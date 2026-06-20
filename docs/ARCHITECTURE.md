@@ -8,6 +8,7 @@
 - `src/mindcraft-client.js`：连接 Mindcraft 本地 API/Socket.IO。
 - `src/mindcraft-config.js`：读取和保存 Mindcraft settings.js 与 Agent Profile。
 - `src/autopilot.js`：自动陪玩循环、任务策略、LLM 调用和记忆。
+- `src/model-providers.js`：云端/本地模型供应商预设、密钥环境变量检测和 Mindcraft 子进程环境映射。
 - `public/`：中文产品化前端。
 
 ## 数据流
@@ -30,6 +31,7 @@
 - Web 控制台默认只监听 `127.0.0.1`。
 - `server.properties` 只暴露白名单字段。
 - Mindcraft API key 不在页面展示。
+- 云端模型密钥只从环境变量读取；供应商预设只保存 Base URL、模型名和供应商 ID。
 - Agent Profile 保存时会过滤明显的密钥字段。
 - 外部启动的 Minecraft Server 只检测，不强制停服。
 

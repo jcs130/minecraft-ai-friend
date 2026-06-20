@@ -3,6 +3,7 @@
 const state = {
   status: null,
   config: null,
+  modelProviders: [],
   busy: false
 }
 
@@ -27,6 +28,7 @@ const elements = {
   agentsList: byId('agentsList'),
   logsView: byId('logsView'),
   memoryView: byId('memoryView'),
+  llmProviderHint: byId('llmProviderHint'),
   llmHint: byId('llmHint'),
   minecraftManagerHint: byId('minecraftManagerHint'),
   minecraftLogView: byId('minecraftLogView'),
@@ -50,6 +52,7 @@ const configInputs = [
   'intervalMs',
   'idleCooldownMs',
   'minTaskRuntimeMs',
+  'llmProvider',
   'llmBaseUrl',
   'llmModel',
   'useLlm'
@@ -88,8 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('saveMindcraftConfigBtn').addEventListener('click', saveMindcraftConfig)
   byId('loadMindcraftProfileBtn').addEventListener('click', () => loadMindcraftConfig(elements.mindcraftProfileSelect.value))
   byId('saveMindcraftProfileBtn').addEventListener('click', saveMindcraftProfile)
+  byId('applyModelToProfileBtn').addEventListener('click', applyModelProviderToProfile)
   byId('mindcraftProfileSelect').addEventListener('change', () => loadMindcraftConfig(elements.mindcraftProfileSelect.value))
   byId('autopilotBtn').addEventListener('click', toggleAutopilot)
+  byId('llmProvider').addEventListener('change', onModelProviderChange)
+  byId('applyModelProviderBtn').addEventListener('click', applyModelProviderPreset)
   byId('saveConfigBtn').addEventListener('click', saveConfig)
   byId('refreshLogsBtn').addEventListener('click', refreshLogs)
   byId('loadServerPropertiesBtn').addEventListener('click', loadServerProperties)
@@ -104,15 +110,18 @@ document.addEventListener('DOMContentLoaded', () => {
 async function refreshAll() {
   if (state.busy) return
   try {
-    const [status, logs, minecraftLog] = await Promise.all([
+    const [status, logs, minecraftLog, providerData] = await Promise.all([
       apiGet('/api/status'),
       apiGet('/api/logs'),
-      apiGet('/api/minecraft/logs')
+      apiGet('/api/minecraft/logs'),
+      apiGet('/api/model-providers')
     ])
     state.status = status
     state.config = status.config
+    state.modelProviders = providerData.providers || []
     renderStatus(status)
     renderProductHome(status)
+    renderModelProviders(providerData, status.config)
     renderConfig(status.config)
     renderMinecraftManager(status, minecraftLog)
     renderLogs(logs.logs || [])
@@ -213,6 +222,110 @@ function renderAgents(status) {
   }).join('')
 }
 
+
+function renderModelProviders(data, config) {
+  const select = byId('llmProvider')
+  if (!select) return
+  const providers = data && data.providers ? data.providers : state.modelProviders
+  state.modelProviders = providers || []
+  const selected = config && config.llmProvider ? config.llmProvider : data && data.selectedProvider ? data.selectedProvider : ''
+  const html = state.modelProviders.map(provider => {
+    return `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
+  }).join('')
+  if (select.innerHTML !== html) select.innerHTML = html
+  if (select.dataset.touched !== '1') select.value = selected
+  renderModelProviderHint(config || state.config || {})
+}
+
+function currentModelProvider(id) {
+  const selected = id || byId('llmProvider').value || state.config && state.config.llmProvider
+  return state.modelProviders.find(provider => provider.id === selected) || state.modelProviders[0] || null
+}
+
+function onModelProviderChange() {
+  byId('llmProvider').dataset.touched = '1'
+  renderModelProviderHint(collectConfigPreview())
+}
+
+function applyModelProviderPreset() {
+  const provider = currentModelProvider()
+  if (!provider) return
+  setConfigInputValue('llmBaseUrl', provider.baseUrl)
+  setConfigInputValue('llmModel', provider.defaultModel)
+  byId('llmProvider').dataset.touched = '1'
+  renderModelProviderHint(collectConfigPreview())
+  showToast('模型供应商预设已填入，保存后生效')
+}
+
+function applyModelProviderToProfile() {
+  const provider = currentModelProvider()
+  if (!provider || !provider.mindcraftProfilePatch) {
+    showToast('当前供应商没有可套用的 Mindcraft Profile 片段')
+    return
+  }
+  try {
+    const profile = JSON.parse(elements.mindcraftProfileJson.value || '{}')
+    const patch = buildMindcraftProfilePatch(provider, byId('llmBaseUrl').value.trim(), byId('llmModel').value.trim())
+    Object.assign(profile, patch)
+    elements.mindcraftProfileJson.value = JSON.stringify(profile, null, 2)
+    showToast('当前模型已套用到角色 JSON，保存角色并重启 Mindcraft 后生效')
+  } catch (error) {
+    showToast(`角色 JSON 解析失败：${error.message}`)
+  }
+}
+
+function buildMindcraftProfilePatch(provider, baseUrl, modelName) {
+  const patch = JSON.parse(JSON.stringify(provider.mindcraftProfilePatch || {}))
+  for (const key of ['model', 'code_model']) {
+    if (!patch[key] || typeof patch[key] !== 'object') continue
+    if (modelName) patch[key].model = modelName
+    if (patch[key].url && baseUrl) patch[key].url = provider.id === 'ollama' ? stripOllamaV1(baseUrl) : baseUrl
+  }
+  if (patch.embedding && typeof patch.embedding === 'object' && patch.embedding.url && baseUrl && provider.id === 'aliyun-qwen') {
+    patch.embedding.url = baseUrl
+  }
+  return patch
+}
+
+function setConfigInputValue(id, value) {
+  const input = byId(id)
+  input.value = value || ''
+  input.dataset.touched = '1'
+}
+
+function collectConfigPreview() {
+  return {
+    ...(state.config || {}),
+    llmProvider: byId('llmProvider').value,
+    llmBaseUrl: byId('llmBaseUrl').value,
+    llmModel: byId('llmModel').value
+  }
+}
+
+function renderModelProviderHint(config) {
+  const provider = currentModelProvider(config.llmProvider)
+  if (!provider || !elements.llmProviderHint) return
+  const detected = config.llmKeyEnvNames && config.llmKeyEnvNames.length > 0
+    ? config.llmKeyEnvNames.join(', ')
+    : provider.detectedEnvNames.join(', ')
+  const accepted = config.llmAcceptedEnvNames && config.llmAcceptedEnvNames.length > 0
+    ? config.llmAcceptedEnvNames.join(', ')
+    : provider.acceptedEnvNames.join(', ')
+  const keyText = provider.authRequired
+    ? detected
+      ? `已检测到密钥环境变量：${detected}。`
+      : `未检测到密钥；可设置：${accepted}。`
+    : '本地模型不需要 API key。'
+  const mindcraftText = provider.mindcraftKeyEnv
+    ? `Mindcraft 侧期望：${provider.mindcraftKeyEnv}。`
+    : 'Mindcraft 侧使用本地 Ollama。'
+  elements.llmProviderHint.textContent = `${provider.label}：${provider.description} ${keyText} ${mindcraftText} ${provider.setupHint || ''}`
+}
+
+function stripOllamaV1(value) {
+  return String(value || '').replace(/\/v1\/?$/, '')
+}
+
 function renderConfig(config) {
   if (!config) return
   for (const name of configInputs) {
@@ -222,14 +335,16 @@ function renderConfig(config) {
     else input.value = config[name] === undefined ? '' : config[name]
     input.addEventListener('input', () => { input.dataset.touched = '1' }, { once: true })
   }
-  const localLlm = isLocalUrl(config.llmBaseUrl)
+  renderModelProviderHint(config)
+  const provider = currentModelProvider(config.llmProvider)
+  const localLlm = provider ? !provider.authRequired : isLocalUrl(config.llmBaseUrl)
   const modeText = config.assistantMode === 'survival'
     ? '当前是生存助手模式：会优先考虑安全、食物、庇护所、照明、工具和短距离目标。'
     : '当前是创造练习模式：会优先建造和改善基地，并避免合成物品。'
-  const llmText = config.llmApiKeyFromEnv
-    ? '已检测到环境变量里的模型密钥，页面不会显示密钥内容。'
-    : localLlm
-      ? '已检测到本地模型接口，Ollama 这类 localhost 服务不需要 API key。'
+  const llmText = localLlm
+    ? '本地模型接口不需要 API key。'
+    : config.llmApiKeyFromEnv
+      ? '已检测到环境变量里的模型密钥，页面不会显示密钥内容。'
       : '没有检测到模型密钥；自动陪玩会使用保守的备用任务轮换。'
   elements.llmHint.textContent = `${modeText} ${llmText}`
 }

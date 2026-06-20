@@ -13,6 +13,13 @@ const { listMindcraftProcesses } = require('./processes')
 const { readServerProperties, writeServerProperties } = require('./server-properties')
 const { MinecraftServerManager, readLatestLog } = require('./minecraft-server')
 const { readMindcraftConfig, writeMindcraftConfig } = require('./mindcraft-config')
+const {
+  listModelProviders,
+  inferModelProvider,
+  getConfiguredLlmApiKey,
+  getProviderEnvStatus,
+  buildMindcraftEnv
+} = require('./model-providers')
 
 const ROOT = path.resolve(__dirname, '..')
 const PUBLIC_DIR = path.join(ROOT, 'public')
@@ -47,7 +54,7 @@ const autopilot = new Autopilot({
   useLlm: config.useLlm,
   llmBaseUrl: config.llmBaseUrl,
   llmModel: config.llmModel,
-  llmApiKey: process.env.MINDCRAFT_LLM_API_KEY || process.env.DEEPSEEK_API_KEY || ''
+  llmApiKey: getConfiguredLlmApiKey(config)
 })
 
 client.start()
@@ -82,6 +89,15 @@ async function handleRequest(req, res) {
 async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/config') {
     sendJson(res, 200, publicConfig())
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/model-providers') {
+    sendJson(res, 200, {
+      selectedProvider: inferModelProvider(config),
+      envStatus: getProviderEnvStatus(config),
+      providers: listModelProviders()
+    })
     return
   }
 
@@ -267,13 +283,20 @@ function loadConfig() {
     idleCooldownMs: 120000,
     minTaskRuntimeMs: 90000,
     useLlm: false,
+    llmProvider: inferModelProvider({
+      llmProvider: process.env.MINDCRAFT_LLM_PROVIDER,
+      llmBaseUrl: process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
+    }),
     llmBaseUrl: process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     llmModel: process.env.MINDCRAFT_LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
   }
 
   try {
     if (!fs.existsSync(CONFIG_PATH)) return defaults
-    return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) }
+    const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
+    const merged = { ...defaults, ...raw }
+    if (!raw.llmProvider) merged.llmProvider = inferModelProvider({ llmBaseUrl: merged.llmBaseUrl })
+    return merged
   } catch (error) {
     logger.warn(`config load failed: ${error.message}`)
     return defaults
@@ -292,8 +315,10 @@ function updateConfig(next) {
   if (next.idleCooldownMs) config.idleCooldownMs = clampNumber(next.idleCooldownMs, 10000, 3600000, config.idleCooldownMs)
   if (next.minTaskRuntimeMs) config.minTaskRuntimeMs = clampNumber(next.minTaskRuntimeMs, 10000, 3600000, config.minTaskRuntimeMs)
   if (typeof next.useLlm === 'boolean') config.useLlm = next.useLlm
+  if (typeof next.llmProvider === 'string') config.llmProvider = inferModelProvider({ llmProvider: next.llmProvider })
   if (typeof next.llmBaseUrl === 'string') config.llmBaseUrl = next.llmBaseUrl.trim() || config.llmBaseUrl
   if (typeof next.llmModel === 'string') config.llmModel = next.llmModel.trim() || config.llmModel
+  if (!config.llmProvider) config.llmProvider = inferModelProvider(config)
 
   client.updateBaseUrl(config.mindcraftUrl)
   autopilot.configure({
@@ -305,7 +330,7 @@ function updateConfig(next) {
     useLlm: config.useLlm,
     llmBaseUrl: config.llmBaseUrl,
     llmModel: config.llmModel,
-    llmApiKey: process.env.MINDCRAFT_LLM_API_KEY || process.env.DEEPSEEK_API_KEY || ''
+    llmApiKey: getConfiguredLlmApiKey(config)
   })
 }
 
@@ -314,9 +339,15 @@ function saveConfig() {
 }
 
 function publicConfig() {
+  const envStatus = getProviderEnvStatus(config)
   return {
     ...config,
-    llmApiKeyFromEnv: Boolean(process.env.MINDCRAFT_LLM_API_KEY || process.env.DEEPSEEK_API_KEY)
+    llmProvider: inferModelProvider(config),
+    llmApiKeyFromEnv: envStatus.keyDetected,
+    llmAuthReady: envStatus.authReady,
+    llmKeyEnvNames: envStatus.detectedEnvNames,
+    llmAcceptedEnvNames: envStatus.acceptedEnvNames,
+    llmMindcraftKeyEnv: envStatus.mindcraftKeyEnv
   }
 }
 
@@ -331,7 +362,7 @@ async function startMindcraft() {
 
   const out = fs.openSync(path.join(LOG_DIR, 'mindcraft.out.log'), 'a')
   const err = fs.openSync(path.join(LOG_DIR, 'mindcraft.err.log'), 'a')
-  const env = { ...process.env }
+  const env = buildMindcraftEnv(config)
 
   mindcraftChild = spawn('node', ['main.js'], {
     cwd: config.mindcraftDir,

@@ -17,6 +17,17 @@ paths:
             application/json:
               schema:
                 type: object
+  /api/model-providers:
+    get:
+      summary: List model provider presets and key environment status
+      operationId: listModelProviders
+      responses:
+        '200':
+          description: Model provider preset list
+          content:
+            application/json:
+              schema:
+                type: object
   /api/task:
     post:
       summary: Send a high-level task to one or more Mindcraft agents

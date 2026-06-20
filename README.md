@@ -29,7 +29,7 @@
 - 向托管服务端发送控制台命令，例如 `list`、`op 玩家名`、`gamemode survival 玩家名`。
 - 编辑常用 `server.properties` 配置，并在保存前自动备份。
 - 支持创造练习和生存助手两种陪玩模式。
-- 支持 OpenAI-compatible 模型接口，也支持本地 Ollama。
+- 支持云端和本地模型供应商预设：DeepSeek、阿里云百炼/通义千问、豆包/火山方舟、OpenAI-compatible、OpenRouter、本地 Ollama。
 - 提供第三方 Agent 集成草案：OpenAPI、Codex 插件、MCP adapter 设计。
 
 ## 运行
@@ -114,7 +114,9 @@ op 你的玩家名
 
 第三方 Agent 应发送高层陪玩意图，例如“陪玩家完成第一晚生存”“帮玩家找食物”“改善基地照明”，不要直接控制底层破坏性动作。
 
-## 本地 Ollama
+## 云端模型和本地 Ollama
+
+控制台的“模型供应商”可以一键填入 DeepSeek、阿里云百炼/通义千问、豆包/火山方舟、OpenAI-compatible、OpenRouter 和本地 Ollama 的常用配置。密钥只从环境变量读取，不会写进页面配置。详见 [`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md)。
 
 如果使用 Ollama 的 `qwen3-vl:8b`：
 
@@ -123,7 +125,7 @@ op 你的玩家名
 模型名称：qwen3-vl:8b
 ```
 
-本地 Ollama 不需要 API key。
+本地 Ollama 不需要 API key。云端模型需要配置对应环境变量，例如 `DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY` 或 `ARK_API_KEY`。
 
 ## 检查
 

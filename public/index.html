@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=7">
+    <link rel="stylesheet" href="/styles.css?v=8">
   </head>
   <body>
     <header class="topbar">
@@ -198,6 +198,13 @@
               <input id="minTaskRuntimeMs" name="minTaskRuntimeMs" type="number" min="10000">
             </label>
             <label>
+              模型供应商
+              <select id="llmProvider" name="llmProvider"></select>
+            </label>
+            <div class="setting-action">
+              <button id="applyModelProviderBtn" type="button">应用供应商预设</button>
+            </div>
+            <label>
               模型接口地址
               <input id="llmBaseUrl" name="llmBaseUrl">
             </label>
@@ -210,6 +217,7 @@
               使用环境变量里的模型密钥/本地模型
             </label>
           </form>
+          <p id="llmProviderHint" class="hint"></p>
           <p id="llmHint" class="hint"></p>
         </section>
 
@@ -343,6 +351,7 @@
           <h2>AI 角色配置</h2>
           <div class="button-row">
             <button id="loadMindcraftProfileBtn" type="button">读取角色</button>
+            <button id="applyModelToProfileBtn" type="button">套用当前模型</button>
             <button id="saveMindcraftProfileBtn" type="button" class="primary">保存角色 JSON</button>
           </div>
         </div>
@@ -498,6 +507,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=7"></script>
+    <script src="/app.js?v=8"></script>
   </body>
 </html>

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added cloud/local model provider presets for DeepSeek, Aliyun Qwen, Doubao/Volcengine Ark, OpenAI-compatible gateways, OpenRouter, and Ollama.
+- Added a model provider API and Chinese UI controls to apply presets and sync the selected model into Mindcraft Agent Profile JSON.
+- Added provider-specific environment variable detection and safe Mindcraft child-process key aliasing.
+
 ## 0.1.0 - 2026-06-21
 
 - 建立“我的世界AI陪玩”产品化 MVP。
