@@ -16,6 +16,7 @@ const { readMindcraftConfig, writeMindcraftConfig } = require('./mindcraft-confi
 
 const ROOT = path.resolve(__dirname, '..')
 const PUBLIC_DIR = path.join(ROOT, 'public')
+const INTEGRATIONS_DIR = path.join(ROOT, 'integrations')
 const DATA_DIR = path.join(ROOT, 'data')
 const LOG_DIR = path.join(ROOT, 'logs')
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
@@ -67,6 +68,11 @@ async function handleRequest(req, res) {
 
   if (url.pathname.startsWith('/api/')) {
     await handleApi(req, res, url)
+    return
+  }
+
+  if (url.pathname.startsWith('/integrations/')) {
+    serveFileFromDir(res, INTEGRATIONS_DIR, url.pathname.replace('/integrations/', '/'))
     return
   }
 
@@ -353,8 +359,12 @@ function stopOwnedMindcraft() {
 
 function serveStatic(res, requestPath) {
   const safePath = requestPath === '/' ? '/index.html' : requestPath
-  const fullPath = path.normalize(path.join(PUBLIC_DIR, safePath))
-  if (!fullPath.startsWith(PUBLIC_DIR)) {
+  serveFileFromDir(res, PUBLIC_DIR, safePath)
+}
+
+function serveFileFromDir(res, rootDir, requestPath) {
+  const fullPath = path.normalize(path.join(rootDir, requestPath))
+  if (!fullPath.startsWith(rootDir)) {
     sendText(res, 403, 'Forbidden')
     return
   }
@@ -368,6 +378,9 @@ function serveStatic(res, requestPath) {
     '.css': 'text/css; charset=utf-8',
     '.js': 'application/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
+    '.yaml': 'application/yaml; charset=utf-8',
+    '.yml': 'application/yaml; charset=utf-8',
+    '.md': 'text/markdown; charset=utf-8',
     '.svg': 'image/svg+xml'
   }[ext] || 'application/octet-stream'
   res.writeHead(200, { 'content-type': contentType })

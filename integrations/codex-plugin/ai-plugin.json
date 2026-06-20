@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "我的世界AI陪玩",
+  "name_for_model": "minecraft_ai_companion",
+  "description_for_human": "管理本地 Minecraft Server、Mindcraft AI 队友和智能陪玩任务。",
+  "description_for_model": "Use this local plugin to inspect Minecraft/Mindcraft status, start local companion services, dispatch high-level tasks to Mindcraft agents, read logs, and manage safe configuration fields. Prefer high-level companion intentions over low-level game commands.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "http://127.0.0.1:4177/integrations/openapi.yaml"
+  },
+  "logo_url": "http://127.0.0.1:4177/icon.png",
+  "contact_email": "",
+  "legal_info_url": "https://github.com/jcs130/minecraft-ai-companion"
+}

@@ -30,6 +30,7 @@
 - 编辑常用 `server.properties` 配置，并在保存前自动备份。
 - 支持创造练习和生存助手两种陪玩模式。
 - 支持 OpenAI-compatible 模型接口，也支持本地 Ollama。
+- 提供第三方 Agent 集成草案：OpenAPI、Codex 插件、MCP adapter 设计。
 
 ## 运行
 
@@ -102,6 +103,16 @@ op 你的玩家名
 
 - HMCL 启动器：<https://github.com/HMCL-dev/HMCL/releases>。适合局域网和离线名配置；建议从官方 GitHub Releases 下载，并按页面提供的 SHA-256 校验文件。
 - Mindcraft：<https://github.com/mindcraft-bots/mindcraft>。AI 玩家运行框架，基于 LLM 和 Mineflayer 控制 Minecraft。
+
+## 第三方 Agent 集成
+
+这个项目可以作为 Codex、小龙虾、Cursor、Claude Desktop 等 Agent 的本地插件能力层。推荐接入方式：
+
+- HTTP/OpenAPI：`integrations/openapi.yaml`。
+- Codex 插件草案：`integrations/codex-plugin/`。
+- MCP adapter 草案：`integrations/mcp/`。
+
+第三方 Agent 应发送高层陪玩意图，例如“陪玩家完成第一晚生存”“帮玩家找食物”“改善基地照明”，不要直接控制底层破坏性动作。
 
 ## 本地 Ollama
 

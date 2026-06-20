@@ -1,0 +1,190 @@
+openapi: 3.1.0
+info:
+  title: Minecraft AI Companion Local API
+  version: 0.1.0
+  description: Local-first API for managing Minecraft Server, Mindcraft agents, and AI companion tasks.
+servers:
+  - url: http://127.0.0.1:4177
+paths:
+  /api/status:
+    get:
+      summary: Get local runtime status
+      operationId: getStatus
+      responses:
+        '200':
+          description: Runtime status
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/task:
+    post:
+      summary: Send a high-level task to one or more Mindcraft agents
+      operationId: sendCompanionTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: Optional comma-separated agent names. Empty means all online agents.
+                task:
+                  type: string
+                  description: High-level companion task in natural language.
+              required:
+                - task
+      responses:
+        '200':
+          description: Task dispatch result
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/autopilot/start:
+    post:
+      summary: Start autonomous companion loop
+      operationId: startAutopilot
+      responses:
+        '200':
+          description: Updated status
+  /api/autopilot/stop:
+    post:
+      summary: Stop autonomous companion loop
+      operationId: stopAutopilot
+      responses:
+        '200':
+          description: Updated status
+  /api/minecraft/start:
+    post:
+      summary: Start Minecraft Server if not already online
+      operationId: startMinecraftServer
+      responses:
+        '200':
+          description: Updated status
+  /api/minecraft/stop:
+    post:
+      summary: Stop Minecraft Server managed by this app
+      operationId: stopMinecraftServer
+      responses:
+        '200':
+          description: Updated status
+  /api/minecraft/restart:
+    post:
+      summary: Restart Minecraft Server managed by this app
+      operationId: restartMinecraftServer
+      responses:
+        '200':
+          description: Updated status
+  /api/minecraft/command:
+    post:
+      summary: Send a console command to a Minecraft Server managed by this app
+      operationId: sendMinecraftCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                command:
+                  type: string
+              required:
+                - command
+      responses:
+        '200':
+          description: Command result
+  /api/minecraft/logs:
+    get:
+      summary: Read recent Minecraft latest.log lines
+      operationId: getMinecraftLogs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 160
+      responses:
+        '200':
+          description: Log lines
+  /api/mindcraft/start:
+    post:
+      summary: Start Mindcraft
+      operationId: startMindcraft
+      responses:
+        '200':
+          description: Updated status
+  /api/mindcraft/stop-owned:
+    post:
+      summary: Stop Mindcraft process started by this app
+      operationId: stopOwnedMindcraft
+      responses:
+        '200':
+          description: Updated status
+  /api/mindcraft-config:
+    get:
+      summary: Read Mindcraft settings and selected agent profile
+      operationId: getMindcraftConfig
+      parameters:
+        - name: profile
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mindcraft config
+    post:
+      summary: Save Mindcraft settings and optionally selected profile JSON
+      operationId: saveMindcraftConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings:
+                  type: object
+                profilePath:
+                  type: string
+                profileJson:
+                  type: string
+      responses:
+        '200':
+          description: Updated config
+  /api/server-properties:
+    get:
+      summary: Read editable server.properties fields
+      operationId: getServerProperties
+      responses:
+        '200':
+          description: Editable server.properties values
+    post:
+      summary: Save editable server.properties fields
+      operationId: saveServerProperties
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                properties:
+                  type: object
+      responses:
+        '200':
+          description: Save result
+  /api/memory:
+    get:
+      summary: Read autopilot memory
+      operationId: getAutopilotMemory
+      parameters:
+        - name: agent
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Memory payload

@@ -32,3 +32,14 @@
 - Mindcraft API key 不在页面展示。
 - Agent Profile 保存时会过滤明显的密钥字段。
 - 外部启动的 Minecraft Server 只检测，不强制停服。
+
+
+## 集成层
+
+项目保留本地 Web 产品形态，同时提供给第三方 Agent 的集成接口。
+
+- `integrations/openapi.yaml`：描述本地 HTTP API。
+- `integrations/codex-plugin/`：Codex/Agent 插件草案。
+- `integrations/mcp/`：MCP adapter 草案。
+
+集成层的原则是“高层意图输入、底层行为托管”。第三方 Agent 调用 `POST /api/task` 下发自然语言目标，由本项目和 Mindcraft 负责具体 Minecraft 行为。
