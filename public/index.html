@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>我的世界AI陪玩</title>
+    <link rel="stylesheet" href="/styles.css?v=7">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>我的世界AI陪玩</h1>
+        <p>给新玩家的本地/局域网 Minecraft AI 队友：开服、进服、聊天、引导、协作和高级管理都在这里。</p>
+      </div>
+      <div class="top-actions">
+        <button id="refreshBtn" type="button">刷新</button>
+        <button id="startExperienceBtn" type="button" class="primary">一键开始陪玩</button>
+        <button id="startMinecraftBtn" type="button">启动服务器</button>
+        <button id="startMindcraftBtn" type="button">启动 Mindcraft</button>
+        <button id="stopMindcraftBtn" type="button">停止 Mindcraft</button>
+        <button id="autopilotBtn" type="button" class="primary">启动自动陪玩</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <span class="eyebrow">AI 队友工作台</span>
+          <h2>开始一次轻松的 Minecraft 陪玩</h2>
+          <p>先启动服务器和 Mindcraft，再让 AI 队友带新玩家完成第一晚、找食物、打怪、建家或自由探索。</p>
+          <div class="hero-actions">
+            <button id="heroStartExperienceBtn" type="button" class="primary">一键启动陪玩</button>
+            <button id="firstNightBtn" type="button">开始“第一晚生存”</button>
+            <button id="freePlayBtn" type="button">让 AI 自由陪玩</button>
+          </div>
+          <p id="homeSummary" class="hero-note">正在读取本地状态。</p>
+        </div>
+        <div class="readiness-card">
+          <h3>准备状态</h3>
+          <div class="readiness-list">
+            <div class="ready-item"><span id="readyServerDot" class="ready-dot"></span><div><strong>服务器</strong><small id="readyServerText">检查中</small></div></div>
+            <div class="ready-item"><span id="readyMindcraftDot" class="ready-dot"></span><div><strong>Mindcraft</strong><small id="readyMindcraftText">检查中</small></div></div>
+            <div class="ready-item"><span id="readyAgentDot" class="ready-dot"></span><div><strong>AI 队友</strong><small id="readyAgentText">等待进服</small></div></div>
+            <div class="ready-item"><span id="readyAutopilotDot" class="ready-dot"></span><div><strong>自动陪玩</strong><small id="readyAutopilotText">未启动</small></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="product-grid">
+        <article class="playbook-card featured">
+          <div>
+            <span class="label">新手推荐</span>
+            <h3>第一晚生存</h3>
+            <p>AI 队友会教玩家砍树、做工具、找食物、搭临时庇护所，并在夜晚保持安全。</p>
+          </div>
+          <button type="button" data-preset-task="first-night" class="primary">发送给 AI</button>
+        </article>
+        <article class="playbook-card">
+          <span class="label">陪玩角色</span>
+          <h3>新手导师</h3>
+          <p>耐心解释每一步，少替玩家做决定，多做示范和提醒。</p>
+          <button type="button" data-preset-task="mentor">设为当前任务</button>
+        </article>
+        <article class="playbook-card">
+          <span class="label">陪玩角色</span>
+          <h3>生存护卫</h3>
+          <p>保持适当距离，夜晚和遇怪时保护玩家，提醒撤退和补给。</p>
+          <button type="button" data-preset-task="guard">设为当前任务</button>
+        </article>
+        <article class="playbook-card">
+          <span class="label">陪玩角色</span>
+          <h3>建筑伙伴</h3>
+          <p>帮忙整理地形、补光、修路、准备材料和搭建简单基地。</p>
+          <button type="button" data-preset-task="builder">设为当前任务</button>
+        </article>
+      </section>
+
+      <section class="quick-command-panel">
+        <div>
+          <h2>快速陪玩指令</h2>
+          <p>不用写提示词，直接把常见意图发给在线 AI 队友。</p>
+        </div>
+        <div class="quick-task-grid">
+          <button type="button" data-preset-task="food">帮我找食物</button>
+          <button type="button" data-preset-task="fight">帮我打怪</button>
+          <button type="button" data-preset-task="base">改善基地</button>
+          <button type="button" data-preset-task="explore">陪我探索</button>
+          <button type="button" data-preset-task="return-home">带我回基地</button>
+          <button type="button" data-preset-task="free-play">自由活动</button>
+        </div>
+      </section>
+      <section class="status-grid">
+        <article class="status-card">
+          <span class="label">我的世界服务器</span>
+          <strong id="minecraftStatus">检查中</strong>
+          <small id="minecraftDetail"></small>
+        </article>
+        <article class="status-card">
+          <span class="label">Mindcraft</span>
+          <strong id="mindcraftStatus">检查中</strong>
+          <small id="mindcraftDetail"></small>
+        </article>
+        <article class="status-card">
+          <span class="label">通信连接</span>
+          <strong id="socketStatus">检查中</strong>
+          <small id="socketDetail"></small>
+        </article>
+        <article class="status-card">
+          <span class="label">自动陪玩</span>
+          <strong id="autopilotStatus">已停止</strong>
+          <small id="autopilotDetail"></small>
+        </article>
+      </section>
+
+      <section class="layout">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>AI 玩家</h2>
+            <button id="loadMemoryBtn" type="button">查看记忆</button>
+          </div>
+          <div id="agentsList" class="agents-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>手动任务</h2>
+          </div>
+          <form id="taskForm" class="task-form">
+            <label>
+              AI 玩家
+              <input id="taskAgent" name="agent" placeholder="Alex，留空表示所有在线 AI">
+            </label>
+            <label>
+              高层任务
+              <textarea id="taskText" name="task" rows="5" placeholder="改善基地照明和道路。不要跟随真人玩家，像独立玩家一样行动。"></textarea>
+            </label>
+            <button type="submit" class="primary">发送任务</button>
+          </form>
+        </section>
+      </section>
+
+      <section class="section-divider">
+        <div>
+          <span class="eyebrow">可选</span>
+          <h2>高级控制</h2>
+          <p>需要调试端口、模型、Mindcraft、server.properties 或日志时再看这里。</p>
+        </div>
+      </section>
+
+      <section class="layout">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>设置</h2>
+            <button id="saveConfigBtn" type="button">保存</button>
+          </div>
+          <form id="configForm" class="settings-grid">
+            <label>
+              我的世界主机
+              <input id="minecraftHost" name="minecraftHost">
+            </label>
+            <label>
+              我的世界端口
+              <input id="minecraftPort" name="minecraftPort" type="number" min="1" max="65535">
+            </label>
+            <label>
+              服务器目录
+              <input id="minecraftServerDir" name="minecraftServerDir" placeholder="包含 server.properties 的文件夹">
+            </label>
+            <label>
+              Mindcraft 地址
+              <input id="mindcraftUrl" name="mindcraftUrl">
+            </label>
+            <label>
+              Mindcraft 目录
+              <input id="mindcraftDir" name="mindcraftDir">
+            </label>
+            <label>
+              AI 玩家筛选
+              <input id="agentFilter" name="agentFilter" placeholder="Alex,Codex">
+            </label>
+            <label>
+              陪玩模式
+              <select id="assistantMode" name="assistantMode">
+                <option value="creative">创造练习</option>
+                <option value="survival">生存助手</option>
+              </select>
+            </label>
+            <label>
+              检查间隔（毫秒）
+              <input id="intervalMs" name="intervalMs" type="number" min="5000">
+            </label>
+            <label>
+              空闲冷却（毫秒）
+              <input id="idleCooldownMs" name="idleCooldownMs" type="number" min="10000">
+            </label>
+            <label>
+              最短任务时间（毫秒）
+              <input id="minTaskRuntimeMs" name="minTaskRuntimeMs" type="number" min="10000">
+            </label>
+            <label>
+              模型接口地址
+              <input id="llmBaseUrl" name="llmBaseUrl">
+            </label>
+            <label>
+              模型名称
+              <input id="llmModel" name="llmModel">
+            </label>
+            <label class="checkbox-row">
+              <input id="useLlm" name="useLlm" type="checkbox">
+              使用环境变量里的模型密钥/本地模型
+            </label>
+          </form>
+          <p id="llmHint" class="hint"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>记忆</h2>
+          </div>
+          <pre id="memoryView" class="prebox">尚未读取记忆。</pre>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Mindcraft 配置</h2>
+          <div class="button-row">
+            <button id="loadMindcraftConfigBtn" type="button">读取 Mindcraft 配置</button>
+            <button id="saveMindcraftConfigBtn" type="button" class="primary">保存 Mindcraft 配置</button>
+          </div>
+        </div>
+        <p id="mindcraftConfigHint" class="hint">这里整合 Mindcraft 的 settings.js 和 Agent Profile。保存后通常需要重启 Mindcraft 才会生效；密钥文件不会在这里展示。</p>
+        <form id="mindcraftConfigForm" class="mindcraft-settings-grid">
+          <label>
+            Minecraft 版本
+            <input id="mcfg-minecraft-version" data-mcfg="minecraft_version" placeholder="auto 或 1.21.6">
+          </label>
+          <label>
+            服务器地址
+            <input id="mcfg-host" data-mcfg="host" placeholder="127.0.0.1">
+          </label>
+          <label>
+            服务器端口
+            <input id="mcfg-port" data-mcfg="port" type="number" min="-1" max="65535">
+          </label>
+          <label>
+            登录方式
+            <select id="mcfg-auth" data-mcfg="auth">
+              <option value="offline">离线名 offline</option>
+              <option value="microsoft">微软正版 microsoft</option>
+            </select>
+          </label>
+          <label>
+            Mindcraft 页面端口
+            <input id="mcfg-mindserver-port" data-mcfg="mindserver_port" type="number" min="1" max="65535">
+          </label>
+          <label>
+            基础角色模板
+            <select id="mcfg-base-profile" data-mcfg="base_profile">
+              <option value="survival">生存 survival</option>
+              <option value="assistant">助手 assistant</option>
+              <option value="creative">创造 creative</option>
+              <option value="god_mode">上帝模式 god_mode</option>
+            </select>
+          </label>
+          <label>
+            翻译语言
+            <input id="mcfg-language" data-mcfg="language" placeholder="zh-CN">
+          </label>
+          <label>
+            语音播报
+            <select id="mcfg-speak" data-mcfg="speak">
+              <option value="system">系统语音 system</option>
+              <option value="false">关闭</option>
+            </select>
+          </label>
+          <label class="wide">
+            启动的 Agent Profile（每行一个）
+            <textarea id="mcfg-profiles" data-mcfg="profiles" rows="3" placeholder="./andy.json"></textarea>
+          </label>
+          <label class="wide">
+            只和这些玩家聊天（留空表示公开聊天，每行一个）
+            <textarea id="mcfg-only-chat-with" data-mcfg="only_chat_with" rows="2"></textarea>
+          </label>
+          <label class="wide">
+            进服初始化消息
+            <textarea id="mcfg-init-message" data-mcfg="init_message" rows="2" placeholder="留空表示不发送"></textarea>
+          </label>
+          <label class="wide">
+            禁用动作（每行一个，例如 !setMode）
+            <textarea id="mcfg-blocked-actions" data-mcfg="blocked_actions" rows="3"></textarea>
+          </label>
+          <label>
+            上下文消息数
+            <input id="mcfg-max-messages" data-mcfg="max_messages" type="number" min="-1" max="200">
+          </label>
+          <label>
+            示例数量
+            <input id="mcfg-num-examples" data-mcfg="num_examples" type="number" min="-1" max="200">
+          </label>
+          <label>
+            相关文档数量
+            <input id="mcfg-relevant-docs-count" data-mcfg="relevant_docs_count" type="number" min="-1" max="200">
+          </label>
+          <label>
+            连续命令上限
+            <input id="mcfg-max-commands" data-mcfg="max_commands" type="number" min="-1" max="10000">
+          </label>
+          <label>
+            代码运行超时（分钟）
+            <input id="mcfg-code-timeout-mins" data-mcfg="code_timeout_mins" type="number" min="-1" max="10000">
+          </label>
+          <label>
+            出生超时（秒）
+            <input id="mcfg-spawn-timeout" data-mcfg="spawn_timeout" type="number" min="1" max="600">
+          </label>
+          <label>
+            放置方块延迟（毫秒）
+            <input id="mcfg-block-place-delay" data-mcfg="block_place_delay" type="number" min="0" max="60000">
+          </label>
+          <label>
+            命令语法显示
+            <select id="mcfg-show-command-syntax" data-mcfg="show_command_syntax">
+              <option value="full">完整 full</option>
+              <option value="shortened">简略 shortened</option>
+              <option value="none">隐藏 none</option>
+            </select>
+          </label>
+          <label class="checkbox-row"><input id="mcfg-auto-open-ui" data-mcfg="auto_open_ui" type="checkbox">启动时自动打开 Mindcraft 原生页面</label>
+          <label class="checkbox-row"><input id="mcfg-load-memory" data-mcfg="load_memory" type="checkbox">加载历史记忆</label>
+          <label class="checkbox-row"><input id="mcfg-chat-ingame" data-mcfg="chat_ingame" type="checkbox">在游戏聊天里回复</label>
+          <label class="checkbox-row"><input id="mcfg-render-bot-view" data-mcfg="render_bot_view" type="checkbox">显示 AI 视角页面</label>
+          <label class="checkbox-row"><input id="mcfg-allow-vision" data-mcfg="allow_vision" type="checkbox">允许视觉模型看截图</label>
+          <label class="checkbox-row"><input id="mcfg-narrate-behavior" data-mcfg="narrate_behavior" type="checkbox">播报简单行为</label>
+          <label class="checkbox-row"><input id="mcfg-chat-bot-messages" data-mcfg="chat_bot_messages" type="checkbox">公开 AI 之间的消息</label>
+          <label class="checkbox-row"><input id="mcfg-log-all-prompts" data-mcfg="log_all_prompts" type="checkbox">记录完整提示词</label>
+          <label class="checkbox-row danger-row"><input id="mcfg-allow-insecure-coding" data-mcfg="allow_insecure_coding" type="checkbox">允许 AI 写入/运行代码（高风险）</label>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>AI 角色配置</h2>
+          <div class="button-row">
+            <button id="loadMindcraftProfileBtn" type="button">读取角色</button>
+            <button id="saveMindcraftProfileBtn" type="button" class="primary">保存角色 JSON</button>
+          </div>
+        </div>
+        <p id="mindcraftProfileHint" class="hint">选择一个 Agent Profile。模型、视觉模型、语音模型、角色名都在这里配置；不要把 API key 写进 profile。</p>
+        <label>
+          当前角色文件
+          <select id="mindcraftProfileSelect"></select>
+        </label>
+        <textarea id="mindcraftProfileJson" class="json-editor" rows="12" spellcheck="false">尚未读取角色配置。</textarea>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>服务器管理</h2>
+          <div class="button-row">
+            <button id="stopMinecraftBtn" type="button">停止服务器</button>
+            <button id="restartMinecraftBtn" type="button">重启服务器</button>
+            <button id="refreshMinecraftLogBtn" type="button">刷新服务端日志</button>
+          </div>
+        </div>
+        <p id="minecraftManagerHint" class="hint">如果服务端是从本页面启动的，就可以发送控制台命令；外部打开的服务端只做状态检测。启动时会从 start.bat/start.sh 推断 Java 参数，实际直接管理 server.jar。</p>
+        <div class="server-control-grid">
+          <form id="minecraftCommandForm" class="command-form">
+            <label>
+              控制台命令
+              <input id="minecraftCommand" name="command" placeholder="list、op 玩家名、gamemode survival 玩家名">
+            </label>
+            <button type="submit" class="primary">发送命令</button>
+          </form>
+          <div class="quick-actions">
+            <label>
+              玩家名
+              <input id="minecraftPlayerName" placeholder="例如 Mengmeng 或 tzi_ivpgY_1003">
+            </label>
+            <button type="button" data-minecraft-command="op {player}">给玩家 OP</button>
+            <button type="button" data-minecraft-command="gamemode survival {player}">切到生存</button>
+            <button type="button" data-minecraft-command="gamemode creative {player}">切到创造</button>
+            <button type="button" data-minecraft-command="list">查看在线玩家</button>
+            <button type="button" data-minecraft-command="time set day">设为白天</button>
+            <button type="button" data-minecraft-command="weather clear">清除天气</button>
+            <button type="button" data-minecraft-command="save-all">保存世界</button>
+          </div>
+        </div>
+        <pre id="minecraftLogView" class="prebox logs">尚未读取服务端日志。</pre>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>服务器配置</h2>
+          <div class="button-row">
+            <button id="loadServerPropertiesBtn" type="button">读取</button>
+            <button id="saveServerPropertiesBtn" type="button" class="primary">保存服务器配置</button>
+          </div>
+        </div>
+        <p id="serverPropertiesHint" class="hint">先在“设置”里填写服务器目录并保存，然后读取 server.properties。</p>
+        <form id="serverPropertiesForm" class="server-settings-grid">
+          <label>
+            游戏模式
+            <select id="prop-gamemode" data-prop="gamemode">
+              <option value="survival">生存 survival</option>
+              <option value="creative">创造 creative</option>
+              <option value="adventure">冒险 adventure</option>
+              <option value="spectator">旁观 spectator</option>
+            </select>
+          </label>
+          <label>
+            难度
+            <select id="prop-difficulty" data-prop="difficulty">
+              <option value="peaceful">和平 peaceful</option>
+              <option value="easy">简单 easy</option>
+              <option value="normal">普通 normal</option>
+              <option value="hard">困难 hard</option>
+            </select>
+          </label>
+          <label>
+            最大玩家数
+            <input id="prop-max-players" data-prop="max-players" type="number" min="1" max="200">
+          </label>
+          <label>
+            服务器描述 MOTD
+            <input id="prop-motd" data-prop="motd">
+          </label>
+          <label>
+            世界名称
+            <input id="prop-level-name" data-prop="level-name">
+          </label>
+          <label>
+            出生点保护
+            <input id="prop-spawn-protection" data-prop="spawn-protection" type="number" min="0" max="64">
+          </label>
+          <label>
+            视距
+            <input id="prop-view-distance" data-prop="view-distance" type="number" min="2" max="64">
+          </label>
+          <label>
+            模拟距离
+            <input id="prop-simulation-distance" data-prop="simulation-distance" type="number" min="2" max="64">
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-force-gamemode" data-prop="force-gamemode" type="checkbox">
+            进服强制游戏模式
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-hardcore" data-prop="hardcore" type="checkbox">
+            极限模式
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-pvp" data-prop="pvp" type="checkbox">
+            允许 PVP
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-white-list" data-prop="white-list" type="checkbox">
+            启用白名单
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-online-mode" data-prop="online-mode" type="checkbox">
+            正版验证
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-allow-flight" data-prop="allow-flight" type="checkbox">
+            允许飞行
+          </label>
+          <label class="checkbox-row">
+            <input id="prop-enable-command-block" data-prop="enable-command-block" type="checkbox">
+            启用命令方块
+          </label>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>关联项目</h2>
+        </div>
+        <div class="related-grid">
+          <a class="related-card" href="https://github.com/HMCL-dev/HMCL/releases" target="_blank" rel="noreferrer">
+            <strong>HMCL 启动器</strong>
+            <span>适合局域网和离线名配置。建议从官方 GitHub Releases 下载，并按页面 SHA-256 校验。</span>
+          </a>
+          <a class="related-card" href="https://github.com/mindcraft-bots/mindcraft" target="_blank" rel="noreferrer">
+            <strong>Mindcraft</strong>
+            <span>AI 玩家运行框架，基于 LLM 和 Mineflayer 控制 Minecraft。本控制台通过本地 Mindcraft 页面/API 下达高层任务。</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>日志</h2>
+          <button id="refreshLogsBtn" type="button">刷新日志</button>
+        </div>
+        <pre id="logsView" class="prebox logs"></pre>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/app.js?v=7"></script>
+  </body>
+</html>

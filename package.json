@@ -1,0 +1,31 @@
+{
+  "name": "minecraft-ai-companion",
+  "version": "0.1.0",
+  "description": "我的世界AI陪玩：本地/局域网 Minecraft AI 队友与 Mindcraft 整合控制台。",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/mindcraft-client.js && node --check src/autopilot.js && node --check src/processes.js && node --check src/server-properties.js && node --check src/minecraft-server.js && node --check src/mindcraft-config.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "minecraft",
+    "mindcraft",
+    "ai-companion",
+    "agent",
+    "autopilot",
+    "local-first"
+  ],
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/jcs130/minecraft-ai-companion.git",
+    "type": "git"
+  },
+  "bugs": {
+    "url": "https://github.com/jcs130/minecraft-ai-companion/issues"
+  },
+  "homepage": "https://github.com/jcs130/minecraft-ai-companion#readme",
+  "author": "jcs130"
+}
