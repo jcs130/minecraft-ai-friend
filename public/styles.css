@@ -472,6 +472,24 @@ label {
   align-items: end;
 }
 
+.runtime-settings {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.runtime-settings h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.runtime-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .related-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -579,6 +597,7 @@ label {
   .server-control-grid,
   .command-form,
   .quick-actions,
+  .runtime-settings-grid,
   .related-grid {
     grid-template-columns: 1fr;
   }

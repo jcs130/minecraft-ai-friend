@@ -33,6 +33,7 @@ const elements = {
   llmProviderHint: byId('llmProviderHint'),
   llmHint: byId('llmHint'),
   minecraftManagerHint: byId('minecraftManagerHint'),
+  minecraftRuntimeHint: byId('minecraftRuntimeHint'),
   minecraftLogView: byId('minecraftLogView'),
   mindcraftConfigHint: byId('mindcraftConfigHint'),
   mindcraftProfileHint: byId('mindcraftProfileHint'),
@@ -86,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('restartMinecraftBtn').addEventListener('click', () => postAction('/api/minecraft/restart', '已请求重启 Minecraft 服务器'))
   byId('refreshMinecraftLogBtn').addEventListener('click', refreshMinecraftLog)
   byId('minecraftCommandForm').addEventListener('submit', sendMinecraftCommand)
+  byId('minecraftRuntimeSettingsForm').addEventListener('submit', applyMinecraftRuntimeSettings)
   document.querySelectorAll('[data-minecraft-command]').forEach(button => button.addEventListener('click', runMinecraftQuickCommand))
   byId('startMindcraftBtn').addEventListener('click', () => postAction('/api/mindcraft/start', '已请求启动 Mindcraft'))
   byId('stopMindcraftBtn').addEventListener('click', () => postAction('/api/mindcraft/stop-owned', '已请求停止本页面启动的 Mindcraft'))
@@ -108,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('taskForm').addEventListener('submit', sendTask)
   refreshAll()
   loadMindcraftConfig()
+  loadServerProperties()
   setInterval(refreshAll, 5000)
 })
 
@@ -479,6 +482,12 @@ function renderMinecraftManager(status, logData) {
   byId('minecraftCommand').disabled = !canCommand
   byId('minecraftCommandForm').querySelector('button[type="submit"]').disabled = !canCommand
   document.querySelectorAll('[data-minecraft-command]').forEach(button => { button.disabled = !canCommand })
+  document.querySelectorAll('[data-runtime-control]').forEach(control => { control.disabled = !canCommand })
+  if (elements.minecraftRuntimeHint) {
+    elements.minecraftRuntimeHint.textContent = canCommand
+      ? '这里会立即发送 difficulty、defaultgamemode、gamemode 等控制台命令。持久配置请在下方 server.properties 保存。'
+      : '只有通过本页面启动并托管的 Minecraft Server，才能直接应用在线世界设置。'
+  }
   renderMinecraftLog(logData)
 }
 
@@ -719,6 +728,42 @@ async function sendMinecraftCommandText(command) {
   }
 }
 
+async function applyMinecraftRuntimeSettings(event) {
+  event.preventDefault()
+  const difficulty = byId('runtimeDifficulty').value
+  const defaultGamemode = byId('runtimeDefaultGamemode').value
+  const playerGamemode = byId('runtimePlayerGamemode').value
+  const player = byId('runtimePlayerName').value.trim() || byId('minecraftPlayerName').value.trim()
+  const commands = []
+  if (difficulty) commands.push(`difficulty ${difficulty}`)
+  if (defaultGamemode) commands.push(`defaultgamemode ${defaultGamemode}`)
+  if (playerGamemode && player) commands.push(`gamemode ${playerGamemode} ${player}`)
+  if (playerGamemode && !player) {
+    showToast('指定玩家模式需要填写玩家名')
+    return
+  }
+  if (commands.length === 0) {
+    showToast('请选择要应用的在线设置')
+    return
+  }
+  try {
+    state.busy = true
+    for (const command of commands) {
+      await apiPost('/api/minecraft/command', { command })
+    }
+    if (difficulty) byId('prop-difficulty').value = difficulty
+    if (defaultGamemode) byId('prop-gamemode').value = defaultGamemode
+    showToast(`已应用：${commands.join('；')}`)
+    await refreshMinecraftLog()
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+
 async function saveServerProperties() {
   try {
     state.busy = true
@@ -754,6 +799,9 @@ function renderServerProperties(data) {
       input.value = ''
     }
   }
+
+  if (values.difficulty && byId('runtimeDifficulty')) byId('runtimeDifficulty').value = values.difficulty
+  if (values.gamemode && byId('runtimeDefaultGamemode')) byId('runtimeDefaultGamemode').value = values.gamemode
 }
 
 function collectServerProperties() {

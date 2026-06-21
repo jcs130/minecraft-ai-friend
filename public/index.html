@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=9">
+    <link rel="stylesheet" href="/styles.css?v=10">
   </head>
   <body>
     <header class="topbar">
@@ -403,6 +403,45 @@
             <button type="button" data-minecraft-command="save-all">保存世界</button>
           </div>
         </div>
+        <div class="runtime-settings">
+          <h3>在线世界设置</h3>
+          <form id="minecraftRuntimeSettingsForm" class="runtime-settings-grid">
+            <label>
+              当前难度
+              <select id="runtimeDifficulty" data-runtime-control>
+                <option value="peaceful">和平 peaceful</option>
+                <option value="easy">简单 easy</option>
+                <option value="normal">普通 normal</option>
+                <option value="hard">困难 hard</option>
+              </select>
+            </label>
+            <label>
+              新玩家默认模式
+              <select id="runtimeDefaultGamemode" data-runtime-control>
+                <option value="survival">生存 survival</option>
+                <option value="creative">创造 creative</option>
+                <option value="adventure">冒险 adventure</option>
+                <option value="spectator">旁观 spectator</option>
+              </select>
+            </label>
+            <label>
+              指定玩家模式
+              <select id="runtimePlayerGamemode" data-runtime-control>
+                <option value="">不修改</option>
+                <option value="survival">生存 survival</option>
+                <option value="creative">创造 creative</option>
+                <option value="adventure">冒险 adventure</option>
+                <option value="spectator">旁观 spectator</option>
+              </select>
+            </label>
+            <label>
+              玩家名
+              <input id="runtimePlayerName" data-runtime-control placeholder="留空使用上面的玩家名">
+            </label>
+            <button type="submit" class="primary" data-runtime-control>立即应用</button>
+          </form>
+          <p id="minecraftRuntimeHint" class="hint">这里会立即发送服务器控制台命令。要让配置重启后仍生效，请同时在下方“服务器配置”保存 server.properties。</p>
+        </div>
         <pre id="minecraftLogView" class="prebox logs">尚未读取服务端日志。</pre>
       </section>
 
@@ -515,6 +554,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=9"></script>
+    <script src="/app.js?v=10"></script>
   </body>
 </html>
