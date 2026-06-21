@@ -1,7 +1,7 @@
 {
-  "name": "minecraft-ai-companion",
+  "name": "minecraft-ai-friend",
   "version": "0.1.0",
-  "description": "我的世界AI陪玩：本地/局域网 Minecraft AI 队友与 Mindcraft 整合控制台。",
+  "description": "我的世界AI陪玩：简单易用的本地/局域网 Minecraft AI 朋友与 Mindcraft 整合控制台。",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -16,16 +16,17 @@
     "ai-companion",
     "agent",
     "autopilot",
-    "local-first"
+    "local-first",
+    "minecraft-ai-friend"
   ],
   "license": "MIT",
   "repository": {
-    "url": "git+https://github.com/jcs130/minecraft-ai-companion.git",
+    "url": "git+https://github.com/jcs130/minecraft-ai-friend.git",
     "type": "git"
   },
   "bugs": {
-    "url": "https://github.com/jcs130/minecraft-ai-companion/issues"
+    "url": "https://github.com/jcs130/minecraft-ai-friend/issues"
   },
-  "homepage": "https://github.com/jcs130/minecraft-ai-companion#readme",
+  "homepage": "https://github.com/jcs130/minecraft-ai-friend#readme",
   "author": "jcs130"
 }

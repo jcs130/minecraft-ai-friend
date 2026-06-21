@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Minecraft AI Companion Local API
+  title: Minecraft AI Friend Local API
   version: 0.1.0
   description: Local-first API for managing Minecraft Server, Mindcraft agents, and AI companion tasks.
 servers:
