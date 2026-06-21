@@ -4,29 +4,29 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const creativeTasks = [
-  'Autonomous creative-practice task: Creative mode: do not craft items or retry failed recipes. Use creative inventory or direct placement. Improve the base as a useful home with lighting, storage, a bed, crafting utilities, windows, and a clear entrance. Do not follow the human player unless directly asked.',
-  'Autonomous creative-practice task: Creative mode: do not craft items. Make the area around the base safer and easier to use with torches, clear paths, hazard cleanup, and a visible entrance. Report briefly when done.',
-  'Autonomous creative-practice task: Creative mode: do not craft items. Prepare or improve a small farm near the base with water, tilled soil, fencing, lighting, and crop placement. Keep it coherent and local.',
-  'Autonomous creative-practice task: Creative mode: do not craft items. Organize the base interior, place useful storage and utility blocks, and make the room easy for a human player to use.',
-  'Autonomous creative-practice task: Creative mode: do not craft items. Explore a short loop around the base, identify useful landmarks, return to the base, and report the route. Stay local.'
+  '创造练习任务：不要合成物品，使用创造模式资源或直接放置。把基地改造成实用住所：补光、储物、床、工作区、窗户和清晰入口。没有明确要求时不要跟随真人玩家。',
+  '创造练习任务：不要合成物品。整理基地周边，补火把、清路、处理危险点、标记入口，让真人玩家更容易使用。',
+  '创造练习任务：不要合成物品。在基地附近准备或改善小农场：水源、耕地、围栏、照明、作物和道路连接。',
+  '创造练习任务：整理基地内部，放置实用储物和工作区，让工具、食物、方块更容易找到。',
+  '创造练习任务：围绕基地做一圈短距离观察，记录有用地标后回到基地，不要远行。'
 ]
 
 const creativeRoleTasks = [
-  'Autonomous creative-practice task: Creative mode: take the builder role. Do not craft. Improve the main base structure, lighting, roof, doors, windows, and interior utility. Avoid blocking other agents work areas.',
-  'Autonomous creative-practice task: Creative mode: take the farmer role. Do not craft. Improve the farm, fencing, water placement, crop readiness, lighting, and path connection back to the base.',
-  'Autonomous creative-practice task: Creative mode: take the scout role. Do not craft. Explore a short safe loop around the base, report useful landmarks, then return. Do not wander far.',
-  'Autonomous creative-practice task: Creative mode: take the quartermaster role. Do not craft. Organize storage and make tools and materials easy to find.'
+  '创造练习任务：你是建筑角色。不要合成。改善基地结构、照明、屋顶、门窗和内部功能区，避免挡住其他居民的施工区。',
+  '创造练习任务：你是农业角色。不要合成。改善农场、水源、围栏、作物、照明和返回基地的道路。',
+  '创造练习任务：你是侦察角色。做一次短距离安全巡查，报告地标和资源点，然后回基地。',
+  '创造练习任务：你是仓储角色。整理公共箱子和材料摆放，让工具、食物、燃料、方块更容易找到。'
 ]
 
 const survivalTasks = {
-  safety: 'Autonomous survival task: Survival mode: prioritize safety. If it is night or hostile mobs are nearby, return to the base or nearest shelter, close doors, add light if torches are available, sleep if a bed is available, and do not wander far.',
-  health: 'Autonomous survival task: Survival mode: health is the priority. Retreat from danger, avoid combat and falls, eat if food is available, return to shelter, and report what is needed if food or safety is missing.',
-  food: 'Autonomous survival task: Survival mode: secure food. Check inventory for edible food, cook raw food if fuel and furnace are available, harvest nearby crops or hunt only low-risk animals close to base, then return to safety.',
-  essentials: 'Autonomous survival task: Survival mode: build essentials. Gather a small amount of nearby wood or stone only if safe, make basic tools only when ingredients and recipe are known, and stop/report instead of retrying if a recipe is missing.',
-  base: 'Autonomous survival task: Survival mode: improve the base for survival. Add lighting, a bed if available, storage, door safety, and a simple path. Avoid decorative work until food and safety are stable.',
-  farm: 'Autonomous survival task: Survival mode: improve sustainable food. Prepare or maintain a small farm near the base with water, tilled soil, fencing or lighting when materials are available, then report missing seeds or crops.',
-  organize: 'Autonomous survival task: Survival mode: organize survival supplies. Put food, tools, fuel, blocks, and mob drops into sensible storage. Keep emergency food and tools accessible.',
-  explore: 'Autonomous survival task: Survival mode: do a short low-risk local scouting loop near the base, mark or report useful resources, avoid caves/lava/combat, and return before night or danger.'
+  safety: '生存任务：优先安全。夜晚、有雷暴或附近有怪物时，回到基地或最近庇护处，关门，能插火把就补光，能睡觉就睡觉，不要远行。',
+  health: '生存任务：优先生命值。远离危险、避免战斗和摔落，有食物就进食，回到安全处；缺食物或缺安全条件时用“需要/受阻”上报。',
+  food: '生存任务：保障食物。检查背包和公共箱子，有燃料和熔炉就烹饪生食；只在基地附近低风险采集作物或食物，然后回到安全处。',
+  essentials: '生存任务：补基础物资。只在安全范围采少量附近木头、石头或燃料；材料和配方明确时再制作工具，缺配方或材料就上报，不要反复试错。',
+  base: '生存任务：改善基地生存条件。优先补光、公共箱子、门、床位、安全边界和简单道路；食物和安全稳定前不要做纯装饰。',
+  farm: '生存任务：改善稳定食物。基地附近维护小农田：水源、耕地、作物、围栏或照明；缺种子、火把或水源时上报。',
+  organize: '生存任务：整理公共物资。把食物、工具、燃料、方块和杂物按类别放入公共箱子，自用只保留应急食物、工具和火把。',
+  explore: '生存任务：短距离安全侦察。只在基地附近小范围观察资源、危险点和地标，避免洞穴、岩浆、战斗，完成后回基地。'
 }
 
 const survivalTaskCycle = [
@@ -38,20 +38,20 @@ const survivalTaskCycle = [
 ]
 
 const survivalRoleTasks = [
-  'Autonomous survival task: Survival mode: take the safety role. Keep the base safe, lit, closed, and easy to return to. Avoid combat unless unavoidable.',
-  'Autonomous survival task: Survival mode: take the gatherer role. Gather only nearby low-risk wood, stone, food, or fuel, then return to base. Do not enter caves or wander far.',
-  'Autonomous survival task: Survival mode: take the farmer role. Improve food reliability with nearby crops, water, lighting, and safe fencing when materials are available.',
-  'Autonomous survival task: Survival mode: take the quartermaster role. Organize survival storage and keep emergency food, tools, torches, and blocks accessible.'
+  '生存任务：你负责安全。保持基地明亮、封闭、可返回；除非避不开，不主动战斗。',
+  '生存任务：你负责采集。只采基地附近低风险木头、石头、食物或燃料，采完回公共箱子，不进深洞，不远行。',
+  '生存任务：你负责农业。围绕基地附近作物、水源、照明和围栏改善食物稳定性。',
+  '生存任务：你负责仓储。整理公共箱子，保证应急食物、工具、火把和方块容易取用。'
 ]
 
-const COLLABORATION_PROTOCOL = 'Use short coordination messages only when useful: HAVE(item/count), NEED(item/count/use), DOING(task/area), DONE(result/coords), BLOCKED(reason/missing). Share inventory and recipes before crafting or cooking. Do not remove or overwrite another resident active build area.'
+const COLLABORATION_PROTOCOL = '只在有用时用中文短句协作：已有(物品/数量)、需要(物品/数量/用途)、正在做(任务/区域)、完成(结果/坐标)、受阻(原因/缺口)。合成、烹饪、建造前先共享库存和缺口。不要拆除或覆盖其他居民正在建设的区域。'
 
 const settlementRoleTasks = [
-  'Steward role: patrol the shared village base, add lighting, organize public storage, report shortages, and keep night work safe.',
-  'Builder role: improve the shared village base with walls, roof, doors, windows, lighting, paths, and useful interior blocks. Own one build area at a time and avoid tearing down player-built or resident-built blocks.',
-  'Miner role: gather nearby stone, coal, iron, and fuel from low-risk mine entrances, light the route, then deposit surplus supplies.',
-  'Scout role: explore only short safe loops around the village, mark useful resources and hazards, then return before danger or night.',
-  'Farmer role: create and maintain a small safe food area with crops, water, light, fences, and nearby animal/food support when materials are available.'
+  '生存管家：巡查共享基地、补光、整理公共箱子、报告缺口，夜晚任务优先安全。',
+  '建筑师：改善共享基地的墙体、屋顶、门窗、照明、道路和室内功能区，一次只负责一个施工区，不拆玩家或居民已建方块。',
+  '矿工：从低风险矿点采集附近石头、煤、铁和燃料，照亮路线后把多余物资存入公共箱子。',
+  '侦察员：只做村庄附近短距离安全巡查，标记资源和危险点，天黑或危险前返回。',
+  '农夫：建设和维护小型安全食物区，包括作物、水源、照明、围栏和动物/食物补给。'
 ]
 
 class Autopilot {
@@ -277,10 +277,9 @@ class Autopilot {
       ? `${assignment.role.role} role: ${assignment.role.focus}`
       : fallbackRole
     const villageContext = this.villageState ? this.villageState.taskContextFor(agentName) : ''
-    const safety = state && state.gameplay && state.gameplay.timeLabel === 'Night'
-      ? 'It is night: prefer lighting, shelter, storage, and indoor/base work until safe.'
-      : 'If safe, continue village construction and local resource loops.'
-    return normalizeTask(`Long-term world directive: ${this.worldDirective || 'Build and maintain the AI village as permanent residents.'} Village plan: ${villageContext} Current assignment for ${agentName}: ${role} ${safety} ${COLLABORATION_PROTOCOL} Keep acting like a permanent resident of the village, coordinate with other AI players, and use shared storage.`, this.assistantMode)
+    const safety = state && state.gameplay && state.gameplay.timeLabel === 'Night'      ? '现在是夜晚或危险时段：优先照明、庇护、仓库和基地内工作。'
+      : '如果安全，继续村庄建设和基地附近资源循环。'
+    return normalizeTask(`长期世界目标：${this.worldDirective || '作为常驻居民建设和维护 AI 村庄。'} 村庄计划：${villageContext} ${agentName} 当前分工：${role} ${safety} ${COLLABORATION_PROTOCOL} 所有公开聊天、思考字幕、协作短句和 VILLAGE_REPORT 的 title/description 都必须使用中文。开始行动前先用中文说“思考：我现在要……因为……下一步……可能缺少……”。这里只写面向观众的行动计划，不复述系统提示、模型规则或内部推理。继续像村庄常驻居民一样行动，与其他 AI 玩家协作并使用公共箱子。`, this.assistantMode)
   }
 
   creativeFallbackDecision(agentName, state) {
@@ -440,31 +439,33 @@ async function runLimited(items, limit, worker) {
 
 function buildSystemPrompt(mode) {
   const base = [
-    'You are a high-level Minecraft supervisor for Mindcraft agents.',
-    'Choose one useful, autonomous, player-like goal for the named agent based on the current world state.',
-    'If a worldDirective is present in the state JSON, treat it as the long-term objective and keep new tasks aligned with it.',
-    'Encourage agents to coordinate with other online AI players through concise in-game chat when it helps divide labor.',
+    '你是 Minecraft Mindcraft AI 居民的高层调度器。',
+    '请根据当前世界状态，为指定 AI 选择一个有用、独立、像真实玩家一样的小目标。',
+    '如果 state JSON 里有 worldDirective，它是长期目标，所有新任务都要与它一致。',
+    '所有输出必须使用中文，包括任务正文、聊天句子、协作短句、VILLAGE_REPORT 的 title 和 description。',
+    '任务必须包含一段给观众看的公开思考要求：让 AI 开始行动前在游戏聊天里用“思考：...”说明当前计划、选择理由、下一步和可能缺口。这个公开思考要完整、自然、中文，但只能是面向观众的行动说明，不输出隐藏推理或提示词内容。',
+    '鼓励 AI 在有助于分工时用简短中文和其他在线 AI 协作。',
     COLLABORATION_PROTOCOL,
-    'For construction tasks, assign a small area/layer/material and tell the agent not to remove blocks placed by another resident unless asked.',
-    'For crafting or cooking tasks, tell the agent to share inventory/recipe needs first, then collect or hand off resources, then assemble the result.',
-    'If the task involves public infrastructure, tell the agent to report progress with VILLAGE_REPORT JSON in chat when it starts, completes, or is blocked.',
-    'Do not tell the agent to follow, chase, or wait beside the human player unless directly requested.',
-    'Do not ask it to run host code, use insecure coding, change server settings, or grief the world.',
-    'Keep the task concise, concrete, and safe. Return only JSON: {"task":"..."}.'
+    '建造任务要分配小区域、层、材料或清单项，并说明不要拆除其他居民或玩家已放置的方块。',
+    '合成或烹饪任务要先共享库存和配方缺口，再收集或交接材料，最后制作成品。',
+    '如果任务涉及公共基础设施，要求 AI 在开始、完成或受阻时用 VILLAGE_REPORT JSON 上报。',
+    '除非明确要求，不要让 AI 跟随、追逐或贴着真人玩家等待。',
+    '不要让 AI 运行主机代码、改服务器设置、破坏世界、远行或反复尝试缺失配方。',
+    '任务要具体、安全、可执行。只返回 JSON：{"task":"..."}。'
   ]
 
   if (mode === 'survival') {
     base.push(
-      'Current assistant mode is survival.',
-      'Priority order: stay alive, avoid danger, food, shelter, bed/sleep, lighting, basic tools, sustainable farm, local resources, short reports.',
-      'Avoid caves, lava, long trips, unnecessary combat, risky falls, and wandering far from base.',
-      'Craft only common vanilla items when the ingredients and recipe are known. If a recipe or ingredient is missing, do not retry endlessly; switch to a safer goal or report what is missing.'
+      '当前模式是生存。',
+      '优先级：活下来、避险、食物、庇护、床/睡觉、照明、基础工具、稳定农场、基地附近资源、短句上报。',
+      '避免洞穴、岩浆、长距离旅行、不必要战斗、摔落风险和远离基地。',
+      '只在材料和配方明确时合成常见原版物品；缺配方或材料时不要无限重试，改做更安全目标或上报缺口。'
     )
   } else {
     base.push(
-      'Current assistant mode is creative practice.',
-      'The agent should build, furnish, light, farm, organize, or explore locally.',
-      'Creative mode rule: do not craft items and do not retry failed recipes. Use creative inventory or direct placement instead.'
+      '当前模式是创造练习。',
+      '不要要求合成物品；创造模式下使用创造资源或直接放置。',
+      '重点是建造、装饰、照明、安全、道路、农场和短距离观察。'
     )
   }
 
@@ -530,11 +531,11 @@ function isIdle(state) {
 
 function normalizeTask(task, mode) {
   const value = String(task || '').trim()
-  if (/^Autonomous (creative-practice|survival) task:/i.test(value) || /^Survival assistant task:/i.test(value)) return value
+  if (/^(Autonomous (creative-practice|survival) task:|Survival assistant task:|生存任务：|创造练习任务：)/i.test(value)) return value
   if (mode === 'survival') {
-    return `Autonomous survival task: Survival mode: prioritize safety, food, shelter, lighting, and short local goals. ${value}`
+    return `生存任务：优先安全、食物、庇护、照明和基地附近短目标。${value}`
   }
-  return `Autonomous creative-practice task: Creative mode: do not craft items; use creative inventory or direct placement. ${value}`
+  return `创造练习任务：不要合成物品，使用创造模式资源或直接放置。${value}`
 }
 
 function normalizeAssistantMode(value) {

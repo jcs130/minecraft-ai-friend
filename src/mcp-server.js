@@ -12,12 +12,12 @@ const MCP_SERVER_INFO = {
 const FIRST_NIGHT_TASK = '你是一个耐心的 Minecraft 新手导师。请陪玩家完成第一晚生存：先确认玩家位置和安全，再引导砍树、做工作台、做木镐/木剑、找食物、搭临时庇护所、插火把或躲避夜晚。不要抢走玩家体验，先解释再示范，遇到怪物时保护玩家。'
 const FREE_PLAY_TASK = '你现在作为一个自主但友好的玩家行动。不要一直贴身跟随真人玩家；根据世界状态选择有价值的小目标，例如补光、收集基础资源、巡逻、改善基地或探索附近。遇到玩家求助时优先响应。'
 const COLLAB_TASKS = {
-  sync_status: 'Autonomous survival task: 进行一次 60 秒协作同步。每个 AI 用短句汇报 HAVE(关键库存)、DOING(当前任务/区域)、NEED(缺口)，然后继续自己的角色任务。不要长篇聊天。',
-  shared_storage: 'Autonomous survival task: 执行公共库存整理。所有 AI 先用 HAVE/NEED 同步关键物资；采集者把多余木头、石头、煤、食物、火把放入公共箱子；Alex 负责分类并用 VILLAGE_REPORT 上报缺口。',
-  craft_tools: 'Autonomous survival task: 执行协作合成基础工具。先共享库存和缺口，Milo/Alex 准备木头、圆石、煤和木棍，能合成时制作镐、斧、铲或火把；缺配方或材料就 BLOCKED 上报，不要重复试错。',
-  cook_meal: 'Autonomous survival task: 执行食物补给任务。Ivy 优先找作物/动物/水源，Alex 负责安全和燃料，其他人只做近距离支援；成品食物放公共箱子并上报。',
-  build_zone: 'Autonomous survival task: 执行分区建造任务。Luna 先声明 DOING(建筑区域/坐标)，其他人只供材料和补光，不要拆或覆盖 Luna 的方块；完成阶段后用 VILLAGE_REPORT 上报。',
-  resource_chain: 'Autonomous survival task: 执行资源接力。Milo 采石煤铁，Nova 标记安全路线，Ivy 保障食物，Alex 整理入库，Luna 只使用公共箱子材料建设；所有人用 NEED/HAVE/DONE 短句协调。'
+  sync_status: '生存任务： 进行一次 60 秒协作同步。每个 AI 用中文短句汇报 已有(关键库存)、正在做(当前任务/区域)、需要(缺口)，然后继续自己的角色任务。不要长篇聊天。',
+  shared_storage: '生存任务： 执行公共库存整理。所有 AI 先用中文“已有/需要”同步关键物资；采集者把多余木头、石头、煤、食物、火把放入公共箱子；Alex 负责分类并用 VILLAGE_REPORT 上报缺口。',
+  craft_tools: '生存任务： 执行协作合成基础工具。先共享库存和缺口，Milo/Alex 准备木头、圆石、煤和木棍，能合成时制作镐、斧、铲或火把；缺配方或材料就用“受阻”上报，不要重复试错。',
+  cook_meal: '生存任务： 执行食物补给任务。Ivy 优先找作物/动物/水源，Alex 负责安全和燃料，其他人只做近距离支援；成品食物放公共箱子并上报。',
+  build_zone: '生存任务： 执行分区建造任务。Luna 先声明“正在做(建筑区域/坐标)”，其他人只供材料和补光，不要拆或覆盖 Luna 的方块；完成阶段后用 VILLAGE_REPORT 上报。',
+  resource_chain: '生存任务： 执行资源接力。Milo 采石煤铁，Nova 标记安全路线，Ivy 保障食物，Alex 整理入库，Luna 只使用公共箱子材料建设；所有人用中文“需要/已有/完成”短句协调。'
 }
 
 class McpBridge {
@@ -573,14 +573,14 @@ function normalizePresetTask(task, args) {
   const preset = String(task || '').trim().toLowerCase()
   if (preset === 'first_night') return FIRST_NIGHT_TASK
   if (preset === 'free_play') return FREE_PLAY_TASK
-  if (preset === 'gather_wood') return 'Autonomous survival task: 在基地附近安全采集木头，优先砍少量树，避免跑远；采集后把多余木头放进公共箱子，并用 VILLAGE_REPORT 上报进度。'
-  if (preset === 'mine' || preset === 'mine_diamond') return 'Autonomous survival task: 执行安全采矿任务。优先在基地附近寻找低风险矿点，采集石头、煤和铁，补光路线，避免深洞、岩浆和长距离冒险，返回后把材料放进公共箱子并上报。'
-  if (preset === 'build_base') return 'Autonomous survival task: 改善基地。优先公共箱子、照明、门、简单墙体、道路和安全边界；不要拆真人玩家已有建筑，完成公共设施后用 VILLAGE_REPORT 上报。'
-  if (preset === 'guard_base') return 'Autonomous survival task: 巡逻基地周围，补光、处理近距离危险、标记坑洞和水边，夜晚优先留在基地附近保护公共区域。'
+  if (preset === 'gather_wood') return '生存任务： 在基地附近安全采集木头，优先砍少量树，避免跑远；采集后把多余木头放进公共箱子，并用 VILLAGE_REPORT 上报进度。'
+  if (preset === 'mine' || preset === 'mine_diamond') return '生存任务： 执行安全采矿任务。优先在基地附近寻找低风险矿点，采集石头、煤和铁，补光路线，避免深洞、岩浆和长距离冒险，返回后把材料放进公共箱子并上报。'
+  if (preset === 'build_base') return '生存任务： 改善基地。优先公共箱子、照明、门、简单墙体、道路和安全边界；不要拆真人玩家已有建筑，完成公共设施后用 VILLAGE_REPORT 上报。'
+  if (preset === 'guard_base') return '生存任务： 巡逻基地周围，补光、处理近距离危险、标记坑洞和水边，夜晚优先留在基地附近保护公共区域。'
   if (COLLAB_TASKS[preset]) return COLLAB_TASKS[preset]
 
   const extra = args && args.args && typeof args.args === 'object'
-    ? ` Extra args: ${JSON.stringify(args.args)}`
+    ? ` 额外参数：${JSON.stringify(args.args)}`
     : ''
   return `${task}${extra}`
 }

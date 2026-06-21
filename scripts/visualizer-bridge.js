@@ -12,6 +12,22 @@ const COLORS = {
   Ivy: '#69c46d'
 }
 
+const TASK_LABELS = {
+  'storage-hub': '整理公共仓库',
+  'safe-lighting': '基地照明与安全',
+  'starter-farm': '建设稳定农场',
+  'starter-mine': '维护安全矿点',
+  'village-paths': '修建村庄道路',
+  'resident-houses': '建设居民小屋',
+  mine: '采矿补给',
+  farm: '农田和食物',
+  build_shelter: '建造和修缮',
+  explore: '短距离侦察',
+  guard: '安全巡逻',
+  chat: '居民协作沟通',
+  deposit: '存放和整理物资',
+  idle: '等待新任务'
+}
 main().catch(error => {
   console.error(`[visualizer-bridge] failed: ${error.stack || error.message}`)
   process.exitCode = 1
@@ -50,8 +66,10 @@ function mapAgent(agentContext) {
   const memory = agentContext.memory || {}
   const statusReport = latest((agentContext.stored && agentContext.stored.statusReports) || []) || latest(memory.statusReports || []) || {}
   const title = role.role || role.roleId || '居民'
-  const currentTask = statusReport.task || project.id || normalizeAction(state.currentAction || state.action || 'idle')
-  const thought = statusReport.summary || memory.lastStatusSummary || memory.lastTaskSummary || project.goal || state.currentAction || '正在观察村庄状态。'
+  const rawTask = statusReport.task || project.id || normalizeAction(state.currentAction || state.action || 'idle')
+  const currentTask = readableTask(rawTask)
+  const fallbackThought = `公开思考待上报。当前计划：${currentTask}。下一步会根据库存、坐标和安全情况继续执行。`
+  const thought = publicThought(memory.recentOutputs) || cleanThought(statusReport.summary || memory.lastStatusSummary || project.goal || state.currentAction || memory.lastTaskSummary, fallbackThought)
 
   return {
     id: agentContext.agent,
@@ -76,6 +94,63 @@ function mapAgent(agentContext) {
   }
 }
 
+function readableTask(value) {
+  const raw = String(value || 'idle').trim()
+  if (TASK_LABELS[raw]) return TASK_LABELS[raw]
+  const normalized = normalizeAction(raw)
+  if (TASK_LABELS[normalized]) return TASK_LABELS[normalized]
+  return cleanThought(raw, '村庄任务')
+}
+
+function publicThought(outputs) {
+  const items = Array.isArray(outputs) ? outputs.slice().reverse() : []
+  for (const item of items) {
+    const text = typeof item === 'string' ? item : item && item.text
+    if (!text) continue
+    if (/思考[:：]|Thought[:：]|HAVE|NEED|DOING|DONE|BLOCKED|已有|需要|完成|受阻|正在做/.test(text)) {
+      return cleanThought(text, '')
+    }
+  }
+  return ''
+}
+
+function cleanThought(value, fallback) {
+  const cleaned = String(value || '')
+    .replace(/Autonomous\s+(creative-practice|survival)\s+task:\s*/gi, '')
+    .replace(/\(To\s+([^\)]+)\)/gi, '（对$1）')
+    .replace(/VILLAGE_REPORT\s+\{.*?(?=\s*!|$)/gi, '')
+    .replace(/![a-zA-Z_]\w*\([^)]*\)/g, '')
+    .replace(/Thought\s*[:：]\s*/gi, '思考：')
+    .replace(/想法\s*[:：]\s*/g, '思考：')
+    .replace(/公开反思/g, '公开思考')
+    .replace(/\black of wool\b/gi, '缺少羊毛')
+    .replace(/\bChecking the next level\.{0,3}/gi, '继续检查下一层。')
+    .replace(/\btorches\b/gi, '火把')
+    .replace(/\bmain road\b/gi, '主路')
+    .replace(/\bHAVE\s*[:：]\s*/gi, '已有：')
+    .replace(/\bNEED\s*[:：]\s*/gi, '需要：')
+    .replace(/\bDOING\s*[:：]\s*/gi, '正在做：')
+    .replace(/\bDONE\s*[:：]\s*/gi, '完成：')
+    .replace(/\bBLOCKED\s*[:：]\s*/gi, '受阻：')
+    .replace(/\bHAVE\s*[\\(（]/gi, '已有（')
+    .replace(/\bNEED\s*[\\(（]/gi, '需要（')
+    .replace(/\bDOING\s*[\\(（]/gi, '正在做（')
+    .replace(/\bDONE\s*[\\(（]/gi, '完成（')
+    .replace(/\bBLOCKED\s*[\\(（]/gi, '受阻（')
+    .replace(/Survival\s+mode:\s*/gi, '生存模式：')
+    .replace(/Creative\s+mode:\s*/gi, '创造模式：')
+    .replace(/Long-term\s+world\s+directive:\s*/gi, '长期目标：')
+    .replace(/Village\s+plan:\s*/gi, '村庄计划：')
+    .replace(/Current\s+assignment\s+for\s+/gi, '当前分工：')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return fallback || ''
+  if (/(管理员指令|系统提示|系统指令|提示说|模型规则|内部推理|思想块|这是一个矛盾|不要在聊天中使用英文)/.test(cleaned)) {
+    return fallback || '公开思考：我会继续当前任务，并只用中文汇报计划、原因、下一步和材料缺口。'
+  }
+  if (!/[\u4e00-\u9fff]/.test(cleaned) && cleaned.length > 40) return fallback || '等待中文公开思考。'
+  return cleaned
+}
 function sharedResources(context, agents) {
   const ledger = {}
   for (const agent of agents) {
@@ -103,7 +178,7 @@ function bulletins(context) {
     agentName: report.agent,
     title: report.status || '状态',
     color: COLORS[report.agent] || '#9ca3af',
-    message: report.summary || report.task || report.detail || '状态更新'
+    message: cleanThought(report.summary || report.task || report.detail || '状态更新', '状态更新')
   })), ...notes.slice(0, 12).map(note => ({
     id: note.id,
     time: note.at,
@@ -112,7 +187,7 @@ function bulletins(context) {
     agentName: note.agent,
     title: '记忆',
     color: COLORS[note.agent] || '#9ca3af',
-    message: note.text || ''
+    message: cleanThought(note.text || '', '记忆更新')
   }))]
 }
 

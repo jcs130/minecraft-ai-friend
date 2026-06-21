@@ -308,31 +308,31 @@ class VillageState {
   taskContextFor(agentName) {
     const assignment = this.assignmentFor(agentName)
     const parts = []
-    if (this.state.commander) parts.push(`Commander: ${this.state.commander.title} ${this.state.commander.name}. ${this.state.commander.persona}`)
-    if (assignment.settlement && assignment.settlement.name) parts.push('Village name: ' + assignment.settlement.name + '.')
+    if (this.state.commander) parts.push(`村长：${this.state.commander.title} ${this.state.commander.name}。${this.state.commander.persona}`)
+    if (assignment.settlement && assignment.settlement.name) parts.push('村庄名称：' + assignment.settlement.name + '。')
     if (assignment.settlement && assignment.settlement.base) {
-      parts.push(`Village base is at ${formatPosition(assignment.settlement.base)} with radius ${assignment.settlement.radius || 120}.`)
+      parts.push(`村庄基地坐标是 ${formatPosition(assignment.settlement.base)}，活动半径 ${assignment.settlement.radius || 120}。`)
     }
     if (assignment.settlement && assignment.settlement.publicChest) {
-      parts.push(`Shared public chest is at ${formatPosition(assignment.settlement.publicChest)}.`)
+      parts.push(`公共箱子坐标是 ${formatPosition(assignment.settlement.publicChest)}。`)
     }
     if (assignment.role) {
-      parts.push(`${agentName} role: ${assignment.role.role} (${assignment.role.focus})`)
+      parts.push(`${agentName} 的角色：${assignment.role.role}（${assignment.role.focus}）`)
     }
     if (assignment.project) {
-      parts.push(`Current village project: ${assignment.project.title}. Goal: ${assignment.project.goal}`)
+      parts.push(`当前村庄项目：${assignment.project.title}。目标：${assignment.project.goal}`)
       const todo = (assignment.project.checklist || []).find(item => !item.done)
-      if (todo) parts.push(`Next checklist item: ${todo.text}.`)
+      if (todo) parts.push(`下一项清单：${todo.text}。`)
     }
     if (assignment.shortage) {
-      parts.push(`Resource shortage: ${assignment.shortage.name} ${assignment.shortage.current}/${assignment.shortage.target} ${assignment.shortage.unit || ''}.`)
+      parts.push(`资源缺口：${assignment.shortage.name} ${assignment.shortage.current}/${assignment.shortage.target} ${assignment.shortage.unit || ''}。`)
     }
     const publicInfrastructure = (this.state.infrastructures || []).filter(item => item.public).slice(-6)
     if (publicInfrastructure.length > 0) {
-      parts.push('Known public infrastructure: ' + publicInfrastructure.map(item => `${item.title} at ${formatPosition(item.position)}`).join('; ') + '.')
+      parts.push('已知公共设施：' + publicInfrastructure.map(item => `${item.title} 位于 ${formatPosition(item.position)}`).join('；') + '。')
     }
-    parts.push('Work as a permanent resident, coordinate with other AI players, and deposit surplus materials into shared storage.')
-    parts.push('When you start or finish a public facility, report it in chat exactly as VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"short name","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"what changed","projectId":"optional","checklistId":"optional"}.')
+    parts.push('你要像常驻居民一样行动，与其他 AI 玩家协作，把多余材料存入公共箱子。')
+    parts.push('开始、完成或受阻于公共设施时，请在聊天里准确上报：VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"中文短名","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"中文说明","projectId":"optional","checklistId":"optional"}。')
     return parts.join(' ')
   }
 

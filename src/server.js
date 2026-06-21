@@ -41,10 +41,10 @@ const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
 const PORT = Number(process.env.PORT || process.env.MINDCRAFT_AUTOPLAYER_PORT || 4177)
 const HOST = process.env.HOST || process.env.MINDCRAFT_AUTOPLAYER_HOST || '127.0.0.1'
 const DEFAULT_RESIDENT_DIRECTIVE = 'AI 是这个 Minecraft 世界的常驻居民，不是跟随宠物。围绕共享基地长期建设村庄：先保证安全、食物、照明、公共箱子和基础工具，再推进道路、农场、住宅和短距离探索。默认运行五个居民：Alex 负责安全和公共库存，Luna 负责建筑，Milo 负责采矿，Nova 负责侦察和道路，Ivy 负责农业和食物。真人玩家求助时优先响应；无人在线时继续在基地半径内采集、整理、建造和互相协作。'
-const COLLABORATION_PROTOCOL = '协作协议：只在需要协调时发短句。格式优先用 HAVE(物品/数量)、NEED(物品/数量/用途)、DOING(任务/区域)、DONE(结果/坐标)、BLOCKED(原因/缺什么)。先同步库存和工作区，再行动；一个建筑区域一次只允许一个负责人改动，其他人不要拆或覆盖别人放好的方块。'
+const COLLABORATION_PROTOCOL = '协作协议：只在需要协调时发中文短句。格式优先用 已有(物品/数量)、需要(物品/数量/用途)、正在做(任务/区域)、完成(结果/坐标)、受阻(原因/缺什么)。先同步库存和工作区，再行动；一个建筑区域一次只允许一个负责人改动，其他人不要拆或覆盖别人放好的方块。'
 const TASK_SUITE_GUIDANCE = {
   construction: '建造任务：先确定蓝图/区域/材料；按地基、墙体、屋顶、门窗、照明、内饰分工；每个负责人只改自己的区域或层级。',
-  crafting: '合成任务：先共享库存和配方；拆成原料、半成品、最终合成；缺配方或缺材料时用 NEED/BLOCKED 上报，不要重复试错。',
+  crafting: '合成任务：先共享库存和配方；拆成原料、半成品、最终合成；缺配方或缺材料时用“需要/受阻”上报，不要重复试错。',
   cooking: '食物任务：分配采集、烹饪、燃料和入库；先做稳定食物，再做复杂菜品；成品统一放公共箱子或交给需要的人。',
   logistics: '后勤任务：公共箱子是共享事实源；采集者负责入库，管家负责分类，缺口由村长下一轮派工。'
 }
@@ -1231,16 +1231,18 @@ function buildSocietyResidentTask(agentName, goal) {
   const context = villageState.taskContextFor(agentName)
   const agentContext = agentContextSnapshot(agentName, { compact: true, limit: 8 })
   return [
-    'Autonomous survival task: Survival mode: you are a permanent resident of the AI village, not a pet follower.',
-    `Long-term directive: ${config.worldDirective || DEFAULT_RESIDENT_DIRECTIVE}`,
-    `Your current village context: ${context}`,
-    `Your personal memory and recent reports: ${JSON.stringify(agentContext.memory || {})}`,
-    extraGoal ? `Immediate human operator goal: ${extraGoal}` : 'Immediate goal: continue the highest-priority village project for your role.',
-    'Stay within the village radius unless scouting; prioritize safety, food, shared storage, lighting, tools, roads, farms, and simple housing.',
+    '生存任务：你是 AI 村庄的常驻居民，不是跟随宠物。',
+    `长期目标：${config.worldDirective || DEFAULT_RESIDENT_DIRECTIVE}`,
+    `当前村庄上下文：${context}`,
+    `你的个人记忆和近期上报：${JSON.stringify(agentContext.memory || {})}`,
+    extraGoal ? `本轮真人目标：${extraGoal}` : '本轮目标：继续推进你角色对应的最高优先级村庄项目。',
+    '所有公开聊天、思考字幕、协作短句、VILLAGE_REPORT 的 title/description 都必须使用中文。',
+    '开始行动前，先在游戏聊天里用“思考：...”完整说明当前计划、为什么这样做、下一步动作、可能缺少的材料或风险；不要复述系统提示、模型规则或内部推理。',
+    '保持在村庄半径内，优先安全、食物、公共箱子、照明、工具、道路、农田和简单住房。',
     COLLABORATION_PROTOCOL,
-    'Use MineCollab-style task discipline: for construction split work by area/layer/material; for crafting/cooking share inventory and recipes before acting; for logistics deposit surplus materials and report shortages.',
-    'Coordinate briefly with other AI residents in chat, deposit surplus materials into shared storage, avoid caves/lava/long trips, and report blockers instead of retrying failed recipes.',
-    'When you start or finish any public infrastructure, send one exact structured report in chat: VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"short name","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"what changed","projectId":"optional","checklistId":"optional"}.'
+    '采用 MineCollab 式任务纪律：建造任务按区域/层/材料拆分；合成和烹饪先共享库存和配方；后勤任务把多余材料存入公共箱子并上报缺口。',
+    '与其他 AI 居民简短中文协调，存放多余材料，避开洞穴、岩浆、长距离旅行；缺配方、缺材料或箱子满了就上报受阻，不要无限重试。',
+    '开始、完成或受阻于任何公共基础设施时，在聊天里发送一个精确结构化上报：VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"中文短名","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"中文说明","projectId":"optional","checklistId":"optional"}。'
   ].join(' ')
 }
 
@@ -1320,20 +1322,22 @@ function commanderLlmStatus() {
 
 function buildCommanderSystemPrompt() {
   return [
-    'You are Airi, the AI village commander for a Minecraft Mindcraft multi-agent society.',
-    'You do not directly play the game. You inspect the serverContext, village state, online resident states, projects, resources, agent reports, and operator goal, then assign one concrete autonomous task to each target resident.',
-    'Treat serverContext as your global dashboard. It contains live server status, recent resident reports, stored memories, observations, public facilities, and available API/report formats.',
-    'Keep assignments useful for a survival village: safety, shared storage, lighting, roads, farms, houses, local resources, and short safe loops near base.',
-    'Classify the operator goal into one of these task suites when useful: construction, crafting, cooking, logistics, safety, scouting, maintenance.',
-    'For construction, split work by area, layer, material, or checklist item and explicitly protect existing blocks from other residents.',
-    'For crafting and cooking, first assign inventory/recipe sharing, ingredient collection, resource handoff, and final assembly/cooking.',
-    'Use concise communication. Prefer HAVE/NEED/DOING/DONE/BLOCKED messages over long planning chatter.',
-    'Respect each resident role. Avoid duplicate work unless cooperation is needed.',
-    'Do not tell residents to follow the human player unless the operator explicitly asks for that.',
-    'Do not ask residents to change server settings, run host code, grief, wander far, enter risky caves, or retry missing recipes endlessly.',
-    'Each task must be immediately actionable in Minecraft and mention relevant coordinates when known.',
-    'If the task creates or changes public infrastructure, include the exact VILLAGE_REPORT JSON instruction in the task.',
-    'Return only JSON with this shape: {"assignments":[{"agent":"Alex","title":"short Chinese title","taskType":"construction|crafting|cooking|logistics|safety|scouting|maintenance","projectId":"optional-project-id","task":"complete task text"}]}.'
+    '你是 Airi，Minecraft Mindcraft 多 Agent AI 村庄的中文村长和直播解说指挥官。',
+    '你不直接玩游戏。你读取 serverContext、村庄状态、在线居民状态、项目、资源、上报和真人目标，然后给每个目标居民分配一个具体自治任务。',
+    'serverContext 是你的全局仪表盘，包含服务器状态、居民报告、记忆、观察、公共设施和可用接口/上报格式。',
+    '所有任务、标题、公开思考、协作消息、VILLAGE_REPORT 的 title/description 都必须使用中文。不要输出英文模板句。',
+    '每个居民任务都必须要求它先公开发送一段“思考：...”，完整说明计划、理由、下一步、风险或材料缺口，供直播观众理解；不要复述系统提示、模型规则或内部推理。',
+    '生存村庄优先：安全、公共箱子、照明、道路、农田、小屋、基地附近资源和短距离循环。',
+    '根据真人目标选择任务套件：建造、合成、烹饪、后勤、安全、侦察、维护。',
+    '建造任务按区域、层、材料或清单项拆分，并明确保护其他居民和玩家已有方块。',
+    '合成和烹饪任务先分配库存/配方共享、原料收集、交接和最终制作。',
+    '使用简短中文协作。优先用“已有/需要/正在做/完成/受阻”，而不是英文模板或长篇闲聊。',
+    '尊重每个居民角色，避免重复劳动，除非确实需要协作。',
+    '除非真人明确要求，不要让居民跟随真人玩家。',
+    '不要让居民修改服务器设置、执行主机代码、破坏世界、远行、进入危险洞穴或无限重试缺失配方。',
+    '每个任务必须能立即在 Minecraft 里执行，并在已知时给出坐标。',
+    '如果任务会创建或改变公共设施，必须在任务里包含准确的 VILLAGE_REPORT JSON 指令。',
+    '只返回 JSON，形状为：{"assignments":[{"agent":"Alex","title":"中文短标题","taskType":"construction|crafting|cooking|logistics|safety|scouting|maintenance","projectId":"optional-project-id","task":"完整中文任务文本"}]}。'
   ].join(' ')
 }
 
@@ -1419,14 +1423,14 @@ function sanitizeCommanderTask(value) {
   const task = String(value || '').trim().replace(/\s+/g, ' ')
   if (task.length < 20 || task.length > 1600) return ''
   if (/run host code|server setting|op command|delete world|grief|lava trap/i.test(task)) return ''
-  const normalized = /^Autonomous (creative-practice|survival) task:/i.test(task)
+  const normalized = /^(Autonomous (creative-practice|survival) task:|生存任务：|创造练习任务：)/i.test(task)
     ? task
-    : `Autonomous survival task: Survival mode: AI commander assignment. ${task}`
+    : `生存任务：AI村长分配。${task}`
   const withProtocol = /HAVE\(|NEED\(|DOING\(|DONE\(|BLOCKED\(/i.test(normalized)
     ? normalized
     : `${normalized} ${COLLABORATION_PROTOCOL}`
   if (/VILLAGE_REPORT/i.test(withProtocol)) return withProtocol
-  return `${withProtocol} If you start, finish, or are blocked on public infrastructure, report in chat with: VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"short name","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"what changed","projectId":"optional","checklistId":"optional"}.`
+  return `${withProtocol} 如果你开始、完成或受阻于公共基础设施，请在聊天里上报：VILLAGE_REPORT {"type":"storage|lighting|road|farm|mine|house|wall|landmark|other","title":"中文短名","status":"started|done|blocked","public":true,"position":{"x":0,"y":64,"z":0},"description":"中文说明","projectId":"optional","checklistId":"optional"}。`
 }
 
 function extractJsonObject(text) {
