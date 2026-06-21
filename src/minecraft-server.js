@@ -16,6 +16,7 @@ class MinecraftServerManager {
   }
 
   async snapshot(config) {
+    this.lastServerDir = config.minecraftServerDir
     const tcpOpen = await testTcp(config.minecraftHost, config.minecraftPort)
     const processes = await listMinecraftProcesses(config.minecraftServerDir, config.minecraftPort)
     const owned = this.ownedRunning()
@@ -111,6 +112,27 @@ class MinecraftServerManager {
     return { ok: true, command: clean }
   }
 
+  async queryPlayerPosition(playerName, timeoutMs = 4000) {
+    const player = sanitizePlayerName(playerName)
+    const filePath = latestLogPath(this.lastServerDir)
+    if (!filePath || !fs.existsSync(filePath)) {
+      throw new Error('未找到服务端日志，无法读取玩家坐标。')
+    }
+
+    const startOffset = fs.statSync(filePath).size
+    this.sendCommand(`data get entity ${player} Pos`)
+    const started = Date.now()
+
+    while (Date.now() - started < timeoutMs) {
+      await delay(250)
+      const appended = readLogFromOffset(filePath, startOffset)
+      const parsed = parseEntityPosition(appended, player)
+      if (parsed) return parsed
+    }
+
+    throw new Error(`没有读到玩家 ${player} 的坐标。确认玩家在线，并且服务端由本页面托管。`)
+  }
+
   writeConsoleLine(line) {
     if (!this.child || !this.child.stdin) throw new Error('Minecraft server stdin is not available')
     this.child.stdin.write(`${line}\n`)
@@ -190,6 +212,45 @@ function sanitizeConsoleCommand(command) {
     .replace(/^\//, '')
     .replace(/[\r\n]+/g, ' ')
     .slice(0, 240)
+}
+
+function sanitizePlayerName(playerName) {
+  const clean = String(playerName || '').trim()
+  if (!/^[A-Za-z0-9_]{1,32}$/.test(clean)) {
+    throw new Error('玩家名只能包含英文、数字和下划线。')
+  }
+  return clean
+}
+
+function readLogFromOffset(filePath, startOffset) {
+  const buffer = fs.readFileSync(filePath)
+  const offset = Math.max(0, Math.min(Number(startOffset) || 0, buffer.length))
+  return buffer.subarray(offset).toString('utf8')
+}
+
+function parseEntityPosition(logText, playerName) {
+  const marker = playerName + ' has the following entity data:'
+  const lines = String(logText || '').split(/\r?\n/)
+  let current = null
+  for (const line of lines) {
+    if (!line.includes(marker)) continue
+    const match = line.match(/\[\s*([-+0-9.eE]+)d?,\s*([-+0-9.eE]+)d?,\s*([-+0-9.eE]+)d?\]/)
+    if (match) current = match
+  }
+  if (!current) return null
+  return {
+    player: playerName,
+    position: {
+      x: Number(current[1]),
+      y: Number(current[2]),
+      z: Number(current[3])
+    },
+    line: current[0]
+  }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function latestLogPath(serverDir) {

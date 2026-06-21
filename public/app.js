@@ -4,7 +4,11 @@ const state = {
   status: null,
   config: null,
   modelProviders: [],
-  busy: false
+  busy: false,
+  viewerIndex: 0,
+  viewerAuto: true,
+  viewerGridSignature: '',
+  featuredViewerUrl: ''
 }
 
 const elements = {
@@ -28,6 +32,15 @@ const elements = {
   agentsList: byId('agentsList'),
   agentCreateForm: byId('agentCreateForm'),
   newAgentName: byId('newAgentName'),
+  humanPlayerName: byId('humanPlayerName'),
+  locateAgentName: byId('locateAgentName'),
+  playerLocationHint: byId('playerLocationHint'),
+  viewerGrid: byId('viewerGrid'),
+  featuredViewerTitle: byId('featuredViewerTitle'),
+  featuredViewerFrame: byId('featuredViewerFrame'),
+  viewerAutoBtn: byId('viewerAutoBtn'),
+  viewerNextBtn: byId('viewerNextBtn'),
+  viewerOpenBtn: byId('viewerOpenBtn'),
   logsView: byId('logsView'),
   memoryView: byId('memoryView'),
   llmProviderHint: byId('llmProviderHint'),
@@ -53,6 +66,7 @@ const configInputs = [
   'mindcraftDir',
   'agentFilter',
   'assistantMode',
+  'worldDirective',
   'intervalMs',
   'idleCooldownMs',
   'minTaskRuntimeMs',
@@ -92,6 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('restartMinecraftBtn').addEventListener('click', () => postAction('/api/minecraft/restart', '已请求重启 Minecraft 服务器'))
   byId('refreshMinecraftLogBtn').addEventListener('click', refreshMinecraftLog)
   byId('minecraftCommandForm').addEventListener('submit', sendMinecraftCommand)
+  byId('locatePlayerBtn').addEventListener('click', locatePlayer)
+  byId('guideAgentsToPlayerBtn').addEventListener('click', () => guideAgentsToPlayer(false))
+  byId('teleportAgentsToPlayerBtn').addEventListener('click', () => guideAgentsToPlayer(true))
+  byId('viewerAutoBtn').addEventListener('click', toggleViewerAuto)
+  byId('viewerNextBtn').addEventListener('click', () => advanceFeaturedViewer(true))
+  byId('viewerOpenBtn').addEventListener('click', openFeaturedViewer)
   byId('minecraftRuntimeSettingsForm').addEventListener('submit', applyMinecraftRuntimeSettings)
   document.querySelectorAll('[data-minecraft-command]').forEach(button => button.addEventListener('click', runMinecraftQuickCommand))
   byId('startMindcraftBtn').addEventListener('click', () => postAction('/api/mindcraft/start', '已请求启动 Mindcraft'))
@@ -119,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadMindcraftConfig()
   loadServerProperties()
   setInterval(refreshAll, 5000)
+  setInterval(() => advanceFeaturedViewer(false), 12000)
 })
 
 async function refreshAll() {
@@ -178,6 +199,7 @@ function renderStatus(status) {
   elements.autopilotBtn.classList.toggle('primary', !auto)
 
   renderAgents(status)
+  renderViewerConsole(status)
 }
 
 function setStatus(titleEl, detailEl, ok, title, detail) {
@@ -240,6 +262,80 @@ function renderAgents(status) {
   }).join('')
 }
 
+
+function renderViewerConsole(status) {
+  if (!elements.viewerGrid) return
+  const agents = (status.socket.agents || []).filter(agent => agent.viewerPort)
+  const signature = agents.map(agent => [agent.name, agent.viewerPort, agent.in_game ? 1 : 0].join(':')).join('|')
+  if (signature !== state.viewerGridSignature) {
+    state.viewerGridSignature = signature
+    elements.viewerGrid.innerHTML = agents.length === 0
+      ? '<div class="viewer-empty">暂无 AI 视角。确认 Mindcraft 已开启 render_bot_view。</div>'
+      : agents.map((agent, index) => {
+        const url = viewerUrl(agent)
+        const statusText = agent.in_game ? '在线' : '未进服'
+        return [
+          '<button type="button" class="viewer-card" data-viewer-index="' + index + '">',
+          '<span class="viewer-card-head"><strong>' + escapeHtml(agent.name) + '</strong><small>' + statusText + '</small></span>',
+          '<iframe src="' + escapeHtml(url) + '" title="' + escapeHtml(agent.name) + ' 视角" loading="lazy"></iframe>',
+          '</button>'
+        ].join('')
+      }).join('')
+    elements.viewerGrid.querySelectorAll('[data-viewer-index]').forEach(button => {
+      button.addEventListener('click', () => {
+        state.viewerIndex = Number(button.dataset.viewerIndex || 0)
+        setFeaturedViewer(viewerCandidates(state.status))
+      })
+    })
+  }
+  setFeaturedViewer(viewerCandidates(status))
+}
+
+function viewerCandidates(status) {
+  const agents = status && status.socket ? status.socket.agents || [] : []
+  const withViewer = agents.filter(agent => agent.viewerPort)
+  const online = withViewer.filter(agent => agent.in_game)
+  return online.length > 0 ? online : withViewer
+}
+
+function setFeaturedViewer(agents) {
+  if (!elements.featuredViewerFrame || !elements.featuredViewerTitle) return
+  if (!agents || agents.length === 0) {
+    elements.featuredViewerTitle.textContent = '等待 AI 视角'
+    elements.featuredViewerFrame.removeAttribute('src')
+    state.featuredViewerUrl = ''
+    return
+  }
+  if (state.viewerIndex >= agents.length) state.viewerIndex = 0
+  const agent = agents[state.viewerIndex]
+  const url = viewerUrl(agent)
+  elements.featuredViewerTitle.textContent = agent.in_game ? agent.name + ' 正在游戏中' : agent.name + ' 未进服'
+  if (state.featuredViewerUrl !== url) {
+    state.featuredViewerUrl = url
+    elements.featuredViewerFrame.src = url
+  }
+}
+
+function advanceFeaturedViewer(force) {
+  if (!force && !state.viewerAuto) return
+  const agents = viewerCandidates(state.status)
+  if (!agents || agents.length === 0) return
+  state.viewerIndex = (state.viewerIndex + 1) % agents.length
+  setFeaturedViewer(agents)
+}
+
+function toggleViewerAuto() {
+  state.viewerAuto = !state.viewerAuto
+  elements.viewerAutoBtn.textContent = state.viewerAuto ? '自动轮播：开' : '自动轮播：关'
+}
+
+function openFeaturedViewer() {
+  if (state.featuredViewerUrl) window.open(state.featuredViewerUrl, '_blank', 'noopener,noreferrer')
+}
+
+function viewerUrl(agent) {
+  return 'http://localhost:' + agent.viewerPort + '/'
+}
 
 function renderModelProviders(data, config) {
   const providers = data && data.providers ? data.providers : state.modelProviders
@@ -373,6 +469,7 @@ function collectConfigPreview() {
     llmBaseUrl: byId('llmBaseUrl').value,
     llmModel: byId('llmModel').value,
     codeModel: byId('codeModel').value,
+    worldDirective: byId('worldDirective') ? byId('worldDirective').value : '',
     visionProvider: byId('visionProvider').value,
     visionBaseUrl: byId('visionBaseUrl').value,
     visionModel: byId('visionModel').value
@@ -551,6 +648,7 @@ function renderMinecraftManager(status, logData) {
   byId('minecraftCommand').disabled = !canCommand
   byId('minecraftCommandForm').querySelector('button[type="submit"]').disabled = !canCommand
   document.querySelectorAll('[data-minecraft-command]').forEach(button => { button.disabled = !canCommand })
+  document.querySelectorAll('[data-player-location]').forEach(control => { control.disabled = !canCommand })
   document.querySelectorAll('[data-runtime-control]').forEach(control => { control.disabled = !canCommand })
   if (elements.minecraftRuntimeHint) {
     elements.minecraftRuntimeHint.textContent = canCommand
@@ -719,6 +817,59 @@ async function sendPresetTask(key) {
   } finally {
     state.busy = false
   }
+}
+
+async function locatePlayer() {
+  const player = currentHumanPlayerName()
+  if (!player) {
+    showToast('请先填写真人玩家名，例如 MengMeng')
+    return
+  }
+  try {
+    state.busy = true
+    const data = await apiPost('/api/player/location', { player })
+    elements.playerLocationHint.textContent = `${data.player} 坐标：${formatPosition(data.position)}`
+    byId('minecraftPlayerName').value = data.player
+    await refreshMinecraftLog()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function guideAgentsToPlayer(teleport) {
+  const player = currentHumanPlayerName()
+  if (!player) {
+    showToast('请先填写真人玩家名，例如 MengMeng')
+    return
+  }
+  try {
+    state.busy = true
+    const payload = {
+      player,
+      agent: elements.locateAgentName.value.trim(),
+      teleport
+    }
+    const data = await apiPost('/api/agents/go-to-player', payload)
+    const action = teleport ? '已传送' : '已发送坐标给'
+    elements.playerLocationHint.textContent = `${data.player} 坐标：${formatPosition(data.position)}；${action} ${data.targets.join(', ')}`
+    await refreshMinecraftLog()
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+function currentHumanPlayerName() {
+  return elements.humanPlayerName.value.trim() || byId('minecraftPlayerName').value.trim()
+}
+
+function formatPosition(position) {
+  if (!position) return '未知'
+  return `${num(position.x)}, ${num(position.y)}, ${num(position.z)}`
 }
 
 async function sendTask(event) {

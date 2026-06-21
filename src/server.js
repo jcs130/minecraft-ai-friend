@@ -59,7 +59,8 @@ const autopilot = new Autopilot({
   useLlm: config.useLlm,
   llmBaseUrl: config.llmBaseUrl,
   llmModel: config.llmModel,
-  llmApiKey: getConfiguredLlmApiKey(config)
+  llmApiKey: getConfiguredLlmApiKey(config),
+  worldDirective: config.worldDirective
 })
 
 client.start()
@@ -224,6 +225,18 @@ async function handleApi(req, res, url) {
     return
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/player/location') {
+    const body = await readJson(req)
+    sendJson(res, 200, await locatePlayer(body.player))
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/agents/go-to-player') {
+    const body = await readJson(req)
+    sendJson(res, 200, await guideAgentsToPlayer(body))
+    return
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/autopilot/start') {
     autopilot.start()
     sendJson(res, 200, await statusSnapshot())
@@ -314,6 +327,7 @@ function loadConfig() {
     intervalMs: 15000,
     idleCooldownMs: 120000,
     minTaskRuntimeMs: 90000,
+    worldDirective: '',
     useLlm: false,
     llmProvider: inferModelProvider({
       llmProvider: process.env.MINDCRAFT_LLM_PROVIDER,
@@ -361,6 +375,7 @@ function updateConfig(next) {
   if (next.intervalMs) config.intervalMs = clampNumber(next.intervalMs, 5000, 600000, config.intervalMs)
   if (next.idleCooldownMs) config.idleCooldownMs = clampNumber(next.idleCooldownMs, 10000, 3600000, config.idleCooldownMs)
   if (next.minTaskRuntimeMs) config.minTaskRuntimeMs = clampNumber(next.minTaskRuntimeMs, 10000, 3600000, config.minTaskRuntimeMs)
+  if (typeof next.worldDirective === 'string') config.worldDirective = next.worldDirective.trim().slice(0, 1400)
   if (typeof next.useLlm === 'boolean') config.useLlm = next.useLlm
   if (typeof next.llmProvider === 'string') config.llmProvider = inferModelProvider({ llmProvider: next.llmProvider })
   if (typeof next.llmBaseUrl === 'string') config.llmBaseUrl = next.llmBaseUrl.trim() || config.llmBaseUrl
@@ -382,7 +397,8 @@ function updateConfig(next) {
     useLlm: config.useLlm,
     llmBaseUrl: config.llmBaseUrl,
     llmModel: config.llmModel,
-    llmApiKey: getConfiguredLlmApiKey(config)
+    llmApiKey: getConfiguredLlmApiKey(config),
+    worldDirective: config.worldDirective
   })
 }
 
@@ -461,6 +477,45 @@ async function ensureMinecraftServerReady() {
   return minecraftServer.snapshot(config)
 }
 
+async function locatePlayer(playerName) {
+  await ensureMinecraftServerReady()
+  const result = await minecraftServer.queryPlayerPosition(playerName)
+  return { ok: true, ...result }
+}
+
+async function guideAgentsToPlayer(body) {
+  const location = await locatePlayer(body.player)
+  const position = location.position
+  const targets = parseCsv(body.agent).length > 0 ? parseCsv(body.agent) : client.onlineAgentNames([])
+  if (targets.length === 0) throw new Error('没有在线 AI 可召回。')
+
+  if (body.teleport === true) {
+    for (const agentName of targets) {
+      minecraftServer.sendCommand(`tp ${sanitizeEntityName(agentName)} ${sanitizeEntityName(location.player)}`)
+    }
+    logger.info(`Teleported agents to ${location.player}: ${targets.join(', ')}`)
+    return { ok: true, mode: 'teleport', player: location.player, position, targets }
+  }
+
+  const task = [
+    '立刻停止当前采集、打猎、探索或建造任务。',
+    `玩家 ${location.player} 当前坐标是 X=${position.x.toFixed(2)}, Y=${position.y.toFixed(2)}, Z=${position.z.toFixed(2)}。`,
+    `请直接执行 !goToCoordinates(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}, 3)。`,
+    `到达后看向玩家 ${location.player} 并报告你已经找到他。不要改去收集木材。`
+  ].join(' ')
+
+  for (const agentName of targets) {
+    await autopilot.sendManualTask(agentName, task)
+  }
+  logger.info(`Guided agents to ${location.player}: ${targets.join(', ')}`)
+  return { ok: true, mode: 'walk', player: location.player, position, targets, task }
+}
+
+function sanitizeEntityName(value) {
+  const clean = String(value || '').trim()
+  if (!/^[A-Za-z0-9_]{1,32}$/.test(clean)) throw new Error(`实体名不合法：${clean}`)
+  return clean
+}
 
 function buildDefaultAgentProfile(name) {
   const textProvider = getModelProvider(inferModelProvider(config))

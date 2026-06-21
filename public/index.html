@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=11">
+    <link rel="stylesheet" href="/styles.css?v=13">
   </head>
   <body>
     <header class="topbar">
@@ -112,6 +112,27 @@
         </article>
       </section>
 
+      <section class="panel live-panel">
+        <div class="panel-head">
+          <div>
+            <h2>直播监看</h2>
+            <p class="hint inline-hint">把所有 AI 视角放在一个控制台里，可用于观察或直播。</p>
+          </div>
+          <div class="button-row">
+            <button id="viewerAutoBtn" type="button">自动轮播：开</button>
+            <button id="viewerNextBtn" type="button">下一个视角</button>
+            <button id="viewerOpenBtn" type="button">打开当前视角</button>
+          </div>
+        </div>
+        <div class="viewer-layout">
+          <div class="viewer-stage">
+            <div class="viewer-title" id="featuredViewerTitle">等待 AI 视角</div>
+            <iframe id="featuredViewerFrame" class="featured-viewer" title="AI 主视角" loading="lazy"></iframe>
+          </div>
+          <div id="viewerGrid" class="viewer-grid"></div>
+        </div>
+      </section>
+
       <section class="layout">
         <section class="panel">
           <div class="panel-head">
@@ -126,6 +147,22 @@
             <button type="submit" class="primary">新增并进服</button>
           </form>
           <p class="hint">名字需要以英文字母开头，只能包含英文、数字、下划线和短横线。会自动创建 Mindcraft Profile，并让 AI 加入当前服务器。</p>
+          <div class="player-locator">
+            <label>
+              真人玩家名
+              <input id="humanPlayerName" data-player-location placeholder="MengMeng">
+            </label>
+            <label>
+              目标 AI
+              <input id="locateAgentName" data-player-location placeholder="留空表示所有在线 AI">
+            </label>
+            <div class="locator-actions">
+              <button id="locatePlayerBtn" type="button" data-player-location>读取坐标</button>
+              <button id="guideAgentsToPlayerBtn" type="button" class="primary" data-player-location>让 AI 来找我</button>
+              <button id="teleportAgentsToPlayerBtn" type="button" data-player-location>传送 AI 到我</button>
+            </div>
+            <p id="playerLocationHint" class="hint">当 AI 离玩家太远时，用服务端坐标把目标同步给 AI。</p>
+          </div>
           <div id="agentsList" class="agents-list"></div>
         </section>
 
@@ -192,6 +229,10 @@
                 <option value="creative">创造练习</option>
                 <option value="survival">生存助手</option>
               </select>
+            </label>
+            <label class="wide">
+              长期世界目标
+              <textarea id="worldDirective" name="worldDirective" rows="4" placeholder="让 AI 成为常驻居民，在基地附近建设村庄、采集材料、整理公共箱子，并互相协作。"></textarea>
             </label>
             <label>
               检查间隔（毫秒）
@@ -574,6 +615,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=11"></script>
+    <script src="/app.js?v=13"></script>
   </body>
 </html>

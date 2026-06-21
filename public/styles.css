@@ -323,6 +323,82 @@ main {
   margin-bottom: 16px;
 }
 
+.live-panel {
+  margin-bottom: 16px;
+}
+
+.inline-hint {
+  margin: 4px 0 0;
+}
+
+.viewer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  gap: 12px;
+}
+
+.viewer-stage {
+  min-width: 0;
+}
+
+.viewer-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.featured-viewer {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #101510;
+}
+
+.viewer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.viewer-card {
+  display: grid;
+  gap: 6px;
+  height: auto;
+  padding: 8px;
+  text-align: left;
+}
+
+.viewer-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.viewer-card-head small {
+  color: var(--muted);
+}
+
+.viewer-card iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #101510;
+  pointer-events: none;
+}
+
+.viewer-empty {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .section-divider {
   margin: 22px 0 12px;
 }
@@ -360,6 +436,27 @@ main {
   gap: 10px;
   align-items: end;
   margin-bottom: 8px;
+}
+
+.player-locator {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: end;
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.player-locator .hint {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.locator-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .agents-list {
@@ -413,6 +510,10 @@ label {
 
 .settings-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-grid .wide {
+  grid-column: 1 / -1;
 }
 
 .setting-action {
@@ -586,6 +687,7 @@ label {
   }
 
   .hero-panel,
+  .viewer-layout,
   .product-grid,
   .quick-command-panel,
   .quick-task-grid,
@@ -607,11 +709,17 @@ label {
   }
 
   .agent-create-form,
-  .agent-row {
+  .agent-row,
+  .player-locator,
+  .viewer-grid {
     grid-template-columns: 1fr;
   }
 
   .agent-controls {
     justify-content: flex-start;
+  }
+
+  .featured-viewer {
+    min-height: 260px;
   }
 }

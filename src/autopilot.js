@@ -44,6 +44,14 @@ const survivalRoleTasks = [
   'Autonomous survival task: Survival mode: take the quartermaster role. Organize survival storage and keep emergency food, tools, torches, and blocks accessible.'
 ]
 
+const settlementRoleTasks = [
+  'Builder role: improve the shared village base with walls, roof, doors, windows, lighting, paths, and useful interior blocks. Avoid tearing down player-built blocks.',
+  'Gatherer role: collect nearby wood, stone, coal, food, wool, and other basic materials, then return to the shared storage chest and deposit surplus supplies.',
+  'Farmer role: create and maintain a small safe food area with crops, water, light, fences, and nearby animal/food support when materials are available.',
+  'Quartermaster role: organize the public chest, keep tools, fuel, food, blocks, torches, and building supplies available, and report shortages.',
+  'Scout role: explore only short safe loops around the village, mark useful resources mentally, then return before danger or night.'
+]
+
 class Autopilot {
   constructor(options) {
     this.client = options.client
@@ -63,6 +71,7 @@ class Autopilot {
     this.lastTickAt = null
     this.lastError = null
     this.memory = this.loadMemory()
+    this.worldDirective = normalizeDirective(options.worldDirective || this.memory.worldDirective || '')
 
     this.client.on('bot-output', (agentName, message) => {
       this.rememberOutput(agentName, message)
@@ -79,6 +88,7 @@ class Autopilot {
     if (options.llmBaseUrl) this.llmBaseUrl = normalizeOpenAiBaseUrl(options.llmBaseUrl)
     if (options.llmModel) this.llmModel = options.llmModel
     if (options.llmApiKey !== undefined) this.llmApiKey = options.llmApiKey
+    if (options.worldDirective !== undefined) this.setWorldDirective(options.worldDirective)
   }
 
   start() {
@@ -108,6 +118,7 @@ class Autopilot {
       llmConfigured: this.canUseLlm(),
       llmBaseUrl: this.llmBaseUrl,
       llmModel: this.llmModel,
+      worldDirective: this.worldDirective,
       lastTickAt: this.lastTickAt,
       lastError: this.lastError,
       memoryPath: this.memoryPath
@@ -127,6 +138,13 @@ class Autopilot {
 
   getMemory(agentName) {
     return agentName ? this.memoryFor(agentName) : this.memory
+  }
+
+  setWorldDirective(directive) {
+    this.worldDirective = normalizeDirective(directive)
+    this.memory.worldDirective = this.worldDirective
+    this.saveMemory()
+    return this.worldDirective
   }
 
   schedule(delay) {
@@ -181,9 +199,20 @@ class Autopilot {
   }
 
   fallbackDecision(agentName, state) {
+    if (this.worldDirective) return this.settlementFallbackDecision(agentName, state)
     return this.assistantMode === 'survival'
       ? this.survivalFallbackDecision(agentName, state)
       : this.creativeFallbackDecision(agentName, state)
+  }
+
+  settlementFallbackDecision(agentName, state) {
+    const online = this.client.onlineAgentNames(this.agentFilter)
+    const roleIndex = Math.max(0, online.indexOf(agentName))
+    const role = settlementRoleTasks[roleIndex % settlementRoleTasks.length]
+    const safety = state && state.gameplay && state.gameplay.timeLabel === 'Night'
+      ? 'It is night: prefer lighting, shelter, storage, and indoor/base work until safe.'
+      : 'If safe, continue village construction and local resource loops.'
+    return normalizeTask(`Long-term world directive: ${this.worldDirective} Current assignment for ${agentName}: ${role} ${safety} Keep acting like a permanent resident of the village, coordinate with other AI players, and use shared storage.`, this.assistantMode)
   }
 
   creativeFallbackDecision(agentName, state) {
@@ -251,7 +280,7 @@ class Autopilot {
           stream: false,
           messages: [
             { role: 'system', content: buildSystemPrompt(this.assistantMode) },
-            { role: 'user', content: JSON.stringify(compactState(this.client, this.memoryFor(agentName), agentName, state, this.assistantMode), null, 2) }
+            { role: 'user', content: JSON.stringify(compactState(this.client, this.memoryFor(agentName), agentName, state, this.assistantMode, this.worldDirective), null, 2) }
           ],
           temperature: 0.2
         }),
@@ -329,6 +358,8 @@ function buildSystemPrompt(mode) {
   const base = [
     'You are a high-level Minecraft supervisor for Mindcraft agents.',
     'Choose one useful, autonomous, player-like goal for the named agent based on the current world state.',
+    'If a worldDirective is present in the state JSON, treat it as the long-term objective and keep new tasks aligned with it.',
+    'Encourage agents to coordinate with other online AI players through concise in-game chat when it helps divide labor.',
     'Do not tell the agent to follow, chase, or wait beside the human player unless directly requested.',
     'Do not ask it to run host code, use insecure coding, change server settings, or grief the world.',
     'Keep the task concise, concrete, and safe. Return only JSON: {"task":"..."}.'
@@ -352,7 +383,7 @@ function buildSystemPrompt(mode) {
   return base.join(' ')
 }
 
-function compactState(client, memory, agentName, state, assistantMode) {
+function compactState(client, memory, agentName, state, assistantMode, worldDirective = '') {
   const gameplay = state.gameplay || {}
   const action = state.action || {}
   const surroundings = state.surroundings || {}
@@ -361,6 +392,7 @@ function compactState(client, memory, agentName, state, assistantMode) {
   return {
     agent: agentName,
     assistantMode,
+    worldDirective,
     position: gameplay.position || null,
     dimension: gameplay.dimension,
     gamemode: gameplay.gamemode,
@@ -413,6 +445,10 @@ function normalizeTask(task, mode) {
 
 function normalizeAssistantMode(value) {
   return String(value || '').toLowerCase() === 'survival' ? 'survival' : 'creative'
+}
+
+function normalizeDirective(value) {
+  return String(value || '').trim().replace(/s+/g, ' ').slice(0, 1400)
 }
 
 function extractJsonObject(text) {
