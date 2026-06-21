@@ -1,0 +1,4 @@
+interface:
+  display_name: "Minecraft AI Friend Maintainer"
+  short_description: "Maintain the Minecraft AI Friend control console safely."
+  default_prompt: "Use this project skill when changing architecture, APIs, AI prompts, storage, Mindcraft integration, MCP, livestream visualizer, or docs in minecraft-ai-friend."

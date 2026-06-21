@@ -37,7 +37,9 @@
 - 生成只读服务器改造蓝图：实施就绪度、下一步清单、Paper 迁移、插件能力、直播导播、AI 社会系统和 dry-run 配置预览。
 - 支持创造练习和生存助手两种陪玩模式。
 - 支持云端和本地模型供应商预设：DeepSeek、阿里云百炼/通义千问、豆包/火山方舟、OpenAI-compatible、OpenRouter、本地 Ollama。
-- 提供第三方 Agent 集成草案：OpenAPI、Codex 插件、MCP adapter 设计。
+- 提供第三方 Agent 集成：OpenAPI 草案、Codex 插件草案、内置 MCP endpoint。
+- 提供直播可视化 bridge，把 AI 居民任务、库存、公开思考和事件同步到可视化站。
+- 支持本地/向量记忆：SQLite 记忆库、可选 Ollama/OpenAI-compatible embedding、可选 Qdrant。
 
 ## 运行
 
@@ -51,6 +53,16 @@ npm start
 ```text
 http://127.0.0.1:4177
 ```
+
+## 工程文档和 Agent 维护
+
+- 架构边界：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 数据模型：[docs/DATA_MODEL.md](docs/DATA_MODEL.md)
+- AI 村庄社群：[docs/AGENT_SOCIETY.md](docs/AGENT_SOCIETY.md)
+- 运行维护：[docs/OPERATIONS.md](docs/OPERATIONS.md)
+- 工程审计：[docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md)
+- Agent 接手规范：[AGENTS.md](AGENTS.md)
+- 项目维护 skill：[.codex/skills/minecraft-ai-friend-maintainer/SKILL.md](.codex/skills/minecraft-ai-friend-maintainer/SKILL.md)
 
 ## CoPaw / 小智 MCP 接入
 
@@ -132,6 +144,9 @@ op 你的玩家名
 
 - `Alex`：生存管家，负责安全巡逻、基础资源、公共箱子、食物、补光和紧急处理。
 - `Luna`：建筑师，负责基地、仓库、道路、围栏、照明、农田和简单住宅。
+- `Milo`：矿工，负责低风险采矿、石头、煤、铁、燃料和矿点入口安全。
+- `Nova`：侦察员，负责基地周边短距离侦察、道路、地标、资源点和危险点记录。
+- `Ivy`：农夫，负责农田、食物、水源、动物、作物补光和可持续补给。
 
 如果真人玩家在基地位置附近，可以先填写玩家名，再点击 **用玩家坐标设基地**。这个动作只读取服务端坐标并更新控制台共享记忆，不会修改世界方块或服务器配置。
 
@@ -163,7 +178,7 @@ VILLAGE_REPORT {"type":"storage","title":"基地公共箱子","status":"done","p
 - `data/ai-friend.sqlite`：任务事件、公共设施上报和居民状态观察的工程化事件库。
 - `data/events.jsonl`：当 Node SQLite 不可用时的降级事件日志。
 
-`GET /api/storage` 会返回当前存储后端和最近事件。下一步可以在 SQLite 上继续扩展 `agent_memories`、`tasks`、`chat_messages`，再按直播规模升级到 Postgres/pgvector。推荐拆成三层记忆：工作记忆、每个居民的个人长期记忆、全村共享记忆。任务管理按 `tasks` + `task_events` 事件流设计，AI 的每次派发、进度、受阻、完成都可追溯。
+`GET /api/storage` 会返回当前存储后端和最近事件。当前已经在 SQLite 中落地 `agent_status_reports`、`agent_memories` 和 `agent_memory_vectors`，向量检索可走 SQLite 本地向量或 Qdrant，失败时自动降级为词法检索。后续可以继续扩展 `tasks` 主表和 `chat_messages`，再按直播规模升级到 Postgres/pgvector。推荐拆成三层记忆：工作记忆、每个居民的个人长期记忆、全村共享记忆。任务管理按 `tasks` + `task_events` 事件流设计，AI 的每次派发、进度、受阻、完成都可追溯。
 
 ## 服务器产品化路线
 
@@ -180,7 +195,7 @@ VILLAGE_REPORT {"type":"storage","title":"基地公共箱子","status":"done","p
 
 - HTTP/OpenAPI：`integrations/openapi.yaml`。
 - Codex 插件草案：`integrations/codex-plugin/`。
-- MCP adapter 草案：`integrations/mcp/`。
+- MCP：内置 `/mcp`、`/mcp/sse` 和 `/mcp/messages`，说明见 `docs/COPAW_MCP.md`；`integrations/mcp/` 保留 adapter 说明。
 
 第三方 Agent 应发送高层陪玩意图，例如“陪玩家完成第一晚生存”“帮玩家找食物”“改善基地照明”，不要直接控制底层破坏性动作。
 
