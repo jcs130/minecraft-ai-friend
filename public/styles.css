@@ -354,19 +354,37 @@ main {
   font-size: 18px;
 }
 
+.agent-create-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
 .agents-list {
   display: grid;
   gap: 10px;
+  margin-top: 14px;
 }
 
 .agent-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.6fr) auto;
   gap: 10px;
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
+}
+
+.agent-row.empty {
+  grid-template-columns: 1fr;
+}
+
+.agent-controls {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .agent-name {
@@ -569,7 +587,12 @@ label {
     grid-column: auto;
   }
 
+  .agent-create-form,
   .agent-row {
     grid-template-columns: 1fr;
+  }
+
+  .agent-controls {
+    justify-content: flex-start;
   }
 }

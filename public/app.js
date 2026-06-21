@@ -26,6 +26,8 @@ const elements = {
   readyAutopilotDot: byId('readyAutopilotDot'),
   readyAutopilotText: byId('readyAutopilotText'),
   agentsList: byId('agentsList'),
+  agentCreateForm: byId('agentCreateForm'),
+  newAgentName: byId('newAgentName'),
   logsView: byId('logsView'),
   memoryView: byId('memoryView'),
   llmProviderHint: byId('llmProviderHint'),
@@ -101,6 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('loadServerPropertiesBtn').addEventListener('click', loadServerProperties)
   byId('saveServerPropertiesBtn').addEventListener('click', saveServerProperties)
   byId('loadMemoryBtn').addEventListener('click', loadMemory)
+  elements.agentCreateForm.addEventListener('submit', createAgent)
+  elements.agentsList.addEventListener('click', handleAgentAction)
   byId('taskForm').addEventListener('submit', sendTask)
   refreshAll()
   loadMindcraftConfig()
@@ -200,7 +204,7 @@ function renderAgents(status) {
   const agents = status.socket.agents || []
   const states = status.socket.states || {}
   if (agents.length === 0) {
-    elements.agentsList.innerHTML = '<div class="agent-row"><span class="agent-meta">Mindcraft 暂时还没有上报 AI 玩家。</span></div>'
+    elements.agentsList.innerHTML = '<div class="agent-row empty"><span class="agent-meta">还没有 AI 玩家。填写名字后点击“新增并进服”。</span></div>'
     return
   }
 
@@ -209,14 +213,18 @@ function renderAgents(status) {
     const pos = agentState.position
       ? `${num(agentState.position.x)}, ${num(agentState.position.y)}, ${num(agentState.position.z)}`
       : '位置未知'
-    const online = agent.in_game ? '在线' : '离线'
+    const online = agent.in_game ? '已进服' : '未进服'
     const action = agentState.action || '暂无动作'
     const idle = agentState.isIdle ? '（空闲）' : ''
+    const actionName = agent.in_game ? 'stop' : 'start'
+    const actionText = agent.in_game ? '停止' : '进服'
+    const actionClass = agent.in_game ? '' : ' class="primary"'
     return [
       '<div class="agent-row">',
       `<div><div class="agent-name">${escapeHtml(agent.name)}</div><div class="agent-meta">${online}</div></div>`,
       `<div class="agent-meta">${escapeHtml(agentState.gamemode || '未知模式')} | ${escapeHtml(agentState.biome || '未知生物群系')} | ${escapeHtml(pos)}</div>`,
       `<div class="agent-action">${escapeHtml(action)} ${idle}</div>`,
+      `<div class="agent-controls"><button type="button"${actionClass} data-agent-action="${actionName}" data-agent-name="${escapeHtml(agent.name)}">${actionText}</button></div>`,
       '</div>'
     ].join('')
   }).join('')
@@ -517,7 +525,9 @@ async function startExperience() {
     elements.homeSummary.textContent = '服务器已在线，正在启动 Mindcraft。'
     await apiPost('/api/mindcraft/start', {})
     await waitForStatus(status => status.mindcraft.httpOk, '等待 Mindcraft 在线', 60000)
-    elements.homeSummary.textContent = 'Mindcraft 已在线，正在启动自动陪玩。'
+    elements.homeSummary.textContent = 'Mindcraft 已在线，正在准备 AI 队友进服。'
+    await ensureAgentReady()
+    elements.homeSummary.textContent = 'AI 队友已准备，正在启动自动陪玩。'
     await apiPost('/api/autopilot/start', {})
     showToast('陪玩流程已启动')
     await refreshAll()
@@ -528,6 +538,25 @@ async function startExperience() {
     state.busy = false
   }
 }
+
+async function ensureAgentReady() {
+  const connectedStatus = await waitForStatus(status => status.socket.connected, '等待 Mindcraft 通信连接', 30000)
+  const agents = connectedStatus.socket.agents || []
+  const onlineAgent = agents.find(agent => agent.in_game)
+  if (onlineAgent) return onlineAgent
+
+  if (agents.length > 0) {
+    const agent = agents[0]
+    await apiPost('/api/agents/start', { agent: agent.name })
+    await waitForStatus(status => (status.socket.agents || []).some(item => item.name === agent.name && item.in_game), `等待 ${agent.name} 进服`, 60000)
+    return agent
+  }
+
+  const created = await apiPost('/api/agents/create', { name: 'CodexFriend' })
+  await waitForStatus(status => (status.socket.agents || []).some(item => item.name === created.agent && item.in_game), `等待 ${created.agent} 进服`, 60000)
+  return created
+}
+
 
 async function waitForStatus(predicate, label, timeoutMs) {
   const started = Date.now()
@@ -546,6 +575,50 @@ async function waitForStatus(predicate, label, timeoutMs) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+async function createAgent(event) {
+  event.preventDefault()
+  const name = elements.newAgentName.value.trim()
+  if (!name) {
+    showToast('请先填写 AI 名字')
+    return
+  }
+  try {
+    state.busy = true
+    const response = await apiPost('/api/agents/create', { name })
+    elements.newAgentName.value = ''
+    showToast(`AI ${response.agent} 已创建并请求进服`)
+    await refreshAll()
+    await loadMindcraftConfig()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function handleAgentAction(event) {
+  const button = event.target.closest('[data-agent-action]')
+  if (!button || !elements.agentsList.contains(button)) return
+  const agent = button.dataset.agentName || ''
+  const action = button.dataset.agentAction || ''
+  if (!agent) return
+  const path = action === 'stop' ? '/api/agents/stop' : '/api/agents/start'
+  const message = action === 'stop' ? `已请求 ${agent} 停止` : `已请求 ${agent} 进服`
+  try {
+    state.busy = true
+    button.disabled = true
+    await apiPost(path, { agent })
+    showToast(message)
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+    button.disabled = false
+  }
+}
+
 
 async function sendPresetTask(key) {
   const task = presetTasks[key] || ''

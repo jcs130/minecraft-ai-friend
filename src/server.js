@@ -12,9 +12,14 @@ const { Autopilot } = require('./autopilot')
 const { listMindcraftProcesses } = require('./processes')
 const { readServerProperties, writeServerProperties } = require('./server-properties')
 const { MinecraftServerManager, readLatestLog } = require('./minecraft-server')
-const { readMindcraftConfig, writeMindcraftConfig } = require('./mindcraft-config')
+const {
+  readMindcraftConfig,
+  writeMindcraftConfig,
+  createMindcraftAgentProfile
+} = require('./mindcraft-config')
 const {
   listModelProviders,
+  getModelProvider,
   inferModelProvider,
   getConfiguredLlmApiKey,
   getProviderEnvStatus,
@@ -192,6 +197,33 @@ async function handleApi(req, res, url) {
     return
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/agents/create') {
+    const body = await readJson(req)
+    const result = await createAndJoinAgent(body)
+    sendJson(res, 200, result)
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/agents/start') {
+    const body = await readJson(req)
+    const agentName = String(body.agent || '').trim()
+    if (!agentName) throw new Error('agent is required')
+    await client.startAgent(agentName)
+    logger.info(`Requested Mindcraft agent start: ${agentName}`)
+    sendJson(res, 200, { ok: true, agent: agentName })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/agents/stop') {
+    const body = await readJson(req)
+    const agentName = String(body.agent || '').trim()
+    if (!agentName) throw new Error('agent is required')
+    await client.stopAgent(agentName)
+    logger.info(`Requested Mindcraft agent stop: ${agentName}`)
+    sendJson(res, 200, { ok: true, agent: agentName })
+    return
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/autopilot/start') {
     autopilot.start()
     sendJson(res, 200, await statusSnapshot())
@@ -351,6 +383,77 @@ function publicConfig() {
   }
 }
 
+async function createAndJoinAgent(body) {
+  await ensureMinecraftServerReady()
+
+  const profile = buildDefaultAgentProfile(body.name)
+  const saved = await createMindcraftAgentProfile(config.mindcraftDir, {
+    name: body.name,
+    profile,
+    overwrite: Boolean(body.overwrite),
+    reuseExisting: true
+  })
+  logger.info(`Prepared AI agent profile ${saved.profilePath}`)
+
+  let mindcraftResult = null
+  if (!(await testHttp(config.mindcraftUrl))) {
+    await startMindcraft()
+    await waitFor(() => testHttp(config.mindcraftUrl), 30000, '等待 Mindcraft 启动超时')
+  }
+  await waitFor(() => client.connected, 15000, '等待 Mindcraft socket 连接超时')
+
+  mindcraftResult = await client.createAgent(saved.runtimeSettings)
+  if (!mindcraftResult || mindcraftResult.success === false) {
+    const error = mindcraftResult && mindcraftResult.error ? String(mindcraftResult.error) : 'unknown error'
+    if (/already exists/i.test(error)) {
+      await client.startAgent(saved.profile.name)
+      mindcraftResult = { success: true, error: null, alreadyExisted: true }
+    } else {
+      throw new Error(`Mindcraft 创建 AI 失败：${error}`)
+    }
+  }
+
+  return {
+    ok: true,
+    agent: saved.profile.name,
+    profilePath: saved.profilePath,
+    mindcraft: mindcraftResult
+  }
+}
+
+async function ensureMinecraftServerReady() {
+  const runtime = await minecraftServer.snapshot(config)
+  if (runtime.tcpOpen) return runtime
+  await minecraftServer.start(config)
+  await waitFor(async () => {
+    const nextRuntime = await minecraftServer.snapshot(config)
+    return nextRuntime.tcpOpen
+  }, 90000, '等待 Minecraft Server 启动超时')
+  return minecraftServer.snapshot(config)
+}
+
+
+function buildDefaultAgentProfile(name) {
+  const provider = getModelProvider(inferModelProvider(config))
+  const profile = {
+    name: String(name || '').trim(),
+    speak_model: 'system'
+  }
+  const patch = cloneJson(provider.mindcraftProfilePatch || {})
+  for (const key of ['model', 'code_model']) {
+    if (patch[key] && typeof patch[key] === 'object') {
+      if (config.llmModel) patch[key].model = config.llmModel
+      if (patch[key].url && config.llmBaseUrl) patch[key].url = provider.id === 'ollama' ? stripOllamaV1(config.llmBaseUrl) : config.llmBaseUrl
+    }
+  }
+  if (patch.embedding && typeof patch.embedding === 'object' && patch.embedding.url && config.llmBaseUrl && provider.id === 'aliyun-qwen') {
+    patch.embedding.url = config.llmBaseUrl
+  }
+  Object.assign(profile, patch)
+  if (!profile.model) profile.model = config.llmModel || 'ollama/qwen3-vl:8b'
+  return profile
+}
+
 async function startMindcraft() {
   if (!fs.existsSync(path.join(config.mindcraftDir, 'main.js'))) {
     throw new Error(`Mindcraft main.js not found in ${config.mindcraftDir}`)
@@ -373,6 +476,15 @@ async function startMindcraft() {
   })
   mindcraftChild.unref()
   logger.info(`Started Mindcraft pid=${mindcraftChild.pid}`)
+}
+
+async function waitFor(predicate, timeoutMs, message) {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    if (await predicate()) return
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  throw new Error(message)
 }
 
 function stopOwnedMindcraft() {
@@ -476,6 +588,14 @@ async function testHttp(url) {
   } finally {
     clearTimeout(timer)
   }
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function stripOllamaV1(value) {
+  return String(value || '').replace(/\/v1\/?$/, '')
 }
 
 function normalizeAssistantMode(value) {

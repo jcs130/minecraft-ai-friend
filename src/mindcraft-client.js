@@ -16,6 +16,8 @@ class MindcraftClient extends EventEmitter {
     this.lastConnectedAt = null
     this.lastErrorLoggedAt = 0
     this.lastErrorLoggedMessage = ''
+    this.nextAckId = 1
+    this.pendingAcks = new Map()
   }
 
   updateBaseUrl(baseUrl) {
@@ -126,6 +128,10 @@ class MindcraftClient extends EventEmitter {
       })
       return
     }
+    if (packet.startsWith('43')) {
+      this.handleAckPacket(packet)
+      return
+    }
     if (!packet.startsWith('42')) return
 
     let payload
@@ -154,6 +160,52 @@ class MindcraftClient extends EventEmitter {
 
   async emitSocket(event, ...args) {
     return this.sendPacket('42' + JSON.stringify([event, ...args]))
+  }
+
+  async emitSocketAck(event, ...args) {
+    if (!this.connected) throw new Error('Mindcraft socket is not connected')
+    const id = this.nextAckId++
+    const packet = '42' + id + JSON.stringify([event, ...args])
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingAcks.delete(id)
+        reject(new Error(`Mindcraft socket ack timeout for ${event}`))
+      }, 30000)
+      this.pendingAcks.set(id, { resolve, reject, timer })
+      this.sendPacket(packet).catch(error => {
+        clearTimeout(timer)
+        this.pendingAcks.delete(id)
+        reject(error)
+      })
+    })
+  }
+
+  handleAckPacket(packet) {
+    const match = packet.slice(2).match(/^(\d+)(.*)$/)
+    if (!match) return
+    const id = Number(match[1])
+    const pending = this.pendingAcks.get(id)
+    if (!pending) return
+    clearTimeout(pending.timer)
+    this.pendingAcks.delete(id)
+    try {
+      const args = match[2] ? JSON.parse(match[2]) : []
+      pending.resolve(args[0] === undefined ? args : args[0])
+    } catch (error) {
+      pending.reject(error)
+    }
+  }
+
+  async createAgent(settings) {
+    return this.emitSocketAck('create-agent', settings)
+  }
+
+  async startAgent(agentName) {
+    return this.emitSocket('start-agent', agentName)
+  }
+
+  async stopAgent(agentName) {
+    return this.emitSocket('stop-agent', agentName)
   }
 }
 

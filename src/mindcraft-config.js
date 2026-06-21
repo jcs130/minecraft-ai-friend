@@ -114,6 +114,95 @@ async function writeMindcraftConfig(mindcraftDir, payload) {
   }
 }
 
+async function createMindcraftAgentProfile(mindcraftDir, payload) {
+  const dir = resolveMindcraftDir(mindcraftDir)
+  const settingsFile = settingsPath(dir)
+  if (!fs.existsSync(settingsFile)) throw new Error(`Mindcraft settings.js not found at ${settingsFile}`)
+
+  const name = sanitizeAgentName(payload.name)
+  const existingProfilePath = payload.reuseExisting && !payload.profilePath ? findProfilePathByName(dir, name) : ''
+  const profilePath = normalizeProfilePath(dir, payload.profilePath || existingProfilePath || `./profiles/${name}.json`)
+  if (!profilePath) throw new Error('Invalid agent profile path')
+  const profileFile = profileAbsolutePath(dir, profilePath)
+
+  const currentSettings = await importSettings(settingsFile)
+  const profileExists = fs.existsSync(profileFile)
+  const reuseExisting = profileExists && !payload.overwrite && payload.reuseExisting
+  let profile = reuseExisting
+    ? readProfile(dir, profilePath)
+    : parseProfileJson(JSON.stringify(payload.profile || {}))
+  profile.name = profile.name || name
+  if (!profile.model) throw new Error('Agent profile model is required')
+  if (!profile.speak_model) profile.speak_model = 'system'
+
+  if (profileExists && !payload.overwrite && !payload.reuseExisting) {
+    throw new Error(`AI 角色文件已存在：${profilePath}`)
+  }
+
+  let profileBackupPath = ''
+  if (!reuseExisting) {
+    profile.name = name
+    fs.mkdirSync(path.dirname(profileFile), { recursive: true })
+    profileBackupPath = profileExists ? backupFile(profileFile) : ''
+    fs.writeFileSync(profileFile, JSON.stringify(profile, null, 2) + '\n', 'utf8')
+  }
+
+  const profiles = Array.isArray(currentSettings.profiles) ? currentSettings.profiles : []
+  const nextProfiles = Array.from(new Set([...profiles, profilePath]))
+  const nextSettings = sanitizeSettings({ ...currentSettings, profiles: nextProfiles })
+  const settingsBackupPath = backupFile(settingsFile)
+  fs.writeFileSync(settingsFile, renderSettingsFile(nextSettings), 'utf8')
+
+  return {
+    profilePath,
+    profile,
+    settings: pickSettings(nextSettings),
+    runtimeSettings: buildRuntimeSettings(nextSettings, profile),
+    settingsBackupPath,
+    profileBackupPath
+  }
+}
+
+async function readMindcraftAgentRuntimeSettings(mindcraftDir, profilePath) {
+  const dir = resolveMindcraftDir(mindcraftDir)
+  const settingsFile = settingsPath(dir)
+  if (!fs.existsSync(settingsFile)) throw new Error(`Mindcraft settings.js not found at ${settingsFile}`)
+  const normalized = normalizeProfilePath(dir, profilePath)
+  if (!normalized) throw new Error('Invalid Mindcraft profile path')
+  const profile = readProfile(dir, normalized)
+  if (!profile) throw new Error(`Agent Profile not found: ${normalized}`)
+  const settings = sanitizeSettings(await importSettings(settingsFile))
+  return {
+    profilePath: normalized,
+    profile,
+    runtimeSettings: buildRuntimeSettings(settings, profile)
+  }
+}
+
+function buildRuntimeSettings(settings, profile) {
+  return {
+    ...sanitizeSettings(settings),
+    profile: cloneJson(profile)
+  }
+}
+
+function sanitizeAgentName(value) {
+  const name = String(value || '').trim().replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 32)
+  if (!name) throw new Error('AI 名字不能为空')
+  if (!/^[A-Za-z][A-Za-z0-9_-]{1,31}$/.test(name)) {
+    throw new Error('AI 名字需要以英文字母开头，只能包含英文、数字、下划线和短横线，长度 2-32')
+  }
+  return name
+}
+
+function findProfilePathByName(mindcraftDir, name) {
+  for (const option of listProfileOptions(mindcraftDir)) {
+    const profile = readProfile(mindcraftDir, option.path)
+    if (profile && profile.name === name) return option.path
+  }
+  return ''
+}
+
 function resolveMindcraftDir(mindcraftDir) {
   const dir = String(mindcraftDir || '').trim()
   if (!dir) throw new Error('Mindcraft directory is not configured')
@@ -290,5 +379,7 @@ function cloneJson(value) {
 
 module.exports = {
   readMindcraftConfig,
-  writeMindcraftConfig
+  writeMindcraftConfig,
+  createMindcraftAgentProfile,
+  readMindcraftAgentRuntimeSettings
 }

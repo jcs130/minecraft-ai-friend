@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=8">
+    <link rel="stylesheet" href="/styles.css?v=9">
   </head>
   <body>
     <header class="topbar">
@@ -118,6 +118,14 @@
             <h2>AI 玩家</h2>
             <button id="loadMemoryBtn" type="button">查看记忆</button>
           </div>
+          <form id="agentCreateForm" class="agent-create-form">
+            <label>
+              AI 名字
+              <input id="newAgentName" name="name" placeholder="CodexFriend" autocomplete="off">
+            </label>
+            <button type="submit" class="primary">新增并进服</button>
+          </form>
+          <p class="hint">名字需要以英文字母开头，只能包含英文、数字、下划线和短横线。会自动创建 Mindcraft Profile，并让 AI 加入当前服务器。</p>
           <div id="agentsList" class="agents-list"></div>
         </section>
 
@@ -507,6 +515,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=8"></script>
+    <script src="/app.js?v=9"></script>
   </body>
 </html>
