@@ -397,7 +397,14 @@ function openFeaturedViewer() {
 }
 
 function viewerUrl(agent) {
-  return 'http://localhost:' + agent.viewerPort + '/'
+  const host = viewerHost()
+  return 'http://' + host + ':' + agent.viewerPort + '/'
+}
+
+function viewerHost() {
+  const host = window.location.hostname || 'localhost'
+  if (host.includes(':') && !host.startsWith('[')) return '[' + host + ']'
+  return host
 }
 
 function renderModelProviders(data, config) {
