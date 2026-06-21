@@ -31,6 +31,7 @@ const elements = {
   logsView: byId('logsView'),
   memoryView: byId('memoryView'),
   llmProviderHint: byId('llmProviderHint'),
+  visionProviderHint: byId('visionProviderHint'),
   llmHint: byId('llmHint'),
   minecraftManagerHint: byId('minecraftManagerHint'),
   minecraftRuntimeHint: byId('minecraftRuntimeHint'),
@@ -58,6 +59,10 @@ const configInputs = [
   'llmProvider',
   'llmBaseUrl',
   'llmModel',
+  'codeModel',
+  'visionProvider',
+  'visionBaseUrl',
+  'visionModel',
   'useLlm'
 ]
 
@@ -99,7 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('mindcraftProfileSelect').addEventListener('change', () => loadMindcraftConfig(elements.mindcraftProfileSelect.value))
   byId('autopilotBtn').addEventListener('click', toggleAutopilot)
   byId('llmProvider').addEventListener('change', onModelProviderChange)
+  byId('visionProvider').addEventListener('change', onVisionProviderChange)
   byId('applyModelProviderBtn').addEventListener('click', applyModelProviderPreset)
+  byId('applyVisionProviderBtn').addEventListener('click', applyVisionProviderPreset)
   byId('saveConfigBtn').addEventListener('click', saveConfig)
   byId('refreshLogsBtn').addEventListener('click', refreshLogs)
   byId('loadServerPropertiesBtn').addEventListener('click', loadServerProperties)
@@ -235,21 +242,24 @@ function renderAgents(status) {
 
 
 function renderModelProviders(data, config) {
-  const select = byId('llmProvider')
-  if (!select) return
   const providers = data && data.providers ? data.providers : state.modelProviders
   state.modelProviders = providers || []
-  const selected = config && config.llmProvider ? config.llmProvider : data && data.selectedProvider ? data.selectedProvider : ''
-  const html = state.modelProviders.map(provider => {
-    return `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
-  }).join('')
-  if (select.innerHTML !== html) select.innerHTML = html
-  if (select.dataset.touched !== '1') select.value = selected
-  renderModelProviderHint(config || state.config || {})
+  const nextConfig = config || state.config || {}
+  renderProviderSelect('llmProvider', nextConfig.llmProvider || data && data.selectedProvider || '')
+  renderProviderSelect('visionProvider', nextConfig.visionProvider || 'ollama')
+  renderModelProviderHint(nextConfig)
 }
 
-function currentModelProvider(id) {
-  const selected = id || byId('llmProvider').value || state.config && state.config.llmProvider
+function renderProviderSelect(id, selected) {
+  const select = byId(id)
+  if (!select) return
+  const html = state.modelProviders.map(provider => `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`).join('')
+  if (select.innerHTML !== html) select.innerHTML = html
+  if (select.dataset.touched !== '1') select.value = selected || (state.modelProviders[0] && state.modelProviders[0].id) || ''
+}
+
+function currentModelProvider(id, selectId = 'llmProvider') {
+  const selected = id || byId(selectId).value || state.config && state.config[selectId]
   return state.modelProviders.find(provider => provider.id === selected) || state.modelProviders[0] || null
 }
 
@@ -258,44 +268,96 @@ function onModelProviderChange() {
   renderModelProviderHint(collectConfigPreview())
 }
 
+function onVisionProviderChange() {
+  byId('visionProvider').dataset.touched = '1'
+  renderModelProviderHint(collectConfigPreview())
+}
+
 function applyModelProviderPreset() {
-  const provider = currentModelProvider()
+  const provider = currentModelProvider(null, 'llmProvider')
   if (!provider) return
   setConfigInputValue('llmBaseUrl', provider.baseUrl)
-  setConfigInputValue('llmModel', provider.defaultModel)
+  setConfigInputValue('llmModel', defaultChatModel(provider))
+  setConfigInputValue('codeModel', defaultCodeModel(provider))
   byId('llmProvider').dataset.touched = '1'
   renderModelProviderHint(collectConfigPreview())
-  showToast('模型供应商预设已填入，保存后生效')
+  showToast('聊天/代码模型预设已填入，保存后生效')
+}
+
+function applyVisionProviderPreset() {
+  const provider = currentModelProvider(null, 'visionProvider')
+  if (!provider) return
+  setConfigInputValue('visionBaseUrl', provider.baseUrl)
+  setConfigInputValue('visionModel', defaultVisionModel(provider))
+  byId('visionProvider').dataset.touched = '1'
+  renderModelProviderHint(collectConfigPreview())
+  showToast('视觉模型预设已填入，保存后生效')
 }
 
 function applyModelProviderToProfile() {
-  const provider = currentModelProvider()
-  if (!provider || !provider.mindcraftProfilePatch) {
+  const textProvider = currentModelProvider(null, 'llmProvider')
+  const visionProvider = currentModelProvider(null, 'visionProvider')
+  if (!textProvider || !textProvider.mindcraftProfilePatch) {
     showToast('当前供应商没有可套用的 Mindcraft Profile 片段')
     return
   }
   try {
     const profile = JSON.parse(elements.mindcraftProfileJson.value || '{}')
-    const patch = buildMindcraftProfilePatch(provider, byId('llmBaseUrl').value.trim(), byId('llmModel').value.trim())
+    const patch = buildMindcraftProfilePatch(
+      textProvider,
+      byId('llmBaseUrl').value.trim(),
+      byId('llmModel').value.trim(),
+      byId('codeModel').value.trim(),
+      visionProvider,
+      byId('visionBaseUrl').value.trim(),
+      byId('visionModel').value.trim()
+    )
     Object.assign(profile, patch)
     elements.mindcraftProfileJson.value = JSON.stringify(profile, null, 2)
-    showToast('当前模型已套用到角色 JSON，保存角色并重启 Mindcraft 后生效')
+    showToast('当前聊天/代码/视觉模型已套用到角色 JSON，保存角色并重启 Mindcraft 后生效')
   } catch (error) {
     showToast(`角色 JSON 解析失败：${error.message}`)
   }
 }
 
-function buildMindcraftProfilePatch(provider, baseUrl, modelName) {
-  const patch = JSON.parse(JSON.stringify(provider.mindcraftProfilePatch || {}))
-  for (const key of ['model', 'code_model']) {
-    if (!patch[key] || typeof patch[key] !== 'object') continue
-    if (modelName) patch[key].model = modelName
-    if (patch[key].url && baseUrl) patch[key].url = provider.id === 'ollama' ? stripOllamaV1(baseUrl) : baseUrl
-  }
-  if (patch.embedding && typeof patch.embedding === 'object' && patch.embedding.url && baseUrl && provider.id === 'aliyun-qwen') {
-    patch.embedding.url = baseUrl
+function buildMindcraftProfilePatch(textProvider, baseUrl, modelName, codeModelName, visionProvider, visionBaseUrl, visionModelName) {
+  const patch = {}
+  const model = buildProviderModelPatch(textProvider, baseUrl, modelName, 'model')
+  const codeModel = buildProviderModelPatch(textProvider, baseUrl, codeModelName || modelName, 'code_model')
+  const visionModel = buildProviderModelPatch(visionProvider || textProvider, visionBaseUrl || baseUrl, visionModelName, 'vision_model')
+  if (model) patch.model = model
+  if (codeModel) patch.code_model = codeModel
+  if (visionModel) patch.vision_model = visionModel
+  if (textProvider.id === 'aliyun-qwen') {
+    const embedding = JSON.parse(JSON.stringify(textProvider.mindcraftProfilePatch.embedding || null))
+    if (embedding && typeof embedding === 'object') {
+      if (embedding.url && baseUrl) embedding.url = baseUrl
+      patch.embedding = embedding
+    }
   }
   return patch
+}
+
+function buildProviderModelPatch(provider, baseUrl, modelName, key) {
+  if (!provider || !provider.mindcraftProfilePatch) return null
+  const source = provider.mindcraftProfilePatch[key] || provider.mindcraftProfilePatch.model
+  if (!source || typeof source !== 'object') return null
+  const next = JSON.parse(JSON.stringify(source))
+  if (modelName) next.model = modelName
+  if (next.url && baseUrl) next.url = provider.id === 'ollama' ? stripOllamaV1(baseUrl) : baseUrl
+  return next
+}
+
+function defaultChatModel(provider) {
+  return provider.id === 'deepseek' ? 'deepseek-v4-flash' : provider.defaultModel
+}
+
+function defaultCodeModel(provider) {
+  return provider.id === 'deepseek' ? 'deepseek-v4-pro' : provider.defaultModel
+}
+
+function defaultVisionModel(provider) {
+  return provider.id === 'ollama' ? 'qwen3-vl:8b' : provider.defaultModel
 }
 
 function setConfigInputValue(id, value) {
@@ -309,28 +371,35 @@ function collectConfigPreview() {
     ...(state.config || {}),
     llmProvider: byId('llmProvider').value,
     llmBaseUrl: byId('llmBaseUrl').value,
-    llmModel: byId('llmModel').value
+    llmModel: byId('llmModel').value,
+    codeModel: byId('codeModel').value,
+    visionProvider: byId('visionProvider').value,
+    visionBaseUrl: byId('visionBaseUrl').value,
+    visionModel: byId('visionModel').value
   }
 }
 
 function renderModelProviderHint(config) {
-  const provider = currentModelProvider(config.llmProvider)
-  if (!provider || !elements.llmProviderHint) return
-  const detected = config.llmKeyEnvNames && config.llmKeyEnvNames.length > 0
-    ? config.llmKeyEnvNames.join(', ')
-    : provider.detectedEnvNames.join(', ')
-  const accepted = config.llmAcceptedEnvNames && config.llmAcceptedEnvNames.length > 0
-    ? config.llmAcceptedEnvNames.join(', ')
-    : provider.acceptedEnvNames.join(', ')
+  const textProvider = currentModelProvider(config.llmProvider, 'llmProvider')
+  const visionProvider = currentModelProvider(config.visionProvider, 'visionProvider')
+  if (textProvider && elements.llmProviderHint) {
+    elements.llmProviderHint.textContent = providerHintText('聊天/代码', textProvider, config.llmKeyEnvNames, config.llmAcceptedEnvNames, config.llmMindcraftKeyEnv)
+  }
+  if (visionProvider && elements.visionProviderHint) {
+    elements.visionProviderHint.textContent = providerHintText('视觉识别', visionProvider, config.visionKeyEnvNames, config.visionAcceptedEnvNames, config.visionMindcraftKeyEnv)
+  }
+}
+
+function providerHintText(scope, provider, detectedNames, acceptedNames, mindcraftKeyEnv) {
+  const detected = detectedNames && detectedNames.length > 0 ? detectedNames.join(', ') : provider.detectedEnvNames.join(', ')
+  const accepted = acceptedNames && acceptedNames.length > 0 ? acceptedNames.join(', ') : provider.acceptedEnvNames.join(', ')
   const keyText = provider.authRequired
-    ? detected
-      ? `已检测到密钥环境变量：${detected}。`
-      : `未检测到密钥；可设置：${accepted}。`
+    ? detected ? `已检测到密钥环境变量：${detected}。` : `未检测到密钥；可设置：${accepted}。`
     : '本地模型不需要 API key。'
-  const mindcraftText = provider.mindcraftKeyEnv
-    ? `Mindcraft 侧期望：${provider.mindcraftKeyEnv}。`
-    : 'Mindcraft 侧使用本地 Ollama。'
-  elements.llmProviderHint.textContent = `${provider.label}：${provider.description} ${keyText} ${mindcraftText} ${provider.setupHint || ''}`
+  const mindcraftText = mindcraftKeyEnv || provider.mindcraftKeyEnv
+    ? `Mindcraft 侧期望：${mindcraftKeyEnv || provider.mindcraftKeyEnv}。`
+    : 'Mindcraft 侧使用本地服务。'
+  return `${scope} ${provider.label}：${provider.description} ${keyText} ${mindcraftText} ${provider.setupHint || ''}`
 }
 
 function stripOllamaV1(value) {
@@ -347,7 +416,7 @@ function renderConfig(config) {
     input.addEventListener('input', () => { input.dataset.touched = '1' }, { once: true })
   }
   renderModelProviderHint(config)
-  const provider = currentModelProvider(config.llmProvider)
+  const provider = currentModelProvider(config.llmProvider, 'llmProvider')
   const localLlm = provider ? !provider.authRequired : isLocalUrl(config.llmBaseUrl)
   const modeText = config.assistantMode === 'survival'
     ? '当前是生存助手模式：会优先考虑安全、食物、庇护所、照明、工具和短距离目标。'

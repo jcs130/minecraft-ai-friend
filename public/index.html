@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=10">
+    <link rel="stylesheet" href="/styles.css?v=11">
   </head>
   <body>
     <header class="topbar">
@@ -206,19 +206,38 @@
               <input id="minTaskRuntimeMs" name="minTaskRuntimeMs" type="number" min="10000">
             </label>
             <label>
-              模型供应商
+              聊天/操作模型供应商
               <select id="llmProvider" name="llmProvider"></select>
             </label>
             <div class="setting-action">
-              <button id="applyModelProviderBtn" type="button">应用供应商预设</button>
+              <button id="applyModelProviderBtn" type="button">应用聊天模型预设</button>
             </div>
             <label>
-              模型接口地址
+              聊天接口地址
               <input id="llmBaseUrl" name="llmBaseUrl">
             </label>
             <label>
-              模型名称
-              <input id="llmModel" name="llmModel">
+              聊天/操作模型
+              <input id="llmModel" name="llmModel" placeholder="deepseek-v4-flash">
+            </label>
+            <label>
+              代码/复杂执行模型
+              <input id="codeModel" name="codeModel" placeholder="deepseek-v4-pro">
+            </label>
+            <label>
+              视觉识别模型供应商
+              <select id="visionProvider" name="visionProvider"></select>
+            </label>
+            <div class="setting-action">
+              <button id="applyVisionProviderBtn" type="button">应用视觉模型预设</button>
+            </div>
+            <label>
+              视觉接口地址
+              <input id="visionBaseUrl" name="visionBaseUrl" placeholder="http://localhost:11434/v1">
+            </label>
+            <label>
+              视觉模型名称
+              <input id="visionModel" name="visionModel" placeholder="qwen3-vl:8b">
             </label>
             <label class="checkbox-row">
               <input id="useLlm" name="useLlm" type="checkbox">
@@ -226,6 +245,7 @@
             </label>
           </form>
           <p id="llmProviderHint" class="hint"></p>
+          <p id="visionProviderHint" class="hint"></p>
           <p id="llmHint" class="hint"></p>
         </section>
 
@@ -554,6 +574,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=10"></script>
+    <script src="/app.js?v=11"></script>
   </body>
 </html>

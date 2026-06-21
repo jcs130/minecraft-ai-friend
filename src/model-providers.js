@@ -22,6 +22,11 @@ const providers = [
         api: 'ollama',
         url: 'http://127.0.0.1:11434',
         model: 'qwen3-vl:8b'
+      },
+      vision_model: {
+        api: 'ollama',
+        url: 'http://127.0.0.1:11434',
+        model: 'qwen3-vl:8b'
       }
     },
     setupHint: '确认 Ollama 已运行并且模型已 pull。'
@@ -172,12 +177,11 @@ function getConfiguredLlmApiKey(config, env = process.env) {
 
 function getConfiguredLlmApiKeyName(config, env = process.env) {
   const provider = getModelProvider(inferModelProvider(config))
-  const candidates = keyCandidates(provider)
-  return candidates.find(name => env[name]) || ''
+  return getConfiguredProviderApiKeyName(provider, env)
 }
 
-function getProviderEnvStatus(config, env = process.env) {
-  const provider = getModelProvider(inferModelProvider(config))
+function getProviderEnvStatus(config, env = process.env, providerId = '') {
+  const provider = providerId ? getModelProvider(providerId) : getModelProvider(inferModelProvider(config))
   const candidates = keyCandidates(provider)
   const detected = candidates.filter(name => env[name])
   return {
@@ -193,8 +197,19 @@ function getProviderEnvStatus(config, env = process.env) {
 
 function buildMindcraftEnv(config, env = process.env) {
   const nextEnv = { ...env }
-  const provider = getModelProvider(inferModelProvider(config))
-  const keyValue = getConfiguredLlmApiKey(config, nextEnv)
+  const textProvider = getModelProvider(inferModelProvider(config))
+  const visionProvider = getModelProvider(inferModelProvider({
+    llmProvider: config.visionProvider,
+    llmBaseUrl: config.visionBaseUrl
+  }))
+
+  applyProviderEnv(nextEnv, textProvider)
+  applyProviderEnv(nextEnv, visionProvider)
+  return nextEnv
+}
+
+function applyProviderEnv(nextEnv, provider) {
+  const keyValue = getConfiguredProviderApiKey(provider, nextEnv)
 
   if (provider.id === 'deepseek' && !nextEnv.DEEPSEEK_API_KEY && keyValue) {
     nextEnv.DEEPSEEK_API_KEY = keyValue
@@ -208,8 +223,16 @@ function buildMindcraftEnv(config, env = process.env) {
   if ((provider.id === 'doubao' || provider.id === 'openai-compatible') && !nextEnv.OPENAI_API_KEY && keyValue) {
     nextEnv.OPENAI_API_KEY = keyValue
   }
+}
 
-  return nextEnv
+function getConfiguredProviderApiKey(provider, env) {
+  const name = getConfiguredProviderApiKeyName(provider, env)
+  return name ? env[name] : ''
+}
+
+function getConfiguredProviderApiKeyName(provider, env) {
+  const candidates = keyCandidates(provider)
+  return candidates.find(name => env[name]) || ''
 }
 
 function toPublicProvider(provider, env) {

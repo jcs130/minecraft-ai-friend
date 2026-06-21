@@ -320,7 +320,11 @@ function loadConfig() {
       llmBaseUrl: process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
     }),
     llmBaseUrl: process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    llmModel: process.env.MINDCRAFT_LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+    llmModel: process.env.MINDCRAFT_LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
+    codeModel: process.env.MINDCRAFT_CODE_MODEL || process.env.DEEPSEEK_CODE_MODEL || 'deepseek-v4-pro',
+    visionProvider: process.env.MINDCRAFT_VISION_PROVIDER || 'ollama',
+    visionBaseUrl: process.env.MINDCRAFT_VISION_BASE_URL || 'http://localhost:11434/v1',
+    visionModel: process.env.MINDCRAFT_VISION_MODEL || 'qwen3-vl:8b'
   }
 
   try {
@@ -328,6 +332,17 @@ function loadConfig() {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
     const merged = { ...defaults, ...raw }
     if (!raw.llmProvider) merged.llmProvider = inferModelProvider({ llmBaseUrl: merged.llmBaseUrl })
+    const hasVisionConfig = raw.visionProvider || raw.visionBaseUrl || raw.visionModel
+    if (!hasVisionConfig && isLikelyVisionModel(merged.llmModel)) {
+      merged.visionProvider = merged.llmProvider
+      merged.visionBaseUrl = merged.llmBaseUrl
+      merged.visionModel = merged.llmModel
+      merged.llmProvider = 'deepseek'
+      merged.llmBaseUrl = process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
+      merged.llmModel = process.env.MINDCRAFT_LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+      merged.codeModel = process.env.MINDCRAFT_CODE_MODEL || process.env.DEEPSEEK_CODE_MODEL || 'deepseek-v4-pro'
+    }
+    if (!raw.visionProvider) merged.visionProvider = inferModelProvider({ llmBaseUrl: merged.visionBaseUrl })
     return merged
   } catch (error) {
     logger.warn(`config load failed: ${error.message}`)
@@ -350,7 +365,12 @@ function updateConfig(next) {
   if (typeof next.llmProvider === 'string') config.llmProvider = inferModelProvider({ llmProvider: next.llmProvider })
   if (typeof next.llmBaseUrl === 'string') config.llmBaseUrl = next.llmBaseUrl.trim() || config.llmBaseUrl
   if (typeof next.llmModel === 'string') config.llmModel = next.llmModel.trim() || config.llmModel
+  if (typeof next.codeModel === 'string') config.codeModel = next.codeModel.trim() || config.codeModel
+  if (typeof next.visionProvider === 'string') config.visionProvider = inferModelProvider({ llmProvider: next.visionProvider })
+  if (typeof next.visionBaseUrl === 'string') config.visionBaseUrl = next.visionBaseUrl.trim() || config.visionBaseUrl
+  if (typeof next.visionModel === 'string') config.visionModel = next.visionModel.trim() || config.visionModel
   if (!config.llmProvider) config.llmProvider = inferModelProvider(config)
+  if (!config.visionProvider) config.visionProvider = inferModelProvider({ llmBaseUrl: config.visionBaseUrl })
 
   client.updateBaseUrl(config.mindcraftUrl)
   autopilot.configure({
@@ -371,15 +391,24 @@ function saveConfig() {
 }
 
 function publicConfig() {
-  const envStatus = getProviderEnvStatus(config)
+  const textProviderId = inferModelProvider(config)
+  const visionProviderId = inferModelProvider({ llmProvider: config.visionProvider, llmBaseUrl: config.visionBaseUrl })
+  const envStatus = getProviderEnvStatus(config, process.env, textProviderId)
+  const visionEnvStatus = getProviderEnvStatus(config, process.env, visionProviderId)
   return {
     ...config,
-    llmProvider: inferModelProvider(config),
+    llmProvider: textProviderId,
+    visionProvider: visionProviderId,
     llmApiKeyFromEnv: envStatus.keyDetected,
     llmAuthReady: envStatus.authReady,
     llmKeyEnvNames: envStatus.detectedEnvNames,
     llmAcceptedEnvNames: envStatus.acceptedEnvNames,
-    llmMindcraftKeyEnv: envStatus.mindcraftKeyEnv
+    llmMindcraftKeyEnv: envStatus.mindcraftKeyEnv,
+    visionApiKeyFromEnv: visionEnvStatus.keyDetected,
+    visionAuthReady: visionEnvStatus.authReady,
+    visionKeyEnvNames: visionEnvStatus.detectedEnvNames,
+    visionAcceptedEnvNames: visionEnvStatus.acceptedEnvNames,
+    visionMindcraftKeyEnv: visionEnvStatus.mindcraftKeyEnv
   }
 }
 
@@ -434,24 +463,45 @@ async function ensureMinecraftServerReady() {
 
 
 function buildDefaultAgentProfile(name) {
-  const provider = getModelProvider(inferModelProvider(config))
+  const textProvider = getModelProvider(inferModelProvider(config))
+  const visionProvider = getModelProvider(inferModelProvider({ llmProvider: config.visionProvider, llmBaseUrl: config.visionBaseUrl }))
   const profile = {
     name: String(name || '').trim(),
     speak_model: 'system'
   }
-  const patch = cloneJson(provider.mindcraftProfilePatch || {})
-  for (const key of ['model', 'code_model']) {
-    if (patch[key] && typeof patch[key] === 'object') {
-      if (config.llmModel) patch[key].model = config.llmModel
-      if (patch[key].url && config.llmBaseUrl) patch[key].url = provider.id === 'ollama' ? stripOllamaV1(config.llmBaseUrl) : config.llmBaseUrl
+  const modelPatch = buildMindcraftProfilePatch(textProvider, config.llmBaseUrl, config.llmModel, ['model'])
+  const codeModel = buildMindcraftModelPatch(textProvider, config.llmBaseUrl, config.codeModel || config.llmModel, 'code_model')
+  if (codeModel) modelPatch.code_model = codeModel
+  Object.assign(profile, modelPatch)
+  const visionModel = buildMindcraftModelPatch(visionProvider, config.visionBaseUrl, config.visionModel, 'vision_model')
+  if (visionModel) profile.vision_model = visionModel
+  if (!profile.model) profile.model = config.llmModel || 'deepseek-v4-flash'
+  return profile
+}
+
+function buildMindcraftProfilePatch(provider, baseUrl, modelName, keys) {
+  const patch = {}
+  for (const key of keys) {
+    const value = buildMindcraftModelPatch(provider, baseUrl, modelName, key)
+    if (value) patch[key] = value
+  }
+  if (provider.id === 'aliyun-qwen') {
+    const embedding = cloneJson(provider.mindcraftProfilePatch && provider.mindcraftProfilePatch.embedding)
+    if (embedding && typeof embedding === 'object') {
+      if (embedding.url && baseUrl) embedding.url = baseUrl
+      patch.embedding = embedding
     }
   }
-  if (patch.embedding && typeof patch.embedding === 'object' && patch.embedding.url && config.llmBaseUrl && provider.id === 'aliyun-qwen') {
-    patch.embedding.url = config.llmBaseUrl
-  }
-  Object.assign(profile, patch)
-  if (!profile.model) profile.model = config.llmModel || 'ollama/qwen3-vl:8b'
-  return profile
+  return patch
+}
+
+function buildMindcraftModelPatch(provider, baseUrl, modelName, key) {
+  const source = provider.mindcraftProfilePatch && (provider.mindcraftProfilePatch[key] || provider.mindcraftProfilePatch.model)
+  if (!source || typeof source !== 'object') return null
+  const next = cloneJson(source)
+  if (modelName) next.model = modelName
+  if (next.url && baseUrl) next.url = provider.id === 'ollama' ? stripOllamaV1(baseUrl) : baseUrl
+  return next
 }
 
 async function startMindcraft() {
@@ -596,6 +646,10 @@ function cloneJson(value) {
 
 function stripOllamaV1(value) {
   return String(value || '').replace(/\/v1\/?$/, '')
+}
+
+function isLikelyVisionModel(value) {
+  return /\bvl\b|vision|qwen.*vl/i.test(String(value || ''))
 }
 
 function normalizeAssistantMode(value) {
