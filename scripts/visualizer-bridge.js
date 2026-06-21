@@ -120,6 +120,8 @@ function cleanThought(value, fallback) {
     .replace(/\(To\s+([^\)]+)\)/gi, '（对$1）')
     .replace(/VILLAGE_REPORT\s+\{.*?(?=\s*!|$)/gi, '')
     .replace(/![a-zA-Z_]\w*\([^)]*\)/g, '')
+    .replace(/\.\s*[A-Z][A-Za-z0-9 ,.'"_=:/()-]{20,}/g, '')
+    .replace(/\s+[A-Za-z][A-Za-z0-9 ,.'"_=:/()-]{24,}(?=$|[。！？；，])/g, '')
     .replace(/Thought\s*[:：]\s*/gi, '思考：')
     .replace(/想法\s*[:：]\s*/g, '思考：')
     .replace(/公开反思/g, '公开思考')
