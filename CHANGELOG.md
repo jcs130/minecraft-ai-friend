@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added configurable parallel resident dispatch so multiple AI villagers can receive LLM-backed tasks concurrently.
+- Added live observer focusing for the `live` account, including a UI action, REST endpoint, and MCP tool.
+
+- Added AI village shared memory for settlement settings, resident roles, resource targets, project tracking, and Autopilot task context.
+- Added resident society mode APIs and Chinese UI controls to activate survival village mode, set the base from player coordinates, and dispatch role-aware village tasks.
+- Added resident infrastructure reporting so AI villagers can record public builds into shared village state.
+- Added AI village chief commander metadata and per-resident persona/storage scopes for the multi-agent control console.
+- Expanded the original AI village design to two default resident roles with optional expansion, task event tracking, mine project support, and engineering docs for the future SQLite memory/task layer.
+- Added a restore-residents society API and UI action to create/start resident agents and activate resident mode.
+- Added a local DataStore layer with SQLite-first event persistence and JSONL fallback for task events, infrastructure reports, and resident observations.
+
+- Added a read-only server productization blueprint for Paper migration, plugin capabilities, livestream directing, AI society design, and dry-run server.properties recommendations.
+
 - Added cloud/local model provider presets for DeepSeek, Aliyun Qwen, Doubao/Volcengine Ark, OpenAI-compatible gateways, OpenRouter, and Ollama.
 - Added a model provider API and Chinese UI controls to apply presets and sync the selected model into Mindcraft Agent Profile JSON.
 - Added provider-specific environment variable detection and safe Mindcraft child-process key aliasing.

@@ -8,7 +8,9 @@ const state = {
   viewerIndex: 0,
   viewerAuto: true,
   viewerGridSignature: '',
-  featuredViewerUrl: ''
+  featuredViewerUrl: '',
+  serverBlueprint: null,
+  village: null
 }
 
 const elements = {
@@ -54,6 +56,31 @@ const elements = {
   mindcraftProfileSelect: byId('mindcraftProfileSelect'),
   mindcraftProfileJson: byId('mindcraftProfileJson'),
   serverPropertiesHint: byId('serverPropertiesHint'),
+  serverBlueprintHint: byId('serverBlueprintHint'),
+  serverBlueprintSummary: byId('serverBlueprintSummary'),
+  serverBlueprintReadiness: byId('serverBlueprintReadiness'),
+  serverBlueprintNextActions: byId('serverBlueprintNextActions'),
+  serverBlueprintProperties: byId('serverBlueprintProperties'),
+  serverBlueprintPhases: byId('serverBlueprintPhases'),
+  serverBlueprintPlugins: byId('serverBlueprintPlugins'),
+  serverBlueprintStreaming: byId('serverBlueprintStreaming'),
+  serverBlueprintDryRun: byId('serverBlueprintDryRun'),
+  villageName: byId('villageName'),
+  villageBaseX: byId('villageBaseX'),
+  villageBaseY: byId('villageBaseY'),
+  villageBaseZ: byId('villageBaseZ'),
+  villageChestX: byId('villageChestX'),
+  villageChestY: byId('villageChestY'),
+  villageChestZ: byId('villageChestZ'),
+  villageRadius: byId('villageRadius'),
+  villageCommander: byId('villageCommander'),
+  villageRoles: byId('villageRoles'),
+  villageTasks: byId('villageTasks'),
+  villageResources: byId('villageResources'),
+  villageProjects: byId('villageProjects'),
+  villageInfrastructures: byId('villageInfrastructures'),
+  villageReports: byId('villageReports'),
+  societyGoal: byId('societyGoal'),
   toast: byId('toast'),
   autopilotBtn: byId('autopilotBtn')
 }
@@ -70,6 +97,8 @@ const configInputs = [
   'intervalMs',
   'idleCooldownMs',
   'minTaskRuntimeMs',
+  'maxConcurrentAgents',
+  'liveObserverName',
   'llmProvider',
   'llmBaseUrl',
   'llmModel',
@@ -77,6 +106,14 @@ const configInputs = [
   'visionProvider',
   'visionBaseUrl',
   'visionModel',
+  'memoryVectorEnabled',
+  'memoryEmbeddingProvider',
+  'memoryEmbeddingBaseUrl',
+  'memoryEmbeddingModel',
+  'memoryVectorStore',
+  'memoryQdrantUrl',
+  'memoryQdrantCollection',
+  'memoryVectorTimeoutMs',
   'useLlm'
 ]
 
@@ -90,7 +127,20 @@ const presetTasks = {
   base: '检查并改善当前基地：补火把、封堵危险洞口、整理入口、做简单道路或围栏。动作要保守，不要拆玩家已经建好的结构。',
   explore: '陪玩家进行短距离探索。记录基地大致方向和重要坐标，优先找村庄、动物、矿洞入口或有用资源；天黑或危险时建议返回。',
   'return-home': '帮助玩家回到基地或安全地点。先确认玩家和基地位置，如果不知道基地位置就寻找最近安全处并解释如何避免迷路。',
-  'free-play': '你现在作为一个自主但友好的玩家行动。不要一直贴身跟随真人玩家；根据世界状态选择有价值的小目标，例如补光、收集基础资源、巡逻、改善基地或探索附近。遇到玩家求助时优先响应。'
+  'free-play': '你现在作为一个自主但友好的玩家行动。不要一直贴身跟随真人玩家；根据世界状态选择有价值的小目标，例如补光、收集基础资源、巡逻、改善基地或探索附近。遇到玩家求助时优先响应。',
+  'collab-sync': '进行一次 60 秒协作同步。每个 AI 用短句汇报 HAVE(关键库存)、DOING(当前任务/区域)、NEED(缺口)，然后继续自己的角色任务。不要长篇聊天。',
+  'shared-storage': '执行公共库存整理。所有 AI 先用 HAVE/NEED 同步关键物资；采集者把多余木头、石头、煤、食物、火把放入公共箱子；Alex 负责分类并用 VILLAGE_REPORT 上报缺口。',
+  'craft-tools': '执行协作合成基础工具。先共享库存和缺口，Milo/Alex 准备木头、圆石、煤和木棍，能合成时制作镐、斧、铲或火把；缺配方或材料就 BLOCKED 上报，不要重复试错。',
+  'cook-meal': '执行食物补给任务。Ivy 优先找作物、动物和水源，Alex 负责安全和燃料，其他人只做近距离支援；成品食物放公共箱子并上报。',
+  'build-zone': '执行分区建造任务。Luna 先声明 DOING(建筑区域/坐标)，其他人只供材料和补光，不要拆或覆盖 Luna 的方块；完成阶段后用 VILLAGE_REPORT 上报。',
+  'resource-chain': '执行资源接力。Milo 采石煤铁，Nova 标记安全路线，Ivy 保障食物，Alex 整理入库，Luna 只使用公共箱子材料建设；所有人用 NEED/HAVE/DONE 短句协调。'
+}
+
+const societyGoalPresets = {
+  construction: '按 MineCollab 建造任务方式推进村庄：村长先分配建筑区域、材料和阶段；Luna 负责建筑主体，Alex 补光和公共箱子，Milo 供应石头/煤/铁，Nova 标记路线和危险点，Ivy 保障食物。禁止互相拆方块。',
+  crafting: '按 MineCollab 合成任务方式推进：先让居民共享库存和配方缺口，再分配原料、半成品和最终合成。缺材料用 NEED 上报，缺配方用 BLOCKED 上报，不要重复试错。',
+  cooking: '按 MineCollab 烹饪任务方式推进：Ivy 负责食材，Alex 负责安全/燃料/公共箱子，Milo/Nova 做近距离支援，Luna 只做厨房/农田基础设施。目标是稳定食物库存。',
+  logistics: '推进村庄后勤接力：采集者入库，Alex 分类，村长根据公共箱子缺口派工。所有居民用 HAVE/NEED/DOING/DONE/BLOCKED 短句沟通。'
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -100,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('firstNightBtn').addEventListener('click', () => sendPresetTask('first-night'))
   byId('freePlayBtn').addEventListener('click', () => sendPresetTask('free-play'))
   document.querySelectorAll('[data-preset-task]').forEach(button => button.addEventListener('click', () => sendPresetTask(button.dataset.presetTask)))
+  document.querySelectorAll('[data-society-preset]').forEach(button => button.addEventListener('click', () => sendSocietyPreset(button.dataset.societyPreset)))
   byId('refreshBtn').addEventListener('click', refreshAll)
   byId('startMinecraftBtn').addEventListener('click', () => postAction('/api/minecraft/start', '已请求启动 Minecraft 服务器'))
   byId('stopMinecraftBtn').addEventListener('click', () => postAction('/api/minecraft/stop', '已请求停止 Minecraft 服务器'))
@@ -112,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('viewerAutoBtn').addEventListener('click', toggleViewerAuto)
   byId('viewerNextBtn').addEventListener('click', () => advanceFeaturedViewer(true))
   byId('viewerOpenBtn').addEventListener('click', openFeaturedViewer)
+  byId('focusLiveObserverBtn').addEventListener('click', focusLiveObserver)
   byId('minecraftRuntimeSettingsForm').addEventListener('submit', applyMinecraftRuntimeSettings)
   document.querySelectorAll('[data-minecraft-command]').forEach(button => button.addEventListener('click', runMinecraftQuickCommand))
   byId('startMindcraftBtn').addEventListener('click', () => postAction('/api/mindcraft/start', '已请求启动 Mindcraft'))
@@ -131,6 +183,15 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('refreshLogsBtn').addEventListener('click', refreshLogs)
   byId('loadServerPropertiesBtn').addEventListener('click', loadServerProperties)
   byId('saveServerPropertiesBtn').addEventListener('click', saveServerProperties)
+  byId('loadServerBlueprintBtn').addEventListener('click', loadServerBlueprint)
+  byId('copyServerBlueprintBtn').addEventListener('click', copyServerBlueprint)
+  byId('activateSocietyBtn').addEventListener('click', activateSocietyMode)
+  byId('ensureResidentsBtn').addEventListener('click', ensureVillageResidents)
+  byId('dispatchVillageTasksBtn').addEventListener('click', dispatchVillageTasks)
+  byId('setVillageBaseFromPlayerBtn').addEventListener('click', setVillageBaseFromPlayer)
+  byId('saveVillageBtn').addEventListener('click', saveVillage)
+  byId('resetVillageBtn').addEventListener('click', resetVillage)
+  elements.villageProjects.addEventListener('change', handleVillageProjectChange)
   byId('loadMemoryBtn').addEventListener('click', loadMemory)
   elements.agentCreateForm.addEventListener('submit', createAgent)
   elements.agentsList.addEventListener('click', handleAgentAction)
@@ -138,6 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshAll()
   loadMindcraftConfig()
   loadServerProperties()
+  loadServerBlueprint()
   setInterval(refreshAll, 5000)
   setInterval(() => advanceFeaturedViewer(false), 12000)
 })
@@ -158,6 +220,7 @@ async function refreshAll() {
     renderProductHome(status)
     renderModelProviders(providerData, status.config)
     renderConfig(status.config)
+    renderVillage(status.village)
     renderMinecraftManager(status, minecraftLog)
     renderLogs(logs.logs || [])
   } catch (error) {
@@ -472,7 +535,10 @@ function collectConfigPreview() {
     worldDirective: byId('worldDirective') ? byId('worldDirective').value : '',
     visionProvider: byId('visionProvider').value,
     visionBaseUrl: byId('visionBaseUrl').value,
-    visionModel: byId('visionModel').value
+    visionModel: byId('visionModel').value,
+    memoryEmbeddingProvider: byId('memoryEmbeddingProvider') ? byId('memoryEmbeddingProvider').value : '',
+    memoryEmbeddingBaseUrl: byId('memoryEmbeddingBaseUrl') ? byId('memoryEmbeddingBaseUrl').value : '',
+    memoryEmbeddingModel: byId('memoryEmbeddingModel') ? byId('memoryEmbeddingModel').value : ''
   }
 }
 
@@ -523,7 +589,10 @@ function renderConfig(config) {
     : config.llmApiKeyFromEnv
       ? '已检测到环境变量里的模型密钥，页面不会显示密钥内容。'
       : '没有检测到模型密钥；自动陪玩会使用保守的备用任务轮换。'
-  elements.llmHint.textContent = `${modeText} ${llmText}`
+  const memoryText = config.memoryVectorEnabled
+    ? `向量记忆：${config.memoryEmbeddingProvider || 'openai-compatible'} ${config.memoryEmbeddingModel || 'bge-m3'}，存储 ${config.memoryVectorStore || 'sqlite'}。`
+    : '向量记忆：关闭。'
+  elements.llmHint.textContent = `${modeText} ${llmText} ${memoryText}`
 }
 
 function renderLogs(logs) {
@@ -893,6 +962,361 @@ async function sendTask(event) {
   }
 }
 
+function renderVillage(village) {
+  if (!village || !elements.villageRoles) return
+  state.village = village
+  const settlement = village.settlement || {}
+  setUntouchedValue(elements.villageName, settlement.name || '')
+  setUntouchedValue(elements.villageRadius, settlement.radius || 120)
+  setPositionInputs('villageBase', settlement.base)
+  setPositionInputs('villageChest', settlement.publicChest)
+
+  if (elements.villageCommander) elements.villageCommander.innerHTML = renderVillageCommander(village.commander || {})
+
+  elements.villageRoles.innerHTML = (village.roles || []).map(role => {
+    const pos = role.lastPosition ? formatPosition(role.lastPosition) : '位置未知'
+    const online = role.online ? '<span class="pill ok-pill">在线</span>' : '<span class="pill">离线/未知</span>'
+    return [
+      '<div class="village-item">',
+      `<div><strong>${escapeHtml(role.agent)}</strong> ${online}</div>`,
+      `<small>${escapeHtml(role.role)}：${escapeHtml(role.focus || '')}</small>`,
+      `<small>人设：${escapeHtml(role.persona || '')}</small>`,
+      `<small>资料区：${escapeHtml(role.storageScope || '')}</small>`,
+      `<small>${escapeHtml(pos)} ${role.lastAction ? '|' : ''} ${escapeHtml(role.lastAction || '')}</small>`,
+      '</div>'
+    ].join('')
+  }).join('')
+
+
+
+  if (elements.villageTasks) {
+    elements.villageTasks.innerHTML = renderVillageTaskEvents(village.taskEvents || [])
+  }
+elements.villageResources.innerHTML = (village.resources || []).map(resource => {
+    const current = Number(resource.current || 0)
+    const target = Math.max(1, Number(resource.target || 1))
+    const percent = Math.max(0, Math.min(100, Math.round(current / target * 100)))
+    return [
+      '<div class="village-item">',
+      `<div><strong>${escapeHtml(resource.name)}</strong><small>${current}/${target} ${escapeHtml(resource.unit || '')}</small></div>`,
+      `<div class="resource-bar"><span style="width:${percent}%"></span></div>`,
+      '</div>'
+    ].join('')
+  }).join('')
+
+  elements.villageProjects.innerHTML = (village.projects || []).map(project => renderVillageProject(project)).join('')
+  if (elements.villageInfrastructures) {
+    elements.villageInfrastructures.innerHTML = renderVillageInfrastructures(village.infrastructures || [])
+  }
+  if (elements.villageReports) {
+    elements.villageReports.innerHTML = renderVillageReports(village.notes || [])
+  }
+}
+
+function renderVillageCommander(commander) {
+  const duties = Array.isArray(commander.duties) ? commander.duties : []
+  return [
+    '<div class="village-item">',
+    `<div><strong>${escapeHtml(commander.title || 'AI村长')} ${escapeHtml(commander.name || '')}</strong><span class="pill">指挥官</span></div>`,
+    `<small>${escapeHtml(commander.persona || '')}</small>`,
+    `<small>直播观察：${escapeHtml(commander.livestreamRole || '')}</small>`,
+    duties.length ? `<small>职责：${duties.map(escapeHtml).join('；')}</small>` : '',
+    '</div>'
+  ].join('')
+}
+
+function renderVillageInfrastructures(items) {
+  if (!items.length) return '<div class="village-item"><small>还没有公共设施上报。村民完成公共箱子、照明、道路、农场或房屋后会自动记录在这里。</small></div>'
+  return items.slice(-12).reverse().map(item => {
+    const status = infrastructureStatusLabel(item.status)
+    const position = item.position ? formatPosition(item.position) : '位置未知'
+    const publicText = item.public ? '公共' : '私人/临时'
+    return [
+      '<div class="village-item">',
+      `<div><strong>${escapeHtml(item.title || item.type)}</strong><span class="pill">${escapeHtml(status)}</span></div>`,
+      `<small>${escapeHtml(publicText)} | ${escapeHtml(infrastructureTypeLabel(item.type))} | ${escapeHtml(position)}</small>`,
+      `<small>${escapeHtml(item.agent || '未知居民')}：${escapeHtml(item.description || '无说明')}</small>`,
+      '</div>'
+    ].join('')
+  }).join('')
+}
+
+function renderVillageReports(notes) {
+  const reports = notes.filter(item => item && item.type === 'infrastructure_report').slice(-10).reverse()
+  if (!reports.length) return '<div class="village-item"><small>暂无村民上报。</small></div>'
+  return reports.map(note => {
+    return [
+      '<div class="village-item">',
+      `<div><strong>${escapeHtml(note.agent || 'AI')}</strong><small>${escapeHtml(formatDateTime(note.at))}</small></div>`,
+      `<small>${escapeHtml(note.text || '')}</small>`,
+      '</div>'
+    ].join('')
+  }).join('')
+}
+
+function renderVillageTaskEvents(events) {
+  if (!events.length) return '<div class="village-item"><small>暂无任务事件。派发村庄任务或手动任务后会记录在这里。</small></div>'
+  return events.slice(-12).reverse().map(event => {
+    const status = taskEventStatusLabel(event.status)
+    const project = event.projectId ? ` | 项目：${event.projectId}` : ''
+    return [
+      '<div class="village-item">',
+      `<div><strong>${escapeHtml(event.agent || 'AI')}</strong><span class="pill">${escapeHtml(status)}</span></div>`,
+      `<small>${escapeHtml(event.title || event.type || '任务事件')} | ${escapeHtml(event.source || 'system')}${escapeHtml(project)}</small>`,
+      `<small>${escapeHtml(formatDateTime(event.at))}</small>`,
+      `<small>${escapeHtml(truncateText(event.description || '', 180))}</small>`,
+      '</div>'
+    ].join('')
+  }).join('')
+}
+
+function taskEventStatusLabel(status) {
+  return {
+    active: '执行中',
+    done: '已完成',
+    blocked: '受阻',
+    info: '记录'
+  }[status] || '记录'
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value || '')
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength - 1) + '…'
+}
+function infrastructureStatusLabel(status) {
+  return {
+    planned: '计划',
+    started: '进行中',
+    done: '已完成',
+    blocked: '受阻'
+  }[status] || '已上报'
+}
+
+function infrastructureTypeLabel(type) {
+  return {
+    storage: '仓储',
+    lighting: '照明',
+    road: '道路',
+    farm: '农场',
+    house: '住宅',
+    shelter: '庇护所',
+    wall: '安全边界',
+    bridge: '桥',
+    mine: '矿点',
+    landmark: '地标',
+    other: '其他'
+  }[type] || '其他'
+}
+
+function formatDateTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function renderVillageProject(project) {
+  const checklist = (project.checklist || []).map(item => {
+    const checked = item.done ? ' checked' : ''
+    return `<label class="checkline"><input type="checkbox" data-village-project-check="${escapeHtml(project.id)}" data-check-id="${escapeHtml(item.id)}"${checked}>${escapeHtml(item.text)}</label>`
+  }).join('')
+  return [
+    '<div class="village-project-card">',
+    '<div class="project-head">',
+    `<div><strong>${escapeHtml(project.title)}</strong><small>${escapeHtml(project.priority)} | ${escapeHtml(project.ownerRole)}</small></div>`,
+    `<select data-village-project-status="${escapeHtml(project.id)}">${projectStatusOptions(project.status)}</select>`,
+    '</div>',
+    `<p>${escapeHtml(project.goal || '')}</p>`,
+    `<div class="project-checklist">${checklist}</div>`,
+    '</div>'
+  ].join('')
+}
+
+function projectStatusOptions(selected) {
+  const options = [
+    ['planned', '计划中'],
+    ['active', '进行中'],
+    ['blocked', '受阻'],
+    ['done', '完成']
+  ]
+  return options.map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('')
+}
+
+async function saveVillage() {
+  try {
+    state.busy = true
+    const village = await apiPost('/api/village', { settlement: collectVillageSettlement() })
+    renderVillage(village)
+    showToast('村庄计划已保存到本地共享记忆')
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function resetVillage() {
+  try {
+    state.busy = true
+    const village = await apiPost('/api/village/reset', {})
+    clearVillageTouched()
+    renderVillage(village)
+    showToast('已恢复默认村庄计划')
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function activateSocietyMode() {
+  try {
+    state.busy = true
+    const response = await apiPost('/api/society/activate', {
+      worldDirective: byId('worldDirective') ? byId('worldDirective').value : '',
+      startAutopilot: true
+    })
+    state.config = response.config
+    showToast(`已进入常驻生存模式：${response.residents.join(', ')}`)
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function ensureVillageResidents() {
+  try {
+    state.busy = true
+    const response = await apiPost('/api/society/residents/ensure', {
+      startAutopilot: true,
+      activateSociety: true,
+      agentFilter: 'Alex,Luna,Milo,Nova,Ivy'
+    })
+    const failed = response.failed && response.failed.length > 0 ? `；失败：${response.failed.map(item => item.agent).join(', ')}` : ''
+    showToast(`已恢复居民：${response.results.map(item => item.agent).join(', ')}${failed}`)
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+async function dispatchVillageTasks(goalOverride = '') {
+  try {
+    state.busy = true
+    const goal = typeof goalOverride === 'string' && goalOverride ? goalOverride : elements.societyGoal ? elements.societyGoal.value.trim() : ''
+    const response = await apiPost('/api/society/dispatch', {
+      goal
+    })
+    const skipped = response.skipped && response.skipped.length > 0 ? `；未在线：${response.skipped.join(', ')}` : ''
+    showToast(`已派发村庄任务给 ${response.sent.map(item => item.agent).join(', ')}${skipped}`)
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function sendSocietyPreset(key) {
+  const goal = societyGoalPresets[key] || ''
+  if (!goal) return
+  if (elements.societyGoal) elements.societyGoal.value = goal
+  await dispatchVillageTasks(goal)
+}
+
+async function setVillageBaseFromPlayer() {
+  const player = currentHumanPlayerName()
+  if (!player) {
+    showToast('请先填写真人玩家名，再设置基地坐标')
+    return
+  }
+  try {
+    state.busy = true
+    const data = await apiPost('/api/player/location', { player })
+    const current = collectVillageSettlement()
+    const village = await apiPost('/api/village', {
+      settlement: {
+        ...current,
+        base: data.position
+      }
+    })
+    clearVillageTouched()
+    renderVillage(village)
+    elements.playerLocationHint.textContent = `${data.player} 坐标：${formatPosition(data.position)}；已设为村庄基地。`
+    showToast('已用玩家当前位置设置村庄基地')
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
+
+async function handleVillageProjectChange(event) {
+  const statusId = event.target.dataset.villageProjectStatus
+  const checkProjectId = event.target.dataset.villageProjectCheck
+  if (!statusId && !checkProjectId) return
+  const current = state.village && state.village.projects ? state.village.projects : []
+  const project = current.find(item => item.id === (statusId || checkProjectId))
+  if (!project) return
+  const next = JSON.parse(JSON.stringify(project))
+  if (statusId) next.status = event.target.value
+  if (checkProjectId) {
+    const checkId = event.target.dataset.checkId
+    next.checklist = (next.checklist || []).map(item => item.id === checkId ? { ...item, done: event.target.checked } : item)
+  }
+  try {
+    const village = await apiPost('/api/village/project', { id: next.id, project: next })
+    renderVillage(village)
+    showToast('村庄项目已更新')
+  } catch (error) {
+    showToast(error.message)
+  }
+}
+
+function collectVillageSettlement() {
+  return {
+    name: elements.villageName.value.trim(),
+    base: collectPosition('villageBase'),
+    publicChest: collectPosition('villageChest'),
+    radius: elements.villageRadius.value
+  }
+}
+
+function collectPosition(prefix) {
+  const x = byId(prefix + 'X').value
+  const y = byId(prefix + 'Y').value
+  const z = byId(prefix + 'Z').value
+  if (x === '' && y === '' && z === '') return null
+  return { x: Number(x), y: Number(y), z: Number(z) }
+}
+
+function setPositionInputs(prefix, position) {
+  setUntouchedValue(byId(prefix + 'X'), position ? position.x : '')
+  setUntouchedValue(byId(prefix + 'Y'), position ? position.y : '')
+  setUntouchedValue(byId(prefix + 'Z'), position ? position.z : '')
+}
+
+function setUntouchedValue(input, value) {
+  if (!input) return
+  if (input.dataset.touched !== '1') input.value = value === undefined || value === null ? '' : value
+  if (input.dataset.touchBound === '1') return
+  input.dataset.touchBound = '1'
+  input.addEventListener('input', () => { input.dataset.touched = '1' })
+}
+
+function clearVillageTouched() {
+  ['villageName', 'villageBaseX', 'villageBaseY', 'villageBaseZ', 'villageChestX', 'villageChestY', 'villageChestZ', 'villageRadius'].forEach(id => {
+    const input = byId(id)
+    if (input) input.dataset.touched = ''
+  })
+}
 async function loadMemory() {
   const agent = byId('taskAgent').value.trim()
   try {
@@ -904,6 +1328,141 @@ async function loadMemory() {
   }
 }
 
+async function loadServerBlueprint() {
+  try {
+    const data = await apiGet('/api/server-blueprint')
+    state.serverBlueprint = data
+    renderServerBlueprint(data)
+  } catch (error) {
+    showToast(error.message)
+  }
+}
+
+function renderServerBlueprint(data) {
+  if (!data || !elements.serverBlueprintSummary) return
+  const propertyChanges = data.properties && data.properties.changes ? data.properties.changes : []
+  const changed = propertyChanges.filter(item => item.changed)
+  const analysis = data.analysis || {}
+  elements.serverBlueprintHint.textContent = data.noWrite
+    ? `只读蓝图：当前识别为 ${analysis.typeLabel || '未知'}，不会写入 server.properties、替换 jar 或重启服务器。`
+    : '蓝图已生成。'
+
+  elements.serverBlueprintSummary.innerHTML = (data.summary || []).map(item => {
+    return `<div class="blueprint-chip">${escapeHtml(item)}</div>`
+  }).join('')
+
+  elements.serverBlueprintReadiness.innerHTML = (data.readiness || []).map(group => {
+    const statusClass = group.status === 'ready' ? 'ok-pill' : group.status === 'partial' ? 'warn-pill' : 'bad-pill'
+    const failed = (group.items || []).filter(item => !item.ok).slice(0, 3)
+    const details = failed.length > 0
+      ? failed.map(item => `<small>待处理：${escapeHtml(item.label)} - ${escapeHtml(item.detail)}</small>`).join('')
+      : '<small>关键检查已通过。</small>'
+    return [
+      '<div class="blueprint-item">',
+      `<div><strong>${escapeHtml(group.title)}</strong> <span class="pill ${statusClass}">${escapeHtml(group.statusLabel)} ${Number(group.score || 0)}%</span></div>`,
+      details,
+      '</div>'
+    ].join('')
+  }).join('') || '<div class="blueprint-item"><small>暂无就绪度数据。</small></div>'
+
+  elements.serverBlueprintNextActions.innerHTML = (data.nextActions || []).map(item => {
+    return [
+      '<div class="blueprint-item">',
+      `<div><strong>${escapeHtml(item.title)}</strong> <span class="pill">${escapeHtml(item.priority)}</span></div>`,
+      `<small>${escapeHtml(item.phase || '')}</small>`,
+      `<p>${escapeHtml(item.detail)}</p>`,
+      '</div>'
+    ].join('')
+  }).join('') || '<div class="blueprint-item"><small>暂无下一步。</small></div>'
+  elements.serverBlueprintProperties.innerHTML = propertyChanges.map(item => {
+    const current = item.current || '未设置'
+    const badge = item.changed ? '<span class="pill warn-pill">建议修改</span>' : '<span class="pill ok-pill">已符合</span>'
+    const restart = item.requiresRestart ? '需要重启后完全生效' : '可在线生效'
+    return [
+      '<div class="blueprint-item">',
+      `<div><strong>${escapeHtml(item.key)}</strong> ${badge}</div>`,
+      `<small>当前：${escapeHtml(current)}；建议：${escapeHtml(item.recommended)}；${restart}</small>`,
+      `<p>${escapeHtml(item.reason)}</p>`,
+      '</div>'
+    ].join('')
+  }).join('') || '<div class="blueprint-item"><small>没有可比较的配置。</small></div>'
+
+  const platform = data.platform || {}
+  elements.serverBlueprintPhases.innerHTML = [
+    '<div class="blueprint-item">',
+    `<div><strong>${escapeHtml(platform.recommended || 'Paper')}</strong> <span class="pill">${escapeHtml(platform.urgency || '建议评估')}</span></div>`,
+    `<p>${escapeHtml(platform.rationale || '')}</p>`,
+    '</div>',
+    ...(platform.options || []).map(option => [
+      '<div class="blueprint-item">',
+      `<strong>${escapeHtml(option.name)}</strong>`,
+      `<small>${escapeHtml(option.fit)}</small>`,
+      `<p>${escapeHtml(option.tradeoff)}</p>`,
+      '</div>'
+    ].join(''))
+  ].join('')
+
+  elements.serverBlueprintPlugins.innerHTML = (data.plugins || []).map(plugin => {
+    return [
+      '<div class="blueprint-item">',
+      `<div><strong>${escapeHtml(plugin.name)}</strong> <span class="pill">${escapeHtml(plugin.priority)}</span></div>`,
+      `<small>${escapeHtml(plugin.status)}</small>`,
+      `<p>${escapeHtml(plugin.purpose)}</p>`,
+      '</div>'
+    ].join('')
+  }).join('')
+
+  const livestream = data.livestream || {}
+  elements.serverBlueprintStreaming.innerHTML = [
+    '<div class="blueprint-item">',
+    `<strong>${escapeHtml(livestream.recommendedPath || '')}</strong>`,
+    `<p>${escapeHtml(livestream.limitation || '')}</p>`,
+    '</div>',
+    ...((livestream.stages || []).map(stage => `<div class="blueprint-item"><small>${escapeHtml(stage)}</small></div>`))
+  ].join('')
+
+  const dryRun = data.dryRun || {}
+  elements.serverBlueprintDryRun.textContent = [
+    dryRun.note || '',
+    '',
+    '[server.properties 预览]',
+    dryRun.propertyPreview || '',
+    '',
+    '[将来可手动执行的控制台命令]',
+    (dryRun.futureCommands || []).join('\n'),
+    '',
+    '[备份范围检查]',
+    dryRun.backupChecklist || ''
+  ].join('\n')
+
+  if (changed.length === 0) showToast('服务器蓝图已刷新：配置建议都已符合')
+}
+
+async function copyServerBlueprint() {
+  const text = state.serverBlueprint && state.serverBlueprint.markdown
+  if (!text) {
+    showToast('请先刷新服务器蓝图')
+    return
+  }
+  await copyText(text)
+  showToast('服务器改造方案已复制')
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  textarea.remove()
+}
+
 async function loadServerProperties() {
   try {
     const data = await apiGet('/api/server-properties')
@@ -912,7 +1471,6 @@ async function loadServerProperties() {
     showToast(error.message)
   }
 }
-
 async function sendMinecraftCommand(event) {
   event.preventDefault()
   const command = byId('minecraftCommand').value.trim()
@@ -924,6 +1482,20 @@ async function sendMinecraftCommand(event) {
   byId('minecraftCommand').value = ''
 }
 
+async function focusLiveObserver() {
+  try {
+    state.busy = true
+    const observer = (state.config && state.config.liveObserverName) || 'live'
+    const data = await apiPost('/api/livestream/focus', { observer, target: 'auto' })
+    showToast(`${data.observer} 已切到 ${data.target}`)
+    await refreshMinecraftLog()
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+  }
+}
 function runMinecraftQuickCommand(event) {
   const template = event.currentTarget.dataset.minecraftCommand || ''
   const player = byId('minecraftPlayerName').value.trim()

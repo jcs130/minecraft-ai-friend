@@ -8,6 +8,7 @@
 - `src/mindcraft-client.js`：连接 Mindcraft 本地 API/Socket.IO。
 - `src/mindcraft-config.js`：读取和保存 Mindcraft settings.js 与 Agent Profile。
 - `src/autopilot.js`：自动陪玩循环、任务策略、LLM 调用和记忆。
+- `src/village-state.js`：AI村长、居民角色、村庄项目、公共设施和任务事件的本地状态。
 - `src/model-providers.js`：云端/本地模型供应商预设、密钥环境变量检测和 Mindcraft 子进程环境映射。
 - `public/`：中文产品化前端。
 
@@ -23,6 +24,7 @@
 
 - `data/config.json`：本地控制台配置，不提交到 Git。
 - `data/autopilot-memory.json`：自动陪玩记忆，不提交到 Git。
+- `data/village-state.json`：AI村庄共享状态，不提交到 Git；后续会迁移到 SQLite。
 - `logs/`：本地日志，不提交到 Git。
 - Minecraft Server 和 Mindcraft 项目位于用户配置的外部目录。
 
@@ -44,4 +46,4 @@
 - `integrations/codex-plugin/`：Codex/Agent 插件草案。
 - `integrations/mcp/`：MCP adapter 草案。
 
-集成层的原则是“高层意图输入、底层行为托管”。第三方 Agent 调用 `POST /api/task` 下发自然语言目标，由本项目和 Mindcraft 负责具体 Minecraft 行为。
+集成层的原则是“高层意图输入、底层行为托管”。第三方 Agent 调用 `POST /api/task` 下发自然语言目标，或调用 `POST /api/village/report` / `POST /api/village/task-event` 写入共享事实；由本项目和 Mindcraft 负责具体 Minecraft 行为。

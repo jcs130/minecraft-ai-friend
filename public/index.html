@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=13">
+    <link rel="stylesheet" href="/styles.css?v=20">
   </head>
   <body>
     <header class="topbar">
@@ -87,6 +87,12 @@
           <button type="button" data-preset-task="explore">陪我探索</button>
           <button type="button" data-preset-task="return-home">带我回基地</button>
           <button type="button" data-preset-task="free-play">自由活动</button>
+          <button type="button" data-preset-task="collab-sync">协作同步</button>
+          <button type="button" data-preset-task="shared-storage">共享库存</button>
+          <button type="button" data-preset-task="craft-tools">合成工具</button>
+          <button type="button" data-preset-task="cook-meal">做饭补给</button>
+          <button type="button" data-preset-task="build-zone">分区建造</button>
+          <button type="button" data-preset-task="resource-chain">资源接力</button>
         </div>
       </section>
       <section class="status-grid">
@@ -122,6 +128,7 @@
             <button id="viewerAutoBtn" type="button">自动轮播：开</button>
             <button id="viewerNextBtn" type="button">下一个视角</button>
             <button id="viewerOpenBtn" type="button">打开当前视角</button>
+            <button id="focusLiveObserverBtn" type="button">live 看活跃 AI</button>
           </div>
         </div>
         <div class="viewer-layout">
@@ -133,6 +140,99 @@
         </div>
       </section>
 
+      <section class="panel village-panel">
+        <div class="panel-head">
+          <div>
+            <h2>AI 指挥官：村庄计划</h2>
+            <p class="hint inline-hint">指挥官负责目标、记忆、项目和验收；多个常驻居民 Agent 负责执行、协作和上报。</p>
+          </div>
+          <div class="button-row">
+            <button id="activateSocietyBtn" type="button" class="primary">进入常驻生存</button>
+            <button id="ensureResidentsBtn" type="button">恢复五位居民</button>
+            <button id="dispatchVillageTasksBtn" type="button">派发村庄任务</button>
+            <button id="setVillageBaseFromPlayerBtn" type="button">用玩家坐标设基地</button>
+            <button id="saveVillageBtn" type="button">保存村庄计划</button>
+            <button id="resetVillageBtn" type="button">恢复默认计划</button>
+          </div>
+          <div class="quick-task-grid">
+            <button type="button" data-society-preset="construction">建造分工</button>
+            <button type="button" data-society-preset="crafting">合成协作</button>
+            <button type="button" data-society-preset="cooking">食物协作</button>
+            <button type="button" data-society-preset="logistics">后勤接力</button>
+          </div>
+        </div>
+        <form id="villageForm" class="village-settings-grid">
+          <label>
+            村庄名
+            <input id="villageName" placeholder="AI Friend Village">
+          </label>
+          <label>
+            基地 X
+            <input id="villageBaseX" type="number" step="0.1" placeholder="-111">
+          </label>
+          <label>
+            基地 Y
+            <input id="villageBaseY" type="number" step="0.1" placeholder="63">
+          </label>
+          <label>
+            基地 Z
+            <input id="villageBaseZ" type="number" step="0.1" placeholder="166">
+          </label>
+          <label>
+            公共箱子 X
+            <input id="villageChestX" type="number" step="0.1">
+          </label>
+          <label>
+            公共箱子 Y
+            <input id="villageChestY" type="number" step="0.1">
+          </label>
+          <label>
+            公共箱子 Z
+            <input id="villageChestZ" type="number" step="0.1">
+          </label>
+          <label>
+            村庄半径
+            <input id="villageRadius" type="number" min="16" max="512" value="120">
+          </label>
+        </form>
+        <div class="society-command-row">
+          <label>
+            本轮村庄目标
+            <textarea id="societyGoal" rows="3" placeholder="例如：所有居民回到基地附近，优先做公共箱子、补光、采集木头和食物，然后开始建一个安全小屋。"></textarea>
+          </label>
+          <p class="hint">“进入常驻生存”会把模式切到生存助手、启用长期世界目标并启动自动陪玩；“派发村庄任务”会给在线居民发送按角色分工的高层任务。</p>
+        </div>
+        <div class="village-grid">
+          <article>
+            <h3>AI 村长</h3>
+            <div id="villageCommander" class="village-list"></div>
+          </article>
+          <article>
+            <h3>居民角色</h3>
+            <div id="villageRoles" class="village-list"></div>
+          </article>
+          <article>
+            <h3>任务事件</h3>
+            <div id="villageTasks" class="village-list"></div>
+          </article>
+          <article>
+            <h3>资源目标</h3>
+            <div id="villageResources" class="village-list"></div>
+          </article>
+          <article class="wide-village-card">
+            <h3>村庄项目</h3>
+            <div id="villageProjects" class="village-projects"></div>
+          </article>
+          <article>
+            <h3>公共设施</h3>
+            <div id="villageInfrastructures" class="village-list"></div>
+          </article>
+          <article class="wide-village-card">
+            <h3>村民上报</h3>
+            <div id="villageReports" class="village-list"></div>
+          </article>
+        </div>
+      </section>
       <section class="layout">
         <section class="panel">
           <div class="panel-head">
@@ -221,7 +321,7 @@
             </label>
             <label>
               AI 玩家筛选
-              <input id="agentFilter" name="agentFilter" placeholder="Alex,Codex">
+              <input id="agentFilter" name="agentFilter" placeholder="Alex,Luna">
             </label>
             <label>
               陪玩模式
@@ -245,6 +345,14 @@
             <label>
               最短任务时间（毫秒）
               <input id="minTaskRuntimeMs" name="minTaskRuntimeMs" type="number" min="10000">
+            </label>
+            <label>
+              AI 并发调度数
+              <input id="maxConcurrentAgents" name="maxConcurrentAgents" type="number" min="1" max="8">
+            </label>
+            <label>
+              直播观察账号
+              <input id="liveObserverName" name="liveObserverName" placeholder="live">
             </label>
             <label>
               聊天/操作模型供应商
@@ -279,6 +387,44 @@
             <label>
               视觉模型名称
               <input id="visionModel" name="visionModel" placeholder="qwen3-vl:8b">
+            </label>
+            <label class="checkbox-row">
+              <input id="memoryVectorEnabled" name="memoryVectorEnabled" type="checkbox">
+              启用长期向量记忆
+            </label>
+            <label>
+              记忆向量接口类型
+              <select id="memoryEmbeddingProvider" name="memoryEmbeddingProvider">
+                <option value="openai-compatible">OpenAI-compatible /v1</option>
+                <option value="ollama">Ollama 原生 /api/embed</option>
+              </select>
+            </label>
+            <label>
+              记忆向量接口地址
+              <input id="memoryEmbeddingBaseUrl" name="memoryEmbeddingBaseUrl" placeholder="http://127.0.0.1:11434/v1">
+            </label>
+            <label>
+              记忆向量模型
+              <input id="memoryEmbeddingModel" name="memoryEmbeddingModel" placeholder="bge-m3">
+            </label>
+            <label>
+              向量库
+              <select id="memoryVectorStore" name="memoryVectorStore">
+                <option value="sqlite">内置 SQLite 向量检索</option>
+                <option value="qdrant">Qdrant</option>
+              </select>
+            </label>
+            <label>
+              Qdrant 地址
+              <input id="memoryQdrantUrl" name="memoryQdrantUrl" placeholder="http://127.0.0.1:6333">
+            </label>
+            <label>
+              Qdrant 集合
+              <input id="memoryQdrantCollection" name="memoryQdrantCollection" placeholder="minecraft_agent_memories">
+            </label>
+            <label>
+              向量请求超时（毫秒）
+              <input id="memoryVectorTimeoutMs" name="memoryVectorTimeoutMs" type="number" min="1000" max="60000">
             </label>
             <label class="checkbox-row">
               <input id="useLlm" name="useLlm" type="checkbox">
@@ -589,6 +735,50 @@
         </form>
       </section>
 
+      <section class="panel blueprint-panel">
+        <div class="panel-head">
+          <div>
+            <h2>服务器改造蓝图</h2>
+            <p class="hint inline-hint">今天只做方案和代码，不修改当前运行中的服务器。</p>
+          </div>
+          <div class="button-row">
+            <button id="loadServerBlueprintBtn" type="button">刷新蓝图</button>
+            <button id="copyServerBlueprintBtn" type="button">复制方案</button>
+          </div>
+        </div>
+        <p id="serverBlueprintHint" class="hint">读取服务器目录后生成 Paper、插件、直播和 AI 社会系统的改造方案。</p>
+        <div id="serverBlueprintSummary" class="blueprint-summary"></div>
+        <div class="blueprint-grid">
+          <article>
+            <h3>实施就绪度</h3>
+            <div id="serverBlueprintReadiness" class="blueprint-list"></div>
+          </article>
+          <article>
+            <h3>下一步</h3>
+            <div id="serverBlueprintNextActions" class="blueprint-list"></div>
+          </article>
+          <article>
+            <h3>推荐配置</h3>
+            <div id="serverBlueprintProperties" class="blueprint-list"></div>
+          </article>
+          <article>
+            <h3>平台路线</h3>
+            <div id="serverBlueprintPhases" class="blueprint-list"></div>
+          </article>
+          <article>
+            <h3>插件能力</h3>
+            <div id="serverBlueprintPlugins" class="blueprint-list"></div>
+          </article>
+          <article>
+            <h3>直播与观察</h3>
+            <div id="serverBlueprintStreaming" class="blueprint-list"></div>
+          </article>
+        </div>
+        <details class="dry-run-box">
+          <summary>查看 dry-run 配置预览</summary>
+          <pre id="serverBlueprintDryRun" class="prebox">尚未生成蓝图。</pre>
+        </details>
+      </section>
       <section class="panel">
         <div class="panel-head">
           <h2>关联项目</h2>
@@ -615,6 +805,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=13"></script>
+    <script src="/app.js?v=20"></script>
   </body>
 </html>

@@ -44,12 +44,14 @@ const survivalRoleTasks = [
   'Autonomous survival task: Survival mode: take the quartermaster role. Organize survival storage and keep emergency food, tools, torches, and blocks accessible.'
 ]
 
+const COLLABORATION_PROTOCOL = 'Use short coordination messages only when useful: HAVE(item/count), NEED(item/count/use), DOING(task/area), DONE(result/coords), BLOCKED(reason/missing). Share inventory and recipes before crafting or cooking. Do not remove or overwrite another resident active build area.'
+
 const settlementRoleTasks = [
-  'Builder role: improve the shared village base with walls, roof, doors, windows, lighting, paths, and useful interior blocks. Avoid tearing down player-built blocks.',
-  'Gatherer role: collect nearby wood, stone, coal, food, wool, and other basic materials, then return to the shared storage chest and deposit surplus supplies.',
-  'Farmer role: create and maintain a small safe food area with crops, water, light, fences, and nearby animal/food support when materials are available.',
-  'Quartermaster role: organize the public chest, keep tools, fuel, food, blocks, torches, and building supplies available, and report shortages.',
-  'Scout role: explore only short safe loops around the village, mark useful resources mentally, then return before danger or night.'
+  'Steward role: patrol the shared village base, add lighting, organize public storage, report shortages, and keep night work safe.',
+  'Builder role: improve the shared village base with walls, roof, doors, windows, lighting, paths, and useful interior blocks. Own one build area at a time and avoid tearing down player-built or resident-built blocks.',
+  'Miner role: gather nearby stone, coal, iron, and fuel from low-risk mine entrances, light the route, then deposit surplus supplies.',
+  'Scout role: explore only short safe loops around the village, mark useful resources and hazards, then return before danger or night.',
+  'Farmer role: create and maintain a small safe food area with crops, water, light, fences, and nearby animal/food support when materials are available.'
 ]
 
 class Autopilot {
@@ -60,6 +62,7 @@ class Autopilot {
     this.intervalMs = options.intervalMs
     this.idleCooldownMs = options.idleCooldownMs
     this.minTaskRuntimeMs = options.minTaskRuntimeMs
+    this.maxConcurrentAgents = clampNumber(options.maxConcurrentAgents || 3, 1, 8, 3)
     this.agentFilter = options.agentFilter || []
     this.assistantMode = normalizeAssistantMode(options.assistantMode || 'creative')
     this.useLlm = options.useLlm || false
@@ -72,6 +75,7 @@ class Autopilot {
     this.lastError = null
     this.memory = this.loadMemory()
     this.worldDirective = normalizeDirective(options.worldDirective || this.memory.worldDirective || '')
+    this.villageState = options.villageState || null
 
     this.client.on('bot-output', (agentName, message) => {
       this.rememberOutput(agentName, message)
@@ -82,6 +86,7 @@ class Autopilot {
     if (options.intervalMs) this.intervalMs = options.intervalMs
     if (options.idleCooldownMs) this.idleCooldownMs = options.idleCooldownMs
     if (options.minTaskRuntimeMs) this.minTaskRuntimeMs = options.minTaskRuntimeMs
+    if (options.maxConcurrentAgents) this.maxConcurrentAgents = clampNumber(options.maxConcurrentAgents, 1, 8, this.maxConcurrentAgents)
     if (options.agentFilter) this.agentFilter = options.agentFilter
     if (options.assistantMode) this.assistantMode = normalizeAssistantMode(options.assistantMode)
     if (typeof options.useLlm === 'boolean') this.useLlm = options.useLlm
@@ -113,6 +118,7 @@ class Autopilot {
       intervalMs: this.intervalMs,
       idleCooldownMs: this.idleCooldownMs,
       minTaskRuntimeMs: this.minTaskRuntimeMs,
+      maxConcurrentAgents: this.maxConcurrentAgents,
       agentFilter: this.agentFilter,
       useLlm: this.useLlm,
       llmConfigured: this.canUseLlm(),
@@ -121,7 +127,8 @@ class Autopilot {
       worldDirective: this.worldDirective,
       lastTickAt: this.lastTickAt,
       lastError: this.lastError,
-      memoryPath: this.memoryPath
+      memoryPath: this.memoryPath,
+      villageEnabled: Boolean(this.villageState)
     }
   }
 
@@ -138,6 +145,63 @@ class Autopilot {
 
   getMemory(agentName) {
     return agentName ? this.memoryFor(agentName) : this.memory
+  }
+
+  recordAgentStatus(agentName, report) {
+    const memory = this.memoryFor(agentName)
+    if (!Array.isArray(memory.statusReports)) memory.statusReports = []
+    if (!Array.isArray(memory.openNeeds)) memory.openNeeds = []
+    const clean = {
+      at: report.at || new Date().toISOString(),
+      status: report.status || 'info',
+      task: report.task || '',
+      summary: report.summary || '',
+      needs: Array.isArray(report.needs) ? report.needs : [],
+      has: Array.isArray(report.has) ? report.has : [],
+      position: report.position || null
+    }
+    memory.statusReports.push(clean)
+    memory.statusReports = memory.statusReports.slice(-30)
+    if (clean.summary || clean.task) memory.lastStatusSummary = (clean.summary || clean.task).slice(0, 260)
+    if (clean.needs.length > 0) memory.openNeeds = clean.needs.slice(0, 12)
+    this.saveMemory()
+    return clean
+  }
+
+  recordAgentMemory(agentName, note) {
+    const memory = this.memoryFor(agentName)
+    if (!Array.isArray(memory.longTermNotes)) memory.longTermNotes = []
+    const clean = {
+      at: note.at || new Date().toISOString(),
+      kind: note.kind || 'note',
+      importance: Number(note.importance || 1),
+      text: String(note.text || '').slice(0, 600),
+      source: note.source || 'agent'
+    }
+    if (!clean.text) return null
+    memory.longTermNotes.push(clean)
+    memory.longTermNotes = memory.longTermNotes
+      .sort((a, b) => Number(b.importance || 0) - Number(a.importance || 0) || String(b.at).localeCompare(String(a.at)))
+      .slice(0, 80)
+    this.saveMemory()
+    return clean
+  }
+
+  agentContext(agentName) {
+    const memory = this.memoryFor(agentName)
+    if (!Array.isArray(memory.statusReports)) memory.statusReports = []
+    if (!Array.isArray(memory.longTermNotes)) memory.longTermNotes = []
+    if (!Array.isArray(memory.openNeeds)) memory.openNeeds = []
+    return {
+      agent: agentName,
+      lastTaskSummary: memory.lastTaskSummary || '',
+      lastStatusSummary: memory.lastStatusSummary || '',
+      openNeeds: memory.openNeeds || [],
+      recentTasks: memory.recentTasks || [],
+      recentOutputs: memory.recentOutputs || [],
+      statusReports: memory.statusReports || [],
+      longTermNotes: memory.longTermNotes || []
+    }
   }
 
   setWorldDirective(directive) {
@@ -163,9 +227,8 @@ class Autopilot {
     if (!this.client.connected || !this.client.latestState) return
 
     const now = Date.now()
-    for (const agentName of this.client.onlineAgentNames(this.agentFilter)) {
-      await this.maybeAssignTask(agentName, now)
-    }
+    const agents = this.client.onlineAgentNames(this.agentFilter)
+    await runLimited(agents, this.maxConcurrentAgents, agentName => this.maybeAssignTask(agentName, now))
   }
 
   async maybeAssignTask(agentName, now) {
@@ -199,7 +262,7 @@ class Autopilot {
   }
 
   fallbackDecision(agentName, state) {
-    if (this.worldDirective) return this.settlementFallbackDecision(agentName, state)
+    if (this.worldDirective || this.villageState) return this.settlementFallbackDecision(agentName, state)
     return this.assistantMode === 'survival'
       ? this.survivalFallbackDecision(agentName, state)
       : this.creativeFallbackDecision(agentName, state)
@@ -208,11 +271,16 @@ class Autopilot {
   settlementFallbackDecision(agentName, state) {
     const online = this.client.onlineAgentNames(this.agentFilter)
     const roleIndex = Math.max(0, online.indexOf(agentName))
-    const role = settlementRoleTasks[roleIndex % settlementRoleTasks.length]
+    const fallbackRole = settlementRoleTasks[roleIndex % settlementRoleTasks.length]
+    const assignment = this.villageState ? this.villageState.assignmentFor(agentName) : null
+    const role = assignment && assignment.role
+      ? `${assignment.role.role} role: ${assignment.role.focus}`
+      : fallbackRole
+    const villageContext = this.villageState ? this.villageState.taskContextFor(agentName) : ''
     const safety = state && state.gameplay && state.gameplay.timeLabel === 'Night'
       ? 'It is night: prefer lighting, shelter, storage, and indoor/base work until safe.'
       : 'If safe, continue village construction and local resource loops.'
-    return normalizeTask(`Long-term world directive: ${this.worldDirective} Current assignment for ${agentName}: ${role} ${safety} Keep acting like a permanent resident of the village, coordinate with other AI players, and use shared storage.`, this.assistantMode)
+    return normalizeTask(`Long-term world directive: ${this.worldDirective || 'Build and maintain the AI village as permanent residents.'} Village plan: ${villageContext} Current assignment for ${agentName}: ${role} ${safety} ${COLLABORATION_PROTOCOL} Keep acting like a permanent resident of the village, coordinate with other AI players, and use shared storage.`, this.assistantMode)
   }
 
   creativeFallbackDecision(agentName, state) {
@@ -280,7 +348,7 @@ class Autopilot {
           stream: false,
           messages: [
             { role: 'system', content: buildSystemPrompt(this.assistantMode) },
-            { role: 'user', content: JSON.stringify(compactState(this.client, this.memoryFor(agentName), agentName, state, this.assistantMode, this.worldDirective), null, 2) }
+            { role: 'user', content: JSON.stringify(compactState(this.client, this.memoryFor(agentName), agentName, state, this.assistantMode, this.worldDirective, this.villageState ? this.villageState.assignmentFor(agentName) : null), null, 2) }
           ],
           temperature: 0.2
         }),
@@ -311,7 +379,11 @@ class Autopilot {
         taskIndex: 0,
         lastTaskSummary: '',
         recentTasks: [],
-        recentOutputs: []
+        recentOutputs: [],
+        statusReports: [],
+        longTermNotes: [],
+        openNeeds: [],
+        lastStatusSummary: ''
       }
     }
     return this.memory.agents[agentName]
@@ -354,12 +426,28 @@ class Autopilot {
   }
 }
 
+async function runLimited(items, limit, worker) {
+  const queue = Array.isArray(items) ? items.slice() : []
+  const concurrency = clampNumber(limit, 1, 8, 3)
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()
+      await worker(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
 function buildSystemPrompt(mode) {
   const base = [
     'You are a high-level Minecraft supervisor for Mindcraft agents.',
     'Choose one useful, autonomous, player-like goal for the named agent based on the current world state.',
     'If a worldDirective is present in the state JSON, treat it as the long-term objective and keep new tasks aligned with it.',
     'Encourage agents to coordinate with other online AI players through concise in-game chat when it helps divide labor.',
+    COLLABORATION_PROTOCOL,
+    'For construction tasks, assign a small area/layer/material and tell the agent not to remove blocks placed by another resident unless asked.',
+    'For crafting or cooking tasks, tell the agent to share inventory/recipe needs first, then collect or hand off resources, then assemble the result.',
+    'If the task involves public infrastructure, tell the agent to report progress with VILLAGE_REPORT JSON in chat when it starts, completes, or is blocked.',
     'Do not tell the agent to follow, chase, or wait beside the human player unless directly requested.',
     'Do not ask it to run host code, use insecure coding, change server settings, or grief the world.',
     'Keep the task concise, concrete, and safe. Return only JSON: {"task":"..."}.'
@@ -383,7 +471,7 @@ function buildSystemPrompt(mode) {
   return base.join(' ')
 }
 
-function compactState(client, memory, agentName, state, assistantMode, worldDirective = '') {
+function compactState(client, memory, agentName, state, assistantMode, worldDirective = '', village = null) {
   const gameplay = state.gameplay || {}
   const action = state.action || {}
   const surroundings = state.surroundings || {}
@@ -393,6 +481,7 @@ function compactState(client, memory, agentName, state, assistantMode, worldDire
     agent: agentName,
     assistantMode,
     worldDirective,
+    village,
     position: gameplay.position || null,
     dimension: gameplay.dimension,
     gamemode: gameplay.gamemode,
@@ -422,7 +511,12 @@ function compactState(client, memory, agentName, state, assistantMode, worldDire
     },
     otherOnlineAgents: client.onlineAgentNames([]).filter(name => name !== agentName),
     recentTasks: memory.recentTasks || [],
-    lastTaskSummary: memory.lastTaskSummary || ''
+    recentOutputs: (memory.recentOutputs || []).slice(-8),
+    statusReports: (memory.statusReports || []).slice(-5),
+    longTermNotes: (memory.longTermNotes || []).slice(0, 8),
+    openNeeds: memory.openNeeds || [],
+    lastTaskSummary: memory.lastTaskSummary || '',
+    lastStatusSummary: memory.lastStatusSummary || ''
   }
 }
 
@@ -448,7 +542,7 @@ function normalizeAssistantMode(value) {
 }
 
 function normalizeDirective(value) {
-  return String(value || '').trim().replace(/s+/g, ' ').slice(0, 1400)
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 1400)
 }
 
 function extractJsonObject(text) {

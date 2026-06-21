@@ -17,6 +17,23 @@ paths:
             application/json:
               schema:
                 type: object
+  /api/storage:
+    get:
+      summary: Get local storage backend and recent AI society events
+      operationId: getStorageEvents
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Storage backend and recent task/infrastructure events
+          content:
+            application/json:
+              schema:
+                type: object
   /api/model-providers:
     get:
       summary: List model provider presets and key environment status
@@ -107,6 +124,32 @@ paths:
       responses:
         '200':
           description: Command result
+  /api/livestream/focus:
+    post:
+      summary: Focus the live observer account on the most active AI agent or an explicit target
+      operationId: focusLiveObserver
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                observer:
+                  type: string
+                  default: live
+                  description: Observer Minecraft account name.
+                target:
+                  type: string
+                  default: auto
+                  description: AI target name, or auto for the currently most active online AI.
+      responses:
+        '200':
+          description: Spectate command dispatch result
+          content:
+            application/json:
+              schema:
+                type: object
   /api/minecraft/logs:
     get:
       summary: Read recent Minecraft latest.log lines
@@ -165,6 +208,17 @@ paths:
       responses:
         '200':
           description: Updated config
+  /api/server-blueprint:
+    get:
+      summary: Get a read-only server productization blueprint
+      operationId: getServerBlueprint
+      responses:
+        '200':
+          description: Paper migration, plugin, livestream, AI society, and dry-run server.properties recommendations
+          content:
+            application/json:
+              schema:
+                type: object
   /api/server-properties:
     get:
       summary: Read editable server.properties fields
@@ -187,6 +241,195 @@ paths:
       responses:
         '200':
           description: Save result
+  /api/village:
+    get:
+      summary: Read AI village shared memory and project state
+      operationId: getVillageState
+      responses:
+        '200':
+          description: Village settlement, roles, resources, projects, infrastructure, and task events
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      summary: Update AI village shared memory
+      operationId: updateVillageState
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated village state
+  /api/village/report:
+    post:
+      summary: Record a resident infrastructure report
+      operationId: recordVillageInfrastructureReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                type:
+                  type: string
+                  enum: [storage, lighting, road, farm, house, shelter, wall, bridge, mine, landmark, other]
+                title:
+                  type: string
+                status:
+                  type: string
+                  enum: [planned, started, done, blocked]
+                public:
+                  type: boolean
+                position:
+                  type: object
+                description:
+                  type: string
+                projectId:
+                  type: string
+                checklistId:
+                  type: string
+      responses:
+        '200':
+          description: Updated village state with recorded infrastructure report
+  /api/village/task-event:
+    post:
+      summary: Record an AI village task event
+      operationId: recordVillageTaskEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                type:
+                  type: string
+                  enum: [assigned, progress, completed, blocked, note]
+                status:
+                  type: string
+                  enum: [active, done, blocked, info]
+                source:
+                  type: string
+                title:
+                  type: string
+                description:
+                  type: string
+                projectId:
+                  type: string
+      responses:
+        '200':
+          description: Updated village state with recorded task event
+  /api/village/project:
+    post:
+      summary: Update one AI village project
+      operationId: updateVillageProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                project:
+                  type: object
+      responses:
+        '200':
+          description: Updated village state
+  /api/village/reset:
+    post:
+      summary: Reset AI village plan to defaults
+      operationId: resetVillageState
+      responses:
+        '200':
+          description: Reset village state
+  /api/society:
+    get:
+      summary: Read resident AI society mode state
+      operationId: getSocietyState
+      responses:
+        '200':
+          description: Resident society directive, online residents, assignments, and village state
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/society/activate:
+    post:
+      summary: Activate survival resident society mode
+      operationId: activateSocietyMode
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentFilter:
+                  type: string
+                  description: Optional comma-separated resident names. Defaults to village roles.
+                worldDirective:
+                  type: string
+                  description: Optional long-term directive for resident agents.
+                startAutopilot:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Updated config, autopilot state, and society snapshot
+  /api/society/dispatch:
+    post:
+      summary: Dispatch role-aware village tasks to online resident agents
+      operationId: dispatchSocietyTasks
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                  description: Optional comma-separated agent names. Defaults to village residents.
+                goal:
+                  type: string
+                  description: Optional immediate village goal from the human operator.
+      responses:
+        '200':
+          description: Sent tasks and skipped offline residents
+  /api/society/residents/ensure:
+    post:
+      summary: Ensure resident profiles exist, start residents, and activate society mode
+      operationId: ensureSocietyResidents
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentFilter:
+                  type: string
+                  description: Optional comma-separated resident names. Defaults to village residents.
+                activateSociety:
+                  type: boolean
+                  default: true
+                startAutopilot:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Resident ensure results and society snapshot
   /api/memory:
     get:
       summary: Read autopilot memory

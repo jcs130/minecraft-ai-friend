@@ -525,6 +525,121 @@ label {
   width: 100%;
 }
 
+.village-panel {
+  margin-bottom: 16px;
+}
+
+.village-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.society-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  margin: 0 0 12px;
+  padding-top: 12px;
+}
+
+.society-command-row .hint {
+  margin-top: 0;
+}
+
+.village-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.7fr) minmax(0, 1.5fr);
+  gap: 12px;
+}
+
+.village-grid article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 12px;
+}
+
+.village-grid h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.wide-village-card {
+  grid-column: span 2;
+}
+
+.village-list,
+.village-projects,
+.project-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.village-item,
+.village-project-card {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.village-item:first-child,
+.village-project-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.village-item small,
+.village-project-card small,
+.village-project-card p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.village-project-card p {
+  margin: 0;
+}
+
+.project-head,
+.village-item > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.project-head select {
+  width: auto;
+  min-width: 92px;
+}
+
+.checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.checkline input {
+  width: auto;
+}
+
+.resource-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eee8;
+}
+
+.resource-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
 .server-settings-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -591,6 +706,111 @@ label {
   align-items: end;
 }
 
+.blueprint-panel {
+  margin-bottom: 16px;
+}
+
+.blueprint-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.blueprint-chip,
+.pill {
+  border: 1px solid #cfe0d0;
+  border-radius: 999px;
+  background: #f7fbf7;
+  color: var(--accent-dark);
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.blueprint-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.blueprint-grid article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 12px;
+}
+
+.blueprint-grid h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.blueprint-list {
+  display: grid;
+  gap: 8px;
+}
+
+.blueprint-item {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.blueprint-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.blueprint-item small,
+.blueprint-item p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.blueprint-item p {
+  margin: 0;
+}
+
+.pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  font-weight: 600;
+}
+
+.warn-pill {
+  border-color: #f0d28a;
+  background: #fff8e5;
+  color: var(--warn);
+}
+
+.ok-pill {
+  border-color: #b8d9bb;
+  background: #f4fbf4;
+  color: var(--ok);
+}
+
+.bad-pill {
+  border-color: #efb8b1;
+  background: #fff3f1;
+  color: var(--danger);
+}
+
+.dry-run-box {
+  margin-top: 12px;
+}
+
+.dry-run-box summary {
+  cursor: pointer;
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.dry-run-box .prebox {
+  margin-top: 10px;
+}
 .related-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -695,6 +915,9 @@ label {
   .layout,
   .settings-grid,
   .server-settings-grid,
+  .village-settings-grid,
+  .village-grid,
+  .blueprint-grid,
   .mindcraft-settings-grid,
   .server-control-grid,
   .command-form,
@@ -705,6 +928,10 @@ label {
   }
 
   .mindcraft-settings-grid .wide {
+    grid-column: auto;
+  }
+
+  .wide-village-card {
     grid-column: auto;
   }
 

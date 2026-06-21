@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/model-providers.js && node --check src/mindcraft-client.js && node --check src/autopilot.js && node --check src/processes.js && node --check src/server-properties.js && node --check src/minecraft-server.js && node --check src/mindcraft-config.js && node --check public/app.js"
+    "check": "node --check src/server.js && node --check src/data-store.js && node --check src/vector-memory.js && node --check src/secrets.js && node --check src/model-providers.js && node --check src/mcp-server.js && node --check src/mindcraft-client.js && node --check src/autopilot.js && node --check src/processes.js && node --check src/server-properties.js && node --check src/server-blueprint.js && node --check src/village-state.js && node --check src/minecraft-server.js && node --check src/mindcraft-config.js && node --check public/app.js",
+    "visualizer:bridge": "node scripts/visualizer-bridge.js",
+    "visualizer:lan": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-visualizer-lan.ps1"
   },
   "engines": {
     "node": ">=18"

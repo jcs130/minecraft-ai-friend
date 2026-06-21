@@ -26,10 +26,15 @@
 - 启动/停止自动陪玩。
 - 手动给一个或多个 AI 玩家下达高层任务。
 - 查看 AI 玩家记忆。
+- 管理 AI 村庄共享记忆：基地、公共箱子、居民角色、资源目标和村庄项目。
+- 一键进入常驻生存社群模式，并按角色给在线 AI 居民派发村庄建设任务。
+- 记录 AI 村民自主上报的公共设施：公共箱子、照明、道路、农场、房屋、安全边界和地标。
+- 将任务事件、公共设施上报和居民状态观察镜像到 SQLite；不支持时自动降级为 JSONL 事件日志。
 - 启动、停止、重启由本页面托管的 Minecraft Server。
 - 读取 Minecraft 服务端最新日志。
 - 向托管服务端发送控制台命令，例如 `list`、`op 玩家名`、`gamemode survival 玩家名`。
 - 编辑常用 `server.properties` 配置，并在保存前自动备份。
+- 生成只读服务器改造蓝图：实施就绪度、下一步清单、Paper 迁移、插件能力、直播导播、AI 社会系统和 dry-run 配置预览。
 - 支持创造练习和生存助手两种陪玩模式。
 - 支持云端和本地模型供应商预设：DeepSeek、阿里云百炼/通义千问、豆包/火山方舟、OpenAI-compatible、OpenRouter、本地 Ollama。
 - 提供第三方 Agent 集成草案：OpenAPI、Codex 插件、MCP adapter 设计。
@@ -47,6 +52,22 @@ npm start
 http://127.0.0.1:4177
 ```
 
+## CoPaw / 小智 MCP 接入
+
+控制台提供 MCP 接入层，CoPaw 可以通过自然语言调用 Minecraft AI 陪玩工具。
+
+```json
+{
+  "mcp_servers": {
+    "minecraft-companion": {
+      "transport": "sse",
+      "url": "http://127.0.0.1:4177/mcp/sse"
+    }
+  }
+}
+```
+
+可用工具包括状态查询、启动陪玩、创建 AI、发送任务、定位玩家、激活村庄和村庄报告。完整说明见 [docs/COPAW_MCP.md](docs/COPAW_MCP.md)。
 ## 陪玩模式
 
 设置页里的 **陪玩模式** 控制 Autoplayer 给 AI 下达任务时的策略。
@@ -100,6 +121,53 @@ op 你的玩家名
 ```
 
 如果服务器没有控制台输入入口，也可以停服后编辑服务器目录里的 `ops.json`。
+
+## AI 村庄共享记忆
+
+页面里的 **AI 村庄计划** 会把可读快照保存到本地 `data/village-state.json`，用于让 Autopilot 给不同 AI 分配长期项目。任务事件、公共设施上报和居民状态观察会同步写入 `data/ai-friend.sqlite`；如果运行环境不支持 Node SQLite，则自动写入 `data/events.jsonl`。它只影响控制台和 Mindcraft 任务提示，不会写入 Minecraft 服务端文件。
+
+新增的 **进入常驻生存** 会把控制台切到生存助手模式，写入长期世界目标，启用默认居民筛选，并启动自动陪玩循环。**恢复两位居民** 会确保默认居民 Profile 存在、请求 Alex 和 Luna 进服，并进入常驻生存模式。**派发村庄任务** 会读取每个居民的角色、当前项目和资源缺口，给在线 AI 发送不同的高层任务。
+
+默认居民分工：
+
+- `Alex`：生存管家，负责安全巡逻、基础资源、公共箱子、食物、补光和紧急处理。
+- `Luna`：建筑师，负责基地、仓库、道路、围栏、照明、农田和简单住宅。
+
+如果真人玩家在基地位置附近，可以先填写玩家名，再点击 **用玩家坐标设基地**。这个动作只读取服务端坐标并更新控制台共享记忆，不会修改世界方块或服务器配置。
+
+### 指挥官和村民上报
+
+这个系统可以按“AI村长 + 多个常驻居民 Agent”理解：
+
+- AI村长是指挥官：保存长期目标、基地坐标、项目队列、公共设施和验收记录。
+- AI村长也可以作为直播观察者：轮流巡查村民、解释建设进展，并为未来弹幕问答提供统一人格。
+- 居民 Agent 执行不同角色任务，并在开始、完成或受阻时上报公共设施。
+- 控制台会监听 Mindcraft 输出里的结构化上报，写入 `data/village-state.json` 快照，并镜像到 `data/ai-friend.sqlite` 事件库，所有打开网页的人都能看到。
+
+村民上报格式：
+
+```text
+VILLAGE_REPORT {"type":"storage","title":"基地公共箱子","status":"done","public":true,"position":{"x":-100,"y":66,"z":167},"description":"已放置公共箱子","projectId":"storage-hub","checklistId":"place-chest"}
+```
+
+也可以由插件或第三方 Agent 直接调用 `POST /api/village/report` 上报。当前这是控制台共享记忆，不是 Minecraft 服务端插件存档；后续 `ai-friend-bridge` 可以把真实方块和箱子状态自动同步进来。
+
+
+### 工程化数据层
+
+当前版本是本地优先存储，不依赖外部数据库服务：
+
+- `data/config.json`：控制台配置。
+- `data/autopilot-memory.json`：Autopilot 的短期/长期任务记忆。
+- `data/village-state.json`：AI 村长、居民角色、基地、公共设施、资源目标、项目和最近任务事件快照。
+- `data/ai-friend.sqlite`：任务事件、公共设施上报和居民状态观察的工程化事件库。
+- `data/events.jsonl`：当 Node SQLite 不可用时的降级事件日志。
+
+`GET /api/storage` 会返回当前存储后端和最近事件。下一步可以在 SQLite 上继续扩展 `agent_memories`、`tasks`、`chat_messages`，再按直播规模升级到 Postgres/pgvector。推荐拆成三层记忆：工作记忆、每个居民的个人长期记忆、全村共享记忆。任务管理按 `tasks` + `task_events` 事件流设计，AI 的每次派发、进度、受阻、完成都可追溯。
+
+## 服务器产品化路线
+
+如果要把 AI 陪玩升级成长期运行的 AI 村庄/直播服务器，建议先使用页面里的 **服务器改造蓝图**。它只读分析服务器目录和 `server.properties`，不会写入当前服务器。详细方案见 [docs/SERVER_PRODUCTIZATION_PLAN.md](docs/SERVER_PRODUCTIZATION_PLAN.md)。
 
 ## 关联项目
 
