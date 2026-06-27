@@ -57,7 +57,7 @@ Codex 插件可以把本项目注册成“我的世界AI陪玩”能力，让 Co
 ## 安全边界
 
 - 默认只监听 `127.0.0.1`。
-- MCP 当前只接受 localhost 请求。
+- MCP 默认只接受 localhost 请求；需要给局域网 CoPaw/主播端使用时，在控制台设置里打开“允许局域网 MCP 接入”。
 - 第三方 Agent 不应获得 API key、keys.json 或服务器 secret。
 - 配置写入必须继续使用白名单。
 - 外部启动的 Minecraft Server 不允许被强制停止。

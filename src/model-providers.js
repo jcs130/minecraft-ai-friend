@@ -49,7 +49,7 @@ const providers = [
       code_model: {
         api: 'deepseek',
         url: 'https://api.deepseek.com',
-        model: 'deepseek-v4-flash'
+        model: 'deepseek-v4-pro'
       }
     },
     setupHint: '设置 DEEPSEEK_API_KEY，或用 MINDCRAFT_LLM_API_KEY 作为本控制台的通用密钥。'

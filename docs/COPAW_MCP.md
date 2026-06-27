@@ -1,6 +1,6 @@
 # CoPaw / 小智 MCP 接入
 
-这个控制台在本机 `http://127.0.0.1:4177` 暴露 MCP 接入层，让 CoPaw 可以通过自然语言调用 Minecraft AI 陪玩能力。
+这个控制台在本机 `http://127.0.0.1:4177` 暴露 MCP 接入层，让 CoPaw 可以通过自然语言调用 Minecraft AI 陪玩能力。默认只允许本机访问；如果 CoPaw 或主播端在局域网另一台机器上，需要在控制台“设置”里打开“允许局域网 MCP 接入”，然后使用服务器局域网 IP。
 
 ## 端点
 
@@ -12,6 +12,19 @@
     "minecraft-companion": {
       "transport": "sse",
       "url": "http://127.0.0.1:4177/mcp/sse"
+    }
+  }
+}
+```
+
+局域网机器示例：
+
+```json
+{
+  "mcp_servers": {
+    "minecraft-companion": {
+      "transport": "sse",
+      "url": "http://192.168.3.133:4177/mcp/sse"
     }
   }
 }
@@ -75,4 +88,4 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:4177/mcp -ContentType 'appl
 
 ## 安全边界
 
-MCP 请求只接受 localhost 连接。这个 MCP 层适合本机 CoPaw / 小智使用；如果要暴露到局域网或公网，需要先加鉴权、来源校验和操作确认。
+MCP 默认只接受 localhost 连接。打开“允许局域网 MCP 接入”后，只接受私网地址来源，包括 `10.x.x.x`、`172.16.x.x` 到 `172.31.x.x`、`192.168.x.x` 和 `169.254.x.x`。不要直接暴露到公网；公网或多人环境应先加鉴权、来源校验和高风险操作确认。

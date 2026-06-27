@@ -59,6 +59,8 @@ http://127.0.0.1:4177
 - 架构边界：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - 数据模型：[docs/DATA_MODEL.md](docs/DATA_MODEL.md)
 - AI 村庄社群：[docs/AGENT_SOCIETY.md](docs/AGENT_SOCIETY.md)
+- Mindcraft 正确用法：[docs/MINDCRAFT_USAGE.md](docs/MINDCRAFT_USAGE.md)
+- Mindcraft 增强插件栈：[docs/MINDCRAFT_PLUGIN_STACK.md](docs/MINDCRAFT_PLUGIN_STACK.md)
 - 运行维护：[docs/OPERATIONS.md](docs/OPERATIONS.md)
 - 工程审计：[docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md)
 - Agent 接手规范：[AGENTS.md](AGENTS.md)
@@ -66,7 +68,7 @@ http://127.0.0.1:4177
 
 ## CoPaw / 小智 MCP 接入
 
-控制台提供 MCP 接入层，CoPaw 可以通过自然语言调用 Minecraft AI 陪玩工具。
+控制台提供 MCP 接入层，CoPaw 可以通过自然语言调用 Minecraft AI 陪玩工具。默认只接受本机 `127.0.0.1`；如果 CoPaw 在局域网另一台机器，先在设置页打开“允许局域网 MCP 接入”，再把地址换成服务器局域网 IP。
 
 ```json
 {

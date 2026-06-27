@@ -13,20 +13,28 @@ class MinecraftServerManager {
     this.child = null
     this.startedAt = null
     this.startCommand = null
+    this.lastConfig = null
+    this.lastServerDir = null
+    this.rconStatusCache = null
   }
 
   async snapshot(config) {
-    this.lastServerDir = config.minecraftServerDir
+    this.rememberConfig(config)
     const tcpOpen = await testTcp(config.minecraftHost, config.minecraftPort)
     const processes = await listMinecraftProcesses(config.minecraftServerDir, config.minecraftPort)
     const owned = this.ownedRunning()
+    const stdinReady = owned && Boolean(this.child.stdin)
+    const rcon = await this.rconSnapshot(config)
+    const commandChannel = stdinReady ? 'stdin' : rcon.ready ? 'rcon' : 'none'
 
     return {
       tcpOpen,
       processIds: processes.map(processInfo => processInfo.pid),
       ownedPid: owned ? this.child.pid : null,
       managed: owned,
-      canSendCommand: owned && Boolean(this.child.stdin),
+      canSendCommand: stdinReady || rcon.ready,
+      commandChannel,
+      rcon,
       startedAt: this.startedAt,
       startCommand: this.startCommand ? this.startCommand.label : '',
       logPath: latestLogPath(config.minecraftServerDir)
@@ -34,6 +42,7 @@ class MinecraftServerManager {
   }
 
   async start(config) {
+    this.rememberConfig(config)
     if (this.ownedRunning()) {
       this.logger.info(`Minecraft server already managed by this app pid=${this.child.pid}`)
       return { ok: true, alreadyRunning: true, managed: true }
@@ -51,8 +60,10 @@ class MinecraftServerManager {
     this.child = spawn(start.command, start.args, {
       cwd: config.minecraftServerDir,
       stdio: ['pipe', out, err],
+      detached: true,
       windowsHide: true
     })
+    this.child.unref()
     this.startedAt = new Date().toISOString()
     this.startCommand = start
 
@@ -101,36 +112,84 @@ class MinecraftServerManager {
     return this.start(config)
   }
 
-  sendCommand(command) {
+  async sendCommand(command, config = null) {
     const clean = sanitizeConsoleCommand(command)
     if (!clean) throw new Error('控制台命令不能为空')
-    if (!this.ownedRunning()) {
-      throw new Error('只有通过本页面启动的 Minecraft 服务端，才能从这里发送控制台命令。')
+    if (config) this.rememberConfig(config)
+
+    if (this.ownedRunning() && this.child.stdin) {
+      this.writeConsoleLine(clean)
+      this.logger.info(`Sent Minecraft console command via stdin: ${clean}`)
+      return { ok: true, command: clean, channel: 'stdin' }
     }
-    this.writeConsoleLine(clean)
-    this.logger.info(`Sent Minecraft console command: ${clean}`)
-    return { ok: true, command: clean }
+
+    const settings = readRconSettings(config || this.lastConfig || { minecraftServerDir: this.lastServerDir })
+    if (!settings.enabled) {
+      throw new Error('Minecraft 服务端不是控制台托管，且 RCON 未开启，不能发送控制台命令。')
+    }
+    if (!settings.password) {
+      throw new Error('RCON 已开启但缺少 rcon.password，不能发送控制台命令。')
+    }
+
+    const response = await sendRconCommand(settings, clean)
+    this.logger.info(`Sent Minecraft console command via RCON: ${clean}`)
+    return { ok: true, command: clean, channel: 'rcon', response }
   }
 
-  async queryPlayerPosition(playerName, timeoutMs = 4000) {
+  async queryPlayerPosition(playerName, configOrTimeout = null, timeoutMs = 4000) {
     const player = sanitizePlayerName(playerName)
-    const filePath = latestLogPath(this.lastServerDir)
+    const config = configOrTimeout && typeof configOrTimeout === 'object' ? configOrTimeout : this.lastConfig
+    const waitMs = typeof configOrTimeout === 'number' ? configOrTimeout : timeoutMs
+    if (config) this.rememberConfig(config)
+    const filePath = latestLogPath((config && config.minecraftServerDir) || this.lastServerDir)
     if (!filePath || !fs.existsSync(filePath)) {
       throw new Error('未找到服务端日志，无法读取玩家坐标。')
     }
 
     const startOffset = fs.statSync(filePath).size
-    this.sendCommand(`data get entity ${player} Pos`)
+    const commandResult = await this.sendCommand(`data get entity ${player} Pos`, config)
+    const parsedResponse = parseEntityPosition(commandResult.response || '', player)
+    if (parsedResponse) return parsedResponse
     const started = Date.now()
 
-    while (Date.now() - started < timeoutMs) {
+    while (Date.now() - started < waitMs) {
       await delay(250)
       const appended = readLogFromOffset(filePath, startOffset)
       const parsed = parseEntityPosition(appended, player)
       if (parsed) return parsed
     }
 
-    throw new Error(`没有读到玩家 ${player} 的坐标。确认玩家在线，并且服务端由本页面托管。`)
+    throw new Error(`没有读到玩家 ${player} 的坐标。确认玩家在线，并且控制台有 stdin 或 RCON 命令通道。`)
+  }
+
+  async rconSnapshot(config) {
+    const settings = readRconSettings(config || this.lastConfig || { minecraftServerDir: this.lastServerDir })
+    const key = settings.enabled + ':' + settings.host + ':' + settings.port + ':' + Boolean(settings.password)
+    const now = Date.now()
+    if (this.rconStatusCache && this.rconStatusCache.key === key && now - this.rconStatusCache.at < 15000) {
+      return { ...this.rconStatusCache.value }
+    }
+    let value
+    if (!settings.enabled) {
+      value = { enabled: false, host: settings.host, port: settings.port, tcpOpen: false, ready: false }
+    } else {
+      const tcpOpen = await testTcp(settings.host, settings.port)
+      value = {
+        enabled: true,
+        host: settings.host,
+        port: settings.port,
+        tcpOpen,
+        ready: tcpOpen && Boolean(settings.password)
+      }
+    }
+    this.rconStatusCache = { key, at: now, value }
+    return { ...value }
+  }
+
+  rememberConfig(config) {
+    if (!config) return
+    this.lastConfig = { ...config }
+    this.lastServerDir = config.minecraftServerDir || this.lastServerDir
   }
 
   writeConsoleLine(line) {
@@ -386,7 +445,13 @@ function waitForExit(child, timeoutMs) {
 
 function run(command, args, timeoutMs = 4000) {
   return new Promise(resolve => {
-    const child = spawn(command, args, { windowsHide: true })
+    let child
+    try {
+      child = spawn(command, args, { windowsHide: true })
+    } catch (error) {
+      resolve({ code: 1, stdout: '', stderr: error.message })
+      return
+    }
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => {
@@ -404,6 +469,95 @@ function run(command, args, timeoutMs = 4000) {
       resolve({ code, stdout, stderr })
     })
   })
+}
+
+function readRconSettings(config = {}) {
+  const serverDir = String(config.minecraftServerDir || '').trim()
+  const properties = readServerPropertiesFile(serverDir)
+  const host = String(config.rconHost || properties['rcon.host'] || config.minecraftHost || '127.0.0.1').trim() || '127.0.0.1'
+  const port = Number(config.rconPort || properties['rcon.port'] || 25575)
+  const password = String(config.rconPassword || process.env.MINECRAFT_RCON_PASSWORD || properties['rcon.password'] || '').trim()
+  return {
+    enabled: String(properties['enable-rcon'] || '').toLowerCase() === 'true' || Boolean(config.rconEnabled),
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : 25575,
+    password
+  }
+}
+
+function readServerPropertiesFile(serverDir) {
+  const filePath = serverDir ? path.join(serverDir, 'server.properties') : ''
+  if (!filePath || !fs.existsSync(filePath)) return {}
+  const values = {}
+  for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#') || !line.includes('=')) continue
+    const index = line.indexOf('=')
+    values[line.slice(0, index).trim()] = line.slice(index + 1).trim()
+  }
+  return values
+}
+
+function sendRconCommand(settings, command, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: settings.host, port: settings.port, timeout: timeoutMs })
+    const authId = randomPacketId()
+    const commandId = authId + 1
+    let buffer = Buffer.alloc(0)
+    let authed = false
+    const responses = []
+    const timer = setTimeout(() => finish(new Error('RCON 请求超时')), timeoutMs)
+
+    function finish(error, value) {
+      clearTimeout(timer)
+      socket.removeAllListeners()
+      socket.destroy()
+      if (error) reject(error)
+      else resolve(value)
+    }
+
+    socket.on('connect', () => sendRconPacket(socket, authId, 3, settings.password))
+    socket.on('timeout', () => finish(new Error('RCON 连接超时')))
+    socket.on('error', error => finish(new Error('RCON 连接失败：' + error.message)))
+    socket.on('data', chunk => {
+      buffer = Buffer.concat([buffer, chunk])
+      while (buffer.length >= 4) {
+        const length = buffer.readInt32LE(0)
+        if (length < 10) return finish(new Error('RCON 响应格式异常'))
+        if (buffer.length < length + 4) return
+        const packet = buffer.subarray(4, 4 + length)
+        buffer = buffer.subarray(4 + length)
+        const id = packet.readInt32LE(0)
+        const body = packet.subarray(8, Math.max(8, packet.length - 2)).toString('utf8')
+        if (id === -1) return finish(new Error('RCON 认证失败，请检查 rcon.password'))
+        if (id === authId && !authed) {
+          authed = true
+          sendRconPacket(socket, commandId, 2, command)
+          continue
+        }
+        if (id === commandId) {
+          responses.push(body)
+          return finish(null, responses.join(''))
+        }
+      }
+    })
+  })
+}
+
+function sendRconPacket(socket, id, type, body) {
+  const payload = Buffer.from(String(body || ''), 'utf8')
+  const length = 4 + 4 + payload.length + 2
+  const packet = Buffer.alloc(4 + length)
+  packet.writeInt32LE(length, 0)
+  packet.writeInt32LE(id, 4)
+  packet.writeInt32LE(type, 8)
+  payload.copy(packet, 12)
+  packet.writeInt16LE(0, 12 + payload.length)
+  socket.write(packet)
+}
+
+function randomPacketId() {
+  return Math.floor(100000 + Math.random() * 100000000)
 }
 
 function normalizeForMatch(value) {

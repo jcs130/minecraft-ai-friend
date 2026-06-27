@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的世界AI陪玩</title>
-    <link rel="stylesheet" href="/styles.css?v=20">
+    <link rel="stylesheet" href="/styles.css?v=21">
   </head>
   <body>
     <header class="topbar">
@@ -93,6 +93,7 @@
           <button type="button" data-preset-task="cook-meal">做饭补给</button>
           <button type="button" data-preset-task="build-zone">分区建造</button>
           <button type="button" data-preset-task="resource-chain">资源接力</button>
+          <button type="button" data-preset-task="water-rescue">水中脱困</button>
         </div>
       </section>
       <section class="status-grid">
@@ -116,6 +117,11 @@
           <strong id="autopilotStatus">已停止</strong>
           <small id="autopilotDetail"></small>
         </article>
+        <article class="status-card">
+          <span class="label">模型配置</span>
+          <strong id="modelStatus">读取中</strong>
+          <small id="modelDetail"></small>
+        </article>
       </section>
 
       <section class="panel live-panel">
@@ -137,6 +143,22 @@
             <iframe id="featuredViewerFrame" class="featured-viewer" title="AI 主视角" loading="lazy"></iframe>
           </div>
           <div id="viewerGrid" class="viewer-grid"></div>
+        </div>
+        <div class="live-intel-strip">
+          <article class="live-intel-card">
+            <div class="live-intel-head">
+              <h3>村长决策</h3>
+              <small id="liveIntelMeta">等待村长状态</small>
+            </div>
+            <div id="liveCommanderFeed" class="live-feed"></div>
+          </article>
+          <article class="live-intel-card">
+            <div class="live-intel-head">
+              <h3>居民想法与上报</h3>
+              <small>公开思考 / 任务进度 / 受阻原因</small>
+            </div>
+            <div id="liveThoughtFeed" class="live-feed live-thought-feed"></div>
+          </article>
         </div>
       </section>
 
@@ -192,7 +214,7 @@
           </label>
           <label>
             村庄半径
-            <input id="villageRadius" type="number" min="16" max="512" value="120">
+            <input id="villageRadius" type="number" min="16" max="5000" value="120">
           </label>
         </form>
         <div class="society-command-row">
@@ -218,6 +240,20 @@
           <article>
             <h3>资源目标</h3>
             <div id="villageResources" class="village-list"></div>
+          </article>
+          <article class="wide-village-card village-dashboard-card">
+            <div class="village-card-head">
+              <h3>村庄资源看板</h3>
+              <small id="villageDashboardMeta">等待实时库存</small>
+            </div>
+            <div id="villageResourceDashboard" class="resource-dashboard-list"></div>
+          </article>
+          <article class="wide-village-card village-scoreboard-card">
+            <div class="village-card-head">
+              <h3>AI 村民战绩榜</h3>
+              <small>来自服务端统计和当前背包</small>
+            </div>
+            <div id="villageScoreboard" class="scoreboard-list"></div>
           </article>
           <article class="wide-village-card">
             <h3>村庄项目</h3>
@@ -260,8 +296,9 @@
               <button id="locatePlayerBtn" type="button" data-player-location>读取坐标</button>
               <button id="guideAgentsToPlayerBtn" type="button" class="primary" data-player-location>让 AI 来找我</button>
               <button id="teleportAgentsToPlayerBtn" type="button" data-player-location>传送 AI 到我</button>
+              <button id="rescueAgentsBtn" type="button">AI 自主脱困</button>
             </div>
-            <p id="playerLocationHint" class="hint">当 AI 离玩家太远时，用服务端坐标把目标同步给 AI。</p>
+            <p id="playerLocationHint" class="hint">当 AI 离玩家太远或卡在水里时，先发脱困任务；多次失败再用传送兜底。</p>
           </div>
           <div id="agentsList" class="agents-list"></div>
         </section>
@@ -318,6 +355,10 @@
             <label>
               Mindcraft 目录
               <input id="mindcraftDir" name="mindcraftDir">
+            </label>
+            <label class="checkbox-row">
+              <input id="mcpAllowLan" name="mcpAllowLan" type="checkbox">
+              允许局域网 MCP 接入
             </label>
             <label>
               AI 玩家筛选
@@ -805,6 +846,6 @@
     </main>
 
     <div id="toast" class="toast" hidden></div>
-    <script src="/app.js?v=20"></script>
+    <script src="/app.js?v=23"></script>
   </body>
 </html>

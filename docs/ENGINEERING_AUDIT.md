@@ -16,7 +16,7 @@
 | AI 村庄领域模型 | 已生效 | `village-state.js` 管角色、项目、公共设施和上报解析。 |
 | 数据层 | 已生效 | `data-store.js` SQLite 优先，JSONL 降级；已覆盖事件、观察、状态、记忆和向量。 |
 | 向量记忆 | 已生效 | `vector-memory.js` 独立封装 embedding、SQLite/Qdrant/词法降级。 |
-| MCP 接入 | 已生效 | `mcp-server.js` 提供 localhost-only MCP 工具层。 |
+| MCP 接入 | 已生效 | `mcp-server.js` 提供 MCP 工具层，默认 localhost，可配置允许局域网私网地址。 |
 | 直播可视化 | 已生效 | `visualizer-bridge.js` 作为独立 adapter，不污染核心领域逻辑。 |
 | 密钥安全 | 已生效 | 代码只保存环境变量名，不保存真实 key；profile 写入会过滤明显密钥字段。 |
 

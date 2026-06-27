@@ -49,6 +49,10 @@ flowchart TD
 | `public/` | 中文控制台 UI、状态展示、表单和 API 调用 | 直接读写本地文件、保存密钥 |
 | `scripts/visualizer-bridge.js` | 把控制台状态投喂给直播可视化站，清理观众可见文案 | AI 决策、服务器控制、长期数据存储 |
 
+## Mindcraft 接入原则
+
+本项目把 Mindcraft 当作“Minecraft 具身执行层”，而不是无限制聊天机器人。常驻居民使用 `!goal(...)` 保持长期自治，控制台在居民空闲、卡住或需要短动作心跳时优先下发稳定内置命令；`!newAction(...)` 会触发代码生成，允许在复杂小动作、高级建造、复合采集和脱困场景中受控使用。详细规则见 [MINDCRAFT_USAGE.md](MINDCRAFT_USAGE.md)。
+
 ## 高内聚低耦合原则
 
 1. `server.js` 是组合根，可以知道所有模块；其他模块不要反向依赖 `server.js`。
@@ -67,7 +71,7 @@ flowchart TD
 - AI 村庄：村长、五个默认居民、基地、公共箱子、项目、资源目标、公共设施上报。
 - 数据层：SQLite 优先，JSONL 降级；已覆盖任务事件、设施上报、观察、状态上报、记忆和记忆向量。
 - 向量记忆：支持 OpenAI-compatible/Ollama embedding，SQLite 向量检索，Qdrant 可选，失败后词法降级。
-- MCP：同时支持旧式 SSE 和新版 streamable HTTP，本机 localhost 安全边界。
+- MCP：同时支持旧式 SSE 和新版 streamable HTTP，默认 localhost；可配置允许局域网私网地址给 CoPaw/主播端使用。
 - 直播可视化 bridge：将控制台状态转换成直播站可消费的中文任务、库存、公开思考和事件。
 
 ## 当前技术债

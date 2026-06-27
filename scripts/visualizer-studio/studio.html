@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI 村庄直播导播台</title>
+    <link rel="stylesheet" href="/studio.css">
+  </head>
+  <body class="studio-body">
+    <main class="studio-main">
+      <section id="videoPanel" class="video-panel" aria-label="直播画面">
+        <div class="video-placeholder">
+          <div class="video-copy">
+            <strong>直播画面</strong>
+            <span>OBS 中把 Minecraft 画面叠到这个黑色区域</span>
+          </div>
+          <div class="video-topbar">
+            <span id="liveBadge" class="badge">镜头同步中</span>
+            <span id="worldBadge" class="badge">世界状态</span>
+          </div>
+          <div id="videoTarget" class="video-target">live → 等待目标</div>
+        </div>
+      </section>
+
+      <section class="bottom-strip" aria-label="直播信息带">
+        <section class="panel strip-resources-panel">
+          <div class="panel-title">
+            <h2>资源目标</h2>
+            <span id="resourceCount">0 项</span>
+          </div>
+          <div id="resourceList" class="resource-list strip-resource-list"></div>
+        </section>
+
+        <section class="panel strip-projects-panel">
+          <div class="panel-title">
+            <h2>当前建设</h2>
+            <span id="stripProjectCount">0 项</span>
+          </div>
+          <div id="stripProjectList" class="strip-project-list"></div>
+        </section>
+      </section>
+
+      <aside class="side-panel" aria-label="直播状态">
+        <section class="panel live-panel">
+          <div>
+            <h1>我的世界 AI 村庄</h1>
+            <p id="studioSubtitle">等待村庄状态同步</p>
+          </div>
+          <span id="onlineBadge" class="badge ok">居民在线</span>
+        </section>
+
+        <section class="panel commander-panel">
+          <div class="panel-title">
+            <h2>村长指令</h2>
+            <span id="commanderName">Airi</span>
+          </div>
+          <p id="directiveText">等待村长目标。</p>
+        </section>
+
+        <section class="panel world-panel">
+          <div class="panel-title">
+            <h2>世界状态</h2>
+            <span id="worldUpdated">--:--:--</span>
+          </div>
+          <div id="worldGrid" class="status-grid"></div>
+        </section>
+
+        <section class="panel models-panel">
+          <div class="panel-title">
+            <h2>模型</h2>
+            <span id="modelUpdated">LLM</span>
+          </div>
+          <div id="modelList" class="model-list"></div>
+        </section>
+
+        <section class="panel leaderboard-panel">
+          <div class="panel-title">
+            <h2>战绩榜</h2>
+            <span id="leaderboardUpdated">死亡 / 怪物</span>
+          </div>
+          <div id="leaderboardList" class="leaderboard-list"></div>
+        </section>
+
+        <section class="panel tasks-panel">
+          <div class="panel-title">
+            <h2>居民任务</h2>
+            <span id="taskSummary">等待任务状态</span>
+          </div>
+          <div id="agentTasks" class="agent-task-list"></div>
+        </section>
+
+
+      </aside>
+    </main>
+    <script type="module" src="/studio.js"></script>
+  </body>
+</html>

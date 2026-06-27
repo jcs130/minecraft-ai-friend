@@ -9,8 +9,11 @@ const state = {
   viewerAuto: true,
   viewerGridSignature: '',
   featuredViewerUrl: '',
+  lastLiveViewerTarget: '',
   serverBlueprint: null,
-  village: null
+  village: null,
+  villageDashboard: null,
+  liveIntel: null
 }
 
 const elements = {
@@ -22,6 +25,8 @@ const elements = {
   socketDetail: byId('socketDetail'),
   autopilotStatus: byId('autopilotStatus'),
   autopilotDetail: byId('autopilotDetail'),
+  modelStatus: byId('modelStatus'),
+  modelDetail: byId('modelDetail'),
   homeSummary: byId('homeSummary'),
   readyServerDot: byId('readyServerDot'),
   readyServerText: byId('readyServerText'),
@@ -43,6 +48,9 @@ const elements = {
   viewerAutoBtn: byId('viewerAutoBtn'),
   viewerNextBtn: byId('viewerNextBtn'),
   viewerOpenBtn: byId('viewerOpenBtn'),
+  liveIntelMeta: byId('liveIntelMeta'),
+  liveCommanderFeed: byId('liveCommanderFeed'),
+  liveThoughtFeed: byId('liveThoughtFeed'),
   logsView: byId('logsView'),
   memoryView: byId('memoryView'),
   llmProviderHint: byId('llmProviderHint'),
@@ -77,6 +85,9 @@ const elements = {
   villageRoles: byId('villageRoles'),
   villageTasks: byId('villageTasks'),
   villageResources: byId('villageResources'),
+  villageResourceDashboard: byId('villageResourceDashboard'),
+  villageDashboardMeta: byId('villageDashboardMeta'),
+  villageScoreboard: byId('villageScoreboard'),
   villageProjects: byId('villageProjects'),
   villageInfrastructures: byId('villageInfrastructures'),
   villageReports: byId('villageReports'),
@@ -91,6 +102,7 @@ const configInputs = [
   'minecraftServerDir',
   'mindcraftUrl',
   'mindcraftDir',
+  'mcpAllowLan',
   'agentFilter',
   'assistantMode',
   'worldDirective',
@@ -133,7 +145,8 @@ const presetTasks = {
   'craft-tools': '执行协作合成基础工具。先共享库存和缺口，Milo/Alex 准备木头、圆石、煤和木棍，能合成时制作镐、斧、铲或火把；缺配方或材料就用“受阻”上报，不要重复试错。',
   'cook-meal': '执行食物补给任务。Ivy 优先找作物、动物和水源，Alex 负责安全和燃料，其他人只做近距离支援；成品食物放公共箱子并上报。',
   'build-zone': '执行分区建造任务。Luna 先声明“正在做(建筑区域/坐标)”，其他人只供材料和补光，不要拆或覆盖 Luna 的方块；完成阶段后用 VILLAGE_REPORT 上报。',
-  'resource-chain': '执行资源接力。Milo 采石煤铁，Nova 标记安全路线，Ivy 保障食物，Alex 整理入库，Luna 只使用公共箱子材料建设；所有人用中文“需要/已有/完成”短句协调。'
+  'resource-chain': '执行资源接力。Milo 采石煤铁，Nova 标记安全路线，Ivy 保障食物，Alex 整理入库，Luna 只使用公共箱子材料建设；所有人用中文“需要/已有/完成”短句协调。',
+  'water-rescue': '水中/卡住脱困'
 }
 
 const societyGoalPresets = {
@@ -160,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('locatePlayerBtn').addEventListener('click', locatePlayer)
   byId('guideAgentsToPlayerBtn').addEventListener('click', () => guideAgentsToPlayer(false))
   byId('teleportAgentsToPlayerBtn').addEventListener('click', () => guideAgentsToPlayer(true))
+  byId('rescueAgentsBtn').addEventListener('click', () => rescueAgent(''))
   byId('viewerAutoBtn').addEventListener('click', toggleViewerAuto)
   byId('viewerNextBtn').addEventListener('click', () => advanceFeaturedViewer(true))
   byId('viewerOpenBtn').addEventListener('click', openFeaturedViewer)
@@ -207,20 +221,25 @@ document.addEventListener('DOMContentLoaded', () => {
 async function refreshAll() {
   if (state.busy) return
   try {
-    const [status, logs, minecraftLog, providerData] = await Promise.all([
+    const [status, logs, minecraftLog, providerData, villageDashboard, liveIntel] = await Promise.all([
       apiGet('/api/status'),
       apiGet('/api/logs'),
       apiGet('/api/minecraft/logs'),
-      apiGet('/api/model-providers')
+      apiGet('/api/model-providers'),
+      apiGet('/api/village/dashboard').catch(error => ({ error: error.message })),
+      apiGet('/api/livestream/intel').catch(error => ({ error: error.message }))
     ])
     state.status = status
     state.config = status.config
     state.modelProviders = providerData.providers || []
+    state.villageDashboard = villageDashboard
+    state.liveIntel = liveIntel
     renderStatus(status)
     renderProductHome(status)
     renderModelProviders(providerData, status.config)
     renderConfig(status.config)
     renderVillage(status.village)
+    renderVillageDashboard(villageDashboard)
     renderMinecraftManager(status, minecraftLog)
     renderLogs(logs.logs || [])
   } catch (error) {
@@ -261,10 +280,52 @@ function renderStatus(status) {
   elements.autopilotBtn.textContent = auto ? '停止自动陪玩' : '启动自动陪玩'
   elements.autopilotBtn.classList.toggle('primary', !auto)
 
+  renderModelStatus(status.models)
   renderAgents(status)
   renderViewerConsole(status)
 }
 
+function renderModelStatus(models) {
+  if (!elements.modelStatus || !elements.modelDetail) return
+  if (!models) {
+    setStatus(elements.modelStatus, elements.modelDetail, false, '未知', '等待 /api/status 返回模型摘要')
+    return
+  }
+  const commander = models.commander || {}
+  const residents = models.residents || {}
+  const vision = models.vision || {}
+  const memory = models.memory || {}
+  const authReady = Boolean(commander.authReady) && Boolean(vision.authReady || !vision.provider)
+  const residentTag = residents.mixed ? residentProfilesSummary(models.profiles || []) : modelName(residents)
+  setStatus(
+    elements.modelStatus,
+    elements.modelDetail,
+    authReady,
+    `主控 ${modelName(commander) || '未配置'}`,
+    `村长：${modelLine(commander)} | 村民：${residentTag}${residents.baseUrl ? ` @ ${residents.baseUrl}` : ''} | 视觉：${modelLine(vision)} | 记忆：${memory.enabled ? `${memory.model || '未命名'} / ${memory.store || 'sqlite'}` : '关闭'}`
+  )
+}
+
+function modelName(item) {
+  return item && item.model ? item.model : ''
+}
+
+function residentProfilesSummary(profiles) {
+  const rows = (profiles || [])
+    .filter(profile => profile && (profile.active || profile.model && profile.model.model))
+    .sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)) || String(a.name).localeCompare(String(b.name)))
+    .slice(0, 4)
+    .map(profile => String(profile.name || 'AI') + ':' + String(profile.model && profile.model.model ? profile.model.model : '未知'))
+  return rows.length > 0 ? rows.join('，') : '多模型'
+}
+function modelLine(item) {
+  if (!item) return '未知'
+  const provider = item.providerLabel || item.provider || ''
+  const model = item.model || ''
+  const endpoint = item.baseUrl ? ` @ ${item.baseUrl}` : ''
+  const auth = item.authReady === false ? '（未就绪）' : ''
+  return `${provider}${provider && model ? ' / ' : ''}${model}${endpoint}${auth}` || '未知'
+}
 function setStatus(titleEl, detailEl, ok, title, detail) {
   titleEl.textContent = title
   titleEl.className = ok ? 'ok' : 'bad'
@@ -295,6 +356,14 @@ function setReady(dotEl, textEl, ok, text) {
   textEl.textContent = text
 }
 
+function agentModelLabel(models, agentName) {
+  const profiles = models && Array.isArray(models.profiles) ? models.profiles : []
+  const profile = profiles.find(item => item && item.name === agentName)
+  const model = profile && profile.model && profile.model.model ? profile.model.model : ''
+  if (model) return model
+  const residents = models && models.residents ? models.residents : {}
+  return residents.model || '未知'
+}
 function renderAgents(status) {
   const agents = status.socket.agents || []
   const states = status.socket.states || {}
@@ -309,6 +378,7 @@ function renderAgents(status) {
       ? `${num(agentState.position.x)}, ${num(agentState.position.y)}, ${num(agentState.position.z)}`
       : '位置未知'
     const online = agent.in_game ? '已进服' : '未进服'
+    const modelLabel = agentModelLabel(status.models, agent.name)
     const action = agentState.action || '暂无动作'
     const idle = agentState.isIdle ? '（空闲）' : ''
     const actionName = agent.in_game ? 'stop' : 'start'
@@ -316,10 +386,10 @@ function renderAgents(status) {
     const actionClass = agent.in_game ? '' : ' class="primary"'
     return [
       '<div class="agent-row">',
-      `<div><div class="agent-name">${escapeHtml(agent.name)}</div><div class="agent-meta">${online}</div></div>`,
+      `<div><div class="agent-name">${escapeHtml(agent.name)}</div><div class="agent-meta">${online} | 模型 ${escapeHtml(modelLabel)}</div></div>`,
       `<div class="agent-meta">${escapeHtml(agentState.gamemode || '未知模式')} | ${escapeHtml(agentState.biome || '未知生物群系')} | ${escapeHtml(pos)}</div>`,
       `<div class="agent-action">${escapeHtml(action)} ${idle}</div>`,
-      `<div class="agent-controls"><button type="button"${actionClass} data-agent-action="${actionName}" data-agent-name="${escapeHtml(agent.name)}">${actionText}</button></div>`,
+      `<div class="agent-controls"><button type="button" data-agent-action="rescue" data-agent-name="${escapeHtml(agent.name)}">脱困</button><button type="button"${actionClass} data-agent-action="${actionName}" data-agent-name="${escapeHtml(agent.name)}">${actionText}</button></div>`,
       '</div>'
     ].join('')
   }).join('')
@@ -351,7 +421,9 @@ function renderViewerConsole(status) {
       })
     })
   }
-  setFeaturedViewer(viewerCandidates(status))
+  const candidates = viewerCandidates(status)
+  syncFeaturedViewerToLiveTarget(candidates, status)
+  setFeaturedViewer(candidates, status)
 }
 
 function viewerCandidates(status) {
@@ -361,7 +433,7 @@ function viewerCandidates(status) {
   return online.length > 0 ? online : withViewer
 }
 
-function setFeaturedViewer(agents) {
+function setFeaturedViewer(agents, status = state.status) {
   if (!elements.featuredViewerFrame || !elements.featuredViewerTitle) return
   if (!agents || agents.length === 0) {
     elements.featuredViewerTitle.textContent = '等待 AI 视角'
@@ -372,11 +444,28 @@ function setFeaturedViewer(agents) {
   if (state.viewerIndex >= agents.length) state.viewerIndex = 0
   const agent = agents[state.viewerIndex]
   const url = viewerUrl(agent)
-  elements.featuredViewerTitle.textContent = agent.in_game ? agent.name + ' 正在游戏中' : agent.name + ' 未进服'
+  const liveTarget = liveObserverTarget(status)
+  const prefix = liveTarget && liveTarget === agent.name ? '直播镜头：' : 'AI 视角：'
+  elements.featuredViewerTitle.textContent = prefix + (agent.in_game ? agent.name + ' 正在游戏中' : agent.name + ' 未进服')
   if (state.featuredViewerUrl !== url) {
     state.featuredViewerUrl = url
     elements.featuredViewerFrame.src = url
   }
+}
+
+function syncFeaturedViewerToLiveTarget(agents, status) {
+  const target = liveObserverTarget(status)
+  if (!target || !state.viewerAuto || !Array.isArray(agents) || agents.length === 0) return
+  const index = agents.findIndex(agent => agent.name === target)
+  if (index === -1) return
+  if (state.lastLiveViewerTarget !== target || state.viewerIndex !== index) {
+    state.viewerIndex = index
+    state.lastLiveViewerTarget = target
+  }
+}
+
+function liveObserverTarget(status) {
+  return status && status.livestream && status.livestream.currentTarget ? String(status.livestream.currentTarget) : ''
 }
 
 function advanceFeaturedViewer(force) {
@@ -384,7 +473,7 @@ function advanceFeaturedViewer(force) {
   const agents = viewerCandidates(state.status)
   if (!agents || agents.length === 0) return
   state.viewerIndex = (state.viewerIndex + 1) % agents.length
-  setFeaturedViewer(agents)
+  setFeaturedViewer(agents, state.status)
 }
 
 function toggleViewerAuto() {
@@ -407,6 +496,54 @@ function viewerHost() {
   return host
 }
 
+function renderLiveIntel(data) {
+  if (!elements.liveCommanderFeed || !elements.liveThoughtFeed) return
+  if (!data || data.error) {
+    const message = data && data.error ? data.error : '等待直播信息流'
+    elements.liveCommanderFeed.innerHTML = '<div class="live-feed-empty">' + escapeHtml(message) + '</div>'
+    elements.liveThoughtFeed.innerHTML = '<div class="live-feed-empty">暂无居民思考。</div>'
+    if (elements.liveIntelMeta) elements.liveIntelMeta.textContent = '未连接'
+    return
+  }
+  const currentTarget = data.livestream && data.livestream.currentTarget ? data.livestream.currentTarget : '自动'
+  const commander = data.commander || {}
+  if (elements.liveIntelMeta) {
+    elements.liveIntelMeta.textContent = (commander.title || 'AI村长') + ' ' + (commander.name || '') + ' | ' + (commander.model || '模型未知') + ' | 当前镜头 ' + currentTarget
+  }
+  const decisions = Array.isArray(commander.decisions) ? commander.decisions : []
+  elements.liveCommanderFeed.innerHTML = decisions.length
+    ? decisions.slice(0, 6).map(item => renderLiveFeedItem(item, 'decision')).join('')
+    : '<div class="live-feed-empty">暂无村长决策。等待自动调度或手动派发任务。</div>'
+
+  const thoughts = Array.isArray(data.thoughts) ? data.thoughts : []
+  elements.liveThoughtFeed.innerHTML = thoughts.length
+    ? thoughts.slice(0, 10).map(item => renderLiveFeedItem(item, 'thought')).join('')
+    : '<div class="live-feed-empty">暂无居民公开思考或上报。</div>'
+}
+
+function renderLiveFeedItem(item, type) {
+  const label = type === 'decision' ? (item.source || '村长') : (item.kind || '想法')
+  const model = item.model ? ' · ' + item.model : ''
+  const time = item.at ? formatDateTime(item.at).split(' ').pop() : ''
+  return [
+    '<div class="live-feed-item">',
+    '<div class="live-feed-row">',
+    '<strong>' + escapeHtml(item.agent || '村庄') + '</strong>',
+    '<span class="pill ' + liveFeedPillClass(label) + '">' + escapeHtml(label) + '</span>',
+    '<small>' + escapeHtml(time + model) + '</small>',
+    '</div>',
+    item.title ? '<div class="live-feed-title">' + escapeHtml(item.title) + '</div>' : '',
+    '<p>' + escapeHtml(item.text || '') + '</p>',
+    '</div>'
+  ].join('')
+}
+
+function liveFeedPillClass(label) {
+  if (/守卫|受阻|脱困/.test(label)) return 'warn-pill'
+  if (/完成|done/.test(label)) return 'ok-pill'
+  if (/AI村长|村长/.test(label)) return 'commander-pill'
+  return ''
+}
 function renderModelProviders(data, config) {
   const providers = data && data.providers ? data.providers : state.modelProviders
   state.modelProviders = providers || []
@@ -599,7 +736,10 @@ function renderConfig(config) {
   const memoryText = config.memoryVectorEnabled
     ? `向量记忆：${config.memoryEmbeddingProvider || 'openai-compatible'} ${config.memoryEmbeddingModel || 'bge-m3'}，存储 ${config.memoryVectorStore || 'sqlite'}。`
     : '向量记忆：关闭。'
-  elements.llmHint.textContent = `${modeText} ${llmText} ${memoryText}`
+  const mcpText = config.mcpAllowLan
+    ? 'MCP：允许局域网私网地址接入。'
+    : 'MCP：仅允许本机 localhost 接入。'
+  elements.llmHint.textContent = `${modeText} ${llmText} ${memoryText} ${mcpText}`
 }
 
 function renderLogs(logs) {
@@ -713,11 +853,14 @@ function renderMinecraftManager(status, logData) {
   const managed = Boolean(minecraft.managed)
   const pids = minecraft.processIds && minecraft.processIds.length > 0 ? minecraft.processIds.join(', ') : '未识别'
   const commandText = minecraft.startCommand ? ` 启动方式：${minecraft.startCommand}。` : ''
+  const channel = minecraft.commandChannel || (managed ? 'stdin' : canCommand ? 'rcon' : 'none')
   elements.minecraftManagerHint.textContent = managed
     ? `服务端由本页面托管，PID ${minecraft.ownedPid}，可以发送控制台命令。${commandText}`
-    : minecraft.tcpOpen
-      ? `服务端在线，但它是外部进程，PID ${pids}。页面现在只检测状态和读取日志；要发送控制台命令，需要先在原控制台 stop，然后从本页面启动。`
-      : '服务端离线。点击顶部“启动服务器”会从 start.bat/start.sh 推断 Java 参数，并直接管理 server.jar。'
+    : minecraft.tcpOpen && channel === 'rcon'
+      ? `服务端在线，是外部进程 PID ${pids}；RCON 命令通道已可用，可以发送控制台命令和自动切换观察者。`
+      : minecraft.tcpOpen
+        ? `服务端在线，但它是外部进程，PID ${pids}。当前没有可用命令通道；要发送控制台命令，需要从本页面启动，或开启 RCON。`
+        : '服务端离线。点击顶部“启动服务器”会从 start.bat/start.sh 推断 Java 参数，并直接管理 server.jar。'
 
   byId('stopMinecraftBtn').disabled = !managed
   byId('restartMinecraftBtn').disabled = minecraft.tcpOpen && !managed
@@ -729,7 +872,7 @@ function renderMinecraftManager(status, logData) {
   if (elements.minecraftRuntimeHint) {
     elements.minecraftRuntimeHint.textContent = canCommand
       ? '这里会立即发送 difficulty、defaultgamemode、gamemode 等控制台命令。持久配置请在下方 server.properties 保存。'
-      : '只有通过本页面启动并托管的 Minecraft Server，才能直接应用在线世界设置。'
+      : '只有通过本页面托管或开启 RCON 后，才能直接应用在线世界设置。'
   }
   renderMinecraftLog(logData)
 }
@@ -855,6 +998,10 @@ async function handleAgentAction(event) {
   const agent = button.dataset.agentName || ''
   const action = button.dataset.agentAction || ''
   if (!agent) return
+  if (action === 'rescue') {
+    await rescueAgent(agent, button)
+    return
+  }
   const path = action === 'stop' ? '/api/agents/stop' : '/api/agents/start'
   const message = action === 'stop' ? `已请求 ${agent} 停止` : `已请求 ${agent} 进服`
   try {
@@ -873,7 +1020,7 @@ async function handleAgentAction(event) {
 
 
 async function sendPresetTask(key) {
-  const task = presetTasks[key] || ''
+  const task = key === 'water-rescue' ? buildRescueTask(byId('taskAgent').value.trim()) : presetTasks[key] || ''
   if (!task) return
   byId('taskText').value = task
   const onlineAgents = state.status && state.status.socket && state.status.socket.agents
@@ -893,6 +1040,46 @@ async function sendPresetTask(key) {
   } finally {
     state.busy = false
   }
+}
+
+async function rescueAgent(agentName = '', button = null) {
+  const selectedAgent = agentName || elements.locateAgentName.value.trim() || byId('taskAgent').value.trim()
+  const task = buildRescueTask(selectedAgent)
+  try {
+    state.busy = true
+    if (button) button.disabled = true
+    const response = await apiPost('/api/task', {
+      agent: selectedAgent,
+      task,
+      title: '水中脱困',
+      source: 'rescue'
+    })
+    elements.playerLocationHint.textContent = `已发送脱困任务给 ${response.targets.join(', ')}。如果 30 秒后仍卡住，再点“传送 AI 到我”。`
+    showToast(`脱困任务已发送给 ${response.targets.join(', ')}`)
+    await refreshAll()
+  } catch (error) {
+    showToast(error.message)
+  } finally {
+    state.busy = false
+    if (button) button.disabled = false
+  }
+}
+
+function buildRescueTask(agentName = '') {
+  const base = state.village && state.village.settlement ? state.village.settlement.base : null
+  const chest = state.village && state.village.settlement ? state.village.settlement.publicChest : null
+  const safeTarget = chest || base
+  const targetText = safeTarget ? `安全目标坐标：X=${num(safeTarget.x)}, Y=${num(safeTarget.y)}, Z=${num(safeTarget.z)}。` : '如果不知道基地坐标，先回到最近的岸边、地面、树旁或亮处。'
+  const nameText = agentName ? `${agentName}，` : ''
+  return [
+    `${nameText}立刻执行水中/卡住脱困流程，暂停当前采集、建造、聊天或探索。`,
+    '如果你在水里：先看向水面和最近岸边，持续向上游并朝岸边移动，不要继续下潜，不要在水下挖方块。',
+    '如果被水流、洞口、藤蔓、门、船、方块边缘或狭窄空间卡住：后退两格，跳跃，转向 90 度，寻找最近的完整方块站上去。',
+    '如果身上有泥土、圆石、木板或其他廉价方块，可以在脚下或身边放 1-3 个方块做临时台阶，但不要破坏玩家建筑。',
+    targetText,
+    '如果 20 秒内坐标几乎不变、仍在水里、生命值低于 12 或即将溺水，马上停止动作，在聊天里用中文说“受阻：我卡住了，需要传送”，然后等待玩家或管理员救援。',
+    '脱困后用中文简短汇报当前位置、原因和下一步。'
+  ].join(' ')
 }
 
 async function locatePlayer() {
@@ -1020,6 +1207,68 @@ elements.villageResources.innerHTML = (village.resources || []).map(resource => 
   }
 }
 
+function renderVillageDashboard(dashboard) {
+  if (!elements.villageResourceDashboard || !elements.villageScoreboard) return
+  if (!dashboard || dashboard.error) {
+    const message = dashboard && dashboard.error ? dashboard.error : '等待实时看板数据'
+    elements.villageResourceDashboard.innerHTML = `<div class="village-item"><small>${escapeHtml(message)}</small></div>`
+    elements.villageScoreboard.innerHTML = '<div class="village-item"><small>暂无战绩数据。</small></div>'
+    if (elements.villageDashboardMeta) elements.villageDashboardMeta.textContent = '实时数据不可用'
+    return
+  }
+
+  const summary = dashboard.summary || {}
+  const warnings = Array.isArray(dashboard.warnings) ? dashboard.warnings : []
+  if (elements.villageDashboardMeta) {
+    const cacheText = dashboard.cached ? `缓存 ${Math.round((dashboard.cacheAgeMs || 0) / 1000)} 秒` : '刚刚刷新'
+    const warningText = warnings.length ? ` | ${warnings.join('；')}` : ''
+    elements.villageDashboardMeta.textContent = `${cacheText} | 公共箱 ${summary.publicChestCount || 0} 个 | 在线 ${summary.onlineResidents || 0}/${summary.totalResidents || 0}${warningText}`
+  }
+
+  const resources = Array.isArray(dashboard.resources) ? dashboard.resources : []
+  elements.villageResourceDashboard.innerHTML = resources.map(resource => {
+    const percent = Math.max(0, Math.min(100, Number(resource.percent || 0)))
+    const status = resourceStatusLabel(resource.status)
+    return [
+      '<div class="resource-dashboard-row">',
+      '<div class="resource-dashboard-title">',
+      `<strong>${escapeHtml(resource.name || resource.id)}</strong>`,
+      `<span class="pill ${resource.status === 'done' ? 'ok-pill' : resource.status === 'missing' ? 'bad-pill' : 'warn-pill'}">${escapeHtml(status)}</span>`,
+      '</div>',
+      `<div class="resource-dashboard-count">实时 ${num(resource.current)}/${num(resource.target)} ${escapeHtml(resource.unit || '')} · 箱内 ${num(resource.chest)} · 村民携带 ${num(resource.carried)}</div>`,
+      `<div class="resource-bar"><span style="width:${percent}%"></span></div>`,
+      '</div>'
+    ].join('')
+  }).join('') || '<div class="village-item"><small>暂无资源数据。</small></div>'
+
+  const scoreboard = Array.isArray(dashboard.scoreboard) ? dashboard.scoreboard : []
+  elements.villageScoreboard.innerHTML = scoreboard.map((row, index) => {
+    const carried = row.carriedTopItems && row.carriedTopItems.length
+      ? row.carriedTopItems.slice(0, 4).map(item => `${item.name} x${item.count}`).join('，')
+      : '背包摘要暂无'
+    const online = row.online ? '<span class="pill ok-pill">在线</span>' : '<span class="pill">离线</span>'
+    return [
+      '<div class="scoreboard-row">',
+      `<div class="score-rank">#${index + 1}</div>`,
+      '<div class="score-main">',
+      `<div><strong>${escapeHtml(row.agent)}</strong>${online}<span class="score-value">${num(row.score)} 分</span></div>`,
+      `<small>死亡 ${num(row.deaths)} · 怪物 ${num(row.monsterKills)} · 总击杀 ${num(row.kills)} · 玩家 ${num(row.playerKills)} · 动物 ${num(row.animalKills)} · 羊 ${num(row.sheepKills)}</small>`,
+      `<small>食物 ${num(row.foodPicked)} · 羊毛 ${num(row.woolPicked)} · 床 ${num(row.bedsCrafted)} · 矿石 ${num(row.oreMined)} · 伤害 ${num(row.damageDealt)}</small>`,
+      `<small>当前位置 ${escapeHtml(formatPosition(row.position))} · 当前动作 ${escapeHtml(row.action || '暂无')}</small>`,
+      `<small>携带：${escapeHtml(carried)}</small>`,
+      '</div>',
+      '</div>'
+    ].join('')
+  }).join('') || '<div class="village-item"><small>暂无战绩数据。</small></div>'
+}
+
+function resourceStatusLabel(status) {
+  return {
+    done: '达标',
+    partial: '进行中',
+    missing: '缺口'
+  }[status] || '记录'
+}
 function renderVillageCommander(commander) {
   const duties = Array.isArray(commander.duties) ? commander.duties : []
   return [
@@ -1103,6 +1352,7 @@ function infrastructureStatusLabel(status) {
 function infrastructureTypeLabel(type) {
   return {
     storage: '仓储',
+    resource: '资源点',
     lighting: '照明',
     road: '道路',
     farm: '农场',

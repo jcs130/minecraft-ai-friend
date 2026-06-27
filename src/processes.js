@@ -22,7 +22,13 @@ function normalizeForMatch(value) {
 
 function run(command, args, timeoutMs = 4000) {
   return new Promise(resolve => {
-    const child = spawn(command, args, { windowsHide: true })
+    let child
+    try {
+      child = spawn(command, args, { windowsHide: true })
+    } catch (error) {
+      resolve({ code: 1, stdout: '', stderr: error.message })
+      return
+    }
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => {

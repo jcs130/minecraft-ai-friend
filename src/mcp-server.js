@@ -23,10 +23,18 @@ const COLLAB_TASKS = {
 class McpBridge {
   constructor(handlers) {
     this.handlers = handlers
+    this.isRequestAllowed = typeof handlers.isRequestAllowed === 'function'
+      ? handlers.isRequestAllowed
+      : isLocalRequest
     this.sseClients = new Map()
   }
 
   async handle(req, res, url) {
+    if (req.method === 'OPTIONS' && (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/') || url.pathname === '/api/mcp')) {
+      sendCorsOptions(res)
+      return true
+    }
+
     if (req.method === 'GET' && url.pathname === '/mcp/sse') {
       this.openLegacySse(req, res)
       return true
@@ -56,7 +64,7 @@ class McpBridge {
   }
 
   openLegacySse(req, res) {
-    if (!isLocalRequest(req)) {
+    if (!this.isRequestAllowed(req)) {
       sendText(res, 403, 'Forbidden')
       return
     }
@@ -64,6 +72,7 @@ class McpBridge {
     const sessionId = crypto.randomUUID()
     this.writeSseHeaders(res)
     this.sseClients.set(sessionId, res)
+    res.write(': connected\n\n')
     this.sendSse(res, 'endpoint', `/mcp/messages?sessionId=${encodeURIComponent(sessionId)}`)
     this.sendSse(res, 'message', {
       jsonrpc: '2.0',
@@ -78,7 +87,7 @@ class McpBridge {
     const keepAlive = setInterval(() => {
       if (res.destroyed) return
       res.write(': keepalive\n\n')
-    }, 30000)
+    }, 15000)
 
     req.on('close', () => {
       clearInterval(keepAlive)
@@ -87,12 +96,13 @@ class McpBridge {
   }
 
   openStreamableSse(req, res) {
-    if (!isLocalRequest(req)) {
+    if (!this.isRequestAllowed(req)) {
       sendText(res, 403, 'Forbidden')
       return
     }
 
     this.writeSseHeaders(res)
+    res.write(': connected\n\n')
     this.sendSse(res, 'message', {
       jsonrpc: '2.0',
       method: 'notifications/message',
@@ -102,10 +112,19 @@ class McpBridge {
         data: 'MCP stream opened'
       }
     })
+
+    const keepAlive = setInterval(() => {
+      if (res.destroyed) return
+      res.write(': keepalive\n\n')
+    }, 15000)
+
+    req.on('close', () => {
+      clearInterval(keepAlive)
+    })
   }
 
   async handleLegacyMessage(req, res) {
-    if (!isLocalRequest(req)) {
+    if (!this.isRequestAllowed(req)) {
       sendText(res, 403, 'Forbidden')
       return
     }
@@ -129,7 +148,7 @@ class McpBridge {
   }
 
   async handleStreamablePost(req, res) {
-    if (!isLocalRequest(req)) {
+    if (!this.isRequestAllowed(req)) {
       sendText(res, 403, 'Forbidden')
       return
     }
@@ -387,7 +406,9 @@ class McpBridge {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',
-      'x-accel-buffering': 'no'
+      'x-accel-buffering': 'no',
+      'access-control-allow-origin': '*',
+      'access-control-expose-headers': 'MCP-Protocol-Version, Mcp-Session-Id'
     })
   }
 
@@ -574,7 +595,7 @@ function normalizePresetTask(task, args) {
   if (preset === 'first_night') return FIRST_NIGHT_TASK
   if (preset === 'free_play') return FREE_PLAY_TASK
   if (preset === 'gather_wood') return '生存任务： 在基地附近安全采集木头，优先砍少量树，避免跑远；采集后把多余木头放进公共箱子，并用 VILLAGE_REPORT 上报进度。'
-  if (preset === 'mine' || preset === 'mine_diamond') return '生存任务： 执行安全采矿任务。优先在基地附近寻找低风险矿点，采集石头、煤和铁，补光路线，避免深洞、岩浆和长距离冒险，返回后把材料放进公共箱子并上报。'
+  if (preset === 'mine' || preset === 'mine_diamond') return '生存任务： 执行安全采矿任务。优先在基地附近寻找低风险矿点，采集石头、煤、铁和可采金矿；金矿必须铁镐或更高级，没铁镐先采铁/做铁镐并记录金矿坐标。补光路线，避免深洞、岩浆和长距离冒险，返回后把材料放进公共箱子并上报。'
   if (preset === 'build_base') return '生存任务： 改善基地。优先公共箱子、照明、门、简单墙体、道路和安全边界；不要拆真人玩家已有建筑，完成公共设施后用 VILLAGE_REPORT 上报。'
   if (preset === 'guard_base') return '生存任务： 巡逻基地周围，补光、处理近距离危险、标记坑洞和水边，夜晚优先留在基地附近保护公共区域。'
   if (COLLAB_TASKS[preset]) return COLLAB_TASKS[preset]
@@ -697,13 +718,31 @@ function isLocalRequest(req) {
   return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1' || remote === ''
 }
 
+function sendCorsOptions(res) {
+  res.writeHead(204, {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+    'access-control-allow-headers': 'content-type, accept, mcp-protocol-version, mcp-session-id',
+    'access-control-expose-headers': 'MCP-Protocol-Version, Mcp-Session-Id',
+    'access-control-max-age': '86400'
+  })
+  res.end()
+}
+
 function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' })
+  res.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    'access-control-allow-origin': '*',
+    'access-control-expose-headers': 'MCP-Protocol-Version, Mcp-Session-Id'
+  })
   res.end(JSON.stringify(payload, null, 2))
 }
 
 function sendText(res, statusCode, text) {
-  res.writeHead(statusCode, { 'content-type': 'text/plain; charset=utf-8' })
+  res.writeHead(statusCode, {
+    'content-type': 'text/plain; charset=utf-8',
+    'access-control-allow-origin': '*'
+  })
   res.end(text)
 }
 
