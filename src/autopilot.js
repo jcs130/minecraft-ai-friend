@@ -52,6 +52,15 @@ const RECENT_OUTPUT_LIMIT = 30
 const STATUS_REPORT_LIMIT = 30
 const CONTEXT_ARCHIVE_LIMIT = 40
 const CONTEXT_SUMMARY_LIMIT = 1800
+const COMMANDER_STRATEGY_INTERVAL_MS = 5 * 60 * 1000
+const COMMANDER_STRATEGY_RETRY_MS = 90 * 1000
+const RESIDENT_LLM_GOAL_INTERVAL_MS = 6 * 60 * 1000
+const RESIDENT_LLM_RETRY_MS = 90 * 1000
+const AGENT_THINKING_GRACE_MS = 10 * 60 * 1000
+const AGENT_RESTART_COOLDOWN_MS = 30 * 60 * 1000
+const NON_VILLAGE_RESTART_MIN_ATTEMPTS = 8
+const NON_VILLAGE_RESTART_STUCK_MS = 12 * 60 * 1000
+const COMMANDER_RESTART_SPACING_MS = 10 * 60 * 1000
 
 const settlementRoleTasks = [
   '生存管家：巡查共享基地、补光、整理公共箱子、报告缺口，夜晚任务优先安全。',
@@ -136,6 +145,7 @@ class Autopilot {
       llmBaseUrl: this.llmBaseUrl,
       llmModel: this.llmModel,
       worldDirective: this.worldDirective,
+      commanderStrategy: this.memory.commanderStrategy || null,
       lastTickAt: this.lastTickAt,
       lastError: this.lastError,
       memoryPath: this.memoryPath,
@@ -245,6 +255,7 @@ class Autopilot {
 
     const now = Date.now()
     const agents = this.client.onlineAgentNames(this.agentFilter)
+    if (this.villageState) await this.maybeRefreshCommanderStrategy(agents, now)
     await runLimited(agents, this.maxConcurrentAgents, agentName => this.maybeAssignTask(agentName, now))
   }
 
@@ -268,6 +279,21 @@ class Autopilot {
     if (recoveryTask) {
       await this.assignTask(agentName, recoveryTask, memory, 'recovery')
       return
+    }
+
+    const currentAction = actionCurrent(state)
+    if (isThinkingLikeAction(currentAction)) {
+      const thinkingSince = updateThinkingMemory(memory, currentAction, now)
+      const thinkingAge = now - Number(thinkingSince || now)
+      const lastInstructionAge = now - Number(memory.lastInstructionAt || 0)
+      if (thinkingAge < AGENT_THINKING_GRACE_MS || lastInstructionAge < AGENT_THINKING_GRACE_MS) {
+        this.saveMemoryThrottled()
+        return
+      }
+    } else if (memory.thinkingSince || memory.thinkingAction) {
+      memory.thinkingSince = 0
+      memory.thinkingAction = ''
+      this.saveMemoryThrottled()
     }
 
     if (!isIdle(state)) {
@@ -327,7 +353,7 @@ class Autopilot {
     }
     if (intervention.type === 'restart') {
       const now = Date.now()
-      if (now - Number(this.lastCommanderRestartAt || 0) < 300000 && intervention.task) {
+      if (now - Number(this.lastCommanderRestartAt || 0) < COMMANDER_RESTART_SPACING_MS && intervention.task) {
         const delayed = {
           ...intervention,
           type: 'task',
@@ -366,7 +392,8 @@ class Autopilot {
 
   async restartAgent(agentName, memory, reason) {
     const now = Date.now()
-    if (now - Number(memory.lastAgentRestartAt || 0) < 600000) return
+    if (isThinkingLikeReason(reason)) return
+    if (now - Number(memory.lastAgentRestartAt || 0) < AGENT_RESTART_COOLDOWN_MS) return
     memory.lastAgentRestartAt = now
     resetCommanderInterventionMemory(memory)
     memory.lastInstructionAt = now
@@ -413,7 +440,9 @@ class Autopilot {
 
     memory.lastRecoveryAt = now
     memory.recoveryAttempts = Number(memory.recoveryAttempts || 0) + 1
-    if ((isChatting || isStopped || reason === '空闲过久') && memory.recoveryAttempts >= 4 && now - Number(memory.lastAgentRestartAt || 0) > 90000) {
+    const restartable = !isThinkingLikeAction(action) && (isStopped || reason === '空闲过久')
+    const noProgressAge = now - Number(memory.lastNonIdleAt || memory.lastInstructionAt || now)
+    if (restartable && memory.recoveryAttempts >= NON_VILLAGE_RESTART_MIN_ATTEMPTS && noProgressAge > NON_VILLAGE_RESTART_STUCK_MS && now - Number(memory.lastAgentRestartAt || 0) > AGENT_RESTART_COOLDOWN_MS) {
       memory.restartRequested = reason
       return null
     }
@@ -437,10 +466,279 @@ class Autopilot {
   }
 
   async decideTask(agentName, state) {
-    if (this.villageState) return this.residentSelfLoopDecision(agentName, state)
+    if (this.villageState) {
+      const autonomousTask = await this.residentAutonomyLlmDecision(agentName, state)
+      if (autonomousTask) return autonomousTask
+      return this.residentSelfLoopDecision(agentName, state)
+    }
     const llmTask = await this.llmDecision(agentName, state)
     if (llmTask) return llmTask
     return this.fallbackDecision(agentName, state)
+  }
+
+  async maybeRefreshCommanderStrategy(agents, now) {
+    if (!this.villageState || !this.canUseLlm() || !Array.isArray(agents) || agents.length === 0) return
+    const lastStrategyAt = Number(this.memory.commanderStrategyAt || 0)
+    const lastAttemptAt = Number(this.memory.commanderStrategyAttemptAt || 0)
+    if (now - lastStrategyAt < COMMANDER_STRATEGY_INTERVAL_MS) return
+    if (now - lastAttemptAt < COMMANDER_STRATEGY_RETRY_MS) return
+    this.memory.commanderStrategyAttemptAt = now
+
+    const strategy = await this.commanderStrategyLlmDecision(agents)
+    if (!strategy) {
+      this.saveMemoryThrottled()
+      return
+    }
+
+    this.memory.commanderStrategyAt = now
+    this.memory.commanderStrategy = strategy
+    if (strategy.directive) this.setWorldDirective(strategy.directive)
+    else this.saveMemoryThrottled()
+
+    if (this.villageState && typeof this.villageState.recordTaskEvent === 'function') {
+      try {
+        this.villageState.recordTaskEvent({
+          type: 'note',
+          status: 'active',
+          source: 'ai-commander-strategy',
+          agent: strategy.commander || 'Airi',
+          title: strategy.phase ? `村长战略：${strategy.phase}` : '村长战略刷新',
+          description: [
+            strategy.summary || '',
+            Array.isArray(strategy.priorities) && strategy.priorities.length > 0 ? '优先级：' + strategy.priorities.join('；') : '',
+            Array.isArray(strategy.successCriteria) && strategy.successCriteria.length > 0 ? '验收：' + strategy.successCriteria.join('；') : ''
+          ].filter(Boolean).join(' ')
+        })
+      } catch (error) {
+        this.logger.warn('Commander strategy event failed: ' + error.message)
+      }
+    }
+    this.logger.info('Commander strategy refreshed: ' + (strategy.phase || strategy.summary || 'updated'))
+  }
+
+  async commanderStrategyLlmDecision(agents) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 55000)
+    try {
+      const headers = { 'content-type': 'application/json' }
+      if (this.llmApiKey) headers.authorization = `Bearer ${this.llmApiKey}`
+      const context = await this.buildCommanderStrategyContext(agents)
+      const response = await fetch(`${this.llmBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: this.llmModel,
+          stream: false,
+          messages: [
+            { role: 'system', content: buildCommanderStrategySystemPrompt(this.assistantMode) },
+            { role: 'user', content: JSON.stringify(context, null, 2) }
+          ],
+          temperature: 0.45
+        }),
+        signal: controller.signal
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ? JSON.stringify(data.error) : `HTTP ${response.status}`)
+      const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content
+      const parsed = extractJsonObject(content)
+      return sanitizeCommanderStrategy(parsed, context)
+    } catch (error) {
+      this.logger.warn('Commander strategy LLM failed: ' + error.message)
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async buildCommanderStrategyContext(agents) {
+    const village = this.villageState && this.villageState.snapshot ? this.villageState.snapshot() : null
+    const states = this.client.latestState || {}
+    const strategyProfile = residentLlmProfile('Alex')
+    const minecraftIntel = await this.safeMinecraftIntel(strategyProfile)
+    const residents = (agents || []).map(agentName => {
+      const memory = this.memoryFor(agentName)
+      const assignment = this.villageState && this.villageState.assignmentFor ? this.villageState.assignmentFor(agentName) : null
+      const compact = compactState(this.client, memory, agentName, states[agentName] || {}, this.assistantMode, this.worldDirective, assignment)
+      return {
+        agent: agentName,
+        role: assignment && assignment.role ? assignment.role.role : '',
+        roleId: assignment && assignment.role ? assignment.role.roleId : '',
+        position: compact.position,
+        action: compact.currentAction,
+        isIdle: compact.isIdle,
+        inWater: compact.inWater,
+        health: compact.health,
+        hunger: compact.hunger,
+        lastTaskSummary: truncateText(memory.lastTaskSummary || '', 360),
+        lastStatusSummary: truncateText(memory.lastStatusSummary || '', 260),
+        lastResidentLlmDecision: memory.lastResidentLlmDecision || null,
+        recentOutputs: (memory.recentOutputs || []).slice(-3).map(item => compactTimelineItem(item, 260)),
+        openNeeds: (memory.openNeeds || []).slice(0, 8)
+      }
+    })
+    return {
+      generatedAt: new Date().toISOString(),
+      commander: { name: 'Airi', title: 'AI村长', model: this.llmModel },
+      currentStrategy: this.memory.commanderStrategy || null,
+      worldDirective: this.worldDirective,
+      village: summarizeVillageForCommander(village, strategyProfile),
+      minecraftIntel,
+      residents,
+      memorySummary: summarizeAgentMemoryForCommander(this.memory.agents || {}, agents || [], strategyProfile),
+      hardFacts: commanderHardFacts({
+        village: summarizeVillageForCommander(village, strategyProfile),
+        minecraftIntel
+      }),
+      requiredOutput: {
+        phase: '未来30-60分钟村庄阶段',
+        summary: '一句中文战略判断',
+        directive: '会写入控制台 worldDirective 的长期指令，必须具体、可执行、少于900字',
+        priorities: ['按顺序列出3-6个战略优先级'],
+        residentIntentions: { Alex: '给每个在线居民一个长期职责重点' },
+        successCriteria: ['可以验收的结果'],
+        risks: ['需要村长巡查的风险']
+      }
+    }
+  }
+
+  async residentAutonomyLlmDecision(agentName, state) {
+    if (!this.canUseLlm() || !this.villageState) return null
+    const assignment = this.villageState.assignmentFor(agentName)
+    const settlement = assignment && assignment.settlement ? assignment.settlement : getVillageSettlement(this.villageState)
+    const memory = this.memoryFor(agentName)
+    const village = this.villageState && this.villageState.snapshot ? this.villageState.snapshot() : null
+    const summary = compactState(this.client, memory, agentName, state, this.assistantMode, this.worldDirective, assignment)
+    const strategy = this.memory.commanderStrategy || null
+    const goalSignature = residentSelfGoalSignature({ assignment, settlement, village, strategy })
+    const now = Date.now()
+    if (!shouldUseResidentAutonomyLlm(memory, summary, goalSignature, now)) return null
+
+    memory.lastResidentLlmAttemptAt = now
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 45000)
+    try {
+      const headers = { 'content-type': 'application/json' }
+      if (this.llmApiKey) headers.authorization = `Bearer ${this.llmApiKey}`
+      const context = await this.buildResidentAutonomyContext(agentName, state, assignment, settlement, village, summary, strategy)
+      const response = await fetch(`${this.llmBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: this.llmModel,
+          stream: false,
+          messages: [
+            { role: 'system', content: buildResidentAutonomySystemPrompt(this.assistantMode) },
+            { role: 'user', content: JSON.stringify(context, null, 2) }
+          ],
+          temperature: agentName === 'Alex' ? 0.5 : 0.42
+        }),
+        signal: controller.signal
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ? JSON.stringify(data.error) : `HTTP ${response.status}`)
+      const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content
+      const parsed = extractJsonObject(content)
+      const decision = sanitizeResidentAutonomyDecision(parsed, agentName)
+      if (!decision) return null
+      const task = buildResidentAutonomyGoalTask({
+        agentName,
+        decision,
+        assignment,
+        settlement,
+        summary,
+        strategy
+      })
+      const immediateTask = directCommandFromResidentDecision({
+        agentName,
+        decision,
+        assignment,
+        settlement,
+        summary
+      }) || mindcraftCommand('newAction', buildResidentAutonomyActionTask({
+        agentName,
+        decision,
+        assignment,
+        settlement,
+        summary,
+        strategy
+      }))
+      memory.lastResidentLlmAt = now
+      memory.selfLoopGoalAt = now
+      memory.selfLoopGoalText = task
+      memory.selfLoopGoalSignature = goalSignature
+      memory.lastDecisionSource = 'resident-llm-autonomy'
+      memory.lastResidentLlmDecision = {
+        at: new Date().toISOString(),
+        model: this.llmModel,
+        title: decision.title,
+        intention: decision.intention,
+        firstAction: decision.firstAction,
+        projectId: decision.projectId,
+        durationMinutes: decision.durationMinutes
+      }
+      this.saveMemoryThrottled()
+      return immediateTask
+    } catch (error) {
+      this.logger.warn(`Resident autonomy LLM failed for ${agentName}: ${error.message}`)
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async buildResidentAutonomyContext(agentName, state, assignment, settlement, village, summary, strategy) {
+    const profile = residentLlmProfile(agentName)
+    const memory = this.memoryFor(agentName)
+    const states = this.client.latestState || {}
+    const peers = villageResidentNamesFromSnapshot(village, this.client.onlineAgentNames(this.agentFilter))
+      .filter(name => name !== agentName)
+      .map(name => {
+        const peerMemory = this.memoryFor(name)
+        const peerAssignment = this.villageState && this.villageState.assignmentFor ? this.villageState.assignmentFor(name) : null
+        const peerCompact = compactState(this.client, peerMemory, name, states[name] || {}, this.assistantMode, this.worldDirective, peerAssignment)
+        return {
+          agent: name,
+          role: peerAssignment && peerAssignment.role ? peerAssignment.role.role : '',
+          roleId: peerAssignment && peerAssignment.role ? peerAssignment.role.roleId : '',
+          position: peerCompact.position,
+          action: peerCompact.currentAction,
+          isIdle: peerCompact.isIdle,
+          lastTaskSummary: truncateText(peerMemory.lastTaskSummary || '', 220),
+          lastResidentLlmDecision: peerMemory.lastResidentLlmDecision || null
+        }
+      })
+    const minecraftIntel = profile.strong ? await this.safeMinecraftIntel(profile) : null
+    return {
+      generatedAt: new Date().toISOString(),
+      agent: agentName,
+      role: assignment && assignment.role ? assignment.role : null,
+      settlement,
+      currentState: compactTargetForLlm(summary, profile),
+      commanderStrategy: compactCommanderStrategyForResident(strategy, agentName, assignment && assignment.role ? assignment.role.roleId : ''),
+      village: summarizeVillageForCommander(village, profile),
+      minecraftIntel,
+      peers,
+      memory: {
+        lastTaskSummary: truncateText(memory.lastTaskSummary || '', 420),
+        lastStatusSummary: truncateText(memory.lastStatusSummary || '', 360),
+        recentTasks: (memory.recentTasks || []).slice(-profile.recentTasks).map(item => compactTimelineItem(item, 360)),
+        recentOutputs: (memory.recentOutputs || []).slice(-profile.recentOutputs).map(item => compactTimelineItem(item, 320)),
+        statusReports: (memory.statusReports || []).slice(-profile.statusReports).map(item => compactTimelineItem(item, 320)),
+        longTermNotes: (memory.longTermNotes || []).slice(0, profile.longTermNotes).map(item => compactTimelineItem(item, 320)),
+        contextSummary: truncateText(memory.contextSummary || '', profile.strong ? 800 : 520),
+        openNeeds: (memory.openNeeds || []).slice(0, 8)
+      },
+      outputContract: {
+        title: '中文短标题',
+        intention: '你作为该居民自己想完成的阶段目标',
+        firstAction: '第一步必须是外显动作，不是聊天或思考',
+        steps: ['2-5个连续动作'],
+        successCriteria: ['可验收结果'],
+        blockedFallback: '受阻时的替代动作或上报',
+        projectId: '关联项目ID',
+        durationMinutes: '建议持续执行分钟数'
+      }
+    }
   }
 
   residentSelfLoopDecision(agentName, state) {
@@ -449,6 +747,7 @@ class Autopilot {
     const memory = this.memoryFor(agentName)
     const summary = compactState(this.client, memory, agentName, state, this.assistantMode, this.worldDirective, assignment)
     const village = this.villageState && this.villageState.snapshot ? this.villageState.snapshot() : null
+    const strategy = this.memory.commanderStrategy || null
     const taskIndex = Number(memory.taskIndex || 0)
     const roleId = assignment && assignment.role ? assignment.role.roleId : ''
     const now = Date.now()
@@ -486,12 +785,12 @@ class Autopilot {
       this.saveMemoryThrottled()
       return goToCommand(safeChestAccessPoint(settlement && settlement.publicChest, settlement && settlement.base, summary.position), 2) || buildUndergroundRescueTask(agentName, summary, settlement, roleId)
     }
-    const goalPrompt = buildResidentSelfGoalPrompt({ agentName, summary, memory, assignment, settlement, village, taskIndex })
-    const goalSignature = residentSelfGoalSignature({ assignment, settlement, village })
+    const goalPrompt = buildResidentSelfGoalPrompt({ agentName, summary, memory, assignment, settlement, village, strategy, taskIndex })
+    const goalSignature = residentSelfGoalSignature({ assignment, settlement, village, strategy })
     const needsGoal = !memory.selfLoopGoalAt || now - Number(memory.selfLoopGoalAt || 0) > 15 * 60 * 1000 || memory.selfLoopGoalSignature !== goalSignature
     const task = needsGoal
-      ? mindcraftCommand('goal', goalPrompt)
-      : directResidentSelfCommand({ agentName, memory, assignment, roleId, settlement, summary, village, taskIndex })
+      ? buildResidentSelfLoopTask({ agentName, summary, memory, assignment, settlement, village, strategy, taskIndex })
+      : directResidentSelfCommand({ agentName, memory, assignment, roleId, settlement, summary, village, strategy, taskIndex })
     memory.taskIndex = taskIndex + 1
     memory.lastDecisionSource = needsGoal ? 'resident-self-goal' : 'resident-direct-action'
     if (needsGoal) {
@@ -680,6 +979,7 @@ class Autopilot {
       targetAgent: compactTargetForLlm(compactState(this.client, memory, agentName, state, this.assistantMode, this.worldDirective, assignment), profile),
       residents: residentStates,
       village: summarizeVillageForCommander(village, profile),
+      commanderStrategy: this.memory.commanderStrategy || null,
       minecraftIntel,
       allAgentMemory: summarizeAgentMemoryForCommander(this.memory.agents || {}, residents, profile),
       modelRouting: {
@@ -869,6 +1169,316 @@ async function runLimited(items, limit, worker) {
   await Promise.all(workers)
 }
 
+function buildCommanderStrategySystemPrompt(mode) {
+  return [
+    '你是 Airi，我的世界 AI 村庄的 AI村长。你这次不是给某个居民派短命令，而是做长周期战略思考。',
+    '必须阅读完整 JSON，综合 Minecraft 服务端事实、公共箱库存、居民坐标/动作、项目进度、资源缺口、历史记忆和当前 worldDirective。',
+    '如果历史指令、settlement.policy、worldDirective 和 Minecraft/RCON 服务端事实冲突，必须以 hard facts、minecraftIntel.publicStorage、minecraftIntel.settlement 和当前可读公共箱坐标为准。',
+    '输出未来 30-60 分钟的战略：当前阶段、为什么这样判断、3-6 个优先级、每个居民的长期意图、验收标准、风险。',
+    '村长只负责战略和边界，不要把居民变成固定脚本。每个居民要保留自己的判断空间：你给职责重点、资源目标、坐标和验收，不要逐步遥控。',
+    '如果服务器难度是 peaceful，以建设、仓储、住宅、农田、探索资源点为主；如果是 easy/normal/hard，加入床、照明、门、围栏、武器、防具、食物和就近自卫。',
+    '不要要求居民执行 RCON、tp、服务器命令、主机文件、网络请求或无限循环。需要传送时只写“请求村长回库/探索授权”，由控制台守卫处理。',
+    '所有字段必须中文，directive 要具体到角色、资源、地点、验收，少于 900 字。',
+    mode === 'survival' ? '当前是生存模式，要把生命、饥饿、装备、返回路线和夜晚策略纳入战略。' : '当前是创造练习模式，重点是建设质量、布局、照明和可用性。',
+    '只返回 JSON，形状为：{"phase":"中文阶段名","summary":"一句战略判断","directive":"长期指令","priorities":["..."],"residentIntentions":{"Alex":"...","Luna":"..."},"successCriteria":["..."],"risks":["..."],"horizonMinutes":45}。'
+  ].join(' ')
+}
+
+function sanitizeCommanderStrategy(parsed, context) {
+  if (!parsed || typeof parsed !== 'object') return null
+  const phase = truncateText(parsed.phase || parsed.stage || '村庄自治建设', 80)
+  const summary = truncateText(parsed.summary || parsed.reason || '', 240)
+  const hardFacts = commanderHardFacts(context)
+  const directive = truncateText([hardFacts, parsed.directive || parsed.worldDirective || parsed.plan || ''].filter(Boolean).join(' '), 900)
+  const priorities = sanitizeStringList(parsed.priorities || parsed.goals || parsed.focus, 6, 140)
+  const successCriteria = sanitizeStringList(parsed.successCriteria || parsed.acceptance || parsed.checks, 6, 140)
+  const risks = sanitizeStringList(parsed.risks || parsed.watch || parsed.guardrails, 6, 140)
+  const residentIntentions = sanitizeResidentIntentions(parsed.residentIntentions || parsed.roles || parsed.assignments, context)
+  const horizonMinutes = clampNumber(Number(parsed.horizonMinutes || parsed.horizon || 45), 15, 120, 45)
+  const fallbackDirective = [
+    summary,
+    priorities.length > 0 ? '优先级：' + priorities.join('；') : '',
+    Object.entries(residentIntentions).map(([name, text]) => `${name}：${text}`).join('；')
+  ].filter(Boolean).join(' ')
+  const clean = {
+    at: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    commander: context && context.commander && context.commander.name || 'Airi',
+    phase,
+    summary,
+    directive: directive || truncateText(fallbackDirective, 900),
+    priorities,
+    residentIntentions,
+    successCriteria,
+    risks,
+    horizonMinutes
+  }
+  if (!clean.directive && priorities.length === 0 && Object.keys(residentIntentions).length === 0) return null
+  return clean
+}
+
+function commanderHardFacts(context) {
+  const settlement = context && context.village && context.village.settlement ? context.village.settlement : {}
+  const intelSettlement = context && context.minecraftIntel && context.minecraftIntel.settlement ? context.minecraftIntel.settlement : {}
+  const storage = context && context.minecraftIntel && context.minecraftIntel.publicStorage ? context.minecraftIntel.publicStorage : {}
+  const readableChest = (storage.candidates || []).find(item => item && item.ok && item.position)
+  const base = settlement.base || intelSettlement.base || null
+  const publicChest = readableChest && readableChest.position ? readableChest.position : (settlement.publicChest || intelSettlement.publicChest || null)
+  const facts = []
+  if (base) facts.push('硬事实：当前基地坐标是 ' + formatPoint(base) + '。')
+  if (publicChest) facts.push('硬事实：当前服务端可读公共箱坐标是 ' + formatPoint(publicChest) + '，所有取放物资、回库和上报库存必须优先使用这个坐标；如果历史指令里出现其他公共箱坐标，以这个坐标为准。')
+  return facts.join(' ')
+}
+
+function sanitizeResidentIntentions(value, context) {
+  const allowed = new Set((context && Array.isArray(context.residents) ? context.residents : []).map(row => row.agent))
+  const result = {}
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (!item || typeof item !== 'object') continue
+      const agent = String(item.agent || item.name || '').trim()
+      if (!agent || allowed.size && !allowed.has(agent)) continue
+      const text = truncateText(item.intention || item.task || item.focus || item.goal || '', 180)
+      if (text) result[agent] = text
+    }
+  } else if (value && typeof value === 'object') {
+    for (const [agent, text] of Object.entries(value)) {
+      if (allowed.size && !allowed.has(agent)) continue
+      const clean = truncateText(typeof text === 'string' ? text : JSON.stringify(text), 180)
+      if (clean) result[agent] = clean
+    }
+  }
+  return result
+}
+
+function buildResidentAutonomySystemPrompt(mode) {
+  return [
+    '你是一个 Minecraft AI 村民的个人决策核心，不是村长。你要站在目标居民自己的职业、人设、记忆和当前状态上，决定接下来一段时间自己想做什么。',
+    '你必须服从村长战略和服务器安全边界，但具体路线、工具、动作顺序、替代方案由你自己判断。',
+    '任务要像真实玩家：先做外显动作，再持续推进一个阶段目标。不要只聊天、只思考、只查看库存、只发 VILLAGE_REPORT。',
+    '如果最近失败，要换更短、更安全的替代方案；如果缺材料，先去公共箱取、制作、采集，或用 VILLAGE_REPORT 上报受阻。',
+    '不要输出 RCON、tp、服务器命令、主机文件、网络请求、无限循环或破坏玩家/居民建筑的内容。',
+    '所有字段必须中文。firstAction 必须是移动、采集、放置、入库、合成、查看公共箱、观察实体、补光、建设之一。',
+    mode === 'survival' ? '当前是生存模式，必须考虑生命、饥饿、怪物、照明、床、工具、返回路线。' : '当前是创造练习模式，不要求合成，重点是建设和整理。',
+    '只返回 JSON，形状为：{"title":"中文短标题","intention":"阶段目标","firstAction":"第一步外显动作","steps":["2-5个动作"],"successCriteria":["验收条件"],"blockedFallback":"受阻时替代方案","projectId":"项目ID","durationMinutes":8}。'
+  ].join(' ')
+}
+
+function shouldUseResidentAutonomyLlm(memory, summary, goalSignature, now) {
+  const lastAttempt = Number(memory.lastResidentLlmAttemptAt || 0)
+  if (now - lastAttempt < RESIDENT_LLM_RETRY_MS) return false
+  if (!memory.lastResidentLlmAt) return true
+  if (memory.selfLoopGoalSignature !== goalSignature) return true
+  if (now - Number(memory.lastResidentLlmAt || 0) > RESIDENT_LLM_GOAL_INTERVAL_MS) return true
+  if (recentOutputsSuggestNoAgency(memory) && now - Number(memory.lastResidentLlmAt || 0) > RESIDENT_LLM_RETRY_MS) return true
+  if (summary && summary.isIdle && /Stopped|Chatting|stay|idle/i.test(String(summary.currentAction || '')) && now - Number(memory.lastInstructionAt || 0) > RESIDENT_LLM_RETRY_MS) return true
+  return false
+}
+
+function recentOutputsSuggestNoAgency(memory) {
+  const text = (memory.recentOutputs || []).slice(-8).map(item => String(item.text || item.message || item || '')).join('\n')
+  return /No response data|did not use command|Stopping auto-prompting|Code generation failed|只是在等待|不知道做什么|没有动作/i.test(text)
+}
+
+function sanitizeResidentAutonomyDecision(parsed, agentName) {
+  if (!parsed || typeof parsed !== 'object') return null
+  const title = truncateText(parsed.title || parsed.name || '自主行动', 80)
+  const intention = truncateText(parsed.intention || parsed.goal || parsed.task || parsed.objective || '', 360)
+  const firstAction = truncateText(parsed.firstAction || parsed.firstStep || '', 180)
+  const steps = sanitizeStringList(parsed.steps || parsed.plan || parsed.actions, 5, 180)
+  const successCriteria = sanitizeStringList(parsed.successCriteria || parsed.acceptance || parsed.checks, 5, 160)
+  const blockedFallback = truncateText(parsed.blockedFallback || parsed.fallback || parsed.blocked || '', 220)
+  const projectId = String(parsed.projectId || parsed.project || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)
+  const durationMinutes = clampNumber(Number(parsed.durationMinutes || parsed.duration || 8), 3, 20, 8)
+  const joined = [title, intention, firstAction, steps.join(' '), blockedFallback].join(' ')
+  if (!intention || intention.length < 8) return null
+  if (containsServerOnlyAction(joined)) return null
+  if (/主机|文件|网络请求|无限循环|破坏玩家|破坏居民/i.test(joined)) return null
+  return {
+    agent: agentName,
+    title,
+    intention,
+    firstAction,
+    steps,
+    successCriteria,
+    blockedFallback,
+    projectId,
+    durationMinutes
+  }
+}
+
+function buildResidentAutonomyGoalTask(input) {
+  const agentName = input.agentName
+  const decision = input.decision || {}
+  const assignment = input.assignment || {}
+  const role = assignment.role || {}
+  const roleId = role.roleId || ''
+  const settlement = input.settlement || {}
+  const summary = input.summary || {}
+  const strategyText = strategyRoleDirective(input.strategy, agentName, roleId)
+  const steps = Array.isArray(decision.steps) && decision.steps.length > 0 ? decision.steps.join('；') : decision.intention
+  const success = Array.isArray(decision.successCriteria) && decision.successCriteria.length > 0 ? decision.successCriteria.join('；') : '有可见动作并上报完成或受阻'
+  return [
+    agentName + ' 自主目标：' + (decision.title || '推进村庄任务') + '。你是“' + (role.role || roleLabelForSelfLoop(roleId)) + '”，不是等待村长逐步遥控的脚本。',
+    strategyText ? '村长战略给你的长期重点：' + strategyText : '',
+    '当前位置 ' + formatPoint(summary.position) + '；基地 ' + formatPoint(settlement.base) + '；公共箱 ' + formatPoint(settlement.publicChest || settlement.base) + '。',
+    '阶段意图：' + decision.intention,
+    '第一步必须是外显动作：' + (decision.firstAction || residentActionExamples(roleId)) + '。',
+    '连续动作建议：' + steps + '。持续推进约 ' + decision.durationMinutes + ' 分钟；中途失败时自己换合理替代动作，不要站着等下一条命令。',
+    '验收标准：' + success + '。',
+    decision.blockedFallback ? '受阻方案：' + decision.blockedFallback + '。' : '',
+    '说话纪律：最多先说一句不超过30字的中文状态，然后马上行动。只聊天、只思考、只查看个人库存、只发上报都不算完成。',
+    '完成、发现资源点或明确受阻时发送 VILLAGE_REPORT {"type":"storage|resource|lighting|road|farm|mine|house|wall|landmark|other","title":"中文短名","status":"done|blocked|started","public":true,"position":{"x":0,"y":64,"z":0},"description":"中文说明","projectId":"' + (decision.projectId || projectForRole(roleId, { shortageIds: [], missing: {} })) + '"}。'
+  ].filter(Boolean).join(' ')
+}
+
+function buildResidentAutonomyActionTask(input) {
+  const agentName = input.agentName
+  const decision = input.decision || {}
+  const assignment = input.assignment || {}
+  const role = assignment.role || {}
+  const roleId = role.roleId || ''
+  const settlement = input.settlement || {}
+  const summary = input.summary || {}
+  const strategyText = strategyRoleDirective(input.strategy, agentName, roleId)
+  return [
+    agentName + ' 自主行动：' + (decision.title || '推进个人目标') + '。你是“' + (role.role || roleLabelForSelfLoop(roleId)) + '”。',
+    strategyText ? '长期重点：' + strategyText : '',
+    '当前位置 ' + formatPoint(summary.position) + '；基地 ' + formatPoint(settlement.base) + '；公共箱 ' + formatPoint(settlement.publicChest || settlement.base) + '。',
+    '目标：' + decision.intention,
+    '马上执行第一步：' + (decision.firstAction || residentActionExamples(roleId)) + '。',
+    '只做一个可见动作：移动、采集、放置、入库、合成、查看公共箱、观察实体、补光或建设。最多一句中文短状态，禁止站着长聊。',
+    decision.blockedFallback ? '失败就改用：' + decision.blockedFallback + '。' : '失败就换一个更短更安全的动作并上报受阻。',
+    '完成或受阻后用中文 VILLAGE_REPORT 上报。'
+  ].filter(Boolean).join(' ')
+}
+
+function directCommandFromResidentDecision(input) {
+  const decision = input.decision || {}
+  const assignment = input.assignment || {}
+  const role = assignment.role || {}
+  const roleId = role.roleId || ''
+  const settlement = input.settlement || {}
+  const summary = input.summary || {}
+  const text = [
+    decision.title,
+    decision.intention,
+    decision.firstAction,
+    ...(decision.steps || [])
+  ].filter(Boolean).join(' ')
+  if (!text.trim()) return ''
+  const explicitCommand = extractSafeMindcraftCommand(text)
+  if (explicitCommand) return explicitCommand
+  const coordinate = extractCoordinate(text)
+  if (coordinate && /移动|前往|到达|地基|建造|施工|寻找|侦查|返回|回到|goTo|坐标/i.test(text)) {
+    if (!summary.position || distance2d(summary.position, coordinate) > 4) return goToCommand(coordinate, 2)
+  }
+  const chestPoint = safeChestAccessPoint(settlement.publicChest, settlement.base, summary.position)
+  if (/公共箱|箱子|回库|入库|取出|查看箱|整理|材料包/i.test(text)) {
+    if (summary.position && chestPoint && distance2d(summary.position, chestPoint) > 4) return goToCommand(chestPoint, 1)
+    if (/查看|打开|检查|公共箱|箱子/i.test(text)) return '!viewChest'
+  }
+  if (roleId === 'builder' || /木屋|房屋|建造|地板|墙|火把|门|床|放置/i.test(text)) {
+    if (coordinate && summary.position && distance2d(summary.position, coordinate) > 5) return goToCommand(coordinate, 2)
+    if (/火把|补光/i.test(text)) return '!placeHere("torch")'
+    if (/门/.test(text)) return '!placeHere("oak_door")'
+    if (/床/.test(text)) return '!placeHere("white_bed")'
+    if (/箱/.test(text)) return '!placeHere("chest")'
+    return '!placeHere("oak_planks")'
+  }
+  if (roleId === 'miner' || /返回地表|地下|采矿|矿|煤|铁|金|圆石/i.test(text)) {
+    if (/返回地表|回到地面|y>60|地表/i.test(text)) return goToCommand(offsetPoint(settlement.base || settlement.publicChest || summary.position, 4, 0, 5), 2)
+    if (/金/.test(text)) return '!searchForBlock("gold_ore", 192)'
+    if (/铁/.test(text)) return '!searchForBlock("iron_ore", 160)'
+    if (/煤/.test(text)) return '!searchForBlock("coal_ore", 128)'
+    return '!searchForBlock("stone", 96)'
+  }
+  if (roleId === 'scout' || /侦察|平坦|坐标|地形|草地|资源点/i.test(text)) {
+    if (coordinate) return goToCommand(coordinate, 2)
+    return '!entities'
+  }
+  if (roleId === 'farmer' || /羊|牛|鸡|食物|农田|播种|收获|羊毛/i.test(text)) {
+    if (/羊|羊毛/.test(text)) return '!searchForEntity("sheep", 500)'
+    if (/牛/.test(text)) return '!searchForEntity("cow", 256)'
+    if (/鸡/.test(text)) return '!searchForEntity("chicken", 256)'
+    if (/火把|补光/.test(text)) return '!placeHere("torch")'
+    return goToCommand(chestPoint, 2)
+  }
+  return ''
+}
+
+function extractSafeMindcraftCommand(text) {
+  const match = String(text || '').match(/!(goToCoordinates|viewChest|entities|nearbyBlocks|searchForEntity|searchForBlock|placeHere|takeFromChest|putInChest|equip|collectBlocks|craftRecipe)\(([^)]*)\)/)
+  if (!match) return ''
+  const command = '!' + match[1] + '(' + match[2] + ')'
+  if (containsServerOnlyAction(command)) return ''
+  return command.slice(0, 220)
+}
+
+function extractCoordinate(text) {
+  const source = String(text || '')
+  const patterns = [
+    /\((-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)\)/,
+    /(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)/
+  ]
+  for (const pattern of patterns) {
+    const match = source.match(pattern)
+    if (!match) continue
+    return {
+      x: Number(match[1]),
+      y: Number(match[2]),
+      z: Number(match[3])
+    }
+  }
+  return null
+}
+
+function compactCommanderStrategyForResident(strategy, agentName, roleId) {
+  if (!strategy || typeof strategy !== 'object') return null
+  return {
+    phase: strategy.phase || '',
+    summary: strategy.summary || '',
+    directive: truncateText(strategy.directive || '', 500),
+    priorities: (strategy.priorities || []).slice(0, 5),
+    myIntention: strategyRoleDirective(strategy, agentName, roleId),
+    successCriteria: (strategy.successCriteria || []).slice(0, 5),
+    risks: (strategy.risks || []).slice(0, 4),
+    updatedAt: strategy.updatedAt || strategy.at || ''
+  }
+}
+
+function strategyRoleDirective(strategy, agentName, roleId) {
+  if (!strategy || typeof strategy !== 'object') return ''
+  const intentions = strategy.residentIntentions || {}
+  const byAgent = truncateText(intentions[agentName] || '', 220)
+  if (byAgent) return byAgent
+  const rolePattern = roleId ? new RegExp(roleId, 'i') : null
+  const priorities = (strategy.priorities || []).filter(item => !rolePattern || rolePattern.test(String(item || ''))).slice(0, 2)
+  if (priorities.length > 0) return truncateText(priorities.join('；'), 220)
+  return truncateText(strategy.directive || strategy.summary || '', 220)
+}
+
+function formatStrategyText(strategy) {
+  if (!strategy || typeof strategy !== 'object') return ''
+  return [
+    strategy.phase,
+    strategy.summary,
+    strategy.directive,
+    ...(strategy.priorities || []),
+    ...(strategy.successCriteria || []),
+    ...(strategy.risks || []),
+    ...Object.values(strategy.residentIntentions || {})
+  ].filter(Boolean).join(' ')
+}
+
+function sanitizeStringList(value, limit, maxLength) {
+  const source = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(/[；;\n]/) : [])
+  return source
+    .map(item => truncateText(typeof item === 'string' ? item : JSON.stringify(item), maxLength))
+    .filter(Boolean)
+    .slice(0, limit)
+}
+
 function buildResidentSelfGoalPrompt(input) {
   const agentName = input.agentName
   const assignment = input.assignment || {}
@@ -879,17 +1489,20 @@ function buildResidentSelfGoalPrompt(input) {
   const base = settlement.base || null
   const chest = settlement.publicChest || base
   const village = input.village || {}
+  const strategy = input.strategy || null
   const shortages = villageResourceShortageText(village)
   const project = assignment.project || preferredProjectForSelfLoop(village, roleId) || {}
+  const strategyText = strategyRoleDirective(strategy, agentName, roleId)
   return [
     '你是 Minecraft AI 村庄常驻居民 ' + agentName + '，职业是' + roleName + '。这是你自己的长期自治循环，不要等待村长逐步遥控。',
     '长期目标：建设 AI Friend Village。基地 ' + formatPoint(base) + '，公共箱 ' + formatPoint(chest) + '。当前项目：' + (project.title || project.id || '村庄公共建设') + '。资源缺口：' + shortages + '。',
+    strategyText ? '村长长期战略：' + strategyText : '',
     '你的职业优先级：' + residentSelfLongTermObjective(roleId),
     '每轮必须先做外显动作，再简短上报：移动、采集、放置、入库、合成、查看公共箱、观察实体、补光、建设小屋、寻找资源。只聊天、只思考、只发 VILLAGE_REPORT 不算完成。',
     '说话规则：最多一句不超过30字的中文状态。不要长篇解释，不要英文模板。',
     '上报规则：实际开始、发现资源、完成或受阻后，发送 VILLAGE_REPORT，title/description 用中文，position 填真实坐标。',
     '安全边界：不跟随真人玩家等待；不改服务器设置；不下水；非矿工不要钻地下；矿工地下采矿正常，但落水/低血量/连续失败要回公共箱。矿洞规则：看到煤、铁、金不要空过；金矿必须铁镐或更高级，没铁镐先采铁/做铁镐并记录金矿坐标。'
-  ].join(' ')
+  ].filter(Boolean).join(' ')
 }
 
 function residentSelfGoalSignature(input) {
@@ -898,9 +1511,11 @@ function residentSelfGoalSignature(input) {
   const roleId = role.roleId || ''
   const settlement = input.settlement || {}
   const village = input.village || {}
+  const strategy = input.strategy || null
   const project = assignment.project || preferredProjectForSelfLoop(village, roleId) || {}
   const shortages = villageShortageIds(village).slice(0, 4).join(',')
-  return [roleId, formatPoint(settlement.base), formatPoint(settlement.publicChest), project.id || project.title || '', shortages].join('|')
+  const strategyKey = strategy ? [strategy.phase, strategy.directive, strategy.updatedAt || strategy.at].filter(Boolean).join(':').slice(0, 160) : ''
+  return [roleId, formatPoint(settlement.base), formatPoint(settlement.publicChest), project.id || project.title || '', shortages, strategyKey].join('|')
 }
 
 function residentSelfLongTermObjective(roleId) {
@@ -941,6 +1556,8 @@ function shouldUseResidentCodeGeneration(input, now) {
   const agentName = input.agentName || ''
   const summary = input.summary || {}
   const memory = input.memory || {}
+  const strategyText = formatStrategyText(input.strategy)
+  if (/停止代码生成|禁止代码生成|不要代码生成|不用代码生成|停止.*newAction|禁止.*newAction/i.test(strategyText)) return false
   if (summary.inWater) return false
   if (Number(summary.health || 20) <= 12) return false
   if (Number(summary.hunger || 20) <= 10) return false
@@ -1005,19 +1622,22 @@ function buildResidentSelfLoopTask(input) {
   const chest = settlement.publicChest || base
   const summary = input.summary || {}
   const village = input.village || {}
+  const strategy = input.strategy || null
   const taskIndex = Number(input.taskIndex || 0)
   const shortages = villageResourceShortageText(village)
   const project = assignment.project || preferredProjectForSelfLoop(village, roleId) || {}
   const objective = residentSelfObjective(roleId, summary, village, taskIndex)
   const actionExamples = residentActionExamples(roleId)
+  const strategyText = strategyRoleDirective(strategy, agentName, roleId)
   return mindcraftCommand('newAction', [
     agentName + ' 自治循环：你是“' + roleName + '”，不是等待村长逐步遥控的脚本。根据当前状态自己判断下一步并执行。',
     '位置 ' + formatPoint(summary.position) + '；基地 ' + formatPoint(base) + '；公共箱 ' + formatPoint(chest) + '；当前动作 ' + (summary.currentAction || '未知') + '。',
     '项目：' + (project.title || project.id || '村庄公共建设') + '；资源缺口：' + shortages + '。',
+    strategyText ? '村长战略给你的长期重点：' + strategyText : '',
     '本轮优先：' + objective,
     '马上做一个外显动作：' + actionExamples + '。最多一句不超过30字的中文状态，不要长聊，不要把思考或上报当成果。',
     '实际开始、发现资源、完成或受阻后，再发送 VILLAGE_REPORT，title/description 用中文，position 填真实坐标。'
-  ].join(' '))
+  ].filter(Boolean).join(' '))
 }
 
 function residentSelfObjective(roleId, summary, village, taskIndex = 0) {
@@ -1310,7 +1930,8 @@ function summarizeAgentMemoryForCommander(allMemory, residents, profile = reside
       contextSummary: truncateText(memory.contextSummary || '', profile.local ? 420 : 700),
       contextArchives: (memory.contextArchives || []).slice(0, profile.local ? 1 : 2).map(item => compactArchiveForLlm(item, profile.local ? 220 : 320)),
       openNeeds: memory.openNeeds || [],
-      lastCommanderLlmDecision: memory.lastCommanderLlmDecision || null
+      lastCommanderLlmDecision: memory.lastCommanderLlmDecision || null,
+      lastResidentLlmDecision: memory.lastResidentLlmDecision || null
     }
   }
   return result
@@ -1641,9 +2262,26 @@ function isIdle(state) {
   return Boolean(action.isIdle) || /^action:stay$/i.test(current) || /^stay$/i.test(current)
 }
 
+function isThinkingLikeAction(action) {
+  return /thinking|planning|reasoning|思考|规划/i.test(String(action || ''))
+}
+
+function isThinkingLikeReason(reason) {
+  return /思考|thinking|planning|reasoning/i.test(String(reason || ''))
+}
+
+function updateThinkingMemory(memory, action, now) {
+  const current = String(action || '').trim()
+  if (!memory.thinkingSince || memory.thinkingAction !== current) {
+    memory.thinkingSince = now
+    memory.thinkingAction = current
+  }
+  return memory.thinkingSince
+}
+
 function mindcraftCommand(name, text) {
   const safeName = String(name || '').replace(/[^a-zA-Z0-9_]/g, '') || 'newAction'
-  const safeText = String(text || '').trim().replace(/\s+/g, ' ').slice(0, 760)
+  const safeText = String(text || '').trim().replace(/\s+/g, ' ').slice(0, 1400)
   return `!${safeName}(${JSON.stringify(safeText)})`
 }
 

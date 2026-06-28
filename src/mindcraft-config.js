@@ -296,6 +296,14 @@ async function readMindcraftAgentRuntimeSettings(mindcraftDir, profilePath) {
   }
 }
 
+async function readMindcraftAgentRuntimeSettingsByName(mindcraftDir, agentName) {
+  const dir = resolveMindcraftDir(mindcraftDir)
+  const name = sanitizeAgentName(agentName)
+  const profilePath = findProfilePathByName(dir, name)
+  if (!profilePath) throw new Error(`Agent Profile not found for ${name}`)
+  return readMindcraftAgentRuntimeSettings(dir, profilePath)
+}
+
 function buildRuntimeSettings(settings, profile) {
   return {
     ...sanitizeSettings(settings),
@@ -499,5 +507,6 @@ module.exports = {
   writeMindcraftConfig,
   createMindcraftAgentProfile,
   applyMindcraftResidentGuardrails,
-  readMindcraftAgentRuntimeSettings
+  readMindcraftAgentRuntimeSettings,
+  readMindcraftAgentRuntimeSettingsByName
 }

@@ -207,6 +207,22 @@ class MindcraftClient extends EventEmitter {
   async stopAgent(agentName) {
     return this.emitSocket('stop-agent', agentName)
   }
+
+  async getAgentSettings(agentName) {
+    return this.emitSocketAck('get-settings', agentName)
+  }
+
+  async setAgentSettings(agentName, settings) {
+    return this.emitSocket('set-agent-settings', agentName, settings)
+  }
+
+  async restartAgent(agentName) {
+    return this.emitSocket('restart-agent', agentName)
+  }
+
+  async destroyAgent(agentName) {
+    return this.emitSocket('destroy-agent', agentName)
+  }
 }
 
 async function getText(url) {

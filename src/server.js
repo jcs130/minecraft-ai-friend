@@ -22,7 +22,8 @@ const {
   readMindcraftConfig,
   writeMindcraftConfig,
   createMindcraftAgentProfile,
-  applyMindcraftResidentGuardrails
+  applyMindcraftResidentGuardrails,
+  readMindcraftAgentRuntimeSettingsByName
 } = require('./mindcraft-config')
 const {
   listModelProviders,
@@ -1981,16 +1982,33 @@ async function ensureSocietyResidents(body = {}) {
   for (const agentName of residents) {
     const current = (client.snapshot().agents || []).find(agent => agent.name === agentName)
     try {
-      if (current && current.in_game && guardrails.changed) {
-        await client.stopAgent(agentName)
-        await waitFor(() => !(client.snapshot().agents || []).find(agent => agent.name === agentName && agent.in_game), 15000, `等待 ${agentName} 退出以应用防闲聊配置超时`)
-        await client.startAgent(agentName)
-        results.push({ agent: agentName, ok: true, action: 'restarted_for_guardrails' })
+      const desiredRuntime = await readMindcraftAgentRuntimeSettingsByName(config.mindcraftDir, agentName)
+      const currentRuntime = current ? await safeGetAgentSettings(agentName) : null
+      const runtimeChanged = currentRuntime
+        ? !sameMindcraftRuntimeSettings(currentRuntime.settings || currentRuntime, desiredRuntime.runtimeSettings)
+        : false
+      if (current && current.in_game && (guardrails.changed || runtimeChanged)) {
+        await client.setAgentSettings(agentName, desiredRuntime.runtimeSettings)
+        await waitFor(() => !(client.snapshot().agents || []).find(agent => agent.name === agentName && agent.in_game), 15000, `等待 ${agentName} 退出以应用运行时配置超时`)
+        await waitFor(() => (client.snapshot().agents || []).find(agent => agent.name === agentName && agent.in_game), 45000, `等待 ${agentName} 重新进入以应用运行时配置超时`)
+        results.push({
+          agent: agentName,
+          ok: true,
+          action: runtimeChanged ? 'updated_runtime_settings' : 'restarted_for_guardrails',
+          profilePath: desiredRuntime.profilePath
+        })
       } else if (current && current.in_game) {
-        results.push({ agent: agentName, ok: true, action: 'already_online' })
+        results.push({ agent: agentName, ok: true, action: 'already_online', profilePath: desiredRuntime.profilePath })
       } else if (current) {
-        await client.startAgent(agentName)
-        results.push({ agent: agentName, ok: true, action: 'started' })
+        if (runtimeChanged) {
+          await client.destroyAgent(agentName)
+          await sleep(1500)
+          await client.createAgent(desiredRuntime.runtimeSettings)
+          results.push({ agent: agentName, ok: true, action: 'recreated_with_runtime_settings', profilePath: desiredRuntime.profilePath })
+        } else {
+          await client.startAgent(agentName)
+          results.push({ agent: agentName, ok: true, action: 'started', profilePath: desiredRuntime.profilePath })
+        }
       } else {
         const created = await createAndJoinAgent({ name: agentName, overwrite: false })
         results.push({ agent: agentName, ok: true, action: created.mindcraft && created.mindcraft.alreadyExisted ? 'reused_profile' : 'created' })
@@ -2216,6 +2234,24 @@ function liveIntelSnapshot(options = {}) {
   const decisions = []
   const thoughts = []
   const residentRows = []
+  const autopilotSnapshot = autopilot.snapshot()
+  const commanderStrategy = autopilotSnapshot.commanderStrategy || null
+
+  if (commanderStrategy && (commanderStrategy.summary || commanderStrategy.directive)) {
+    decisions.push({
+      at: commanderStrategy.updatedAt || commanderStrategy.at || '',
+      agent: village.commander && village.commander.name || 'Airi',
+      source: 'AI村长战略',
+      model: config.llmModel || '',
+      title: commanderStrategy.phase ? '长期战略：' + commanderStrategy.phase : '长期战略',
+      text: liveTextSummary([
+        commanderStrategy.summary || '',
+        commanderStrategy.directive || '',
+        Array.isArray(commanderStrategy.priorities) && commanderStrategy.priorities.length > 0 ? '优先级：' + commanderStrategy.priorities.join('；') : '',
+        Array.isArray(commanderStrategy.successCriteria) && commanderStrategy.successCriteria.length > 0 ? '验收：' + commanderStrategy.successCriteria.join('；') : ''
+      ].filter(Boolean).join(' '), 1400)
+    })
+  }
 
   for (const agentName of residents) {
     const memory = autopilot.agentContext(agentName)
@@ -2241,9 +2277,25 @@ function liveIntelSnapshot(options = {}) {
       })
     }
 
+    const residentDecision = memory.lastResidentLlmDecision
+    if (residentDecision && residentDecision.at) {
+      decisions.push({
+        at: residentDecision.at,
+        agent: agentName,
+        source: '居民自主意图',
+        model: residentDecision.model || config.llmModel || '',
+        title: residentDecision.title || agentName + ' 的自主目标',
+        text: liveTextSummary([
+          residentDecision.intention || '',
+          residentDecision.firstAction ? '第一步：' + residentDecision.firstAction : '',
+          residentDecision.durationMinutes ? '预计持续：' + residentDecision.durationMinutes + ' 分钟' : ''
+        ].filter(Boolean).join(' '), 900)
+      })
+    }
+
     for (const task of (memory.recentTasks || []).slice(-8)) {
       const source = String(task.source || '')
-      if (!/resident-self-goal|resident-direct-action|resident-self-loop|ai-commander|guardrail|water-rescue|teleport|fallback-commander/i.test(source)) continue
+      if (!/resident-llm-autonomy|resident-self-goal|resident-direct-action|resident-self-loop|ai-commander|guardrail|water-rescue|teleport|fallback-commander/i.test(source)) continue
       decisions.push({
         at: task.at || '',
         agent: agentName,
@@ -2287,6 +2339,7 @@ function liveIntelSnapshot(options = {}) {
       name: village.commander && village.commander.name || 'Airi',
       title: village.commander && village.commander.title || 'AI村长',
       model: config.llmModel || '',
+      strategy: commanderStrategy,
       decisions: uniqueLiveItems(decisions).sort(byAtDesc).slice(0, limit)
     },
     thoughts: uniqueLiveItems(thoughts).sort(byAtDesc).slice(0, limit + 2),
@@ -2341,6 +2394,8 @@ function byAtDesc(a, b) {
 }
 
 function sourceLabel(source) {
+  if (/resident-llm-autonomy/i.test(source)) return '居民自主意图'
+  if (/ai-commander-strategy/i.test(source)) return 'AI村长战略'
   if (/resident-self-goal/i.test(source)) return '居民长期目标'
   if (/resident-direct-action/i.test(source)) return '居民行动心跳'
   if (/resident-self-loop/i.test(source)) return '居民自治'
@@ -2842,6 +2897,60 @@ async function waitFor(predicate, timeoutMs, message) {
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
   throw new Error(message)
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function safeGetAgentSettings(agentName) {
+  try {
+    return await client.getAgentSettings(agentName)
+  } catch (error) {
+    logger.warn(`Read Mindcraft runtime settings failed for ${agentName}: ${error.message}`)
+    return null
+  }
+}
+
+function sameMindcraftRuntimeSettings(current, desired) {
+  return stableStringify(mindcraftRuntimeFingerprint(current)) === stableStringify(mindcraftRuntimeFingerprint(desired))
+}
+
+function mindcraftRuntimeFingerprint(settings) {
+  const source = settings || {}
+  const profile = source.profile || {}
+  return {
+    host: source.host,
+    port: source.port,
+    auth: source.auth,
+    minecraft_version: source.minecraft_version,
+    base_profile: source.base_profile,
+    load_memory: source.load_memory,
+    allow_insecure_coding: source.allow_insecure_coding,
+    allow_vision: source.allow_vision,
+    blocked_actions: source.blocked_actions,
+    max_messages: source.max_messages,
+    max_commands: source.max_commands,
+    profile: {
+      name: profile.name,
+      model: profile.model,
+      code_model: profile.code_model,
+      vision_model: profile.vision_model,
+      embedding: profile.embedding,
+      speak_model: profile.speak_model,
+      self_prompt: profile.self_prompt,
+      bot_responder: profile.bot_responder,
+      modes: profile.modes
+    }
+  }
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']'
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + stableStringify(value[key])).join(',') + '}'
+  }
+  return JSON.stringify(value)
 }
 
 function stopOwnedMindcraft() {

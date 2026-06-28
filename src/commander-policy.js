@@ -1,21 +1,22 @@
 'use strict'
 
-const CHAT_GRACE_MS = 2 * 60 * 1000
-const STOPPED_GRACE_MS = 2 * 60 * 1000
+const CHAT_GRACE_MS = 4 * 60 * 1000
+const STOPPED_GRACE_MS = 4 * 60 * 1000
 const IDLE_GRACE_MS = 3 * 60 * 1000
-const STAY_GRACE_MS = 2 * 60 * 1000
-const ACTIVE_ACTION_GRACE_MS = 8 * 60 * 1000
-const PLANNING_ACTION_GRACE_MS = 7 * 60 * 1000
-const SLEEP_ACTION_GRACE_MS = 2 * 60 * 1000
-const INTERVENTION_COOLDOWN_MS = 3 * 60 * 1000
-const NON_URGENT_MIN_INSTRUCTION_AGE_MS = 3 * 60 * 1000
+const STAY_GRACE_MS = 4 * 60 * 1000
+const ACTIVE_ACTION_GRACE_MS = 12 * 60 * 1000
+const PLANNING_ACTION_GRACE_MS = 15 * 60 * 1000
+const THINKING_GRACE_MS = 12 * 60 * 1000
+const SLEEP_ACTION_GRACE_MS = 4 * 60 * 1000
+const INTERVENTION_COOLDOWN_MS = 4 * 60 * 1000
+const NON_URGENT_MIN_INSTRUCTION_AGE_MS = 5 * 60 * 1000
 const WATER_GRACE_MS = 20000
 const WATER_TELEPORT_MS = 2 * 60 * 1000
 const WATER_TELEPORT_MIN_ATTEMPTS = 3
 const SERVER_COMMAND_COOLDOWN_MS = 3 * 60 * 1000
-const RESTART_MIN_ATTEMPTS = 8
-const RESTART_STUCK_MS = 8 * 60 * 1000
-const RESTART_COOLDOWN_MS = 15 * 60 * 1000
+const RESTART_MIN_ATTEMPTS = 12
+const RESTART_STUCK_MS = 20 * 60 * 1000
+const RESTART_COOLDOWN_MS = 30 * 60 * 1000
 
 function decideCommanderIntervention(input) {
   const agentName = input.agentName
@@ -31,6 +32,7 @@ function decideCommanderIntervention(input) {
   const idle = Boolean(summary.isIdle) || staying
   const chatting = idle && /^chatting/i.test(action)
   const stopped = idle && /^stopped$/i.test(action)
+  const thinking = idle && isThinkingLikeAction(action)
   const observation = updateObservationMemory(memory, summary, action, now)
   const lastInstructionAge = now - Number(memory.lastInstructionAt || 0)
   const lastInterventionAge = now - Number(memory.lastCommanderInterventionAt || 0)
@@ -54,6 +56,7 @@ function decideCommanderIntervention(input) {
   else if (inWater && (waterAge > WATER_GRACE_MS || stopped || chatting || /collect|search|attack|goto|path|move/i.test(action))) reason = '落水或水中卡住'
   else if (chatting && actionAge > CHAT_GRACE_MS && lastInstructionAge > CHAT_GRACE_MS) reason = '闲聊过久'
   else if (stopped && actionAge > STOPPED_GRACE_MS && lastInstructionAge > STOPPED_GRACE_MS) reason = '停顿过久'
+  else if (thinking && actionAge > THINKING_GRACE_MS && lastInstructionAge > THINKING_GRACE_MS && noProgressAge > THINKING_GRACE_MS) reason = '思考过久未行动'
   else if (!idle && /newAction/i.test(action) && actionAge > PLANNING_ACTION_GRACE_MS && noProgressAge > PLANNING_ACTION_GRACE_MS) reason = '规划过久未行动'
   else if (staying && actionAge > STAY_GRACE_MS && lastInstructionAge > STAY_GRACE_MS) reason = '等待过久'
   else if (hasRecentUnresolvedStuck(memory) && noProgressAge > STOPPED_GRACE_MS) reason = '卡住或脱困失败'
@@ -89,7 +92,7 @@ function decideCommanderIntervention(input) {
       task: buildVitalRecoveryTask(agentName, reason, summary, base, chest)
     }
   }
-  const canRestart = !chatting && (stopped || reason === '卡住或脱困失败' || reason === '落水或水中卡住' || reason === '睡觉动作无进展' || reason === '动作执行无进展' || reason === '空闲过久' || reason === '等待过久' || reason === '停顿过久' || reason === '规划过久未行动')
+  const canRestart = !chatting && !thinking && (stopped || reason === '卡住或脱困失败' || reason === '落水或水中卡住' || reason === '睡觉动作无进展' || reason === '动作执行无进展' || reason === '空闲过久' || reason === '等待过久' || reason === '停顿过久' || reason === '规划过久未行动')
   const lowWaterTrap = summary.position && Number(summary.position.y || 64) < 63
   const undergroundTrap = summary.position && Number(summary.position.y || 64) < 61
   const confirmedStuckTrap = /卡住|脱困|动作执行无进展|规划过久/i.test(reason)
@@ -863,7 +866,7 @@ function buildCommanderRecoveryTask(agentName, reason, summary, base, chest, ass
       '目标安全点是公共箱附近 ' + formatPoint(target) + '，村长会优先用服务器传送处理非矿工地下卡住。'
     ].join(' '))
   }
-  if (/等待过久|空闲|停顿|idle|闲聊|规划过久/i.test(reason)) {
+  if (/等待过久|空闲|停顿|idle|闲聊|规划过久|思考过久/i.test(reason)) {
     const direct = directRecoveryCommand(roleId, base, chest, attempt)
     if (direct) return direct
     return buildIdleReassignmentTask(agentName, reason, summary, base, chest, assignment)
@@ -985,6 +988,10 @@ function goToCommand(position, closeness = 2) {
 
 function isLongRunningAction(action) {
   return /goToBed|sleep|collect|search|attack|craft|place|goto|path|move|mine|dig|stay|newAction/i.test(String(action || ''))
+}
+
+function isThinkingLikeAction(action) {
+  return /thinking|planning|reasoning|思考|规划/i.test(String(action || ''))
 }
 
 function isWaterState(summary) {
