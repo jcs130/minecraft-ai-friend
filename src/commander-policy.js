@@ -978,7 +978,7 @@ function offsetPoint(position, dx = 0, dy = 0, dz = 0) {
 }
 
 function safeChestAccessPoint(chest, base, fallback) {
-  if (chest) return offsetPoint(chest, 1, 0, 1)
+  if (chest) return offsetPoint(chest, -1, -1, 0)
   return offsetPoint(base || fallback, 0, 0, 0)
 }
 function goToCommand(position, closeness = 2) {

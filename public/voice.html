@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI村长语音播报</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+        background: #101318;
+        color: #f4f7fb;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at 30% 20%, #1c3144, #101318 52%);
+      }
+      main {
+        width: min(760px, calc(100vw - 32px));
+        padding: 28px;
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        background: rgba(14, 18, 24, 0.86);
+        box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      p {
+        color: #b7c2d0;
+        line-height: 1.6;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin: 18px 0;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        background: #3b82f6;
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #263244;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        color: #b7c2d0;
+        font-size: 13px;
+      }
+      input[type="range"] {
+        width: 160px;
+      }
+      select {
+        min-width: min(520px, calc(100vw - 72px));
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #111821;
+        color: #f4f7fb;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: #1c2533;
+        color: #dce7f6;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #6b7280;
+      }
+      .dot.on {
+        background: #22c55e;
+      }
+      .card {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 10px;
+        background: #151c27;
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+      .card strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+      .queue {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .queue-item {
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #111821;
+        color: #cbd5e1;
+        font-size: 14px;
+      }
+      small {
+        color: #8fa0b5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>AI村长语音播报</h1>
+      <p>这个页面负责把游戏里玩家聊天触发的村长回复读出来。打开后点一次“启用声音”，浏览器才允许自动播报。</p>
+      <div class="row">
+        <button id="enableBtn" type="button">启用声音</button>
+        <button id="playLatestBtn" type="button" class="secondary">播放最新</button>
+        <button id="testVoiceBtn" type="button" class="secondary">试听声音</button>
+        <span class="status"><span id="statusDot" class="dot"></span><span id="statusText">未启用</span></span>
+      </div>
+      <div class="row">
+        <label>
+          声音
+          <select id="voiceSelect">
+            <option value="">正在读取浏览器声音...</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          音量
+          <input id="volumeRange" type="range" min="0" max="1" step="0.05" value="1">
+        </label>
+        <label>
+          语速
+          <input id="rateRange" type="range" min="0.75" max="1.35" step="0.05" value="1">
+        </label>
+      </div>
+      <section class="card">
+        <strong>最新播报</strong>
+        <div id="latestText">等待村长回复。</div>
+        <small id="latestMeta"></small>
+      </section>
+      <section class="card">
+        <strong>最近队列</strong>
+        <div id="queue" class="queue"></div>
+      </section>
+    </main>
+    <script src="/voice.js?v=2"></script>
+  </body>
+</html>

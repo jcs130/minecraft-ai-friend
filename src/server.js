@@ -41,7 +41,7 @@ const DATA_DIR = path.join(ROOT, 'data')
 const LOG_DIR = path.join(ROOT, 'logs')
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json')
 const PORT = Number(process.env.PORT || process.env.MINDCRAFT_AUTOPLAYER_PORT || 4177)
-const HOST = process.env.HOST || process.env.MINDCRAFT_AUTOPLAYER_HOST || '127.0.0.1'
+const HOST = process.env.HOST || process.env.MINDCRAFT_AUTOPLAYER_HOST || '0.0.0.0'
 const DEFAULT_RESIDENT_DIRECTIVE = 'AI 是这个 Minecraft 世界的常驻居民，不是跟随宠物。当前是和平建设模式：没有怪物压力，不安排巡逻和打怪，主线是建造城镇、开采资源、公共仓储、个人住宅、家具、农田和陆地资源勘察。每个居民都要拥有自己的小屋、床和基础家具，夜晚优先回自己的床睡觉。默认五个居民：Alex 是资源总管，负责公共仓储、材料调度、住宅验收和高级任务拆解；Luna 负责建筑；Milo 负责采矿；Nova 只做陆地资源勘察和坐标记录，不修路、不下水、不靠近水域；Ivy 负责农业、食物和羊毛。侦察员和找林地任务允许在 5000 格内探索，但必须记录坐标、路线、风险和返回点；其他居民优先留在基地周边建设。 村长可以通过服务端受控瞬移提升探索和回库效率；所有林地、动物、矿点、煤铁金等资源点必须上报到公共数据。金矿必须铁镐或更高级，没铁镐先采铁/做铁镐并记录金矿坐标。Alex 要多走动，发现资源并带回，制作工具、武器和护甲给大家。'
 const COLLABORATION_PROTOCOL = '协作协议：只在需要协调时发中文短句。格式优先用 已有(物品/数量)、需要(物品/数量/用途)、正在做(任务/区域)、完成(结果/坐标)、受阻(原因/缺什么)。先同步库存和工作区，再行动；一个建筑区域一次只允许一个负责人改动，其他人不要拆或覆盖别人放好的方块。'
 const TASK_SUITE_GUIDANCE = {
@@ -54,6 +54,10 @@ const VILLAGE_DASHBOARD_CACHE_MS = 15000
 const LIVE_OBSERVER_PREFERRED_AGENT = process.env.MINECRAFT_LIVE_OBSERVER_PREFERRED_AGENT || ''
 const LIVE_OBSERVER_PREFERRED_SCORE_BOOST = Number(process.env.MINECRAFT_LIVE_OBSERVER_PREFERRED_SCORE_BOOST || 25)
 const LIVE_OBSERVER_FOLLOW_REFRESH_MS = clampNumber(process.env.MINECRAFT_LIVE_OBSERVER_FOLLOW_REFRESH_MS || 5000, 2000, 60000, 5000)
+const PLAYER_CHAT_BRIDGE_POLL_MS = clampNumber(process.env.MINECRAFT_PLAYER_CHAT_BRIDGE_POLL_MS || 1500, 500, 10000, 1500)
+const PLAYER_CHAT_BRIDGE_ENABLED = !/^(0|false|no|off)$/i.test(process.env.MINECRAFT_PLAYER_CHAT_BRIDGE || 'true')
+const PLAYER_CHAT_RECENT_LIMIT = 40
+const COMMANDER_VOICE_QUEUE_LIMIT = 20
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 fs.mkdirSync(LOG_DIR, { recursive: true })
@@ -72,6 +76,20 @@ const liveObserverState = {
   lastError: null,
   lastFollowError: null,
   lastCandidates: []
+}
+const playerChatBridgeState = {
+  timer: null,
+  active: PLAYER_CHAT_BRIDGE_ENABLED,
+  processing: false,
+  logPath: '',
+  offset: null,
+  buffer: '',
+  lastPollAt: null,
+  lastMessageAt: null,
+  lastReplyAt: null,
+  lastError: null,
+  recent: [],
+  voiceQueue: []
 }
 const villageDashboardCache = { at: 0, value: null }
 let mindcraftChild = null
@@ -155,12 +173,16 @@ const server = http.createServer((req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
-  logger.info(`我的世界AI陪玩控制台已启动：http://${HOST}:${PORT}`)
+  const localUrl = `http://${displayHost(HOST)}:${PORT}`
+  const lanUrls = localLanUrls(PORT)
+  logger.info(`我的世界AI陪玩控制台已启动：${localUrl}${lanUrls.length ? `；局域网：${lanUrls.join('，')}` : ''}`)
   scheduleLiveObserverSwitch(5000)
+  schedulePlayerChatBridge(3000)
 })
 
 process.once('exit', () => {
   clearLiveObserverTimer()
+  clearPlayerChatBridgeTimer()
   dataStore.close()
 })
 
@@ -250,6 +272,30 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, snapshot)
     return
   }
+
+  if (req.method === 'GET' && url.pathname === '/api/player-chat') {
+    sendJson(res, 200, playerChatBridgeSnapshot())
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/player-chat/test') {
+    const body = await readJson(req)
+    sendJson(res, 200, await handlePlayerChatMessage({
+      player: body.player || 'MengMeng',
+      message: body.message || body.text || '',
+      source: 'api-test'
+    }))
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/voice/latest') {
+    sendJson(res, 200, {
+      latest: playerChatBridgeState.voiceQueue[0] || null,
+      queue: playerChatBridgeState.voiceQueue
+    })
+    return
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/agents/context') {
     const agent = url.searchParams.get('agent') || url.searchParams.get('agent_name') || ''
     sendJson(res, 200, agent ? agentContextSnapshot(agent, { limit: Number(url.searchParams.get('limit') || 20) }) : commanderContextSnapshot({ limit: Number(url.searchParams.get('limit') || 20) }).agents)
@@ -501,7 +547,11 @@ async function statusSnapshot() {
 
   return {
     app: {
-      url: `http://${HOST}:${PORT}`,
+      url: `http://${displayHost(HOST)}:${PORT}`,
+      bindHost: HOST,
+      lanUrls: localLanUrls(PORT),
+      voiceUrl: `http://${displayHost(HOST)}:${PORT}/voice.html`,
+      lanVoiceUrls: localLanUrls(PORT).map(url => `${url}/voice.html`),
       dataDir: DATA_DIR,
       logDir: LOG_DIR,
       node: process.version
@@ -537,6 +587,7 @@ async function statusSnapshot() {
     socket: socketSnapshot,
     autopilot: autopilot.snapshot(),
     livestream: liveObserverSnapshot(),
+    playerChat: playerChatBridgeSnapshot(),
     village: villageState.snapshot(),
     models: await modelStatusSnapshot(socketSnapshot),
     config: publicConfig()
@@ -1511,6 +1562,10 @@ function loadConfig() {
     llmBaseUrl: process.env.MINDCRAFT_LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     llmModel: process.env.MINDCRAFT_LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
     codeModel: process.env.MINDCRAFT_CODE_MODEL || process.env.DEEPSEEK_CODE_MODEL || 'deepseek-v4-pro',
+    residentLlmProvider: process.env.MINDCRAFT_RESIDENT_LLM_PROVIDER || 'ollama',
+    residentLlmBaseUrl: process.env.MINDCRAFT_RESIDENT_LLM_BASE_URL || 'http://127.0.0.1:11434/v1',
+    residentLlmModel: process.env.MINDCRAFT_RESIDENT_LLM_MODEL || 'qwen3:14b',
+    residentCodeModel: process.env.MINDCRAFT_RESIDENT_CODE_MODEL || process.env.MINDCRAFT_RESIDENT_LLM_MODEL || 'qwen3:14b',
     visionProvider: process.env.MINDCRAFT_VISION_PROVIDER || 'ollama',
     visionBaseUrl: process.env.MINDCRAFT_VISION_BASE_URL || 'http://localhost:11434/v1',
     visionModel: process.env.MINDCRAFT_VISION_MODEL || 'qwen3-vl:8b',
@@ -1529,6 +1584,7 @@ function loadConfig() {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
     const merged = { ...defaults, ...raw }
     if (!raw.llmProvider) merged.llmProvider = inferModelProvider({ llmBaseUrl: merged.llmBaseUrl })
+    if (!raw.residentLlmProvider) merged.residentLlmProvider = inferModelProvider({ llmBaseUrl: merged.residentLlmBaseUrl })
     const hasVisionConfig = raw.visionProvider || raw.visionBaseUrl || raw.visionModel
     if (!hasVisionConfig && isLikelyVisionModel(merged.llmModel)) {
       merged.visionProvider = merged.llmProvider
@@ -1569,6 +1625,10 @@ function updateConfig(next) {
   if (typeof next.llmBaseUrl === 'string') config.llmBaseUrl = next.llmBaseUrl.trim() || config.llmBaseUrl
   if (typeof next.llmModel === 'string') config.llmModel = next.llmModel.trim() || config.llmModel
   if (typeof next.codeModel === 'string') config.codeModel = next.codeModel.trim() || config.codeModel
+  if (typeof next.residentLlmProvider === 'string') config.residentLlmProvider = inferModelProvider({ llmProvider: next.residentLlmProvider })
+  if (typeof next.residentLlmBaseUrl === 'string') config.residentLlmBaseUrl = next.residentLlmBaseUrl.trim() || config.residentLlmBaseUrl
+  if (typeof next.residentLlmModel === 'string') config.residentLlmModel = next.residentLlmModel.trim() || config.residentLlmModel
+  if (typeof next.residentCodeModel === 'string') config.residentCodeModel = next.residentCodeModel.trim() || config.residentCodeModel
   if (typeof next.visionProvider === 'string') config.visionProvider = inferModelProvider({ llmProvider: next.visionProvider })
   if (typeof next.visionBaseUrl === 'string') config.visionBaseUrl = next.visionBaseUrl.trim() || config.visionBaseUrl
   if (typeof next.visionModel === 'string') config.visionModel = next.visionModel.trim() || config.visionModel
@@ -1581,6 +1641,7 @@ function updateConfig(next) {
   if (typeof next.memoryQdrantCollection === 'string') config.memoryQdrantCollection = next.memoryQdrantCollection.trim() || config.memoryQdrantCollection
   if (next.memoryVectorTimeoutMs) config.memoryVectorTimeoutMs = clampNumber(next.memoryVectorTimeoutMs, 1000, 60000, config.memoryVectorTimeoutMs || 8000)
   if (!config.llmProvider) config.llmProvider = inferModelProvider(config)
+  if (!config.residentLlmProvider) config.residentLlmProvider = inferModelProvider({ llmBaseUrl: config.residentLlmBaseUrl })
   if (!config.visionProvider) config.visionProvider = inferModelProvider({ llmBaseUrl: config.visionBaseUrl })
 
   syncLiveObserverFromConfig()
@@ -1596,6 +1657,12 @@ function updateConfig(next) {
     llmBaseUrl: config.llmBaseUrl,
     llmModel: config.llmModel,
     llmApiKey: getConfiguredLlmApiKey(config, runtimeEnv()),
+    residentLlmBaseUrl: config.residentLlmBaseUrl,
+    residentLlmModel: config.residentLlmModel,
+    residentLlmApiKey: getConfiguredLlmApiKey({
+      llmProvider: config.residentLlmProvider,
+      llmBaseUrl: config.residentLlmBaseUrl
+    }, runtimeEnv()),
     worldDirective: config.worldDirective
   })
 }
@@ -1606,20 +1673,31 @@ function saveConfig() {
 
 function publicConfig() {
   const textProviderId = inferModelProvider(config)
+  const residentProviderId = inferModelProvider({ llmProvider: config.residentLlmProvider, llmBaseUrl: config.residentLlmBaseUrl })
   const visionProviderId = inferModelProvider({ llmProvider: config.visionProvider, llmBaseUrl: config.visionBaseUrl })
   const env = runtimeEnv()
   const envStatus = getProviderEnvStatus(config, env, textProviderId)
+  const residentEnvStatus = getProviderEnvStatus({
+    llmProvider: config.residentLlmProvider,
+    llmBaseUrl: config.residentLlmBaseUrl
+  }, env, residentProviderId)
   const visionEnvStatus = getProviderEnvStatus(config, env, visionProviderId)
   const secretStatus = secretEnvStatus(env)
   return {
     ...config,
     llmProvider: textProviderId,
+    residentLlmProvider: residentProviderId,
     visionProvider: visionProviderId,
     llmApiKeyFromEnv: envStatus.keyDetected,
     llmAuthReady: envStatus.authReady,
     llmKeyEnvNames: envStatus.detectedEnvNames,
     llmAcceptedEnvNames: envStatus.acceptedEnvNames,
     llmMindcraftKeyEnv: envStatus.mindcraftKeyEnv,
+    residentLlmApiKeyFromEnv: residentEnvStatus.keyDetected,
+    residentLlmAuthReady: residentEnvStatus.authReady,
+    residentLlmKeyEnvNames: residentEnvStatus.detectedEnvNames,
+    residentLlmAcceptedEnvNames: residentEnvStatus.acceptedEnvNames,
+    residentLlmMindcraftKeyEnv: residentEnvStatus.mindcraftKeyEnv,
     secretFilesLoaded: secretStatus.loadedFiles.length,
     visionApiKeyFromEnv: visionEnvStatus.keyDetected,
     visionAuthReady: visionEnvStatus.authReady,
@@ -1632,6 +1710,7 @@ function publicConfig() {
 async function modelStatusSnapshot(socketSnapshot = {}) {
   const cfg = publicConfig()
   const textProvider = getModelProvider(cfg.llmProvider)
+  const residentAutonomyProvider = getModelProvider(cfg.residentLlmProvider)
   const visionProvider = getModelProvider(cfg.visionProvider)
   const activeAgentNames = new Set(((socketSnapshot && socketSnapshot.agents) || []).map(agent => agent.name).filter(Boolean))
   const profiles = await mindcraftProfileModelSummaries(config.mindcraftDir, activeAgentNames)
@@ -1651,6 +1730,18 @@ async function modelStatusSnapshot(socketSnapshot = {}) {
       authReady: Boolean(cfg.llmAuthReady || allowsNoAuthEndpoint(cfg.llmBaseUrl)),
       keyDetected: Boolean(cfg.llmApiKeyFromEnv),
       source: '控制台 LLM 配置'
+    },
+    residentAutonomy: {
+      role: '居民自治/控制台心跳',
+      provider: residentAutonomyProvider.id,
+      providerLabel: residentAutonomyProvider.label,
+      model: cfg.residentLlmModel || '',
+      codeModel: cfg.residentCodeModel || cfg.residentLlmModel || '',
+      baseUrl: safeEndpointLabel(cfg.residentLlmBaseUrl),
+      enabled: Boolean(cfg.useLlm),
+      authReady: Boolean(cfg.residentLlmAuthReady || allowsNoAuthEndpoint(cfg.residentLlmBaseUrl)),
+      keyDetected: Boolean(cfg.residentLlmApiKeyFromEnv),
+      source: '控制台居民自治 LLM 配置'
     },
     residents: residentSummary,
     vision: {
@@ -1884,6 +1975,501 @@ async function guideAgentsToPlayer(body) {
   })
   logger.info(`Guided agents to ${location.player}: ${targets.join(', ')}`)
   return { ok: true, mode: 'walk', player: location.player, position, targets, task }
+}
+
+function schedulePlayerChatBridge(delayMs = PLAYER_CHAT_BRIDGE_POLL_MS) {
+  clearPlayerChatBridgeTimer()
+  if (!playerChatBridgeState.active) return
+  playerChatBridgeState.timer = setTimeout(() => {
+    pollPlayerChatBridge()
+      .catch(error => {
+        playerChatBridgeState.lastError = error.message
+        logger.warn(`Player chat bridge failed: ${error.message}`)
+      })
+      .finally(() => schedulePlayerChatBridge(PLAYER_CHAT_BRIDGE_POLL_MS))
+  }, delayMs)
+}
+
+function clearPlayerChatBridgeTimer() {
+  if (playerChatBridgeState.timer) clearTimeout(playerChatBridgeState.timer)
+  playerChatBridgeState.timer = null
+}
+
+async function pollPlayerChatBridge() {
+  if (!playerChatBridgeState.active || playerChatBridgeState.processing) return
+  playerChatBridgeState.processing = true
+  try {
+    playerChatBridgeState.lastPollAt = new Date().toISOString()
+    const logPath = config.minecraftServerDir ? path.join(config.minecraftServerDir, 'logs', 'latest.log') : ''
+    if (!logPath || !fs.existsSync(logPath)) {
+      playerChatBridgeState.logPath = logPath
+      playerChatBridgeState.offset = null
+      playerChatBridgeState.buffer = ''
+      return
+    }
+
+    const stat = fs.statSync(logPath)
+    if (playerChatBridgeState.logPath !== logPath) {
+      playerChatBridgeState.logPath = logPath
+      playerChatBridgeState.offset = stat.size
+      playerChatBridgeState.buffer = ''
+      return
+    }
+    if (playerChatBridgeState.offset === null) {
+      playerChatBridgeState.offset = stat.size
+      return
+    }
+    if (stat.size < playerChatBridgeState.offset) {
+      playerChatBridgeState.offset = 0
+      playerChatBridgeState.buffer = ''
+    }
+    if (stat.size <= playerChatBridgeState.offset) return
+
+    const chunk = readFileRangeUtf8(logPath, playerChatBridgeState.offset, stat.size)
+    playerChatBridgeState.offset = stat.size
+    const text = playerChatBridgeState.buffer + chunk
+    const lines = text.split(/\r?\n/)
+    if (/[\r\n]$/.test(text)) {
+      playerChatBridgeState.buffer = ''
+      if (lines[lines.length - 1] === '') lines.pop()
+    } else {
+      playerChatBridgeState.buffer = lines.pop() || ''
+    }
+
+    for (const line of lines) {
+      const event = parseMinecraftPlayerChatLine(line)
+      if (!event || !shouldHandlePlayerChat(event.player, event.message)) continue
+      await handlePlayerChatMessage({ ...event, rawLine: line, source: 'minecraft-log' })
+    }
+  } finally {
+    playerChatBridgeState.processing = false
+  }
+}
+
+function readFileRangeUtf8(filePath, start, end) {
+  const length = Math.max(0, Number(end) - Number(start))
+  if (length <= 0) return ''
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const buffer = Buffer.alloc(Math.min(length, 1024 * 256))
+    const chunks = []
+    let offset = Number(start)
+    let remaining = length
+    while (remaining > 0) {
+      const slice = Buffer.alloc(Math.min(remaining, buffer.length))
+      const read = fs.readSync(fd, slice, 0, slice.length, offset)
+      if (read <= 0) break
+      chunks.push(slice.subarray(0, read))
+      offset += read
+      remaining -= read
+    }
+    return Buffer.concat(chunks).toString('utf8')
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+function parseMinecraftPlayerChatLine(line) {
+  const text = String(line || '')
+  const match = text.match(/^\[(\d{2}:\d{2}:\d{2})\]\s+\[[^\]]+\]:\s+(?:\[Not Secure\]\s+)?<([^>]+)>\s*([\s\S]*)$/)
+    || text.match(/\]:\s+(?:\[Not Secure\]\s+)?<([^>]+)>\s*([\s\S]*)$/)
+  if (!match) return null
+  const hasTime = match.length === 4
+  return {
+    at: hasTime ? match[1] : '',
+    player: String(match[hasTime ? 2 : 1] || '').trim(),
+    message: String(match[hasTime ? 3 : 2] || '').trim()
+  }
+}
+
+function shouldHandlePlayerChat(player, message) {
+  const cleanPlayer = String(player || '').trim()
+  const cleanMessage = String(message || '').trim()
+  if (!cleanPlayer || !cleanMessage || cleanMessage.length > 500) return false
+  if (/^[!/]/.test(cleanMessage)) return false
+  if (/^(VILLAGE_REPORT|AGENT_STATUS|STATUS_REPORT|MEMORY_NOTE|AGENT_MEMORY)\b/i.test(cleanMessage)) return false
+  if (/^(Action output|No response data|\*ADMIN used|Code threw exception)/i.test(cleanMessage)) return false
+
+  const excluded = new Set([
+    ...parseCsv(config.agentFilter),
+    ...villageResidentNames(villageState.snapshot()),
+    config.liveObserverName || 'live',
+    liveObserverState.observer || 'live',
+    'Airi',
+    'ADMIN',
+    'Server'
+  ].map(name => String(name || '').toLowerCase()).filter(Boolean))
+  if (excluded.has(cleanPlayer.toLowerCase())) return false
+
+  const now = Date.now()
+  const key = `${cleanPlayer}\n${cleanMessage}`
+  const recentDuplicate = playerChatBridgeState.recent.find(item => item.key === key && now - Number(item.time || 0) < 5000)
+  return !recentDuplicate
+}
+
+async function handlePlayerChatMessage(event) {
+  const player = sanitizeLoosePlayerName(event.player || 'player')
+  const message = String(event.message || '').trim().replace(/\s+/g, ' ').slice(0, 500)
+  if (!message) throw new Error('message is required')
+
+  const now = Date.now()
+  const chatEvent = {
+    at: new Date().toISOString(),
+    time: now,
+    key: `${player}\n${message}`,
+    player,
+    message,
+    source: event.source || 'player-chat'
+  }
+  playerChatBridgeState.lastMessageAt = chatEvent.at
+  playerChatBridgeState.recent.unshift(chatEvent)
+  playerChatBridgeState.recent = playerChatBridgeState.recent.slice(0, PLAYER_CHAT_RECENT_LIMIT)
+
+  villageState.recordTaskEvent({
+    type: 'player_chat',
+    status: 'active',
+    source: 'player-chat',
+    agent: 'Airi',
+    title: `玩家 ${player}`,
+    description: message
+  })
+
+  const started = Date.now()
+  const decision = await decideCommanderPlayerChat(chatEvent)
+  const reply = decision.reply || `收到，${player}。我会结合村庄状态处理。`
+  await broadcastCommanderReply(reply)
+  recordCommanderVoice(reply, { player, source: chatEvent.source, usedLlm: decision.usedLlm })
+
+  const sent = []
+  const assignments = decision.assignments || new Map()
+  await runLimited(Array.from(assignments.values()).slice(0, 5), config.maxConcurrentAgents, async item => {
+    await autopilot.sendManualTask(item.agent, item.task)
+    villageState.recordTaskEvent({
+      type: 'assigned',
+      status: 'active',
+      source: 'player-chat-commander',
+      agent: item.agent,
+      title: item.title || '玩家语音任务',
+      description: item.task,
+      projectId: item.projectId || ''
+    })
+    sent.push(item.agent)
+  })
+
+  villageState.recordTaskEvent({
+    type: 'commander_reply',
+    status: sent.length > 0 ? 'active' : 'done',
+    source: 'player-chat-commander',
+    agent: 'Airi',
+    title: '村长回复玩家',
+    description: reply
+  })
+
+  const totalMs = Date.now() - started
+  logger.info(`Player chat handled: ${player}: ${message} -> ${reply}${sent.length ? `; assigned ${sent.join(',')}` : ''} (${totalMs}ms; mode=${decision.mode || 'unknown'}; context=${decision.contextMs || 0}ms; llm=${decision.llmMs || 0}ms; live=${Boolean(decision.liveContext)})`)
+  return { ok: true, player, message, reply, assigned: sent, usedLlm: decision.usedLlm, source: chatEvent.source, latencyMs: totalMs, mode: decision.mode || '', liveContext: Boolean(decision.liveContext) }
+}
+
+async function decideCommanderPlayerChat(event) {
+  const quick = quickCommanderReply(event)
+  if (quick) {
+    return {
+      usedLlm: false,
+      reply: quick,
+      assignments: new Map(),
+      mode: 'local-fast',
+      liveContext: false,
+      contextMs: 0,
+      llmMs: 0
+    }
+  }
+
+  const direct = await directCommanderPlayerAction(event)
+  if (direct) return direct
+
+  const status = commanderLlmStatus()
+  const targets = villageResidentNames(villageState.snapshot())
+  if (!status.configured || targets.length === 0) {
+    return {
+      usedLlm: false,
+      reply: status.configured ? '我听到了，但当前没有可调度的在线村民。' : '我听到了，但村长模型还没有配置好，暂时只能记录这条消息。',
+      assignments: new Map(),
+      mode: 'fallback',
+      liveContext: false
+    }
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 45000)
+  try {
+    const headers = { 'content-type': 'application/json' }
+    const apiKey = getConfiguredLlmApiKey(config, runtimeEnv())
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`
+    const liveContext = shouldUseLiveMinecraftForPlayerChat(event.message)
+    const contextStarted = Date.now()
+    const commanderState = await buildCommanderState(targets, `玩家 ${event.player} 说：${event.message}`, {
+      liveMinecraft: liveContext,
+      limit: liveContext ? 12 : 6
+    })
+    const contextMs = Date.now() - contextStarted
+    const llmStarted = Date.now()
+    const response = await fetch(`${stripSlash(config.llmBaseUrl)}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: config.llmModel,
+        stream: false,
+        max_tokens: 500,
+        messages: [
+          { role: 'system', content: buildPlayerChatCommanderSystemPrompt() },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              player: event.player,
+              playerMessage: event.message,
+              inputSource: event.source,
+              commanderState
+            }, null, 2)
+          }
+        ],
+        temperature: 0.2
+      }),
+      signal: controller.signal
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error ? JSON.stringify(data.error) : `HTTP ${response.status}`)
+    const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content
+    const parsed = extractJsonObject(content)
+    const llmMs = Date.now() - llmStarted
+    if (!parsed) {
+      const fallbackReply = sanitizeCommanderReply(content)
+      if (!fallbackReply) throw new Error('AI村长没有返回可用内容')
+      logger.warn(`Player chat commander returned non-JSON; using text fallback: ${fallbackReply.slice(0, 120)}`)
+      return {
+        usedLlm: true,
+        reply: fallbackReply,
+        assignments: new Map(),
+        mode: 'llm-text-fallback',
+        liveContext,
+        contextMs,
+        llmMs
+      }
+    }
+    return {
+      usedLlm: true,
+      reply: sanitizeCommanderReply(parsed.reply || parsed.message || ''),
+      assignments: sanitizeCommanderAssignments(parsed, targets),
+      mode: 'llm',
+      liveContext,
+      contextMs,
+      llmMs
+    }
+  } catch (error) {
+    logger.warn(`Player chat commander failed: ${error.message}`)
+    return {
+      usedLlm: false,
+      reply: '我听到了，但刚才村长模型响应失败。我先记录这条消息，稍后继续调度。',
+      assignments: new Map(),
+      error: error.message,
+      mode: 'error',
+      liveContext: false
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function quickCommanderReply(event) {
+  const text = String(event && event.message || '').trim().replace(/\s+/g, ' ')
+  if (!text || text.length > 80) return ''
+  if (/^(谢谢|謝謝|谢谢你|謝謝你|多谢|多謝|感谢|感謝|thank you|thanks|thx)[。.!！?？\s]*$/i.test(text)) {
+    return '不客气，萌萌。需要我帮忙就直接喊村长。'
+  }
+  if (/^(你好|你好吗|hi|hello|hey|哈喽|嗨)[。.!！?？\s]*$/i.test(text)) {
+    return '我在呢，萌萌。你想让我安排大家做什么？'
+  }
+  if (/^(在吗|在不在|村长在吗|airi在吗)[。.!！?？\s]*$/i.test(text)) {
+    return '我在，正在看村庄和大家的状态。'
+  }
+  return ''
+}
+
+async function directCommanderPlayerAction(event) {
+  const text = String(event && event.message || '').trim()
+  const player = sanitizeLoosePlayerName(event && event.player || 'player')
+  const started = Date.now()
+
+  if (/(我的|我).*(坐标|座标|作标|位置)|坐标.*(在哪|哪里|多少)|座标.*(在哪|哪里|多少)|作标.*(在哪|哪里|多少)/i.test(text)) {
+    try {
+      await ensureMinecraftServerReady()
+      const result = await minecraftServer.sendCommand(`data get entity ${sanitizeEntityName(player)} Pos`, config)
+      const p = parseMinecraftPosition(result.response || '')
+      if (!p) {
+        const responseText = String(result.response || '')
+        if (/no entity was found|entity not found|found no entity/i.test(responseText)) {
+          return {
+            usedLlm: false,
+            reply: `我现在没有在服务器在线列表里看到 ${player}，等你进服后我就能直接读坐标。`,
+            assignments: new Map(),
+            mode: 'direct-rcon-offline',
+            liveContext: true,
+            contextMs: Date.now() - started,
+            llmMs: 0
+          }
+        }
+        throw new Error('服务端没有返回可解析坐标。')
+      }
+      return {
+        usedLlm: false,
+        reply: `${player}，你现在坐标是 ${Math.round(Number(p.x || 0))}, ${Math.round(Number(p.y || 0))}, ${Math.round(Number(p.z || 0))}。`,
+        assignments: new Map(),
+        mode: 'direct-rcon',
+        liveContext: true,
+        contextMs: Date.now() - started,
+        llmMs: 0
+      }
+    } catch (error) {
+      logger.warn(`Direct player position query failed for ${player}: ${error.message}`)
+      return null
+    }
+  }
+
+  const rescueAgent = agentNameMentioned(text)
+  if (rescueAgent && /(卡住|困住|出不来|救|帮帮|傳送|传送|瞬移|\btp\b|stuck|teleport|rescue|help)/i.test(text)) {
+    try {
+      await minecraftServer.sendCommand(`tp ${sanitizeEntityName(rescueAgent)} ${sanitizeEntityName(player)}`, config)
+      villageState.recordTaskEvent({
+        type: 'server_rescue',
+        status: 'done',
+        source: 'player-chat-direct-rcon',
+        agent: rescueAgent,
+        title: '玩家请求传送救援',
+        description: `${player} 请求把 ${rescueAgent} 传送到玩家附近。`
+      })
+      return {
+        usedLlm: false,
+        reply: `收到，已经把 ${rescueAgent} 传送到你附近。`,
+        assignments: new Map(),
+        mode: 'direct-rcon',
+        liveContext: true,
+        contextMs: Date.now() - started,
+        llmMs: 0
+      }
+    } catch (error) {
+      logger.warn(`Direct rescue teleport failed for ${rescueAgent}: ${error.message}`)
+      return {
+        usedLlm: false,
+        reply: `我尝试传送 ${rescueAgent}，但服务端返回失败：${error.message.slice(0, 80)}。`,
+        assignments: new Map(),
+        mode: 'direct-rcon-error',
+        liveContext: true,
+        contextMs: Date.now() - started,
+        llmMs: 0
+      }
+    }
+  }
+
+  return null
+}
+
+function agentNameMentioned(text) {
+  const normalized = String(text || '').toLowerCase().replace(/[^a-z0-9_\u4e00-\u9fff]+/g, '')
+  const aliases = [
+    ['Alex', ['alex', '艾利克斯']],
+    ['Luna', ['luna', '露娜']],
+    ['Milo', ['milo', 'miro', 'milo', '米洛', '米罗', 'm.i.r.o', 'miro']],
+    ['Nova', ['nova', '诺瓦']],
+    ['Ivy', ['ivy', 'ivey', 'ivey', '艾薇', '农牙']]
+  ]
+  for (const [agent, names] of aliases) {
+    if (names.some(name => normalized.includes(name.toLowerCase().replace(/[^a-z0-9_\u4e00-\u9fff]+/g, '')))) return agent
+  }
+  return ''
+}
+
+function shouldUseLiveMinecraftForPlayerChat(message) {
+  const text = String(message || '').toLowerCase()
+  return /坐标|座标|作标|位置|在哪|哪里|哪儿|过来|集合|来我|到我|跟我|跟随|给我|拿|送|放在|丢在|床|箱子|箱|物品|背包|卡住|脱困|传送|瞬移|tp|teleport|come here|where|coordinate|coords|bed|chest|stuck|give|bring|follow|find me/i.test(text)
+}
+
+function buildPlayerChatCommanderSystemPrompt() {
+  return [
+    '你是 Airi，Minecraft AI 村庄的中文村长。玩家消息来自游戏内聊天，可能是玩家客户端语音转文字插件生成的文本。',
+    '你需要读取 commanderState 里的服务器、村庄、居民、资源、项目、公共箱、记忆和近期事件，判断玩家是在闲聊、询问状态，还是下达宏观指令。',
+    '如果玩家只是询问、寒暄、确认状态，只给中文短回复，不派任务。',
+    '如果玩家明确要求建造、采矿、找资源、回基地、保护玩家、整理箱子、换直播镜头或推进村庄，就选择合适居民派发短任务。',
+    '不要把居民变成固定脚本；任务给高层意图、坐标、边界和上报条件，让居民自己的 LLM 执行。',
+    '除非玩家明确要求，不要让所有居民跟随玩家。不要要求居民执行服务器命令、RCON、tp 或主机代码。',
+    '所有回复、任务标题和任务内容必须是中文。回复适合游戏聊天和语音播报，控制在 90 个汉字以内。',
+    '任务必须能立刻执行，最多 3-5 步。公共设施相关任务要要求居民用 VILLAGE_REPORT 上报。',
+    '只返回 JSON，不要 markdown，不要解释。形状：{"reply":"给玩家的中文短回复","assignments":[{"agent":"Alex","title":"中文短标题","taskType":"construction|crafting|cooking|logistics|safety|scouting|maintenance","projectId":"optional","task":"短中文任务文本"}]}。'
+  ].join(' ')
+}
+
+async function broadcastCommanderReply(reply) {
+  const text = sanitizeMinecraftChatText(`[AI村长] ${reply}`)
+  if (!text) return
+  try {
+    await minecraftServer.sendCommand(`say ${text}`, config)
+    playerChatBridgeState.lastReplyAt = new Date().toISOString()
+  } catch (error) {
+    playerChatBridgeState.lastError = error.message
+    logger.warn(`Commander chat reply broadcast failed: ${error.message}`)
+  }
+}
+
+function recordCommanderVoice(text, meta = {}) {
+  const item = {
+    at: new Date().toISOString(),
+    speaker: 'Airi',
+    title: 'AI村长',
+    text: sanitizeCommanderReply(text),
+    player: sanitizeLoosePlayerName(meta.player || ''),
+    source: meta.source || 'player-chat',
+    usedLlm: Boolean(meta.usedLlm)
+  }
+  if (!item.text) return
+  playerChatBridgeState.voiceQueue.unshift(item)
+  playerChatBridgeState.voiceQueue = playerChatBridgeState.voiceQueue.slice(0, COMMANDER_VOICE_QUEUE_LIMIT)
+}
+
+function playerChatBridgeSnapshot() {
+  return {
+    active: playerChatBridgeState.active,
+    logPath: playerChatBridgeState.logPath,
+    offset: playerChatBridgeState.offset,
+    lastPollAt: playerChatBridgeState.lastPollAt,
+    lastMessageAt: playerChatBridgeState.lastMessageAt,
+    lastReplyAt: playerChatBridgeState.lastReplyAt,
+    lastError: playerChatBridgeState.lastError,
+    recent: playerChatBridgeState.recent.map(item => ({
+      at: item.at,
+      player: item.player,
+      message: item.message,
+      source: item.source
+    })),
+    latestVoice: playerChatBridgeState.voiceQueue[0] || null
+  }
+}
+
+function sanitizeCommanderReply(value) {
+  return String(value || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180)
+}
+
+function sanitizeMinecraftChatText(value) {
+  return sanitizeCommanderReply(value)
+    .replace(/[§\u0000-\u001f\u007f]/g, '')
+    .slice(0, 220)
+}
+
+function sanitizeLoosePlayerName(value) {
+  const clean = String(value || '').trim()
+  return /^[A-Za-z0-9_]{1,32}$/.test(clean) ? clean : clean.replace(/[^\w]/g, '').slice(0, 32) || 'player'
 }
 
 async function sendTask(body = {}) {
@@ -2545,7 +3131,7 @@ function buildSocietyResidentTask(agentName, goal) {
     '所有公开聊天、思考字幕、协作短句、VILLAGE_REPORT 的 title/description 都必须使用中文。',
     '行动优先：最多先说一句不超过 30 字的中文状态句，然后马上执行移动、采集、放置、入库、合成、查看公共箱或观察实体。不要长篇思考；只聊天、只上报不算完成。',
     '按当前服务器难度调整策略：peaceful 以建设为主；easy/normal/hard 要把基地照明、床、门、围栏、武器、防具、食物和就近自卫放进优先级。不要远距离追怪，但基地附近出现怪物时要保护自己和村庄。允许村长通过服务端瞬移提升探索和回库效率。优先建镇、采矿、公共箱、材料包、工具武器护甲、个人住宅、床、家具、农田和陆地资源勘察。Nova 不修路、不靠近水域。Alex 要多走动，发现资源并带回，制作工具、武器和护甲给大家。',
-    '模型执行规则：所有居民聊天/操作使用云端 DeepSeek Flash，复杂代码/动作生成使用 DeepSeek Pro，视觉识别使用 Qwen3.7。Alex 可以承担复杂调度和长一点的任务；其他居民为控制成本和减少冲突，任务仍必须短、原子、坐标明确、最多 3-5 步。所有居民仍然优先由自己的 LLM 判断下一步动作，村长只给高层目标和边界。',
+    '模型执行规则：Alex 使用云端 DeepSeek Pro，适合复杂调度、装备制作、探索回库和跨居民协作；Luna、Milo、Nova、Ivy 使用本机 Ollama qwen3:14b，任务必须短、原子、坐标明确、最多 3-5 步。视觉识别使用云端 Qwen3.7。所有居民仍然优先由自己的 LLM 判断下一步动作，村长只给高层目标和边界。',
     COLLABORATION_PROTOCOL,
     '采用 MineCollab 式任务纪律：建造任务按区域/层/材料拆分；合成和烹饪先共享库存和配方；后勤任务把多余材料存入公共箱子并上报缺口。',
     '与其他 AI 居民简短中文协调，存放多余材料，避开洞穴、岩浆、长距离旅行；缺配方、缺材料或箱子满了就上报受阻，不要无限重试。',
@@ -2634,7 +3220,7 @@ function buildCommanderSystemPrompt() {
     'serverContext 是你的全局仪表盘，包含服务器状态、Minecraft RCON 实时情报、公共箱/背包/资源缺口、居民报告、记忆、观察、公共设施和可用接口/上报格式。Minecraft RCON/服务端事实优先于 Mindcraft socket 摘要。',
     '每个居民都应该优先使用自己的 LLM 做行动规划。你给的是高层意图、坐标、材料、边界和上报条件，不要把居民变成固定脚本。',
     '不要把瞬移、tp、RCON 或服务器命令写进居民任务；需要瞬移时只写探索/回库意图，让控制台守卫决定是否用服务端命令执行。',
-    '模型差异：所有居民聊天/操作使用云端 DeepSeek Flash，复杂代码/动作生成使用 DeepSeek Pro，视觉识别使用 Qwen3.7。Alex 可以承担更复杂的资源调度、装备制作、探索回库和跨居民协作；Luna、Milo、Nova、Ivy 仍按短任务执行，原子、坐标明确、最多 3-5 步。',
+    '模型差异：AI村长使用云端 DeepSeek Pro 做全局判断；居民聊天、操作和代码生成优先使用本机 Ollama Qwen3，视觉识别优先使用本机 Qwen3-VL。Alex 可以承担更复杂的资源调度、装备制作、探索回库和跨居民协作；Luna、Milo、Nova、Ivy 仍按短任务执行，原子、坐标明确、最多 3-5 步。',
     '上下文纪律：不要塞长背景、大段代码或多个并行目标；只给当前必要信息、最近缺口、一个目标和一个 VILLAGE_REPORT 条件。',
     '你必须主动管理居民纪律：允许居民用短时间聊天进行必要协作、库存确认、坐标确认或生成行动代码；如果 Chatting/Stopped/idle 持续过久且没有位置或动作进展，再派「回基地或公共箱子，完成一个短行动并上报」的任务。',
     '居民之间可以协作，但协作消息要服务于库存、缺口、坐标、建设状态、代码执行计划和受阻上报；不要长期闲聊。',
@@ -2656,19 +3242,24 @@ function buildCommanderSystemPrompt() {
   ].join(' ')
 }
 
-async function buildCommanderState(targets, goal) {
+async function buildCommanderState(targets, goal, options = {}) {
   const socket = client.snapshot()
   const village = villageState.snapshot()
   const states = socket.states || {}
-  const recentTaskEvents = dataStore.recentTaskEvents(20)
-  const recentInfrastructureReports = dataStore.recentInfrastructureReports(20)
+  const limit = clampNumber(options.limit || 20, 4, 30, 20)
+  const recentTaskEvents = dataStore.recentTaskEvents(limit)
+  const recentInfrastructureReports = dataStore.recentInfrastructureReports(limit)
+  const serverContext = options.liveMinecraft === false
+    ? commanderContextSnapshot({ targets, compact: true, limit })
+    : await commanderContextSnapshotWithLiveMinecraft({ targets, compact: true, limit })
   return {
     commander: village.commander,
     assistantMode: config.assistantMode,
     worldDirective: config.worldDirective || DEFAULT_RESIDENT_DIRECTIVE,
     collaborationProtocol: COLLABORATION_PROTOCOL,
     taskSuites: TASK_SUITE_GUIDANCE,
-    serverContext: await commanderContextSnapshotWithLiveMinecraft({ targets, compact: true, limit: 12 }),
+    serverContext,
+    serverContextMode: options.liveMinecraft === false ? 'cached' : 'live-rcon',
     operatorGoal: String(goal || '').trim(),
     targets,
     onlineAgents: (socket.agents || []).filter(agent => agent.in_game).map(agent => agent.name),
@@ -2825,20 +3416,56 @@ function sanitizeEntityName(value) {
 }
 
 function buildDefaultAgentProfile(name) {
-  const textProvider = getModelProvider(inferModelProvider(config))
+  const profileName = String(name || '').trim()
+  const isAlex = profileName.toLowerCase() === 'alex'
+  const route = isAlex
+    ? {
+        provider: config.llmProvider,
+        baseUrl: config.llmBaseUrl,
+        model: config.llmModel,
+        codeModel: config.codeModel || config.llmModel
+      }
+    : {
+        provider: config.residentLlmProvider,
+        baseUrl: config.residentLlmBaseUrl,
+        model: config.residentLlmModel,
+        codeModel: config.residentCodeModel || config.residentLlmModel
+      }
+  const textProvider = getModelProvider(inferModelProvider({
+    llmProvider: route.provider,
+    llmBaseUrl: route.baseUrl
+  }))
   const visionProvider = getModelProvider(inferModelProvider({ llmProvider: config.visionProvider, llmBaseUrl: config.visionBaseUrl }))
   const profile = {
-    name: String(name || '').trim(),
+    name: profileName,
     speak_model: 'system'
   }
-  const modelPatch = buildMindcraftProfilePatch(textProvider, config.llmBaseUrl, config.llmModel, ['model'])
-  const codeModel = buildMindcraftModelPatch(textProvider, config.llmBaseUrl, config.codeModel || config.llmModel, 'code_model')
+  const modelPatch = buildMindcraftProfilePatch(textProvider, route.baseUrl, route.model, ['model'])
+  const codeModel = buildMindcraftModelPatch(textProvider, route.baseUrl, route.codeModel, 'code_model')
   if (codeModel) modelPatch.code_model = codeModel
   Object.assign(profile, modelPatch)
   const visionModel = buildMindcraftModelPatch(visionProvider, config.visionBaseUrl, config.visionModel, 'vision_model')
   if (visionModel) profile.vision_model = visionModel
-  if (!profile.model) profile.model = config.llmModel || 'deepseek-v4-flash'
+  profile.embedding = buildMindcraftEmbeddingPatch()
+  if (!profile.model) profile.model = route.model || 'qwen3:14b'
   return profile
+}
+
+function buildMindcraftEmbeddingPatch() {
+  const baseUrl = stripOllamaV1(config.memoryEmbeddingBaseUrl || 'http://127.0.0.1:11434/v1')
+  const model = config.memoryEmbeddingModel || 'bge-m3:latest'
+  if (/ollama|11434/i.test(`${config.memoryEmbeddingProvider || ''} ${baseUrl}`)) {
+    return {
+      api: 'ollama',
+      url: baseUrl || 'http://127.0.0.1:11434',
+      model: model.includes(':') ? model : `${model}:latest`
+    }
+  }
+  return {
+    api: 'openai',
+    url: config.memoryEmbeddingBaseUrl || 'http://127.0.0.1:11434/v1',
+    model
+  }
 }
 
 function buildMindcraftProfilePatch(provider, baseUrl, modelName, keys) {
@@ -3090,4 +3717,21 @@ function clampNumber(value, min, max, fallback) {
   const number = Number(value)
   if (!Number.isFinite(number)) return fallback
   return Math.max(min, Math.min(max, number))
+}
+
+function displayHost(host) {
+  return host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host
+}
+
+function localLanUrls(port) {
+  const urls = []
+  const interfaces = os.networkInterfaces()
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries || []) {
+      if (!entry || entry.internal || entry.family !== 'IPv4') continue
+      if (!isPrivateLanAddress(entry.address)) continue
+      urls.push(`http://${entry.address}:${port}`)
+    }
+  }
+  return Array.from(new Set(urls))
 }

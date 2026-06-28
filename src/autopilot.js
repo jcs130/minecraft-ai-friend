@@ -85,6 +85,9 @@ class Autopilot {
     this.llmBaseUrl = normalizeOpenAiBaseUrl(options.llmBaseUrl || 'https://api.deepseek.com')
     this.llmModel = options.llmModel || 'deepseek-v4-flash'
     this.llmApiKey = options.llmApiKey || ''
+    this.residentLlmBaseUrl = normalizeOpenAiBaseUrl(options.residentLlmBaseUrl || options.llmBaseUrl || 'http://127.0.0.1:11434/v1')
+    this.residentLlmModel = options.residentLlmModel || options.llmModel || 'qwen3:14b'
+    this.residentLlmApiKey = options.residentLlmApiKey || ''
     this.sendMinecraftCommand = typeof options.sendMinecraftCommand === 'function' ? options.sendMinecraftCommand : null
     this.getMinecraftIntel = typeof options.getMinecraftIntel === 'function' ? options.getMinecraftIntel : null
     this.active = false
@@ -112,6 +115,9 @@ class Autopilot {
     if (options.llmBaseUrl) this.llmBaseUrl = normalizeOpenAiBaseUrl(options.llmBaseUrl)
     if (options.llmModel) this.llmModel = options.llmModel
     if (options.llmApiKey !== undefined) this.llmApiKey = options.llmApiKey
+    if (options.residentLlmBaseUrl) this.residentLlmBaseUrl = normalizeOpenAiBaseUrl(options.residentLlmBaseUrl)
+    if (options.residentLlmModel) this.residentLlmModel = options.residentLlmModel
+    if (options.residentLlmApiKey !== undefined) this.residentLlmApiKey = options.residentLlmApiKey
     if (options.worldDirective !== undefined) this.setWorldDirective(options.worldDirective)
     if (options.getMinecraftIntel !== undefined) this.getMinecraftIntel = typeof options.getMinecraftIntel === 'function' ? options.getMinecraftIntel : null
   }
@@ -144,6 +150,9 @@ class Autopilot {
       llmConfigured: this.canUseLlm(),
       llmBaseUrl: this.llmBaseUrl,
       llmModel: this.llmModel,
+      residentLlmConfigured: this.canUseResidentLlm(),
+      residentLlmBaseUrl: this.residentLlmBaseUrl,
+      residentLlmModel: this.residentLlmModel,
       worldDirective: this.worldDirective,
       commanderStrategy: this.memory.commanderStrategy || null,
       lastTickAt: this.lastTickAt,
@@ -602,7 +611,8 @@ class Autopilot {
   }
 
   async residentAutonomyLlmDecision(agentName, state) {
-    if (!this.canUseLlm() || !this.villageState) return null
+    const route = this.residentLlmRoute(agentName)
+    if (!this.canUseResidentLlm(agentName) || !this.villageState) return null
     const assignment = this.villageState.assignmentFor(agentName)
     const settlement = assignment && assignment.settlement ? assignment.settlement : getVillageSettlement(this.villageState)
     const memory = this.memoryFor(agentName)
@@ -615,16 +625,16 @@ class Autopilot {
 
     memory.lastResidentLlmAttemptAt = now
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 45000)
+    const timer = setTimeout(() => controller.abort(), route.timeoutMs)
     try {
       const headers = { 'content-type': 'application/json' }
-      if (this.llmApiKey) headers.authorization = `Bearer ${this.llmApiKey}`
+      if (route.apiKey) headers.authorization = `Bearer ${route.apiKey}`
       const context = await this.buildResidentAutonomyContext(agentName, state, assignment, settlement, village, summary, strategy)
-      const response = await fetch(`${this.llmBaseUrl}/chat/completions`, {
+      const response = await fetch(`${route.baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: this.llmModel,
+          model: route.model,
           stream: false,
           messages: [
             { role: 'system', content: buildResidentAutonomySystemPrompt(this.assistantMode) },
@@ -669,7 +679,9 @@ class Autopilot {
       memory.lastDecisionSource = 'resident-llm-autonomy'
       memory.lastResidentLlmDecision = {
         at: new Date().toISOString(),
-        model: this.llmModel,
+        model: route.model,
+        baseUrl: route.baseUrl,
+        timeoutMs: route.timeoutMs,
         title: decision.title,
         intention: decision.intention,
         firstAction: decision.firstAction,
@@ -893,6 +905,30 @@ class Autopilot {
     return this.useLlm && (Boolean(this.llmApiKey) || allowsNoAuth(this.llmBaseUrl))
   }
 
+  canUseResidentLlm(agentName = '') {
+    const route = this.residentLlmRoute(agentName)
+    return this.useLlm && (Boolean(route.apiKey) || allowsNoAuth(route.baseUrl))
+  }
+
+  residentLlmRoute(agentName = '') {
+    if (String(agentName || '').toLowerCase() === 'alex') {
+      return {
+        baseUrl: this.llmBaseUrl,
+        model: this.llmModel,
+        apiKey: this.llmApiKey,
+        timeoutMs: 90000,
+        tier: 'cloud-strong'
+      }
+    }
+    return {
+      baseUrl: this.residentLlmBaseUrl,
+      model: this.residentLlmModel,
+      apiKey: this.residentLlmApiKey,
+      timeoutMs: 60000,
+      tier: 'local-standard'
+    }
+  }
+
   async llmDecision(agentName, state) {
     if (!this.canUseLlm()) return null
 
@@ -995,7 +1031,7 @@ class Autopilot {
         avoidConflicts: '不要覆盖居民正在有效推进的任务；如果居民正在行动，只给目标居民一个短小、可验证、与其角色一致的新目标。',
         language: '所有公开内容、任务、上报和协作句都用中文。',
         minecraftIntelPolicy: '优先使用 minecraftIntel 里的 RCON、公共箱、在线玩家、时间、难度、资源缺口和坐标事实；如果 Mindcraft socket 与 Minecraft RCON 冲突，以 RCON/服务端事实为准。',
-        localModelDiscipline: profile.strong ? '目标居民是 Alex，使用云端强模型，可以承担资源调度、装备制作、探索回库和跨居民协作等更复杂目标。' : '目标居民使用云端 DeepSeek Flash 聊天模型和 DeepSeek Pro 代码模型；为控制成本仍应给短、原子、坐标明确、最多 3-5 步的任务。'
+        localModelDiscipline: profile.strong ? '目标居民是 Alex，使用云端 DeepSeek Pro，可以承担资源调度、装备制作、探索回库和跨居民协作等更复杂目标。' : '目标居民使用本机 Ollama qwen3:14b；为降低延迟和成本，应给短、原子、坐标明确、最多 3-5 步的任务。'
       }
     }
   }
@@ -1714,7 +1750,7 @@ function buildVillageCommanderSystemPrompt(mode) {
     '这是自动循环里的正常派工，不是硬编码脚本。程序守卫只负责落水、卡住、远程回库、动作线程重启等底层兜底；普通建设、采集、仓储、探索、协作和优先级由你综合判断。minecraftIntel 来自 Minecraft 服务端/RCON，是全局事实源，优先用它判断在线玩家、时间、难度、公共箱、资源缺口、居民战绩和坐标。',
     '每个居民都应该优先使用自己的 LLM 做行动规划。村长给的是高层意图、坐标、材料、边界和上报条件，不要把居民变成固定脚本。',
     '不要把瞬移、tp、RCON 或服务器命令写进居民任务；需要瞬移时只写探索/回库意图，让控制台守卫决定是否用服务端命令执行。',
-    '模型差异：所有居民聊天/操作使用云端 DeepSeek Flash，复杂代码/动作生成使用 DeepSeek Pro，视觉识别使用 Qwen3.7。Alex 可以承担更复杂的资源调度、装备制作、探索回库和跨居民协作；其他居民为控制成本仍保持短任务：原子、坐标明确、最多 3-5 步。',
+    '模型差异：Alex 使用云端 DeepSeek Pro，适合更复杂的资源调度、装备制作、探索回库和跨居民协作；Luna、Milo、Nova、Ivy 使用本机 Ollama qwen3:14b，任务必须短、原子、坐标明确、最多 3-5 步。视觉识别使用云端 Qwen3.7。',
     '上下文纪律：不要给任何居民塞长背景、大段代码或多个并行目标；只给当前必要信息、最近缺口、一个目标和一个 VILLAGE_REPORT 条件。',
     '不要和已有有效任务冲突：如果其他居民正在推进某个项目，不要让目标居民拆除、覆盖或重复劳动；如果目标居民刚刚失败，换一个更短、更安全的替代动作。',
     '任务要像真实玩家能执行的小目标：包含地点、材料、第一步外显动作、完成/受阻上报条件，避免空泛口号。',
@@ -1731,10 +1767,10 @@ function buildVillageCommanderSystemPrompt(mode) {
 function residentLlmProfile(agentName) {
   const strong = STRONG_ONLINE_RESIDENTS.has(String(agentName || ''))
   return {
-    tier: strong ? 'cloud-strong' : 'cloud-standard',
-    local: false,
+    tier: strong ? 'cloud-strong' : 'local-standard',
+    local: !strong,
     strong,
-    modelHint: strong ? '云端 DeepSeek Flash + DeepSeek Pro；适合复杂资源调度、装备制作、长距离探索回库和跨居民协作。' : '云端 DeepSeek Flash + DeepSeek Pro；为控制成本使用压缩上下文，但仍必须优先由 LLM 自主规划下一步。',
+    modelHint: strong ? '云端 DeepSeek Pro；适合复杂资源调度、装备制作、长距离探索回库和跨居民协作。' : '本机 Ollama qwen3:14b；为降低延迟和成本使用压缩上下文，但仍必须优先由 LLM 自主规划下一步。',
     contextPolicy: strong ? '可以读取较完整村庄上下文和多居民状态。' : '使用压缩上下文，只保留当前位置、动作、关键库存、最近任务/想法/受阻上报和少量长期记忆。',
     taskPolicy: strong ? '可分配 4-6 步复杂任务，但第一步必须是外显动作，并明确坐标、材料、完成条件和 VILLAGE_REPORT。' : '任务必须短、原子、明确：一个目标、2-4 步、第一步外显动作、一个完成/受阻上报；避免长篇背景、复杂代码和多目标并行。',
     recentTasks: strong ? 4 : 2,
@@ -2203,7 +2239,7 @@ function offsetPoint(position, dx = 0, dy = 0, dz = 0) {
 }
 
 function safeChestAccessPoint(chest, base, fallback) {
-  if (chest) return offsetPoint(chest, 1, 0, 1)
+  if (chest) return offsetPoint(chest, -1, -1, 0)
   return offsetPoint(base || fallback, 0, 0, 0)
 }
 function goToCommand(position, closeness = 2) {

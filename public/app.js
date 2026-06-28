@@ -13,7 +13,9 @@ const state = {
   serverBlueprint: null,
   village: null,
   villageDashboard: null,
-  liveIntel: null
+  liveIntel: null,
+  pageLoadedAt: Date.now(),
+  lastVoiceAt: ''
 }
 
 const elements = {
@@ -221,13 +223,14 @@ document.addEventListener('DOMContentLoaded', () => {
 async function refreshAll() {
   if (state.busy) return
   try {
-    const [status, logs, minecraftLog, providerData, villageDashboard, liveIntel] = await Promise.all([
+    const [status, logs, minecraftLog, providerData, villageDashboard, liveIntel, voiceData] = await Promise.all([
       apiGet('/api/status'),
       apiGet('/api/logs'),
       apiGet('/api/minecraft/logs'),
       apiGet('/api/model-providers'),
       apiGet('/api/village/dashboard').catch(error => ({ error: error.message })),
-      apiGet('/api/livestream/intel').catch(error => ({ error: error.message }))
+      apiGet('/api/livestream/intel').catch(error => ({ error: error.message })),
+      apiGet('/api/voice/latest').catch(error => ({ error: error.message }))
     ])
     state.status = status
     state.config = status.config
@@ -242,6 +245,7 @@ async function refreshAll() {
     renderVillageDashboard(villageDashboard)
     renderMinecraftManager(status, minecraftLog)
     renderLogs(logs.logs || [])
+    maybeSpeakCommanderVoice(voiceData.latest)
   } catch (error) {
     showToast(error.message)
   }
@@ -544,6 +548,28 @@ function liveFeedPillClass(label) {
   if (/AI村长|村长/.test(label)) return 'commander-pill'
   return ''
 }
+
+function maybeSpeakCommanderVoice(item) {
+  if (!item || !item.at || !item.text || item.at === state.lastVoiceAt) return
+  state.lastVoiceAt = item.at
+  const itemAt = Date.parse(item.at) || 0
+  if (itemAt && itemAt + 3000 < state.pageLoadedAt) return
+  if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return
+
+  const utterance = new SpeechSynthesisUtterance(String(item.text || '').slice(0, 180))
+  utterance.lang = 'zh-CN'
+  utterance.rate = 1
+  utterance.pitch = 1
+  const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : []
+  const savedVoice = localStorage.getItem('minecraftAiFriend.voice') || ''
+  const zhVoice = voices.find(voice => `${voice.name || ''}|||${voice.lang || ''}|||${voice.voiceURI || ''}` === savedVoice)
+    || voices.find(voice => /zh-CN/i.test(voice.lang || '') && /xiaoxiao|xiaoyi|xiaobei|xiaozhen|xiaoshuang/i.test(voice.name || ''))
+    || voices.find(voice => /zh/i.test(voice.lang || '') && /natural|online/i.test(voice.name || ''))
+    || voices.find(voice => /zh|Chinese|Mandarin|中文|普通话/i.test(`${voice.lang} ${voice.name}`))
+  if (zhVoice) utterance.voice = zhVoice
+  window.speechSynthesis.speak(utterance)
+}
+
 function renderModelProviders(data, config) {
   const providers = data && data.providers ? data.providers : state.modelProviders
   state.modelProviders = providers || []
