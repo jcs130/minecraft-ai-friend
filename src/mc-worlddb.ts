@@ -81,6 +81,16 @@ export interface MailRow {
   readAt: number | null
 }
 
+export interface DiaryRow {
+  id: number
+  username: string
+  /** 现实日期 YYYY-MM-DD（每人每天一篇，UNIQUE 约束兜底）。 */
+  day: string
+  content: string
+  gameDay: number | null
+  at: number
+}
+
 export interface WorlddbService {
   /** 收件箱：入队一封祈愿（返回 ahead = 排在他前面还有几封）。 */
   inboxPush(username: string, name: string, wish: string, offering?: OfferingInfo): { id: number; ahead: number }
@@ -131,6 +141,15 @@ export interface WorlddbService {
   friendRemove(me: string, other: string): boolean
   friendList(username: string): string[]
   areFriends(a: string, b: string): boolean
+  // ── 日记档案馆（2026-08-17）：每人每天一篇，UNIQUE(username, day) ──
+  /** 落一篇日记。当天已有（UNIQUE 冲突）返回 false，由调用方回话。 */
+  diaryAdd(username: string, day: string, content: string, gameDay: number | null): boolean
+  /** 最近 N 篇（新→旧）。username 为空 = 全体穿越者混排（讲台/面板用）。 */
+  diaryList(username: string | null, limit: number): DiaryRow[]
+  /** 某人的日记总篇数（「第 N 篇」编号用）。 */
+  diaryCount(username: string): number
+  /** 领书去重标记：首次（该 username 从未领过欢迎册）返回 true 并落标记。 */
+  diaryGiftMark(username: string): boolean
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -147,6 +166,7 @@ export const CHRONICLE_TYPE_CN: Record<string, string> = {
   skill: '天资觉醒', law: '法则修订',
   balance: '天平拨正',
   say: '话语', mail: '书信', friend: '结交',
+  diary: '日记',
 }
 
 function chronicleMdLine(e: ChronicleEntry): string {
@@ -190,6 +210,8 @@ function detailText(e: ChronicleEntry): string {
       return `寄给 ${String(d.to ?? '')}：「${String(d.body ?? '')}」`
     case 'friend':
       return d.event === 'accept' ? `与 ${String(d.to ?? '')} 结为好友` : `向 ${String(d.to ?? '')} 发起结交`
+    case 'diary':
+      return `第 ${String(d.no ?? '?')} 篇（${String(d.day ?? '')}，${String(d.chars ?? 0)} 字）`
     default:
       return JSON.stringify(d).slice(0, 100)
   }
@@ -257,6 +279,19 @@ CREATE TABLE IF NOT EXISTS friends (
   status TEXT NOT NULL DEFAULT 'pending',
   at INTEGER NOT NULL,
   PRIMARY KEY (a, b)
+);
+CREATE TABLE IF NOT EXISTS diary (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL,
+  day TEXT NOT NULL,
+  content TEXT NOT NULL,
+  game_day INTEGER,
+  at INTEGER NOT NULL,
+  UNIQUE(username, day)
+);
+CREATE TABLE IF NOT EXISTS diary_gift (
+  username TEXT PRIMARY KEY,
+  at INTEGER NOT NULL
 );
 `
 
@@ -512,6 +547,12 @@ export function apply(ctx: Context, config: Config) {
   const delFriend = db.prepare('DELETE FROM friends WHERE (a=? AND b=?) OR (a=? AND b=?)')
   const selFriendAccepted = db.prepare("SELECT CASE WHEN a=? THEN b ELSE a END AS other FROM friends WHERE (a=? OR b=?) AND status='accepted'")
   const selFriendPendingFor = db.prepare("SELECT a FROM friends WHERE b=? AND status='pending'")
+  // 日记档案馆
+  const insDiary = db.prepare('INSERT INTO diary (username, day, content, game_day, at) VALUES (?,?,?,?,?)')
+  const selDiaryByUser = db.prepare('SELECT id, username, day, content, game_day, at FROM diary WHERE username=? ORDER BY id DESC LIMIT ?')
+  const selDiaryAll = db.prepare('SELECT id, username, day, content, game_day, at FROM diary ORDER BY id DESC LIMIT ?')
+  const cntDiary = db.prepare('SELECT COUNT(*) AS c FROM diary WHERE username=?')
+  const insDiaryGift = db.prepare('INSERT OR IGNORE INTO diary_gift (username, at) VALUES (?,?)')
 
   function mailRow(r: { id: number; from_user: string; body: string; at: number; read_at?: number | null }, to: string): MailRow {
     return { id: r.id, from: r.from_user, to, body: r.body, at: r.at, readAt: r.read_at ?? null }
@@ -636,6 +677,25 @@ export function apply(ctx: Context, config: Config) {
     areFriends(a, b) {
       const row = selFriendAny.get(a, b, b, a) as { status: string } | undefined
       return row?.status === 'accepted'
+    },
+    // ── 日记 ──
+    diaryAdd(username, day, content, gameDay) {
+      try {
+        insDiary.run(username, day, content, gameDay, Date.now())
+        return true
+      } catch {
+        return false // UNIQUE(username, day) 冲突 = 今天已记过
+      }
+    },
+    diaryList(username, limit) {
+      const rows = (username ? selDiaryByUser.all(username, limit) : selDiaryAll.all(limit)) as Array<{ id: number; username: string; day: string; content: string; game_day: number | null; at: number }>
+      return rows.map((r) => ({ id: r.id, username: r.username, day: r.day, content: r.content, gameDay: r.game_day, at: r.at }))
+    },
+    diaryCount(username) {
+      return (cntDiary.get(username) as { c: number }).c
+    },
+    diaryGiftMark(username) {
+      return insDiaryGift.run(username, Date.now()).changes === 1
     },
     remember,
     recall,
