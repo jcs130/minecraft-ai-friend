@@ -79,6 +79,8 @@ export interface Config {
   balanceFlushMs: number
   /** 攒批队列落盘文件（重启不丢未发公告）。 */
   bulletinPath: string
+  /** 世界心跳落盘文件：外部看门狗 + 观察面板据此探活世界进程。 */
+  heartbeatPath: string
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -99,6 +101,7 @@ export const Config: Schema<Config> = Schema.object({
   maintainers: Schema.array(Schema.string()).default(['MengMeng']),
   balanceFlushMs: Schema.number().default(300_000),
   bulletinPath: Schema.string().default('./data/balance-bulletin.json'),
+  heartbeatPath: Schema.string().default('./data/world-heartbeat.json'),
 })
 
 // ── 程序化预过滤（纯函数，可离线单测）─────────────────────────────────
@@ -681,6 +684,22 @@ export function apply(ctx: Context, config: Config) {
   }
   const enabledPassives = passiveDefs.filter((p) => p.enabled !== false)
 
+  // ── 世界心跳（2026-08-18）：每守望 tick 落盘一次，外部看门狗 + 面板据此探活 ──
+  // 教训：世界进程被杀后面板照常绿（面板是独立进程），女神聋了 17 分钟无人察觉。
+  // 心跳只在 bot.entity 存活分支写入——化身断线重连失败时心跳同样过期，看门狗兜底。
+  const heartbeatPath = resolve(config.heartbeatPath)
+  const writeHeartbeat = (watching: string[]) => {
+    try {
+      writeFileSync(heartbeatPath, JSON.stringify({
+        ts: Date.now(),
+        pid: process.pid,
+        goddess: getBot()?.username ?? null,
+        watching,
+        uptimeSec: Math.round(process.uptime()),
+      }))
+    } catch { /* 心跳失败不影响守望 */ }
+  }
+
   // ── 成就监听引擎（2026-08-17 扛枪提议：MC 原生成就 = 第三条解锁通道「历练」）──
   // 每 deathPollMs 读服务器 advancements/<uuid>.json → diff 新成就 → 编年史 + 公告 + 解锁。
   // 与等级（修为）/苦难被动（苦修）互补：成就 = 用事迹提前换技能/加成。
@@ -935,6 +954,7 @@ export function apply(ctx: Context, config: Config) {
             deathPollArmedLogged = true
             lastWatched = watched
           }
+          writeHeartbeat(names)
           for (const name of names) {
             const out = await rcon.send(`scoreboard players get ${name} ${DEATH_OBJ}`)
             // 兜底路径（快路径见上方 log-tail 订阅）：慢一步但能追平 log 丢行/世界进程重启间隙
@@ -1222,8 +1242,6 @@ export function apply(ctx: Context, config: Config) {
       if (message.trim().startsWith('/')) return
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
       if (parseVoice(message.trim())) return
-      // 日记通道让行（2026-08-17）：「日记：…/日记本」归 mc-diary 档案馆，不当祈愿。
-      if (/^日记([：:]|\b)|^日记本/.test(message.trim())) return
       // 天平通道（服主职权，2026-08-17）：「平衡 <法术> <字段> <数值>」等，
       // 白名单+护栏校验，程序化代行，不进祈愿队列。命中即返回。
       const bal = matchBalance(message.trim())

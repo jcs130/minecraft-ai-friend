@@ -12,6 +12,7 @@ const ATOMS_PATH = resolve(DATA_DIR, 'magic-atoms.json')
 const EVENTS_PATH = resolve(DATA_DIR, 'skill-events.json')
 const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
+const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
 
 function readJson(path, fallback) {
   try {
@@ -107,6 +108,7 @@ function apiState() {
     passives: passiveDefs,
     chronicle: readChronicle(40),
     npcFeed: readNpcFeed(24),
+    world: readJson(WORLD_HB_PATH, null),
   }
 }
 
@@ -127,6 +129,10 @@ const PAGE = `<!doctype html>
   .dot { width:10px; height:10px; border-radius:50%; background:var(--dim); display:inline-block; flex:0 0 auto; }
   .dot.on { background:var(--green); box-shadow:0 0 8px var(--green); }
   .sub { color:var(--dim); font-size:12px; font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .worldchip { font-size:12px; padding:3px 10px; border-radius:12px; border:1px solid var(--line); white-space:nowrap; color:var(--dim); flex:0 0 auto; }
+  .worldchip.on { color:var(--green); border-color:var(--green); }
+  .worldchip.off { color:#f85149; border-color:#f85149; animation:wpulse 1.2s infinite; }
+  @keyframes wpulse { 50% { opacity:.45; } }
   .tabs { display:flex; gap:8px; overflow-x:auto; flex:0 1 auto; min-width:0; scrollbar-width:thin; }
   .tab { display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:5px 12px; cursor:pointer; font-size:13px; color:var(--dim); transition:all .15s; white-space:nowrap; flex:0 0 auto; }
   .tab:hover { border-color:var(--dim); color:var(--text); }
@@ -239,6 +245,7 @@ const PAGE = `<!doctype html>
 <body>
   <header class="topbar">
     <div class="brand"><span class="dot" id="dot"></span>穿越者观察面板 <span class="sub" id="sub"></span></div>
+    <span class="worldchip" id="worldchip">世界…</span>
     <div class="tabs" id="tabs"></div>
     <div class="spacer"></div>
   </header>
@@ -820,6 +827,23 @@ function drawMap() {
     + '<span style="margin-left:auto">范围 ±' + RANGE + ' 格</span>';
 }
 
+// 世界进程健康徽章（2026-08-18）：mc-god 心跳 >60s 视为离线——面板是独立进程，
+// 世界死了面板照常绿，靠这枚徽章暴露盲区（事故复盘产物）。
+function renderWorldChip(w) {
+  const el = document.getElementById('worldchip');
+  if (!el) return;
+  if (!w || !w.ts) { el.className = 'worldchip off'; el.textContent = '⚠ 世界进程无心跳'; return; }
+  const age = (Date.now() - w.ts) / 1000;
+  if (age > 60) {
+    el.className = 'worldchip off';
+    el.textContent = '⚠ 世界进程离线 ' + (age > 95 ? Math.round(age / 60) + ' 分钟' : Math.round(age) + ' 秒');
+  } else {
+    el.className = 'worldchip on';
+    const n = (w.watching || []).length;
+    el.textContent = '世界在线 · 守望 ' + n + ' 人 · ' + Math.round(age) + 's';
+  }
+}
+
 async function refresh() {
   try {
     const r = await fetch('/api/state');
@@ -834,6 +858,7 @@ async function refresh() {
     }
     document.getElementById('sub').textContent = (s.updatedAt ? '更新于 ' + await fmtTime(s.updatedAt) : '')
       + ' · ' + s.bots.length + ' 位穿越者 · 每 2 秒刷新';
+    renderWorldChip(s.world);
     renderTabs();
     renderCurrent();
 
