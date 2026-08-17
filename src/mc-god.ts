@@ -581,6 +581,7 @@ export function apply(ctx: Context, config: Config) {
   let deathObjReady = false
   let stopDeathPoll: (() => void) | null = null
   let deathPollArmedLogged = false
+  let lastWatched = new Set<string>()
 
   /** "Kirito has 2 [mcdeaths]" → 2（1.21.11 无 score 字样；旧版 "has 2 score(s)"）。 */
   function parseDeathScore(out: string): number {
@@ -923,9 +924,16 @@ export function apply(ctx: Context, config: Config) {
             deathObjReady = true
           }
           const names = Object.keys(bot.players).filter((n) => n !== bot.username)
-          if (!deathPollArmedLogged) {
-            log(`death poll armed: watching ${names.length} player(s): ${names.join(', ') || '(none)'}`)
+          // 观察名单随进随出（2026-08-17）：每 tick 从 bot.players 现取，玩家加入/离开
+          // 无需重启世界进程；名单变化时打一行日志作证（+加入 / -离开）。
+          const watched = new Set(names)
+          if (!deathPollArmedLogged || watched.size !== lastWatched.size || [...watched].some((n) => !lastWatched.has(n))) {
+            const joined = [...watched].filter((n) => !lastWatched.has(n))
+            const left = [...lastWatched].filter((n) => !watched.has(n))
+            const delta = [...joined.map((n) => `+${n}`), ...left.map((n) => `-${n}`)].join(' ')
+            log(`death poll watching ${watched.size} player(s): ${names.join(', ') || '(none)'}${deathPollArmedLogged && delta ? ` [${delta}]` : ''}`)
             deathPollArmedLogged = true
+            lastWatched = watched
           }
           for (const name of names) {
             const out = await rcon.send(`scoreboard players get ${name} ${DEATH_OBJ}`)

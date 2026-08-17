@@ -21,20 +21,37 @@ WORKDIR /app
 
 # 1) 依赖层（package*.json 不变则缓存命中）
 COPY minecraft-ai-friend/package.json minecraft-ai-friend/package-lock.json ./
-RUN npm install --omit=optional --no-audit --no-fund \
+RUN npm install --omit=optional --legacy-peer-deps --no-audit --no-fund \
   --registry=https://registry.npmmirror.com \
-  && npm install --no-save --no-audit --no-fund tsx \
+  && npm install --no-save --legacy-peer-deps --no-audit --no-fund \
+  tsx @standard-schema/spec \
   --registry=https://registry.npmmirror.com
 
-# 2) dsh 底座（vendor + packages，symlink 进 node_modules 等价 junction）
-COPY deepseek-harness/vendor /dsh/vendor
-COPY deepseek-harness/packages /dsh/packages
-RUN mkdir -p node_modules/@deepseek-ai \
-  && ln -s /dsh/vendor/cordis node_modules/@deepseek-ai/cordis \
-  && ln -s /dsh/vendor/schemastery node_modules/@deepseek-ai/schemastery \
-  && ln -s /dsh/vendor/timer node_modules/@deepseek-ai/cordis-plugin-timer \
-  && ln -s /dsh/packages/core/system-prompt node_modules/@deepseek-ai/dsh-system-prompt \
-  && ln -s /dsh/packages/core/tools node_modules/@deepseek-ai/dsh-tools
+# 2) dsh 底座（vendor + packages，symlink 进 node_modules 等价 junction）。
+#    ⚠️ 必须拷进 /app 内部（/app/dsh/...）：Node ESM 解析沿目录祖先链找
+#    node_modules，vendor 若放在 /app 之外，其 require('@deepseek-ai/cosmokit')
+#    等兄弟包将永远看不见 /app/node_modules（宿主机可用正是因为 vendor 住在
+#    harness 树内）。按 package.json name 自动软链全部 @deepseek-ai/* 包。
+COPY deepseek-harness/vendor /app/dsh/vendor
+COPY deepseek-harness/packages /app/dsh/packages
+RUN node -e '\
+const fs = require("fs"), path = require("path"); \
+const target = "/app/node_modules/@deepseek-ai"; \
+fs.mkdirSync(target, { recursive: true }); \
+const link = (dir) => { \
+  const pj = path.join(dir, "package.json"); \
+  if (!fs.existsSync(pj)) return; \
+  const name = JSON.parse(fs.readFileSync(pj, "utf8")).name || ""; \
+  if (!name.startsWith("@deepseek-ai/")) return; \
+  const dest = path.join(target, name.split("/")[1]); \
+  if (!fs.existsSync(dest)) fs.symlinkSync(dir, dest, "dir"); \
+  console.log("linked " + name + " -> " + dir); \
+}; \
+const walk = (root) => fs.readdirSync(root, { withFileTypes: true }) \
+  .filter((d) => d.isDirectory()).forEach((d) => link(path.join(root, d.name))); \
+walk("/app/dsh/vendor"); \
+walk("/app/dsh/packages/core"); \
+'
 
 # 3) 本仓源码（data/ 运行时数据由 volume 挂载，不进镜像）
 COPY minecraft-ai-friend/src ./src

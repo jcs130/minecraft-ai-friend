@@ -4,7 +4,6 @@ import mineflayer from 'mineflayer'
 import type { Bot } from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { plugin as toolPlugin } from 'mineflayer-tool'
-import prismarineViewer from 'prismarine-viewer'
 
 export const name = 'mc-bot-service'
 
@@ -63,7 +62,7 @@ export function apply(ctx: Context, config: Config) {
     bot.loadPlugin(pf.pathfinder)
     bot.loadPlugin(toolPlugin)
 
-    bot.once('spawn', () => {
+    bot.once('spawn', async () => {
       const p = bot.entity?.position
       log(`spawned at ${p ? `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})` : 'unknown'}`)
       const movements = new pf.Movements(bot)
@@ -73,12 +72,15 @@ export function apply(ctx: Context, config: Config) {
       //   viewerPort     = 第三人称（环绕跟随，默认 3001）
       //   viewerPort+100 = 第一人称（bot 眼中世界）
       // 两个实例的 close 句柄分别保存；重连时先全部关闭再重建。
+      // viewer 懒加载：不用 viewer（MC_VIEWER=0）的部署完全不需要装
+      // node-canvas-webgl/canvas/gl 这些 native 依赖（很多平台编译不过）。
       if (config.viewerEnabled) {
         try {
           if (closeViewer) {
             closeViewer()
             closeViewer = null
           }
+          const { default: prismarineViewer } = await import('prismarine-viewer')
           const mineflayerViewer = prismarineViewer.mineflayer
           mineflayerViewer(bot, {
             port: config.viewerPort,
