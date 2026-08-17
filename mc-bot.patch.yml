@@ -1,0 +1,41 @@
+# Example patch: load the mineflayer service + MC tools plugins into a
+# DeepSeek Harness headless agent.
+#
+# Usage (from the deepseek-harness repo root):
+#   DEEPSEEK_BASE_URL=http://<your-llm-endpoint>/v1 DEEPSEEK_API_KEY=<your-key> \
+#     pnpm dsh --profile headless --patch ./path/to/mc-bot.patch.yml "<task>"
+#
+# NOTE: any OpenAI-compatible endpoint works (e.g. a local llama.cpp server
+# at http://localhost:8890/v1, or the public DeepSeek API).
+- insert:
+    - id: mc-bot-service
+      name: 'file:///./src/mc-bot.ts'
+      config:
+        host: 'localhost'
+        port: 25565
+        username: 'HarnessBot'
+        autoReconnect: true
+
+    - id: mc-tools
+      name: 'file:///./src/mc-tools.ts'
+
+    - id: mc-memory
+      name: 'file:///./src/mc-memory.ts'
+      config:
+        memoryPath: './data/mc-memory.json'
+        maxPointsPerType: 20
+
+    - id: mc-transmigrator
+      name: 'file:///./src/mc-transmigrator.ts'
+      config:
+        registryPath: './data/transmigrators.json'
+
+    - id: mc-loop
+      name: 'file:///./src/mc-loop.ts'
+      config:
+        enabled: true
+        intervalMs: 8000
+        baseUrl: 'http://localhost:8890/v1'
+        apiKey: 'sk-local'
+        model: 'qwen3.8'
+        goal: 'Explore the area, gather wood and coal, and stay alive. Eat food when hungry.'

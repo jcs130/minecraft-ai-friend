@@ -1,0 +1,990 @@
+{
+  "_comment": "魔法原子指令表（快路径）。改数字梯度/咒语词/命令/视觉直接编辑本文件，无需改代码。删除本文件则回退到 src/mc-magic.ts 内嵌默认。mana 上限与回蓝速率在 bootstrap-world.mts 的 mcMagic 配置里（maxManaDefault=100, regenPerSec=2.0 = 每秒 2% 上限）。三资源消耗：mana=时间回蓝，food=吃回(data modify foodLevel)，hp=血祭(damage ... minecraft:magic 无视护甲)。视觉：particles=每条 /particle 参数模板(type x y z dx dy dz speed count)、sounds=音效ID(相对施法者)、title/subtitle=大字咏唱词，全部纯 vanilla 零 mod。占位符支持算术：{py+1}/{py-10}/{px+2}。",
+  "atoms": [
+    {
+      "id": "appraise",
+      "layer": "effect",
+      "name": "鉴定",
+      "words": [
+        "鉴定",
+        "鉴定自身",
+        "鉴定能力",
+        "审视己身",
+        "appraise"
+      ],
+      "cost": {
+        "mana": 2,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [],
+      "reply": "",
+      "sounds": [
+        "minecraft:block.enchantment_table.use"
+      ],
+      "title": "鉴定",
+      "subtitle": "女神之眼，烛照己身"
+    },
+    {
+      "id": "home",
+      "layer": "effect",
+      "name": "归乡",
+      "words": [
+        "归乡",
+        "回家",
+        "回基地",
+        "归途",
+        "回巢"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [
+        "tp {target} {bx} {by} {bz}"
+      ],
+      "reply": "空间之力涌动，你被送回家中。",
+      "particles": [
+        "minecraft:portal {bx} {by+1} {bz} 0.5 0.5 0.5 0.3 80",
+        "minecraft:end_rod {bx} {by+1} {bz} 0.4 0.4 0.4 0.05 50"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "归乡",
+      "subtitle": "空间之力，护你归途"
+    },
+    {
+      "id": "tp",
+      "layer": "effect",
+      "name": "空间传送",
+      "words": [
+        "传送",
+        "瞬移",
+        "闪现",
+        "撕裂虚空",
+        "空间跳跃",
+        "跃迁"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "paramCosts": {
+        "distance": {
+          "mana": 5
+        }
+      },
+      "params": {
+        "distance": {
+          "type": "number",
+          "default": 5,
+          "max": 30
+        },
+        "direction": {
+          "type": "direction",
+          "default": "东"
+        }
+      },
+      "commands": [
+        "tp {target} {tx} {ty} {tz}"
+      ],
+      "reply": "虚空撕开一道裂缝，你向{direction}跃迁 {distance} 格。",
+      "particles": [
+        "minecraft:end_rod {tx} {ty+1} {tz} 0.4 0.4 0.4 0.05 60",
+        "minecraft:portal {tx} {ty+1} {tz} 0.5 0.5 0.5 0.3 50"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "撕裂虚空",
+      "subtitle": "向{direction}跃迁 {distance} 格"
+    },
+    {
+      "id": "heal",
+      "layer": "effect",
+      "name": "圣愈术",
+      "words": [
+        "圣愈",
+        "治愈",
+        "治疗",
+        "疗伤",
+        "回血",
+        "痊愈"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "effect give {target} minecraft:instant_health 1 1",
+        "effect give {target} minecraft:saturation 1 20"
+      ],
+      "reply": "柔和的光笼罩你，伤口愈合，饥饿缓解。",
+      "particles": [
+        "minecraft:heart {px} {py+1} {pz} 0.6 0.6 0.6 0.1 25",
+        "minecraft:glow {px} {py+1} {pz} 0.4 0.4 0.4 0.01 40"
+      ],
+      "sounds": [
+        "minecraft:block.enchantment_table.use"
+      ],
+      "title": "圣愈",
+      "subtitle": "柔和的光，抚平伤痛"
+    },
+    {
+      "id": "blood_mana",
+      "layer": "effect",
+      "name": "燃血术",
+      "words": [
+        "燃血",
+        "以血为引",
+        "血祭",
+        "化血为魔",
+        "燃烧生命"
+      ],
+      "cost": {
+        "mana": -15,
+        "food": 0,
+        "hp": 6
+      },
+      "requiredLevel": 5,
+      "commands": [],
+      "reply": "你咬破指尖，以血为引——伤口灼痛，魔力却自血脉中翻涌而出。",
+      "particles": [
+        "minecraft:crimson_spore {px} {py+1} {pz} 0.4 0.5 0.4 0.02 40",
+        "minecraft:heart {px} {py+2} {pz} 0.3 0.3 0.3 0 6"
+      ],
+      "sounds": [
+        "minecraft:entity.player.hurt",
+        "minecraft:block.fire.ambient"
+      ],
+      "title": "燃血",
+      "subtitle": "以血为引，魔力翻涌"
+    },
+    {
+      "id": "feed",
+      "layer": "effect",
+      "name": "饱食赐福",
+      "words": [
+        "饱食",
+        "充饥",
+        "饱腹",
+        "不饿",
+        "充能"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [
+        "effect give {target} minecraft:saturation 1 99"
+      ],
+      "reply": "神力化作暖流，你的饥饿感消失了。",
+      "particles": [
+        "minecraft:glow {px} {py+1} {pz} 0.5 0.5 0.5 0.01 30"
+      ],
+      "sounds": [
+        "minecraft:block.note_block.chime"
+      ],
+      "title": "饱食赐福",
+      "subtitle": "暖流涌动，饥饿消散"
+    },
+    {
+      "id": "food_mana",
+      "layer": "effect",
+      "name": "炼食术",
+      "words": [
+        "炼食",
+        "化食",
+        "以食为引",
+        "化食为魔",
+        "炼化腹中之食"
+      ],
+      "cost": {
+        "mana": -6,
+        "food": 8,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [],
+      "reply": "你凝神炼化腹中之食，饥意翻涌间，魔力自丹田升腾。",
+      "particles": [
+        "minecraft:happy_villager {px} {py+1} {pz} 0.4 0.4 0.4 0 12",
+        "minecraft:falling_honey {px} {py+2} {pz} 0.3 0.3 0.3 0.02 20"
+      ],
+      "sounds": [
+        "minecraft:entity.player.burp"
+      ],
+      "title": "炼食",
+      "subtitle": "饥肠化炉，魔力升腾"
+    },
+    {
+      "id": "give",
+      "layer": "effect",
+      "name": "造物术",
+      "words": [
+        "造物",
+        "赐予",
+        "给予",
+        "赐下",
+        "给我",
+        "变出"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "params": {
+        "item": {
+          "type": "item",
+          "default": "bread"
+        }
+      },
+      "commands": [
+        "give {target} {item} {count}"
+      ],
+      "reply": "一件物资自虚空中凝聚，落入你的手中。",
+      "particles": [
+        "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 50"
+      ],
+      "sounds": [
+        "minecraft:block.enchantment_table.use"
+      ],
+      "title": "造物",
+      "subtitle": "虚空中，物质凝成"
+    },
+    {
+      "id": "light",
+      "layer": "effect",
+      "name": "照明术",
+      "words": [
+        "照明",
+        "点火",
+        "火把",
+        "光亮",
+        "照亮",
+        "驱暗"
+      ],
+      "cost": {
+        "mana": 5,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "give {target} minecraft:torch 4"
+      ],
+      "reply": "几根火把落入你的手中，照亮前路。",
+      "particles": [
+        "minecraft:flame {px} {py+1} {pz} 0.3 0.3 0.3 0.02 30"
+      ],
+      "sounds": [
+        "minecraft:block.fire.ambient"
+      ],
+      "title": "照明",
+      "subtitle": "火光，驱散黑暗"
+    },
+    {
+      "id": "time_day",
+      "layer": "effect",
+      "name": "破晓术",
+      "words": [
+        "破晓",
+        "天明",
+        "白昼",
+        "天亮",
+        "日出",
+        "驱夜"
+      ],
+      "cost": {
+        "mana": 60,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 25,
+      "commands": [
+        "time set day"
+      ],
+      "reply": "太阳撕裂夜幕，世界重归白昼。",
+      "particles": [
+        "minecraft:firework {px} {py+2} {pz} 0.5 0.5 0.5 0.01 25",
+        "minecraft:glow {px} {py+2} {pz} 0.5 0.5 0.5 0.01 30"
+      ],
+      "sounds": [
+        "minecraft:block.beacon.activate"
+      ],
+      "title": "破晓",
+      "subtitle": "太阳，撕裂夜幕"
+    },
+    {
+      "id": "weather_clear",
+      "layer": "effect",
+      "name": "驱云术",
+      "words": [
+        "驱云",
+        "放晴",
+        "晴空",
+        "雨停",
+        "云散"
+      ],
+      "cost": {
+        "mana": 35,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 8,
+      "commands": [
+        "weather clear"
+      ],
+      "reply": "乌云散尽，天空放晴。",
+      "particles": [
+        "minecraft:cloud {px} {py+2} {pz} 0.5 0.5 0.5 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:block.chain.break"
+      ],
+      "title": "驱云",
+      "subtitle": "乌云散尽，晴空万里"
+    },
+    {
+      "id": "terraform",
+      "layer": "effect",
+      "name": "大地塑形",
+      "words": [
+        "塑形",
+        "裂地",
+        "掘土",
+        "开辟",
+        "平整",
+        "挖地"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 6,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "fill {px} {py-1} {pz} {px} {py-1} {pz} minecraft:air"
+      ],
+      "reply": "你消耗体力（饱食度），重塑了脚下的大地。",
+      "particles": [
+        "minecraft:poof {px} {py} {pz} 0.5 0.5 0.5 0.1 40"
+      ],
+      "sounds": [
+        "minecraft:block.gravel.break"
+      ],
+      "title": "大地塑形",
+      "subtitle": "脚下大地，为你重塑"
+    },
+    {
+      "id": "rampart",
+      "layer": "effect",
+      "name": "覆土术",
+      "words": [
+        "覆土",
+        "填壑",
+        "垒土",
+        "筑地",
+        "垫脚"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 3,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [
+        "fill {px} {py-10} {pz} {px} {py-1} {pz} minecraft:dirt"
+      ],
+      "reply": "大地应声隆起，深坑裂隙在脚下填为坦途。",
+      "particles": [
+        "minecraft:poof {px} {py-1} {pz} 0.4 0.6 0.4 0.1 50"
+      ],
+      "sounds": [
+        "minecraft:block.grass.place"
+      ],
+      "title": "覆土",
+      "subtitle": "大地隆起，天堑变通途"
+    },
+    {
+      "id": "spring",
+      "layer": "effect",
+      "name": "化水术",
+      "words": [
+        "化水",
+        "清泉",
+        "涌泉",
+        "甘泉",
+        "引水"
+      ],
+      "cost": {
+        "mana": 12,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "params": {
+        "distance": {
+          "type": "number",
+          "default": 2,
+          "max": 10
+        },
+        "direction": {
+          "type": "direction",
+          "default": "东"
+        }
+      },
+      "commands": [
+        "setblock {tx} {ty-1} {tz} minecraft:water"
+      ],
+      "reply": "清泉自{direction}方涌出，润泽旱土。",
+      "particles": [
+        "minecraft:falling_water {tx} {ty+2} {tz} 0.3 0.5 0.3 0.05 40",
+        "minecraft:splash {tx} {ty} {tz} 0.3 0.2 0.3 0.05 20"
+      ],
+      "sounds": [
+        "minecraft:item.bucket.empty"
+      ],
+      "title": "化水",
+      "subtitle": "清泉涌出，润泽旱土"
+    },
+    {
+      "id": "meteor",
+      "layer": "effect",
+      "name": "陨石术",
+      "words": [
+        "陨石",
+        "天罚",
+        "星陨",
+        "神雷",
+        "天雷",
+        "雷击"
+      ],
+      "cost": {
+        "mana": 80,
+        "food": 0,
+        "hp": 15
+      },
+      "requiredLevel": 25,
+      "commands": [
+        "summon minecraft:lightning_bolt {tx} {ty} {tz}"
+      ],
+      "reply": "你燃烧生命，召唤天雷轰击前方！",
+      "particles": [
+        "minecraft:lava {tx} {ty+1} {tz} 0.3 0.3 0.3 0.05 30",
+        "minecraft:flame {tx} {ty+1} {tz} 0.3 0.3 0.3 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:entity.lightning_bolt.thunder"
+      ],
+      "title": "陨石",
+      "subtitle": "燃烧生命，天罚降临"
+    },
+    {
+      "id": "swift",
+      "layer": "effect",
+      "name": "迅捷术",
+      "words": [
+        "迅捷",
+        "疾风",
+        "加速"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [
+        "effect give {target} minecraft:speed 90 1"
+      ],
+      "reply": "风裹住你的双腿，步履如飞，持续九十息。",
+      "particles": [
+        "minecraft:crit {px} {py} {pz} 0.4 0.2 0.4 0.1 20"
+      ],
+      "sounds": [
+        "minecraft:item.trident.riptide_1"
+      ],
+      "title": "迅捷",
+      "subtitle": "步履如风"
+    },
+    {
+      "id": "leap",
+      "layer": "effect",
+      "name": "跃升术",
+      "words": [
+        "跃升",
+        "大跳",
+        "高跳",
+        "腾跃"
+      ],
+      "cost": {
+        "mana": 15,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "effect give {target} minecraft:jump_boost 60 2"
+      ],
+      "reply": "脚下如有神风托举，你健步如飞、一跃冲天。",
+      "particles": [
+        "minecraft:cloud {px} {py-1} {pz} 0.4 0.2 0.4 0.05 20"
+      ],
+      "sounds": [
+        "minecraft:entity.goat.long_jump"
+      ],
+      "title": "跃升",
+      "subtitle": "脚下生风，一跃冲天"
+    },
+    {
+      "id": "feather_fall",
+      "layer": "effect",
+      "name": "羽落术",
+      "words": [
+        "羽落",
+        "缓降",
+        "轻身"
+      ],
+      "cost": {
+        "mana": 15,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "effect give {target} minecraft:slow_falling 90 0"
+      ],
+      "reply": "你的身体轻若鸿毛，从此高处坠落再无惧意。",
+      "particles": [
+        "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.03 20"
+      ],
+      "sounds": [
+        "minecraft:entity.ender_dragon.flap"
+      ],
+      "title": "羽落",
+      "subtitle": "轻若鸿毛，坠落无伤"
+    },
+    {
+      "id": "ironskin",
+      "layer": "effect",
+      "name": "铁肤术",
+      "words": [
+        "铁肤",
+        "护体",
+        "坚韧"
+      ],
+      "cost": {
+        "mana": 35,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 8,
+      "commands": [
+        "effect give {target} minecraft:resistance 60 1"
+      ],
+      "reply": "金光凝成无形铠甲覆上你的皮肤，刀剑难伤。",
+      "particles": [
+        "minecraft:enchant {px} {py+1} {pz} 0.5 0.6 0.5 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:block.anvil.land"
+      ],
+      "title": "铁肤",
+      "subtitle": "金光护体，刀枪难伤"
+    },
+    {
+      "id": "regen",
+      "layer": "effect",
+      "name": "再生术",
+      "words": [
+        "再生",
+        "愈合",
+        "新生"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "effect give {target} minecraft:regeneration 30 1"
+      ],
+      "reply": "生命力在你体内重新流淌，伤口正在缓缓愈合。",
+      "particles": [
+        "minecraft:heart {px} {py+1} {pz} 0.4 0.5 0.4 0.05 15"
+      ],
+      "sounds": [
+        "minecraft:block.brewing_stand.brew"
+      ],
+      "title": "再生",
+      "subtitle": "血肉重生，生生不息"
+    },
+    {
+      "id": "strength",
+      "layer": "effect",
+      "name": "神力术",
+      "words": [
+        "神力",
+        "蛮力",
+        "力量"
+      ],
+      "cost": {
+        "mana": 35,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 8,
+      "commands": [
+        "effect give {target} minecraft:strength 60 0"
+      ],
+      "reply": "力量涌入你的四肢，拳拳有开山之势。",
+      "particles": [
+        "minecraft:crit {px} {py+1} {pz} 0.5 0.5 0.5 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:entity.player.attack.crit"
+      ],
+      "title": "神力",
+      "subtitle": "力拔山河"
+    },
+    {
+      "id": "haste",
+      "layer": "effect",
+      "name": "急迫术",
+      "words": [
+        "急迫",
+        "巧手",
+        "快手"
+      ],
+      "cost": {
+        "mana": 25,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "effect give {target} minecraft:haste 60 1"
+      ],
+      "reply": "你的双手如有神助，挖掘与劳作快了何止一倍。",
+      "particles": [
+        "minecraft:enchant {px} {py+1} {pz} 0.3 0.3 0.3 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:block.grindstone.use"
+      ],
+      "title": "急迫",
+      "subtitle": "双手如飞"
+    },
+    {
+      "id": "night_vision",
+      "layer": "effect",
+      "name": "夜视术",
+      "words": [
+        "夜视",
+        "猫眼",
+        "夜瞳"
+      ],
+      "cost": {
+        "mana": 15,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "effect give {target} minecraft:night_vision 180 0"
+      ],
+      "reply": "黑暗在你眼中褪去，视物如昼，持续三分钟。",
+      "particles": [
+        "minecraft:end_rod {px} {py+2} {pz} 0.3 0.2 0.3 0.01 20"
+      ],
+      "sounds": [
+        "minecraft:block.note_block.chime"
+      ],
+      "title": "夜视",
+      "subtitle": "暗夜之中，视物如昼"
+    },
+    {
+      "id": "water_breath",
+      "layer": "effect",
+      "name": "水息术",
+      "words": [
+        "水息",
+        "鱼鳃",
+        "水下呼吸",
+        "深潜"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 2,
+      "commands": [
+        "effect give {target} minecraft:water_breathing 120 0"
+      ],
+      "reply": "你如鱼得水，可以在水下自由呼吸两分钟。",
+      "particles": [
+        "minecraft:bubble {px} {py+1} {pz} 0.4 0.5 0.4 0.05 30"
+      ],
+      "sounds": [
+        "minecraft:item.bucket.fill"
+      ],
+      "title": "水息",
+      "subtitle": "如鱼得水，深潜无碍"
+    },
+    {
+      "id": "fire_res",
+      "layer": "effect",
+      "name": "避火术",
+      "words": [
+        "火抗",
+        "防火",
+        "避火"
+      ],
+      "cost": {
+        "mana": 25,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "effect give {target} minecraft:fire_resistance 120 0"
+      ],
+      "reply": "烈焰绕身而不伤，岩浆亦如温泉。",
+      "particles": [
+        "minecraft:flame {px} {py+1} {pz} 0.3 0.4 0.3 0.02 20"
+      ],
+      "sounds": [
+        "minecraft:block.fire.extinguish"
+      ],
+      "title": "避火",
+      "subtitle": "烈焰焚身而不伤"
+    },
+    {
+      "id": "invisibility",
+      "layer": "effect",
+      "name": "隐身术",
+      "words": [
+        "隐身",
+        "无形",
+        "遁形"
+      ],
+      "cost": {
+        "mana": 45,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 12,
+      "commands": [
+        "effect give {target} minecraft:invisibility 60 0"
+      ],
+      "reply": "你的身形没入虚空，肉眼再难辨你踪迹。",
+      "particles": [
+        "minecraft:smoke {px} {py+1} {pz} 0.4 0.6 0.4 0.02 30"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "隐身",
+      "subtitle": "身形没入虚空"
+    },
+    {
+      "id": "rain",
+      "layer": "effect",
+      "name": "唤雨术",
+      "words": [
+        "唤雨",
+        "降雨",
+        "甘霖",
+        "求雨"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "weather rain"
+      ],
+      "reply": "你感应到天际云气汇聚，雨落了下来。",
+      "particles": [
+        "minecraft:falling_water {px} {py+3} {pz} 1 0.5 1 0.1 60"
+      ],
+      "sounds": [
+        "minecraft:weather.rain"
+      ],
+      "title": "唤雨",
+      "subtitle": "甘霖自天而降"
+    },
+    {
+      "id": "storm",
+      "layer": "effect",
+      "name": "雷暴术",
+      "words": [
+        "雷暴",
+        "风暴",
+        "雷云",
+        "风雷"
+      ],
+      "cost": {
+        "mana": 50,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 12,
+      "commands": [
+        "weather thunder"
+      ],
+      "reply": "风雷激荡，天地变色，雷暴降临此界。",
+      "particles": [
+        "minecraft:electric_spark {px} {py+3} {pz} 1 0.5 1 0.1 40"
+      ],
+      "sounds": [
+        "minecraft:entity.lightning_bolt.thunder"
+      ],
+      "title": "雷暴",
+      "subtitle": "风雷激荡，天地变色"
+    },
+    {
+      "id": "steed",
+      "layer": "effect",
+      "name": "唤马术",
+      "words": [
+        "唤马",
+        "战马",
+        "坐骑",
+        "召唤马"
+      ],
+      "cost": {
+        "mana": 50,
+        "food": 6,
+        "hp": 0
+      },
+      "requiredLevel": 12,
+      "commands": [
+        "summon minecraft:horse {px+2} {py} {pz} {Tame:1b,SaddleItem:{id:\"minecraft:saddle\",count:1}}"
+      ],
+      "reply": "一匹神骏的战马自光芒中走出，鞍鞯齐备，任你驱驰。",
+      "particles": [
+        "minecraft:cloud {px+2} {py+1} {pz} 0.5 0.8 0.5 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.horse.ambient"
+      ],
+      "title": "唤马",
+      "subtitle": "神骏自光中而来"
+    },
+    {
+      "id": "guardian",
+      "layer": "effect",
+      "name": "铁卫术",
+      "words": [
+        "铁卫",
+        "守护者",
+        "铁傀儡",
+        "护卫"
+      ],
+      "cost": {
+        "mana": 60,
+        "food": 0,
+        "hp": 4
+      },
+      "requiredLevel": 18,
+      "commands": [
+        "summon minecraft:iron_golem {px+2} {py} {pz}"
+      ],
+      "reply": "你以血为契，唤起一尊铁卫——它将驻守此地，为你撕碎来犯的邪祟。",
+      "particles": [
+        "minecraft:crit {px+2} {py+2} {pz} 0.6 1 0.6 0.05 50",
+        "minecraft:poof {px+2} {py+1} {pz} 0.5 1 0.5 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:entity.iron_golem.repair"
+      ],
+      "title": "铁卫",
+      "subtitle": "血契铸就，守护降临"
+    },
+    {
+      "id": "purge",
+      "layer": "effect",
+      "name": "退魔术",
+      "words": [
+        "退魔",
+        "净化",
+        "驱邪",
+        "驱魔"
+      ],
+      "cost": {
+        "mana": 50,
+        "food": 0,
+        "hp": 3
+      },
+      "requiredLevel": 18,
+      "commands": [
+        "kill @e[type=minecraft:zombie,distance=..10]",
+        "kill @e[type=minecraft:husk,distance=..10]",
+        "kill @e[type=minecraft:skeleton,distance=..10]",
+        "kill @e[type=minecraft:stray,distance=..10]",
+        "kill @e[type=minecraft:creeper,distance=..10]",
+        "kill @e[type=minecraft:spider,distance=..10]",
+        "kill @e[type=minecraft:cave_spider,distance=..10]",
+        "kill @e[type=minecraft:witch,distance=..10]",
+        "kill @e[type=minecraft:enderman,distance=..10]"
+      ],
+      "reply": "圣光如潮涤荡四方，方圆十格内的邪祟灰飞烟灭。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 5 1.5 5 0.05 120",
+        "minecraft:witch {px} {py+1} {pz} 5 1.5 5 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:entity.evoker.cast_spell"
+      ],
+      "title": "退魔",
+      "subtitle": "圣光涤荡，邪祟皆灭"
+    },
+    {
+      "id": "windburst",
+      "layer": "effect",
+      "name": "风爆术",
+      "words": [
+        "风爆",
+        "气浪",
+        "御风"
+      ],
+      "cost": {
+        "mana": 15,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "summon minecraft:wind_charge {px} {py-1} {pz}"
+      ],
+      "reply": "一团狂风在你脚下炸开，将你抛向空中！",
+      "particles": [
+        "minecraft:gust {px} {py} {pz} 0.3 0.3 0.3 0.1 30",
+        "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.1 30"
+      ],
+      "sounds": [
+        "minecraft:entity.wind_charge.wind_burst"
+      ],
+      "title": "风爆",
+      "subtitle": "御风而起，扶摇直上"
+    }
+  ]
+}

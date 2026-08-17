@@ -1,0 +1,17 @@
+{
+  "_comment": "村民引擎配置。llm.enabled=false 时全部走模板（零算力）；未来算力够了改 true 即插即用（本地 OpenAI 兼容端点）。template_first=true 时命中模板的话题不走 LLM，只有兜底闲聊才问 LLM",
+  "llm": {
+    "enabled": false,
+    "endpoint": "http://127.0.0.1:8890/v1/chat/completions",
+    "model": "qwen3.8-27b",
+    "timeout": 6,
+    "max_tokens": 200,
+    "temperature": 0.7,
+    "template_first": true
+  },
+  "quests": {
+    "per_villager_chance": 0.55,
+    "daily_cap": 4,
+    "leash_radius": 28
+  }
+}

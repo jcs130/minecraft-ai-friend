@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# logs
+*.log
+npm-debug.log*
+
+# env / secrets
+.env
+.env.*
+data/rcon-secret.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# runtime state — everything under data/ except the curated configs below
+data/*
+!data/magic-atoms.json
+!data/skill-events.json
+!data/balance-overrides.json
+!data/advancement-names.json
+!data/advancement-unlocks.json
+!data/transmigrators.json
+!data/transmigrators/
+!data/village/
+data/village/quest-ledger.jsonl
+data/village/quests-*.json
