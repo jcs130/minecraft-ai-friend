@@ -19,6 +19,7 @@ import * as mcTransmigrator from './src/mc-transmigrator.ts'
 import * as mcMagic from './src/mc-magic.ts'
 import * as mcGod from './src/mc-god.ts'
 import * as mcRitual from './src/mc-ritual.ts'
+import * as mcSocial from './src/mc-social.ts'
 
 const RUN_MS = Number(process.env.RUN_MS ?? 0)
 // 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
@@ -99,6 +100,22 @@ await ctx.plugin(mcGod, {
 })
 await ctx.plugin(mcRitual, {
   enabled: true,
+})
+// 女神传声 & 信差（2026-08-17）：说话三档距离转达 + 好友制邮件。
+// 数值可被 data/social.json 覆盖（服主调参不改代码）。
+await ctx.plugin(mcSocial, {
+  enabled: true,
+  socialPath: './data/social.json',
+  sayRadius: 48,
+  shoutRadius: 96,
+  whisperRadius: 6,
+  shoutFoodCost: 1,
+  posCacheMs: 5_000,
+  mailMaxBody: 200,
+  mailInboxCap: 50,
+  mailPerMinute: 10,
+  remindCooldownSec: 60,
+  mailReadBatch: 5,
 })
 
 console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)

@@ -72,6 +72,15 @@ export interface MemoryHit {
   score: number
 }
 
+export interface MailRow {
+  id: number
+  from: string
+  to: string
+  body: string
+  at: number
+  readAt: number | null
+}
+
 export interface WorlddbService {
   /** 收件箱：入队一封祈愿（返回 ahead = 排在他前面还有几封）。 */
   inboxPush(username: string, name: string, wish: string, offering?: OfferingInfo): { id: number; ahead: number }
@@ -98,6 +107,30 @@ export interface WorlddbService {
   remember(username: string, kind: string, text: string): Promise<void>
   /** 众生册：语义召回与此人相关的旧事（失败返回 []，绝不阻塞裁决）。 */
   recall(username: string, query: string, k?: number): Promise<MemoryHit[]>
+  // ── 书信（女神信差，2026-08-17）：好友制邮件，离线落库在线投递 ──
+  /** 落一封信（收件箱容量守卫在调用方 mc-social）。返回信件 id。 */
+  mailPush(from: string, to: string, body: string): { id: number }
+  /** 未读信件（旧→新）。 */
+  mailUnread(username: string): MailRow[]
+  mailUnreadCount(username: string): number
+  /** 收件箱存量（含已读，容量守卫用）。 */
+  mailInboxCount(username: string): number
+  /** 最新未读的寄件人（上线提醒文案用），无则 null。 */
+  mailLatestSender(username: string): string | null
+  /** 最近 N 封（新→旧，含已读）。 */
+  mailRecent(username: string, limit: number): MailRow[]
+  mailMarkRead(username: string, ids: number[]): void
+  /** 清空收件箱，返回删除数。 */
+  mailClear(username: string): number
+  // ── 好友（双向确认）──
+  friendRequestAdd(from: string, to: string): { ok: boolean; reason?: string }
+  /** 等我答复的请求（from 名单）。 */
+  friendPendingFor(username: string): string[]
+  /** 答应 from 的请求 → 双向好友。无此请求返回 false。 */
+  friendAccept(me: string, from: string): boolean
+  friendRemove(me: string, other: string): boolean
+  friendList(username: string): string[]
+  areFriends(a: string, b: string): boolean
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -113,6 +146,7 @@ export const CHRONICLE_TYPE_CN: Record<string, string> = {
   death: '陨落', presence: '行迹', 'world-review': '女神观察',
   skill: '天资觉醒', law: '法则修订',
   balance: '天平拨正',
+  say: '话语', mail: '书信', friend: '结交',
 }
 
 function chronicleMdLine(e: ChronicleEntry): string {
@@ -148,6 +182,14 @@ function detailText(e: ChronicleEntry): string {
       return `${String(d.summary ?? '')}`
     case 'presence':
       return d.event === 'join' ? '踏入此界' : '离去'
+    case 'say': {
+      const modeCn = d.mode === 'shout' ? '喊' : d.mode === 'whisper' ? '悄悄' : '说'
+      return `${modeCn}「${String(d.text ?? '')}」（${Array.isArray(d.heard) ? d.heard.length : 0} 人听见）`
+    }
+    case 'mail':
+      return `寄给 ${String(d.to ?? '')}：「${String(d.body ?? '')}」`
+    case 'friend':
+      return d.event === 'accept' ? `与 ${String(d.to ?? '')} 结为好友` : `向 ${String(d.to ?? '')} 发起结交`
     default:
       return JSON.stringify(d).slice(0, 100)
   }
@@ -200,6 +242,22 @@ CREATE TABLE IF NOT EXISTS memory_points (
   synced INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_memory_user ON memory_points(username, at);
+CREATE TABLE IF NOT EXISTS mail (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_user TEXT NOT NULL,
+  to_user TEXT NOT NULL,
+  body TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mail_to ON mail(to_user, id);
+CREATE TABLE IF NOT EXISTS friends (
+  a TEXT NOT NULL,
+  b TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  at INTEGER NOT NULL,
+  PRIMARY KEY (a, b)
+);
 `
 
 // ── 旧文件数据一次性迁移（表空 + 旧文件存在 → 导入 → 改名 .migrated）──
@@ -439,6 +497,25 @@ export function apply(ctx: Context, config: Config) {
   const maxReviewIssue = db.prepare('SELECT COALESCE(MAX(issue), 0) AS m FROM reviews')
   const maxReviewAt = db.prepare('SELECT MAX(at) AS m FROM reviews')
   const insReview = db.prepare('INSERT OR REPLACE INTO reviews (issue, at, entries, stats, markdown) VALUES (?,?,?,?,?)')
+  // 书信 & 好友（女神信差）
+  const insMail = db.prepare('INSERT INTO mail (from_user, to_user, body, at) VALUES (?,?,?,?)')
+  const selMailUnread = db.prepare('SELECT id, from_user, body, at FROM mail WHERE to_user=? AND read_at IS NULL ORDER BY id')
+  const cntMailUnread = db.prepare('SELECT COUNT(*) AS c FROM mail WHERE to_user=? AND read_at IS NULL')
+  const cntMailInbox = db.prepare('SELECT COUNT(*) AS c FROM mail WHERE to_user=?')
+  const latestMailSender = db.prepare('SELECT from_user FROM mail WHERE to_user=? AND read_at IS NULL ORDER BY id DESC LIMIT 1')
+  const selMailRecent = db.prepare('SELECT id, from_user, body, at, read_at FROM mail WHERE to_user=? ORDER BY id DESC LIMIT ?')
+  const markMailRead = db.prepare('UPDATE mail SET read_at=? WHERE to_user=? AND id=? AND read_at IS NULL')
+  const delMail = db.prepare('DELETE FROM mail WHERE to_user=?')
+  const selFriendAny = db.prepare("SELECT a, b, status FROM friends WHERE (a=? AND b=?) OR (a=? AND b=?)")
+  const insFriend = db.prepare('INSERT INTO friends (a, b, status, at) VALUES (?,?,?,?)')
+  const accFriend = db.prepare("UPDATE friends SET status='accepted' WHERE a=? AND b=? AND status='pending'")
+  const delFriend = db.prepare('DELETE FROM friends WHERE (a=? AND b=?) OR (a=? AND b=?)')
+  const selFriendAccepted = db.prepare("SELECT CASE WHEN a=? THEN b ELSE a END AS other FROM friends WHERE (a=? OR b=?) AND status='accepted'")
+  const selFriendPendingFor = db.prepare("SELECT a FROM friends WHERE b=? AND status='pending'")
+
+  function mailRow(r: { id: number; from_user: string; body: string; at: number; read_at?: number | null }, to: string): MailRow {
+    return { id: r.id, from: r.from_user, to, body: r.body, at: r.at, readAt: r.read_at ?? null }
+  }
 
   const service: WorlddbService = {
     inboxPush(username, name, wish, offering) {
@@ -501,6 +578,64 @@ export function apply(ctx: Context, config: Config) {
     },
     reviewSave(issue, entries, stats, markdown, at = Date.now()) {
       insReview.run(issue, at, entries, stats, markdown)
+    },
+    // ── 书信 ──
+    mailPush(from, to, body) {
+      const info = insMail.run(from, to, body, Date.now())
+      return { id: Number(info.lastInsertRowid) }
+    },
+    mailUnread(username) {
+      return (selMailUnread.all(username) as Array<{ id: number; from_user: string; body: string; at: number }>)
+        .map((r) => mailRow(r, username))
+    },
+    mailUnreadCount(username) {
+      return (cntMailUnread.get(username) as { c: number }).c
+    },
+    mailInboxCount(username) {
+      return (cntMailInbox.get(username) as { c: number }).c
+    },
+    mailLatestSender(username) {
+      return (latestMailSender.get(username) as { from_user: string } | undefined)?.from_user ?? null
+    },
+    mailRecent(username, limit) {
+      return (selMailRecent.all(username, limit) as Array<{ id: number; from_user: string; body: string; at: number; read_at: number | null }>)
+        .map((r) => mailRow(r, username))
+    },
+    mailMarkRead(username, ids) {
+      const now = Date.now()
+      for (const id of ids) markMailRead.run(now, username, id)
+    },
+    mailClear(username) {
+      const info = delMail.run(username)
+      return Number(info.changes)
+    },
+    // ── 好友 ──
+    friendRequestAdd(from, to) {
+      const row = selFriendAny.get(from, to, to, from) as { a: string; b: string; status: string } | undefined
+      if (row) {
+        if (row.status === 'accepted') return { ok: false, reason: `你们已经是好友了。` }
+        return { ok: false, reason: row.a === from ? '好友请求早已送出，耐心等对方答复。' : '对方先向你发起了请求——直接 /friend accept <游戏ID> 答应即可。' }
+      }
+      insFriend.run(from, to, 'pending', Date.now())
+      return { ok: true }
+    },
+    friendPendingFor(username) {
+      return (selFriendPendingFor.all(username) as Array<{ a: string }>).map((r) => r.a)
+    },
+    friendAccept(me, from) {
+      const info = accFriend.run(from, me)
+      return Number(info.changes) > 0
+    },
+    friendRemove(me, other) {
+      const info = delFriend.run(me, other, other, me)
+      return Number(info.changes) > 0
+    },
+    friendList(username) {
+      return (selFriendAccepted.all(username, username, username) as Array<{ other: string }>).map((r) => r.other)
+    },
+    areFriends(a, b) {
+      const row = selFriendAny.get(a, b, b, a) as { status: string } | undefined
+      return row?.status === 'accepted'
     },
     remember,
     recall,

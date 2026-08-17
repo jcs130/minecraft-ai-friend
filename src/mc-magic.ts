@@ -1329,7 +1329,9 @@ export function apply(ctx: Context, config: Config) {
   }
 
   // ── 公屏咏唱监听：任何玩家（AI 或真人）念咒即施法 ────────────────────
-  // 女神化身点名回复（公屏），施法者的 Agent 靠聊天事件听见回执。
+  // 咒语本身全世界听见（表演性，公屏）；回执由信使私聊点名送达
+  // （2026-08-17 扛枪定调：回执=个人事务走私聊，公屏不再刷 [女神] 点名，
+  // 人多了也不乱；施法者的 Agent 靠 whisper 事件听见回执）。
   let watchedBot: Bot | null = null
   function ensureChatListener(bot: Bot) {
     if (watchedBot === bot) return
@@ -1343,7 +1345,7 @@ export function apply(ctx: Context, config: Config) {
       cast(username, chant)
         .then((reply) => {
           log(`player ${username} chanted "${chant}"`)
-          bot.chat(`[女神] ${username}，${reply}`)
+          try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
         })
         .catch((err) => log(`player cast error: ${err instanceof Error ? err.message : String(err)}`))
     })

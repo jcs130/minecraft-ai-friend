@@ -10,6 +10,7 @@ import type { Transmigrator } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
 import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
+import { parseVoice } from './mc-social.ts'
 
 /**
  * mc-god —— 慢路径女神（世界守护者，QwenPaw Agent mc-god）+ 女神化身管理。
@@ -345,6 +346,12 @@ export function apply(ctx: Context, config: Config) {
   const lastUsed = new Map<string, number>() // 每技艺全局冷却
   const lastPray = new Map<string, number>() // 每玩家入场节流
   const worlddb: WorlddbService = ctx.mcWorlddb
+
+  // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
+  // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
+  const courier = (player: string, text: string) => {
+    try { getBot().whisper(player, `[信使] ${text}`) } catch { /* bot not ready */ }
+  }
 
   // ── 供奉收执（RCON 权威复核 + /clear 收走，贡品即从行囊消失）──────
   async function takeOffering(username: string, offer: OfferingInfo): Promise<{ ok: true; taken: number } | { ok: false; reason: string }> {
@@ -731,10 +738,11 @@ export function apply(ctx: Context, config: Config) {
     if (u.exp && u.exp > 0) await grantXp(name, u.exp, `advancement:${advId}`)
     if (parts.length > 0 && announce) {
       try {
-        await rcon.send(`tellraw @a ${JSON.stringify({ text: `[女神] 历练觉醒——「${zh.name}」之功德，赐予 ${name}：${parts.join('，')}。${u.reason ? '（' + u.reason + '）' : ''}`, color: 'gold', bold: true })}`)
+        // 信使私聊递达（个人成长通告不上公屏；vanilla 成就播报仍由服务器自己做）
+        courier(name, `历练觉醒——「${zh.name}」之功德，赐予你：${parts.join('，')}。${u.reason ? `（${u.reason}）` : ''}`)
         await rcon.send(`title ${name} title ${JSON.stringify({ text: '✦ 历练觉醒 ✦', color: 'gold', bold: true })}`)
         await rcon.send(`title ${name} subtitle ${JSON.stringify({ text: parts.join('，'), color: 'yellow' })}`)
-        await rcon.send(`playsound minecraft:ui.toast.challenge_complete master @a`)
+        await rcon.send(`playsound minecraft:ui.toast.challenge_complete master ${name}`)
       } catch { /* 特效失败不影响解锁 */ }
     }
   }
@@ -777,9 +785,10 @@ export function apply(ctx: Context, config: Config) {
       log(`ADVANCEMENT: ${name} earned ${id} (${zh.name})`)
       worlddb.chronicleRecord('advancement', name, { id, name: zh.name, desc: zh.desc ?? undefined })
       try {
-        await rcon.send(`tellraw @a ${JSON.stringify({ text: `🏆 ${name} 达成成就「${zh.name}」${zh.desc ? '——' + zh.desc : ''}`, color: 'yellow' })}`)
+        // 信使私聊贺喜（vanilla 服务器自己的成就公屏播报保留，全服共庆的那声由 MC 原生发）
+        courier(name, `🏆 你达成成就「${zh.name}」${zh.desc ? `——${zh.desc}` : ''}`)
         await rcon.send(`title ${name} title ${JSON.stringify({ text: `🏆 ${zh.name}`, color: 'yellow', bold: true })}`)
-        await rcon.send(`playsound minecraft:ui.toast.challenge_complete master @a`)
+        await rcon.send(`playsound minecraft:ui.toast.challenge_complete master ${name}`)
       } catch { /* 公告失败不影响登记 */ }
       await checkAdvUnlocks(name, id, true)
     }
@@ -888,8 +897,9 @@ export function apply(ctx: Context, config: Config) {
         await rcon.send(`title ${name} title ${JSON.stringify({ text: '✦ 层级提升 ✦', color: 'gold', bold: true })}`)
         await rcon.send(`title ${name} subtitle ${JSON.stringify({ text: `魔力层级 ${prev} → ${xp}`, color: 'yellow' })}`)
         await rcon.send(`execute at ${name} run particle minecraft:totem_of_undying ~ ~1 ~ 0.5 0.8 0.5 0.1 120`)
-        await rcon.send(`execute at ${name} run playsound minecraft:entity.player.levelup master @a`)
-        await rcon.send(`tellraw @a ${JSON.stringify({ text: `[女神] ${name} 的修行有了回报：魔力层级 ${prev} → ${xp}，魔力上限 ${view.maxMana}。`, color: 'gold' })}`)
+        await rcon.send(`execute at ${name} run playsound minecraft:entity.player.levelup master ${name}`)
+        // 信使私聊递达：修行回报是自己的事，公屏不播
+        courier(name, `修行有了回报：魔力层级 ${prev} → ${xp}，魔力上限 ${view.maxMana}。`)
       } catch { /* 特效失败不影响升级 */ }
       worlddb.chronicleRecord('levelup', name, { from: prev, to: xp, maxMana: view.maxMana })
       log(`LEVEL UP ${name}: ${prev} -> ${xp} (native XpLevel, maxMana ${view.maxMana})`)
@@ -950,10 +960,9 @@ export function apply(ctx: Context, config: Config) {
                     if (fresh) {
                       log(`PASSIVE UNLOCKED: ${name} gained 「${def.name}」(${def.id}) after ${Math.round(acc)}s`)
                       worlddb.chronicleRecord('skill', name, { passive: def.id, name: def.name, accumulatedSec: Math.round(acc) })
-                      const vfx = `tellraw @a ${JSON.stringify({ text: `[女神] ${def.announce}`, color: 'light_purple', bold: true })}`
                       const title = `title ${name} title ${JSON.stringify({ text: `✦ ${def.name} ✦`, color: 'light_purple', bold: true })}`
                       const sound = `playsound minecraft:entity.player.levelup master ${name}`
-                      try { await rcon.send(vfx); await rcon.send(title); await rcon.send(sound) } catch { /* 特效失败不影响解锁 */ }
+                      try { courier(name, def.announce); await rcon.send(title); await rcon.send(sound) } catch { /* 特效失败不影响解锁 */ }
                       if (def.expReward && def.expReward > 0) await grantXp(name, def.expReward, `passive:${def.id}`)
                     }
                   }
@@ -1201,6 +1210,10 @@ export function apply(ctx: Context, config: Config) {
     // 私聊祈愿：任何玩家 /msg Goddess <愿望>[｜供奉：面包x3] → 收执供奉 → 入收件箱。
     bot.on('whisper', (username: string, message: string) => {
       if (username === bot.username) return
+      // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
+      if (message.trim().startsWith('/')) return
+      // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
+      if (parseVoice(message.trim())) return
       // 天平通道（服主职权，2026-08-17）：「平衡 <法术> <字段> <数值>」等，
       // 白名单+护栏校验，程序化代行，不进祈愿队列。命中即返回。
       const bal = matchBalance(message.trim())

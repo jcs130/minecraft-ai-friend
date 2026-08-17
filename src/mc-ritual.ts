@@ -126,9 +126,18 @@ export function apply(ctx: Context, config: Config) {
         log(`announce chat failed: ${err instanceof Error ? err.message : String(err)}`)
         return
       }
-      // 逐句缓说：聊天限速防踢，也给仪式一点庄重感。
-      await new Promise((r) => setTimeout(r, 400))
+      // 逐句缓说：聊天限速防踢（vanilla 反刷屏在 ~5行/秒即踢，2026-08-17 双仪式并行实测被踢），
+      // 也给仪式一点庄重感。
+      await new Promise((r) => setTimeout(r, 700))
     }
+  }
+
+  // 仪式广播全局串行：多玩家同时降临时逐场宣读，避免公屏速率叠加被踢。
+  let announceChain: Promise<void> = Promise.resolve()
+  function announceQueued(username: string, t: Transmigrator | null, candidates: AtomSummary[]): Promise<void> {
+    const run = announceChain.then(() => announce(username, t, candidates))
+    announceChain = run.catch(() => { /* 单场失败不堵后续仪式 */ })
+    return run
   }
 
   async function startRitual(username: string) {
@@ -141,7 +150,7 @@ export function apply(ctx: Context, config: Config) {
       magic.setBackstory(username, transmigrator.backstory)
     }
     pending.set(username, { candidates, lastAnnounce: Date.now() })
-    await announce(username, transmigrator, candidates)
+    await announceQueued(username, transmigrator, candidates)
     log(`ritual started for ${username}: ${candidates.map((c) => c.id).join(',')}`)
   }
 
@@ -183,7 +192,7 @@ export function apply(ctx: Context, config: Config) {
       if (/天赋|候选|法术|仪式|再说|重复|什么意思/.test(msg) && Date.now() - entry.lastAnnounce > 30_000) {
         entry.lastAnnounce = Date.now()
         const t = ctx.mcTransmigrators.getByUsername(username)
-        announce(username, t, entry.candidates).catch(() => {})
+        announceQueued(username, t, entry.candidates).catch(() => {})
       }
     })
 
