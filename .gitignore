@@ -34,3 +34,6 @@ data/*
 !data/village/
 data/village/quest-ledger.jsonl
 data/village/quests-*.json
+# local MC server install (deploy-server.mjs)
+mc-server/
+sidecar/*.log* 

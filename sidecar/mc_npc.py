@@ -15,17 +15,28 @@ import socket, struct, os, re, json, time, io, sys, random, urllib.request
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-WORK = r"C:\Users\lzl19\.copaw\workspaces\default"
-DATA = os.path.join(WORK, "deepseek-harness", "scratch-plugin", "data")
+# 路径/RCON 全部支持环境变量覆盖（部署脚本用）；默认值保持本机布局。
+WORK = os.environ.get("NPC_DATA_DIR") or r"C:\Users\lzl19\.copaw\workspaces\default"
+DATA = os.path.join(WORK, "deepseek-harness", "scratch-plugin", "data") if not os.environ.get("NPC_DATA_DIR") else WORK
 VDIR = os.path.join(DATA, "village")
-LOG = r"C:\Users\lzl19\Documents\airi-minecraft\server\logs\latest.log"
-HOST, PORT = "127.0.0.1", 25575
+LOG = os.environ.get("NPC_LOG_PATH") or r"C:\Users\lzl19\Documents\airi-minecraft\server\logs\latest.log"
+HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
+PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 COOLDOWN = 3.0
 
 os.makedirs(VDIR, exist_ok=True)
 PROFILES = json.load(open(os.path.join(VDIR, "villagers.json"), encoding="utf-8"))["villagers"]
 CFG = json.load(open(os.path.join(VDIR, "config.json"), encoding="utf-8"))
 BY_TAG = {v["tag"]: v for v in PROFILES}
+
+# 皮肤注册表（npc_skins_gen.py 产出）：有档案的 key 用「盔甲架+自定义头颅」人偶化
+try:
+    SKIN_REG = json.load(open(os.path.join(VDIR, "skin-registry.json"), encoding="utf-8"))
+except OSError:
+    SKIN_REG = {}
+
+def mode_of(v):
+    return "stand" if v["key"] in SKIN_REG else "villager"
 
 # ---------- RCON ----------
 def pkt(pid, ptype, body):
@@ -384,7 +395,18 @@ def route(speaker, msg):
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
 def sel(v):
-    return '@e[type=villager,tag=%s,limit=1]' % v["tag"]
+    etype = "armor_stand" if mode_of(v) == "stand" else "villager"
+    return '@e[type=%s,tag=%s,limit=1]' % (etype, v["tag"])
+
+def dedup_npc(v):
+    """防堆积：同 tag 实体 >1 时只保留一个（多进程竞召/服务器重启竞态的历史教训）。
+    幂等三连：标记保留者 → 杀未标记 → 摘标记。"""
+    etype = "armor_stand" if mode_of(v) == "stand" else "villager"
+    R.cmd("tag %s add npcKeep" % sel(v))
+    r = R.cmd("kill @e[type=%s,tag=%s,tag=!npcKeep]" % (etype, v["tag"]))
+    R.cmd("tag %s remove npcKeep" % sel(v))
+    if r and "No entity" not in r:
+        print("[npc] dedup:", v["display"], "->", r.strip(), flush=True)
 
 def alive_pos(v):
     try:
@@ -396,19 +418,72 @@ def alive_pos(v):
         R.s = None
     return None
 
+def _pose_nbt(pose):
+    parts = []
+    for k, ang in pose.items():
+        vals = ",".join("%sf" % a for a in ang)
+        parts.append('%s:[%s]' % (k, vals))
+    return "Pose:{%s}" % ",".join(parts)
+
+def _leather(item, rgb):
+    return ('{id:"minecraft:%s",count:1,components:{"minecraft:dyed_color":'
+            '{rgb:%d,show_in_tooltip:false}}}' % (item, rgb))
+
+def summon_stand(v):
+    """盔甲架人偶 NPC：自定义头颅（客户端经 http 拉皮肤）+ 染色皮革甲三件 + 姿势 + 持物
+    1.21.5+ 实体装备 NBT 用 equipment 复合键（ArmorItems/HandItems 已废弃会被静默丢弃）"""
+    reg = SKIN_REG[v["key"]]
+    robe = reg["robe"]
+    uid = ",".join(str(i) for i in reg["uuid_ints"])
+    head = ('{id:"minecraft:player_head",count:1,components:{"minecraft:profile":'
+            '{name:"%s",id:[I;%s],properties:[{name:"textures",value:"%s"}]}}}'
+            % (reg["name_en"], uid, reg["b64"]))
+    equip = ('equipment:{feet:%s,legs:%s,chest:%s,head:%s,mainhand:{id:"%s",count:1}}' % (
+        _leather("leather_boots", robe["boots"]),
+        _leather("leather_leggings", robe["legs"]),
+        _leather("leather_chestplate", robe["chest"]),
+        head, reg.get("mainhand", "minecraft:air")))
+    nbt = ('{Tags:["%s"],CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,'
+           'Invulnerable:1b,PersistenceRequired:1b,Silent:1b,'
+           'NoBasePlate:1b,ShowArms:1b,Marker:0b,Small:0b,%s,%s}') % (
+        v["tag"], v["display"], v["color"], _pose_nbt(reg.get("pose", {})), equip)
+    x, y, z = v["spawn"]
+    R.cmd("summon minecraft:armor_stand %s %s %s %s" % (x, y, z, nbt))
+    print("[npc] healed(stand):", v["display"], flush=True)
+
 def summon_villager(v):
+    biome = v.get("biome", "plains")
     nbt = ('{NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
            'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,'
-           'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:plains"}}') % (
-        v["tag"], v["display"], v["color"], v["profession"])
+           'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"}}') % (
+        v["tag"], v["display"], v["color"], v["profession"], biome)
     x, y, z = v["spawn"]
     R.cmd("summon minecraft:villager %s %s %s %s" % (x, y, z, nbt))
     print("[npc] healed:", v["display"], flush=True)
 
+def summon_npc(v):
+    if mode_of(v) == "stand":
+        summon_stand(v)
+    else:
+        summon_villager(v)
+
+def sync_villager_variant(v):
+    """活村民的生物群系变体对齐（幂等）：与档案 biome 不一致时 data merge"""
+    biome = v.get("biome")
+    if not biome:
+        return
+    try:
+        r = R.cmd("data get entity %s VillagerData.type" % sel(v))
+        if ('minecraft:%s' % biome) not in r:
+            R.cmd('data merge entity %s {VillagerData:{type:"minecraft:%s"}}' % (sel(v), biome))
+            print("[npc] variant:", v["display"], "->", biome, flush=True)
+    except Exception:
+        R.s = None
+
 def unleash_alive():
-    """活村民解除 NoAI，开始自由生活（拴绳看护兜底）"""
+    """活村民解除 NoAI，开始自由生活（拴绳看护兜底）。人偶（盔甲架）无此概念，跳过。"""
     for v in PROFILES:
-        if not v.get("alive"):
+        if not v.get("alive") or mode_of(v) == "stand":
             continue
         try:
             R.cmd("data merge entity %s {NoAI:0b}" % sel(v))
@@ -419,15 +494,22 @@ def unleash_alive():
 def heal_npcs():
     radius = CFG.get("quests", {}).get("leash_radius", 28)
     for v in PROFILES:
+        try:
+            dedup_npc(v)
+        except Exception:
+            R.s = None
         pos = alive_pos(v)
         if pos is None:
             try:
-                summon_villager(v)
+                summon_npc(v)
             except Exception as e:
                 print("[npc] heal err:", v["display"], e, flush=True)
                 R.s = None
             continue
+        if mode_of(v) == "stand":
+            continue  # 人偶不会走动，无需拴绳
         if v.get("alive"):
+            sync_villager_variant(v)
             x, y, z = v["spawn"]
             dx, dy, dz = pos[0] - x, pos[1] - y, pos[2] - z
             if dx * dx + dy * dy + dz * dz > radius * radius:
@@ -438,6 +520,7 @@ def heal_npcs():
 # ---------- 日志 tail ----------
 RE_CHAT = re.compile(r"<([A-Za-z0-9_]{1,16})> (.+)")
 RE_SAY = re.compile(r"\]: (?:\[Not Secure\] )?\[([A-Za-z0-9_]{1,16})\] (.+)")
+_last_heal = 0.0
 
 def _decode_unicode_escapes(msg):
     if "\\u" in msg:
@@ -490,12 +573,16 @@ def tail_forever():
                             R.s = None
                         time.sleep(0.3)
             continue
-        # EOF：委托日期翻转 + 村民看护 + 日志轮转
-        try:
-            quests_today()
-        except Exception as e:
-            print("[quest] regen err:", e, flush=True)
-        heal_npcs()
+        # EOF：委托日期翻转 + 村民看护（60s 节流，防 RCON 刷屏/竞态）+ 日志轮转
+        global _last_heal
+        now = time.time()
+        if now - _last_heal >= 60:
+            _last_heal = now
+            try:
+                quests_today()
+            except Exception as e:
+                print("[quest] regen err:", e, flush=True)
+            heal_npcs()
         try:
             if os.path.getsize(LOG) < f.tell():
                 f.close()
