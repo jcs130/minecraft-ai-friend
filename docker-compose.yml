@@ -1,0 +1,100 @@
+# minecraft-ai-friend Docker 编排 —— 世界进程 + 观察面板 (+ 可选 MC 服 + NPC)。
+#
+# 用法（在本仓根目录）：
+#   RCON_PASSWORD=xxx docker compose up -d --build world panel
+#   # 连 MC 服一起起（profile=mc）：
+#   RCON_PASSWORD=xxx docker compose --profile mc up -d --build
+#   # 讲述者 NPC（profile=npc）：
+#   RCON_PASSWORD=xxx docker compose --profile npc up -d
+#
+# 拓扑（默认 = 「宿主机已有 MC 服 + MemOS/LLM 在宿主」的家用场景）：
+#   world  ──MC_HOST=host.docker.internal──▶ 宿主 MC 服(25565/RCON 25575)
+#         ──MC_MEMOS_URL/MC_QWENPAW_URL────▶ 宿主 MemOS(:8002)/QwenPaw(:8088)
+#   panel  ──共享 data 卷只读 world.db──────▶ 浏览器 :9090
+#   mc     ──profile=mc 时替代宿主 MC 服（world 自动改连 mc:25565）
+#   npc    ──python sidecar 讲述者（纯 stdlib）
+#
+# ⚠️ build context = 上一级目录（须同时看得见 deepseek-harness/ 与本仓，
+#    dsh 底座 vendor/packages 从 harness 取）。Windows Docker Desktop 的
+#    host.docker.internal 开箱即用；Linux 宿主靠 extra_hosts（已带）。
+#    RCON_PASSWORD 必填（与 MC 服 server.properties 的 rcon.password 一致）。
+
+x-world-common: &world-common
+  build:
+    context: ..                       # workspace 根（deepseek-harness/ 与本仓的公共父目录）
+    dockerfile: minecraft-ai-friend/Dockerfile
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment: &world-env
+    MC_GOD_NAME: ${MC_GOD_NAME:-Goddess}
+    # 默认连宿主机上的 MC 服；--profile mc 时会被覆盖为 mc:25565。
+    MC_HOST: ${MC_HOST:-host.docker.internal}
+    MC_PORT: ${MC_PORT:-25565}
+    RCON_HOST: ${RCON_HOST:-host.docker.internal}
+    RCON_PORT: ${RCON_PORT:-25575}
+    RCON_PASSWORD: ${RCON_PASSWORD:?RCON_PASSWORD required (same as server.properties rcon.password)}
+    MC_MEMOS_URL: ${MC_MEMOS_URL:-http://host.docker.internal:8002}
+    MC_QWENPAW_URL: ${MC_QWENPAW_URL:-http://host.docker.internal:8088/api/console/chat}
+    MC_QDRANT_URL: ${MC_QDRANT_URL:-http://host.docker.internal:6333}
+    MC_EMBEDDING_URL: ${MC_EMBEDDING_URL:-http://host.docker.internal:11434}
+  volumes:
+    - world-data:/app/data            # world.db/编年史/魔法状态/供奉账本（panel 共享只读）
+
+services:
+  world:
+    <<: *world-common
+    container_name: mc-world
+    init: true
+    restart: unless-stopped
+
+  panel:
+    <<: *world-common
+    container_name: mc-panel
+    init: true
+    restart: unless-stopped
+    command: ["node", "web-panel.mjs"]
+    entrypoint: []                    # 面板不需要 RCON 密码注入/世界进程入口
+    ports:
+      - "9090:9090"
+
+  # 可选：原版 MC 服务器（itzg 镜像）。默认不起；--profile mc 时 world 会改连它。
+  mc:
+    image: itzg/minecraft-server:java21
+    container_name: mc-server
+    profiles: ["mc"]
+    environment:
+      EULA: "TRUE"
+      TYPE: VANILLA
+      VERSION: "1.21.11"
+      ONLINE_MODE: "false"            # 与家用离线服一致（bot 任意用户名可连）
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: ${RCON_PASSWORD:?RCON_PASSWORD required}
+      MOTD: "初始之地城镇 - AI 陪玩世界"
+    ports:
+      - "25565:25565"
+      - "25575:25575"
+    volumes:
+      - mc-data:/data
+    restart: unless-stopped
+
+  # 可选：讲述者 NPC sidecar（纯 stdlib python，连宿主 MC 服 RCON + 聊天）。
+  npc:
+    image: python:3.12-slim
+    container_name: mc-npc
+    profiles: ["npc"]
+    working_dir: /npc
+    command: ["python", "-u", "mc_npc.py"]
+    volumes:
+      - ./sidecar:/npc:ro
+      - npc-logs:/npc/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      MC_HOST: ${MC_HOST:-host.docker.internal}
+      RCON_HOST: ${RCON_HOST:-host.docker.internal}
+    restart: unless-stopped
+
+volumes:
+  world-data:
+  mc-data:
+  npc-logs:

@@ -1214,6 +1214,8 @@ export function apply(ctx: Context, config: Config) {
       if (message.trim().startsWith('/')) return
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
       if (parseVoice(message.trim())) return
+      // 日记通道让行（2026-08-17）：「日记：…/日记本」归 mc-diary 档案馆，不当祈愿。
+      if (/^日记([：:]|\b)|^日记本/.test(message.trim())) return
       // 天平通道（服主职权，2026-08-17）：「平衡 <法术> <字段> <数值>」等，
       // 白名单+护栏校验，程序化代行，不进祈愿队列。命中即返回。
       const bal = matchBalance(message.trim())

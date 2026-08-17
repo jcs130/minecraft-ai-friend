@@ -1,0 +1,31 @@
+# Per-Dockerfile ignore（BuildKit：与本 Dockerfile 同目录，路径相对 build context 根）。
+# context = workspace 根（同时含 deepseek-harness/ 与 minecraft-ai-friend/），
+# 用「排除一切 + 白名单放行」把 context 传输量压到最小（工作区里其他东西一律不进）。
+*
+!deepseek-harness
+deepseek-harness/*
+!deepseek-harness/vendor
+!deepseek-harness/packages
+!minecraft-ai-friend
+minecraft-ai-friend/node_modules
+minecraft-ai-friend/data
+minecraft-ai-friend/mc-server
+minecraft-ai-friend/docs
+minecraft-ai-friend/sidecar
+minecraft-ai-friend/.git
+minecraft-ai-friend/.gitignore
+minecraft-ai-friend/*.log*
+minecraft-ai-friend/test-*.mts
+minecraft-ai-friend/test-*.py
+minecraft-ai-friend/*.bat
+minecraft-ai-friend/check_panel.cjs
+minecraft-ai-friend/analyze-skill-usage.mts
+minecraft-ai-friend/passive-e2e.mts
+minecraft-ai-friend/magic-test.mjs
+minecraft-ai-friend/rcon-test.mts
+minecraft-ai-friend/ritual-test.mts
+minecraft-ai-friend/Dockerfile*
+minecraft-ai-friend/docker-compose.yml
+minecraft-ai-friend/deploy-server.mjs
+minecraft-ai-friend/start_webpanel.py
+minecraft-ai-friend/setup-vendor-links.mjs
