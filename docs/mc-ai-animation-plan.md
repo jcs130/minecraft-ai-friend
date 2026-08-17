@@ -71,8 +71,8 @@
 ### 开源边界（A/B 双仓库）
 
 - **插件项目 A `jcs130/dsh-minecraft-agent`（开源）**：穿越者侧 6 插件（bot/tools/memory/transmigrator/mystic/loop）+ 档案机制 + 示例档案。任何人都可用它让自己的 Agent 接入世界。
-- **世界项目 B（私有）**：世界侧（rcon/magic/god/ritual）+ magic-atoms.json + 天神人格 + 世界数据。
-- 当前两套代码暂同居 scratch-plugin，仓库物理拆分等 B 仓库 URL 拍板后执行。
+- **世界项目 B `jcs130/minecraft-ai-friend`（开源，本仓库）**：世界侧（rcon/magic/god/ritual）+ magic-atoms.json + 天神人格 + 世界数据。
+- 双仓库已物理拆分完毕（2026-08-17），两仓均公开，穿越者是自主意识体——天神与世界不操控它们，只立法、守望、回应祈祷。
 
 ### 女神化身 Goddess
 
