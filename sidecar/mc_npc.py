@@ -267,14 +267,20 @@ def gen_quests(day):
 QUESTS = {"date": None, "doc": None}
 
 def quests_today():
+    """每日委托=磁盘文件为准：同日每次调用都重读（多进程共享：daemon/watch/手动核销
+    并存，内存缓存会把别处刚写的 done 标志用旧快照整份踩回去——08-18 墨白翻案教训）。"""
     day = time.strftime("%Y-%m-%d")
-    if QUESTS["date"] == day and QUESTS["doc"]:
-        return QUESTS["doc"]
     p = quests_path(day)
     if os.path.exists(p):
-        doc = json.load(open(p, encoding="utf-8"))
-    else:
-        doc = gen_quests(day)
+        try:
+            doc = json.load(open(p, encoding="utf-8"))
+        except Exception:
+            doc = QUESTS["doc"] if QUESTS["date"] == day else None
+            if not doc:
+                doc = gen_quests(day)
+        QUESTS["date"], QUESTS["doc"] = day, doc
+        return doc
+    doc = gen_quests(day)
     QUESTS["date"], QUESTS["doc"] = day, doc
     return doc
 
@@ -405,10 +411,12 @@ def _recipes_nbt(v):
     return "Offers:{Recipes:[%s]}" % ",".join(recipes)
 
 def sync_offers(vlist=None):
-    """柜台同步（幂等）：把当日委托/撤架状态刷进活村民 Offers；Xp:0 防交易升级换表。"""
+    """柜台同步（幂等）：把当日委托/撤架状态刷进活村民 Offers；Xp:0 防交易升级换表。
+    写架前先 _scan_settle 侦测 pending 成交，防止 uses 被重写抹掉（60s 看护 vs 15s 轮询竞速）。"""
     for v in (vlist or PROFILES):
         if mode_of(v) == "stand":
             continue
+        _scan_settle(v)
         nbt = _recipes_nbt(v) or "Offers:{Recipes:[]}"
         try:
             R.cmd("data merge entity %s {%s,Xp:0}" % (sel(v), nbt))
@@ -417,14 +425,42 @@ def sync_offers(vlist=None):
     print("[offer] synced", flush=True)
 
 def _parse_trades(nbt_text):
-    """Offers NBT 文本 → [(item_id, count, uses)]（按 buy 块逐条切分，容忍字段顺序）"""
+    """Offers NBT 文本 → [(item_id, count, uses)]。
+    vanilla data get 是带空格的 pretty 格式（'buy: {'），自己 merge 写的是紧凑格式（'{buy:'），
+    故切分一律用正则容忍两种；buy 块内各字段独立搜索（vanilla 会重排键序）；
+    uses 用负向后顾排除 maxUses 子串假阳性。"""
     out = []
-    for chunk in (nbt_text or "").split("{buy:")[1:]:
-        mb = re.search(r'id:\s*"minecraft:([a-z0-9_]+)",\s*count:\s*(\d+)', chunk)
-        mu = re.search(r"uses:\s*(\d+)", chunk)
-        if mb and mu:
-            out.append((mb.group(1), int(mb.group(2)), int(mu.group(1))))
+    for chunk in re.split(r'buy\s*:\s*\{', nbt_text or "")[1:]:
+        buy_part = re.split(r',\s*sell\s*:\s*\{', chunk)[0]
+        mi = re.search(r'id\s*:\s*"minecraft:([a-z0-9_]+)"', buy_part)
+        mc_ = re.search(r'count\s*:\s*(\d+)', buy_part)
+        mu = re.search(r'(?<![A-Za-z])uses\s*:\s*(\d+)', chunk)
+        if mi and mc_ and mu:
+            out.append((mi.group(1), int(mc_.group(1)), int(mu.group(1))))
     return out
+
+def _scan_settle(v):
+    """读柜台上架商品的 uses，≥1 的按 item+count 回配当日未完成委托核销。
+    watch 轮询与 sync_offers 写架前共用，双路径收敛防 uses 被重写抹掉。"""
+    try:
+        r = R.cmd("data get entity %s Offers" % sel(v))
+    except Exception:
+        R.s = None
+        return
+    for item, cnt, uses in _parse_trades(r or ""):
+        if uses < 1:
+            continue
+        try:
+            quests = quests_today()["quests"]
+        except Exception:
+            continue
+        q = next((x for x in quests if x["item"] == item and x["count"] == cnt and not x.get("done")), None)
+        if q:
+            owner = next((p for p in PROFILES if p["key"] == q["villager"]), v)
+            try:
+                _settle_gui_trade(owner, q)
+            except Exception as e:
+                print("[offer] settle err:", e, flush=True)
 
 def _settle_gui_trade(v, q):
     """GUI 成交核销（轮询侦测 uses 0→1）：委托下架 + 补发奖励 + 台账。交易者取柜台 6 格内最近玩家。"""
@@ -460,32 +496,13 @@ def _settle_gui_trade(v, q):
     sync_offers()  # 全量：掌柜聚合柜与各家柜同步下架
 
 def watch_offers():
-    """柜台成交侦测（15s 轮询）：扫每个柜台实体的全部 recipe，uses≥1 的按 item+count
-    回配当日未完成委托核销（掌柜聚合柜/各村民自家柜统一走这条路）。"""
+    """柜台成交侦测（15s 轮询）：扫每个柜台实体的全部 recipe，uses≥1 的核销。"""
     while True:
         time.sleep(15)
         for v in PROFILES:
             if mode_of(v) == "stand" or not v.get("alive"):
                 continue
-            try:
-                r = R.cmd("data get entity %s Offers" % sel(v))
-            except Exception:
-                R.s = None
-                continue
-            for item, cnt, uses in _parse_trades(r or ""):
-                if uses < 1:
-                    continue
-                try:
-                    quests = quests_today()["quests"]
-                except Exception:
-                    continue
-                q = next((x for x in quests if x["item"] == item and x["count"] == cnt and not x.get("done")), None)
-                if q:
-                    owner = next((p for p in PROFILES if p["key"] == q["villager"]), v)
-                    try:
-                        _settle_gui_trade(owner, q)
-                    except Exception as e:
-                        print("[offer] settle err:", e, flush=True)
+            _scan_settle(v)
 
 # ---------- @公证交割（Agent↔Agent / 玩家↔玩家，村民作公证点） ----------
 RE_HANDOFF = re.compile(r"@([A-Za-z0-9_]{1,16})\s+(?:给\s*)?(\d+)\s*([A-Za-z\u4e00-\u9fff_]+)")
