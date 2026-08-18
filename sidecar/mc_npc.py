@@ -4,13 +4,18 @@ mc_npc.py v2 — 初始之地村民引擎（数据驱动 + 每日委托经济 + 
 架构（参考 Stanford Generative Agents / AI-Villgers / Wanderfolk 的轻量本地化）：
   - 村民档案外置 data/village/villagers.json（人格/背景/话题/委托模板/回家锚点）
   - 每日委托：模板池按日随机生成 quests-YYYY-MM-DD.json，聊天交付（/clear 收货 + /give 绿宝石）
+- 三通道交易架构（2026-08-18 服务器/客户端解耦）：
+  ① 原版交易 GUI＝通用接口：summon 即带 Offers.Recipes（当日委托 maxUses=1），任何真人/
+     外来客户端右键村民即可交易，零协议知识；轮询 uses 侦测成交→核销委托+补发奖励
+  ② whisper 委托交付（/msg Goddess 交易：…）＝Agent 快捷通道（bot 开 GUI 不便）
+  ③ @玩家 数量物品 ＝女神公证交割（Agent↔Agent 或玩家↔玩家，村民作公证点，双方 ≤5 格当面）
   - LLM 接口预留：config.llm.enabled=true 时兜底闲聊走本地 OpenAI 兼容端点，模板优先
   - 村民看护：tag 选择器存活检查 + 自愈重招（1.21.5+ 组件语法）+ 活村民拴绳看护
 1.21.11 铁律：
   - CustomName 必须用 SNBT 复合体 {text:...,color:...}，旧 JSON 字符串会存成字面文本
   - RCON 对 `execute if ... run say` 的响应恒为空，存活检查必须用 `data get ... Pos`
 """
-import socket, struct, os, re, json, time, io, sys, random, urllib.request
+import socket, struct, os, re, json, time, io, sys, random, urllib.request, threading
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -86,9 +91,18 @@ class Rcon:
 
 R = Rcon()
 
-def tellraw(parts, color="white"):
+# RCON 连接非线程安全：inbox 线程与主 tail 线程并发须串行化（WHISPER-TRADE 2026-08-18）
+_RLOCK = threading.Lock()
+_raw_cmd = R.cmd
+def _locked_cmd(c):
+    with _RLOCK:
+        return _raw_cmd(c)
+R.cmd = _locked_cmd
+
+def tellraw(parts, color="white", to=None):
     seg = ",".join('{"text":"%s","color":"%s"}' % (esc(t), c) for t, c in parts)
-    R.cmd("tellraw @a [" + seg + "]")
+    # WHISPER-TRADE：to 给定=点对点耳语回执（不刷公屏）；玩家名 [A-Za-z0-9_] 天然安全
+    R.cmd("tellraw %s [%s]" % (to if to else "@a", seg))
 
 def esc(t):
     out = []
@@ -97,8 +111,8 @@ def esc(t):
         out.append(ch if 32 <= o < 127 and ch not in '"\\' else "\\u%04x" % o)
     return "".join(out)
 
-def speak(v, text):
-    tellraw([("<" + v["display"] + "> ", v["color"]), (text, "white")])
+def speak(v, text, to=None):
+    tellraw([("<" + v["display"] + "> ", v["color"]), (text, "white")], to=to)
 
 def goddess(text):
     tellraw([("[女神] ", "gold"), (text, "gold")])
@@ -197,7 +211,25 @@ ITEM_ALIASES = {
     "paper": ["纸", "纸张"], "book": ["书", "书本"], "bread": ["面包"], "rotten_flesh": ["腐肉"],
     "diamond": ["钻石"], "emerald": ["绿宝石"], "apple": ["苹果"], "beef": ["牛肉"],
     "cobblestone": ["圆石"], "string": ["线"], "egg": ["鸡蛋"],
+    # v2.1 @公证交割扩充表（Agent↔Agent 常用物）
+    "oak_log": ["木头", "原木", "橡木"], "stick": ["木棍", "棍"], "torch": ["火把"],
+    "cooked_beef": ["牛排", "熟牛肉"], "porkchop": ["猪排", "生猪肉"], "cooked_porkchop": ["熟猪排"],
+    "chicken": ["生鸡肉", "鸡肉"], "cooked_chicken": ["熟鸡肉"], "carrot": ["胡萝卜"],
+    "cod": ["鳕鱼"], "salmon": ["鲑鱼", "三文鱼"], "leather": ["皮革", "皮"], "feather": ["羽毛"],
+    "gunpowder": ["火药"], "arrow": ["箭"], "bone": ["骨头"], "sugar": ["糖"], "sugarcane": ["甘蔗"],
+    "white_wool": ["羊毛"], "glass": ["玻璃"], "sand": ["沙子"], "gravel": ["沙砾"], "dirt": ["泥土"],
+    "obsidian": ["黑曜石"], "gold_ingot": ["金锭", "金子"], "redstone": ["红石", "红石粉"],
+    "cooked_cod": ["熟鳕鱼"], "baked_potato": ["烤土豆"], "golden_apple": ["金苹果"],
 }
+
+def zh2id(name):
+    """中文名/别名 → 物品 id；英文 id 原样放行（交由 clear/give 校验）"""
+    for iid, als in ITEM_ALIASES.items():
+        if name == iid or name in als:
+            return iid
+    if re.match(r"^[a-z0-9_]+$", name) and len(name) <= 32:
+        return name
+    return None
 
 def quests_path(day):
     return os.path.join(VDIR, "quests-%s.json" % day)
@@ -336,7 +368,173 @@ def turn_in(speaker, v, count, item_zh):
     except Exception:
         pass
     print("[quest] DONE %s -> %s: %s" % (speaker, q["display"], q["zh"]), flush=True)
+    try:
+        sync_offers([v])  # 柜台同步撤下已完成的委托（GUI/whisper 双通道一致）
+    except Exception:
+        R.s = None
     return lines
+
+# ---------- 原版交易柜台（Offers.Recipes 通用接口，2026-08-18） ----------
+def _offer_recipe(item_id, count, emeralds, max_uses=1):
+    """委托柜台条目：buy=收购物品 sell=绿宝石；价格全钉死（specialPrice/demand/priceMultiplier=0）
+    防原版供需涨价；maxUses=1 一份卖完即灰；rewardExp:0b 不吐交易经验。"""
+    return ('{buy:{id:"minecraft:%s",count:%d},sell:{id:"minecraft:emerald",count:%d},'
+            'uses:0,maxUses:%d,discountCounter:0,specialPrice:0,demand:0,'
+            'priceMultiplier:0.0f,rewardExp:0b}' % (item_id, count, emeralds, max_uses))
+
+def _recipes_nbt(v):
+    """村民柜台：当日未完成委托 + 档案 shop 民生柜台。
+    market_agg=True 的「掌柜」聚合全村全部未完成委托（含盔甲架人偶 NPC 的——人偶无 GUI，
+    掌柜总柜台补全覆盖：右键一个村民 = 看到所有今日委托）。"""
+    recipes = []
+    if v.get("market_agg"):
+        for x in quests_today()["quests"]:
+            if not x.get("done"):
+                recipes.append(_offer_recipe(x["item"], x["count"], max(1, x.get("emerald", 1))))
+    else:
+        q = quest_of(v["key"])
+        if q and not q.get("done"):
+            recipes.append(_offer_recipe(q["item"], q["count"], max(1, q.get("emerald", 1))))
+    for s in v.get("shop", []):
+        recipes.append('{buy:{id:"minecraft:emerald",count:%d},sell:{id:"minecraft:%s",count:%d},'
+                       'uses:0,maxUses:%d,discountCounter:0,specialPrice:0,demand:0,'
+                       'priceMultiplier:0.0f,rewardExp:0b}' % (
+                           int(s.get("emerald", 1)), s["item"], int(s.get("count", 1)), int(s.get("max", 12))))
+    if not recipes:
+        return None
+    return "Offers:{Recipes:[%s]}" % ",".join(recipes)
+
+def sync_offers(vlist=None):
+    """柜台同步（幂等）：把当日委托/撤架状态刷进活村民 Offers；Xp:0 防交易升级换表。"""
+    for v in (vlist or PROFILES):
+        if mode_of(v) == "stand":
+            continue
+        nbt = _recipes_nbt(v) or "Offers:{Recipes:[]}"
+        try:
+            R.cmd("data merge entity %s {%s,Xp:0}" % (sel(v), nbt))
+        except Exception:
+            R.s = None
+    print("[offer] synced", flush=True)
+
+def _parse_trades(nbt_text):
+    """Offers NBT 文本 → [(item_id, count, uses)]（按 buy 块逐条切分，容忍字段顺序）"""
+    out = []
+    for chunk in (nbt_text or "").split("{buy:")[1:]:
+        mb = re.search(r'id:\s*"minecraft:([a-z0-9_]+)",\s*count:\s*(\d+)', chunk)
+        mu = re.search(r"uses:\s*(\d+)", chunk)
+        if mb and mu:
+            out.append((mb.group(1), int(mb.group(2)), int(mu.group(1))))
+    return out
+
+def _settle_gui_trade(v, q):
+    """GUI 成交核销（轮询侦测 uses 0→1）：委托下架 + 补发奖励 + 台账。交易者取柜台 6 格内最近玩家。"""
+    near = "@p[distance=..6,limit=1]"
+    q["done"], q["done_by"], q["done_at"] = True, "(gui)", time.strftime("%H:%M")
+    try:
+        json.dump(QUESTS["doc"], open(quests_path(QUESTS["date"]), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    reward_desc = ["%d 绿宝石(gui柜台)" % q.get("emerald", 0)]
+    if q.get("effect"):
+        try:
+            R.cmd("effect give %s minecraft:%s 60 0" % (near, q["effect"]))
+            reward_desc.append("祝福·%s" % q["effect"])
+        except Exception:
+            R.s = None
+    if q.get("lore_atom"):
+        atoms = load_atoms()
+        pick = random.choice(atoms) if atoms else None
+        if pick and pick.get("words"):
+            word = pick["words"][0]
+            reward_desc.append("咒语情报")
+            try:
+                speak(v, "（柜台交割后凑近耳边）说好的秘密——「%s」。在聊天栏念出这个词，女神听得懂。" % word, to=near)
+            except Exception:
+                R.s = None
+    ledger_append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "date": QUESTS["date"], "villager": q["display"],
+                   "player": "(gui)", "item": q["item"], "count": q["count"],
+                   "reward": ",".join(reward_desc), "via": "gui"})
+    chronicle_append("集市｜有人在柜台买走了 %s 的委托（%d %s → %s）" % (q["display"], q["count"], q["zh"], "、".join(reward_desc)))
+    feed_append({"kind": "event", "npc": q["display"], "text": "%s 的委托在柜台被买走（%d %s）" % (q["display"], q["count"], q["zh"])})
+    print("[offer] GUI DONE %s: %s" % (q["display"], q["zh"]), flush=True)
+    sync_offers()  # 全量：掌柜聚合柜与各家柜同步下架
+
+def watch_offers():
+    """柜台成交侦测（15s 轮询）：扫每个柜台实体的全部 recipe，uses≥1 的按 item+count
+    回配当日未完成委托核销（掌柜聚合柜/各村民自家柜统一走这条路）。"""
+    while True:
+        time.sleep(15)
+        for v in PROFILES:
+            if mode_of(v) == "stand" or not v.get("alive"):
+                continue
+            try:
+                r = R.cmd("data get entity %s Offers" % sel(v))
+            except Exception:
+                R.s = None
+                continue
+            for item, cnt, uses in _parse_trades(r or ""):
+                if uses < 1:
+                    continue
+                try:
+                    quests = quests_today()["quests"]
+                except Exception:
+                    continue
+                q = next((x for x in quests if x["item"] == item and x["count"] == cnt and not x.get("done")), None)
+                if q:
+                    owner = next((p for p in PROFILES if p["key"] == q["villager"]), v)
+                    try:
+                        _settle_gui_trade(owner, q)
+                    except Exception as e:
+                        print("[offer] settle err:", e, flush=True)
+
+# ---------- @公证交割（Agent↔Agent / 玩家↔玩家，村民作公证点） ----------
+RE_HANDOFF = re.compile(r"@([A-Za-z0-9_]{1,16})\s+(?:给\s*)?(\d+)\s*([A-Za-z\u4e00-\u9fff_]+)")
+
+def handoff(speaker, v, target, count, item_name):
+    """女神公证交割：/clear 收 speaker → /give 交 target，双方须 ≤trade_proximity 格当面。
+    对价协商在 Agent 社交层自理，这里只做物品交割公证。失败原路退还。"""
+    iid = zh2id(item_name)
+    if iid is None:
+        return [v.get("handoff_unk", "这物件我不识得——说个常见的名儿（煤/铁锭/面包…），或用英文物品名。")]
+    if target == speaker:
+        return ["自己给自己递东西，这公证我可做不了。"]
+    try:
+        limit = float(CFG.get("trade_proximity", 5))
+    except (TypeError, ValueError):
+        limit = 5.0
+    tpos = player_pos(target)
+    spos = player_pos(speaker)
+    if tpos is None:
+        return [v.get("handoff_away", "%s 不在场——公证交割得人到齐。" % target)]
+    if spos is not None:
+        dist = ((spos[0]-tpos[0])**2 + (spos[1]-tpos[1])**2 + (spos[2]-tpos[2])**2) ** 0.5
+        if dist > limit:
+            print("[npc] handoff refused (far): %s -> %s %.1f blocks" % (speaker, target, dist), flush=True)
+            return [v.get("far", "公证交割得当面——把 %s 叫到跟前来（5 格内）再找我。" % target)]
+    try:
+        r = R.cmd("clear %s minecraft:%s %d" % (speaker, iid, count))
+    except Exception:
+        R.s = None
+        return ["（一阵怪风卷过柜台……再试一次？）"]
+    m = re.search(r"Removed (\d+)", r)
+    got = int(m.group(1)) if m else 0
+    if got <= 0:
+        return [v.get("handoff_none", "你背包里没有 %d 个%s，空手递什么？" % (count, item_name))]
+    if got < count:
+        R.cmd("give %s minecraft:%s %d" % (speaker, iid, got))  # 原路退还
+        return [v.get("handoff_none", "你背包里只有 %d 个%s，不够 %d 个——我退回去了。" % (got, item_name, count))]
+    R.cmd("give %s minecraft:%s %d" % (target, iid, got))
+    try:
+        speak(v, "%s 托我公证，当面转交给你 %d 个%s——请点收。" % (speaker, got, item_name), to=target)
+    except Exception:
+        R.s = None
+    ledger_append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "date": QUESTS["date"], "villager": v["display"],
+                   "player": speaker, "item": iid, "count": got, "reward": "->%s" % target, "via": "handoff"})
+    chronicle_append("集市｜%s 经 %s 公证转交 %s %d %s" % (speaker, v["display"], target, got, item_name))
+    feed_append({"kind": "event", "npc": v["display"],
+                 "text": "%s 经 %s 公证转交 %s %d %s" % (speaker, v["display"], target, got, item_name)})
+    print("[handoff] %s -> %s: %dx%s (via %s)" % (speaker, target, got, iid, v["display"]), flush=True)
+    return [v.get("handoff_ok", "（当面点清）%d 个%s，已交到 %s 手上——两清！" % (got, item_name, target))]
 
 # ---------- LLM 接口（预留，默认关闭） ----------
 def llm_reply(v, speaker, msg, ctx):
@@ -372,7 +570,7 @@ QUEST_KW = ["任务", "委托", "帮忙", "活儿", "活计", "差事", "酬劳"
 RE_GIVE = re.compile(r"^(?:给|交给|交付|交)\s*(\d+)\s*(\S+)$")
 LAST_TALK = {}  # speaker -> (villager_key, ts)
 
-def route(speaker, msg):
+def route(speaker, msg, via="public"):
     hit_v, rest = None, msg
     for v in PROFILES:
         hits = [c for c in v["calls"] if c in msg]
@@ -392,8 +590,22 @@ def route(speaker, msg):
     LAST_TALK[speaker] = (hit_v["key"], time.time())
     if any(w in rest for w in GREET) and len(rest) <= 6:
         return hit_v, [hit_v["greet"]]
+    m = RE_HANDOFF.match(rest)
+    if m:
+        # @公证交割：Agent↔Agent / 玩家↔玩家。公屏只教学，结算走私语通道。
+        if via == "public":
+            return hit_v, [
+                "（摆摆手）替人递东西更得避人耳目——凑到耳边低语：/msg Goddess 交易：%s @%s 给%s%s" % (hit_v["calls"][0], m.group(1), m.group(2), m.group(3)),
+            ]
+        return hit_v, handoff(speaker, hit_v, m.group(1), int(m.group(2)), m.group(3))
     m = RE_GIVE.match(rest)
     if m:
+        # WHISPER-TRADE 2026-08-18 刷屏治理：交付类高频指令不占公屏——
+        # 公屏喊「岳山 给16煤」只回教学（真人可学），结算只走私语通道（inbox）。
+        if via == "public":
+            return hit_v, [
+                "（左右看了看，压低声音）人多的地方不谈买卖——凑到我耳边低语：/msg Goddess 交易：%s 给%s%s" % (hit_v["calls"][0], m.group(1), m.group(2)),
+            ]
         return hit_v, turn_in(speaker, hit_v, int(m.group(1)), m.group(2))
     if any(w in rest for w in QUEST_KW):
         return hit_v, pitch_quest(hit_v)
@@ -479,10 +691,11 @@ def summon_stand(v):
 
 def summon_villager(v):
     biome = v.get("biome", "plains")
+    offers = _recipes_nbt(v) or "Offers:{Recipes:[]}"
     nbt = ('{NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
-           'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,'
-           'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"}}') % (
-        v["tag"], v["display"], v["color"], v["profession"], biome)
+           'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,Xp:0,'
+           'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
+        v["tag"], v["display"], v["color"], v["profession"], biome, offers)
     x, y, z = v["spawn"]
     R.cmd("summon minecraft:villager %s %s %s %s" % (x, y, z, nbt))
     print("[npc] healed:", v["display"], flush=True)
@@ -608,6 +821,10 @@ def tail_forever():
                 quests_today()
             except Exception as e:
                 print("[quest] regen err:", e, flush=True)
+            try:
+                sync_offers()  # 每日委托翻转/被 whisper 通道完成后柜台对齐
+            except Exception as e:
+                print("[offer] sync err:", e, flush=True)
             heal_npcs()
         try:
             if os.path.getsize(LOG) < f.tell():
@@ -618,14 +835,75 @@ def tail_forever():
             pass
         time.sleep(0.5)
 
+# ---------- WHISPER-TRADE：耳语收件箱（世界进程 mc-god「交易：」分流写入）----------
+# 链路：bot/真人 /msg Goddess 交易：岳山 给16煤 → 女神 whisper 分流 → 本文件 append
+# → 本线程消费 → route(via="whisper") 正常结算（距离门照旧）→ tellraw 点对点回执。
+INBOX = os.path.join(DATA, "npc-inbox.jsonl")
+
+def inbox_loop():
+    while not os.path.exists(INBOX):
+        time.sleep(1.0)
+    f = open(INBOX, "r", encoding="utf-8", errors="replace")
+    f.seek(0, 2)  # 只消费启动之后的新消息
+    print("[npc] inbox up, tailing", INBOX, flush=True)
+    while True:
+        line = f.readline()
+        if line:
+            try:
+                rec = json.loads(line)
+                who = rec.get("speaker", "")
+                msg = rec.get("text", "")
+            except Exception:
+                continue
+            if not who or not msg:
+                continue
+            try:
+                v, replies = route(who, msg, via="whisper")
+            except Exception as e:
+                print("[npc] inbox route err:", e, flush=True)
+                v, replies = None, None
+            if v:
+                # 点对点不刷屏，不吃公屏 COOLDOWN（bot 靠回执知道已结算，防重复交付重试）
+                print("[npc] inbox %s -> %s: %r" % (who, v["display"], msg[:60]), flush=True)
+                feed_append({"kind": "player", "who": who, "npc": v["display"], "npcKey": v["key"],
+                             "text": msg[:200], "via": "whisper"})
+                npc_pos = alive_pos(v)
+                for r in replies:
+                    try:
+                        speak(v, r, to=who)
+                        feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
+                                     "npcPos": list(npc_pos) if npc_pos else None,
+                                     "color": v.get("color", "white"), "to": who,
+                                     "text": r[:300], "via": "whisper"})
+                    except Exception as e:
+                        print("[npc] inbox speak err:", e, flush=True)
+                        R.s = None
+                    time.sleep(0.3)
+            continue
+        # EOF：轮转检测（与 tail_forever 同款）
+        try:
+            if os.path.exists(INBOX) and os.path.getsize(INBOX) < f.tell():
+                f.close()
+                f = open(INBOX, "r", encoding="utf-8", errors="replace")
+                f.seek(0, 2)
+        except OSError:
+            pass
+        time.sleep(0.4)
+
 if __name__ == "__main__":
     R.connect()
+    threading.Thread(target=inbox_loop, daemon=True).start()
+    threading.Thread(target=watch_offers, daemon=True).start()
     print("[npc] rcon auth ok", flush=True)
     try:
         qd = quests_today()
         print("[npc] quests today:", len(qd["quests"]), flush=True)
     except Exception as e:
         print("[npc] quest init err:", e, flush=True)
+    try:
+        sync_offers()
+    except Exception as e:
+        print("[offer] boot sync err:", e, flush=True)
     try:
         unleash_alive()
     except Exception as e:
