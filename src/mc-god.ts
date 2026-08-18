@@ -1256,7 +1256,24 @@ export function apply(ctx: Context, config: Config) {
         applyLaw(username, law).catch((err) => log(`applyLaw failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
       }
-      const { wish, offeringText } = splitWishOffering(message.trim())
+      // ── 咏唱分流（2026-08-18 方案A：咒语走私语，公屏不再施法）─────────
+      // AI 的 mc_pray 显式带「祈愿：」前缀 → 一律入祈愿队列，绝不误伤
+      // （自然语言祈愿碰巧含法术关键词也照旧入队）；无前缀且含法术关键词 →
+      // 快路径施法（真人 /msg Goddess 念咒同样生效，AI 与真人平权）；
+      // 其余自然语言 → 祈愿。施法回执由信使私聊送达，特效仍公屏。
+      const trimmed = message.trim()
+      const explicitPrayer = trimmed.startsWith('祈愿：')
+      const body = explicitPrayer ? trimmed.slice(3).trim() : trimmed
+      if (!explicitPrayer && ctx.mcMagic.sniffChant(body)) {
+        ctx.mcMagic.castSpell(username, body)
+          .then((reply) => {
+            log(`whisper chant from ${username}: ${body}`)
+            try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
+          })
+          .catch((err) => log(`whisper cast failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        return
+      }
+      const { wish, offeringText } = splitWishOffering(body)
       if (!wish) return
 
       // 入场节流：同一玩家 admitCooldownMs 内不重复收信

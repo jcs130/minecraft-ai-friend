@@ -246,6 +246,13 @@ export interface MagicService {
    * 视觉特效（粒子/音效/大字）与快路径完全一致。返回执行结果描述。
    */
   castByGod(username: string, atomId: string, opts?: GodCastOpts): Promise<string>
+  /**
+   * 快路径施法（玩家自付三资源，含等级/魔力/参数校验）：
+   * mc-god 私语分流命中关键词后调用，返回给施法者的结果描述。
+   */
+  castSpell(username: string, chant: string): Promise<string>
+  /** 私语嗅探（分流用）：消息含任意法术关键词即真，不保证参数合法。 */
+  sniffChant(message: string): boolean
   /* ── 成长体系（2026-08-17 路线 A 定稿：等级复用原生 XpLevel；魔力为体系自有属性）── */
   /** 魔力上限基础公式：100 + 12 × (XpLevel − 1)；最终 = 此值 + maxManaBonus。 */
   maxManaFor(level: number): number
@@ -1012,6 +1019,8 @@ export function apply(ctx: Context, config: Config) {
     unlockPassive: (u, id) => store.unlockPassive(u, id),
     hasPassive: (u, id) => store.hasPassive(u, id),
     castByGod: (username, atomId, opts) => castByGod(username, atomId, opts),
+    castSpell: (username, chant) => cast(username, chant),
+    sniffChant: (msg) => atoms.some((a) => a.words.some((w) => msg.includes(w))),
   }
   ctx.provide('mcMagic', service)
 
@@ -1328,45 +1337,12 @@ export function apply(ctx: Context, config: Config) {
     }
   }
 
-  // ── 公屏咏唱监听：任何玩家（AI 或真人）念咒即施法 ────────────────────
-  // 咒语本身全世界听见（表演性，公屏）；回执由信使私聊点名送达
-  // （2026-08-17 扛枪定调：回执=个人事务走私聊，公屏不再刷 [女神] 点名，
-  // 人多了也不乱；施法者的 Agent 靠 whisper 事件听见回执）。
-  let watchedBot: Bot | null = null
-  function ensureChatListener(bot: Bot) {
-    if (watchedBot === bot) return
-    watchedBot = bot
-    bot.on('chat', (username: string, message: string) => {
-      if (username === bot.username) return
-      const chant = message.trim()
-      // 只处理疑似咏唱（含任意原子关键词），避免每句聊天都触发施法
-      const hits = atoms.some((a) => a.words.some((w) => chant.includes(w)))
-      if (!hits) return
-      cast(username, chant)
-        .then((reply) => {
-          log(`player ${username} chanted "${chant}"`)
-          try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
-        })
-        .catch((err) => log(`player cast error: ${err instanceof Error ? err.message : String(err)}`))
-    })
-  }
-
-  // 定期确保监听挂上（bot reconnect 会换实例）；用 ctx.setTimeout 递归（与 mc-loop 一致）
-  let disposed = false
-  let stopEnsure: (() => void) | null = null
-  function scheduleEnsure() {
-    if (disposed) return
-    stopEnsure = ctx.setTimeout(() => {
-      const bot = getBot()
-      if (bot) ensureChatListener(bot)
-      scheduleEnsure()
-    }, 5000)
-  }
-  scheduleEnsure()
-
+  // ── 咏唱监听已迁至私语通道（2026-08-18 方案A：咒语走私语，公屏不再施法）──
+  // 分流在 mc-god 的 whisper handler：sniffChant 命中 → castSpell → [信使] 回执。
+  // 理由：公屏即输入通道会误触发（任何人的闲聊含关键词即施法、白烧魔力）+
+  // 咒文当众暴露；私语通道 AI 与真人平权——真人 /msg Goddess 念咒同样施法；
+  // 特效（粒子/音效/大字）仍公屏：旁人见异象而不知咒文。
   ctx.effect(() => () => {
-    disposed = true
-    if (stopEnsure) stopEnsure()
     log('magic disposed')
   })
 
