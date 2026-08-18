@@ -12,6 +12,10 @@ import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import { parseVoice } from './mc-social.ts'
 
+// 村民交易耳语收件箱（WHISPER-TRADE 2026-08-18）：世界进程与 mc_npc.py 同容器同卷，
+// 路径须与引擎侧 INBOX=DATA/npc-inbox.jsonl 一致（容器内 /app/data）。
+const NPC_INBOX = process.env.NPC_INBOX || './data/npc-inbox.jsonl'
+
 /**
  * mc-god —— 慢路径女神（世界守护者，QwenPaw Agent mc-god）+ 女神化身管理。
  *
@@ -428,6 +432,12 @@ export function apply(ctx: Context, config: Config) {
       answer = pending[messageId].delta || pending[messageId].full
     }
     log(`goddess answered (${answer.length} chars): ${answer.slice(0, 160)}`)
+    // 神谕中的地貌旨意（2026-08-18 女神获自主改地貌权）：回复文本里嵌 TERRAFORM JSON
+    // 时交 mc-terra 白名单校验后落地（fill/setblock，限额聚居区内）；无指令/无插件时静默。
+    try {
+      const n = await (ctx as unknown as { mcTerra?: { executeOracle(t: string): Promise<number> } }).mcTerra?.executeOracle(answer)
+      if (n) log(`terra: ${n} TERRAFORM directives executed from goddess oracle`)
+    } catch { /* terra 不可用不影响神谕送达 */ }
     return answer
   }
 
@@ -1262,6 +1272,21 @@ export function apply(ctx: Context, config: Config) {
       // 快路径施法（真人 /msg Goddess 念咒同样生效，AI 与真人平权）；
       // 其余自然语言 → 祈愿。施法回执由信使私聊送达，特效仍公屏。
       const trimmed = message.trim()
+      // ── 村民交易耳语分流（2026-08-18 刷屏治理）：「交易：岳山 给16煤」→ NPC 引擎
+      // 耳语收件箱。交付类高频指令走私语点对点，公屏只留低频社交；村民结算回执由
+      // 引擎 tellraw 点对点送达交易者本人。
+      const tradeBody = trimmed.startsWith('交易：') ? trimmed.slice(3).trim()
+        : trimmed.startsWith('交易:') ? trimmed.slice(3).trim() : ''
+      if (tradeBody) {
+        try {
+          appendFileSync(NPC_INBOX, JSON.stringify({ speaker: username, text: tradeBody, ts: Date.now() }) + '\n')
+          log(`npc trade whisper from ${username}: ${tradeBody}`)
+        } catch (err) {
+          log(`npc inbox append failed: ${err instanceof Error ? err.message : String(err)}`)
+          try { bot.whisper(username, '[信使] 掌柜的铺子暂时歇了（村民引擎不在），稍后再试。') } catch { /* not ready */ }
+        }
+        return
+      }
       const explicitPrayer = trimmed.startsWith('祈愿：')
       const body = explicitPrayer ? trimmed.slice(3).trim() : trimmed
       if (!explicitPrayer && ctx.mcMagic.sniffChant(body)) {

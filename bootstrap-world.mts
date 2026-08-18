@@ -21,6 +21,8 @@ import * as mcGod from './src/mc-god.ts'
 import * as mcRitual from './src/mc-ritual.ts'
 import * as mcSocial from './src/mc-social.ts'
 import * as mcBubble from './src/mc-bubble.ts'
+import * as mcEvolveReview from './src/mc-evolve-review.ts'
+import * as mcTerra from './src/mc-terra.ts'
 
 const RUN_MS = Number(process.env.RUN_MS ?? 0)
 // 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
@@ -120,6 +122,24 @@ await ctx.plugin(mcSocial, {
   mailReadBatch: 5,
 })
 await ctx.plugin(mcBubble)
+
+// L3 提议进化·世界侧审核官（2026-08-18）：扫描 evolution-proposals/，女神裁决后
+// 核准指令落 evolution-directives-<u>.json，穿越者侧 mc-adapt 读回注入。
+await ctx.plugin(mcEvolveReview, {
+  enabled: true,
+  qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
+  pollMs: 60_000,
+  maxAttempts: 5,
+  maxDirectives: 10,
+})
+// 女神的地貌之手（2026-08-18 扛枪拍板：女神可自主决定改变地貌）：
+// 巡检隐患自主封井 + 神谕 TERRAFORM 指令白名单落地。
+await ctx.plugin(mcTerra, {
+  enabled: true,
+  dataDir: './data',
+  pollMs: 60_000,
+  maxFixesPerPoll: 5,
+})
 
 console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)
 if (RUN_MS > 0) {
