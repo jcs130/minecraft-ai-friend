@@ -1083,7 +1083,31 @@ async function rconExec(cmd) {
 
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
-  if (u.pathname === '/api/state') {
+  if (u.pathname === '/api/village') {
+      try {
+        const vil = JSON.parse(readFileSync(join(DATA_DIR, 'village', 'villagers.json'), 'utf-8'))
+        const list = Array.isArray(vil) ? vil : vil?.villagers ?? []
+        const d = new Date()
+        const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        let quests = []
+        try { quests = JSON.parse(readFileSync(join(DATA_DIR, 'village', `quests-${day}.json`), 'utf-8'))?.quests ?? [] } catch {}
+        const feed = []
+        try {
+          const lines = readFileSync(NPCFEED_PATH, 'utf-8').trim().split('\n').slice(-30)
+          for (const ln of lines) { try { feed.push(JSON.parse(ln)) } catch {} }
+        } catch {}
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify({ day, npcs: list.map((v) => ({
+          key: v.key, display: v.display, spawn: v.spawn,
+          quest: (() => { const q = quests.find((x) => x.villager === v.key); return q ? { zh: q.zh, count: q.count, emerald: q.emerald, done: q.done, doneBy: q.done_by } : null })(),
+        })), feed }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: String(e) }))
+      }
+      return
+    }
+    if (u.pathname === '/api/state') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify(apiState()))
     return

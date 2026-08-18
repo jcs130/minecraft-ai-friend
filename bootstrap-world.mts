@@ -20,6 +20,7 @@ import * as mcMagic from './src/mc-magic.ts'
 import * as mcGod from './src/mc-god.ts'
 import * as mcRitual from './src/mc-ritual.ts'
 import * as mcSocial from './src/mc-social.ts'
+import * as mcBubble from './src/mc-bubble.ts'
 
 const RUN_MS = Number(process.env.RUN_MS ?? 0)
 // 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
@@ -118,6 +119,7 @@ await ctx.plugin(mcSocial, {
   remindCooldownSec: 60,
   mailReadBatch: 5,
 })
+await ctx.plugin(mcBubble)
 
 console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)
 if (RUN_MS > 0) {
