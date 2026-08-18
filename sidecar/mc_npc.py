@@ -274,6 +274,21 @@ def chronicle_append(text):
         f.write("- [%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M"), text))
 
 def turn_in(speaker, v, count, item_zh):
+    # 距离门：当面交易——玩家与 NPC 实距 > trade_proximity 格（默认 5）一律拒收，
+    # 防远程喊话白嫖（玩家不上前就能 /clear+/give 属经济漏洞）。村民档案可配 "far" 台词。
+    try:
+        limit = float(CFG.get("trade_proximity", 5))
+    except (TypeError, ValueError):
+        limit = 5.0
+    ppos = player_pos(speaker)
+    npos = alive_pos(v)
+    if ppos is None or npos is None:
+        print("[npc] trade refused (pos unknown): %s -> %s" % (speaker, v["key"]), flush=True)
+        return [v.get("far", "（手搭凉棚四下张望）没见着人影……走到我铺子跟前，当面才好交割！")]
+    dist = ((ppos[0]-npos[0])**2 + (ppos[1]-npos[1])**2 + (ppos[2]-npos[2])**2) ** 0.5
+    if dist > limit:
+        print("[npc] trade refused (far): %s %.1f blocks from %s" % (speaker, dist, v["key"]), flush=True)
+        return [v.get("far", "（手搭凉棚张望）隔着老远喊什么呢？走到我跟前来，当面点货！")]
     q = quest_of(v["key"])
     if not q:
         return [v.get("quest_busy", "今日的活已经有人办完了。")]
@@ -411,6 +426,17 @@ def dedup_npc(v):
 def alive_pos(v):
     try:
         r = R.cmd("data get entity %s Pos" % sel(v))
+        m = re.search(r"\[(-?[\d.]+)d, ?(-?[\d.]+)d, ?(-?[\d.]+)d\]", r)
+        if m:
+            return float(m.group(1)), float(m.group(2)), float(m.group(3))
+    except Exception:
+        R.s = None
+    return None
+
+def player_pos(name):
+    """玩家实况坐标（在线玩家；名字仅支持 ASCII，中文玩家名 RCON 直传不可用——与 turn_in 既有行为一致）"""
+    try:
+        r = R.cmd("data get entity %s Pos" % name)
         m = re.search(r"\[(-?[\d.]+)d, ?(-?[\d.]+)d, ?(-?[\d.]+)d\]", r)
         if m:
             return float(m.group(1)), float(m.group(2)), float(m.group(3))
