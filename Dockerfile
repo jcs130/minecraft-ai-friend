@@ -53,13 +53,17 @@ walk("/app/dsh/vendor"); \
 walk("/app/dsh/packages/core"); \
 '
 
-# 3) 本仓源码（data/ 运行时数据由 volume 挂载，不进镜像）
+# 3) 本仓源码（data/ 运行时数据由 volume 挂载，不进镜像；
+#    但 git 里维护的「默认世界配置」拷到 /app/defaults，entrypoint 首启时
+#    cp -n 种子进 volume——魔法原子 32 条/技能事件/档案/平衡表开箱即用）
 COPY minecraft-ai-friend/src ./src
 COPY minecraft-ai-friend/bootstrap-world.mts minecraft-ai-friend/tsconfig.json ./
 COPY minecraft-ai-friend/web-panel.mjs ./
+COPY minecraft-ai-friend/data ./defaults
 
 # 观察面板（同镜像第二用途：docker compose 的 panel 服务直接换 command 跑）
 EXPOSE 9090
 
-# 入口：RCON 密码经 env 注入 secrets 文件（mc-rcon 只读文件），再起世界进程。
-ENTRYPOINT ["/bin/sh", "-c", "mkdir -p data && if [ -n \"$RCON_PASSWORD\" ]; then printf '%s' \"$RCON_PASSWORD\" > data/rcon-secret.txt; fi && exec npx tsx bootstrap-world.mts"]
+# 入口：RCON 密码经 env 注入 secrets 文件（mc-rcon 只读文件），默认配置
+# 种子进 volume（已有文件不覆盖），再起世界进程。
+ENTRYPOINT ["/bin/sh", "-c", "mkdir -p data && cp -rn /app/defaults/. /app/data/ 2>/dev/null; if [ -n \"$RCON_PASSWORD\" ]; then printf '%s' \"$RCON_PASSWORD\" > data/rcon-secret.txt; fi && exec npx tsx bootstrap-world.mts"]

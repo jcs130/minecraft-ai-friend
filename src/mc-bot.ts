@@ -80,7 +80,14 @@ export function apply(ctx: Context, config: Config) {
             closeViewer()
             closeViewer = null
           }
-          const { default: prismarineViewer } = await import('prismarine-viewer')
+          // ⚠️ 必须变量化 import 路径：esbuild 会把字面量 `import('prismarine-viewer')`
+          // 提升成顶层静态 import（CJS/ESM 都如此），导致即使 viewerEnabled=false，
+          // 模块加载时就 require prismarine-viewer → canvas。世界镜像用
+          // --omit=optional 跳过 canvas，会直接崩。变量化后 esbuild 无法静态分析，
+          // 保持真正的懒加载（viewer 关闭的部署完全不需要 canvas 全家桶）。
+          const pvModule = 'prismarine-viewer'
+          const pv = await import(pvModule)
+          const prismarineViewer = (pv as any).default
           const mineflayerViewer = prismarineViewer.mineflayer
           mineflayerViewer(bot, {
             port: config.viewerPort,

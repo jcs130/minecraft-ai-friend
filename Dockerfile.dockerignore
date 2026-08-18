@@ -9,6 +9,15 @@ deepseek-harness/*
 !minecraft-ai-friend
 minecraft-ai-friend/node_modules
 minecraft-ai-friend/data
+minecraft-ai-friend/data/*
+!minecraft-ai-friend/data/magic-atoms.json
+!minecraft-ai-friend/data/skill-events.json
+!minecraft-ai-friend/data/balance-overrides.json
+!minecraft-ai-friend/data/transmigrators.json
+!minecraft-ai-friend/data/transmigrators
+!minecraft-ai-friend/data/advancement-names.json
+!minecraft-ai-friend/data/advancement-unlocks.json
+!minecraft-ai-friend/data/village
 minecraft-ai-friend/mc-server
 minecraft-ai-friend/docs
 minecraft-ai-friend/sidecar
