@@ -1,1059 +1,1125 @@
 {
-  "_comment": "魔法原子指令表（快路径）。改数字梯度/咒语词/命令/视觉直接编辑本文件，无需改代码。删除本文件则回退到 src/mc-magic.ts 内嵌默认。mana 上限与回蓝速率在 bootstrap-world.mts 的 mcMagic 配置里（maxManaDefault=100, regenPerSec=2.0 = 每秒 2% 上限）。三资源消耗：mana=时间回蓝，food=吃回(data modify foodLevel)，hp=血祭(damage ... minecraft:magic 无视护甲)。视觉：particles=每条 /particle 参数模板(type x y z dx dy dz speed count)、sounds=音效ID(相对施法者)、title/subtitle=大字咏唱词，全部纯 vanilla 零 mod。占位符支持算术：{py+1}/{py-10}/{px+2}。",
-  "atoms": [
-    {
-      "id": "appraise",
-      "layer": "effect",
-      "name": "鉴定",
-      "words": [
-        "鉴定",
-        "鉴定自身",
-        "鉴定能力",
-        "审视己身",
-        "appraise"
-      ],
-      "cost": {
-        "mana": 2,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [],
-      "reply": "",
-      "sounds": [
-        "minecraft:block.enchantment_table.use"
-      ],
-      "title": "鉴定",
-      "subtitle": "女神之眼，烛照己身"
-    },
-    {
-      "id": "home",
-      "layer": "effect",
-      "name": "归乡",
-      "words": [
-        "归乡",
-        "回家",
-        "回基地",
-        "归途",
-        "回巢"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [
-        "tp {target} {bx} {by} {bz}"
-      ],
-      "reply": "空间之力涌动，你被送回家中。",
-      "particles": [
-        "minecraft:portal {bx} {by+1} {bz} 0.5 0.5 0.5 0.3 80",
-        "minecraft:end_rod {bx} {by+1} {bz} 0.4 0.4 0.4 0.05 50"
-      ],
-      "sounds": [
-        "minecraft:entity.enderman.teleport"
-      ],
-      "title": "归乡",
-      "subtitle": "空间之力，护你归途"
-    },
-    {
-      "id": "tp",
-      "layer": "effect",
-      "name": "空间传送",
-      "words": [
-        "传送",
-        "瞬移",
-        "闪现",
-        "撕裂虚空",
-        "空间跳跃",
-        "跃迁"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "paramCosts": {
-        "distance": {
-          "mana": 5
-        }
-      },
-      "params": {
-        "distance": {
-          "type": "number",
-          "default": 5,
-          "max": 30
-        },
-        "direction": {
-          "type": "direction",
-          "default": "东"
-        }
-      },
-      "commands": [
-        "tp {target} {tx} {ty} {tz}"
-      ],
-      "reply": "虚空撕开一道裂缝，你向{direction}跃迁 {distance} 格。",
-      "particles": [
-        "minecraft:end_rod {tx} {ty+1} {tz} 0.4 0.4 0.4 0.05 60",
-        "minecraft:portal {tx} {ty+1} {tz} 0.5 0.5 0.5 0.3 50"
-      ],
-      "sounds": [
-        "minecraft:entity.enderman.teleport"
-      ],
-      "title": "撕裂虚空",
-      "subtitle": "向{direction}跃迁 {distance} 格"
-    },
-    {
-      "id": "heal",
-      "layer": "effect",
-      "name": "圣愈术",
-      "words": [
-        "圣愈",
-        "治愈",
-        "治疗",
-        "疗伤",
-        "回血",
-        "痊愈"
-      ],
-      "cost": {
-        "mana": 30,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "effect give {target} minecraft:instant_health 1 1",
-        "effect give {target} minecraft:saturation 1 20"
-      ],
-      "reply": "柔和的光笼罩你，伤口愈合，饥饿缓解。",
-      "particles": [
-        "minecraft:heart {px} {py+1} {pz} 0.6 0.6 0.6 0.1 25",
-        "minecraft:glow {px} {py+1} {pz} 0.4 0.4 0.4 0.01 40"
-      ],
-      "sounds": [
-        "minecraft:block.enchantment_table.use"
-      ],
-      "title": "圣愈",
-      "subtitle": "柔和的光，抚平伤痛"
-    },
-    {
-      "id": "blood_mana",
-      "layer": "effect",
-      "name": "燃血术",
-      "words": [
-        "燃血",
-        "以血为引",
-        "血祭",
-        "化血为魔",
-        "燃烧生命"
-      ],
-      "cost": {
-        "mana": -15,
-        "food": 0,
-        "hp": 6
-      },
-      "requiredLevel": 5,
-      "commands": [],
-      "reply": "你咬破指尖，以血为引——伤口灼痛，魔力却自血脉中翻涌而出。",
-      "particles": [
-        "minecraft:crimson_spore {px} {py+1} {pz} 0.4 0.5 0.4 0.02 40",
-        "minecraft:heart {px} {py+2} {pz} 0.3 0.3 0.3 0 6"
-      ],
-      "sounds": [
-        "minecraft:entity.player.hurt",
-        "minecraft:block.fire.ambient"
-      ],
-      "title": "燃血",
-      "subtitle": "以血为引，魔力翻涌"
-    },
-    {
-      "id": "feed",
-      "layer": "effect",
-      "name": "饱食赐福",
-      "words": [
-        "饱食",
-        "充饥",
-        "饱腹",
-        "不饿",
-        "充能"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [
-        "effect give {target} minecraft:saturation 1 99"
-      ],
-      "reply": "神力化作暖流，你的饥饿感消失了。",
-      "particles": [
-        "minecraft:glow {px} {py+1} {pz} 0.5 0.5 0.5 0.01 30"
-      ],
-      "sounds": [
-        "minecraft:block.note_block.chime"
-      ],
-      "title": "饱食赐福",
-      "subtitle": "暖流涌动，饥饿消散"
-    },
-    {
-      "id": "food_mana",
-      "layer": "effect",
-      "name": "炼食术",
-      "words": [
-        "炼食",
-        "化食",
-        "以食为引",
-        "化食为魔",
-        "炼化腹中之食"
-      ],
-      "cost": {
-        "mana": -6,
-        "food": 8,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [],
-      "reply": "你凝神炼化腹中之食，饥意翻涌间，魔力自丹田升腾。",
-      "particles": [
-        "minecraft:happy_villager {px} {py+1} {pz} 0.4 0.4 0.4 0 12",
-        "minecraft:falling_honey {px} {py+2} {pz} 0.3 0.3 0.3 0.02 20"
-      ],
-      "sounds": [
-        "minecraft:entity.player.burp"
-      ],
-      "title": "炼食",
-      "subtitle": "饥肠化炉，魔力升腾"
-    },
-    {
-      "id": "give",
-      "layer": "effect",
-      "name": "造物术",
-      "words": [
-        "造物",
-        "赐予",
-        "给予",
-        "赐下",
-        "给我",
-        "变出"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "params": {
-        "item": {
-          "type": "item",
-          "default": "bread"
-        }
-      },
-      "commands": [
-        "give {target} {item} {count}"
-      ],
-      "reply": "一件物资自虚空中凝聚，落入你的手中。",
-      "particles": [
-        "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 50"
-      ],
-      "sounds": [
-        "minecraft:block.enchantment_table.use"
-      ],
-      "title": "造物",
-      "subtitle": "虚空中，物质凝成"
-    },
-    {
-      "id": "light",
-      "layer": "effect",
-      "name": "照明术",
-      "words": [
-        "照明",
-        "点火",
-        "火把",
-        "光亮",
-        "照亮",
-        "驱暗"
-      ],
-      "cost": {
-        "mana": 5,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [
-        "give {target} minecraft:torch 4"
-      ],
-      "reply": "几根火把落入你的手中，照亮前路。",
-      "particles": [
-        "minecraft:flame {px} {py+1} {pz} 0.3 0.3 0.3 0.02 30"
-      ],
-      "sounds": [
-        "minecraft:block.fire.ambient"
-      ],
-      "title": "照明",
-      "subtitle": "火光，驱散黑暗"
-    },
-    {
-      "id": "time_day",
-      "layer": "effect",
-      "name": "破晓术",
-      "words": [
-        "破晓",
-        "天明",
-        "白昼",
-        "天亮",
-        "日出",
-        "驱夜"
-      ],
-      "cost": {
-        "mana": 60,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 25,
-      "commands": [
-        "time set day"
-      ],
-      "reply": "太阳撕裂夜幕，世界重归白昼。",
-      "particles": [
-        "minecraft:firework {px} {py+2} {pz} 0.5 0.5 0.5 0.01 25",
-        "minecraft:glow {px} {py+2} {pz} 0.5 0.5 0.5 0.01 30"
-      ],
-      "sounds": [
-        "minecraft:block.beacon.activate"
-      ],
-      "title": "破晓",
-      "subtitle": "太阳，撕裂夜幕"
-    },
-    {
-      "id": "weather_clear",
-      "layer": "effect",
-      "name": "驱云术",
-      "words": [
-        "驱云",
-        "放晴",
-        "晴空",
-        "雨停",
-        "云散"
-      ],
-      "cost": {
-        "mana": 35,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 8,
-      "commands": [
-        "weather clear"
-      ],
-      "reply": "乌云散尽，天空放晴。",
-      "particles": [
-        "minecraft:cloud {px} {py+2} {pz} 0.5 0.5 0.5 0.05 40"
-      ],
-      "sounds": [
-        "minecraft:block.chain.break"
-      ],
-      "title": "驱云",
-      "subtitle": "乌云散尽，晴空万里"
-    },
-    {
-      "id": "terraform",
-      "layer": "effect",
-      "name": "大地塑形",
-      "words": [
-        "塑形",
-        "裂地",
-        "掘土",
-        "开辟",
-        "平整",
-        "挖地"
-      ],
-      "cost": {
-        "mana": 30,
-        "food": 6,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "fill {px} {py-1} {pz} {px} {py-1} {pz} minecraft:air"
-      ],
-      "reply": "你消耗体力（饱食度），重塑了脚下的大地。",
-      "particles": [
-        "minecraft:poof {px} {py} {pz} 0.5 0.5 0.5 0.1 40"
-      ],
-      "sounds": [
-        "minecraft:block.gravel.break"
-      ],
-      "title": "大地塑形",
-      "subtitle": "脚下大地，为你重塑"
-    },
-    {
-      "id": "rampart",
-      "layer": "effect",
-      "name": "覆土术",
-      "words": [
-        "覆土",
-        "填壑",
-        "垒土",
-        "筑地",
-        "垫脚"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 3,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [
-        "fill {px} {py-10} {pz} {px} {py-1} {pz} minecraft:dirt"
-      ],
-      "reply": "大地应声隆起，深坑裂隙在脚下填为坦途。",
-      "particles": [
-        "minecraft:poof {px} {py-1} {pz} 0.4 0.6 0.4 0.1 50"
-      ],
-      "sounds": [
-        "minecraft:block.grass.place"
-      ],
-      "title": "覆土",
-      "subtitle": "大地隆起，天堑变通途"
-    },
-    {
-      "id": "spring",
-      "layer": "effect",
-      "name": "化水术",
-      "words": [
-        "化水",
-        "清泉",
-        "涌泉",
-        "甘泉",
-        "引水"
-      ],
-      "cost": {
-        "mana": 12,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "params": {
-        "distance": {
-          "type": "number",
-          "default": 2,
-          "max": 10
-        },
-        "direction": {
-          "type": "direction",
-          "default": "东"
-        }
-      },
-      "commands": [
-        "setblock {tx} {ty-1} {tz} minecraft:water"
-      ],
-      "reply": "清泉自{direction}方涌出，润泽旱土。",
-      "particles": [
-        "minecraft:falling_water {tx} {ty+2} {tz} 0.3 0.5 0.3 0.05 40",
-        "minecraft:splash {tx} {ty} {tz} 0.3 0.2 0.3 0.05 20"
-      ],
-      "sounds": [
-        "minecraft:item.bucket.empty"
-      ],
-      "title": "化水",
-      "subtitle": "清泉涌出，润泽旱土"
-    },
-    {
-      "id": "meteor",
-      "layer": "effect",
-      "name": "陨石术",
-      "words": [
-        "陨石",
-        "天罚",
-        "星陨",
-        "神雷",
-        "天雷",
-        "雷击"
-      ],
-      "cost": {
-        "mana": 80,
-        "food": 0,
-        "hp": 15
-      },
-      "requiredLevel": 25,
-      "commands": [
-        "summon minecraft:lightning_bolt {tx} {ty} {tz}"
-      ],
-      "reply": "你燃烧生命，召唤天雷轰击前方！",
-      "particles": [
-        "minecraft:lava {tx} {ty+1} {tz} 0.3 0.3 0.3 0.05 30",
-        "minecraft:flame {tx} {ty+1} {tz} 0.3 0.3 0.3 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:entity.lightning_bolt.thunder"
-      ],
-      "title": "陨石",
-      "subtitle": "燃烧生命，天罚降临"
-    },
-    {
-      "id": "swift",
-      "layer": "effect",
-      "name": "迅捷术",
-      "words": [
-        "迅捷",
-        "疾风",
-        "加速"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [
-        "effect give {target} minecraft:speed 90 1"
-      ],
-      "reply": "风裹住你的双腿，步履如飞，持续九十息。",
-      "particles": [
-        "minecraft:crit {px} {py} {pz} 0.4 0.2 0.4 0.1 20"
-      ],
-      "sounds": [
-        "minecraft:item.trident.riptide_1"
-      ],
-      "title": "迅捷",
-      "subtitle": "步履如风"
-    },
-    {
-      "id": "leap",
-      "layer": "effect",
-      "name": "跃升术",
-      "words": [
-        "跃升",
-        "大跳",
-        "高跳",
-        "腾跃"
-      ],
-      "cost": {
-        "mana": 15,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [
-        "effect give {target} minecraft:jump_boost 60 2"
-      ],
-      "reply": "脚下如有神风托举，你健步如飞、一跃冲天。",
-      "particles": [
-        "minecraft:cloud {px} {py-1} {pz} 0.4 0.2 0.4 0.05 20"
-      ],
-      "sounds": [
-        "minecraft:entity.goat.long_jump"
-      ],
-      "title": "跃升",
-      "subtitle": "脚下生风，一跃冲天"
-    },
-    {
-      "id": "feather_fall",
-      "layer": "effect",
-      "name": "羽落术",
-      "words": [
-        "羽落",
-        "缓降",
-        "轻身"
-      ],
-      "cost": {
-        "mana": 15,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [
-        "effect give {target} minecraft:slow_falling 90 0"
-      ],
-      "reply": "你的身体轻若鸿毛，从此高处坠落再无惧意。",
-      "particles": [
-        "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.03 20"
-      ],
-      "sounds": [
-        "minecraft:entity.ender_dragon.flap"
-      ],
-      "title": "羽落",
-      "subtitle": "轻若鸿毛，坠落无伤"
-    },
-    {
-      "id": "ironskin",
-      "layer": "effect",
-      "name": "铁肤术",
-      "words": [
-        "铁肤",
-        "护体",
-        "坚韧"
-      ],
-      "cost": {
-        "mana": 35,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 8,
-      "commands": [
-        "effect give {target} minecraft:resistance 60 1"
-      ],
-      "reply": "金光凝成无形铠甲覆上你的皮肤，刀剑难伤。",
-      "particles": [
-        "minecraft:enchant {px} {py+1} {pz} 0.5 0.6 0.5 0.05 40"
-      ],
-      "sounds": [
-        "minecraft:block.anvil.land"
-      ],
-      "title": "铁肤",
-      "subtitle": "金光护体，刀枪难伤"
-    },
-    {
-      "id": "regen",
-      "layer": "effect",
-      "name": "再生术",
-      "words": [
-        "再生",
-        "愈合",
-        "新生"
-      ],
-      "cost": {
-        "mana": 30,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "effect give {target} minecraft:regeneration 30 1"
-      ],
-      "reply": "生命力在你体内重新流淌，伤口正在缓缓愈合。",
-      "particles": [
-        "minecraft:heart {px} {py+1} {pz} 0.4 0.5 0.4 0.05 15"
-      ],
-      "sounds": [
-        "minecraft:block.brewing_stand.brew"
-      ],
-      "title": "再生",
-      "subtitle": "血肉重生，生生不息"
-    },
-    {
-      "id": "strength",
-      "layer": "effect",
-      "name": "神力术",
-      "words": [
-        "神力",
-        "蛮力",
-        "力量"
-      ],
-      "cost": {
-        "mana": 35,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 8,
-      "commands": [
-        "effect give {target} minecraft:strength 60 0"
-      ],
-      "reply": "力量涌入你的四肢，拳拳有开山之势。",
-      "particles": [
-        "minecraft:crit {px} {py+1} {pz} 0.5 0.5 0.5 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:entity.player.attack.crit"
-      ],
-      "title": "神力",
-      "subtitle": "力拔山河"
-    },
-    {
-      "id": "haste",
-      "layer": "effect",
-      "name": "急迫术",
-      "words": [
-        "急迫",
-        "巧手",
-        "快手"
-      ],
-      "cost": {
-        "mana": 25,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "effect give {target} minecraft:haste 60 1"
-      ],
-      "reply": "你的双手如有神助，挖掘与劳作快了何止一倍。",
-      "particles": [
-        "minecraft:enchant {px} {py+1} {pz} 0.3 0.3 0.3 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:block.grindstone.use"
-      ],
-      "title": "急迫",
-      "subtitle": "双手如飞"
-    },
-    {
-      "id": "night_vision",
-      "layer": "effect",
-      "name": "夜视术",
-      "words": [
-        "夜视",
-        "猫眼",
-        "夜瞳"
-      ],
-      "cost": {
-        "mana": 15,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [
-        "effect give {target} minecraft:night_vision 180 0"
-      ],
-      "reply": "黑暗在你眼中褪去，视物如昼，持续三分钟。",
-      "particles": [
-        "minecraft:end_rod {px} {py+2} {pz} 0.3 0.2 0.3 0.01 20"
-      ],
-      "sounds": [
-        "minecraft:block.note_block.chime"
-      ],
-      "title": "夜视",
-      "subtitle": "暗夜之中，视物如昼"
-    },
-    {
-      "id": "water_breath",
-      "layer": "effect",
-      "name": "水息术",
-      "words": [
-        "水息",
-        "鱼鳃",
-        "水下呼吸",
-        "深潜"
-      ],
-      "cost": {
-        "mana": 20,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 2,
-      "commands": [
-        "effect give {target} minecraft:water_breathing 120 0"
-      ],
-      "reply": "你如鱼得水，可以在水下自由呼吸两分钟。",
-      "particles": [
-        "minecraft:bubble {px} {py+1} {pz} 0.4 0.5 0.4 0.05 30"
-      ],
-      "sounds": [
-        "minecraft:item.bucket.fill"
-      ],
-      "title": "水息",
-      "subtitle": "如鱼得水，深潜无碍"
-    },
-    {
-      "id": "fire_res",
-      "layer": "effect",
-      "name": "避火术",
-      "words": [
-        "火抗",
-        "防火",
-        "避火"
-      ],
-      "cost": {
-        "mana": 25,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "effect give {target} minecraft:fire_resistance 120 0"
-      ],
-      "reply": "烈焰绕身而不伤，岩浆亦如温泉。",
-      "particles": [
-        "minecraft:flame {px} {py+1} {pz} 0.3 0.4 0.3 0.02 20"
-      ],
-      "sounds": [
-        "minecraft:block.fire.extinguish"
-      ],
-      "title": "避火",
-      "subtitle": "烈焰焚身而不伤"
-    },
-    {
-      "id": "invisibility",
-      "layer": "effect",
-      "name": "隐身术",
-      "words": [
-        "隐身",
-        "无形",
-        "遁形"
-      ],
-      "cost": {
-        "mana": 45,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 12,
-      "commands": [
-        "effect give {target} minecraft:invisibility 60 0"
-      ],
-      "reply": "你的身形没入虚空，肉眼再难辨你踪迹。",
-      "particles": [
-        "minecraft:smoke {px} {py+1} {pz} 0.4 0.6 0.4 0.02 30"
-      ],
-      "sounds": [
-        "minecraft:entity.enderman.teleport"
-      ],
-      "title": "隐身",
-      "subtitle": "身形没入虚空"
-    },
-    {
-      "id": "rain",
-      "layer": "effect",
-      "name": "唤雨术",
-      "words": [
-        "唤雨",
-        "降雨",
-        "甘霖",
-        "求雨"
-      ],
-      "cost": {
-        "mana": 30,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 5,
-      "commands": [
-        "weather rain"
-      ],
-      "reply": "你感应到天际云气汇聚，雨落了下来。",
-      "particles": [
-        "minecraft:falling_water {px} {py+3} {pz} 1 0.5 1 0.1 60"
-      ],
-      "sounds": [
-        "minecraft:weather.rain"
-      ],
-      "title": "唤雨",
-      "subtitle": "甘霖自天而降"
-    },
-    {
-      "id": "storm",
-      "layer": "effect",
-      "name": "雷暴术",
-      "words": [
-        "雷暴",
-        "风暴",
-        "雷云",
-        "风雷"
-      ],
-      "cost": {
-        "mana": 50,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 12,
-      "commands": [
-        "weather thunder"
-      ],
-      "reply": "风雷激荡，天地变色，雷暴降临此界。",
-      "particles": [
-        "minecraft:electric_spark {px} {py+3} {pz} 1 0.5 1 0.1 40"
-      ],
-      "sounds": [
-        "minecraft:entity.lightning_bolt.thunder"
-      ],
-      "title": "雷暴",
-      "subtitle": "风雷激荡，天地变色"
-    },
-    {
-      "id": "steed",
-      "layer": "effect",
-      "name": "唤马术",
-      "words": [
-        "唤马",
-        "战马",
-        "坐骑",
-        "召唤马"
-      ],
-      "cost": {
-        "mana": 50,
-        "food": 6,
-        "hp": 0
-      },
-      "requiredLevel": 12,
-      "commands": [
-        "summon minecraft:horse {px+2} {py} {pz} {Tame:1b,SaddleItem:{id:\"minecraft:saddle\",count:1}}"
-      ],
-      "reply": "一匹神骏的战马自光芒中走出，鞍鞯齐备，任你驱驰。",
-      "particles": [
-        "minecraft:cloud {px+2} {py+1} {pz} 0.5 0.8 0.5 0.05 40"
-      ],
-      "sounds": [
-        "minecraft:entity.horse.ambient"
-      ],
-      "title": "唤马",
-      "subtitle": "神骏自光中而来"
-    },
-    {
-      "id": "guardian",
-      "layer": "effect",
-      "name": "铁卫术",
-      "words": [
-        "铁卫",
-        "守护者",
-        "铁傀儡",
-        "护卫"
-      ],
-      "cost": {
-        "mana": 60,
-        "food": 0,
-        "hp": 4
-      },
-      "requiredLevel": 18,
-      "commands": [
-        "summon minecraft:iron_golem {px+2} {py} {pz}"
-      ],
-      "reply": "你以血为契，唤起一尊铁卫——它将驻守此地，为你撕碎来犯的邪祟。",
-      "particles": [
-        "minecraft:crit {px+2} {py+2} {pz} 0.6 1 0.6 0.05 50",
-        "minecraft:poof {px+2} {py+1} {pz} 0.5 1 0.5 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:entity.iron_golem.repair"
-      ],
-      "title": "铁卫",
-      "subtitle": "血契铸就，守护降临"
-    },
-    {
-      "id": "purge",
-      "layer": "effect",
-      "name": "退魔术",
-      "words": [
-        "退魔",
-        "净化",
-        "驱邪",
-        "驱魔"
-      ],
-      "cost": {
-        "mana": 50,
-        "food": 0,
-        "hp": 3
-      },
-      "requiredLevel": 18,
-      "commands": [
-        "kill @e[type=minecraft:zombie,distance=..10]",
-        "kill @e[type=minecraft:husk,distance=..10]",
-        "kill @e[type=minecraft:skeleton,distance=..10]",
-        "kill @e[type=minecraft:stray,distance=..10]",
-        "kill @e[type=minecraft:creeper,distance=..10]",
-        "kill @e[type=minecraft:spider,distance=..10]",
-        "kill @e[type=minecraft:cave_spider,distance=..10]",
-        "kill @e[type=minecraft:witch,distance=..10]",
-        "kill @e[type=minecraft:enderman,distance=..10]"
-      ],
-      "reply": "圣光如潮涤荡四方，方圆十格内的邪祟灰飞烟灭。",
-      "particles": [
-        "minecraft:end_rod {px} {py+1} {pz} 5 1.5 5 0.05 120",
-        "minecraft:witch {px} {py+1} {pz} 5 1.5 5 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:entity.evoker.cast_spell"
-      ],
-      "title": "退魔",
-      "subtitle": "圣光涤荡，邪祟皆灭"
-    },
-    {
-      "id": "windburst",
-      "layer": "effect",
-      "name": "风爆术",
-      "words": [
-        "风爆",
-        "气浪",
-        "御风"
-      ],
-      "cost": {
-        "mana": 15,
-        "food": 0,
-        "hp": 0
-      },
-      "requiredLevel": 1,
-      "commands": [
-        "summon minecraft:wind_charge {px} {py-1} {pz}"
-      ],
-      "reply": "一团狂风在你脚下炸开，将你抛向空中！",
-      "particles": [
-        "minecraft:gust {px} {py} {pz} 0.3 0.3 0.3 0.1 30",
-        "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.1 30"
-      ],
-      "sounds": [
-        "minecraft:entity.wind_charge.wind_burst"
-      ],
-      "title": "风爆",
-      "subtitle": "御风而起，扶摇直上"
-    },
-    {
-      "id": "summon_wolf",
-      "layer": "effect",
-      "name": "通灵契约",
-      "words": [
-        "通灵",
-        "通灵之术",
-        "契约之狼",
-        "灵狼",
-        "通灵狼",
-        "召唤狼",
-        "通灵犬"
-      ],
-      "cost": {
-        "mana": 35,
-        "food": 4,
-        "hp": 0
-      },
-      "requiredLevel": 15,
-      "ownLimit": {
-        "entity": "minecraft:wolf",
-        "range": 96,
-        "denyReply": "你的契约之狼仍守在身边（96格内已有一只）——通灵之门一次只为一人开。"
-      },
-      "commands": [
-        "summon minecraft:wolf {px+2} {py} {pz} {Owner:[{puuid}],Sitting:0b,PersistenceRequired:1b,CollarItem:{id:\"minecraft:red_wool\",count:1},CustomName:{text:\"\\u901a\\u7075\\u72ac\",color:\"gold\"}}"
-      ],
-      "reply": "空间泛起涟漪，一头灵狼踏光而出——它已与你缔结灵魂契约，将随你征战、为你撕咬敌人。（对它按使用键可命令坐下/跟随）",
-      "particles": [
-        "minecraft:totem_of_undying {px+2} {py+1} {pz} 0.5 0.8 0.5 0.3 40",
-        "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
-      ],
-      "sounds": [
-        "minecraft:entity.wolf.howl"
-      ],
-      "title": "通灵契约",
-      "subtitle": "灵狼踏光而出，与尔缔约"
-    },
-    {
-      "id": "summon_pack",
-      "layer": "effect",
-      "name": "驮兽契约",
-      "words": [
-        "驮兽",
-        "驮兽契约",
-        "召唤驴",
-        "驮兽之术",
-        "灵驴"
-      ],
-      "cost": {
-        "mana": 30,
-        "food": 6,
-        "hp": 0
-      },
-      "requiredLevel": 25,
-      "commands": [
-        "summon minecraft:donkey {px+2} {py} {pz} {Tame:1b,ChestedHorse:1b,SaddleItem:{id:\"minecraft:saddle\",count:1},PersistenceRequired:1b,CustomName:{text:\"\\u9a6d\\u517d\",color:\"gray\"}}"
-      ],
-      "reply": "一头驮兽踏尘而来，背上驮着货箱（对它潜行+使用键装取，货箱 15 格），已安好鞍可骑乘远征——它是你最可靠的伙计。",
-      "particles": [
-        "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
-      ],
-      "sounds": [
-        "minecraft:entity.donkey.chest",
-        "minecraft:entity.horse.ambient"
-      ],
-      "title": "驮兽契约",
-      "subtitle": "踏尘而来，与尔同行"
+ "_comment": "\u9b54\u6cd5\u539f\u5b50\u6307\u4ee4\u8868\uff08\u5feb\u8def\u5f84\uff09\u3002\u6539\u6570\u5b57\u68af\u5ea6/\u5492\u8bed\u8bcd/\u547d\u4ee4/\u89c6\u89c9\u76f4\u63a5\u7f16\u8f91\u672c\u6587\u4ef6\uff0c\u65e0\u9700\u6539\u4ee3\u7801\u3002\u5220\u9664\u672c\u6587\u4ef6\u5219\u56de\u9000\u5230 src/mc-magic.ts \u5185\u5d4c\u9ed8\u8ba4\u3002mana \u4e0a\u9650\u4e0e\u56de\u84dd\u901f\u7387\u5728 bootstrap-world.mts \u7684 mcMagic \u914d\u7f6e\u91cc\uff08maxManaDefault=100, regenPerSec=2.0 = \u6bcf\u79d2 2% \u4e0a\u9650\uff09\u3002\u4e09\u8d44\u6e90\u6d88\u8017\uff1amana=\u65f6\u95f4\u56de\u84dd\uff0cfood=\u5403\u56de(data modify foodLevel)\uff0chp=\u8840\u796d(damage ... minecraft:magic \u65e0\u89c6\u62a4\u7532)\u3002\u89c6\u89c9\uff1aparticles=\u6bcf\u6761 /particle \u53c2\u6570\u6a21\u677f(type x y z dx dy dz speed count)\u3001sounds=\u97f3\u6548ID(\u76f8\u5bf9\u65bd\u6cd5\u8005)\u3001title/subtitle=\u5927\u5b57\u548f\u5531\u8bcd\uff0c\u5168\u90e8\u7eaf vanilla \u96f6 mod\u3002\u5360\u4f4d\u7b26\u652f\u6301\u7b97\u672f\uff1a{py+1}/{py-10}/{px+2}\u3002",
+ "atoms": [
+  {
+   "id": "appraise",
+   "layer": "effect",
+   "name": "\u9274\u5b9a",
+   "words": [
+    "\u9274\u5b9a",
+    "\u9274\u5b9a\u81ea\u8eab",
+    "\u9274\u5b9a\u80fd\u529b",
+    "\u5ba1\u89c6\u5df1\u8eab",
+    "appraise"
+   ],
+   "cost": {
+    "mana": 2,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [],
+   "reply": "",
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "\u9274\u5b9a",
+   "subtitle": "\u5973\u795e\u4e4b\u773c\uff0c\u70db\u7167\u5df1\u8eab"
+  },
+  {
+   "id": "home",
+   "layer": "effect",
+   "name": "\u5f52\u4e61",
+   "words": [
+    "\u5f52\u4e61",
+    "\u56de\u5bb6",
+    "\u56de\u57fa\u5730",
+    "\u5f52\u9014",
+    "\u56de\u5de2"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "tp {target} {bx} {by} {bz}"
+   ],
+   "reply": "\u7a7a\u95f4\u4e4b\u529b\u6d8c\u52a8\uff0c\u4f60\u88ab\u9001\u56de\u5bb6\u4e2d\u3002",
+   "particles": [
+    "minecraft:portal {bx} {by+1} {bz} 0.5 0.5 0.5 0.3 80",
+    "minecraft:end_rod {bx} {by+1} {bz} 0.4 0.4 0.4 0.05 50"
+   ],
+   "sounds": [
+    "minecraft:entity.enderman.teleport"
+   ],
+   "title": "\u5f52\u4e61",
+   "subtitle": "\u7a7a\u95f4\u4e4b\u529b\uff0c\u62a4\u4f60\u5f52\u9014"
+  },
+  {
+   "id": "tp",
+   "layer": "effect",
+   "name": "\u7a7a\u95f4\u4f20\u9001",
+   "words": [
+    "\u4f20\u9001",
+    "\u77ac\u79fb",
+    "\u95ea\u73b0",
+    "\u6495\u88c2\u865a\u7a7a",
+    "\u7a7a\u95f4\u8df3\u8dc3",
+    "\u8dc3\u8fc1"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "paramCosts": {
+    "distance": {
+     "mana": 5
     }
-  ]
+   },
+   "params": {
+    "distance": {
+     "type": "number",
+     "default": 5,
+     "max": 30
+    },
+    "direction": {
+     "type": "direction",
+     "default": "\u4e1c"
+    }
+   },
+   "commands": [
+    "tp {target} {tx} {ty} {tz}"
+   ],
+   "reply": "\u865a\u7a7a\u6495\u5f00\u4e00\u9053\u88c2\u7f1d\uff0c\u4f60\u5411{direction}\u8dc3\u8fc1 {distance} \u683c\u3002",
+   "particles": [
+    "minecraft:end_rod {tx} {ty+1} {tz} 0.4 0.4 0.4 0.05 60",
+    "minecraft:portal {tx} {ty+1} {tz} 0.5 0.5 0.5 0.3 50"
+   ],
+   "sounds": [
+    "minecraft:entity.enderman.teleport"
+   ],
+   "title": "\u6495\u88c2\u865a\u7a7a",
+   "subtitle": "\u5411{direction}\u8dc3\u8fc1 {distance} \u683c"
+  },
+  {
+   "id": "heal",
+   "layer": "effect",
+   "name": "\u5723\u6108\u672f",
+   "words": [
+    "\u5723\u6108",
+    "\u6cbb\u6108",
+    "\u6cbb\u7597",
+    "\u7597\u4f24",
+    "\u56de\u8840",
+    "\u75ca\u6108"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "effect give {target} minecraft:instant_health 1 1",
+    "effect give {target} minecraft:saturation 1 20"
+   ],
+   "reply": "\u67d4\u548c\u7684\u5149\u7b3c\u7f69\u4f60\uff0c\u4f24\u53e3\u6108\u5408\uff0c\u9965\u997f\u7f13\u89e3\u3002",
+   "particles": [
+    "minecraft:heart {px} {py+1} {pz} 0.6 0.6 0.6 0.1 25",
+    "minecraft:glow {px} {py+1} {pz} 0.4 0.4 0.4 0.01 40"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "\u5723\u6108",
+   "subtitle": "\u67d4\u548c\u7684\u5149\uff0c\u629a\u5e73\u4f24\u75db"
+  },
+  {
+   "id": "blood_mana",
+   "layer": "effect",
+   "name": "\u71c3\u8840\u672f",
+   "words": [
+    "\u71c3\u8840",
+    "\u4ee5\u8840\u4e3a\u5f15",
+    "\u8840\u796d",
+    "\u5316\u8840\u4e3a\u9b54",
+    "\u71c3\u70e7\u751f\u547d"
+   ],
+   "cost": {
+    "mana": -15,
+    "food": 0,
+    "hp": 6
+   },
+   "requiredLevel": 5,
+   "commands": [],
+   "reply": "\u4f60\u54ac\u7834\u6307\u5c16\uff0c\u4ee5\u8840\u4e3a\u5f15\u2014\u2014\u4f24\u53e3\u707c\u75db\uff0c\u9b54\u529b\u5374\u81ea\u8840\u8109\u4e2d\u7ffb\u6d8c\u800c\u51fa\u3002",
+   "particles": [
+    "minecraft:crimson_spore {px} {py+1} {pz} 0.4 0.5 0.4 0.02 40",
+    "minecraft:heart {px} {py+2} {pz} 0.3 0.3 0.3 0 6"
+   ],
+   "sounds": [
+    "minecraft:entity.player.hurt",
+    "minecraft:block.fire.ambient"
+   ],
+   "title": "\u71c3\u8840",
+   "subtitle": "\u4ee5\u8840\u4e3a\u5f15\uff0c\u9b54\u529b\u7ffb\u6d8c"
+  },
+  {
+   "id": "feed",
+   "layer": "effect",
+   "name": "\u9971\u98df\u8d50\u798f",
+   "words": [
+    "\u9971\u98df",
+    "\u5145\u9965",
+    "\u9971\u8179",
+    "\u4e0d\u997f",
+    "\u5145\u80fd"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "effect give {target} minecraft:saturation 1 99"
+   ],
+   "reply": "\u795e\u529b\u5316\u4f5c\u6696\u6d41\uff0c\u4f60\u7684\u9965\u997f\u611f\u6d88\u5931\u4e86\u3002",
+   "particles": [
+    "minecraft:glow {px} {py+1} {pz} 0.5 0.5 0.5 0.01 30"
+   ],
+   "sounds": [
+    "minecraft:block.note_block.chime"
+   ],
+   "title": "\u9971\u98df\u8d50\u798f",
+   "subtitle": "\u6696\u6d41\u6d8c\u52a8\uff0c\u9965\u997f\u6d88\u6563"
+  },
+  {
+   "id": "food_mana",
+   "layer": "effect",
+   "name": "\u70bc\u98df\u672f",
+   "words": [
+    "\u70bc\u98df",
+    "\u5316\u98df",
+    "\u4ee5\u98df\u4e3a\u5f15",
+    "\u5316\u98df\u4e3a\u9b54",
+    "\u70bc\u5316\u8179\u4e2d\u4e4b\u98df"
+   ],
+   "cost": {
+    "mana": -6,
+    "food": 8,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [],
+   "reply": "\u4f60\u51dd\u795e\u70bc\u5316\u8179\u4e2d\u4e4b\u98df\uff0c\u9965\u610f\u7ffb\u6d8c\u95f4\uff0c\u9b54\u529b\u81ea\u4e39\u7530\u5347\u817e\u3002",
+   "particles": [
+    "minecraft:happy_villager {px} {py+1} {pz} 0.4 0.4 0.4 0 12",
+    "minecraft:falling_honey {px} {py+2} {pz} 0.3 0.3 0.3 0.02 20"
+   ],
+   "sounds": [
+    "minecraft:entity.player.burp"
+   ],
+   "title": "\u70bc\u98df",
+   "subtitle": "\u9965\u80a0\u5316\u7089\uff0c\u9b54\u529b\u5347\u817e"
+  },
+  {
+   "id": "give",
+   "layer": "effect",
+   "name": "\u9020\u7269\u672f",
+   "words": [
+    "\u9020\u7269",
+    "\u8d50\u4e88",
+    "\u7ed9\u4e88",
+    "\u8d50\u4e0b",
+    "\u7ed9\u6211",
+    "\u53d8\u51fa"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "params": {
+    "item": {
+     "type": "item",
+     "default": "bread"
+    }
+   },
+   "commands": [
+    "give {target} {item} {count}"
+   ],
+   "reply": "\u4e00\u4ef6\u7269\u8d44\u81ea\u865a\u7a7a\u4e2d\u51dd\u805a\uff0c\u843d\u5165\u4f60\u7684\u624b\u4e2d\u3002",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 50"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "\u9020\u7269",
+   "subtitle": "\u865a\u7a7a\u4e2d\uff0c\u7269\u8d28\u51dd\u6210"
+  },
+  {
+   "id": "light",
+   "layer": "effect",
+   "name": "\u7167\u660e\u672f",
+   "words": [
+    "\u7167\u660e",
+    "\u70b9\u706b",
+    "\u706b\u628a",
+    "\u5149\u4eae",
+    "\u7167\u4eae",
+    "\u9a71\u6697"
+   ],
+   "cost": {
+    "mana": 5,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "give {target} minecraft:torch 4"
+   ],
+   "reply": "\u51e0\u6839\u706b\u628a\u843d\u5165\u4f60\u7684\u624b\u4e2d\uff0c\u7167\u4eae\u524d\u8def\u3002",
+   "particles": [
+    "minecraft:flame {px} {py+1} {pz} 0.3 0.3 0.3 0.02 30"
+   ],
+   "sounds": [
+    "minecraft:block.fire.ambient"
+   ],
+   "title": "\u7167\u660e",
+   "subtitle": "\u706b\u5149\uff0c\u9a71\u6563\u9ed1\u6697"
+  },
+  {
+   "id": "time_day",
+   "layer": "effect",
+   "name": "\u7834\u6653\u672f",
+   "words": [
+    "\u7834\u6653",
+    "\u5929\u660e",
+    "\u767d\u663c",
+    "\u5929\u4eae",
+    "\u65e5\u51fa",
+    "\u9a71\u591c"
+   ],
+   "cost": {
+    "mana": 60,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 25,
+   "commands": [
+    "time set day"
+   ],
+   "reply": "\u592a\u9633\u6495\u88c2\u591c\u5e55\uff0c\u4e16\u754c\u91cd\u5f52\u767d\u663c\u3002",
+   "particles": [
+    "minecraft:firework {px} {py+2} {pz} 0.5 0.5 0.5 0.01 25",
+    "minecraft:glow {px} {py+2} {pz} 0.5 0.5 0.5 0.01 30"
+   ],
+   "sounds": [
+    "minecraft:block.beacon.activate"
+   ],
+   "title": "\u7834\u6653",
+   "subtitle": "\u592a\u9633\uff0c\u6495\u88c2\u591c\u5e55"
+  },
+  {
+   "id": "weather_clear",
+   "layer": "effect",
+   "name": "\u9a71\u4e91\u672f",
+   "words": [
+    "\u9a71\u4e91",
+    "\u653e\u6674",
+    "\u6674\u7a7a",
+    "\u96e8\u505c",
+    "\u4e91\u6563"
+   ],
+   "cost": {
+    "mana": 35,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 8,
+   "commands": [
+    "weather clear"
+   ],
+   "reply": "\u4e4c\u4e91\u6563\u5c3d\uff0c\u5929\u7a7a\u653e\u6674\u3002",
+   "particles": [
+    "minecraft:cloud {px} {py+2} {pz} 0.5 0.5 0.5 0.05 40"
+   ],
+   "sounds": [
+    "minecraft:block.chain.break"
+   ],
+   "title": "\u9a71\u4e91",
+   "subtitle": "\u4e4c\u4e91\u6563\u5c3d\uff0c\u6674\u7a7a\u4e07\u91cc"
+  },
+  {
+   "id": "terraform",
+   "layer": "effect",
+   "name": "\u5927\u5730\u5851\u5f62",
+   "words": [
+    "\u5851\u5f62",
+    "\u88c2\u5730",
+    "\u6398\u571f",
+    "\u5f00\u8f9f",
+    "\u5e73\u6574",
+    "\u6316\u5730"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 6,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "fill {px} {py-1} {pz} {px} {py-1} {pz} minecraft:air"
+   ],
+   "reply": "\u4f60\u6d88\u8017\u4f53\u529b\uff08\u9971\u98df\u5ea6\uff09\uff0c\u91cd\u5851\u4e86\u811a\u4e0b\u7684\u5927\u5730\u3002",
+   "particles": [
+    "minecraft:poof {px} {py} {pz} 0.5 0.5 0.5 0.1 40"
+   ],
+   "sounds": [
+    "minecraft:block.gravel.break"
+   ],
+   "title": "\u5927\u5730\u5851\u5f62",
+   "subtitle": "\u811a\u4e0b\u5927\u5730\uff0c\u4e3a\u4f60\u91cd\u5851"
+  },
+  {
+   "id": "rampart",
+   "layer": "effect",
+   "name": "\u8986\u571f\u672f",
+   "words": [
+    "\u8986\u571f",
+    "\u586b\u58d1",
+    "\u5792\u571f",
+    "\u7b51\u5730",
+    "\u57ab\u811a"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 3,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "fill {px} {py-10} {pz} {px} {py-1} {pz} minecraft:dirt"
+   ],
+   "reply": "\u5927\u5730\u5e94\u58f0\u9686\u8d77\uff0c\u6df1\u5751\u88c2\u9699\u5728\u811a\u4e0b\u586b\u4e3a\u5766\u9014\u3002",
+   "particles": [
+    "minecraft:poof {px} {py-1} {pz} 0.4 0.6 0.4 0.1 50"
+   ],
+   "sounds": [
+    "minecraft:block.grass.place"
+   ],
+   "title": "\u8986\u571f",
+   "subtitle": "\u5927\u5730\u9686\u8d77\uff0c\u5929\u5811\u53d8\u901a\u9014"
+  },
+  {
+   "id": "spring",
+   "layer": "effect",
+   "name": "\u5316\u6c34\u672f",
+   "words": [
+    "\u5316\u6c34",
+    "\u6e05\u6cc9",
+    "\u6d8c\u6cc9",
+    "\u7518\u6cc9",
+    "\u5f15\u6c34"
+   ],
+   "cost": {
+    "mana": 12,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "params": {
+    "distance": {
+     "type": "number",
+     "default": 2,
+     "max": 10
+    },
+    "direction": {
+     "type": "direction",
+     "default": "\u4e1c"
+    }
+   },
+   "commands": [
+    "setblock {tx} {ty-1} {tz} minecraft:water"
+   ],
+   "reply": "\u6e05\u6cc9\u81ea{direction}\u65b9\u6d8c\u51fa\uff0c\u6da6\u6cfd\u65f1\u571f\u3002",
+   "particles": [
+    "minecraft:falling_water {tx} {ty+2} {tz} 0.3 0.5 0.3 0.05 40",
+    "minecraft:splash {tx} {ty} {tz} 0.3 0.2 0.3 0.05 20"
+   ],
+   "sounds": [
+    "minecraft:item.bucket.empty"
+   ],
+   "title": "\u5316\u6c34",
+   "subtitle": "\u6e05\u6cc9\u6d8c\u51fa\uff0c\u6da6\u6cfd\u65f1\u571f"
+  },
+  {
+   "id": "meteor",
+   "layer": "effect",
+   "name": "\u9668\u77f3\u672f",
+   "words": [
+    "\u9668\u77f3",
+    "\u5929\u7f5a",
+    "\u661f\u9668",
+    "\u795e\u96f7",
+    "\u5929\u96f7",
+    "\u96f7\u51fb"
+   ],
+   "cost": {
+    "mana": 80,
+    "food": 0,
+    "hp": 15
+   },
+   "requiredLevel": 25,
+   "commands": [
+    "summon minecraft:lightning_bolt {tx} {ty} {tz}"
+   ],
+   "reply": "\u4f60\u71c3\u70e7\u751f\u547d\uff0c\u53ec\u5524\u5929\u96f7\u8f70\u51fb\u524d\u65b9\uff01",
+   "particles": [
+    "minecraft:lava {tx} {ty+1} {tz} 0.3 0.3 0.3 0.05 30",
+    "minecraft:flame {tx} {ty+1} {tz} 0.3 0.3 0.3 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:entity.lightning_bolt.thunder"
+   ],
+   "title": "\u9668\u77f3",
+   "subtitle": "\u71c3\u70e7\u751f\u547d\uff0c\u5929\u7f5a\u964d\u4e34"
+  },
+  {
+   "id": "swift",
+   "layer": "effect",
+   "name": "\u8fc5\u6377\u672f",
+   "words": [
+    "\u8fc5\u6377",
+    "\u75be\u98ce",
+    "\u52a0\u901f"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "effect give {target} minecraft:speed 90 1"
+   ],
+   "reply": "\u98ce\u88f9\u4f4f\u4f60\u7684\u53cc\u817f\uff0c\u6b65\u5c65\u5982\u98de\uff0c\u6301\u7eed\u4e5d\u5341\u606f\u3002",
+   "particles": [
+    "minecraft:crit {px} {py} {pz} 0.4 0.2 0.4 0.1 20"
+   ],
+   "sounds": [
+    "minecraft:item.trident.riptide_1"
+   ],
+   "title": "\u8fc5\u6377",
+   "subtitle": "\u6b65\u5c65\u5982\u98ce"
+  },
+  {
+   "id": "leap",
+   "layer": "effect",
+   "name": "\u8dc3\u5347\u672f",
+   "words": [
+    "\u8dc3\u5347",
+    "\u5927\u8df3",
+    "\u9ad8\u8df3",
+    "\u817e\u8dc3"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "effect give {target} minecraft:jump_boost 60 2"
+   ],
+   "reply": "\u811a\u4e0b\u5982\u6709\u795e\u98ce\u6258\u4e3e\uff0c\u4f60\u5065\u6b65\u5982\u98de\u3001\u4e00\u8dc3\u51b2\u5929\u3002",
+   "particles": [
+    "minecraft:cloud {px} {py-1} {pz} 0.4 0.2 0.4 0.05 20"
+   ],
+   "sounds": [
+    "minecraft:entity.goat.long_jump"
+   ],
+   "title": "\u8dc3\u5347",
+   "subtitle": "\u811a\u4e0b\u751f\u98ce\uff0c\u4e00\u8dc3\u51b2\u5929"
+  },
+  {
+   "id": "feather_fall",
+   "layer": "effect",
+   "name": "\u7fbd\u843d\u672f",
+   "words": [
+    "\u7fbd\u843d",
+    "\u7f13\u964d",
+    "\u8f7b\u8eab"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "effect give {target} minecraft:slow_falling 90 0"
+   ],
+   "reply": "\u4f60\u7684\u8eab\u4f53\u8f7b\u82e5\u9e3f\u6bdb\uff0c\u4ece\u6b64\u9ad8\u5904\u5760\u843d\u518d\u65e0\u60e7\u610f\u3002",
+   "particles": [
+    "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.03 20"
+   ],
+   "sounds": [
+    "minecraft:entity.ender_dragon.flap"
+   ],
+   "title": "\u7fbd\u843d",
+   "subtitle": "\u8f7b\u82e5\u9e3f\u6bdb\uff0c\u5760\u843d\u65e0\u4f24"
+  },
+  {
+   "id": "ironskin",
+   "layer": "effect",
+   "name": "\u94c1\u80a4\u672f",
+   "words": [
+    "\u94c1\u80a4",
+    "\u62a4\u4f53",
+    "\u575a\u97e7"
+   ],
+   "cost": {
+    "mana": 35,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 8,
+   "commands": [
+    "effect give {target} minecraft:resistance 60 1"
+   ],
+   "reply": "\u91d1\u5149\u51dd\u6210\u65e0\u5f62\u94e0\u7532\u8986\u4e0a\u4f60\u7684\u76ae\u80a4\uff0c\u5200\u5251\u96be\u4f24\u3002",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.5 0.6 0.5 0.05 40"
+   ],
+   "sounds": [
+    "minecraft:block.anvil.land"
+   ],
+   "title": "\u94c1\u80a4",
+   "subtitle": "\u91d1\u5149\u62a4\u4f53\uff0c\u5200\u67aa\u96be\u4f24"
+  },
+  {
+   "id": "regen",
+   "layer": "effect",
+   "name": "\u518d\u751f\u672f",
+   "words": [
+    "\u518d\u751f",
+    "\u6108\u5408",
+    "\u65b0\u751f"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "effect give {target} minecraft:regeneration 30 1"
+   ],
+   "reply": "\u751f\u547d\u529b\u5728\u4f60\u4f53\u5185\u91cd\u65b0\u6d41\u6dcc\uff0c\u4f24\u53e3\u6b63\u5728\u7f13\u7f13\u6108\u5408\u3002",
+   "particles": [
+    "minecraft:heart {px} {py+1} {pz} 0.4 0.5 0.4 0.05 15"
+   ],
+   "sounds": [
+    "minecraft:block.brewing_stand.brew"
+   ],
+   "title": "\u518d\u751f",
+   "subtitle": "\u8840\u8089\u91cd\u751f\uff0c\u751f\u751f\u4e0d\u606f"
+  },
+  {
+   "id": "strength",
+   "layer": "effect",
+   "name": "\u795e\u529b\u672f",
+   "words": [
+    "\u795e\u529b",
+    "\u86ee\u529b",
+    "\u529b\u91cf"
+   ],
+   "cost": {
+    "mana": 35,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 8,
+   "commands": [
+    "effect give {target} minecraft:strength 60 0"
+   ],
+   "reply": "\u529b\u91cf\u6d8c\u5165\u4f60\u7684\u56db\u80a2\uff0c\u62f3\u62f3\u6709\u5f00\u5c71\u4e4b\u52bf\u3002",
+   "particles": [
+    "minecraft:crit {px} {py+1} {pz} 0.5 0.5 0.5 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:entity.player.attack.crit"
+   ],
+   "title": "\u795e\u529b",
+   "subtitle": "\u529b\u62d4\u5c71\u6cb3"
+  },
+  {
+   "id": "haste",
+   "layer": "effect",
+   "name": "\u6025\u8feb\u672f",
+   "words": [
+    "\u6025\u8feb",
+    "\u5de7\u624b",
+    "\u5feb\u624b"
+   ],
+   "cost": {
+    "mana": 25,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "effect give {target} minecraft:haste 60 1"
+   ],
+   "reply": "\u4f60\u7684\u53cc\u624b\u5982\u6709\u795e\u52a9\uff0c\u6316\u6398\u4e0e\u52b3\u4f5c\u5feb\u4e86\u4f55\u6b62\u4e00\u500d\u3002",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.3 0.3 0.3 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:block.grindstone.use"
+   ],
+   "title": "\u6025\u8feb",
+   "subtitle": "\u53cc\u624b\u5982\u98de"
+  },
+  {
+   "id": "night_vision",
+   "layer": "effect",
+   "name": "\u591c\u89c6\u672f",
+   "words": [
+    "\u591c\u89c6",
+    "\u732b\u773c",
+    "\u591c\u77b3"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "effect give {target} minecraft:night_vision 180 0"
+   ],
+   "reply": "\u9ed1\u6697\u5728\u4f60\u773c\u4e2d\u892a\u53bb\uff0c\u89c6\u7269\u5982\u663c\uff0c\u6301\u7eed\u4e09\u5206\u949f\u3002",
+   "particles": [
+    "minecraft:end_rod {px} {py+2} {pz} 0.3 0.2 0.3 0.01 20"
+   ],
+   "sounds": [
+    "minecraft:block.note_block.chime"
+   ],
+   "title": "\u591c\u89c6",
+   "subtitle": "\u6697\u591c\u4e4b\u4e2d\uff0c\u89c6\u7269\u5982\u663c"
+  },
+  {
+   "id": "water_breath",
+   "layer": "effect",
+   "name": "\u6c34\u606f\u672f",
+   "words": [
+    "\u6c34\u606f",
+    "\u9c7c\u9cc3",
+    "\u6c34\u4e0b\u547c\u5438",
+    "\u6df1\u6f5c"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "effect give {target} minecraft:water_breathing 120 0"
+   ],
+   "reply": "\u4f60\u5982\u9c7c\u5f97\u6c34\uff0c\u53ef\u4ee5\u5728\u6c34\u4e0b\u81ea\u7531\u547c\u5438\u4e24\u5206\u949f\u3002",
+   "particles": [
+    "minecraft:bubble {px} {py+1} {pz} 0.4 0.5 0.4 0.05 30"
+   ],
+   "sounds": [
+    "minecraft:item.bucket.fill"
+   ],
+   "title": "\u6c34\u606f",
+   "subtitle": "\u5982\u9c7c\u5f97\u6c34\uff0c\u6df1\u6f5c\u65e0\u788d"
+  },
+  {
+   "id": "fire_res",
+   "layer": "effect",
+   "name": "\u907f\u706b\u672f",
+   "words": [
+    "\u706b\u6297",
+    "\u9632\u706b",
+    "\u907f\u706b"
+   ],
+   "cost": {
+    "mana": 25,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "effect give {target} minecraft:fire_resistance 120 0"
+   ],
+   "reply": "\u70c8\u7130\u7ed5\u8eab\u800c\u4e0d\u4f24\uff0c\u5ca9\u6d46\u4ea6\u5982\u6e29\u6cc9\u3002",
+   "particles": [
+    "minecraft:flame {px} {py+1} {pz} 0.3 0.4 0.3 0.02 20"
+   ],
+   "sounds": [
+    "minecraft:block.fire.extinguish"
+   ],
+   "title": "\u907f\u706b",
+   "subtitle": "\u70c8\u7130\u711a\u8eab\u800c\u4e0d\u4f24"
+  },
+  {
+   "id": "invisibility",
+   "layer": "effect",
+   "name": "\u9690\u8eab\u672f",
+   "words": [
+    "\u9690\u8eab",
+    "\u65e0\u5f62",
+    "\u9041\u5f62"
+   ],
+   "cost": {
+    "mana": 45,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 12,
+   "commands": [
+    "effect give {target} minecraft:invisibility 60 0"
+   ],
+   "reply": "\u4f60\u7684\u8eab\u5f62\u6ca1\u5165\u865a\u7a7a\uff0c\u8089\u773c\u518d\u96be\u8fa8\u4f60\u8e2a\u8ff9\u3002",
+   "particles": [
+    "minecraft:smoke {px} {py+1} {pz} 0.4 0.6 0.4 0.02 30"
+   ],
+   "sounds": [
+    "minecraft:entity.enderman.teleport"
+   ],
+   "title": "\u9690\u8eab",
+   "subtitle": "\u8eab\u5f62\u6ca1\u5165\u865a\u7a7a"
+  },
+  {
+   "id": "rain",
+   "layer": "effect",
+   "name": "\u5524\u96e8\u672f",
+   "words": [
+    "\u5524\u96e8",
+    "\u964d\u96e8",
+    "\u7518\u9716",
+    "\u6c42\u96e8"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [
+    "weather rain"
+   ],
+   "reply": "\u4f60\u611f\u5e94\u5230\u5929\u9645\u4e91\u6c14\u6c47\u805a\uff0c\u96e8\u843d\u4e86\u4e0b\u6765\u3002",
+   "particles": [
+    "minecraft:falling_water {px} {py+3} {pz} 1 0.5 1 0.1 60"
+   ],
+   "sounds": [
+    "minecraft:weather.rain"
+   ],
+   "title": "\u5524\u96e8",
+   "subtitle": "\u7518\u9716\u81ea\u5929\u800c\u964d"
+  },
+  {
+   "id": "storm",
+   "layer": "effect",
+   "name": "\u96f7\u66b4\u672f",
+   "words": [
+    "\u96f7\u66b4",
+    "\u98ce\u66b4",
+    "\u96f7\u4e91",
+    "\u98ce\u96f7"
+   ],
+   "cost": {
+    "mana": 50,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 12,
+   "commands": [
+    "weather thunder"
+   ],
+   "reply": "\u98ce\u96f7\u6fc0\u8361\uff0c\u5929\u5730\u53d8\u8272\uff0c\u96f7\u66b4\u964d\u4e34\u6b64\u754c\u3002",
+   "particles": [
+    "minecraft:electric_spark {px} {py+3} {pz} 1 0.5 1 0.1 40"
+   ],
+   "sounds": [
+    "minecraft:entity.lightning_bolt.thunder"
+   ],
+   "title": "\u96f7\u66b4",
+   "subtitle": "\u98ce\u96f7\u6fc0\u8361\uff0c\u5929\u5730\u53d8\u8272"
+  },
+  {
+   "id": "steed",
+   "layer": "effect",
+   "name": "\u5524\u9a6c\u672f",
+   "words": [
+    "\u5524\u9a6c",
+    "\u6218\u9a6c",
+    "\u5750\u9a91",
+    "\u53ec\u5524\u9a6c"
+   ],
+   "cost": {
+    "mana": 50,
+    "food": 6,
+    "hp": 0
+   },
+   "requiredLevel": 12,
+   "commands": [
+    "summon minecraft:horse {px+2} {py} {pz} {Tame:1b,SaddleItem:{id:\"minecraft:saddle\",count:1}}"
+   ],
+   "reply": "\u4e00\u5339\u795e\u9a8f\u7684\u6218\u9a6c\u81ea\u5149\u8292\u4e2d\u8d70\u51fa\uff0c\u978d\u97af\u9f50\u5907\uff0c\u4efb\u4f60\u9a71\u9a70\u3002",
+   "particles": [
+    "minecraft:cloud {px+2} {py+1} {pz} 0.5 0.8 0.5 0.05 40"
+   ],
+   "sounds": [
+    "minecraft:entity.horse.ambient"
+   ],
+   "title": "\u5524\u9a6c",
+   "subtitle": "\u795e\u9a8f\u81ea\u5149\u4e2d\u800c\u6765"
+  },
+  {
+   "id": "guardian",
+   "layer": "effect",
+   "name": "\u94c1\u536b\u672f",
+   "words": [
+    "\u94c1\u536b",
+    "\u5b88\u62a4\u8005",
+    "\u94c1\u5080\u5121",
+    "\u62a4\u536b"
+   ],
+   "cost": {
+    "mana": 60,
+    "food": 0,
+    "hp": 4
+   },
+   "requiredLevel": 18,
+   "commands": [
+    "summon minecraft:iron_golem {px+2} {py} {pz}"
+   ],
+   "reply": "\u4f60\u4ee5\u8840\u4e3a\u5951\uff0c\u5524\u8d77\u4e00\u5c0a\u94c1\u536b\u2014\u2014\u5b83\u5c06\u9a7b\u5b88\u6b64\u5730\uff0c\u4e3a\u4f60\u6495\u788e\u6765\u72af\u7684\u90aa\u795f\u3002",
+   "particles": [
+    "minecraft:crit {px+2} {py+2} {pz} 0.6 1 0.6 0.05 50",
+    "minecraft:poof {px+2} {py+1} {pz} 0.5 1 0.5 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:entity.iron_golem.repair"
+   ],
+   "title": "\u94c1\u536b",
+   "subtitle": "\u8840\u5951\u94f8\u5c31\uff0c\u5b88\u62a4\u964d\u4e34"
+  },
+  {
+   "id": "purge",
+   "layer": "effect",
+   "name": "\u9000\u9b54\u672f",
+   "words": [
+    "\u9000\u9b54",
+    "\u51c0\u5316",
+    "\u9a71\u90aa",
+    "\u9a71\u9b54"
+   ],
+   "cost": {
+    "mana": 50,
+    "food": 0,
+    "hp": 3
+   },
+   "requiredLevel": 18,
+   "commands": [
+    "kill @e[type=minecraft:zombie,distance=..10]",
+    "kill @e[type=minecraft:husk,distance=..10]",
+    "kill @e[type=minecraft:skeleton,distance=..10]",
+    "kill @e[type=minecraft:stray,distance=..10]",
+    "kill @e[type=minecraft:creeper,distance=..10]",
+    "kill @e[type=minecraft:spider,distance=..10]",
+    "kill @e[type=minecraft:cave_spider,distance=..10]",
+    "kill @e[type=minecraft:witch,distance=..10]",
+    "kill @e[type=minecraft:enderman,distance=..10]"
+   ],
+   "reply": "\u5723\u5149\u5982\u6f6e\u6da4\u8361\u56db\u65b9\uff0c\u65b9\u5706\u5341\u683c\u5185\u7684\u90aa\u795f\u7070\u98de\u70df\u706d\u3002",
+   "particles": [
+    "minecraft:end_rod {px} {py+1} {pz} 5 1.5 5 0.05 120",
+    "minecraft:witch {px} {py+1} {pz} 5 1.5 5 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:entity.evoker.cast_spell"
+   ],
+   "title": "\u9000\u9b54",
+   "subtitle": "\u5723\u5149\u6da4\u8361\uff0c\u90aa\u795f\u7686\u706d"
+  },
+  {
+   "id": "windburst",
+   "layer": "effect",
+   "name": "\u98ce\u7206\u672f",
+   "words": [
+    "\u98ce\u7206",
+    "\u6c14\u6d6a",
+    "\u5fa1\u98ce"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "summon minecraft:wind_charge {px} {py-1} {pz}"
+   ],
+   "reply": "\u4e00\u56e2\u72c2\u98ce\u5728\u4f60\u811a\u4e0b\u70b8\u5f00\uff0c\u5c06\u4f60\u629b\u5411\u7a7a\u4e2d\uff01",
+   "particles": [
+    "minecraft:gust {px} {py} {pz} 0.3 0.3 0.3 0.1 30",
+    "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.1 30"
+   ],
+   "sounds": [
+    "minecraft:entity.wind_charge.wind_burst"
+   ],
+   "title": "\u98ce\u7206",
+   "subtitle": "\u5fa1\u98ce\u800c\u8d77\uff0c\u6276\u6447\u76f4\u4e0a"
+  },
+  {
+   "id": "summon_wolf",
+   "layer": "effect",
+   "name": "\u901a\u7075\u5951\u7ea6",
+   "words": [
+    "\u901a\u7075",
+    "\u901a\u7075\u4e4b\u672f",
+    "\u5951\u7ea6\u4e4b\u72fc",
+    "\u7075\u72fc",
+    "\u901a\u7075\u72fc",
+    "\u53ec\u5524\u72fc",
+    "\u901a\u7075\u72ac"
+   ],
+   "cost": {
+    "mana": 35,
+    "food": 4,
+    "hp": 0
+   },
+   "requiredLevel": 15,
+   "ownLimit": {
+    "entity": "minecraft:wolf",
+    "range": 96,
+    "denyReply": "\u4f60\u7684\u5951\u7ea6\u4e4b\u72fc\u4ecd\u5b88\u5728\u8eab\u8fb9\uff0896\u683c\u5185\u5df2\u6709\u4e00\u53ea\uff09\u2014\u2014\u901a\u7075\u4e4b\u95e8\u4e00\u6b21\u53ea\u4e3a\u4e00\u4eba\u5f00\u3002"
+   },
+   "commands": [
+    "summon minecraft:wolf {px+2} {py} {pz} {Owner:[{puuid}],Sitting:0b,PersistenceRequired:1b,CollarItem:{id:\"minecraft:red_wool\",count:1},CustomName:{text:\"\\u901a\\u7075\\u72ac\",color:\"gold\"}}"
+   ],
+   "reply": "\u7a7a\u95f4\u6cdb\u8d77\u6d9f\u6f2a\uff0c\u4e00\u5934\u7075\u72fc\u8e0f\u5149\u800c\u51fa\u2014\u2014\u5b83\u5df2\u4e0e\u4f60\u7f14\u7ed3\u7075\u9b42\u5951\u7ea6\uff0c\u5c06\u968f\u4f60\u5f81\u6218\u3001\u4e3a\u4f60\u6495\u54ac\u654c\u4eba\u3002\uff08\u5bf9\u5b83\u6309\u4f7f\u7528\u952e\u53ef\u547d\u4ee4\u5750\u4e0b/\u8ddf\u968f\uff09",
+   "particles": [
+    "minecraft:totem_of_undying {px+2} {py+1} {pz} 0.5 0.8 0.5 0.3 40",
+    "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
+   ],
+   "sounds": [
+    "minecraft:entity.wolf.howl"
+   ],
+   "title": "\u901a\u7075\u5951\u7ea6",
+   "subtitle": "\u7075\u72fc\u8e0f\u5149\u800c\u51fa\uff0c\u4e0e\u5c14\u7f14\u7ea6"
+  },
+  {
+   "id": "summon_pack",
+   "layer": "effect",
+   "name": "\u9a6e\u517d\u5951\u7ea6",
+   "words": [
+    "\u9a6e\u517d",
+    "\u9a6e\u517d\u5951\u7ea6",
+    "\u53ec\u5524\u9a74",
+    "\u9a6e\u517d\u4e4b\u672f",
+    "\u7075\u9a74"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 6,
+    "hp": 0
+   },
+   "requiredLevel": 25,
+   "commands": [
+    "summon minecraft:donkey {px+2} {py} {pz} {Tame:1b,ChestedHorse:1b,SaddleItem:{id:\"minecraft:saddle\",count:1},PersistenceRequired:1b,CustomName:{text:\"\\u9a6d\\u517d\",color:\"gray\"}}"
+   ],
+   "reply": "\u4e00\u5934\u9a6e\u517d\u8e0f\u5c18\u800c\u6765\uff0c\u80cc\u4e0a\u9a6e\u7740\u8d27\u7bb1\uff08\u5bf9\u5b83\u6f5c\u884c+\u4f7f\u7528\u952e\u88c5\u53d6\uff0c\u8d27\u7bb1 15 \u683c\uff09\uff0c\u5df2\u5b89\u597d\u978d\u53ef\u9a91\u4e58\u8fdc\u5f81\u2014\u2014\u5b83\u662f\u4f60\u6700\u53ef\u9760\u7684\u4f19\u8ba1\u3002",
+   "particles": [
+    "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
+   ],
+   "sounds": [
+    "minecraft:entity.donkey.chest",
+    "minecraft:entity.horse.ambient"
+   ],
+   "title": "\u9a6e\u517d\u5951\u7ea6",
+   "subtitle": "\u8e0f\u5c18\u800c\u6765\uff0c\u4e0e\u5c14\u540c\u884c"
+  },
+  {
+   "id": "rasengan",
+   "layer": "effect",
+   "name": "\u87ba\u65cb\u4e38",
+   "words": [
+    "\u87ba\u65cb\u4e38",
+    "\u87ba\u65cb\u624b\u91cc\u5251",
+    "\u67e5\u514b\u62c9\u65cb\u6da1",
+    "rasengan"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 4,
+    "hp": 2
+   },
+   "requiredLevel": 8,
+   "commands": [
+    "summon minecraft:wind_charge {tx} {ty} {tz}",
+    "execute at {target} run damage @e[distance=..6,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:painting] 8 minecraft:magic"
+   ],
+   "reply": "\u67e5\u514b\u62c9\u5728\u638c\u5fc3\u75af\u72c2\u65cb\u8f6c\u51dd\u805a\u2014\u2014\u87ba\u65cb\u4e38\uff0c\u8f70\u7136\u800c\u51fa\uff01\u98ce\u538b\u6495\u88c2\u524d\u65b9\u4e00\u5207\u3002",
+   "particles": [
+    "minecraft:end_rod {tx} {ty+1} {tz} 0.5 0.5 0.5 0.15 80",
+    "minecraft:crit {tx} {ty+1} {tz} 0.6 0.6 0.6 0.1 40"
+   ],
+   "sounds": [
+    "minecraft:entity.wind_charge.wind_burst",
+    "minecraft:block.conduit.ambient"
+   ],
+   "title": "\u87ba\u65cb\u4e38",
+   "subtitle": "\u67e5\u514b\u62c9\u51dd\u805a\u4e8e\u638c\uff0c\u65cb\u6da1\u7834\u654c"
+  },
+  {
+   "id": "kage_bunshin",
+   "layer": "effect",
+   "name": "\u5f71\u5206\u8eab\u4e4b\u672f",
+   "words": [
+    "\u5f71\u5206\u8eab",
+    "\u591a\u91cd\u5f71\u5206\u8eab",
+    "\u5206\u8eab\u4e4b\u672f",
+    "kage bunshin"
+   ],
+   "cost": {
+    "mana": 40,
+    "food": 6,
+    "hp": 0
+   },
+   "requiredLevel": 6,
+   "commands": [
+    "summon minecraft:snow_golem {px+1} {py} {pz} {PersistenceRequired:1b,CustomName:{text:\"\\u5f71\\u5206\\u8eab\\u00b7\\u58f9\",color:\"aqua\"},CustomNameVisible:1b}",
+    "summon minecraft:snow_golem {px-1} {py} {pz} {PersistenceRequired:1b,CustomName:{text:\"\\u5f71\\u5206\\u8eab\\u00b7\\u8d30\",color:\"aqua\"},CustomNameVisible:1b}",
+    "effect give {target} minecraft:speed 12 1 true"
+   ],
+   "reply": "\u53cc\u624b\u7ed3\u5370\uff0c\u767d\u70df\u70b8\u88c2\u2014\u2014\u4e24\u540d\u5f71\u5206\u8eab\u5e94\u58f0\u800c\u73b0\uff0c\u4e0e\u4f60\u5e76\u80a9\u800c\u6218\uff01\u5206\u8eab\u8106\u5f31\uff0c\u9047\u6c34\u9047\u70ed\u5373\u6563\uff08\u96ea\u5316\u5373\u6563\uff0c\u4ea6\u662f\u5fcd\u9053\uff09\u3002",
+   "particles": [
+    "minecraft:cloud {px+1} {py+1} {pz} 0.4 0.8 0.4 0.05 25",
+    "minecraft:cloud {px-1} {py+1} {pz} 0.4 0.8 0.4 0.05 25",
+    "minecraft:poof {px} {py+1} {pz} 0.8 1 0.8 0.1 40"
+   ],
+   "sounds": [
+    "minecraft:entity.illusioner.cast_spell",
+    "minecraft:entity.illusioner.mirror_move"
+   ],
+   "title": "\u5f71\u5206\u8eab\u4e4b\u672f",
+   "subtitle": "\u7ed3\u5370\u4e4b\u95f4\uff0c\u5206\u8eab\u9f50\u73b0"
+  }
+ ]
 }
