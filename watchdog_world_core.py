@@ -39,7 +39,11 @@ def log(msg: str) -> None:
 
 
 def docker(*args, timeout=30):
-    return subprocess.run([DOCKER, *args], capture_output=True, text=True, timeout=timeout)
+    # encoding 必须 utf-8：docker 输出含 UTF-8 特殊字符（如 →），默认 GBK 解码会炸
+    # reader thread（2026-08-19 task.log 实锤 UnicodeDecodeError，且 capture 失败会
+    # 导致 stdout 为空 → 心跳误判 stale → 多余重启）
+    return subprocess.run([DOCKER, *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=timeout)
 
 
 def container_status() -> str:
@@ -51,11 +55,19 @@ def container_status() -> str:
         return ""
 
 
-def container_heartbeat_age() -> float:
-    """读 volume 内心跳（docker exec cat）；失败返回 1e9。"""
+def read_container_hb() -> dict:
+    """读容器内世界心跳 dict；失败返回 {}。"""
     try:
         r = docker("exec", WORLD_CONTAINER, "cat", "/app/data/world-heartbeat.json", timeout=15)
-        d = json.loads(r.stdout)
+        return json.loads(r.stdout) if r.returncode == 0 else {}
+    except Exception:
+        return {}
+
+
+def container_heartbeat_age() -> float:
+    """读 volume 内心跳（docker exec cat）；失败返回 1e9。"""
+    d = read_container_hb()
+    try:
         return max(0.0, time.time() - d["ts"] / 1000)
     except Exception:
         return 1e9
@@ -128,7 +140,35 @@ def restart_world(reason: str) -> None:
     log(f"restart_world rc={r.returncode} out={ (r.stdout or '').strip()[:200] }")
 
 
+ALIVE = os.path.join(BASE, "data", "watchdog-alive.json")
+
+
+def touch_alive() -> None:
+    """每次 tick 覆写存活信号（2026-08-19 二级探活锚点，源自 08-18 晚 andy 事件复盘：
+    看门狗健康时静默不写动作日志，外部无法区分“正常静默”与“看门狗已死”）。
+    二级探活规则：本文件 age > 900s（3 个 tick 周期）→ 看门狗死亡 →
+    schtasks /Run /TN MC-World-Watchdog 拉起 + 报 agent bus。
+    watching 数组顺带落档，bot 掉线检测有数据源可查。"""
+    try:
+        hb = read_container_hb()
+        age = container_heartbeat_age()
+        info = {
+            "ts": int(time.time() * 1000),
+            "serverUp": server_up(),
+            "container": container_status(),
+            "hbAge": int(age) if age < 1e8 else None,
+            "watching": hb.get("watching", []),
+        }
+        tmp = ALIVE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(info, f, ensure_ascii=False)
+        os.replace(tmp, ALIVE)
+    except Exception:
+        pass  # 存活信号写失败不阻断主逻辑（主逻辑自身会写动作日志）
+
+
 def main() -> int:
+    touch_alive()  # 二级探活锚点：无论走哪个分支，tick 开头先盖章
     if not server_up():
         return 0  # 服务器不在 = 有意下线，看门狗不打扰
 
