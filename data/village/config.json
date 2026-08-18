@@ -1,13 +1,15 @@
 {
-  "_comment": "村民引擎配置。llm.enabled=false 时全部走模板（零算力）；未来算力够了改 true 即插即用（本地 OpenAI 兼容端点）。template_first=true 时命中模板的话题不走 LLM，只有兜底闲聊才问 LLM",
+  "_comment": "村民引擎配置。llm: 闲聊兜底+每日委托生成走本地 OpenAI 兼容端点（vLLM/Ollama 均可）；连不上自动回落模板，零依赖可跑。容器内部署 endpoint 用 http://host.docker.internal:8890/...（Linux 原生 docker 改宿主地址）；template_first=true 时话题模板优先、仅兜底闲聊问 LLM",
   "llm": {
-    "enabled": false,
+    "enabled": true,
     "endpoint": "http://127.0.0.1:8890/v1/chat/completions",
     "model": "qwen3.8-27b",
-    "timeout": 6,
-    "max_tokens": 200,
+    "timeout": 22,
+    "max_tokens": 300,
     "temperature": 0.7,
-    "template_first": true
+    "template_first": true,
+    "quests": true,
+    "reasoning_effort": "none"
   },
   "quests": {
     "per_villager_chance": 0.55,

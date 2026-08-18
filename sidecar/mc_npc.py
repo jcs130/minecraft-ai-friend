@@ -252,13 +252,23 @@ def gen_quests(day):
             break
         if random.random() > chance:
             continue
-        t = random.choice(v["quests"])
-        quests.append({
-            "id": "%s-%s" % (v["key"], day), "villager": v["key"], "display": v["display"],
-            "item": t["item"], "zh": t["zh"], "count": t["count"],
-            "emerald": t.get("emerald", 0), "effect": t.get("effect"), "lore_atom": t.get("lore_atom", False),
-            "done": False, "done_by": None, "done_at": None,
-        })
+        q = None
+        try:
+            q = llm_quest(v, day)
+            if q:
+                print("[quest] llm quest ok: %s -> %dx%s for %d emerald" % (
+                    v["display"], q["count"], q["zh"], q["emerald"]), flush=True)
+        except Exception as e:
+            print("[quest] llm quest err:", e, flush=True)
+        if not q:
+            t = random.choice(v["quests"])
+            q = {
+                "id": "%s-%s" % (v["key"], day), "villager": v["key"], "display": v["display"],
+                "item": t["item"], "zh": t["zh"], "count": t["count"],
+                "emerald": t.get("emerald", 0), "effect": t.get("effect"), "lore_atom": t.get("lore_atom", False),
+                "done": False, "done_by": None, "done_at": None,
+            }
+        quests.append(q)
     doc = {"date": day, "quests": quests}
     json.dump(doc, open(quests_path(day), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("[quest] generated %d quests for %s: %s" % (len(quests), day, [q["display"] for q in quests]), flush=True)
@@ -294,7 +304,8 @@ def pitch_quest(v):
     q = quest_of(v["key"])
     if not q:
         return [v.get("quest_busy", "今日没有活计了。")]
-    ln = v.get("quest_pitch", "帮我凑 {count} 个{zh}，酬 {emerald} 绿宝石。").replace("{count}", str(q["count"])).replace("{zh}", q["zh"]).replace("{emerald}", str(q["emerald"]))
+    ln = q.get("pitch") or v.get("quest_pitch", "帮我凑 {count} 个{zh}，酬 {emerald} 绿宝石。").replace(
+        "{count}", str(q["count"])).replace("{zh}", q["zh"]).replace("{emerald}", str(q["emerald"]))
     return [ln]
 
 def quest_summary(v):
@@ -567,6 +578,7 @@ def llm_reply(v, speaker, msg, ctx):
                      {"role": "user", "content": "%s 对你说：%s" % (speaker, msg)}],
         "max_tokens": llm.get("max_tokens", 200),
         "temperature": llm.get("temperature", 0.7),
+        "reasoning_effort": llm.get("reasoning_effort", "none"),
     }).encode("utf-8")
     req = urllib.request.Request(llm.get("endpoint", "http://127.0.0.1:8890/v1/chat/completions"),
                                  data=body, headers={"Content-Type": "application/json"})
@@ -579,6 +591,57 @@ def llm_reply(v, speaker, msg, ctx):
         return lines or None
     except Exception as e:
         print("[llm] fallback:", e, flush=True)
+        return None
+
+# ---------- LLM 生成每日委托（2026-08-18 上线：委托也交给 LLM 写，白名单+clamp 兜底）----------
+QUEST_WHITELIST = ["coal", "iron_ingot", "wheat", "potato", "bread", "beef", "cod", "salmon",
+                   "oak_log", "stick", "torch", "cooked_beef", "cooked_cod", "baked_potato",
+                   "apple", "egg", "leather", "feather", "bone", "string", "sugar", "carrot",
+                   "paper", "book", "cobblestone", "sand", "glass", "arrow"]
+
+def llm_quest(v, day):
+    """让 LLM 以村民人设拟今日委托。输出严格 JSON，全部字段过校验，任何异常→None 走模板池。
+    经济安全：物品只准从白名单选（zh2id 再验一道）；count clamp 3..24；emerald clamp 1..3。"""
+    llm = CFG.get("llm", {})
+    if not (llm.get("enabled") and llm.get("quests")):
+        return None
+    zh_map = ", ".join("%s=%s" % (i, ITEM_ALIASES[i][0]) for i in QUEST_WHITELIST)
+    sysp = ("你是%s，Minecraft世界「初始之地」集市的村民。人设：%s。"
+            "请以你的身份给今天的集市委托拟一张单子。物品只能从这些里选（id=中文名）：%s。"
+            "要求：数量 3 到 24 之间、报酬 1 到 3 颗绿宝石、要与你的营生和人设相关。"
+            '只输出一行 JSON，格式：{"item": "物品id", "zh": "中文名", "count": 数量, "emerald": 报酬, '
+            '"pitch": "一句话委托口吻，30字内，含数量和报酬"}。不要输出其他任何内容。') % (
+        v["display"], v.get("persona", ""), zh_map)
+    body = json.dumps({
+        "model": llm.get("model", "qwen3.8-27b"),
+        "messages": [{"role": "system", "content": sysp}, {"role": "user", "content": "拟今日委托"}],
+        "max_tokens": 300, "temperature": llm.get("temperature", 0.7),
+        "reasoning_effort": "none",
+    }).encode("utf-8")
+    req = urllib.request.Request(llm.get("endpoint", "http://127.0.0.1:8890/v1/chat/completions"),
+                                 data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=llm.get("timeout", 12)) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        text = text.strip().split("</think>")[-1].strip()
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            return None
+        j = json.loads(m.group(0))
+        item = zh2id(str(j.get("item", "")))
+        if item not in QUEST_WHITELIST:
+            return None
+        zh = str(j.get("zh") or ITEM_ALIASES[item][0])
+        count = max(3, min(24, int(j.get("count", 0))))
+        emerald = max(1, min(3, int(j.get("emerald", 0))))
+        pitch = str(j.get("pitch") or "").strip().replace("\n", " ")[:80]
+        return {"item": item, "zh": zh, "count": count, "emerald": emerald, "pitch": pitch,
+                "id": "%s-%s" % (v["key"], day), "villager": v["key"], "display": v["display"],
+                "effect": None, "lore_atom": False, "done": False, "done_by": None, "done_at": None,
+                "source": "llm"}
+    except Exception as e:
+        print("[llm-quest] fallback:", e, flush=True)
         return None
 
 # ---------- 路由 ----------
