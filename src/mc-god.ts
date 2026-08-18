@@ -894,26 +894,75 @@ export function apply(ctx: Context, config: Config) {
   }
 
   /**
-   * 等级同步 + 升级公告 + 旧数据迁移（死亡守望 tick 每 20s 调一次）。
+   * 等级同步 + 升级公告（死亡守望 tick 每 20s 调一次）。
    * 路线 A：原生 XpLevel 是唯一真源；Δ>0 → 升级仪式（title/图腾/音效/新秘法宣读/编年史）。
-   * 迁移：老玩家自建 level 高于原生（从没用过原生经验）时，xp set 一次性灌入，进度不丢。
+   * 2026-08-18 定稿（鸣人 300 级事故）：等级 = 游戏硬编码经验系统，程序只读不写。
+   * - 删除旧「builtin level 灌入原生」迁移（xp set levels 是唯一等级造假口，已拔）。
+   * - 不变量自愈：XpLevel 必须落在 XpTotal 能支撑的范围内（vanilla 公式），
+   *   分裂态（等级高悬/总量诚实）一律以总量为准重建。
    */
   const lastSeenLevel = new Map<string, number>()
+  /** vanilla 硬编码：从等级 i 升到 i+1 所需经验点数。 */
+  function xpToNext(level: number): number {
+    if (level < 16) return 2 * level + 7
+    if (level < 31) return 5 * level - 38
+    return 9 * level - 158
+  }
+  /** 总经验点数对应的合法等级（按 vanilla 公式累加）。 */
+  function levelForTotal(total: number): number {
+    let lvl = 0
+    let acc = 0
+    while (lvl < 1000 && acc + xpToNext(lvl) <= total) {
+      acc += xpToNext(lvl)
+      lvl++
+    }
+    return lvl
+  }
+  /** 达到某等级所需累计经验点数（vanilla 公式累加）。 */
+  function totalForLevel(level: number): number {
+    let acc = 0
+    for (let i = 0; i < level; i++) acc += xpToNext(i)
+    return acc
+  }
+  /**
+   * ⚠️ xp 命令语义实测（08-18）：`xp set <p> <n> levels` 只改 XpLevel、不回写 XpTotal；
+   * `xp set <p> <n> points` 只改层内进度（XpP=n/cost(level)）、也不动总量。
+   * 即两者都无法凭总量重建 —— 分裂态（等级/总量不匹配）只有这里能治。
+   * 防循环：同一分裂态连治 3 次未收敛则停手（命令语义再变时不刷编年史）。
+   */
+  const healAttempts = new Map<string, number>()
   async function syncLevel(name: string): Promise<void> {
-    const xp = await rcon.getEntityNumber(name, 'XpLevel')
+    const [xp, total] = await Promise.all([
+      rcon.getEntityNumber(name, 'XpLevel'),
+      rcon.getEntityNumber(name, 'XpTotal'),
+    ])
     if (xp === null) return
-    const st = ctx.mcMagic.getState(name)
-    // 一次性迁移：自建时代等级高于原生 → 灌入原生经验条
-    if (st.level > xp) {
-      try {
-        await rcon.send(`xp set ${name} ${st.level} levels`)
-        worlddb.chronicleRecord('migration', name, { from: 'builtin-level', to: 'native-xp', level: st.level })
-        log(`migrated ${name}: native XpLevel ${xp} -> ${st.level} (from builtin state)`)
-      } catch (err) {
-        log(`migration(${name}) failed: ${err instanceof Error ? err.message : String(err)}`)
+    // 不变量校验（点数口径，双向，±250 点容差吸收读数间隙的正常涨落）：
+    // XpTotal 是诚实账本；等级与账本严重背离（任一方向）→ 以账本重建等级。
+    if (total !== null) {
+      const impliedMin = totalForLevel(xp) // 达到当前等级至少要这么多点
+      const overBy = impliedMin - total
+      const underBy = total - (impliedMin + xpToNext(xp))
+      if (overBy > 250 || underBy > 250) {
+        const key = `${name}|${xp}|${total}`
+        const tries = (healAttempts.get(key) ?? 0) + 1
+        healAttempts.set(key, tries)
+        const healedLevel = levelForTotal(total)
+        if (tries > 3) {
+          log(`xpheal(${name}) gave up after 3 attempts on ${key} — check xp command semantics`)
+          ctx.mcMagic.setLevel(name, Math.min(xp, healedLevel))
+          return
+        }
+        try {
+          await rcon.send(`xp set ${name} ${healedLevel} levels`)
+          worlddb.chronicleRecord('xpheal', name, { corruptLevel: xp, total, healedLevel })
+          log(`XP HEAL ${name}: corrupt XpLevel ${xp} vs total ${total} -> set to level ${healedLevel}`)
+        } catch (err) {
+          log(`xpheal(${name}) failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+        ctx.mcMagic.setLevel(name, healedLevel)
+        return
       }
-      ctx.mcMagic.setLevel(name, st.level)
-      return
     }
     ctx.mcMagic.setLevel(name, xp)
     const prev = lastSeenLevel.get(name)

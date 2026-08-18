@@ -91,8 +91,11 @@ export function apply(ctx: Context, config: Config) {
     getEntityNumber: async (target, path) => {
       try {
         const out = await service.send(`data get entity ${target} ${path}`)
-        const m = out.match(/-?\d+(\.\d+)?/)
-        return m ? parseFloat(m[0]) : null
+        // 严格只认 "entity data: <value>" 尾值（可带 d/f/L 类型后缀）。
+        // 旧版抓「响应中第一个数字」——异常/串线响应里的无关数字（如 Air=300 满氧
+        // 气值）会被误当查询值，污染等级等关键状态（08-18 鸣人 300 级事故根因）。
+        const m = out.match(/entity data:\s*(-?\d+(?:\.\d+)?)(?:[dLf])?\s*$/)
+        return m ? parseFloat(m[1]) : null
       } catch {
         return null
       }
