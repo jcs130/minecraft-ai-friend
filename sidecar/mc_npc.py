@@ -772,10 +772,12 @@ def summon_stand(v):
 def summon_villager(v):
     biome = v.get("biome", "plains")
     offers = _recipes_nbt(v) or "Offers:{Recipes:[]}"
-    nbt = ('{NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
+    # 背景村民（2026-08-18）：天生 NoAI:0b 自由生活——会溜达/归巢；委托型商人维持 1b（unleash_alive 释放）
+    noai = "0b" if v.get("ambient") else "1b"
+    nbt = ('{NoAI:%s,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
            'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,Xp:0,'
            'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
-        v["tag"], v["display"], v["color"], v["profession"], biome, offers)
+        noai, v["tag"], v["display"], v["color"], v["profession"], biome, offers)
     x, y, z = v["spawn"]
     R.cmd("summon minecraft:villager %s %s %s %s" % (x, y, z, nbt))
     print("[npc] healed:", v["display"], flush=True)
@@ -970,10 +972,72 @@ def inbox_loop():
             pass
         time.sleep(0.4)
 
+# ================= 背景村民日记（2026-08-18：环境生命感——他们在过自己的日子） =================
+AMBIENT = [v for v in PROFILES if v.get("ambient")]
+_diary_day = None
+
+def diary_path(day):
+    return os.path.join(VDIR, "diary-%s.jsonl" % day)
+
+def _diary_line(v, pos):
+    if pos is None:
+        return random.choice(["不知去向，八成躲哪儿歇着了", "没见着人影", "出门去了吧"])
+    x, _, z = v["spawn"]
+    d2 = (pos[0] - x) ** 2 + (pos[2] - z) ** 2
+    hh = int(time.strftime("%H"))
+    if hh >= 21 or hh < 6:
+        return random.choice(["早早歇下了", "梦里还在忙活", "睡得正香"])
+    if d2 <= 64:
+        return random.choice(["在老地方张望", "打点自己的营生", "蹲在门口歇脚", "正跟路过的虫子较劲"])
+    if d2 <= 625:
+        return random.choice(["在村里溜达", "串门去了", "凑热闹看稀奇", "赶集似的瞎转悠"])
+    return random.choice(["走得老远，怕是迷路了", "出远门了，说是散心", "沿着大路走远了"])
+
+def ambient_diary_loop():
+    """每 30 分钟采样背景村民动向 → data/village/diary-YYYY-MM-DD.jsonl；
+    跨日首检 → 女神公告昨日村庄一景（零 LLM 模板合成）。"""
+    global _diary_day
+    interval = CFG.get("ambient", {}).get("diary_interval", 1800)
+    while True:
+        try:
+            today = time.strftime("%Y-%m-%d")
+            if _diary_day is not None and today != _diary_day:
+                try:
+                    ypath = diary_path(_diary_day)
+                    if os.path.exists(ypath):
+                        recs = [json.loads(x) for x in open(ypath, encoding="utf-8") if x.strip()]
+                        acts = {}
+                        for r in recs:
+                            acts.setdefault(r.get("npc", "?"), []).append(r.get("act", ""))
+                        if acts:
+                            parts = []
+                            for name, a in list(acts.items())[:4]:
+                                short = name.split("·")[-1]
+                                parts.append("%s%s" % (short, random.choice(a) if a else "过着平常一天"))
+                            goddess("晨光落在初始之地——昨日村里：%s。日子就这么淌着，挺好。" % "，".join(parts))
+                except Exception as e:
+                    print("[diary] day-flip err:", e, flush=True)
+            _diary_day = today
+            with open(diary_path(today), "a", encoding="utf-8") as f:
+                for v in AMBIENT:
+                    pos = alive_pos(v)
+                    act = _diary_line(v, pos)
+                    f.write(json.dumps({"ts": time.strftime("%H:%M"), "npc": v["display"],
+                                        "act": act, "pos": list(pos) if pos else None},
+                                       ensure_ascii=False) + "\n")
+            print("[diary] sampled %d ambient villagers" % len(AMBIENT), flush=True)
+        except Exception as e:
+            print("[diary] err:", e, flush=True)
+            R.s = None
+        time.sleep(interval)
+
 if __name__ == "__main__":
     R.connect()
     threading.Thread(target=inbox_loop, daemon=True).start()
     threading.Thread(target=watch_offers, daemon=True).start()
+    if AMBIENT:
+        threading.Thread(target=ambient_diary_loop, daemon=True).start()
+        print("[npc] ambient diary armed: %d villagers" % len(AMBIENT), flush=True)
     print("[npc] rcon auth ok", flush=True)
     try:
         qd = quests_today()

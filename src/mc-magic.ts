@@ -71,6 +71,10 @@ interface Atom {
   sounds?: string[] // 声音 ID（如 minecraft:entity.enderman.teleport），相对施法者位置播放
   title?: string // 大字咏唱词（可含 {distance}/{direction} 等占位符）
   subtitle?: string // 大字副标题（中二补充，可含占位符）
+  /** 通灵契约类（2026-08-18）：施法者名下已有契约兽在场则拒绝（防刷）。
+   *  entity=实体类型，range=检测半径（默认96），denyReply=拒绝话术。
+   *  实现：RCON NBT Owner 选择器命中（execute if entity @e[type=…,nbt={Owner:[I;…]}]）。 */
+  ownLimit?: { entity: string; range?: number; denyReply?: string }
 }
 
 // ── 对外服务：把法术表与状态库的关键能力暴露给其他插件（降临仪式等）──
@@ -284,6 +288,11 @@ export interface MagicService {
   applyBalancePatch(atomKey: string | null, field: string, value: number, by: string, reason?: string): BalanceResult
   /** 撤销补丁：atomKey 省略 = 清空全部；返回撤销条数。撤销后从基准表重放。 */
   resetBalance(atomKey?: string): number
+  /**
+   * 基准表热重载（创世之笔 2026-08-18）：从 magic-atoms.json 重新加载并重放
+   * 天平补丁，返回加载后的法术总数。mc-saga 注入新咒文后调用。
+   */
+  reloadAtoms(): number
 }
 
 export interface GodCastOpts {
@@ -992,6 +1001,14 @@ export function apply(ctx: Context, config: Config) {
       }
       return removed
     },
+    reloadAtoms: () => {
+      // 创世之笔：基准表热重载 + 回蓝复位 + 补丁重放（与 resetBalance 同构）
+      atoms = loadBaseAtoms()
+      store.setRegenPerSec(config.regenPerSec)
+      for (const p of balancePatches) applyPatchToAtoms(p)
+      log(`reloaded ${atoms.length} atoms (saga)`)
+      return atoms.length
+    },
     getBackstory: (u) => store.getBackstory(u),
     setBackstory: (u, t) => store.setBackstory(u, t),
     getState: (u) => {
@@ -1199,6 +1216,24 @@ export function apply(ctx: Context, config: Config) {
       target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance,
     }
 
+    // 通灵契约（2026-08-18）：命令含 {puuid} 或带 ownLimit 时，取施法者 UUID（I;a,b,c,d 格式）
+    if (atom.commands.some((c) => c.includes('{puuid}')) || atom.ownLimit) {
+      const raw = await rcon.send(`data get entity ${username} UUID`)
+      const m = /\[I;\s*([-\d,\s]+)\]/.exec(raw || '')
+      if (!m) return `无法感知你的灵魂印记（UUID），「${atom.name}」未成。`
+      vars.puuid = `I;${m[1].replace(/\s+/g, '')}`
+    }
+    // ownLimit 防刷：名下已有同种契约兽在场则拒绝（RCON NBT Owner 选择器，实测 Count 精确）
+    if (atom.ownLimit) {
+      const range = atom.ownLimit.range ?? 96
+      const sel = `@e[type=${atom.ownLimit.entity},distance=..${range},nbt={Owner:[${vars.puuid}]}]`
+      const out = await rcon.send(`execute if entity ${sel}`)
+      if (/passed/i.test(out || '')) {
+        log(`ownLimit hit: ${username} already has ${atom.ownLimit.entity} within ${range}`)
+        return atom.ownLimit.denyReply ?? `你的契约之兽仍守在身边（${range}格内已有一只）——通灵之门一次只为一人开。`
+      }
+    }
+
     try {
       // 校验 + 扣 hp（血祭，damage magic 无视护甲；留 1 滴血防误杀）
       if (cost.hp > 0) {
@@ -1323,6 +1358,18 @@ export function apply(ctx: Context, config: Config) {
 
     const vars: Record<string, number | string> = {
       target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, direction: dirName,
+    }
+    // 通灵契约：神迹代施同样支持 {puuid}（契约兽归属受赐者）+ ownLimit 防重赐
+    if (atom.commands.some((c) => c.includes('{puuid}')) || atom.ownLimit) {
+      const raw = await rcon.send(`data get entity ${username} UUID`)
+      const m = /\[I;\s*([-\d,\s]+)\]/.exec(raw || '')
+      if (!m) return `无法感知「${username}」的灵魂印记（UUID），神迹未成。`
+      vars.puuid = `I;${m[1].replace(/\s+/g, '')}`
+    }
+    if (atom.ownLimit) {
+      const range = atom.ownLimit.range ?? 96
+      const out = await rcon.send(`execute if entity @e[type=${atom.ownLimit.entity},distance=..${range},nbt={Owner:[${vars.puuid}]}]`)
+      if (/passed/i.test(out || '')) return atom.ownLimit.denyReply ?? `契约之兽已在其身边，无需再赐。`
     }
     try {
       for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {

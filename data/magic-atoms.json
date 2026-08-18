@@ -985,6 +985,75 @@
       ],
       "title": "风爆",
       "subtitle": "御风而起，扶摇直上"
+    },
+    {
+      "id": "summon_wolf",
+      "layer": "effect",
+      "name": "通灵契约",
+      "words": [
+        "通灵",
+        "通灵之术",
+        "契约之狼",
+        "灵狼",
+        "通灵狼",
+        "召唤狼",
+        "通灵犬"
+      ],
+      "cost": {
+        "mana": 35,
+        "food": 4,
+        "hp": 0
+      },
+      "requiredLevel": 15,
+      "ownLimit": {
+        "entity": "minecraft:wolf",
+        "range": 96,
+        "denyReply": "你的契约之狼仍守在身边（96格内已有一只）——通灵之门一次只为一人开。"
+      },
+      "commands": [
+        "summon minecraft:wolf {px+2} {py} {pz} {Owner:[{puuid}],Sitting:0b,PersistenceRequired:1b,CollarItem:{id:\"minecraft:red_wool\",count:1},CustomName:{text:\"\\u901a\\u7075\\u72ac\",color:\"gold\"}}"
+      ],
+      "reply": "空间泛起涟漪，一头灵狼踏光而出——它已与你缔结灵魂契约，将随你征战、为你撕咬敌人。（对它按使用键可命令坐下/跟随）",
+      "particles": [
+        "minecraft:totem_of_undying {px+2} {py+1} {pz} 0.5 0.8 0.5 0.3 40",
+        "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
+      ],
+      "sounds": [
+        "minecraft:entity.wolf.howl"
+      ],
+      "title": "通灵契约",
+      "subtitle": "灵狼踏光而出，与尔缔约"
+    },
+    {
+      "id": "summon_pack",
+      "layer": "effect",
+      "name": "驮兽契约",
+      "words": [
+        "驮兽",
+        "驮兽契约",
+        "召唤驴",
+        "驮兽之术",
+        "灵驴"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 6,
+        "hp": 0
+      },
+      "requiredLevel": 25,
+      "commands": [
+        "summon minecraft:donkey {px+2} {py} {pz} {Tame:1b,ChestedHorse:1b,SaddleItem:{id:\"minecraft:saddle\",count:1},PersistenceRequired:1b,CustomName:{text:\"\\u9a6d\\u517d\",color:\"gray\"}}"
+      ],
+      "reply": "一头驮兽踏尘而来，背上驮着货箱（对它潜行+使用键装取，货箱 15 格），已安好鞍可骑乘远征——它是你最可靠的伙计。",
+      "particles": [
+        "minecraft:cloud {px+2} {py} {pz} 0.5 0.8 0.5 0.05 25"
+      ],
+      "sounds": [
+        "minecraft:entity.donkey.chest",
+        "minecraft:entity.horse.ambient"
+      ],
+      "title": "驮兽契约",
+      "subtitle": "踏尘而来，与尔同行"
     }
   ]
 }
