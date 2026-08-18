@@ -23,6 +23,7 @@ import * as mcSocial from './src/mc-social.ts'
 import * as mcBubble from './src/mc-bubble.ts'
 import * as mcEvolveReview from './src/mc-evolve-review.ts'
 import * as mcTerra from './src/mc-terra.ts'
+import * as mcSaga from './src/mc-saga.ts'
 
 const RUN_MS = Number(process.env.RUN_MS ?? 0)
 // 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
@@ -139,6 +140,20 @@ await ctx.plugin(mcTerra, {
   dataDir: './data',
   pollMs: 60_000,
   maxFixesPerPoll: 5,
+})
+// 女神的创世之笔（2026-08-18 扛枪点题）：根据在场玩家与故事，
+// 构思新咒文（热注入 magic-atoms）/神托任务（供奉核销）/大事件（三幕戏）。
+// data/saga-trigger 文件 = 手动构思把手。
+await ctx.plugin(mcSaga, {
+  enabled: process.env.MC_SAGA !== '0',
+  qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
+  sagaMs: Number(process.env.MC_SAGA_MS ?? 6 * 3600_000),
+  firstDelayMs: Number(process.env.MC_SAGA_FIRST_MS ?? 5 * 60_000),
+  pollMs: 60_000,
+  maxAtomsPerDay: 2,
+  maxActiveQuests: 3,
+  minEventGapMs: 4 * 3600_000,
+  dataDir: './data',
 })
 
 console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)

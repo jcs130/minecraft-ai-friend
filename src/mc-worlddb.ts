@@ -103,6 +103,8 @@ export interface WorlddbService {
   ledgerRecord(username: string, offer: OfferingInfo): void
   /** 账本：给女神看的供奉史摘要。 */
   ledgerSummary(username: string): string
+  /** 账本：某人自某时刻以来供奉某物的累计数量（创世之笔神托核销用）。 */
+  ledgerCountSince(username: string, itemId: string, sinceTs: number): number
   /** 史官：记一条编年史（入库 + md 双写导出）。 */
   chronicleRecord(type: string, actor: string, detail: Record<string, unknown>): void
   /** 史官：读某时刻以来的全部条目。 */
@@ -167,6 +169,8 @@ export const CHRONICLE_TYPE_CN: Record<string, string> = {
   balance: '天平拨正',
   say: '话语', mail: '书信', friend: '结交',
   diary: '日记',
+  saga_muse: '创世感怀', saga_atom: '新咒降世', saga_quest: '神托任务',
+  saga_event: '大事件', saga_reject: '创世驳回',
 }
 
 function chronicleMdLine(e: ChronicleEntry): string {
@@ -527,6 +531,7 @@ export function apply(ctx: Context, config: Config) {
   const insOffering = db.prepare('INSERT INTO offerings (username, item_id, item_cn, count, at) VALUES (?,?,?,?,?)')
   const aggOffering = db.prepare('SELECT COUNT(*) AS total, MAX(at) AS last_at FROM offerings WHERE username=?')
   const aggByItem = db.prepare('SELECT item_id, SUM(count) AS n FROM offerings WHERE username=? GROUP BY item_id ORDER BY n DESC')
+  const sumOfferingSince = db.prepare('SELECT COALESCE(SUM(count),0) AS c FROM offerings WHERE username=? AND item_id=? AND at>=?')
   const insChronicle = db.prepare('INSERT INTO chronicle (at, type, actor, detail_json) VALUES (?,?,?,?)')
   const selChronicleSince = db.prepare('SELECT at, type, actor, detail_json FROM chronicle WHERE at >= ? ORDER BY seq')
   const maxReviewIssue = db.prepare('SELECT COALESCE(MAX(issue), 0) AS m FROM reviews')
@@ -584,6 +589,10 @@ export function apply(ctx: Context, config: Config) {
     },
     ledgerRecord(username, offer) {
       insOffering.run(username, offer.id.replace(/^minecraft:/, ''), offer.cn, offer.count, Date.now())
+    },
+    ledgerCountSince(username, itemId, sinceTs) {
+      const row = sumOfferingSince.get(username, itemId.replace(/^minecraft:/, ''), sinceTs) as { c: number }
+      return row.c
     },
     ledgerSummary(username) {
       const agg = aggOffering.get(username) as { total: number; last_at: number | null }

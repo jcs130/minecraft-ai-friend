@@ -38,3 +38,5 @@ data/village/quests-*.json
 mc-server/
 sidecar/*.log* 
 __pycache__/  
+.grep*.py 
+.peek*.py 
