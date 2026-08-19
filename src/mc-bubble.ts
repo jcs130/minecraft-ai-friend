@@ -93,7 +93,7 @@ export function apply(ctx: Context, config: Config) {
   const rcon: RconService = ctx.mcRcon
   const getBot = (): Bot => ctx.mcbot
 
-  const DATA = './data'
+  const DATA = process.env.MC_DATA_DIR ?? './data'
   const feedPath = resolve(DATA, 'npc-feed.jsonl')
   const villageDir = resolve(DATA, 'village')
 

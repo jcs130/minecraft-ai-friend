@@ -4,7 +4,7 @@ import { resolve, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 const PORT = 9090
-const DATA_DIR = resolve(process.cwd(), 'data')
+const DATA_DIR = resolve(process.env.MC_DATA_DIR || resolve(process.cwd(), 'data'))
 const STATUS_PATH = resolve(DATA_DIR, 'status.json') // 兼容旧格式（单 bot）
 const MEMORY_PATH = resolve(DATA_DIR, 'mc-memory.json')
 const MAGIC_PATH = resolve(DATA_DIR, 'magic-state.json')
@@ -1218,7 +1218,7 @@ const server = createServer((req, res) => {
       const sk = JSON.parse(readFileSync(join(DATA_DIR, 'skins.json'), 'utf-8'))
       const presets = Object.entries(sk.presets || {}).map(([name, p]) => ({ name, displayName: p.displayName || name, png: p.png || (name + '.png') }))
       let whitelist = []
-      try { whitelist = JSON.parse(readFileSync(join(resolve(process.cwd()), 'mc-server', 'whitelist.json'), 'utf-8')).map((e) => e.name) } catch {}
+      try { whitelist = JSON.parse(readFileSync(join(process.env.MC_SERVER_DIR || join(resolve(process.cwd()), 'mc-server'), 'whitelist.json'), 'utf-8')).map((e) => e.name) } catch {}
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ presets, assignments: sk.assignments || {}, whitelist }))
     } catch (e) {

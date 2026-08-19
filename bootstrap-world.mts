@@ -25,6 +25,8 @@ import * as mcEvolveReview from './src/mc-evolve-review.ts'
 import * as mcTerra from './src/mc-terra.ts'
 import * as mcSaga from './src/mc-saga.ts'
 
+// 运行态根（2026-08-20 D 步迁正仓）：默认 ./data（仓内自足）；迁正仓跑时经 MC_DATA_DIR 指向部署现场 data（运行态正本）
+const D = process.env.MC_DATA_DIR ?? './data'
 const RUN_MS = Number(process.env.RUN_MS ?? 0)
 // 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
 // mineflayer/RCON 内部 promise 拒绝无人可 catch 时保进程（详见 bootstrap-mc.mts 同款注释）。
@@ -55,7 +57,7 @@ await ctx.plugin(mcRcon, {
   enabled: true,
   host: process.env.MC_RCON_HOST ?? process.env.MC_HOST ?? 'localhost',
   port: Number(process.env.MC_RCON_PORT ?? 25575),
-  passwordPath: './data/rcon-secret.txt',
+  passwordPath: `${D}/rcon-secret.txt`,
 })
 await ctx.plugin(mcLogwatch, {
   enabled: true,
@@ -65,8 +67,8 @@ await ctx.plugin(mcLogwatch, {
 })
 await ctx.plugin(mcWorlddb, {
   enabled: true,
-  dbPath: './data/world.db',
-  chronicleMdPath: './data/world-chronicle.md',
+  dbPath: `${D}/world.db`,
+  chronicleMdPath: `${D}/world-chronicle.md`,
   memoryEnabled: process.env.MC_MEMORY_ENABLED !== '0', // 众生册（Qdrant 独立 collection，与家里 MemOS 分开）
   qdrantUrl: process.env.MC_QDRANT_URL ?? 'http://127.0.0.1:6333',
   qdrantCollection: 'mc_world_memory',
@@ -74,15 +76,15 @@ await ctx.plugin(mcWorlddb, {
   embeddingModel: process.env.MC_EMBEDDING_MODEL ?? 'bge-m3-cpu:latest',
 })
 await ctx.plugin(mcTransmigrator, {
-  registryPath: './data/transmigrators.json',
+  registryPath: `${D}/transmigrators.json`,
 })
 await ctx.plugin(mcMagic, {
   enabled: true,
-  atomsPath: './data/magic-atoms.json',
-  statePath: './data/magic-state.json',
+  atomsPath: `${D}/magic-atoms.json`,
+  statePath: `${D}/magic-state.json`,
   maxManaDefault: 100,
   regenPerSec: 2.0,
-  balancePath: './data/balance-overrides.json',
+  balancePath: `${D}/balance-overrides.json`,
 })
 await ctx.plugin(mcGod, {
   enabled: true,
@@ -92,16 +94,16 @@ await ctx.plugin(mcGod, {
   admitCooldownMs: 30_000,
   deathPollMs: 20_000,
   reviewMs: 7_200_000,
-  requirementsPath: './data/world-requirements.md',
+  requirementsPath: `${D}/world-requirements.md`,
   recallTopK: 5,
-  skillEventsPath: './data/skill-events.json',
+  skillEventsPath: `${D}/skill-events.json`,
   advancementsDir: process.env.MC_ADVANCEMENTS_DIR ?? './mc-server/advancements',
-  advancementUnlocksPath: './data/advancement-unlocks.json',
-  advancementNamesPath: './data/advancement-names.json',
+  advancementUnlocksPath: `${D}/advancement-unlocks.json`,
+  advancementNamesPath: `${D}/advancement-names.json`,
   maintainers: ['MengMeng', 'Goddess'],
   balanceFlushMs: 120_000,
-  bulletinPath: './data/balance-bulletin.json',
-  heartbeatPath: './data/world-heartbeat.json',
+  bulletinPath: `${D}/balance-bulletin.json`,
+  heartbeatPath: `${D}/world-heartbeat.json`,
 })
 await ctx.plugin(mcRitual, {
   enabled: true,
@@ -110,7 +112,7 @@ await ctx.plugin(mcRitual, {
 // 数值可被 data/social.json 覆盖（服主调参不改代码）。
 await ctx.plugin(mcSocial, {
   enabled: true,
-  socialPath: './data/social.json',
+  socialPath: `${D}/social.json`,
   sayRadius: 48,
   shoutRadius: 96,
   whisperRadius: 6,
@@ -137,7 +139,7 @@ await ctx.plugin(mcEvolveReview, {
 // 巡检隐患自主封井 + 神谕 TERRAFORM 指令白名单落地。
 await ctx.plugin(mcTerra, {
   enabled: true,
-  dataDir: './data',
+  dataDir: D,
   pollMs: 60_000,
   maxFixesPerPoll: 5,
 })
@@ -153,7 +155,7 @@ await ctx.plugin(mcSaga, {
   maxAtomsPerDay: 2,
   maxActiveQuests: 3,
   minEventGapMs: 4 * 3600_000,
-  dataDir: './data',
+  dataDir: D,
 })
 
 console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)
