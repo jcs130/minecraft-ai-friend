@@ -25,6 +25,8 @@ if out:
 
 env = os.environ.copy()
 env["MC_GOD_NAME"] = "Goddess"
+env["MC_VIEWER"] = "1"          # 女神天眼：世界进程自带 viewer(3050)，9090 面板无穿越者时兜底
+env["MC_VIEWER_PORT"] = "3050"
 cmd = [node, "--require", preflight, "--import", f"file:///{loader}", "bootstrap-world.mts"]
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200

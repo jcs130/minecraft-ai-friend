@@ -47,9 +47,9 @@ await ctx.plugin(mcBot, {
   port: Number(process.env.MC_PORT ?? 25565),
   username: godName,
   autoReconnect: true,
-  viewerEnabled: false, // 女神无需被观察；穿越者才开 viewer
-  viewerFirstPerson: false,
-  viewerPort: 0,
+  viewerEnabled: process.env.MC_VIEWER === '1', // 女神天眼：MC_VIEWER=1 时开启（9090 面板无穿越者时的兜底画面）
+  viewerFirstPerson: process.env.MC_VIEWER_FP === '1',
+  viewerPort: Number(process.env.MC_VIEWER_PORT ?? 3050),
 })
 await ctx.plugin(mcRcon, {
   enabled: true,
