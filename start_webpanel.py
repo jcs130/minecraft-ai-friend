@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-DIR = r'C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin'
+DIR = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录即部署目录：repo 正本拷到现场即现场运行
 logf = open(os.path.join(DIR, 'web-panel.log'), 'w', encoding='utf-8')
 p = subprocess.Popen(
     ['node', 'web-panel.mjs'],

@@ -650,6 +650,22 @@ function maybeCameraCue(s, prevFeedT) {
   } catch { /* 运镜是锦上添花，失败静默 */ }
 }
 
+// ---- 视角回落：穿越者不在线 / viewer 口探活失败 → Goddess 天眼(3050) ----
+const GODDESS_PORT = 3050;
+let vprobe = { port: 0, ok: false, at: 0, inflight: false }; // 探活结论缓存（10s，期间不重探）
+function probeViewer(port) {
+  const now = Date.now();
+  if (vprobe.port === port && (vprobe.inflight || now - vprobe.at < 10000)) return;
+  const prevOk = vprobe.port === port ? vprobe.ok : false; // 重探期间沿用旧结论，避免周期性闪回落
+  vprobe = { port, ok: prevOk, at: now, inflight: true };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 1500);
+  fetch('http://' + location.hostname + ':' + port + '/', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal })
+    .then(() => { vprobe = { port, ok: true, at: Date.now(), inflight: false }; })
+    .catch(() => { vprobe = { port, ok: false, at: Date.now(), inflight: false }; })
+    .finally(() => { clearTimeout(timer); renderCurrent(); });
+}
+
 function renderCurrent() {
   const b = botOf(currentUser);
   const bot = b?.bot || {};
@@ -659,14 +675,23 @@ function renderCurrent() {
   document.getElementById('steps-title').textContent = name + ' 思考流';
 
   // 视角 iframe：第三人称=viewerPort，第一人称=viewerPort+100（mc-bot 双端口方案）
-  const vp = bot.viewerPort || 3001;
+  // 回落：无穿越者在线 / 所选穿越者 viewer 口不通 → Goddess 天眼(3050)
+  const vp = Number(bot.viewerPort) || 0;
+  const hasBotViewer = on && vp > 0;
+  const wantPort = hasBotViewer ? (viewMode === 'first' ? vp + 100 : vp) : GODDESS_PORT;
+  if (hasBotViewer) probeViewer(wantPort); // 异步探活，结论变化经缓存触发回落重渲
+  const probing = hasBotViewer && vprobe.port !== wantPort; // 该口尚无结论：先信在线 bot，不闪回落
+  const viewerOk = hasBotViewer ? (probing ? true : vprobe.ok) : false;
+  const showPort = viewerOk ? wantPort : GODDESS_PORT;
   const frame = document.getElementById('viewer-frame');
-  const wantPort = viewMode === 'first' ? vp + 100 : vp;
   // 第三人称默认智能运镜(follow=smart)：平时追尾锁定，检测到穿越者×NPC 对话时自动切过肩双人构图
-  const want = 'http://' + location.hostname + ':' + wantPort + '/?skin=' + (bot.username || '').toLowerCase()
-    + (viewMode === 'first' ? '&fov=110' : '&follow=smart') + '&pv=6'; // pv=镜头补丁版本，cache-bust
+  const want = 'http://' + location.hostname + ':' + showPort + '/'
+    + (viewerOk ? '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart') : '?follow=smart')
+    + '&pv=7'; // pv=镜头补丁版本，cache-bust（v7=+Goddess 回落）
   if (frame.getAttribute('src') !== want) frame.setAttribute('src', want);
-  document.getElementById('viewer-title').textContent = name + '（' + (viewMode === 'first' ? '第一人称' : '第三人称·智能运镜') + '）';
+  document.getElementById('viewer-title').textContent = viewerOk
+    ? name + '（' + (viewMode === 'first' ? '第一人称' : '第三人称·智能运镜') + '）'
+    : 'Goddess（天眼）';
 
   // 等级徽章 / 睡觉 chip
   const mg = magicOf(bot.username || currentUser);
