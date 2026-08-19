@@ -19,6 +19,9 @@ import socket, struct, os, re, json, time, io, sys, random, urllib.request, thre
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+_STD_KEEP = (sys.stdout, sys.stderr)  # 防 GC：失引用的旧 wrapper 会被回收并 close 掉共享底层 fd
+if __name__ == "__main__":
+    sys.modules["mc_npc"] = sys.modules["__main__"]  # mc_guild 会 `import mc_npc`——注册别名复用本实例，防止整个文件被二次执行（二次执行的 line20 重包 stdout 会 GC-close 掉 fd1，guild 首个 print 必炸）
 
 # 路径/RCON 全部支持环境变量覆盖（部署脚本用）；默认值保持本机布局。
 WORK = os.environ.get("NPC_DATA_DIR") or r"C:\Users\lzl19\.copaw\workspaces\default"
@@ -385,6 +388,13 @@ def turn_in(speaker, v, count, item_zh):
     except Exception:
         pass
     print("[quest] DONE %s -> %s: %s" % (speaker, q["display"], q["zh"]), flush=True)
+    # 公会钩子：该委托若在看板上，连带销板+声望+公告（未接单的裸交付也给功勋——板书即公会）
+    try:
+        import mc_guild as _G
+        if _G.settle_gather(q["id"], speaker):
+            lines.append("（柜台那头盖了个青色印章）公会看板上的这单也一并给你记功了。")
+    except Exception as e:
+        print("[guild] settle err:", e, flush=True)
     try:
         sync_offers([v])  # 柜台同步撤下已完成的委托（GUI/whisper 双通道一致）
     except Exception:
@@ -504,6 +514,12 @@ def _settle_gui_trade(v, q):
     chronicle_append("集市｜有人在柜台买走了 %s 的委托（%d %s → %s）" % (q["display"], q["count"], q["zh"], "、".join(reward_desc)))
     feed_append({"kind": "event", "npc": q["display"], "text": "%s 的委托在柜台被买走（%d %s）" % (q["display"], q["count"], q["zh"])})
     print("[offer] GUI DONE %s: %s" % (q["display"], q["zh"]), flush=True)
+    # 公会钩子：GUI 柜台成交也销板（完成者=柜台 6 格内最近玩家）
+    try:
+        import mc_guild as _G
+        _G.settle_gather(q["id"], "@p[distance=..6,limit=1]", cmd_who="@p[distance=..6,limit=1]")
+    except Exception as e:
+        print("[guild] gui settle err:", e, flush=True)
     sync_offers()  # 全量：掌柜聚合柜与各家柜同步下架
 
 def watch_offers():
@@ -668,6 +684,14 @@ def route(speaker, msg, via="public"):
         else:
             return None, None
     LAST_TALK[speaker] = (hit_v["key"], time.time())
+    # —— 冒险者公会（mc_guild）：看板/接单/放弃/我的/声望，优先于村民闲聊 ——
+    try:
+        import mc_guild as _G
+        glines = _G.route_guild(speaker, msg, rest, hit_v)
+        if glines is not None:
+            return hit_v, glines
+    except Exception as e:
+        print("[guild] route err:", e, flush=True)
     if any(w in rest for w in GREET) and len(rest) <= 6:
         return hit_v, [hit_v["greet"]]
     m = RE_HANDOFF.match(rest)
@@ -1052,6 +1076,11 @@ if __name__ == "__main__":
         unleash_alive()
     except Exception as e:
         print("[npc] unleash err:", e, flush=True)
+    try:
+        import mc_guild
+        mc_guild.start()
+    except Exception as e:
+        print("[guild] boot err:", e, flush=True)
     try:
         tail_forever()
     except KeyboardInterrupt:
