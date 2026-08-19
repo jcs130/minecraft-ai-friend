@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -203,6 +203,12 @@ const PAGE = `<!doctype html>
   .gm-row button { background:#21262d; border:1px solid var(--line); border-radius:8px; padding:5px 10px; color:var(--text); cursor:pointer; font-size:12px; }
   .gm-row button:hover { border-color:var(--green); }
   .muted { color:var(--dim); font-size:12px; }
+  /* 皮肤选择器 */
+  .skchip { display:inline-flex; align-items:center; gap:5px; background:#21262d; border:1px solid var(--line); border-radius:6px; padding:2px 7px 2px 2px; font-size:11px; color:var(--dim); }
+  .skchip img { width:22px; height:22px; image-rendering:pixelated; border-radius:3px; border:1px solid var(--line); display:block; }
+  .skrow { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:12px; }
+  .skrow .skname { font-family:monospace; flex:0 0 118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .skrow select { flex:1 1 auto; background:#0d1117; border:1px solid var(--line); border-radius:8px; color:var(--text); padding:4px 6px; font-size:12px; max-width:200px; }
   /* 被动天赋 */
   .passive { border:1px solid var(--line); border-radius:8px; padding:7px 10px; margin-bottom:7px; background:#11151c; }
   .passive.unlocked { border-color:rgba(188,140,255,.4); }
@@ -289,6 +295,12 @@ const PAGE = `<!doctype html>
       <div class="card">
         <div class="card-head"><h2>技能与被动</h2><span class="muted" id="skill-sub"></span></div>
         <div id="skills"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>皮肤</h2><span class="muted" id="skin-note">指派后下次入服生效（在线需重连）</span></div>
+        <div class="chips" id="skin-presets" style="margin-bottom:8px"><span class="empty" style="padding:6px 0">加载中…</span></div>
+        <div id="skin-assign"><span class="empty" style="padding:6px 0">加载中…</span></div>
       </div>
 
       <div class="card">
@@ -406,6 +418,48 @@ function skinFor(username) {
   };
   entry.img.src = '/skins/' + username.toLowerCase() + '.png';
   return entry;
+}
+
+// ---- 皮肤选择器：预设墙 + 白名单玩家指派（写 skins.json -> skin-proxy 热加载） ----
+let skinData = { presets: [], assignments: {}, whitelist: [] };
+async function loadSkins() {
+  try {
+    const r = await fetch('/api/skins');
+    if (r.ok) skinData = await r.json();
+  } catch {}
+  renderSkins();
+}
+function renderSkins() {
+  const pre = document.getElementById('skin-presets');
+  if (skinData.presets && skinData.presets.length) {
+    pre.innerHTML = skinData.presets.map((p) =>
+      '<span class="skchip" title="' + esc(p.name) + '"><img loading="lazy" src="/skins/' + esc(p.png) + '" onerror="this.parentNode.style.display=\'none\'">' + esc(p.displayName) + '</span>').join('');
+  } else {
+    pre.innerHTML = '<span class="empty" style="padding:6px 0">skins.json 无预设（跑 fetch_presets.py 生成）</span>';
+  }
+  const el = document.getElementById('skin-assign');
+  const names = (skinData.whitelist && skinData.whitelist.length) ? skinData.whitelist : Object.keys(skinData.assignments || {});
+  if (!names.length) { el.innerHTML = '<span class="empty" style="padding:6px 0">白名单为空</span>'; return; }
+  el.innerHTML = names.map((n) => {
+    const cur = (skinData.assignments || {})[n] || '';
+    const opts = ['<option value="">默认（不注入）</option>'].concat((skinData.presets || []).map((p) =>
+      '<option value="' + esc(p.name) + '"' + (cur === p.name ? ' selected' : '') + '>' + esc(p.displayName) + '</option>')).join('');
+    return '<div class="skrow"><span class="skname">' + esc(n) + '</span><select data-u="' + esc(n) + '">' + opts + '</select></div>';
+  }).join('');
+  el.querySelectorAll('select').forEach((s) => s.addEventListener('change', async () => {
+    const un = s.getAttribute('data-u'), v = s.value;
+    const note = document.getElementById('skin-note');
+    note.textContent = '写入中…';
+    try {
+      const r = await fetch('/api/skins/assign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: un, preset: v }),
+      });
+      const j = await r.json();
+      note.textContent = j.ok ? (un + ' → ' + (v || '默认') + ' ✓ 下次入服生效') : ('失败: ' + (j.error || r.status));
+    } catch (e) { note.textContent = '失败: ' + e; }
+    loadSkins();
+  }));
 }
 
 function renderTabs() {
@@ -1012,6 +1066,7 @@ initZoomButtons();
   });
 })();
 setInterval(refresh, 2000);
+loadSkins(); setInterval(loadSkins, 60000);
 </script>
 </body>
 </html>`
@@ -1130,6 +1185,49 @@ const server = createServer((req, res) => {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
         res.end('RCON 失败: ' + e.message)
       })
+    return
+  }
+  // 皮肤库：GET /api/skins -> 预设元信息 + 当前指派 + 白名单（不外泄 value/signature 大字段）
+  if (u.pathname === '/api/skins' && req.method === 'GET') {
+    try {
+      const sk = JSON.parse(readFileSync(join(DATA_DIR, 'skins.json'), 'utf-8'))
+      const presets = Object.entries(sk.presets || {}).map(([name, p]) => ({ name, displayName: p.displayName || name, png: p.png || (name + '.png') }))
+      let whitelist = []
+      try { whitelist = JSON.parse(readFileSync(join(resolve(process.cwd()), 'mc-server', 'whitelist.json'), 'utf-8')).map((e) => e.name) } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ presets, assignments: sk.assignments || {}, whitelist }))
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ error: String(e) }))
+    }
+    return
+  }
+  // 皮肤指派：POST /api/skins/assign {username, preset}（preset 空=清除）-> 改写 skins.json，skin-proxy fs.watch 热加载
+  if (u.pathname === '/api/skins/assign' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (c) => { body += c; if (body.length > 4096) { req.destroy(); } })
+    req.on('end', () => {
+      try {
+        const { username, preset } = JSON.parse(body || '{}')
+        if (!/^[A-Za-z0-9_]{1,16}$/.test(username || '')) throw new Error('用户名非法')
+        const p = join(DATA_DIR, 'skins.json')
+        const sk = JSON.parse(readFileSync(p, 'utf-8'))
+        if (preset) {
+          if (!sk.presets || !sk.presets[preset]) throw new Error('未知预设: ' + preset)
+          sk.assignments = sk.assignments || {}
+          sk.assignments[username] = preset
+        } else if (sk.assignments) {
+          delete sk.assignments[username]
+        }
+        writeFileSync(p, JSON.stringify(sk, null, 2) + '\n')
+        console.log(`[web-panel] skin assign: ${username} -> ${preset || '(default)'}`)
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ error: String(e.message || e) }))
+      }
+    })
     return
   }
   // AI 睁眼截图：/shot/<username>/<file>.jpg —— 只放行 screenshots 目录下的 jpg
