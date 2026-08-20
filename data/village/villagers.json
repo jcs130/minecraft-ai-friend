@@ -96,7 +96,8 @@
      "act": "rest",
      "line": "（收锤擦汗）炉火封了，明天赶早。"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "shilei",
@@ -163,7 +164,8 @@
      "count": 2,
      "emerald": 5
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "mobai",
@@ -242,7 +244,8 @@
      "act": "hawk",
      "line": "书摊掌灯——夜里读几页再走，不亏的。"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "yunji",
@@ -308,7 +311,8 @@
      "emerald": 2,
      "lore_atom": true
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "fubo",
@@ -382,7 +386,8 @@
      "count": 16,
      "emerald": 1
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "fenglin",
@@ -488,7 +493,8 @@
      "emerald": 1
     }
    ],
-   "biome": "jungle"
+   "biome": "jungle",
+   "carrier": "base_villager"
   },
   {
    "key": "zhujiu",
@@ -580,7 +586,8 @@
      "act": "light",
      "line": "（巡看四周）夜里的路，仔细脚下。"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "jingshui",
@@ -682,7 +689,8 @@
      "effect": "regeneration"
     }
    ],
-   "biome": "swamp"
+   "biome": "swamp",
+   "carrier": "base_villager"
   },
   {
    "key": "market",
@@ -741,7 +749,8 @@
      ]
     }
    ],
-   "biome": "plains"
+   "biome": "plains",
+   "carrier": "base_villager"
   },
   {
    "key": "hesu",
@@ -808,7 +817,8 @@
       "日子嘛，跟庄稼一样，一天天往高里长。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "xiaoman",
@@ -872,7 +882,8 @@
       "羊群往东坡去了，草嫩，它们欢喜得很。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "langbo",
@@ -937,7 +948,8 @@
       "打算这两天去湖心试试深水，兴许能碰上大家伙。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "moyan",
@@ -1004,7 +1016,8 @@
       "听闻湖心有异象，正欲往浪伯处求证，以正视听。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "abao",
@@ -1065,7 +1078,8 @@
       "昨天看见女神了！金色的！我跟她挥手，她看见我了！嘿嘿！"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "tongban",
@@ -1130,7 +1144,8 @@
       "打算歇两天，把担子修修，再跟岳山扯张油布防雨。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "guild_lan",
@@ -1203,7 +1218,8 @@
       "远方的地平线那单，走到离广场三百格开外就算数——世界很大，去见见。"
      ]
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "adie",
@@ -1284,7 +1300,8 @@
      "act": "rest",
      "line": "（打了个哈欠）"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "suiniang",
@@ -1349,7 +1366,8 @@
      "act": "rest",
      "line": "（收工回屋）"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   },
   {
    "key": "ahe",
@@ -1415,7 +1433,8 @@
      "act": "rest",
      "line": "（靠着草垛歇脚看晚霞）"
     }
-   ]
+   ],
+   "carrier": "base_villager"
   }
  ]
 }
