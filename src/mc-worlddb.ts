@@ -171,6 +171,7 @@ export const CHRONICLE_TYPE_CN: Record<string, string> = {
   diary: '日记',
   saga_muse: '创世感怀', saga_atom: '新咒降世', saga_quest: '神托任务',
   saga_event: '大事件', saga_reject: '创世驳回',
+  ask: '求知', help: '查册', welcome: '迎新',
 }
 
 function chronicleMdLine(e: ChronicleEntry): string {

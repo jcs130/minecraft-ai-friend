@@ -11,6 +11,7 @@ import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type Offer
 import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import { parseVoice } from './mc-social.ts'
+import { isHelpCommand, handleHelpText, welcomeLines } from './mc-man.ts'
 
 // 村民交易耳语收件箱（WHISPER-TRADE 2026-08-18）：世界进程与 mc_npc.py 同容器同卷，
 // 路径须与引擎侧 INBOX=DATA/npc-inbox.jsonl 一致（容器内 /app/data）。
@@ -483,6 +484,7 @@ export function apply(ctx: Context, config: Config) {
   // 不收供奉：女神翻世界档案（编年史 + 在世旅人名册）直接作答，独立 session
   // 积累每个旅人的求知史。
   const lastAsk = new Map<string, number>() // 每玩家提问节流（独立于祈愿）
+  const welcomed = new Set<string>() // 白纸冷启动引导去重（每进程每人一次）
   async function answerQuestion(username: string, question: string): Promise<void> {
     const bot = getBot()
     const now = Date.now()
@@ -1326,6 +1328,20 @@ export function apply(ctx: Context, config: Config) {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
       worlddb.chronicleRecord('presence', username, { event: 'join' })
+      // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
+      // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
+      if (!welcomed.has(username) && !ctx.mcTransmigrators.getByUsername(username)) {
+        welcomed.add(username)
+        setTimeout(() => {
+          const t = ctx.mcTransmigrators.getByUsername(username)
+          const name = t?.name ?? username
+          for (const ln of welcomeLines(name)) {
+            try { bot.whisper(username, `[女神] ${ln}`) } catch { /* not ready */ }
+          }
+          try { worlddb.chronicleRecord('welcome', username, { via: 'coldstart' }) } catch { /* best effort */ }
+          log(`coldstart welcome sent to ${username}`)
+        }, 8_000)
+      }
     })
     bot.on('playerLeft', (player) => {
       const username = typeof player === 'string' ? player : player.username
@@ -1337,6 +1353,14 @@ export function apply(ctx: Context, config: Config) {
     // 让真人玩家像对服主喊话一样对女神说话。天平（平衡）命令同通道。
     bot.on('chat', (username: string, message: string) => {
       if (username === bot.username) return
+      // 世界手册（2026-08-20）：公屏说 /help 同样应答——白纸 Agent 未必知道要
+      // 私聊。回复走私语点对点，不刷公屏。零 LLM，毫秒级。
+      if (isHelpCommand(message)) {
+        const lines = handleHelpText(message.trim(), ctx)
+        if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+        try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
+        return
+      }
       const bal = matchBalance(message.trim())
       if (bal) {
         applyBalance(username, bal).catch((err) => log(`applyBalance(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
@@ -1352,7 +1376,16 @@ export function apply(ctx: Context, config: Config) {
     bot.on('whisper', (username: string, message: string) => {
       if (username === bot.username) return
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
-      if (message.trim().startsWith('/')) return
+      // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
+      if (message.trim().startsWith('/')) {
+        if (isHelpCommand(message)) {
+          const lines = handleHelpText(message.trim(), ctx)
+          if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+          try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+          log(`help served to ${username}: ${message.trim().slice(0, 40)}`)
+        }
+        return
+      }
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
       if (parseVoice(message.trim())) return
       // 天平通道（服主职权，2026-08-17）：「平衡 <法术> <字段> <数值>」等，
