@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-const PORT = 9090
+const PORT = Number(process.env.PANEL_PORT ?? 9090)
 const DATA_DIR = resolve(process.env.MC_DATA_DIR || resolve(process.cwd(), 'data'))
 const STATUS_PATH = resolve(DATA_DIR, 'status.json') // 兼容旧格式（单 bot）
 const MEMORY_PATH = resolve(DATA_DIR, 'mc-memory.json')
