@@ -1367,6 +1367,14 @@ export function apply(ctx: Context, config: Config) {
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
       }
+      // 世界提问（2026-08-20）：公屏「问：」同样应答（答走私语）——欢迎语教的是
+      // 「任何聊天框」，公屏不能失信。走传令官 mc-herald（本地 27B）。
+      const pubAsk = message.trim().startsWith('问：') ? message.trim().slice(2).trim()
+        : message.trim().startsWith('问:') ? message.trim().slice(2).trim() : ''
+      if (pubAsk) {
+        answerQuestion(username, pubAsk)
+        return
+      }
       const bal = matchBalance(message.trim())
       if (bal) {
         applyBalance(username, bal).catch((err) => log(`applyBalance(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
