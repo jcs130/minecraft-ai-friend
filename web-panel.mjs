@@ -433,7 +433,7 @@ function renderSkins() {
   const pre = document.getElementById('skin-presets');
   if (skinData.presets && skinData.presets.length) {
     pre.innerHTML = skinData.presets.map((p) =>
-      '<span class="skchip" title="' + esc(p.name) + '"><img loading="lazy" src="/skins/' + esc(p.png) + '" onerror="this.parentNode.style.display=\'none\'">' + esc(p.displayName) + '</span>').join('');
+      '<span class="skchip" title="' + esc(p.name) + '"><img loading="lazy" src="/skins/' + esc(p.png) + '" onerror="this.parentNode.style.display=&#39;none&#39;">' + esc(p.displayName) + '</span>').join('');
   } else {
     pre.innerHTML = '<span class="empty" style="padding:6px 0">skins.json 无预设（跑 fetch_presets.py 生成）</span>';
   }
@@ -1281,7 +1281,7 @@ const server = createServer((req, res) => {
     res.end(readFileSync(p))
     return
   }
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(PAGE)
 })
 
