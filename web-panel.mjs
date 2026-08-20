@@ -68,12 +68,18 @@ function apiState() {
   }
 
   // 多 bot：每个穿越者写 status-<username>.json，这里扫描发现全部。
+  // 陈旧即离线：updatedAt 超 10 分钟未更新（进程暴毙没写下线记号）→ online 强制为 false，
+  // 防止旧世界残影被当作在线画在地图上（2026-08-20 鸣人残影案）。
+  const STALE_MS = 10 * 60 * 1000
   let bots = []
   try {
     const files = readdirSync(DATA_DIR).filter((f) => f.startsWith('status-') && f.endsWith('.json'))
     for (const f of files) {
       const st = readJson(join(DATA_DIR, f), null)
-      if (st?.bot) bots.push(st)
+      if (!st?.bot) continue
+      const t = Date.parse(st.updatedAt || st.bot.updatedAt || '') || 0
+      if (t && Date.now() - t > STALE_MS && st.bot.online) st.bot.online = false
+      bots.push(st)
     }
   } catch {
     bots = []
