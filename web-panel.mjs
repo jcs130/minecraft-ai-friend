@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -13,6 +13,36 @@ const EVENTS_PATH = resolve(DATA_DIR, 'skill-events.json')
 const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
+
+// ── mc-brain.log 思考账本（结构化 JSONL：ts/step/thought/goal/tool/args/outcome/shots）──
+// session 架构下 status.recentSteps 恒为空（2026-08-20 断流案），从账本直接捞。
+// mtime 缓存：文件没变就不重读（账本 9.5MB，轮询每 5s 一次不能全量重读）。
+let brainCache = { mtime: 0, entries: [] }
+function readBrainLog() {
+  const p = join(DATA_DIR, 'mc-brain.log')
+  try {
+    const mt = statSync(p).mtimeMs
+    if (mt === brainCache.mtime) return brainCache.entries
+    const entries = []
+    for (const ln of readFileSync(p, 'utf-8').split('\n')) {
+      const s = ln.trim()
+      if (!s.startsWith('{')) continue
+      try {
+        const e = JSON.parse(s)
+        // shots 在账本里是 Python list 的字符串 repr，统一抽成数组
+        let shots = []
+        if (Array.isArray(e.shots)) shots = e.shots
+        else if (typeof e.shots === 'string') shots = e.shots.match(/[\w./-]+\.jpe?g/gi) || []
+        else if (typeof e.shot === 'string' && e.shot.includes('/')) shots = [e.shot]
+        entries.push({ ts: e.ts, step: e.step, thought: e.thought, goal: e.goal, tool: e.tool, args: e.args, outcome: e.outcome, shots })
+      } catch { /* 脏行跳过 */ }
+    }
+    brainCache = { mtime: mt, entries }
+    return entries
+  } catch {
+    return []
+  }
+}
 
 function readJson(path, fallback) {
   try {
@@ -90,6 +120,17 @@ function apiState() {
     if (st?.bot) bots.push(st)
   }
   bots.sort((a, b) => (a.bot?.username ?? '').localeCompare(b.bot?.username ?? ''))
+
+  // 思考流兜底：status.recentSteps 为空时，从 mc-brain.log 账本按归属（shots 路径前缀）补尾 30 条。
+  // 管道修复（session 模式回写 recentSteps）后 status 自带数据，此兜底自动让位。
+  const brain = readBrainLog()
+  for (const st of bots) {
+    if (st.bot?.recentSteps?.length) continue
+    const name = st.bot?.username
+    if (!name) continue
+    const own = brain.filter((e) => e.shots.some((s) => s.startsWith(name + '/')))
+    if (own.length) st.bot.recentSteps = own.slice(-30)
+  }
 
   const latest = bots.reduce((max, b) => {
     const t = b.updatedAt || b.bot?.updatedAt
@@ -763,14 +804,17 @@ function renderCurrent() {
   const steps = b?.recentSteps || [];
   document.getElementById('steps').innerHTML = steps.length
     ? steps.slice().reverse().map((st) => {
-        const args = st.args && Object.keys(st.args).length ? ' ' + JSON.stringify(st.args) : '';
+        const args = typeof st.args === 'object' && st.args && Object.keys(st.args).length
+          ? ' ' + JSON.stringify(st.args)
+          : (typeof st.args === 'string' && st.args && st.args !== '{}' ? ' ' + st.args : '');
         const out = (st.outcome || '').length > 120 ? String(st.outcome).slice(0, 120) + '…' : (st.outcome || '');
         const shotList = (st.shots && st.shots.length ? st.shots : (st.shot ? [st.shot] : []));
         const shot = shotList.length
           ? '<div class="shot">' + shotList.map((f) => '<img src="/shot/' + f + '" loading="lazy" data-shot="' + f + '" title="点击看大图">').join('') + '</div>'
           : '';
+        const t = st.ts ? String(st.ts).slice(5, 16).replace('T', ' ') : '';
         return '<div class="step">'
-          + '<div class="head"><span>#' + st.step + '</span><span class="tool">' + esc(st.tool) + esc(args) + '</span></div>'
+          + '<div class="head"><span>#' + st.step + '</span><span class="tool">' + esc(st.tool) + esc(args) + '</span><span class="muted">' + t + '</span></div>'
           + '<div class="thought">💭 ' + esc(st.thought || '-') + '</div>'
           + '<div class="goal">🎯 ' + esc(st.goal || '-') + '</div>'
           + shot

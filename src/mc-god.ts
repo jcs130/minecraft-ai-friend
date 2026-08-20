@@ -477,6 +477,60 @@ export function apply(ctx: Context, config: Config) {
     return { action, skill, item, count, direction, distance, reply }
   }
 
+  // ── 世界提问快速答疑（2026-08-20 分仓解耦定调）───────────────────────
+  // 客户端（穿越者 AI / 真人）没有服务器的运行状态与历史背景——世界的一切
+  // 知识只能在游戏过程中经聊天渠道向女神求得。提问不进祈愿队列、不耗神恩、
+  // 不收供奉：女神翻世界档案（编年史 + 在世旅人名册）直接作答，独立 session
+  // 积累每个旅人的求知史。
+  const lastAsk = new Map<string, number>() // 每玩家提问节流（独立于祈愿）
+  async function answerQuestion(username: string, question: string): Promise<void> {
+    const bot = getBot()
+    const now = Date.now()
+    const lastAt = lastAsk.get(username) ?? 0
+    if (now - lastAt < 15_000) {
+      const wait = Math.ceil((15_000 - (now - lastAt)) / 1000)
+      try { bot.whisper(username, `[女神] 你的疑问声犹在耳畔（${wait} 秒前才问过），稍候再问。`) } catch { /* bot not ready */ }
+      return
+    }
+    lastAsk.set(username, Date.now())
+    const t = ctx.mcTransmigrators.getByUsername(username)
+    const senderName = t?.name ?? username
+    try {
+      // 世界档案素材：近 7 天编年史后 20 条 + 在世旅人名册。
+      const chron = worlddb.chronicleSince(Date.now() - 7 * 24 * 3600_000).slice(-20)
+      const chronLines = chron.map((e) => {
+        const d = new Date(e.at)
+        const det = Object.entries(e.detail ?? {})
+          .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+          .map(([k, v]) => `${k}=${v}`).join(',')
+        return `- ${d.getMonth() + 1}/${d.getDate()} ${e.actor} ${e.type}${det ? `(${det})` : ''}`
+      })
+      const roster = ctx.mcTransmigrators.list().map((x) => `${x.name}(${x.username})`).join('、') || '（名册暂空）'
+      const prompt = [
+        `你是这个方块世界的女神（游戏名 ${bot.username}），全知世界的过去与现在。`,
+        `一位名叫「${senderName}」的旅人向你提问。`,
+        '',
+        '你的世界档案（作答的唯一依据）：',
+        '【近 7 天世界大事（编年史，type 含 death=陨落/prayer=祈愿/offering=供奉/say=传声/awaken=觉醒等）】',
+        ...(chronLines.length ? chronLines : ['- （编年史尚无近事）']),
+        `【在世旅人名册】${roster}`,
+        '',
+        '以女神口吻直接回答他的问题，规则：',
+        '1. 只依据档案作答；档案没有的就坦诚告知「连本神也不曾记录此事」，绝不编造。',
+        '2. 口吻威严又慈爱，文言白话相间，100 字以内，直接给答案，不要 JSON、不要旁白。',
+        `他的问题：${question}`,
+      ].join('\n')
+      const answer = await callAgent(`mc:${username}:questions`, username, prompt)
+      const trimmedAnswer = answer.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
+      try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
+      worlddb.chronicleRecord('ask', username, { question: question.slice(0, 60), via: 'goddess' })
+      log(`question from ${username} answered: ${question.slice(0, 50)} → ${trimmedAnswer.slice(0, 60)}`)
+    } catch (err) {
+      log(`answerQuestion failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      try { bot.whisper(username, `[女神] ${senderName}，神谕此刻紊乱（${err instanceof Error ? err.message.slice(0, 60) : '神力波动'}），稍后再问。`) } catch { /* bot not ready */ }
+    }
+  }
+
   // ── 处理一封祈愿信（收件箱处理器调用，一次一封）──────────────────────
   async function handleOne(item: InboxRow): Promise<void> {
     const bot = getBot()
@@ -1338,6 +1392,15 @@ export function apply(ctx: Context, config: Config) {
       }
       const explicitPrayer = trimmed.startsWith('祈愿：')
       const body = explicitPrayer ? trimmed.slice(3).trim() : trimmed
+      // ── 世界提问快速答疑分流（2026-08-20）：「问：」显式前缀 → 女神翻世界
+      // 档案直接作答，不进祈愿队列。客户端没有服务器数据，世界知识全走这条
+      // 聊天渠道（与 mc-social 信使、mc_deliver 交易耳语同一私聊总线）。
+      const askBody = trimmed.startsWith('问：') ? trimmed.slice(2).trim()
+        : trimmed.startsWith('问:') ? trimmed.slice(2).trim() : ''
+      if (askBody) {
+        answerQuestion(username, askBody)
+        return
+      }
       if (!explicitPrayer && ctx.mcMagic.sniffChant(body)) {
         ctx.mcMagic.castSpell(username, body)
           .then((reply) => {
