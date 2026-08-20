@@ -37,6 +37,7 @@ data/village/quests-*.json
 # local MC server install (deploy-server.mjs)
 mc-server/
 sidecar/*.log* 
+sidecar/hearth-last.sse
 __pycache__/  
 .grep*.py 
 .peek*.py 

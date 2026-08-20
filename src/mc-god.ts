@@ -13,9 +13,19 @@ import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import { parseVoice } from './mc-social.ts'
 import { isHelpCommand, handleHelpText, welcomeLines } from './mc-man.ts'
 
-// 村民交易耳语收件箱（WHISPER-TRADE 2026-08-18）：世界进程与 mc_npc.py 同容器同卷，
-// 路径须与引擎侧 INBOX=DATA/npc-inbox.jsonl 一致（容器内 /app/data）。
-const NPC_INBOX = process.env.NPC_INBOX || './data/npc-inbox.jsonl'
+// 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
+// scratch-plugin\data，经 MC_DATA_DIR 传入。村民交易/祈福文件队列须锚到运行态，
+// 与 mc_npc.py 的 DATA（scratch-plugin\data）一致——旧 './data' 相对 cwd 在迁仓后会落错卷。
+const DATA_DIR = process.env.MC_DATA_DIR || './data'
+const NPC_INBOX = process.env.NPC_INBOX || `${DATA_DIR}/npc-inbox.jsonl`
+
+// 村民祈福通道（2026-08-20 造物主谕「一步到位」）：村民（灶火民）祈愿由 mc_npc.py
+// 投 god-inbox.jsonl，女神裁断后神谕回 god-reply.jsonl（村民非玩家，不走 whisper）。
+// 路径与 npc-inbox 同卷（scratch-plugin\data）。
+const GOD_INBOX = process.env.GOD_INBOX || `${DATA_DIR}/god-inbox.jsonl`
+const GOD_REPLY = process.env.GOD_REPLY || `${DATA_DIR}/god-reply.jsonl`
+/** 村民祈愿用的虚拟 username 前缀（区别于真人/AI 穿越者；神谕据此回文件而非私聊）。 */
+const VILLAGER_PREFIX = 'villager:'
 
 /**
  * mc-god —— 慢路径女神（世界守护者，QwenPaw Agent mc-god）+ 女神化身管理。
@@ -185,10 +195,14 @@ function verdictPrompt(
   offering: OfferingInfo | undefined,
   devotion: string,
   memories: MemoryHit[],
+  isVillager = false,
 ): string {
   const lines = [
     `【祈愿】${senderName}：${wish}`,
   ]
+  if (isVillager) {
+    lines.push('【祈愿者】这是一位灶火民（村民），向女神「摇光」祈福。他与穿越者平权同杆秤。')
+  }
   if (offering) {
     lines.push(`【本次供奉】${offering.cn}×${offering.count}（已从他的行囊收执，归入神库；无论你如何裁断，供品不退还）`)
   } else {
@@ -208,12 +222,18 @@ function verdictPrompt(
   lines.push('【神谕裁决协议】只输出一个 JSON 对象（不要多余文字、不要调用任何工具、不要检索记忆——现状已给出）：')
   lines.push('{"action":"cast或none","skill":"<技艺id，cast时必填>","item":"<物品id，仅造物>","count":1-16,"direction":"东/南/西/北/组合","distance":<格数>,"reply":"<一句中文神谕>"}', '')
   lines.push('裁决要点：')
-  lines.push('- 求的技艺他未习得（程序已过滤已习得的）→ 你裁量：值得帮 → cast 代施；滥用/无礼/贪心/理由不足 → none 拒绝或提条件；')
-  lines.push('- 供奉与虔诚是你的裁量依据：危难中慷慨、贵重之物（钻石/绿宝石/金锭/附魔书/末影珍珠）更显诚心，可优先垂怜；口粮级小供奉配小心愿即可；空手求大术，可以拒绝或在 reply 里向他索要供奉——让世人明白神恩有价；')
-  lines.push('- 造物只从白名单选 item，数量克制（1-16）；')
-  lines.push('- 破晓/驱云是全服天象，影响众生，慎用；天雷/陨石等毁灭技艺除非理由充分不施；')
-  lines.push('- 纯闲聊、试探、问问题 → none，reply 里以神谕口吻回应；')
-  lines.push('- reply 话少而重，有神性。')
+  if (isVillager) {
+    lines.push('- 灶火民与穿越者同杆秤：虔诚看处境（越困苦越虔诚）与祈愿里自陈的供奉，不因他是 NPC 就轻视，也不因他是 NPC 就滥施；')
+    lines.push('- 神恩有价：村民须舍贡（祈愿里自陈的麦/鱼/炭等即其供奉），神多指引、少代劳——对村民优先给指引（告诉他怎么自渡），不要代施神迹（他不能咏唱，代施意义也异于穿越者）；天象级恩典（破晓/驱云等全村同享）可酌情；')
+    lines.push('- 口吻仍是有神性的神谕，话少而重。')
+  } else {
+    lines.push('- 求的技艺他未习得（程序已过滤已习得的）→ 你裁量：值得帮 → cast 代施；滥用/无礼/贪心/理由不足 → none 拒绝或提条件；')
+    lines.push('- 供奉与虔诚是你的裁量依据：危难中慷慨、贵重之物（钻石/绿宝石/金锭/附魔书/末影珍珠）更显诚心，可优先垂怜；口粮级小供奉配小心愿即可；空手求大术，可以拒绝或在 reply 里向他索要供奉——让世人明白神恩有价；')
+    lines.push('- 造物只从白名单选 item，数量克制（1-16）；')
+    lines.push('- 破晓/驱云是全服天象，影响众生，慎用；天雷/陨石等毁灭技艺除非理由充分不施；')
+    lines.push('- 纯闲聊、试探、问问题 → none，reply 里以神谕口吻回应；')
+    lines.push('- reply 话少而重，有神性。')
+  }
   return lines.join('\n')
 }
 
@@ -446,20 +466,22 @@ export function apply(ctx: Context, config: Config) {
    * 神谕裁决：她有长期记忆与众生册——同一穿越者的祈愿落在同一 session，
    * 恩情与冒犯、供奉与亵渎都留痕。
    */
-  async function askGoddess(username: string, senderName: string, wish: string, offering: OfferingInfo | undefined): Promise<Verdict> {
+  async function askGoddess(username: string, senderName: string, wish: string, offering: OfferingInfo | undefined, isVillager = false): Promise<Verdict> {
     const ms = magic.getState(username)
     const atoms = magic.listAtoms()
     const learnedNames = ms.learned
       .map((id) => magic.getAtomById(id)?.name ?? id)
       .join('/')
-    const snapshot = [
-      `法力 ${Math.floor(ms.mana)}/${ms.maxMana}，等级 ${ms.level}`,
-      `已习得技艺：${learnedNames || '无'}`,
-      `出生天赋：${ms.innateSkill ? (magic.getAtomById(ms.innateSkill)?.name ?? ms.innateSkill) : '未定'}`,
-      '（注：已习得且魔力足够的祈愿已被程序拦截，不会上达于你——你看到的都是未习得或特殊心愿）',
-    ].join('；')
+    const snapshot = isVillager
+      ? '灶火民无咏唱之力；其处境见祈愿文。'
+      : [
+        `法力 ${Math.floor(ms.mana)}/${ms.maxMana}，等级 ${ms.level}`,
+        `已习得技艺：${learnedNames || '无'}`,
+        `出生天赋：${ms.innateSkill ? (magic.getAtomById(ms.innateSkill)?.name ?? ms.innateSkill) : '未定'}`,
+        '（注：已习得且魔力足够的祈愿已被程序拦截，不会上达于你——你看到的都是未习得或特殊心愿）',
+      ].join('；')
     const memories = await worlddb.recall(username, wish, config.recallTopK)
-    const prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories)
+    const prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
     const answer = await callAgent(`mc:${username}:prayers`, username, prompt)
 
     const parsed = extractJson(answer)
@@ -539,19 +561,76 @@ export function apply(ctx: Context, config: Config) {
     }
   }
 
+  // ── 灶火民祈愿通道（2026-08-20 造物主谕「一步到位」）───────────────────
+  // mc_npc.py 投 god-inbox.jsonl → 本进程消费进收件箱（虚拟 username villager:key）
+  // → 裁决后神谕经 appendGodReply 回 god-reply.jsonl（见 handleOne 的 whisper 分支）。
+  function appendGodReply(key: string, reply: string): void {
+    try {
+      appendFileSync(GOD_REPLY, JSON.stringify({ key, reply, ts: Date.now() }) + '\n', 'utf-8')
+    } catch (err) {
+      log(`appendGodReply failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  async function consumeVillagerPrayers(): Promise<void> {
+    try {
+      if (!existsSync(GOD_INBOX)) return
+      const lines = readFileSync(GOD_INBOX, 'utf-8').split('\n').filter((l) => l.trim())
+      if (lines.length === 0) return
+      writeFileSync(GOD_INBOX, '') // 消费即清空（单消费者：世界进程）
+      for (const ln of lines) {
+        try {
+          const rec = JSON.parse(ln)
+          const key: string = rec?.key
+          const wish: string = rec?.wish
+          if (!key || !wish) continue
+          const display: string = rec?.display || key
+          // 处境（桥的产物）拼进祈愿文，供女神掂量虔诚；不单独扩 schema。
+          const fullWish = rec?.situation ? `${wish}（其处境：${rec.situation}）` : wish
+          const username = VILLAGER_PREFIX + key
+          worlddb.inboxPush(username, display, fullWish)
+          worlddb.chronicleRecord('prayer', username, { wish: wish.slice(0, 60), villager: true, situation: rec?.situation ?? undefined })
+          log(`villager prayer from ${display}(${key}): ${wish.slice(0, 50)}`)
+        } catch {
+          /* 单条坏行跳过 */
+        }
+      }
+    } catch (err) {
+      log(`consumeVillagerPrayers failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   // ── 处理一封祈愿信（收件箱处理器调用，一次一封）──────────────────────
   async function handleOne(item: InboxRow): Promise<void> {
     const bot = getBot()
     const { username, wish } = item
+    const isVillager = username.startsWith(VILLAGER_PREFIX)
+    const villagerKey = isVillager ? username.slice(VILLAGER_PREFIX.length) : null
     const offering = item.offering ?? undefined
     const senderName = item.name || username
     const whisper = (text: string) => {
-      try {
-        bot.whisper(username, `[女神] ${senderName}，${text}`)
-      } catch {
-        /* bot not ready */
+      if (isVillager && villagerKey) {
+        appendGodReply(villagerKey, text)
+      } else {
+        try {
+          bot.whisper(username, `[女神] ${senderName}，${text}`)
+        } catch {
+          /* bot not ready */
+        }
       }
     }
+
+    // 灶火民祈愿：独立裁决路径——多指引少代劳、不代施神迹，神谕走文件回传（不依赖化身在线）
+    if (isVillager) {
+      const verdict = await askGoddess(username, senderName, wish, offering, true)
+      whisper(verdict.reply)
+      worlddb.chronicleRecord('verdict', username, { action: 'villager', skill: null, reply: verdict.reply })
+      await worlddb.remember(username, 'verdict', `灶火民${senderName}祈愿「${wish.slice(0, 60)}」；你回应：「${verdict.reply.slice(0, 60)}」`)
+      worlddb.inboxComplete(item.id, `villager: ${verdict.reply.slice(0, 60)}`)
+      log(`villager verdict for ${senderName}(${villagerKey}): ${verdict.reply.slice(0, 60)}`)
+      return
+    }
+
     if (!bot.entity) throw new Error('avatar offline')
 
     // 快捷应答：找回出生天赋（穿越者进程重启后的记忆找回，不打扰女神）
@@ -646,9 +725,31 @@ export function apply(ctx: Context, config: Config) {
         busy = false
       }
       schedulePoll()
+
+  // ── 灶火民祈愿消费循环（村民祈愿低频，文件队列消费宜即时）─────────────
+  let stopVillagerPrayerPoll: (() => void) | null = null
+  function scheduleVillagerPrayerPoll() {
+    if (disposed) return
+    stopVillagerPrayerPoll = ctx.setTimeout(async () => {
+      await consumeVillagerPrayers()
+      scheduleVillagerPrayerPoll()
+    }, 5_000)
+  }
+  scheduleVillagerPrayerPoll()
     }, config.pollMs)
   }
   schedulePoll()
+
+  // ── 灶火民祈愿消费循环（村民祈愿低频，文件队列消费宜即时）─────────────
+  let stopVillagerPrayerPoll: (() => void) | null = null
+  function scheduleVillagerPrayerPoll() {
+    if (disposed) return
+    stopVillagerPrayerPoll = ctx.setTimeout(async () => {
+      await consumeVillagerPrayers()
+      scheduleVillagerPrayerPoll()
+    }, 5_000)
+  }
+  scheduleVillagerPrayerPoll()
 
   // ── 守望者：死亡计分板轮询（scoreboard deathCount，权威）─────────────
   const DEATH_OBJ = 'mcdeaths'

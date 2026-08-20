@@ -31,6 +31,11 @@ LOG = os.environ.get("NPC_LOG_PATH") or os.path.join(DATA, "..", "mc-server-neof
 HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 COOLDOWN = 3.0
+# 祈福通道（2026-08-20 造物主谕「一步到位」）
+PRAY_PERIOD = 240        # 祈愿扫描间隔（秒）
+PRAY_COOLDOWN = 900      # 每村民祈愿冷却（秒），防刷屏
+PRAY_CHANCE = 0.4        # 夜里单次扫描触发祈愿的概率
+GOD_REPLY_PERIOD = 8     # 神谕回传消费间隔（秒）
 
 os.makedirs(VDIR, exist_ok=True)
 PROFILES = json.load(open(os.path.join(VDIR, "villagers.json"), encoding="utf-8"))["villagers"]
@@ -671,44 +676,76 @@ def _skill_card(key):
     except OSError:
         return ""
 
-def agent_chat(v, speaker, msg, ctx):
-    """经 QwenPaw Agent mc-hearth（本地 27B）以村民之魂作答。
-    隔离铁律：session_id = npc:<villager_key> —— 每位村民一条独立记忆线，
-    岳山永不记得墨白聊过什么；不同旅人对同村村民说话共用该村民的 session
-    （那是村民自己的记忆）。
-    2026-08-20 三改（造物主谕）：
-      ① 人设不再每问重申——每条记忆线只在本引擎生命期内首次开口时播种一次；
-      ② 轨迹沉淀：每次对话落 data/village/traj/<key>.jsonl（append-only）；
-      ③ 渐进式披露：新消息按 bigram 重叠从轨迹按需提取 top-3 注入为「回忆」，
-         data/village/skills/<key>.md 存在时随人设播种（沉淀成 skill，按需加载）。
-    任何失败返回 None → 走旧直连 llm_reply → 模板台词，引擎永不停摆。"""
+# ---------- 桥：处境喂魂（2026-08-20 造物主谕「一步到位」） ----------
+# 读 Settlements mod 行为状态（neoforge:attachments），合成一句中文处境，
+# 注入灶火祭司 LLM，使村民之「知」源于真实处境——先有「知」才有「求」。
+# 数据源实测（浪伯）：settlements:day_plan（dayType/activityBlocks/slots）、
+#   settlements:hunger（饱食度 0=饿~1=饱）、settlements:villager_genetics（六维基因）。
+GENE_CN = {
+    "STRENGTH": "气力", "CONSTITUTION": "体魄", "AGILITY": "身手",
+    "INTELLIGENCE": "聪慧", "WILL": "心志", "CHARISMA": "魅力",
+}
+CTX_CN = {"IDLE": "闲着", "MEET": "与人聚着", "WORK": "忙活", "SLEEP": "歇着"}
+
+def _get_att(v, path):
+    """读 neoforge:attachments 下的精确路径，返回原始值文本；失败/无值返回空串。
+    精确路径优于读整个 attachments——整个 attachments 序列化顺序不稳定（HashMap）
+    且超 4096 字符会被 /data get 截断，导致字段时有时无。"""
+    try:
+        r = R.cmd("data get entity %s %s" % (sel(v), path))
+    except Exception:
+        R.s = None
+        return ""
+    if not r or "has the following entity data" not in r:
+        return ""
+    return r.split("has the following entity data: ", 1)[-1].strip()
+
+def read_situation(v):
+    """读 mod 行为状态 → 一句中文处境；非 base_villager 载体返回空串。
+    四项精确查询（各短、不截断）：饱食度 / 休息日 / 当前活动 / 六维基因。"""
+    if v.get("carrier") != "base_villager":
+        return ""
+    parts = []
+    # 饱食度（settlements:hunger，0=饿 ~ 1=饱）
+    h = _get_att(v, "neoforge:attachments.settlements:hunger")
+    m = re.search(r"(-?[\d.]+)f", h)
+    if m:
+        hv = float(m.group(1))
+        parts.append("腹中充足" if hv >= 0.75 else
+                     "腹中尚可" if hv >= 0.70 else
+                     "肚里有点空" if hv >= 0.50 else
+                     "饥肠辘辘" if hv >= 0.30 else "饿得发虚")
+    # 今日休息日还是当值日
+    dt = _get_att(v, "neoforge:attachments.settlements:day_plan.plan.dayType")
+    if dt:
+        parts.append("休息日" if "REST_DAY" in dt else "当值日")
+    # 当前活动块（schedule.activityBlocks 末个 context）
+    ab = _get_att(v, "neoforge:attachments.settlements:day_plan.plan.schedule.activityBlocks")
+    acts = re.findall(r'context\s*:\s*"([A-Z_]+)"', ab)
+    if acts:
+        parts.append("此刻" + CTX_CN.get(acts[-1], acts[-1]))
+    # 六维基因：挑最高与最低，点出性格
+    g = _get_att(v, "neoforge:attachments.settlements:villager_genetics.genes")
+    genes = re.findall(r'type\s*:\s*"([A-Z_]+)"\s*,\s*value\s*:\s*(-?[\d.]+)d', g)
+    if len(genes) >= 2:
+        gv = [(GENE_CN.get(t, t), float(val)) for t, val in genes]
+        hi = max(gv, key=lambda x: x[1])
+        lo = min(gv, key=lambda x: x[1])
+        if hi[0] != lo[0]:
+            parts.append("%s出众、%s欠缺" % (hi[0], lo[0]))
+    return "、".join(parts) if parts else ""
+
+def _hearth_reply(sid, user_id, text, dbg):
+    """走 mc-hearth agent 通道（本地 27B），返回完整 answer 文本；失败返回 None。
+    闲聊（agent_chat）与祈愿（villager_pray）共用；session_id 由调用方区分。"""
     llm = CFG.get("llm", {})
     if not (llm.get("enabled") and llm.get("agent")):
         return None
-    sid = "npc:%s" % v["key"]
-    if sid in _SEEDED:
-        recall = _traj_recall(v["key"], msg)
-        pre = ""
-        if recall:
-            pre = "（你想起先前的事：%s）\n" % "；".join(
-                "%s问过「%s」你答「%s」" % (r.get("speaker", "有人"), (r.get("q") or "")[:20], (r.get("a") or "")[:16])
-                for r in recall)
-        text = "%s%s 对你说：%s" % (pre, speaker, msg)
-    else:
-        _SEEDED.add(sid)
-        skill = _skill_card(v["key"])
-        sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
-                "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
-                "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
-            v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
-            ctx.get("online", "?"), ("\n你的心得手记（熟稔之事）：\n" + skill) if skill else "")
-        text = "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)
     body = json.dumps({
         "channel": "console",
-        "user_id": "npc-" + v["key"],
+        "user_id": user_id,
         "session_id": sid,
-        "input": [{"role": "user", "content": [
-            {"type": "text", "text": text}]}],
+        "input": [{"role": "user", "content": [{"type": "text", "text": text}]}],
     }).encode("utf-8")
     req = urllib.request.Request(
         llm.get("agent_endpoint", "http://127.0.0.1:8088/api/console/chat"),
@@ -720,7 +757,7 @@ def agent_chat(v, speaker, msg, ctx):
         # 运维取证：最后一次祭司应答原文落盘（排障用，环形覆盖）
         try:
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hearth-last.sse"), "w", encoding="utf-8") as df:
-                df.write("session=%s user=%s\n" % (v["key"], speaker))
+                df.write("dbg=%s\n" % dbg)
                 df.write(raw[-8000:])
         except Exception:
             pass
@@ -749,14 +786,145 @@ def agent_chat(v, speaker, msg, ctx):
                     slot["delta"] += t
         if msg_id and msg_id in pending:
             answer = pending[msg_id]["delta"] or pending[msg_id]["full"]
-        answer = answer.strip().split("</think>")[-1].strip()
-        lines = [x for x in answer.splitlines() if x.strip()][:2]
-        if lines:
-            _traj_append(v["key"], speaker, msg, lines[0])
-        return lines or None
+        return answer.strip().split("</think>")[-1].strip() or None
     except Exception as e:
-        print("[npc-agent] fallback:", e, flush=True)
+        print("[hearth] fallback:", e, flush=True)
         return None
+
+def agent_chat(v, speaker, msg, ctx):
+    """经 QwenPaw Agent mc-hearth（本地 27B）以村民之魂作答。
+    隔离铁律：session_id = npc:<villager_key> —— 每位村民一条独立记忆线，
+    岳山永不记得墨白聊过什么；不同旅人对同村村民说话共用该村民的 session
+    （那是村民自己的记忆）。
+    2026-08-20 三改（造物主谕）：
+      ① 人设不再每问重申——每条记忆线只在本引擎生命期内首次开口时播种一次；
+      ② 轨迹沉淀：每次对话落 data/village/traj/<key>.jsonl（append-only）；
+      ③ 渐进式披露：新消息按 bigram 重叠从轨迹按需提取 top-3 注入为「回忆」，
+         data/village/skills/<key>.md 存在时随人设播种（沉淀成 skill，按需加载）。
+    任何失败返回 None → 走旧直连 llm_reply → 模板台词，引擎永不停摆。"""
+    llm = CFG.get("llm", {})
+    if not (llm.get("enabled") and llm.get("agent")):
+        return None
+    sid = "npc:%s" % v["key"]
+    if sid in _SEEDED:
+        recall = _traj_recall(v["key"], msg)
+        sit = read_situation(v)
+        pre = ("（你此刻的处境：%s。）\n" % sit) if sit else ""
+        if recall:
+            pre += "（你想起先前的事：%s）\n" % "；".join(
+                "%s问过「%s」你答「%s」" % (r.get("speaker", "有人"), (r.get("q") or "")[:20], (r.get("a") or "")[:16])
+                for r in recall)
+        text = "%s%s 对你说：%s" % (pre, speaker, msg)
+    else:
+        _SEEDED.add(sid)
+        skill = _skill_card(v["key"])
+        sit = read_situation(v)
+        sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
+                "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
+                "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
+            v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
+            ctx.get("online", "?"),
+            ("\n你此刻的处境：%s。" % sit) if sit else "",
+            ("\n你的心得手记（熟稔之事）：\n" + skill) if skill else "")
+        text = "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)
+    answer = _hearth_reply(sid, "npc-" + v["key"], text, "chat:%s<-%s" % (v["key"], speaker))
+    lines = [x for x in (answer or "").splitlines() if x.strip()][:2]
+    if lines:
+        _traj_append(v["key"], speaker, msg, lines[0])
+    return lines or None
+
+# ---------- 祈福通道（2026-08-20 造物主谕「一步到位」：桥 + 同炉裁 + 神恩有价） ----------
+# 村民（base_villager 载体）向女神「摇光」祈愿：处境驱动触发 → 灶火祭司生成祈愿
+# → 投 god-inbox.jsonl → 女神（mc-god.ts）裁断 → 神谕回 god-reply.jsonl → 本引擎消费 speak。
+GOD_INBOX = os.path.join(DATA, "god-inbox.jsonl")
+GOD_REPLY = os.path.join(DATA, "god-reply.jsonl")
+
+def _god_append(path, rec):
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+def villager_pray(v):
+    """生成村民祈愿（灶火祭司 LLM，带处境），投递 god-inbox.jsonl；失败返回 False。"""
+    sit = read_situation(v)
+    sysp = ("你就是%s本人——千灯界集市的村民。你此刻的处境：%s。"
+            "你要向这方世界的女神（摇光）祈愿。用你的口吻，一句话说出你此刻最想求女神的事，"
+            "必须与你的真实处境相关（饿了求食、怕了求护、有难求助、有愿祈成），不贪心、不越界，"
+            "愿以你手头之物（如麦、鱼、炭）为供。只输出这一句祈愿，不要任何别的字。") % (
+        v["display"], sit or "一切如常")
+    answer = _hearth_reply("prayer:%s" % v["key"], "npc-" + v["key"], sysp, "pray:%s" % v["key"])
+    lines = [x for x in (answer or "").splitlines() if x.strip()]
+    if not lines:
+        return False
+    wish = lines[0].strip().strip("「」“”\"'，。 ")
+    if not wish or len(wish) < 3:
+        return False
+    rec = {"key": v["key"], "display": v["display"], "wish": wish,
+           "situation": sit or "", "ts": int(time.time())}
+    _god_append(GOD_INBOX, rec)
+    print("[pray] %s -> %s" % (v["display"], wish), flush=True)
+    return True
+
+def _night_time():
+    """查 MC 世界时间（daytime ticks），True=夜里（13000~23000）。失败返回 False。"""
+    try:
+        r = R.cmd("time query daytime")
+        m = re.search(r"(\d+)", r or "")
+        if m:
+            t = int(m.group(1)) % 24000
+            return 13000 <= t <= 23000
+    except Exception:
+        R.s = None
+    return False
+
+def prayer_loop():
+    """处境驱动的村民祈愿。低频扫描 base_villager 村民，夜里按概率祈愿；每村民有冷却。"""
+    cooldown = {}
+    while True:
+        try:
+            time.sleep(PRAY_PERIOD)
+            if not CFG.get("prayer", {}).get("enabled", True):
+                continue
+            if not _night_time():
+                continue
+            now = time.time()
+            for key, v in list(BY_TAG.items()):
+                if v.get("carrier") != "base_villager":
+                    continue
+                if now - cooldown.get(key, 0) < PRAY_COOLDOWN:
+                    continue
+                if random.random() > PRAY_CHANCE:
+                    continue
+                cooldown[key] = now
+                villager_pray(v)
+        except Exception as e:
+            print("[prayer] err:", e, flush=True)
+
+def god_reply_loop():
+    """消费 god-reply.jsonl（女神神谕），以村民口吻 speak 回应。"""
+    while True:
+        try:
+            if os.path.exists(GOD_REPLY):
+                with open(GOD_REPLY, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                if lines:
+                    # 只处理新行（本引擎重启后从头读，但用已读游标避免重复；简化：整读后清空）
+                    os.remove(GOD_REPLY)
+                    for ln in lines:
+                        try:
+                            rec = json.loads(ln.strip())
+                        except Exception:
+                            continue
+                        key = rec.get("key")
+                        v = BY_TAG.get(key)
+                        if not v:
+                            continue
+                        reply = (rec.get("reply") or "").strip()
+                        if reply:
+                            print("[god-reply] %s 收神谕：%s" % (v["display"], reply), flush=True)
+                            speak(v, "%s（仰头望天，喃喃道）%s" % (v["display"], reply))
+        except Exception as e:
+            print("[god-reply] err:", e, flush=True)
+        time.sleep(GOD_REPLY_PERIOD)
 
 # ---------- LLM 生成每日委托（2026-08-18 上线：委托也交给 LLM 写，白名单+clamp 兜底）----------
 QUEST_WHITELIST = ["coal", "iron_ingot", "wheat", "potato", "bread", "beef", "cod", "salmon",
@@ -1287,6 +1455,8 @@ if __name__ == "__main__":
     threading.Thread(target=inbox_loop, daemon=True).start()
     threading.Thread(target=routine_loop, daemon=True).start()
     threading.Thread(target=watch_offers, daemon=True).start()
+    threading.Thread(target=prayer_loop, daemon=True).start()
+    threading.Thread(target=god_reply_loop, daemon=True).start()
     if AMBIENT:
         threading.Thread(target=ambient_diary_loop, daemon=True).start()
         print("[npc] ambient diary armed: %d villagers" % len(AMBIENT), flush=True)
