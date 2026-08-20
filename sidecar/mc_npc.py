@@ -49,6 +49,9 @@ except OSError:
     SKIN_REG = {}
 
 def mode_of(v):
+    # 万家烟火融合（2026-08-20）：carrier=base_villager 优先转实体——有皮肤档案的人偶也活化。
+    if v.get("carrier") == "base_villager":
+        return "villager"
     return "stand" if v["key"] in SKIN_REG else "villager"
 
 
@@ -1129,6 +1132,11 @@ def summon_villager(v):
         r = R.cmd("kill @e[type=minecraft:villager,tag=%s]" % v["tag"])
         if r and "No entity" not in r:
             print("[npc] purge legacy:", v["display"], "->", r.strip(), flush=True)
+        # 原为盔甲架人偶（有皮肤档案）者，一并清除旧人偶，防人偶与实体并存
+        if v["key"] in SKIN_REG:
+            r2 = R.cmd("kill @e[type=minecraft:armor_stand,tag=%s]" % v["tag"])
+            if r2 and "No entity" not in r2:
+                print("[npc] purge stand:", v["display"], "->", r2.strip(), flush=True)
         etype = "settlements:base_villager"
     else:
         etype = "minecraft:villager"
