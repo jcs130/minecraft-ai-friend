@@ -387,7 +387,7 @@ export function apply(ctx: Context, config: Config) {
 
   // ── 问女神（QwenPaw Agent mc-god，本地 LLM）─────────────────────────
   /** 底层通道：console chat + SSE 解析，返回最后一条正式回答全文。 */
-  async function callAgent(sessionId: string, userId: string, prompt: string): Promise<string> {
+  async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god'): Promise<string> {
     const payload = {
       channel: 'console',
       user_id: userId,
@@ -399,7 +399,7 @@ export function apply(ctx: Context, config: Config) {
     }
     const res = await fetch(config.qwenpawUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Agent-Id': 'mc-god' },
+      headers: { 'Content-Type': 'application/json', 'X-Agent-Id': agentId },
       signal: AbortSignal.timeout(120_000),
       body: JSON.stringify(payload),
     })
@@ -522,7 +522,13 @@ export function apply(ctx: Context, config: Config) {
         '2. 口吻威严又慈爱，文言白话相间，100 字以内，直接给答案，不要 JSON、不要旁白。',
         `他的问题：${question}`,
       ].join('\n')
-      const answer = await callAgent(`mc:${username}:questions`, username, prompt)
+      // 2026-08-20 造物主谕（云端不做高频杂务）：问：通道转传令官 mc-herald
+      // （本地 27B，零云费、低延迟）；失败自动回落女神本尊（云端）。
+      const answer = await callAgent(`mc:${username}:questions`, username, prompt, 'mc-herald')
+        .catch(async (e) => {
+          log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+          return callAgent(`mc:${username}:questions`, username, prompt)
+        })
       const trimmedAnswer = answer.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
       worlddb.chronicleRecord('ask', username, { question: question.slice(0, 60), via: 'goddess' })
