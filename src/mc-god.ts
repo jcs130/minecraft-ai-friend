@@ -482,7 +482,14 @@ export function apply(ctx: Context, config: Config) {
       ].join('；')
     const memories = await worlddb.recall(username, wish, config.recallTopK)
     const prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
-    const answer = await callAgent(`mc:${username}:prayers`, username, prompt)
+    // 2026-08-20 造物主谕（祷告回应下放传令官）：祈愿裁决转 mc-herald（本地 27B，
+    // 零云费、低延迟），减轻天神压力；传令官按 verdictPrompt 里的场景+上下文+目标
+    // 智能裁量，输出裁决 JSON。失败自动回落女神本尊（云端 mc-god）。
+    const answer = await callAgent(`mc:${username}:prayers`, username, prompt, 'mc-herald')
+      .catch(async (e) => {
+        log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+        return callAgent(`mc:${username}:prayers`, username, prompt)
+      })
 
     const parsed = extractJson(answer)
     const fallback: Verdict = { action: 'none', skill: null, item: null, count: 1, direction: null, distance: null, reply: '（女神沉默不语，神力似乎在波动）' }
@@ -1488,7 +1495,28 @@ export function apply(ctx: Context, config: Config) {
     })
 
     // 私聊祈愿：任何玩家 /msg Goddess <愿望>[｜供奉：面包x3] → 收执供奉 → 入收件箱。
-    bot.on('whisper', (username: string, message: string) => {
+    // 2026-08-21：mineflayer 的 whisper 事件靠正则 `(\w+)` 匹配用户名，中文名（桐人/鸣人）
+    // 匹配不上（\w 只认 ASCII），故改由 playerChat 包直读 chat type 分流——与英文名平权。
+    function usernameFromPacket(data: any): string | null {
+      if (data?.senderName) {
+        try {
+          const comp = JSON.parse(data.senderName)
+          const name = comp?.hoverEvent?.contents?.name
+          if (typeof name === 'string' && name) return name
+          if (typeof comp?.insertion === 'string' && comp.insertion) return comp.insertion
+          if (Array.isArray(comp?.extra)) {
+            const text = comp.extra.filter((x: unknown) => typeof x === 'string').join('')
+            if (text) return text
+          }
+        } catch { /* fallthrough */ }
+      }
+      if (data?.sender) {
+        const found = Object.entries((bot as any).players ?? {}).find(([, p]: [string, any]) => p?.uuid === data.sender)
+        if (found) return found[0]
+      }
+      return null
+    }
+    async function handleWhisper(username: string, message: string): Promise<void> {
       if (username === bot.username) return
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
@@ -1604,6 +1632,17 @@ export function apply(ctx: Context, config: Config) {
         } catch { /* bot not ready */ }
       }
       admit().catch((err) => log(`admit prayer failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+    }
+
+    // playerChat 包分流：chat type 2 = msg_command_incoming（他人 whisper 我）。
+    // 英文名经此同样命中（Edward/Kirito），中文名（桐人/鸣人）不再被正则拦下。
+    ;(bot as any)._client?.on('playerChat', (data: any) => {
+      const chatTypeId = data?.type?.chatType ?? data?.type
+      if (chatTypeId !== 2) return
+      const username = usernameFromPacket(data)
+      const message = String(data?.plainMessage ?? '')
+      if (!username || !message) return
+      handleWhisper(username, message).catch((err) => log(`handleWhisper failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
     })
   }
 
