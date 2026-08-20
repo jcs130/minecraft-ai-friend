@@ -46,6 +46,14 @@ except OSError:
 def mode_of(v):
     return "stand" if v["key"] in SKIN_REG else "villager"
 
+
+def etype_of(v):
+    """载体实体类型：人偶→armor_stand；实体→villager 或 base_villager（carrier 标记）。
+    万家烟火融合（2026-08-20）：carrier=base_villager 的实体型村民用 mod 实体，激活行为系统。"""
+    if mode_of(v) == "stand":
+        return "armor_stand"
+    return "settlements:base_villager" if v.get("carrier") == "base_villager" else "villager"
+
 # ---------- RCON ----------
 def pkt(pid, ptype, body):
     d = struct.pack("<ii", pid, ptype) + body.encode("utf-8") + b"\x00\x00"
@@ -870,13 +878,13 @@ def route(speaker, msg, via="public"):
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
 def sel(v):
-    etype = "armor_stand" if mode_of(v) == "stand" else "villager"
+    etype = etype_of(v)
     return '@e[type=%s,tag=%s,limit=1]' % (etype, v["tag"])
 
 def dedup_npc(v):
     """防堆积：同 tag 实体 >1 时只保留一个（多进程竞召/服务器重启竞态的历史教训）。
     幂等三连：标记保留者 → 杀未标记 → 摘标记。"""
-    etype = "armor_stand" if mode_of(v) == "stand" else "villager"
+    etype = etype_of(v)
     R.cmd("tag %s add npcKeep" % sel(v))
     r = R.cmd("kill @e[type=%s,tag=%s,tag=!npcKeep]" % (etype, v["tag"]))
     R.cmd("tag %s remove npcKeep" % sel(v))
@@ -947,8 +955,21 @@ def summon_villager(v):
            'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
         noai, v["tag"], v["display"], v["color"], v["profession"], biome, offers)
     x, y, z = v["spawn"]
-    R.cmd("summon minecraft:villager %s %s %s %s" % (x, y, z, nbt))
-    print("[npc] healed:", v["display"], flush=True)
+    base = v.get("carrier") == "base_villager"
+    if base:
+        # 换身清场：同 tag 旧原版 villager 必除，防新旧载体并存（2026-08-20 万家烟火融合）
+        r = R.cmd("kill @e[type=minecraft:villager,tag=%s]" % v["tag"])
+        if r and "No entity" not in r:
+            print("[npc] purge legacy:", v["display"], "->", r.strip(), flush=True)
+        etype = "settlements:base_villager"
+    else:
+        etype = "minecraft:villager"
+    R.cmd("summon %s %s %s %s %s" % (etype, x, y, z, nbt))
+    if base:
+        # mod 在 spawn 时生成随机名覆盖 CustomName——回填我方名字（1.21.5+ 组件语法）
+        R.cmd('data merge entity @e[type=settlements:base_villager,tag=%s,limit=1] '
+              '{CustomName:\'{"text":"%s","color":"%s"}\'}' % (v["tag"], v["display"], v["color"]))
+    print("[npc] healed(%s):" % ("base" if base else "vanilla"), v["display"], flush=True)
 
 def summon_npc(v):
     if mode_of(v) == "stand":
