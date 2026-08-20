@@ -609,6 +609,73 @@ def llm_reply(v, speaker, msg, ctx):
         print("[llm] fallback:", e, flush=True)
         return None
 
+# ---------- 灶火祭司通道（2026-08-20 造物主谕：一村民一 session，互不串台） ----------
+def agent_chat(v, speaker, msg, ctx):
+    """经 QwenPaw Agent mc-hearth（本地 27B）以村民之魂作答。
+    隔离铁律：session_id = npc:<villager_key> —— 每位村民一条独立记忆线，
+    岳山永不记得墨白聊过什么；不同旅人对同村村民说话共用该村民的 session
+    （那是村民自己的记忆）。人设每问重申（防串台双保险）。
+    任何失败返回 None → 走旧直连 llm_reply → 模板台词，引擎永不停摆。"""
+    llm = CFG.get("llm", {})
+    if not (llm.get("enabled") and llm.get("agent")):
+        return None
+    sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
+            "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
+            "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。") % (
+        v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"))
+    body = json.dumps({
+        "channel": "console",
+        "user_id": "npc-" + v["key"],
+        "session_id": "npc:%s" % v["key"],
+        "input": [{"role": "user", "content": [
+            {"type": "text", "text": "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)}]}],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        llm.get("agent_endpoint", "http://127.0.0.1:8088/api/console/chat"),
+        data=body,
+        headers={"Content-Type": "application/json", "X-Agent-Id": llm.get("agent_id", "mc-hearth")})
+    try:
+        with urllib.request.urlopen(req, timeout=llm.get("agent_timeout", 45)) as resp:
+            raw = resp.read().decode("utf-8", "replace")
+        # 运维取证：最后一次祭司应答原文落盘（排障用，环形覆盖）
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hearth-last.sse"), "w", encoding="utf-8") as df:
+                df.write("session=%s user=%s\n" % (v["key"], speaker))
+                df.write(raw[-8000:])
+        except Exception:
+            pass
+        # SSE 解析（与 mc-god.ts callAgent 同法）：取最后一条正式回答
+        msg_id, answer = None, ""
+        pending = {}
+        for line in raw.split("\n"):
+            if not line.startswith("data:"):
+                continue
+            try:
+                evt = json.loads(line[5:].strip())
+            except Exception:
+                continue
+            if evt.get("object") == "message":
+                if evt.get("type") == "message":
+                    msg_id = evt.get("id")
+                continue
+            if evt.get("object") == "content" and isinstance(evt.get("msg_id"), str):
+                t = (evt.get("data") or {}).get("text") or evt.get("text") or ""
+                if not t:
+                    continue
+                slot = pending.setdefault(evt["msg_id"], {"delta": "", "full": ""})
+                if evt.get("delta") is False:
+                    slot["full"] = t
+                else:
+                    slot["delta"] += t
+        if msg_id and msg_id in pending:
+            answer = pending[msg_id]["delta"] or pending[msg_id]["full"]
+        answer = answer.strip().split("</think>")[-1].strip()
+        lines = [x for x in answer.splitlines() if x.strip()][:2]
+        return lines or None
+    except Exception as e:
+        print("[npc-agent] fallback:", e, flush=True)
+        return None
+
 # ---------- LLM 生成每日委托（2026-08-18 上线：委托也交给 LLM 写，白名单+clamp 兜底）----------
 QUEST_WHITELIST = ["coal", "iron_ingot", "wheat", "potato", "bread", "beef", "cod", "salmon",
                    "oak_log", "stick", "torch", "cooked_beef", "cooked_cod", "baked_potato",
@@ -717,7 +784,10 @@ def route(speaker, msg, via="public"):
     for t in hit_v.get("topics", []):
         if any(w in rest for w in t["kw"]):
             return hit_v, resolve_lines(t["lines"], ctx)
-    # 兜底：LLM（若启用）或 fallback 台词
+    # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
+    lines = agent_chat(hit_v, speaker, msg, ctx)
+    if lines:
+        return hit_v, lines
     if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
         lines = llm_reply(hit_v, speaker, msg, ctx)
         if lines:
