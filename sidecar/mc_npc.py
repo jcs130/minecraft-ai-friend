@@ -1077,9 +1077,17 @@ def tail_forever():
                 print("[offer] sync err:", e, flush=True)
             heal_npcs()
         try:
-            if os.path.getsize(LOG) < f.tell():
+            # 轮转检测双信号（2026-08-20 修：日志轮转后旧句柄 stale 致聊天全失聪）
+            #  ① size 回退：清空重写类轮转（新文件 size < 旧句柄已读位置）
+            #  ② inode 漂移：重命名+新建类轮转（路径 stat 与句柄 fstat 的 file index 不一致）
+            rotated = os.path.getsize(LOG) < f.tell()
+            if not rotated:
+                sp, sh = os.stat(LOG), os.fstat(f.fileno())
+                rotated = (sp.st_ino != sh.st_ino)
+            if rotated:
                 f.close()
                 f = open(LOG, "r", encoding="utf-8", errors="replace")
+                f.seek(0, 2)
                 print("[npc] log rotated, reopened", flush=True)
         except OSError:
             pass
