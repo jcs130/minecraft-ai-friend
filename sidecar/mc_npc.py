@@ -610,25 +610,97 @@ def llm_reply(v, speaker, msg, ctx):
         return None
 
 # ---------- 灶火祭司通道（2026-08-20 造物主谕：一村民一 session，互不串台） ----------
+# ---------- 村民轨迹与技能（2026-08-20 造物主谕：轨迹沉淀成 skill，渐进式披露） ----------
+TRAJ_DIR = os.path.join(VDIR, "traj")
+SKILL_DIR = os.path.join(VDIR, "skills")
+os.makedirs(TRAJ_DIR, exist_ok=True)
+os.makedirs(SKILL_DIR, exist_ok=True)
+_SEEDED = set()  # 本引擎生命内已播人设的记忆线（进程重启后重播一次，作轻量锚定）
+
+def _traj_path(key):
+    return os.path.join(TRAJ_DIR, key + ".jsonl")
+
+def _traj_append(key, speaker, q, a):
+    try:
+        with open(_traj_path(key), "a", encoding="utf-8") as f:
+            f.write(json.dumps({"t": int(time.time()), "speaker": speaker,
+                                "q": (q or "")[:60], "a": (a or "")[:80]}, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def _bigrams(s):
+    s = "".join((s or "").split())
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+def _traj_recall(key, msg, k=3):
+    """渐进式披露·按需提取：bigram 重叠≥2 才算相关，取 top-k 轨迹为「回忆」。"""
+    try:
+        rows = [json.loads(l) for l in open(_traj_path(key), encoding="utf-8") if l.strip()]
+    except OSError:
+        return []
+    qg = _bigrams(msg)
+    scored = []
+    for r in rows[-200:]:
+        ov = len(qg & (_bigrams(r.get("q")) | _bigrams(r.get("a"))))
+        if ov >= 2:
+            scored.append((ov, r))
+    scored.sort(key=lambda x: -x[0])
+    out, seen = [], set()
+    for _, r in scored:
+        sig = (r.get("q") or "")[:20]
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(r)
+        if len(out) >= k:
+            break
+    return out
+
+def _skill_card(key):
+    """村民技能卡（data/village/skills/<key>.md）：存在即随人设播种，上限 600 字。"""
+    try:
+        return open(os.path.join(SKILL_DIR, key + ".md"), encoding="utf-8").read().strip()[:600]
+    except OSError:
+        return ""
+
 def agent_chat(v, speaker, msg, ctx):
     """经 QwenPaw Agent mc-hearth（本地 27B）以村民之魂作答。
     隔离铁律：session_id = npc:<villager_key> —— 每位村民一条独立记忆线，
     岳山永不记得墨白聊过什么；不同旅人对同村村民说话共用该村民的 session
-    （那是村民自己的记忆）。人设每问重申（防串台双保险）。
+    （那是村民自己的记忆）。
+    2026-08-20 三改（造物主谕）：
+      ① 人设不再每问重申——每条记忆线只在本引擎生命期内首次开口时播种一次；
+      ② 轨迹沉淀：每次对话落 data/village/traj/<key>.jsonl（append-only）；
+      ③ 渐进式披露：新消息按 bigram 重叠从轨迹按需提取 top-3 注入为「回忆」，
+         data/village/skills/<key>.md 存在时随人设播种（沉淀成 skill，按需加载）。
     任何失败返回 None → 走旧直连 llm_reply → 模板台词，引擎永不停摆。"""
     llm = CFG.get("llm", {})
     if not (llm.get("enabled") and llm.get("agent")):
         return None
-    sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
-            "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
-            "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。") % (
-        v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"))
+    sid = "npc:%s" % v["key"]
+    if sid in _SEEDED:
+        recall = _traj_recall(v["key"], msg)
+        pre = ""
+        if recall:
+            pre = "（你想起先前的事：%s）\n" % "；".join(
+                "%s问过「%s」你答「%s」" % (r.get("speaker", "有人"), (r.get("q") or "")[:20], (r.get("a") or "")[:16])
+                for r in recall)
+        text = "%s%s 对你说：%s" % (pre, speaker, msg)
+    else:
+        _SEEDED.add(sid)
+        skill = _skill_card(v["key"])
+        sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
+                "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
+                "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
+            v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
+            ctx.get("online", "?"), ("\n你的心得手记（熟稔之事）：\n" + skill) if skill else "")
+        text = "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)
     body = json.dumps({
         "channel": "console",
         "user_id": "npc-" + v["key"],
-        "session_id": "npc:%s" % v["key"],
+        "session_id": sid,
         "input": [{"role": "user", "content": [
-            {"type": "text", "text": "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)}]}],
+            {"type": "text", "text": text}]}],
     }).encode("utf-8")
     req = urllib.request.Request(
         llm.get("agent_endpoint", "http://127.0.0.1:8088/api/console/chat"),
@@ -671,6 +743,8 @@ def agent_chat(v, speaker, msg, ctx):
             answer = pending[msg_id]["delta"] or pending[msg_id]["full"]
         answer = answer.strip().split("</think>")[-1].strip()
         lines = [x for x in answer.splitlines() if x.strip()][:2]
+        if lines:
+            _traj_append(v["key"], speaker, msg, lines[0])
         return lines or None
     except Exception as e:
         print("[npc-agent] fallback:", e, flush=True)
