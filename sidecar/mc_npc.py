@@ -27,7 +27,7 @@ if __name__ == "__main__":
 WORK = os.environ.get("NPC_DATA_DIR") or r"C:\Users\lzl19\.copaw\workspaces\default"
 DATA = os.path.join(WORK, "deepseek-harness", "scratch-plugin", "data") if not os.environ.get("NPC_DATA_DIR") else WORK
 VDIR = os.path.join(DATA, "village")
-LOG = os.environ.get("NPC_LOG_PATH") or r"C:\Users\lzl19\Documents\airi-minecraft\server\logs\latest.log"
+LOG = os.environ.get("NPC_LOG_PATH") or os.path.join(DATA, "..", "mc-server-neoforge", "logs", "latest.log")
 HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 COOLDOWN = 3.0
@@ -1125,9 +1125,64 @@ def ambient_diary_loop():
             R.s = None
         time.sleep(interval)
 
+# ---------- 村民自主技能（2026-08-20 造物主谕：村民可以自主做事） ----------
+# villagers.json 每人可选 routines: [{"phase":"dawn|day|dusk|night","act":"hawk|work|light|rest","line":"…"}]
+# 进入新时辰阶段时触发一次：hawk=吆喝(speak) work=干活粒子 light=点灯粒子 rest=歇息台词。
+# 零 LLM、纯 RCON + 台词，与灶火祭司通道（闲聊）正交。
+def _phase_of(ticks):
+    """MC daytime(0..24000) → dawn/day/dusk/night。"""
+    if ticks >= 23000 or ticks < 2000:
+        return "dawn"
+    if ticks < 11000:
+        return "day"
+    if ticks < 13000:
+        return "dusk"
+    return "night"
+
+def _do_routine(v, r):
+    pos = alive_pos(v)
+    if not pos:
+        return
+    act, line = r.get("act", ""), r.get("line", "")
+    try:
+        if act in ("work", "light"):
+            p = "minecraft:end_rod" if act == "light" else random.choice(
+                ["minecraft:flame", "minecraft:happy_villager", "minecraft:note"])
+            R.cmd("particle %s %.1f %.1f %.1f 0.3 0.4 0.3 0 6" % (p, pos[0], pos[1] + 1.2, pos[2]))
+        if line:
+            speak(v, line)
+    except Exception as e:
+        print("[routine] err %s: %s" % (v.get("key"), e), flush=True)
+    feed_append({"kind": "routine", "npc": v["display"], "text": "%s·%s" % (r.get("phase"), act or "say")})
+
+def routine_loop():
+    """每 90s 查 MC 时间 → 阶段切换时触发对应村民 routine（每人每阶段至多一次）。"""
+    fired = {}  # (villager_key, phase) -> True
+    while True:
+        try:
+            out = R.cmd("time query daytime")
+            m = re.search(r"(\d+)", out or "")
+            if m:
+                phase = _phase_of(int(m.group(1)))
+                for v in PROFILES:
+                    if not v.get("alive"):
+                        continue
+                    for r in (v.get("routines") or []):
+                        if r.get("phase") == phase and (v["key"], phase) not in fired:
+                            fired[(v["key"], phase)] = True
+                            _do_routine(v, r)
+                # 清理旧阶段标记，防止跨日内存增长
+                for k in [k for k in fired if k[1] != phase]:
+                    del fired[k]
+        except Exception as e:
+            print("[routine] loop err:", e, flush=True)
+            R.s = None
+        time.sleep(CFG.get("routine_interval", 90))
+
 if __name__ == "__main__":
     R.connect()
     threading.Thread(target=inbox_loop, daemon=True).start()
+    threading.Thread(target=routine_loop, daemon=True).start()
     threading.Thread(target=watch_offers, daemon=True).start()
     if AMBIENT:
         threading.Thread(target=ambient_diary_loop, daemon=True).start()

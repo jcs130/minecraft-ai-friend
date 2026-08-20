@@ -539,6 +539,67 @@ function matchSpell(chant: string, atoms: Atom[]): { atom: Atom; params: Record<
   return null
 }
 
+// ── 咒语向量兜底（2026-08-20）：严格匹配失败 → bge-m3 语义建议，只荐不施 ──
+const OLLAMA_EMBED_URL = process.env.OLLAMA_EMBED_URL ?? 'http://127.0.0.1:11434/api/embeddings'
+const EMBED_MODEL = process.env.MC_EMBED_MODEL ?? 'bge-m3-cpu:latest'
+const SUGGEST_THRESHOLD = 0.50 // PoC 定谳：低于此分的近邻不足以代言神意
+
+let suggestCorpus: { vecs: number[][]; atoms: Atom[] } | null = null
+let corpusBuilding: Promise<void> | null = null
+
+async function embedText(text: string): Promise<number[] | null> {
+  try {
+    const res = await fetch(OLLAMA_EMBED_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: EMBED_MODEL, prompt: text }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+    const j = await res.json() as { embedding?: number[] }
+    return Array.isArray(j.embedding) ? j.embedding : null
+  } catch { return null }
+}
+
+function cosine(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  const d = Math.sqrt(na) * Math.sqrt(nb)
+  return d > 0 ? dot / d : 0
+}
+
+/** 预热语料库（apply 时后台跑一次；ollama 不在则静默弃用，不影响施法主路）。 */
+function warmSuggestCorpus(atoms: Atom[]): void {
+  if (corpusBuilding) return
+  corpusBuilding = (async () => {
+    const vecs: number[][] = []
+    for (const a of atoms) {
+      const v = await embedText(`法术：${a.name}。咒语词：${a.words.join('、')}。`)
+      if (!v) return // 任一失败即弃（ollama 未起/超时），下次再试
+      vecs.push(v)
+    }
+    suggestCorpus = { vecs, atoms }
+  })().catch(() => {})
+}
+
+async function suggestSpell(chant: string, atoms: Atom[]): Promise<string | null> {
+  if (!suggestCorpus) {
+    warmSuggestCorpus(atoms) // 首次触发即预热，本次先走原文案
+    return null
+  }
+  const qv = await embedText(chant)
+  if (!qv) return null
+  let best = { s: 0, idx: -1 }
+  for (let i = 0; i < suggestCorpus.vecs.length; i++) {
+    const s = cosine(qv, suggestCorpus.vecs[i])
+    if (s > best.s) best = { s, idx: i }
+  }
+  if (best.idx < 0 || best.s < SUGGEST_THRESHOLD) return null
+  const a = suggestCorpus.atoms[best.idx]
+  return `你的低语隐约有法力波动——或许汝意欲【${a.name}】？直念「${a.words[0]}」即可施展（需 Lv${a.requiredLevel ?? 1}，耗魔 ${a.cost.mana}）。` +
+    `若非此意，直述所求向女神祈愿便是。`
+}
+
 function extractParams(chant: string, atom: Atom): Record<string, number | string> {
   const params: Record<string, number | string> = {}
   if (!atom.params) return params
@@ -845,6 +906,8 @@ export class MagicStateStore {
 // ── 插件主体 ───────────────────────────────────────────────────────────
 export function apply(ctx: Context, config: Config) {
   const log = (msg: string) => console.log(`[mc-magic] ${msg}`)
+  // 向量兜底语料预热（后台一次性；ollama 未起则静默弃用）
+  setTimeout(() => warmSuggestCorpus(atoms), 3_000)
   // 女神化身 = 世界进程的 mineflayer bot（旁观者），是世界之眼：
   // 听公屏、看所有玩家位置、替天神开口。重连会换实例，须每次现取。
   const getBot = (): Bot => ctx.mcbot
@@ -1143,6 +1206,10 @@ export function apply(ctx: Context, config: Config) {
   async function cast(username: string, chant: string): Promise<string> {
     const match = matchSpell(chant, atoms)
     if (!match) {
+      // 向量兜底（2026-08-20 造物主谕：严格匹配是铁律，但失败时给 Agent 一条明路）：
+      // bge-m3 语义近邻，只建议、绝不代施（阈值 0.50，PoC 实证「石头」会撞陨石术）。
+      const hint = await suggestSpell(chant, atoms).catch(() => null)
+      if (hint) return hint
       return `「${chant}」并未构成任何已知魔法。也许是咒语不对，或者你尚未悟得此法。`
     }
     const { atom, params } = match
