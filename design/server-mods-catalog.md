@@ -49,6 +49,7 @@
 
 ## 候补席（已验存在、按需启用的能力）
 
+- **RPG/皮肤/特效三域勘验（08-20 三探）**：RPG 五巨（Iron's Spells/Ars Nouveau/Mahou Tsukai/Better Combat/Epic Fight）+ 全部粒子音效 mod 均 `client_side=required` 注册表型——**装则踢 bot，永不可装**；设计拆骨已入 `design/rpg-reference.md`。**SkinsRestorer**（纯服务端皮肤注入，方向完美）neo 构建钉死 `minecraft "[26.2,)"`，1.21.1 无缘，jar 封存 `D:\ops\modstaging\`，升 MC 26.2+ 即取。特效正道=**god-fx 数据包**（`world/datapacks/god-fx/` 九函数：levelup/blessing/wrath/welcome/焰霜圣冥，vanilla particle+sound+title，重启即载）。
 - **BlueMap 5.7-neoforge**（5.3MB）：3D 舆图 web 服务，可接 web-panel。**顾虑**：渲染吃 CPU（与 27B LLM 争粮），且已有自研 2D 舆图 :9090。需要时再启。
 - **KubeJS 2101.7.2**：服务端脚本引擎（事件/合成/刷怪），但自研 RCON+datapot 管线已覆盖，暂不引入复杂度。
 - **LuckPerms v5.4.140**：权限组。当前玩家少且全 op，无用武之地。
