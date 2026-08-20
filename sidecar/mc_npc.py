@@ -915,7 +915,7 @@ def god_reply_loop():
                         except Exception:
                             continue
                         key = rec.get("key")
-                        v = BY_TAG.get(key)
+                        v = BY_TAG.get(key) or next((x for x in PROFILES if x["key"] == key), None)
                         if not v:
                             continue
                         reply = (rec.get("reply") or "").strip()
