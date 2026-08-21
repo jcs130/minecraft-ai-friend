@@ -406,15 +406,41 @@ export function apply(ctx: Context, config: Config) {
   }
 
   // ── 问女神（QwenPaw Agent mc-god，本地 LLM）─────────────────────────
+  /**
+   * 取某穿越者最新第一人称截图（排除四面 -front/-back/-right/-left），转 data URI。
+   * 视觉链路（2026-08-21 打通）：调用 QwenPaw agent 时直接带图，VL 模型（传令官/魂/眷属）
+   * 直接看图；data URI 跨机、跨模型最稳，不依赖文件系统或 URL 可达。
+   */
+  async function latestShotDataUri(username: string): Promise<string | null> {
+    try {
+      const dir = resolve(DATA_DIR, 'screenshots', username)
+      if (!existsSync(dir)) return null
+      const { readdir, readFile } = await import('node:fs/promises')
+      const files = (await readdir(dir))
+        .filter((f) => f.endsWith('.jpg') && !/-(front|back|right|left)\.jpg$/.test(f))
+        .sort() // 文件名带 ISO 时间戳，字典序即时间序
+      if (!files.length) return null
+      const buf = await readFile(resolve(dir, files[files.length - 1]))
+      return `data:image/jpeg;base64,${buf.toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
   /** 底层通道：console chat + SSE 解析，返回最后一条正式回答全文。 */
-  async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god'): Promise<string> {
+  async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<string> {
+    const content: { type: string; text?: string; image_url?: string }[] = []
+    if (images?.length) {
+      for (const img of images) content.push({ type: 'image', image_url: img })
+    }
+    content.push({ type: 'text', text: prompt })
     const payload = {
       channel: 'console',
       user_id: userId,
       session_id: sessionId,
       input: [{
         role: 'user',
-        content: [{ type: 'text', text: prompt }],
+        content,
       }],
     }
     const res = await fetch(config.qwenpawUrl, {
@@ -481,11 +507,16 @@ export function apply(ctx: Context, config: Config) {
         '（注：已习得且魔力足够的祈愿已被程序拦截，不会上达于你——你看到的都是未习得或特殊心愿）',
       ].join('；')
     const memories = await worlddb.recall(username, wish, config.recallTopK)
-    const prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
+    let prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
+    // 视觉带图（2026-08-21 链路打通）：附祈愿者当前第一人称画面给裁量者（传令官 VL）。
+    // 纯文本模型（女神本尊 deepseek-v4-pro）回落时不带图，避免多模态报错。
+    const shot = await latestShotDataUri(username)
+    const images = shot ? [shot] : undefined
+    if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供裁量参考。）`
     // 2026-08-20 造物主谕（祷告回应下放传令官）：祈愿裁决转 mc-herald（本地 27B，
     // 零云费、低延迟），减轻天神压力；传令官按 verdictPrompt 里的场景+上下文+目标
     // 智能裁量，输出裁决 JSON。失败自动回落女神本尊（云端 mc-god）。
-    const answer = await callAgent(`mc:${username}:prayers`, username, prompt, 'mc-herald')
+    const answer = await callAgent(`mc:${username}:prayers`, username, prompt, 'mc-herald', images)
       .catch(async (e) => {
         log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
         return callAgent(`mc:${username}:prayers`, username, prompt)
@@ -537,7 +568,7 @@ export function apply(ctx: Context, config: Config) {
         return `- ${d.getMonth() + 1}/${d.getDate()} ${e.actor} ${e.type}${det ? `(${det})` : ''}`
       })
       const roster = ctx.mcTransmigrators.list().map((x) => `${x.name}(${x.username})`).join('、') || '（名册暂空）'
-      const prompt = [
+      let prompt = [
         `你是这个方块世界的女神（游戏名 ${bot.username}），全知世界的过去与现在。`,
         `一位名叫「${senderName}」的旅人向你提问。`,
         '',
@@ -551,9 +582,13 @@ export function apply(ctx: Context, config: Config) {
         '2. 口吻威严又慈爱，文言白话相间，100 字以内，直接给答案，不要 JSON、不要旁白。',
         `他的问题：${question}`,
       ].join('\n')
+      // 视觉带图（2026-08-21 链路打通）：附提问者当前第一人称画面给答疑者（传令官 VL）。
+      const shot = await latestShotDataUri(username)
+      const images = shot ? [shot] : undefined
+      if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供答疑参考。）`
       // 2026-08-20 造物主谕（云端不做高频杂务）：问：通道转传令官 mc-herald
       // （本地 27B，零云费、低延迟）；失败自动回落女神本尊（云端）。
-      const answer = await callAgent(`mc:${username}:questions`, username, prompt, 'mc-herald')
+      const answer = await callAgent(`mc:${username}:questions`, username, prompt, 'mc-herald', images)
         .catch(async (e) => {
           log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
           return callAgent(`mc:${username}:questions`, username, prompt)
