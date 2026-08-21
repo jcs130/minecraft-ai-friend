@@ -508,8 +508,8 @@ export function apply(ctx: Context, config: Config) {
       ].join('；')
     const memories = await worlddb.recall(username, wish, config.recallTopK)
     let prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
-    // 视觉带图（2026-08-21 链路打通）：附祈愿者当前第一人称画面给裁量者（传令官 VL）。
-    // 纯文本模型（女神本尊 deepseek-v4-pro）回落时不带图，避免多模态报错。
+    // 视觉带图（2026-08-21 链路打通）：统一带图，模型能否看图由 QwenPaw provider 配置决定。
+    // 传令官/女神本尊均走 QwenPaw；换 VL 模型只改 provider 配置，代码不动。
     const shot = await latestShotDataUri(username)
     const images = shot ? [shot] : undefined
     if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供裁量参考。）`
@@ -519,7 +519,7 @@ export function apply(ctx: Context, config: Config) {
     const answer = await callAgent(`mc:${username}:prayers`, username, prompt, 'mc-herald', images)
       .catch(async (e) => {
         log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-        return callAgent(`mc:${username}:prayers`, username, prompt)
+        return callAgent(`mc:${username}:prayers`, username, prompt, 'mc-god', images)
       })
 
     const parsed = extractJson(answer)
@@ -591,7 +591,7 @@ export function apply(ctx: Context, config: Config) {
       const answer = await callAgent(`mc:${username}:questions`, username, prompt, 'mc-herald', images)
         .catch(async (e) => {
           log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:${username}:questions`, username, prompt)
+          return callAgent(`mc:${username}:questions`, username, prompt, 'mc-god', images)
         })
       const trimmedAnswer = answer.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
