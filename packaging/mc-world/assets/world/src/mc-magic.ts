@@ -16,11 +16,11 @@ import { createLifecycle } from './lifecycle.ts'
  * 权限隔离：本插件只存在于世界进程。穿越者进程零 RCON、零魔法 ID——
  * 它们只是"说出咒语"（bot.chat），由这里听见并施法。真人与 AI 同通道。
  */
-// 归乡默认落点（2026-08-19，用户需求）：初始之地城镇中心——8 位村民锚点
-// （岳山铁匠 -106.5,66,157.5 … 云笈书商 -95.5,66,176.5）的几何中心，y=67
-// 与神官静水/诗人风临同层广场。玩家没睡床（实体无 SpawnX/Y/Z）时归乡不再
-// 失败，天神直接送回初始城镇。城镇搬迁只需改这一处。
-const TOWN_SPAWN = { x: -101, y: 67, z: 167 }
+// 归乡默认落点（2026-08-19 定；2026-08-21 迁至灯门镇广场）：灯门镇中心
+// ——16 位村民锚点（岳山铁匠 1682.5,66,-897.5 … 通宝集市 1695.5,66,-903.5）
+// 几何中心约 (1689,-901)，实测广场地面 y=72。玩家没睡床（实体无 SpawnX/Y/Z）
+// 时归乡不再失败，天神直接送回灯门镇广场。城镇搬迁只需改这一处。
+const TOWN_SPAWN = { x: 1688, y: 72, z: -900 }
 
 export interface Config {
   enabled: boolean
@@ -1266,7 +1266,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const item = String(params.item ?? 'bread')
     const count = 1
 
-    // 归乡：家的真相 = 玩家重生点（床）。没睡过床时回落初始之地城镇中心，
+    // 归乡：家的真相 = 玩家重生点（床）。没睡过床时回落灯门镇中心，
     // 不再失败劝退（2026-08-19 修订）。
     let bx = 0
     let by = 0
@@ -1385,7 +1385,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       log(`cast ${atom.id} by ${username}: ${atom.commands.join('; ')} (mana ${cost.mana}, food ${cost.food}, hp ${cost.hp}, xp +${expGain})`)
       chronicle('cast', username, { skill: atom.id, mana: cost.mana, food: cost.food, hp: cost.hp, xp: expGain, level: levelAfter })
       appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter })
-      return `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（你尚未安家——天神将你送回初始之地城镇中心；睡一张床，归乡便会带你回床边。）' : ''}`
+      return `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（你尚未安家——天神将你送回灯门镇中心；睡一张床，归乡便会带你回床边。）' : ''}`
     } catch (err) {
       return `神力连接不上这个世界：${err instanceof Error ? err.message : String(err)}`
     }
@@ -1429,7 +1429,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         by = spawn.y
         bz = spawn.z
       } else {
-        // 没睡过床：回落初始之地城镇中心（与快路径 cast() 同一常量，2026-08-19）
+        // 没睡过床：回落灯门镇中心（与快路径 cast() 同一常量，2026-08-19）
         bx = TOWN_SPAWN.x
         by = TOWN_SPAWN.y
         bz = TOWN_SPAWN.z

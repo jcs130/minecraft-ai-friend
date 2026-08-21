@@ -45,7 +45,7 @@
 - **radium**：lithium 官方出 neoforge 版后无存在必要（同算法二选一）。
 - **villageroptimizer / async-locator**：无 1.21.1 构建或不支持。
 - **threadtweak / c2me / vmp**：Fabric 专属，与 NeoForge 无缘。
-- **村民自主行为不自外求**：Guard Villagers 类实体 AI mod 皆注册表型；千灯界走自研 routine_loop（mc_npc.py，零 LLM 零 mod，2026-08-20 上线）。
+- **村民自主行为不自外求**：Guard Villagers 类实体 AI mod 皆注册表型；千灯纪走自研 routine_loop（mc_npc.py，零 LLM 零 mod，2026-08-20 上线）。
 
 ## 候补席（已验存在、按需启用的能力）
 
@@ -53,7 +53,7 @@
 - **BlueMap 5.7-neoforge**（5.3MB）：3D 舆图 web 服务，可接 web-panel。**顾虑**：渲染吃 CPU（与 27B LLM 争粮），且已有自研 2D 舆图 :9090。需要时再启。
 - **KubeJS 2101.7.2**：服务端脚本引擎（事件/合成/刷怪），但自研 RCON+datapot 管线已覆盖，暂不引入复杂度。
 - **LuckPerms v5.4.140**：权限组。当前玩家少且全 op，无用武之地。
-- **Open Parties and Claims 0.30.1**：圈地保护。千灯界土地归神律，暂不需要。
+- **Open Parties and Claims 0.30.1**：圈地保护。千灯纪土地归神律，暂不需要。
 - **ServerCore 1.5.19**：与 Lithium 功能重叠，克制不叠。
 - **Terralith / Towns & Towers（datapack）**：世界生成增强。**仅新世界**可用（旧图新区块生效），留作迁界备选。
 
