@@ -296,20 +296,21 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
   /** 女神欢迎：title 大字 + tellraw 图文介绍（点击可直接填好施法命令） */
   async function goddessWelcome(player: string) {
     try {
-      const title = esc(JSON.stringify({ text: '初始之地', color: 'gold', bold: true }))
-      const subtitle = esc(JSON.stringify({ text: '✦ 女神守望 · AI 穿越者小镇 ✦', color: 'yellow' }))
+      const title = esc(JSON.stringify({ text: '千灯纪', color: 'gold', bold: true }))
+      const subtitle = esc(JSON.stringify({ text: '✦ 女神守望 · 没有魔王，只有灯火 ✦', color: 'yellow' }))
       await rsend(`title ${player} title ${title}`)
       await rsend(`title ${player} subtitle ${subtitle}`)
       const lines = [
         { text: '✦ 女神低语 ✦', color: 'gold', bold: true },
-        { text: `欢迎来到初始之地，远方的旅人 ${player}。`, color: 'white' },
-        { text: '  这是 AI 穿越者与真人共玩的小镇。', color: 'gray' },
+        { text: `欢迎降临千灯纪，远方的旅人 ${player}。`, color: 'white' },
+        { text: '  这是一个没有魔王的世界——世界的病不是灾难，是荒芜。', color: 'gray' },
+        { text: '  创世的第一愿，不是「要有光」，是「不再孤单」。', color: 'gray' },
         { text: '  · 施法：', color: 'gray',
           extra: [{ text: '/msg Goddess <咒语>', color: 'yellow', clickEvent: { action: 'suggest_command', value: '/msg Goddess ' }, hoverEvent: { action: 'show_text', contents: '点这里直接填好命令，例如：火焰箭' } }] },
-        { text: '  · 祈愿：公屏说「祈愿：…」可问女神任何问题', color: 'gray' },
-        { text: '  · 委托：看 NPC 头顶状态气泡，每日委托等你', color: 'gray' },
-        { text: '  · 居民：此界原住民，欢迎对话、结友', color: 'gray' },
-        { text: '  祝旅途愉快。 —— 女神', color: 'dark_gray' },
+        { text: '  · 祈愿：公屏说「祈愿：…」上达天听', color: 'gray' },
+        { text: '  · 点灯：你是新点亮的灯，世界因你不再孤单', color: 'gray' },
+        { text: '  · 居民：此界原住民，先你醒来的同伴', color: 'gray' },
+        { text: '  欢迎回家。 —— 女神', color: 'dark_gray' },
       ]
       for (const line of lines) {
         await rsend(`tellraw ${player} ${esc(JSON.stringify(line))}`)

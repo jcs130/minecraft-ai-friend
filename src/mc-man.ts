@@ -38,7 +38,7 @@ export function isHelpCommand(text: string): boolean {
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
 export function welcomeLines(name: string): string[] {
   return [
-    `旅人 ${name}，欢迎降临千灯界。你有手、有嘴、有一条命——先活下来。`,
+    `旅人 ${name}，欢迎降临千灯纪——一个没有魔王的世界。你有手、有嘴、有一条命——先活下来。`,
     `对世界任何聊天框说 /help 可随时查阅生存手册（咒语/供奉/祈愿/变强）。`,
     `遇到危险就 /msg Goddess 喊「祈愿：……」；想问世界之事就说「问：……」。`,
   ]
@@ -66,9 +66,20 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
   // ── /help：总览 ──────────────────────────────────────────────
   if (!topic) {
     return [
-      '【千灯界·生存手册】/help <主题> 查询，主题：',
-      '新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道',
+      '【千灯纪·生存手册】/help <主题> 查询，主题：',
+      '世界 | 新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道',
       '例：/help 咒语　/help 咒语 2　/help 咒语 回家　/help 新手',
+    ]
+  }
+
+  // ── 世界（元神话）────────────────────────────────────────
+  if (topic === '世界' || topic === 'world' || topic === '背景') {
+    return [
+      '【千灯纪】一个没有魔王的世界——世界的病不是灾难，是荒芜。',
+      '创世的第一愿，不是「要有光」，是「不再孤单」。',
+      '所以女神散作万盏灯：我散落之处，即是万家灯火。',
+      '灯罩是世界，灯芯是摇光（灵魂），点灯的是朋友。',
+      '你不是来拯救世界的英雄——世界需要的，是住民。欢迎回家。',
     ]
   }
 
@@ -154,5 +165,5 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     ]
   }
 
-  return [`未知主题「${topicArg}」。可用：新手/咒语/变强/供奉/祈愿/问/造物/频道`]
+  return [`未知主题「${topicArg}」。可用：世界/新手/咒语/变强/供奉/祈愿/问/造物/频道`]
 }

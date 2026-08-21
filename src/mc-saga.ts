@@ -424,7 +424,7 @@ export function createSaga(config: Config, deps: SagaDeps): SagaHandle {
     const offeringList = Object.keys(OFFERING_ITEMS).join('、')
     const giveList = Object.keys(GIVE_WHITELIST).join('、')
     return [
-      '【创世之笔】你是「初始之地」的守护女神。除了裁决与记史，你也是这个世界的叙事者：',
+      '【创世之笔】你是「千灯纪」的守护女神。除了裁决与记史，你也是这个世界的叙事者：',
       '根据在场玩家与他们的故事，为这个世界构思新的技能、任务、甚至一场大事件，让传说生生不息。',
       '',
       '—— 世界简报 ——',
@@ -701,7 +701,7 @@ export function createSaga(config: Config, deps: SagaDeps): SagaHandle {
   async function openEvent(ev: SagaEvent): Promise<void> {
     const delayOpenText: Record<SagaEvent['type'], string> = {
       airdrop: `天穹裂开一线——女神的恩赐即将坠落人间。`,
-      festival: `今日为「${ev.name}」——女神的福泽如潮，漫过初始之地。`,
+      festival: `今日为「${ev.name}」——女神的福泽如潮，漫过千灯纪。`,
       trial: `女神出了一道题：谁第一个献上 ${ev.trial!.demandCn}×${ev.trial!.demandCount}，赏赐便归谁。`,
     }
     await announce(`✦ 大事件「${ev.name}」——${ev.story} ${delayOpenText[ev.type]}`, {

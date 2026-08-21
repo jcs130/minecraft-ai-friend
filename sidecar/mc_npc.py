@@ -601,7 +601,7 @@ def llm_reply(v, speaker, msg, ctx):
     llm = CFG.get("llm", {})
     if not llm.get("enabled"):
         return None
-    sysp = ("你是%s，Minecraft世界「初始之地」集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
+    sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
             "请以人设口吻用中文回答，不超过两句话，不要出戏，不要提到游戏机制之外的现实。") % (
         v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"))
     body = json.dumps({
@@ -822,7 +822,7 @@ def agent_chat(v, speaker, msg, ctx):
         _SEEDED.add(sid)
         skill = _skill_card(v["key"])
         sit = read_situation(v)
-        sysp = ("你就是%s本人——千灯界集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
+        sysp = ("你就是%s本人——千灯纪集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
                 "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
                 "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
             v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
@@ -837,7 +837,7 @@ def agent_chat(v, speaker, msg, ctx):
     return lines or None
 
 # ---------- 祈福通道（2026-08-20 造物主谕「一步到位」：桥 + 同炉裁 + 神恩有价） ----------
-# 村民（base_villager 载体）向女神「摇光」祈愿：处境驱动触发 → 灶火祭司生成祈愿
+# 村民（base_villager 载体）向女神祈愿：处境驱动触发 → 灶火祭司生成祈愿
 # → 投 god-inbox.jsonl → 女神（mc-god.ts）裁断 → 神谕回 god-reply.jsonl → 本引擎消费 speak。
 GOD_INBOX = os.path.join(DATA, "god-inbox.jsonl")
 GOD_REPLY = os.path.join(DATA, "god-reply.jsonl")
@@ -849,8 +849,8 @@ def _god_append(path, rec):
 def villager_pray(v):
     """生成村民祈愿（灶火祭司 LLM，带处境），投递 god-inbox.jsonl；失败返回 False。"""
     sit = read_situation(v)
-    sysp = ("你就是%s本人——千灯界集市的村民。你此刻的处境：%s。"
-            "你要向这方世界的女神（摇光）祈愿。用你的口吻，一句话说出你此刻最想求女神的事，"
+    sysp = ("你就是%s本人——千灯纪集市的村民。你此刻的处境：%s。"
+            "你要向这方世界的女神祈愿。用你的口吻，一句话说出你此刻最想求女神的事，"
             "必须与你的真实处境相关（饿了求食、怕了求护、有难求助、有愿祈成），不贪心、不越界，"
             "愿以你手头之物（如麦、鱼、炭）为供。只输出这一句祈愿，不要任何别的字。") % (
         v["display"], sit or "一切如常")
@@ -942,7 +942,7 @@ def llm_quest(v, day):
     if not (llm.get("enabled") and llm.get("quests")):
         return None
     zh_map = ", ".join("%s=%s" % (i, ITEM_ALIASES[i][0]) for i in QUEST_WHITELIST)
-    sysp = ("你是%s，Minecraft世界「初始之地」集市的村民。人设：%s。"
+    sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s。"
             "请以你的身份给今天的集市委托拟一张单子。物品只能从这些里选（id=中文名）：%s。"
             "要求：数量 3 到 24 之间、报酬 1 到 3 颗绿宝石、要与你的营生和人设相关。"
             '只输出一行 JSON，格式：{"item": "物品id", "zh": "中文名", "count": 数量, "emerald": 报酬, '
@@ -1387,7 +1387,7 @@ def ambient_diary_loop():
                             for name, a in list(acts.items())[:4]:
                                 short = name.split("·")[-1]
                                 parts.append("%s%s" % (short, random.choice(a) if a else "过着平常一天"))
-                            goddess("晨光落在初始之地——昨日村里：%s。日子就这么淌着，挺好。" % "，".join(parts))
+                            goddess("晨光落在千灯纪——昨日村里：%s。日子就这么淌着，挺好。" % "，".join(parts))
                 except Exception as e:
                     print("[diary] day-flip err:", e, flush=True)
             _diary_day = today

@@ -390,7 +390,7 @@ export function createWorlddb(config: Config): WorlddbHandle {
     const dir = dirname(mdPath)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     if (!existsSync(mdPath)) {
-      appendFileSync(mdPath, '# 初始之地 · 世界编年史\n\n> 女神亲笔。这个世界运行过的一切，与穿越者们走过的每一步。\n\n', 'utf-8')
+      appendFileSync(mdPath, '# 千灯纪 · 世界编年史\n\n> 女神亲笔。这个世界运行过的一切，与穿越者们走过的每一步。\n\n', 'utf-8')
     }
   }
 

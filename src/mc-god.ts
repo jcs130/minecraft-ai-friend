@@ -178,7 +178,7 @@ function verdictPrompt(
     `【祈愿】${senderName}：${wish}`,
   ]
   if (isVillager) {
-    lines.push('【祈愿者】这是一位灶火民（村民），向女神「摇光」祈福。他与穿越者平权同杆秤。')
+    lines.push('【祈愿者】这是一位灶火民（村民），向女神祈福。他与穿越者平权同杆秤。')
   }
   if (offering) {
     lines.push(`【本次供奉】${offering.cn}×${offering.count}（已从他的行囊收执，归入神库；无论你如何裁断，供品不退还）`)
@@ -216,7 +216,7 @@ function verdictPrompt(
 
 function reviewPrompt(statsText: string, sampleLines: string): string {
   return [
-    '你是「初始之地」世界的守护女神，也是世界的守望者与史官。',
+    '你是「千灯纪」世界的守护女神，也是世界的守望者与史官。',
     '以下是自上次观察以来，世界运行记录的统计与摘录：',
     '',
     `【统计】${statsText}`,
@@ -568,8 +568,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       `你是这个方块世界的女神（游戏名 ${bot.username}）。`,
       `一位名叫「${name}」的旅人刚刚醒来、降临此界，这是他第一次踏足这片土地。`,
       '',
-      '【世界背景 · 初始之地】（你介绍时的依据，可精简转述）：',
+      '【世界背景 · 千灯纪】（你介绍时的依据，可精简转述）：',
       '- 他刚从一个关于现实的梦里醒来，躺在一片方块大陆上，忘了来处。',
+      '- 这是一个没有魔王的世界——世界的病不是灾难，是荒芜。',
+      '- 创世的第一愿，不是「要有光」，是「不再孤单」：女神散作万盏灯，照亮这方世界。',
+      '- 灯罩是世界，灯芯是摇光（灵魂），点灯的是朋友。',
       '- 先他醒来的住民（史蒂夫、艾利克斯等）是同伴，不是老师、不是仆人。',
       '- 白天安全、夜晚危险；饿了要吃、暗了要点火。',
       '- 古老的力量藏在「咏唱」里——念出正确的词，世界会回应，住民叫它「魔法」。',
@@ -592,7 +595,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const msg = answer.trim().slice(0, 200) || welcomeLines(name).join('；')
       try { bot.whisper(username, `[女神] ${msg}`) } catch { /* not ready */ }
       try { worlddb.chronicleRecord('welcome', username, { via: 'goddess-init' }) } catch { /* best effort */ }
-      await worlddb.remember(username, 'welcome', `你迎接了旅人「${name}」降临初始之地，介绍世界背景，并预告其出生天赋仪式。`)
+      await worlddb.remember(username, 'welcome', `你迎接了旅人「${name}」降临千灯纪，介绍世界背景，并预告其出生天赋仪式。`)
       pendingIntro.set(username, Date.now() + 90_000) // 开启 90s 自报家门窗口
       log(`init welcome sent to ${username}: ${msg.slice(0, 60)}`)
     } catch (err) {
@@ -1374,7 +1377,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const dir = dirname(reqPath)
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
       if (!existsSync(reqPath)) {
-        writeFileSync(reqPath, '# 初始之地 · 世界迭代需求文档\n\n> 守望女神定期观察世界运行，写给世界缔造者的迭代需求。\n\n', 'utf-8')
+        writeFileSync(reqPath, '# 千灯纪 · 世界迭代需求文档\n\n> 守望女神定期观察世界运行，写给世界缔造者的迭代需求。\n\n', 'utf-8')
       }
       appendFileSync(reqPath, `## ${iso} 女神观察 · 第 ${issue} 期（覆盖 ${entries.length} 条记录）\n\n**统计**：${statsText}\n\n${out.trim()}\n\n---\n\n`, 'utf-8')
       worlddb.reviewSave(issue, entries.length, statsText, out.trim())

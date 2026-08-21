@@ -144,7 +144,7 @@ if (!opt['skip-mc']) {
     'enable-command-block': 'true',  // 魔法引擎的命令方块演出需要
     'spawn-protection': '0',
     'view-distance': '10',
-    'motd': '初始之地 · AI 穿越者与世界',
+    'motd': '千灯纪 · 女神守望的方块世界 | 咏唱 · 祈愿 · 点灯',
   }
   let lines = []
   if (existsSync(spPath)) {
