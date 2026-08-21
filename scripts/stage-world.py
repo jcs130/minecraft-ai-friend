@@ -9,7 +9,7 @@ import json
 import shutil
 from pathlib import Path
 
-REPO = Path(r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend")
+REPO = Path(__file__).resolve().parent.parent  # B 仓根（minecraft-ai-friend），不再硬编码宿主机绝对路径
 DST = REPO / "packaging" / "mc-world" / "assets" / "world"
 
 TSX_VERSION = "^4.22.4"

@@ -22,7 +22,9 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="repla
 # 2026-08-21 容器化：硬编码 127.0.0.1 改为 env 可覆盖（独立 guard-drive 容器需连 mc-server/qwenpaw 容器网）
 RCON_HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
 RCON_PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
-RCON_PW = os.environ.get("RCON_PASSWORD", "f1089a6c0cb54ee399b360f20fb7d330")
+RCON_PW = os.environ.get("RCON_PASSWORD")
+if not RCON_PW:
+    raise SystemExit("缺少 RCON_PASSWORD 环境变量（见 .env / docker-compose，不再提供硬编码默认值）")
 CONSOLE_URL = os.environ.get("QWENPAW_CONSOLE_URL", "http://127.0.0.1:8088/api/console/chat")
 # 已归位 B 仓 sidecar/guard/：账本写本仓 data/（不再跨仓引 A 仓 scratch-plugin/data）
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

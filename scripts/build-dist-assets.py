@@ -12,11 +12,15 @@
     分发版巡检由世界进程内 mc-terra.ts 承担，不再复制。）
 """
 import json
+import os
 import shutil
 from pathlib import Path
 
-SRC = Path(r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data")
-DST = Path(r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\packaging\mc-world\assets\data")
+REPO = Path(__file__).resolve().parent.parent  # B 仓根（minecraft-ai-friend）
+# A 仓（deepseek-harness）默认与 B 仓同挂 workspaces\default\ 下，可经 MC_HARNESS_ROOT 覆盖
+HARNESS = Path(os.environ.get("MC_HARNESS_ROOT", REPO.parent / "deepseek-harness"))
+SRC = HARNESS / "scratch-plugin" / "data"
+DST = REPO / "packaging" / "mc-world" / "assets" / "data"
 
 DROP_ATOMS = {"rasengan", "kage_bunshin"}  # 火影忍者 IP 技能，分发版剔除
 

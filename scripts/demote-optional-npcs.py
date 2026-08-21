@@ -12,7 +12,7 @@ import json
 import shutil
 from pathlib import Path
 
-DST = Path(r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\packaging\mc-world\assets\data")
+DST = Path(__file__).resolve().parent.parent / "packaging" / "mc-world" / "assets" / "data"
 TRANS = DST / "transmigrators.json"
 AGENTS = DST / "agents.json"
 OPT_DIR = DST / "optional-npcs"

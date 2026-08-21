@@ -12,12 +12,16 @@
 
 可复跑（幂等：先清空目标再收集）。
 """
+import os
 import re
 import shutil
 from pathlib import Path
 
-SRC = Path(r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\mc-server-neoforge")
-DST = Path(r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\packaging\mc-world\assets\mc-server")
+REPO = Path(__file__).resolve().parent.parent  # B 仓根（minecraft-ai-friend）
+# A 仓（deepseek-harness）默认与 B 仓同挂 workspaces\default\ 下，可经 MC_HARNESS_ROOT 覆盖
+HARNESS = Path(os.environ.get("MC_HARNESS_ROOT", REPO.parent / "deepseek-harness"))
+SRC = HARNESS / "scratch-plugin" / "mc-server-neoforge"
+DST = REPO / "packaging" / "mc-world" / "assets" / "mc-server"
 
 RCON_PLACEHOLDER = "__MC_WORLD_RCON__"  # backend 首启随机化
 NEOFORGE_VER = "21.1.73"                 # 与 libraries/.../neoforge/{ver} 一致
