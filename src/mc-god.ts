@@ -552,6 +552,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const lastAsk = new Map<string, number>() // 每玩家提问节流（独立于祈愿）
   const welcomed = new Set<string>() // 进服初始化去重（每进程每人一次）
   const pendingIntro = new Map<string, number>() // username -> 自报家门截止时间戳（进服引导后 90s 窗口）
+  const introCoolUntil = new Map<string, number>() // username -> 自报家门收尾后冷却截止（60s 静默，防连续闲聊）
 
   // ── 进服初始化（2026-08-21 造物主谕「一个玩家一个 session」）──────────
   // 新穿越者首次降临 = 女神与其 session 的初始化：LLM 私聊欢迎 + 世界背景 + 指路，
@@ -1685,11 +1686,21 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           const disp = transmigrators.getByUsername(username)?.name ?? username
           try { worlddb.chronicleRecord('intro', username, { intro }) } catch { /* best effort */ }
           await worlddb.remember(username, 'intro', `「${disp}」初降此界时自报家门：「${intro}」`)
-          try { bot.whisper(username, `[女神] 我记下了。${disp}，欢迎。`) } catch { /* not ready */ }
+          try { bot.whisper(username, `[女神] 我记下了。${disp}，欢迎。且去——天赋仪式正在公屏宣读，喊「我选 <法术名>」即可选定；要求助说「祈愿：…」，有疑问说「问：…」。`) } catch { /* not ready */ }
+          introCoolUntil.set(username, Date.now() + 60_000) // 收尾后 60s 静默，防连续闲聊
           log(`intro from ${username}: ${intro}`)
           return
         }
         // 超时：落入下方祈愿流程
+      }
+      // ── 自报家门收尾后冷却（2026-08-21 防一直聊）────────────────────
+      // 女神收尾语已引导「去选天赋」。其后 60s 内，穿越者的自然语言一律静默
+      // （不陪聊、不当祈愿），防 AI 与女神在初始化后连续闲聊不停；明确指令
+      // （祈愿：/问：/咏唱/交易/命令）已在前方分流，不受影响。超时恢复祈愿。
+      const coolUntil = introCoolUntil.get(username)
+      if (coolUntil !== undefined) {
+        if (Date.now() <= coolUntil) return
+        introCoolUntil.delete(username)
       }
       const { wish, offeringText } = splitWishOffering(body)
       if (!wish) return
