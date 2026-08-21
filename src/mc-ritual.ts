@@ -1,9 +1,8 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
 import type { AtomSummary, MagicService } from './mc-magic.ts'
-import type { Transmigrator } from './mc-transmigrator.ts'
+import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 /**
  * mc-ritual —— 降临仪式（世界侧，程序化、零生成式 LLM）。
@@ -16,16 +15,9 @@ import type { Transmigrator } from './mc-transmigrator.ts'
  * 真人玩家看着屏幕念出来）——两族同通道，机制平权。
  * 大字标题「降临」走 RCON（视觉糖，给真人玩家的仪式感）。
  */
-export const name = 'mc-ritual'
-export const inject = ['mcbot', 'mcRcon', 'mcTransmigrators', 'mcMagic', 'timer']
-
 export interface Config {
   enabled: boolean
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-})
 
 // ── 候选排序：档案偏好的技能排前（保持档案顺序），其余按法术表顺序靠后 ──
 export function rankCandidates(atoms: AtomSummary[], preferred: string[]): AtomSummary[] {
@@ -98,11 +90,25 @@ function ritualLines(t: Transmigrator | null, username: string, candidates: Atom
   return lines
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface RitualDeps {
+  getBot: () => Bot
+  rcon: RconService
+  magic: MagicService
+  transmigrators: TransmigratorRegistry
+}
+
+export interface RitualHandle {
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createRitual(config, deps) 装配。 */
+export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
   const log = (msg: string) => console.log(`[mc-ritual] ${msg}`)
-  const getBot = (): Bot => ctx.mcbot
-  const rcon: RconService = ctx.mcRcon
-  const magic: MagicService = ctx.mcMagic
+  const getBot = deps.getBot
+  const rcon = deps.rcon
+  const magic = deps.magic
+  const transmigrators = deps.transmigrators
+  const lc = createLifecycle()
 
   // 正在等待选择的穿越者：username -> { candidates, lastAnnounce }
   const pending = new Map<string, { candidates: AtomSummary[]; lastAnnounce: number }>()
@@ -142,7 +148,7 @@ export function apply(ctx: Context, config: Config) {
 
   async function startRitual(username: string) {
     if (pending.has(username)) return
-    const transmigrator = ctx.mcTransmigrators.getByUsername(username)
+    const transmigrator = transmigrators.getByUsername(username)
     const preferred = transmigrator?.innate?.preferredAtoms ?? []
     const candidates = rankCandidates(magic.listAtoms(), preferred)
     // 背景故事落库（属性面板「前世」字段），仅首次
@@ -191,7 +197,7 @@ export function apply(ctx: Context, config: Config) {
       // 还没选定但开口问起（「有哪些」「再说一遍」「什么意思」…）→ 30s 冷却重宣读。
       if (/天赋|候选|法术|仪式|再说|重复|什么意思/.test(msg) && Date.now() - entry.lastAnnounce > 30_000) {
         entry.lastAnnounce = Date.now()
-        const t = ctx.mcTransmigrators.getByUsername(username)
+        const t = transmigrators.getByUsername(username)
         announceQueued(username, t, entry.candidates).catch(() => {})
       }
     })
@@ -216,7 +222,7 @@ export function apply(ctx: Context, config: Config) {
   let stopEnsure: (() => void) | null = null
   function scheduleEnsure() {
     if (disposed) return
-    stopEnsure = ctx.setTimeout(() => {
+    stopEnsure = lc.setTimeout(() => {
       const bot = getBot()
       if (bot) {
         ensureListeners(bot)
@@ -234,7 +240,7 @@ export function apply(ctx: Context, config: Config) {
   }
   scheduleEnsure()
 
-  ctx.effect(() => () => {
+  lc.onDispose(() => {
     disposed = true
     if (stopEnsure) stopEnsure()
     log('ritual disposed')
@@ -243,4 +249,6 @@ export function apply(ctx: Context, config: Config) {
   if (config.enabled) {
     log('ritual service armed (world-side, public-chat protocol)')
   }
+
+  return { dispose: () => lc.dispose() }
 }

@@ -1,11 +1,16 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import mineflayer from 'mineflayer'
 import type { Bot } from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { plugin as toolPlugin } from 'mineflayer-tool'
 
-export const name = 'mc-bot-service'
+/**
+ * mc-bot —— 女神化身（Goddess）的 mineflayer 假玩家，世界进程唯一。
+ *
+ * 已脱 cordis 壳（2026-08-21）：不再 import @deepseek-ai/cordis，
+ * 由 bootstrap-world.mts 显式 createBot() 装配；bot 实例会随断线重连
+ * 变化，故对外暴露 getBot() getter（替代原 ctx.mcbot 可变引用），
+ * 依赖方每次现取，不持有过期快照。
+ */
 
 export interface Config {
   host: string
@@ -17,26 +22,15 @@ export interface Config {
   viewerFirstPerson: boolean
 }
 
-export const Config: Schema<Config> = Schema.object({
-  host: Schema.string().default('localhost'),
-  port: Schema.number().default(25565),
-  username: Schema.string().default('HarnessBot'),
-  autoReconnect: Schema.boolean().default(true),
-  viewerEnabled: Schema.boolean().default(true),
-  viewerPort: Schema.number().default(3001),
-  viewerFirstPerson: Schema.boolean().default(false),
-})
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcbot: Bot
-  }
+export interface BotHandle {
+  /** 当前 bot 实例（断线重连会换新实例，务必每次现取）。 */
+  getBot: () => Bot
+  dispose: () => void
 }
 
-export function apply(ctx: Context, config: Config) {
+export function createBot(config: Config): BotHandle {
   const log = (msg: string) => console.log(`[mc-bot-service] ${msg}`)
   let disposed = false
-  let provided = false
   let currentBot: Bot | null = null
   let closeViewer: (() => void) | null = null
 
@@ -49,14 +43,6 @@ export function apply(ctx: Context, config: Config) {
       checkTimeoutInterval: 30_000,
     })
     currentBot = bot
-    // Register the service on first connect; reconnects overwrite the value.
-    // (cordis: `set` on an unprovided name throws, so provide must come first.)
-    if (provided) {
-      ctx.set('mcbot', bot)
-    } else {
-      ctx.provide('mcbot', bot)
-      provided = true
-    }
 
     // Official plugins: pathfinding + best-tool-for-block selection.
     bot.loadPlugin(pf.pathfinder)
@@ -132,18 +118,24 @@ export function apply(ctx: Context, config: Config) {
 
   connect()
 
-  ctx.effect(() => {
-    return () => {
-      disposed = true
-      log('disposing, ending bot')
-      if (closeViewer) {
-        closeViewer()
-        closeViewer = null
-      }
-      if (currentBot) {
-        currentBot.end('plugin disposed')
-        currentBot = null
-      }
+  const dispose = () => {
+    disposed = true
+    log('disposing, ending bot')
+    if (closeViewer) {
+      closeViewer()
+      closeViewer = null
     }
-  })
+    if (currentBot) {
+      currentBot.end('plugin disposed')
+      currentBot = null
+    }
+  }
+
+  return {
+    getBot: () => {
+      if (!currentBot) throw new Error('[mc-bot-service] bot not connected yet')
+      return currentBot
+    },
+    dispose,
+  }
 }

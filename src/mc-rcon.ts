@@ -1,5 +1,3 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Rcon } from './rcon.ts'
@@ -12,9 +10,10 @@ import { Rcon } from './rcon.ts'
  *
  * RCON 协议不能直接传非 ASCII 字符（中文命令会被截断/拒绝）：
  * send() 自动把非 ASCII 转成 \uXXXX 转义，服务端按文本正常解析。
+ *
+ * 已脱 cordis 壳（2026-08-21）：不再 import @deepseek-ai/cordis / schemastery，
+ * 由 bootstrap-world.mts 显式 createRcon() 装配并注入依赖。
  */
-export const name = 'mc-rcon'
-export const inject = []
 
 export interface Config {
   enabled: boolean
@@ -22,13 +21,6 @@ export interface Config {
   port: number
   passwordPath: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  host: Schema.string().default('localhost'),
-  port: Schema.number().default(25575),
-  passwordPath: Schema.string().default('./data/rcon-secret.txt'),
-})
 
 export interface SpawnPoint {
   x: number
@@ -47,10 +39,10 @@ export interface RconService {
   getSpawn(username: string): Promise<SpawnPoint | null>
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcRcon: RconService
-  }
+/** 服务句柄：bootstrap 拿 service 注入其他服务，进程收尾时调 dispose。 */
+export interface RconHandle {
+  service: RconService
+  dispose: () => void
 }
 
 /** RCON 通道只接受可打印 ASCII：其余字符转 \uXXXX（服务端按 JSON/文本转义解析）。 */
@@ -61,7 +53,7 @@ export function toAscii(s: string): string {
   })
 }
 
-export function apply(ctx: Context, config: Config) {
+export function createRcon(config: Config): RconHandle {
   const log = (msg: string) => console.log(`[mc-rcon] ${msg}`)
 
   const passwordPath = resolve(config.passwordPath)
@@ -133,13 +125,12 @@ export function apply(ctx: Context, config: Config) {
       }
     },
   }
-  ctx.provide('mcRcon', service)
 
-  ctx.effect(() => () => {
+  const dispose = () => {
     rcon?.close()
     rcon = null
     log('rcon disposed')
-  })
+  }
 
   if (config.enabled) {
     log(
@@ -148,4 +139,6 @@ export function apply(ctx: Context, config: Config) {
         : 'rcon service armed but NO password — commands will fail until the secret file exists',
     )
   }
+
+  return { service, dispose }
 }

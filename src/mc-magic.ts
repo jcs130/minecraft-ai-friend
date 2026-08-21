@@ -1,9 +1,8 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 /**
  * mc-magic —— 快路径魔法系统（世界侧，程序化、零生成式 LLM）。
@@ -17,9 +16,6 @@ import type { RconService } from './mc-rcon.ts'
  * 权限隔离：本插件只存在于世界进程。穿越者进程零 RCON、零魔法 ID——
  * 它们只是"说出咒语"（bot.chat），由这里听见并施法。真人与 AI 同通道。
  */
-export const name = 'mc-magic'
-export const inject = ['mcbot', 'mcRcon', 'timer']
-
 // 归乡默认落点（2026-08-19，用户需求）：初始之地城镇中心——8 位村民锚点
 // （岳山铁匠 -106.5,66,157.5 … 云笈书商 -95.5,66,176.5）的几何中心，y=67
 // 与神官静水/诗人风临同层广场。玩家没睡床（实体无 SpawnX/Y/Z）时归乡不再
@@ -35,15 +31,6 @@ export interface Config {
   /** 天平覆盖层（data/balance-overrides.json）：女神动态平衡的补丁持久化。 */
   balancePath: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  atomsPath: Schema.string().default('./data/magic-atoms.json'),
-  statePath: Schema.string().default('./data/magic-state.json'),
-  maxManaDefault: Schema.number().default(100),
-  regenPerSec: Schema.number().default(2.0),
-  balancePath: Schema.string().default('./data/balance-overrides.json'),
-})
 
 // ── 原子指令（Atom）类型 ────────────────────────────────────────────────
 type AtomParamType = 'number' | 'direction' | 'item'
@@ -306,12 +293,6 @@ export interface GodCastOpts {
   distance?: number
   item?: string
   count?: number
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcMagic: MagicService
-  }
 }
 
 // ── 数字梯度：默认原子指令表（可被 data/magic-atoms.json 覆盖）────────
@@ -904,22 +885,37 @@ export class MagicStateStore {
 }
 
 // ── 插件主体 ───────────────────────────────────────────────────────────
-export function apply(ctx: Context, config: Config) {
+export interface MagicDeps {
+  getBot: () => Bot
+  rcon: RconService
+}
+
+export interface MagicHandle {
+  service: MagicService
+  dispose: () => void
+  /** 迟绑定史官：bootstrap 创建完 mc-god 后注入其 record 回调（解开 mc-magic ↔ mc-god 循环依赖）。 */
+  setChronicle: (fn: (type: string, actor: string, detail: Record<string, unknown>) => void) => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createMagic(config, deps) 装配。 */
+export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   const log = (msg: string) => console.log(`[mc-magic] ${msg}`)
+  const lc = createLifecycle()
   // 向量兜底语料预热（后台一次性；ollama 未起则静默弃用）
   setTimeout(() => warmSuggestCorpus(atoms), 3_000)
   // 女神化身 = 世界进程的 mineflayer bot（旁观者），是世界之眼：
   // 听公屏、看所有玩家位置、替天神开口。重连会换实例，须每次现取。
-  const getBot = (): Bot => ctx.mcbot
-  const rcon: RconService = ctx.mcRcon
+  const getBot = deps.getBot
+  const rcon = deps.rcon
 
   // ── 世界史官：把大事记写入女神的编年史（mc-god 提供，可选注入）────
   // 咏唱/升级/降临天赋都发生在 mc-magic，由这里上报；
   // 女神侧（mc-god）另记祈愿/神谕/供奉/陨落。运行时才调用（非装配期），
   // 可选链 + try/catch：mc-god 未就位时静默跳过，不阻碍施法。
+  let chronicleFn: ((type: string, actor: string, detail: Record<string, unknown>) => void) | null = null
   const chronicle = (type: string, actor: string, detail: Record<string, unknown>): void => {
     try {
-      (ctx as any).mcGod?.record?.(type, actor, detail)
+      chronicleFn?.(type, actor, detail)
     } catch { /* 史官不在场，不阻碍世界运转 */ }
   }
 
@@ -950,9 +946,9 @@ export function apply(ctx: Context, config: Config) {
     try {
       await rcon.send('kill @e[type=minecraft:wind_charge]')
     } catch { /* RCON 短暂不可用时跳过，下一轮再扫 */ }
-    ctx.setTimeout(sweepWindCharges, 60_000)
+    lc.setTimeout(sweepWindCharges, 60_000)
   }
-  ctx.setTimeout(sweepWindCharges, 60_000)
+  lc.setTimeout(sweepWindCharges, 60_000)
 
   // 原子指令表：外置 JSON 覆盖内嵌默认（服务器适配改数字/命令不用改代码）
   const atomsPath = resolve(config.atomsPath)
@@ -1108,7 +1104,6 @@ export function apply(ctx: Context, config: Config) {
     castSpell: (username, chant) => cast(username, chant),
     sniffChant: (msg) => atoms.some((a) => a.words.some((w) => msg.includes(w))),
   }
-  ctx.provide('mcMagic', service)
 
   /** RCON 查询实体数值字段，返回数字或 null。 */
   async function getEntityNumber(target: string, path: string): Promise<number | null> {
@@ -1474,11 +1469,17 @@ export function apply(ctx: Context, config: Config) {
   // 理由：公屏即输入通道会误触发（任何人的闲聊含关键词即施法、白烧魔力）+
   // 咒文当众暴露；私语通道 AI 与真人平权——真人 /msg Goddess 念咒同样施法；
   // 特效（粒子/音效/大字）仍公屏：旁人见异象而不知咒文。
-  ctx.effect(() => () => {
+  lc.onDispose(() => {
     log('magic disposed')
   })
 
   if (config.enabled) {
     log(`${atoms.length} atoms loaded, world-side engine armed (rcon via mc-rcon service)`)
+  }
+
+  return {
+    service,
+    dispose: () => lc.dispose(),
+    setChronicle: (fn) => { chronicleFn = fn },
   }
 }

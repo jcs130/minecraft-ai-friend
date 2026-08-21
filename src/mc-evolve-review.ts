@@ -11,13 +11,11 @@
  *      穿越者侧 mc-adapt 每步读回注入 prompt——提议→神裁→生效，全程热更新。
  * 驳回/核准都由信使私聊送达（2026-08-17 扛枪定调：个人成长通告不走公屏）。
  */
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-export const name = 'mc-evolve-review'
-export const inject = ['mcbot', 'mcWorlddb', 'timer']
+import type { Bot } from 'mineflayer'
+import type { WorlddbService } from './mc-worlddb.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 export interface Config {
   enabled: boolean
@@ -27,14 +25,6 @@ export interface Config {
   maxAttempts: number
   maxDirectives: number
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  qwenpawUrl: Schema.string().default('http://127.0.0.1:8088/api/console/chat'),
-  pollMs: Schema.number().default(60_000),
-  maxAttempts: Schema.number().default(5),
-  maxDirectives: Schema.number().default(10),
-})
 
 interface Proposal {
   id: string
@@ -71,14 +61,25 @@ function extractJson(raw: string): Record<string, unknown> | null {
   }
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface EvolveReviewDeps {
+  getBot: () => Bot
+  worlddb: WorlddbService
+}
+
+export interface EvolveReviewHandle {
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createEvolveReview(config, deps) 装配。 */
+export function createEvolveReview(config: Config, deps: EvolveReviewDeps): EvolveReviewHandle {
   const log = (msg: string) => console.log(`[mc-evolve-review] ${msg}`)
-  if (!config.enabled) return
+  const lc = createLifecycle()
+  if (!config.enabled) return { dispose: () => {} }
   const dataDir = './data'
   const proposalsDir = join(dataDir, 'evolution-proposals')
 
   const courier = (player: string, msg: string) => {
-    try { ctx.mcbot.whisper(player, `[信使] ${msg}`) } catch { /* bot 不在线 */ }
+    try { deps.getBot().whisper(player, `[信使] ${msg}`) } catch { /* bot 不在线 */ }
   }
 
   /** 与 mc-god.ts callAgent 同协议：console chat + SSE 解析，取最后一条正式回答。 */
@@ -191,7 +192,7 @@ export function apply(ctx: Context, config: Config) {
       p.verdictAt = new Date().toISOString()
       writeFileSync(path, JSON.stringify(p, null, 2), 'utf-8')
       courier(p.username, `你的提案「${p.title}」事关重大，已呈报造物主（世界维护者）亲裁，静候佳音。`)
-      ctx.mcWorlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'pending_human' })
+      deps.worlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'pending_human' })
       return
     }
     // 2. 请女神裁决
@@ -208,14 +209,14 @@ export function apply(ctx: Context, config: Config) {
         p.verdictReason = reason
         applyDirective(p, reason, directive)
         courier(p.username, `女神核准了你的提案「${p.title}」！新准则即刻融入你的本能：「${directive}」（${reason}）`)
-        ctx.mcWorlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'approved', directive })
+        deps.worlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'approved', directive })
         log(`APPROVED ${p.id}「${p.title}」-> ${directive}`)
       } else {
         const reason = typeof parsed.reason === 'string' && parsed.reason.trim() ? parsed.reason.trim().slice(0, 200) : '女神未予置评。'
         p.status = 'rejected'
         p.verdictReason = reason
         courier(p.username, `你的提案「${p.title}」被女神驳回：${reason}`)
-        ctx.mcWorlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'rejected', reason })
+        deps.worlddb.chronicleRecord('evolve', p.username, { title: p.title, status: 'rejected', reason })
         log(`REJECTED ${p.id}「${p.title}」: ${reason}`)
       }
       writeFileSync(path, JSON.stringify(p, null, 2), 'utf-8')
@@ -254,11 +255,13 @@ export function apply(ctx: Context, config: Config) {
   }
 
   function schedule(): void {
-    ctx.setTimeout(() => {
+    lc.setTimeout(() => {
       void poll().catch((err) => log(`poll error: ${err instanceof Error ? err.message : String(err)}`))
       schedule()
     }, config.pollMs)
   }
   schedule()
   log(`evolution review armed (poll ${config.pollMs}ms, proposals dir=${proposalsDir})`)
+
+  return { dispose: () => lc.dispose() }
 }

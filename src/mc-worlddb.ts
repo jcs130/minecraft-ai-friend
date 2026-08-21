@@ -1,5 +1,3 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import Database from 'better-sqlite3'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -23,9 +21,6 @@ import { OFFERING_ITEM_CN, type OfferingInfo } from './mc-offering.ts'
  * 降级铁律：Qdrant / embedding 任一不可用时，众生册自动退化为「只留档、不召回」，
  * 绝不阻塞祈愿处理与世界运转。
  */
-export const name = 'mc-worlddb'
-export const inject = []
-
 export interface Config {
   enabled: boolean
   dbPath: string
@@ -36,17 +31,6 @@ export interface Config {
   embeddingUrl: string
   embeddingModel: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  dbPath: Schema.string().default('./data/world.db'),
-  chronicleMdPath: Schema.string().default('./data/world-chronicle.md'),
-  memoryEnabled: Schema.boolean().default(true),
-  qdrantUrl: Schema.string().default('http://127.0.0.1:6333'),
-  qdrantCollection: Schema.string().default('mc_world_memory'),
-  embeddingUrl: Schema.string().default('http://127.0.0.1:11434'),
-  embeddingModel: Schema.string().default('bge-m3-cpu:latest'),
-})
 
 // ── 公共类型 ─────────────────────────────────────────────────────────
 export interface ChronicleEntry {
@@ -152,12 +136,6 @@ export interface WorlddbService {
   diaryCount(username: string): number
   /** 领书去重标记：首次（该 username 从未领过欢迎册）返回 true 并落标记。 */
   diaryGiftMark(username: string): boolean
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcWorlddb: WorlddbService
-  }
 }
 
 // ── 编年史 md 导出格式（史官亲笔）─────────────────────────────────────
@@ -386,8 +364,13 @@ function migrateLegacy(db: Database.Database, dbPath: string): void {
   }
 }
 
-// ── 插件装配 ─────────────────────────────────────────────────────────
-export function apply(ctx: Context, config: Config) {
+export interface WorlddbHandle {
+  service: WorlddbService
+  dispose: () => void
+}
+
+// ── 服务装配 ─────────────────────────────────────────────────────────
+export function createWorlddb(config: Config): WorlddbHandle {
   const log = (msg: string) => console.log(`[mc-worlddb] ${msg}`)
 
   const dbPath = resolve(config.dbPath)
@@ -710,12 +693,10 @@ export function apply(ctx: Context, config: Config) {
     remember,
     recall,
   }
-  ctx.provide('mcWorlddb', service)
-
-  ctx.effect(() => () => {
+  const dispose = () => {
     try { db.close() } catch { /* already closed */ }
     log('worlddb disposed')
-  })
+  }
 
   if (config.enabled) {
     const prayers = (db.prepare('SELECT COUNT(*) AS c FROM prayers').get() as { c: number }).c
@@ -723,4 +704,6 @@ export function apply(ctx: Context, config: Config) {
     const chronicle = (db.prepare('SELECT COUNT(*) AS c FROM chronicle').get() as { c: number }).c
     log(`world db ready @ ${config.dbPath} (prayers=${prayers}, offerings=${offerings}, chronicle=${chronicle}); 众生册 qdrant=${config.memoryEnabled ? config.qdrantUrl : 'off'} collection=${config.qdrantCollection}`)
   }
+
+  return { service, dispose }
 }

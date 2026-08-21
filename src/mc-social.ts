@@ -1,12 +1,11 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
 import type { SpawnPoint } from './mc-rcon.ts'
 import type { WorlddbService } from './mc-worlddb.ts'
-import type { Transmigrator } from './mc-transmigrator.ts'
+import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 /**
  * mc-social —— 女神传声 & 信使（世界侧社交层，2026-08-17）。
@@ -38,9 +37,6 @@ import type { Transmigrator } from './mc-transmigrator.ts'
  * 命令入口统一在女神私聊（/msg Goddess ...），以 / 开头；
  * mc-god 的祈愿处理器对 / 开头消息让行（见 mc-god.ts）。
  */
-export const name = 'mc-social'
-export const inject = ['mcbot', 'mcRcon', 'mcWorlddb', 'mcTransmigrators', 'timer']
-
 export interface Config {
   enabled: boolean
   /** 数值配置文件（可选）：存在则覆盖下方默认值，方便服主不改代码调参数。 */
@@ -66,21 +62,6 @@ export interface Config {
   /** 一次 /mail read 最多吐几封（防刷屏） */
   mailReadBatch: number
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  socialPath: Schema.string().default('./data/social.json'),
-  sayRadius: Schema.number().default(48),
-  shoutRadius: Schema.number().default(96),
-  whisperRadius: Schema.number().default(6),
-  shoutFoodCost: Schema.number().default(1),
-  posCacheMs: Schema.number().default(5_000),
-  mailMaxBody: Schema.number().default(200),
-  mailInboxCap: Schema.number().default(50),
-  mailPerMinute: Schema.number().default(10),
-  remindCooldownSec: Schema.number().default(60),
-  mailReadBatch: Schema.number().default(5),
-})
 
 // ── 纯函数（单测见 test-social.mts）────────────────────────────────────
 
@@ -176,8 +157,22 @@ export function voiceLine(speakerName: string, mode: VoiceMode, text: string): {
 
 interface ResolvedConfig extends Config {}
 
-export function apply(ctx: Context, config: Config) {
+export interface SocialDeps {
+  /** bot 未连接时返回 null（与 mc-bot.getBot 的 throw 语义不同，bootstrap 需包一层）。 */
+  getBot: () => Bot | null
+  rcon: RconService
+  worlddb: WorlddbService
+  transmigrators: TransmigratorRegistry
+}
+
+export interface SocialHandle {
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createSocial(config, deps) 装配。 */
+export function createSocial(config: Config, deps: SocialDeps): SocialHandle {
   const log = (msg: string) => console.log(`[mc-social] ${msg}`)
+  const lc = createLifecycle()
   // data/social.json 覆盖层：服主改数值不动代码
   const cfg: ResolvedConfig = { ...config }
   try {
@@ -192,19 +187,19 @@ export function apply(ctx: Context, config: Config) {
   }
   if (!cfg.enabled) {
     log('disabled')
-    return
+    return { dispose: () => {} }
   }
 
-  const worlddb = ctx.mcWorlddb
-  const rcon: RconService = ctx.mcRcon
-  const getBot = (): Bot | null => (ctx.mcbot as Bot | undefined) ?? null
+  const worlddb = deps.worlddb
+  const rcon = deps.rcon
+  const getBot = deps.getBot
 
   const displayName = (username: string): string => {
-    const t: Transmigrator | null = ctx.mcTransmigrators.getByUsername(username)
+    const t: Transmigrator | null = deps.transmigrators.getByUsername(username)
     return t?.name ?? username
   }
   /** AI 穿越者名单（转达时用私聊，而不是 tellraw）。 */
-  const isTransmigrator = (username: string): boolean => !!ctx.mcTransmigrators.getByUsername(username)
+  const isTransmigrator = (username: string): boolean => !!deps.transmigrators.getByUsername(username)
 
   // 位置缓存：speaker/听众位置统一 5s TTL，转达风暴不打爆 RCON
   const posCache = new Map<string, { at: number; pos: SpawnPoint | null }>()
@@ -279,7 +274,7 @@ export function apply(ctx: Context, config: Config) {
         if (cmd.to === from) return reply(bot, from, '不能给自己写信。')
         if (cmd.to === bot.username) return reply(bot, from, '女神只送信，不收信——想许愿直接对我说即可。')
         if (cmd.body.length > cfg.mailMaxBody) return reply(bot, from, `信太长了（${cmd.body.length} 字 > 上限 ${cfg.mailMaxBody} 字），长话短说。`)
-        if (!ctx.mcTransmigrators.getByUsername(cmd.to) && !(cmd.to in bot.players)) {
+        if (!deps.transmigrators.getByUsername(cmd.to) && !(cmd.to in bot.players)) {
           return reply(bot, from, `此界没有叫「${cmd.to}」的居民（名字要写游戏 ID，如 Kirito / Naruto / MengMeng）。`)
         }
         if (!worlddb.areFriends(from, cmd.to)) {
@@ -332,7 +327,7 @@ export function apply(ctx: Context, config: Config) {
       case 'friend-add': {
         if (cmd.to === from) return reply(bot, from, '和自己做朋友……虽然自恋，但不行。')
         if (cmd.to === bot.username) return reply(bot, from, '女神与众生同在，不必特意结交。')
-        if (!ctx.mcTransmigrators.getByUsername(cmd.to) && !(cmd.to in bot.players)) {
+        if (!deps.transmigrators.getByUsername(cmd.to) && !(cmd.to in bot.players)) {
           return reply(bot, from, `此界没有叫「${cmd.to}」的居民（名字要写游戏 ID）。`)
         }
         const r = worlddb.friendRequestAdd(from, cmd.to)
@@ -430,7 +425,7 @@ export function apply(ctx: Context, config: Config) {
   }
 
   let stopped = false
-  const stopWatch = ctx.setInterval(() => {
+  const stopWatch = lc.setInterval(() => {
     if (stopped) return
     const bot = getBot()
     if (bot) ensureAvatar(bot)
@@ -440,9 +435,11 @@ export function apply(ctx: Context, config: Config) {
     if (bot) ensureAvatar(bot)
   }
 
-  ctx.effect(() => () => {
+  lc.onDispose(() => {
     stopped = true
     stopWatch()
     log('social disposed')
   })
+
+  return { dispose: () => lc.dispose() }
 }

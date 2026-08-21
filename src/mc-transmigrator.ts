@@ -1,5 +1,3 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
@@ -12,17 +10,12 @@ import { dirname, resolve } from 'node:path'
  *
  * 档案索引在 data/transmigrators.json；backstory / persona 正文放独立
  * .md 文件（相对索引所在目录解析），便于人工润色，符合「灵魂三件套」惯例。
+ *
+ * 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createTransmigrator() 装配。
  */
-export const name = 'mc-transmigrator'
-export const inject: string[] = []
-
 export interface Config {
   registryPath: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  registryPath: Schema.string().default('./data/transmigrators.json'),
-})
 
 export interface InnatePreference {
   preferredAtoms: string[]
@@ -121,15 +114,15 @@ export class TransmigratorRegistry {
   }
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcTransmigrators: TransmigratorRegistry
-  }
+export interface TransmigratorHandle {
+  service: TransmigratorRegistry
+  dispose: () => void
 }
 
-export function apply(ctx: Context, config: Config) {
+export function createTransmigrator(config: Config): TransmigratorHandle {
   const registry = new TransmigratorRegistry(config.registryPath)
-  ctx.provide('mcTransmigrators', registry)
   const names = registry.list().map((t) => `${t.name}(${t.username})`).join(', ') || '(none)'
   console.log(`[mc-transmigrator] loaded ${registry.list().length} transmigrator(s): ${names}`)
+  // 纯内存 + 启动时读文件，无连接/定时器，dispose 为空操作。
+  return { service: registry, dispose: () => {} }
 }

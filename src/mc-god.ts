@@ -1,17 +1,18 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
 import type { AtomSummary, MagicService } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
-import type { Transmigrator } from './mc-transmigrator.ts'
+import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
 import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
+import type { LogwatchService } from './mc-logwatch.ts'
+import type { McTerraService } from './mc-terra.ts'
 import { parseVoice } from './mc-social.ts'
 import { isHelpCommand, handleHelpText, welcomeLines } from './mc-man.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
 // scratch-plugin\data，经 MC_DATA_DIR 传入。村民交易/祈福文件队列须锚到运行态，
@@ -59,9 +60,6 @@ const VILLAGER_PREFIX = 'villager:'
  *   c. cast 经世界侧第二道闸（每技艺全局冷却、造物白名单、数量上限）
  *      → mc-magic.castByGod 落地（不耗玩家资源）→ 私聊回传神谕。
  */
-export const name = 'mc-god'
-export const inject = ['mcbot', 'mcRcon', 'mcLogwatch', 'mcMagic', 'mcTransmigrators', 'mcWorlddb', 'timer']
-
 export interface Config {
   enabled: boolean
   /** QwenPaw 本地 API（女神 Agent 挂在这里，长期记忆/众生册由世界数据库管） */
@@ -97,27 +95,6 @@ export interface Config {
   /** 世界心跳落盘文件：外部看门狗 + 观察面板据此探活世界进程。 */
   heartbeatPath: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  qwenpawUrl: Schema.string().default('http://127.0.0.1:8088/api/console/chat'),
-  cooldownMs: Schema.number().default(60_000),
-  pollMs: Schema.number().default(12_000),
-  admitCooldownMs: Schema.number().default(30_000),
-  deathPollMs: Schema.number().default(20_000),
-  reviewMs: Schema.number().default(7_200_000),
-  requirementsPath: Schema.string().default('./data/world-requirements.md'),
-  recallTopK: Schema.number().default(5),
-  skillEventsPath: Schema.string().default('./data/skill-events.json'),
-  advancementsDir: Schema.string().default('C:/Users/lzl19/Documents/airi-minecraft/server/advancements'),
-  advancementUnlocksPath: Schema.string().default('./data/advancement-unlocks.json'),
-  advancementNamesPath: Schema.string().default('./data/advancement-names.json'),
-  /** 天平引擎维护者名单（可对女神喊「平衡 …」的玩家名；其他玩家只能祈愿陈情）。 */
-  maintainers: Schema.array(Schema.string()).default(['MengMeng']),
-  balanceFlushMs: Schema.number().default(300_000),
-  bulletinPath: Schema.string().default('./data/balance-bulletin.json'),
-  heartbeatPath: Schema.string().default('./data/world-heartbeat.json'),
-})
 
 // ── 程序化预过滤（纯函数，可离线单测）─────────────────────────────────
 export interface InstantPlanView {
@@ -365,15 +342,44 @@ export function matchLaw(message: string): LawRequest | null {
   return null
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface GodService {
+  /** 直接触发一次祈愿处理（测试用）。 */
+  pray(username: string, wish: string): void
+  /** 当前收件箱待处理数。 */
+  pendingCount(): number
+  /** 世界史官：记一条大事记（mc-magic 等插件上报用）。 */
+  record(type: string, actor: string, detail: Record<string, unknown>): void
+}
+
+export interface GodDeps {
+  getBot: () => Bot
+  rcon: RconService
+  magic: MagicService
+  worlddb: WorlddbService
+  transmigrators: TransmigratorRegistry
+  logwatch?: LogwatchService
+  terra?: McTerraService
+}
+
+export interface GodHandle {
+  service: GodService
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createGod(config, deps) 装配。 */
+export function createGod(config: Config, deps: GodDeps): GodHandle {
   const log = (msg: string) => console.log(`[mc-god] ${msg}`)
+  const lc = createLifecycle()
   // 女神化身实例随重连变化，须每次现取。
-  const getBot = (): Bot => ctx.mcbot
-  const rcon: RconService = ctx.mcRcon
-  const magic: MagicService = ctx.mcMagic
+  const getBot = deps.getBot
+  const rcon = deps.rcon
+  const magic = deps.magic
+  const transmigrators = deps.transmigrators
+  const logwatch = deps.logwatch
+  const terra = deps.terra
   const lastUsed = new Map<string, number>() // 每技艺全局冷却
   const lastPray = new Map<string, number>() // 每玩家入场节流
-  const worlddb: WorlddbService = ctx.mcWorlddb
+  const worlddb = deps.worlddb
 
   // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
   // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
@@ -482,7 +488,7 @@ export function apply(ctx: Context, config: Config) {
     // 神谕中的地貌旨意（2026-08-18 女神获自主改地貌权）：回复文本里嵌 TERRAFORM JSON
     // 时交 mc-terra 白名单校验后落地（fill/setblock，限额聚居区内）；无指令/无插件时静默。
     try {
-      const n = await (ctx as unknown as { mcTerra?: { executeOracle(t: string): Promise<number> } }).mcTerra?.executeOracle(answer)
+      const n = await terra?.executeOracle(answer)
       if (n) log(`terra: ${n} TERRAFORM directives executed from goddess oracle`)
     } catch { /* terra 不可用不影响神谕送达 */ }
     return answer
@@ -555,7 +561,7 @@ export function apply(ctx: Context, config: Config) {
       return
     }
     lastAsk.set(username, Date.now())
-    const t = ctx.mcTransmigrators.getByUsername(username)
+    const t = transmigrators.getByUsername(username)
     const senderName = t?.name ?? username
     try {
       // 世界档案素材：近 7 天编年史后 20 条 + 在世旅人名册。
@@ -567,7 +573,7 @@ export function apply(ctx: Context, config: Config) {
           .map(([k, v]) => `${k}=${v}`).join(',')
         return `- ${d.getMonth() + 1}/${d.getDate()} ${e.actor} ${e.type}${det ? `(${det})` : ''}`
       })
-      const roster = ctx.mcTransmigrators.list().map((x) => `${x.name}(${x.username})`).join('、') || '（名册暂空）'
+      const roster = transmigrators.list().map((x) => `${x.name}(${x.username})`).join('、') || '（名册暂空）'
       let prompt = [
         `你是这个方块世界的女神（游戏名 ${bot.username}），全知世界的过去与现在。`,
         `一位名叫「${senderName}」的旅人向你提问。`,
@@ -743,7 +749,7 @@ export function apply(ctx: Context, config: Config) {
   const failCount = new Map<number, number>() // 毒信防护：同一封连续失败 3 次即归档
   function schedulePoll() {
     if (disposed) return
-    stopPoll = ctx.setTimeout(async () => {
+    stopPoll = lc.setTimeout(async () => {
       if (!busy && worlddb.inboxPendingCount() > 0) {
         busy = true
         const item = worlddb.inboxPeek()
@@ -772,7 +778,7 @@ export function apply(ctx: Context, config: Config) {
   let stopVillagerPrayerPoll: (() => void) | null = null
   function scheduleVillagerPrayerPoll() {
     if (disposed) return
-    stopVillagerPrayerPoll = ctx.setTimeout(async () => {
+    stopVillagerPrayerPoll = lc.setTimeout(async () => {
       await consumeVillagerPrayers()
       scheduleVillagerPrayerPoll()
     }, 5_000)
@@ -786,7 +792,7 @@ export function apply(ctx: Context, config: Config) {
   let stopVillagerPrayerPoll: (() => void) | null = null
   function scheduleVillagerPrayerPoll() {
     if (disposed) return
-    stopVillagerPrayerPoll = ctx.setTimeout(async () => {
+    stopVillagerPrayerPoll = lc.setTimeout(async () => {
       await consumeVillagerPrayers()
       scheduleVillagerPrayerPoll()
     }, 5_000)
@@ -826,7 +832,7 @@ export function apply(ctx: Context, config: Config) {
   // latest.log 实时广播死亡 → 秒级触发；计分板仍是权威：
   // log 触发后立刻 RCON 复核 mcdeaths，没动 = 误报/重放丢弃。
   // 死亡延迟从 ~20s 降到 <1s，编年史还能记下轮询拿不到的死因与击杀者。
-  const offLogwatch = ctx.mcLogwatch?.subscribe((ev) => {
+  const offLogwatch = logwatch?.subscribe((ev) => {
     if (ev.kind !== 'death') return // join/leave/成就/聊天已有各自通道，此处不重复入册
     const name = ev.player
     if (name === getBot()?.username) return
@@ -958,16 +964,16 @@ export function apply(ctx: Context, config: Config) {
     const zh = advZh(advId)
     const parts: string[] = []
     if (u.skill) {
-      const atom = ctx.mcMagic.getAtomById(u.skill)
+      const atom = magic.getAtomById(u.skill)
       if (atom) {
-        ctx.mcMagic.learnViaAdvancement(name, u.skill)
+        magic.learnViaAdvancement(name, u.skill)
         parts.push(`秘法「${atom.name}」`)
         worlddb.chronicleRecord('skill', name, { via: 'advancement', advancement: advId, atom: u.skill, name: atom.name, backfill: !announce })
         log(`ADVANCEMENT UNLOCK: ${name} 「${zh.name}」-> skill ${u.skill} (${announce ? 'live' : 'backfill'})`)
       }
     }
     if (u.maxManaBonus && u.maxManaBonus > 0) {
-      const nm = ctx.mcMagic.addMaxManaBonus(name, u.maxManaBonus)
+      const nm = magic.addMaxManaBonus(name, u.maxManaBonus)
       parts.push(`魔力上限 +${u.maxManaBonus}（至 ${nm}）`)
     }
     if (u.exp && u.exp > 0) await grantXp(name, u.exp, `advancement:${advId}`)
@@ -998,12 +1004,12 @@ export function apply(ctx: Context, config: Config) {
       (k) => k.startsWith('minecraft:') && !k.startsWith('minecraft:recipes/') && (raw[k] as { done?: boolean })?.done === true,
     )
     if (doneIds.length === 0) return
-    const seen = ctx.mcMagic.getAdvancements(name)
+    const seen = magic.getAdvancements(name)
     if (seen.length === 0) {
       // 首次基线（新玩家 / 机制上线）：全部入库 + 静默解锁检查 + 一条汇总编年史
       let unlocked = 0
       for (const id of doneIds) {
-        ctx.mcMagic.addAdvancement(name, id)
+        magic.addAdvancement(name, id)
         await checkAdvUnlocks(name, id, false)
         unlocked++
       }
@@ -1014,7 +1020,7 @@ export function apply(ctx: Context, config: Config) {
     const seenSet = new Set(seen)
     for (const id of doneIds) {
       if (seenSet.has(id)) continue
-      const fresh = ctx.mcMagic.addAdvancement(name, id)
+      const fresh = magic.addAdvancement(name, id)
       if (!fresh) continue
       const zh = advZh(id)
       log(`ADVANCEMENT: ${name} earned ${id} (${zh.name})`)
@@ -1031,7 +1037,7 @@ export function apply(ctx: Context, config: Config) {
 
 
   function metricValue(username: string, metric: string): number | null {
-    const st = ctx.mcMagic.getState(username)
+    const st = magic.getState(username)
     if (metric === 'hpRatio') return st.hpRatio
     if (metric === 'foodRatio') return st.foodRatio
     return null
@@ -1054,7 +1060,7 @@ export function apply(ctx: Context, config: Config) {
     for (const def of enabledPassives) {
       const eff = def.effect
       if (!eff || eff.kind !== 'mc_effect' || !eff.mcId) continue
-      if (!ctx.mcMagic.hasPassive(name, def.id)) continue
+      if (!magic.hasPassive(name, def.id)) continue
       const key = `${name}|${def.id}`
       const when = eff.when ?? def.trigger
       const v = metricValue(name, when.metric)
@@ -1155,7 +1161,7 @@ export function apply(ctx: Context, config: Config) {
         const healedLevel = levelForTotal(total)
         if (tries > 3) {
           log(`xpheal(${name}) gave up after 3 attempts on ${key} — check xp command semantics`)
-          ctx.mcMagic.setLevel(name, Math.min(xp, healedLevel))
+          magic.setLevel(name, Math.min(xp, healedLevel))
           return
         }
         try {
@@ -1165,16 +1171,16 @@ export function apply(ctx: Context, config: Config) {
         } catch (err) {
           log(`xpheal(${name}) failed: ${err instanceof Error ? err.message : String(err)}`)
         }
-        ctx.mcMagic.setLevel(name, healedLevel)
+        magic.setLevel(name, healedLevel)
         return
       }
     }
-    ctx.mcMagic.setLevel(name, xp)
+    magic.setLevel(name, xp)
     const prev = lastSeenLevel.get(name)
     lastSeenLevel.set(name, xp)
     if (prev !== undefined && xp > prev) {
-      const view = ctx.mcMagic.getState(name)
-      const unlocked = ctx.mcMagic.listAtoms()
+      const view = magic.getState(name)
+      const unlocked = magic.listAtoms()
         .filter((a) => a.requiredLevel > prev && a.requiredLevel <= xp)
         .map((a) => a.name)
       try {
@@ -1197,7 +1203,7 @@ export function apply(ctx: Context, config: Config) {
 
   function scheduleDeathPoll() {
     if (disposed) return
-    stopDeathPoll = ctx.setTimeout(async () => {
+    stopDeathPoll = lc.setTimeout(async () => {
       try {
         const bot = getBot()
         if (bot.entity && bot.username) {
@@ -1241,14 +1247,14 @@ export function apply(ctx: Context, config: Config) {
               const hpRatio = hp === null ? null : Math.max(0, Math.min(1, hp / 20))
               const food = await rcon.getEntityNumber(name, 'foodLevel')
               const foodRatio = food === null ? undefined : Math.max(0, Math.min(1, food / 20))
-              ctx.mcMagic.setVitals(name, hpRatio, foodRatio)
+              magic.setVitals(name, hpRatio, foodRatio)
               for (const def of enabledPassives) {
-                if (ctx.mcMagic.hasPassive(name, def.id)) continue
+                if (magic.hasPassive(name, def.id)) continue
                 const v = metricValue(name, def.trigger.metric)
                 if (v !== null && condHit(v, def.trigger.op, def.trigger.threshold)) {
-                  const acc = ctx.mcMagic.addPassiveProgress(name, def.id, config.deathPollMs / 1000)
+                  const acc = magic.addPassiveProgress(name, def.id, config.deathPollMs / 1000)
                   if (acc >= def.trigger.accumulateSec) {
-                    const fresh = ctx.mcMagic.unlockPassive(name, def.id)
+                    const fresh = magic.unlockPassive(name, def.id)
                     if (fresh) {
                       log(`PASSIVE UNLOCKED: ${name} gained 「${def.name}」(${def.id}) after ${Math.round(acc)}s`)
                       worlddb.chronicleRecord('skill', name, { passive: def.id, name: def.name, accumulatedSec: Math.round(acc) })
@@ -1330,7 +1336,7 @@ export function apply(ctx: Context, config: Config) {
   }
   function scheduleReview() {
     if (disposed) return
-    stopReview = ctx.setTimeout(() => {
+    stopReview = lc.setTimeout(() => {
       runReview().finally(() => scheduleReview())
     }, config.reviewMs)
   }
@@ -1404,7 +1410,7 @@ export function apply(ctx: Context, config: Config) {
     }
   }
   function scheduleBulletin() {
-    stopBulletin = ctx.setTimeout(async () => {
+    stopBulletin = lc.setTimeout(async () => {
       try { await flushBulletin() } catch { /* 单轮失败不影响下轮 */ }
       scheduleBulletin()
     }, config.balanceFlushMs)
@@ -1427,11 +1433,11 @@ export function apply(ctx: Context, config: Config) {
     }
     try {
       if (req.kind === 'show') {
-        const patches = ctx.mcMagic.listBalance()
+        const patches = magic.listBalance()
         if (!patches.length) reply('天平未曾偏移（尚无任何平衡补丁）。写法：平衡 <法术> <魔力|饱食|生命|等级> <数值>；平衡 回蓝 <数值>；重置平衡 [法术]。')
         else {
           const lines = patches.map((p) => {
-            const who = p.atom === '*' ? '全局' : (ctx.mcMagic.getAtomById(p.atom)?.name ?? p.atom)
+            const who = p.atom === '*' ? '全局' : (magic.getAtomById(p.atom)?.name ?? p.atom)
             return `· ${who} ${balanceFieldLabel(p.field)} = ${p.value}（${p.by}${p.reason ? '：' + p.reason : ''}）`
           })
           reply(`当前天平（${patches.length} 道补丁）：\n${lines.join('\n')}`)
@@ -1439,7 +1445,7 @@ export function apply(ctx: Context, config: Config) {
         return
       }
       if (req.kind === 'reset') {
-        const n = ctx.mcMagic.resetBalance(req.atom)
+        const n = magic.resetBalance(req.atom)
         if (n > 0) {
           worlddb.chronicleRecord('balance', actor, { reset: true, atom: req.atom ?? null, removed: n })
           const text = `天平复位——${req.atom ? `「${req.atom}」` : '全部法术'}回归基准法则（撤 ${n} 道）`
@@ -1451,7 +1457,7 @@ export function apply(ctx: Context, config: Config) {
         }
         return
       }
-      const res = ctx.mcMagic.applyBalancePatch(req.atom ?? null, req.field!, req.value!, actor)
+      const res = magic.applyBalancePatch(req.atom ?? null, req.field!, req.value!, actor)
       if (!res.ok || !res.summary) {
         reply(`平衡未成：${res.ok ? '内部错误：无摘要' : res.error}`)
         return
@@ -1479,10 +1485,10 @@ export function apply(ctx: Context, config: Config) {
       worlddb.chronicleRecord('presence', username, { event: 'join' })
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
-      if (!welcomed.has(username) && !ctx.mcTransmigrators.getByUsername(username)) {
+      if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
         welcomed.add(username)
         setTimeout(() => {
-          const t = ctx.mcTransmigrators.getByUsername(username)
+          const t = transmigrators.getByUsername(username)
           const name = t?.name ?? username
           for (const ln of welcomeLines(name)) {
             try { bot.whisper(username, `[女神] ${ln}`) } catch { /* not ready */ }
@@ -1505,7 +1511,7 @@ export function apply(ctx: Context, config: Config) {
       // 世界手册（2026-08-20）：公屏说 /help 同样应答——白纸 Agent 未必知道要
       // 私聊。回复走私语点对点，不刷公屏。零 LLM，毫秒级。
       if (isHelpCommand(message)) {
-        const lines = handleHelpText(message.trim(), ctx)
+        const lines = handleHelpText(message.trim(), magic)
         if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
@@ -1557,7 +1563,7 @@ export function apply(ctx: Context, config: Config) {
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
       if (message.trim().startsWith('/')) {
         if (isHelpCommand(message)) {
-          const lines = handleHelpText(message.trim(), ctx)
+          const lines = handleHelpText(message.trim(), magic)
           if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
           try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
           log(`help served to ${username}: ${message.trim().slice(0, 40)}`)
@@ -1612,8 +1618,8 @@ export function apply(ctx: Context, config: Config) {
         answerQuestion(username, askBody)
         return
       }
-      if (!explicitPrayer && ctx.mcMagic.sniffChant(body)) {
-        ctx.mcMagic.castSpell(username, body)
+      if (!explicitPrayer && magic.sniffChant(body)) {
+        magic.castSpell(username, body)
           .then((reply) => {
             log(`whisper chant from ${username}: ${body}`)
             try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
@@ -1636,7 +1642,7 @@ export function apply(ctx: Context, config: Config) {
       }
 
       // 供奉收执（异步）：名目 → 行囊复核 → /clear 收走 → 记账 → 再入队。
-      const t: Transmigrator | null = ctx.mcTransmigrators.getByUsername(username)
+      const t: Transmigrator | null = transmigrators.getByUsername(username)
       const admit = async (): Promise<void> => {
         let offer: OfferingInfo | undefined
         if (offeringText) {
@@ -1684,7 +1690,7 @@ export function apply(ctx: Context, config: Config) {
   let stopEnsure: (() => void) | null = null
   function scheduleEnsure() {
     if (disposed) return
-    stopEnsure = ctx.setTimeout(() => {
+    stopEnsure = lc.setTimeout(() => {
       const bot = getBot()
       if (bot) {
         ensureAvatar(bot)
@@ -1705,7 +1711,7 @@ export function apply(ctx: Context, config: Config) {
   }
   scheduleEnsure()
 
-  ctx.effect(() => () => {
+  lc.onDispose(() => {
     disposed = true
     if (offLogwatch) offLogwatch()
     if (stopPoll) stopPoll()
@@ -1720,26 +1726,15 @@ export function apply(ctx: Context, config: Config) {
     log(`goddess armed (三职：裁量/守望/史官, 持久层=mc-worlddb): poll ${config.pollMs}ms, admit ${config.admitCooldownMs}ms, cast-cooldown ${config.cooldownMs}ms; death-poll ${config.deathPollMs}ms; review every ${Math.round(config.reviewMs / 60000)}min; 众生册 recall top-${config.recallTopK}; 天平公告窗口 ${Math.round(config.balanceFlushMs / 1000)}s; 被动引擎 ${enabledPassives.length} 项 + 服主法则 ${Object.keys(LAW_WHITELIST).length} 项`)
   }
 
-  // 暴露给其他插件的接口
-  ctx.provide('mcGod', {
+  // 暴露给其他服务的接口（mc-magic 经 setChronicle 迟绑定 record）
+  const service: GodService = {
     pray: (username: string, wish: string) => {
-      const t: Transmigrator | null = ctx.mcTransmigrators.getByUsername(username)
+      const t: Transmigrator | null = transmigrators.getByUsername(username)
       worlddb.inboxPush(username, t?.name ?? username, wish)
     },
     pendingCount: () => worlddb.inboxPendingCount(),
     record: (type: string, actor: string, detail: Record<string, unknown>) => worlddb.chronicleRecord(type, actor, detail),
-  })
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcGod: {
-      /** 直接触发一次祈愿处理（测试用） */
-      pray(username: string, wish: string): void
-      /** 当前收件箱待处理数 */
-      pendingCount(): number
-      /** 世界史官：记一条大事记（mc-magic 等插件上报用） */
-      record(type: string, actor: string, detail: Record<string, unknown>): void
-    }
   }
+
+  return { service, dispose: () => lc.dispose() }
 }

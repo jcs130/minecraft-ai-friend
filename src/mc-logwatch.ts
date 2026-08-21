@@ -1,7 +1,6 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { closeSync, openSync, readSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createLifecycle } from './lifecycle.ts'
 
 /**
  * mc-logwatch —— 世界侧日志尾随服务（仅世界进程加载）。
@@ -14,20 +13,11 @@ import { resolve } from 'node:path'
  * 铁律：log 只是触发器（可能被重放/误报），计分板才是权威——
  * 消费方（mc-god）收到 death 事件后必须 RCON 复核 mcdeaths 再入册。
  */
-export const name = 'mc-logwatch'
-export const inject = ['timer']
-
 export interface Config {
   enabled: boolean
   logPath: string
   pollMs: number
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  logPath: Schema.string().default('C:/Users/lzl19/Documents/airi-minecraft/server/logs/latest.log'),
-  pollMs: Schema.number().default(500),
-})
 
 export type LogEventKind = 'death' | 'join' | 'leave' | 'advancement' | 'chat' | 'command'
 
@@ -246,26 +236,25 @@ export interface LogwatchService {
   subscribe(fn: (ev: LogEvent) => void): () => void
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcLogwatch: LogwatchService
-  }
+export interface LogwatchHandle {
+  service: LogwatchService
+  dispose: () => void
 }
 
-export function apply(ctx: Context, config: Config) {
+export function createLogwatch(config: Config): LogwatchHandle {
+  const lc = createLifecycle()
   const log = (msg: string) => console.log(`[mc-logwatch] ${msg}`)
   const listeners = new Set<(ev: LogEvent) => void>()
 
   if (!config.enabled) {
-    ctx.provide('mcLogwatch', { subscribe: () => () => {} })
     log('disabled by config')
-    return
+    return { service: { subscribe: () => () => {} }, dispose: () => lc.dispose() }
   }
 
   const tail = createLogTailer({
     path: resolve(config.logPath),
     pollMs: Math.max(100, config.pollMs),
-    setTimeout: (fn, ms) => ctx.setTimeout(fn, ms),
+    setTimeout: (fn, ms) => lc.setTimeout(fn, ms),
     onLine: (line) => {
       const parsed = parseLogLine(line)
       if (!parsed) return
@@ -285,16 +274,19 @@ export function apply(ctx: Context, config: Config) {
     },
   })
 
-  ctx.provide('mcLogwatch', {
+  const service: LogwatchService = {
     subscribe(fn) {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
-  })
-  ctx.effect(() => () => {
+  }
+
+  const dispose = () => {
     tail.stop()
+    lc.dispose()
     log('disposed')
-  })
+  }
 
   log(`armed (${Math.max(100, config.pollMs)}ms poll, ${resolve(config.logPath)})`)
+  return { service, dispose }
 }

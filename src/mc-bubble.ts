@@ -1,9 +1,8 @@
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync, statSync, openSync, readSync, closeSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
+import { createLifecycle } from './lifecycle.ts'
 
 /**
  * mc-bubble —— 世界侧 3D 气泡引擎（2026-08-18）。
@@ -21,10 +20,6 @@ import type { RconService } from './mc-rcon.ts'
  *
  * RCON 中文铁律：命令必须纯 ASCII，中文一律 \uXXXX 转义（mc_npc.py 同款 esc）。
  */
-export const name = 'mc-bubble'
-
-export const inject = ['mcbot', 'mcRcon', 'timer']
-
 export interface Config {
   bubbleTtlMs: number
   followIntervalMs: number
@@ -33,15 +28,6 @@ export interface Config {
   feedPollMs: number
   perPlayerCooldownMs: number
 }
-
-export const Config: Schema<Config> = Schema.object({
-  bubbleTtlMs: Schema.number().default(6500).description('气泡存活毫秒数'),
-  followIntervalMs: Schema.number().default(900).description('玩家气泡跟随刷新间隔'),
-  maxTextLen: Schema.number().default(80).description('气泡文本最大长度（超出截断）'),
-  statRefreshMs: Schema.number().default(60000).description('NPC 任务状态行刷新间隔'),
-  feedPollMs: Schema.number().default(500).description('npc-feed 轮询间隔'),
-  perPlayerCooldownMs: Schema.number().default(900).description('同玩家气泡最小间隔（刷屏保护）'),
-})
 
 /** RCON 安全转义：仅保留可见 ASCII，中文/特殊字符 → \uXXXX */
 function esc(t: string): string {
@@ -83,15 +69,28 @@ interface Quest {
   villager: string
   display?: string
   zh?: string
+  item?: string
   count?: number
   emerald?: number
   done?: boolean
+  done_by?: string
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface BubbleDeps {
+  rcon: RconService
+  getBot: () => Bot
+}
+
+export interface BubbleHandle {
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createBubble(config, deps) 装配。 */
+export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
   const log = (msg: string) => console.log(`[mc-bubble] ${msg}`)
-  const rcon: RconService = ctx.mcRcon
-  const getBot = (): Bot => ctx.mcbot
+  const rcon = deps.rcon
+  const getBot = deps.getBot
+  const lc = createLifecycle()
 
   const DATA = process.env.MC_DATA_DIR ?? './data'
   const feedPath = resolve(DATA, 'npc-feed.jsonl')
@@ -119,10 +118,10 @@ export function apply(ctx: Context, config: Config) {
     const pz = ep ? ep.z.toFixed(1) : '147'
     await rcon.send(`summon minecraft:text_display ${px} ${py} ${pz} ${nbtOf(tag, cut, 'white', 2.4)}`).catch(() => undefined)
     const deadline = Date.now() + config.bubbleTtlMs
-    const timer = ctx.setInterval(() => {
+    const stopFollow = lc.setInterval(() => {
       void (async () => {
         if (Date.now() > deadline) {
-          timer.dispose?.()
+          stopFollow()
           await killTag(tag)
           return
         }
@@ -141,7 +140,7 @@ export function apply(ctx: Context, config: Config) {
     const z = npcPos?.[2]?.toFixed(1) ?? '147'
     await rcon.send(`summon minecraft:text_display ${x} ${y} ${z} ${nbtOf(tag, cut, color || 'white', 0.9)}`).catch(() => undefined)
     await rcon.send(`ride @e[tag=${tag},limit=1] mount @e[tag=${npcTag},limit=1]`).catch(() => undefined)
-    ctx.setTimeout(() => void killTag(tag), config.bubbleTtlMs + 1500)
+    lc.setTimeout(() => void killTag(tag), config.bubbleTtlMs + 1500)
   }
 
   // ---------- 玩家公屏 → 气泡 ----------
@@ -258,11 +257,11 @@ export function apply(ctx: Context, config: Config) {
   function ensureJoinListener(bot: Bot) {
     if (joinedBot === bot) return
     joinedBot = bot
-    bot.on('playerEnter', (player: { username?: string } | string) => {
-      const name = typeof player === 'string' ? player : player?.username ?? ''
+    bot.on('playerJoined', (player) => {
+      const name = player.username ?? ''
       if (!name || name === bot.username) return
       if (welcomed.has(name) || welcomeFailed.has(name)) return
-      log(`playerEnter: ${name}`)
+      log(`playerJoined: ${name}`)
       welcomed.add(name)
       void goddessWelcome(name)
     })
@@ -325,7 +324,7 @@ export function apply(ctx: Context, config: Config) {
 
   // ---------- 生命周期 ----------
   loadVillagers()
-  ctx.setInterval(() => {
+  lc.setInterval(() => {
     try {
       ensureChatListener(getBot())
       ensureJoinListener(getBot())
@@ -335,11 +334,13 @@ export function apply(ctx: Context, config: Config) {
     }
     pollFeed()
   }, config.feedPollMs)
-  ctx.setInterval(() => {
+  lc.setInterval(() => {
     loadVillagers()
     void refreshStatLines()
   }, config.statRefreshMs)
   // 启动后稍等 NPC 看护召唤完成再画状态行
-  ctx.setTimeout(() => void refreshStatLines(), 12000)
+  lc.setTimeout(() => void refreshStatLines(), 12000)
   log(`up: ttl=${config.bubbleTtlMs}ms follow=${config.followIntervalMs}ms npcs=${villagers.length}`)
+
+  return { dispose: () => lc.dispose() }
 }

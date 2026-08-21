@@ -21,15 +21,15 @@
  *     闸门全部程序化、确定性。
  * 编年史类型：saga_muse / saga_atom / saga_quest / saga_event / saga_reject。
  */
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import type { Bot } from 'mineflayer'
+import type { RconService } from './mc-rcon.ts'
+import type { WorlddbService } from './mc-worlddb.ts'
+import type { TransmigratorRegistry } from './mc-transmigrator.ts'
 import { GIVE_WHITELIST, type MagicService } from './mc-magic.ts'
 import { OFFERING_ITEMS, OFFERING_ITEM_CN } from './mc-offering.ts'
-
-export const name = 'mc-saga'
-export const inject = ['mcbot', 'mcRcon', 'mcMagic', 'mcWorlddb', 'mcTransmigrators', 'timer']
+import { createLifecycle } from './lifecycle.ts'
 
 export interface Config {
   enabled: boolean
@@ -45,18 +45,6 @@ export interface Config {
   minEventGapMs: number
   dataDir: string
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  qwenpawUrl: Schema.string().default('http://127.0.0.1:8088/api/console/chat'),
-  sagaMs: Schema.number().default(6 * 3600_000),
-  firstDelayMs: Schema.number().default(5 * 60_000),
-  pollMs: Schema.number().default(60_000),
-  maxAtomsPerDay: Schema.number().default(2),
-  maxActiveQuests: Schema.number().default(3),
-  minEventGapMs: Schema.number().default(4 * 3600_000),
-  dataDir: Schema.string().default('./data'),
-})
 
 // ── 提案类型（女神 LLM 的产出，进闸门前先当陌生人）──────────────────────
 interface AtomProposal {
@@ -270,9 +258,23 @@ function extractJson(raw: string): Record<string, unknown> | null {
   }
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface SagaDeps {
+  getBot: () => Bot
+  rcon: RconService
+  magic: MagicService
+  worlddb: WorlddbService
+  transmigrators: TransmigratorRegistry
+}
+
+export interface SagaHandle {
+  dispose: () => void
+}
+
+/** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createSaga(config, deps) 装配。 */
+export function createSaga(config: Config, deps: SagaDeps): SagaHandle {
   const log = (msg: string) => console.log(`[mc-saga] ${msg}`)
-  if (!config.enabled) return
+  const lc = createLifecycle()
+  if (!config.enabled) return { dispose: () => {} }
   const dataDir = resolve(config.dataDir)
   mkdirSync(dataDir, { recursive: true })
   const storePath = join(dataDir, 'saga-store.json')
@@ -297,17 +299,18 @@ export function apply(ctx: Context, config: Config) {
   const save = () => writeFileSync(storePath, JSON.stringify(store, null, 2), 'utf-8')
   save()
 
-  const magic: MagicService = ctx.mcMagic
-  const rcon = ctx.mcRcon
-  const worlddb = ctx.mcWorlddb
+  const magic = deps.magic
+  const rcon = deps.rcon
+  const worlddb = deps.worlddb
 
   const onlinePlayers = (): string[] => {
-    const bot = ctx.mcbot
+    let bot: Bot
+    try { bot = deps.getBot() } catch { return [] }
     if (!bot?.players) return []
     return Object.keys(bot.players).filter((n) => n !== bot.username)
   }
   const courier = (player: string, msg: string) => {
-    try { ctx.mcbot.whisper(player, `[女神] ${msg}`) } catch { /* 不在线 */ }
+    try { deps.getBot().whisper(player, `[女神] ${msg}`) } catch { /* 不在线 */ }
   }
   /** 全服公告（tellraw @a + 可选全屏大字 + 音效）。 */
   const announce = async (text: string, ceremony: { title?: string; subtitle?: string; sound?: string } = {}): Promise<void> => {
@@ -364,11 +367,11 @@ export function apply(ctx: Context, config: Config) {
   // ── 故事简报：她读世界，才能为世界执笔 ────────────────────────────────
   function buildBrief(): string {
     const lines: string[] = []
-    const bot = ctx.mcbot
+    const bot = deps.getBot()
     const online = onlinePlayers()
     lines.push(`【在场者】${online.join('、') || '（空无一人）'}`)
     for (const u of online) {
-      const t = ctx.mcTransmigrators.getByUsername(u)
+      const t = deps.transmigrators.getByUsername(u)
       const st = magic.getState(u)
       const learned = st.learned.length + (st.innateSkill ? 1 : 0)
       const innateName = st.innateSkill ? (magic.getAtomById(st.innateSkill)?.name ?? st.innateSkill) : '未定'
@@ -524,7 +527,7 @@ export function apply(ctx: Context, config: Config) {
     }
     store.quests.push(q)
     save()
-    const t = ctx.mcTransmigrators.getByUsername(p.target)
+    const t = deps.transmigrators.getByUsername(p.target)
     const dl = new Date(q.deadlineAt)
     const dlText = `${String(dl.getHours()).padStart(2, '0')}:${String(dl.getMinutes()).padStart(2, '0')}`
     courier(p.target, `${t?.name ?? p.target}，女神有一桩心愿托付于你——「${p.title}」：${p.story}（把 ${p.demandCn}×${p.demandCount} 献给女神即算达成：对我说「祈愿：愿了此托｜供奉：${p.demandCn}x${p.demandCount}」。限 ${dlText} 前）`)
@@ -566,7 +569,7 @@ export function apply(ctx: Context, config: Config) {
 
   // ── 构思主流程 ──────────────────────────────────────────────────────
   let ideating = false
-  async function runIdeation(trigger: 'timer' | 'manual'): Promise<void> {
+  async function runIdeation(trigger: 'timer' | 'manual' | 'boot'): Promise<void> {
     if (ideating) return
     ideating = true
     try {
@@ -717,7 +720,7 @@ export function apply(ctx: Context, config: Config) {
     try {
       // 投放点：随机一位在场者附近 ±12 格、头上 12 格——恩赐落在有人处
       const online = onlinePlayers()
-      const bot = ctx.mcbot
+      const bot = deps.getBot()
       let x = -109, y = 76, z = 147
       if (online.length && bot?.players) {
         const pick = online[Math.floor(Math.random() * online.length)]
@@ -764,18 +767,18 @@ export function apply(ctx: Context, config: Config) {
 
   // ── 调度 ────────────────────────────────────────────────────────────
   function scheduleIdeation(): void {
-    ctx.setTimeout(() => {
+    lc.setTimeout(() => {
       if (Date.now() - store.lastIdeationAt >= config.sagaMs) void runIdeation('timer')
       scheduleIdeation()
     }, config.sagaMs)
   }
-  ctx.setTimeout(() => {
+  lc.setTimeout(() => {
     void runIdeation('boot')
     scheduleIdeation()
   }, config.firstDelayMs)
 
   function schedulePoll(): void {
-    ctx.setTimeout(() => {
+    lc.setTimeout(() => {
       void runPoll().catch((err) => log(`poll error: ${err instanceof Error ? err.message : String(err)}`))
       // 手动触发把手：往 data/saga-trigger 丢个文件即立刻构思
       if (existsSync(triggerPath)) {
@@ -789,4 +792,6 @@ export function apply(ctx: Context, config: Config) {
   schedulePoll()
 
   log(`saga armed (ideation every ${Math.round(config.sagaMs / 60000)}min, poll ${Math.round(config.pollMs / 1000)}s, atoms/day ${config.maxAtomsPerDay}, quests ${store.quests.filter((q) => q.status === 'active').length} active, events ${store.events.filter((e) => e.status !== 'done').length} in flight)`)
+
+  return { dispose: () => lc.dispose() }
 }

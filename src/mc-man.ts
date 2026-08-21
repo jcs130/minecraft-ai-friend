@@ -11,9 +11,8 @@
 // 接线：mc-god.ts 的 whisper/chat 两个入口在分流最前处调用
 //   handleHelpText()；playerJoined 里对名册外新面孔调 welcomeLines()。
 
-import type { Context } from '@deepseek-ai/cordis'
 import { OFFERING_ITEMS } from './mc-offering.ts'
-import { GIVE_WHITELIST } from './mc-magic.ts'
+import { GIVE_WHITELIST, type MagicService } from './mc-magic.ts'
 
 /** 单条回复行宽上限（中文计） */
 const LINE_MAX = 60
@@ -54,8 +53,10 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
   return parts.join(' ') || '无消耗'
 }
 
-/** 处理一条 /help 命令，返回回复行数组；null = 不是 help 命令。 */
-export function handleHelpText(text: string, ctx: Context): string[] | null {
+/** 处理一条 /help 命令，返回回复行数组；null = 不是 help 命令。
+ *  已脱 cordis 壳（2026-08-21）：ctx 依赖改为显式传入 magic（仅用 listAtoms）。
+ */
+export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
   const raw = text.trim().replace(/^\/(help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
@@ -83,7 +84,7 @@ export function handleHelpText(text: string, ctx: Context): string[] | null {
 
   // ── 咒语（分页目录 / 单条详情）──────────────────────────────
   if (topic === '咒语' || topic === 'spells' || topic === '法术') {
-    const atoms = ctx.mcMagic.listAtoms().slice().sort((a, b) => (a.requiredLevel - b.requiredLevel) || a.id.localeCompare(b.id))
+    const atoms = magic.listAtoms().slice().sort((a, b) => (a.requiredLevel - b.requiredLevel) || a.id.localeCompare(b.id))
     if (arg2 && !/^\d+$/.test(arg2)) {
       // 单条详情：中文名 / id / 咒语词 模糊匹配
       const q = arg2.toLowerCase()

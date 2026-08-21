@@ -14,13 +14,12 @@
  * 安全边界：水/岩浆/TNT/火一律不可造（防洪灌滥用）；单 fill ≤512 方块（air ≤256）；
  * 单次神谕 ≤8 op / ≤2048 方块；聚居区 (-109,64,147) 半径 400 格内、y∈[-60,320]。
  */
-import type { Context } from '@deepseek-ai/cordis'
-import Schema from '@deepseek-ai/schemastery'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-
-export const name = 'mc-terra'
-export const inject = ['mcbot', 'mcRcon', 'mcWorlddb', 'timer']
+import type { Bot } from 'mineflayer'
+import { createLifecycle } from './lifecycle.ts'
+import type { RconService } from './mc-rcon.ts'
+import type { WorlddbService } from './mc-worlddb.ts'
 
 export interface Config {
   enabled: boolean
@@ -29,13 +28,6 @@ export interface Config {
   /** 每轮巡检处置上限（防误报风暴） */
   maxFixesPerPoll: number
 }
-
-export const Config: Schema<Config> = Schema.object({
-  enabled: Schema.boolean().default(true),
-  dataDir: Schema.string().default('./data'),
-  pollMs: Schema.number().default(60_000),
-  maxFixesPerPoll: Schema.number().default(5),
-})
 
 interface Finding {
   id: string
@@ -73,12 +65,6 @@ export interface McTerraService {
   executeOracle(replyText: string): Promise<number>
 }
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mcTerra?: McTerraService
-  }
-}
-
 function loadJson<T>(path: string, fallback: T): T {
   try {
     if (!existsSync(path)) return fallback
@@ -92,17 +78,32 @@ function saveJson(path: string, data: unknown): void {
   writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8')
 }
 
-export function apply(ctx: Context, config: Config) {
+export interface TerraDeps {
+  getBot: () => Bot
+  rcon: RconService
+  worlddb: WorlddbService
+}
+
+export interface TerraHandle {
+  service: McTerraService
+  dispose: () => void
+}
+
+export function createTerra(config: Config, deps: TerraDeps): TerraHandle {
+  const lc = createLifecycle()
   const log = (msg: string) => console.log(`[mc-terra] ${msg}`)
-  if (!config.enabled) return
+  if (!config.enabled) {
+    log('disabled by config')
+    return { service: { executeOracle: async () => 0 }, dispose: () => lc.dispose() }
+  }
   const dataDir = config.dataDir
   const reportPath = join(dataDir, 'terra-report.json')
   const fixedPath = join(dataDir, 'terra-fixed.json')
-  const worlddb = ctx.mcWorlddb
-  const rcon = ctx.mcRcon
+  const worlddb = deps.worlddb
+  const rcon = deps.rcon
 
   const goddessSay = (msg: string) => {
-    try { ctx.mcbot.chat(`§5✦ ${msg}`) } catch { /* bot 不在线 */ }
+    try { deps.getBot().chat(`§5✦ ${msg}`) } catch { /* bot 不在线 */ }
   }
 
   function inBounds(x: number, y: number, z: number): boolean {
@@ -214,15 +215,18 @@ export function apply(ctx: Context, config: Config) {
     return applied
   }
 
-  ctx.provide('mcTerra', { executeOracle })
-
   // 巡检消费循环
   function schedule(): void {
-    ctx.setTimeout(() => {
+    lc.setTimeout(() => {
       void consumeReport().catch((err) => log(`consume error: ${err instanceof Error ? err.message : String(err)}`))
       schedule()
     }, config.pollMs)
   }
   schedule()
   log(`terra steward armed (report=${reportPath}, poll ${config.pollMs}ms)`)
+
+  return {
+    service: { executeOracle },
+    dispose: () => lc.dispose(),
+  }
 }
