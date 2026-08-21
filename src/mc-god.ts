@@ -522,10 +522,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 2026-08-20 造物主谕（祷告回应下放传令官）：祈愿裁决转 mc-herald（本地 27B，
     // 零云费、低延迟），减轻天神压力；传令官按 verdictPrompt 里的场景+上下文+目标
     // 智能裁量，输出裁决 JSON。失败自动回落女神本尊（云端 mc-god）。
-    const answer = await callAgent(`mc:${username}:prayers`, username, prompt, 'mc-herald', images)
+    const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
       .catch(async (e) => {
         log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-        return callAgent(`mc:${username}:prayers`, username, prompt, 'mc-god', images)
+        return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
       })
 
     const parsed = extractJson(answer)
@@ -550,7 +550,56 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 不收供奉：女神翻世界档案（编年史 + 在世旅人名册）直接作答，独立 session
   // 积累每个旅人的求知史。
   const lastAsk = new Map<string, number>() // 每玩家提问节流（独立于祈愿）
-  const welcomed = new Set<string>() // 白纸冷启动引导去重（每进程每人一次）
+  const welcomed = new Set<string>() // 进服初始化去重（每进程每人一次）
+
+  // ── 进服初始化（2026-08-21 造物主谕「一个玩家一个 session」）──────────
+  // 新穿越者首次降临 = 女神与其 session 的初始化：LLM 私聊欢迎 + 世界背景 + 指路，
+  // 落同一 session（mc:${username}），与后续祈愿/问世界同脉，女神记得完整历程。
+  // 天赋宣读仍走 mc-ritual 公屏（两族同通道，候选法术在公屏念出），此处只预告、不重复宣读；
+  // 名册内住民（Steve/Alex）是「先醒来的同伴」，不在降临欢迎之列。
+  async function initNewcomer(username: string): Promise<void> {
+    const bot = getBot()
+    const t = transmigrators.getByUsername(username)
+    const name = t?.name ?? username
+    const backstory = t?.backstory?.split('\n')[0]?.slice(0, 60) ?? ''
+    const prompt = [
+      `你是这个方块世界的女神（游戏名 ${bot.username}）。`,
+      `一位名叫「${name}」的旅人刚刚醒来、降临此界，这是他第一次踏足这片土地。`,
+      '',
+      '【世界背景 · 初始之地】（你介绍时的依据，可精简转述）：',
+      '- 他刚从一个关于现实的梦里醒来，躺在一片方块大陆上，忘了来处。',
+      '- 先他醒来的住民（史蒂夫、艾利克斯等）是同伴，不是老师、不是仆人。',
+      '- 白天安全、夜晚危险；饿了要吃、暗了要点火。',
+      '- 古老的力量藏在「咏唱」里——念出正确的词，世界会回应，住民叫它「魔法」。',
+      backstory ? `【他的前世】${backstory}` : '【他的前世】（一片空白，他忘了来处）',
+      '',
+      '【你要做】（以女神口吻私聊他，一段话说完）：',
+      '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
+      '2. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
+      '3. 指路：说 /help 查生存手册；遇险私聊「祈愿：…」；疑问私聊「问：…」。',
+      '',
+      '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
+    ].join('\n')
+    try {
+      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
+        .catch(async (e) => {
+          log(`herald down for init (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+          return callAgent(`mc:${username}`, username, prompt, 'mc-god')
+        })
+      const msg = answer.trim().slice(0, 200) || welcomeLines(name).join('；')
+      try { bot.whisper(username, `[女神] ${msg}`) } catch { /* not ready */ }
+      try { worlddb.chronicleRecord('welcome', username, { via: 'goddess-init' }) } catch { /* best effort */ }
+      await worlddb.remember(username, 'welcome', `你迎接了旅人「${name}」降临初始之地，介绍世界背景，并预告其出生天赋仪式。`)
+      log(`init welcome sent to ${username}: ${msg.slice(0, 60)}`)
+    } catch (err) {
+      log(`initNewcomer failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      // 兜底：退回白纸冷启动三行（静态），保证新玩家不落空
+      for (const ln of welcomeLines(name)) {
+        try { bot.whisper(username, `[女神] ${ln}`) } catch { /* not ready */ }
+      }
+    }
+  }
+
   async function answerQuestion(username: string, question: string): Promise<void> {
     const bot = getBot()
     const now = Date.now()
@@ -594,10 +643,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供答疑参考。）`
       // 2026-08-20 造物主谕（云端不做高频杂务）：问：通道转传令官 mc-herald
       // （本地 27B，零云费、低延迟）；失败自动回落女神本尊（云端）。
-      const answer = await callAgent(`mc:${username}:questions`, username, prompt, 'mc-herald', images)
+      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
         .catch(async (e) => {
           log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:${username}:questions`, username, prompt, 'mc-god', images)
+          return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
         })
       const trimmedAnswer = answer.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
@@ -1488,13 +1537,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
         welcomed.add(username)
         setTimeout(() => {
-          const t = transmigrators.getByUsername(username)
-          const name = t?.name ?? username
-          for (const ln of welcomeLines(name)) {
-            try { bot.whisper(username, `[女神] ${ln}`) } catch { /* not ready */ }
-          }
-          try { worlddb.chronicleRecord('welcome', username, { via: 'coldstart' }) } catch { /* best effort */ }
-          log(`coldstart welcome sent to ${username}`)
+          initNewcomer(username).catch((err) => log(`initNewcomer error: ${err instanceof Error ? err.message : String(err)}`))
         }, 8_000)
       }
     })
