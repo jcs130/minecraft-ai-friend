@@ -11,13 +11,18 @@
 // 离线服 UUID: nmp 服务端与 vanilla java 均按 nameToMcOfflineUUID 派生, 两层天然一致。
 import mc from 'minecraft-protocol';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const LISTEN_PORT = parseInt(process.env.SKIN_LISTEN_PORT || '25565', 10);
 const UPSTREAM_HOST = process.env.SKIN_UPSTREAM_HOST || '127.0.0.1';
 const UPSTREAM_PORT = parseInt(process.env.SKIN_UPSTREAM_PORT || '25599', 10);
 const MC_VERSION = process.env.MC_VERSION || '1.21.1';
-const SKINS_FILE = process.env.SKINS_FILE || '/app/data/skins.json';
+const DEFAULT_SKINS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../data/skins.json');
+const SKINS_FILE = process.env.SKINS_FILE || DEFAULT_SKINS;
 const PLAY = mc.states.PLAY;
+const PLAYER_INFO_ID = 0x3e; // 1.21.1 clientbound play: player_info
 
 let assignments = new Map(); // lowercase username -> {value, signature, model, preset}
 let skinsStat = { file: SKINS_FILE, presets: 0, assignments: 0, applied: 0, sessions: 0 };
@@ -106,6 +111,87 @@ function injectTextures(data) {
   return hits;
 }
 
+// ---- play 态帧工具（2026-08-22 帧级选择性解压注入）----
+// raw bridge 之下：字节流按帧切分（VarInt 长度前缀），压缩帧（长度 >= 阈值）解压后
+// 读包 ID——只有 player_info 才用 minecraft-protocol 解析注入皮肤，其余包原样字节转发
+// （NeoForge mod 扩展字节无损）。任何解析/注入失败都回退原样透传，绝不改包。
+
+function readVarIntAt(buf, offset) {
+  let num = 0;
+  for (let count = 0; count < 5; count++) {
+    if (offset + count >= buf.length) return null;
+    const b = buf[offset + count];
+    num |= (b & 0x7f) << (7 * count);
+    if ((b & 0x80) === 0) return { value: num >>> 0, bytes: count + 1 };
+  }
+  return null;
+}
+
+function writeVarInt(v) {
+  const out = [];
+  let n = v >>> 0;
+  while (n >= 0x80) {
+    out.push((n & 0x7f) | 0x80);
+    n >>>= 7;
+  }
+  out.push(n);
+  return Buffer.from(out);
+}
+
+// 从缓冲切出一帧：{ id, payload, raw, consumed, fail? }；不足一帧返回 null（等更多字节）。
+function tryReadFrame(buf, threshold) {
+  const len = readVarIntAt(buf, 0);
+  if (!len) return null;
+  const total = len.bytes + len.value;
+  if (buf.length < total) return null;
+  const body = buf.subarray(len.bytes, total);
+  const raw = buf.subarray(0, total);
+  let payload = body;
+  if (len.value >= threshold) {
+    const cl = readVarIntAt(body, 0);
+    if (!cl) return null;
+    try {
+      payload = zlib.inflateSync(body.subarray(cl.bytes));
+    } catch (e) {
+      return { id: -1, payload: null, raw, consumed: total, fail: `inflate: ${e.message}` };
+    }
+  }
+  const pid = readVarIntAt(payload, 0);
+  return { id: pid ? pid.value : -1, payload, raw, consumed: total };
+}
+
+// 重写一帧（注入后的 player_info）：按阈值决定是否压缩。
+function wrapFrame(payload, threshold) {
+  if (threshold > 0 && payload.length >= threshold) {
+    const z = zlib.deflateSync(payload);
+    return Buffer.concat([writeVarInt(payload.length), writeVarInt(z.length), z]);
+  }
+  return Buffer.concat([writeVarInt(payload.length), payload]);
+}
+
+// 服务端帧转发：player_info 注入皮肤，其余原样字节。
+function forwardServerFrame(client, frame) {
+  if (frame.fail) {
+    client.socket.write(frame.raw);
+    return;
+  }
+  if (frame.id === PLAYER_INFO_ID && assignments.size > 0) {
+    try {
+      const { data } = client.deserializer.parsePacketBuffer(frame.payload, 'packet_player_info', 'clientbound', 'play');
+      const hits = injectTextures(data);
+      if (hits.length) {
+        log('skin injected: ' + hits.join(', '));
+        const out = client.serializer.createPacketBuffer('packet_player_info', data, 'clientbound', 'play');
+        client.socket.write(wrapFrame(out, client.compressionThreshold > 0 ? client.compressionThreshold : 0));
+        return;
+      }
+    } catch (e) {
+      log(`! player_info inject failed, raw forward: ${e.message}`);
+    }
+  }
+  client.socket.write(frame.raw);
+}
+
 // ---- server list ping 透传 (3参形式: response, client, answerToPing) ----
 function proxyPing(response, client, answerToPing) {
   try {
@@ -153,16 +239,17 @@ srv.on('login', (client) => {
   // 旧实现 play 态用 minecraft-protocol 的 packet 事件 "解析成对象→再序列化" 转发,
   // 对 NeoForge mod 扩展字节有损(实测: vanilla 客户端直连本代理报
   // "Failed to decode packet 'clientbound/minecraft:update_recipes'")。
-  // 现在两侧进入 play 态后接管 socket, 原始字节双向透传(不解析不重序列化),
-  // 压缩帧原样透传 —— NeoForge 扩展字节无损到达客户端。
-  // 代价: player_info 皮肤注入在 play 态暂停(字节层无法解析); 皮肤后续可用
-  // config 态注入或帧级选择性解压实现。
+  // 现在两侧进入 play 态后接管 socket：c->s 原始字节透传；s->c 帧级切分后
+  // 仅对 player_info 选择性解析注入皮肤(帧级选择性解压, 2026-08-22 补),
+  // 其余包(含 update_recipes 等 mod 扩展)原样字节转发 —— 登录与皮肤共存。
   let rawBridged = false;
+  let serverFrameBuf = Buffer.alloc(0);
   const maybeRawBridge = () => {
     if (rawBridged || endedClient || endedUpstream) return;
     if (client.state !== PLAY || upstream.state !== PLAY) return;
     rawBridged = true;
-    log(`== raw bridge ON: ${client.username} (play 态字节透传, 皮肤注入暂停) ==`);
+    const threshold = upstream.compressionThreshold > 0 ? upstream.compressionThreshold : 0;
+    log(`== raw bridge ON: ${client.username} (play 态字节透传 + player_info 选择性注入, threshold=${threshold}) ==`);
     try {
       client.socket.removeAllListeners('data');
       upstream.socket.removeAllListeners('data');
@@ -173,10 +260,16 @@ srv.on('login', (client) => {
     });
     upstream.socket.on('data', (buf) => {
       if (endedClient) return;
-      try { client.socket.write(buf); } catch (e) { log(`! s->c raw: ${e.message}`); }
+      serverFrameBuf = Buffer.concat([serverFrameBuf, buf]);
+      let frame;
+      while ((frame = tryReadFrame(serverFrameBuf, threshold))) {
+        serverFrameBuf = serverFrameBuf.subarray(frame.consumed);
+        try { forwardServerFrame(client, frame); } catch (e) { log(`! s->c frame: ${e.message}`); }
+      }
     });
     skinsStat.playRaw = true;
     skinsStat.playRawAt = Date.now();
+    skinsStat.skinInject = 'selective-frame';
   };
   const tryState = () => {
     try { maybeRawBridge(); } catch (e) { log(`! raw bridge check: ${e.message}`); }
