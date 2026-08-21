@@ -986,12 +986,37 @@ QUEST_KW = ["任务", "委托", "帮忙", "活儿", "活计", "差事", "酬劳"
 RE_GIVE = re.compile(r"^(?:给|交给|交付|交)\s*(\d+)\s*(\S+)$")
 LAST_TALK = {}  # speaker -> (villager_key, ts)
 
+# 2026-08-22 造物主谕「npc得能回应」：村民开耳——附近旅人说话（未点名）也由最近村民接话，
+# 不再当背景板。HEAR_RADIUS 与 mc-social 的 sayRadius 一致（48 格）；ACTIVE_TALK 节流
+# 防同一人反复无点名说话时村民连环搭话（点名不受此限）。
+HEAR_RADIUS = float(CFG.get("hear", {}).get("radius", 48))
+ACTIVE_TALK = {}  # speaker -> ts（最近一次村民主动接话的时间）
+
+def nearest_villager(speaker):
+    """说话者 HEAR_RADIUS 格内最近的在世村民；无则 None（先说话者坐标，再各村民坐标）。"""
+    ppos = player_pos(speaker)
+    if ppos is None:
+        return None
+    best, bestd = None, None
+    for v in PROFILES:
+        if not v.get("alive", True):
+            continue
+        npos = alive_pos(v)
+        if npos is None:
+            continue
+        d = ((ppos[0] - npos[0]) ** 2 + (ppos[1] - npos[1]) ** 2 + (ppos[2] - npos[2]) ** 2) ** 0.5
+        if d <= HEAR_RADIUS and (bestd is None or d < bestd):
+            best, bestd = v, d
+    return best
+
 def route(speaker, msg, via="public"):
     hit_v, rest = None, msg
+    by_calls = False
     for v in PROFILES:
         hits = [c for c in v["calls"] if c in msg]
         if hits:
             hit_v = v
+            by_calls = True
             for c in hits:
                 rest = rest.replace(c, " ")
             rest = rest.strip()
@@ -1002,7 +1027,15 @@ def route(speaker, msg, via="public"):
             hit_v = BY_TAG.get(lt[0]) or next((v for v in PROFILES if v["key"] == lt[0]), None)
             rest = msg.strip()
         else:
-            return None, None
+            # 未点名：附近最近村民主动接话（60s 节流，防同一人反复喊话时连环搭话）
+            now = time.time()
+            if now - ACTIVE_TALK.get(speaker, 0) >= 60:
+                hit_v = nearest_villager(speaker)
+                if hit_v is not None:
+                    ACTIVE_TALK[speaker] = now
+                    rest = msg.strip()
+            if hit_v is None:
+                return None, None
     LAST_TALK[speaker] = (hit_v["key"], time.time())
     # —— 冒险者公会（mc_guild）：看板/接单/放弃/我的/声望，优先于村民闲聊 ——
     try:
@@ -1016,8 +1049,8 @@ def route(speaker, msg, via="public"):
         return hit_v, [hit_v["greet"]]
     m = RE_HANDOFF.match(rest)
     if m:
-        # @公证交割：Agent↔Agent / 玩家↔玩家。公屏只教学，结算走私语通道。
-        if via == "public":
+        # @公证交割：Agent↔Agent / 玩家↔玩家。公屏/传声只教学，结算走私语通道。
+        if via in ("public", "voice"):
             return hit_v, [
                 "（摆摆手）替人递东西更得避人耳目——凑到耳边低语：/msg Goddess 交易：%s @%s 给%s%s" % (hit_v["calls"][0], m.group(1), m.group(2), m.group(3)),
             ]
@@ -1025,8 +1058,8 @@ def route(speaker, msg, via="public"):
     m = RE_GIVE.match(rest)
     if m:
         # WHISPER-TRADE 2026-08-18 刷屏治理：交付类高频指令不占公屏——
-        # 公屏喊「岳山 给16煤」只回教学（真人可学），结算只走私语通道（inbox）。
-        if via == "public":
+        # 公屏/传声喊「岳山 给16煤」只回教学（真人可学），结算只走私语通道（inbox）。
+        if via in ("public", "voice"):
             return hit_v, [
                 "（左右看了看，压低声音）人多的地方不谈买卖——凑到我耳边低语：/msg Goddess 交易：%s 给%s%s" % (hit_v["calls"][0], m.group(1), m.group(2)),
             ]
@@ -1038,13 +1071,16 @@ def route(speaker, msg, via="public"):
         if any(w in rest for w in t["kw"]):
             return hit_v, resolve_lines(t["lines"], ctx)
     # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
-    lines = agent_chat(hit_v, speaker, msg, ctx)
-    if lines:
-        return hit_v, lines
-    if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
-        lines = llm_reply(hit_v, speaker, msg, ctx)
+    # 2026-08-22 造物主谕：未点名（nearest 兜底接话）不碰 LLM——本地 27B 首轮可达
+    # 4-5 分钟，同步阻塞 tail 主循环会让全村失聪；未点名只用模板应声（greet/fallback）。
+    if by_calls:
+        lines = agent_chat(hit_v, speaker, msg, ctx)
         if lines:
             return hit_v, lines
+        if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
+            lines = llm_reply(hit_v, speaker, msg, ctx)
+            if lines:
+                return hit_v, lines
     return hit_v, [hit_v["fallback"]]
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
@@ -1073,9 +1109,13 @@ def alive_pos(v):
     return None
 
 def player_pos(name):
-    """玩家实况坐标（在线玩家；名字仅支持 ASCII，中文玩家名 RCON 直传不可用——与 turn_in 既有行为一致）"""
+    """玩家实况坐标（在线玩家）。ASCII 名直传；中文名 RCON 直传 Invalid（MC 实体参数
+    不认 Unicode 名），改用选择器 @a[name="…"]——2026-08-22 桐人/鸣人接话排查所修。"""
+    target = name
+    if not re.match(r"^[A-Za-z0-9_]{1,16}$", name):
+        target = '@a[name="%s",limit=1]' % name.replace('"', "")
     try:
-        r = R.cmd("data get entity %s Pos" % name)
+        r = R.cmd("data get entity %s Pos" % target)
         m = re.search(r"\[(-?[\d.]+)d, ?(-?[\d.]+)d, ?(-?[\d.]+)d\]", r)
         if m:
             return float(m.group(1)), float(m.group(2)), float(m.group(3))
@@ -1204,8 +1244,8 @@ def heal_npcs():
                 feed_append({"kind": "event", "npc": v["display"], "text": "%s 离家太远，被世界看护拉回了广场" % v["display"]})
 
 # ---------- 日志 tail ----------
-RE_CHAT = re.compile(r"<([A-Za-z0-9_]{1,16})> (.+)")
-RE_SAY = re.compile(r"\]: (?:\[Not Secure\] )?\[([A-Za-z0-9_]{1,16})\] (.+)")
+RE_CHAT = re.compile(r"<([A-Za-z0-9_\u4e00-\u9fff]{1,16})> (.+)")
+RE_SAY = re.compile(r"\]: (?:\[Not Secure\] )?\[([A-Za-z0-9_\u4e00-\u9fff]{1,16})\] (.+)")
 _last_heal = 0.0
 
 def _decode_unicode_escapes(msg):
@@ -1308,12 +1348,13 @@ def inbox_loop():
                 rec = json.loads(line)
                 who = rec.get("speaker", "")
                 msg = rec.get("text", "")
+                via = rec.get("via", "whisper")
             except Exception:
                 continue
             if not who or not msg:
                 continue
             try:
-                v, replies = route(who, msg, via="whisper")
+                v, replies = route(who, msg, via=via)
             except Exception as e:
                 print("[npc] inbox route err:", e, flush=True)
                 v, replies = None, None
