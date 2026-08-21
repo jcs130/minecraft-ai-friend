@@ -551,6 +551,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 积累每个旅人的求知史。
   const lastAsk = new Map<string, number>() // 每玩家提问节流（独立于祈愿）
   const welcomed = new Set<string>() // 进服初始化去重（每进程每人一次）
+  const pendingIntro = new Map<string, number>() // username -> 自报家门截止时间戳（进服引导后 90s 窗口）
 
   // ── 进服初始化（2026-08-21 造物主谕「一个玩家一个 session」）──────────
   // 新穿越者首次降临 = 女神与其 session 的初始化：LLM 私聊欢迎 + 世界背景 + 指路，
@@ -575,8 +576,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '',
       '【你要做】（以女神口吻私聊他，一段话说完）：',
       '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
-      '2. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
-      '3. 指路：说 /help 查生存手册；遇险私聊「祈愿：…」；疑问私聊「问：…」。',
+      '2. 引导他自报家门：问他叫什么、记得自己是谁、此刻想做什么（不必长篇，一句即可）。',
+      '3. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
+      '4. 指路：说 /help 查生存手册；遇险私聊「祈愿：…」；疑问私聊「问：…」。',
       '',
       '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
     ].join('\n')
@@ -590,6 +592,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       try { bot.whisper(username, `[女神] ${msg}`) } catch { /* not ready */ }
       try { worlddb.chronicleRecord('welcome', username, { via: 'goddess-init' }) } catch { /* best effort */ }
       await worlddb.remember(username, 'welcome', `你迎接了旅人「${name}」降临初始之地，介绍世界背景，并预告其出生天赋仪式。`)
+      pendingIntro.set(username, Date.now() + 90_000) // 开启 90s 自报家门窗口
       log(`init welcome sent to ${username}: ${msg.slice(0, 60)}`)
     } catch (err) {
       log(`initNewcomer failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
@@ -1669,6 +1672,24 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           })
           .catch((err) => log(`whisper cast failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
+      }
+      // ── 转生者自报家门（2026-08-21 造物主谕「转生异世界」）────────────
+      // 女神私聊欢迎后已引导新穿越者「自报家门」。ta 进服后的第一段自然语言
+      // （非指令/非祈愿/非咏唱）即视为自我介绍：记入众生册与编年史，作为人格
+      // 演化的种子；女神简短记下，不进祈愿队列。窗口 90s，超时自然落入祈愿。
+      const introDeadline = pendingIntro.get(username)
+      if (introDeadline !== undefined) {
+        pendingIntro.delete(username) // 一次性消费，无论命中与否
+        if (Date.now() <= introDeadline) {
+          const intro = body.slice(0, 120)
+          const disp = transmigrators.getByUsername(username)?.name ?? username
+          try { worlddb.chronicleRecord('intro', username, { intro }) } catch { /* best effort */ }
+          await worlddb.remember(username, 'intro', `「${disp}」初降此界时自报家门：「${intro}」`)
+          try { bot.whisper(username, `[女神] 我记下了。${disp}，欢迎。`) } catch { /* not ready */ }
+          log(`intro from ${username}: ${intro}`)
+          return
+        }
+        // 超时：落入下方祈愿流程
       }
       const { wish, offeringText } = splitWishOffering(body)
       if (!wish) return
