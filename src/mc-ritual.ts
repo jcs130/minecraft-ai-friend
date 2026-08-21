@@ -9,11 +9,14 @@ import { createLifecycle } from './lifecycle.ts'
  *
  * 每个穿越者（AI bot 或真人玩家）首次降临此界、尚未选定「出生天赋」时，
  * 女神主持降临仪式：公屏宣读候选法术（按档案 innate.preferredAtoms 优先排序），
- * 穿越者在公屏喊「我选 X / 选 N」→ 写入 magic-state 的 innateSkill。
+ * 穿越者选天赋走双通道（2026-08-22 定谳）：
+ *   - 公屏喊「我选 X / 选 N」→ 公屏确认（兼容真人玩家，原文保留）；
+ *   - 私语说「我选 X / 选 1」→ 私语确认（bot.whisper，AI 穿越者偏好私密表态）；
+ * 两种来源都解析同一份候选、都写 magic-state 的 innateSkill，
+ * 只是「确认」跟随来源通道（公屏选→公屏确认，私语选→私语确认）。
  *
- * 全程走公屏聊天（AI 穿越者靠 bot 聊天事件听见宣读、用嘴回答；
- * 真人玩家看着屏幕念出来）——两族同通道，机制平权。
- * 大字标题「降临」走 RCON（视觉糖，给真人玩家的仪式感）。
+ * 宣读始终公屏（所有穿越者都看得到候选清单），大字标题「降临」走 RCON
+ * （视觉糖，给真人玩家的仪式感）。
  */
 export interface Config {
   enabled: boolean
@@ -160,23 +163,52 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
     log(`ritual started for ${username}: ${candidates.map((c) => c.id).join(',')}`)
   }
 
-  async function commit(username: string, atomId: string): Promise<string> {
+  async function commit(username: string, atomId: string, via: 'chat' | 'whisper' = 'chat'): Promise<string> {
     const atom = magic.getAtomById(atomId)
     magic.setInnate(username, atomId)
     pending.delete(username)
     const name = atom?.name ?? atomId
     const bot = getBot()
     try {
-      // 公屏确认：必须点名 + 含「出生天赋「X」」，穿越者进程靠这个模式找回记忆。
-      bot.chat(`[女神] ${username}，你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
+      // 确认跟随来源通道（2026-08-22）：
+      // 公屏选 → 公屏确认（原文保留，必须点名 + 含「出生天赋「X」」，穿越者进程靠这个模式找回记忆）；
+      // 私语选 → 私语确认（私聊对象就是本人，无需点名，但保留同一关键句供 mc-mystic parseInnate 捕获）。
+      if (via === 'whisper') {
+        bot.whisper(username, `[女神] 你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
+      } else {
+        bot.chat(`[女神] ${username}，你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
+      }
     } catch (err) {
       log(`confirm failed: ${err instanceof Error ? err.message : String(err)}`)
     }
-    log(`ritual committed for ${username}: innateSkill=${atomId}`)
+    log(`ritual committed for ${username}: innateSkill=${atomId} (via ${via})`)
     return `你选择了「${name}」作为出生天赋，已永镌于灵魂。`
   }
 
-  // ── 公屏监听：候选者的选择 + 「再说一遍」式的重宣读请求 ──────────────
+  // ── 选择监听：公屏（bot.on('chat')）+ 私语（bot.on('whisper')）双通道 ──
+  // 私语分流与 mc_pray「祈愿：」同姿势：只认 pending 中玩家的消息，
+  // 未在等待选择者的私语（如 mc-mystic 失忆找回「我的出生天赋是什么？」）
+  // 归 god-inbox 的 innate-memory 快捷应答，ritual 绝不抢答。
+  function tryResolve(username: string, message: string, via: 'chat' | 'whisper'): boolean {
+    const entry = pending.get(username)
+    if (!entry) return false
+    const msg = message.trim()
+    const id = resolveChoice(msg, entry.candidates)
+    if (id) {
+      commit(username, id, via)
+        .then(() => log(`player ${username} chose innate skill ${id} (via ${via})`))
+        .catch((err) => log(`player choose error: ${err instanceof Error ? err.message : String(err)}`))
+      return true
+    }
+    // 还没选定但开口问起（「有哪些」「再说一遍」「什么意思」…）→ 30s 冷却重宣读。
+    if (/天赋|候选|法术|仪式|再说|重复|什么意思/.test(msg) && Date.now() - entry.lastAnnounce > 30_000) {
+      entry.lastAnnounce = Date.now()
+      const t = transmigrators.getByUsername(username)
+      announceQueued(username, t, entry.candidates).catch(() => {})
+    }
+    return false
+  }
+
   let watchedBot: Bot | null = null
   function ensureListeners(bot: Bot) {
     if (watchedBot === bot) return
@@ -184,22 +216,12 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
 
     bot.on('chat', (username: string, message: string) => {
       if (username === bot.username) return
-      const entry = pending.get(username)
-      if (!entry) return
-      const msg = message.trim()
-      const id = resolveChoice(msg, entry.candidates)
-      if (id) {
-        commit(username, id)
-          .then(() => log(`player ${username} chose innate skill ${id}`))
-          .catch((err) => log(`player choose error: ${err instanceof Error ? err.message : String(err)}`))
-        return
-      }
-      // 还没选定但开口问起（「有哪些」「再说一遍」「什么意思」…）→ 30s 冷却重宣读。
-      if (/天赋|候选|法术|仪式|再说|重复|什么意思/.test(msg) && Date.now() - entry.lastAnnounce > 30_000) {
-        entry.lastAnnounce = Date.now()
-        const t = transmigrators.getByUsername(username)
-        announceQueued(username, t, entry.candidates).catch(() => {})
-      }
+      tryResolve(username, message, 'chat')
+    })
+
+    bot.on('whisper', (username: string, message: string) => {
+      if (username === bot.username) return
+      tryResolve(username, message, 'whisper')
     })
 
     bot.on('playerJoined', (player) => {
@@ -247,7 +269,7 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
   })
 
   if (config.enabled) {
-    log('ritual service armed (world-side, public-chat protocol)')
+    log('ritual service armed (world-side, public-chat + whisper dual-channel protocol)')
   }
 
   return { dispose: () => lc.dispose() }

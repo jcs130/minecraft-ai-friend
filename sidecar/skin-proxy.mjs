@@ -149,6 +149,45 @@ srv.on('login', (client) => {
 
   upstream.on('login', () => log(`upstream logged in: ${client.username}`));
 
+  // ---- RAW BRIDGE (2026-08-22 方案A落地: play 态字节级帧透传) ----
+  // 旧实现 play 态用 minecraft-protocol 的 packet 事件 "解析成对象→再序列化" 转发,
+  // 对 NeoForge mod 扩展字节有损(实测: vanilla 客户端直连本代理报
+  // "Failed to decode packet 'clientbound/minecraft:update_recipes'")。
+  // 现在两侧进入 play 态后接管 socket, 原始字节双向透传(不解析不重序列化),
+  // 压缩帧原样透传 —— NeoForge 扩展字节无损到达客户端。
+  // 代价: player_info 皮肤注入在 play 态暂停(字节层无法解析); 皮肤后续可用
+  // config 态注入或帧级选择性解压实现。
+  let rawBridged = false;
+  const maybeRawBridge = () => {
+    if (rawBridged || endedClient || endedUpstream) return;
+    if (client.state !== PLAY || upstream.state !== PLAY) return;
+    rawBridged = true;
+    log(`== raw bridge ON: ${client.username} (play 态字节透传, 皮肤注入暂停) ==`);
+    try {
+      client.socket.removeAllListeners('data');
+      upstream.socket.removeAllListeners('data');
+    } catch (e) { log(`! removeAllListeners: ${e.message}`); }
+    client.socket.on('data', (buf) => {
+      if (endedUpstream) return;
+      try { upstream.socket.write(buf); } catch (e) { log(`! c->s raw: ${e.message}`); }
+    });
+    upstream.socket.on('data', (buf) => {
+      if (endedClient) return;
+      try { client.socket.write(buf); } catch (e) { log(`! s->c raw: ${e.message}`); }
+    });
+    skinsStat.playRaw = true;
+    skinsStat.playRawAt = Date.now();
+  };
+  const tryState = () => {
+    try { maybeRawBridge(); } catch (e) { log(`! raw bridge check: ${e.message}`); }
+  };
+  client.on('state', tryState);
+  upstream.on('state', tryState);
+  // 保险: play 态第一个包到达时再确认一次(状态事件可能在进入 play 前已经触发过)
+  client.once('packet', tryState);
+  upstream.once('packet', tryState);
+
+
   // NeoForge 1.20.5+ config 阶段 keep-alive：mc-protocol 的 keepalive.js 只处理 play 态 keep_alive、
   // 不响应 config 态 ping；缺这行主服会 30s 超时踢上游（2026-08-21 实证，对齐 mineflayer game.js 的做法）。
   upstream.on('ping', (data) => {
