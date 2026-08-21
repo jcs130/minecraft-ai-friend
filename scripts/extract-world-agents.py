@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""提炼世界侧 agent 到 ~/.copaw-agentos（容器 AgentOS 数据根，compose 挂载为 /root/.copaw）。
+"""提炼世界侧 agent 到 ~/.qwenpaw-agentos（容器 AgentOS 数据根，compose 挂载为 /root/.qwenpaw）。
+
+容器是【全新安装】的 qwenpaw——无 legacy ~/.copaw 包袱，WORKING_DIR = ~/.qwenpaw（标准路径）。
+故容器内 workspace_dir / media_dir 归一化到 /root/.qwenpaw/...（非 legacy /root/.copaw）。
 
 世界侧 5 位（含 mc-god 分身）：
   mc-god          本尊分身——世界进程回退路由 + 世界复盘 + 重大裁决的落点
@@ -15,11 +18,11 @@
            —— 对话流水含造物主私密，不进容器（服务器）。
 
 config.json 精简：
-  - agents 只留 5 位世界侧，workspace_dir -> /root/.copaw/workspaces/{id}
+  - agents 只留 5 位世界侧，workspace_dir -> /root/.qwenpaw/workspaces/{id}
   - 通道只启用 console；feishu 禁用并【清除 app_id/app_secret】
   - MCP：minecraft_companion -> http://autoplayer:4177/mcp；winremote -> http://host.docker.internal:8090/mcp
   - embedding -> ollama bge-m3-cpu
-  - media_dir 硬路径归一化
+  - media_dir 硬路径归一化到 /root/.qwenpaw
 
 运行：python scripts/extract-world-agents.py
 """
@@ -28,7 +31,7 @@ import json, shutil, os, sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 SRC = r"C:\Users\lzl19\.copaw"
-DST = r"C:\Users\lzl19\.copaw-agentos"
+DST = r"C:\Users\lzl19\.qwenpaw-agentos"
 
 WORLD_AGENTS = ["mc-god", "mc-herald", "mc-hearth", "mc-guard-kirito", "mc-guard-naruto"]
 
@@ -77,8 +80,8 @@ def copy_agent_workspace(ag):
 
 def norm(p):
     if isinstance(p, str):
-        return (p.replace(r'C:\Users\lzl19\.copaw', '/root/.copaw')
-                 .replace('C:/Users/lzl19/.copaw', '/root/.copaw'))
+        return (p.replace(r'C:\Users\lzl19\.copaw', '/root/.qwenpaw')
+                 .replace('C:/Users/lzl19/.copaw', '/root/.qwenpaw'))
     return p
 
 
@@ -108,7 +111,7 @@ def main():
     profiles = {}
     for aid in WORLD_AGENTS:
         p = cfg['agents']['profiles'][aid].copy()
-        p['workspace_dir'] = f"/root/.copaw/workspaces/{aid}"
+        p['workspace_dir'] = f"/root/.qwenpaw/workspaces/{aid}"
         profiles[aid] = p
     cfg['agents']['profiles'] = profiles
     cfg['agents']['agent_order'] = list(WORLD_AGENTS)

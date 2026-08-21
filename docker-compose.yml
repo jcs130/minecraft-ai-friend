@@ -1,100 +1,172 @@
-# minecraft-ai-friend Docker 编排 —— 世界进程 + 观察面板 (+ 可选 MC 服 + NPC)。
-#
-# 用法（在本仓根目录）：
-#   RCON_PASSWORD=xxx docker compose up -d --build world panel
-#   # 连 MC 服一起起（profile=mc）：
-#   RCON_PASSWORD=xxx docker compose --profile mc up -d --build
-#   # 讲述者 NPC（profile=npc）：
-#   RCON_PASSWORD=xxx docker compose --profile npc up -d
-#
-# 拓扑（默认 = 「宿主机已有 MC 服 + MemOS/LLM 在宿主」的家用场景）：
-#   world  ──MC_HOST=host.docker.internal──▶ 宿主 MC 服(25565/RCON 25575)
-#         ──MC_MEMOS_URL/MC_QWENPAW_URL────▶ 宿主 MemOS(:8002)/QwenPaw(:8088)
-#   panel  ──共享 data 卷只读 world.db──────▶ 浏览器 :9090
-#   mc     ──profile=mc 时替代宿主 MC 服（world 自动改连 mc:25565）
-#   npc    ──python sidecar 讲述者（纯 stdlib）
-#
-# ⚠️ build context = 上一级目录（须同时看得见 deepseek-harness/ 与本仓，
-#    dsh 底座 vendor/packages 从 harness 取）。Windows Docker Desktop 的
-#    host.docker.internal 开箱即用；Linux 宿主靠 extra_hosts（已带）。
-#    RCON_PASSWORD 必填（与 MC 服 server.properties 的 rcon.password 一致）。
+name: mc-world
 
-x-world-common: &world-common
-  build:
-    context: ..                       # workspace 根（deepseek-harness/ 与本仓的公共父目录）
-    dockerfile: minecraft-ai-friend/Dockerfile
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-  environment: &world-env
-    MC_GOD_NAME: ${MC_GOD_NAME:-Goddess}
-    # 默认连宿主机上的 MC 服；--profile mc 时会被覆盖为 mc:25565。
-    MC_HOST: ${MC_HOST:-host.docker.internal}
-    MC_PORT: ${MC_PORT:-25565}
-    RCON_HOST: ${RCON_HOST:-host.docker.internal}
-    RCON_PORT: ${RCON_PORT:-25575}
-    RCON_PASSWORD: ${RCON_PASSWORD:?RCON_PASSWORD required (same as server.properties rcon.password)}
-    MC_MEMOS_URL: ${MC_MEMOS_URL:-http://host.docker.internal:8002}
-    MC_QWENPAW_URL: ${MC_QWENPAW_URL:-http://host.docker.internal:8088/api/console/chat}
-    MC_QDRANT_URL: ${MC_QDRANT_URL:-http://host.docker.internal:6333}
-    MC_EMBEDDING_URL: ${MC_EMBEDDING_URL:-http://host.docker.internal:11434}
-  volumes:
-    - world-data:/app/data            # world.db/编年史/魔法状态/供奉账本（panel 共享只读）
+# ============================================================
+# 全量 Docker 化（2026-08-21 造物主最终拍板）
+#   - 不放 vLLM（推理+视觉全走云端 QwenPaw provider）
+#   - QwenPaw = 智能化管理世界的 AgentOS（核心，接 minecraft_companion MCP 操作世界）
+#   - CPU embedding 模型内置进 ollama 镜像（自包含）
+#   - minecraft_companion MCP（mindcraft-autoplayer）容器化，供 AgentOS 操作 MC 角色
+# 用法：docker compose up -d --build
+# ============================================================
+
+x-mc-common: &mc-common
+  restart: unless-stopped
+  networks: [mc-net]
+
+x-world-env: &world-env
+  MC_HOST: mc-server
+  MC_PORT: "25599"                 # mineflayer 直连 java 内网口（绕开皮肤代理）
+  MC_RCON_HOST: mc-server
+  MC_RCON_PORT: "25575"
+  RCON_PASSWORD: ${RCON_PASSWORD:?请在 .env 设置 RCON_PASSWORD}
+  MC_GOD_NAME: Goddess
+  MC_MEMORY_ENABLED: "1"
+  MC_QDRANT_URL: http://qdrant:6333
+  MC_EMBEDDING_URL: http://ollama:11434
+  MC_EMBEDDING_MODEL: ${MC_EMBEDDING_MODEL:-bge-m3-cpu:latest}
+  QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
 
 services:
-  world:
-    <<: *world-common
-    container_name: mc-world
-    init: true
-    restart: unless-stopped
-
-  panel:
-    <<: *world-common
-    container_name: mc-panel
-    init: true
-    restart: unless-stopped
-    command: ["node", "web-panel.mjs"]
-    entrypoint: []                    # 面板不需要 RCON 密码注入/世界进程入口
-    ports:
-      - "9090:9090"
-
-  # 可选：原版 MC 服务器（itzg 镜像）。默认不起；--profile mc 时 world 会改连它。
-  mc:
-    image: itzg/minecraft-server:java21
+  # ---- 1. MC java 服务端（NeoForge 21.1.233 + numen + settlements） ----
+  mc-server:
+    <<: *mc-common
+    build:
+      context: .
+      dockerfile: Dockerfile.mc-server
+    image: mc-server-java:latest
     container_name: mc-server
-    profiles: ["mc"]
     environment:
-      EULA: "TRUE"
-      TYPE: VANILLA
-      VERSION: "1.21.11"
-      ONLINE_MODE: "false"            # 与家用离线服一致（bot 任意用户名可连）
-      ENABLE_RCON: "true"
-      RCON_PASSWORD: ${RCON_PASSWORD:?RCON_PASSWORD required}
-      MOTD: "初始之地城镇 - AI 陪玩世界"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms2G -Xmx4G}
+    volumes:
+      - ${MC_SERVER_DATA_DIR:-C:/Users/lzl19/.copaw/workspaces/default/numen-sandbox}:/app/mc-server
+
+  # ---- 2. 皮肤代理前门（:25565 -> mc-server:25599） ----
+  skin-proxy:
+    <<: *mc-common
+    image: node:22-slim
+    container_name: mc-skin-proxy
+    command: ["node", "/app/skin-proxy.mjs"]
+    environment:
+      SKIN_LISTEN_PORT: "25565"
+      SKIN_UPSTREAM_HOST: mc-server
+      SKIN_UPSTREAM_PORT: "25599"
+      MC_VERSION: ${MC_VERSION:-1.21.1}
+      SKINS_FILE: /app/data/skins.json
+      SKIN_PROXY_STAT: /app/data/skin-proxy-status.json
+    volumes:
+      - ./sidecar/skin-proxy.mjs:/app/skin-proxy.mjs:ro
+      - mc-data:/app/data:ro
     ports:
       - "25565:25565"
-      - "25575:25575"
-    volumes:
-      - mc-data:/data
-    restart: unless-stopped
+    depends_on: [mc-server]
 
-  # 可选：讲述者 NPC sidecar（纯 stdlib python，连宿主 MC 服 RCON + 聊天）。
-  npc:
-    image: python:3.12-slim
-    container_name: mc-npc
-    profiles: ["npc"]
-    working_dir: /npc
-    command: ["python", "-u", "mc_npc.py"]
-    volumes:
-      - ./sidecar:/npc:ro
-      - npc-logs:/npc/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  # ---- 3. 世界进程（Goddess，唯一 RCON 持有者） ----
+  world-process:
+    <<: *mc-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mc-world:latest
+    container_name: mc-world-process
     environment:
-      MC_HOST: ${MC_HOST:-host.docker.internal}
-      RCON_HOST: ${RCON_HOST:-host.docker.internal}
-    restart: unless-stopped
+      <<: *world-env
+      MC_DATA_DIR: /app/data
+    volumes:
+      - mc-data:/app/data
+    depends_on: [mc-server, qwenpaw, qdrant, ollama]
+
+  # ---- 4. 观察面板（:9090） ----
+  web-panel:
+    <<: *mc-common
+    image: mc-world:latest
+    container_name: mc-panel
+    command: ["node", "web-panel.mjs"]
+    entrypoint: []
+    environment:
+      <<: *world-env
+      MC_DATA_DIR: /app/data
+    volumes:
+      - mc-data:/app/data:ro
+    ports:
+      - "9090:9090"
+    depends_on: [world-process]
+
+  # ---- 5. 假玩家桥（guard-drive：身/魂桥接，纯 stdlib） ----
+  guard-drive:
+    <<: *mc-common
+    image: python:3.12-slim
+    container_name: mc-guard-drive
+    working_dir: /app
+    command: ["python", "-u", "/app/sidecar/guard/start_guard_drive.py"]
+    environment:
+      <<: *world-env
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./sidecar/guard:/app/sidecar/guard:ro
+      - mc-data:/app/data
+    depends_on: [mc-server, qwenpaw]
+
+  # ---- 6. QwenPaw 智能层 AgentOS（服务器侧，管理世界的中枢；与宿主机 QwenPaw 并存） ----
+  # 注意：宿主机 QwenPaw(8088) 是造物主的 AgentOS，mc-god 女神住在那里——不可停。
+  # 本容器是【另一套】AgentOS，部署到服务器，承载世界侧 agent（亲卫/传令官/灶神/mc-god 分身），
+  # 经 minecraft_companion MCP 操作世界；数据目录独立（QWENPAW_AGENTOS_DATA_DIR），不与宿主机 .copaw 共享。
+  # 全新安装 qwenpaw → 数据根 ~/.qwenpaw（无 legacy 包袱），故挂载到 /root/.qwenpaw。
+  qwenpaw:
+    <<: *mc-common
+    build:
+      context: .
+      dockerfile: Dockerfile.qwenpaw
+    image: mc-qwenpaw:latest
+    container_name: mc-qwenpaw
+    volumes:
+      - ${QWENPAW_AGENTOS_DATA_DIR:-C:/Users/lzl19/.qwenpaw-agentos}:/root/.qwenpaw
+    ports:
+      - "${QWENPAW_HTTP_PORT:-18088}:8088"   # 本地 18088 避开宿主机 QwenPaw(8088)；服务器部署设 8088
+    depends_on: [autoplayer]
+
+  # ---- 7. minecraft_companion MCP（mindcraft-autoplayer，:4177/mcp，AgentOS 操作世界的桥梁） ----
+  autoplayer:
+    <<: *mc-common
+    build:
+      context: ${AUTOPLAYER_DIR:-C:/Users/lzl19/Documents/Codex/2026-06-20/new-chat/mindcraft-autoplayer}
+      dockerfile: ${AUTOPLAYER_DOCKERFILE:-C:/Users/lzl19/.copaw/workspaces/default/minecraft-ai-friend/Dockerfile.autoplayer}
+    image: mc-autoplayer:latest
+    container_name: mc-autoplayer
+    environment:
+      MINDCRAFT_AUTOPLAYER_PORT: "4177"
+      MINDCRAFT_MCP_ALLOW_LAN: "false"
+    volumes:
+      - ${AUTOPLAYER_DIR:-C:/Users/lzl19/Documents/Codex/2026-06-20/new-chat/mindcraft-autoplayer}/data:/app/data
+    ports:
+      - "4177:4177"   # 供宿主侧调试/宿 QwenPaw 过渡期访问；稳定后仅内网
+
+  # ---- 8. ollama（embedding :11434，模型已内置镜像，自包含） ----
+  ollama:
+    <<: *mc-common
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+      args:
+        EMBED_MODEL: ${MC_EMBEDDING_MODEL:-bge-m3-cpu:latest}
+    image: mc-ollama:latest
+    container_name: mc-ollama
+    ports:
+      - "11434:11434"   # 可选对外（世界进程走内网即可）
+
+  # ---- 9. qdrant（世界向量库 :6333，仅内网，独立于 MemOS） ----
+  qdrant:
+    <<: *mc-common
+    image: qdrant/qdrant:v1.15.3
+    container_name: mc-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+networks:
+  mc-net:
+    driver: bridge
 
 volumes:
-  world-data:
   mc-data:
-  npc-logs:
+    external: true   # 已有完整世界数据（world.db/chronicle/magic-state/skins/transmigrators 等）
+  qdrant-data:

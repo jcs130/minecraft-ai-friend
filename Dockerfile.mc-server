@@ -1,0 +1,16 @@
+# MC java 服务端镜像（NeoForge 21.1.233 + numen + settlements）
+#
+# 数据（mods/config/world/libraries/versions）由 compose bind mount 宿主 numen-sandbox/
+# 到 /app/mc-server，不进镜像。本镜像只带 JRE + 启动脚本。
+#
+#   docker build -t mc-server-java -f Dockerfile.mc-server .
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app/mc-server
+
+COPY sidecar/server-entrypoint-mc.sh /app/server-entrypoint-mc.sh
+RUN chmod +x /app/server-entrypoint-mc.sh
+
+EXPOSE 25599 25575
+
+ENTRYPOINT ["/app/server-entrypoint-mc.sh"]

@@ -1,0 +1,39 @@
+# build context = 本仓库根目录（minecraft-ai-friend）
+# 排除运行时数据 / 依赖 / 日志，避免进镜像（data 走 volume 挂载，node_modules 重新 install）
+
+node_modules
+data
+data-archive-20260820
+.git
+.gitignore
+*.log
+*.log.*
+**/__pycache__
+**/*.pyc
+docs
+design
+.env
+.env.example
+*.bak*
+*.pid
+
+# 测试/诊断脚本不进镜像
+test-*.mts
+test-*.py
+*test*.mjs
+*test*.mts
+check_panel.cjs
+analyze-skill-usage.mts
+magic-test.mjs
+rcon-test.mts
+ritual-test.mts
+ritual-e2e-3.mjs
+
+# 部署/本地启动辅助
+deploy-server.mjs
+start_webpanel.py
+start-panel.bat
+start-world.bat
+watchdog_world_core.py
+restart_world.py
+kill_world.py

@@ -15,7 +15,7 @@ import fs from 'node:fs';
 const LISTEN_PORT = parseInt(process.env.SKIN_LISTEN_PORT || '25565', 10);
 const UPSTREAM_HOST = process.env.SKIN_UPSTREAM_HOST || '127.0.0.1';
 const UPSTREAM_PORT = parseInt(process.env.SKIN_UPSTREAM_PORT || '25599', 10);
-const MC_VERSION = process.env.MC_VERSION || '1.21.11';
+const MC_VERSION = process.env.MC_VERSION || '1.21.1';
 const SKINS_FILE = process.env.SKINS_FILE || '/app/data/skins.json';
 const PLAY = mc.states.PLAY;
 
@@ -148,6 +148,12 @@ srv.on('login', (client) => {
   });
 
   upstream.on('login', () => log(`upstream logged in: ${client.username}`));
+
+  // NeoForge 1.20.5+ config 阶段 keep-alive：mc-protocol 的 keepalive.js 只处理 play 态 keep_alive、
+  // 不响应 config 态 ping；缺这行主服会 30s 超时踢上游（2026-08-21 实证，对齐 mineflayer game.js 的做法）。
+  upstream.on('ping', (data) => {
+    try { upstream.write('pong', { id: data.id }); } catch { /* upstream closing */ }
+  });
 
   // upstream 在 login/config 阶段踢人(白名单/满员) -> end(reason) 由 nmp 按客户端当前状态
   // 打包正确的 disconnect 包(直接 write('disconnect',d) 会因 1.21 NBT 聊天组件序列化崩溃)
