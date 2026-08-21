@@ -119,6 +119,13 @@ services:
       dockerfile: Dockerfile.qwenpaw
     image: mc-qwenpaw:latest
     container_name: mc-qwenpaw
+    environment:
+      # SECRET_DIR 指到数据根内 secret/，provider 配置随数据卷一并挂载，免额外卷
+      QWENPAW_SECRET_DIR: /root/.qwenpaw/secret
+      # 服务器侧对外 AgentOS，必须开启鉴权（云端部署安全）
+      QWENPAW_AUTH_ENABLED: "true"
+      QWENPAW_AUTH_USERNAME: ${QWENPAW_AUTH_USERNAME:?请在 .env 设置 QWENPAW_AUTH_USERNAME}
+      QWENPAW_AUTH_PASSWORD: ${QWENPAW_AUTH_PASSWORD:?请在 .env 设置 QWENPAW_AUTH_PASSWORD}
     volumes:
       - ${QWENPAW_AGENTOS_DATA_DIR:-C:/Users/lzl19/.qwenpaw-agentos}:/root/.qwenpaw
     ports:
