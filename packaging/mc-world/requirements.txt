@@ -1,0 +1,2 @@
+﻿# mc-world 后端 Python 依赖（QwenPaw 安装插件时自动 pip install）
+# 阶段 1 骨架无额外依赖；后续若 mc-admin 面板需要数据访问，再补充。

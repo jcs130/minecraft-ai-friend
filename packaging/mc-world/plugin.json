@@ -1,0 +1,55 @@
+{
+  "id": "mc-world",
+  "name": "MC 异世界",
+  "version": "0.1.0",
+  "type": "app",
+  "description": "标准版 MC + AI 原住民。numen 假玩家（史蒂夫/艾利克斯/村民）、29 条瞬发魔法、神谕祈愿、降临仪式、世界进化——一键安装，即拥有整片会呼吸的方块大陆。",
+  "description_i18n": {
+    "zh-CN": "标准版 MC + AI 原住民。numen 假玩家（史蒂夫/艾利克斯/村民）、29 条瞬发魔法、神谕祈愿、降临仪式、世界进化——一键安装，即拥有整片会呼吸的方块大陆。",
+    "en-US": "Vanilla MC + AI natives. numen fake players (Steve/Alex/villagers), 29 instant spells, divine prayers, arrival rituals, world evolution — install once and own a breathing block world."
+  },
+  "author": "mc-god",
+  "entry": {
+    "backend": "backend/main.py"
+  },
+  "dependencies": [],
+  "qwenpaw_version": {
+    "min": "2.1.0"
+  },
+  "meta": {
+    "pawapp": {
+      "icon": "⛏️",
+      "entry_page": "/apps/mc-world",
+      "launch_scope": "page",
+      "category": "game"
+    },
+    "permissions": {
+      "chat": false,
+      "storage": true
+    },
+    "runtime_dependencies": {
+      "java": {
+        "required_for": "MC 服务端（NeoForge + numen）启动",
+        "path_env": "MC_JAVA_PATH",
+        "auto_install_env": "MC_AUTO_INSTALL_BINARIES",
+        "auto_install_default": false,
+        "bundled_fallback": "assets/runtime/java"
+      },
+      "node": {
+        "required_for": "世界进程（天神化身，握 RCON）",
+        "path_env": "MC_NODE_PATH",
+        "auto_install_env": "MC_AUTO_INSTALL_BINARIES",
+        "auto_install_default": false,
+        "bundled_fallback": "assets/runtime/node"
+      }
+    },
+    "features": [
+      "fake-players",
+      "magic-spells",
+      "divine-prayer",
+      "arrival-ritual",
+      "world-evolution",
+      "chronicle"
+    ]
+  }
+}

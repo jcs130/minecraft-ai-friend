@@ -1,0 +1,129 @@
+{
+  "presets": {
+    "alex": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjMwNzU4MDMyOSwKICAicHJvZmlsZUlkIiA6ICI0ZGEzNDFmNjgyOTg0YTgwYjE2MTIzMGUxNmJmZWRjNiIsCiAgInByb2ZpbGVOYW1lIiA6ICJFZnJlZXRTUCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS80NmFjZDA2ZTg0ODNiMTc2ZThlYTM5ZmMxMmZlMTA1ZWIzYTJhNDk3MGY1MTAwMDU3ZTlkODRkNGI2MGJkZmE3IiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=",
+      "signature": "xDoJ1XDQaiJtMPfagD/HodwiiuFbo60JHAA/ATSG6brzyHrk4N5k0U4eGFPOge/4XHLUCalQq49OPHKzVsYUvmkuoiTVDMSQnz5FUhjrHTVoL0hS1VJ5Zy8heF7bC74aTo4SCIcZzr2FiTBwkGEOoiXMWHFz8kJT5XcgNFgWsemaz5DqZuIklIlR5ZKh9FXoOLGsJaMR3Nn0c159Ud4y5cJMDqTR1N5LpSdApJWqkerlc15ioc78CFsGwAY5ObpTanIIKJvVPuWt7fdGez/ErG4BmaHaoXwkWy99+BVAroH/ajMICI32Bcrmy99x1oIjWx0M7y0YWKQGIpiO4UF8blImZlEvKXJvIr3nI5M3+22el0JTtei0Qv1JqxWfrc3oX10Io9pc5OWtsxQ51U4DXaqKB6wUpxGH3sAIeBxrVu0G3HoEP4J8Xzsqndo0+6hQkuzTcA2S55n3b6IRXU8MqBBXpw3ul8qjjNIahvfK1J6FGd1VcUny5jU7wUt5/16WY27otWEH37sd/F3p1wyoGXiuaRrc3xHum7LKU/lIiQPhUF9wlqziTchQ9qTFFEIhsg8MUPEIntshP3XrvpezIWe4qXazcJTuBS2xWU9G4/CP8yfkKU0iY68Xq0ryr/wk3yd4ZIy0jT1vRoz6ujsPSA/csWhoEYHZrN7uz1Waex0=",
+      "url": "https://textures.minecraft.net/texture/46acd06e8483b176e8ea39fc12fe105eb3a2a4970f5100057e9d84d4b60bdfa7",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Alex",
+      "png": "alex.png",
+      "source": "mojang-defaults"
+    },
+    "ari": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjM5Mzc1OTQzNCwKICAicHJvZmlsZUlkIiA6ICI3ZDJhY2YzOGQ3YTQ0YjU0YTliMGNkYTZhNzk1YmNmYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJXaW5zdHJlYWtzT1AiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmFjNmNhMjYyZDY3YmNmYjNkYmM5MjRiYTgyMTVhMTgxOTU0OTdjNzgwMDU4YTU3NDlkZTY3NDIxNzcyMTg5MiIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9",
+      "signature": "laixzW3+FQ0sfEbZ+yLteVMH9AhUbLfc1cOiOxLQPULt8sTujdOA8UxZNWtvC5FQp+G8Ov+F4+drGYXxyu6xrh7VMuhbnJNU9h6slyXr6beLJQmczkUOKetsl8zywksfPv9xoEgOw/60jD024EfpJS53OqFln6wIgbGRXHcruuvE3QBYx0E3lMoAJCHQFJXSbN8gcojd1qC1saUgNfvPOEmSBMBQ9eP1YxHVbLzzbx4tljG00ppby8mkgTAzArwMbJJYNBYaIjTjwMhBO1oOrJosgJ3Sd6EIOYZIzOmtruLbD8TRrjEiEggkht6g5GkzLOJBtPCqk8EuGgy2+b78sGHkMfTk9deXsF+ilrVlv8Jdr3LkStn4lB06g85iCMGe7BG0bLkbhy1EYqVQuC/CARuJVNtmcem0Wk4AuA5iacdZ9f5OVq2PkLY4auJeSWbDDHjth741WAz/xou3bzeoUuoXH00cfzh+CTkrGMlDGJQj3U+OJLuH/iaERnatT2lTw4xXKuMnT9fG6DhE+r19vsqxBwTv5c0kHgiVEk2pjU41wZEcKjEjVPaRTRi7OfjWcCNEjW6ySyG8A8JGL+9uGI7HLnSXX2oiOeK3WxhIR1ueQlsXS25LmGBAAFruM+gKPL1gAKheHgli4otaRFu3WVepeuXeAnocxTW70WwkbJo=",
+      "url": "https://textures.minecraft.net/texture/6ac6ca262d67bcfb3dbc924ba8215a18195497c780058a5749de674217721892",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Ari",
+      "png": "ari.png",
+      "source": "mojang-defaults"
+    },
+    "efe": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjI5OTg3NTAzMywKICAicHJvZmlsZUlkIiA6ICJmZTE0M2FhZTVmNGE0YTdiYjM4MzcxM2U1Mjg0YmIxYiIsCiAgInByb2ZpbGVOYW1lIiA6ICJKZWZveHk0IiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2ZlY2U3MDE3YjFiYjEzOTI2ZDExNTg4NjRiMjgzYjhiOTMwMjcxZjgwYTkwNDgyZjE3NGNjYTZhMTdlODgyMzYiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==",
+      "signature": "RWfhiEsBA1JGObQEyAWRgZs+vnFQOx284fSL7PR7AAzkN7HrlsWfg2Ll14+WggyQ8i9OxszrmFwqH5id4lwqThGRV5f2wqhAVN7CWL1NcS79C9w2hJ1H3p7OZr1i2U+bXszBSzDvjsLd3n9ED1X71Tbvc73YYkMo205NxM0PNorpJYM1UbO4fL9jrKiz/6NLpXTmCJrUFkwJDmWytk43/gAdy1WHl64AFtoAyaR1rI3dVuGvmEAjvodhB3o/jvkZOW8prrkHAM37p+iSIgva2+a6dnj/uZCxD9vERQPhbNS9RpTd0Zxryz9NO2+28iUpzWHPUvKmw5HkMymuSWty3SHuvnTCDLAdLfaQv9FtAwF21pQB8kRXkHPPa//5KF8KKufzUfcUsrD4VMxxfMP4FOP8a7UMLJmcnuHhKqiACcGRrLFUl+T2cK2ZvZ0rIzOw2+3541shDtaJiwxIkdknurI0jBrgUxqhGdpLPVz9hrJ91DpWUWjnQSi9l0o8fHXWwykxMaiPQXmRzD2F1qqsUlkrsexvVvkEMuEFWcOixNJquqN2ZtpqEY+XAY04PVljTBmaL7+cnzI/3plJzTgJM5p+6P+TYmNk1Km2MlUTPd+HAjNm48rzZcuxiVmMw9EO9PJTh+Gy3ryrggQSinFn0rVHnggKt5iW2yexGxel9nI=",
+      "url": "https://textures.minecraft.net/texture/fece7017b1bb13926d1158864b283b8b930271f80a90482f174cca6a17e88236",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Efe",
+      "png": "efe.png",
+      "source": "mojang-defaults"
+    },
+    "kai": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjQ2MjEwMjU0NSwKICAicHJvZmlsZUlkIiA6ICI4MTc1MTc4NzQ2MjE0NmY2YjllOWM3MTYyMWRiODQwZSIsCiAgInByb2ZpbGVOYW1lIiA6ICJGZWxwTWUiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjI2YzYxN2ZkZTViMWJhNTY5YWEwOGJkMmNiNmZkODRjOTMzMzc1MzJhODcyYjNlYjdiZjY2YmRkNWIzOTVmOCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9",
+      "signature": "EuUMaoZBuNwRAVIyAXdpK6UpJ66Nd2nOWXLVyRk/o19YLRUl6EHKOcZpUcs4dEGNFDjRIQOhr7YwiSwTwgN1arLVfKd32AAWaiKhw/Ti882ysD532j7F959NjDo4K6tZpQ46v+3pzEzXYIfjt58WIYvs6PrP6D8mzs6l0QvnDnTj+LKw2930q8g8P+apKmv7kxQQ+9J54Mxkh7O8freHjTUELWwXkk2Z1/Ldn5YjdHivRWZNXNzMYA57v691TqNmzaNt3ndz3IAPYzSJH/vLsnTpkKcN0lgsrs+D4S1vslT1wQ3zY40UIC1rt1SkiVU2aR9owNUgB5m78vCO2dF+4uiWGHPz/2+n8y5Q/qgJifuxdEWZzWyVON2w6dyXVuS1bQ2YZI7udYPxkKO9ZNGwI0xXntHdN/+LqEmk+Mf/LeLq//DEpJn216aNls+sqH4bviaIN4sQ6/vsQW0XEHCo3rnu4xA3tCqMEtP5E/BDKOFbASgCW/nScrZo5y/zY6+Jb3Zy1WNRBXJ73UWzJIqp8jD688QB21GPCVDJrhELIGekqx7lfCtECDrCNvdEL/tNxt+xPimTDnXnCQNOEAGcsXinS8ejaZoA9j6+fWjmqM4z83nkC4z0ZuY5J9T4V1YU62+6Yfb9NnAITGLHdEzR66Ir5tI6lNb48k5ODisQ5Ag=",
+      "url": "https://textures.minecraft.net/texture/226c617fde5b1ba569aa08bd2cb6fd84c93337532a872b3eb7bf66bdd5b395f8",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Kai",
+      "png": "kai.png",
+      "source": "mojang-defaults"
+    },
+    "makena": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjMwNzU1Mzg2NSwKICAicHJvZmlsZUlkIiA6ICI4N2RlZmVhMTQwMWQ0MzYxODFhNmNhOWI3ZGQ2ODg0MyIsCiAgInByb2ZpbGVOYW1lIiA6ICJTcGh5bnhpdHMiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2NiM2JhNTJkZGQ1Y2M4MmMwYjA1MGMzZjkyMGY4N2RhMzZhZGQ4MDE2NTg0NmY0NzkwNzk2NjM4MDU0MzNkYiIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9",
+      "signature": "b0jDBscz/qjerkvWAQtxFdT7QuzfZ9G5iDeMwveC6AImon7Qm6TDpwzz2pzt+/0X55B4ni4ydM+C03hqfyr4GQ2k2CB7jKQKq7d8b83v+xkC80uDoZViNwYVdjMex8GCa0D5SlKtblyoW3lfCRrtM/OE+lb/R+LtYPGFMejEHkrdVsvL84o12vaIeIgLljYHKgmYGBBc07/C86tLkr+IMvStfWAW2j1sOktuMsTCUWxWE8XbPR24P32vK4jQZ/CwYI/XpbKLYNjqFhtJy3kfV0OeCKQQL8sxxOdgbbKLRaQfA/m1skJpZy8M0Q2Ei22c3URYlhK2xWRyAn/sZZRnHa+MKIwOs20wMkb0xeY3Tv7gq4i1uzJyEb7BZRqfqDdhRog0qrK9pKaAcB4H6r1LThLYLp8pFrv04Z0L2oftXCHqkdDcIDxlobYnO9mM7HObf3VrJZIM31tQVMLyc/sSyaupTNgFrmroIitg+yhBJN/GZEcUDLRzBqHaEZzntvquI18UfhpVXhYBE/W5Xg+YOa9GwQi1TtL8nbHAjsD0bAii61S3p2v/XcCpsuYLc01gF4J6U+JmAVit5Kg9yzlNdKZKUDu2nts2jOBCS675sVsZbSHjuTwRgMVqumM3uUYWozGTbbTIlIPMQBvDexP0BM9aaoHsRTtUBGWq+50uMi8=",
+      "url": "https://textures.minecraft.net/texture/7cb3ba52ddd5cc82c0b050c3f920f87da36add80165846f479079663805433db",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Makena",
+      "png": "makena.png",
+      "source": "mojang-defaults"
+    },
+    "noor": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjMwMDA0NTk3MCwKICAicHJvZmlsZUlkIiA6ICIwODFiZTAxZmZlMmU0ODMyODI3MDIwMjBlNmI1M2ExNyIsCiAgInByb2ZpbGVOYW1lIiA6ICJMeXJpY1BsYXRlMjUyNDIiLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmMxNjBmYmQxNmFkYmM0YmZmMjQwOWU3MDE4MGQ5MTEwMDJhZWJjZmE4MTFlYjZlYzNkMTA0MDc2MWFlYTZkZCIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9",
+      "signature": "dZyB5xHwSpFdAWa97CPszBpcCVftab6nlaGG7CUkL9RSm+I4nrWOqka8cRWPq0ocpv7uMm4/l5MonsSI7CeInuT6SiJrFI2rlLVelHNmrwkC7VklvFIFfB5LGYpRU4ChRpOfdVilFBRVYt1lUB3bADZZ+UdIZnAwD1PV6muk1hbj/PCFUCBwBn4CAmSXDxi3D0zxVbY1/Bqekc+c9+jOGZ756dukyciQhpmGL8oSfNFLpC3Hthq4g6izaU2J515OYg8079T9UlC13XywaFJWTWe3lRrfwNfq4YNvyBY9bVcihrGX2YGPKpw6MdT42zn1k9E1PoP4fl5o6leesDXRps5CQV28qixzdpJbHQbvK1AtvbCQCSj8l3nBO9J006pul/FmST2Bx9dLCrpvQSOynMFHHplLm+Nlbsa0vAX+eldLpD4Vv39obpZ16WcgkulIJ72ivOjw3HCdn9pIynXupL8KSLzPkBYfqr+esoIkmB84Fc6F0isOnnrHamCqcDYhCpFdyd8gPgFGyI5E9vUw84d9gSHJtLHbxk0IowHbRs0zrTbAwO6sGX2/q91cUjFSvzOEmSsvGbl6x91G7ATirHLZcRgw6Ubyv7CleJbX0UpSAmP+nXNuZvslNRPo4/CNgOTl0LEQkfVeYEBd4Qz3F5+VKSe8MI2FtGB3QI1dV/c=",
+      "url": "https://textures.minecraft.net/texture/6c160fbd16adbc4bff2409e70180d911002aebcfa811eb6ec3d1040761aea6dd",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Noor",
+      "png": "noor.png",
+      "source": "mojang-defaults"
+    },
+    "steve": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2Njc4NDIzNzE4NSwKICAicHJvZmlsZUlkIiA6ICIzOTdlMmY5OTAyNmI0NjI1OTcyNTM1OTNjODgyZjRmMyIsCiAgInByb2ZpbGVOYW1lIiA6ICJ4WnlkdWVMeCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS9kNWM0ZWU1Y2UyMGFlZDllMzNlODY2YzY2Y2FhMzcxNzg2MDYyMzRiMzcyMTA4NGJmMDFkMTMzMjBmYjJlYjNmIiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=",
+      "signature": "J5raW3RDcKw7WhS0GjaQCyPY5ce+0nxfUpZHU4mbVfDOFRS25cy/6DYCOXkCBE+aOZ0aBl7i9tHzdXhtuDZRmve+JSHWpZM6Eo+SEG0O/5ichkpMmtfMCDKbaCQdt35FYLubp2Ht/GieUH2y0F7MFvjXZeSmxAt98s+FvNccSdFfds24l0C+/Vs0NL1lCvVFIcjEtXYGwaXhxZc/Lcl7CPtGx1c3HHpP1MpwNWNALXa6fWMznSx1+YzHQFfw5C1iR9/2r/l+iaboWbhz/q9S6XHUaqOdygfg7E2JIA22J0t4lHGYb4OD6XG3CbfFNBOtGkZ0oVEZTS2FZ4ZO+EZP4OYMJsob+VgqoyOD3sXdkfN8copSSz7yN4TNcc9cPq0cU1pdWOoJkdh/nUqGHNn8rzOoCcUpsw14Nzg25REV9zTQLGOyflernRcXhlWVEcg2RHUpptXbkwMw0omgbFj7ZlTD+C9WZ9NIaq6yLVeJA3txRqb/YAgjYa1+X3g/X1DHHeHpg925Rt5y9GtF9XrOfahwkO/eG8dGSHiAGYKYY0rspu4P9uSIac/9OXbb8ssEsiW0/xe/cTZsPQ5orD16u468o9nDupa0dGPzxUrKJ+8EqnqGFCbP0H+38N9/5iEsV49cyxk6L6PFPy4Mio/ejkU5WvWlbfYYiQ6W/tMPvyw=",
+      "url": "https://textures.minecraft.net/texture/d5c4ee5ce20aed9e33e866c66caa37178606234b3721084bf01d13320fb2eb3f",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Steve",
+      "png": "steve.png",
+      "source": "mojang-defaults"
+    },
+    "sunny": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjMwMDI4NDI1NSwKICAicHJvZmlsZUlkIiA6ICJiNTM5NTkyMjMwY2I0MmE0OWY5YTRlYmYxNmRlOTYwYiIsCiAgInByb2ZpbGVOYW1lIiA6ICJtYXJpYW5hZmFnIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlL2I2NmJjODBmMDAyYjEwMzcxZTJmYTIzZGU2ZjIzMGRkNWUyZjNhZmZjMmUxNTc4NmY2NWJjOWJlNGM2ZWI3MWEiLAogICAgICAibWV0YWRhdGEiIDogewogICAgICAgICJtb2RlbCIgOiAic2xpbSIKICAgICAgfQogICAgfQogIH0KfQ==",
+      "signature": "duGmueLBvFNcwpQdRUgjB+GfLkCUFv/3Ripjv35ytisCmKL6R6GjOmlUmjrMvQ+e0HFEAzeiRN9p9tUYBflTnGC7+zCpKbgyuinl6zldDCM7Ofr2VA8IYUE1GVrrdhK5XSm8ngNAX7mSIHfylb8U2tll7ks+Tr6p1mvPRCwMVplS8LGauPVwNARSUkmH9+yF3DeegBXTYTBUeaVe9k5SQVag2vdA2AorWmrSv0jiazd2JukQDwuZyDiz8cQ3DXDeM7nthWBCBebud9wy95lQ14/2IywvZJbMDgj8JqvftSTvIbUX0oSkp+QOnJRHy6EAJQDGBl24gZc99RIgvlaqvF79Tg78Y8XqsPzXzoVz0kUBp45kq+8zx4BSVT4QB1cpdJqqOPdlR3Yn0PVoRideawPaaITwp0zLRNdVxM4ATL/UwPKavx9mRAErWmKTBvM9nBBTcxo+dw5B5sHmVR47VGsakDk91o9tSbOYdVRw0Na3iFhgjZ5svU7GJ4/OZOJuVgxNRdH/5+l3PsLyb29Lpei5SrBUOLGruplF+2Ch3QbGumfFGuejrrxSKriY0hv4jD3daIvADGZJmuJ/K7pTB9xDylT7iy7v9c99go/l1JU6DTmYle1PeqplUjcxmspGFwHQPzv7D4A5/2w38KFq13wllNeTgFGJGED4Ssuq3lY=",
+      "url": "https://textures.minecraft.net/texture/b66bc80f002b10371e2fa23de6f230dd5e2f3affc2e15786f65bc9be4c6eb71a",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Sunny",
+      "png": "sunny.png",
+      "source": "mojang-defaults"
+    },
+    "zuri": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTY2NjM3OTU3Njg5MywKICAicHJvZmlsZUlkIiA6ICIwNTkyNTIxZGNjZWE0NzRkYjE0M2NmMDg2MDA1Y2FkNyIsCiAgInByb2ZpbGVOYW1lIiA6ICJwdXIyNCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS9lZWU1MjI2MTEwMDVhY2YyNTZkYmQxNTJlOTkyYzYwYzBiYjc5NzhjYjBmMzEyNzgwNzcwMGU0NzhhZDk3NjY0IiwKICAgICAgIm1ldGFkYXRhIiA6IHsKICAgICAgICAibW9kZWwiIDogInNsaW0iCiAgICAgIH0KICAgIH0KICB9Cn0=",
+      "signature": "yYEJoHXLYOjJOzlkUI/WbKyGCTWE7kMiIKOP/9IS8H6+3ANBjvLg8T9pXLiKUy7nZ50BPycxAHoBLcQR2Moa9TNqvuL9RCC44Osvsm5Wf+wPGSw+WFwrtt4WhvXK3f0bg8VFbqAP+5Ik4bPWZdHb8afjV8hb7+8JJxQYSgNArM4ZMJTSdQl/7Brshhxq59/KDGvJKUYYVZZU05fM2okCPJlsSOMbbRixwv3dBbI8sAYw5E9Mo+t59r/RsrMX7W/TJLMUSLhPGWhrC0SvyRYk0DpTTcDtlKpQJKbsOkoiKvjwT6cidHl8pEKgWmJERhGxCNRt1rpyjN4YNH103bNEBjqAI3gulTs4yqeq/GiEQRdu5fegzmIRTNPvLycUp1TuznmY+W3Nx6QhQgoNNfNRfLCLwljhs6lq9Us3qBgjX48NIWIyAT431yhzxZVsJk54NQtTAngmJQgut/nd5k7cO1fe5SjI6Y/fGmPE2V6kUNBV+tecMwIDUyaE9sjXIXp5IU8JaLs/tMo2EFwhHgRRsmYZf5n9wnza+Bj0P1lCxDj2ZXbg/cRT+jTWpUfPZn1yM6PMPsnkV4jlh5Bo6VQvqzbZ2mm1Y+z71Zi06EEiE0h483N3chPkOVz5r2vbapkacIEIEKkCoMVOYqW4mmLwLgLXaT6vOUCtOKQR4QO5E08=",
+      "url": "https://textures.minecraft.net/texture/eee522611005acf256dbd152e992c60c0bb7978cb0f3127807700e478ad97664",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "Zuri",
+      "png": "zuri.png",
+      "source": "mojang-defaults"
+    },
+    "notch": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTYyMDgyMzMzMDQ5MSwKICAicHJvZmlsZUlkIiA6ICJmZDYwZjM2ZjU4NjE0ZjEyYjNjZDQ3YzJkODU1Mjk5YSIsCiAgInByb2ZpbGVOYW1lIiA6ICJSZWFkIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzJmZjZkOTcwYjFiNjI0M2ZlNWE0NGM1YWM1NDBjMzIwNTA2OTg3YTVjNTViYTk5YTkwZjc1OGIwMGQzZTA1YTEiCiAgICB9CiAgfQp9",
+      "signature": "hYXq2rTaVqTdQ0DfgBj6qQLlcc1UOreIeYO5ChO/OZkDaBWE5VosM9+1Y8AOq74+iAv+xASGa5YXLVJ0eqd6ISUaiogiJ4mtSQLbYycI/v9I/DULMGuY1riPTBvUARUYFJMYjOvZQnURlzXot/6og6X0Tr0xSxeoxQB0j1JhXIM8pjjOWH9x9aCWtB2PMyMIN07hFEUNJbIqXc6/ITB0LW/tJWNedIdVQljXzUvJ8r89QvXvcN07S7jflYy3SVEFfh9iUWqRyAt8aMl3Y5ZdRDY04Le6Wi9qJORDTAUL+siCW+RO8XzEoywsodbDHIzIIKuG2OmqfZyf6KU1WCPgfBnU3gYUrKdAIg8AdVGDZbSaUxVkjR3bwwP67dqcOK3XXb7pACgBYGLrgPi8cu6Bp1+plRaA81xmXIrrbHxmqqfFk77dihJsOzQXTTM8dnPEZhOrnPkpMsugk3do+qd8gOtRaqbwuLfIVFrYTHR6C09vSLMwgUIt4CMiEvGwf8UHS7xJpqqEcSfdvbfauXpi9t0e6dCGNmkYOQ+W6TCWTZPEwppoZDIoMZpMIUnBvjZ2lFkkBefIqWakKXhr76PV7cx3Ra+w+7V4Hf7bpxPCcGDUIumBGlRq2T1AreSvrs4eQqlVEBaVAjfK8S2o0gfWkQsozT8WF2064PhklcXp9Gs=",
+      "url": "https://textures.minecraft.net/texture/2ff6d970b1b6243fe5a44c5ac540c320506987a5c55ba99a90f758b00d3e05a1",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "notch",
+      "png": "notch.png",
+      "source": "mojang-account"
+    },
+    "jeb": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTc0MDA3NzgzNjc0MywKICAicHJvZmlsZUlkIiA6ICI4NTNjODBlZjNjMzc0OWZkYWE0OTkzOGI2NzRhZGFlNiIsCiAgInByb2ZpbGVOYW1lIiA6ICJqZWJfIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzdmZDliYTQyYTdjODFlZWVhMjJmMTUyNDI3MWFlODVhOGUwNDVjZTBhZjVhNmFlMTZjNjQwNmFlOTE3ZTY4YjUiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzllNTA3YWZjNTYzNTk5NzhhM2ViM2UzMjM2NzA0MmI4NTNjZGRkMDk5NWQxN2QwZGE5OTU2NjI5MTNmYjAwZjciCiAgICB9CiAgfQp9",
+      "signature": "JclHvNjaqEVjeC1c+ujhDlh4bqBVr3U9DdHREzlbsxsX+T2/8chxCf3A3Lb/yRiLXlbchND96W6KSqPV/srrskJZ9qRJGdq/iWE9UrmDNYRCsuEqwOFheCswS8sR2xJhDq+x8ffd3r+cBRx4r62KXKz00Op9GNQ9exL9NGmqF5KlRWo3e9dD6fR8tlnIMkdMzlOEfkOAeasuAVwOXvwDKlxcVYY+oNMIAfVyUhW/djUQuxOnFuvdFQpVK9sSzkn0hVsVSIw4X/Q9aH9zmdsHTTJUqWTIKEYNDTEqhIdUlH7BKZKytg5gG6etBbndOydlrDeMJE/MlnV99EOT/wGLg2+eTnJxtIKs4sup1EnfXftYwjM9BfkIsUNOXpSb17HEDCZwDRelObwwD4WsNOLgObw0Nus2HPQqWAg9Kv2NilA3YjZKbPKDtOBQzKD1ohqlxae4xnPXEEVhqITGoOhEQHXhmIqan+pZsD6X0XE7kZ0EidCheN/3E6vuIyETXj4fo1RKuwFvNFzCb8UEHISuhdzvbLuraHA7HQ+c9X3HuQxjINFg2xDvVXG5rMTXeWc6c20V8PTrn7dbpIZaPP+xOdj52ZECcdx4+GDYYDLrXE6QQdsIq2Rk4RkzlaT4NSxhGole9HAFFDQtqqvQrH5knXeederqbEeyJgEAWCvepsE=",
+      "url": "https://textures.minecraft.net/texture/7fd9ba42a7c81eeea22f1524271ae85a8e045ce0af5a6ae16c6406ae917e68b5",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "jeb_",
+      "png": "jeb.png",
+      "source": "mojang-account"
+    },
+    "dinnerbone": {
+      "value": "ewogICJ0aW1lc3RhbXAiIDogMTc3NTMyMDQxOTMxOSwKICAicHJvZmlsZUlkIiA6ICI2MTY5OWIyZWQzMjc0YTAxOWYxZTBlYThjM2YwNmJjNiIsCiAgInByb2ZpbGVOYW1lIiA6ICJEaW5uZXJib25lIiwKICAic2lnbmF0dXJlUmVxdWlyZWQiIDogdHJ1ZSwKICAidGV4dHVyZXMiIDogewogICAgIlNLSU4iIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzUwYzQxMGZhZDhkOWQ4ODI1YWQ1NmIwZTQ0M2UyNzc3YTZiNDZiZmEyMGRhY2QxZDJmNTVlZGM3MWZiZWIwNmQiCiAgICB9LAogICAgIkNBUEUiIDogewogICAgICAidXJsIiA6ICJodHRwOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzU3ODZmZTk5YmUzNzdkZmI2ODU4ODU5ZjkyNmM0ZGJjOTk1NzUxZTkxY2VlMzczNDY4YzVmYmY0ODY1ZTcxNTEiCiAgICB9CiAgfQp9",
+      "signature": "Y9Z2lGLcCBrVIWIC2ECACLw9svmXR09JvvXaAHFHbQyLXsvVRymKUmHXE6nT6+xzuMC/e8iUDfHcoI7yCjHgH1Rf7CNRS48AbCqVlaEzcjdPYpeOHJIuftSE/uwL5nQ7ZoYiW8hLZb6XKxabdYVe5NdPX/aKL4r4yVTZyeEaUH2P7Ftl7H7H1XtQkTKdVn1tjewxed8gccTBK9qqXMMY5FBwNnX5CDNfEjgwwI8JcUmCSFKMEvSE4SsWs+nIEXqBmt1gLUc15DiAsxMGEQ89l1C6BxVl54bBin2dDpRO2dGYSTCgH9xpyOWK6R+mAq4nR+rha3ZbSW9NDygOeaAYRiVLBhm/AKcOJ1kOjrYXf3aedHBvcWyizlA7LcF4LKnMzNNe4Rfu5AHklMq6gPvinT2/FZyxepUwh4Cncx1p+LNX/Ptiydffx7yATBDSYS/vKMbv2s/ePMDF426t+8VHrHtL074qlVymcw5kBtTzDHZ6vxwoskZ+Ht7RL8IRq42Qfe05fi17t+LUT+HzOeymCPloIEjpd0XiYG2wlMAuBkYWCm+30/Brq0mMSsR7DnlhkI1mkV/8XIF/jMUpYCQe/9pl7eGwNaxo4k+f+Gc679LzQF834pLCdsvg2Xd2ZgJcifvncnLDYioP/xonic50e/h66uAnoGdH2yMKT99FZ4A=",
+      "url": "https://textures.minecraft.net/texture/50c410fad8d9d8825ad56b0e443e2777a6b46bfa20dacd1d2f55edc71fbeb06d",
+      "model": "unknown",
+      "mineskinId": 0,
+      "displayName": "dinnerbone",
+      "png": "dinnerbone.png",
+      "source": "mojang-account"
+    }
+  },
+  "assignments": {
+    "Steve": "steve",
+    "Alex": "alex"
+  },
+  "_note": "presets=服务端皮肤库; assignments=用户名->皮肤预设(加入时由 skin-proxy 注入); 由 fetch_presets.py / 面板 API 维护"
+}

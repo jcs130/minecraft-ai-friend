@@ -1,0 +1,26 @@
+{
+  "name": "minecraft-ai-friend-world",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "World-side server project: goddess, magic, chronicle, offerings, observation deck (pairs with dsh-minecraft-agent)",
+  "keywords": [
+    "minecraft",
+    "mineflayer",
+    "agent",
+    "ai"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "mineflayer": "^4.37.1",
+    "mineflayer-pathfinder": "^2.4.5",
+    "mineflayer-tool": "^1.2.0",
+    "playwright-core": "^1.62.1",
+    "prismarine-viewer": "^1.33.0",
+    "tsx": "^4.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "typescript": "^7.0.2"
+  }
+}

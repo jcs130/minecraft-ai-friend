@@ -43,3 +43,22 @@ __pycache__/
 .peek*.py 
  
 data-archive-*/ 
+
+# 分发版打包产物（大二进制，git 不跟踪；打包时由 scripts/stage-*.py 收集）
+packaging/mc-world/assets/mc-server/
+packaging/mc-world/assets/runtime/
+packaging/mc-world/assets/world/node_modules/
+packaging/mc-world/dist/
+packaging/mc-world/logs/
+
+# 分发版运行时产物（世界进程首启自动生成/重建，不入库）
+packaging/mc-world/assets/data/rcon-secret.txt
+packaging/mc-world/assets/data/world.db
+packaging/mc-world/assets/data/world.db-shm
+packaging/mc-world/assets/data/world.db-wal
+packaging/mc-world/assets/data/world-chronicle.md
+packaging/mc-world/assets/data/world-heartbeat.json
+packaging/mc-world/assets/data/world-requirements.md
+packaging/mc-world/assets/data/saga-store.json
+packaging/mc-world/assets/data/terra-report.json
+packaging/mc-world/backend/__pycache__/

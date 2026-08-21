@@ -1,0 +1,41 @@
+{
+  "_comment": "住民档案索引。每个住民一份档案：人格层（backstory 身世 + persona 注入 mc-loop 的人格）与技能层（innate 初始技能偏好，走 MC 魔法系统）解耦——角色只带思考方式/行为风格/性格口吻，不带原作技能进 MC。backstoryFile/personaFile 相对本文件所在目录（data/）。origin: ip=现成 IP 人物，random=随机生成身世。innate.preferredAtoms 是降临仪式自选初始技能时的偏好排序（对应 magic-atoms.json 里的 atom id）。分发版默认两位住民均为 Minecraft 官方角色（Steve/Alex，玩家化身，官方无固定背景故事）。所有角色可自由增删改，定制方法见 CUSTOMIZE.md。",
+  "transmigrators": [
+    {
+      "id": "steve",
+      "name": "史蒂夫",
+      "username": "Steve",
+      "origin": "ip",
+      "source": "Minecraft 官方",
+      "epithet": "方块原住民 · 开拓者",
+      "backstoryFile": "transmigrators/steve.backstory.md",
+      "personaFile": "transmigrators/steve.persona.md",
+      "innate": {
+        "preferredAtoms": [
+          "terraform",
+          "give",
+          "strength"
+        ],
+        "reasoning": "方块原住民：采掘与建造是刻进骨子里的本能（大地塑形），随手便能造出趁手工具（造物），正面硬扛的蛮力（神力）。他相信双手能改变世界——一镐一斧，开拓出家园。"
+      }
+    },
+    {
+      "id": "alex",
+      "name": "艾利克斯",
+      "username": "Alex",
+      "origin": "ip",
+      "source": "Minecraft 官方",
+      "epithet": "方块原住民 · 猎手",
+      "backstoryFile": "transmigrators/alex.backstory.md",
+      "personaFile": "transmigrators/alex.persona.md",
+      "innate": {
+        "preferredAtoms": [
+          "tp",
+          "night_vision",
+          "heal"
+        ],
+        "reasoning": "原住民猎手：来去如风的高机动（空间传送），暗夜如昼的警觉（夜视），荒野求生的自愈（圣愈）。她相信活着才有输出——先站稳，再出击。"
+      }
+    }
+  ]
+}
