@@ -1837,6 +1837,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
       return null
     }
+
+    // 2026-08-23 造物主谕「女神私聊尽量回复」：正常问题（未带「问：」前缀）也
+    // 一律直接答，不再强制前缀。启发式判定是否信息性问句（how/what/where/when/why）。
+    // 只认「确属问问题」的词，避免把祈愿/求助（求/帮/给我/能不能…）误当问题。
+    function looksLikeQuestion(s: string): boolean {
+      const t = s.trim()
+      if (/[?？]$/.test(t)) return true
+      return /(怎么|如何|怎样|怎么办|为什么|为何|啥|什么|哪(里|儿|些|个)|多少|几时|何时|多久|在吗)/.test(t)
+    }
     async function handleWhisper(username: string, message: string): Promise<void> {
       if (username === bot.username) return
       // VIP 特殊监听白名单（2026-08-22）：白名单内的真人旅人说的一切——即便只是
@@ -1929,6 +1938,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           return
         }
         // 超时：落入下方祈愿流程
+      }
+      // 造物主谕 08-23「女神私聊尽量回复」：正常问题（未带「问：」前缀）也直接答。
+      // 置于自报家门之后、收尾冷却之前——已过引路期的玩家普通问题同样被女神答复，
+      // 且不会被收尾 60s 静默吞掉（只有纯闲聊仍在静默窗口内）；祈愿/求助/闲聊仍
+      // 落下方祈愿流程（神恩有价不受影响）。answerQuestion 自带 15s/人节流以控成本。
+      if (looksLikeQuestion(body)) {
+        answerQuestion(username, body)
+        return
       }
       // ── 自报家门收尾后冷却（2026-08-21 防一直聊）────────────────────
       // 女神收尾语已引导「去选天赋」。其后 60s 内，穿越者的自然语言一律静默
