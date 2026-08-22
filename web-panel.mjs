@@ -242,6 +242,9 @@ const PAGE = `<!doctype html>
   .kvrow { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:13px; }
   .kvrow .k { color:var(--dim); white-space:nowrap; min-width:62px; }
   .vsel { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:2px 6px; font-size:12px; flex:1 1 auto; }
+  .npcvoice-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; margin:4px 0 8px; }
+  .npcvoice .k { font-size:12px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .npcvoice .vbtn { flex:0 0 auto; padding:2px 8px; font-size:11px; }
   .hp { color:var(--green); } .food { color:var(--gold); } .bad { color:var(--red); }
   /* 等级徽章 */
   .lv-badge { font-size:12px; color:var(--gold); border:1px solid rgba(210,153,34,.5); background:rgba(210,153,34,.08); border-radius:10px; padding:1px 9px; white-space:nowrap; }
@@ -489,6 +492,16 @@ const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；�
   '阿宝': 'xiaotian',          // 少年
   '灯窝·阿禾': 'xiaotian',     // 少年
 };
+const NPC_SPEAKERS = [ // 面板「语音」卡可逐个指音色的全部已知 NPC（对应 data/village/villagers.json 的 display）
+  '铁匠·岳山', '甲匠·石磊', '书商·墨白', '书商·云笈', '货郎·福伯', '吟游诗人·风临',
+  '守夜人·烛九', '神官·静水', '集市掌柜·通宝', '老农·禾叔', '牧羊女·小满', '渔夫·浪伯',
+  '墨先生', '阿宝', '货郎·铜板', '公会接待员·岚', '灯窝·阿爹', '灯窝·穗娘', '灯窝·阿禾',
+];
+const ttsNpcOverride = {}; // NPC 名 -> voice id（面板可改，存 localStorage ttsVoiceNpc_<名>，优先于 ttsBySpeaker）
+for (const name of NPC_SPEAKERS) {
+  const v = localStorage.getItem('ttsVoiceNpc_' + name);
+  if (v) ttsNpcOverride[name] = v;
+}
 let ttsVoiceList = ['baolin','qingxin','taozi','xiaotian','xiaoxue','xiaoyi','yunjian','yunxi','yunyang'];
 let ttsSeen = { chronT: 0, feedT: 0 };   // 去重游标（记最大值，避免重播历史行）
 let ttsBooted = false;                    // 首次载入只记游标不播，防开局重放全部旧台词
@@ -542,7 +555,7 @@ function cleanTtsText(t) {
 function ttsVoiceFor(speaker, kind) {
   if (kind === 'goddess') return ttsVoices.goddess;
   if (kind === 'player') return ttsVoices.player;
-  if (speaker && ttsBySpeaker[speaker]) return ttsBySpeaker[speaker];
+  if (speaker && (ttsNpcOverride[speaker] || ttsBySpeaker[speaker])) return ttsNpcOverride[speaker] || ttsBySpeaker[speaker];
   return ttsVoices.npc;
 }
 
@@ -704,12 +717,21 @@ function renderTtsForm() {
   const goptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.goddess ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
   const noptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.npc ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
   const poptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.player ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+  const npcRows = NPC_SPEAKERS.map((name) => {
+    const cur = ttsNpcOverride[name] || ttsBySpeaker[name] || '';
+    const opts = '<option value="">（默认' + (ttsBySpeaker[name] ? '：' + esc(ttsBySpeaker[name]) : '）') + '</option>'
+      + ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+    return '<div class="kvrow npcvoice"><span class="k">' + esc(name) + '</span>'
+      + '<select class="vsel" data-npc="' + esc(name) + '">' + opts + '</select>'
+      + '<button class="vbtn" data-npct="' + esc(name) + '">试听</button></div>';
+  }).join('');
   el.innerHTML =
     '<div class="kvrow"><span class="k">女神</span><select class="vsel" id="tts-v-goddess">' + goptions + '</select><button class="vbtn" id="tts-t-goddess">试听</button></div>' +
     '<div class="kvrow"><span class="k">NPC 默认</span><select class="vsel" id="tts-v-npc">' + noptions + '</select><button class="vbtn" id="tts-t-npc">试听</button></div>' +
     '<div class="kvrow"><span class="k">玩家</span><select class="vsel" id="tts-v-player">' + poptions + '</select><button class="vbtn" id="tts-t-player">试听</button></div>' +
     '<div class="kvrow"><span class="k">播报范围</span><select class="vsel" id="tts-v-filter"></select><span class="muted" style="font-size:11px">全部 / 只看某玩家</span></div>' +
-    '<div class="muted" style="padding:4px 0 2px">命名的 NPC 可在代码里逐个指音色（ttsBySpeaker）</div>';
+    '<div class="muted" style="padding:8px 0 2px;border-top:1px solid #30363d;margin-top:6px">NPC 音色（一人一音色，选「（默认）」用 NPC 默认）</div>' +
+    '<div class="npcvoice-grid">' + npcRows + '</div>';
   const g = document.getElementById('tts-v-goddess'), n = document.getElementById('tts-v-npc'), p = document.getElementById('tts-v-player');
   if (g) g.onchange = (ev) => { ttsVoices.goddess = ev.target.value; localStorage.setItem('ttsVoiceGoddess', ev.target.value); };
   if (n) n.onchange = (ev) => { ttsVoices.npc = ev.target.value; localStorage.setItem('ttsVoiceNpc', ev.target.value); };
@@ -718,6 +740,20 @@ function renderTtsForm() {
   if (tg) tg.onclick = () => ttsPreview(ttsVoices.goddess, 'goddess');
   if (tn) tn.onclick = () => ttsPreview(ttsVoices.npc, 'npc');
   if (tp) tp.onclick = () => ttsPreview(ttsVoices.player, 'player');
+  el.querySelectorAll('select[data-npc]').forEach((sel) => {
+    sel.onchange = () => {
+      const name = sel.dataset.npc;
+      if (sel.value) { ttsNpcOverride[name] = sel.value; localStorage.setItem('ttsVoiceNpc_' + name, sel.value); }
+      else { delete ttsNpcOverride[name]; localStorage.removeItem('ttsVoiceNpc_' + name); }
+    };
+  });
+  el.querySelectorAll('button[data-npct]').forEach((btn) => {
+    btn.onclick = () => {
+      const name = btn.dataset.npct;
+      const voice = ttsNpcOverride[name] || ttsBySpeaker[name] || ttsVoices.npc;
+      ttsPreview(voice, 'npc');
+    };
+  });
   updateTtsFilterOptions();
 }
 function ttsPreview(voice, kind) {
@@ -1274,8 +1310,11 @@ function renderWorldChip(w) {
     el.textContent = '⚠ 世界进程离线 ' + (age > 95 ? Math.round(age / 60) + ' 分钟' : Math.round(age) + ' 秒');
   } else {
     el.className = 'worldchip on';
-    const n = (w.watching || []).length;
-    el.textContent = '世界在线 · 守望 ' + n + ' 人 · ' + Math.round(age) + 's';
+    const names = (w.watching || []).map((x) => PLAYER_DISPLAY[x] || x);
+    const n = names.length;
+    const who = n ? names.join('、') : '（空）';
+    el.textContent = '世界在线 · ' + n + ' 人：' + who + ' · ' + Math.round(age) + 's';
+    el.title = '每 2 秒由世界进程心跳刷新；含真人玩家与假玩家';
   }
 }
 
