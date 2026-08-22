@@ -123,6 +123,20 @@
      "count": 1,
      "max": 2
     }
+   ],
+   "buy": [
+    {
+     "item": "iron_ore",
+     "count": 4,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "coal",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    }
    ]
   },
   {
@@ -216,6 +230,20 @@
      "item": "iron_boots",
      "count": 1,
      "max": 2
+    }
+   ],
+   "buy": [
+    {
+     "item": "leather",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
+    },
+    {
+     "item": "string",
+     "count": 8,
+     "emerald": 1,
+     "max": 16
     }
    ]
   },
@@ -317,6 +345,14 @@
      "count": 1,
      "max": 6
     }
+   ],
+   "buy": [
+    {
+     "item": "sugar_cane",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    }
    ]
   },
   {
@@ -403,6 +439,14 @@
      "item": "bookshelf",
      "count": 1,
      "max": 5
+    }
+   ],
+   "buy": [
+    {
+     "item": "sugar_cane",
+     "count": 8,
+     "emerald": 1,
+     "max": 16
     }
    ]
   },
@@ -503,6 +547,20 @@
      "emerald": 1,
      "item": "string",
      "count": 8,
+     "max": 12
+    }
+   ],
+   "buy": [
+    {
+     "item": "apple",
+     "count": 4,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "string",
+     "count": 8,
+     "emerald": 1,
      "max": 12
     }
    ]
@@ -638,6 +696,20 @@
      "count": 4,
      "max": 8
     }
+   ],
+   "buy": [
+    {
+     "item": "ink_sac",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
+    },
+    {
+     "item": "paper",
+     "count": 8,
+     "emerald": 1,
+     "max": 12
+    }
    ]
   },
   {
@@ -750,6 +822,14 @@
      "item": "iron_sword",
      "count": 1,
      "max": 3
+    }
+   ],
+   "buy": [
+    {
+     "item": "coal",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
     }
    ]
   },
@@ -874,6 +954,20 @@
      "count": 2,
      "max": 6
     }
+   ],
+   "buy": [
+    {
+     "item": "gold_nugget",
+     "count": 16,
+     "emerald": 1,
+     "max": 20
+    },
+    {
+     "item": "rotten_flesh",
+     "count": 8,
+     "emerald": 1,
+     "max": 12
+    }
    ]
   },
   {
@@ -959,6 +1053,20 @@
      "item": "string",
      "count": 8,
      "max": 12
+    }
+   ],
+   "buy": [
+    {
+     "item": "bone_meal",
+     "count": 4,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "string",
+     "count": 8,
+     "emerald": 1,
+     "max": 16
     }
    ]
   },
@@ -1054,6 +1162,20 @@
      "count": 1,
      "max": 8
     }
+   ],
+   "buy": [
+    {
+     "item": "wheat",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    },
+    {
+     "item": "wheat_seeds",
+     "count": 16,
+     "emerald": 1,
+     "max": 20
+    }
    ]
   },
   {
@@ -1138,6 +1260,20 @@
      "item": "cooked_mutton",
      "count": 4,
      "max": 12
+    }
+   ],
+   "buy": [
+    {
+     "item": "mutton",
+     "count": 4,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "white_wool",
+     "count": 8,
+     "emerald": 1,
+     "max": 16
     }
    ]
   },
@@ -1231,6 +1367,20 @@
      "count": 1,
      "max": 4
     }
+   ],
+   "buy": [
+    {
+     "item": "cod",
+     "count": 4,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "salmon",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
+    }
    ]
   },
   {
@@ -1319,6 +1469,20 @@
      "count": 4,
      "max": 10
     }
+   ],
+   "buy": [
+    {
+     "item": "sugar_cane",
+     "count": 8,
+     "emerald": 1,
+     "max": 16
+    },
+    {
+     "item": "ink_sac",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
+    }
    ]
   },
   {
@@ -1399,6 +1563,20 @@
      "emerald": 1,
      "item": "stone",
      "count": 16,
+     "max": 20
+    }
+   ],
+   "buy": [
+    {
+     "item": "cobblestone",
+     "count": 16,
+     "emerald": 1,
+     "max": 20
+    },
+    {
+     "item": "sand",
+     "count": 16,
+     "emerald": 1,
      "max": 20
     }
    ]
@@ -1492,6 +1670,20 @@
      "item": "string",
      "count": 8,
      "max": 10
+    }
+   ],
+   "buy": [
+    {
+     "item": "string",
+     "count": 8,
+     "emerald": 1,
+     "max": 12
+    },
+    {
+     "item": "bone_meal",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
     }
    ]
   },
@@ -1592,6 +1784,26 @@
      "item": "iron_sword",
      "count": 1,
      "max": 3
+    }
+   ],
+   "buy": [
+    {
+     "item": "rotten_flesh",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    },
+    {
+     "item": "bone",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    },
+    {
+     "item": "gunpowder",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
     }
    ]
   },
@@ -1695,6 +1907,14 @@
      "count": 1,
      "max": 6
     }
+   ],
+   "buy": [
+    {
+     "item": "coal",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
+    }
    ]
   },
   {
@@ -1774,6 +1994,14 @@
      "item": "candle",
      "count": 4,
      "max": 10
+    }
+   ],
+   "buy": [
+    {
+     "item": "honeycomb",
+     "count": 4,
+     "emerald": 1,
+     "max": 12
     }
    ]
   },
@@ -1855,6 +2083,14 @@
      "item": "lantern",
      "count": 2,
      "max": 10
+    }
+   ],
+   "buy": [
+    {
+     "item": "coal",
+     "count": 8,
+     "emerald": 1,
+     "max": 20
     }
    ]
   }

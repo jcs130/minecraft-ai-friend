@@ -546,6 +546,9 @@ def _recipes_nbt(v):
                        'uses:0,maxUses:%d,discountCounter:0,specialPrice:0,demand:0,'
                        'priceMultiplier:0.0f,rewardExp:0b}' % (
                            int(s.get("emerald", 1)), s["item"], int(s.get("count", 1)), int(s.get("max", 12))))
+    # 收购柜台（2026-08-22 造物主谕「村民也该收购」）：buy 表 = 职业需求，玩家卖物资换绿宝石
+    for b in v.get("buy", []):
+        recipes.append(_offer_recipe(b["item"], int(b.get("count", 1)), int(b.get("emerald", 1)), int(b.get("max", 12))))
     if not recipes:
         return None
     return "Offers:{Recipes:[%s]}" % ",".join(recipes)
