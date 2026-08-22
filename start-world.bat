@@ -6,6 +6,7 @@ cd /d %~dp0
 for %%I in ("%~dp0..") do set "WS=%%~fI"
 set "SCRATCH=%WS%\deepseek-harness\scratch-plugin"
 set "MC_GOD_NAME=Goddess"
+set "MC_PORT=25599"
 set "MC_VIEWER=1"
 set "MC_VIEWER_PORT=3050"
 set "MC_DATA_DIR=%SCRATCH%\data"

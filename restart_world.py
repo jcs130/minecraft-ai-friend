@@ -33,6 +33,10 @@ if out:
 
 env = os.environ.copy()
 env["MC_GOD_NAME"] = "Goddess"
+# Goddess 直连主服 25599：skin-proxy(25565) 对其 config 阶段 NeoForge 注册表包有损转发，
+# 导致 synchronize_registries 失败而 socketClosed 死循环(2026-08-22 13:50 实证)。
+# Goddess 不在 skin-proxy assignments 皮肤指派内，无需皮肤注入，故直连主服绕开 skin-proxy。
+env["MC_PORT"] = "25599"
 env["MC_VIEWER"] = "1"          # 女神天眼：世界进程自带 viewer(3050)，9090 面板无穿越者时兜底
 env["MC_VIEWER_PORT"] = "3050"
 env["MC_DATA_DIR"] = DATA_DIR   # 运行态正本：scratch-plugin\data
