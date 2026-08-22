@@ -29,16 +29,12 @@ const wrap = (s: string): string[] => {
   return out
 }
 
-/** 识别 /help、/h 与 /cli（带参或不带参）。其他斜杠命令返回 false（归信使）。
- *  2026-08-23 造物主定谳（经三轮迭代）：/help 是通用生存手册；/cli **专给读不了书的
- *  AI 玩家**看命令接口——两者都保留，/cli 输出的是 AI 结构化命令表，/help 是内容手册。
- *  都只认斜杠前缀，不认裸词。 */
+/** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。
+ *  2026-08-23 造物主定谳（经四轮迭代定稿）：帮助触发器**只用 /help**；AI 命令接口
+ *  不再单设 /cli 命令，而是作为 /help 的一个**说明内容（主题）**——`/help cli` 查询。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
-  return (
-    t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
-    t === '/cli' || t.startsWith('/cli ')
-  )
+  return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
@@ -65,32 +61,18 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const trimmed = text.trim()
-  const isCli = /^\/?cli\b/i.test(trimmed) // /cli 专给 AI 玩家
-  const raw = trimmed.replace(/^\/?(help|h|cli)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
-
-  // ── /cli：AI 玩家命令接口（读不了书，走结构化命令）──────────
-  if (isCli) {
-    return [
-      '【AI 命令接口｜/cli】AI 玩家读不了书，按这套发命令（私聊女神 /msg Goddess）：',
-      '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
-      '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
-      '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
-      '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
-      '查全法术表 /help 咒语；内容手册 /help。',
-    ]
-  }
 
   // ── /help：总览 ──────────────────────────────────────────────
   if (!topic) {
     return [
       '【千灯纪·生存手册】/help <主题> 查询，主题：',
-      '世界 | 新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道',
+      '世界 | 新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道 | 技能书 | cli',
       '例：/help 咒语　/help 咒语 2　/help 咒语 回家　/help 新手',
-      'AI 玩家（读不了书）专用：/cli 看命令接口。',
+      'AI 玩家（读不了书）专用主题：/help cli 看命令接口。',
     ]
   }
 
@@ -178,6 +160,16 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     return [
       '【造物】祈愿求物只从白名单内取（数量 1-16）：',
       ...wrap(names),
+    ]
+  }
+  if (topic === 'cli' || topic === '命令' || topic === '命令接口' || topic === 'ai') {
+    return [
+      '【/help cli｜AI 命令接口】给读不了书的 AI 玩家用（私聊女神 /msg Goddess 发命令）：',
+      '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
+      '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
+      '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
+      '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
+      '查全法术表 /help 咒语；内容手册 /help。',
     ]
   }
   if (topic === '技能书' || topic === '技能' || topic === '技艺' || topic === 'skill') {
