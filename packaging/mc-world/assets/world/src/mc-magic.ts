@@ -1004,7 +1004,8 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     manaLeft: number; maxMana: number; level: number
     // 2026-08-23（造物主谕·施法记录学习闭环）：匹配层级 / tokens / 前摇耗时 / 成败 / 结果。
     // matchMode: exact=严格瞬发 vector=向量模糊 llm=LLM 推理 miss=未识别（新咒语学习原料）
-    matchMode?: 'exact' | 'vector' | 'llm' | 'miss'
+    //           precheck_deny=LLM 前预判拦截（tokens 成本预算不足，零 LLM 拒绝）
+    matchMode?: 'exact' | 'vector' | 'llm' | 'miss' | 'precheck_deny'
     tokens?: number
     latencyMs?: number
     success?: boolean
@@ -1016,6 +1017,59 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       mkdirSync(dirname(usagePath), { recursive: true })
       appendFileSync(usagePath, JSON.stringify(e) + '\n', 'utf8')
     } catch { /* 台账失败不影响施法 */ }
+    // 学习闭环：真实 tokens 消耗喂入预测器（precheck_deny 是预估，不喂）
+    if (e.tokens && e.tokens > 0 && e.matchMode !== 'precheck_deny') feedTokens(e.atom, e.tokens)
+  }
+
+  // ── tokens 成本预测器（2026-08-23 造物主谕：tokens 判断施法成败，代码写、零 LLM）──
+  // 按 atomId 统计历史实际消耗（llm/vector/神迹），EMA 平滑预测下次成本。
+  // 用途：LLM 推理前预判——玩家魔力折不出预估 tokens，直接拦截拒绝，不浪费 LLM 调用；
+  // 预判结果（matchMode:'precheck_deny'）也入台账，与实际消耗对照形成学习闭环。
+  const TOKENS_HISTORY_MAX = 20
+  const TOKENS_EMA_ALPHA = 0.3
+  let tokensPredictor: Map<string, number> | null = null
+  let tokensPredictorLoaded = false
+
+  function loadTokensPredictor(): void {
+    if (tokensPredictorLoaded) return
+    tokensPredictorLoaded = true
+    try {
+      if (!existsSync(usagePath)) return
+      const lines = readFileSync(usagePath, 'utf-8').split('\n').filter((l) => l.trim()).slice(-300)
+      const byAtom = new Map<string, number[]>()
+      for (const ln of lines) {
+        try {
+          const r = JSON.parse(ln)
+          if (r?.atom && typeof r.tokens === 'number' && r.tokens > 0 && r.matchMode !== 'precheck_deny') {
+            const arr = byAtom.get(r.atom) ?? []
+            arr.push(r.tokens)
+            byAtom.set(r.atom, arr.slice(-TOKENS_HISTORY_MAX))
+          }
+        } catch { /* 坏行跳过 */ }
+      }
+      const ema = new Map<string, number>()
+      for (const [id, arr] of byAtom) {
+        let e = arr[0]
+        for (const t of arr.slice(1)) e = TOKENS_EMA_ALPHA * t + (1 - TOKENS_EMA_ALPHA) * e
+        ema.set(id, Math.round(e))
+      }
+      tokensPredictor = ema
+      log(`tokens predictor loaded: ${ema.size} atom(s) with history`)
+    } catch { /* 预测器不可用不影响施法主路 */ }
+  }
+
+  function predictTokens(atomId: string): number | null {
+    loadTokensPredictor()
+    const e = tokensPredictor?.get(atomId)
+    return e ?? null
+  }
+
+  function feedTokens(atomId: string, tokens: number): void {
+    if (!atomId || !tokens || tokens <= 0) return
+    loadTokensPredictor()
+    if (!tokensPredictor) tokensPredictor = new Map()
+    const cur = tokensPredictor.get(atomId)
+    tokensPredictor.set(atomId, cur === undefined ? Math.round(tokens) : Math.round(TOKENS_EMA_ALPHA * tokens + (1 - TOKENS_EMA_ALPHA) * cur))
   }
   /** 未识别咏唱也入台账（matchMode:'miss'）——新咒语/新魔法的学习原料（2026-08-23）。 */
   const appendChantMiss = (player: string, chant: string, reason: string): void => {
@@ -1313,7 +1367,22 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         return cast(username, chant, { forceAtom: vm.atom, mode: 'vector', latencyMs: FUZZY_CAST_DELAY_MS })
       }
       if (vm && vm.similarity >= SUGGEST_THRESHOLD) {
-        // 中置信：需 LLM 推理解析（mc-god 侧 catch 后裁决，通过再代施）
+        // 中置信：LLM 推理前先代码预判（2026-08-23 造物主谕：tokens 判断成败，代码写、零 LLM）。
+        // 预估成本 = 历史 EMA（无历史字符估算兜底），总耗 = 基础魔力 + ⌈est/50⌉（上限 80）；
+        // 玩家魔力折不出 → 直接拦截拒绝（不浪费 LLM 调用），precheck_deny 入台账供学习闭环对照。
+        const pstate = store.get(username)
+        const est = predictTokens(vm.atom.id) ?? Math.ceil((body.length + 80) / 1.5)
+        const tokenMana = Math.min(TOKEN_MANA_CAP, Math.ceil(est / TOKEN_MANA_RATIO))
+        const manaNeeded = (vm.atom.cost?.mana ?? 0) + tokenMana
+        if (pstate.mana < manaNeeded) {
+          appendSkillUsage({
+            ts: new Date().toISOString(), player: username, atom: vm.atom.id, chant: body.slice(0, 120),
+            mana: 0, food: 0, hp: 0, manaLeft: Math.floor(pstate.mana), maxMana: pstate.maxMana, level: pstate.level,
+            matchMode: 'precheck_deny', tokens: est, latencyMs: 0, success: false, result: `precheck mana ${manaNeeded}`,
+          })
+          return `你的低语指向「${vm.atom.name}」，但要唤醒它需约 ${manaNeeded} 点魔力（含 ${tokenMana} 点语义凝聚费），汝今 ${Math.floor(pstate.mana)} 点。静候回蓝，或改念准确咒语。`
+        }
+        // 中置信且预算够：需 LLM 推理解析（mc-god 侧 catch 后裁决，通过再代施）
         throw new NeedLlmError(vm.atom.id, body, vm.similarity)
       }
       appendChantMiss(username, chant, '未识别')
