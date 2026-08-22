@@ -29,16 +29,12 @@ const wrap = (s: string): string[] => {
   return out
 }
 
-/** 识别 /help、/h 与 /cli（带参或不带参）。其他斜杠命令返回 false（归信使）。
- *  2026-08-23 造物主谕「打一个 cli 看帮助文档」：让读者（尤 AI 穿越者）用
- *  `/cli` 这个斜杠小命令也能唤出生存手册，与 /help 同款（要斜杠前缀，不认裸 cli，
- *  免得与正常聊天话撞车）。 */
+/** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。
+ *  2026-08-23 造物主定谳：帮助触发器就用 `/help`（更合适），不另设 /cli 别名，
+ *  免得命令面冗余、也与 vanilla /help 语义对齐。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
-  return (
-    t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
-    t === '/cli' || t.startsWith('/cli ')
-  )
+  return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
@@ -65,7 +61,7 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(help|h|cli)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()

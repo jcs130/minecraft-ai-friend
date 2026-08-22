@@ -32,10 +32,7 @@ const wrap = (s: string): string[] => {
 /** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
-  return (
-    t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
-    t === '/cli' || t.startsWith('/cli ')
-  )
+  return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
@@ -62,7 +59,7 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(help|h|cli)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
