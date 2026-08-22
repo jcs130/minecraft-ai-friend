@@ -462,8 +462,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
 
-  /** 底层通道：console chat + SSE 解析，返回最后一条正式回答全文。 */
-  async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<string> {
+  /** 底层通道：console chat + SSE 解析，返回最后一条正式回答全文 + 本轮真实 tokens（2026-08-23 加）。 */
+  async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<{ text: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
     const content: { type: string; text?: string; image_url?: string }[] = []
     if (images?.length) {
       for (const img of images) content.push({ type: 'image', image_url: img })
@@ -488,9 +488,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
     // SSE 解析：只取最后一条正式回答（message:message）的 content；
     // reasoning 思考流与 plugin_call 参数流全部丢弃。增量优先，全文兜底。
+    // 2026-08-23：QwenPaw console 通道每轮会发 turn_usage 事件（usage 字段），
+    // 是真实 tokens——神迹/模糊施法记账用它替代字符估算（拿不到时回落估算）。
     const text = await res.text()
     let messageId: string | null = null
     let answer = ''
+    let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
     const pending: Record<string, { delta: string; full: string }> = {}
     for (const line of text.split('\n')) {
       if (!line.startsWith('data:')) continue
@@ -498,6 +501,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (!body) continue
       let evt: any
       try { evt = JSON.parse(body) } catch { continue }
+      if (evt.type === 'turn_usage' && evt.usage && typeof evt.usage === 'object') {
+        usage = evt.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+        continue
+      }
       if (evt.object === 'message') {
         if (evt.type === 'message') messageId = evt.id
         continue
@@ -513,14 +520,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     if (messageId && pending[messageId]) {
       answer = pending[messageId].delta || pending[messageId].full
     }
-    log(`goddess answered (${answer.length} chars): ${answer.slice(0, 160)}`)
+    log(`goddess answered (${answer.length} chars)${usage ? `, tokens=${usage.total_tokens ?? '?'}(p${usage.prompt_tokens ?? '?'}/c${usage.completion_tokens ?? '?'})` : ''}: ${answer.slice(0, 160)}`)
     // 神谕中的地貌旨意（2026-08-18 女神获自主改地貌权）：回复文本里嵌 TERRAFORM JSON
     // 时交 mc-terra 白名单校验后落地（fill/setblock，限额聚居区内）；无指令/无插件时静默。
     try {
       const n = await terra?.executeOracle(answer)
       if (n) log(`terra: ${n} TERRAFORM directives executed from goddess oracle`)
     } catch { /* terra 不可用不影响神谕送达 */ }
-    return answer
+    return { text: answer, usage }
   }
 
   /**
@@ -551,11 +558,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 2026-08-20 造物主谕（祷告回应下放传令官）：祈愿裁决转 mc-herald（本地 27B，
     // 零云费、低延迟），减轻天神压力；传令官按 verdictPrompt 里的场景+上下文+目标
     // 智能裁量，输出裁决 JSON。失败自动回落女神本尊（云端 mc-god）。
-    const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
+    const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
       .catch(async (e) => {
         log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
         return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
       })
+    const answer = ans.text
 
     const parsed = extractJson(answer)
     const fallback: Verdict = { action: 'none', skill: null, item: null, count: 1, direction: null, distance: null, reply: '（女神沉默不语，神力似乎在波动）' }
@@ -568,8 +576,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const direction = typeof parsed.direction === 'string' && parsed.direction.trim() ? parsed.direction.trim() : null
     const distance = typeof parsed.distance === 'number' && Number.isFinite(parsed.distance) ? parsed.distance : null
     const reply = typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : '愿神力庇佑于你。'
-    // 女神魔力（tokens）估算：callAgent 无 usage，按字符折算（中文 ~1.5 字符/token）
-    const tokens = Math.ceil((prompt.length + answer.length) / 1.5)
+    // 女神魔力（tokens）：优先用 QwenPaw turn_usage 真实值；拿不到回落字符估算（中文 ~1.5 字符/token）
+    const tokens = ans.usage?.total_tokens ?? Math.ceil((prompt.length + answer.length) / 1.5)
     // cast 但技艺不合法 → 降级为 none
     if (action === 'cast' && !skill) return { ...fallback, reply, tokens }
     return { action, skill, item, count, direction, distance, reply, tokens }
@@ -629,12 +637,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
     ].join('\n')
     try {
-      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
+      const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
         .catch(async (e) => {
           log(`herald down for init (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
           return callAgent(`mc:${username}`, username, prompt, 'mc-god')
         })
-      const msg = answer.trim().slice(0, 200) || welcomeLines(name).join('；')
+      const msg = ans.text.trim().slice(0, 200) || welcomeLines(name).join('；')
       try { bot.whisper(username, `[女神] ${msg}`) } catch { /* not ready */ }
       try { worlddb.chronicleRecord('welcome', username, { via: 'goddess-init' }) } catch { /* best effort */ }
       await worlddb.remember(username, 'welcome', `你迎接了旅人「${name}」降临千灯纪，介绍世界背景，并预告其出生天赋仪式。`)
@@ -692,12 +700,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供答疑参考。）`
       // 2026-08-20 造物主谕（云端不做高频杂务）：问：通道转传令官 mc-herald
       // （本地 27B，零云费、低延迟）；失败自动回落女神本尊（云端）。
-      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
+      const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
         .catch(async (e) => {
           log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
           return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
         })
-      const trimmedAnswer = answer.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
+      const trimmedAnswer = ans.text.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
       worlddb.chronicleRecord('ask', username, { question: question.slice(0, 60), via: 'goddess' })
       log(`question from ${username} answered: ${question.slice(0, 50)} → ${trimmedAnswer.slice(0, 60)}`)
@@ -796,12 +804,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '判断：施法者意图就是此法术 → 只输出 Y。明显不是 / 意图不明 / 危险歧义 → 输出 N 加一句简短原因。',
     ].join('\n')
     try {
-      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
+      const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
         .catch(async (e) => {
           log(`herald down for fuzzy resolve (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
           return callAgent(`mc:${username}`, username, prompt, 'mc-god')
         })
-      const tokens = Math.ceil((prompt.length + answer.length) / 1.5)
+      const answer = ans.text
+      // 真实 tokens 优先（turn_usage），拿不到回落字符估算
+      const tokens = ans.usage?.total_tokens ?? Math.ceil((prompt.length + answer.length) / 1.5)
       const trimmed = answer.trim()
       if (/^Y\b/i.test(trimmed)) return { ok: true, tokens }
       return { ok: false, reason: trimmed.slice(0, 60) || '意图不明' }
@@ -1574,6 +1584,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }).join('\n')
 
       const out = await callAgent('mc:world-review', 'world', reviewPrompt(statsText, sampleLines))
+      const reviewText = out.text
       const iso = new Date().toISOString().replace('T', ' ').slice(0, 16)
       const issue = worlddb.reviewNextSeq()
       const reqPath = resolve(config.requirementsPath)
@@ -1582,8 +1593,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (!existsSync(reqPath)) {
         writeFileSync(reqPath, '# 千灯纪 · 世界迭代需求文档\n\n> 守望女神定期观察世界运行，写给世界缔造者的迭代需求。\n\n', 'utf-8')
       }
-      appendFileSync(reqPath, `## ${iso} 女神观察 · 第 ${issue} 期（覆盖 ${entries.length} 条记录）\n\n**统计**：${statsText}\n\n${out.trim()}\n\n---\n\n`, 'utf-8')
-      worlddb.reviewSave(issue, entries.length, statsText, out.trim())
+      appendFileSync(reqPath, `## ${iso} 女神观察 · 第 ${issue} 期（覆盖 ${entries.length} 条记录）\n\n**统计**：${statsText}\n\n${reviewText.trim()}\n\n---\n\n`, 'utf-8')
+      worlddb.reviewSave(issue, entries.length, statsText, reviewText.trim())
       worlddb.chronicleRecord('world-review', 'Goddess', { entries: entries.length, issue })
       lastReviewAt = Date.now()
       log(`world review #${issue} written (${entries.length} entries) -> ${reqPath}`)
