@@ -404,6 +404,7 @@ const PAGE = `<!doctype html>
     .steps-card { flex:0 0 auto; }
     .steps-scroll { max-height:40vh; }
     .side { flex:0 0 auto; overflow:visible; }
+    }   /* 闭合 @media (max-width:1000px) —— 勿删，否则下方抽屉/聊天条规则会被吞 */
   /* ── 设置抽屉（#3）：配置类卡片收进右侧滑出抽屉，主栏只留核心 ── */
   .drawer-toggle { position:relative; display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:5px 12px; cursor:pointer; font-size:13px; color:var(--dim); flex:0 0 auto; }
   .drawer-toggle:hover { border-color:var(--dim); color:var(--text); }
@@ -421,6 +422,8 @@ const PAGE = `<!doctype html>
   .chatbar-scroll .ce { display:flex; gap:8px; padding:3px 0; border-bottom:1px dashed #21262d; align-items:baseline; }
   .chatbar-scroll .ct { color:var(--dim); font-family:monospace; font-size:11px; flex:0 0 auto; }
   .chatbar-scroll .cx { overflow-wrap:anywhere; min-width:0; }
+  .sysbar { flex:0 0 auto; padding:4px 14px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--line); display:none; align-items:center; gap:6px; }
+  .sysbar .sys-ico { color:var(--gold); white-space:nowrap; }
   .chatbar-scroll .empty { color:var(--dim); text-align:center; padding:20px 0; }
 </style>
 </head>
@@ -523,6 +526,7 @@ const PAGE = `<!doctype html>
 
 <div class="chatbar">
   <div class="chatbar-head"><h2>🌍 世界之声 · 聊天记录</h2><span class="muted" id="chatbar-sub">穿越者 × NPC 对话 · 神谕 · 编年史</span></div>
+  <div id="sysbar" class="sysbar"></div>
   <div class="chatbar-scroll" id="chatfeed"><div class="empty">暂无记录</div></div>
 </div>
 
@@ -1223,25 +1227,43 @@ function npcLine(e) {
   return line;
 }
 
-// 世界之声（#2）：编年史 + 村口实况 合并成聊天流（按时间倒序填 #chatfeed）
+// 世界之声（#2）：对话流 + 系统提示。对话（say/goddess/player/chat）才进聊天记录；
+// 系统事件（拉回铺子/离世界/死亡/加入）瘦身成一条置顶系统提示（#信息透出），不刷屏。
 function renderChatBar() {
   const el = document.getElementById('chatfeed');
   if (!el) return;
-  const rows = [];
+  const dt = (v) => {
+    const d = new Date(String(v || '').replace(' ', 'T'));
+    return (d && !isNaN(d.getTime())) ? d.toLocaleTimeString('zh-CN', { hour12: false }) : '';
+  };
+  // —— 系统提示：死亡/加入/离世界/世界看护拉回 聚合为一条 ——
+  const sysRows = [];
   for (const e of (state.chronicle || [])) {
-    if (e.type === 'xp') continue;
-    rows.push({ t: e.at || '', h: chronLine(e) });
+    if (['chat', 'xp'].includes(e.type)) continue;
+    if (['event', 'join', 'leave', 'death'].includes(e.type)) { try { sysRows.push({ t: e.at || '', h: chronLine(e) }); } catch {} }
   }
   for (const e of (state.npcFeed || [])) {
-    rows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
+    if (e.kind === 'event') sysRows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
+  }
+  sysRows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
+  const sysEl = document.getElementById('sysbar');
+  if (sysEl) {
+    if (sysRows.length) {
+      sysEl.innerHTML = '<span class="sys-ico">🛡 系统</span>' + (sysRows[0].h || '');
+      sysEl.style.display = 'flex';
+    } else { sysEl.style.display = 'none'; }
+  }
+  // —— 对话流：只留真正的对话 ——
+  const rows = [];
+  for (const e of (state.chronicle || [])) {
+    if (['chat', 'say', 'goddess'].includes(e.type)) { try { rows.push({ t: e.at || '', h: chronLine(e) }); } catch {} }
+  }
+  for (const e of (state.npcFeed || [])) {
+    if (['say', 'goddess', 'player'].includes(e.kind)) rows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
   }
   rows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
   const tail = rows.slice(0, 48);
-  el.innerHTML = tail.length ? tail.map((r) => {
-    const d = new Date(String(r.t).replace(' ', 'T'));
-    const ts = (d && !isNaN(d.getTime())) ? d.toLocaleTimeString('zh-CN', { hour12: false }) : '';
-    return '<div class="ce"><span class="ct">' + ts + '</span><span class="cx">' + r.h + '</span></div>';
-  }).join('') : '<div class="empty">暂无记录</div>';
+  el.innerHTML = tail.length ? tail.map((r) => '<div class="ce"><span class="ct">' + dt(r.t) + '</span><span class="cx">' + r.h + '</span></div>').join('') : '<div class="empty">暂无对话记录</div>';
 }
 
 // 设置抽屉（#3）：配置类卡片收进右侧抽屉；村口实况/编年史卡片移除（聊天条接管）
