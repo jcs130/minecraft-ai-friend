@@ -23,8 +23,24 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="repla
 RCON_HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
 RCON_PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 RCON_PW = os.environ.get("RCON_PASSWORD")
+# 密码回退：env 优先；无 env/空时从世界侧 rcon-secret.txt 读（与 _diag_summon.py 同源），
+# 不依赖外部 shell 预先注入 env，可移植、可跨容器。
 if not RCON_PW:
-    raise SystemExit("缺少 RCON_PASSWORD 环境变量（见 .env / docker-compose，不再提供硬编码默认值）")
+    # 候选：1) MC_RCON_SECRET 显式指定；2) deepseek-harness 世界侧秘密文件（绝对路径兼容本机/容器）
+    _secret_candidates = [
+        os.environ.get("MC_RCON_SECRET"),
+        r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\rcon-secret.txt",
+        "/root/deepseek-harness/scratch-plugin/data/rcon-secret.txt",  # 容器内路径
+    ]
+    _secret_candidates = [c for c in _secret_candidates if c]
+    for _cand in _secret_candidates:
+        if os.path.isfile(_cand):
+            _val = open(_cand, "r", encoding="utf-8").read().strip()
+            if _val:
+                RCON_PW = _val
+                break
+if not RCON_PW:
+    raise SystemExit("缺少 RCON_PASSWORD 环境变量（见 .env / docker-compose；可设 MC_RCON_SECRET 指定 secret 文件）")
 CONSOLE_URL = os.environ.get("QWENPAW_CONSOLE_URL", "http://127.0.0.1:8088/api/console/chat")
 # 已归位 B 仓 sidecar/guard/：账本写本仓 data/（不再跨仓引 A 仓 scratch-plugin/data）
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
