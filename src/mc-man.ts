@@ -29,14 +29,15 @@ const wrap = (s: string): string[] => {
   return out
 }
 
-/** 识别 /help、/h 与「cli」/「/cli」（带参或不带参）。其他斜杠命令返回 false（归信使）。
- *  2026-08-23 造物主谕「打一个 cli 看帮助文档」：让读者（尤 AI 穿越者）用 `cli`
- *  这个低门槛词就能唤出生存手册，无需记斜杠前缀。 */
+/** 识别 /help、/h 与 /cli（带参或不带参）。其他斜杠命令返回 false（归信使）。
+ *  2026-08-23 造物主谕「打一个 cli 看帮助文档」：让读者（尤 AI 穿越者）用
+ *  `/cli` 这个斜杠小命令也能唤出生存手册，与 /help 同款（要斜杠前缀，不认裸 cli，
+ *  免得与正常聊天话撞车）。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
   return (
     t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
-    t === 'cli' || t === '/cli' || t.startsWith('cli ') || t.startsWith('/cli ')
+    t === '/cli' || t.startsWith('/cli ')
   )
 }
 

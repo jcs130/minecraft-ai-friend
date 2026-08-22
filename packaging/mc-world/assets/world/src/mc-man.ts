@@ -34,7 +34,7 @@ export function isHelpCommand(text: string): boolean {
   const t = text.trim()
   return (
     t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
-    t === 'cli' || t === '/cli' || t.startsWith('cli ') || t.startsWith('/cli ')
+    t === '/cli' || t.startsWith('/cli ')
   )
 }
 
