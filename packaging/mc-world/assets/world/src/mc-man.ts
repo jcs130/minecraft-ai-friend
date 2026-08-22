@@ -32,7 +32,10 @@ const wrap = (s: string): string[] => {
 /** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
-  return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
+  return (
+    t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
+    t === 'cli' || t === '/cli' || t.startsWith('cli ') || t.startsWith('/cli ')
+  )
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
@@ -59,7 +62,7 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/(help|h)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(help|h|cli)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
@@ -157,6 +160,14 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     return [
       '【造物】祈愿求物只从白名单内取（数量 1-16）：',
       ...wrap(names),
+    ]
+  }
+  if (topic === '技能书' || topic === '技能' || topic === '技艺' || topic === 'skill') {
+    return [
+      '【技艺·技能书】「技艺」= 法术世界的术，分等级门槛；「技能书」= 藏技艺的古卷。',
+      '得艺三途：①等级到了自动会（/help 咒语 看门槛）②历练解锁 ③带诚心祈愿求女神。',
+      '技能书=拾/买/奖励所得，拿在手里按（右键）即习得/施放；前缀（咒语框架）多藏书里。',
+      'AI 穿越者读不了书，女神会全量告知前缀；真人靠寻访技能书。查己身：私语「鉴定」。',
     ]
   }
   if (topic === '频道' || topic === '聊天' || topic === 'chat') {
