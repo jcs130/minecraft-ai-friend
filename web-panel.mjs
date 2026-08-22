@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 
 const PORT = Number(process.env.PANEL_PORT ?? 9090)
@@ -19,6 +20,12 @@ const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程�
 // 失败时前端会兜底到浏览器 speechSynthesis。
 const INDEX_TTS_URL = process.env.INDEX_TTS_URL || 'http://127.0.0.1:8085'
 const TTS_INFER_TIMEOUT = 45000 // 与网关 INFER_TIMEOUT 对齐；超时网关自身会降到 edge-tts
+// 本地合成慢（IndexTTS CPU 推理 ~5-11s/句），加磁盘缓存：同文本+同音色只合成一次。
+const TTS_CACHE_DIR = resolve(DATA_DIR, 'tts-cache')
+try { mkdirSync(TTS_CACHE_DIR, { recursive: true }) } catch {}
+function ttsCacheKey(text, voice) {
+  return createHash('sha1').update(String(text) + '\u0000' + String(voice)).digest('hex').slice(0, 24)
+}
 
 // ── mc-brain.log 思考账本（结构化 JSONL：ts/step/thought/goal/tool/args/outcome/shots）──
 // session 架构下 status.recentSteps 恒为空（2026-08-20 断流案），从账本直接捞。
@@ -464,13 +471,23 @@ function esc(s) {
 // 数据源：chronicle(女神 verdict/godcast/welcome) + npc-feed(NPC say / goddess / player 台词)。
 // 都带单调递增标记（chronicle.at 毫秒 / npc-feed.t 计数），用标记去重，只播新台词。
 let ttsEnable = localStorage.getItem('ttsEnable') !== '0';   // 默认开
+let ttsPrefetch = null; // 流水线预合成：{url, key}，当前句播放时预取下一句
 const ttsVoices = {   // 音色（可经面板「语音」卡改，存 localStorage）
   goddess: localStorage.getItem('ttsVoiceGoddess') || 'xiaoyi', // 女神：默认 xiaoyi 晓伊（女声）
   npc: localStorage.getItem('ttsVoiceNpc') || 'yunxi',          // NPC 默认：yunxi 云希（清亮男声）
   player: localStorage.getItem('ttsVoicePlayer') || 'xiaoxue',  // 玩家：默认 xiaoxue 小雪（女声，与女神晓伊区分）
 };
-const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；命名的 NPC 可在此逐个指定
-  '铁匠·岳山': 'baolin', '神官·静水': 'qingxin',
+const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；特色 NPC 一人一音色，其余走 NPC 默认
+  '铁匠·岳山': 'yunyang',      // 男，浑厚豪爽
+  '甲匠·石磊': 'baolin',       // 男，沉稳
+  '书商·墨白': 'yunjian',      // 男，清朗书生
+  '吟游诗人·风临': 'xiaotian', // 少年诗人，灵动
+  '守夜人·烛九': 'yunxi',      // 男，沉稳守夜
+  '神官·静水': 'qingxin',      // 女，空灵
+  '牧羊女·小满': 'taozi',      // 女，甜美
+  '公会接待员·岚': 'xiaoxue',  // 女，亲和
+  '阿宝': 'xiaotian',          // 少年
+  '灯窝·阿禾': 'xiaotian',     // 少年
 };
 let ttsVoiceList = ['baolin','qingxin','taozi','xiaotian','xiaoxue','xiaoyi','yunjian','yunxi','yunyang'];
 let ttsSeen = { chronT: 0, feedT: 0 };   // 去重游标（记最大值，避免重播历史行）
@@ -500,7 +517,12 @@ const VIP_PRIORITY = ['MengMeng', '萌萌']; // 重点看护玩家：语音打�
 // 播报范围：'' = 全部；玩家名（如 MengMeng）= 只听该玩家视角（他说的 / 对他说 / 女神回应他的）
 let ttsFilter = localStorage.getItem('ttsFilterPlayer') || '';
 function ttsFiltered(kind, who, to, actor) {
-  if (!ttsFilter) return true;
+  if (!ttsFilter) {
+    // 全部模式：祈福裁决（verdict）不播——那是"别人的私事"，全播会刷屏；welcome 只播真人玩家的
+    if (kind === 'verdict') return false;
+    if (kind === 'welcome') return !!actor && !String(actor).startsWith('villager:');
+    return true;
+  }
   if (kind === 'player') return who === ttsFilter;    // 他说的话
   if (kind === 'say') return to === ttsFilter;        // NPC 对他说
   if (kind === 'verdict') return actor === ttsFilter; // 女神回应他的裁决
@@ -544,6 +566,7 @@ function ttsSpeak(text, kind, speaker) {
 }
 function ttsStop() {
   ttsBusy = false;
+  if (ttsPrefetch) { try { URL.revokeObjectURL(ttsPrefetch.url); } catch {} ttsPrefetch = null; }
   try { if (ttsAudioEl) { ttsAudioEl.onended = null; ttsAudioEl.onerror = null; ttsAudioEl.pause(); ttsAudioEl.src = ''; } } catch {}
   try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
 }
@@ -553,10 +576,47 @@ async function ttsPump() {
   const job = ttsQ.shift();
   const voice = ttsVoiceFor(job.speaker, job.kind);
   let ok = false;
-  try { ok = await ttsPlayIndex(job.clean, voice); } catch { ok = false; }
+  // 流水线：用预合成的下一条（无等待），否则现取
+  if (ttsPrefetch && ttsPrefetch.key === job.clean + '\u0000' + voice) {
+    const pf = ttsPrefetch; ttsPrefetch = null;
+    ok = await ttsPlayUrl(pf.url);
+  } else {
+    try { ok = await ttsPlayIndex(job.clean, voice); } catch { ok = false; }
+  }
   if (!ok) ttsPlayFallback(job.clean, job.kind); // TTS 服务超时/挂 -> 浏览器兜底
   ttsBusy = false;
+  ttsPrefetchNext();
   ttsPump();
+}
+function ttsPrefetchNext() {
+  if (ttsPrefetch || !ttsQ.length) return;
+  const next = ttsQ[0];
+  const voice = ttsVoiceFor(next.speaker, next.kind);
+  const key = next.clean + '\u0000' + voice;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 55000);
+  fetch('/api/tts', {
+    method: 'POST', signal: ctl.signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: next.clean, voice }),
+  }).then((r) => {
+    if (!r.ok) throw new Error('tts ' + r.status);
+    return r.blob();
+  }).then((blob) => {
+    if (ttsPrefetch) URL.revokeObjectURL(ttsPrefetch.url);
+    ttsPrefetch = { url: URL.createObjectURL(blob), key };
+  }).catch(() => {}).finally(() => { clearTimeout(timer); });
+}
+function ttsPlayUrl(url) {
+  return new Promise((resolve) => {
+    const a = ttsAudioEl || (ttsAudioEl = document.createElement('audio'));
+    ttsAudioEl = a;
+    a.src = url;
+    a.onended = () => { URL.revokeObjectURL(url); resolve(true); };
+    a.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+    const p = a.play();
+    if (p) p.catch(() => { URL.revokeObjectURL(url); resolve(false); });
+  });
 }
 function ttsPlayIndex(text, voice) {
   return new Promise((resolve) => {
@@ -1594,7 +1654,7 @@ const server = createServer((req, res) => {
     res.end(readFileSync(p))
     return
   }
-  // 语音（TTS）：代理本机 IndexTTS 2.5 网关 -> 前端拿 WAV 播放。
+  // 语音（TTS）：代理本机 IndexTTS 2.5 网关 -> 前端拿 WAV 播放（磁盘缓存：同文本只合成一次）。
   if (u.pathname === '/api/tts' && req.method === 'POST') {
     let body = ''
     req.on('data', (c) => { body += c; if (body.length > 8192) { req.destroy(); } })
@@ -1602,16 +1662,26 @@ const server = createServer((req, res) => {
       let text = '', voice = ''
       try { ({ text, voice } = JSON.parse(body || '{}')) } catch {}
       if (!text) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('no text'); return }
+      voice = voice || 'xiaoyi'
+      const cachePath = join(TTS_CACHE_DIR, ttsCacheKey(text, voice) + '.wav')
+      try {
+        if (existsSync(cachePath)) {
+          res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
+          res.end(readFileSync(cachePath))
+          return
+        }
+      } catch {}
       const ctl = new AbortController()
       const timer = setTimeout(() => ctl.abort(), TTS_INFER_TIMEOUT + 8000)
       try {
         const r = await fetch(`${INDEX_TTS_URL}/tts_raw`, {
           method: 'POST', signal: ctl.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: String(text).slice(0, 160), voice: voice || 'xiaoyi' }),
+          body: JSON.stringify({ text: String(text).slice(0, 160), voice }),
         })
         if (!r.ok) throw new Error('upstream ' + r.status)
         const buf = Buffer.from(await r.arrayBuffer())
+        try { writeFileSync(cachePath, buf) } catch {}
         res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
         res.end(buf)
       } catch (e) {
