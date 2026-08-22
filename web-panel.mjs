@@ -395,7 +395,24 @@ const PAGE = `<!doctype html>
     .steps-card { flex:0 0 auto; }
     .steps-scroll { max-height:40vh; }
     .side { flex:0 0 auto; overflow:visible; }
-  }
+  /* ── 设置抽屉（#3）：配置类卡片收进右侧滑出抽屉，主栏只留核心 ── */
+  .drawer-toggle { position:relative; display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:5px 12px; cursor:pointer; font-size:13px; color:var(--dim); flex:0 0 auto; }
+  .drawer-toggle:hover { border-color:var(--dim); color:var(--text); }
+  #settings-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:490; opacity:0; pointer-events:none; transition:opacity .2s; }
+  body.drawer-open #settings-backdrop { opacity:1; pointer-events:auto; }
+  #settings-drawer { position:fixed; top:0; right:0; height:100%; width:400px; max-width:92vw; background:var(--bg); border-left:1px solid var(--line); box-shadow:-10px 0 28px rgba(0,0,0,.5); transform:translateX(100%); transition:transform .25s; overflow-y:auto; padding:14px 16px; z-index:491; display:flex; flex-direction:column; gap:12px; scrollbar-width:thin; }
+  body.drawer-open #settings-drawer { transform:translateX(0); }
+  #settings-drawer .card { flex:0 0 auto; }
+  /* ── 底部聊天条（#2）：填满下方空白，承载穿越者×NPC对话与编年史 ── */
+  .chatbar { flex:0 0 auto; height:196px; border-top:1px solid var(--line); background:var(--card); display:flex; flex-direction:column; min-height:0; }
+  .chatbar-head { display:flex; align-items:center; gap:8px; padding:6px 14px; border-bottom:1px solid var(--line); flex:0 0 auto; }
+  .chatbar-head h2 { font-size:12px; margin:0; color:var(--dim); font-weight:600; letter-spacing:1px; }
+  .chatbar-head .muted { font-size:11px; }
+  .chatbar-scroll { flex:1 1 auto; overflow-y:auto; padding:6px 14px; font-size:12px; scrollbar-width:thin; }
+  .chatbar-scroll .ce { display:flex; gap:8px; padding:3px 0; border-bottom:1px dashed #21262d; align-items:baseline; }
+  .chatbar-scroll .ct { color:var(--dim); font-family:monospace; font-size:11px; flex:0 0 auto; }
+  .chatbar-scroll .cx { overflow-wrap:anywhere; min-width:0; }
+  .chatbar-scroll .empty { color:var(--dim); text-align:center; padding:20px 0; }
 </style>
 </head>
 <body>
@@ -406,6 +423,7 @@ const PAGE = `<!doctype html>
     <span class="worldchip" id="worldchip">世界…</span>
     <div class="tabs" id="tabs"></div>
     <div class="spacer"></div>
+    <button class="drawer-toggle" id="settings-toggle" title="打开设置抽屉（技能/皮肤/语音/背包/记忆）">⚙ 设置</button>
   </header>
 
   <div class="main">
@@ -494,9 +512,22 @@ const PAGE = `<!doctype html>
     </div>
   </div>
 
+<div class="chatbar">
+  <div class="chatbar-head"><h2>🌍 世界之声 · 聊天记录</h2><span class="muted" id="chatbar-sub">穿越者 × NPC 对话 · 神谕 · 编年史</span></div>
+  <div class="chatbar-scroll" id="chatfeed"><div class="empty">暂无记录</div></div>
+</div>
+
+<div id="settings-backdrop"></div>
+<aside id="settings-drawer">
+  <div class="drawer-note" style="display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px;">
+    <button class="vbtn" id="drawer-close">✕ 收起</button>
+    <span>技能 / 皮肤 / 语音 / 背包 / 记忆</span>
+  </div>
+</aside>
+
 <script>
 document.getElementById('dbg-btn').addEventListener('click', () => { document.getElementById('dbg').textContent = 'DBGBTN CLICKED ' + Date.now(); });
-let state = { bots: [], memory: {}, magic: {}, atomNames: {}, passives: [], chronicle: [], npcFeed: [] };
+let state = { bots: [], memory: {}, magic: {}, atomNames: {}, passives: [], chronicle: [], npcFeed: [], villageNpcs: [] };
 let currentUser = null; // 当前选中的 bot username
 let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
 // 天眼跟随：选中玩家 -> 后端把女神 tp 到其上方（每 2s 跟随），天眼视角即跟过去
@@ -1059,14 +1090,16 @@ function renderTabs() {
 function renderVitals(bot, mg) {
   const el = document.getElementById('vitals');
   if (!bot.online) { el.innerHTML = ''; return; }
-  const hp = bot.health ?? 0, food = bot.food ?? 0;
+  // #4 修复：health/food 可能为浮点小数、或对无 status 档案的真人缺失（显示为假 0）——取整 + 未知占位
+  const hasHp = Number.isFinite(bot.health), hp = Math.round(Number(bot.health) || 0);
+  const hasFood = Number.isFinite(bot.food), food = Math.round(Number(bot.food) || 0);
   const rows = [];
   rows.push('<div class="vital"><span class="vlabel">❤ 生命</span>'
-    + '<div class="vbar"><div class="vfill hp' + (hp <= 6 ? ' low' : '') + '" style="width:' + Math.min(100, hp / 20 * 100) + '%"></div></div>'
-    + '<span class="vnum">' + hp + '/20</span></div>');
+    + '<div class="vbar"><div class="vfill hp' + (hasHp && hp <= 6 ? ' low' : '') + '" style="width:' + (hasHp ? Math.min(100, hp / 20 * 100) : 0) + '%"></div></div>'
+    + '<span class="vnum">' + (hasHp ? hp + '/20' : '—/—') + '</span></div>');
   rows.push('<div class="vital"><span class="vlabel">🍗 饱食</span>'
-    + '<div class="vbar"><div class="vfill food' + (food <= 6 ? ' low' : '') + '" style="width:' + Math.min(100, food / 20 * 100) + '%"></div></div>'
-    + '<span class="vnum">' + food + '/20</span></div>');
+    + '<div class="vbar"><div class="vfill food' + (hasFood && food <= 6 ? ' low' : '') + '" style="width:' + (hasFood ? Math.min(100, food / 20 * 100) : 0) + '%"></div></div>'
+    + '<span class="vnum">' + (hasFood ? food + '/20' : '—/—') + '</span></div>');
   if (mg && mg.maxMana) {
     const mana = Math.max(0, Math.min(mg.mana ?? 0, mg.maxMana));
     rows.push('<div class="vital"><span class="vlabel">✨ 魔力</span>'
@@ -1162,6 +1195,83 @@ function renderChronicle() {
     const ts = isNaN(t) ? '' : t.toLocaleTimeString('zh-CN', { hour12: false });
     return '<div class="ce"><span class="ct">' + ts + '</span><span class="cx">' + chronLine(e) + '</span></div>';
   }).join('');
+}
+
+// NPC 对话行（聊天条/村口共用）
+function npcLine(e) {
+  if (!e) return '';
+  let line = '';
+  if (e.kind === 'player') {
+    line = '<span style="color:var(--dim)">🧑 ' + esc(e.who || '?') + ' → ' + esc(e.npc || '?') + '：' + esc(String(e.text || '').slice(0, 80)) + '</span>';
+  } else if (e.kind === 'say') {
+    const color = e.color || 'var(--green)';
+    line = '<span style="color:' + color + '">&lt;' + esc(e.npc || '?') + '&gt;</span> ' + esc(String(e.text || '').slice(0, 100));
+  } else if (e.kind === 'goddess') {
+    line = '<span style="color:var(--gold)">[女神] ' + esc(String(e.text || '').slice(0, 90)) + '</span>';
+  } else {
+    line = '<span style="color:var(--gold)">✨ ' + esc(String(e.text || '').slice(0, 90)) + '</span>';
+  }
+  return line;
+}
+
+// 世界之声（#2）：编年史 + 村口实况 合并成聊天流（按时间倒序填 #chatfeed）
+function renderChatBar() {
+  const el = document.getElementById('chatfeed');
+  if (!el) return;
+  const rows = [];
+  for (const e of (state.chronicle || [])) {
+    if (e.type === 'xp') continue;
+    rows.push({ t: e.at || '', h: chronLine(e) });
+  }
+  for (const e of (state.npcFeed || [])) {
+    rows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
+  }
+  rows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
+  const tail = rows.slice(0, 48);
+  el.innerHTML = tail.length ? tail.map((r) => {
+    const d = new Date(String(r.t).replace(' ', 'T'));
+    const ts = (d && !isNaN(d.getTime())) ? d.toLocaleTimeString('zh-CN', { hour12: false }) : '';
+    return '<div class="ce"><span class="ct">' + ts + '</span><span class="cx">' + r.h + '</span></div>';
+  }).join('') : '<div class="empty">暂无记录</div>';
+}
+
+// 设置抽屉（#3）：配置类卡片收进右侧抽屉；村口实况/编年史卡片移除（聊天条接管）
+function tuckSettings() {
+  const drawer = document.getElementById('settings-drawer');
+  if (!drawer) return;
+  ['skills', 'skin-presets', 'tts-form', 'inv', 'memory'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.closest) { const card = el.closest('.card'); if (card) drawer.appendChild(card); }
+  });
+  ['npcfeed', 'chronicle'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.closest) { const card = el.closest('.card'); if (card) card.remove(); }
+  });
+}
+function initSettingsDrawer() {
+  tuckSettings();
+  const toggle = document.getElementById('settings-toggle');
+  const close = document.getElementById('drawer-close');
+  const backdrop = document.getElementById('settings-backdrop');
+  if (toggle && !toggle.dataset.bound) {
+    toggle.dataset.bound = '1';
+    const shut = () => { document.body.classList.remove('drawer-open'); renderCurrent(); };
+    toggle.addEventListener('click', () => document.body.classList.add('drawer-open'));
+    if (close) close.addEventListener('click', shut);
+    if (backdrop) backdrop.addEventListener('click', shut);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') shut(); });
+  }
+}
+
+// 村口 NPC（#1）：读 /api/village 拿 villagers spawn 坐标，画到小地图
+async function loadVillage() {
+  try {
+    const r = await fetch('/api/village');
+    if (!r.ok) return;
+    const d = await r.json();
+    state.villageNpcs = (d.npcs || []).map((n) => ({ key: n.key, display: n.display, spawn: n.spawn }));
+    drawMap();
+  } catch { /* 静默 */ }
 }
 
 // 村口实况：npc-feed.jsonl（mc_npc.py 写入）—— 玩家点名 / NPC 回复 / 委托与看护事件
@@ -1266,8 +1376,7 @@ function renderCurrent() {
 
   renderVitals(bot, mg);
   renderSkills();
-  renderChronicle();
-  renderNpcFeed();
+  renderChatBar();
 
   // 基础状态 kv（正在输入时不重建，防止焦点丢失）
   const typing = document.activeElement && document.activeElement.tagName === 'INPUT';
@@ -1411,6 +1520,18 @@ function drawMap() {
     ctx.strokeRect(px - 4, py - 4, 8, 8);
   }
 
+  // NPC（村民，来自 villagers.json spawn 坐标）—— #1 村民不显示
+  (state.villageNpcs || []).forEach((n) => {
+    if (!n.spawn || n.spawn.length < 3) return;
+    const px = sx(n.spawn[0]), py = sy(n.spawn[2]);
+    if (px < -10 || py < -10 || px > W + 10 || py > H + 10) return;
+    ctx.fillStyle = '#f0883e';
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#e6edf3'; ctx.font = '9px sans-serif';
+    ctx.fillText((n.display || 'NPC'), px + 5, py - 3);
+  });
+
   // 其他 bot（紫色圆点 / 皮肤头像）
   state.bots.forEach((b) => {
     const bot = b.bot || {};
@@ -1469,6 +1590,7 @@ function drawMap() {
   document.getElementById('legend').innerHTML = '<span><i style="background:#3fb950"></i>当前穿越者</span>'
     + '<span><i style="background:#bc8cff"></i>其他穿越者</span>'
     + '<span><i style="background:#d29922"></i>基地</span>'
+    + '<span><i style="background:#f0883e"></i>NPC</span>'
     + '<span><i style="background:#58a6ff"></i>公共箱</span>'
     + RES_TYPES.map(([k, l, c]) => '<span><i style="background:' + c + '"></i>' + l + '</span>').join('')
     + '<span style="margin-left:auto">范围 ±' + RANGE + ' 格</span>';
@@ -1671,6 +1793,8 @@ refresh();
 initMapInteraction();
 initViewButtons();
 initZoomButtons();
+initSettingsDrawer();
+loadVillage();
 // 思考流截图点击看大图（容器级事件委托，不受 innerHTML 重绘影响）
 (function initShotClick() {
   const el = document.getElementById('steps');
@@ -1762,8 +1886,12 @@ function eyeTpOnce(name) {
   return rconExec(`execute at ${target} run tp Goddess ~ ~${EYE_HEIGHT} ~`)
 }
 setInterval(() => {
-  if (eyeFollow && eyeFollow.name) eyeTpOnce(eyeFollow.name).catch(() => {})
-}, 2000)
+  if (eyeFollow && eyeFollow.name) {
+    // 观察者身份（spectator）：穿墙、不干扰目标，配合高频 tp 实现丝滑天眼跟随（#5）
+    rconExec('gamemode spectator Goddess').catch(() => {})
+    eyeTpOnce(eyeFollow.name).catch(() => {})
+  }
+}, 600)
 
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
