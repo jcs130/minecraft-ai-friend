@@ -213,13 +213,15 @@ function apiState() {
   const hb = readJson(WORLD_HB_PATH, null)
   const watching = hb?.watching || []
   const watchingSet = new Set(watching)
-  const botKey = (st) => st?.bot?.username || st?.bot?.personaName || ''
+  // 服务器里匹配用的是 personaName（守卫真实名是中文"桐人/鸣人"），
+  // 而 status 档案 username 是英文（Kirito/Naruto）。用 personaName 参与对齐，
+  // 否则 watching 里的中文名找不到对应实体，会重复补同名占位 tab（2026-08-23 桐人/鸣人分裂案）。
+  const botNames = (st) => [st?.bot?.username, st?.bot?.personaName].filter(Boolean)
   for (const st of bots) {
-    const k = botKey(st)
-    if (k && watchingSet.has(k)) st.bot.online = true
+    if (botNames(st).some((n) => watchingSet.has(n))) st.bot.online = true
   }
   for (const name of watching) {
-    if (!bots.some((b) => botKey(b) === name)) {
+    if (!bots.some((b) => botNames(b).includes(name))) {
       bots.push({ bot: { username: name, personaName: name, online: true } })
     }
   }
@@ -1064,17 +1066,25 @@ function renderTabs() {
     el.innerHTML = '<span class="muted">暂无穿越者在线（bot 未运行）</span>';
     return;
   }
-  // 去重：同一玩家可能既有 status 档案（username 为 null、personaName 为准）又被心跳补了占位，
-  // 按键 username||personaName 合并，data-u 统一用键（否则 Edward 出现两个 tab）。
-  const merged = [...new Map(state.bots.map((b) => {
-    const key = b.bot?.username || b.bot?.personaName || '';
-    return [key, b];
-  })).values()];
+  // 去重：统一用 personaName（服务器真实名/中文显示名）作 tab 键，
+  // 避免 username(英文 Kirito/Naruto) 与心跳中文名('桐人') 分裂成两个 tab。
+  // 同键出现多条（占位 + 档案）时保留信息更全（有 position/viewer 端口/username）的。
+  const merged = [];
+  const seenK = new Set();
+  for (const b of state.bots) {
+    const k = b.bot?.personaName || b.bot?.username || '';
+    const idx = seenK.has(k) ? merged.findIndex((x) => ((x.bot?.personaName || x.bot?.username || '') === k)) : -1;
+    if (idx === -1) { seenK.add(k); merged.push(b); }
+    else {
+      const w = (x) => ((x.bot?.position ? 2 : 0) + (x.bot?.viewerPort ? 1 : 0) + (x.bot?.username ? 1 : 0));
+      if (w(b) > w(merged[idx])) merged[idx] = b;
+    }
+  }
   el.innerHTML = merged.map((b) => {
     const bot = b.bot || {};
     const on = !!bot.online;
     const name = bot.personaName || bot.username;
-    const key = bot.username || bot.personaName || name;
+    const key = bot.personaName || bot.username || name;
     const cls = currentUser === key ? 'tab active' : 'tab';
     const sk = skinFor(bot.username || bot.personaName);
     const avatar = (sk && sk.ok) ? '<img class="tavatar" src="' + sk.faceURL + '">' : '';
@@ -1381,20 +1391,21 @@ function renderCurrent() {
   // 回落：无穿越者在线 / 所选穿越者 viewer 口不通 → Goddess 天眼(3050)
   const vp = Number(bot.viewerPort) || 0;
   const hasBotViewer = on && vp > 0;
-  const wantPort = hasBotViewer ? (viewMode === 'first' ? vp + 100 : vp) : GODDESS_PORT;
+  const wantPort = hasBotViewer ? (viewMode === 'first' ? vp + 100 : vp) : (viewMode === 'first' ? GODDESS_PORT + 100 : GODDESS_PORT);
   if (hasBotViewer) probeViewer(wantPort); // 异步探活，结论变化经缓存触发回落重渲
   const probing = hasBotViewer && vprobe.port !== wantPort; // 该口尚无结论：先信在线 bot，不闪回落
   const viewerOk = hasBotViewer ? (probing ? true : vprobe.ok) : false;
-  const showPort = viewerOk ? wantPort : GODDESS_PORT;
+  // 回落女神视角时也按视界切换端口（3050 第三人称 / 3150=GODDESS_PORT+100 第一人称），
+  // 否则守卫等无 bot viewer 的实体 first/third 切换永远无效（2026-08-23）。
+  const showPort = viewerOk ? wantPort : (viewMode === 'first' ? GODDESS_PORT + 100 : GODDESS_PORT);
   const frame = document.getElementById('viewer-frame');
-  // 第三人称默认智能运镜(follow=smart)：平时追尾锁定，检测到穿越者×NPC 对话时自动切过肩双人构图
   const want = 'http://' + location.hostname + ':' + showPort + '/'
-    + (viewerOk ? '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart') : '?follow=smart')
+    + (viewerOk ? '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart') : (viewMode === 'first' ? '?fov=110' : '?follow=smart'))
     + '&pv=7'; // pv=镜头补丁版本，cache-bust（v7=+Goddess 回落）
   if (frame.getAttribute('src') !== want) frame.setAttribute('src', want);
   document.getElementById('viewer-title').textContent = viewerOk
     ? name + '（' + (viewMode === 'first' ? '第一人称' : '第三人称·智能运镜') + '）'
-    : 'Goddess（天眼）';
+    : 'Goddess（天眼·' + (viewMode === 'first' ? '第一人称' : '第三人称') + '）';
 
   // 等级徽章 / 睡觉 chip
   const mg = magicOf(bot.username || currentUser);
@@ -1577,7 +1588,7 @@ function drawMap() {
   state.bots.forEach((b) => {
     const bot = b.bot || {};
     if (!bot.online || !bot.position) return;
-    if (bot.username === currentUser) return;
+    if (bot.username === currentUser || bot.personaName === currentUser) return;
     const px = sx(bot.position.x), py = sy(bot.position.z);
     if (px < -10 || py < -10 || px > W + 10 || py > H + 10) return;
     const sk = skinFor(bot.username);
@@ -1669,7 +1680,7 @@ async function refresh() {
     // 首次或当前 bot 已消失时，自动选中第一个在线的 bot。
     if (!currentUser || !botOf(currentUser)) {
       const first = s.bots.find((b) => b.bot?.online) || s.bots[0];
-      currentUser = first?.bot?.username || null;
+      currentUser = first?.bot?.personaName || first?.bot?.username || null;
     }
     document.getElementById('sub').textContent = (s.updatedAt ? '更新于 ' + await fmtTime(s.updatedAt) : '')
       + ' · ' + s.bots.length + ' 位穿越者 · 每 2 秒刷新';
@@ -1921,7 +1932,7 @@ async function rconExec(cmd) {
 
 // ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 到其上方俯视，每 2s 跟随一次 ----
 let eyeFollow = null // { name, home }
-const EYE_HEIGHT = 12 // 悬停玩家上方格数（俯视）
+const EYE_HEIGHT = 9 // 悬停玩家上方格数（俯视；2026-08-23 从 12 调近，避免"缩放太远"看不清守卫）
 function eyeTpOnce(name) {
   // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
   const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
