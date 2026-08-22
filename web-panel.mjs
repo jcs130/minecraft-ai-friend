@@ -678,6 +678,8 @@ function ttsFiltered(kind, who, to, actor) {
     // 全部模式：祈福裁决（verdict）不播——那是"别人的私事"，全播会刷屏；welcome 只播真人玩家的
     if (kind === 'verdict') return false;
     if (kind === 'welcome') return !!actor && !String(actor).startsWith('villager:');
+    // 2026-08-23 治理：NPC 私聊（to 非空）不播——公屏治理后 NPC 大多私聊，全播等于把私聊变公屏语音刷屏
+    if (kind === 'say' && to) return false;
     return true;
   }
   if (kind === 'player') return who === ttsFilter;    // 他说的话
