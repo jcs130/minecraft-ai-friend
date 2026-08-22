@@ -602,7 +602,8 @@ def llm_reply(v, speaker, msg, ctx):
     if not llm.get("enabled"):
         return None
     sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
-            "请以人设口吻用中文回答，不超过两句话，不要出戏，不要提到游戏机制之外的现实。") % (
+            "请以人设口吻用中文回答，不超过两句话；说话用大白话、口语，像街坊邻居聊天一样，简短直接，"
+            "别拽文、别用文言、别用书面腔；不要出戏，不要提到游戏机制之外的现实。") % (
         v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"))
     body = json.dumps({
         "model": llm.get("model", "qwen3.8-27b"),
@@ -823,7 +824,8 @@ def agent_chat(v, speaker, msg, ctx):
         skill = _skill_card(v["key"])
         sit = read_situation(v)
         sysp = ("你就是%s本人——千灯纪集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
-                "以你的口吻用中文回话，不超过两句话；不出戏、不提游戏机制之外的事；"
+                "以你的口吻用中文回话，不超过两句话；说话用大白话、口语，像街坊邻居聊天一样，简短直接，"
+                "别拽文、别用文言、别用书面腔；不出戏、不提游戏机制之外的事；"
                 "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
             v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
             ctx.get("online", "?"),
@@ -850,7 +852,8 @@ def villager_pray(v):
     """生成村民祈愿（灶火祭司 LLM，带处境），投递 god-inbox.jsonl；失败返回 False。"""
     sit = read_situation(v)
     sysp = ("你就是%s本人——千灯纪集市的村民。你此刻的处境：%s。"
-            "你要向这方世界的女神祈愿。用你的口吻，一句话说出你此刻最想求女神的事，"
+            "你要向这方世界的女神祈愿。用大白话说一句话，像平常人开口求人帮忙那样，别拽文、别文绉绉，"
+            "说出你此刻最想求女神的事，"
             "必须与你的真实处境相关（饿了求食、怕了求护、有难求助、有愿祈成），不贪心、不越界，"
             "愿以你手头之物（如麦、鱼、炭）为供。只输出这一句祈愿，不要任何别的字。") % (
         v["display"], sit or "一切如常")
@@ -946,7 +949,7 @@ def llm_quest(v, day):
             "请以你的身份给今天的集市委托拟一张单子。物品只能从这些里选（id=中文名）：%s。"
             "要求：数量 3 到 24 之间、报酬 1 到 3 颗绿宝石、要与你的营生和人设相关。"
             '只输出一行 JSON，格式：{"item": "物品id", "zh": "中文名", "count": 数量, "emerald": 报酬, '
-            '"pitch": "一句话委托口吻，30字内，含数量和报酬"}。不要输出其他任何内容。') % (
+            '"pitch": "一句话委托口吻，30字内，用大白话、像平常人吆喝一样，含数量和报酬"}。不要输出其他任何内容。') % (
         v["display"], v.get("persona", ""), zh_map)
     body = json.dumps({
         "model": llm.get("model", "qwen3.8-27b"),

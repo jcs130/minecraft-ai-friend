@@ -14,6 +14,12 @@ const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
 
+// ── 语音播报（TTS）—— 本机 IndexTTS 2.5 网关（小智部署）。────────────────────────
+// 本地真实音色，供女神/NPC 说话用。只绑 127.0.0.1（面板与网关同机可直连）。
+// 失败时前端会兜底到浏览器 speechSynthesis。
+const INDEX_TTS_URL = process.env.INDEX_TTS_URL || 'http://127.0.0.1:8085'
+const TTS_INFER_TIMEOUT = 45000 // 与网关 INFER_TIMEOUT 对齐；超时网关自身会降到 edge-tts
+
 // ── mc-brain.log 思考账本（结构化 JSONL：ts/step/thought/goal/tool/args/outcome/shots）──
 // session 架构下 status.recentSteps 恒为空（2026-08-20 断流案），从账本直接捞。
 // mtime 缓存：文件没变就不重读（账本 9.5MB，轮询每 5s 一次不能全量重读）。
@@ -204,6 +210,7 @@ const PAGE = `<!doctype html>
   .vbtn { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:3px 10px; cursor:pointer; font-size:12px; color:var(--dim); transition:all .15s; }
   .vbtn:hover { border-color:var(--dim); color:var(--text); }
   .vbtn.active { border-color:var(--blue); color:var(--text); background:#12233a; }
+  .vbtn[data-on="1"] { border-color:var(--gold); color:var(--gold); background:#2a2014; }
   /* 全屏模式：viewer 占满整个 main */
   body.vmax .side, body.vmax .steps-card { display:none; }
   body.vmax .viewer-card { flex:1 1 auto; }
@@ -225,6 +232,9 @@ const PAGE = `<!doctype html>
   .kv { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:13px; }
   .kv .k { color:var(--dim); white-space:nowrap; }
   .kv .v { word-break:break-all; }
+  .kvrow { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:13px; }
+  .kvrow .k { color:var(--dim); white-space:nowrap; min-width:62px; }
+  .vsel { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:2px 6px; font-size:12px; flex:1 1 auto; }
   .hp { color:var(--green); } .food { color:var(--gold); } .bad { color:var(--red); }
   /* 等级徽章 */
   .lv-badge { font-size:12px; color:var(--gold); border:1px solid rgba(210,153,34,.5); background:rgba(210,153,34,.08); border-radius:10px; padding:1px 9px; white-space:nowrap; }
@@ -313,6 +323,7 @@ const PAGE = `<!doctype html>
             <button class="vbtn" id="vbtn-first">TA 的眼睛</button>
             <button class="vbtn" id="vbtn-reset">重置镜头</button>
             <button class="vbtn" id="vbtn-max" title="放大 3D 画面，隐藏其他面板">⛶ 全屏</button>
+            <button class="vbtn" id="vbtn-tts" title="把游戏中 NPC 与女神的话用语音播报（戳一下开启/关闭）">🔊 语音</button>
           </div>
         </div>
         <div class="viewer-wrap">
@@ -348,6 +359,11 @@ const PAGE = `<!doctype html>
         <div class="card-head"><h2>皮肤</h2><span class="muted" id="skin-note">指派后下次入服生效（在线需重连）</span></div>
         <div class="chips" id="skin-presets" style="margin-bottom:8px"><span class="empty" style="padding:6px 0">加载中…</span></div>
         <div id="skin-assign"><span class="empty" style="padding:6px 0">加载中…</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>语音</h2><span class="muted" id="tts-note">本机 IndexTTS 2.5 音色</span></div>
+        <div id="tts-form"><span class="empty" style="padding:6px 0">加载中…</span></div>
       </div>
 
       <div class="card">
@@ -442,6 +458,236 @@ function effDesc(def) {
 }
 function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ---- 语音播报（TTS）：本机 IndexTTS 2.5 真实音色，女神/NPC 说话；服务挂了才兜底浏览器 speechSynthesis ----
+// 数据源：chronicle(女神 verdict/godcast/welcome) + npc-feed(NPC say / goddess / player 台词)。
+// 都带单调递增标记（chronicle.at 毫秒 / npc-feed.t 计数），用标记去重，只播新台词。
+let ttsEnable = localStorage.getItem('ttsEnable') !== '0';   // 默认开
+const ttsVoices = {   // 音色（可经面板「语音」卡改，存 localStorage）
+  goddess: localStorage.getItem('ttsVoiceGoddess') || 'xiaoyi', // 女神：默认 xiaoyi 晓伊（女声）
+  npc: localStorage.getItem('ttsVoiceNpc') || 'yunxi',          // NPC 默认：yunxi 云希（清亮男声）
+  player: localStorage.getItem('ttsVoicePlayer') || 'xiaoxue',  // 玩家：默认 xiaoxue 小雪（女声，与女神晓伊区分）
+};
+const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；命名的 NPC 可在此逐个指定
+  '铁匠·岳山': 'baolin', '神官·静水': 'qingxin',
+};
+let ttsVoiceList = ['baolin','qingxin','taozi','xiaotian','xiaoxue','xiaoyi','yunjian','yunxi','yunyang'];
+let ttsSeen = { chronT: 0, feedT: 0 };   // 去重游标（记最大值，避免重播历史行）
+let ttsBooted = false;                    // 首次载入只记游标不播，防开局重放全部旧台词
+const ttsQ = [];                          // {text, kind, speaker}
+let ttsBusy = false;
+let ttsAudioEl = null;                    // 复用 <audio> 播 WAV
+let ttsSynthVoice = null;                 // 浏览器兜底音色
+
+function ttsPickVoice() {
+  if (!('speechSynthesis' in window)) { ttsSynthVoice = null; return; }
+  const vs = window.speechSynthesis.getVoices() || [];
+  ttsSynthVoice = vs.find((v) => /zh/i.test(v.lang)) || vs[0] || null;
+}
+ttsPickVoice();
+if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = ttsPickVoice;
+
+// 浏览器自动播放策略：任意首击解锁 speechSynthesis / audio 元素。
+if ('speechSynthesis' in window) {
+  document.addEventListener('pointerdown', () => { try { window.speechSynthesis.resume(); } catch {} }, { once: true });
+}
+document.addEventListener('pointerdown', () => { try { if (ttsAudioEl) ttsAudioEl.play().catch(() => {}); } catch {} }, { once: true });
+
+const PLAYER_DISPLAY = { MengMeng: '萌萌', KangQiang: '扛枪' }; // 登录名 → 中文名（TTS 朗读用）
+const VIP_PRIORITY = ['MengMeng', '萌萌']; // 重点看护玩家：语音打断优先
+
+// 播报范围：'' = 全部；玩家名（如 MengMeng）= 只听该玩家视角（他说的 / 对他说 / 女神回应他的）
+let ttsFilter = localStorage.getItem('ttsFilterPlayer') || '';
+function ttsFiltered(kind, who, to, actor) {
+  if (!ttsFilter) return true;
+  if (kind === 'player') return who === ttsFilter;    // 他说的话
+  if (kind === 'say') return to === ttsFilter;        // NPC 对他说
+  if (kind === 'verdict') return actor === ttsFilter; // 女神回应他的裁决
+  if (kind === 'welcome') return actor === ttsFilter; // 他的欢迎语
+  return false; // godcast / goddess 公开广播：过滤模式下不播
+}
+
+// 播报文本清理：去 MC 格式码 / 语音输入前缀 / 开头动作描写括号 / 残留音频 emoji
+function cleanTtsText(t) {
+  let s = String(t || '').replace(/\u00a7./g, '').trim();
+  s = s.replace(/^[\u{1F3A4}\u{1F399}\u{1F3A7}]+\s*(Speech Input|语音输入|voice input)\s*[\u{1F3A4}\u{1F399}\u{1F3A7}]*\s*[:：]?\s*/iu, '');
+  s = s.replace(/^[（(][^（()）]*[）)]\s*/, '');
+  s = s.replace(/[\u{1F3A4}\u{1F399}\u{1F3A7}]/gu, '');
+  return s.trim();
+}
+
+function ttsVoiceFor(speaker, kind) {
+  if (kind === 'goddess') return ttsVoices.goddess;
+  if (kind === 'player') return ttsVoices.player;
+  if (speaker && ttsBySpeaker[speaker]) return ttsBySpeaker[speaker];
+  return ttsVoices.npc;
+}
+
+function ttsSpeak(text, kind, speaker) {
+  if (!ttsEnable) return;
+  const clean = cleanTtsText(text);
+  if (!clean) return;
+  // 角色前缀：让听者一听就知道谁在说
+  let label = '';
+  if (kind === 'goddess') label = '女神：';
+  else if (kind === 'player') label = (PLAYER_DISPLAY[speaker] || speaker || '玩家') + '：';
+  else if (speaker) label = speaker + '：';
+  const priority = kind === 'goddess' || (kind === 'player' && VIP_PRIORITY.includes(speaker));
+  if (priority) {
+    ttsQ.length = 0; ttsStop();       // 女神话 / 重点看护玩家：优先且打断
+  } else if (ttsQ.length >= 3) {
+    ttsQ.shift();                     // 其余台词限长 3，防刷屏
+  }
+  ttsQ.push({ clean: label + clean, kind, speaker });
+  ttsPump();
+}
+function ttsStop() {
+  ttsBusy = false;
+  try { if (ttsAudioEl) { ttsAudioEl.onended = null; ttsAudioEl.onerror = null; ttsAudioEl.pause(); ttsAudioEl.src = ''; } } catch {}
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
+}
+async function ttsPump() {
+  if (ttsBusy || !ttsQ.length) return;
+  ttsBusy = true;
+  const job = ttsQ.shift();
+  const voice = ttsVoiceFor(job.speaker, job.kind);
+  let ok = false;
+  try { ok = await ttsPlayIndex(job.clean, voice); } catch { ok = false; }
+  if (!ok) ttsPlayFallback(job.clean, job.kind); // TTS 服务超时/挂 -> 浏览器兜底
+  ttsBusy = false;
+  ttsPump();
+}
+function ttsPlayIndex(text, voice) {
+  return new Promise((resolve) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 50000);
+    fetch('/api/tts', {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice }),
+    }).then((r) => {
+      if (!r.ok) throw new Error('tts ' + r.status);
+      return r.blob();
+    }).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = ttsAudioEl || (ttsAudioEl = document.createElement('audio'));
+      ttsAudioEl = a;
+      a.src = url;
+      a.onended = () => { URL.revokeObjectURL(url); resolve(true); };
+      a.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+      const p = a.play();
+      if (p) p.catch(() => { URL.revokeObjectURL(url); resolve(false); });
+    }).catch(() => { clearTimeout(timer); resolve(false); })
+      .finally(() => { clearTimeout(timer); });
+  });
+}
+function ttsPlayFallback(text, kind) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    if (ttsSynthVoice) u.voice = ttsSynthVoice;
+    u.lang = (ttsSynthVoice && ttsSynthVoice.lang) || 'zh-CN';
+    u.pitch = kind === 'goddess' ? 0.82 : 1.1;  // 女神低沉庄重 / NPC 清亮
+    u.rate = kind === 'goddess' ? 0.95 : 1.0;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+// 每次刷新 state 后调用：比对游标，把新出现的台词交给 TTS（旧→新顺序，保证先后自然）。
+function playTtsFromState() {
+  if (!ttsEnable) return;
+  const chron = (state.chronicle || []).slice().reverse(); // 旧→新
+  const feed = (state.npcFeed || []).slice().reverse();     // 旧→新
+  if (!ttsBooted) {
+    // 首次载入：把游标拉到当前最新，不播旧历史，只播此后的新台词
+    ttsBooted = true;
+    ttsSeen.chronT = chron.length ? Math.max(...chron.map((e) => e.at || 0)) : 0;
+    ttsSeen.feedT = feed.length ? Math.max(...feed.map((e) => e.t || 0)) : 0;
+    return;
+  }
+  const strip = (t) => String(t || '').replace(/\u00a7./g, '').trim();
+  for (const e of chron) {
+    const at = e.at || 0;
+    if (at <= ttsSeen.chronT) continue;
+    ttsSeen.chronT = Math.max(ttsSeen.chronT, at);
+    const d = e.detail || {};
+    if (e.type === 'verdict' && ttsFiltered('verdict', null, null, e.actor)) ttsSpeak(d.reply, 'goddess', '女神');
+    else if (e.type === 'godcast' && !ttsFilter) ttsSpeak(d.reply || d.text, 'goddess', '女神');
+    else if (e.type === 'welcome' && ttsFiltered('welcome', null, null, e.actor)) ttsSpeak(d.text, 'goddess', '女神');
+  }
+  for (const e of feed) {
+    const t = e.t || 0;
+    if (t <= ttsSeen.feedT) continue;
+    ttsSeen.feedT = Math.max(ttsSeen.feedT, t);
+    const txt = strip(e.text);
+    if (!txt) continue;
+    if (e.kind === 'goddess' && !ttsFilter) ttsSpeak(txt, 'goddess', '女神');
+    else if (e.kind === 'say' && ttsFiltered('say', null, e.to, null)) ttsSpeak(txt, 'npc', e.npc);
+    else if (e.kind === 'player' && ttsFiltered('player', e.who, null, null)) ttsSpeak(txt, 'player', e.who || e.npc); // 玩家的话：独立音色 + 角色前缀
+    // event（看护/拉回）不播，避免刷屏
+  }
+}
+
+function ttsRenderToggle() {
+  const b = document.getElementById('vbtn-tts');
+  if (!b) return;
+  b.dataset.on = ttsEnable ? '1' : '0';
+  b.textContent = ttsEnable ? '🔊 语音 · 开' : '🔇 语音 · 关';
+  b.title = ttsEnable ? '语音播报开启（再点关闭）' : '语音播报关闭（再点开启）';
+}
+
+// 语音卡：女神/NPC 音色选择 + 试听（读网关照 /api/tts/voices 填充）
+function renderTtsForm() {
+  const el = document.getElementById('tts-form');
+  if (!el) return;
+  const goptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.goddess ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+  const noptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.npc ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+  const poptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.player ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+  el.innerHTML =
+    '<div class="kvrow"><span class="k">女神</span><select class="vsel" id="tts-v-goddess">' + goptions + '</select><button class="vbtn" id="tts-t-goddess">试听</button></div>' +
+    '<div class="kvrow"><span class="k">NPC 默认</span><select class="vsel" id="tts-v-npc">' + noptions + '</select><button class="vbtn" id="tts-t-npc">试听</button></div>' +
+    '<div class="kvrow"><span class="k">玩家</span><select class="vsel" id="tts-v-player">' + poptions + '</select><button class="vbtn" id="tts-t-player">试听</button></div>' +
+    '<div class="kvrow"><span class="k">播报范围</span><select class="vsel" id="tts-v-filter"></select><span class="muted" style="font-size:11px">全部 / 只看某玩家</span></div>' +
+    '<div class="muted" style="padding:4px 0 2px">命名的 NPC 可在代码里逐个指音色（ttsBySpeaker）</div>';
+  const g = document.getElementById('tts-v-goddess'), n = document.getElementById('tts-v-npc'), p = document.getElementById('tts-v-player');
+  if (g) g.onchange = (ev) => { ttsVoices.goddess = ev.target.value; localStorage.setItem('ttsVoiceGoddess', ev.target.value); };
+  if (n) n.onchange = (ev) => { ttsVoices.npc = ev.target.value; localStorage.setItem('ttsVoiceNpc', ev.target.value); };
+  if (p) p.onchange = (ev) => { ttsVoices.player = ev.target.value; localStorage.setItem('ttsVoicePlayer', ev.target.value); };
+  const tg = document.getElementById('tts-t-goddess'), tn = document.getElementById('tts-t-npc'), tp = document.getElementById('tts-t-player');
+  if (tg) tg.onclick = () => ttsPreview(ttsVoices.goddess, 'goddess');
+  if (tn) tn.onclick = () => ttsPreview(ttsVoices.npc, 'npc');
+  if (tp) tp.onclick = () => ttsPreview(ttsVoices.player, 'player');
+  updateTtsFilterOptions();
+}
+function ttsPreview(voice, kind) {
+  ttsStop(); ttsQ.length = 0; ttsBusy = false;
+  const preview = '神说，这世界有光。';
+  ttsPlayIndex(preview, voice).then((ok) => { if (!ok) ttsPlayFallback(preview, kind || 'npc'); });
+}
+// 播报范围下拉：全部 + 在线玩家（world.watching）+ 已知真人（PLAYER_DISPLAY），保留当前选择
+function updateTtsFilterOptions() {
+  const el = document.getElementById('tts-v-filter');
+  if (!el) return;
+  const names = new Set(['']);
+  (state.world && state.world.watching || []).forEach((n) => names.add(n));
+  Object.keys(PLAYER_DISPLAY).forEach((n) => names.add(n));
+  el.innerHTML = '<option value="">全部</option>' + [...names].filter(Boolean).map((n) =>
+    '<option value="' + esc(n) + '"' + (n === ttsFilter ? ' selected' : '') + '>' + esc(PLAYER_DISPLAY[n] || n) + '</option>').join('');
+  if (!el.dataset.bound) {
+    el.dataset.bound = '1';
+    el.onchange = (ev) => {
+      ttsFilter = ev.target.value;
+      localStorage.setItem('ttsFilterPlayer', ttsFilter);
+    };
+  }
+}
+async function loadVoiceList() {
+  try {
+    const r = await fetch('/api/tts/voices');
+    if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.voices) && j.voices.length) ttsVoiceList = j.voices; }
+  } catch {}
+  renderTtsForm();
 }
 
 // ---- 皮肤系统：/skins/<username小写>.png，加载后提取脸 8x8 ----
@@ -979,6 +1225,7 @@ async function refresh() {
     const s = await r.json();
     const prevFeedT = (state.npcFeed && state.npcFeed.length) ? Math.max(...state.npcFeed.map((e) => e.t || 0)) : 0;
     state = s;
+    playTtsFromState(); // 语音播报：新出现的 NPC/女神台词 → TTS
     maybeCameraCue(s, prevFeedT);
     // 首次或当前 bot 已消失时，自动选中第一个在线的 bot。
     if (!currentUser || !botOf(currentUser)) {
@@ -988,6 +1235,7 @@ async function refresh() {
     document.getElementById('sub').textContent = (s.updatedAt ? '更新于 ' + await fmtTime(s.updatedAt) : '')
       + ' · ' + s.bots.length + ' 位穿越者 · 每 2 秒刷新';
     renderWorldChip(s.world);
+    updateTtsFilterOptions(); // 播报范围下拉：按在线玩家动态补全（保留当前选择）
     renderTabs();
     renderCurrent();
 
@@ -1126,6 +1374,20 @@ function initViewButtons() {
     bm.classList.toggle('active');
   });
   sync();
+
+  // 语音播报（TTS）开关：开/关 + 开关后重定游标（只播重启后的新台词，不重放旧历史）
+  const ttsBtn = document.getElementById('vbtn-tts');
+  if (ttsBtn && !ttsBtn.dataset.bound) {
+    ttsBtn.dataset.bound = '1';
+    ttsRenderToggle();
+    ttsBtn.addEventListener('click', () => {
+      ttsEnable = !ttsEnable;
+      localStorage.setItem('ttsEnable', ttsEnable ? '1' : '0');
+      ttsSeen.chronT = 0; ttsSeen.feedT = 0; ttsBooted = false;
+      if (!ttsEnable) { try { window.speechSynthesis.cancel(); } catch {} ttsQ.length = 0; ttsBusy = false; }
+      ttsRenderToggle();
+    });
+  }
 }
 
 refresh();
@@ -1142,6 +1404,7 @@ initZoomButtons();
 })();
 setInterval(refresh, 2000);
 loadSkins(); setInterval(loadSkins, 60000);
+loadVoiceList();
 </script>
 </body>
 </html>`
@@ -1329,6 +1592,39 @@ const server = createServer((req, res) => {
     }
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=60', 'Access-Control-Allow-Origin': '*' })
     res.end(readFileSync(p))
+    return
+  }
+  // 语音（TTS）：代理本机 IndexTTS 2.5 网关 -> 前端拿 WAV 播放。
+  if (u.pathname === '/api/tts' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (c) => { body += c; if (body.length > 8192) { req.destroy(); } })
+    req.on('end', async () => {
+      let text = '', voice = ''
+      try { ({ text, voice } = JSON.parse(body || '{}')) } catch {}
+      if (!text) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('no text'); return }
+      const ctl = new AbortController()
+      const timer = setTimeout(() => ctl.abort(), TTS_INFER_TIMEOUT + 8000)
+      try {
+        const r = await fetch(`${INDEX_TTS_URL}/tts_raw`, {
+          method: 'POST', signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: String(text).slice(0, 160), voice: voice || 'xiaoyi' }),
+        })
+        if (!r.ok) throw new Error('upstream ' + r.status)
+        const buf = Buffer.from(await r.arrayBuffer())
+        res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
+        res.end(buf)
+      } catch (e) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' })
+        res.end('tts error: ' + (e.message || e))
+      } finally { clearTimeout(timer) }
+    })
+    return
+  }
+  if (u.pathname === '/api/tts/voices' && req.method === 'GET') {
+    fetch(`${INDEX_TTS_URL}/voices`)
+      .then(async (r) => { const j = await r.json(); res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(j)); })
+      .catch((e) => { res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: String(e.message || e) })); });
     return
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
