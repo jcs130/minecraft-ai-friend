@@ -39,6 +39,7 @@ GUARDS = [
 # 每轮节奏（秒）
 DECIDE_INTERVAL = 20      # 空闲时：决策+执行一轮后休息
 BUSY_POLL = 6             # 有任务在跑时：只轮询，不决策
+LOST_POLL = 30            # 伴链断连时：只降频心跳（身体实体不在，别刷无效动作）
 MAX_RUN_SECONDS = 0       # 0 = 无限循环（常驻）；>0 用于试运行
 
 # 动作白名单（亲卫可驱动身体做的；不含任何世界级/创造级动作）
@@ -60,13 +61,14 @@ TOOL_WHITELIST = {
 }
 
 # 决策 prompt 模板：喂给亲卫，让它输出一个动作 JSON
-def decision_prompt(g, status, world, look, scan, last_act, goal):
+def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=None):
     return "\n".join([
         f"【{g['name']}身体快照】{status}",
         f"【世界】{world}",
         f"【周围地形 look_around】\n{look}",
         f"【附近实体 hostile】{scan}",
         f"【上一动作】{last_act or '（无，这是第一轮）'}",
+        f"【当前任务（常驻）】{standing_task or '（无——身体空闲）'}",
         f"【当前目标】{goal or '（尚未立下目标——结合处境先定一个眼前该办的正事）'}",
         "",
         f"你是亲卫（{g['agent']}），直管穿越者{g['name']}的魂。此刻他的身体由你掌舵——",
@@ -96,6 +98,12 @@ def decision_prompt(g, status, world, look, scan, last_act, goal):
         "- 目标连贯：goal 是你此刻想办成的事（如「天黑前搭个遮雨窝」），一次只做一个动作，做完等 task_finished 再规划下一步；目标达成或不再要紧，就在本轮的 goal 里换掉；",
         "- 不贪心：不索要钻石、不造奇观，先活着、再攒生计；",
         "- 有危险优先处理危险，没事就奔着当前目标推进（砍树/采煤/觅食/回家）。",
+        "",
+        "常驻任务的处置（若【当前任务】是『跟随』这类无终点任务）：",
+        "- 这不是坏事——跟主人走是正常诉求；它不会自己结束，需要你决定留还是换。",
+        "- 若跟随仍有意义（主人就在近旁、或你要跟他走）→ 保持现状，可输出感知类工具确认，或直接给一个无害动作；",
+        "- 若跟随已无意义（主人离线、目标消失、你需要去办别的事）→ 输出新的身体动作（mine/eat/goto/sleep 等），新动作会自动顶替跟随（numen 语义：派别的东西就是让它停下的正常方式）。",
+        "- 不要因为『有任务在跑』就什么都不做——常驻任务占着身体不等于锁死你，你永远是决策者。",
     ])
 
 
@@ -248,22 +256,59 @@ def drive_loop(g, stop_at):
             log("试运行时间到，退出")
             return
         round_n += 1
+        current_task = None
         try:
-            # 1. 查任务状态：有活干就先等，不派新动作
+            # 1. 查任务状态：有"有界"任务在跑就先等，不派新动作；
+            #    但"常驻"任务（follow 类，无终点、永不 task_finished）不能把决策锁死——
+            #    numen 语义是"派别的身体动作就顶替它"，所以要把这个状态喂给亲卫，
+            #    让它自己决定继续跟随还是换成别的活。判断标准：time budget 是天文数字
+            #    （>= NO_DEADLINE 折算）或 task 名在常驻集合里。
+            STANDING_TASKS = {"follow", "follow_entity"}
             ts = query(g["name"], "task_status")
             if isinstance(ts, dict) and ts.get("success") is True:
                 msg = ts.get("message", "")
-                if "空闲" not in msg and "没有后台任务" not in msg:
+                data = ts.get("data") or {}
+                task_name = str(data.get("task", "")).strip()
+                budget_left = data.get("budget_left_s")
+                is_standing = (
+                    task_name in STANDING_TASKS
+                    or (isinstance(budget_left, (int, float)) and budget_left > 1000000)
+                )
+                if "空闲" not in msg and "没有后台任务" not in msg and not is_standing:
                     feed_append(g, "busy", msg[:200])
                     time.sleep(BUSY_POLL)
                     continue
+                if is_standing:
+                    # 常驻任务：不锁死决策，但把"当前在跟随/常驻"状态喂给亲卫判断
+                    current_task = data.get("task") or task_name
+                    current_task_desc = str(data.get("task_id", "") or "")
+                    feed_append(g, "standing", f"task={task_name} id={current_task_desc} budget={budget_left}")
+                    log(f"常驻任务在跑：{task_name}（不锁决策，交给亲卫判断是否替换）")
             # 2. 读状态 + 感知
             status = invoke(g["name"], "get_self_status")
+            # 伴链断连识别：身体实体不在（no companion / ToolNotFoundError 之类）时，
+            # 不要再喂亲卫做新动作——那是无效刷屏，只会让亲卫一次次撞墙。
+            # 降频心跳，等实体重挂（宿主要重启伴链服务/重挂实体）。
+            if isinstance(status, str) and (
+                "no companion" in status
+                or "no entity" in status.lower()
+                or "没有伴" in status
+                or "ToolNotFound" in status
+            ):
+                feed_append(g, "disconnected", status[:200])
+                log(f"伴链断连：{g['name']} 身体实体不在，停发新动作，降频心跳等重挂（{status[:80]}）")
+                time.sleep(LOST_POLL)
+                continue
+            if isinstance(status, dict) and not status.get("success", True) and "no companion" in str(status):
+                feed_append(g, "disconnected", str(status)[:200])
+                log(f"伴链断连：{g['name']} 身体实体不在，停发新动作，等重挂")
+                time.sleep(LOST_POLL)
+                continue
             world = invoke(g["name"], "get_world_info")
             look = invoke(g["name"], "look_around", {"radius": 8})
             scan = invoke(g["name"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
             # 3. 喂亲卫决策
-            prompt = decision_prompt(g, status, world, look, scan, last_act, goal)
+            prompt = decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=current_task)
             ans = call_guard(g["agent"], g["session"], prompt)
             act = extract_action(ans)
             if not act:
