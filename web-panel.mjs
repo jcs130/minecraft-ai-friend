@@ -167,6 +167,14 @@ function readNpcFeed(limit = 24) {
   }
 }
 
+// 女神天眼实体快照（bootstrap-world 每 1.5s 写 web-entities.json）：只取 mob/村民/玩家上线给前端
+function readEntities() {
+  try {
+    const d = readJson(join(DATA_DIR, 'web-entities.json'), null)
+    return (d?.entities || []).filter((e) => e.isMob || e.isNpc || e.isPlayer)
+  } catch { return [] }
+}
+
 function apiState() {
   const memory = readJson(MEMORY_PATH, null)
   const mem = {
@@ -252,6 +260,7 @@ function apiState() {
     chronicle: readChronicle(40),
     npcFeed: readNpcFeed(24),
     world: hb,
+    entities: readEntities(),
   }
 }
 
@@ -1532,6 +1541,16 @@ function drawMap() {
     ctx.fillText((n.display || 'NPC'), px + 5, py - 3);
   });
 
+  // 怪物（女神天眼视野内的 mob）—— #1 怪物显示
+  (state.entities || []).forEach((e) => {
+    if (!e.isMob) return;
+    const px = sx(e.x), py = sy(e.z);
+    if (px < -10 || py < -10 || px > W + 10 || py > H + 10) return;
+    ctx.fillStyle = '#f85149';
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
   // 其他 bot（紫色圆点 / 皮肤头像）
   state.bots.forEach((b) => {
     const bot = b.bot || {};
@@ -1591,6 +1610,7 @@ function drawMap() {
     + '<span><i style="background:#bc8cff"></i>其他穿越者</span>'
     + '<span><i style="background:#d29922"></i>基地</span>'
     + '<span><i style="background:#f0883e"></i>NPC</span>'
+    + '<span><i style="background:#f85149"></i>怪物</span>'
     + '<span><i style="background:#58a6ff"></i>公共箱</span>'
     + RES_TYPES.map(([k, l, c]) => '<span><i style="background:' + c + '"></i>' + l + '</span>').join('')
     + '<span style="margin-left:auto">范围 ±' + RANGE + ' 格</span>';
