@@ -328,6 +328,10 @@ const PAGE = `<!doctype html>
   .step .shot img { flex:1 1 160px; max-width:640px; border:1px solid var(--line); border-radius:6px; cursor:zoom-in; display:block; object-fit:cover; max-height:140px; }
   .step .shot:has(img:only-child) img { width:100%; }
   .empty { color:var(--dim); font-size:13px; text-align:center; padding:20px 0; }
+  /* 聊天记录（原思考流面板改承载对话流）：行样式复用原聊天条 */
+  .steps-scroll .ce { display:flex; gap:8px; padding:4px 0; border-bottom:1px dashed #21262d; align-items:baseline; }
+  .steps-scroll .ct { color:var(--dim); font-family:monospace; font-size:11px; flex:0 0 auto; }
+  .steps-scroll .cx { overflow-wrap:anywhere; min-width:0; }
   /* ── 侧栏 ── */
   .side { flex:0 0 350px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-height:0; scrollbar-width:thin; }
   .kv { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:13px; }
@@ -412,9 +416,9 @@ const PAGE = `<!doctype html>
   .drawer-toggle:hover { border-color:var(--dim); color:var(--text); }
   #settings-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:490; opacity:0; pointer-events:none; transition:opacity .2s; }
   body.drawer-open #settings-backdrop { opacity:1; pointer-events:auto; }
-  #settings-drawer { position:fixed; top:0; right:0; height:100%; width:400px; max-width:92vw; background:var(--bg); border-left:1px solid var(--line); box-shadow:-10px 0 28px rgba(0,0,0,.5); transform:translateX(100%); transition:transform .25s; overflow-y:auto; padding:14px 16px; z-index:491; display:flex; flex-direction:column; gap:12px; scrollbar-width:thin; }
+  #settings-drawer { position:fixed; top:0; right:0; height:100%; width:560px; max-width:96vw; background:var(--bg); border-left:1px solid var(--line); box-shadow:-10px 0 28px rgba(0,0,0,.5); transform:translateX(100%); transition:transform .25s; overflow-y:auto; overflow-x:hidden; padding:14px 16px; z-index:491; display:flex; flex-direction:column; gap:12px; scrollbar-width:thin; }
   body.drawer-open #settings-drawer { transform:translateX(0); }
-  #settings-drawer .card { flex:0 0 auto; }
+  #settings-drawer .card { flex:0 0 auto; min-width:0; max-width:100%; }
   /* ── 底部聊天条（#2）：填满下方空白，承载穿越者×NPC对话与编年史 ── */
   .chatbar { flex:0 0 auto; height:196px; border-top:1px solid var(--line); background:var(--card); display:flex; flex-direction:column; min-height:0; }
   .chatbar-head { display:flex; align-items:center; gap:8px; padding:6px 14px; border-bottom:1px solid var(--line); flex:0 0 auto; }
@@ -459,8 +463,9 @@ const PAGE = `<!doctype html>
       </div>
 
       <div class="card steps-card">
-        <div class="card-head"><h2 id="steps-title">思考流</h2><span class="muted">最新在上 · 空白说明 bot 离线</span></div>
-        <div class="steps-scroll" id="steps"><div class="empty">还没有数据</div></div>
+        <div class="card-head"><h2 id="steps-title">聊天记录</h2><span class="muted">穿越者 × NPC 对话 · 神谕 · 编年史</span></div>
+        <div id="sysbar" class="sysbar"></div>
+        <div class="steps-scroll" id="steps"><div class="empty">暂无对话记录</div></div>
       </div>
     </div>
 
@@ -526,11 +531,7 @@ const PAGE = `<!doctype html>
     </div>
   </div>
 
-<div class="chatbar">
-  <div class="chatbar-head"><h2>🌍 世界之声 · 聊天记录</h2><span class="muted" id="chatbar-sub">穿越者 × NPC 对话 · 神谕 · 编年史</span></div>
-  <div id="sysbar" class="sysbar"></div>
-  <div class="chatbar-scroll" id="chatfeed"><div class="empty">暂无记录</div></div>
-</div>
+<!-- 聊天记录已并入主区「聊天记录」卡（原思考流位），不再保留 196px 底部小条 -->
 
 <div id="settings-backdrop"></div>
 <aside id="settings-drawer">
@@ -1240,7 +1241,7 @@ function npcLine(e) {
 // 世界之声（#2）：对话流 + 系统提示。对话（say/goddess/player/chat）才进聊天记录；
 // 系统事件（拉回铺子/离世界/死亡/加入）瘦身成一条置顶系统提示（#信息透出），不刷屏。
 function renderChatBar() {
-  const el = document.getElementById('chatfeed');
+  const el = document.getElementById('steps');
   if (!el) return;
   const dt = (v) => {
     const d = new Date(String(v || '').replace(' ', 'T'));
@@ -1272,7 +1273,7 @@ function renderChatBar() {
     if (['say', 'goddess', 'player'].includes(e.kind)) rows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
   }
   rows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
-  const tail = rows.slice(0, 48);
+  const tail = rows.slice(0, 200);
   el.innerHTML = tail.length ? tail.map((r) => '<div class="ce"><span class="ct">' + dt(r.t) + '</span><span class="cx">' + r.h + '</span></div>').join('') : '<div class="empty">暂无对话记录</div>';
 }
 
@@ -1470,27 +1471,7 @@ function renderCurrent() {
     ? inv.map((i) => '<span class="chip">' + esc(i.name) + ' ×' + i.count + '</span>').join('')
     : '<span class="muted">空</span>';
 
-  const steps = b?.recentSteps || [];
-  document.getElementById('steps').innerHTML = steps.length
-    ? steps.slice().reverse().map((st) => {
-        const args = typeof st.args === 'object' && st.args && Object.keys(st.args).length
-          ? ' ' + JSON.stringify(st.args)
-          : (typeof st.args === 'string' && st.args && st.args !== '{}' ? ' ' + st.args : '');
-        const out = (st.outcome || '').length > 120 ? String(st.outcome).slice(0, 120) + '…' : (st.outcome || '');
-        const shotList = (st.shots && st.shots.length ? st.shots : (st.shot ? [st.shot] : []));
-        const shot = shotList.length
-          ? '<div class="shot">' + shotList.map((f) => '<img src="/shot/' + f + '" loading="lazy" data-shot="' + f + '" title="点击看大图">').join('') + '</div>'
-          : '';
-        const t = st.ts ? String(st.ts).slice(5, 16).replace('T', ' ') : '';
-        return '<div class="step">'
-          + '<div class="head"><span>#' + st.step + '</span><span class="tool">' + esc(st.tool) + esc(args) + '</span><span class="muted">' + t + '</span></div>'
-          + '<div class="thought">💭 ' + esc(st.thought || '-') + '</div>'
-          + '<div class="goal">🎯 ' + esc(st.goal || '-') + '</div>'
-          + shot
-          + '<div class="outcome">→ ' + esc(out) + '</div>'
-          + '</div>';
-      }).join('')
-    : '<div class="empty">还没有数据</div>';
+  // #steps（聊天记录）由 renderChatBar() 全权渲染；此处不再用 recentSteps（服务端取不到思考流）。
 }
 
 function mapCenter() {
