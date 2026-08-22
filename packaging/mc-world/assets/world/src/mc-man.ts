@@ -32,7 +32,10 @@ const wrap = (s: string): string[] => {
 /** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
-  return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
+  return (
+    t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ') ||
+    t === '/cli' || t.startsWith('/cli ')
+  )
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
@@ -59,10 +62,24 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
+  const trimmed = text.trim()
+  const isCli = /^\/?cli\b/i.test(trimmed) // /cli 专给 AI 玩家
+  const raw = trimmed.replace(/^\/?(help|h|cli)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
+
+  // ── /cli：AI 玩家命令接口（读不了书，走结构化命令）──────────
+  if (isCli) {
+    return [
+      '【AI 命令接口｜/cli】AI 玩家读不了书，按这套发命令（私聊女神 /msg Goddess）：',
+      '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
+      '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
+      '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
+      '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
+      '查全法术表 /help 咒语；内容手册 /help。',
+    ]
+  }
 
   // ── /help：总览 ──────────────────────────────────────────────
   if (!topic) {
@@ -70,6 +87,7 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
       '【千灯纪·生存手册】/help <主题> 查询，主题：',
       '世界 | 新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道',
       '例：/help 咒语　/help 咒语 2　/help 咒语 回家　/help 新手',
+      'AI 玩家（读不了书）专用：/cli 看命令接口。',
     ]
   }
 
