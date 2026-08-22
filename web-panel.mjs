@@ -15,6 +15,9 @@ const EVENTS_PATH = resolve(DATA_DIR, 'skill-events.json')
 const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
+const VILLAGE_DIR = resolve(DATA_DIR, 'village') // 村庄引擎数据目录（config.json / villagers.json）
+const VILLAGE_CFG_PATH = resolve(VILLAGE_DIR, 'config.json')
+const VILLAGERS_PATH = resolve(VILLAGE_DIR, 'villagers.json')
 
 // ── 语音播报（TTS）—— 云端 edge-tts 优先，本机 IndexTTS 网关兜底。─────────────
 // 2026-08-22 用户定调「TTS 走云端」：本地 IndexTTS 被 vllm 抢 GPU 慢（5~25s/句），
@@ -441,7 +444,7 @@ const PAGE = `<!doctype html>
     <span class="worldchip" id="worldchip">世界…</span>
     <div class="tabs" id="tabs"></div>
     <div class="spacer"></div>
-    <button class="drawer-toggle" id="settings-toggle" title="打开设置抽屉（技能/皮肤/语音/背包/记忆）">⚙ 设置</button>
+    <button class="drawer-toggle" id="settings-toggle" title="打开设置抽屉（技能/皮肤/语音/背包/记忆/世界控制/村庄NPC）">⚙ 设置</button>
   </header>
 
   <div class="main">
@@ -528,6 +531,16 @@ const PAGE = `<!doctype html>
         <div class="card-head"><h2>记忆</h2></div>
         <div class="kv" id="memory"></div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h2>世界控制</h2><span class="muted">难度 · 时间 · 天气 · 游戏规则（即时生效）</span></div>
+        <div id="worldctrl"><span class="empty" style="padding:6px 0">加载中…</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>村庄 / NPC</h2><span class="muted" id="npc-note">对话半径 · 拉回 · 祈愿 · 各村民</span></div>
+        <div id="npcctl"><span class="empty" style="padding:6px 0">加载中…</span></div>
+      </div>
     </div>
   </div>
 
@@ -537,7 +550,7 @@ const PAGE = `<!doctype html>
 <aside id="settings-drawer">
   <div class="drawer-note" style="display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px;">
     <button class="vbtn" id="drawer-close">✕ 收起</button>
-    <span>技能 / 皮肤 / 语音 / 背包 / 记忆</span>
+    <span>技能 / 皮肤 / 语音 / 背包 / 记忆 / 世界控制 / 村庄NPC</span>
   </div>
 </aside>
 
@@ -1061,6 +1074,140 @@ function renderSkins() {
   }));
 }
 
+// ---- 世界控制卡（#4）：难度 / 时间 / 天气 / 游戏规则 ----
+let worldctl = { ok: false, difficulty: null, ticks: null, gamerules: {} };
+async function loadWorldCtl() {
+  try {
+    const r = await fetch('/api/world');
+    if (!r.ok) return;
+    const j = await r.json();
+    worldctl = Object.assign({ ok: false, difficulty: null, ticks: null, gamerules: {} }, j);
+    renderWorldCtl();
+  } catch { /* 世界进程未起/RCON 抖动 */ }
+}
+const DIFF_ZH = [['peaceful', '和平'], ['easy', '简单'], ['normal', '普通'], ['hard', '困难']];
+const TIME_ZH = [['day', '白天'], ['noon', '正午'], ['night', '夜晚'], ['midnight', '午夜']];
+const WEATHER_ZH = [['clear', '晴'], ['rain', '雨'], ['thunder', '雷暴']];
+const GR_ZH = Object.fromEntries([
+  ['doDaylightCycle', '日夜循环'], ['doWeatherCycle', '天气变化'], ['keepInventory', '死亡保留背包'],
+  ['mobGriefing', '生物破坏'], ['naturalRegeneration', '自然回血'], ['doMobSpawning', '怪物生成'],
+  ['doMobLoot', '怪物掉落'], ['doFireTick', '火焰蔓延'],
+]);
+function phaseOf(ticks) {
+  const t = ((Number(ticks) % 24000) + 24000) % 24000;
+  if (t < 1000) return '清晨';
+  if (t < 13000) return '白天';
+  if (t < 18000) return '黄昏·夜晚';
+  return '深夜';
+}
+function renderWorldCtl() {
+  const el = document.getElementById('worldctrl');
+  if (!el) return;
+  // 抽屉内正在编辑（焦点在某 input/select）时跳过重建，防止毁掉输入中的值/光标
+  const ae = document.activeElement;
+  if (ae && el.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName)) return;
+  const off = '<span class="k">读取</span><span class="v">—（世界进程未起 / RCON 抖动，按钮仍可操作）</span>';
+  const diffActive = (k) => (worldctl.difficulty === ['peaceful', 'easy', 'normal', 'hard'].indexOf(k)) ? ' active' : '';
+  const gr = worldctl.gamerules || {};
+  const html =
+    '<div class="kvrow"><span class="k">难度</span><span class="chips" style="margin:0">'
+    + ['peaceful', 'easy', 'normal', 'hard'].map((k) => '<button class="vbtn' + diffActive(k) + '" data-wdiff="' + k + '">' + DIFF_ZH.reduce((a, d) => a + (d[0] === k ? d[1] : ''), '') + '</button>').join('')
+    + '</span></div>'
+    + '<div class="kvrow"><span class="k">时间</span><span class="chips" style="margin:0">'
+    + TIME_ZH.map(([k, zh]) => '<button class="vbtn" data-wtime="' + k + '">' + zh + '</button>').join('')
+    + '</span><span class="muted" style="margin-left:6px">当前 ' + (worldctl.ticks != null ? phaseOf(worldctl.ticks) + '（' + worldctl.ticks + ' tick）' : '—') + '</span></div>'
+    + '<div class="kvrow"><span class="k">天气</span><span class="chips" style="margin:0">'
+    + WEATHER_ZH.map(([k, zh]) => '<button class="vbtn" data-wweather="' + k + '">' + zh + '</button>').join('')
+    + '</span></div>'
+    + '<div class="muted" style="padding:6px 0 2px;border-top:1px solid #30363d;margin-top:6px">天气设置可选持续时长（秒，留空=按当前循环）</div>'
+    + '<div class="kvrow"><span class="k">持续</span><input class="vsel" id="wx-dur" type="number" min="0" max="1000000" value="0" placeholder="0=循环"></div>'
+    + '<div class="muted" style="padding:6px 0 2px;border-top:1px solid #30363d;margin-top:6px">游戏规则（点击切换）</div>'
+    + '<div class="kv">' + Object.keys(GR_ZH).map((k) => {
+        const v = gr[k];
+        const on = v === true, offR = v === false;
+        const label = (v == null ? '?' : (on ? '开' : '关'));
+        return '<span class="k">' + GR_ZH[k] + '</span><span class="v"><button class="vbtn' + (on ? ' active' : '') + '" data-wg="' + k + '">' + label + '</button></span>';
+      }).join('') + '</div>'
+    + (worldctl.ok ? '' : '<div class="muted" style="margin-top:8px">' + off + '</div>');
+  el.innerHTML = html;
+  el.querySelectorAll('[data-wdiff]').forEach((b) => b.addEventListener('click', () => postWorld('difficulty', { value: b.getAttribute('data-wdiff') })));
+  el.querySelectorAll('[data-wtime]').forEach((b) => b.addEventListener('click', () => postWorld('time', { value: b.getAttribute('data-wtime') })));
+  el.querySelectorAll('[data-wweather]').forEach((b) => b.addEventListener('click', () => {
+    const dur = Number(document.getElementById('wx-dur').value) || 0;
+    postWorld('weather', { value: b.getAttribute('data-wweather'), duration: dur });
+  }));
+  el.querySelectorAll('[data-wg]').forEach((b) => b.addEventListener('click', () => {
+    const name = b.getAttribute('data-wg');
+    const cur = gr[name];
+    postWorld('gamerule', { name, value: !(cur === true) });
+  }));
+}
+async function postWorld(action, payload) {
+  const el = document.getElementById('worldctrl');
+  if (el) el.innerHTML = '<span class="empty" style="padding:6px 0">应用 ' + action + ' …</span>';
+  try {
+    const r = await fetch('/api/world', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action }, payload)) });
+    if (!r.ok) { const t = await r.text(); if (el) el.innerHTML = '<div class="empty">' + esc(t.slice(0, 120)) + '</div>'; return; }
+  } catch (e) { if (el) el.innerHTML = '<div class="empty">' + esc(String(e)) + '</div>'; return; }
+  loadWorldCtl();
+}
+
+// ---- 村庄 / NPC 设置卡（#5）：全局配置 + 各村民半径 ----
+let npcData = { global: {}, npcs: [], reloadHint: '' };
+async function loadNpcCtl() {
+  try {
+    const r = await fetch('/api/npc/settings');
+    if (!r.ok) return;
+    npcData = await r.json();
+    renderNpcCtl();
+  } catch { /* 配置读取抖动 */ }
+}
+function renderNpcCtl() {
+  const el = document.getElementById('npcctl');
+  if (!el) return;
+  const ae = document.activeElement;
+  if (ae && el.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName)) return;
+  const g = npcData.global || {};
+  const q = g.quests || {}, h = g.hear || {}, p = g.prayer || {}, l = g.llm || {};
+  const val = (v) => (v == null || v === '' ? '' : v);
+  const rows = (npcData.npcs || []).map((n) =>
+    '<div class="kvrow"><span class="k" title="' + esc(n.key) + '">' + esc(n.display || n.key)
+    + ' <span class="muted">' + (n.alive ? '🟢' : '⚫') + (n.ambient ? ' ·背景' : '') + '</span></span>'
+    + '<span class="v"><input class="vsel npc-radius" data-npc="' + esc(n.key) + '" type="number" min="0" max="128" value="' + esc(n.radius == null ? '' : n.radius) + '" placeholder="全局" style="width:70px"></span></div>'
+  ).join('');
+  const html =
+    '<div class="kvrow"><span class="k">祈愿通道</span><span class="v"><button class="vbtn' + (p.enabled ? ' active' : '') + '" data-nc="prayer.enabled">' + (p.enabled ? '开' : '关') + '</button></span></div>'
+    + '<div class="kvrow"><span class="k">对话半径</span><span class="v"><input class="vsel" id="nc-hear" type="number" min="8" max="128" value="' + val(h.radius) + '" placeholder="48"></span></div>'
+    + '<div class="kvrow"><span class="k">拉回半径</span><span class="v"><input class="vsel" id="nc-leash" type="number" min="8" max="128" value="' + val(q.leash_radius) + '" placeholder="40"></span></div>'
+    + '<div class="kvrow"><span class="k">LLM 闲聊</span><span class="v"><button class="vbtn' + (l.enabled ? ' active' : '') + '" data-nc="llm.enabled">' + (l.enabled ? '开' : '关') + '</button></span></div>'
+    + '<div class="muted" style="padding:6px 0 2px;border-top:1px solid #30363d;margin-top:6px">各村民拉回半径（空=用全局）</div>'
+    + '<div class="kv">' + (rows || '<span class="empty">无村民档案</span>') + '</div>'
+    + '<div class="kvrow" style="margin-top:10px;gap:8px"><button class="vbtn" id="npc-save">💾 保存</button>'
+    + '<span class="muted" id="npc-save-msg">' + esc(npcData.reloadHint || '') + '</span></div>';
+  el.innerHTML = html;
+  el.querySelectorAll('[data-nc]').forEach((b) => b.addEventListener('click', () => saveNpcCtl()));
+  document.getElementById('npc-save')?.addEventListener('click', saveNpcCtl);
+}
+async function saveNpcCtl() {
+  const msg = document.getElementById('npc-save-msg');
+  const g = npcData.global || {};
+  const patch = { global: {}, npcs: [] };
+  patch.global.prayer = { enabled: !!document.querySelector('[data-nc="prayer.enabled"]')?.classList.contains('active') };
+  patch.global.llm = { enabled: !!document.querySelector('[data-nc="llm.enabled"]')?.classList.contains('active') };
+  patch.global.hear = { radius: Number(document.getElementById('nc-hear').value) || null };
+  patch.global.quests = { leash_radius: Number(document.getElementById('nc-leash').value) || null };
+  document.querySelectorAll('.npc-radius').forEach((i) => {
+    const v = i.value.trim();
+    patch.npcs.push({ key: i.getAttribute('data-npc'), radius: v === '' ? null : Number(v) });
+  });
+  if (msg) msg.textContent = '保存中…';
+  try {
+    const r = await fetch('/api/npc/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    const j = await r.json();
+    if (msg) msg.textContent = r.ok ? ('已保存 ✓ ' + (j.reloadHint || npcData.reloadHint || '重载后生效')) : ('失败: ' + (j.error || r.status));
+  } catch (e) { if (msg) msg.textContent = '失败: ' + e; }
+}
+
 function renderTabs() {
   const el = document.getElementById('tabs');
   if (!state.bots.length) {
@@ -1281,7 +1428,7 @@ function renderChatBar() {
 function tuckSettings() {
   const drawer = document.getElementById('settings-drawer');
   if (!drawer) return;
-  ['skills', 'skin-presets', 'tts-form', 'inv', 'memory'].forEach((id) => {
+  ['skills', 'skin-presets', 'tts-form', 'inv', 'memory', 'worldctrl', 'npcctl'].forEach((id) => {
     const el = document.getElementById(id);
     if (el && el.closest) { const card = el.closest('.card'); if (card) drawer.appendChild(card); }
   });
@@ -1840,6 +1987,8 @@ loadVillage();
 setInterval(refresh, 2000);
 loadSkins(); setInterval(loadSkins, 60000);
 loadVoiceList();
+loadWorldCtl(); setInterval(loadWorldCtl, 30000);
+loadNpcCtl(); setInterval(loadNpcCtl, 45000);
 </script>
 </body>
 </html>`
@@ -1959,6 +2108,134 @@ setInterval(() => {
     eyeTpOnce(eyeFollow.name).catch(() => {})
   }
 }, 600)
+
+// ---- 世界控制（2026-08-23）：难度 / 时间 / 天气 / 游戏规则 —— 走 RCON 即时生效 ----
+const WORLD_GAMERULES = [
+  { key: 'doDaylightCycle', zh: '日夜循环' },
+  { key: 'doWeatherCycle', zh: '天气变化' },
+  { key: 'keepInventory', zh: '死亡保留背包' },
+  { key: 'mobGriefing', zh: '生物破坏方块' },
+  { key: 'naturalRegeneration', zh: '自然回血' },
+  { key: 'doMobSpawning', zh: '怪物自然生成' },
+  { key: 'doMobLoot', zh: '怪物掉落' },
+  { key: 'doFireTick', zh: '火焰蔓延' },
+]
+const WORLD_GAMERULE_KEYS = WORLD_GAMERULES.map((g) => g.key)
+
+function parseRconBool(s) {
+  const v = String(s || '').toLowerCase()
+  if (/true|\b1\b/.test(v) && !/false|\b0\b/.test(v)) return true
+  if (/false|\b0\b/.test(v) && !/true|\b1\b/.test(v)) return false
+  return null
+}
+
+// 天气无查询指令且 execute if weather run 会向全体广播，故只读难度/时间/规则，天气仅设不读
+async function worldStatus() {
+  const out = { ok: false, difficulty: null, ticks: null, gamerules: {} }
+  try {
+    const [diffRaw, timeRaw, ...ruleRaw] = await Promise.all([
+      rconExec('difficulty').catch(() => ''),
+      rconExec('time query daytime').catch(() => ''),
+      ...WORLD_GAMERULE_KEYS.map((k) => rconExec('gamerule ' + k).catch(() => 'ERR')),
+    ])
+    const diff = String(diffRaw || '')
+    const m = diff.match(/\b(0|1|2|3)\b/) || diff.match(/peaceful|easy|normal|hard/i)
+    if (m) {
+      const t = String(m[0]).toLowerCase()
+      out.difficulty = /^[0-3]$/.test(t) ? Number(t) : ({ peaceful: 0, easy: 1, normal: 2, hard: 3 }[t])
+    }
+    const tm = String(timeRaw || '').match(/[\d-]{2,}/)
+    if (tm) out.ticks = Number(tm[0])
+    WORLD_GAMERULE_KEYS.forEach((k, i) => { out.gamerules[k] = parseRconBool(ruleRaw[i]) })
+    out.ok = !!(diffRaw && timeRaw)
+  } catch { /* 单次读失败不全盘报错 */ }
+  return out
+}
+
+function applyWorld(action, body) {
+  const value = String(body.value == null ? '' : body.value).toLowerCase()
+  switch (action) {
+    case 'difficulty': {
+      const v = /^(peaceful|easy|normal|hard)$/.test(value) ? value : (/^[0-3]$/.test(value) ? value : null)
+      if (!v) throw new Error('难度须为 peaceful/easy/normal/hard')
+      return rconExec('difficulty ' + v)
+    }
+    case 'time': {
+      const v = /^(day|noon|night|midnight|sunrise|sunset)$/.test(value) || /^\d{1,6}$/.test(value) ? value : null
+      if (!v) throw new Error('时间须为 day/noon/night/midnight 或刻数')
+      return rconExec('time set ' + v)
+    }
+    case 'weather': {
+      const v = /^(clear|rain|thunder)$/.test(value) ? value : null
+      if (!v) throw new Error('天气须为 clear/rain/thunder')
+      const dur = Math.max(0, Math.min(1000000, Number(body.duration) || 0))
+      return rconExec(dur > 0 ? ('weather ' + v + ' ' + dur) : ('weather ' + v))
+    }
+    case 'gamerule': {
+      const name = String(body.name || '')
+      if (!WORLD_GAMERULE_KEYS.includes(name)) throw new Error('未知规则: ' + name)
+      const val = body.value === true || body.value === 'true' ? 'true' : body.value === false || body.value === 'false' ? 'false' : null
+      if (val === null) throw new Error('规则值须为布尔')
+      return rconExec('gamerule ' + name + ' ' + val)
+    }
+    default: throw new Error('未知动作: ' + action)
+  }
+}
+
+// ---- 村庄 / NPC 设置（2026-08-23）：读 config.json + villagers.json，写回文件（重载 mc_npc 生效）----
+function readVillageCfg() { return readJson(VILLAGE_CFG_PATH, {}) }
+function readVillagers() {
+  const v = readJson(VILLAGERS_PATH, {})
+  return Array.isArray(v) ? v : (v?.villagers ?? [])
+}
+
+function npcSettings() {
+  const cfg = readVillageCfg()
+  const npcs = readVillagers().map((v) => ({
+    key: v.key, display: v.display, profession: v.profession,
+    spawn: v.spawn, alive: !!v.alive, ambient: !!v.ambient,
+    radius: v.radius == null ? null : v.radius,
+  }))
+  return {
+    global: {
+      llm: cfg.llm || {},
+      quests: cfg.quests || {},
+      guild: cfg.guild || {},
+      prayer: cfg.prayer || {},
+      hear: cfg.hear || {},
+    },
+    npcs,
+    reloadHint: '改配置不会自动热载，保存后需重启 mc_npc / 世界进程生效',
+  }
+}
+
+// body: { global: {prayer:{enabled}, hear:{radius}, quests:{leash_radius}, llm:{enabled}}, npcs:[{key,radius}] }
+function saveNpcSettings(body) {
+  const cfg = readVillageCfg()
+  const g = body.global || {}
+  for (const [section, patch] of Object.entries(g)) {
+    if (!patch || typeof patch !== 'object') continue
+    cfg[section] = Object.assign({}, cfg[section] || {}, patch)
+  }
+  writeFileSync(VILLAGE_CFG_PATH, JSON.stringify(cfg, null, 2))
+  let npcs = readVillagers()
+  let shell = readJson(VILLAGERS_PATH, {})
+  const isShell = !Array.isArray(shell) && Array.isArray(shell.villagers)
+  if (Array.isArray(body.npcs) && body.npcs.length) {
+    const byKey = Object.fromEntries(body.npcs.map((n) => [n.key, n]))
+    npcs = npcs.map((v) => {
+      const patch = byKey[v.key]
+      if (!patch) return v
+      const next = Object.assign({}, v)
+      if (patch.radius === null || patch.radius === undefined || patch.radius === '') delete next.radius
+      else next.radius = Number(patch.radius) || v.radius
+      return next
+    })
+  }
+  const outFile = isShell ? Object.assign({ _comment: shell._comment, villagers: npcs }) : (npcs.length ? npcs : { villagers: npcs })
+  writeFileSync(VILLAGERS_PATH, JSON.stringify(outFile, null, 2))
+  return { ok: true, saved: cfg, npcs: npcs.map((v) => ({ key: v.key, radius: v.radius == null ? null : v.radius })) }
+}
 
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
@@ -2190,6 +2467,51 @@ const server = createServer((req, res) => {
     // edge-tts 中文音色表（静态，秒回；不依赖网关）
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ voices: TTS_EDGE_VOICES.map(([id, name]) => id), labels: Object.fromEntries(TTS_EDGE_VOICES) }))
+    return
+  }
+  // 世界控制状态：GET /api/world
+  if (u.pathname === '/api/world' && req.method === 'GET') {
+    worldStatus().then((s) => { res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(s)) })
+      .catch((e) => { res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('world err: ' + (e.message || e)) })
+    return
+  }
+  // 世界控制动作：POST /api/world {action, value, duration, name}
+  if (u.pathname === '/api/world' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      let b = {}
+      try { b = JSON.parse(body || '{}') } catch {}
+      applyWorld(b.action || '', b).then((out) => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true, action: b.action, out: String(out).slice(0, 200) }))
+      }).catch((e) => {
+        res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('world err: ' + (e.message || e))
+      })
+    })
+    return
+  }
+  // NPC 设置读取：GET /api/npc/settings
+  if (u.pathname === '/api/npc/settings' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify(npcSettings()))
+    return
+  }
+  // NPC 设置保存：POST /api/npc/settings {global:{...}, npcs:[...]}
+  if (u.pathname === '/api/npc/settings' && req.method === 'POST') {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      let b = {}
+      try { b = JSON.parse(body || '{}') } catch {}
+      try {
+        const r = saveNpcSettings(b)
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify(r))
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('npc err: ' + (e.message || e))
+      }
+    })
     return
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
