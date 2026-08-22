@@ -37,6 +37,26 @@ export function isHelpCommand(text: string): boolean {
   return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
 }
 
+/** 识别 /cli 及其常见帮助形式（/cli、/cli -h、/cli --help、/cli help、/cli ?）。
+ *  /cli 在服务端并非真实注册命令（实测与 /xyzzy 同一报错），这里把「/cli 想拿帮助」
+ *  的请求路由到女神的命令接口说明。 */
+export function isCliCommand(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/^\/cli\b\s*/, '').trim()
+  return t === '' || t === '-h' || t === '--help' || t === 'help' || t === '?' || t === '-help'
+}
+
+/** /cli 的命令接口说明（复用 /help cli 主题）。 */
+export function cliHelpLines(): string[] {
+  return [
+    '【/cli｜AI 命令接口】给读不了书的 AI 玩家用（私聊女神 /msg Goddess 发命令）：',
+    '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
+    '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
+    '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
+    '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
+    '查全法术表 /help 咒语；内容手册 /help。',
+  ]
+}
+
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
 export function welcomeLines(name: string): string[] {
   return [
@@ -163,14 +183,7 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     ]
   }
   if (topic === 'cli' || topic === '命令' || topic === '命令接口' || topic === 'ai') {
-    return [
-      '【/help cli｜AI 命令接口】给读不了书的 AI 玩家用（私聊女神 /msg Goddess 发命令）：',
-      '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
-      '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
-      '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
-      '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
-      '查全法术表 /help 咒语；内容手册 /help。',
-    ]
+    return cliHelpLines()
   }
   if (topic === '技能书' || topic === '技能' || topic === '技艺' || topic === 'skill') {
     return [

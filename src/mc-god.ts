@@ -12,7 +12,7 @@ import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import type { LogwatchService } from './mc-logwatch.ts'
 import type { McTerraService } from './mc-terra.ts'
 import { parseVoice } from './mc-social.ts'
-import { isHelpCommand, handleHelpText, welcomeLines } from './mc-man.ts'
+import { isHelpCommand, handleHelpText, isCliCommand, cliHelpLines, welcomeLines } from './mc-man.ts'
 import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
@@ -1991,6 +1991,13 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
       }
+      // /cli（AI 命令接口）：/cli / /cli -h / --help / help / ? 一体应答（对应 /help cli 主题）。
+      if (isCliCommand(message)) {
+        const lines = cliHelpLines()
+        for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+        try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat-cli' }) } catch { /* best effort */ }
+        return
+      }
       // 世界提问（2026-08-20）：公屏「问：」同样应答（答走私语）——欢迎语教的是
       // 「任何聊天框」，公屏不能失信。走传令官 mc-herald（本地 27B）。
       const pubAsk = message.trim().startsWith('问：') ? message.trim().slice(2).trim()
@@ -2055,7 +2062,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
           try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
           log(`help served to ${username}: ${message.trim().slice(0, 40)}`)
+          return
         }
+        // /cli（AI 命令接口）：/cli / /cli -h / --help / help / ? 一体应答。
+        if (isCliCommand(message)) {
+          const lines = cliHelpLines()
+          for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+          try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+          log(`cli served to ${username}: ${message.trim().slice(0, 40)}`)
+          return
+        }
+        // 其余斜杠命令让行（/mail、/friend 等归 mc-social 信使）——保持原有的「/ 开头一律 return」。
         return
       }
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
