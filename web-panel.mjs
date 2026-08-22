@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { spawn } from 'node:child_process'
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -15,16 +16,81 @@ const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
 
-// ── 语音播报（TTS）—— 本机 IndexTTS 2.5 网关（小智部署）。────────────────────────
-// 本地真实音色，供女神/NPC 说话用。只绑 127.0.0.1（面板与网关同机可直连）。
-// 失败时前端会兜底到浏览器 speechSynthesis。
+// ── 语音播报（TTS）—— 云端 edge-tts 优先，本机 IndexTTS 网关兜底。─────────────
+// 2026-08-22 用户定调「TTS 走云端」：本地 IndexTTS 被 vllm 抢 GPU 慢（5~25s/句），
+// 改走微软 Edge 朗读服务（edge-tts，Python311 子进程，实测 ~2s/句，中文音色 30+）。
+// 磁盘缓存保留：同文本+同音色+同语气只合成一次（命中 ~0.03s）。
 const INDEX_TTS_URL = process.env.INDEX_TTS_URL || 'http://127.0.0.1:8085'
-const TTS_INFER_TIMEOUT = 45000 // 与网关 INFER_TIMEOUT 对齐；超时网关自身会降到 edge-tts
-// 本地合成慢（IndexTTS CPU 推理 ~5-11s/句），加磁盘缓存：同文本+同音色只合成一次。
+const TTS_INFER_TIMEOUT = 45000 // IndexTTS 兜底时的超时
+const TTS_EDGE_PY = process.env.TTS_EDGE_PY || 'C:\\Users\\lzl19\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
+const TTS_EDGE_SCRIPT = resolve(process.cwd(), 'ops', 'tts_edge_synth.py')
+// 语气 -> edge-tts rate/pitch（14 种，与 IndexTTS mood 同名；edge-tts 用语速/音高近似表达）
+const TTS_MOOD_RP = {
+  '平静': ['+0%', '+0Hz'], '快乐': ['+14%', '+10Hz'], '生气': ['+18%', '+12Hz'],
+  '悲伤': ['-14%', '-10Hz'], '害怕': ['-6%', '-12Hz'], '厌恶': ['+6%', '-6Hz'],
+  '忧郁': ['-16%', '-12Hz'], '惊讶': ['+22%', '+16Hz'], '温柔': ['-8%', '+2Hz'],
+  '豪爽': ['+12%', '+8Hz'], '严肃': ['-6%', '-8Hz'], '俏皮': ['+20%', '+14Hz'],
+  '温暖': ['-4%', '+4Hz'], '冷淡': ['-12%', '-10Hz'],
+}
+// edge-tts 中文音色表（id -> 展示名）。覆盖 zh-CN / zh-HK / zh-TW。
+const TTS_EDGE_VOICES = [
+  ['zh-CN-XiaoxiaoNeural', '晓晓（女·温柔）'], ['zh-CN-XiaoyiNeural', '晓伊（女·亲切）'],
+  ['zh-CN-YunjianNeural', '云健（男·青年）'], ['zh-CN-YunxiNeural', '云希（男·阳光）'],
+  ['zh-CN-YunxiaNeural', '云夏（男·少年）'], ['zh-CN-YunyangNeural', '云扬（男·浑厚）'],
+  ['zh-CN-liaoning-XiaobeiNeural', '晓北（女·东北）'], ['zh-CN-shaanxi-XiaoniNeural', '晓妮（女·陕西方言）'],
+  ['zh-CN-XiaoxiaoNeural', '晓晓（女·温柔）'], ['zh-CN-XiaomoNeural', '晓墨（女·知性）'],
+  ['zh-CN-XiaohanNeural', '晓涵（女·甜美）'], ['zh-CN-XiaoruiNeural', '晓睿（女·成熟）'],
+  ['zh-CN-XiaoshuangNeural', '晓双（女·童声）'], ['zh-CN-XiaoyanNeural', '晓颜（女·训练师）'],
+  ['zh-CN-XiaoyouNeural', '晓悠（女·童声）'], ['zh-CN-XiaozhenNeural', '晓甄（女·温和）'],
+  ['zh-CN-YunfengNeural', '云峰（男·成熟）'], ['zh-CN-YunhaoNeural', '云浩（男·磁性）'],
+  ['zh-CN-YunjieNeural', '云杰（男·激情）'], ['zh-CN-YunmingNeural', '云明（男·温润）'],
+  ['zh-CN-YunzeNeural', '云泽（男·优雅）'], ['zh-HK-HiuGaaiNeural', '曉佳（粤·女）'],
+  ['zh-HK-HiuMaanNeural', '曉曼（粤·女）'], ['zh-HK-WanLungNeural', '雲龍（粤·男）'],
+  ['zh-TW-HsiaoChenNeural', '曉臻（台·女）'], ['zh-TW-HsiaoYuNeural', '曉雨（台·女）'],
+  ['zh-TW-YunJheNeural', '雲哲（台·男）'],
+]
+// 旧 IndexTTS 音色名 -> edge-tts 音色 id（localStorage 已有旧选择的兼容映射）
+const TTS_LEGACY_MAP = {
+  'xiaoyi': 'zh-CN-XiaoyiNeural', 'xiaoxue': 'zh-CN-XiaoxiaoNeural', 'xiaoxiao': 'zh-CN-XiaoxiaoNeural',
+  'yunxi': 'zh-CN-YunxiNeural', 'yunyang': 'zh-CN-YunyangNeural', 'yunxia': 'zh-CN-YunxiaNeural',
+  'yunjian': 'zh-CN-YunjianNeural', 'baolin': 'zh-CN-YunjianNeural', 'yunqiu': 'zh-CN-YunjianNeural',
+  'qingxin': 'zh-CN-XiaoxiaoNeural', 'xiaotian': 'zh-CN-YunxiaNeural', 'taozi': 'zh-CN-XiaohanNeural',
+  'huihui': 'zh-CN-XiaoxiaoNeural', 'kangkang': 'zh-CN-YunyangNeural', 'yaoyao': 'zh-CN-XiaoxiaoNeural',
+  'npc': 'zh-CN-YunxiNeural', 'default': 'zh-CN-XiaoxiaoNeural',
+}
+function ttsVoiceToEdge(voice) {
+  if (!voice) return 'zh-CN-XiaoxiaoNeural'
+  if (TTS_EDGE_VOICES.some(([id]) => id === voice)) return voice
+  if (TTS_LEGACY_MAP[voice]) return TTS_LEGACY_MAP[voice]
+  return voice // 未知音色直接透传（edge-tts 可能认识）
+}
 const TTS_CACHE_DIR = resolve(DATA_DIR, 'tts-cache')
 try { mkdirSync(TTS_CACHE_DIR, { recursive: true }) } catch {}
-function ttsCacheKey(text, voice) {
-  return createHash('sha1').update(String(text) + '\u0000' + String(voice)).digest('hex').slice(0, 24)
+function ttsCacheKey(text, voice, mood) {
+  return createHash('sha1').update(String(text) + '\u0000' + String(voice) + '\u0000' + String(mood || '')).digest('hex').slice(0, 24)
+}
+// 云端合成（edge-tts Python 子进程 -> MP3 字节）。PYTHONHOME/PYTHONPATH 必须 delete（设空串会让 Python 启动失败）。
+function ttsEdgeSynth(text, voice, rate, pitch, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env };
+    delete env.PYTHONHOME;
+    delete env.PYTHONPATH;
+    const cp = spawn(TTS_EDGE_PY, [TTS_EDGE_SCRIPT, '--text', String(text).slice(0, 300), '--voice', voice, '--rate=' + rate, '--pitch=' + pitch], { env, windowsHide: true })
+    const chunks = []
+    let errOut = ''
+    let done = false
+    const timer = setTimeout(() => { if (!done) { done = true; cp.kill(); reject(new Error('edge-tts timeout')) } }, timeoutMs)
+    cp.stdout.on('data', (c) => chunks.push(c))
+    cp.stderr.on('data', (c) => { errOut += c })
+    cp.on('error', (e) => { if (!done) { done = true; clearTimeout(timer); reject(e) } })
+    cp.on('close', (code) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      if (code === 0 && chunks.length) resolve(Buffer.concat(chunks))
+      else reject(new Error('edge-tts exit ' + code + (errOut ? ' :: ' + errOut.slice(0, 2000) : '')))
+    })
+  })
 }
 
 // ── mc-brain.log 思考账本（结构化 JSONL：ts/step/thought/goal/tool/args/outcome/shots）──
@@ -134,6 +200,23 @@ function apiState() {
   }
   bots.sort((a, b) => (a.bot?.username ?? '').localeCompare(b.bot?.username ?? ''))
 
+  // 在线玩家与 bots 对齐：世界心跳（RCON list）里的名字强制在线，
+  // 缺 status 档案的（如真人/无 bot 文件的假玩家）补占位 tab，保证「谁在线」一眼可见。
+  const hb = readJson(WORLD_HB_PATH, null)
+  const watching = hb?.watching || []
+  const watchingSet = new Set(watching)
+  const botKey = (st) => st?.bot?.username || st?.bot?.personaName || ''
+  for (const st of bots) {
+    const k = botKey(st)
+    if (k && watchingSet.has(k)) st.bot.online = true
+  }
+  for (const name of watching) {
+    if (!bots.some((b) => botKey(b) === name)) {
+      bots.push({ bot: { username: name, personaName: name, online: true } })
+    }
+  }
+  bots.sort((a, b) => (a.bot?.username ?? a.bot?.personaName ?? '').localeCompare(b.bot?.username ?? b.bot?.personaName ?? ''))
+
   // 思考流兜底：status.recentSteps 为空时，从 mc-brain.log 账本按归属（shots 路径前缀）补尾 30 条。
   // 管道修复（session 模式回写 recentSteps）后 status 自带数据，此兜底自动让位。
   const brain = readBrainLog()
@@ -168,7 +251,7 @@ function apiState() {
     passives: passiveDefs,
     chronicle: readChronicle(40),
     npcFeed: readNpcFeed(24),
-    world: readJson(WORLD_HB_PATH, null),
+    world: hb,
   }
 }
 
@@ -177,7 +260,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>穿越者观察面板</title>
+<title>穿越者观察面板 · v3</title>
 <style>
   :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --text:#e6edf3; --dim:#8b949e; --green:#3fb950; --gold:#d29922; --red:#f85149; --blue:#58a6ff; --purple:#bc8cff; }
   * { box-sizing:border-box; }
@@ -316,6 +399,8 @@ const PAGE = `<!doctype html>
 </style>
 </head>
 <body>
+  <div id="dbg" style="display:none"></div>
+  <button id="dbg-btn" style="position:fixed;top:0;left:0;z-index:9999">DBGTEST</button>
   <header class="topbar">
     <div class="brand"><span class="dot" id="dot"></span>穿越者观察面板 <span class="sub" id="sub"></span></div>
     <span class="worldchip" id="worldchip">世界…</span>
@@ -410,9 +495,22 @@ const PAGE = `<!doctype html>
   </div>
 
 <script>
+document.getElementById('dbg-btn').addEventListener('click', () => { document.getElementById('dbg').textContent = 'DBGBTN CLICKED ' + Date.now(); });
 let state = { bots: [], memory: {}, magic: {}, atomNames: {}, passives: [], chronicle: [], npcFeed: [] };
 let currentUser = null; // 当前选中的 bot username
 let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
+let posCache = {}; // 无 status 档案的在线玩家坐标缓存：username -> {x,y,z,at}
+async function fetchPosFor(name) {
+  if (!name) return;
+  const hit = posCache[name];
+  if (hit && Date.now() - hit.at < 8000) return;
+  try {
+    const r = await fetch('/api/pos?name=' + encodeURIComponent(name));
+    if (!r.ok) return;
+    const p = await r.json();
+    if (p && typeof p.x === 'number') { posCache[name] = { x: p.x, y: p.y, z: p.z, at: Date.now() }; renderCurrent(); }
+  } catch {}
+}
 let mapState = { range: 128, offsetX: 0, offsetZ: 0, follow: true };
 let drag = null; // { startX, startY, startOffsetX, startOffsetZ, moved }
 
@@ -442,7 +540,7 @@ async function fmtTime(ts) {
 }
 
 function botOf(username) {
-  return state.bots.find((b) => b.bot?.username === username) || null;
+  return state.bots.find((b) => b.bot?.username === username || b.bot?.personaName === username) || null;
 }
 function magicOf(username) {
   return (state.magic || {})[username] || null;
@@ -476,9 +574,9 @@ function esc(s) {
 let ttsEnable = localStorage.getItem('ttsEnable') !== '0';   // 默认开
 let ttsPrefetch = null; // 流水线预合成：{url, key}，当前句播放时预取下一句
 const ttsVoices = {   // 音色（可经面板「语音」卡改，存 localStorage）
-  goddess: localStorage.getItem('ttsVoiceGoddess') || 'xiaoyi', // 女神：默认 xiaoyi 晓伊（女声）
-  npc: localStorage.getItem('ttsVoiceNpc') || 'yunxi',          // NPC 默认：yunxi 云希（清亮男声）
-  player: localStorage.getItem('ttsVoicePlayer') || 'xiaoxue',  // 玩家：默认 xiaoxue 小雪（女声，与女神晓伊区分）
+  goddess: localStorage.getItem('ttsVoiceGoddess') || 'zh-CN-XiaoyiNeural', // 女神：晓伊（女声）
+  npc: localStorage.getItem('ttsVoiceNpc') || 'zh-CN-YunxiNeural',          // NPC 默认：云希（清亮男声）
+  player: localStorage.getItem('ttsVoicePlayer') || 'zh-CN-XiaoxiaoNeural', // 玩家：晓晓（女声，与女神区分）
 };
 const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；特色 NPC 一人一音色，其余走 NPC 默认
   '铁匠·岳山': 'yunyang',      // 男，浑厚豪爽
@@ -497,12 +595,43 @@ const NPC_SPEAKERS = [ // 面板「语音」卡可逐个指音色的全部已知
   '守夜人·烛九', '神官·静水', '集市掌柜·通宝', '老农·禾叔', '牧羊女·小满', '渔夫·浪伯',
   '墨先生', '阿宝', '货郎·铜板', '公会接待员·岚', '灯窝·阿爹', '灯窝·穗娘', '灯窝·阿禾',
 ];
+const TTS_MOODS = [ // 语气预设（网关 MOOD_VECTORS 已支持）：id + 中文名
+  ['calm', '平静'], ['happy', '快乐'], ['angry', '生气'], ['sad', '悲伤'],
+  ['afraid', '害怕'], ['disgusted', '厌恶'], ['melancholic', '忧郁'], ['surprised', '惊讶'],
+  ['gentle', '温柔'], ['hearty', '豪爽'], ['serious', '严肃'], ['playful', '俏皮'],
+  ['warm', '温暖'], ['cold', '冷淡'],
+];
+const NPC_VOICE_MOOD = { // NPC -> 专属音色 + 语气 + 试听台词（匹配人物身份）
+  '铁匠·岳山': { voice: 'yunyang', mood: 'hearty', sample: '打铁趁热！这一锤下去，保你兵刃趁手。' },
+  '甲匠·石磊': { voice: 'baolin', mood: 'serious', sample: '甲要合身，命才保得住。别急，慢慢来。' },
+  '书商·墨白': { voice: 'yunjian', mood: 'calm', sample: '书中自有黄金屋，客官可要看看新到的卷子？' },
+  '书商·云笈': { voice: 'yunjian', mood: 'melancholic', sample: '这一册孤本，世上再难寻第二份了。' },
+  '货郎·福伯': { voice: 'yunxi', mood: 'warm', sample: '走街串巷几十年，好东西都在我担子里头。' },
+  '吟游诗人·风临': { voice: 'xiaotian', mood: 'playful', sample: '风起灯明，且听我唱一段江湖故事！' },
+  '守夜人·烛九': { voice: 'yunxi', mood: 'cold', sample: '夜深了，火把交给我，你只管安睡。' },
+  '神官·静水': { voice: 'qingxin', mood: 'gentle', sample: '愿神明的光，照你前行的路。' },
+  '集市掌柜·通宝': { voice: 'yunxi', mood: 'happy', sample: '童叟无欺，价钱公道，您再看看？' },
+  '老农·禾叔': { voice: 'yunyang', mood: 'warm', sample: '地里的庄稼，比啥都实在。吃饭了没？' },
+  '牧羊女·小满': { voice: 'taozi', mood: 'gentle', sample: '小羊羔又跑远啦，快来帮我一把！' },
+  '渔夫·浪伯': { voice: 'yunyang', mood: 'happy', sample: '今儿个鱼多，分你两条，拿去炖汤！' },
+  '墨先生': { voice: 'yunjian', mood: 'calm', sample: '文章千古事，得失寸心知。' },
+  '阿宝': { voice: 'xiaotian', mood: 'happy', sample: '俺阿宝力气大，扛东西的事包在我身上！' },
+  '货郎·铜板': { voice: 'xiaotian', mood: 'playful', sample: '叮当叮当，铜板响，好货送到你手上！' },
+  '公会接待员·岚': { voice: 'xiaoxue', mood: 'serious', sample: '欢迎来到冒险者公会，请先登记你的委托。' },
+  '灯窝·阿爹': { voice: 'yunxi', mood: 'calm', sample: '灯窝的灯，点一盏，亮一宿。' },
+  '灯窝·穗娘': { voice: 'taozi', mood: 'warm', sample: '灯芯要勤剪，火才旺呢。' },
+  '灯窝·阿禾': { voice: 'xiaotian', mood: 'happy', sample: '今晚我来守灯，保证不让它灭！' },
+};
 const ttsNpcOverride = {}; // NPC 名 -> voice id（面板可改，存 localStorage ttsVoiceNpc_<名>，优先于 ttsBySpeaker）
+const ttsNpcMood = {}; // NPC 名 -> mood id（存 localStorage ttsMoodNpc_<名>）
 for (const name of NPC_SPEAKERS) {
   const v = localStorage.getItem('ttsVoiceNpc_' + name);
   if (v) ttsNpcOverride[name] = v;
+  const m = localStorage.getItem('ttsMoodNpc_' + name);
+  if (m) ttsNpcMood[name] = m;
 }
-let ttsVoiceList = ['baolin','qingxin','taozi','xiaotian','xiaoxue','xiaoyi','yunjian','yunxi','yunyang'];
+let ttsVoiceList = ['zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural','zh-CN-YunyangNeural','zh-CN-YunjianNeural','zh-CN-XiaoyiNeural','zh-CN-YunxiaNeural'];
+let ttsVoiceLabels = {};
 let ttsSeen = { chronT: 0, feedT: 0 };   // 去重游标（记最大值，避免重播历史行）
 let ttsBooted = false;                    // 首次载入只记游标不播，防开局重放全部旧台词
 const ttsQ = [];                          // {text, kind, speaker}
@@ -631,14 +760,14 @@ function ttsPlayUrl(url) {
     if (p) p.catch(() => { URL.revokeObjectURL(url); resolve(false); });
   });
 }
-function ttsPlayIndex(text, voice) {
+function ttsPlayIndex(text, voice, mood) {
   return new Promise((resolve) => {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 50000);
     fetch('/api/tts', {
       method: 'POST', signal: ctl.signal,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice }),
+      body: JSON.stringify({ text, voice, mood: mood || undefined }),
     }).then((r) => {
       if (!r.ok) throw new Error('tts ' + r.status);
       return r.blob();
@@ -714,15 +843,21 @@ function ttsRenderToggle() {
 function renderTtsForm() {
   const el = document.getElementById('tts-form');
   if (!el) return;
-  const goptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.goddess ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
-  const noptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.npc ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
-  const poptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.player ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+  const vlabel = (v) => ttsVoiceLabels[v] || v;
+  const goptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.goddess ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
+  const noptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.npc ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
+  const poptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.player ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
   const npcRows = NPC_SPEAKERS.map((name) => {
-    const cur = ttsNpcOverride[name] || ttsBySpeaker[name] || '';
-    const opts = '<option value="">（默认' + (ttsBySpeaker[name] ? '：' + esc(ttsBySpeaker[name]) : '）') + '</option>'
-      + ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
-    return '<div class="kvrow npcvoice"><span class="k">' + esc(name) + '</span>'
-      + '<select class="vsel" data-npc="' + esc(name) + '">' + opts + '</select>'
+    const def = NPC_VOICE_MOOD[name] || {};
+    const curV = ttsNpcOverride[name] || ttsBySpeaker[name] || def.voice || '';
+    const curM = ttsNpcMood[name] || def.mood || '';
+    const vopts = '<option value="">（默认' + (ttsBySpeaker[name] || def.voice ? '：' + esc(vlabel(ttsBySpeaker[name] || def.voice)) : '）') + '</option>'
+      + ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === curV ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
+    const mopts = '<option value="">（默认' + (def.mood ? '：' + (TTS_MOODS.find((m) => m[0] === def.mood) || [])[1] || def.mood : '）') + '</option>'
+      + TTS_MOODS.map(([mk, ml]) => '<option value="' + mk + '"' + (mk === curM ? ' selected' : '') + '>' + ml + '</option>').join('');
+    return '<div class="kvrow npcvoice"><span class="k" title="' + esc(name) + '">' + esc(name) + '</span>'
+      + '<select class="vsel" data-npc="' + esc(name) + '">' + vopts + '</select>'
+      + '<select class="msel" data-npcm="' + esc(name) + '">' + mopts + '</select>'
       + '<button class="vbtn" data-npct="' + esc(name) + '">试听</button></div>';
   }).join('');
   el.innerHTML =
@@ -747,11 +882,22 @@ function renderTtsForm() {
       else { delete ttsNpcOverride[name]; localStorage.removeItem('ttsVoiceNpc_' + name); }
     };
   });
+  el.querySelectorAll('select[data-npcm]').forEach((sel) => {
+    sel.onchange = () => {
+      const name = sel.dataset.npcm;
+      if (sel.value) { ttsNpcMood[name] = sel.value; localStorage.setItem('ttsMoodNpc_' + name, sel.value); }
+      else { delete ttsNpcMood[name]; localStorage.removeItem('ttsMoodNpc_' + name); }
+    };
+  });
   el.querySelectorAll('button[data-npct]').forEach((btn) => {
     btn.onclick = () => {
       const name = btn.dataset.npct;
-      const voice = ttsNpcOverride[name] || ttsBySpeaker[name] || ttsVoices.npc;
-      ttsPreview(voice, 'npc');
+      const def = NPC_VOICE_MOOD[name] || {};
+      const voice = ttsNpcOverride[name] || ttsBySpeaker[name] || def.voice || ttsVoices.npc;
+      const mood = ttsNpcMood[name] || def.mood || '';
+      const sample = def.sample || '神说，这世界有光。';
+      ttsStop(); ttsQ.length = 0; ttsBusy = false;
+      ttsPlayIndex(sample, voice, mood).then((ok) => { if (!ok) ttsPlayFallback(sample, 'npc'); });
     };
   });
   updateTtsFilterOptions();
@@ -781,7 +927,7 @@ function updateTtsFilterOptions() {
 async function loadVoiceList() {
   try {
     const r = await fetch('/api/tts/voices');
-    if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.voices) && j.voices.length) ttsVoiceList = j.voices; }
+    if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.voices) && j.voices.length) { ttsVoiceList = j.voices; ttsVoiceLabels = j.labels || {}; } }
   } catch {}
   renderTtsForm();
 }
@@ -857,16 +1003,23 @@ function renderTabs() {
     el.innerHTML = '<span class="muted">暂无穿越者在线（bot 未运行）</span>';
     return;
   }
-  el.innerHTML = state.bots.map((b) => {
+  // 去重：同一玩家可能既有 status 档案（username 为 null、personaName 为准）又被心跳补了占位，
+  // 按键 username||personaName 合并，data-u 统一用键（否则 Edward 出现两个 tab）。
+  const merged = [...new Map(state.bots.map((b) => {
+    const key = b.bot?.username || b.bot?.personaName || '';
+    return [key, b];
+  })).values()];
+  el.innerHTML = merged.map((b) => {
     const bot = b.bot || {};
     const on = !!bot.online;
     const name = bot.personaName || bot.username;
-    const cls = currentUser === bot.username ? 'tab active' : 'tab';
-    const sk = skinFor(bot.username);
+    const key = bot.username || bot.personaName || name;
+    const cls = currentUser === key ? 'tab active' : 'tab';
+    const sk = skinFor(bot.username || bot.personaName);
     const avatar = (sk && sk.ok) ? '<img class="tavatar" src="' + sk.faceURL + '">' : '';
-    const mg = magicOf(bot.username);
+    const mg = magicOf(bot.username || bot.personaName);
     const lv = mg && mg.level ? '<span class="lv">Lv' + mg.level + '</span>' : '';
-    return '<div class="' + cls + '" data-u="' + esc(bot.username) + '">'
+    return '<div class="' + cls + '" data-u="' + esc(key) + '">'
       + avatar
       + '<span class="tdot ' + (on ? 'on' : '') + '"></span>'
       + '<span>' + esc(name) + '</span>'
@@ -1056,6 +1209,8 @@ function probeViewer(port) {
 }
 
 function renderCurrent() {
+  const dbgEl = document.getElementById('dbg');
+  if (dbgEl) dbgEl.textContent = 'cu=' + currentUser + ' | b0.bot=' + JSON.stringify(state.bots[0] && state.bots[0].bot) + ' | b0.username=' + JSON.stringify(state.bots[0] && state.bots[0].username);
   const b = botOf(currentUser);
   const bot = b?.bot || {};
   const on = !!bot.online;
@@ -1099,7 +1254,10 @@ function renderCurrent() {
   // 基础状态 kv（正在输入时不重建，防止焦点丢失）
   const typing = document.activeElement && document.activeElement.tagName === 'INPUT';
   if (!typing) {
-    const pos = bot.position ? '(' + bot.position.x + ', ' + bot.position.y + ', ' + bot.position.z + ')' : '-';
+    const pc = posCache[bot.username || currentUser];
+    const pos = bot.position ? '(' + bot.position.x + ', ' + bot.position.y + ', ' + bot.position.z + ')'
+      : (pc ? '(' + pc.x + ', ' + pc.y + ', ' + pc.z + ')' : '-');
+    if (on && !bot.position && !pc) fetchPosFor(bot.username); // 无档案在线玩家：RCON 查坐标
     document.getElementById('status').innerHTML = on ? [
       ['身份', name + '（' + (bot.username || '-') + '）'],
       ['状态', '<span style="color:var(--green)">在线</span>'],
@@ -1600,10 +1758,24 @@ const server = createServer((req, res) => {
       return
     }
     if (u.pathname === '/api/state') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify(apiState()))
-    return
-  }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify(apiState()))
+      return
+    }
+    // 查询在线玩家/实体坐标（RCON data get entity <name> Pos）
+    if (u.pathname === '/api/pos' && req.method === 'GET') {
+      const name = (u.searchParams.get('name') || '').trim()
+      if (!name) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('no name'); return }
+      rconExec('data get entity ' + name + ' Pos').then((out) => {
+        const m = String(out || '').match(/\[([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?\]/)
+        if (!m) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('no pos: ' + String(out).slice(0, 80)); return }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ name, x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) }))
+      }).catch((e) => {
+        res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('rcon err: ' + (e.message || e))
+      })
+      return
+    }
   // GM 传送：/api/tp?as=被传送者&to=目的地玩家（tp <as> <to>）
   if (u.pathname === '/api/tp' && req.method === 'GET') {
     const as = (u.searchParams.get('as') || '').replace(/[^A-Za-z0-9_]/g, '')
@@ -1693,47 +1865,65 @@ const server = createServer((req, res) => {
     res.end(readFileSync(p))
     return
   }
-  // 语音（TTS）：代理本机 IndexTTS 2.5 网关 -> 前端拿 WAV 播放（磁盘缓存：同文本只合成一次）。
+  // 语音（TTS）：云端 edge-tts 优先（实测 ~2s/句，30+ 中文音色），IndexTTS 网关兜底。
+  // 磁盘缓存：同文本+同音色+同语气只合成一次（命中 ~0.03s）。
   if (u.pathname === '/api/tts' && req.method === 'POST') {
     let body = ''
     req.on('data', (c) => { body += c; if (body.length > 8192) { req.destroy(); } })
     req.on('end', async () => {
-      let text = '', voice = ''
-      try { ({ text, voice } = JSON.parse(body || '{}')) } catch {}
+      let text = '', voice = '', mood = ''
+      try { ({ text, voice, mood } = JSON.parse(body || '{}')) } catch {}
       if (!text) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('no text'); return }
-      voice = voice || 'xiaoyi'
-      const cachePath = join(TTS_CACHE_DIR, ttsCacheKey(text, voice) + '.wav')
+      voice = ttsVoiceToEdge(voice || 'zh-CN-XiaoxiaoNeural')
+      mood = (mood || '').toString().toLowerCase()
+      // 中文语气名兼容（前端可能传中文「快乐」或英文「happy」）
+      const moodCn = ({ happy: '快乐', angry: '生气', sad: '悲伤', fear: '害怕', disgust: '厌恶', melancholy: '忧郁', surprise: '惊讶', tender: '温柔', bold: '豪爽', serious: '严肃', playful: '俏皮', warm: '温暖', cold: '冷淡', calm: '平静' })[mood] || mood
+      const rp = TTS_MOOD_RP[moodCn] || ['+0%', '+0Hz']
+      const cachePath = join(TTS_CACHE_DIR, ttsCacheKey(text, voice, mood) + '.mp3')
       try {
         if (existsSync(cachePath)) {
-          res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
+          res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' })
           res.end(readFileSync(cachePath))
           return
         }
       } catch {}
-      const ctl = new AbortController()
-      const timer = setTimeout(() => ctl.abort(), TTS_INFER_TIMEOUT + 8000)
+      // 主链路：云端 edge-tts
       try {
-        const r = await fetch(`${INDEX_TTS_URL}/tts_raw`, {
-          method: 'POST', signal: ctl.signal,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: String(text).slice(0, 160), voice }),
-        })
-        if (!r.ok) throw new Error('upstream ' + r.status)
-        const buf = Buffer.from(await r.arrayBuffer())
+        const buf = await ttsEdgeSynth(text, voice, rp[0], rp[1])
         try { writeFileSync(cachePath, buf) } catch {}
-        res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
+        res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' })
         res.end(buf)
+        return
       } catch (e) {
-        res.writeHead(502, { 'Content-Type': 'text/plain' })
-        res.end('tts error: ' + (e.message || e))
-      } finally { clearTimeout(timer) }
+        console.log('[tts] edge-tts fail:', e && e.message || e, '| voice:', voice, '| mood:', mood)
+        // 兜底：本地 IndexTTS 网关（旧 WAV 链路）
+        try {
+          const ctl = new AbortController()
+          const timer = setTimeout(() => ctl.abort(), TTS_INFER_TIMEOUT + 8000)
+          const r = await fetch(`${INDEX_TTS_URL}/tts_raw`, {
+            method: 'POST', signal: ctl.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: String(text).slice(0, 160), voice, mood: mood || undefined }),
+          })
+          clearTimeout(timer)
+          if (!r.ok) throw new Error('upstream ' + r.status)
+          const buf = Buffer.from(await r.arrayBuffer())
+          try { writeFileSync(cachePath, buf) } catch {}
+          res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' })
+          res.end(buf)
+          return
+        } catch (e2) {
+          res.writeHead(502, { 'Content-Type': 'text/plain' })
+          res.end('tts error: ' + (e2.message || e2) + ' (edge: ' + (e.message || e) + ')')
+        }
+      }
     })
     return
   }
   if (u.pathname === '/api/tts/voices' && req.method === 'GET') {
-    fetch(`${INDEX_TTS_URL}/voices`)
-      .then(async (r) => { const j = await r.json(); res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(j)); })
-      .catch((e) => { res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: String(e.message || e) })); });
+    // edge-tts 中文音色表（静态，秒回；不依赖网关）
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify({ voices: TTS_EDGE_VOICES.map(([id, name]) => id), labels: Object.fromEntries(TTS_EDGE_VOICES) }))
     return
   }
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
