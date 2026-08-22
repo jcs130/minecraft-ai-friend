@@ -503,7 +503,8 @@ def turn_in(speaker, v, count, item_zh):
     chronicle_append("集市｜%s 替 %s 办成今日委托（%d %s → %s）" % (speaker, q["display"], q["count"], q["zh"], "、".join(reward_desc) or "谢意"))
     feed_append({"kind": "event", "npc": q["display"], "text": "%s 办成了 %s 的委托（%d %s → %s）" % (speaker, q["display"], q["count"], q["zh"], "、".join(reward_desc) or "谢意")})
     try:
-        goddess("%s 办成了 %s 的今日委托。（编年史已记）" % (speaker, q["display"]))
+        # 2026-08-23 造物主谕：确认一律 msg 点对点，不刷公屏——委托完成只告诉委托人。
+        tellraw([("[女神] ", "gold"), ("%s 办成了 %s 的今日委托。（编年史已记）" % (speaker, q["display"]), "white")], to=speaker)
     except Exception:
         pass
     print("[quest] DONE %s -> %s: %s" % (speaker, q["display"], q["zh"]), flush=True)
@@ -570,6 +571,15 @@ SKILLBOOKS = {
             "造物之卷（创造系·Lv2）｜咏唱：造物/赐予/给予/赐下/给我/变出。报所需之物（如「给我个火把」）私语念出，神恩按白名单施予。",
         ],
     },
+    # 2026-08-23 造物技能自由化：空白造物卷（书与笔）——玩家自写想要的内容 → 合书 → 右键。
+    # 白名单内物资直给（火把/面包/煤/原木/石头/圆石/铁锭/金锭/小麦/苹果/木棍/木板，数量有上限）；
+    # 白名单外（钻石剑/附魔书/末影珍珠…）→ 呈神裁量，或拒或索供奉。写在书页里的话就是祈愿文。
+    "craft": {
+        "title": "空白造物卷", "author": "云笈", "emerald": 2, "writable": True,
+        "pages": [
+            "空白造物卷｜买下这本空白书（书与笔），写下你想要的物资（如「铁锭 2」「火把」），合成本书后右键——白名单内的物资直接到手；白名单外的会上达天神，由女神裁断。",
+        ],
+    },
 }
 
 def _snbt_esc(t):
@@ -577,12 +587,19 @@ def _snbt_esc(t):
     换行必须转 \\n 序列（真实换行会截断 RCON 命令）。"""
     return t.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
-def _skillbook_nbt(sb):
-    """1.21 组件格式：pages 是 JSON 编码 RawText 字符串数组（纯 tag 写法会被静默丢弃）。"""
+def _skillbook_nbt(sb, key):
+    """1.21 组件格式：pages 是 JSON 编码 RawText 字符串数组（纯 tag 写法会被静默丢弃）。
+    2026-08-23 技能书右键：custom_data.skillbook=<key> 供 settlementsfix mod 识别
+    （固定技能书右键一键施法）；writable=True 的「空白造物卷」卖书与笔 + custom_data.craftreq=true，
+    玩家自写内容合书后产物由 mod 打 craftreq 标记 → 右键呈造物。"""
     pages = ",".join('"%s"' % _snbt_esc(json.dumps({"text": p}, ensure_ascii=False)) for p in sb["pages"])
+    if sb.get("writable"):
+        return ('{id:"minecraft:writable_book",count:1,components:'
+                '{"minecraft:custom_data":{"craftreq":true}}}')
     return ('{id:"minecraft:written_book",count:1,components:'
-            '{"minecraft:written_book_content":{title:"%s",author:"%s",pages:[%s]}}}'
-            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages))
+            '{"minecraft:written_book_content":{title:"%s",author:"%s",pages:[%s]},'
+            '"minecraft:custom_data":{"skillbook":"%s"}}}'
+            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages, key))
 
 def _recipes_nbt(v):
     """村民柜台：当日未完成委托 + 档案 shop 民生柜台。
@@ -602,7 +619,7 @@ def _recipes_nbt(v):
             sb = SKILLBOOKS.get(s["skillbook"])
             if not sb:
                 continue
-            sell = _skillbook_nbt(sb)
+            sell = _skillbook_nbt(sb, s["skillbook"])
             recipes.append('{buy:{id:"minecraft:emerald",count:%d},sell:%s,uses:0,maxUses:%d,'
                            'discountCounter:0,specialPrice:0,demand:0,priceMultiplier:0.0f,rewardExp:0b}' % (
                                int(s.get("emerald", sb.get("emerald", 3))), sell, int(s.get("max", 1))))
@@ -1303,6 +1320,28 @@ def player_pos(name):
         R.s = None
     return None
 
+def nearest_player(pos, maxd=32):
+    """在线玩家中离 (x,y,z) 最近的一个（≤maxd 格）；无则 None。
+    2026-08-23 造物主谕「NPC 不公屏说话」：村民闲话/守卫喊话只私聊给在场的人。"""
+    try:
+        r = R.cmd("list")
+    except Exception:
+        R.s = None
+        return None
+    m = re.search(r"(?:online|在线)[：:\s]*(.*)$", r or "")
+    if not m:
+        return None
+    names = [n.strip() for n in m.group(1).split(",") if n.strip()]
+    best, bestd = None, None
+    for n in names:
+        ppos = player_pos(n)
+        if not ppos:
+            continue
+        d = ((ppos[0]-pos[0])**2 + (ppos[1]-pos[1])**2 + (ppos[2]-pos[2])**2) ** 0.5
+        if d <= maxd and (bestd is None or d < bestd):
+            best, bestd = n, d
+    return best
+
 def _pose_nbt(pose):
     parts = []
     for k, ang in pose.items():
@@ -1501,7 +1540,8 @@ def tail_forever():
                     npc_pos = alive_pos(v)
                     for r in replies:
                         try:
-                            speak(v, r)
+                            # 2026-08-23 造物主谕：NPC 回应一律 msg 私聊（tellraw to=who），不刷公屏。
+                            speak(v, r, to=who)
                             feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
                                          "npcPos": list(npc_pos) if npc_pos else None,
                                          "color": v.get("color", "white"), "to": who, "text": r[:300]})
@@ -1597,6 +1637,136 @@ def inbox_loop():
             pass
         time.sleep(0.4)
 
+# ---------- 技能书施法（2026-08-23 造物主谕：真人靠技能书一键施法） ----------
+# settlementsfix mod 监听玩家右键 written_book（custom_data.skillbook=固定技能书 /
+# custom_data.craftreq=空白造物卷合书）→ 写 spell-requests.jsonl → 本循环消费执行效果
+# → tellraw 点对点回执（[女神] 口吻，不走公屏）。分级冷却（2026-08-23 定稿）：
+# 照明 15s / 造物 30s / 圣愈 60s / 归乡 120s。造物卷白名单直给；超纲呈神裁量。
+SPELL_REQ = os.path.join(DATA, "spell-requests.jsonl")
+SPELL_COOLDOWNS = {"light": 15, "give": 30, "heal": 60, "home": 120}
+# 造物卷白名单（2026-08-23 造物主拍板）：(玩家书写的中文名, MC id, 数量上限)
+CRAFT_WHITELIST = [
+    ("火把", "minecraft:torch", 16), ("面包", "minecraft:bread", 8), ("煤", "minecraft:coal", 8),
+    ("原木", "minecraft:oak_log", 8), ("石头", "minecraft:stone", 8), ("圆石", "minecraft:cobblestone", 8),
+    ("铁锭", "minecraft:iron_ingot", 4), ("金锭", "minecraft:gold_ingot", 2), ("小麦", "minecraft:wheat", 8),
+    ("苹果", "minecraft:apple", 4), ("木棍", "minecraft:stick", 16), ("木板", "minecraft:oak_planks", 8),
+]
+
+def _spell_tell(to, text):
+    tellraw([("[女神] ", "gold"), (text, "white")], to=to)
+
+def _home_pos(name):
+    """玩家重生点（床）；没睡过床 → 镇中心（出生点安全区中心）。"""
+    try:
+        out = R.cmd("data get entity %s SpawnX" % name)
+        m = re.search(r"(\d+)", out or "")
+        if m:
+            x = int(m.group(1))
+            y = int(re.search(r"(\d+)", R.cmd("data get entity %s SpawnY" % name) or "").group(1))
+            z = int(re.search(r"(\d+)", R.cmd("data get entity %s SpawnZ" % name) or "").group(1))
+            return x, y, z
+    except Exception:
+        pass
+    return VILLAGE_CX, VILLAGE_CY, VILLAGE_CZ
+
+def _exec_fixed_skill(speaker, skill):
+    """执行固定技能书效果（与快路径法术口径一致）。返回回执文本。"""
+    try:
+        if skill == "home":
+            x, y, z = _home_pos(speaker)
+            R.cmd("tp %s %d %d %d" % (speaker, x, y, z))
+            return "空间之力涌动，你被送回基地。"
+        if skill == "heal":
+            R.cmd("effect give %s minecraft:instant_health 1 1" % speaker)
+            R.cmd("effect give %s minecraft:saturation 1 20" % speaker)
+            return "圣光抚过伤口，伤痛与饥饿一同消散。"
+        if skill == "light":
+            R.cmd("give %s minecraft:torch 4" % speaker)
+            return "几根火把落入你的手中，照亮前路。"
+        if skill == "give":
+            R.cmd("give %s minecraft:bread 2" % speaker)
+            return "两片面包自虚空中凝聚，落入你的手中。"
+        return "这本卷轴上写的法术，天神不识。"
+    except Exception as e:
+        print("[spell] exec err:", e, flush=True)
+        R.s = None
+        return "施法途中天地阻隔，稍后再试。"
+
+def _match_craft(text):
+    """造物卷：文本含白名单物品名 → (id, count)；超纲 → None。"""
+    for cn, mid, maxc in CRAFT_WHITELIST:
+        if cn in text:
+            return mid, maxc
+    return None
+
+def spell_loop():
+    """消费 spell-requests.jsonl（mod 技能书右键请求），分级冷却，tellraw 点对点回执。"""
+    cooldown = {}  # (speaker, skill) -> ts
+    while not os.path.exists(SPELL_REQ):
+        time.sleep(1.0)
+    f = open(SPELL_REQ, "r", encoding="utf-8", errors="replace")
+    f.seek(0, 2)
+    print("[spell] spell loop up, tailing", SPELL_REQ, flush=True)
+    while True:
+        line = f.readline()
+        if line:
+            try:
+                rec = json.loads(line)
+                speaker = str(rec.get("speaker", "")).strip()
+            except Exception:
+                continue
+            if not speaker:
+                continue
+            skill = str(rec.get("skill", "") or "").strip()
+            text = str(rec.get("text", "") or "").strip()
+            now = time.time()
+            # 冷却判定
+            cd_key = (speaker, skill or "craft")
+            last = cooldown.get(cd_key, 0)
+            cd = SPELL_COOLDOWNS.get(skill, 30 if not skill else 0)
+            if now - last < cd:
+                wait = int(cd - (now - last))
+                _spell_tell(speaker, "卷轴的灵光尚在回蓄（约 %d 秒后再试）。" % wait)
+                print("[spell] %s %s 冷却中 %ds" % (speaker, skill or text[:20], wait), flush=True)
+                continue
+            if skill:
+                # 固定技能书
+                reply = _exec_fixed_skill(speaker, skill)
+                cooldown[cd_key] = now
+                _spell_tell(speaker, reply)
+                feed_append({"kind": "spell", "who": speaker, "skill": skill, "text": reply[:200]})
+                print("[spell] %s 技能书 %s → %s" % (speaker, skill, reply), flush=True)
+            else:
+                # 空白造物卷（玩家自写书页全文）
+                m = _match_craft(text)
+                if m:
+                    mid, maxc = m
+                    R.cmd("give %s %s %d" % (speaker, mid, maxc))
+                    cooldown[cd_key] = now
+                    reply = "一件物资自虚空中凝聚，落入你的手中。"
+                    _spell_tell(speaker, reply)
+                    feed_append({"kind": "spell", "who": speaker, "skill": "craft", "item": mid, "text": reply[:200]})
+                    print("[spell] %s 造物 %s x%d" % (speaker, mid, maxc), flush=True)
+                else:
+                    # 超纲 → 呈神裁量（god-inbox asPlayer=true：走玩家祈愿路径，神谕 whisper 回）
+                    _god_append(GOD_INBOX, {
+                        "key": speaker, "wish": "造物卷求「%s」" % text[:120],
+                        "display": speaker, "asPlayer": True,
+                        "situation": "空白造物卷超纲请求（白名单外物资）", "ts": int(now * 1000),
+                    })
+                    _spell_tell(speaker, "此物不在卷轴白名单内，你的请求已上达天听，女神按序裁断。")
+                    print("[spell] %s 造物超纲 → 呈神: %s" % (speaker, text[:60]), flush=True)
+            continue
+        # EOF：轮转检测
+        try:
+            if os.path.exists(SPELL_REQ) and os.path.getsize(SPELL_REQ) < f.tell():
+                f.close()
+                f = open(SPELL_REQ, "r", encoding="utf-8", errors="replace")
+                f.seek(0, 2)
+        except OSError:
+            pass
+        time.sleep(0.4)
+
 # ================= 背景村民日记（2026-08-18：环境生命感——他们在过自己的日子） =================
 AMBIENT = [v for v in PROFILES if v.get("ambient")]
 _diary_day = None
@@ -1681,7 +1851,10 @@ def _do_routine(v, r):
                 ["minecraft:flame", "minecraft:happy_villager", "minecraft:note"])
             R.cmd("particle %s %.1f %.1f %.1f 0.3 0.4 0.3 0 6" % (p, pos[0], pos[1] + 1.2, pos[2]))
         if line:
-            speak(v, line)
+            # 2026-08-23 造物主谕：闲话只私聊给在场的最近玩家，没人就不说（不刷公屏）。
+            to = nearest_player(pos)
+            if to:
+                speak(v, line, to=to)
     except Exception as e:
         print("[routine] err %s: %s" % (v.get("key"), e), flush=True)
     feed_append({"kind": "routine", "npc": v["display"], "text": "%s·%s" % (r.get("phase"), act or "say")})
@@ -1769,9 +1942,12 @@ def village_watch_loop():
                     v = _pick_guard()
                     if v:
                         line = random.choice(GUARD_LINES.get(v["key"], GUARD_LINES["zhujiu"]))
+                        # 2026-08-23 造物主谕：守卫喊话只私聊给村内在场玩家，没人就不喊。
+                        to = nearest_player((VILLAGE_CX, VILLAGE_CY, VILLAGE_CZ), maxd=VILLAGE_RADIUS)
                         try:
-                            speak(v, line)
-                            feed_append({"kind": "say", "npc": v["display"], "text": line})
+                            if to:
+                                speak(v, line, to=to)
+                            feed_append({"kind": "say", "npc": v["display"], "to": to, "text": line})
                         except Exception:
                             pass
                     last_shout = now
@@ -1848,6 +2024,7 @@ if __name__ == "__main__":
     threading.Thread(target=village_watch_loop, daemon=True).start()
     threading.Thread(target=proximity_chat_loop, daemon=True).start()
     threading.Thread(target=interact_tail_loop, daemon=True).start()
+    threading.Thread(target=spell_loop, daemon=True).start()
     if AMBIENT:
         threading.Thread(target=ambient_diary_loop, daemon=True).start()
         print("[npc] ambient diary armed: %d villagers" % len(AMBIENT), flush=True)

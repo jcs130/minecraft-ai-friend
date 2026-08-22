@@ -42,6 +42,8 @@ env["MC_VIEWER_PORT"] = "3050"
 env["MC_DATA_DIR"] = DATA_DIR   # 运行态正本：scratch-plugin\data
 env["MC_LOG_PATH"] = os.path.join(SERVER_DIR, "logs", "latest.log")
 env["MC_ADVANCEMENTS_DIR"] = os.path.join(SERVER_DIR, "world", "advancements")
+# 受守护 VIP 真人白名单（逗号分隔，可经 MC_VIP_LISTEN 覆盖）：绕过冷启动/静默/节流三闸，女神必回
+env["MC_VIP_LISTEN"] = os.environ.get("MC_VIP_LISTEN") or "mengmeng,kangqiang"
 cmd = [node, "--require", preflight, "--import", f"file:///{loader}", "bootstrap-world.mts"]
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200

@@ -41,8 +41,34 @@ export function createBot(config: Config): BotHandle {
       port: config.port,
       username: config.username,
       checkTimeoutInterval: 30_000,
+      // NeoForge 21.1.248 = MC 1.21.1：显式钉版本，避免 mineflayer 默认版本探测
+      // 在 config/registry 同步阶段失配（Goddess 连 25599 曾卡死在 connecting）。
+      version: '1.21.1',
     })
     currentBot = bot
+
+    // 实体 name 归一化：mod 实体（numen/settlements 的村民 base_villager）在 mineflayer
+    // registry 里查不到 → name='unknown' → viewer 的 getEntityMesh 对 'unknown' throw → 紫盒/不可见。
+    // 这里把已知 mod 实体的 name 归一到 vanilla 对应名，viewer 就能用自带模型渲染。
+    // 映射表集中在 B 仓 src/ 可维护；modName 取 mineflayer 的 entityType（协议内部 id）。
+    // 注意：必须在创建 viewer(WorldView) 之前注册，保证事件监听先于 viewer，读到的是归一后的 name。
+    const MOD_ENTITY_NAME: Record<number, string> = {
+      130: 'villager', // numen/settlements 村民（诊断证实 19 位村民均 entityType=130）
+    }
+    const normalizeModEntity = (e: { name?: string; entityType?: number }): void => {
+      if (!e || e.name !== 'unknown' || e.entityType === undefined) return
+      const mapped = MOD_ENTITY_NAME[e.entityType]
+      if (mapped) e.name = mapped
+    }
+    bot.on('entitySpawn', (e: any) => normalizeModEntity(e))
+    bot.on('entityUpdated', (e: any) => normalizeModEntity(e))
+    // 对已连接的旧实体立即归一（防实体早于我注册 hook 已入列）。
+    // ⚠️ bot.entities 由 mineflayer 内部插件在 inject_allowed（下一个 event-loop tick）才初始化；
+    // createBot() 同步返回的那一刻它仍是 undefined，直接 Object.values 会抛
+    // "Cannot convert undefined or null to object"，中断 connect() 后续装配（spawn/error/end
+    // 处理器不再注册）→ 进程半挂 → Goddess 卡死在 connecting、RCON 显示在线但没有 spawned。
+    // 故必须判空；已连接的实体后续会经 entitySpawn/entityUpdated hook + spawn 时兜底归一到。
+    if (bot.entities) for (const e of Object.values(bot.entities)) normalizeModEntity(e)
 
     // Official plugins: pathfinding + best-tool-for-block selection.
     bot.loadPlugin(pf.pathfinder)

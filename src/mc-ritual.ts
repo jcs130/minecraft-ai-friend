@@ -60,14 +60,6 @@ export function resolveChoice(input: string, candidates: AtomSummary[]): string 
   return null
 }
 
-function costText(cost: { mana: number; food: number; hp: number }): string {
-  const parts: string[] = []
-  if (cost.mana > 0) parts.push(`魔力${cost.mana}`)
-  if (cost.food > 0) parts.push(`饱食${cost.food}`)
-  if (cost.hp > 0) parts.push(`生命${cost.hp}`)
-  return parts.length > 0 ? `耗${parts.join('/')}` : '无消耗'
-}
-
 // ── 女神台词（模板）───────────────────────────────────────────────────
 function ritualTitle(t: Transmigrator | null, username: string): { title: string; subtitle: string } {
   const name = t?.name ?? username
@@ -77,20 +69,14 @@ function ritualTitle(t: Transmigrator | null, username: string): { title: string
 
 function ritualLines(t: Transmigrator | null, username: string, candidates: AtomSummary[]): string[] {
   const name = t?.name ?? username
-  const lines: string[] = []
-  lines.push(`[女神] ${name}，欢迎降临此界。`)
-  if (t?.backstory) {
-    const firstLine = t.backstory.split('\n')[0].slice(0, 60)
-    lines.push(`[女神] 你的前世——${firstLine}${t.backstory.split('\n')[0].length > 60 ? '…' : ''}`)
-  }
-  lines.push('[女神] 作为穿越的补偿，我赐你一项「出生天赋」——从下列法术中自选其一：')
-  candidates.forEach((c, i) => {
-    const lvTag = c.requiredLevel > 1 ? `${c.requiredLevel}级秘法` : ''
-    const sep = lvTag ? '，' : ''
-    lines.push(`[女神]   ${i + 1}. ${c.name} —— ${c.words[0] ?? ''}（${costText(c.cost)}${sep}${lvTag}${lvTag ? '，天赋无视门槛' : ''}）`)
-  })
-  lines.push('[女神] 喊出「我选 <法术名>」或「选 <编号>」，即告选定。')
-  return lines
+  // 2026-08-22 造物主谕「公屏清净」：降临仪式从「欢迎+前世+逐条候选」的冗长宣读
+  // 精简为两行公屏（欢迎 + 一行候选清单），不再逐条刷屏。候选名公屏可见（AI 与真人同通道），
+  // 耗魔/门槛等细节由 /help 与私聊「问：」补足；前世背景已由 initNewcomer 的私聊带到，公屏不再重报。
+  const names = candidates.map((c, i) => `${i + 1}.${c.name}`).join('／')
+  return [
+    `[女神] ${name}，欢迎降临此界。`,
+    `[女神] 我赐你一项「出生天赋」——候选：${names}。喊「我选 <法术名>」或「选 <编号>」即告选定，细节可私聊问我。`,
+  ]
 }
 
 export interface RitualDeps {

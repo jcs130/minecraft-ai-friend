@@ -164,6 +164,8 @@ const god = createGod({
   advancementNamesPath: `${D}/advancement-names.json`,
   // 「平衡」通道白名单（私服真人玩家名不再硬编码）：默认仅女神；服主可经 MC_MAINTAINERS 注入，逗号分隔
   maintainers: (process.env.MC_MAINTAINERS ?? 'Goddess').split(',').map(s => s.trim()).filter(Boolean),
+  // 特殊监听白名单（VIP 真人）：说的一切女神都要聆听回应，绕过冷启动/冷却；经 MC_VIP_LISTEN 注入
+  vipListen: (process.env.MC_VIP_LISTEN ?? '').split(',').map(s => s.trim()).filter(Boolean),
   balanceFlushMs: 120_000,
   bulletinPath: `${D}/balance-bulletin.json`,
   heartbeatPath: `${D}/world-heartbeat.json`,

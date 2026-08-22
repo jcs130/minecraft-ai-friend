@@ -52,6 +52,17 @@ GUARDS = [
     {"name": "鸣人", "agent": "mc-guard-naruto", "session": "guard:naruto", "tag": "naruto"},
 ]
 
+# ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
+# 咏唱/祈愿/谕示文件必须与 mc-god 世界进程同卷（默认锚 A 仓 scratch-plugin\data 运行态，
+# 容器化/迁移经 MC_DATA_DIR 覆盖）。守卫桥的账本仍在 B 仓 data/（DATA），与此无关。
+WORLD_DATA = os.environ.get("MC_DATA_DIR", r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data")
+CHANT_REQ = os.path.join(WORLD_DATA, "chant-requests.jsonl")      # 亲卫 chant → 女神（快路径咏唱）
+CHANT_REPLY = os.path.join(WORLD_DATA, "chant-reply.jsonl")       # 女神回执 → 守卫桥注入亲卫
+GOD_INBOX = os.path.join(WORLD_DATA, "god-inbox.jsonl")           # 亲卫 pray → 女神收件箱
+GODDESS_ORDERS = os.path.join(WORLD_DATA, "goddess-orders.jsonl") # 女神主动谕示 → 守卫桥注入亲卫
+# 回执/谕示多守卫共享读（桐人/鸣人双线程），锁内"读-分流-写回-清空"原子
+_MSG_LOCK = threading.Lock()
+
 # 每轮节奏（秒）
 DECIDE_INTERVAL = 20      # 空闲时：决策+执行一轮后休息
 BUSY_POLL = 6             # 有任务在跑时：只轮询，不决策
@@ -61,7 +72,9 @@ MAX_RUN_SECONDS = 0       # 0 = 无限循环（常驻）；>0 用于试运行
 # 任务熔断阈值（QwenPaw 决策 loop 不僵死的核心）：
 # 有界任务跑得比这久/预算快耗尽 → 主动 task_stop 让亲卫重议，绝不无限轮询。
 MAX_TASK_RUN_ELAPSED = 420   # 有界任务最长跑多少秒（7 分钟）即熔断
-MAX_TASK_BUDGET_STOP = 60    # 有界任务预算剩多少秒即熔断（视为快超时，别等它自然结束）
+# 已弃用：绝不用"绝对预算剩余"判熔断——goto 移动任务预算天然几十秒(30s+距离)，
+# 剩 39s 是正常，按它熔断会让身体"受理即蒸发、站位不动(numen 自己会 deadline 超时收尾)"。
+# MAX_TASK_BUDGET_STOP = 60
 MAX_TASK_DEAD_ELAPSED = 150  # 有界任务"死任务"早拆除线：攻击/采集等预期有限的动作打这么久还不收尾，
                              # 说明卡死（如 attack 打了 300s 还在"战斗 0/1"），提前 task_stop 让亲卫重议；
                              # 正常一只怪/几棵树不会超过此线。亲卫重发会重议，不损剧情。
@@ -82,6 +95,9 @@ TOOL_WHITELIST = {
     "craft", "equip_item", "interact_at", "interact_entity", "close_gui", "inspect_gui",
     # 说话（独立命令 numen_act say，非 invoke 工具）
     "say",
+    # 与女神侧通信（2026-08-23：文件通道，非世界级动作）
+    "chant",  # 咏唱已学技能（等价私语念咒 → chant-requests.jsonl → 女神侧 castSpell）
+    "pray",   # 祈愿上达天神（→ god-inbox.jsonl → 女神收件箱）
     # 控制
     "task_stop", "todowrite",
 }
@@ -109,7 +125,23 @@ def _owner_valid(owner_status):
 
 
 # 决策 prompt 模板：喂给亲卫，让它输出一个动作 JSON
-def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=None, standing_stuck=False, emergency=None):
+def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=None, standing_stuck=False, emergency=None, goddess_msgs=None):
+    # 2026-08-23：女神侧回执/谕示注入（chant 回执、祈愿神谕、主动守望谕示）。
+    # 假玩家没有 mineflayer whisper，女神的话经此文件通道送达，亲卫"听见"后决定怎么回应/行动。
+    goddess_hint = ""
+    if goddess_msgs:
+        parts = []
+        for m in goddess_msgs:
+            kind = "神谕" if m.get("kind") == "prayer" else ("咏唱回执" if m.get("kind") == "chant" else "女神谕示")
+            txt = str(m.get("reply") or m.get("text") or "").strip()
+            if txt:
+                parts.append(f"【{kind}】{txt}")
+        if parts:
+            goddess_hint = "\n".join([
+                "女神刚对你说了话（务必回应：若她点出你的处境/可用技能，就照做或回话）：",
+                "\n".join(parts),
+                "—— 你可以 say 回应女神，也可以按她的指点行动（如她提醒你念'圣愈'，就输出 chant）。",
+            ])
     # 常驻任务空转过久的强出口：喂给亲卫"务必换活"的明确指令（自主导向，不诱导主人概念）
     stuck_hint = ""
     if standing_stuck:
@@ -142,6 +174,7 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         f"【当前任务（常驻）】{standing_task or '（无——身体空闲）'}{stuck_hint}",
         f"【当前目标】{goal or '（尚未立下目标——结合处境先定一个眼前该办的正事）'}",
         emergency_hint,
+        goddess_hint,
         "",
         f"你是亲卫（{g['agent']}），直管穿越者{g['name']}的魂。此刻他的身体由你掌舵——",
         "以他的性格（见你的 PROFILE 人物志）替他决定下一步生存动作。",
@@ -149,7 +182,7 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         "结合场景信息、上下文与当前目标，智能判断「此刻最该干的一件事」；",
         "不要把决策做成固定循环，也不要把上一动作机械照搬——场景变了就改道，目标达成了就换目标。",
         "",
-        "只输出一个 JSON 对象，不要多余文字、不要调用工具、不要索要神恩（祈愿另由你上达天神）：",
+        "只输出一个 JSON 对象，不要多余文字、不要调用工具：",
         '{"tool":"<工具名>","args":{...},"reason":"<一句话，你为何这么做>","goal":"<当前目标，未变则照抄原目标>"}',
         "",
         "可用工具（身体能执行，其余一律不要输出）：",
@@ -162,6 +195,8 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         '- scan_blocks：{"block_ids":["minecraft:oak_log"]} 找方块',
         '- follow：{"target":"owner"} 跟随指定目标——只在「明确护卫/同行指令」时用它，否则别主动跟；',
         '- say：{"message":"<一句话>"} 以身体本人的身份在公屏说话，与在场玩家/NPC 交谈、回应别人、报平安、求援——你「开口」的唯一方式；语气要像本人（见 PROFILE 人物志），短而自然，别喊口号',
+        '- chant：{"spell":"归乡"} 咏唱你已学会的技能（等同私语念咒——女神侧按技能表判定：已学会的自己施法，未学会的会得到提示）——危急时优先用你掌握的法术自救；',
+        '- pray：{"wish":"…"} 祈愿上达天神（危急求助、重大事项、求指引），女神按序聆听并神谕回执——别拿它当闲聊；',
         '- task_stop：{} 叫停当前动作',
         '- 感知：look_around（{radius} 附近地形）/ scan_nearby_entities（必须有 type_filter 参数，如 {"radius":16,"type_filter":"hostile"}）/ get_self_status / get_world_info / task_status',
         "",
@@ -176,6 +211,70 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         "- 若没有确切的护卫指令、或目标根本不在/已离线 → 立刻输出新的身体动作（mine/eat/goto/sleep/attack 等），新动作会自动顶替 follow（numen 语义：派别的东西就是让它停下的正常方式）。",
         "- 不要因为『有任务在跑』就什么都不做——常驻任务占着身体不等于锁死你，你永远是决策者，按自己的生存目标走。",
     ])
+
+
+# ---------------- 女神通道（2026-08-23：咏唱/祈愿/谕示） ----------------
+def drain_msgs(g):
+    """读女神侧回执/谕示：返回本守卫相关的消息列表（chant-reply 按 speaker、
+    goddess-orders 按 to），其余写回文件。多守卫共享读，锁内原子。"""
+    mine = []
+    with _MSG_LOCK:
+        for path, field in ((CHANT_REPLY, "speaker"), (GODDESS_ORDERS, "to")):
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = [l for l in f.read().splitlines() if l.strip()]
+            except Exception:
+                continue
+            if not lines:
+                continue
+            keep = []
+            for ln in lines:
+                try:
+                    rec = json.loads(ln)
+                    target = str(rec.get(field, "")).strip()
+                except Exception:
+                    keep.append(ln)
+                    continue
+                if target == g["name"]:
+                    mine.append(rec)
+                else:
+                    keep.append(ln)
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(keep) + ("\n" if keep else ""))
+            except Exception:
+                pass
+    return mine
+
+
+def append_chant_req(name, spell):
+    """亲卫 chant → chant-requests.jsonl（女神侧 consumeChantRequests 消费）。"""
+    try:
+        with open(CHANT_REQ, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"speaker": name, "text": spell, "ts": int(time.time() * 1000)}, ensure_ascii=False) + "\n")
+        return True
+    except Exception as e:
+        log(f"chant req 写盘失败：{e}")
+        return False
+
+
+def append_prayer(g, wish, status=None):
+    """亲卫 pray → god-inbox.jsonl（asPlayer=true：女神按玩家祈愿路径裁决，神谕双写 chant-reply）。"""
+    situation = ""
+    if status:
+        situation = str(status)[:120]
+    try:
+        with open(GOD_INBOX, "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "key": g["name"], "wish": wish, "display": g["name"],
+                "asPlayer": True, "situation": situation, "ts": int(time.time() * 1000),
+            }, ensure_ascii=False) + "\n")
+        return True
+    except Exception as e:
+        log(f"prayer 写盘失败：{e}")
+        return False
 
 
 # ---------------- RCON ----------------
@@ -414,14 +513,17 @@ def drive_loop(g, stop_at):
                     task_name in STANDING_TASKS
                     or (isinstance(budget_left, (int, float)) and budget_left > 1000000)
                 )
-                # —— 熔断判定：有界任务卡死/超时/预算将尽 → task_stop ——
+                # —— 熔断判定：有界任务卡死/超时 → task_stop ——
+                # 关键：绝不用"绝对预算剩余"判熔断——goto 这类移动任务的预算天然只有几十秒
+                # (numen 给 30s+距离)，剩 39s 是正常进行中，被 budget_ok 误熔断会让身体
+                # "受理即蒸发、站位不动"。numen 的有界任务自己会 deadline 超时收尾，守卫桥
+                # 只需处理"elapsed 远超合理值还不收尾"的死任务(如 attack 卡 300s 仍战斗 x/y)。
                 if not is_standing and "空闲" not in msg and "没有后台任务" not in msg:
                     elapsed_ok = (isinstance(elapsed_s, (int, float)) and elapsed_s > MAX_TASK_RUN_ELAPSED)
                     # "死任务"早拆除：预期有限的动作（打一只怪/砍几棵树）打了 150s+ 还没收尾 → 卡死
                     # （通常卡在目标已死但 task_finished 没来 / 目标清不掉，numen 一直报"战斗 x/y"）
                     dead_ok = (isinstance(elapsed_s, (int, float)) and elapsed_s > MAX_TASK_DEAD_ELAPSED)
-                    budget_ok = (isinstance(budget_left, (int, float)) and 0 < budget_left <= MAX_TASK_BUDGET_STOP)
-                    if elapsed_ok or dead_ok or budget_ok:
+                    if elapsed_ok or dead_ok:
                         feed_append(g, "tripped", f"有界任务 {task_id}({task_name}) 卡死：elapsed={elapsed_s}s budget={budget_left}s → task_stop 熔断")
                         log(f"⚠ 有界任务 {task_id}({task_name}) 超时/预算尽（elapsed={elapsed_s}s budget={budget_left}s），task_stop 熔断，让亲卫重议")
                         R.cmd(f'numen_act invoke "{g["name"]}" task_stop {{}}')
@@ -504,9 +606,10 @@ def drive_loop(g, stop_at):
             look = invoke(g["name"], "look_around", {"radius": 8})
             scan = invoke(g["name"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
             # 3. 喂亲卫决策（standing_stuck 标记常驻任务空转过久的强出口；emergency 标记濒死，优先保命）
+            g_msgs = drain_msgs(g)  # 2026-08-23：女神回执/谕示（chant 回执、神谕、主动守望）
             prompt = decision_prompt(g, status, world, look, scan, last_act, goal,
                                      standing_task=current_task, standing_stuck=standing_stuck,
-                                     emergency=emergency)
+                                     emergency=emergency, goddess_msgs=g_msgs)
             ans = call_guard(g["agent"], g["session"], prompt)
             act = extract_action(ans)
             if not act:
@@ -531,7 +634,36 @@ def drive_loop(g, stop_at):
                 time.sleep(DECIDE_INTERVAL)
                 continue
             # 5. 执行
-            if tool == "say":
+            if tool == "chant":
+                # 咏唱：写 chant-requests.jsonl → 女神侧 castSpell（已学自施/未学提示）→ 回执注入
+                spell = str((args.get("spell") if isinstance(args, dict) else None) or
+                            (args.get("text") if isinstance(args, dict) else None) or "").strip()
+                if not spell:
+                    feed_append(g, "blocked", "chant 缺 spell/text 内容")
+                    log("⚠ chant 无内容，跳过")
+                    last_act = "（chant 需要 spell 内容）"
+                    time.sleep(DECIDE_INTERVAL)
+                    continue
+                ok = append_chant_req(g["name"], spell)
+                out = "已上达咏唱通道" if ok else "(写盘失败)"
+                feed_append(g, "act", f"tool=chant spell={spell[:60]} → {out}")
+                last_act = f"chant {spell[:60]} → {out}"
+            elif tool == "pray":
+                # 祈愿：写 god-inbox.jsonl（asPlayer=true）→ 女神玩家路径裁决 → 神谕经 chant-reply 回执
+                wish = str((args.get("wish") if isinstance(args, dict) else None) or
+                           (args.get("text") if isinstance(args, dict) else None) or "").strip()
+                if not wish:
+                    feed_append(g, "blocked", "pray 缺 wish/text 内容")
+                    log("⚠ pray 无内容，跳过")
+                    last_act = "（pray 需要 wish 内容）"
+                    time.sleep(DECIDE_INTERVAL)
+                    continue
+                ok = append_prayer(g, wish, status)
+                out = "祈愿已上达天听" if ok else "(写盘失败)"
+                feed_append(g, "act", f"tool=pray wish={wish[:60]} → {out}")
+                log(f"{g['name']} 祈愿：{wish[:80]}")
+                last_act = f"pray {wish[:60]} → {out}"
+            elif tool == "say":
                 # say 走独立命令 numen_act say "名字" <消息>（greedyString 收全剩余），非 invoke 工具
                 raw = args.get("message") if isinstance(args, dict) else args
                 msg = str(raw if raw is not None else "").strip()

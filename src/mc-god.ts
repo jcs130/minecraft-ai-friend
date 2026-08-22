@@ -28,6 +28,18 @@ const GOD_REPLY = process.env.GOD_REPLY || `${DATA_DIR}/god-reply.jsonl`
 /** 村民祈愿用的虚拟 username 前缀（区别于真人/AI 穿越者；神谕据此回文件而非私聊）。 */
 const VILLAGER_PREFIX = 'villager:'
 
+// 假玩家咏唱/神谕通道（2026-08-23 造物主谕「假玩家与客户端 AI 玩家一致」）：
+// 守卫桥（sidecar/guard/guard_drive.py）投 chant-requests.jsonl（亲卫 chant 工具，等价私语念咒）
+// → 本进程与"私语念咒"同逻辑 castSpell（已学自施/未学呈神）→ 回执写 chant-reply.jsonl
+// → 守卫桥每轮读并注入亲卫决策。女神主动守望（watchGuards）写 goddess-orders.jsonl，守卫桥同读。
+const CHANT_REQ = process.env.CHANT_REQ || `${DATA_DIR}/chant-requests.jsonl`
+const CHANT_REPLY = process.env.CHANT_REPLY || `${DATA_DIR}/chant-reply.jsonl`
+const GODDESS_ORDERS = process.env.GODDESS_ORDERS || `${DATA_DIR}/goddess-orders.jsonl`
+/** 守卫假玩家名单（神谕须双写 chant-reply 供守卫桥读；mc_npc 的 god_reply_loop 读后即删 god-reply.jsonl）。 */
+const GUARD_NAMES = ['桐人', '鸣人', '爱德华']
+/** 守卫桥账本目录（B 仓 data/；跨仓路径经 env 注入，默认空=不读账本，仅靠 magic-state 判定）。 */
+const GUARD_LEDGER_DIR = process.env.GUARD_LEDGER_DIR || ''
+
 /**
  * mc-god —— 慢路径女神（世界守护者，QwenPaw Agent mc-god）+ 女神化身管理。
  *
@@ -88,6 +100,11 @@ export interface Config {
   advancementNamesPath: string
   /** 天平引擎维护者名单（可对女神喊「平衡 …」的玩家名；其他玩家只能祈愿陈情）。 */
   maintainers: string[]
+  /** 特殊监听白名单（VIP 真人旅人）：不在言必称「祈愿」约束内——
+   *  他们说的一切——闲聊、求助、牢骚——女神都必须聆听并回应（绕过冷启动/
+   *  冷却节流），并可按处境主动调派守护者或动用服务器权限施以援手。
+   *  逗号分隔注入（MC_VIP_LISTEN），默认空表。 */
+  vipListen: string[]
   /** 天平公告攒批窗口：调整即时生效但公告攒一波一起发（版本更新式，防公屏刷屏）。 */
   balanceFlushMs: number
   /** 攒批队列落盘文件（重启不丢未发公告）。 */
@@ -149,6 +166,8 @@ interface Verdict {
   direction: string | null
   distance: number | null
   reply: string
+  /** 2026-08-23 神迹记账：女神裁量耗 tokens（callAgent 无 usage，字符折算估算）。 */
+  tokens?: number
 }
 
 const GIVE_ITEMS_TEXT = Object.entries(GIVE_WHITELIST).map(([cn, id]) => `${cn}/${id}`).join('、')
@@ -173,12 +192,15 @@ function verdictPrompt(
   devotion: string,
   memories: MemoryHit[],
   isVillager = false,
+  vip = false,
 ): string {
   const lines = [
     `【祈愿】${senderName}：${wish}`,
   ]
   if (isVillager) {
     lines.push('【祈愿者】这是一位灶火民（村民），向女神祈福。他与穿越者平权同杆秤。')
+  } else if (vip) {
+    lines.push('【祈愿者】这是一位受女神守护的 VIP 真人旅人（特殊监听白名单）。')
   }
   if (offering) {
     lines.push(`【本次供奉】${offering.cn}×${offering.count}（已从他的行囊收执，归入神库；无论你如何裁断，供品不退还）`)
@@ -210,6 +232,13 @@ function verdictPrompt(
     lines.push('- 破晓/驱云是全服天象，影响众生，慎用；天雷/陨石等毁灭技艺除非理由充分不施；')
     lines.push('- 纯闲聊、试探、问问题 → none，reply 里以神谕口吻回应；')
     lines.push('- reply 话少而重，有神性。')
+    if (vip) {
+      lines.push('')
+      lines.push('【VIP 守护特例】此人在特殊监听白名单内，她/他说的一切你都当聆听回应，不必拘于「祈愿」名分：')
+      lines.push('- 纯闲聊/牢骚也以女神口吻宽和回应一句，莫冷落她/他；')
+      lines.push('- 若她/他处境艰难（重伤/濒死/被困/迷失/身无长物），可主动代施辅助法术（如圣愈、归乡、照明）或赐予白名单内物资，或在 reply 里给明晰指引；')
+      lines.push('- 代施/赐物仍守白名单与数量克制；天象级恩典（破晓/驱云）仍慎用，全服同享不可私赏。')
+    }
   }
   return lines.join('\n')
 }
@@ -498,7 +527,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
    * 神谕裁决：她有长期记忆与众生册——同一穿越者的祈愿落在同一 session，
    * 恩情与冒犯、供奉与亵渎都留痕。
    */
-  async function askGoddess(username: string, senderName: string, wish: string, offering: OfferingInfo | undefined, isVillager = false): Promise<Verdict> {
+  async function askGoddess(username: string, senderName: string, wish: string, offering: OfferingInfo | undefined, isVillager = false, vip = false): Promise<Verdict> {
     const ms = magic.getState(username)
     const atoms = magic.listAtoms()
     const learnedNames = ms.learned
@@ -513,7 +542,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         '（注：已习得且魔力足够的祈愿已被程序拦截，不会上达于你——你看到的都是未习得或特殊心愿）',
       ].join('；')
     const memories = await worlddb.recall(username, wish, config.recallTopK)
-    let prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager)
+    let prompt = verdictPrompt(senderName, wish, atoms, snapshot, offering ?? undefined, worlddb.ledgerSummary(username), memories, isVillager, vip)
     // 视觉带图（2026-08-21 链路打通）：统一带图，模型能否看图由 QwenPaw provider 配置决定。
     // 传令官/女神本尊均走 QwenPaw；换 VL 模型只改 provider 配置，代码不动。
     const shot = await latestShotDataUri(username)
@@ -539,9 +568,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const direction = typeof parsed.direction === 'string' && parsed.direction.trim() ? parsed.direction.trim() : null
     const distance = typeof parsed.distance === 'number' && Number.isFinite(parsed.distance) ? parsed.distance : null
     const reply = typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : '愿神力庇佑于你。'
+    // 女神魔力（tokens）估算：callAgent 无 usage，按字符折算（中文 ~1.5 字符/token）
+    const tokens = Math.ceil((prompt.length + answer.length) / 1.5)
     // cast 但技艺不合法 → 降级为 none
-    if (action === 'cast' && !skill) return { ...fallback, reply }
-    return { action, skill, item, count, direction, distance, reply }
+    if (action === 'cast' && !skill) return { ...fallback, reply, tokens }
+    return { action, skill, item, count, direction, distance, reply, tokens }
   }
 
   // ── 世界提问快速答疑（2026-08-20 分仓解耦定调）───────────────────────
@@ -564,6 +595,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const t = transmigrators.getByUsername(username)
     const name = t?.name ?? username
     const backstory = t?.backstory?.split('\n')[0]?.slice(0, 60) ?? ''
+    // 2026-08-23 咒语框架分级分发（造物主谕）：AI 穿越者全量告知（看不了书）；真人随机 2-3 个公共前缀，其余藏技能书。
+    const prefixHint = t
+      ? magic.chantPrefixes(true).join(' / ')
+      : (() => {
+          const pool = magic.chantPrefixes(false)
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[pool[i], pool[j]] = [pool[j], pool[i]]
+          }
+          return pool.slice(0, 3).join(' / ')
+        })()
     const prompt = [
       `你是这个方块世界的女神（游戏名 ${bot.username}）。`,
       `一位名叫「${name}」的旅人刚刚醒来、降临此界，这是他第一次踏足这片土地。`,
@@ -582,7 +624,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
       '2. 引导他自报家门：问他叫什么、记得自己是谁、此刻想做什么（不必长篇，一句即可）。',
       '3. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
-      '4. 指路：说 /help 查生存手册；遇险私聊「祈愿：…」；疑问私聊「问：…」。',
+      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；/help 查生存手册。',
       '',
       '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
     ].join('\n')
@@ -691,16 +733,179 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           const display: string = rec?.display || key
           // 处境（桥的产物）拼进祈愿文，供女神掂量虔诚；不单独扩 schema。
           const fullWish = rec?.situation ? `${wish}（其处境：${rec.situation}）` : wish
-          const username = VILLAGER_PREFIX + key
+          // 2026-08-23：守卫假玩家（桐人/鸣人/爱德华）与造物书超纲请求投本通道时带
+          // asPlayer:true → 用真实 username 入收件箱（走玩家祈愿路径：instant/女神裁量/
+          // whisper 或 chant-reply 双写），不套 villager: 前缀（村民裁决路径多指引少代劳）。
+          const username = rec?.asPlayer ? key : VILLAGER_PREFIX + key
           worlddb.inboxPush(username, display, fullWish)
-          worlddb.chronicleRecord('prayer', username, { wish: wish.slice(0, 60), villager: true, situation: rec?.situation ?? undefined })
-          log(`villager prayer from ${display}(${key}): ${wish.slice(0, 50)}`)
+          worlddb.chronicleRecord('prayer', username, { wish: wish.slice(0, 60), villager: !rec?.asPlayer, situation: rec?.situation ?? undefined })
+          log(`villager prayer from ${display}(${key})${rec?.asPlayer ? ' [asPlayer]' : ''}: ${wish.slice(0, 50)}`)
         } catch {
           /* 单条坏行跳过 */
         }
       }
     } catch (err) {
       log(`consumeVillagerPrayers failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // ── 假玩家咏唱通道（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致，自己学会技能自己施法）──
+  // 守卫桥亲卫 chant 工具 → chant-requests.jsonl → 本进程与"私语念咒"同逻辑处理：
+  // sniffChant 未命中 → 回执「此咒不成」引导祈愿；命中 → castSpell 严格匹配：
+  // 成功=零 LLM 瞬发（已学=等级够+咒语对）；失败=向量建议+引导祈愿（慢路径 LLM 前摇）。
+  // 「未学呈神」不在 cast 内——由守卫桥亲卫侧判断（自己没学 → 主动 pray 工具呈神祈愿）。
+  // 回执 chant-reply.jsonl → 守卫桥读并注入亲卫（假玩家"听见"女神回执，无需 whisper）。
+  function appendChantReply(speaker: string, reply: string, kind = 'chant'): void {
+    try {
+      appendFileSync(CHANT_REPLY, JSON.stringify({ speaker, reply, kind, ts: Date.now() }) + '\n', 'utf-8')
+    } catch (err) {
+      log(`appendChantReply failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // ── 施法统一处理链（2026-08-23 造物主谕：严格→向量→LLM→模糊施法，无需二次确认）──
+  // castSpell 抛 NeedLlmError（中置信向量命中）时：LLM 短推理确认法术归属，
+  // 命中 → castFuzzy（tokens 折算魔力 + 推理耗时=自然前摇）；拒绝 → 原话转达。
+  async function resolveChant(username: string, chant: string): Promise<string> {
+    try {
+      return await magic.castSpell(username, chant)
+    } catch (err) {
+      if (err instanceof Error && err.name === 'NeedLlmError' && typeof (err as any).atomId === 'string') {
+        const atomId = (err as any).atomId as string
+        const atom = magic.getAtomById(atomId)
+        const startedAt = Date.now()
+        const decision = await resolveFuzzyByLlm(username, chant, atomId, atom?.name ?? atomId)
+        const latencyMs = Date.now() - startedAt
+        if (decision.ok) {
+          const reply = await magic.castFuzzy(username, chant, atomId, { tokens: decision.tokens, latencyMs, mode: 'llm' })
+          log(`fuzzy llm cast ${atomId} for ${username}: ${chant.slice(0, 30)} -> ${reply.slice(0, 60)}`)
+          return reply
+        }
+        return `女神聆听了你的低语，但「${chant.slice(0, 30)}」未能与任何已知魔法契合——${decision.reason}。直述所求向女神祈愿便是。`
+      }
+      return `施法未能完成：${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+
+  // LLM 短推理：确认模糊咒语归属（Y/N）。传令官本地 27B 零云费、低延迟；失败回落女神。
+  async function resolveFuzzyByLlm(username: string, chant: string, atomId: string, atomName: string): Promise<{ ok: true; tokens: number } | { ok: false; reason: string }> {
+    const prompt = [
+      '你是咏唱裁决者。一位施法者念了一段咒语，向量近邻已指向候选法术。',
+      `咒语：「${chant.slice(0, 80)}」`,
+      `候选法术：${atomName}（${atomId}）`,
+      '判断：施法者意图就是此法术 → 只输出 Y。明显不是 / 意图不明 / 危险歧义 → 输出 N 加一句简短原因。',
+    ].join('\n')
+    try {
+      const answer = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
+        .catch(async (e) => {
+          log(`herald down for fuzzy resolve (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+          return callAgent(`mc:${username}`, username, prompt, 'mc-god')
+        })
+      const tokens = Math.ceil((prompt.length + answer.length) / 1.5)
+      const trimmed = answer.trim()
+      if (/^Y\b/i.test(trimmed)) return { ok: true, tokens }
+      return { ok: false, reason: trimmed.slice(0, 60) || '意图不明' }
+    } catch {
+      return { ok: false, reason: '女神此刻无暇倾听，稍后再试' }
+    }
+  }
+
+  async function consumeChantRequests(): Promise<void> {
+    try {
+      if (!existsSync(CHANT_REQ)) return
+      const lines = readFileSync(CHANT_REQ, 'utf-8').split('\n').filter((l) => l.trim())
+      if (lines.length === 0) return
+      writeFileSync(CHANT_REQ, '') // 消费即清空（单消费者：世界进程）
+      for (const ln of lines) {
+        try {
+          const rec = JSON.parse(ln)
+          const speaker: string = rec?.speaker
+          const text: string = rec?.text
+          if (!speaker || !text) continue
+          const trimmed = String(text).trim()
+          if (!magic.sniffChant(trimmed)) {
+            appendChantReply(speaker, `此咒不成——「${trimmed.slice(0, 30)}」未闻法术关键词。可祈愿，或直接说要做什么。`, 'chant')
+            continue
+          }
+          const reply = await resolveChant(speaker, trimmed)
+          appendChantReply(speaker, reply, 'chant')
+          log(`chant request from ${speaker}: ${trimmed.slice(0, 40)} → ${reply.slice(0, 60)}`)
+        } catch {
+          /* 单条坏行跳过 */
+        }
+      }
+    } catch (err) {
+      log(`consumeChantRequests failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // ── 女神主动守望假玩家（2026-08-23 造物主谕：发现有人需要帮助，主动私聊帮助，点明可用技能）──
+  // 每 60s 巡检守卫假玩家：magic-state（血/饱食）+ 守卫桥账本近 10 分钟异常
+  // （guard-drive-*.jsonl 的 emergency/error/noop/blocked）→ 困境 → 写 goddess-orders.jsonl
+  // → 守卫桥下轮注入亲卫 prompt（"女神谕示"）。含已学技能中文名点明。每守卫 5 分钟至多一条。
+  let lastGuardWatch = 0
+  const lastOrder = new Map<string, number>()
+  function guardDistress(name: string, ms: any): string | null {
+    // 血/饱食（magic-state 的 hpRatio/foodRatio 由 mc-magic tick 更新）
+    if (typeof ms.hpRatio === 'number' && ms.hpRatio > 0 && ms.hpRatio < 0.4) {
+      return `你的生命仅余 ${Math.round(ms.hpRatio * 20)}/20，濒临倒下`
+    }
+    if (typeof ms.foodRatio === 'number' && ms.foodRatio > 0 && ms.foodRatio < 0.2) {
+      return `你的饥饿见底（${Math.round(ms.foodRatio * 20)}/20），快要饿晕`
+    }
+    // 守卫桥账本近 10 分钟异常（跨仓路径经 GUARD_LEDGER_DIR 注入；拿不到则跳过账本判定）
+    if (GUARD_LEDGER_DIR) {
+      const tag = name === '桐人' ? 'kirito' : name === '鸣人' ? 'naruto' : ''
+      if (tag) {
+        try {
+          const p = `${GUARD_LEDGER_DIR}/guard-drive-${tag}.jsonl`
+          if (existsSync(p)) {
+            const cutoff = Date.now() - 10 * 60_000
+            const rows = readFileSync(p, 'utf-8').split('\n')
+            const recent = [] as { kind: string; ts: number }[]
+            for (let i = rows.length - 1; i >= 0 && recent.length < 20; i--) {
+              try {
+                const r = JSON.parse(rows[i])
+                const ts = Date.parse(String(r.ts ?? '')) || 0
+                if (ts < cutoff) break
+                if (r.kind) recent.push({ kind: String(r.kind), ts })
+              } catch { /* 坏行跳过 */ }
+            }
+            const emergencies = recent.filter((r) => r.kind === 'emergency').length
+            const errors = recent.filter((r) => r.kind === 'error').length
+            if (emergencies >= 3) return '最近连续遭遇险情，身体多次告急'
+            if (errors >= 5) return '最近身体动作频繁异常，似有卡顿'
+          }
+        } catch { /* 账本读取失败忽略 */ }
+      }
+    }
+    return null
+  }
+  async function watchGuards(): Promise<void> {
+    try {
+      const now = Date.now()
+      if (now - lastGuardWatch < 60_000) return
+      lastGuardWatch = now
+      for (const name of GUARD_NAMES) {
+        const ms = magic.getState(name) as any
+        if (!ms) continue
+        const since = lastOrder.get(name) ?? 0
+        if (now - since < 5 * 60_000) continue
+        const reason = guardDistress(name, ms)
+        if (!reason) continue
+        lastOrder.set(name, now)
+        const skills = (ms.learned ?? []).map((id: string) => magic.getAtomById(id)?.name).filter(Boolean).slice(0, 6).join('、')
+        const text = `${reason}。${skills ? `你已掌握：${skills}——需要时咏唱或祈愿即可。` : '需要帮助时祈愿即可。'}`
+        try {
+          appendFileSync(GODDESS_ORDERS, JSON.stringify({ to: name, text, ts: now }) + '\n', 'utf-8')
+          worlddb.chronicleRecord('guard-order', name, { reason: reason.slice(0, 80), text: text.slice(0, 120) })
+          log(`goddess order → ${name}: ${text.slice(0, 80)}`)
+        } catch (err) {
+          log(`goddess order append failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+    } catch (err) {
+      log(`watchGuards failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -715,12 +920,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const whisper = (text: string) => {
       if (isVillager && villagerKey) {
         appendGodReply(villagerKey, text)
+        // 2026-08-23 守卫假玩家：神谕双写 chant-reply.jsonl（mc_npc 的 god_reply_loop
+        // 读后即删 god-reply.jsonl，守卫桥来不及读；双写保证守卫桥必达）。
+        if (GUARD_NAMES.includes(villagerKey)) appendChantReply(villagerKey, text, 'prayer')
       } else {
         try {
           bot.whisper(username, `[女神] ${senderName}，${text}`)
         } catch {
           /* bot not ready */
         }
+        // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
+        if (GUARD_NAMES.includes(username)) appendChantReply(username, text, 'prayer')
       }
     }
 
@@ -760,8 +970,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       return
     }
 
-    // 女神裁量（LLM，异步）
-    const verdict = await askGoddess(username, senderName, wish, offering)
+    // 女神裁量（LLM，异步）。VIP 特殊监听白名单内 → 女神知晓其受守护，可主动援手。
+    const verdict = await askGoddess(username, senderName, wish, offering, false, config.vipListen.includes(username))
     if (verdict.action === 'none' || !verdict.skill) {
       whisper(verdict.reply)
       worlddb.chronicleRecord('verdict', username, { action: 'none', skill: null, reply: verdict.reply })
@@ -782,12 +992,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       return
     }
 
-    // 神迹落地（不耗祈愿者资源）
+    // 神迹落地（不耗祈愿者资源；女神魔力=tokens，入台账供学习闭环 2026-08-23）
     const result = await magic.castByGod(username, verdict.skill, {
       direction: verdict.direction ?? undefined,
       distance: verdict.distance ?? undefined,
       item: verdict.item ?? undefined,
       count: verdict.count,
+      tokens: verdict.tokens,
+      playerChant: wish,
     })
     lastUsed.set(verdict.skill, now)
     log(`blessing granted: ${verdict.skill} for ${username} wish "${wish}" -> ${result}`)
@@ -829,27 +1041,18 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         busy = false
       }
       schedulePoll()
-
-  // ── 灶火民祈愿消费循环（村民祈愿低频，文件队列消费宜即时）─────────────
-  let stopVillagerPrayerPoll: (() => void) | null = null
-  function scheduleVillagerPrayerPoll() {
-    if (disposed) return
-    stopVillagerPrayerPoll = lc.setTimeout(async () => {
-      await consumeVillagerPrayers()
-      scheduleVillagerPrayerPoll()
-    }, 5_000)
-  }
-  scheduleVillagerPrayerPoll()
     }, config.pollMs)
   }
   schedulePoll()
 
-  // ── 灶火民祈愿消费循环（村民祈愿低频，文件队列消费宜即时）─────────────
+  // ── 灶火民祈愿/假玩家咏唱/女神守望 消费循环（低频文件队列，消费宜即时）─────
   let stopVillagerPrayerPoll: (() => void) | null = null
   function scheduleVillagerPrayerPoll() {
     if (disposed) return
     stopVillagerPrayerPoll = lc.setTimeout(async () => {
       await consumeVillagerPrayers()
+      await consumeChantRequests()
+      await watchGuards()
       scheduleVillagerPrayerPoll()
     }, 5_000)
   }
@@ -1609,6 +1812,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
     async function handleWhisper(username: string, message: string): Promise<void> {
       if (username === bot.username) return
+      // VIP 特殊监听白名单（2026-08-22）：白名单内的真人旅人说的一切——即便只是
+      // 闲聊、牢骚、求助——都要上达女神并得到回应。VIP 绕过冷启动窗口、自报家门
+      // 静默冷却、入场节流三闸（结构化指令/唱咒/交易/问：仍在前方分流，不受影响）。
+      const isVip = config.vipListen.includes(username)
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
       if (message.trim().startsWith('/')) {
@@ -1669,7 +1876,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         return
       }
       if (!explicitPrayer && magic.sniffChant(body)) {
-        magic.castSpell(username, body)
+        resolveChant(username, body)
           .then((reply) => {
             log(`whisper chant from ${username}: ${body}`)
             try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
@@ -1682,7 +1889,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // （非指令/非祈愿/非咏唱）即视为自我介绍：记入众生册与编年史，作为人格
       // 演化的种子；女神简短记下，不进祈愿队列。窗口 90s，超时自然落入祈愿。
       const introDeadline = pendingIntro.get(username)
-      if (introDeadline !== undefined) {
+      if (introDeadline !== undefined && !isVip) {
         pendingIntro.delete(username) // 一次性消费，无论命中与否
         if (Date.now() <= introDeadline) {
           const intro = body.slice(0, 120)
@@ -1701,17 +1908,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // （不陪聊、不当祈愿），防 AI 与女神在初始化后连续闲聊不停；明确指令
       // （祈愿：/问：/咏唱/交易/命令）已在前方分流，不受影响。超时恢复祈愿。
       const coolUntil = introCoolUntil.get(username)
-      if (coolUntil !== undefined) {
+      if (coolUntil !== undefined && !isVip) {
         if (Date.now() <= coolUntil) return
         introCoolUntil.delete(username)
       }
       const { wish, offeringText } = splitWishOffering(body)
       if (!wish) return
 
-      // 入场节流：同一玩家 admitCooldownMs 内不重复收信
+      // 入场节流：同一玩家 admitCooldownMs 内不重复收信（VIP 不受此限，言必达天听）
       const now = Date.now()
       const lastAt = lastPray.get(username) ?? 0
-      if (now - lastAt < config.admitCooldownMs) {
+      if (now - lastAt < config.admitCooldownMs && !isVip) {
         const wait = Math.ceil((config.admitCooldownMs - (now - lastAt)) / 1000)
         try {
           bot.whisper(username, `[女神] 汝之祈愿声犹在耳畔（${wait} 秒前才诉说过），稍候再试。`)

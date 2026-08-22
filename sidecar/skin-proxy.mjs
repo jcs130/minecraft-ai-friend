@@ -5,8 +5,14 @@
 //       仅当【两侧都进入 play 态】后才开始双向转发 —— configuration 包绝不跨侧转发,
 //       否则会把 config 包写进仍处于 login 态的对端, 污染握手字节流被 java 判
 //       "Failed to decode packet 'serverbound/minecraft:hello'" 踢掉(2026-08-19 repro4 实证)。
-//       转发后仅拦截 server->client 的 player_info(add_player): 命中 assignments 的用户名
-//       注入 Mojang 签名 textures 属性 -> 所有 vanilla 客户端直接渲染皮肤。
+// 转发策略(2026-08-22 修正): login/config 阶段走 minecraft-protocol packet 事件转发(简单包无损);
+//       play 阶段【完全走字节级 raw】—— upstream 一旦进入 PLAY 立即接管其下行 socket 字节流,
+//       缓冲到 client 也进入 PLAY 后建立双向 raw bridge, 绝不用 packet 解析->序列化转发 play 包
+//       (旧实现残留竞态: raw bridge 建立前的第一个 play 大包(update_recipes 等)仍走 packet
+//        序列化转发, 对 NeoForge mod 扩展字节有损, 实测 vanilla 客户端报
+//        "Failed to decode packet 'clientbound/minecraft:update_recipes'" 2026-08-22 实证)。
+//       仅当 s->c 帧为 player_info(add_player) 且命中 assignments 时才用 minecraft-protocol
+//        解析注入 Mojang 签名 textures 属性, 其余帧(含 update_recipes)原样字节转发。
 // 皮肤库/指派: /app/data/skins.json (presets + assignments), 每次登录热读 + fs.watch。
 // 离线服 UUID: nmp 服务端与 vanilla java 均按 nameToMcOfflineUUID 派生, 两层天然一致。
 import mc from 'minecraft-protocol';
@@ -111,7 +117,7 @@ function injectTextures(data) {
   return hits;
 }
 
-// ---- play 态帧工具（2026-08-22 帧级选择性解压注入）----
+// ---- play 态帧工具（帧级选择性解压注入）----
 // raw bridge 之下：字节流按帧切分（VarInt 长度前缀），压缩帧（长度 >= 阈值）解压后
 // 读包 ID——只有 player_info 才用 minecraft-protocol 解析注入皮肤，其余包原样字节转发
 // （NeoForge mod 扩展字节无损）。任何解析/注入失败都回退原样透传，绝不改包。
@@ -232,24 +238,46 @@ srv.on('login', (client) => {
     version: MC_VERSION,
     auth: 'offline',
   });
+  // 方向B (2026-08-22 拍板, 决定性验证): NeoForge 1.21.1 config 阶段要进 play,
+  // 裸 mc.createClient 必须补齐两件事: ①注册 brand 通道 ②响应 config 态 ping→pong。
+  // ①registerChannel('minecraft:brand'): 对齐 mineflayer game.js 的
+  //   bot._client.registerChannel('minecraft:brand',['string',[]]). 没有这行 minecraft-protocol
+  //   不认识 minecraft:brand 通道, config 阶段连 custom_payload 都不解析, 卡 configuration。
+  // ②config 态 ping→pong 已有(下方 upstream.on('ping')), minecraft-protocol keepalive.js
+  //   只处理 play 态 keep_alive、不响应 config 态 ping, 缺这行 java 等 config ping 超时踢上游。
+  // 实测(exp_b_full): 直连 25599 补这两件事后, config 序列完整跑通
+  //   custom_payload(register/unregister/neoforge:register)->ping->[pong]->brand->feature_flags->
+  //   select_known_packs->[回空]->registry_data x11->tags->finish_configuration->[ack]->play ✓
+  try { upstream.registerChannel('minecraft:brand', ['string', []]); }
+  catch (e) { log(`! registerChannel(brand): ${e.message}`); }
 
   upstream.on('login', () => log(`upstream logged in: ${client.username}`));
 
-  // ---- RAW BRIDGE (2026-08-22 方案A落地: play 态字节级帧透传) ----
-  // 旧实现 play 态用 minecraft-protocol 的 packet 事件 "解析成对象→再序列化" 转发,
-  // 对 NeoForge mod 扩展字节有损(实测: vanilla 客户端直连本代理报
-  // "Failed to decode packet 'clientbound/minecraft:update_recipes'")。
-  // 现在两侧进入 play 态后接管 socket：c->s 原始字节透传；s->c 帧级切分后
-  // 仅对 player_info 选择性解析注入皮肤(帧级选择性解压, 2026-08-22 补),
-  // 其余包(含 update_recipes 等 mod 扩展)原样字节转发 —— 登录与皮肤共存。
+  // ---- PLAY 态字节级 raw 管线 (2026-08-22 重写, 根治 update_recipes 有损竞态) ----
+  // login/config 走 packet 事件转发; PLAY 完全走字节 raw:
+  //   * upstream 一旦进入 PLAY, 立即接管其下行 socket 字节 -> upPlayBuf 缓冲(不再用 packet 序列化转发)
+  //   * client 进入 PLAY 后 establishRaw: 双向 socket 字节透传 + s->c 帧级 player_info 注入
+  //   * 缓冲在 establishRaw 时并入 serverFrameBuf 统一帧切分转发
   let rawBridged = false;
   let serverFrameBuf = Buffer.alloc(0);
-  const maybeRawBridge = () => {
+  let upPlayBuf = Buffer.alloc(0);
+  let upPlayTaken = false;
+
+  const pumpServerFrames = (threshold) => {
+    let frame;
+    while ((frame = tryReadFrame(serverFrameBuf, threshold))) {
+      serverFrameBuf = serverFrameBuf.subarray(frame.consumed);
+      if (endedClient) return;
+      try { forwardServerFrame(client, frame); } catch (e) { log(`! s->c frame: ${e.message}`); }
+    }
+  };
+
+  const establishRaw = () => {
     if (rawBridged || endedClient || endedUpstream) return;
     if (client.state !== PLAY || upstream.state !== PLAY) return;
     rawBridged = true;
     const threshold = upstream.compressionThreshold > 0 ? upstream.compressionThreshold : 0;
-    log(`== raw bridge ON: ${client.username} (play 态字节透传 + player_info 选择性注入, threshold=${threshold}) ==`);
+    log(`== raw bridge ON: ${client.username} (play 字节透传 + player_info 选择性注入, threshold=${threshold}) ==`);
     try {
       client.socket.removeAllListeners('data');
       upstream.socket.removeAllListeners('data');
@@ -261,28 +289,61 @@ srv.on('login', (client) => {
     upstream.socket.on('data', (buf) => {
       if (endedClient) return;
       serverFrameBuf = Buffer.concat([serverFrameBuf, buf]);
-      let frame;
-      while ((frame = tryReadFrame(serverFrameBuf, threshold))) {
-        serverFrameBuf = serverFrameBuf.subarray(frame.consumed);
-        try { forwardServerFrame(client, frame); } catch (e) { log(`! s->c frame: ${e.message}`); }
-      }
+      pumpServerFrames(threshold);
     });
+    // flush 上游缓冲
+    if (upPlayBuf.length) {
+      serverFrameBuf = Buffer.concat([upPlayBuf, serverFrameBuf]);
+      upPlayBuf = Buffer.alloc(0);
+      pumpServerFrames(threshold);
+    }
     skinsStat.playRaw = true;
     skinsStat.playRawAt = Date.now();
     skinsStat.skinInject = 'selective-frame';
   };
-  const tryState = () => {
-    try { maybeRawBridge(); } catch (e) { log(`! raw bridge check: ${e.message}`); }
+
+  const tryEstablish = () => {
+    try {
+      establishRaw();
+    } catch (e) { log(`! raw bridge check: ${e.message}`); }
   };
-  client.on('state', tryState);
-  upstream.on('state', tryState);
-  // 保险: play 态第一个包到达时再确认一次(状态事件可能在进入 play 前已经触发过)
-  client.once('packet', tryState);
-  upstream.once('packet', tryState);
+
+  // upstream 进入 PLAY: 立即接管其下行字节(缓冲), 此后不再走 packet 序列化转发
+  upstream.on('state', (s) => {
+    if (endedUpstream) return;
+    if (upstream.state === PLAY && !upPlayTaken) {
+      upPlayTaken = true;
+      try {
+        upstream.socket.removeAllListeners('data');
+        upstream.socket.on('data', (buf) => {
+          if (endedClient) return;
+          // 已 raw bridge -> 直接进帧切分管线; 未 raw bridge -> 缓冲等 client 就绪
+          if (rawBridged) {
+            serverFrameBuf = Buffer.concat([serverFrameBuf, buf]);
+            pumpServerFrames(upstream.compressionThreshold > 0 ? upstream.compressionThreshold : 0);
+          } else {
+            upPlayBuf = Buffer.concat([upPlayBuf, buf]);
+          }
+        });
+        log(`upstream play taken: ${client.username} (bytes buffered, raw-bridge=${rawBridged})`);
+      } catch (e) { log(`! upstream play takeover: ${e.message}`); }
+    }
+    tryEstablish();
+  });
+  client.on('state', tryEstablish);
+  client.once('packet', tryEstablish);
+  upstream.once('packet', tryEstablish);
 
 
   // NeoForge 1.20.5+ config 阶段 keep-alive：mc-protocol 的 keepalive.js 只处理 play 态 keep_alive、
   // 不响应 config 态 ping；缺这行主服会 30s 超时踢上游（2026-08-21 实证，对齐 mineflayer game.js 的做法）。
+  upstream.on('ping', (data) => {
+    try { upstream.write('pong', { id: data.id }); } catch { /* upstream closing */ }
+  });
+
+  // NeoForge 1.20.5+ config 阶段 keep-alive：mc-protocol 的 keepalive.js 只处理 play 态 keep_alive、
+  // 不响应 config 态 ping；缺这行服务端 30s 超时踢上游(2026-08-21 实证，对齐 mineflayer game.js)。
+  // proxy 自己回 pong，不依赖下游 client(vanilla/mineflayer) 回，保证 proxy->java 的 config 握手健壮。
   upstream.on('ping', (data) => {
     try { upstream.write('pong', { id: data.id }); } catch { /* upstream closing */ }
   });
@@ -296,25 +357,24 @@ srv.on('login', (client) => {
     if (!endedClient) { try { client.end(why); } catch {} }
   });
 
-  // c->s: 仅当双方都在 play 态才转发(官方范例模式)
+  // c->s / s->c: 仅 login/config 态走 packet 事件转发(简单包无损); PLAY 态一律走 raw(上面管线),
+  // 这里对 PLAY 包直接 return —— 绝不用 packet 解析->序列化转发, 避免对 mod 扩展字节有损。
   client.on('packet', (data, meta) => {
     if (endedUpstream || endedClient) return;
-    if (meta.state !== PLAY || upstream.state !== PLAY) return;
+    if (process.env.SKIN_DEBUG_FWD) log(`__cl fwd ${meta.state} ${meta.name}`);
+    if (meta.state === PLAY) {
+      return;
+    }
     try { upstream.write(meta.name, data); }
     catch (e) { log(`! c->s write ${meta.name}: ${e.message}`); endBoth('proxy error'); }
   });
 
-  // s->c: 仅当双方都在 play 态才转发; player_info 顺带注入皮肤
   upstream.on('packet', (data, meta) => {
     if (endedClient || endedUpstream) return;
-    if (meta.state !== PLAY || client.state !== PLAY) return;
-    try {
-      if (meta.name === 'player_info') {
-        const hit = injectTextures(data);
-        if (hit.length) log('skin injected: ' + hit.join(', '));
-      }
-      client.write(meta.name, data);
-    } catch (e) {
+    if (process.env.SKIN_DEBUG_FWD) log(`__up fwd ${meta.state} ${meta.name}`);
+    if (meta.state === PLAY) return; // 走 raw, 绝不序列化转发
+    try { client.write(meta.name, data); }
+    catch (e) {
       log(`! s->c write ${meta.name}: ${e.message}`);
       endBoth('proxy error');
     }

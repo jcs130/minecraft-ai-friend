@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
@@ -247,6 +247,13 @@ export function createSocial(config: Config, deps: SocialDeps): SocialHandle {
     }
     // 编年史：世界记录一切（面板全量可见），凡人只听近处
     worlddb.chronicleRecord('say', speaker, { mode, text: text.slice(0, 120), radius, heard })
+    // 村民开耳（2026-08-22 造物主谕「npc得能回应」）：voice 私语同样投进村民引擎
+    // 的 npc-inbox（mc_npc.py inbox_loop 消费，via="voice" 走公屏式聊天路由，点名/
+    // 附近村民都会回应）——否则「说/喊/悄悄」只 tellraw 给玩家，村民永远听不见。
+    try {
+      const npcInbox = process.env.NPC_INBOX || `${process.env.MC_DATA_DIR || './data'}/npc-inbox.jsonl`
+      appendFileSync(npcInbox, JSON.stringify({ speaker, text, ts: Date.now(), via: 'voice', mode }) + '\n')
+    } catch { /* 村民引擎不在/文件不可写：voice 仍照常转达给玩家，不阻塞 */ }
     // 回执给说话者（AI 工具等这个判断成败）
     const via = heard.length > 0
       ? `已传出：${heard.length} 位同伴在 ${radius} 格内听见了你（${heard.map(displayName).join('、')}）`

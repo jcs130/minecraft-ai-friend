@@ -499,6 +499,14 @@ document.getElementById('dbg-btn').addEventListener('click', () => { document.ge
 let state = { bots: [], memory: {}, magic: {}, atomNames: {}, passives: [], chronicle: [], npcFeed: [] };
 let currentUser = null; // 当前选中的 bot username
 let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
+// 天眼跟随：选中玩家 -> 后端把女神 tp 到其上方（每 2s 跟随），天眼视角即跟过去
+async function eyeFollowTo(name) {
+  if (!name) return;
+  try { await fetch('/api/eye?name=' + encodeURIComponent(name) + '&follow=1'); } catch {}
+}
+function eyeFollowStop() {
+  try { fetch('/api/eye?follow=0').catch(() => {}); } catch {}
+}
 let posCache = {}; // 无 status 档案的在线玩家坐标缓存：username -> {x,y,z,at}
 async function fetchPosFor(name) {
   if (!name) return;
@@ -578,17 +586,24 @@ const ttsVoices = {   // 音色（可经面板「语音」卡改，存 localStor
   npc: localStorage.getItem('ttsVoiceNpc') || 'zh-CN-YunxiNeural',          // NPC 默认：云希（清亮男声）
   player: localStorage.getItem('ttsVoicePlayer') || 'zh-CN-XiaoxiaoNeural', // 玩家：晓晓（女声，与女神区分）
 };
+// 旧 IndexTTS 音色名 -> edge-tts 中文展示名（兼容 localStorage 里已存的旧音色名；vlabel 兜底用）
+const TTS_LEGACY_DISPLAY = {
+  'yunyang': '云扬（男·浑厚）', 'baolin': '云健（男·青年）', 'yunjian': '云健（男·青年）',
+  'xiaotian': '云夏（男·少年）', 'yunxi': '云希（男·阳光）', 'qingxin': '晓晓（女·温柔）',
+  'taozi': '晓涵（女·甜美）', 'xiaoxue': '晓晓（女·温柔）', 'xiaoyi': '晓伊（女·亲切）',
+  'xiaoxiao': '晓晓（女·温柔）', 'yunxia': '云夏（男·少年）',
+};
 const ttsBySpeaker = { // 按说话人覆写音色（NPC 名 -> voice id）；特色 NPC 一人一音色，其余走 NPC 默认
-  '铁匠·岳山': 'yunyang',      // 男，浑厚豪爽
-  '甲匠·石磊': 'baolin',       // 男，沉稳
-  '书商·墨白': 'yunjian',      // 男，清朗书生
-  '吟游诗人·风临': 'xiaotian', // 少年诗人，灵动
-  '守夜人·烛九': 'yunxi',      // 男，沉稳守夜
-  '神官·静水': 'qingxin',      // 女，空灵
-  '牧羊女·小满': 'taozi',      // 女，甜美
-  '公会接待员·岚': 'xiaoxue',  // 女，亲和
-  '阿宝': 'xiaotian',          // 少年
-  '灯窝·阿禾': 'xiaotian',     // 少年
+  '铁匠·岳山': 'zh-CN-YunyangNeural',   // 男，浑厚豪爽
+  '甲匠·石磊': 'zh-CN-YunjianNeural',   // 男，沉稳
+  '书商·墨白': 'zh-CN-YunjianNeural',   // 男，清朗书生
+  '吟游诗人·风临': 'zh-CN-YunxiaNeural',// 少年诗人，灵动
+  '守夜人·烛九': 'zh-CN-YunxiNeural',   // 男，沉稳守夜
+  '神官·静水': 'zh-CN-XiaoxiaoNeural',  // 女，空灵
+  '牧羊女·小满': 'zh-CN-XiaohanNeural', // 女，甜美
+  '公会接待员·岚': 'zh-CN-XiaoxiaoNeural', // 女，亲和
+  '阿宝': 'zh-CN-YunxiaNeural',         // 少年
+  '灯窝·阿禾': 'zh-CN-YunxiaNeural',    // 少年
 };
 const NPC_SPEAKERS = [ // 面板「语音」卡可逐个指音色的全部已知 NPC（对应 data/village/villagers.json 的 display）
   '铁匠·岳山', '甲匠·石磊', '书商·墨白', '书商·云笈', '货郎·福伯', '吟游诗人·风临',
@@ -602,25 +617,25 @@ const TTS_MOODS = [ // 语气预设（网关 MOOD_VECTORS 已支持）：id + �
   ['warm', '温暖'], ['cold', '冷淡'],
 ];
 const NPC_VOICE_MOOD = { // NPC -> 专属音色 + 语气 + 试听台词（匹配人物身份）
-  '铁匠·岳山': { voice: 'yunyang', mood: 'hearty', sample: '打铁趁热！这一锤下去，保你兵刃趁手。' },
-  '甲匠·石磊': { voice: 'baolin', mood: 'serious', sample: '甲要合身，命才保得住。别急，慢慢来。' },
-  '书商·墨白': { voice: 'yunjian', mood: 'calm', sample: '书中自有黄金屋，客官可要看看新到的卷子？' },
-  '书商·云笈': { voice: 'yunjian', mood: 'melancholic', sample: '这一册孤本，世上再难寻第二份了。' },
-  '货郎·福伯': { voice: 'yunxi', mood: 'warm', sample: '走街串巷几十年，好东西都在我担子里头。' },
-  '吟游诗人·风临': { voice: 'xiaotian', mood: 'playful', sample: '风起灯明，且听我唱一段江湖故事！' },
-  '守夜人·烛九': { voice: 'yunxi', mood: 'cold', sample: '夜深了，火把交给我，你只管安睡。' },
-  '神官·静水': { voice: 'qingxin', mood: 'gentle', sample: '愿神明的光，照你前行的路。' },
-  '集市掌柜·通宝': { voice: 'yunxi', mood: 'happy', sample: '童叟无欺，价钱公道，您再看看？' },
-  '老农·禾叔': { voice: 'yunyang', mood: 'warm', sample: '地里的庄稼，比啥都实在。吃饭了没？' },
-  '牧羊女·小满': { voice: 'taozi', mood: 'gentle', sample: '小羊羔又跑远啦，快来帮我一把！' },
-  '渔夫·浪伯': { voice: 'yunyang', mood: 'happy', sample: '今儿个鱼多，分你两条，拿去炖汤！' },
-  '墨先生': { voice: 'yunjian', mood: 'calm', sample: '文章千古事，得失寸心知。' },
-  '阿宝': { voice: 'xiaotian', mood: 'happy', sample: '俺阿宝力气大，扛东西的事包在我身上！' },
-  '货郎·铜板': { voice: 'xiaotian', mood: 'playful', sample: '叮当叮当，铜板响，好货送到你手上！' },
-  '公会接待员·岚': { voice: 'xiaoxue', mood: 'serious', sample: '欢迎来到冒险者公会，请先登记你的委托。' },
-  '灯窝·阿爹': { voice: 'yunxi', mood: 'calm', sample: '灯窝的灯，点一盏，亮一宿。' },
-  '灯窝·穗娘': { voice: 'taozi', mood: 'warm', sample: '灯芯要勤剪，火才旺呢。' },
-  '灯窝·阿禾': { voice: 'xiaotian', mood: 'happy', sample: '今晚我来守灯，保证不让它灭！' },
+  '铁匠·岳山': { voice: 'zh-CN-YunyangNeural', mood: 'hearty', sample: '打铁趁热！这一锤下去，保你兵刃趁手。' },
+  '甲匠·石磊': { voice: 'zh-CN-YunjianNeural', mood: 'serious', sample: '甲要合身，命才保得住。别急，慢慢来。' },
+  '书商·墨白': { voice: 'zh-CN-YunjianNeural', mood: 'calm', sample: '书中自有黄金屋，客官可要看看新到的卷子？' },
+  '书商·云笈': { voice: 'zh-CN-YunjianNeural', mood: 'melancholic', sample: '这一册孤本，世上再难寻第二份了。' },
+  '货郎·福伯': { voice: 'zh-CN-YunxiNeural', mood: 'warm', sample: '走街串巷几十年，好东西都在我担子里头。' },
+  '吟游诗人·风临': { voice: 'zh-CN-YunxiaNeural', mood: 'playful', sample: '风起灯明，且听我唱一段江湖故事！' },
+  '守夜人·烛九': { voice: 'zh-CN-YunxiNeural', mood: 'cold', sample: '夜深了，火把交给我，你只管安睡。' },
+  '神官·静水': { voice: 'zh-CN-XiaoxiaoNeural', mood: 'gentle', sample: '愿神明的光，照你前行的路。' },
+  '集市掌柜·通宝': { voice: 'zh-CN-YunxiNeural', mood: 'happy', sample: '童叟无欺，价钱公道，您再看看？' },
+  '老农·禾叔': { voice: 'zh-CN-YunyangNeural', mood: 'warm', sample: '地里的庄稼，比啥都实在。吃饭了没？' },
+  '牧羊女·小满': { voice: 'zh-CN-XiaohanNeural', mood: 'gentle', sample: '小羊羔又跑远啦，快来帮我一把！' },
+  '渔夫·浪伯': { voice: 'zh-CN-YunyangNeural', mood: 'happy', sample: '今儿个鱼多，分你两条，拿去炖汤！' },
+  '墨先生': { voice: 'zh-CN-YunjianNeural', mood: 'calm', sample: '文章千古事，得失寸心知。' },
+  '阿宝': { voice: 'zh-CN-YunxiaNeural', mood: 'happy', sample: '俺阿宝力气大，扛东西的事包在我身上！' },
+  '货郎·铜板': { voice: 'zh-CN-YunxiaNeural', mood: 'playful', sample: '叮当叮当，铜板响，好货送到你手上！' },
+  '公会接待员·岚': { voice: 'zh-CN-XiaoxiaoNeural', mood: 'serious', sample: '欢迎来到冒险者公会，请先登记你的委托。' },
+  '灯窝·阿爹': { voice: 'zh-CN-YunxiNeural', mood: 'calm', sample: '灯窝的灯，点一盏，亮一宿。' },
+  '灯窝·穗娘': { voice: 'zh-CN-XiaohanNeural', mood: 'warm', sample: '灯芯要勤剪，火才旺呢。' },
+  '灯窝·阿禾': { voice: 'zh-CN-YunxiaNeural', mood: 'happy', sample: '今晚我来守灯，保证不让它灭！' },
 };
 const ttsNpcOverride = {}; // NPC 名 -> voice id（面板可改，存 localStorage ttsVoiceNpc_<名>，优先于 ttsBySpeaker）
 const ttsNpcMood = {}; // NPC 名 -> mood id（存 localStorage ttsMoodNpc_<名>）
@@ -843,7 +858,7 @@ function ttsRenderToggle() {
 function renderTtsForm() {
   const el = document.getElementById('tts-form');
   if (!el) return;
-  const vlabel = (v) => ttsVoiceLabels[v] || v;
+  const vlabel = (v) => ttsVoiceLabels[v] || TTS_LEGACY_DISPLAY[v] || v;
   const goptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.goddess ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
   const noptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.npc ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
   const poptions = ttsVoiceList.map((v) => '<option value="' + esc(v) + '"' + (v === ttsVoices.player ? ' selected' : '') + '>' + esc(vlabel(v)) + '</option>').join('');
@@ -1033,6 +1048,7 @@ function renderTabs() {
       renderTabs();
       renderCurrent();
       drawMap();
+      eyeFollowTo(currentUser);
     });
   });
 }
@@ -1575,6 +1591,7 @@ function initMapInteraction() {
       renderTabs();
       renderCurrent();
       drawMap();
+      eyeFollowTo(u);
     }
   });
 
@@ -1619,7 +1636,8 @@ function initViewButtons() {
   bt.addEventListener('click', () => { viewMode = 'third'; localStorage.setItem('viewMode', 'third'); sync(); renderCurrent(); });
   bf.addEventListener('click', () => { viewMode = 'first'; localStorage.setItem('viewMode', 'first'); sync(); renderCurrent(); });
   br.addEventListener('click', () => {
-    // 重载 iframe 以重置镜头位置
+    // 重载 iframe 以重置镜头位置；天眼跟随停止并归位
+    eyeFollowStop();
     const frame = document.getElementById('viewer-frame');
     const cur = frame.getAttribute('src');
     frame.setAttribute('src', 'about:blank');
@@ -1676,7 +1694,9 @@ const RCON_HOST = process.env.MC_RCON_HOST || '127.0.0.1'
 const RCON_PORT = Number(process.env.MC_RCON_PORT || 25575)
 
 function rconReadSecret() {
-  for (const p of [join(__dirname, 'data', 'rcon-secret.txt'), join(__dirname, '..', 'data', 'rcon-secret.txt')]) {
+  const viaEnv = process.env.MC_DATA_DIR ? join(process.env.MC_DATA_DIR, 'rcon-secret.txt') : null
+  for (const p of [viaEnv, join(__dirname, 'data', 'rcon-secret.txt'), join(__dirname, '..', 'data', 'rcon-secret.txt')]) {
+    if (!p) continue
     try { return readFileSync(p, 'utf-8').trim() } catch { /* try next */ }
   }
   throw new Error('rcon-secret.txt not found')
@@ -1731,6 +1751,18 @@ async function rconExec(cmd) {
   }
 }
 
+// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 到其上方俯视，每 2s 跟随一次 ----
+let eyeFollow = null // { name, home }
+const EYE_HEIGHT = 12 // 悬停玩家上方格数（俯视）
+function eyeTpOnce(name) {
+  // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
+  const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
+  return rconExec(`execute at ${target} run tp Goddess ~ ~${EYE_HEIGHT} ~`)
+}
+setInterval(() => {
+  if (eyeFollow && eyeFollow.name) eyeTpOnce(eyeFollow.name).catch(() => {})
+}, 2000)
+
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
   if (u.pathname === '/api/village') {
@@ -1776,6 +1808,43 @@ const server = createServer((req, res) => {
       })
       return
     }
+  // 天眼跟随：/api/eye?name=<玩家>&follow=1 启动（每 2s tp 女神到玩家上方俯视），follow=0 停止并归位
+  // 无论 bot viewer 在线与否，viewer 都显示女神（Goddess）视角——点玩家后把女神 tp 过去，天眼即跟随。
+  if (u.pathname === '/api/eye' && req.method === 'GET') {
+    const name = (u.searchParams.get('name') || '').trim()
+    const follow = u.searchParams.get('follow')
+    if (follow === '0' || !name) {
+      if (eyeFollow && eyeFollow.home) {
+        rconExec(`tp Goddess ${eyeFollow.home}`).catch(() => {})
+      }
+      eyeFollow = null
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true, follow: false }))
+      return
+    }
+    const doStart = () => {
+      eyeFollow = { name }
+      eyeTpOnce(name).catch(() => {})
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true, follow: true, name }))
+    }
+    if (!eyeFollow) {
+      // 记录女神当前位置（归位用）；查不到就 home=null（只跟随不归位）
+      rconExec('data get entity Goddess Pos').then((out) => {
+        const m = String(out || '').match(/\[([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?\]/)
+        eyeFollow = { name, home: m ? `${m[1]} ${m[2]} ${m[3]}` : null }
+        eyeTpOnce(name).catch(() => {})
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true, follow: true, name }))
+      }).catch(() => doStart())
+    } else {
+      eyeFollow.name = name
+      eyeTpOnce(name).catch(() => {})
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true, follow: true, name }))
+    }
+    return
+  }
   // GM 传送：/api/tp?as=被传送者&to=目的地玩家（tp <as> <to>）
   if (u.pathname === '/api/tp' && req.method === 'GET') {
     const as = (u.searchParams.get('as') || '').replace(/[^A-Za-z0-9_]/g, '')

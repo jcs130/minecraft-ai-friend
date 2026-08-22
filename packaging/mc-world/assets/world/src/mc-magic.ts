@@ -53,6 +53,11 @@ interface Atom {
   layer: 'form' | 'effect' | 'augment'
   name: string
   words: string[]
+  /** 法术分类（2026-08-23 造物主谕：辅助/攻击/召唤/…，技能列表持续更新）。
+   *  自由字符串、不硬编码枚举（新分类随时可加）；外置 atoms JSON 可配。
+   *  惯例：support=辅助（移动/恢复/造物/照明）、attack=攻击、summon=召唤（通灵契约）、
+   *  world=世界天象（全服）、utility=地形改造。用于面板分组/女神裁量（attack 慎施）/书卷分类。 */
+  category?: string
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -76,6 +81,7 @@ export interface AtomSummary {
   id: string
   name: string
   words: string[]
+  category?: string
   cost: CostSpec
   requiredLevel: number
 }
@@ -249,8 +255,15 @@ export interface MagicService {
    * mc-god 私语分流命中关键词后调用，返回给施法者的结果描述。
    */
   castSpell(username: string, chant: string): Promise<string>
-  /** 私语嗅探（分流用）：消息含任意法术关键词即真，不保证参数合法。 */
+  /**
+   * 模糊施法（2026-08-23）：向量/LLM 已裁决的法术，tokens 折算魔力 + 自然前摇。
+   * mc-god catch NeedLlmError 后 LLM 推理确认，再经此代施（扣玩家魔力，记 matchMode/tokens 台账）。
+   */
+  castFuzzy(username: string, chant: string, atomId: string, opts: { tokens?: number; latencyMs?: number; mode?: 'vector' | 'llm' }): Promise<string>
+  /** 私语嗅探（分流用）：咒语框架命中 或 消息含任意法术关键词即真，不保证参数合法。 */
   sniffChant(message: string): boolean
+  /** 咒语框架前缀分级分发（2026-08-23）：all=true（AI 玩家）全量；否则公共池（真人随机被告知 2-3 个）。 */
+  chantPrefixes(all: boolean): string[]
   /* ── 成长体系（2026-08-17 路线 A 定稿：等级复用原生 XpLevel；魔力为体系自有属性）── */
   /** 魔力上限基础公式：100 + 12 × (XpLevel − 1)；最终 = 此值 + maxManaBonus。 */
   maxManaFor(level: number): number
@@ -294,6 +307,12 @@ export interface GodCastOpts {
   distance?: number
   item?: string
   count?: number
+  // 2026-08-23 模糊施法/神迹记账（造物主谕：模糊施法耗更久更多魔力；神迹=女神耗 tokens）
+  consumeMana?: number   // 传入则扣玩家魔力（模糊施法）；缺省零消耗（神迹代施）
+  latencyMs?: number     // 前摇延迟（粒子先行，LLM 推理耗时 = 自然前摇）
+  mode?: 'vector' | 'llm' // 匹配层级（台账）
+  tokens?: number        // LLM 推理 tokens（llm 模糊施法 + 神迹记账）
+  playerChant?: string   // 玩家咒语原文（台账 chant 字段）
 }
 
 // ── 数字梯度：默认原子指令表（可被 data/magic-atoms.json 覆盖）────────
@@ -321,7 +340,7 @@ export const GIVE_WHITELIST: Record<string, string> = {
 
 const DEFAULT_ATOMS: Atom[] = [
   {
-    id: 'home', layer: 'effect', name: '归乡',
+    id: 'home', layer: 'effect', category: 'support', name: '归乡',
     words: ['归乡', '回家', '回基地', '归途', '回巢'],
     cost: { mana: 20, food: 0, hp: 0 },
     commands: ['tp {target} {bx} {by} {bz}'],
@@ -335,7 +354,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '空间之力，护你归途',
   },
   {
-    id: 'tp', layer: 'effect', name: '空间传送',
+    id: 'tp', layer: 'effect', category: 'support', name: '空间传送',
     words: ['传送', '瞬移', '闪现', '撕裂虚空', '空间跳跃', '跃迁'],
     cost: { mana: 20, food: 0, hp: 0 },
     paramCosts: { distance: { mana: 5 } },
@@ -354,7 +373,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '向{direction}跃迁 {distance} 格',
   },
   {
-    id: 'heal', layer: 'effect', name: '圣愈术',
+    id: 'heal', layer: 'effect', category: 'support', name: '圣愈术',
     words: ['圣愈', '治愈', '治疗', '疗伤', '回血', '痊愈'],
     cost: { mana: 30, food: 0, hp: 0 },
     commands: [
@@ -371,7 +390,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '柔和的光，抚平伤痛',
   },
   {
-    id: 'feed', layer: 'effect', name: '饱食赐福',
+    id: 'feed', layer: 'effect', category: 'support', name: '饱食赐福',
     words: ['饱食', '充饥', '饱腹', '不饿', '充能'],
     cost: { mana: 20, food: 0, hp: 0 },
     commands: ['effect give {target} minecraft:saturation 1 99'],
@@ -382,7 +401,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '暖流涌动，饥饿消散',
   },
   {
-    id: 'give', layer: 'effect', name: '造物术',
+    id: 'give', layer: 'effect', category: 'support', name: '造物术',
     words: ['造物', '赐予', '给予', '赐下', '给我', '变出'],
     cost: { mana: 20, food: 0, hp: 0 },
     params: { item: { type: 'item', default: 'bread' } },
@@ -394,7 +413,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '虚空中，物质凝成',
   },
   {
-    id: 'light', layer: 'effect', name: '照明术',
+    id: 'light', layer: 'effect', category: 'support', name: '照明术',
     words: ['照明', '点火', '火把', '光亮', '照亮', '驱暗'],
     cost: { mana: 5, food: 0, hp: 0 },
     commands: ['give {target} minecraft:torch 4'],
@@ -405,7 +424,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '火光，驱散黑暗',
   },
   {
-    id: 'time_day', layer: 'effect', name: '破晓术',
+    id: 'time_day', layer: 'effect', category: 'world', name: '破晓术',
     words: ['破晓', '天明', '白昼', '天亮', '日出', '驱夜'],
     cost: { mana: 60, food: 0, hp: 0 },
     commands: ['time set day'],
@@ -419,7 +438,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '太阳，撕裂夜幕',
   },
   {
-    id: 'weather_clear', layer: 'effect', name: '驱云术',
+    id: 'weather_clear', layer: 'effect', category: 'world', name: '驱云术',
     words: ['驱云', '放晴', '晴空', '雨停', '云散'],
     cost: { mana: 35, food: 0, hp: 0 },
     commands: ['weather clear'],
@@ -430,7 +449,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '乌云散尽，晴空万里',
   },
   {
-    id: 'terraform', layer: 'effect', name: '大地塑形',
+    id: 'terraform', layer: 'effect', category: 'utility', name: '大地塑形',
     words: ['塑形', '裂地', '掘土', '开辟', '平整', '挖地'],
     cost: { mana: 30, food: 6, hp: 0 },
     commands: ['fill {px} {py-1} {pz} {px} {py-1} {pz} minecraft:air'],
@@ -441,7 +460,7 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '脚下大地，为你重塑',
   },
   {
-    id: 'meteor', layer: 'effect', name: '陨石术',
+    id: 'meteor', layer: 'effect', category: 'attack', name: '陨石术',
     words: ['陨石', '天罚', '星陨', '神雷', '天雷', '雷击'],
     cost: { mana: 80, food: 0, hp: 15 },
     commands: ['summon minecraft:lightning_bolt {tx} {ty} {tz}'],
@@ -455,6 +474,32 @@ const DEFAULT_ATOMS: Atom[] = [
     subtitle: '燃烧生命，天罚降临',
   },
 ]
+
+// ── 施法框架前缀（2026-08-23 造物主谕：施法必须有固定咒语框架，正则匹配，持续扩展）──
+// 前缀命中 = 明确施法意图声明 → 进匹配链；无前缀自然语言 → 聊天/祈愿通道。
+// 分级分发：PUBLIC=公共池（新玩家随机被告知 2-3 个），BOOK=技能书藏宝（书商/探索掉落），
+// AI 玩家全量告知（AI 看不了书）；匹配时全量认（正则 i 不敏感，英文大小写通吃）。
+// 长词在前（alternation 顺序敏感：cast_spell 先于 cast）；斜杠前缀排除（/ 开头会被当命令）。
+const CHANT_PREFIXES_PUBLIC: string[] = [
+  // 公共池：新玩家入世即被告知（随机 2-3 个）
+  'cast_spell', '施法', '天灵灵地灵灵', '女神在上',
+]
+const CHANT_PREFIXES_BOOK: string[] = [
+  // 技能书藏宝：墨白/云笈技能书、探索掉落里写（每本书记几个前缀，凑齐靠收集）
+  'cast', 'chant', 'spell', '咏唱',
+  '急急如律令', '妈咪妈咪哄', '嘛哩嘛哩哄', '芝麻开门',
+  '天地无极', '乾坤借法', '巴啦啦能量', '古娜拉黑暗之神', '阿布拉卡达布拉',
+  '千灯在上', '天神在上', '灯明',
+  '菠萝菠萝蜜', '噼里啪啦', '呜咪咪哄', '咻咻咻',
+]
+const CHANT_PREFIXES: string[] = [...CHANT_PREFIXES_PUBLIC, ...CHANT_PREFIXES_BOOK]
+const CHANT_PREFIX_RE = new RegExp(`^(?:${CHANT_PREFIXES.join('|')})[\\s:：]*(.+)$`, 'i')
+
+/** 剥施法框架：命中前缀则返回咒语内容（去前缀），未命中返回 null（不算施法意图）。 */
+function matchChantFrame(msg: string): string | null {
+  const m = CHANT_PREFIX_RE.exec(msg.trim())
+  return m ? m[1].trim() : null
+}
 
 // ── 中文数字 / 方向 / 物品 解析 ────────────────────────────────────────
 const CN_DIGITS: Record<string, number> = {
@@ -521,10 +566,19 @@ function matchSpell(chant: string, atoms: Atom[]): { atom: Atom; params: Record<
   return null
 }
 
-// ── 咒语向量兜底（2026-08-20）：严格匹配失败 → bge-m3 语义建议，只荐不施 ──
+// ── 咒语向量兜底（2026-08-20 起）：严格匹配失败 → bge-m3 语义近邻 ──
+// 2026-08-23 造物主谕「瞬发 vs 前摇」：严格匹配=瞬发（零 LLM）；模糊=向量→LLM→代施（更久+更多魔力）。
 const OLLAMA_EMBED_URL = process.env.OLLAMA_EMBED_URL ?? 'http://127.0.0.1:11434/api/embeddings'
 const EMBED_MODEL = process.env.MC_EMBED_MODEL ?? 'bge-m3-cpu:latest'
-const SUGGEST_THRESHOLD = 0.50 // PoC 定谳：低于此分的近邻不足以代言神意
+// 阈值：>=0.80 高置信 → 向量模糊施法（×1.5 + 2s 粒子前摇）；0.50~0.80 中置信 → LLM 推理解析；
+// <0.50 不足以代言神意（PoC 实证「石头」撞陨石术，歧义须 LLM 把关）。
+const VECTOR_DIRECT_THRESHOLD = 0.80
+const SUGGEST_THRESHOLD = 0.50
+// 模糊施法代价：向量 ×1.5；LLM = 基础 + ⌈tokens/50⌉（上限 80）；向量前摇 2s（LLM 路径延迟=推理耗时）。
+const VECTOR_FUZZY_MULT = 1.5
+const TOKEN_MANA_RATIO = 50
+const TOKEN_MANA_CAP = 80
+const FUZZY_CAST_DELAY_MS = 2000
 
 let suggestCorpus: { vecs: number[][]; atoms: Atom[] } | null = null
 let corpusBuilding: Promise<void> | null = null
@@ -564,23 +618,41 @@ function warmSuggestCorpus(atoms: Atom[]): void {
   })().catch(() => {})
 }
 
-async function suggestSpell(chant: string, atoms: Atom[]): Promise<string | null> {
-  if (!suggestCorpus) {
-    warmSuggestCorpus(atoms) // 首次触发即预热，本次先走原文案
-    return null
+  interface SpellVectorMatch {
+    atom: Atom
+    similarity: number
   }
-  const qv = await embedText(chant)
-  if (!qv) return null
-  let best = { s: 0, idx: -1 }
-  for (let i = 0; i < suggestCorpus.vecs.length; i++) {
-    const s = cosine(qv, suggestCorpus.vecs[i])
-    if (s > best.s) best = { s, idx: i }
+
+  /** 中置信向量命中：需要 LLM 推理解析（mc-god 侧处理），抛此信号。 */
+  class NeedLlmError extends Error {
+    atomId: string
+    body: string
+    similarity: number
+    constructor(atomId: string, body: string, similarity: number) {
+      super('need_llm')
+      this.name = 'NeedLlmError'
+      this.atomId = atomId
+      this.body = body
+      this.similarity = similarity
+    }
   }
-  if (best.idx < 0 || best.s < SUGGEST_THRESHOLD) return null
-  const a = suggestCorpus.atoms[best.idx]
-  return `你的低语隐约有法力波动——或许汝意欲【${a.name}】？直念「${a.words[0]}」即可施展（需 Lv${a.requiredLevel ?? 1}，耗魔 ${a.cost.mana}）。` +
-    `若非此意，直述所求向女神祈愿便是。`
-}
+
+  /** 向量近邻（结构化）：返回候选法术 + 相似度；不达 0.50 返回 null。 */
+  async function suggestSpellMatch(chant: string, atoms: Atom[]): Promise<SpellVectorMatch | null> {
+    if (!suggestCorpus) {
+      warmSuggestCorpus(atoms) // 首次触发即预热，本次走 miss
+      return null
+    }
+    const qv = await embedText(chant)
+    if (!qv) return null
+    let best = { s: 0, idx: -1 }
+    for (let i = 0; i < suggestCorpus.vecs.length; i++) {
+      const s = cosine(qv, suggestCorpus.vecs[i])
+      if (s > best.s) best = { s, idx: i }
+    }
+    if (best.idx < 0 || best.s < SUGGEST_THRESHOLD) return null
+    return { atom: suggestCorpus.atoms[best.idx], similarity: best.s }
+  }
 
 function extractParams(chant: string, atom: Atom): Record<string, number | string> {
   const params: Record<string, number | string> = {}
@@ -930,6 +1002,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     ts: string; player: string; atom: string; chant: string
     mana: number; food: number; hp: number
     manaLeft: number; maxMana: number; level: number
+    // 2026-08-23（造物主谕·施法记录学习闭环）：匹配层级 / tokens / 前摇耗时 / 成败 / 结果。
+    // matchMode: exact=严格瞬发 vector=向量模糊 llm=LLM 推理 miss=未识别（新咒语学习原料）
+    matchMode?: 'exact' | 'vector' | 'llm' | 'miss'
+    tokens?: number
+    latencyMs?: number
+    success?: boolean
+    result?: string
   }
   const usagePath = resolve(dirname(resolve(config.statePath)), 'skill-usage.jsonl')
   const appendSkillUsage = (e: SkillUsageEntry): void => {
@@ -937,6 +1016,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       mkdirSync(dirname(usagePath), { recursive: true })
       appendFileSync(usagePath, JSON.stringify(e) + '\n', 'utf8')
     } catch { /* 台账失败不影响施法 */ }
+  }
+  /** 未识别咏唱也入台账（matchMode:'miss'）——新咒语/新魔法的学习原料（2026-08-23）。 */
+  const appendChantMiss = (player: string, chant: string, reason: string): void => {
+    const p = store.get(player)
+    appendSkillUsage({
+      ts: new Date().toISOString(), player, atom: '', chant: chant.slice(0, 120),
+      mana: 0, food: 0, hp: 0, manaLeft: Math.floor(p.mana), maxMana: p.maxMana, level: p.level,
+      matchMode: 'miss', success: false, result: reason.slice(0, 120),
+    })
   }
 
   // ── 世界清扫：滞留风爆弹 ──────────────────────────────────────────
@@ -1003,10 +1091,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
 
   const service: MagicService = {
-    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 })),
+    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], category: a.category, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 })),
     getAtomById: (id) => {
       const a = atoms.find((x) => x.id === id)
-      return a ? { id: a.id, name: a.name, words: [...a.words], cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 } : null
+      return a ? { id: a.id, name: a.name, words: [...a.words], category: a.category, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 } : null
     },
     getInnate: (u) => store.getInnate(u),
     setInnate: (u, id) => {
@@ -1103,7 +1191,18 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     hasPassive: (u, id) => store.hasPassive(u, id),
     castByGod: (username, atomId, opts) => castByGod(username, atomId, opts),
     castSpell: (username, chant) => cast(username, chant),
-    sniffChant: (msg) => atoms.some((a) => a.words.some((w) => msg.includes(w))),
+    // 2026-08-23：模糊施法（LLM 已裁决的法术，tokens 折算魔力 + 自然前摇）——mc-god catch NeedLlmError 后调用。
+    castFuzzy: (username, chant, atomId, opts) => {
+      const atom = atoms.find((a) => a.id === atomId)
+      return atom
+        ? cast(username, chant, { forceAtom: atom, tokens: opts.tokens, latencyMs: opts.latencyMs, mode: opts.mode ?? 'llm' })
+        : Promise.resolve('此术未在法则之列。')
+    },
+    // 2026-08-23：施法意图 = 咒语框架命中（前缀+内容）或 法术词子串（兼容旧习惯/旧客户端）。
+    // 收紧为"纯框架"在第二步分流改造时统一做（守卫桥 chant/A 仓工具需先适配）。
+    sniffChant: (msg) => matchChantFrame(msg) !== null || atoms.some((a) => a.words.some((w) => msg.includes(w))),
+    // 前缀分级分发：all=true（AI 玩家）全量；否则公共池（真人玩家随机被告知 2-3 个）
+    chantPrefixes: (all: boolean) => (all ? [...CHANT_PREFIXES] : [...CHANT_PREFIXES_PUBLIC]),
   }
 
   /** RCON 查询实体数值字段，返回数字或 null。 */
@@ -1199,17 +1298,38 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   }
 
   // ── 核心施法 ─────────────────────────────────────────────────────────
-  async function cast(username: string, chant: string): Promise<string> {
-    const match = matchSpell(chant, atoms)
+  async function cast(username: string, chant: string, opts?: { forceAtom?: Atom; tokens?: number; latencyMs?: number; mode?: 'vector' | 'llm' }): Promise<string> {
+    // 2026-08-23：剥施法框架前缀（兼容无前缀直呼——旧习惯/内部调用），匹配用咒语内容。
+    const body = matchChantFrame(chant) ?? chant
+    // forceAtom = 模糊施法（向量/LLM 已确认法术），直接按指定原子走执行体。
+    const match = opts?.forceAtom
+      ? { atom: opts.forceAtom, params: extractParams(body, opts.forceAtom) }
+      : matchSpell(body, atoms)
     if (!match) {
-      // 向量兜底（2026-08-20 造物主谕：严格匹配是铁律，但失败时给 Agent 一条明路）：
-      // bge-m3 语义近邻，只建议、绝不代施（阈值 0.50，PoC 实证「石头」会撞陨石术）。
-      const hint = await suggestSpell(chant, atoms).catch(() => null)
-      if (hint) return hint
+      // 向量降级（2026-08-23 造物主谕：严格失败 → 向量 → LLM → 模糊施法，无需二次确认）
+      const vm = await suggestSpellMatch(body, atoms).catch(() => null)
+      if (vm && vm.similarity >= VECTOR_DIRECT_THRESHOLD) {
+        // 高置信：向量模糊施法（×1.5 + 2s 粒子凝聚前摇）
+        return cast(username, chant, { forceAtom: vm.atom, mode: 'vector', latencyMs: FUZZY_CAST_DELAY_MS })
+      }
+      if (vm && vm.similarity >= SUGGEST_THRESHOLD) {
+        // 中置信：需 LLM 推理解析（mc-god 侧 catch 后裁决，通过再代施）
+        throw new NeedLlmError(vm.atom.id, body, vm.similarity)
+      }
+      appendChantMiss(username, chant, '未识别')
       return `「${chant}」并未构成任何已知魔法。也许是咒语不对，或者你尚未悟得此法。`
     }
     const { atom, params } = match
-    const cost = computeCost(atom, params)
+    const baseCost = computeCost(atom, params)
+    // 模糊施法代价（2026-08-23）：vector = base×1.5；llm = base + ⌈tokens/50⌉（上限 80）
+    const fuzzyTokenMana = opts?.mode === 'llm' && opts.tokens
+      ? Math.min(TOKEN_MANA_CAP, Math.ceil(opts.tokens / TOKEN_MANA_RATIO))
+      : 0
+    const cost = opts?.mode === 'llm'
+      ? { ...baseCost, mana: baseCost.mana + fuzzyTokenMana }
+      : opts?.mode === 'vector'
+        ? { ...baseCost, mana: Math.round(baseCost.mana * VECTOR_FUZZY_MULT) }
+        : baseCost
 
     // 结算回蓝 + 等级校验（出生天赋 = 与生俱来的能力，豁免等级门槛）
     // 路线 A：等级真源 = MC 原生 XpLevel，cast 时直读（tick 缓存最多滞后 20s，门槛判定必须准确）
@@ -1266,6 +1386,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
     const item = String(params.item ?? 'bread')
     const count = 1
+
+    // 模糊施法前摇（2026-08-23 造物主谕：模糊 = 更久）：粒子先行（凝聚中），延迟后落地。
+    // 向量路径延迟 2s；LLM 路径延迟 = 推理耗时（mc-god 侧 catch NeedLlmError 时已消耗，传 latencyMs 记录）。
+    if (opts?.latencyMs && opts.latencyMs > 0) {
+      await rcon.send(`particle minecraft:end_rod ${px} ${py + 1} ${pz} 0.5 0.5 0.5 0.02 40`).catch(() => {})
+      await new Promise((res) => setTimeout(res, opts.latencyMs ?? 0))
+    }
 
     // 归乡：家的真相 = 玩家重生点（床）。没睡过床时回落灯门镇中心，
     // 不再失败劝退（2026-08-19 修订）。
@@ -1385,14 +1512,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         : parts.length > 0 ? `（消耗${parts.join('、')}）` : ''
       log(`cast ${atom.id} by ${username}: ${atom.commands.join('; ')} (mana ${cost.mana}, food ${cost.food}, hp ${cost.hp}, xp +${expGain})`)
       chronicle('cast', username, { skill: atom.id, mana: cost.mana, food: cost.food, hp: cost.hp, xp: expGain, level: levelAfter })
-      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter })
+      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: true })
       return `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（你尚未安家——天神将你送回灯门镇中心；睡一张床，归乡便会带你回床边。）' : ''}`
     } catch (err) {
       return `神力连接不上这个世界：${err instanceof Error ? err.message : String(err)}`
     }
   }
 
-  // ── 女神代施（慢路径执行器）：与 cast() 共用渲染器/VFX，但零门槛零消耗 ──
+  // ── 女神代施（慢路径执行器）：与 cast() 共用渲染器/VFX。
+  // 2026-08-23：默认零门槛零消耗（神迹）；传 consumeMana/latencyMs/mode 时 = 模糊施法（扣魔力+前摇+台账）。
   async function castByGod(username: string, atomId: string, opts: GodCastOpts = {}): Promise<string> {
     const atom = atoms.find((a) => a.id === atomId)
     if (!atom) return `未知技艺「${atomId}」，神迹未成。`
@@ -1452,14 +1580,41 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const out = await rcon.send(`execute if entity @e[type=${atom.ownLimit.entity},distance=..${range},nbt={Owner:[${vars.puuid}]}]`)
       if (/passed/i.test(out || '')) return atom.ownLimit.denyReply ?? `契约之兽已在其身边，无需再赐。`
     }
+    // 模糊施法前摇（2026-08-23）：粒子先行（凝聚中），延迟后落地。LLM 路径延迟=推理耗时（自然前摇）。
+    if (opts.latencyMs && opts.latencyMs > 0) {
+      await rcon.send(`particle minecraft:end_rod ${px} ${py + 1} ${pz} 0.5 0.5 0.5 0.02 40`).catch(() => {})
+      await new Promise((res) => setTimeout(res, opts.latencyMs ?? 0))
+    }
+    // 模糊施法扣魔力（神迹零消耗；向量/LLM 模糊 = 玩家自担魔力）
+    if (opts.consumeMana !== undefined && opts.consumeMana > 0) {
+      const pstate = store.get(username)
+      if (pstate.mana < opts.consumeMana) {
+        return `魔力不足（耗魔 ${opts.consumeMana}，汝余 ${Math.floor(pstate.mana)}）。法力波动渐渐平息……`
+      }
+      store.spendMana(username, opts.consumeMana)
+    }
     try {
       for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {
         const out = await rcon.send(cmd)
         if (out) log(`rc[${cmd}] -> ${out.trim()}`)
       }
       await castVfx(atom, vars, username)
-      log(`godcast ${atom.id} for ${username} (divine intervention, no player cost)`)
-      return `「${atom.name}」已由神力代施。`
+      log(`godcast ${atom.id} for ${username} (${opts.mode ?? 'divine'}, mana ${opts.consumeMana ?? 0}, tokens ${opts.tokens ?? 0})`)
+      // 模糊施法/神迹记账（2026-08-23）：女神魔力=LLM tokens，入台账供学习闭环
+      if (opts.mode || opts.tokens !== undefined || opts.playerChant) {
+        const st = store.get(username)
+        appendSkillUsage({
+          ts: new Date().toISOString(), player: username, atom: atom.id,
+          chant: (opts.playerChant ?? '').slice(0, 120),
+          mana: opts.consumeMana ?? 0, food: 0, hp: 0,
+          manaLeft: Math.floor(st.mana), maxMana: st.maxMana, level: st.level,
+          matchMode: opts.mode ?? (opts.tokens !== undefined ? 'llm' : 'exact'),
+          tokens: opts.tokens ?? 0, latencyMs: opts.latencyMs ?? 0, success: true, result: 'ok',
+        })
+      }
+      return opts.mode
+        ? `你以模糊的咒语凝聚法力——「${atom.name}」应声而现。`
+        : `「${atom.name}」已由神力代施。`
     } catch (err) {
       return `神迹中途受阻：${err instanceof Error ? err.message : String(err)}`
     }
