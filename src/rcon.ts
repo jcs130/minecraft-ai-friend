@@ -33,6 +33,9 @@ export class Rcon {
   private nextId = 1
   private pending = new Map<number, Waiter>()
   private buffer = Buffer.alloc(0)
+  // 连接真实状态：服务端断开/错误时由 close/error 处理器置 false，
+  // 供 isConnected() 准确判断，避免往死 socket 写命令等 8s 超时。
+  private connected = false
 
   constructor(
     private readonly host: string,
@@ -41,32 +44,78 @@ export class Rcon {
   ) {}
 
   isConnected(): boolean {
-    return this.socket !== null && !this.socket.destroyed
+    return this.connected && this.socket !== null && !this.socket.destroyed
   }
 
   connect(timeoutMs = 6000): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      const finish = (ok: boolean, err?: Error) => {
+        if (settled) return
+        settled = true
+        if (ok) resolve()
+        else reject(err)
+      }
       const socket = net.createConnection({ host: this.host, port: this.port })
       this.socket = socket
+      // TCP keepalive：死亡连接能较快被系统察觉（默认 10s 后开始探测），
+      // 触发 close/error → 及时拒绝 pending，而不是石沉大海等 8s 超时。
+      socket.setKeepAlive(true, 10_000)
       socket.on('data', (chunk) => this.onData(chunk as Buffer))
-      socket.once('error', (err) => reject(err))
-      socket.setTimeout(timeoutMs, () => reject(new Error('rcon connect timeout')))
+      socket.on('close', () => {
+        this.onClosed()
+        finish(false, new Error('rcon closed'))
+      })
+      socket.on('error', (err) => {
+        this.onError(err)
+        finish(false, err)
+      })
+      socket.setTimeout(timeoutMs, () => {
+        socket.destroy()
+        finish(false, new Error('rcon connect timeout'))
+      })
       socket.once('connect', () => {
         socket.setTimeout(0)
         const id = this.nextId++
         this.pending.set(id, {
           kind: 'auth',
           chunks: [],
-          resolve: () => resolve(),
-          reject,
+          resolve: () => {
+            this.connected = true
+            finish(true)
+          },
+          reject: (e) => {
+            this.connected = false
+            finish(false, e)
+          },
         })
         socket.write(encodePacket(id, 3, this.password))
       })
     })
   }
 
+  private onClosed() {
+    this.connected = false
+    // 连接已断：立即拒绝所有在途命令，避免 caller 等满 timeout。
+    for (const [, w] of this.pending) {
+      w.reject(new Error('rcon closed'))
+    }
+    this.pending.clear()
+  }
+
+  private onError(err: Error) {
+    // 已连接的 socket 出错：标记断开并拒绝 pending；不抛未捕获异常。
+    this.connected = false
+    for (const [, w] of this.pending) {
+      w.reject(err || new Error('rcon error'))
+    }
+    this.pending.clear()
+    this.socket?.destroy()
+    this.socket = null
+  }
+
   send(command: string, timeoutMs = 8000): Promise<string> {
-    if (!this.socket) return Promise.reject(new Error('rcon not connected'))
+    if (!this.socket || !this.connected) return Promise.reject(new Error('rcon not connected'))
     const id = this.nextId++
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -128,6 +177,7 @@ export class Rcon {
   }
 
   close() {
+    this.connected = false
     if (this.socket) {
       this.socket.destroy()
       this.socket = null

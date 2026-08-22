@@ -88,7 +88,21 @@ export function createRcon(config: Config): RconHandle {
   }
 
   const service: RconService = {
-    send: async (cmd) => (await ensure()).send(toAscii(cmd)),
+    send: async (cmd) => {
+      try {
+        return (await ensure()).send(toAscii(cmd))
+      } catch (e) {
+        // 保守重试：仅当「连接本来就没建立/已明确断开（命令根本没发出去）」时重建一次。
+        // 不重试 timed out / closed —— 那些命令可能已被服务器执行，双发会重复给物/广播。
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/rcon not connected/i.test(msg)) {
+          rcon?.close()
+          rcon = null
+          return (await ensure()).send(toAscii(cmd))
+        }
+        throw e
+      }
+    },
     getEntityNumber: async (target, path) => {
       try {
         const out = await service.send(`data get entity ${target} ${path}`)
