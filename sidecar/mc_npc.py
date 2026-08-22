@@ -1457,7 +1457,8 @@ def unleash_alive():
             R.s = None
 
 def heal_npcs():
-    radius = CFG.get("quests", {}).get("leash_radius", 28)
+    # 2026-08-23 造物主拍板「A+B」：水平拉回阈值用全局 leash_radius(40) 放宽+软化，每 NPC 可配 radius 覆盖。
+    radius = CFG.get("quests", {}).get("leash_radius", 40)
     for v in PROFILES:
         try:
             dedup_npc(v)
@@ -1482,11 +1483,12 @@ def heal_npcs():
             R.s = None
         if mode_of(v) == "stand":
             continue  # 人偶不会走动，无需拴绳
-        # 2026-08-22 造物主谕「限定活动范围」：全员自由生活（NoAI:0b）后不再区分 alive，
-        # 一律按铺子半径拴绳——radius 取每 NPC 档案 radius（默认 8 格，守住自家铺子/岗位）
+        # 2026-08-23 造物主拍板「A+B」：全村放宽+软化——默认按全局 leash_radius(40)，
+        # 每 NPC 档案可配 radius 覆盖（未配用全局）。村民在阈值内自由钓鱼/种菜，
+        # 只在真离家太远(超阈值)或异常(爬顶/掉坑)时才拉回，尽量不打断生活。
         sync_villager_variant(v)
         x, y, z = v["spawn"]
-        vrad = v.get("radius", 8)
+        vrad = v.get("radius", radius)
         dx, dy, dz = pos[0] - x, pos[1] - y, pos[2] - z
         if dx * dx + dy * dy + dz * dz > vrad * vrad:
             R.cmd("tp %s %s %s %s" % (sel(v), x, y, z))
