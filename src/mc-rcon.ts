@@ -67,15 +67,24 @@ export function createRcon(config: Config): RconHandle {
   }
 
   let rcon: Rcon | null = null
+  let connecting: Promise<Rcon> | null = null
   async function ensure(): Promise<Rcon> {
     if (rcon && rcon.isConnected()) return rcon
+    if (connecting) return connecting
     if (!password) throw new Error(`rcon password not configured (${config.passwordPath})`)
-    rcon?.close()
-    const conn = new Rcon(config.host, config.port, password)
-    await conn.connect()
-    rcon = conn
-    log('rcon connected')
-    return conn
+    connecting = (async () => {
+      rcon?.close()
+      const conn = new Rcon(config.host, config.port, password)
+      await conn.connect()
+      rcon = conn
+      log('rcon connected')
+      return conn
+    })()
+    try {
+      return await connecting
+    } finally {
+      connecting = null
+    }
   }
 
   const service: RconService = {
