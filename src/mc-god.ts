@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
@@ -1470,6 +1471,97 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
 
+  // ── 女神守护施援扫描（2026-08-23 拍板：只提示/引导，女神不直接救人；守神恩有价+主观能动性）──
+  // 挂在 scheduleDeathPoll 生命 tick：采 HP/饱食/空气/夜间 → 危险判定 → courier 私聊提示（不刷公屏）。
+  // 每条×每人×同指标 120s 冷却；夜间提示按游戏日一次；女神不给"濒死直接圣愈"（已弃），只催不救。
+  const GUARD_HINT_COOLDOWN_MS = 120_000
+  const lastHint: Map<string, Map<string, number>> = new Map()
+  const nightHintDay: Map<string, number> = new Map()
+
+  function hintCooldownOk(name: string, ind: string): boolean {
+    const t = Date.now()
+    const m = lastHint.get(name) ?? new Map()
+    const last = m.get(ind) ?? 0
+    if (t - last < GUARD_HINT_COOLDOWN_MS) return false
+    m.set(ind, t)
+    lastHint.set(name, m)
+    return true
+  }
+
+  async function guardHint(name: string, ind: string, text: string): Promise<void> {
+    if (!hintCooldownOk(name, ind)) return
+    try { courier(name, text) } catch { /* 私聊失败无碍 */ }
+    log(`GUARD-HINT [${name}] ${ind}: ${text}`)
+  }
+
+  /** 读世界时刻（time query gametime → 总 tick；mod 24000 得时刻）。 */
+  async function gameTimeInfo(): Promise<{ day: number; tod: number; isNight: boolean }> {
+    try {
+      const out = await rcon.send('time query gametime')
+      const m = out.match(/-?\d+/)
+      const ticks = m ? parseInt(m[0], 10) : -1
+      if (ticks < 0) return { day: -1, tod: -1, isNight: false }
+      const tod = ((ticks % 24000) + 24000) % 24000
+      return { day: Math.floor(ticks / 24000), tod, isNight: tod >= 13000 && tod < 23000 }
+    } catch {
+      return { day: -1, tod: -1, isNight: false }
+    }
+  }
+
+  /** 每玩家施援扫描：只判定+提示，绝不动手（圣愈/填海留给祈愿供奉与自己吟唱）。 */
+  async function guardScan(name: string, isNight: boolean, day: number): Promise<void> {
+    try {
+      const [hp, food, air] = await Promise.all([
+        rcon.getEntityNumber(name, 'Health'),
+        rcon.getEntityNumber(name, 'foodLevel'),
+        rcon.getEntityNumber(name, 'Air'),
+      ])
+      if (hp !== null) {
+        const hpRatio = hp / 20
+        if (hpRatio < 0.15) await guardHint(name, 'dying', `你随时会倒下——快祈愿，或者喊救命！`)
+        else if (hpRatio < 0.30) await guardHint(name, 'hurt', `你伤得不轻（${Math.round(hp)}/20），找屋檐歇脚，或念「圣愈」/向女神求个恩典。`)
+      }
+      if (air !== null && air < 8) await guardHint(name, 'drown', `你呛水了，快上岸换口气！`)
+      if (food !== null && food < 6) await guardHint(name, 'hunger', `你肚子空了（${Math.round(food)}/20），找点吃的，别硬扛。`)
+      // 夜黑无檐：按游戏日一次，夜里进屋/点火把（不逐分钟刷）
+      if (isNight && day >= 0 && nightHintDay.get(name) !== day) {
+        nightHintDay.set(name, day)
+        try { courier(name, `天黑了，别在野外过夜——进屋、点火把。`) } catch { /* 无碍 */ }
+        log(`GUARD-HINT [${name}] night: 天黑了，别在野外过夜`)
+      }
+    } catch { /* 单玩家失败不影响其余 */ }
+  }
+
+  // ── 填坑（2026-08-23 拍板：游戏内每天中午触发，自动修复主城区苦力怕坑）──────────
+  // 不用现实钟表——玩家睡觉会跳过夜晚，现实时间会错位；按世界时刻 mod 24000 ≈ 6000（中午）触发。
+  const FILL_NOON_START = 5600
+  const FILL_NOON_END = 6400
+  const TERRAIN_REPAIR_PY = process.env.TERRAIN_REPAIR_PY || 'C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\terrain_repair.py'
+  const FILL_PY = process.env.FILL_PYTHON || 'C:\\Users\\lzl19\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
+  let lastFillDay = -1
+  let fillBusy = false
+
+  function maybeRunTerrainFill(gt: { day: number; tod: number }): void {
+    if (fillBusy) return
+    if (gt.day < 0 || gt.tod < FILL_NOON_START || gt.tod > FILL_NOON_END) return
+    if (gt.day === lastFillDay) return
+    lastFillDay = gt.day
+    fillBusy = true
+    // 清掉被 uv 劫持的 PYTHONHOME/PYTHONPATH，用干净环境跑野外填坑脚本
+    const env: NodeJS.ProcessEnv = { ...process.env }
+    delete env.PYTHONHOME
+    delete env.PYTHONPATH
+    log(`terrain fill triggered at day ${gt.day} tod=${gt.tod}; spawning ${TERRAIN_REPAIR_PY}`)
+    const child = spawn(FILL_PY, ['-u', TERRAIN_REPAIR_PY, '--check', '--fix'], { env, detached: true, stdio: 'ignore' })
+    child.unref()
+    child.on('error', (err) => { fillBusy = false; log(`terrain fill spawn error: ${err.message}`) })
+    child.on('exit', (code) => {
+      fillBusy = false
+      log(`terrain fill done code=${code}`)
+      worlddb.chronicleRecord('terra', 'Goddess', { action: 'auto_repair_noon', code, day: gt.day })
+    })
+  }
+
   function scheduleDeathPoll() {
     if (disposed) return
     stopDeathPoll = lc.setTimeout(async () => {
@@ -1494,6 +1586,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             lastWatched = watched
           }
           writeHeartbeat(names)
+          const gt = await gameTimeInfo()
           for (const name of names) {
             const out = await rcon.send(`scoreboard players get ${name} ${DEATH_OBJ}`)
             // 兜底路径（快路径见上方 log-tail 订阅）：慢一步但能追平 log 丢行/世界进程重启间隙
@@ -1538,7 +1631,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
               // 效果引擎：已解锁被动在 when 条件成立期间持续给药水效果（血怒→力量/铁壁→抗性）
               await applyPassiveEffects(name)
             }
+
+            // 女神守护施援扫描（提示/引导 only，女神不直接救人）
+            await guardScan(name, gt.isNight, gt.day)
           }
+          // 填坑：游戏内每天中午触发一次（不占主循环，spawn 子进程）
+          maybeRunTerrainFill(gt)
         }
       } catch (err) { log(`death poll failed: ${err instanceof Error ? err.message : String(err)}`) } // 守望轮询异常必须可见
       scheduleDeathPoll()
