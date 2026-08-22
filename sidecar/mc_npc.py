@@ -785,14 +785,29 @@ def handoff(speaker, v, target, count, item_name):
     return [v.get("handoff_ok", "（当面点清）%d 个%s，已交到 %s 手上——两清！" % (got, item_name, target))]
 
 # ---------- LLM 接口（预留，默认关闭） ----------
+# 2026-08-23 造物主谕「NPC 私聊要贴人设 + 世界设定」：给村民注入一条世界常识，
+# 让 TA 被问「女神/法术/归乡」时能帖人设地指点，而不是瞎编或掉兜底模板。
+WORLD_BRIEF = ("这片世界叫千灯纪，由一位女神庇护。人可以向女神祈愿求恩典，"
+               "也可以把法术咏唱出来——念对固定的词，世界就会回应，住民把这叫「魔法」。"
+               "「归乡」是女神赐的空间之艺，能把离家的人送回村子；想学它，"
+               "要么带诚心求女神，要么去书商墨白那儿淘一本《归乡之卷》。"
+               "你只是个街坊，不是女神也不是祭司——别替女神许愿，有人问起就照这些指点他。")
+
+# 世界设定问询触发词：玩家（尤其新来的 AI/真人）问起女神/法术/归乡/祈愿等常识，
+# 即便没点名村民、只是近旁搭话，也让村民走 LLM 贴人设+世界设定作答，别掉模板。
+# 其余话题仍走模板兜底（保住 2026-08-22「未点名不碰 LLM」防阻塞的静默）。
+WORLD_QUERY_KW = ("归乡", "归途", "回村", "回基地", "回家", "女神", "天神", "神谕",
+                  "祈愿", "咏唱", "法术", "魔法", "咒语", "技能书", "天赋", "祝福",
+                  "求教", "请教", "怎么学", "如何学", "学一门", "怎么回", "神灵")
+
 def llm_reply(v, speaker, msg, ctx):
     llm = CFG.get("llm", {})
     if not llm.get("enabled"):
         return None
-    sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s 背景：%s %s 目前在线：%s。"
+    sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
             "请以人设口吻用中文回答，不超过两句话；说话用大白话、口语，像街坊邻居聊天一样，简短直接，"
             "别拽文、别用文言、别用书面腔；不要出戏，不要提到游戏机制之外的现实。") % (
-        v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"))
+        v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"), WORLD_BRIEF)
     body = json.dumps({
         "model": llm.get("model", "qwen3.8-27b"),
         "messages": [{"role": "system", "content": sysp},
@@ -1014,11 +1029,13 @@ def agent_chat(v, speaker, msg, ctx):
         sysp = ("你就是%s本人——千灯纪集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
                 "以你的口吻用中文回话，不超过两句话；说话用大白话、口语，像街坊邻居聊天一样，简短直接，"
                 "别拽文、别用文言、别用书面腔；不出戏、不提游戏机制之外的事；"
-                "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s") % (
+                "你不是女神也不是祭司；除了你自己这条记忆线里的事，别的村民与旅人聊过什么你一概不知。%s"
+                "%s") % (
             v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v),
             ctx.get("online", "?"),
             ("\n你此刻的处境：%s。" % sit) if sit else "",
-            ("\n你的心得手记（熟稔之事）：\n" + skill) if skill else "")
+            ("\n你的心得手记（熟稔之事）：\n" + skill) if skill else "",
+            ("\n\n这个世界你耳熟能详：\n" + WORLD_BRIEF))
         text = "%s\n\n%s 对你说：%s" % (sysp, speaker, msg)
     answer = _hearth_reply(sid, "npc-" + v["key"], text, "chat:%s<-%s" % (v["key"], speaker))
     lines = [x for x in (answer or "").splitlines() if x.strip()][:2]
@@ -1267,13 +1284,26 @@ def route(speaker, msg, via="public"):
     for t in hit_v.get("topics", []):
         if any(w in rest for w in t["kw"]):
             return hit_v, resolve_lines(t["lines"], ctx)
-    # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
-    # 2026-08-22 造物主谕：未点名（nearest 兜底接话）不碰 LLM——本地 27B 首轮可达
-    # 4-5 分钟，同步阻塞 tail 主循环会让全村失聪；未点名只用模板应声（greet/fallback）。
-    if by_calls:
+    # 世界设定问询：提到女神/归乡/法术/祈愿等 → 走 LLM（agent_chat 已注入世界常识），
+    # 让村民贴人设+世界设定地指点；其余仍走模板兜底。
+    if any(w in rest for w in WORLD_QUERY_KW):
         lines = agent_chat(hit_v, speaker, msg, ctx)
         if lines:
             return hit_v, lines
+        if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
+            lines = llm_reply(hit_v, speaker, msg, ctx)
+            if lines:
+                return hit_v, lines
+    # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
+    # 2026-08-22 造物主谕：未点名（nearest 兜底接话）不碰 LLM——本地 27B 首轮可达
+    # 4-5 分钟，同步阻塞 tail 主循环会让全村失聪；未点名只用模板应声（greet/fallback）。
+    # 2026-08-23 造物主谕：私聊（via=whisper）＝指名道姓，也要走 LLM——玩家专门找 TA 说事，
+    # 就该给贴人设+世界设定的答话，而不是掉兜底模板；降级链兜底，永不阻塞到全村失聪。
+    if by_calls or via == "whisper":
+        lines = agent_chat(hit_v, speaker, msg, ctx)   # 世界常识已被 agent_chat 注入
+        if lines:
+            return hit_v, lines
+        # 兜底直连 LLM（带世界常识；template_first 时省略）
         if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
             lines = llm_reply(hit_v, speaker, msg, ctx)
             if lines:
