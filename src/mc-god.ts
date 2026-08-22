@@ -1578,9 +1578,98 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     child.on('error', (err) => { fillBusy = false; log(`terrain fill spawn error: ${err.message}`) })
     child.on('exit', (code) => {
       fillBusy = false
+      lastFillCode = code
       log(`terrain fill done code=${code}`)
       worlddb.chronicleRecord('terra', 'Goddess', { action: 'auto_repair_noon', code, day: gt.day })
     })
+  }
+
+  // ── 女神每日分析日报（2026-08-23 造物主令 点2：中午例行后汇总上报创世天神）─────────
+  // 与填坑同窗口（游戏内 5600..6400 ≈ 中午），填坑完成后再汇总当日祈愿/施法/帮人，
+  // 组分析报告 → 经现成 console 通道投 mc-god（创世天神）评价+下达指示（发给我、我回消息），
+  // 并落文件留存（B 仓运行态 data/，我可随时读回）。不新建通道。
+  const DAILY_REPORT_STATE = process.env.DAILY_REPORT_STATE || `${DATA_DIR}/goddess-report-state.json`
+  const DAILY_REPORT_MD = (day: number) => `${DATA_DIR}/goddess-daily-report-${day}.md`
+  let lastReportDay = -1
+  let reportBusy = false
+  let lastFillCode: number | null = null
+
+  /** 汇总 skill-usage.jsonl 自 ts 以来的施法（技术/玩家/总数）。 */
+  function skillUsageSince(ts: number): { total: number; byAtom: Record<string, number>; byPlayer: Record<string, number> } {
+    const path = resolve(DATA_DIR, 'skill-usage.jsonl')
+    const out = { total: 0, byAtom: {} as Record<string, number>, byPlayer: {} as Record<string, number> }
+    if (!existsSync(path)) return out
+    for (const line of readFileSync(path, 'utf-8').split('\n')) {
+      if (!line.trim()) continue
+      try {
+        const e = JSON.parse(line)
+        if (typeof e.ts !== 'string' || !e.player) continue
+        const t = Date.parse(e.ts)
+        if (isNaN(t) || t < ts) continue
+        out.total++
+        if (e.atom) out.byAtom[e.atom] = (out.byAtom[e.atom] ?? 0) + 1
+        out.byPlayer[e.player] = (out.byPlayer[e.player] ?? 0) + 1
+      } catch { /* 脏行跳过 */ }
+    }
+    return out
+  }
+
+  /** 女神每日分析日报：中午填坑后采集当日数据 → 报告 → 投向创世天神（mc-god）。 */
+  async function maybeRunDailyReport(gt: { day: number; tod: number }): Promise<void> {
+    if (reportBusy) return
+    if (gt.day < 0) return
+    if (gt.tod < FILL_NOON_START || gt.tod > FILL_NOON_END) return
+    // 状态持久化：重启不重复上报。（若 state 缺 lastAt，首次回看近 24h 补一版）
+    let lastAt = 0
+    try { lastAt = JSON.parse(readFileSync(DAILY_REPORT_STATE, 'utf-8')).lastAt ?? 0 } catch { /* 首跑 */ }
+    if (gt.day === lastReportDay) return
+    lastReportDay = gt.day
+    reportBusy = true
+    try {
+      const since = lastAt || Date.now() - 24 * 3600 * 1000
+      const ch = worlddb.chronicleSince(since)
+      const usg = skillUsageSince(since)
+      const byType: Record<string, number> = {}
+      for (const e of ch) byType[e.type] = (byType[e.type] ?? 0) + 1
+      const n = (k: string) => byType[k] ?? 0
+      const helped = ch.filter((e) => e.type === 'welcome' || e.type === 'help' || e.type === 'ask').map((e) => e.actor)
+      const topPlayer = Object.entries(usg.byPlayer).sort((a, b) => b[1] - a[1]).slice(0, 6)
+        .map(([p, c]) => `${p} ${c}`).join(' / ')
+      const topAtom = Object.entries(usg.byAtom).sort((a, b) => b[1] - a[1]).slice(0, 8)
+        .map(([a, c]) => `${a} ${c}`).join(' / ')
+      const day = gt.day
+      const md = [
+        `# 女神每日汇报 · 游戏内第 ${day} 天（${new Date().toISOString().slice(0, 10)}）`,
+        '',
+        `- 祈祷收件箱待处理：${worlddb.inboxPendingCount()} 封（上达 ${n('prayer')}，应允/神迹 ${n('verdict') + n('godcast')}，供奉 ${n('offering')}）`,
+        `- 咏唱 ${n('cast')} · 升级 ${n('levelup')} · 陨落 ${n('death')} · 行迹 ${n('presence')}`,
+        `- 施法（skill-usage.jsonl 该时段共 ${usg.total} 次）：按技艺 ${topAtom || '无'}；按对象 ${topPlayer || '无'}`,
+        `- 填坑：窗口内完成 ${n('terra')} 次自动修复（近一次 code=${lastFillCode === null ? '未知' : lastFillCode}）`,
+        `- 今日帮助对象（迎新/答疑/指引）：${[...new Set(helped)].join(' / ') || '无记录'}`,
+        '',
+        '（以上由游戏内女神采集自 world.db 编年史 + skill-usage.jsonl；解读与下达指令由创世天神裁定。）',
+      ].join('\n')
+      // 投向创世天神：经现成 console 通道（mc-god 人格=我），我读、我评、我回。
+      const prompt = `${md}\n\n请以创世天神身份评价女神今日工作，并给女神下达可执行指示（为什么+怎么做）。话说人话，观点明确。`
+      let reply = ''
+      try {
+        const ans = await callAgent('mc:goddess:report', 'goddess', prompt, 'mc-god')
+        reply = ans.text
+      } catch (e) {
+        reply = `（天神暂时不在，未能回执：${e instanceof Error ? e.message : String(e)}）`
+        log(`daily report to god failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      // 落文件留存：报告 + 天神回执双写。天神本尊可随时读回。
+      try {
+        mkdirSync(dirname(DAILY_REPORT_MD(day)), { recursive: true })
+        writeFileSync(DAILY_REPORT_MD(day), `${md}\n\n## 创世天神回执\n\n${reply}\n`, 'utf-8')
+      } catch (e) { /* 写文件失败不影响上报 */ }
+      writeFileSync(DAILY_REPORT_STATE, JSON.stringify({ lastAt: Date.now() }), 'utf-8')
+      worlddb.chronicleRecord('world-report', 'Goddess', { day, prayers: n('prayer'), verdicts: n('verdict') + n('godcast'), offerings: n('offering'), casts: n('cast'), deaths: n('death'), skillCasts: usg.total })
+      log(`goddess daily report day ${day} sent to god (prayers=${n('prayer')} casts=${usg.total})`)
+    } finally {
+      reportBusy = false
+    }
   }
 
   function scheduleDeathPoll() {
@@ -1658,6 +1747,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           }
           // 填坑：游戏内每天中午触发一次（不占主循环，spawn 子进程）
           maybeRunTerrainFill(gt)
+          // 女神每日分析日报：填坑后汇总当日祈愿/施法/帮人 → 投向创世天神（mc-god）。
+          // 非阻塞触发（内含对 mc-god 的 LLM 调用，最久 120s），不冻结死亡轮询主循环。
+          maybeRunDailyReport(gt).catch((e) => log(`daily report error: ${e instanceof Error ? e.message : String(e)}`))
         }
       } catch (err) { log(`death poll failed: ${err instanceof Error ? err.message : String(err)}`) } // 守望轮询异常必须可见
       scheduleDeathPoll()
