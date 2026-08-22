@@ -681,18 +681,34 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         return `- ${d.getMonth() + 1}/${d.getDate()} ${e.actor} ${e.type}${det ? `(${det})` : ''}`
       })
       const roster = transmigrators.list().map((x) => `${x.name}(${x.username})`).join('、') || '（名册暂空）'
+      // 2026-08-23 造物主反馈「玩法问 NPC 不知道、女神化身也不答」：
+      // 根因=女神答疑只喂档案不喂玩法知识。这里注入权威世界玩法要诀（实时取
+      // 法术表 magic.listAtoms()，不编造）——让女神能真正回答「怎么学/在哪儿/怎么用」。
+      const atomLines = magic.listAtoms().map((a) => {
+        const cp = [a.cost.mana ? `${a.cost.mana}灵` : '', a.cost.food ? `${a.cost.food}食` : '', a.cost.hp ? `${a.cost.hp}血` : ''].filter(Boolean).join('+')
+        return `- ${a.name}（词：${a.words.slice(0, 4).join('/')}｜${a.requiredLevel}级${cp ? `｜${cp}` : ''}）`
+      }).join('\n')
+      const playbook = [
+        '【世界玩法要诀（本神亲订，作答权威依据）】',
+        '法术（私语 /msg Goddess 念词，学过的自己咏唱；词可为自然语言）：',
+        atomLines || '- （法术表暂空）',
+        '- 求助：私语「祈愿：<愿>[｜供奉：名物x数量]」；疑问：私语「问：<问题>」；选出生天赋：喊「我选 <法术名>」；查状态：「鉴定」；/help 查生存手册。',
+        '- 求大术可附供奉（危难慷慨、贵重之物更显诚心）；修为靠挖矿/历练/施法/供奉攒。',
+        '- 世界设施：灯门镇有书商墨白卖技能书（如《归乡之卷》）；当面物品交割私语「/msg Goddess 交易：<物> 给<玩家名>」；村民/守卫也懂些常识。',
+      ].join('\n')
       let prompt = [
         `你是这个方块世界的女神（游戏名 ${bot.username}），全知世界的过去与现在。`,
         `一位名叫「${senderName}」的旅人向你提问。`,
         '',
-        '你的世界档案（作答的唯一依据）：',
+        playbook,
+        '',
         '【近 7 天世界大事（编年史，type 含 death=陨落/prayer=祈愿/offering=供奉/say=传声/awaken=觉醒等）】',
         ...(chronLines.length ? chronLines : ['- （编年史尚无近事）']),
         `【在世旅人名册】${roster}`,
         '',
         '以女神口吻直接回答他的问题，规则：',
-        '1. 只依据档案作答；档案没有的就坦诚告知「连本神也不曾记录此事」，绝不编造。',
-        '2. 口吻威严又慈爱，文言白话相间，100 字以内，直接给答案，不要 JSON、不要旁白。',
+        '1. 以「世界玩法要诀」与「世界档案」为依据作答；两者都没有的就坦诚「连本神也不曾记录此事」，绝不编造。',
+        '2. 口吻威严又慈爱，说大白话别拽文，140 字以内，直接给答案，不要 JSON、不要旁白。',
         `他的问题：${question}`,
       ].join('\n')
       // 视觉带图（2026-08-21 链路打通）：附提问者当前第一人称画面给答疑者（传令官 VL）。
