@@ -1896,19 +1896,52 @@ function rconSendRecv(sock, id, type, body) {
   })
 }
 
-async function rconExec(cmd) {
+// 复用持久 RCON 连接：天眼跟随每 600ms 调 rconExec，原实现每次 net.connect 新连+认证+销毁，
+// 导致 RCON 连接风暴（也是"女神站位爬升"根因之一，女神被悬到目标上方时反复 tp 还狂开连接）。
+// 改为保持一条已认证连接并复用；命令串行化避免同一 socket 并发写交错；断连自动重建自愈。
+let _rcSock = null
+let _rcAuth = false
+let _rcLock = Promise.resolve()
+
+function _rcClose() {
+  if (_rcSock) { try { _rcSock.destroy() } catch { /* 无碍 */ } }
+  _rcSock = null
+  _rcAuth = false
+}
+
+function _rcSerialize(fn) {
+  const run = _rcLock.then(fn, fn)
+  _rcLock = run.catch(() => {})
+  return run
+}
+
+async function _rcEnsure() {
   const secret = rconReadSecret()
+  if (_rcSock && _rcAuth) return _rcSock
+  _rcClose()
   const sock = net.connect(RCON_PORT, RCON_HOST)
   sock.setNoDelay(true)
-  try {
-    await new Promise((ok, bad) => { sock.once('connect', ok); sock.once('error', bad) })
-    const auth = await rconSendRecv(sock, 1, 3, secret)
-    if (auth.id === -1) throw new Error('rcon auth failed')
-    const out = await rconSendRecv(sock, 2, 2, cmd)
-    return out.body
-  } finally {
-    sock.destroy()
-  }
+  sock.on('close', () => { if (_rcSock === sock) _rcAuth = false })
+  sock.on('error', () => { if (_rcSock === sock) _rcAuth = false })
+  await new Promise((ok, bad) => { sock.once('connect', ok); sock.once('error', bad) })
+  const auth = await rconSendRecv(sock, 1, 3, secret)
+  if (auth.id === -1) { sock.destroy(); throw new Error('rcon auth failed') }
+  _rcSock = sock
+  _rcAuth = true
+  return sock
+}
+
+function rconExec(cmd) {
+  return _rcSerialize(async () => {
+    try {
+      const sock = await _rcEnsure()
+      const out = await rconSendRecv(sock, 2, 2, cmd)
+      return out.body
+    } catch (e) {
+      _rcClose() // 命令失败/断连：丢弃连接，等下次调用重建
+      throw e
+    }
+  })
 }
 
 // ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 到其上方俯视，每 2s 跟随一次 ----
