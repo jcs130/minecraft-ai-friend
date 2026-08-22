@@ -20,6 +20,59 @@ import socket, struct, os, re, json, time, io, sys, random, urllib.request, thre
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 _STD_KEEP = (sys.stdout, sys.stderr)  # 防 GC：失引用的旧 wrapper 会被回收并 close 掉共享底层 fd
+# ---------- 靠近搭话（2026-08-22 造物主谕：NPC 要像 RPG 一样跟玩家说话） ----------
+# 玩家走进 NPC 身边（≤3.5 格）→ NPC 蹦出今日想法/话题/问候（点对点 tellraw，不刷全村屏）。
+# 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
+PROX_RADIUS = 3.5
+PROX_COOLDOWN = 240
+EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+
+def _prox_lines(v):
+    pool = []
+    for t in (v.get("topics") or []):
+        pool.extend(t.get("lines", []))
+    if pool:
+        return random.choice(pool)
+    return v.get("greet") or "（朝你点点头）今天也辛苦啦。"
+
+def proximity_chat_loop():
+    last = {}  # (vkey, player) -> ts
+    while True:
+        try:
+            out = R.cmd("list")
+            m = re.search(r"online \(.*?\):\s*(.*)$", out or "", re.S)
+            names = [n.strip() for n in m.group(1).split(",") if n.strip()] if m else []
+            names = [n for n in names if n not in EXCLUDE_PROX]
+            if names:
+                for p in names:
+                    pp = player_pos(p)
+                    if not pp:
+                        continue
+                    for v in PROFILES:
+                        key = (v["key"], p)
+                        now = time.time()
+                        if now - last.get(key, 0) < PROX_COOLDOWN:
+                            continue
+                        vp = alive_pos(v)
+                        if not vp:
+                            continue
+                        dx, dy, dz = pp[0] - vp[0], pp[1] - vp[1], pp[2] - vp[2]
+                        if dx * dx + dy * dy + dz * dz <= PROX_RADIUS * PROX_RADIUS:
+                            last[key] = now
+                            line = _prox_lines(v)
+                            try:
+                                speak(v, line, to=p)
+                                feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
+                                             "npcPos": list(vp), "color": v.get("color", "white"),
+                                             "to": p, "text": line[:300], "via": "proximity"})
+                            except Exception as e:
+                                print("[prox] speak err:", e, flush=True)
+                                R.s = None
+        except Exception as e:
+            print("[prox] err:", e, flush=True)
+            R.s = None
+        time.sleep(8)
+
 if __name__ == "__main__":
     sys.modules["mc_npc"] = sys.modules["__main__"]  # mc_guild 会 `import mc_npc`——注册别名复用本实例，防止整个文件被二次执行（二次执行的 line20 重包 stdout 会 GC-close 掉 fd1，guild 首个 print 必炸）
 
@@ -27,6 +80,56 @@ if __name__ == "__main__":
 WORK = os.environ.get("NPC_DATA_DIR") or r"C:\Users\lzl19\.copaw\workspaces\default"
 DATA = os.path.join(WORK, "deepseek-harness", "scratch-plugin", "data") if not os.environ.get("NPC_DATA_DIR") else WORK
 VDIR = os.path.join(DATA, "village")
+
+# ---------- 右键对话（2026-08-22 造物主谕：按使用键跟 NPC 说话） ----------
+# settlementsfix mod 监听玩家右键村民，把事件写进 village/interact-events.jsonl；
+# 本线程 tail 该文件，读到事件就让 NPC 对 TA 说话（今日想法/话题，与靠近搭话同款内容池）。
+# 每 NPC × 每玩家冷却 30s（右键是主动操作，比靠近搭话短）。文件不存在时静默等待（mod 未装/未重启）。
+INTERACT_FILE = os.path.join(VDIR, "interact-events.jsonl")
+INTERACT_COOLDOWN = 30
+_interact_pos = 0
+
+def interact_tail_loop():
+    global _interact_pos
+    last = {}  # (vkey, player) -> ts
+    while True:
+        try:
+            if not os.path.exists(INTERACT_FILE):
+                time.sleep(3)
+                continue
+            with open(INTERACT_FILE, encoding="utf-8") as f:
+                f.seek(_interact_pos)
+                for ln in f:
+                    ln = ln.strip()
+                    if not ln:
+                        continue
+                    try:
+                        ev = json.loads(ln)
+                    except Exception:
+                        continue
+                    player = ev.get("player", "")
+                    npc_disp = ev.get("npc", "")
+                    v = next((x for x in PROFILES if x["display"] == npc_disp), None)
+                    if not v or not player:
+                        continue
+                    now = time.time()
+                    key = (v["key"], player)
+                    if now - last.get(key, 0) < INTERACT_COOLDOWN:
+                        continue
+                    last[key] = now
+                    line = _prox_lines(v)
+                    try:
+                        speak(v, line, to=player)
+                        feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
+                                     "color": v.get("color", "white"),
+                                     "to": player, "text": line[:300], "via": "interact"})
+                    except Exception as e:
+                        print("[interact] speak err:", e, flush=True)
+                        R.s = None
+                _interact_pos = f.tell()
+        except Exception as e:
+            print("[interact] err:", e, flush=True)
+        time.sleep(3)
 LOG = os.environ.get("NPC_LOG_PATH") or os.path.join(DATA, "..", "mc-server-neoforge", "logs", "latest.log")
 HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
@@ -1137,6 +1240,22 @@ def _leather(item, rgb):
     return ('{id:"minecraft:%s",count:1,components:{"minecraft:dyed_color":'
             '{rgb:%d,show_in_tooltip:false}}}' % (item, rgb))
 
+def ground_y(x, z, y0, max_drop=8):
+    """从 y0 往下找第一个脚下有方块的落地高度（悬空修正）。
+    逐格查 (x, y-1, z) 是否空气：非空气则站 y。查不到返回 y0（不动）。
+    探测用 scoreboard（无副作用）——2026-08-22 修复：旧 say 探测会把 GY_AIR 广播进聊天框。"""
+    try:
+        for dy in range(0, max_drop + 1):
+            yy = int(y0) - dy
+            _locked_cmd("scoreboard players set #gy npc_guard 999")
+            _locked_cmd("execute if block %d %d %d minecraft:air store result score #gy npc_guard run scoreboard players add #gy npc_guard 0" % (x, yy - 1, z))
+            out = _locked_cmd("scoreboard players get #gy npc_guard")
+            if " 999 " in " " + (out or "") + " ":
+                return yy
+    except Exception:
+        R.s = None
+    return int(y0)
+
 def summon_stand(v):
     """盔甲架人偶 NPC：自定义头颅（客户端经 http 拉皮肤）+ 染色皮革甲三件 + 姿势 + 持物
     1.21.5+ 实体装备 NBT 用 equipment 复合键（ArmorItems/HandItems 已废弃会被静默丢弃）"""
@@ -1156,19 +1275,22 @@ def summon_stand(v):
            'NoBasePlate:1b,ShowArms:1b,Marker:0b,Small:0b,%s,%s}') % (
         v["tag"], v["display"], v["color"], _pose_nbt(reg.get("pose", {})), equip)
     x, y, z = v["spawn"]
+    y = ground_y(x, z, y)
     R.cmd("summon minecraft:armor_stand %s %s %s %s" % (x, y, z, nbt))
     print("[npc] healed(stand):", v["display"], flush=True)
 
 def summon_villager(v):
     biome = v.get("biome", "plains")
     offers = _recipes_nbt(v) or "Offers:{Recipes:[]}"
-    # 背景村民（2026-08-18）：天生 NoAI:0b 自由生活——会溜达/归巢；委托型商人维持 1b（unleash_alive 释放）
-    noai = "0b" if v.get("ambient") else "1b"
+    # 2026-08-22 造物主谕「正常 NPC 不要站桩」：一律 NoAI:0b 自由生活（会溜达/归巢），
+    # 交易/职业动作不受影响；拴绳看护（heal_npcs leash_radius）把离家者拉回广场。
+    noai = "0b"
     nbt = ('{NoAI:%s,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
            'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,Xp:0,'
            'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
         noai, v["tag"], v["display"], v["color"], v["profession"], biome, offers)
     x, y, z = v["spawn"]
+    y = ground_y(x, z, y)
     base = v.get("carrier") == "base_villager"
     if base:
         # 换身清场：同 tag 旧原版 villager 必除，防新旧载体并存（2026-08-20 万家烟火融合）
@@ -1210,9 +1332,10 @@ def sync_villager_variant(v):
         R.s = None
 
 def unleash_alive():
-    """活村民解除 NoAI，开始自由生活（拴绳看护兜底）。人偶（盔甲架）无此概念，跳过。"""
+    """活村民解除 NoAI，开始自由生活（拴绳看护兜底）。人偶（盔甲架）无此概念，跳过。
+    2026-08-22 造物主谕「正常 NPC 不要站桩」：不再区分 alive/ambient，全员解锁。"""
     for v in PROFILES:
-        if not v.get("alive") or mode_of(v) == "stand":
+        if mode_of(v) == "stand":
             continue
         try:
             R.cmd("data merge entity %s {NoAI:0b}" % sel(v))
@@ -1235,16 +1358,27 @@ def heal_npcs():
                 print("[npc] heal err:", v["display"], e, flush=True)
                 R.s = None
             continue
+        # 接地自愈（2026-08-22）：以 spawn 为锚——高于锚 2+（爬屋顶/卡树冠）或低于锚 2.5+（掉坑）都拉回 spawn 地面
+        try:
+            sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
+            gy = ground_y(sx, sz, sy0)
+            if pos[1] - gy > 2 or pos[1] - gy < -2.5:
+                R.cmd("tp %s %d %d %d" % (sel(v), sx, gy, sz))
+                print("[npc] ground:", v["display"], "y %.1f -> %d" % (pos[1], gy), flush=True)
+        except Exception:
+            R.s = None
         if mode_of(v) == "stand":
             continue  # 人偶不会走动，无需拴绳
-        if v.get("alive"):
-            sync_villager_variant(v)
-            x, y, z = v["spawn"]
-            dx, dy, dz = pos[0] - x, pos[1] - y, pos[2] - z
-            if dx * dx + dy * dy + dz * dz > radius * radius:
-                R.cmd("tp %s %s %s %s" % (sel(v), x, y, z))
-                print("[npc] leash:", v["display"], "pulled home from", pos, flush=True)
-                feed_append({"kind": "event", "npc": v["display"], "text": "%s 离家太远，被世界看护拉回了广场" % v["display"]})
+        # 2026-08-22 造物主谕「限定活动范围」：全员自由生活（NoAI:0b）后不再区分 alive，
+        # 一律按铺子半径拴绳——radius 取每 NPC 档案 radius（默认 8 格，守住自家铺子/岗位）
+        sync_villager_variant(v)
+        x, y, z = v["spawn"]
+        vrad = v.get("radius", 8)
+        dx, dy, dz = pos[0] - x, pos[1] - y, pos[2] - z
+        if dx * dx + dy * dy + dz * dz > vrad * vrad:
+            R.cmd("tp %s %s %s %s" % (sel(v), x, y, z))
+            print("[npc] leash:", v["display"], "pulled home from", pos, flush=True)
+            feed_append({"kind": "event", "npc": v["display"], "text": "%s 离家太远，被世界看护拉回了铺子" % v["display"]})
 
 # ---------- 日志 tail ----------
 RE_CHAT = re.compile(r"<([A-Za-z0-9_\u4e00-\u9fff]{1,16})> (.+)")
@@ -1502,6 +1636,134 @@ def routine_loop():
             R.s = None
         time.sleep(CFG.get("routine_interval", 90))
 
+# ---------- 村庄守护 / 出生点安全区（2026-08-22 造物主谕：NPC 秒怪；初始城堡附近无怪） ----------
+# 铁匠/甲匠/守夜人/渔夫/阿宝是有战力设定的村民：发现怪物进村即秒杀，公屏喊话。
+# 白天低频清理（洞穴蜘蛛等），夜间每 8s 一轮。RCON 距离以 positioned 定原点。
+VILLAGE_CX, VILLAGE_CZ, VILLAGE_CY = 3094, -1338, 68   # 出生点（初始城堡）中心（level.dat SpawnX/Z）
+VILLAGE_RADIUS = 64                                    # 安全区半径（覆盖城堡建筑群）
+# 1.21 选择器不支持多 type=（报 Option 'type' isn't applicable here），改排除法：
+# 村庄半径内"非无害实体"一律当敌清除（= 敌对 + 未知 mod 生物）。
+SAFE_TYPES = ["minecraft:player", "minecraft:villager", "settlements:base_villager", "minecraft:item",
+              "minecraft:armor_stand", "minecraft:item_frame", "minecraft:glow_item_frame", "minecraft:painting",
+              "minecraft:cow", "minecraft:sheep", "minecraft:pig", "minecraft:chicken",
+              "minecraft:horse", "minecraft:donkey", "minecraft:mule", "minecraft:cat", "minecraft:wolf",
+              "minecraft:fox", "minecraft:rabbit", "minecraft:iron_golem", "minecraft:snow_golem",
+              "minecraft:salmon", "minecraft:cod", "minecraft:pufferfish", "minecraft:tropical_fish",
+              "minecraft:bat", "minecraft:parrot", "minecraft:llama", "minecraft:trader_llama",
+              "minecraft:wandering_trader", "minecraft:minecart", "minecraft:chest_minecart",
+              "minecraft:hopper_minecart", "minecraft:boat", "minecraft:arrow", "minecraft:trident",
+              "minecraft:snowball", "minecraft:experience_orb", "minecraft:marker", "minecraft:interaction",
+              "minecraft:leash_knot", "minecraft:area_effect_cloud", "minecraft:fishing_bobber",
+              "minecraft:egg", "minecraft:ender_pearl", "minecraft:lightning_bolt"]
+HOSTILE_SEL = ",".join("type=!" + t for t in SAFE_TYPES)
+GUARD_KEYS = ["zhujiu", "yueshan", "shilei", "langbo", "abao"]
+GUARD_LINES = {
+    "yueshan": ["哪来的杂碎，敢闯我的村子！", "铁锤在这，怪物退散！", "敢碰我的炉子，先问过这把锤！"],
+    "shilei": ["……找死。", "甲胄护村，怪物滚。", "铠甲不护外敌。"],
+    "zhujiu": ["夜里的规矩，我说了算。", "敢扰村民安眠？", "守夜人的刀，不挑时辰。"],
+    "langbo": ["湖里的鱼我护着，村里的地也是！", "滚回你的暗处去！", "老头我年轻时，一鱼叉一个！"],
+    "abao": ["阿宝力气大，揍你！", "不许欺负村里人！", "嘿！吃阿宝一拳！"],
+}
+
+def _pick_guard():
+    # 2026-08-22 修复：随机选在世守卫（旧版固定取第一个=守夜人，夜里清怪时他一人刷屏）
+    alive = [x for x in PROFILES if x.get("key") in GUARD_KEYS]
+    if not alive:
+        return None
+    return random.choice(alive)
+
+def village_watch_loop():
+    """村庄守护：扫描村庄半径内敌对生物 → 守卫喊话 + 秒杀。零 LLM。"""
+    try:
+        _locked_cmd("scoreboard objectives add npc_guard dummy")  # 幂等
+    except Exception:
+        pass
+    had = False
+    last_shout = 0.0  # 守卫喊话全局冷却（2026-08-22：防夜里清怪每轮喊一次刷屏）
+    while True:
+        try:
+            time.sleep(8)
+            sel = "@e[distance=..%d,%s]" % (VILLAGE_RADIUS, HOSTILE_SEL)
+            _locked_cmd("execute positioned %d %d %d store result score #g_mobs npc_guard if entity %s"
+                        % (VILLAGE_CX, VILLAGE_CY, VILLAGE_CZ, sel))
+            out = _locked_cmd("scoreboard players get #g_mobs npc_guard")
+            m = re.search(r"(\d+)", out or "")
+            n = int(m.group(1)) if m else 0
+            now = time.time()
+            if n > 0:
+                if not had and now - last_shout > 60:
+                    v = _pick_guard()
+                    if v:
+                        line = random.choice(GUARD_LINES.get(v["key"], GUARD_LINES["zhujiu"]))
+                        try:
+                            speak(v, line)
+                            feed_append({"kind": "say", "npc": v["display"], "text": line})
+                        except Exception:
+                            pass
+                    last_shout = now
+                _locked_cmd("execute positioned %d %d %d as %s run kill @s"
+                            % (VILLAGE_CX, VILLAGE_CY, VILLAGE_CZ, sel))
+                had = True
+            else:
+                had = False
+        except Exception as e:
+            print("[guard] err:", e, flush=True)
+            R.s = None
+            time.sleep(5)
+
+# ---------- 靠近搭话（2026-08-22 造物主谕：NPC 要像 RPG 一样跟玩家说话） ----------
+# 玩家走进 NPC 身边（≤3.5 格）→ NPC 蹦出今日想法/话题/问候（点对点 tellraw，不刷全村屏）。
+# 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
+PROX_RADIUS = 3.5
+PROX_COOLDOWN = 240
+EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+
+def _prox_lines(v):
+    pool = []
+    for t in (v.get("topics") or []):
+        pool.extend(t.get("lines", []))
+    if pool:
+        return random.choice(pool)
+    return v.get("greet") or "（朝你点点头）今天也辛苦啦。"
+
+def proximity_chat_loop():
+    last = {}  # (vkey, player) -> ts
+    while True:
+        try:
+            out = R.cmd("list")
+            m = re.search(r"online \(.*?\):\s*(.*)$", out or "", re.S)
+            names = [n.strip() for n in m.group(1).split(",") if n.strip()] if m else []
+            names = [n for n in names if n not in EXCLUDE_PROX]
+            if names:
+                for p in names:
+                    pp = player_pos(p)
+                    if not pp:
+                        continue
+                    for v in PROFILES:
+                        key = (v["key"], p)
+                        now = time.time()
+                        if now - last.get(key, 0) < PROX_COOLDOWN:
+                            continue
+                        vp = alive_pos(v)
+                        if not vp:
+                            continue
+                        dx, dy, dz = pp[0] - vp[0], pp[1] - vp[1], pp[2] - vp[2]
+                        if dx * dx + dy * dy + dz * dz <= PROX_RADIUS * PROX_RADIUS:
+                            last[key] = now
+                            line = _prox_lines(v)
+                            try:
+                                speak(v, line, to=p)
+                                feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
+                                             "npcPos": list(vp), "color": v.get("color", "white"),
+                                             "to": p, "text": line[:300], "via": "proximity"})
+                            except Exception as e:
+                                print("[prox] speak err:", e, flush=True)
+                                R.s = None
+        except Exception as e:
+            print("[prox] err:", e, flush=True)
+            R.s = None
+        time.sleep(8)
+
 if __name__ == "__main__":
     R.connect()
     threading.Thread(target=inbox_loop, daemon=True).start()
@@ -1509,6 +1771,9 @@ if __name__ == "__main__":
     threading.Thread(target=watch_offers, daemon=True).start()
     threading.Thread(target=prayer_loop, daemon=True).start()
     threading.Thread(target=god_reply_loop, daemon=True).start()
+    threading.Thread(target=village_watch_loop, daemon=True).start()
+    threading.Thread(target=proximity_chat_loop, daemon=True).start()
+    threading.Thread(target=interact_tail_loop, daemon=True).start()
     if AMBIENT:
         threading.Thread(target=ambient_diary_loop, daemon=True).start()
         print("[npc] ambient diary armed: %d villagers" % len(AMBIENT), flush=True)

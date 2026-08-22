@@ -97,7 +97,33 @@
      "line": "（收锤擦汗）炉火封了，明天赶早。"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 4,
+     "item": "iron_sword",
+     "count": 1,
+     "max": 3
+    },
+    {
+     "emerald": 4,
+     "item": "iron_pickaxe",
+     "count": 1,
+     "max": 3
+    },
+    {
+     "emerald": 2,
+     "item": "iron_ingot",
+     "count": 4,
+     "max": 10
+    },
+    {
+     "emerald": 5,
+     "item": "shield",
+     "count": 1,
+     "max": 2
+    }
+   ]
   },
   {
    "key": "shilei",
@@ -165,7 +191,33 @@
      "emerald": 5
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 8,
+     "item": "iron_chestplate",
+     "count": 1,
+     "max": 2
+    },
+    {
+     "emerald": 5,
+     "item": "iron_helmet",
+     "count": 1,
+     "max": 2
+    },
+    {
+     "emerald": 7,
+     "item": "iron_leggings",
+     "count": 1,
+     "max": 2
+    },
+    {
+     "emerald": 5,
+     "item": "iron_boots",
+     "count": 1,
+     "max": 2
+    }
+   ]
   },
   {
    "key": "mobai",
@@ -245,7 +297,27 @@
      "line": "书摊掌灯——夜里读几页再走，不亏的。"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "book",
+     "count": 2,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "paper",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 3,
+     "item": "bookshelf",
+     "count": 1,
+     "max": 6
+    }
+   ]
   },
   {
    "key": "yunji",
@@ -312,7 +384,27 @@
      "lore_atom": true
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "book",
+     "count": 3,
+     "max": 10
+    },
+    {
+     "emerald": 1,
+     "item": "paper",
+     "count": 6,
+     "max": 16
+    },
+    {
+     "emerald": 4,
+     "item": "bookshelf",
+     "count": 1,
+     "max": 5
+    }
+   ]
   },
   {
    "key": "fubo",
@@ -387,7 +479,33 @@
      "emerald": 1
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "bread",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "apple",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "string",
+     "count": 8,
+     "max": 12
+    }
+   ]
   },
   {
    "key": "fenglin",
@@ -494,7 +612,33 @@
     }
    ],
    "biome": "jungle",
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 8,
+     "item": "music_disc_cat",
+     "count": 1,
+     "max": 1
+    },
+    {
+     "emerald": 8,
+     "item": "music_disc_13",
+     "count": 1,
+     "max": 1
+    },
+    {
+     "emerald": 1,
+     "item": "paper",
+     "count": 8,
+     "max": 10
+    },
+    {
+     "emerald": 1,
+     "item": "ink_sac",
+     "count": 4,
+     "max": 8
+    }
+   ]
   },
   {
    "key": "zhujiu",
@@ -587,7 +731,27 @@
      "line": "（巡看四周）夜里的路，仔细脚下。"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 2,
+     "item": "lantern",
+     "count": 2,
+     "max": 8
+    },
+    {
+     "emerald": 4,
+     "item": "iron_sword",
+     "count": 1,
+     "max": 3
+    }
+   ]
   },
   {
    "key": "jingshui",
@@ -690,7 +854,27 @@
     }
    ],
    "biome": "swamp",
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 6,
+     "item": "golden_apple",
+     "count": 1,
+     "max": 3
+    },
+    {
+     "emerald": 2,
+     "item": "gold_ingot",
+     "count": 2,
+     "max": 6
+    },
+    {
+     "emerald": 3,
+     "item": "glowstone",
+     "count": 2,
+     "max": 6
+    }
+   ]
   },
   {
    "key": "market",
@@ -750,7 +934,33 @@
     }
    ],
    "biome": "plains",
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "bread",
+     "count": 8,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "bone_meal",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "string",
+     "count": 8,
+     "max": 12
+    }
+   ]
   },
   {
    "key": "hesu",
@@ -818,7 +1028,33 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "bread",
+     "count": 8,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "wheat_seeds",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "carrot",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "pumpkin",
+     "count": 1,
+     "max": 8
+    }
+   ]
   },
   {
    "key": "xiaoman",
@@ -883,7 +1119,27 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "white_wool",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "mutton",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "cooked_mutton",
+     "count": 4,
+     "max": 12
+    }
+   ]
   },
   {
    "key": "langbo",
@@ -949,7 +1205,33 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "cod",
+     "count": 4,
+     "max": 16
+    },
+    {
+     "emerald": 2,
+     "item": "cooked_cod",
+     "count": 4,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "salmon",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 3,
+     "item": "fishing_rod",
+     "count": 1,
+     "max": 4
+    }
+   ]
   },
   {
    "key": "moyan",
@@ -1017,7 +1299,27 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "book",
+     "count": 2,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "paper",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "ink_sac",
+     "count": 4,
+     "max": 10
+    }
+   ]
   },
   {
    "key": "abao",
@@ -1079,7 +1381,27 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "oak_log",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "cobblestone",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "stone",
+     "count": 16,
+     "max": 20
+    }
+   ]
   },
   {
    "key": "tongban",
@@ -1145,7 +1467,33 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "bread",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "bone_meal",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 1,
+     "item": "string",
+     "count": 8,
+     "max": 10
+    }
+   ]
   },
   {
    "key": "guild_lan",
@@ -1219,7 +1567,33 @@
      ]
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "bread",
+     "count": 8,
+     "max": 16
+    },
+    {
+     "emerald": 1,
+     "item": "apple",
+     "count": 4,
+     "max": 12
+    },
+    {
+     "emerald": 4,
+     "item": "iron_sword",
+     "count": 1,
+     "max": 3
+    }
+   ]
   },
   {
    "key": "adie",
@@ -1301,7 +1675,27 @@
      "line": "（打了个哈欠）"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 2,
+     "item": "lantern",
+     "count": 2,
+     "max": 10
+    },
+    {
+     "emerald": 3,
+     "item": "glowstone",
+     "count": 1,
+     "max": 6
+    }
+   ]
   },
   {
    "key": "suiniang",
@@ -1367,7 +1761,21 @@
      "line": "（收工回屋）"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 1,
+     "item": "candle",
+     "count": 4,
+     "max": 10
+    }
+   ]
   },
   {
    "key": "ahe",
@@ -1434,7 +1842,21 @@
      "line": "（靠着草垛歇脚看晚霞）"
     }
    ],
-   "carrier": "base_villager"
+   "carrier": "base_villager",
+   "shop": [
+    {
+     "emerald": 1,
+     "item": "torch",
+     "count": 16,
+     "max": 20
+    },
+    {
+     "emerald": 2,
+     "item": "lantern",
+     "count": 2,
+     "max": 10
+    }
+   ]
   }
  ]
 }

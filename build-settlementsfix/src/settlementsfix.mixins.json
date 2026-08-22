@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "dev.god.settlementsfix.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "VillagerBubbleServiceMixin",
+    "VillagerNameMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
