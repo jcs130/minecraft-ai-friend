@@ -25,5 +25,9 @@
     "claim_proximity": 8,
     "hunt_cap": 3,
     "tick_interval": 30
+  },
+  "prayer": {
+    "enabled": false,
+    "_comment": "2026-08-22 造物主定：村民自动祈愿停用（每祈愿=本地+云端两次 LLM 空转、神谕刷公屏）。经济供需（收购/委托）取代祈福通道成为村民思考载体。"
   }
 }

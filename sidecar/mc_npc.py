@@ -528,6 +528,62 @@ def _offer_recipe(item_id, count, emeralds, max_uses=1):
             'uses:0,maxUses:%d,discountCounter:0,specialPrice:0,demand:0,'
             'priceMultiplier:0.0f,rewardExp:0b}' % (item_id, count, emeralds, max_uses))
 
+# ---------- 技能书（2026-08-22 造物主谕：书商卖"怎么咏唱"的技能书） ----------
+# 书 = 实物化的 mc_spell_detail：标准咏唱词 + 等级门槛 + 用法。玩家买了读书 → 照词咏唱 →
+# 成功即 seal 掌握（与自主学习闭环一致）。内容照 A 仓 mc-spellbook.ts SPELLS_SEED 抄录。
+# 注意：单页合并排版（MC 1.21 SNBT 不认 \n/\u 转义，真实换行又截断 RCON；页面用｜分隔）。
+# 每本技能书条目占 NBT 较大，书商总柜台（3卖+2本+1收）需 < ~1300 字节，故每商限量 2 本。
+SKILLBOOKS = {
+    "home": {
+        "title": "归乡之卷", "author": "墨白", "emerald": 2,
+        "pages": [
+            "归乡之卷（空间系·Lv2）｜咏唱：归乡/回家/回基地/归途/回巢。私语念出即施，成功即掌握；远行前备一卷，迷途不慌。",
+        ],
+    },
+    "light": {
+        "title": "照明之卷", "author": "墨白", "emerald": 2,
+        "pages": [
+            "照明之卷（光系·Lv1）｜咏唱：照明/点火/火把/光亮/照亮/驱暗。黑暗中私语念出，掌心燃光；矿洞夜路皆可应急。",
+        ],
+    },
+    "feed": {
+        "title": "饱食之卷", "author": "墨白", "emerald": 3,
+        "pages": [
+            "饱食之卷（生命系·Lv2）｜咏唱：饱食/充饥/饱腹/不饿/充能。腹空时私语念出，饥意自消；神赐一餐，不如自己种一田。",
+        ],
+    },
+    "heal": {
+        "title": "圣愈之卷", "author": "云笈", "emerald": 4,
+        "pages": [
+            "圣愈之卷（生命系·Lv5）｜咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈。负伤时私语念出，伤口愈合；生死关头的保命卷。",
+        ],
+    },
+    "tp": {
+        "title": "传送之卷", "author": "云笈", "emerald": 4,
+        "pages": [
+            "传送之卷（空间系·Lv2）｜咏唱：传送/瞬移/闪现/撕裂虚空/空间跳跃/跃迁。报方向距离（如「传送十格东」）念出即至。",
+        ],
+    },
+    "give": {
+        "title": "造物之卷", "author": "云笈", "emerald": 4,
+        "pages": [
+            "造物之卷（创造系·Lv2）｜咏唱：造物/赐予/给予/赐下/给我/变出。报所需之物（如「给我个火把」）私语念出，神恩按白名单施予。",
+        ],
+    },
+}
+
+def _snbt_esc(t):
+    """SNBT 字符串转义：MC 1.21 只认 \\" \\\\ \\' \\n（不认 \\uXXXX）；中文原样 UTF-8。
+    换行必须转 \\n 序列（真实换行会截断 RCON 命令）。"""
+    return t.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+def _skillbook_nbt(sb):
+    """1.21 组件格式：pages 是 JSON 编码 RawText 字符串数组（纯 tag 写法会被静默丢弃）。"""
+    pages = ",".join('"%s"' % _snbt_esc(json.dumps({"text": p}, ensure_ascii=False)) for p in sb["pages"])
+    return ('{id:"minecraft:written_book",count:1,components:'
+            '{"minecraft:written_book_content":{title:"%s",author:"%s",pages:[%s]}}}'
+            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages))
+
 def _recipes_nbt(v):
     """村民柜台：当日未完成委托 + 档案 shop 民生柜台。
     market_agg=True 的「掌柜」聚合全村全部未完成委托（含盔甲架人偶 NPC 的——人偶无 GUI，
@@ -542,6 +598,15 @@ def _recipes_nbt(v):
         if q and not q.get("done"):
             recipes.append(_offer_recipe(q["item"], q["count"], max(1, q.get("emerald", 1))))
     for s in v.get("shop", []):
+        if s.get("skillbook"):
+            sb = SKILLBOOKS.get(s["skillbook"])
+            if not sb:
+                continue
+            sell = _skillbook_nbt(sb)
+            recipes.append('{buy:{id:"minecraft:emerald",count:%d},sell:%s,uses:0,maxUses:%d,'
+                           'discountCounter:0,specialPrice:0,demand:0,priceMultiplier:0.0f,rewardExp:0b}' % (
+                               int(s.get("emerald", sb.get("emerald", 3))), sell, int(s.get("max", 1))))
+            continue
         recipes.append('{buy:{id:"minecraft:emerald",count:%d},sell:{id:"minecraft:%s",count:%d},'
                        'uses:0,maxUses:%d,discountCounter:0,specialPrice:0,demand:0,'
                        'priceMultiplier:0.0f,rewardExp:0b}' % (
@@ -1033,7 +1098,13 @@ def god_reply_loop():
                         reply = (rec.get("reply") or "").strip()
                         if reply:
                             print("[god-reply] %s 收神谕：%s" % (v["display"], reply), flush=True)
-                            speak(v, "%s（仰头望天，喃喃道）%s" % (v["display"], reply))
+                            # 2026-08-22 公屏清净：村民自动祈愿的神谕无祈愿者（rec 无 who）——只入编年史，
+                            # 不再 speak 刷全村。若未来恢复祈愿且带祈愿者（who/to），仍点对点送达。
+                            who = rec.get("who") or rec.get("to") or rec.get("speaker")
+                            if who:
+                                speak(v, "%s（仰头望天，喃喃道）%s" % (v["display"], reply), to=who)
+                            else:
+                                chronicle_append("神谕｜%s 得女神示：%s" % (v["display"], reply))
         except Exception as e:
             print("[god-reply] err:", e, flush=True)
         time.sleep(GOD_REPLY_PERIOD)
