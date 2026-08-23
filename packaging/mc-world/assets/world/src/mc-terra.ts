@@ -123,10 +123,25 @@ export function createTerra(config: Config, deps: TerraDeps): TerraHandle {
       if (fixedThisRound >= config.maxFixesPerPoll) break
       if (f.type === 'open_shaft') {
         try {
-          // setblock keep：目标位非 air 时拒绝放置——防误封玩家建筑/矿道入口
+          // 区块未加载时 setblock 静默失败（"That position is not loaded"），
+          // 老版只匹配 could not/unable → 把没填上的坑误标 fixed（2026-08-23 实测 200 坑全假填）。
+          // 修复：先 forceload 该 chunk 再封盖；只认 "Changed the block" 为成功；未加载/其他异常留待下轮重试。
+          const cx = f.x >> 4, cz = f.z >> 4
+          await rcon.send(`forceload add ${cx} ${cz}`).catch(() => {})
           const out = await rcon.send(`setblock ${f.x} ${f.y} ${f.z} minecraft:cobblestone keep`)
-          if (/could not|unable/i.test(out)) {
+          await rcon.send(`forceload remove ${cx} ${cz}`).catch(() => {})
+          if (/not loaded/i.test(out)) {
+            f.status = 'pending'
+            f.evidence = `verify: ${out.slice(0, 80)}`
+            continue
+          }
+          if (/could not|unable|cannot/i.test(out)) {
             f.status = 'false_positive'
+            f.evidence = `verify: ${out.slice(0, 80)}`
+            continue
+          }
+          if (!/Changed the block/i.test(out)) {
+            f.status = 'pending'
             f.evidence = `verify: ${out.slice(0, 80)}`
             continue
           }
