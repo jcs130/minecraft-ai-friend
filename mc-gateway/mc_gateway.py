@@ -711,11 +711,13 @@ def system_profile(row):
         "permissions": perms or system_tier_perms(lv),
         "personality": row["personality"],
         # 系统=世界内 mineflayer 客户端实体的运行时状态（2026-08-23 拍板）
-        "bot_username": row.get("bot_username"),
-        "owner_mc_uuid": row.get("owner_mc_uuid"),
-        "entity_state": row.get("entity_state") or "idle",
-        "follow_mode": row.get("follow_mode") or "pet",
-        "last_sync_at": row.get("last_sync_at"),
+        # 注：db()/db_world() 均设 row_factory=sqlite3.Row，只支持下标访问、无 .get()，
+        # 这里统一用下标 + keys() 容错（companions 老行可能缺这些新列）。
+        "bot_username": row["bot_username"] if "bot_username" in row.keys() else None,
+        "owner_mc_uuid": row["owner_mc_uuid"] if "owner_mc_uuid" in row.keys() else None,
+        "entity_state": (row["entity_state"] if "entity_state" in row.keys() else None) or "idle",
+        "follow_mode": (row["follow_mode"] if "follow_mode" in row.keys() else None) or "pet",
+        "last_sync_at": row["last_sync_at"] if "last_sync_at" in row.keys() else None,
     }
 
 def push_system_command(user_id, ctype, payload=None):
@@ -868,45 +870,6 @@ class Handler(BaseHTTPRequestHandler):
                     with db() as c:
                         comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                     return json_write(self, 200, system_profile(comp))
-                if p == "/api/guardian/bind":
-                    # 守护天使绑定（2026-08-23 造物主拍板）：客户端在**新玩家注册时**调本接口，
-                    # 由服务端生成/分配一个守护天使（sys_<owner>）并**认主登记**。
-                    # 关键：认主写进【世界库 world.db 的 guardian_angels】，女神 mc-god.ts 的
-                    # guardianResolve(sys_<owner>) 在此识别守护天使、代主人处理祈愿/问事/CLI/唱咒。
-                    # 客户端不用改逻辑——注册后调一次即可；bot_username 缺省= sys_<登录名>。
-                    user = require_user(self.headers)
-                    if not user: return json_write(self, 401, {"error": "unauthorized"})
-                    b = read_body(self)
-                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
-                    owner_uuid = (b.get("owner_uuid") or user.get("mc_uuid") or "").strip()[:36] or None
-                    state = (b.get("state") or "online").strip()[:12] or "online"
-                    ip = client_ip(self.headers)
-                    now_ms = int(time.time() * 1000)
-                    # 1) 世界库认主（女神凭此认主）——先保证表存在，再 upsert
-                    with db_world() as cw:
-                        ensure_guardian_table(cw)
-                        cw.execute("INSERT INTO guardian_angels(bot_username, owner_username, owner_uuid, state, bound_at, updated_at) "
-                                   "VALUES(?,?,?,?,?,?) "
-                                   "ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, "
-                                   "owner_uuid=excluded.owner_uuid, state=excluded.state, updated_at=excluded.updated_at",
-                                   (bot_username, user["username"], owner_uuid, state, now_ms, now_ms))
-                    # 2) 网关库 companions 同步一份（保持伴侣=守护天使地基一致，供客户端查 state）
-                    with db() as c:
-                        old = c.execute("SELECT cname,level,xp,skills,permissions,auto_assigned,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
-                        n = now_iso()
-                        c.execute("INSERT INTO companions(user_id,cname,enabled,auto_assigned,bot_username,created_at,updated_at) "
-                                  "VALUES(?,?,1,1,?,?,?) "
-                                  "ON CONFLICT(user_id) DO UPDATE SET enabled=1, auto_assigned=1, "
-                                  "bot_username=COALESCE(companions.bot_username, excluded.bot_username), updated_at=excluded.updated_at",
-                                  (user["id"], "守护天使", bot_username, n, n))
-                        audit(c, "user", user["id"], user["username"], ip, "guardian_bind", "guardian", user["id"],
-                              old_data=(dict(old) if old else None),
-                              new_data={"bot_username": bot_username, "owner_username": user["username"], "owner_uuid": owner_uuid, "state": state})
-                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
-                    profile = system_profile(comp) if comp else {"bot_username": bot_username, "owner_username": user["username"], "state": state}
-                    profile["guardian"] = {"bot_username": bot_username, "owner_username": user["username"],
-                                           "owner_uuid": owner_uuid, "state": state}
-                    return json_write(self, 200, profile)
                 if p == "/api/companion/commands":
                     # 客户端轮询「系统指令」队列（auto-assign / level-up / unlock-skill / permission-grant）。
                     # 服务端是权威：客户端主动拉取待处理指令，处理完回执 ack。
@@ -968,6 +931,47 @@ class Handler(BaseHTTPRequestHandler):
                         rows = c.execute("SELECT u.username,u.nickname,r.name AS role,u.created_at,u.last_login,u.status FROM users u JOIN roles r ON r.id=u.role_id ORDER BY u.id").fetchall()
                     return json_write(self, 200, {"users": [dict(r) for r in rows], "online": online_list()})
             elif method == "POST":
+                if p == "/api/guardian/bind":
+                    # 守护天使绑定（2026-08-23 造物主拍板）：客户端在**新玩家注册时**调本接口，
+                    # 由服务端生成/分配一个守护天使（sys_<owner>）并**认主登记**。
+                    # 关键：认主写进【世界库 world.db 的 guardian_angels】，女神 mc-god.ts 的
+                    # guardianResolve(sys_<owner>) 在此识别守护天使、代主人处理祈愿/问事/CLI/唱咒。
+                    # 客户端不用改逻辑——注册后调一次即可；bot_username 缺省= sys_<登录名>。
+                    # 契约：POST /api/guardian/bind（认主是写操作，走 POST，勿用 GET）。
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
+                    # user 是 sqlite3.Row（require_user 返回），只支持下标，无 .get()；用 keys() 容错
+                    owner_uuid = (b.get("owner_uuid") or (user["mc_uuid"] if "mc_uuid" in user.keys() else None) or "").strip()[:36] or None
+                    state = (b.get("state") or "online").strip()[:12] or "online"
+                    ip = client_ip(self.headers)
+                    now_ms = int(time.time() * 1000)
+                    # 1) 世界库认主（女神凭此认主）——先保证表存在，再 upsert
+                    with db_world() as cw:
+                        ensure_guardian_table(cw)
+                        cw.execute("INSERT INTO guardian_angels(bot_username, owner_username, owner_uuid, state, bound_at, updated_at) "
+                                   "VALUES(?,?,?,?,?,?) "
+                                   "ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, "
+                                   "owner_uuid=excluded.owner_uuid, state=excluded.state, updated_at=excluded.updated_at",
+                                   (bot_username, user["username"], owner_uuid, state, now_ms, now_ms))
+                    # 2) 网关库 companions 同步一份（保持伴侣=守护天使地基一致，供客户端查 state）
+                    with db() as c:
+                        old = c.execute("SELECT cname,level,xp,skills,permissions,auto_assigned,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        n = now_iso()
+                        c.execute("INSERT INTO companions(user_id,cname,enabled,auto_assigned,bot_username,created_at,updated_at) "
+                                  "VALUES(?,?,1,1,?,?,?) "
+                                  "ON CONFLICT(user_id) DO UPDATE SET enabled=1, auto_assigned=1, "
+                                  "bot_username=COALESCE(companions.bot_username, excluded.bot_username), updated_at=excluded.updated_at",
+                                  (user["id"], "守护天使", bot_username, n, n))
+                        audit(c, "user", user["id"], user["username"], ip, "guardian_bind", "guardian", user["id"],
+                              old_data=(dict(old) if old else None),
+                              new_data={"bot_username": bot_username, "owner_username": user["username"], "owner_uuid": owner_uuid, "state": state})
+                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                    profile = system_profile(comp) if comp else {"bot_username": bot_username, "owner_username": user["username"], "state": state}
+                    profile["guardian"] = {"bot_username": bot_username, "owner_username": user["username"],
+                                           "owner_uuid": owner_uuid, "state": state}
+                    return json_write(self, 200, profile)
                 if p == "/api/auth/register":
                     b = read_body(self)
                     username = (b.get("username") or "").strip()
