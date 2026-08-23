@@ -987,6 +987,34 @@
       "subtitle": "御风而起，扶摇直上"
     },
     {
+      "id": "fireball",
+      "layer": "effect",
+      "name": "火球术",
+      "words": [
+        "火球",
+        "火球术",
+        "烈焰弹",
+        "fireball"
+      ],
+      "cost": {
+        "mana": 30,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 5,
+      "commands": [
+        "summon minecraft:small_fireball {px} {py+1} {pz} {Motion:[{vx},{vy},{vz}]}"
+      ],
+      "reply": "烈焰在指尖凝聚，火球呼啸而出！",
+      "particles": [
+        "minecraft:flame {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40",
+        "minecraft:smoke {px} {py+1} {pz} 0.3 0.3 0.3 0.02 20"
+      ],
+      "sounds": [
+        "minecraft:entity.blaze.shoot"
+      ]
+    },
+    {
       "id": "summon_wolf",
       "layer": "effect",
       "name": "通灵契约",

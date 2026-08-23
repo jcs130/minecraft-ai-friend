@@ -1552,8 +1552,28 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       }
     }
 
+    // 火球术方向（2026-08-23 造物主反馈「萌萌语音火球没反应」→ 界中本无此术，现补齐）：
+    // 命令含 {vx}/{vy}/{vz} 时，按施法者视线（yaw/pitch）算发射向量。占位符以字符串传入
+    // （renderCommand 对 number 会 Math.round，会抹掉小数向量，字符串原样保留）。
+    let vx = '0.00', vy = '0.00', vz = '0.00'
+    if (atom.commands.some((c) => c.includes('{vx}'))) {
+      const ent = bot.players[username]?.entity
+      const speed = 1.6
+      let dx = 1, dy = 0, dz = 0
+      if (ent && typeof ent.yaw === 'number') {
+        const yaw = (ent.yaw * Math.PI) / 180
+        const pitch = ((ent.pitch ?? 0) * Math.PI) / 180
+        dx = -Math.sin(yaw) * Math.cos(pitch)
+        dy = -Math.sin(pitch)
+        dz = Math.cos(yaw) * Math.cos(pitch)
+      }
+      vx = (dx * speed).toFixed(2)
+      vy = (dy * speed).toFixed(2)
+      vz = (dz * speed).toFixed(2)
+    }
+
     const vars: Record<string, number | string> = {
-      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance,
+      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, vx, vy, vz,
     }
 
     // 通灵契约（2026-08-18）：命令含 {puuid} 或带 ownLimit 时，取施法者 UUID（I;a,b,c,d 格式）

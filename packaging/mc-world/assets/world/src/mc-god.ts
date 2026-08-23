@@ -46,6 +46,26 @@ const GUARD_NAMES = ['桐人', '鸣人', '爱德华']
 /** 守卫桥账本目录（B 仓 data/；跨仓路径经 env 注入，默认空=不读账本，仅靠 magic-state 判定）。 */
 const GUARD_LEDGER_DIR = process.env.GUARD_LEDGER_DIR || ''
 
+// 神使手札（状态书）通道（2026-08-23 造物主谕「所有人都有一本，无法丢弃无法放入箱子」）：
+//  - settlementsfix mod 右键手札 → 写 status-requests.jsonl {ts, speaker}；
+//  - 本进程 tail 消费 → 组装状态面板（shapeStatus 同款）→ whisper 回执；
+//  - 上线发书：playerJoined 时 give 一本（custom_data.statusbook=true），已发名单持久化。
+const STATUS_REQ = process.env.STATUS_REQ || `${DATA_DIR}/status-requests.jsonl`
+const STATUS_GIVEN = process.env.STATUS_GIVEN || `${DATA_DIR}/statusbook-given.json`
+/** SNBT 字符串转义（与 mc_npc.py _snbt_esc 一致）：反斜杠、双引号、换行。 */
+function snbtEsc(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
+}
+/** 神使手札 NBT（1.21 组件格式；lore 教用法，右键=查状态不打开书）。 */
+function statusBookNbt(): string {
+  const pages = [
+    '神使手札\n\n右键我，即可查看你的当前状态：等级、魔力、生命、饱食、出生天赋、已学技艺。\n—— 天神',
+    '无法丢弃，无法放入箱子。\n它只属于你。\n\n聊天框打 cli status 或 /mycli status 也能看。',
+  ].map((p) => `"${snbtEsc(JSON.stringify({ text: p }))}"`).join(',')
+  const lore = `"${snbtEsc(JSON.stringify({ text: '右键=查看状态（不打开书）', color: 'dark_gray', italic: true }))}"`
+  return `minecraft:written_book[minecraft:written_book_content={title:"神使手札",author:"天神",pages:[${pages}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"神使手札","color":"gold"}',minecraft:lore=[${lore}]]`
+}
+
 /**
  * mc-god —— 慢路径女神（世界守护者，QwenPaw Agent mc-god）+ 女神化身管理。
  *
@@ -423,8 +443,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
   // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
+  // 守护天使 CC（2026-08-23 客户端守护登记）：女神对「主人」递话/递事件时，
+  // 同步 whisper 一份给其守护天使(sys_<owner>)——守护收到后本地 TTS 播报（按设计不做游戏内语音）。
+  // 自守卫：主人无守护 / 守护离线 / 目标即守护本身 → 静默跳过。
+  const ccGuardian = (owner: string, text: string) => {
+    try {
+      const bot = getBot()
+      if (!bot?.entity) return
+      const g = worlddb.guardianByOwner(owner)
+      if (!g || g.botUsername === owner) return
+      if (!(bot as any).players?.[g.botUsername]) return
+      bot.whisper(g.botUsername, `[守护] ${text}`)
+    } catch { /* CC 失败不影响主送达 */ }
+  }
   const courier = (player: string, text: string) => {
     try { getBot().whisper(player, `[信使] ${text}`) } catch { /* bot not ready */ }
+    ccGuardian(player, text)
   }
 
   // ── 供奉收执（RCON 权威复核 + /clear 收走，贡品即从行囊消失）──────
@@ -614,38 +648,23 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const t = transmigrators.getByUsername(username)
     const name = t?.name ?? username
     const backstory = t?.backstory?.split('\n')[0]?.slice(0, 60) ?? ''
-    // 2026-08-23 咒语框架分级分发（造物主谕）：AI 穿越者全量告知（看不了书）；真人随机 2-3 个公共前缀，其余藏技能书。
-    const prefixHint = t
-      ? magic.chantPrefixes(true).join(' / ')
-      : (() => {
-          const pool = magic.chantPrefixes(false)
-          for (let i = pool.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1))
-            ;[pool[i], pool[j]] = [pool[j], pool[i]]
-          }
-          return pool.slice(0, 3).join(' / ')
-        })()
+    // 2026-08-23 造物主谕「新手引导短点」：不再塞咒语框架前缀清单，前缀留在技能书与 /myhelp 里。
+    // 2026-08-23 造物主谕「新手引导太长了，短点；主要就是技能怎么用，尤其是 myhelp mycli」：
+    // 背景一句带过，重心放在「技能怎么用 + 两条命令」上，输出控制在 80 字内。
     const prompt = [
       `你是这个方块世界的女神（游戏名 ${bot.username}）。`,
-      `一位名叫「${name}」的旅人刚刚醒来、降临此界，这是他第一次踏足这片土地。`,
+      `一位名叫「${name}」的旅人刚刚醒来、降临此界。`,
       '',
-      '【世界背景 · 千灯纪】（你介绍时的依据，可精简转述）：',
-      '- 他刚从一个关于现实的梦里醒来，躺在一片方块大陆上，忘了来处。',
-      '- 这是一个没有魔王的世界——世界的病不是灾难，是荒芜。',
-      '- 创世的第一愿，不是「要有光」，是「不再孤单」：女神散作万盏灯，照亮这方世界。',
-      '- 灯罩是世界，灯芯是摇光（灵魂），点灯的是朋友。',
-      '- 先他醒来的住民（史蒂夫、艾利克斯等）是同伴，不是老师、不是仆人。',
-      '- 白天安全、夜晚危险；饿了要吃、暗了要点火。',
-      '- 古老的力量藏在「咏唱」里——念出正确的词，世界会回应，住民叫它「魔法」。',
-      backstory ? `【他的前世】${backstory}` : '【他的前世】（一片空白，他忘了来处）',
+      '【背景】（一句带过即可）：这是没有魔王、只有荒芜的世界；魔法藏在咏唱里，念对词世界就回应。',
+      backstory ? `【他的前世】${backstory}` : '【他的前世】一片空白，他忘了来处。',
       '',
-      '【你要做】（以女神口吻私聊他，一段话说完）：',
-      '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
-      '2. 引导他自报家门：问他叫什么、记得自己是谁、此刻想做什么（不必长篇，一句即可）。',
-      '3. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
-      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；查手册说「help」或「/myhelp」（真人可打斜杠 /myhelp、/mycli 是真命令，复制粘贴就能用；裸 cli/help 不打斜杠也行）。',
+      '【你要做】（私聊一段话，短！重点教他怎么用技能）：',
+      '1. 一句欢迎（点明他刚醒来、这是千灯纪）。',
+      '2. 教技能用法：已学的技能私语 /msg Goddess 念咒语名（归乡/圣愈/造物/照明/传送…）即可施放；不会的用法术名祈愿或找书商。',
+      '3. 教命令：打 /myhelp 看帮助，/mycli status 查状态、/mycli spells 查法术表——真人直接复制粘贴就能用，裸 cli/help 也行。',
+      '4. 一句提示：作为穿越的补偿，稍后公屏宣读「出生天赋」，你喊「我选 <法术名>」即可选定。',
       '',
-      '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
+      '要求：大白话、简短，60-90 字，纯文本，不要列表符号、不要 JSON。',
     ].join('\n')
     try {
       const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
@@ -667,6 +686,86 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
     }
   }
+
+  // ── 神使手札（状态书）：上线发书 + 右键刷新状态（2026-08-23）────────
+  // 所有人一本、无法丢弃/入箱（服务端 settlementsfix mod 拦）。右键手札 → mod 写
+  // status-requests.jsonl → 本函数尾随消费 → whisper 状态面板（shapeStatus 同款）。
+  const statusGiven: Set<string> = new Set()
+  try {
+    const arr = JSON.parse(readFileSync(STATUS_GIVEN, 'utf-8'))
+    if (Array.isArray(arr)) for (const u of arr) statusGiven.add(String(u))
+  } catch { /* 首次运行 */ }
+  const persistStatusGiven = (): void => {
+    try {
+      mkdirSync(dirname(STATUS_GIVEN), { recursive: true })
+      writeFileSync(STATUS_GIVEN, JSON.stringify([...statusGiven]))
+    } catch { /* best effort */ }
+  }
+  /** 上线发书：非 sys_ 且未发过 → give 一本（custom_data.statusbook=true）。 */
+  async function ensureStatusBook(username: string): Promise<void> {
+    if (username.startsWith('sys_') || statusGiven.has(username)) return
+    const r = await rcon.send(`give ${username} ${statusBookNbt()} 1`).catch(() => '')
+    // give 成功（玩家在线）才记名单；离线给不了，等下次上线再补。
+    if (r && /gave|已给予|Given/i.test(r)) {
+      statusGiven.add(username)
+      persistStatusGiven()
+      log(`statusbook given to ${username}`)
+    }
+  }
+  let statusTail = 0
+  let statusSeen = new Set<string>()
+  try {
+    const lines = existsSync(STATUS_REQ) ? readFileSync(STATUS_REQ, 'utf-8').split('\n').filter(Boolean) : []
+    for (const ln of lines) {
+      try { statusSeen.add(String(JSON.parse(ln).ts)) } catch { /* skip */ }
+    }
+  } catch { /* 首次运行 */ }
+  /** 尾随 status-requests.jsonl：每条请求 → 组装状态面板 → whisper 回执。 */
+  async function statusLoop(): Promise<void> {
+    try {
+      if (!existsSync(STATUS_REQ)) return
+      const lines = readFileSync(STATUS_REQ, 'utf-8').split('\n').filter(Boolean)
+      if (lines.length < statusTail) statusTail = 0
+      for (let i = statusTail; i < lines.length; i++) {
+        const ln = lines[i]
+        let rec: { ts?: string | number; speaker?: string } = {}
+        try { rec = JSON.parse(ln) } catch { continue }
+        const key = String(rec.ts ?? `${i}:${rec.speaker}`)
+        if (statusSeen.has(key)) continue
+        statusSeen.add(key)
+        const speaker = (rec.speaker ?? '').trim()
+        if (!speaker) continue
+        try {
+          const view = magic.getState(speaker)
+          const innateName = magic.getInnate(speaker)
+          const { panel } = shapeStatus(view, innateName)
+          const bot = getBot()
+          for (const line of panel.split('\n')) {
+            try { bot.whisper(speaker, `[神使手札] ${line}`) } catch { /* bot not ready */ }
+          }
+          try { worlddb.chronicleRecord('statusbook', speaker, {}) } catch { /* best effort */ }
+          log(`statusbook served to ${speaker}`)
+        } catch (err) {
+          log(`statusbook failed for ${speaker}: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      statusTail = lines.length
+    } catch (err) {
+      log(`statusLoop error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  setInterval(() => { statusLoop().catch(() => {}) }, 5000)
+  // 进程启动即补一轮（服务重启后把重启前积压的请求也回执掉）。
+  setTimeout(() => { statusLoop().catch(() => {}) }, 3000)
+  // 启动补发：已在线的玩家也发一本（不等下次重登）。
+  setTimeout(() => {
+    const bot = getBot()
+    if (!bot?.players) return
+    for (const name of Object.keys(bot.players)) {
+      if (name === bot.username || name.startsWith('sys_')) continue
+      ensureStatusBook(name).catch(() => {})
+    }
+  }, 10_000)
 
   async function answerQuestion(username: string, question: string, replyTarget?: string): Promise<void> {
     const bot = getBot()
@@ -741,6 +840,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         })
       const trimmedAnswer = ans.text.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(target, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
+      if (target === username) ccGuardian(username, trimmedAnswer)
       worlddb.chronicleRecord('ask', username, { question: question.slice(0, 60), via: 'goddess' })
       log(`question from ${username} answered: ${question.slice(0, 50)} → ${trimmedAnswer.slice(0, 60)}`)
     } catch (err) {
@@ -862,7 +962,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const t: Transmigrator | null = transmigrators.getByUsername(caller)
     const disp = t?.name ?? caller
     const summon = {
-      to: guard,
+      to: resolveLogin(guard),
       from: caller,
       display: disp,
       task,
@@ -889,6 +989,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** 显示名→登录名：守卫走映射；其余（真人玩家已用登录名、AI 穿越者）原样返回。 */
   function resolveLogin(name: string): string {
     return GUARD_LOGIN[name.trim()] ?? name.trim()
+  }
+  const GUARD_LOGIN_SET = new Set(Object.values(GUARD_LOGIN))
+  /** 是否守卫（中文显示名或英文登录名都算）。守卫桥通道文件写英文登录名，此处兼容两种写法。 */
+  function isGuardKey(name: string): boolean {
+    const k = name.trim()
+    return GUARD_NAMES.includes(k) || GUARD_LOGIN_SET.has(k)
   }
 
   // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
@@ -934,7 +1040,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const disp = t?.name ?? username
       try {
         appendFileSync(GODDESS_ORDERS, JSON.stringify({
-          to: guard,
+          to: resolveLogin(guard),
           from: username,
           display: disp,
           ts: Date.now(),
@@ -1210,7 +1316,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (now - lastGuardWatch < 60_000) return
       lastGuardWatch = now
       for (const name of GUARD_NAMES) {
-        const ms = magic.getState(name) as any
+        // magic-state 键 = 登录名（英文 Kirito/Naruto）；显示名只用于叙事（chronicle/log）。
+        const ms = magic.getState(resolveLogin(name)) as any
         if (!ms) continue
         const since = lastOrder.get(name) ?? 0
         if (now - since < 5 * 60_000) continue
@@ -1220,7 +1327,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const skills = (ms.learned ?? []).map((id: string) => magic.getAtomById(id)?.name).filter(Boolean).slice(0, 6).join('、')
         const text = `${reason}。${skills ? `你已掌握：${skills}——需要时咏唱或祈愿即可。` : '需要帮助时祈愿即可。'}`
         try {
-          appendFileSync(GODDESS_ORDERS, JSON.stringify({ to: name, text, ts: now }) + '\n', 'utf-8')
+          appendFileSync(GODDESS_ORDERS, JSON.stringify({ to: resolveLogin(name), text, ts: now }) + '\n', 'utf-8')
           worlddb.chronicleRecord('guard-order', name, { reason: reason.slice(0, 80), text: text.slice(0, 120) })
           log(`goddess order → ${name}: ${text.slice(0, 80)}`)
         } catch (err) {
@@ -1245,15 +1352,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         appendGodReply(villagerKey, text)
         // 2026-08-23 守卫假玩家：神谕双写 chant-reply.jsonl（mc_npc 的 god_reply_loop
         // 读后即删 god-reply.jsonl，守卫桥来不及读；双写保证守卫桥必达）。
-        if (GUARD_NAMES.includes(villagerKey)) appendChantReply(villagerKey, text, 'prayer')
+        if (isGuardKey(villagerKey)) appendChantReply(resolveLogin(villagerKey), text, 'prayer')
       } else {
         try {
           bot.whisper(username, `[女神] ${senderName}，${text}`)
         } catch {
           /* bot not ready */
         }
+        // 守护天使 CC（2026-08-23）：神谕同步抄送主人绑定的守护天使，供其本地 TTS 播报。
+        ccGuardian(username, text)
         // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
-        if (GUARD_NAMES.includes(username)) appendChantReply(username, text, 'prayer')
+        if (isGuardKey(username)) appendChantReply(resolveLogin(username), text, 'prayer')
       }
     }
 
@@ -2259,9 +2368,19 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         // 「魂」不露身体（2026-08-23 归属定：vanilla 隐身效果，服务端权威，零 Java）。
         // infinite 0 true = 无限时长 / 等级I / 藏粒子。死亡会清效果，但魂不涉险，仅登录时施加即可。
         rcon.send(`effect give ${username} minecraft:invisibility infinite 0 true`).catch(() => {})
+        // 2026-08-23 造物主谕「检测到 sys 上线之后可以直接通知 /myhelp /mycli 的使用方法」：
+        // 只对守护天使本身发一次就位提示（回执=守护天使，主体仍按主人）。
+        try {
+          const g = worlddb.guardianResolve(username)
+          const master = g?.ownerUsername ?? username.replace(/^sys_/, '')
+          bot.whisper(username, `[女神] 守护天使已就位（守护 ${master}）。代主人施法：/mycli guardian-cast <法术名>；查主人状态：/mycli status；法术表：/mycli spells；总帮助：/myhelp。`)
+        } catch { /* bot not ready */ }
         return
       }
       worlddb.chronicleRecord('presence', username, { event: 'join' })
+      // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
+      // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
+      ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
@@ -2485,6 +2604,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         return
       }
       if (!explicitPrayer && magic.sniffChant(body)) {
+        // 2026-08-23 造物主谕「sys 只能通过 mycli 施法」：守护天使直接念咒不代施——
+        // 一切代施走 CLI guardian-cast（主体仍是主人，三闸：已学/等级/魔力，同快路径）。
+        if (isGuardian) {
+          try {
+            bot.whisper(username, `[信使] 守护天使代主人施法请用：/mycli guardian-cast <法术名>（查表：/mycli spells）。直接念咒由主人自己来。`)
+          } catch { /* not ready */ }
+          return
+        }
         resolveChant(OWNER, body)
           .then((reply) => {
             log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body}`)

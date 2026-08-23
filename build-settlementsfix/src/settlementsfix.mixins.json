@@ -8,7 +8,8 @@
     "VillagerNameMixin",
     "GuardianAngelInvisibilityMixin",
     "GuardianAngelInvisibilityListedMixin",
-    "WrittenBookItemMixin"
+    "WrittenBookItemMixin",
+    "SlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -200,7 +200,9 @@ const snapshotTimer = setInterval(() => {
       if (!e || !e.position) continue
       const ent = e.entity
       const type = String(e.type ?? ent?.type ?? '')
-      const mobType = String(e.mobType ?? ent?.mobType ?? '')
+      // 2026-08-23：mobType getter 每次访问都打弃用 Trace（2.7GB err 日志源头），
+      // 改走 displayName（官方推荐替代，同值）。统一小写以匹配 MOB_RE 与 NPC_RE。
+      const mobType = String(e.displayName ?? ent?.displayName ?? '').toLowerCase()
       const kind = String(e.kind ?? ent?.kind ?? '')
       const name = String(e.username ?? ent?.name ?? '')
       const isPlayer = type === 'player' || !!name

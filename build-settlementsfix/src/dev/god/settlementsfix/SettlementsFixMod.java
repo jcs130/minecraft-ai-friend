@@ -58,6 +58,11 @@ public class SettlementsFixMod {
             "settlementsfix.spellFile",
             "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\deepseek-harness\\scratch-plugin\\data\\spell-requests.jsonl"));
 
+    /** 状态书（神使手札）请求：右键 → 写 {ts, speaker} 到 status-requests.jsonl（mc-god 消费回执状态）。 */
+    private static final Path STATUS_FILE = Paths.get(System.getProperty(
+            "settlementsfix.statusFile",
+            "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\deepseek-harness\\scratch-plugin\\data\\status-requests.jsonl"));
+
     private static final Gson GSON = new Gson();
 
     private static final Logger LOGGER = LoggerFactory.getLogger("settlementsfix");
@@ -67,6 +72,22 @@ public class SettlementsFixMod {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onEntityInteract);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemCrafted);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemToss);
+    }
+
+    /**
+     * 神使手札/技能书不可丢弃（2026-08-23 造物主谕「无法丢弃无法放入箱子」）。
+     * ItemTossEvent 在玩家丢出物品（Q 键 / 拖出背包 / 丢出快捷栏）时触发且可取消。
+     */
+    private void onItemToss(net.neoforged.neoforge.event.entity.item.ItemTossEvent ev) {
+        try {
+            var itemEntity = ev.getEntity();
+            if (itemEntity != null && isMarkedBook(itemEntity.getItem())) {
+                ev.setCanceled(true);
+            }
+        } catch (Exception e) {
+            // 事件 API 变动的兜底：不因监听失败影响游戏
+        }
     }
 
     /**
@@ -127,6 +148,28 @@ public class SettlementsFixMod {
      */
     /** 是否技能书（skillbook 或 craftreq 标记）。双端一致——客户端据此也取消打开。 */
     public static boolean isSkillBook(ItemStack stack) {
+        return isMarkedBook(stack);
+    }
+
+    /** 是否神使手札（custom_data.statusbook=true）。双端一致。 */
+    public static boolean isStatusBook(ItemStack stack) {
+        if (!stack.is(Items.WRITTEN_BOOK)) {
+            return false;
+        }
+        var cd = stack.get(DataComponents.CUSTOM_DATA);
+        if (cd == null || cd.isEmpty()) {
+            return false;
+        }
+        try {
+            CompoundTag data = cd.getUnsafe();
+            return data != null && data.getBoolean("statusbook");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 是否受保护的标记书（技能书/造物卷/神使手札）：不可丢弃、不可入箱。 */
+    public static boolean isMarkedBook(ItemStack stack) {
         if (!stack.is(Items.WRITTEN_BOOK)) {
             return false;
         }
@@ -143,14 +186,22 @@ public class SettlementsFixMod {
         if (data == null) {
             return false;
         }
-        return data.contains("skillbook") || data.getBoolean("craftreq");
+        return data.contains("skillbook") || data.getBoolean("craftreq") || data.getBoolean("statusbook");
     }
 
     /**
-     * 技能书施法统一入口。返回 true = 是技能书（本次交互被消费，调用方取消打开书 GUI）；
+     * 技能书/神使手札使用统一入口。返回 true = 标记书（本次交互被消费，调用方取消打开书 GUI）；
      * false = 普通书，照常打开。
      */
     public static boolean handleSkillBookUse(Player player, ItemStack stack) {
+        // 神使手札（statusbook=true）：右键 = 刷新状态（写 status-requests.jsonl，mc-god 回执），不打开书。
+        if (isStatusBook(stack)) {
+            if (!player.level().isClientSide) {
+                appendStatus(player.getName().getString());
+                LOGGER.info("[settlementsfix] statusbook request: player={}", player.getName().getString());
+            }
+            return true;
+        }
         if (!isSkillBook(stack)) {
             return false;
         }
@@ -253,6 +304,23 @@ public class SettlementsFixMod {
                 o.addProperty(kv[i], kv[i + 1]);
             }
             Files.writeString(SPELL_FILE, GSON.toJson(o) + System.lineSeparator(),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // 写盘失败不打断游戏
+        }
+    }
+
+    /** 追加 {ts, speaker} 到 status-requests.jsonl（神使手札右键刷新状态请求）。 */
+    private static void appendStatus(String playerName) {
+        try {
+            Path parent = STATUS_FILE.getParent();
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
+            }
+            JsonObject o = new JsonObject();
+            o.addProperty("ts", System.currentTimeMillis());
+            o.addProperty("speaker", playerName);
+            Files.writeString(STATUS_FILE, GSON.toJson(o) + System.lineSeparator(),
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // 写盘失败不打断游戏
