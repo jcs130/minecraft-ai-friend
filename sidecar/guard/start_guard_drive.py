@@ -51,6 +51,10 @@ def start():
         return
     # 以 UTF-8 环境启动，日志由 Python 侧 UTF-8 写入，绕开 cmd GBK 代码页乱码
     env = os.environ.copy()
+    # 清除 uv 劫持的 PYTHONHOME/PYTHONPATH：否则 Python311 解释器会加载 uv 3.12 标准库，
+    # 触发 "SRE module mismatch" 崩溃（2026-08-23 改名重启时踩坑）。
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
     with open(LOG, "ab") as f:

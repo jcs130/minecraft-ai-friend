@@ -859,7 +859,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const t: Transmigrator | null = transmigrators.getByUsername(caller)
     const disp = t?.name ?? caller
     const summon = {
-      to: guard,
+      to: resolveLogin(guard),
       from: caller,
       display: disp,
       task,
@@ -886,6 +886,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** 显示名→登录名：守卫走映射；其余（真人玩家已用登录名、AI 穿越者）原样返回。 */
   function resolveLogin(name: string): string {
     return GUARD_LOGIN[name.trim()] ?? name.trim()
+  }
+  const GUARD_LOGIN_SET = new Set(Object.values(GUARD_LOGIN))
+  /** 是否守卫（中文显示名或英文登录名都算）。守卫桥通道文件写英文登录名，此处兼容两种写法。 */
+  function isGuardKey(name: string): boolean {
+    const k = name.trim()
+    return GUARD_NAMES.includes(k) || GUARD_LOGIN_SET.has(k)
   }
 
   // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
@@ -931,7 +937,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const disp = t?.name ?? username
       try {
         appendFileSync(GODDESS_ORDERS, JSON.stringify({
-          to: guard,
+          to: resolveLogin(guard),
           from: username,
           display: disp,
           ts: Date.now(),
@@ -1193,7 +1199,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (now - lastGuardWatch < 60_000) return
       lastGuardWatch = now
       for (const name of GUARD_NAMES) {
-        const ms = magic.getState(name) as any
+        // magic-state 键 = 登录名（英文 Kirito/Naruto）；显示名只用于叙事（chronicle/log）。
+        const ms = magic.getState(resolveLogin(name)) as any
         if (!ms) continue
         const since = lastOrder.get(name) ?? 0
         if (now - since < 5 * 60_000) continue
@@ -1203,7 +1210,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const skills = (ms.learned ?? []).map((id: string) => magic.getAtomById(id)?.name).filter(Boolean).slice(0, 6).join('、')
         const text = `${reason}。${skills ? `你已掌握：${skills}——需要时咏唱或祈愿即可。` : '需要帮助时祈愿即可。'}`
         try {
-          appendFileSync(GODDESS_ORDERS, JSON.stringify({ to: name, text, ts: now }) + '\n', 'utf-8')
+          appendFileSync(GODDESS_ORDERS, JSON.stringify({ to: resolveLogin(name), text, ts: now }) + '\n', 'utf-8')
           worlddb.chronicleRecord('guard-order', name, { reason: reason.slice(0, 80), text: text.slice(0, 120) })
           log(`goddess order → ${name}: ${text.slice(0, 80)}`)
         } catch (err) {
@@ -1228,7 +1235,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         appendGodReply(villagerKey, text)
         // 2026-08-23 守卫假玩家：神谕双写 chant-reply.jsonl（mc_npc 的 god_reply_loop
         // 读后即删 god-reply.jsonl，守卫桥来不及读；双写保证守卫桥必达）。
-        if (GUARD_NAMES.includes(villagerKey)) appendChantReply(villagerKey, text, 'prayer')
+        if (isGuardKey(villagerKey)) appendChantReply(resolveLogin(villagerKey), text, 'prayer')
       } else {
         try {
           bot.whisper(username, `[女神] ${senderName}，${text}`)
@@ -1236,7 +1243,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           /* bot not ready */
         }
         // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
-        if (GUARD_NAMES.includes(username)) appendChantReply(username, text, 'prayer')
+        if (isGuardKey(username)) appendChantReply(resolveLogin(username), text, 'prayer')
       }
     }
 

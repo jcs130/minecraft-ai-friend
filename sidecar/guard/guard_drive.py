@@ -46,10 +46,12 @@ CONSOLE_URL = os.environ.get("QWENPAW_CONSOLE_URL", "http://127.0.0.1:8088/api/c
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA = os.path.join(REPO_ROOT, "data")
 
-# 两穿越者：身体名 -> 亲卫 agent + 持久 session
+# 两穿越者：身体登录名(login, ASCII) + 显示名(name, 中文) -> 亲卫 agent + 持久 session
+# 铁律 name/ID 分离（2026-08-23 造物主定调）：numen_act 等程序化操作用 login（Kirito/Naruto），
+# 通道文件（chant/pray/goddess-orders 的 speaker/to/key）与亲卫叙事用 name（桐人/鸣人）。
 GUARDS = [
-    {"name": "桐人", "agent": "mc-guard-kirito", "session": "guard:kirito", "tag": "kirito"},
-    {"name": "鸣人", "agent": "mc-guard-naruto", "session": "guard:naruto", "tag": "naruto"},
+    {"name": "桐人", "login": "Kirito", "agent": "mc-guard-kirito", "session": "guard:kirito", "tag": "kirito"},
+    {"name": "鸣人", "login": "Naruto", "agent": "mc-guard-naruto", "session": "guard:naruto", "tag": "naruto"},
 ]
 
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
@@ -237,7 +239,7 @@ def drain_msgs(g):
                 except Exception:
                     keep.append(ln)
                     continue
-                if target == g["name"]:
+                if target == g["login"]:
                     mine.append(rec)
                 else:
                     keep.append(ln)
@@ -268,7 +270,7 @@ def append_prayer(g, wish, status=None):
     try:
         with open(GOD_INBOX, "a", encoding="utf-8") as f:
             f.write(json.dumps({
-                "key": g["name"], "wish": wish, "display": g["name"],
+                "key": g["login"], "wish": wish, "display": g["name"],
                 "asPlayer": True, "situation": situation, "ts": int(time.time() * 1000),
             }, ensure_ascii=False) + "\n")
         return True
@@ -331,7 +333,7 @@ class Rcon:
 R = Rcon()
 
 def invoke(name, tool, args=None):
-    """numen_act invoke <name> <tool> <json>；中文名双引号包裹。"""
+    """numen_act invoke <name> <tool> <json>；name=登录名(ASCII)，双引号包裹。"""
     a = json.dumps(args if args is not None else {}, ensure_ascii=False)
     cmd = f'numen_act invoke "{name}" {tool} {a}'
     out = R.cmd(cmd)
@@ -501,7 +503,7 @@ def drive_loop(g, stop_at):
             STANDING_TASKS = {"follow", "follow_entity"}
             # 常驻任务"卡住"强出口标记：默认 False，只有常驻任务空转超时才置 True
             standing_stuck = False
-            ts = query(g["name"], "task_status")
+            ts = query(g["login"], "task_status")
             if isinstance(ts, dict) and ts.get("success") is True:
                 msg = ts.get("message", "")
                 data = ts.get("data") or {}
@@ -526,7 +528,7 @@ def drive_loop(g, stop_at):
                     if elapsed_ok or dead_ok:
                         feed_append(g, "tripped", f"有界任务 {task_id}({task_name}) 卡死：elapsed={elapsed_s}s budget={budget_left}s → task_stop 熔断")
                         log(f"⚠ 有界任务 {task_id}({task_name}) 超时/预算尽（elapsed={elapsed_s}s budget={budget_left}s），task_stop 熔断，让亲卫重议")
-                        R.cmd(f'numen_act invoke "{g["name"]}" task_stop {{}}')
+                        R.cmd(f'numen_act invoke "{g["login"]}" task_stop {{}}')
                         # 叫停后本轮不派新动作（等下一轮拿到空闲态再决策）
                         tripped = True
                         current_task = None
@@ -547,7 +549,7 @@ def drive_loop(g, stop_at):
                     # —— 主人在场判定：常驻跟随是否仍有意义 ——
                     owner_status = None
                     try:
-                        osq = query(g["name"], "get_owner_status")
+                        osq = query(g["login"], "get_owner_status")
                         if isinstance(osq, dict):
                             owner_status = osq
                     except Exception:
@@ -562,7 +564,7 @@ def drive_loop(g, stop_at):
                 time.sleep(BUSY_POLL)
                 continue
             # 2. 读状态 + 感知
-            status = invoke(g["name"], "get_self_status")
+            status = invoke(g["login"], "get_self_status")
             # 伴链断连识别：身体实体不在（no companion / ToolNotFoundError 之类）时，
             # 不要再喂亲卫做新动作——那是无效刷屏，只会让亲卫一次次撞墙。
             # 降频心跳，等实体重挂（宿主要重启伴链服务/重挂实体）。
@@ -581,7 +583,7 @@ def drive_loop(g, stop_at):
                 log(f"伴链断连：{g['name']} 身体实体不在，停发新动作，等重挂")
                 time.sleep(LOST_POLL)
                 continue
-            world = invoke(g["name"], "get_world_info")
+            world = invoke(g["login"], "get_world_info")
             # —— 濒死急救闸（基础生存能力的核心）——
             # 身体贫血/濒死（hp 过低）或饥饿归零且生命已受影响 → 高于一切任务。
             # 步骤：①先打断可能在跑的卡死任务（如 attack 打了 300s 都没打死 → 它占用身体）
@@ -600,11 +602,11 @@ def drive_loop(g, stop_at):
                     feed_append(g, "emergency", reason)
                     log(f"🚑 濒死急救：{g['name']} {reason}——优先保命，打断卡死任务")
                     # 打断卡死/占用身体的任务（如有界 attack 跑太久没结果），让身体脱离僵持
-                    R.cmd(f'numen_act invoke "{g["name"]}" task_stop {{}}')
+                    R.cmd(f'numen_act invoke "{g["login"]}" task_stop {{}}')
                     # 本轮不再走"常驻任务在跑"的跟随逻辑，直接进入濒死决策
                     standing_stuck = False
-            look = invoke(g["name"], "look_around", {"radius": 8})
-            scan = invoke(g["name"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
+            look = invoke(g["login"], "look_around", {"radius": 8})
+            scan = invoke(g["login"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
             # 3. 喂亲卫决策（standing_stuck 标记常驻任务空转过久的强出口；emergency 标记濒死，优先保命）
             g_msgs = drain_msgs(g)  # 2026-08-23：女神回执/谕示（chant 回执、神谕、主动守望）
             prompt = decision_prompt(g, status, world, look, scan, last_act, goal,
@@ -644,7 +646,7 @@ def drive_loop(g, stop_at):
                     last_act = "（chant 需要 spell 内容）"
                     time.sleep(DECIDE_INTERVAL)
                     continue
-                ok = append_chant_req(g["name"], spell)
+                ok = append_chant_req(g["login"], spell)
                 out = "已上达咏唱通道" if ok else "(写盘失败)"
                 feed_append(g, "act", f"tool=chant spell={spell[:60]} → {out}")
                 last_act = f"chant {spell[:60]} → {out}"
@@ -675,11 +677,11 @@ def drive_loop(g, stop_at):
                     last_act = "（say 需要 message 内容）"
                     time.sleep(DECIDE_INTERVAL)
                     continue
-                out = R.cmd(f'numen_act say "{g["name"]}" {msg}')
+                out = R.cmd(f'numen_act say "{g["login"]}" {msg}')
             else:
                 # —— 参数归一化：亲卫可能少给必填参数，补默认避免 invoke 报错（自主循环健壮性）——
                 args = _normalize_args(tool, args)
-                out = invoke(g["name"], tool, args)
+                out = invoke(g["login"], tool, args)
             log(f"R{round_n} {tool} {json.dumps(args, ensure_ascii=False)[:80]} → {out[:100]}")
             feed_append(g, "act", f"tool={tool} args={json.dumps(args, ensure_ascii=False)[:120]} reason={reason} → {out[:120]}")
             last_act = f"{tool} {json.dumps(args, ensure_ascii=False)[:60]} → {out[:80]}"
