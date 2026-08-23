@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.WrittenBookContent;
@@ -14,6 +16,8 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,6 +40,12 @@ import java.nio.file.StandardOpenOption;
  *  - 合书识别：合成产物 written_book 且输入含 custom_data.craftreq=true 的书与笔
  *    → 给产物打 custom_data.craftreq=true（空白造物卷链路：买书与笔 → 自写 → 合成 → 右键）。
  * 路径可用 -Dsettlementsfix.spellFile=... 覆盖；默认与 interactFile 同卷。
+ *
+ * 【2026-08-23 根因修复】原 onRightClickItem 监听 PlayerInteractEvent.RightClickItem，
+ * 但 NeoForge 的 RightClickItem 事件只在 ServerPlayerGameMode.useItem（对着空气右键）fire；
+ * 书右键打开 GUI 最常走 useItemOn（对着方块右键），该路径根本不 fire 此事件 → 书右键无反应。
+ * 正确拦截点 = WrittenBookItem.use（书被使用的唯一统一入口，对空气/对方块右键都走这里），
+ * 由 WrittenBookItemMixin @Inject HEAD 调用 {@link #handleSkillBookUse} 完成写盘。
  */
 @Mod("settlementsfix")
 public class SettlementsFixMod {
@@ -50,10 +60,11 @@ public class SettlementsFixMod {
 
     private static final Gson GSON = new Gson();
 
+    private static final Logger LOGGER = LoggerFactory.getLogger("settlementsfix");
+
     public SettlementsFixMod(IEventBus modBus) {
         // PlayerInteractEvent / PlayerEvent 是游戏总线事件（非 mod 总线）；NeoForge.EVENT_BUS 注册
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onEntityInteract);
-        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onRightClickItem);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemCrafted);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
     }
@@ -102,11 +113,22 @@ public class SettlementsFixMod {
         }
     }
 
-    private void onRightClickItem(PlayerInteractEvent.RightClickItem ev) {
-        if (ev.getLevel().isClientSide) {
-            return; // 服务端 only（双端都 fire，避免重复写盘）
+    /**
+     * 技能书施法统一入口（2026-08-23 根因修复）。
+     *
+     * 由 WrittenBookItemMixin @Inject 到 {@code WrittenBookItem.use} HEAD 处调用。
+     * 为什么不用 PlayerInteractEvent.RightClickItem：该事件只在「对着空气右键」fire，
+     * 玩家拿着书右键地面/方块打开 GUI 时走 useItemOn，不 fire 此事件 → 书右键永远不触发。
+     * 而 WrittenBookItem.use 是书被使用的唯一统一入口（对空气/对方块都经过它），
+     * 服务端在 HEAD 处检查 custom_data 并写 spell-requests.jsonl。
+     *
+     * @param player 使用书的玩家
+     * @param stack  玩家手上的 ItemStack（WrittenBookItem）
+     */
+    public static void handleSkillBookUse(Player player, ItemStack stack) {
+        if (player.level().isClientSide) {
+            return; // 服务端 only（双端都走 use，避免重复写盘）
         }
-        var stack = ev.getItemStack();
         if (!stack.is(Items.WRITTEN_BOOK)) {
             return;
         }
@@ -118,17 +140,18 @@ public class SettlementsFixMod {
         try {
             data = cd.getUnsafe();
         } catch (Exception e) {
-            return;
+            return; // 非法 custom_data 视为无标记
         }
         if (data == null) {
             return;
         }
-        String player = ev.getEntity().getName().getString();
+        String playerName = player.getName().getString();
         // 固定技能书：custom_data.skillbook=<id>
         if (data.contains("skillbook")) {
             String skill = data.getString("skillbook");
             if (!skill.isEmpty()) {
-                appendSpell("speaker", player, "skill", skill);
+                appendSpell("speaker", playerName, "skill", skill);
+                LOGGER.info("[settlementsfix] skillbook cast: player={} skill={}", playerName, skill);
             }
             return;
         }
@@ -146,7 +169,8 @@ public class SettlementsFixMod {
             }
             String text = sb.toString().trim();
             if (!text.isEmpty()) {
-                appendSpell("speaker", player, "text", text);
+                appendSpell("speaker", playerName, "text", text);
+                LOGGER.info("[settlementsfix] craftreq request: player={} len={}", playerName, text.length());
             }
         }
     }
@@ -193,7 +217,7 @@ public class SettlementsFixMod {
     }
 
     /** 追加 {ts, speaker, skill|text} 到 spell-requests.jsonl（每行一个 JSON）。 */
-    private void appendSpell(String... kv) {
+    private static void appendSpell(String... kv) {
         try {
             Path parent = SPELL_FILE.getParent();
             if (parent != null && !Files.exists(parent)) {
