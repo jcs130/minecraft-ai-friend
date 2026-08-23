@@ -119,6 +119,7 @@ def interact_tail_loop():
                     last[key] = now
                     line = _prox_lines(v)
                     try:
+                        villager_hmm(v, "ambient")
                         speak(v, line, to=player)
                         feed_append({"kind": "say", "npc": v["display"], "npcKey": v["key"],
                                      "color": v.get("color", "white"),
@@ -235,6 +236,32 @@ def esc(t):
 
 def speak(v, text, to=None):
     tellraw([("<" + v["display"] + "> ", v["color"]), (text, "white")], to=to)
+
+# ---------- 村民"嗯嗯"声（2026-08-23 造物主谕：互动时发、空闲也主动发，增强代入感） ----------
+VILLAGER_SOUNDS = {
+    "ambient": "minecraft:entity.villager.ambient",   # 嗯嗯（空闲/应声）
+    "trade": "minecraft:entity.villager.trade",       # 交易成交
+    "yes": "minecraft:entity.villager.yes",           # 同意
+    "no": "minecraft:entity.villager.no",             # 拒绝
+}
+HMM_LAST = {}  # villager_key -> ts（ambient 声节流：每村民 8s 至多一次，防连环对话轰炸）
+
+def villager_hmm(v, sound="ambient", pitch=1.0, vol=0.6, throttle=True):
+    """在村民位置给附近 20 格内玩家播 villager 音效（playsound，source=neutral，
+    与原版村民音效同类别）。ambient 声带节流；trade/yes/no 不节流（关键反馈）。"""
+    if not v.get("alive", True):
+        return
+    if sound == "ambient" and throttle:
+        now = time.time()
+        if now - HMM_LAST.get(v["key"], 0) < 8:
+            return
+        HMM_LAST[v["key"]] = now
+    snd = VILLAGER_SOUNDS.get(sound, VILLAGER_SOUNDS["ambient"])
+    try:
+        R.cmd('execute at %s run playsound %s neutral @a[distance=..20] ~ ~ ~ %.2f %.2f'
+              % (sel(v), snd, vol, pitch))
+    except Exception:
+        R.s = None
 
 def goddess(text):
     tellraw([("[女神] ", "gold"), (text, "gold")])
@@ -497,6 +524,7 @@ def turn_in(speaker, v, count, item_zh):
             lines.append("（压低声音）说好的秘密——「%s」。在聊天栏念出这个词，女神听得懂。" % word)
             reward_desc.append("咒语情报")
     q["done"], q["done_by"], q["done_at"] = True, speaker, time.strftime("%H:%M")
+    villager_hmm(v, "trade", throttle=False)  # 成交"嗯嗯"声（关键反馈，不节流）
     json.dump(QUESTS["doc"], open(quests_path(QUESTS["date"]), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     ledger_append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "date": QUESTS["date"], "villager": q["display"],
                    "player": speaker, "item": q["item"], "count": q["count"], "reward": ",".join(reward_desc) or "无"})
@@ -1572,6 +1600,7 @@ def tail_forever():
                     last_cd[v["key"]] = now
                     print("[npc] %s -> %s: %r" % (who, v["display"], msg[:60]), flush=True)
                     feed_append({"kind": "player", "who": who, "npc": v["display"], "npcKey": v["key"], "text": msg[:200]})
+                    villager_hmm(v, "ambient")
                     npc_pos = alive_pos(v)
                     for r in replies:
                         try:
@@ -1649,6 +1678,7 @@ def inbox_loop():
                 print("[npc] inbox %s -> %s: %r" % (who, v["display"], msg[:60]), flush=True)
                 feed_append({"kind": "player", "who": who, "npc": v["display"], "npcKey": v["key"],
                              "text": msg[:200], "via": "whisper"})
+                villager_hmm(v, "ambient")
                 npc_pos = alive_pos(v)
                 for r in replies:
                     try:
@@ -1918,6 +1948,25 @@ def routine_loop():
             R.s = None
         time.sleep(CFG.get("routine_interval", 90))
 
+# ---------- 村民空闲"嗯嗯"声（2026-08-23 造物主谕：村民主动发声音，更有代入感） ----------
+def villager_ambient_loop():
+    """随机间隔选一个在世村民发 ambient"嗯嗯"声；有玩家在 20 格内才发（没人就不对空气嗯嗯）。
+    playsound 自带距离门，远处玩家听不到。"""
+    lo, hi = CFG.get("ambient", {}).get("hmm_interval", [20, 45])
+    while True:
+        time.sleep(random.uniform(lo, hi))
+        try:
+            alive = [v for v in PROFILES if v.get("alive", True)]
+            if not alive:
+                continue
+            v = random.choice(alive)
+            pos = alive_pos(v)
+            if pos and nearest_player(pos, maxd=20):
+                villager_hmm(v, "ambient", pitch=random.uniform(0.9, 1.15))
+        except Exception as e:
+            print("[hmm] err:", e, flush=True)
+            R.s = None
+
 # ---------- 村庄守护 / 出生点安全区（2026-08-22 造物主谕：NPC 秒怪；初始城堡附近无怪） ----------
 # 铁匠/甲匠/守夜人/渔夫/阿宝是有战力设定的村民：发现怪物进村即秒杀，公屏喊话。
 # 白天低频清理（洞穴蜘蛛等），夜间每 8s 一轮。RCON 距离以 positioned 定原点。
@@ -2060,6 +2109,7 @@ if __name__ == "__main__":
     threading.Thread(target=proximity_chat_loop, daemon=True).start()
     threading.Thread(target=interact_tail_loop, daemon=True).start()
     threading.Thread(target=spell_loop, daemon=True).start()
+    threading.Thread(target=villager_ambient_loop, daemon=True).start()
     if AMBIENT:
         threading.Thread(target=ambient_diary_loop, daemon=True).start()
         print("[npc] ambient diary armed: %d villagers" % len(AMBIENT), flush=True)
