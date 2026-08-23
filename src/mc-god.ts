@@ -2190,34 +2190,51 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
     async function handleWhisper(username: string, message: string): Promise<void> {
       if (username === bot.username) return
+      // ── 守护天使代主人上达（2026-08-23 造物主拍板）─────────────────────
+      // `sys_<owner>` 是守护天使（客户端侧 LLM 陪玩）的标准登录名：服务端据此认出
+      // 它是某玩家的守护天使。它私聊女神 = **代主人**祈愿/问事——所以「主体」
+      // （祈愿/供奉/等级/记录/查玩家档案）一律按【主人】算，但「回执」
+      // （bot.whisper 确认/神谕/答疑）仍发回【守护天使本身】（username = sys_<owner>）。
+      // 主人不在线也照常处理——守护天使是主人的 Mouthpiece，不因主人离线而哑火。
+      // 守护天使【永远够不着服务端控制接口/RCON】，只借游戏内私聊这一条通道说话。
+      let OWNER = username
+      const _guardian = worlddb.guardianResolve(username)
+      if (_guardian) {
+        OWNER = _guardian.ownerUsername
+        worlddb.guardianSetState(_guardian.botUsername, 'online')
+        log(`guardian angel ${username} speaking for ${OWNER}`)
+      }
       // VIP 特殊监听白名单（2026-08-22）：白名单内的真人旅人说的一切——即便只是
       // 闲聊、牢骚、求助——都要上达女神并得到回应。VIP 绕过冷启动窗口、自报家门
       // 静默冷却、入场节流三闸（结构化指令/唱咒/交易/问：仍在前方分流，不受影响）。
-      const isVip = config.vipListen.includes(username)
+      // 守护天使代主人上达时，按【主人】是否 VIP 判断（主人是 VIP，其守护天使的话
+      // 同样优先聆听）。
+      const isVip = config.vipListen.includes(OWNER)
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
       if (message.trim().startsWith('/')) {
         if (isHelpCommand(message)) {
           const lines = handleHelpText(message.trim(), magic)
           if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
-          try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
-          log(`help served to ${username}: ${message.trim().slice(0, 40)}`)
+          try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+          log(`help served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
           return
         }
         // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
         // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
+        // 主体=主人（守护天使代执行 CLI，作用到主人头上）。
         const cliCmd = parseCli(message)
         if (cliCmd) {
-          worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'whisper' })
-          log(`cli cmd from ${username}: ${cliCmd.raw.slice(0, 60)}`)
-          await handleCli(username, cliCmd)
+          worlddb.chronicleRecord('cli', OWNER, { q: message.trim().slice(0, 60), via: 'whisper' })
+          log(`cli cmd from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${cliCmd.raw.slice(0, 60)}`)
+          await handleCli(OWNER, cliCmd)
           return
         }
         if (isCliCommand(message)) {
           const lines = cliOverview()
           for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
-          try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
-          log(`cli served to ${username}: ${message.trim().slice(0, 40)}`)
+          try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+          log(`cli served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
           return
         }
         // 其余斜杠命令让行（/mail、/friend 等归 mc-social 信使）——保持原有的「/ 开头一律 return」。
@@ -2225,11 +2242,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
       // 世界 CLI 裸动词（2026-08-23）：私聊直接说 status/skills/spells/innate/appraise 等
       // 低冲突词，也命中确定性 CLI，不靠自然语言框架猜。置于斜杠后、递话/唱咒/祈愿前。
+      // 主体=主人。
       const bareCli = parseBareCli(message, CLI_BARE_WHITELIST)
       if (bareCli) {
-        worlddb.chronicleRecord('cli', username, { q: bareCli.raw.slice(0, 60), via: 'bare-whisper' })
-        log(`bare cli from ${username}: ${bareCli.raw.slice(0, 60)}`)
-        await handleCli(username, bareCli)
+        worlddb.chronicleRecord('cli', OWNER, { q: bareCli.raw.slice(0, 60), via: 'bare-whisper' })
+        log(`bare cli from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${bareCli.raw.slice(0, 60)}`)
+        await handleCli(OWNER, bareCli)
         return
       }
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
@@ -2261,8 +2279,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         : trimmed.startsWith('交易:') ? trimmed.slice(3).trim() : ''
       if (tradeBody) {
         try {
-          appendFileSync(NPC_INBOX, JSON.stringify({ speaker: username, text: tradeBody, ts: Date.now() }) + '\n')
-          log(`npc trade whisper from ${username}: ${tradeBody}`)
+          appendFileSync(NPC_INBOX, JSON.stringify({ speaker: OWNER, text: tradeBody, ts: Date.now() }) + '\n')
+          log(`npc trade whisper from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${tradeBody}`)
         } catch (err) {
           log(`npc inbox append failed: ${err instanceof Error ? err.message : String(err)}`)
           try { bot.whisper(username, '[信使] 掌柜的铺子暂时歇了（村民引擎不在），稍后再试。') } catch { /* not ready */ }
@@ -2277,16 +2295,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const askBody = trimmed.startsWith('问：') ? trimmed.slice(2).trim()
         : trimmed.startsWith('问:') ? trimmed.slice(2).trim() : ''
       if (askBody) {
-        answerQuestion(username, askBody)
+        // 主体=主人（守护天使代问，世界知识作到主人头上）
+        answerQuestion(OWNER, askBody)
         return
       }
       if (!explicitPrayer && magic.sniffChant(body)) {
-        resolveChant(username, body)
+        resolveChant(OWNER, body)
           .then((reply) => {
-            log(`whisper chant from ${username}: ${body}`)
-            try { bot.whisper(username, `[信使] ${username}，${reply}`) } catch { /* not ready */ }
+            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body}`)
+            try { bot.whisper(username, `[信使] ${OWNER}，${reply}`) } catch { /* not ready */ }
           })
-          .catch((err) => log(`whisper cast failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+          .catch((err) => log(`whisper cast failed for ${OWNER}: ${err instanceof Error ? err.message : String(err)}`))
         return
       }
       // ── 转生者自报家门（2026-08-21 造物主谕「转生异世界」）────────────
@@ -2298,12 +2317,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         pendingIntro.delete(username) // 一次性消费，无论命中与否
         if (Date.now() <= introDeadline) {
           const intro = body.slice(0, 120)
-          const disp = transmigrators.getByUsername(username)?.name ?? username
-          try { worlddb.chronicleRecord('intro', username, { intro }) } catch { /* best effort */ }
-          await worlddb.remember(username, 'intro', `「${disp}」初降此界时自报家门：「${intro}」`)
+          const disp = transmigrators.getByUsername(OWNER)?.name ?? OWNER
+          try { worlddb.chronicleRecord('intro', OWNER, { intro }) } catch { /* best effort */ }
+          await worlddb.remember(OWNER, 'intro', `「${disp}」初降此界时自报家门：「${intro}」`)
           try { bot.whisper(username, `[女神] 我记下了。${disp}，欢迎。且去——天赋仪式正在公屏宣读，喊「我选 <法术名>」即可选定；要求助说「祈愿：…」，有疑问说「问：…」。`) } catch { /* not ready */ }
           introCoolUntil.set(username, Date.now() + 60_000) // 收尾后 60s 静默，防连续闲聊
-          log(`intro from ${username}: ${intro}`)
+          log(`intro from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${intro}`)
           return
         }
         // 超时：落入下方祈愿流程
@@ -2313,7 +2332,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 且不会被收尾 60s 静默吞掉（只有纯闲聊仍在静默窗口内）；祈愿/求助/闲聊仍
       // 落下方祈愿流程（神恩有价不受影响）。answerQuestion 自带 15s/人节流以控成本。
       if (looksLikeQuestion(body)) {
-        answerQuestion(username, body)
+        answerQuestion(OWNER, body)
         return
       }
       // ── 自报家门收尾后冷却（2026-08-21 防一直聊）────────────────────
@@ -2340,7 +2359,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
 
       // 供奉收执（异步）：名目 → 行囊复核 → /clear 收走 → 记账 → 再入队。
-      const t: Transmigrator | null = transmigrators.getByUsername(username)
+      // 主体按【主人】算（守护天使代主人祈愿，EX 扣主人的、等级给主人）。
+      const t: Transmigrator | null = transmigrators.getByUsername(OWNER)
       const admit = async (): Promise<void> => {
         let offer: OfferingInfo | undefined
         if (offeringText) {
@@ -2359,15 +2379,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             } catch { /* bot not ready */ }
             return
           }
-          // 虔诚有回报：供奉被收执 +15 exp（2026-08-17 成长体系）
-          await grantXp(username, 15, 'offering')
+          // 虔诚有回报：供奉被收执 +15 exp（2026-08-17 成长体系）——给主人
+          await grantXp(OWNER, 15, 'offering')
         }
-        lastPray.set(username, Date.now())
-        const { ahead } = worlddb.inboxPush(username, t?.name ?? username, wish, offer ?? undefined)
-        worlddb.chronicleRecord('prayer', username, { wish, offering: offer ?? undefined })
-        log(`wish received from ${username}: ${wish}${offer ? ` +offering ${offer.cn}x${offer.count}` : ''} (ahead: ${ahead})`)
+        lastPray.set(OWNER, Date.now())
+        const { ahead } = worlddb.inboxPush(OWNER, t?.name ?? OWNER, wish, offer ?? undefined)
+        worlddb.chronicleRecord('prayer', OWNER, { wish, offering: offer ?? undefined })
+        log(`wish received from ${OWNER}${t?.name !== OWNER ? `(via guardian ${username})` : ''}: ${wish}${offer ? ` +offering ${offer.cn}x${offer.count}` : ''} (ahead: ${ahead})`)
         try {
-          bot.whisper(username, `[女神] ${t?.name ?? username}，祈愿已上达天听${offer ? `（供奉 ${offer.cn}×${offer.count} 已归神库）` : ''}${ahead > 0 ? `，队列中还有 ${ahead} 位信士` : ''}。女神将按序聆听，神谕随后送达——在此期间照常行事，勿要枯等。`)
+          bot.whisper(username, `[女神] ${t?.name ?? OWNER}，祈愿已上达天听${offer ? `（供奉 ${offer.cn}×${offer.count} 已归神库）` : ''}${ahead > 0 ? `，队列中还有 ${ahead} 位信士` : ''}。女神将按序聆听，神谕随后送达——在此期间照常行事，勿要枯等。`)
         } catch { /* bot not ready */ }
       }
       admit().catch((err) => log(`admit prayer failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))

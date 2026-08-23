@@ -136,6 +136,15 @@ export interface WorlddbService {
   diaryCount(username: string): number
   /** 领书去重标记：首次（该 username 从未领过欢迎册）返回 true 并落标记。 */
   diaryGiftMark(username: string): boolean
+  // ── 守护天使（2026-08-23 造物主拍板：每真人玩家的 mineflayer 系统客户端实体）──
+  /** 登记/更新一个守护天使（认主绑定）。 */
+  guardianUpsert(botUsername: string, ownerUsername: string, ownerUuid: string | null, state?: string): void
+  /** 按守护天使实体名解析主人（女神识别守护天使用）。无绑定返回 null。 */
+  guardianResolve(botUsername: string): { botUsername: string; ownerUsername: string; ownerUuid: string | null; state: string } | null
+  /** 按主人查守护天使（认主反向，判断某玩家是否已有系统）。 */
+  guardianByOwner(ownerUsername: string): { botUsername: string; ownerUsername: string; ownerUuid: string | null; state: string } | null
+  /** 更新守护天使状态（idle/online/leash/guard/offline）。 */
+  guardianSetState(botUsername: string, state: string): void
 }
 
 // ── 编年史 md 导出格式（史官亲笔）─────────────────────────────────────
@@ -276,6 +285,18 @@ CREATE TABLE IF NOT EXISTS diary_gift (
   username TEXT PRIMARY KEY,
   at INTEGER NOT NULL
 );
+-- 守护天使（2026-08-23 造物主拍板）：每个真人玩家的 mineflayer 系统客户端实体。
+-- 女神识别「每条消息来自谁的守护天使」，靠 bot_username → owner 映射。
+-- bot_username = 系统实体登录名（ASCII，如 sys_taro）；owner = 真人玩家登录名。
+CREATE TABLE IF NOT EXISTS guardian_angels (
+  bot_username TEXT PRIMARY KEY,      -- 守护天使实体登录名（sys_<owner>）
+  owner_username TEXT NOT NULL,       -- 主人（真人玩家登录名，ASCII）
+  owner_uuid TEXT,                    -- 主人 MC UUID（认主权威键，跨会话）
+  state TEXT NOT NULL DEFAULT 'idle', -- idle/online/leash/guard/offline
+  bound_at INTEGER NOT NULL,          -- 绑定时间戳
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_guardian_owner ON guardian_angels(owner_username);
 `
 
 // ── 旧文件数据一次性迁移（表空 + 旧文件存在 → 导入 → 改名 .migrated）──
@@ -542,6 +563,14 @@ export function createWorlddb(config: Config): WorlddbHandle {
   const selDiaryAll = db.prepare('SELECT id, username, day, content, game_day, at FROM diary ORDER BY id DESC LIMIT ?')
   const cntDiary = db.prepare('SELECT COUNT(*) AS c FROM diary WHERE username=?')
   const insDiaryGift = db.prepare('INSERT OR IGNORE INTO diary_gift (username, at) VALUES (?,?)')
+  // 守护天使（2026-08-23 造物主拍板：每真人玩家的 mineflayer 系统客户端实体）
+  const upsertGuardian = db.prepare(`INSERT INTO guardian_angels (bot_username, owner_username, owner_uuid, state, bound_at, updated_at)
+    VALUES (?,?,?,?,?,?)
+    ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, owner_uuid=excluded.owner_uuid,
+      state=excluded.state, updated_at=excluded.updated_at`)
+  const selGuardianByBot = db.prepare('SELECT bot_username, owner_username, owner_uuid, state FROM guardian_angels WHERE bot_username=?')
+  const selGuardianByOwner = db.prepare('SELECT bot_username, owner_username, owner_uuid, state FROM guardian_angels WHERE owner_username=?')
+  const updGuardianState = db.prepare('UPDATE guardian_angels SET state=?, updated_at=? WHERE bot_username=?')
 
   function mailRow(r: { id: number; from_user: string; body: string; at: number; read_at?: number | null }, to: string): MailRow {
     return { id: r.id, from: r.from_user, to, body: r.body, at: r.at, readAt: r.read_at ?? null }
@@ -689,6 +718,23 @@ export function createWorlddb(config: Config): WorlddbHandle {
     },
     diaryGiftMark(username) {
       return insDiaryGift.run(username, Date.now()).changes === 1
+    },
+    // 守护天使（2026-08-23 造物主拍板）
+    guardianUpsert(botUsername, ownerUsername, ownerUuid, state = 'idle') {
+      upsertGuardian.run(botUsername, ownerUsername, ownerUuid, state, Date.now(), Date.now())
+    },
+    guardianResolve(botUsername) {
+      const r = selGuardianByBot.get(botUsername) as { bot_username: string; owner_username: string; owner_uuid: string | null; state: string } | undefined
+      if (!r) return null
+      return { botUsername: r.bot_username, ownerUsername: r.owner_username, ownerUuid: r.owner_uuid, state: r.state }
+    },
+    guardianByOwner(ownerUsername) {
+      const r = selGuardianByOwner.get(ownerUsername) as { bot_username: string; owner_username: string; owner_uuid: string | null; state: string } | undefined
+      if (!r) return null
+      return { botUsername: r.bot_username, ownerUsername: r.owner_username, ownerUuid: r.owner_uuid, state: r.state }
+    },
+    guardianSetState(botUsername, state) {
+      updGuardianState.run(state, Date.now(), botUsername)
     },
     remember,
     recall,
