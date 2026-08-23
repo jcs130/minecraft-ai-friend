@@ -2254,7 +2254,13 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerJoined', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
-      if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出（2026-08-23）
+      if (username.startsWith('sys_')) {
+        // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出；且隐形——
+        // 「魂」不露身体（2026-08-23 归属定：vanilla 隐身效果，服务端权威，零 Java）。
+        // infinite 0 true = 无限时长 / 等级I / 藏粒子。死亡会清效果，但魂不涉险，仅登录时施加即可。
+        rcon.send(`effect give ${username} minecraft:invisibility infinite 0 true`).catch(() => {})
+        return
+      }
       worlddb.chronicleRecord('presence', username, { event: 'join' })
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
