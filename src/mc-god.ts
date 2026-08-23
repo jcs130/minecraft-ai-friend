@@ -1284,7 +1284,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
 
     // 女神裁量（LLM，异步）。VIP 特殊监听白名单内 → 女神知晓其受守护，可主动援手。
-    const verdict = await askGoddess(username, senderName, wish, offering, false, config.vipListen.includes(username))
+    const verdict = await askGoddess(username, senderName, wish, offering, false, config.vipListen.includes(username.toLowerCase()))
     if (verdict.action === 'none' || !verdict.skill) {
       whisper(verdict.reply)
       worlddb.chronicleRecord('verdict', username, { action: 'none', skill: null, reply: verdict.reply })
@@ -2365,7 +2365,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 静默冷却、入场节流三闸（结构化指令/唱咒/交易/问：仍在前方分流，不受影响）。
       // 守护天使代主人上达时，按【主人】是否 VIP 判断（主人是 VIP，其守护天使的话
       // 同样优先聆听）。
-      const isVip = config.vipListen.includes(OWNER)
+      const isVip = config.vipListen.includes(OWNER.toLowerCase())
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
       // help（带/不带斜杠）→ 生存手册（真人说 help、AI 说 /help，都能查）。
