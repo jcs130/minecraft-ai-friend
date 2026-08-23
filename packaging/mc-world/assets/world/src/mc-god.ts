@@ -224,6 +224,7 @@ function verdictPrompt(
   lines.push('【法则技艺表】女神可代施的全部技艺（id「关键词」等级 魔耗）：')
   lines.push(atomsTableText(atoms))
   lines.push('', `【可赐物资】造物术仅限白名单：${GIVE_ITEMS_TEXT}`, '')
+  lines.push('【语音容错】祈愿带「Speech Input」前缀＝语音输入转写，可能误听。常见：「镐子」被误写为「鸟子/稿子/toy/fork/tool」；「斧子」→「父子/axe」；「火把」→「火巴/torch」；「剑」→「sword」。收到这类词，结合 MC 生存语境推断真实所求（玩家要「镐/斧/剑/火把」是常情，「玩具」几乎不会出现在生存祈愿里），推断准了就照真实所求裁量赐物；吃不准就在 reply 反问一句确认，别按字面拒绝。')
   lines.push('【神谕裁决协议】只输出一个 JSON 对象（不要多余文字、不要调用任何工具、不要检索记忆——现状已给出）：')
   lines.push('{"action":"cast或none","skill":"<技艺id，cast时必填>","item":"<物品id，仅造物>","count":1-16,"direction":"东/南/西/北/组合","distance":<格数>,"reply":"<一句中文神谕>"}', '')
   lines.push('裁决要点：')
