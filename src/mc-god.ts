@@ -833,11 +833,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     reply(`[女神] ${t?.name ?? username}，祈愿已上达天听${offer ? `（供奉 ${offer.cn}×${offer.count} 已归神库）` : ''}${ahead > 0 ? `，队列中还有 ${ahead} 位信士` : ''}。女神将按序聆听，神谕随后送达。`)
   }
 
-  // 守卫名归一（陈氏拼音混写 → 权威中文名）。守卫只认桐人/鸣人/爱德华三个。
+  // 守卫名归一（陈氏拼音混写 → 权威中文名）。守卫只认桐人/鸣人——守卫桥(GUARDS)只驱动这两个
+  // （剑侍 mc-guard-kirito 司桐人 / 影侍 mc-guard-naruto 司鸣人）。爱德华不在守卫桥 GUARDS 里
+  // （穿越者档案 transmigrators.json 也无此角色），故召唤术不可召爱德华。
   const GUARD_ALIASES: Record<string, string> = {
     '桐人': '桐人', 'kirito': '桐人', 'Kirito': '桐人', '桐': '桐人',
     '鸣人': '鸣人', 'naruto': '鸣人', 'Naruto': '鸣人', '鸣': '鸣人',
-    '爱德华': '爱德华', 'edward': '爱德华', 'Edward': '爱德华',
   }
   function canonicalGuardName(s: string): string | null {
     const key = s.trim()
@@ -964,11 +965,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
       case 'summon': {
         // 召唤术/秽土转生（2026-08-23 造物主拍板，唤魂分支）：
-        // 把服务器【现有守卫】（桐人/鸣人/爱德华）召唤过来帮你——不是生成新分身，
+        // 把服务器【现有守卫】（桐人/鸣人）召唤过来帮你——不是生成新分身，
         // 而是给守卫注入一个「到某地干某事」的任务，守卫桥/亲卫自主 decide 怎么过去。
         // 无需玩家生成资料（被召唤者本来是活的）。用法：/cli summon <守卫名> <任务>。
         const guard = cmd.args[0] ? canonicalGuardName(cmd.args[0]) : null
-        if (!guard) { reply(`[CLI] 用法：/cli summon <守卫名|桐人|鸣人|爱德华> <任务>。例：/cli summon 桐人 帮我到村广场挖矿`); return }
+        if (!guard) { reply(`[CLI] 用法：/cli summon <守卫名|桐人|鸣人> <任务>。例：/cli summon 桐人 帮我到村广场挖矿`); return }
         const task = cmd.args.slice(1).join(' ').trim()
         if (!task) { reply(`[CLI] 想让他做什么？例：/cli summon 桐人 到广场帮我挖矿`); return }
         const { summon, code } = issueSummon(username, guard, task)
