@@ -1694,6 +1694,62 @@
       ],
       "title": "唤魂",
       "subtitle": "魂链轻颤，从者当归"
+    },
+    {
+      "id": "luck_favor",
+      "layer": "effect",
+      "name": "福缘",
+      "words": [
+        "福缘",
+        "福星照命"
+      ],
+      "cost": {
+        "mana": 20,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 3,
+      "commands": [
+        "effect give {target} minecraft:luck 600 0 true"
+      ],
+      "reply": "勤者福自随，神许你一时福星照命。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "福缘",
+      "subtitle": "福星照命，勤者自随",
+      "lore": "新人萌萌以童声唤神为友，求一玩物。神予石镐而非玩具，她以镐开山、以勤兴家。故立此术，凡勤耕勤掘者，神许一时福星照命。"
+    },
+    {
+      "id": "blood_shield",
+      "layer": "effect",
+      "name": "血盾",
+      "words": [
+        "血盾",
+        "赤血成盾"
+      ],
+      "cost": {
+        "mana": 25,
+        "food": 0,
+        "hp": 2
+      },
+      "requiredLevel": 3,
+      "commands": [
+        "effect give {target} minecraft:absorption 300 1 true"
+      ],
+      "reply": "燃己之血，铸护命之盾。勤者求道，神许你一时无虞。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "血盾",
+      "subtitle": "以血铸盾，护命无虞",
+      "lore": "医者塔罗以圣愈济人，却常燃血怒而陷苦战，命悬一线。神怜其勤，授此血盾——以己之血铸盾，暂护其命，待其自救。"
     }
   ]
 }
