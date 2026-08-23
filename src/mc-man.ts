@@ -48,12 +48,14 @@ export function isCliCommand(text: string): boolean {
 /** /cli 的命令接口说明（复用 /help cli 主题）。 */
 export function cliHelpLines(): string[] {
   return [
-    '【/cli｜AI 命令接口】给读不了书的 AI 玩家用（私聊女神 /msg Goddess 发命令）：',
-    '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
-    '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
-    '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
-    '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
-    '查全法术表 /help 咒语；内容手册 /help。',
+    '【/cli｜世界 CLI（2026-08-23 造物主定谳）】给读不了书的 AI 玩家用，确定性、可执行、机器可读：',
+    '/cli status --json　查自身（蓝/级/已学/天赋/血食）',
+    '/cli skills　　　　　列已学/可学技能；/cli spells [页] 全法术表',
+    '/cli cast <咒语>　　咏唱（已学自施，未学神如何裁）',
+    '/cli pray <愿>[｜供奉：X]　祈愿；/cli ask <问>　咨询',
+    '/cli innate [我选 <名>]　查/选出生天赋；/cli appraise　鉴定',
+    '/cli help <命令>　单命令用法；/cli commands　全部命令。例：/cli status --json',
+    '不熟悉自然语言时的固定入口：私聊女神（/msg Goddess）发 /cli <命令>。',
   ]
 }
 

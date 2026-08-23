@@ -13,6 +13,11 @@ import type { LogwatchService } from './mc-logwatch.ts'
 import type { McTerraService } from './mc-terra.ts'
 import { parseVoice } from './mc-social.ts'
 import { isHelpCommand, handleHelpText, isCliCommand, cliHelpLines, welcomeLines } from './mc-man.ts'
+import {
+  parseCli, parseBareCli, cliOverview, cliVerbHelp,
+  shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb,
+  type CliCommand,
+} from './mc-cli.ts'
 import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
@@ -790,6 +795,133 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       appendFileSync(CHANT_REPLY, JSON.stringify({ speaker, reply, kind, ts: Date.now() }) + '\n', 'utf-8')
     } catch (err) {
       log(`appendChantReply failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // ── 世界 CLI 分发器（2026-08-23 造物主谕「把技能做成cli」）：确定性、可执行、
+  // 自描述、机器可读（--json）。命令树与数据塑形在 mc-cli.ts；这里只做执行委派，
+  // 复用全线现有执行点：cast→resolveChant、ask→answerQuestion、pray→admit、
+  // innate→get/set、appraise→resolveChant('鉴定')。返回回执行数组。
+  // 裸动词白名单：低冲突词（status/skills/spells/innate/appraise/commands/help），
+  // 若用户私聊/公屏直接打这些词，也命中确定性 CLI（不靠自然语言框架猜）。
+  const CLI_BARE_WHITELIST = ['status', 'skills', 'spells', 'innate', 'appraise', 'commands', 'help']
+
+  // 祈愿提交（CLI pray 复用 whisper 的收执逻辑）：供奉收执 + 入队 + 回执。
+  // 与 handleWhisper 末尾的 admit 保持一致（收执→记账→入队→回执）。
+  async function submitPrayerCli(username: string, wish: string, offeringText: string | null): Promise<void> {
+    const bot = getBot()
+    const reply = (text: string) => { try { bot.whisper(username, text) } catch { /* */ } }
+    const t: Transmigrator | null = transmigrators.getByUsername(username)
+    let offer: OfferingInfo | undefined
+
+    if (offeringText) {
+      const resolved = resolveOfferingText(offeringText)
+      if (!resolved) {
+        reply(`[女神] 你想供奉「${offeringText}」，但天神不识此物。可用：面包/熟牛肉/煤/铁锭/金锭/钻石/绿宝石/附魔书…（写法如「面包x3」）。`)
+        return
+      }
+      offer = { id: resolved.id, cn: resolved.cn, count: resolved.count }
+      const taken = await takeOffering(username, offer)
+      if (!taken.ok) { reply(`[女神] ${taken.reason}`); return }
+      await grantXp(username, 15, 'offering')
+    }
+
+    const { ahead } = worlddb.inboxPush(username, t?.name ?? username, wish, offer)
+    worlddb.chronicleRecord('prayer', username, { wish, offering: offer })
+    try { worlddb.remember(username, 'prayer', `「${t?.name ?? username}」向天神祈愿：「${wish}」${offer ? `，并供奉 ${offer.cn}×${offer.count}` : ''}`) } catch { /* */ }
+    log(`cli wish received from ${username}: ${wish}${offer ? ` +offering ${offer.cn}x${offer.count}` : ''} (ahead: ${ahead})`)
+    reply(`[女神] ${t?.name ?? username}，祈愿已上达天听${offer ? `（供奉 ${offer.cn}×${offer.count} 已归神库）` : ''}${ahead > 0 ? `，队列中还有 ${ahead} 位信士` : ''}。女神将按序聆听，神谕随后送达。`)
+  }
+
+  async function handleCli(username: string, cmd: CliCommand): Promise<void> {
+    const bot = getBot()
+    const reply = (text: string) => { try { bot.whisper(username, text) } catch { /* bot not ready */ } }
+    const replyLines = (lines: string[]) => { for (const ln of lines) reply(ln) }
+    const jsonReply = (o: unknown) => { try { bot.whisper(username, `[CLI] ${JSON.stringify(o)}`) } catch { /* */ } }
+
+    // 鉴定 / appraise：resolveChant('鉴定') 命中 appraise atom → doAppraise（零命令原子）
+    const doAppraiseCli = async (textArg?: string): Promise<void> => {
+      const r = await resolveChant(username, textArg ?? '鉴定')
+      if (cmd.json) jsonReply({ ok: true, summary: r })
+      else reply(`[信使] ${r}`)
+    }
+
+    switch (cmd.verb) {
+      case 'commands': {
+        replyLines(cliOverview()); return
+      }
+      case 'help': {
+        const v = cmd.args[0] ?? ''
+        if (v) replyLines(cliVerbHelp(canonicalVerb(v) ?? v))
+        else replyLines(cliOverview())
+        return
+      }
+      case 'status': {
+        const view = magic.getState(username)
+        const innateName = magic.getInnate(username)
+        const { panel, json } = shapeStatus(view, innateName)
+        if (cmd.json) { jsonReply({ ok: true, ...json }); return }
+        replyLines(panel.split('\n')); return
+      }
+      case 'skills': {
+        const view = magic.getState(username)
+        const { panel, json } = shapeSkills(view, magic.listAtoms())
+        if (cmd.json) { jsonReply({ ok: true, ...json }); return }
+        replyLines(panel.split('\n')); return
+      }
+      case 'spells': {
+        const page = cmd.args[0] ? parseInt(cmd.args[0], 10) || 1 : 1
+        const { panel, json } = shapeSpells(magic.listAtoms(), page)
+        if (cmd.json) { jsonReply({ ok: true, ...json }); return }
+        replyLines(panel.split('\n')); return
+      }
+      case 'cast': {
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli cast <咒语>。要什么，直说。`); return }
+        const chant = cmd.args.join(' ')
+        const r = await resolveChant(username, chant)
+        if (cmd.json) jsonReply({ ok: true, summary: r })
+        else reply(`[信使] ${r}`)
+        return
+      }
+      case 'pray': {
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli pray <愿望>[｜ 供奉：xxx]。`); return }
+        const wishText = cmd.args.join(' ')
+        const { wish, offeringText } = splitWishOffering(wishText)
+        if (!wish) { reply(`[CLI] 愿想何物？`); return }
+        await submitPrayerCli(username, wish, offeringText)
+        return
+      }
+      case 'ask': {
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli ask <问题>。`); return }
+        await answerQuestion(username, cmd.args.join(' '))
+        return
+      }
+      case 'innate': {
+        const arg = cmd.args.join(' ').trim()
+        if (arg.startsWith('我选') || arg.startsWith('select')) {
+          const name = arg.replace(/^我选\s*/, '').replace(/^select\s*/, '').trim()
+          if (!name) { reply(`[CLI] 用法：/cli innate 我选 <法术名>。`); return }
+          const atom = magic.listAtoms().find((a) => a.name === name || a.id === name.toLowerCase())
+          if (!atom) { reply(`[CLI] 没有叫「${name}」的天赋法术。/cli spells 看法术表。`); return }
+          magic.setInnate(username, atom.id)
+          const { json } = shapeInnate(atom.name)
+          worlddb.chronicleRecord('innate_select', username, { name })
+          if (cmd.json) jsonReply({ ok: true, innateSet: atom.name })
+          else reply(`[女神] ${username}，你已选定出生天赋「${atom.name}」。这是与生俱来的能力，豁免等级门槛。`)
+          return
+        }
+        const innateName = magic.getInnate(username)
+        const { panel, json } = shapeInnate(innateName)
+        if (cmd.json) jsonReply({ ok: true, ...json })
+        else replyLines(panel.split('\n'))
+        return
+      }
+      case 'appraise': {
+        await doAppraiseCli(cmd.args.join(' '))
+        return
+      }
+      default:
+        reply(`[CLI] 未知命令「${cmd.verb}」。/cli commands 看全部。`)
     }
   }
 
@@ -1991,9 +2123,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
       }
-      // /cli（AI 命令接口）：/cli / /cli -h / --help / help / ? 一体应答（对应 /help cli 主题）。
+      // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
+      // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
+      const cliCmd = parseCli(message)
+      if (cliCmd) {
+        worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'chat' })
+        log(`cli cmd (chat) from ${username}: ${cliCmd.raw.slice(0, 60)}`)
+        handleCli(username, cliCmd).catch((err) => log(`handleCli(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        return
+      }
       if (isCliCommand(message)) {
-        const lines = cliHelpLines()
+        const lines = cliOverview()
         for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat-cli' }) } catch { /* best effort */ }
         return
@@ -2064,15 +2204,32 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           log(`help served to ${username}: ${message.trim().slice(0, 40)}`)
           return
         }
-        // /cli（AI 命令接口）：/cli / /cli -h / --help / help / ? 一体应答。
+        // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
+        // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
+        const cliCmd = parseCli(message)
+        if (cliCmd) {
+          worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'whisper' })
+          log(`cli cmd from ${username}: ${cliCmd.raw.slice(0, 60)}`)
+          await handleCli(username, cliCmd)
+          return
+        }
         if (isCliCommand(message)) {
-          const lines = cliHelpLines()
+          const lines = cliOverview()
           for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
           try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
           log(`cli served to ${username}: ${message.trim().slice(0, 40)}`)
           return
         }
         // 其余斜杠命令让行（/mail、/friend 等归 mc-social 信使）——保持原有的「/ 开头一律 return」。
+        return
+      }
+      // 世界 CLI 裸动词（2026-08-23）：私聊直接说 status/skills/spells/innate/appraise 等
+      // 低冲突词，也命中确定性 CLI，不靠自然语言框架猜。置于斜杠后、递话/唱咒/祈愿前。
+      const bareCli = parseBareCli(message, CLI_BARE_WHITELIST)
+      if (bareCli) {
+        worlddb.chronicleRecord('cli', username, { q: bareCli.raw.slice(0, 60), via: 'bare-whisper' })
+        log(`bare cli from ${username}: ${bareCli.raw.slice(0, 60)}`)
+        await handleCli(username, bareCli)
         return
       }
       // 递话协议让行（2026-08-17）：「说/喊/悄悄 <台词>」归 mc-social 女神传声，不当祈愿。
