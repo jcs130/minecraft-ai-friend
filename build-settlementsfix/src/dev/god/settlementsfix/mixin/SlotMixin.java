@@ -11,12 +11,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 神使手札/技能书不可入箱（2026-08-23 造物主谕「无法丢弃无法放入箱子」）。
+ * 神使手札（状态书）不可入箱（2026-08-23 造物主谕「状态书无法放入箱子」）。
  *
  * 拦截点 = {@link Slot#set(ItemStack)}：玩家把物品放进箱子/漏斗/熔炉等容器槽时，
- * 最终都会调目标槽的 set()。若放入的栈是受保护标记书（skillbook/craftreq/statusbook）
+ * 最终都会调目标槽的 set()。若放入的栈是受保护神使手札（custom_data.statusbook=true）
  * 且目标槽不属于玩家背包（Inventory），直接取消——书留在原地（玩家手里/背包/光标），
  * 进不了任何容器。
+ *
+ * 技能书/空白造物卷不受保护：它们是搜集品，可入箱、可送人。
  *
  * 玩家背包槽的 container = PlayerInventory（继承 Container），因此「不是背包槽」= 容器槽。
  * 这同时拦下鼠标拖放与 shift 批量移动两条路径（后者底层也走 Slot.set）。

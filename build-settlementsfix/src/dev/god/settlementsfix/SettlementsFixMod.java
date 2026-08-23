@@ -76,8 +76,9 @@ public class SettlementsFixMod {
     }
 
     /**
-     * 神使手札/技能书不可丢弃（2026-08-23 造物主谕「无法丢弃无法放入箱子」）。
+     * 神使手札（状态书）不可丢弃（2026-08-23 造物主谕「状态书无法丢弃」）。
      * ItemTossEvent 在玩家丢出物品（Q 键 / 拖出背包 / 丢出快捷栏）时触发且可取消。
+     * 技能书/空白造物卷不在保护内——它们是搜集品，可丢、可入箱、可送人。
      */
     private void onItemToss(net.neoforged.neoforge.event.entity.item.ItemTossEvent ev) {
         try {
@@ -146,9 +147,24 @@ public class SettlementsFixMod {
      * @param player 使用书的玩家
      * @param stack  玩家手上的 ItemStack（WrittenBookItem）
      */
-    /** 是否技能书（skillbook 或 craftreq 标记）。双端一致——客户端据此也取消打开。 */
+    /** 是否技能书（skillbook 标记）或空白造物卷（craftreq 标记）：右键 = 施法。双端一致——客户端据此取消打开。 */
     public static boolean isSkillBook(ItemStack stack) {
-        return isMarkedBook(stack);
+        if (!stack.is(Items.WRITTEN_BOOK)) {
+            return false;
+        }
+        var cd = stack.get(DataComponents.CUSTOM_DATA);
+        if (cd == null || cd.isEmpty()) {
+            return false;
+        }
+        try {
+            CompoundTag data = cd.getUnsafe();
+            if (data == null) {
+                return false;
+            }
+            return data.contains("skillbook") || data.getBoolean("craftreq");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** 是否神使手札（custom_data.statusbook=true）。双端一致。 */
@@ -168,7 +184,11 @@ public class SettlementsFixMod {
         }
     }
 
-    /** 是否受保护的标记书（技能书/造物卷/神使手札）：不可丢弃、不可入箱。 */
+    /**
+     * 是否受保护的神使手札（custom_data.statusbook=true）：不可丢弃、不可入箱。
+     * 2026-08-23 拍板：只有状态书受保护——技能书/空白造物卷是搜集品，
+     * 可丢、可入箱、可送人（用户「技能书还得自己去搜集…可以给别人」）。
+     */
     public static boolean isMarkedBook(ItemStack stack) {
         if (!stack.is(Items.WRITTEN_BOOK)) {
             return false;
@@ -186,7 +206,7 @@ public class SettlementsFixMod {
         if (data == null) {
             return false;
         }
-        return data.contains("skillbook") || data.getBoolean("craftreq") || data.getBoolean("statusbook");
+        return data.getBoolean("statusbook");
     }
 
     /**
