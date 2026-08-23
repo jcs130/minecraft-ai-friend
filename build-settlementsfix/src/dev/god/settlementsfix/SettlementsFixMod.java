@@ -4,10 +4,12 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.GameType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -53,6 +55,27 @@ public class SettlementsFixMod {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onEntityInteract);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onRightClickItem);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemCrafted);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+    }
+
+    /**
+     * 守护天使以观察者模式登录（2026-08-23，造物主谕「sys 并且登录模式是观察者」）。
+     *
+     * 守护天使 = 客户端侧 AI 陪玩实体，登录名固定 sys_<owner>（ASCII）。它应在世界旁边
+     * 看护主人，而非参与生存：切 SPECTATOR 让它不破坏方块、不拾取掉落、不挨打、不占资源，
+     * 只以「守望」姿态存在。配合两个隐形 mixin（实体层 + player_info 名单层），完整形态
+     * 是「名单之外、世界之内、主人可见、旁人无感」的观察者。
+     *
+     * 时机：PlayerLoggedInEvent 在玩家完全加入玩家列表后触发，此时 setGameMode 会向客户端
+     * 同步游戏模式包，mineflayer 客户端（守护天使）能正常处理，不影响登录握手。
+     */
+    private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent ev) {
+        if (ev.getEntity() instanceof ServerPlayer sp) {
+            String name = sp.getScoreboardName();
+            if (name != null && name.startsWith("sys_")) {
+                sp.setGameMode(GameType.SPECTATOR);
+            }
+        }
     }
 
     private void onEntityInteract(PlayerInteractEvent.EntityInteract ev) {

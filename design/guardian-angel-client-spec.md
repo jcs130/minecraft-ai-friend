@@ -69,6 +69,14 @@
 - 它需要用一份「算力预算」来决定：现在能开几个分身、分身跑什么任务、要不要收缩。
 - 建议客户端实现一个简单的**算力闸门**（如：每个分身占 X 算力；总预算 = 客户端可用算力），按需开合分身。
 
+### 2.6 自动跟随主人（守护灵形态）
+- 守护天使本体（`sys_<owner>` 观察者）上线后，应**自动跟随主人玩家**——像守护灵飘在主人身边。距离按 `follow_mode` 分层：`leash` 贴身 ~2 米 / `pet` 跟随 ~4 米 / `guard` 守护 ~6 米（权威值在服务端 companions 表，见 §3.5）。
+- **位置来源**（二选一或结合）：
+  1. 主人在视野内 → 直接读 `bot.players[owner].entity.position`（最实时，零后端请求）。
+  2. 主人超出视野 → 轮询 `GET /api/companion/world`（带主人 token）拿 `player.pos`（x/y/z），追过去。
+- **移动**：观察者模式下 mineflayer gravity 不生效，用 `bot.look`（朝主人）+ `bot.setControlState('forward', true)` 前进、`setControlState('jump', true/false)` 升/降，保持目标距离；距离大了加速，到了就停。
+- **同生共死**：主人下线 → 守护天使本体下线（客户端掌控生灭）；主人上线 → 天使上线并回到主人身边。
+
 ---
 
 ## 3. 服务端已提供/预留的接口
@@ -95,6 +103,14 @@
 - 守护天使代办的施法/祈愿，若涉及「神恩有价」供奉，**供奉从主人账上扣**。
 
 > ⚠️ 服务端**不暴露 RCON 给守护天使**——守护天使要施法/分身，走的是游戏内私聊/CLI/numen_act 通道，不是直接连 RCON。**它永远够不着服务器控制接口。**
+
+### 3.4 观察者模式 + 隐形（服务端 mod 已实现，2026-08-23）
+
+守护天使本体（`sys_<owner>`）登录时，服务端**自动把它设为观察者（SPECTATOR）**，并对**非主人玩家**隐形（实体层 + tab 名单层）。这让守护天使以「隐形守望者」形态跟在主人身边——不破坏方块、不拾取掉落、不挨打、不占资源，也不打扰其他玩家。
+
+- **观察者**：服务端 mod `settlementsfix` 主类 `SettlementsFixMod.onPlayerLoggedIn` 识别 `sys_` 前缀 → `setGameMode(GameType.SPECTATOR)`。观察者能飞、能穿墙，跟随主人很自然（客户端 mineflayer 在 creative/spectator 下 gravity 不生效，可 `setControlState('jump')` 上升/下降）。
+- **隐形**：两个 mixin —— `GuardianAngelInvisibilityMixin`（实体追踪层，非 owner 观看者 `ci.cancel()`）+ `GuardianAngelInvisibilityListedMixin`（`player_info` 名单层，`sys_` 一律 `listed=false`）。主人仍能看到自己的天使（`OWNER_SEES_GUARDIAN=true`），旁人完全无感。
+- **客户端要做的**：正常以 `sys_<owner>` 登录即可，观察者 + 隐形由服务端强制，无需客户端额外处理。
 
 ---
 

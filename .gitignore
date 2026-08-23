@@ -6,6 +6,12 @@ dist/
 build/
 *.tsbuildinfo
 
+# settlementsfix mod 编译中间产物（源码在 src/ 与 META-INF/，jar 产物在 dist/）
+build-settlementsfix/pkg/
+build-settlementsfix/classes/
+build-settlementsfix/compile-args.txt
+build-settlementsfix/META-INF/
+
 # logs
 *.log
 npm-debug.log*

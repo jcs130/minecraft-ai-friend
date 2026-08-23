@@ -6,7 +6,8 @@
   "mixins": [
     "VillagerBubbleServiceMixin",
     "VillagerNameMixin",
-    "GuardianAngelInvisibilityMixin"
+    "GuardianAngelInvisibilityMixin",
+    "GuardianAngelInvisibilityListedMixin"
   ],
   "injectors": {
     "defaultRequire": 1
