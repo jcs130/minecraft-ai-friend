@@ -67,19 +67,42 @@ export function createRcon(config: Config): RconHandle {
   }
 
   let rcon: Rcon | null = null
+  let connecting: Promise<Rcon> | null = null
   async function ensure(): Promise<Rcon> {
     if (rcon && rcon.isConnected()) return rcon
+    if (connecting) return connecting
     if (!password) throw new Error(`rcon password not configured (${config.passwordPath})`)
-    rcon?.close()
-    const conn = new Rcon(config.host, config.port, password)
-    await conn.connect()
-    rcon = conn
-    log('rcon connected')
-    return conn
+    connecting = (async () => {
+      rcon?.close()
+      const conn = new Rcon(config.host, config.port, password)
+      await conn.connect()
+      rcon = conn
+      log('rcon connected')
+      return conn
+    })()
+    try {
+      return await connecting
+    } finally {
+      connecting = null
+    }
   }
 
   const service: RconService = {
-    send: async (cmd) => (await ensure()).send(toAscii(cmd)),
+    send: async (cmd) => {
+      try {
+        return (await ensure()).send(toAscii(cmd))
+      } catch (e) {
+        // 保守重试：仅当「连接本来就没建立/已明确断开（命令根本没发出去）」时重建一次。
+        // 不重试 timed out / closed —— 那些命令可能已被服务器执行，双发会重复给物/广播。
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/rcon not connected/i.test(msg)) {
+          rcon?.close()
+          rcon = null
+          return (await ensure()).send(toAscii(cmd))
+        }
+        throw e
+      }
+    },
     getEntityNumber: async (target, path) => {
       try {
         const out = await service.send(`data get entity ${target} ${path}`)

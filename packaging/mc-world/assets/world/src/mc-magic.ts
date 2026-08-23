@@ -34,12 +34,14 @@ export interface Config {
 }
 
 // ── 原子指令（Atom）类型 ────────────────────────────────────────────────
-type AtomParamType = 'number' | 'direction' | 'item'
+type AtomParamType = 'number' | 'direction' | 'item' | 'guard' | 'text'
 
 interface AtomParam {
   type: AtomParamType
   max?: number
   default?: number | string
+  /** text 类型：剥掉守卫名（默认 false）。契约任务用 true，目标名用 false。 */
+  stripGuard?: boolean
 }
 
 interface CostSpec {
@@ -58,6 +60,11 @@ interface Atom {
    *  惯例：support=辅助（移动/恢复/造物/照明）、attack=攻击、summon=召唤（通灵契约）、
    *  world=世界天象（全服）、utility=地形改造。用于面板分组/女神裁量（attack 慎施）/书卷分类。 */
   category?: string
+  /** 流派维（2026-08-23 正交分类第二维，可选）：东方/魔幻/忍术等。缺省归「通用」。 */
+  school?: string
+  /** 契约类法术（2026-08-23）：不走路 RCON commands，改由注入的 specialExecutor 执行。
+   *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）。 */
+  special?: 'contract' | 'trace' | 'recall'
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -82,6 +89,7 @@ export interface AtomSummary {
   name: string
   words: string[]
   category?: string
+  school?: string
   cost: CostSpec
   requiredLevel: number
 }
@@ -556,6 +564,32 @@ function extractItem(s: string): string | null {
   return null
 }
 
+// 守卫名候选词（契约/唤魂法术参数解析用，2026-08-23）。守卫只认桐人/鸣人——
+// 守卫桥 GUARDS 只驱动这两位（剑侍 mc-guard-kirito / 影侍 mc-guard-naruto），
+// 爱德华不在召唤范围。归一化到权威中文名；此处仅做"咒语里点到谁"的宽松提取，
+// 真正的守卫可用性由 specialExecutor（mc-god 注入）二次把关。
+const GUARD_PARAM_WORDS: Record<string, string> = {
+  '桐人': '桐人', 'kirito': '桐人', 'Kirito': '桐人', '桐': '桐人',
+  '鸣人': '鸣人', 'naruto': '鸣人', 'Naruto': '鸣人', '鸣': '鸣人',
+}
+
+function extractGuard(s: string): string | null {
+  for (const [alias, canonical] of Object.entries(GUARD_PARAM_WORDS)) {
+    if (s.includes(alias)) return canonical
+  }
+  return null
+}
+
+/** 提取自由文本任务/目标名：剥掉咒语词与（可选）守卫名，剩下的就是任务/目标。 */
+function extractTaskText(s: string, stripGuard: boolean, spellWords: string[] = []): string {
+  let t = s
+  for (const w of spellWords) t = t.replace(w, ' ')
+  if (stripGuard) {
+    for (const alias of Object.keys(GUARD_PARAM_WORDS)) t = t.replace(alias, ' ')
+  }
+  return t.replace(/\s+/g, ' ').trim()
+}
+
 // ── 匹配 / 参数 / 消耗 ─────────────────────────────────────────────────
 function matchSpell(chant: string, atoms: Atom[]): { atom: Atom; params: Record<string, number | string> } | null {
   for (const atom of atoms) {
@@ -666,6 +700,10 @@ function extractParams(chant: string, atom: Atom): Record<string, number | strin
       params[pname] = extractDirection(chant) ?? (spec.default as string)
     } else if (spec.type === 'item') {
       params[pname] = extractItem(chant) ?? (spec.default as string)
+    } else if (spec.type === 'guard') {
+      params[pname] = extractGuard(chant) ?? (spec.default as string)
+    } else if (spec.type === 'text') {
+      params[pname] = extractTaskText(chant, spec.stripGuard ?? false, atom.words)
     }
   }
   return params
@@ -963,11 +1001,22 @@ export interface MagicDeps {
   rcon: RconService
 }
 
+/** 契约/魂链法术执行器（2026-08-23）：效果不走路 RCON commands，由 mc-god 注入实际落地逻辑
+ *  （contract=写 goddess-orders 唤守卫、trace=传送到目标、recall=拉从者到身边）。 */
+export type SpecialExecutor = (
+  special: 'contract' | 'trace' | 'recall',
+  username: string,
+  params: Record<string, number | string>,
+  vars: Record<string, number | string>,
+) => Promise<{ ok: boolean; reply: string }>
+
 export interface MagicHandle {
   service: MagicService
   dispose: () => void
   /** 迟绑定史官：bootstrap 创建完 mc-god 后注入其 record 回调（解开 mc-magic ↔ mc-god 循环依赖）。 */
   setChronicle: (fn: (type: string, actor: string, detail: Record<string, unknown>) => void) => void
+  /** 迟绑定契约/魂链执行器：bootstrap 创建完 mc-god 后注入（同 setChronicle 解环思路）。 */
+  setSpecialExecutor: (fn: SpecialExecutor) => void
 }
 
 /** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createMagic(config, deps) 装配。 */
@@ -991,6 +1040,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       chronicleFn?.(type, actor, detail)
     } catch { /* 史官不在场，不阻碍世界运转 */ }
   }
+
+  // 契约/魂链执行器（迟绑定，mc-god 注入）：contract/trace/recall 法术的效果不走路 RCON，
+  // 改由这里落地（写 goddess-orders.jsonl / tp 目标）。未注入时这类法术静默失败。
+  let specialExecutor: SpecialExecutor | null = null
 
   // ── 施法台账（2026-08-17）：技能使用=服务器问题信号 ──────────────
   // 每次成功施法追加一行 JSONL（data/skill-usage.jsonl）。分析口径：
@@ -1145,10 +1198,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
 
   const service: MagicService = {
-    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], category: a.category, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 })),
+    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], category: a.category, school: a.school, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 })),
     getAtomById: (id) => {
       const a = atoms.find((x) => x.id === id)
-      return a ? { id: a.id, name: a.name, words: [...a.words], category: a.category, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 } : null
+      return a ? { id: a.id, name: a.name, words: [...a.words], category: a.category, school: a.school, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 } : null
     },
     getInnate: (u) => store.getInnate(u),
     setInnate: (u, id) => {
@@ -1522,6 +1575,16 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         }
       }
 
+      // 契约/魂链法术（2026-08-23）：效果不走路 RCON commands，先落地（写 goddess-orders / tp 目标），
+      // 成功才扣资源。失败直接回执，不白烧魔力/血祭。
+      let specialReply: string | null = null
+      if (atom.special) {
+        if (!specialExecutor) return '契约信道未开（执行器未就位），法术未成。'
+        const res = await specialExecutor(atom.special, username, params, vars)
+        if (!res.ok) return res.reply
+        specialReply = res.reply
+      }
+
       // 扣 mana（程序化状态库）
       store.spendMana(username, cost.mana)
 
@@ -1542,10 +1605,12 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
           }
         }
       }
-      // 法术效果命令
-      for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {
-        const out = await rcon.send(cmd)
-        if (out) log(`rc[${cmd}] -> ${out.trim()}`)
+      // 法术效果命令（契约/魂链法术的效果已由 specialExecutor 落地，跳过 commands）
+      if (!atom.special) {
+        for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {
+          const out = await rcon.send(cmd)
+          if (out) log(`rc[${cmd}] -> ${out.trim()}`)
+        }
       }
 
       // 视觉：粒子 + 音效 + 大字咏唱词
@@ -1568,7 +1633,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const manaLeft = store.get(username).mana
       // 逆转化实际增量（被上限截断时少于理论值，如实相告）
       const manaGained = cost.mana < 0 ? Math.max(0, Math.round(manaLeft - pstate.mana)) : 0
-      const reply = atom.reply
+      const reply = specialReply ?? atom.reply
         .replace(/\{distance\}/g, String(distance))
         .replace(/\{direction\}/g, String(params.direction ?? '东'))
       const parts: string[] = []
@@ -1706,5 +1771,6 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     service,
     dispose: () => lc.dispose(),
     setChronicle: (fn) => { chronicleFn = fn },
+    setSpecialExecutor: (fn) => { specialExecutor = fn },
   }
 }

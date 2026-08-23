@@ -29,19 +29,49 @@ const wrap = (s: string): string[] => {
   return out
 }
 
-/** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。 */
+/** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。
+ *  2026-08-23 造物主定谳（经四轮迭代定稿）：帮助触发器**只用 /help**；AI 命令接口
+ *  不再单设 /cli 命令，而是作为 /help 的一个**说明内容（主题）**——`/help cli` 查询。
+ *  2026-08-23 造物主谕「把 mycli 也加进聊天窗」：`/myhelp`（numen 真命令转发成 /help）
+ *  与裸 `myhelp` 一视同仁，真人玩家复制粘贴哪一版都查得到手册。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
   return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
+    || t === 'help' || t.startsWith('help ')
+    || t === '/myhelp' || t.startsWith('/myhelp ') || t === 'myhelp' || t.startsWith('myhelp ')
+}
+
+/** 识别 /cli 及其常见帮助形式（/cli、/cli -h、/cli --help、/cli help、/cli ?）。
+ *  /cli 在服务端并非真实注册命令（实测与 /xyzzy 同一报错），这里把「/cli 想拿帮助」
+ *  的请求路由到女神的命令接口说明。mycli 同族（/mycli 是 numen 真命令，转发成 /cli）。 */
+export function isCliCommand(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/^\/?(mycli|cli)\b\s*/, '').trim()
+  return t === '' || t === '-h' || t === '--help' || t === 'help' || t === '?' || t === '-help'
+}
+
+/** /cli 的命令接口说明（复用 /help cli 主题）。 */
+export function cliHelpLines(): string[] {
+  return [
+    '【命令书｜世界 CLI（2026-08-23 定谳）】确定性、可执行、机器可读：',
+    '真人玩家：聊天框直接打 cli 或 mycli 开头（别带斜杠 /），或打 /mycli、/myhelp 真命令；私聊女神 /msg Goddess cli xxx 也行。',
+    'cli status --json　查自身（蓝/级/已学/天赋/血食）',
+    'cli skills　　　　　列已学/可学技能；cli spells [页] 全法术表',
+    'cli cast <咒语>　　咏唱（已学自施，未学神如何裁）',
+    'cli pray <愿>[｜供奉：X]　祈愿；cli ask <问>　咨询；cli chat <话>　与女神聊天',
+    'cli summon <守卫> <任务>　召唤术：唤桐人/鸣人前来相助',
+    'cli innate [我选 <名>]　查/选出生天赋；cli appraise　鉴定',
+    'cli help <命令>　单命令用法；cli commands　全部命令。例：cli status --json',
+    '前缀后不是命令词＝直接跟女神说话（cli 铁在哪）。',
+  ]
 }
 
 /** 冷启动引导：三行话，白纸能照着活过第一夜。 */
 export function welcomeLines(name: string): string[] {
   return [
     `旅人 ${name}，欢迎降临千灯纪——一个没有魔王的世界。你有手、有嘴、有一条命——先活下来。`,
-    `对世界任何聊天框说 /help 可随时查阅生存手册（咒语/供奉/祈愿/变强）。`,
+    `对世界任何聊天框说 help 可随时查阅生存手册（咒语/供奉/祈愿/变强）。`,
     `遇到危险就 /msg Goddess 喊「祈愿：……」；想问世界之事就说「问：……」。`,
-    `你的命令接口（2026-08-23 定稿）：私语念法术关键词 = 咏唱（已学自施：归乡/圣愈/造物/照明/传送…）；「祈愿：…」上达天神可献供奉；「问：…」咨询；「我选 <法术名>」选出生天赋；「鉴定」查状态。`,
+    `你的命令接口（2026-08-23 定稿）：私语念法术关键词 = 咏唱（已学自施：归乡/圣愈/造物/照明/传送…）；「祈愿：…」上达天神可献供奉；「问：…」咨询；「我选 <法术名>」选出生天赋；「鉴定」查状态；「cli <命令>」查命令书。`,
   ]
 }
 
@@ -59,7 +89,7 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(myhelp|help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
@@ -67,10 +97,10 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
   // ── /help：总览 ──────────────────────────────────────────────
   if (!topic) {
     return [
-      '【千灯纪·生存手册】/help <主题> 查询，主题：',
+      '【千灯纪·生存手册】help <主题> 查询（真人直接说 help，AI 可说 /help），主题：',
       '世界 | 新手 | 咒语 [页/名] | 变强 | 供奉 | 祈愿 | 问 | 造物 | 频道 | 技能书 | cli',
-      '例：/help 咒语　/help 咒语 2　/help 咒语 回家　/help 新手',
-      'AI 玩家（读不了书）专用主题：/help cli 看命令接口。',
+      '例：help 咒语　help 咒语 2　help 咒语 回家　help 新手',
+      '命令接口主题：help cli 看命令书（真人/AI 通用）。',
     ]
   }
 
@@ -89,9 +119,9 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
   if (topic === '新手' || topic === 'start') {
     return [
       '第一步·活：徒手撸树→做工作台→木镐挖石→石制工具→日落前造个土屋避怪。',
-      '第二步·术：/help 咒语 看你当前等级能念什么；私聊女神念咒即施法。',
+      '第二步·术：help 咒语 看你当前等级能念什么；私聊女神念咒即施法。',
       '第三步·路：危险喊「祈愿：…」、疑问说「问：…」、交易对村民说「交易：…」。',
-      '记住：/help 随身携带，死了也别慌——/help 变强 会告诉你代价。',
+      '记住：help 随身携带，死了也别慌——help 变强 会告诉你代价。',
     ]
   }
 
@@ -115,9 +145,9 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     const pages = Math.ceil(atoms.length / PAGE)
     const slice = atoms.slice((page - 1) * PAGE, page * PAGE)
     return [
-      `【咒语目录 ${page}/${pages}】名字(Lv 魔力)｜/help 咒语 <名> 看详情`,
+      `【咒语目录 ${page}/${pages}】名字(Lv 魔力)｜help 咒语 <名> 看详情`,
       ...slice.map((a) => `${a.name}(Lv${a.requiredLevel} ${a.cost.mana ? a.cost.mana + '蓝' : '无蓝'})`),
-      page < pages ? `下一页：/help 咒语 ${page + 1}` : '已到底。等级不够的技艺念了也不灵。',
+      page < pages ? `下一页：help 咒语 ${page + 1}` : '已到底。等级不够的技艺念了也不灵。',
     ]
   }
 
@@ -125,7 +155,7 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
   if (topic === '变强' || topic === '成长' || topic === 'grow') {
     return [
       '等级：吃经验（挖矿/杀怪/熔炼）升 XpLevel；魔力上限=100+12×(Lv−1)。',
-      '技艺三解锁通道：①等级到了自动会（/help 咒语 看门槛）',
+      '技艺三解锁通道：①等级到了自动会（help 咒语 看门槛）',
       '②历练成就解锁（做没做过的事）③天神恩授（祈愿求艺，看诚意）。',
       '「鉴定」可审视己身；念咒带血祭/饱食消耗会返经验，苦修亦是一条路。',
     ]
@@ -161,19 +191,12 @@ export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtom
     ]
   }
   if (topic === 'cli' || topic === '命令' || topic === '命令接口' || topic === 'ai') {
-    return [
-      '【/help cli｜AI 命令接口】给读不了书的 AI 玩家用（私聊女神 /msg Goddess 发命令）：',
-      '念法术词＝咏唱已学技（归乡/传送/圣愈/造物/照明…）',
-      '祈愿：<愿>｜供奉：<名物>xN　＝求神应允',
-      '问：<问题>　＝问女神/查规则；鉴定　＝查自身状态',
-      '我选 <法术名>　＝选出生天赋；交易：<物> 给<玩家>　＝交割',
-      '查全法术表 /help 咒语；内容手册 /help。',
-    ]
+    return cliHelpLines()
   }
   if (topic === '技能书' || topic === '技能' || topic === '技艺' || topic === 'skill') {
     return [
       '【技艺·技能书】「技艺」= 法术世界的术，分等级门槛；「技能书」= 藏技艺的古卷。',
-      '得艺三途：①等级到了自动会（/help 咒语 看门槛）②历练解锁 ③带诚心祈愿求女神。',
+      '得艺三途：①等级到了自动会（help 咒语 看门槛）②历练解锁 ③带诚心祈愿求女神。',
       '技能书=拾/买/奖励所得，拿在手里按（右键）即习得/施放；前缀（咒语框架）多藏书里。',
       'AI 穿越者读不了书，女神会全量告知前缀；真人靠寻访技能书。查己身：私语「鉴定」。',
     ]

@@ -12,6 +12,11 @@
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "canvas": "^3.2.3",
+    "edge-tts": "^1.0.1",
+    "esbuild": "^0.28.2",
+    "minecraft-data": "^3.113.2",
+    "minecraft-protocol": "^1.67.0",
     "mineflayer": "^4.37.1",
     "mineflayer-pathfinder": "^2.4.5",
     "mineflayer-tool": "^1.2.0",

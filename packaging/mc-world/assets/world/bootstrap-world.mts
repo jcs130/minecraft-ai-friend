@@ -13,6 +13,7 @@
 // 2026-08-21 已脱 cordis 壳：手动依赖注入（createXxx 工厂），
 // 依赖顺序 = 无依赖者先建，mc-god 最后建（依赖最多），
 // mc-magic ↔ mc-god 的循环依赖经 magic.setChronicle(god.service.record) 迟绑定解开。
+import fs from 'node:fs'
 import { createBot } from './src/mc-bot.ts'
 import { createRcon } from './src/mc-rcon.ts'
 import { createLogwatch } from './src/mc-logwatch.ts'
@@ -164,6 +165,8 @@ const god = createGod({
   advancementNamesPath: `${D}/advancement-names.json`,
   // 「平衡」通道白名单（私服真人玩家名不再硬编码）：默认仅女神；服主可经 MC_MAINTAINERS 注入，逗号分隔
   maintainers: (process.env.MC_MAINTAINERS ?? 'Goddess').split(',').map(s => s.trim()).filter(Boolean),
+  // 特殊监听白名单（VIP 真人）：说的一切女神都要聆听回应，绕过冷启动/冷却；经 MC_VIP_LISTEN 注入
+  vipListen: (process.env.MC_VIP_LISTEN ?? '').split(',').map(s => s.trim()).filter(Boolean),
   balanceFlushMs: 120_000,
   bulletinPath: `${D}/balance-bulletin.json`,
   heartbeatPath: `${D}/world-heartbeat.json`,
@@ -181,12 +184,47 @@ magic.setChronicle(god.service.record)
 // 契约/魂链法术执行器（2026-08-23）：contract/trace/recall 的效果由 mc-god 落地（写 goddess-orders / tp）。
 magic.setSpecialExecutor((special, username, params, vars) => god.service.execSpecial(special, username, params, vars))
 
+// 女神天眼实体快照（2026-08-23）：周期性把 Goddess 视野内的实体写进 web-entities.json，
+// 供 9090 面板小地图标注怪物（#1 怪物显示）。女神以旁观者常驻，视野即「她所见」，
+// 覆盖以天眼为中心 / 显视距离内的 mob、村民、玩家。全服精确实体待服务端 mod 版（另立）。
+const SNAP_FILE = `${D}/web-entities.json`
+const MOB_RE = /(zombie|zombie_villager|drowned|husk|skeleton|stray|wither_skeleton|spider|cave_spider|creep|creeper|enderman|witch|slime|phantom|pillager|vindicator|ravager|evoker|vex|blaze|guardian|elder_guardian|shulker|warden|hoglin|zoglin|piglin|piglin_brute|breeze|bogged|boss|living)/i
+const snapshotTimer = setInterval(() => {
+  try {
+    const b = bot.getBot()
+    if (!b || !b.entities) return
+    const now = Date.now()
+    const out = { at: now, t: now / 1000, entities: [] }
+    for (const id of Object.keys(b.entities)) {
+      const e = b.entities[id]
+      if (!e || !e.position) continue
+      const ent = e.entity
+      const type = String(e.type ?? ent?.type ?? '')
+      const mobType = String(e.mobType ?? ent?.mobType ?? '')
+      const kind = String(e.kind ?? ent?.kind ?? '')
+      const name = String(e.username ?? ent?.name ?? '')
+      const isPlayer = type === 'player' || !!name
+      const isMob = (type === 'mob') || MOB_RE.test(type) || MOB_RE.test(mobType)
+      const isNpc = !isPlayer && !isMob && /(villager|wandering_trader|npc)/i.test(type + mobType)
+      out.entities.push({
+        id, type: mobType || type, kind, name,
+        x: Math.round(e.position.x * 10) / 10,
+        y: Math.round(e.position.y * 10) / 10,
+        z: Math.round(e.position.z * 10) / 10,
+        isMob, isNpc, isPlayer,
+      })
+    }
+    fs.writeFileSync(SNAP_FILE, JSON.stringify(out))
+  } catch { /* 天眼快照非关键，静默 */ }
+}, 1500)
+
 // ---------- 进程收尾：逆序 dispose ----------
 const handles = [bubble, ritual, social, saga, evolveReview, terra, god, magic, transmigrator, worlddb, logwatch, rcon, bot]
 let shuttingDown = false
 const shutdown = (): void => {
   if (shuttingDown) return
   shuttingDown = true
+  clearInterval(snapshotTimer)
   console.log('[bootstrap-world] shutting down ...')
   for (const h of handles) {
     try { h.dispose() } catch (e) {
