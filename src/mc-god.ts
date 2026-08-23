@@ -423,8 +423,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
   // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
+  // 守护天使 CC（2026-08-23 客户端守护登记）：女神对「主人」递话/递事件时，
+  // 同步 whisper 一份给其守护天使(sys_<owner>)——守护收到后本地 TTS 播报（按设计不做游戏内语音）。
+  // 自守卫：主人无守护 / 守护离线 / 目标即守护本身 → 静默跳过。
+  const ccGuardian = (owner: string, text: string) => {
+    try {
+      const bot = getBot()
+      if (!bot?.entity) return
+      const g = worlddb.guardianByOwner(owner)
+      if (!g || g.botUsername === owner) return
+      if (!(bot as any).players?.[g.botUsername]) return
+      bot.whisper(g.botUsername, `[守护] ${text}`)
+    } catch { /* CC 失败不影响主送达 */ }
+  }
   const courier = (player: string, text: string) => {
     try { getBot().whisper(player, `[信使] ${text}`) } catch { /* bot not ready */ }
+    ccGuardian(player, text)
   }
 
   // ── 供奉收执（RCON 权威复核 + /clear 收走，贡品即从行囊消失）──────
@@ -2245,6 +2259,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerJoined', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'join' })
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
@@ -2258,6 +2273,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerLeft', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (username.startsWith('sys_')) return // 守护天使不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'leave' })
     })
 
@@ -2265,6 +2281,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 让真人玩家像对服主喊话一样对女神说话。天平（平衡）命令同通道。
     bot.on('chat', (username: string, message: string) => {
       if (username === bot.username) return
+      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
+      // 公屏发言（尤其语音转文字的自然语言祈使句，如「给我来一个铁剑吧」）应优先
+      // 上达女神，而不是被附近 NPC 截胡或忽略。直接复用私语处理链路 handleWhisper，
+      // 让女神聆听并回应她说的每一句话（回应仍走私语，不刷公屏）。
+      if (config.vipListen.includes(username.toLowerCase())) {
+        handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        return
+      }
       // 世界手册（2026-08-20）：公屏说 /help 同样应答——白纸 Agent 未必知道要
       // 私聊。回复走私语点对点，不刷公屏。零 LLM，毫秒级。
       if (isHelpCommand(message)) {

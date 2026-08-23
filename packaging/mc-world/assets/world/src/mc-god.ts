@@ -2238,6 +2238,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerJoined', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'join' })
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
@@ -2251,6 +2252,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerLeft', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (username.startsWith('sys_')) return // 守护天使不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'leave' })
     })
 
@@ -2258,6 +2260,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 让真人玩家像对服主喊话一样对女神说话。天平（平衡）命令同通道。
     bot.on('chat', (username: string, message: string) => {
       if (username === bot.username) return
+      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
+      // 公屏发言（尤其语音转文字的自然语言祈使句，如「给我来一个铁剑吧」）应优先
+      // 上达女神，而不是被附近 NPC 截胡或忽略。直接复用私语处理链路 handleWhisper，
+      // 让女神聆听并回应她说的每一句话（回应仍走私语，不刷公屏）。
+      if (config.vipListen.includes(username.toLowerCase())) {
+        handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        return
+      }
       // 世界手册（2026-08-20）：公屏说 /help 同样应答——白纸 Agent 未必知道要
       // 私聊。回复走私语点对点，不刷公屏。零 LLM，毫秒级。
       if (isHelpCommand(message)) {

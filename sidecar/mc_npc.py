@@ -26,6 +26,9 @@ _STD_KEEP = (sys.stdout, sys.stderr)  # 防 GC：失引用的旧 wrapper 会被�
 PROX_RADIUS = 3.5
 PROX_COOLDOWN = 240
 EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+# VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
+# 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
+VIP_LIST = {n.strip().lower() for n in os.environ.get("MC_VIP_LISTEN", "").split(",") if n.strip()}
 
 def _prox_lines(v):
     pool = []
@@ -1588,6 +1591,15 @@ def tail_forever():
         if line:
             who, msg = parse_line(line)
             if who and msg:
+                # VIP 让位（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
+                # 公屏发言（尤其语音转文字）由女神独占处理，NPC 不接话——避免「牧羊女抢答、
+                # 回些奇奇怪怪的话」盖过女神的看护。
+                if who.lower() in VIP_LIST:
+                    continue
+                # 守护天使（sys_ 前缀，客户端陪玩）不接话（2026-08-23）：它走私语代主人上达，
+                # 公屏偶发也不该被村民抢答。
+                if who.lower().startswith("sys_"):
+                    continue
                 try:
                     v, replies = route(who, msg)
                 except Exception as e:
@@ -2051,6 +2063,9 @@ def village_watch_loop():
 PROX_RADIUS = 3.5
 PROX_COOLDOWN = 240
 EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+# VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
+# 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
+VIP_LIST = {n.strip().lower() for n in os.environ.get("MC_VIP_LISTEN", "").split(",") if n.strip()}
 
 def _prox_lines(v):
     pool = []

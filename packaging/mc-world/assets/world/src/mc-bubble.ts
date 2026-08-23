@@ -260,6 +260,7 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
     bot.on('playerJoined', (player) => {
       const name = player.username ?? ''
       if (!name || name === bot.username) return
+      if (name.startsWith('sys_')) return // 守护天使（客户端陪玩）不接欢迎气泡（2026-08-23）
       if (welcomed.has(name) || welcomeFailed.has(name)) return
       log(`playerJoined: ${name}`)
       welcomed.add(name)
@@ -270,7 +271,7 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
   function pollWelcome(bot: Bot) {
     try {
       for (const name of Object.keys(bot.players)) {
-        if (name === bot.username || welcomed.has(name) || welcomeFailed.has(name)) continue
+        if (name === bot.username || name.startsWith('sys_') || welcomed.has(name) || welcomeFailed.has(name)) continue
         log(`pollWelcome found: ${name}`)
         welcomed.add(name)
         void goddessWelcome(name)

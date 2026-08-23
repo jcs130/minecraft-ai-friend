@@ -116,9 +116,9 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
     }
     for (const line of lines) {
       try {
-        bot.chat(line)
+        bot.whisper(username, line)
       } catch (err) {
-        log(`announce chat failed: ${err instanceof Error ? err.message : String(err)}`)
+        log(`announce whisper failed: ${err instanceof Error ? err.message : String(err)}`)
         return
       }
       // 逐句缓说：聊天限速防踢（vanilla 反刷屏在 ~5行/秒即踢，2026-08-17 双仪式并行实测被踢），
@@ -156,14 +156,9 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
     const name = atom?.name ?? atomId
     const bot = getBot()
     try {
-      // 确认跟随来源通道（2026-08-22）：
-      // 公屏选 → 公屏确认（原文保留，必须点名 + 含「出生天赋「X」」，穿越者进程靠这个模式找回记忆）；
-      // 私语选 → 私语确认（私聊对象就是本人，无需点名，但保留同一关键句供 mc-mystic parseInnate 捕获）。
-      if (via === 'whisper') {
-        bot.whisper(username, `[女神] 你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
-      } else {
-        bot.chat(`[女神] ${username}，你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
-      }
+      // 2026-08-23 造物主谕「选择技能不该发公屏」：确认一律私语送达本人，
+      // 不刷公屏（守护天使/穿越者/真人都走私语通道收到）。
+      bot.whisper(username, `[女神] 你的出生天赋「${name}」已镌入灵魂，永世不灭。`)
     } catch (err) {
       log(`confirm failed: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -214,6 +209,7 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
       const username = player?.username
       if (!username) return
       if (username === bot.username) return // 女神自己不参加仪式
+      if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不是穿越者，不参加降临仪式（2026-08-23）
       if (magic.getInnate(username) !== null) return
       // 稍等几秒让客户端站稳，再开仪式。
       setTimeout(() => {
@@ -237,6 +233,7 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
         if (bot.entity) {
           for (const username of Object.keys(bot.players)) {
             if (username === bot.username) continue
+            if (username.startsWith('sys_')) continue // 守护天使不参加降临仪式（2026-08-23）
             if (pending.has(username)) continue
             if (magic.getInnate(username) !== null) continue
             startRitual(username).catch((err) => log(`ritual error: ${err instanceof Error ? err.message : String(err)}`))
