@@ -33,6 +33,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'ask', aliases: ['question', '问'], summary: '咨询女神 / 查规则', usage: 'ask <问题>', argDesc: '问题：任何世界向问题', json: false },
   { id: 'innate', aliases: ['天赋', 'talent'], summary: '查/选出生天赋', usage: 'innate [我的 | 我选 <法术名>]', argDesc: '我选 <法术名>：选天赋；默认查', json: true },
   { id: 'appraise', aliases: ['鉴定'], summary: '鉴定自身（法力/等阶/秘法）', usage: 'appraise', json: true },
+  { id: 'summon', aliases: ['召唤', '传唤'], summary: '召唤术：把现有守卫召来相助（桐人/鸣人/爱德华）', usage: 'summon <守卫名> <任务>', argDesc: '守卫名：桐人/鸣人/爱德华；任务：让他干什么（如 帮我挖矿）', json: true },
 ]
 
 // ── 解析 ───────────────────────────────────────────────────────────────
