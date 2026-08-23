@@ -35,9 +35,15 @@
 
 > ⚠️ **召唤范围边界（2026-08-23 修正）**：能被召唤的守卫 = **守卫桥 `GUARDS` 真正驱动的角色 = 桐人、鸣人**（剑侍 mc-guard-kirito / 影侍 mc-guard-naruto）。**爱德华不在召唤范围**——它不在守卫桥 `GUARDS`、也不在穿越者档案 `transmigrators.json`（只被 mc-npc `EXCLUDE_PROX` / gateway `_NON_HUMAN` 作为非真人排除、被世界进程 `GUARD_NAMES` 历史遗留列入），无任何驱动链路，既不能自主行动也无可召唤的身体。召唤术只认桐人/鸣人。
 
+> 📌 **「官方侍卫」身份界定（2026-08-23 造物主拍板）**：**官方侍卫 = 守卫桥驱动的 numen 服务端守卫（桐人/鸣人）。来自外部的 mineflayer 客户端（守护天使 `sys_<owner>`、穿越者 Agent bot 等）一律不属女神服务器的官方侍卫。** 两者本质不同：
+> - **官方侍卫**：服务端原生 numen 假玩家（NumenPlayer），守卫桥 `GUARDS` 驱动（有 agent 上脑、可自主行动/召唤/保护），是服务器「官方提供的侍从服务」。
+> - **外部 mineflayer**：客户端侧实体（守护天使 = 玩家客户端 LLM 陪玩、穿越者 Agent），经 mineflayer 接入；它们**不属官方侍卫**，也**够不着**守卫桥/服务端 numen 能力——是玩家自带的同伴，不是服务器官方的。
+> 凡涉及「服务器官方侍卫」的功能（召唤/保护/遣散），只认守卫桥 `GUARDS` 的桐人/鸣人；绝不可把外部 mineflayer 当侍卫召唤或当作官方能力。
+
 ---
 
-## 一、为什么不是 a 路（MCP 桥）
+## 一、为什么不是 a 路（MCP 桥)<<<TRUNCATED>>>
+
 
 - Numen 的 `McpServer`（外接大脑，HTTP `127.0.0.1:8765/mcp`）是 **client-only**：跑在 MC 客户端进程，靠 `Minecraft.getInstance().execute()` + `Services.NETWORK.sendToServer()` 发包驱动服务端假玩家。
 - MC 客户端要 LWJGL/GLFW/OpenGL **GUI 窗口**；Numen 无运行时无头模式（源码里 "headless" 均指 GameTest/单测）。
