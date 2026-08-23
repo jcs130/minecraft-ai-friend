@@ -215,6 +215,219 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
     ])
 
 
+# ---------------- 增量感知（2026-08-23 方案A：上下文只发变化点，治"每轮全量快照堆叠"） ----------------
+# 背景：守卫桥每轮把【身体快照+世界+地形+实体】全量塞进 prompt，QwenPaw 按 session 持久累积后，
+# 历史里全是同构快照，信噪比极低、token 浪费。方案A：首轮/濒死/卡死用全量（decision_prompt），
+# 普通轮只发"当前关键状态（紧凑行）+ 与上轮相比的变化点"；地形/实体/世界无变化就不重发。
+# 亲卫的历史（scroll 窗口内）里有首轮完整说明与上一轮地形，决策信息不丢。
+
+def _as_dict(s):
+    """RCON 输出（dict 或含 JSON 的字符串）→ dict；解析失败返回 None。"""
+    if isinstance(s, dict):
+        return s
+    if isinstance(s, str):
+        m = re.search(r"\{.*\}", s, re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+    return None
+
+
+def _status_compact(status):
+    """status → 紧凑关键行：HP/饥饿/饱和/位置/模式。解析失败返回 None。"""
+    d = _as_dict(status)
+    if not d:
+        return None
+    parts = []
+    hp, mhp = d.get("hp"), d.get("max_hp", 20)
+    if isinstance(hp, (int, float)) and isinstance(mhp, (int, float)):
+        parts.append(f"HP {hp:.0f}/{mhp:.0f}")
+    hunger = d.get("hunger")
+    if isinstance(hunger, (int, float)):
+        parts.append(f"饥饿 {hunger:.0f}/20")
+    sat = d.get("saturation")
+    if isinstance(sat, (int, float)):
+        parts.append(f"饱和 {sat:.0f}")
+    pos = d.get("position") or d.get("pos")
+    if isinstance(pos, (list, tuple)) and len(pos) >= 3:
+        parts.append(f"位置 ({pos[0]:.1f},{pos[1]:.1f},{pos[2]:.1f})")
+    gm = d.get("game_mode") or d.get("gamemode")
+    if gm:
+        parts.append(f"模式 {gm}")
+    return " ".join(parts) if parts else None
+
+
+def _status_diff(old, new):
+    """两条紧凑状态行的逐字段 diff（'HP 20→19(-1)'、'移动 北 4 格'）。"""
+    out = []
+    for label, pat in (("HP", r"HP ([\d.]+)/([\d.]+)"),
+                       ("饥饿", r"饥饿 ([\d.]+)/20"),
+                       ("饱和", r"饱和 ([\d.]+)")):
+        mo, mn = re.search(pat, old), re.search(pat, new)
+        if mo and mn and mo.group(0) != mn.group(0):
+            try:
+                vo, vn = float(mo.group(1)), float(mn.group(1))
+                d = vn - vo
+                out.append(f"{mo.group(0)}→{mn.group(0)}" + (f"({d:+.0f})" if abs(d) >= 1 else ""))
+            except Exception:
+                out.append(f"{mo.group(0)}→{mn.group(0)}")
+    po = re.search(r"位置 \(([-\d.]+),([-\d.]+),([-\d.]+)\)", old)
+    pn = re.search(r"位置 \(([-\d.]+),([-\d.]+),([-\d.]+)\)", new)
+    if po and pn:
+        try:
+            xo, yo, zo = map(float, po.groups())
+            xn, yn, zn = map(float, pn.groups())
+            dist = ((xn - xo) ** 2 + (yn - yo) ** 2 + (zn - zo) ** 2) ** 0.5
+            if dist >= 0.5:
+                # MC 坐标：+X 东、-X 西、+Z 南、-Z 北（与 look_around 图例 North = -Z 一致）
+                dx, dz = xn - xo, zn - zo
+                if abs(dx) >= abs(dz):
+                    dirstr = "东" if dx > 0 else "西"
+                else:
+                    dirstr = "北" if dz < 0 else "南"
+                out.append(f"移动 {dirstr} {dist:.0f} 格")
+        except Exception:
+            pass
+    return out
+
+
+def _world_compact(world):
+    """world → (规范化键, 人读串)。丢弃每 tick 变的 game_time 等，只在语义变化时触发重发。"""
+    d = _as_dict(world)
+    if not d:
+        return None, None
+    key = {k: v for k, v in d.items() if k not in ("game_time", "time_of_day", "day", "tick", "world_time")}
+    norm = json.dumps(key, ensure_ascii=False, sort_keys=True)
+    parts = []
+    if d.get("is_dark_outside") is True:
+        parts.append("夜")
+    elif d.get("is_bright_outside") is True:
+        parts.append("昼")
+    if d.get("raining"):
+        parts.append("下雨")
+    if d.get("thundering"):
+        parts.append("雷暴")
+    dim = str(d.get("dimension", ""))
+    if "nether" in dim:
+        parts.append("下界")
+    elif "end" in dim:
+        parts.append("末地")
+    elif dim:
+        parts.append("主世界")
+    return norm, (" ".join(parts) if parts else "?")
+
+
+def _scan_entities(scan):
+    """scan → (实体列表[{id,type,dist}], 威胁计数行)；解析失败返回 (None, None)。"""
+    d = _as_dict(scan)
+    if not d:
+        return None, None
+    ents = d.get("entities") or []
+    rows = []
+    if isinstance(ents, list):
+        for e in ents:
+            if not isinstance(e, dict):
+                continue
+            eid = e.get("entity_id") or e.get("id")
+            typ = e.get("name") or e.get("type") or e.get("entity_type") or "?"
+            dist = e.get("distance")
+            rows.append({"id": str(eid), "type": str(typ),
+                         "dist": f"@{dist:.0f}m" if isinstance(dist, (int, float)) else ""})
+    counts = {}
+    for r in rows:
+        counts[r["type"]] = counts.get(r["type"], 0) + 1
+    count_line = "敌 " + "、".join(f"{t}×{c}" for t, c in sorted(counts.items())) if rows else "敌 0"
+    return rows, count_line
+
+
+def _look_norm(look):
+    if isinstance(look, str):
+        return look.strip()
+    return None
+
+
+# 工具清单压缩行：增量轮每轮只发摘要（完整说明在首轮全量 prompt 里，scroll 窗口内有）
+_TOOL_SUMMARY = (
+    "可用工具（完整说明见你首轮收到的决策说明）：移动 goto；采集 mine；捡物 collect_items；吃 eat；睡 sleep；"
+    "战斗 attack；找方块 scan_blocks；跟随 follow（仅明确护卫/同行时）；说话 say（你开口的唯一方式）；"
+    "咏唱 chant（已学技能自施）；祈愿 pray（上达天神）；叫停 task_stop；"
+    "感知 look_around / scan_nearby_entities / get_self_status / get_world_info / task_status"
+)
+
+
+def delta_prompt(g, status, world, look, scan, last_act, goal, prev,
+                 standing_task=None, standing_stuck=False, emergency=None, goddess_msgs=None):
+    """增量决策 prompt：当前关键状态（紧凑行）+ 与上轮相比的变化点。prev 是上轮缓存 dict。"""
+    lines = []
+    sc = _status_compact(status)
+    if sc:
+        lines.append(f"【身体】{sc}")
+    # —— 变化块 ——
+    delta_bits = []
+    old_sc = prev.get("status_compact")
+    if old_sc and sc and sc != old_sc:
+        delta_bits.extend(_status_diff(old_sc, sc))
+    wnorm, wread = _world_compact(world)
+    old_wnorm = prev.get("world_norm")
+    if wnorm:
+        if old_wnorm and wnorm != old_wnorm:
+            delta_bits.append(f"世界：{prev.get('world_read') or '?'}→{wread}")
+        elif not old_wnorm:
+            delta_bits.append(f"世界：{wread}")
+    ents, count_line = _scan_entities(scan)
+    old_ents = prev.get("scan_ids") or set()
+    if ents is not None:
+        cur_ids = {(e["id"], e["type"]) for e in ents}
+        added = cur_ids - old_ents
+        gone = old_ents - cur_ids
+        if added:
+            delta_bits.append("新增威胁：" + "、".join(f"{t}(id {i})" for i, t in sorted(added)))
+        if gone:
+            delta_bits.append("威胁消失：" + "、".join(f"{t}(id {i})" for i, t in sorted(gone)))
+        if not added and not gone and old_ents:
+            delta_bits.append(f"威胁无变化（{count_line}）")
+        elif ents:
+            delta_bits.append(count_line)
+    lines.append("【变化】" + ("；".join(delta_bits) if delta_bits else "无重大变化"))
+    # —— 地形（仅变化时重发；位置没动、地形没变则省略，亲卫历史里有上轮地图）——
+    ln = _look_norm(look)
+    old_ln = prev.get("look_norm")
+    if ln:
+        if old_ln and ln != old_ln:
+            lines.append(f"【周围地形（较上轮已变）】\n{ln[:800]}")
+        elif not old_ln:
+            lines.append(f"【周围地形】\n{ln[:800]}")
+    # —— 上轮动作 / 任务 / 目标 ——
+    lines.append(f"【上一动作】{last_act or '（无，这是第一轮）'}")
+    lines.append(f"【当前任务（常驻）】{standing_task or '（无——身体空闲）'}")
+    lines.append(f"【当前目标】{goal or '（尚未立下——结合处境先定一件正事）'}")
+    # —— 强出口提示 ——
+    if emergency:
+        lines.append(f"【⚠ 濒死急救】{emergency.get('reason')}——只输出续命动作：eat / goto 庇护所 / sleep / attack 贴脸怪。")
+    elif standing_stuck:
+        lines.append("【⚠ 常驻任务空转太久】目标已无意义——立刻换一个有推进的身体动作（goto/mine/eat/sleep/attack），别再 follow/发呆。")
+    # —— 女神消息 ——
+    if goddess_msgs:
+        parts = []
+        for m in goddess_msgs:
+            kind = "神谕" if m.get("kind") == "prayer" else ("咏唱回执" if m.get("kind") == "chant" else "女神谕示")
+            txt = str(m.get("reply") or m.get("text") or "").strip()
+            if txt:
+                parts.append(f"【{kind}】{txt}")
+        if parts:
+            lines.append("女神刚对你说话（务必回应或照做）：\n" + "\n".join(parts)
+                         + "\n—— 可 say 回应女神，也可按她指点行动（如她提醒念'圣愈'就输出 chant）。")
+    # —— 输出格式（保留，亲卫每轮输出依赖）——
+    lines.append("")
+    lines.append("只输出一个 JSON 对象，不要多余文字、不要调用工具：")
+    lines.append('{"tool":"<工具名>","args":{...},"reason":"<一句话，你为何这么做>","goal":"<当前目标，未变则照抄原目标>"}')
+    lines.append(_TOOL_SUMMARY)
+    lines.append("裁决要点：生存第一（饿了吃、天黑躲/睡、遇怪战或避、怕深水绕开）；目标连贯（goal 未变照抄）；不贪心；危险优先。")
+    return "\n".join(lines)
+
+
 # ---------------- 女神通道（2026-08-23：咏唱/祈愿/谕示） ----------------
 def drain_msgs(g):
     """读女神侧回执/谕示：返回本守卫相关的消息列表（chant-reply 按 speaker、
@@ -478,6 +691,9 @@ def drive_loop(g, stop_at):
     last_act = None
     goal = None
     round_n = 0
+    # —— 增量感知缓存（2026-08-23 方案A）：普通轮只发变化点；首轮/濒死/卡死发全量 ——
+    prev = {"status_compact": None, "world_norm": None, "world_read": None,
+            "look_norm": None, "scan_ids": set()}
     # —— 任务熔断推进追踪（QwenPaw 决策 loop 不僵死）——
     # 记录当前有界任务启动时间（elapsed_s 由 numen 给，但 start_ts 便于守卫桥侧判断持续时间）
     task_start_ts = None          # 当前"正在跑的任务"首次观察到的墙上时钟
@@ -609,10 +825,26 @@ def drive_loop(g, stop_at):
             scan = invoke(g["login"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
             # 3. 喂亲卫决策（standing_stuck 标记常驻任务空转过久的强出口；emergency 标记濒死，优先保命）
             g_msgs = drain_msgs(g)  # 2026-08-23：女神回执/谕示（chant 回执、神谕、主动守望）
-            prompt = decision_prompt(g, status, world, look, scan, last_act, goal,
-                                     standing_task=current_task, standing_stuck=standing_stuck,
-                                     emergency=emergency, goddess_msgs=g_msgs)
+            # 2026-08-23 方案A：首轮/濒死/卡死 → 全量 prompt（不省细节）；普通轮 → 增量 prompt（只发变化点）
+            if prev["status_compact"] is None or emergency or standing_stuck:
+                prompt = decision_prompt(g, status, world, look, scan, last_act, goal,
+                                         standing_task=current_task, standing_stuck=standing_stuck,
+                                         emergency=emergency, goddess_msgs=g_msgs)
+            else:
+                prompt = delta_prompt(g, status, world, look, scan, last_act, goal, prev,
+                                      standing_task=current_task, standing_stuck=standing_stuck,
+                                      emergency=emergency, goddess_msgs=g_msgs)
             ans = call_guard(g["agent"], g["session"], prompt)
+            # 本轮感知 → 更新增量缓存（供下一轮对比）
+            _sc = _status_compact(status)
+            _wn, _wr = _world_compact(world)
+            _ents, _ = _scan_entities(scan)
+            prev["status_compact"] = _sc
+            prev["world_norm"] = _wn
+            prev["world_read"] = _wr
+            prev["look_norm"] = _look_norm(look)
+            if _ents is not None:
+                prev["scan_ids"] = {(e["id"], e["type"]) for e in _ents}
             act = extract_action(ans)
             if not act:
                 feed_append(g, "noop", ans[:200] or "(empty)")
