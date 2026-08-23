@@ -274,7 +274,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>我的异世界:千灯级 · 萌悦AI 出品</title>
+<title>我的异世界:千灯纪 · 萌悦AI 出品</title>
 <style>
   :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --text:#e6edf3; --dim:#8b949e; --green:#3fb950; --gold:#d29922; --red:#f85149; --blue:#58a6ff; --purple:#bc8cff; }
   * { box-sizing:border-box; }
@@ -440,7 +440,7 @@ const PAGE = `<!doctype html>
   <div id="dbg" style="display:none"></div>
   <button id="dbg-btn" style="position:fixed;top:0;left:0;z-index:9999">DBGTEST</button>
   <header class="topbar">
-    <div class="brand"><span class="dot" id="dot"></span>我的异世界:千灯级 <span class="sub" id="sub"></span></div>
+    <div class="brand"><span class="dot" id="dot"></span>我的异世界:千灯纪 <span class="sub" id="sub"></span></div>
     <span class="worldchip" id="worldchip">世界…</span>
     <div class="tabs" id="tabs"></div>
     <div class="spacer"></div>
