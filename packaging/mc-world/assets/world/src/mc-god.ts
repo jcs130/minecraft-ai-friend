@@ -1491,6 +1491,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   scheduleVillagerPrayerPoll()
 
   // ── 守望者：死亡计分板轮询（scoreboard deathCount，权威）─────────────
+  // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）是女神的工具，不是旅人——
+  // 死亡守望/守卫提示/欢迎仪式一律不碰。名单可用 INTERNAL_BOT_NAMES 追加（逗号分隔，大小写敏感）。
+  const INTERNAL_BOTS = new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean))
+  const isInternalBot = (name: string) => INTERNAL_BOTS.has(name)
   const DEATH_OBJ = 'mcdeaths'
   const deathScores = new Map<string, number>()
   let deathObjReady = false
@@ -2083,7 +2087,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             await rcon.send(`scoreboard objectives add ${DEATH_OBJ} deathCount`)
             deathObjReady = true
           }
-          const names = Object.keys(bot.players).filter((n) => n !== bot.username)
+          const names = Object.keys(bot.players).filter((n) => n !== bot.username && !INTERNAL_BOTS.has(n))
           // 观察名单随进随出（2026-08-17）：每 tick 从 bot.players 现取，玩家加入/离开
           // 无需重启世界进程；名单变化时打一行日志作证（+加入 / -离开）。
           const watched = new Set(names)
@@ -2360,9 +2364,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
     // 史官：玩家行迹（谁踏入此界、谁离去——穿越者与真人一律记录）
     // mineflayer 4.x 的 playerJoined/playerLeft 回调给 Player 对象（旧版给 string），两种都兼容。
+    // 内部 bot（RenderBot 等）过滤见上方守望者常量区（INTERNAL_BOTS / isInternalBot）。
     bot.on('playerJoined', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (isInternalBot(username)) return
       if (username.startsWith('sys_')) {
         // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出；且隐形——
         // 「魂」不露身体（2026-08-23 归属定：vanilla 隐身效果，服务端权威，零 Java）。
@@ -2388,6 +2394,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     bot.on('playerLeft', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      if (isInternalBot(username)) return
       if (username.startsWith('sys_')) return // 守护天使不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'leave' })
     })

@@ -209,6 +209,8 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
       const username = player?.username
       if (!username) return
       if (username === bot.username) return // 女神自己不参加仪式
+      // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）不是穿越者，不参加降临仪式
+      if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) return
       if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不是穿越者，不参加降临仪式（2026-08-23）
       if (magic.getInnate(username) !== null) return
       // 稍等几秒让客户端站稳，再开仪式。
@@ -233,6 +235,8 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
         if (bot.entity) {
           for (const username of Object.keys(bot.players)) {
             if (username === bot.username) continue
+            // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）不参加降临仪式
+            if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) continue
             if (username.startsWith('sys_')) continue // 守护天使不参加降临仪式（2026-08-23）
             if (pending.has(username)) continue
             if (magic.getInnate(username) !== null) continue

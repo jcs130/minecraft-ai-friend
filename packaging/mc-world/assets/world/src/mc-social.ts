@@ -426,6 +426,8 @@ export function createSocial(config: Config, deps: SocialDeps): SocialHandle {
     bot.on('playerJoined', (player) => {
       const username = typeof player === 'string' ? player : player.username
       if (username === bot.username) return
+      // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）不上线提醒
+      if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) return
       remindOnJoin(bot, username)
     })
     log('goddess social channels armed (voice relay + mail + friends)')

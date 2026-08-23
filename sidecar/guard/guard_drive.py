@@ -13,7 +13,7 @@
   - 动作型工具异步（setTask 受理即回 task_id），循环须先查 task_status，任务在跑则等待、不重复派发。
   - 中文名走 UTF-8 直发 + 双引号包裹；不得用 backslashreplace。
 """
-import io, json, os, re, sys, time, socket, struct, threading, urllib.request
+import io, json, os, re, sys, time, socket, struct, threading, urllib.request, subprocess, base64, math
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -45,6 +45,16 @@ CONSOLE_URL = os.environ.get("QWENPAW_CONSOLE_URL", "http://127.0.0.1:8088/api/c
 # 已归位 B 仓 sidecar/guard/：账本写本仓 data/（不再跨仓引 A 仓 scratch-plugin/data）
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA = os.path.join(REPO_ROOT, "data")
+
+# ---- 守卫「眼」渲染（2026-08-23）：亲卫 qwen3.8 实测支持视觉，低频喂守卫位置截图 ----
+# 渲染脚本 guard-render.mts：mineflayer 临时 RenderBot → RCON tp 到守卫坐标 → viewer → 无头截图
+NODE_EXE = os.environ.get("NODE_EXE", r"C:\Program Files\nodejs\node.exe")
+TSX_CLI = os.environ.get("TSX_CLI",
+    r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\node_modules\tsx\dist\cli.mjs")
+RENDER_SCRIPT = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render.mts")
+RENDER_EVERY_N = 8            # 每 N 轮至少渲一张（20s/轮 → 约 2.5 分钟一帧）
+RENDER_MOVE_MIN = 20.0        # 位置变化 ≥ 此距离(格) 提前重渲
+RENDER_TIMEOUT = 100          # 单次渲染超时（秒）；失败吞掉不阻塞主流程
 
 # 两穿越者：身体登录名(login, ASCII) + 显示名(name, 中文) -> 亲卫 agent + 持久 session
 # 铁律 name/ID 分离（2026-08-23 造物主定调）：numen_act 等程序化操作用 login（Kirito/Naruto），
@@ -624,12 +634,18 @@ def _parse_health(status):
 
 
 # ---------------- console/chat 调亲卫 ----------------
-def call_guard(agent, session, prompt):
+def call_guard(agent, session, prompt, images=None):
+    content = [{"type": "text", "text": prompt}]
+    if images:
+        # 2026-08-23/24：守卫「眼」——亲卫视觉模型支持 image_url，图插在文本前；
+        # 2026-08-24 起一次给两张：fp 广角第一人称 + top 正俯视全景（描述在 prompt 中说明）。
+        for b64 in images:
+            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}})
     payload = {
         "channel": "console",
         "user_id": f"guard:{session}",
         "session_id": session,
-        "input": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        "input": [{"role": "user", "content": content}],
     }
     req = urllib.request.Request(
         CONSOLE_URL, data=json.dumps(payload).encode("utf-8"),
@@ -672,6 +688,61 @@ def extract_action(text):
         return json.loads(text[s:e + 1])
     except Exception:
         return None
+
+
+# ---------------- 守卫「眼」渲染（2026-08-23） ----------------
+def _status_pos(status):
+    """status → (x, y, z)；解析失败返回 None。"""
+    d = _as_dict(status)
+    if not d:
+        return None
+    pos = d.get("position") or d.get("pos")
+    if isinstance(pos, dict):
+        pos = [pos.get("x"), pos.get("y"), pos.get("z")]
+    if isinstance(pos, (list, tuple)) and len(pos) >= 3:
+        try:
+            return (float(pos[0]), float(pos[1]), float(pos[2]))
+        except Exception:
+            return None
+    return None
+
+
+def render_guard_eye(g, x, y, z):
+    """渲染守卫位置画面，返回 {"fp": b64, "top": b64}（广角第一人称 + 正俯视全景）；失败返回 None。
+
+    调 guard-render.mts：RenderBot 连入 → RCON 切 spectator+tp → viewer → 无头 chromium 截图
+    （一次运行出两张 <out>.fp.png / <out>.top.png）。
+    RCON 密码经 env 传入（不落盘）；直连主服 25599（25565 皮肤代理会拒陌生 bot）。
+    """
+    try:
+        rot_out = R.cmd(f'data get entity "{g["login"]}" Rotation')
+        m = re.search(r"\[([-\d.]+)[fd]?,\s*([-\d.]+)[fd]?\]", rot_out or "")
+        yaw, pitch = (m.group(1), m.group(2)) if m else ("", "")
+    except Exception:
+        yaw = pitch = ""
+    out = os.path.join(DATA, f"guard-eye-{g['tag']}.png")
+    env = dict(os.environ)
+    env["RCON_PW"] = RCON_PW
+    env.setdefault("MC_PORT", "25599")    # 直连主服
+    env.setdefault("RCON_PORT", "25575")
+    cmd = [NODE_EXE, TSX_CLI, RENDER_SCRIPT,
+           f"{x:.1f}", f"{y:.1f}", f"{z:.1f}", out, yaw, pitch]
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=RENDER_TIMEOUT,
+                       env=env, cwd=REPO_ROOT, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception as e:
+        print(f"[guard-eye] {g['name']} 渲染守卫之眼失败：{e}", flush=True)
+        return None
+    imgs = {}
+    for key, suffix in (("top3", ".top3.png"), ("top", ".top.png"), ("fp", ".fp.png")):
+        p = out.replace(".png", suffix)
+        if os.path.isfile(p) and os.path.getsize(p) > 1000:
+            try:
+                with open(p, "rb") as f:
+                    imgs[key] = base64.b64encode(f.read()).decode("ascii")
+            except Exception as e:
+                print(f"[guard-eye] {g['name']} 读截图失败：{e}", flush=True)
+    return imgs or None
 
 
 # ---------------- 记录 ----------------
@@ -827,8 +898,10 @@ def drive_loop(g, stop_at):
             scan = invoke(g["login"], "scan_nearby_entities", {"radius": 16, "type_filter": "hostile"})
             # 3. 喂亲卫决策（standing_stuck 标记常驻任务空转过久的强出口；emergency 标记濒死，优先保命）
             g_msgs = drain_msgs(g)  # 2026-08-23：女神回执/谕示（chant 回执、神谕、主动守望）
-            # 2026-08-23 方案A：首轮/濒死/卡死 → 全量 prompt（不省细节）；普通轮 → 增量 prompt（只发变化点）
-            if prev["status_compact"] is None or emergency or standing_stuck:
+            # 2026-08-23 方案A：仅首轮发全量（decision_prompt）；普通/濒死/卡死全走增量——
+            # 濒死循环里若每轮发全量，会和旧历史堆叠撑爆上下文（实测桐人迭代超限跳过本轮）。
+            # delta_prompt 自带濒死/卡死提示行，决策所需信息（身体/变化/威胁/目标）齐全。
+            if prev["status_compact"] is None:
                 prompt = decision_prompt(g, status, world, look, scan, last_act, goal,
                                          standing_task=current_task, standing_stuck=standing_stuck,
                                          emergency=emergency, goddess_msgs=g_msgs)
@@ -836,7 +909,30 @@ def drive_loop(g, stop_at):
                 prompt = delta_prompt(g, status, world, look, scan, last_act, goal, prev,
                                       standing_task=current_task, standing_stuck=standing_stuck,
                                       emergency=emergency, goddess_msgs=g_msgs)
-            ans = call_guard(g["agent"], g["session"], prompt)
+            # 3.4 守卫「眼」：低频渲染守卫位置截图喂给亲卫（qwen3.8 视觉）。
+            # 触发：位置水平移动 ≥ RENDER_MOVE_MIN 格，或距上次渲染 ≥ RENDER_EVERY_N 轮。
+            # 渲染 ~15s 会卡住本守卫线程一轮（双线程互不影响），失败静默。
+            imgs = None
+            try:
+                now_pos = _status_pos(status)
+                if now_pos and prev["status_compact"] is not None:
+                    g.setdefault("_render_n", 0)
+                    g["_render_n"] += 1
+                    last_rend = g.get("_last_render_pos")
+                    moved = last_rend is None or (
+                        math.hypot(now_pos[0] - last_rend[0], now_pos[2] - last_rend[2]) >= RENDER_MOVE_MIN)
+                    if moved or g["_render_n"] >= RENDER_EVERY_N:
+                        g["_render_n"] = 0
+                        imgs = render_guard_eye(g, *now_pos)
+                        # 无论成败都记录位置：失败不每轮重试轰炸，等移动或 N 轮后再试
+                        g["_last_render_pos"] = now_pos
+                        if imgs:
+                            feed_append(g, "eye", f"rendered @ ({now_pos[0]:.1f},{now_pos[1]:.1f},{now_pos[2]:.1f})")
+                            log(f"👁 {g['name']} 守卫之眼已渲染（{now_pos[0]:.1f},{now_pos[1]:.1f},{now_pos[2]:.1f}）")
+            except Exception as e:
+                log(f"👁 {g['name']} 守卫之眼触发异常：{e}")
+            ans = call_guard(g["agent"], g["session"], prompt,
+                             images=list(imgs.values()) if imgs else None)
             # 本轮感知 → 更新增量缓存（供下一轮对比）
             _sc = _status_compact(status)
             _wn, _wr = _world_compact(world)

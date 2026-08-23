@@ -25,7 +25,7 @@ _STD_KEEP = (sys.stdout, sys.stderr)  # 防 GC：失引用的旧 wrapper 会被�
 # 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
 PROX_RADIUS = 3.5
 PROX_COOLDOWN = 240
-EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯", "RenderBot", "ProbeBot"}
 # VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
 # 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
 VIP_LIST = {n.strip().lower() for n in os.environ.get("MC_VIP_LISTEN", "").split(",") if n.strip()}
@@ -2069,7 +2069,7 @@ def village_watch_loop():
 # 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
 PROX_RADIUS = 3.5
 PROX_COOLDOWN = 240
-EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯"}
+EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯", "RenderBot", "ProbeBot"}
 # VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
 # 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
 VIP_LIST = {n.strip().lower() for n in os.environ.get("MC_VIP_LISTEN", "").split(",") if n.strip()}

@@ -253,6 +253,8 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
 
   // ---------- 入服欢迎（playerEnter → 女神问候） ----------
   const welcomed = new Set<string>()
+  // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）是女神的工具，不接欢迎气泡。
+  const internalBots = new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean))
   let joinedBot: Bot | null = null
   function ensureJoinListener(bot: Bot) {
     if (joinedBot === bot) return
@@ -260,6 +262,7 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
     bot.on('playerJoined', (player) => {
       const name = player.username ?? ''
       if (!name || name === bot.username) return
+      if (internalBots.has(name)) return
       if (name.startsWith('sys_')) return // 守护天使（客户端陪玩）不接欢迎气泡（2026-08-23）
       if (welcomed.has(name) || welcomeFailed.has(name)) return
       log(`playerJoined: ${name}`)
@@ -271,7 +274,7 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
   function pollWelcome(bot: Bot) {
     try {
       for (const name of Object.keys(bot.players)) {
-        if (name === bot.username || name.startsWith('sys_') || welcomed.has(name) || welcomeFailed.has(name)) continue
+        if (name === bot.username || internalBots.has(name) || name.startsWith('sys_') || welcomed.has(name) || welcomeFailed.has(name)) continue
         log(`pollWelcome found: ${name}`)
         welcomed.add(name)
         void goddessWelcome(name)
