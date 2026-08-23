@@ -638,7 +638,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
       '2. 引导他自报家门：问他叫什么、记得自己是谁、此刻想做什么（不必长篇，一句即可）。',
       '3. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
-      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；/help 查生存手册。',
+      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；查手册说「help」（真人别打斜杠 /，会被游戏系统当命令拦下）。',
       '',
       '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
     ].join('\n')
@@ -697,11 +697,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         '【世界玩法要诀（本神亲订，作答权威依据）】',
         '法术（私语 /msg Goddess 念词，学过的自己咏唱；词可为自然语言）：',
         atomLines || '- （法术表暂空）',
-        '- 求助：私语「祈愿：<愿>[｜供奉：名物x数量]」；疑问：私语「问：<问题>」；选出生天赋：喊「我选 <法术名>」；查状态：「鉴定」；/help 查生存手册。',
+        '- 求助：私语「祈愿：<愿>[｜供奉：名物x数量]」；疑问：私语「问：<问题>」；选出生天赋：喊「我选 <法术名>」；查状态：「鉴定」；查手册说「help」。',
         '- 求大术可附供奉（危难慷慨、贵重之物更显诚心）；修为靠挖矿/历练/施法/供奉攒。',
         '- 世界设施：灯门镇有书商墨白卖技能书（如《归乡之卷》）；当面物品交割私语「/msg Goddess 交易：<物> 给<玩家名>」；村民/守卫也懂些常识。',
         '- 技艺（技能书）得法：等级到自动会 / 历练解锁 / 带诚心祈愿求女神；技能书=捡/买/奖励得的古卷，拿手里按（右键）即习得施放；前缀（咒语框架）多藏书里，AI 穿越者读不了书由本神全量告知。',
-        '- 命令接口=CLI（本神御定的命令书）：凡「操作/施法/求物/选天赋/交易」直接按命令办——私语念词 / 祈愿： / 问： / 交易：<物> 给<玩家> / 我选 <法术名> / 鉴定；查命令书打 /help；AI 玩家读不了书，可打 /help cli 看命令接口。',
+        '- 命令接口=CLI（本神御定的命令书）：凡「操作/施法/求物/选天赋/交易」直接按命令办——私语念词 / 祈愿： / 问： / 交易：<物> 给<玩家> / 我选 <法术名> / 鉴定；查命令书说「cli commands」或「help cli」；真人玩家直接说 cli xxx（别带斜杠 /），AI 玩家 /cli xxx 同效。',
       ].join('\n')
       // 2026-08-23 造物主谕「AI 穿越者优先用 CLI」：AI 读不了书，答时要多指命令、少叙事。
       const isAi = !!transmigrators.getByUsername(username)
@@ -804,7 +804,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // innate→get/set、appraise→resolveChant('鉴定')。返回回执行数组。
   // 裸动词白名单：低冲突词（status/skills/spells/innate/appraise/commands/help），
   // 若用户私聊/公屏直接打这些词，也命中确定性 CLI（不靠自然语言框架猜）。
-  const CLI_BARE_WHITELIST = ['status', 'skills', 'spells', 'innate', 'appraise', 'commands', 'help']
+  const CLI_BARE_WHITELIST = ['status', 'skills', 'spells', 'innate', 'appraise', 'commands']
 
   // 祈愿提交（CLI pray 复用 whisper 的收执逻辑）：供奉收执 + 入队 + 回执。
   // 与 handleWhisper 末尾的 admit 保持一致（收执→记账→入队→回执）。
@@ -2206,6 +2206,13 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         answerQuestion(username, pubAsk)
         return
       }
+      // 2026-08-23 造物主反馈「公屏问问题女神不回」：公屏原本只有「问：」前缀才答，
+      // 普通问句（铁在哪/怎么回血）漏了。这里补 looksLikeQuestion 兜底，与私聊一致。
+      const pubQ = message.trim()
+      if (looksLikeQuestion(pubQ)) {
+        answerQuestion(username, pubQ)
+        return
+      }
       const bal = matchBalance(message.trim())
       if (bal) {
         applyBalance(username, bal).catch((err) => log(`applyBalance(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
@@ -2246,7 +2253,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     function looksLikeQuestion(s: string): boolean {
       const t = s.trim()
       if (/[?？]$/.test(t)) return true
-      return /(怎么|如何|怎样|怎么办|为什么|为何|啥|什么|哪(里|儿|些|个)|多少|几时|何时|多久|在吗)/.test(t)
+      return /(怎么|如何|怎样|怎么办|为什么|为何|为啥|什么|啥|哪|多少|几时|何时|多久|多远|多深|多高|在吗)/.test(t)
     }
     async function handleWhisper(username: string, message: string): Promise<void> {
       if (username === bot.username) return
@@ -2272,14 +2279,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const isVip = config.vipListen.includes(OWNER)
       // 斜杠命令让行（2026-08-17）：/mail、/friend 等归 mc-social 信使处理，不进祈愿队列。
       // （2026-08-20 世界手册）/help 与 /h 归 mc-man（零 LLM 查表），在此截获应答。
+      // help（带/不带斜杠）→ 生存手册（真人说 help、AI 说 /help，都能查）。
+      if (isHelpCommand(message)) {
+        const lines = handleHelpText(message.trim(), magic)
+        if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+        try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+        log(`help served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
+        return
+      }
       if (message.trim().startsWith('/')) {
-        if (isHelpCommand(message)) {
-          const lines = handleHelpText(message.trim(), magic)
-          if (lines) for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
-          try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
-          log(`help served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
-          return
-        }
         // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
         // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
         // 主体=主人（守护天使代执行 CLI，作用到主人头上）。

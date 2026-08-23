@@ -131,20 +131,22 @@ export function parseBareCli(
 // ── 自描述帮助 ──────────────────────────────────────────────────────────
 export function cliOverview(): string[] {
   return [
-    '【世界 CLI】/cli <命令> [参数] [--json]　——Agent 一键调用面',
+    '【命令书】cli <命令> [参数] [--json]',
     ...CLI_VERBS.map((v) => `  ${v.usage.padEnd(28)}${v.summary}`),
     '',
-    '例：/cli status --json　　/cli cast 归乡　　/cli help cast',
-    '每条命令都可试 /cli help <命令> 看用法（--help 也行）。',
+    '例：cli status --json　　cli cast 归乡　　cli help cast',
+    '真人玩家：在聊天框直接打 cli 开头（别带斜杠 /），或私聊女神 /msg Goddess cli xxx。',
+    'AI 玩家（读不了书）：/cli xxx 与 cli xxx 同效。',
+    '每条命令都可试 cli help <命令> 看用法（--help 也行）。',
   ]
 }
 
 export function cliVerbHelp(verb: string): string[] {
   const v = CLI_VERBS.find((x) => x.id === verb)
-  if (!v) return [`没有「${verb}」这条命令。/cli commands 看全部命令。`]
+  if (!v) return [`没有「${verb}」这条命令。cli commands 看全部命令。`]
   const lines = [
-    `【/cli ${v.id}】${v.summary}`,
-    `  用法：/cli ${v.usage}`,
+    `【cli ${v.id}】${v.summary}`,
+    `  用法：cli ${v.usage}`,
   ]
   if (v.argDesc) lines.push(`  说明：${v.argDesc}`)
   if (v.json) lines.push(`  --json：返回机器可读结构化数据（Agent 用）`)
