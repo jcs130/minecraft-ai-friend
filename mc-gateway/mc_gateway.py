@@ -266,6 +266,66 @@ def active_skin(uid):
         r = c.execute("SELECT texture_url FROM skins WHERE user_id=? AND is_active=1 ORDER BY id DESC LIMIT 1", (uid,)).fetchone()
     return r["texture_url"] if r else None
 
+# ------------------------- 自定义皮肤（上传/绑定/历史） -------------------------
+SKIN_DIR = os.path.join(GATEWAY_DATA, "skins")
+os.makedirs(SKIN_DIR, exist_ok=True)
+
+def _is_png(data):
+    return data[:8] == b"\x89PNG\r\n\x1a\n"
+
+def _png_size(data):
+    """读 PNG IHDR 宽高（字节 16-23），宽 == 高 或 宽==2*高。失败返回 None。"""
+    try:
+        if len(data) < 24 or not _is_png(data): return None
+        import struct
+        w, h = struct.unpack(">II", data[16:24])
+        return int(w), int(h)
+    except Exception:
+        return None
+
+def save_skin(uid, data):
+    """校验 PNG 尺寸（64×64 或 64×32），存文件+入库。返回 (skins row dict, err)。"""
+    if not data or not _is_png(data):
+        return None, "not_png"
+    size = _png_size(data)
+    if not size:
+        return None, "bad_png"
+    w, h = size
+    if not ((w == 64 and h == 64) or (w == 64 and h == 32)):
+        return None, "bad_size(64x64 or 64x32)"
+    sha = hashlib.sha256(data).hexdigest()
+    fname = f"u{uid}_{sha[:16]}.png"
+    fpath = os.path.abspath(os.path.join(SKIN_DIR, fname))
+    # 防路径穿越：必须落在 SKIN_DIR 内
+    if not fpath.lower().startswith(os.path.abspath(SKIN_DIR).lower()):
+        return None, "forbidden"
+    model = "slim" if h == 32 else "classic"
+    with open(fpath, "wb") as f:
+        f.write(data)
+    with db() as c:
+        c.execute("UPDATE skins SET is_active=0 WHERE user_id=?", (uid,))
+        c.execute("INSERT INTO skins(user_id,texture_url,model,sha256,is_active,uploaded_at) VALUES(?,?,?,?,1,?)",
+                  (uid, f"skin://{fname}", model, sha, now_iso()))
+        row = c.execute("SELECT * FROM skins WHERE id=last_insert_rowid()").fetchone()
+        audit(c, "user", uid, None, "", "skin_upload", "skin", row["id"],
+              new_data={"file": fname, "model": model, "sha256": sha})
+    return dict(row), None
+
+def list_skins(uid):
+    with db() as c:
+        return [dict(r) for r in c.execute("SELECT id,model,sha256,is_active,uploaded_at FROM skins WHERE user_id=? ORDER BY id DESC", (uid,)).fetchall()]
+
+def skin_file_path(sid, uid):
+    """返回某皮肤的文件绝对路径（属主校验），无则 None。"""
+    with db() as c:
+        r = c.execute("SELECT texture_url FROM skins WHERE id=? AND user_id=?", (sid, uid)).fetchone()
+    if not r: return None
+    fname = r["texture_url"].replace("skin://", "")
+    p = os.path.abspath(os.path.join(SKIN_DIR, fname))
+    if not p.lower().startswith(os.path.abspath(SKIN_DIR).lower()):
+        return None
+    return p if os.path.exists(p) else None
+
 # ------------------------- 玩家在线信息（RCON list） -------------------------
 def rcon_cmd(cmd, timeout=6):
     """一次性 RCON 连接（频度低；连接由服务端自动释放）。"""
@@ -614,6 +674,9 @@ def json_write(res, code, obj):
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     res.send_response(code)
     res.send_header("Content-Type", "application/json; charset=utf-8")
+    res.send_header("Access-Control-Allow-Origin", "*")
+    res.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    res.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     res.send_header("Content-Length", str(len(body)))
     res.end_headers()
     res.wfile.write(body)
@@ -626,6 +689,13 @@ def read_body(res):
         return json.loads(raw.decode("utf-8") or "{}")
     except Exception:
         return {}
+
+def read_raw(res):
+    """读原始 body 字节（文件上传用），带上限保护。"""
+    ln = int(res.headers.get("Content-Length", 0) or 0)
+    if not ln or ln > 5 * 1024 * 1024:  # 5MB 上限
+        return b""
+    return res.rfile.read(ln)
 
 # ------------------------- 路由 -------------------------
 class Handler(BaseHTTPRequestHandler):
@@ -739,6 +809,29 @@ class Handler(BaseHTTPRequestHandler):
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
                     return json_write(self, 200, {"username": user["username"], "skin": active_skin(user["id"])})
+                if p == "/api/user/skins":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    return json_write(self, 200, {"username": user["username"], "skins": list_skins(user["id"])})
+                if p.startswith("/api/user/skin/file/"):
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    sid = p.split("/")[-1]
+                    try: sid = int(sid)
+                    except Exception:
+                        return json_write(self, 400, {"error": "bad skin id"})
+                    fp = skin_file_path(sid, user["id"])
+                    if not fp: return json_write(self, 404, {"error": "skin_not_found"})
+                    with open(fp, "rb") as f:
+                        data = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return None
                 if p == "/api/admin/player/list":
                     user = require_user(self.headers)
                     if not user or user["role"] not in ("owner", "admin"): return json_write(self, 403, {"error": "forbidden"})
@@ -812,17 +905,43 @@ class Handler(BaseHTTPRequestHandler):
                                   user["id"], old_data=old, new_data=fields)
                     return json_write(self, 200, {"ok": True, "updated": list(fields.keys())})
                 if p == "/api/user/skin":
+                    # 上传自定义皮肤：raw PNG 字节（64x64 classic / 64x32 slim）。替代旧 URL 字符串方式。
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    data = read_raw(self)
+                    row, err = save_skin(user["id"], data)
+                    if err:
+                        return json_write(self, 400, {"error": err})
+                    return json_write(self, 200, {"ok": True, "skin": row, "skins": list_skins(user["id"])})
+                if p == "/api/user/skins/activate":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
                     b = read_body(self)
-                    skin = str(b.get("skin", ""))[:256]
+                    sid = b.get("id")
                     with db() as c:
+                        row = c.execute("SELECT id FROM skins WHERE id=? AND user_id=?", (sid, user["id"])).fetchone()
+                        if not row:
+                            return json_write(self, 404, {"error": "skin_not_found"})
                         c.execute("UPDATE skins SET is_active=0 WHERE user_id=?", (user["id"],))
-                        c.execute("INSERT INTO skins(user_id,texture_url,is_active,uploaded_at) VALUES(?,?,1,?)",
-                                  (user["id"], skin, now_iso()))
-                        audit(c, "user", user["id"], user["username"], client_ip(self.headers), "skin_update", "skin", user["id"],
-                              new_data={"texture_url": skin})
-                    return json_write(self, 200, {"ok": True, "skin": skin})
+                        c.execute("UPDATE skins SET is_active=1 WHERE id=?", (sid,))
+                        audit(c, "user", user["id"], user["username"], client_ip(self.headers), "skin_activate", "skin", sid)
+                    return json_write(self, 200, {"ok": True, "active_id": sid})
+                if p == "/api/user/skins/delete":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    sid = b.get("id")
+                    fp = skin_file_path(sid, user["id"])
+                    with db() as c:
+                        row = c.execute("SELECT id,is_active FROM skins WHERE id=? AND user_id=?", (sid, user["id"])).fetchone()
+                        if not row:
+                            return json_write(self, 404, {"error": "skin_not_found"})
+                        c.execute("DELETE FROM skins WHERE id=? AND user_id=?", (sid, user["id"]))
+                        audit(c, "user", user["id"], user["username"], client_ip(self.headers), "skin_delete", "skin", sid)
+                    if fp and os.path.exists(fp):
+                        try: os.remove(fp)
+                        except Exception: pass
+                    return json_write(self, 200, {"ok": True})
                 if p == "/api/user/characters":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
@@ -942,6 +1061,14 @@ class Handler(BaseHTTPRequestHandler):
         self._route("GET")
     def do_POST(self):
         self._route("POST")
+    def do_OPTIONS(self):
+        # CORS 预检
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
 
 def main():
     srv = ThreadingHTTPServer((LAN_IP, PORT), Handler)
