@@ -63,6 +63,7 @@ ADVERTISE = os.environ.get("GATEWAY_ADVERTISE", "192.168.3.133")
 ENABLE_COMMAND_LLM = os.environ.get("GATEWAY_COMMAND_LLM", "0") == "1"
 GATEWAY_DATA = os.environ.get("GATEWAY_DATA_DIR", os.path.join(MC_DATA_DIR, "gateway"))
 DB_PATH = os.path.join(GATEWAY_DATA, "gateway.db")
+WORLD_DB_PATH = os.path.join(MC_DATA_DIR, "world.db")  # 世界库：守护天使认主登记落点
 MODINDEX_PATH = os.path.join(GATEWAY_DATA, "mod_index.json")
 PANLINKS_PATH = os.path.join(GATEWAY_DATA, "pan_links.json")
 os.makedirs(GATEWAY_DATA, exist_ok=True)
@@ -74,6 +75,27 @@ def db():
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA foreign_keys=ON")
     return con
+
+# 世界库连接：守护天使认主必须写进世界库（<MC_DATA_DIR>/world.db），
+# 女神 mc-god.ts 的 guardianResolve(sys_<owner>) 靠它认出守护天使并代主人处理。
+# world.db 与 gateway.db 同一 data 根、不同文件；世界进程用 better-sqlite3(WAL)，
+# gateway 用 Python sqlite3(WAL) 多进程并发读写在 WAL 下可行（本处只做低频一次性登记）。
+def db_world():
+    con = sqlite3.connect(WORLD_DB_PATH, timeout=10)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL")
+    return con
+
+def ensure_guardian_table(c):
+    """幂等建守护天使表（与世界端 mc-worlddb.ts 的 guardian_angels 同构）。"""
+    c.execute("""CREATE TABLE IF NOT EXISTS guardian_angels(
+        bot_username TEXT PRIMARY KEY,
+        owner_username TEXT NOT NULL,
+        owner_uuid TEXT,
+        state TEXT NOT NULL DEFAULT 'idle',
+        bound_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL)""")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_guardian_owner ON guardian_angels(owner_username)")
 
 def client_ip(headers):
     return str(headers.get("X-Forwarded-For", "").split(",")[0].strip() or headers.get("Remote-Addr", "") or "")
@@ -216,11 +238,75 @@ def _init_db():
             "model": "TEXT", "level": "INTEGER DEFAULT 1", "xp": "INTEGER DEFAULT 0",
             "skills": "TEXT DEFAULT '[]'", "permissions": "TEXT DEFAULT '[]'",
             "auto_assigned": "INTEGER DEFAULT 0",
+            # 系统=世界内 mineflayer 客户端实体（2026-08-23 造物主拍板）——
+            # UUID 认主 / 同生共死 / 距离分层跟随的权威状态都钉在这。
+            "bot_username": "TEXT",         # 系统实体在服务器登录名（ASCII，mineflayer bot 用）——认主&施法的实体名
+            "owner_mc_uuid": "TEXT",        # 玩家 MC UUID——认主权威键（跨会话稳定，不靠连接会话）
+            "entity_state": "TEXT DEFAULT 'idle'",  # idle(未上线)/online(在线跟随)/leash(贴身)/guard(守护)/offline(玩家下线)
+            "follow_mode": "TEXT DEFAULT 'pet'",    # leash(贴身)/pet(跟随)/guard(守护)
+            "last_sync_at": "TEXT",         # 与 owner 世界侧同步时间戳
         }
         for _col, _typ in _comp_adder.items():
             if _col not in _comp_cols:
                 c.execute(f"ALTER TABLE companions ADD COLUMN {_col} {_typ}")
 _init_db()
+
+# ------------------------- CORS（白名单，防跨站读响应） -------------------------
+def _cors_origin():
+    """CORS 允许来源。
+    - 默认 '*'（兼容本地开发/局域网直连）。
+    - 生产可通过环境变量 MC_CORS_ORIGINS 设白名单（逗号分隔，如 'https://portal.example.com,http://192.168.3.133:5173'）。
+    白名单模式下，仅当请求 Origin 命中白名单才回显该 Origin（并带 Vary），否则不回 CORS 头（浏览器将拦截跨域读）。
+    """
+    raw = os.environ.get("MC_CORS_ORIGINS", "").strip()
+    if not raw:
+        return "*", False                     # (origin_to_return, whitelisted_mode)
+    allowed = {o.strip() for o in raw.split(",") if o.strip()}
+    return allowed, True
+
+def _cors_for(res, origin_header):
+    """按白名单给响应写 CORS 头。origin_header = 请求头里的 Origin（可能为空/是 None）。"""
+    origin, whitelisted_mode = _cors_origin()
+    if whitelisted_mode:
+        if origin_header and origin_header in origin:
+            res.send_header("Access-Control-Allow-Origin", origin_header)
+            res.send_header("Vary", "Origin")
+        # 不在白名单：不写 Allow-Origin，浏览器自然会拦截跨域读
+    else:
+        res.send_header("Access-Control-Allow-Origin", "*")
+    res.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    res.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+# ------------------------- 暴力破解防护（内存滑动窗口限流） -------------------------
+# 按 (ip, username) 计失败次数；滑动窗口内超阈值则 429。进程级内存态，门户单实例足够。
+_AUTH_LOCK = threading.Lock()
+_AUTH_FAILS = {}            # key -> list[ts]
+_AUTH_MAX_FAILS = 5         # 窗口内最大失败次数
+_AUTH_WINDOW = 600          # 窗口 600 秒
+_AUTH_BLOCK = 900           # 超限后封禁 900 秒
+
+def _auth_blocked(ip, username):
+    """返回 (blocked, retry_after_sec)。"""
+    key = f"{ip}|{username.lower()}"
+    now = time.time()
+    with _AUTH_LOCK:
+        hist = [t for t in _AUTH_FAILS.get(key, []) if now - t < _AUTH_WINDOW]
+        _AUTH_FAILS[key] = hist
+        if len(hist) >= _AUTH_MAX_FAILS:
+            retry = int(_AUTH_WINDOW - (now - hist[0])) if hist else _AUTH_WINDOW
+            return True, max(retry, 1)
+        return False, 0
+
+def _auth_record_fail(ip, username):
+    key = f"{ip}|{username.lower()}"
+    now = time.time()
+    with _AUTH_LOCK:
+        _AUTH_FAILS.setdefault(key, []).append(now)
+
+def _auth_clear(ip, username):
+    key = f"{ip}|{username.lower()}"
+    with _AUTH_LOCK:
+        _AUTH_FAILS.pop(key, None)
 
 # ------------------------- 密码/认证 -------------------------
 PBKDF2_ITERS = 600000
@@ -624,6 +710,12 @@ def system_profile(row):
         "skills": skills, "skills_unlocked": sorted(set(skills) | set(system_tier_perms(lv))),
         "permissions": perms or system_tier_perms(lv),
         "personality": row["personality"],
+        # 系统=世界内 mineflayer 客户端实体的运行时状态（2026-08-23 拍板）
+        "bot_username": row.get("bot_username"),
+        "owner_mc_uuid": row.get("owner_mc_uuid"),
+        "entity_state": row.get("entity_state") or "idle",
+        "follow_mode": row.get("follow_mode") or "pet",
+        "last_sync_at": row.get("last_sync_at"),
     }
 
 def push_system_command(user_id, ctype, payload=None):
@@ -674,9 +766,7 @@ def json_write(res, code, obj):
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     res.send_response(code)
     res.send_header("Content-Type", "application/json; charset=utf-8")
-    res.send_header("Access-Control-Allow-Origin", "*")
-    res.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    res.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    _cors_for(res, res.headers.get("Origin") if hasattr(res, "headers") else None)
     res.send_header("Content-Length", str(len(body)))
     res.end_headers()
     res.wfile.write(body)
@@ -778,6 +868,45 @@ class Handler(BaseHTTPRequestHandler):
                     with db() as c:
                         comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                     return json_write(self, 200, system_profile(comp))
+                if p == "/api/guardian/bind":
+                    # 守护天使绑定（2026-08-23 造物主拍板）：客户端在**新玩家注册时**调本接口，
+                    # 由服务端生成/分配一个守护天使（sys_<owner>）并**认主登记**。
+                    # 关键：认主写进【世界库 world.db 的 guardian_angels】，女神 mc-god.ts 的
+                    # guardianResolve(sys_<owner>) 在此识别守护天使、代主人处理祈愿/问事/CLI/唱咒。
+                    # 客户端不用改逻辑——注册后调一次即可；bot_username 缺省= sys_<登录名>。
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
+                    owner_uuid = (b.get("owner_uuid") or user.get("mc_uuid") or "").strip()[:36] or None
+                    state = (b.get("state") or "online").strip()[:12] or "online"
+                    ip = client_ip(self.headers)
+                    now_ms = int(time.time() * 1000)
+                    # 1) 世界库认主（女神凭此认主）——先保证表存在，再 upsert
+                    with db_world() as cw:
+                        ensure_guardian_table(cw)
+                        cw.execute("INSERT INTO guardian_angels(bot_username, owner_username, owner_uuid, state, bound_at, updated_at) "
+                                   "VALUES(?,?,?,?,?,?) "
+                                   "ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, "
+                                   "owner_uuid=excluded.owner_uuid, state=excluded.state, updated_at=excluded.updated_at",
+                                   (bot_username, user["username"], owner_uuid, state, now_ms, now_ms))
+                    # 2) 网关库 companions 同步一份（保持伴侣=守护天使地基一致，供客户端查 state）
+                    with db() as c:
+                        old = c.execute("SELECT cname,level,xp,skills,permissions,auto_assigned,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        n = now_iso()
+                        c.execute("INSERT INTO companions(user_id,cname,enabled,auto_assigned,bot_username,created_at,updated_at) "
+                                  "VALUES(?,?,1,1,?,?,?) "
+                                  "ON CONFLICT(user_id) DO UPDATE SET enabled=1, auto_assigned=1, "
+                                  "bot_username=COALESCE(companions.bot_username, excluded.bot_username), updated_at=excluded.updated_at",
+                                  (user["id"], "守护天使", bot_username, n, n))
+                        audit(c, "user", user["id"], user["username"], ip, "guardian_bind", "guardian", user["id"],
+                              old_data=(dict(old) if old else None),
+                              new_data={"bot_username": bot_username, "owner_username": user["username"], "owner_uuid": owner_uuid, "state": state})
+                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                    profile = system_profile(comp) if comp else {"bot_username": bot_username, "owner_username": user["username"], "state": state}
+                    profile["guardian"] = {"bot_username": bot_username, "owner_username": user["username"],
+                                           "owner_uuid": owner_uuid, "state": state}
+                    return json_write(self, 200, profile)
                 if p == "/api/companion/commands":
                     # 客户端轮询「系统指令」队列（auto-assign / level-up / unlock-skill / permission-grant）。
                     # 服务端是权威：客户端主动拉取待处理指令，处理完回执 ack。
@@ -826,7 +955,7 @@ class Handler(BaseHTTPRequestHandler):
                         data = f.read()
                     self.send_response(200)
                     self.send_header("Content-Type", "image/png")
-                    self.send_header("Access-Control-Allow-Origin", "*")
+                    _cors_for(self, self.headers.get("Origin"))
                     self.send_header("Content-Length", str(len(data)))
                     self.send_header("Cache-Control", "public, max-age=86400")
                     self.end_headers()
@@ -846,8 +975,14 @@ class Handler(BaseHTTPRequestHandler):
                     nickname = (b.get("nickname") or username).strip()[:32]
                     if not username or not password: return json_write(self, 400, {"error": "username/password required"})
                     if not re.match(r"^[A-Za-z0-9_\-\.]{2,32}$", username): return json_write(self, 400, {"error": "username invalid"})
-                    if len(password) < 4: return json_write(self, 400, {"error": "password too short"})
+                    if len(password) < 8: return json_write(self, 400, {"error": "password too short (min 8)"})
                     ip = client_ip(self.headers)
+                    # 注册限流：按 IP 防批量注册（窗口内最多 N 次）
+                    rblocked, rretry = _auth_blocked(ip, "__register__")
+                    if rblocked:
+                        return json_write(self, 429, {"error": "too many registrations", "retry_after": rretry})
+                    _auth_record_fail(ip, "__register__")
+                    _auth_clear(ip, username)
                     with db() as c:
                         if c.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
                             return json_write(self, 409, {"error": "username taken"})
@@ -866,9 +1001,22 @@ class Handler(BaseHTTPRequestHandler):
                     username = (b.get("username") or "").strip()
                     password = b.get("password") or ""
                     ip = client_ip(self.headers)
+                    # 暴力破解防护：滑动窗口限流（按 IP+用户名）
+                    blocked, retry = _auth_blocked(ip, username)
+                    if blocked:
+                        return json_write(self, 429, {"error": "too many attempts", "retry_after": retry})
                     with db() as c:
                         row = c.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-                        ok = bool(row) and verify_password(password, row["password_hash"])
+                        if row:
+                            ok = verify_password(password, row["password_hash"])
+                        else:
+                            # 拉平时序：对不存在用户名也做一次哑验证，避免用户名枚举时序侧信道
+                            ok = False
+                            verify_password(password, "pbkdf2_sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000")
+                        if not ok:
+                            _auth_record_fail(ip, username)
+                        else:
+                            _auth_clear(ip, username)
                         c.execute("INSERT INTO login_attempts(username,ip,success,reason,at) VALUES(?,?,?,?,?)",
                                   (username, ip, 1 if ok else 0, "ok" if ok else "bad_credentials", now_iso()))
                         if ok:
@@ -989,18 +1137,23 @@ class Handler(BaseHTTPRequestHandler):
                         return json_write(self, 400, {"error": "personality must be object"})
                     model = (b.get("model") or "").strip()[:64] or None
                     auto_assigned = int(bool(b.get("auto_assigned", False)))
+                    # 认主（2026-08-23 拍板：系统=世界内 mineflayer 客户端实体）——
+                    # bot_username = 系统实体在服务器登录名（ASCII，mineflayer bot 用），守卫「认主」；
+                    # owner_mc_uuid = 玩家 MC UUID（权威键，世界端拉起系统 bot 时回写确认）。
+                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
                     ip = client_ip(self.headers)
                     persona_str = json.dumps(persona, ensure_ascii=False)[:2000]
                     with db() as c:
                         old = c.execute("SELECT cname,personality,enabled,model,level,xp,skills,permissions,auto_assigned FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                         n = now_iso()
-                        c.execute("INSERT INTO companions(user_id,cname,personality,enabled,model,auto_assigned,created_at,updated_at) VALUES(?,?,?,1,?,?,?,?) "
+                        c.execute("INSERT INTO companions(user_id,cname,personality,enabled,model,auto_assigned,bot_username,created_at,updated_at) VALUES(?,?,?,1,?,?,?,?,?) "
                                   "ON CONFLICT(user_id) DO UPDATE SET cname=excluded.cname, personality=excluded.personality, enabled=1, "
-                                  "model=COALESCE(excluded.model, companions.model), updated_at=excluded.updated_at",
-                                  (user["id"], cname, persona_str, model, auto_assigned, n, n))
+                                  "model=COALESCE(excluded.model, companions.model), "
+                                  "bot_username=COALESCE(companions.bot_username, excluded.bot_username), updated_at=excluded.updated_at",
+                                  (user["id"], cname, persona_str, model, auto_assigned, bot_username, n, n))
                         audit(c, "user", user["id"], user["username"], ip, "companion_bind", "companion", user["id"],
                               old_data=(dict(old) if old else None),
-                              new_data={"cname": cname, "personality": persona, "model": model, "auto_assigned": auto_assigned})
+                              new_data={"cname": cname, "personality": persona, "model": model, "auto_assigned": auto_assigned, "bot_username": bot_username})
                         comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                     return json_write(self, 200, system_profile(comp))
                 if p == "/api/companion/activate":
@@ -1064,9 +1217,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         # CORS 预检
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        _cors_for(self, self.headers.get("Origin"))
         self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
 
