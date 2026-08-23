@@ -1453,6 +1453,102 @@
       "subtitle": "土石让路，清泉上涌"
     },
     {
+      "id": "lantern_guide",
+      "layer": "effect",
+      "name": "提灯引路",
+      "words": [
+        "提灯",
+        "引路"
+      ],
+      "cost": {
+        "mana": 8,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "effect give {target} minecraft:night_vision 120 0 true",
+        "effect give {target} minecraft:speed 60 0 true"
+      ],
+      "reply": "灯引前路，行而不迷。风灯在手，万径皆通。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 0.4 0.5 0.4 0.05 60"
+      ],
+      "sounds": [
+        "minecraft:block.amethyst_block.chime"
+      ],
+      "title": "提灯引路",
+      "subtitle": "风灯一盏，照彻迷途",
+      "lore": "千灯纪初，灯守人燃灯引迷途客，夜风拂灯而光不灭。旅人得此，行于旷野不再失路。"
+    },
+    {
+      "id": "steel_bulwark",
+      "layer": "effect",
+      "name": "炼甲成钢",
+      "words": [
+        "炼甲",
+        "成钢"
+      ],
+      "cost": {
+        "mana": 12,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 1,
+      "commands": [
+        "effect give {target} minecraft:resistance 30 0 true",
+        "effect give {target} minecraft:absorption 60 1 true"
+      ],
+      "reply": "钢铁之躯以刻痕铸成，盾与血同炼。铠甲已加、迅捷已得——再锻一息，立于万敌之前。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 0.4 0.5 0.4 0.05 60"
+      ],
+      "sounds": [
+        "minecraft:item.armor.equip_iron"
+      ],
+      "title": "炼甲成钢",
+      "subtitle": "一息之间，躯若锻铁",
+      "lore": "钢之炼金术士爱德华披甲之际，神于其掌中凝一缕刚气：护之于危、续甲之魂，练就者冲锋陷阵可立于万敌之前。"
+    },
+    {
+      "id": "starburst_stream",
+      "layer": "effect",
+      "name": "星爆气流斩",
+      "words": [
+        "星爆气流斩",
+        "二刀流",
+        "双刀",
+        "双剑",
+        "星光连斩",
+        "starburst stream"
+      ],
+      "cost": {
+        "mana": 40,
+        "food": 4,
+        "hp": 0
+      },
+      "requiredLevel": 8,
+      "commands": [
+        "effect give {target} minecraft:strength 20 2 true",
+        "effect give {target} minecraft:speed 20 1 true",
+        "execute at {target} run damage @e[distance=..4,limit=4,sort=nearest,type=!minecraft:player,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:painting] 12 minecraft:magic",
+        "execute at {target} run damage @e[distance=..4,limit=2,sort=nearest,type=!minecraft:player,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:painting] 8 minecraft:magic"
+      ],
+      "reply": "双剑出鞘，星光凝于刃上——星爆气流斩！十六连击如骤雨倾泻，前方敌影尽数被斩裂。",
+      "particles": [
+        "minecraft:sweep_attack {tx} {ty+1} {tz} 1.5 1.2 1.5 0.05 120",
+        "minecraft:crit {tx} {ty+1} {tz} 1.0 1.0 1.0 0.1 60",
+        "minecraft:end_rod {tx} {ty+1} {tz} 0.8 0.8 0.8 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.player.attack.sweep",
+        "minecraft:entity.player.attack.crit"
+      ],
+      "title": "星爆气流斩",
+      "subtitle": "二刀流奥义·十六连斩",
+      "lore": "黑色剑士桐人以双剑起舞，星爆气流斩撕裂长空。剑不在手之日，神以星光重铸其刃。"
+    },
+    {
       "id": "bind_guard",
       "layer": "effect",
       "name": "缔结契约",
