@@ -120,7 +120,16 @@ CREATE TABLE characters(
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
   name TEXT, class TEXT, stats JSONB DEFAULT '{}',
+  mc_username TEXT,               -- 游戏内登录名（ASCII），锚定账号↔角色的键
   is_active BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now()
+);
+-- 账号↔伴侣（一对一）：每个真人玩家一个私有无实体观察者 AI agent
+CREATE TABLE companions(
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  cname TEXT, personality JSONB DEFAULT '{}',
+  enabled BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- C 法术/AI 向量

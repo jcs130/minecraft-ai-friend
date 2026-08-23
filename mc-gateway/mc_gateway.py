@@ -151,7 +151,14 @@ def _init_db():
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           name TEXT, class TEXT, stats TEXT DEFAULT '{}',
+          mc_username TEXT,
           is_active INTEGER DEFAULT 0, created_at TEXT);
+        -- 账号↔伴侣（一对一）：每个真人玩家一个私有无实体观察者 AI agent
+        CREATE TABLE IF NOT EXISTS companions(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+          cname TEXT, personality TEXT DEFAULT '{}', enabled INTEGER DEFAULT 1,
+          created_at TEXT, updated_at TEXT);
         CREATE TABLE IF NOT EXISTS spells(
           id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
           category TEXT, description TEXT, chant TEXT, tier TEXT, rarity TEXT,
@@ -187,6 +194,10 @@ def _init_db():
           version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT, applied_by TEXT,
           checksum TEXT, duration_ms INTEGER);
         """)
+        # 幂等迁移：已有库为新能力补齐列（ALTER TABLE 对已存在表不会自动生效）
+        _cols = [r[1] for r in c.execute("PRAGMA table_info(characters)").fetchall()]
+        if "mc_username" not in _cols:
+            c.execute("ALTER TABLE characters ADD COLUMN mc_username TEXT")
 _init_db()
 
 # ------------------------- 密码/认证 -------------------------
@@ -393,6 +404,93 @@ def find_mod(mod_id=None, filename=None):
         if filename and (e.get("filename") == filename): return e
     return None
 
+# ------------------------- 玩家实时数据（当前玩家转发） -------------------------
+_NON_HUMAN = {"goddess", "kirito", "naruto", "edward", "steve", "alex", "hermine", "maka"}
+
+def online_map():
+    """RCON list -> {登录名(小写): 显示名}。当前在线的玩家实体系全家。"""
+    out = {}
+    try:
+        txt = rcon_cmd("list") or ""
+        # RCON list 形如: There are 3 of a max of 20 players online: Taro, Goddess, Edward
+        _, _, rest = txt.partition("online:")
+        for tok in rest.split(","):
+            tok = tok.strip()
+            if not tok: continue
+            out[tok.lower()] = tok
+    except Exception:
+        pass
+    return out
+
+def is_human(mc_name):
+    """是否真人玩家：排除 numen 假玩家/女神/示例角色（Goddess/Kirito/Naruto/Edward 等穿越者）。"""
+    return (mc_name or "").strip().lower() not in _NON_HUMAN
+
+def _entity_field(mc_name, path):
+    """单路径 data get entity <name> <path> -> 原始值字符串（去后缀）。找不到 -> None。"""
+    tx = (rcon_cmd(f"data get entity {mc_name} {path}") or "").strip()
+    if not tx:
+        return None
+    low = tx.lower()
+    if low.startswith("no entity") or "invalid name" in low or "found no elements" in low:
+        return None
+    # 形如: Taro has the following entity data: [3096.7d, 76.0d, -1343.3d] / ...: 9.333334f / ...: "minecraft:overworld"
+    _, _, val = tx.partition(":")
+    val = val.strip()
+    # 去数组尾括号与数值后缀 d/f/s/b
+    if val.startswith("[") and val.endswith("]"):
+        val = val[1:-1].strip()
+    return val
+
+def _num(val):
+    val = (val or "").strip().strip('"')
+    for suf in ("d", "f", "s", "b", "l"):
+        if val.endswith(suf) and val[:-1].replace(".", "").replace("-", "").isdigit():
+            val = val[:-1]; break
+    return val
+
+def player_snapshot(mc_name):
+    """抓当前(在线)真人玩家的实时数据 -> dict（字段尽可能全）。非真人/离线/异常 -> {}。"""
+    if not mc_name or not is_human(mc_name):
+        return {"online": False, "username": mc_name}
+    onl = online_map()
+    key = mc_name.strip().lower()
+    if key not in onl:
+        return {"username": mc_name, "online": False}
+    snap = {"username": mc_name, "online": True}
+    # Pos 数组 -> {x,y,z}
+    pv = _entity_field(mc_name, "Pos")
+    if pv:
+        parts = [p.strip() for p in pv.split(",") if p.strip()]
+        if len(parts) >= 3:
+            try:
+                snap["pos"] = {"x": float(_num(parts[0])), "y": float(_num(parts[1])), "z": float(_num(parts[2]))}
+            except Exception:
+                snap["pos"] = pv
+    for path, key in (("Health", "health"), ("XpLevel", "level"), ("Air", "air"), ("Dimension", "dimension")):
+        v = _num(_entity_field(mc_name, path))
+        if v:
+            snap[key] = v
+    if "dimension" in snap:
+        snap["dimension"] = snap["dimension"].strip('"')
+    return snap
+
+def current_player_view(user):
+    """当前账号的「玩家视图」：绑定角色里在线的那个人的快照 + 角色列表。
+    —— 只看自己（不多看别人），机器人/非真人不在范围。"""
+    with db() as c:
+        chars = c.execute("SELECT id,name,mc_username,class,is_active FROM characters WHERE user_id=? AND is_active=1", (user["id"],)).fetchall()
+    online_snap = []
+    for ch in chars:
+        mu = (ch["mc_username"] or "").strip()
+        if not mu or not is_human(mu):
+            continue
+        s = player_snapshot(mu)
+        if s.get("online"):
+            s["character"] = ch["name"]; s["character_id"] = ch["id"]; s["class"] = ch["class"]
+            online_snap.append(s)
+    return {"characters": [dict(ch) for ch in chars], "online": online_snap}
+
 def pan_links():
     try:
         return json.loads(Path(PANLINKS_PATH).read_text(encoding="utf-8"))
@@ -503,7 +601,35 @@ class Handler(BaseHTTPRequestHandler):
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
                     return json_write(self, 200, {"username": user["username"], "nickname": user["nickname"],
                         "role": user["role"], "server_tag": user["server_tag"], "status": user["status"],
-                        "skin": active_skin(user["id"]), "online": online_list()})
+                        "skin": active_skin(user["id"]), "online": current_player_view(user)})
+                if p == "/api/user/characters":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    with db() as c:
+                        rows = c.execute("SELECT id,name,mc_username,class,is_active,created_at FROM characters WHERE user_id=? ORDER BY id", (user["id"],)).fetchall()
+                    return json_write(self, 200, {"characters": [dict(r) for r in rows]})
+                if p == "/api/companion/state":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    with db() as c:
+                        comp = c.execute("SELECT cname,personality,enabled,created_at,updated_at FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        if comp is None:
+                            return json_write(self, 200, {"bound": False})
+                        comp = dict(comp)
+                        comp["bound"] = True
+                        return json_write(self, 200, comp)
+                if p == "/api/companion/world":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    with db() as c:
+                        comp = c.execute("SELECT enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        if not comp or not comp["enabled"]:
+                            return json_write(self, 200, {"bound": False, "ok": False, "reason": "companion_not_bound"})
+                    view = current_player_view(user)
+                    online = view.get("online") or []
+                    sel = online[0] if online else None
+                    return json_write(self, 200, {"bound": True, "ok": bool(sel), "player": sel,
+                        "characters": view.get("characters", [])})
                 if p == "/api/user/profile":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
@@ -598,6 +724,86 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c, "user", user["id"], user["username"], client_ip(self.headers), "skin_update", "skin", user["id"],
                               new_data={"texture_url": skin})
                     return json_write(self, 200, {"ok": True, "skin": skin})
+                if p == "/api/user/characters":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    name = (b.get("name") or "").strip()[:32]
+                    mc_username = (b.get("mc_username") or "").strip()[:32]
+                    role_class = (b.get("class") or "").strip()[:32] or "adventurer"
+                    # 校验：mc_username 必须是真人玩家（在线或可验证的登录名），拒绝 numen/女神
+                    if not mc_username or not is_human(mc_username):
+                        return json_write(self, 400, {"error": "mc_username must be a real player login"})
+                    ip = client_ip(self.headers)
+                    with db() as c:
+                        dup = c.execute("SELECT 1 FROM characters WHERE user_id=? AND mc_username=?",
+                                        (user["id"], mc_username.lower())).fetchone()
+                        if dup:
+                            return json_write(self, 409, {"error": "character_already_bound"})
+                        n = now_iso()
+                        c.execute("INSERT INTO characters(user_id,name,mc_username,class,is_active,created_at) VALUES(?,?,?,?,1,?)",
+                                  (user["id"], name or mc_username, mc_username.lower(), role_class, n))
+                        cid = c.execute("SELECT last_insert_rowid() as x").fetchone()["x"]
+                        audit(c, "user", user["id"], user["username"], ip, "character_bind", "character", cid,
+                              new_data={"name": name, "mc_username": mc_username, "class": role_class})
+                    return json_write(self, 200, {"ok": True, "id": cid, "name": name or mc_username, "mc_username": mc_username.lower(), "class": role_class})
+                if p == "/api/user/characters/activate":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    cid = b.get("id")
+                    with db() as c:
+                        row = c.execute("SELECT mc_username FROM characters WHERE user_id=? AND id=?", (user["id"], cid)).fetchone()
+                        if not row:
+                            return json_write(self, 404, {"error": "character_not_found"})
+                        c.execute("UPDATE characters SET is_active=0 WHERE user_id=?", (user["id"],))
+                        c.execute("UPDATE characters SET is_active=1 WHERE user_id=? AND id=?", (user["id"], cid))
+                        audit(c, "user", user["id"], user["username"], client_ip(self.headers), "character_activate", "character", cid,
+                              new_data={"mc_username": row["mc_username"]})
+                    return json_write(self, 200, {"ok": True, "active_id": cid})
+                if p == "/api/companion/bind":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    cname = (b.get("cname") or "你的伙伴").strip()[:24]
+                    persona = b.get("personality", {})
+                    if not isinstance(persona, dict):
+                        return json_write(self, 400, {"error": "personality must be object"})
+                    ip = client_ip(self.headers)
+                    persona_str = json.dumps(persona, ensure_ascii=False)[:2000]
+                    with db() as c:
+                        old = c.execute("SELECT cname,personality,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        n = now_iso()
+                        c.execute("INSERT INTO companions(user_id,cname,personality,enabled,created_at,updated_at) VALUES(?,?,?,1,?,?) "
+                                  "ON CONFLICT(user_id) DO UPDATE SET cname=excluded.cname, personality=excluded.personality, enabled=1, updated_at=excluded.updated_at",
+                                  (user["id"], cname, persona_str, n, n))
+                        audit(c, "user", user["id"], user["username"], ip, "companion_bind", "companion", user["id"],
+                              old_data=(dict(old) if old else None),
+                              new_data={"cname": cname, "personality": persona})
+                    return json_write(self, 200, {"ok": True, "bound": True, "cname": cname})
+                if p == "/api/companion/activate":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    # 激活 = 标记在线角色的聚焦（伴侣跟随当前在线角色）。数据视图在 /companion/world。
+                    view = current_player_view(user)
+                    online = view.get("online") or []
+                    if not online:
+                        return json_write(self, 200, {"ok": False, "reason": "no_online_character"})
+                    sel = online[0]
+                    return json_write(self, 200, {"ok": True, "focused": sel})
+                if p == "/api/companion/chat":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    text = (b.get("text") or "").strip()
+                    if not text: return json_write(self, 400, {"error": "text required"})
+                    with db() as c:
+                        comp = c.execute("SELECT cname,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        if not comp or not comp["enabled"]:
+                            return json_write(self, 200, {"bound": False, "ok": False, "reason": "companion_not_bound"})
+                    # MVP：伴侣答话走模板（无实体 agent）。世界视图数据 / 代行上达祈愿后续接。
+                    reply = f"［{comp['cname']}］我在你身边。有啥事，说一声。"
+                    return json_write(self, 200, {"bound": True, "reply": reply})
                 if p == "/api/player/command":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
