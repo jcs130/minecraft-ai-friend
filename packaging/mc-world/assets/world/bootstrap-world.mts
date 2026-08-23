@@ -178,6 +178,8 @@ const god = createGod({
 })
 // 解开 mc-magic ↔ mc-god 循环依赖：mc-magic 的 chronicle 迟绑定到 mc-god 的史官 record。
 magic.setChronicle(god.service.record)
+// 契约/魂链法术执行器（2026-08-23）：contract/trace/recall 的效果由 mc-god 落地（写 goddess-orders / tp）。
+magic.setSpecialExecutor((special, username, params, vars) => god.service.execSpecial(special, username, params, vars))
 
 // ---------- 进程收尾：逆序 dispose ----------
 const handles = [bubble, ritual, social, saga, evolveReview, terra, god, magic, transmigrator, worlddb, logwatch, rcon, bot]

@@ -1451,6 +1451,125 @@
       ],
       "title": "土遁·水井",
       "subtitle": "土石让路，清泉上涌"
+    },
+    {
+      "id": "bind_guard",
+      "layer": "effect",
+      "name": "缔结契约",
+      "words": [
+        "缔结契约",
+        "契约召唤",
+        "御主契约",
+        "结契",
+        "召唤侍卫",
+        "唤守卫"
+      ],
+      "category": "contract",
+      "school": "东方",
+      "special": "contract",
+      "cost": {
+        "mana": 60,
+        "food": 0,
+        "hp": 2
+      },
+      "requiredLevel": 20,
+      "params": {
+        "guard": {
+          "type": "guard"
+        },
+        "task": {
+          "type": "text",
+          "stripGuard": true
+        }
+      },
+      "commands": [],
+      "reply": "契约已成——侍卫应召而来。",
+      "particles": [
+        "minecraft:totem_of_undying {px} {py+1} {pz} 0.6 1 0.6 0.3 60",
+        "minecraft:end_rod {px} {py+1} {pz} 0.5 0.8 0.5 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.evoker.cast_spell"
+      ],
+      "title": "缔结契约",
+      "subtitle": "以血为契，从者应召"
+    },
+    {
+      "id": "trace",
+      "layer": "effect",
+      "name": "寻踪",
+      "words": [
+        "寻踪",
+        "追踪",
+        "寻人",
+        "找他",
+        "找她",
+        "传送到他身边",
+        "去找"
+      ],
+      "category": "contract",
+      "school": "东方",
+      "special": "trace",
+      "cost": {
+        "mana": 30,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 10,
+      "params": {
+        "target": {
+          "type": "text"
+        }
+      },
+      "commands": [],
+      "reply": "循息而至——你已到他身边。",
+      "particles": [
+        "minecraft:end_rod {px} {py+1} {pz} 0.4 0.6 0.4 0.05 40",
+        "minecraft:cloud {px} {py} {pz} 0.5 0.8 0.5 0.05 20"
+      ],
+      "sounds": [
+        "minecraft:entity.enderman.teleport"
+      ],
+      "title": "寻踪",
+      "subtitle": "循息千里，一念即至"
+    },
+    {
+      "id": "recall",
+      "layer": "effect",
+      "name": "唤魂",
+      "words": [
+        "唤魂",
+        "召回",
+        "召唤从者",
+        "唤回",
+        "召回从者",
+        "唤他回来"
+      ],
+      "category": "contract",
+      "school": "东方",
+      "special": "recall",
+      "cost": {
+        "mana": 50,
+        "food": 0,
+        "hp": 0
+      },
+      "requiredLevel": 16,
+      "params": {
+        "guard": {
+          "type": "guard"
+        }
+      },
+      "commands": [],
+      "reply": "魂链一颤——从者已归。",
+      "particles": [
+        "minecraft:totem_of_undying {px} {py+1} {pz} 0.6 1 0.6 0.3 60",
+        "minecraft:end_rod {px} {py+1} {pz} 0.5 0.8 0.5 0.05 40"
+      ],
+      "sounds": [
+        "minecraft:entity.illusioner.cast_spell"
+      ],
+      "title": "唤魂",
+      "subtitle": "魂链轻颤，从者当归"
     }
   ]
 }

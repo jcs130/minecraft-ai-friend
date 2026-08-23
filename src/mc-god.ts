@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
-import type { AtomSummary, MagicService } from './mc-magic.ts'
+import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
@@ -384,6 +384,10 @@ export interface GodService {
   pendingCount(): number
   /** 世界史官：记一条大事记（mc-magic 等插件上报用）。 */
   record(type: string, actor: string, detail: Record<string, unknown>): void
+  /** 契约/魂链法术执行器（2026-08-23）：contract/trace/recall 的效果不走 RCON commands，
+   *  由 mc-god 落地（contract/recall 写 goddess-orders 唤守卫、trace 直接 tp 到目标）。
+   *  经 magic.setSpecialExecutor 迟绑定注入（同 setChronicle 解环思路）。 */
+  execSpecial: SpecialExecutor
 }
 
 export interface GodDeps {
@@ -874,6 +878,76 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       log(`summon order append failed for ${guard}: ${err instanceof Error ? err.message : String(err)}`)
       return { summon: null, code: '召唤失败：通灵信道未开。' }
     }
+  }
+
+  // 守卫登录名映射（2026-08-23 铁律 name/ID 分离）：显示名（桐人/鸣人）只用于叙事与人机界面，
+  // 程序化 RCON 操作（data get entity / tp）必须用 ASCII 登录名（Kirito/Naruto）。
+  const GUARD_LOGIN: Record<string, string> = { '桐人': 'Kirito', '鸣人': 'Naruto' }
+  /** 显示名→登录名：守卫走映射；其余（真人玩家已用登录名、AI 穿越者）原样返回。 */
+  function resolveLogin(name: string): string {
+    return GUARD_LOGIN[name.trim()] ?? name.trim()
+  }
+
+  // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
+  // special 原子的效果不走 RCON commands，由这里落地。与召唤术同哲学——不强制 tp 守卫：
+  // contract/recall 写 goddess-orders（守卫桥/亲卫自主到场/返程）；trace 是施法者自己去目标身边，
+  // 走直接 tp。失败返回 { ok:false }，cast() 据此不扣资源、不白烧魔力/血祭。
+  async function execSpecial(
+    special: 'contract' | 'trace' | 'recall',
+    username: string,
+    params: Record<string, number | string>,
+    _vars: Record<string, number | string>,
+  ): Promise<{ ok: boolean; reply: string }> {
+    if (special === 'contract') {
+      // 缔结契约 = 召唤侍卫相助（唤魂分支）。守卫只认桐人/鸣人（守卫桥 GUARDS）。
+      const guard = canonicalGuardName(String(params.guard ?? ''))
+      const task = String(params.task ?? '').trim()
+      if (!guard) return { ok: false, reply: '只能与桐人、鸣人缔结契约。' }
+      if (!task) return { ok: false, reply: '契约既成，要他从者做什么？' }
+      const { summon, code } = issueSummon(username, guard, task)
+      if (!summon) return { ok: false, reply: code ?? '契约未成。' }
+      worlddb.chronicleRecord('summon', username, { to: guard, task: task.slice(0, 80), via: 'bind_guard' })
+      log(`bind_guard ${guard} by ${username}: ${task.slice(0, 60)}`)
+      return { ok: true, reply: `契约已成——「${guard}」应召而来。` }
+    }
+    if (special === 'trace') {
+      // 寻踪 = 循息到目标身边（施法者自己过去，直接 tp 施法者到目标登录名）。
+      const target = String(params.target ?? '').trim()
+      if (!target) return { ok: false, reply: '想寻谁？' }
+      const targetLogin = resolveLogin(target)
+      try {
+        await rcon.send(`tp ${resolveLogin(username)} ${targetLogin}`)
+        return { ok: true, reply: `循息而至——你已到${target}身边。` }
+      } catch (err) {
+        log(`trace tp failed for ${username} -> ${target}: ${err instanceof Error ? err.message : String(err)}`)
+        return { ok: false, reply: `寻不见「${target}」。` }
+      }
+    }
+    if (special === 'recall') {
+      // 唤魂 = 拉从者归来。与召唤同哲学：不强制 tp，写 goddess-orders 唤其返程（守卫桥/亲卫自主回来）。
+      const guard = canonicalGuardName(String(params.guard ?? ''))
+      if (!guard) return { ok: false, reply: '没有这样的从者。' }
+      const t: Transmigrator | null = transmigrators.getByUsername(username)
+      const disp = t?.name ?? username
+      try {
+        appendFileSync(GODDESS_ORDERS, JSON.stringify({
+          to: guard,
+          from: username,
+          display: disp,
+          ts: Date.now(),
+          mode: 'recall',
+          // 守卫桥 decision_prompt 只认 reply/text 字段注入亲卫——唤魂指令必须带 text。
+          text: `女神谕示：${disp} 唤你归来——请回到 ${disp} 身边待命。`,
+        }) + '\n', 'utf-8')
+        worlddb.chronicleRecord('summon', username, { to: guard, via: 'recall' })
+        log(`recall ${guard} by ${username}`)
+        return { ok: true, reply: `魂链一颤——「${guard}」当归。` }
+      } catch (err) {
+        log(`recall order append failed for ${guard}: ${err instanceof Error ? err.message : String(err)}`)
+        return { ok: false, reply: '唤魂未成：通灵信道未开。' }
+      }
+    }
+    return { ok: false, reply: '此法术未通。' }
   }
 
   async function handleCli(username: string, cmd: CliCommand): Promise<void> {
@@ -2535,6 +2609,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     },
     pendingCount: () => worlddb.inboxPendingCount(),
     record: (type: string, actor: string, detail: Record<string, unknown>) => worlddb.chronicleRecord(type, actor, detail),
+    execSpecial,
   }
 
   return { service, dispose: () => lc.dispose() }

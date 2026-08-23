@@ -58,6 +58,7 @@ export function cliHelpLines(): string[] {
     'cli skills　　　　　列已学/可学技能；cli spells [页] 全法术表',
     'cli cast <咒语>　　咏唱（已学自施，未学神如何裁）',
     'cli pray <愿>[｜供奉：X]　祈愿；cli ask <问>　咨询；cli chat <话>　与女神聊天',
+    'cli summon <守卫> <任务>　召唤术：唤桐人/鸣人前来相助',
     'cli innate [我选 <名>]　查/选出生天赋；cli appraise　鉴定',
     'cli help <命令>　单命令用法；cli commands　全部命令。例：cli status --json',
     '前缀后不是命令词＝直接跟女神说话（cli 铁在哪）。',
