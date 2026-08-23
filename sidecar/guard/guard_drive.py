@@ -251,6 +251,8 @@ def _status_compact(status):
     if isinstance(sat, (int, float)):
         parts.append(f"饱和 {sat:.0f}")
     pos = d.get("position") or d.get("pos")
+    if isinstance(pos, dict):
+        pos = [pos.get("x"), pos.get("y"), pos.get("z")]
     if isinstance(pos, (list, tuple)) and len(pos) >= 3:
         parts.append(f"位置 ({pos[0]:.1f},{pos[1]:.1f},{pos[2]:.1f})")
     gm = d.get("game_mode") or d.get("gamemode")
