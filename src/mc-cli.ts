@@ -29,6 +29,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'skills', aliases: ['known', 'learned'], summary: '列已学/可学技能', usage: 'skills', json: true },
   { id: 'spells', aliases: ['法术', '魔咒', 'magic'], summary: '列全部法术表', usage: 'spells', json: true },
   { id: 'cast', aliases: ['chant', '施', '咏唱'], summary: '咏唱/施法（已学自施，神可代施）', usage: 'cast <咒语>', argDesc: '咒语：法术关键词（如 归乡/圣愈/照明）', json: true },
+  { id: 'guardian-cast', aliases: ['gcast', '代施'], summary: '守护天使代主人施放已学技能', usage: 'guardian-cast <法术id>', argDesc: '法术id：主人已学法术（cli spells 查）；仅守护天使可用', json: true },
   { id: 'pray', aliases: ['wish', '祈愿'], summary: '祈愿上达天神（可带供奉）', usage: 'pray <愿望> [| 供奉：xxx]', argDesc: '供奉：面包x3 / 铁锭x1 等', json: true },
   { id: 'ask', aliases: ['question', '问'], summary: '咨询女神 / 查规则', usage: 'ask <问题>', argDesc: '问题：任何世界向问题', json: false },
   { id: 'chat', aliases: ['talk', '说', '聊', '对话'], summary: '与女神直接对话', usage: 'chat <话>', argDesc: '话：想对女神说的（提问/闲聊/求助都行）', json: false },
@@ -173,6 +174,7 @@ export function shapeStatus(view: MagicPlayerView, innateName: string | null): {
     mana: Math.floor(view.mana),
     maxMana: view.maxMana,
     maxManaBonus: view.maxManaBonus,
+    manaPerSec: view.manaPerSec,
     innate: innateName,
     learned: view.learned,
     passives: view.passives,
@@ -183,6 +185,7 @@ export function shapeStatus(view: MagicPlayerView, innateName: string | null): {
   const panel =
     `✦ 状态 · Lv.${view.level} ✦\n` +
     `魔力：${Math.floor(view.mana)}/${view.maxMana}${view.maxManaBonus > 0 ? `（含加持 +${view.maxManaBonus}）` : ''}\n` +
+    `回蓝：${view.manaPerSec}点/秒\n` +
     `生命：${hp === null ? '未探明' : `${hp}/20`} ｜ 饱食：${food === null ? '未探明' : `${food}/20`}\n` +
     (innateName ? `出生天赋：${innateName}\n` : '') +
     (view.passives.length > 0 ? `稀有被动：${view.passives.join('、')}\n` : '') +

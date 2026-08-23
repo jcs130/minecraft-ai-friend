@@ -241,6 +241,8 @@ export interface MagicPlayerView {
   hpRatio: number | null
   /** 饱食度缓存（foodLevel/20，null = 未采到）。 */
   foodRatio: number | null
+  /** 当前回蓝速率（点/秒）：基础 regenPerSec × 稀有被动倍率（坚毅 HP<30% ×2）。 */
+  manaPerSec: number
 }
 
 export interface MagicService {
@@ -258,6 +260,13 @@ export interface MagicService {
    * 视觉特效（粒子/音效/大字）与快路径完全一致。返回执行结果描述。
    */
   castByGod(username: string, atomId: string, opts?: GodCastOpts): Promise<string>
+  /**
+   * 守护天使代主人施法（2026-08-23 认主代执行）：主人已习得（或出生天赋）的技艺，
+   * 由守护天使经 CLI 触发，按主人结算三资源（魔力/饱食/生命）与等级门槛。
+   * 三闸：learned.includes||innateSkill → requiredLevel≤level（天赋豁免） → mana≥cost；
+   * 复用快路径执行核（forceAtom），扣 store.spendMana(owner, cost)。
+   */
+  castAsOwner(owner: string, atomId: string): Promise<string>
   /**
    * 快路径施法（玩家自付三资源，含等级/魔力/参数校验）：
    * mc-god 私语分流命中关键词后调用，返回给施法者的结果描述。
@@ -867,6 +876,11 @@ export class MagicStateStore {
     return this.regenPerSecNow
   }
 
+  /** 当前回蓝速率（点/秒）：基础 × 稀有被动倍率（坚毅 HP<30% ×2）。供属性面板/CLI 查询。 */
+  regenRateForPlayer(username: string): number {
+    return this.regenRateFor(this.get(username))
+  }
+
   spendMana(username: string, amount: number, now = Date.now()): void {
     const p = this.get(username, now)
     // 双向钳制：正数扣魔不透支，负数（逆转化：燃血/炼食换魔）不溢出上限。
@@ -1286,6 +1300,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         passives: [...p.passives],
         hpRatio: p.hpRatio,
         foodRatio: p.foodRatio,
+        manaPerSec: store.regenRateForPlayer(u),
       }
     },
     maxManaFor: (level) => store.maxManaFor(level),
@@ -1297,6 +1312,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     unlockPassive: (u, id) => store.unlockPassive(u, id),
     hasPassive: (u, id) => store.hasPassive(u, id),
     castByGod: (username, atomId, opts) => castByGod(username, atomId, opts),
+    castAsOwner: (owner, atomId) => castAsOwner(owner, atomId),
     castSpell: (username, chant) => cast(username, chant),
     // 2026-08-23：模糊施法（LLM 已裁决的法术，tokens 折算魔力 + 自然前摇）——mc-god catch NeedLlmError 后调用。
     castFuzzy: (username, chant, atomId, opts) => {
@@ -1752,6 +1768,25 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     } catch (err) {
       return `神迹中途受阻：${err instanceof Error ? err.message : String(err)}`
     }
+  }
+
+  // ── 守护天使代主人施法（2026-08-23 认主代执行）──────────────────────
+  // 守护天使（sys_<owner>）经 CLI `guardian-cast <atomId>` 触发：替主人施放
+  // **主人已习得（或出生天赋）**的技艺。与 castByGod（神迹零消耗）不同，这里
+  // 按主人结算三资源与等级门槛，等价于主人自己咏唱（复用快路径执行核）。
+  // 三闸：learned||innate → requiredLevel≤level（天赋豁免） → mana≥cost；
+  // 扣 store.spendMana(owner, cost) 由执行核完成。
+  async function castAsOwner(owner: string, atomId: string): Promise<string> {
+    const atom = atoms.find((a) => a.id === atomId)
+    if (!atom) return `未知技艺「${atomId}」，代施未成。`
+    const pstate = store.get(owner)
+    // 闸一：主人已习得 或 出生天赋
+    if (!pstate.learned.includes(atomId) && pstate.innateSkill !== atomId) {
+      return `「${owner}」尚未习得「${atom.name}」，不能代施——先祈愿求授，或让它自己咏唱已学之技。`
+    }
+    // 闸二（等级）、闸三（魔力）与扣费（spendMana）都在快路径执行核 cast() 内
+    // （等级门槛对出生天赋豁免）；forceAtom 复用执行核，参数取默认值。
+    return cast(owner, atomId, { forceAtom: atom })
   }
 
   // ── 咏唱监听已迁至私语通道（2026-08-18 方案A：咒语走私语，公屏不再施法）──
