@@ -753,6 +753,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         })
       const trimmedAnswer = ans.text.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(username, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
+      ccGuardian(username, trimmedAnswer)
       worlddb.chronicleRecord('ask', username, { question: question.slice(0, 60), via: 'goddess' })
       log(`question from ${username} answered: ${question.slice(0, 50)} → ${trimmedAnswer.slice(0, 60)}`)
     } catch (err) {
@@ -1257,6 +1258,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         } catch {
           /* bot not ready */
         }
+        // 守护天使 CC（2026-08-23）：神谕同步抄送主人绑定的守护天使，供其本地 TTS 播报。
+        ccGuardian(username, text)
         // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
         if (isGuardKey(username)) appendChantReply(resolveLogin(username), text, 'prayer')
       }
