@@ -2,18 +2,34 @@ package dev.god.settlementsfix;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.Filterable;
+import net.minecraft.server.network.FilteredText;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.entries.EmptyLootItem;
+import net.minecraft.world.level.storage.loot.entries.LootItem;
+import net.minecraft.world.level.storage.loot.functions.SetComponentsFunction;
+import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.event.LootTableLoadEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import org.slf4j.Logger;
@@ -24,6 +40,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
 
 /**
  * 右键村民 → 记事件文件（mc_npc.py interact_tail_loop 消费后让 NPC 说话）。
@@ -73,6 +93,148 @@ public class SettlementsFixMod {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemCrafted);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onItemToss);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onLivingDrops);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::onLootTableLoad);
+    }
+
+    // ---------- 技能书世界生成（2026-08-23 造物主谕「技能书…打怪掉落 / 箱子里面」） ----------
+    // 与书商 mc_npc.py SKILLBOOKS 保持同池同文案；掉落/箱子出的书可直接右键施法（custom_data.skillbook）。
+    // 权重：light 最常见，heal/tp/give 稀有（保命卷/空间卷/造物卷不烂大街）。
+    private static final String[][] SKILLBOOK_POOL = {
+            {"home", "归乡之卷", "墨白", "咏唱：归乡/回家/回基地/归途/回巢", "归乡之卷（空间系·Lv2）｜咏唱：归乡/回家/回基地/归途/回巢。私语念出即施，成功即掌握；远行前备一卷，迷途不慌。", "2"},
+            {"light", "照明之卷", "墨白", "咏唱：照明/点火/火把/光亮/照亮/驱暗", "照明之卷（光系·Lv1）｜咏唱：照明/点火/火把/光亮/照亮/驱暗。黑暗中私语念出，掌心燃光；矿洞夜路皆可应急。", "3"},
+            {"feed", "饱食之卷", "墨白", "咏唱：饱食/充饥/饱腹/不饿/充能", "饱食之卷（生命系·Lv2）｜咏唱：饱食/充饥/饱腹/不饿/充能。腹空时私语念出，饥意自消；神赐一餐，不如自己种一田。", "2"},
+            {"heal", "圣愈之卷", "云笈", "咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈", "圣愈之卷（生命系·Lv5）｜咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈。负伤时私语念出，伤口愈合；生死关头的保命卷。", "1"},
+            {"tp", "传送之卷", "云笈", "咏唱：传送/瞬移/闪现/空间跳跃/跃迁", "传送之卷（空间系·Lv2）｜咏唱：传送/瞬移/闪现/撕裂虚空/空间跳跃/跃迁。报方向距离（如「传送十格东」）念出即至。", "1"},
+            {"give", "造物之卷", "云笈", "咏唱：造物/赐予/给予/给我/变出", "造物之卷（创造系·Lv2）｜咏唱：造物/赐予/给予/赐下/给我/变出。报所需之物（如「给我个火把」）私语念出，神恩按白名单施予。", "1"},
+    };
+    private static final Random RNG = new Random();
+
+    /** 打怪掉落：亡灵/节肢/苦力怕/女巫死亡有 3% 掉一本随机技能书。 */
+    private static final Set<EntityType<?>> DROP_MOBS = Set.of(
+            EntityType.ZOMBIE, EntityType.HUSK, EntityType.DROWNED,
+            EntityType.SKELETON, EntityType.STRAY,
+            EntityType.SPIDER, EntityType.CAVE_SPIDER,
+            EntityType.CREEPER, EntityType.WITCH);
+
+    /** 箱子注入：探索箱 → 低概率多一池技能书（空手权重 vs 技能书权重）。 */
+    private static final java.util.Map<ResourceLocation, Integer> CHEST_SKILLBOOK_WEIGHT;
+    static {
+        java.util.Map<ResourceLocation, Integer> m = new java.util.HashMap<>();
+        m.put(ResourceLocation.withDefaultNamespace("chests/simple_dungeon"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/abandoned_mineshaft"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/stronghold_corridor"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/ruined_portal"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/shipwreck_treasure"), 3);
+        m.put(ResourceLocation.withDefaultNamespace("chests/jungle_temple"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/desert_pyramid"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/village_plains_house"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/village_taiga_house"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/village_desert_house"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/village_savanna_house"), 1);
+        m.put(ResourceLocation.withDefaultNamespace("chests/village_snowy_house"), 1);
+        CHEST_SKILLBOOK_WEIGHT = java.util.Collections.unmodifiableMap(m);
+    }
+
+    /** 生成一本技能书（与书商 SKILLBOOKS 同结构：written_book + custom_data.skillbook + lore）。 */
+    public static ItemStack makeSkillBook(String key, String title, String author, String chant, String page) {
+        ItemStack book = new ItemStack(Items.WRITTEN_BOOK, 1);
+        // 1.21 WrittenBookContent：title=Filterable<String>，author=String，pages=List<Filterable<Component>>
+        // 书页即 Component（序列化后与书商 SNBT 的 {"text": ...} 等价）
+        List<Filterable<Component>> pages = List.of(Filterable.passThrough(Component.literal(page)));
+        book.set(DataComponents.WRITTEN_BOOK_CONTENT,
+                new WrittenBookContent(Filterable.passThrough(title), author, 0, pages, true));
+        book.set(DataComponents.CUSTOM_DATA, CustomData.EMPTY.update(j -> j.putString("skillbook", key)));
+        book.set(DataComponents.LORE, new ItemLore(List.of(
+                Component.literal(chant).withStyle(ChatFormatting.GRAY),
+                Component.literal("右键=施放（不打开书）").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC))));
+        return book;
+    }
+
+    /** 按权重随机抽一本技能书。 */
+    private static ItemStack randomSkillBook() {
+        int total = 0;
+        for (String[] sb : SKILLBOOK_POOL) {
+            total += Integer.parseInt(sb[5]);
+        }
+        int pick = RNG.nextInt(total);
+        for (String[] sb : SKILLBOOK_POOL) {
+            pick -= Integer.parseInt(sb[5]);
+            if (pick < 0) {
+                return makeSkillBook(sb[0], sb[1], sb[2], sb[3], sb[4]);
+            }
+        }
+        return makeSkillBook(SKILLBOOK_POOL[0][0], SKILLBOOK_POOL[0][1], SKILLBOOK_POOL[0][2], SKILLBOOK_POOL[0][3], SKILLBOOK_POOL[0][4]);
+    }
+
+    /** 打怪掉落：敌对怪 3% 掉一本随机技能书（技能书可自由流转，掉落物直接进世界）。 */
+    private void onLivingDrops(LivingDropsEvent ev) {
+        try {
+            var entity = ev.getEntity();
+            if (entity.level().isClientSide) {
+                return;
+            }
+            if (!DROP_MOBS.contains(entity.getType())) {
+                return;
+            }
+            if (RNG.nextDouble() >= 0.03) {
+                return;
+            }
+            ItemStack book = randomSkillBook();
+            ev.getDrops().add(new ItemEntity(entity.level(), entity.getX(), entity.getY(), entity.getZ(), book));
+            LOGGER.info("[settlementsfix] skillbook drop: mob={} book={}", entity.getType().getDescriptionId(), book.getDisplayName().getString());
+        } catch (Exception e) {
+            // 掉落失败不阻断
+        }
+    }
+
+    /** 箱子注入：探索箱 loot table 加载后追加一个「空手/技能书」池。
+     *  LootTable 构造器包私有、原池无公开 getter，用反射重建表（原池全保留 + 追加技能书池）。
+     *  任何反射失败都被兜住：箱子注入静默降级，打怪掉落不受影响。 */
+    private void onLootTableLoad(LootTableLoadEvent ev) {
+        try {
+            Integer weight = CHEST_SKILLBOOK_WEIGHT.get(ev.getName());
+            if (weight == null) {
+                return;
+            }
+            LootTable table = ev.getTable();
+            java.lang.reflect.Field f = LootTable.class.getDeclaredField("pools");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<LootPool> orig = (List<LootPool>) f.get(table);
+            List<LootPool> pools = new ArrayList<>(orig);
+            pools.add(skillbookPool(weight));
+            java.lang.reflect.Constructor<LootTable> c = LootTable.class.getDeclaredConstructor(
+                    net.minecraft.world.level.storage.loot.parameters.LootContextParamSet.class,
+                    java.util.Optional.class, List.class, List.class);
+            c.setAccessible(true);
+            LootTable newTable = c.newInstance(table.getParamSet(), java.util.Optional.empty(), pools, List.of());
+            ev.setTable(newTable);
+            LOGGER.info("[settlementsfix] skillbook injected into chest loot: {}", ev.getName());
+        } catch (Exception e) {
+            LOGGER.warn("[settlementsfix] chest loot inject failed for {}: {}", ev.getName(), e.toString());
+        }
+    }
+
+    /** 构造技能书池：rolls=1，空手 19 vs 技能书 weight（默认 1，沉船宝藏 3 → 更高概率）。 */
+    private static LootPool skillbookPool(int bookWeight) {
+        LootPool.Builder b = LootPool.lootPool().setRolls(ConstantValue.exactly(1.0F));
+        b.add(EmptyLootItem.emptyItem().setWeight(19));
+        for (String[] sb : SKILLBOOK_POOL) {
+            int w = bookWeight * Integer.parseInt(sb[5]);
+            b.add(LootItem.lootTableItem(Items.WRITTEN_BOOK)
+                    .setWeight(w)
+                    .apply(SetComponentsFunction.setComponent(DataComponents.WRITTEN_BOOK_CONTENT,
+                            new WrittenBookContent(Filterable.passThrough(sb[1]), sb[2], 0,
+                                    List.of(Filterable.passThrough(Component.literal(sb[4]))), true)))
+                    .apply(SetComponentsFunction.setComponent(DataComponents.CUSTOM_DATA,
+                            CustomData.EMPTY.update(j -> j.putString("skillbook", sb[0]))))
+                    .apply(SetComponentsFunction.setComponent(DataComponents.LORE,
+                            new ItemLore(List.of(
+                                    Component.literal(sb[3]).withStyle(ChatFormatting.GRAY),
+                                    Component.literal("右键=施放（不打开书）").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC))))));
+        }
+        return b.build();
     }
 
     /**
