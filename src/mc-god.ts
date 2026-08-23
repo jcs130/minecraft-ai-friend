@@ -833,6 +833,48 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     reply(`[女神] ${t?.name ?? username}，祈愿已上达天听${offer ? `（供奉 ${offer.cn}×${offer.count} 已归神库）` : ''}${ahead > 0 ? `，队列中还有 ${ahead} 位信士` : ''}。女神将按序聆听，神谕随后送达。`)
   }
 
+  // 守卫名归一（陈氏拼音混写 → 权威中文名）。守卫只认桐人/鸣人/爱德华三个。
+  const GUARD_ALIASES: Record<string, string> = {
+    '桐人': '桐人', 'kirito': '桐人', 'Kirito': '桐人', '桐': '桐人',
+    '鸣人': '鸣人', 'naruto': '鸣人', 'Naruto': '鸣人', '鸣': '鸣人',
+    '爱德华': '爱德华', 'edward': '爱德华', 'Edward': '爱德华',
+  }
+  function canonicalGuardName(s: string): string | null {
+    const key = s.trim()
+    return GUARD_ALIASES[key] ?? null
+  }
+
+  // 召唤术核心（唤魂分支，2026-08-23）：给【现有守卫】注入「到某地干某事」的任务，
+  // 守卫桥（guard_drive.py，GUARD_DELIVERY）读到 goddess-orders.jsonl 即注入亲卫决策，
+  // 亲卫用 goto/follow 自主到场干活。**不强制 tp、不生成新分身、不要玩家资料**——
+  // 被召唤者本来就是活的服务器角色。返回 { summon, code }（失败时 summon=null + code=提示）。
+  // 写世界库的同名字段用 owner（守护天使代主人召唤时按主人算）。
+  function issueSummon(caller: string, guard: string, task: string): { summon: Record<string, unknown> | null; code?: string } {
+    const now = Date.now()
+    const t: Transmigrator | null = transmigrators.getByUsername(caller)
+    const disp = t?.name ?? caller
+    const summon = {
+      to: guard,
+      from: caller,
+      display: disp,
+      task,
+      ts: now,
+      mode: 'summon',          // 标记这是「召唤术」而非普通女神谕示，守卫桥可区分
+      summoner: disp,          // 召唤者显示名
+      summonerUuid: (t as any)?.uuid ?? null,
+      // 守卫桥 decision_prompt 只认 reply/text 字段注入亲卫——召唤指令必须带 text，
+      // 否则亲卫"听不见"。text = 召唤任务的自然语言谕示（引导亲卫自主到场干活）。
+      text: `女神谕示：${disp} 召唤你前来相助——「${task}」。请自主寻路到 ${disp} 身边协助他；若不知他在何处，用 summon 感知或祈愿向女神问位置。`,
+    }
+    try {
+      appendFileSync(GODDESS_ORDERS, JSON.stringify(summon) + '\n', 'utf-8')
+      return { summon }
+    } catch (err) {
+      log(`summon order append failed for ${guard}: ${err instanceof Error ? err.message : String(err)}`)
+      return { summon: null, code: '召唤失败：通灵信道未开。' }
+    }
+  }
+
   async function handleCli(username: string, cmd: CliCommand): Promise<void> {
     const bot = getBot()
     const reply = (text: string) => { try { bot.whisper(username, text) } catch { /* bot not ready */ } }
@@ -918,6 +960,23 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
       case 'appraise': {
         await doAppraiseCli(cmd.args.join(' '))
+        return
+      }
+      case 'summon': {
+        // 召唤术/秽土转生（2026-08-23 造物主拍板，唤魂分支）：
+        // 把服务器【现有守卫】（桐人/鸣人/爱德华）召唤过来帮你——不是生成新分身，
+        // 而是给守卫注入一个「到某地干某事」的任务，守卫桥/亲卫自主 decide 怎么过去。
+        // 无需玩家生成资料（被召唤者本来是活的）。用法：/cli summon <守卫名> <任务>。
+        const guard = cmd.args[0] ? canonicalGuardName(cmd.args[0]) : null
+        if (!guard) { reply(`[CLI] 用法：/cli summon <守卫名|桐人|鸣人|爱德华> <任务>。例：/cli summon 桐人 帮我到村广场挖矿`); return }
+        const task = cmd.args.slice(1).join(' ').trim()
+        if (!task) { reply(`[CLI] 想让他做什么？例：/cli summon 桐人 到广场帮我挖矿`); return }
+        const { summon, code } = issueSummon(username, guard, task)
+        if (!summon) { reply(`[CLI] ${code ?? '召唤失败：未见此守卫身影。'}`); return }
+        worlddb.chronicleRecord('summon', username, { to: guard, task: task.slice(0, 80), summon })
+        log(`summon ${guard} by ${username}: ${task.slice(0, 60)}`)
+        if (cmd.json) jsonReply({ ok: true, summon, to: guard })
+        else reply(`[女神] 已唤「${guard}」前来相助：${task}。他自会寻路到场。`)
         return
       }
       default:
