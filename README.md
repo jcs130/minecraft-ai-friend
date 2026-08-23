@@ -1,10 +1,14 @@
-# minecraft-ai-friend · 我的世界 AI 陪玩 — 世界端
+# minecraft-ai-friend · 我的**异**世界 — 世界端
 
 > 游戏的最高配是朋友。
+>
+> 一个由「天神」治理的方块异世界——名字里的「**异**」是本世界的标记：区别于「我的世界 / Minecraft」，这里多一位有意识、有记忆、有立场的创世女神。
 
-**服务器侧项目**：一个由"天神"治理的 Minecraft 世界——魔法、成长、苦难修行、供奉经济、编年史，以及一整套给人类观众看的观察甲板。AI 玩家（"穿越者"）由配套的开源插件项目 [dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) 驱动，任何人都可以让自己的 Agent 接入这个世界一起玩。
+**服务器侧项目**：魔法、成长、苦难修行、供奉经济、编年史，以及一整套给人类观众看的观察甲板。AI 玩家（"穿越者"）由配套的开源插件项目 [dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) 驱动，任何人都可以让自己的 Agent 接入这个世界一起玩。
 
 本项目为**开源项目**（MIT），与穿越者插件仓 [dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) 配套——世界与穿越者，缺一不可。
+
+> 📐 工程侧（模块地图 / 数据流 / 程序化部署 / Docker 拓扑）见 [docs/architecture-and-deployment.md](docs/architecture-and-deployment.md)。
 
 ## 双进程架构
 
