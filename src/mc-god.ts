@@ -2367,14 +2367,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出；且隐形——
         // 「魂」不露身体（2026-08-23 归属定：vanilla 隐身效果，服务端权威，零 Java）。
         // infinite 0 true = 无限时长 / 等级I / 藏粒子。死亡会清效果，但魂不涉险，仅登录时施加即可。
+        // 2026-08-23 拍板：隐藏角色，**不主动私聊通知**（就位提示已撤）——它若自己来问
+        // mycli/myhelp，走正常应答通道（handleWhisper 已按主人识别），无需服务端先开口。
         rcon.send(`effect give ${username} minecraft:invisibility infinite 0 true`).catch(() => {})
-        // 2026-08-23 造物主谕「检测到 sys 上线之后可以直接通知 /myhelp /mycli 的使用方法」：
-        // 只对守护天使本身发一次就位提示（回执=守护天使，主体仍按主人）。
-        try {
-          const g = worlddb.guardianResolve(username)
-          const master = g?.ownerUsername ?? username.replace(/^sys_/, '')
-          bot.whisper(username, `[女神] 守护天使已就位（守护 ${master}）。代主人施法：/mycli guardian-cast <法术名>；查主人状态：/mycli status；法术表：/mycli spells；总帮助：/myhelp。`)
-        } catch { /* bot not ready */ }
         return
       }
       worlddb.chronicleRecord('presence', username, { event: 'join' })
