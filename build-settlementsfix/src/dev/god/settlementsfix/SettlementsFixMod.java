@@ -125,25 +125,47 @@ public class SettlementsFixMod {
      * @param player 使用书的玩家
      * @param stack  玩家手上的 ItemStack（WrittenBookItem）
      */
-    public static void handleSkillBookUse(Player player, ItemStack stack) {
-        if (player.level().isClientSide) {
-            return; // 服务端 only（双端都走 use，避免重复写盘）
-        }
+    /** 是否技能书（skillbook 或 craftreq 标记）。双端一致——客户端据此也取消打开。 */
+    public static boolean isSkillBook(ItemStack stack) {
         if (!stack.is(Items.WRITTEN_BOOK)) {
-            return;
+            return false;
         }
         var cd = stack.get(DataComponents.CUSTOM_DATA);
         if (cd == null || cd.isEmpty()) {
-            return;
+            return false;
         }
         CompoundTag data;
         try {
             data = cd.getUnsafe();
         } catch (Exception e) {
-            return; // 非法 custom_data 视为无标记
+            return false; // 非法 custom_data 视为无标记
         }
         if (data == null) {
-            return;
+            return false;
+        }
+        return data.contains("skillbook") || data.getBoolean("craftreq");
+    }
+
+    /**
+     * 技能书施法统一入口。返回 true = 是技能书（本次交互被消费，调用方取消打开书 GUI）；
+     * false = 普通书，照常打开。
+     */
+    public static boolean handleSkillBookUse(Player player, ItemStack stack) {
+        if (!isSkillBook(stack)) {
+            return false;
+        }
+        if (player.level().isClientSide) {
+            return true; // 客户端不写盘，但仍取消打开
+        }
+        var cd = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data;
+        try {
+            data = cd.getUnsafe();
+        } catch (Exception e) {
+            return true;
+        }
+        if (data == null) {
+            return true;
         }
         String playerName = player.getName().getString();
         // 固定技能书：custom_data.skillbook=<id>
@@ -153,7 +175,7 @@ public class SettlementsFixMod {
                 appendSpell("speaker", playerName, "skill", skill);
                 LOGGER.info("[settlementsfix] skillbook cast: player={} skill={}", playerName, skill);
             }
-            return;
+            return true;
         }
         // 空白造物卷（合书产物）：custom_data.craftreq=true → 读全书页作为祈愿文
         if (data.getBoolean("craftreq")) {
@@ -172,7 +194,9 @@ public class SettlementsFixMod {
                 appendSpell("speaker", playerName, "text", text);
                 LOGGER.info("[settlementsfix] craftreq request: player={} len={}", playerName, text.length());
             }
+            return true;
         }
+        return true;
     }
 
     private void onItemCrafted(PlayerEvent.ItemCraftedEvent ev) {

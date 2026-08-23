@@ -31,9 +31,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(WrittenBookItem.class)
 public abstract class WrittenBookItemMixin {
 
-    @Inject(method = "use", at = @At("HEAD"))
+    @Inject(method = "use", at = @At("HEAD"), cancellable = true)
     private void settlementsfix$onSkillBookUse(Level level, Player player, InteractionHand hand,
                                                CallbackInfoReturnable<InteractionResultHolder<ItemStack>> cir) {
-        SettlementsFixMod.handleSkillBookUse(player, player.getItemInHand(hand));
+        ItemStack stack = player.getItemInHand(hand);
+        if (SettlementsFixMod.handleSkillBookUse(player, stack)) {
+            // 技能书：右键 = 施法，不打开书（造物主谕「在手上使用不是打开，而是施法」）。
+            // sidedSuccess 与 vanilla 返回一致（消费本次交互、摆臂），仅跳过 openItemGui。
+            cir.setReturnValue(InteractionResultHolder.sidedSuccess(stack, level.isClientSide()));
+        }
     }
 }
