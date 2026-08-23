@@ -31,18 +31,21 @@ const wrap = (s: string): string[] => {
 
 /** 识别 /help 与 /h（带参或不带参）。其他斜杠命令返回 false（归信使）。
  *  2026-08-23 造物主定谳（经四轮迭代定稿）：帮助触发器**只用 /help**；AI 命令接口
- *  不再单设 /cli 命令，而是作为 /help 的一个**说明内容（主题）**——`/help cli` 查询。 */
+ *  不再单设 /cli 命令，而是作为 /help 的一个**说明内容（主题）**——`/help cli` 查询。
+ *  2026-08-23 造物主谕「把 mycli 也加进聊天窗」：`/myhelp`（numen 真命令转发成 /help）
+ *  与裸 `myhelp` 一视同仁，真人玩家复制粘贴哪一版都查得到手册。 */
 export function isHelpCommand(text: string): boolean {
   const t = text.trim()
   return t === '/help' || t === '/h' || t.startsWith('/help ') || t.startsWith('/h ')
     || t === 'help' || t.startsWith('help ')
+    || t === '/myhelp' || t.startsWith('/myhelp ') || t === 'myhelp' || t.startsWith('myhelp ')
 }
 
 /** 识别 /cli 及其常见帮助形式（/cli、/cli -h、/cli --help、/cli help、/cli ?）。
  *  /cli 在服务端并非真实注册命令（实测与 /xyzzy 同一报错），这里把「/cli 想拿帮助」
- *  的请求路由到女神的命令接口说明。 */
+ *  的请求路由到女神的命令接口说明。mycli 同族（/mycli 是 numen 真命令，转发成 /cli）。 */
 export function isCliCommand(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/^\/cli\b\s*/, '').trim()
+  const t = text.trim().toLowerCase().replace(/^\/?(mycli|cli)\b\s*/, '').trim()
   return t === '' || t === '-h' || t === '--help' || t === 'help' || t === '?' || t === '-help'
 }
 
@@ -50,13 +53,14 @@ export function isCliCommand(text: string): boolean {
 export function cliHelpLines(): string[] {
   return [
     '【命令书｜世界 CLI（2026-08-23 定谳）】确定性、可执行、机器可读：',
-    '真人玩家：聊天框直接打 cli 开头（别带斜杠 /），或私聊女神 /msg Goddess cli xxx。',
+    '真人玩家：聊天框直接打 cli 或 mycli 开头（别带斜杠 /），或打 /mycli、/myhelp 真命令；私聊女神 /msg Goddess cli xxx 也行。',
     'cli status --json　查自身（蓝/级/已学/天赋/血食）',
     'cli skills　　　　　列已学/可学技能；cli spells [页] 全法术表',
     'cli cast <咒语>　　咏唱（已学自施，未学神如何裁）',
-    'cli pray <愿>[｜供奉：X]　祈愿；cli ask <问>　咨询',
+    'cli pray <愿>[｜供奉：X]　祈愿；cli ask <问>　咨询；cli chat <话>　与女神聊天',
     'cli innate [我选 <名>]　查/选出生天赋；cli appraise　鉴定',
     'cli help <命令>　单命令用法；cli commands　全部命令。例：cli status --json',
+    '前缀后不是命令词＝直接跟女神说话（cli 铁在哪）。',
   ]
 }
 
@@ -84,7 +88,7 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(help|h)\s*/, '').trim()
+  const raw = text.trim().replace(/^\/?(myhelp|help|h)\s*/, '').trim()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()

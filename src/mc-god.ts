@@ -638,7 +638,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '1. 欢迎他降临此界，点出世界背景（1-2 句，勿长篇）。',
       '2. 引导他自报家门：问他叫什么、记得自己是谁、此刻想做什么（不必长篇，一句即可）。',
       '3. 告诉他：作为穿越的补偿，我将赐他一项「出生天赋」，候选法术稍后在公屏宣读，他喊「我选 <法术名>」即可选定。',
-      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；查手册说「help」（真人别打斜杠 /，会被游戏系统当命令拦下）。',
+      '4. 指路：把世界的「命令接口」私聊告诉他（2026-08-23 定稿）——已习得的技能自己咏唱：私语 /msg Goddess 念法术关键词即可（归乡/圣愈/造物/照明/传送…）；咏唱可带咒语框架前缀（如「' + prefixHint + '」+ 法术内容）更显仪式，前缀只知一二，其余藏在技能书里待他寻访；求助私聊「祈愿：…」可自愿献供奉；疑问私聊「问：…」；选天赋喊「我选 <法术名>」；查状态说「鉴定」；查手册说「help」或「/myhelp」（真人可打斜杠 /myhelp、/mycli 是真命令，复制粘贴就能用；裸 cli/help 不打斜杠也行）。',
       '',
       '要求：庄重又慈爱，文言白话相间，80-140 字，纯文本，不要 JSON、不要列表符号。',
     ].join('\n')
@@ -701,7 +701,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         '- 求大术可附供奉（危难慷慨、贵重之物更显诚心）；修为靠挖矿/历练/施法/供奉攒。',
         '- 世界设施：灯门镇有书商墨白卖技能书（如《归乡之卷》）；当面物品交割私语「/msg Goddess 交易：<物> 给<玩家名>」；村民/守卫也懂些常识。',
         '- 技艺（技能书）得法：等级到自动会 / 历练解锁 / 带诚心祈愿求女神；技能书=捡/买/奖励得的古卷，拿手里按（右键）即习得施放；前缀（咒语框架）多藏书里，AI 穿越者读不了书由本神全量告知。',
-        '- 命令接口=CLI（本神御定的命令书）：凡「操作/施法/求物/选天赋/交易」直接按命令办——私语念词 / 祈愿： / 问： / 交易：<物> 给<玩家> / 我选 <法术名> / 鉴定；查命令书说「cli commands」或「help cli」；真人玩家直接说 cli xxx（别带斜杠 /），AI 玩家 /cli xxx 同效。',
+        '- 命令接口=CLI（本神御定的命令书）：凡「操作/施法/求物/选天赋/交易」直接按命令办——私语念词 / 祈愿： / 问： / 交易：<物> 给<玩家> / 我选 <法术名> / 鉴定；查命令书说「cli commands」或「help cli」；真人玩家直接说 cli xxx（或复制粘贴 /mycli xxx），AI 玩家 /cli xxx 同效；前缀后非命令词＝直接跟女神说话（cli 铁在哪）。',
       ].join('\n')
       // 2026-08-23 造物主谕「AI 穿越者优先用 CLI」：AI 读不了书，答时要多指命令、少叙事。
       const isAi = !!transmigrators.getByUsername(username)
@@ -936,6 +936,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
       case 'ask': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli ask <问题>。`); return }
+        await answerQuestion(username, cmd.args.join(' '))
+        return
+      }
+      case 'chat': {
+        // 与女神直接对话（2026-08-23 造物主谕「cli/mycli 也能直接跟女神说话」）：
+        // 显式 cli chat <话>，或 cli 前缀后非命令词（parseCli 兜底成 chat）都走这里。
+        // 复用 ask 的答疑通道（翻世界档案 + 玩法要诀，走传令官 mc-herald，失败回落女神）。
+        if (!cmd.args.length) { reply(`[CLI] 用法：cli chat <想对女神说的话>。直接说即可。`); return }
         await answerQuestion(username, cmd.args.join(' '))
         return
       }
@@ -2287,24 +2295,24 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         log(`help served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
         return
       }
+      // 世界 CLI 命令（2026-08-23 造物主谕「cli/mycli 都能进聊天窗」）：/cli、cli、!cli、
+      // mycli、/mycli 前缀一律命中——真人在聊天框打 cli xxx 或私聊女神 /msg Goddess cli xxx
+      // 都走这里（numen 真命令 /mycli 转发成 /cli 也命中）。主体=主人（守护天使代执行 CLI）。
+      const cliCmd = parseCli(message)
+      if (cliCmd) {
+        worlddb.chronicleRecord('cli', OWNER, { q: message.trim().slice(0, 60), via: 'whisper' })
+        log(`cli cmd from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${cliCmd.raw.slice(0, 60)}`)
+        await handleCli(OWNER, cliCmd)
+        return
+      }
+      if (isCliCommand(message)) {
+        const lines = cliOverview()
+        for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
+        try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
+        log(`cli served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
+        return
+      }
       if (message.trim().startsWith('/')) {
-        // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
-        // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
-        // 主体=主人（守护天使代执行 CLI，作用到主人头上）。
-        const cliCmd = parseCli(message)
-        if (cliCmd) {
-          worlddb.chronicleRecord('cli', OWNER, { q: message.trim().slice(0, 60), via: 'whisper' })
-          log(`cli cmd from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${cliCmd.raw.slice(0, 60)}`)
-          await handleCli(OWNER, cliCmd)
-          return
-        }
-        if (isCliCommand(message)) {
-          const lines = cliOverview()
-          for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
-          try { worlddb.chronicleRecord('help', OWNER, { q: message.trim().slice(0, 40) }) } catch { /* best effort */ }
-          log(`cli served to ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${message.trim().slice(0, 40)}`)
-          return
-        }
         // 其余斜杠命令让行（/mail、/friend 等归 mc-social 信使）——保持原有的「/ 开头一律 return」。
         return
       }

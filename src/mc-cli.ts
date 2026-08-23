@@ -31,6 +31,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'cast', aliases: ['chant', '施', '咏唱'], summary: '咏唱/施法（已学自施，神可代施）', usage: 'cast <咒语>', argDesc: '咒语：法术关键词（如 归乡/圣愈/照明）', json: true },
   { id: 'pray', aliases: ['wish', '祈愿'], summary: '祈愿上达天神（可带供奉）', usage: 'pray <愿望> [| 供奉：xxx]', argDesc: '供奉：面包x3 / 铁锭x1 等', json: true },
   { id: 'ask', aliases: ['question', '问'], summary: '咨询女神 / 查规则', usage: 'ask <问题>', argDesc: '问题：任何世界向问题', json: false },
+  { id: 'chat', aliases: ['talk', '说', '聊', '对话'], summary: '与女神直接对话', usage: 'chat <话>', argDesc: '话：想对女神说的（提问/闲聊/求助都行）', json: false },
   { id: 'innate', aliases: ['天赋', 'talent'], summary: '查/选出生天赋', usage: 'innate [我的 | 我选 <法术名>]', argDesc: '我选 <法术名>：选天赋；默认查', json: true },
   { id: 'appraise', aliases: ['鉴定'], summary: '鉴定自身（法力/等阶/秘法）', usage: 'appraise', json: true },
   { id: 'summon', aliases: ['召唤', '传唤'], summary: '召唤术：把现有守卫召来相助（桐人/鸣人）', usage: 'summon <守卫名> <任务>', argDesc: '守卫名：桐人/鸣人；任务：让他干什么（如 帮我挖矿）', json: true },
@@ -67,8 +68,10 @@ export function parseCli(
   const raw = text.trim()
   if (!raw) return null
 
-  // 显式前缀剥离
-  const prefixed = raw.match(/^(\/cli|cli|!cli)\b[\s:]*/i)
+  // 显式前缀剥离（2026-08-23 造物主谕「把 mycli 也加进聊天窗」）：
+  // `cli`/`mycli`/`/cli`/`/mycli`/`!cli` 一律当 CLI 入口；`/mycli` 是 numen 注册的
+  // 真命令，转发成 `/cli` 私语给女神，这里把它与裸 `cli` 一视同仁。
+  const prefixed = raw.match(/^(\/?(?:mycli|cli)|!cli)\b[\s:]*/i)
   let body: string
   if (prefixed) {
     body = raw.slice(prefixed[0].length).trim()
@@ -82,20 +85,25 @@ export function parseCli(
   let wantHelp = false
 
   // 第一个 token 若已是规范命令 → verb（这样 `help`/`commands` 等命令词不会被当 flag 吃掉）。
-  // 否则扫描 flags，取第一个出现的命令词作 verb（兼容 `--json status` 这类写法）。
+  // 否则扫描 flags，取第一个出现的命令词作 verb（兼容 `--json status` 这类写法）；
+  // 若前缀之后并非已知命令词 → 整句当作「与女神对话」（chat）直接上达，不再判「非 CLI」
+  // 让用户干瞪眼——`cli 给我个火把`、`mycli 铁在哪` 都能直接跟女神说话。
   let verb: string | null = canonicalVerb(toks[0] ?? '')
   let rest = toks.slice(1)
   if (!verb) {
-    let found = false
+    const chatWords: string[] = []
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i]
       if (t === '--json' || t === '-j') { json = true; continue }
       if (t === '--help' || t === '-h') { wantHelp = true; continue }
       verb = canonicalVerb(t)
-      if (verb) { rest = toks.slice(i + 1); found = true; break }
-      return null // 首个非flag token不是命令 → 非 CLI
+      if (verb) { rest = toks.slice(i + 1); break }
+      chatWords.push(t)
     }
-    if (!found || !verb) return null
+    if (!verb) {
+      if (chatWords.length) return { verb: 'chat', args: [chatWords.join(' ')], json, wantHelp, raw }
+      return { verb: 'commands', args: [], json, wantHelp, raw }
+    }
   }
 
   // 剥离剩余参数里的 flags，其余保留为 args
@@ -131,13 +139,14 @@ export function parseBareCli(
 // ── 自描述帮助 ──────────────────────────────────────────────────────────
 export function cliOverview(): string[] {
   return [
-    '【命令书】cli <命令> [参数] [--json]',
+    '【命令书】cli <命令> [参数] [--json]（mycli 同效）',
     ...CLI_VERBS.map((v) => `  ${v.usage.padEnd(28)}${v.summary}`),
     '',
     '例：cli status --json　　cli cast 归乡　　cli help cast',
-    '真人玩家：在聊天框直接打 cli 开头（别带斜杠 /），或私聊女神 /msg Goddess cli xxx。',
-    'AI 玩家（读不了书）：/cli xxx 与 cli xxx 同效。',
+    '真人玩家：聊天框直接打 cli 或 mycli 开头（别带斜杠 /），或打 /mycli、/myhelp 真命令；私聊女神 /msg Goddess cli xxx 也行。',
+    'AI 玩家（读不了书）：/cli xxx 与 cli xxx、mycli xxx 同效。',
     '每条命令都可试 cli help <命令> 看用法（--help 也行）。',
+    '前缀后面若不是命令词，就是直接跟女神说话（如 cli 铁在哪）。',
   ]
 }
 
