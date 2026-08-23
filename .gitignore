@@ -50,6 +50,24 @@ __pycache__/
  
 data-archive-*/ 
 
+# 本地工具链 junction/副本（A 仓 deepseek-harness/scratch-plugin，非本仓源码，勿入库）
+deepseek-harness/
+
+# 运行时日志目录（世界进程/面板/npc 的滚动日志）
+logs/
+
+# settlementsfix 构建临时目录（build.py 产生的 _sfx*/ 中间产物）
+_sfx*/
+build-settlementsfix/compile-args.txt
+
+# 备份文件（*.bak / *.bak-<date>）与临时诊断脚本、临时探测产物
+*.bak
+*.bak-*
+sidecar/guard/_diag_*.py
+sidecar/_diag_*.py
+sidecar/skin-proxy-test-*.json
+prerender_previews.mjs
+
 # 分发版打包产物（大二进制，git 不跟踪；打包时由 scripts/stage-*.py 收集）
 packaging/mc-world/assets/mc-server/
 packaging/mc-world/assets/runtime/
