@@ -153,12 +153,25 @@ def _init_db():
           name TEXT, class TEXT, stats TEXT DEFAULT '{}',
           mc_username TEXT,
           is_active INTEGER DEFAULT 0, created_at TEXT);
-        -- 账号↔伴侣（一对一）：每个真人玩家一个私有无实体观察者 AI agent
+        -- 账号↔伴侣「系统」（一对一）：运行在客户端本地、从服务端拉数据、按级别解锁权限
         CREATE TABLE IF NOT EXISTS companions(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
           cname TEXT, personality TEXT DEFAULT '{}', enabled INTEGER DEFAULT 1,
+          model TEXT,               -- 客户端配置的模型 id（快照，运行在客户端）
+          level INTEGER DEFAULT 1,  -- 系统等级（转生史莱姆「大贤者」式升级）
+          xp INTEGER DEFAULT 0,     -- 系统经验（升级来源待定）
+          skills TEXT DEFAULT '[]', -- 已解禁技能（json 数组）
+          permissions TEXT DEFAULT '[]', -- 当前授权权限集（按 level 派生 + 手动授予），供大模型判断
+          auto_assigned INTEGER DEFAULT 0, -- 是否由服务器自动分配
           created_at TEXT, updated_at TEXT);
+        -- 服务端→客户端「系统指令」队列（客户端轮询 + ack）
+        CREATE TABLE IF NOT EXISTS companion_commands(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          type TEXT NOT NULL,      -- auto_assign / level_up / unlock_skill / permission_grant
+          payload TEXT DEFAULT '{}',
+          acked_at TEXT, created_at TEXT);
         CREATE TABLE IF NOT EXISTS spells(
           id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
           category TEXT, description TEXT, chant TEXT, tier TEXT, rarity TEXT,
@@ -198,6 +211,15 @@ def _init_db():
         _cols = [r[1] for r in c.execute("PRAGMA table_info(characters)").fetchall()]
         if "mc_username" not in _cols:
             c.execute("ALTER TABLE characters ADD COLUMN mc_username TEXT")
+        _comp_cols = [r[1] for r in c.execute("PRAGMA table_info(companions)").fetchall()]
+        _comp_adder = {
+            "model": "TEXT", "level": "INTEGER DEFAULT 1", "xp": "INTEGER DEFAULT 0",
+            "skills": "TEXT DEFAULT '[]'", "permissions": "TEXT DEFAULT '[]'",
+            "auto_assigned": "INTEGER DEFAULT 0",
+        }
+        for _col, _typ in _comp_adder.items():
+            if _col not in _comp_cols:
+                c.execute(f"ALTER TABLE companions ADD COLUMN {_col} {_typ}")
 _init_db()
 
 # ------------------------- 密码/认证 -------------------------
@@ -497,6 +519,78 @@ def pan_links():
     except Exception:
         return {}
 
+# ------------------------- 伴侣「系统」等级/权限模型（转生史莱姆大贤者式） -------------------------
+# 系统运行在客户端本地；服务端是权威档案 + 权限管控 + 数据供给 + 指令下发。
+# 每个 level 解锁一组权限（permissions），客户端大模型据此判断能动用哪些服务端能力。
+SYSTEM_TIERS = {
+    1: {"name": "观察者",   "perms": ["world_view"],          "desc": "能看到世界与自身状态"},
+    2: {"name": "分析者",   "perms": ["world_view", "analyse"], "desc": "能分析周边地形/资源/村庄/危险"},
+    3: {"name": "影响者",   "perms": ["world_view", "analyse", "pray"], "desc": "能代表玩家向女神上达祈愿/代施"},
+    4: {"name": "施法者",   "perms": ["world_view", "analyse", "pray", "suggest"], "desc": "能建议/触发法术咏唱"},
+    5: {"name": "大贤者",   "perms": ["world_view", "analyse", "pray", "suggest", "oracle"], "desc": "全服公共情报 + 女神级洞察"},
+}
+SYSTEM_SKILLS = {
+    "world_view": {"name": "世界之眼", "desc": "读取玩家状态与世界快照", "tier": 1},
+    "analyse":    {"name": "解析",     "desc": "分析周边地形/资源/村庄/危险（需世界端扫描）", "tier": 2},
+    "pray":       {"name": "祈祷",     "desc": "代表玩家向女神上达祈愿/请求代施", "tier": 3},
+    "suggest":    {"name": "咏唱建议", "desc": "建议/触发法术咏唱", "tier": 4},
+    "oracle":     {"name": "神谕",     "desc": "全服公共情报 + 女神级洞察", "tier": 5},
+}
+
+def system_tier_perms(level):
+    """按 level 返回权限集（第 level 级含以下全部）。"""
+    if level is None: return []
+    perms = []
+    for t in range(1, min(int(level) or 1, 5) + 1):
+        perms.extend(SYSTEM_TIERS[int(t)]["perms"])
+    return sorted(set(perms))
+
+def system_profile(row):
+    """把 companions 行展开成系统档案（含 level/权限/技能/配置快照）。"""
+    if row is None:
+        return {"bound": False}
+    try:
+        skills = json.loads(row["skills"] or "[]")
+        perms = json.loads(row["permissions"] or "[]")
+    except Exception:
+        skills, perms = [], []
+    lv = int(row["level"] or 1)
+    tier = SYSTEM_TIERS[min(lv, 5)]
+    return {
+        "bound": True, "cname": row["cname"], "enabled": bool(row["enabled"]),
+        "model": row["model"], "level": lv, "xp": int(row["xp"] or 0),
+        "auto_assigned": bool(row["auto_assigned"]),
+        "tier": tier["name"], "tier_desc": tier["desc"],
+        "skills": skills, "skills_unlocked": sorted(set(skills) | set(system_tier_perms(lv))),
+        "permissions": perms or system_tier_perms(lv),
+        "personality": row["personality"],
+    }
+
+def push_system_command(user_id, ctype, payload=None):
+    """服务端→客户端「系统指令」。客户端轮询 /api/companion/commands 拉取，处理完 ack。"""
+    with db() as c:
+        c.execute("INSERT INTO companion_commands(user_id,type,payload,created_at) VALUES(?,?,?,?)",
+                  (user_id, ctype, json.dumps(payload or {}, ensure_ascii=False), now_iso()))
+    return True
+
+def grant_xp(user_id, amount):
+    """给某账号的系统加经验，若跨级则入队 level_up 指令。返回 (新level, 是否升级)。"""
+    with db() as c:
+        comp = c.execute("SELECT id,level,xp FROM companions WHERE user_id=?", (user_id,)).fetchone()
+        if comp is None:
+            return None, False
+        old_lv = int(comp["level"] or 1); new_xp = int(comp["xp"] or 0) + int(amount)
+        # 升级曲线：每级需要 level*100 xp（1->2:100, 2->3:200 ...）
+        new_lv = old_lv
+        need = new_lv * 100
+        while new_xp >= need and new_lv < 5:
+            new_xp -= need; new_lv += 1; need = new_lv * 100
+        c.execute("UPDATE companions SET xp=?, level=? WHERE user_id=?", (new_xp, new_lv, user_id))
+    if new_lv > old_lv:
+        push_system_command(user_id, "level_up", {"from": old_lv, "to": new_lv})
+        return new_lv, True
+    return new_lv, False
+
 # ------------------------- vLLM 解析 -------------------------
 def llm_parse(text):
     """阶段2/可选：把玩家文字命令送本地 LLM 解析。默认关闭（GATEWAY_COMMAND_LLM=1 才启用），
@@ -612,12 +706,17 @@ class Handler(BaseHTTPRequestHandler):
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
                     with db() as c:
-                        comp = c.execute("SELECT cname,personality,enabled,created_at,updated_at FROM companions WHERE user_id=?", (user["id"],)).fetchone()
-                        if comp is None:
-                            return json_write(self, 200, {"bound": False})
-                        comp = dict(comp)
-                        comp["bound"] = True
-                        return json_write(self, 200, comp)
+                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                    return json_write(self, 200, system_profile(comp))
+                if p == "/api/companion/commands":
+                    # 客户端轮询「系统指令」队列（auto-assign / level-up / unlock-skill / permission-grant）。
+                    # 服务端是权威：客户端主动拉取待处理指令，处理完回执 ack。
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    with db() as c:
+                        cmds = c.execute("SELECT id,type,payload,created_at FROM companion_commands WHERE user_id=? AND acked_at IS NULL ORDER BY id",
+                                         (user["id"],)).fetchall()
+                    return json_write(self, 200, {"commands": [dict(x) for x in cmds]})
                 if p == "/api/companion/world":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
@@ -769,18 +868,22 @@ class Handler(BaseHTTPRequestHandler):
                     persona = b.get("personality", {})
                     if not isinstance(persona, dict):
                         return json_write(self, 400, {"error": "personality must be object"})
+                    model = (b.get("model") or "").strip()[:64] or None
+                    auto_assigned = int(bool(b.get("auto_assigned", False)))
                     ip = client_ip(self.headers)
                     persona_str = json.dumps(persona, ensure_ascii=False)[:2000]
                     with db() as c:
-                        old = c.execute("SELECT cname,personality,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        old = c.execute("SELECT cname,personality,enabled,model,level,xp,skills,permissions,auto_assigned FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                         n = now_iso()
-                        c.execute("INSERT INTO companions(user_id,cname,personality,enabled,created_at,updated_at) VALUES(?,?,?,1,?,?) "
-                                  "ON CONFLICT(user_id) DO UPDATE SET cname=excluded.cname, personality=excluded.personality, enabled=1, updated_at=excluded.updated_at",
-                                  (user["id"], cname, persona_str, n, n))
+                        c.execute("INSERT INTO companions(user_id,cname,personality,enabled,model,auto_assigned,created_at,updated_at) VALUES(?,?,?,1,?,?,?,?) "
+                                  "ON CONFLICT(user_id) DO UPDATE SET cname=excluded.cname, personality=excluded.personality, enabled=1, "
+                                  "model=COALESCE(excluded.model, companions.model), updated_at=excluded.updated_at",
+                                  (user["id"], cname, persona_str, model, auto_assigned, n, n))
                         audit(c, "user", user["id"], user["username"], ip, "companion_bind", "companion", user["id"],
                               old_data=(dict(old) if old else None),
-                              new_data={"cname": cname, "personality": persona})
-                    return json_write(self, 200, {"ok": True, "bound": True, "cname": cname})
+                              new_data={"cname": cname, "personality": persona, "model": model, "auto_assigned": auto_assigned})
+                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                    return json_write(self, 200, system_profile(comp))
                 if p == "/api/companion/activate":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
@@ -798,12 +901,31 @@ class Handler(BaseHTTPRequestHandler):
                     text = (b.get("text") or "").strip()
                     if not text: return json_write(self, 400, {"error": "text required"})
                     with db() as c:
-                        comp = c.execute("SELECT cname,enabled FROM companions WHERE user_id=?", (user["id"],)).fetchone()
+                        comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                         if not comp or not comp["enabled"]:
                             return json_write(self, 200, {"bound": False, "ok": False, "reason": "companion_not_bound"})
-                    # MVP：伴侣答话走模板（无实体 agent）。世界视图数据 / 代行上达祈愿后续接。
-                    reply = f"［{comp['cname']}］我在你身边。有啥事，说一声。"
-                    return json_write(self, 200, {"bound": True, "reply": reply})
+                    # 伴侣系统运行在客户端本地（大模型在客户端）：服务端只转发意图 + 给足上下文。
+                    # MVP 给模板回执；客户端系统接入后，此处改为把 text+world 数据推给客户端，由客户端系统模型作答。
+                    prof = system_profile(comp)
+                    # 组装可供客户端系统模型用的上下文（权限决定能看多少）
+                    ctx = {"system": prof}
+                    lv = prof["level"]
+                    if "world_view" in prof["permissions"]:
+                        view = current_player_view(user)
+                        ctx["world"] = view
+                    reply = f"［{prof['cname']}·{prof['tier']}］我在你身边。有权限级别 {prof['level']} 能看，你说。"
+                    return json_write(self, 200, {"bound": True, "reply": reply, "intent": text, "context": ctx})
+                if p == "/api/companion/commands/ack":
+                    user = require_user(self.headers)
+                    if not user: return json_write(self, 401, {"error": "unauthorized"})
+                    b = read_body(self)
+                    cid = b.get("id")
+                    with db() as c:
+                        row = c.execute("SELECT id FROM companion_commands WHERE user_id=? AND id=?", (user["id"], cid)).fetchone()
+                        if not row:
+                            return json_write(self, 404, {"error": "command_not_found"})
+                        c.execute("UPDATE companion_commands SET acked_at=? WHERE id=?", (now_iso(), cid))
+                    return json_write(self, 200, {"ok": True, "acked": cid})
                 if p == "/api/player/command":
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})

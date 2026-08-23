@@ -123,13 +123,27 @@ CREATE TABLE characters(
   mc_username TEXT,               -- 游戏内登录名（ASCII），锚定账号↔角色的键
   is_active BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now()
 );
--- 账号↔伴侣（一对一）：每个真人玩家一个私有无实体观察者 AI agent
+-- 账号↔伴侣「系统」（一对一）：运行在客户端本地、从服务端拉数据、按级别解锁权限
 CREATE TABLE companions(
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   cname TEXT, personality JSONB DEFAULT '{}',
-  enabled BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  enabled BOOLEAN DEFAULT true,
+  model TEXT,               -- 客户端配置的模型 id（快照）
+  level SMALLINT DEFAULT 1, -- 系统等级（转生史莱姆大贤者式升级）
+  xp INT DEFAULT 0,         -- 系统经验
+  skills JSONB DEFAULT '[]',-- 已解禁技能
+  permissions JSONB DEFAULT '[]', -- 当前授权权限集（按 level 派生+手动授予）
+  auto_assigned BOOLEAN DEFAULT false, -- 是否服务器自动分配
+  created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
+);
+-- 服务端→客户端「系统指令」队列（客户端轮询 + ack）
+CREATE TABLE companion_commands(
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,       -- auto_assign / level_up / unlock_skill / permission_grant
+  payload JSONB DEFAULT '{}',
+  acked_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- C 法术/AI 向量
