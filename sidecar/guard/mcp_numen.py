@@ -50,10 +50,10 @@ NUMEN_DISPLAY = os.environ.get("NUMEN_DISPLAY", "鸣人")
 # 与 mc-god.ts kage_bunshin 召唤写死的 Kage1/Kage2 保持一致；分身死亡即散/超时回收。
 KAGE_NAMES = ["Kage1", "Kage2"]
 # 与女神侧共享的通道文件（同守卫桥；容器迁移经 MC_DATA_DIR 覆盖）
-WORLD_DATA = os.environ.get(
-    "MC_DATA_DIR",
-    r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data",
-)
+# 2026-08-26 AUDIT-01 修复：默认值曾指向 deepseek-harness 旧世界目录，咏唱/祈愿全部石沉大海。
+# 现役主服世界数据在 B 仓 mc-data/，跟随 REPO_ROOT（REPO_ROOT 定义上移至此）。
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+WORLD_DATA = os.environ.get("MC_DATA_DIR", os.path.join(REPO_ROOT, "mc-data"))
 CHANT_REQ = os.path.join(WORLD_DATA, "chant-requests.jsonl")
 GOD_INBOX = os.path.join(WORLD_DATA, "god-inbox.jsonl")
 
@@ -66,6 +66,9 @@ TSX_CLI = os.environ.get(
     r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\node_modules\tsx\dist\cli.mjs",
 )
 RENDER_SCRIPT = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render-pure.mts")
+# 2026-08-26 AUDIT-03：公屏/私语同文本 120s 去重（agent 唯一出口，最治本的一层——
+# 鸣人曾同一句招徕吆喝 80+ 条、峰值 3 秒 4 条）。
+_SAY_RECENT: dict = {}
 RENDER_SCRIPT_FP = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render-webgl.mts")
 RENDER_TIMEOUT = int(os.environ.get("GUARD_RENDER_TIMEOUT", "100"))
 
@@ -498,10 +501,23 @@ async def kage_dismiss(name: str = "Kage1") -> str:
 
 
 # ============ 说话 ============
+def _say_dedup(msg: str, what: str = "say") -> str | None:
+    """AUDIT-03：同文本 120s 内重复 → 返回拦截提示；否则记录放行（返回 None）。"""
+    now = time.time()
+    key = (what, msg[:60])
+    if _SAY_RECENT.get(key, 0) > now - 120:
+        return f"（{what} 去重拦截：这句话 2 分钟内已说过，换个说法或先沉默）"
+    _SAY_RECENT[key] = now
+    return None
+
+
 @mcp.tool()
 async def say(message: str) -> str:
     """以身体本人的身份在公屏说话（与在场玩家/NPC 交谈、回应、报平安、求援）。语气像本人，短而自然。"""
     msg = (message or "").strip()[:256]
+    blocked = _say_dedup(msg, "say")
+    if blocked:
+        return blocked
     return rcon().cmd(f'numen_act say "{NUMEN_COMPANION}" {msg}')
 
 
@@ -536,6 +552,9 @@ async def pray(wish: str) -> str:
 async def whisper(target: str, message: str) -> str:
     """向指定玩家发【私语】消息（不是公屏）。target 是玩家名（如 Goddess）。假玩家以本人身份私语，目标玩家才看到。"""
     msg = (message or "").strip()[:256]
+    blocked = _say_dedup(f"{target}|{msg}", "whisper")
+    if blocked:
+        return blocked
     return rcon().cmd(f'numen_act whisper "{NUMEN_COMPANION}" "{target}" {msg}')
 
 

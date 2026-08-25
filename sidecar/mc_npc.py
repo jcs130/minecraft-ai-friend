@@ -870,7 +870,9 @@ def llm_reply(v, speaker, msg, ctx):
         return None
     sysp = ("你是%s，Minecraft世界「千灯纪」集市的村民。人设：%s 背景：%s %s 目前在线：%s。%s"
             "请以人设口吻用中文回答，不超过两句话；说话用大白话、口语，像街坊邻居聊天一样，简短直接，"
-            "别拽文、别用文言、别用书面腔；不要出戏，不要提到游戏机制之外的现实。") % (
+            "别拽文、别用文言、别用书面腔；不要出戏，不要提到游戏机制之外的现实。"
+            "你只能说话、不能走动办事：不许说『我这就去』『我带给你』『我马上来』这类承诺——"
+            "要办事就答『记下了，我托给任务板或守卫』；有人求救求物时只指路（哪有吃的、找谁帮忙），别揽活。") % (
         v["display"], v.get("persona", ""), " ".join(v.get("backstory", [])[:1]), quest_summary(v), ctx.get("online", "?"), WORLD_BRIEF)
     body = json.dumps({
         "model": llm.get("model", "qwen3.8-27b"),

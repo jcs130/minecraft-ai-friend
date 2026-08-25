@@ -2216,14 +2216,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** 每玩家施援扫描：只判定+提示，绝不动手（圣愈/填海留给祈愿供奉与自己吟唱）。 */
   async function guardScan(name: string, isNight: boolean, day: number): Promise<void> {
     try {
-      const [hp, food, air] = await Promise.all([
-        rcon.getEntityNumber(name, 'Health'),
-        rcon.getEntityNumber(name, 'foodLevel'),
-        rcon.getEntityNumber(name, 'Air'),
-      ])
+      // 2026-08-26 AUDIT-02 根因修复：原 Promise.all 三连并发把 RCON 单连接串包
+      // （foodLevel/Air 长期 null——饥饿检测从未工作过）。RCON 是单连接请求-响应
+      // 协议，必须串行查询；20s 轮询 ×5 玩家 ×3 查询串行完全够用。
+      const hp = await rcon.getEntityNumber(name, 'Health')
+      const food = await rcon.getEntityNumber(name, 'foodLevel')
+      const air = await rcon.getEntityNumber(name, 'Air')
+      log(`GUARD-SCAN ${name}: hp=${hp} food=${food} air=${air}`) // AUDIT-02 调试：确认扫描取数
       if (hp !== null) {
         const hpRatio = hp / 20
-        if (hpRatio < 0.15) {
+        if (hpRatio <= 0.15) {
           // 濒死先救铁律（守卫侧）：真濒死 → 女神先代施圣愈救活，再催教并行。翻掉"只催不救"教条。
           const sinceSave = lastGuardSave.get(name) ?? 0
           if (Date.now() - sinceSave > GUARD_SAVE_COOLDOWN_MS) {
@@ -2238,6 +2240,24 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             }
           }
           await guardHint(name, 'dying', `我已出手救你（圣愈）——别硬撑，快念「圣愈」自保，或速撤找屋檐！`)
+        }
+        else if (food !== null && food === 0 && hpRatio <= 0.5) {
+          // 2026-08-26 AUDIT-02 修复：饥饿归零+失血的「慢性濒死」——HP 未到 0.15 线但会被磨死
+          // （鸣人实证：饥饿0+HP10 拖了 40 分钟，旧条件不触发代施，只发"肚子空了"提示）。
+          // 女神代施「饱食赐福」止血因（feed=补饥饿），节流同 GUARD_SAVE_COOLDOWN_MS。
+          const sinceSave = lastGuardSave.get(name) ?? 0
+          if (Date.now() - sinceSave > GUARD_SAVE_COOLDOWN_MS) {
+            lastGuardSave.set(name, Date.now())
+            try {
+              const save = await magic.castByGod(name, 'feed', { playerChant: `守卫饥饿归零+失血 ${Math.round(hp)}/20`, tokens: 0 })
+              log(`GUARD-SAVE ${name}: feed (hp ${Math.round(hp)}/20, food 0) -> ${save}`)
+              worlddb.chronicleRecord('verdict', name, { action: 'emergency', skill: 'feed', reply: `守卫饿极失血，女神代施「饱食赐福」救急` })
+              await worlddb.remember(name, 'verdict', `守卫${name}饥饿归零失血（${Math.round(hp)}/20），你代施「饱食赐福」止血因`)
+            } catch (err) {
+              log(`guard feed save failed for ${name}: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+          await guardHint(name, 'starving', `我已喂饱你（饱食赐福）——快去弄点吃的备着，别再空腹硬扛！`)
         }
         else if (hpRatio < 0.30) await guardHint(name, 'hurt', `你伤得不轻（${Math.round(hp)}/20），找屋檐歇脚，或念「圣愈」/向女神求个恩典。`)
       }

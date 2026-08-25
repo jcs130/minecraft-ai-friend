@@ -68,7 +68,10 @@ GUARDS = [
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
 # 咏唱/祈愿/谕示文件必须与 mc-god 世界进程同卷（默认锚 A 仓 scratch-plugin\data 运行态，
 # 容器化/迁移经 MC_DATA_DIR 覆盖）。守卫桥的账本仍在 B 仓 data/（DATA），与此无关。
-WORLD_DATA = os.environ.get("MC_DATA_DIR", r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data")
+# 2026-08-26 AUDIT-01 修复：默认值曾指向 deepseek-harness 旧世界目录（A 仓遗留），
+# 鸣人 2026-08-22 起所有咏唱/祈愿全部写进旧目录石沉大海（积压 2977 条无人消费）。
+# 现役主服世界数据在 B 仓 mc-data/，跟随 REPO_ROOT 走（迁移也不怕）。
+WORLD_DATA = os.environ.get("MC_DATA_DIR", os.path.join(REPO_ROOT, "mc-data"))
 CHANT_REQ = os.path.join(WORLD_DATA, "chant-requests.jsonl")      # 亲卫 chant → 女神（快路径咏唱）
 CHANT_REPLY = os.path.join(WORLD_DATA, "chant-reply.jsonl")       # 女神回执 → 守卫桥注入亲卫
 GOD_INBOX = os.path.join(WORLD_DATA, "god-inbox.jsonl")           # 亲卫 pray → 女神收件箱
@@ -661,6 +664,8 @@ def query(name, tool, args=None):
 
 # 参数归一化：亲卫决策返回的工具 args 可能缺必填参数，这里按工具补默认，
 # 避免 invoke 时报 missing required argument（自主循环健壮性）。
+# 2026-08-26 AUDIT-03：say 同文本冷却表（120s 去重，防公屏刷屏）
+_SAY_RECENT = {}
 _DEFAULT_ARGS = {
     "scan_nearby_entities": {"radius": 16, "type_filter": "hostile"},
     "scan_blocks": {"block_ids": ["minecraft:oak_log"]},
@@ -1086,6 +1091,17 @@ def drive_loop(g, stop_at):
                     last_act = "（say 需要 message 内容）"
                     time.sleep(DECIDE_INTERVAL)
                     continue
+                # 2026-08-26 AUDIT-03 修复：同文本 120s 去重（桥层硬保险，防公屏刷屏——
+                # 鸣人曾同一句招徕吆喝 80+ 条、峰值 3 秒 4 条）。过冷却才放行。
+                _say_key = (g["login"], msg[:60])
+                _now = time.time()
+                if _SAY_RECENT.get(_say_key, 0) > _now - 120:
+                    feed_append(g, "blocked", f"同文本120s内已说过，去重拦截：{msg[:50]}")
+                    log(f"🔇 去重拦截 {g['name']} say：{msg[:40]}")
+                    last_act = f"say 去重拦截（120s 内重复：{msg[:40]}）"
+                    time.sleep(DECIDE_INTERVAL)
+                    continue
+                _SAY_RECENT[_say_key] = _now
                 out = R.cmd(f'numen_act say "{g["login"]}" {msg}')
             else:
                 # —— 参数归一化：亲卫可能少给必填参数，补默认避免 invoke 报错（自主循环健壮性）——
@@ -1154,6 +1170,7 @@ def autonomy_prompt(g, status, goddess_msgs=None, player_msgs=None, emergency=No
         "- 第3步：调一个身体动作工具真去办它（goto/mine/eat/sleep/attack/collect_items/say/chant/pray 选一）。",
         "- 第4步：动作受理后就用一两句话收尾、说清决定与进展（下一步交给守卫桥下一轮再接）。",
         "**关键：numen 的身体动作是异步的**——goto/mine/eat 等返回『已受理，后台执行』就是动作已下发，身体自己会完成；你调完就收尾，别一直刷同一个工具。",
+        "**说话别重复**——同一句话 2 分钟内说第二遍会被拦下。招徕/吆喝说过一次就守在原地等人来，别刷屏；要再开口就换个说法。",
         "**宁可真调一个动作落地，也不要只评估不行动**——如果评估后觉得没有紧迫事，就主动选一件能变强/保安全的具体实事去做。",
         "**一次只推进一小步**：先最多调1-2个感知工具看一眼（get_self_status/look_around/scan_nearby_entities），挑一件最该做的事**真调一个动作**（goto/mine/eat/sleep/attack），调完**立刻打一行收尾**——别再连环调第3、4个工具（那是单轮步数上限掐死你的根源）。守卫桥下一轮会再叫你。",
         f"- 你是「{g['name']}」本人（人格见 PROFILE 人物志）。{_guard_core(g)}",
