@@ -542,8 +542,9 @@ def claim(who, no):
     if deny:
         return [deny]
     mine = [x for x in doc["board"] if x["status"] == "claimed" and who in _takers(x)]
-    if len(mine) >= GCFG.get("active_cap", 2):
-        return ["（翻名册）你名下已有 %d 单在办，接不了新的。先办完一单（对我说「交付 编号」），实在办不动就「放弃 编号」腾手，再接新的。" % len(mine)]
+    if len(mine) >= GCFG.get("active_cap", 1):
+        cur = mine[0]
+        return ["（翻名册）公会规矩：一人一次只办一单。你名下的 No.%d「%s」还没交呢——先去办完，对我说「交付 %d」；实在办不动就说「放弃 %d」腾手，再来接新的。" % (cur["no"], cur["title"], cur["no"], cur["no"])]
     b["status"] = "claimed"
     b["taker"] = [who]
     b["taken_at"] = time.strftime("%H:%M")
@@ -583,6 +584,9 @@ def party_claim(who, no, invitee):
     deny = _rank_gate(who, b)
     if deny:
         return [deny]
+    mine = [x for x in doc["board"] if x["status"] == "claimed" and who in _takers(x)]
+    if len(mine) >= GCFG.get("active_cap", 1):
+        return ["（翻名册）一人一次只办一单——你名下的 No.%d 还没交呢。先「交付 %d」或「放弃 %d」，再来组队接新的。" % (mine[0]["no"], mine[0]["no"], mine[0]["no"])]
     if not invitee:
         return ["组队接 No.%d 得有个队友——说「组队接 %d 邀请 队友名」，他回「入队」就算成军。" % (no, no)]
     # 自动注册未入会队友档（等级门槛同步校验队友）
@@ -616,6 +620,9 @@ def party_join(who):
     leader = inv["leader"]
     if not _near_receptionist(who):
         return ["（岚朝你摆手）入队画押也得来柜台——走过来。"]
+    mine = [x for x in doc["board"] if x["status"] == "claimed" and who in _takers(x)]
+    if len(mine) >= GCFG.get("active_cap", 1):
+        return ["（摇头）一人一次只办一单——你名下的 No.%d 还没交，先「交付 %d」或「放弃 %d」，再入队不迟。" % (mine[0]["no"], mine[0]["no"], mine[0]["no"])]
     b["status"] = "claimed"
     b["taker"] = [leader, who]
     b["taken_at"] = time.strftime("%H:%M")
