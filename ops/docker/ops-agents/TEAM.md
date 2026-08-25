@@ -46,6 +46,15 @@
 - **记忆**：守卫账本 + episodic 事件流。
 - **KPI**：活着、干活、有反馈（BUG 与体验都是情报）。
 
+## 共享记忆库（MemOS · 2026-08-25 上线）
+
+全员已接入瓶中 MemOS（MCP `memos`，工具 `add_memory` / `search_memories` / `chat`）：
+
+- **这是跨成员的共享记忆**：user_id 填自己的名字（如 `LanternWarden` / `mc-herald` / `Kirito`），别人存的你也能查（user_id 换成对方名）。
+- **什么值得存**：跨轮次要记的事——玩家偏好、事件结论、踩坑教训、待办约定。单轮就能查到的（台账/编年史）不必重复存。
+- **怎么查**：`search_memories(query=关键词, user_id=名字)`；记不清谁存的就 `chat` 问一句。
+- **红线**：与 ReMe 私人记忆并行不悖——ReMe 是各自工作区记忆，MemOS 是团队共享记忆；别把私密/密钥类内容存进来。
+
 ## 长久可持续机制
 
 1. **日志即记忆**：各成员每轮记档（herald-log / priest-journal / 守卫账本）；司灯汇总台账。
@@ -58,4 +67,5 @@
 
 - 灶火 → mc_guild 任务引擎直连（现在经 village/ 文件间接驱动）；
 - 司灯 ↔ 成员的双向消息（现在单向：司灯看台账，成员被动巡检）；
-- 体验官反馈自动入司灯台账。
+- 体验官反馈自动入司灯台账；
+- shadow-ollama 镜像就位后启用（`--profile selfhost up -d ollama`），embedding 彻底离宿主机。

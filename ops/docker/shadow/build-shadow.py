@@ -251,7 +251,32 @@ if os.path.isfile(da):
         json.dump(_d, open(da, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=2)
         print("  default agent.json: active_model patched（司灯模型接线 xhigh）")
 
-# 4.6 注册进 config.json agents.profiles（否则 console/chat X-Agent-Id 404）
+# 4.65 瓶中 MemOS 记忆栈接线：全员 drivers/mcp/memos.yaml → shadow-memos-mcp:8003
+#     （compose 里 memos-* 五服务 + ollama；2026-08-25 收编，离宿主机可活）
+MEMOS_YAML = """name: memos
+protocol: mcp
+endpoint:
+  transport: streamable_http
+  url: http://shadow-memos-mcp:8003/mcp
+  headers: {}
+config:
+  display_name: MemOS Memory
+  description: 瓶中共享记忆库（MemOS）：add_memory 存记忆（user_id 填自己的名字，如 LanternWarden/mc-herald）
+    / search_memories 语义检索 / chat 记忆问答。瓶中全员共享一个记忆库，跨 agent 可查。
+enabled: true
+policy:
+  default_effect: allow
+  rules: []
+"""
+for aid in list(GUARDS) + [a[0] for a in OPS_AGENTS] + ["default"]:
+    d = os.path.join(SH, "copaw", "workspaces", aid, "drivers", "mcp")
+    if not os.path.isdir(os.path.dirname(os.path.dirname(d))):
+        continue  # default 在容器首启时才自建，此处跳过
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, "memos.yaml"), "w", encoding="utf-8", newline="\n").write(MEMOS_YAML)
+print("  memos MCP wired for all agents (shadow-memos-mcp:8003)")
+
+# 4.7 注册进 config.json agents.profiles（否则 console/chat X-Agent-Id 404）
 cfg_path = os.path.join(SH, "copaw", "config.json")
 cfg = json.load(open(cfg_path, encoding="utf-8"))
 profs = cfg.setdefault("agents", {}).setdefault("profiles", {})

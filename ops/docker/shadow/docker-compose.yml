@@ -99,8 +99,8 @@ services:
       MC_DATA_DIR: /app/data
       MC_LOG_PATH: /mclogs/latest.log
       MC_ADVANCEMENTS_DIR: /mcadv
-      MC_QDRANT_URL: http://host.docker.internal:6333
-      MC_EMBEDDING_URL: http://host.docker.internal:11434
+      MC_QDRANT_URL: http://memos-qdrant:6333       # 众生册向量库 → 瓶中 MemOS 栈（自包含）
+      MC_EMBEDDING_URL: http://host.docker.internal:11434  # 众生册 embedding 暂用宿主 ollama（bge-m3-cpu）；shadow-ollama 镜像就位后切 http://ollama:11434
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       TERRAIN_FILL: "0"     # 容器内无宿主 python/terrain_repair.py，禁用每日填坑 spawn
     networks: [shadow]
@@ -183,6 +183,149 @@ services:
     networks: [shadow]
     depends_on: [qwenpaw]
 
+  # ══════════════════════════════════════════════════════════════
+  # MemOS 瓶中记忆栈（2026-08-25 收编：镜像/参数照抄宿主机 memos-deploy，
+  # 数据独立于宿主机 memos；LLM 借道 8890，embedding 走瓶中 ollama）
+  # ══════════════════════════════════════════════════════════════
+  memos-redis:
+    image: redis:7-alpine
+    container_name: shadow-memos-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./memos-data/redis:/data
+    restart: unless-stopped
+    networks: [shadow]
+
+  memos-qdrant:
+    image: qdrant/qdrant:v1.15.3
+    container_name: shadow-memos-qdrant
+    volumes:
+      - ./memos-data/qdrant:/qdrant/storage
+    restart: unless-stopped
+    networks: [shadow]
+
+  memos-neo4j:
+    image: neo4j:5.26.6
+    container_name: shadow-memos-neo4j
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+      NEO4J_AUTH: "neo4j/memos123"
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - ./memos-data/neo4j:/data
+      - ./memos-data/neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    networks: [shadow]
+
+  memos-api:
+    image: memos-api:local
+    container_name: shadow-memos-api
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONPATH: /app/src
+      ENABLE_CHAT_API: "true"
+      MOS_CHAT_MODEL: qwen3.8-27b-uncensored
+      # chat LLM：借道宿主 8890（同 daemon 的 vllm 容器口；整机迁移见下方 vllm profile）
+      CHAT_MODEL_LIST: '[{"backend":"openai","model_name_or_path":"qwen3.8-27b-uncensored","temperature":0.8,"max_tokens":4096,"top_p":0.95,"api_key":"local","api_base":"http://host.docker.internal:8890/v1","support_models":["qwen3.8-27b-uncensored","qwen3.6-27b"]}]'
+      OPENAI_API_BASE: http://host.docker.internal:8890/v1
+      MEMRADER_MODEL: qwen3.8-27b-uncensored
+      MEMREADER_GENERAL_MODEL: qwen3.8-27b-uncensored
+      MEMRADER_API_BASE: http://host.docker.internal:8890/v1
+      MEMREADER_GENERAL_API_BASE: http://host.docker.internal:8890/v1
+      # embedding：暂用宿主 ollama（bge-m3-cpu 在宿主模型库）；shadow-ollama 就位后切 http://ollama:11434
+      OLLAMA_API_BASE: http://host.docker.internal:11434
+      MOS_EMBEDDER_BACKEND: ollama
+      MOS_EMBEDDER_MODEL: bge-m3-cpu
+      EMBEDDING_DIMENSION: "1024"
+      NEO4J_URI: bolt://memos-neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: memos123
+      QDRANT_HOST: memos-qdrant
+      QDRANT_PORT: "6333"
+      MOS_CUBE_PATH: /data
+      MEMSCHEDULER_USE_REDIS_QUEUE: "true"
+      MEMSCHEDULER_REDIS_HOST: memos-redis
+      MEMSCHEDULER_REDIS_PORT: "6379"
+      MOS_ENABLE_SCHEDULER: "false"
+      API_SCHEDULER_ON: "true"
+      ENABLE_INTERNET: "false"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - ./memos-data/api:/data
+    depends_on:
+      memos-neo4j:
+        condition: service_healthy
+      memos-qdrant:
+        condition: service_started
+      memos-redis:
+        condition: service_started
+    restart: unless-stopped
+    networks: [shadow]
+
+  memos-mcp:
+    image: memos-api:local
+    container_name: shadow-memos-mcp
+    command: ["python", "examples/mem_mcp/simple_fastmcp_serve.py", "--transport", "http", "--host", "0.0.0.0", "--port", "8003"]
+    environment:
+      PYTHONPATH: /app/src
+      MEMOS_API_BASE_URL: http://memos-api:8000/product
+    depends_on: [memos-api]
+    restart: unless-stopped
+    networks: [shadow]
+
+  # 瓶中 ollama：只跑 embedding（bge-m3-cpu），共享宿主机模型库（blob 只读并发安全）。
+  # ⏳ 镜像 ollama/ollama:latest 拉取中（Docker Hub 网络慢）——就位后启用：
+  #   docker compose --env-file shadow.env --profile selfhost up -d ollama
+  #   并把 world/memos-api 的 embedding URL 从 host.docker.internal:11434 切到 http://ollama:11434
+  ollama:
+    profiles: ["selfhost"]
+    image: ollama/ollama:latest
+    container_name: shadow-ollama
+    environment:
+      OLLAMA_MODELS: /root/.ollama/models
+    volumes:
+      - type: bind
+        source: C:\Users\lzl19\.ollama
+        target: /root/.ollama
+    restart: unless-stopped
+    networks: [shadow]
+
+  # vllm 搬家预案：默认不起（GPU 显存单份，现役 vllm-qwen38-ara 占用中）。
+  # 整机迁移时：docker compose --env-file shadow.env --profile gpu up -d vllm
+  # （须先停掉原 vllm 容器；模型卷 ara-nvfp4 + 编译缓存卷随 docker 卷迁移）
+  vllm:
+    profiles: ["gpu"]
+    image: vllm/vllm-openai:qwen38-x86_64-cu130
+    container_name: shadow-vllm
+    command: ["--model", "/models", "--served-model-name", "qwen3.8-27b-uncensored", "qwen3.8-27b-unc", "qwen3.8-27b", "qwen3.8", "qwen3.6-27b", "--max-model-len", "262144", "--kv-cache-dtype", "fp8", "--gpu-memory-utilization", "0.75", "--max-num-seqs", "64", "--speculative-config", "{\"method\":\"mtp\",\"num_speculative_tokens\":3}", "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder", "--reasoning-parser", "qwen3"]
+    environment:
+      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: "0"
+    volumes:
+      - ara-nvfp4:/models:ro
+      - vllm_compile_cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks: [shadow]
+
 networks:
   shadow:
     name: shadow_net
+
+volumes:
+  ara-nvfp4:
+    external: true
+  vllm_compile_cache:
+    external: true
