@@ -450,8 +450,10 @@ def _rank_gate(who, b):
     idx = rank_idx_of(fm.get(who, {}).get("fame", 0))
     if idx >= need:
         return None
-    return ("（把名册翻得哗啦响）No.%d 是%s级委托，你眼下是%s——差着档呢。先去攒功勋，或者挑低阶的干。"
-            % (b["no"], RANKS[need][0], RANKS[idx][0]))
+    fame = fm.get(who, {}).get("fame", 0)
+    return ("（把名册翻得哗啦响）No.%d 是%s级委托（要功勋%d），你眼下是%s、功勋%d——差着档呢，再喊几遍也接不上。"
+            "先挑看板上没标档位的单子做（说「接 编号」），攒够功勋升%s再来。说「我的」看你手头在办的单子。"
+            % (b["no"], RANKS[need][0], RANKS[need][1], RANKS[idx][0], fame, RANKS[need][0]))
 
 def board_lines():
     doc = board_today()
@@ -462,7 +464,7 @@ def board_lines():
         elif b["status"] == "claimed":
             mark = "→%s" % "+".join(_takers(b))
         else:
-            mark = "可接"
+            mark = "可接" if b.get("rank", 0) <= 0 else "可接·需%s档" % RANKS[b.get("rank", 0)][0]
         rank = "[%s]" % RANKS[b.get("rank", 0)][0] if b.get("rank", 0) > 0 else ""
         party = "·组队%d人" % b["party"] if b.get("party") else ""
         out.append("No.%d %s%s%s（%s · 酬%d绿/功勋%d）[%s]" % (
@@ -541,7 +543,7 @@ def claim(who, no):
         return [deny]
     mine = [x for x in doc["board"] if x["status"] == "claimed" and who in _takers(x)]
     if len(mine) >= GCFG.get("active_cap", 2):
-        return ["（翻名册）你名下已有 %d 单在办。公会的规矩：先把手头的办利索了再接新的。" % len(mine)]
+        return ["（翻名册）你名下已有 %d 单在办，接不了新的。先办完一单（对我说「交付 编号」），实在办不动就「放弃 编号」腾手，再接新的。" % len(mine)]
     b["status"] = "claimed"
     b["taker"] = [who]
     b["taken_at"] = time.strftime("%H:%M")
