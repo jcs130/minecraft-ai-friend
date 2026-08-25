@@ -52,6 +52,7 @@ services:
       - ./copaw.secret:/root/.copaw.secret
       - ./data:/data          # mcp_numen 的 pray/chant 落同一神使通道卷
       - ./mc/god-channel:/god-channel   # 运营双 agent（灯语/灶火）的神使通道（零密钥文件 IPC）
+      - ./mcdata:/mcdata      # NPC 运营卷：灶火经 npc_read/npc_write 编排村民与任务板（写限 village/）
     environment:
       TZ: Asia/Shanghai
       MC_RCON_HOST: mc

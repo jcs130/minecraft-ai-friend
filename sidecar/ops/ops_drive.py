@@ -26,6 +26,7 @@ GC_DIR = os.environ.get("GOD_CHANNEL_DIR", "/god-channel")
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 HERALD_EVERY = int(os.environ.get("HERALD_EVERY_SEC", "600"))
 PRIEST_EVERY = int(os.environ.get("PRIEST_EVERY_SEC", "3600"))
+SIDENG_EVERY = int(os.environ.get("SIDENG_EVERY_SEC", "7200"))
 
 
 def log(msg: str):
@@ -130,10 +131,25 @@ def priest_digest() -> str:
     )
 
 
+def sideng_digest(new_events: list) -> str:
+    st = read_status()
+    now = datetime.datetime.now().strftime("%H:%M")
+    extra = ("\n[编年史新事件]\n" + "\n".join(new_events[-10:])) if new_events else ""
+    return (
+        f"[巡场时刻 {now}] 世界状态：{json.dumps(st, ensure_ascii=False)}\n"
+        f"{extra}\n"
+        "你是司灯——本项目（我的异世界·千灯纪）的总负责人，天神（mc-god）的下属。"
+        "花一分钟巡场：对照你记忆里的待办与团队近况，做一件总负责人该做的事——"
+        "更新你的项目管理台账（todo/风险/决议）、写下给某位成员的协调意见、或给天神留一条简报。"
+        "没有要事就一句话收工，别硬找事。产出写进你自己工作区的文件。"
+    )
+
+
 def main():
     log(f"start: herald every {HERALD_EVERY}s, priest every {PRIEST_EVERY}s, console={CONSOLE}")
     last_h = time.time() - HERALD_EVERY   # 启动即首轮巡检
     last_p = time.time() - PRIEST_EVERY + 180  # 灯语先行，灶火 3 分钟后首轮
+    last_s = time.time() - SIDENG_EVERY + 300  # 司灯 5 分钟后首轮巡场
     cursor = 0
     while True:
         try:
@@ -151,6 +167,11 @@ def main():
                 r = call("mc-priest", "ops:priest", f"priest-ops-{d}", priest_digest())
                 log(f"priest round: {r}")
                 last_p = now
+            if now - last_s >= SIDENG_EVERY:
+                d = datetime.datetime.now().strftime("%Y%m%d")
+                r = call("default", "ops:sideng", f"sideng-ops-{d}", sideng_digest(new))
+                log(f"sideng round: {r}")
+                last_s = now
             time.sleep(10)
         except KeyboardInterrupt:
             break

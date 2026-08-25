@@ -115,5 +115,51 @@ def data_read(filename: str, tail_chars: int = 2000) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+# ── NPC 运营权柄（灶火祭司主用）：MCDATA_DIR 只读全域，写仅限 village/ ──
+MCDATA_DIR = os.environ.get("MCDATA_DIR", "/mcdata")
+
+
+def _mc_path(rel: str) -> pathlib.Path:
+    base = pathlib.Path(MCDATA_DIR).resolve()
+    f = (base / rel).resolve()
+    if not str(f).startswith(str(base)):
+        raise PermissionError("path escape denied")
+    return f
+
+
+@mcp.tool()
+def npc_read(relpath: str, tail_chars: int = 3000) -> str:
+    """只读打开 NPC 数据卷（/mcdata）里的文件。常用：village/villagers.json（村民人设册）、village/quests-YYYY-MM-DD.json（当日任务板）、village/quest-ledger.jsonl（委托流水）、episodic-<名>.jsonl（玩家近事）、world-chronicle.md（编年史）。"""
+    try:
+        f = _mc_path(relpath)
+        if not f.is_file():
+            return json.dumps({"error": f"not found: {relpath}"}, ensure_ascii=False)
+        t = f.read_text(encoding="utf-8", errors="replace")
+        return t[-tail_chars:]
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@mcp.tool()
+def npc_write(relpath: str, content: str) -> str:
+    """写入 NPC 数据卷（/mcdata）——仅限 village/ 目录（任务板 quests-YYYY-MM-DD.json、村民册 villagers.json、剧情笔记 plot-*.md）。.json 会先校验合法性再原子落盘（npc 进程不会读到半个文件）。改 villagers.json 前先 npc_read 备份一份到 village/backup-*.json。"""
+    try:
+        f = _mc_path(relpath)
+        rel = f.relative_to(pathlib.Path(MCDATA_DIR).resolve()).as_posix()
+        if not (rel.startswith("village/") and f.suffix in (".json", ".jsonl", ".md", ".txt")):
+            return json.dumps({"error": "write allowlist: village/**.{json,jsonl,md,txt} only"}, ensure_ascii=False)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        if f.suffix == ".json":
+            json.loads(content)  # 合法性校验，坏 JSON 直接抛错不落盘
+        tmp = f.with_suffix(f.suffix + ".tmp")
+        tmp.write_text(content, encoding="utf-8", newline="\n")
+        tmp.replace(f)
+        return json.dumps({"ok": True, "file": rel, "bytes": len(content.encode('utf-8'))}, ensure_ascii=False)
+    except json.JSONDecodeError as e:
+        return json.dumps({"error": f"invalid JSON: {e}"}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
