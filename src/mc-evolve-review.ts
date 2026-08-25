@@ -75,7 +75,9 @@ export function createEvolveReview(config: Config, deps: EvolveReviewDeps): Evol
   const log = (msg: string) => console.log(`[mc-evolve-review] ${msg}`)
   const lc = createLifecycle()
   if (!config.enabled) return { dispose: () => {} }
-  const dataDir = './data'
+  // 2026-08-24：数据目录锚到运行态正本（MC_DATA_DIR），不要写死 './data'——
+  // 世界进程 cwd=正仓，'./data' 会落到仓库拷贝而非 scratch 活体。
+  const dataDir = process.env.MC_DATA_DIR || './data'
   const proposalsDir = join(dataDir, 'evolution-proposals')
 
   const courier = (player: string, msg: string) => {
@@ -146,8 +148,13 @@ export function createEvolveReview(config: Config, deps: EvolveReviewDeps): Evol
 
   function hotspotsOf(username: string): string {
     try {
-      const f = JSON.parse(readFileSync(join(dataDir, 'death-hotspots.json'), 'utf-8')) as { clusters: Record<string, { zh: string; x: number; y: number; z: number; count: number; usernames: string[] }> }
-      const mine = Object.values(f.clusters).slice(0, 5)
+      const f = JSON.parse(readFileSync(join(dataDir, 'death-hotspots.json'), 'utf-8')) as { clusters: Record<string, { zh: string; x: number; y: number; z: number; count: number; lastAt: number; usernames: string[] }> }
+      // 只取「这名提案人自己」死过、死得越多次越危险（反复死亡的坑位）坐标（原取全局前5 = 张冠李戴）。
+      const mine = Object.values(f.clusters)
+        .filter((c) => c.usernames?.includes(username))
+        .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || (b.lastAt ?? 0) - (a.lastAt ?? 0))
+        .slice(0, 5)
+      if (!mine.length) return ''
       return mine.map((c) => `- (${c.x},${c.y},${c.z})「${c.zh}」×${c.count}`).join('\n')
     } catch {
       return ''

@@ -20,6 +20,7 @@ VDIR = N.VDIR
 DATA = N.DATA
 GCFG = N.CFG.get("guild", {})
 PLAZA = (-101, 64, 167)  # 广场中心（世界锚点）
+GATE_BOARD = (3140, 68, -1327)  # 城门·任务板（实体告示牌，立在守卫桐人/鸣人之间的城镇中心）：对板附近说「看板」看今日委托。坐标可调。
 
 # 等级表（门槛=功勋）
 RANKS = [("青铜", 0), ("黑铁", 10), ("白银", 30), ("黄金", 70), ("白金", 150), ("钻石", 350)]
@@ -386,10 +387,10 @@ def route_guild(speaker, msg, rest, hit_v):
     guildish = any(w in msg for w in ("公会", "冒险者", "功勋"))
     if not (is_lan or guildish or "看板" in msg):
         return None
-    if "看板" in msg or "任务列表" in msg or (is_lan and any(w in rest for w in ("单子", "委托", "任务"))):
-        if is_lan or guildish:
+    if "看板" in msg or "委托列表" in msg or "任务列表" in msg or (is_lan and any(w in rest for w in ("单子", "委托", "任务"))):
+        if is_lan or guildish or _near_board(speaker):
             return board_lines()
-        return ["（指了指公会柜台）委托看板在公会那儿——找公会接待员·岚问去。"]
+        return ["（指了指公会柜台）委托看板在公会那儿——不过城门口立了块任务板，走过去说「看板」一样看得到。"]
     m = RE_DELIVER.search(rest)
     if m:
         return deliver(speaker, _zh_num(m.group(1)))
@@ -413,6 +414,18 @@ def route_guild(speaker, msg, rest, hit_v):
     if is_lan:
         return None
     return None
+
+def _near_board(who, limit=None):
+    """是否在城门·任务板附近（默认 12 格）——城门口说「看板」也能看今日委托，不必非到公会。"""
+    lim = limit or GCFG.get("board_proximity", 12)
+    try:
+        pp = N.player_pos(who)
+        if pp is None:
+            return False
+        d = ((pp[0] - GATE_BOARD[0]) ** 2 + (pp[1] - GATE_BOARD[1]) ** 2 + (pp[2] - GATE_BOARD[2]) ** 2) ** 0.5
+        return d <= lim
+    except Exception:
+        return False
 
 def _near_receptionist(who, limit=None):
     v = next((x for x in N.PROFILES if x["key"] == "guild_lan"), None)

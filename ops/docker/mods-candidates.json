@@ -1,0 +1,46 @@
+{
+  "_comment": "玩法扩展候选区（造物主《千灯纪·模组清单》③组，2026-08-25 下载囤备）。本目录【不挂载】——compose 只 COPY_MODS ./mods，这里的货经造物主逐个拍板并测试服验证后才移入 ./mods。铁律：玩法介入型（尤其世界生成/改生态）先测试服验证再进正式服，存档是 Settlements 活世界。",
+  "mc": "1.21.1",
+  "loader": "neoforge",
+  "candidates": [
+    {"file": "bettercombat-neoforge-2.4.0+1.21.1.jar", "mod": "Better Combat", "ver": "2.4.0+1.21.1", "role": "双持/连击动画", "deps": "playeranimator(在包) + cloth-config(本区)"},
+    {"file": "puffish_skills-0.18.3-1.21-neoforge.jar", "mod": "Pufferfish's Skills", "ver": "0.18.3", "role": "技能树/加点体系", "deps": "无"},
+    {"file": "epic-fight-21.17.3.1-mc1.21.1-neoforge.jar", "mod": "Epic Fight", "ver": "21.17.3.1", "role": "魂系战斗（翻滚/武器动作）", "deps": "无", "note": "与 Better Combat 同改战斗/动画层，通常二选一，测试服验证兼容性"},
+    {"file": "tensura-neoforge-2.0.1.1.jar", "mod": "Tensura: Reincarnated", "ver": "2.0.1.1", "role": "异世界转生/魔素技能体系", "deps": "smartbrainlib+terrablender+manascore(本区) + geckolib(在包)", "note": "TerraBlender 涉世界生成，活世界需测试服先验"},
+    {"file": "l_enders_cataclysm-1.21.1-3.33.jar", "mod": "L_Ender's Cataclysm", "ver": "3.33", "role": "史诗 Boss/地牢", "deps": "lionfish-api(本区) + curios(在包)", "note": "改世界生成（结构），先测试服"},
+    {"file": "mowziesmobs-1.21.1-1.8.2.jar", "mod": "Mowzie's Mobs", "ver": "1.8.2", "role": "奇幻精英怪", "deps": "geckolib(在包)", "note": "改生态刷新，先测试服"},
+    {"file": "aquamirae-neoforge-1.21.1-7.2.2.jar", "mod": "Aquamirae", "ver": "7.2.2", "role": "深海沉船探索", "deps": "geckolib(在包) + fragmentum(本区)", "note": "改世界生成，先测试服"},
+    {"file": "moemusic-neoforge-1.4.2+1.21.1.jar", "mod": "MoeMusic", "ver": "1.4.2+1.21.1", "role": "二次元 BGM（server-synced）", "deps": "kotlinforforge(在包 5.12.0 版本正好) + badpackets(本区)"},
+    {"file": "cloth-config-15.0.140-neoforge.jar", "mod": "Cloth Config API", "ver": "15.0.140", "role": "dep: Better Combat/MoeMusic"},
+    {"file": "fragmentum-neoforge-1.21.1-2.4.4.jar", "mod": "Fragmentum", "ver": "2.4.4", "role": "dep: Aquamirae"},
+    {"file": "lionfishapi-3.1.jar", "mod": "Lionfish-API", "ver": "3.1", "role": "dep: Cataclysm"},
+    {"file": "SmartBrainLib-neoforge-1.21.1-1.16.11.jar", "mod": "SmartBrainLib", "ver": "1.16.11", "role": "dep: Tensura"},
+    {"file": "badpackets-neo-0.8.2.jar", "mod": "bad packets", "ver": "neo-0.8.2", "role": "dep: MoeMusic"},
+    {"file": "TerraBlender-neoforge-1.21.1-4.1.0.8.jar", "mod": "TerraBlender", "ver": "4.1.0.8", "role": "dep: Tensura"},
+    {"file": "manascore-neoforge-4.0.0.2.jar", "mod": "ManasCore", "ver": "4.0.0.2", "role": "dep: Tensura"}
+  ],
+  "mounted_japanese_structures": {
+    "_comment": "2026-08-25 日系结构三件套实测入服：server=required client=optional，不注册必需通道——29件服女神 mineflayer LOGIN+SPAWN 实测通过。这是 bot 友好服能吃到日系美学的唯一模组形态。",
+    "japanese-temple-1.0.jar": "Japanese Temple（3.0MB，平原和风寺院建筑群）",
+    "japanese-castle-1.0.jar": "Japanese Castle（5.6MB，和风城堡）",
+    "japanese-offering-shrines-1.0.jar": "Japanese Offering Shrines（1.4MB，荒废神社）",
+    "datapack_option": "qrafty's Japanese Villages 150k下载——1.21.1 无 neoforge 模组版（仅 fabric/forge/quilt），但有 datapack zip 版（加载器无关，丢 world/datapacks 即用，零通道风险）"
+  },
+  "mounted_npc_and_datapacks": {
+    "_comment": "2026-08-25 造物主批准中式建筑+NPC人物。全部选 bot 友好形态（服务端only/数据包），女神探针全绿。",
+    "mods": {
+      "villagernames-1.21.1-8.5.jar": "Villager Names（Serilum，server=required/client=optional）——村民自动命名，已实证（召唤村民得名 Al）",
+      "collective-1.21.1-8.39.jar": "Collective（Serilum 前置库）——首启因缺它崩溃，补后恢复。教训：Serilum 系模组必带 collective"
+    },
+    "datapacks": {
+      "qraftys-japanese-villages-2.2.zip": "qrafty 日式村庄数据包版（1.21.1 无 neoforge 模组版，数据包加载器无关）",
+      "Chinesevillage_1.21.1_v1.zip": "Chinese Village 中式村庄",
+      "mcs-v1.1.1.zip": "More Chinese Structures——280 个结构 NBT（宝塔/城堡/舰队/佛像/石窟/蒙甘回村庄）；已知小瑕：成就 JSON 旧格式（structures→structure）致部分成就读不了，不影响结构生成",
+      "peakscape_0.1.1.zip": "叠山 peakscape（中式假山叠石）"
+    },
+    "content_server_list_chinese_npc": "中式双侧大件与真 NPC 模组留内容服：wcsm（中式学堂民居）、chinese-flying-island-tower、KaleidoscopeChineseFood（200万下载）、Easy NPC（108万）、MCA Reborn（387万，村民变人）、TACZ NPCs、Player2 AI NPC——全部 client+server required，会踢原版客户端"
+  },
+  "not_downloadable": [
+    {"mod": "Everything Japanese（日式建筑）", "reason": "【2026-08-25 修正】1.21.1 有真身但全在 Forge 侧（0.0.4~0.4.2，约 4.9MB×14 版）；NeoForge 侧只有 0.0.1/0.0.2 占位 stub，真 NeoForge 版迁往 1.21.10+/26.x。本服是 NeoForge——卡在加载器墙（Forge↔NeoForge 不互通），不是版本墙。替代：qrafty's Japanese Villages / Japanese Temple / Castle / Offering Shrines（纯结构、server-only、bot 友好）或 Fetzi's Asian Decoration（双侧、内容服）"}
+  ]
+}

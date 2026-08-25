@@ -9,10 +9,10 @@ import subprocess, os, time
 
 WS = r"C:\Users\lzl19\.copaw\workspaces\default"
 REPO = os.path.join(WS, "minecraft-ai-friend")
-SCRATCH = os.path.join(WS, "deepseek-harness", "scratch-plugin")
-DATA = os.path.join(SCRATCH, "data")
+# 2026-08-24 重建：新家 = B 仓内 mc-server / mc-data（deepseek-harness 已废弃，待清理）
+DATA = os.environ.get("MC_DATA_DIR_OVERRIDE") or os.path.join(REPO, "mc-data")
 NODE = r"C:\Program Files\nodejs\node.exe"
-TSX_CLI = os.path.join(WS, "deepseek-harness", "node_modules", "tsx", "dist", "cli.mjs")
+TSX_CLI = os.path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs")
 
 
 def ps(cmd_script: str) -> str:
@@ -36,8 +36,8 @@ def build_env() -> dict:
     env["MC_VIEWER"] = "1"
     env["MC_VIEWER_PORT"] = "3050"
     env["MC_DATA_DIR"] = DATA
-    env["MC_LOG_PATH"] = os.path.join(SCRATCH, "mc-server-neoforge", "logs", "latest.log")
-    env["MC_ADVANCEMENTS_DIR"] = os.path.join(SCRATCH, "mc-server-neoforge", "world", "advancements")
+    env["MC_LOG_PATH"] = os.path.join(REPO, "mc-server", "logs", "latest.log")
+    env["MC_ADVANCEMENTS_DIR"] = os.path.join(REPO, "mc-server", "world", "advancements")
     env["MC_VIP_LISTEN"] = "mengmeng,kangqiang"
     return env
 

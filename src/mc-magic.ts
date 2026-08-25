@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { dirname, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
+import { Vec3 } from 'vec3'
 import { createLifecycle } from './lifecycle.ts'
 
 /**
@@ -63,8 +64,9 @@ interface Atom {
   /** 流派维（2026-08-23 正交分类第二维，可选）：东方/魔幻/忍术等。缺省归「通用」。 */
   school?: string
   /** 契约类法术（2026-08-23）：不走路 RCON commands，改由注入的 specialExecutor 执行。
-   *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）。 */
-  special?: 'contract' | 'trace' | 'recall'
+   *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）、
+   *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）。 */
+  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin'
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -732,6 +734,31 @@ function computeCost(atom: Atom, params: Record<string, number | string>): CostS
   return cost
 }
 
+// ── 位移/传送落点安全（2026-08-24 安全级修复：防 tp 进实体方块 suffocated）──
+function teleportSpotSafe(bot: Bot, x: number, y: number, z: number): boolean {
+  try {
+    const feet = bot.world.getBlock(new Vec3(x, y, z))
+    const head = bot.world.getBlock(new Vec3(x, y + 1, z))
+    if (!feet || !head) return false               // 区块未加载/未知 → 不冒险
+    const solid = (b: any) => (b.boundingBox ?? '') === 'block'
+    if (solid(feet) || solid(head)) return false   // 嵌墙/窒息
+    if (/lava/i.test(String(feet.name ?? '')) || /lava/i.test(String(head.name ?? ''))) return false  // 岩浆
+    return true
+  } catch { return false }
+}
+/** 从目标落点朝施法者位置逐格回退，找最近的安全落点（含玩家原地兜底）。 */
+async function nearestSafeTeleport(bot: Bot, vars: Record<string, number | string>, tx: number, ty: number, tz: number) {
+  const px = Number(vars.px ?? 0), py = Number(vars.py ?? 0), pz = Number(vars.pz ?? 0)
+  const dist = Math.max(1, Math.round(Math.hypot(px - tx, pz - tz)))
+  for (let i = 0; i <= dist; i++) {
+    const k = dist ? i / dist : 0
+    const nx = Math.round(tx + (px - tx) * k)
+    const nz = Math.round(tz + (pz - tz) * k)
+    if (teleportSpotSafe(bot, nx, ty, nz)) return { x: nx, y: ty, z: nz }
+  }
+  return null
+}
+
 // ── 命令渲染：{name} 或 {name±offset} 占位符 ───────────────────────────
 function renderCommand(cmd: string, vars: Record<string, number | string>): string {
   return cmd.replace(/\{([a-z]+)([+-]\d+)?\}/g, (_m, key: string, off?: string) => {
@@ -1018,7 +1045,7 @@ export interface MagicDeps {
 /** 契约/魂链法术执行器（2026-08-23）：效果不走路 RCON commands，由 mc-god 注入实际落地逻辑
  *  （contract=写 goddess-orders 唤守卫、trace=传送到目标、recall=拉从者到身边）。 */
 export type SpecialExecutor = (
-  special: 'contract' | 'trace' | 'recall',
+  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin',
   username: string,
   params: Record<string, number | string>,
   vars: Record<string, number | string>,
@@ -1643,7 +1670,16 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       }
       // 法术效果命令（契约/魂链法术的效果已由 specialExecutor 落地，跳过 commands）
       if (!atom.special) {
-        for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {
+        for (const rawCmd of atom.commands.map((c) => renderCommand(c, vars))) {
+          let cmd = rawCmd
+          // 位移/传送落点安全预检（2026-08-24 安全级修复：防 tp 进实体方块 suffocated）
+          if (/^tp\s/.test(rawCmd)) {
+            const seg = rawCmd.trim().split(/\s+/)
+            if (seg.length >= 5) {
+              const safe = await nearestSafeTeleport(bot, vars, Number(seg[2]), Number(seg[3]), Number(seg[4]))
+              cmd = safe ? `tp ${seg[1]} ${safe.x} ${safe.y} ${safe.z}` : `tp ${seg[1]} ${vars.px} ${vars.py} ${vars.pz}`
+            }
+          }
           const out = await rcon.send(cmd)
           if (out) log(`rc[${cmd}] -> ${out.trim()}`)
         }
@@ -1764,7 +1800,16 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       store.spendMana(username, opts.consumeMana)
     }
     try {
-      for (const cmd of atom.commands.map((c) => renderCommand(c, vars))) {
+      for (const rawCmd of atom.commands.map((c) => renderCommand(c, vars))) {
+        let cmd = rawCmd
+        // 位移/传送落点安全预检（2026-08-24 安全级修复：防 tp 进实体方块 suffocated）
+        if (/^tp\s/.test(rawCmd)) {
+          const seg = rawCmd.trim().split(/\s+/)
+          if (seg.length >= 5) {
+            const safe = await nearestSafeTeleport(bot, vars, Number(seg[2]), Number(seg[3]), Number(seg[4]))
+            cmd = safe ? `tp ${seg[1]} ${safe.x} ${safe.y} ${safe.z}` : `tp ${seg[1]} ${vars.px} ${vars.py} ${vars.pz}`
+          }
+        }
         const out = await rcon.send(cmd)
         if (out) log(`rc[${cmd}] -> ${out.trim()}`)
       }

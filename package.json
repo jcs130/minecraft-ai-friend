@@ -20,11 +20,18 @@
     "mineflayer": "^4.37.1",
     "mineflayer-pathfinder": "^2.4.5",
     "mineflayer-tool": "^1.2.0",
+    "node-canvas-webgl": "^0.3.0",
     "playwright-core": "^1.62.1",
     "prismarine-viewer": "^1.33.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
+    "patch-package": "^8.0.0",
+    "tsx": "^4.22.4",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "canvas": "^3.2.3",
+    "gl": "^8.1.6"
   }
 }

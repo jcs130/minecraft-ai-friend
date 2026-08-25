@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""重启 MC 主服（NeoForge 21.1.248，JDK25）。
+"""重启 MC 主服（新家版 2026-08-24：NeoForge 21.1.73 + JDK21，B 仓 mc-server）。
 
 流程：RCON stop 优雅关服 → 等进程退出 → 拉起 start-neoforge.bat → 等 latest.log Done → 重启世界进程。
 密码只读自 server.properties，不输出。
@@ -7,8 +7,7 @@
 import socket, struct, time, os, re, subprocess, sys
 
 WS = r"C:\Users\lzl19\.copaw\workspaces\default"
-SCRATCH = os.path.join(WS, "deepseek-harness", "scratch-plugin")
-MC_DIR = os.path.join(SCRATCH, "mc-server-neoforge")
+MC_DIR = os.path.join(WS, "minecraft-ai-friend", "mc-server")
 RCON_PORT = 25575
 PY = r"C:\Users\lzl19\AppData\Local\Programs\Python\Python311\python.exe"
 

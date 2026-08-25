@@ -239,6 +239,8 @@ def esc(t):
 
 def speak(v, text, to=None):
     tellraw([("<" + v["display"] + "> ", v["color"]), (text, "white")], to=to)
+    # 世界系统优化：若这话是对守卫（桐人/鸣人）说的，同步写进守卫信箱 → 守卫能"听见"NPC回应
+    guard_inbox_write(to, v["display"], text)
 
 # ---------- 村民"嗯嗯"声（2026-08-23 造物主谕：互动时发、空闲也主动发，增强代入感） ----------
 VILLAGER_SOUNDS = {
@@ -268,6 +270,27 @@ def villager_hmm(v, sound="ambient", pitch=1.0, vol=0.6, throttle=True):
 
 def goddess(text):
     tellraw([("[女神] ", "gold"), (text, "gold")])
+
+# ---------- 守卫听觉（2026-08-24 世界系统优化）：NPC/系统对守卫说话时，写进守卫的 guard-inbox，
+# 让守卫 get_recent_messages 能"听见"（桐人/鸣人是假玩家侍卫，接任务/感知世界靠这口）----------
+GUARD_LOGINS = {"Kirito", "Naruto", "桐人", "鸣人"}   # 守卫登录名+显示名（name/ID 分离铁律：两套都认）
+GUARD_INBOX = os.path.join(os.environ.get("MC_DATA_DIR", DATA), "guard-inbox.jsonl")
+
+def guard_inbox_write(who, speaker_display, text):
+    """把 NPC/系统对某守卫(to=who)说的话写进守卫的信箱，守卫 get_recent_messages 据此听见。"""
+    if not who or who not in GUARD_LOGINS:
+        return
+    try:
+        os.makedirs(os.path.dirname(GUARD_INBOX), exist_ok=True)
+        with open(GUARD_INBOX, "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "kind": "system",
+                "to": who,
+                "text": f"{speaker_display}: {text}",
+            }, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print("[guard-inbox] err:", e, flush=True)
 
 # ---------- 面板实况 feed（npc-feed.jsonl：对话+行为，供观察面板展示与智能运镜触发）----------
 FEED_PATH = os.path.join(DATA, "npc-feed.jsonl")

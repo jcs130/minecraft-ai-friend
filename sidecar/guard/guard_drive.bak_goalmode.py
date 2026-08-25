@@ -61,8 +61,8 @@ RENDER_TIMEOUT = 100          # 单次渲染超时（秒）；失败吞掉不阻
 # 铁律 name/ID 分离（2026-08-23 造物主定调）：numen_act 等程序化操作用 login（Kirito/Naruto），
 # 通道文件（chant/pray/goddess-orders 的 speaker/to/key）与亲卫叙事用 name（桐人/鸣人）。
 GUARDS = [
-    {"name": "桐人", "login": "Kirito", "agent": "mc-guard-kirito", "session": "guard:kirito-default-20260824", "tag": "kirito", "autonomy": True},
-    {"name": "鸣人", "login": "Naruto", "agent": "mc-guard-naruto", "session": "guard:naruto-default-20260824", "tag": "naruto", "autonomy": True},
+    {"name": "桐人", "login": "Kirito", "agent": "mc-guard-kirito", "session": "guard:kirito-autonomy-20260824", "tag": "kirito", "autonomy": True},
+    {"name": "鸣人", "login": "Naruto", "agent": "mc-guard-naruto", "session": "guard:naruto-autonomy-20260824", "tag": "naruto", "autonomy": True},
 ]
 
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
@@ -84,19 +84,6 @@ _MSG_LOCK = threading.Lock()
 DECIDE_INTERVAL = 20      # 空闲时：决策+执行一轮后休息
 BUSY_POLL = 6             # 有任务在跑时：只轮询，不决策
 LOST_POLL = 30            # 伴链断连时：只降频心跳（身体实体不在，别刷无效动作）
-
-# ============ 影分身分脑（2026-08-24 造物主定调） ============
-# 分身=独立进程/独立 session、上下文独立。它在的时候是一个独立的"分脑"意识：
-# 守卫桥为每个在册 Kage 开一个独立 QwenPaw session（复用施术者 agent id），提示词明确"你是影分身"；
-# 分身用 kage_* 系列工具驱动自己（绝不碰 goto/mine 等本体工具，否则会移动本体鸣人）。
-# 分身血线 <50%(HP<10) 自动解散；分身消失（不在 roster）时把它的见闻融合回本体（上下文+记忆双路）。
-KAGE_NAMES = ["Kage1", "Kage2"]
-KAGE_CASTER_AGENT = "mc-guard-naruto"   # 分身属于鸣人（复用其 agent，但 session 独立）
-KAGE_CASTER_LOGIN = "Naruto"
-KAGE_CASTER_SESSION = "guard:naruto-default-20260824"   # 鸣人本体 session（融合记忆注入点）
-KAGE_HP_DIE = 10.0       # 血线 50%（20→10）以下 → 解散并融合
-KAGE_POLL = 8            # 分身轮询节拍
-KAGE_FUSE_FILE = os.path.join(DATA, "kage-fusion-naruto.jsonl")  # 分身记忆 → 本体下轮读取注入
 MAX_RUN_SECONDS = 0       # 0 = 无限循环（常驻）；>0 用于试运行
 
 # 任务熔断阈值（QwenPaw 决策 loop 不僵死的核心）：
@@ -1212,15 +1199,6 @@ def _guard_core_short(g):
     return "开拓·攻略·变强·挑战"
 
 
-# 世界系统优化（2026-08-24）：冒险者公会（灯门镇·接待员岚）任务机会——给守卫"任务驱动"目标，治绕圈/原地待。
-# 守卫可 say「看板」/「接 编号」/「声望」与岚交互（配合 mc_npc speak→guard-inbox 的守卫听觉）。
-QUEST_HINT = (
-    "【世界机会】方外有委托可接——灯门镇城门口立着一块任务板，走近 say『看板』看今日委托，say『接 编号』接单，"
-    "达成后换绿宝石与声望（壮大自己、帮到世界）。若你一时没有紧迫事，"
-    "就去接单委托赚绿宝石、长本事——这是穿越者发家的正道；当然若眼前有人落难/威胁逼近，先救急救人，委托可稍后再接。"
-)
-
-
 def build_guard_goal(g, goddess_msgs=None):
     """守卫的『女神使命』——goal 描述：把女神近期谕示当指引，否则用基础生存/变强/守护使命。"""
     extra = ""
@@ -1238,7 +1216,6 @@ def build_guard_goal(g, goddess_msgs=None):
         "要行动就**直接调用这些工具**（像伸手做实事一样），**绝对不要输出 JSON 格式的 {tool:...} 文本**——那是旧守卫桥要执行的格式，你不是调度器，你就是这具身体。"
         "作为穿越者" + g["name"] + "本人（人格见人物志）。" + _guard_core(g)
         + extra
-        + QUEST_HINT
         + "。现在不要只评估——**用手里的 numen 工具真调一个动作落地**：优先做当下最该办的一件实事"
         "（帮眼前的人 / 对付威胁 / 采集求生物资 / 找地方安身 / 练本事），选一个具体可完成的，"
         "做完一件再看下一件（要做就做到，不半途）。若一时没有紧迫事，就主动选一件能让你变得更强或帮到别人的事，真去做，别空等。"
@@ -1268,18 +1245,12 @@ def goal_continue_prompt(g, status, goddess_msgs=None, player_msgs=None, emergen
         emergency_hint = ("\n【⚠ 濒死急救——最高优先级】身体『" + em_reason + "』随时倒下。"
                           "其它任务全作废，只做能续命的：eat 止血 / attack 打贴脸怪 / goto 逃 / chant 圣愈。")
     sc = _status_compact(status) or str(status)
-    kage_fuse = _kage_fuse_hint()   # 影分身归体记忆回灌（鸣人体），2026-08-24
-    fuse_hint = ""
-    if kage_fuse:
-        fuse_hint = "【分身记忆·已融回】" + kage_fuse
     return "\n".join([
         "（别忘了：你手握 numen 身体工具，行动**直接调用工具**（goto/mine/eat/sleep/attack...），别输出 JSON 决策。"
         "继续朝着『" + _guard_core_short(g) + "』推进，说到做到——每轮**至少真调一个身体动作**（goto/mine/eat/sleep/attack/collect_items 选一），"
         "动作受理后一句话收尾、守卫桥下轮接；只有评估后确实无任何可做，才说『无紧迫事』。）",
         "**一次只推进一小步**：先最多调1-2个感知工具看一眼，挑一件最该做的事**真调一个动作**，调完**立刻打一行收尾**——别再连环调第3、4个工具（那是单轮步数上限掐死你的根源）。守卫桥下一轮会再叫你。",
         f"【{g['name']}身体】{sc}",
-        fuse_hint,
-        "【可选委托】若一时无事可做，可去灯门镇城门口的任务板 say『看板』接委托（say『接 编号』），完成换绿宝石/声望；若正在忙紧要事/救急则不必理会。",
         goddess_hint,
         player_hint,
         emergency_hint,
@@ -1375,10 +1346,10 @@ def autonomy_loop(g, stop_at):
             # 3. GOAL prompt：首次 /goal 激活 GoalSession，后续每轮轻推（不重复 /goal）
             if not goal_active:
                 goal_text = build_guard_goal(g, g_msgs)
-                prompt = goal_text   # default 模式：不打 /goal，max_iters=15 即时生效（免 daemon reload）
+                prompt = "/goal " + goal_text
                 goal_active = True
                 interrupt_flag = False
-                log("🎯 R%d 进入自主行动：%s" % (round_n, goal_text[:60]))
+                log("🎯 R%d 激活 Goal 模式：%s" % (round_n, goal_text[:60]))
             elif interrupt_flag:
                 prompt = continue_prompt(g, status)
                 interrupt_flag = False          # 发一次『继续』，下轮回常规轻推
@@ -1404,175 +1375,6 @@ def autonomy_loop(g, stop_at):
         time.sleep(DECIDE_INTERVAL)
 
 
-# =====================================================================
-# 影分身分脑引擎（2026-08-24 造物主定调）
-# 分身=独立进程/独立 session、上下文独立。守卫桥为每个在册 Kage 开一个独立 QwenPaw session
-# （复用施术者 agent id，但 session 彻底独立——它是"另一个意识"），提示词明确"你是影分身"；
-# 分身用 kage_* 系列工具驱动自己。血线 <50% 自动解散；分身消失时把见闻融合回本体。
-# ---------------------------------------------------------------------
-_kage_state = {}   # name -> {"agent","session","start_ts","last_hp","last_pos","log_path"}
-
-
-def _kage_log_path(name):
-    return os.path.join(DATA, f"kage-drive-{name}.jsonl")
-
-
-def _roster_kages():
-    """numen_act list → 解析当前在册的影分身（Kage1/Kage2）。返回 set。"""
-    out = R.cmd("numen_act list")
-    names = set()
-    for k in KAGE_NAMES:
-        if re.search(r"(?m)^" + re.escape(k) + r"\|", str(out)):
-            names.add(k)
-    return names
-
-
-def _kage_status(name):
-    """分身自身状态（HP/位置）。用 numen_act invoke <Kage> 驱动分身身体拿，非本体。"""
-    out = invoke(name, "get_self_status")
-    return _parse_health(out)
-
-
-def _kage_prompt(name, status, start_ts):
-    """分裂时/每轮喂给分身 session 的提示词——明确『你是影分身』，只用 kage_* 工具。"""
-    sc = ""
-    if status:
-        hp = status.get("hp")
-        pos = status.get("pos")
-        sc = f"（HP {hp if hp is not None else '?'}/20 · 位置 {pos if pos is not None else '?'}）"
-    return "\n".join([
-        f"你是『鸣人』的影分身【{name}】——不是本体，是一个独立意识的分身，此刻另有任务。",
-        "你有一副属于你自己的分身身体，用**仅限 kage_* 系列工具**驱动它（kage_status 看自己、kage_goto 移动、kage_attack 打架、kage_scan 扫周围、kage_follow 召回、kage_dismiss 遣散）。",
-        "**铁律·千万别碰 goto/mine/eat/attack/collect_items/say/chant 这些工具**——它们是本体『鸣人』的工具，你一碰就会移动/操作**本体**的身体，不是你的分身！你只活在 kage_* 工具里。",
-        "你的任务：作为分身前哨侦察战斗——去探路、俯瞰、看敌人、看地形、看资源，把看到的情报带回来；或替本体执行它分身不做的战斗/采集杂务。",
-        f"当前分身状态{sc}。你被召唤于 {start_ts}。",
-        "请**真正用 kage_* 工具**去做（kage_scan 看周围 / kage_goto 移动 / kage_attack 打怪），观察后做一件最值得的分身实事。你看到的、做到的，都会在解除时**融回本体鸣人的记忆**——所以认真看、认真记。",
-        "每轮只推进一小步：最多1-2个 kage_ 感知工具看一眼，然后真调一个 kage_ 动作，做完一句话收尾。",
-    ])
-
-
-def _fuse_kage(name, reason):
-    """分身消失/解散：把它的见闻融合回本体（上下文注入 + 持久记录双路）。"""
-    st = _kage_state.pop(name, None)
-    log = lambda msg: print(f"[分身·{name}] {msg}", flush=True)
-    try:
-        lib = _kage_log_path(name)
-        lines = []
-        if os.path.exists(lib):
-            with open(lib, "r", encoding="utf-8") as f:
-                lines = [json.loads(x) for x in f if x.strip()]
-            os.remove(lib)
-        # 提取分身"做过的事/看到的情报"作记忆。
-        mem = []
-        for ln in lines[-40:]:
-            t = str(ln.get("text") or "").strip()
-            if t:
-                mem.append(t[-200:])
-        summary = "；".join(mem[-12:]) if mem else "（此身未及留下见闻）"
-        rec = {
-            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "name": name, "reason": reason,
-            "what": summary,
-            "start_ts": st.get("start_ts") if st else "",
-            "last_hp": st.get("last_hp") if st else None,
-        }
-        # ① 上下文注入：写进 kage-fusion 文件，本体下轮 prompt 读走
-        os.makedirs(DATA, exist_ok=True)
-        with open(KAGE_FUSE_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        # ② 持久记录分身档案（供女神/史官素材）
-        with open(os.path.join(DATA, "kage-archive.jsonl"), "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        log(f"分身结束({reason}) → 阅历已融回本体：{summary[:60]}")
-    except Exception as e:
-        log(f"融合失败：{e}")
-
-
-def _kage_fuse_hint():
-    """读走 kage-fusion 文件的未消费分身记忆，供本体 prompt 注入。有则返回文本，无则空。"""
-    if not os.path.exists(KAGE_FUSE_FILE):
-        return ""
-    recs = []
-    try:
-        with open(KAGE_FUSE_FILE, "r", encoding="utf-8") as f:
-            for x in f:
-                if x.strip():
-                    try:
-                        recs.append(json.loads(x))
-                    except Exception:
-                        pass
-        os.remove(KAGE_FUSE_FILE)   # 消费即清，避免反复注入
-    except Exception:
-        return ""
-    if not recs:
-        return ""
-    parts = [f"（你的影分身{rec.get('name','')}已归体 {rec.get('reason','')}——它看到/做了：{rec.get('what','')[:120]}）" for rec in recs]
-    return "\n".join(parts)
-
-
-def kage_loop(stop_at):
-    log = lambda msg: print(f"[分身·分脑] {msg}", flush=True)
-    log(f"影分身分脑引擎启动（{kage_loop.__name__}）")
-    while True:
-        if stop_at and time.time() >= stop_at:
-            return
-        try:
-            rosters = _roster_kages()
-            # 1. 新在册的分身 → 开独立 session（分脑）
-            for name in rosters:
-                if name not in _kage_state:
-                    sess = f"kage:naruto-{name}-{time.strftime('%Y%m%d-%H%M%S')}"
-                    _kage_state[name] = {
-                        "agent": KAGE_CASTER_AGENT, "session": sess,
-                        "start_ts": time.strftime("%m-%d %H:%M"),
-                        "last_hp": None, "last_pos": None,
-                        "log_path": _kage_log_path(name),
-                    }
-                    st = _kage_status(name)
-                    prompt = _kage_prompt(name, st, _kage_state[name]["start_ts"])
-                    ans = call_guard(KAGE_CASTER_AGENT, sess, prompt)
-                    _kage_drive_log(name, "init", ans[:400])
-                    log(f"分身 {name} 分脑 session 已开（{sess}）→ 首轮回 {ans[:60]!r}")
-                    continue
-            # 2. 在册分身 → 每轮看状态 + 血线 + 喂一轮行动
-            for name, stt in list(_kage_state.items()):
-                if name not in rosters:
-                    continue
-                status = _kage_status(name)
-                hp = status.get("hp") if status else None
-                pos = status.get("pos") if status else None
-                if isinstance(hp, (int, float)):
-                    stt["last_hp"] = hp
-                    if hp <= KAGE_HP_DIE:   # 血线 50% 以下 → 解散 + 融合
-                        R.cmd(f'numen_act dismiss "{name}"')
-                        _fuse_kage(name, f"血线低于50%(HP {hp:.0f}/20)自动解散")
-                        continue
-                stt["last_pos"] = pos
-                prompt = _kage_prompt(name, status, stt["start_ts"])
-                ans = call_guard(stt["agent"], stt["session"], prompt)
-                _kage_drive_log(name, "round", ans[:400])
-            # 3. 已不在册的分身 → 消失（超时/死亡/被遣散）→ 融合
-            for name in list(_kage_state.keys()):
-                if name not in rosters:
-                    _fuse_kage(name, "分身已消失（超时/死亡/遣散）")
-            time.sleep(KAGE_POLL)
-        except Exception as e:
-            log(f"分脑轮次异常：{e}")
-            time.sleep(KAGE_POLL)
-
-
-def _kage_drive_log(name, kind, text):
-    """记录分身着单轮回复（供消失时融合成记忆）。"""
-    try:
-        with open(_kage_log_path(name), "a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "ts": time.strftime("%Y-%m-%d %H:%M:%S"), "kind": kind,
-                "text": text[:400],
-            }, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
 # ---------------- 主入口 ----------------
 def main():
     limit = float(os.environ.get("GUARD_MAX_SECONDS", "0") or 0)
@@ -1583,10 +1385,6 @@ def main():
         t = threading.Thread(target=tgt, args=(g, stop_at), daemon=True)
         t.start()
         threads.append(t)
-    # 影分身分脑引擎（2026-08-24）：独立线程扫描在册分身，开分脑 session、血线解散、消失融合
-    tk = threading.Thread(target=kage_loop, args=(stop_at,), daemon=True)
-    tk.start()
-    threads.append(tk)
     _descs = [(g["name"] + ("(React)" if g.get("autonomy") else "(旧JSON)")) for g in GUARDS]
     print("[guard_drive] 双亲卫桥已启动：" + "、".join(_descs) + f"（限时 {limit}s）", flush=True)
     for t in threads:

@@ -1,0 +1,134 @@
+# 「我的异世界」千灯纪 — 全栈编排
+# 一期（默认，docker compose up -d）：mc 主服
+# 二期（docker compose --profile full up -d）：女神技能系统/守卫/智能体/数据面
+# 版本基准：MC 1.21.1 + NeoForge 21.1.248 + Java 21
+#
+# 系统全景（2026-08-25 造物主谕：容器化覆盖整个系统）：
+#   1. mc            MC 主服 + 31 件 mod（含 numen/numen_act/godfix settlements）✅ 本期
+#   2. world-process 女神化身/世界进程（bootstrap-world.mts + web-panel.mjs，node）
+#   3. oracle        村民神谕推理（mc_oracle.py，:9001）
+#   4. npc           村民之魂（mc_npc.py）
+#   5. skin-proxy    离线皮肤代理（skin-proxy.mjs，node）
+#   6. guard         守卫桥（guard_drive.py；mcp_numen 是 QwenPaw 子进程，随 qwenpaw 走）
+#   7. qwenpaw       QwenPaw 多智能体 OS（天神/女神/守卫 agents 的家）
+#   8. auth          用户注册/登录服务端（代码尚不存在，待造物主定性）
+#   数据面已容器化（C:\Users\lzl19\memos-deploy）：memos-api:8002 / memos-mcp:8003 /
+#   qdrant:6333 / neo4j / redis —— 经 external 网络 memos_memos 接入。
+#   推理面：vllm-qwen38-ara:8890（GPU，独立容器，本机保留）。
+
+services:
+  # ── 一期：MC 主服 ─────────────────────────────────────────────
+  mc:
+    image: itzg/minecraft-server:java21
+    container_name: mc-isekai
+    restart: unless-stopped
+    environment:
+      EULA: "TRUE"
+      TYPE: NEOFORGE
+      VERSION: "1.21.1"
+      NEOFORGE_VERSION: "21.1.248"
+      MEMORY: ${MC_MEMORY:-6G}
+      SERVER_PORT: "25599"
+      LEVEL: world
+      MOTD: "千灯纪 · 女神守望的方块世界 | 咏唱 · 祈愿 · 点灯"
+      DIFFICULTY: easy
+      GAMEMODE: survival
+      PVP: "false"
+      MAX_PLAYERS: "20"
+      VIEW_DISTANCE: "8"
+      SIMULATION_DISTANCE: "8"
+      ONLINE_MODE: "false"
+      WHITE_LIST: "false"
+      SPAWN_PROTECTION: "0"
+      ALLOW_FLIGHT: "false"
+      ENABLE_COMMAND_BLOCK: "true"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD:?RCON_PASSWORD must be set via --env-file (see ops/docker/*.env, git-ignored)}
+      GUI: "false"
+      COPY_MODS: "true"
+      TZ: Asia/Shanghai
+    ports:
+      - "${MC_PORT:-25599}:25599"
+      - "${RCON_PORT_HOST:-25575}:25575"
+      - "${VOICECHAT_PORT:-24454}:24454/udp"   # Simple Voice Chat 语音端口（客户端默认连这个）
+    volumes:
+      - ./data:/data
+      - ./mods:/mods:ro
+    networks: [isekai]
+
+  # ── 二期：女神技能系统 / 守卫 / 智能体（images 待建，见 README 路线图）──
+  world-process:
+    profiles: ["full"]
+    image: mc-world:latest          # 8-18 旧造物，需按新 data 重建 → Dockerfile.world TODO
+    container_name: isekai-world-process
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes:
+      - ../../scratch-plugin/data:/app/data   # 活数据：world.db / villagers.json
+    environment:
+      TZ: Asia/Shanghai
+      # TODO: LLM 端点（vllm:8890 或云 API）、RCON 指向 mc 容器
+    networks: [isekai]
+
+  oracle:
+    profiles: ["full"]
+    image: TODO-isekai-oracle:latest        # Dockerfile.oracle TODO（python3.12 + 依赖）
+    container_name: isekai-oracle
+    restart: unless-stopped
+    ports: ["9001:9001"]
+    volumes:
+      - ../../scratch-plugin/data:/app/data
+    networks: [isekai]
+
+  npc:
+    profiles: ["full"]
+    image: TODO-isekai-npc:latest           # Dockerfile.npc TODO（mc_npc.py + 依赖）
+    container_name: isekai-npc
+    restart: unless-stopped
+    volumes:
+      - ../../scratch-plugin/data:/app/data
+    networks: [isekai]
+
+  skin-proxy:
+    profiles: ["full"]
+    image: TODO-isekai-skinproxy:latest     # Dockerfile.skinproxy TODO（node skin-proxy.mjs）
+    container_name: isekai-skin-proxy
+    restart: unless-stopped
+    networks: [isekai]
+
+  guard:
+    profiles: ["full"]
+    image: TODO-isekai-guard:latest         # Dockerfile.guard TODO（guard_drive.py；
+    container_name: isekai-guard            #  濒死急救/节拍器/记录，RCON 指向 mc）
+    restart: unless-stopped
+    volumes:
+      - ../../scratch-plugin/data:/app/data
+    networks: [isekai]
+
+  qwenpaw:
+    profiles: ["full"]
+    image: TODO-isekai-qwenpaw:latest       # Dockerfile.qwenpaw TODO（python + qwenpaw）
+    container_name: isekai-qwenpaw
+    restart: unless-stopped
+    ports: ["8088:8088"]                    # console/chat
+    volumes:
+      - ${QWENPAW_HOME:-C:/Users/lzl19/.qwenpaw}:/root/.qwenpaw
+      - ${WORKSPACES:-C:/Users/lzl19/.copaw/workspaces}:/root/workspace
+    environment:
+      TZ: Asia/Shanghai
+      # TODO: LLM 端点；mcp_numen.py 作为其子进程随容器走
+    networks: [isekai, memos_memos]
+
+  auth:
+    profiles: ["full"]
+    image: TODO-isekai-auth:latest          # 用户注册/登录服务端——代码尚不存在，
+    container_name: isekai-auth             #  形态待造物主定性（面板账号？玩家白名单注册？）
+    restart: unless-stopped
+    networks: [isekai]
+
+networks:
+  isekai:
+  memos_memos:
+    external: true
+    name: memos_memos

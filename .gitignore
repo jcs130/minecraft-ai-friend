@@ -86,3 +86,17 @@ packaging/mc-world/assets/data/world-requirements.md
 packaging/mc-world/assets/data/saga-store.json
 packaging/mc-world/assets/data/terra-report.json
 packaging/mc-world/backend/__pycache__/
+
+# 2026-08-25 Docker 全栈：数据卷/候选与禁用模组二进制/密钥环境文件 不入库
+ops/docker/data/
+ops/docker/bare-test/
+ops/docker/datapack-candidates/
+ops/docker/goddess-data/
+ops/docker/mods-candidates/
+ops/docker/mods-disabled/
+ops/docker/*.zip
+ops/docker/*.env
+# 本地参考源与临时产物（大、可再生）
+tmp-neoforge-src/
+tmp-*.out
+mc-data/

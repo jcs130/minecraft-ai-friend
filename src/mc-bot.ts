@@ -61,7 +61,8 @@ export function createBot(config: Config): BotHandle {
       if (mapped) e.name = mapped
     }
     bot.on('entitySpawn', (e: any) => normalizeModEntity(e))
-    bot.on('entityUpdated', (e: any) => normalizeModEntity(e))
+    // entityUpdated 不在 mineflayer 官方 BotEvents 类型里；保留监听作为兜底归一（事件若不发则无害）。
+    bot.on('entityUpdated' as any, (e: any) => normalizeModEntity(e))
     // 对已连接的旧实体立即归一（防实体早于我注册 hook 已入列）。
     // ⚠️ bot.entities 由 mineflayer 内部插件在 inject_allowed（下一个 event-loop tick）才初始化；
     // createBot() 同步返回的那一刻它仍是 undefined，直接 Object.values 会抛
