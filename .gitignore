@@ -100,3 +100,7 @@ ops/docker/*.env
 tmp-neoforge-src/
 tmp-*.out
 mc-data/
+  
+# datapack 源例外：datapacks-src 内的 data/ 子目录是正经源码目录，豁免根级 data/*  
+!ops/docker/datapacks-src/**/data/  
+!ops/docker/datapacks-src/**/data/**  
