@@ -57,7 +57,7 @@ def chronicle_new(since_line: int):
     return lines[since_line:][-20:], len(lines)
 
 
-def call(agent_id: str, user_id: str, session_id: str, text: str) -> str:
+def call(agent_id: str, user_id: str, session_id: str, text: str, timeout: int = 900) -> str:
     """AgentRequest 格式（对齐 mc-god.ts callAgent）+ SSE 解析出正式回答。"""
     payload = json.dumps({
         "channel": "console",
@@ -69,7 +69,7 @@ def call(agent_id: str, user_id: str, session_id: str, text: str) -> str:
         CONSOLE, data=payload,
         headers={"Content-Type": "application/json", "X-Agent-Id": agent_id})
     try:
-        with urllib.request.urlopen(req, timeout=900) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read().decode("utf-8", errors="replace")
         # SSE 解析：最后一条 message:message 的 content
         message_id = None
@@ -169,7 +169,8 @@ def main():
                 last_p = now
             if now - last_s >= SIDENG_EVERY:
                 d = datetime.datetime.now().strftime("%Y%m%d")
-                r = call("default", "ops:sideng", f"sideng-ops-{d}", sideng_digest(new))
+                # 司灯跑 xhigh 最高思考档（本地 27B 单轮可到 20 分钟），放宽到 30 分钟
+                r = call("default", "ops:sideng", f"sideng-ops-{d}", sideng_digest(new), timeout=1800)
                 log(f"sideng round: {r}")
                 last_s = now
             time.sleep(10)

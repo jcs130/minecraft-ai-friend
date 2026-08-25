@@ -241,14 +241,15 @@ for aid, aname, adesc in OPS_AGENTS:
 
 # 4.5b 司灯（default 总负责人）模型接线：瓶中 default 出厂无 active_model
 #     （No active model configured → console/chat 直接 MODEL_EXECUTION_ERROR）。
+#     总负责人配最高思考档（16384 budget / xhigh / 262K 上下文）。
 #     只接模型水电，身份/台账在其工作区自持（2026-08-25 天神与司灯交互立职）。
 da = os.path.join(SH, "copaw", "workspaces", "default", "agent.json")
 if os.path.isfile(da):
     _d = json.load(open(da, encoding="utf-8"))
     if not (_d.get("active_model") or {}).get("provider_id"):
-        _d["active_model"] = {"provider_id": "qwen38_low_think", "model": "qwen3.8-27b-uncensored"}
+        _d["active_model"] = {"provider_id": "qwen38_xhigh_think", "model": "qwen3.8-27b-uncensored"}
         json.dump(_d, open(da, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=2)
-        print("  default agent.json: active_model patched（司灯模型接线）")
+        print("  default agent.json: active_model patched（司灯模型接线 xhigh）")
 
 # 4.6 注册进 config.json agents.profiles（否则 console/chat X-Agent-Id 404）
 cfg_path = os.path.join(SH, "copaw", "config.json")
