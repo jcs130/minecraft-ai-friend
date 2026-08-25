@@ -1,0 +1,165 @@
+# 千灯纪 Phase B — 影子环境编排（不动生产；端口 25899/25880/18088/19090）
+# 前置：python build-shadow.py 生成 mods/data/mcdata/copaw/copaw.secret/mc 卷
+# 启动：cd ops/docker/shadow && docker compose --env-file shadow.env up -d
+# 全景：mc(qwenpaw 家外) + world(女神化身) + panel + qwenpaw(守卫魂) + guard(守卫桥) + npc + oracle
+name: shadow
+
+services:
+  # ── MC 主服（生产 modpack + god-channel 版 numen_act）──
+  mc:
+    image: itzg/minecraft-server:java21
+    container_name: shadow-mc
+    restart: unless-stopped
+    environment:
+      EULA: "TRUE"
+      TYPE: NEOFORGE
+      VERSION: "1.21.1"
+      NEOFORGE_VERSION: "21.1.248"
+      MEMORY: 3G
+      SERVER_PORT: "25599"
+      LEVEL: shadow
+      MOTD: "千灯纪 · 影子验证环境（Phase B）"
+      DIFFICULTY: easy
+      ONLINE_MODE: "false"
+      WHITE_LIST: "false"
+      SPAWN_PROTECTION: "0"
+      PVP: "false"
+      VIEW_DISTANCE: "6"
+      SIMULATION_DISTANCE: "6"
+      ENABLE_COMMAND_BLOCK: "true"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+      COPY_MODS: "true"
+      GUI: "false"
+      TZ: Asia/Shanghai
+    ports:
+      - "25899:25599"
+      - "25880:25575"
+    volumes:
+      - ./mc:/data
+      - ./mods:/mods:ro
+    networks: [shadow]
+
+  # ── 瓶中 QwenPaw：守卫魂的家（8088 console/chat；mcp_numen 随行）──
+  qwenpaw:
+    image: qwenpaw-mc:2.1.1
+    container_name: shadow-qwenpaw
+    restart: unless-stopped
+    command: ["qwenpaw", "app", "--host", "0.0.0.0", "--port", "8088"]
+    volumes:
+      - ./copaw:/root/.copaw
+      - ./copaw.secret:/root/.copaw.secret
+      - ./data:/data          # mcp_numen 的 pray/chant 落同一神使通道卷
+    environment:
+      TZ: Asia/Shanghai
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+      WORLD_DATA: /data
+    ports:
+      - "18088:8088"          # 调试口
+    networks: [shadow]
+
+  # ── 守卫桥（账本落 ./data 卷 = 神使通道 IPC）──
+  guard:
+    image: mc-sidecar:2.1.0
+    container_name: shadow-guard
+    restart: unless-stopped
+    command: ["python3", "-u", "/opt/sidecar/guard/guard_drive.py"]
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Asia/Shanghai
+      QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+      MC_DATA_DIR: /data
+    networks: [shadow]
+    depends_on: [qwenpaw]
+
+  # ── 女神化身 / 世界进程（bot 连容器 MC；RCON+logwatch+神使通道）──
+  world:
+    image: mc-world:2.1.0
+    container_name: shadow-world
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./mc/logs:/mclogs:ro
+      - ./mc/world/advancements:/mcadv:ro
+    environment:
+      TZ: Asia/Shanghai
+      MC_HOST: mc
+      MC_PORT: "25599"
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_DATA_DIR: /app/data
+      MC_LOG_PATH: /mclogs/latest.log
+      MC_ADVANCEMENTS_DIR: /mcadv
+      MC_QDRANT_URL: http://host.docker.internal:6333
+      MC_EMBEDDING_URL: http://host.docker.internal:11434
+      QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+    networks: [shadow]
+    depends_on: [mc]
+
+  # ── 面板（web-panel.mjs，node:sqlite 读 world.db）──
+  panel:
+    image: mc-world:2.1.0
+    container_name: shadow-panel
+    restart: unless-stopped
+    entrypoint: []
+    command: ["node", "web-panel.mjs"]
+    volumes:
+      - ./data:/app/data
+      - ./mc/logs:/mclogs:ro
+    environment:
+      TZ: Asia/Shanghai
+      PANEL_PORT: "9090"
+      MC_DATA_DIR: /app/data
+      MC_LOG_PATH: /mclogs/latest.log
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+    ports:
+      - "19090:9090"
+    networks: [shadow]
+
+  # ── 村民之魂（mcdata 卷；听 log + RCON 发言）──
+  npc:
+    image: mc-sidecar:2.1.0
+    container_name: shadow-npc
+    restart: unless-stopped
+    command: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
+    volumes:
+      - ./mcdata:/mcdata
+      - ./data:/data
+      - ./mc/logs:/mclogs:ro
+    environment:
+      TZ: Asia/Shanghai
+      NPC_DATA_DIR: /mcdata
+      NPC_LOG_PATH: /mclogs/latest.log
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+      MC_DATA_DIR: /data
+    networks: [shadow]
+
+  # ── 村民神谕推理（SIS 直连 vllm，endpoint 已在 mcdata 配置里打补丁）──
+  oracle:
+    image: mc-sidecar:2.1.0
+    container_name: shadow-oracle
+    restart: unless-stopped
+    command: ["python3", "-u", "/opt/sidecar/mc_oracle.py"]
+    volumes:
+      - ./mcdata:/mcdata
+    environment:
+      TZ: Asia/Shanghai
+      NPC_DATA_DIR: /mcdata
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      RCON_PASSWORD: ${RCON_PASSWORD}
+    networks: [shadow]
+
+networks:
+  shadow:
+    name: shadow_net
