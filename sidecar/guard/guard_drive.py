@@ -44,7 +44,7 @@ if not RCON_PW:
 if not RCON_PW:
     raise SystemExit("缺少 RCON_PASSWORD 环境变量（见 .env / docker-compose；可设 MC_RCON_SECRET 指定 secret 文件）")
 CONSOLE_URL = os.environ.get("QWENPAW_CONSOLE_URL", "http://127.0.0.1:8088/api/console/chat")
-# 已归位 B 仓 sidecar/guard/：账本写本仓 data/（不再跨仓引 A 仓 scratch-plugin/data）
+# 已归位 B 仓 sidecar/guard/：账本写本仓 data/（不再跨仓引 A 仓旧 data 目录）
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA = os.path.join(REPO_ROOT, "data")
 
@@ -69,7 +69,7 @@ GUARDS = [
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
 # 咏唱/祈愿/谕示文件必须与 mc-god 世界进程同卷（默认锚 B 仓 mc-data 运行态，
 # 容器化/迁移经 MC_DATA_DIR 覆盖）。守卫桥的账本仍在 B 仓 data/（DATA），与此无关。
-# 2026-08-26 AUDIT-01 修复：默认值曾指向 deepseek-harness 旧世界目录（A 仓遗留），
+# 2026-08-26 AUDIT-01 修复：默认值曾指向 A 仓旧世界目录（迁移遗留），
 # 鸣人 2026-08-22 起所有咏唱/祈愿全部写进旧目录石沉大海（积压 2977 条无人消费）。
 # 现役主服世界数据在 B 仓 mc-data/，跟随 REPO_ROOT 走（迁移也不怕）。
 WORLD_DATA = os.environ.get("MC_DATA_DIR", os.path.join(REPO_ROOT, "mc-data"))

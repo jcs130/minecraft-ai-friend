@@ -42,7 +42,7 @@ from urllib.request import Request, urlopen
 LAN_IP = "0.0.0.0"
 PORT = int(os.environ.get("GATEWAY_PORT", "8011"))
 # 绝对路径基准：mc-gateway 脚本在 B 仓 minecraft-ai-friend/mc-gateway/ 下，
-# 数据/服务端自持本仓 mc-data / mc-server（2026-08-26 清 A 仓 deepseek-harness 残留）。
+# 数据/服务端自持本仓 mc-data / mc-server（2026-08-26 清 A 仓旧目录残留）。
 # 用 __file__ 推导，避免依赖 CWD（否则从不同目录启动会走错 MC_SERVER_DIR / mods）。
 _REPO = str(Path(__file__).resolve().parent.parent)
 MC_DATA_DIR = os.environ.get("MC_DATA_DIR", os.path.join(_REPO, "mc-data"))

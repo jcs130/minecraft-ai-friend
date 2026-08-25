@@ -9,7 +9,7 @@ import subprocess, os, time
 
 WS = r"C:\Users\lzl19\.copaw\workspaces\default"
 REPO = os.path.join(WS, "minecraft-ai-friend")
-# 2026-08-26 全量清理：A 仓 deepseek-harness 引用已全部清除，B 仓完全自持（mc-server / mc-data / node_modules）
+# 2026-08-26 全量清理：A 仓旧目录引用已全部清除，B 仓完全自持（mc-server / mc-data / node_modules）
 DATA = os.environ.get("MC_DATA_DIR_OVERRIDE") or os.path.join(REPO, "mc-data")
 NODE = r"C:\Program Files\nodejs\node.exe"
 TSX_CLI = os.path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs")

@@ -50,7 +50,7 @@ NUMEN_DISPLAY = os.environ.get("NUMEN_DISPLAY", "鸣人")
 # 与 mc-god.ts kage_bunshin 召唤写死的 Kage1/Kage2 保持一致；分身死亡即散/超时回收。
 KAGE_NAMES = ["Kage1", "Kage2"]
 # 与女神侧共享的通道文件（同守卫桥；容器迁移经 MC_DATA_DIR 覆盖）
-# 2026-08-26 AUDIT-01 修复：默认值曾指向 deepseek-harness 旧世界目录，咏唱/祈愿全部石沉大海。
+# 2026-08-26 AUDIT-01 修复：默认值曾指向 A 仓旧世界目录，咏唱/祈愿全部石沉大海。
 # 现役主服世界数据在 B 仓 mc-data/，跟随 REPO_ROOT（REPO_ROOT 定义上移至此）。
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORLD_DATA = os.environ.get("MC_DATA_DIR", os.path.join(REPO_ROOT, "mc-data"))
