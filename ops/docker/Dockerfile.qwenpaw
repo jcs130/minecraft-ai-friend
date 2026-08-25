@@ -12,7 +12,12 @@ ENV TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "qwenpaw==2.1.0"
+# git 供 QwenPaw checkpoint 用；apt 走清华源（官源网络受限）
+RUN printf 'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie main\ndeb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie-updates main\ndeb https://mirrors.tuna.tsinghua.edu.cn/debian-security/ trixie-security main\n' > /etc/apt/sources.list \
+ && apt-get update -qq \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "qwenpaw==2.1.0"
 
 # 内置 numen 工具桥 + 神使通道客户端（守卫 agent 的 MCP 工具）
 COPY sidecar/guard/mcp_numen.py /opt/sidecar/guard/mcp_numen.py
