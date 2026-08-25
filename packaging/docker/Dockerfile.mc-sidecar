@@ -1,0 +1,17 @@
+# mc-sidecar:2.1.0 — guard_drive / mc_npc / mc_oracle 三服务共用镜像（不同 CMD 启动）
+# 底座 memos-api:local（python 3.11.15，2026-08-25 实证）。三个进程全标准库，零 pip。
+# 一期限制：guard 渲染路径（NODE_EXE/TSX_CLI 调 node）在容器内无 node 可用，
+# 渲染服务化进 world 容器为二期项；主循环（RCON 轮询+神使通道+prompt 注入）不受影响。
+ARG BASE_IMAGE=memos-api:local
+FROM ${BASE_IMAGE}
+WORKDIR /opt/sidecar
+COPY sidecar/guard/guard_drive.py ./guard/guard_drive.py
+COPY sidecar/guard/start_guard_drive.py ./guard/start_guard_drive.py
+COPY sidecar/god-channel/god_channel.py ./god-channel/god_channel.py
+COPY sidecar/mc_npc.py sidecar/mc_guild.py sidecar/mc_oracle.py ./
+# 服务入口（compose/运行时覆盖 CMD）：
+#   guard : python3 -u /opt/sidecar/guard/guard_drive.py
+#   npc   : python3 -u /opt/sidecar/mc_npc.py
+#   oracle: python3 -u /opt/sidecar/mc_oracle.py
+EXPOSE 9001
+CMD ["python3", "-u", "/opt/sidecar/mc_oracle.py"]

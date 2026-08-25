@@ -1,0 +1,16 @@
+# skin-proxy:2.1.0 — 皮肤注入代理（vanilla 客户端 -> proxy -> java）
+# 底座复用 mc-world:latest（node + minecraft-protocol 1.66.2 + node 内置 zlib/fs）。
+# 皮肤库挂载 /app/data/skins.json（SKINS_FILE 可覆盖）。
+# 注意：底座 ENTRYPOINT 是 sh -c '... exec npx tsx bootstrap-world.mts'，
+# 必须显式清空 ENTRYPOINT，否则 CMD 会沦为它的参数（2026-08-25 实证）。
+ARG BASE_IMAGE=mc-world:latest
+FROM ${BASE_IMAGE}
+ENTRYPOINT []
+WORKDIR /app
+COPY sidecar/skin-proxy.mjs /app/skin-proxy.mjs
+ENV SKIN_LISTEN_PORT=25565 \
+    SKIN_UPSTREAM_HOST=mc \
+    SKIN_UPSTREAM_PORT=25599 \
+    MC_VERSION=1.21.1
+EXPOSE 25565
+CMD ["node", "skin-proxy.mjs"]

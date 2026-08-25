@@ -1,0 +1,13 @@
+# mc-world:2.1.0 — world-process (bootstrap-world.mts) + web-panel.mjs
+# 底座复用旧 mc-world:latest（node v22.23.2 + tsx + linux 原生 better-sqlite3/mineflayer，
+# 2026-08-25 实证 SQLITE_OK），主链不依赖 canvas/edge-tts（bootstrap-world import 树已核）。
+# minecraft-protocol 1.66.2（package.json 声明 ^1.67，运行时以冒烟为准）。
+ARG BASE_IMAGE=mc-world:latest
+FROM ${BASE_IMAGE}
+WORKDIR /app
+COPY package.json tsconfig.json ./
+COPY src ./src
+COPY bootstrap-world.mts web-panel.mjs ./
+# 不 npm install：底座 node_modules 已含主链依赖（tsx/mineflayer/better-sqlite3 实证可载）
+EXPOSE 3000
+CMD ["node_modules/.bin/tsx", "bootstrap-world.mts"]

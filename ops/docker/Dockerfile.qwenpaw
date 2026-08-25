@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+# QwenPaw 容器镜像 — 千灯纪全家桶二期
+# 用途：瓶中跑「世界专属 agent」（守卫魂 kirito/naruto、发行版 Goddess agent 等）。
+# 神不进瓶子：mc-god（天神）留宿主机 QwenPaw，管理容器。
+# 构建（B 仓根为 context）：
+#   docker build -f ops/docker/Dockerfile.qwenpaw -t qwenpaw-mc:2.1.0 .
+# BASE_IMAGE 参数化：网络通畅时用 python:3.12-slim（小）；当前网络受限用本地已有的 memos-api:local（含 Python 3.11.15，满足 >=3.11,<3.14）
+ARG BASE_IMAGE=memos-api:local
+FROM ${BASE_IMAGE}
+
+ENV TZ=Asia/Shanghai \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "qwenpaw==2.1.0"
+
+# 内置 numen 工具桥 + 神使通道客户端（守卫 agent 的 MCP 工具）
+COPY sidecar/guard/mcp_numen.py /opt/sidecar/guard/mcp_numen.py
+COPY sidecar/god-channel/god_channel.py /opt/sidecar/god-channel/god_channel.py
+# mcp_numen 的伴生依赖（如有 requirements 就装；没有则跳过）
+COPY sidecar/guard/requirements.txt* /tmp/guard-requirements/
+RUN if [ -f /tmp/guard-requirements/requirements.txt ]; then \
+        pip install -r /tmp/guard-requirements/requirements.txt; \
+    fi ; rm -rf /tmp/guard-requirements
+
+# 数据家由 volume 挂载进 /root/.copaw（config.json、workspaces、chats 等）
+WORKDIR /root
+EXPOSE 8088
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD qwenpaw --help >/dev/null 2>&1 || exit 1
+
+CMD ["qwenpaw", "app"]
