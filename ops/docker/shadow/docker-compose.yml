@@ -51,6 +51,7 @@ services:
       - ./copaw:/root/.copaw
       - ./copaw.secret:/root/.copaw.secret
       - ./data:/data          # mcp_numen 的 pray/chant 落同一神使通道卷
+      - ./mc/god-channel:/god-channel   # 运营双 agent（灯语/灶火）的神使通道（零密钥文件 IPC）
     environment:
       TZ: Asia/Shanghai
       MC_RCON_HOST: mc
@@ -161,6 +162,25 @@ services:
       MC_RCON_PORT: "25575"
       RCON_PASSWORD: ${RCON_PASSWORD}
     networks: [shadow]
+
+  # ── 运营双桥：驱动灯语女神(巡检修世界)/灶火祭司(世界观播报) ──
+  opsdrive:
+    image: mc-sidecar:2.1.0
+    container_name: shadow-opsdrive
+    restart: unless-stopped
+    command: ["python3", "-u", "/opt/sidecar/ops/ops_drive.py"]
+    volumes:
+      - ./data:/data
+      - ./mc/god-channel:/god-channel:ro
+    environment:
+      TZ: Asia/Shanghai
+      QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+      GOD_CHANNEL_DIR: /god-channel
+      DATA_DIR: /data
+      HERALD_EVERY_SEC: "600"    # 灯语巡检周期
+      PRIEST_EVERY_SEC: "3600"   # 灶火策划周期
+    networks: [shadow]
+    depends_on: [qwenpaw]
 
 networks:
   shadow:

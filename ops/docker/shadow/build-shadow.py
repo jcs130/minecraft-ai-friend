@@ -167,6 +167,89 @@ for g in GUARDS:
     else:
         print(f"  workspace {g} copied (agent.json patched; numen.yaml absent)")
 
+# 4.5 瓶中运营双 agent（灯语女神/灶火祭司）——生成式创建（无宿主 workspace 源，保留既有 history）
+OPS_AGENTS = [
+    ("mc-herald", "灯语女神",
+     "世界运营之神：主动发现问题（坑洞/玩家危险/天象异常）并修复、播报、记档，守护玩家游戏体验。"),
+    ("mc-priest", "灶火祭司",
+     "世界策划之神：世界观播报、进程书写、任务活动构思，让村庄有烟火气。"),
+]
+OPS_TPL = os.path.join(REPO, "ops", "docker", "ops-agents")
+GOD_CLIENT = {
+    "name": "god",
+    "description": "神使通道工具箱（世界状态/管理命令/编年史/数据只读），零密钥文件 IPC",
+    "enabled": True, "transport": "stdio", "url": "", "headers": {},
+    "command": "/usr/local/bin/python3",
+    "args": ["/opt/sidecar/god-channel/mcp_god.py"],
+    "env": {"GOD_CHANNEL_DIR": "/god-channel", "DATA_DIR": "/data",
+            "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/root"},
+    "cwd": "/root",
+}
+GOD_YAML = """name: god
+protocol: mcp
+endpoint:
+  args:
+  - /opt/sidecar/god-channel/mcp_god.py
+  command: /usr/local/bin/python3
+  cwd: /root
+  env:
+    PATH: /usr/local/bin:/usr/bin:/bin
+    HOME: /root
+    GOD_CHANNEL_DIR: /god-channel
+    DATA_DIR: /data
+  transport: stdio
+config:
+  description: 神使通道工具箱（世界状态/管理命令/编年史/数据只读），零密钥文件 IPC
+  display_name: god
+enabled: true
+policy:
+  default_effect: deny
+  rules:
+  - subject: '*'
+    effect: allow
+    target:
+      kind: tool
+      name: '*'
+    principal:
+      source_type: '*'
+      source_value: '*'
+      subject_type: '*'
+      subject_value: '*'
+    condition: null
+"""
+for aid, aname, adesc in OPS_AGENTS:
+    dst = os.path.join(SH, "copaw", "workspaces", aid)
+    os.makedirs(os.path.join(dst, "drivers", "mcp"), exist_ok=True)
+    # agent.json：以 kirito 副本为底本（保留既有 history.db 等运行痕迹）
+    aj_path = os.path.join(dst, "agent.json")
+    base = aj_path if os.path.exists(aj_path) else os.path.join(
+        SH, "copaw", "workspaces", "mc-guard-kirito", "agent.json")
+    aj = json.load(open(base, encoding="utf-8"))
+    aj["id"] = aid
+    aj["name"] = aname
+    aj["description"] = adesc
+    aj["workspace_dir"] = f"/root/.copaw/workspaces/{aid}"
+    aj["mcp"]["clients"] = {"god": GOD_CLIENT}
+    aj.pop("last_dispatch", None)
+    json.dump(aj, open(aj_path, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=2)
+    for fn in ("AGENTS.md", "SOUL.md", "PROFILE.md"):
+        shutil.copyfile(os.path.join(OPS_TPL, aid, fn), os.path.join(dst, fn))
+    open(os.path.join(dst, "drivers", "mcp", "god.yaml"), "w", encoding="utf-8", newline="\n").write(GOD_YAML)
+    print(f"  ops agent {aid}（{aname}） ready")
+
+# 4.6 注册进 config.json agents.profiles（否则 console/chat X-Agent-Id 404）
+cfg_path = os.path.join(SH, "copaw", "config.json")
+cfg = json.load(open(cfg_path, encoding="utf-8"))
+profs = cfg.setdefault("agents", {}).setdefault("profiles", {})
+order = cfg["agents"].setdefault("agent_order", [])
+for aid, _aname, _adesc in OPS_AGENTS:
+    profs[aid] = {"id": aid, "workspace_dir": f"/root/.copaw/workspaces/{aid}",
+                  "enabled": True, "pinned": False}
+    if aid not in order:
+        order.append(aid)
+json.dump(cfg, open(cfg_path, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=2)
+print("  config.json: ops agents registered")
+
 # 5 copaw.secret：只手写本地 vllm provider（api_key: None），任何真实密钥/master_key 不入瓶
 print("[5/6] copaw.secret (local-only, no secrets) ...")
 rm(os.path.join(SH, "copaw.secret"))

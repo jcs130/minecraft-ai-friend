@@ -22,6 +22,7 @@ RUN printf 'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie main\ndeb ht
 # 内置 numen 工具桥 + 神使通道客户端（守卫 agent 的 MCP 工具）
 COPY sidecar/guard/mcp_numen.py /opt/sidecar/guard/mcp_numen.py
 COPY sidecar/god-channel/god_channel.py /opt/sidecar/god-channel/god_channel.py
+COPY sidecar/god-channel/mcp_god.py /opt/sidecar/god-channel/mcp_god.py
 # mcp_numen 的伴生依赖（如有 requirements 就装；没有则跳过）
 COPY sidecar/guard/requirements.txt* /tmp/guard-requirements/
 RUN if [ -f /tmp/guard-requirements/requirements.txt ]; then \
