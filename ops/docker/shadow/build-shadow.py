@@ -195,5 +195,23 @@ print("[6/6] mc ...")
 if fresh:
     rm(os.path.join(SH, "mc"))
 os.makedirs(os.path.join(SH, "mc"), exist_ok=True)
+# settlements SIS 对齐生产（fresh 首启前无此文件——首启后无参重跑 build-shadow.py 即补上）
+inf = os.path.join(SH, "mc", "config", "settlements", "inference.toml")
+if os.path.exists(inf):
+    t = open(inf, encoding="utf-8").read()
+    t2 = (t.replace("enabled = false", "enabled = true")
+          .replace('endpoint_base_url = ""', 'endpoint_base_url = "http://oracle:9001"')
+          .replace('locale = "en_us"', 'locale = "zh_cn"')
+          .replace('mode = "HEURISTIC"', 'mode = "LLM"'))
+    gen = os.path.join(SH, "mc", "config", "settlements", "general.toml")
+    if os.path.exists(gen):
+        gt = open(gen, encoding="utf-8").read()
+        gt2 = gt.replace("scripted_chatter = true", "scripted_chatter = false")
+        if gt2 != gt:
+            open(gen, "w", encoding="utf-8", newline="\n").write(gt2)
+            print("  settlements general.toml aligned (scripted_chatter=false)")
+    if t2 != t:
+        open(inf, "w", encoding="utf-8", newline="\n").write(t2)
+        print("  settlements SIS aligned (enabled+LLM+zh_cn+oracle:9001)")
 
 print("== done. compose: cd ops/docker/shadow && docker compose --env-file shadow.env up -d ==")

@@ -100,6 +100,7 @@ services:
       MC_QDRANT_URL: http://host.docker.internal:6333
       MC_EMBEDDING_URL: http://host.docker.internal:11434
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+      TERRAIN_FILL: "0"     # 容器内无宿主 python/terrain_repair.py，禁用每日填坑 spawn
     networks: [shadow]
     depends_on: [mc]
 
@@ -154,6 +155,7 @@ services:
       - ./mcdata:/mcdata
     environment:
       TZ: Asia/Shanghai
+      ORACLE_BIND: 0.0.0.0   # 容器网内 settlements mod 经 oracle:9001 访问
       NPC_DATA_DIR: /mcdata
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
