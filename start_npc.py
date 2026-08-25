@@ -5,10 +5,9 @@ import sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 WS = os.path.dirname(DIR)
-SCRATCH = os.path.join(WS, 'deepseek-harness', 'scratch-plugin')
 
 env = dict(os.environ)
-env['NPC_DATA_DIR'] = os.path.join(SCRATCH, 'data')
+env['NPC_DATA_DIR'] = os.path.join(DIR, 'mc-data')
 # VIP 重点看护名单（与 restart-world.py / bootstrap-world.mts 对齐）：注入 MC_VIP_LISTEN
 # 供 mc_npc.py 读 VIP_LIST——让 VIP 真人旅人（萌萌）的公屏发言由女神独占处理、NPC 让位，
 # 不再被牧羊女等村民抢答（2026-08-23 造物主谕「让女神化身重点服务」）。

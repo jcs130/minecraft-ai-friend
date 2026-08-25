@@ -21,14 +21,14 @@ import {
 import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
-// scratch-plugin\data，经 MC_DATA_DIR 传入。村民交易/祈福文件队列须锚到运行态，
-// 与 mc_npc.py 的 DATA（scratch-plugin\data）一致——旧 './data' 相对 cwd 在迁仓后会落错卷。
+// mc-data，经 MC_DATA_DIR 传入。村民交易/祈福文件队列须锚到运行态，
+// 与 mc_npc.py 的 DATA（mc-data）一致——旧 './data' 相对 cwd 在迁仓后会落错卷。
 const DATA_DIR = process.env.MC_DATA_DIR || './data'
 const NPC_INBOX = process.env.NPC_INBOX || `${DATA_DIR}/npc-inbox.jsonl`
 
 // 村民祈福通道（2026-08-20 造物主谕「一步到位」）：村民（灶火民）祈愿由 mc_npc.py
 // 投 god-inbox.jsonl，女神裁断后神谕回 god-reply.jsonl（村民非玩家，不走 whisper）。
-// 路径与 npc-inbox 同卷（scratch-plugin\data）。
+// 路径与 npc-inbox 同卷（mc-data）。
 const GOD_INBOX = process.env.GOD_INBOX || `${DATA_DIR}/god-inbox.jsonl`
 const GOD_REPLY = process.env.GOD_REPLY || `${DATA_DIR}/god-reply.jsonl`
 /** 村民祈愿用的虚拟 username 前缀（区别于真人/AI 穿越者；神谕据此回文件而非私聊）。 */

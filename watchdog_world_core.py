@@ -24,9 +24,9 @@ import time
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-BASE = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin"
-HEARTBEAT = os.path.join(BASE, "data", "world-heartbeat.json")
-LOG = os.path.join(BASE, "data", "watchdog-world.log")
+BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mc-data")  # B 仓自持
+HEARTBEAT = os.path.join(BASE, "world-heartbeat.json")
+LOG = os.path.join(BASE, "watchdog-world.log")
 STALE_SEC = 150
 WORLD_CONTAINER = "mc-server"
 DOCKER = shutil.which("docker") or r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"

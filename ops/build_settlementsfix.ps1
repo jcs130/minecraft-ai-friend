@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $ROOT = 'C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend'
 $BUILD = Join-Path $ROOT 'build-settlementsfix'
-$SERVER = 'C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\mc-server-neoforge'
+$SERVER = 'C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\mc-server'
 $JDK = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot'
 $JAVAC = Join-Path $JDK 'bin\javac.exe'
 $JAR = Join-Path $JDK 'bin\jar.exe'

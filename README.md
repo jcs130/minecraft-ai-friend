@@ -87,7 +87,7 @@
 
 ## 环境要求
 
-- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（developer preview）
+- [QwenPaw](https://github.com/agentscope-ai/QwenPaw)（多智能体 OS：天神/女神/守卫 agents 的家；本仓唯一智能体运行时）
 - Node.js **22.19+ / 24+**
 - Minecraft 服务端（Java 版，实测 **1.21.11**；开启 RCON）。离线模式即可。
 - 一个 OpenAI 兼容 LLM 端点（本地 llama.cpp / Ollama 即可，零成本）。

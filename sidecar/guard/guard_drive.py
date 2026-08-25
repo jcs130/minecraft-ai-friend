@@ -25,12 +25,14 @@ RCON_PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 RCON_PW = os.environ.get("RCON_PASSWORD")
 # 密码回退：env 优先；无 env/空时从世界侧 rcon-secret.txt 读（与 _diag_summon.py 同源），
 # 不依赖外部 shell 预先注入 env，可移植、可跨容器。
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # B 仓根
 if not RCON_PW:
-    # 候选：1) MC_RCON_SECRET 显式指定；2) deepseek-harness 世界侧秘密文件（绝对路径兼容本机/容器）
+    # 候选：1) MC_RCON_SECRET 显式指定；2) B 仓 mc-data 秘密文件（2026-08-26 清 A 仓残留，容器布局另列两条）
     _secret_candidates = [
         os.environ.get("MC_RCON_SECRET"),
-        r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\rcon-secret.txt",
-        "/root/deepseek-harness/scratch-plugin/data/rcon-secret.txt",  # 容器内路径
+        os.path.join(_REPO, "mc-data", "rcon-secret.txt"),
+        "/root/mc-data/rcon-secret.txt",   # 容器内路径（镜像布局）
+        "/app/mc-data/rcon-secret.txt",
     ]
     _secret_candidates = [c for c in _secret_candidates if c]
     for _cand in _secret_candidates:
@@ -49,8 +51,7 @@ DATA = os.path.join(REPO_ROOT, "data")
 # ---- 守卫「眼」渲染（2026-08-23）：亲卫 qwen3.8 实测支持视觉，低频喂守卫位置截图 ----
 # 渲染脚本 guard-render.mts：mineflayer 临时 RenderBot → RCON tp 到守卫坐标 → viewer → 无头截图
 NODE_EXE = os.environ.get("NODE_EXE", r"C:\Program Files\nodejs\node.exe")
-TSX_CLI = os.environ.get("TSX_CLI",
-    r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\node_modules\tsx\dist\cli.mjs")
+TSX_CLI = os.environ.get("TSX_CLI", os.path.join(REPO_ROOT, "node_modules", "tsx", "dist", "cli.mjs"))
 RENDER_SCRIPT = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render-pure.mts")
 RENDER_SCRIPT_FP = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render-webgl.mts")
 RENDER_EVERY_N = 8            # 每 N 轮至少渲一张（20s/轮 → 约 2.5 分钟一帧）
@@ -66,7 +67,7 @@ GUARDS = [
 ]
 
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
-# 咏唱/祈愿/谕示文件必须与 mc-god 世界进程同卷（默认锚 A 仓 scratch-plugin\data 运行态，
+# 咏唱/祈愿/谕示文件必须与 mc-god 世界进程同卷（默认锚 B 仓 mc-data 运行态，
 # 容器化/迁移经 MC_DATA_DIR 覆盖）。守卫桥的账本仍在 B 仓 data/（DATA），与此无关。
 # 2026-08-26 AUDIT-01 修复：默认值曾指向 deepseek-harness 旧世界目录（A 仓遗留），
 # 鸣人 2026-08-22 起所有咏唱/祈愿全部写进旧目录石沉大海（积压 2977 条无人消费）。

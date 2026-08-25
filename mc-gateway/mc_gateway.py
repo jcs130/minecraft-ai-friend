@@ -16,8 +16,8 @@
 
 环境变量（均有默认值）：
   GATEWAY_PORT    监听端口（默认 8011）
-  MC_DATA_DIR     运行时数据目录（默认 ../deepseek-harness/scratch-plugin/data）
-  MC_SERVER_DIR   服务端根目录（默认 ../deepseek-harness/scratch-plugin/mc-server-neoforge）
+  MC_DATA_DIR     运行时数据目录（默认 B 仓 mc-data，可用 env 覆盖）
+  MC_SERVER_DIR   服务端根目录（默认 B 仓 mc-server，可用 env 覆盖）
   RCON_HOST/RCON_PORT/RCON_SECRET   RCON（secret 默认读 <MC_DATA_DIR>/rcon-secret.txt）
   VLLM_URL        vLLM OpenAI 兼容端点（默认 http://192.168.3.133:8890/v1/chat/completions）
   GATEWAY_DATA_DIR 本服务数据目录（默认 <MC_DATA_DIR>/gateway）
@@ -41,13 +41,12 @@ from urllib.request import Request, urlopen
 # ------------------------- 配置 -------------------------
 LAN_IP = "0.0.0.0"
 PORT = int(os.environ.get("GATEWAY_PORT", "8011"))
-# 绝对路径基准：mc-gateway 脚本在 <default>/minecraft-ai-friend/mc-gateway/ 下，
-# 兄弟目录 deepseek-harness 在 <default>/deepseek-harness。
+# 绝对路径基准：mc-gateway 脚本在 B 仓 minecraft-ai-friend/mc-gateway/ 下，
+# 数据/服务端自持本仓 mc-data / mc-server（2026-08-26 清 A 仓 deepseek-harness 残留）。
 # 用 __file__ 推导，避免依赖 CWD（否则从不同目录启动会走错 MC_SERVER_DIR / mods）。
-_ECOBASE = str(Path(__file__).resolve().parent.parent.parent)
-_DH = os.path.join(_ECOBASE, "deepseek-harness")
-MC_DATA_DIR = os.environ.get("MC_DATA_DIR", os.path.join(_DH, "scratch-plugin", "data"))
-MC_SERVER_DIR = os.environ.get("MC_SERVER_DIR", os.path.join(_DH, "scratch-plugin", "mc-server-neoforge"))
+_REPO = str(Path(__file__).resolve().parent.parent)
+MC_DATA_DIR = os.environ.get("MC_DATA_DIR", os.path.join(_REPO, "mc-data"))
+MC_SERVER_DIR = os.environ.get("MC_SERVER_DIR", os.path.join(_REPO, "mc-server"))
 MODS_DIR = os.environ.get("MODS_DIR", os.path.join(MC_SERVER_DIR, "mods"))
 LOGS_DIR = os.path.join(MC_SERVER_DIR, "logs")
 RCON_HOST = os.environ.get("RCON_HOST", "127.0.0.1")

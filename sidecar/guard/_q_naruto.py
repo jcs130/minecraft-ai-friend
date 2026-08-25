@@ -4,7 +4,7 @@ import socket, struct
 
 RCON_HOST = "127.0.0.1"
 RCON_PORT = 25575
-pw_file = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\rcon-secret.txt"
+pw_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "mc-data", "rcon-secret.txt")
 RCON_PW = open(pw_file).read().strip()
 
 def _recv_exact(s, n):

@@ -4,8 +4,7 @@ import subprocess, os, time
 
 WS = r"C:\Users\lzl19\.copaw\workspaces\default"
 REPO = os.path.join(WS, "minecraft-ai-friend")
-SCRATCH = os.path.join(WS, "deepseek-harness", "scratch-plugin")
-DATA = os.path.join(SCRATCH, "data")
+DATA = os.path.join(REPO, "mc-data")
 NODE = r"C:\Program Files\nodejs\node.exe"
 
 def ps(cmd_script):
@@ -23,7 +22,7 @@ env = os.environ.copy()
 env.pop("PYTHONHOME", None)
 env.pop("PYTHONPATH", None)
 env["MC_DATA_DIR"] = DATA
-env["MC_SERVER_DIR"] = os.path.join(SCRATCH, "mc-server-neoforge")
+env["MC_SERVER_DIR"] = os.path.join(REPO, "mc-server")
 DETACHED = 0x00000008 | 0x00000200 | 0x08000000
 panel_log = os.path.join(DATA, "panel-process.log")
 p = subprocess.Popen([NODE, "web-panel.mjs"], cwd=REPO,

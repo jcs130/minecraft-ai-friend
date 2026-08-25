@@ -18,9 +18,9 @@ import shutil
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent  # B 仓根（minecraft-ai-friend）
-# A 仓（deepseek-harness）默认与 B 仓同挂 workspaces\default\ 下，可经 MC_HARNESS_ROOT 覆盖
-HARNESS = Path(os.environ.get("MC_HARNESS_ROOT", REPO.parent / "deepseek-harness"))
-SRC = HARNESS / "scratch-plugin" / "mc-server-neoforge"
+# 2026-08-26 清 A 仓残留：服务端正本自持 B 仓 mc-server（可经 MC_HARNESS_ROOT 指向别处打包）
+HARNESS = Path(os.environ.get("MC_HARNESS_ROOT", REPO))
+SRC = HARNESS / "mc-server"
 DST = REPO / "packaging" / "mc-world" / "assets" / "mc-server"
 
 RCON_PLACEHOLDER = "__MC_WORLD_RCON__"  # backend 首启随机化

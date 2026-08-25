@@ -8,8 +8,8 @@ import subprocess, os, time, socket, sys
 NODE = "node"
 SCRIPT = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\sidecar\skin-proxy.mjs"
 CWD = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend"
-SKINS_FILE = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\skins.json"
-STAT_FILE = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\skin-proxy-status.json"
+SKINS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mc-data", "skins.json")
+STAT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mc-data", "skin-proxy-status.json")
 LOG = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\sidecar\skin-proxy.log"
 
 

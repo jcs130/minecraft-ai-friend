@@ -18,11 +18,12 @@ import struct
 import sys
 import zlib
 
-WORLD = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\mc-server-neoforge\world"
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # B 仓根
+WORLD = os.path.join(_REPO, "mc-server", "world")
 REGION_DIR = os.path.join(WORLD, "region")
-BASELINE = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\village\terrain-baseline.json"
+BASELINE = os.path.join(_REPO, "mc-data", "village", "terrain-baseline.json")
 RCON_HOST, RCON_PORT = "127.0.0.1", 25575
-RCON_SECRET = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data\rcon-secret.txt"
+RCON_SECRET = os.path.join(_REPO, "mc-data", "rcon-secret.txt")
 
 CENTER_X, CENTER_Z = 3096, -1340
 RADIUS = 24          # 扫描半径（村庄核心区，排除边缘自然地形）

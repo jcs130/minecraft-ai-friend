@@ -26,8 +26,8 @@
 
 ```bat
 set GATEWAY_PORT=8011
-set MC_DATA_DIR=C:\...\deepseek-harness\scratch-plugin\data
-set MC_SERVER_DIR=C:\...\deepseek-harness\scratch-plugin\mc-server-neoforge
+set MC_DATA_DIR=C:\...\minecraft-ai-friend\mc-data
+set MC_SERVER_DIR=C:\...\minecraft-ai-friend\mc-server
 C:\Python314\python.exe mc_gateway.py
 ```
 纯标准库（Python 3.11+，建议 3.13/3.14），零第三方依赖。建议作为独立 Windows 服务/计划任务常驻。

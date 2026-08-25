@@ -61,10 +61,7 @@ GOD_INBOX = os.path.join(WORLD_DATA, "god-inbox.jsonl")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA = os.path.join(REPO_ROOT, "data")
 NODE_EXE = os.environ.get("NODE_EXE", r"C:\Program Files\nodejs\node.exe")
-TSX_CLI = os.environ.get(
-    "TSX_CLI",
-    r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\node_modules\tsx\dist\cli.mjs",
-)
+TSX_CLI = os.environ.get("TSX_CLI", os.path.join(REPO_ROOT, "node_modules", "tsx", "dist", "cli.mjs"))
 RENDER_SCRIPT = os.path.join(REPO_ROOT, "sidecar", "guard", "guard-render-pure.mts")
 # 2026-08-26 AUDIT-03：公屏/私语同文本 120s 去重（agent 唯一出口，最治本的一层——
 # 鸣人曾同一句招徕吆喝 80+ 条、峰值 3 秒 4 条）。
@@ -78,7 +75,7 @@ def _read_rcon_pw():
         return RCON_PW
     for cand in [
         os.environ.get("MC_RCON_SECRET"),
-        os.path.join(r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data", "rcon-secret.txt"),
+        os.path.join(WORLD_DATA, "rcon-secret.txt"),
     ]:
         if cand and os.path.isfile(cand):
             try:

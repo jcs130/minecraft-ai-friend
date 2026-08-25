@@ -80,8 +80,8 @@ if __name__ == "__main__":
     sys.modules["mc_npc"] = sys.modules["__main__"]  # mc_guild 会 `import mc_npc`——注册别名复用本实例，防止整个文件被二次执行（二次执行的 line20 重包 stdout 会 GC-close 掉 fd1，guild 首个 print 必炸）
 
 # 路径/RCON 全部支持环境变量覆盖（部署脚本用）；默认值保持本机布局。
-WORK = os.environ.get("NPC_DATA_DIR") or r"C:\Users\lzl19\.copaw\workspaces\default"
-DATA = os.path.join(WORK, "deepseek-harness", "scratch-plugin", "data") if not os.environ.get("NPC_DATA_DIR") else WORK
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # B 仓根
+DATA = os.environ.get("NPC_DATA_DIR") or os.path.join(_REPO, "mc-data")  # 2026-08-26 清 A 仓残留：自持 mc-data
 VDIR = os.path.join(DATA, "village")
 
 # ---------- 右键对话（2026-08-22 造物主谕：按使用键跟 NPC 说话） ----------

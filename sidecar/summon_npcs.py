@@ -4,7 +4,7 @@ import socket, struct, io, sys, time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 HOST, PORT = "127.0.0.1", 25575
-PASS = open("deepseek-harness/scratch-plugin/data/rcon-secret.txt", encoding="utf-8-sig").read().strip()
+PASS = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mc-data", "rcon-secret.txt"), encoding="utf-8-sig").read().strip()
 
 def pkt(pid, ptype, body):
     d = struct.pack("<ii", pid, ptype) + body.encode("utf-8") + b"\x00\x00"

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import subprocess, time, os
 JAVA = r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin\java.exe"
-CWD = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\mc-server-neoforge"
+CWD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mc-server")
 log = open(os.path.join(CWD, "boot-direct.log"), "ab")
 p = subprocess.Popen([JAVA, "@user_jvm_args.txt",
                       "@libraries/net/neoforged/neoforge/21.1.73/win_args.txt", "nogui"],

@@ -25,7 +25,7 @@ except Exception as e:
     print("Oracle 9001:", e)
 
 # 主服日志 tail，找 settlements 相关
-LOG = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\mc-server-neoforge\logs\latest.log"
+LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mc-server", "logs", "latest.log")
 if os.path.exists(LOG):
     with open(LOG, "rb") as f:
         f.seek(0, os.SEEK_END); size = f.tell(); f.seek(max(0, size-120000))

@@ -33,7 +33,7 @@ def db_conn():
         return psycopg.connect(url, autocommit=False)
     # sqlite
     import sqlite3
-    data = os.environ.get("MC_DATA_DIR", r"..\deepseek-harness\scratch-plugin\data")
+    data = os.environ.get("MC_DATA_DIR", os.path.join(str(Path(__file__).resolve().parent.parent), "mc-data"))
     dbp = os.path.join(data, "gateway", "gateway.db")
     Path(dbp).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(dbp, timeout=15)

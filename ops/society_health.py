@@ -23,7 +23,7 @@ from datetime import datetime
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 B_REPO = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend"
-DATA = r"C:\Users\lzl19\.copaw\workspaces\default\deepseek-harness\scratch-plugin\data"
+DATA = os.path.join(B_REPO, "mc-data")
 
 # 需要巡检的脚本 → 显示名 + 是否要求恰好 1 个根
 TARGETS = [

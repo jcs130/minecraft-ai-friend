@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     ports: ["9090:9090"]
     volumes:
-      - ../../scratch-plugin/data:/app/data   # 活数据：world.db / villagers.json
+      - ../mc-data:/app/data   # 活数据：world.db / villagers.json（B 仓自持）
     environment:
       TZ: Asia/Shanghai
       # TODO: LLM 端点（vllm:8890 或云 API）、RCON 指向 mc 容器
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
     ports: ["9001:9001"]
     volumes:
-      - ../../scratch-plugin/data:/app/data
+      - ../mc-data:/app/data
     networks: [isekai]
 
   npc:
@@ -87,7 +87,7 @@ services:
     container_name: isekai-npc
     restart: unless-stopped
     volumes:
-      - ../../scratch-plugin/data:/app/data
+      - ../mc-data:/app/data
     networks: [isekai]
 
   skin-proxy:
@@ -103,7 +103,7 @@ services:
     container_name: isekai-guard            #  濒死急救/节拍器/记录，RCON 指向 mc）
     restart: unless-stopped
     volumes:
-      - ../../scratch-plugin/data:/app/data
+      - ../mc-data:/app/data
     networks: [isekai]
 
   qwenpaw:
