@@ -2268,6 +2268,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   let fillBusy = false
 
   function maybeRunTerrainFill(gt: { day: number; tod: number }): void {
+    if (process.env.TERRAIN_FILL === '0') return // 容器部署置 0（无宿主 python/脚本）
     if (fillBusy) return
     if (gt.day < 0 || gt.tod < FILL_NOON_START || gt.tod > FILL_NOON_END) return
     if (gt.day === lastFillDay) return

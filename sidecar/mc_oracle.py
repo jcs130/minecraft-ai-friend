@@ -435,8 +435,9 @@ def main():
         _build_uuid_map()
     except Exception as e:
         print("[oracle] pre-build uuid map err:", e, flush=True)
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), OracleHandler)
-    print("[oracle] settlements oracle listening on 127.0.0.1:%d" % PORT, flush=True)
+    _bind = os.environ.get("ORACLE_BIND", "127.0.0.1")  # 容器部署置 0.0.0.0
+    srv = ThreadingHTTPServer((_bind, PORT), OracleHandler)
+    print("[oracle] settlements oracle listening on %s:%d" % (_bind, PORT), flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
