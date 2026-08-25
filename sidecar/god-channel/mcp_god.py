@@ -110,7 +110,12 @@ def data_read(filename: str, tail_chars: int = 2000) -> str:
         if not f.is_file():
             return json.dumps({"error": "not found"}, ensure_ascii=False)
         t = f.read_text(encoding="utf-8", errors="replace")
-        return t[-tail_chars:]
+        if len(t) > tail_chars:
+            # 2026-08-26 天神补：截断必须显式告知，否则大文件（如村民册 20K）会被误当全文
+            banner = ("[截断提示] 文件共 %d 字符，此处只给尾部 %d 字符（开头被截去）。"
+                      "需要全文/更多请加大 tail_chars（如 tail_chars=50000）。\n---\n" % (len(t), tail_chars))
+            return banner + t[-tail_chars:]
+        return t
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
@@ -135,7 +140,12 @@ def npc_read(relpath: str, tail_chars: int = 3000) -> str:
         if not f.is_file():
             return json.dumps({"error": f"not found: {relpath}"}, ensure_ascii=False)
         t = f.read_text(encoding="utf-8", errors="replace")
-        return t[-tail_chars:]
+        if len(t) > tail_chars:
+            # 2026-08-26 天神补：截断必须显式告知，否则大文件（如村民册 20K）会被误当全文
+            banner = ("[截断提示] 文件共 %d 字符，此处只给尾部 %d 字符（开头被截去）。"
+                      "需要全文/更多请加大 tail_chars（如 tail_chars=50000）。\n---\n" % (len(t), tail_chars))
+            return banner + t[-tail_chars:]
+        return t
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
