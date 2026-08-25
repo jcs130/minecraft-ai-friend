@@ -4,8 +4,6 @@
   "package": "dev.god.settlementsfix.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BubblePublishGuardMixin",
-    "VillagerBubbleServiceMixin",
     "VillagerNameMixin",
     "GuardianAngelInvisibilityMixin",
     "GuardianAngelInvisibilityListedMixin",

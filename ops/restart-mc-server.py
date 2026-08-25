@@ -12,26 +12,25 @@ RCON_PORT = 25575
 PY = r"C:\Users\lzl19\AppData\Local\Programs\Python\Python311\python.exe"
 
 
+def _recv_exact(s, n):
+    buf = b""
+    while len(buf) < n:
+        c = s.recv(n - len(buf))
+        if not c:
+            raise ConnectionError("closed")
+        buf += c
+    return buf
+
+
 def rcon_send(s, ptype, body: bytes):
-    payload = body + b"\x00\x00"
-    s.sendall(struct.pack("<ii", len(payload) + 4, 1) + struct.pack("<i", ptype) + payload)
+    # length = requestID(4) + type(4) + body + 尾部两字节 0（2026-08-25 修：原实现少算 4 字节，服务器直接掐线）
+    s.sendall(struct.pack("<iii", len(body) + 10, 1, ptype) + body + b"\x00\x00")
 
 
 def rcon_recv(s):
-    hdr = b""
-    while len(hdr) < 12:
-        c = s.recv(12 - len(hdr))
-        if not c:
-            raise ConnectionError("closed")
-        hdr += c
-    length, _ = struct.unpack("<ii", hdr)
-    body = b""
-    while len(body) < length - 4:
-        c = s.recv(length - 4 - len(body))
-        if not c:
-            raise ConnectionError("closed")
-        body += c
-    return body[:-2]
+    length = struct.unpack("<i", _recv_exact(s, 4))[0]
+    rest = _recv_exact(s, length)
+    return rest[8:-2]  # 跳过 requestID(4)+type(4)，去掉尾部两个 0
 
 
 def rcon(pwd, cmd):
