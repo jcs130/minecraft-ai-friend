@@ -79,6 +79,27 @@ class GodChannel:
             raise ConnectionError(f"god-channel beacon stale ({age:.0f}s old) — server down?")
         return st
 
+    # ---------- 查台账 ----------
+
+    def history(self, last: int = 20) -> list:
+        """读审计台账（服务端每处理一条追加一行 JSONL：ts/id/cmd/ok/ms/error）。
+        哪条处理了、哪条失败、耗时多少，全在这里；5MB 轮转，旧账在 .1 文件。"""
+        lines = []
+        for name in ("history.jsonl.1", "history.jsonl"):
+            p = self.root / name
+            if p.exists():
+                lines.extend(p.read_text(encoding="utf-8").splitlines())
+        out = []
+        for ln in lines[-last:]:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                out.append(json.loads(ln))
+            except json.JSONDecodeError:
+                continue
+        return out
+
 
 if __name__ == "__main__":
     import sys
@@ -88,5 +109,8 @@ if __name__ == "__main__":
         print('example: python god_channel.py ./data/god-channel exec \'{"command":"list"}\'')
         sys.exit(2)
     params = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
-    print(json.dumps(GodChannel(sys.argv[1]).send(sys.argv[2], **params),
-                     ensure_ascii=False, indent=2))
+    god = GodChannel(sys.argv[1])
+    if sys.argv[2] == "history":
+        print(json.dumps(god.history(int(params.get("last", 20))), ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(god.send(sys.argv[2], **params), ensure_ascii=False, indent=2))
