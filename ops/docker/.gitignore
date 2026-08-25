@@ -1,3 +1,7 @@
 mods/
 data/
 .env
+  
+# datapacks-src 内的 data/ 是数据包源码目录，豁免上面的 data/ 忽略  
+!datapacks-src/**/data/  
+!datapacks-src/**/data/**  

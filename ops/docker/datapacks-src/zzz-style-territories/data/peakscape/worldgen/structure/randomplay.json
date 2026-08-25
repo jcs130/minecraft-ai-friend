@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:jigsaw",
+  "start_pool": "peakscape:field_structure/randomplay/random_play_start",
+  "size": 7,
+  "adapt_noise": false,
+  "biomes": "minecraft:sunflower_plains",
+  "spawn_overrides": {},
+  "max_distance_from_center": 110,
+  "step": "surface_structures",
+   "start_height": {
+    "above_bottom": 66
+  },
+  "project_start_to_heightmap": "WORLD_SURFACE_WG",
+  "terrain_adaptation": "beard_thin",
+  "use_expansion_hack": false
+}
