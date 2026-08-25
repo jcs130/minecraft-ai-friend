@@ -96,6 +96,11 @@ ops/docker/mods-candidates/
 ops/docker/mods-disabled/
 ops/docker/*.zip
 ops/docker/*.env
+# 神社之门运行产物：门日志与按服缓存的通道知识（可再生，勿入库）
+gate-out.log
+gate-err.log
+gate*.log
+src/neoforge-handshake/knowledge-cache.json
 # 本地参考源与临时产物（大、可再生）
 tmp-neoforge-src/
 tmp-*.out
