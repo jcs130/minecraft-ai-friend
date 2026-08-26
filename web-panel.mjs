@@ -485,7 +485,14 @@ const PAGE = `<!doctype html>
   /* 地图 */
   .map-btns { display:flex; gap:6px; margin-bottom:8px; align-items:center; flex-wrap:wrap; }
   .map-wrap { display:flex; justify-content:center; }
-  canvas#map { width:100%; max-width:520px; aspect-ratio:1/1; background:#0c1122; border:1px solid var(--line); border-radius:8px; cursor:grab; }
+  /* 右栏分页签（2026-08-26：8 卡竖排滚动太挤 → 众生/村务/世界 三页签） */
+  .side-tabs { display:flex; gap:6px; flex:0 0 auto; }
+  .side-tab { flex:1 1 0; padding:7px 0 6px; text-align:center; font-family:var(--serif); font-size:13px; letter-spacing:4px; color:var(--dim); border:1px solid var(--line); border-radius:8px; background:transparent; cursor:pointer; transition:all .15s; }
+  .side-tab:hover { color:var(--text); }
+  .side-tab.on { color:var(--gold); border-color:rgba(238,181,68,.55); background:#1c1a10; box-shadow:0 0 10px rgba(238,181,68,.15); }
+  .side-sec { display:none; flex-direction:column; gap:12px; }
+  .side-sec.on { display:flex; }
+  canvas#map { width:100%; aspect-ratio:1/1; background:#0c1122; border:1px solid var(--line); border-radius:8px; cursor:grab; }
   .legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:11px; color:var(--dim); }
   .legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
@@ -598,6 +605,7 @@ const PAGE = `<!doctype html>
           <div class="vbtns">
             <button class="vbtn" id="vbtn-third">环绕跟随</button>
             <button class="vbtn" id="vbtn-first">TA 的眼睛</button>
+            <button class="vbtn" id="vbtn-dungeon" title="现代画面专属：女神天眼 2.5D 地牢视角">2.5D</button>
             <button class="vbtn" id="vbtn-reset">重置镜头</button>
             <button class="vbtn" id="vbtn-max" title="放大 3D 画面，隐藏其他面板">⛶ 全屏</button>
             <button class="vbtn" id="vbtn-tts" title="把游戏中 NPC 与女神的话用语音播报（戳一下开启/关闭）">🔊 语音</button>
@@ -721,7 +729,7 @@ const PAGE = `<!doctype html>
 // (DBGTEST 调试按钮已移除，2026-08-26)
 let state = { bots: [], memory: {}, magic: {}, atomNames: {}, atomTable: [], passives: [], chronicle: [], npcFeed: [], villageNpcs: [], villagersLive: [], questBoard: null };
 let currentUser = null; // 当前选中的 bot username
-let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
+let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first | dungeon(现代画面 2.5D)
 // 天眼跟随：选中玩家 -> 后端把女神 tp 过去（每 600ms 跟随），天眼视角即跟过去
 // 第三人称 h=0：化身与目标完全重合（viewer 里化身 mesh 已隐身，取景以角色为中心）；
 // 第一人称 h=9：保留上空俯瞰（Goddess 自己的眼睛）。
@@ -1898,19 +1906,23 @@ function maybeCameraCue(s, prevFeedT) {
   } catch { /* 运镜是锦上添花，失败静默 */ }
 }
 
-// ---- 视角回落：穿越者不在线 / viewer 口探活失败 → Goddess 天眼(3050) ----
+// ---- 视角回落：穿越者不在线 / viewer 口探活失败 → 女神天眼 ----
+// 2026-08-26 造物主拍板「直接换成现代UI」：天眼默认走现代画面（萌悦 Three.js 渲染，:3070），
+// 环绕跟随=/third/、TA的眼睛=/、2.5D 地牢=/dungeon/；旧 prismarine viewer(3050/3150) 只在 3070 探活失败时回退。
 const GODDESS_PORT = 3050;
-let vprobe = { port: 0, ok: false, at: 0, inflight: false }; // 探活结论缓存（10s，期间不重探）
+const MODERN_PORT = 3070;
+let vprobe = new Map(); // port -> { ok, at, inflight } 探活结论缓存（10s，期间不重探）
+function vprobeOk(port) { return vprobe.get(port)?.ok === true }
 function probeViewer(port) {
   const now = Date.now();
-  if (vprobe.port === port && (vprobe.inflight || now - vprobe.at < 10000)) return;
-  const prevOk = vprobe.port === port ? vprobe.ok : false; // 重探期间沿用旧结论，避免周期性闪回落
-  vprobe = { port, ok: prevOk, at: now, inflight: true };
+  const prev = vprobe.get(port);
+  if (prev && (prev.inflight || now - prev.at < 10000)) return;
+  vprobe.set(port, { ok: prev?.ok ?? false, at: now, inflight: true });
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 1500);
   fetch('http://' + location.hostname + ':' + port + '/', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal })
-    .then(() => { vprobe = { port, ok: true, at: Date.now(), inflight: false }; })
-    .catch(() => { vprobe = { port, ok: false, at: Date.now(), inflight: false }; })
+    .then(() => vprobe.set(port, { ok: true, at: Date.now(), inflight: false }))
+    .catch(() => vprobe.set(port, { ok: false, at: Date.now(), inflight: false }))
     .finally(() => { clearTimeout(timer); renderCurrent(); });
 }
 
@@ -1925,24 +1937,40 @@ function renderCurrent() {
   document.getElementById('steps-title').textContent = name + ' 思考流';
 
   // 视角 iframe：第三人称=viewerPort，第一人称=viewerPort+100（mc-bot 双端口方案）
-  // 回落：无穿越者在线 / 所选穿越者 viewer 口不通 → Goddess 天眼(3050)
+  // 回落：无穿越者在线 / 所选穿越者 viewer 口不通 → 女神天眼。天眼优先现代画面(:3070)，
+  // 3070 探活失败才回旧 prismarine(3050/3150)。2.5D 地牢是现代画面专属视角（女神天眼）。
   const vp = Number(bot.viewerPort) || 0;
-  const hasBotViewer = on && vp > 0;
+  const hasBotViewer = on && vp > 0 && viewMode !== 'dungeon';
   const wantPort = hasBotViewer ? (viewMode === 'first' ? vp + 100 : vp) : (viewMode === 'first' ? GODDESS_PORT + 100 : GODDESS_PORT);
   if (hasBotViewer) probeViewer(wantPort); // 异步探活，结论变化经缓存触发回落重渲
-  const probing = hasBotViewer && vprobe.port !== wantPort; // 该口尚无结论：先信在线 bot，不闪回落
-  const viewerOk = hasBotViewer ? (probing ? true : vprobe.ok) : false;
-  // 回落女神视角时也按视界切换端口（3050 第三人称 / 3150=GODDESS_PORT+100 第一人称），
-  // 否则守卫等无 bot viewer 的实体 first/third 切换永远无效（2026-08-23）。
-  const showPort = viewerOk ? wantPort : (viewMode === 'first' ? GODDESS_PORT + 100 : GODDESS_PORT);
+  if (!hasBotViewer) probeViewer(MODERN_PORT);
+  const probing = hasBotViewer && !vprobe.has(wantPort); // 该口尚无结论：先信在线 bot，不闪回落
+  const viewerOk = hasBotViewer ? (probing ? true : vprobeOk(wantPort)) : false;
   const frame = document.getElementById('viewer-frame');
-  const want = 'http://' + location.hostname + ':' + showPort + '/'
-    + (viewerOk ? '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart') : (viewMode === 'first' ? '?fov=110' : '?follow=smart'))
-    + '&pv=8'; // pv=镜头补丁版本，cache-bust（v7=+Goddess 回落）
+  let want;
+  if (viewerOk) {
+    // 穿越者 bot 自带 viewer（旧 prismarine 双端口）
+    want = 'http://' + location.hostname + ':' + wantPort + '/'
+      + '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart')
+      + '&pv=8'; // pv=镜头补丁版本，cache-bust
+  } else if (vprobeOk(MODERN_PORT)) {
+    // 女神天眼 · 现代画面（萌悦 Three.js 渲染）：/third/ 环绕、/ 第一人称、/dungeon/ 2.5D
+    const path = viewMode === 'first' ? '/' : (viewMode === 'dungeon' ? '/dungeon/' : '/third/');
+    const q = viewMode === 'first' ? '?fov=110' : (viewMode === 'dungeon' ? '?dungeonFov=48&distance=5' : '?distance=6');
+    want = 'http://' + location.hostname + ':' + MODERN_PORT + path + q + '&quality=auto&mv=1';
+  } else {
+    // 回退旧天眼（现代画面服务没起来）
+    const showPort = viewMode === 'first' ? GODDESS_PORT + 100 : GODDESS_PORT;
+    want = 'http://' + location.hostname + ':' + showPort + '/'
+      + (viewMode === 'first' ? '?fov=110' : '?follow=smart') + '&pv=8';
+  }
   if (frame.getAttribute('src') !== want) frame.setAttribute('src', want);
+  const modeLabel = { first: '第一人称', third: '第三人称·智能运镜', dungeon: '2.5D 地牢' }[viewMode] || viewMode;
   document.getElementById('viewer-title').textContent = viewerOk
-    ? name + '（' + (viewMode === 'first' ? '第一人称' : '第三人称·智能运镜') + '）'
-    : 'Goddess（天眼·' + (viewMode === 'first' ? '第一人称' : '第三人称') + '）';
+    ? name + '（' + modeLabel + '）'
+    : (vprobeOk(MODERN_PORT)
+      ? 'Goddess（现代画面·' + modeLabel + '）'
+      : 'Goddess（天眼·' + (viewMode === 'first' ? '第一人称' : '第三人称') + '）');
 
   // 等级徽章 / 睡觉 chip
   const mg = magicOf(bot.username || currentUser);
@@ -2046,6 +2074,70 @@ function mapCenter() {
   };
 }
 
+// ── 右栏分页签（2026-08-26）：8 卡竖排太挤 → 众生/村务/世界 三页签，各页满高不滚 ──
+function initSideTabs() {
+  const side = document.querySelector('.side');
+  if (!side || side.dataset.tabbed) return;
+  side.dataset.tabbed = '1';
+  const defs = [
+    { id: 'beings', label: '众生', h2s: ['状态', '技能与被动', '修为榜'] },
+    { id: 'village', label: '村务', h2s: ['任务板', '村民动态', '村口实况', '编年史'] },
+    { id: 'world', label: '世界', h2s: ['小地图'] },
+  ];
+  // 位置锚点：把页签条插在第一个 group-head 处
+  const anchor = side.querySelector('.group-head');
+  const strip = document.createElement('div');
+  strip.className = 'side-tabs';
+  side.insertBefore(strip, anchor);
+  for (const d of defs) {
+    const btn = document.createElement('button');
+    btn.className = 'side-tab'; btn.textContent = d.label; btn.dataset.sec = d.id;
+    btn.onclick = () => activateSideTab(d.id);
+    strip.appendChild(btn);
+    const sec = document.createElement('div');
+    sec.className = 'side-sec'; sec.id = 'side-sec-' + d.id;
+    side.insertBefore(sec, anchor); // 先占位，下面把卡搬进来
+  }
+  // 卡片按 h2 标题归位到各页
+  for (const card of [...side.querySelectorAll(':scope > .card')]) {
+    const h = card.querySelector('h2'); if (!h) continue;
+    const title = (h.textContent || '').trim();
+    const d = defs.find((x) => x.h2s.includes(title));
+    if (d) document.getElementById('side-sec-' + d.id).appendChild(card);
+  }
+  // group-head 题字撤下（页签取代）
+  side.querySelectorAll(':scope > .group-head').forEach((e) => e.remove());
+  activateSideTab('beings');
+}
+function activateSideTab(id) {
+  document.querySelectorAll('.side-tab').forEach((b) => b.classList.toggle('on', b.dataset.sec === id));
+  document.querySelectorAll('.side-sec').forEach((s) => s.classList.toggle('on', s.id === 'side-sec-' + id));
+  if (id === 'world') { fitMapCanvas(); drawMap(); }
+}
+function fitMapCanvas() {
+  const c = document.getElementById('map'); if (!c) return;
+  const w = Math.max(280, Math.min(720, Math.round(c.parentElement.clientWidth) || 340));
+  if (c.width !== w) { c.width = w; c.height = w; }
+}
+window.addEventListener('resize', () => { if (document.getElementById('side-sec-world')?.classList.contains('on')) fitMapCanvas(); });
+
+// ── 小地图地形底图（2026-08-26）：shadow-world :3060 tile 服务，Goddess 区块视野内地形 ──
+const MAP_TILE_PORT = 3060;
+let mapTerrain = { key: '', cx: 0, cz: 0, range: 0, img: null, loading: false };
+function ensureMapTerrain(cx, cz, range) {
+  if (range > 128) return; // 超出 tile 服务上限：只画点阵
+  const v = Math.floor(Date.now() / 60000); // 60s 自然刷新（世界会变）
+  const qx = Math.round(cx / 12), qz = Math.round(cz / 12);
+  const key = qx + '|' + qz + '|' + range + '|' + v;
+  if (key === mapTerrain.key || mapTerrain.loading) return;
+  mapTerrain.loading = true;
+  const img = new Image();
+  const tcx = Math.round(cx), tcz = Math.round(cz);
+  img.onload = () => { mapTerrain = { key, cx: tcx, cz: tcz, range, img, loading: false }; drawMap(); };
+  img.onerror = () => { mapTerrain.loading = false; };
+  img.src = 'http://' + location.hostname + ':' + MAP_TILE_PORT + '/map.png?cx=' + tcx + '&cz=' + tcz + '&r=' + range + '&v=' + v;
+}
+
 function drawMap() {
   const canvas = document.getElementById('map');
   if (!canvas) return;
@@ -2062,7 +2154,17 @@ function drawMap() {
   function sx(x) { return (x - cx) * scale + W / 2; }
   function sy(z) { return (z - cz) * scale + H / 2; }
 
-  // 网格（自适应：放大看细节时用细网格）
+  // 地形底图（Goddess 区块视野；未载区块=深夜蓝，随跟随目标移动而扩展）
+  ensureMapTerrain(cx, cz, RANGE);
+  const hasTerrain = mapTerrain.img && mapTerrain.range === RANGE;
+  if (hasTerrain) {
+    const ox = (mapTerrain.cx - cx) * scale, oz = (mapTerrain.cz - cz) * scale;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mapTerrain.img, ox, oz, W, H);
+  }
+
+  // 网格（自适应：放大看细节时用细网格；有地形时淡出）
+  ctx.globalAlpha = hasTerrain ? 0.22 : 1;
   ctx.strokeStyle = '#1b222c';
   ctx.lineWidth = 1;
   const step = RANGE <= 16 ? 1 : RANGE <= 64 ? 4 : RANGE <= 256 ? 16 : 64;
@@ -2078,6 +2180,7 @@ function drawMap() {
   ctx.strokeStyle = '#30363d';
   ctx.beginPath(); ctx.moveTo(sx(cx), 0); ctx.lineTo(sx(cx), H); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(0, sy(cz)); ctx.lineTo(W, sy(cz)); ctx.stroke();
+  ctx.globalAlpha = 1;
 
   // 资源点
   const rp = m.resourcePoints || {};
@@ -2349,6 +2452,7 @@ function initZoomButtons() {
 function initViewButtons() {
   const bt = document.getElementById('vbtn-third');
   const bf = document.getElementById('vbtn-first');
+  const bd = document.getElementById('vbtn-dungeon');
   const br = document.getElementById('vbtn-reset');
   const bm = document.getElementById('vbtn-max');
   if (!bt || bt.dataset.bound) return;
@@ -2356,9 +2460,11 @@ function initViewButtons() {
   function sync() {
     bt.className = 'vbtn' + (viewMode === 'third' ? ' active' : '');
     bf.className = 'vbtn' + (viewMode === 'first' ? ' active' : '');
+    if (bd) bd.className = 'vbtn' + (viewMode === 'dungeon' ? ' active' : '');
   }
   bt.addEventListener('click', () => { viewMode = 'third'; localStorage.setItem('viewMode', 'third'); sync(); renderCurrent(); eyeFollowTo(currentUser); });
   bf.addEventListener('click', () => { viewMode = 'first'; localStorage.setItem('viewMode', 'first'); sync(); renderCurrent(); eyeFollowTo(currentUser); });
+  if (bd) bd.addEventListener('click', () => { viewMode = 'dungeon'; localStorage.setItem('viewMode', 'dungeon'); sync(); renderCurrent(); eyeFollowTo(currentUser); });
   br.addEventListener('click', () => {
     // 重载 iframe 以重置镜头位置；天眼跟随停止并归位
     eyeFollowStop();
@@ -2390,6 +2496,7 @@ function initViewButtons() {
 }
 
 refresh();
+initSideTabs();
 initMapInteraction();
 initViewButtons();
 initZoomButtons();

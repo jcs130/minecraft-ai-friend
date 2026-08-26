@@ -22,6 +22,7 @@
     "mineflayer-tool": "^1.2.0",
     "node-canvas-webgl": "^0.3.0",
     "playwright-core": "^1.62.1",
+    "pngjs": "^7.0.0",
     "prismarine-viewer": "^1.33.0"
   },
   "devDependencies": {

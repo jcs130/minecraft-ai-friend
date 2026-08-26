@@ -27,6 +27,7 @@ import { createBubble } from './src/mc-bubble.ts'
 import { createEvolveReview } from './src/mc-evolve-review.ts'
 import { createTerra } from './src/mc-terra.ts'
 import { createSaga } from './src/mc-saga.ts'
+import { startModernViewer } from './src/mc-modern-viewer.mts'
 import type { Bot } from 'mineflayer'
 
 // 运行态根（2026-08-20 D 步迁正仓）：默认 ./data（仓内自足）；迁正仓跑时经 MC_DATA_DIR 指向部署现场 data（运行态正本）
@@ -56,6 +57,9 @@ const bot = createBot({
   viewerPort: Number(process.env.MC_VIEWER_PORT ?? 3050),
   observer: process.env.MC_OBSERVER === '1', // 观察者化身：关物理，位置只随 RCON tp（防与重力模拟互搏掉落）
 })
+// 现代画面（萌悦 modern-viewer）：MC_MODERN_VIEWER=1 时在 :3070 起 Web 渲染宿主
+// （/ 第一人称 · /third/ 环绕跟随 · /dungeon/ 2.5D；面板默认 iframe 切到它，旧 3050 留作回退）
+startModernViewer(() => bot.getBot())
 const rcon = createRcon({
   enabled: true,
   host: process.env.MC_RCON_HOST ?? process.env.MC_HOST ?? 'localhost',
@@ -223,6 +227,122 @@ const snapshotTimer = setInterval(() => {
 
 // ---------- 进程收尾：逆序 dispose ----------
 const handles = [bubble, ritual, social, saga, evolveReview, terra, god, magic, transmigrator, worlddb, logwatch, rcon, bot]
+// ---------- 小地图地形 tile 服务（2026-08-26：面板小地图「没有东西」根治） ----------
+// 复用 Goddess bot 已载入的区块（观察者跟随谁、谁的周边区块就在内存），读顶层块出俯视地形图。
+// GET /map.png?cx=&cz=&r=  → r*2 见方 PNG（1px/格），缓存 90s，渲染串行+让路（不卡 viewer 流）。
+// 配色与列扫描移植自 sidecar/guard/guard-render-pure.mts（守卫之眼同源，视觉一致）。
+import http from 'node:http'
+import { PNG } from 'pngjs'
+import { Vec3 } from 'vec3'
+
+const MAP_PORT = Number(process.env.MC_MAP_PORT ?? 3060)
+const TILE_COLORS: Record<string, [number, number, number]> = {
+  grass_block: [106, 170, 64], dirt: [134, 96, 67], coarse_dirt: [119, 85, 59],
+  stone: [125, 125, 125], granite: [149, 103, 85], diorite: [188, 188, 191], andesite: [136, 136, 137],
+  deepslate: [80, 80, 84], tuff: [108, 109, 102], gravel: [127, 124, 123], sand: [219, 211, 160],
+  sandstone: [216, 203, 155], red_sand: [190, 102, 40], snow_block: [240, 246, 246], ice: [145, 183, 251],
+  water: [63, 118, 228], flowing_water: [63, 118, 228], lava: [207, 91, 19], flowing_lava: [207, 91, 19],
+  oak_log: [109, 84, 51], spruce_log: [58, 37, 16], birch_log: [215, 205, 188], cherry_log: [214, 140, 152],
+  oak_leaves: [55, 96, 47], spruce_leaves: [50, 90, 45], birch_leaves: [107, 141, 70], cherry_leaves: [228, 158, 191],
+  oak_planks: [162, 130, 78], spruce_planks: [114, 84, 48], birch_planks: [192, 175, 121],
+  cobblestone: [110, 110, 110], mossy_cobblestone: [90, 108, 90], stone_bricks: [122, 121, 122],
+  bricks: [151, 97, 91], glass: [180, 220, 240], iron_block: [216, 216, 216], gold_block: [246, 208, 61],
+  diamond_block: [98, 237, 228], emerald_block: [98, 224, 113], lapis_block: [35, 79, 175],
+  coal_ore: [80, 80, 80], iron_ore: [175, 142, 117], copper_ore: [181, 108, 80], gold_ore: [180, 155, 78],
+  redstone_ore: [150, 70, 70], diamond_ore: [95, 130, 130], emerald_ore: [100, 160, 110], lapis_ore: [60, 75, 140],
+  bedrock: [60, 60, 60], obsidian: [21, 18, 32], glowstone: [220, 190, 110], sea_lantern: [173, 214, 214],
+  pumpkin: [196, 118, 21], melon: [108, 154, 24], hay_block: [255, 178, 0], wheat: [218, 182, 67],
+  carrot: [255, 255, 255], potato: [255, 255, 255], torch: [230, 170, 60], lantern: [230, 170, 60],
+  chest: [140, 100, 50], crafting_table: [120, 90, 50], furnace: [90, 90, 90], bookshelf: [140, 110, 70],
+  bed: [200, 60, 60], path: [180, 160, 120], farmland: [110, 70, 40], clay: [160, 170, 180],
+  terracotta: [150, 100, 80], bamboo: [100, 140, 60], sugar_cane: [140, 180, 100], cactus: [80, 140, 60],
+  lily_pad: [50, 130, 80], seagrass: [60, 120, 90], kelp: [40, 110, 70], kelp_plant: [40, 110, 70],
+}
+function tileColorFor(name: string): [number, number, number] {
+  const c = TILE_COLORS[name]
+  if (c) return c
+  const n = name || ''
+  if (n.includes('leaves')) return [60, 110, 45]
+  if (n.includes('log') || n.includes('wood')) return [110, 80, 45]
+  if (n.includes('planks') || n.includes('stairs') || n.includes('slab') || n.includes('fence') || n.includes('door')) return [150, 120, 75]
+  if (n.includes('ore')) return [90, 90, 90]
+  if (n.includes('stone') || n.includes('brick')) return [118, 118, 118]
+  if (n.includes('water')) return [63, 118, 228]
+  if (n.includes('lava')) return [207, 91, 19]
+  if (n.includes('sand')) return [216, 208, 160]
+  if (n.includes('glass')) return [170, 190, 200]
+  if (n.includes('flower') || n.includes('poppy') || n.includes('tulip') || n.includes('grass')) return [106, 170, 64]
+  if (n.includes('snow') || n.includes('ice')) return [230, 240, 245]
+  if (n.includes('wool') || n.includes('carpet')) return [190, 160, 170]
+  return [127, 127, 127] as [number, number, number]
+}
+const tileCache = new Map<string, { buf: Buffer; at: number }>()
+let tileBusy = false
+let tileQueued: (() => void) | null = null
+const yieldTick = () => new Promise<void>((r) => setImmediate(r))
+async function renderTilePNG(bot: any, cx: number, cz: number, r: number): Promise<Buffer> {
+  const size = r * 2
+  const png = new PNG({ width: size, height: size })
+  const yTop = 110, yBot = -16
+  const ox = Math.round(cx) - r, oz = Math.round(cz) - r
+  for (let dz = 0; dz < size; dz++) {
+    for (let dx = 0; dx < size; dx++) {
+      const bx = ox + dx, bz = oz + dz
+      let col: [number, number, number] | null = null
+      for (let y = yTop; y >= yBot; y--) {
+        const b = bot.world.getBlock(new Vec3(bx, y, bz))
+        if (b && b.name && b.name !== 'air' && b.name !== 'cave_air' && b.name !== 'void_air') { col = tileColorFor(b.name); break }
+      }
+      const c = col ?? [28, 32, 48] // 未载区块（远离跟随目标）= 深夜蓝
+      const idx = (size * dz + dx) << 2
+      png.data[idx] = c[0]; png.data[idx + 1] = c[1]; png.data[idx + 2] = c[2]; png.data[idx + 3] = 255
+    }
+    if ((dz & 7) === 7) await yieldTick() // 每 8 行让路事件循环，viewer 流不断
+  }
+  return PNG.sync.write(png)
+}
+function serveMapTiles(getBot: () => any): void {
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://localhost')
+    if (!url.pathname.endsWith('/map.png')) { res.writeHead(404).end(); return }
+    const cx = Number(url.searchParams.get('cx')), cz = Number(url.searchParams.get('cz'))
+    let r = Number(url.searchParams.get('r') ?? 64)
+    if (!Number.isFinite(cx) || !Number.isFinite(cz)) { res.writeHead(400).end('bad cx/cz'); return }
+    r = Math.max(8, Math.min(128, Number.isFinite(r) ? r : 64)) // 上限 128：256² 列扫描 ~1s，再大顶不住
+    const key = `${Math.round(cx)},${Math.round(cz)},${r}`
+    const hit = tileCache.get(key)
+    if (hit && Date.now() - hit.at < 90_000) {
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=30' }).end(hit.buf)
+      return
+    }
+    const job = () => new Promise<void>((resolve) => {
+      const b = getBot()
+      if (!b || !b.world) { res.writeHead(503).end('bot not ready'); resolve(); return }
+      renderTilePNG(b, cx, cz, r)
+        .then((buf) => {
+          tileCache.set(key, { buf, at: Date.now() })
+          if (tileCache.size > 80) { // 简单 LRU：超 80 条删最旧
+            const first = tileCache.keys().next().value
+            if (first !== undefined) tileCache.delete(first)
+          }
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=30' }).end(buf)
+          resolve()
+        })
+        .catch((e) => { res.writeHead(500).end(String(e?.message ?? e)); resolve() })
+    })
+    if (tileBusy) { tileQueued = job; return } // 串行：忙时只留最新请求
+    tileBusy = true
+    job().finally(() => {
+      tileBusy = false
+      if (tileQueued) { const next = tileQueued; tileQueued = null; tileBusy = true; next().finally(() => { tileBusy = false }) }
+    })
+  })
+  server.listen(MAP_PORT, '0.0.0.0', () => console.log(`[bootstrap-world] map tile service on :${MAP_PORT} (/map.png?cx=&cz=&r=)`))
+}
+// 注意：调用必须在 MAP_PORT 等 const 定义之后（TDZ：早于定义调用 serveMapTiles 会
+// ReferenceError，且被 uncaughtException 兜底吞掉=进程活着但服务没起，极难察觉）。
+serveMapTiles(() => bot.getBot())
+
 let shuttingDown = false
 const shutdown = (): void => {
   if (shuttingDown) return

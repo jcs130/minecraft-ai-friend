@@ -1,0 +1,11 @@
+# mc-world:2.1.9 — 小地图地形 tile 服务
+# 2026-08-26 用户反馈「小地图都没有东西」：旧地图=网格+点，无地形。
+# bootstrap-world.mts 新增 :3060 /map.png?cx=&cz=&r=（pngjs 顶层块配色俯视图，
+# 复用 Goddess bot 已载区块，缓存 90s，渲染串行+让路）。配色移植自 guard-render-pure。
+# 用法：docker build -f Dockerfile.mc-world-map -t mc-world:2.1.9 <repo 根>
+FROM mc-world:2.1.8
+# 前缀隔离安装（勿在 /app 直接 install：会触发 gl 等 native 全树重建，容器无 python/gyp 环境必炸）
+RUN mkdir /tmp/pkgs && cd /tmp/pkgs && npm init -y >/dev/null 2>&1 \
+ && npm install pngjs@7 --registry=https://registry.npmmirror.com --legacy-peer-deps \
+ && cp -r /tmp/pkgs/node_modules/pngjs /app/node_modules/
+COPY bootstrap-world.mts /app/bootstrap-world.mts
