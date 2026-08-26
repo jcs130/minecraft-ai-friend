@@ -1,0 +1,9 @@
+# mc-world:2.1.2 — 2.1.1 + 观察者化身（MC_OBSERVER=1 关物理）
+# 2026-08-26 9090 面板「小人一直往下掉」根因：mineflayer 本地物理不知道 RCON tp，
+# 继续按重力模拟并发位置包回服务端，与天眼跟随的 600ms tp 互搏 → 化身永动下坠 +
+# 服务端刷 "moved too quickly"。观察者模式 spawn 后 bot.physics.enabled=false，
+# 化身位置纯随服务端（tp 后的位置包）镜像。
+# 用法：docker build -f Dockerfile.mc-world-observer -t mc-world:2.1.2 <repo 根>
+FROM mc-world:2.1.1
+COPY src/mc-bot.ts /app/src/mc-bot.ts
+COPY bootstrap-world.mts /app/bootstrap-world.mts

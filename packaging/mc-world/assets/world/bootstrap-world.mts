@@ -54,6 +54,7 @@ const bot = createBot({
   viewerEnabled: process.env.MC_VIEWER === '1', // 女神天眼：MC_VIEWER=1 时开启（9090 面板无穿越者时的兜底画面）
   viewerFirstPerson: process.env.MC_VIEWER_FP === '1',
   viewerPort: Number(process.env.MC_VIEWER_PORT ?? 3050),
+  observer: process.env.MC_OBSERVER === '1', // 观察者化身：关物理，位置只随 RCON tp（防与重力模拟互搏掉落）
 })
 const rcon = createRcon({
   enabled: true,

@@ -20,6 +20,8 @@ export interface Config {
   viewerEnabled: boolean
   viewerPort: number
   viewerFirstPerson: boolean
+  /** 观察者模式：化身不自己走路（移动全由 RCON tp 驱动），关闭本地物理模拟。 */
+  observer?: boolean
 }
 
 export interface BotHandle {
@@ -80,6 +82,21 @@ export function createBot(config: Config): BotHandle {
       log(`spawned at ${p ? `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})` : 'unknown'}`)
       const movements = new pf.Movements(bot)
       bot.pathfinder.setMovements(movements)
+
+      // 观察者模式（化身=天眼相机，移动全由 RCON tp 驱动）：关闭本地物理模拟。
+      // 否则 mineflayer 物理不知道服务端 tp，继续按重力模拟并把下坠位置包发回服务端，
+      // 与 RCON tp 互搏 → 面板画面里化身永远在坠落 + 服务端刷 "moved too quickly"
+      // （2026-08-26 9090 面板「小人一直往下掉」根因）。物理关闭后 bot 不再发移动包，
+      // 位置纯随服务端（tp 后的位置包）镜像，viewer 相机即稳定。
+      if (config.observer) {
+        // ⚠️ mineflayer 4.x 的开关是 bot 顶层属性 `bot.physicsEnabled`（physics.js inject 里
+        // `bot.physicsEnabled = physicsEnabled ?? true`；tickPhysics 以它守卫 simulatePlayer）。
+        // `bot.physics.enabled` 不是开关（physics 是重力/空气阻力等常量对象）——写成它无效。
+        try {
+          ;(bot as any).physicsEnabled = false
+          log('observer mode: physics disabled (avatar position follows RCON tp only)')
+        } catch { /* 极旧版本无此属性时忽略 */ }
+      }
 
       // 双视角 viewer（prismarine-viewer），供观察面板 iframe 嵌入：
       //   viewerPort     = 第三人称（环绕跟随，默认 3001）
