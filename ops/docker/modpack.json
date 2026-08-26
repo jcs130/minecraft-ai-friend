@@ -1,152 +1,70 @@
 {
- "_comment": "「我的异世界」千灯纪 modpack 清单 — MC 1.21.1 + NeoForge 21.1.248。download=Modrinth 直链；copy=从本地主服 mods 目录拷贝。fetch_mods.py 按此清单备齐 ./mods。",
- "minecraft": "1.21.1",
- "neoforge": "21.1.248",
- "download": [
-  {
-   "name": "Cobblemon-neoforge-1.7.3+1.21.1.jar",
-   "url": "https://cdn.modrinth.com/data/MdwFAVRL/versions/S1TrAn8c/Cobblemon-neoforge-1.7.3+1.21.1.jar",
-   "mod": "cobblemon",
-   "ver": "1.7.3"
+  "_comment": "我的异世界·千灯纪 modpack 清单 v2（2026-08-26 新纪重锚）· MC 1.21.1 + NeoForge 21.1.248 · 基准=ops/docker/shadow/mods（COPY_MODS 进 shadow-mc）· 准入铁律：纯服务端/GUI pass + 握手维度审查（注册必需网络通道=踢原版客户端风险，须冒烟）",
+  "meta": {
+    "version": "千灯纪-新纪",
+    "mc": "1.21.1",
+    "loader": "NeoForge 21.1.248",
+    "seed": "3620753367502722513",
+    "spawn": "-544, 864（平原村，2026-08-26 天神钦定）",
+    "updated": "2026-08-26"
   },
-  {
-   "name": "kotlinforforge-5.12.0-all.jar",
-   "url": "https://cdn.modrinth.com/data/ordsPcFz/versions/uhJhCT7X/kotlinforforge-5.12.0-all.jar",
-   "mod": "kotlin-for-forge",
-   "ver": "5.12.0"
+  "active": {
+    "_desc": "现役 32 个（shadow/mods → 容器 /data/mods）",
+    "性能": {
+      "lithium-neoforge-0.15.4+mc1.21.1.jar": "tick 优化",
+      "modernfix-neoforge-5.27.20+mc1.21.1.jar": "加载/内存优化",
+      "noisium-neoforge-2.3.0+mc1.21-1.21.1.jar": "地形生成优化",
+      "alternate_current-mc1.21-1.9.0.jar": "红石优化",
+      "Clumps-neoforge-1.21.1-19.0.0.1.jar": "经验球合并",
+      "Chunky-NeoForge-1.4.23.jar": "预生成（已跑村心 r384）",
+      "spark-1.10.124-neoforge.jar": "性能剖析"
+    },
+    "管理": {
+      "grieflogger-1.2.6-1.21.1-neoforge.jar": "方块日志",
+      "incontrol-1.21-10.2.7.jar": "规则引擎（spawn.json 等全空待用）"
+    },
+    "核心": {
+      "numen-neoforge-1.21.1-0.1.1.jar": "假玩家体（守卫/影分身）",
+      "numen_act-neoforge-1.21.1-0.1.1.jar": "numen 动作桥（god-channel 依赖 mc/god-channel 目录树）",
+      "settlements-1.0.0-beta.1+godfix.3.jar": "村民文明（godfix.3 修复版，勿用原版同名 jar 替换）",
+      "settlementsfix.jar": "气泡/事件流补丁（SafePayloadSender 守卫 13 发包点）",
+      "architectury-13.0.11-neoforge.jar": "Settlements 依赖",
+      "supermartijn642configlib-1.1.8-neoforge-mc1.21.jar": "Settlements 依赖",
+      "collective-1.21.1-8.39.jar": "villagernames 依赖"
+    },
+    "内容·结构": {
+      "japanese-castle-1.0.jar": "日式天守（数据驱动 worldgen）",
+      "japanese-offering-shrines-1.0.jar": "日式供奉神龛",
+      "japanese-temple-1.0.jar": "日式寺庙",
+      "mcw-bridges-3.1.2-mc1.21.1neoforge.jar": "Macaw 桥",
+      "mcw-doors-1.1.5-mc1.21.1neoforge.jar": "Macaw 门",
+      "mcw-furniture-3.4.1-mc1.21.1neoforge.jar": "Macaw 家具",
+      "mcw-lights-1.1.5-mc1.21.1neoforge.jar": "Macaw 灯",
+      "mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar": "Macaw 栅栏",
+      "mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar": "Macaw 路径",
+      "mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar": "Macaw 楼梯",
+      "mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar": "Macaw 窗",
+      "mcw-paintings-1.1.0-mc1.21.1neoforge.jar": "Macaw 画",
+      "mcw-roofs-2.3.2-mc1.21.1neoforge.jar": "Macaw 屋顶",
+      "mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar": "Macaw 活板门"
+    },
+    "内容·玩法": {
+      "villagernames-1.21.1-8.5.jar": "自然村民随机命名（Fidel/Jarrod…）",
+      "voicechat-neoforge-1.21.1-2.6.22.jar": "语音聊天（冒烟通过：mineflayer 客户端未被踢）"
+    }
   },
-  {
-   "name": "irons_spellbooks-1.21.1-3.16.3.jar",
-   "url": "https://cdn.modrinth.com/data/s4OWxYQQ/versions/slKLosTb/irons_spellbooks-1.21.1-3.16.3.jar",
-   "mod": "irons-spells-n-spellbooks",
-   "ver": "1.21.1-3.16.3"
+  "frozen": {
+    "_desc": "冻结：冒烟未过/风险未除，待复验",
+    "roadweaver-neoforge-2.3.1-1.21.1-hotfix.jar": "路织机（性能顾虑，冻结于 mc-server/mods-disabled）",
+    "settlements-1.0.0-beta.1.jar（原版）": "无 godfix 修复，与 godfix.3 二选一（现役用 godfix.3）；原件留在 ops/docker/mods",
+    "irons_spellbooks 系列": "注册必需网络通道→踢原版客户端，仅限真人客户端整合包场景启用（mc-server/mods-disabled）",
+    "puffish_skills 系列": "技能树候选，待冒烟（历史 mods-candidates 已并入本清单跟踪）",
+    "MCA Reborn": "永禁（替换型 NPC，违反准入铁律）"
   },
-  {
-   "name": "geckolib-neoforge-1.21.1-4.9.2.jar",
-   "url": "https://cdn.modrinth.com/data/8BmcQJ2H/versions/tPkJmim6/geckolib-neoforge-1.21.1-4.9.2.jar",
-   "mod": "geckolib",
-   "ver": "4.9.2"
-  },
-  {
-   "name": "curios-neoforge-9.5.1+1.21.1.jar",
-   "url": "https://cdn.modrinth.com/data/vvuO3ImH/versions/yohfFbgD/curios-neoforge-9.5.1+1.21.1.jar",
-   "mod": "curios",
-   "ver": "9.5.1+1.21.1"
-  },
-  {
-   "name": "player-animation-lib-forge-2.0.4+1.21.1.jar",
-   "url": "https://cdn.modrinth.com/data/gedNE4y2/versions/HJZB6bmA/player-animation-lib-forge-2.0.4+1.21.1.jar",
-   "mod": "playeranimator",
-   "ver": "2.0.4+1.21.1"
-  },
-  {
-   "name": "mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/C7I0BCni/versions/rQUE4LCz/mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
-   "mod": "macaws-windows",
-   "ver": "2.4.2"
-  },
-  {
-   "name": "mcw-doors-1.1.5-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/kNxa8z3e/versions/u7BRX44F/mcw-doors-1.1.5-mc1.21.1neoforge.jar",
-   "mod": "macaws-doors",
-   "ver": "1.1.5"
-  },
-  {
-   "name": "mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/B8jaH3P1/versions/jiXRXiSt/mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
-   "mod": "macaws-roofs",
-   "ver": "2.3.2"
-  },
-  {
-   "name": "mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/GURcjz8O/versions/aQ7rY7ng/mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
-   "mod": "macaws-bridges",
-   "ver": "3.1.2"
-  },
-  {
-   "name": "mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/GmwLse2I/versions/jVdb0r4W/mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar",
-   "mod": "macaws-fences-and-walls",
-   "ver": "1.2.1"
-  },
-  {
-   "name": "mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/dtWC90iB/versions/Z5V3Ps7S/mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
-   "mod": "macaws-furniture",
-   "ver": "3.4.1"
-  },
-  {
-   "name": "mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/iP3wH1ha/versions/4t8L0dGP/mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar",
-   "mod": "macaws-stairs",
-   "ver": "1.0.2"
-  },
-  {
-   "name": "mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/VRLhWB91/versions/tlymsxUG/mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar",
-   "mod": "macaws-paths-and-pavings",
-   "ver": "1.1.1"
-  },
-  {
-   "name": "mcw-lights-1.1.5-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/w4an97C2/versions/5U2kQZIL/mcw-lights-1.1.5-mc1.21.1neoforge.jar",
-   "mod": "macaws-lights-and-lamps",
-   "ver": "1.1.5"
-  },
-  {
-   "name": "mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/n2fvCDlM/versions/StnP0RNi/mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar",
-   "mod": "macaws-trapdoors",
-   "ver": "1.1.5"
-  },
-  {
-   "name": "mcw-paintings-1.1.0-mc1.21.1neoforge.jar",
-   "url": "https://cdn.modrinth.com/data/okE6QVAY/versions/W9QHKmDh/mcw-paintings-1.1.0-mc1.21.1neoforge.jar",
-   "mod": "macaws-paintings",
-   "ver": "1.1.0"
-  },
-  {
-   "name": "voicechat-neoforge-1.21.1-2.6.22.jar",
-   "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/2s7zUspF/voicechat-neoforge-1.21.1-2.6.22.jar",
-   "mod": "simple-voice-chat",
-   "ver": "2.6.22",
-   "note": "客户端整合包同版本 2.6.22 硬对齐，版本不一致则 Voice chat not connected；需放行 UDP 24454"
-  },
-  {
-   "name": "waystones-neoforge-1.21.1-21.1.41.jar",
-   "url": "https://cdn.modrinth.com/data/LOpKHB2A/versions/fxszxKRW/waystones-neoforge-1.21.1-21.1.41.jar",
-   "mod": "waystones",
-   "ver": "21.1.41",
-   "note": "路碑传送，纯加成低风险（清单建议先上）"
-  },
-  {
-   "name": "balm-neoforge-1.21.1-21.0.65.jar",
-   "url": "https://cdn.modrinth.com/data/MBAkmtvl/versions/KgypwTqX/balm-neoforge-1.21.1-21.0.65.jar",
-   "mod": "balm",
-   "ver": "21.0.65",
-   "note": "Waystones 必需前置"
-  },
-  {
-   "name": "irons_lib-1.21.1-2.1.0.jar",
-   "url": "https://cdn.modrinth.com/data/9nfaJPtX/versions/sQyzhxuH/irons_lib-1.21.1-2.1.0.jar",
-   "mod": "irons-lib",
-   "ver": "1.21.1-2.1.0"
+  "candidates": {
+    "_desc": "候选池：待需求触发再冒烟",
+    "Guard Villagers 2.4.11": "村民守卫（历史冒烟过，新纪未入役）",
+    "VillagersPlus 4.0.0": "村民增强（同上）",
+    "VillagersTradingPlus 1.0.0": "村民交易增强（同上）"
   }
- ],
- "copy_from_local_server": [
-  "numen-neoforge-1.21.1-0.1.1.jar",
-  "numen_act-neoforge-1.21.1-0.1.1.jar",
-  "settlements-1.0.0-beta.1.jar",
-  "alternate_current-mc1.21-1.9.0.jar",
-  "architectury-13.0.11-neoforge.jar",
-  "Chunky-NeoForge-1.4.23.jar",
-  "Clumps-neoforge-1.21.1-19.0.0.1.jar",
-  "grieflogger-1.2.6-1.21.1-neoforge.jar",
-  "incontrol-1.21-10.2.7.jar",
-  "lithium-neoforge-0.15.4+mc1.21.1.jar",
-  "modernfix-neoforge-5.27.20+mc1.21.1.jar",
-  "noisium-neoforge-2.3.0+mc1.21-1.21.1.jar",
-  "spark-1.10.124-neoforge.jar",
-  "supermartijn642configlib-1.1.8-neoforge-mc1.21.jar"
- ]
 }

@@ -3067,11 +3067,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             .then(() => {
               log(`avatar "${bot.username}" is now a spectator`)
               // 女神默认站位：新镇广场地面（2026-08-23 造物主谕 选项A）。
-              // 目的地 (3096,71,-1340)：村心几何中心 ≈(3094,-1338)，y=67 实心 / 68+ 空旷，
+              // 目的地 (-544,65,864)：新纪平原村（2026-08-26 新世界重锚），
               // 71 为站立视点——避免高空悬停。回落（/api/eye?follow=0）即回此地面位，追尾即地面级。
-              return rcon.send(`tp ${bot.username} 3096 71 -1340`)
+              return rcon.send(`tp ${bot.username} -544 65 864`)
             })
-            .then(() => log(`avatar "${bot.username}" parked at village ground (3096 71 -1340)`))
+            .then(() => log(`avatar "${bot.username}" parked at village ground (-544 65 864)`))
             .catch((err) => {
               avatarSet = false
               log(`avatar ensure failed: ${err instanceof Error ? err.message : String(err)}`)
