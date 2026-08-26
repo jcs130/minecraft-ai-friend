@@ -76,6 +76,20 @@ def api_embed(req: EmbedReq):
     return {"model": req.model or MODEL_NAME, "embeddings": vecs}
 
 
+class EmbeddingsReq(BaseModel):
+    model: str = ""
+    prompt: object = None  # str 或 [str]（ollama legacy 协议）
+
+
+@app.post("/api/embeddings")
+def api_embeddings(req: EmbeddingsReq):
+    """ollama legacy 协议：{model,prompt} → {embedding:[...]}。
+    mc-magic.ts embedText（OLLAMA_EMBED_URL 默认 /api/embeddings）零改动直连。"""
+    texts = req.prompt if isinstance(req.prompt, list) else [req.prompt or ""]
+    vecs = backend().embed(texts)
+    return {"model": req.model or MODEL_NAME, "embedding": vecs[0]}
+
+
 @app.get("/api/tags")
 def api_tags():
     return {"models": [{"name": MODEL_NAME, "model": MODEL_NAME}]}
