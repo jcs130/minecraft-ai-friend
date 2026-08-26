@@ -102,6 +102,7 @@ services:
       MC_ADVANCEMENTS_DIR: /mcadv
       MC_QDRANT_URL: http://memos-qdrant:6333       # 众生册向量库 → 瓶中 MemOS 栈（自包含）
       MC_EMBEDDING_URL: http://embed:11434          # 众生册 embedding → 瓶中轻量 embed（e5-large 1024d）
+      OLLAMA_EMBED_URL: http://embed:11434/api/embeddings  # mc-magic.ts 向量咒语匹配（legacy 协议，embed 服务已补兼容端点）
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       TERRAIN_FILL: "0"     # 容器内无宿主 python/terrain_repair.py，禁用每日填坑 spawn
     networks: [shadow]
