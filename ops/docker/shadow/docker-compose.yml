@@ -11,6 +11,10 @@ services:
     container_name: shadow-mc
     restart: unless-stopped
     environment:
+      # ── 世界自动备份（itzg 原生，每日 04:00 tar 进 data 卷 backups/，保留 7 份）──
+      BACKUP_INTERVAL: "0 4 * * *"
+      BACKUP_RETENTION_LIMIT: "7"
+      BACKUP_METHOD: "tar"
       EULA: "TRUE"
       TYPE: NEOFORGE
       VERSION: "1.21.1"
