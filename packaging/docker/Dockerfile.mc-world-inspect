@@ -1,0 +1,7 @@
+# mc-world:2.1.4 — 2.1.3 + 面板「众生档案」/api/inspect（RCON 实查生命/饥饿/氧气/等级/背包）
+# 2026-08-26：点谁看谁——背包卡升级 9 格网格（快捷栏主手金框/背包/盔甲副手），守卫/真人/
+# 化身通用；状态卡补 氧气/等级/生命/饱食（档案缺失时）；新增 rconExecBig 防 Inventory NBT
+# 超 RCON 单包 4096B 截断（静默窗口聚合分包）+ SNBT 深度游走解析。
+# 用法：docker build -f Dockerfile.mc-world-inspect -t mc-world:2.1.4 <repo 根>
+FROM mc-world:2.1.3
+COPY web-panel.mjs /app/web-panel.mjs

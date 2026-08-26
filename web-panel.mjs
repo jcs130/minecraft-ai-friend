@@ -434,6 +434,14 @@ const PAGE = `<!doctype html>
   .sysbar { flex:0 0 auto; padding:4px 14px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--line); display:none; align-items:center; gap:6px; }
   .sysbar .sys-ico { color:var(--gold); white-space:nowrap; }
   .chatbar-scroll .empty { color:var(--dim); text-align:center; padding:20px 0; }
+  /* 行囊网格（/api/inspect RCON 实查，众生通用） */
+  .invgrid { display:grid; grid-template-columns:repeat(9,1fr); gap:3px; margin-top:4px }
+  .invgrid .islot { background:#161b22; border:1px solid #30363d; border-radius:4px; min-height:40px; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:10px; line-height:1.25; overflow:hidden; text-align:center }
+  .invgrid .islot .inm { color:#c9d1d9; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 2px }
+  .invgrid .islot .icnt { color:var(--gold); font-weight:600 }
+  .invgrid .islot.empty { opacity:.32 }
+  .invgrid .islot.sel { border-color:#f0b72e; box-shadow:0 0 0 1px #f0b72e66 inset }
+  .inv-label { font-size:11px; color:var(--dim); margin:8px 0 2px }
 </style>
 </head>
 <body>
@@ -578,6 +586,82 @@ async function fetchPosFor(name) {
     const p = await r.json();
     if (p && typeof p.x === 'number') { posCache[name] = { x: p.x, y: p.y, z: p.z, at: Date.now() }; renderCurrent(); }
   } catch {}
+}
+// ---- 众生档案（inspect）：RCON 实查生命/饥饿/氧气/等级/背包 —— 守卫/真人/化身通用，随选中人切换 ----
+let inspectCache = {}; // username -> { d, at }
+let inspectBusy = false
+async function fetchInspectFor(name) {
+  if (!name || inspectBusy) return;
+  const hit = inspectCache[name];
+  if (hit && Date.now() - hit.at < 5000) return; // 5s TTL：选中谁查谁，切人即换
+  inspectBusy = true;
+  try {
+    const r = await fetch('/api/inspect?name=' + encodeURIComponent(name));
+    if (r.ok) {
+      const d = await r.json();
+      if (d && !d.error) { inspectCache[name] = { d, at: Date.now() }; renderCurrent(); }
+    }
+  } catch {}
+  inspectBusy = false;
+}
+// 常见物品中文名（缺省回退短 id）
+const ITEM_CN = {
+  iron_sword:'铁剑', iron_pickaxe:'铁镐', iron_axe:'铁斧', iron_shovel:'铁锹', iron_hoe:'铁锄',
+  golden_sword:'金剑', golden_pickaxe:'金镐', golden_axe:'金斧', golden_shovel:'金锹',
+  diamond_sword:'钻石剑', diamond_pickaxe:'钻石镐', diamond_axe:'钻石斧', diamond_shovel:'钻石锹', diamond_hoe:'钻石锄',
+  stone_sword:'石剑', stone_pickaxe:'石镐', stone_axe:'石斧', stone_shovel:'石锹',
+  wooden_sword:'木剑', wooden_pickaxe:'木镐', wooden_axe:'木斧', wooden_shovel:'木锹', wooden_hoe:'木锄',
+  netherite_sword:'合金剑', netherite_pickaxe:'合金镐',
+  bow:'弓', crossbow:'弩', arrow:'箭', shield:'盾', fishing_rod:'钓竿', flint_and_steel:'打火石', shears:'剪刀',
+  torch:'火把', soul_torch:'灵魂火把', lantern:'灯笼', glowstone:'荧石',
+  bread:'面包', apple:'苹果', golden_apple:'金苹果', cooked_beef:'牛排', beef:'生牛肉', cooked_porkchop:'熟猪排', porkchop:'生猪排',
+  cooked_chicken:'烤鸡', chicken:'生鸡肉', cooked_mutton:'熟羊肉', mutton:'生羊肉', cooked_cod:'熟鳕鱼', cooked_salmon:'熟鲑鱼', cod:'生鳕鱼',
+  wheat:'小麦', wheat_seeds:'小麦种子', carrot:'胡萝卜', potato:'土豆', baked_potato:'烤土豆', beetroot:'甜菜根', beetroot_seeds:'甜菜种子',
+  melon_slice:'西瓜片', sweet_berries:'甜浆果', egg:'鸡蛋', sugar:'糖', cake:'蛋糕',
+  oak_log:'橡木原木', oak_planks:'橡木板', oak_leaves:'橡树叶', oak_sapling:'橡树苗', spruce_log:'云杉原木', birch_log:'白桦原木',
+  cobblestone:'圆石', stone:'石头', dirt:'泥土', grass_block:'草方块', sand:'沙子', gravel:'沙砾', deepslate:'深板岩',
+  coal:'煤炭', charcoal:'木炭', iron_ingot:'铁锭', gold_ingot:'金锭', copper_ingot:'铜锭', diamond:'钻石', emerald:'绿宝石',
+  lapis_lazuli:'青金石', redstone:'红石', quartz:'下界石英', amethyst_shard:'紫水晶', raw_iron:'粗铁', raw_gold:'粗金', raw_copper:'粗铜',
+  netherite_ingot:'合金锭', netherite_scrap:'合金碎片', ancient_debris:'远古残骸',
+  stick:'木棍', string:'线', feather:'羽毛', leather:'皮革', flint:'燧石', gunpowder:'火药', ender_pearl:'末影珍珠',
+  blaze_rod:'烈焰棒', bone:'骨头', bone_meal:'骨粉', rotten_flesh:'腐肉', spider_eye:'蜘蛛眼', slime_ball:'粘液球', phantom_membrane:'幻翼膜',
+  crafting_table:'工作台', furnace:'熔炉', chest:'箱子', barrel:'木桶', bed:'床', ladder:'梯子', boat:'船', rail:'铁轨',
+  bucket:'铁桶', water_bucket:'水桶', milk_bucket:'奶桶', lava_bucket:'岩浆桶',
+  iron_helmet:'铁头盔', iron_chestplate:'铁胸甲', iron_leggings:'铁护腿', iron_boots:'铁靴',
+  diamond_helmet:'钻石头盔', diamond_chestplate:'钻石胸甲', diamond_leggings:'钻石护腿', diamond_boots:'钻石靴',
+  leather_helmet:'皮帽', leather_chestplate:'皮衣', turtle_helmet:'龟壳', elytra:'鞘翅', totem_of_undying:'不死图腾', experience_bottle:'经验瓶',
+  book:'书', paper:'纸', compass:'指南针', clock:'钟', spyglass:'望远镜', saddle:'鞍', name_tag:'命名牌', lead:'拴绳', map:'地图',
+};
+function itemCN(id) {
+  const short = String(id || '').replace(/^minecraft:/, '')
+  return ITEM_CN[short] || short
+}
+// 行囊网格：快捷栏(0-8, 主手金框) / 背包(9-35) / 盔甲(103头 102胸 101腿 100靴)+副手(40)
+function renderInspect(uname, dispName) {
+  const el = document.getElementById('inv')
+  const sub = document.getElementById('inv-sub')
+  const hit = inspectCache[uname]
+  if (!hit) return false
+  const d = hit.d
+  const bySlot = {}
+  for (const it of (d.items || [])) if (it.slot != null) bySlot[it.slot] = it
+  function slotHtml(s, selSlot) {
+    const it = bySlot[s]
+    const sel = selSlot === s ? ' sel' : ''
+    if (!it) return '<div class="islot empty' + sel + '"></div>'
+    return '<div class="islot' + sel + '" title="' + esc(it.id) + '"><span class="inm">' + esc(itemCN(it.id)) + '</span>'
+      + (it.count > 1 ? '<span class="icnt">×' + it.count + '</span>' : '') + '</div>'
+  }
+  const selSlot = (d.sel != null) ? d.sel : -1
+  let h = '<div class="inv-label">' + esc(dispName) + ' · 快捷栏（金框=主手）</div>'
+    + '<div class="invgrid">' + Array.from({ length: 9 }, (_, i) => slotHtml(i, selSlot)).join('') + '</div>'
+  h += '<div class="inv-label">背包</div><div class="invgrid">' + Array.from({ length: 27 }, (_, i) => slotHtml(9 + i, -1)).join('') + '</div>'
+  h += '<div class="inv-label">盔甲（头胸腿靴）/ 副手</div><div class="invgrid" style="grid-template-columns:repeat(5,1fr)">'
+    + [103, 102, 101, 100, 40].map((s) => slotHtml(s, -1)).join('') + '</div>'
+  el.innerHTML = h
+  const n = (d.items || []).length
+  sub.textContent = n + ' 格有物 · ' + new Date(hit.at).toLocaleTimeString('zh-CN', { hour12: false }) + ' 实查'
+  return true
 }
 let mapState = { range: 128, offsetX: 0, offsetZ: 0, follow: true };
 let drag = null; // { startX, startY, startOffsetX, startOffsetZ, moved }
@@ -1564,6 +1648,12 @@ function renderCurrent() {
   } else badge.style.display = 'none';
   document.getElementById('sleep-chip').style.display = bot.sleeping ? '' : 'none';
 
+  // 生命/饱食：穿越者 status 档案缺失时（守卫/真人/化身），用 RCON 实查补上
+  const insp = (bot.username && inspectCache[bot.username]) ? inspectCache[bot.username].d : null
+  if (insp && on) {
+    if (!Number.isFinite(bot.health) && insp.health != null) bot.health = insp.health
+    if (!Number.isFinite(bot.food) && insp.food != null) bot.food = insp.food
+  }
   renderVitals(bot, mg);
   renderSkills();
   renderChatBar();
@@ -1575,12 +1665,20 @@ function renderCurrent() {
     const pos = bot.position ? '(' + bot.position.x + ', ' + bot.position.y + ', ' + bot.position.z + ')'
       : (pc ? '(' + pc.x + ', ' + pc.y + ', ' + pc.z + ')' : '-');
     if (on && !bot.position && !pc) fetchPosFor(bot.username); // 无档案在线玩家：RCON 查坐标
-    document.getElementById('status').innerHTML = on ? [
+    const rows = on ? [
       ['身份', name + '（' + (bot.username || '-') + '）'],
       ['状态', '<span style="color:var(--green)">在线</span>'],
       ['位置', pos],
       ['手持', esc(bot.heldItem || '空手')],
-    ].map(([k, v]) => '<span class="k">' + k + '</span><span class="v">' + v + '</span>').join('')
+    ] : [];
+    if (on && insp) { // RCON 实查的氧气/等级（众生通用）
+      if (insp.health != null) rows.push(['生命', Math.round(insp.health) + '/20'])
+      if (insp.food != null) rows.push(['饱食', Math.round(insp.food) + '/20'])
+      rows.push(['氧气', Math.round(insp.air ?? 0) + '/300'])
+      rows.push(['等级', 'Lv ' + (insp.xp ?? 0)])
+    }
+    document.getElementById('status').innerHTML = rows.length
+      ? rows.map(([k, v]) => '<span class="k">' + k + '</span><span class="v">' + v + '</span>').join('')
       : '<span class="k">状态</span><span class="v bad">离线（bot 未运行）</span>';
     const gmName = localStorage.getItem('gmName') || '';
     document.getElementById('gm-name').value = gmName;
@@ -1612,11 +1710,22 @@ function renderCurrent() {
     };
   }
 
-  const inv = bot.inventory || [];
-  document.getElementById('inv-sub').textContent = inv.length ? inv.length + ' 种' : '';
-  document.getElementById('inv').innerHTML = inv.length
-    ? inv.map((i) => '<span class="chip">' + esc(i.name) + ' ×' + i.count + '</span>').join('')
-    : '<span class="muted">空</span>';
+  // 背包：优先 RCON 实查网格（众生通用：守卫/真人/化身），回落穿越者 status 档案 chips
+  const invUser = bot.username || currentUser
+  if (on && invUser) fetchInspectFor(invUser) // 异步刷，5s TTL，落 cache 后触发重渲
+  const gotGrid = (on && invUser && inspectCache[invUser]) ? renderInspect(invUser, name) : false
+  if (!gotGrid) {
+    const inv = bot.inventory || [];
+    if (on && invUser && !inspectCache[invUser]) {
+      document.getElementById('inv-sub').textContent = name + ' · 实查中…'
+      document.getElementById('inv').innerHTML = '<span class="muted">实查中…</span>'
+    } else {
+      document.getElementById('inv-sub').textContent = inv.length ? inv.length + ' 种（档案）' : '';
+      document.getElementById('inv').innerHTML = inv.length
+        ? inv.map((i) => '<span class="chip">' + esc(i.name) + ' ×' + i.count + '</span>').join('')
+        : '<span class="muted">空</span>'
+    }
+  }
 
   // #steps（聊天记录）由 renderChatBar() 全权渲染；此处不再用 recentSteps（服务端取不到思考流）。
 }
@@ -2093,6 +2202,80 @@ function rconExec(cmd) {
   })
 }
 
+// 大响应版（如 Inventory NBT 可超 RCON 单包 4096B，服务端分包）：静默窗口聚合所有分包再拼。
+// 与 rconExec 同一把串行锁；小响应也安全（多等 quietMs）。分包边界若切断 UTF-8 字符，极端
+// 情况一两个物品名首字符乱码（各自 toString 的代价），可接受。
+function rconSendRecvAll(sock, id, type, body, quietMs = 220) {
+  return new Promise((resolve, reject) => {
+    let pending = []
+    const parts = []
+    let quiet = null
+    const hard = setTimeout(() => { cleanup(); reject(new Error('rcon timeout')) }, 6000)
+    function cleanup() { clearTimeout(hard); clearTimeout(quiet); sock.removeListener('data', onData) }
+    function onData(d) {
+      pending.push(d)
+      for (;;) {
+        const all = Buffer.concat(pending)
+        if (all.length < 4) break
+        const len = all.readInt32LE(0)
+        if (all.length < 4 + len) break
+        parts.push(all.toString('utf-8', 12, 4 + len - 2))
+        pending = all.length > 4 + len ? [all.subarray(4 + len)] : []
+      }
+      clearTimeout(quiet)
+      quiet = setTimeout(() => { cleanup(); resolve(parts.join('')) }, quietMs)
+    }
+    sock.on('data', onData)
+    sock.write(rconPacket(id, type, body))
+  })
+}
+function rconExecBig(cmd) {
+  return _rcSerialize(async () => {
+    try {
+      const sock = await _rcEnsure()
+      return await rconSendRecvAll(sock, 2, 2, cmd)
+    } catch (e) {
+      _rcClose()
+      throw e
+    }
+  })
+}
+
+// ---- /api/inspect 的 NBT(SNBT) 解析：标量 + Inventory 数组（深度游走，字符串/嵌套安全） ----
+function parseSnbtScalar(out) {
+  const m = String(out || '').match(/entity data:\s*([-\d.]+)/)
+  return m ? Number(m[1]) : null
+}
+function parseSnbtItems(out) {
+  const s = String(out || '')
+  const i = s.indexOf('[')
+  if (i < 0) return []
+  const body = s.slice(i)
+  const items = []
+  let depth = 0, inStr = false, esc = false, elStart = -1
+  for (let k = 0; k < body.length; k++) {
+    const c = body[k]
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue }
+    if (c === '"') { inStr = true; continue }
+    if (c === '[' || c === '{') { if (c === '{' && depth === 1 && elStart < 0) elStart = k; depth++; continue }
+    if (c === ']' || c === '}') {
+      if (c === '}' && depth === 2 && elStart >= 0) {
+        const el = body.slice(elStart, k + 1)
+        // 注意：本服（NeoForge 1.21.1）SNBT 是带空格的宽松格式：`id: "x"`, `count: 1`(小写无b后缀),
+        // `Slot: 0b`（冒号后也有空格）——正则必须 \s* 宽容 + 大小写通吃，否则 items 全空（2026-08-26 实测坑）。
+        const id = el.match(/id:\s*"([^"]+)"/)
+        const cnt = el.match(/[Cc]ount:\s*(\d+)/)
+        const slot = el.match(/Slot:\s*(\d+)b?/)
+        if (id) items.push({ slot: slot ? Number(slot[1]) : null, id: id[1], count: cnt ? Number(cnt[1]) : 1 })
+        elStart = -1
+      }
+      depth--
+      continue
+    }
+  }
+  return items
+}
+
 // ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 到其上方俯视，每 2s 跟随一次 ----
 let eyeFollow = null // { name, home }
 const EYE_HEIGHT = 9 // 悬停玩家上方格数（俯视；2026-08-23 从 12 调近，避免"缩放太远"看不清守卫）
@@ -2277,6 +2460,28 @@ const server = createServer((req, res) => {
         if (!m) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('no pos: ' + String(out).slice(0, 80)); return }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ name, x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) }))
+      }).catch((e) => {
+        res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('rcon err: ' + (e.message || e))
+      })
+      return
+    }
+    // 众生档案：生命/饥饿/氧气/等级/主手格/背包 —— RCON data get entity 实查
+    // （守卫 numen 体 / 真人玩家 / 女神化身通用；穿越者另有 status 档案，前端合并）
+    if (u.pathname === '/api/inspect' && req.method === 'GET') {
+      const name = (u.searchParams.get('name') || '').trim()
+      if (!name) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end('no name'); return }
+      const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
+      const scal = (k) => rconExec(`data get entity ${target} ${k}`).catch(() => null)
+      Promise.all([
+        scal('Health'), scal('foodLevel'), scal('Air'), scal('XpLevel'), scal('SelectedItemSlot'), // 玩家键是 XpLevel（大写X）
+        rconExecBig(`data get entity ${target} Inventory`).catch(() => null),
+      ]).then(([hp, food, air, xp, sel, inv]) => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({
+          name,
+          health: parseSnbtScalar(hp), food: parseSnbtScalar(food), air: parseSnbtScalar(air),
+          xp: parseSnbtScalar(xp), sel: parseSnbtScalar(sel), items: parseSnbtItems(inv),
+        }))
       }).catch((e) => {
         res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('rcon err: ' + (e.message || e))
       })

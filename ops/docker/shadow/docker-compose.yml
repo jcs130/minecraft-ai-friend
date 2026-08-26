@@ -137,7 +137,9 @@ services:
 
   # ── 面板（web-panel.mjs，node:sqlite 读 world.db）──
   panel:
-    image: mc-world:2.1.0
+    # 2.1.4 = 2.1.0(骨架) + pv=8 镜头跟随页 + /api/inspect 众生档案（RCON 实查状态/背包，
+    # 随选中人切换）。此前对 panel 的热更（docker cp）随重建丢失，2.1.4 起烘焙进镜像。
+    image: mc-world:2.1.4
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []
