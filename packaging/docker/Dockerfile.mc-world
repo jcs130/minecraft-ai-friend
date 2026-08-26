@@ -6,8 +6,13 @@ ARG BASE_IMAGE=mc-world:latest
 FROM ${BASE_IMAGE}
 WORKDIR /app
 COPY package.json tsconfig.json ./
+# pngjs（/map.png 地图瓦片服务，纯 JS 无原生编译）底座缺装。
+# 不能直接 npm install：会连带重编 package.json 全树（gl 需 libX11，容器里必炸）。
+# 用 --prefix 装进隔离目录再拷入 node_modules，主树零扰动。
+RUN npm install --prefix /tmp/pngjs-install pngjs@7.0.0 \
+ && cp -r /tmp/pngjs-install/node_modules/pngjs /app/node_modules/pngjs
 COPY src ./src
 COPY bootstrap-world.mts web-panel.mjs ./
-# 不 npm install：底座 node_modules 已含主链依赖（tsx/mineflayer/better-sqlite3 实证可载）
+# 其余不 npm install：底座 node_modules 已含主链依赖（tsx/mineflayer/better-sqlite3 实证可载）
 EXPOSE 3000
 CMD ["node_modules/.bin/tsx", "bootstrap-world.mts"]

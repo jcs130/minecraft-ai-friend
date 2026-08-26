@@ -6,6 +6,7 @@
 // 启用：bootstrap-world.mts spawn 后调用 startModernViewer(() => bot.getBot())；MC_MODERN_VIEWER=1。
 import { createRequire } from 'node:module'
 import { readFile, stat } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -168,21 +169,82 @@ function finiteRegistryInteger(value) {
   const n = Number(value)
   return Number.isInteger(n) && n >= 0 ? n : undefined
 }
+// ---------- mod 方块注册表注入（渲染桥 Step②：主机侧解码 mod stateId） ----------
+// block-registry.json 由 numen dumpregistry 产出（Step①），复制到 shadow data/ 后随 /app/data 挂载。
+// 注入后 bot.registry 能把 NeoForge 追加的 stateId（>原版上界）解析成真实方块名——
+// 区块流原样透传原始 stateId，归一化器在客户端具备 mod 资产（Step③）前仍走原版兜底。
+// ⚠ minecraftData(version) 是模块级单例：注入会污染它的 blocksByStateId/blocksByName，
+// 归一化器若再拿同一单例当"原版基准"对照，两边永远相等 → mod stateId 原样漏给客户端
+// （2026-08-27 实证：setblock mcwstairs 后 blockUpdate stateId=54143 裸穿，无解码日志）。
+// 故注入前先拍一份纯净原版表快照，归一化器一律对照快照。
+let vanillaBlockTablesSnapshot = null
+function captureVanillaBlockTables(version) {
+  if (vanillaBlockTablesSnapshot) return vanillaBlockTablesSnapshot
+  const data = minecraftData(version)
+  vanillaBlockTablesSnapshot = data ? {
+    blocksByStateId: { ...data.blocksByStateId },
+    blocksByName: { ...data.blocksByName },
+  } : null
+  return vanillaBlockTablesSnapshot
+}
+function injectModBlockRegistry(bot) {
+  captureVanillaBlockTables(bot.version) // 先拍快照，再做任何污染
+  const registryPath = process.env.MC_MOD_BLOCK_REGISTRY ?? '/app/data/block-registry.json'
+  let dump
+  try { dump = JSON.parse(readFileSync(registryPath, 'utf8')) } catch (error) {
+    console.warn('[render-bridge] mod 方块注册表未加载（' + registryPath + '）：' + (error?.message ?? error))
+    return 0
+  }
+  const blocks = Array.isArray(dump?.blocks) ? dump.blocks : []
+  const runtime = bot.registry
+  if (!runtime) { console.warn('[render-bridge] bot.registry 不存在，跳过注入'); return 0 }
+  if (!runtime.blocksByStateId) runtime.blocksByStateId = {}
+  if (!runtime.blocksByName) runtime.blocksByName = {}
+  let injected = 0
+  for (const block of blocks) {
+    const name = typeof block?.name === 'string' ? block.name : ''
+    const min = Number(block?.minStateId)
+    const max = Number(block?.maxStateId)
+    if (!name || !Number.isInteger(min) || !Number.isInteger(max) || max < min) continue
+    if (runtime.blocksByName[name]) continue // 只补 vanilla minecraft-data 查不到的
+    const record = { name, minStateId: min, maxStateId: max, defaultState: Number.isInteger(Number(block?.defaultState)) ? Number(block.defaultState) : min }
+    runtime.blocksByName[name] = record
+    for (let stateId = min; stateId <= max; stateId += 1) {
+      if (runtime.blocksByStateId[String(stateId)] === undefined) {
+        runtime.blocksByStateId[String(stateId)] = record
+        injected += 1
+      }
+    }
+  }
+  console.log('[render-bridge] mod 方块注册表注入完成：' + blocks.length + ' 块登记，补齐 ' + injected + ' 个 stateId 槽位')
+  return injected
+}
+
 function createViewerStateIdNormalizer(bot, version) {
   const runtimeData = bot.registry
-  const canonicalData = minecraftData(version) ?? undefined
+  // 归一化对照必须用注入前的原版快照；minecraftData(version) 此时已被注入污染，不可直接用
+  const canonicalData = captureVanillaBlockTables(version) ?? minecraftData(version) ?? undefined
   const knownRemap = version === '1.21.1' ? KNOWN_1_21_1_STATE_ID_REMAP : undefined
   const cache = new Map()
+  const modDecodedLogged = new Set() // 渲染桥 Step② PoC：真数据路径上的 mod 方块解码证明（每名一次，封顶 8 条）
   return (stateId) => {
     const cached = cache.get(stateId)
     if (cached !== undefined) return cached
     let normalized = stateId
     const runtimeBlock = runtimeData?.blocksByStateId?.[String(stateId)]
     const canonicalAtState = canonicalData?.blocksByStateId?.[String(stateId)]
-    const runtimeName = canonicalRegistryName(runtimeBlock?.name)
+    // ⚠ 检测"是不是 mod 块"必须用原始注册名（带冒号）：canonicalRegistryName 会剥掉冒号，
+    // 用它检测 includes(':') 永远为假 → 解码日志永不触发（2026-08-27 二度实证后修复）
+    const runtimeRawName = typeof runtimeBlock?.name === 'string' ? runtimeBlock.name : ''
+    const runtimeName = canonicalRegistryName(runtimeRawName)
     const canonicalStateName = canonicalRegistryName(canonicalAtState?.name)
     if (runtimeName && runtimeName !== canonicalStateName) {
-      const canonicalBlock = canonicalData?.blocksByName?.[runtimeName]
+      if (runtimeRawName.includes(':') && modDecodedLogged.size < 8 && !modDecodedLogged.has(runtimeRawName)) {
+        modDecodedLogged.add(runtimeRawName)
+        console.log('[render-bridge] 主机解码 mod 方块：stateId ' + stateId + ' → ' + runtimeRawName + '（客户端资产就绪前原样透传）')
+      }
+      // 区间重映射只对原版同名块有意义（服务器注册表平移）；mod 块在原版数据里无同名者，不做平移
+      const canonicalBlock = canonicalData?.blocksByName?.[runtimeRawName] ?? canonicalData?.blocksByName?.[runtimeName]
       if (canonicalBlock) {
         const runtimeMin = finiteRegistryInteger(runtimeBlock?.minStateId)
         const canonicalMin = finiteRegistryInteger(canonicalBlock.minStateId)
@@ -686,6 +748,7 @@ export function startModernViewer(getBot, options = {}) {
 }
 
 function startServer(bot, port, firstPersonFov, dashboardOrigin) {
+  injectModBlockRegistry(bot) // 渲染桥 Step②：先补注册表，再开任何会话（归一化器/区块流共用 bot.registry）
   const prismarinePublicRoot = path.join(path.dirname(require.resolve('prismarine-viewer/package.json')), 'public')
   const sessions = new Set()
   let worldGeneration = 0

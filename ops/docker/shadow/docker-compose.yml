@@ -1,4 +1,4 @@
-# 千灯纪 Phase B — 影子环境编排（不动生产；端口 25899/25880/18088/19090）
+﻿# 千灯纪 Phase B — 影子环境编排（不动生产；端口 25899/25880/18088/19090）
 # 前置：python build-shadow.py 生成 mods/data/mcdata/copaw/copaw.secret/mc 卷
 # 启动：cd ops/docker/shadow && docker compose --env-file shadow.env up -d
 # 全景：mc(qwenpaw 家外) + world(女神化身) + panel + qwenpaw(守卫魂) + guard(守卫桥) + npc + oracle
@@ -96,7 +96,7 @@ services:
   # 2.1.3 = 2.1.2 + 天眼镜头跟随双修：①观察者 forcedMove→补发 move（viewer 才推镜头/加载
   # 区块）②web 端 bundle follow=smart 增量跟镜头（stock 第三人称只摆一次相机）。
   world:
-    image: mc-world:2.1.13  # 2.1.13 = 2.1.12 + 观察者化身不再显示名牌（avatarState 喂渲染世界时剥 username）；2.1.12 = 跟随标签改显被观察目标名（桐人/鸣人）
+    image: mc-world:2.1.15  # 2.1.14 = 2.1.13 + 渲染桥Step② 主机侧注入 mod 方块注册表（block-registry.json→bot.registry，区块流暂仍原版兜底）；2.1.13 = 观察者化身不再显示名牌；2.1.12 = 跟随标签改显被观察目标名（桐人/鸣人）
     container_name: shadow-world
     restart: unless-stopped
     volumes:
