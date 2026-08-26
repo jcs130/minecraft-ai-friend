@@ -1,0 +1,13 @@
+# mc-world:2.2.0 — 观星台重设计（前端换肤，API 零改动）
+# 2026-08-26 用户反馈「页面布局实在太丑」→ 千灯纪·夜航观星台设计系统：
+# - 配色：GitHub Dark → 夜空靛蓝基底 + 灯焰金主强调（千灯）+ 天青/魔力紫辅助；
+#   body 星点夜空背景（双层 radial 星光 + 深蓝晕）。
+# - 签名元素「灯带」：顶栏每位穿越者一盏灯（在线亮金光晕呼吸，renderLamps）。
+# - 品牌宋体化：千灯纪（Noto Serif SC），卡片 h2 宋体+金灯点，字距拉宽。
+# - 天眼取景器：viewer 四角金色角标（观星台仪器感）。
+# - 侧栏分组题字：众生（状态/修为榜）· 村务（任务板/村民动态）· 世界（小地图）。
+# - tab 选中金描边、可接委托金化、当前角色金框、细金滚动条。
+# - 全部渲染函数与 API 不动；126 个 class 选择器兼容，仅重定义值。
+# 用法：docker build -f Dockerfile.mc-world-redesign -t mc-world:2.2.0 <repo 根>
+FROM mc-world:2.1.7
+COPY web-panel.mjs /app/web-panel.mjs

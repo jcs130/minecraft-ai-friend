@@ -92,7 +92,7 @@ services:
   # 2.1.3 = 2.1.2 + 天眼镜头跟随双修：①观察者 forcedMove→补发 move（viewer 才推镜头/加载
   # 区块）②web 端 bundle follow=smart 增量跟镜头（stock 第三人称只摆一次相机）。
   world:
-    image: mc-world:2.1.7
+    image: mc-world:2.2.0
     container_name: shadow-world
     restart: unless-stopped
     volumes:
@@ -139,7 +139,7 @@ services:
   panel:
     # 2.1.5 = 2.1.0(骨架) + pv=8 镜头跟随 + /api/inspect 众生档案（RCON 实查状态/背包）
     # + 服务器特色卡：任务板（公会委托·mcdata 卷）/ 修为榜 / 法则技艺谱。
-    image: mc-world:2.1.7
+    image: mc-world:2.2.0
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []
