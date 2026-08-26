@@ -18,7 +18,7 @@ services:
       MEMORY: 3G
       SERVER_PORT: "25599"
       LEVEL: shadow
-      MOTD: "千灯纪 · 影子验证环境（Phase B）"
+      MOTD: "千灯纪 · 主世界"
       DIFFICULTY: easy
       ONLINE_MODE: "false"
       WHITE_LIST: "false"
@@ -34,11 +34,12 @@ services:
       GUI: "false"
       TZ: Asia/Shanghai
     ports:
-      - "25899:25599"
-      - "25880:25575"
+      - "25599:25599"
+      - "25575:25575"
     volumes:
       - ./mc:/data
       - ./mods:/mods:ro
+      - ./mcdata:/mcdata   # 2026-08-26 天神补挂：settlementsfix 事件流（interact/spell/status）落村运营目录，与 qwenpaw /mcdata 同源
     networks: [shadow]
 
   # ── 瓶中 QwenPaw：守卫魂的家（8088 console/chat；mcp_numen 随行）──

@@ -197,7 +197,32 @@ class Rcon:
         pw = open(os.path.join(DATA, "rcon-secret.txt"), encoding="utf-8-sig").read().strip()
         self.s = socket.create_connection((HOST, PORT), timeout=8)
         self.s.sendall(pkt(1, 3, pw))
-        rp(self.s)
+        # 2026-08-26 修复：认证回执必须校验。此前认证失败被静默吞掉——RCON 变成
+        # "零异常全空响应"的假活（召唤永远到不了服务器，村民从未真正存在）。
+        resp = self._recv_pkt()
+        rid = struct.unpack("<i", resp[0:4])[0]
+        if rid == -1:
+            try:
+                self.s.close()
+            except Exception:
+                pass
+            self.s = None
+            raise ConnectionError("rcon auth failed: mcdata/rcon-secret.txt 与服务器密码不一致")
+    def _recv_pkt(self):
+        raw = b""
+        while len(raw) < 4:
+            c = self.s.recv(4 - len(raw))
+            if not c:
+                raise ConnectionError("rcon closed")
+            raw += c
+        (ln,) = struct.unpack("<i", raw)
+        d = b""
+        while len(d) < ln:
+            c = self.s.recv(ln - len(d))
+            if not c:
+                raise ConnectionError("rcon closed")
+            d += c
+        return d
     def cmd(self, c):
         for attempt in (1, 2):
             try:
