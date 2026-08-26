@@ -1,0 +1,22 @@
+# mc-world:2.1.1 — 2.1.0 + canvas 兼容层（女神天眼 prismarine-viewer 硬依赖）
+# 背景：viewer/lib/entities.js 顶层 require('canvas')；底座 2.1.0 的 node_modules 用
+#   --omit=optional 装的、无 canvas，MC_VIEWER=1 一开就 "Cannot find module 'canvas'"。
+# 为什么不用真 canvas：canvas@3 对 node22(abi127) 无预编译→回退源码编译→镜像无 pkg-config/cairo 头→gyp 死；
+#   canvas@2.11.2 预编译也只到 node20（npmmirror 404 on node-v127）。装编译链体积/时长不划算。
+# 方案：@napi-rs/canvas（纯 napi 预编译，API 兼容 node-canvas）+ 同名 canvas 垫片包转发导出。
+#   实测容器内：createCanvas/loadImage 均 function（2026-08-26）。registry 用 npmmirror（npmjs 直连 tarball 挂起）。
+# 用法：docker build -f Dockerfile.mc-world-viewer -t mc-world:2.1.1 <context 随意>
+FROM mc-world:2.1.0
+WORKDIR /tmp/cv
+RUN npm init -y >/dev/null 2>&1 \
+ && npm install --no-audit --no-fund --loglevel=error \
+      --registry=https://registry.npmmirror.com \
+      @napi-rs/canvas @napi-rs/canvas-linux-x64-gnu \
+ && cp -r /tmp/cv/node_modules/@napi-rs /app/node_modules/ \
+ && mkdir -p /app/node_modules/canvas \
+ && printf '{"name":"canvas","version":"0.0.0-napi-shim","main":"index.js"}' > /app/node_modules/canvas/package.json \
+ && printf 'module.exports = require("@napi-rs/canvas");\n' > /app/node_modules/canvas/index.js \
+ && rm -rf /tmp/cv
+WORKDIR /app
+RUN node -e "const c=require('canvas'); if(!c.createCanvas) process.exit(1); console.log('canvas shim OK')"
+EXPOSE 3050 3150

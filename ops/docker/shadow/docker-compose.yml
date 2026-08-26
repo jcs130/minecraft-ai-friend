@@ -85,8 +85,10 @@ services:
     depends_on: [qwenpaw]
 
   # ── 女神化身 / 世界进程（bot 连容器 MC；RCON+logwatch+神使通道）──
+  # 2.1.1 = 2.1.0 + canvas 垫片（@napi-rs/canvas），MC_VIEWER=1 开女神天眼 prismarine-viewer：
+  # 第三人称 3050 / 第一人称 3150，宿主直通供 9090 面板 iframe 嵌入（无穿越者时兜底画面）
   world:
-    image: mc-world:2.1.0
+    image: mc-world:2.1.1
     container_name: shadow-world
     restart: unless-stopped
     volumes:
@@ -102,11 +104,16 @@ services:
       MC_DATA_DIR: /app/data
       MC_LOG_PATH: /mclogs/latest.log
       MC_ADVANCEMENTS_DIR: /mcadv
+      MC_VIEWER: "1"
+      MC_VIEWER_PORT: "3050"
       MC_QDRANT_URL: http://memos-qdrant:6333       # 众生册向量库 → 瓶中 MemOS 栈（自包含）
       MC_EMBEDDING_URL: http://embed:11434          # 众生册 embedding → 瓶中轻量 embed（e5-large 1024d）
       OLLAMA_EMBED_URL: http://embed:11434/api/embeddings  # mc-magic.ts 向量咒语匹配（legacy 协议，embed 服务已补兼容端点）
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       TERRAIN_FILL: "0"     # 容器内无宿主 python/terrain_repair.py，禁用每日填坑 spawn
+    ports:
+      - "127.0.0.1:3050:3050"   # 女神天眼·第三人称（面板 iframe）
+      - "127.0.0.1:3150:3150"   # 女神天眼·第一人称
     networks: [shadow]
     depends_on: [mc]
 
