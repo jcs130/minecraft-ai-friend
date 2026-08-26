@@ -281,6 +281,32 @@ function apiState() {
   })()
   const atomTable = atomsRaw.map((a) => ({ id: a.id, name: a.name ?? a.id, layer: a.layer ?? '', cost: a.cost || {}, requiredLevel: a.requiredLevel ?? 1 }))
 
+  // ── 村民动态：静态档案(villagers.json) + 今日行迹(diary-*.jsonl 末条) + 今日委托状态(guild 板) ──
+  const villagersLive = (() => {
+    let list = []
+    try {
+      const vil = JSON.parse(readFileSync(join(VILLAGE_DIR, 'villagers.json'), 'utf-8'))
+      list = Array.isArray(vil) ? vil : vil?.villagers ?? []
+    } catch { try {
+      const vil = JSON.parse(readFileSync(join(LIVE_DIR, 'villagers.json'), 'utf-8'))
+      list = Array.isArray(vil) ? vil : vil?.villagers ?? []
+    } catch {} }
+    const last = {}
+    try {
+      const lines = readFileSync(join(LIVE_DIR, `diary-${day}.jsonl`), 'utf-8').trim().split('\n')
+      for (const ln of lines) { try { const e = JSON.parse(ln); if (e && e.npc) last[e.npc] = e } catch {} }
+    } catch {}
+    return list.map((v) => {
+      const gq = (board || []).find((q) => q.from === v.key && q.type === 'gather')
+      return {
+        key: v.key, display: v.display, profession: v.profession || '', alive: v.alive !== false,
+        persona: v.persona || '',
+        quest: gq ? { zh: gq.zh, count: gq.count, emerald: gq.reward, status: gq.status, taker: gq.taker, doneBy: gq.done_by } : null,
+        last: last[v.display] || null,
+      }
+    })
+  })()
+
   return {
     updatedAt: latest,
     bots,
@@ -290,6 +316,7 @@ function apiState() {
     atomTable,
     passives: passiveDefs,
     questBoard: { day, board, fame, stat7 },
+    villagersLive,
     chronicle: readChronicle(40),
     npcFeed: readNpcFeed(24),
     world: hb,
@@ -504,6 +531,16 @@ const PAGE = `<!doctype html>
   .atomrow .areq { color:var(--dim); font-size:11px; flex:0 0 auto }
   details.sum { margin-top:8px }
   details.sum summary { color:var(--dim); font-size:11px; cursor:pointer; user-select:none }
+  /* 村民动态 */
+  .vrow { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed #21262d; font-size:12px; cursor:pointer }
+  .vrow:last-child { border-bottom:none }
+  .vrow:hover { background:#1c2128 }
+  .vrow.dead { opacity:.38; filter:grayscale(.85) }
+  .vrow .vico { flex:0 0 22px; text-align:center; font-size:14px }
+  .vrow .vmain { flex:1 1 auto; min-width:0 }
+  .vrow .vname { font-weight:600 }
+  .vrow .vact { color:var(--dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px }
+  .vrow .qst { flex:0 0 auto }
 </style>
 </head>
 <body>
@@ -572,6 +609,11 @@ const PAGE = `<!doctype html>
       </div>
 
       <div class="card">
+        <div class="card-head"><h2>村民动态</h2><span class="muted" id="vill-sub"></span></div>
+        <div id="villagers"><div class="empty">加载中…</div></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h2>皮肤</h2><span class="muted" id="skin-note">指派后下次入服生效（在线需重连）</span></div>
         <div class="chips" id="skin-presets" style="margin-bottom:8px"><span class="empty" style="padding:6px 0">加载中…</span></div>
         <div id="skin-assign"><span class="empty" style="padding:6px 0">加载中…</span></div>
@@ -637,7 +679,7 @@ const PAGE = `<!doctype html>
 
 <script>
 document.getElementById('dbg-btn').addEventListener('click', () => { document.getElementById('dbg').textContent = 'DBGBTN CLICKED ' + Date.now(); });
-let state = { bots: [], memory: {}, magic: {}, atomNames: {}, passives: [], chronicle: [], npcFeed: [], villageNpcs: [] };
+let state = { bots: [], memory: {}, magic: {}, atomNames: {}, atomTable: [], passives: [], chronicle: [], npcFeed: [], villageNpcs: [], villagersLive: [], questBoard: null };
 let currentUser = null; // 当前选中的 bot username
 let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
 // 天眼跟随：选中玩家 -> 后端把女神 tp 到其上方（每 2s 跟随），天眼视角即跟过去
@@ -1379,7 +1421,7 @@ function renderQuestBoard() {
   el.innerHTML = qb.board.map((q) => {
     const [ico] = QTYPE[q.type] || ['📜']
     const main = q.title || (q.zh ? '收购·' + q.zh : q.qid || '?')
-    const sub2 = [q.display, q.zh ? q.zh + '×' + q.count : '', q.rank ? QRANK[q.rank] || ('档' + q.rank) : ''].filter(Boolean).join(' · ')
+    const sub2 = [q.display, q.zh ? (q.count ? q.zh + '×' + q.count : q.zh) : '', q.rank ? QRANK[q.rank] || ('档' + q.rank) : ''].filter(Boolean).join(' · ')
     const rw = '💚' + (q.reward ?? '?') + (q.fame ? ' <span class="qfame">★' + q.fame + '</span>' : '')
     const stTxt = q.status === 'done' ? '✓ ' + (CN_NAME[q.done_by] || q.done_by || '?') + (q.done_at ? '·' + q.done_at : '')
       : q.status === 'claimed' ? '进行中·' + (q.taker || []).map((t) => CN_NAME[t] || t).join(',')
@@ -1454,6 +1496,53 @@ function renderAtomTable() {
     }).join('')
     return '<div class="inv-label">' + ico + ' ' + txt + '（' + groups[c].length + '）</div>' + rows
   }).join('')
+}
+// ── 村民动态：谁在干什么（diary 行迹末条）+ 今日委托状态 + 点行天眼飞过去 ──
+const PROF_ICO = { weaponsmith: '⚒️', armorer: '🛡️', librarian: '📚', farmer: '🌾', fisherman: '🎣', butcher: '🔪', leatherworker: '🧥', fletcher: '🏹', shepherd: '🐑', toolsmith: '🔧', cartographer: '🗺️', cleric: '✨', mason: '🧱', nitwit: '🤷' }
+const PROF_TXT = { weaponsmith: '铁匠', armorer: '甲匠', librarian: '书商', farmer: '农人', fisherman: '渔夫', butcher: '屠户', leatherworker: '皮匠', fletcher: '制箭师', shepherd: '牧羊人', toolsmith: '工具匠', cartographer: '制图师', cleric: '神官', mason: '石匠', nitwit: '闲人' }
+function villIco(v) {
+  if (PROF_ICO[v.profession]) return PROF_ICO[v.profession]
+  const d = v.display || ''
+  if (/货郎|商队/.test(d)) return '🐴'
+  if (/守夜/.test(d)) return '🕯️'
+  if (/厨/.test(d)) return '🍳'
+  if (/猎户/.test(d)) return '🏹'
+  if (/说书|吟游|诗人/.test(d)) return '🎵'
+  if (/茶|酒/.test(d)) return '🍵'
+  return '🧑‍🌾'
+}
+function renderVillagers() {
+  const el = document.getElementById('villagers')
+  const sub = document.getElementById('vill-sub')
+  const vs = state.villagersLive || []
+  if (!vs.length) { el.innerHTML = '<div class="empty">村民档案未加载（村庄引擎未运行？）</div>'; sub.textContent = ''; return }
+  const alive = vs.filter((v) => v.alive).length
+  const qs = vs.filter((v) => v.quest)
+  const dn = qs.filter((v) => v.quest.status === 'done').length
+  sub.textContent = vs.length + ' 位村民 · 在世 ' + alive + ' · 今日委托 ' + dn + '/' + qs.length + ' 完成 · 点行飞镜头'
+  el.innerHTML = vs.map((v) => {
+    const q = v.quest
+    const qTxt = !q ? '<span class="qst">无委托</span>'
+      : q.status === 'done' ? '<span class="qst done">✓ 完成</span>'
+      : q.status === 'claimed' ? '<span class="qst claimed">进行中·' + (q.taker || []).map((t) => CN_NAME[t] || t).join(',') + '</span>'
+      : '<span class="qst open">可接 💚' + (q.emerald ?? '?') + '</span>'
+    const l = v.last
+    const p = l && l.pos ? ' data-x="' + l.pos[0] + '" data-y="' + l.pos[1] + '" data-z="' + l.pos[2] + '"' : ''
+    return '<div class="vrow' + (v.alive ? '' : ' dead') + '" data-k="' + esc(v.key) + '"' + p
+      + ' title="' + esc(v.persona) + (l && l.pos ? ' @ ' + Math.round(l.pos[0]) + ',' + Math.round(l.pos[2]) : '') + '">'
+      + '<span class="vico">' + villIco(v) + '</span>'
+      + '<div class="vmain"><span class="vname">' + esc(v.display) + '</span> <span style="color:var(--dim);font-size:10px">'
+      + esc(PROF_TXT[v.profession] || '') + '</span>'
+      + '<div class="vact">' + (l ? esc(l.ts || '') + ' ' + esc(l.act || '') : '今日暂无行迹') + '</div></div>'
+      + qTxt + '</div>'
+  }).join('')
+  el.querySelectorAll('.vrow[data-x]').forEach((r) => {
+    r.addEventListener('click', () => {
+      const { x, y, z } = r.dataset
+      if (!x) return
+      fetch('/api/eye?x=' + x + '&y=' + (Number(y) + 9) + '&z=' + z).catch(() => {})
+    })
+  })
 }
 function renderTabs() {
   const el = document.getElementById('tabs');
@@ -2091,6 +2180,7 @@ async function refresh() {
     renderQuestBoard();
     renderRoster();
     renderAtomTable();
+    renderVillagers();
 
     const m = s.memory || {};
     const res = Object.entries(m.resourcePoints || {}).map(([k, v]) => k + '(' + v.length + ')').join(', ');
@@ -2660,6 +2750,16 @@ const server = createServer((req, res) => {
   if (u.pathname === '/api/eye' && req.method === 'GET') {
     const name = (u.searchParams.get('name') || '').trim()
     const follow = u.searchParams.get('follow')
+    // 坐标模式：一次性 tp（村民/地标）——停跟随，天眼飞过去俯瞰，不循环
+    const ex = u.searchParams.get('x'), ey2 = u.searchParams.get('y'), ez = u.searchParams.get('z')
+    if (ex != null && ey2 != null && ez != null) {
+      if (eyeFollow && eyeFollow.home) { try { rconExec(`tp Goddess ${eyeFollow.home}`).catch(() => {}) } catch {} }
+      eyeFollow = null
+      rconExec(`tp Goddess ${Number(ex)} ${Number(ey2)} ${Number(ez)}`).catch(() => {})
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true, tp: [Number(ex), Number(ey2), Number(ez)] }))
+      return
+    }
     if (follow === '0' || !name) {
       if (eyeFollow && eyeFollow.home) {
         rconExec(`tp Goddess ${eyeFollow.home}`).catch(() => {})

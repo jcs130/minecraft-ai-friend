@@ -139,7 +139,7 @@ services:
   panel:
     # 2.1.5 = 2.1.0(骨架) + pv=8 镜头跟随 + /api/inspect 众生档案（RCON 实查状态/背包）
     # + 服务器特色卡：任务板（公会委托·mcdata 卷）/ 修为榜 / 法则技艺谱。
-    image: mc-world:2.1.5
+    image: mc-world:2.1.6
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []

@@ -1,7 +1,7 @@
-# mc-world:2.1.5 — 2.1.4 + 面板「服务器特色」卡：任务板（公会委托）+ 修为榜 + 法则技艺谱
-# 2026-08-26：apiState 增 questBoard（guild-<today>.json 全板 + guild-fame + 近7日流水统计）
-# 与 atomTable（36 法则技艺）；/api/village 任务读改走 MC_QUEST_DIR（mcdata 卷，修复
-# 此前 panel 未挂 mcdata 导致委托信息静默为空的暗病）。compose 同步挂 ./mcdata:ro。
-# 用法：docker build -f Dockerfile.mc-world-inspect -t mc-world:2.1.5 <repo 根>
-FROM mc-world:2.1.4
+# mc-world:2.1.6 — 2.1.5 + 面板「村民动态」卡
+# 2026-08-26：apiState 增 villagersLive（villagers.json 档案 + diary-<today>.jsonl 行迹末条
+# + guild 板委托状态合并）；/api/eye 增 x/y/z 坐标模式（一次性 tp，天眼飞去看村民）；
+# 前端村民动态卡：职业图标/当前动作(带时刻)/今日委托三态/存活灰显，点行飞镜头。
+# 用法：docker build -f Dockerfile.mc-world-inspect -t mc-world:2.1.6 <repo 根>
+FROM mc-world:2.1.5
 COPY web-panel.mjs /app/web-panel.mjs
