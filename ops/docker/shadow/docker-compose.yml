@@ -149,7 +149,7 @@ services:
   panel:
     # 2.1.5 = 2.1.0(骨架) + pv=8 镜头跟随 + /api/inspect 众生档案（RCON 实查状态/背包）
     # + 服务器特色卡：任务板（公会委托·mcdata 卷）/ 修为榜 / 法则技艺谱。
-    image: mc-world:2.2.3   # 2.2.3 = 2.2.2 + 天眼默认现代画面(:3070) + 2.5D 按钮 + 旧画面探活回退
+    image: mc-world:2.2.4   # 2.2.4 = 2.2.3 + 画面主导布局(思考流压矮条并更名动态)
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []

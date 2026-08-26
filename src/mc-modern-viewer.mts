@@ -687,7 +687,6 @@ export function startModernViewer(getBot, options = {}) {
 
 function startServer(bot, port, firstPersonFov, dashboardOrigin) {
   const prismarinePublicRoot = path.join(path.dirname(require.resolve('prismarine-viewer/package.json')), 'public')
-  const textureRoot = path.join(prismarinePublicRoot, 'textures', bot.version)
   const sessions = new Set()
   let worldGeneration = 0
   let worldResetTimer = null
@@ -757,9 +756,10 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
         }
         send(404, 'text/plain', 'Not Found'); return
       }
-      // 方块/实体/物品纹理：prismarine-viewer public 目录
-      if (rel.startsWith('/textures/')) {
-        const file = safeJoin(textureRoot, rel.slice('/textures/'.length))
+      // 方块/实体/物品纹理 + 方块状态表：prismarine-viewer public 目录直出
+      // 注意：URL 自带版本段（/textures/1.21.1/blocks/x.png），根=public，别再拼 textures/<version>
+      if (rel.startsWith('/textures/') || rel.startsWith('/blocksStates/')) {
+        const file = safeJoin(prismarinePublicRoot, rel)
         if (file && /\.(png|json)$/iu.test(file)) {
           const meta = await stat(file).catch(() => null)
           if (meta?.isFile()) {
@@ -767,6 +767,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
             send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Cache-Control': 'public, max-age=86400' }); return
           }
         }
+        if (rel.startsWith('/blocksStates/')) { send(404, 'application/json', '{}'); return }
         // 纹理缺失兜底：1x1 透明 png（参考宿主同款）
         send(200, 'image/png', OPTIONAL_TEXTURE_FALLBACK); return
       }

@@ -390,7 +390,7 @@ const PAGE = `<!doctype html>
   .group-head::before { content:""; width:14px; height:1px; background:linear-gradient(90deg, transparent, rgba(238,181,68,.7)); }
   .group-head::after { content:""; flex:1 1 auto; height:1px; background:linear-gradient(90deg, rgba(238,181,68,.45), rgba(30,42,74,.6) 40%, transparent); }
   /* viewer */
-  .viewer-card { flex:1 1 58%; min-height:220px; display:flex; flex-direction:column; }
+  .viewer-card { flex:1 1 auto; min-height:220px; display:flex; flex-direction:column; } /* 画面主导：吃满左列剩余高度 */
   .viewer-wrap { position:relative; flex:1 1 auto; min-height:0; background:#000; border:1px solid #263356; border-radius:8px; overflow:hidden; }
   .viewer-wrap::before, .viewer-wrap::after { content:""; position:absolute; width:26px; height:26px; z-index:2; pointer-events:none; }
   .viewer-wrap::before { top:7px; left:7px; border-top:2px solid rgba(238,181,68,.85); border-left:2px solid rgba(238,181,68,.85); border-top-left-radius:4px; }
@@ -405,8 +405,8 @@ const PAGE = `<!doctype html>
   body.vmax .side, body.vmax .steps-card { display:none; }
   body.vmax .viewer-card { flex:1 1 auto; }
   /* 思考流 */
-  .steps-card { flex:1 1 42%; min-height:150px; display:flex; flex-direction:column; }
-  .steps-scroll { flex:1 1 auto; overflow-y:auto; min-height:0; }
+  .steps-card { flex:0 0 auto; min-height:0; display:flex; flex-direction:column; } /* 聊天压成矮条，不再占 42% 大空白 */
+  .steps-scroll { flex:1 1 auto; overflow-y:auto; min-height:0; max-height:210px; }
   .step { border-left:2px solid var(--line); padding:8px 0 8px 12px; margin-bottom:10px; }
   .step .head { font-size:12px; color:var(--dim); margin-bottom:4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .step .tool { font-family:monospace; font-size:11px; color:var(--gold); word-break:break-all; min-width:0; }
@@ -1934,7 +1934,7 @@ function renderCurrent() {
   const on = !!bot.online;
   document.getElementById('dot').className = 'dot ' + (on ? 'on' : '');
   const name = bot.personaName || bot.username || '—';
-  document.getElementById('steps-title').textContent = name + ' 思考流';
+  document.getElementById('steps-title').textContent = name + ' 动态';
 
   // 视角 iframe：第三人称=viewerPort，第一人称=viewerPort+100（mc-bot 双端口方案）
   // 回落：无穿越者在线 / 所选穿越者 viewer 口不通 → 女神天眼。天眼优先现代画面(:3070)，

@@ -1,8 +1,7 @@
-# mc-world:2.2.3 — 面板：默认现代画面 + 2.5D 按钮
-# 2026-08-26 造物主拍板「直接换成现代UI」：
-#   - 女神天眼默认 iframe → :3070 现代画面（/third/ 环绕、/ 第一人称、/dungeon/ 2.5D）；
-#   - 新增 2.5D 视角按钮；3070 探活失败自动回退旧 prismarine(3050/3150)；
-#   - 穿越者 bot 自带 viewer（双端口）时仍走 bot 画面（旧逻辑保留）。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-redesign -t mc-world:2.2.3 <repo 根>
-FROM mc-world:2.2.2
+# mc-world:2.2.4 — 面板：画面主导布局（修「思考流大空白」）
+# 2026-08-26 造物主反馈：布局差、思考流一大块空白。
+#   - viewer-card flex 1 1 auto（吃满左列），steps-card 压成矮条（max-height 210px）；
+#   - 「XX 思考流」更名「XX 动态」（那卡早已是聊天记录，不是思考）。
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-redesign -t mc-world:2.2.4 <repo 根>
+FROM mc-world:2.2.3
 COPY web-panel.mjs /app/web-panel.mjs
