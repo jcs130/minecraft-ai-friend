@@ -24,13 +24,31 @@
 
 ## 运行
 
+### 正典：容器（shadow 栈 gateway 服务，2026-08-26 起）
+
+```powershell
+# B 仓根目录
+docker build -t mc-gateway:1.0.0 -f packaging/docker/Dockerfile.mc-gateway .
+cd ops\docker\shadow
+docker compose --env-file shadow.env up -d gateway
+```
+
+- 服务定义见 `ops/docker/shadow/docker-compose.yml` 的 `gateway`：8011 发布到局域网，
+  `./data`（world.db 同源 + `gateway/` 账号库）、`./mods`、`./mc/logs` 只读挂入，
+  RCON 指向容器 `mc:25575`，`GATEWAY_ADVERTISE=192.168.3.133`（模组直链地址）。
+- 账号库迁移：宿主机进程停掉后整目录拷 `mc-data/gateway/` → `ops/docker/shadow/data/gateway/`
+  （db+wal+shm 一起拷，SQLite 打开时自动恢复）。
+- 基镜像 `python:3.12-slim` 经 `docker.1ms.run` 加速源拉取（直连 Docker Hub 会超时）。
+
+### 应急回退：宿主机直跑
+
 ```bat
 set GATEWAY_PORT=8011
 set MC_DATA_DIR=C:\...\minecraft-ai-friend\mc-data
 set MC_SERVER_DIR=C:\...\minecraft-ai-friend\mc-server
 C:\Python314\python.exe mc_gateway.py
 ```
-纯标准库（Python 3.11+，建议 3.13/3.14），零第三方依赖。建议作为独立 Windows 服务/计划任务常驻。
+纯标准库（Python 3.11+，建议 3.13/3.14），零第三方依赖。（8011 被容器占用时直跑会绑定失败——先 `docker compose stop gateway`。）
 
 ## API 契约
 

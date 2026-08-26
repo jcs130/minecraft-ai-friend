@@ -1,0 +1,14 @@
+# mc-gateway：玩家门户网关（纯 Python 标准库，零三方依赖）
+# 构建（B 仓根目录）：docker build -t mc-gateway:1.0.0 -f packaging/docker/Dockerfile.mc-gateway .
+# 运行配置全部走环境变量（见 ops/docker/shadow/docker-compose.yml 的 gateway 服务）：
+#   GATEWAY_PORT / MC_DATA_DIR / MC_SERVER_DIR(mods+logs 挂这下面) /
+#   RCON_HOST/PORT/PASSWORD / GATEWAY_DATA_DIR / GATEWAY_ADVERTISE
+FROM python:3.12-slim
+LABEL org.opencontainers.image.title="mc-gateway"
+LABEL org.opencontainers.image.description="MC 异世界玩家门户：登录/注册/模组清单分发/皮肤上传"
+ENV TZ=Asia/Shanghai \
+    PYTHONUNBUFFERED=1
+WORKDIR /opt/gateway
+COPY mc-gateway/mc_gateway.py /opt/gateway/mc_gateway.py
+EXPOSE 8011
+CMD ["python", "mc_gateway.py"]
