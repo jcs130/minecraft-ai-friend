@@ -96,6 +96,14 @@ export function createBot(config: Config): BotHandle {
           ;(bot as any).physicsEnabled = false
           log('observer mode: physics disabled (avatar position follows RCON tp only)')
         } catch { /* 极旧版本无此属性时忽略 */ }
+        // 物理关掉后 mineflayer 的 'move' 事件永远不触发（它由物理 tick 发出），而
+        // prismarine-viewer（lib/mineflayer.js bot.on('move', botPosition)）只听 'move'：
+        // 服务端 RCON tp 只发 'forcedMove' → viewer 不推镜头位置、WorldView 也不加载
+        // 目标周边区块 → 面板「化身过去了、画面不过去」（2026-08-26 根因②）。
+        // 桥接：forcedMove 时手动补发 'move'，让 viewer 相机与区块流跟随 tp。
+        bot.on('forcedMove', () => {
+          try { bot.emit('move') } catch { /* 并发 close 时忽略 */ }
+        })
       }
 
       // 双视角 viewer（prismarine-viewer），供观察面板 iframe 嵌入：

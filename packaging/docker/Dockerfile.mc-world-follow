@@ -1,0 +1,15 @@
+# mc-world:2.1.3 — 2.1.2 + 天眼镜头跟随双修
+# 2026-08-26 面板「点角色切人，化身过去了、画面不过去」两根因：
+# ① 服务端：观察者模式 physicsEnabled=false 后 mineflayer 'move'（物理 tick 发）永不触发，
+#    而 prismarine-viewer 只听 'move' 推镜头/加载区块 → RCON tp 只发 'forcedMove'。
+#    修：mc-bot.ts 观察者模式桥接 forcedMove→补发 'move'。
+# ② 客户端：stock web 端第三人称只在首个 position 事件摆一次相机（s=!1 后永不跟）。
+#    修：bundle 打 follow=smart 增量跟镜头补丁（相机随位移平移，保留环绕/缩放）；
+#    index.html 引 index.js?v=8 防旧 bundle 缓存。node_modules/ops 不在 build context，
+#    用 packaging/docker/viewer-client-patch.mjs 在镜像内对容器自己的 bundle 施展（带模式校验）。
+# 用法：docker build -f Dockerfile.mc-world-follow -t mc-world:2.1.3 <repo 根>
+FROM mc-world:2.1.2
+COPY src/mc-bot.ts /app/src/mc-bot.ts
+COPY packaging/docker/viewer-client-patch.mjs /tmp/viewer-client-patch.mjs
+RUN node /tmp/viewer-client-patch.mjs /app/node_modules/prismarine-viewer/public/index.js /app/node_modules/prismarine-viewer/public/index.html \
+ && rm /tmp/viewer-client-patch.mjs

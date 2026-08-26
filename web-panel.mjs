@@ -1549,7 +1549,7 @@ function renderCurrent() {
   const frame = document.getElementById('viewer-frame');
   const want = 'http://' + location.hostname + ':' + showPort + '/'
     + (viewerOk ? '?skin=' + (bot.username || '').toLowerCase() + (viewMode === 'first' ? '&fov=110' : '&follow=smart') : (viewMode === 'first' ? '?fov=110' : '?follow=smart'))
-    + '&pv=7'; // pv=镜头补丁版本，cache-bust（v7=+Goddess 回落）
+    + '&pv=8'; // pv=镜头补丁版本，cache-bust（v7=+Goddess 回落）
   if (frame.getAttribute('src') !== want) frame.setAttribute('src', want);
   document.getElementById('viewer-title').textContent = viewerOk
     ? name + '（' + (viewMode === 'first' ? '第一人称' : '第三人称·智能运镜') + '）'
