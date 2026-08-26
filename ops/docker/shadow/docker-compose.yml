@@ -96,7 +96,7 @@ services:
   # 2.1.3 = 2.1.2 + 天眼镜头跟随双修：①观察者 forcedMove→补发 move（viewer 才推镜头/加载
   # 区块）②web 端 bundle follow=smart 增量跟镜头（stock 第三人称只摆一次相机）。
   world:
-    image: mc-world:2.1.10  # 2.1.10 = 2.1.9 + 现代画面宿主（:3070 萌悦 Three.js 渲染，/third/ 环绕 / 第一人称 /dungeon/ 2.5D）
+    image: mc-world:2.1.11  # 2.1.11 = 2.1.9 + 现代画面宿主（:3070 萌悦 Three.js 渲染，/third/ 环绕 / 第一人称 /dungeon/ 2.5D）+ minecraft-renderer 网格化 worker 补齐（修纯天空）
     container_name: shadow-world
     restart: unless-stopped
     volumes:

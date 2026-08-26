@@ -1,15 +1,23 @@
-# mc-world:2.1.10 — 现代画面（萌悦 modern-viewer 宿主服务）
+# mc-world:2.1.11 — 现代画面（萌悦 modern-viewer 宿主服务）
 # 2026-08-26 造物主拍板「直接换成现代UI」：面板主画面切到 Three.js/WebGL2 现代渲染
 # （/ 第一人称 · /third/ 环绕跟随 · /dungeon/ 2.5D），旧 prismarine viewer(3050/3150) 保留作回退。
 # 内容：
-#   - /app/modern-viewer/：modern-viewer.js 渲染 bundle + viewer.css + npc-portraits 立绘（萌悦交付资产）
+#   - /app/modern-viewer/：modern-viewer.js 渲染 bundle + viewer.css + npc-portraits 立绘
+#     + minecraft-renderer 网格化 worker（mesher.js / mesherWasm.js / threeWorker.js / wasm_mesher_bg.wasm）
+#     —— 修 2026-08-26 现代画面纯天空：worker 缺失导致网格器永不产块。
 #   - src/mc-modern-viewer.mts：宿主数据桥（socket.io 双命名空间 + WorldView 区块流 + 实体/化身/特效序列化）
 #   - bootstrap-world.mts：spawn 后 startModernViewer()；MC_MODERN_VIEWER=1 / MC_MODERN_VIEWER_PORT=3070
 # 依赖：socket.io / prismarine-viewer / minecraft-data —— 容器内已有，零新增安装。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.10 <repo 根>
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.11 <repo 根>
 FROM mc-world:2.1.9
 COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
 COPY packaging/docker/modern-viewer/viewer.css /app/modern-viewer/viewer.css
 COPY packaging/docker/modern-viewer/npc-portraits/ /app/modern-viewer/npc-portraits/
+COPY packaging/docker/modern-viewer/mesher.js /app/modern-viewer/mesher.js
+COPY packaging/docker/modern-viewer/mesherWasm.js /app/modern-viewer/mesherWasm.js
+COPY packaging/docker/modern-viewer/threeWorker.js /app/modern-viewer/threeWorker.js
+COPY packaging/docker/modern-viewer/wasm_mesher_bg.wasm /app/modern-viewer/wasm_mesher_bg.wasm
+COPY packaging/docker/modern-viewer/minecraft-renderer.js /app/modern-viewer/minecraft-renderer.js
+COPY packaging/docker/modern-viewer/minecraft-renderer.js.meta.json /app/modern-viewer/minecraft-renderer.js.meta.json
 COPY src/mc-modern-viewer.mts /app/src/mc-modern-viewer.mts
 COPY bootstrap-world.mts /app/bootstrap-world.mts

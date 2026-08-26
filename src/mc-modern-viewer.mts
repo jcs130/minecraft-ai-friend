@@ -658,7 +658,7 @@ function viewerHtml(firstPersonFov, dashboardOrigin) {
 }
 
 // ---------- 静态资产 ----------
-const MIME = { '.png': 'image/png', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.html': 'text/html; charset=utf-8' }
+const MIME = { '.png': 'image/png', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.html': 'text/html; charset=utf-8', '.wasm': 'application/wasm' }
 function safeJoin(root, rel) {
   const resolved = path.resolve(root, '.' + path.sep + rel)
   return resolved.startsWith(root + path.sep) ? resolved : null
@@ -743,6 +743,20 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       }
       if (rel === '/healthz') {
         send(200, 'application/json; charset=utf-8', JSON.stringify({ ok: true, sessions: sessions.size, generation: worldGeneration })); return
+      }
+      // minecraft-renderer 网格化 worker 与 wasm：这些由 minecraft-renderer/dist 提供，
+      // 不随 prismarine-viewer 分发。必须原样可寻址，否则客户端 new Worker('threeWorker.js'|'mesherWasm.js')
+      // 一律 404，网格器永不产出区块几何 → 画面只剩天空/背景（含小地图全黑）。
+      if (rel === '/mesher.js' || rel === '/mesherWasm.js' || rel === '/threeWorker.js' || rel === '/wasm_mesher_bg.wasm' || rel === '/minecraft-renderer.js' || rel === '/minecraft-renderer.js.meta.json') {
+        const file = safeJoin(ASSET_ROOT, rel.slice(1))
+        if (file) {
+          const meta = await stat(file).catch(() => null)
+          if (meta?.isFile()) {
+            const body = await readFile(file)
+            send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Content-Length': String(meta.size), 'Cache-Control': 'public, max-age=86400' }); return
+          }
+        }
+        send(404, 'text/plain', 'Not Found'); return
       }
       // NPC 立绘
       if (rel.startsWith('/npc-portraits/')) {
