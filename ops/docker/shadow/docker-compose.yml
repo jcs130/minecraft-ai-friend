@@ -137,20 +137,22 @@ services:
 
   # ── 面板（web-panel.mjs，node:sqlite 读 world.db）──
   panel:
-    # 2.1.4 = 2.1.0(骨架) + pv=8 镜头跟随页 + /api/inspect 众生档案（RCON 实查状态/背包，
-    # 随选中人切换）。此前对 panel 的热更（docker cp）随重建丢失，2.1.4 起烘焙进镜像。
-    image: mc-world:2.1.4
+    # 2.1.5 = 2.1.0(骨架) + pv=8 镜头跟随 + /api/inspect 众生档案（RCON 实查状态/背包）
+    # + 服务器特色卡：任务板（公会委托·mcdata 卷）/ 修为榜 / 法则技艺谱。
+    image: mc-world:2.1.5
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []
     command: ["node", "web-panel.mjs"]
     volumes:
       - ./data:/app/data
+      - ./mcdata:/mcdata:ro  # 村庄活数据：任务板/声望/流水（npc 侧写、panel 只读展示）
       - ./mc/logs:/mclogs:ro
     environment:
       TZ: Asia/Shanghai
       PANEL_PORT: "9090"
       MC_DATA_DIR: /app/data
+      MC_QUEST_DIR: /mcdata/village
       MC_LOG_PATH: /mclogs/latest.log
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"

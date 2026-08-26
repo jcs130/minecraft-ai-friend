@@ -16,6 +16,9 @@ const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
 const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
 const VILLAGE_DIR = resolve(DATA_DIR, 'village') // 村庄引擎数据目录（config.json / villagers.json）
+// 村庄活数据（任务板 guild-*.json / 声望 guild-fame.json / 流水 quest-ledger.jsonl）在
+// mcdata 卷（npc 侧写）；容器里经 MC_QUEST_DIR 指过去，裸跑回落到 data/village。
+const LIVE_DIR = resolve(process.env.MC_QUEST_DIR || VILLAGE_DIR)
 const VILLAGE_CFG_PATH = resolve(VILLAGE_DIR, 'config.json')
 const VILLAGERS_PATH = resolve(VILLAGE_DIR, 'villagers.json')
 
@@ -255,13 +258,38 @@ function apiState() {
   // 被动天赋定义（skill-events.json）
   const passiveDefs = readJson(EVENTS_PATH, {})?.passives ?? []
 
+  // ── 服务器特色：任务系统（公会板 + 声望）与技艺谱（2026-08-26）──
+  const day = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+  const board = readJson(join(LIVE_DIR, `guild-${day}.json`), null)?.board ?? null
+  const fame = readJson(join(LIVE_DIR, 'guild-fame.json'), null) ?? null
+  // 近 7 日完成流水（quest-ledger.jsonl，guild-done 计数）
+  const stat7 = (() => {
+    const done = {}; let total = 0
+    try {
+      const lines = readFileSync(join(LIVE_DIR, 'quest-ledger.jsonl'), 'utf-8').trim().split('\n')
+      const cutoff = Date.now() - 7 * 86400e3
+      for (const ln of lines) {
+        try {
+          const e = JSON.parse(ln)
+          if (e.type !== 'guild-done') continue
+          if (Date.parse(e.ts.replace(' ', 'T') + '+08:00') < cutoff) continue
+          total++; done[e.who] = (done[e.who] || 0) + 1
+        } catch {}
+      }
+    } catch {}
+    return { total, by: done }
+  })()
+  const atomTable = atomsRaw.map((a) => ({ id: a.id, name: a.name ?? a.id, layer: a.layer ?? '', cost: a.cost || {}, requiredLevel: a.requiredLevel ?? 1 }))
+
   return {
     updatedAt: latest,
     bots,
     memory: mem,
     magic: magicPlayers,
     atomNames,
+    atomTable,
     passives: passiveDefs,
+    questBoard: { day, board, fame, stat7 },
     chronicle: readChronicle(40),
     npcFeed: readNpcFeed(24),
     world: hb,
@@ -442,6 +470,40 @@ const PAGE = `<!doctype html>
   .invgrid .islot.empty { opacity:.32 }
   .invgrid .islot.sel { border-color:#f0b72e; box-shadow:0 0 0 1px #f0b72e66 inset }
   .inv-label { font-size:11px; color:var(--dim); margin:8px 0 2px }
+  /* 任务板 + 修为榜（服务器特色系统） */
+  .qrow { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed #21262d; font-size:12px; }
+  .qrow:last-child { border-bottom:none }
+  .qrow .qno { color:var(--dim); font-family:monospace; font-size:11px; flex:0 0 30px }
+  .qrow .qico { flex:0 0 20px; text-align:center }
+  .qrow .qmain { flex:1 1 auto; min-width:0 }
+  .qrow .qtitle { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .qrow .qsub { color:var(--dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .qrow .qreward { flex:0 0 auto; text-align:right; font-size:11px; color:var(--gold); white-space:nowrap }
+  .qrow .qfame { color:var(--purple); font-size:10px }
+  .qst { flex:0 0 auto; font-size:10px; border-radius:8px; padding:1px 7px; border:1px solid var(--line); color:var(--dim); white-space:nowrap }
+  .qst.open { color:var(--dim) }
+  .qst.claimed { color:var(--blue); border-color:rgba(88,166,255,.45) }
+  .qst.done { color:var(--green); border-color:rgba(63,181,80,.45) }
+  .rrow { display:flex; align-items:center; gap:8px; padding:5px 6px; margin:2px 0; border-radius:6px; font-size:12px; cursor:pointer; }
+  .rrow:hover { background:#1c2128 }
+  .rrow.cur { background:#1c2b22; outline:1px solid rgba(63,181,80,.4) }
+  .rrow .rrank { color:var(--dim); font-family:monospace; flex:0 0 22px; text-align:center }
+  .rrow .rname { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .rrow .rlv { color:var(--gold); font-size:11px; flex:0 0 auto }
+  .rrow .rmana { color:var(--blue); font-size:11px; flex:0 0 auto; font-family:monospace }
+  .rrow .rlearn { color:var(--dim); font-size:11px; flex:0 0 auto }
+  .atomrow { display:flex; align-items:baseline; gap:8px; padding:3px 0; border-bottom:1px dashed #21262d; font-size:12px }
+  .atomrow:last-child { border-bottom:none }
+  .atomrow .aname { flex:0 0 88px }
+  .atomrow .alayer { font-size:10px; border-radius:8px; padding:0 6px; flex:0 0 auto }
+  .alayer.effect { color:var(--blue); border:1px solid rgba(88,166,255,.4) }
+  .alayer.travel { color:var(--purple); border:1px solid rgba(188,140,255,.4) }
+  .alayer.item { color:var(--gold); border:1px solid rgba(210,153,34,.4) }
+  .alayer.world { color:var(--green); border:1px solid rgba(63,181,80,.4) }
+  .atomrow .acost { color:var(--dim); font-size:11px; flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .atomrow .areq { color:var(--dim); font-size:11px; flex:0 0 auto }
+  details.sum { margin-top:8px }
+  details.sum summary { color:var(--dim); font-size:11px; cursor:pointer; user-select:none }
 </style>
 </head>
 <body>
@@ -496,6 +558,17 @@ const PAGE = `<!doctype html>
       <div class="card">
         <div class="card-head"><h2>技能与被动</h2><span class="muted" id="skill-sub"></span></div>
         <div id="skills"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>修为榜</h2><span class="muted" id="roster-sub">众生修行档案 · 点名选中</span></div>
+        <div id="roster"><div class="empty">加载中…</div></div>
+        <details class="sum" id="atom-fold" open><summary>法则技艺谱（收起）</summary><div id="atom-table"></div></details>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>任务板</h2><span class="muted" id="quest-sub"></span></div>
+        <div id="questboard"><div class="empty">加载中…</div></div>
       </div>
 
       <div class="card">
@@ -1292,6 +1365,96 @@ async function saveNpcCtl() {
   } catch (e) { if (msg) msg.textContent = '失败: ' + e; }
 }
 
+// ── 服务器特色：任务板（公会委托）+ 修为榜 + 法则技艺谱（2026-08-26）──
+const QTYPE = { gather: ['📦', '收购'], hunt: ['⚔️', '狩猎'], visit: ['🧭', '朝圣'], treasure: ['💰', '藏宝'], lair: ['🏕️', '讨巢'], boss: ['👹', '讨伐'], escort: ['🛡️', '护送'] }
+const QRANK = ['黑铁', '青铜', '白银', '黄金', '铂金']
+function renderQuestBoard() {
+  const el = document.getElementById('questboard')
+  const sub = document.getElementById('quest-sub')
+  const qb = state.questBoard
+  if (!qb || !Array.isArray(qb.board)) { el.innerHTML = '<div class="empty">今日公会板未生成（村庄引擎未运行？）</div>'; sub.textContent = ''; return }
+  const st = qb.stat7 || { total: 0, by: {} }
+  const byTxt = Object.entries(st.by).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => CN_NAME[k] + '×' + v).join(' ')
+  sub.textContent = (qb.day || '') + ' · 近7日完成 ' + st.total + ' 单' + (byTxt ? '（' + byTxt + '）' : '')
+  el.innerHTML = qb.board.map((q) => {
+    const [ico] = QTYPE[q.type] || ['📜']
+    const main = q.title || (q.zh ? '收购·' + q.zh : q.qid || '?')
+    const sub2 = [q.display, q.zh ? q.zh + '×' + q.count : '', q.rank ? QRANK[q.rank] || ('档' + q.rank) : ''].filter(Boolean).join(' · ')
+    const rw = '💚' + (q.reward ?? '?') + (q.fame ? ' <span class="qfame">★' + q.fame + '</span>' : '')
+    const stTxt = q.status === 'done' ? '✓ ' + (CN_NAME[q.done_by] || q.done_by || '?') + (q.done_at ? '·' + q.done_at : '')
+      : q.status === 'claimed' ? '进行中·' + (q.taker || []).map((t) => CN_NAME[t] || t).join(',')
+      : '可接'
+    return '<div class="qrow"><span class="qno">#' + (q.no ?? '-') + '</span><span class="qico">' + ico + '</span>'
+      + '<div class="qmain"><div class="qtitle">' + esc(main) + '</div><div class="qsub">' + esc(sub2) + '</div></div>'
+      + '<span class="qreward">' + rw + '</span><span class="qst ' + (q.status || 'open') + '">' + esc(stTxt) + '</span></div>'
+  }).join('')
+}
+// 登录名 -> 显示名（守卫桐人/鸣人等）
+const CN_NAME = { Kirito: '桐人', Naruto: '鸣人', Asuna: '亚丝娜', Sasuke: '佐助', Edward: '爱德华', Taro: '太郎', LanternWarden: '司灯' }
+const TEST_BOT_RE = /^(probe|smoke|harness|clitest|defect|test|skin|act|comm|pilgrim|courier)/i
+function renderRoster() {
+  const el = document.getElementById('roster')
+  const sub = document.getElementById('roster-sub')
+  const magic = state.magic || {}
+  const rows = Object.entries(magic)
+    .filter(([k, v]) => !TEST_BOT_RE.test(k) && ((v.learned || []).length || v.innateSkill || v.backstory))
+    .sort((a, b) => (b[1].level || 0) - (a[1].level || 0))
+  if (!rows.length) { el.innerHTML = '<div class="empty">女神册空（世界进程未运行）</div>'; return }
+  sub.textContent = rows.length + ' 位在册修行者 · 点名选中'
+  el.innerHTML = rows.map(([k, v], i) => {
+    const disp = CN_NAME[k] || k
+    const cur = botOf(currentUser) && (botOf(currentUser).bot?.username === k) ? ' cur' : ''
+    return '<div class="rrow' + cur + '" data-k="' + esc(k) + '"><span class="rrank">' + (i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1) + '</span>'
+      + '<span class="rname">' + esc(disp) + '<span style="color:var(--dim);font-size:10px"> ' + esc(k) + '</span></span>'
+      + '<span class="rlv">Lv' + (v.level || 0) + '</span>'
+      + '<span class="rmana">✨' + Math.round(v.mana ?? 0) + '/' + (v.maxMana || '?') + '</span>'
+      + '<span class="rlearn">已学' + (v.learned || []).length + '门</span></div>'
+  }).join('')
+  el.querySelectorAll('.rrow').forEach((r) => {
+    r.addEventListener('click', () => {
+      const k = r.getAttribute('data-k')
+      const st = state.bots.find((b) => b.bot?.username === k)
+      if (!st) return // 无 tab（离线无档案）：不可选
+      currentUser = st.bot.personaName || st.bot.username
+      renderTabs(); renderCurrent(); drawMap(); eyeFollowTo(currentUser)
+    })
+  })
+}
+// 法则技艺谱分类（atoms 的 layer 字段全是 'effect' 不作数，按 id 语义归类）
+const ATOM_CAT = {
+  home: 'travel', tp: 'travel', leap: 'travel', feather_fall: 'travel', steed: 'travel', windburst: 'travel',
+  appraise: 'bless', light: 'bless', heal: 'bless', feed: 'bless', regen: 'bless', swift: 'bless', ironskin: 'bless', strength: 'bless', haste: 'bless', night_vision: 'bless', water_breath: 'bless', fire_res: 'bless', invisibility: 'bless', guardian: 'bless', undying_stand: 'bless',
+  give: 'build', terraform: 'build', rampart: 'build', spring: 'build',
+  time_day: 'world', rain: 'world', storm: 'world', weather_clear: 'world', meteor: 'world',
+  blood_mana: 'blood', food_mana: 'blood', purge: 'blood',
+  summon_wolf: 'summon', summon_pack: 'summon', rasengan: 'summon', kage_bunshin: 'summon',
+}
+const CAT_TXT = { travel: ['🌀', '空间行旅'], bless: ['✨', '神恩护佑'], build: ['🏗️', '造物大地'], world: ['🌦️', '天象时序'], blood: ['🩸', '血祭秘术'], summon: ['🐺', '通灵忍道'] }
+const CAT_ORDER = ['travel', 'bless', 'build', 'world', 'blood', 'summon']
+function renderAtomTable() {
+  const el = document.getElementById('atom-table')
+  const tbl = state.atomTable || []
+  if (!tbl.length) { el.innerHTML = '<div class="empty">技艺表未加载</div>'; return }
+  const catOf = (id) => ATOM_CAT[id] || 'bless'
+  const groups = {}
+  for (const a of tbl) (groups[catOf(a.id)] ||= []).push(a)
+  el.innerHTML = CAT_ORDER.filter((c) => groups[c]).map((c) => {
+    const [ico, txt] = CAT_TXT[c]
+    const rows = groups[c].sort((x, y) => x.requiredLevel - y.requiredLevel).map((a) => {
+      const cc = a.cost || {}
+      // 负代价=付出换回（燃血 ❤→✨、炼食 🍗→✨），正代价=消耗
+      const bits = []
+      if (cc.mana > 0) bits.push('✨' + cc.mana)
+      if (cc.mana < 0) bits.push('→✨' + (-cc.mana))
+      if (cc.food > 0) bits.push('🍗' + cc.food)
+      if (cc.hp > 0) bits.push('❤' + cc.hp)
+      const cost = bits.join(' ') || '免费'
+      return '<div class="atomrow"><span class="aname">' + esc(a.name) + '</span>'
+        + '<span class="acost">' + cost + '</span><span class="areq">Lv' + a.requiredLevel + '</span></div>'
+    }).join('')
+    return '<div class="inv-label">' + ico + ' ' + txt + '（' + groups[c].length + '）</div>' + rows
+  }).join('')
+}
 function renderTabs() {
   const el = document.getElementById('tabs');
   if (!state.bots.length) {
@@ -1925,6 +2088,9 @@ async function refresh() {
     updateTtsFilterOptions(); // 播报范围下拉：按在线玩家动态补全（保留当前选择）
     renderTabs();
     renderCurrent();
+    renderQuestBoard();
+    renderRoster();
+    renderAtomTable();
 
     const m = s.memory || {};
     const res = Object.entries(m.resourcePoints || {}).map(([k, v]) => k + '(' + v.length + ')').join(', ');
@@ -2429,7 +2595,9 @@ const server = createServer((req, res) => {
         const d = new Date()
         const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         let quests = []
-        try { quests = JSON.parse(readFileSync(join(DATA_DIR, 'village', `quests-${day}.json`), 'utf-8'))?.quests ?? [] } catch {}
+        // 任务板在 mcdata 卷（LIVE_DIR）；回落 data/village 兼容裸跑
+        try { quests = JSON.parse(readFileSync(join(LIVE_DIR, `quests-${day}.json`), 'utf-8'))?.quests ?? [] } catch {}
+        try { if (!quests.length) quests = JSON.parse(readFileSync(join(VILLAGE_DIR, `quests-${day}.json`), 'utf-8'))?.quests ?? [] } catch {}
         const feed = []
         try {
           const lines = readFileSync(NPCFEED_PATH, 'utf-8').trim().split('\n').slice(-30)
