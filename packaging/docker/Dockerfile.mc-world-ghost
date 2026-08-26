@@ -1,0 +1,13 @@
+# mc-world:2.1.7 — 2.1.6 + 天眼化身隐身&重合取景
+# 2026-08-26 用户反馈：第三人称里女神小人悬在角色上空(不重合)、且小人可见干扰看角色。
+# 修两处：
+# ① /api/eye 增 h 悬停高度参数：第三人称 h=0（化身与目标完全重合，取景以角色为中心），
+#    第一人称保留 h=9 上空俯瞰；前端 eyeFollowTo 按 viewMode 传 h，视角切换按钮重发跟随。
+# ② viewer-selfhide-patch.mjs：bundle 里自己的玩家 mesh e.visible=!1（viewer 本地渲染
+#    无视 spectator，世界里本就隐身）；缓存版本 v=8 -> v=9。
+# 用法：docker build -f Dockerfile.mc-world-ghost -t mc-world:2.1.7 <repo 根>
+FROM mc-world:2.1.6
+COPY web-panel.mjs /app/web-panel.mjs
+COPY packaging/docker/viewer-selfhide-patch.mjs /tmp/viewer-selfhide-patch.mjs
+RUN node /tmp/viewer-selfhide-patch.mjs /app/node_modules/prismarine-viewer/public/index.js /app/node_modules/prismarine-viewer/public/index.html \
+ && rm /tmp/viewer-selfhide-patch.mjs

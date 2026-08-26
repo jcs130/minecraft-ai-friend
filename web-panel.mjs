@@ -682,10 +682,12 @@ document.getElementById('dbg-btn').addEventListener('click', () => { document.ge
 let state = { bots: [], memory: {}, magic: {}, atomNames: {}, atomTable: [], passives: [], chronicle: [], npcFeed: [], villageNpcs: [], villagersLive: [], questBoard: null };
 let currentUser = null; // 当前选中的 bot username
 let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first
-// 天眼跟随：选中玩家 -> 后端把女神 tp 到其上方（每 2s 跟随），天眼视角即跟过去
+// 天眼跟随：选中玩家 -> 后端把女神 tp 过去（每 600ms 跟随），天眼视角即跟过去
+// 第三人称 h=0：化身与目标完全重合（viewer 里化身 mesh 已隐身，取景以角色为中心）；
+// 第一人称 h=9：保留上空俯瞰（Goddess 自己的眼睛）。
 async function eyeFollowTo(name) {
   if (!name) return;
-  try { await fetch('/api/eye?name=' + encodeURIComponent(name) + '&follow=1'); } catch {}
+  try { await fetch('/api/eye?name=' + encodeURIComponent(name) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 0)); } catch {}
 }
 function eyeFollowStop() {
   try { fetch('/api/eye?follow=0').catch(() => {}); } catch {}
@@ -2303,8 +2305,8 @@ function initViewButtons() {
     bt.className = 'vbtn' + (viewMode === 'third' ? ' active' : '');
     bf.className = 'vbtn' + (viewMode === 'first' ? ' active' : '');
   }
-  bt.addEventListener('click', () => { viewMode = 'third'; localStorage.setItem('viewMode', 'third'); sync(); renderCurrent(); });
-  bf.addEventListener('click', () => { viewMode = 'first'; localStorage.setItem('viewMode', 'first'); sync(); renderCurrent(); });
+  bt.addEventListener('click', () => { viewMode = 'third'; localStorage.setItem('viewMode', 'third'); sync(); renderCurrent(); eyeFollowTo(currentUser); });
+  bf.addEventListener('click', () => { viewMode = 'first'; localStorage.setItem('viewMode', 'first'); sync(); renderCurrent(); eyeFollowTo(currentUser); });
   br.addEventListener('click', () => {
     // 重载 iframe 以重置镜头位置；天眼跟随停止并归位
     eyeFollowStop();
@@ -2532,13 +2534,14 @@ function parseSnbtItems(out) {
   return items
 }
 
-// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 到其上方俯视，每 2s 跟随一次 ----
-let eyeFollow = null // { name, home }
-const EYE_HEIGHT = 9 // 悬停玩家上方格数（俯视；2026-08-23 从 12 调近，避免"缩放太远"看不清守卫）
+// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 过去跟随，每 600ms 一次 ----
+let eyeFollow = null // { name, home, h }
+const EYE_HOVER = 9 // 第一人称（Goddess 视角）悬停上空格数；第三人称 h=0 与目标重合
 function eyeTpOnce(name) {
   // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
   const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
-  return rconExec(`execute at ${target} run tp Goddess ~ ~${EYE_HEIGHT} ~`)
+  const h = eyeFollow?.h ?? EYE_HOVER
+  return rconExec(`execute at ${target} run tp Goddess ~ ~${h} ~`)
 }
 setInterval(() => {
   if (eyeFollow && eyeFollow.name) {
@@ -2750,6 +2753,8 @@ const server = createServer((req, res) => {
   if (u.pathname === '/api/eye' && req.method === 'GET') {
     const name = (u.searchParams.get('name') || '').trim()
     const follow = u.searchParams.get('follow')
+    const hRaw = Number(u.searchParams.get('h'))
+    const h = Number.isFinite(hRaw) && hRaw >= 0 ? hRaw : EYE_HOVER // 悬停高度：第三人称传 0（重合），缺省上空俯瞰
     // 坐标模式：一次性 tp（村民/地标）——停跟随，天眼飞过去俯瞰，不循环
     const ex = u.searchParams.get('x'), ey2 = u.searchParams.get('y'), ez = u.searchParams.get('z')
     if (ex != null && ey2 != null && ez != null) {
@@ -2770,7 +2775,7 @@ const server = createServer((req, res) => {
       return
     }
     const doStart = () => {
-      eyeFollow = { name }
+      eyeFollow = { name, h }
       eyeTpOnce(name).catch(() => {})
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
@@ -2779,13 +2784,14 @@ const server = createServer((req, res) => {
       // 记录女神当前位置（归位用）；查不到就 home=null（只跟随不归位）
       rconExec('data get entity Goddess Pos').then((out) => {
         const m = String(out || '').match(/\[([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?\]/)
-        eyeFollow = { name, home: m ? `${m[1]} ${m[2]} ${m[3]}` : null }
+        eyeFollow = { name, h, home: m ? `${m[1]} ${m[2]} ${m[3]}` : null }
         eyeTpOnce(name).catch(() => {})
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ ok: true, follow: true, name }))
       }).catch(() => doStart())
     } else {
       eyeFollow.name = name
+      eyeFollow.h = h
       eyeTpOnce(name).catch(() => {})
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
