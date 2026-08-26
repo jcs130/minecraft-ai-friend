@@ -120,6 +120,19 @@ services:
     networks: [shadow]
     depends_on: [mc]
 
+  # ── 基岩版入口（2026-08-26 终局：不走容器，宿主直跑）──
+  # 实测三连否决：Docker Desktop(Windows) 的端口发布层不绑 UDP 到宿主——
+  # useVpnkit true/false 皆然（netstat 查无监听）；WSL mirrored 早已生效但 DD 的
+  # system 发行版不参与 mirrored。容器内 Geyser 一切正常（网内 RakNet PONG），
+  # 就是出不了宿主 → 局域网手机无门。正解 = 宿主进程：
+  #   ops/docker/shadow/viaproxy/start-viaproxy.bat（cli 模式，勿裸跑=GUI 模式会
+  #   等一个永远无人点的 Start 按钮）+ start-viaproxy-hidden.vbs 隐窗；
+  #   自启 = 计划任务 ViaProxy-Bedrock-Entry（ONLOGON）。
+  # 链路：基岩客户端 --UDP 19140--> Geyser(插件) --Java--> ViaProxy --1.21.1--> 127.0.0.1:25599
+  # 端口史：19132 系统隐身占用；19133 DD 重启后留 mirrored 僵尸预留（bind 报 10048
+  # 却查无进程，wsl --shutdown/重启才能清）→ 19140 定居。Geyser 端口在
+  # viaproxy/plugins/Geyser/config.yml。容器版历史方案见 git log。
+
   # ── 面板（web-panel.mjs，node:sqlite 读 world.db）──
   panel:
     image: mc-world:2.1.0
