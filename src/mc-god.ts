@@ -1137,7 +1137,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   // 守卫登录名映射（2026-08-23 铁律 name/ID 分离）：显示名（桐人/鸣人）只用于叙事与人机界面，
   // 程序化 RCON 操作（data get entity / tp）必须用 ASCII 登录名（Kirito/Naruto）。
-  const GUARD_LOGIN: Record<string, string> = { '桐人': 'Kirito', '鸣人': 'Naruto' }
+  const GUARD_LOGIN: Record<string, string> = { '桐人': 'Kirito', '鸣人': 'Naruto', '爱德华': 'Edward' }
   /** 显示名→登录名：守卫走映射；其余（真人玩家已用登录名、AI 穿越者）原样返回。 */
   function resolveLogin(name: string): string {
     return GUARD_LOGIN[name.trim()] ?? name.trim()
@@ -1494,6 +1494,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // → 守卫桥下轮注入亲卫 prompt（"女神谕示"）。含已学技能中文名点明。每守卫 5 分钟至多一条。
   let lastGuardWatch = 0
   const lastOrder = new Map<string, number>()
+  // R008 去重（2026-08-26）：同一 reason 连发计数——连发 4 条无改善即降频，防丧钟连响灌编年史。
+  const lastReasonRun = new Map<string, { reason: string; count: number }>()
   function guardDistress(name: string, ms: any): string | null {
     // 血/饱食（magic-state 的 hpRatio/foodRatio 由 mc-magic tick 更新）
     if (typeof ms.hpRatio === 'number' && ms.hpRatio > 0 && ms.hpRatio < 0.4) {
@@ -1535,14 +1537,42 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const now = Date.now()
       if (now - lastGuardWatch < 60_000) return
       lastGuardWatch = now
+      const bot = getBot()
       for (const name of GUARD_NAMES) {
         // magic-state 键 = 登录名（英文 Kirito/Naruto）；显示名只用于叙事（chronicle/log）。
-        const ms = magic.getState(resolveLogin(name)) as any
+        const login = resolveLogin(name)
+        const ms = magic.getState(login) as any
         if (!ms) continue
         const since = lastOrder.get(name) ?? 0
         if (now - since < 5 * 60_000) continue
+        // R008 根修（2026-08-26 天神工程窗口）：magic-state 的 hpRatio/foodRatio 由死亡轮询
+        // setVitals 刷新——实体掉线/被容器化 wipe 后不再刷新，快照冻结在濒死值 → 每 5 分钟
+        // 对空气重发同一条「濒临倒下」丧钟（旧界实证：桐人 30 帧零变化、鸣人 7/20 连刷 6 小时）。
+        // 判定前先验实体在场（bot.players 现取，零 RCON 开销）；不在场本轮直接跳过。
+        if (!bot.entity || !bot.players || !bot.players[login]) {
+          log(`watchGuards: ${name} 不在场，跳过困境判定（R008 防对消失实体空报）`)
+          continue
+        }
         const reason = guardDistress(name, ms)
-        if (!reason) continue
+        if (!reason) {
+          lastReasonRun.delete(name) // 恢复常态，计数清零
+          continue
+        }
+        // R008 第二闸：同一 reason 连发 4 条（20 分钟）无改善 → 不再往 goddess-orders 注入
+        // 同文案（防亲卫被同一条谕示轰炸、编年史灌水），此后每 20 分钟只在编年史记一笔
+        // 低频观察；reason 变化或恢复后自动重置。
+        const prevRun = lastReasonRun.get(name)
+        if (prevRun && prevRun.reason === reason) prevRun.count += 1
+        else lastReasonRun.set(name, { reason, count: 1 })
+        const run = lastReasonRun.get(name)!
+        if (run.count > 4) {
+          if ((run.count - 5) % 4 === 0) {
+            worlddb.chronicleRecord('guard-order', name, { reason: `${reason}（持续未见改善，谕示降频观察）`.slice(0, 80), text: '' })
+          }
+          lastOrder.set(name, now)
+          log(`watchGuards: ${name} 同困境第 ${run.count} 轮无改善，谕示降频（R008 去重）`)
+          continue
+        }
         lastOrder.set(name, now)
         const skills = (ms.learned ?? []).map((id: string) => magic.getAtomById(id)?.name).filter(Boolean).slice(0, 6).join('、')
         const text = `${reason}。${skills ? `你已掌握：${skills}——需要时咏唱或祈愿即可。` : '需要帮助时祈愿即可。'}`

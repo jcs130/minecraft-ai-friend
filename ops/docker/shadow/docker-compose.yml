@@ -33,6 +33,8 @@ services:
       COPY_MODS: "true"
       GUI: "false"
       TZ: Asia/Shanghai
+      # 2026-08-26 天神补：settlementsfix 三键走 JVM_OPTS 持久注入（itzg 启动脚本每次重写 user_jvm_args.txt，直接编辑该文件会被抹掉）
+      JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl"
     ports:
       - "25599:25599"
       - "25575:25575"
@@ -126,7 +128,7 @@ services:
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
     ports:
-      - "19090:9090"
+      - "9090:9090"
     networks: [shadow]
 
   # ── 村民之魂（mcdata 卷；听 log + RCON 发言）──
