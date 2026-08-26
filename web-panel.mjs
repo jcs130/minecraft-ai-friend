@@ -2586,8 +2586,9 @@ function parseSnbtItems(out) {
   return items
 }
 
-// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 过去跟随，每 600ms 一次 ----
+// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 过去跟随，每 250ms 一次（2026-08-26 提频：600ms 步子太大=一卡一卡）----
 let eyeFollow = null // { name, home, h }
+let eyeGmSet = false // spectator 只需设一次，不再每轮重发
 const EYE_HOVER = 9 // 第一人称（Goddess 视角）悬停上空格数；第三人称 h=0 与目标重合
 function eyeTpOnce(name) {
   // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
@@ -2597,11 +2598,13 @@ function eyeTpOnce(name) {
 }
 setInterval(() => {
   if (eyeFollow && eyeFollow.name) {
-    // 观察者身份（spectator）：穿墙、不干扰目标，配合高频 tp 实现丝滑天眼跟随（#5）
-    rconExec('gamemode spectator Goddess').catch(() => {})
+    // 观察者身份（spectator）：穿墙、不干扰目标；设一次即可，跟随期间不重发
+    if (!eyeGmSet) { rconExec('gamemode spectator Goddess').catch(() => {}); eyeGmSet = true }
     eyeTpOnce(eyeFollow.name).catch(() => {})
+  } else {
+    eyeGmSet = false
   }
-}, 600)
+}, 250)
 
 // ---- 世界控制（2026-08-23）：难度 / 时间 / 天气 / 游戏规则 —— 走 RCON 即时生效 ----
 const WORLD_GAMERULES = [

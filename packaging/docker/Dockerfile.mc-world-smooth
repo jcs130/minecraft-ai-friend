@@ -1,0 +1,10 @@
+# mc-world:2.1.8 — 天眼丝滑跟随（客户端相机插值）
+# 2026-08-26 用户反馈人物跟随一卡一卡。两层修：
+#   ① 服务端（web-panel.mjs，panel 容器 2.2.1）：tp 间隔 600ms→250ms、gamemode 只设一次；
+#   ② 客户端（本镜像）：viewer-smooth-patch.mjs 把相机增量与 OrbitControls target
+#      从直接 snap 改为 170ms Tween 平滑（v9→v10），衔接 250ms 服务端步进。
+# 用法：docker build -f Dockerfile.mc-world-smooth -t mc-world:2.1.8 <repo 根>
+FROM mc-world:2.1.7
+COPY packaging/docker/viewer-smooth-patch.mjs /tmp/viewer-smooth-patch.mjs
+RUN node /tmp/viewer-smooth-patch.mjs /app/node_modules/prismarine-viewer/public/index.js /app/node_modules/prismarine-viewer/public/index.html \
+ && rm /tmp/viewer-smooth-patch.mjs
