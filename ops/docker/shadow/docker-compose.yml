@@ -90,7 +90,7 @@ services:
   # 2.1.1 = 2.1.0 + canvas 鍨墖锛園napi-rs/canvas锛夛紝MC_VIEWER=1 寮€濂崇澶╃溂 prismarine-viewer锛?  # 绗笁浜虹О 3050 / 绗竴浜虹О 3150锛屽涓荤洿閫氫緵 9090 闈㈡澘 iframe 宓屽叆锛堟棤绌胯秺鑰呮椂鍏滃簳鐢婚潰锛?  # 2.1.2 = 2.1.1 + 瑙傚療鑰呭寲韬紙MC_OBSERVER=1 鍏崇墿鐞嗭級锛氫慨 9090 闈㈡澘銆屽皬浜轰竴鐩村線涓嬫帀銆?  # 鈥斺€攎ineflayer 鏈湴閲嶅姏妯℃嫙涓庡ぉ鐪?RCON tp 浜掓悘锛屾案鍔ㄤ笅鍧?+ moved too quickly 鍒峰睆銆?  # 2.1.3 = 2.1.2 + 澶╃溂闀滃ご璺熼殢鍙屼慨锛氣憼瑙傚療鑰?forcedMove鈫掕ˉ鍙?move锛坴iewer 鎵嶆帹闀滃ご/鍔犺浇
   # 鍖哄潡锛夆憽web 绔?bundle follow=smart 澧為噺璺熼暅澶达紙stock 绗笁浜虹О鍙憜涓€娆＄浉鏈猴級銆?
   world:
-    image: mc-world:2.1.23
+    image: mc-world:2.1.31
     container_name: shadow-world
     restart: unless-stopped
     volumes:
