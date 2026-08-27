@@ -80,3 +80,13 @@
 - **眼验动线**：9090 面板点顶部穿越者 tab（坐标 click(1031,24)）→ 跟随桐人看守村实体；get_by_text('Kirito') 5 处命中点不到按钮，坐标点击最直接。
 - 落地：mc-world:2.1.33（mts 归一分支 + textures 1.21.1/1.16.4 全树），commit 9cbd868 已推，全村零棋盘眼验通过。
 
+
+## 2026-08-27 品红棋盘二次终局：纹理 URL 三形态与"透明兜底"的谎言
+
+- **所谓"1x1 透明兜底"实为 16x16 品红/黑棋盘**（OPTIONAL_TEXTURE_FALLBACK 的 base64 解出来 255,0,255 与 24,24,24 交替）——注释骗人。凡纹理 404 都被喂这张图，这就是画面品红的直接来源；bundle 里根本没有品红绘制代码，别在 renderer 里白挖。
+- **实体纹理 URL 有三种形态并存于 bundle**：①绝对+版本段 `/textures/1.21.1/entity/villager/...`（villager 特例函数）②相对+版本段 `textures/${v}/entity/horse/...`（C8 变种表）③**无版本段** `/textures/entity/cow/cow.png`（cow/pig/sheep/zombie/skeleton/iron_golem 等常见生物）。三形态漏一种就整类生物品红。归一修法：lastIndexOf('/textures/') 切尾 + 无版本段补 1.21.1；另在 public 树放 textures/entity 版本无关副本双保险。
+- **找缺口别猜：mts 落 [texture-miss] 日志 + docker logs --since 抓清单**，一次列出全部 404 纹理（14 条），按单补齐——比截图猜实体类型快十倍。RCON `execute positioned ... if entity @e[type=x] run say` 探测法会因 say 不回 RCON + 错误回显误判全 HIT；用 `data get entity @e[type=x,limit=1] Pos` 才有真回显。
+- **const 赋值炸 500**：请求处理函数里 rel 是 const，归一重新赋值直接 "Assignment to constant variable" → 500。归一必须落新变量（texRel）。2.1.33 的"验证 200"存疑（归一代码当时可能根本没被执行到/未进镜像），**每次改路由必须重验全部形态的 URL**。
+- **眼验要打到病灶本体**：上一轮"全村零品红"是取样偏差——桐人在跑图，守村傀儡群不在镜头里。眼验点位由 RCON data get 实体坐标决定（守村傀儡·南巷 -564,71,834 → 跟随 Edward -557,852 即可入镜），别拿"附近没病"当"病愈"。
+- 落地：mc-world:2.1.36（texRel 双归一 + textures/entity 层 + miss 日志），commit a47ca4f 已推 CI 17 绿；铁傀儡/雪傀儡/鱼群/村民全量眼验正常。
+
