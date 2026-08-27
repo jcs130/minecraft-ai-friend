@@ -38,3 +38,13 @@
 - **剥 username 的安全性边界（客户端源码逐一核实后才动刀）**：名牌跳过逻辑 ✓；named-character-identities 无 Goddess 条目（不会误伤女神自定义形象绑定）；皮肤走 selectedPlayerSkin.texture + applyOverride(textureUrl,id,...)，不依赖 username。
 - **验证三板斧**：①socket 探针对线（本体 3 通道无 username，Kirito/Naruto/Edward/Codex 完好）；②部署 bundle 反查名牌函数判定逻辑；③browser SDK /third 截图实拍（本体头顶无名牌、形象正常）。修传输层必须三层全验，别只看一层就宣布修好。
 - 落地：mc-world:2.1.17（FROM 2.1.16，仅 COPY mc-modern-viewer.mts），compose world 升版；顺带收编 Step③ 未入库产物（modern-viewer.js bundle、mod-assets/、build-mod-asset-pack.py、rcon-shadow.py）。
+
+## 2026-08-27 局域网进服终局：DD Windows TCP 发布的「隐形占位」+ 宿主中继定谳
+
+- **症状与昨日 UDP 三层死刑同族（TCP 版）**：LAN 客户端连宿主 IP 的发布端口全灭（25599 游戏/9090 面板），loopback 却通；netstat 与 Get-NetTCPConnection(-State Listen) 双双查无 LISTENING；但原生 python 绑同端口报 WinError 10048——**Docker Desktop 发布的端口被隐形 socket 全接口占位且只服务回环流量**。
+- **三层冤案排除法（防再绕弯）**：①Windows 主防火墙 allow 规则——无效但无辜；②Hyper-V firewall `Set-NetFirewallHyperVVMSetting -DefaultInboundAction Allow`——无效但无辜；③GPO LocalFirewallRules "N/A (GPO-store only)" 字样是显示格式误读，Policies 键根本不存在，本地规则实际生效。判据=**对照实验金标准**：原生 `python -m http.server --bind 0.0.0.0` 从 LAN IP 自测 True → 防火墙链路完好，唯一堵点是隐形占位者只管回环。
+- **netsh portproxy 在此机死刑**：v4tov4 无论 0.0.0.0 还是具体网卡 IP 监听都不出现（iphlpsvc 重启亦然），别再试第三次。
+- **解法定谳=宿主原生中继换口绕行**：`ops/docker/host_tcp_relay.py`（asyncio 双向 pump），25565→127.0.0.1:25599（MC 客户端默认端口免填）、8090→9090（面板）；schtasks ONLOGON 两任务固化（MCHostRelay-MC25565 / MCHostRelay-Panel8090）。端口必须挑没被隐形占用的口——原端口上中继永远绑不上。
+- **Java 版专用服永不上「局域网」扫描清单**：LAN 组播发现（224.0.2.60:4445）是单人世界 Open-to-LAN 专属机制，客户端须手动「添加服务器」——这不是故障，别往服务器侧找病根。
+- **Start-Process 参数化陷阱**：PowerShell `-ArgumentList` 数组里漏一个参数不报错，进程 argparse 秒退静默；后台拉起后必须回查 netstat 确认监听真的在场。
+- 落地：commit 4c49de1；shadow-world bundle=d25e4e0e（村民 UV flipY+髋部 rig+职业分层，上游 tests 全绿）；mc-god.ts callAgentTask/callAgent 120s→300s；web-panel.mjs 天眼修复热部两容器；Numen 上游 v0.1.2-1.21.1-beta 已 fetch 为 upstream-v0.1.2 tag 待拍板升级（36 commits：载具/右键管线/equip·unequip/event 台账化/MCP 对话一线/UI 改版）。

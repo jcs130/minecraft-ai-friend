@@ -26,8 +26,10 @@ const MAX_VIEWER_EFFECT_DISTANCE = 96
 const MAX_VIEWER_EFFECT_EVENTS_PER_SECOND = 80
 const MAX_VIEWER_EFFECT_PARTICLES = 24
 
-// 本服注册表在原版 1.21.1 之后追加过两种矿石状态——名称归一化之外再留实测兜底
-const KNOWN_1_21_1_STATE_ID_REMAP = new Map([[26684, 123], [26685, 124]]) // gold_ore / deepslate_gold_ore
+// 2026-08-27 摘除"26684/26685→金矿石"实测兜底：客户端 mcData 已并入真 mod 注册表
+// （渲染桥 Step③ 根修），留着它会把 settlements:dormant_ore 污染成金矿石；留空让
+// mod 块 stateId 原样透传给客户端注册表解析。
+const KNOWN_1_21_1_STATE_ID_REMAP = new Map()
 
 const OPTIONAL_TEXTURE_FALLBACK = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAALElEQVR4nGP4z/D/PzKWkJBAwYTkGYaBAaRqQJcfDgYMfCwMvAEDHwsDbgAAZ/wiH+XmcpcAAAAASUVORK5CYII=',
@@ -832,6 +834,11 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
         res.writeHead(code, { 'Content-Type': type, ...headers })
         res.end(req.method === 'HEAD' ? undefined : body)
       }
+      // TEMP 渲染桥排障：worker 探针回传（问号方块根修用，修复后拆除）
+      if (p === '/worker-probe') {
+        console.log('[worker-probe]', req.url)
+        send(204, 'text/plain', ''); return
+      }
       // 页面
       if (rel === '/' || rel === '') {
         send(200, 'text/html; charset=utf-8', viewerHtml(firstPersonFov, dashboardOrigin)); return
@@ -839,7 +846,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       // bundle / css / manifest
       if (rel === '/index.js') {
         const body = await readFile(path.join(ASSET_ROOT, 'modern-viewer.js'))
-        send(200, 'application/javascript; charset=utf-8', body); return
+        send(200, 'application/javascript; charset=utf-8', body, { 'Cache-Control': 'no-store' }); return
       }
       if (rel === '/viewer.css') {
         const body = await readFile(path.join(ASSET_ROOT, 'viewer.css'))
@@ -874,7 +881,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
           const meta = await stat(file).catch(() => null)
           if (meta?.isFile()) {
             const body = await readFile(file)
-            send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Content-Length': String(meta.size), 'Cache-Control': 'public, max-age=86400' }); return
+            // 2026-08-27 no-store（原 86400 酿祸）：渲染器 ping 用 cache:'force-cache'，
+            // 长缓存会把旧 worker 钉死 24h，mod 块补丁永远进不了 worker → 问号方块。
+            send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Content-Length': String(meta.size), 'Cache-Control': 'no-store' }); return
           }
         }
         send(404, 'text/plain', 'Not Found'); return

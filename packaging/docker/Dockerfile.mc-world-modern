@@ -1,13 +1,14 @@
-# mc-world:2.1.18 — 具名角色（桐人/鸣人等）名牌恢复 + 中文显示名
-# 2.1.18 = FROM 2.1.17（本体名牌抑制根修）+ modern-viewer.js（mengyue-modern-minecraft-viewer 构建）：
-#   根因：自定义角色挂载时 hideNativeCharacterMaterials 把原生 root 整组 visible=false，
-#         而渲染器名牌精灵（non-mesh Sprite, name==='nametag'）就挂在原生 mesh 组内——
-#         桐人/鸣人的名牌连同原生身体一起被藏掉，其余普通玩家不受影响（→「鸣人和桐人没名字」）。
-#   修复：①逐 mesh 抑制（object.visible=false + 记录/恢复），native root 保活；
-#         ②新增 ensureCharacterNameplate：借渲染器 globalThis.getUsernameTexture 以
-#           definition.identityName（桐人/鸣人…中文名）重绘名牌纹理并按签名缓存，
-#           挂牌异步到达时限次重试（40 次），同时与实体隐身状态同步可见性。
-#   三个挂载/升级/降级路径与每帧刷新分支均已接入；卸载路径对称恢复 mesh/material 可见性。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.18 <repo 根>
-FROM mc-world:2.1.17
+# mc-world:2.1.19 — mod 方块贴图终局修复：命名空间前缀兜底 + 三 bundle 全量固化
+# 根因链见 LESSONS.md「mod 贴图问号终局」：
+#   mod 模型引用原版贴图带命名空间 minecraft:block/oak_log，
+#   face 解析剥 block/ 后得 minecraft:oak_log，而 atlas 键是裸名 oak_log → miss → 静默丢面渲染 '?'。
+#   getTextureInfo 包装层加「含 : 时剥命名空间重查」兜底（modern-viewer.js 主线程/图标 + mesher.js worker + threeWorker.js 死拷贝）。
+#   本次把 mesher.js/threeWorker.js 一并 COPY 固化——此前历次镜像演进只 COPY modern-viewer.js，
+#   docker cp 进容器可写层的成果在容器 recreate 后全部回滚（2026-08-27 引擎崩溃实证），这是
+#   「修好过→同步村民模型修复→又坏」循环的根源。
+# 验证指纹：浏览器 tab 标题含 |v2.1.19-NSFIX；worker-probe 探针 facemiss/nomodel/texmiss 三零。
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.19 <repo 根>
+FROM mc-world:2.1.18
 COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
+COPY packaging/docker/modern-viewer/mesher.js /app/modern-viewer/mesher.js
+COPY packaging/docker/modern-viewer/threeWorker.js /app/modern-viewer/threeWorker.js
