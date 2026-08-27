@@ -478,6 +478,17 @@ function viewerInventory(bot) {
     .filter((item) => item !== undefined)
     .slice(0, MAX_VIEWER_INVENTORY_SLOTS)
 }
+// 本体铭牌抑制：跟随视角下本体会与被观察者坐标重合，username/displayName/customName 任一存在
+// 都会被客户端渲染器画成名牌——「跟随谁，goddess 名牌就叠在谁头上」（2026-08-27 根因裁定）。
+// 客户端 _n() 对缺 username 的玩家实体直接跳过铭牌，故本体载荷剥离这三个字段；id/isSelf/uuid
+// 保留，皮肤/自定义形象绑定（按 id、isSelf 与 lantern 档案）不受影响。
+function stripOwnNameTag<T extends object>(payload: T): T {
+  const clone: Record<string, unknown> = { ...(payload as Record<string, unknown>) }
+  delete clone.username
+  delete clone.displayName
+  delete clone.customName
+  return clone as T
+}
 function serializeAvatarState(bot, sequence = 0) {
   const entity = bot.entity
   const inventory = viewerInventory(bot)
@@ -504,8 +515,8 @@ function serializeAvatarState(bot, sequence = 0) {
   return {
     seq: sequence, sequence, capturedAt: Date.now(),
     entity: {
-      ...serializeViewerEntity(bot, entity),
-      name: 'player', type: 'player', username: bot.username,
+      ...stripOwnNameTag(serializeViewerEntity(bot, entity)),
+      name: 'player', type: 'player',
       headYaw: viewerEntityHeadYaw(entity), isSelf: true,
     },
     movementState,
@@ -821,6 +832,19 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
         }
         send(404, 'text/plain', 'Not Found'); return
       }
+      // 渲染桥 Step③：mod 资产包与 mod 方块注册表（scripts/build-mod-asset-pack.py 产物）
+      // client.js 经 fetch('/mod_assets/mod-pack.json') 注入 customBlockStates/customModels/customTextures
+      if (rel.startsWith('/mod_assets/') && rel.endsWith('.json')) {
+        const file = safeJoin(path.join(ASSET_ROOT, 'mod-assets'), rel.slice('/mod_assets/'.length))
+        if (file && file.endsWith('.json')) {
+          const meta = await stat(file).catch(() => null)
+          if (meta?.isFile()) {
+            const body = await readFile(file)
+            send(200, 'application/json; charset=utf-8', body, { 'Content-Length': String(meta.size), 'Cache-Control': 'no-cache' }); return
+          }
+        }
+        send(404, 'application/json', '{}'); return
+      }
       // NPC 立绘
       if (rel.startsWith('/npc-portraits/')) {
         const file = safeJoin(path.join(ASSET_ROOT, 'npc-portraits'), rel.slice('/npc-portraits/'.length))
@@ -917,8 +941,8 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     let avatarSequence = 0
     const movementAnimations = new Map()
     const ownEntity = () => ({
-      ...serializeViewerEntity(bot, bot.entity),
-      name: 'player', type: 'player', username: bot.username,
+      ...stripOwnNameTag(serializeViewerEntity(bot, bot.entity)),
+      name: 'player', type: 'player',
       headYaw: viewerEntityHeadYaw(bot.entity), isSelf: true,
     })
     const emitOwnEntity = () => {
