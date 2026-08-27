@@ -5,7 +5,7 @@
 // 依赖：socket.io + prismarine-viewer(WorldView) + minecraft-data（容器 /app/node_modules 均已有）。
 // 启用：bootstrap-world.mts spawn 后调用 startModernViewer(() => bot.getBot())；MC_MODERN_VIEWER=1。
 import { createRequire } from 'node:module'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, stat, readdir } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
@@ -731,10 +731,43 @@ function viewerHtml(firstPersonFov, dashboardOrigin) {
 }
 
 // ---------- 静态资产 ----------
-const MIME = { '.png': 'image/png', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.html': 'text/html; charset=utf-8', '.wasm': 'application/wasm' }
+const MIME = { '.png': 'image/png', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.html': 'text/html; charset=utf-8', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary', '.vrm': 'model/gltf-binary' }
 function safeJoin(root, rel) {
   const resolved = path.resolve(root, '.' + path.sep + rel)
   return resolved.startsWith(root + path.sep) ? resolved : null
+}
+
+// ---------- 可信三维形象资产（trusted avatars，2026-08-27）----------
+// 客户端 bundle 内嵌白名单（萌悦 trusted-avatar-manifest.js），dedicated 槽位约定：
+//   characters/kirito-black-swordsman.glb / characters/naruto-uzumaki-shippuden.glb …
+// 身份→槽位由 bundle 自查：实体 username（Kirito/Naruto…）→ 命名角色注册表 → npc 身份键。
+// 本服务只负责两件事：
+//   ① /character-assets/manifest.json 如实盘点磁盘文件（id=去扩展名相对路径、format=扩展名、
+//      byteLength=实际字节数）。客户端拿内嵌白名单过滤，多报/未注册的 id 会被静默忽略——
+//      服务端永远无法让浏览器加载白名单外的 URL（安全设计）。
+//   ② 按同路径静态下发 .glb/.vrm 本体（safeJoin 防目录穿越）。
+async function listCharacterAssetFiles(dirRel = '') {
+  const root = path.join(ASSET_ROOT, 'character-assets')
+  const dir = path.join(root, dirRel)
+  let entries = []
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return [] // 目录不存在 = 无形象资产，客户端走默认皮肤渲染兜底
+  }
+  const out = []
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue
+    const childRel = dirRel ? `${dirRel}/${entry.name}` : entry.name
+    if (entry.isDirectory()) {
+      out.push(...await listCharacterAssetFiles(childRel))
+    } else if (/\.glb$/i.test(entry.name) || /\.vrm$/i.test(entry.name)) {
+      const format = /\.vrm$/i.test(entry.name) ? 'vrm' : 'glb'
+      const meta = await stat(path.join(root, childRel)).catch(() => null)
+      if (meta?.isFile()) out.push({ id: childRel.replace(/\.(glb|vrm)$/i, ''), format, byteLength: meta.size })
+    }
+  }
+  return out
 }
 
 // ---------- 主入口 ----------
@@ -813,7 +846,21 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
         send(200, 'text/css; charset=utf-8', body); return
       }
       if (rel === '/character-assets/manifest.json') {
-        send(200, 'application/json; charset=utf-8', JSON.stringify({ schemaVersion: 1, assets: [] })); return
+        const assets = await listCharacterAssetFiles()
+        send(200, 'application/json; charset=utf-8', JSON.stringify({ schemaVersion: 1, assets }), { 'Cache-Control': 'no-store' }); return
+      }
+      // 可信形象模型本体（GLB/VRM）。GLTFLoader 直接 fetch 数组缓冲按二进制解析，
+      // Content-Type 仅供调试可读；no-store 前哨 5 分钟，方便换模迭代。
+      if (rel.startsWith('/character-assets/')) {
+        const file = safeJoin(path.join(ASSET_ROOT, 'character-assets'), decodeURIComponent(rel.slice('/character-assets/'.length)))
+        if (file) {
+          const meta = await stat(file).catch(() => null)
+          if (meta?.isFile()) {
+            const body = await readFile(file)
+            send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Content-Length': String(meta.size), 'Cache-Control': 'public, max-age=300' }); return
+          }
+        }
+        send(404, 'text/plain', 'Not Found'); return
       }
       if (rel === '/healthz') {
         send(200, 'application/json; charset=utf-8', JSON.stringify({ ok: true, sessions: sessions.size, generation: worldGeneration })); return
