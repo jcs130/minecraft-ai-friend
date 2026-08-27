@@ -588,7 +588,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const res = await fetch(config.qwenpawUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Agent-Id': agentId },
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(300_000), // 🩹 2026-08-27：120s 必炸——本尊玩具回合都要 ~77s，重活+思考远超此线
       body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error(`goddess API ${res.status}: ${(await res.text()).slice(0, 200)}`)
@@ -642,6 +642,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
    * 目标 agent 完整跑一轮（可用工具/写记忆），轮询 GET /console/chat/task/{id} 拿最终回复。
    * 给日报这类长任务用——不再受同步 120s 超时限制（158 天前那次「天神暂时不在」就是同步超时）。
    * 失败时调用方回退同步 callAgent。
+   * 🩹 2026-08-27：实测定谳——mc-god 本尊连玩具回合都要 ~77s，日报这种「评价+指示+写记忆」
+   * 的重活远超原 300s 死线；且轮询只认 finished，failed 态会被干等到假超时。修三处：
+   *   ① 客户端死线与 payload timeout 都提到 600s；
+   *   ② 轮询识别 failed/cancelled/error 终态即刻抛错（带真实原因，不再假装超时）；
+   *   ③ 同步兜底的 AbortSignal 也放宽到 300s（原来 120s 必炸）。
    */
   async function callAgentTask(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<{ text: string }> {
     const content: { type: string; text?: string; image_url?: string }[] = []
@@ -656,7 +661,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       user_id: userId,
       session_id: sessionId,
       input: [{ role: 'user', content }],
-      timeout: 300_000,
+      timeout: 570_000,
     }
     const post = await fetch(`${base}/console/chat/task`, {
       method: 'POST',
@@ -667,7 +672,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     if (!post.ok) throw new Error(`goddess task submit ${post.status}: ${(await post.text()).slice(0, 200)}`)
     const { task_id: taskId } = await post.json() as { task_id?: string }
     if (!taskId) throw new Error('goddess task: no task_id')
-    const deadline = Date.now() + 300_000
+    const deadline = Date.now() + 590_000
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 5_000))
       const st = await fetch(`${base}/console/chat/task/${taskId}`, { headers, signal: AbortSignal.timeout(15_000) })
@@ -677,6 +682,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const text = extractTaskText(body.result)
         if (text) return { text }
         throw new Error('goddess task finished without text')
+      }
+      // 终态失败：立刻把真实错误带出去（此前只认 finished，failed 会被干等到「timed out」假象）
+      const errText = (() => { try { return JSON.stringify(body.result).slice(0, 200) } catch { return '' } })()
+      if (body.status === 'failed' || body.status === 'cancelled' || body.status === 'canceled') {
+        throw new Error(`goddess task ${body.status}${errText ? ': ' + errText : ''}`)
+      }
+      if (body.status && !['pending', 'running', 'queued'].includes(body.status)) {
+        throw new Error(`goddess task unknown terminal status "${body.status}"${errText ? ': ' + errText : ''}`)
       }
     }
     throw new Error('goddess task timed out')

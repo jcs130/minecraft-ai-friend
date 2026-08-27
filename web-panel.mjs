@@ -2693,25 +2693,66 @@ function parseSnbtItems(out) {
   return items
 }
 
-// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 过去跟随，每 250ms 一次（2026-08-26 提频：600ms 步子太大=一卡一卡）----
+// ---- 天眼跟随：点玩家 -> 女神（Goddess）tp 过去跟随，节拍 250ms（2026-08-26 提频：600ms 步子太大=一卡一卡）----
+// 🩹 2026-08-27 根治「女神传送刷屏」：此前浏览器关掉后循环变孤儿，对着静止目标每秒 tp 4 次永不停
+//   （全服日志被 [Rcon: Teleported Goddess...] 淹没、RCON 白白空转）。两道根治：
+//   1) 孤儿自停：panelActiveAt 由所有 /api 访问刷新——谁开着面板（包括后台标签页的轮询）就算在看；
+//      全局面板静默 > EYE_ORPHAN_MS => 自动停跟随并归位，不再空转。
+//   2) 静止退避：拿上次 tp 的服务端反馈原文当运动检测（坐标逐字相同=目标没动），
+//      连续不动则把发送间隔从 250ms 指数退避到最高 EYE_BACKOFF_MAX_MS；一动立刻恢复跟手。
 let eyeFollow = null // { name, home, h }
 let eyeGmSet = false // spectator 只需设一次，不再每轮重发
+let panelActiveAt = Date.now() // 最近一次任何面板 API 活动时间（孤儿检测用）
 const EYE_HOVER = 9 // 第一人称（Goddess 视角）悬停上空格数；第三人称 h=0 与目标重合
+const EYE_TICK_MS = 250
+const EYE_ORPHAN_MS = 120000 // 全局面板静默 2 分钟即视为无人观看，自动停跟随
+const EYE_BACKOFF_MAX_MS = 3000 // 目标静止时两次 tp 的最大间隔（指数退避封顶）
+let _eyeLastEcho = '' // 上次成功 tp 的反馈原文（运动检测）
+let _eyeStillCount = 0 // 连续「没动」次数
+let _eyeNextSendAt = 0 // 下次允许发 tp 的时间戳
 function eyeTpOnce(name) {
   // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
   const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
   const h = eyeFollow?.h ?? EYE_HOVER
   return rconExec(`execute at ${target} run tp Goddess ~ ~${h} ~`)
 }
+function eyeStop(tpHome) {
+  const f = eyeFollow
+  eyeFollow = null
+  _eyeLastEcho = ''
+  _eyeStillCount = 0
+  _eyeNextSendAt = 0
+  if (tpHome && f && f.home) rconExec(`tp Goddess ${f.home}`).catch(() => {})
+}
 setInterval(() => {
   if (eyeFollow && eyeFollow.name) {
+    // 孤儿防护：整个面板都没人访问了（连后台轮询都停了），自动收摊归位
+    if (Date.now() - panelActiveAt > EYE_ORPHAN_MS) {
+      console.log('[eye-follow] panel idle over', Math.round(EYE_ORPHAN_MS / 1000), 's — auto-stop follow:', eyeFollow.name)
+      eyeStop(true)
+      eyeGmSet = false
+      return
+    }
     // 观察者身份（spectator）：穿墙、不干扰目标；设一次即可，跟随期间不重发
     if (!eyeGmSet) { rconExec('gamemode spectator Goddess').catch(() => {}); eyeGmSet = true }
-    eyeTpOnce(eyeFollow.name).catch(() => {})
+    if (Date.now() < _eyeNextSendAt) return // 静止退避窗口内，不发
+    // 发之前先运动检测：反馈原文与上次逐字相同 => 目标没挪窝 => 指数退避；不同 => 立刻恢复 250ms 跟手
+    eyeTpOnce(eyeFollow.name)
+      .then((out) => {
+        const s = String(out || '')
+        if (_eyeLastEcho && s === _eyeLastEcho) {
+          _eyeStillCount += 1
+          _eyeNextSendAt = Date.now() + Math.min(250 * _eyeStillCount, EYE_BACKOFF_MAX_MS)
+        } else {
+          _eyeLastEcho = s
+          _eyeStillCount = 0
+        }
+      })
+      .catch(() => {})
   } else {
     eyeGmSet = false
   }
-}, 250)
+}, EYE_TICK_MS)
 
 // ---- 世界控制（2026-08-23）：难度 / 时间 / 天气 / 游戏规则 —— 走 RCON 即时生效 ----
 const WORLD_GAMERULES = [
@@ -2843,6 +2884,7 @@ function saveNpcSettings(body) {
 
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
+  panelActiveAt = Date.now() // 任何面板访问都算「有人在看」（天眼跟随孤儿自停依据）
   if (u.pathname === '/api/village') {
       try {
         const vil = JSON.parse(readFileSync(join(DATA_DIR, 'village', 'villagers.json'), 'utf-8'))
@@ -2920,24 +2962,21 @@ const server = createServer((req, res) => {
     // 坐标模式：一次性 tp（村民/地标）——停跟随，天眼飞过去俯瞰，不循环
     const ex = u.searchParams.get('x'), ey2 = u.searchParams.get('y'), ez = u.searchParams.get('z')
     if (ex != null && ey2 != null && ez != null) {
-      if (eyeFollow && eyeFollow.home) { try { rconExec(`tp Goddess ${eyeFollow.home}`).catch(() => {}) } catch {} }
-      eyeFollow = null
+      eyeStop(false)
       rconExec(`tp Goddess ${Number(ex)} ${Number(ey2)} ${Number(ez)}`).catch(() => {})
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, tp: [Number(ex), Number(ey2), Number(ez)] }))
       return
     }
     if (follow === '0' || !name) {
-      if (eyeFollow && eyeFollow.home) {
-        rconExec(`tp Goddess ${eyeFollow.home}`).catch(() => {})
-      }
-      eyeFollow = null
+      eyeStop(true)
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: false }))
       return
     }
     const doStart = () => {
       eyeFollow = { name, h }
+      _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0 // 新目标：运动检测状态清零
       eyeTpOnce(name).catch(() => {})
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
@@ -2947,13 +2986,16 @@ const server = createServer((req, res) => {
       rconExec('data get entity Goddess Pos').then((out) => {
         const m = String(out || '').match(/\[([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?\]/)
         eyeFollow = { name, h, home: m ? `${m[1]} ${m[2]} ${m[3]}` : null }
+        _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0
         eyeTpOnce(name).catch(() => {})
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ ok: true, follow: true, name }))
       }).catch(() => doStart())
     } else {
+      const switched = eyeFollow.name !== name || eyeFollow.h !== h
       eyeFollow.name = name
       eyeFollow.h = h
+      if (switched) { _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0 } // 换目标/换高度：清运动检测
       eyeTpOnce(name).catch(() => {})
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
