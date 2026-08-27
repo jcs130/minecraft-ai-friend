@@ -96,7 +96,7 @@ services:
   # 2.1.3 = 2.1.2 + 天眼镜头跟随双修：①观察者 forcedMove→补发 move（viewer 才推镜头/加载
   # 区块）②web 端 bundle follow=smart 增量跟镜头（stock 第三人称只摆一次相机）。
   world:
-    image: mc-world:2.1.17  # 2.1.17 = 本体名牌抑制（自体载荷剥离 username，跟随谁不再叠「goddess」名牌，收编 2.1.13 被回退的修复）；2.1.16 = 渲染桥Step③ 网页端mod方块真身（bundle内联mod块表+/mod_assets资产包+注入路由）；2.1.15 = 已废弃（主Dockerfile误覆盖，:3070资产500）；2.1.12 = 跟随标签改显被观察目标名（桐人/鸣人）
+    image: mc-world:2.1.18  # 2.1.18 = 具名角色名牌恢复+中文显示名（桐人/鸣人头上名牌回来了；自定义角色不再整组隐藏原生 mesh——名牌精灵随组被藏的根修，名牌纹理改用身份中文名重绘）；2.1.17 = 本体名牌抑制（自体载荷剥离 username，跟随谁不再叠「goddess」名牌）；2.1.16 = 渲染桥Step③ 网页端mod方块真身（bundle内联mod块表+/mod_assets资产包+注入路由）；2.1.12 = 跟随标签改显被观察目标名（桐人/鸣人）
     container_name: shadow-world
     restart: unless-stopped
     volumes:

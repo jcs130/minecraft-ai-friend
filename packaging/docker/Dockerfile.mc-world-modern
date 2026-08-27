@@ -1,10 +1,13 @@
-# mc-world:2.1.17 — 本体名牌抑制根修（「人物头上都是 goddess」）
-# 2.1.17 = FROM 2.1.16（渲染桥 Step③ 全量：bundle 内联 mod 块表 + /mod_assets 资产包 + 注入路由）
-#          + src/mc-modern-viewer.mts：本体自体载荷（'entity' / 'entityMoved' / avatarState.entity）
-#            经 stripOwnNameTag 剥离 username/displayName/customName——客户端渲染器对无 username
-#            的玩家实体自动跳过铭牌，跟随谁都不再叠加「goddess」名牌。
-#          注：2.1.13 曾修过同类问题，2.1.14-16 载荷改造时把 username 写回而回退；本版以独立助手
-#              函数在序列化源头统一剥离，三通道（entity/entityMoved/avatarState）全覆盖。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.17 <repo 根>
-FROM mc-world:2.1.16
-COPY src/mc-modern-viewer.mts /app/src/mc-modern-viewer.mts
+# mc-world:2.1.18 — 具名角色（桐人/鸣人等）名牌恢复 + 中文显示名
+# 2.1.18 = FROM 2.1.17（本体名牌抑制根修）+ modern-viewer.js（mengyue-modern-minecraft-viewer 构建）：
+#   根因：自定义角色挂载时 hideNativeCharacterMaterials 把原生 root 整组 visible=false，
+#         而渲染器名牌精灵（non-mesh Sprite, name==='nametag'）就挂在原生 mesh 组内——
+#         桐人/鸣人的名牌连同原生身体一起被藏掉，其余普通玩家不受影响（→「鸣人和桐人没名字」）。
+#   修复：①逐 mesh 抑制（object.visible=false + 记录/恢复），native root 保活；
+#         ②新增 ensureCharacterNameplate：借渲染器 globalThis.getUsernameTexture 以
+#           definition.identityName（桐人/鸣人…中文名）重绘名牌纹理并按签名缓存，
+#           挂牌异步到达时限次重试（40 次），同时与实体隐身状态同步可见性。
+#   三个挂载/升级/降级路径与每帧刷新分支均已接入；卸载路径对称恢复 mesh/material 可见性。
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.18 <repo 根>
+FROM mc-world:2.1.17
+COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
