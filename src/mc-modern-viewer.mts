@@ -917,12 +917,17 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       // 注意：URL 自带版本段（/textures/1.21.1/blocks/x.png），根=public，别再拼 textures/<version>
       // 兼容相对路径：renderer 内部实体纹理用无斜杠前缀 textures/...，页面在 /third/ 下会拼成 /third/textures/...
       // ——取最后一个 /textures/ 起的子串归一到 public 树，避免 404 落进 renderer 品红棋盘兜底
-      const textureIdx = rel.lastIndexOf('/textures/')
+      // 第三种形态：bundle 内部分实体纹理无版本段（/textures/entity/cow/cow.png）——统一补 1.21.1 段
+      let texRel = rel
+      const textureIdx = texRel.lastIndexOf('/textures/')
       if (textureIdx >= 0 && textureIdx !== 0) {
-        rel = rel.slice(textureIdx)
+        texRel = texRel.slice(textureIdx)
       }
-      if (rel.startsWith('/textures/') || rel.startsWith('/blocksStates/')) {
-        const file = safeJoin(prismarinePublicRoot, rel)
+      if (texRel.startsWith('/textures/entity/')) {
+        texRel = '/textures/1.21.1' + texRel.slice('/textures'.length)
+      }
+      if (texRel.startsWith('/textures/') || texRel.startsWith('/blocksStates/')) {
+        const file = safeJoin(prismarinePublicRoot, texRel)
         if (file && /\.(png|json)$/iu.test(file)) {
           const meta = await stat(file).catch(() => null)
           if (meta?.isFile()) {
@@ -930,8 +935,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
             send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Cache-Control': 'public, max-age=86400' }); return
           }
         }
-        if (rel.startsWith('/blocksStates/')) { send(404, 'application/json', '{}'); return }
-        // 纹理缺失兜底：1x1 透明 png（参考宿主同款）
+        if (texRel.startsWith('/blocksStates/')) { send(404, 'application/json', '{}'); return }
+        // 纹理缺失兜底：missing 纹理（品红棋盘，便于目视发现缺口）——落日志供补资产
+        console.log('[texture-miss]', texRel)
         send(200, 'image/png', OPTIONAL_TEXTURE_FALLBACK); return
       }
       send(404, 'text/plain', 'Not Found')
