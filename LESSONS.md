@@ -71,3 +71,12 @@
 - **[坑] 用户 Downloads 里同名多版本下载件要按字节+peek分辨**：kirito.glb / kirito (1).glb 都是同一只 1018256B 静态雕像，唯 kirito (2).glb (2259784B) 是骨架版——别按文件名或大小直觉拿错件。
 - **[教训] 网页 viewer 的镜头跟随目标由服务端 avatarState 流决定，URL 没有 follow/name 定点参数**——想看指定角色的模型就走面板选中该角色，别臆造 query 参数。验收画面里的角色身份未名牌化时勿下"上身成功/失败"结论，交给用户刷新定谳。
 - **9090 面板问号与 3070 直开不一致又一例**：panel iframe 经代码与 guest 实测双证恒指 :3070 现代画面（bots 全员无 viewerPort 字段，hasBotViewer 分支不可达）；用户所见问号页签是容器重建前的旧会话内存 bundle。问号报障分流三板斧（tab 指纹/debug 行/坐标比对）再次命中——凡「两个窗口不一样」，先令强刷再查码。
+## 2026-08-27 实体品红棋盘终局：相对纹理路径 404 + 半棵纹理树
+
+- **品红棋盘不一定等于 404-品红兜底**：mts 纹理分支缺图本来返回 1x1 透明 png；画面上的品红棋盘是 renderer 拿不到纹理 URL/加载失败时自己画的 missing 纹理。看到品红先查「请求是否根本没发出/发到错路径」，别急着找品红常量。
+- **renderer 活体实体纹理是相对路径 textures/1.21.1/entity/...（无前导斜杠）**：页面在 /third/ 下解析成 /third/textures/... → 404。villager 是 bundle 里特例函数走绝对 /textures/ 所以单独修好——同画面「村民好了铁傀儡坏」正是两类路径并存的铁证。
+- **修法通用化**：mts 纹理分支用 rel.lastIndexOf('/textures/') 归一（任何子路径下的 textures/ 请求都收进 public 树），一次堵住 /first//third//dungeon/ 全部页面路径。
+- **实体纹理树必须全量供给**：renderer 按需引用 entity/ 下几百张（马变种/狼色/职业/类型…），只挑几张必漏。正解=从 1.21.1 client jar 一次提取全树（524 张仅 0.4MB）进 packaging textures，另克隆一份 1.16.4 别名（bundle 里 zombie_villager 等特例硬编码 1.16.4 版本段）。
+- **眼验动线**：9090 面板点顶部穿越者 tab（坐标 click(1031,24)）→ 跟随桐人看守村实体；get_by_text('Kirito') 5 处命中点不到按钮，坐标点击最直接。
+- 落地：mc-world:2.1.33（mts 归一分支 + textures 1.21.1/1.16.4 全树），commit 9cbd868 已推，全村零棋盘眼验通过。
+
