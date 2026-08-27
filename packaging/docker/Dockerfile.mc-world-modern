@@ -1,3 +1,8 @@
+# mc-world:2.1.21 — 桐人换装正式骨架模（kirito(2).glb：Bip001 骨架 + 11 动画 + 2.26MB）
+#   旧 kirito-black-swordsman.glb 为 1MB 无骨静态雕像素（skins=0 anims=0），用户观感「丑模型」；
+#   新模 92 节点远低于 trusted-avatar 硬预算（1024），零补码直接覆盖同名资产。
+#   同步改动：源仓+bundle 内联 ASSET_CACHE_REV 20260827b→20260827c（浏览器 ?v= 缓存穿透）；
+#   旧雕像备份 packaging/docker/modern-viewer/character-assets/characters/kirito-black-swordsman-statue.bak.glb。
 # mc-world:2.1.20 — trusted-avatar 角色资产入镜像（鸣人骨架模丢失根修）
 # 根因：character-assets/characters/*.glb 当年只 docker cp 进可写层，从未 COPY 固化；
 #   2.1.19 容器 recreate 时随可写层蒸发 → /character-assets/manifest.json 盘点为空 assets:[],
@@ -5,7 +10,7 @@
 # 同时把 npc-portraits / mod-assets 一并显式固化（此前靠早期幸存层）；mod-assets 两 json 以容器字节为准同步。
 # FROM 2.1.19：mod 方块贴图终局修复已在父层（命名空间前缀兜底 + 三 bundle 全量固化），
 #   那一版注释：mod 模型贴图引用带 minecraft: 前缀 → atlas 键裸名 → miss → '?'；getTextureInfo 剥前缀重查兜底。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.20 <repo 根>
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.21 <repo 根>
 FROM mc-world:2.1.19
 COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
 COPY packaging/docker/modern-viewer/mesher.js /app/modern-viewer/mesher.js
