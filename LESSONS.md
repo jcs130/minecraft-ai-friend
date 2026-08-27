@@ -57,3 +57,10 @@
 - **亲临复现闭环**：browser SDK 开 :3070/third 等 25s 初始化+chunk 流入→screenshot 对照用户点位——guest 浏览器实测同区零问号是宣布修好的最后一环，此后才等用户复核。
 - **萌悦 viewer 源仓没有 .git**：G:\workspace\mengyue-modern-minecraft-viewer 纯散文件，B 仓 packaging/docker/modern-viewer/ 三 bundle 是唯一权威副本——源侧改动必须即时回写 B 仓并 commit（本次 aa429dc 已固化，CI 17 绿）。
 - 收官时间线：2026-08-26 五处剥前缀兜底 → 08-27 拦截重建/镜像固化 2.1.19 → 用户两次复验通过，主线关闭。
+
+## 2026-08-27 桐人骨架模换装：trusted-avatar 角色替换五步定型
+
+- **[流程] 角色模型换装五步**（鸣人/佐助、桐人各走一遍，已是第二次——再有一次就升 skill）：① peek 脚本验 GLB 成色（skins≥1 且 anims≥1 才算骨架模；节点数对 trusted-avatar 硬预算 1024 免拆分则零补码直上）；② 文件覆盖两处同名资产（B 仓 packaging/docker/modern-viewer/character-assets/characters/<slug>.glb 为发布真源 + G:\workspace\mengyue-modern-minecraft-viewer\public 同位源仓副本），旧件留 .bak；③ ASSET_CACHE_REV 字面量 bump（源仓 trusted-avatar-manifest.js 与 B 仓 bundle modern-viewer.js 双 patch——REV 只内联在主 bundle，mesher/threeWorker 无此字面量）；④ Dockerfile/compose bump 版本重打镜像重启 shadow-world；⑤ 容器字节/HTTP 取回/bundle REV 三路校验 + 用户刷新眼验。本次实证 kirito(2).glb：92 节点 Bip001+11 动画 vs 旧雕像 skins=0 anims=0。
+- **[坑] 用户 Downloads 里同名多版本下载件要按字节+peek分辨**：kirito.glb / kirito (1).glb 都是同一只 1018256B 静态雕像，唯 kirito (2).glb (2259784B) 是骨架版——别按文件名或大小直觉拿错件。
+- **[教训] 网页 viewer 的镜头跟随目标由服务端 avatarState 流决定，URL 没有 follow/name 定点参数**——想看指定角色的模型就走面板选中该角色，别臆造 query 参数。验收画面里的角色身份未名牌化时勿下"上身成功/失败"结论，交给用户刷新定谳。
+- **9090 面板问号与 3070 直开不一致又一例**：panel iframe 经代码与 guest 实测双证恒指 :3070 现代画面（bots 全员无 viewerPort 字段，hasBotViewer 分支不可达）；用户所见问号页签是容器重建前的旧会话内存 bundle。问号报障分流三板斧（tab 指纹/debug 行/坐标比对）再次命中——凡「两个窗口不一样」，先令强刷再查码。
