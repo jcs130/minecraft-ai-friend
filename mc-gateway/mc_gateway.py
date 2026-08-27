@@ -122,6 +122,49 @@ def derive_bot_name(owner_username):
 _RESERVED_ENTITY_NAMES = {"goddess", "kirito", "naruto", "edward", "steve",
                           "alex", "hermine", "maka"}
 
+def auto_bind_guardian(uid, username, ip=None):
+    """注册钩子自动认主（2026-08-27 天神裁 §11.4-1：绑定平台/服务端权威，客户端不再发起）。
+    注册即有守护天使：world.db guardian_angels + 网关 companions 一次写齐；
+    state='idle'（实体未上线，spawner 拉起后由世界侧翻 online），owner_uuid 留空——
+    首次进服由 spawner 的 COALESCE 写回（离线 UUID），与 bind 端点语义一致。
+    占用冲突绝不覆盖他人认主（与 bind 端点同款 409 语义）。尽力而为：
+    认主失败不阻断注册（世界库偶发锁忙可重试补绑），但留系统侧审计。"""
+    bot_username = derive_bot_name(username)
+    now_ms = int(time.time() * 1000)
+    n = now_iso()
+    try:
+        with db_world() as cw:
+            ensure_guardian_table(cw)
+            held = cw.execute("SELECT owner_username FROM guardian_angels WHERE bot_username=?",
+                              (bot_username,)).fetchone()
+            if held is not None and str(held["owner_username"]) != str(username):
+                return {"ok": False, "error": "bot_name conflict",
+                        "held_by": str(held["owner_username"]), "bot_username": bot_username}
+            cw.execute("INSERT INTO guardian_angels(bot_username, owner_username, owner_uuid, state, bound_at, updated_at) "
+                       "VALUES(?,?,?,?,?,?) "
+                       "ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, "
+                       "state=excluded.state, updated_at=excluded.updated_at",
+                       (bot_username, username, None, "idle", now_ms, now_ms))
+        with db() as c:
+            c.execute("INSERT INTO companions(user_id,cname,enabled,auto_assigned,bot_username,created_at,updated_at) "
+                      "VALUES(?,?,1,1,?,?,?) "
+                      "ON CONFLICT(user_id) DO UPDATE SET enabled=1, auto_assigned=1, "
+                      "bot_username=COALESCE(companions.bot_username, excluded.bot_username), updated_at=excluded.updated_at",
+                      (uid, "守护天使", bot_username, n, n))
+            audit(c, "user", uid, username, ip or "", "guardian_autobind", "guardian", uid,
+                  new_data={"bot_username": bot_username, "owner_username": username,
+                            "owner_uuid": None, "state": "idle", "via": "register_hook"})
+        return {"ok": True, "bot_username": bot_username, "state": "idle"}
+    except Exception as e:
+        try:
+            with db() as c:
+                audit(c, "system", 0, "mc-gateway", ip or "", "guardian_autobind_fail", "guardian", uid,
+                      new_data={"username": username, "error": str(e)[:200]})
+        except Exception:
+            pass
+        return {"ok": False, "error": str(e)[:200], "bot_username": bot_username}
+
+
 def client_ip(headers):
     return str(headers.get("X-Forwarded-For", "").split(",")[0].strip() or headers.get("Remote-Addr", "") or "")
 
@@ -1034,7 +1077,11 @@ class Handler(BaseHTTPRequestHandler):
                     password = b.get("password") or ""
                     nickname = (b.get("nickname") or username).strip()[:32]
                     if not username or not password: return json_write(self, 400, {"error": "username/password required"})
-                    if not re.match(r"^[A-Za-z0-9_\-\.]{2,32}$", username): return json_write(self, 400, {"error": "username invalid"})
+                    # 2026-08-27 天神裁（§11.4-1）：平台注册名限 [A-Za-z0-9_]{3,16}——MC 名硬限内
+                    # 永不截断、程序键纯 ASCII、不引入中文 ID 映射层；中文显示诉求走
+                    # nickname/display_name。仅注册时校验，旧格式存量账号不受影响。
+                    if not re.match(r"^[A-Za-z0-9_]{3,16}$", username):
+                        return json_write(self, 400, {"error": "username invalid (3-16 chars, [A-Za-z0-9_])"})
                     if len(password) < 8: return json_write(self, 400, {"error": "password too short (min 8)"})
                     ip = client_ip(self.headers)
                     # 注册限流：按 IP 防批量注册（窗口内最多 N 次）
@@ -1054,8 +1101,11 @@ class Handler(BaseHTTPRequestHandler):
                         c.execute("INSERT INTO profiles(user_id,display_name,updated_at) VALUES(?,?,?)", (uid, nickname, n))
                         audit(c, "user", uid, username, ip, "register", "user", uid,
                               new_data={"username": username, "nickname": nickname, "role_id": 3})
+                    # 2026-08-27 注册钩子自动认主（§11.4-1）：注册即有守护天使，客户端无需再调 bind。
+                    angel = auto_bind_guardian(uid, username, ip)
                     tok = issue_session(uid, ip, self.headers.get("User-Agent", ""))
-                    return json_write(self, 200, {"ok": True, "token": tok, "username": username, "nickname": nickname})
+                    return json_write(self, 200, {"ok": True, "token": tok, "username": username,
+                                                  "nickname": nickname, "guardian": angel})
                 if p == "/api/auth/login":
                     b = read_body(self)
                     username = (b.get("username") or "").strip()

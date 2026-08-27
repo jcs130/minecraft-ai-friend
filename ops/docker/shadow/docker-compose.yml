@@ -1,4 +1,4 @@
-# 鍗冪伅绾?Phase B 鈥?褰卞瓙鐜缂栨帓锛堜笉鍔ㄧ敓浜э紱绔彛 25899/25880/18088/19090锛?# 鍓嶇疆锛歱ython build-shadow.py 鐢熸垚 mods/data/mcdata/copaw/copaw.secret/mc 鍗?# 鍚姩锛歝d ops/docker/shadow && docker compose --env-file shadow.env up -d
+﻿# 鍗冪伅绾?Phase B 鈥?褰卞瓙鐜缂栨帓锛堜笉鍔ㄧ敓浜э紱绔彛 25899/25880/18088/19090锛?# 鍓嶇疆锛歱ython build-shadow.py 鐢熸垚 mods/data/mcdata/copaw/copaw.secret/mc 鍗?# 鍚姩锛歝d ops/docker/shadow && docker compose --env-file shadow.env up -d
 # 鍏ㄦ櫙锛歮c(qwenpaw 瀹跺) + world(濂崇鍖栬韩) + panel + qwenpaw(瀹堝崼榄? + guard(瀹堝崼妗? + npc + oracle
 name: shadow
 
@@ -90,7 +90,7 @@ services:
   # 2.1.1 = 2.1.0 + canvas 鍨墖锛園napi-rs/canvas锛夛紝MC_VIEWER=1 寮€濂崇澶╃溂 prismarine-viewer锛?  # 绗笁浜虹О 3050 / 绗竴浜虹О 3150锛屽涓荤洿閫氫緵 9090 闈㈡澘 iframe 宓屽叆锛堟棤绌胯秺鑰呮椂鍏滃簳鐢婚潰锛?  # 2.1.2 = 2.1.1 + 瑙傚療鑰呭寲韬紙MC_OBSERVER=1 鍏崇墿鐞嗭級锛氫慨 9090 闈㈡澘銆屽皬浜轰竴鐩村線涓嬫帀銆?  # 鈥斺€攎ineflayer 鏈湴閲嶅姏妯℃嫙涓庡ぉ鐪?RCON tp 浜掓悘锛屾案鍔ㄤ笅鍧?+ moved too quickly 鍒峰睆銆?  # 2.1.3 = 2.1.2 + 澶╃溂闀滃ご璺熼殢鍙屼慨锛氣憼瑙傚療鑰?forcedMove鈫掕ˉ鍙?move锛坴iewer 鎵嶆帹闀滃ご/鍔犺浇
   # 鍖哄潡锛夆憽web 绔?bundle follow=smart 澧為噺璺熼暅澶达紙stock 绗笁浜虹О鍙憜涓€娆＄浉鏈猴級銆?
   world:
-    image: mc-world:2.1.31
+    image: mc-world:2.1.36
     container_name: shadow-world
     restart: unless-stopped
     volumes:
@@ -158,7 +158,7 @@ services:
   # 2026-08-26 鏀剁紪鍏ユ爤锛氬涓绘満鐩磋窇杩涚▼涓嬬嚎锛?011 鐢卞鍣ㄦ帴绠★紙瀹㈡埛绔富鐧诲綍鍏ュ彛锛夈€?  # 璐﹀彿搴?鐨偆杩佺Щ鑷?B 浠?mc-data/gateway/銆侻C_SERVER_DIR=/server 鍙槸鐩綍楠ㄦ灦锛?  # mods 涓?logs锛坙atest.log SCAN 琛?= 瀹為檯鍔犺浇娓呭崟锛夌敱鏈湇鍔″彧璇绘寕鍏ワ紱
   # world.db 璧?./data 鍗凤紙瀹堟姢澶╀娇璁や富鐧昏涓庨潰鏉?绁炰娇鍚屾簮锛夈€?
   gateway:
-    image: mc-gateway:1.0.0
+    image: mc-gateway:1.0.1
     container_name: shadow-gateway
     restart: unless-stopped
     volumes:
