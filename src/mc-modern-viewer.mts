@@ -915,6 +915,12 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       }
       // 方块/实体/物品纹理 + 方块状态表：prismarine-viewer public 目录直出
       // 注意：URL 自带版本段（/textures/1.21.1/blocks/x.png），根=public，别再拼 textures/<version>
+      // 兼容相对路径：renderer 内部实体纹理用无斜杠前缀 textures/...，页面在 /third/ 下会拼成 /third/textures/...
+      // ——取最后一个 /textures/ 起的子串归一到 public 树，避免 404 落进 renderer 品红棋盘兜底
+      const textureIdx = rel.lastIndexOf('/textures/')
+      if (textureIdx >= 0 && textureIdx !== 0) {
+        rel = rel.slice(textureIdx)
+      }
       if (rel.startsWith('/textures/') || rel.startsWith('/blocksStates/')) {
         const file = safeJoin(prismarinePublicRoot, rel)
         if (file && /\.(png|json)$/iu.test(file)) {
