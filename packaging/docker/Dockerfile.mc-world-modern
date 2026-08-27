@@ -1,14 +1,18 @@
-# mc-world:2.1.19 — mod 方块贴图终局修复：命名空间前缀兜底 + 三 bundle 全量固化
-# 根因链见 LESSONS.md「mod 贴图问号终局」：
-#   mod 模型引用原版贴图带命名空间 minecraft:block/oak_log，
-#   face 解析剥 block/ 后得 minecraft:oak_log，而 atlas 键是裸名 oak_log → miss → 静默丢面渲染 '?'。
-#   getTextureInfo 包装层加「含 : 时剥命名空间重查」兜底（modern-viewer.js 主线程/图标 + mesher.js worker + threeWorker.js 死拷贝）。
-#   本次把 mesher.js/threeWorker.js 一并 COPY 固化——此前历次镜像演进只 COPY modern-viewer.js，
-#   docker cp 进容器可写层的成果在容器 recreate 后全部回滚（2026-08-27 引擎崩溃实证），这是
-#   「修好过→同步村民模型修复→又坏」循环的根源。
-# 验证指纹：浏览器 tab 标题含 |v2.1.19-NSFIX；worker-probe 探针 facemiss/nomodel/texmiss 三零。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.19 <repo 根>
-FROM mc-world:2.1.18
+# mc-world:2.1.20 — trusted-avatar 角色资产入镜像（鸣人骨架模丢失根修）
+# 根因：character-assets/characters/*.glb 当年只 docker cp 进可写层，从未 COPY 固化；
+#   2.1.19 容器 recreate 时随可写层蒸发 → /character-assets/manifest.json 盘点为空 assets:[],
+#   鸣人客户端拿不到 trusted-avatar 清单 → 回退默认皮肤渲染。
+# 同时把 npc-portraits / mod-assets 一并显式固化（此前靠早期幸存层）；mod-assets 两 json 以容器字节为准同步。
+# FROM 2.1.19：mod 方块贴图终局修复已在父层（命名空间前缀兜底 + 三 bundle 全量固化），
+#   那一版注释：mod 模型贴图引用带 minecraft: 前缀 → atlas 键裸名 → miss → '?'；getTextureInfo 剥前缀重查兜底。
+# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.20 <repo 根>
+FROM mc-world:2.1.19
 COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
 COPY packaging/docker/modern-viewer/mesher.js /app/modern-viewer/mesher.js
 COPY packaging/docker/modern-viewer/threeWorker.js /app/modern-viewer/threeWorker.js
+COPY packaging/docker/modern-viewer/character-assets /app/modern-viewer/character-assets
+COPY packaging/docker/modern-viewer/npc-portraits /app/modern-viewer/npc-portraits
+COPY packaging/docker/modern-viewer/mod-assets /app/modern-viewer/mod-assets
+# 服务端源码本体入镜像：容器 tsx 直跑 /app/src/*.ts，此前只靠 docker cp 热补可写层，
+# recreate 即回退旧版（2026-08-27 实锤：manifest 路由回退为硬编码空数组 → 鸣人骨架模失踪）。
+COPY src /app/src
