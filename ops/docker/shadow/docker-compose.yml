@@ -1,17 +1,15 @@
-# 千灯纪 Phase B — 影子环境编排（不动生产；端口 25899/25880/18088/19090）
-# 前置：python build-shadow.py 生成 mods/data/mcdata/copaw/copaw.secret/mc 卷
-# 启动：cd ops/docker/shadow && docker compose --env-file shadow.env up -d
-# 全景：mc(qwenpaw 家外) + world(女神化身) + panel + qwenpaw(守卫魂) + guard(守卫桥) + npc + oracle
+# 鍗冪伅绾?Phase B 鈥?褰卞瓙鐜缂栨帓锛堜笉鍔ㄧ敓浜э紱绔彛 25899/25880/18088/19090锛?# 鍓嶇疆锛歱ython build-shadow.py 鐢熸垚 mods/data/mcdata/copaw/copaw.secret/mc 鍗?# 鍚姩锛歝d ops/docker/shadow && docker compose --env-file shadow.env up -d
+# 鍏ㄦ櫙锛歮c(qwenpaw 瀹跺) + world(濂崇鍖栬韩) + panel + qwenpaw(瀹堝崼榄? + guard(瀹堝崼妗? + npc + oracle
 name: shadow
 
 services:
-  # ── MC 主服（生产 modpack + god-channel 版 numen_act）──
+  # 鈹€鈹€ MC 涓绘湇锛堢敓浜?modpack + god-channel 鐗?numen_act锛夆攢鈹€
   mc:
     image: itzg/minecraft-server:java21
     container_name: shadow-mc
     restart: unless-stopped
     environment:
-      # ── 世界自动备份（itzg 原生，每日 04:00 tar 进 data 卷 backups/，保留 7 份）──
+      # 鈹€鈹€ 涓栫晫鑷姩澶囦唤锛坕tzg 鍘熺敓锛屾瘡鏃?04:00 tar 杩?data 鍗?backups/锛屼繚鐣?7 浠斤級鈹€鈹€
       BACKUP_INTERVAL: "0 4 * * *"
       BACKUP_RETENTION_LIMIT: "7"
       BACKUP_METHOD: "tar"
@@ -37,7 +35,7 @@ services:
       COPY_MODS: "true"
       GUI: "false"
       TZ: Asia/Shanghai
-      # 2026-08-26 天神补：settlementsfix 三键走 JVM_OPTS 持久注入（itzg 启动脚本每次重写 user_jvm_args.txt，直接编辑该文件会被抹掉）
+      # settlementsfix three-key persistent injection via JVM_OPTS (itzg rewrites user_jvm_args.txt on every start)
       JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl"
     ports:
       - "25599:25599"
@@ -45,10 +43,10 @@ services:
     volumes:
       - ./mc:/data
       - ./mods:/mods:ro
-      - ./mcdata:/mcdata   # 2026-08-26 天神补挂：settlementsfix 事件流（interact/spell/status）落村运营目录，与 qwenpaw /mcdata 同源
+      - ./mcdata:/mcdata   # 2026-08-26 澶╃琛ユ寕锛歴ettlementsfix 浜嬩欢娴侊紙interact/spell/status锛夎惤鏉戣繍钀ョ洰褰曪紝涓?qwenpaw /mcdata 鍚屾簮
     networks: [shadow]
 
-  # ── 瓶中 QwenPaw：守卫魂的家（8088 console/chat；mcp_numen 随行）──
+  # 鈹€鈹€ 鐡朵腑 QwenPaw锛氬畧鍗瓊鐨勫锛?088 console/chat锛沵cp_numen 闅忚锛夆攢鈹€
   qwenpaw:
     image: qwenpaw-mc:2.1.1
     container_name: shadow-qwenpaw
@@ -57,9 +55,9 @@ services:
     volumes:
       - ./copaw:/root/.copaw
       - ./copaw.secret:/root/.copaw.secret
-      - ./data:/data          # mcp_numen 的 pray/chant 落同一神使通道卷
-      - ./mc/god-channel:/god-channel   # 运营双 agent（灯语/灶火）的神使通道（零密钥文件 IPC）
-      - ./mcdata:/mcdata      # NPC 运营卷：灶火经 npc_read/npc_write 编排村民与任务板（写限 village/）
+      - ./data:/data
+      - ./mc/god-channel:/god-channel
+      - ./mcdata:/mcdata
     environment:
       TZ: Asia/Shanghai
       MC_RCON_HOST: mc
@@ -67,10 +65,10 @@ services:
       RCON_PASSWORD: ${RCON_PASSWORD}
       WORLD_DATA: /data
     ports:
-      - "18088:8088"          # 调试口
+      - "18088:8088"
     networks: [shadow]
 
-  # ── 守卫桥（账本落 ./data 卷 = 神使通道 IPC）──
+  # 鈹€鈹€ 瀹堝崼妗ワ紙璐︽湰钀?./data 鍗?= 绁炰娇閫氶亾 IPC锛夆攢鈹€
   guard:
     image: mc-sidecar:2.1.0
     container_name: shadow-guard
@@ -88,15 +86,11 @@ services:
     networks: [shadow]
     depends_on: [qwenpaw]
 
-  # ── 女神化身 / 世界进程（bot 连容器 MC；RCON+logwatch+神使通道）──
-  # 2.1.1 = 2.1.0 + canvas 垫片（@napi-rs/canvas），MC_VIEWER=1 开女神天眼 prismarine-viewer：
-  # 第三人称 3050 / 第一人称 3150，宿主直通供 9090 面板 iframe 嵌入（无穿越者时兜底画面）
-  # 2.1.2 = 2.1.1 + 观察者化身（MC_OBSERVER=1 关物理）：修 9090 面板「小人一直往下掉」
-  # ——mineflayer 本地重力模拟与天眼 RCON tp 互搏，永动下坠 + moved too quickly 刷屏。
-  # 2.1.3 = 2.1.2 + 天眼镜头跟随双修：①观察者 forcedMove→补发 move（viewer 才推镜头/加载
-  # 区块）②web 端 bundle follow=smart 增量跟镜头（stock 第三人称只摆一次相机）。
+  # 鈹€鈹€ 濂崇鍖栬韩 / 涓栫晫杩涚▼锛坆ot 杩炲鍣?MC锛汻CON+logwatch+绁炰娇閫氶亾锛夆攢鈹€
+  # 2.1.1 = 2.1.0 + canvas 鍨墖锛園napi-rs/canvas锛夛紝MC_VIEWER=1 寮€濂崇澶╃溂 prismarine-viewer锛?  # 绗笁浜虹О 3050 / 绗竴浜虹О 3150锛屽涓荤洿閫氫緵 9090 闈㈡澘 iframe 宓屽叆锛堟棤绌胯秺鑰呮椂鍏滃簳鐢婚潰锛?  # 2.1.2 = 2.1.1 + 瑙傚療鑰呭寲韬紙MC_OBSERVER=1 鍏崇墿鐞嗭級锛氫慨 9090 闈㈡澘銆屽皬浜轰竴鐩村線涓嬫帀銆?  # 鈥斺€攎ineflayer 鏈湴閲嶅姏妯℃嫙涓庡ぉ鐪?RCON tp 浜掓悘锛屾案鍔ㄤ笅鍧?+ moved too quickly 鍒峰睆銆?  # 2.1.3 = 2.1.2 + 澶╃溂闀滃ご璺熼殢鍙屼慨锛氣憼瑙傚療鑰?forcedMove鈫掕ˉ鍙?move锛坴iewer 鎵嶆帹闀滃ご/鍔犺浇
+  # 鍖哄潡锛夆憽web 绔?bundle follow=smart 澧為噺璺熼暅澶达紙stock 绗笁浜虹О鍙憜涓€娆＄浉鏈猴級銆?
   world:
-    image: mc-world:2.1.22  # 2.1.21 = 桐人换装正式骨架模（kirito(2).glb Bip001+11动画，REV 20260827c 缓存穿透）；2.1.20 = trusted-avatar GLB 入镜像（character-assets/npc-portraits/mod-assets 显式 COPY——鸣人骨架模随可写层蒸发之根修）2.1.19 = mod贴图终局：命名空间前缀兜底(getTextureInfo剥namespace重查) + mesher/threeWorker bundle首次COPY固化（此前只COPY modern-viewer.js，容器recreate即回滚=「修好→同步→又坏」循环根源）；|v2.1.19-NSFIX 指纹在tab标题；2.1.18 = 具名角色名牌恢复+中文显示名（桐人/鸣人头上名牌回来了；自定义角色不再整组隐藏原生 mesh——名牌精灵随组被藏的根修，名牌纹理改用身份中文名重绘）；2.1.17 = 本体名牌抑制（自体载荷剥离 username，跟随谁不再叠「goddess」名牌）；2.1.16 = 渲染桥Step③ 网页端mod方块真身（bundle内联mod块表+/mod_assets资产包+注入路由）；2.1.12 = 跟随标签改显被观察目标名（桐人/鸣人）
+    image: mc-world:2.1.23
     container_name: shadow-world
     restart: unless-stopped
     volumes:
@@ -114,49 +108,39 @@ services:
       MC_ADVANCEMENTS_DIR: /mcadv
       MC_VIEWER: "1"
       MC_VIEWER_PORT: "3050"
-      MC_MAP_PORT: "3060"    # 小地图地形 tile 服务（9090 面板小地图底图）
-      MC_MODERN_VIEWER: "1"    # 现代画面（萌悦 Three.js 渲染）：面板默认 iframe
+      MC_MAP_PORT: "3060"    # 灏忓湴鍥惧湴褰?tile 鏈嶅姟锛?090 闈㈡澘灏忓湴鍥惧簳鍥撅級
+      MC_MODERN_VIEWER: "1"    # 鐜颁唬鐢婚潰锛堣悓鎮?Three.js 娓叉煋锛夛細闈㈡澘榛樿 iframe
       MC_MODERN_VIEWER_PORT: "3070"
-      MC_PANEL_ORIGIN: http://127.0.0.1:9090   # viewer 页 meta lantern-dashboard-origin（NPC 面板回落目标）
-      MC_OBSERVER: "1"      # 观察者化身：spawn 后关物理，位置只随 RCON tp 镜像（不掉落）
-      MC_QDRANT_URL: http://memos-qdrant:6333       # 众生册向量库 → 瓶中 MemOS 栈（自包含）
-      MC_EMBEDDING_URL: http://embed:11434          # 众生册 embedding → 瓶中轻量 embed（e5-large 1024d）
-      OLLAMA_EMBED_URL: http://embed:11434/api/embeddings  # mc-magic.ts 向量咒语匹配（legacy 协议，embed 服务已补兼容端点）
+      MC_PANEL_ORIGIN: http://127.0.0.1:9090
+      MC_OBSERVER: "1"
+      MC_QDRANT_URL: http://memos-qdrant:6333
+      MC_EMBEDDING_URL: http://embed:11434
+      OLLAMA_EMBED_URL: http://embed:11434/api/embeddings
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
-      TERRAIN_FILL: "0"     # 容器内无宿主 python/terrain_repair.py，禁用每日填坑 spawn
+      TERRAIN_FILL: "0"     # 瀹瑰櫒鍐呮棤瀹夸富 python/terrain_repair.py锛岀鐢ㄦ瘡鏃ュ～鍧?spawn
     ports:
-      - "127.0.0.1:3050:3050"   # 女神天眼·第三人称（面板 iframe）
-      - "127.0.0.1:3150:3150"   # 女神天眼·第一人称
-      - "127.0.0.1:3060:3060"   # 小地图地形 tile 服务（面板 Image() 拉取，无 CORS 需求）
-      - "127.0.0.1:3070:3070"   # 现代画面（Three.js/WebGL2：/third/ 环绕、/ 第一人称、/dungeon/ 2.5D）
+      - "127.0.0.1:3050:3050"
+      - "127.0.0.1:3150:3150"
+      - "127.0.0.1:3060:3060"   # 灏忓湴鍥惧湴褰?tile 鏈嶅姟锛堥潰鏉?Image() 鎷夊彇锛屾棤 CORS 闇€姹傦級
+      - "127.0.0.1:3070:3070"
     networks: [shadow]
     depends_on: [mc]
 
-  # ── 基岩版入口（2026-08-26 终局：不走容器，宿主直跑）──
-  # 实测三连否决：Docker Desktop(Windows) 的端口发布层不绑 UDP 到宿主——
-  # useVpnkit true/false 皆然（netstat 查无监听）；WSL mirrored 早已生效但 DD 的
-  # system 发行版不参与 mirrored。容器内 Geyser 一切正常（网内 RakNet PONG），
-  # 就是出不了宿主 → 局域网手机无门。正解 = 宿主进程：
-  #   ops/docker/shadow/viaproxy/start-viaproxy.bat（cli 模式，勿裸跑=GUI 模式会
-  #   等一个永远无人点的 Start 按钮）+ start-viaproxy-hidden.vbs 隐窗；
-  #   自启 = 计划任务 ViaProxy-Bedrock-Entry（ONLOGON）。
-  # 链路：基岩客户端 --UDP 19140--> Geyser(插件) --Java--> ViaProxy --1.21.1--> 127.0.0.1:25599
-  # 端口史：19132 系统隐身占用；19133 DD 重启后留 mirrored 僵尸预留（bind 报 10048
-  # 却查无进程，wsl --shutdown/重启才能清）→ 19140 定居。Geyser 端口在
-  # viaproxy/plugins/Geyser/config.yml。容器版历史方案见 git log。
-
-  # ── 面板（web-panel.mjs，node:sqlite 读 world.db）──
+  # 鈹€鈹€ 鍩哄博鐗堝叆鍙ｏ紙2026-08-26 缁堝眬锛氫笉璧板鍣紝瀹夸富鐩磋窇锛夆攢鈹€
+  # 瀹炴祴涓夎繛鍚﹀喅锛欴ocker Desktop(Windows) 鐨勭鍙ｅ彂甯冨眰涓嶇粦 UDP 鍒板涓烩€斺€?  # useVpnkit true/false 鐨嗙劧锛坣etstat 鏌ユ棤鐩戝惉锛夛紱WSL mirrored 鏃╁凡鐢熸晥浣?DD 鐨?  # system 鍙戣鐗堜笉鍙備笌 mirrored銆傚鍣ㄥ唴 Geyser 涓€鍒囨甯革紙缃戝唴 RakNet PONG锛夛紝
+  # 灏辨槸鍑轰笉浜嗗涓?鈫?灞€鍩熺綉鎵嬫満鏃犻棬銆傛瑙?= 瀹夸富杩涚▼锛?  #   ops/docker/shadow/viaproxy/start-viaproxy.bat锛坈li 妯″紡锛屽嬁瑁歌窇=GUI 妯″紡浼?  #   绛変竴涓案杩滄棤浜虹偣鐨?Start 鎸夐挳锛? start-viaproxy-hidden.vbs 闅愮獥锛?  #   鑷惎 = 璁″垝浠诲姟 ViaProxy-Bedrock-Entry锛圤NLOGON锛夈€?  # 閾捐矾锛氬熀宀╁鎴风 --UDP 19140--> Geyser(鎻掍欢) --Java--> ViaProxy --1.21.1--> 127.0.0.1:25599
+  # 绔彛鍙诧細19132 绯荤粺闅愯韩鍗犵敤锛?9133 DD 閲嶅惎鍚庣暀 mirrored 鍍靛案棰勭暀锛坆ind 鎶?10048
+  # 鍗存煡鏃犺繘绋嬶紝wsl --shutdown/閲嶅惎鎵嶈兘娓咃級鈫?19140 瀹氬眳銆侴eyser 绔彛鍦?  # viaproxy/plugins/Geyser/config.yml銆傚鍣ㄧ増鍘嗗彶鏂规瑙?git log銆?
+  # 鈹€鈹€ 闈㈡澘锛坵eb-panel.mjs锛宯ode:sqlite 璇?world.db锛夆攢鈹€
   panel:
-    # 2.1.5 = 2.1.0(骨架) + pv=8 镜头跟随 + /api/inspect 众生档案（RCON 实查状态/背包）
-    # + 服务器特色卡：任务板（公会委托·mcdata 卷）/ 修为榜 / 法则技艺谱。
-    image: mc-world:2.2.4   # 2.2.4 = 2.2.3 + 画面主导布局(思考流压矮条并更名动态)
+    image: mc-world:2.2.4
     container_name: shadow-panel
     restart: unless-stopped
     entrypoint: []
     command: ["node", "web-panel.mjs"]
     volumes:
       - ./data:/app/data
-      - ./mcdata:/mcdata:ro  # 村庄活数据：任务板/声望/流水（npc 侧写、panel 只读展示）
+      - ./mcdata:/mcdata:ro
       - ./mc/logs:/mclogs:ro
     environment:
       TZ: Asia/Shanghai
@@ -170,11 +154,9 @@ services:
       - "9090:9090"
     networks: [shadow]
 
-  # ── 玩家门户网关（mc_gateway.py 纯标准库；登录/注册/模组清单分发/皮肤上传）──
-  # 2026-08-26 收编入栈：宿主机直跑进程下线，8011 由容器接管（客户端主登录入口）。
-  # 账号库/皮肤迁移自 B 仓 mc-data/gateway/。MC_SERVER_DIR=/server 只是目录骨架：
-  # mods 与 logs（latest.log SCAN 行 = 实际加载清单）由本服务只读挂入；
-  # world.db 走 ./data 卷（守护天使认主登记与面板/神使同源）。
+  # 鈹€鈹€ 鐜╁闂ㄦ埛缃戝叧锛坢c_gateway.py 绾爣鍑嗗簱锛涚櫥褰?娉ㄥ唽/妯＄粍娓呭崟鍒嗗彂/鐨偆涓婁紶锛夆攢鈹€
+  # 2026-08-26 鏀剁紪鍏ユ爤锛氬涓绘満鐩磋窇杩涚▼涓嬬嚎锛?011 鐢卞鍣ㄦ帴绠★紙瀹㈡埛绔富鐧诲綍鍏ュ彛锛夈€?  # 璐﹀彿搴?鐨偆杩佺Щ鑷?B 浠?mc-data/gateway/銆侻C_SERVER_DIR=/server 鍙槸鐩綍楠ㄦ灦锛?  # mods 涓?logs锛坙atest.log SCAN 琛?= 瀹為檯鍔犺浇娓呭崟锛夌敱鏈湇鍔″彧璇绘寕鍏ワ紱
+  # world.db 璧?./data 鍗凤紙瀹堟姢澶╀娇璁や富鐧昏涓庨潰鏉?绁炰娇鍚屾簮锛夈€?
   gateway:
     image: mc-gateway:1.0.0
     container_name: shadow-gateway
@@ -191,13 +173,13 @@ services:
       RCON_HOST: mc
       RCON_PORT: "25575"
       RCON_PASSWORD: ${RCON_PASSWORD}
-      GATEWAY_ADVERTISE: 192.168.3.133   # 模组下载直链地址（宿主 LAN IP）
+      GATEWAY_ADVERTISE: 192.168.3.133
     ports:
-      - "8011:8011"        # 局域网客户端主登录入口
+      - "8011:8011"        # 灞€鍩熺綉瀹㈡埛绔富鐧诲綍鍏ュ彛
     networks: [shadow]
     depends_on: [mc]
 
-  # ── 村民之魂（mcdata 卷；听 log + RCON 发言）──
+  # 鈹€鈹€ 鏉戞皯涔嬮瓊锛坢cdata 鍗凤紱鍚?log + RCON 鍙戣█锛夆攢鈹€
   npc:
     image: mc-sidecar:2.1.0
     container_name: shadow-npc
@@ -217,7 +199,7 @@ services:
       MC_DATA_DIR: /data
     networks: [shadow]
 
-  # ── 村民神谕推理（SIS 直连 vllm，endpoint 已在 mcdata 配置里打补丁）──
+  # 鈹€鈹€ 鏉戞皯绁炶皶鎺ㄧ悊锛圫IS 鐩磋繛 vllm锛宔ndpoint 宸插湪 mcdata 閰嶇疆閲屾墦琛ヤ竵锛夆攢鈹€
   oracle:
     image: mc-sidecar:2.1.0
     container_name: shadow-oracle
@@ -227,14 +209,14 @@ services:
       - ./mcdata:/mcdata
     environment:
       TZ: Asia/Shanghai
-      ORACLE_BIND: 0.0.0.0   # 容器网内 settlements mod 经 oracle:9001 访问
+      ORACLE_BIND: 0.0.0.0   # 瀹瑰櫒缃戝唴 settlements mod 缁?oracle:9001 璁块棶
       NPC_DATA_DIR: /mcdata
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       RCON_PASSWORD: ${RCON_PASSWORD}
     networks: [shadow]
 
-  # ── 运营双桥：驱动灯语女神(巡检修世界)/灶火祭司(世界观播报) ──
+  # 鈹€鈹€ 杩愯惀鍙屾ˉ锛氶┍鍔ㄧ伅璇コ绁?宸℃淇笘鐣?/鐏剁伀绁徃(涓栫晫瑙傛挱鎶? 鈹€鈹€
   opsdrive:
     image: mc-sidecar:2.1.0
     container_name: shadow-opsdrive
@@ -248,15 +230,13 @@ services:
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       GOD_CHANNEL_DIR: /god-channel
       DATA_DIR: /data
-      HERALD_EVERY_SEC: "600"    # 灯语巡检周期
-      PRIEST_EVERY_SEC: "3600"   # 灶火策划周期
+      HERALD_EVERY_SEC: "600"    # 鐏宸℃鍛ㄦ湡
+      PRIEST_EVERY_SEC: "3600"   # 鐏剁伀绛栧垝鍛ㄦ湡
     networks: [shadow]
     depends_on: [qwenpaw]
 
-  # ══════════════════════════════════════════════════════════════
-  # MemOS 瓶中记忆栈（2026-08-25 收编：镜像/参数照抄宿主机 memos-deploy，
-  # 数据独立于宿主机 memos；LLM 借道 8890，embedding 走瓶中 ollama）
-  # ══════════════════════════════════════════════════════════════
+  # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+  # MemOS 鐡朵腑璁板繂鏍堬紙2026-08-25 鏀剁紪锛氶暅鍍?鍙傛暟鐓ф妱瀹夸富鏈?memos-deploy锛?  # 鏁版嵁鐙珛浜庡涓绘満 memos锛汱LM 鍊熼亾 8890锛宔mbedding 璧扮摱涓?ollama锛?  # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
   memos-redis:
     image: redis:7-alpine
     container_name: shadow-memos-redis
@@ -301,14 +281,14 @@ services:
       PYTHONPATH: /app/src
       ENABLE_CHAT_API: "true"
       MOS_CHAT_MODEL: qwen3.8-27b-uncensored
-      # chat LLM：借道宿主 8890（同 daemon 的 vllm 容器口；整机迁移见下方 vllm profile）
+      # chat LLM via host vllm :8890 (qwenpaw profile below)
       CHAT_MODEL_LIST: '[{"backend":"openai","model_name_or_path":"qwen3.8-27b-uncensored","temperature":0.8,"max_tokens":4096,"top_p":0.95,"api_key":"local","api_base":"http://host.docker.internal:8890/v1","support_models":["qwen3.8-27b-uncensored","qwen3.6-27b"]}]'
       OPENAI_API_BASE: http://host.docker.internal:8890/v1
       MEMRADER_MODEL: qwen3.8-27b-uncensored
       MEMREADER_GENERAL_MODEL: qwen3.8-27b-uncensored
       MEMRADER_API_BASE: http://host.docker.internal:8890/v1
       MEMREADER_GENERAL_API_BASE: http://host.docker.internal:8890/v1
-      # embedding：瓶中轻量 embed 服务（e5-large 1024d，假 ollama 协议）
+      # embedding: light embed stack (b5-large 1024d, ollama protocol)
       OLLAMA_API_BASE: http://embed:11434
       MOS_EMBEDDER_BACKEND: ollama
       MOS_EMBEDDER_MODEL: intfloat/multilingual-e5-large
@@ -350,10 +330,9 @@ services:
     restart: unless-stopped
     networks: [shadow]
 
-  # 轻量 embedding（2026-08-26 替代 ollama）：假 ollama 协议（/api/embed + /api/tags），
-  # 后端 fastembed ONNX CPU · multilingual-e5-large（1024d 多语言，与众生册硬编码维度一致）。
-  # 镜像自带模型，运行时离线。云端预案：EMBED_OPENAI_BASE_URL 指向 dashscope/硅基流动
-  # 等 OpenAI 兼容端点即走云端（纯 CPU 云机可省 2.2GB 模型）。
+  # 杞婚噺 embedding锛?026-08-26 鏇夸唬 ollama锛夛細鍋?ollama 鍗忚锛?api/embed + /api/tags锛夛紝
+  # 鍚庣 fastembed ONNX CPU 路 multilingual-e5-large锛?024d 澶氳瑷€锛屼笌浼楃敓鍐岀‖缂栫爜缁村害涓€鑷达級銆?  # 闀滃儚鑷甫妯″瀷锛岃繍琛屾椂绂荤嚎銆備簯绔妗堬細EMBED_OPENAI_BASE_URL 鎸囧悜 dashscope/纭呭熀娴佸姩
+  # 绛?OpenAI 鍏煎绔偣鍗宠蛋浜戠锛堢函 CPU 浜戞満鍙渷 2.2GB 妯″瀷锛夈€?
   embed:
     build:
       context: ../embed
@@ -362,7 +341,7 @@ services:
     environment:
       EMBED_MODEL: intfloat/multilingual-e5-large
       FASTEMBED_CACHE: /data/fastembed
-      # 云端模式示例（二选一，留空=本地 ONNX）：
+      # 浜戠妯″紡绀轰緥锛堜簩閫変竴锛岀暀绌?鏈湴 ONNX锛夛細
       # EMBED_OPENAI_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
       # EMBED_OPENAI_MODEL: text-embedding-v4
       # EMBED_OPENAI_API_KEY: sk-xxx
@@ -371,9 +350,8 @@ services:
     restart: unless-stopped
     networks: [shadow]
 
-  # vllm 搬家预案：默认不起（GPU 显存单份，现役 vllm-qwen38-ara 占用中）。
-  # 整机迁移时：docker compose --env-file shadow.env --profile gpu up -d vllm
-  # （须先停掉原 vllm 容器；模型卷 ara-nvfp4 + 编译缓存卷随 docker 卷迁移）
+  # vllm 鎼棰勬锛氶粯璁や笉璧凤紙GPU 鏄惧瓨鍗曚唤锛岀幇褰?vllm-qwen38-ara 鍗犵敤涓級銆?  # 鏁存満杩佺Щ鏃讹細docker compose --env-file shadow.env --profile gpu up -d vllm
+  # 锛堥』鍏堝仠鎺夊師 vllm 瀹瑰櫒锛涙ā鍨嬪嵎 ara-nvfp4 + 缂栬瘧缂撳瓨鍗烽殢 docker 鍗疯縼绉伙級
   vllm:
     profiles: ["gpu"]
     image: vllm/vllm-openai:qwen38-x86_64-cu130

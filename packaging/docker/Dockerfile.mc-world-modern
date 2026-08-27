@@ -1,17 +1,21 @@
-# mc-world:2.1.22 — tab 标题指纹 |v2.1.21-KIRITO（用户肉眼辨新旧页面；2.1.21 内容=桐人换装）
-# mc-world:2.1.21 — 桐人换装正式骨架模（kirito(2).glb：Bip001 骨架 + 11 动画 + 2.26MB）
-#   旧 kirito-black-swordsman.glb 为 1MB 无骨静态雕像素（skins=0 anims=0），用户观感「丑模型」；
-#   新模 92 节点远低于 trusted-avatar 硬预算（1024），零补码直接覆盖同名资产。
-#   同步改动：源仓+bundle 内联 ASSET_CACHE_REV 20260827b→20260827c（浏览器 ?v= 缓存穿透）；
-#   旧雕像备份 packaging/docker/modern-viewer/character-assets/characters/kirito-black-swordsman-statue.bak.glb。
-# mc-world:2.1.20 — trusted-avatar 角色资产入镜像（鸣人骨架模丢失根修）
-# 根因：character-assets/characters/*.glb 当年只 docker cp 进可写层，从未 COPY 固化；
-#   2.1.19 容器 recreate 时随可写层蒸发 → /character-assets/manifest.json 盘点为空 assets:[],
-#   鸣人客户端拿不到 trusted-avatar 清单 → 回退默认皮肤渲染。
-# 同时把 npc-portraits / mod-assets 一并显式固化（此前靠早期幸存层）；mod-assets 两 json 以容器字节为准同步。
-# FROM 2.1.19：mod 方块贴图终局修复已在父层（命名空间前缀兜底 + 三 bundle 全量固化），
-#   那一版注释：mod 模型贴图引用带 minecraft: 前缀 → atlas 键裸名 → miss → '?'；getTextureInfo 剥前缀重查兜底。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.22 <repo 根>
+﻿# mc-world:2.1.23 - named-character nameplate regression fix (third strike).
+#   Root cause: the 2.1.18 nameplate patch (ensureCharacterNameplate + per-mesh
+#   hide) was lost when mengyue src was rebuilt for 2.1.20-22 (mengyue repo has
+#   no git; the patch existed only in a working tree that later got overwritten).
+#   Re-applied on fresh G-disk client.js:
+#     1) hideNativeCharacterMaterials: no more whole-group nativeRoot.visible=false
+#        (nametag sprite is a nativeRoot child); per-mesh + per-material ledger.
+#     2) removeCustomCharacter restores mesh visibility symmetrically.
+#     3) ensureCharacterNameplate relabels nametag sprite with Chinese identity
+#        name via globalThis.getUsernameTexture; rAF retry x40 while renderer
+#        builds the sprite async.
+#     4) All four mount paths call ensureCharacterNameplate.
+#   ASSET_CACHE_REV 20260827c -> 20260827d.
+# mc-world:2.1.22 鈥?tab 鏍囬鎸囩汗 |v2.1.21-KIRITO锛堢敤鎴疯倝鐪艰鲸鏂版棫椤甸潰锛?.1.21 鍐呭=妗愪汉鎹㈣锛?# mc-world:2.1.21 鈥?妗愪汉鎹㈣姝ｅ紡楠ㄦ灦妯★紙kirito(2).glb锛欱ip001 楠ㄦ灦 + 11 鍔ㄧ敾 + 2.26MB锛?#   鏃?kirito-black-swordsman.glb 涓?1MB 鏃犻闈欐€侀洉鍍忕礌锛坰kins=0 anims=0锛夛紝鐢ㄦ埛瑙傛劅銆屼笐妯″瀷銆嶏紱
+#   鏂版ā 92 鑺傜偣杩滀綆浜?trusted-avatar 纭绠楋紙1024锛夛紝闆惰ˉ鐮佺洿鎺ヨ鐩栧悓鍚嶈祫浜с€?#   鍚屾鏀瑰姩锛氭簮浠?bundle 鍐呰仈 ASSET_CACHE_REV 20260827b鈫?0260827c锛堟祻瑙堝櫒 ?v= 缂撳瓨绌块€忥級锛?#   鏃ч洉鍍忓浠?packaging/docker/modern-viewer/character-assets/characters/kirito-black-swordsman-statue.bak.glb銆?# mc-world:2.1.20 鈥?trusted-avatar 瑙掕壊璧勪骇鍏ラ暅鍍忥紙楦ｄ汉楠ㄦ灦妯′涪澶辨牴淇級
+# 鏍瑰洜锛歝haracter-assets/characters/*.glb 褰撳勾鍙?docker cp 杩涘彲鍐欏眰锛屼粠鏈?COPY 鍥哄寲锛?#   2.1.19 瀹瑰櫒 recreate 鏃堕殢鍙啓灞傝捀鍙?鈫?/character-assets/manifest.json 鐩樼偣涓虹┖ assets:[],
+#   楦ｄ汉瀹㈡埛绔嬁涓嶅埌 trusted-avatar 娓呭崟 鈫?鍥為€€榛樿鐨偆娓叉煋銆?# 鍚屾椂鎶?npc-portraits / mod-assets 涓€骞舵樉寮忓浐鍖栵紙姝ゅ墠闈犳棭鏈熷垢瀛樺眰锛夛紱mod-assets 涓?json 浠ュ鍣ㄥ瓧鑺備负鍑嗗悓姝ャ€?# FROM 2.1.19锛歮od 鏂瑰潡璐村浘缁堝眬淇宸插湪鐖跺眰锛堝懡鍚嶇┖闂村墠缂€鍏滃簳 + 涓?bundle 鍏ㄩ噺鍥哄寲锛夛紝
+#   閭ｄ竴鐗堟敞閲婏細mod 妯″瀷璐村浘寮曠敤甯?minecraft: 鍓嶇紑 鈫?atlas 閿８鍚?鈫?miss 鈫?'?'锛沢etTextureInfo 鍓ュ墠缂€閲嶆煡鍏滃簳銆?# 鐢ㄦ硶锛歞ocker build -f packaging/docker/Dockerfile.mc-world-modern -t mc-world:2.1.22 <repo 鏍?
 FROM mc-world:2.1.19
 COPY packaging/docker/modern-viewer/modern-viewer.js /app/modern-viewer/modern-viewer.js
 COPY packaging/docker/modern-viewer/mesher.js /app/modern-viewer/mesher.js
@@ -19,6 +23,6 @@ COPY packaging/docker/modern-viewer/threeWorker.js /app/modern-viewer/threeWorke
 COPY packaging/docker/modern-viewer/character-assets /app/modern-viewer/character-assets
 COPY packaging/docker/modern-viewer/npc-portraits /app/modern-viewer/npc-portraits
 COPY packaging/docker/modern-viewer/mod-assets /app/modern-viewer/mod-assets
-# 服务端源码本体入镜像：容器 tsx 直跑 /app/src/*.ts，此前只靠 docker cp 热补可写层，
-# recreate 即回退旧版（2026-08-27 实锤：manifest 路由回退为硬编码空数组 → 鸣人骨架模失踪）。
-COPY src /app/src
+# 鏈嶅姟绔簮鐮佹湰浣撳叆闀滃儚锛氬鍣?tsx 鐩磋窇 /app/src/*.ts锛屾鍓嶅彧闈?docker cp 鐑ˉ鍙啓灞傦紝
+# recreate 鍗冲洖閫€鏃х増锛?026-08-27 瀹為敜锛歮anifest 璺敱鍥為€€涓虹‖缂栫爜绌烘暟缁?鈫?楦ｄ汉楠ㄦ灦妯″け韪級銆?COPY src /app/src
+

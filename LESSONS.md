@@ -1,4 +1,11 @@
 
+## 2026-08-27 守卫名牌丢失三犯终局 + compose 编码手术
+
+- **名牌回归三犯，根因一条：G 盘 mengyue 仓无 .git，补丁只活在生成区**。2.1.18 打的六处名牌修复（ensureCharacterNameplate 中文重绘 + hideNativeCharacterMaterials 改逐 mesh）没进任何版本控制；2.1.20「src/ 入镜像」用 G 盘现行 src 重建 bundle 时被无声冲掉 → 桐人鸣人（唯二命中具名角色路径者）名牌连身藏没。规矩：**改 G 盘 mengyue 源码后必须立即同步一份补丁副本进 B 仓（patches/ 或 dist 并行），或给 G:\workspace\mengyue-modern-minecraft-viewer 做 git init**——凡是无版本控制的目录，一律视为易失存储。
+- **具名角色路径的病根结构**：hideNativeCharacterMaterials 原实现 `nativeRoot.visible=false` 整组隐藏——nametag Sprite 是 nativeRoot 子节点，非 mesh，traverse 跳过它但父级 visible=false 照样藏掉。正确姿势=逐 mesh + 逐材质带 Map 台账抑制、恢复时对称回放；ensureCharacterNameplate 借 globalThis.getUsernameTexture（renderer entities.ts 已挂全局，签名 `{username},{fontFamily},version` 返回 canvas）重绘中文身份名牌，CanvasTexture 包装 + 按 canvas 尺寸重设 sprite scale + rAF×40 重试（renderer 建 nametag 是异步的）；四个挂载路径（首挂/LOD 降级/每 tick 刷新/trusted-avatar 升级安装）全接。
+- **minify bundle 特征反查要用字符串常量而非函数名**：esbuild 会改名函数（ensureCharacterNameplate 查不到≠不存在），userData 键名（__lanternNameplate）、URL 参数等字符串常量才会保留；size 对账同判。
+- **compose 手术事故与复原**：对含中文的 YAML 用 PowerShell `Get-Content`（无 -Encoding，按 ANSI 读 UTF-8）+ `Set-Content -Encoding UTF8` 回写 → BOM 注入 + 中文字节错读，行尾中文字符把 `\r` 与下一行吞并成粘连行：MOTD 闭合引号丢失、JVM_OPTS/image/volumes/ports/网络键整批被卷进注释或前一行、`world:`/`gateway:`/`embed:` 服务键失踪。复原三步：①python utf-8-sig 读字节级定位 ②按 must_contain 断言逐处重建（MOTD 从 server.properties 取权威值、JVM_OPTS 从容器 user_jvm_args.txt 取运行实据）③通用解放器扫「注释行尾粘连 top-level 键」直至 `docker compose config --quiet` 通过。教训：**含中文 YAML 的读写一律 python + 明确 encoding，PowerShell 只做只读检查**。
+
 ## 2026-08-26 现代画面（萌悦 modern-viewer）接入：bundle 两版之坑与精裁宿主
 
 - **mengyue-modern-minecraft-viewer/dist 的 bundle 是坏的（对独立宿主而言）**：直接用 dist/modern-viewer.js 渲染器启动即崩「Cannot read properties of undefined (reading '3')」（数据桥正常：热键栏/化身状态都到，只有 3D 渲染器挂）。**必须用 mengyue-world-platform plugins/minecraft-codex-agent/src/dashboard/public/modern-viewer.js**（sha256 头 22e8caac，10138459B；dist 版 08068b7e/10141533B）。同目录名两份构建产物不同源，接入时先哈希对账。
