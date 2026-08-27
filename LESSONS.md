@@ -48,3 +48,12 @@
 - **Java 版专用服永不上「局域网」扫描清单**：LAN 组播发现（224.0.2.60:4445）是单人世界 Open-to-LAN 专属机制，客户端须手动「添加服务器」——这不是故障，别往服务器侧找病根。
 - **Start-Process 参数化陷阱**：PowerShell `-ArgumentList` 数组里漏一个参数不报错，进程 argparse 秒退静默；后台拉起后必须回查 netstat 确认监听真的在场。
 - 落地：commit 4c49de1；shadow-world bundle=d25e4e0e（村民 UV flipY+髋部 rig+职业分层，上游 tests 全绿）；mc-god.ts callAgentTask/callAgent 120s→300s；web-panel.mjs 天眼修复热部两容器；Numen 上游 v0.1.2-1.21.1-beta 已 fetch 为 upstream-v0.1.2 tag 待拍板升级（36 commits：载具/右键管线/equip·unequip/event 台账化/MCP 对话一线/UI 改版）。
+
+## 2026-08-27 mod 方块问号收官：报障分流三板斧与资产源普查
+
+- **用户二次报障先验「新旧页面」，别急着改代码**：分流三证=①浏览器 tab 标题指纹（|v2.1.19-NSFIX）②[mod-debug] 行是否新版格式（customBlockStates 计数只有新版有）③截图内具体坐标是否换过位置。本轮第一张"还有问号"实为 Ctrl+F5 生效前的旧 tab；二张（Codex 视角 -524,72,841）木楼梯/灯柱/苔藓全渲染正常。
+- **bundle 验收必须按页面真实入口 URL 对账**：shadow-world 容器 3050/3150 还有另一个 Prismarine Viewer（1.2MB 旧 bundle），3070 根 /index.js 与 /third/index.js 都可能是入口——只 curl :3070/index.js 一处下结论不严谨，要把 4 端口 ×2 路径全拉 hash 与本地构建比对（命中 SAME 才算数）。PowerShell 拉内容用 $resp.RawContentStream.ToArray()+GetFileHash -InputStream，异常消息不带出响应体。
+- **离线覆盖审计定分界**：block-registry.json（4058 块）按 modid 分组 vs mod-assets 包 walk（以 blockstates/ 目录为 mod 判据）差集——本次仅 minecraft:(vanilla) 未覆盖属正常，证明**资产包自洽、无第 18 个漏提取 mod**；配合 [mod-debug] customBlockStates:3017/customModels:9923/customTextures:1088 加载成功，现场任何问号只剩「旧页面缓存」一种解释。审计脚本思路值得留作 mod 变更后的例行自检。
+- **亲临复现闭环**：browser SDK 开 :3070/third 等 25s 初始化+chunk 流入→screenshot 对照用户点位——guest 浏览器实测同区零问号是宣布修好的最后一环，此后才等用户复核。
+- **萌悦 viewer 源仓没有 .git**：G:\workspace\mengyue-modern-minecraft-viewer 纯散文件，B 仓 packaging/docker/modern-viewer/ 三 bundle 是唯一权威副本——源侧改动必须即时回写 B 仓并 commit（本次 aa429dc 已固化，CI 17 绿）。
+- 收官时间线：2026-08-26 五处剥前缀兜底 → 08-27 拦截重建/镜像固化 2.1.19 → 用户两次复验通过，主线关闭。
