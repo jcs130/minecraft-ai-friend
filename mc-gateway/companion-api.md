@@ -110,6 +110,19 @@
 - `push_system_command(user_id, type, payload)`：入队指令。
 - `grant_xp(user_id, amount)`：加经验；若跨级自动入队 `level_up` 指令。升级曲线 `level*100`，Lv5 封顶。
 
+## 三·五、守护天使绑定（2026-08-27 天神裁·安全收口）
+
+### `POST /api/guardian/bind`
+注册/进服流程由服务端钩子调用（**绑定是平台权威动作，客户端不再发起**；本端点保留 Bearer 认证做过渡兼容）。认主登记写世界库 `world.db.guardian_angels`——女神 `guardianResolve(sys_<owner>)` 凭此认主；网关库 `companions.bot_username` 同步镜像。
+
+请求：`{"state":"online"}`（state 可选，白名单 idle/online/leash/guard/offline）
+返回：系统档案 + `"guardian":{"bot_username":"sys_MengMeng","owner_username":"MengMeng","owner_uuid":"...","state":"online"}`
+
+**命名铁律（客户端必须知晓）**：
+- `bot_username` **一律服务端派生** `sys_<username>`（≤12 位合法字符直拼；含中文等非法字符或超长 → `sys_<8位清洗><4位hash>` 短名，恰 ≤16）。
+- 客户端传入的 `bot_username` 字段**作废**（>40 字符直接 400）；`owner_uuid` 自报与服务端不符 → **403**（防跨用户串绑）；派生名已被他人占用 → **409**（绝不静默改绑他人认主）。
+- 冒名洞已封死：实体名永不可能叫 Goddess/Kirito 等既有身份，永远以 `sys_` 开头。
+
 ## 六、鉴权
 
 所有 `/api/user/*` 与 `/api/companion/*` 需 `Authorization: Bearer <token>`（登录返回）。未授权 `401`。

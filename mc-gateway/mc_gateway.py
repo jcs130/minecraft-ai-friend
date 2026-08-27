@@ -96,6 +96,32 @@ def ensure_guardian_table(c):
         updated_at INTEGER NOT NULL)""")
     c.execute("CREATE INDEX IF NOT EXISTS idx_guardian_owner ON guardian_angels(owner_username)")
 
+# ------------------------- 守护天使命名权威（2026-08-27 天神裁·封冒名洞） -------------------------
+# 铁律：守护天使实体名一律【服务端派生】，客户端自报的 bot_username / owner_uuid 一律作废——
+# 认主关系里的实体名是程序键，绝不允许客户端可控（否则任何注册用户都能给自己绑一个
+# 叫 Goddess / Kirito 的实体名，即冒名洞）。三条硬约束：
+#   ① 派生结果永远以 sys_ 开头（女神 guardianResolve 认主的硬门，也是反冒名的硬门）；
+#   ② 派生结果 ≤16 字符、只含 [A-Za-z0-9_]（MC 登录名硬限，中文等非法字符直接剔除）；
+#   ③ 同主幂等稳定（重复 bind 得到同一个名字），不同主必异（超限时掺 sha1 短哈希防截断撞名）。
+_GUARDIAN_BAD_CHARS = re.compile(r"[^A-Za-z0-9_]")
+
+def derive_bot_name(owner_username):
+    """sys_<owner> 权威派生：
+    - owner 本身就是纯 [A-Za-z0-9_] 且 ≤12 → 直拼（sys_MengMeng 形态，可读优先）；
+    - 否则（含非法字符被清洗 / 超长）→ sys_<clean[:8]><sha1[:4]> 短名。
+    关键：凡经清洗的一律走 hash 分支——否则「萌萌MengMeng中文名」清洗出 MengMeng 会
+    与真人账号 MengMeng 塌缩成同一个 sys_MengMeng（2026-08-27 冒烟实测撞名，已堵死）。"""
+    s = str(owner_username or "")
+    if s and len(s) <= 12 and not _GUARDIAN_BAD_CHARS.search(s):
+        return f"sys_{s}"
+    clean = _GUARDIAN_BAD_CHARS.sub("", s)
+    h = hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
+    return f"sys_{clean[:8]}{h[:4]}"                           # ≤16 位短名：4+8+4
+
+# 系统保留实体名（女神/守卫/穿越者既有身份）——守护天使派生名禁止借位这些身份
+_RESERVED_ENTITY_NAMES = {"goddess", "kirito", "naruto", "edward", "steve",
+                          "alex", "hermine", "maka"}
+
 def client_ip(headers):
     return str(headers.get("X-Forwarded-For", "").split(",")[0].strip() or headers.get("Remote-Addr", "") or "")
 
@@ -935,20 +961,50 @@ class Handler(BaseHTTPRequestHandler):
                     # 由服务端生成/分配一个守护天使（sys_<owner>）并**认主登记**。
                     # 关键：认主写进【世界库 world.db 的 guardian_angels】，女神 mc-god.ts 的
                     # guardianResolve(sys_<owner>) 在此识别守护天使、代主人处理祈愿/问事/CLI/唱咒。
-                    # 客户端不用改逻辑——注册后调一次即可；bot_username 缺省= sys_<登录名>。
                     # 契约：POST /api/guardian/bind（认主是写操作，走 POST，勿用 GET）。
+                    #
+                    # —— 2026-08-27 天神裁·安全收口（封冒名洞）：——
+                    #   ① bot_username 一律服务端派生 sys_<username>（derive_bot_name），客户端
+                    #      自报该字段**作废**（响应里回实际生效名，audit 留痕）；恶意形态直接拒。
+                    #   ② owner_uuid 一律取认证账号的 mc_uuid；客户端自报与服务端不一致 → 403
+                    #      （防把天使绑到别人 UUID 上，跨用户串绑也是冒名的一种）。
+                    #   ③ 派生名已被其他 owner 占用 → 409，绝不静默改绑（UPSERT 覆盖别人认主=事故）。
+                    # 方向已定：绑定降级为内部能力（注册流程钩子自动认主，客户端不再发起），
+                    # 本端点保留 user-token 认证做过渡期兼容。
                     user = require_user(self.headers)
                     if not user: return json_write(self, 401, {"error": "unauthorized"})
                     b = read_body(self)
-                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
-                    # user 是 sqlite3.Row（require_user 返回），只支持下标，无 .get()；用 keys() 容错
-                    owner_uuid = (b.get("owner_uuid") or (user["mc_uuid"] if "mc_uuid" in user.keys() else None) or "").strip()[:36] or None
-                    state = (b.get("state") or "online").strip()[:12] or "online"
                     ip = client_ip(self.headers)
                     now_ms = int(time.time() * 1000)
-                    # 1) 世界库认主（女神凭此认主）——先保证表存在，再 upsert
+                    cli_name = (b.get("bot_username") or "").strip()
+                    if len(cli_name) > 40:
+                        audit(db(), "user", user["id"], user["username"], ip, "guardian_bind_reject",
+                              "guardian", user["id"], new_data={"reason": "client bot_username too long"})
+                        return json_write(self, 400, {"error": "bad bot_username"})
+                    bot_username = derive_bot_name(user["username"])
+                    # user 是 sqlite3.Row（require_user 返回），只支持下标，无 .get()；用 keys() 容错
+                    srv_uuid = (str(user["mc_uuid"]).strip() if ("mc_uuid" in user.keys() and user["mc_uuid"]) else "")
+                    own_req = (b.get("owner_uuid") or "").strip()
+                    if own_req and srv_uuid and own_req != srv_uuid:
+                        audit(db(), "user", user["id"], user["username"], ip, "guardian_bind_reject",
+                              "guardian", user["id"],
+                              new_data={"reason": "owner_uuid mismatch (cross-user bind attempt)",
+                                        "claimed_owner_uuid": own_req[:36], "server_owner_uuid": srv_uuid})
+                        return json_write(self, 403, {"error": "owner_uuid mismatch"})
+                    owner_uuid = srv_uuid or None
+                    state = b.get("state") or "online"
+                    state = state.strip().lower()[:12] if isinstance(state, str) else "online"
+                    if state not in ("idle", "online", "leash", "guard", "offline"):
+                        state = "online"
+                    # 1) 世界库认主（女神凭此认主）——先保证表存在；占用冲突绝不覆盖他人认主
                     with db_world() as cw:
                         ensure_guardian_table(cw)
+                        held = cw.execute("SELECT owner_username FROM guardian_angels WHERE bot_username=?",
+                                          (bot_username,)).fetchone()
+                        if held is not None and str(held["owner_username"]) != str(user["username"]):
+                            return json_write(self, 409, {"error": "bot_name conflict",
+                                                          "held_by": str(held["owner_username"]),
+                                                          "bot_username": bot_username})
                         cw.execute("INSERT INTO guardian_angels(bot_username, owner_username, owner_uuid, state, bound_at, updated_at) "
                                    "VALUES(?,?,?,?,?,?) "
                                    "ON CONFLICT(bot_username) DO UPDATE SET owner_username=excluded.owner_username, "
@@ -965,7 +1021,8 @@ class Handler(BaseHTTPRequestHandler):
                                   (user["id"], "守护天使", bot_username, n, n))
                         audit(c, "user", user["id"], user["username"], ip, "guardian_bind", "guardian", user["id"],
                               old_data=(dict(old) if old else None),
-                              new_data={"bot_username": bot_username, "owner_username": user["username"], "owner_uuid": owner_uuid, "state": state})
+                              new_data={"bot_username": bot_username, "owner_username": user["username"], "owner_uuid": owner_uuid, "state": state,
+                                        "client_supplied_bot_username": cli_name or None})
                         comp = c.execute("SELECT * FROM companions WHERE user_id=?", (user["id"],)).fetchone()
                     profile = system_profile(comp) if comp else {"bot_username": bot_username, "owner_username": user["username"], "state": state}
                     profile["guardian"] = {"bot_username": bot_username, "owner_username": user["username"],
@@ -1143,7 +1200,9 @@ class Handler(BaseHTTPRequestHandler):
                     # 认主（2026-08-23 拍板：系统=世界内 mineflayer 客户端实体）——
                     # bot_username = 系统实体在服务器登录名（ASCII，mineflayer bot 用），守卫「认主」；
                     # owner_mc_uuid = 玩家 MC UUID（权威键，世界端拉起系统 bot 时回写确认）。
-                    bot_username = (b.get("bot_username") or "").strip()[:40] or (f"sys_{user['username']}"[:16])
+                    # 2026-08-27 天神裁·收口：bot_username 一律服务端派生（derive_bot_name），
+                    # 客户端自报该字段作废——此处只落 companions 镜像，认主权威在 /api/guardian/bind。
+                    bot_username = derive_bot_name(user["username"])
                     ip = client_ip(self.headers)
                     persona_str = json.dumps(persona, ensure_ascii=False)[:2000]
                     with db() as c:
