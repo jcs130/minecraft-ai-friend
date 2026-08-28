@@ -5,8 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "VillagerNameMixin",
-    "WrittenBookItemMixin",
+    "SkillBookUseMixin",
     "SlotMixin",
+    "CheckPacketSendGuardMixin",
+    "BubblePublishGuardMixin",
     "PayloadRegistrarForceOptionalMixin",
     "BetterCombatConfigTaskGateMixin"
   ],

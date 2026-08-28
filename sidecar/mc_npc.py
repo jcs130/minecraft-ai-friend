@@ -159,10 +159,10 @@ except OSError:
     SKIN_REG = {}
 
 def mode_of(v):
-    # 万家烟火融合（2026-08-20）：carrier=base_villager 优先转实体——有皮肤档案的人偶也活化。
-    if v.get("carrier") == "base_villager":
-        return "villager"
-    return "stand" if v["key"] in SKIN_REG else "villager"
+    # 2026-08-29 造物主令「怎么还有村民是盔甲架」：盔甲架人偶制度退役，全员活化实体。
+    # 载体选择交给 etype_of：carrier=base_villager 用 mod 实体（激活行为系统），否则原版 villager。
+    # 皮肤档案（SKIN_REG）仅保留作历史资产，不再驱动人偶。
+    return "villager"
 
 
 def etype_of(v):
@@ -679,10 +679,10 @@ def _skillbook_nbt(sb, key):
         return ('{id:"minecraft:writable_book",count:1,components:'
                 '{"minecraft:custom_data":{"craftreq":true}}}')
     # 2026-08-23 造物主谕「书在手上右键=施法而非打开」：技能书右键被 settlementsfix mod 拦截施法、
-    # 不再翻开书页，故咏唱词写进 lore（悬停即读），替代"翻开看字"。
+    # 2026-08-29 godfix.5 新交互：右键=施放、潜行+右键=翻开细读说明（lore 同步更新）。
     lore_items = [
         {"text": sb.get("chant", ""), "color": "gray", "italic": False},
-        {"text": "右键=施放（不打开书）", "color": "dark_gray", "italic": True},
+        {"text": "右键=施放 · 潜行+右键=阅读", "color": "dark_gray", "italic": True},
     ]
     lore = ",".join('"%s"' % _snbt_esc(json.dumps(x, ensure_ascii=False)) for x in lore_items)
     return ('{id:"minecraft:written_book",count:1,components:'
@@ -1422,9 +1422,13 @@ def sel(v):
 
 def dedup_npc(v):
     """防堆积：同 tag 实体 >1 时只保留一个（多进程竞召/服务器重启竞态的历史教训）。
-    幂等三连：标记保留者 → 杀未标记 → 摘标记。"""
+    幂等三连：标记保留者 → 杀未标记 → 摘标记。
+    2026-08-29 修误杀竞态：tag add 瞬断失败（RCON 断连/实体查询空窗）时绝不下刀——
+    否则新召唤实体未带 npcKeep 会被 kill 全灭（书商·云笈反复召唤反复被杀的根因）。"""
     etype = etype_of(v)
-    R.cmd("tag %s add npcKeep" % sel(v))
+    r_tag = R.cmd("tag %s add npcKeep" % sel(v))
+    if not r_tag or "no entit" in str(r_tag).lower():
+        return
     r = R.cmd("kill @e[type=%s,tag=%s,tag=!npcKeep]" % (etype, v["tag"]))
     R.cmd("tag %s remove npcKeep" % sel(v))
     if r and "No entity" not in r:

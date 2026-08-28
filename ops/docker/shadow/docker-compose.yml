@@ -135,7 +135,7 @@ services:
       - ../../../src:/app/src:ro
       # 2026-08-29 固化：世界主入口 bind-mount（此前镜像 COPY 态，改码须重新 build 才生效）
       - ../../../bootstrap-world.mts:/app/bootstrap-world.mts:ro
-      - ./mcdata:/mcdata:ro   # 2026-08-29 灯语女神公屏聊天：读 NPC 档案（village/villagers.json）做点名分流
+      - ./mcdata:/mcdata   # 2026-08-29 修只读断供：灯语聊天读档案保留，同时 world 必须写 web-entities.json（9090 实体快照每 1.5s，ro 曾致前端冻结 4 天）
       - ./mc/logs:/mclogs:ro
       - ./mc/world/advancements:/mcadv:ro
     environment:

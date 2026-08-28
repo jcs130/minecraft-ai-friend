@@ -64,14 +64,11 @@ const STATUS_GIVEN = process.env.STATUS_GIVEN || `${DATA_DIR}/statusbook-given.j
 function snbtEsc(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 }
-/** 神使手札 NBT（1.21 组件格式；lore 教用法，右键=查状态不打开书）。 */
-function statusBookNbt(): string {
-  const pages = [
-    '神使手札\n\n右键我，即可查看你的当前状态：等级、魔力、生命、饱食、出生天赋、已学技艺。\n—— 天神',
-    '无法丢弃，无法放入箱子。\n它只属于你。\n\n聊天框打 cli status 或 /mycli status 也能看。',
-  ].map((p) => `"${snbtEsc(JSON.stringify({ text: p }))}"`).join(',')
-  const lore = `"${snbtEsc(JSON.stringify({ text: '右键=查看状态（不打开书）', color: 'dark_gray', italic: true }))}"`
-  return `minecraft:written_book[minecraft:written_book_content={title:"神使手札",author:"天神",pages:[${pages}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"神使手札","color":"gold"}',minecraft:lore=[${lore}]]`
+/** 命格书 NBT（2026-08-29 造物主令：一般的成书、人人一本、基岩版可翻读）。发书时生成静态快照；右键实时查询保留。 */
+function statusBookNbt(pages: string[]): string {
+  const ps = pages.map((p) => `"${snbtEsc(JSON.stringify({ text: p }))}"`).join(',')
+  const lore = `"${snbtEsc(JSON.stringify({ text: '翻开即读 · 右键实时刷新', color: 'dark_gray', italic: true }))}"`
+  return `minecraft:written_book[minecraft:written_book_content={title:"命格书",author:"天神",pages:[${ps}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"命格书","color":"gold"}',minecraft:lore=[${lore}]]`
 }
 
 /**
@@ -871,7 +868,18 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** 上线发书：非 sys_ 且未发过 → give 一本（custom_data.statusbook=true）。 */
   async function ensureStatusBook(username: string): Promise<void> {
     if (username.startsWith('sys_') || statusGiven.has(username)) return
-    const r = await rcon.send(`give ${username} ${statusBookNbt()} 1`).catch(() => '')
+    // 2026-08-29 造物主令：命格书=一般成书人人一本（基岩可读）。发书时生成静态命格快照。
+    const view = magic.getState(username)
+    const innateId = view.innateSkill ?? magic.getInnate(username)
+    const innateName = (innateId && magic.getAtomById(innateId)?.name) || '未显'
+    const learned = view.learned.slice(0, 8).map((id) => magic.getAtomById(id)?.name ?? id)
+    const story = String(view.backstory ?? '').replace(/\s+/g, ' ').slice(0, 55)
+    const pages = [
+      `§6《命格书》§r\n${username}\n天赋：${innateName}`,
+      `法力 ${Math.round(view.mana)}/${view.maxMana}\n技艺：${learned.length ? learned.join('、') : '尚未习艺'}`,
+      story ? `出身：${story}` : '出身：此界原住民',
+    ]
+    const r = await rcon.send(`give ${username} ${statusBookNbt(pages)} 1`).catch(() => '')
     // give 成功（玩家在线）才记名单；离线给不了，等下次上线再补。
     if (r && /gave|已给予|Given/i.test(r)) {
       statusGiven.add(username)
