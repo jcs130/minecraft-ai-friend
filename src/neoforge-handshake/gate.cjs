@@ -46,8 +46,40 @@ const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}
 // ── 通道知识（共享）与缓存 ────────────────────────────────────────
 const cacheFile = path.join(__dirname, 'knowledge-cache.json')
 
+// Better Combat 2.3.2 通道（2026-08-29 定谳，javap 反编译挖出）：
+//   CONFIGURATION 桶(4)：config_sync/weapon_registry（服务端→客户端，配置任务负载）
+//                        ack（客户端→服务端，code 字符串，服务端据此 finishCurrentTask）
+//   PLAY 桶(1)：attack_animation/attack_sound（服务端→客户端）、block_hit（客户端→服务端）
+// 知识里宣告（协商可见），CONFIG 任务负载在 gate 自答吞掉（vanilla 客户端无需看见）。
+const BETTERCOMBAT_CHANNELS = [
+  { id: 'bettercombat:config_sync', bucket: 4 },
+  { id: 'bettercombat:weapon_registry', bucket: 4 },
+  { id: 'bettercombat:ack', bucket: 4 },
+  { id: 'bettercombat:attack_animation', bucket: 1 },
+  { id: 'bettercombat:attack_sound', bucket: 1 },
+  { id: 'bettercombat:block_hit', bucket: 1 }
+]
+
+// MC 协议字符串（FriendlyByteBuf.writeUtf）：varint 字节长 + UTF-8
+function encodeMCString (s) {
+  const body = Buffer.from(s, 'utf8')
+  const len = body.length
+  const varint = []
+  let v = len
+  do {
+    let b = v & 0x7F
+    v >>>= 7
+    if (v !== 0) b |= 0x80
+    varint.push(b)
+  } while (v !== 0)
+  return Buffer.concat([Buffer.from(varint), body])
+}
+
 function loadKnowledge () {
   const knowledge = probe.seedKnowledge()
+  for (const c of BETTERCOMBAT_CHANNELS) {
+    knowledge.set(c.id, { bucket: c.bucket, version: '1', flow: null, moves: 0, optional: true, core: true })
+  }
   try {
     const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8'))
     const backendKey = `${BACKEND.host}:${BACKEND.port}`
@@ -387,6 +419,15 @@ function handleNeoForgePayload (sess, channel, data) {
       back.write('custom_payload', { channel: P.CH.KNOWN_DATA_MAPS_REPLY, data: P.encodeDataMapsReply(reply) })
       return true
     }
+    // Better Combat 配置任务（2026-08-29）：BC 的两个 configuration task 发负载后
+    // 靠客户端回 Ack(code) 才 finishCurrentTask——vanilla 客户端不认识这俩负载，
+    // 透传只会让它卡死在等 finish_configuration。门代答：吞负载 + 回 Ack。
+    case 'bettercombat:config_sync':
+      back.write('custom_payload', { channel: 'bettercombat:ack', data: encodeMCString('bettercombat:config') })
+      return true
+    case 'bettercombat:weapon_registry':
+      back.write('custom_payload', { channel: 'bettercombat:ack', data: encodeMCString('bettercombat:weapon_registry') })
+      return true
     default:
       return channel.startsWith('neoforge:') // 未识别的 neoforge 通道：吞掉，别惊动原版客户端
   }
