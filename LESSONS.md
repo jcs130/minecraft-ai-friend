@@ -105,3 +105,16 @@
 - **教训 2（mods 双目录）**：mc 镜像启动时 mc-image-helper 把 /mods（种子）COPY 到 /data/mods（工作目录）且只增不删——摘 mod 必须种子+工作目录双删再重启，只删种子=重启被种回。
 - **教训 3（诊断链）**：panel「世界进程离线」= world-heartbeat.json ts 停更；心跳停写≠进程死（bot spawn 才写）；gate 日志「LOGIN_SUCCESS 后无 play/timeout」+ mc 日志「ServerConfigurationPacketListenerImpl lost connection」即可定位 configuration 卡死。
 - **兜底**：start-server.py 新增 heal_dependents（77c32b1）——mc 重启后 world 心跳 120s 不恢复自动滚 world 容器。
+
+## 2026-08-29 凌晨 · BC 2.3.2 过门终战：configuration task 的 Ack 协议（commit b4b499b）
+- **协议真相**：BC 两个 configuration task（bettercombat:config / weapon_registry）发负载后**等客户端回 Ack(writeUtf code) 才 finishCurrentTask**——vanilla 客户端不认识负载不回 Ack，NeoForge 任务机永不出 CONFIG。通道名定谳：config_sync/weapon_registry/ack（CONFIG 桶4）+ attack_animation/attack_sound/block_hit（PLAY 桶1）。
+- **修法（门侧自答，与 neoforge:* 同策略）**：gate knowledge 硬塞 BC 六通道宣告（协商可见，服务端敢发）；config_sync/weapon_registry 到门即吞、代答 Ack(writeUtf code)。vanilla 客户端全程无感，PLAY 阶段 BC 负载由原版协议自然忽略。
+- **@Pseudo mixin 陷阱**：@Pseudo 伪目标 mixin 的 @Inject 不编织（应用成功但 handler 永不触发，require=0 静默吞）——目标类确定存在时用普通 @Mixin(targets=...)+require=0；「Mixing X into Y」日志只代表类合并，不代表 injection 生效，handler 加 println 才是行为学验证。
+- **mixin debug 三件套**：-Dmixin.debug.verbose/verify/countInjections=true（compose JVM_OPTS 临时加，排查完摘）。
+- **验证闭环**：probe2.cjs（custom_payload 监听探针）直打 25599——看到 config_sync 透传=门没代答；SPAWN OK=过门。修后 vanilla 探针过门 + Goddess/Kirito/Naruto/Taro 四实体全在线。
+
+## 2026-08-29 · 面板「实时不动」=浏览器吃缓存（commit bee6c8f）
+- **症状**：9090 页面画面冻结、村民不显示；但数据链路全通（web-entities.json 1.5s 在写、31 村民实时坐标在动、/api/state 数据在变）。
+- **病根**：/api/* 响应无 Cache-Control，浏览器启发式缓存旧快照，页面渲染陈旧画面。HTML 本身有 no-store，JSON API 没有即中招。
+- **修法**：createServer 入口对 /api/* 统一 setHeader Cache-Control no-store（一行治全部）+ 前端 refresh fetch {cache:'no-store'} 双保险。
+- **排障口诀**：面板「不动」先 curl API 看数据在不在变——数据动=浏览器缓存/前端死循环；数据停=mtime 三查（world-heartbeat.json / web-entities.json / status-*.json）定位断点。
