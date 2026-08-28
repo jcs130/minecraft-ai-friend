@@ -24,7 +24,7 @@ _STD_KEEP = (sys.stdout, sys.stderr)  # 防 GC：失引用的旧 wrapper 会被�
 # 玩家走进 NPC 身边（≤3.5 格）→ NPC 蹦出今日想法/话题/问候（点对点 tellraw，不刷全村屏）。
 # 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
 PROX_RADIUS = 3.5
-PROX_COOLDOWN = 240
+PROX_COOLDOWN = 300  # 2026-08-29 算力再分配：240→300，近距模板闲聊也降频
 EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯", "RenderBot", "ProbeBot"}
 # VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
 # 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
@@ -140,9 +140,12 @@ PORT = int(os.environ.get("MC_RCON_PORT", "25575"))
 COOLDOWN = 3.0
 # 祈福通道（2026-08-20 造物主谕「一步到位」）
 PRAY_PERIOD = 240        # 祈愿扫描间隔（秒）
-PRAY_COOLDOWN = 900      # 每村民祈愿冷却（秒），防刷屏
-PRAY_CHANCE = 0.4        # 夜里单次扫描触发祈愿的概率
+PRAY_COOLDOWN = 1500     # 每村民祈愿冷却（秒），防刷屏（2026-08-29 算力再分配：900→1500）
+PRAY_CHANCE = 0.25       # 夜里单次扫描触发祈愿的概率（2026-08-29 算力再分配：0.4→0.25）
 GOD_REPLY_PERIOD = 8     # 神谕回传消费间隔（秒）
+# 2026-08-29 造物主谕「算力再分配」：村民 LLM 对话冷却表（(speaker, villager_key) -> ts），
+# 冷却窗口内同旅人搭同村民走模板，省下 27B 吞吐让给灯语女神/灶火祭司/鸣人/桐人。
+_llm_chat_last = {}
 
 os.makedirs(VDIR, exist_ok=True)
 PROFILES = json.load(open(os.path.join(VDIR, "villagers.json"), encoding="utf-8"))["villagers"]
@@ -1375,15 +1378,24 @@ def route(speaker, msg, via="public"):
     for t in hit_v.get("topics", []):
         if any(w in rest for w in t["kw"]):
             return hit_v, resolve_lines(t["lines"], ctx)
+    # 2026-08-29 造物主谕「算力再分配」：村民 LLM 对话加冷却——同一旅人反复搭同一村民，
+    # 冷却窗口内只烧一次卡，其余走模板（省下的吞吐让给灯语女神/灶火祭司/鸣人/桐人）。
+    global _llm_chat_last
+    _ck = (speaker, hit_v["key"])
+    _cd = CFG.get("llm", {}).get("chat_cooldown", 75)
+    if time.time() - _llm_chat_last.get(_ck, 0) < _cd:
+        return hit_v, [hit_v.get("greet") or hit_v["fallback"]]
     # 世界设定问询：提到女神/归乡/法术/祈愿等 → 走 LLM（agent_chat 已注入世界常识），
     # 让村民贴人设+世界设定地指点；其余仍走模板兜底。
     if any(w in rest for w in WORLD_QUERY_KW):
         lines = agent_chat(hit_v, speaker, msg, ctx)
         if lines:
+            _llm_chat_last[_ck] = time.time()
             return hit_v, lines
         if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
             lines = llm_reply(hit_v, speaker, msg, ctx)
             if lines:
+                _llm_chat_last[_ck] = time.time()
                 return hit_v, lines
     # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
     # 2026-08-22 造物主谕：未点名（nearest 兜底接话）不碰 LLM——本地 27B 首轮可达
@@ -1393,11 +1405,13 @@ def route(speaker, msg, via="public"):
     if by_calls or via == "whisper":
         lines = agent_chat(hit_v, speaker, msg, ctx)   # 世界常识已被 agent_chat 注入
         if lines:
+            _llm_chat_last[_ck] = time.time()
             return hit_v, lines
         # 兜底直连 LLM（带世界常识；template_first 时省略）
         if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
             lines = llm_reply(hit_v, speaker, msg, ctx)
             if lines:
+                _llm_chat_last[_ck] = time.time()
                 return hit_v, lines
     return hit_v, [hit_v["fallback"]]
 
@@ -2118,7 +2132,7 @@ def village_watch_loop():
 # 玩家走进 NPC 身边（≤3.5 格）→ NPC 蹦出今日想法/话题/问候（点对点 tellraw，不刷全村屏）。
 # 每 NPC × 每玩家冷却 240s；内容池：topics 模板 > greet > fallback（零 LLM，与灶火祭司闲聊正交）。
 PROX_RADIUS = 3.5
-PROX_COOLDOWN = 240
+PROX_COOLDOWN = 300  # 2026-08-29 算力再分配：240→300，近距模板闲聊也降频
 EXCLUDE_PROX = {"Goddess", "Kirito", "Naruto", "Edward", "桐人", "鸣人", "爱德华", "Steve", "Alex", "史蒂夫", "艾利克斯", "RenderBot", "ProbeBot"}
 # VIP 重点看护名单（与 mc-god.ts 的 MC_VIP_LISTEN 对齐）：VIP 真人旅人的公屏发言
 # 由女神独占处理，NPC 不接话（2026-08-23 造物主谕「让女神化身重点服务」，勿让牧羊女抢答）。
