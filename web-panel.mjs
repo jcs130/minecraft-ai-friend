@@ -2737,6 +2737,43 @@ async function eyeTpOnce(name) {
   } catch { /* 查询失败退回相对 tp */ }
   return rconExec(`execute at ${target} run tp Goddess ~ ~0 ~`)
 }
+// 激活/换目标时的「神明飞临」动画：化身沿拱形弧线分段飞向目标（spectator 无碰撞），
+// viewer 镜头锚着化身 → 画面平滑飞掠，避免几十格瞬跳的突兀感（2026-08-29 造物主要求）
+async function eyeFlyTo(name) {
+  const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
+  const parseTriple = (s) => ((String(s).match(/\[([^\]]+)\]/) || [])[1] || '').split(',').map((v) => parseFloat(v))
+  const [posRaw, rotRaw, tpRaw, trRaw] = await Promise.all([
+    rconExec('data get entity Goddess Pos'),
+    rconExec('data get entity Goddess Rotation'),
+    rconExec(`data get entity ${target} Pos`),
+    rconExec(`data get entity ${target} Rot`),
+  ])
+  const p0 = parseTriple(posRaw), r0 = parseTriple(rotRaw), p1 = parseTriple(tpRaw), r1 = parseTriple(trRaw)
+  if (![p0, r0, p1, r1].every((a) => a.length >= 2 && a.every(Number.isFinite))) return
+  const dist = Math.hypot(p1[0] - p0[0], p1[2] - p0[2])
+  if (dist < 10) return // 太近：不值得飞，常规 tp 直接落位
+  const steps = Math.max(4, Math.min(16, Math.round(dist / 8))) // ~8 格一段，封顶 16 段≈0.9s
+  const arc = Math.min(20, dist / 5) // 拱形抬升：神明划过天际
+  const yaw0 = r0[0], yaw1 = r1[0]
+  const dyaw = ((yaw1 - yaw0 + 540) % 360) - 180 // 朝向走最短弧
+  const dt = 55
+  _eyeNextSendAt = Date.now() + steps * dt + 500 // 飞行期间常规 tick 让路
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps
+    const x = p0[0] + (p1[0] - p0[0]) * t
+    const y = p0[1] + (p1[1] - p0[1]) * t + Math.sin(Math.PI * t) * arc
+    const z = p0[2] + (p1[2] - p0[2]) * t
+    const yaw = yaw0 + dyaw * t
+    const pitch = r0[1] + (r1[1] - r0[1]) * t
+    await rconExec(`tp Goddess ${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)} ${yaw.toFixed(2)} ${pitch.toFixed(2)}`)
+    await new Promise((r) => setTimeout(r, dt))
+  }
+}
+// 三个激活分支共用的入口：重合模式（h=0）先飞掠，悬停模式直接落位
+function eyeActivate(name, h) {
+  if (!h) eyeFlyTo(name).catch(() => {})
+  else eyeTpOnce(name).catch(() => {})
+}
 function eyeStop(tpHome) {
   const f = eyeFollow
   eyeFollow = null
@@ -2998,7 +3035,7 @@ const server = createServer((req, res) => {
     const doStart = () => {
       eyeFollow = { name, h }
       _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0 // 新目标：运动检测状态清零
-      eyeTpOnce(name).catch(() => {})
+      eyeActivate(name, h)
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
     }
@@ -3008,7 +3045,7 @@ const server = createServer((req, res) => {
         const m = String(out || '').match(/\[([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?,\s*([-\d.]+)[dD]?\]/)
         eyeFollow = { name, h, home: m ? `${m[1]} ${m[2]} ${m[3]}` : null }
         _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0
-        eyeTpOnce(name).catch(() => {})
+        eyeActivate(name, h)
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ ok: true, follow: true, name }))
       }).catch(() => doStart())
@@ -3017,7 +3054,7 @@ const server = createServer((req, res) => {
       eyeFollow.name = name
       eyeFollow.h = h
       if (switched) { _eyeLastEcho = ''; _eyeStillCount = 0; _eyeNextSendAt = 0 } // 换目标/换高度：清运动检测
-      eyeTpOnce(name).catch(() => {})
+      eyeActivate(name, h)
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true, follow: true, name }))
     }
