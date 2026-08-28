@@ -92,6 +92,43 @@ def udp_listening_pid(port):
     return None
 
 
+def hb_age_sec():
+    """world 心跳文件年龄（秒）；读不到/解析不了返回大数（视为不健康）。"""
+    try:
+        import json as _json
+        p = os.path.join(COMPOSE_DIR, "data", "world-heartbeat.json")
+        with open(p, "rb") as f:
+            d = _json.loads(f.read().decode("utf-8"))
+        ts = d.get("ts") or (d.get("t", 0) * 1000)
+        return (time.time() * 1000 - ts) / 1000.0
+    except Exception:
+        return 1e9
+
+
+def heal_dependents(restarted):
+    """mc 重启后自愈依赖：Goddess bot 偶发连不回（心跳停摆）→ 等 120s，仍不恢复就滚 world 容器。
+    2026-08-29 造物主报「世界进程离线 6 分钟」：mc 重启窗口 world 心跳断，靠 world 进程自己崩溃重启
+    才恢复——不保证每次走运，编排兜底。"""
+    if "mc" not in restarted:
+        return
+    print("[自愈] mc 重启后等待 world 心跳恢复…")
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        age = hb_age_sec()
+        if age <= 90:
+            print(f"[自愈] world 心跳已恢复（age={age:.0f}s），依赖正常")
+            return
+        time.sleep(10)
+    print(f"[自愈] world 心跳 120s 未恢复（age={hb_age_sec():.0f}s）→ docker restart shadow-world")
+    _sh("docker restart shadow-world")
+    for _ in range(12):
+        time.sleep(10)
+        if hb_age_sec() <= 90:
+            print("[自愈] world 容器已滚，心跳恢复")
+            return
+    print("[自愈] ⚠ world 心跳仍不恢复，请人工介入（docker logs shadow-world）")
+
+
 # ---------------------------------------------------------------------------
 # COMPONENTS 注册表 —— 增删组件只改这里
 # kind: compose(service, container) | relay(listen_port, target_port)
@@ -220,6 +257,7 @@ def main():
     elif cmd == "up":
         for label in labels:
             comp_start(label)
+        heal_dependents(set(labels))
     elif cmd == "down":
         for label in labels:
             comp_stop(label)
@@ -229,6 +267,7 @@ def main():
         time.sleep(3)
         for label in labels:
             comp_start(label)
+        heal_dependents(set(labels))
     else:
         print(__doc__)
         return 1
