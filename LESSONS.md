@@ -128,3 +128,9 @@
 6. **rcon-cli 负数坐标**：`docker exec shadow-mc rcon-cli summon x -544 ...` 负号被 flag 解析吃掉——参数表里加 `--` 分隔。
 7. **voicechat jar 残骸致 MC 重启循环**：容器 init 拷贝中断留下 851KB 残骸（源 4.9MB），init 见文件已存在不覆盖 → zip END header not found 无限崩。修：删 `/data/mods` 残骸让 init 重拷。**MC 莫名重启循环先查 mods 目录文件大小 vs 源。**
 8. **命格书改静态快照**：造物主令「一般的书人人一本基岩可读」——written_book 发放时生成命格快照页（天赋/法力/技艺/出身），Java 右键实时查询保留。join 自动发书在 mc-god.ts ensureStatusBook。
+
+## 2026-08-29 深夜 · 基岩村民变虫清零
+1. **基岩「村民变虫」三层根因**：① extensions 里装的 settlementsgate-1.0.0 旧 jar（源码已到 1.3.0，GATE 映射+UUID 名册救援都没跑上）；② settlements-professions.json 名册是旧实体 UUID——**NPC 一旦重召（kill+summon）UUID 就变，名册即过时**，新实体走不上 UUID 救援分支；③ mod 自然生成的野生 base_villager（Nigel/Albert 等英文名）从不在名册。三层叠加 → Geyser 上游错报（未知 int id 错位）时 fallback 末影螨=虫。
+2. **修法三连**：重跑 export-professions.py（新 UUID）→ 全量兜底（世界所有 base_villager UUID 补进名册，野生 prof=0）→ extensions 换 1.3.0 jar。验证：日志「vanilla definitions captured: 6/6 (all OK)」+「roster loaded: 37」。
+3. **防复发**：Windows 计划任务 GeyserRosterDaily（每日 04:00 跑 roster-daily-refresh.bat：export 名册 + 野生补录 + 重启 ViaProxy 断基岩 15s）。**凡 kill+summon 重召 NPC 后，名册必须刷新**——要么等凌晨任务，要么手动跑 export 脚本。
+4. **换扩展 jar 前先 kill ViaProxy 进程**——jar 被运行中 JVM 锁定删不掉（taskkill /PID 后再动文件）。
