@@ -97,3 +97,11 @@
 - 修复：后端连接 keepAlive:false，应答权完全让给真客户端，门只做搬运（commit e38f347）。容器热补：docker cp gate.cjs 进 shadow-gate + docker restart，实测 45s 两轮 challenge 存活。
 - 排障法：DEBUG 版 gate 给 keep_alive/relayTo 加转发日志 + 裸 mcp 探针（join 后长 PLAY 停留）复现；服务端日志「Timed out」= vanilla keepalive 超时路径，别和 mod 踢人混淆。
 - 连带发现：云端 bot（213.152.161.54 经 frp→25565 relay）裸原版协议直连 25599 会被 NeoForge CONFIG 正常拒收（「You are trying to connect to a modded server」）——这类外部 bot 必须改走 gate。
+
+## 2026-08-29 凌晨 · Better Combat 服务端装载导致全部 bot 卡死 configuration（已回滚）
+- **症状**：00:17 重启 mc（装 BC 2.4.0）后，所有 mineflayer bot（Goddess/Taro）+ gate 自检探针 GateLearn 卡死 NeoForge configuration 阶段 30-40s 超时（Taro 40s 循环、Goddess LOGIN_SUCCESS 后 disconnect.timeout），panel 报「世界进程离线 6 分钟」；modded 真人客户端（MengMeng/KangQiang）不受影响。
+- **根因**：BC 在 configuration 注册 bettercombat:config_sync 通道；gate（神社之门代协商边车）通道协商清单不认识新通道，无法替 bot 代答 → NeoForge 协商永不完成。
+- **教训 1（装 mod 流程）**：服务端装新 mod 前先评估 gate 代协商覆盖；装完必须立刻验证 bot 回列（mc list 出现 Goddess/Kirito），不等 panel 报警。
+- **教训 2（mods 双目录）**：mc 镜像启动时 mc-image-helper 把 /mods（种子）COPY 到 /data/mods（工作目录）且只增不删——摘 mod 必须种子+工作目录双删再重启，只删种子=重启被种回。
+- **教训 3（诊断链）**：panel「世界进程离线」= world-heartbeat.json ts 停更；心跳停写≠进程死（bot spawn 才写）；gate 日志「LOGIN_SUCCESS 后无 play/timeout」+ mc 日志「ServerConfigurationPacketListenerImpl lost connection」即可定位 configuration 卡死。
+- **兜底**：start-server.py 新增 heal_dependents（77c32b1）——mc 重启后 world 心跳 120s 不恢复自动滚 world 容器。
