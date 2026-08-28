@@ -1878,6 +1878,151 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     } catch { /* best effort：记录失败不影响女神逻辑 */ }
   }
 
+  // ── 灯语女神公屏聊天（2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）──
+  // 真人公屏未点名的自然语言 → 灯语女神理解意图、真回应（「给我来个面包」真给面包）。
+  // 点名（守卫/NPC/其他在线玩家）→ 女神不接，归被点名者（守卫桥/NPC 引擎/玩家互喊）。
+  // 实现与她 existing 答疑同脉：LLM（herald 本地 27B 低延迟，失败回落女神云端）单轮
+  // 输出 JSON 意图 {action:"reply"|"give", item?, count?, text}，程序校验后执行。
+  const GODDESS_CHAT_COOLDOWN = 10_000      // 每人公屏聊天节流
+  const GODDESS_GIVE_COOLDOWN = 60_000      // 每人物品馈赠冷却（VIP 减半）
+  const lastGoddessChat = new Map<string, number>()
+  const lastGoddessGive = new Map<string, number>()
+  const VIP_SET = new Set(config.vipListen)
+
+  // NPC 点名名单：读运行态 villagers.json（display/calls），5 分钟缓存刷新。
+  // world 容器现挂 mcdata 只读卷（compose 2026-08-29）；MC_DATA_DIR/village 与 /mcdata/village
+  // 双路径兼容，档案缺失时退化为空表（点名判定只降级不报错）。
+  let npcNamesCache: string[] = []
+  let npcNamesLoadedAt = 0
+  function loadNpcNames(): string[] {
+    const now = Date.now()
+    if (now - npcNamesLoadedAt < 5 * 60_000) return npcNamesCache
+    npcNamesLoadedAt = now
+    const paths = [`${DATA_DIR}/village/villagers.json`, '/mcdata/village/villagers.json']
+    for (const p of paths) {
+      try {
+        if (!existsSync(p)) continue
+        const d = JSON.parse(readFileSync(p, 'utf-8'))
+        const list: any[] = Array.isArray(d) ? d : (d.villagers ?? [])
+        const names = list
+          .flatMap((v) => [String(v.display ?? ''), ...(Array.isArray(v.calls) ? v.calls.map(String) : [])])
+          .map((s) => s.trim()).filter(Boolean)
+        if (names.length) { npcNamesCache = names; break }
+      } catch { /* 读不动试下一个 */ }
+    }
+    return npcNamesCache
+  }
+
+  // 馈赠白名单：口粮级/实用级日常物资（中文名 → MC id）。贵重物（钻石/绿宝石/金锭/
+  // 下界合金等）不在此列——公屏随口要不到贵重货，真有需要走私语祈愿（神恩有价）。
+  const CHAT_GIVE_WHITELIST: Record<string, string> = {
+    面包: 'minecraft:bread', 火把: 'minecraft:torch', 灯笼: 'minecraft:lantern',
+    原木: 'minecraft:oak_log', 木头: 'minecraft:oak_log', 圆石: 'minecraft:cobblestone', 石头: 'minecraft:cobblestone',
+    煤: 'minecraft:coal', 煤炭: 'minecraft:coal', 铁锭: 'minecraft:iron_ingot',
+    苹果: 'minecraft:apple', 熟牛肉: 'minecraft:cooked_beef', 牛排: 'minecraft:cooked_beef',
+    木剑: 'minecraft:wooden_sword', 石剑: 'minecraft:stone_sword', 铁剑: 'minecraft:iron_sword',
+    木镐: 'minecraft:wooden_pickaxe', 石镐: 'minecraft:stone_pickaxe', 铁镐: 'minecraft:iron_pickaxe',
+    木斧: 'minecraft:wooden_axe', 石斧: 'minecraft:stone_axe', 铁斧: 'minecraft:iron_axe',
+    床: 'minecraft:white_bed', 船: 'minecraft:oak_boat', 梯子: 'minecraft:ladder',
+    盾牌: 'minecraft:shield', 玻璃: 'minecraft:glass', 萤石: 'minecraft:glowstone',
+    锄头: 'minecraft:iron_hoe', 水桶: 'minecraft:water_bucket',
+  }
+  function resolveGiveItem(item: string): { id: string; cn: string } | null {
+    const t = (item ?? '').trim().toLowerCase()
+    if (!t) return null
+    for (const [cn, id] of Object.entries(CHAT_GIVE_WHITELIST)) if (cn === t) return { id, cn }
+    for (const [cn, id] of Object.entries(CHAT_GIVE_WHITELIST)) if (t.includes(cn)) return { id, cn } // 「一把铁剑吧」
+    return null
+  }
+
+  // 灯语女神：理解一句话 → 回复或馈赠。回执走公屏（她是个聊天角色，大家看得见）。
+  async function goddessChat(username: string, message: string): Promise<void> {
+    const bot = getBot()
+    if (!bot) return
+    const isVip = VIP_SET.has(username.toLowerCase())
+    const now = Date.now()
+    const cool = isVip ? Math.floor(GODDESS_CHAT_COOLDOWN / 2) : GODDESS_CHAT_COOLDOWN
+    const lastAt = lastGoddessChat.get(username) ?? 0
+    if (now - lastAt < cool) return // 静默节流（公屏聊天不打扰，不做「稍候」提醒）
+    lastGoddessChat.set(username, now)
+    const t = transmigrators.getByUsername(username)
+    const senderName = t?.name ?? username
+    const prompt = [
+      '你是这个方块世界的「灯语女神」（游戏内化身 Goddess），温柔幽默、说话大白话、简短。',
+      '真人玩家在公屏说了句话，你要理解他真正的意思并做出回应——比如他要面包，你就真的送面包。',
+      '你的神力边界：可以送日常小物（面包/火把/煤/原木/圆石/苹果/熟牛肉/木石铁工具剑/床/船/梯子/盾牌/玻璃/萤石/灯笼/铁锭/水桶/锄头），不能送贵重物（钻石/绿宝石/金锭/合金/附魔书）——要贵重物就指他私语 /msg Goddess 祈愿：<愿望>。',
+      '',
+      `玩家名：${senderName}（登录名 ${username}）`,
+      `他说：「${message.slice(0, 120)}」`,
+      '',
+      '只输出一行 JSON，不要 markdown 代码块，两种格式二选一：',
+      '{"action":"reply","text":"<你说的话，30字内，大白话>"}',
+      '{"action":"give","item":"<物品中文名>","count":<1-8>,"text":"<你说的话，30字内>"}',
+      '规则：他要日常物品且合理 → give；问路/问玩法/求助 → reply 给答案（需要大力帮忙时让他私语祈愿）；闲聊 → 自然聊回来；无理取闹 → 温柔拒绝。',
+    ].join('\n')
+    try {
+      const ans = await callAgent(`mc:chat:${username}`, username, prompt, 'mc-herald')
+        .catch(async (e) => {
+          log(`herald down for chat (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+          return callAgent(`mc:chat:${username}`, username, prompt, 'mc-god')
+        })
+      let decision: any = null
+      const raw = String(ans.text ?? '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
+      const m = raw.match(/\{[\s\S]*\}/)
+      if (m) { try { decision = JSON.parse(m[0]) } catch { /* 非 JSON 落 reply */ } }
+      const text = String(decision?.text ?? '').trim().slice(0, 60) || raw.slice(0, 60) || '……'
+      if (decision?.action === 'give') {
+        const lastGive = lastGoddessGive.get(username) ?? 0
+        const giveCool = isVip ? Math.floor(GODDESS_GIVE_COOLDOWN / 2) : GODDESS_GIVE_COOLDOWN
+        if (now - lastGive < giveCool) {
+          try { bot.chat(`${senderName}，方才才给过你，歇一歇再来～`) } catch { /* not ready */ }
+          return
+        }
+        const resolved = resolveGiveItem(String(decision.item ?? ''))
+        if (!resolved) { // LLM 给了白名单外物品：只回话不给货
+          try { bot.chat(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`) } catch { /* not ready */ }
+          return
+        }
+        const count = Math.max(1, Math.min(8, Number(decision.count) || 1))
+        lastGoddessGive.set(username, now)
+        try {
+          await rcon.send(`give ${username} ${resolved.id} ${count}`)
+          try { bot.chat(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`) } catch { /* not ready */ }
+          worlddb.chronicleRecord('chat-give', username, { item: resolved.cn, count, via: 'goddess-chat' })
+          log(`goddess-chat give: ${username} <- ${resolved.id}x${count}`)
+        } catch (err) {
+          log(`goddess-chat give failed: ${err instanceof Error ? err.message : String(err)}`)
+          try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+        }
+      } else {
+        try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+        worlddb.chronicleRecord('chat', username, { text: message.slice(0, 40), via: 'goddess-chat' })
+        log(`goddess-chat reply to ${username}: ${text.slice(0, 50)}`)
+      }
+    } catch (err) {
+      log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // 点名检测：消息里点了守卫/NPC/其他在线玩家的名 → 女神不接，归被点名者处理。
+  function isCalledOut(username: string, message: string): boolean {
+    const m = message.trim()
+    if (!m) return false
+    for (const g of GUARD_PLAYER_NAMES) if (m.includes(g)) return true
+    for (const n of loadNpcNames()) if (m.includes(n)) return true
+    // 其他在线玩家（登录名与穿越者显示名都算）
+    for (const name of Object.keys((bot.players ?? {}) as Record<string, unknown>)) {
+      if (name === username || name === getBot()?.username) continue
+      if (m.includes(name)) return true
+    }
+    for (const x of transmigrators.list()) {
+      if (x.username === username) continue
+      if (m.includes(x.name)) return true
+    }
+    return false
+  }
+
+
   const DEATH_OBJ = 'mcdeaths'
   const deathScores = new Map<string, number>()
   let deathObjReady = false
@@ -2842,10 +2987,26 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (username === getBot()?.username) return
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
       recordPlayerChat(username, message)
-      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
-      // 公屏发言（尤其语音转文字的自然语言祈使句，如「给我来一个铁剑吧」）应优先
-      // 上达女神，而不是被附近 NPC 截胡或忽略。直接复用私语处理链路 handleWhisper，
-      // 让女神聆听并回应她说的每一句话（回应仍走私语，不刷公屏）。
+      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）＋ 灯语女神公屏聊天
+      // （2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）：真人（VIP 与否）公屏
+      // 未点名的自然语言 → 灯语女神即时理解意图、真回应（「给我来个面包」真给面包）。
+      // 点名（守卫/NPC/其他在线玩家）→ 女神不接，归被点名者（守卫桥/NPC 引擎/玩家互喊）。
+      // 显式「祈愿：」前缀例外 → 走私聊全链上达天听（女神本尊裁决，神恩有价不变）。
+      // AI 穿越者不走此通道（仍走私聊祈愿/咏唱/守卫桥生态，防 bot 话痨绕过祈愿体系）。
+      if (
+        !isInternalBot(username) &&
+        !username.startsWith('sys_') &&
+        !GUARD_PLAYER_NAMES.has(username) &&
+        !transmigrators.getByUsername(username) &&
+        !isCalledOut(username, message)
+      ) {
+        if (message.trim().startsWith('祈愿：')) {
+          handleWhisper(username, message).catch((err) => log(`handleWhisper(chat-pray) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        } else {
+          goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        }
+        return
+      }
       if (config.vipListen.includes(username.toLowerCase())) {
         handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
