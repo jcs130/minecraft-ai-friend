@@ -735,7 +735,14 @@ let viewMode = localStorage.getItem('viewMode') || 'third'; // third | first | d
 // 第一人称 h=9：保留上空俯瞰（Goddess 自己的眼睛）。
 async function eyeFollowTo(name) {
   if (!name) return;
-  try { await fetch('/api/eye?name=' + encodeURIComponent(name) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 0)); } catch {}
+  // 天眼 tp 只认注册名（Kirito/Naruto）；UI 点选传来的可能是显示名（personaName，如「桐人」）
+  // ——MC 的 @a[name=...] 不匹配显示名，直接传会静默跳不过去（name/ID 分离铁律）。先反查回注册名。
+  let target = name;
+  if (!/^[A-Za-z0-9_]{1,16}$/.test(name)) {
+    const hit = state.bots.find((b) => b.bot && (b.bot.personaName === name || b.bot.username === name));
+    if (hit && hit.bot.username) target = hit.bot.username;
+  }
+  try { await fetch('/api/eye?name=' + encodeURIComponent(target) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 0)); } catch {}
 }
 function eyeFollowStop() {
   try { fetch('/api/eye?follow=0').catch(() => {}); } catch {}
