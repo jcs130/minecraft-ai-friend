@@ -90,3 +90,10 @@
 - **眼验要打到病灶本体**：上一轮"全村零品红"是取样偏差——桐人在跑图，守村傀儡群不在镜头里。眼验点位由 RCON data get 实体坐标决定（守村傀儡·南巷 -564,71,834 → 跟随 Edward -557,852 即可入镜），别拿"附近没病"当"病愈"。
 - 落地：mc-world:2.1.36（texRel 双归一 + textures/entity 层 + miss 日志），commit a47ca4f 已推 CI 17 绿；铁傀儡/雪傀儡/鱼群/村民全量眼验正常。
 
+
+## 2026-08-28 gate keepalive 双应答竞态（Goddess 15s 踢循环）
+- 症状：经神社之门的客户端 join 后 ~15s 被 MC 服务端踢「Timed out」，无限重连（每 17s 一轮）。
+- 根因：gate 后端 mc.createClient 默认 keepAlive:true 会自动应答服务端 keep_alive；真客户端（mineflayer/mcp 前端）的应答又经 PLAY 全透传到达服务端 → 服务端收到两条同 id 应答 → 断线。probe 短会话暴露不了，只有长时 PLAY 会话踩中。
+- 修复：后端连接 keepAlive:false，应答权完全让给真客户端，门只做搬运（commit e38f347）。容器热补：docker cp gate.cjs 进 shadow-gate + docker restart，实测 45s 两轮 challenge 存活。
+- 排障法：DEBUG 版 gate 给 keep_alive/relayTo 加转发日志 + 裸 mcp 探针（join 后长 PLAY 停留）复现；服务端日志「Timed out」= vanilla keepalive 超时路径，别和 mod 踢人混淆。
+- 连带发现：云端 bot（213.152.161.54 经 frp→25565 relay）裸原版协议直连 25599 会被 NeoForge CONFIG 正常拒收（「You are trying to connect to a modded server」）——这类外部 bot 必须改走 gate。
