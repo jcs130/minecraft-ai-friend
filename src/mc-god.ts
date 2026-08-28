@@ -1353,6 +1353,29 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         await submitPrayerCli(subject, replyTarget, wish, offeringText)
         return
       }
+      case 'offering': {
+        // 独立供奉令（2026-08-28 T006-a1 供奉回执机制）：/cli offering <物品> [数量]
+        // 守卫/真人不必裹愿望即可直供神库——收执→取物→入账→回执，一句终局信号。
+        // 旧病根：旧版无此子命令，/cli offering … 被当未知命令，守卫供了东西却永远
+        // 等不到回执（offerings=0 与感怀口径分裂，R009 病根）。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli offering <物品> [数量]，如 /cli offering 铁锭 4`); return }
+        const offText = cmd.args.join(' ').trim()
+        const t: Transmigrator | null = transmigrators.getByUsername(subject)
+        const resolved = resolveOfferingText(offText)
+        if (!resolved) {
+          reply(`[神库] 此物神不受：${offText}。可献：面包/熟牛肉/煤/铁锭/金锭/钻石/绿宝石/附魔书…（写法如「铁锭 4」「diamond 2」）。`)
+          return
+        }
+        const offer: OfferingInfo = { id: resolved.id, cn: resolved.cn, count: resolved.count }
+        const taken = await takeOffering(subject, offer)
+        if (!taken.ok) { reply(`[神库] ${taken.reason}`); return }
+        await grantXp(subject, 15, 'offering')
+        worlddb.chronicleRecord('offering', subject, { cn: offer.cn, count: offer.count })
+        try { worlddb.remember(subject, 'offering', `「${t?.name ?? subject}」直献神库：${offer.cn}×${offer.count}`) } catch { /* */ }
+        log(`cli offering accepted from ${subject}: ${offer.cn}x${offer.count}`)
+        reply(`[神库] 已收讫：${offer.cn}×${offer.count}。供奉归档，天知道。`)
+        return
+      }
       case 'ask': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli ask <问题>。`); return }
         await answerQuestion(subject, cmd.args.join(' '), replyTarget)
