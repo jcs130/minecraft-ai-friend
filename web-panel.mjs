@@ -742,8 +742,9 @@ async function eyeFollowTo(name) {
     const hit = state.bots.find((b) => b.bot && (b.bot.personaName === name || b.bot.username === name));
     if (hit && hit.bot.username) target = hit.bot.username;
   }
-  // h=6：镜头抬到目标头顶上方——h=0 贴脸时目标被压在镜头正下方，画面里根本看不到人
-  try { await fetch('/api/eye?name=' + encodeURIComponent(target) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 6)); } catch {}
+  // h=0：化身与目标同位同向重合（化身 mesh 隐藏），环绕镜头落在正后方=F5 背影视角；
+  // h>0 是头顶悬停（第一人称/俯瞰用），h=6 会把人压在镜头正下方看不见（2026-08-29 造物主实测）
+  try { await fetch('/api/eye?name=' + encodeURIComponent(target) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 0)); } catch {}
 }
 function eyeFollowStop() {
   try { fetch('/api/eye?follow=0').catch(() => {}); } catch {}
@@ -2718,11 +2719,23 @@ const EYE_BACKOFF_MAX_MS = 3000 // 目标静止时两次 tp 的最大间隔（�
 let _eyeLastEcho = '' // 上次成功 tp 的反馈原文（运动检测）
 let _eyeStillCount = 0 // 连续「没动」次数
 let _eyeNextSendAt = 0 // 下次允许发 tp 的时间戳
-function eyeTpOnce(name) {
+async function eyeTpOnce(name) {
   // 中文名 RCON 直传 Invalid，用选择器包装（与 mc_npc.py player_pos 同款）
   const target = /^[A-Za-z0-9_]{1,16}$/.test(name) ? name : `@a[name="${name.replace(/"/g, '')}",limit=1]`
   const h = eyeFollow?.h ?? EYE_HOVER
-  return rconExec(`execute at ${target} run tp Goddess ~ ~${h} ~`)
+  if (h) return rconExec(`execute at ${target} run tp Goddess ~ ~${h} ~`) // 悬停模式（第一人称/俯瞰）
+  // 第三人称跟随视角：化身与目标【同位同向】重合 → viewer 环绕镜头自动落在其正后方，
+  // 画面中央即目标背影（F5 视角）。tp 必须带上目标朝向，否则镜头方位随化身旧朝向乱飘。
+  try {
+    const posRaw = await rconExec(`data get entity ${target} Pos`)
+    const rotRaw = await rconExec(`data get entity ${target} Rot`)
+    const pos = ((posRaw.match(/\[([^\]]+)\]/) || [])[1] || '').split(',').map((v) => parseFloat(v))
+    const rot = ((rotRaw.match(/\[([^\]]+)\]/) || [])[1] || '').split(',').map((v) => parseFloat(v))
+    if (pos.length >= 3 && rot.length >= 2 && pos.every(Number.isFinite) && rot.every(Number.isFinite)) {
+      return rconExec(`tp Goddess ${pos[0].toFixed(2)} ${pos[1].toFixed(2)} ${pos[2].toFixed(2)} ${rot[0].toFixed(2)} ${rot[1].toFixed(2)}`)
+    }
+  } catch { /* 查询失败退回相对 tp */ }
+  return rconExec(`execute at ${target} run tp Goddess ~ ~0 ~`)
 }
 function eyeStop(tpHome) {
   const f = eyeFollow
