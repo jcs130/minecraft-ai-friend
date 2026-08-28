@@ -934,6 +934,17 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
             const body = await readFile(file)
             send(200, MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream', body, { 'Cache-Control': 'public, max-age=86400' }); return
           }
+          // 2026-08-29 新版纹理树兜底：1.21.1 树把部分实体纹理挪进同名子目录
+          // （entity/squid.png → entity/squid/squid.png；glow_squid.png → entity/squid/glow_squid.png）。
+          // renderer 仍按老平铺路径请求 → 落品红棋盘。落空时试同名子目录再回。
+          const sub = file.replace(/[\\/]entity[\\/]([^\\/]+)\.png$/i, '/entity/$1/$1.png')
+          if (sub !== file) {
+            const subMeta = await stat(sub).catch(() => null)
+            if (subMeta?.isFile()) {
+              const body = await readFile(sub)
+              send(200, MIME[path.extname(sub).toLowerCase()] ?? 'image/png', body, { 'Cache-Control': 'public, max-age=86400' }); return
+            }
+          }
         }
         if (texRel.startsWith('/blocksStates/')) { send(404, 'application/json', '{}'); return }
         // 纹理缺失兜底：missing 纹理（品红棋盘，便于目视发现缺口）——落日志供补资产

@@ -133,6 +133,9 @@ services:
     volumes:
       - ./data:/app/data
       - ../../../src:/app/src:ro
+      # 2026-08-29 固化：世界主入口 bind-mount（此前镜像 COPY 态，改码须重新 build 才生效）
+      - ../../../bootstrap-world.mts:/app/bootstrap-world.mts:ro
+      - ./mcdata:/mcdata:ro   # 2026-08-29 灯语女神公屏聊天：读 NPC 档案（village/villagers.json）做点名分流
       - ./mc/logs:/mclogs:ro
       - ./mc/world/advancements:/mcadv:ro
     environment:
@@ -418,6 +421,14 @@ services:
     restart: unless-stopped
     networks: [shadow]
 
+  viaproxy:
+    image: ghcr.io/viaproxy/viaproxy:latest
+    container_name: shadow-viaproxy
+    restart: unless-stopped
+    volumes: ["./viaproxy:/config"]
+    ports: ["19140:19140/udp", "25568:25568/tcp"]
+    networks: [shadow]
+
 networks:
   shadow:
     name: shadow_net
@@ -427,3 +438,4 @@ volumes:
     external: true
   vllm_compile_cache:
     external: true
+

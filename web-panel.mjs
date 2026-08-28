@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, openSync, readSync, closeSync, fstatSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
@@ -13,7 +13,13 @@ const MAGIC_PATH = resolve(DATA_DIR, 'magic-state.json')
 const ATOMS_PATH = resolve(DATA_DIR, 'magic-atoms.json')
 const EVENTS_PATH = resolve(DATA_DIR, 'skill-events.json')
 const WORLDDB_PATH = resolve(DATA_DIR, 'world.db')
-const NPCFEED_PATH = resolve(DATA_DIR, 'npc-feed.jsonl')
+// 村口实况落笔处有多个可能位置（2026-08-29 修复「暂无对话记录」：panel 容器里 mc_npc.py
+// 写在 /mcdata/npc-feed.jsonl（只读挂载），此前固定读 DATA_DIR 恒空）。
+const NPCFEED_PATHS = [
+  process.env.MC_NPC_FEED || '',
+  resolve(DATA_DIR, 'npc-feed.jsonl'),
+  '/mcdata/npc-feed.jsonl',
+].filter(Boolean)
 const WORLD_HB_PATH = resolve(DATA_DIR, 'world-heartbeat.json') // 世界进程心跳（mc-god 死亡轮询每 20s 落盘）
 const VILLAGE_DIR = resolve(DATA_DIR, 'village') // 村庄引擎数据目录（config.json / villagers.json）
 // 村庄活数据（任务板 guild-*.json / 声望 guild-fame.json / 流水 quest-ledger.jsonl）在
@@ -139,7 +145,7 @@ function readJson(path, fallback) {
 }
 
 // 编年史：直接读世界进程的 world.db（read-only，短锁冲突时静默降级为空表）
-function readChronicle(limit = 40) {
+function readChronicle(limit = 300) {
   try {
     if (!existsSync(WORLDDB_PATH)) return []
     const db = new DatabaseSync(WORLDDB_PATH, { readOnly: true })
@@ -161,13 +167,49 @@ function readChronicle(limit = 40) {
 }
 
 // 村口实况：mc_npc.py 写的 npc-feed.jsonl（穿越者×NPC 对话与行为，倒序取尾部）
+function npcFeedPath() { for (const p of NPCFEED_PATHS) { try { if (existsSync(p)) return p } catch {} } return NPCFEED_PATHS[NPCFEED_PATHS.length - 1] }
 function readNpcFeed(limit = 24) {
   try {
-    if (!existsSync(NPCFEED_PATH)) return []
-    const lines = readFileSync(NPCFEED_PATH, 'utf-8').split('\n').filter(Boolean)
+    const p = npcFeedPath()
+    if (!existsSync(p)) return []
+    const lines = readFileSync(p, 'utf-8').split('\n').filter(Boolean)
     return lines.slice(-limit).reverse().map((ln) => {
       try { return JSON.parse(ln) } catch { return null }
     }).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+// 公屏聊天（2026-08-29 新增，治「聊天记录暂无」）：直接读 MC 日志尾部的
+// 「[HH:MM:SS] … [Not Secure] <玩家> 内容」行——公屏原话不依赖任何组件落账本。
+// 女神化身/NPC 的公屏说话同样是 <名字> 内容，一并可见；只读尾部 2MB，绝不整读大文件。
+let logChatCache = { size: -1, at: 0, rows: null }
+function readLatestLogChat(limit = 60) {
+  const p = '/mclogs/latest.log'
+  try {
+    if (!existsSync(p)) return []
+    // 15s 结果缓存：轮询频繁，日志没新增就不重读。日志 13MB 级，整读 ~50ms 可承受；
+    // 不敢只读尾部——RCON 刷屏极快，稀疏的公屏聊天会被漂出窗口。
+    const sz = statSync(p).size
+    if (logChatCache.rows && Date.now() - logChatCache.at < 15000 && logChatCache.size === sz) return logChatCache.rows
+    const text = readFileSync(p, 'utf-8')
+      const today = new Date()
+      const dstr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')} `
+      const rows = []
+      const re = /\[(?:\d{1,2}[A-Za-z]{3}\d{4}[ ])?(\d{1,2}:\d{2}:\d{2})(?:\.\d+)?\][^\n]*?\[Not Secure\] <([^>\n]{1,24})> ([^\n]+)/g
+      let m
+      while ((m = re.exec(text))) {
+        const who = m[2].trim()
+        const body = m[3].trim().slice(0, 160)
+        if (!body) continue
+        const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        const h = '<span style="color:' + (who === 'Goddess' ? 'var(--gold)' : 'var(--blue)') + '">&lt;' + escHtml(who) + '&gt;</span> ' + escHtml(body)
+        rows.push({ t: dstr + m[1], h })
+      }
+      const out = rows.slice(-limit)
+      logChatCache = { size: sz, at: Date.now(), rows: out }
+      return out
   } catch {
     return []
   }
@@ -317,8 +359,9 @@ function apiState() {
     passives: passiveDefs,
     questBoard: { day, board, fame, stat7 },
     villagersLive,
-    chronicle: readChronicle(40),
-    npcFeed: readNpcFeed(24),
+    chronicle: readChronicle(300),
+    npcFeed: readNpcFeed(40),
+    logChat: readLatestLogChat(60),
     world: hb,
     entities: readEntities(),
   }
@@ -407,6 +450,13 @@ const PAGE = `<!doctype html>
   /* 思考流 */
   .steps-card { flex:0 0 auto; min-height:0; display:flex; flex-direction:column; } /* 聊天压成矮条，不再占 42% 大空白 */
   .steps-scroll { flex:1 1 auto; overflow-y:auto; min-height:0; max-height:210px; }
+  /* 底部通栏（2026-08-29）：聊天记录 + 村口实况横跨全宽，不再留大空白 */
+  .chat-footer { flex:0 0 250px; display:flex; gap:12px; padding:0 16px 12px; min-height:0; }
+  .chat-footer .steps-card { flex:2 1 0; min-width:0; }
+  .chat-footer .cf-feed { flex:1 1 0; }
+  .chat-footer .steps-scroll { max-height:none; }
+  .chat-footer .chron { flex:1 1 auto; overflow-y:auto; min-height:0; }
+  body.vmax .chat-footer { display:none; }
   .step { border-left:2px solid var(--line); padding:8px 0 8px 12px; margin-bottom:10px; }
   .step .head { font-size:12px; color:var(--dim); margin-bottom:4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .step .tool { font-family:monospace; font-size:11px; color:var(--gold); word-break:break-all; min-width:0; }
@@ -615,12 +665,6 @@ const PAGE = `<!doctype html>
           <iframe id="viewer-frame" class="viewer-frame" loading="lazy"></iframe>
         </div>
       </div>
-
-      <div class="card steps-card">
-        <div class="card-head"><h2 id="steps-title">聊天记录</h2><span class="muted">穿越者 × NPC 对话 · 神谕 · 编年史</span></div>
-        <div id="sysbar" class="sysbar"></div>
-        <div class="steps-scroll" id="steps"><div class="empty">暂无对话记录</div></div>
-      </div>
     </div>
 
     <div class="side">
@@ -684,11 +728,6 @@ const PAGE = `<!doctype html>
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>村口实况</h2><span class="muted">穿越者 × NPC 对话与行为</span></div>
-        <div class="chron" id="npcfeed"><div class="empty">暂无记录</div></div>
-      </div>
-
-      <div class="card">
         <div class="card-head"><h2>编年史</h2><span class="muted">世界事件流</span></div>
         <div class="chron" id="chronicle"><div class="empty">暂无记录</div></div>
       </div>
@@ -715,7 +754,18 @@ const PAGE = `<!doctype html>
     </div>
   </div>
 
-<!-- 聊天记录已并入主区「聊天记录」卡（原思考流位），不再保留 196px 底部小条 -->
+  <!-- 底部通栏（2026-08-29 造物主谕：下面一大片别空着——聊天记录/村口实况铺满全宽） -->
+  <div class="chat-footer">
+    <div class="card steps-card cf-chat">
+      <div class="card-head"><h2 id="steps-title">聊天记录</h2><span class="muted">公屏 · NPC 对话 · 神谕 · 编年史</span></div>
+      <div id="sysbar" class="sysbar"></div>
+      <div class="steps-scroll" id="steps"><div class="empty">暂无对话记录</div></div>
+    </div>
+    <div class="card steps-card cf-feed">
+      <div class="card-head"><h2>村口实况</h2><span class="muted">穿越者 × NPC 对话与行为</span></div>
+      <div class="chron" id="npcfeed"><div class="empty">暂无记录</div></div>
+    </div>
+  </div>
 
 <div id="settings-backdrop"></div>
 <aside id="settings-drawer">
@@ -834,7 +884,9 @@ function renderInspect(uname, dispName) {
     + [103, 102, 101, 100, 40].map((s) => slotHtml(s, -1)).join('') + '</div>'
   el.innerHTML = h
   const n = (d.items || []).length
-  sub.textContent = n + ' 格有物 · ' + new Date(hit.at).toLocaleTimeString('zh-CN', { hour12: false }) + ' 实查'
+  sub.textContent = n
+    ? n + ' 格有物 · ' + new Date(hit.at).toLocaleTimeString('zh-CN', { hour12: false }) + ' 实查'
+    : '空空如也（若刚死亡，物品已掉落在原地）· ' + new Date(hit.at).toLocaleTimeString('zh-CN', { hour12: false }) + ' 实查'
   return true
 }
 let mapState = { range: 128, offsetX: 0, offsetZ: 0, follow: true };
@@ -1825,6 +1877,7 @@ function renderChatBar() {
   for (const e of (state.npcFeed || [])) {
     if (['say', 'goddess', 'player'].includes(e.kind)) rows.push({ t: (e.t || e.ts || ''), h: npcLine(e) });
   }
+  for (const e of (state.logChat || [])) rows.push({ t: e.t || '', h: e.h }); // 公屏原话（MC 日志直读）
   rows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
   const tail = rows.slice(0, 200);
   el.innerHTML = tail.length ? tail.map((r) => '<div class="ce"><span class="ct">' + dt(r.t) + '</span><span class="cx">' + r.h + '</span></div>').join('') : '<div class="empty">暂无对话记录</div>';
@@ -1834,14 +1887,12 @@ function renderChatBar() {
 function tuckSettings() {
   const drawer = document.getElementById('settings-drawer');
   if (!drawer) return;
-  ['skills', 'skin-presets', 'tts-form', 'inv', 'memory', 'worldctrl', 'npcctl'].forEach((id) => {
+  // 2026-08-29：'inv'（背包）移出抽屉——众生看行囊是常态诉求，常驻右侧「众生」页签。
+  ['skills', 'skin-presets', 'tts-form', 'memory', 'worldctrl', 'npcctl'].forEach((id) => {
     const el = document.getElementById(id);
     if (el && el.closest) { const card = el.closest('.card'); if (card) drawer.appendChild(card); }
   });
-  ['npcfeed', 'chronicle'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el && el.closest) { const card = el.closest('.card'); if (card) card.remove(); }
-  });
+  // 2026-08-29：不再移除村口实况卡（已迁底部通栏）；编年史卡归「村务」页签。
 }
 function initSettingsDrawer() {
   tuckSettings();
@@ -2011,7 +2062,11 @@ function renderCurrent() {
       ['身份', name + '（' + (bot.username || '-') + '）'],
       ['状态', '<span style="color:var(--green)">在线</span>'],
       ['位置', pos],
-      ['手持', esc(bot.heldItem || '空手')],
+      // 手持：优先 RCON 实查（选中槽位的真家伙），档案 heldItem 兜底
+      ['手持', (() => {
+        const it = insp ? (insp.items || []).find((x) => x.slot === (insp.sel ?? -1)) : null;
+        return esc(it ? (itemCN(it.id) + (it.count > 1 ? ' ×' + it.count : '')) : (bot.heldItem || '空手'));
+      })()],
     ] : [];
     if (on && insp) { // RCON 实查的氧气/等级（众生通用）
       if (insp.health != null) rows.push(['生命', Math.round(insp.health) + '/20'])
@@ -2065,7 +2120,7 @@ function renderCurrent() {
       document.getElementById('inv-sub').textContent = inv.length ? inv.length + ' 种（档案）' : '';
       document.getElementById('inv').innerHTML = inv.length
         ? inv.map((i) => '<span class="chip">' + esc(i.name) + ' ×' + i.count + '</span>').join('')
-        : '<span class="muted">空</span>'
+        : '<span class="muted">空空如也（若刚死亡，物品已掉落在原地）</span>'
     }
   }
 
@@ -2089,8 +2144,8 @@ function initSideTabs() {
   if (!side || side.dataset.tabbed) return;
   side.dataset.tabbed = '1';
   const defs = [
-    { id: 'beings', label: '众生', h2s: ['状态', '技能与被动', '修为榜'] },
-    { id: 'village', label: '村务', h2s: ['任务板', '村民动态', '村口实况', '编年史'] },
+    { id: 'beings', label: '众生', h2s: ['状态', '技能与被动', '修为榜', '背包'] },
+    { id: 'village', label: '村务', h2s: ['任务板', '村民动态', '编年史'] },
     { id: 'world', label: '世界', h2s: ['小地图'] },
   ];
   // 位置锚点：把页签条插在第一个 group-head 处
@@ -2132,7 +2187,7 @@ window.addEventListener('resize', () => { if (document.getElementById('side-sec-
 
 // ── 小地图地形底图（2026-08-26）：shadow-world :3060 tile 服务，Goddess 区块视野内地形 ──
 const MAP_TILE_PORT = 3060;
-let mapTerrain = { key: '', cx: 0, cz: 0, range: 0, img: null, loading: false };
+let mapTerrain = { key: '', cx: 0, cz: 0, range: 0, img: null, loading: false, empty: false };
 function ensureMapTerrain(cx, cz, range) {
   if (range > 128) return; // 超出 tile 服务上限：只画点阵
   const v = Math.floor(Date.now() / 60000); // 60s 自然刷新（世界会变）
@@ -2140,11 +2195,18 @@ function ensureMapTerrain(cx, cz, range) {
   const key = qx + '|' + qz + '|' + range + '|' + v;
   if (key === mapTerrain.key || mapTerrain.loading) return;
   mapTerrain.loading = true;
-  const img = new Image();
-  const tcx = Math.round(cx), tcz = Math.round(cz);
-  img.onload = () => { mapTerrain = { key, cx: tcx, cz: tcz, range, img, loading: false }; drawMap(); };
-  img.onerror = () => { mapTerrain.loading = false; };
-  img.src = 'http://' + location.hostname + ':' + MAP_TILE_PORT + '/map.png?cx=' + tcx + '&cz=' + tcz + '&r=' + range + '&v=' + v;
+  // fetch 而非 Image：tile 服务在女神区块未就绪时返回一张近乎全空的极小 PNG（<800B），
+  // 此前照单渲染=「小地图坏了」的观感；现在识别空图，显式提示并等下一轮重试。
+  fetch('http://' + location.hostname + ':' + MAP_TILE_PORT + '/map.png?cx=' + Math.round(cx) + '&cz=' + Math.round(cz) + '&r=' + range + '&v=' + v)
+    .then((r) => { if (!r.ok) throw new Error('tile ' + r.status); return r.blob(); })
+    .then((b) => {
+      mapTerrain.loading = false;
+      if (b.size < 800) { mapTerrain.empty = true; mapTerrain.key = ''; mapTerrain.img = null; drawMap(); return; }
+      const img = new Image();
+      img.onload = () => { mapTerrain.empty = false; mapTerrain.key = key; mapTerrain.cx = Math.round(cx); mapTerrain.cz = Math.round(cz); mapTerrain.range = range; mapTerrain.img = img; drawMap(); };
+      img.src = URL.createObjectURL(b);
+    })
+    .catch(() => { mapTerrain.loading = false; mapTerrain.empty = true; mapTerrain.img = null; drawMap(); });
 }
 
 function drawMap() {
@@ -2170,6 +2232,12 @@ function drawMap() {
     const ox = (mapTerrain.cx - cx) * scale, oz = (mapTerrain.cz - cz) * scale;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(mapTerrain.img, ox, oz, W, H);
+  } else if (mapTerrain.empty) {
+    ctx.fillStyle = 'rgba(221,230,250,.55)';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🌏 地形未就绪：女神区块加载中（稍候自动重试）', W / 2, H / 2);
+    ctx.textAlign = 'left';
   }
 
   // 网格（自适应：放大看细节时用细网格；有地形时淡出）
@@ -2236,6 +2304,21 @@ function drawMap() {
     ctx.fillStyle = '#f85149';
     ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // 智能村民（settlements NPC，RCON 补录进快照的实时位置）—— 2026-08-29 村民上屏
+  // 橙色点与档案静态点（villageNpcs）同色系：档案点是「应站岗位」，这里是「此刻真身」
+  (state.entities || []).forEach((e) => {
+    if (!e.isNpc) return;
+    const px = sx(e.x), py = sy(e.z);
+    if (px < -10 || py < -10 || px > W + 10 || py > H + 10) return;
+    ctx.fillStyle = '#f0883e';
+    ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1; ctx.stroke();
+    if (e.name) {
+      ctx.fillStyle = '#f0883e'; ctx.font = '9px sans-serif';
+      ctx.fillText(e.name, px + 5, py - 3);
+    }
   });
 
   // 其他 bot（紫色圆点 / 皮肤头像）
@@ -2347,6 +2430,8 @@ async function refresh() {
     renderAtomTable();
     renderVillagers();
     renderLamps();
+    renderNpcFeed(); // 2026-08-29 补调用：迁移到底部通栏后渲染点丢失，恒显「暂无记录」
+    renderChronicle(); // 同上：编年史卡（村务页签）
 
     const m = s.memory || {};
     const res = Object.entries(m.resourcePoints || {}).map(([k, v]) => k + '(' + v.length + ')').join(', ');
@@ -2955,7 +3040,7 @@ const server = createServer((req, res) => {
         try { if (!quests.length) quests = JSON.parse(readFileSync(join(VILLAGE_DIR, `quests-${day}.json`), 'utf-8'))?.quests ?? [] } catch {}
         const feed = []
         try {
-          const lines = readFileSync(NPCFEED_PATH, 'utf-8').trim().split('\n').slice(-30)
+          const lines = readFileSync(npcFeedPath(), 'utf-8').trim().split('\n').slice(-30)
           for (const ln of lines) { try { feed.push(JSON.parse(ln)) } catch {} }
         } catch {}
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })

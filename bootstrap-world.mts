@@ -195,12 +195,35 @@ magic.setSpecialExecutor((special, username, params, vars) => god.service.execSp
 // 覆盖以天眼为中心 / 显视距离内的 mob、村民、玩家。全服精确实体待服务端 mod 版（另立）。
 const SNAP_FILE = `${D}/web-entities.json`
 const MOB_RE = /(zombie|zombie_villager|drowned|husk|skeleton|stray|wither_skeleton|spider|cave_spider|creep|creeper|enderman|witch|slime|phantom|pillager|vindicator|ravager|evoker|vex|blaze|guardian|elder_guardian|shulker|warden|hoglin|zoglin|piglin|piglin_brute|breeze|bogged|boss|living)/i
+// 2026-08-29 智能村民上屏（造物主令）：settlements 自定义实体 mineflayer 不认识（不在 b.entities），
+// 天眼快照里一个都没有 → 面板/小地图全村隐身。补录：每 3 轮（4.5s）RCON 一条命令批量拉
+// `execute as @e[type=settlements:base_villager] run data get entity @s Pos`，回执每行自带
+// 「中文名 has the following entity data: [x, y, z]」（名字+位置一次拿全）。解析结果缓存，
+// 每轮以 isNpc=true 注入快照；RCON 失败保留旧缓存（村民不闪没）。
+interface SettleNpc { name: string; x: number; y: number; z: number }
+let settleNpcCache: SettleNpc[] = []
+let snapTick = 0
+function refreshSettleNpcs(): void {
+  rcon.service
+    .send('execute as @e[type=settlements:base_villager] run data get entity @s Pos')
+    .then((out) => {
+      // RCON 多行回执带 ANSI 颜色码（含跨行残留的孤立 [0m），全清再解析
+      const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+      const rows: SettleNpc[] = []
+      for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]/g)) {
+        rows.push({ name: m[1].trim(), x: +m[2], y: +m[3], z: +m[4] })
+      }
+      // 空结果=村民真没了（正常不会发生）；RCON 异常走 catch，缓存原地保留
+      settleNpcCache = rows
+    })
+    .catch(() => { /* RCON 未就绪/瞬时失败：用旧缓存 */ })
+}
 const snapshotTimer = setInterval(() => {
   try {
     const b = bot.getBot()
     if (!b || !b.entities) return
     const now = Date.now()
-    const out = { at: now, t: now / 1000, entities: [] }
+    const out = { at: now, t: now / 1000, entities: [] as any[] }
     for (const id of Object.keys(b.entities)) {
       const e = b.entities[id]
       if (!e || !e.position) continue
@@ -222,7 +245,17 @@ const snapshotTimer = setInterval(() => {
         isMob, isNpc, isPlayer,
       })
     }
+    // 智能村民注入（RCON 补录，见上）
+    if (snapTick % 3 === 0) refreshSettleNpcs()
+    for (const v of settleNpcCache) {
+      out.entities.push({
+        id: 'settle:' + v.name, type: 'villager', kind: 'Village NPC', name: v.name,
+        x: Math.round(v.x * 10) / 10, y: Math.round(v.y * 10) / 10, z: Math.round(v.z * 10) / 10,
+        isMob: false, isNpc: true, isPlayer: false,
+      })
+    }
     fs.writeFileSync(SNAP_FILE, JSON.stringify(out))
+    snapTick++
   } catch { /* 天眼快照非关键，静默 */ }
 }, 1500)
 
