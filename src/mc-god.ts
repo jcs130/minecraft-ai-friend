@@ -475,6 +475,8 @@ export interface GodDeps {
   transmigrators: TransmigratorRegistry
   logwatch?: LogwatchService
   terra?: McTerraService
+  /** 咏唱可视化（2026-08-28 造物主点子）：AI 咏唱=CLI，头顶气泡冒咒语词，节目效果拉满。 */
+  bubble?: { show: (player: string, text: string) => void }
 }
 
 export interface GodHandle {
@@ -1418,6 +1420,36 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         else reply(`[信使] ${r}`)
         return
       }
+      case 'cultivate': {
+        // 修行灌顶（2026-08-28 造物主拍板：puffish 管理动词登记世界侧，AI/真人 cli 同效）。
+        // 每次给自己灌 5 点经验，60s 冷却防灌水；命令语法已经 RCON 实测（puffish_skills experience add）。
+        const cat = (cmd.args[0] ?? 'combat').trim().toLowerCase()
+        if (!/^[a-z_]{2,24}$/.test(cat)) { reply(`[CLI] 用法：cli cultivate <类别>（如 combat，缺省 combat）。类别名只认小写字母。`); return }
+        const cdMap: Map<string, number> = (globalThis as any).__cultCd ?? ((globalThis as any).__cultCd = new Map())
+        const now = Date.now()
+        const last = cdMap.get(subject) ?? 0
+        if (now - last < 60_000) { reply(`[修行] 真气未复，${Math.ceil((60_000 - (now - last)) / 1000)} 秒后再行灌顶。`); return }
+        cdMap.set(subject, now)
+        const login = resolveLogin(subject)
+        const out = await rcon.send(`puffish_skills experience add ${login} ${cat} 5`).catch((e: unknown) => `施法失败：${String(e).slice(0, 120)}`)
+        worlddb.chronicleRecord('cultivate', subject, { category: cat })
+        deps.bubble?.show(subject, `「灌顶！」·${cat} +5`)
+        if (cmd.json) jsonReply({ ok: true, category: cat, raw: String(out).slice(0, 200) })
+        else reply(`[修行] 你盘膝运功，「${cat}」之途精进一分（经验 +5）。一息之后可再灌顶。`)
+        return
+      }
+      case 'growth': {
+        // 修行进度（2026-08-28）：查 puffish 经验/点数，语法已经 RCON 实测（experience get / points get）。
+        const cat = (cmd.args[0] ?? 'combat').trim().toLowerCase()
+        if (!/^[a-z_]{2,24}$/.test(cat)) { reply(`[CLI] 用法：cli growth <类别>（如 combat，缺省 combat）。`); return }
+        const login = resolveLogin(subject)
+        const exp = await rcon.send(`puffish_skills experience get ${login} ${cat}`).catch(() => '')
+        const pts = await rcon.send(`puffish_skills points get ${login} ${cat}`).catch(() => '')
+        const fmt = (s: string) => s.split('\n')[0].trim().slice(0, 120)
+        if (cmd.json) jsonReply({ ok: true, category: cat, experience: fmt(exp), points: fmt(pts) })
+        else replyLines([`【修行进度 · ${cat}】`, `  ${fmt(exp)}`, `  ${fmt(pts)}`, `  灌顶：cli cultivate ${cat}（60 秒一次，经验 +5）`])
+        return
+      }
       default:
         reply(`[CLI] 未知命令「${cmd.verb}」。/cli commands 看全部。`)
     }
@@ -1428,7 +1460,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 命中 → castFuzzy（tokens 折算魔力 + 推理耗时=自然前摇）；拒绝 → 原话转达。
   async function resolveChant(username: string, chant: string): Promise<string> {
     try {
-      return await magic.castSpell(username, chant)
+      const r = await magic.castSpell(username, chant)
+      // 咏唱可视化（2026-08-28 造物主点子）：施法成功，头顶冒咒语词气泡——
+      // AI 咏唱虽走 CLI/文件通道，头上照样「言灵显形」；未来接语音可直接念这个词。
+      const spoken = chant.trim()
+      if (spoken && deps.bubble) {
+        const atom = magic.listAtoms().find((a) => a.words.some((w) => spoken.includes(w) || w.includes(spoken)))
+        if (atom) deps.bubble.show(username, `「${atom.words[0]}！」`)
+      }
+      return r
     } catch (err) {
       if (err instanceof Error && err.name === 'NeedLlmError' && typeof (err as any).atomId === 'string') {
         const atomId = (err as any).atomId as string

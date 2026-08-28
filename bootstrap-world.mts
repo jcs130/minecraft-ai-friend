@@ -183,6 +183,7 @@ const god = createGod({
   transmigrators: transmigrator.service,
   logwatch: logwatch.service,
   terra: terra.service,
+  bubble: bubble, // 咏唱可视化（2026-08-28）：技艺施放成功时头顶冒咒语气泡
 })
 // 解开 mc-magic ↔ mc-god 循环依赖：mc-magic 的 chronicle 迟绑定到 mc-god 的史官 record。
 magic.setChronicle(god.service.record)

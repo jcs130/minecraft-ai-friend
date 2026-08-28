@@ -83,6 +83,8 @@ export interface BubbleDeps {
 
 export interface BubbleHandle {
   dispose: () => void
+  /** 主动在玩家头顶冒气泡（咏唱可视化等场景复用 text_display 管线）。 */
+  show: (player: string, text: string) => void
 }
 
 /** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createBubble(config, deps) 装配。 */
@@ -347,5 +349,10 @@ export function createBubble(config: Config, deps: BubbleDeps): BubbleHandle {
   lc.setTimeout(() => void refreshStatLines(), 12000)
   log(`up: ttl=${config.bubbleTtlMs}ms follow=${config.followIntervalMs}ms npcs=${villagers.length}`)
 
-  return { dispose: () => lc.dispose() }
+  return {
+    dispose: () => lc.dispose(),
+    // 主动冒泡口（2026-08-28 咏唱可视化）：世界侧其他模块（mc-god 咏唱成功/CLI 灌顶）
+    // 在玩家头顶复现同款气泡，同一 tag 生命周期（bub_p_<player>），跟随/TTL 全复用。
+    show: (player: string, text: string) => { void playerBubble(player, text) },
+  }
 }

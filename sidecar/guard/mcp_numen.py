@@ -51,9 +51,13 @@ NUMEN_DISPLAY = os.environ.get("NUMEN_DISPLAY", "鸣人")
 KAGE_NAMES = ["Kage1", "Kage2"]
 # 与女神侧共享的通道文件（同守卫桥；容器迁移经 MC_DATA_DIR 覆盖）
 # 2026-08-26 AUDIT-01 修复：默认值曾指向 A 仓旧世界目录，咏唱/祈愿全部石沉大海。
-# 现役主服世界数据在 B 仓 mc-data/，跟随 REPO_ROOT（REPO_ROOT 定义上移至此）。
+# 2026-08-28 AUDIT-02 修复：世界容器化后 shadow-world 进程消费的数据卷是
+# ops/docker/shadow/data（容器 /app/data），旧 B 仓 mc-data/ 已成孤儿目录——
+# 守卫 chant「灌顶」等曾沉底于此无人消费。默认值改指现役数据卷；
+# MC_DATA_DIR 环境变量仍可覆盖；mc-data 遗留未消费请求视为死信不迁移。
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-WORLD_DATA = os.environ.get("MC_DATA_DIR", os.path.join(REPO_ROOT, "mc-data"))
+WORLD_DATA = os.environ.get("MC_DATA_DIR") or os.path.join(
+    REPO_ROOT, "ops", "docker", "shadow", "data")
 CHANT_REQ = os.path.join(WORLD_DATA, "chant-requests.jsonl")
 GOD_INBOX = os.path.join(WORLD_DATA, "god-inbox.jsonl")
 
