@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+issueTrackerURL=""
+
+[[mods]]
+modId="godvoice"
+version="0.1.0"
+displayName="God Voice"
+description='''Tianyin: AI entities speak with real spatial voice. Tianer: designated players' speech captured to wav for ASR. Built for the 1000 Lantern Era.'''
+
+[[dependencies.godvoice]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,)"
+ordering="NONE"
+side="SERVER"
+
+[[dependencies.godvoice]]
+modId="voicechat"
+type="required"
+versionRange="[0,)"
+ordering="NONE"
+side="SERVER"

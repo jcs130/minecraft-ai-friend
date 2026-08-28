@@ -110,6 +110,22 @@ services:
     networks: [shadow]
     depends_on: [mc]
 
+  # 2026-08-28 真人直连口（mc-direct）：gate 只懂原版协议协商，真人 NeoForge 客户端过门
+  # 会被拒（"服务器没有使用 NeoForge"）——故给真人一条纯 TCP 通路：宿主 25565 relay ->
+  # 127.0.0.1:25566（loopback-only 发布）-> 此容器 socat 纯转发 -> mc:25599（服务名解析不怕 IP 变）。
+  # 宿主直连容器 IP 不可达=WSL2 隔离，此中转不可省。
+  mc-direct:
+    image: alpine:latest
+    container_name: mc-direct
+    restart: unless-stopped
+    entrypoint: []
+    command: ["sh", "-c", "apk add --no-cache socat >/dev/null 2>&1 && exec socat -d tcp-listen:25599,fork,reuseaddr tcp:mc:25599"]
+    environment:
+      TZ: Asia/Shanghai
+    ports: ["25566:25599"]
+    networks: [shadow]
+    depends_on: [mc]
+
   world:
     image: mc-world:2.1.36
     container_name: shadow-world
@@ -165,6 +181,9 @@ services:
     command: ["node", "web-panel.mjs"]
     volumes:
       - ./data:/app/data
+      # 2026-08-29 固化：面板源码走 B 仓 bind-mount（此前 docker cp 态，容器重建即丢
+      # 「神明飞临」等热修）。与 world 服务 src 卷同套路，单一事实源=B 仓。
+      - ../../../web-panel.mjs:/app/web-panel.mjs:ro
       - ./mcdata:/mcdata:ro
       - ./mc/logs:/mclogs:ro
     environment:

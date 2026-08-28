@@ -50,7 +50,10 @@
     },
     "内容·玩法": {
       "villagernames-1.21.1-8.5.jar": "自然村民随机命名（Fidel/Jarrod…）",
-      "voicechat-neoforge-1.21.1-2.6.22.jar": "语音聊天（冒烟通过：mineflayer 客户端未被踢）"
+      "voicechat-neoforge-1.21.1-2.6.22.jar": "语音聊天（冒烟通过：mineflayer 客户端未被踢）",
+      "immersive_aircraft-1.4.6+1.21.1-neoforge.jar": "载具（旋翼机/飞船等，AI 骑乘可行 2026-08-28；注意：注册必需网络通道，裸客户端须经神社之门 gate 协商进门）",
+      "drones-neoforge-1.1.0.jar": "Buddy/Modular Drones 无人机（依赖 architectury，同须 gate 协商）",
+      "architectury-13.0.11-neoforge.jar": "drones 前置库"
     }
   },
   "frozen": {
