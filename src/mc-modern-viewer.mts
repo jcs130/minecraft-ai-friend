@@ -1105,8 +1105,24 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     const inventoryEmitter = viewerEventEmitter(bot.inventory)
     const avatarTimer = setInterval(botAvatarState, AVATAR_STATE_INTERVAL_MS)
     avatarTimer.unref()
+    // 行走系实体 keepalive（2026-08-29「原地跑步」根因）：entityMoved 只在位置变化时触发，
+    // 实体一停帧流即断，velocity 归零算出的 idle 收尾帧永远没有触发时机——浏览器步态机
+    // 拿着最后一帧 walking 无限循环。运动中补的是真实新位置（等价正常帧）；停下后补帧
+    // 位置差=0 → 正好充当零速收尾帧；归 idle 后条件不再满足自动停补，自愈闭环。
+    const locomotionKeepalive = setInterval(() => {
+      if (!socket.connected) return
+      for (const entity of Object.values(bot.entities ?? {})) {
+        if (!entity || entity === bot.entity || entity.type !== 'player') continue
+        const last = movementAnimations.get(String(entity.id))
+        if (last === 'walking' || last === 'running' || last === 'crouchWalking') {
+          socket.emit('entityMoved', serializeViewerEntity(bot, entity, false))
+          emitMovementAnimation(entity)
+        }
+      }
+    }, 300)
+    locomotionKeepalive.unref()
     const session = {
-      socket, worldView, viewMode, avatarTimer, movementAnimations,
+      socket, worldView, viewMode, avatarTimer, locomotionKeepalive, movementAnimations,
       botPosition, botTime, botWeather, botAvatarState, botEntitySpawn, botEntityMoved, botEntityRefresh,
       botEntitySwingArm, botEntityHurt, botParticle, botSoundEffect, botHardcodedSoundEffect, botEntityDead,
       botEntityCrouch, botEntityUncrouch,
@@ -1156,6 +1172,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
   function closeSession(session) {
     if (!sessions.delete(session)) return
     clearInterval(session.avatarTimer)
+    if (session.locomotionKeepalive) clearInterval(session.locomotionKeepalive)
     bot.off('move', session.botPosition)
     bot.off('forcedMove', session.botPosition)
     bot.off('time', session.botTime)
