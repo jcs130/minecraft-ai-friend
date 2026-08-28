@@ -207,6 +207,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/data
+      # 2026-08-29 固化：网关源码 bind-mount（镜像 1.0.1 里的代码已过时，以 B 仓为单一事实源）
+      - ../../../mc-gateway/mc_gateway.py:/opt/gateway/mc_gateway.py:ro
       - ./mods:/server/mods:ro
       - ./mc/logs:/server/logs:ro
     environment:

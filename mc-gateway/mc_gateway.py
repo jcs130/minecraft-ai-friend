@@ -65,6 +65,12 @@ DB_PATH = os.path.join(GATEWAY_DATA, "gateway.db")
 WORLD_DB_PATH = os.path.join(MC_DATA_DIR, "world.db")  # 世界库：守护天使认主登记落点
 MODINDEX_PATH = os.path.join(GATEWAY_DATA, "mod_index.json")
 PANLINKS_PATH = os.path.join(GATEWAY_DATA, "pan_links.json")
+# 客户端资源站（2026-08-29）：MC 数据直挂目录下的 downloads/（宿主机 ops/docker/shadow/data/downloads），
+# 由宿主机 mc-gateway/build_client_pack.py 生成；/download 页面分发。
+# 注意挂 MC_DATA_DIR 而非 GATEWAY_DATA_DIR：资源分发是公开静态物，不混入网关内部状态目录。
+DOWNLOADS_DIR = os.path.join(MC_DATA_DIR, "downloads")
+MC_VERSION = "1.21.1"
+NEOFORGE_VERSION = "21.1.248"
 os.makedirs(GATEWAY_DATA, exist_ok=True)
 
 # ------------------------- SQLite -------------------------
@@ -733,6 +739,60 @@ def pan_links():
     except Exception:
         return {}
 
+def latest_pack():
+    """data/downloads 里最新的客户端整合包文件名（文件名由 build_client_pack.py 生成，无用户输入，无穿越面）。"""
+    try:
+        fs = [f for f in os.listdir(DOWNLOADS_DIR)
+              if f.startswith("qiandeng-client-pack-") and f.endswith(".zip")]
+        return max(fs) if fs else None
+    except Exception:
+        return None
+
+def download_page(self):
+    """千灯纪客户端资源站：真人玩家一站式下载 NeoForge 安装器+全量 mods+图解说明。"""
+    pack = latest_pack()
+    try:
+        size_mb = round(os.path.getsize(os.path.join(DOWNLOADS_DIR, pack)) / 1048576)
+    except Exception:
+        size_mb = 0
+    pan = pan_links().get("__pack__") or {}
+    pan_btn = (f'<a class="alt" href="{pan.get("url","")}">📦 网盘下载（提取码 {pan.get("code","无")}）</a>'
+               if pan.get("url") else "")
+    pack_btn = (f'<a class="main" href="/download/client-pack.zip">⬇️ 一键下载完整客户端包（约 {size_mb} MB）</a>'
+                if pack else '<span class="dim">整合包尚未生成：宿主机运行 mc-gateway/build_client_pack.py</span>')
+    html = f"""<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>千灯纪 · 客户端资源站</title><style>
+body{{background:#12100d;color:#e8dcc0;font-family:system-ui,sans-serif;margin:0;padding:32px 16px;}}
+.box{{max-width:560px;margin:0 auto;}}
+h1{{font-size:22px;color:#ffd76a;letter-spacing:2px;}} .sub{{color:#9a8b6f;font-size:13px;margin-bottom:24px;}}
+a{{display:block;text-align:center;padding:16px;border-radius:12px;margin:12px 0;font-size:16px;text-decoration:none;}}
+.main{{background:#ffd76a;color:#221c10;font-weight:700;}}
+.alt{{background:#2a251c;color:#e8dcc0;border:1px solid #4a4030;}}
+ol{{line-height:2;padding-left:20px;}} .addr{{background:#1c1812;border:1px solid #4a4030;border-radius:8px;padding:10px 14px;font-family:monospace;color:#ffd76a;}}
+.dim{{color:#7a6f58;font-size:14px;}} .tip{{font-size:13px;color:#9a8b6f;margin-top:20px;line-height:1.8;}}
+</style></head><body><div class="box">
+<h1>🏮 千灯纪 · 客户端资源站</h1>
+<div class="sub">我的异世界 · 萌悦AI 出品 —— 下载一次，全部就位</div>
+{pack_btn}
+<a class="alt" href="/download/neoforge-installer.jar">⚙️ 仅下载 NeoForge 安装器（约 7 MB）</a>
+{pan_btn}
+<h1 style="font-size:16px;margin-top:28px;">安装三步</h1>
+<ol>
+<li>先装好官方 <b>Minecraft Java {MC_VERSION}</b>，再双击包里的 <b>neoforge-{NEOFORGE_VERSION}-installer.jar</b> 选「Install client」</li>
+<li>把包里 <b>mods 文件夹</b>的所有 .jar 放进 <b>%appdata%\\.minecraft\\mods</b></li>
+<li>启动器选 <b>neoforge-{MC_VERSION}</b>，进多人游戏，服务器地址：</li>
+</ol>
+<div class="addr">{ADVERTISE}:25565</div>
+<div class="tip">💡 服务端更新模组后，回到本页重新下载覆盖即可。<br>🗣️ 语音、神谕发音、技能界面所需的模组都已包含，无需另装。</div>
+</div></body></html>"""
+    body = html.encode("utf-8")
+    self.send_response(200)
+    self.send_header("Content-Type", "text/html; charset=utf-8")
+    self.send_header("Content-Length", str(len(body)))
+    self.end_headers()
+    self.wfile.write(body)
+
 # ------------------------- 伴侣「系统」等级/权限模型（转生史莱姆大贤者式） -------------------------
 # 系统运行在客户端本地；服务端是权威档案 + 权限管控 + 数据供给 + 指令下发。
 # 每个 level 解锁一组权限（permissions），客户端大模型据此判断能动用哪些服务端能力。
@@ -890,6 +950,17 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         try:
             if method == "GET":
+                # —— 客户端资源站（公开无鉴权；文件名白名单=生成器命名，无用户输入穿越面）——
+                if p == "/download":
+                    return download_page(self)
+                if p == "/download/client-pack.zip":
+                    fn = latest_pack()
+                    if not fn: return json_write(self, 404, {"error": "pack not ready (run build_client_pack.py)"})
+                    return self._send_file(os.path.join(DOWNLOADS_DIR, fn), "application/zip")
+                if p == "/download/neoforge-installer.jar":
+                    fp = os.path.join(DOWNLOADS_DIR, f"neoforge-{NEOFORGE_VERSION}-installer.jar")
+                    if not os.path.isfile(fp): return json_write(self, 404, {"error": "installer not found"})
+                    return self._send_file(fp, "application/java-archive")
                 if p == "/api/gateway/health":
                     online = online_list()
                     return json_write(self, 200, {"ok": True, "service": "mc-gateway",
