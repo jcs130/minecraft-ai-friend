@@ -15,7 +15,7 @@ build_client_pack.py — 千灯纪客户端资源包打包器（2026-08-29）
   python build_client_pack.py            # 打包 + 打印清单
   python build_client_pack.py --dry      # 只打印分类，不写 zip
 """
-import os, sys, zipfile, tomllib, datetime
+import os, sys, re, zipfile, tomllib, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODS_DIR = os.path.normpath(os.path.join(HERE, "..", "ops", "docker", "shadow", "mods"))
@@ -80,6 +80,55 @@ def jar_meta(path):
         pass
     return server_only, client_code
 
+def build_server_pack():
+    """服务端整合包：mods+config+启动件（能开一个千灯纪服的骨架）。
+    排除：world（数据主权）、logs/crash、RCON 凭据、database.db/whitelist/ops（玩家隐私）。
+    server.properties 的 rcon.password 强制脱敏。"""
+    mc_dir = os.path.normpath(os.path.join(HERE, "..", "ops", "docker", "shadow", "mc"))
+    stamp = datetime.date.today().strftime("%Y%m%d")
+    out = os.path.join(OUT_DIR, f"qiandeng-server-pack-{MC_VERSION}-{stamp}.zip")
+    readme = f"""千灯纪 · 服务端整合包（自动生成 {datetime.date.today()}）
+==============================================
+
+【这是什么】能自己开一个「千灯纪」服务器的完整骨架（不含世界存档与玩家数据）。
+
+【开服 5 步】
+1. 安装 Java 21（服务端要求）
+2. 双击 neoforge-{NEOFORGE_VERSION}-installer.jar → 选「Install server」→ 目录选本包解压处
+3. 检查 server.properties（RCON 密码已重置为 CHANGE_ME，记得改）
+4. 运行 run.bat（Windows）或 run.sh（Linux/Mac）
+5. 客户端用资源站的客户端包进服，地址 <你的IP>:25565
+
+【注意】
+- 模组版权归各自作者，本包仅供朋友间自用，请勿公开传播
+- 世界存档与玩家数据不随包分发
+"""
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("SERVER-README.txt", readme)
+        for fn in os.listdir(MODS_DIR):
+            if fn.lower().endswith(".jar"):
+                z.write(os.path.join(MODS_DIR, fn), f"mods/{fn}")
+        for sub in ("config", "defaultconfigs"):
+            base = os.path.join(mc_dir, sub)
+            if not os.path.isdir(base):
+                continue
+            for root, _dirs, files in os.walk(base):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    z.write(fp, os.path.join(sub, os.path.relpath(fp, base)))
+        for fn in ("run.sh", "run.bat", "user_jvm_args.txt", "eula.txt"):
+            fp = os.path.join(mc_dir, fn)
+            if os.path.isfile(fp):
+                z.write(fp, fn)
+        # server.properties：脱敏后入包
+        sp = os.path.join(mc_dir, "server.properties")
+        if os.path.isfile(sp):
+            text = open(sp, encoding="utf-8").read()
+            z.writestr("server.properties", re.sub(r"rcon.password=.*", "rcon.password=CHANGE_ME", text))
+    print(f"[OK] {out} ({os.path.getsize(out)//1024} KB)")
+    return out
+
+
 def main():
     dry = "--dry" in sys.argv
     if not os.path.isdir(MODS_DIR):
@@ -111,6 +160,8 @@ def main():
         if os.path.isfile(installer):
             z.write(installer, f"neoforge-{NEOFORGE_VERSION}-installer.jar")
     print(f"\n[OK] {out} ({os.path.getsize(out)//1024} KB)")
+    if not dry:
+        build_server_pack()
     return 0
 
 if __name__ == "__main__":

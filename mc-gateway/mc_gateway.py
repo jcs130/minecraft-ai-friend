@@ -739,27 +739,35 @@ def pan_links():
     except Exception:
         return {}
 
-def latest_pack():
-    """data/downloads 里最新的客户端整合包文件名（文件名由 build_client_pack.py 生成，无用户输入，无穿越面）。"""
+def latest_pack(kind="client"):
+    """data/downloads 里最新的整合包文件名（client/server 两族；文件名由 build_client_pack.py 生成，无用户输入，无穿越面）。"""
+    prefix = "qiandeng-server-pack-" if kind == "server" else "qiandeng-client-pack-"
     try:
         fs = [f for f in os.listdir(DOWNLOADS_DIR)
-              if f.startswith("qiandeng-client-pack-") and f.endswith(".zip")]
+              if f.startswith(prefix) and f.endswith(".zip")]
         return max(fs) if fs else None
     except Exception:
         return None
 
 def download_page(self):
-    """千灯纪客户端资源站：真人玩家一站式下载 NeoForge 安装器+全量 mods+图解说明。"""
-    pack = latest_pack()
+    """千灯纪客户端资源站：真人玩家一站式下载 NeoForge 安装器+全量 mods+图解说明，附服务端整合包。"""
+    pack = latest_pack("client")
+    spack = latest_pack("server")
     try:
         size_mb = round(os.path.getsize(os.path.join(DOWNLOADS_DIR, pack)) / 1048576)
     except Exception:
         size_mb = 0
+    try:
+        ssize_mb = round(os.path.getsize(os.path.join(DOWNLOADS_DIR, spack)) / 1048576)
+    except Exception:
+        ssize_mb = 0
     pan = pan_links().get("__pack__") or {}
     pan_btn = (f'<a class="alt" href="{pan.get("url","")}">📦 网盘下载（提取码 {pan.get("code","无")}）</a>'
                if pan.get("url") else "")
     pack_btn = (f'<a class="main" href="/download/client-pack.zip">⬇️ 一键下载完整客户端包（约 {size_mb} MB）</a>'
                 if pack else '<span class="dim">整合包尚未生成：宿主机运行 mc-gateway/build_client_pack.py</span>')
+    spack_btn = (f'<a class="alt" href="/download/server-pack.zip">🖥️ 服务端整合包（约 {ssize_mb} MB，想自己开一个千灯纪？）</a>'
+                 if spack else "")
     html = f"""<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>千灯纪 · 客户端资源站</title><style>
@@ -776,6 +784,7 @@ ol{{line-height:2;padding-left:20px;}} .addr{{background:#1c1812;border:1px soli
 <div class="sub">我的异世界 · 萌悦AI 出品 —— 下载一次，全部就位</div>
 {pack_btn}
 <a class="alt" href="/download/neoforge-installer.jar">⚙️ 仅下载 NeoForge 安装器（约 7 MB）</a>
+{spack_btn}
 {pan_btn}
 <h1 style="font-size:16px;margin-top:28px;">安装三步</h1>
 <ol>
@@ -784,7 +793,7 @@ ol{{line-height:2;padding-left:20px;}} .addr{{background:#1c1812;border:1px soli
 <li>启动器选 <b>neoforge-{MC_VERSION}</b>，进多人游戏，服务器地址：</li>
 </ol>
 <div class="addr">{ADVERTISE}:25565</div>
-<div class="tip">💡 服务端更新模组后，回到本页重新下载覆盖即可。<br>🗣️ 语音、神谕发音、技能界面所需的模组都已包含，无需另装。</div>
+<div class="tip">💡 服务端更新模组后，回到本页重新下载覆盖即可。<br>🗣️ 语音、神谕发音、技能界面所需的模组都已包含，无需另装。<br>🖥️ 服务端包仅供朋友间自用，不含世界存档与玩家数据；RCON 密码已重置为 CHANGE_ME。</div>
 </div></body></html>"""
     body = html.encode("utf-8")
     self.send_response(200)
@@ -954,8 +963,12 @@ class Handler(BaseHTTPRequestHandler):
                 if p == "/download":
                     return download_page(self)
                 if p == "/download/client-pack.zip":
-                    fn = latest_pack()
+                    fn = latest_pack("client")
                     if not fn: return json_write(self, 404, {"error": "pack not ready (run build_client_pack.py)"})
+                    return self._send_file(os.path.join(DOWNLOADS_DIR, fn), "application/zip")
+                if p == "/download/server-pack.zip":
+                    fn = latest_pack("server")
+                    if not fn: return json_write(self, 404, {"error": "server pack not ready (run build_client_pack.py)"})
                     return self._send_file(os.path.join(DOWNLOADS_DIR, fn), "application/zip")
                 if p == "/download/neoforge-installer.jar":
                     fp = os.path.join(DOWNLOADS_DIR, f"neoforge-{NEOFORGE_VERSION}-installer.jar")
