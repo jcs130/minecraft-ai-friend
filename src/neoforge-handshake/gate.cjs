@@ -175,6 +175,10 @@ function kickFront (sess, reason) {
 }
 
 // ── 后端连接（A 路协商，知识缓存失配时当场神谕学习）──────────────
+// 后端连接（A 路协商，知识缓存失配时当场神谕学习）
+// keepAlive:false 是命门——mcp 的自动应答会与真客户端经门透传的应答叠加，
+// 服务端收到两条同 id 应答即断线（表现为 join+15s「Timed out」循环）。
+// 应答权必须完全让给真客户端，门只做搬运。
 function connectBackend (sess) {
   const back = mc.createClient({
     host: BACKEND.host,
@@ -182,7 +186,8 @@ function connectBackend (sess) {
     username: sess.username,
     version: VERSION,
     auth: 'offline',
-    hideErrors: true
+    hideErrors: true,
+    keepAlive: false
   })
   sess.back = back
   sess.backReady = false
