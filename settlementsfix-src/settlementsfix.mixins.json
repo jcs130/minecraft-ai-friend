@@ -1,4 +1,4 @@
-﻿{
+{
   "required": true,
   "minVersion": "0.8.7",
   "package": "dev.god.settlementsfix.mixin",
@@ -6,7 +6,8 @@
   "mixins": [
     "VillagerNameMixin",
     "WrittenBookItemMixin",
-    "SlotMixin"
+    "SlotMixin",
+    "PayloadRegistrarForceOptionalMixin"
   ],
   "injectors": {
     "defaultRequire": 1

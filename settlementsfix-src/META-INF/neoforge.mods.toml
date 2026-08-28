@@ -4,9 +4,9 @@ license = "MIT"
 
 [[mods]]
 modId = "settlementsfix"
-version = "1.1.0"
-displayName = "Settlements Bubble + Name Fix"
-description = "Disables VillagerBubbleService.tick (bubble crash loop) AND makes NPC in-world nametags show CustomName (Chinese) instead of the mod's English pool name."
+version = "1.2.0"
+displayName = "Settlements Bubble + Name Fix + Vanilla Gate"
+description = "Bubble crash loop fix + Chinese nametags + force-optional payloads so vanilla/bedrock clients (Geyser) can negotiate with the NeoForge server instead of being kicked with 'Incompatible client'."
 
 [[dependencies.settlementsfix]]
 modId = "minecraft"
