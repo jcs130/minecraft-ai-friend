@@ -2409,7 +2409,7 @@ function renderWorldChip(w) {
 
 async function refresh() {
   try {
-    const r = await fetch('/api/state');
+    const r = await fetch('/api/state', { cache: 'no-store' });
     const s = await r.json();
     const prevFeedT = (state.npcFeed && state.npcFeed.length) ? Math.max(...state.npcFeed.map((e) => e.t || 0)) : 0;
     state = s;
@@ -3029,6 +3029,9 @@ function saveNpcSettings(body) {
 const server = createServer((req, res) => {
   const u = new URL(req.url, 'http://x')
   panelActiveAt = Date.now() // 任何面板访问都算「有人在看」（天眼跟随孤儿自停依据）
+  // 2026-08-29 「实时不动」根治：API 响应一律禁缓存——此前 /api/state 等无 Cache-Control，
+  // 浏览器启发式缓存旧快照，数据链路全好但页面永远渲染陈旧画面（村民不显示同病根）。
+  if (u.pathname.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store')
   if (u.pathname === '/api/village') {
       try {
         const vil = JSON.parse(readFileSync(join(DATA_DIR, 'village', 'villagers.json'), 'utf-8'))
