@@ -82,9 +82,20 @@ def relay_stop(listen_port):
         time.sleep(1)
 
 
+def udp_listening_pid(port):
+    """返回监听该 UDP 端口的 PID（str）或 None（Geyser 基岩口 19140 是 UDP）。"""
+    out = _sh(f'netstat -ano -p udp | findstr ":{port} "')
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[0].upper() == "UDP":
+            return parts[-1]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # COMPONENTS 注册表 —— 增删组件只改这里
 # kind: compose(service, container) | relay(listen_port, target_port)
+#       | host_proc(vbs 隐藏拉起宿主进程 + probe_proto/probe_port 探测存活；如 Geyser 基岩桥)
 # depends: 依赖的组件 label（up 时自动先拉起）
 # ---------------------------------------------------------------------------
 COMPONENTS = {
@@ -99,13 +110,28 @@ COMPONENTS = {
                     "desc": "TCP 转发 25565 -> mc-direct:25566（socat 容器纯转发 -> mc:25599）＝真人 NeoForge 直连口",
                     "depends": ["mc"]},
     "relay25599":  {"kind": "relay", "listen_port": "25599", "target_port": GATE_PORT, "desc": "TCP 转发 25599 -> gate:25700 ＝ bot/mineflayer 口（神社之门代协商）", "depends": ["gate"]},
+    # 2026-08-29 造物主谕「基岩桥要常驻」：Geyser 收编为编排组件（此前只有计划任务 ONLOGON，
+    # 进程死了没人拉）。Docker Desktop 发布不了 UDP 端口 → 只能宿主进程（vbs 隐藏跑 ViaProxy cli）。
+    # ViaProxy 3.4.12 内置 Geyser-ViaProxy 插件 + settlementsgate 扩展（35 NPC 花名册）。
+    "geyser":      {"kind": "host_proc", "probe_proto": "udp", "probe_port": "19140",
+                    "vbs": os.path.join(COMPOSE_DIR, "viaproxy", "start-viaproxy-hidden.vbs"),
+                    "desc": "Geyser 基岩桥（ViaProxy 宿主进程：UDP 19140 基岩口；TCP 25568 老Java测试口）",
+                    "depends": ["mc"]},
 }
+
+
+def _probe_pid(c):
+    if c.get("probe_proto") == "udp":
+        return udp_listening_pid(c["probe_port"])
+    return port_listening_pid(c["probe_port"])
 
 
 def is_up(label):
     c = COMPONENTS[label]
     if c["kind"] == "compose":
         return container_running(c["container"])
+    if c["kind"] == "host_proc":
+        return _probe_pid(c) is not None
     return port_listening_pid(c["listen_port"]) is not None
 
 
@@ -126,6 +152,15 @@ def comp_start(label, seen=None):
         out = compose_up(c["service"])
         tail = out.strip().splitlines()[-3:] if out.strip() else []
         print(f"  {label}: compose up -> " + " | ".join(x.strip() for x in tail))
+    elif c["kind"] == "host_proc":
+        # wscript 跑 vbs（内部 hidden 跑 bat → java -jar ViaProxy cli）；无窗口、脱离本进程
+        subprocess.Popen(["wscript.exe", c["vbs"]], cwd=os.path.dirname(c["vbs"]), close_fds=True)
+        for _ in range(20):  # ViaProxy+Geyser 启动 ~15s（含 mod 映射加载）
+            time.sleep(1)
+            if is_up(label):
+                break
+        ok = is_up(label)
+        print(f"  {label}: host proc start {'OK' if ok else 'FAILED(探测端口未监听)'}")
     else:
         relay_start(c["listen_port"], c["target_port"], c.get("target_host", "127.0.0.1"))
         ok = is_up(label)
@@ -137,6 +172,12 @@ def comp_stop(label):
     if c["kind"] == "compose":
         out = compose_down(c["service"])
         print(f"  {label}: compose stop")
+    elif c["kind"] == "host_proc":
+        pid = _probe_pid(c)
+        if pid:
+            _sh(f"taskkill /PID {pid} /F")
+            time.sleep(1)
+        print(f"  {label}: host proc stopped")
     else:
         relay_stop(c["listen_port"])
         print(f"  {label}: relay stopped")
@@ -173,8 +214,8 @@ def main():
             c = COMPONENTS[label]
             up = is_up(label)
             pid = ""
-            if c["kind"] == "relay" and up:
-                pid = f"pid={port_listening_pid(c['listen_port'])}"
+            if c["kind"] in ("relay", "host_proc") and up:
+                pid = f"pid={_probe_pid(c) if c['kind'] == 'host_proc' else port_listening_pid(c['listen_port'])}"
             print(f"{label:<12}{'UP' if up else 'DOWN':<8}{c['desc']} {pid}")
     elif cmd == "up":
         for label in labels:
