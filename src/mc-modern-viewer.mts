@@ -1099,6 +1099,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     const botEntityDead = (entity) => emitViewerEffect(serializeViewerEntityBurst(bot, entity, 'death'))
     const botHeldItemChanged = () => { emitOwnEntity(); botAvatarState() }
     const botInventoryUpdate = () => { emitOwnEntity(); botAvatarState() }
+    // 命名引用：匿名箭头函数无法 bot.off，每开一次页面泄 2 个监听器（2026-08-29 幽灵画面根因）
+    const botEntityCrouch = (e) => emitMovementAnimation(e, true)
+    const botEntityUncrouch = (e) => emitMovementAnimation(e, true)
     const inventoryEmitter = viewerEventEmitter(bot.inventory)
     const avatarTimer = setInterval(botAvatarState, AVATAR_STATE_INTERVAL_MS)
     avatarTimer.unref()
@@ -1106,6 +1109,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       socket, worldView, viewMode, avatarTimer, movementAnimations,
       botPosition, botTime, botWeather, botAvatarState, botEntitySpawn, botEntityMoved, botEntityRefresh,
       botEntitySwingArm, botEntityHurt, botParticle, botSoundEffect, botHardcodedSoundEffect, botEntityDead,
+      botEntityCrouch, botEntityUncrouch,
       botHeldItemChanged, botInventoryUpdate, inventoryEmitter,
     }
     sessions.add(session)
@@ -1116,6 +1120,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     try {
       worldView.listenToBot(bot)
       bot.on('move', botPosition)
+      bot.on('forcedMove', botPosition) // 服务端 tp/强制同步只触发 forcedMove，不触发 move（2026-08-29 修跟随冻结）
       bot.on('time', botTime)
       bot.on('rain', botWeather)
       bot.on('weatherUpdate', botWeather)
@@ -1124,8 +1129,8 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       bot.on('entityUpdate', botEntityRefresh)
       bot.on('entityEquip', botEntityRefresh)
       bot.on('entitySwingArm', botEntitySwingArm)
-      bot.on('entityCrouch', (e) => emitMovementAnimation(e, true))
-      bot.on('entityUncrouch', (e) => emitMovementAnimation(e, true))
+      bot.on('entityCrouch', botEntityCrouch)
+      bot.on('entityUncrouch', botEntityUncrouch)
       bot.on('entityHurt', botEntityHurt)
       bot.on('particle', botParticle)
       bot.on('soundEffectHeard', botSoundEffect)
@@ -1152,6 +1157,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     if (!sessions.delete(session)) return
     clearInterval(session.avatarTimer)
     bot.off('move', session.botPosition)
+    bot.off('forcedMove', session.botPosition)
     bot.off('time', session.botTime)
     bot.off('rain', session.botWeather)
     bot.off('weatherUpdate', session.botWeather)
@@ -1160,6 +1166,8 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     bot.off('entityUpdate', session.botEntityRefresh)
     bot.off('entityEquip', session.botEntityRefresh)
     bot.off('entitySwingArm', session.botEntitySwingArm)
+    bot.off('entityCrouch', session.botEntityCrouch)
+    bot.off('entityUncrouch', session.botEntityUncrouch)
     bot.off('entityHurt', session.botEntityHurt)
     bot.off('particle', session.botParticle)
     bot.off('soundEffectHeard', session.botSoundEffect)

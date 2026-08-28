@@ -742,7 +742,8 @@ async function eyeFollowTo(name) {
     const hit = state.bots.find((b) => b.bot && (b.bot.personaName === name || b.bot.username === name));
     if (hit && hit.bot.username) target = hit.bot.username;
   }
-  try { await fetch('/api/eye?name=' + encodeURIComponent(target) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 0)); } catch {}
+  // h=6：镜头抬到目标头顶上方——h=0 贴脸时目标被压在镜头正下方，画面里根本看不到人
+  try { await fetch('/api/eye?name=' + encodeURIComponent(target) + '&follow=1&h=' + (viewMode === 'first' ? 9 : 6)); } catch {}
 }
 function eyeFollowStop() {
   try { fetch('/api/eye?follow=0').catch(() => {}); } catch {}
