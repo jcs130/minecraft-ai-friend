@@ -118,3 +118,13 @@
 - **病根**：/api/* 响应无 Cache-Control，浏览器启发式缓存旧快照，页面渲染陈旧画面。HTML 本身有 no-store，JSON API 没有即中招。
 - **修法**：createServer 入口对 /api/* 统一 setHeader Cache-Control no-store（一行治全部）+ 前端 refresh fetch {cache:'no-store'} 双保险。
 - **排障口诀**：面板「不动」先 curl API 看数据在不在变——数据动=浏览器缓存/前端死循环；数据停=mtime 三查（world-heartbeat.json / web-entities.json / status-*.json）定位断点。
+
+## 2026-08-29 夜 · 盔甲架村民清零战役（修全一锅端）
+1. **shadow-npc 容器无源码挂载（最大元凶）**：sidecar 代码是镜像 COPY，改宿主 `sidecar/mc_npc.py` 对容器**无效**——连续多轮「改了没生效」都是它。救急 = `docker cp sidecar/mc_npc.py shadow-npc:/opt/sidecar/` + restart；长期应给 npc 容器加 bind-mount（同 world 容器模式）。**改容器内代码前先 inspect Mounts 确认生效路径。**
+2. **RCON 长命令断连（~1.4KB 阈值）**：`data merge entity ... {Offers}` 和 `give ... [组件串]` 超长直接把连接打崩（TCP 分帧），且 mc_npc 的 sync_offers 静默吞异常。柜台 NBT 控制在 <1000B（shop≤3 条+buy≤1）；技能书 sell（整本书 pages NBT）是大头，一人最多 3-4 本。
+3. **settlements mod 周期清除未登记原版村民（~20s 一跳）**：裸 `minecraft:villager` 召唤后必蒸发（探针实证 8s 活/28s 没）。NPC 一律走 `settlements:base_villager` 载体（mod 登记管理，30+ 实证存活）。
+4. **dedup_npc 误杀竞态（已修）**：`tag add` 瞬断失败后 `kill @e[...,tag=!npcKeep]` 团灭刚召唤的新实体（云笈反复消失根因之一）。修法：先验 tag 回执再挥刀。
+5. **/mcdata 只读误诊**：web-entities.json 停更 4 天 → 以为是 world /mcdata:ro 断写；真源在 `/app/data`（shadow/data 共享卷，panel/world 同挂）一直流动。`/mcdata/web-entities.json` 是僵尸文件。**排查数据断供先 `grep` 两端代码确认读写路径，别只看文件 mtime。**
+6. **rcon-cli 负数坐标**：`docker exec shadow-mc rcon-cli summon x -544 ...` 负号被 flag 解析吃掉——参数表里加 `--` 分隔。
+7. **voicechat jar 残骸致 MC 重启循环**：容器 init 拷贝中断留下 851KB 残骸（源 4.9MB），init 见文件已存在不覆盖 → zip END header not found 无限崩。修：删 `/data/mods` 残骸让 init 重拷。**MC 莫名重启循环先查 mods 目录文件大小 vs 源。**
+8. **命格书改静态快照**：造物主令「一般的书人人一本基岩可读」——written_book 发放时生成命格快照页（天赋/法力/技艺/出身），Java 右键实时查询保留。join 自动发书在 mc-god.ts ensureStatusBook。
