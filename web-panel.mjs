@@ -2127,13 +2127,14 @@ function renderCurrent() {
   // #steps（聊天记录）由 renderChatBar() 全权渲染；此处不再用 recentSteps（服务端取不到思考流）。
 }
 
+const MAP_HOME = { x: -545, z: 863 }; // 万家烟火广场（智能村民聚集地）——无跟随目标且无 base 记忆时的默认地图中心
 function mapCenter() {
   const m = state.memory || {};
   const cur = botOf(currentUser)?.bot || {};
-  // 地图中心：跟随模式 = 当前 bot；手动平移后 = bot + 偏移。
+  // 地图中心：跟随模式 = 当前 bot；手动平移后 = bot + 偏移；无 bot 无 base = 广场（村民都在那，别再落 0,0）。
   return {
-    cx: (cur.position?.x ?? m.base?.x ?? 0) + mapState.offsetX,
-    cz: (cur.position?.z ?? m.base?.z ?? 0) + mapState.offsetZ,
+    cx: (cur.position?.x ?? m.base?.x ?? MAP_HOME.x) + mapState.offsetX,
+    cz: (cur.position?.z ?? m.base?.z ?? MAP_HOME.z) + mapState.offsetZ,
     range: mapState.range,
   };
 }
