@@ -2410,6 +2410,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   }
 
   // 灯语女神：理解一句话 → 回复或馈赠。回执走公屏（她是个聊天角色，大家看得见）。
+  // 女神公屏说话统一出口（2026-08-29 修复「面板观感没人理」）：bot.chat 发声之外
+  // 同步落 player-chat.jsonl——面板公屏流与守卫桥才看得到女神的公屏回应。此前只有
+  // 守卫 NPC 的 say 走 numen 链路落 jsonl，女神 bot.chat 不落盘，面板上像女神失踪。
+  // recordPlayerChat 内部挡 bot 自己（2347），故这里直写文件，格式与 jsonl 完全一致。
+  function goddessSayPublic(text: string): void {
+    try { getBot()?.chat(text) } catch { /* not ready */ }
+    try {
+      appendFileSync(PLAYER_CHAT, JSON.stringify({ ts: Date.now(), user: 'Goddess', text: text.slice(0, 256) }) + '\n')
+    } catch { /* best effort */ }
+  }
+
   async function goddessChat(username: string, message: string): Promise<void> {
     const bot = getBot()
     if (!bot) return
@@ -2428,6 +2439,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       '',
       `玩家名：${senderName}（登录名 ${username}）`,
       `他说：「${message.slice(0, 120)}」`,
+      // 已持有的技能书（2026-08-29 萌萌反复要「技能书火球术」）：书已在她包里，
+      // LLM 要能引导她右键用书，而不是反复「听岔了」。
+      ...(ATTACK_BOOK_GIFT.find((g) => g.to === username)
+        ? [`他已持有技能书：${ATTACK_BOOK_GIFT.find((g) => g.to === username)!.books.join('、')}（拿书按右键即施法）——他要法术/技能/书时，引导他右键用这些书，不要送新的。`]
+        : []),
       '',
       '只输出一行 JSON，不要 markdown 代码块，两种格式二选一：',
       '{"action":"reply","text":"<你说的话，30字内，大白话>"}',
@@ -2449,27 +2465,27 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const lastGive = lastGoddessGive.get(username) ?? 0
         const giveCool = isVip ? Math.floor(GODDESS_GIVE_COOLDOWN / 2) : GODDESS_GIVE_COOLDOWN
         if (now - lastGive < giveCool) {
-          try { bot.chat(`${senderName}，方才才给过你，歇一歇再来～`) } catch { /* not ready */ }
+          goddessSayPublic(`${senderName}，方才才给过你，歇一歇再来～`)
           return
         }
         const resolved = resolveGiveItem(String(decision.item ?? ''))
         if (!resolved) { // LLM 给了白名单外物品：只回话不给货
-          try { bot.chat(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`) } catch { /* not ready */ }
+          goddessSayPublic(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`)
           return
         }
         const count = Math.max(1, Math.min(8, Number(decision.count) || 1))
         lastGoddessGive.set(username, now)
         try {
           await rcon.send(`give ${username} ${resolved.id} ${count}`)
-          try { bot.chat(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`) } catch { /* not ready */ }
+          goddessSayPublic(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`)
           worlddb.chronicleRecord('chat-give', username, { item: resolved.cn, count, via: 'goddess-chat' })
           log(`goddess-chat give: ${username} <- ${resolved.id}x${count}`)
         } catch (err) {
           log(`goddess-chat give failed: ${err instanceof Error ? err.message : String(err)}`)
-          try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+          goddessSayPublic(`${senderName}，${text}`)
         }
       } else {
-        try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+        goddessSayPublic(`${senderName}，${text}`)
         worlddb.chronicleRecord('chat', username, { text: message.slice(0, 40), via: 'goddess-chat' })
         log(`goddess-chat reply to ${username}: ${text.slice(0, 50)}`)
       }
@@ -3517,7 +3533,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         !username.startsWith('sys_') &&
         !GUARD_PLAYER_NAMES.has(username) &&
         !transmigrators.getByUsername(username) &&
-        !isCalledOut(username, message)
+        !(() => {
+          // 点名留痕（2026-08-29）：萌萌「给我来几个攻击性的技能」疑似被 isCalledOut
+          // 静默吞掉——拦截时留一行日志，下次「没人理」立刻能看到是谁的名字嵌进话里。
+          if (isCalledOut(username, message)) {
+            log(`chat dispatch: ${username} 的话点名了别人(isCalledOut)，女神不接：「${message.slice(0, 40)}」`)
+            return true
+          }
+          return false
+        })()
       ) {
         if (message.trim().startsWith('祈愿：')) {
           handleWhisper(username, message).catch((err) => log(`handleWhisper(chat-pray) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
