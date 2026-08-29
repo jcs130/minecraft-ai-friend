@@ -60,3 +60,16 @@
 {"at": "2026-08-29 18:56:02", "ts": 1788000962.817845, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
 {"at": "2026-08-29 19:01:02", "ts": 1788001262.7018785, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
 {"at": "2026-08-29 19:06:02", "ts": 1788001562.7361157, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:11:02", "ts": 1788001862.8931649, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:16:02", "ts": 1788002162.7248974, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:21:02", "ts": 1788002462.9850664, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:26:03", "ts": 1788002763.145792, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:31:03", "ts": 1788003063.0366192, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:36:02", "ts": 1788003362.6864727, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:41:03", "ts": 1788003663.5369613, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:46:03", "ts": 1788003963.79701, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:51:02", "ts": 1788004262.697605, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 19:56:02", "ts": 1788004562.6721592, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 21:01:03", "ts": 1788008463.0680747, "comp": "guards-online", "msg": "missing ['Naruto']"}
+{"at": "2026-08-29 21:01:03", "ts": 1788008463.0680747, "comp": "Naruto-status", "msg": "get_self_status no hp field"}
+{"at": "2026-08-29 22:31:02", "ts": 1788013862.998133, "comp": "guards-online", "msg": "missing ['Kirito', 'Naruto']"}

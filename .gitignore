@@ -113,3 +113,8 @@ mc-data/
 # 2026-08-29 viewer 静态资产(71MB,只活在构建上下文与镜像层,源头=mc-world:2.1.36/2.1.38)
 /modern-viewer/
 /public/
+
+# runtime artifacts (2026-08-29)
+*.pid
+settlementsfix-src/javac*.txt
+ops/health/data/
