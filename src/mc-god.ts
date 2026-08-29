@@ -987,28 +987,46 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     try {
       const ms = magic.getState(username)
       if (!ms.learned || ms.learned.length === 0) return
-      const inv = await rcon.send(`data get entity ${username} Inventory`).catch(() => '')
-      if (!inv || inv.includes('No player was found')) return // 离线/查询失败：下轮再试
-      // 背包满（36 格）时 give 会掉地上——跳过本轮并留痕，别把书撒一地。
-      if ((inv.match(/Slot: \d+b/g) ?? []).length >= 36) {
-        log(`learnedbook skip ${username}: inventory full`)
+      // ⚠ RCON 响应上限 4096 字节：data get Inventory 全量 NBT 会被截断——owned 集合
+      // 永远查不全 → sweep 循环误发书（2026-08-29 萌萌 17 本散书事故根因）。
+      // 改用两条短查询：① 槽位 id 列表（检测匣/背包满）② 仅 enchanted_book 的组件（书名）。
+      const ids = await rcon.send(`data get entity ${username} Inventory[].id`).catch(() => '')
+      if (!ids || ids.includes('No player was found')) return
+      const slots = (ids.match(/id: "/g) ?? []).length
+      if (slots >= 36) {
+        log(`learnedbook skip ${username}: inventory full (${slots})`)
         return
       }
-      const owned = new Set<string>()
-      for (const m of inv.matchAll(/✦ ([^"\\]+)/g)) owned.add(m[1].trim())
-      // 补书范围 = learned 已习法术 ∪ 自己的攻击书礼包名单（书丢了/没到都能自动回，
-      // owned 检查天然防重复——名单挡重发的职能由背包实测取代）。
       const giftNames = ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? []
-      const wantNames = [...new Set([...ms.learned.map((id) => magic.getAtomById(id)?.name ?? id), ...giftNames])]
-      const missing = wantNames.filter((n) => !owned.has(n))
-      if (missing.length === 0) return
-      // 造物主令「技能书都放收纳袋里，好找、不占格子」（2026-08-29）：bundle 收纳袋在
-      // 基岩端不可用（Geyser 无映射、显示成潜影壳、装取交互全失）——用基岩原生潜影盒
-      // 「✦ 法术书匣」替代，书预装：没有匣→一发装满全部法术书（背包只占 1 格）；
-      // 已有匣→新学的书散本补发（增量，她自己或造物主顺手塞匣）。
-      if (!inv.includes('法术书匣')) {
-        const boxName = JSON.stringify({ text: '✦ 法术书匣', color: 'light_purple', italic: false })
-        const items = wantNames
+      const learnedNames = ms.learned.map((id) => magic.getAtomById(id)?.name ?? id)
+      const wantNames = [...new Set([...learnedNames, ...giftNames])]
+      if (ids.includes('shulker_box')) {
+        // 已有匣：新书散本增量补（owned 来自短查询，不会被截断坑到循环发书）。
+        const comps = await rcon.send(`data get entity ${username} Inventory[{id:"minecraft:enchanted_book"}].components`).catch(() => '')
+        const owned = new Set<string>()
+        for (const m of comps.matchAll(/✦ ([^"'\\]+)/g)) owned.add(m[1].trim())
+        for (const name of wantNames) {
+          if (owned.has(name)) continue
+          const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
+          if (r && /gave|已给予|Given/i.test(r)) {
+            log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
+          }
+        }
+        return
+      }
+      // 无匣：发预装匣（造物主令「书都收进袋里，好找、不占格子」——bundle 基岩不可用，
+      // 用潜影盒；且 RCON 请求 ~1446 字节上限，13 本一匣必超 → 固定拆两匣：
+      // 生活「法术书匣」+ 攻击「攻击书匣」，各自实测 1332/900 字节安全过。
+      const learnedBooks = [...new Set(learnedNames)]
+      const attackBooks = wantNames.filter((n) => !learnedBooks.includes(n))
+      const boxes: Array<[string, string, string[]]> = [
+        ['法术书匣', 'light_purple', learnedBooks],
+        ['攻击书匣', 'red', attackBooks],
+      ]
+      for (const [boxTitle, color, books] of boxes) {
+        if (books.length === 0) continue
+        const boxName = JSON.stringify({ text: `✦ ${boxTitle}`, color, italic: false })
+        const items = books
           .map((n, i) => {
             const cn = JSON.stringify({ text: `✦ ${n}`, color: 'gold', italic: false })
             return `{Slot:${i}b,id:"minecraft:enchanted_book",count:1,components:{"minecraft:custom_name":'${cn}'}}`
@@ -1019,15 +1037,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           + `minecraft:block_entity_data={id:"minecraft:shulker_box",Items:[${items}]}] 1`)
         const r = await rcon.send(boxCmd).catch(() => '')
         if (r && /gave|已给予|Given/i.test(r)) {
-          log(`spellbook box given to ${username}: ✦ 法术书匣 ×${wantNames.length} 本预装`)
-          return
-        }
-        log(`spellbook box give failed for ${username}: ${r.slice(0, 80)}`)
-      }
-      for (const name of missing) {
-        const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
-        if (r && /gave|已给予|Given/i.test(r)) {
-          log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
+          log(`spellbook box given to ${username}: ✦ ${boxTitle} ×${books.length} 本预装`)
+        } else {
+          log(`spellbook box give failed for ${username} (${boxTitle}): ${(r ?? '').slice(0, 80)}`)
         }
       }
     } catch (err) {
