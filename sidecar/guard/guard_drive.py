@@ -15,8 +15,16 @@
 """
 import io, json, os, re, sys, time, socket, struct, threading, urllib.request, subprocess, base64, math
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+# Windows console GBK 修复;无防御裸 wrap 曾在 pytest capture 语境炸
+# (sys.stdout.buffer 不存在/双关闭)——try 包住,生产 console 照常、测试语境跳过。
+# GUARD_DRIVE_NO_WRAP=1 哨兵:pytest 等宿主下彻底不碰 std 流(wrap 住宿主临时
+# 文件,GC 时关闭它,宿主收尾崩「I/O operation on closed file」)。
+if not os.environ.get("GUARD_DRIVE_NO_WRAP"):
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # ---------------- 常量 ----------------
 # 2026-08-21 容器化：硬编码 127.0.0.1 改为 env 可覆盖（独立 guard-drive 容器需连 mc-server/qwenpaw 容器网）
@@ -88,6 +96,21 @@ _MSG_LOCK = threading.Lock()
 DECIDE_INTERVAL = 20      # 空闲时：决策+执行一轮后休息
 BUSY_POLL = 6             # 有任务在跑时：只轮询，不决策
 LOST_POLL = 30            # 伴链断连时：只降频心跳（身体实体不在，别刷无效动作）
+
+def _reattach_if_lost(g, threshold=5):
+    """T006-d（2026-08-29 天神）：伴链断连不再干等——连续断连≥threshold 轮（30s×5≈2.5min）
+    主动 RCON 召唤重挂 numen_act summon Goddess <login>。只在「确认实体不在」的分支调用：
+    活实体走不到这里，无重复召唤风险；summon 失败只记日志不抛出，下轮再试。"""
+    g["_lost_streak"] = g.get("_lost_streak", 0) + 1
+    if g["_lost_streak"] < threshold:
+        return
+    g["_lost_streak"] = 0
+    try:
+        out = R.cmd('numen_act summon Goddess "%s"' % g["login"])
+        log("🔁 %s 断连 %d 轮主动召唤重挂：numen_act summon Goddess %s → %s" % (g["name"], threshold, g["login"], out))
+        feed_append(g, "reattach", "断连%d轮主动重挂 summon Goddess %s" % (threshold, g["login"]))
+    except Exception as e:
+        log("🔁 %s 主动重挂异常：%s" % (g["name"], e))
 
 # ============ 影分身分脑（2026-08-24 造物主定调） ============
 # 分身=独立进程/独立 session、上下文独立。它在的时候是一个独立的"分脑"意识：
@@ -947,13 +970,16 @@ def drive_loop(g, stop_at):
             ):
                 feed_append(g, "disconnected", status[:200])
                 log(f"伴链断连：{g['name']} 身体实体不在，停发新动作，降频心跳等重挂（{status[:80]}）")
+                _reattach_if_lost(g)  # T006-d（2026-08-29 天神）：连续断连主动召唤重挂
                 time.sleep(LOST_POLL)
                 continue
             if isinstance(status, dict) and not status.get("success", True) and "no companion" in str(status):
                 feed_append(g, "disconnected", str(status)[:200])
                 log(f"伴链断连：{g['name']} 身体实体不在，停发新动作，等重挂")
+                _reattach_if_lost(g)  # T006-d：连续断连主动召唤重挂
                 time.sleep(LOST_POLL)
                 continue
+            g["_lost_streak"] = 0  # T006-d：正常路径重置断连计数
             world = invoke(g["login"], "get_world_info")
             # —— 濒死急救闸（基础生存能力的核心）——
             # 身体贫血/濒死（hp 过低）或饥饿归零且生命已受影响 → 高于一切任务。
@@ -1333,6 +1359,7 @@ def autonomy_loop(g, stop_at):
             ):
                 feed_append(g, "disconnected", status[:200])
                 log(f"伴链断连：{g['name']} 身体实体不在，降频心跳等重挂（{status[:80]}）")
+                _reattach_if_lost(g)  # T006-d：连续断连主动召唤重挂
                 time.sleep(LOST_POLL)
                 continue
             health = _parse_health(status)
