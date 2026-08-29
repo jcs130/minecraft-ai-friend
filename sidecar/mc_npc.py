@@ -892,6 +892,29 @@ WORLD_QUERY_KW = ("归乡", "归途", "回村", "回基地", "回家", "女神",
                   "祈愿", "咏唱", "法术", "魔法", "咒语", "技能书", "天赋", "祝福",
                   "求教", "请教", "怎么学", "如何学", "学一门", "怎么回", "神灵")
 
+# ---------- 2026-08-29 造物主谕「算力再分配·二」：村民闲聊零 LLM ----------
+# 村民的话不再用 LLM 实时生成（闲聊全模板）；LLM 只留给工会委托（llm_quest）。
+# 世界设定问询改走固定指路语（WORLD_GUIDE，按关键词分派，内容源自 WORLD_BRIEF），
+# 答案本就高度确定（归乡=书商/祈愿=女神），模板比 LLM 更稳更快更省。
+# 回退开关：llm.chat_mode="chat" 可恢复旧闲聊 LLM 行为（默认 "quests"）。
+WORLD_GUIDE = [
+    (("归乡", "归途", "回村", "回家", "怎么回", "回基地"),
+     "想回村？找书商墨白淘一本《归乡之卷》，或者诚心向女神求「归乡」这门艺——念对词，人就到家了。"),
+    (("祈愿", "女神", "天神", "神谕", "神灵", "求"),
+     "有事求女神就私聊她：「/msg Goddess 祈愿：<你的愿望>」。她听得见，诚心点，带上供奉更好。"),
+    (("法术", "咏唱", "咒语", "魔法", "技能书", "怎么学", "如何学", "学一门", "天赋"),
+     "想学法术？私聊女神念词就能咏唱；想深造就去书商墨白那儿淘技能书。我只会种地，这些是女神的事。"),
+    (("问", "为什么", "什么"),
+     "这个我还真说不准——你私聊女神问：「/msg Goddess 问：<问题>」，她懂世界的一切。"),
+]
+
+def world_guide_reply(msg):
+    """世界设定问询的固定指路语（零 LLM）。命中返回台词行；未命中返回 None。"""
+    for kws, line in WORLD_GUIDE:
+        if any(w in msg for w in kws):
+            return [line]
+    return None
+
 def llm_reply(v, speaker, msg, ctx):
     llm = CFG.get("llm", {})
     if not llm.get("enabled"):
@@ -1380,40 +1403,45 @@ def route(speaker, msg, via="public"):
             return hit_v, resolve_lines(t["lines"], ctx)
     # 2026-08-29 造物主谕「算力再分配」：村民 LLM 对话加冷却——同一旅人反复搭同一村民，
     # 冷却窗口内只烧一次卡，其余走模板（省下的吞吐让给灯语女神/灶火祭司/鸣人/桐人）。
+    # 2026-08-29 造物主谕「算力再分配·二」：闲聊零 LLM（默认 chat_mode="quests"）——
+    # 村民的话不再实时生成，全模板；LLM 只留给工会委托（llm_quest）。
+    # 世界设定问询改走固定指路语（WORLD_GUIDE），答案本就确定，模板更稳更快。
+    _chat_llm_on = CFG.get("llm", {}).get("chat_mode", "quests") == "chat"
     global _llm_chat_last
     _ck = (speaker, hit_v["key"])
-    _cd = CFG.get("llm", {}).get("chat_cooldown", 75)
-    if time.time() - _llm_chat_last.get(_ck, 0) < _cd:
-        return hit_v, [hit_v.get("greet") or hit_v["fallback"]]
-    # 世界设定问询：提到女神/归乡/法术/祈愿等 → 走 LLM（agent_chat 已注入世界常识），
-    # 让村民贴人设+世界设定地指点；其余仍走模板兜底。
     if any(w in rest for w in WORLD_QUERY_KW):
-        lines = agent_chat(hit_v, speaker, msg, ctx)
-        if lines:
-            _llm_chat_last[_ck] = time.time()
-            return hit_v, lines
-        if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
-            lines = llm_reply(hit_v, speaker, msg, ctx)
-            if lines:
-                _llm_chat_last[_ck] = time.time()
-                return hit_v, lines
-    # 兜底：灶火祭司（一村民一 session，串台隔离）→ 旧直连 LLM → 固定台词
+        guide = world_guide_reply(rest)
+        if guide:
+            return hit_v, guide
+        if _chat_llm_on:
+            _cd = CFG.get("llm", {}).get("chat_cooldown", 75)
+            if time.time() - _llm_chat_last.get(_ck, 0) >= _cd:
+                lines = agent_chat(hit_v, speaker, msg, ctx)
+                if lines:
+                    _llm_chat_last[_ck] = time.time()
+                    return hit_v, lines
+                if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
+                    lines = llm_reply(hit_v, speaker, msg, ctx)
+                    if lines:
+                        _llm_chat_last[_ck] = time.time()
+                        return hit_v, lines
+    # 指名道姓（by_calls/whisper）与闲聊兜底：chat_mode="chat" 才走 LLM，否则全模板。
     # 2026-08-22 造物主谕：未点名（nearest 兜底接话）不碰 LLM——本地 27B 首轮可达
     # 4-5 分钟，同步阻塞 tail 主循环会让全村失聪；未点名只用模板应声（greet/fallback）。
-    # 2026-08-23 造物主谕：私聊（via=whisper）＝指名道姓，也要走 LLM——玩家专门找 TA 说事，
-    # 就该给贴人设+世界设定的答话，而不是掉兜底模板；降级链兜底，永不阻塞到全村失聪。
-    if by_calls or via == "whisper":
-        lines = agent_chat(hit_v, speaker, msg, ctx)   # 世界常识已被 agent_chat 注入
-        if lines:
-            _llm_chat_last[_ck] = time.time()
-            return hit_v, lines
-        # 兜底直连 LLM（带世界常识；template_first 时省略）
-        if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
-            lines = llm_reply(hit_v, speaker, msg, ctx)
+    if _chat_llm_on and (by_calls or via == "whisper"):
+        _cd = CFG.get("llm", {}).get("chat_cooldown", 75)
+        if time.time() - _llm_chat_last.get(_ck, 0) >= _cd:
+            lines = agent_chat(hit_v, speaker, msg, ctx)   # 世界常识已被 agent_chat 注入
             if lines:
                 _llm_chat_last[_ck] = time.time()
                 return hit_v, lines
-    return hit_v, [hit_v["fallback"]]
+            # 兜底直连 LLM（带世界常识；template_first 时省略）
+            if CFG.get("llm", {}).get("enabled") and not CFG.get("llm", {}).get("template_first"):
+                lines = llm_reply(hit_v, speaker, msg, ctx)
+                if lines:
+                    _llm_chat_last[_ck] = time.time()
+                    return hit_v, lines
+    return hit_v, [hit_v.get("greet") or hit_v["fallback"]]
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
 def sel(v):
