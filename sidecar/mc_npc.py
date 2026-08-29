@@ -1866,7 +1866,7 @@ def _exec_fixed_skill(speaker, skill):
         if skill == "give":
             R.cmd("give %s minecraft:bread 2" % speaker)
             return "两片面包自虚空中凝聚，落入你的手中。"
-        return "这本卷轴上写的法术，天神不识。"
+        return None  # 非固定四技 → 走 /mycli cast 通道（2026-08-29：✦法术书右键=任意已学法术）
     except Exception as e:
         print("[spell] exec err:", e, flush=True)
         R.s = None
@@ -1912,6 +1912,14 @@ def spell_loop():
             if skill:
                 # 固定技能书
                 reply = _exec_fixed_skill(speaker, skill)
+                if reply is None:
+                    # ✦法术书（任意已学法术）：以玩家身份走 /mycli cast——法力/等级/冷却
+                    # 全由法术引擎裁定，回执由引擎 tellraw 给玩家本人（2026-08-29）。
+                    R.cmd("execute as %s at @s run mycli cast %s" % (speaker, skill))
+                    cooldown[cd_key] = now  # 外层仅记时（引擎另有法力门槛）
+                    feed_append({"kind": "spell", "who": speaker, "skill": skill, "text": "✦法术书→mycli cast"})
+                    print("[spell] %s ✦法术书 cast %s" % (speaker, skill), flush=True)
+                    continue
                 cooldown[cd_key] = now
                 _spell_tell(speaker, reply)
                 feed_append({"kind": "spell", "who": speaker, "skill": skill, "text": reply[:200]})
