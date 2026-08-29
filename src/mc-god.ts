@@ -2019,7 +2019,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     for (const g of GUARD_PLAYER_NAMES) if (m.includes(g)) return true
     for (const n of loadNpcNames()) if (m.includes(n)) return true
     // 其他在线玩家（登录名与穿越者显示名都算）
-    for (const name of Object.keys((bot.players ?? {}) as Record<string, unknown>)) {
+    // 2026-08-29 修复:裸用 bot 在此作用域未定义,chat 事件里抛 ReferenceError 会打断
+    // socket 包处理链 → keepalive 30s 无人应答 → 化身断连 → 9090 可视化冻结(每遇聊天必现)
+    for (const name of Object.keys((getBot()?.players ?? {}) as Record<string, unknown>)) {
       if (name === username || name === getBot()?.username) continue
       if (m.includes(name)) return true
     }
