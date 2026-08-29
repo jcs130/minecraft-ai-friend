@@ -1,7 +1,9 @@
 # 设计文档：宝箱技能面板（SkillChest）
 
-> 版本 v1.0 · 2026-08-30 · 造物主拍板：萌萌（5 岁，PC Java + 手柄）专属交互升级
-> 状态：已批准开工 · 工程分两期（一期技能+传送，二期按实测反馈迭代）
+> 版本 v1.1 · 2026-08-30 · 造物主拍板：萌萌（5 岁，PC Java + 手柄）专属交互升级
+> v1.1（同日）：造物扩展——「底层是 CLI，技能书/面板是给人用的前端界面」；造物术从
+> 只能面包扩展为 76 种可造物（子面板选），数量按物品分类默认。
+> 状态：一期已上线（设计→实现→单测 56 断言→CI→部署→E2E 全绿）
 
 ## 0. 一句话
 
@@ -58,24 +60,46 @@ vanilla 客户端零安装。
 - 超过 8 个技能：行0 末格「更多」→ 翻页（重开面板换页）。
 - 空格 = 灰色玻璃板（gray_stained_glass_pane），点了没反应。
 
+### 3.4 造物子面板（v1.1 · 2026-08-30 造物扩展）
+
+架构定位（造物主点破）：**底层是 CLI（/mycli），技能书/宝箱面板都是给人用的前端 skin**。
+前端只负责把「点击」翻译成咒语词，裁决/计费/执行全在 CLI 层。
+
+- 主面板行0 的「造物术」格：点击**不施法**，改开**造物子面板**（27 格物品网格）。
+- 子面板：76 种可造物（图标=物品本身，零识字），三行铺满，每页 26 格+末格翻页，
+  共 3 页。点击物品格 → `/mycli cast 造物 <中文名>` → mc-magic `extractItem` 白名单
+  转 id → `give` 落地。
+- **数量由 CLI 层裁断**（`GIVE_DEFAULT_COUNT` 分类默认）：食物×4、原料×8/16、
+  工具装备×1、甜点×8；护栏 1-16。面板不显示数量逻辑，lore 仅提示「一次 N 个」。
+- **白名单正本在 TS**（`src/mc-magic.ts` GIVE_WHITELIST，76 项：食物/木材/矿物/
+  工具/武器/基建/防具/甜点/手工材料）；`scripts/gen-give-items.mjs` 镜像到
+  skill-chest.json 的 items 段（运行卷 + packaging 分发正本）；
+  CI 一致性测试对账（tests/js/give-whitelist-sync.test.mjs，防五份漂移）。
+- 入口命令：`/skillchest items <player> [page]`（测试/女神代开）。
+
 ### 3.3 确认与执行
-1. 点技能格 → 关箱 → `performCommand("/mycli cast <player> <咒语词>")`
-   （书页同款；施法成败的反馈走既有私语/title/particle 通道）。
-2. 点传送格 → 关箱 → `performCommand("/mycli goto <player> <序号|名字>")`
-   （复用传送阵页的 goto 动词）。
-3. 防抖：同玩家 0.8s 内多次点击只执行第一次（孩子手抖连点）。
-4. 施法冷却/魔力不足等失败信息由 mycli 既有回执链走私语+actionbar——**不改**。
+1. 点技能格 → 关箱 → `performCommand("/mycli cast <咒语词>")`——mycli 以**玩家为执行者**
+   （`player.createCommandSourceStack()`），参数**不带玩家名**（与书页 clickEvent 同格式；
+   v1.0 曾写成 `/mycli cast {PLAYER} <名>`，实测 mycli 报「需要玩家」后修正）。
+2. 点造物格（give）→ 关箱 → **开造物子面板**（见 §3.4），不直接施法。
+3. 点传送格 → 关箱 → `performCommand("/mycli 传送去 <序号>")`（传送阵页同款）。
+4. 防抖：同玩家 0.8s 内多次点击只执行第一次（孩子手抖连点）；点击即关箱，
+   二次点击时面板已关（实测天然防重）。
+5. 施法冷却/魔力不足等失败信息由 mycli 既有回执链走私语+actionbar——**不改**。
 
 ## 4. 技术设计
 
-### 4.1 组件与代码落点
+### 4.1 组件与代码落点（实际实现）
 | 组件 | 位置 | 职责 |
 |---|---|---|
-| SkillChestMenu | `settlementsfix-src/dev/god/settlementsfix/chest/SkillChestMenu.java` | 继承 vanilla `ChestMenu`（MenuType.GENERIC_9x3），覆写 `clicked`：拦下点击→关箱→执行命令；不真的拿物品 |
-| SkillChestRegistry | 同包 `SkillChestRegistry.java` | 从 `/mcdata/skill-chest.json` 读布局配置（图标映射/行列语义）；含 JSON 校验与默认布局 |
-| SkillChestCommand | 同包 `SkillChestCommand.java` | 注册 `/skillchest open <player>`（OP）；构造 SkillChestMenu 并 `player.openMenu` |
-| SkillChestLiveInfo | 同包 `SkillChestLiveInfo.java` | 开面板瞬间读 `/mcdata/magic-state.json`（已学技能+魔力）与 `/mcdata/waypoints.json`（共享+个人传送点），动态决定格子内容 |
-| SkillBookUseMixin 扩展 | 现有 mixin | ✦书匣右键分支：`custom_data.skillbox == "panel"` → 开面板（原发书逻辑不动） |
+| SkillChestLayout | `settlementsfix-src/dev/god/settlementsfix/chest/SkillChestLayout.java` | **纯逻辑**（无 MC import，CI 可测）：布局构建/分页/防抖/咒语词映射/造物子面板网格（buildItemGrid） |
+| SkillChestIO | 同包 `SkillChestIO.java` | **纯逻辑**：读 magic-state/magic-atoms/waypoints/skill-chest.json（gson，坏文件全兜底），聚合 PanelData |
+| SkillChestMenu | 同包 `SkillChestMenu.java` | 继承 vanilla `ChestMenu`（GENERIC_9x3），覆写 `clicked`：拦点击→关箱→performCommand / 开子面板；图标物品不可拿取 |
+| SkillChestCommands | 同包 `SkillChestCommands.java` | `/skillchest open|items|click`；openFor/openItemsFor 构造面板 |
+| SkillChestBootMixin | `mixin/SkillChestBootMixin.java` | 注入 `Commands.<init>` TAIL 注册命令（v1 事件监听错过启动期 fire，v2 根治——见 §7 时序坑） |
+| SkillBookUseMixin 扩展 | 现有 mixin | 任意物品带 `custom_data.skillbox=true` 右键 → 开面板（潜行+右键放行原版行为） |
+| mc-magic.ts（TS 侧） | `src/mc-magic.ts` + packaging 镜像 | GIVE_WHITELIST（76 项正本）+ GIVE_DEFAULT_COUNT（分类数量）+ count 护栏 |
+| gen-give-items.mjs | `scripts/gen-give-items.mjs` | 白名单镜像生成器：TS → skill-chest.json items 段（运行卷+分发正本） |
 
 ### 4.2 关键技术决策
 - **vanilla MenuType.GENERIC_9x3**：客户端零 mod。服务端构造 `new ChestMenu(
@@ -187,3 +211,5 @@ performCommand("/mycli cast MengMeng 螺旋丸")  ←（书页同款，已验证
 | 技能多于一页萌萌迷路 | 默认只放她已学的前 8 个常用（配置 `pinned` 列表可钉） |
 | 书匣右键语义变化（原来是发书） | custom_data 区分：`skillbox=panel` 才开面板；存量书匣不受影响 |
 | CI 需下载 MC 官方库 | 版本+sha256 钉死，下载失败 CI 显式红（不静默跳过） |
+| **时序坑（已踩已修）**：RegisterCommandsEvent 在 Commands 构造器尾部 fire，晚挂监听即错过 | v2 直接注 `Commands.<init>` TAIL 注册，命令树每次重建（启动//reload）都生效 |
+| **白名单漂移（已防）**：TS 正本 ↔ json 镜像 ↔ 分发正本三处 | gen-give-items.mjs 生成 + CI 一致性测试对账（node --test tests/js/） |

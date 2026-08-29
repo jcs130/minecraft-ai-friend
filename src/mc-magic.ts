@@ -357,6 +357,31 @@ export const GIVE_WHITELIST: Record<string, string> = {
   '梯子': 'ladder', '栅栏': 'oak_fence', '门': 'oak_door', '床': 'white_bed',
   '箭': 'arrow', '弓': 'bow', '盾牌': 'shield', '灯笼': 'lantern',
   '铁盔甲': 'iron_chestplate', '铁剑鞘': 'iron_helmet',
+  // 2026-08-30 造物扩展：甜点/零食/手工材料（萌萌向：体验/探索/创意）
+  '蛋糕': 'cake', '饼干': 'cookie', '南瓜派': 'pumpkin_pie', '甜浆果': 'sweet_berries',
+  '发光浆果': 'glow_berries', '蜂蜜瓶': 'honey_bottle', '牛奶': 'milk_bucket',
+  '纸': 'paper', '书': 'book', '墨囊': 'ink_sac', '羽毛': 'feather', '线': 'string',
+  '皮革': 'leather', '燧石': 'flint', '骨粉': 'bone_meal', '砖块': 'brick',
+  '铁轨': 'rail', '雪球': 'snowball', '花盆': 'flower_pot', '画': 'painting',
+  '音符盒': 'note_block', '红石': 'redstone',
+}
+
+/**
+ * 造物分类默认数量（2026-08-30）：按物品定 give 数——食物×4、原料×8、
+ * 工具装备×1、其他默认×1。key = GIVE_WHITELIST 的英文 id；未列出的回退 1。
+ * 护栏：填模板时 max(1, min(16, n))。
+ */
+export const GIVE_DEFAULT_COUNT: Record<string, number> = {
+  apple: 4, bread: 4, cooked_beef: 4, cooked_porkchop: 4, cooked_chicken: 4,
+  cooked_cod: 4, cooked_salmon: 4, carrot: 4, potato: 4, baked_potato: 4,
+  melon_slice: 4, cake: 1, cookie: 8, pumpkin_pie: 4, sweet_berries: 8,
+  glow_berries: 8, honey_bottle: 2, milk_bucket: 1,
+  oak_log: 8, spruce_log: 8, birch_log: 8, oak_planks: 16, stick: 8,
+  cobblestone: 16, stone: 16, coal: 8, iron_ingot: 4, copper_ingot: 4,
+  glass: 8, sand: 8, dirt: 8, stone_bricks: 8, oak_fence: 4, ladder: 4,
+  arrow: 8, torch: 4, lantern: 2, paper: 8, book: 2, ink_sac: 4, feather: 4,
+  string: 4, leather: 4, flint: 4, bone_meal: 8, brick: 8, rail: 8,
+  snowball: 8, redstone: 8,
 }
 
 const DEFAULT_ATOMS: Atom[] = [
@@ -1561,7 +1586,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const tz = pz + dirVec[1] * distance
 
     const item = String(params.item ?? 'bread')
-    const count = 1
+    // 2026-08-30 造物扩展：数量按物品分类默认（GIVE_DEFAULT_COUNT，护栏 1-16），
+    // 未配置回退 1（模糊路径无 opts.count——显式数量走女神代施路径）。
+    const count = Math.max(1, Math.min(16, GIVE_DEFAULT_COUNT[item] ?? 1))
 
     // 模糊施法前摇（2026-08-23 造物主谕：模糊 = 更久）：粒子先行（凝聚中），延迟后落地。
     // 向量路径延迟 2s；LLM 路径延迟 = 推理耗时（mc-god 侧 catch NeedLlmError 时已消耗，传 latencyMs 记录）。
@@ -1774,9 +1801,11 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const tz = Math.round(pz + dirVec[1] * distance)
 
     const item = opts.item && Object.values(GIVE_WHITELIST).includes(opts.item) ? opts.item : 'bread'
+    // 2026-08-30 造物扩展：数量分类默认（GIVE_DEFAULT_COUNT）——女神未明示数量时
+    // 面包=4/木板=16/工具=1，而不是一刀切 1；护栏 1-16。
     const count = typeof opts.count === 'number' && Number.isFinite(opts.count)
       ? Math.max(1, Math.min(16, Math.floor(opts.count)))
-      : 1
+      : Math.max(1, Math.min(16, GIVE_DEFAULT_COUNT[item] ?? 1))
 
     let bx = 0
     let by = 0

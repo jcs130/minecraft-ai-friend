@@ -41,16 +41,26 @@ public class SkillChestMenu extends ChestMenu {
     private final int page;
     private final SkillChestLayout.Debouncer debouncer;
     private final java.util.function.Consumer<Integer> pageTurner;
+    /** 造物子面板开关（主面板 give 格点击时调用；null=无子面板能力）。 */
+    private final java.util.function.Consumer<Integer> itemPanelOpener;
 
     public SkillChestMenu(int containerId, net.minecraft.world.entity.player.Inventory playerInventory,
                           ServerPlayer player, List<SkillChestLayout.Entry> entries, int page,
                           long debounceMs, java.util.function.Consumer<Integer> pageTurner) {
+        this(containerId, playerInventory, player, entries, page, debounceMs, pageTurner, null);
+    }
+
+    public SkillChestMenu(int containerId, net.minecraft.world.entity.player.Inventory playerInventory,
+                          ServerPlayer player, List<SkillChestLayout.Entry> entries, int page,
+                          long debounceMs, java.util.function.Consumer<Integer> pageTurner,
+                          java.util.function.Consumer<Integer> itemPanelOpener) {
         super(MenuType.GENERIC_9x3, containerId, playerInventory, buildContainer(entries), 3);
         this.player = player;
         this.entries = entries;
         this.page = page;
         this.debouncer = new SkillChestLayout.Debouncer(debounceMs);
         this.pageTurner = pageTurner;
+        this.itemPanelOpener = itemPanelOpener;
     }
 
     private static SimpleContainer buildContainer(List<SkillChestLayout.Entry> entries) {
@@ -78,6 +88,7 @@ public class SkillChestMenu extends ChestMenu {
                 lore.add(Component.literal("§8" + switch (e.kind) {
                     case SKILL -> "按 A / 确认释放";
                     case WAYPOINT -> "按 A / 确认传送";
+                    case ITEM -> "按 A / 变出来";
                     case MORE, BACK -> "翻页";
                     default -> "";
                 }));
@@ -107,6 +118,19 @@ public class SkillChestMenu extends ChestMenu {
             }
             switch (e.kind) {
                 case SKILL, WAYPOINT -> {
+                    String cmd = e.command == null ? null
+                            : e.command.replace("{PLAYER}", player.getGameProfile().getName());
+                    player.closeContainer();
+                    if (cmd != null) {
+                        player.server.getCommands().performPrefixedCommand(
+                                player.createCommandSourceStack().withSuppressedOutput(), cmd);
+                        GODFIX.info("[skillchest] {} slot{} -> {}", player.getGameProfile().getName(), slotId, cmd);
+                    } else if ("give".equals(e.id) && itemPanelOpener != null) {
+                        // 造物术格：开「可造物」子面板（2026-08-30 造物扩展）
+                        itemPanelOpener.accept(0);
+                    }
+                }
+                case ITEM -> {
                     String cmd = e.command == null ? null
                             : e.command.replace("{PLAYER}", player.getGameProfile().getName());
                     player.closeContainer();

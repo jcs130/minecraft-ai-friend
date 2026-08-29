@@ -28,6 +28,7 @@ public final class SkillChestTest {
         tReg4BadConfig();
         tReg5Debounce();
         tReg6ChantAlias();  // 合并 T-IO：load 聚合+未入册兜底
+        tItemsGrid();       // 造物扩展（2026-08-30）：子面板网格+造物格特判
         System.out.println("passed=" + passed + " failed=" + failed);
         if (failed > 0) {
             System.exit(1);
@@ -149,6 +150,46 @@ public final class SkillChestTest {
         for (String f : new String[]{"magic-atoms.json", "magic-state.json", "waypoints.json"}) {
             Files.deleteIfExists(tmp.resolve(f));
         }
+        Files.deleteIfExists(tmp);
+    }
+
+    // 造物扩展（2026-08-30）：造物子面板网格 + 主面板 give 格特判 + items 配置解析
+    static void tItemsGrid() throws Exception {
+        // 子面板：76 物 → 3 页（26/页）；物品格命令=造物咒语；数量进 lore
+        SkillChestLayout.Config cfg = new SkillChestLayout.Config();
+        List<SkillChestLayout.GiveItem> items = new ArrayList<>();
+        for (int i = 0; i < 76; i++) items.add(new SkillChestLayout.GiveItem("物" + i, "item_" + i, i % 4 == 0 ? 1 : 4));
+        eq("T-ITEM pages 76 -> 3", 3, SkillChestLayout.itemPagesFor(items));
+        List<SkillChestLayout.Entry> p0 = SkillChestLayout.buildItemGrid(cfg, items, 0);
+        eq("T-ITEM p0 size", 27, p0.size());
+        eq("T-ITEM p0 c0 kind", SkillChestLayout.Kind.ITEM, p0.get(0).kind);
+        eq("T-ITEM p0 c0 cmd", "/mycli cast 造物 物0", p0.get(0).command);
+        eq("T-ITEM p0 c25 kind", SkillChestLayout.Kind.ITEM, p0.get(25).kind);
+        eq("T-ITEM p0 c26 MORE", SkillChestLayout.Kind.MORE, p0.get(26).kind);
+        eq("T-ITEM count=1 无数量词", "一次 1 个", p0.get(0).lore);
+        eq("T-ITEM count=4 lore", "一次 4 个", p0.get(1).lore);
+        List<SkillChestLayout.Entry> p2 = SkillChestLayout.buildItemGrid(cfg, items, 2);
+        eq("T-ITEM p2 c23=第76物", SkillChestLayout.Kind.ITEM, p2.get(23).kind);
+        eq("T-ITEM p2 c24 空", SkillChestLayout.Kind.EMPTY, p2.get(24).kind);
+        eq("T-ITEM p2 末格 BACK", SkillChestLayout.Kind.BACK, p2.get(26).kind);
+        // 主面板 give 格特判：command=null（点击开子面板而非施法）
+        SkillChestLayout.Config cfg2 = new SkillChestLayout.Config();
+        cfg2.skillNames.put("give", "造物术");
+        cfg2.skillIcons.put("give", "minecraft:chest");
+        List<SkillChestLayout.Entry> main = SkillChestLayout.build(cfg2,
+                java.util.Arrays.asList(new SkillChestLayout.SkillInfo("give"),
+                        new SkillChestLayout.SkillInfo("heal")), null, 0);
+        eq("T-ITEM give 格 command=null（开子面板）", null, main.get(0).command);
+        eq("T-ITEM give 格 lore", "选一个变出来", main.get(0).lore);
+        eq("T-ITEM 非 give 技能照常施法", "/mycli cast heal", main.get(1).command.replace("{PLAYER} ", "").replace("  ", " "));
+        // items 配置解析：坏段跳过不炸
+        Path tmp = Files.createTempFile("skill-chest-items", ".json");
+        Files.writeString(tmp, "{\"items\":[{\"cn\":\"火把\",\"icon\":\"torch\",\"count\":4},{\"bad\":1},{\"cn\":\"煤\",\"icon\":\"coal\"}]}",
+                StandardCharsets.UTF_8);
+        SkillChestLayout.Config cfg3 = SkillChestIO.loadConfig(tmp);
+        eq("T-ITEM items 解析 2 条（坏条跳过）", 2, cfg3.giveItems.size());
+        eq("T-ITEM 火把 count", 4, cfg3.giveItems.get(0).count);
+        eq("T-ITEM 煤 缺 count 默认 1", 1, cfg3.giveItems.get(1).count);
         Files.deleteIfExists(tmp);
     }
 

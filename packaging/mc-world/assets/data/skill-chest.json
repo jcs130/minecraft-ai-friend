@@ -1,0 +1,408 @@
+{
+  "version": 1,
+  "icons": {
+    "default": "minecraft:gray_stained_glass_pane",
+    "close": "minecraft:barrier",
+    "more": "minecraft:paper",
+    "back": "minecraft:paper",
+    "waypoint": "minecraft:nether_star",
+    "skill": {
+      "rasengan": "minecraft:snowball",
+      "fireball": "minecraft:fire_charge",
+      "heal_self": "minecraft:glistering_melon_slice",
+      "home_return": "minecraft:compass",
+      "light": "minecraft:glowstone_dust",
+      "shadow_clone": "minecraft:blue_orchid",
+      "starburst_stream": "minecraft:netherite_sword"
+    }
+  },
+  "chantAlias": {},
+  "debounceMs": 800,
+  "rows": {
+    "0": "skills",
+    "1": "waypoints",
+    "2": "reserved"
+  },
+  "items": [
+    {
+      "cn": "苹果",
+      "icon": "apple",
+      "count": 4
+    },
+    {
+      "cn": "面包",
+      "icon": "bread",
+      "count": 4
+    },
+    {
+      "cn": "熟牛肉",
+      "icon": "cooked_beef",
+      "count": 4
+    },
+    {
+      "cn": "熟猪排",
+      "icon": "cooked_porkchop",
+      "count": 4
+    },
+    {
+      "cn": "熟鸡肉",
+      "icon": "cooked_chicken",
+      "count": 4
+    },
+    {
+      "cn": "熟鳕鱼",
+      "icon": "cooked_cod",
+      "count": 4
+    },
+    {
+      "cn": "熟鲑鱼",
+      "icon": "cooked_salmon",
+      "count": 4
+    },
+    {
+      "cn": "胡萝卜",
+      "icon": "carrot",
+      "count": 4
+    },
+    {
+      "cn": "土豆",
+      "icon": "potato",
+      "count": 4
+    },
+    {
+      "cn": "烤土豆",
+      "icon": "baked_potato",
+      "count": 4
+    },
+    {
+      "cn": "西瓜",
+      "icon": "melon_slice",
+      "count": 4
+    },
+    {
+      "cn": "橡木",
+      "icon": "oak_log",
+      "count": 8
+    },
+    {
+      "cn": "云杉木",
+      "icon": "spruce_log",
+      "count": 8
+    },
+    {
+      "cn": "白桦木",
+      "icon": "birch_log",
+      "count": 8
+    },
+    {
+      "cn": "木板",
+      "icon": "oak_planks",
+      "count": 16
+    },
+    {
+      "cn": "木棍",
+      "icon": "stick",
+      "count": 8
+    },
+    {
+      "cn": "圆石",
+      "icon": "cobblestone",
+      "count": 16
+    },
+    {
+      "cn": "石头",
+      "icon": "stone",
+      "count": 16
+    },
+    {
+      "cn": "煤",
+      "icon": "coal",
+      "count": 8
+    },
+    {
+      "cn": "铁锭",
+      "icon": "iron_ingot",
+      "count": 4
+    },
+    {
+      "cn": "铜锭",
+      "icon": "copper_ingot",
+      "count": 4
+    },
+    {
+      "cn": "火把",
+      "icon": "torch",
+      "count": 4
+    },
+    {
+      "cn": "木镐",
+      "icon": "wooden_pickaxe",
+      "count": 1
+    },
+    {
+      "cn": "石镐",
+      "icon": "stone_pickaxe",
+      "count": 1
+    },
+    {
+      "cn": "铁镐",
+      "icon": "iron_pickaxe",
+      "count": 1
+    },
+    {
+      "cn": "木斧",
+      "icon": "wooden_axe",
+      "count": 1
+    },
+    {
+      "cn": "石斧",
+      "icon": "stone_axe",
+      "count": 1
+    },
+    {
+      "cn": "铁斧",
+      "icon": "iron_axe",
+      "count": 1
+    },
+    {
+      "cn": "木剑",
+      "icon": "wooden_sword",
+      "count": 1
+    },
+    {
+      "cn": "石剑",
+      "icon": "stone_sword",
+      "count": 1
+    },
+    {
+      "cn": "铁剑",
+      "icon": "iron_sword",
+      "count": 1
+    },
+    {
+      "cn": "木锹",
+      "icon": "wooden_shovel",
+      "count": 1
+    },
+    {
+      "cn": "石锹",
+      "icon": "stone_shovel",
+      "count": 1
+    },
+    {
+      "cn": "熔炉",
+      "icon": "furnace",
+      "count": 1
+    },
+    {
+      "cn": "高炉",
+      "icon": "blast_furnace",
+      "count": 1
+    },
+    {
+      "cn": "工作台",
+      "icon": "crafting_table",
+      "count": 1
+    },
+    {
+      "cn": "锻造台",
+      "icon": "smithing_table",
+      "count": 1
+    },
+    {
+      "cn": "铁砧",
+      "icon": "anvil",
+      "count": 1
+    },
+    {
+      "cn": "箱子",
+      "icon": "chest",
+      "count": 1
+    },
+    {
+      "cn": "木桶",
+      "icon": "barrel",
+      "count": 1
+    },
+    {
+      "cn": "玻璃",
+      "icon": "glass",
+      "count": 8
+    },
+    {
+      "cn": "沙子",
+      "icon": "sand",
+      "count": 8
+    },
+    {
+      "cn": "泥土",
+      "icon": "dirt",
+      "count": 8
+    },
+    {
+      "cn": "石砖",
+      "icon": "stone_bricks",
+      "count": 8
+    },
+    {
+      "cn": "梯子",
+      "icon": "ladder",
+      "count": 4
+    },
+    {
+      "cn": "栅栏",
+      "icon": "oak_fence",
+      "count": 4
+    },
+    {
+      "cn": "门",
+      "icon": "oak_door",
+      "count": 1
+    },
+    {
+      "cn": "床",
+      "icon": "white_bed",
+      "count": 1
+    },
+    {
+      "cn": "箭",
+      "icon": "arrow",
+      "count": 8
+    },
+    {
+      "cn": "弓",
+      "icon": "bow",
+      "count": 1
+    },
+    {
+      "cn": "盾牌",
+      "icon": "shield",
+      "count": 1
+    },
+    {
+      "cn": "灯笼",
+      "icon": "lantern",
+      "count": 2
+    },
+    {
+      "cn": "铁盔甲",
+      "icon": "iron_chestplate",
+      "count": 1
+    },
+    {
+      "cn": "铁剑鞘",
+      "icon": "iron_helmet",
+      "count": 1
+    },
+    {
+      "cn": "蛋糕",
+      "icon": "cake",
+      "count": 1
+    },
+    {
+      "cn": "饼干",
+      "icon": "cookie",
+      "count": 8
+    },
+    {
+      "cn": "南瓜派",
+      "icon": "pumpkin_pie",
+      "count": 4
+    },
+    {
+      "cn": "甜浆果",
+      "icon": "sweet_berries",
+      "count": 8
+    },
+    {
+      "cn": "发光浆果",
+      "icon": "glow_berries",
+      "count": 8
+    },
+    {
+      "cn": "蜂蜜瓶",
+      "icon": "honey_bottle",
+      "count": 2
+    },
+    {
+      "cn": "牛奶",
+      "icon": "milk_bucket",
+      "count": 1
+    },
+    {
+      "cn": "纸",
+      "icon": "paper",
+      "count": 8
+    },
+    {
+      "cn": "书",
+      "icon": "book",
+      "count": 2
+    },
+    {
+      "cn": "墨囊",
+      "icon": "ink_sac",
+      "count": 4
+    },
+    {
+      "cn": "羽毛",
+      "icon": "feather",
+      "count": 4
+    },
+    {
+      "cn": "线",
+      "icon": "string",
+      "count": 4
+    },
+    {
+      "cn": "皮革",
+      "icon": "leather",
+      "count": 4
+    },
+    {
+      "cn": "燧石",
+      "icon": "flint",
+      "count": 4
+    },
+    {
+      "cn": "骨粉",
+      "icon": "bone_meal",
+      "count": 8
+    },
+    {
+      "cn": "砖块",
+      "icon": "brick",
+      "count": 8
+    },
+    {
+      "cn": "铁轨",
+      "icon": "rail",
+      "count": 8
+    },
+    {
+      "cn": "雪球",
+      "icon": "snowball",
+      "count": 8
+    },
+    {
+      "cn": "花盆",
+      "icon": "flower_pot",
+      "count": 1
+    },
+    {
+      "cn": "画",
+      "icon": "painting",
+      "count": 1
+    },
+    {
+      "cn": "音符盒",
+      "icon": "note_block",
+      "count": 1
+    },
+    {
+      "cn": "红石",
+      "icon": "redstone",
+      "count": 8
+    }
+  ]
+}

@@ -33,8 +33,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Run node anchor tests
-        run: node --test tests/js/panel-anchors.test.mjs
+      - name: Run node tests (panel anchors + give whitelist sync)
+        run: node --test tests/js/
 
   settlementsfix:
     name: settlementsfix (pure-logic javac + SkillChestTest)

@@ -40,6 +40,13 @@ public final class SkillChestCommands {
                         .then(Commands.argument("page", IntegerArgumentType.integer(0))
                                 .executes(ctx -> open(ctx.getSource(), StringArgumentType.getString(ctx, "player"),
                                         IntegerArgumentType.getInteger(ctx, "page"))))));
+        // 造物子面板（2026-08-30 造物扩展）：/skillchest items <player> [page]
+        root.then(Commands.literal("items")
+                .then(Commands.argument("player", StringArgumentType.word())
+                        .executes(ctx -> openItems(ctx.getSource(), StringArgumentType.getString(ctx, "player"), 0))
+                        .then(Commands.argument("page", IntegerArgumentType.integer(0))
+                                .executes(ctx -> openItems(ctx.getSource(), StringArgumentType.getString(ctx, "player"),
+                                        IntegerArgumentType.getInteger(ctx, "page"))))));
         if (Boolean.getBoolean("settlementsfix.testHooks")) {
             root.then(Commands.literal("click")
                     .then(Commands.argument("player", StringArgumentType.word())
@@ -83,7 +90,8 @@ public final class SkillChestCommands {
                         int syncId, net.minecraft.world.entity.player.Inventory inv,
                         net.minecraft.world.entity.player.Player p) {
                     return new SkillChestMenu(syncId, inv, sp, entries, safePage,
-                            data.config.debounceMs, target -> openFor(sp, target));
+                            data.config.debounceMs, target -> openFor(sp, target),
+                            target -> openItemsFor(sp, target));
                 }
 
                 @Override
@@ -95,6 +103,45 @@ public final class SkillChestCommands {
                     sp.getGameProfile().getName(), safePage, data.skills.size(), data.waypoints.size());
         } catch (Exception e) {
             GODFIX.warn("[skillchest] open failed for {}: {}", sp.getGameProfile().getName(), e.toString());
+        }
+    }
+
+    /** 造物子面板入口。 */
+    public static int openItems(CommandSourceStack source, String playerName, int page) {
+        ServerPlayer sp = source.getServer().getPlayerList().getPlayerByName(playerName);
+        if (sp == null) {
+            source.sendFailure(Component.literal("玩家不在线: " + playerName));
+            return 0;
+        }
+        openItemsFor(sp, page);
+        return 1;
+    }
+
+    /** 造物子面板（2026-08-30 造物扩展）：可造物 27 格网格，点击 → /mycli cast 造物 <名>。 */
+    public static void openItemsFor(ServerPlayer sp, int page) {
+        try {
+            String mcdata = System.getProperty("settlementsfix.mcdataDir", "/mcdata");
+            SkillChestLayout.Config cfg = SkillChestIO.loadConfig(Path.of(mcdata, "skill-chest.json"));
+            int safePage = Math.max(0, Math.min(page, SkillChestLayout.itemPagesFor(cfg.giveItems) - 1));
+            List<SkillChestLayout.Entry> entries = SkillChestLayout.buildItemGrid(cfg, cfg.giveItems, safePage);
+            sp.openMenu(new net.minecraft.world.MenuProvider() {
+                @Override
+                public net.minecraft.world.inventory.AbstractContainerMenu createMenu(
+                        int syncId, net.minecraft.world.entity.player.Inventory inv,
+                        net.minecraft.world.entity.player.Player p) {
+                    return new SkillChestMenu(syncId, inv, sp, entries, safePage,
+                            cfg.debounceMs, target -> openItemsFor(sp, target), null);
+                }
+
+                @Override
+                public Component getDisplayName() {
+                    return Component.literal("§3造物 · §b选一个变出来");
+                }
+            });
+            GODFIX.info("[skillchest] items panel for {} page={} ({} items)",
+                    sp.getGameProfile().getName(), safePage, cfg.giveItems.size());
+        } catch (Exception e) {
+            GODFIX.warn("[skillchest] items open failed for {}: {}", sp.getGameProfile().getName(), e.toString());
         }
     }
 

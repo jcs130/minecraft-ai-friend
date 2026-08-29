@@ -65,8 +65,10 @@ interface Atom {
   school?: string
   /** 契约类法术（2026-08-23）：不走路 RCON commands，改由注入的 specialExecutor 执行。
    *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）、
-   *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）。 */
-  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin'
+   *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）、
+   *  aura=光环系（2026-08-29）：三元素球绕体旋绕——元素由 atomId 分派（fire_aura 火焰光环
+   *  等 8 元素家族，萌萌专属火焰、余七术公开）。 */
+  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura'
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -355,6 +357,31 @@ export const GIVE_WHITELIST: Record<string, string> = {
   '梯子': 'ladder', '栅栏': 'oak_fence', '门': 'oak_door', '床': 'white_bed',
   '箭': 'arrow', '弓': 'bow', '盾牌': 'shield', '灯笼': 'lantern',
   '铁盔甲': 'iron_chestplate', '铁剑鞘': 'iron_helmet',
+  // 2026-08-30 造物扩展：甜点/零食/手工材料（萌萌向：体验/探索/创意）
+  '蛋糕': 'cake', '饼干': 'cookie', '南瓜派': 'pumpkin_pie', '甜浆果': 'sweet_berries',
+  '发光浆果': 'glow_berries', '蜂蜜瓶': 'honey_bottle', '牛奶': 'milk_bucket',
+  '纸': 'paper', '书': 'book', '墨囊': 'ink_sac', '羽毛': 'feather', '线': 'string',
+  '皮革': 'leather', '燧石': 'flint', '骨粉': 'bone_meal', '砖块': 'brick',
+  '铁轨': 'rail', '雪球': 'snowball', '花盆': 'flower_pot', '画': 'painting',
+  '音符盒': 'note_block', '红石': 'redstone',
+}
+
+/**
+ * 造物分类默认数量（2026-08-30）：按物品定 give 数——食物×4、原料×8、
+ * 工具装备×1、其他默认×1。key = GIVE_WHITELIST 的英文 id；未列出的回退 1。
+ * 护栏：填模板时 max(1, min(16, n))。
+ */
+export const GIVE_DEFAULT_COUNT: Record<string, number> = {
+  apple: 4, bread: 4, cooked_beef: 4, cooked_porkchop: 4, cooked_chicken: 4,
+  cooked_cod: 4, cooked_salmon: 4, carrot: 4, potato: 4, baked_potato: 4,
+  melon_slice: 4, cake: 1, cookie: 8, pumpkin_pie: 4, sweet_berries: 8,
+  glow_berries: 8, honey_bottle: 2, milk_bucket: 1,
+  oak_log: 8, spruce_log: 8, birch_log: 8, oak_planks: 16, stick: 8,
+  cobblestone: 16, stone: 16, coal: 8, iron_ingot: 4, copper_ingot: 4,
+  glass: 8, sand: 8, dirt: 8, stone_bricks: 8, oak_fence: 4, ladder: 4,
+  arrow: 8, torch: 4, lantern: 2, paper: 8, book: 2, ink_sac: 4, feather: 4,
+  string: 4, leather: 4, flint: 4, bone_meal: 8, brick: 8, rail: 8,
+  snowball: 8, redstone: 8,
 }
 
 const DEFAULT_ATOMS: Atom[] = [
@@ -760,6 +787,8 @@ async function nearestSafeTeleport(bot: Bot, vars: Record<string, number | strin
 }
 
 // ── 命令渲染：{name} 或 {name±offset} 占位符 ───────────────────────────
+/** RCON 命令回执错误识别（2026-08-29 台账真实性）：命中即视为该命令执行失败。 */
+const RCON_CMD_ERR_RE = /Invalid escape|Unknown or incorrect|Incorrect argument|Incorrect.*command|Expected .*but|Failed to execute|no such entity|Could not find|was not found|is not a valid/i
 function renderCommand(cmd: string, vars: Record<string, number | string>): string {
   return cmd.replace(/\{([a-z]+)([+-]\d+)?\}/g, (_m, key: string, off?: string) => {
     const base = vars[key]
@@ -840,6 +869,12 @@ export class MagicStateStore {
       const tmp = this.path + '.tmp'
       writeFileSync(tmp, JSON.stringify(this.state, null, 2), 'utf-8')
       renameSync(tmp, this.path)
+      // 2026-08-29 双源归一：/mcdata 侧（settlementsfix 命格书重写、numen、npc 引擎渲染）
+      // 长期读到旧副本——「萌萌命格书尚未启封」的根因即 mod 读 mcdata 过期文件。
+      // 正本落盘后镜像到 /mcdata（world 容器挂载可写）；本地跑测试无此目录则静默跳过。
+      try {
+        writeFileSync('/mcdata/magic-state.json', JSON.stringify(this.state, null, 2), 'utf-8')
+      } catch { /* 镜像尽力而为，不伤正本 */ }
     } catch (err) {
       console.error(`[mc-magic] failed to save state: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -1045,10 +1080,11 @@ export interface MagicDeps {
 /** 契约/魂链法术执行器（2026-08-23）：效果不走路 RCON commands，由 mc-god 注入实际落地逻辑
  *  （contract=写 goddess-orders 唤守卫、trace=传送到目标、recall=拉从者到身边）。 */
 export type SpecialExecutor = (
-  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin',
+  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura',
   username: string,
   params: Record<string, number | string>,
   vars: Record<string, number | string>,
+  atomId?: string, // 光环系元素分派键（aura=按 atomId 查元素表）
 ) => Promise<{ ok: boolean; reply: string }>
 
 export interface MagicHandle {
@@ -1550,7 +1586,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const tz = pz + dirVec[1] * distance
 
     const item = String(params.item ?? 'bread')
-    const count = 1
+    // 2026-08-30 造物扩展：数量按物品分类默认（GIVE_DEFAULT_COUNT，护栏 1-16），
+    // 未配置回退 1（模糊路径无 opts.count——显式数量走女神代施路径）。
+    const count = Math.max(1, Math.min(16, GIVE_DEFAULT_COUNT[item] ?? 1))
 
     // 模糊施法前摇（2026-08-23 造物主谕：模糊 = 更久）：粒子先行（凝聚中），延迟后落地。
     // 向量路径延迟 2s；LLM 路径延迟 = 推理耗时（mc-god 侧 catch NeedLlmError 时已消耗，传 latencyMs 记录）。
@@ -1582,8 +1620,12 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     // 火球术方向（2026-08-23 造物主反馈「萌萌语音火球没反应」→ 界中本无此术，现补齐）：
     // 命令含 {vx}/{vy}/{vz} 时，按施法者视线（yaw/pitch）算发射向量。占位符以字符串传入
     // （renderCommand 对 number 会 Math.round，会抹掉小数向量，字符串原样保留）。
+    // 2026-08-29 慢弹档 {wx}/{wy}/{wz}（×0.15）：风弹类（螺旋丸 breeze_wind_charge）
+    // 用 1.6 档会一帧飞出 100+ 格（实测 0.6s 位移 101 格）——肉眼只见「消失」不见「飞行」；
+    // 0.15 档 ≈ 25 格/s，弹道清晰可追（造物主实测反馈「没有向前飞」即此）。
     let vx = '0.00', vy = '0.00', vz = '0.00'
-    if (atom.commands.some((c) => c.includes('{vx}'))) {
+    let wx = '0.15', wy = '0.00', wz = '0.15'
+    if (atom.commands.some((c) => c.includes('{vx}') || c.includes('{wx}'))) {
       const ent = bot.players[username]?.entity
       const speed = 1.6
       let dx = 1, dy = 0, dz = 0
@@ -1597,10 +1639,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       vx = (dx * speed).toFixed(2)
       vy = (dy * speed).toFixed(2)
       vz = (dz * speed).toFixed(2)
+      wx = (dx * 0.15).toFixed(3)
+      wy = (dy * 0.15).toFixed(3)
+      wz = (dz * 0.15).toFixed(3)
     }
 
     const vars: Record<string, number | string> = {
-      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, vx, vy, vz,
+      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, vx, vy, vz, wx, wy, wz,
+      // pyh = 头部高度（弹体生成位，字符串保留小数防 renderCommand Math.round 抹平）
+      pyh: `${py + 1.4}`,
     }
 
     // 通灵契约（2026-08-18）：命令含 {puuid} 或带 ownLimit 时，取施法者 UUID（I;a,b,c,d 格式）
@@ -1629,6 +1676,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
           return `「${atom.name}」需要燃烧 ${cost.hp} 点生命，但你只剩 ${Math.round(hp)} 点，强行施展会殒命。`
         }
       }
+      const cmdErrors: string[] = []
       // 校验 + 扣 food（data modify foodLevel）
       if (cost.food > 0) {
         const food = await getEntityNumber(username, 'foodLevel')
@@ -1643,7 +1691,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       let specialReply: string | null = null
       if (atom.special) {
         if (!specialExecutor) return '契约信道未开（执行器未就位），法术未成。'
-        const res = await specialExecutor(atom.special, username, params, vars)
+        const res = await specialExecutor(atom.special, username, params, vars, atom.id)
         if (!res.ok) return res.reply
         specialReply = res.reply
       }
@@ -1682,6 +1730,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
           }
           const out = await rcon.send(cmd)
           if (out) log(`rc[${cmd}] -> ${out.trim()}`)
+          // 2026-08-29 台账真实性收紧：RCON 回执含错误关键词 → 记失败（此前 263 次
+          // 影分身「假成功」——SNBT 报 Invalid escape 仍记 success:true，统计数据失真）。
+          if (RCON_CMD_ERR_RE.test(out || '')) cmdErrors.push(`${cmd.slice(0, 60)} => ${(out || '').trim().slice(0, 80)}`)
         }
       }
 
@@ -1718,7 +1769,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         : parts.length > 0 ? `（消耗${parts.join('、')}）` : ''
       log(`cast ${atom.id} by ${username}: ${atom.commands.join('; ')} (mana ${cost.mana}, food ${cost.food}, hp ${cost.hp}, xp +${expGain})`)
       chronicle('cast', username, { skill: atom.id, mana: cost.mana, food: cost.food, hp: cost.hp, xp: expGain, level: levelAfter })
-      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: true })
+      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: cmdErrors.length === 0, ...(cmdErrors[0] ? { result: `cmd-fail: ${cmdErrors[0]}` } : {}) })
       return `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（你尚未安家——天神将你送回灯门镇中心；睡一张床，归乡便会带你回床边。）' : ''}`
     } catch (err) {
       return `神力连接不上这个世界：${err instanceof Error ? err.message : String(err)}`
@@ -1750,9 +1801,11 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const tz = Math.round(pz + dirVec[1] * distance)
 
     const item = opts.item && Object.values(GIVE_WHITELIST).includes(opts.item) ? opts.item : 'bread'
+    // 2026-08-30 造物扩展：数量分类默认（GIVE_DEFAULT_COUNT）——女神未明示数量时
+    // 面包=4/木板=16/工具=1，而不是一刀切 1；护栏 1-16。
     const count = typeof opts.count === 'number' && Number.isFinite(opts.count)
       ? Math.max(1, Math.min(16, Math.floor(opts.count)))
-      : 1
+      : Math.max(1, Math.min(16, GIVE_DEFAULT_COUNT[item] ?? 1))
 
     let bx = 0
     let by = 0
@@ -1773,6 +1826,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
     const vars: Record<string, number | string> = {
       target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, direction: dirName,
+      pyh: `${py + 1.4}`, // 头部高度（弹体生成位；字符串保小数）
     }
     // 通灵契约：神迹代施同样支持 {puuid}（契约兽归属受赐者）+ ownLimit 防重赐
     if (atom.commands.some((c) => c.includes('{puuid}')) || atom.ownLimit) {
@@ -1798,6 +1852,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         return `魔力不足（耗魔 ${opts.consumeMana}，汝余 ${Math.floor(pstate.mana)}）。法力波动渐渐平息……`
       }
       store.spendMana(username, opts.consumeMana)
+    }
+    // 光环/契约类（2026-08-29 补）：special 原子不走 commands，交给 specialExecutor
+    // 落地（光环引擎启动等）——与 cast() 执行核同构；失败则神迹未成，不进 vfx/记账。
+    if (atom.special) {
+      if (!specialExecutor) return '契约信道未开（执行器未就位），神迹未成。'
+      const res = await specialExecutor(atom.special, username, {}, vars, atom.id)
+      if (!res.ok) return res.reply
     }
     try {
       for (const rawCmd of atom.commands.map((c) => renderCommand(c, vars))) {

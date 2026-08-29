@@ -209,3 +209,12 @@
 - **venv shim 双进程是单实例正常形态**:qwenpaw venv 的 python.exe 是 uv launcher,Popen 一个会看到 shim+真体两个 pid(父子链);判断实例数看 ppid 链分组,别数进程。
 - **看门狗与人工重启竞态双启**:`--stop` 杀完到新实例起来的窗口恰逢 schtasks 5min 巡检,双方各拉一个实例(反射层双拍/任务双派)。治:start_guard_drive 写 pid 文件,start() 时 pid 文件+双查询任一活着即跳过;重启人工流程避开整 5 分钟边界。
 - **mindcraft modes.js 是反射层设计的现成参照**(本地 clone mindcraft-ref):self_preservation(头顶水 jump/落沙 moveAway/着火水桶/3s 内重伤大撤 20 格)、unstuck(同点 20s)、cowardice/self_defense 分档、item_collecting(2s 确认)、torch_placing(5s 冷却)、execute() 后 AUTO MESSAGE 回流模型(=我们的 feed kind=reflex)。numen 无 jump/水桶原语,R4/R5 用 goto 近似;hunting/torch 类留给慢系统。
+
+## 2026-08-30 螺旋丸弹体三连坑（renderCommand 表达式限制 + 静默失败 + 弹速不可见）
+- **renderCommand 只支持整数偏移**：正则 `{([a-z]+)([+-]\d+)?}` —— {py+1} 合法、**{py+1.4} 不匹配整体原样透传** → RCON NBT 'Expected double' → **summon 静默失败**（cast 链其余 VFX 照常，log 只在 mc-magic rc[] 行，易误判为「弹飞走了」）。小数偏移用**字符串 vars 占位符**（如 pyh = (py+1.4) 保小数；number 类型会被 Math.round 抹平）。
+- **damage 是单实体命令**：选择器不许 limit>1（'Only one entity is allowed'）——AOE 语义用弹体原生爆炸兜底，兜底命令 limit=1。
+- **风弹 Motion 1.6 = 不可见**：breeze_wind_charge 0.6s 飞 101 格（实测 RCON 采样），肉眼只见「消失」不是「飞行」；0.15 档约 25 格/s 弧线清晰。已加 {wx/wy/wz} 慢弹档视线占位符（cast 与 castByGod 的 vars 均已挂）。
+- **调试通道**：mycli cast 有同信士节流（连发第二次静默）——用 /app/data/chant-requests.jsonl 文件通道注入（回执落 chant-reply.jsonl 可见）；注意 CHANT_REQ=DATA_DIR(/app/data) 不是 /mcdata。RCON data get @e[sort=nearest] 必须先 execute at 锚点，否则以 (0,0,0) 为准。
+- **又犯双卷坑**：atoms 运行时正本 = DATA_DIR(/app/data)=宿主 shadow/data；shadow/mcdata 是 mixin 卷。改 atoms 五份都要同步（data/、packaging/ 进库，两个 shadow 卷不进库）。
+- commit ea45243，CI 17 绿。
+  ## 2026-08-30 造物扩展（CLI 正本 + 面板 skin） - **架构定谳（造物主点破）**：底层是 CLI（/mycli），技能书/宝箱面板是给人用的前端界面——前端只把点击翻译成咒语词，裁决/计费/执行全在 CLI 层。新功能先落 CLI 动词，再套 skin。 - **造物只出面包的根因**：GIVE_WHITELIST 早有 55+ 物品且 extractParams 支持 item 参数，但书页/面板点击不带物品词 → 永远 default=bread；且 count=1 写死。修=白名单扩 76 项 + GIVE_DEFAULT_COUNT 分类数量（食物x4/原料x8-16/工具x1，护栏1-16）+ 主面板 give 格开子面板（27格物品网格，图标=物品本身）。 - **白名单镜像生成器模式**：TS 正本(GIVE_WHITELIST) → scripts/gen-give-items.mjs 生成 skill-chest.json items 段（运行卷+packaging 分发正本）→ CI 一致性测试对账（tests/js/give-whitelist-sync.test.mjs）。改 TS 必跑生成器，CI 防漂移——治五份同步顽疾的通用解。 - **改 src 后必须重启 shadow-world**：世界进程跑的是容器内 bundle，E2E 先看命令是否新语义（apple 1 vs apple 4 即旧代码信号）。 - **mycli 是玩家执行者命令**：RCON 直跑报 A player is required——面板/书页用 player.createCommandSourceStack()，命令不带玩家名参数。 

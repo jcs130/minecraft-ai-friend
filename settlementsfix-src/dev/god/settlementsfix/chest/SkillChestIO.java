@@ -160,6 +160,19 @@ public final class SkillChestIO {
                     cfg.chantAlias.put(e.getKey(), e.getValue().getAsString());
                 }
             }
+            // 造物子面板物品清单（2026-08-30 造物扩展）：[{cn, icon, count}]，
+            // 与 TS 侧 GIVE_WHITELIST/GIVE_DEFAULT_COUNT 镜像——CI 一致性测试对账。
+            JsonArray items = arr(root, "items");
+            if (items != null) {
+                for (JsonElement el : items) {
+                    if (!el.isJsonObject()) continue;
+                    JsonObject it = el.getAsJsonObject();
+                    String cn = strOf(it, "cn", null);
+                    String icon = strOf(it, "icon", null);
+                    if (cn == null || icon == null) continue;
+                    cfg.giveItems.add(new SkillChestLayout.GiveItem(cn, icon, intOf(it, "count", 1)));
+                }
+            }
             long db = root.has("debounceMs") ? root.get("debounceMs").getAsLong() : cfg.debounceMs;
             cfg.debounceMs = db;
         } catch (Exception ignore) {

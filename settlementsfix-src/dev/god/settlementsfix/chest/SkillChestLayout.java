@@ -25,8 +25,8 @@ public final class SkillChestLayout {
     public static final int WAYPOINT_ROW = 1;
     public static final int SKILLS_PER_PAGE = COLS - 1; // 行0 前 8 格技能，末格翻页/关闭
 
-    /** 格子种类。 */
-    public enum Kind { SKILL, WAYPOINT, MORE, BACK, EMPTY }
+    /** 格子种类。ITEM = 造物物品子面板的可造物格（2026-08-30 造物扩展）。 */
+    public enum Kind { SKILL, WAYPOINT, MORE, BACK, EMPTY, ITEM }
 
     /** 一个格子的全部数据（薄壳据此构造 ItemStack）。 */
     public static final class Entry {
@@ -73,6 +73,8 @@ public final class SkillChestLayout {
         /** atom id → 中文名（来自 magic-atoms.json，由 IO 层填好传入）。 */
         public final Map<String, String> skillNames = new HashMap<>();
         public final Map<String, String> skillLore = new HashMap<>();
+        /** 造物子面板物品清单（skill-chest.json items 段；与 TS GIVE_WHITELIST 镜像，CI 对账）。 */
+        public final List<GiveItem> giveItems = new ArrayList<>();
         public long debounceMs = 800;
 
         public Config() {
@@ -120,6 +122,13 @@ public final class SkillChestLayout {
                 String name = cfg.skillNames.getOrDefault(id, id);
                 String icon = cfg.skillIcons.getOrDefault(id, cfg.defaultIcon);
                 String lore = cfg.skillLore.getOrDefault(id, "");
+                if ("give".equals(id)) {
+                    // 造物术（2026-08-30 造物扩展）：不直接施法，开「可造物」子面板
+                    // （图标=物品本身，点击才定物品——CLI 底层 /mycli cast 造物 <名>）。
+                    out.set(SKILL_ROW * COLS + i, new Entry(Kind.SKILL, id, name, icon,
+                            "选一个变出来", null));
+                    continue;
+                }
                 String chant = cfg.chantAlias.getOrDefault(id, name);
                 // mycli 以玩家为执行者（SkillChestMenu 用 player.createCommandSourceStack()），
                 // 参数不带玩家名——与书页 clickEvent "/mycli cast <名>" 同格式。
@@ -156,6 +165,61 @@ public final class SkillChestLayout {
     public static int pagesFor(List<SkillInfo> skills) {
         if (skills == null || skills.isEmpty()) return 1;
         return (skills.size() + SKILLS_PER_PAGE - 1) / SKILLS_PER_PAGE;
+    }
+
+    /** 可造物格（2026-08-30 造物扩展）：cn=中文名（咒语词），icon=物品id，count=默认数量。 */
+    public static final class GiveItem {
+        public final String cn;
+        public final String icon;
+        public final int count;
+        public GiveItem(String cn, String icon, int count) {
+            this.cn = cn;
+            this.icon = icon;
+            this.count = count;
+        }
+    }
+
+    /** 造物子面板每页物品数：三行全用（27 格），末格留给导航。 */
+    public static final int ITEMS_PER_PAGE = SIZE - 1;
+
+    /**
+     * 造物物品子面板（2026-08-30 造物扩展，docs/skill-chest-design.md §3.4）：
+     * 三行网格铺可造物（图标=物品本身，零识字门槛），每页 26 格 + 末格导航。
+     * 点击 → "/mycli cast 造物 <中文名>"（mc-magic extractItem 白名单转 id，
+     * 数量由 GIVE_DEFAULT_COUNT 分类默认——CLI 层裁断，面板不管数量）。
+     */
+    public static List<Entry> buildItemGrid(Config cfg, List<GiveItem> items, int page) {
+        List<Entry> out = new ArrayList<>(SIZE);
+        for (int i = 0; i < SIZE; i++) {
+            out.add(Entry.empty(cfg.defaultIcon));
+        }
+        if (items != null && !items.isEmpty() && page >= 0) {
+            int from = page * ITEMS_PER_PAGE;
+            for (int i = 0; i < ITEMS_PER_PAGE; i++) {
+                int at = from + i;
+                if (at >= items.size()) break;
+                GiveItem g = items.get(at);
+                String lore = g.count > 1 ? ("一次 " + g.count + " 个") : "一次 1 个";
+                out.set(i, new Entry(Kind.ITEM, g.cn, g.cn,
+                        "minecraft:" + g.icon, lore, "/mycli cast 造物 " + g.cn));
+            }
+        }
+        int totalPages = itemPagesFor(items);
+        if (totalPages > 1) {
+            boolean hasNext = page + 1 < totalPages;
+            Entry nav = hasNext
+                    ? new Entry(Kind.MORE, String.valueOf(page + 1), "更多 ▶", cfg.moreIcon,
+                            "第" + (page + 2) + "/" + totalPages + "页", null)
+                    : new Entry(Kind.BACK, "0", "◀ 返回", cfg.backIcon, "回到第1页", null);
+            out.set(SIZE - 1, nav);
+        }
+        return out;
+    }
+
+    /** 造物子面板页数。 */
+    public static int itemPagesFor(List<GiveItem> items) {
+        if (items == null || items.isEmpty()) return 1;
+        return (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
     }
 
     /** MORE/BACK 格：目标页号（entry.id 存的就是目标页）。 */

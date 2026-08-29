@@ -1,7 +1,9 @@
 {
- "at": "2026-08-29 23:41:03",
- "ts": 1788018063.183769,
- "red": [],
+ "at": "2026-08-30 01:46:03",
+ "ts": 1788025563.280658,
+ "red": [
+  "rcon"
+ ],
  "yellow": [],
  "detail": {
   "panel-9090": {
@@ -18,23 +20,23 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 7 minutes (healthy)"
+   "m": "Up 9 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 7 minutes"
+   "m": "Up About an hour"
   },
   "shadow-panel": {
    "s": "green",
-   "m": "Up 4 hours"
+   "m": "Up 6 hours"
   },
   "shadow-gateway": {
    "s": "green",
-   "m": "Up 15 hours"
+   "m": "Up 17 hours"
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 25 hours (healthy)"
+   "m": "Up 27 hours (healthy)"
   },
   "guard-bridge": {
    "s": "green",
@@ -42,27 +44,15 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 281s old"
+   "m": "log 82s old"
   },
   "web-entities-fresh": {
    "s": "green",
    "m": "0s old"
   },
   "rcon": {
-   "s": "green",
-   "m": "ok"
-  },
-  "guards-online": {
-   "s": "green",
-   "m": "both"
-  },
-  "Kirito-status": {
-   "s": "green",
-   "m": "hp 20.0 food 15.0"
-  },
-  "Naruto-status": {
-   "s": "green",
-   "m": "hp 20.0 food 16.0"
+   "s": "red",
+   "m": "[WinError 10053] 你的主机中的软件中止了一个已建立的连接。"
   },
   "mc-guard-kirito": {
    "s": "green",
