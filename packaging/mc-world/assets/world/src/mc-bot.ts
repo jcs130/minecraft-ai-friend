@@ -30,11 +30,32 @@ export interface BotHandle {
   dispose: () => void
 }
 
+// 渲染桥 Step② 说明（2026-08-29）：mod 方块注册表注入由 src/mc-modern-viewer.mts 的
+// injectModBlockRegistry 实现（bot.registry 层，spawn 后注入，实测 79134 槽位生效）。
+// 此处不再重复注入——ESM 环境无 require，且双写会互相污染 blocksByStateId 基准。
+
 export function createBot(config: Config): BotHandle {
   const log = (msg: string) => console.log(`[mc-bot-service] ${msg}`)
   let disposed = false
   let currentBot: Bot | null = null
   let closeViewer: (() => void) | null = null
+
+  // ── 2026-08-29 协议错位自愈 ──────────────────────────────────────────────
+  // 现象: 内容模组(settlements 村民语音/数据同步)的高频包会让 minecraft-protocol
+  // 字节流错位, 其内部只 console.error("Chunk size is N but only M was read ; partial packet ..."),
+  // 既不断线也不抛 bot error → 实体流永久卡死(9090 画面/天眼快照全停), 既往只能人工重启容器。
+  // 修法: 拦截该特征文本, 主动 end 当前连接, 走既有 autoReconnect(3s)重新同步协议流。
+  const consoleError = console.error
+  let desyncCooldownUntil = 0
+  console.error = (...args: unknown[]) => {
+    const text = args.map(a => (typeof a === 'string' ? a : (a as Error)?.message ?? '')).join(' ')
+    if (text.includes('partial packet') && Date.now() > desyncCooldownUntil) {
+      desyncCooldownUntil = Date.now() + 30_000
+      log('协议错位自愈: 检测到 partial packet, 主动重连同步协议流')
+      try { currentBot?.end('protocol desync') } catch { /* 已断则忽略 */ }
+    }
+    consoleError(...args)
+  }
 
   function connect(): Bot {
     log(`connecting to ${config.host}:${config.port} as "${config.username}"`)

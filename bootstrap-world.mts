@@ -369,7 +369,39 @@ function serveMapTiles(getBot: () => any, worlddb?: { discoveryList(): Array<{ i
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }).end(JSON.stringify(rows))
       return
     }
-    if (!url.pathname.endsWith('/map.png')) { res.writeHead(404).end(); return }
+    if (!url.pathname.endsWith('/map.png')) {
+      // 【地图排障 2026-08-29】/mapdiag → chunk 收到/装载计数+实体脚下采样（判断 chunk 装载 vs stateId 查询）
+      if (url.pathname.endsWith('/mapdiag')) {
+        const b = getBot()
+        let info: Record<string, unknown> = { online: !!(b && b.world) }
+        try {
+          // 懒挂探针：map_chunk 收到数 vs chunkColumnLoad 装载数（每次重连换 client，WeakSet 防重挂）
+          const diagGlobal = globalThis as any
+          if (b?._client && !diagGlobal.__mapdiagHooked?.has(b._client)) {
+            diagGlobal.__mapdiagHooked ??= new WeakSet()
+            diagGlobal.__mapdiagHooked.add(b._client)
+            diagGlobal.__mapChunkSeen ??= 0; diagGlobal.__columnLoadSeen ??= 0
+            b._client.on('map_chunk', () => { diagGlobal.__mapChunkSeen++ })
+            b.world?.on?.('chunkColumnLoad', () => { diagGlobal.__columnLoadSeen++ })
+          }
+          info.mapChunkSeen = diagGlobal.__mapChunkSeen ?? -1
+          info.columnLoadSeen = diagGlobal.__columnLoadSeen ?? -1
+          const ep: any = b?.entity?.position
+          info.entityPos = ep ? [Math.floor(ep.x), Math.floor(ep.y), Math.floor(ep.z)] : null
+          const w: any = b?.world
+          const sample: unknown[] = []
+          const bx = ep ? Math.floor(ep.x) : 0, bz = ep ? Math.floor(ep.z) : 0
+          for (const [dx, dy, dz] of [[0, 60, 0], [0, 70, 0], [0, 80, 0], [5, 70, 5], [-5, 70, -5]] as const) {
+            const blk = w?.getBlock?.(new Vec3(bx + dx, dy, bz + dz))
+            sample.push({ at: `${bx + dx},${dy},${bz + dz}`, name: blk?.name ?? null, stateId: blk?.stateId ?? null })
+          }
+          info.sample = sample
+        } catch (e) { info.err = String(e) }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }).end(JSON.stringify(info))
+        return
+      }
+      res.writeHead(404).end(); return
+    }
     const cx = Number(url.searchParams.get('cx')), cz = Number(url.searchParams.get('cz'))
     let r = Number(url.searchParams.get('r') ?? 64)
     if (!Number.isFinite(cx) || !Number.isFinite(cz)) { res.writeHead(400).end('bad cx/cz'); return }

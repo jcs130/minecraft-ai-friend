@@ -30,6 +30,10 @@ export interface BotHandle {
   dispose: () => void
 }
 
+// 渲染桥 Step② 说明（2026-08-29）：mod 方块注册表注入由 src/mc-modern-viewer.mts 的
+// injectModBlockRegistry 实现（bot.registry 层，spawn 后注入，实测 79134 槽位生效）。
+// 此处不再重复注入——ESM 环境无 require，且双写会互相污染 blocksByStateId 基准。
+
 export function createBot(config: Config): BotHandle {
   const log = (msg: string) => console.log(`[mc-bot-service] ${msg}`)
   let disposed = false

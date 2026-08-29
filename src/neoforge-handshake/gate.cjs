@@ -207,6 +207,8 @@ function closeSession (sess, reason) {
     log(`census[${sess.username}] back_total=${b.reduce((s, [, v]) => s + v, 0)} time(${pick(b)}) | front_total=${f.reduce((s, [, v]) => s + v, 0)} time(${pick(f)}) | err=${e.length ? e.map(([k, v]) => k + '=' + v).join(',') : 'none'}`)
     const top = b.slice(0, 8).map(([k, v]) => k + '=' + v).join(' ')
     if (top) log(`census[${sess.username}] back top: ${top}`)
+    // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
+    log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
   } catch (err) {}
   try { sess.back?.end() } catch (e) {}
   try { if (!sess.front.ended) sess.front.end(reason) } catch (e) {}
@@ -290,6 +292,8 @@ function onBackPacket (sess, name, params) {
     // 甚至 join game——NeoForge 注册包先于 join game）先入闸排队，
     // 待 ack 到达、前端真切了 PLAY 再放出，保证前端按 PLAY 的包 id 解。
     if (name === 'login') { sess.joinedEntityId = params.entityId; saveKnowledge() }
+    // 【chunk 断流诊断 2026-08-29】排队期 chunk 专项计数（census 只统计开闸后）
+    if (/chunk/.test(name)) { sess.queueChunkCount = (sess.queueChunkCount || 0) + 1; if (sess.queueChunkCount <= 3) log(`DEBUG：[chunk-诊断] ${sess.username} playQueue 期 ${name}（累计 ${sess.queueChunkCount}）`) }
     if (name === 'kick_disconnect') { setTimeout(() => closeSession(sess, '后端踢人（PLAY）'), 200) }
     sess.playQueue.push({ name, params })
     return
@@ -297,6 +301,8 @@ function onBackPacket (sess, name, params) {
 
   if (sess.phase === 'play') {
     if (name === 'kick_disconnect') { setTimeout(() => closeSession(sess, '后端踢人（PLAY）'), 200) }
+    // 【chunk 断流诊断 2026-08-29】PLAY 期 chunk 专项计数（不受 census top 名次遮蔽）
+    if (/chunk/.test(name)) { sess.playChunkCount = (sess.playChunkCount || 0) + 1; if (sess.playChunkCount <= 3) log(`DEBUG：[chunk-诊断] ${sess.username} PLAY 期 ${name}（累计 ${sess.playChunkCount}）`) }
     // 【时间包普查】后端 PLAY 包名计数,会话关时打摘要——update_time 断流类问题的常驻探针
     sess.backCensus = sess.backCensus || {}
     sess.backCensus[name] = (sess.backCensus[name] || 0) + 1
