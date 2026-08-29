@@ -2339,6 +2339,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // (sys_，客户端陪玩专属)。与守卫桥同卷（MC_DATA_DIR）。
   // 2026-08-29 造物主谕「numen 说话肯定要被听到」：守卫自己的公屏发言**也落盘**
   // （假玩家互听/世界之声完整）——自说自话由消费侧滤（mcp_numen/guard_drive 读时跳过本人）。
+  // GUARD_PLAYER_NAMES 仅作判定用（点名检测/灯语女神跳过守卫），不做记录排除。
+  const GUARD_PLAYER_NAMES = new Set(['桐人', '鸣人', 'Kirito', 'Naruto'])
   const PLAYER_CHAT = process.env.PLAYER_CHAT || `${DATA_DIR}/player-chat.jsonl`
   function recordPlayerChat(username: string, message: string): void {
     if (!username || !message) return
@@ -3483,6 +3485,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 让真人玩家像对服主喊话一样对女神说话。天平（平衡）命令同通道。
     bot.on('chat', (username: string, message: string) => {
       if (username === getBot()?.username) return
+      // 2026-08-29 教训（萌萌要武器没人理）：GUARD_PLAYER_NAMES 引用错曾让本回调在
+      // recordPlayerChat 之后、goddessChat 之前崩掉——玩家的请求被静默吞掉、无任何日志。
+      // 整回调裹保护：任何异常都落日志，绝不再无声吞话。
+      try {
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
       recordPlayerChat(username, message)
       // 公屏 CLI 收敛为指路牌（2026-08-29 造物主谕：「公屏 cli 有点奇怪，私聊让他用 /mycli」）：
@@ -3562,6 +3568,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const law = matchLaw(message.trim())
       if (law) {
         applyLaw(username, law).catch((err) => log(`applyLaw(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+      }
+      } catch (e) {
+        // 兜底：recordPlayerChat 之后的任何崩断都不再吞话——落日志可追。
+        log(`chat-handler error for ${username}: ${e instanceof Error ? e.message : String(e)} | msg=${message.slice(0, 50)}`)
       }
     })
 
