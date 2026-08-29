@@ -18,7 +18,7 @@ build_client_pack.py — 千灯纪客户端资源包打包器（2026-08-29）
 import os, sys, re, zipfile, tomllib, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODS_DIR = os.path.normpath(os.path.join(HERE, "..", "ops", "docker", "shadow", "mods"))
+MODS_DIR = os.path.normpath(os.path.join(HERE, "..", "ops", "docker", "shadow", "mc", "mods"))  # 2026-08-29 修正: MC 容器目录已重构到 mc/ 下
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "ops", "docker", "shadow", "data", "downloads"))
 MC_VERSION = "1.21.1"
 NEOFORGE_VERSION = "21.1.248"

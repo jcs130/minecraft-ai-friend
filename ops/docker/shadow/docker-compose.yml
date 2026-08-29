@@ -44,7 +44,7 @@ services:
       - "25575:25575"
     volumes:
       - ./mc:/data
-      - ./mods:/mods:ro
+      - ./mc/mods:/mods:ro   # 2026-08-29 修正: 同 ./mc/mods(即 /data/mods),itzg COPY_MODS 自拷幂等;旧 ./mods 已退役
       - ./mcdata:/mcdata   # 2026-08-26 澶╃琛ユ寕锛歴ettlementsfix 浜嬩欢娴侊紙interact/spell/status锛夎惤鏉戣繍钀ョ洰褰曪紝涓?qwenpaw /mcdata 鍚屾簮
     networks: [shadow]
 
@@ -212,7 +212,7 @@ services:
       - ./data:/data
       # 2026-08-29 固化：网关源码 bind-mount（镜像 1.0.1 里的代码已过时，以 B 仓为单一事实源）
       - ../../../mc-gateway/mc_gateway.py:/opt/gateway/mc_gateway.py:ro
-      - ./mods:/server/mods:ro
+      - ./mc/mods:/server/mods:ro   # 2026-08-29 修正: MC 容器目录重构后 mods 在 mc/ 下,旧 ./mods 是过时副本
       - ./mc/logs:/server/logs:ro
     environment:
       TZ: Asia/Shanghai
