@@ -40,6 +40,8 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'cultivate', aliases: ['灌顶', '修行', '传功'], summary: '修行灌顶：给自己灌技艺经验（60秒一息）', usage: 'cultivate [类别]', argDesc: '类别：combat/mining 等，缺省 combat', json: true },
   { id: 'bookget', aliases: ['领书', '取书'], summary: '领取技能书：已学法术随时领✦书（拿手上右键施法）', usage: 'bookget <法术名>', argDesc: '法术名：已学会的（如 螺旋丸）', json: false },
   { id: 'learn', aliases: ['参悟', '学会'], summary: '持书参悟：手拿✦技能书学会该法术（入命格书）', usage: 'learn <法术名>', argDesc: '法术名：书上写的名字；书必须在手', json: false },
+  { id: 'goto', aliases: ['传送去', '去', '传送'], summary: '传送：按序号/名字去传送点（书页点行=同一事）', usage: 'goto <序号|名字>', argDesc: '序号：传送阵页的第几项；名字：点名（如 家）', json: false },
+  { id: 'waypoint', aliases: ['传送点', '路标', '记点'], summary: '传送点簿：查列表 / 记 <名字> / 删 <序号>', usage: 'waypoint [记 <名字> | 删 <序号>]', argDesc: '记：把脚下记为传送点；删：删自己的第几项', json: false },
   { id: 'growth', aliases: ['进度', '修为'], summary: '查修行进度（经验/点数）', usage: 'growth [类别]', argDesc: '类别：缺省 combat', json: true },
 ]
 

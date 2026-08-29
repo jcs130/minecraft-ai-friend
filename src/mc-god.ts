@@ -18,6 +18,7 @@ import {
   shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb,
   type CliCommand,
 } from './mc-cli.ts'
+import { WaypointStore, zhNumberToArabic, type Waypoint } from './mc-waypoints.ts'
 import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
@@ -502,6 +503,48 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const lastUsed = new Map<string, number>() // 每技艺全局冷却
   const lastPray = new Map<string, number>() // 每玩家入场节流
   const worlddb = deps.worlddb
+
+  // ── 传送点簿（2026-08-29 造物主设计「设置传送点+说数字就传」）──────────────
+  // DATA_DIR 与 /mcdata 同卷（shadow-world 双挂同源），mixin（命格书传送阵页）
+  // 与 python 侧读同一份 waypoints.json。序号铁律：shared 前 + personal 后，
+  // 书页第 n 行 = 公屏说 n 传去的地方。
+  const waypoints = new WaypointStore(`${DATA_DIR}/waypoints.json`, [
+    { id: 1, name: '村庄广场', x: 3096, y: 67, z: -1340, dim: 'minecraft:overworld', createdAt: 0 },
+    { id: 2, name: '家', x: 3098, y: 67, z: -1337, dim: 'minecraft:overworld', createdAt: 0 },
+  ])
+  const lastTp = new Map<string, number>() // 数字传送冷却（防连点抖动）
+  /** 传送执行：tp + 粒子/音效仪式感 + 编年史。返回结果描述。 */
+  async function tpWaypoint(username: string, wp: Waypoint): Promise<string> {
+    const login = resolveLogin(username)
+    await rcon.send(`tp ${login} ${wp.x} ${wp.y} ${wp.z}`).catch(() => '')
+    try {
+      await rcon.send(`execute at ${login} run particle minecraft:portal ~ ~1 ~ 0.6 0.9 0.6 0.3 90`)
+      await rcon.send(`playsound minecraft:entity.enderman.teleport master ${login}`)
+    } catch { /* 特效失败不影响传送 */ }
+    worlddb.chronicleRecord('cast', username, { skill: 'waypoint-tp', to: wp.name })
+    return `✦ 传送阵已开——「${wp.name}」（${Math.round(wp.x)}, ${Math.round(wp.z)}）。`
+  }
+  /** 公屏/私聊纯数字（1-99 或 一/二/十二…）→ 序号传送（书页同一顺序）。 */
+  async function handleNumberTeleport(username: string, message: string): Promise<boolean> {
+    const n = zhNumberToArabic(message)
+    if (n === null) return false
+    const now = Date.now()
+    if (now - (lastTp.get(username) ?? 0) < 3000) return true // 冷却中静默
+    const wp = waypoints.byIndex(username, n)
+    if (!wp) return false // 超出列表范围：当普通消息
+    lastTp.set(username, now)
+    const r = await tpWaypoint(username, wp)
+    try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ }
+    log(`number-tp ${username} -> ${n}:${wp.name}`)
+    return true
+  }
+  /** 玩家脚下坐标（RCON Pos；拿不到返回 null）。 */
+  async function playerPos(username: string): Promise<{ x: number; y: number; z: number } | null> {
+    const out = await rcon.send(`data get entity ${resolveLogin(username)} Pos`).catch(() => '')
+    const m = out.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/)
+    if (!m) return null
+    return { x: Math.floor(parseFloat(m[1])), y: Math.floor(parseFloat(m[2])), z: Math.floor(parseFloat(m[3])) }
+  }
 
   // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
   // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
@@ -1966,6 +2009,54 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         magic.learnViaAdvancement(subject, atom.id)
         worlddb.chronicleRecord('cast', subject, { skill: 'learn', atom: atom.id, via: 'skillbook' })
         reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
+        return
+      }
+      case 'goto': {
+        // 传送（2026-08-29 造物主设计「1234 输数字就传」）：序号=命格书传送阵页行序，
+        // 也可点名（先个人后共享，模糊包含）。公屏纯数字同走这里（handleNumberTeleport）。
+        const q = cmd.args.join(' ').trim()
+        if (!q) {
+          const list = waypoints.allFor(subject)
+          const lines = list.map((w, i) => `  ${i + 1}. ${w.name}（${Math.round(w.x)}, ${Math.round(w.z)}）${i < waypoints.sharedPoints().length ? ' §7[公共]' : ''}`)
+          replyLines([`[信使] 传送阵一览：`, ...lines, `§7 说数字（如 2）或 /cli 传送去 2/名字 即传。`])
+          return
+        }
+        const asNum = parseInt(q, 10)
+        const wp = Number.isFinite(asNum) && String(asNum) === q ? waypoints.byIndex(subject, asNum) : waypoints.byName(subject, q)
+        if (!wp) { reply(`[信使] 没有第 ${q} 个传送点，也没叫「${q}」的地方。/cli 传送点 看列表。`); return }
+        const r = await tpWaypoint(subject, wp)
+        if (cmd.json) jsonReply({ ok: true, summary: r, waypoint: wp })
+        else reply(`[信使] ${r}`)
+        return
+      }
+      case 'waypoint': {
+        // 传送点簿：查 / 记 <名字>（站的地方=安全落点）/ 删 <个人序号>
+        const sub = cmd.args[0] ?? ''
+        if (sub === '记' || sub === 'add' || sub === '记录') {
+          const name = cmd.args.slice(1).join(' ').trim()
+          const pos = await playerPos(subject)
+          if (!pos) { reply(`[信使] 没探到你脚下——人在线才能记点。`); return }
+          const wp = waypoints.add(subject, name || `藏宝点${waypoints.personal(subject).length + 1}`, pos.x, pos.y, pos.z)
+          if (!wp) { reply(`[信使] 你的传送点满了（上限 10 个）——先 /cli 传送点 删 <序号> 腾位置。`); return }
+          const idx = waypoints.allFor(subject).findIndex((w) => w === wp) + 1
+          worlddb.chronicleRecord('cast', subject, { skill: 'waypoint-add', name: wp.name, pos: `${pos.x},${pos.y},${pos.z}` })
+          reply(`[信使] 已记下——第 ${idx} 项「${wp.name}」（${pos.x}, ${pos.z}）。说 ${idx} 或翻命格书传送阵页即达。`)
+          return
+        }
+        if (sub === '删' || sub === 'del' || sub === 'remove') {
+          const n = parseInt(cmd.args[1] ?? '', 10)
+          const rm = waypoints.remove(subject, Number.isFinite(n) ? n : 0)
+          if (!rm) { reply(`[信使] 没有可删的第 ${cmd.args[1] ?? '?'} 项（只能删自己的点）。`); return }
+          reply(`[信使] 已抹去「${rm.name}」。`)
+          return
+        }
+        const list = waypoints.allFor(subject)
+        const sharedN = waypoints.sharedPoints().length
+        replyLines([
+          `[信使] 传送点簿（${list.length} 项，前 ${sharedN} 项公共）：`,
+          ...list.map((w, i) => `  ${i + 1}. ${w.name}（${Math.round(w.x)}, ${Math.round(w.z)}）${i < sharedN ? ' §7[公共]' : ''}`),
+          `§7 记新点：/cli 传送点 记 <名字>；删自己的：/cli 传送点 删 <个人序号>。`,
+        ])
         return
       }
       case 'pray': {
@@ -3723,6 +3814,28 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         return
       }
+      // 数字传送（2026-08-29 造物主设计「1234 输数字就传」）：公屏纯数字/中文数字
+      // （1-99、二、十二…）→ 按传送点序号传送（与命格书传送阵页同序）。语音输入
+      // 说出「2」「二」也能带出来——萌萌零打字通道。不在列表范围=当普通消息放行。
+      {
+        const nMsg = message.trim()
+        if (/^[0-9]{1,2}$/.test(nMsg) || /^[一二两三四五六七八九十]{1,3}$/.test(nMsg)) {
+          const n = zhNumberToArabic(nMsg)
+          const wp = n !== null ? waypoints.byIndex(username, n) : null
+          if (wp) {
+            const now = Date.now()
+            if (now - (lastTp.get(username) ?? 0) >= 3000) {
+              lastTp.set(username, now)
+              tpWaypoint(username, wp)
+                .then((r) => { try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ } })
+                .catch(() => { /* */ })
+              log(`number-tp ${username} -> ${n}:${wp.name}`)
+            }
+            return // 命中（含冷却中）都拦截，不再走 VIP/chat
+          }
+          // 没命中 = 普通消息，放行
+        }
+      }
       if (config.vipListen.includes(username.toLowerCase())) {
         handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
@@ -3866,6 +3979,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         log(`cli cmd from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${cliCmd.raw.slice(0, 60)}`)
         await handleCli(OWNER, username, cliCmd, isGuardian)
         return
+      }
+      // 数字传送（私聊通道）：对女神说「2」=公屏说 2（VIP 语音常走私聊语义）。
+      const nMsg = message.trim()
+      if (/^[0-9]{1,2}$/.test(nMsg) || /^[一二两三四五六七八九十]{1,3}$/.test(nMsg)) {
+        const handled = await handleNumberTeleport(OWNER, nMsg)
+        if (handled) return
       }
       if (isCliCommand(message)) {
         const lines = cliOverview()

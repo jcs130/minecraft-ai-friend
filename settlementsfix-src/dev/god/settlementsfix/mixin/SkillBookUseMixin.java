@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.Filterable;
 import net.minecraft.world.InteractionHand;
@@ -249,6 +250,40 @@ public class SkillBookUseMixin {
                     pages.add(Filterable.passThrough(Component.literal("§7尚未习得任何法术。\n\n§8向书商购卷，或求女神开蒙。§r")));
                 }
 
+                // 传送阵页（2026-08-29 造物主设计「设置传送点+说数字就传」）：shared 前
+                // + personal 后，行序 = 公屏数字序号（同一份 waypoints.json，序号铁律）。
+                // 每行点击传送；页尾【记住这里】把脚下记为个人点（自动名「藏宝点N」）。
+                try {
+                    String wpPath = System.getProperty("settlementsfix.waypointsFile", "/mcdata/waypoints.json");
+                    JsonObject wroot = JsonParser.parseReader(Files.newBufferedReader(Path.of(wpPath), StandardCharsets.UTF_8)).getAsJsonObject();
+                    JsonArray shared = wroot.has("shared") ? wroot.getAsJsonArray("shared") : new JsonArray();
+                    JsonObject wpPlayers = wroot.has("players") ? wroot.getAsJsonObject("players") : new JsonObject();
+                    JsonArray personal = (wpPlayers.has(name) && wpPlayers.get(name).isJsonArray())
+                            ? wpPlayers.getAsJsonArray(name) : new JsonArray();
+                    if (shared.size() + personal.size() > 0) {
+                        MutableComponent tp = Component.empty()
+                                .append(Component.literal("§d—— 传送阵 ——§r\n§8点行即达，或公屏说数字§r\n"));
+                        int[] idx = { 0 };
+                        for (JsonArray arr : new JsonArray[]{ shared, personal }) {
+                            for (JsonElement wel : arr) {
+                                JsonObject w = wel.getAsJsonObject();
+                                idx[0]++;
+                                String wn = optStr(w, "name", "?");
+                                String label = String.format("§b【%d】§f%s§r", idx[0], wn);
+                                tp = tp.append(Component.literal("\n" + label)
+                                        .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                                ClickEvent.Action.RUN_COMMAND, "/mycli 传送去 " + idx[0]))));
+                            }
+                        }
+                        tp = tp.append(Component.literal("\n\n§a【记住这里】§r§8脚下记为传送点§r")
+                                .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                        ClickEvent.Action.RUN_COMMAND, "/mycli 传送点 记 藏宝点"))));
+                        pages.add(Filterable.passThrough(tp));
+                    }
+                } catch (Exception ignore) {
+                    // waypoints.json 缺失/损坏 → 不出传送页（技能页不受影响）
+                }
+
                 // 被动天赋页
                 StringBuilder pb = new StringBuilder();
                 pb.append("§8—— 身负异禀 ——§r\n");
@@ -262,7 +297,7 @@ public class SkillBookUseMixin {
                 pages.add(Filterable.passThrough(Component.literal(pb.toString())));
             }
             pages.add(Filterable.passThrough(Component.literal(
-                    "§8§o神谕：翻到法术页点击即施法；\n技能书拿在手上右键也施法。§r")));
+                    "§8§o神谕：法术页点击即施法；技能书右键也施法；传送阵点行即达，或公屏说数字。§r")));
         } catch (Exception e) {
             GODFIX.warn("[book] status regenerate failed: {}", e.toString());
             pages.clear();
