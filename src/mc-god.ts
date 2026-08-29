@@ -899,6 +899,55 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       log(`statusbook given to ${username}`)
     }
   }
+
+  // ── 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）──────────────────
+  // ✦ 徽记 enchanted_book = 右键施法书（numen_act SkillBookHandler 监听
+  // PlayerInteractEvent.RightClickItem → 私语 /cli cast <书名去徽记> → 女神
+  // cast 链校验等级/魔力/冷却）。等级不够的书右键会收「等级不足」反馈——低门槛
+  // 书马上能放，高门槛书是成长目标，这正是设计。
+  const SKILLBOOKS_GIVEN = process.env.SKILLBOOKS_GIVEN || `${DATA_DIR}/skillbooks-given.json`
+  const ATTACK_BOOK_GIFT: Array<{ to: string; books: string[] }> = [
+    // 萌萌（重点看护/手柄/不识字）：点书即施法，零打字零咒语。先 4 本攻击术。
+    { to: 'MengMeng', books: ['风爆术', '螺旋丸', '雷暴术', '陨石术'] },
+  ]
+  let skillBooksGiven = new Set<string>()
+  try {
+    if (existsSync(SKILLBOOKS_GIVEN)) {
+      for (const n of JSON.parse(readFileSync(SKILLBOOKS_GIVEN, 'utf-8'))) skillBooksGiven.add(String(n))
+    }
+  } catch { /* 首次运行 */ }
+  function persistSkillBooksGiven(): void {
+    try {
+      writeFileSync(SKILLBOOKS_GIVEN, JSON.stringify([...skillBooksGiven], null, 1), 'utf-8')
+    } catch (err) {
+      log(`persist skillbooks-given failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  function skillBookItem(name: string): string {
+    // custom_name SNBT：金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
+    return `enchanted_book[custom_name={text:"✦ ${name}",color:"gold",italic:false}]`
+  }
+  /** 上线送攻击技能书包（名单内玩家，每进程一份，give 成功才记名单）。 */
+  async function ensureSkillBooks(username: string): Promise<void> {
+    const gift = ATTACK_BOOK_GIFT.find((g) => g.to === username)
+    if (!gift || skillBooksGiven.has(username)) return
+    let allOk = true
+    for (const name of gift.books) {
+      const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch((err: unknown) => {
+        log(`skillbook give failed for ${username} ${name}: ${err instanceof Error ? err.message : String(err)}`)
+        return ''
+      })
+      if (!r || !/gave|已给予|Given/i.test(r)) allOk = false
+    }
+    if (allOk) {
+      skillBooksGiven.add(username)
+      persistSkillBooksGiven()
+      log(`attack skillbooks given to ${username}: ${gift.books.join('、')}`)
+      // 天音一句（萌萌不识字，靠听）：语音通道由面板播报/天音术承担，此处私语文字留档。
+      rcon.send(`tellraw ${username} {"text":"✦ 收到攻击法术书×4（风爆/螺旋丸/雷暴/陨石）：拿在手里按右键就能放！等级不够的书会提示，练级后再试。","color":"gold"}`).catch(() => {})
+    }
+  }
+
   let statusTail = 0
   let statusSeen = new Set<string>()
   try {
@@ -3108,6 +3157,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
+      // 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）：✦徽记书右键即施法，
+      // 上线送一份、名单持久化防重发。先萌萌（重点看护/手柄/不识字——点书即施法是
+      // 她的正道），跑顺再扩全员。
+      ensureSkillBooks(username).catch((err) => log(`ensureSkillBooks error: ${err instanceof Error ? err.message : String(err)}`))
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
