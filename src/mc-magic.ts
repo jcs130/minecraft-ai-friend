@@ -1593,8 +1593,12 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     // 火球术方向（2026-08-23 造物主反馈「萌萌语音火球没反应」→ 界中本无此术，现补齐）：
     // 命令含 {vx}/{vy}/{vz} 时，按施法者视线（yaw/pitch）算发射向量。占位符以字符串传入
     // （renderCommand 对 number 会 Math.round，会抹掉小数向量，字符串原样保留）。
+    // 2026-08-29 慢弹档 {wx}/{wy}/{wz}（×0.15）：风弹类（螺旋丸 breeze_wind_charge）
+    // 用 1.6 档会一帧飞出 100+ 格（实测 0.6s 位移 101 格）——肉眼只见「消失」不见「飞行」；
+    // 0.15 档 ≈ 25 格/s，弹道清晰可追（造物主实测反馈「没有向前飞」即此）。
     let vx = '0.00', vy = '0.00', vz = '0.00'
-    if (atom.commands.some((c) => c.includes('{vx}'))) {
+    let wx = '0.15', wy = '0.00', wz = '0.15'
+    if (atom.commands.some((c) => c.includes('{vx}') || c.includes('{wx}'))) {
       const ent = bot.players[username]?.entity
       const speed = 1.6
       let dx = 1, dy = 0, dz = 0
@@ -1608,10 +1612,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       vx = (dx * speed).toFixed(2)
       vy = (dy * speed).toFixed(2)
       vz = (dz * speed).toFixed(2)
+      wx = (dx * 0.15).toFixed(3)
+      wy = (dy * 0.15).toFixed(3)
+      wz = (dz * 0.15).toFixed(3)
     }
 
     const vars: Record<string, number | string> = {
-      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, vx, vy, vz,
+      target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, vx, vy, vz, wx, wy, wz,
+      // pyh = 头部高度（弹体生成位，字符串保留小数防 renderCommand Math.round 抹平）
+      pyh: `${py + 1.4}`,
     }
 
     // 通灵契约（2026-08-18）：命令含 {puuid} 或带 ownLimit 时，取施法者 UUID（I;a,b,c,d 格式）
@@ -1788,6 +1797,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
     const vars: Record<string, number | string> = {
       target: username, bx, by, bz, px, py, pz, tx, ty, tz, item, count, distance, direction: dirName,
+      pyh: `${py + 1.4}`, // 头部高度（弹体生成位；字符串保小数）
     }
     // 通灵契约：神迹代施同样支持 {puuid}（契约兽归属受赐者）+ ownLimit 防重赐
     if (atom.commands.some((c) => c.includes('{puuid}')) || atom.ownLimit) {
