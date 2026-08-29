@@ -540,7 +540,7 @@ const PAGE = `<!doctype html>
   .side-tab { flex:1 1 0; padding:7px 0 6px; text-align:center; font-family:var(--serif); font-size:13px; letter-spacing:4px; color:var(--dim); border:1px solid var(--line); border-radius:8px; background:transparent; cursor:pointer; transition:all .15s; }
   .side-tab:hover { color:var(--text); }
   .side-tab.on { color:var(--gold); border-color:rgba(238,181,68,.55); background:#1c1a10; box-shadow:0 0 10px rgba(238,181,68,.15); }
-  .side-sec { display:none; flex-direction:column; gap:12px; }
+  .side-sec { display:none; flex-direction:column; gap:12px;; overflow-y:auto; scrollbar-width:thin; }
   .side-sec.on { display:flex; }
   canvas#map { width:100%; aspect-ratio:1/1; background:#0c1122; border:1px solid var(--line); border-radius:8px; cursor:grab; }
   .legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:11px; color:var(--dim); }
@@ -2145,7 +2145,7 @@ function initSideTabs() {
   if (!side || side.dataset.tabbed) return;
   side.dataset.tabbed = '1';
   const defs = [
-    { id: 'beings', label: '众生', h2s: ['状态', '技能与被动', '修为榜', '背包'] },
+    { id: 'beings', label: '众生', h2s: ['状态', '背包', '技能与被动', '修为榜'] },
     { id: 'village', label: '村务', h2s: ['任务板', '村民动态', '编年史'] },
     { id: 'world', label: '世界', h2s: ['小地图'] },
   ];
@@ -2163,12 +2163,15 @@ function initSideTabs() {
     sec.className = 'side-sec'; sec.id = 'side-sec-' + d.id;
     side.insertBefore(sec, anchor); // 先占位，下面把卡搬进来
   }
-  // 卡片按 h2 标题归位到各页
-  for (const card of [...side.querySelectorAll(':scope > .card')]) {
-    const h = card.querySelector('h2'); if (!h) continue;
-    const title = (h.textContent || '').trim();
-    const d = defs.find((x) => x.h2s.includes(title));
-    if (d) document.getElementById('side-sec-' + d.id).appendChild(card);
+  // 卡片按 h2 标题归位到各页（2026-08-29：组内按 h2s 声明序重排——状态→背包→修为榜。
+  // 此前按文档序，修为榜（名单+技艺谱，很高）把背包卡顶出「满高」视口，造物主看不到行囊）
+  for (const d of defs) {
+    for (const title of d.h2s) {
+      for (const card of [...side.querySelectorAll(':scope > .card')]) {
+        const h = card.querySelector('h2'); if (!h) continue;
+        if ((h.textContent || '').trim() === title) { document.getElementById('side-sec-' + d.id).appendChild(card); break }
+      }
+    }
   }
   // group-head 题字撤下（页签取代）
   side.querySelectorAll(':scope > .group-head').forEach((e) => e.remove());
