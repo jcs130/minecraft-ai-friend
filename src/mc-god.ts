@@ -987,12 +987,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (!inv || inv.includes('No player was found')) return // 离线/查询失败：下轮再试
       const owned = new Set<string>()
       for (const m of inv.matchAll(/✦ ([^"\\]+)/g)) owned.add(m[1].trim())
-      for (const id of ms.learned) {
-        const atom = magic.getAtomById(id)
-        if (!atom || owned.has(atom.name)) continue
-        const r = await rcon.send(`give ${username} ${skillBookItem(atom.name)} 1`).catch(() => '')
+      // 补书范围 = learned 已习法术 ∪ 自己的攻击书礼包名单（书丢了/没到都能自动回，
+      // owned 检查天然防重复——名单挡重发的职能由背包实测取代）。
+      const giftNames = ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? []
+      for (const name of [...new Set([...ms.learned.map((id) => magic.getAtomById(id)?.name ?? id), ...giftNames])]) {
+        if (owned.has(name)) continue
+        const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
         if (r && /gave|已给予|Given/i.test(r)) {
-          log(`learned skillbook given to ${username}: ✦ ${atom.name}（学会即得书）`)
+          log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
         }
       }
     } catch (err) {
@@ -3527,6 +3529,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 上线送一份、名单持久化防重发。先萌萌（重点看护/手柄/不识字——点书即施法是
       // 她的正道），跑顺再扩全员。
       ensureSkillBooks(username).catch((err) => log(`ensureSkillBooks error: ${err instanceof Error ? err.message : String(err)}`))
+      // 学会即得书（2026-08-29 造物主令「放点背包里的技能书」）：上线瞬间即查
+      // learned vs 背包 ✦书，缺的秒补——不等 60s sweep（萌萌等过一轮空手，不再等）。
+      setTimeout(() => {
+        ensureLearnedBooks(username).catch((err) => log(`ensureLearnedBooks(join) error: ${err instanceof Error ? err.message : String(err)}`))
+      }, 5_000)
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
