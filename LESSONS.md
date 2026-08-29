@@ -164,3 +164,17 @@
 8. **v2 只补 vanilla 零经验区**：采集（砍树/普通挖石/建造）原版零经验，守卫日常任务大头正在此——折算 `minecraft:mined`：原木/木类 1xp、含 ore 3xp、石类不折（量太大会灌水）。天然无双份。
 9. **stats json 盘面滞后 ≤5 分钟**（MC 定期 flush，非实时）——折算补偿延迟可接受；测试时要等 flush 或真等 5 分钟，别被旧盘面骗。
   ## 2026-08-29 快慢双系统落地 + 守卫桥暴死三天教训 - **快系统(反射层)落地 guard_drive.py**:亲卫 30s 一轮 LLM 决策是慢系统,贴脸怪/断粮/濒死等不及过脑子。参照 MindCraft self-preservation reflexes 加 reflex_loop:5s 心跳独立线程+独立 Rcon(防与主循环串包),三条规则零 LLM——R1 贴脸敌 attack nearby(12s 节流)/R2 饥饿≤8 食物链探测进食(90s 节流,吃「没有」就试下一种)/R3 HP≤8 强吃+HP≤4 无粮念归乡(走 chant-requests.jsonl 文件通道,不走 RCON)。反射动作 feed_append(kind=reflex) 入亲卫上下文,慢系统自然感知。 - **坑:守卫桥暴死三天无人知**:guard_drive.py 裸 python 进程,8-26 01:28 死后无看门狗,桐人鸣人三天无人驾驶(鸣人饿到归零的真因)。治本:Windows 计划任务 guard_drive_watchdog 每 5min 幂等跑 start_guard_drive.py(已在跑则跳过)。教训:**常驻 sidecar 必须配看门狗,启动器幂等是前提**。 - **坑:亲卫 403 的真因是 agent 被 disabled**:QwenPaw console 403 = agents.profiles.<id>.enabled=False(C:\Users\lzl19\.copaw\config.json)。CLI 无 enable 命令,直接改 config.json 即可,AgentConfigWatcher 会自动重建 agent(约 1 分钟内生效,无需重启 QwenPaw)。排查顺序:403 先查 list_agents 的 enabled 状态,再怀疑别的。 - **慢系统恢复特征**:亲卫轮恢复后日志直接从 R1 重新计数(会话持久,轮号重开),鸣人第一轮就自己吃面包回饱食——桥死期间身体状态正常、决策断供,恢复即接管。 
+## 2026-08-29 9090 背包看不见 + 鸣人无武器
+- **背包功能一直在,坏的是可见性**:/api/inspect(RCON 实查→SNBT 解析→invgrid)全链路正常(curl 实测 16 物品全出);根因=initSideTabs 页签组内按文档序排卡,高修为榜卡把背包卡顶出「满高不滚」视口。修法:组内按 h2s 声明序重排(状态→背包)+ .side-sec 加 overflow-y:auto 兜底。教训:**UI「满高不滚」布局里,卡片顺序=可见性,后加的卡必须显式排位**。
+- **numen craft 工具是坏的**:invoke craft 任意参数(recipe/item/result)全 NPE(String.indexOf on null),插件级 bug 待修;守卫武器链暂时只能靠给。equip_item/inspect_gui 正常(inspect_gui 无参=查自己背包 GUI)。
+- **守卫装备盘点**:桐人有铁剑(damage 150 快坏)+34 铁锭;鸣人零武器(38 原木 16 熟牛肉 44 火把)。已赐鸣人石剑+皮帽并 equip。
+- **curl 管道里的中文比对在 Windows GBK stdout 会假阴性**:python -c 内比对中文后经 TextIOWrapper(gbk) 输出会 UnicodeEncodeError/失真——落文件再 io.open(utf-8) 比对才可靠。
+
+## 2026-08-29 工程稳定性体系化(造物主问责后立)
+- **根因模式承认**:近期所有大 bug(桥死三天/背包不可见/craft NPE/成就空目录/账本全瘫)无一主动发现,全是造物主使用时撞见——缺的不是修 bug 的能力,是「主动发现」的机制:无健康基线、无看门狗、无冒烟。
+- **健康巡检器落地 ops/health/health_mon.py**:纯标准库单文件,一轮探活 20+ 项(HTTP x4/容器 x5/守卫桥进程+日志新鲜度/天眼实体快照新鲜度/RCON+守卫在线+HP饥饿/亲卫 agent enabled/panel 冒烟),红灯落 alerts.jsonl,status.json 存快照。--auto 模式自动恢复(带 30min 冷却),--report 出 24h 警报日报。
+- **双调度挂好**:schtasks mc_health_watchdog 每 5min --auto(自动拉活);copaw cron 99ac6bdc 每天 9/21 点喂创世天神日报(天神主动消化,红灯主动修)。
+- **Definition of Done 三件套写入 AGENTS.md**:健康探针+看门狗+冒烟断言,缺一不算上线。
+- **首轮巡检即抓真问题**:viewer-3050 半死(HTTP 强关,回退通道记黄待修);Kirito hp9/food6 黄灯与反射层实时闭环(巡检发现→反射层已自动进食饥饿 6→12)——体系第一天就证明价值。
+- **坑再犯+1**:cmd 内联 python(引号嵌套中文)转义黑洞又踩(AssertError),一律落 .py 文件;Windows GBK 管道中文比对假阴性,落文件 utf-8 比对。
+- **Source RCON 简版实现坑**:响应包须按 request-id 匹配循环读,连读两个包会等到超时(探针假红);探针 URL 要选真 endpoint(gateway 根路径 404 是常态不是病)。
