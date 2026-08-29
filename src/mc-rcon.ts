@@ -83,16 +83,21 @@ export function createRcon(config: Config): RconHandle {
 
   const service: RconService = {
     send: async (cmd) => {
+      const attempt = async () => (await ensure()).send(cmd)
       try {
-        return (await ensure()).send(cmd)
+        return await attempt()
       } catch (e) {
-        // 保守重试：仅当「连接本来就没建立/已明确断开（命令根本没发出去）」时重建一次。
-        // 不重试 timed out / closed —— 那些命令可能已被服务器执行，双发会重复给物/广播。
+        // 保守重试：仅当「连接本来就没建立/命令根本没发出去」时重建一次。
+        // 不重试 timed out —— 那条命令可能已被服务器执行，双发会重复给物/广播。
+        // 2026-08-29 扩大安全面：rcon closed / socket closed 同属「没发出去」（socket 已关，
+        // 服务器不可能收到），重试无双发风险——此前只认 not connected，cli status 的
+        // statusbook/xp-comp sweep 在断连窗口里直接抛『rcon closed』失败（cli 间歇性
+        // 哑火的第二层根因）。
         const msg = e instanceof Error ? e.message : String(e)
-        if (/rcon not connected/i.test(msg)) {
+        if (/rcon not connected|rcon closed|socket is closed|ECONNABORTED|ECONNRESET/i.test(msg)) {
           rcon?.close()
           rcon = null
-          return (await ensure()).send(cmd)
+          return await attempt()
         }
         throw e
       }
