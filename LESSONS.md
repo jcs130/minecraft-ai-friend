@@ -1,3 +1,12 @@
+## 2026-08-29 遗迹开箱摸书 + 公共军械库(RCON item replace 大坑)
+
+- **1.21.1 无 `replaceitem` 命令**(1.16 老命令,报 Unknown or incomplete)。塞容器用 `item replace block <x y z> container.<N> with <item> [count]`,成功回执=「Replaced a slot at ... with [物品名]」。
+- **RCON 批量操作的成功断言必须匹配正向回执**(「Replaced a slot」),不能 `Replaced|Failed|error` 这种泛匹配——「Unknown or incomplete command, see below for error」尾部的 **error 一词会命中泛正则**,46 条全失败被统计成「replaced count: 46」,军械库首塞全军覆没而日志全绿。中性强词(Replaced/Failed)两头下注也是坑,失败回执里就含成功样式的词。
+- **双箱(double chest)数据层仍是两个独立 BlockEntity**(菜单层合并):分箱 `item replace` 各自 container.N 独立;`data get block Items` 也分箱读。但 NeoForge PlayerContainerEvent.Open 拿到的 ChestMenu.getContainer() 是 Composite(非 BlockEntity)——LootInjector v1 因此跳过 double chest。
+- **RCON python 直连**:RCON 协议 login(type3)+command(type2),包体 little-endian len+rid+type+payload+2×null;读响应要循环 recv 到 len(单次 recv 会短读)。避开 shell 引号转义地狱(PS/cmd/sh 三层剥引号各不相同,复杂 NBT/SNBT 一律 python socket 直发)。
+- **setInterval 首轮即跑的假象**:vllm/node 的 interval 首次触发在 interval 之后,不会启动即跑——军械库 6h refill 不会在部署后立即清箱(排除一个嫌疑)。
+- **并发 docker exec rcon-cli 会串台**:两个 rcon-cli 并发,一个连接的回执可能串进另一个 stdout(data get 返回了玩家实体 JSON)。RCON 操作一律串行。
+
 ## 2026-08-29 技能书右键施法(✦徽记)+ 萌萌上线礼包
 
 - **架构一行话**:右键书→`PlayerInteractEvent.RightClickItem`(numen_act SkillBookHandler)→以玩家本人身份私语 Goddess `/cli cast <书名去徽记>`→女神 cast 链全量校验——java 侧零旁路,等级/魔力/冷却/模糊咒词全在 TS 侧单点维护。技能书=custom_name 带「✦ 」徽记的 enchanted_book(`getHoverName().getString()` 纯文本前缀识别,普通附魔书零干扰)。
