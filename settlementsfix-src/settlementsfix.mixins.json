@@ -11,7 +11,9 @@
     "BubblePublishGuardMixin",
     "PayloadRegistrarForceOptionalMixin",
     "BetterCombatConfigTaskGateMixin",
-    "SkillChestBootMixin"
+    "SkillChestBootMixin",
+    "BookDropGuardMixin",
+    "BookAutoRestoreMixin"
   ],
   "injectors": {
     "defaultRequire": 1

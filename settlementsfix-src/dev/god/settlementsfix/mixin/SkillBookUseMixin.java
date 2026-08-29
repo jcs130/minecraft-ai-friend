@@ -95,11 +95,16 @@ public class SkillBookUseMixin {
 
             CompoundTag cd = customData(stack);
 
-            // ── ① 命格书：右键=动态重写书页并打开（潜行与否都开） ──
+            // ── ① 命格书：右键=动态重写书页并打开；潜行+右键=开技能面板
+            //    （2026-08-30 造物主谕「操作界面找不到」——书即钥匙，不用另发物品）──
             if (cd.getBoolean("statusbook")) {
                 if (serverSide && player instanceof ServerPlayer sp) {
-                    regenerateStatusBook(sp, stack);
-                    sp.openItemGui(stack, hand);
+                    if (player.isShiftKeyDown()) {
+                        dev.god.settlementsfix.chest.SkillChestCommands.openFor(sp, 0);
+                    } else {
+                        regenerateStatusBook(sp, stack);
+                        sp.openItemGui(stack, hand);
+                    }
                 }
                 cir.setReturnValue(InteractionResultHolder.sidedSuccess(stack, level.isClientSide));
                 return;
@@ -230,7 +235,14 @@ public class SkillBookUseMixin {
                     p1.append("§7天命：§d").append(atomName(atomsPath, innate)).append("§r\n");
                 }
                 p1.append("\n§8—— 已习法术 ——§r");
-                pages.add(Filterable.passThrough(Component.literal(p1.toString())));
+                // 2026-08-30 造物主谕「操作界面找不到」：首页直接给技能面板入口
+                // （点击开宝箱面板，手柄十字键选格子；/skillchest self 人人可跑）。
+                Component page1 = Component.empty()
+                        .append(Component.literal(p1.toString()))
+                        .append(Component.literal("\n\n§e【✦ 打开技能面板】§r§8（点这行）§r")
+                                .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                        ClickEvent.Action.RUN_COMMAND, "/skillchest self"))));
+                pages.add(Filterable.passThrough(page1));
 
                 // 已习法术：每页一个技能，点击整页即施法（2026-08-29 造物主令
                 // 「每页一技，这样就可以施法」——书页 clickEvent run_command /mycli cast，

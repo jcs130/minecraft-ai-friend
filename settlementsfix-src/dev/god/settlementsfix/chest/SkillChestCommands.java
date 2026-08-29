@@ -31,9 +31,14 @@ public final class SkillChestCommands {
 
     private SkillChestCommands() {}
 
-    /** 命令树根（BootMixin 直接注进 Commands 构造器——不依赖事件时序）。 */
+    /** 命令树根（BootMixin 直接注进 Commands 构造器——不依赖事件时序）。
+     * 2026-08-30 权限分层：root 不再整体 requires OP——self 子命令人人可跑
+     * （命格书首页入口点进来的是玩家身份）；open/items 代开他人仍需 OP
+     * （executes 内校验，控制台/RCON 恒放行）；click 仅测试钩子。 */
     public static LiteralArgumentBuilder<CommandSourceStack> root() {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("skillchest").requires(s -> s.hasPermission(2));
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("skillchest");
+        root.then(Commands.literal("self")
+                .executes(ctx -> openSelf(ctx.getSource())));
         root.then(Commands.literal("open")
                 .then(Commands.argument("player", StringArgumentType.word())
                         .executes(ctx -> open(ctx.getSource(), StringArgumentType.getString(ctx, "player"), 0))
@@ -59,8 +64,36 @@ public final class SkillChestCommands {
         return root;
     }
 
+    /** self：玩家给自己开面板（无需 OP；控制台跑报错——控制台用 open <player>）。 */
+    public static int openSelf(CommandSourceStack source) {
+        try {
+            ServerPlayer sp = source.getPlayerOrException();
+            openFor(sp, 0);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("此命令需以玩家身份执行（控制台请用 open <玩家名>）"));
+            return 0;
+        }
+    }
+
+    /** 权限校验：玩家只能开自己；OP/控制台可代开任何人。 */
+    private static boolean mayOpenOther(CommandSourceStack source, String targetName) {
+        try {
+            ServerPlayer sp = source.getPlayer();
+            return sp == null // 控制台/RCON
+                    || sp.hasPermissions(2)
+                    || sp.getGameProfile().getName().equalsIgnoreCase(targetName);
+        } catch (Exception e) {
+            return true; // 无玩家上下文（控制台）
+        }
+    }
+
     /** 开面板主流程。返回 1 成功 / 0 玩家不在线。 */
     public static int open(CommandSourceStack source, String playerName, int page) {
+        if (!mayOpenOther(source, playerName)) {
+            source.sendFailure(Component.literal("只能给自己开面板（skillchest self）"));
+            return 0;
+        }
         ServerPlayer sp = source.getServer().getPlayerList().getPlayerByName(playerName);
         if (sp == null) {
             source.sendFailure(Component.literal("玩家不在线: " + playerName));
@@ -108,6 +141,10 @@ public final class SkillChestCommands {
 
     /** 造物子面板入口。 */
     public static int openItems(CommandSourceStack source, String playerName, int page) {
+        if (!mayOpenOther(source, playerName)) {
+            source.sendFailure(Component.literal("只能给自己开面板（skillchest self）"));
+            return 0;
+        }
         ServerPlayer sp = source.getServer().getPlayerList().getPlayerByName(playerName);
         if (sp == null) {
             source.sendFailure(Component.literal("玩家不在线: " + playerName));
