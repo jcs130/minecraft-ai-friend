@@ -31,3 +31,25 @@
 {"at": "2026-08-29 16:41:02", "ts": 1787992862.7071142, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
 {"at": "2026-08-29 16:46:02", "ts": 1787993162.9246051, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
 {"at": "2026-08-29 16:51:02", "ts": 1787993462.7859974, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:56:02", "ts": 1787993762.7860966, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:01:02", "ts": 1787994062.8211317, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:06:02", "ts": 1787994362.8304632, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:11:02", "ts": 1787994662.8929386, "comp": "modern-3070", "msg": "Remote end closed connection without response"}
+{"at": "2026-08-29 17:11:02", "ts": 1787994662.8929386, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:16:02", "ts": 1787994962.86279, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:21:02", "ts": 1787995262.8224285, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:26:02", "ts": 1787995562.820541, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:31:02", "ts": 1787995862.9350255, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:36:02", "ts": 1787996162.9279895, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:41:02", "ts": 1787996462.7854493, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:46:02", "ts": 1787996762.7393038, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:51:02", "ts": 1787997062.7053065, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:56:02", "ts": 1787997362.656394, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 17:56:02", "ts": 1787997362.656394, "comp": "rcon", "msg": "[WinError 10054] 远程主机强迫关闭了一个现有的连接。"}
+{"at": "2026-08-29 18:01:02", "ts": 1787997662.7237122, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:06:02", "ts": 1787997962.667189, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:11:02", "ts": 1787998262.6736205, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:16:02", "ts": 1787998562.8507848, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:21:02", "ts": 1787998862.644736, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:26:02", "ts": 1787999162.59681, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 18:31:02", "ts": 1787999462.5563617, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}

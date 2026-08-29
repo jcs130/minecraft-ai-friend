@@ -65,8 +65,9 @@ interface Atom {
   school?: string
   /** 契约类法术（2026-08-23）：不走路 RCON commands，改由注入的 specialExecutor 执行。
    *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）、
-   *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）。 */
-  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin'
+   *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）、
+   *  fire_aura=火焰光环（2026-08-29 造物主谕：三颗小火球绕体旋绕，触敌点燃——萌萌专属）。 */
+  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura'
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -1047,7 +1048,7 @@ export interface MagicDeps {
 /** 契约/魂链法术执行器（2026-08-23）：效果不走路 RCON commands，由 mc-god 注入实际落地逻辑
  *  （contract=写 goddess-orders 唤守卫、trace=传送到目标、recall=拉从者到身边）。 */
 export type SpecialExecutor = (
-  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin',
+  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura',
   username: string,
   params: Record<string, number | string>,
   vars: Record<string, number | string>,

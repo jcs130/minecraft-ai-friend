@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "dev.god.settlementsfix.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "VillagerNameMixin",
+    "WrittenBookItemMixin",
+    "SlotMixin",
+    "PayloadRegistrarForceOptionalMixin",
+    "CheckPacketSendGuardMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

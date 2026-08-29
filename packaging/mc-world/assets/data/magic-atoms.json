@@ -1663,6 +1663,37 @@
    ],
    "title": "星尘",
    "subtitle": "星河洒落，此间有光"
+  },
+  {
+   "id": "fire_aura",
+   "layer": "effect",
+   "name": "火焰光环",
+   "words": [
+    "火焰光环",
+    "火环",
+    "炎之环",
+    "三昧真火",
+    "护体火环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "fire_aura",
+   "cost": {
+    "mana": 40,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [],
+   "reply": "三团火苗自你脚下升起，绕着你缓缓旋绕——近身的敌人都将被灼烧！",
+   "particles": [
+    "minecraft:flame {px} {py+1} {pz} 2.2 0.5 2.2 0.01 6"
+   ],
+   "sounds": [
+    "minecraft:block.fire.ambient"
+   ],
+   "title": "火焰光环",
+   "subtitle": "三昧真火，护体灼敌"
   }
  ]
 }

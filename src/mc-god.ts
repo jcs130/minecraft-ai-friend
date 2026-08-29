@@ -907,8 +907,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 书马上能放，高门槛书是成长目标，这正是设计。
   const SKILLBOOKS_GIVEN = process.env.SKILLBOOKS_GIVEN || `${DATA_DIR}/skillbooks-given.json`
   const ATTACK_BOOK_GIFT: Array<{ to: string; books: string[] }> = [
-    // 萌萌（重点看护/手柄/不识字）：点书即施法，零打字零咒语。先 4 本攻击术。
-    { to: 'MengMeng', books: ['风爆术', '螺旋丸', '雷暴术', '陨石术'] },
+    // 萌萌（重点看护/手柄/不识字）：点书即施法，零打字零咒语。4 攻击术 + 专属火焰光环。
+    { to: 'MengMeng', books: ['风爆术', '螺旋丸', '雷暴术', '陨石术', '火焰光环'] },
   ]
   let skillBooksGiven = new Set<string>()
   try {
@@ -947,6 +947,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const lvMap: Record<string, { lv: number; mana: number }> = {
       '风爆术': { lv: 1, mana: 15 }, '螺旋丸': { lv: 8, mana: 30 },
       '雷暴术': { lv: 12, mana: 50 }, '陨石术': { lv: 25, mana: 80 },
+      '火焰光环': { lv: 1, mana: 40 },
     }
     let allOk = true
     for (const name of gift.books) {
@@ -1445,12 +1446,82 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     return GUARD_NAMES.includes(k) || GUARD_LOGIN_SET.has(k)
   }
 
+  // ── 火焰光环引擎（2026-08-29 造物主谕：三颗小火球绕体旋绕，触敌点燃——萌萌专属）──
+  // 常驻 Map + 400ms tick：每 tick 取施术者坐标、角度推进、3 球粒子刷新（small_flame
+  // 粒子自滞留 ~0.5s，400ms 刷新视觉连续）；隔 tick 碰撞（800ms）：球心 1.4 格内敌对
+  // 点燃（Fire:100≈5s 燃烧，燃烧自带 on_fire 伤害）。90s 自然熄灭；离线连续 3 tick
+  // 失联即散。单服同时最多 3 道光环（RCON 吞吐护栏：每道 ~9 cmd/s）。
+  interface FireAura { login: string; until: number; angle: number; px: number; py: number; pz: number; lastHit: boolean; misses: number }
+  const fireAuras = new Map<string, FireAura>()
+  let fireAuraTimer: ReturnType<typeof setInterval> | null = null
+  const FIRE_AURA_ALLOW = new Set(['MengMeng', 'Kirito']) // Kirito=技能测试位（2026-08-29 验证后撤）
+  const FIRE_AURA_DURATION_MS = 90_000
+  const FIRE_AURA_MAX = 3
+  const FIRE_AURA_DAMAGE_TYPES = 'type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:armor_stand,type=!minecraft:villager,type=!minecraft:iron_golem'
+  function fireAuraTick(): void {
+    const now = Date.now()
+    for (const [login, aura] of fireAuras) {
+      if (now > aura.until) {
+        fireAuras.delete(login)
+        rcon.send(`tellraw ${login} {"text":"✦ 火焰光环缓缓熄灭了","color":"gold"}`).catch(() => {})
+        log(`fire_aura expired for ${login}`)
+        continue
+      }
+      // 视觉帧：粒子三球（先发粒子再取坐标会用到旧坐标——先定位）
+      rcon.send(`data get entity ${login} Pos`).then((raw) => {
+        const nums = String(raw).match(/-?\d+(?:\.\d+)?/g)
+        if (!nums || nums.length < 3) {
+          if (++aura.misses >= 3) {
+            fireAuras.delete(login)
+            log(`fire_aura lost ${login} (3 misses)`)
+          }
+          return
+        }
+        aura.misses = 0
+        aura.px = Number(nums[0]); aura.py = Number(nums[1]); aura.pz = Number(nums[2])
+        aura.angle = (aura.angle + 16.36) % 360 // 400ms·16.36° ≈ 2.45s 一圈
+        const hit = aura.lastHit = !aura.lastHit // 碰撞隔帧：800ms
+        for (let k = 0; k < 3; k++) {
+          const rad = ((aura.angle + k * 120) * Math.PI) / 180
+          const bx = aura.px + 2.2 * Math.cos(rad)
+          const bz = aura.pz + 2.2 * Math.sin(rad)
+          const by = aura.py + 1.25
+          rcon.send(`particle minecraft:small_flame ${bx.toFixed(2)} ${by.toFixed(2)} ${bz.toFixed(2)} 0.04 0.04 0.04 0.001 3`).catch(() => {})
+          if (hit) {
+            rcon.send(`execute positioned ${bx.toFixed(2)} ${by.toFixed(2)} ${bz.toFixed(2)} run data merge entity @e[distance=..1.4,${FIRE_AURA_DAMAGE_TYPES}] {Fire:100}`).catch(() => {})
+          }
+        }
+      }).catch(() => {
+        if (++aura.misses >= 3) { fireAuras.delete(login); log(`fire_aura lost ${login} (rcon err)`) }
+      })
+    }
+    if (fireAuras.size === 0 && fireAuraTimer) {
+      clearInterval(fireAuraTimer); fireAuraTimer = null
+      log('fire_aura engine idle-stopped')
+    }
+  }
+  function startFireAura(login: string, display: string): { ok: boolean; reply: string } {
+    const existing = fireAuras.get(login)
+    if (existing) {
+      existing.until = Date.now() + FIRE_AURA_DURATION_MS
+      return { ok: true, reply: '火焰光环仍在你身边旋绕——火焰更旺了些（时长已续满）。' }
+    }
+    if (fireAuras.size >= FIRE_AURA_MAX) return { ok: false, reply: '此界火气有限，三道光环已是极限——稍候再燃。' }
+    fireAuras.set(login, { login, until: Date.now() + FIRE_AURA_DURATION_MS, angle: 0, px: 0, py: 0, pz: 0, lastHit: false, misses: 0 })
+    if (!fireAuraTimer) {
+      fireAuraTimer = setInterval(fireAuraTick, 400)
+      log(`fire_aura engine started for ${login}`)
+    }
+    worlddb.chronicleRecord('cast', login, { skill: 'fire_aura', via: 'special', for: display })
+    return { ok: true, reply: '三团火苗自你脚下升起，绕着你缓缓旋绕——近身的敌人都将被灼烧！' }
+  }
+
   // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
   // special 原子的效果不走 RCON commands，由这里落地。与召唤术同哲学——不强制 tp 守卫：
   // contract/recall 写 goddess-orders（守卫桥/亲卫自主到场/返程）；trace 是施法者自己去目标身边，
   // 走直接 tp。失败返回 { ok:false }，cast() 据此不扣资源、不白烧魔力/血祭。
   async function execSpecial(
-    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin',
+    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura',
     username: string,
     params: Record<string, number | string>,
     _vars: Record<string, number | string>,
@@ -1571,6 +1642,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         log('kage_bunshin auto-dismiss Kage1/Kage2 after 90s')
       }, 90_000)
       return { ok: true, reply: '影分身之术·成——两身随你而动，见敌即战！分身受创则白烟归体，忍道不灭。' }
+    }
+    if (special === 'fire_aura') {
+      // 火焰光环（2026-08-29 造物主谕「三颗小火球绕体转圈碰敌点燃，给萌萌装上」）：
+      // 萌萌专属（Kirito 为技能测试位，验证后撤）——他人咏唱婉拒。
+      const login = resolveLogin(username)
+      if (!FIRE_AURA_ALLOW.has(login)) {
+        return { ok: false, reply: '火焰光环只随「萌萌」而燃——这是天神给她的护身之火。' }
+      }
+      return startFireAura(login, username)
     }
     return { ok: false, reply: '此法术未通。' }
   }

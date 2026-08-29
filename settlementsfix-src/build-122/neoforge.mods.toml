@@ -1,0 +1,19 @@
+modLoader = "javafml"
+loaderVersion = "*"
+license = "MIT"
+
+[[mods]]
+modId = "settlementsfix"
+version = "1.2.2"
+displayName = "Settlements Bubble + Name Fix + Vanilla Gate"
+description = "Bubble crash loop fix + Chinese nametags + force-optional payloads so vanilla/bedrock clients (Geyser) can negotiate with the NeoForge server instead of being kicked with 'Incompatible client'."
+
+[[dependencies.settlementsfix]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21, 1.21.1]"
+ordering = "NONE"
+side = "BOTH"
+
+[[mixins]]
+config = "settlementsfix.mixins.json"
