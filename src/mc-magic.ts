@@ -760,6 +760,8 @@ async function nearestSafeTeleport(bot: Bot, vars: Record<string, number | strin
 }
 
 // ── 命令渲染：{name} 或 {name±offset} 占位符 ───────────────────────────
+/** RCON 命令回执错误识别（2026-08-29 台账真实性）：命中即视为该命令执行失败。 */
+const RCON_CMD_ERR_RE = /Invalid escape|Unknown or incorrect|Incorrect argument|Incorrect.*command|Expected .*but|Failed to execute|no such entity|Could not find|was not found|is not a valid/i
 function renderCommand(cmd: string, vars: Record<string, number | string>): string {
   return cmd.replace(/\{([a-z]+)([+-]\d+)?\}/g, (_m, key: string, off?: string) => {
     const base = vars[key]
@@ -1629,6 +1631,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
           return `「${atom.name}」需要燃烧 ${cost.hp} 点生命，但你只剩 ${Math.round(hp)} 点，强行施展会殒命。`
         }
       }
+      const cmdErrors: string[] = []
       // 校验 + 扣 food（data modify foodLevel）
       if (cost.food > 0) {
         const food = await getEntityNumber(username, 'foodLevel')
@@ -1682,6 +1685,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
           }
           const out = await rcon.send(cmd)
           if (out) log(`rc[${cmd}] -> ${out.trim()}`)
+          // 2026-08-29 台账真实性收紧：RCON 回执含错误关键词 → 记失败（此前 263 次
+          // 影分身「假成功」——SNBT 报 Invalid escape 仍记 success:true，统计数据失真）。
+          if (RCON_CMD_ERR_RE.test(out || '')) cmdErrors.push(`${cmd.slice(0, 60)} => ${(out || '').trim().slice(0, 80)}`)
         }
       }
 
@@ -1718,7 +1724,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         : parts.length > 0 ? `（消耗${parts.join('、')}）` : ''
       log(`cast ${atom.id} by ${username}: ${atom.commands.join('; ')} (mana ${cost.mana}, food ${cost.food}, hp ${cost.hp}, xp +${expGain})`)
       chronicle('cast', username, { skill: atom.id, mana: cost.mana, food: cost.food, hp: cost.hp, xp: expGain, level: levelAfter })
-      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: true })
+      appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: cmdErrors.length === 0, ...(cmdErrors[0] ? { result: `cmd-fail: ${cmdErrors[0]}` } : {}) })
       return `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（你尚未安家——天神将你送回灯门镇中心；睡一张床，归乡便会带你回床边。）' : ''}`
     } catch (err) {
       return `神力连接不上这个世界：${err instanceof Error ? err.message : String(err)}`

@@ -141,3 +141,12 @@
 3. **发书兜底要走 RCON `list`（服务器权威），不能走 bot.players（goddess 的 mineflayer 视角）**：Taro 这类接入 goddess 看不见（旁证 pollWelcome 从未发现过他），bot.players 扫不到 → 一次性补发漏人。60s 周期 sweep（名单幂等，give 成功才记名单）+ join 事件双轨，RCON 瞬断（启动期 `welcome FAILED: rcon closed`）也不再整场漏发。
 4. **statusbook-given.json 是进程启动快照**：运行期外部改文件，进程内存 Set 不感知——测试名单改动必须 restart world 才生效（生产无碍：ensureStatusBook 自己写文件+内存同步）。
 - 验证方法沉淀：临时把测试玩家移出名单 + restart → 60s 内自动补发 → `clear <p> minecraft:written_book[minecraft:custom_data~{statusbook:true}] 1` 精准清测试书。1.21.1 item predicate 语法可用。
+
+## 2026-08-29 午 · 技能体系全面体检（39 atoms 全量审计）
+1. **magic-atoms.json 数据源也可能埋 \uXXXX 字面量**：kage_bunshin 的 commands 在 json 里就写死了 `\u5f71\u5206\u8eab`（生成时转义串原样入库）——修传输层（拆 toAscii）不够，**数据源也要扫**。正则 `\\\\u[0-9a-fA-F]{4}` 全文替换为 chr() 即治；修完 json.loads 验证 atoms 数不变。
+2. **skill-usage 台账「假成功」**：施法命令 RCON 回执（如 Invalid escape sequence）不算异常，旧代码无条件记 success:true——影分身 263 次全记成功但雪傀儡从未落地。修法：`RCON_CMD_ERR_RE`（Invalid escape|Unknown or incorrect|Incorrect argument|Expected|Failed to execute|no such entity…）命中即记 success:false + result。**凡「发了命令就算成功」的台账都要过回执判定**。
+3. **magic-state 孤儿档**：name/ID 铁律（2026-08-23）之前 numen 用中文名注册留下的「桐人/鸣人/爱德华」档 + probe 测试档 + sys_ 档共 15 个，清档（备份 .bak-orphan-clean-*）保 9 现役。**清档后必须 restart shadow-world**——引擎内存 state 随时会 save() 写回覆盖宿主文件。
+4. **status-requests.jsonl（右键手札实时查询）从未产生过**——SkillBookUseMixin 链无人触发（基岩玩家/numen 不走 Java 客户端右键）；链路代码在，不算断,但 Java 真人实测为零。技能书右键施法（settlementsfix 1.4.0）同理。
+5. **puffish 双 mod 已在服**（skills 0.18.3 + attributes 0.8.3）——「三选一」悬案实际已落地；`puffish_skills experience add <p> <cat> <n>` RCON 实测通（initiate 灌顶依赖它）。
+6. 16/39 技零使用（appraise/blood_mana/food_mana/weather_clear/meteor/feather_fall/fire_res/invisibility/storm/steed/guardian/purge/summon_wolf/summon_pack/clarity_glow/will_walk）——高门槛（lv12-25）+没人学是双重死因;澄光/意行是千灯纪主题技,该给灯守配。
+7. title/tellraw 的 JSON.stringify 合法（JSON 认 \uXXXX）——**别把 SNBT 的坑过度推广到 JSON 命令**;两者转义规则不同，SNBT 才是重灾区。
