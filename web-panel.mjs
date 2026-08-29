@@ -2219,6 +2219,18 @@ function ensureMapTerrain(cx, cz, range) {
     .catch(() => { mapTerrain.loading = false; mapTerrain.empty = true; mapTerrain.img = null; drawMap(); });
 }
 
+// 探索者舆图（2026-08-29 造物主谕）：守卫远征登记的发现点，60s 拉一次上图——
+// 地形底图只有女神视野内的一小片，地名点阵是世界级「手绘地图」，两者互补。
+let mapDisc = { at: 0, rows: [] };
+function ensureDiscoveries() {
+  if (Date.now() - mapDisc.at < 60_000) return;
+  mapDisc.at = Date.now();
+  fetch('http://' + location.hostname + ':' + MAP_TILE_PORT + '/api/discoveries')
+    .then((r) => (r.ok ? r.json() : []))
+    .then((rows) => { mapDisc.rows = Array.isArray(rows) ? rows : []; drawMap(); })
+    .catch(() => {});
+}
+
 function drawMap() {
   const canvas = document.getElementById('map');
   if (!canvas) return;
@@ -2331,6 +2343,21 @@ function drawMap() {
     }
   });
 
+  // 发现地（探索者舆图）：青金菱形+地名——守卫走到哪，世界的名字就标到哪
+  ensureDiscoveries();
+  (mapDisc.rows || []).forEach((d) => {
+    const px = sx(d.x), py = sy(d.z);
+    if (px < -14 || py < -14 || px > W + 14 || py > H + 14) return;
+    ctx.save();
+    ctx.translate(px, py); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#39d2c0'; ctx.fillRect(-3.2, -3.2, 6.4, 6.4);
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(57,210,192,.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, 7.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#7de8db'; ctx.font = 'bold 10px sans-serif';
+    ctx.fillText(d.name, px + 9, py - 5);
+  });
+
   // 其他 bot（紫色圆点 / 皮肤头像）
   state.bots.forEach((b) => {
     const bot = b.bot || {};
@@ -2392,6 +2419,7 @@ function drawMap() {
     + '<span><i style="background:#f0883e"></i>NPC</span>'
     + '<span><i style="background:#f85149"></i>怪物</span>'
     + '<span><i style="background:#58a6ff"></i>公共箱</span>'
+    + '<span><i style="background:#39d2c0"></i>发现地</span>'
     + RES_TYPES.map(([k, l, c]) => '<span><i style="background:' + c + '"></i>' + l + '</span>').join('')
     + '<span style="margin-left:auto">范围 ±' + RANGE + ' 格</span>';
 }

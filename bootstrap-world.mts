@@ -360,9 +360,15 @@ async function renderTilePNG(bot: any, cx: number, cz: number, r: number): Promi
   }
   return PNG.sync.write(png)
 }
-function serveMapTiles(getBot: () => any): void {
+function serveMapTiles(getBot: () => any, worlddb?: { discoveryList(): Array<{ id: number; name: string; kind: string; x: number; z: number; found_by: string; ts: number }> }): void {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost')
+    // 探索者舆图（2026-08-29 造物主谕）：发现点地名经纬，供 9090 世界地图上图。
+    if (url.pathname.endsWith('/api/discoveries')) {
+      const rows = worlddb?.discoveryList() ?? []
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }).end(JSON.stringify(rows))
+      return
+    }
     if (!url.pathname.endsWith('/map.png')) { res.writeHead(404).end(); return }
     const cx = Number(url.searchParams.get('cx')), cz = Number(url.searchParams.get('cz'))
     let r = Number(url.searchParams.get('r') ?? 64)
@@ -400,7 +406,7 @@ function serveMapTiles(getBot: () => any): void {
 }
 // 注意：调用必须在 MAP_PORT 等 const 定义之后（TDZ：早于定义调用 serveMapTiles 会
 // ReferenceError，且被 uncaughtException 兜底吞掉=进程活着但服务没起，极难察觉）。
-serveMapTiles(() => bot.getBot())
+serveMapTiles(() => bot.getBot(), worlddb.service)
 
 let shuttingDown = false
 const shutdown = (): void => {
