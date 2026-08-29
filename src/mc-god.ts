@@ -944,6 +944,65 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   setInterval(() => { statusLoop().catch(() => {}) }, 5000)
   // 进程启动即补一轮（服务重启后把重启前积压的请求也回执掉）。
   setTimeout(() => { statusLoop().catch(() => {}) }, 3000)
+  // ── 修为折算器（2026-08-29 造物主令「做任务该涨级」）──────────────────
+  // 根因实测（08-29）：numen 假玩家不吸经验球——execute at 贴脸召 value=30 球，
+  // XpTotal 5s 不动；xp add 命令路径正常。即：numen 杀怪掉的经验球全部蒸发
+  // （Kirito lv44 的 4020 总量几乎全靠施法 xp add 与神迹注入）。加上原版采集
+  // （砍树/挖石）本就零经验 → 守卫「一直做任务不涨级」。
+  // 修法：MC 侧 stats json（compose 只读挂载 /mcstats，UUID 文件名）读
+  // stats["minecraft:custom"]["minecraft:mob_kills"]，Δkills × 5xp → xp add
+  // （XpLevel 是修为唯一真源，升级公告由既有 ΔXpLevel 检测自然触发）。
+  // 1.21 已无 custom criteria scoreboard（Unknown criterion 实测），故走文件。
+  // 真人（自己能吸球）白名单跳过防双份。
+  const NATIVE_XP_PLAYERS = new Set(['MengMeng', 'KangQiang', 'MicroKQ', 'Codex'])
+  const MOBKILL_XP = 5
+  const MC_STATS_DIR = process.env.MC_STATS_DIR || '/mcstats'
+  const XP_SNAP_PATH = resolve(DATA_DIR, 'xp-snapshots.json')
+  let xpSnaps: Record<string, number> = {}
+  try { xpSnaps = JSON.parse(readFileSync(XP_SNAP_PATH, 'utf-8')) as Record<string, number> } catch { /* 首跑立基线 */ }
+  const uuidCache = new Map<string, string>()
+  async function uuidOf(name: string): Promise<string | null> {
+    const hit = uuidCache.get(name)
+    if (hit) return hit
+    const raw = await rcon.send(`data get entity ${name} UUID`).catch(() => '')
+    const m = /\[I;\s*([-\d,\s]+)\]/.exec(raw || '')
+    if (!m) return null
+    const s = m[1].split(',').map((x) => (Number(x.trim()) >>> 0).toString(16).padStart(8, '0')).join('')
+    if (s.length !== 32) return null
+    const uuid = `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
+    uuidCache.set(name, uuid)
+    return uuid
+  }
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_') || NATIVE_XP_PLAYERS.has(name)) continue
+          const uuid = await uuidOf(name)
+          if (!uuid) continue
+          let stat: { stats?: Record<string, Record<string, number>> } = {}
+          try { stat = JSON.parse(readFileSync(resolve(MC_STATS_DIR, `${uuid}.json`), 'utf-8')) as typeof stat } catch { continue }
+          const cur = stat?.stats?.['minecraft:custom']?.['minecraft:mob_kills']
+          if (typeof cur !== 'number') continue
+          const prev = xpSnaps[name]
+          if (prev === undefined) { xpSnaps[name] = cur; continue } // 首见立基线，历史击杀不折
+          if (cur > prev) {
+            const gain = (cur - prev) * MOBKILL_XP
+            xpSnaps[name] = cur
+            await rcon.send(`xp add ${name} ${gain} points`)
+            log(`xp-comp ${name}: kills ${prev}->${cur} => +${gain} xp (numen orb-broken compensation)`)
+          } else if (cur < prev) {
+            xpSnaps[name] = cur // 服务端统计重置（防回绕）
+          }
+        }
+        writeFileSync(XP_SNAP_PATH, JSON.stringify(xpSnaps), 'utf-8')
+      } catch (err) { log(`xp-comp sweep failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 20_000)
+
   // 启动补发：已在线的玩家也发一本（不等下次重登）。
   // 2026-08-29 II（造物主令「所有玩家都该有状态书」核验加固）：一次性 setTimeout 在
   // world 刚启动 RCON 瞬断期（welcome FAILED: rcon closed 同源）会整场漏发 → 改 60s

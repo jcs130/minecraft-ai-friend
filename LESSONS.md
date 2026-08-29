@@ -150,3 +150,10 @@
 5. **puffish 双 mod 已在服**（skills 0.18.3 + attributes 0.8.3）——「三选一」悬案实际已落地；`puffish_skills experience add <p> <cat> <n>` RCON 实测通（initiate 灌顶依赖它）。
 6. 16/39 技零使用（appraise/blood_mana/food_mana/weather_clear/meteor/feather_fall/fire_res/invisibility/storm/steed/guardian/purge/summon_wolf/summon_pack/clarity_glow/will_walk）——高门槛（lv12-25）+没人学是双重死因;澄光/意行是千灯纪主题技,该给灯守配。
 7. title/tellraw 的 JSON.stringify 合法（JSON 认 \uXXXX）——**别把 SNBT 的坑过度推广到 JSON 命令**;两者转义规则不同，SNBT 才是重灾区。
+
+## 2026-08-29 午后 · 修为折算器（numen 经验球蒸发根因）
+1. **numen 假玩家不吸经验球（铁证实验）**：execute at 贴脸召 experience_orb value=30，5s 后 XpTotal 不动；xp add 命令路径正常（+10/-10 实测）。即 numen 杀怪经验全蒸发；Kirito lv44 的 4020 总量全靠施法 xp add/神迹注入，非杀怪。**「做任务不涨级」根因 = 球蒸发 + 原版采集（砍树/挖石）零经验**。
+2. **1.21.1 已无 custom criteria scoreboard**：`scoreboard objectives add x minecraft:custom:minecraft.mob_kills` 报 Unknown criterion（1.20.5 砍掉）——统计走 **stats json**：`<mc>/shadow/stats/<uuid>.json` 的 `stats["minecraft:custom"]["minecraft:mob_kills"]`。UUID 文件名，用 `data get entity <name> UUID` 的 [I;a,b,c,d] 转 hex 拼标准 UUID（`>>>0` 处理负数）。
+3. **stats 跨容器读**：MC 容器 /data=bind 宿主 `ops/docker/shadow/mc`，world 容器 compose 加只读挂载 `./mc/shadow/stats:/mcstats:ro`（仿既有 /mcadv 模式）——**挂载改动须 `docker compose up -d world` recreate，restart 不生效**。
+4. **execute as <player> run kill 不计入 mob_kills**（kill 命令 DamageSource 无 killer 归属）——测试统计折算不能伪造击杀，只能等真实杀怪贯通；但 stat 里已有 numen 真实击杀累计（Naruto 29）证明机制对假玩家有效。
+5. 首见立基线（历史击杀不折）+ delta×5xp/kill + 真人白名单（自己能吸球防双份）+ 20s 周期（RCON 瞬断自愈）。
