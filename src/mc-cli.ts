@@ -23,10 +23,10 @@ export interface CliVerbMeta {
 
 /** 命令树（顺序即 help 展示顺序）。 */
 export const CLI_VERBS: CliVerbMeta[] = [
-  { id: 'commands', aliases: ['command', 'cmd'], summary: '列全部命令', usage: 'commands', json: false },
-  { id: 'help', aliases: ['man', 'h', '?'], summary: '命令帮助（可跟命令名）', usage: 'help [verb]', argDesc: 'verb：要查询的命令', json: false },
-  { id: 'status', aliases: ['me', 'who', 'whoami'], summary: '查自身状态', usage: 'status', json: true },
-  { id: 'skills', aliases: ['known', 'learned'], summary: '列已学/可学技能', usage: 'skills', json: true },
+  { id: 'commands', aliases: ['command', 'cmd', '命令'], summary: '列全部命令', usage: 'commands', json: false },
+  { id: 'help', aliases: ['man', 'h', '?', '帮助'], summary: '命令帮助（可跟命令名）', usage: 'help [verb]', argDesc: 'verb：要查询的命令', json: false },
+  { id: 'status', aliases: ['me', 'who', 'whoami', '状态'], summary: '查自身状态', usage: 'status', json: true },
+  { id: 'skills', aliases: ['known', 'learned', '技能'], summary: '列已学/可学技能', usage: 'skills', json: true },
   { id: 'spells', aliases: ['法术', '魔咒', 'magic'], summary: '列全部法术表', usage: 'spells', json: true },
   { id: 'cast', aliases: ['chant', '施', '咏唱'], summary: '咏唱/施法（已学自施，神可代施）', usage: 'cast <咒语>', argDesc: '咒语：法术关键词（如 归乡/圣愈/照明）', json: true },
   { id: 'guardian-cast', aliases: ['gcast', '代施'], summary: '守护天使代主人施放已学技能', usage: 'guardian-cast <法术id>', argDesc: '法术id：主人已学法术（cli spells 查）；仅守护天使可用', json: true },

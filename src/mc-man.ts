@@ -49,19 +49,19 @@ export function isCliCommand(text: string): boolean {
   return t === '' || t === '-h' || t === '--help' || t === 'help' || t === '?' || t === '-help'
 }
 
-/** /cli 的命令接口说明（复用 /help cli 主题）。 */
+/** /cli 的命令接口说明（2026-08-29 重设计：全 /mycli 形态、场景分组、中文动词全覆盖）。
+ *  命令统一走私聊——公屏只社交（公屏发 cli 只会被指路，不执行）。 */
 export function cliHelpLines(): string[] {
   return [
-    '【命令书｜世界 CLI（2026-08-23 定谳）】确定性、可执行、机器可读：',
-    '真人玩家：聊天框直接打 cli 或 mycli 开头（别带斜杠 /），或打 /mycli、/myhelp 真命令；私聊女神 /msg Goddess cli xxx 也行。',
-    'cli status --json　查自身（蓝/级/已学/天赋/血食）',
-    'cli skills　　　　　列已学/可学技能；cli spells [页] 全法术表',
-    'cli cast <咒语>　　咏唱（已学自施，未学神如何裁）',
-    'cli pray <愿>[｜供奉：X]　祈愿；cli ask <问>　咨询；cli chat <话>　与女神聊天',
-    'cli summon <守卫> <任务>　召唤术：唤桐人/鸣人前来相助',
-    'cli innate [我选 <名>]　查/选出生天赋；cli appraise　鉴定',
-    'cli help <命令>　单命令用法；cli commands　全部命令。例：cli status --json',
-    '前缀后不是命令词＝直接跟女神说话（cli 铁在哪）。',
+    '【命令书｜世界 CLI】确定性执行、支持 --json 机器可读。命令走私聊，公屏只聊天：',
+    '■ 入口三选：/mycli <命令>（斜杠，Agent 推荐）｜私聊 Goddess 说 cli <命令> ｜私聊直接说动词（状态/技能/鉴定…）',
+    '■ 自救保命：/mycli cast 圣愈术（回血）｜/mycli cast 归乡｜/mycli cast 照明——cast=施法/咏唱，已学即自施',
+    '■ 查自身：/mycli status --json（蓝/级/已学/天赋/血食）｜/mycli 技能（已学+可学）｜/mycli 鉴定｜/mycli 法术 2（全表第2页）',
+    '■ 成长修行：/mycli 灌顶（60秒一息加经验）｜/mycli 修为（查进度）｜/mycli 天赋 我选 <法术名>',
+    '■ 求神问道：/mycli pray 想要钻石剑｜供奉:铁锭x3（祈愿，可带供）｜/mycli ask 煤矿在哪（免费问）',
+    '■ 协作社交：/mycli summon 桐人 帮我挖矿（召守卫）｜/mycli chat <话>（直接跟女神说）',
+    '■ 求助手册：/myhelp（命令速查）｜/myhelp cli（本页）｜/mycli help cast（单命令用法）｜/mycli commands（全树）',
+    '动词中英通吃：status=状态、skills=技能、spells=法术、cast=施法/咏唱、pray=祈愿、ask=问、innate=天赋、summon=召唤、cultivate=灌顶、growth=修为。',
   ]
 }
 
@@ -82,12 +82,32 @@ const costText = (c: { mana: number; food: number; hp: number }): string => {
   return parts.join(' ') || '无消耗'
 }
 
+/** /myhelp 裸命令速查（2026-08-29 重设计）：
+ *  会打 /myhelp 的就是要命令的（Agent/高级真人）——直接给一页上手速查；
+ *  真人向生存手册仍在 /help（裸）。主题深查两界共用：/myhelp cli / /myhelp 咒语 … */
+export function myhelpQuickLines(): string[] {
+  return [
+    '【命令速查｜千灯纪】命令走私聊（公屏只社交），斜杠 /mycli 一律可执行：',
+    '自救：/mycli cast 圣愈术（回血）｜/mycli cast 归乡（回家）｜/mycli cast 照明（黑了就点）',
+    '查身：/mycli status --json　/mycli 技能　/mycli 鉴定　/mycli 法术 <页>',
+    '成长：/mycli 灌顶　/mycli 修为　/mycli 天赋 我选 <法术名>',
+    '求神：/mycli pray <愿>｜供奉:<物>x<数>　/mycli ask <问题>（免费问）',
+    '协作：/mycli summon <桐人|鸣人> <任务>　/mycli chat <跟女神说话>',
+    '━━━━━━━━━━',
+    '详册：/myhelp cli　手册：/help（真人向）　单命令：/mycli help <命令>',
+  ]
+}
+
 /** 处理一条 /help 命令，返回回复行数组；null = 不是 help 命令。
  *  已脱 cordis 壳（2026-08-21）：ctx 依赖改为显式传入 magic（仅用 listAtoms）。
  */
 export function handleHelpText(text: string, magic: Pick<MagicService, 'listAtoms'>): string[] | null {
   if (!isHelpCommand(text)) return null
-  const raw = text.trim().replace(/^\/?(myhelp|help|h)\s*/, '').trim()
+  // /myhelp 与 /help 分流（2026-08-29）：myhelp 裸=命令速查（Agent 优先），
+  // help 裸=生存手册总览（真人叙事）。带主题时两界共用主题路由。
+  const isMyForm = /^\/?(myhelp)\b/i.test(text.trim())
+  const raw = text.trim().replace(/^\/?(myhelp|help|h)\s*/i, '').trim()
+  if (isMyForm && !raw) return myhelpQuickLines()
   const [topicArg, ...rest] = raw ? raw.split(/\s+/) : []
   const arg2 = rest.join(' ')
   const topic = (topicArg ?? '').toLowerCase()
