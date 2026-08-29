@@ -21,7 +21,8 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 JDK = os.environ.get("JDK21_BIN", r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin")
-JAVAC = os.path.join(JDK, "javac.exe")
+# 平台自适应（2026-08-30 CI 红根因③）：Linux CI 无 javac.exe——.exe 只在 Windows 拼。
+JAVAC = os.path.join(JDK, "javac.exe" if os.name == "nt" else "javac")
 
 PURE = [
     "dev/god/settlementsfix/chest/SkillChestLayout.java",

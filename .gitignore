@@ -110,7 +110,7 @@ mc-data/
 !ops/docker/datapacks-src/**/data/  
 !ops/docker/datapacks-src/**/data/**  
 
-# 2026-08-29 viewer ¾²Ì¬×Ê²ú(71MB,Ö»»îÔÚ¹¹½¨ÉÏÏÂÎÄÓë¾µÏñ²ã,Ô´Í·=mc-world:2.1.36/2.1.38)
+# 2026-08-29 viewer Ì¬Ê²(71MB,Ö»Ú¹ë¾µ,Ô´Í·=mc-world:2.1.36/2.1.38)
 /modern-viewer/
 /public/
 
@@ -118,3 +118,6 @@ mc-data/
 *.pid
 settlementsfix-src/javac*.txt
 ops/health/data/
+
+# CI çº¯é€»è¾‘ç¼–è¯‘ç”¨çš„ gsonï¼ˆactions é‡Œ curl ä¸‹è½½åˆ°æ ¹ï¼Œå‹¿è¯¯æäº¤ï¼‰
+/gson-*.jar

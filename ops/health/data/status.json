@@ -1,10 +1,10 @@
 {
- "at": "2026-08-30 01:46:03",
- "ts": 1788025563.280658,
- "red": [
-  "rcon"
+ "at": "2026-08-30 01:56:03",
+ "ts": 1788026163.3078322,
+ "red": [],
+ "yellow": [
+  "Kirito-status"
  ],
- "yellow": [],
  "detail": {
   "panel-9090": {
    "s": "green",
@@ -24,7 +24,7 @@
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up About an hour"
+   "m": "Up 8 minutes"
   },
   "shadow-panel": {
    "s": "green",
@@ -44,15 +44,27 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 82s old"
+   "m": "log 9s old"
   },
   "web-entities-fresh": {
    "s": "green",
    "m": "0s old"
   },
   "rcon": {
-   "s": "red",
-   "m": "[WinError 10053] 你的主机中的软件中止了一个已建立的连接。"
+   "s": "green",
+   "m": "ok"
+  },
+  "guards-online": {
+   "s": "green",
+   "m": "both"
+  },
+  "Kirito-status": {
+   "s": "yellow",
+   "m": "hp 8.0 food 8.0"
+  },
+  "Naruto-status": {
+   "s": "green",
+   "m": "hp 20.0 food 20.0"
   },
   "mc-guard-kirito": {
    "s": "green",

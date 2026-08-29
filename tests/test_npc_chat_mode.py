@@ -11,10 +11,17 @@ import io
 import json
 import os
 import re
+import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NPC = io.open(os.path.join(ROOT, "sidecar", "mc_npc.py"), encoding="utf-8").read()
-CFG = json.load(io.open(os.path.join(ROOT, "ops", "docker", "shadow", "data", "village", "config.json"), encoding="utf-8"))
+# 运行时配置有意不入库（2026-08-30 CI 红根因①）：干净 checkout 缺失时
+# CFG=None，用它的测试 skip（unittest/pytest 双认 SkipTest）；源码断言照常跑。
+_cfg_path = os.path.join(ROOT, "ops", "docker", "shadow", "data", "village", "config.json")
+try:
+    CFG = json.load(io.open(_cfg_path, encoding="utf-8"))
+except FileNotFoundError:
+    CFG = None
 
 
 def test_chat_llm_gated_by_chat_mode():
@@ -46,8 +53,13 @@ def test_world_guide_no_llm_fallback():
 
 def test_config_chat_mode_quests():
     """两份运行配置默认闲聊零 LLM。"""
+    if CFG is None:
+        raise unittest.SkipTest("runtime village config not in repo (CI)")
     assert CFG.get("llm", {}).get("chat_mode") == "quests", "运行配置 chat_mode 必须 quests"
-    cfg2 = json.load(io.open(os.path.join(ROOT, "mc-data", "village", "config.json"), encoding="utf-8"))
+    _cfg2 = os.path.join(ROOT, "mc-data", "village", "config.json")
+    if not os.path.exists(_cfg2):
+        raise unittest.SkipTest("runtime mc-data config not in repo (CI)")
+    cfg2 = json.load(io.open(_cfg2, encoding="utf-8"))
     assert cfg2.get("llm", {}).get("chat_mode") == "quests", "mc-data 副本 chat_mode 必须 quests"
 
 

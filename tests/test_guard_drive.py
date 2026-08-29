@@ -17,6 +17,9 @@ gd = importlib.util.module_from_spec(spec)
 # 哨兵先行:guard_drive 顶层 wrap std 流(Windows GBK 修复),pytest capture 下
 # wrap 会住宿主临时文件并 GC 关闭它,宿主收尾崩。哨兵=wrap 整段跳过。
 os.environ["GUARD_DRIVE_NO_WRAP"] = "1"
+# CI 哨兵(2026-08-30 红根因②):guard_drive 顶层校验 RCON_PASSWORD 缺失即
+# SystemExit——干净 checkout/CI 无 .env。测试只测纯函数,dummy 密码即可放行。
+os.environ.setdefault("RCON_PASSWORD", "ci-dummy-not-a-secret")
 spec.loader.exec_module(gd)
 del os.environ["GUARD_DRIVE_NO_WRAP"]
 
