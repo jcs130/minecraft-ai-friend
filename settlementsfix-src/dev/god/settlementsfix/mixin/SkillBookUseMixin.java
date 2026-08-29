@@ -228,13 +228,21 @@ public class SkillBookUseMixin {
                                 ? meta.getAsJsonObject("cost") : null;
                         int spellMana = cost == null ? 0 : optInt(cost, "mana", 0);
                         int spellLv = meta == null ? 0 : optInt(meta, "requiredLevel", 0);
-                        Component page = Component.literal(
+                        // 2026-08-29 造物主设计「命格书=技能仓库」：每技能页两个动作——
+                        // ▶ 点击释放（直接放）；✦ 领取技能书（give 成书，拿手上右键施法，
+                        // 手柄正道）。书丢了随时翻页再领，背包只留要用的。
+                        Component page = Component.empty()
+                                .append(Component.literal(
                                         "§6❖ " + n + " ❖§r\n\n"
                                         + (spellLv > 0 ? "§7需要 Lv" + spellLv + "§r\n" : "")
                                         + (spellMana > 0 ? "§7魔力 §b" + spellMana + "§r\n" : "")
-                                        + "\n§a▶▶ 点击释放 ◀◀§r")
-                                .withStyle(s -> s.withClickEvent(new ClickEvent(
-                                        ClickEvent.Action.RUN_COMMAND, "/mycli cast " + n)));
+                                        + "\n"))
+                                .append(Component.literal("§a▶▶ 点击释放 ◀◀§r\n\n")
+                                        .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                                ClickEvent.Action.RUN_COMMAND, "/mycli cast " + n))))
+                                .append(Component.literal("§e【✦ 领取技能书】§r§8（拿手上右键放）§r")
+                                        .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                                ClickEvent.Action.RUN_COMMAND, "/mycli 领书 " + n))));
                         pages.add(Filterable.passThrough(page));
                     }
                 } else {

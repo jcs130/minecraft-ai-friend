@@ -1927,6 +1927,47 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         else reply(`[信使] ${r}`)
         return
       }
+      case 'bookget': {
+        // 领取技能书（2026-08-29 造物主设计「命格书=技能仓库」：翻页领书 → 装备右键施法；
+        // 命格书每技能页带【✦ 领取】链接，语音说一声也行——书丢了随时再领，不再占满背包）。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli 领书 <法术名>。已学会的法术随时可领。`); return }
+        const name = cmd.args.join(' ').trim()
+        const atom = magic.listAtoms().find((a) => a.name === name || a.id === name)
+        if (!atom) { reply(`[CLI] 没有叫「${name}」的法术。/cli spells 查法术表。`); return }
+        const view = magic.getState(subject)
+        if (!view.learned.includes(atom.id) && view.innateSkill !== atom.id) {
+          reply(`[信使] 「${atom.name}」你还没学会，领不了书——先参悟或升级解锁。`)
+          return
+        }
+        const r = await rcon.send(`give ${subject} ${skillBookItem(atom.name)} 1`).catch(() => '')
+        if (!r || !/gave|已给予|Given/i.test(r)) { reply(`[信使] 书没递到你手上——人在线再领。`); return }
+        worlddb.chronicleRecord('cast', subject, { skill: 'bookget', book: atom.name })
+        reply(`[信使] ✦《${atom.name}》技能书已到手：拿在手上右键就是放。`)
+        return
+      }
+      case 'learn': {
+        // 持书参悟（2026-08-29 造物主设计「野外拾取的书用一次自动收录」）：
+        // 校验背包里有 skillbook:<名> 的成书（书=历练凭证）→ learnViaAdvancement
+        // 入册（绕等级门槛；施放仍走快路径等级闸）。命格书右键重写时自动收录成页。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli 参悟 <法术名>——把对应的✦技能书拿在手上。`); return }
+        const name = cmd.args.join(' ').trim()
+        const atom = magic.listAtoms().find((a) => a.name === name || a.id === name)
+        if (!atom) { reply(`[CLI] 没有叫「${name}」的法术。`); return }
+        const view = magic.getState(subject)
+        if (view.learned.includes(atom.id) || view.innateSkill === atom.id) {
+          reply(`[信使] 「${atom.name}」你早已学会，收录在命格书里了。`)
+          return
+        }
+        const inv = await rcon.send(`data get entity ${subject} Inventory`).catch(() => '')
+        if (!inv || !inv.includes(`skillbook:"${atom.name}"`)) {
+          reply(`[信使] 参悟需要《✦ ${atom.name}》技能书在手——没有书，悟不出来的。`)
+          return
+        }
+        magic.learnViaAdvancement(subject, atom.id)
+        worlddb.chronicleRecord('cast', subject, { skill: 'learn', atom: atom.id, via: 'skillbook' })
+        reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
+        return
+      }
       case 'pray': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli pray <愿望>[｜ 供奉：xxx]。`); return }
         const wishText = cmd.args.join(' ')

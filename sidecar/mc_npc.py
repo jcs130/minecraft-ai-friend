@@ -1849,6 +1849,32 @@ def _home_pos(name):
         pass
     return VILLAGE_CX, VILLAGE_CY, VILLAGE_CZ
 
+_MAGIC_CACHE = {"t": 0.0, "learned": {}, "name2id": {}}
+
+def _has_learned(username, skill_name):
+    """玩家是否已学该法术（读 /mcdata/magic-state.json 只读快照 + atoms 名→id 映射）。
+    文件读不出来/名字对不上 → 返回 False（宁可多发一条『参悟』，mc-god 会幂等处理）。"""
+    import time as _t, json as _j
+    now = _t.time()
+    if now - _MAGIC_CACHE["t"] > 20:  # 20s 缓存
+        try:
+            st = _j.load(open("/mcdata/magic-state.json", encoding="utf-8"))
+            _MAGIC_CACHE["learned"] = {u: [str(x) for x in (p.get("learned") or [])]
+                                       for u, p in (st.get("players") or {}).items()}
+            at = _j.load(open("/mcdata/magic-atoms.json", encoding="utf-8"))
+            _MAGIC_CACHE["name2id"] = {a.get("name", ""): a.get("id", "") for a in at.get("atoms", [])}
+            _MAGIC_CACHE["t"] = now
+        except Exception as e:
+            print("[spell] magic cache err:", e, flush=True)
+    ids = _MAGIC_CACHE["learned"].get(username) or []
+    if not ids:
+        return False
+    atom_id = _MAGIC_CACHE["name2id"].get(skill_name, "")
+    if atom_id:
+        return atom_id in ids
+    return skill_name in ids  # 兜底：直接按名字对 id
+
+
 def _exec_fixed_skill(speaker, skill):
     """执行固定技能书效果（与快路径法术口径一致）。返回回执文本。"""
     try:
@@ -1915,6 +1941,15 @@ def spell_loop():
                 if reply is None:
                     # ✦法术书（任意已学法术）：以玩家身份走 /mycli cast——法力/等级/冷却
                     # 全由法术引擎裁定，回执由引擎 tellraw 给玩家本人（2026-08-29）。
+                    # 2026-08-29 造物主设计「野外书用一次自动收录」：未学的技能，
+                    # 先 /mycli 参悟（learn 校验书在手=历练凭证）再 cast——
+                    # 拿着野外的书右键一次 = 参悟入册 + 施放，一步到位。
+                    if not _has_learned(speaker, skill):
+                        try:
+                            R.cmd("execute as %s at @s run mycli 参悟 %s" % (speaker, skill))
+                            time.sleep(0.8)  # 等 mc-god 入册（书在手必成）
+                        except Exception as e:
+                            print("[spell] learn err:", e, flush=True)
                     R.cmd("execute as %s at @s run mycli cast %s" % (speaker, skill))
                     cooldown[cd_key] = now  # 外层仅记时（引擎另有法力门槛）
                     feed_append({"kind": "spell", "who": speaker, "skill": skill, "text": "✦法术书→mycli cast"})
