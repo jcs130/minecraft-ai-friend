@@ -17,3 +17,21 @@ jobs:
         run: pip install pyyaml
       - name: CI gate (migration regression / syntax / path anchors)
         run: python ops/ci_check.py
+
+  unit:
+    name: unit tests (pytest + node anchors)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run pytest
+        run: |
+          pip install pytest
+          pytest tests -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run node anchor tests
+        run: node --test tests/js/panel-anchors.test.mjs

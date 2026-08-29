@@ -42,11 +42,14 @@ VENV_PY = r"C:\Users\lzl19\.qwenpaw\venv\Scripts\python.exe"
 HTTP_PROBES = {          # name: url
     "panel-9090": "http://127.0.0.1:9090/",
     "modern-3070": "http://127.0.0.1:3070/index.js",
-    "viewer-3050": "http://127.0.0.1:3050/",
     "gateway-8011": "http://127.0.0.1:8011/download",
+    # viewer-3050(旧 prismarine)2026-08-29 退役:canvas/gl 原生依赖随 2.1.37
+    # 底座重建丢失,重装需编译泥潭;现代画面 3070 为主画面且健康,9090 仅在
+    # 3070 探活失败时才回退 3050(死回退=无用户影响)。恢复它=重建镜像时固化
+    # canvas+gl+系统库,待真有回退需求再做。
 }
 CONTAINERS = ["shadow-mc", "shadow-world", "shadow-panel", "shadow-gateway", "shadow-qwenpaw"]
-YELLOW_ONLY = {"viewer-3050"}  # 回退通道(现代画面 3070 为主):挂=黄不记红
+YELLOW_ONLY = set()  # (viewer-3050 已退役)
 GUARD_AGENTS = ["mc-guard-kirito", "mc-guard-naruto"]   # QwenPaw 亲卫必须 enabled
 EXPECTED_ONLINE = ["Kirito", "Naruto"]                   # RCON list 里必须见到的身体
 
@@ -63,10 +66,16 @@ class Rcon:
         self.s.sendall(struct.pack("<i", len(data)) + data)
 
     def _read(self):
-        ln = struct.unpack("<i", self.s.recv(4))[0]
+        hdr = b""
+        while len(hdr) < 4:  # 长度头本身也可能拆包
+            hdr += self.s.recv(4 - len(hdr))
+        ln = struct.unpack("<i", hdr)[0]
         buf = b""
-        while len(buf) < ln:
-            buf += self.s.recv(ln - len(buf))
+        while len(buf) < ln:  # 包体循环收满(TCP 拆包;曾致 list 残包→守卫假掉线警报)
+            chunk = self.s.recv(ln - len(buf))
+            if not chunk:
+                raise RuntimeError("rcon socket closed mid-packet")
+            buf += chunk
         rid, ptype = struct.unpack("<ii", buf[:8])
         return rid, ptype, buf[8:-2].decode("utf-8", "replace")
 
