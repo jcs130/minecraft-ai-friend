@@ -696,30 +696,30 @@ function viewerHtml(firstPersonFov, dashboardOrigin) {
         window.__wkHb = { workers: [] }
         var HookedHB = function (url, opts) {
           var w = HookedWorker(url, opts)
-          var st = { w: w, lastSentAt: 0, lastRecvAt: Date.now(), sent: 0, dead: false }
+          var st = { w: w, lastSentAt: 0, lastRecvAt: Date.now(), sent: 0, recv: 0, dead: false }
           window.__wkHb.workers.push(st)
           var op = w.postMessage.bind(w)
           w.postMessage = function () { st.lastSentAt = Date.now(); st.sent += 1; return op.apply(w, arguments) }
-          w.addEventListener('message', function () { st.lastRecvAt = Date.now() })
+          w.addEventListener('message', function () { st.lastRecvAt = Date.now(); st.recv += 1 })
           return w
         }
         HookedHB.prototype = OrigWorker.prototype
         try { Object.defineProperty(window, 'Worker', { value: HookedHB, writable: true, configurable: true }) } catch (err) {}
         setInterval(function () {
-          var now = Date.now(), live = false
+          var now = Date.now()
           for (var i = 0; i < window.__wkHb.workers.length; i++) {
             var st = window.__wkHb.workers[i]
             if (st.dead) continue
-            var sentRecent = now - st.lastSentAt < 25000
-            var recvStale = now - st.lastRecvAt > 30000
-            if (sentRecent && recvStale && st.sent > 30) {
+            // 判据v2（实测v1不触发：renderer 派完即停，sentRecent 不满足）：
+            // 派活积压差 sent-recv > 10 且 worker 回音停 40s+ → 队列不消化=死循环。
+            // 健康静止：sent=recv 恒定差不涨；健康慢消化：lastRecvAt 持续更新——均不误杀。
+            if (st.sent - st.recv > 10 && now - st.lastRecvAt > 40000) {
               st.dead = true
-              report('wkHB', 'worker silent 30s+ with active dispatch (sent=' + st.sent + ') — terminate & reload')
+              report('wkHB', 'backlog=' + (st.sent - st.recv) + ' recv stale ' + Math.round((now - st.lastRecvAt) / 1000) + 's — terminate & reload')
               try { st.w.terminate() } catch (e) {}
               location.reload()
               return
             }
-            if (!st.dead) live = true
           }
         }, 5000)
         // fetch 拦截探针：mod_assets 拉取结果（404 降级是否真生效——worker blocks 数仍 4058 之谜）
