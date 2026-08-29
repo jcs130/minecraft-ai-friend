@@ -10,7 +10,8 @@
     "CheckPacketSendGuardMixin",
     "BubblePublishGuardMixin",
     "PayloadRegistrarForceOptionalMixin",
-    "BetterCombatConfigTaskGateMixin"
+    "BetterCombatConfigTaskGateMixin",
+    "SkillChestBootMixin"
   ],
   "injectors": {
     "defaultRequire": 1

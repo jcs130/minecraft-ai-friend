@@ -36,7 +36,8 @@ services:
       GUI: "false"
       TZ: Asia/Shanghai
       # settlementsfix three-key persistent injection via JVM_OPTS (itzg rewrites user_jvm_args.txt on every start)
-      JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl"
+      # testHooks: /skillchest click 测试钩子（E2E 用；生产稳定后可移除）
+      JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl -Dsettlementsfix.mcdataDir=/mcdata -Dsettlementsfix.testHooks=true"
     ports:
       # 2026-08-28 方案B：25599 对外映射撤销——宿主 25599 由 host_tcp_relay 接管转 gate:25700，
       # 裸原版客户端（Taro/Codex/Edward/真人）连 25599 自动过门完成 NeoForge 协商。

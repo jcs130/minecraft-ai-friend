@@ -74,11 +74,26 @@ public class SkillBookUseMixin {
                                         CallbackInfoReturnable<InteractionResultHolder<ItemStack>> cir) {
         try {
             ItemStack stack = player.getItemInHand(hand);
-            CompoundTag cd = customData(stack);
-            if (cd == null) {
-                return; // 普通书：放行原版逻辑
-            }
             boolean serverSide = !level.isClientSide;
+
+            // ── ⓪ 宝箱技能面板（2026-08-30 docs/skill-chest-design.md）：
+            //    任意物品带 custom_data.skillbox=true → 右键=开技能面板（手柄十字键
+            //    选格子+RT 确认，5 岁萌萌零识字可施法）。优先级最高，先于各书判定。
+            //    潜行+右键 = 放行原版行为（保留物品本来用途）。 ──
+            {
+                CustomData panelTag = stack.get(DataComponents.CUSTOM_DATA);
+                if (panelTag != null && !panelTag.isEmpty()
+                        && panelTag.copyTag().getBoolean("skillbox")
+                        && !player.isShiftKeyDown()) {
+                    if (serverSide && player instanceof ServerPlayer sp) {
+                        dev.god.settlementsfix.chest.SkillChestCommands.openFor(sp, 0);
+                    }
+                    cir.setReturnValue(InteractionResultHolder.sidedSuccess(stack, level.isClientSide));
+                    return;
+                }
+            }
+
+            CompoundTag cd = customData(stack);
 
             // ── ① 命格书：右键=动态重写书页并打开（潜行与否都开） ──
             if (cd.getBoolean("statusbook")) {
