@@ -64,10 +64,17 @@ const STATUS_GIVEN = process.env.STATUS_GIVEN || `${DATA_DIR}/statusbook-given.j
 function snbtEsc(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 }
+/** text 组件 → SNBT 内嵌 JSON（中文原生输出）。2026-08-29 发书失败根因：
+ * JSON.stringify 把中文转 \uXXXX，SNBT 解析器不认（Invalid escape sequence '\u'）。 */
+function textJson(o: Record<string, string | boolean | number>): string {
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(o)) parts.push(`"${k}":${typeof v === 'string' ? `"${snbtEsc(v)}"` : JSON.stringify(v)}`)
+  return `{${parts.join(',')}}`
+}
 /** 命格书 NBT（2026-08-29 造物主令：一般的成书、人人一本、基岩版可翻读）。发书时生成静态快照；右键实时查询保留。 */
 function statusBookNbt(pages: string[]): string {
-  const ps = pages.map((p) => `"${snbtEsc(JSON.stringify({ text: p }))}"`).join(',')
-  const lore = `"${snbtEsc(JSON.stringify({ text: '翻开即读 · 右键实时刷新', color: 'dark_gray', italic: true }))}"`
+  const ps = pages.map((p) => `"${snbtEsc(textJson({ text: p }))}"`).join(',')
+  const lore = `"${snbtEsc(textJson({ text: '翻开即读 · 右键实时刷新', color: 'dark_gray', italic: true }))}"`
   return `minecraft:written_book[minecraft:written_book_content={title:"命格书",author:"天神",pages:[${ps}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"命格书","color":"gold"}',minecraft:lore=[${lore}]]`
 }
 
@@ -879,7 +886,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       `法力 ${Math.round(view.mana)}/${view.maxMana}\n技艺：${learned.length ? learned.join('、') : '尚未习艺'}`,
       story ? `出身：${story}` : '出身：此界原住民',
     ]
-    const r = await rcon.send(`give ${username} ${statusBookNbt(pages)} 1`).catch(() => '')
+    const r = await rcon.send(`give ${username} ${statusBookNbt(pages)} 1`).catch((err: unknown) => {
+      // 2026-08-29 II：give 失败不再静默——60s 周期兜底会重试，但日志要留痕以便排查。
+      log(`statusbook give failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      return ''
+    })
+    log(`statusbook give reply for ${username}: ${JSON.stringify(String(r)).slice(0, 120)}`)
     // give 成功（玩家在线）才记名单；离线给不了，等下次上线再补。
     if (r && /gave|已给予|Given/i.test(r)) {
       statusGiven.add(username)
@@ -933,14 +945,25 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 进程启动即补一轮（服务重启后把重启前积压的请求也回执掉）。
   setTimeout(() => { statusLoop().catch(() => {}) }, 3000)
   // 启动补发：已在线的玩家也发一本（不等下次重登）。
-  setTimeout(() => {
-    const bot = getBot()
-    if (!bot?.players) return
-    for (const name of Object.keys(bot.players)) {
-      if (name === bot.username || name.startsWith('sys_')) continue
-      ensureStatusBook(name).catch(() => {})
-    }
-  }, 10_000)
+  // 2026-08-29 II（造物主令「所有玩家都该有状态书」核验加固）：一次性 setTimeout 在
+  // world 刚启动 RCON 瞬断期（welcome FAILED: rcon closed 同源）会整场漏发 → 改 60s
+  // 周期兜底；ensureStatusBook 名单幂等（give 成功才记名单），周期重试零副作用。
+  // 2026-08-29 III：不再依赖 bot.players（goddess 的 mineflayer 视角看不见部分接入，
+  // 如 Taro）——改走 RCON `list`（服务器权威在线名单，涵盖真人/numen/基岩一切路径）。
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        log(`statusbook sweep: [${tail.trim()}]`)
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
+          await ensureStatusBook(name).catch((err: unknown) => log(`statusbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
+        }
+      } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
+    })()
+  }, 60_000)
 
   async function answerQuestion(username: string, question: string, replyTarget?: string): Promise<void> {
     const bot = getBot()

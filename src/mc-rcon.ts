@@ -8,8 +8,10 @@ import { Rcon } from './rcon.ts'
  * 铁律：RCON 只存在于世界进程（天神侧）。穿越者进程（bot）不得 import 本文件，
  * 也不得读取 rcon-secret —— 它们与世界的全部交互走 MC 聊天文字（见 mc-mystic）。
  *
- * RCON 协议不能直接传非 ASCII 字符（中文命令会被截断/拒绝）：
- * send() 自动把非 ASCII 转成 \uXXXX 转义，服务端按文本正常解析。
+ * 2026-08-29 定谳：RCON 协议 payload 本就是 UTF-8（rcon.ts Buffer.from(payload,'utf-8')），
+ * 服务端 1.21.1 按 UTF-8 收——中文命令直发即合法（rcon-cli 召唤中文名村民/发命格书
+ * 千百次验证）。旧 toAscii() 把中文转 \uXXXX 字面量，SNBT 引号串里是非法转义
+ * （Invalid escape sequence '\u'）——发书、影分身召唤雪傀儡失败的根因，已拆除。
  *
  * 已脱 cordis 壳（2026-08-21）：不再 import @deepseek-ai/cordis / schemastery，
  * 由 bootstrap-world.mts 显式 createRcon() 装配并注入依赖。
@@ -29,7 +31,7 @@ export interface SpawnPoint {
 }
 
 export interface RconService {
-  /** 执行一条服务器命令（非 ASCII 自动转义）。返回服务端响应文本。 */
+  /** 执行一条服务器命令（原生 UTF-8 直发，中文合法）。返回服务端响应文本。 */
   send(cmd: string): Promise<string>
   /** 查询实体数值字段（Health / foodLevel / ...），失败返回 null。 */
   getEntityNumber(target: string, path: string): Promise<number | null>
@@ -43,14 +45,6 @@ export interface RconService {
 export interface RconHandle {
   service: RconService
   dispose: () => void
-}
-
-/** RCON 通道只接受可打印 ASCII：其余字符转 \uXXXX（服务端按 JSON/文本转义解析）。 */
-export function toAscii(s: string): string {
-  return s.replace(/[^\x20-\x7E]/g, (ch) => {
-    const code = ch.codePointAt(0) ?? 0
-    return '\\u' + code.toString(16).padStart(4, '0')
-  })
 }
 
 export function createRcon(config: Config): RconHandle {
@@ -90,7 +84,7 @@ export function createRcon(config: Config): RconHandle {
   const service: RconService = {
     send: async (cmd) => {
       try {
-        return (await ensure()).send(toAscii(cmd))
+        return (await ensure()).send(cmd)
       } catch (e) {
         // 保守重试：仅当「连接本来就没建立/已明确断开（命令根本没发出去）」时重建一次。
         // 不重试 timed out / closed —— 那些命令可能已被服务器执行，双发会重复给物/广播。
@@ -98,7 +92,7 @@ export function createRcon(config: Config): RconHandle {
         if (/rcon not connected/i.test(msg)) {
           rcon?.close()
           rcon = null
-          return (await ensure()).send(toAscii(cmd))
+          return (await ensure()).send(cmd)
         }
         throw e
       }

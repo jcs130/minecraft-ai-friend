@@ -134,3 +134,10 @@
 2. **修法三连**：重跑 export-professions.py（新 UUID）→ 全量兜底（世界所有 base_villager UUID 补进名册，野生 prof=0）→ extensions 换 1.3.0 jar。验证：日志「vanilla definitions captured: 6/6 (all OK)」+「roster loaded: 37」。
 3. **防复发**：Windows 计划任务 GeyserRosterDaily（每日 04:00 跑 roster-daily-refresh.bat：export 名册 + 野生补录 + 重启 ViaProxy 断基岩 15s）。**凡 kill+summon 重召 NPC 后，名册必须刷新**——要么等凌晨任务，要么手动跑 export 脚本。
 4. **换扩展 jar 前先 kill ViaProxy 进程**——jar 被运行中 JVM 锁定删不掉（taskkill /PID 后再动文件）。
+
+## 2026-08-29 上午 · 命格书「人人一本」核验——发书链路三坑（端到端实测 PASS）
+1. **TS JSON.stringify 中文 → \uXXXX 字面量，SNBT 里非法**：`JSON.stringify({text:"命格书"})` 产出 `\u547d...`，MC SNBT 解析器不认（`Invalid escape sequence '\u'`）——give/summon 全炸。修法：手写 `textJson()`（snbtEsc 只转 `\`、`"`、`\n`，中文原生）。python 侧对等坑位：`json.dumps(..., ensure_ascii=False)` 才是正解。**任何「JSON.stringify 产物嵌进 SNBT」的写法都要过这道检查。**
+2. **mc-rcon toAscii 是错误假设的历史包袱（已拆）**：注释称「RCON 不能传非 ASCII」——实际 rcon.ts 底层 `Buffer.from(payload,'utf-8')` 本就支持 UTF-8，rcon-cli 直发中文千百次成功。toAscii 把命令里所有非 ASCII 洗成 `\uXXXX` 字面量，纯害：发书失败、**影分身 kage_bunshin 召唤雪傀儡也一直因此失败**（日志同款 Invalid escape，药水效果生效但傀儡没落地）。拆除后两者同愈。**凡「某层好心转义」先质疑协议层事实。**
+3. **发书兜底要走 RCON `list`（服务器权威），不能走 bot.players（goddess 的 mineflayer 视角）**：Taro 这类接入 goddess 看不见（旁证 pollWelcome 从未发现过他），bot.players 扫不到 → 一次性补发漏人。60s 周期 sweep（名单幂等，give 成功才记名单）+ join 事件双轨，RCON 瞬断（启动期 `welcome FAILED: rcon closed`）也不再整场漏发。
+4. **statusbook-given.json 是进程启动快照**：运行期外部改文件，进程内存 Set 不感知——测试名单改动必须 restart world 才生效（生产无碍：ensureStatusBook 自己写文件+内存同步）。
+- 验证方法沉淀：临时把测试玩家移出名单 + restart → 60s 内自动补发 → `clear <p> minecraft:written_book[minecraft:custom_data~{statusbook:true}] 1` 精准清测试书。1.21.1 item predicate 语法可用。
