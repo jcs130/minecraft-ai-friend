@@ -972,6 +972,31 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
 
+  /** 学会即得书（2026-08-29 造物主问「手柄怎么施法」）：萌萌手柄基岩，命格书页
+   * clickEvent 点击施法在 Geyser 基岩端大概率不可用（Geyser 官方限制：基岩不支持
+   * 点击文本执行命令）——手柄正道 = ✦书右键（使用键）施法。查在线玩家已习法术 vs
+   * 背包已有 ✦书（RCON data get Inventory），缺的每技补一本——书即手柄按钮。 */
+  async function ensureLearnedBooks(username: string): Promise<void> {
+    try {
+      const ms = magic.getState(username)
+      if (!ms.learned || ms.learned.length === 0) return
+      const inv = await rcon.send(`data get entity ${username} Inventory`).catch(() => '')
+      if (!inv || inv.includes('No player was found')) return // 离线/查询失败：下轮再试
+      const owned = new Set<string>()
+      for (const m of inv.matchAll(/✦ ([^"\\]+)/g)) owned.add(m[1].trim())
+      for (const id of ms.learned) {
+        const atom = magic.getAtomById(id)
+        if (!atom || owned.has(atom.name)) continue
+        const r = await rcon.send(`give ${username} ${skillBookItem(atom.name)} 1`).catch(() => '')
+        if (r && /gave|已给予|Given/i.test(r)) {
+          log(`learned skillbook given to ${username}: ✦ ${atom.name}（学会即得书）`)
+        }
+      }
+    } catch (err) {
+      log(`learnedbook check failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   let statusTail = 0
   let statusSeen = new Set<string>()
   try {
@@ -1211,6 +1236,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           const name = raw.trim()
           if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
           await ensureStatusBook(name).catch((err: unknown) => log(`statusbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
+          await ensureLearnedBooks(name).catch((err: unknown) => log(`learnedbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
         }
       } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
     })()
