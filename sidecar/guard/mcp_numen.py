@@ -155,9 +155,20 @@ def invoke_for(companion: str, tool: str, args=None):
 
     分身是"战斗用工具"：鸣人（大脑）通过本入口对无 LLM 的影分身下发程序化指令
     （attack/goto/follow/get_self_status 等），分身按 numen 工具语义执行。"""
+    # 别名归一（2026-08-29 定谳：numen 官方技能篇用旧名 eat_item/task_finished，
+    # 服务端真实 op 是 eat/task_status——亲卫照技能篇调用会 404，这里归一保调用成功率）
+    tool = _OP_ALIASES.get(tool, tool)
     a = json.dumps(args if args is not None else {}, ensure_ascii=False)
     cmd = f'numen_act invoke "{companion}" {tool} {a}'
     return rcon().cmd(cmd)
+
+
+# numen 官方技能篇旧名 → 服务端真实 op（保技能篇教学内容即调即通）
+_OP_ALIASES = {
+    "eat_item": "eat",
+    "task_finished": "task_status",
+    "known_blocks": "scan_blocks",
+}
 
 
 # ---------------- MCP server ----------------
@@ -793,6 +804,147 @@ async def list_places() -> str:
         return "你还没存过任何地点。到了值得记住的地方(家/矿场/集合点)就用 remember_place 存一个。"
     rows = [f"{n}: ({p['x']}, {p['y']}, {p['z']}) 存于{p.get('t','?')}" for n, p in sorted(mine.items())]
     return "你的地点(" + str(len(rows)) + " 个):\n" + "\n".join(rows)
+
+
+# ---------------- 技能篇系统(2026-08-29 skill-creator 规范完善:调用成功率主线) ----------------
+# numen 官方技能篇的自持版:sidecar/guard/skills/<name>/SKILL.md(+references/)。
+# 官方 load_skill 是 client-local 工具(经 numen_act 不可达,实测"no server-side body
+# implementation"),亲卫读不到——本通道把技能篇内容直接喂给亲卫上下文。
+# 自持版可修:过时 op 名已按别名表归一(如 eat_item→eat),正文按实测补坑。
+SKILLS_DIR = os.path.join(REPO_ROOT, "sidecar", "guard", "skills")
+
+
+def _safe_skill_path(name: str, file: str) -> str | None:
+    """防目录穿越:技能名/文件名只允许 [a-z0-9_] 与 .md,拼出的路径必须落在 SKILLS_DIR 内。"""
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", name):
+        return None
+    rel = file if file else "SKILL.md"
+    if not re.fullmatch(r"[A-Za-z0-9_\-./]{1,80}\.md", rel) or ".." in rel:
+        return None
+    p = os.path.normpath(os.path.join(SKILLS_DIR, name, rel))
+    if not p.startswith(SKILLS_DIR):
+        return None
+    return p if os.path.isfile(p) else None
+
+
+@mcp.tool()
+async def list_skills() -> str:
+    """列出可学的技能篇(战斗/进阶/建造/容器/下界/屠龙/世界图鉴…)。接到相关任务先 read_skill 学流程再动手——照篇子走,工具调用不容易错。"""
+    if not os.path.isdir(SKILLS_DIR):
+        return "技能篇目录不存在"
+    out = []
+    for d in sorted(os.listdir(SKILLS_DIR)):
+        fp = os.path.join(SKILLS_DIR, d, "SKILL.md")
+        if not os.path.isfile(fp):
+            continue
+        try:
+            head = open(fp, encoding="utf-8", errors="replace").read(600)
+            m = re.search(r"description:\s*(.+)", head)
+            desc = (m.group(1).strip() if m else "")[:110]
+        except Exception:
+            desc = ""
+        n_refs = 0
+        rd = os.path.join(SKILLS_DIR, d, "references")
+        if os.path.isdir(rd):
+            n_refs = len([x for x in os.listdir(rd) if x.endswith(".md")])
+        refs = f"(含 {n_refs} 篇分册,可 read_skill 指定 file 细读)" if n_refs else ""
+        out.append(f"- {d}: {desc} {refs}")
+    return "可用技能篇(" + str(len(out)) + "):\n" + "\n".join(out)
+
+
+@mcp.tool()
+async def read_skill(name: str, file: str = "SKILL.md") -> str:
+    """读一篇技能篇的正文(默认 SKILL.md;分册文件传 references/xxx.md)。学完照篇子里的流程干,工具参数都有现成示例。"""
+    p = _safe_skill_path(name, file)
+    if not p:
+        # 给个可读清单帮亲卫自纠
+        avail = []
+        if os.path.isdir(SKILLS_DIR):
+            avail = sorted(os.listdir(SKILLS_DIR))
+        return f"技能篇不存在: {name}/{file}。可用技能: {', '.join(avail)}"
+    body = open(p, encoding="utf-8", errors="replace").read()
+    # 剥 YAML frontmatter(name/description 元数据对亲卫无用,省上下文)
+    if body.startswith("---"):
+        end = body.find("\n---", 3)
+        if end > 0:
+            body = body[end + 4:]
+    return f"[技能篇 {name}/{file}]\n" + body.strip()
+
+
+# ---------------- numen 服务端 37 工具对齐补缺(2026-08-29 注册表全量审计) ----------------
+# 审计源:NumenCore.java 37 注册类。此前 MCP 只铺 30;以下为技能篇在教、亲卫却调不到的缺口。
+
+
+@mcp.tool()
+async def fish(count: int = 1) -> str:
+    """钓鱼(需背包有钓鱼竿)。找水边站定后调。"""
+    return invoke("fish", {"count": count})
+
+
+@mcp.tool()
+async def build(ops_json: str) -> str:
+    """方块流建造:一条有序 ops 流作为一个后台任务执行(放置/清空)。ops 是 JSON 数组字符串,来自蓝图或技能篇 building_design 的示例。先 read_skill('building_design') 学用法。"""
+    try:
+        ops = json.loads(ops_json)
+    except Exception as e:
+        return f"ops_json 不是合法 JSON: {e}"
+    return invoke("build", {"ops": ops})
+
+
+@mcp.tool()
+async def blueprint(action: str, name: str = "", at: str = "") -> str:
+    """蓝图建造系:服务器 schematics/ 目录的蓝图文件。action=build/list(先 list 看有哪些蓝图)。"""
+    a: dict = {"action": action}
+    if name:
+        a["name"] = name
+    if at:
+        a["at"] = at
+    return invoke("blueprint", a)
+
+
+@mcp.tool()
+async def blueprint_read(name: str) -> str:
+    """读蓝图不动世界:总尺寸/方块数/所需材料清单。"""
+    return invoke("blueprint_read", {"name": name})
+
+
+@mcp.tool()
+async def set_timer(seconds: int, reason: str) -> str:
+    """定个闹钟(seconds 后提示你)。reason 必填——醒来靠它认出自己为什么定这个表(如「熔炉那批铁锭该好了」)。熔炼/等待类任务定表后去干别的,别站着傻等。"""
+    return invoke("set_timer", {"seconds": seconds, "reason": reason})
+
+
+@mcp.tool()
+async def drop_items(item_id: str, count: int = 1) -> str:
+    """把背包里的物品丢到面前地上(给人递东西/腾格子)。"""
+    return invoke("drop_items", {"item_id": item_id, "count": count})
+
+
+@mcp.tool()
+async def get_owner_status() -> str:
+    """查主人的状态:名字/在不在线/HP/饥饿/位置。护卫场景先看主人在哪再决定跟随或守点。"""
+    return invoke("get_owner_status", {})
+
+
+@mcp.tool()
+async def scaffold_materials(action: str = "list", block_ids: str = "") -> str:
+    """管理你愿意当一次性脚手架消耗的方块(搭桥/垫脚用的垫料白名单)。action=list/add/remove。"""
+    a: dict = {"action": action}
+    if block_ids:
+        a["block_ids"] = [b.strip() for b in block_ids.split(",") if b.strip()]
+    return invoke("scaffold_materials", a)
+
+
+@mcp.tool()
+async def inspect_block(x: int, y: int, z: int) -> str:
+    """查一个方块:是什么/硬度/可不可挖等。挖不动的方块先查它再换工具。"""
+    return invoke("inspect_block", {"x": x, "y": y, "z": z})
+
+
+@mcp.tool()
+async def inspect_block_storage(x: int, y: int, z: int) -> str:
+    """读方块肚子里装了什么(物品/流体/能量)——不开 GUI 直接查箱子/机器内容。"""
+    return invoke("inspect_block_storage", {"x": x, "y": y, "z": z})
 
 
 if __name__ == "__main__":

@@ -175,8 +175,42 @@ def test_tool_summary_incremental():
     """增量轮压缩摘要也必须覆盖新工具(增量轮是常态轮,词表缺了等于常态失明)。"""
     s = gd._TOOL_SUMMARY
     for t in ["craft", "equip_item", "interact_at", "transfer", "locate_structure",
-              "remember_place", "list_places", "inspect_gui", "close_gui"]:
+              "remember_place", "list_places", "inspect_gui", "close_gui",
+              "read_skill", "list_skills", "set_timer", "get_owner_status"]:
         assert t in s, f"_TOOL_SUMMARY 缺: {t}"
+
+
+def test_skill_channel_and_aliases():
+    """技能通道+别名(2026-08-29 37 工具对齐批):技能篇自持版可读、防穿越、别名归一。"""
+    mn_spec = importlib.util.spec_from_file_location(
+        "mcp_numen_skill_test", os.path.join(HERE, "..", "sidecar", "guard", "mcp_numen.py"))
+    mn = importlib.util.module_from_spec(mn_spec)
+    try:
+        mn_spec.loader.exec_module(mn)
+    except Exception:
+        pytest.skip("mcp_numen 依赖(mcp 包)本环境不可用")
+    import asyncio
+    # 1. list_skills 出 11 篇且含核心四篇
+    listing = asyncio.run(mn.list_skills())
+    for s in ("combat_basics", "tier_progression", "containers", "building_design"):
+        assert s in listing, f"list_skills 缺技能篇: {s}"
+    # 2. read_skill 正文可读且剥了 frontmatter
+    body = asyncio.run(mn.read_skill("combat_basics"))
+    assert body.startswith("[技能篇") and "description:" not in body.split("\n")[0]
+    # 3. 目录穿越防住
+    assert "不存在" in asyncio.run(mn.read_skill("../secrets"))
+    assert "不存在" in asyncio.run(mn.read_skill("combat_basics/../../mcp_numen.py"))
+    # 4. 别名归一:技能篇旧名 → 服务端真实 op
+    assert mn._OP_ALIASES["eat_item"] == "eat"
+    assert mn._OP_ALIASES["task_finished"] == "task_status"
+    # 5. 技能篇自持版正文无过时工具名(防上游同步时回退)
+    skills_dir = os.path.join(HERE, "..", "sidecar", "guard", "skills")
+    for w in ("load_skill", "task_finished", "eat_item", "known_blocks", "todowrite"):
+        for root, _, files in os.walk(skills_dir):
+            for fn in files:
+                if fn.endswith(".md"):
+                    src = open(os.path.join(root, fn), encoding="utf-8").read()
+                    assert w not in src, f"{fn} 残留过时工具名: {w}"
 
 
 def test_places_memory_roundtrip(tmp_path, monkeypatch):

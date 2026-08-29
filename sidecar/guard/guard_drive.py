@@ -154,6 +154,10 @@ TOOL_WHITELIST = {
     # 制作 / 交互
     "craft", "equip_item", "interact_at", "interact_entity", "close_gui", "inspect_gui",
     "transfer",
+    # 技能篇 / 进阶(2026-08-29 37 工具对齐)
+    "fish", "build", "blueprint", "blueprint_read", "set_timer", "drop_items",
+    "get_owner_status", "scaffold_materials", "inspect_block", "inspect_block_storage",
+    "list_skills", "read_skill",
     # 说话（独立命令 numen_act say，非 invoke 工具）
     "say",
     # 与女神侧通信（2026-08-23：文件通道，非世界级动作）
@@ -277,6 +281,19 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         '- locate_biome：{"biome":"plains"} 找附近生物群系，返回坐标再 goto',
         '- remember_place：{"name":"家"} 把当前坐标存为命名地点（家/矿场/集合点……存一次以后随时能回）',
         '- list_places：{} 列出你存过的所有地点（拿到坐标后用 goto 过去）',
+        '',
+        '技能篇（遇到对应任务先学再干，照篇子走调用不容易错）：',
+        '- list_skills：{} 列出可学技能篇（战斗/进阶/建造/容器/下界/屠龙/世界图鉴…）',
+        '- read_skill：{"name":"tier_progression"} 读一篇技能篇正文（学流程、工具参数有现成示例）；分册传 {"name":"building_design","file":"references/japanese_minka.md"}',
+        '- 打架前学 combat_basics；攒料造装备学 tier_progression；开箱存取学 containers；要盖房学 building_design——学完照着干',
+        '',
+        '进阶工具（按需用）：',
+        '- set_timer：{"seconds":120,"reason":"熔炉那批铁锭该好了"} 定闹钟——熔炼/等待类任务定表后去干别的，别站着傻等（reason 必填）',
+        '- inspect_block：{"x":X,"y":Y,"z":Z} 查一个方块是什么/硬度/能不能挖；inspect_block_storage 查方块肚里装了什么（不开箱直接查）',
+        '- fish：{"count":1} 钓鱼（需钓竿）；drop_items：{"item_id":"…","count":1} 丢物品给面前的人/腾格子',
+        '- get_owner_status：{} 查主人状态（在哪/HP/在不在线）——护卫场景先看主人再动',
+        '- build：{"ops_json":"[...]"} 方块流建造（蓝图/建筑用，先 read_skill("building_design") 学）；blueprint：{"action":"list"} 服务器蓝图系',
+        '- scaffold_materials：{"action":"list"} 管理你愿意当脚手架垫料的方块白名单',
         '- follow：{"target":"owner"} 跟随指定目标——只在「明确护卫/同行指令」时用它，否则别主动跟；',
         '- say：{"message":"<一句话>"} 以身体本人的身份在公屏说话，与在场玩家/NPC 交谈、回应别人、报平安、求援——你「开口」的唯一方式；语气要像本人（见 PROFILE 人物志与 SOUL「你怎么说话」一节）：大白话短句直说，别拽文、别书面腔、别喊口号',
         '- chant：{"spell":"归乡"} 咏唱你已学会的技能（等同私语念咒——女神侧按技能表判定：已学会的自己施法，未学会的会得到提示）——危急时优先用你掌握的法术自救；',
@@ -445,10 +462,12 @@ _TOOL_SUMMARY = (
     "战斗 attack；找方块 scan_blocks；跟随 follow（仅明确护卫/同行时）；说话 say（你开口的唯一方式）；"
     "咏唱 chant（已学技能自施）；祈愿 pray（上达天神）；叫停 task_stop；"
     "合成 craft（3x3 需身边工作台）/查方 lookup_recipe；穿装备 equip_item；"
-    "方块右键 interact_at（开门/开箱/熔炉）；实体右键 interact_entity（村民交易）；"
+    "方块右键 interact_at（开门/开箱/熔炉/手持方块放置）；实体右键 interact_entity（村民交易）；"
     "看界面 inspect_gui；移物 transfer；关界面 close_gui；找结构 locate_structure；找群系 locate_biome；"
     "感知 look_around / scan_nearby_entities / get_self_status / get_world_info / task_status；"
-    "地点记忆 remember_place（存当前坐标为命名地点）/ list_places（列出已存地点）"
+    "地点记忆 remember_place / list_places；"
+    "技能篇 list_skills / read_skill（打战/进阶/建造/容器任务先学再干）；"
+    "进阶 set_timer（熔炼等待定闹钟）/ inspect_block / fish / drop_items / get_owner_status / build / blueprint / scaffold_materials"
 )
 
 
@@ -1220,6 +1239,8 @@ def autonomy_prompt(g, status, goddess_msgs=None, player_msgs=None, emergency=No
         "- 制作与升级（攒料→查方→合成→穿上，一步一步来）：craft（合成，3x3 配方需身边有工作台，没有先 craft 一张）/ equip_item（穿装备）",
         "- 界面交互（存取/交易链）：interact_at 开门开箱熔炉 → inspect_gui 看槽位 → transfer 移物存取 → close_gui 关；interact_entity 对村民/动物右键（交易用绿宝石）",
         "- 地点记忆（空间感）：remember_place 把当前坐标存成「家/矿场/集合点」；list_places 查已存地点，拿坐标 goto 回去——到了重要的地方就存一个",
+        "- 技能篇（先学后干）：list_skills 看有什么可学；read_skill(name) 读技能篇——打架前学 combat_basics、攒料造装备学 tier_progression、开箱存取学 containers、盖房学 building_design。照篇子里的流程干，工具参数有现成示例，调用不容易错",
+        "- 进阶：set_timer 定闹钟（熔炼等待用，reason 必填）；inspect_block 查方块；fish 钓鱼；drop_items 递物/腾格子；get_owner_status 查主人；build/blueprint 建造系（先读 building_design 技能篇）；scaffold_materials 脚手架垫料白名单",
         "",
         "行动原则（每轮一步，做完就停）：",
         "- 第1步：调 1-2 个查询工具看清处境（get_self_status / look_around / scan_nearby_entities）——**最多 2 次，查到需要的信息就别再查**。",
