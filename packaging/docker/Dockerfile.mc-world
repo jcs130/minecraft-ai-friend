@@ -13,6 +13,9 @@ RUN npm install --prefix /tmp/pngjs-install pngjs@7.0.0 \
  && cp -r /tmp/pngjs-install/node_modules/pngjs /app/node_modules/pngjs
 COPY src ./src
 COPY bootstrap-world.mts web-panel.mjs ./
+# 2026-08-29 修复:静态资产目录入构建上下文(此前只活在旧镜像层,2.1.37 重建即丢致 9090 黑屏)
+COPY modern-viewer ./modern-viewer
+COPY public ./public
 # 其余不 npm install：底座 node_modules 已含主链依赖（tsx/mineflayer/better-sqlite3 实证可载）
 EXPOSE 3000
 CMD ["node_modules/.bin/tsx", "bootstrap-world.mts"]

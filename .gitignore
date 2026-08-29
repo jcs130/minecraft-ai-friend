@@ -109,3 +109,7 @@ mc-data/
 # datapack æºä¾‹å¤–ï¼šdatapacks-src å†…çš„ data/ å­ç›®å½•æ˜¯æ­£ç»æºç ç›®å½•ï¼Œè±å…æ ¹çº§ data/*  
 !ops/docker/datapacks-src/**/data/  
 !ops/docker/datapacks-src/**/data/**  
+
+# 2026-08-29 viewer ¾²Ì¬×Ê²ú(71MB,Ö»»îÔÚ¹¹½¨ÉÏÏÂÎÄÓë¾µÏñ²ã,Ô´Í·=mc-world:2.1.36/2.1.38)
+/modern-viewer/
+/public/
