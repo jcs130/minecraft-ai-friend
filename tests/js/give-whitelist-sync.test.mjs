@@ -29,23 +29,29 @@ const counts = new Map([...extractObject('GIVE_DEFAULT_COUNT').matchAll(/([a-z0-
 const expect = new Map()
 for (const [, cn, en] of wl) if (!expect.has(en)) expect.set(en, { cn, count: counts.get(en) ?? 1 })
 
-const runtime = JSON.parse(readFileSync(resolve(root, 'ops/docker/shadow/mcdata/skill-chest.json'), 'utf8'))
+const runtimePath = resolve(root, 'ops/docker/shadow/mcdata/skill-chest.json')
+// 运行卷副本是部署产物（不入库）：CI 干净 checkout 缺失时跳过运行卷对账；
+// packaging 分发正本入库，必须存在且与 TS 全量一致（硬断言）。
+const runtime = existsSync(runtimePath)
+  ? JSON.parse(readFileSync(runtimePath, 'utf8'))
+  : null
 const dist = JSON.parse(readFileSync(resolve(root, 'packaging/mc-world/assets/data/skill-chest.json'), 'utf8'))
 
-test('运行卷 items 与 TS GIVE_WHITELIST 全量一致', () => {
-  const got = new Map(runtime.items.map((it) => [it.icon, { cn: it.cn, count: it.count }]))
+test('分发正本 items 与 TS GIVE_WHITELIST 全量一致', () => {
+  const got = new Map(dist.items.map((it) => [it.icon, { cn: it.cn, count: it.count }]))
   assert.equal(got.size, expect.size, `物品数不一致：ts=${expect.size} json=${got.size}`)
   for (const [en, exp] of expect) {
     assert.deepEqual(got.get(en), exp, `${en} 不一致：ts=${JSON.stringify(exp)} json=${JSON.stringify(got.get(en))}`)
   }
 })
 
-test('分发正本与运行卷 items 一致（防五份漂移）', () => {
-  assert.deepEqual(dist.items, runtime.items)
+test('运行卷与分发正本 items 一致（防五份漂移；CI 无运行卷时跳过）', () => {
+  if (!runtime) return
+  assert.deepEqual(runtime.items, dist.items)
 })
 
 test('count 护栏 1-16', () => {
-  for (const it of runtime.items) {
+  for (const it of dist.items) {
     assert.ok(it.count >= 1 && it.count <= 16, `${it.icon} count=${it.count} 越界`)
   }
 })
