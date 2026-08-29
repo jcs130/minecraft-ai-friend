@@ -3131,6 +3131,19 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (username === getBot()?.username) return
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
       recordPlayerChat(username, message)
+      // 显式 CLI 前缀优先于一切对话通道（2026-08-29 修复：Taro 发 `cli cast 圣愈术 --json`
+      // 被真人 goddessChat 分支 LLM 抢答「我不是CLI哦」——Taro 未注册 transmigrators，
+      // 被误判真人。凡显式 `cli ...`/`/cli ...`/`!cli ...`/`mycli ...` 一律先走确定性
+      // CLI 执行，真人想聊天不带前缀不受影响，bot 的 cli 不再被 LLM 劫持）。
+      {
+        const earlyCli = parseCli(message)
+        if (earlyCli) {
+          worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'chat' })
+          log(`cli cmd (chat-early) from ${username}: ${earlyCli.raw.slice(0, 60)}`)
+          handleCli(username, username, earlyCli).catch((err) => log(`handleCli(chat-early) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+          return
+        }
+      }
       // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）＋ 灯语女神公屏聊天
       // （2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）：真人（VIP 与否）公屏
       // 未点名的自然语言 → 灯语女神即时理解意图、真回应（「给我来个面包」真给面包）。
@@ -3163,15 +3176,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
       }
-      // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
-      // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
-      const cliCmd = parseCli(message)
-      if (cliCmd) {
-        worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'chat' })
-        log(`cli cmd (chat) from ${username}: ${cliCmd.raw.slice(0, 60)}`)
-        handleCli(username, username, cliCmd).catch((err) => log(`handleCli(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
-        return
-      }
+      // /cli 命令树：已前置到 chat handler 顶部（chat-early），此处不再重复解析。
       if (isCliCommand(message)) {
         const lines = cliOverview()
         for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
