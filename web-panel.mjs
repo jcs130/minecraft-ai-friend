@@ -340,11 +340,17 @@ function apiState() {
     } catch {}
     return list.map((v) => {
       const gq = (board || []).find((q) => q.from === v.key && q.type === 'gather')
+      // 行迹回退（2026-08-29 修）：diary 断供（引擎停摆/重启日）时 10/16 村民无 last → 点行不绑 click、
+      // 天眼跳不过去（用户实测「点名字没反应」）。回退 villagers.json 的 spawn 常驻点，保「点了就飞」。
+      let lastE = last[v.display] || null
+      if (!lastE && Array.isArray(v.spawn) && v.spawn.length >= 3 && v.alive !== false) {
+        lastE = { npc: v.display, pos: v.spawn, act: '常驻点', ts: '' }
+      }
       return {
         key: v.key, display: v.display, profession: v.profession || '', alive: v.alive !== false,
         persona: v.persona || '',
         quest: gq ? { zh: gq.zh, count: gq.count, emerald: gq.reward, status: gq.status, taker: gq.taker, doneBy: gq.done_by } : null,
-        last: last[v.display] || null,
+        last: lastE,
       }
     })
   })()

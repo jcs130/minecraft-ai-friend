@@ -227,6 +227,53 @@ function createViewerStateIdNormalizer(bot, version) {
   // 归一化对照必须用注入前的原版快照；minecraftData(version) 此时已被注入污染，不可直接用
   const canonicalData = captureVanillaBlockTables(version) ?? minecraftData(version) ?? undefined
   const knownRemap = version === '1.21.1' ? KNOWN_1_21_1_STATE_ID_REMAP : undefined
+  // 2026-08-29 修「点名字画面跳不过去」：超原版 stateId 原样透传会让客户端 mesher 陷入
+  // 无限重试（worker-probe rx/jsIdx 同区块循环、渲染循环冻结，大跳 tp 后画面卡死）。
+  // 客户端 mod 资产（Step③）就绪前，mod 块一律兜底成近义原版方块——画面活着比逼真重要。
+  const MOD_FALLBACK: Array<[string, string]> = [
+    ['trapdoor', 'oak_trapdoor'],
+    ['door', 'oak_door'],
+    ['stair', 'oak_stairs'],
+    ['slab', 'oak_slab'],
+    ['fence', 'oak_fence'],
+    ['gate', 'oak_fence_gate'],
+    ['wall', 'cobblestone_wall'],
+    ['bridge', 'oak_planks'],
+    ['lamp', 'glowstone'],
+    ['light', 'glowstone'],
+    ['lantern', 'glowstone'],
+    ['candle', 'glowstone'],
+    ['torch', 'glowstone'],
+    ['window', 'glass_pane'],
+    ['glass', 'glass'],
+    ['table', 'oak_planks'],
+    ['chair', 'oak_planks'],
+    ['sofa', 'oak_planks'],
+    ['furniture', 'oak_planks'],
+    ['cabinet', 'oak_planks'],
+    ['shelf', 'bookshelf'],
+    ['desk', 'oak_planks'],
+    ['bed', 'red_bed'],
+    ['roof', 'oak_planks'],
+    ['path', 'gravel_path'],
+    ['road', 'gravel'],
+    ['log', 'oak_log'],
+    ['plank', 'oak_planks'],
+  ]
+  const fallbackCache = new Map<string, number | undefined>()
+  const fallbackVanillaStateId = (rawName: string): number | undefined => {
+    if (fallbackCache.has(rawName)) return fallbackCache.get(rawName)
+    const lower = rawName.toLowerCase()
+    let target: string | undefined
+    for (const [kw, vanilla] of MOD_FALLBACK) {
+      if (lower.includes(kw)) { target = vanilla; break }
+    }
+    target = target ?? 'stone'
+    const rec = canonicalData?.blocksByName?.[target]
+    const sid = rec ? (finiteRegistryInteger(rec.defaultState) ?? finiteRegistryInteger(rec.minStateId)) : undefined
+    fallbackCache.set(rawName, sid)
+    return sid
+  }
   const cache = new Map()
   const modDecodedLogged = new Set() // 渲染桥 Step② PoC：真数据路径上的 mod 方块解码证明（每名一次，封顶 8 条）
   return (stateId) => {
@@ -241,10 +288,6 @@ function createViewerStateIdNormalizer(bot, version) {
     const runtimeName = canonicalRegistryName(runtimeRawName)
     const canonicalStateName = canonicalRegistryName(canonicalAtState?.name)
     if (runtimeName && runtimeName !== canonicalStateName) {
-      if (runtimeRawName.includes(':') && modDecodedLogged.size < 8 && !modDecodedLogged.has(runtimeRawName)) {
-        modDecodedLogged.add(runtimeRawName)
-        console.log('[render-bridge] 主机解码 mod 方块：stateId ' + stateId + ' → ' + runtimeRawName + '（客户端资产就绪前原样透传）')
-      }
       // 区间重映射只对原版同名块有意义（服务器注册表平移）；mod 块在原版数据里无同名者，不做平移
       const canonicalBlock = canonicalData?.blocksByName?.[runtimeRawName] ?? canonicalData?.blocksByName?.[runtimeName]
       if (canonicalBlock) {
@@ -261,6 +304,18 @@ function createViewerStateIdNormalizer(bot, version) {
         if (normalized === stateId) {
           const defaultState = finiteRegistryInteger(canonicalBlock.defaultState)
           if (defaultState !== undefined) normalized = defaultState
+        }
+      }
+      // mod 块（原版无同名）：不再原样透传——兜底近义原版方块，防客户端 mesher 死循环（2026-08-29）
+      if (normalized === stateId && runtimeRawName.includes(':')) {
+        const fb = fallbackVanillaStateId(runtimeRawName)
+        if (fb !== undefined) {
+          if (modDecodedLogged.size < 8 && !modDecodedLogged.has(runtimeRawName)) {
+            modDecodedLogged.add(runtimeRawName)
+            const fbName = canonicalData?.blocksByStateId?.[String(fb)]?.name ?? String(fb)
+            console.log('[render-bridge] mod 方块兜底：stateId ' + stateId + ' ' + runtimeRawName + ' → ' + fbName + '（客户端 Step③ 前防 mesher 死锁）')
+          }
+          normalized = fb
         }
       }
     }
@@ -608,6 +663,80 @@ function viewerHtml(firstPersonFov, dashboardOrigin) {
     <meta name="lantern-dashboard-origin" content="${dashboardOrigin}">
     <title>我的异世界 · 现代画面</title>
     <link rel="stylesheet" href="/viewer.css">
+    <script>
+      // TEMP 渲染桥排障（2026-08-29 画面冻结）：页面级错误上报——worker 崩溃常以主线程
+      // unhandledrejection 形态露出（如 mcData transfer timeout）。抓到就回传，服务端日志留痕。
+      (function () {
+        var report = function (kind, msg) {
+          try { fetch('/worker-probe?w=' + kind + '&msg=' + encodeURIComponent(String(msg).slice(0, 200))).catch(function () {}) } catch (e) {}
+        }
+        window.addEventListener('error', function (e) { report('pageErr', (e.message || 'err') + ' @' + (e.filename || '') + ':' + (e.lineno || 0)) })
+        window.addEventListener('unhandledrejection', function (e) { report('pageRej', (e.reason && (e.reason.stack || e.reason.message)) || e.reason || 'rejection') })
+        // worker 静默崩探针：包住 Worker 构造器，worker 内部未捕获异常（含 OOM 终止）经
+        // error 事件冒泡——画面冻结常因此且主线程无任何报错（2026-08-29 实证）。
+        var OrigWorker = window.Worker
+        var HookedWorker = function (url, opts) {
+          var w = new OrigWorker(url, opts)
+          try {
+            w.addEventListener('error', function (e) {
+              report('wkErr', (e.message || 'worker error') + ' @' + (e.filename || '') + ':' + (e.lineno || 0) + (e.message ? '' : ' (silent terminate/OOM?)'))
+            })
+            var om = w.onmessage
+            // messageerror：反序列化失败也是静默冻结源
+            w.addEventListener('messageerror', function () { report('wkMsgErr', 'deserialization failed') })
+          } catch (err) {}
+          return w
+        }
+        HookedWorker.prototype = OrigWorker.prototype
+        try { Object.defineProperty(window, 'Worker', { value: HookedWorker, writable: true, configurable: true }) } catch (err) {}
+        // worker 心跳自愈（2026-08-29 画面冻结根治不了 renderer 死循环时的兜底）：多跳 tp 后
+        // mesher worker 会静默死循环（无 error 事件、sectionFinished 停、主线程照常派活）。
+        // 判据：主线程 25s 内还在派活而 worker 30s+ 无任何回音 → terminate + 整页 reload 自愈。
+        // 健康静止时主线程不派活，不会误杀；reload 后探针套件会重新出现（服务端可观测自愈率）。
+        window.__wkHb = { workers: [] }
+        var HookedHB = function (url, opts) {
+          var w = HookedWorker(url, opts)
+          var st = { w: w, lastSentAt: 0, lastRecvAt: Date.now(), sent: 0, dead: false }
+          window.__wkHb.workers.push(st)
+          var op = w.postMessage.bind(w)
+          w.postMessage = function () { st.lastSentAt = Date.now(); st.sent += 1; return op.apply(w, arguments) }
+          w.addEventListener('message', function () { st.lastRecvAt = Date.now() })
+          return w
+        }
+        HookedHB.prototype = OrigWorker.prototype
+        try { Object.defineProperty(window, 'Worker', { value: HookedHB, writable: true, configurable: true }) } catch (err) {}
+        setInterval(function () {
+          var now = Date.now(), live = false
+          for (var i = 0; i < window.__wkHb.workers.length; i++) {
+            var st = window.__wkHb.workers[i]
+            if (st.dead) continue
+            var sentRecent = now - st.lastSentAt < 25000
+            var recvStale = now - st.lastRecvAt > 30000
+            if (sentRecent && recvStale && st.sent > 30) {
+              st.dead = true
+              report('wkHB', 'worker silent 30s+ with active dispatch (sent=' + st.sent + ') — terminate & reload')
+              try { st.w.terminate() } catch (e) {}
+              location.reload()
+              return
+            }
+            if (!st.dead) live = true
+          }
+        }, 5000)
+        // fetch 拦截探针：mod_assets 拉取结果（404 降级是否真生效——worker blocks 数仍 4058 之谜）
+        var origFetch = window.fetch
+        window.fetch = function (url, opts) {
+          var p = origFetch.apply(this, arguments)
+          try {
+            var u = String(url)
+            if (u.indexOf('mod_assets') >= 0 || u.indexOf('mod-pack') >= 0) {
+              p.then(function (r) { report('fetchMod', u.slice(Math.max(0, u.length - 34)) + ' -> ' + r.status) })
+                .catch(function () { report('fetchMod', u.slice(Math.max(0, u.length - 34)) + ' -> network ERR') })
+            }
+          } catch (err) {}
+          return p
+        }
+      })()
+    </script>
   </head>
   <body>
     <div class="boot" aria-live="polite">正在点亮世界画面…</div>
@@ -941,6 +1070,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, getSettleNpcs) 
       // 渲染桥 Step③：mod 资产包与 mod 方块注册表（scripts/build-mod-asset-pack.py 产物）
       // client.js 经 fetch('/mod_assets/mod-pack.json') 注入 customBlockStates/customModels/customTextures
       if (rel.startsWith('/mod_assets/') && rel.endsWith('.json')) {
+        // TEMP 渲染桥排障开关（2026-08-29 画面冻结二分）：MC_DISABLE_MOD_ASSETS=1 时 404，
+        // 客户端 Noe() try/catch 降级纯原版 mcData——用于鉴别「mod 合并注册表是否为大跳冻结诱因」。
+        if (process.env.MC_DISABLE_MOD_ASSETS === '1') { send(404, 'application/json', '{}'); return }
         const file = safeJoin(path.join(ASSET_ROOT, 'mod-assets'), rel.slice('/mod_assets/'.length))
         if (file && file.endsWith('.json')) {
           const meta = await stat(file).catch(() => null)

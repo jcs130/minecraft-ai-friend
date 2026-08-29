@@ -1,3 +1,33 @@
 {"at": "2026-08-29 13:54:48", "ts": 1787982888.2290666, "comp": "viewer-3050", "msg": "[WinError 10054] 远程主机强迫关闭了一个现有的连接。"}
 {"at": "2026-08-29 13:54:48", "ts": 1787982888.2290666, "comp": "gateway-8011", "msg": "HTTP Error 404: Not Found"}
 {"at": "2026-08-29 13:54:48", "ts": 1787982888.2290666, "comp": "rcon", "msg": "timed out"}
+{"at": "2026-08-29 14:07:27", "ts": 1787983647.4383955, "comp": "guards-online", "msg": "missing ['Kirito', 'Naruto']"}
+{"at": "2026-08-29 14:31:03", "ts": 1787985063.1196237, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 14:36:03", "ts": 1787985363.1869059, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 14:41:03", "ts": 1787985663.167552, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 14:46:03", "ts": 1787985963.200092, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 14:51:03", "ts": 1787986263.173047, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 14:56:03", "ts": 1787986563.1223006, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:01:03", "ts": 1787986863.1925607, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:06:03", "ts": 1787987163.2274985, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:11:03", "ts": 1787987463.1776175, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:16:03", "ts": 1787987763.2216475, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:21:03", "ts": 1787988063.1669378, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:26:03", "ts": 1787988363.359185, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:31:03", "ts": 1787988663.194818, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:36:03", "ts": 1787988963.3373961, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:41:03", "ts": 1787989263.3423293, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:46:02", "ts": 1787989562.6240227, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:51:02", "ts": 1787989862.6452587, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 15:56:02", "ts": 1787990162.6810765, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:01:05", "ts": 1787990465.227645, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:06:02", "ts": 1787990762.601157, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:11:02", "ts": 1787991062.638898, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:16:02", "ts": 1787991362.7490914, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:21:03", "ts": 1787991663.2859826, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:26:02", "ts": 1787991962.7636418, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:31:03", "ts": 1787992263.4449031, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:36:02", "ts": 1787992562.7887442, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:41:02", "ts": 1787992862.7071142, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:46:02", "ts": 1787993162.9246051, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}
+{"at": "2026-08-29 16:51:02", "ts": 1787993462.7859974, "comp": "guard-bridge", "msg": "bridge dead -> restarted (start_guard_drive)"}

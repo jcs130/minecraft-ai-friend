@@ -1,10 +1,10 @@
 {
- "at": "2026-08-29 13:56:04",
- "ts": 1787982964.4844716,
- "red": [],
- "yellow": [
-  "viewer-3050"
+ "at": "2026-08-29 16:51:02",
+ "ts": 1787993462.7859974,
+ "red": [
+  "guard-bridge"
  ],
+ "yellow": [],
  "detail": {
   "panel-9090": {
    "s": "green",
@@ -14,41 +14,37 @@
    "s": "green",
    "m": "200"
   },
-  "viewer-3050": {
-   "s": "yellow",
-   "m": "Remote end closed connection without response"
-  },
   "gateway-8011": {
    "s": "green",
    "m": "200"
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 4 hours (healthy)"
+   "m": "Up 7 hours (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up About an hour"
+   "m": "Up 4 minutes"
   },
   "shadow-panel": {
    "s": "green",
-   "m": "Up 10 minutes"
+   "m": "Up 54 minutes"
   },
   "shadow-gateway": {
    "s": "green",
-   "m": "Up 5 hours"
+   "m": "Up 8 hours"
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 15 hours (healthy)"
+   "m": "Up 18 hours (healthy)"
   },
   "guard-bridge": {
-   "s": "green",
-   "m": "proc x4"
+   "s": "red",
+   "m": "bridge dead -> restarted (start_guard_drive)"
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 0s old"
+   "m": "log 18s old"
   },
   "web-entities-fresh": {
    "s": "green",
@@ -64,11 +60,11 @@
   },
   "Kirito-status": {
    "s": "green",
-   "m": "hp 20.0 food 20.0"
+   "m": "hp 20.0 food 10.0"
   },
   "Naruto-status": {
    "s": "green",
-   "m": "hp 20.0 food 15.0"
+   "m": "hp 18.016 food 16.0"
   },
   "mc-guard-kirito": {
    "s": "green",
