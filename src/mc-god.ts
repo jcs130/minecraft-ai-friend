@@ -3131,16 +3131,18 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (username === getBot()?.username) return
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
       recordPlayerChat(username, message)
-      // 显式 CLI 前缀优先于一切对话通道（2026-08-29 修复：Taro 发 `cli cast 圣愈术 --json`
-      // 被真人 goddessChat 分支 LLM 抢答「我不是CLI哦」——Taro 未注册 transmigrators，
-      // 被误判真人。凡显式 `cli ...`/`/cli ...`/`!cli ...`/`mycli ...` 一律先走确定性
-      // CLI 执行，真人想聊天不带前缀不受影响，bot 的 cli 不再被 LLM 劫持）。
+      // 公屏 CLI 收敛为指路牌（2026-08-29 造物主谕：「公屏 cli 有点奇怪，私聊让他用 /mycli」）：
+      // 公屏是社交空间，不走命令执行（不刷回执、不产生 LLM 抢答歧义）。凡显式
+      // cli/mycli//cli/!cli 前缀——无论真人还是 Agent——一律私语回一句引导：
+      // Agent 正门 = 斜杠命令 /mycli（numen 命令桥，以本人身份私语 /cli 执行）；
+      // 或直接私语 Goddess 发 cli <verb>。私聊路径的 cli 执行不受影响。
       {
         const earlyCli = parseCli(message)
         if (earlyCli) {
-          worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'chat' })
-          log(`cli cmd (chat-early) from ${username}: ${earlyCli.raw.slice(0, 60)}`)
-          handleCli(username, username, earlyCli).catch((err) => log(`handleCli(chat-early) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+          log(`cli-on-chat deflected to private for ${username}: ${earlyCli.raw.slice(0, 50)}`)
+          try {
+            bot.whisper(username, '[CLI] 公屏不走命令。私聊我：/mycli status --json（斜杠命令）或 /msg Goddess cli status')
+          } catch { /* bot not ready */ }
           return
         }
       }
