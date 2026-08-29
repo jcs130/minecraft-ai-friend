@@ -41,6 +41,15 @@ const OFFLINE_UUID = require('minecraft-protocol/src/datatypes/uuid')
 const [listenPort = '25700', backendHost = '127.0.0.1', backendPort = '25799'] = process.argv.slice(2)
 const BACKEND = { host: backendHost, port: Number(backendPort) }
 
+// 【2026-08-29 update_time 断流定谳】后端默认走 vanilla 姿势(GATE_VANILLA=0 切回 forge 协商):
+//   forge 协商路径(答 neoforge:register 通道清单)下,NeoForge 21.1 的 forge 网络层
+//   不给连接发 update_time(30s 28665 包 0 时间包,探针实证);而 vanilla 姿势
+//   (CONFIG 期发 minecraft:brand)走兼容路径,update_time 每秒 1 个正常到账。
+//   后果:经门 bot(小芋/Goddess)bot.time 恒 null→判永夜→原地 rest。
+//   当前 mod 组合对 vanilla 客户端友好(实测不踢);若日后有 mod 声明必需网络通道,
+//   设 GATE_VANILLA=0 切回 forge 协商并另修时间包。
+const VANILLA_BACKEND = process.env.GATE_VANILLA !== '0'
+
 const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`)
 
 // ── 通道知识（共享）与缓存 ────────────────────────────────────────
@@ -190,6 +199,15 @@ function closeSession (sess, reason) {
   if (sess.closed) return
   sess.closed = true
   sessions.delete(sess)
+  // 【时间包普查】会话收摊:打出 back/front/err 三本账里时间相关与总量
+  try {
+    const fmt = (c) => c ? Object.entries(c).sort((a, b) => b[1] - a[1]) : []
+    const b = fmt(sess.backCensus); const f = fmt(sess.frontCensus); const e = fmt(sess.frontErrCensus)
+    const pick = (arr) => arr.filter(([k]) => /time/i.test(k)).map(([k, v]) => k + '=' + v).join(',') || 'NONE'
+    log(`census[${sess.username}] back_total=${b.reduce((s, [, v]) => s + v, 0)} time(${pick(b)}) | front_total=${f.reduce((s, [, v]) => s + v, 0)} time(${pick(f)}) | err=${e.length ? e.map(([k, v]) => k + '=' + v).join(',') : 'none'}`)
+    const top = b.slice(0, 8).map(([k, v]) => k + '=' + v).join(' ')
+    if (top) log(`census[${sess.username}] back top: ${top}`)
+  } catch (err) {}
   try { sess.back?.end() } catch (e) {}
   try { if (!sess.front.ended) sess.front.end(reason) } catch (e) {}
   log(`会话 ${sess.username} 关闭：${reason}`)
@@ -229,6 +247,15 @@ function connectBackend (sess) {
   back.on('state', (n) => {
     log(`DEBUG：[${sess.username}] 后端 state -> ${n}`)
     if (n === states.CONFIGURATION && !sess.backReady) {
+      // vanilla 姿姿：立刻自报 brand,NeoForge 判 vanilla 走兼容路径(update_time 才会发)
+      if (VANILLA_BACKEND) {
+        try {
+          const brand = Buffer.from('vanilla', 'utf8')
+          const buf = Buffer.concat([Buffer.from([brand.length]), brand])
+          back.write('custom_payload', { channel: 'minecraft:brand', data: buf })
+          log(`DEBUG：[${sess.username}] 后端自报 vanilla brand（update_time 通道保命）`)
+        } catch (e) { log(`brand 自报失败：${e.message}`) }
+      }
       sess.backReady = true
       const q = sess.frontQueue.splice(0)
       log(`DEBUG：[${sess.username}] 后端就绪，放出排队包 ${q.length} 个`)
@@ -270,6 +297,9 @@ function onBackPacket (sess, name, params) {
 
   if (sess.phase === 'play') {
     if (name === 'kick_disconnect') { setTimeout(() => closeSession(sess, '后端踢人（PLAY）'), 200) }
+    // 【时间包普查】后端 PLAY 包名计数,会话关时打摘要——update_time 断流类问题的常驻探针
+    sess.backCensus = sess.backCensus || {}
+    sess.backCensus[name] = (sess.backCensus[name] || 0) + 1
     relayTo(sess, sess.front, name, params, '后端->前端')
     return
   }
@@ -358,8 +388,15 @@ function onFrontPacket (sess, name, params) {
 // 安全重序列化转发：失败只记日志，不炸会话
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
-  if (target === sess.front) sess.lastFrontWrite = name
+  if (target === sess.front) {
+    sess.lastFrontWrite = name
+    // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
+    sess.frontCensus = sess.frontCensus || {}
+    sess.frontCensus[name] = (sess.frontCensus[name] || 0) + 1
+  }
   try { target.write(name, params) } catch (e) {
+    sess.frontErrCensus = sess.frontErrCensus || {}
+    sess.frontErrCensus[name] = (sess.frontErrCensus[name] || 0) + 1
     log(`（容忍）${dir} ${name} 重序列化失败：${(e && e.message || e).toString().slice(0, 160)}`)
   }
 }
@@ -380,6 +417,9 @@ function normalizeCustomPayload (params) {
 // 返回 true = 已处置（自答或有意吞掉），不透传；false = 非新约通道，照常透传。
 function handleNeoForgePayload (sess, channel, data) {
   const back = sess.back
+  // vanilla 姿势:mod 通道任务负载一律吞掉不答——服务端已凭 brand 判 vanilla,
+  // 不再等这些应答;原版通道(minecraft:brand/register 等)照常透传保真
+  if (VANILLA_BACKEND) return !channel.startsWith('minecraft:')
   switch (channel) {
     case P.CH.REGISTER_QUERY:
       back.write('custom_payload', { channel: P.CH.REGISTER_QUERY, data: P.encodeNetworkQuery(probe.buildChannelList(knowledge)) })
@@ -455,6 +495,10 @@ function onSetupFailed (sess, failures) {
 
 // ── 启动自检：先以探针学一遍，门再开张接客 ───────────────────────
 async function bootLearn () {
+  if (VANILLA_BACKEND) { // vanilla 姿势无需通道知识,探针反而徒增 timeout 记录
+    log('vanilla 后端模式：跳过协商自检（brand 兼容路径无需通道知识）')
+    return
+  }
   log('启动自检：以探针先行叩门……')
   const r = await probe.negotiateAndJoin({
     host: BACKEND.host,
