@@ -59,7 +59,7 @@ const bot = createBot({
 })
 // 现代画面（萌悦 modern-viewer）：MC_MODERN_VIEWER=1 时在 :3070 起 Web 渲染宿主
 // （/ 第一人称 · /third/ 环绕跟随 · /dungeon/ 2.5D；面板默认 iframe 切到它，旧 3050 留作回退）
-startModernViewer(() => bot.getBot())
+startModernViewer(() => bot.getBot(), { getSettleNpcs: () => settleNpcCache })
 const rcon = createRcon({
   enabled: true,
   host: process.env.MC_RCON_HOST ?? process.env.MC_HOST ?? 'localhost',
@@ -200,18 +200,41 @@ const MOB_RE = /(zombie|zombie_villager|drowned|husk|skeleton|stray|wither_skele
 // `execute as @e[type=settlements:base_villager] run data get entity @s Pos`，回执每行自带
 // 「中文名 has the following entity data: [x, y, z]」（名字+位置一次拿全）。解析结果缓存，
 // 每轮以 isNpc=true 注入快照；RCON 失败保留旧缓存（村民不闪没）。
-interface SettleNpc { name: string; x: number; y: number; z: number }
+// 2026-08-29 II（9090 村民=盔甲架修复）：再加拉 VillagerData（profession/level），并把名单
+// 喂给现代画面（startModernViewer 第二参数）——mineflayer 把 base_villager 错认成
+// unknown/armor stand，3070 3D 里村民全成了隐形或盔甲架；viewer 侧按 settle 名单重造实体流。
+interface SettleNpc { name: string; x: number; y: number; z: number; profession: string; level: number }
 let settleNpcCache: SettleNpc[] = []
 let snapTick = 0
+const SETTLE_YAW = new Map<string, number>() // 名字→朝向（可选增强，暂不拉）
+function parseSettleRcon(out: string): Map<string, { x: number; y: number; z: number }> {
+  const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+  const map = new Map<string, { x: number; y: number; z: number }>()
+  for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]/g)) {
+    map.set(m[1].trim(), { x: +m[2], y: +m[3], z: +m[4] })
+  }
+  return map
+}
+function parseSettleProfessions(out: string): Map<string, { profession: string; level: number }> {
+  const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+  const map = new Map<string, { profession: string; level: number }>()
+  for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \{type: "[^"]*", profession: "([^"]*)"(?:, level: (\d+))?\}/g)) {
+    map.set(m[1].trim(), { profession: m[2].replace(/^.*:/, ''), level: +(m[3] ?? 1) })
+  }
+  return map
+}
 function refreshSettleNpcs(): void {
-  rcon.service
-    .send('execute as @e[type=settlements:base_villager] run data get entity @s Pos')
-    .then((out) => {
-      // RCON 多行回执带 ANSI 颜色码（含跨行残留的孤立 [0m），全清再解析
-      const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+  Promise.all([
+    rcon.service.send('execute as @e[type=settlements:base_villager] run data get entity @s Pos'),
+    rcon.service.send('execute as @e[type=settlements:base_villager] run data get entity @s VillagerData'),
+  ])
+    .then(([posOut, profOut]) => {
+      const posMap = parseSettleRcon(posOut)
+      const profMap = parseSettleProfessions(profOut)
       const rows: SettleNpc[] = []
-      for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]/g)) {
-        rows.push({ name: m[1].trim(), x: +m[2], y: +m[3], z: +m[4] })
+      for (const [name, p] of posMap) {
+        const prof = profMap.get(name)
+        rows.push({ name, x: p.x, y: p.y, z: p.z, profession: prof?.profession ?? 'none', level: prof?.level ?? 1 })
       }
       // 空结果=村民真没了（正常不会发生）；RCON 异常走 catch，缓存原地保留
       settleNpcCache = rows

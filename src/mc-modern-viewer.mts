@@ -778,11 +778,15 @@ export function startModernViewer(getBot, options = {}) {
   const port = Number(process.env.MC_MODERN_VIEWER_PORT ?? options.port ?? 3070)
   const firstPersonFov = Number(process.env.MC_MODERN_VIEWER_FP_FOV ?? 110)
   const dashboardOrigin = process.env.MC_PANEL_ORIGIN ?? 'http://127.0.0.1:9090'
+  // 2026-08-29 II（9090 村民=盔甲架修复）：settle 村民名单供给（RCON 补录，bootstrap-world 喂）。
+  // mineflayer 不认 settlements:base_villager → 实体流里错认成 unknown/armor stand，
+  // 3070 3D 画面村民要么隐身要么画成盔甲架。据此名单重造村民实体流 + 压制错认幽灵。
+  const getSettleNpcs = typeof options.getSettleNpcs === 'function' ? options.getSettleNpcs : null
 
   const boot = () => {
     const bot = getBot()
     if (!bot || !bot.entity || !bot.version) return false
-    startServer(bot, port, firstPersonFov, dashboardOrigin)
+    startServer(bot, port, firstPersonFov, dashboardOrigin, getSettleNpcs)
     return true
   }
   if (!boot()) {
@@ -793,8 +797,54 @@ export function startModernViewer(getBot, options = {}) {
   }
 }
 
-function startServer(bot, port, firstPersonFov, dashboardOrigin) {
+function startServer(bot, port, firstPersonFov, dashboardOrigin, getSettleNpcs) {
   injectModBlockRegistry(bot) // 渲染桥 Step②：先补注册表，再开任何会话（归一化器/区块流共用 bot.registry）
+
+  // ---------- settle 村民实体流（2026-08-29 II：9090 村民=盔甲架修复） ----------
+  // mineflayer 把 settlements:base_villager 错认成 unknown/armor stand → 3D 画面村民隐身或成盔甲架。
+  // 这里按 RCON 补录名单（bootstrap-world settleNpcCache）重造实体流：name='villager' 走
+  // 客户端村民 OBJ 模型 + maybeApplyVillagerAppearance 职业袍；中文名牌走 username/customName。
+  // 客户端 VILLAGER_LEVEL_KEYS = none/stone/iron/gold/emerald/diamond（徽章材质，对应原版 1-5 级）
+  const SETTLE_LEVEL_KEYS = ['none', 'stone', 'iron', 'gold', 'emerald', 'diamond']
+  const settleVillagerEntity = (v) => ({
+    id: 'settle:' + v.name,
+    name: 'villager',
+    type: 'villager',
+    username: v.name,
+    customName: v.name,
+    displayName: v.name,
+    pos: { x: v.x, y: v.y, z: v.z },
+    position: { x: v.x, y: v.y, z: v.z },
+    width: 0.6,
+    height: 1.9,
+    yaw: 0,
+    headYaw: 0,
+    onGround: true,
+    villagerAppearance: {
+      typeKey: 'plains',
+      professionKey: String(v.profession ?? 'none').replace(/^.*:/, ''),
+      levelKey: SETTLE_LEVEL_KEYS[Math.min(5, Math.max(1, Number(v.level) || 1))],
+    },
+  })
+  // 错认幽灵压制：armor_stand 且水平 24 格内有 settle 村民 → 不推（RCON 实证全服真盔甲架=0，
+  // bot 流里的 armor_stand 全是 base_villager/装饰实体错认或僵尸缓存；发行版无 settle 名单时不过滤）。
+  // 注意时序：bot spawn 批量推早于 RCON 名单首拉（4.5s 周期），settleTimer 每轮补压漏网幽灵。
+  const isSettleGhost = (entity) => {
+    if (!getSettleNpcs) return false
+    const list = getSettleNpcs()
+    if (!Array.isArray(list) || list.length === 0) return false
+    const name = canonicalEntityName(entity?.name ?? entity?.type)
+    if (name !== 'armor stand' && name !== 'armor_stand') return false
+    const pos = entity?.position ?? entity?.pos
+    if (!pos || !Number.isFinite(pos.x)) return false
+    return list.some((v) => Number.isFinite(v.x) && Number.isFinite(v.z)
+      && Math.hypot(v.x - pos.x, v.z - pos.z) <= 24)
+  }
+  const currentSettleList = () => {
+    if (!getSettleNpcs) return []
+    const list = getSettleNpcs()
+    return Array.isArray(list) ? list : []
+  }
   const prismarinePublicRoot = path.join(path.dirname(require.resolve('prismarine-viewer/package.json')), 'public')
   const sessions = new Set()
   let worldGeneration = 0
@@ -1062,16 +1112,19 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     }
     const botEntitySpawn = (entity) => {
       if (!socket.connected || !entity || entity === bot.entity) return
+      if (isSettleGhost(entity)) return // settle 村民错认成的盔甲架幽灵：不推（settle 名单会重造真身）
       socket.emit('entity', serializeViewerEntity(bot, entity))
       emitMovementAnimation(entity, true)
     }
     const botEntityMoved = (entity) => {
       if (!socket.connected || !entity) return
+      if (isSettleGhost(entity)) return
       if (entity !== bot.entity) socket.emit('entityMoved', serializeViewerEntity(bot, entity, false))
       emitMovementAnimation(entity)
     }
     const botEntityRefresh = (entity) => {
       if (!socket.connected || !entity) return
+      if (isSettleGhost(entity)) return
       if (entity === bot.entity) { emitOwnEntity(); botAvatarState() }
       else socket.emit('entity', serializeViewerEntity(bot, entity))
       emitMovementAnimation(entity)
@@ -1132,8 +1185,40 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
       }
     }, 300)
     locomotionKeepalive.unref()
+    // settle 村民实体流（2026-08-29 II）：RCON 名单重造村民（name='villager'→OBJ 模型+职业袍），
+    // 全量 emit（客户端 handleEntity 幂等 merge，35 条 JSON 代价可忽略）；名单里消失的补 delete；
+    // 顺带补压漏网幽灵（spawn 批推早于名单首拉的时序洞：晚到的错认 armor_stand 在此清扫）。
+    const settleKnown = new Set()
+    const settleGhostsPurged = new Set()
+    const settleTimer = setInterval(() => {
+      if (!socket.connected) return
+      const list = currentSettleList()
+      if (list.length === 0) return
+      const seen = new Set()
+      for (const v of list) {
+        if (!v || !Number.isFinite(v.x)) continue
+        socket.emit('entity', settleVillagerEntity(v))
+        seen.add('settle:' + v.name)
+      }
+      for (const id of settleKnown) {
+        if (!seen.has(id)) socket.emit('entity', { id, delete: true }) // 复用 entity 事件的 delete 分支
+      }
+      settleKnown.clear()
+      for (const id of seen) settleKnown.add(id)
+      // 漏网幽灵清扫：bot 流里贴近 settle 村民的错认 armor_stand（含僵尸缓存）
+      for (const entity of Object.values(bot.entities ?? {})) {
+        if (!entity) continue
+        const id = String(entity.id)
+        if (settleGhostsPurged.has(id)) continue
+        if (isSettleGhost(entity)) {
+          socket.emit('entity', { id, delete: true })
+          settleGhostsPurged.add(id)
+        }
+      }
+    }, 1500)
+    settleTimer.unref()
     const session = {
-      socket, worldView, viewMode, avatarTimer, locomotionKeepalive, movementAnimations,
+      socket, worldView, viewMode, avatarTimer, locomotionKeepalive, settleTimer, movementAnimations,
       botPosition, botTime, botWeather, botAvatarState, botEntitySpawn, botEntityMoved, botEntityRefresh,
       botEntitySwingArm, botEntityHurt, botParticle, botSoundEffect, botHardcodedSoundEffect, botEntityDead,
       botEntityCrouch, botEntityUncrouch,
@@ -1184,6 +1269,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin) {
     if (!sessions.delete(session)) return
     clearInterval(session.avatarTimer)
     if (session.locomotionKeepalive) clearInterval(session.locomotionKeepalive)
+    if (session.settleTimer) clearInterval(session.settleTimer)
     bot.off('move', session.botPosition)
     bot.off('forcedMove', session.botPosition)
     bot.off('time', session.botTime)
