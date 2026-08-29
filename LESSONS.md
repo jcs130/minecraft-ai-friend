@@ -1,3 +1,10 @@
+﻿## 2026-08-29 神社之门 update_time 断流(小芋永夜僵直)——forge 协商路径吞时间包
+
+- **症状**:经门 bot(小芋/Goddess)bot.time 恒 null→判永夜→原地 rest;小桃探针 30s 零时间包。**根因**:gate 后端答全套 neoforge 通道协商→NeoForge 21.1 判 forge 客户端→**forge 网络路径不给连接发 update_time**(census 实证:30s 28665 包 0 时间包,实体/方块/聊天全正常);而 vanilla 路径(mineflayer 直连)每秒 1 个正常。**修法**:后端进 CONFIG 即自报 `minecraft:brand`(varint len + utf8)走 vanilla 兼容路径,mod 通道负载吞掉不答、原版通道照常透传;GATE_VANILLA=0 可切回。**教训:「协商过≠行为等价」——NeoForge 对 forge/vanilla 连接的包流有差异,中继层协议分叉要以 wire 级对拍(census+探针)验收,不能只看能否进 PLAY。**
+- **诊断方法论(30 分钟定位)**:①门内三本账(backCensus/frontCensus/errCensus)分层定位丢包点——back 0 个=后端没收到(服务端行为差异),back 有 front 无=转发丢失;②矩阵实验(mcvanilla3 A/B/C)逐项加应答找通路:A 答 ping/ka 仍卡 CONFIG,B 加 brand 秒过+update_time 到账,C 答通道清单走到 enum_data 卡死——brand 是 NeoForge 判 vanilla 的开关;③对拍探针常备:idprobe(直连 vs 过门数包名)是「门有没有吞包」的照妖镜。
+- **mcp 裸 createClient 三坑**:①CONFIG 期只自动答 select_known_packs/finish_configuration,不自动答 ping(要手动 pong,否则 NeoForge 卡任务机);②不发 minecraft:brand(要手动发才被判 vanilla);③PLAY 期对 NeoForge declare_commands 会 PartialReadError(单包失败帧对齐不受影响,容忍跳过即可;vanilla 路径下此包可正常解析)。
+- **bundle_delimiter≠乱流**:mcp client.js 有 bundle 缓冲逻辑(_mcBundle,>32 倾泻+_hasBundlePacket=false),census 里大量 bundle_delimiter 是正常现象(每 bundle 2 个 delimiter),不是包流错位。
+
 
 ## 2026-08-27 守卫名牌丢失三犯终局 + compose 编码手术
 
