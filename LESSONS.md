@@ -1,4 +1,11 @@
-﻿## 2026-08-29 神社之门 update_time 断流(小芋永夜僵直)——forge 协商路径吞时间包
+## 2026-08-29 技能书右键施法(✦徽记)+ 萌萌上线礼包
+
+- **架构一行话**:右键书→`PlayerInteractEvent.RightClickItem`(numen_act SkillBookHandler)→以玩家本人身份私语 Goddess `/cli cast <书名去徽记>`→女神 cast 链全量校验——java 侧零旁路,等级/魔力/冷却/模糊咒词全在 TS 侧单点维护。技能书=custom_name 带「✦ 」徽记的 enchanted_book(`getHoverName().getString()` 纯文本前缀识别,普通附魔书零干扰)。
+- **RCON 发 SNBT 物品组件(PowerShell 吃引号坑)**:PS 里 `rcon-cli 'give X enchanted_book[custom_name={text:"✦ 名"}]'` 报 `Expected value`——引号层层被剥。正解:cmd 原生 `docker exec shadow-mc rcon-cli "give X enchanted_book[custom_name='{text:\"✦ 名\",color:\"gold\",italic:false}'] 1"`(外双内单,SNBT 字符串单引号包)。TS 侧 rcon.send 模板字符串无此坑。
+- **假玩家右键无 RCON 通道**:numen `Interaction.useInAir` 存在但 numen_act invoke 的工具名未导出,端到端右键验证只能真人首测;java 监听以「编译过+mod 加载无错+私语→cast 链已验」三段折衷验收。
+- **上线路径送礼模式**(ensureStatusBook 同构):名单持久化(`skillbooks-given.json`)+give 全成功才记账+离线自动等下次上线——restart 幂等。
+
+## 2026-08-29 神社之门 update_time 断流(小芋永夜僵直)——forge 协商路径吞时间包
 
 - **症状**:经门 bot(小芋/Goddess)bot.time 恒 null→判永夜→原地 rest;小桃探针 30s 零时间包。**根因**:gate 后端答全套 neoforge 通道协商→NeoForge 21.1 判 forge 客户端→**forge 网络路径不给连接发 update_time**(census 实证:30s 28665 包 0 时间包,实体/方块/聊天全正常);而 vanilla 路径(mineflayer 直连)每秒 1 个正常。**修法**:后端进 CONFIG 即自报 `minecraft:brand`(varint len + utf8)走 vanilla 兼容路径,mod 通道负载吞掉不答、原版通道照常透传;GATE_VANILLA=0 可切回。**教训:「协商过≠行为等价」——NeoForge 对 forge/vanilla 连接的包流有差异,中继层协议分叉要以 wire 级对拍(census+探针)验收,不能只看能否进 PLAY。**
 - **诊断方法论(30 分钟定位)**:①门内三本账(backCensus/frontCensus/errCensus)分层定位丢包点——back 0 个=后端没收到(服务端行为差异),back 有 front 无=转发丢失;②矩阵实验(mcvanilla3 A/B/C)逐项加应答找通路:A 答 ping/ka 仍卡 CONFIG,B 加 brand 秒过+update_time 到账,C 答通道清单走到 enum_data 卡死——brand 是 NeoForge 判 vanilla 的开关;③对拍探针常备:idprobe(直连 vs 过门数包名)是「门有没有吞包」的照妖镜。
