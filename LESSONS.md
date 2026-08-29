@@ -157,3 +157,9 @@
 3. **stats 跨容器读**：MC 容器 /data=bind 宿主 `ops/docker/shadow/mc`，world 容器 compose 加只读挂载 `./mc/shadow/stats:/mcstats:ro`（仿既有 /mcadv 模式）——**挂载改动须 `docker compose up -d world` recreate，restart 不生效**。
 4. **execute as <player> run kill 不计入 mob_kills**（kill 命令 DamageSource 无 killer 归属）——测试统计折算不能伪造击杀，只能等真实杀怪贯通；但 stat 里已有 numen 真实击杀累计（Naruto 29）证明机制对假玩家有效。
 5. 首见立基线（历史击杀不折）+ delta×5xp/kill + 真人白名单（自己能吸球防双份）+ 20s 周期（RCON 瞬断自愈）。
+
+### 更正（同日 v1→v2，重要机制澄清）
+6. **v1 误判「numen 杀怪经验蒸发」——实为 vanilla 机制记错**：玩家近战击杀的经验是**直接入账**（`LivingEntity.dropExperience → player.giveExperiencePoints`），**根本不走经验球**；球只在繁殖/熔炉/交易等场景产生。贴脸召球没人吸≠杀怪经验丢（鸣人 223 XpTotal = 29 kills 直接入账 + 施法 xp，账对得上）。**铁证**：Kirito 无任何折算日志却 +5xp 升级 44→45（stats 盘面还是旧值 30）——那是 vanilla 直接入账的杀怪经验。
+7. **v1 双份风险**：若 stats flush（MC 定期 ≤5 分钟）后折算器再按 mob_kills delta 发钱 → 同一批击杀双份。好在赶在 flush 前撤下。教训：**补偿器上线前先问「vanilla 这条路原本给不给」——原版已给的路（杀怪/挖经验矿掉经验直入账）绝不能再补**。
+8. **v2 只补 vanilla 零经验区**：采集（砍树/普通挖石/建造）原版零经验，守卫日常任务大头正在此——折算 `minecraft:mined`：原木/木类 1xp、含 ore 3xp、石类不折（量太大会灌水）。天然无双份。
+9. **stats json 盘面滞后 ≤5 分钟**（MC 定期 flush，非实时）——折算补偿延迟可接受；测试时要等 flush 或真等 5 分钟，别被旧盘面骗。

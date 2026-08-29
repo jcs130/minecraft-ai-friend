@@ -944,22 +944,36 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   setInterval(() => { statusLoop().catch(() => {}) }, 5000)
   // 进程启动即补一轮（服务重启后把重启前积压的请求也回执掉）。
   setTimeout(() => { statusLoop().catch(() => {}) }, 3000)
-  // ── 修为折算器（2026-08-29 造物主令「做任务该涨级」）──────────────────
-  // 根因实测（08-29）：numen 假玩家不吸经验球——execute at 贴脸召 value=30 球，
-  // XpTotal 5s 不动；xp add 命令路径正常。即：numen 杀怪掉的经验球全部蒸发
-  // （Kirito lv44 的 4020 总量几乎全靠施法 xp add 与神迹注入）。加上原版采集
-  // （砍树/挖石）本就零经验 → 守卫「一直做任务不涨级」。
-  // 修法：MC 侧 stats json（compose 只读挂载 /mcstats，UUID 文件名）读
-  // stats["minecraft:custom"]["minecraft:mob_kills"]，Δkills × 5xp → xp add
-  // （XpLevel 是修为唯一真源，升级公告由既有 ΔXpLevel 检测自然触发）。
-  // 1.21 已无 custom criteria scoreboard（Unknown criterion 实测），故走文件。
-  // 真人（自己能吸球）白名单跳过防双份。
+  // ── 修为折算器 v2（2026-08-29 造物主令「做任务该涨级」）──────────────────
+  // ⚠️ v1 教训（当天即纠）：玩家近战击杀经验是 vanilla 直接入账、不走经验球
+  // （球只在繁殖/熔炉等场景）——「numen 杀怪经验蒸发」是误判；折算 mob_kills
+  // 会双份发钱（v1 赶在 stats flush 前撤下，未造成实际双发）。
+  // 真凶：守卫的日常任务是砍木/挖石/建造——原版采集类零经验；修为唯一真源
+  // XpLevel 涨不动 → 「一直做任务不涨级」（鸣人 XpTotal 223 vs 桐人 4025，
+  // 桐人 45 级几乎全靠施法 xp add 与杀怪）。
+  // v2 修法：只折算 vanilla 零经验的「采集」——stats["minecraft:mined"] 里
+  // 原木系 1xp/个、矿石系 3xp/个（石类量太大不折，防灌水）。天然无双份。
+  // stats json 由 compose 只读挂载 /mcstats（UUID 文件名），盘面最多滞后
+  // 5 分钟（MC 定期 flush），折算延迟可接受。20s 周期，首见立基线。
+  // 真人白名单同跳过（采集对真人同样零经验，但先保守跳过，观察后再放）。
   const NATIVE_XP_PLAYERS = new Set(['MengMeng', 'KangQiang', 'MicroKQ', 'Codex'])
-  const MOBKILL_XP = 5
+  const MINE_XP_LOG = 1     // 每根原木
+  const MINE_XP_ORE = 3     // 每块矿石
   const MC_STATS_DIR = process.env.MC_STATS_DIR || '/mcstats'
   const XP_SNAP_PATH = resolve(DATA_DIR, 'xp-snapshots.json')
-  let xpSnaps: Record<string, number> = {}
-  try { xpSnaps = JSON.parse(readFileSync(XP_SNAP_PATH, 'utf-8')) as Record<string, number> } catch { /* 首跑立基线 */ }
+  type MineSnap = Record<string, number> // 玩家 → 采集价值点累计（原木/矿折价后）
+  let xpSnaps: MineSnap = {}
+  try { xpSnaps = JSON.parse(readFileSync(XP_SNAP_PATH, 'utf-8')) as MineSnap } catch { /* 首跑立基线 */ }
+  function mineValue(stat: { stats?: Record<string, Record<string, number>> }): number {
+    const mined = stat?.stats?.['minecraft:mined']
+    if (!mined) return 0
+    let v = 0
+    for (const [block, n] of Object.entries(mined)) {
+      if (block.endsWith('_log') || block.endsWith('_wood') || block.endsWith('_stem')) v += n * MINE_XP_LOG
+      else if (block.includes('_ore')) v += n * MINE_XP_ORE
+    }
+    return v
+  }
   const uuidCache = new Map<string, string>()
   async function uuidOf(name: string): Promise<string | null> {
     const hit = uuidCache.get(name)
@@ -985,15 +999,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           if (!uuid) continue
           let stat: { stats?: Record<string, Record<string, number>> } = {}
           try { stat = JSON.parse(readFileSync(resolve(MC_STATS_DIR, `${uuid}.json`), 'utf-8')) as typeof stat } catch { continue }
-          const cur = stat?.stats?.['minecraft:custom']?.['minecraft:mob_kills']
-          if (typeof cur !== 'number') continue
+          const cur = mineValue(stat)
           const prev = xpSnaps[name]
-          if (prev === undefined) { xpSnaps[name] = cur; continue } // 首见立基线，历史击杀不折
+          if (prev === undefined) { xpSnaps[name] = cur; continue } // 首见立基线，历史采集不折
           if (cur > prev) {
-            const gain = (cur - prev) * MOBKILL_XP
+            const gain = cur - prev
             xpSnaps[name] = cur
             await rcon.send(`xp add ${name} ${gain} points`)
-            log(`xp-comp ${name}: kills ${prev}->${cur} => +${gain} xp (numen orb-broken compensation)`)
+            log(`xp-comp ${name}: mine-value ${prev}->${cur} => +${gain} xp (vanilla 零经验采集补偿)`)
           } else if (cur < prev) {
             xpSnaps[name] = cur // 服务端统计重置（防回绕）
           }
