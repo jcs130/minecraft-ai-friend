@@ -2335,16 +2335,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   // ── 守卫回应玩家的耳（2026-08-24）：玩家公屏发言 → player-chat.jsonl ──
   // 守卫（桐人/鸣人）能"听见"玩家在聊天频道说的话并 say 回应；守卫桥读该文件后
-  // 让亲卫判定是否接话。排除：女神自己（chat 事件已 return）、内部 bot、守卫本人
-  // （避免自说自话）、守护天使(sys_，客户端陪玩专属)。与守卫桥同卷（MC_DATA_DIR）。
-  const GUARD_PLAYER_NAMES = new Set(['桐人', '鸣人', 'Kirito', 'Naruto'])
+  // 让亲卫判定是否接话。排除：女神自己（chat 事件已 return）、内部 bot、守护天使
+  // (sys_，客户端陪玩专属)。与守卫桥同卷（MC_DATA_DIR）。
+  // 2026-08-29 造物主谕「numen 说话肯定要被听到」：守卫自己的公屏发言**也落盘**
+  // （假玩家互听/世界之声完整）——自说自话由消费侧滤（mcp_numen/guard_drive 读时跳过本人）。
   const PLAYER_CHAT = process.env.PLAYER_CHAT || `${DATA_DIR}/player-chat.jsonl`
   function recordPlayerChat(username: string, message: string): void {
     if (!username || !message) return
     if (username === getBot()?.username) return
     if (isInternalBot(username)) return
     if (username.startsWith('sys_')) return
-    if (GUARD_PLAYER_NAMES.has(username)) return
     try {
       appendFileSync(PLAYER_CHAT, JSON.stringify({ ts: Date.now(), user: username, text: message.slice(0, 256) }) + '\n')
     } catch { /* best effort：记录失败不影响女神逻辑 */ }
@@ -3563,6 +3563,26 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (law) {
         applyLaw(username, law).catch((err) => log(`applyLaw(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
       }
+    })
+
+    // 假玩家公屏耳朵（2026-08-29 造物主谕「numen 说话肯定要被听到，不然各种做任务做不了」）：
+    // 守卫/假玩家改用 `execute as <login> run say <msg>`（服务器原生广播）说话——入 latest.log
+    // （村民引擎 tail 感知✓），同时以 system chat 发到各客户端。mineflayer 'chat' 事件只认
+    // player_chat 包，收不到 say 广播；这里补 'message' 事件解析 `[名字] 内容` 格式，
+    // 落 player-chat.jsonl——假玩家之间、假玩家↔守卫桥的公屏听觉由此闭环。
+    const SAY_RE = /^\[([A-Za-z0-9_]{1,16})\] (.+)$/
+    bot.on('message', (msg: any) => {
+      try {
+        const text = String(msg?.toString?.() ?? '').trim()
+        const m = SAY_RE.exec(text)
+        if (!m) return
+        const who = m[1]
+        if (who === getBot()?.username || who === 'Server') return
+        // 只认在线玩家名单里的名字，避免误吞服务器广播（如 [Rcon]）
+        const online = new Set((process.env.MC_ONLINE_CACHE ?? '').split(',').filter(Boolean))
+        recordPlayerChat(who, m[2])
+        log(`say-heard [${who}] ${m[2].slice(0, 60)}`)
+      } catch { /* 解析失败静默 */ }
     })
 
     // 私聊祈愿：任何玩家 /msg Goddess <愿望>[｜供奉：面包x3] → 收执供奉 → 入收件箱。

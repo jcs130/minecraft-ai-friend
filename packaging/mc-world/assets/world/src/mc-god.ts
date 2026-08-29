@@ -7,7 +7,7 @@ import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
-import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
+import { CHRONICLE_TYPE_CN, adventurerRank } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import type { LogwatchService } from './mc-logwatch.ts'
 import type { McTerraService } from './mc-terra.ts'
@@ -64,14 +64,18 @@ const STATUS_GIVEN = process.env.STATUS_GIVEN || `${DATA_DIR}/statusbook-given.j
 function snbtEsc(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 }
-/** 神使手札 NBT（1.21 组件格式；lore 教用法，右键=查状态不打开书）。 */
-function statusBookNbt(): string {
-  const pages = [
-    '神使手札\n\n右键我，即可查看你的当前状态：等级、魔力、生命、饱食、出生天赋、已学技艺。\n—— 天神',
-    '无法丢弃，无法放入箱子。\n它只属于你。\n\n聊天框打 cli status 或 /mycli status 也能看。',
-  ].map((p) => `"${snbtEsc(JSON.stringify({ text: p }))}"`).join(',')
-  const lore = `"${snbtEsc(JSON.stringify({ text: '右键=查看状态（不打开书）', color: 'dark_gray', italic: true }))}"`
-  return `minecraft:written_book[minecraft:written_book_content={title:"神使手札",author:"天神",pages:[${pages}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"神使手札","color":"gold"}',minecraft:lore=[${lore}]]`
+/** text 组件 → SNBT 内嵌 JSON（中文原生输出）。2026-08-29 发书失败根因：
+ * JSON.stringify 把中文转 \uXXXX，SNBT 解析器不认（Invalid escape sequence '\u'）。 */
+function textJson(o: Record<string, string | boolean | number>): string {
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(o)) parts.push(`"${k}":${typeof v === 'string' ? `"${snbtEsc(v)}"` : JSON.stringify(v)}`)
+  return `{${parts.join(',')}}`
+}
+/** 命格书 NBT（2026-08-29 造物主令：一般的成书、人人一本、基岩版可翻读）。发书时生成静态快照；右键实时查询保留。 */
+function statusBookNbt(pages: string[]): string {
+  const ps = pages.map((p) => `"${snbtEsc(textJson({ text: p }))}"`).join(',')
+  const lore = `"${snbtEsc(textJson({ text: '翻开即读 · 右键实时刷新', color: 'dark_gray', italic: true }))}"`
+  return `minecraft:written_book[minecraft:written_book_content={title:"命格书",author:"天神",pages:[${ps}]},minecraft:custom_data={statusbook:true},minecraft:custom_name='{"text":"命格书","color":"gold"}',minecraft:lore=[${lore}]]`
 }
 
 /**
@@ -475,6 +479,8 @@ export interface GodDeps {
   transmigrators: TransmigratorRegistry
   logwatch?: LogwatchService
   terra?: McTerraService
+  /** 咏唱可视化（2026-08-28 造物主点子）：AI 咏唱=CLI，头顶气泡冒咒语词，节目效果拉满。 */
+  bubble?: { show: (player: string, text: string) => void }
 }
 
 export interface GodHandle {
@@ -588,7 +594,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     const res = await fetch(config.qwenpawUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Agent-Id': agentId },
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(300_000), // 🩹 2026-08-27：120s 必炸——本尊玩具回合都要 ~77s，重活+思考远超此线
       body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error(`goddess API ${res.status}: ${(await res.text()).slice(0, 200)}`)
@@ -642,6 +648,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
    * 目标 agent 完整跑一轮（可用工具/写记忆），轮询 GET /console/chat/task/{id} 拿最终回复。
    * 给日报这类长任务用——不再受同步 120s 超时限制（158 天前那次「天神暂时不在」就是同步超时）。
    * 失败时调用方回退同步 callAgent。
+   * 🩹 2026-08-27：实测定谳——mc-god 本尊连玩具回合都要 ~77s，日报这种「评价+指示+写记忆」
+   * 的重活远超原 300s 死线；且轮询只认 finished，failed 态会被干等到假超时。修三处：
+   *   ① 客户端死线与 payload timeout 都提到 600s；
+   *   ② 轮询识别 failed/cancelled/error 终态即刻抛错（带真实原因，不再假装超时）；
+   *   ③ 同步兜底的 AbortSignal 也放宽到 300s（原来 120s 必炸）。
    */
   async function callAgentTask(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<{ text: string }> {
     const content: { type: string; text?: string; image_url?: string }[] = []
@@ -656,7 +667,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       user_id: userId,
       session_id: sessionId,
       input: [{ role: 'user', content }],
-      timeout: 300_000,
+      timeout: 570_000,
     }
     const post = await fetch(`${base}/console/chat/task`, {
       method: 'POST',
@@ -667,7 +678,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     if (!post.ok) throw new Error(`goddess task submit ${post.status}: ${(await post.text()).slice(0, 200)}`)
     const { task_id: taskId } = await post.json() as { task_id?: string }
     if (!taskId) throw new Error('goddess task: no task_id')
-    const deadline = Date.now() + 300_000
+    const deadline = Date.now() + 590_000
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 5_000))
       const st = await fetch(`${base}/console/chat/task/${taskId}`, { headers, signal: AbortSignal.timeout(15_000) })
@@ -677,6 +688,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const text = extractTaskText(body.result)
         if (text) return { text }
         throw new Error('goddess task finished without text')
+      }
+      // 终态失败：立刻把真实错误带出去（此前只认 finished，failed 会被干等到「timed out」假象）
+      const errText = (() => { try { return JSON.stringify(body.result).slice(0, 200) } catch { return '' } })()
+      if (body.status === 'failed' || body.status === 'cancelled' || body.status === 'canceled') {
+        throw new Error(`goddess task ${body.status}${errText ? ': ' + errText : ''}`)
+      }
+      if (body.status && !['pending', 'running', 'queued'].includes(body.status)) {
+        throw new Error(`goddess task unknown terminal status "${body.status}"${errText ? ': ' + errText : ''}`)
       }
     }
     throw new Error('goddess task timed out')
@@ -856,7 +875,23 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** 上线发书：非 sys_ 且未发过 → give 一本（custom_data.statusbook=true）。 */
   async function ensureStatusBook(username: string): Promise<void> {
     if (username.startsWith('sys_') || statusGiven.has(username)) return
-    const r = await rcon.send(`give ${username} ${statusBookNbt()} 1`).catch(() => '')
+    // 2026-08-29 造物主令：命格书=一般成书人人一本（基岩可读）。发书时生成静态命格快照。
+    const view = magic.getState(username)
+    const innateId = view.innateSkill ?? magic.getInnate(username)
+    const innateName = (innateId && magic.getAtomById(innateId)?.name) || '未显'
+    const learned = view.learned.slice(0, 8).map((id) => magic.getAtomById(id)?.name ?? id)
+    const story = String(view.backstory ?? '').replace(/\s+/g, ' ').slice(0, 55)
+    const pages = [
+      `§6《命格书》§r\n${username}\n天赋：${innateName}`,
+      `法力 ${Math.round(view.mana)}/${view.maxMana}\n技艺：${learned.length ? learned.join('、') : '尚未习艺'}`,
+      story ? `出身：${story}` : '出身：此界原住民',
+    ]
+    const r = await rcon.send(`give ${username} ${statusBookNbt(pages)} 1`).catch((err: unknown) => {
+      // 2026-08-29 II：give 失败不再静默——60s 周期兜底会重试，但日志要留痕以便排查。
+      log(`statusbook give failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      return ''
+    })
+    log(`statusbook give reply for ${username}: ${JSON.stringify(String(r)).slice(0, 120)}`)
     // give 成功（玩家在线）才记名单；离线给不了，等下次上线再补。
     if (r && /gave|已给予|Given/i.test(r)) {
       statusGiven.add(username)
@@ -864,6 +899,79 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       log(`statusbook given to ${username}`)
     }
   }
+
+  // ── 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）──────────────────
+  // ✦ 徽记 enchanted_book = 右键施法书（numen_act SkillBookHandler 监听
+  // PlayerInteractEvent.RightClickItem → 私语 /cli cast <书名去徽记> → 女神
+  // cast 链校验等级/魔力/冷却）。等级不够的书右键会收「等级不足」反馈——低门槛
+  // 书马上能放，高门槛书是成长目标，这正是设计。
+  const SKILLBOOKS_GIVEN = process.env.SKILLBOOKS_GIVEN || `${DATA_DIR}/skillbooks-given.json`
+  const ATTACK_BOOK_GIFT: Array<{ to: string; books: string[] }> = [
+    // 萌萌（重点看护/手柄/不识字）：点书即施法，零打字零咒语。4 攻击术 + 专属火焰光环。
+    { to: 'MengMeng', books: ['风爆术', '螺旋丸', '雷暴术', '陨石术', '火焰光环'] },
+  ]
+  let skillBooksGiven = new Set<string>()
+  try {
+    if (existsSync(SKILLBOOKS_GIVEN)) {
+      for (const n of JSON.parse(readFileSync(SKILLBOOKS_GIVEN, 'utf-8'))) skillBooksGiven.add(String(n))
+    }
+  } catch { /* 首次运行 */ }
+  function persistSkillBooksGiven(): void {
+    try {
+      writeFileSync(SKILLBOOKS_GIVEN, JSON.stringify([...skillBooksGiven], null, 1), 'utf-8')
+    } catch (err) {
+      log(`persist skillbooks-given failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  function skillBookItem(name: string): string {
+    // custom_name SNBT：金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
+    return `enchanted_book[custom_name={text:"✦ ${name}",color:"gold",italic:false}]`
+  }
+  // 《魔导书》= written_book 成书（1.8 起书页支持 clickEvent，1.21.1 用旧格式
+  // clickEvent/value）：右键打开阅读界面（书名不带「✦ 」前缀，SkillBookHandler
+  // 不拦截），页内大字「▶ 释放」点击 = 以玩家身份执行 /mycli cast → 私语女神施法。
+  // 对萌萌是「翻书点按钮」的容错玩法；4 本速发书是「切栏右键」的快捷玩法——两路并存。
+  function grimoireItem(books: Array<{ name: string; lv: number; mana: number }>): string {
+    const pages = books.map((b) => JSON.stringify({
+      text: `${b.name}  Lv${b.lv}\n魔力 ${b.mana}\n\n【▶ 释放${b.name}】`,
+      bold: true, color: 'gold',
+      clickEvent: { action: 'run_command', value: `/mycli cast ${b.name}` },
+    }))
+    const pageSnbt = pages.map((p) => `'${p.replace(/'/g, "\\'")}'`).join(',')
+    return `written_book[written_book_content={pages:[${pageSnbt}],title:'魔导书·攻击篇',author:'天神'}]`
+  }
+  /** 上线送攻击技能书包（名单内玩家，每进程一份，give 成功才记名单）。 */
+  async function ensureSkillBooks(username: string): Promise<void> {
+    const gift = ATTACK_BOOK_GIFT.find((g) => g.to === username)
+    if (!gift || skillBooksGiven.has(username)) return
+    const lvMap: Record<string, { lv: number; mana: number }> = {
+      '风爆术': { lv: 1, mana: 15 }, '螺旋丸': { lv: 8, mana: 30 },
+      '雷暴术': { lv: 12, mana: 50 }, '陨石术': { lv: 25, mana: 80 },
+      '火焰光环': { lv: 1, mana: 40 },
+    }
+    let allOk = true
+    for (const name of gift.books) {
+      const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch((err: unknown) => {
+        log(`skillbook give failed for ${username} ${name}: ${err instanceof Error ? err.message : String(err)}`)
+        return ''
+      })
+      if (!r || !/gave|已给予|Given/i.test(r)) allOk = false
+    }
+    // 魔导书（成书·页内点击施法）：右键打开=翻书点「▶ 释放」。
+    const grimoire = await rcon.send(`give ${username} ${grimoireItem(gift.books.map((n) => ({ name: n, ...lvMap[n] })))} 1`).catch((err: unknown) => {
+      log(`grimoire give failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      return ''
+    })
+    if (!grimoire || !/gave|已给予|Given/i.test(grimoire)) allOk = false
+    if (allOk) {
+      skillBooksGiven.add(username)
+      persistSkillBooksGiven()
+      log(`attack skillbooks given to ${username}: ${gift.books.join('、')} + 魔导书`)
+      // 天音一句（萌萌不识字，靠听）：语音通道由面板播报/天音术承担，此处私语文字留档。
+      rcon.send(`tellraw ${username} {"text":"✦ 收到攻击法术书×4 +《魔导书》：书拿在手里按右键就能放；魔导书翻开点【▶ 释放】也行！等级不够会提示，练级后再试。","color":"gold"}`).catch(() => {})
+    }
+  }
+
   let statusTail = 0
   let statusSeen = new Set<string>()
   try {
@@ -909,15 +1017,204 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   setInterval(() => { statusLoop().catch(() => {}) }, 5000)
   // 进程启动即补一轮（服务重启后把重启前积压的请求也回执掉）。
   setTimeout(() => { statusLoop().catch(() => {}) }, 3000)
-  // 启动补发：已在线的玩家也发一本（不等下次重登）。
-  setTimeout(() => {
-    const bot = getBot()
-    if (!bot?.players) return
-    for (const name of Object.keys(bot.players)) {
-      if (name === bot.username || name.startsWith('sys_') || isKage(name)) continue
-      ensureStatusBook(name).catch(() => {})
+  // ── 修为折算器 v2（2026-08-29 造物主令「做任务该涨级」）──────────────────
+  // ⚠️ v1 教训（当天即纠）：玩家近战击杀经验是 vanilla 直接入账、不走经验球
+  // （球只在繁殖/熔炉等场景）——「numen 杀怪经验蒸发」是误判；折算 mob_kills
+  // 会双份发钱（v1 赶在 stats flush 前撤下，未造成实际双发）。
+  // 真凶：守卫的日常任务是砍木/挖石/建造——原版采集类零经验；修为唯一真源
+  // XpLevel 涨不动 → 「一直做任务不涨级」（鸣人 XpTotal 223 vs 桐人 4025，
+  // 桐人 45 级几乎全靠施法 xp add 与杀怪）。
+  // v2 修法：只折算 vanilla 零经验的「采集」——stats["minecraft:mined"] 里
+  // 原木系 1xp/个、矿石系 3xp/个（石类量太大不折，防灌水）。天然无双份。
+  // stats json 由 compose 只读挂载 /mcstats（UUID 文件名），盘面最多滞后
+  // 5 分钟（MC 定期 flush），折算延迟可接受。20s 周期，首见立基线。
+  // 真人白名单同跳过（采集对真人同样零经验，但先保守跳过，观察后再放）。
+  const NATIVE_XP_PLAYERS = new Set(['MengMeng', 'KangQiang', 'MicroKQ', 'Codex'])
+  const MINE_XP_LOG = 1     // 每根原木
+  const MINE_XP_ORE = 3     // 每块矿石
+  const MC_STATS_DIR = process.env.MC_STATS_DIR || '/mcstats'
+  const XP_SNAP_PATH = resolve(DATA_DIR, 'xp-snapshots.json')
+  type MineSnap = Record<string, number> // 玩家 → 采集价值点累计（原木/矿折价后）
+  let xpSnaps: MineSnap = {}
+  try { xpSnaps = JSON.parse(readFileSync(XP_SNAP_PATH, 'utf-8')) as MineSnap } catch { /* 首跑立基线 */ }
+  function mineValue(stat: { stats?: Record<string, Record<string, number>> }): number {
+    const mined = stat?.stats?.['minecraft:mined']
+    if (!mined) return 0
+    let v = 0
+    for (const [block, n] of Object.entries(mined)) {
+      if (block.endsWith('_log') || block.endsWith('_wood') || block.endsWith('_stem')) v += n * MINE_XP_LOG
+      else if (block.includes('_ore')) v += n * MINE_XP_ORE
     }
-  }, 10_000)
+    return v
+  }
+  const uuidCache = new Map<string, string>()
+  async function uuidOf(name: string): Promise<string | null> {
+    const hit = uuidCache.get(name)
+    if (hit) return hit
+    const raw = await rcon.send(`data get entity ${name} UUID`).catch(() => '')
+    const m = /\[I;\s*([-\d,\s]+)\]/.exec(raw || '')
+    if (!m) return null
+    const s = m[1].split(',').map((x) => (Number(x.trim()) >>> 0).toString(16).padStart(8, '0')).join('')
+    if (s.length !== 32) return null
+    const uuid = `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
+    uuidCache.set(name, uuid)
+    return uuid
+  }
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_') || NATIVE_XP_PLAYERS.has(name)) continue
+          const uuid = await uuidOf(name)
+          if (!uuid) continue
+          let stat: { stats?: Record<string, Record<string, number>> } = {}
+          try { stat = JSON.parse(readFileSync(resolve(MC_STATS_DIR, `${uuid}.json`), 'utf-8')) as typeof stat } catch { continue }
+          const cur = mineValue(stat)
+          const prev = xpSnaps[name]
+          if (prev === undefined) { xpSnaps[name] = cur; continue } // 首见立基线，历史采集不折
+          if (cur > prev) {
+            const gain = cur - prev
+            xpSnaps[name] = cur
+            await rcon.send(`xp add ${name} ${gain} points`)
+            log(`xp-comp ${name}: mine-value ${prev}->${cur} => +${gain} xp (vanilla 零经验采集补偿)`)
+          } else if (cur < prev) {
+            xpSnaps[name] = cur // 服务端统计重置（防回绕）
+          }
+        }
+        writeFileSync(XP_SNAP_PATH, JSON.stringify(xpSnaps), 'utf-8')
+      } catch (err) { log(`xp-comp sweep failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 20_000)
+
+  // ── 公共军械库（2026-08-29 造物主谕「村里放大箱一堆装备大家随意取用」）─────
+  // 灯门镇广场 3095/3096 66 -1342 双箱+告示牌（天神手书）。6h 巡检：对照
+  // 标准清单「缺啥补啥」——空位补满、在位不动（玩家寄存私物不打扰）。
+  const ARMORY_BOXES: Array<{ x: number; y: number; z: number; base: number }> = [
+    { x: 3095, y: 66, z: -1342, base: 0 },   // 左箱 slot 0-26（replaceitem container.N）
+    { x: 3096, y: 66, z: -1342, base: 0 },   // 右箱（各箱独立 0 起）
+  ]
+  const ARMORY_STOCK: Array<{ item: string; count: number }> = [
+    // 左箱：铁甲×3 套 + 铁工具 + 弓箭
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_sword', count: 1 },
+    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_pickaxe', count: 1 },
+    { item: 'minecraft:iron_pickaxe', count: 1 }, { item: 'minecraft:iron_axe', count: 1 },
+    { item: 'minecraft:iron_axe', count: 1 }, { item: 'minecraft:iron_shovel', count: 1 },
+    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:bow', count: 1 },
+    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:arrow', count: 64 },
+    { item: 'minecraft:arrow', count: 64 }, { item: 'minecraft:shield', count: 1 },
+    // 右箱：补给 + 钻石高级货（少量惊喜）+ 设施
+    { item: 'minecraft:bread', count: 64 }, { item: 'minecraft:golden_apple', count: 16 },
+    { item: 'minecraft:torch', count: 64 }, { item: 'minecraft:cooked_beef', count: 64 },
+    { item: 'minecraft:red_bed', count: 1 }, { item: 'minecraft:white_bed', count: 1 },
+    { item: 'minecraft:oak_boat', count: 1 }, { item: 'minecraft:water_bucket', count: 1 },
+    { item: 'minecraft:ender_pearl', count: 4 }, { item: 'minecraft:diamond_sword', count: 1 },
+    { item: 'minecraft:diamond_pickaxe', count: 1 }, { item: 'minecraft:diamond_helmet', count: 1 },
+    { item: 'minecraft:diamond_chestplate', count: 1 }, { item: 'minecraft:diamond_leggings', count: 1 },
+    { item: 'minecraft:diamond_boots', count: 1 }, { item: 'minecraft:enchanted_golden_apple', count: 2 },
+    { item: 'minecraft:experience_bottle', count: 64 }, { item: 'minecraft:ladder', count: 32 },
+    { item: 'minecraft:crafting_table', count: 1 }, { item: 'minecraft:furnace', count: 1 },
+  ]
+  let armoryLastCheck = ''
+  setInterval(() => {
+    void (async () => {
+      try {
+        // 箱子是否还在（被炸/被拆则跳过本轮，下轮重探；不自动重建防误覆盖新建筑）。
+        const probe = await rcon.send('data get block 3096 66 -1342').catch(() => '')
+        const alive = /chest/i.test(probe)
+        if (!alive) {
+          if (armoryLastCheck !== 'gone') { log('armory: chest gone at 3096 66 -1342, refill paused'); armoryLastCheck = 'gone' }
+          return
+        }
+        armoryLastCheck = 'ok'
+        // 逐箱对照标准清单补空位（data get Items 全量 → 空位 replaceitem）。
+        for (const box of ARMORY_BOXES) {
+          const stock = box.x === 3095 ? ARMORY_STOCK.slice(0, 26) : ARMORY_STOCK.slice(26)
+          const data = await rcon.send(`data get block ${box.x} ${box.y} ${box.z} Items`).catch(() => '')
+          const m = /Items:\[(.*)\]/s.exec(data)
+          if (!m) continue // 双箱 merge 后 Items 在主箱；空箱读不到=全空
+          const usedSlots = new Set<number>()
+          const slotRe = /\{[^{}]*Slot:(\d+)b[^{}]*\}/g
+          for (const s of data.matchAll(slotRe)) usedSlots.add(Number(s[1]))
+          for (let i = 0; i < stock.length; i++) {
+            if (usedSlots.has(i)) continue
+            // 1.21.1 正确命令=item replace block ... with（replaceitem 是 1.16 老命令，
+            // 报 Unknown 且正则若匹配泛 error 会把失败当成功——坑已记 LESSONS）。
+            const r = await rcon.send(`item replace block ${box.x} ${box.y} ${box.z} container.${i} with ${stock[i].item} ${stock[i].count}`).catch(() => '')
+            if (r && !/replaced a slot/i.test(r)) log(`armory refill slot${i} unexpected: ${r.slice(0, 80)}`)
+          }
+        }
+      } catch (err) { log(`armory refill failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 6 * 60 * 60 * 1000)
+
+  // ── 冒险者档案聚合器（2026-08-29 造物主令：冒险者等级入库）──────────────
+  // 5min 拍：把在线假玩家的修为/成就/击杀/采集/陨落聚合进 world.db
+  // adventurers 表——积分 = 修为×10 + 非配方成就×5 + 击杀×2 + 采集折价，
+  // 段位 F~S。面板/公会牌/神谕读此表；vanilla XpLevel 降为数据源之一。
+  const ADV_DISPLAY_NAMES: Record<string, string> = { Kirito: '桐人', Naruto: '鸣人', Taro: '太郎', Edward: '爱德华', LanternWarden: '灯守' }
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
+          const uuid = await uuidOf(name)
+          if (!uuid) continue
+          const st = magic.getState(name)
+          const xpLevel = st?.level ?? 0
+          let kills = 0; let deaths = 0; let mineVal = 0; let advCount = 0
+          try {
+            const stat = JSON.parse(readFileSync(resolve(MC_STATS_DIR, `${uuid}.json`), 'utf-8')) as { stats?: Record<string, Record<string, number>> }
+            kills = stat?.stats?.['minecraft:custom']?.['minecraft:mob_kills'] ?? 0
+            deaths = stat?.stats?.['minecraft:custom']?.['minecraft:deaths'] ?? 0
+            mineVal = mineValue(stat)
+          } catch { /* 无 stats 档案跳过 */ }
+          try {
+            const adv = JSON.parse(readFileSync(resolve(config.advancementsDir, `${uuid}.json`), 'utf-8')) as Record<string, unknown>
+            advCount = Object.keys(adv).filter((k) => !k.includes('recipes/')).length
+          } catch { /* 无成就档案 */ }
+          const score = xpLevel * 10 + advCount * 5 + kills * 2 + mineVal
+          worlddb.adventurerUpsert({
+            username: name, display_name: ADV_DISPLAY_NAMES[name] ?? name, rank: adventurerRank(score),
+            adv_score: score, xp_level: xpLevel, advancements: advCount, kills, mine_value: mineVal,
+            deaths, updated_at: Date.now(),
+          })
+        }
+      } catch (err) { log(`adv-aggregate failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 300_000)
+
+  // 启动补发：已在线的玩家也发一本（不等下次重登）。
+  // 2026-08-29 II（造物主令「所有玩家都该有状态书」核验加固）：一次性 setTimeout 在
+  // world 刚启动 RCON 瞬断期（welcome FAILED: rcon closed 同源）会整场漏发 → 改 60s
+  // 周期兜底；ensureStatusBook 名单幂等（give 成功才记名单），周期重试零副作用。
+  // 2026-08-29 III：不再依赖 bot.players（goddess 的 mineflayer 视角看不见部分接入，
+  // 如 Taro）——改走 RCON `list`（服务器权威在线名单，涵盖真人/numen/基岩一切路径）。
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        log(`statusbook sweep: [${tail.trim()}]`)
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
+          await ensureStatusBook(name).catch((err: unknown) => log(`statusbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
+        }
+      } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
+    })()
+  }, 60_000)
 
   async function answerQuestion(username: string, question: string, replyTarget?: string): Promise<void> {
     const bot = getBot()
@@ -1137,7 +1434,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   // 守卫登录名映射（2026-08-23 铁律 name/ID 分离）：显示名（桐人/鸣人）只用于叙事与人机界面，
   // 程序化 RCON 操作（data get entity / tp）必须用 ASCII 登录名（Kirito/Naruto）。
-  const GUARD_LOGIN: Record<string, string> = { '桐人': 'Kirito', '鸣人': 'Naruto' }
+  const GUARD_LOGIN: Record<string, string> = { '桐人': 'Kirito', '鸣人': 'Naruto', '爱德华': 'Edward' }
   /** 显示名→登录名：守卫走映射；其余（真人玩家已用登录名、AI 穿越者）原样返回。 */
   function resolveLogin(name: string): string {
     return GUARD_LOGIN[name.trim()] ?? name.trim()
@@ -1149,15 +1446,175 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     return GUARD_NAMES.includes(k) || GUARD_LOGIN_SET.has(k)
   }
 
+  // ── 光环系引擎（2026-08-29 造物主谕扩展：火水风土雷吸血治愈迅捷 8 元素家族）──
+  // 三元素球绕体旋绕（400ms tick：Pos 刷新+角度 16.36°/tick≈2.45s/圈+三球粒子）；
+  // 攻击型隔帧碰撞（800ms，球心 1.4 格）：fire=点燃/water=缓滞/wind=径向击退/earth=虚弱
+  // 迟滞/thunder=即时雷伤/vampire=噬敌回体；增益型（heal/speed）不碰撞，每 4s 刷自体
+  // effect。90s 自然熄灭；失联 3 tick 即散；单服上限 3 道；同人重复施法=同元素续满、
+  // 换元素顶替。fire_aura（火焰光环）为萌萌专属（Kirito 测试位），其余七术公开。
+  interface Aura { elem: string; until: number; angle: number; px: number; py: number; pz: number; lastHit: boolean; misses: number; buffs: number }
+  const auras = new Map<string, Aura>()
+  let auraTimer: ReturnType<typeof setInterval> | null = null
+  const AURA_DURATION_MS = 90_000
+  const AURA_MAX = 3
+  const AURA_EXCLUDE = 'type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:armor_stand,type=!minecraft:villager,type=!minecraft:iron_golem'
+  interface AuraSpec {
+    name: string; particle: (x: number, y: number, z: number) => string
+    hit?: (bx: number, by: number, bz: number, a: Aura) => string[] // 攻击型碰撞命令
+    self?: (login: string) => string[] // 增益型自体 buff（每 4s）
+  }
+  const AURA_SPECS: Record<string, AuraSpec> = {
+    fire_aura: {
+      name: '火焰光环',
+      particle: (x, y, z) => `particle minecraft:small_flame ${x} ${y} ${z} 0.04 0.04 0.04 0.001 3`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run data merge entity @e[distance=..1.4,${AURA_EXCLUDE}] {Fire:100}`],
+    },
+    water_aura: {
+      name: '水之光环',
+      particle: (x, y, z) => `particle minecraft:dripping_drip_water ${x} ${y} ${z} 0.06 0.06 0.06 0.001 3`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] slowness 3 2 true`],
+    },
+    wind_aura: {
+      name: '风暴光环',
+      particle: (x, y, z) => `particle minecraft:cloud ${x} ${y} ${z} 0.05 0.05 0.05 0.02 2`,
+      hit: (bx, by, bz, a) => {
+        const dx = bx - a.px, dz = bz - a.pz, r = Math.hypot(dx, dz) || 1
+        const mv = `Motion:[${(dx / r * 1.1).toFixed(2)}d,0.4d,${(dz / r * 1.1).toFixed(2)}d]`
+        return [`execute positioned ${bx} ${by} ${bz} run data merge entity @e[distance=..1.4,${AURA_EXCLUDE}] {${mv}}`]
+      },
+    },
+    earth_aura: {
+      name: '大地光环',
+      particle: (x, y, z) => `particle minecraft:dust{color:[0.55,0.4,0.2],scale:1} ${x} ${y} ${z} 0.08 0.08 0.08 0 3`,
+      hit: (bx, by, bz) => [
+        `execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] weakness 3 1 true`,
+        `execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] slowness 3 1 true`,
+      ],
+    },
+    thunder_aura: {
+      name: '雷光光环',
+      particle: (x, y, z) => `particle minecraft:electric_spark ${x} ${y} ${z} 0.06 0.06 0.06 0.02 4`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run damage @e[distance=..1.4,${AURA_EXCLUDE}] 3 minecraft:lightning_bolt`],
+    },
+    vampire_aura: {
+      name: '血蚀光环',
+      particle: (x, y, z) => `particle minecraft:soul ${x} ${y} ${z} 0.05 0.05 0.05 0.01 2`,
+      hit: (bx, by, bz) => [
+        `execute positioned ${bx} ${by} ${bz} run damage @e[distance=..1.4,${AURA_EXCLUDE}] 1 minecraft:magic`,
+      ],
+    },
+    heal_aura: {
+      name: '圣愈光环',
+      particle: (x, y, z) => `particle minecraft:happy_villager ${x} ${y} ${z} 0.08 0.08 0.08 0.001 2`,
+      self: (login) => [`effect give ${login} regeneration 6 1 true`],
+    },
+    speed_aura: {
+      name: '迅捷光环',
+      particle: (x, y, z) => `particle minecraft:crit ${x} ${y} ${z} 0.06 0.06 0.06 0.02 2`,
+      self: (login) => [`effect give ${login} speed 6 1 true`, `effect give ${login} jump_boost 6 1 true`],
+    },
+  }
+  // 吸血光环噬血回体：碰撞帧另给主人即时小回血（主人不在 positioned 半径内，单独发）
+  const AURA_CASTER_LEECH: Record<string, (login: string) => string> = {
+    vampire_aura: (login) => `effect give ${login} instant_health 1 0 true`,
+  }
+  // 元素准入：火焰光环=萌萌专属（Kirito 测试位，验证后撤）；其余公开。
+  const AURA_ACCESS: Record<string, Set<string> | null> = {
+    fire_aura: new Set(['MengMeng', 'Kirito']),
+  }
+  const AURA_DENY: Record<string, string> = {
+    fire_aura: '火焰光环只随「萌萌」而燃——这是天神给她的护身之火。',
+  }
+  function auraTick(): void {
+    const now = Date.now()
+    for (const [login, aura] of auras) {
+      const spec = AURA_SPECS[aura.elem]
+      if (!spec) { auras.delete(login); continue }
+      if (now > aura.until) {
+        auras.delete(login)
+        rcon.send(`tellraw ${login} {"text":"✦ ${spec.name}缓缓熄灭了","color":"gold"}`).catch(() => {})
+        log(`aura expired: ${aura.elem} for ${login}`)
+        continue
+      }
+      rcon.send(`data get entity ${login} Pos`).then((raw) => {
+        const nums = String(raw).match(/-?\d+(?:\.\d+)?/g)
+        if (!nums || nums.length < 3) {
+          if (++aura.misses >= 3) { auras.delete(login); log(`aura lost ${login} (3 misses)`) }
+          return
+        }
+        aura.misses = 0
+        aura.px = Number(nums[0]); aura.py = Number(nums[1]); aura.pz = Number(nums[2])
+        aura.angle = (aura.angle + 16.36) % 360
+        const hit = aura.lastHit = !aura.lastHit // 攻击型隔帧：800ms
+        for (let k = 0; k < 3; k++) {
+          const rad = ((aura.angle + k * 120) * Math.PI) / 180
+          const bx = aura.px + 2.2 * Math.cos(rad)
+          const bz = aura.pz + 2.2 * Math.sin(rad)
+          const by = aura.py + 1.25
+          const nX = Number(bx.toFixed(2)), nY = Number(by.toFixed(2)), nZ = Number(bz.toFixed(2))
+          rcon.send(spec.particle(nX, nY, nZ)).catch(() => {})
+          if (spec.hit && hit) for (const cmd of spec.hit(nX, nY, nZ, aura)) {
+            rcon.send(cmd).catch(() => {})
+          }
+        }
+        // 吸血：碰撞帧顺带给主人回血
+        const leech = AURA_CASTER_LEECH[aura.elem]
+        if (leech && hit) rcon.send(leech(login)).catch(() => {})
+        // 增益型：每 4s（10 tick）刷自体 buff
+        if (spec.self && ++aura.buffs % 10 === 1) for (const cmd of spec.self(login)) {
+          rcon.send(cmd).catch(() => {})
+        }
+      }).catch(() => {
+        if (++aura.misses >= 3) { auras.delete(login); log(`aura lost ${login} (rcon err)`) }
+      })
+    }
+    if (auras.size === 0 && auraTimer) {
+      clearInterval(auraTimer); auraTimer = null
+      log('aura engine idle-stopped')
+    }
+  }
+  function startAura(login: string, elem: string, username: string): { ok: boolean; reply: string } {
+    const spec = AURA_SPECS[elem]
+    if (!spec) return { ok: false, reply: '此法术未通。' }
+    const existing = auras.get(login)
+    if (existing) {
+      if (existing.elem === elem) {
+        existing.until = Date.now() + AURA_DURATION_MS
+        return { ok: true, reply: `${spec.name}仍在，时长已续满。` }
+      }
+      auras.delete(login) // 换元素：旧光环散去，新光环升起
+      rcon.send(`tellraw ${login} {"text":"✦ 旧光环散去，${spec.name}升起","color":"yellow"}`).catch(() => {})
+    }
+    if (auras.size >= AURA_MAX) return { ok: false, reply: '此界灵气有限，三道光环已是极限——稍候再燃。' }
+    auras.set(login, { elem, until: Date.now() + AURA_DURATION_MS, angle: 0, px: 0, py: 0, pz: 0, lastHit: false, misses: 0, buffs: 0 })
+    if (!auraTimer) {
+      auraTimer = setInterval(auraTick, 400)
+      log(`aura engine started: ${elem} for ${login}`)
+    }
+    worlddb.chronicleRecord('cast', login, { skill: elem, via: 'special', for: username })
+    const lines: Record<string, string> = {
+      fire_aura: '三团火苗自你脚下升起，绕着你缓缓旋绕——近身的敌人都将被灼烧！',
+      water_aura: '三泓清水绕身流转——近敌将陷于迟滞泥沼，举步维艰。',
+      wind_aura: '三道旋风环你而舞——近身的敌人将被远远吹开！',
+      earth_aura: '三块碎石围你沉浮——近敌四肢沉重、臂软无力。',
+      thunder_aura: '三颗电弧绕你疾走——触之者当场吃痛麻痹！',
+      vampire_aura: '三缕血雾缠你游弋——它们噬敌之血，还于你身。',
+      heal_aura: '三点圣光绕你温柔旋转——你的伤口正在慢慢愈合。',
+      speed_aura: '三缕清风推着你的脚步——身轻如燕，健步如飞。',
+    }
+    return { ok: true, reply: lines[elem] ?? `${spec.name}·成。` }
+  }
+
   // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
   // special 原子的效果不走 RCON commands，由这里落地。与召唤术同哲学——不强制 tp 守卫：
   // contract/recall 写 goddess-orders（守卫桥/亲卫自主到场/返程）；trace 是施法者自己去目标身边，
   // 走直接 tp。失败返回 { ok:false }，cast() 据此不扣资源、不白烧魔力/血祭。
   async function execSpecial(
-    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin',
+    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura',
     username: string,
     params: Record<string, number | string>,
     _vars: Record<string, number | string>,
+    atomId = '',
   ): Promise<{ ok: boolean; reply: string }> {
     if (special === 'contract') {
       // 缔结契约 = 召唤侍卫相助（唤魂分支）。守卫只认桐人/鸣人（守卫桥 GUARDS）。
@@ -1209,10 +1666,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }
     }
     if (special === 'kage_bunshin') {
-      // 影分身之术（2026-08-24）：召 2 个「分脑」分身——真 numen 实体，给守卫桥分脑引擎感知。
-      // 分身是一个独立意识（守卫桥为每个 Kage 开独立 QwenPaw session、喂「你是影分身」prompt），
-      // 用 kage_* 系列工具驱动自己（侦察/战斗），血线<50%自动解散、消失时阅历融回本体鸣人。
-      // 世界侧只负责 summon 实体 + 通知守卫生效，不驱动它行动（驱动归守卫桥 kage_loop）。
+      // 影分身之术（2026-08-24）：按施术者数据召 2 个「无魂战斗分身」——真 numen 实体，
+      // 不接 LLM/不建 agent，纯程序化：follow 常驻跟随施术者 + numen 原生 mob_defense 本能反击。
       const login = resolveLogin(username)
       // 影分身之术 = 鸣人独占（2026-08-24 造物主谕：他人放算力扛不住）。旁人咏唱直接拒、零分身。
       if (login !== 'Naruto') return { ok: false, reply: '影分身之术为「鸣人」独有之忍术，旁人使不出来。' }
@@ -1244,24 +1699,50 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       let created = 0
       try {
         for (const k of ['Kage1', 'Kage2']) {
-          await rcon.send(`numen_act summon "${casterUuid}" "${k}"`) // owner=施术者
+          await rcon.send(`numen_act summon "${casterUuid}" "${k}"`) // owner=施术者 → follow 默认跟施术者
           created++
         }
       } catch (err) {
         log(`kage_bunshin summon failed: ${err instanceof Error ? err.message : String(err)}`)
       }
       if (created === 0) return { ok: false, reply: '影分身之术散了——查克拉未凝，分身未成。' }
-      // （不再自动 follow：分脑引擎 kage_loop 会感知 roster、为每个 Kage 开独立 session 驱动它自主行动。）
+      // 等分身实体就绪，再逐个发常驻跟随（带重试：numen follow 对刚召唤实体偶发未就绪→失败只少一个跟随，不误报失败、不拖垮另一半身）
+      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+      await sleep(400)
+      let followed = 0
+      for (const k of ['Kage1', 'Kage2']) {
+        for (let t = 0; t < 3; t++) {
+          try {
+            await rcon.send(`numen_act invoke "${k}" follow {}`)
+            followed++
+            break
+          } catch (e) {
+            if (t === 2) log(`kage_bunshin follow failed for ${k}: ${e instanceof Error ? e.message : String(e)}`)
+            await sleep(300)
+          }
+        }
+      }
       worlddb.chronicleRecord('cast', username, { skill: 'kage_bunshin', kages: 2, via: 'numen' })
-      log(`kage_bunshin by ${login}: summoned Kage1/Kage2 (分脑引擎 await drive)`)
-      // 超时回收（2026-08-24：KAGE_TTL_MS=5min 兜底；到点遣散——守卫桥 kage_loop 检测到消失即把阅历融回本体鸣人）
+      log(`kage_bunshin by ${login}: summoned Kage1/Kage2 following ${login}`)
+      // 90s 超时回收（2026-08-24 补上「90s 超时回收」决策——分身是一次性战斗 spawn，到点自动遣散，不常驻占线）
       setTimeout(() => {
         for (const k of ['Kage1', 'Kage2']) {
           rcon.send(`numen_act dismiss ${k}`).catch(() => {})
         }
-        log(`kage_bunshin auto-dismiss Kage1/Kage2 after ${Math.round(KAGE_TTL_MS / 1000)}s`)
-      }, KAGE_TTL_MS)
+        log('kage_bunshin auto-dismiss Kage1/Kage2 after 90s')
+      }, 90_000)
       return { ok: true, reply: '影分身之术·成——两身随你而动，见敌即战！分身受创则白烟归体，忍道不灭。' }
+    }
+    if (special === 'aura' || special === 'fire_aura') {
+      // 光环系（2026-08-29 家族化）：元素由 atomId 分派（fire/water/wind/earth/thunder/
+      // vampire/heal/speed 八环）。火焰光环萌萌专属（Kirito 测试位），其余公开。
+      const login = resolveLogin(username)
+      const elem = atomId || special // 兼容裸 fire_aura（已不注册，防御）
+      const allow = AURA_ACCESS[elem]
+      if (allow && !allow.has(login)) {
+        return { ok: false, reply: AURA_DENY[elem] ?? '此光环不容你染指。' }
+      }
+      return startAura(login, elem, username)
     }
     return { ok: false, reply: '此法术未通。' }
   }
@@ -1309,6 +1790,25 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         if (cmd.json) { jsonReply({ ok: true, ...json }); return }
         replyLines(panel.split('\n')); return
       }
+      case 'discoveries': case '发现点': case '舆图': {
+        // 探索者舆图（2026-08-29）：守卫远征自动登记的发现点一览；
+        // 改名用法：/mycli 舆图 改名 <id> <新地名>（女神赐名权）
+        const sub = cmd.args[0] ?? ''
+        if (sub === '改名' || sub === 'rename') {
+          const id = parseInt(cmd.args[1] ?? '', 10)
+          const newName = cmd.args.slice(2).join(' ').trim()
+          if (!id || !newName) { reply(`[CLI] 用法：/cli 舆图 改名 <id> <新地名>。`); return }
+          const ok = worlddb.discoveryRename(id, newName.slice(0, 24))
+          reply(ok ? `[CLI] 第 ${id} 处发现点已赐名「${newName}」。` : `[CLI] 没有第 ${id} 处发现点。`)
+          return
+        }
+        const rows = worlddb.discoveryList()
+        if (cmd.json) { jsonReply({ ok: true, count: rows.length, discoveries: rows }); return }
+        if (!rows.length) { reply(`[CLI] 舆图还空着——守卫远征到新天地才会落笔。`); return }
+        replyLines(rows.slice(0, 20).map((r) =>
+          `#${r.id} ${r.name} (${Math.round(r.x)}, ${Math.round(r.z)}) by ${r.found_by}`))
+        return
+      }
       case 'cast': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli cast <咒语>。要什么，直说。`); return }
         const chant = cmd.args.join(' ')
@@ -1323,6 +1823,29 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const { wish, offeringText } = splitWishOffering(wishText)
         if (!wish) { reply(`[CLI] 愿想何物？`); return }
         await submitPrayerCli(subject, replyTarget, wish, offeringText)
+        return
+      }
+      case 'offering': {
+        // 独立供奉令（2026-08-28 T006-a1 供奉回执机制）：/cli offering <物品> [数量]
+        // 守卫/真人不必裹愿望即可直供神库——收执→取物→入账→回执，一句终局信号。
+        // 旧病根：旧版无此子命令，/cli offering … 被当未知命令，守卫供了东西却永远
+        // 等不到回执（offerings=0 与感怀口径分裂，R009 病根）。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli offering <物品> [数量]，如 /cli offering 铁锭 4`); return }
+        const offText = cmd.args.join(' ').trim()
+        const t: Transmigrator | null = transmigrators.getByUsername(subject)
+        const resolved = resolveOfferingText(offText)
+        if (!resolved) {
+          reply(`[神库] 此物神不受：${offText}。可献：面包/熟牛肉/煤/铁锭/金锭/钻石/绿宝石/附魔书…（写法如「铁锭 4」「diamond 2」）。`)
+          return
+        }
+        const offer: OfferingInfo = { id: resolved.id, cn: resolved.cn, count: resolved.count }
+        const taken = await takeOffering(subject, offer)
+        if (!taken.ok) { reply(`[神库] ${taken.reason}`); return }
+        await grantXp(subject, 15, 'offering')
+        worlddb.chronicleRecord('offering', subject, { cn: offer.cn, count: offer.count })
+        try { worlddb.remember(subject, 'offering', `「${t?.name ?? subject}」直献神库：${offer.cn}×${offer.count}`) } catch { /* */ }
+        log(`cli offering accepted from ${subject}: ${offer.cn}x${offer.count}`)
+        reply(`[神库] 已收讫：${offer.cn}×${offer.count}。供奉归档，天知道。`)
         return
       }
       case 'ask': {
@@ -1392,6 +1915,36 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         else reply(`[信使] ${r}`)
         return
       }
+      case 'cultivate': {
+        // 修行灌顶（2026-08-28 造物主拍板：puffish 管理动词登记世界侧，AI/真人 cli 同效）。
+        // 每次给自己灌 5 点经验，60s 冷却防灌水；命令语法已经 RCON 实测（puffish_skills experience add）。
+        const cat = (cmd.args[0] ?? 'combat').trim().toLowerCase()
+        if (!/^[a-z_]{2,24}$/.test(cat)) { reply(`[CLI] 用法：cli cultivate <类别>（如 combat，缺省 combat）。类别名只认小写字母。`); return }
+        const cdMap: Map<string, number> = (globalThis as any).__cultCd ?? ((globalThis as any).__cultCd = new Map())
+        const now = Date.now()
+        const last = cdMap.get(subject) ?? 0
+        if (now - last < 60_000) { reply(`[修行] 真气未复，${Math.ceil((60_000 - (now - last)) / 1000)} 秒后再行灌顶。`); return }
+        cdMap.set(subject, now)
+        const login = resolveLogin(subject)
+        const out = await rcon.send(`puffish_skills experience add ${login} ${cat} 5`).catch((e: unknown) => `施法失败：${String(e).slice(0, 120)}`)
+        worlddb.chronicleRecord('cultivate', subject, { category: cat })
+        deps.bubble?.show(subject, `「灌顶！」·${cat} +5`)
+        if (cmd.json) jsonReply({ ok: true, category: cat, raw: String(out).slice(0, 200) })
+        else reply(`[修行] 你盘膝运功，「${cat}」之途精进一分（经验 +5）。一息之后可再灌顶。`)
+        return
+      }
+      case 'growth': {
+        // 修行进度（2026-08-28）：查 puffish 经验/点数，语法已经 RCON 实测（experience get / points get）。
+        const cat = (cmd.args[0] ?? 'combat').trim().toLowerCase()
+        if (!/^[a-z_]{2,24}$/.test(cat)) { reply(`[CLI] 用法：cli growth <类别>（如 combat，缺省 combat）。`); return }
+        const login = resolveLogin(subject)
+        const exp = await rcon.send(`puffish_skills experience get ${login} ${cat}`).catch(() => '')
+        const pts = await rcon.send(`puffish_skills points get ${login} ${cat}`).catch(() => '')
+        const fmt = (s: string) => s.split('\n')[0].trim().slice(0, 120)
+        if (cmd.json) jsonReply({ ok: true, category: cat, experience: fmt(exp), points: fmt(pts) })
+        else replyLines([`【修行进度 · ${cat}】`, `  ${fmt(exp)}`, `  ${fmt(pts)}`, `  灌顶：cli cultivate ${cat}（60 秒一次，经验 +5）`])
+        return
+      }
       default:
         reply(`[CLI] 未知命令「${cmd.verb}」。/cli commands 看全部。`)
     }
@@ -1402,7 +1955,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 命中 → castFuzzy（tokens 折算魔力 + 推理耗时=自然前摇）；拒绝 → 原话转达。
   async function resolveChant(username: string, chant: string): Promise<string> {
     try {
-      return await magic.castSpell(username, chant)
+      const r = await magic.castSpell(username, chant)
+      // 咏唱可视化（2026-08-28 造物主点子）：施法成功，头顶冒咒语词气泡——
+      // AI 咏唱虽走 CLI/文件通道，头上照样「言灵显形」；未来接语音可直接念这个词。
+      const spoken = chant.trim()
+      if (spoken && deps.bubble) {
+        const atom = magic.listAtoms().find((a) => a.words.some((w) => spoken.includes(w) || w.includes(spoken)))
+        if (atom) deps.bubble.show(username, `「${atom.words[0]}！」`)
+      }
+      return r
     } catch (err) {
       if (err instanceof Error && err.name === 'NeedLlmError' && typeof (err as any).atomId === 'string') {
         const atomId = (err as any).atomId as string
@@ -1481,6 +2042,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // → 守卫桥下轮注入亲卫 prompt（"女神谕示"）。含已学技能中文名点明。每守卫 5 分钟至多一条。
   let lastGuardWatch = 0
   const lastOrder = new Map<string, number>()
+  // R008 去重（2026-08-26）：同一 reason 连发计数——连发 4 条无改善即降频，防丧钟连响灌编年史。
+  const lastReasonRun = new Map<string, { reason: string; count: number }>()
   function guardDistress(name: string, ms: any): string | null {
     // 血/饱食（magic-state 的 hpRatio/foodRatio 由 mc-magic tick 更新）
     if (typeof ms.hpRatio === 'number' && ms.hpRatio > 0 && ms.hpRatio < 0.4) {
@@ -1522,14 +2085,42 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const now = Date.now()
       if (now - lastGuardWatch < 60_000) return
       lastGuardWatch = now
+      const bot = getBot()
       for (const name of GUARD_NAMES) {
         // magic-state 键 = 登录名（英文 Kirito/Naruto）；显示名只用于叙事（chronicle/log）。
-        const ms = magic.getState(resolveLogin(name)) as any
+        const login = resolveLogin(name)
+        const ms = magic.getState(login) as any
         if (!ms) continue
         const since = lastOrder.get(name) ?? 0
         if (now - since < 5 * 60_000) continue
+        // R008 根修（2026-08-26 天神工程窗口）：magic-state 的 hpRatio/foodRatio 由死亡轮询
+        // setVitals 刷新——实体掉线/被容器化 wipe 后不再刷新，快照冻结在濒死值 → 每 5 分钟
+        // 对空气重发同一条「濒临倒下」丧钟（旧界实证：桐人 30 帧零变化、鸣人 7/20 连刷 6 小时）。
+        // 判定前先验实体在场（bot.players 现取，零 RCON 开销）；不在场本轮直接跳过。
+        if (!bot.entity || !bot.players || !bot.players[login]) {
+          log(`watchGuards: ${name} 不在场，跳过困境判定（R008 防对消失实体空报）`)
+          continue
+        }
         const reason = guardDistress(name, ms)
-        if (!reason) continue
+        if (!reason) {
+          lastReasonRun.delete(name) // 恢复常态，计数清零
+          continue
+        }
+        // R008 第二闸：同一 reason 连发 4 条（20 分钟）无改善 → 不再往 goddess-orders 注入
+        // 同文案（防亲卫被同一条谕示轰炸、编年史灌水），此后每 20 分钟只在编年史记一笔
+        // 低频观察；reason 变化或恢复后自动重置。
+        const prevRun = lastReasonRun.get(name)
+        if (prevRun && prevRun.reason === reason) prevRun.count += 1
+        else lastReasonRun.set(name, { reason, count: 1 })
+        const run = lastReasonRun.get(name)!
+        if (run.count > 4) {
+          if ((run.count - 5) % 4 === 0) {
+            worlddb.chronicleRecord('guard-order', name, { reason: `${reason}（持续未见改善，谕示降频观察）`.slice(0, 80), text: '' })
+          }
+          lastOrder.set(name, now)
+          log(`watchGuards: ${name} 同困境第 ${run.count} 轮无改善，谕示降频（R008 去重）`)
+          continue
+        }
         lastOrder.set(name, now)
         const skills = (ms.learned ?? []).map((id: string) => magic.getAtomById(id)?.name).filter(Boolean).slice(0, 6).join('、')
         const text = `${reason}。${skills ? `你已掌握：${skills}——需要时咏唱或祈愿即可。` : '需要帮助时祈愿即可。'}`
@@ -1741,30 +2332,170 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 死亡守望/守卫提示/欢迎仪式一律不碰。名单可用 INTERNAL_BOT_NAMES 追加（逗号分隔，大小写敏感）。
   const INTERNAL_BOTS = new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean))
   const isInternalBot = (name: string) => INTERNAL_BOTS.has(name)
-  // 影分身（2026-08-24 造物主定调）：分身是完整实体，不做降级；但它在女神法术体系下
-  // 不是"独立旅人"——只是鸣人召唤的瞬态战斗分身。女神系统不该把它当新玩家照看
-  // （不发神使手札、不白纸欢迎、不记进出、不进死亡轮询/日报帮助对象、不死后复活）。
-  // 分身在女神这里的正确语义 = 死亡即散（dismiss，不复活）+ 超时回收。
-  const isKage = (name: string) => /^Kage\d*$/i.test(String(name ?? '').trim())
-  /** 影分身存在时长（ms）。2026-08-24：造物主拍板"时间可长一些"，90s → 5min，可再调。 */
-  const KAGE_TTL_MS = 5 * 60_000
 
   // ── 守卫回应玩家的耳（2026-08-24）：玩家公屏发言 → player-chat.jsonl ──
   // 守卫（桐人/鸣人）能"听见"玩家在聊天频道说的话并 say 回应；守卫桥读该文件后
-  // 让亲卫判定是否接话。排除：女神自己（chat 事件已 return）、内部 bot、守卫本人
-  // （避免自说自话）、守护天使(sys_，客户端陪玩专属)。与守卫桥同卷（MC_DATA_DIR）。
-  const GUARD_PLAYER_NAMES = new Set(['桐人', '鸣人', 'Kirito', 'Naruto'])
+  // 让亲卫判定是否接话。排除：女神自己（chat 事件已 return）、内部 bot、守护天使
+  // (sys_，客户端陪玩专属)。与守卫桥同卷（MC_DATA_DIR）。
+  // 2026-08-29 造物主谕「numen 说话肯定要被听到」：守卫自己的公屏发言**也落盘**
+  // （假玩家互听/世界之声完整）——自说自话由消费侧滤（mcp_numen/guard_drive 读时跳过本人）。
   const PLAYER_CHAT = process.env.PLAYER_CHAT || `${DATA_DIR}/player-chat.jsonl`
   function recordPlayerChat(username: string, message: string): void {
     if (!username || !message) return
     if (username === getBot()?.username) return
     if (isInternalBot(username)) return
     if (username.startsWith('sys_')) return
-    if (GUARD_PLAYER_NAMES.has(username)) return
     try {
       appendFileSync(PLAYER_CHAT, JSON.stringify({ ts: Date.now(), user: username, text: message.slice(0, 256) }) + '\n')
     } catch { /* best effort：记录失败不影响女神逻辑 */ }
   }
+
+  // ── 灯语女神公屏聊天（2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）──
+  // 真人公屏未点名的自然语言 → 灯语女神理解意图、真回应（「给我来个面包」真给面包）。
+  // 点名（守卫/NPC/其他在线玩家）→ 女神不接，归被点名者（守卫桥/NPC 引擎/玩家互喊）。
+  // 实现与她 existing 答疑同脉：LLM（herald 本地 27B 低延迟，失败回落女神云端）单轮
+  // 输出 JSON 意图 {action:"reply"|"give", item?, count?, text}，程序校验后执行。
+  const GODDESS_CHAT_COOLDOWN = 10_000      // 每人公屏聊天节流
+  const GODDESS_GIVE_COOLDOWN = 60_000      // 每人物品馈赠冷却（VIP 减半）
+  const lastGoddessChat = new Map<string, number>()
+  const lastGoddessGive = new Map<string, number>()
+  const VIP_SET = new Set(config.vipListen)
+
+  // NPC 点名名单：读运行态 villagers.json（display/calls），5 分钟缓存刷新。
+  // world 容器现挂 mcdata 只读卷（compose 2026-08-29）；MC_DATA_DIR/village 与 /mcdata/village
+  // 双路径兼容，档案缺失时退化为空表（点名判定只降级不报错）。
+  let npcNamesCache: string[] = []
+  let npcNamesLoadedAt = 0
+  function loadNpcNames(): string[] {
+    const now = Date.now()
+    if (now - npcNamesLoadedAt < 5 * 60_000) return npcNamesCache
+    npcNamesLoadedAt = now
+    const paths = [`${DATA_DIR}/village/villagers.json`, '/mcdata/village/villagers.json']
+    for (const p of paths) {
+      try {
+        if (!existsSync(p)) continue
+        const d = JSON.parse(readFileSync(p, 'utf-8'))
+        const list: any[] = Array.isArray(d) ? d : (d.villagers ?? [])
+        const names = list
+          .flatMap((v) => [String(v.display ?? ''), ...(Array.isArray(v.calls) ? v.calls.map(String) : [])])
+          .map((s) => s.trim()).filter(Boolean)
+        if (names.length) { npcNamesCache = names; break }
+      } catch { /* 读不动试下一个 */ }
+    }
+    return npcNamesCache
+  }
+
+  // 馈赠白名单：口粮级/实用级日常物资（中文名 → MC id）。贵重物（钻石/绿宝石/金锭/
+  // 下界合金等）不在此列——公屏随口要不到贵重货，真有需要走私语祈愿（神恩有价）。
+  const CHAT_GIVE_WHITELIST: Record<string, string> = {
+    面包: 'minecraft:bread', 火把: 'minecraft:torch', 灯笼: 'minecraft:lantern',
+    原木: 'minecraft:oak_log', 木头: 'minecraft:oak_log', 圆石: 'minecraft:cobblestone', 石头: 'minecraft:cobblestone',
+    煤: 'minecraft:coal', 煤炭: 'minecraft:coal', 铁锭: 'minecraft:iron_ingot',
+    苹果: 'minecraft:apple', 熟牛肉: 'minecraft:cooked_beef', 牛排: 'minecraft:cooked_beef',
+    木剑: 'minecraft:wooden_sword', 石剑: 'minecraft:stone_sword', 铁剑: 'minecraft:iron_sword',
+    木镐: 'minecraft:wooden_pickaxe', 石镐: 'minecraft:stone_pickaxe', 铁镐: 'minecraft:iron_pickaxe',
+    木斧: 'minecraft:wooden_axe', 石斧: 'minecraft:stone_axe', 铁斧: 'minecraft:iron_axe',
+    床: 'minecraft:white_bed', 船: 'minecraft:oak_boat', 梯子: 'minecraft:ladder',
+    盾牌: 'minecraft:shield', 玻璃: 'minecraft:glass', 萤石: 'minecraft:glowstone',
+    锄头: 'minecraft:iron_hoe', 水桶: 'minecraft:water_bucket',
+  }
+  function resolveGiveItem(item: string): { id: string; cn: string } | null {
+    const t = (item ?? '').trim().toLowerCase()
+    if (!t) return null
+    for (const [cn, id] of Object.entries(CHAT_GIVE_WHITELIST)) if (cn === t) return { id, cn }
+    for (const [cn, id] of Object.entries(CHAT_GIVE_WHITELIST)) if (t.includes(cn)) return { id, cn } // 「一把铁剑吧」
+    return null
+  }
+
+  // 灯语女神：理解一句话 → 回复或馈赠。回执走公屏（她是个聊天角色，大家看得见）。
+  async function goddessChat(username: string, message: string): Promise<void> {
+    const bot = getBot()
+    if (!bot) return
+    const isVip = VIP_SET.has(username.toLowerCase())
+    const now = Date.now()
+    const cool = isVip ? Math.floor(GODDESS_CHAT_COOLDOWN / 2) : GODDESS_CHAT_COOLDOWN
+    const lastAt = lastGoddessChat.get(username) ?? 0
+    if (now - lastAt < cool) return // 静默节流（公屏聊天不打扰，不做「稍候」提醒）
+    lastGoddessChat.set(username, now)
+    const t = transmigrators.getByUsername(username)
+    const senderName = t?.name ?? username
+    const prompt = [
+      '你是这个方块世界的「灯语女神」（游戏内化身 Goddess），温柔幽默、说话大白话、简短。',
+      '真人玩家在公屏说了句话，你要理解他真正的意思并做出回应——比如他要面包，你就真的送面包。',
+      '你的神力边界：可以送日常小物（面包/火把/煤/原木/圆石/苹果/熟牛肉/木石铁工具剑/床/船/梯子/盾牌/玻璃/萤石/灯笼/铁锭/水桶/锄头），不能送贵重物（钻石/绿宝石/金锭/合金/附魔书）——要贵重物就指他私语 /msg Goddess 祈愿：<愿望>。',
+      '',
+      `玩家名：${senderName}（登录名 ${username}）`,
+      `他说：「${message.slice(0, 120)}」`,
+      '',
+      '只输出一行 JSON，不要 markdown 代码块，两种格式二选一：',
+      '{"action":"reply","text":"<你说的话，30字内，大白话>"}',
+      '{"action":"give","item":"<物品中文名>","count":<1-8>,"text":"<你说的话，30字内>"}',
+      '规则：他要日常物品且合理 → give；问路/问玩法/求助 → reply 给答案（需要大力帮忙时让他私语祈愿）；闲聊 → 自然聊回来；无理取闹 → 温柔拒绝。',
+    ].join('\n')
+    try {
+      const ans = await callAgent(`mc:chat:${username}`, username, prompt, 'mc-herald')
+        .catch(async (e) => {
+          log(`herald down for chat (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
+          return callAgent(`mc:chat:${username}`, username, prompt, 'mc-god')
+        })
+      let decision: any = null
+      const raw = String(ans.text ?? '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
+      const m = raw.match(/\{[\s\S]*\}/)
+      if (m) { try { decision = JSON.parse(m[0]) } catch { /* 非 JSON 落 reply */ } }
+      const text = String(decision?.text ?? '').trim().slice(0, 60) || raw.slice(0, 60) || '……'
+      if (decision?.action === 'give') {
+        const lastGive = lastGoddessGive.get(username) ?? 0
+        const giveCool = isVip ? Math.floor(GODDESS_GIVE_COOLDOWN / 2) : GODDESS_GIVE_COOLDOWN
+        if (now - lastGive < giveCool) {
+          try { bot.chat(`${senderName}，方才才给过你，歇一歇再来～`) } catch { /* not ready */ }
+          return
+        }
+        const resolved = resolveGiveItem(String(decision.item ?? ''))
+        if (!resolved) { // LLM 给了白名单外物品：只回话不给货
+          try { bot.chat(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`) } catch { /* not ready */ }
+          return
+        }
+        const count = Math.max(1, Math.min(8, Number(decision.count) || 1))
+        lastGoddessGive.set(username, now)
+        try {
+          await rcon.send(`give ${username} ${resolved.id} ${count}`)
+          try { bot.chat(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`) } catch { /* not ready */ }
+          worlddb.chronicleRecord('chat-give', username, { item: resolved.cn, count, via: 'goddess-chat' })
+          log(`goddess-chat give: ${username} <- ${resolved.id}x${count}`)
+        } catch (err) {
+          log(`goddess-chat give failed: ${err instanceof Error ? err.message : String(err)}`)
+          try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+        }
+      } else {
+        try { bot.chat(`${senderName}，${text}`) } catch { /* not ready */ }
+        worlddb.chronicleRecord('chat', username, { text: message.slice(0, 40), via: 'goddess-chat' })
+        log(`goddess-chat reply to ${username}: ${text.slice(0, 50)}`)
+      }
+    } catch (err) {
+      log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // 点名检测：消息里点了守卫/NPC/其他在线玩家的名 → 女神不接，归被点名者处理。
+  function isCalledOut(username: string, message: string): boolean {
+    const m = message.trim()
+    if (!m) return false
+    for (const g of GUARD_PLAYER_NAMES) if (m.includes(g)) return true
+    for (const n of loadNpcNames()) if (m.includes(n)) return true
+    // 其他在线玩家（登录名与穿越者显示名都算）
+    // 2026-08-29 修复:裸用 bot 在此作用域未定义,chat 事件里抛 ReferenceError 会打断
+    // socket 包处理链 → keepalive 30s 无人应答 → 化身断连 → 9090 可视化冻结(每遇聊天必现)
+    for (const name of Object.keys((getBot()?.players ?? {}) as Record<string, unknown>)) {
+      if (name === username || name === getBot()?.username) continue
+      if (m.includes(name)) return true
+    }
+    for (const x of transmigrators.list()) {
+      if (x.username === username) continue
+      if (m.includes(x.name)) return true
+    }
+    return false
+  }
+
 
   const DEATH_OBJ = 'mcdeaths'
   const deathScores = new Map<string, number>()
@@ -1781,13 +2512,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   /** 死亡入册（快/慢路径共用）。prev 由调用方传入（log 路径 set 先于 record，从 map 读会拿到新值）。 */
   function recordDeath(name: string, prev: number | undefined, cur: number, evidence?: { cause?: string; killer?: string; text: string }): void {
-    if (isKage(name)) {
-      // 影分身语义（2026-08-24 造物主定调）：死亡 = 直接消失，不复活、不入册
-      // （不污染陨落计数 / 死亡热点 / 女神救援会话）。
-      rcon.send(`numen_act dismiss ${name}`).catch(() => {})
-      log(`kage ${name} died — dismissed, no respawn`)
-      return
-    }
     log(`death detected: ${name} (${prev ?? '?'} -> ${cur})${evidence ? ` [log: ${evidence.text}]` : ''}`)
     const detail: Record<string, unknown> = { total: cur, source: evidence ? 'log' : 'poll' }
     if (evidence) {
@@ -1809,11 +2533,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     if (ev.kind !== 'death') return // join/leave/成就/聊天已有各自通道，此处不重复入册
     const name = ev.player
     if (name === getBot()?.username) return
-    if (isKage(name)) { // 影分身死亡：直接消失，不复活、不计分板复核
-      rcon.send(`numen_act dismiss ${name}`).catch(() => {})
-      log(`kage ${name} died (log) — dismissed, no respawn`)
-      return
-    }
     void (async () => {
       try {
         if (!deathObjReady) {
@@ -2220,16 +2939,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   }
 
   /** 每玩家施援扫描：只判定+提示，绝不动手（圣愈/填海留给祈愿供奉与自己吟唱）。 */
+  // 探索者远征（2026-08-29 造物主任命）：守卫游历世界即探索者——远离已知发现点
+  // (>500格)时自动登记新地名，供日后传送阵/玩家远行导航。每守卫 30 分钟节流。
+  const lastDiscover = new Map<string, number>()
+  const EXPLORE_COOLDOWN_MS = 30 * 60_000
   async function guardScan(name: string, isNight: boolean, day: number): Promise<void> {
     try {
-      const [hp, food, air] = await Promise.all([
-        rcon.getEntityNumber(name, 'Health'),
-        rcon.getEntityNumber(name, 'foodLevel'),
-        rcon.getEntityNumber(name, 'Air'),
-      ])
+      // 2026-08-26 AUDIT-02 根因修复：原 Promise.all 三连并发把 RCON 单连接串包
+      // （foodLevel/Air 长期 null——饥饿检测从未工作过）。RCON 是单连接请求-响应
+      // 协议，必须串行查询；20s 轮询 ×5 玩家 ×3 查询串行完全够用。
+      const hp = await rcon.getEntityNumber(name, 'Health')
+      const food = await rcon.getEntityNumber(name, 'foodLevel')
+      const air = await rcon.getEntityNumber(name, 'Air')
+      log(`GUARD-SCAN ${name}: hp=${hp} food=${food} air=${air}`) // AUDIT-02 调试：确认扫描取数
       if (hp !== null) {
         const hpRatio = hp / 20
-        if (hpRatio < 0.15) {
+        if (hpRatio <= 0.15) {
           // 濒死先救铁律（守卫侧）：真濒死 → 女神先代施圣愈救活，再催教并行。翻掉"只催不救"教条。
           const sinceSave = lastGuardSave.get(name) ?? 0
           if (Date.now() - sinceSave > GUARD_SAVE_COOLDOWN_MS) {
@@ -2245,6 +2970,24 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           }
           await guardHint(name, 'dying', `我已出手救你（圣愈）——别硬撑，快念「圣愈」自保，或速撤找屋檐！`)
         }
+        else if (food !== null && food === 0 && hpRatio <= 0.5) {
+          // 2026-08-26 AUDIT-02 修复：饥饿归零+失血的「慢性濒死」——HP 未到 0.15 线但会被磨死
+          // （鸣人实证：饥饿0+HP10 拖了 40 分钟，旧条件不触发代施，只发"肚子空了"提示）。
+          // 女神代施「饱食赐福」止血因（feed=补饥饿），节流同 GUARD_SAVE_COOLDOWN_MS。
+          const sinceSave = lastGuardSave.get(name) ?? 0
+          if (Date.now() - sinceSave > GUARD_SAVE_COOLDOWN_MS) {
+            lastGuardSave.set(name, Date.now())
+            try {
+              const save = await magic.castByGod(name, 'feed', { playerChant: `守卫饥饿归零+失血 ${Math.round(hp)}/20`, tokens: 0 })
+              log(`GUARD-SAVE ${name}: feed (hp ${Math.round(hp)}/20, food 0) -> ${save}`)
+              worlddb.chronicleRecord('verdict', name, { action: 'emergency', skill: 'feed', reply: `守卫饿极失血，女神代施「饱食赐福」救急` })
+              await worlddb.remember(name, 'verdict', `守卫${name}饥饿归零失血（${Math.round(hp)}/20），你代施「饱食赐福」止血因`)
+            } catch (err) {
+              log(`guard feed save failed for ${name}: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+          await guardHint(name, 'starving', `我已喂饱你（饱食赐福）——快去弄点吃的备着，别再空腹硬扛！`)
+        }
         else if (hpRatio < 0.30) await guardHint(name, 'hurt', `你伤得不轻（${Math.round(hp)}/20），找屋檐歇脚，或念「圣愈」/向女神求个恩典。`)
       }
       if (air !== null && air < 8) await guardHint(name, 'drown', `你呛水了，快上岸换口气！`)
@@ -2254,6 +2997,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         nightHintDay.set(name, day)
         try { courier(name, `天黑了，别在野外过夜——进屋、点火把。`) } catch { /* 无碍 */ }
         log(`GUARD-HINT [${name}] night: 天黑了，别在野外过夜`)
+      }
+      // 探索者远征登记（冷却到才查 Pos，不增常态 RCON 压力）
+      const sinceDisc = lastDiscover.get(name) ?? 0
+      if (Date.now() - sinceDisc > EXPLORE_COOLDOWN_MS) {
+        const posRaw = await rcon.send(`data get entity ${name} Pos`)
+        const pm = /\[(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\]/.exec(posRaw || '')
+        if (pm) {
+          const [x, y, z] = [Number(pm[1]), Number(pm[2]), Number(pm[3])]
+          const got = worlddb.discoveryAdd('', 'spot', Math.round(x), Math.round(z), name, `y=${Math.round(y)}`, 500)
+          if (got) {
+            lastDiscover.set(name, Date.now())
+            worlddb.chronicleRecord('explore', name, { place: got.name, x: Math.round(x), z: Math.round(z), y: Math.round(y) })
+            log(`EXPLORE ${name}: ${got.name} @ ${Math.round(x)},${Math.round(y)},${Math.round(z)}`)
+            try { courier(name, `你走到了一片新的天地——「${got.name}」已被记入世界舆图。`) } catch { /* 无碍 */ }
+          }
+        }
       }
     } catch { /* 单玩家失败不影响其余 */ }
   }
@@ -2338,7 +3097,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const byType: Record<string, number> = {}
       for (const e of ch) byType[e.type] = (byType[e.type] ?? 0) + 1
       const n = (k: string) => byType[k] ?? 0
-      const helped = ch.filter((e) => (e.type === 'welcome' || e.type === 'help' || e.type === 'ask') && !isKage(String(e.actor))).map((e) => e.actor)
+      const helped = ch.filter((e) => e.type === 'welcome' || e.type === 'help' || e.type === 'ask').map((e) => e.actor)
       const topPlayer = Object.entries(usg.byPlayer).sort((a, b) => b[1] - a[1]).slice(0, 6)
         .map(([p, c]) => `${p} ${c}`).join(' / ')
       const topAtom = Object.entries(usg.byAtom).sort((a, b) => b[1] - a[1]).slice(0, 8)
@@ -2404,7 +3163,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             await rcon.send(`scoreboard objectives add ${DEATH_OBJ} deathCount`)
             deathObjReady = true
           }
-          const names = Object.keys(bot.players).filter((n) => n !== bot.username && !INTERNAL_BOTS.has(n) && !isKage(n))
+          const names = Object.keys(bot.players).filter((n) => n !== bot.username && !INTERNAL_BOTS.has(n))
           // 观察名单随进随出（2026-08-17）：每 tick 从 bot.players 现取，玩家加入/离开
           // 无需重启世界进程；名单变化时打一行日志作证（+加入 / -离开）。
           const watched = new Set(names)
@@ -2686,8 +3445,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const username = typeof player === 'string' ? player : player.username
       if (username === getBot()?.username) return
       if (isInternalBot(username)) return
-      // 影分身：瞬态战斗实体，女神系统不对它做任何"新玩家照看"（发书/欢迎/记进出）。
-      if (isKage(username)) return
       if (username.startsWith('sys_')) {
         // 守护天使（客户端陪玩）不上降临仪轨、不欢迎、不记进出；且隐形——
         // 「魂」不露身体（2026-08-23 归属定：vanilla 隐身效果，服务端权威，零 Java）。
@@ -2701,6 +3458,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
+      // 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）：✦徽记书右键即施法，
+      // 上线送一份、名单持久化防重发。先萌萌（重点看护/手柄/不识字——点书即施法是
+      // 她的正道），跑顺再扩全员。
+      ensureSkillBooks(username).catch((err) => log(`ensureSkillBooks error: ${err instanceof Error ? err.message : String(err)}`))
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
@@ -2714,7 +3475,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const username = typeof player === 'string' ? player : player.username
       if (username === getBot()?.username) return
       if (isInternalBot(username)) return
-      if (isKage(username)) return // 影分身：瞬态战斗实体，不记进出
       if (username.startsWith('sys_')) return // 守护天使不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'leave' })
     })
@@ -2725,10 +3485,41 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (username === getBot()?.username) return
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
       recordPlayerChat(username, message)
-      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
-      // 公屏发言（尤其语音转文字的自然语言祈使句，如「给我来一个铁剑吧」）应优先
-      // 上达女神，而不是被附近 NPC 截胡或忽略。直接复用私语处理链路 handleWhisper，
-      // 让女神聆听并回应她说的每一句话（回应仍走私语，不刷公屏）。
+      // 公屏 CLI 收敛为指路牌（2026-08-29 造物主谕：「公屏 cli 有点奇怪，私聊让他用 /mycli」）：
+      // 公屏是社交空间，不走命令执行（不刷回执、不产生 LLM 抢答歧义）。凡显式
+      // cli/mycli//cli/!cli 前缀——无论真人还是 Agent——一律私语回一句引导：
+      // Agent 正门 = 斜杠命令 /mycli（numen 命令桥，以本人身份私语 /cli 执行）；
+      // 或直接私语 Goddess 发 cli <verb>。私聊路径的 cli 执行不受影响。
+      {
+        const earlyCli = parseCli(message)
+        if (earlyCli) {
+          log(`cli-on-chat deflected to private for ${username}: ${earlyCli.raw.slice(0, 50)}`)
+          try {
+            bot.whisper(username, '[CLI] 公屏不走命令。私聊我：/mycli status --json（斜杠命令）或 /msg Goddess cli status')
+          } catch { /* bot not ready */ }
+          return
+        }
+      }
+      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）＋ 灯语女神公屏聊天
+      // （2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）：真人（VIP 与否）公屏
+      // 未点名的自然语言 → 灯语女神即时理解意图、真回应（「给我来个面包」真给面包）。
+      // 点名（守卫/NPC/其他在线玩家）→ 女神不接，归被点名者（守卫桥/NPC 引擎/玩家互喊）。
+      // 显式「祈愿：」前缀例外 → 走私聊全链上达天听（女神本尊裁决，神恩有价不变）。
+      // AI 穿越者不走此通道（仍走私聊祈愿/咏唱/守卫桥生态，防 bot 话痨绕过祈愿体系）。
+      if (
+        !isInternalBot(username) &&
+        !username.startsWith('sys_') &&
+        !GUARD_PLAYER_NAMES.has(username) &&
+        !transmigrators.getByUsername(username) &&
+        !isCalledOut(username, message)
+      ) {
+        if (message.trim().startsWith('祈愿：')) {
+          handleWhisper(username, message).catch((err) => log(`handleWhisper(chat-pray) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        } else {
+          goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        }
+        return
+      }
       if (config.vipListen.includes(username.toLowerCase())) {
         handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
@@ -2741,15 +3532,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         try { worlddb.chronicleRecord('help', username, { q: message.trim().slice(0, 40), via: 'chat' }) } catch { /* best effort */ }
         return
       }
-      // /cli（世界 CLI 命令树）：/cli <verb> [args] [--json] → 确定性执行；
-      // 旧写法 /cli / -h / --help / help / ? 回退到 cliOverview（command 树）。
-      const cliCmd = parseCli(message)
-      if (cliCmd) {
-        worlddb.chronicleRecord('cli', username, { q: message.trim().slice(0, 60), via: 'chat' })
-        log(`cli cmd (chat) from ${username}: ${cliCmd.raw.slice(0, 60)}`)
-        handleCli(username, username, cliCmd).catch((err) => log(`handleCli(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
-        return
-      }
+      // /cli 命令树：已前置到 chat handler 顶部（chat-early），此处不再重复解析。
       if (isCliCommand(message)) {
         const lines = cliOverview()
         for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
@@ -2780,6 +3563,26 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (law) {
         applyLaw(username, law).catch((err) => log(`applyLaw(chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
       }
+    })
+
+    // 假玩家公屏耳朵（2026-08-29 造物主谕「numen 说话肯定要被听到，不然各种做任务做不了」）：
+    // 守卫/假玩家改用 `execute as <login> run say <msg>`（服务器原生广播）说话——入 latest.log
+    // （村民引擎 tail 感知✓），同时以 system chat 发到各客户端。mineflayer 'chat' 事件只认
+    // player_chat 包，收不到 say 广播；这里补 'message' 事件解析 `[名字] 内容` 格式，
+    // 落 player-chat.jsonl——假玩家之间、假玩家↔守卫桥的公屏听觉由此闭环。
+    const SAY_RE = /^\[([A-Za-z0-9_]{1,16})\] (.+)$/
+    bot.on('message', (msg: any) => {
+      try {
+        const text = String(msg?.toString?.() ?? '').trim()
+        const m = SAY_RE.exec(text)
+        if (!m) return
+        const who = m[1]
+        if (who === getBot()?.username || who === 'Server') return
+        // 只认在线玩家名单里的名字，避免误吞服务器广播（如 [Rcon]）
+        const online = new Set((process.env.MC_ONLINE_CACHE ?? '').split(',').filter(Boolean))
+        recordPlayerChat(who, m[2])
+        log(`say-heard [${who}] ${m[2].slice(0, 60)}`)
+      } catch { /* 解析失败静默 */ }
     })
 
     // 私聊祈愿：任何玩家 /msg Goddess <愿望>[｜供奉：面包x3] → 收执供奉 → 入收件箱。
@@ -2938,7 +3741,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         resolveChant(OWNER, body)
           .then((reply) => {
-            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body}`)
+            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body} -> ${String(reply).slice(0, 120)}`)
             try { bot.whisper(username, `[信使] ${OWNER}，${reply}`) } catch { /* not ready */ }
           })
           .catch((err) => log(`whisper cast failed for ${OWNER}: ${err instanceof Error ? err.message : String(err)}`))
@@ -3056,11 +3859,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
             .then(() => {
               log(`avatar "${bot.username}" is now a spectator`)
               // 女神默认站位：新镇广场地面（2026-08-23 造物主谕 选项A）。
-              // 目的地 (3096,71,-1340)：村心几何中心 ≈(3094,-1338)，y=67 实心 / 68+ 空旷，
+              // 目的地 (-544,65,864)：新纪平原村（2026-08-26 新世界重锚），
               // 71 为站立视点——避免高空悬停。回落（/api/eye?follow=0）即回此地面位，追尾即地面级。
-              return rcon.send(`tp ${bot.username} 3096 71 -1340`)
+              return rcon.send(`tp ${bot.username} -544 65 864`)
             })
-            .then(() => log(`avatar "${bot.username}" parked at village ground (3096 71 -1340)`))
+            .then(() => log(`avatar "${bot.username}" parked at village ground (-544 65 864)`))
             .catch((err) => {
               avatarSet = false
               log(`avatar ensure failed: ${err instanceof Error ? err.message : String(err)}`)

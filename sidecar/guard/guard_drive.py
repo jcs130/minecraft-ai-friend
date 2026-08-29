@@ -625,7 +625,9 @@ def drain_player_chat(g, cursor):
             continue
         if not user or not text:
             continue
-        if user in GUARD_NAMES:   # 守卫自己说话（桐人/鸣人/Kirito/Naruto）——不转回给守卫
+        # 2026-08-29 造物主谕「numen 说话肯定要被听到」：只排本人（防自说自话），
+        # 其余守卫（桐人↔鸣人）互听——协同做任务的前提。
+        if user == g["login"]:
             continue
         new.append((user, text))
     return new, len(lines)
@@ -1175,7 +1177,9 @@ def drive_loop(g, stop_at):
                     time.sleep(DECIDE_INTERVAL)
                     continue
                 _SAY_RECENT[_say_key] = _now
-                out = R.cmd(f'numen_act say "{g["login"]}" {msg}')
+                # 2026-08-29 造物主谕「numen 说话肯定要被听到」：改服务器原生 say
+                # （入 latest.log→村民引擎感知；system chat→女神 bot 落 player-chat.jsonl）。
+                out = R.cmd(f'execute as "{g["login"]}" run say {msg}')
             else:
                 # —— 参数归一化：亲卫可能少给必填参数，补默认避免 invoke 报错（自主循环健壮性）——
                 args = _normalize_args(tool, args)

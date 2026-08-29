@@ -214,7 +214,8 @@ async def get_recent_messages(limit: int = 8) -> str:
                         t = str(rec.get("text", "")).strip()
                     except Exception:
                         continue
-                    if u and t:
+                    # 2026-08-29：守卫自己落盘（假玩家互听），但读时跳过本人——防自说自话。
+                    if u and t and u != NUMEN_COMPANION:
                         out.append({"kind": "player", "user": u, "text": t})
         except Exception:
             pass
@@ -530,7 +531,11 @@ async def say(message: str) -> str:
     blocked = _say_dedup(msg, "say")
     if blocked:
         return blocked
-    return rcon().cmd(f'numen_act say "{NUMEN_COMPANION}" {msg}')
+    # 2026-08-29 造物主谕「numen 说话肯定要被听到」：numen_act say 的广播不入
+    # latest.log、mineflayer 也收不到——村民引擎/女神全聋，任务闭环断。
+    # 改走服务器原生 `execute as <login> run say <msg>`：入 log（引擎 tail 感知）+
+    # system chat 广播（女神 bot 'message' 事件感知→落 player-chat.jsonl，假玩家互听）。
+    return rcon().cmd(f'execute as "{NUMEN_COMPANION}" run say {msg}')
 
 
 @mcp.tool()
