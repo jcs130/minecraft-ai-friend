@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.Filterable;
@@ -215,18 +216,26 @@ public class SkillBookUseMixin {
                 p1.append("\n§8—— 已习法术 ——§r");
                 pages.add(Filterable.passThrough(Component.literal(p1.toString())));
 
-                // 已习法术：每页 9 个
+                // 已习法术：每页一个技能，点击整页即施法（2026-08-29 造物主令
+                // 「每页一技，这样就可以施法」——书页 clickEvent run_command /mycli cast，
+                // 与《魔导书》同机制；萌萌不识字也能「翻到页就点」）。
                 if (learned != null && learned.size() > 0) {
-                    List<String> names = new ArrayList<>();
                     for (JsonElement el : learned) {
-                        names.add(atomName(atomsPath, el.getAsString()));
-                    }
-                    for (int i = 0; i < names.size(); i += 9) {
-                        StringBuilder pp = new StringBuilder();
-                        for (int j = i; j < Math.min(i + 9, names.size()); j++) {
-                            pp.append("§a· §f").append(names.get(j)).append("§r\n");
-                        }
-                        pages.add(Filterable.passThrough(Component.literal(pp.toString())));
+                        String id = el.getAsString();
+                        JsonObject meta = atomMeta(atomsPath, id);
+                        String n = meta == null ? id : optStr(meta, "name", id);
+                        JsonObject cost = (meta != null && meta.has("cost") && meta.get("cost").isJsonObject())
+                                ? meta.getAsJsonObject("cost") : null;
+                        int spellMana = cost == null ? 0 : optInt(cost, "mana", 0);
+                        int spellLv = meta == null ? 0 : optInt(meta, "requiredLevel", 0);
+                        Component page = Component.literal(
+                                        "§6❖ " + n + " ❖§r\n\n"
+                                        + (spellLv > 0 ? "§7需要 Lv" + spellLv + "§r\n" : "")
+                                        + (spellMana > 0 ? "§7魔力 §b" + spellMana + "§r\n" : "")
+                                        + "\n§a▶▶ 点击释放 ◀◀§r")
+                                .withStyle(s -> s.withClickEvent(new ClickEvent(
+                                        ClickEvent.Action.RUN_COMMAND, "/mycli cast " + n)));
+                        pages.add(Filterable.passThrough(page));
                     }
                 } else {
                     pages.add(Filterable.passThrough(Component.literal("§7尚未习得任何法术。\n\n§8向书商购卷，或求女神开蒙。§r")));
@@ -245,7 +254,7 @@ public class SkillBookUseMixin {
                 pages.add(Filterable.passThrough(Component.literal(pb.toString())));
             }
             pages.add(Filterable.passThrough(Component.literal(
-                    "§8§o神谕：右键技能书即施法，\n潜行＋右键可细读书页。§r")));
+                    "§8§o神谕：翻到法术页点击即施法；\n技能书拿在手上右键也施法。§r")));
         } catch (Exception e) {
             GODFIX.warn("[book] status regenerate failed: {}", e.toString());
             pages.clear();
@@ -272,8 +281,8 @@ public class SkillBookUseMixin {
         }
     }
 
-    /** 技能 id → 中文名（读 magic-atoms.json，缺失回退 id）。 */
-    private static String atomName(String atomsPath, String id) {
+    /** 技能 id → atom 对象（读 magic-atoms.json；缺失返回 null）。 */
+    private static JsonObject atomMeta(String atomsPath, String id) {
         try (var fr = Files.newBufferedReader(Path.of(atomsPath), StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(fr).getAsJsonObject();
             JsonArray atoms = root.getAsJsonArray("atoms");
@@ -281,17 +290,20 @@ public class SkillBookUseMixin {
                 for (JsonElement el : atoms) {
                     JsonObject a = el.getAsJsonObject();
                     if (id.equals(optStr(a, "id", ""))) {
-                        String n = optStr(a, "name", "");
-                        if (!n.isEmpty()) {
-                            return n;
-                        }
+                        return a;
                     }
                 }
             }
         } catch (Exception ignore) {
-            // 回退 id
+            // 回退 null
         }
-        return id;
+        return null;
+    }
+
+    /** 技能 id → 中文名（读 magic-atoms.json，缺失回退 id）。 */
+    private static String atomName(String atomsPath, String id) {
+        JsonObject a = atomMeta(atomsPath, id);
+        return a == null ? id : optStr(a, "name", id);
     }
 
     /** 常见被动 id → 中文名（表驱动，缺失回退 id）。 */

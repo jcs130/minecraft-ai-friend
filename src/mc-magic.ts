@@ -844,6 +844,12 @@ export class MagicStateStore {
       const tmp = this.path + '.tmp'
       writeFileSync(tmp, JSON.stringify(this.state, null, 2), 'utf-8')
       renameSync(tmp, this.path)
+      // 2026-08-29 双源归一：/mcdata 侧（settlementsfix 命格书重写、numen、npc 引擎渲染）
+      // 长期读到旧副本——「萌萌命格书尚未启封」的根因即 mod 读 mcdata 过期文件。
+      // 正本落盘后镜像到 /mcdata（world 容器挂载可写）；本地跑测试无此目录则静默跳过。
+      try {
+        writeFileSync('/mcdata/magic-state.json', JSON.stringify(this.state, null, 2), 'utf-8')
+      } catch { /* 镜像尽力而为，不伤正本 */ }
     } catch (err) {
       console.error(`[mc-magic] failed to save state: ${err instanceof Error ? err.message : String(err)}`)
     }
