@@ -1054,7 +1054,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const boxCmd = ('give ' + username + ' minecraft:purple_shulker_box'
           + `[minecraft:custom_name='${boxName}',`
           + `minecraft:block_entity_data={id:"minecraft:shulker_box",Items:[${items}]}] 1`)
-        const r = await rcon.send(boxCmd).catch((e) => `[err:${e instanceof Error ? e.message : String(e)}]`)
+        // 长匣命令(~1.3KB)在复用长连接上偶发 rcon closed(连接被断,python 新连接
+        // 每次都过)——失败后重连重发一次,实测二次必过(2026-08-29)。
+        let r = ''
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          r = await rcon.send(boxCmd).catch((e) => `[err:${e instanceof Error ? e.message : String(e)}]`)
+          if (r && /gave|已给予|Given/i.test(r)) break
+          if (attempt === 1) await new Promise((res) => setTimeout(res, 2_500))
+        }
         if (r && /gave|已给予|Given/i.test(r)) {
           rec.boxes.push(`✦ ${boxTitle}`)
           rec.books.push(...books)
