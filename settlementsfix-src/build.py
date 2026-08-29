@@ -91,7 +91,7 @@ def main():
         gson = glob.glob(os.path.join(os.getcwd(), "gson-*.jar"))
         cp = os.pathsep.join(gson)
         compile_java(PURE, cp)
-        java = os.path.join(JDK, "java.exe")
+        java = os.path.join(JDK, "java.exe" if os.name == "nt" else "java")
         r = subprocess.run([java, "-cp", cp + os.pathsep + HERE,
                             "dev.god.settlementsfix.chest.SkillChestTest"],
                            capture_output=True, timeout=300)

@@ -1,6 +1,6 @@
 {
- "at": "2026-08-30 01:56:03",
- "ts": 1788026163.3078322,
+ "at": "2026-08-30 02:01:03",
+ "ts": 1788026463.3385656,
  "red": [],
  "yellow": [
   "Kirito-status"
@@ -20,11 +20,11 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 9 minutes (healthy)"
+   "m": "Up 14 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 8 minutes"
+   "m": "Up 13 minutes"
   },
   "shadow-panel": {
    "s": "green",
@@ -44,7 +44,7 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 9s old"
+   "m": "log 36s old"
   },
   "web-entities-fresh": {
    "s": "green",

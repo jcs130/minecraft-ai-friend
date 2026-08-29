@@ -9,6 +9,8 @@ import os
 import sys
 import time
 
+import pytest  # 两处 mcp 依赖缺失时 pytest.skip 兜底（gate job 已装 pytest）
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 GD_PATH = os.path.join(HERE, "..", "sidecar", "guard", "guard_drive.py")
 
