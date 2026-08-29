@@ -178,3 +178,11 @@
 - **首轮巡检即抓真问题**:viewer-3050 半死(HTTP 强关,回退通道记黄待修);Kirito hp9/food6 黄灯与反射层实时闭环(巡检发现→反射层已自动进食饥饿 6→12)——体系第一天就证明价值。
 - **坑再犯+1**:cmd 内联 python(引号嵌套中文)转义黑洞又踩(AssertError),一律落 .py 文件;Windows GBK 管道中文比对假阴性,落文件 utf-8 比对。
 - **Source RCON 简版实现坑**:响应包须按 request-id 匹配循环读,连读两个包会等到超时(探针假红);探针 URL 要选真 endpoint(gateway 根路径 404 是常态不是病)。
+
+
+## 2026-08-29 反射层二批(mindcraft 对齐)连挖三坑
+
+- **RCON 错密码=静默哑火,不是报错**:guard_drive 兜底链读到旧世密码(mc-data/rcon-secret.txt 32字符),认证失败后 MC 不抛错不关连接,命令回执**空串**——反射/慢系统全降级为零动作,无任何报错痕迹。排查法:同命令用已知能用的客户端(mcp_numen 桥)对照;密码 md5 指纹对比不泄密。真源唯一:`ops/docker/shadow/data/rcon-secret.txt`(utf-8-sig 读),候选链已对齐。任何「RCON 回执空串」先查密码指纹。
+- **venv shim 双进程是单实例正常形态**:qwenpaw venv 的 python.exe 是 uv launcher,Popen 一个会看到 shim+真体两个 pid(父子链);判断实例数看 ppid 链分组,别数进程。
+- **看门狗与人工重启竞态双启**:`--stop` 杀完到新实例起来的窗口恰逢 schtasks 5min 巡检,双方各拉一个实例(反射层双拍/任务双派)。治:start_guard_drive 写 pid 文件,start() 时 pid 文件+双查询任一活着即跳过;重启人工流程避开整 5 分钟边界。
+- **mindcraft modes.js 是反射层设计的现成参照**(本地 clone mindcraft-ref):self_preservation(头顶水 jump/落沙 moveAway/着火水桶/3s 内重伤大撤 20 格)、unstuck(同点 20s)、cowardice/self_defense 分档、item_collecting(2s 确认)、torch_placing(5s 冷却)、execute() 后 AUTO MESSAGE 回流模型(=我们的 feed kind=reflex)。numen 无 jump/水桶原语,R4/R5 用 goto 近似;hunting/torch 类留给慢系统。
