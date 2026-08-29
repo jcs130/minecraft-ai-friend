@@ -999,8 +999,32 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 补书范围 = learned 已习法术 ∪ 自己的攻击书礼包名单（书丢了/没到都能自动回，
       // owned 检查天然防重复——名单挡重发的职能由背包实测取代）。
       const giftNames = ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? []
-      for (const name of [...new Set([...ms.learned.map((id) => magic.getAtomById(id)?.name ?? id), ...giftNames])]) {
-        if (owned.has(name)) continue
+      const wantNames = [...new Set([...ms.learned.map((id) => magic.getAtomById(id)?.name ?? id), ...giftNames])]
+      const missing = wantNames.filter((n) => !owned.has(n))
+      if (missing.length === 0) return
+      // 造物主令「技能书都放收纳袋里，好找、不占格子」（2026-08-29）：bundle 收纳袋在
+      // 基岩端不可用（Geyser 无映射、显示成潜影壳、装取交互全失）——用基岩原生潜影盒
+      // 「✦ 法术书匣」替代，书预装：没有匣→一发装满全部法术书（背包只占 1 格）；
+      // 已有匣→新学的书散本补发（增量，她自己或造物主顺手塞匣）。
+      if (!inv.includes('法术书匣')) {
+        const boxName = JSON.stringify({ text: '✦ 法术书匣', color: 'light_purple', italic: false })
+        const items = wantNames
+          .map((n, i) => {
+            const cn = JSON.stringify({ text: `✦ ${n}`, color: 'gold', italic: false })
+            return `{Slot:${i}b,id:"minecraft:enchanted_book",count:1,components:{"minecraft:custom_name":'${cn}'}}`
+          })
+          .join(',')
+        const boxCmd = ('give ' + username + ' minecraft:purple_shulker_box'
+          + `[minecraft:custom_name='${boxName}',`
+          + `minecraft:block_entity_data={id:"minecraft:shulker_box",Items:[${items}]}] 1`)
+        const r = await rcon.send(boxCmd).catch(() => '')
+        if (r && /gave|已给予|Given/i.test(r)) {
+          log(`spellbook box given to ${username}: ✦ 法术书匣 ×${wantNames.length} 本预装`)
+          return
+        }
+        log(`spellbook box give failed for ${username}: ${r.slice(0, 80)}`)
+      }
+      for (const name of missing) {
         const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
         if (r && /gave|已给予|Given/i.test(r)) {
           log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
@@ -3534,12 +3558,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
-      // 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）：✦徽记书右键即施法，
-      // 上线送一份、名单持久化防重发。先萌萌（重点看护/手柄/不识字——点书即施法是
-      // 她的正道），跑顺再扩全员。
-      ensureSkillBooks(username).catch((err) => log(`ensureSkillBooks error: ${err instanceof Error ? err.message : String(err)}`))
-      // 学会即得书（2026-08-29 造物主令「放点背包里的技能书」）：上线瞬间即查
-      // learned vs 背包 ✦书，缺的秒补——不等 60s sweep（萌萌等过一轮空手，不再等）。
+      // 礼包攻击书不再散着发（2026-08-29 造物主令「书都收进袋里好找、不占格子」）——
+      // 书类交付统一归 ensureLearnedBooks：没有「✦ 法术书匣」→一发预装满匣（learned ∪
+      // 礼包名单全装进去）；有匣→新书散本增量补。ensureSkillBooks 仅留作旧流程兜底。
+      // 学会即得书：上线瞬间即查 learned vs 背包 ✦书，缺的秒补——不等 60s sweep
+      // （萌萌等过一轮空手，不再等）。
       setTimeout(() => {
         ensureLearnedBooks(username).catch((err) => log(`ensureLearnedBooks(join) error: ${err instanceof Error ? err.message : String(err)}`))
       }, 5_000)
