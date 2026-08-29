@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
 import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
@@ -980,6 +980,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
    * clickEvent 点击施法在 Geyser 基岩端大概率不可用（Geyser 官方限制：基岩不支持
    * 点击文本执行命令）——手柄正道 = ✦书右键（使用键）施法。查在线玩家已习法术 vs
    * 背包已有 ✦书（RCON data get Inventory），缺的每技补一本——书即手柄按钮。 */
+  // 书匣记账（2026-08-29 三修）：data get 的 NBT 路径过滤多值在 1.21.1 报「accepts
+  // a single NBT value」——背包书名查询彻底不可用；改为 execute if items 探匣
+  // （响应 "Test passed, count: N"，短且带数量）+ 本地记账 bookbox-given.json 判重：
+  // 发匣/散书成功即记账，wantNames 差集只发增量，不再依赖背包快照（截断坑根除）。
+  function loadBookLedger(): Record<string, { boxes: string[]; books: string[] }> {
+    try {
+      return JSON.parse(readFileSync(join(DATA_DIR, 'bookbox-given.json'), 'utf-8'))
+    } catch {
+      return {}
+    }
+  }
+  function saveBookLedger(ledger: Record<string, { boxes: string[]; books: string[] }>): void {
+    mkdirSync(DATA_DIR, { recursive: true })
+    writeFileSync(join(DATA_DIR, 'bookbox-given.json'), JSON.stringify(ledger, null, 2))
+  }
+
   async function ensureLearnedBooks(username: string): Promise<void> {
     // 只对真人发施法书——numen 假玩家（守卫/AI 玩家）走 numen 咏唱，塞书只占背包。
     const FAKE_PLAYERS = new Set(['Kirito', 'Naruto', 'Taro', 'Edward', 'TaroProbe', 'TaroProbe5', 'Steve', 'Alex'])
@@ -987,40 +1003,40 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     try {
       const ms = magic.getState(username)
       if (!ms.learned || ms.learned.length === 0) return
-      // ⚠ RCON 响应上限 4096 字节：data get Inventory 全量 NBT 会被截断——owned 集合
-      // 永远查不全 → sweep 循环误发书（2026-08-29 萌萌 17 本散书事故根因）。
-      // 改用两条短查询：① 槽位 id 列表（检测匣/背包满）② 仅 enchanted_book 的组件（书名）。
-      const ids = await rcon.send(`data get entity ${username} Inventory[].id`).catch(() => '')
-      if (!ids || ids.includes('No player was found')) return
-      const slots = (ids.match(/id: "/g) ?? []).length
-      if (slots >= 36) {
-        log(`learnedbook skip ${username}: inventory full (${slots})`)
-        return
-      }
       const giftNames = ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? []
       const learnedNames = ms.learned.map((id) => magic.getAtomById(id)?.name ?? id)
       const wantNames = [...new Set([...learnedNames, ...giftNames])]
-      if (ids.includes('shulker_box')) {
-        // 已有匣：新书散本增量补（owned 来自短查询，不会被截断坑到循环发书）。
-        const comps = await rcon.send(`data get entity ${username} Inventory[{id:"minecraft:enchanted_book"}].components`).catch(() => '')
-        const owned = new Set<string>()
-        for (const m of comps.matchAll(/✦ ([^"'\\]+)/g)) owned.add(m[1].trim())
+      const ledger = loadBookLedger()
+      const rec = ledger[username] ?? { boxes: [], books: [] }
+      // ① 探匣：execute if items 短响应（永不截断），count 即匣数。
+      const boxTest = await rcon.send(`execute if items entity ${username} inventory.* minecraft:purple_shulker_box`).catch(() => '')
+      const boxCount = /Test passed, count: (\d+)/.exec(boxTest ?? '') ? Number(/Test passed, count: (\d+)/.exec(boxTest!)![1]) : 0
+      if (boxCount > 0) {
+        // 已有匣：新学的书散本补（记账判重，差集=增量；书在匣里丢不了，散本增量极少）。
         for (const name of wantNames) {
-          if (owned.has(name)) continue
+          if (rec.books.includes(name)) continue
           const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
           if (r && /gave|已给予|Given/i.test(r)) {
+            rec.books.push(name)
             log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
           }
         }
+        ledger[username] = rec
+        saveBookLedger(ledger)
         return
       }
-      // 无匣：发预装匣（造物主令「书都收进袋里，好找、不占格子」——bundle 基岩不可用，
-      // 用潜影盒；且 RCON 请求 ~1446 字节上限，13 本一匣必超 → 固定拆两匣：
-      // 生活「法术书匣」+ 攻击「攻击书匣」，各自实测 1332/900 字节安全过。
-      const learnedBooks = [...new Set(learnedNames)]
-      const attackBooks = wantNames.filter((n) => !learnedBooks.includes(n))
+      // 无匣：查背包满与否（全量查询仅在无匣路径用一次；截断最多误判满包跳过，不炸）。
+      const inv = await rcon.send(`data get entity ${username} Inventory`).catch(() => '')
+      if (!inv || inv.includes('No player was found')) return
+      if ((inv.match(/Slot: \d+b/g) ?? []).length >= 36) {
+        log(`learnedbook skip ${username}: inventory full`)
+        return
+      }
+      // ② 发两匣（RCON 请求 ~1446 上限，13 本一匣必超 → 法术书匣+攻击书匣，
+      // 实测 1332/900 字节安全过；已发过的匣靠记账不重发）。
+      const attackBooks = wantNames.filter((n) => !learnedNames.includes(n))
       const boxes: Array<[string, string, string[]]> = [
-        ['法术书匣', 'light_purple', learnedBooks],
+        ['法术书匣', 'light_purple', learnedNames],
         ['攻击书匣', 'red', attackBooks],
       ]
       for (const [boxTitle, color, books] of boxes) {
@@ -1035,13 +1051,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const boxCmd = ('give ' + username + ' minecraft:purple_shulker_box'
           + `[minecraft:custom_name='${boxName}',`
           + `minecraft:block_entity_data={id:"minecraft:shulker_box",Items:[${items}]}] 1`)
-        const r = await rcon.send(boxCmd).catch(() => '')
+        const r = await rcon.send(boxCmd).catch((e) => `[err:${e instanceof Error ? e.message : String(e)}]`)
         if (r && /gave|已给予|Given/i.test(r)) {
+          rec.boxes.push(`✦ ${boxTitle}`)
+          rec.books.push(...books)
           log(`spellbook box given to ${username}: ✦ ${boxTitle} ×${books.length} 本预装`)
         } else {
           log(`spellbook box give failed for ${username} (${boxTitle}): ${(r ?? '').slice(0, 80)}`)
         }
       }
+      ledger[username] = rec
+      saveBookLedger(ledger)
     } catch (err) {
       log(`learnedbook check failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
     }
