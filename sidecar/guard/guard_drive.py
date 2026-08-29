@@ -1591,6 +1591,113 @@ def _kage_drive_log(name, kind, text):
         pass
 
 
+# ---------------- 反射层(快系统,2026-08-29 造物主令) ----------------
+# 参照 MindCraft 的 self-preservation reflexes:亲卫 30s 一轮太慢,"怪贴脸/断粮/
+# 濒死"等不及过脑子。本层独立心跳(5s),程序化反应,零 LLM:
+#   R1 贴脸敌(hostile≤5格)→ attack nearby 主动反击(每守卫 12s 节流;瞬发,
+#      允许顶替长任务——命比任务大,顶替后亲卫下轮自然重议)
+#   R2 饥饿≤8 → 按食物链探测进食(熟牛排→熟猪排→面包→熟鸡肉→苹果→金胡萝卜),
+#      eat 回执"没有"就试下一种,命中即吃(90s 节流,防把食物一口气吃完)
+#   R3 HP≤8(40%)→ R2 食物链强吃(饱和回血);HP≤4 时再叠 chant 归乡回安全区
+#      (120s 节流)。女神铁律(HP≤15% 代施圣愈)仍在世界侧,双层保险。
+# 反射动作 feed_append(kind="reflex") 入亲卫上下文,慢系统自然感知"身体刚自保"。
+# 独立 Rcon 连接(反射与主循环并发,不共 socket 防串包)。
+
+REFLEX_POLL = 5            # 反射心跳(秒)
+REFLEX_ATTACK_THROTTLE = 12
+REFLEX_EAT_THROTTLE = 90
+REFLEX_FLEE_THROTTLE = 120
+REFLEX_FOOD_CHAIN = [
+    "minecraft:cooked_beef", "minecraft:cooked_porkchop", "minecraft:bread",
+    "minecraft:cooked_chicken", "minecraft:cooked_mutton", "minecraft:apple",
+    "minecraft:golden_carrot", "minecraft:carrot", "minecraft:potato",
+]
+_reflex_ts = {}  # (tag, kind) -> 上次触发时刻(节流)
+
+
+def _reflex_gate(tag, kind, throttle):
+    """节流闸:距上次触发不足 throttle 秒则拦下。"""
+    key = (tag, kind)
+    now = time.time()
+    if now - _reflex_ts.get(key, 0) < throttle:
+        return False
+    _reflex_ts[key] = now
+    return True
+
+
+def _reflex_rcon():
+    """反射层独立 Rcon 连接(线程安全:每线程一连接)。"""
+    r = Rcon()
+    return r
+
+
+def reflex_loop(g, stop_at):
+    """快系统主循环:一拍一发 get_self_status(含在场敌对),按规则瞬发反射。"""
+    tag = g["tag"]
+    log = lambda msg: print(f"[{g['name']}·反射] {msg}", flush=True)
+    R2 = _reflex_rcon()
+
+    def rinvoke(tool, args=None):
+        a = json.dumps(args if args is not None else {}, ensure_ascii=False)
+        out = R2.cmd(f'numen_act invoke "{g["login"]}" {tool} {a}')
+        m = re.search(r"\{.*\}", out, re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                pass
+        return {"raw": out}
+
+    # R2/R3 共用:按食物链探测进食,返回吃下的食物 id 或 None
+    def eat_chain(reason):
+        for food in REFLEX_FOOD_CHAIN:
+            out = rinvoke("eat", {"item_id": food})
+            txt = json.dumps(out, ensure_ascii=False) if not isinstance(out, str) else out
+            if ("没有" not in txt) and ("not have" not in txt.lower()) and ("don't" not in txt.lower()):
+                feed_append(g, "reflex", f"{reason} → 反射进食 {food}")
+                log(f"{reason} → 吃 {food}")
+                return food
+        return None
+
+    log("反射层上线(5s 心跳:贴脸反击/断粮进食/濒死强吃+归乡)")
+    while True:
+        if stop_at and time.time() >= stop_at:
+            return
+        try:
+            st = rinvoke("get_self_status")
+            h = _parse_health(st)
+            if not h:
+                time.sleep(REFLEX_POLL)
+                continue
+            hp, hunger = h.get("hp"), h.get("hunger")
+            # 敌对在场(get_self_status 的 hostiles 字段;拿不到就补一发 scan)
+            txt = json.dumps(st, ensure_ascii=False)
+            near_hostile = ("僵尸" in txt or "骷髅" in txt or "苦力怕" in txt
+                            or "僵尸猪灵" in txt or "尸壳" in txt or "蜘蛛" in txt
+                            or "末影人" in txt or "女巫" in txt or "zombie" in txt.lower()
+                            or "skeleton" in txt.lower() or "creeper" in txt.lower())
+            # R1 贴脸反击
+            if near_hostile and _reflex_gate(tag, "attack", REFLEX_ATTACK_THROTTLE):
+                out = rinvoke("attack", {"nearby": True})
+                feed_append(g, "reflex", "敌对贴身 → 反射反击(attack nearby)")
+                log(f"贴脸敌 → 反击({json.dumps(out, ensure_ascii=False)[:80]})")
+            # R3 濒死强吃(优先于 R2:血线比饥饿线急)
+            if isinstance(hp, (int, float)) and hp <= 8 and _reflex_gate(tag, "eat", REFLEX_EAT_THROTTLE):
+                ate = eat_chain(f"HP {hp}/20 偏低")
+                if not ate and isinstance(hp, (int, float)) and hp <= 4 and _reflex_gate(tag, "flee", REFLEX_FLEE_THROTTLE):
+                    # 没吃的且真濒死 → 念归乡逃回安全区(lv2 已学;走 chant-requests
+                    # 文件通道由女神侧 castSpell 结算,不走 RCON)
+                    append_chant_req(g["name"], "归乡")
+                    feed_append(g, "reflex", f"HP {hp}/20 无粮 → 反射咏唱归乡")
+                    log(f"濒死无粮 → 归乡(chant-requests)")
+            # R2 断粮进食
+            elif isinstance(hunger, (int, float)) and hunger <= 8 and _reflex_gate(tag, "eat", REFLEX_EAT_THROTTLE):
+                eat_chain(f"饥饿 {hunger}/20")
+        except Exception as e:
+            log(f"反射拍异常(继续): {e}")
+        time.sleep(REFLEX_POLL)
+
+
 # ---------------- 主入口 ----------------
 def main():
     limit = float(os.environ.get("GUARD_MAX_SECONDS", "0") or 0)
@@ -1601,12 +1708,16 @@ def main():
         t = threading.Thread(target=tgt, args=(g, stop_at), daemon=True)
         t.start()
         threads.append(t)
+        # 快系统:反射层独立线程(2026-08-29 造物主令,MindCraft self-preservation)
+        tr = threading.Thread(target=reflex_loop, args=(g, stop_at), daemon=True)
+        tr.start()
+        threads.append(tr)
     # 影分身分脑引擎（2026-08-24）：独立线程扫描在册分身，开分脑 session、血线解散、消失融合
     tk = threading.Thread(target=kage_loop, args=(stop_at,), daemon=True)
     tk.start()
     threads.append(tk)
     _descs = [(g["name"] + ("(React)" if g.get("autonomy") else "(旧JSON)")) for g in GUARDS]
-    print("[guard_drive] 双亲卫桥已启动：" + "、".join(_descs) + f"（限时 {limit}s）", flush=True)
+    print("[guard_drive] 双亲卫桥已启动：" + "、".join(_descs) + f"（限时 {limit}s；反射层 5s 心跳）", flush=True)
     for t in threads:
         t.join()
 
