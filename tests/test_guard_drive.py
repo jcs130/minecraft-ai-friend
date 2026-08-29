@@ -146,3 +146,51 @@ def test_nbt_number_extraction():
     assert gd._nbt_number("No entity was found") is None
     assert gd._nbt_number(None) is None
     assert gd._nbt_number(12345) is None
+
+
+# ---------- 2026-08-29 三批:决策词表对齐 mcp_numen 全工具面(mindcraft $COMMAND_DOCS 等价物) ----------
+
+_ESSENTIAL_TOOLS = [
+    "craft", "lookup_recipe", "equip_item",
+    "interact_at", "interact_entity", "inspect_gui", "transfer", "close_gui",
+    "locate_structure", "locate_biome", "remember_place", "list_places",
+    "goto", "mine", "eat", "attack", "sleep", "say", "chant", "pray", "task_stop",
+]
+
+
+def _fake_guard():
+    return {"name": "桐人", "agent": "mc-guard-kirito", "login": "Kirito"}
+
+
+def test_decision_prompt_tool_vocabulary():
+    """全量决策 prompt 必须含全部关键工具行——亲卫的嘴要跟得上身体(mcp_numen 43 工具)。"""
+    p = gd.decision_prompt(_fake_guard(), "{}", "{}", "", "", "", "", )
+    for t in _ESSENTIAL_TOOLS:
+        assert t in p, f"decision_prompt 缺工具说明: {t}"
+    # 链路 few-shot 必须在(教亲卫多步活怎么串)
+    assert "合成链" in p and "存取链" in p and "交易链" in p
+
+
+def test_tool_summary_incremental():
+    """增量轮压缩摘要也必须覆盖新工具(增量轮是常态轮,词表缺了等于常态失明)。"""
+    s = gd._TOOL_SUMMARY
+    for t in ["craft", "equip_item", "interact_at", "transfer", "locate_structure",
+              "remember_place", "list_places", "inspect_gui", "close_gui"]:
+        assert t in s, f"_TOOL_SUMMARY 缺: {t}"
+
+
+def test_places_memory_roundtrip(tmp_path, monkeypatch):
+    """地点记忆:存文件按守卫分册、原子写、可回读(mcp_numen remember_place/list_places 的文件层)。"""
+    mn_spec = importlib.util.spec_from_file_location(
+        "mcp_numen_test", os.path.join(HERE, "..", "sidecar", "guard", "mcp_numen.py"))
+    mn = importlib.util.module_from_spec(mn_spec)
+    try:
+        mn_spec.loader.exec_module(mn)
+    except Exception:
+        pytest.skip("mcp_numen 依赖(mcp 包)本环境不可用")
+    fp = tmp_path / "guard-places.json"
+    monkeypatch.setattr(mn, "PLACES_FP", str(fp))
+    mn._save_places({"Kirito": {"家": {"x": 3096.0, "y": 67.0, "z": -1340.0, "t": "08-29 12:00"}}})
+    d = mn._load_places()
+    assert d["Kirito"]["家"]["x"] == 3096.0
+    assert d["Kirito"]["家"]["z"] == -1340.0

@@ -153,6 +153,7 @@ TOOL_WHITELIST = {
     "mine", "collect_items", "fish", "eat", "sleep", "attack", "follow",
     # 制作 / 交互
     "craft", "equip_item", "interact_at", "interact_entity", "close_gui", "inspect_gui",
+    "transfer",
     # 说话（独立命令 numen_act say，非 invoke 工具）
     "say",
     # 与女神侧通信（2026-08-23：文件通道，非世界级动作）
@@ -264,16 +265,35 @@ def decision_prompt(g, status, world, look, scan, last_act, goal, standing_task=
         '- attack：{} 打退近身敌怪；或 {"entity_ids":[id]}',
         '- sleep：{} 睡最近的床',
         '- scan_blocks：{"block_ids":["minecraft:oak_log"]} 找方块',
+        '- craft：{"item_id":"minecraft:iron_sword","count":1} 合成物品（端到端：自动找配方摆格取结果）。2x2 配方随处可做；3x3 配方需身边 4 格内有工作台（crafting_table）——没有就先 craft 一张并放置。缺料会报精确差额',
+        '- lookup_recipe：{"item_id":"minecraft:iron_sword"} 查合成配方材料清单——想造什么先查它，缺什么补什么再 craft',
+        '- equip_item：{"item_id":"minecraft:iron_chestplate"} 穿装备（头盔/胸甲/护腿/靴子/武器上手）；或 {"item_id":...,"action":"unequip"} 脱下',
+        '- interact_at：{"x":X,"y":Y,"z":Z,"button":"right"} 对方块右键交互（开门/开箱/用工作台/熔炉/床）——button 只认 left/right；手持方块 id 时对地面右键=放置方块（如放工作台：{"x":X,"y":地面Y,"z":Z,"button":"right","item_id":"minecraft:crafting_table"}）',
+        '- interact_entity：{"entity_id":id,"button":"right"} 对实体右键（村民交易/喂动物/骑乘）——button 只认 left/right；entity_id 来自 scan_nearby_entities',
+        '- inspect_gui：{} 查看当前打开的 GUI（箱子/交易/工作台）槽位内容——开箱/交易后先看再动',
+        '- transfer：{"moves":[{"from":槽,"to":槽,"count":1}]} 在 GUI 槽位间移动物品（存箱/取物/交易确认）——槽号来自 inspect_gui',
+        '- close_gui：{} 关闭当前 GUI（存取/交易完随手关）',
+        '- locate_structure：{"structure":"village"} 找附近结构（village/mansion/stronghold 等），返回坐标再 goto',
+        '- locate_biome：{"biome":"plains"} 找附近生物群系，返回坐标再 goto',
+        '- remember_place：{"name":"家"} 把当前坐标存为命名地点（家/矿场/集合点……存一次以后随时能回）',
+        '- list_places：{} 列出你存过的所有地点（拿到坐标后用 goto 过去）',
         '- follow：{"target":"owner"} 跟随指定目标——只在「明确护卫/同行指令」时用它，否则别主动跟；',
         '- say：{"message":"<一句话>"} 以身体本人的身份在公屏说话，与在场玩家/NPC 交谈、回应别人、报平安、求援——你「开口」的唯一方式；语气要像本人（见 PROFILE 人物志与 SOUL「你怎么说话」一节）：大白话短句直说，别拽文、别书面腔、别喊口号',
         '- chant：{"spell":"归乡"} 咏唱你已学会的技能（等同私语念咒——女神侧按技能表判定：已学会的自己施法，未学会的会得到提示）——危急时优先用你掌握的法术自救；',
         '- pray：{"wish":"…"} 祈愿上达天神（危急求助、重大事项、求指引），女神按序聆听并神谕回执——别拿它当闲聊；',
         '- task_stop：{} 叫停当前动作',
         '- 感知：look_around（{radius} 附近地形）/ scan_nearby_entities（必须有 type_filter 参数，如 {"radius":16,"type_filter":"hostile"}）/ get_self_status / get_world_info / task_status',
+        '',
+        '常用链路（多步活按这个顺序走，一步一动，做完看回执再下一步）：',
+        '- 合成链：lookup_recipe 查料 → 缺的先 mine/collect_items 补 → craft（3x3 配方身边没工作台就先 craft 一张 crafting_table，再 interact_at 手持它对地面 right 放下，然后 craft）→ 好武器/盔甲用 equip_item 穿上；',
+        '- 存取链：interact_at 开箱 → inspect_gui 看槽位 → transfer 移物（存/取）→ close_gui 关箱；',
+        '- 交易链：scan_nearby_entities({"type_filter":"passive"}) 找村民拿 id → interact_entity 右键 → inspect_gui 看交易 → transfer 买入 → close_gui；',
+        '- 远行链：locate_structure/locate_biome 拿坐标 → goto 过去 → 到了 look_around 看环境。',
         "",
         "裁决要点：",
         "- 生存第一：饿了进食、天黑找庇护或回家睡觉、遇怪则战或避、怕深水则绕开；",
         "- 目标连贯：goal 是你此刻想办成的事（如「天黑前搭个遮雨窝」），一次只做一个动作，做完等 task_finished 再规划下一步；目标达成或不再要紧，就在本轮的 goal 里换掉；",
+        "- 升级有路：石头工具→铁装→剑盾是活下来的正道——攒料（mine）→查方（lookup_recipe）→合成（craft）→穿上（equip_item），一步一动走链路，别空想；",
         "- 不贪心：不索要钻石、不造奇观，先活着、再攒生计；",
         "- 有危险优先处理危险，没事就奔着当前目标推进（砍树/采煤/觅食/回家）。",
         "",
@@ -424,7 +444,11 @@ _TOOL_SUMMARY = (
     "可用工具（完整说明见你首轮收到的决策说明）：移动 goto；采集 mine；捡物 collect_items；吃 eat；睡 sleep；"
     "战斗 attack；找方块 scan_blocks；跟随 follow（仅明确护卫/同行时）；说话 say（你开口的唯一方式）；"
     "咏唱 chant（已学技能自施）；祈愿 pray（上达天神）；叫停 task_stop；"
-    "感知 look_around / scan_nearby_entities / get_self_status / get_world_info / task_status"
+    "合成 craft（3x3 需身边工作台）/查方 lookup_recipe；穿装备 equip_item；"
+    "方块右键 interact_at（开门/开箱/熔炉）；实体右键 interact_entity（村民交易）；"
+    "看界面 inspect_gui；移物 transfer；关界面 close_gui；找结构 locate_structure；找群系 locate_biome；"
+    "感知 look_around / scan_nearby_entities / get_self_status / get_world_info / task_status；"
+    "地点记忆 remember_place（存当前坐标为命名地点）/ list_places（列出已存地点）"
 )
 
 
@@ -1191,8 +1215,11 @@ def autonomy_prompt(g, status, goddess_msgs=None, player_msgs=None, emergency=No
         "用你手里的 numen 工具**自主**行动——不是描述、不是编造，是真的调用工具让身体去做。",
         "",
         "工具（numen MCP）：",
-        "- 查询（随意调，摸清处境）：get_self_status / get_world_info / look_around / scan_nearby_entities / task_status / scan_blocks",
+        "- 查询（随意调，摸清处境）：get_self_status / get_world_info / look_around / scan_nearby_entities / task_status / scan_blocks / lookup_recipe / locate_structure / locate_biome / inspect_gui / list_places",
         "- 身体动作（每轮**至少真调一个**，调完一句话收尾）：goto / mine / collect_items / eat / sleep / attack / say / chant / pray",
+        "- 制作与升级（攒料→查方→合成→穿上，一步一步来）：craft（合成，3x3 配方需身边有工作台，没有先 craft 一张）/ equip_item（穿装备）",
+        "- 界面交互（存取/交易链）：interact_at 开门开箱熔炉 → inspect_gui 看槽位 → transfer 移物存取 → close_gui 关；interact_entity 对村民/动物右键（交易用绿宝石）",
+        "- 地点记忆（空间感）：remember_place 把当前坐标存成「家/矿场/集合点」；list_places 查已存地点，拿坐标 goto 回去——到了重要的地方就存一个",
         "",
         "行动原则（每轮一步，做完就停）：",
         "- 第1步：调 1-2 个查询工具看清处境（get_self_status / look_around / scan_nearby_entities）——**最多 2 次，查到需要的信息就别再查**。",

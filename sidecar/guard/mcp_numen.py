@@ -661,8 +661,9 @@ async def numen_invoke(tool: str, args: dict | None = None) -> str:
 
     高频示例:
     - 合成: numen_invoke("craft", {"item_id": "minecraft:iron_pickaxe", "count": 1})
-    - 交易: numen_invoke("interact_entity", {"button": "use", "entity_id": 123})
-    - 开箱: numen_invoke("interact_at", {"button": "use", "x": 100, "y": 64, "z": -200})
+    - 交易: numen_invoke("interact_entity", {"button": "right", "entity_id": 123})
+    - 开箱: numen_invoke("interact_at", {"button": "right", "x": 100, "y": 64, "z": -200})
+    - 放方块: numen_invoke("interact_at", {"button": "right", "x": 100, "y": 63, "z": -200, "item_id": "minecraft:crafting_table"})  # 手持方块对地面右键=放置
 
     全工具目录:
     """ + _CAPACITY_DOC.split("\n", 2)[2]
@@ -692,8 +693,9 @@ async def equip_item(item_id: str, action: str = "equip", slot: str | None = Non
 
 
 @mcp.tool()
-async def interact_entity(entity_id: int, button: str = "use", item_id: str | None = None) -> str:
-    """与实体交互——村民交易(use 手持绿宝石)、喂动物、骑乘等。entity_id 来自 scan_nearby_entities。"""
+async def interact_entity(entity_id: int, button: str = "right", item_id: str | None = None) -> str:
+    """与实体交互——村民交易(right 手持绿宝石)、喂动物、骑乘等。entity_id 来自 scan_nearby_entities。
+    button 只认 left/right(2026-08-29 实测定谳:传 use 会 IllegalArgumentException)。"""
     a: dict = {"button": button, "entity_id": entity_id}
     if item_id:
         a["item_id"] = item_id
@@ -701,8 +703,9 @@ async def interact_entity(entity_id: int, button: str = "use", item_id: str | No
 
 
 @mcp.tool()
-async def interact_at(x: int, y: int, z: int, button: str = "use", item_id: str | None = None) -> str:
-    """对方块交互——开门/开箱/放工作台后使用/熔炉等。配合 inspect_gui 看界面内容。"""
+async def interact_at(x: int, y: int, z: int, button: str = "right", item_id: str | None = None) -> str:
+    """对方块交互——开门/开箱/上工作台/熔炉等;手持方块对地面右键=放置(item_id 给方块 id)。
+    配合 inspect_gui 看界面内容。button 只认 left/right(传 use 会报错)。"""
     a: dict = {"button": button, "x": x, "y": y, "z": z}
     if item_id:
         a["item_id"] = item_id
@@ -737,6 +740,59 @@ async def locate_structure(structure: str) -> str:
 async def locate_biome(biome: str) -> str:
     """找生物群系(如 minecraft:snowy_plains)。远行探索前先定位。"""
     return invoke("locate_biome", {"biome": biome})
+
+
+# ---------------- 地点记忆(2026-08-29 mindcraft 对齐:rememberHere/goToRememberedPlace) ----------------
+# 守卫的空间记忆:亲卫把「家/矿场/集合点」存成命名地点,重启/滚动后依然记得。
+# 存储:B仓 data/guard-places.json(按守卫 login 分册),读写原子(临时文件+replace)。
+PLACES_FP = os.path.join(DATA, "guard-places.json")
+
+
+def _load_places() -> dict:
+    try:
+        return json.load(open(PLACES_FP, encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_places(d: dict) -> None:
+    tmp = PLACES_FP + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, PLACES_FP)
+
+
+@mcp.tool()
+async def remember_place(name: str) -> str:
+    """把当前坐标存为命名地点(如「家」「矿场」「集合点」)。以后 list_places 拿坐标、goto 回去。"""
+    st = invoke("get_self_status", {})
+    try:
+        s = json.loads(re.search(r"\{.*\}", str(st), re.S).group(0)) if isinstance(st, str) else st
+        pos = s.get("pos") or s.get("position")
+    except Exception:
+        pos = None
+    if not pos or len(pos) < 3:
+        return f"存点失败:拿不到当前坐标(状态回执异常)"
+    login = NUMEN_COMPANION
+    d = _load_places()
+    mine = d.setdefault(login, {})
+    prev = mine.get(name)
+    mine[name] = {"x": round(float(pos[0]), 1), "y": round(float(pos[1]), 1), "z": round(float(pos[2]), 1),
+                  "t": time.strftime("%m-%d %H:%M")}
+    _save_places(d)
+    moved = "" if prev is None else f"(旧点 ({prev['x']},{prev['z']}) 被覆盖)"
+    return f"已记住『{name}』= ({mine[name]['x']}, {mine[name]['y']}, {mine[name]['z']}) {moved}"
+
+
+@mcp.tool()
+async def list_places() -> str:
+    """列出你存过的所有命名地点(带坐标)。想去哪个,拿坐标用 goto 过去。"""
+    d = _load_places()
+    mine = d.get(NUMEN_COMPANION) or {}
+    if not mine:
+        return "你还没存过任何地点。到了值得记住的地方(家/矿场/集合点)就用 remember_place 存一个。"
+    rows = [f"{n}: ({p['x']}, {p['y']}, {p['z']}) 存于{p.get('t','?')}" for n, p in sorted(mine.items())]
+    return "你的地点(" + str(len(rows)) + " 个):\n" + "\n".join(rows)
 
 
 if __name__ == "__main__":
