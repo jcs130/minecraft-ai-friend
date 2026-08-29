@@ -977,6 +977,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
    * 点击文本执行命令）——手柄正道 = ✦书右键（使用键）施法。查在线玩家已习法术 vs
    * 背包已有 ✦书（RCON data get Inventory），缺的每技补一本——书即手柄按钮。 */
   async function ensureLearnedBooks(username: string): Promise<void> {
+    // 只对真人发施法书——numen 假玩家（守卫/AI 玩家）走 numen 咏唱，塞书只占背包。
+    const FAKE_PLAYERS = new Set(['Kirito', 'Naruto', 'Taro', 'Edward', 'TaroProbe', 'TaroProbe5', 'Steve', 'Alex'])
+    if (FAKE_PLAYERS.has(username)) return
     try {
       const ms = magic.getState(username)
       if (!ms.learned || ms.learned.length === 0) return
