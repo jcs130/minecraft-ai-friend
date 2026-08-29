@@ -924,8 +924,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
   function skillBookItem(name: string): string {
-    // custom_name SNBT：金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
-    return `enchanted_book[custom_name={text:"✦ ${name}",color:"gold",italic:false}]`
+    // custom_name 组件（1.20.5+ SNBT）：**必须字符串化 JSON**——对象字面量 {text:...}
+    // 被 RCON 拒「Malformed component: Not a string」，这是萌萌攻击书礼包一直没发
+    // 出去、「背包没书」的根因（2026-08-29 Kirito 实测：对象格式拒/JSON 字符串过）。
+    // 金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
+    const cn = JSON.stringify({ text: `✦ ${name}`, color: 'gold', italic: false })
+    return `enchanted_book[minecraft:custom_name='${cn.replace(/'/g, "\\'")}']`
   }
   // 《魔导书》= written_book 成书（1.8 起书页支持 clickEvent，1.21.1 用旧格式
   // clickEvent/value）：右键打开阅读界面（书名不带「✦ 」前缀，SkillBookHandler
@@ -985,6 +989,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (!ms.learned || ms.learned.length === 0) return
       const inv = await rcon.send(`data get entity ${username} Inventory`).catch(() => '')
       if (!inv || inv.includes('No player was found')) return // 离线/查询失败：下轮再试
+      // 背包满（36 格）时 give 会掉地上——跳过本轮并留痕，别把书撒一地。
+      if ((inv.match(/Slot: \d+b/g) ?? []).length >= 36) {
+        log(`learnedbook skip ${username}: inventory full`)
+        return
+      }
       const owned = new Set<string>()
       for (const m of inv.matchAll(/✦ ([^"\\]+)/g)) owned.add(m[1].trim())
       // 补书范围 = learned 已习法术 ∪ 自己的攻击书礼包名单（书丢了/没到都能自动回，
