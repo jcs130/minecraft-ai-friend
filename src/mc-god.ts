@@ -927,10 +927,27 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // custom_name SNBT：金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
     return `enchanted_book[custom_name={text:"✦ ${name}",color:"gold",italic:false}]`
   }
+  // 《魔导书》= written_book 成书（1.8 起书页支持 clickEvent，1.21.1 用旧格式
+  // clickEvent/value）：右键打开阅读界面（书名不带「✦ 」前缀，SkillBookHandler
+  // 不拦截），页内大字「▶ 释放」点击 = 以玩家身份执行 /mycli cast → 私语女神施法。
+  // 对萌萌是「翻书点按钮」的容错玩法；4 本速发书是「切栏右键」的快捷玩法——两路并存。
+  function grimoireItem(books: Array<{ name: string; lv: number; mana: number }>): string {
+    const pages = books.map((b) => JSON.stringify({
+      text: `${b.name}  Lv${b.lv}\n魔力 ${b.mana}\n\n【▶ 释放${b.name}】`,
+      bold: true, color: 'gold',
+      clickEvent: { action: 'run_command', value: `/mycli cast ${b.name}` },
+    }))
+    const pageSnbt = pages.map((p) => `'${p.replace(/'/g, "\\'")}'`).join(',')
+    return `written_book[written_book_content={pages:[${pageSnbt}],title:'魔导书·攻击篇',author:'天神'}]`
+  }
   /** 上线送攻击技能书包（名单内玩家，每进程一份，give 成功才记名单）。 */
   async function ensureSkillBooks(username: string): Promise<void> {
     const gift = ATTACK_BOOK_GIFT.find((g) => g.to === username)
     if (!gift || skillBooksGiven.has(username)) return
+    const lvMap: Record<string, { lv: number; mana: number }> = {
+      '风爆术': { lv: 1, mana: 15 }, '螺旋丸': { lv: 8, mana: 30 },
+      '雷暴术': { lv: 12, mana: 50 }, '陨石术': { lv: 25, mana: 80 },
+    }
     let allOk = true
     for (const name of gift.books) {
       const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch((err: unknown) => {
@@ -939,12 +956,18 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       })
       if (!r || !/gave|已给予|Given/i.test(r)) allOk = false
     }
+    // 魔导书（成书·页内点击施法）：右键打开=翻书点「▶ 释放」。
+    const grimoire = await rcon.send(`give ${username} ${grimoireItem(gift.books.map((n) => ({ name: n, ...lvMap[n] })))} 1`).catch((err: unknown) => {
+      log(`grimoire give failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
+      return ''
+    })
+    if (!grimoire || !/gave|已给予|Given/i.test(grimoire)) allOk = false
     if (allOk) {
       skillBooksGiven.add(username)
       persistSkillBooksGiven()
-      log(`attack skillbooks given to ${username}: ${gift.books.join('、')}`)
+      log(`attack skillbooks given to ${username}: ${gift.books.join('、')} + 魔导书`)
       // 天音一句（萌萌不识字，靠听）：语音通道由面板播报/天音术承担，此处私语文字留档。
-      rcon.send(`tellraw ${username} {"text":"✦ 收到攻击法术书×4（风爆/螺旋丸/雷暴/陨石）：拿在手里按右键就能放！等级不够的书会提示，练级后再试。","color":"gold"}`).catch(() => {})
+      rcon.send(`tellraw ${username} {"text":"✦ 收到攻击法术书×4 +《魔导书》：书拿在手里按右键就能放；魔导书翻开点【▶ 释放】也行！等级不够会提示，练级后再试。","color":"gold"}`).catch(() => {})
     }
   }
 
