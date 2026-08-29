@@ -222,6 +222,50 @@ public final class SkillChestLayout {
         return (items.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE;
     }
 
+    // ── 技能轮盘（2026-08-30 造物主谕「技能太多占格子，用圆盘施法」）──
+    // 9x1 一行轻量轮：8 技能 + 1 翻轮格；潜行+右键命格书秒开秒关，
+    // 比 9x3 全面板更贴近「圆盘施法」的手感（服务端容器 UI 能做的极限形态）。
+    public static final int WHEEL_SIZE = 9;
+
+    /** 轮盘每页技能数（末格留导航）。 */
+    public static final int WHEEL_PER_PAGE = WHEEL_SIZE - 1;
+
+    public static int wheelPagesFor(List<SkillInfo> skills) {
+        if (skills == null || skills.isEmpty()) return 1;
+        return (skills.size() + WHEEL_PER_PAGE - 1) / WHEEL_PER_PAGE;
+    }
+
+    /** 一行技能轮盘：8 技能格（点击即施法/开造物橱窗）+ 末格翻轮。 */
+    public static List<Entry> buildWheel(Config cfg, List<SkillInfo> skills, int page) {
+        List<Entry> out = new ArrayList<>(WHEEL_SIZE);
+        for (int i = 0; i < WHEEL_SIZE; i++) out.add(Entry.empty(cfg.defaultIcon));
+        if (skills == null || skills.isEmpty() || page < 0) return out;
+        int from = page * WHEEL_PER_PAGE;
+        for (int i = 0; i < WHEEL_PER_PAGE; i++) {
+            int at = from + i;
+            if (at >= skills.size()) break;
+            String id = skills.get(at).id;
+            String name = cfg.skillNames.getOrDefault(id, id);
+            String icon = cfg.skillIcons.getOrDefault(id, cfg.defaultIcon);
+            String lore = cfg.skillLore.getOrDefault(id, "");
+            if ("give".equals(id)) {
+                out.set(i, new Entry(Kind.SKILL, id, name, icon, "选一个变出来", null));
+                continue;
+            }
+            String chant = cfg.chantAlias.getOrDefault(id, name);
+            out.set(i, new Entry(Kind.SKILL, id, name, icon, lore, "/mycli cast " + chant));
+        }
+        int totalPages = wheelPagesFor(skills);
+        if (totalPages > 1) {
+            boolean hasNext = page + 1 < totalPages;
+            out.set(WHEEL_SIZE - 1, hasNext
+                    ? new Entry(Kind.MORE, String.valueOf(page + 1), "更多 ▶", cfg.moreIcon,
+                            (page + 2) + "/" + totalPages, null)
+                    : new Entry(Kind.BACK, "0", "◀ 回头", cfg.backIcon, "回到第1轮", null));
+        }
+        return out;
+    }
+
     /** MORE/BACK 格：目标页号（entry.id 存的就是目标页）。 */
     public static int navTarget(Entry e) {
         try {

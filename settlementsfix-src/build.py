@@ -31,6 +31,7 @@ PURE = [
 ]
 FULL = PURE + [
     "dev/god/settlementsfix/chest/SkillChestMenu.java",
+    "dev/god/settlementsfix/chest/SkillWheelMenu.java",
     "dev/god/settlementsfix/chest/SkillChestCommands.java",
     "dev/god/settlementsfix/mixin/SkillChestBootMixin.java",
     "dev/god/settlementsfix/mixin/SkillBookUseMixin.java",

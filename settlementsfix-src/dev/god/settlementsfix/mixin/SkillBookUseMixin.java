@@ -86,7 +86,7 @@ public class SkillBookUseMixin {
                         && panelTag.copyTag().getBoolean("skillbox")
                         && !player.isShiftKeyDown()) {
                     if (serverSide && player instanceof ServerPlayer sp) {
-                        dev.god.settlementsfix.chest.SkillChestCommands.openFor(sp, 0);
+                        dev.god.settlementsfix.chest.SkillChestCommands.openWheelFor(sp, 0);
                     }
                     cir.setReturnValue(InteractionResultHolder.sidedSuccess(stack, level.isClientSide));
                     return;
@@ -100,7 +100,7 @@ public class SkillBookUseMixin {
             if (cd.getBoolean("statusbook")) {
                 if (serverSide && player instanceof ServerPlayer sp) {
                     if (player.isShiftKeyDown()) {
-                        dev.god.settlementsfix.chest.SkillChestCommands.openFor(sp, 0);
+                        dev.god.settlementsfix.chest.SkillChestCommands.openWheelFor(sp, 0);
                     } else {
                         regenerateStatusBook(sp, stack);
                         sp.openItemGui(stack, hand);
@@ -239,7 +239,7 @@ public class SkillBookUseMixin {
                 // （点击开宝箱面板，手柄十字键选格子；/skillchest self 人人可跑）。
                 Component page1 = Component.empty()
                         .append(Component.literal(p1.toString()))
-                        .append(Component.literal("\n\n§e【✦ 打开技能面板】§r§8（点这行）§r")
+                        .append(Component.literal("\n\n§e【✦ 技能轮盘】§r§8（点这行开轮盘）§r")
                                 .withStyle(s -> s.withClickEvent(new ClickEvent(
                                         ClickEvent.Action.RUN_COMMAND, "/skillchest self"))));
                 pages.add(Filterable.passThrough(page1));

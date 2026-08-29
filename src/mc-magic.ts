@@ -85,6 +85,10 @@ interface Atom {
    *  entity=实体类型，range=检测半径（默认96），denyReply=拒绝话术。
    *  实现：RCON NBT Owner 选择器命中（execute if entity @e[type=…,nbt={Owner:[I;…]}]）。 */
   ownLimit?: { entity: string; range?: number; denyReply?: string }
+  /** 延迟后续命令（2026-08-30 螺旋丸根治）：弹道类沿弹伤害——弹飞出去后按
+   *  delayMs 分批补发 commands（占位符同主 commands，vars 快照复用）。
+   *  例：[{delayMs:150, commands:["execute as @e[tag=rasengan] at @s run damage …"]}] */
+  postCast?: { delayMs: number; commands: string[] }[]
 }
 
 // ── 对外服务：把法术表与状态库的关键能力暴露给其他插件（降临仪式等）──
@@ -1617,31 +1621,46 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       }
     }
 
-    // 火球术方向（2026-08-23 造物主反馈「萌萌语音火球没反应」→ 界中本无此术，现补齐）：
-    // 命令含 {vx}/{vy}/{vz} 时，按施法者视线（yaw/pitch）算发射向量。占位符以字符串传入
-    // （renderCommand 对 number 会 Math.round，会抹掉小数向量，字符串原样保留）。
-    // 2026-08-29 慢弹档 {wx}/{wy}/{wz}（×0.15）：风弹类（螺旋丸 breeze_wind_charge）
-    // 用 1.6 档会一帧飞出 100+ 格（实测 0.6s 位移 101 格）——肉眼只见「消失」不见「飞行」；
-    // 0.15 档 ≈ 25 格/s，弹道清晰可追（造物主实测反馈「没有向前飞」即此）。
+    // 弹道方向（2026-08-23 火球术 / 2026-08-29 慢弹档 / 2026-08-30 螺旋丸根治）：
+    // {vx}/{vy}/{vz} = 1.6 快档（火球），{wx}/{wy}/{wz} = 慢弹档（风弹类螺旋丸）。
+    // 2026-08-30 根治「方向不可控」：数据源从 bot.players 缓存改为 RCON 实时读
+    // 服务端 Rotation（真实准心 yaw/pitch，MC 约定无歧义）；缓存缺失不再回退
+    // 写死的 (1,0,1)——旧版弹永远朝同方向飞就是它。RCON 失败才退回 bot 缓存。
+    // 慢弹档提至 ×0.45（≈75格/s，0.15 档被重力拽成下坠弧线，弹道不贴准心）。
     let vx = '0.00', vy = '0.00', vz = '0.00'
-    let wx = '0.15', wy = '0.00', wz = '0.15'
+    let wx = '0.45', wy = '0.00', wz = '0.45'
     if (atom.commands.some((c) => c.includes('{vx}') || c.includes('{wx}'))) {
-      const ent = bot.players[username]?.entity
-      const speed = 1.6
       let dx = 1, dy = 0, dz = 0
-      if (ent && typeof ent.yaw === 'number') {
-        const yaw = (ent.yaw * Math.PI) / 180
-        const pitch = ((ent.pitch ?? 0) * Math.PI) / 180
+      let got = false
+      const ry = await getEntityNumber(username, 'Rotation[0]')
+      const rp = await getEntityNumber(username, 'Rotation[1]')
+      if (typeof ry === 'number' && Number.isFinite(ry) && typeof rp === 'number' && Number.isFinite(rp)) {
+        const yaw = (ry * Math.PI) / 180
+        const pitch = (rp * Math.PI) / 180
         dx = -Math.sin(yaw) * Math.cos(pitch)
         dy = -Math.sin(pitch)
         dz = Math.cos(yaw) * Math.cos(pitch)
+        got = true
+      } else {
+        const ent = bot.players[username]?.entity
+        if (ent && typeof ent.yaw === 'number') {
+          const yaw = (ent.yaw * Math.PI) / 180
+          const pitch = ((ent.pitch ?? 0) * Math.PI) / 180
+          dx = -Math.sin(yaw) * Math.cos(pitch)
+          dy = -Math.sin(pitch)
+          dz = Math.cos(yaw) * Math.cos(pitch)
+          got = true
+        }
       }
-      vx = (dx * speed).toFixed(2)
-      vy = (dy * speed).toFixed(2)
-      vz = (dz * speed).toFixed(2)
-      wx = (dx * 0.15).toFixed(3)
-      wy = (dy * 0.15).toFixed(3)
-      wz = (dz * 0.15).toFixed(3)
+      if (got) {
+        vx = (dx * 1.6).toFixed(2)
+        vy = (dy * 1.6).toFixed(2)
+        vz = (dz * 1.6).toFixed(2)
+        wx = (dx * 0.45).toFixed(3)
+        wy = (dy * 0.45).toFixed(3)
+        wz = (dz * 0.45).toFixed(3)
+        log(`sight vector ${username}: wx=${wx} wy=${wy} wz=${wz}`)
+      }
     }
 
     const vars: Record<string, number | string> = {
@@ -1738,6 +1757,20 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
       // 视觉：粒子 + 音效 + 大字咏唱词
       await castVfx(atom, vars, username)
+
+      // 延迟后续命令（postCast，2026-08-30 螺旋丸根治）：沿弹伤害/清场。
+      // vars 已渲染为字符串快照，复用安全；异步发不阻塞回执。
+      if (atom.postCast?.length) {
+        for (const pc of atom.postCast) {
+          setTimeout(() => {
+            for (const c of pc.commands) {
+              rcon.send(renderCommand(c, vars)).then((out) => {
+                if (out) log(`postCast(${pc.delayMs}ms)[${c.slice(0, 50)}] -> ${out.trim()}`)
+              }).catch(() => { /* 延迟段失败静默（弹已消散等） */ })
+            }
+          }, pc.delayMs)
+        }
+      }
 
       store.learn(username, atom.id)
 
@@ -1875,6 +1908,18 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         if (out) log(`rc[${cmd}] -> ${out.trim()}`)
       }
       await castVfx(atom, vars, username)
+      // postCast（2026-08-30 螺旋丸根治）：代施同享沿弹伤害。
+      if (atom.postCast?.length) {
+        for (const pc of atom.postCast) {
+          setTimeout(() => {
+            for (const c of pc.commands) {
+              rcon.send(renderCommand(c, vars)).then((out) => {
+                if (out) log(`postCast(${pc.delayMs}ms)[${c.slice(0, 50)}] -> ${out.trim()}`)
+              }).catch(() => { /* 延迟段失败静默 */ })
+            }
+          }, pc.delayMs)
+        }
+      }
       log(`godcast ${atom.id} for ${username} (${opts.mode ?? 'divine'}, mana ${opts.consumeMana ?? 0}, tokens ${opts.tokens ?? 0})`)
       // 模糊施法/神迹记账（2026-08-23）：女神魔力=LLM tokens，入台账供学习闭环
       if (opts.mode || opts.tokens !== undefined || opts.playerChant) {

@@ -29,6 +29,7 @@ public final class SkillChestTest {
         tReg5Debounce();
         tReg6ChantAlias();  // 合并 T-IO：load 聚合+未入册兜底
         tItemsGrid();       // 造物扩展（2026-08-30）：子面板网格+造物格特判
+        tWheel();           // 技能轮盘（2026-08-30）：9x1 一行 8 技能+翻轮
         System.out.println("passed=" + passed + " failed=" + failed);
         if (failed > 0) {
             System.exit(1);
@@ -83,9 +84,43 @@ public final class SkillChestTest {
         eq("T-REG-2 0技一页", 1, SkillChestLayout.pagesFor(new ArrayList<>()));
     }
 
-    // T-REG-3：未知技能无图标配置 → default 灰玻璃
-    static void tReg3IconFallback() {
+    // T-WHEEL（2026-08-30 轮盘）：9 格一行=8 技能+翻轮；页数=⌈n/8⌉
+    static void tWheel() {
         SkillChestLayout.Config cfg = new SkillChestLayout.Config();
+        cfg.skillNames.put("s1", "螺旋丸");
+        cfg.chantAlias.put("s1", "螺旋丸");
+        List<SkillChestLayout.SkillInfo> sk9 = new ArrayList<>();
+        for (int i = 0; i < 9; i++) sk9.add(new SkillChestLayout.SkillInfo("s" + (i + 1)));
+        eq("T-WHEEL wheelPagesFor 9 -> 2", 2, SkillChestLayout.wheelPagesFor(sk9));
+        eq("T-WHEEL wheelPagesFor 8 -> 1", 1, SkillChestLayout.wheelPagesFor(
+                java.util.Arrays.asList(new SkillChestLayout.SkillInfo("a"),
+                        new SkillChestLayout.SkillInfo("b"), new SkillChestLayout.SkillInfo("c"),
+                        new SkillChestLayout.SkillInfo("d"), new SkillChestLayout.SkillInfo("e"),
+                        new SkillChestLayout.SkillInfo("f"), new SkillChestLayout.SkillInfo("g"),
+                        new SkillChestLayout.SkillInfo("h"))));
+        List<SkillChestLayout.Entry> w0 = SkillChestLayout.buildWheel(cfg, sk9, 0);
+        eq("T-WHEEL size", 9, w0.size());
+        eq("T-WHEEL c0 name", "螺旋丸", w0.get(0).name);
+        eq("T-WHEEL c0 cmd", "/mycli cast 螺旋丸", w0.get(0).command);
+        eq("T-WHEEL c7 第8技", SkillChestLayout.Kind.SKILL, w0.get(7).kind);
+        eq("T-WHEEL c8 MORE", SkillChestLayout.Kind.MORE, w0.get(8).kind);
+        eq("T-WHEEL MORE 目标页", 1, SkillChestLayout.navTarget(w0.get(8)));
+        List<SkillChestLayout.Entry> w1 = SkillChestLayout.buildWheel(cfg, sk9, 1);
+        eq("T-WHEEL p1 c0 第9技", SkillChestLayout.Kind.SKILL, w1.get(0).kind);
+        eq("T-WHEEL p1 c1 空", SkillChestLayout.Kind.EMPTY, w1.get(1).kind);
+        eq("T-WHEEL p1 c8 BACK", SkillChestLayout.Kind.BACK, w1.get(8).kind);
+        eq("T-WHEEL BACK 目标页", 0, SkillChestLayout.navTarget(w1.get(8)));
+        // 8 技整：单页、末格无翻页
+        List<SkillChestLayout.SkillInfo> sk8 = new ArrayList<>(sk9.subList(0, 8));
+        List<SkillChestLayout.Entry> wOnly = SkillChestLayout.buildWheel(cfg, sk8, 0);
+        eq("T-WHEEL 8技单页末格空", SkillChestLayout.Kind.EMPTY, wOnly.get(8).kind);
+        // 越界页安全
+        List<SkillChestLayout.Entry> wBad = SkillChestLayout.buildWheel(cfg, sk8, 5);
+        eq("T-WHEEL 越界页不炸", 9, wBad.size());
+    }
+
+    // T-REG-3：未知技能无图标配置 → default 灰玻璃
+    static void tReg3IconFallback() {        SkillChestLayout.Config cfg = new SkillChestLayout.Config();
         List<SkillChestLayout.Entry> out = SkillChestLayout.build(cfg,
                 java.util.Arrays.asList(new SkillChestLayout.SkillInfo("unknown_spell")), null, 0);
         eq("T-REG-3 fallback icon", "minecraft:gray_stained_glass_pane", out.get(0).icon);

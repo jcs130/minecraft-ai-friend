@@ -54,7 +54,16 @@ public class SkillChestMenu extends ChestMenu {
                           ServerPlayer player, List<SkillChestLayout.Entry> entries, int page,
                           long debounceMs, java.util.function.Consumer<Integer> pageTurner,
                           java.util.function.Consumer<Integer> itemPanelOpener) {
-        super(MenuType.GENERIC_9x3, containerId, playerInventory, buildContainer(entries), 3);
+        this(MenuType.GENERIC_9x3, 3, containerId, playerInventory, player, entries, page, debounceMs, pageTurner, itemPanelOpener);
+    }
+
+    /** 可变规格构造（2026-08-30 轮盘）：GENERIC_9x1 一行轮盘等由子类复用全部点击语义。 */
+    protected SkillChestMenu(MenuType<? extends ChestMenu> type, int rows, int containerId,
+                             net.minecraft.world.entity.player.Inventory playerInventory,
+                             ServerPlayer player, List<SkillChestLayout.Entry> entries, int page,
+                             long debounceMs, java.util.function.Consumer<Integer> pageTurner,
+                             java.util.function.Consumer<Integer> itemPanelOpener) {
+        super(type, containerId, playerInventory, buildContainer(entries), rows);
         this.player = player;
         this.entries = entries;
         this.page = page;
@@ -65,7 +74,7 @@ public class SkillChestMenu extends ChestMenu {
 
     private static SimpleContainer buildContainer(List<SkillChestLayout.Entry> entries) {
         SimpleContainer c = new SimpleContainer(SkillChestLayout.SIZE);
-        for (int i = 0; i < SkillChestLayout.SIZE; i++) {
+        for (int i = 0; i < SkillChestLayout.SIZE && i < entries.size(); i++) {
             c.setItem(i, iconStack(entries.get(i)));
         }
         return c;

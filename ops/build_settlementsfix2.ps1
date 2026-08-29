@@ -22,8 +22,19 @@ Copy-Item $DEV (Join-Path $CLASSES 'dev') -Recurse
 Get-ChildItem $CLASSES -Recurse -Filter *.java | Remove-Item -Force
 
 # 2) classpath: settlements jar + libraries 全量
-$cpItems = @(Join-Path $SERVER 'mods\settlements-1.0.0-beta.1.jar')
-$cpItems += (Get-ChildItem (Join-Path $SERVER 'libraries') -Recurse -Filter *.jar | ForEach-Object { $_.FullName })
+# 2026-08-30: settlements jar 改名容忍（mods 里现名 +godfix.3 等，取第一个 settlements-*.jar，
+# 排除 .bak 备份）；同时排除 vanilla 混淆版 server-1.21.1.jar（无时间戳目录那个）——
+# 它会抢在 mapped slim/extra 之前解析 MinecraftServer，方法名全是 SRG 导致 getPlayerList 报红。
+$settleJar = Get-ChildItem (Join-Path $SERVER 'mods') -Filter 'settlements-*.jar' |
+    Where-Object { $_.Name -notmatch '\.bak' } | Select-Object -First 1
+if (-not $settleJar) { throw 'settlements jar not found in mods/' }
+$cpItems = @($settleJar.FullName)
+# MC 官方分发的 slim/srg/unpacked 是 SRG 壳或半成品，会遮蔽 neoforge-<v>-server.jar
+# 里 official-mapped 的 MinecraftServer（getPlayerList/getCommands 在后者）——一律剔除。
+$cpItems += (Get-ChildItem (Join-Path $SERVER 'libraries') -Recurse -Filter *.jar |
+    Where-Object { $_.Name -notmatch '^(server|client)-.*-(slim|srg|unpacked|extra)\.jar$' } |
+    Where-Object { $_.Name -ne 'server-1.21.1.jar' } |
+    ForEach-Object { $_.FullName })
 $cpStr = $cpItems -join ';'
 
 # 3) 编译 dev 树下所有 .java 源码（含新增）→ 输出进 classes
