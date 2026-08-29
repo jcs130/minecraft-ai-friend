@@ -1088,6 +1088,73 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     })()
   }, 20_000)
 
+  // ── 公共军械库（2026-08-29 造物主谕「村里放大箱一堆装备大家随意取用」）─────
+  // 灯门镇广场 3095/3096 66 -1342 双箱+告示牌（天神手书）。6h 巡检：对照
+  // 标准清单「缺啥补啥」——空位补满、在位不动（玩家寄存私物不打扰）。
+  const ARMORY_BOXES: Array<{ x: number; y: number; z: number; base: number }> = [
+    { x: 3095, y: 66, z: -1342, base: 0 },   // 左箱 slot 0-26（replaceitem container.N）
+    { x: 3096, y: 66, z: -1342, base: 0 },   // 右箱（各箱独立 0 起）
+  ]
+  const ARMORY_STOCK: Array<{ item: string; count: number }> = [
+    // 左箱：铁甲×3 套 + 铁工具 + 弓箭
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_sword', count: 1 },
+    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_pickaxe', count: 1 },
+    { item: 'minecraft:iron_pickaxe', count: 1 }, { item: 'minecraft:iron_axe', count: 1 },
+    { item: 'minecraft:iron_axe', count: 1 }, { item: 'minecraft:iron_shovel', count: 1 },
+    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:bow', count: 1 },
+    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:arrow', count: 64 },
+    { item: 'minecraft:arrow', count: 64 }, { item: 'minecraft:shield', count: 1 },
+    // 右箱：补给 + 钻石高级货（少量惊喜）+ 设施
+    { item: 'minecraft:bread', count: 64 }, { item: 'minecraft:golden_apple', count: 16 },
+    { item: 'minecraft:torch', count: 64 }, { item: 'minecraft:cooked_beef', count: 64 },
+    { item: 'minecraft:red_bed', count: 1 }, { item: 'minecraft:white_bed', count: 1 },
+    { item: 'minecraft:oak_boat', count: 1 }, { item: 'minecraft:water_bucket', count: 1 },
+    { item: 'minecraft:ender_pearl', count: 4 }, { item: 'minecraft:diamond_sword', count: 1 },
+    { item: 'minecraft:diamond_pickaxe', count: 1 }, { item: 'minecraft:diamond_helmet', count: 1 },
+    { item: 'minecraft:diamond_chestplate', count: 1 }, { item: 'minecraft:diamond_leggings', count: 1 },
+    { item: 'minecraft:diamond_boots', count: 1 }, { item: 'minecraft:enchanted_golden_apple', count: 2 },
+    { item: 'minecraft:experience_bottle', count: 64 }, { item: 'minecraft:ladder', count: 32 },
+    { item: 'minecraft:crafting_table', count: 1 }, { item: 'minecraft:furnace', count: 1 },
+  ]
+  let armoryLastCheck = ''
+  setInterval(() => {
+    void (async () => {
+      try {
+        // 箱子是否还在（被炸/被拆则跳过本轮，下轮重探；不自动重建防误覆盖新建筑）。
+        const probe = await rcon.send('data get block 3096 66 -1342').catch(() => '')
+        const alive = /chest/i.test(probe)
+        if (!alive) {
+          if (armoryLastCheck !== 'gone') { log('armory: chest gone at 3096 66 -1342, refill paused'); armoryLastCheck = 'gone' }
+          return
+        }
+        armoryLastCheck = 'ok'
+        // 逐箱对照标准清单补空位（data get Items 全量 → 空位 replaceitem）。
+        for (const box of ARMORY_BOXES) {
+          const stock = box.x === 3095 ? ARMORY_STOCK.slice(0, 26) : ARMORY_STOCK.slice(26)
+          const data = await rcon.send(`data get block ${box.x} ${box.y} ${box.z} Items`).catch(() => '')
+          const m = /Items:\[(.*)\]/s.exec(data)
+          if (!m) continue // 双箱 merge 后 Items 在主箱；空箱读不到=全空
+          const usedSlots = new Set<number>()
+          const slotRe = /\{[^{}]*Slot:(\d+)b[^{}]*\}/g
+          for (const s of data.matchAll(slotRe)) usedSlots.add(Number(s[1]))
+          for (let i = 0; i < stock.length; i++) {
+            if (usedSlots.has(i)) continue
+            // 1.21.1 正确命令=item replace block ... with（replaceitem 是 1.16 老命令，
+            // 报 Unknown 且正则若匹配泛 error 会把失败当成功——坑已记 LESSONS）。
+            const r = await rcon.send(`item replace block ${box.x} ${box.y} ${box.z} container.${i} with ${stock[i].item} ${stock[i].count}`).catch(() => '')
+            if (r && !/replaced a slot/i.test(r)) log(`armory refill slot${i} unexpected: ${r.slice(0, 80)}`)
+          }
+        }
+      } catch (err) { log(`armory refill failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 6 * 60 * 60 * 1000)
+
   // ── 冒险者档案聚合器（2026-08-29 造物主令：冒险者等级入库）──────────────
   // 5min 拍：把在线假玩家的修为/成就/击杀/采集/陨落聚合进 world.db
   // adventurers 表——积分 = 修为×10 + 非配方成就×5 + 击杀×2 + 采集折价，
