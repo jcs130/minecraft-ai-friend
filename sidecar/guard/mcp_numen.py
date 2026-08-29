@@ -635,6 +635,110 @@ async def render_view(
     return ImageContent(type="image", data=b64, mimeType="image/jpeg" if is_fp else "image/png")
 
 
+# ---------------- 全能力扩展（2026-08-29 造物主令「服务不全」补齐）----------------
+# numen 服务端实有 36 个工具（合成/建造/交互/交易/钓鱼/穿装备/蓝图全套），此前
+# 桥只铺了采集/战斗/生存基础批。本节补：通用透传 + 高频专用包装 + 内置目录。
+# 参数 schema 提取自 numen-reference 源码（CraftTool/EquipItemTool/... 的 Args record）。
+
+_CAPACITY_DOC = """numen 服务端全工具目录(经 numen_invoke 调用,未单列包装的都用它):
+craft{item_id,count} 端到端合成(3x3需工作台4格内,缺料报差额)
+lookup_recipe{item_id} 查合成配方 | equip_item{action,item_id,slot} 穿脱装备
+interact_entity{button,entity_id,hold_ticks?,item_id?} 实体交互(村民交易/喂动物)
+interact_at{button,x,y,z,hold_ticks?,item_id?} 方块交互(开门/开箱/上工作台/熔炉)
+inspect_gui{} 查看打开的GUI | close_gui{} 关GUI | transfer{moves[{from,to,count?}]} 容器间转移(存取箱/交易找零)
+take_items{item_id,count} 拿取 | drop_items{item_id,count} 丢弃
+inspect_block{x,y,z} 查方块 | inspect_block_storage{x,y,z} 查方块容器内容
+locate_structure{structure} 找结构(要塞/村庄) | locate_biome{biome} 找群系
+blueprint{action,file,x?,y?,z?,rotation?} 蓝图管理 | blueprint_read{file,...} 读蓝图
+build{ops,replace_existing?} 按蓝图/操作序列建造 | scaffold_materials{action,block_ids} 脚手架材料
+fish 钓鱼 | scan_blocks{radius,block_ids} 大范围找方块(半径至192)
+示例: numen_invoke("craft", {"item_id": "minecraft:crafting_table", "count": 1})"""
+
+
+@mcp.tool()
+async def numen_invoke(tool: str, args: dict | None = None) -> str:
+    """调用 numen 服务端任意工具(万能直通)。常用工具目录与参数见工具说明。
+
+    高频示例:
+    - 合成: numen_invoke("craft", {"item_id": "minecraft:iron_pickaxe", "count": 1})
+    - 交易: numen_invoke("interact_entity", {"button": "use", "entity_id": 123})
+    - 开箱: numen_invoke("interact_at", {"button": "use", "x": 100, "y": 64, "z": -200})
+
+    全工具目录:
+    """ + _CAPACITY_DOC.split("\n", 2)[2]
+    return invoke(tool, args or {})
+
+
+@mcp.tool()
+async def craft(item_id: str, count: int = 1) -> str:
+    """合成物品(端到端:找配方→摆格→取结果)。2x2 任意处可做;3x3 需身边 4 格内有工作台。
+    缺料会报精确差额,先补料再调。仅限工作台配方(熔炼走 interact_at+transfer)。"""
+    return invoke("craft", {"item_id": item_id, "count": count})
+
+
+@mcp.tool()
+async def lookup_recipe(item_id: str) -> str:
+    """查询某物品的合成配方(材料清单),先查再 craft 少走弯路。"""
+    return invoke("lookup_recipe", {"item_id": item_id})
+
+
+@mcp.tool()
+async def equip_item(item_id: str, action: str = "equip", slot: str | None = None) -> str:
+    """穿/脱装备。action: equip 穿上 / unequip 脱下;slot 可选(头盔/胸甲/护腿/靴子/主手/副手)。"""
+    a: dict = {"action": action, "item_id": item_id}
+    if slot:
+        a["slot"] = slot
+    return invoke("equip_item", a)
+
+
+@mcp.tool()
+async def interact_entity(entity_id: int, button: str = "use", item_id: str | None = None) -> str:
+    """与实体交互——村民交易(use 手持绿宝石)、喂动物、骑乘等。entity_id 来自 scan_nearby_entities。"""
+    a: dict = {"button": button, "entity_id": entity_id}
+    if item_id:
+        a["item_id"] = item_id
+    return invoke("interact_entity", a)
+
+
+@mcp.tool()
+async def interact_at(x: int, y: int, z: int, button: str = "use", item_id: str | None = None) -> str:
+    """对方块交互——开门/开箱/放工作台后使用/熔炉等。配合 inspect_gui 看界面内容。"""
+    a: dict = {"button": button, "x": x, "y": y, "z": z}
+    if item_id:
+        a["item_id"] = item_id
+    return invoke("interact_at", a)
+
+
+@mcp.tool()
+async def inspect_gui() -> str:
+    """查看当前打开的 GUI(箱子/交易/工作台)内容与槽位,配合 transfer 移动物品。"""
+    return invoke("inspect_gui", {})
+
+
+@mcp.tool()
+async def close_gui() -> str:
+    """关闭当前打开的 GUI(交易/开箱结束后随手关,防状态悬挂)。"""
+    return invoke("close_gui", {})
+
+
+@mcp.tool()
+async def transfer(moves: list[dict]) -> str:
+    """容器间转移物品(存箱/取箱/交易确认)。moves=[{from:槽, to:槽, count?}](槽号来自 inspect_gui)。"""
+    return invoke("transfer", {"moves": moves})
+
+
+@mcp.tool()
+async def locate_structure(structure: str) -> str:
+    """找世界结构(如 minecraft:village / minecraft:stronghold / #minecraft:village)。"""
+    return invoke("locate_structure", {"structure": structure})
+
+
+@mcp.tool()
+async def locate_biome(biome: str) -> str:
+    """找生物群系(如 minecraft:snowy_plains)。远行探索前先定位。"""
+    return invoke("locate_biome", {"biome": biome})
+
+
 if __name__ == "__main__":
     # stdio 传输：QwenPaw agent 的 mcp.clients 用 command=Popen 拉起本进程
     mcp.run(transport="stdio")

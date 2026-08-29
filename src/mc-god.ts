@@ -7,7 +7,7 @@ import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
-import { CHRONICLE_TYPE_CN } from './mc-worlddb.ts'
+import { CHRONICLE_TYPE_CN, adventurerRank } from './mc-worlddb.ts'
 import type { InboxRow, MemoryHit, WorlddbService } from './mc-worlddb.ts'
 import type { LogwatchService } from './mc-logwatch.ts'
 import type { McTerraService } from './mc-terra.ts'
@@ -1015,6 +1015,45 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       } catch (err) { log(`xp-comp sweep failed: ${err instanceof Error ? err.message : String(err)}`) }
     })()
   }, 20_000)
+
+  // ── 冒险者档案聚合器（2026-08-29 造物主令：冒险者等级入库）──────────────
+  // 5min 拍：把在线假玩家的修为/成就/击杀/采集/陨落聚合进 world.db
+  // adventurers 表——积分 = 修为×10 + 非配方成就×5 + 击杀×2 + 采集折价，
+  // 段位 F~S。面板/公会牌/神谕读此表；vanilla XpLevel 降为数据源之一。
+  const ADV_DISPLAY_NAMES: Record<string, string> = { Kirito: '桐人', Naruto: '鸣人', Taro: '太郎', Edward: '爱德华', LanternWarden: '灯守' }
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        for (const raw of tail.split(',')) {
+          const name = raw.trim()
+          if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
+          const uuid = await uuidOf(name)
+          if (!uuid) continue
+          const st = magic.getState(name)
+          const xpLevel = st?.level ?? 0
+          let kills = 0; let deaths = 0; let mineVal = 0; let advCount = 0
+          try {
+            const stat = JSON.parse(readFileSync(resolve(MC_STATS_DIR, `${uuid}.json`), 'utf-8')) as { stats?: Record<string, Record<string, number>> }
+            kills = stat?.stats?.['minecraft:custom']?.['minecraft:mob_kills'] ?? 0
+            deaths = stat?.stats?.['minecraft:custom']?.['minecraft:deaths'] ?? 0
+            mineVal = mineValue(stat)
+          } catch { /* 无 stats 档案跳过 */ }
+          try {
+            const adv = JSON.parse(readFileSync(resolve(config.advancementsDir, `${uuid}.json`), 'utf-8')) as Record<string, unknown>
+            advCount = Object.keys(adv).filter((k) => !k.includes('recipes/')).length
+          } catch { /* 无成就档案 */ }
+          const score = xpLevel * 10 + advCount * 5 + kills * 2 + mineVal
+          worlddb.adventurerUpsert({
+            username: name, display_name: ADV_DISPLAY_NAMES[name] ?? name, rank: adventurerRank(score),
+            adv_score: score, xp_level: xpLevel, advancements: advCount, kills, mine_value: mineVal,
+            deaths, updated_at: Date.now(),
+          })
+        }
+      } catch (err) { log(`adv-aggregate failed: ${err instanceof Error ? err.message : String(err)}`) }
+    })()
+  }, 300_000)
 
   // 启动补发：已在线的玩家也发一本（不等下次重登）。
   // 2026-08-29 II（造物主令「所有玩家都该有状态书」核验加固）：一次性 setTimeout 在

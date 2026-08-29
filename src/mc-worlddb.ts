@@ -145,6 +145,36 @@ export interface WorlddbService {
   guardianByOwner(ownerUsername: string): { botUsername: string; ownerUsername: string; ownerUuid: string | null; state: string } | null
   /** 更新守护天使状态（idle/online/leash/guard/offline）。 */
   guardianSetState(botUsername: string, state: string): void
+  // ── 冒险者档案（2026-08-29）：冒险者等级入库，聚合器 upsert，全界可读 ──
+  /** upsert 一个冒险者档案（积分/段位由聚合器算好传入）。 */
+  adventurerUpsert(row: AdventurerRow): void
+  /** 全体冒险者（按积分降序——公会排名榜/面板）。 */
+  adventurersAll(): AdventurerRow[]
+}
+
+/** 冒险者档案行（adventurers 表）。 */
+export interface AdventurerRow {
+  username: string
+  display_name: string
+  rank: string
+  adv_score: number
+  xp_level: number
+  advancements: number
+  kills: number
+  mine_value: number
+  deaths: number
+  updated_at: number
+}
+
+/** 积分 → 段位（冒险者等级 F~S；<100 见习 F）。 */
+export function adventurerRank(score: number): string {
+  if (score >= 8000) return 'S'
+  if (score >= 3500) return 'A'
+  if (score >= 1500) return 'B'
+  if (score >= 600) return 'C'
+  if (score >= 250) return 'D'
+  if (score >= 100) return 'E'
+  return 'F'
 }
 
 // ── 编年史 md 导出格式（史官亲笔）─────────────────────────────────────
@@ -297,6 +327,21 @@ CREATE TABLE IF NOT EXISTS guardian_angels (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_guardian_owner ON guardian_angels(owner_username);
+-- 冒险者档案（2026-08-29 造物主令：冒险者等级入库——正路落 SQLite）。
+-- mc-god 聚合器 5min upsert：积分 = 修为×10 + 成就×5 + 击杀×2 + 采集折价；
+-- 段位 F/E/D/C/B/A/S（公会牌/面板/神谕皆读此表，vanilla XpLevel 不再是唯一入口）。
+CREATE TABLE IF NOT EXISTS adventurers (
+  username TEXT PRIMARY KEY,           -- 登录名（ASCII 权威键）
+  display_name TEXT NOT NULL,          -- 叙事名（桐人/鸣人）
+  rank TEXT NOT NULL DEFAULT 'F',      -- 冒险者段位 F/E/D/C/B/A/S
+  adv_score INTEGER NOT NULL DEFAULT 0,-- 冒险积分
+  xp_level INTEGER NOT NULL DEFAULT 0, -- 修为（同步自 vanilla XpLevel）
+  advancements INTEGER NOT NULL DEFAULT 0, -- 成就数（非配方类）
+  kills INTEGER NOT NULL DEFAULT 0,    -- 击杀（stats mob_kills）
+  mine_value INTEGER NOT NULL DEFAULT 0,   -- 采集折价（原木1/矿3累计）
+  deaths INTEGER NOT NULL DEFAULT 0,   -- 陨落次数（编年史）
+  updated_at INTEGER NOT NULL
+);
 `
 
 // ── 旧文件数据一次性迁移（表空 + 旧文件存在 → 导入 → 改名 .migrated）──
@@ -571,6 +616,13 @@ export function createWorlddb(config: Config): WorlddbHandle {
   const selGuardianByBot = db.prepare('SELECT bot_username, owner_username, owner_uuid, state FROM guardian_angels WHERE bot_username=?')
   const selGuardianByOwner = db.prepare('SELECT bot_username, owner_username, owner_uuid, state FROM guardian_angels WHERE owner_username=?')
   const updGuardianState = db.prepare('UPDATE guardian_angels SET state=?, updated_at=? WHERE bot_username=?')
+  // 冒险者档案（2026-08-29：冒险者等级入库）
+  const upsertAdventurer = db.prepare(`INSERT INTO adventurers (username, display_name, rank, adv_score, xp_level, advancements, kills, mine_value, deaths, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(username) DO UPDATE SET display_name=excluded.display_name, rank=excluded.rank, adv_score=excluded.adv_score,
+      xp_level=excluded.xp_level, advancements=excluded.advancements, kills=excluded.kills,
+      mine_value=excluded.mine_value, deaths=excluded.deaths, updated_at=excluded.updated_at`)
+  const selAdventurers = db.prepare('SELECT username, display_name, rank, adv_score, xp_level, advancements, kills, mine_value, deaths, updated_at FROM adventurers ORDER BY adv_score DESC')
 
   function mailRow(r: { id: number; from_user: string; body: string; at: number; read_at?: number | null }, to: string): MailRow {
     return { id: r.id, from: r.from_user, to, body: r.body, at: r.at, readAt: r.read_at ?? null }
@@ -735,6 +787,15 @@ export function createWorlddb(config: Config): WorlddbHandle {
     },
     guardianSetState(botUsername, state) {
       updGuardianState.run(state, Date.now(), botUsername)
+    },
+    // 冒险者档案（2026-08-29 造物主令：冒险者等级入库）
+    adventurerUpsert(row) {
+      upsertAdventurer.run(row.username, row.display_name, row.rank, row.adv_score, row.xp_level,
+        row.advancements, row.kills, row.mine_value, row.deaths, row.updated_at)
+    },
+    adventurersAll() {
+      const rs = selAdventurers.all() as Array<Omit<AdventurerRow, never>>
+      return rs
     },
     remember,
     recall,
