@@ -11,6 +11,26 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
 DRIVE = os.path.join(HERE, "guard_drive.py")
 LOG = os.path.join(HERE, "guard_drive.log")
+PIDFILE = os.path.join(HERE, "guard_drive.pid")   # 2026-08-29:看门狗/人工重启竞态双启防
+
+
+def _pid_alive(pid):
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"(Get-Process -Id {pid} -ErrorAction SilentlyContinue) -ne $null"],
+            capture_output=True, text=True)
+        return r.stdout.strip().lower() == "true"
+    except Exception:
+        return False
+
+
+def _pids_from_file():
+    try:
+        with open(PIDFILE, encoding="utf-8") as f:
+            return [int(x) for x in f.read().split() if x.strip().isdigit()]
+    except Exception:
+        return []
 
 DETACHED = 0x00000008
 NEW_GROUP = 0x00000200
@@ -35,19 +55,41 @@ def find_drive_pid():
 
 def stop():
     pids = find_drive_pid()
+    # pid 文件里的进程一并清(防 CIM 查询漏网)
+    for pid in _pids_from_file():
+        if pid not in pids:
+            pids.append(pid)
     if not pids:
         print("无 guard_drive 进程在跑")
+        try:
+            os.remove(PIDFILE)
+        except OSError:
+            pass
         return
     for pid in pids:
         subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
         print(f"已停止 guard_drive pid={pid}")
     time.sleep(1)
+    try:
+        os.remove(PIDFILE)
+    except OSError:
+        pass
 
 
 def start():
     pids = find_drive_pid()
-    if pids:
-        print(f"guard_drive 已在跑 pid={pids}，跳过（如需重启请先 --stop）")
+    # 双保险:pid 文件里还活着的也算在跑(2026-08-29 竞态双启课:
+    # 人工 --stop 与看门狗 5min 巡检撞窗口,双方各拉一个实例)
+    alive_from_file = [p for p in _pids_from_file() if _pid_alive(p)]
+    if pids or alive_from_file:
+        print(f"guard_drive 已在跑 pid={pids or alive_from_file}，跳过（如需重启请先 --stop）")
+        # 有进程但 pid 文件缺失/陈旧 → 补写,保下轮巡检可见
+        if not alive_from_file and pids:
+            try:
+                with open(PIDFILE, "w", encoding="utf-8") as f:
+                    f.write(" ".join(str(p) for p in pids))
+            except OSError:
+                pass
         return
     # 以 UTF-8 环境启动，日志由 Python 侧 UTF-8 写入，绕开 cmd GBK 代码页乱码
     env = os.environ.copy()
@@ -65,6 +107,11 @@ def start():
     time.sleep(3)
     pids = find_drive_pid()
     print(f"确认 pid={pids}")
+    try:
+        with open(PIDFILE, "w", encoding="utf-8") as f:
+            f.write(" ".join(str(p) for p in pids))
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":

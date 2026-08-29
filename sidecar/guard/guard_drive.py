@@ -35,17 +35,20 @@ RCON_PW = os.environ.get("RCON_PASSWORD")
 # 不依赖外部 shell 预先注入 env，可移植、可跨容器。
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # B 仓根
 if not RCON_PW:
-    # 候选：1) MC_RCON_SECRET 显式指定；2) B 仓 mc-data 秘密文件（2026-08-26 清 A 仓残留，容器布局另列两条）
+    # 密码候选链(2026-08-29 修正:现役真密码在 ops/docker/shadow/data/rcon-secret.txt,
+    # utf-8-sig 读;B仓根 mc-data 是旧世遗留错密码——旧链曾致整桥 RCON 静默哑火:
+    # 认证失败不抛错只回空串,反射/慢系统全降级,极难察觉。与 mcp_numen._read_rcon_pw 同源。)
     _secret_candidates = [
         os.environ.get("MC_RCON_SECRET"),
-        os.path.join(_REPO, "mc-data", "rcon-secret.txt"),
+        os.path.join(_REPO, "ops", "docker", "shadow", "data", "rcon-secret.txt"),  # 现役真源
         "/root/mc-data/rcon-secret.txt",   # 容器内路径（镜像布局）
         "/app/mc-data/rcon-secret.txt",
+        os.path.join(_REPO, "mc-data", "rcon-secret.txt"),  # 旧世兜底(防回滚场景)
     ]
     _secret_candidates = [c for c in _secret_candidates if c]
     for _cand in _secret_candidates:
         if os.path.isfile(_cand):
-            _val = open(_cand, "r", encoding="utf-8").read().strip()
+            _val = open(_cand, "r", encoding="utf-8-sig").read().strip()
             if _val:
                 RCON_PW = _val
                 break
@@ -1627,19 +1630,35 @@ def _kage_drive_log(name, kind, text):
 #      eat 回执"没有"就试下一种,命中即吃(90s 节流,防把食物一口气吃完)
 #   R3 HP≤8(40%)→ R2 食物链强吃(饱和回血);HP≤4 时再叠 chant 归乡回安全区
 #      (120s 节流)。女神铁律(HP≤15% 代施圣愈)仍在世界侧,双层保险。
-# 反射动作 feed_append(kind="reflex") 入亲卫上下文,慢系统自然感知"身体刚自保"。
+# 2026-08-29 二批(mindcraft modes.js 全文对齐,造物主令"多看 mindcraft"):
+#   R4 溺水(mindcraft:头顶水持续 jump)→ numen 无 jump 原语,取近义:Air NBT
+#      <150(总300)→ goto 当前(x,z) 寻路出水(30s 节流,顶替长任务——当天
+#      桐人河底第6死即此课)
+#   R5 着火(mindcraft:水桶/找水/moveAway)→ Fire NBT>0 → goto 挪位(x+4,z)
+#      离开火源方块(45s 节流);水桶原语缺,灭火靠挪位+R3 兜底
+#   R6 卡死(mindcraft unstuck:同点 20s)→ task running 且连续 4 拍位移<2格
+#      → task_stop 叫停交慢系统重议(60s 冷却)
+# 反射动作 feed_append(kind="reflex") 入亲卫上下文,慢系统自然感知"身体刚自保"
+# (mindcraft 同构物:execute() 后 AUTO MESSAGE 回流模型)。
 # 独立 Rcon 连接(反射与主循环并发,不共 socket 防串包)。
 
 REFLEX_POLL = 5            # 反射心跳(秒)
 REFLEX_ATTACK_THROTTLE = 12
 REFLEX_EAT_THROTTLE = 90
 REFLEX_FLEE_THROTTLE = 120
+REFLEX_DROWN_THROTTLE = 30     # R4 溺水
+REFLEX_FIRE_THROTTLE = 45      # R5 着火
+REFLEX_STUCK_THROTTLE = 60     # R6 解卡
+AIR_DANGER = 150               # Air NBT < 此值(总300)即危险
+STUCK_MIN_TICKS = 4            # 连续 N 拍(5s×4=20s)没挪窝才算卡
+STUCK_MOVE_EPS = 2.0           # 位移小于此(格)视为没动
 REFLEX_FOOD_CHAIN = [
     "minecraft:cooked_beef", "minecraft:cooked_porkchop", "minecraft:bread",
     "minecraft:cooked_chicken", "minecraft:cooked_mutton", "minecraft:apple",
     "minecraft:golden_carrot", "minecraft:carrot", "minecraft:potato",
 ]
 _reflex_ts = {}  # (tag, kind) -> 上次触发时刻(节流)
+_reflex_stuck = {}  # tag -> [last_pos, stuck_ticks]  R6 状态
 
 
 def _reflex_gate(tag, kind, throttle):
@@ -1650,6 +1669,47 @@ def _reflex_gate(tag, kind, throttle):
         return False
     _reflex_ts[key] = now
     return True
+
+
+def _nbt_number(out):
+    """data get entity 回执里的裸数字(Air 300 / Fire -1),抽不出给 None。"""
+    if not isinstance(out, str):
+        return None
+    m = re.search(r"entity data:\s*(-?\d+)(?:\.\d+)?[LbBsfd]*\s*$", out.strip())
+    return int(m.group(1)) if m else None
+
+
+def _air_dangerous(air):
+    """R4 判定:Air NBT 缺报(None)不动作,拿到且低于阈值即危险。"""
+    return air is not None and air < AIR_DANGER
+
+
+def _fire_burning(fire):
+    """R5 判定:Fire NBT >0 在烧(-1/-20 表示不在烧)。"""
+    return fire is not None and fire > 0
+
+
+def _stuck_verdict(tag, cur_pos, task_running, min_ticks=STUCK_MIN_TICKS, eps=STUCK_MOVE_EPS):
+    """R6 判定(纯函数):任务在跑但连续 min_ticks 拍位移<eps → True。
+
+    无任务即重置(mindcraft 同义:isIdle 时 stuck_time=0)。
+    """
+    st = _reflex_stuck.setdefault(tag, [None, 0])
+    last, ticks = st
+    if not task_running:
+        _reflex_stuck[tag] = [cur_pos, 0]
+        return False
+    if last is not None and cur_pos is not None:
+        try:
+            moved = math.dist((last[0], last[2]), (cur_pos[0], cur_pos[2]))
+        except Exception:
+            moved = eps + 1   # 位置数据不完整时按"动过"处理,宁可漏报不误杀
+        if moved < eps:
+            ticks += 1
+        else:
+            ticks = 0
+    _reflex_stuck[tag] = [cur_pos, ticks]
+    return ticks >= min_ticks
 
 
 def _reflex_rcon():
@@ -1686,7 +1746,7 @@ def reflex_loop(g, stop_at):
                 return food
         return None
 
-    log("反射层上线(5s 心跳:贴脸反击/断粮进食/濒死强吃+归乡)")
+    log("反射层上线(5s 心跳:溺水/着火/贴脸反击/断粮进食/濒死强吃+归乡/卡死解卡)")
     while True:
         if stop_at and time.time() >= stop_at:
             return
@@ -1696,7 +1756,24 @@ def reflex_loop(g, stop_at):
             if not h:
                 time.sleep(REFLEX_POLL)
                 continue
-            hp, hunger = h.get("hp"), h.get("hunger")
+            hp, hunger, pos = h.get("hp"), h.get("hunger"), h.get("pos")
+            # ---- 保命类先问身体 NBT(Air/Fire),一发一发拿(mindcraft self_preservation)----
+            air = _nbt_number(R2.cmd(f'data get entity "{g["login"]}" Air'))
+            fire = _nbt_number(R2.cmd(f'data get entity "{g["login"]}" Fire'))
+            # R4 溺水:Air 告急 → goto 当前(x,z) 寻路出水(顶替长任务,命比任务大)
+            if _air_dangerous(air) and _reflex_gate(tag, "drown", REFLEX_DROWN_THROTTLE):
+                if pos and len(pos) >= 3:
+                    rinvoke("task_stop", {})
+                    rinvoke("goto", {"x": round(pos[0]), "z": round(pos[2])})
+                    feed_append(g, "reflex", f"水下 Air {air}/300 → 反射寻路出水")
+                    log(f"Air {air} → goto({round(pos[0])},{round(pos[2])}) 出水")
+            # R5 着火:在烧 → 挪位离开火源(数格外重落点)
+            elif _fire_burning(fire) and _reflex_gate(tag, "fire", REFLEX_FIRE_THROTTLE):
+                if pos and len(pos) >= 3:
+                    rinvoke("task_stop", {})
+                    rinvoke("goto", {"x": round(pos[0]) + 4, "z": round(pos[2])})
+                    feed_append(g, "reflex", f"着火(Fire {fire}) → 反射挪位离火源")
+                    log(f"Fire {fire} → goto 挪 4 格")
             # 敌对在场(get_self_status 的 hostiles 字段;拿不到就补一发 scan)
             txt = json.dumps(st, ensure_ascii=False)
             near_hostile = ("僵尸" in txt or "骷髅" in txt or "苦力怕" in txt
@@ -1720,8 +1797,20 @@ def reflex_loop(g, stop_at):
             # R2 断粮进食
             elif isinstance(hunger, (int, float)) and hunger <= 8 and _reflex_gate(tag, "eat", REFLEX_EAT_THROTTLE):
                 eat_chain(f"饥饿 {hunger}/20")
+            # R6 卡死:任务在跑但 20s 没挪窝 → 叫停交慢系统重议(mindcraft unstuck)
+            try:
+                tstat = rinvoke("task_status", {})
+                task_running = '"state":"running"' in json.dumps(tstat, ensure_ascii=False) \
+                    or "running" in json.dumps(tstat.get("data", {}), ensure_ascii=False) if isinstance(tstat, dict) else False
+            except Exception:
+                task_running = False
+            if _stuck_verdict(tag, pos, task_running) and _reflex_gate(tag, "stuck", REFLEX_STUCK_THROTTLE):
+                rinvoke("task_stop", {})
+                _reflex_stuck[tag] = [pos, 0]
+                feed_append(g, "reflex", "任务在跑但 20s 未挪窝 → 反射叫停,请重新决策")
+                log("卡死 → task_stop(交慢系统重议)")
         except Exception as e:
-            log(f"反射拍异常(继续): {e}")
+            log(f"反射拍异常(继续): {type(e).__name__}: {e}")
         time.sleep(REFLEX_POLL)
 
 

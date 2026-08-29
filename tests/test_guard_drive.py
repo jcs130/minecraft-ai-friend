@@ -78,3 +78,71 @@ def test_reflex_thresholds():
     assert gd.REFLEX_EAT_THROTTLE == 90
     assert gd.REFLEX_FLEE_THROTTLE == 120
     assert gd.REFLEX_POLL == 5
+
+
+# ---------- 2026-08-29 二批:R4 溺水 / R5 着火 / R6 卡死(mindcraft 对齐) ----------
+def test_r4_air_dangerous():
+    """Air NBT(总 300):低于 150 危险;None(取不到)不动作。"""
+    assert gd._air_dangerous(120) is True
+    assert gd._air_dangerous(150) is False
+    assert gd._air_dangerous(300) is False
+    assert gd._air_dangerous(None) is False
+
+
+def test_r5_fire_burning():
+    """Fire NBT:0 未烧 / -1 灭 / >0 在烧;None 不动作。"""
+    assert gd._fire_burning(1) is True
+    assert gd._fire_burning(60) is True
+    assert gd._fire_burning(0) is False
+    assert gd._fire_burning(-1) is False
+    assert gd._fire_burning(None) is False
+
+
+def test_r6_stuck_verdict_triggers():
+    """任务在跑 + 基点后连续 4 拍位移<2格 → True(整 20s 没挪窝)。
+
+    首拍存基点(不计比较),其后每拍比较一次;4 次比较都没动=20s 整。
+    """
+    gd._reflex_stuck.clear()
+    tag = "Kirito"
+    pos = [-500.0, 70.0, 800.0]
+    for _ in range(4):   # 基点 + 3 次比较:不触发
+        assert gd._stuck_verdict(tag, pos, True) is False
+    # 第 5 拍(第 4 次比较):仍然没动 → 触发
+    assert gd._stuck_verdict(tag, pos, True) is True
+    gd._reflex_stuck.clear()
+
+
+def test_r6_stuck_reset_when_moved():
+    """中途挪窝(>2格)计数清零。"""
+    gd._reflex_stuck.clear()
+    tag = "Naruto"
+    a, far = [0.0, 70.0, 0.0], [10.0, 70.0, 0.0]
+    gd._stuck_verdict(tag, a, True)
+    gd._stuck_verdict(tag, a, True)
+    gd._stuck_verdict(tag, a, True)   # 基点+2 比较
+    assert gd._stuck_verdict(tag, far, True) is False  # 挪了 → 清零
+    assert gd._stuck_verdict(tag, far, True) is False  # 新基点
+    assert gd._stuck_verdict(tag, far, True) is False
+    assert gd._stuck_verdict(tag, far, True) is False
+    assert gd._stuck_verdict(tag, far, True) is True   # 基点+4 次比较没动才触发
+    gd._reflex_stuck.clear()
+
+
+def test_r6_stuck_idle_never_triggers():
+    """无任务(mindcraft isIdle 同义)永不触发并清零。"""
+    gd._reflex_stuck.clear()
+    tag = "Kirito"
+    pos = [1.0, 70.0, 1.0]
+    for _ in range(6):
+        assert gd._stuck_verdict(tag, pos, False) is False
+    gd._reflex_stuck.clear()
+
+
+def test_nbt_number_extraction():
+    """data get entity 回执抠裸数字;非数字回执 None。"""
+    assert gd._nbt_number("Kirito has the following entity data: 300") == 300
+    assert gd._nbt_number("Naruto has the following entity data: -1") == -1
+    assert gd._nbt_number("No entity was found") is None
+    assert gd._nbt_number(None) is None
+    assert gd._nbt_number(12345) is None
