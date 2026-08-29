@@ -191,17 +191,29 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
   }
 
   let watchedBot: Bot | null = null
+  // 2026-08-29 造物主反馈「为什么又让她选天赋」：降临仪式只对真人开。
+  // 假玩家/守卫（Kirito/Naruto——技能走神授与守卫体系）、AI 玩家（Taro——
+  // 引擎对话不解析仪式选项，问了永远挂着，每次重启重问一遍刷日志）一律跳过。
+  const RITUAL_SKIP_NAMES = new Set(['Kirito', 'Naruto', 'Taro', '桐人', '鸣人'])
+  function shouldSkipRitual(username: string): boolean {
+    if (RITUAL_SKIP_NAMES.has(username)) return true
+    if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) return true
+    if (username.startsWith('sys_')) return true
+    return false
+  }
   function ensureListeners(bot: Bot) {
     if (watchedBot === bot) return
     watchedBot = bot
 
     bot.on('chat', (username: string, message: string) => {
       if (username === bot.username) return
+      if (RITUAL_SKIP_NAMES.has(username)) return // 选项解析也跳过（防守卫公屏词被误当选项吃掉）
       tryResolve(username, message, 'chat')
     })
 
     bot.on('whisper', (username: string, message: string) => {
       if (username === bot.username) return
+      if (RITUAL_SKIP_NAMES.has(username)) return
       tryResolve(username, message, 'whisper')
     })
 
@@ -209,9 +221,7 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
       const username = player?.username
       if (!username) return
       if (username === bot.username) return // 女神自己不参加仪式
-      // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）不是穿越者，不参加降临仪式
-      if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) return
-      if (username.startsWith('sys_')) return // 守护天使（客户端陪玩）不是穿越者，不参加降临仪式（2026-08-23）
+      if (shouldSkipRitual(username)) return // 守卫/内部bot/守护天使/AI玩家不开降临仪式
       if (magic.getInnate(username) !== null) return
       // 稍等几秒让客户端站稳，再开仪式。
       setTimeout(() => {
@@ -235,9 +245,7 @@ export function createRitual(config: Config, deps: RitualDeps): RitualHandle {
         if (bot.entity) {
           for (const username of Object.keys(bot.players)) {
             if (username === bot.username) continue
-            // 内部 bot（2026-08-24）：渲染/巡检等临时客户端（RenderBot 等）不参加降临仪式
-            if (new Set((process.env.INTERNAL_BOT_NAMES ?? 'RenderBot,ProbeBot').split(',').map((s) => s.trim()).filter(Boolean)).has(username)) continue
-            if (username.startsWith('sys_')) continue // 守护天使不参加降临仪式（2026-08-23）
+            if (shouldSkipRitual(username)) continue // 守卫/内部bot/守护天使/AI玩家（2026-08-29）
             if (pending.has(username)) continue
             if (magic.getInnate(username) !== null) continue
             startRitual(username).catch((err) => log(`ritual error: ${err instanceof Error ? err.message : String(err)}`))
