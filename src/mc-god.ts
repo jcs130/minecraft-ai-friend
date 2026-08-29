@@ -1790,6 +1790,25 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         if (cmd.json) { jsonReply({ ok: true, ...json }); return }
         replyLines(panel.split('\n')); return
       }
+      case 'discoveries': case '发现点': case '舆图': {
+        // 探索者舆图（2026-08-29）：守卫远征自动登记的发现点一览；
+        // 改名用法：/mycli 舆图 改名 <id> <新地名>（女神赐名权）
+        const sub = cmd.args[0] ?? ''
+        if (sub === '改名' || sub === 'rename') {
+          const id = parseInt(cmd.args[1] ?? '', 10)
+          const newName = cmd.args.slice(2).join(' ').trim()
+          if (!id || !newName) { reply(`[CLI] 用法：/cli 舆图 改名 <id> <新地名>。`); return }
+          const ok = worlddb.discoveryRename(id, newName.slice(0, 24))
+          reply(ok ? `[CLI] 第 ${id} 处发现点已赐名「${newName}」。` : `[CLI] 没有第 ${id} 处发现点。`)
+          return
+        }
+        const rows = worlddb.discoveryList()
+        if (cmd.json) { jsonReply({ ok: true, count: rows.length, discoveries: rows }); return }
+        if (!rows.length) { reply(`[CLI] 舆图还空着——守卫远征到新天地才会落笔。`); return }
+        replyLines(rows.slice(0, 20).map((r) =>
+          `#${r.id} ${r.name} (${Math.round(r.x)}, ${Math.round(r.z)}) by ${r.found_by}`))
+        return
+      }
       case 'cast': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli cast <咒语>。要什么，直说。`); return }
         const chant = cmd.args.join(' ')
@@ -2920,6 +2939,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   }
 
   /** 每玩家施援扫描：只判定+提示，绝不动手（圣愈/填海留给祈愿供奉与自己吟唱）。 */
+  // 探索者远征（2026-08-29 造物主任命）：守卫游历世界即探索者——远离已知发现点
+  // (>500格)时自动登记新地名，供日后传送阵/玩家远行导航。每守卫 30 分钟节流。
+  const lastDiscover = new Map<string, number>()
+  const EXPLORE_COOLDOWN_MS = 30 * 60_000
   async function guardScan(name: string, isNight: boolean, day: number): Promise<void> {
     try {
       // 2026-08-26 AUDIT-02 根因修复：原 Promise.all 三连并发把 RCON 单连接串包
@@ -2974,6 +2997,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         nightHintDay.set(name, day)
         try { courier(name, `天黑了，别在野外过夜——进屋、点火把。`) } catch { /* 无碍 */ }
         log(`GUARD-HINT [${name}] night: 天黑了，别在野外过夜`)
+      }
+      // 探索者远征登记（冷却到才查 Pos，不增常态 RCON 压力）
+      const sinceDisc = lastDiscover.get(name) ?? 0
+      if (Date.now() - sinceDisc > EXPLORE_COOLDOWN_MS) {
+        const posRaw = await rcon.send(`data get entity ${name} Pos`)
+        const pm = /\[(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\]/.exec(posRaw || '')
+        if (pm) {
+          const [x, y, z] = [Number(pm[1]), Number(pm[2]), Number(pm[3])]
+          const got = worlddb.discoveryAdd('', 'spot', Math.round(x), Math.round(z), name, `y=${Math.round(y)}`, 500)
+          if (got) {
+            lastDiscover.set(name, Date.now())
+            worlddb.chronicleRecord('explore', name, { place: got.name, x: Math.round(x), z: Math.round(z), y: Math.round(y) })
+            log(`EXPLORE ${name}: ${got.name} @ ${Math.round(x)},${Math.round(y)},${Math.round(z)}`)
+            try { courier(name, `你走到了一片新的天地——「${got.name}」已被记入世界舆图。`) } catch { /* 无碍 */ }
+          }
+        }
       }
     } catch { /* 单玩家失败不影响其余 */ }
   }

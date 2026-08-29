@@ -91,6 +91,12 @@ export interface WorlddbService {
   ledgerCountSince(username: string, itemId: string, sinceTs: number): number
   /** 史官：记一条编年史（入库 + md 双写导出）。 */
   chronicleRecord(type: string, actor: string, detail: Record<string, unknown>): void
+  /** 探索者（2026-08-29 守卫远征）：登记一处发现点。返回 null=离已知点太近（<minGap），不重复登记。 */
+  discoveryAdd(name: string, kind: string, x: number, z: number, foundBy: string, note?: string, minGap?: number): { id: number; name: string } | null
+  /** 探索者：列全部发现点（新→旧）。 */
+  discoveryList(): Array<{ id: number; name: string; kind: string; x: number; z: number; found_by: string; ts: number }>
+  /** 探索者：女神赐名/改名。 */
+  discoveryRename(id: number, name: string): boolean
   /** 史官：读某时刻以来的全部条目。 */
   chronicleSince(ts: number): ChronicleEntry[]
   /** 守望者：下一期观察期号（从 DB 恢复，重启不重置）。 */
@@ -341,6 +347,16 @@ CREATE TABLE IF NOT EXISTS adventurers (
   mine_value INTEGER NOT NULL DEFAULT 0,   -- 采集折价（原木1/矿3累计）
   deaths INTEGER NOT NULL DEFAULT 0,   -- 陨落次数（编年史）
   updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS discoveries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,                  -- 地名（初记「无名之地N」，女神可改名）
+  kind TEXT NOT NULL DEFAULT 'spot',   -- spot/village/ruin/portal…
+  x REAL NOT NULL, z REAL NOT NULL,    -- 地表坐标（y 落地时解析）
+  dim TEXT NOT NULL DEFAULT 'overworld',
+  found_by TEXT NOT NULL,              -- 发现者登录名（守卫远征）
+  note TEXT,                           -- 备注（群系/结构线索）
+  ts INTEGER NOT NULL
 );
 `
 
@@ -676,6 +692,33 @@ export function createWorlddb(config: Config): WorlddbHandle {
       } catch (err) {
         console.error(`[mc-worlddb] chronicle record failed: ${err instanceof Error ? err.message : String(err)}`)
       }
+    },
+    // ── 探索者（2026-08-29 守卫远征自动登记）──────────────────────────────
+    discoveryAdd(name, kind, x, z, foundBy, note, minGap = 400) {
+      try {
+        const rows = db.prepare('SELECT x, z FROM discoveries').all() as Array<{ x: number; z: number }>
+        for (const r of rows) {
+          if (Math.hypot(r.x - x, r.z - z) < minGap) return null
+        }
+        const seq = (db.prepare('SELECT COUNT(*) AS c FROM discoveries').get() as { c: number }).c + 1
+        const finalName = name || `无名之地${seq}`
+        const info = db.prepare(
+          'INSERT INTO discoveries (name, kind, x, z, dim, found_by, note, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        ).run(finalName, kind, x, z, 'overworld', foundBy, note ?? null, Date.now()) as { lastInsertRowid: number }
+        return { id: Number(info.lastInsertRowid), name: finalName }
+      } catch (err) {
+        console.error(`[mc-worlddb] discovery add failed: ${err instanceof Error ? err.message : String(err)}`)
+        return null
+      }
+    },
+    discoveryList() {
+      return db.prepare('SELECT id, name, kind, x, z, found_by, ts FROM discoveries ORDER BY ts DESC').all() as Array<
+        { id: number; name: string; kind: string; x: number; z: number; found_by: string; ts: number }
+      >
+    },
+    discoveryRename(id, name) {
+      const r = db.prepare('UPDATE discoveries SET name = ? WHERE id = ?').run(name, id)
+      return (r.changes ?? 0) > 0
     },
     chronicleSince(ts) {
       const rows = selChronicleSince.all(ts) as Array<{ at: number; type: string; actor: string; detail_json: string }>
