@@ -188,7 +188,9 @@ const god = createGod({
 // 解开 mc-magic ↔ mc-god 循环依赖：mc-magic 的 chronicle 迟绑定到 mc-god 的史官 record。
 magic.setChronicle(god.service.record)
 // 契约/魂链法术执行器（2026-08-23）：contract/trace/recall 的效果由 mc-god 落地（写 goddess-orders / tp）。
-magic.setSpecialExecutor((special, username, params, vars) => god.service.execSpecial(special, username, params, vars))
+// 2026-08-29 修：原 lambda 手动转发 4 参，吞掉了第 5 参 atomId——光环系(aura)元素分派
+// 全靠 atomId，被吞后 elem 恒空 →「此法术未通」。直接传函数引用，不再逐参转发。
+magic.setSpecialExecutor(god.service.execSpecial)
 
 // 女神天眼实体快照（2026-08-23）：周期性把 Goddess 视野内的实体写进 web-entities.json，
 // 供 9090 面板小地图标注怪物（#1 怪物显示）。女神以旁观者常驻，视野即「她所见」，

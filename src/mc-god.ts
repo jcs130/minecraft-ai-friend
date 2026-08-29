@@ -3682,7 +3682,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         resolveChant(OWNER, body)
           .then((reply) => {
-            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body}`)
+            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body} -> ${String(reply).slice(0, 120)}`)
             try { bot.whisper(username, `[信使] ${OWNER}，${reply}`) } catch { /* not ready */ }
           })
           .catch((err) => log(`whisper cast failed for ${OWNER}: ${err instanceof Error ? err.message : String(err)}`))
