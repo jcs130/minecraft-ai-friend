@@ -1009,7 +1009,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const ledger = loadBookLedger()
       const rec = ledger[username] ?? { boxes: [], books: [] }
       // ① 探匣：execute if items 短响应（永不截断），count 即匣数。
-      const boxTest = await rcon.send(`execute if items entity ${username} inventory.* minecraft:purple_shulker_box`).catch(() => '')
+      // ⚠ slot 范围必须用 container.*：inventory.* 对带组件（block_entity_data）的
+      // 潜影盒物品在这套 1.21.1+NeoForge 下 Test failed（实测 dirt 能过、匣探不到，
+      // container.* 两者皆准——2026-08-29 实验定谳）。
+      const boxTest = await rcon.send(`execute if items entity ${username} container.* minecraft:purple_shulker_box`).catch(() => '')
       const boxCount = /Test passed, count: (\d+)/.exec(boxTest ?? '') ? Number(/Test passed, count: (\d+)/.exec(boxTest!)![1]) : 0
       if (boxCount > 0) {
         // 已有匣：新学的书散本补（记账判重，差集=增量；书在匣里丢不了，散本增量极少）。
