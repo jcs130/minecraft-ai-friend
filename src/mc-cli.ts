@@ -35,6 +35,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'chat', aliases: ['talk', '说', '聊', '对话'], summary: '与女神直接对话', usage: 'chat <话>', argDesc: '话：想对女神说的（提问/闲聊/求助都行）', json: false },
   { id: 'innate', aliases: ['天赋', 'talent'], summary: '查/选出生天赋', usage: 'innate [我的 | 我选 <法术名>]', argDesc: '我选 <法术名>：选天赋；默认查', json: true },
   { id: 'appraise', aliases: ['鉴定'], summary: '鉴定自身（法力/等阶/秘法）', usage: 'appraise', json: true },
+  { id: 'discoveries', aliases: ['舆图', '发现点', 'discover'], summary: '探索者舆图：发现点一览/赐名', usage: 'discoveries [改名 <id> <新地名>]', argDesc: '改名：给发现点赐名', json: true },
   { id: 'summon', aliases: ['召唤', '传唤'], summary: '召唤术：把现有守卫召来相助（桐人/鸣人）', usage: 'summon <守卫名> <任务>', argDesc: '守卫名：桐人/鸣人；任务：让他干什么（如 帮我挖矿）', json: true },
   { id: 'cultivate', aliases: ['灌顶', '修行', '传功'], summary: '修行灌顶：给自己灌技艺经验（60秒一息）', usage: 'cultivate [类别]', argDesc: '类别：combat/mining 等，缺省 combat', json: true },
   { id: 'growth', aliases: ['进度', '修为'], summary: '查修行进度（经验/点数）', usage: 'growth [类别]', argDesc: '类别：缺省 combat', json: true },
