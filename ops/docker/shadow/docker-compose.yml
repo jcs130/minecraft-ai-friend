@@ -144,6 +144,9 @@ services:
       # 2026-08-29 修为折算器：numen 假玩家不吸经验球（贴脸实测 XpTotal 不动），
       # 杀怪经验全蒸发 → world 侧读 stats json（UUID 文件）按 mob_kills delta 补 xp。
       - ./mc/shadow/stats:/mcstats:ro
+      # 2026-08-29 天音接线:女神说话投文本任务 → 宿主 god-voice-watcher 合成 →
+      # god-voice mod(SVC) 在女神实体头顶播放,装 SVC 客户端的玩家(萌萌)可听。
+      - ./mc/data/godvoice:/godvoice
     environment:
       TZ: Asia/Shanghai
       # 2026-08-28 神社之门收编：IA/drones mod 注册必需网络通道后，裸 mineflayer 直连
@@ -154,6 +157,7 @@ services:
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_DATA_DIR: /app/data
+      GODVOICE_DIR: /godvoice   # 天音:女神公屏说话落此目录 text-queue/,宿主 watcher 合成 mp3 后由 mod 播放
       MC_LOG_PATH: /mclogs/latest.log
       MC_ADVANCEMENTS_DIR: /mcadv
       MC_VIEWER: "1"

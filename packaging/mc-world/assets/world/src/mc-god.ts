@@ -2157,6 +2157,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         } catch {
           /* bot not ready */
         }
+        // 天音（2026-08-29）：萌萌等 VIP 不识字——私语神谕同步语音化（SVC 空间播放，
+        // 念正文不带「[女神]」前缀，实体位置已表明是谁在说话）。
+        if (VIP_SET.has(username.toLowerCase())) speakViaGodVoice(text)
         // 守护天使 CC（2026-08-23）：神谕同步抄送主人绑定的守护天使，供其本地 TTS 播报。
         ccGuardian(username, text)
         // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
@@ -2414,11 +2417,26 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 同步落 player-chat.jsonl——面板公屏流与守卫桥才看得到女神的公屏回应。此前只有
   // 守卫 NPC 的 say 走 numen 链路落 jsonl，女神 bot.chat 不落盘，面板上像女神失踪。
   // recordPlayerChat 内部挡 bot 自己（2347），故这里直写文件，格式与 jsonl 完全一致。
+  // 天音投递（2026-08-29）：任意文本 → god-voice text-queue——宿主 god-voice-watcher
+  // 用 edge-tts 合成 mp3 后，god-voice mod(SVC) 在女神实体头顶空间播放。萌萌等装
+  // SVC 客户端的玩家零读字即可听见。语音是增益：合成失败不影响文字链路。
+  function speakViaGodVoice(text: string): void {
+    try {
+      const gv = process.env.GODVOICE_DIR
+      const ent = getBot()?.entity?.uuid
+      if (gv && ent) {
+        const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+        appendFileSync(`${gv}/text-queue/${id}.json`, JSON.stringify({ id, entity: String(ent), text: text.slice(0, 200), voice: 'goddess' }), 'utf-8')
+      }
+    } catch { /* 语音失败不伤文字 */ }
+  }
+
   function goddessSayPublic(text: string): void {
     try { getBot()?.chat(text) } catch { /* not ready */ }
     try {
       appendFileSync(PLAYER_CHAT, JSON.stringify({ ts: Date.now(), user: 'Goddess', text: text.slice(0, 256) }) + '\n')
     } catch { /* best effort */ }
+    speakViaGodVoice(text)
   }
 
   async function goddessChat(username: string, message: string): Promise<void> {
