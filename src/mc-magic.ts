@@ -66,8 +66,9 @@ interface Atom {
   /** 契约类法术（2026-08-23）：不走路 RCON commands，改由注入的 specialExecutor 执行。
    *  contract=缔结契约（唤守卫）、trace=寻踪（传送到对方）、recall=唤魂（拉从者）、
    *  kage_bunshin=影分身之术（按施术者数据召 2 个无魂战斗分身，跟随施术者 + 本能防御）、
-   *  fire_aura=火焰光环（2026-08-29 造物主谕：三颗小火球绕体旋绕，触敌点燃——萌萌专属）。 */
-  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura'
+   *  aura=光环系（2026-08-29）：三元素球绕体旋绕——元素由 atomId 分派（fire_aura 火焰光环
+   *  等 8 元素家族，萌萌专属火焰、余七术公开）。 */
+  special?: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura'
   cost: CostSpec
   /** 等级门槛：低于此等级的玩家无法驾驭此法术（出生天赋豁免）。缺省 = 1 级。 */
   requiredLevel?: number
@@ -1048,10 +1049,11 @@ export interface MagicDeps {
 /** 契约/魂链法术执行器（2026-08-23）：效果不走路 RCON commands，由 mc-god 注入实际落地逻辑
  *  （contract=写 goddess-orders 唤守卫、trace=传送到目标、recall=拉从者到身边）。 */
 export type SpecialExecutor = (
-  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura',
+  special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura',
   username: string,
   params: Record<string, number | string>,
   vars: Record<string, number | string>,
+  atomId?: string, // 光环系元素分派键（aura=按 atomId 查元素表）
 ) => Promise<{ ok: boolean; reply: string }>
 
 export interface MagicHandle {
@@ -1647,7 +1649,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       let specialReply: string | null = null
       if (atom.special) {
         if (!specialExecutor) return '契约信道未开（执行器未就位），法术未成。'
-        const res = await specialExecutor(atom.special, username, params, vars)
+        const res = await specialExecutor(atom.special, username, params, vars, atom.id)
         if (!res.ok) return res.reply
         specialReply = res.reply
       }
@@ -1805,6 +1807,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         return `魔力不足（耗魔 ${opts.consumeMana}，汝余 ${Math.floor(pstate.mana)}）。法力波动渐渐平息……`
       }
       store.spendMana(username, opts.consumeMana)
+    }
+    // 光环/契约类（2026-08-29 补）：special 原子不走 commands，交给 specialExecutor
+    // 落地（光环引擎启动等）——与 cast() 执行核同构；失败则神迹未成，不进 vfx/记账。
+    if (atom.special) {
+      if (!specialExecutor) return '契约信道未开（执行器未就位），神迹未成。'
+      const res = await specialExecutor(atom.special, username, {}, vars, atom.id)
+      if (!res.ok) return res.reply
     }
     try {
       for (const rawCmd of atom.commands.map((c) => renderCommand(c, vars))) {

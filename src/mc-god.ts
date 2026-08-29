@@ -1446,74 +1446,163 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     return GUARD_NAMES.includes(k) || GUARD_LOGIN_SET.has(k)
   }
 
-  // ── 火焰光环引擎（2026-08-29 造物主谕：三颗小火球绕体旋绕，触敌点燃——萌萌专属）──
-  // 常驻 Map + 400ms tick：每 tick 取施术者坐标、角度推进、3 球粒子刷新（small_flame
-  // 粒子自滞留 ~0.5s，400ms 刷新视觉连续）；隔 tick 碰撞（800ms）：球心 1.4 格内敌对
-  // 点燃（Fire:100≈5s 燃烧，燃烧自带 on_fire 伤害）。90s 自然熄灭；离线连续 3 tick
-  // 失联即散。单服同时最多 3 道光环（RCON 吞吐护栏：每道 ~9 cmd/s）。
-  interface FireAura { login: string; until: number; angle: number; px: number; py: number; pz: number; lastHit: boolean; misses: number }
-  const fireAuras = new Map<string, FireAura>()
-  let fireAuraTimer: ReturnType<typeof setInterval> | null = null
-  const FIRE_AURA_ALLOW = new Set(['MengMeng', 'Kirito']) // Kirito=技能测试位（2026-08-29 验证后撤）
-  const FIRE_AURA_DURATION_MS = 90_000
-  const FIRE_AURA_MAX = 3
-  const FIRE_AURA_DAMAGE_TYPES = 'type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:armor_stand,type=!minecraft:villager,type=!minecraft:iron_golem'
-  function fireAuraTick(): void {
+  // ── 光环系引擎（2026-08-29 造物主谕扩展：火水风土雷吸血治愈迅捷 8 元素家族）──
+  // 三元素球绕体旋绕（400ms tick：Pos 刷新+角度 16.36°/tick≈2.45s/圈+三球粒子）；
+  // 攻击型隔帧碰撞（800ms，球心 1.4 格）：fire=点燃/water=缓滞/wind=径向击退/earth=虚弱
+  // 迟滞/thunder=即时雷伤/vampire=噬敌回体；增益型（heal/speed）不碰撞，每 4s 刷自体
+  // effect。90s 自然熄灭；失联 3 tick 即散；单服上限 3 道；同人重复施法=同元素续满、
+  // 换元素顶替。fire_aura（火焰光环）为萌萌专属（Kirito 测试位），其余七术公开。
+  interface Aura { elem: string; until: number; angle: number; px: number; py: number; pz: number; lastHit: boolean; misses: number; buffs: number }
+  const auras = new Map<string, Aura>()
+  let auraTimer: ReturnType<typeof setInterval> | null = null
+  const AURA_DURATION_MS = 90_000
+  const AURA_MAX = 3
+  const AURA_EXCLUDE = 'type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:armor_stand,type=!minecraft:villager,type=!minecraft:iron_golem'
+  interface AuraSpec {
+    name: string; particle: (x: number, y: number, z: number) => string
+    hit?: (bx: number, by: number, bz: number, a: Aura) => string[] // 攻击型碰撞命令
+    self?: (login: string) => string[] // 增益型自体 buff（每 4s）
+  }
+  const AURA_SPECS: Record<string, AuraSpec> = {
+    fire_aura: {
+      name: '火焰光环',
+      particle: (x, y, z) => `particle minecraft:small_flame ${x} ${y} ${z} 0.04 0.04 0.04 0.001 3`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run data merge entity @e[distance=..1.4,${AURA_EXCLUDE}] {Fire:100}`],
+    },
+    water_aura: {
+      name: '水之光环',
+      particle: (x, y, z) => `particle minecraft:dripping_drip_water ${x} ${y} ${z} 0.06 0.06 0.06 0.001 3`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] slowness 3 2 true`],
+    },
+    wind_aura: {
+      name: '风暴光环',
+      particle: (x, y, z) => `particle minecraft:cloud ${x} ${y} ${z} 0.05 0.05 0.05 0.02 2`,
+      hit: (bx, by, bz, a) => {
+        const dx = bx - a.px, dz = bz - a.pz, r = Math.hypot(dx, dz) || 1
+        const mv = `Motion:[${(dx / r * 1.1).toFixed(2)}d,0.4d,${(dz / r * 1.1).toFixed(2)}d]`
+        return [`execute positioned ${bx} ${by} ${bz} run data merge entity @e[distance=..1.4,${AURA_EXCLUDE}] {${mv}}`]
+      },
+    },
+    earth_aura: {
+      name: '大地光环',
+      particle: (x, y, z) => `particle minecraft:dust{color:[0.55,0.4,0.2],scale:1} ${x} ${y} ${z} 0.08 0.08 0.08 0 3`,
+      hit: (bx, by, bz) => [
+        `execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] weakness 3 1 true`,
+        `execute positioned ${bx} ${by} ${bz} run effect give @e[distance=..1.4,${AURA_EXCLUDE}] slowness 3 1 true`,
+      ],
+    },
+    thunder_aura: {
+      name: '雷光光环',
+      particle: (x, y, z) => `particle minecraft:electric_spark ${x} ${y} ${z} 0.06 0.06 0.06 0.02 4`,
+      hit: (bx, by, bz) => [`execute positioned ${bx} ${by} ${bz} run damage @e[distance=..1.4,${AURA_EXCLUDE}] 3 minecraft:lightning_bolt`],
+    },
+    vampire_aura: {
+      name: '血蚀光环',
+      particle: (x, y, z) => `particle minecraft:soul ${x} ${y} ${z} 0.05 0.05 0.05 0.01 2`,
+      hit: (bx, by, bz) => [
+        `execute positioned ${bx} ${by} ${bz} run damage @e[distance=..1.4,${AURA_EXCLUDE}] 1 minecraft:magic`,
+      ],
+    },
+    heal_aura: {
+      name: '圣愈光环',
+      particle: (x, y, z) => `particle minecraft:happy_villager ${x} ${y} ${z} 0.08 0.08 0.08 0.001 2`,
+      self: (login) => [`effect give ${login} regeneration 6 1 true`],
+    },
+    speed_aura: {
+      name: '迅捷光环',
+      particle: (x, y, z) => `particle minecraft:crit ${x} ${y} ${z} 0.06 0.06 0.06 0.02 2`,
+      self: (login) => [`effect give ${login} speed 6 1 true`, `effect give ${login} jump_boost 6 1 true`],
+    },
+  }
+  // 吸血光环噬血回体：碰撞帧另给主人即时小回血（主人不在 positioned 半径内，单独发）
+  const AURA_CASTER_LEECH: Record<string, (login: string) => string> = {
+    vampire_aura: (login) => `effect give ${login} instant_health 1 0 true`,
+  }
+  // 元素准入：火焰光环=萌萌专属（Kirito 测试位，验证后撤）；其余公开。
+  const AURA_ACCESS: Record<string, Set<string> | null> = {
+    fire_aura: new Set(['MengMeng', 'Kirito']),
+  }
+  const AURA_DENY: Record<string, string> = {
+    fire_aura: '火焰光环只随「萌萌」而燃——这是天神给她的护身之火。',
+  }
+  function auraTick(): void {
     const now = Date.now()
-    for (const [login, aura] of fireAuras) {
+    for (const [login, aura] of auras) {
+      const spec = AURA_SPECS[aura.elem]
+      if (!spec) { auras.delete(login); continue }
       if (now > aura.until) {
-        fireAuras.delete(login)
-        rcon.send(`tellraw ${login} {"text":"✦ 火焰光环缓缓熄灭了","color":"gold"}`).catch(() => {})
-        log(`fire_aura expired for ${login}`)
+        auras.delete(login)
+        rcon.send(`tellraw ${login} {"text":"✦ ${spec.name}缓缓熄灭了","color":"gold"}`).catch(() => {})
+        log(`aura expired: ${aura.elem} for ${login}`)
         continue
       }
-      // 视觉帧：粒子三球（先发粒子再取坐标会用到旧坐标——先定位）
       rcon.send(`data get entity ${login} Pos`).then((raw) => {
         const nums = String(raw).match(/-?\d+(?:\.\d+)?/g)
         if (!nums || nums.length < 3) {
-          if (++aura.misses >= 3) {
-            fireAuras.delete(login)
-            log(`fire_aura lost ${login} (3 misses)`)
-          }
+          if (++aura.misses >= 3) { auras.delete(login); log(`aura lost ${login} (3 misses)`) }
           return
         }
         aura.misses = 0
         aura.px = Number(nums[0]); aura.py = Number(nums[1]); aura.pz = Number(nums[2])
-        aura.angle = (aura.angle + 16.36) % 360 // 400ms·16.36° ≈ 2.45s 一圈
-        const hit = aura.lastHit = !aura.lastHit // 碰撞隔帧：800ms
+        aura.angle = (aura.angle + 16.36) % 360
+        const hit = aura.lastHit = !aura.lastHit // 攻击型隔帧：800ms
         for (let k = 0; k < 3; k++) {
           const rad = ((aura.angle + k * 120) * Math.PI) / 180
           const bx = aura.px + 2.2 * Math.cos(rad)
           const bz = aura.pz + 2.2 * Math.sin(rad)
           const by = aura.py + 1.25
-          rcon.send(`particle minecraft:small_flame ${bx.toFixed(2)} ${by.toFixed(2)} ${bz.toFixed(2)} 0.04 0.04 0.04 0.001 3`).catch(() => {})
-          if (hit) {
-            rcon.send(`execute positioned ${bx.toFixed(2)} ${by.toFixed(2)} ${bz.toFixed(2)} run data merge entity @e[distance=..1.4,${FIRE_AURA_DAMAGE_TYPES}] {Fire:100}`).catch(() => {})
+          const nX = Number(bx.toFixed(2)), nY = Number(by.toFixed(2)), nZ = Number(bz.toFixed(2))
+          rcon.send(spec.particle(nX, nY, nZ)).catch(() => {})
+          if (spec.hit && hit) for (const cmd of spec.hit(nX, nY, nZ, aura)) {
+            rcon.send(cmd).catch(() => {})
           }
         }
+        // 吸血：碰撞帧顺带给主人回血
+        const leech = AURA_CASTER_LEECH[aura.elem]
+        if (leech && hit) rcon.send(leech(login)).catch(() => {})
+        // 增益型：每 4s（10 tick）刷自体 buff
+        if (spec.self && ++aura.buffs % 10 === 1) for (const cmd of spec.self(login)) {
+          rcon.send(cmd).catch(() => {})
+        }
       }).catch(() => {
-        if (++aura.misses >= 3) { fireAuras.delete(login); log(`fire_aura lost ${login} (rcon err)`) }
+        if (++aura.misses >= 3) { auras.delete(login); log(`aura lost ${login} (rcon err)`) }
       })
     }
-    if (fireAuras.size === 0 && fireAuraTimer) {
-      clearInterval(fireAuraTimer); fireAuraTimer = null
-      log('fire_aura engine idle-stopped')
+    if (auras.size === 0 && auraTimer) {
+      clearInterval(auraTimer); auraTimer = null
+      log('aura engine idle-stopped')
     }
   }
-  function startFireAura(login: string, display: string): { ok: boolean; reply: string } {
-    const existing = fireAuras.get(login)
+  function startAura(login: string, elem: string, username: string): { ok: boolean; reply: string } {
+    const spec = AURA_SPECS[elem]
+    if (!spec) return { ok: false, reply: '此法术未通。' }
+    const existing = auras.get(login)
     if (existing) {
-      existing.until = Date.now() + FIRE_AURA_DURATION_MS
-      return { ok: true, reply: '火焰光环仍在你身边旋绕——火焰更旺了些（时长已续满）。' }
+      if (existing.elem === elem) {
+        existing.until = Date.now() + AURA_DURATION_MS
+        return { ok: true, reply: `${spec.name}仍在，时长已续满。` }
+      }
+      auras.delete(login) // 换元素：旧光环散去，新光环升起
+      rcon.send(`tellraw ${login} {"text":"✦ 旧光环散去，${spec.name}升起","color":"yellow"}`).catch(() => {})
     }
-    if (fireAuras.size >= FIRE_AURA_MAX) return { ok: false, reply: '此界火气有限，三道光环已是极限——稍候再燃。' }
-    fireAuras.set(login, { login, until: Date.now() + FIRE_AURA_DURATION_MS, angle: 0, px: 0, py: 0, pz: 0, lastHit: false, misses: 0 })
-    if (!fireAuraTimer) {
-      fireAuraTimer = setInterval(fireAuraTick, 400)
-      log(`fire_aura engine started for ${login}`)
+    if (auras.size >= AURA_MAX) return { ok: false, reply: '此界灵气有限，三道光环已是极限——稍候再燃。' }
+    auras.set(login, { elem, until: Date.now() + AURA_DURATION_MS, angle: 0, px: 0, py: 0, pz: 0, lastHit: false, misses: 0, buffs: 0 })
+    if (!auraTimer) {
+      auraTimer = setInterval(auraTick, 400)
+      log(`aura engine started: ${elem} for ${login}`)
     }
-    worlddb.chronicleRecord('cast', login, { skill: 'fire_aura', via: 'special', for: display })
-    return { ok: true, reply: '三团火苗自你脚下升起，绕着你缓缓旋绕——近身的敌人都将被灼烧！' }
+    worlddb.chronicleRecord('cast', login, { skill: elem, via: 'special', for: username })
+    const lines: Record<string, string> = {
+      fire_aura: '三团火苗自你脚下升起，绕着你缓缓旋绕——近身的敌人都将被灼烧！',
+      water_aura: '三泓清水绕身流转——近敌将陷于迟滞泥沼，举步维艰。',
+      wind_aura: '三道旋风环你而舞——近身的敌人将被远远吹开！',
+      earth_aura: '三块碎石围你沉浮——近敌四肢沉重、臂软无力。',
+      thunder_aura: '三颗电弧绕你疾走——触之者当场吃痛麻痹！',
+      vampire_aura: '三缕血雾缠你游弋——它们噬敌之血，还于你身。',
+      heal_aura: '三点圣光绕你温柔旋转——你的伤口正在慢慢愈合。',
+      speed_aura: '三缕清风推着你的脚步——身轻如燕，健步如飞。',
+    }
+    return { ok: true, reply: lines[elem] ?? `${spec.name}·成。` }
   }
 
   // 契约/魂链法术执行器（2026-08-23）：bind_guard(contract)/寻踪(trace)/唤魂(recall) 三个
@@ -1521,10 +1610,11 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // contract/recall 写 goddess-orders（守卫桥/亲卫自主到场/返程）；trace 是施法者自己去目标身边，
   // 走直接 tp。失败返回 { ok:false }，cast() 据此不扣资源、不白烧魔力/血祭。
   async function execSpecial(
-    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura',
+    special: 'contract' | 'trace' | 'recall' | 'kage_bunshin' | 'fire_aura' | 'aura',
     username: string,
     params: Record<string, number | string>,
     _vars: Record<string, number | string>,
+    atomId = '',
   ): Promise<{ ok: boolean; reply: string }> {
     if (special === 'contract') {
       // 缔结契约 = 召唤侍卫相助（唤魂分支）。守卫只认桐人/鸣人（守卫桥 GUARDS）。
@@ -1643,14 +1733,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       }, 90_000)
       return { ok: true, reply: '影分身之术·成——两身随你而动，见敌即战！分身受创则白烟归体，忍道不灭。' }
     }
-    if (special === 'fire_aura') {
-      // 火焰光环（2026-08-29 造物主谕「三颗小火球绕体转圈碰敌点燃，给萌萌装上」）：
-      // 萌萌专属（Kirito 为技能测试位，验证后撤）——他人咏唱婉拒。
+    if (special === 'aura' || special === 'fire_aura') {
+      // 光环系（2026-08-29 家族化）：元素由 atomId 分派（fire/water/wind/earth/thunder/
+      // vampire/heal/speed 八环）。火焰光环萌萌专属（Kirito 测试位），其余公开。
       const login = resolveLogin(username)
-      if (!FIRE_AURA_ALLOW.has(login)) {
-        return { ok: false, reply: '火焰光环只随「萌萌」而燃——这是天神给她的护身之火。' }
+      const elem = atomId || special // 兼容裸 fire_aura（已不注册，防御）
+      const allow = AURA_ACCESS[elem]
+      if (allow && !allow.has(login)) {
+        return { ok: false, reply: AURA_DENY[elem] ?? '此光环不容你染指。' }
       }
-      return startFireAura(login, username)
+      return startAura(login, elem, username)
     }
     return { ok: false, reply: '此法术未通。' }
   }

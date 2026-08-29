@@ -1677,7 +1677,7 @@
    ],
    "category": "support",
    "school": "魔幻",
-   "special": "fire_aura",
+   "special": "aura",
    "cost": {
     "mana": 40,
     "food": 2,
@@ -1694,6 +1694,216 @@
    ],
    "title": "火焰光环",
    "subtitle": "三昧真火，护体灼敌"
+  },
+  {
+   "id": "water_aura",
+   "layer": "effect",
+   "name": "水之光环",
+   "words": [
+    "水之光环",
+    "水环",
+    "碧水环",
+    "流水护体"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 40,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 3,
+   "commands": [],
+   "reply": "三泓清水绕身流转——近敌将陷于迟滞泥沼。",
+   "particles": [
+    "minecraft:dripping_drip_water {px} {py+1} {pz} 2.2 0.5 2.2 0.01 4"
+   ],
+   "sounds": [
+    "minecraft:entity.player.splash"
+   ],
+   "title": "水之光环",
+   "subtitle": "碧水绕身，泥沼滞敌"
+  },
+  {
+   "id": "wind_aura",
+   "layer": "effect",
+   "name": "风暴光环",
+   "words": [
+    "风暴光环",
+    "风环",
+    "疾风环",
+    "旋风护体"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 45,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 5,
+   "commands": [],
+   "reply": "三道旋风环你而舞——近身的敌人将被远远吹开！",
+   "particles": [
+    "minecraft:cloud {px} {py+1} {pz} 2.2 0.5 2.2 0.03 3"
+   ],
+   "sounds": [
+    "minecraft:item.elytra.flying"
+   ],
+   "title": "风暴光环",
+   "subtitle": "旋风环体，吹敌千步"
+  },
+  {
+   "id": "earth_aura",
+   "layer": "effect",
+   "name": "大地光环",
+   "words": [
+    "大地光环",
+    "土环",
+    "大地护体",
+    "厚土环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 50,
+    "food": 3,
+    "hp": 0
+   },
+   "requiredLevel": 6,
+   "commands": [],
+   "reply": "三块碎石围你沉浮——近敌四肢沉重、臂软无力。",
+   "particles": [
+    "minecraft:dust{color:[0.55,0.4,0.2],scale:1} {px} {py+1} {pz} 2.2 0.5 2.2 0 4"
+   ],
+   "sounds": [
+    "minecraft:block.deepslate.place"
+   ],
+   "title": "大地光环",
+   "subtitle": "厚土沉浮，敌臂力竭"
+  },
+  {
+   "id": "thunder_aura",
+   "layer": "effect",
+   "name": "雷光光环",
+   "words": [
+    "雷光光环",
+    "雷环",
+    "雷电护体",
+    "静电环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 60,
+    "food": 3,
+    "hp": 0
+   },
+   "requiredLevel": 10,
+   "commands": [],
+   "reply": "三颗电弧绕你疾走——触之者当场吃痛麻痹！",
+   "particles": [
+    "minecraft:electric_spark {px} {py+1} {pz} 2.2 0.5 2.2 0.03 5"
+   ],
+   "sounds": [
+    "minecraft:block.lightning_rod.charged"
+   ],
+   "title": "雷光光环",
+   "subtitle": "电弧疾走，触之即痛"
+  },
+  {
+   "id": "vampire_aura",
+   "layer": "effect",
+   "name": "血蚀光环",
+   "words": [
+    "血蚀光环",
+    "血环",
+    "吸血光环",
+    "噬血环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 60,
+    "food": 3,
+    "hp": 0
+   },
+   "requiredLevel": 12,
+   "commands": [],
+   "reply": "三缕血雾缠你游弋——它们噬敌之血，还于你身。",
+   "particles": [
+    "minecraft:soul {px} {py+1} {pz} 2.2 0.5 2.2 0.02 3"
+   ],
+   "sounds": [
+    "minecraft:particle.soul_escape"
+   ],
+   "title": "血蚀光环",
+   "subtitle": "血雾游弋，噬敌还体"
+  },
+  {
+   "id": "heal_aura",
+   "layer": "effect",
+   "name": "圣愈光环",
+   "words": [
+    "圣愈光环",
+    "治愈光环",
+    "圣光环",
+    "回血光环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 55,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 8,
+   "commands": [],
+   "reply": "三点圣光绕你温柔旋转——你的伤口正在慢慢愈合。",
+   "particles": [
+    "minecraft:happy_villager {px} {py+1} {pz} 2.2 0.5 2.2 0.01 3"
+   ],
+   "sounds": [
+    "minecraft:block.beacon.ambient"
+   ],
+   "title": "圣愈光环",
+   "subtitle": "圣光温柔，伤口自愈"
+  },
+  {
+   "id": "speed_aura",
+   "layer": "effect",
+   "name": "迅捷光环",
+   "words": [
+    "迅捷光环",
+    "速度光环",
+    "疾行环",
+    "轻风环"
+   ],
+   "category": "support",
+   "school": "魔幻",
+   "special": "aura",
+   "cost": {
+    "mana": 35,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [],
+   "reply": "三缕清风推着你的脚步——身轻如燕，健步如飞。",
+   "particles": [
+    "minecraft:crit {px} {py+1} {pz} 2.2 0.5 2.2 0.03 3"
+   ],
+   "sounds": [
+    "minecraft:entity.goat.long_jump"
+   ],
+   "title": "迅捷光环",
+   "subtitle": "清风推步，健步如飞"
   }
  ]
 }
