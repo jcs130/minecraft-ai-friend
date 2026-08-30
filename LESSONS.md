@@ -285,3 +285,6 @@
 ## 2026-08-30 mod 鏈嶆€ц兘璇婃柇涓夋澘鏂э紙RoadWeaver 绌洪棽淇矾妗堬級
 
 - **绾跨▼绾у畾浣?*: docker exec top -H -b -n1 鐪嬬嚎绋嬪悕+CPU鈥斺€攎od 鑷湁绾跨▼姹?RW-Worker/RW-CoarseTile)鐩存帴鎸囪鍑舵墜; 涓荤嚎绋?Server thread)闀挎湡>50% 蹇呮湁鐥呫€?- **涓荤嚎绋嬪湪蹇欎粈涔?*: 瀹瑰櫒鏃?jstack 鏃?kill -3 <javapid> 瑙﹀彂 JVM thread dump 杩?docker logs(SIGQUIT 鏃犳崯); 杩炴姄 2-3 娆￠噰鏍锋爤椤垛€斺€斿悓鐐?姝诲惊鐜? 寮傜偣=楂橀閲嶈浇/澶ф椿銆傛湰妗堜緥涓夐噰鏍?gson/RW StructureFileStorage/瀵昏矾鈫掗攣瀹?mod JSON 鎸佷箙鍖?鍚庡彴瑙勫垝銆?- **銆屽嚑浜哄湪绾夸篃鍗°€嶅厛鏌ュ悗鍙?mod 宸ョ▼**: worldgen/淇矾/棰勭敓鎴愮被 mod(RoadWeaver/DistantHorizons)鏈?idleGeneration 鏈哄埗鈥斺€旈厤缃噷鍏虫帀绌洪棽鐢熸垚+鐮嶅崐寰?鍑?worker, CPU 380%鈫?4%銆?- spark profiler 鎶ュ憡鏄?JS 娓叉煋, web_fetch 鎷夸笉鍒扳€斺€旂敤绾跨▼鏍?top 鏇夸唬銆?
+
+## 2026-08-30 涓嬬彮寮€鍏充笌 GPU 浼戞伅
+- presence.ps1 涓€閿紑鍏?瑙掕壊 off/on/status + AI 杩愯惀 ai-off/ai-on); ai-on 鍏?vllm 鍚?qwenpaw(渚濊禆搴?銆?- numen 鍋囩帺瀹惰韩浣撲笉闅忓畧鍗ˉ鏂紑鑷姩鎺夌嚎, 涓嬬嚎蹇呴』 numen_act dismiss銆?- WDDM 妯″紡 nvidia-smi 鐨?utilization 甯?100% 鏄閲忓亣璞♀€斺€旂湅鍔熻€?98W=姝? 250W+=婊¤浇鎺ㄧ悊)鎵嶇湡瀹炪€?- cmd 浼犲琛?powershell here-string 蹇呯偢(鎹㈣琚帇)鈥斺€斿鏉?patch 鐢?python 鏂囦欢鍋氥€?

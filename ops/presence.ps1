@@ -41,6 +41,22 @@ switch ($args[0]) {
         Status
     }
     'status' { Status }
+    'ai-off' {
+        Write-Host '>>> AI 运营下线(QwenPaw 容器栈 + vllm 本地模型)...' -ForegroundColor Yellow
+        docker stop shadow-qwenpaw vllm-qwen38-ara-df2 | ForEach-Object { Write-Host "  stopped: $_" }
+        Write-Host '>>> 完成。GPU 显存释放, 推理归零(司灯/天神分身/亲卫魂挂起待恢复)。' -ForegroundColor Green
+        Status
+    }
+    'ai-on' {
+        Write-Host '>>> AI 运营上线(vllm 先起, QwenPaw 后起)...' -ForegroundColor Yellow
+        docker start vllm-qwen38-ara-df2 | ForEach-Object { Write-Host "  started: $_" }
+        Write-Host '  等 vllm 健康(最多 120s)...'
+        $ok = $false
+        foreach ($i in 1..24) { Start-Sleep 5; $s = docker ps --filter 'name=vllm-qwen38-ara-df2' --format '{{.Status}}'; if ($s -match 'healthy') { $ok = $true; break } }
+        Write-Host ("  vllm health: " + $(if ($ok) { 'ready' } else { 'timeout-继续(容器可能仍在预热)' }))
+        docker start shadow-qwenpaw | ForEach-Object { Write-Host "  started: $_" }
+        Write-Host '>>> 完成。' -ForegroundColor Green
+    }
     default {
         Write-Host '用法: .\ops\presence.ps1 off|on|status'
         Write-Host '  off    全体下线（女神/守卫/灶火村民）'
