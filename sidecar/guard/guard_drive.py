@@ -26,27 +26,34 @@ if not os.environ.get("GUARD_DRIVE_NO_WRAP"):
     except Exception:
         pass
 
-# ---------------- 单实例锁（2026-08-30 RCON 风暴课） ----------------
-# 教训：guard_drive 被绕过 start 脚本手动拉起 → 多实例并存（实测 3 个）→
-# 每实例每分钟对 40+ NPC 发 120-160 条 RCON → 多实例叠加几百条/分钟连接风暴，
-# 拖垮 MC 玩家连接（TIME_WAIT 堆积）。启动时发现已有实例在跑 → 打日志即自杀。
-def _single_instance_guard():
-    try:
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
-             "Where-Object { $_.CommandLine -match 'guard_drive\\.py' "
-             "  -and $_.CommandLine -notmatch 'start_guard_drive' "
-             f" -and $_.ProcessId -ne {os.getpid()} }}).Count"],
-            capture_output=True, text=True, timeout=20)
-        n = int(r.stdout.strip() or "0")
-        if n > 0:
-            print(f"[single-instance] 已有 {n} 个 guard_drive 在跑，本实例(pid={os.getpid()})退出", flush=True)
-            sys.exit(0)
-    except Exception as e:
-        print(f"[single-instance] 检查失败({e})，放行继续", flush=True)
+# ---------------- 单实例锁（2026-08-30 RCON 风暴课·v2 文件锁） ----------------
+# 教训：guard_drive 被多来源拉起（手动/看门狗/健康恢复器），v1 的 CIM 计数锁
+# 在系统满载时 powershell 超时 → fail-open 放行 → 双开 → 每实例每分钟 120-160 条
+# NPC keepalive RCON → 叠加风暴拖垮 MC 玩家登录。
+# v2：独占文件锁（原子，无竞态，无外部依赖）。拿不到锁 = 已有实例 → 退出。
+# 注意：锁只在 main() 里上，import（测试/工具）不触发。
+_LOCK_FP = None
 
-_single_instance_guard()
+
+def _acquire_single_instance_lock():
+    global _LOCK_FP
+    try:
+        import msvcrt
+    except ImportError:
+        return  # 非 Windows 环境不锁
+    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "guard_drive.lock")
+    fp = open(lock_path, "a+")
+    fp.seek(0)  # 锁 [0,1) 固定区域——a+ 初始 position 在末尾，不 seek 会错开
+    try:
+        msvcrt.locking(fp.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        print(f"[single-instance] 锁已被占（guard_drive 已在跑），本实例(pid={os.getpid()})退出", flush=True)
+        sys.exit(0)
+    fp.seek(0)
+    fp.truncate()
+    fp.write(str(os.getpid()))
+    fp.flush()
+    _LOCK_FP = fp  # 持引用到进程退出，锁才不释放
 
 # ---------------- 常量 ----------------
 # 2026-08-21 容器化：硬编码 127.0.0.1 改为 env 可覆盖（独立 guard-drive 容器需连 mc-server/qwenpaw 容器网）
@@ -1890,6 +1897,7 @@ def reflex_loop(g, stop_at):
 
 # ---------------- 主入口 ----------------
 def main():
+    _acquire_single_instance_lock()
     limit = float(os.environ.get("GUARD_MAX_SECONDS", "0") or 0)
     stop_at = time.time() + limit if limit > 0 else 0
     threads = []
