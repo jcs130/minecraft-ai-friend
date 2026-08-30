@@ -211,7 +211,7 @@ public final class TtsQueueWatcher {
             int i0 = (int) pos;
             int i1 = Math.min(i0 + 1, src.length - 1);
             double frac = pos - i0;
-            double v = (src[i0] & 0xFFFF) * (1 - frac) + (src[i1] & 0xFFFF) * frac;
+            double v = src[i0] * (1 - frac) + src[i1] * frac;
             long clamped = Math.round(v);
             if (clamped > Short.MAX_VALUE) clamped = Short.MAX_VALUE;
             if (clamped < Short.MIN_VALUE) clamped = Short.MIN_VALUE;
