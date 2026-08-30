@@ -26,6 +26,11 @@ switch ($args[0]) {
     'off' {
         Write-Host '>>> 角色全体下线…' -ForegroundColor Yellow
         docker stop $ROLE_CONTAINERS_OFF | ForEach-Object { Write-Host "  stopped: $_" }
+        # numen 假玩家身体不随桥断开自动掉线，需显式 dismiss
+        foreach ($b in @("Kirito", "Naruto")) {
+            $out = docker exec shadow-mc rcon-cli "numen_act dismiss $b" 2>$null
+            if ($out -match "dismissed") { Write-Host "  dismissed: $b" }
+        }
         Write-Host '>>> 完成。GPU 推理请求已归零，本地模型歇班。' -ForegroundColor Green
         Status
     }
