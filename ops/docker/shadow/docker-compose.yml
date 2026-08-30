@@ -377,6 +377,10 @@ services:
       TRANSFORMERS_OFFLINE: "1"
     volumes:
       - ./memos-data/api:/data
+    # 2026-08-31 造物主定谳：宿主 memos-deploy 五件套退役，游戏记忆以本栈为唯一权威；
+    # 8002:8000 接管宿主旧端口，宿主侧调用方（守卫桥/QwenPaw MCP）零改动无缝切换。
+    ports:
+      - "8002:8000"
     depends_on:
       memos-neo4j:
         condition: service_healthy
