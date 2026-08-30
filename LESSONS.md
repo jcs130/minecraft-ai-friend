@@ -259,3 +259,15 @@
 ﻿
 - **push 后必看 CI 结论（本轮抓到的流程漏洞）**：上两轮 commit（a9273b4/0f4242f）在 GitHub Actions 上已连续红了两次没人发现——build.py 反斜杠存量红 + aura 词表红，全靠本轮「补单测跑全量」才暴露。纪律：git push 完 30s 后查一次 actions runs（curl api.github.com 即可，gh CLI 未装也能查），红了不许开新工单。
 - **静态源码锚测试的窗口要给注释留余量**：`/matchSpell[\s\S]{0,600}xxx/` 这种「函数内含关键行」的正则，函数头注释一长就顶出窗口假失败——锚窗口一律 1100+，或锚两行紧邻代码而非跨函数头。
+
+
+## 2026-08-30 千灯堂落成（归乡/传送阵/军械库迁址）
+
+- **settlements mod 拦截 item replace**：mod 给所有 chest（setblock 新放的也算）挂 `neoforge:attachments{settlements:chest_waxed}`，`item replace block` 回执无错但 Items 不落盘——静默失败。绕法：**barrel 不受管 + `data merge block` 直写 NBT**（Items 数组全量写回；1.20.5+ 字段 `count` 小写、`Slot:0b`）。补货逻辑同步改造：读全量→缺位补→merge 全量写回。
+- **SNBT 告示牌文字三层转义**：messages 元素=「JSON 字符串形式」的组件。SNBT **单引号串里 `\"` 非法**（Invalid escape），SNBT 双引号串里 `\"` 合法。正确链路：python 字面 → 字节层 `"{\"text\":...}"`（SNBT 双引号串含转义引号）→ 解析成 JSON 字符串。组件 compound 直填（`{text:"..",color:".."}`）会被 data merge 静默吞成空串。`data modify block set value` 对 sign front_text.messages 有效。
+- **RCON 自研客户端必须按 rid 匹配响应**：服务器会插队推送（村民数据等），不做 rid 过滤会把别人的包当本次回执（读告示牌读到「守夜人·烛九」案例）。超时 5s、最多丢 8 包。
+- **armor_stand 落体探地法**（复用 08-21 验证过的）：summon 无 Marker + sleep 2.5s + data get Pos + kill，RCON 4 次一列，比 region 解析快且绝对准。选址千灯村实测 (-540,868) 一带 y=63 平坦（村中心 (-532,854) 本身就是村民建筑）。
+- **自解析 region NBT 三个坑**：根 tag 名长度是 short（2 字节）不是 1 字节（症状：read_nbt 全部成功但返回空 {}）；逐方块解析做选址会因 palette/布局细节出乱图案，此时直接换 Heightmaps.WORLD_SURFACE（long array 直挂 Heightmaps 键下、9bit little-endian、z*16+x 索引）更稳；乱图案先怀疑自己再怀疑地形。
+- **世界重生后坐标断代要全仓清扫**：2026-08-25 世界重生后，TOWN_SPAWN/waypoints/ARMORY/种子默认仍指旧世界 (3094~-3098,-1337~-1342)，萌萌说 2 传到 3800 格外荒地、鸣人床在野外劫持归乡。凡世界重生，grep 全部坐标常量 + 运行中数据文件（waypoints.json 等）双清；「家的地址」类常量要有单一权威（TOWN_SPAWN）。
+- **归乡语义定谳（2026-08-30 造物主谕）**：家=千灯村千灯堂固定落点，废除「有床送床」——村外睡床按原版覆盖重生点，会劫持归乡到野外。个人重生点 spawnpoint 已随迁千灯堂，床语义不再需要。
+
