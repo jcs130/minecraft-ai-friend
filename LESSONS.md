@@ -228,3 +228,11 @@
 - **shadow-mc 的 mods bind-mount 在 ops/docker/shadow/mc/mods**（不是 ops/docker/shadow/mods——那是给 /mods 安装器的），拷错位 jar 不生效、命令报 Incorrect argument。
 - **轮盘（SkillWheelMenu）**：GENERIC_9x1 一行 9 格=8 技能+翻轮；SkillChestMenu 抽出 protected 可变规格构造复用全部点击语义；潜行+右键命格书=轮盘、书页入口=/skillchest self（同为轮盘）、9x3 全面板留给 /skillchest panel。测试 56→70 绿。
 - commit 39c192b，CI 17 绿。
+## 2026-08-30 双端 mod 上服两连击与通用门（Curios/Sophisticated 三件套）
+
+1. **mods 真实挂载路径是 `ops/docker/shadow/mc/mods`**（多一层 `mc`），不是 `ops/docker/shadow/mods`（那是资产提取旧目录）。装 jar 拷错目录=mod 静默不加载，日志无报错只有 give Unknown item——装完必验 `Found mod file ... locator: {mods folder locator at /data/mods}` 与 give 物品双证。
+2. **双端 mod 上服两连击**（现象=Goddess 循环 socketClosed / 服务器侧 Timed out）：①mod 注册 CONFIG 任务→非 NeoForge 客户端协商卡死；②mod 新配方进 declare_recipes→mineflayer protodef 流错位（array size 垃圾值）PLAY 期炸。**根治=两个通用门 mixin**：`ConfigTaskGateForNonNeoForgeMixin`（hook RegisterConfigurationTasksEvent.register，非 NeoForge 连接一律 cancel，require=0+打点）+ `RecipePacketGateForNonNeoForgeMixin`（hook ServerCommonPacketListenerImpl.send，拦 ClientboundUpdateRecipesPacket 对非 NeoForge 不发）。**以后装任何双端 mod 不再需要逐 mod 打补丁**；代价=原版协议客户端（mineflayer bot）无配方书，合成走 RCON。
+3. **cfg/recipe 双门生效后女神化身直连 mc:25599 已通**——gate 边车从 Goddess 链路退役（compose MC_HOST=mc），Taro 等穿越者仍走 gate；gate 的 PLAY 期翻译层在新 mod 包面前有流错位，勿再让主 bot 依赖。
+4. **MC 重启后假玩家不自动重召**：RCON `numen_act summon <owner-UUID> <name>`，owner 用权威 UUID 对（Kirito=0fac6539-844f-4ca7-861f-59cc77242794，Naruto=a4701dac-7077-4452-85c7-2decce8f5efc），给名字会报 bad owner uuid。
+5. **settlementsfix-src/build.py FULL 清单已改 mixin 目录动态全扫**（例外：BubblePublishGuardMixin 依赖 settlements 类不在 cp）——手列清单漏文件的崩循环坑不再复发。
+
