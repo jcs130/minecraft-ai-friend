@@ -34,12 +34,13 @@ FULL = PURE + [
     "dev/god/settlementsfix/chest/SkillWheelMenu.java",
     "dev/god/settlementsfix/chest/SkillChestCommands.java",
 ] + [
-    # mixin 目录全扫（2026-08-30：FULL 手列漏新 mixin 曾致崩循环 ~10 分钟，
-    # pack() 全目录打 class 而编译只编手列——改为动态收集，永不再漏）。
-    # 例外：依赖 settlements mod 类（dev.breezes.*）的 mixin 不在本 cp 里，
-    # 编不了——它们的历史 .class 由 pack() 全目录扫描带进 jar。
-    "dev/god/settlementsfix/mixin/" + f
-    for f in sorted(os.listdir(os.path.join(HERE, "dev/god/settlementsfix/mixin")))
+    # dev/god/settlementsfix 全树 .java 扫描（2026-08-30 两步演进：FULL 手列漏新
+    # mixin 致崩循环 ~10 分钟→当日再改全树——chest/magic/mixin 新目录免登记）。
+    # 例外：依赖 settlements mod 类（dev.breezes.*）的源不在本 cp，编不了——
+    # 其历史 .class 由 pack() 全目录扫描带进 jar。
+    os.path.relpath(os.path.join(root, f), HERE).replace("\\\\", "/")
+    for root, _dirs, files in os.walk(os.path.join(HERE, "dev/god/settlementsfix"))
+    for f in sorted(files)
     if f.endswith(".java") and f not in ("BubblePublishGuardMixin.java",)
 ]
 

@@ -13,6 +13,7 @@
     "BetterCombatConfigTaskGateMixin",
     "ConfigTaskGateForNonNeoForgeMixin",
     "RecipePacketGateForNonNeoForgeMixin",
+    "FlyBootMixin",
     "SkillChestBootMixin",
     "BookDropGuardMixin",
     "BookAutoRestoreMixin",

@@ -236,3 +236,14 @@
 4. **MC 重启后假玩家不自动重召**：RCON `numen_act summon <owner-UUID> <name>`，owner 用权威 UUID 对（Kirito=0fac6539-844f-4ca7-861f-59cc77242794，Naruto=a4701dac-7077-4452-85c7-2decce8f5efc），给名字会报 bad owner uuid。
 5. **settlementsfix-src/build.py FULL 清单已改 mixin 目录动态全扫**（例外：BubblePublishGuardMixin 依赖 settlements 类不在 cp）——手列清单漏文件的崩循环坑不再复发。
 
+
+
+## 2026-08-30 魔法体系三扩展（御空/附魔/被动装备化）+ 循环异常根治
+
+- **守卫魂 LLM 决策循环（照明术每 2s 连放）→ 施法去重闸**：mc-magic `cast()` 加 `castDedupe` 表（player|atomId → 上次执行时间戳），20s 窗口内重复直接婉拒并明说剩余秒数（LLM 读到即停）；heal 保命术窗口收窄 8s（战斗自愈正当）。matchMode 记 `dedupe_deny` 入台账可审计。
+- **list 幽灵双条目根因 = 手动 RCON summon 与守卫桥自动重连撞车**：MC 重启后守卫桥 ~40s 内自动重连召假玩家；此时手动 `numen_act summon` 造出同名第二实体（numen 实体不踢同名）。**纪律：MC 重启后先等 60s 看守卫桥自连，勿手动 summon**。清重：`numen_act dismiss <name>`，守卫桥自会补正典那只。
+- **御空术实现链**：settlementsfix `FlyCommand`（/fly <player> <seconds>，OP）改 abilities.mayfly/flying+onUpdateAbilities()——原版能力包机制，survival 客户端零依赖可飞；到期 daemon 线程收回（server.execute 回主线程），版本戳防重复授予误收；收回前 slow_falling 5s 防高空坠落。注册走 Commands 构造器 TAIL mixin。atoms `sky_walk`：commands=[fly {target} 60]。
+- **被动装备化三层**：①atoms 加 `type:passive`+`passiveId`（夜视之瞳/铁躯/疾风之躯/鱼鳃/火衣）；②skill-events 加 `effect.always:true`（when 占位恒真）；③mc-god `applyPassiveEffects` 支持 always 跳条件——参悟（CLI learn 分支）`unlockPassive` 入册，效果引擎每 tick 续杯（durationSec 40 > poll 30s）。cast 拦截：被动不可咏唱，回复指路参悟。
+- **magic-state 直改盘无效**：store 常驻内存，fs 写盘被内存覆盖/忽略——绕过内存的写入须重启 shadow-world 重载。测被动：改盘→重启→查 active_effects。
+- **1.21 NBT 路径**：玩家药水效果 `active_effects`（snake_case）；abilities 小写（abilities.mayfly）。
+- **mod 侧数据双源四处同步**：/app/data（正本）→ 容器 /mcdata → 宿主 data/ → 宿主 mc-data/（save() 只镜像 magic-state；atoms/skill-events 手动）。

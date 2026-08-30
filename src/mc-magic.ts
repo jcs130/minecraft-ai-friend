@@ -1294,6 +1294,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   // resetBalance 从基准表重载再重放余下补丁。所有方法零 LLM、同步生效。
   const store = new MagicStateStore(config.statePath, config.maxManaDefault, config.regenPerSec)
   let balancePatches: BalancePatch[] = []
+  // 施法去重表（2026-08-30）：key=`player|atomId` → 上次成功执行时间戳。
+  // 守卫魂 LLM 每 tick 决策可能重复咏唱同一法术（照明循环事件），窗口内拒绝。
+  const castDedupe = new Map<string, number>()
   const balancePath = resolve(config.balancePath)
   const applyPatchToAtoms = (p: BalancePatch): boolean => {
     if (p.field === 'regenPerSec') {
@@ -1618,6 +1621,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       return `「${atom.name}」是 ${requiredLevel} 级的秘法，你的魔力层级才 ${liveLevel} 级，强行咏唱只会反噬。挖矿、历练、施法、供奉皆可积攒修为（头顶绿条就是你的修为层级）。`
     }
 
+    // 被动装备化（2026-08-30）：type:passive 不是可施放法术——参悟即装备、常驻生效，
+    // 咏唱拦下并告知（LLM 施法者读到即停，防决策循环）。
+    if ((atom as { type?: string }).type === 'passive') {
+      const learned = pstate.learned.includes(atom.id) || pstate.innateSkill === atom.id
+      return learned
+        ? `「${atom.name}」是被动之体，早已融入你的身躯——无需咏唱，效果常伴。`
+        : `「${atom.name}」是被动之体，参悟（拿到✦技能书 /cli 参悟 ${atom.name}）即永久装备，无需咏唱。`
+    }
+
     // item 参数没解析出来：不 fallback 面包，而是让女神指出不识此物
     if (atom.params?.item && !params.item) {
       return `你想以「${atom.name}」造物，但天神不识此物。已知的可造之物：${Object.keys(GIVE_WHITELIST).join('、')}。换一种说法试试（如「造物赐我熔炉」）。`
@@ -1626,6 +1638,25 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     if (cost.mana > pstate.mana + 0.001) {
       return `你咏唱「${atom.name}」，但魔力不足：需要 ${cost.mana} 点，你只有 ${Math.floor(pstate.mana)} 点。静候片刻待魔力恢复。`
     }
+
+    // 施法去重（2026-08-30 鸣人照明循环事件）：LLM 决策类施法者（守卫魂）可能
+    // 每 tick 重复咏唱同一法术（give 刷屏/魔力空转）。同一玩家同一原子冷却窗内
+    // 直接婉拒，回复里明说剩余秒数——守卫魂读到即可停止再念。
+    // 保命术（heal）窗口放窄到 8s：战斗中反复自愈是正当需求。
+    const castDedupeMs = atom.id === 'heal' ? 8000 : 20000
+    const dedupeKey = `${username}|${atom.id}`
+    const lastCastAt = castDedupe.get(dedupeKey) ?? 0
+    const elapsed = Date.now() - lastCastAt
+    if (elapsed > 0 && elapsed < castDedupeMs) {
+      const waitSec = Math.ceil((castDedupeMs - elapsed) / 1000)
+      appendSkillUsage({
+        ts: new Date().toISOString(), player: username, atom: atom.id, chant: body.slice(0, 120),
+        mana: 0, food: 0, hp: 0, manaLeft: Math.floor(pstate.mana), maxMana: pstate.maxMana, level: pstate.level,
+        matchMode: 'dedupe_deny', tokens: 0, latencyMs: 0, success: false, result: `cooldown ${waitSec}s`,
+      })
+      return `「${atom.name}」方才已施过，余韵未散——约 ${waitSec} 秒后再念。`
+    }
+    castDedupe.set(dedupeKey, Date.now())
 
     // 逆转化（cost.mana < 0，燃血/炼食换魔）：魔力盈满时拒绝——白白的牺牲。
     if (cost.mana < 0 && pstate.mana >= pstate.maxMana - 0.001) {

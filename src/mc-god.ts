@@ -2077,6 +2077,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         magic.learnViaAdvancement(subject, atom.id)
         worlddb.chronicleRecord('cast', subject, { skill: 'learn', atom: atom.id, via: 'skillbook' })
+        // 被动装备化（2026-08-30 造物主钦点）：type:passive 的法术参悟即装备——
+        // 写 passives，效果引擎自动续杯（夜视/铁躯/疾风/鱼鳃/火衣），无需施放。
+        const passiveId = (atom as { type?: string; passiveId?: string }).passiveId
+        if ((atom as { type?: string }).type === 'passive' && passiveId) {
+          magic.unlockPassive(subject, passiveId)
+          worlddb.chronicleRecord('skill', subject, { passive: passiveId, via: 'learn' })
+          reply(`[信使] 参悟成功——「${atom.name}」已融入你的身躯（被动·永久装备）：不用施放，效果常伴。`)
+          return
+        }
         reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
         return
       }
@@ -3108,7 +3117,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const key = `${name}|${def.id}`
       const when = eff.when ?? def.trigger
       const v = metricValue(name, when.metric)
-      const hit = v !== null && condHit(v, when.op, when.threshold)
+      // 装备化被动（2026-08-30）：always=true 跳过条件判定——参悟即装备，
+      // 效果引擎无条件续杯（夜视/铁躯/疾风/鱼鳃/火衣；when 只作占位不参与）。
+      const hit = (eff as { always?: boolean }).always === true
+        || (v !== null && condHit(v, when.op, when.threshold))
       const prev = passiveActive.get(key) ?? false
       if (hit) {
         const dur = Math.max(5, Math.floor(eff.durationSec ?? 25))

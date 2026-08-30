@@ -2013,6 +2013,311 @@
    "title": "迅捷光环",
    "subtitle": "清风推步，健步如飞",
    "icon": "minecraft:rabbit_foot"
+  },
+  {
+   "id": "take_root",
+   "layer": "effect",
+   "name": "落脚",
+   "words": [
+    "落脚"
+   ],
+   "cost": {
+    "mana": 5,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 1,
+   "commands": [
+    "effect give {target} minecraft:resistance 20 0 true",
+    "effect give {target} minecraft:saturation 5 0 true",
+    "particle minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40",
+    "playsound minecraft:block.stone.hit master {target}"
+   ],
+   "reply": "二十一次跌倒，脚底仍记得土。落脚了，就不算漂着。",
+   "particles": [
+    "minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40"
+   ],
+   "sounds": [
+    "minecraft:block.stone.hit"
+   ],
+   "title": "落脚",
+   "subtitle": "二十一次跌倒之后，脚底终于记住土",
+   "lore": "无名行者坠身廿一次，魂魄每次散尽又归。女神不给他新刃，只给一寸定住的土——落脚，是漂泊者唯一的疆域。"
+  },
+  {
+   "id": "sky_walk",
+   "layer": "effect",
+   "name": "御空术",
+   "words": [
+    "御空",
+    "御空术",
+    "飞行",
+    "飞起来",
+    "我要飞",
+    "飞上天",
+    "凌空"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 2,
+    "hp": 0
+   },
+   "requiredLevel": 3,
+   "commands": [
+    "fly {target} 60"
+   ],
+   "reply": "风承托起你的身体——六十息之内，天空任你行走。将落之时自会缓降，莫怕。",
+   "particles": [
+    "minecraft:cloud {px} {py+1} {pz} 0.6 0.4 0.6 0.02 25",
+    "minecraft:end_rod {px} {py+2} {pz} 0.4 0.4 0.4 0.03 15"
+   ],
+   "sounds": [
+    "minecraft:item.elytra.flying"
+   ],
+   "title": "御空术",
+   "subtitle": "风起之时，天地皆路",
+   "icon": "minecraft:feather"
+  },
+  {
+   "id": "enchant_fire",
+   "layer": "effect",
+   "name": "附魔·焰",
+   "words": [
+    "附魔火焰",
+    "附魔焰",
+    "火焰附魔",
+    "附火之刃",
+    "武器附火"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "enchant {target} minecraft:fire_aspect 2"
+   ],
+   "reply": "烈焰缠上了你的武器——此后每一击，都带着灼烧之痛。须手持武器施术。",
+   "particles": [
+    "minecraft:flame {px} {py+1.5} {pz} 0.4 0.4 0.4 0.03 20"
+   ],
+   "sounds": [
+    "minecraft:block.fire.ambient"
+   ],
+   "title": "附魔·焰",
+   "subtitle": "刃上生火",
+   "icon": "minecraft:blaze_rod"
+  },
+  {
+   "id": "enchant_sharp",
+   "layer": "effect",
+   "name": "附魔·锋",
+   "words": [
+    "附魔锋利",
+    "附魔锋",
+    "锋利附魔",
+    "磨刀",
+    "利刃"
+   ],
+   "cost": {
+    "mana": 15,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "enchant {target} minecraft:sharpness 3"
+   ],
+   "reply": "武器锋芒毕露——攻击将造成更深的创伤。须手持武器施术。",
+   "particles": [
+    "minecraft:crit {px} {py+1.5} {pz} 0.4 0.4 0.4 0.05 18"
+   ],
+   "sounds": [
+    "minecraft:block.anvil.use"
+   ],
+   "title": "附魔·锋",
+   "subtitle": "吹毛断发",
+   "icon": "minecraft:flint"
+  },
+  {
+   "id": "enchant_knock",
+   "layer": "effect",
+   "name": "附魔·退",
+   "words": [
+    "附魔击退",
+    "附魔退",
+    "击退附魔",
+    "震荡之刃"
+   ],
+   "cost": {
+    "mana": 12,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "enchant {target} minecraft:knockback 2"
+   ],
+   "reply": "武器附上了震退之力——一击之下，敌自远去。须手持武器施术。",
+   "particles": [
+    "minecraft:poof {px} {py+1.5} {pz} 0.4 0.4 0.4 0.05 15"
+   ],
+   "sounds": [
+    "minecraft:entity.generic.explode"
+   ],
+   "title": "附魔·退",
+   "subtitle": "触之即退",
+   "icon": "minecraft:piston"
+  },
+  {
+   "id": "enchant_loot",
+   "layer": "effect",
+   "name": "附魔·夺",
+   "words": [
+    "附魔抢夺",
+    "附魔夺",
+    "抢夺附魔",
+    "丰收之刃"
+   ],
+   "cost": {
+    "mana": 18,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 3,
+   "commands": [
+    "enchant {target} minecraft:looting 3"
+   ],
+   "reply": "武器学会了贪婪——击杀之时，战利品更加丰饶。须手持武器施术。",
+   "particles": [
+    "minecraft:happy_villager {px} {py+1.5} {pz} 0.4 0.4 0.4 0.05 15"
+   ],
+   "sounds": [
+    "minecraft:entity.villager.celebrate"
+   ],
+   "title": "附魔·夺",
+   "subtitle": "战有所获",
+   "icon": "minecraft:emerald"
+  },
+  {
+   "id": "night_eye",
+   "layer": "effect",
+   "name": "夜视之瞳",
+   "type": "passive",
+   "passiveId": "night_vision",
+   "words": [
+    "夜视",
+    "夜视之瞳",
+    "夜猫眼",
+    "暗夜视物"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [],
+   "reply": "",
+   "title": "夜视之瞳",
+   "subtitle": "永夜如昼（被动·装备即生效）",
+   "icon": "minecraft:ender_eye"
+  },
+  {
+   "id": "iron_body",
+   "layer": "effect",
+   "name": "铁躯",
+   "type": "passive",
+   "passiveId": "resistance",
+   "words": [
+    "铁躯",
+    "铁肤",
+    "刚体",
+    "铁骨"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 3,
+   "commands": [],
+   "reply": "",
+   "title": "铁躯",
+   "subtitle": "身如铁铸（被动·装备即生效）",
+   "icon": "minecraft:iron_ingot"
+  },
+  {
+   "id": "gale_body",
+   "layer": "effect",
+   "name": "疾风之躯",
+   "type": "passive",
+   "passiveId": "speed",
+   "words": [
+    "疾风之躯",
+    "疾行",
+    "风行"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [],
+   "reply": "",
+   "title": "疾风之躯",
+   "subtitle": "步履生风（被动·装备即生效）",
+   "icon": "minecraft:sugar"
+  },
+  {
+   "id": "fish_gill",
+   "layer": "effect",
+   "name": "鱼鳃",
+   "type": "passive",
+   "passiveId": "water_breathing",
+   "words": [
+    "鱼鳃",
+    "水下呼吸",
+    "深潜",
+    "水中呼吸"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [],
+   "reply": "",
+   "title": "鱼鳃",
+   "subtitle": "如鱼得水（被动·装备即生效）",
+   "icon": "minecraft:cod"
+  },
+  {
+   "id": "fire_veil",
+   "layer": "effect",
+   "name": "火衣",
+   "type": "passive",
+   "passiveId": "fire_resistance",
+   "words": [
+    "火衣",
+    "防火",
+    "耐火",
+    "抗火"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 3,
+   "commands": [],
+   "reply": "",
+   "title": "火衣",
+   "subtitle": "烈焰不侵（被动·装备即生效）",
+   "icon": "minecraft:magma_cream"
   }
  ]
 }
