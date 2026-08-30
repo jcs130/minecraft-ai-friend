@@ -38,7 +38,7 @@ FULL = PURE + [
     # mixin 致崩循环 ~10 分钟→当日再改全树——chest/magic/mixin 新目录免登记）。
     # 例外：依赖 settlements mod 类（dev.breezes.*）的源不在本 cp，编不了——
     # 其历史 .class 由 pack() 全目录扫描带进 jar。
-    os.path.relpath(os.path.join(root, f), HERE).replace("\\\\", "/")
+    os.path.relpath(os.path.join(root, f), HERE).replace(os.sep, "/")
     for root, _dirs, files in os.walk(os.path.join(HERE, "dev/god/settlementsfix"))
     for f in sorted(files)
     if f.endswith(".java") and f not in ("BubblePublishGuardMixin.java",)

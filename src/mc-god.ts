@@ -3,6 +3,12 @@ import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
+import {
+  GUARD_FOLLOW_SPEC as guardFollowSpec,
+  GUARD_FOLLOW_TARGET,
+  GUARD_FOLLOW_UUID,
+  decideGuardFollow,
+} from './guard-follow.mjs'
 import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
@@ -1370,6 +1376,34 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           await ensureLearnedBooks(name).catch((err: unknown) => log(`learnedbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
         }
       } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
+    })()
+  }, 60_000)
+
+  // 护花双卫（2026-08-30 造物主谕「萌萌上线之后让桐人或者鸣人跟随她」）：
+  // 决策逻辑抽为纯函数 src/guard-follow.mjs（tests/js/guard-follow.test.mjs 运行时覆盖）。
+  // 萌萌在线 → 每 60s 核对双卫任务，空闲即补发 follow；守卫在忙绝不打断；萌萌离线
+  // 不干预（follow 由服务端按目标离开世界自动了断，守卫恢复自由，零清理）。
+  // 实测（2026-08-30）：numen_act invoke <guard> follow {"entity_uuid":...,"distance":n}
+  // 受理为常驻任务（standing:true），跨重启重放（任务记录钉 entity_uuid）。
+  const GUARD_FOLLOW_SPEC = guardFollowSpec
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        const online = new Set(tail.split(',').map((s) => s.trim()))
+        const taskByGuard: Record<string, string> = {}
+        for (const g of GUARD_FOLLOW_SPEC) {
+          if (!online.has(g.name)) continue
+          const stRaw = await rcon.send(`numen_act invoke ${g.name} task_status {}`).catch(() => '')
+          try { taskByGuard[g.name] = (JSON.parse(stRaw) as { data?: { task?: string } })?.data?.task ?? '' } catch { taskByGuard[g.name] = '' }
+        }
+        for (const g of decideGuardFollow(online, taskByGuard)) {
+          const invoke = `numen_act invoke ${g.name} follow {"entity_uuid":"${GUARD_FOLLOW_UUID}","distance":${g.distance}}`
+          const r = await rcon.send(invoke).catch((e: unknown) => `ERR ${e instanceof Error ? e.message : String(e)}`)
+          log(`guard-follow heal: ${g.name} idle -> follow ${GUARD_FOLLOW_TARGET} (${String(r).slice(0, 80)})`)
+        }
+      } catch { /* RCON 未就绪：下轮再试 */ }
     })()
   }, 60_000)
 
@@ -3814,6 +3848,19 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         return
       }
       worlddb.chronicleRecord('presence', username, { event: 'join' })
+      // 护花双卫即时触发（2026-08-30）：萌萌上线 → 15s 后（等她加载稳）给双守卫下
+      // follow 常驻任务。守卫若在忙正事会被 60s sweep 兜底补上；萌萌离线任务自动了断。
+      if (username === GUARD_FOLLOW_TARGET) {
+        setTimeout(() => {
+          void (async () => {
+            for (const g of GUARD_FOLLOW_SPEC) {
+              const invoke = `numen_act invoke ${g.name} follow {"entity_uuid":"${GUARD_FOLLOW_UUID}","distance":${g.distance}}`
+              const r = await rcon.send(invoke).catch((e: unknown) => `ERR ${e instanceof Error ? e.message : String(e)}`)
+              log(`guard-follow on-join: ${g.name} -> ${GUARD_FOLLOW_TARGET} (${String(r).slice(0, 80)})`)
+            }
+          })()
+        }, 15_000)
+      }
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))

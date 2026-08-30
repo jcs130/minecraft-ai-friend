@@ -1,0 +1,27 @@
+{
+  "comment": "守卫本尊皮肤档案（2026-08-30 造物主谕：桐人/鸣人穿各自动漫皮肤，客户端可见）。value/signature 为 Mojang 签名的 textures 属性对（Mineskin 上传 64x64 原图生成，纹理挂 textures.minecraft.net 公网域，客户端零配置可达）。重新应用（RCON 长命令须走 B 仓自研 rcon.ts；参数须双引号包裹——brigadier string() 不吃裸 base64 的 /= 字符）：numen_act skin <name> \"<value>\" \"<signature>\"。数据另存 numen CompanionRegistry（世界存档 numen_companions.dat），重启/休眠/重召不过期。附件: ops/guard-skins/ 下 value/signature txt 与 64x64 原图 png。",
+  "target_follow": {
+    "player": "MengMeng",
+    "uuid": "1949104d-60e2-3a33-9bfe-d2e897b60dfb"
+  },
+  "skins": {
+    "Kirito": {
+      "source": "mcskins.top/skin/kirito (64x64, dl n=726)",
+      "url": "https://textures.minecraft.net/texture/3daa324a5872bd8dec189ceb2db213e00537facbe588d5b1a7a85d0e34533f6",
+      "value_file": "ops/guard-skins/kirito_value.txt",
+      "signature_file": "ops/guard-skins/kirito_sig.txt",
+      "png": "ops/guard-skins/kirito_726.png",
+      "applied": "2026-08-30",
+      "applied_result": "skin set for Kirito|body_refreshed"
+    },
+    "Naruto": {
+      "source": "mcskins.top/skin/narutouzumaki (64x64, dl n=748)",
+      "url": "https://textures.minecraft.net/texture/e5fe33c4101093cbd1eb0b961b25b9c3990726f1b7f23f3578dc3f1b6e31b296",
+      "value_file": "ops/guard-skins/naruto_value.txt",
+      "signature_file": "ops/guard-skins/naruto_sig.txt",
+      "png": "ops/guard-skins/naruto_748.png",
+      "applied": "2026-08-30",
+      "applied_result": "skin set for Naruto|body_refreshed"
+    }
+  }
+}

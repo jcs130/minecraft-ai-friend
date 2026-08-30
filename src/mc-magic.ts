@@ -650,12 +650,20 @@ function extractTaskText(s: string, stripGuard: boolean, spellWords: string[] = 
 
 // ── 匹配 / 参数 / 消耗 ─────────────────────────────────────────────────
 function matchSpell(chant: string, atoms: Atom[]): { atom: Atom; params: Record<string, number | string> } | null {
+  // 2026-08-30：词长优先——短词常是长咒子串（『闪电』⊂『附魔闪电链』），首中即返
+  // 会截胡长咒。全量收候选，最长命中词者胜；平词长保持 atoms 文件序（稳定）。
+  // 2026-08-30 之二：跳过 type:passive——被动装备系（夜视之瞳/铁躯/鱼鳃/火衣）不经
+  // 咏唱匹配（参悟走 CLI learn 分支）。否则被动词撞咏唱版（『夜视』『铁肤』『鱼鳃』
+  // 『防火』）时，文件序在前的被动会抢走匹配，cast 层再拦就变成「明明有咏唱版却不给放」。
+  let best: { atom: Atom; params: Record<string, number | string>; len: number } | null = null
   for (const atom of atoms) {
-    if (atom.words.some((w) => chant.includes(w))) {
-      return { atom, params: extractParams(chant, atom) }
-    }
+    if ((atom as { type?: string }).type === 'passive') continue
+    let hitLen = 0
+    for (const w of atom.words) if (chant.includes(w) && w.length > hitLen) hitLen = w.length
+    if (hitLen === 0) continue
+    if (!best || hitLen > best.len) best = { atom, params: extractParams(chant, atom), len: hitLen }
   }
-  return null
+  return best
 }
 
 // ── 咒语向量兜底（2026-08-20 起）：严格匹配失败 → bge-m3 语义近邻 ──
