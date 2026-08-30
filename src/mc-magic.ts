@@ -377,6 +377,9 @@ export const GIVE_WHITELIST: Record<string, string> = {
   '皮革': 'leather', '燧石': 'flint', '骨粉': 'bone_meal', '砖块': 'brick',
   '铁轨': 'rail', '雪球': 'snowball', '花盆': 'flower_pot', '画': 'painting',
   '音符盒': 'note_block', '红石': 'redstone',
+  // 收纳（2026-08-30 造物主谕「背包不够用了」）：Sophisticated Backpacks 已在服。
+  // 注意「背包」⊂「大背包」——extractItem 已改最长匹配，防截胡。
+  '背包': 'sophisticatedbackpacks:backpack', '大背包': 'sophisticatedbackpacks:iron_backpack',
 }
 
 /**
@@ -395,6 +398,7 @@ export const GIVE_DEFAULT_COUNT: Record<string, number> = {
   arrow: 8, torch: 4, lantern: 2, paper: 8, book: 2, ink_sac: 4, feather: 4,
   string: 4, leather: 4, flint: 4, bone_meal: 8, brick: 8, rail: 8,
   snowball: 8, redstone: 8,
+  'sophisticatedbackpacks:backpack': 1, 'sophisticatedbackpacks:iron_backpack': 1,
 }
 
 const DEFAULT_ATOMS: Atom[] = [
@@ -616,10 +620,13 @@ function extractDirection(s: string): string | null {
 }
 
 function extractItem(s: string): string | null {
+  // 2026-08-30 最长匹配：短词常是长咒子串（『背包』⊂『大背包』），顺序遍历会
+  // 截胡——与 matchSpell 词长优先同病同治。平词长保持表序（稳定）。
+  let best: { en: string; len: number } | null = null
   for (const [cn, en] of Object.entries(GIVE_WHITELIST)) {
-    if (s.includes(cn)) return en
+    if (s.includes(cn) && cn.length > (best?.len ?? 0)) best = { en, len: cn.length }
   }
-  return null
+  return best?.en ?? null
 }
 
 // 守卫名候选词（契约/唤魂法术参数解析用，2026-08-23）。守卫只认桐人/鸣人——
