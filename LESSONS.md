@@ -256,3 +256,6 @@
 - **mods 目录挂载双视图**：宿主 `mc\mods` 同时挂容器 `/mods` 与 `/data/mods`（/data 挂 mc 整目录）——宿主改 = 容器生效，无需 docker cp；`.bak-*` 后缀的旧 jar 不会被 NeoForge 加载（非 .jar 结尾），备份直接改名留在现场即可。
 - **皮肤档案归仓**：value/sig/原图 png 归档 `ops/guard-skins/` + 清单 `ops/guard-skins.json`（data/ 被 gitignore 不入册）；重应用命令与坑写在 comment 里。Mojang textures JSON 官方 URL 是 `http://` 前缀（客户端两种 scheme 都认）——断言比较须归一化。
 - **护花双卫决策抽纯函数**：`src/guard-follow.mjs`（decideGuardFollow + 常量）——mc-god.ts 的 60s sweep 与 playerJoined 即时触发共用；测试 `tests/js/guard-follow.test.mjs` 直接 import 运行时断言（node --test 原生跑 mjs，无需 tsx loader），接线处再以源码锚防误删。TS 侧 import .mjs 用 esbuild/tsx 都正常解析（无类型按 any）。
+﻿
+- **push 后必看 CI 结论（本轮抓到的流程漏洞）**：上两轮 commit（a9273b4/0f4242f）在 GitHub Actions 上已连续红了两次没人发现——build.py 反斜杠存量红 + aura 词表红，全靠本轮「补单测跑全量」才暴露。纪律：git push 完 30s 后查一次 actions runs（curl api.github.com 即可，gh CLI 未装也能查），红了不许开新工单。
+- **静态源码锚测试的窗口要给注释留余量**：`/matchSpell[\s\S]{0,600}xxx/` 这种「函数内含关键行」的正则，函数头注释一长就顶出窗口假失败——锚窗口一律 1100+，或锚两行紧邻代码而非跨函数头。
