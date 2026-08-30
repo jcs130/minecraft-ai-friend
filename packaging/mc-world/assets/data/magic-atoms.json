@@ -1114,37 +1114,37 @@
     {
      "delayMs": 150,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 300,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 450,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 600,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 750,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 900,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
      ]
     },
     {
@@ -1345,8 +1345,8 @@
    },
    "requiredLevel": 6,
    "commands": [
-    "execute at {target} run effect give @e[distance=..6,type=#minecraft:monster] minecraft:slowness 12 4",
-    "execute at {target} run damage @e[distance=..6,type=#minecraft:monster] 4 minecraft:freeze"
+    "execute at {target} run effect give @e[distance=..6,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] minecraft:slowness 12 4",
+    "execute at {target} run damage @e[distance=..6,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] 4 minecraft:freeze"
    ],
    "reply": "寒气以你为中心炸开，方圆六格凝霜滞缓！",
    "particles": [
@@ -1382,8 +1382,8 @@
    },
    "requiredLevel": 10,
    "commands": [
-    "execute at {target} as @e[sort=nearest,limit=3,distance=..14,type=#minecraft:monster] at @s run summon minecraft:lightning_bolt ~ ~ ~",
-    "execute at {target} as @e[sort=nearest,limit=3,distance=..14,type=#minecraft:monster] run damage @s 6 minecraft:magic"
+    "execute at {target} as @e[sort=nearest,limit=3,distance=..14,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] at @s run summon minecraft:lightning_bolt ~ ~ ~",
+    "execute at {target} as @e[sort=nearest,limit=3,distance=..14,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] run damage @s 6 minecraft:magic"
    ],
    "reply": "雷光自你掌心跃出，在最近的三只活物间连缀成链！",
    "particles": [
@@ -1415,7 +1415,7 @@
    },
    "requiredLevel": 15,
    "commands": [
-    "execute at {target} run damage @e[distance=..5,type=#minecraft:monster] 11 minecraft:player_attack",
+    "execute at {target} run damage @e[distance=..5,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] 11 minecraft:player_attack",
     "execute at {target} run particle minecraft:sweep_attack {px} {py+1} {pz} 2.2 0.6 2.2 0 12"
    ],
    "reply": "十六连斩！剑气化作星爆，将身周四散的敌人尽数撕裂！",
@@ -1450,8 +1450,8 @@
    },
    "requiredLevel": 8,
    "commands": [
-    "execute at {target} run effect give @e[distance=..6,type=#minecraft:monster] minecraft:poison 10 1",
-    "execute at {target} run effect give @e[distance=..6,type=#minecraft:monster] minecraft:nausea 10 1"
+    "execute at {target} run effect give @e[distance=..6,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] minecraft:poison 10 1",
+    "execute at {target} run effect give @e[distance=..6,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] minecraft:nausea 10 1"
    ],
    "reply": "紫黑色的瘴气自你脚下漫开，范围内的活物尽数中毒！",
    "particles": [
@@ -1688,7 +1688,7 @@
    },
    "requiredLevel": 3,
    "commands": [
-    "execute at {target} run effect give @e[distance=..24,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame] minecraft:glowing 15 1"
+    "execute at {target} run effect give @e[distance=..24,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:armor_stand,type=!minecraft:painting,type=!minecraft:interaction,type=!minecraft:experience_orb,type=!minecraft:breeze_wind_charge,type=!minecraft:villager,type=!settlements:base_villager,type=!minecraft:wandering_trader,type=!minecraft:wolf,type=!minecraft:cat,type=!minecraft:horse,type=!minecraft:donkey,type=!minecraft:mule,type=!minecraft:camel,type=!minecraft:llama,type=!minecraft:trader_llama,type=!minecraft:cow,type=!minecraft:sheep,type=!minecraft:pig,type=!minecraft:chicken,type=!minecraft:rabbit,type=!minecraft:fox,type=!minecraft:goat,type=!minecraft:bee,type=!minecraft:parrot,type=!minecraft:bat,type=!minecraft:allay,type=!minecraft:squid,type=!minecraft:dolphin,type=!minecraft:turtle,type=!minecraft:frog,type=!minecraft:axolotl,type=!minecraft:iron_golem,type=!minecraft:snow_golem] minecraft:glowing 15 1"
    ],
    "reply": "心眼开启——方圆二十四格内的一切活物都泛起了轮廓光。",
    "particles": [
