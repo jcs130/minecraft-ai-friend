@@ -1481,14 +1481,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const out = await rcon.send(`playsound ${s} master ${target} ${vars.px} ${vars.py} ${vars.pz} 1 1`)
       if (out) log(`vfx sound[${s}] -> ${out.trim()}`)
     }
-    // 大字咏唱词 + 副标题（金色主标题 / 黄色副标题）
-    if (atom.title) {
-      const t = renderCommand(atom.title, vars)
-      await rcon.send(`title ${target} title ${JSON.stringify({ text: t, color: 'gold', bold: true })}`)
-    }
-    if (atom.subtitle) {
-      const st = renderCommand(atom.subtitle, vars)
-      await rcon.send(`title ${target} subtitle ${JSON.stringify({ text: st, color: 'yellow' })}`)
+    // 咏唱词显示（2026-08-30 造物主反馈「字太大挡视线」）：
+    // 弃用全屏大字 title/subtitle，改 actionbar 小字（物品栏上方一行）——不挡视线。
+    if (atom.title || atom.subtitle) {
+      const t = atom.title ? renderCommand(atom.title, vars) : ''
+      const st = atom.subtitle ? renderCommand(atom.subtitle, vars) : ''
+      const line = t && st ? `✦ ${t} · ${st}` : (t || st)
+      await rcon.send(`title ${target} actionbar ${JSON.stringify({ text: `✦ ${line.replace(/^✦ /, '')}`, color: 'gold', bold: true })}`)
     }
   }
 

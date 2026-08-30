@@ -1,32 +1,6 @@
 {
  "atoms": [
   {
-   "id": "appraise",
-   "layer": "effect",
-   "name": "鉴定",
-   "words": [
-    "鉴定",
-    "鉴定自身",
-    "鉴定能力",
-    "审视己身",
-    "appraise"
-   ],
-   "cost": {
-    "mana": 2,
-    "food": 0,
-    "hp": 0
-   },
-   "requiredLevel": 1,
-   "commands": [],
-   "reply": "",
-   "sounds": [
-    "minecraft:block.enchantment_table.use"
-   ],
-   "title": "鉴定",
-   "subtitle": "女神之眼，烛照己身",
-   "icon": "minecraft:spyglass"
-  },
-  {
    "id": "home",
    "layer": "effect",
    "name": "归乡",
@@ -486,11 +460,11 @@
     "雷击"
    ],
    "cost": {
-    "mana": 80,
+    "mana": 65,
     "food": 0,
     "hp": 15
    },
-   "requiredLevel": 25,
+   "requiredLevel": 15,
    "commands": [
     "summon minecraft:lightning_bolt {tx} {ty} {tz}"
    ],
@@ -899,11 +873,11 @@
     "召唤马"
    ],
    "cost": {
-    "mana": 50,
+    "mana": 35,
     "food": 6,
     "hp": 0
    },
-   "requiredLevel": 12,
+   "requiredLevel": 6,
    "commands": [
     "summon minecraft:horse {px+2} {py} {pz} {Tame:1b,SaddleItem:{id:\"minecraft:saddle\",count:1}}"
    ],
@@ -960,11 +934,11 @@
     "驱魔"
    ],
    "cost": {
-    "mana": 50,
+    "mana": 35,
     "food": 0,
     "hp": 3
    },
-   "requiredLevel": 18,
+   "requiredLevel": 10,
    "commands": [
     "kill @e[type=minecraft:zombie,distance=..10]",
     "kill @e[type=minecraft:husk,distance=..10]",
@@ -1036,7 +1010,7 @@
     "food": 4,
     "hp": 0
    },
-   "requiredLevel": 15,
+   "requiredLevel": 8,
    "ownLimit": {
     "entity": "minecraft:wolf",
     "range": 96,
@@ -1073,7 +1047,7 @@
     "food": 6,
     "hp": 0
    },
-   "requiredLevel": 25,
+   "requiredLevel": 12,
    "commands": [
     "summon minecraft:donkey {px+2} {py} {pz} {Tame:1b,ChestedHorse:1b,SaddleItem:{id:\"minecraft:saddle\",count:1},PersistenceRequired:1b,CustomName:{text:\"驭兽\",color:\"gray\"}}"
    ],
@@ -1233,37 +1207,6 @@
    "icon": "minecraft:sea_lantern"
   },
   {
-   "id": "will_walk",
-   "layer": "effect",
-   "name": "意行",
-   "words": [
-    "意行"
-   ],
-   "cost": {
-    "mana": 25,
-    "food": 2,
-    "hp": 0
-   },
-   "requiredLevel": 3,
-   "commands": [
-    "effect give {target} minecraft:speed 30 1 true",
-    "effect give {target} minecraft:haste 30 1 true",
-    "particle minecraft:flame {px} {py+1} {pz} 0.4 0.5 0.4 0.05 60",
-    "playsound minecraft:entity.player.levelup master {target}"
-   ],
-   "reply": "身断处，意先行。你替自己走剩下的路。",
-   "particles": [
-    "minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40"
-   ],
-   "sounds": [
-    "minecraft:entity.enderman.teleport"
-   ],
-   "title": "意行",
-   "subtitle": "身断处，意先行",
-   "lore": "木叶的忍者说：查克拉不在身体里，在意志里。容器裂了，里面的东西还在流。这道咒文让意志越过身体的断点——你砍下的橡木，你未走完的路，都还能到。",
-   "icon": "minecraft:spectral_arrow"
-  },
-  {
    "id": "initiate",
    "layer": "effect",
    "name": "灌顶",
@@ -1409,11 +1352,11 @@
    "category": "attack",
    "school": "刀剑",
    "cost": {
-    "mana": 55,
+    "mana": 40,
     "food": 2,
     "hp": 0
    },
-   "requiredLevel": 15,
+   "requiredLevel": 10,
    "commands": [
     "execute at {target} run damage @e[distance=..5,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:armor_stand] 11 minecraft:player_attack",
     "execute at {target} run particle minecraft:sweep_attack {px} {py+1} {pz} 2.2 0.6 2.2 0 12"
@@ -1543,11 +1486,11 @@
    "category": "summon",
    "school": "魔幻",
    "cost": {
-    "mana": 60,
+    "mana": 45,
     "food": 4,
     "hp": 0
    },
-   "requiredLevel": 18,
+   "requiredLevel": 12,
    "ownLimit": {
     "entity": "minecraft:iron_golem",
     "range": 96,
@@ -1601,39 +1544,6 @@
    "title": "烟花",
    "subtitle": "为这一刻，喝彩",
    "icon": "minecraft:firework_rocket"
-  },
-  {
-   "id": "frost_step",
-   "layer": "effect",
-   "name": "凌波微步",
-   "words": [
-    "凌波微步",
-    "水上漂",
-    "踏水",
-    "冰上走",
-    "水上行走"
-   ],
-   "category": "support",
-   "school": "东方",
-   "cost": {
-    "mana": 15,
-    "food": 0,
-    "hp": 0
-   },
-   "requiredLevel": 3,
-   "commands": [
-    "execute at {target} run fill ~-1 ~-1 ~-1 ~1 ~-1 ~1 minecraft:frosted_ice replace minecraft:water"
-   ],
-   "reply": "脚下水波凝成薄冰——踏水而行，如履平地。（冰化前快走）",
-   "particles": [
-    "minecraft:snowflake {px} {py-0.2} {pz} 1 0.1 1 0.02 25"
-   ],
-   "sounds": [
-    "minecraft:block.powder_snow.break"
-   ],
-   "title": "凌波微步",
-   "subtitle": "水波成冰，如履平地",
-   "icon": "minecraft:blue_ice"
   },
   {
    "id": "magnet",
@@ -1703,38 +1613,6 @@
    "icon": "minecraft:ender_eye"
   },
   {
-   "id": "ignite",
-   "layer": "effect",
-   "name": "火焰掌",
-   "words": [
-    "火焰掌",
-    "掌心火",
-    "点火",
-    "生火"
-   ],
-   "category": "support",
-   "school": "魔幻",
-   "cost": {
-    "mana": 8,
-    "food": 0,
-    "hp": 0
-   },
-   "requiredLevel": 2,
-   "commands": [
-    "execute at {target} anchored eyes positioned ^ ^ ^4 run setblock ~ ~ ~ minecraft:fire"
-   ],
-   "reply": "掌心窜出一簇火苗，点燃了你注视的地方。",
-   "particles": [
-    "minecraft:flame {px} {py+1.5} {pz} 0.4 0.3 0.4 0.05 20"
-   ],
-   "sounds": [
-    "minecraft:item.flintandsteel.use"
-   ],
-   "title": "火焰掌",
-   "subtitle": "一点星光，燎原之始",
-   "icon": "minecraft:flint_and_steel"
-  },
-  {
    "id": "starlight",
    "layer": "effect",
    "name": "星尘术",
@@ -1799,99 +1677,6 @@
    "icon": "minecraft:blaze_rod"
   },
   {
-   "id": "water_aura",
-   "layer": "effect",
-   "name": "水之光环",
-   "words": [
-    "水之光环",
-    "水环",
-    "碧水环",
-    "流水环身"
-   ],
-   "category": "support",
-   "school": "魔幻",
-   "special": "aura",
-   "cost": {
-    "mana": 40,
-    "food": 2,
-    "hp": 0
-   },
-   "requiredLevel": 3,
-   "commands": [],
-   "reply": "三泓清水绕身流转——近敌将陷于迟滞泥沼。",
-   "particles": [
-    "minecraft:dripping_drip_water {px} {py+1} {pz} 2.2 0.5 2.2 0.01 4"
-   ],
-   "sounds": [
-    "minecraft:entity.player.splash"
-   ],
-   "title": "水之光环",
-   "subtitle": "碧水绕身，泥沼滞敌",
-   "icon": "minecraft:heart_of_the_sea"
-  },
-  {
-   "id": "wind_aura",
-   "layer": "effect",
-   "name": "风暴光环",
-   "words": [
-    "罡风环身",
-    "风环",
-    "罡风环",
-    "旋风环身"
-   ],
-   "category": "support",
-   "school": "魔幻",
-   "special": "aura",
-   "cost": {
-    "mana": 45,
-    "food": 2,
-    "hp": 0
-   },
-   "requiredLevel": 5,
-   "commands": [],
-   "reply": "三道旋风环你而舞——近身的敌人将被远远吹开！",
-   "particles": [
-    "minecraft:cloud {px} {py+1} {pz} 2.2 0.5 2.2 0.03 3"
-   ],
-   "sounds": [
-    "minecraft:item.elytra.flying"
-   ],
-   "title": "风暴光环",
-   "subtitle": "旋风环体，吹敌千步",
-   "icon": "minecraft:phantom_membrane"
-  },
-  {
-   "id": "earth_aura",
-   "layer": "effect",
-   "name": "大地光环",
-   "words": [
-    "大地光环",
-    "土环",
-    "厚土环身",
-    "厚土环"
-   ],
-   "category": "support",
-   "school": "魔幻",
-   "special": "aura",
-   "cost": {
-    "mana": 50,
-    "food": 3,
-    "hp": 0
-   },
-   "requiredLevel": 6,
-   "commands": [],
-   "reply": "三块碎石围你沉浮——近敌四肢沉重、臂软无力。",
-   "particles": [
-    "minecraft:dust{color:[0.55,0.4,0.2],scale:1} {px} {py+1} {pz} 2.2 0.5 2.2 0 4"
-   ],
-   "sounds": [
-    "minecraft:block.deepslate.place"
-   ],
-   "title": "大地光环",
-   "subtitle": "厚土沉浮，敌臂力竭",
-   "icon": "minecraft:mossy_cobblestone"
-  },
-  {
    "id": "thunder_aura",
    "layer": "effect",
    "name": "雷光光环",
@@ -1921,37 +1706,6 @@
    "title": "雷光光环",
    "subtitle": "电弧疾走，触之即痛",
    "icon": "minecraft:copper_ingot"
-  },
-  {
-   "id": "vampire_aura",
-   "layer": "effect",
-   "name": "血蚀光环",
-   "words": [
-    "血蚀光环",
-    "血环",
-    "吸血光环",
-    "噬血环"
-   ],
-   "category": "support",
-   "school": "魔幻",
-   "special": "aura",
-   "cost": {
-    "mana": 60,
-    "food": 3,
-    "hp": 0
-   },
-   "requiredLevel": 12,
-   "commands": [],
-   "reply": "三缕血雾缠你游弋——它们噬敌之血，还于你身。",
-   "particles": [
-    "minecraft:soul {px} {py+1} {pz} 2.2 0.5 2.2 0.02 3"
-   ],
-   "sounds": [
-    "minecraft:particle.soul_escape"
-   ],
-   "title": "血蚀光环",
-   "subtitle": "血雾游弋，噬敌还体",
-   "icon": "minecraft:rotten_flesh"
   },
   {
    "id": "heal_aura",
@@ -2014,36 +1768,6 @@
    "title": "迅捷光环",
    "subtitle": "清风推步，健步如飞",
    "icon": "minecraft:rabbit_foot"
-  },
-  {
-   "id": "take_root",
-   "layer": "effect",
-   "name": "落脚",
-   "words": [
-    "落脚"
-   ],
-   "cost": {
-    "mana": 5,
-    "food": 0,
-    "hp": 0
-   },
-   "requiredLevel": 1,
-   "commands": [
-    "effect give {target} minecraft:resistance 20 0 true",
-    "effect give {target} minecraft:saturation 5 0 true",
-    "particle minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40",
-    "playsound minecraft:block.stone.hit master {target}"
-   ],
-   "reply": "二十一次跌倒，脚底仍记得土。落脚了，就不算漂着。",
-   "particles": [
-    "minecraft:end_rod {px} {py+1} {pz} 0.4 0.4 0.4 0.05 40"
-   ],
-   "sounds": [
-    "minecraft:block.stone.hit"
-   ],
-   "title": "落脚",
-   "subtitle": "二十一次跌倒之后，脚底终于记住土",
-   "lore": "无名行者坠身廿一次，魂魄每次散尽又归。女神不给他新刃，只给一寸定住的土——落脚，是漂泊者唯一的疆域。"
   },
   {
    "id": "sky_walk",
