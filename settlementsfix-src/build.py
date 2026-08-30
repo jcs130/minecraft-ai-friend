@@ -37,6 +37,7 @@ FULL = PURE + [
     "dev/god/settlementsfix/mixin/SkillBookUseMixin.java",
     "dev/god/settlementsfix/mixin/BookDropGuardMixin.java",
     "dev/god/settlementsfix/mixin/BookAutoRestoreMixin.java",
+    "dev/god/settlementsfix/mixin/SkillItemUseMixin.java",
 ]
 
 

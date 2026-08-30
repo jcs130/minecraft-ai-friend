@@ -54,13 +54,51 @@ public abstract class BookAutoRestoreMixin {
             if (self.isSpectator()) {
                 return;
             }
-            if (hasStatusBook(self)) {
-                return;
+            if (!hasStatusBook(self)) {
+                giveStatusBook(self);
             }
-            giveStatusBook(self);
+            // 技能罗盘（2026-08-30 造物主谕：书页手柄点不了 → 罗盘右键=轮盘）：
+            // 同一套护持——无 skillbox 物品 5s 内自动补发罗盘（壳可换，丢了就回来）。
+            if (!hasWheelItem(self)) {
+                giveWheelItem(self);
+            }
         } catch (Exception e) {
             GODFIX.warn("[bookrestore] tick hook failed: {}", e.toString());
         }
+    }
+
+    /** 技能罗盘：custom_data.skillbox=true 的任意物品（罗盘为正壳）。 */
+    private static boolean hasWheelItem(ServerPlayer sp) {
+        for (int i = 0; i < sp.getInventory().getContainerSize(); i++) {
+            ItemStack stack = sp.getInventory().getItem(i);
+            if (stack == null || stack.isEmpty()) {
+                continue;
+            }
+            CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
+            if (cd != null && !cd.isEmpty() && cd.copyTag().getBoolean("skillbox")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void giveWheelItem(ServerPlayer sp) {
+        ItemStack wheel = new ItemStack(Items.COMPASS);
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("skillbox", true);
+        wheel.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        wheel.set(DataComponents.ITEM_NAME,
+                net.minecraft.network.chat.Component.literal("§b✦ 技能罗盘 ✦"));
+        if (!sp.getInventory().add(wheel)) {
+            GODFIX.info("[bookrestore] {} inventory full, wheel retry next round",
+                    sp.getGameProfile().getName());
+            return;
+        }
+        sp.displayClientMessage(
+                net.minecraft.network.chat.Component.literal(
+                        "§b✦ 技能罗盘回到你的行囊。（右键即开技能轮盘，永不遗失）"), false);
+        GODFIX.info("[bookrestore] skill wheel auto-restored to {}",
+                sp.getGameProfile().getName());
     }
 
     private static boolean hasStatusBook(ServerPlayer sp) {

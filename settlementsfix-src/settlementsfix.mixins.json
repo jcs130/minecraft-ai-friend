@@ -13,7 +13,8 @@
     "BetterCombatConfigTaskGateMixin",
     "SkillChestBootMixin",
     "BookDropGuardMixin",
-    "BookAutoRestoreMixin"
+    "BookAutoRestoreMixin",
+    "SkillItemUseMixin"
   ],
   "injectors": {
     "defaultRequire": 1
