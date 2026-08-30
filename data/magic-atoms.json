@@ -568,30 +568,31 @@
   {
    "id": "feather_fall",
    "layer": "effect",
-   "name": "羽落术",
+   "name": "羽落",
    "words": [
-    "羽落",
     "缓降",
-    "轻身"
+    "轻如鸿毛",
+    "轻身",
+    "漂浮"
    ],
    "cost": {
-    "mana": 15,
+    "mana": 8,
     "food": 0,
     "hp": 0
    },
    "requiredLevel": 1,
    "commands": [
-    "effect give {target} minecraft:slow_falling 90 0"
+    "effect give {target} minecraft:slow_falling 30 0 true"
    ],
-   "reply": "你的身体轻若鸿毛，从此高处坠落再无惧意。",
+   "reply": "你的身体轻如鸿毛——三十息之内，坠落即是滑翔。",
    "particles": [
-    "minecraft:cloud {px} {py-1} {pz} 0.4 0.3 0.4 0.03 20"
+    "minecraft:cloud {px} {py+1} {pz} 0.5 0.3 0.5 0.02 12"
    ],
    "sounds": [
-    "minecraft:entity.ender_dragon.flap"
+    "minecraft:item.elytra.flying"
    ],
    "title": "羽落",
-   "subtitle": "轻若鸿毛，坠落无伤",
+   "subtitle": "坠落即是滑翔",
    "icon": "minecraft:feather"
   },
   {
@@ -2064,9 +2065,10 @@
    },
    "requiredLevel": 3,
    "commands": [
-    "fly {target} 60"
+    "fly {target} 60",
+    "effect give {target} minecraft:slow_falling 65 0 true"
    ],
-   "reply": "风承托起你的身体——六十息之内，天空任你行走。将落之时自会缓降，莫怕。",
+   "reply": "风承托起你的身体——六十息之内，天空任你行走；周身有羽落护持，纵然法尽坠落，亦如落叶徐降。",
    "particles": [
     "minecraft:cloud {px} {py+1} {pz} 0.6 0.4 0.6 0.02 25",
     "minecraft:end_rod {px} {py+2} {pz} 0.4 0.4 0.4 0.03 15"
@@ -2318,6 +2320,36 @@
    "title": "火衣",
    "subtitle": "烈焰不侵（被动·装备即生效）",
    "icon": "minecraft:magma_cream"
+  },
+  {
+   "id": "feather_boots",
+   "layer": "effect",
+   "name": "羽落之靴",
+   "words": [
+    "羽落之靴",
+    "缓降靴",
+    "羽靴",
+    "云靴"
+   ],
+   "cost": {
+    "mana": 20,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 2,
+   "commands": [
+    "give {target} minecraft:leather_boots[minecraft:custom_name='{\"text\":\"✦ 羽落之靴\",\"color\":\"aqua\",\"italic\":false}',minecraft:custom_data={featherfall:1b},minecraft:lore=['{\"text\":\"穿上即摔不死（被动·装备即生效）\",\"color\":\"gray\"}']] 1"
+   ],
+   "reply": "一双羽落之靴落入你手中——穿上它，坠落即是舞蹈，再高的天也摔不死你。",
+   "particles": [
+    "minecraft:cloud {px} {py+1} {pz} 0.5 0.4 0.5 0.02 20"
+   ],
+   "sounds": [
+    "minecraft:entity.chicken.egg"
+   ],
+   "title": "羽落之靴",
+   "subtitle": "踏云而落",
+   "icon": "minecraft:leather_boots"
   }
  ]
 }

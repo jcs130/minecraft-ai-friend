@@ -247,3 +247,4 @@
 - **magic-state 直改盘无效**：store 常驻内存，fs 写盘被内存覆盖/忽略——绕过内存的写入须重启 shadow-world 重载。测被动：改盘→重启→查 active_effects。
 - **1.21 NBT 路径**：玩家药水效果 `active_effects`（snake_case）；abilities 小写（abilities.mayfly）。
 - **mod 侧数据双源四处同步**：/app/data（正本）→ 容器 /mcdata → 宿主 data/ → 宿主 mc-data/（save() 只镜像 magic-state；atoms/skill-events 手动）。
+ ## 2026-08-30 羽落体系（造物主防摔死钦点）  - **御空自带缓降**：sky_walk commands 追加 effect give slow_falling 65s（60s 飞+5s 余量）——法尽坠落如落叶。atom 命令可多条顺序执行，直接叠加。 - **羽落之靴=装备化摔伤免疫**：FeatherBootsMixin 注入 LivingEntity.causeFallDamage HEAD——脚靴 custom_data:featherfall → 摔伤清零+云雾特效。装备即生效/脱下即失效。E2E：tp 150 格高落地满血。 - **词冲突坑**：atoms 匹配是子串包含且先到先得——「羽落」是「羽落之靴」前缀，短词先入库会把长咒抢走。词表设计：短词给高频应急术，复合词族要保证词根不互相包含。 - **atoms 改动须重启 shadow-world 或 reloadAtoms**：cast 用的 atoms 是启动时 loadBaseAtoms 载入内存——改文件不重启不生效（跟 magic-state 同理）。 

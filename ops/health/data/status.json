@@ -1,6 +1,6 @@
 {
- "at": "2026-08-30 11:51:03",
- "ts": 1788061863.5090075,
+ "at": "2026-08-30 12:01:03",
+ "ts": 1788062463.559672,
  "red": [],
  "yellow": [],
  "detail": {
@@ -18,11 +18,11 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 6 minutes (healthy)"
+   "m": "Up 2 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up About a minute"
+   "m": "Up 20 seconds"
   },
   "shadow-panel": {
    "s": "green",
@@ -42,11 +42,11 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 42s old"
+   "m": "log 13s old"
   },
   "web-entities-fresh": {
    "s": "green",
-   "m": "1s old"
+   "m": "0s old"
   },
   "rcon": {
    "s": "green",
@@ -58,7 +58,7 @@
   },
   "Kirito-status": {
    "s": "green",
-   "m": "hp 15.0 food 7.0"
+   "m": "hp 20.0 food 20.0"
   },
   "Naruto-status": {
    "s": "green",
