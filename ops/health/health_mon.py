@@ -124,21 +124,14 @@ def probe_containers():
 
 
 def probe_guard_bridge(auto=False, cooldown={}):
-    """守卫桥进程 + 日志新鲜度(慢系统 30s 一轮;反射层 5s 心跳异常才打,静默=正常)。"""
+    """守卫桥存活探测（2026-08-30 双轨退役：唯一权威=shadow-guard 容器，宿主拉起链已退役）。"""
     try:
-        r = subprocess.run(["powershell", "-NoProfile", "-Command",
-                            "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object {$_.CommandLine -match 'guard_drive'} | Measure-Object | Select-Object -ExpandProperty Count"],
-                           capture_output=True, text=True, timeout=25)
-        n = int(r.stdout.strip() or 0)
-    except Exception:
-        n = -1
-    if n >= 1:
-        return "green", f"proc x{n}"
-    if auto and _cool("restart_guard_bridge", cooldown, 1800):
-        subprocess.Popen([VENV_PY, START_GUARD], cwd=os.path.dirname(START_GUARD),
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return "red", "bridge dead -> restarted (start_guard_drive)"
-    return "red", "guard_drive process absent"
+        r = subprocess.run(["docker", "top", "shadow-guard"], capture_output=True, text=True, timeout=20)
+        if "guard_drive.py" in (r.stdout or ""):
+            return "green", "bridge alive (shadow-guard container)"
+        return "red", "shadow-guard container running but no guard_drive process"
+    except Exception as e:
+        return "red", f"shadow-guard probe failed: {e}"
 
 
 def probe_guard_log_fresh():
