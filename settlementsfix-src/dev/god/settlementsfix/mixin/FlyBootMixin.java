@@ -2,6 +2,7 @@ package dev.god.settlementsfix.mixin;
 
 import com.mojang.brigadier.CommandDispatcher;
 import dev.god.settlementsfix.magic.FlyCommand;
+import dev.god.settlementsfix.magic.SkillEnchantCommand;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import org.slf4j.Logger;
@@ -29,7 +30,9 @@ public class FlyBootMixin {
     private void settlementsfix$registerFly(CallbackInfo ci) {
         try {
             dispatcher.register(FlyCommand.root());
+            dispatcher.register(SkillEnchantCommand.root());
             GODFIX.info("[fly] command registered on Commands init (/fly)");
+            GODFIX.info("[enchant] command registered on Commands init (/skillenchant)");
         } catch (Exception e) {
             GODFIX.warn("[fly] command register failed: {}", e.toString());
         }

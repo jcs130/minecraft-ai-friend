@@ -90,3 +90,4 @@
 {"at": "2026-08-30 11:16:03", "ts": 1788059763.2025256, "comp": "guards-online", "msg": "missing ['Kirito', 'Naruto']"}
 {"at": "2026-08-30 11:16:03", "ts": 1788059763.2025256, "comp": "Kirito-status", "msg": "get_self_status no hp field"}
 {"at": "2026-08-30 11:16:03", "ts": 1788059763.2025256, "comp": "Naruto-status", "msg": "get_self_status no hp field"}
+{"at": "2026-08-30 12:41:03", "ts": 1788064863.600756, "comp": "rcon", "msg": "[WinError 10054] 远程主机强迫关闭了一个现有的连接。"}

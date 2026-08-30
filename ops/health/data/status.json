@@ -1,6 +1,6 @@
 {
- "at": "2026-08-30 12:01:03",
- "ts": 1788062463.559672,
+ "at": "2026-08-30 12:46:03",
+ "ts": 1788065163.9042776,
  "red": [],
  "yellow": [],
  "detail": {
@@ -18,23 +18,23 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 2 minutes (healthy)"
+   "m": "Up 5 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 20 seconds"
+   "m": "Up 8 minutes"
   },
   "shadow-panel": {
    "s": "green",
-   "m": "Up 16 hours"
+   "m": "Up 17 hours"
   },
   "shadow-gateway": {
    "s": "green",
-   "m": "Up 27 hours"
+   "m": "Up 28 hours"
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 37 hours (healthy)"
+   "m": "Up 38 hours (healthy)"
   },
   "guard-bridge": {
    "s": "green",
@@ -42,11 +42,11 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 13s old"
+   "m": "log 172s old"
   },
   "web-entities-fresh": {
    "s": "green",
-   "m": "0s old"
+   "m": "1s old"
   },
   "rcon": {
    "s": "green",

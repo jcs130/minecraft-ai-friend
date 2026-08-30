@@ -2350,6 +2350,192 @@
    "title": "羽落之靴",
    "subtitle": "踏云而落",
    "icon": "minecraft:leather_boots"
+  },
+  {
+   "id": "ench_chain_lightning",
+   "layer": "effect",
+   "name": "附魔·闪电链",
+   "words": [
+    "附魔闪电链",
+    "附魔闪电",
+    "武器附魔闪电链"
+   ],
+   "cost": {
+    "mana": 40,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 10,
+   "commands": [
+    "skillenchant {target} chain_lightning"
+   ],
+   "reply": "技能烙进了你的武器——此后挥击，「闪电链」有几率自行发难。须手持武器、且已学会该技能。",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 25"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "附魔·闪电链",
+   "subtitle": "雷霆入刃",
+   "icon": "minecraft:lightning_rod"
+  },
+  {
+   "id": "ench_fireburst",
+   "layer": "effect",
+   "name": "附魔·炎爆",
+   "words": [
+    "附魔炎爆",
+    "附魔爆炎",
+    "武器附魔炎爆"
+   ],
+   "cost": {
+    "mana": 25,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [
+    "skillenchant {target} fireburst"
+   ],
+   "reply": "技能烙进了你的武器——此后挥击，「炎爆」有几率自行发难。须手持武器、且已学会该技能。",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 25"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "附魔·炎爆",
+   "subtitle": "烈焰入刃",
+   "icon": "minecraft:blaze_powder"
+  },
+  {
+   "id": "ench_rasengan",
+   "layer": "effect",
+   "name": "附魔·螺旋丸",
+   "words": [
+    "附魔螺旋丸",
+    "武器附魔螺旋丸"
+   ],
+   "cost": {
+    "mana": 35,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 8,
+   "commands": [
+    "skillenchant {target} rasengan"
+   ],
+   "reply": "技能烙进了你的武器——此后挥击，「螺旋丸」有几率自行发难。须手持武器、且已学会该技能。",
+   "particles": [
+    "minecraft:enchant {px} {py+1} {pz} 0.5 0.5 0.5 0.1 25"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "附魔·螺旋丸",
+   "subtitle": "旋风入刃",
+   "icon": "minecraft:wind_charge"
+  },
+  {
+   "id": "ench_aura_bloodlust",
+   "layer": "effect",
+   "name": "附魔·嗜血光环",
+   "words": [
+    "附魔嗜血光环",
+    "嗜血光环附魔",
+    "附魔嗜血"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [
+    "skillenchant aura {target} bloodlust"
+   ],
+   "reply": "嗜血之力沁入甲胄——穿上它，你的每一击都会汲取对方的生命为己所用。须手持盔甲、且已参悟「嗜血光环」。",
+   "particles": [
+    "minecraft:damage_indicator {px} {py+1} {pz} 0.4 0.4 0.4 0.05 12"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "附魔·嗜血光环",
+   "subtitle": "以血养血",
+   "icon": "minecraft:redstone"
+  },
+  {
+   "id": "ench_aura_healing",
+   "layer": "effect",
+   "name": "附魔·治愈光环",
+   "words": [
+    "附魔治愈光环",
+    "治愈光环附魔",
+    "附魔治愈"
+   ],
+   "cost": {
+    "mana": 30,
+    "food": 1,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [
+    "skillenchant aura {target} healing"
+   ],
+   "reply": "治愈之力沁入甲胄——穿上它，伤口会自己慢慢愈合（每三息回半心）。须手持盔甲、且已参悟「治愈光环」。",
+   "particles": [
+    "minecraft:heart {px} {py+1.5} {pz} 0.4 0.4 0.4 0.03 8"
+   ],
+   "sounds": [
+    "minecraft:block.enchantment_table.use"
+   ],
+   "title": "附魔·治愈光环",
+   "subtitle": "生生不息",
+   "icon": "minecraft:golden_apple"
+  },
+  {
+   "id": "aura_bloodlust",
+   "layer": "effect",
+   "name": "嗜血光环",
+   "type": "passive",
+   "auraId": "bloodlust",
+   "words": [
+    "嗜血光环"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [],
+   "reply": "",
+   "title": "嗜血光环",
+   "subtitle": "参悟后可附魔到盔甲（装备·穿戴生效）",
+   "icon": "minecraft:redstone"
+  },
+  {
+   "id": "aura_healing",
+   "layer": "effect",
+   "name": "治愈光环",
+   "type": "passive",
+   "auraId": "healing",
+   "words": [
+    "治愈光环"
+   ],
+   "cost": {
+    "mana": 0,
+    "food": 0,
+    "hp": 0
+   },
+   "requiredLevel": 4,
+   "commands": [],
+   "reply": "",
+   "title": "治愈光环",
+   "subtitle": "参悟后可附魔到盔甲（装备·穿戴生效）",
+   "icon": "minecraft:golden_apple"
   }
  ]
 }
