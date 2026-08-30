@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, rm } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
@@ -3915,6 +3916,48 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (username.startsWith('sys_')) return // 守护天使不记进出（2026-08-23）
       worlddb.chronicleRecord('presence', username, { event: 'leave' })
     })
+
+    // ─── 天耳（2026-08-30）：萌萌游戏内 SVC 语音 → MicCapture 切段落盘 inbox →
+    // mic_asr_watcher（宿主常驻）whisper 转写 → outbox/*.json → 这里注入公屏 chat
+    // 全链（语音即发言，VIP/法术匹配/点名判断全部复用）。5 岁孩子的主通道。
+    {
+      const MIC_OUTBOX = join(process.env.GODVOICE_DIR || join(DATA_DIR, 'godvoice'), 'mic', 'outbox')
+      const seenMic = new Set<string>()
+      lc.setInterval(async () => {
+        try {
+          const files = await readdir(MIC_OUTBOX).catch(() => [] as string[])
+          for (const f of files.filter((x) => x.endsWith('.json') && !seenMic.has(x)).sort()) {
+            seenMic.add(f)
+            try {
+              const j = JSON.parse(await readFile(join(MIC_OUTBOX, f), 'utf8'))
+              // 消费即删（2026-08-30 实测：不删+重启清 seenMic=重复消费风暴，
+              // 女神被同一段话轰炸几十次）。log 已留痕，文件无需保留。
+              try {
+                await rm(join(MIC_OUTBOX, f), { force: true })
+              } catch { /* 删失败靠 seenMic 兜底 */ }
+              const player = typeof j.player === 'string' && j.player ? j.player : 'MengMeng'
+              const raw = typeof j.text === 'string' ? j.text.trim() : ''
+              if (!raw) continue
+              const text = raw.replace(/["\]/g, ' ').replace(/[\r\n]+/g, ' ')
+              log(`[mic] ${player} 语音：${text.slice(0, 60)}`)
+              // ① 转写广播到公屏（世界听得见她说什么）——不 await：
+              // rcon 闪断时会挂住 await，挡死后面的 chat 注入（2026-08-30 实测）。
+              try {
+                void rcon.send(`tellraw @a {"text":"[🎤] <${player}> ${text}"}`).catch(() => undefined)
+              } catch { /* rcon 闪断不挡事 */ }
+              // ② 以玩家身份注入女神 chat 全链（VIP 看护/自然语言法术/点名判断）
+              try {
+                ;(bot as any).emit('chat', player, text)
+              } catch (err) {
+                log(`mic emit fail: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            } catch (err) {
+              log(`mic outbox parse fail ${f}: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+        } catch { /* 目录未建等静默 */ }
+      }, 1500)
+    }
 
     // 公屏法则请求（服主权限）：自然语言短语（如「死亡不失行囊」）也认，
     // 让真人玩家像对服主喊话一样对女神说话。天平（平衡）命令同通道。
