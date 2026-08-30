@@ -148,7 +148,7 @@ GOD_REPLY_PERIOD = 8     # 神谕回传消费间隔（秒）
 _llm_chat_last = {}
 
 os.makedirs(VDIR, exist_ok=True)
-PROFILES = json.load(open(os.path.join(VDIR, "villagers.json"), encoding="utf-8"))["villagers"]
+PROFILES = json.load(open(os.path.join(VDIR, "villagers.json"), encoding="utf-8-sig"))["villagers"]  # utf-8-sig 兼容 BOM（2026-08-30 崩溃课）
 CFG = json.load(open(os.path.join(VDIR, "config.json"), encoding="utf-8"))
 BY_TAG = {v["tag"]: v for v in PROFILES}
 
