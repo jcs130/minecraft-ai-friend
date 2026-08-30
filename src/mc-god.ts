@@ -2161,7 +2161,21 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           const name = cmd.args.slice(1).join(' ').trim()
           const pos = await playerPos(subject)
           if (!pos) { reply(`[信使] 没探到你脚下——人在线才能记点。`); return }
-          const wp = waypoints.add(subject, name || `藏宝点${waypoints.personal(subject).length + 1}`, pos.x, pos.y, pos.z)
+          // 自动命名（2026-08-30 造物主谕「记点最好自动命名」）：不报名字时按
+          // 方位+距离生成（家·千灯堂为原点）——「东·1200格」「村边」「西南·2.5千格」，
+          // 萌萌语音只说「记」也能得到可认的名字，不再全是「藏宝点N」。
+          const autoName = (x: number, z: number): string => {
+            const dx = x + 541, dz = z - 868
+            const dist = Math.hypot(dx, dz)
+            if (dist < 300) return `村边${waypoints.personal(subject).length + 1}`
+            const dirs = ['东', '东南', '南', '西南', '西', '西北', '北', '东北']
+            const idx = ((Math.round(Math.atan2(dz, dx) / (Math.PI / 4)) % 8) + 8) % 8
+            const far = dist >= 1000
+              ? `${(dist / 1000).toFixed(1).replace(/\.0$/, '')}千`
+              : `${Math.round(dist / 100) * 100}`
+            return `${dirs[idx]}·${far}格`
+          }
+          const wp = waypoints.add(subject, name || autoName(pos.x, pos.z), pos.x, pos.y, pos.z)
           if (!wp) { reply(`[信使] 你的传送点满了（上限 10 个）——先 /cli 传送点 删 <序号> 腾位置。`); return }
           const idx = waypoints.allFor(subject).findIndex((w) => w === wp) + 1
           worlddb.chronicleRecord('cast', subject, { skill: 'waypoint-add', name: wp.name, pos: `${pos.x},${pos.y},${pos.z}` })

@@ -157,6 +157,13 @@ public final class SkillChestLayout {
                         new Entry(Kind.WAYPOINT, String.valueOf(w.index), w.name,
                                 cfg.waypointIcon, "第" + w.index + "号", cmd));
             }
+            // 溢出提示（2026-08-30）：>8 个点时末格亮提示，语音说序号照样能传。
+            if (waypoints.size() > COLS - 1) {
+                int more = waypoints.size() - (COLS - 1);
+                out.set(WAYPOINT_ROW * COLS + COLS - 1,
+                        new Entry(Kind.EMPTY, "", "还有 " + more + " 个",
+                                cfg.moreIcon, "说出数字也能传", null));
+            }
         }
         return out;
     }
@@ -200,8 +207,10 @@ public final class SkillChestLayout {
                 if (at >= items.size()) break;
                 GiveItem g = items.get(at);
                 String lore = g.count > 1 ? ("一次 " + g.count + " 个") : "一次 1 个";
-                out.set(i, new Entry(Kind.ITEM, g.cn, g.cn,
-                        "minecraft:" + g.icon, lore, "/mycli cast 造物 " + g.cn));
+                // icon 冒号兼容（2026-08-30 背包造物）：mod 物品 id 自带命名空间
+                // （如 sophisticatedbackpacks:backpack）不能硬拼 minecraft: 前缀。
+                String icon = g.icon.contains(":") ? g.icon : "minecraft:" + g.icon;
+                out.set(i, new Entry(Kind.ITEM, g.cn, g.cn, icon, lore, "/mycli cast 造物 " + g.cn));
             }
         }
         int totalPages = itemPagesFor(items);
@@ -223,38 +232,48 @@ public final class SkillChestLayout {
     }
 
     // ── 技能轮盘（2026-08-30 造物主谕「技能太多占格子，用圆盘施法」）──
-    // 9x1 一行轻量轮：8 技能 + 1 翻轮格；潜行+右键命格书秒开秒关，
+    // 9x1 一行轻量轮：7 技能 + 传送阵格 + 翻轮格；潜行+右键命格书秒开秒关，
     // 比 9x3 全面板更贴近「圆盘施法」的手感（服务端容器 UI 能做的极限形态）。
+    // 2026-08-30 造物主谕「方便传送」：倒数第二格固定「传送阵」入口——点击开
+    // 9x3 全面板（第二行=全部传送点），手柄十字键直达。
     public static final int WHEEL_SIZE = 9;
 
-    /** 轮盘每页技能数（末格留导航）。 */
-    public static final int WHEEL_PER_PAGE = WHEEL_SIZE - 1;
+    /** 轮盘每页技能数（末两格留传送阵+导航）。 */
+    public static final int WHEEL_PER_PAGE = WHEEL_SIZE - 2;
+
+    /** 传送阵入口格位（倒数第二格，永远在）。 */
+    public static final int WHEEL_WARP_SLOT = WHEEL_SIZE - 2;
 
     public static int wheelPagesFor(List<SkillInfo> skills) {
         if (skills == null || skills.isEmpty()) return 1;
         return (skills.size() + WHEEL_PER_PAGE - 1) / WHEEL_PER_PAGE;
     }
 
-    /** 一行技能轮盘：8 技能格（点击即施法/开造物橱窗）+ 末格翻轮。 */
+    /** 一行技能轮盘：7 技能格 + 传送阵格 + 翻轮格。 */
     public static List<Entry> buildWheel(Config cfg, List<SkillInfo> skills, int page) {
         List<Entry> out = new ArrayList<>(WHEEL_SIZE);
         for (int i = 0; i < WHEEL_SIZE; i++) out.add(Entry.empty(cfg.defaultIcon));
-        if (skills == null || skills.isEmpty() || page < 0) return out;
-        int from = page * WHEEL_PER_PAGE;
-        for (int i = 0; i < WHEEL_PER_PAGE; i++) {
-            int at = from + i;
-            if (at >= skills.size()) break;
-            String id = skills.get(at).id;
-            String name = cfg.skillNames.getOrDefault(id, id);
-            String icon = cfg.skillIcons.getOrDefault(id, cfg.defaultIcon);
-            String lore = cfg.skillLore.getOrDefault(id, "");
-            if ("give".equals(id)) {
-                out.set(i, new Entry(Kind.SKILL, id, name, icon, "选一个变出来", null));
-                continue;
+        if (skills != null && !skills.isEmpty() && page >= 0) {
+            int from = page * WHEEL_PER_PAGE;
+            for (int i = 0; i < WHEEL_PER_PAGE; i++) {
+                int at = from + i;
+                if (at >= skills.size()) break;
+                String id = skills.get(at).id;
+                String name = cfg.skillNames.getOrDefault(id, id);
+                String icon = cfg.skillIcons.getOrDefault(id, cfg.defaultIcon);
+                String lore = cfg.skillLore.getOrDefault(id, "");
+                if ("give".equals(id)) {
+                    out.set(i, new Entry(Kind.SKILL, id, name, icon, "选一个变出来", null));
+                    continue;
+                }
+                String chant = cfg.chantAlias.getOrDefault(id, name);
+                out.set(i, new Entry(Kind.SKILL, id, name, icon, lore, "/mycli cast " + chant));
             }
-            String chant = cfg.chantAlias.getOrDefault(id, name);
-            out.set(i, new Entry(Kind.SKILL, id, name, icon, lore, "/mycli cast " + chant));
         }
+        // 传送阵入口（永远在倒数第二格）：开 9x3 全面板——第二行是全部传送点。
+        // command 走玩家身份（{PLAYER} 由 SkillChestMenu 替换），panel 校验自己==自己放行。
+        out.set(WHEEL_WARP_SLOT, new Entry(Kind.WAYPOINT, "waypoints-hub", "传送阵",
+                "minecraft:compass", "看看记过的地方", "skillchest panel {PLAYER} 0"));
         int totalPages = wheelPagesFor(skills);
         if (totalPages > 1) {
             boolean hasNext = page + 1 < totalPages;
