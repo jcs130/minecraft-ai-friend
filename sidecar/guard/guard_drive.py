@@ -26,6 +26,28 @@ if not os.environ.get("GUARD_DRIVE_NO_WRAP"):
     except Exception:
         pass
 
+# ---------------- 单实例锁（2026-08-30 RCON 风暴课） ----------------
+# 教训：guard_drive 被绕过 start 脚本手动拉起 → 多实例并存（实测 3 个）→
+# 每实例每分钟对 40+ NPC 发 120-160 条 RCON → 多实例叠加几百条/分钟连接风暴，
+# 拖垮 MC 玩家连接（TIME_WAIT 堆积）。启动时发现已有实例在跑 → 打日志即自杀。
+def _single_instance_guard():
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+             "Where-Object { $_.CommandLine -match 'guard_drive\\.py' "
+             "  -and $_.CommandLine -notmatch 'start_guard_drive' "
+             f" -and $_.ProcessId -ne {os.getpid()} }}).Count"],
+            capture_output=True, text=True, timeout=20)
+        n = int(r.stdout.strip() or "0")
+        if n > 0:
+            print(f"[single-instance] 已有 {n} 个 guard_drive 在跑，本实例(pid={os.getpid()})退出", flush=True)
+            sys.exit(0)
+    except Exception as e:
+        print(f"[single-instance] 检查失败({e})，放行继续", flush=True)
+
+_single_instance_guard()
+
 # ---------------- 常量 ----------------
 # 2026-08-21 容器化：硬编码 127.0.0.1 改为 env 可覆盖（独立 guard-drive 容器需连 mc-server/qwenpaw 容器网）
 RCON_HOST = os.environ.get("MC_RCON_HOST", "127.0.0.1")
