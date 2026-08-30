@@ -11,6 +11,8 @@
     "BubblePublishGuardMixin",
     "PayloadRegistrarForceOptionalMixin",
     "BetterCombatConfigTaskGateMixin",
+    "ConfigTaskGateForNonNeoForgeMixin",
+    "RecipePacketGateForNonNeoForgeMixin",
     "SkillChestBootMixin",
     "BookDropGuardMixin",
     "BookAutoRestoreMixin",

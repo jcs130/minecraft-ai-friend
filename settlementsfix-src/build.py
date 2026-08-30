@@ -33,11 +33,14 @@ FULL = PURE + [
     "dev/god/settlementsfix/chest/SkillChestMenu.java",
     "dev/god/settlementsfix/chest/SkillWheelMenu.java",
     "dev/god/settlementsfix/chest/SkillChestCommands.java",
-    "dev/god/settlementsfix/mixin/SkillChestBootMixin.java",
-    "dev/god/settlementsfix/mixin/SkillBookUseMixin.java",
-    "dev/god/settlementsfix/mixin/BookDropGuardMixin.java",
-    "dev/god/settlementsfix/mixin/BookAutoRestoreMixin.java",
-    "dev/god/settlementsfix/mixin/SkillItemUseMixin.java",
+] + [
+    # mixin 目录全扫（2026-08-30：FULL 手列漏新 mixin 曾致崩循环 ~10 分钟，
+    # pack() 全目录打 class 而编译只编手列——改为动态收集，永不再漏）。
+    # 例外：依赖 settlements mod 类（dev.breezes.*）的 mixin 不在本 cp 里，
+    # 编不了——它们的历史 .class 由 pack() 全目录扫描带进 jar。
+    "dev/god/settlementsfix/mixin/" + f
+    for f in sorted(os.listdir(os.path.join(HERE, "dev/god/settlementsfix/mixin")))
+    if f.endswith(".java") and f not in ("BubblePublishGuardMixin.java",)
 ]
 
 

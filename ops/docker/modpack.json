@@ -6,10 +6,10 @@
     "loader": "NeoForge 21.1.248",
     "seed": "3620753367502722513",
     "spawn": "-544, 864（平原村，2026-08-26 天神钦定）",
-    "updated": "2026-08-26"
+    "updated": "2026-08-30"
   },
   "active": {
-    "_desc": "现役 32 个（shadow/mods → 容器 /data/mods）",
+    "_desc": "现役 35 个（shadow/mc/mods → 容器 /data/mods）",
     "性能": {
       "lithium-neoforge-0.15.4+mc1.21.1.jar": "tick 优化",
       "modernfix-neoforge-5.27.20+mc1.21.1.jar": "加载/内存优化",
@@ -54,6 +54,11 @@
       "immersive_aircraft-1.4.6+1.21.1-neoforge.jar": "载具（旋翼机/飞船等，AI 骑乘可行 2026-08-28；注意：注册必需网络通道，裸客户端须经神社之门 gate 协商进门）",
       "drones-neoforge-1.1.0.jar": "Buddy/Modular Drones 无人机（依赖 architectury，同须 gate 协商）",
       "architectury-13.0.11-neoforge.jar": "drones 前置库"
+    },
+    "内容·收纳": {
+      "curios-neoforge-9.5.1+1.21.1.jar": "饰品栏（Iron 法术书可装备施法；2026-08-30 上服，配合 ConfigTaskGate/RecipePacketGate 双门）",
+      "sophisticatedbackpacks-1.21.1-3.25.78.2107.jar": "随身背包（多级扩容+磁吸/分类模块，技能书收纳）",
+      "sophisticatedcore-1.21.1-1.4.90.2299.jar": "背包前置（勿拿 1.21.11-1.4.97 那版）"
     }
   },
   "frozen": {

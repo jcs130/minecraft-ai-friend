@@ -23,7 +23,8 @@
     "minecraft:block.enchantment_table.use"
    ],
    "title": "鉴定",
-   "subtitle": "女神之眼，烛照己身"
+   "subtitle": "女神之眼，烛照己身",
+   "icon": "minecraft:spyglass"
   },
   {
    "id": "home",
@@ -54,7 +55,8 @@
     "minecraft:entity.enderman.teleport"
    ],
    "title": "归乡",
-   "subtitle": "空间之力，护你归途"
+   "subtitle": "空间之力，护你归途",
+   "icon": "minecraft:compass"
   },
   {
    "id": "tp",
@@ -102,7 +104,8 @@
     "minecraft:entity.enderman.teleport"
    ],
    "title": "撕裂虚空",
-   "subtitle": "向{direction}跃迁 {distance} 格"
+   "subtitle": "向{direction}跃迁 {distance} 格",
+   "icon": "minecraft:ender_pearl"
   },
   {
    "id": "heal",
@@ -135,7 +138,8 @@
     "minecraft:block.enchantment_table.use"
    ],
    "title": "圣愈",
-   "subtitle": "柔和的光，抚平伤痛"
+   "subtitle": "柔和的光，抚平伤痛",
+   "icon": "minecraft:golden_apple"
   },
   {
    "id": "blood_mana",
@@ -165,7 +169,8 @@
     "minecraft:block.fire.ambient"
    ],
    "title": "燃血",
-   "subtitle": "以血为引，魔力翻涌"
+   "subtitle": "以血为引，魔力翻涌",
+   "icon": "minecraft:redstone"
   },
   {
    "id": "feed",
@@ -195,7 +200,8 @@
     "minecraft:block.note_block.chime"
    ],
    "title": "饱食赐福",
-   "subtitle": "暖流涌动，饥饿消散"
+   "subtitle": "暖流涌动，饥饿消散",
+   "icon": "minecraft:cooked_beef"
   },
   {
    "id": "food_mana",
@@ -224,7 +230,8 @@
     "minecraft:entity.player.burp"
    ],
    "title": "炼食",
-   "subtitle": "饥肠化炉，魔力升腾"
+   "subtitle": "饥肠化炉，魔力升腾",
+   "icon": "minecraft:furnace"
   },
   {
    "id": "give",
@@ -261,7 +268,8 @@
     "minecraft:block.enchantment_table.use"
    ],
    "title": "造物",
-   "subtitle": "虚空中，物质凝成"
+   "subtitle": "虚空中，物质凝成",
+   "icon": "minecraft:crafting_table"
   },
   {
    "id": "light",
@@ -292,7 +300,8 @@
     "minecraft:block.fire.ambient"
    ],
    "title": "照明",
-   "subtitle": "火光，驱散黑暗"
+   "subtitle": "火光，驱散黑暗",
+   "icon": "minecraft:glowstone"
   },
   {
    "id": "time_day",
@@ -324,7 +333,8 @@
     "minecraft:block.beacon.activate"
    ],
    "title": "破晓",
-   "subtitle": "太阳，撕裂夜幕"
+   "subtitle": "太阳，撕裂夜幕",
+   "icon": "minecraft:clock"
   },
   {
    "id": "weather_clear",
@@ -354,7 +364,8 @@
     "minecraft:block.chain.break"
    ],
    "title": "驱云",
-   "subtitle": "乌云散尽，晴空万里"
+   "subtitle": "乌云散尽，晴空万里",
+   "icon": "minecraft:sunflower"
   },
   {
    "id": "terraform",
@@ -385,7 +396,8 @@
     "minecraft:block.gravel.break"
    ],
    "title": "大地塑形",
-   "subtitle": "脚下大地，为你重塑"
+   "subtitle": "脚下大地，为你重塑",
+   "icon": "minecraft:grass_block"
   },
   {
    "id": "rampart",
@@ -415,7 +427,8 @@
     "minecraft:block.grass.place"
    ],
    "title": "覆土",
-   "subtitle": "大地隆起，天堑变通途"
+   "subtitle": "大地隆起，天堑变通途",
+   "icon": "minecraft:cobblestone"
   },
   {
    "id": "spring",
@@ -457,7 +470,8 @@
     "minecraft:item.bucket.empty"
    ],
    "title": "化水",
-   "subtitle": "清泉涌出，润泽旱土"
+   "subtitle": "清泉涌出，润泽旱土",
+   "icon": "minecraft:water_bucket"
   },
   {
    "id": "meteor",
@@ -489,7 +503,8 @@
     "minecraft:entity.lightning_bolt.thunder"
    ],
    "title": "陨石",
-   "subtitle": "燃烧生命，天罚降临"
+   "subtitle": "燃烧生命，天罚降临",
+   "icon": "minecraft:magma_block"
   },
   {
    "id": "swift",
@@ -517,7 +532,8 @@
     "minecraft:item.trident.riptide_1"
    ],
    "title": "迅捷",
-   "subtitle": "步履如风"
+   "subtitle": "步履如风",
+   "icon": "minecraft:sugar"
   },
   {
    "id": "leap",
@@ -546,7 +562,8 @@
     "minecraft:entity.goat.long_jump"
    ],
    "title": "跃升",
-   "subtitle": "脚下生风，一跃冲天"
+   "subtitle": "脚下生风，一跃冲天",
+   "icon": "minecraft:slime_block"
   },
   {
    "id": "feather_fall",
@@ -574,7 +591,8 @@
     "minecraft:entity.ender_dragon.flap"
    ],
    "title": "羽落",
-   "subtitle": "轻若鸿毛，坠落无伤"
+   "subtitle": "轻若鸿毛，坠落无伤",
+   "icon": "minecraft:feather"
   },
   {
    "id": "ironskin",
@@ -602,7 +620,8 @@
     "minecraft:block.anvil.land"
    ],
    "title": "铁肤",
-   "subtitle": "金光护体，刀枪难伤"
+   "subtitle": "金光护体，刀枪难伤",
+   "icon": "minecraft:iron_chestplate"
   },
   {
    "id": "regen",
@@ -630,7 +649,8 @@
     "minecraft:block.brewing_stand.brew"
    ],
    "title": "再生",
-   "subtitle": "血肉重生，生生不息"
+   "subtitle": "血肉重生，生生不息",
+   "icon": "minecraft:glistering_melon_slice"
   },
   {
    "id": "strength",
@@ -658,7 +678,8 @@
     "minecraft:entity.player.attack.crit"
    ],
    "title": "神力",
-   "subtitle": "力拔山河"
+   "subtitle": "力拔山河",
+   "icon": "minecraft:blaze_powder"
   },
   {
    "id": "haste",
@@ -686,7 +707,8 @@
     "minecraft:block.grindstone.use"
    ],
    "title": "急迫",
-   "subtitle": "双手如飞"
+   "subtitle": "双手如飞",
+   "icon": "minecraft:golden_pickaxe"
   },
   {
    "id": "night_vision",
@@ -714,7 +736,8 @@
     "minecraft:block.note_block.chime"
    ],
    "title": "夜视",
-   "subtitle": "暗夜之中，视物如昼"
+   "subtitle": "暗夜之中，视物如昼",
+   "icon": "minecraft:golden_carrot"
   },
   {
    "id": "water_breath",
@@ -743,7 +766,8 @@
     "minecraft:item.bucket.fill"
    ],
    "title": "水息",
-   "subtitle": "如鱼得水，深潜无碍"
+   "subtitle": "如鱼得水，深潜无碍",
+   "icon": "minecraft:pufferfish"
   },
   {
    "id": "fire_res",
@@ -771,7 +795,8 @@
     "minecraft:block.fire.extinguish"
    ],
    "title": "避火",
-   "subtitle": "烈焰焚身而不伤"
+   "subtitle": "烈焰焚身而不伤",
+   "icon": "minecraft:magma_cream"
   },
   {
    "id": "invisibility",
@@ -799,7 +824,8 @@
     "minecraft:entity.enderman.teleport"
    ],
    "title": "隐身",
-   "subtitle": "身形没入虚空"
+   "subtitle": "身形没入虚空",
+   "icon": "minecraft:glass"
   },
   {
    "id": "rain",
@@ -828,7 +854,8 @@
     "minecraft:weather.rain"
    ],
    "title": "唤雨",
-   "subtitle": "甘霖自天而降"
+   "subtitle": "甘霖自天而降",
+   "icon": "minecraft:snowball"
   },
   {
    "id": "storm",
@@ -857,7 +884,8 @@
     "minecraft:entity.lightning_bolt.thunder"
    ],
    "title": "雷暴",
-   "subtitle": "风雷激荡，天地变色"
+   "subtitle": "风雷激荡，天地变色",
+   "icon": "minecraft:lightning_rod"
   },
   {
    "id": "steed",
@@ -886,7 +914,8 @@
     "minecraft:entity.horse.ambient"
    ],
    "title": "唤马",
-   "subtitle": "神骏自光中而来"
+   "subtitle": "神骏自光中而来",
+   "icon": "minecraft:saddle"
   },
   {
    "id": "guardian",
@@ -916,7 +945,8 @@
     "minecraft:entity.iron_golem.repair"
    ],
    "title": "铁卫",
-   "subtitle": "血契铸就，守护降临"
+   "subtitle": "血契铸就，守护降临",
+   "icon": "minecraft:iron_golem_spawn_egg"
   },
   {
    "id": "purge",
@@ -954,7 +984,8 @@
     "minecraft:entity.evoker.cast_spell"
    ],
    "title": "退魔",
-   "subtitle": "圣光涤荡，邪祟皆灭"
+   "subtitle": "圣光涤荡，邪祟皆灭",
+   "icon": "minecraft:golden_sword"
   },
   {
    "id": "windburst",
@@ -983,7 +1014,8 @@
     "minecraft:entity.wind_charge.wind_burst"
    ],
    "title": "风爆",
-   "subtitle": "御风而起，扶摇直上"
+   "subtitle": "御风而起，扶摇直上",
+   "icon": "minecraft:wind_charge"
   },
   {
    "id": "summon_wolf",
@@ -1021,7 +1053,8 @@
     "minecraft:entity.wolf.howl"
    ],
    "title": "通灵契约",
-   "subtitle": "灵狼踏光而出，与尔缔约"
+   "subtitle": "灵狼踏光而出，与尔缔约",
+   "icon": "minecraft:wolf_spawn_egg"
   },
   {
    "id": "summon_pack",
@@ -1052,7 +1085,8 @@
     "minecraft:entity.horse.ambient"
    ],
    "title": "驮兽契约",
-   "subtitle": "踏尘而来，与尔同行"
+   "subtitle": "踏尘而来，与尔同行",
+   "icon": "minecraft:llama_spawn_egg"
   },
   {
    "id": "rasengan",
@@ -1079,23 +1113,47 @@
     {
      "delayMs": 150,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..2.5,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 9 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 300,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 450,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..2.5,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 9 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 600,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 750,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 900,
      "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 1100,
+     "commands": [
       "kill @e[tag=rsn_{target}]"
      ]
     }
    ],
-   "reply": "查克拉在掌心疯狂旋转凝聚——蓝色螺旋丸呼啸而出，风压撕裂前方一切！",
+   "reply": "查克拉在掌心疯狂旋转凝聚——蓝色螺旋丸呼啸而出，撕碎准心所指的一切！",
    "particles": [
     "minecraft:witch {px} {py+1.2} {pz} 0.4 0.4 0.4 0.1 50",
     "minecraft:electric_spark {px} {py+1.2} {pz} 0.3 0.3 0.3 0.2 30"
@@ -1105,7 +1163,8 @@
     "minecraft:block.beacon.power_select"
    ],
    "title": "螺旋丸",
-   "subtitle": "查克拉凝聚于掌，旋涡破敌"
+   "subtitle": "查克拉凝聚于掌，旋涡破敌",
+   "icon": "minecraft:breeze_rod"
   },
   {
    "id": "kage_bunshin",
@@ -1139,7 +1198,8 @@
     "minecraft:entity.illusioner.mirror_move"
    ],
    "title": "影分身之术",
-   "subtitle": "结印之间，分身齐现"
+   "subtitle": "结印之间，分身齐现",
+   "icon": "minecraft:carved_pumpkin"
   },
   {
    "id": "clarity_glow",
@@ -1168,7 +1228,8 @@
    ],
    "title": "澄光初照",
    "subtitle": "鉴定者之赐，真伪立判",
-   "lore": "灯守者以澄光为名，承鉴定之天赋。此咒非照夜色，乃照物心——让手中之物、眼前之块，各归其真。"
+   "lore": "灯守者以澄光为名，承鉴定之天赋。此咒非照夜色，乃照物心——让手中之物、眼前之块，各归其真。",
+   "icon": "minecraft:sea_lantern"
   },
   {
    "id": "will_walk",
@@ -1198,7 +1259,8 @@
    ],
    "title": "意行",
    "subtitle": "身断处，意先行",
-   "lore": "木叶的忍者说：查克拉不在身体里，在意志里。容器裂了，里面的东西还在流。这道咒文让意志越过身体的断点——你砍下的橡木，你未走完的路，都还能到。"
+   "lore": "木叶的忍者说：查克拉不在身体里，在意志里。容器裂了，里面的东西还在流。这道咒文让意志越过身体的断点——你砍下的橡木，你未走完的路，都还能到。",
+   "icon": "minecraft:spectral_arrow"
   },
   {
    "id": "initiate",
@@ -1224,7 +1286,8 @@
     "minecraft:block.enchantment_table.use"
    ],
    "title": "灌顶",
-   "subtitle": "传功授业，精进一分"
+   "subtitle": "传功授业，精进一分",
+   "icon": "minecraft:enchanted_book"
   },
   {
    "id": "fireburst",
@@ -1258,7 +1321,8 @@
     "minecraft:entity.blaze.shoot"
    ],
    "title": "炎爆",
-   "subtitle": "烈焰连珠，直贯准心"
+   "subtitle": "烈焰连珠，直贯准心",
+   "icon": "minecraft:fire_charge"
   },
   {
    "id": "frost_nova",
@@ -1292,13 +1356,17 @@
     "minecraft:block.glass.break"
    ],
    "title": "冰霜新星",
-   "subtitle": "寒气成环，万物滞缓"
+   "subtitle": "寒气成环，万物滞缓",
+   "icon": "minecraft:snow_block"
   },
   {
    "id": "chain_lightning",
    "layer": "effect",
    "name": "闪电链",
    "words": [
+    "放电",
+    "闪电术",
+    "闪电",
     "闪电链",
     "连闪",
     "雷链",
@@ -1324,7 +1392,8 @@
     "minecraft:entity.lightning_bolt.impact"
    ],
    "title": "闪电链",
-   "subtitle": "雷光连缀，无处可逃"
+   "subtitle": "雷光连缀，无处可逃",
+   "icon": "minecraft:trident"
   },
   {
    "id": "starburst",
@@ -1358,7 +1427,8 @@
     "minecraft:entity.warden.sonic_boom"
    ],
    "title": "星爆·气流斩",
-   "subtitle": "链接开始——"
+   "subtitle": "链接开始——",
+   "icon": "minecraft:nether_star"
   },
   {
    "id": "venom_breath",
@@ -1391,7 +1461,8 @@
     "minecraft:entity.witch.throw"
    ],
    "title": "剧毒瘴气",
-   "subtitle": "紫雾漫野，生者退散"
+   "subtitle": "紫雾漫野，生者退散",
+   "icon": "minecraft:fermented_spider_eye"
   },
   {
    "id": "barrier",
@@ -1423,7 +1494,8 @@
     "minecraft:block.beacon.activate"
    ],
    "title": "结界",
-   "subtitle": "圣域张开，诸邪辟易"
+   "subtitle": "圣域张开，诸邪辟易",
+   "icon": "minecraft:glass_pane"
   },
   {
    "id": "feather_shield",
@@ -1454,7 +1526,8 @@
     "minecraft:entity.ender_dragon.flap"
    ],
    "title": "羽盾",
-   "subtitle": "光羽护心，命悬可续"
+   "subtitle": "光羽护心，命悬可续",
+   "icon": "minecraft:shield"
   },
   {
    "id": "golem_guard",
@@ -1491,7 +1564,8 @@
     "minecraft:entity.irongolem.repair"
    ],
    "title": "铁卫傀儡",
-   "subtitle": "土石成卫，忠不可摧"
+   "subtitle": "土石成卫，忠不可摧",
+   "icon": "minecraft:iron_block"
   },
   {
    "id": "fireworks",
@@ -1524,7 +1598,8 @@
     "minecraft:entity.firework_rocket.launch"
    ],
    "title": "烟花",
-   "subtitle": "为这一刻，喝彩"
+   "subtitle": "为这一刻，喝彩",
+   "icon": "minecraft:firework_rocket"
   },
   {
    "id": "frost_step",
@@ -1556,7 +1631,8 @@
     "minecraft:block.powder_snow.break"
    ],
    "title": "凌波微步",
-   "subtitle": "水波成冰，如履平地"
+   "subtitle": "水波成冰，如履平地",
+   "icon": "minecraft:blue_ice"
   },
   {
    "id": "magnet",
@@ -1588,7 +1664,8 @@
     "minecraft:entity.enderman.teleport"
    ],
    "title": "磁石术",
-   "subtitle": "万物归主，散珠成串"
+   "subtitle": "万物归主，散珠成串",
+   "icon": "minecraft:lodestone"
   },
   {
    "id": "sense",
@@ -1621,7 +1698,8 @@
     "minecraft:entity.breeze.charge"
    ],
    "title": "心眼",
-   "subtitle": "轮廓显形，无所遁形"
+   "subtitle": "轮廓显形，无所遁形",
+   "icon": "minecraft:ender_eye"
   },
   {
    "id": "ignite",
@@ -1652,7 +1730,8 @@
     "minecraft:item.flintandsteel.use"
    ],
    "title": "火焰掌",
-   "subtitle": "一点星光，燎原之始"
+   "subtitle": "一点星光，燎原之始",
+   "icon": "minecraft:flint_and_steel"
   },
   {
    "id": "starlight",
@@ -1683,7 +1762,8 @@
     "minecraft:entity.evoker.cast_spell"
    ],
    "title": "星尘",
-   "subtitle": "星河洒落，此间有光"
+   "subtitle": "星河洒落，此间有光",
+   "icon": "minecraft:glowstone_dust"
   },
   {
    "id": "fire_aura",
@@ -1714,7 +1794,8 @@
     "minecraft:block.fire.ambient"
    ],
    "title": "火焰光环",
-   "subtitle": "三昧真火，护体灼敌"
+   "subtitle": "三昧真火，护体灼敌",
+   "icon": "minecraft:blaze_rod"
   },
   {
    "id": "water_aura",
@@ -1744,7 +1825,8 @@
     "minecraft:entity.player.splash"
    ],
    "title": "水之光环",
-   "subtitle": "碧水绕身，泥沼滞敌"
+   "subtitle": "碧水绕身，泥沼滞敌",
+   "icon": "minecraft:heart_of_the_sea"
   },
   {
    "id": "wind_aura",
@@ -1774,7 +1856,8 @@
     "minecraft:item.elytra.flying"
    ],
    "title": "风暴光环",
-   "subtitle": "旋风环体，吹敌千步"
+   "subtitle": "旋风环体，吹敌千步",
+   "icon": "minecraft:phantom_membrane"
   },
   {
    "id": "earth_aura",
@@ -1804,7 +1887,8 @@
     "minecraft:block.deepslate.place"
    ],
    "title": "大地光环",
-   "subtitle": "厚土沉浮，敌臂力竭"
+   "subtitle": "厚土沉浮，敌臂力竭",
+   "icon": "minecraft:mossy_cobblestone"
   },
   {
    "id": "thunder_aura",
@@ -1834,7 +1918,8 @@
     "minecraft:block.lightning_rod.charged"
    ],
    "title": "雷光光环",
-   "subtitle": "电弧疾走，触之即痛"
+   "subtitle": "电弧疾走，触之即痛",
+   "icon": "minecraft:copper_ingot"
   },
   {
    "id": "vampire_aura",
@@ -1864,7 +1949,8 @@
     "minecraft:particle.soul_escape"
    ],
    "title": "血蚀光环",
-   "subtitle": "血雾游弋，噬敌还体"
+   "subtitle": "血雾游弋，噬敌还体",
+   "icon": "minecraft:rotten_flesh"
   },
   {
    "id": "heal_aura",
@@ -1894,7 +1980,8 @@
     "minecraft:block.beacon.ambient"
    ],
    "title": "圣愈光环",
-   "subtitle": "圣光温柔，伤口自愈"
+   "subtitle": "圣光温柔，伤口自愈",
+   "icon": "minecraft:honey_bottle"
   },
   {
    "id": "speed_aura",
@@ -1924,7 +2011,8 @@
     "minecraft:entity.goat.long_jump"
    ],
    "title": "迅捷光环",
-   "subtitle": "清风推步，健步如飞"
+   "subtitle": "清风推步，健步如飞",
+   "icon": "minecraft:rabbit_foot"
   }
  ]
 }

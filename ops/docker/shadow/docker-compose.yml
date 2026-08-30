@@ -150,11 +150,16 @@ services:
       - ./mc/data/godvoice:/godvoice
     environment:
       TZ: Asia/Shanghai
-      # 2026-08-28 神社之门收编：IA/drones mod 注册必需网络通道后，裸 mineflayer 直连
-      # mc:25599 会被 NeoForge CONFIG 期拒（"you are not running NeoForge"）。
-      # world 的 bot 一律改走 gate:25700（协商边车，自动学习通道清单）。
-      MC_HOST: gate
-      MC_PORT: "25700"
+      # 2026-08-30 直连回归：settlementsfix ConfigTaskGateForNonNeoForgeMixin 上线后，
+      # 非 NeoForge 客户端的 mod CONFIG 任务被服务端直接滤除，裸 mineflayer 直连
+      # mc:25599 已畅通（Goddess 实测过 CONFIG 入 PLAY）。gate 边车保留服务
+      # （Taro 等穿越者仍走 gate），但 world 的女神化身不再绕行——少一跳翻译层，
+      # 少一处包错位（gate 在 Curios/Sophisticated 上服后 PLAY 期解析错位）。
+      # 历史注（2026-08-28 神社之门收编）：IA/drones mod 注册必需网络通道后，裸
+      # mineflayer 直连会被 NeoForge CONFIG 期拒（"you are not running NeoForge"），
+      # 当时的解法是 world 的 bot 一律走 gate:25700 协商边车。
+      MC_HOST: mc
+      MC_PORT: "25599"
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_DATA_DIR: /app/data
