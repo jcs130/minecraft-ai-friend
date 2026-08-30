@@ -1,11 +1,7 @@
 {
- "at": "2026-08-30 11:16:03",
- "ts": 1788059763.2025256,
- "red": [
-  "guards-online",
-  "Kirito-status",
-  "Naruto-status"
- ],
+ "at": "2026-08-30 11:26:03",
+ "ts": 1788060363.446074,
+ "red": [],
  "yellow": [],
  "detail": {
   "panel-9090": {
@@ -22,11 +18,11 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 3 minutes (healthy)"
+   "m": "Up 13 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 7 minutes"
+   "m": "Up 8 minutes"
   },
   "shadow-panel": {
    "s": "green",
@@ -38,7 +34,7 @@
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 36 hours (healthy)"
+   "m": "Up 37 hours (healthy)"
   },
   "guard-bridge": {
    "s": "green",
@@ -46,7 +42,7 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 0s old"
+   "m": "log 12s old"
   },
   "web-entities-fresh": {
    "s": "green",
@@ -57,16 +53,16 @@
    "m": "ok"
   },
   "guards-online": {
-   "s": "red",
-   "m": "missing ['Kirito', 'Naruto']"
+   "s": "green",
+   "m": "both"
   },
   "Kirito-status": {
-   "s": "red",
-   "m": "get_self_status no hp field"
+   "s": "green",
+   "m": "hp 20.0 food 5.0"
   },
   "Naruto-status": {
-   "s": "red",
-   "m": "get_self_status no hp field"
+   "s": "green",
+   "m": "hp 20.0 food 16.0"
   },
   "mc-guard-kirito": {
    "s": "green",
