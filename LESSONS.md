@@ -273,3 +273,5 @@
 
 
 - **BOM 害死 Node JSON.parse 再连锁数据覆盖（2026-08-30 萌萌藏宝点事故）**：PowerShell 5/7 的 Set-Content -Encoding UTF8 写出带 BOM，宿主 Node JSON.parse(readFileSync utf-8) 直接 throw；更毒的是 WaypointStore 构造即 save()——load 失败回写种子把玩家个人点全灭（data/mcdata 双份同灭）。三重防御已落：①load 先剥 BOM；②损坏时 copyFileSync 备份 .broken-<ts> 留证再重建；③铁律：改宿主 json 一律 python open(w,encoding='utf-8')（无 BOM），别用 PowerShell Set-Content。数据恢复源=world.db chronicle 表 cast 事件 detail_json 带 pos。
+
+- **中文 mod 名先查 MC百科再下结论（2026-08-30 阡陌乌龙）**：用户说『阡陌交通』我认成 Macaw's Paths（建材包）差点带偏方案；实际是 RoadWeaver（国创自动织路 mod，MC百科 id 22551）。用户口中的中文 mod 名是第一手线索，mcmod.cn 搜中文名直达条目，比猜英文对应快且准。
