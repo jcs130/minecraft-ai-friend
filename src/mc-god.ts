@@ -1966,8 +1966,73 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           `#${r.id} ${r.name} (${Math.round(r.x)}, ${Math.round(r.z)}) by ${r.found_by}`))
         return
       }
+      case 'skillbar': {
+        // 技能栏（2026-08-30 造物主设计「圆盘可编辑+数字键快捷施法」）：
+        //   /mycli skillbar            → 查看（json 模式带 icon，客户端 HUD 直用）
+        //   /mycli skillbar set 1 圣愈术 → 第 1 槽放圣愈术（''=空槽占位）
+        //   /mycli skillbar clear 3    → 清空第 3 槽
+        //   /mycli skillbar auto      → 重置为推荐栏
+        const sub = cmd.args[0] ?? ''
+        const all = magic.listAtoms()
+        const nameOf = (id: string) => all.find((x) => x.id === id)?.name ?? id
+        const iconOf = (id: string) => all.find((x) => x.id === id)?.icon ?? 'minecraft:paper'
+        const barView = (bar: string[]) => bar
+          .map((id, i) => (id ? { slot: i + 1, id, name: nameOf(id), icon: iconOf(id) } : null))
+          .filter((x): x is { slot: number; id: string; name: string; icon: string } => x !== null)
+        const lineOf = (bar: string[]) => bar.map((id, i) => `${i + 1}=${id ? nameOf(id) : '空'}`).join(' ')
+        if (sub === 'set' || sub === 'clear') {
+          const bar = magic.getSkillbar(subject)
+          const slot = parseInt(cmd.args[1] ?? '', 10)
+          if (!slot || slot < 1 || slot > 8) { reply(`[CLI] 用法：/mycli skillbar ${sub} <1-8>${sub === 'set' ? ' <法术名>' : ''}。`); return }
+          while (bar.length < slot) bar.push('')
+          if (sub === 'clear') { bar[slot - 1] = '' }
+          else {
+            const nameOrId = cmd.args.slice(2).join(' ').trim()
+            const atom = all.find((a) => a.name === nameOrId || a.id === nameOrId)
+            if (!atom) { reply(`[CLI] 没有叫「${nameOrId}」的法术。/cli spells 查表。`); return }
+            const view = magic.getState(subject)
+            const pool = [...view.learned, ...(view.innateSkill ? [view.innateSkill] : [])]
+            if (!pool.includes(atom.id)) { reply(`[信使] 「${atom.name}」你还没学会，进不了技能栏。`); return }
+            bar[slot - 1] = atom.id
+          }
+          const next = magic.setSkillbar(subject, bar)
+          if (cmd.json) jsonReply({ ok: true, skillbar: barView(next) })
+          else reply(`[信使] 技能栏：${lineOf(next) || '（空）'}`)
+          return
+        }
+        if (sub === 'auto') {
+          magic.setSkillbar(subject, [])            // 清自定义 → undefined
+          const fresh = magic.getSkillbar(subject)  // 默认推荐填充
+          if (cmd.json) jsonReply({ ok: true, skillbar: barView(fresh) })
+          else reply(`[信使] 技能栏已重置：${lineOf(fresh)}`)
+          return
+        }
+        // 查看模式（默认；json 给客户端 HUD：icon 字段即物品图标）
+        const bar = magic.getSkillbar(subject)
+        if (cmd.json) { jsonReply({ ok: true, skillbar: barView(bar) }); return }
+        if (!barView(bar).length) { reply(`[信使] 技能栏是空的——/mycli skillbar set <1-8> <法术名>，或 skillbar auto 一键推荐。`); return }
+        replyLines([
+          `[信使] 技能栏（数字键直放）：${lineOf(bar)}`,
+          ...barView(bar).map((s) => `  ${s.slot}. ${s.name} = ${s.icon.replace('minecraft:', '')}`),
+          `编辑：skillbar set <1-8> <法术名>｜清槽：clear <槽>｜重置：auto`,
+        ])
+        return
+      }
       case 'cast': {
         if (!cmd.args.length) { reply(`[CLI] 用法：/cli cast <咒语>。要什么，直说。`); return }
+        // 槽位施法（2026-08-30）：cast 3 = 放技能栏第 3 槽（Command Keys 绑
+        // /mycli cast 1~5 即可，槽里换技能按键不用重绑）。
+        if (/^\d+$/.test(cmd.args[0])) {
+          const slot = parseInt(cmd.args[0], 10)
+          const bar = magic.getSkillbar(subject)
+          const id = slot >= 1 && slot <= bar.length ? bar[slot - 1] : ''
+          if (!id) { reply(`[信使] 第 ${slot} 槽是空的——/mycli skillbar 配置。`); return }
+          const atom = magic.listAtoms().find((a) => a.id === id)!
+          const r = await resolveChant(subject, atom.name)
+          if (cmd.json) jsonReply({ ok: true, slot, skill: atom.name, summary: r })
+          else reply(`[信使] ${r}`)
+          return
+        }
         const chant = cmd.args.join(' ')
         const r = await resolveChant(subject, chant)
         if (cmd.json) jsonReply({ ok: true, summary: r })

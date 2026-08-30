@@ -23,10 +23,10 @@ export interface CliVerbMeta {
 
 /** 命令树（顺序即 help 展示顺序）。 */
 export const CLI_VERBS: CliVerbMeta[] = [
-  { id: 'commands', aliases: ['command', 'cmd'], summary: '列全部命令', usage: 'commands', json: false },
-  { id: 'help', aliases: ['man', 'h', '?'], summary: '命令帮助（可跟命令名）', usage: 'help [verb]', argDesc: 'verb：要查询的命令', json: false },
-  { id: 'status', aliases: ['me', 'who', 'whoami'], summary: '查自身状态', usage: 'status', json: true },
-  { id: 'skills', aliases: ['known', 'learned'], summary: '列已学/可学技能', usage: 'skills', json: true },
+  { id: 'commands', aliases: ['command', 'cmd', '命令'], summary: '列全部命令', usage: 'commands', json: false },
+  { id: 'help', aliases: ['man', 'h', '?', '帮助'], summary: '命令帮助（可跟命令名）', usage: 'help [verb]', argDesc: 'verb：要查询的命令', json: false },
+  { id: 'status', aliases: ['me', 'who', 'whoami', '状态'], summary: '查自身状态', usage: 'status', json: true },
+  { id: 'skills', aliases: ['known', 'learned', '技能'], summary: '列已学/可学技能', usage: 'skills', json: true },
   { id: 'spells', aliases: ['法术', '魔咒', 'magic'], summary: '列全部法术表', usage: 'spells', json: true },
   { id: 'cast', aliases: ['chant', '施', '咏唱'], summary: '咏唱/施法（已学自施，神可代施）', usage: 'cast <咒语>', argDesc: '咒语：法术关键词（如 归乡/圣愈/照明）', json: true },
   { id: 'guardian-cast', aliases: ['gcast', '代施'], summary: '守护天使代主人施放已学技能', usage: 'guardian-cast <法术id>', argDesc: '法术id：主人已学法术（cli spells 查）；仅守护天使可用', json: true },
@@ -35,7 +35,15 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'chat', aliases: ['talk', '说', '聊', '对话'], summary: '与女神直接对话', usage: 'chat <话>', argDesc: '话：想对女神说的（提问/闲聊/求助都行）', json: false },
   { id: 'innate', aliases: ['天赋', 'talent'], summary: '查/选出生天赋', usage: 'innate [我的 | 我选 <法术名>]', argDesc: '我选 <法术名>：选天赋；默认查', json: true },
   { id: 'appraise', aliases: ['鉴定'], summary: '鉴定自身（法力/等阶/秘法）', usage: 'appraise', json: true },
+  { id: 'discoveries', aliases: ['舆图', '发现点', 'discover'], summary: '探索者舆图：发现点一览/赐名', usage: 'discoveries [改名 <id> <新地名>]', argDesc: '改名：给发现点赐名', json: true },
   { id: 'summon', aliases: ['召唤', '传唤'], summary: '召唤术：把现有守卫召来相助（桐人/鸣人）', usage: 'summon <守卫名> <任务>', argDesc: '守卫名：桐人/鸣人；任务：让他干什么（如 帮我挖矿）', json: true },
+  { id: 'cultivate', aliases: ['灌顶', '修行', '传功'], summary: '修行灌顶：给自己灌技艺经验（60秒一息）', usage: 'cultivate [类别]', argDesc: '类别：combat/mining 等，缺省 combat', json: true },
+  { id: 'skillbar', aliases: ['技能栏', '法术栏'], summary: '技能栏：查看/配槽（数字键直放）', usage: 'skillbar [set <1-8> <法术名> | clear <槽> | auto]', argDesc: 'set：配槽；clear：清槽；auto：重置推荐栏', json: true },
+  { id: 'bookget', aliases: ['领书', '取书'], summary: '领取技能书：已学法术随时领✦书（拿手上右键施法）', usage: 'bookget <法术名>', argDesc: '法术名：已学会的（如 螺旋丸）', json: false },
+  { id: 'learn', aliases: ['参悟', '学会'], summary: '持书参悟：手拿✦技能书学会该法术（入命格书）', usage: 'learn <法术名>', argDesc: '法术名：书上写的名字；书必须在手', json: false },
+  { id: 'goto', aliases: ['传送去', '去', '传送'], summary: '传送：按序号/名字去传送点（书页点行=同一事）', usage: 'goto <序号|名字>', argDesc: '序号：传送阵页的第几项；名字：点名（如 家）', json: false },
+  { id: 'waypoint', aliases: ['传送点', '路标', '记点'], summary: '传送点簿：查列表 / 记 <名字> / 删 <序号>', usage: 'waypoint [记 <名字> | 删 <序号>]', argDesc: '记：把脚下记为传送点；删：删自己的第几项', json: false },
+  { id: 'growth', aliases: ['进度', '修为'], summary: '查修行进度（经验/点数）', usage: 'growth [类别]', argDesc: '类别：缺省 combat', json: true },
 ]
 
 // ── 解析 ───────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'discoveries', aliases: ['舆图', '发现点', 'discover'], summary: '探索者舆图：发现点一览/赐名', usage: 'discoveries [改名 <id> <新地名>]', argDesc: '改名：给发现点赐名', json: true },
   { id: 'summon', aliases: ['召唤', '传唤'], summary: '召唤术：把现有守卫召来相助（桐人/鸣人）', usage: 'summon <守卫名> <任务>', argDesc: '守卫名：桐人/鸣人；任务：让他干什么（如 帮我挖矿）', json: true },
   { id: 'cultivate', aliases: ['灌顶', '修行', '传功'], summary: '修行灌顶：给自己灌技艺经验（60秒一息）', usage: 'cultivate [类别]', argDesc: '类别：combat/mining 等，缺省 combat', json: true },
+  { id: 'skillbar', aliases: ['技能栏', '法术栏'], summary: '技能栏：查看/配槽（数字键直放）', usage: 'skillbar [set <1-8> <法术名> | clear <槽> | auto]', argDesc: 'set：配槽；clear：清槽；auto：重置推荐栏', json: true },
   { id: 'bookget', aliases: ['领书', '取书'], summary: '领取技能书：已学法术随时领✦书（拿手上右键施法）', usage: 'bookget <法术名>', argDesc: '法术名：已学会的（如 螺旋丸）', json: false },
   { id: 'learn', aliases: ['参悟', '学会'], summary: '持书参悟：手拿✦技能书学会该法术（入命格书）', usage: 'learn <法术名>', argDesc: '法术名：书上写的名字；书必须在手', json: false },
   { id: 'goto', aliases: ['传送去', '去', '传送'], summary: '传送：按序号/名字去传送点（书页点行=同一事）', usage: 'goto <序号|名字>', argDesc: '序号：传送阵页的第几项；名字：点名（如 家）', json: false },

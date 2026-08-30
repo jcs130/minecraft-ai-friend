@@ -89,6 +89,8 @@ interface Atom {
    *  delayMs 分批补发 commands（占位符同主 commands，vars 快照复用）。
    *  例：[{delayMs:150, commands:["execute as @e[tag=rasengan] at @s run damage …"]}] */
   postCast?: { delayMs: number; commands: string[] }[]
+  /** 图标物品（2026-08-30）：技能在 UI（技能栏/面板/书）里的物品图标 id。 */
+  icon?: string
 }
 
 // ── 对外服务：把法术表与状态库的关键能力暴露给其他插件（降临仪式等）──
@@ -100,6 +102,8 @@ export interface AtomSummary {
   school?: string
   cost: CostSpec
   requiredLevel: number
+  /** 图标物品（2026-08-30）：技能在 UI（技能栏/面板/书）里的物品图标。 */
+  icon?: string
 }
 
 // ── 天平引擎（2026-08-17 扛枪提议：女神=世界维护者，动态平衡技能）──────
@@ -289,6 +293,11 @@ export interface MagicService {
   sniffChant(message: string): boolean
   /** 咒语框架前缀分级分发（2026-08-23）：all=true（AI 玩家）全量；否则公共池（真人随机被告知 2-3 个）。 */
   chantPrefixes(all: boolean): string[]
+  /* ── 技能栏（2026-08-30 造物主设计「圆盘可编辑+数字键快捷施法」）── */
+  /** 读技能栏（无则自动按推荐表默认填充并持久化）。 */
+  getSkillbar(username: string): string[]
+  /** 整栏写入（≤8 槽、去重、只收已学/天赋），返回落定后的栏。 */
+  setSkillbar(username: string, ids: string[]): string[]
   /* ── 成长体系（2026-08-17 路线 A 定稿：等级复用原生 XpLevel；魔力为体系自有属性）── */
   /** 魔力上限基础公式：100 + 12 × (XpLevel − 1)；最终 = 此值 + maxManaBonus。 */
   maxManaFor(level: number): number
@@ -840,6 +849,9 @@ export interface PlayerMagicState {
   advancements: string[]
   /** 由成就解锁的法术 atom id（learned 的子集；面板标注来源 🏆 历练）。 */
   advancementSkills: string[]
+  /** 技能栏槽位（2026-08-30 造物主设计「圆盘可编辑+数字键快捷施法」）：atom id 数组，
+   *  下标即槽位 1-8；缺省自动按推荐表从已学里填。 */
+  skillbar?: string[]
 }
 
 interface MagicStateFile {
@@ -891,6 +903,33 @@ export class MagicStateStore {
     }
   }
 
+  /** 技能栏槽位（2026-08-30）：''=空槽占位（保槽位语义：设第 5 槽不会塌成第 3 槽）。
+   *  失效 id（遗忘/热重载消失）原位变 ''；无栏则按推荐表自动填并持久化。 */
+  skillbar(username: string, atoms: Atom[]): string[] {
+    const p = this.get(username)
+    const known = new Set<string>([...p.learned, ...(p.innateSkill ? [p.innateSkill] : [])])
+    const valid = (id: string) => id === '' || (known.has(id) && atoms.some((a) => a.id === id))
+    if (p.skillbar) {
+      let dirty = false
+      const alive = p.skillbar.map((id) => {
+        if (valid(id)) return id
+        dirty = true
+        return ''
+      })
+      if (dirty) { p.skillbar = alive; this.save() }
+      return alive
+    }
+    // 默认填充：推荐优先级 ∩ 已学，剩余已学补位，最多 6 槽（数字 1-6 / 手柄十字+双肩）。
+    const PREF = ['heal', 'rasengan', 'chain_lightning', 'fireburst', 'swift', 'home']
+    const bar = [...PREF.filter((id) => known.has(id) && atoms.some((a) => a.id === id)),
+      ...[...known].filter((id) => !PREF.includes(id) && atoms.some((a) => a.id === id))].slice(0, 6)
+    p.skillbar = bar
+    this.save()
+    return bar
+  }
+
+  persist(): void { this.save() }
+
   /** 惰性回蓝：结算到 now，返回该玩家状态。 */
   get(username: string, now = Date.now()): PlayerMagicState {
     let p = this.state.players[username]
@@ -912,6 +951,7 @@ export class MagicStateStore {
         advancementSkills: [],
       }
     }
+    if (p.skillbar === undefined) p.skillbar = undefined
     // 兜底：旧版状态文件缺字段时补默认值（exp 字段已随路线 A 废弃，读到的旧值忽略）。
     if (p.innateSkill === undefined) p.innateSkill = null
     if (p.backstory === undefined) p.backstory = null
@@ -1286,7 +1326,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
 
 
   const service: MagicService = {
-    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], category: a.category, school: a.school, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 })),
+    listAtoms: () => atoms.map((a) => ({ id: a.id, name: a.name, words: [...a.words], category: a.category, school: a.school, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1, icon: a.icon })),
     getAtomById: (id) => {
       const a = atoms.find((x) => x.id === id)
       return a ? { id: a.id, name: a.name, words: [...a.words], category: a.category, school: a.school, cost: { ...a.cost }, requiredLevel: a.requiredLevel ?? 1 } : null
@@ -1375,7 +1415,26 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         hpRatio: p.hpRatio,
         foodRatio: p.foodRatio,
         manaPerSec: store.regenRateForPlayer(u),
+        skillbar: store.skillbar(u, atoms),
       }
+    },
+    // ── 技能栏（2026-08-30 造物主设计「圆盘可编辑+数字键快捷施法」）──
+    getSkillbar: (u) => store.skillbar(u, atoms),
+    setSkillbar: (u, ids) => {
+      // 校验：≤8 槽、去重、非空 id 必须已学或天赋；''=空槽占位原样保留。
+      // 空数组 = 重置（清掉自定义，下次 getSkillbar 走默认填充）。
+      const p = store.get(u)
+      const seen = new Set<string>()
+      const clean: string[] = []
+      for (const id of ids.slice(0, 8)) {
+        if (id === '') { clean.push(''); continue }
+        if (seen.has(id)) continue
+        if (!p.learned.includes(id) && p.innateSkill !== id) continue
+        seen.add(id); clean.push(id)
+      }
+      p.skillbar = clean.length ? clean : undefined
+      store.persist()
+      return clean
     },
     maxManaFor: (level) => store.maxManaFor(level),
     addMaxManaBonus: (u, amount) => store.addMaxManaBonus(u, amount),
