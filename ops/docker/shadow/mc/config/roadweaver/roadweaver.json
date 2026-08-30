@@ -1,0 +1,111 @@
+{
+  "structurePrediction": {
+    "enabled": true,
+    "structureAvoidanceEnabled": true,
+    "predictRadiusChunks": 128,
+    "biomePrefilter": true,
+    "structureWhitelist": [
+      "#minecraft:village"
+    ],
+    "structureBlacklist": [],
+    "villageRoadOffset": 60,
+    "otherStructureRoadOffset": 15
+  },
+  "planning": {
+    "initialPlanRadiusChunks": 48,
+    "dynamicPlanEnabled": true,
+    "dynamicPlanRadiusChunks": 48,
+    "dynamicPlanStrideChunks": 32,
+    "planningAlgorithm": "RNG",
+    "terrainSamplingMode": "COARSE_CORRIDOR"
+  },
+  "pathfindingCost": {
+    "orthoStepCost": 1.0,
+    "diagStepCost": 1.414,
+    "elevationWeight": 80,
+    "biomeWeight": 2,
+    "stabilityWeight": 15,
+    "waterDepthWeight": 80,
+    "nearWaterCost": 80,
+    "waterProximityCost": 20,
+    "heuristicWeight": 15.0,
+    "deviationWeight": 0.5,
+    "aStarStep": 8,
+    "aStarMaxSteps": 200000,
+    "pathfindingAlgorithm": "GRADIENT_DESCENT"
+  },
+  "roadAppearance": {
+    "roadsEnabled": true,
+    "allowArtificial": true,
+    "allowNatural": true,
+    "placeWaypoints": false,
+    "spawnCabinEnabled": true,
+    "averagingRadius": 8,
+    "roadWidth": 3,
+    "roadSignsEnabled": true,
+    "lampInterval": 32,
+    "roadClearHeight": 4,
+    "tunnelEnabled": false,
+    "tunnelClearHeight": 5,
+    "preventTreesOnRoad": true,
+    "maxSlopeStepPerTwoSegments": 1,
+    "slopeLimitEnabled": true
+  },
+  "bridge": {
+    "enabled": true,
+    "deckClearance": 2,
+    "maxLengthBlocks": 100,
+    "useBuoysInstead": false,
+    "useBuoysWhenSkipped": false,
+    "buoyIntervalBlocks": 32,
+    "pierInterval": 6,
+    "pierWidth": 1,
+    "pierMaxHeight": 20,
+    "keepLamps": true,
+    "rampSegments": 4,
+    "minWaterDepth": 1,
+    "minLength": 5,
+    "mergeGap": 8
+  },
+  "performance": {
+    "sharedWorkerThreads": 2,
+    "initialGenerationThreads": 8,
+    "maxConcurrentGenerations": 1,
+    "threadDutyCycle": 50,
+    "idleGenerationEnabled": false,
+    "idleThreadDutyCycle": 20,
+    "openclCoarseSamplingEnabled": true,
+    "openclAccurateSamplingEnabled": true,
+    "openclDevicePreference": "AUTO",
+    "openclMinSamples": 1024,
+    "openclValidateSamples": false
+  },
+  "roadsideStructure": {
+    "enabled": true,
+    "maxStructuresPerRoad": 3,
+    "smallStructureOffset": 8,
+    "mediumStructureOffset": 12,
+    "largeStructureOffset": 16
+  },
+  "roadsideVillage": {
+    "enabled": true,
+    "maxVillagesPerRoad": 6,
+    "minRoadSegments": 32,
+    "windowSegments": 24,
+    "targetNodeCountMin": 6,
+    "targetNodeCountMax": 14,
+    "maxHeightDiff": 4,
+    "maxLocalSlope": 4,
+    "minCurveAngle": 0.0,
+    "maxCurveAngle": 70.0,
+    "roadBufferBlocks": 6,
+    "buildingGapInterval": 3,
+    "maxStepHeight": 3,
+    "maxDistanceFromCenter": 96,
+    "spawnChance": 0.3
+  },
+  "client": {
+    "loadingTipsEnabled": true,
+    "loadingProgressEnabled": true
+  }
+}
