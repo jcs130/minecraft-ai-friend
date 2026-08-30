@@ -17,12 +17,12 @@ import { createLifecycle } from './lifecycle.ts'
  * 权限隔离：本插件只存在于世界进程。穿越者进程零 RCON、零魔法 ID——
  * 它们只是"说出咒语"（bot.chat），由这里听见并施法。真人与 AI 同通道。
  */
-// 归乡默认落点（2026-08-19 定；2026-08-21 迁至灯门镇广场；2026-08-22 迁新镇）：
-// ——19 位村民锚点已迁新平原村庄（岳山 3096,70,-1340 … 阿禾 3112,68,-1348），
-// 几何中心约 (3094,-1338)，实测 y=67 实心、y=68+ 空旷，站立点 y=68。
-// 玩家没睡床（实体无 SpawnX/Y/Z）时归乡不再失败，天神直接送回灯门新镇。
-// 城镇搬迁只需改这一处。
-const TOWN_SPAWN = { x: 3094, y: 68, z: -1338 }
+// 归乡落点（2026-08-30 造物主定谳：家的地址=初始千灯村）：
+// ——千灯村·千灯堂（村中心 (-540,868)，35 位村民锚点重心 (-531.6,853.9)），
+// 地表 y=62、堂内地板站立点 y=64。归乡固定千灯堂（不再查床——村外/野外
+// 睡床会劫持落点，鸣人案例）。旧灯门新镇/收编村庄 (3094,-1338) 随 2026-08-25
+// 世界重生已废弃。城镇搬迁只需改这一处。
+const TOWN_SPAWN = { x: -540, y: 64, z: 868 } // 千灯堂·千灯村中心（2026-08-30 造物主谕迁址：家的地址=初始千灯村；旧灯门新镇 3094,68,-1338 已随世界重生废弃）
 
 export interface Config {
   enabled: boolean
@@ -650,12 +650,20 @@ function extractTaskText(s: string, stripGuard: boolean, spellWords: string[] = 
 
 // ── 匹配 / 参数 / 消耗 ─────────────────────────────────────────────────
 function matchSpell(chant: string, atoms: Atom[]): { atom: Atom; params: Record<string, number | string> } | null {
+  // 2026-08-30：词长优先——短词常是长咒子串（『闪电』⊂『附魔闪电链』），首中即返
+  // 会截胡长咒。全量收候选，最长命中词者胜；平词长保持 atoms 文件序（稳定）。
+  // 2026-08-30 之二：跳过 type:passive——被动装备系（夜视之瞳/铁躯/鱼鳃/火衣）不经
+  // 咏唱匹配（参悟走 CLI learn 分支）。否则被动词撞咏唱版（『夜视』『铁肤』『鱼鳃』
+  // 『防火』）时，文件序在前的被动会抢走匹配，cast 层再拦就变成「明明有咏唱版却不给放」。
+  let best: { atom: Atom; params: Record<string, number | string>; len: number } | null = null
   for (const atom of atoms) {
-    if (atom.words.some((w) => chant.includes(w))) {
-      return { atom, params: extractParams(chant, atom) }
-    }
+    if ((atom as { type?: string }).type === 'passive') continue
+    let hitLen = 0
+    for (const w of atom.words) if (chant.includes(w) && w.length > hitLen) hitLen = w.length
+    if (hitLen === 0) continue
+    if (!best || hitLen > best.len) best = { atom, params: extractParams(chant, atom), len: hitLen }
   }
-  return null
+  return best
 }
 
 // ── 咒语向量兜底（2026-08-20 起）：严格匹配失败 → bge-m3 语义近邻 ──
@@ -1294,6 +1302,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   // resetBalance 从基准表重载再重放余下补丁。所有方法零 LLM、同步生效。
   const store = new MagicStateStore(config.statePath, config.maxManaDefault, config.regenPerSec)
   let balancePatches: BalancePatch[] = []
+  // 施法去重表（2026-08-30）：key=`player|atomId` → 上次成功执行时间戳。
+  // 守卫魂 LLM 每 tick 决策可能重复咏唱同一法术（照明循环事件），窗口内拒绝。
+  const castDedupe = new Map<string, number>()
   const balancePath = resolve(config.balancePath)
   const applyPatchToAtoms = (p: BalancePatch): boolean => {
     if (p.field === 'regenPerSec') {
@@ -1478,14 +1489,13 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const out = await rcon.send(`playsound ${s} master ${target} ${vars.px} ${vars.py} ${vars.pz} 1 1`)
       if (out) log(`vfx sound[${s}] -> ${out.trim()}`)
     }
-    // 大字咏唱词 + 副标题（金色主标题 / 黄色副标题）
-    if (atom.title) {
-      const t = renderCommand(atom.title, vars)
-      await rcon.send(`title ${target} title ${JSON.stringify({ text: t, color: 'gold', bold: true })}`)
-    }
-    if (atom.subtitle) {
-      const st = renderCommand(atom.subtitle, vars)
-      await rcon.send(`title ${target} subtitle ${JSON.stringify({ text: st, color: 'yellow' })}`)
+    // 咏唱词显示（2026-08-30 造物主反馈「字太大挡视线」）：
+    // 弃用全屏大字 title/subtitle，改 actionbar 小字（物品栏上方一行）——不挡视线。
+    if (atom.title || atom.subtitle) {
+      const t = atom.title ? renderCommand(atom.title, vars) : ''
+      const st = atom.subtitle ? renderCommand(atom.subtitle, vars) : ''
+      const line = t && st ? `✦ ${t} · ${st}` : (t || st)
+      await rcon.send(`title ${target} actionbar ${JSON.stringify({ text: `✦ ${line.replace(/^✦ /, '')}`, color: 'gold', bold: true })}`)
     }
   }
 
@@ -1618,6 +1628,15 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       return `「${atom.name}」是 ${requiredLevel} 级的秘法，你的魔力层级才 ${liveLevel} 级，强行咏唱只会反噬。挖矿、历练、施法、供奉皆可积攒修为（头顶绿条就是你的修为层级）。`
     }
 
+    // 被动装备化（2026-08-30）：type:passive 不是可施放法术——参悟即装备、常驻生效，
+    // 咏唱拦下并告知（LLM 施法者读到即停，防决策循环）。
+    if ((atom as { type?: string }).type === 'passive') {
+      const learned = pstate.learned.includes(atom.id) || pstate.innateSkill === atom.id
+      return learned
+        ? `「${atom.name}」是被动之体，早已融入你的身躯——无需咏唱，效果常伴。`
+        : `「${atom.name}」是被动之体，参悟（拿到✦技能书 /cli 参悟 ${atom.name}）即永久装备，无需咏唱。`
+    }
+
     // item 参数没解析出来：不 fallback 面包，而是让女神指出不识此物
     if (atom.params?.item && !params.item) {
       return `你想以「${atom.name}」造物，但天神不识此物。已知的可造之物：${Object.keys(GIVE_WHITELIST).join('、')}。换一种说法试试（如「造物赐我熔炉」）。`
@@ -1626,6 +1645,25 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     if (cost.mana > pstate.mana + 0.001) {
       return `你咏唱「${atom.name}」，但魔力不足：需要 ${cost.mana} 点，你只有 ${Math.floor(pstate.mana)} 点。静候片刻待魔力恢复。`
     }
+
+    // 施法去重（2026-08-30 鸣人照明循环事件）：LLM 决策类施法者（守卫魂）可能
+    // 每 tick 重复咏唱同一法术（give 刷屏/魔力空转）。同一玩家同一原子冷却窗内
+    // 直接婉拒，回复里明说剩余秒数——守卫魂读到即可停止再念。
+    // 保命术（heal）窗口放窄到 8s：战斗中反复自愈是正当需求。
+    const castDedupeMs = atom.id === 'heal' ? 8000 : 20000
+    const dedupeKey = `${username}|${atom.id}`
+    const lastCastAt = castDedupe.get(dedupeKey) ?? 0
+    const elapsed = Date.now() - lastCastAt
+    if (elapsed > 0 && elapsed < castDedupeMs) {
+      const waitSec = Math.ceil((castDedupeMs - elapsed) / 1000)
+      appendSkillUsage({
+        ts: new Date().toISOString(), player: username, atom: atom.id, chant: body.slice(0, 120),
+        mana: 0, food: 0, hp: 0, manaLeft: Math.floor(pstate.mana), maxMana: pstate.maxMana, level: pstate.level,
+        matchMode: 'dedupe_deny', tokens: 0, latencyMs: 0, success: false, result: `cooldown ${waitSec}s`,
+      })
+      return `「${atom.name}」方才已施过，余韵未散——约 ${waitSec} 秒后再念。`
+    }
+    castDedupe.set(dedupeKey, Date.now())
 
     // 逆转化（cost.mana < 0，燃血/炼食换魔）：魔力盈满时拒绝——白白的牺牲。
     if (cost.mana < 0 && pstate.mana >= pstate.maxMana - 0.001) {
@@ -1667,24 +1705,17 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       await new Promise((res) => setTimeout(res, opts.latencyMs ?? 0))
     }
 
-    // 归乡：家的真相 = 玩家重生点（床）。没睡过床时回落灯门镇中心，
-    // 不再失败劝退（2026-08-19 修订）。
+    // 归乡：家的真相 = 千灯堂（千灯村中心，2026-08-30 造物主定谳）。
+    // 旧「有床送床」语义废弃——村外/野外睡床会劫持归乡落点（鸣人案例），家固定为千灯村。
     let bx = 0
     let by = 0
     let bz = 0
     let homeToTown = false
     if (atom.id === 'home') {
-      const spawn = await rcon.getSpawn(username)
-      if (spawn) {
-        bx = spawn.x
-        by = spawn.y
-        bz = spawn.z
-      } else {
-        bx = TOWN_SPAWN.x
-        by = TOWN_SPAWN.y
-        bz = TOWN_SPAWN.z
-        homeToTown = true
-      }
+      bx = TOWN_SPAWN.x
+      by = TOWN_SPAWN.y
+      bz = TOWN_SPAWN.z
+      homeToTown = true
     }
 
     // 弹道方向（2026-08-23 火球术 / 2026-08-29 慢弹档 / 2026-08-30 螺旋丸根治）：
@@ -1910,17 +1941,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     let by = 0
     let bz = 0
     if (atom.id === 'home') {
-      const spawn = await rcon.getSpawn(username)
-      if (spawn) {
-        bx = spawn.x
-        by = spawn.y
-        bz = spawn.z
-      } else {
-        // 没睡过床：回落灯门镇中心（与快路径 cast() 同一常量，2026-08-19）
-        bx = TOWN_SPAWN.x
-        by = TOWN_SPAWN.y
-        bz = TOWN_SPAWN.z
-      }
+      // 2026-08-30 定谳：归乡固定千灯堂（千灯村），不再查床（村外床劫持问题）
+      bx = TOWN_SPAWN.x
+      by = TOWN_SPAWN.y
+      bz = TOWN_SPAWN.z
     }
 
     const vars: Record<string, number | string> = {

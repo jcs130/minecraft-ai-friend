@@ -17,12 +17,12 @@ import { createLifecycle } from './lifecycle.ts'
  * 权限隔离：本插件只存在于世界进程。穿越者进程零 RCON、零魔法 ID——
  * 它们只是"说出咒语"（bot.chat），由这里听见并施法。真人与 AI 同通道。
  */
-// 归乡默认落点（2026-08-19 定；2026-08-21 迁至灯门镇广场；2026-08-22 迁新镇）：
-// ——19 位村民锚点已迁新平原村庄（岳山 3096,70,-1340 … 阿禾 3112,68,-1348），
-// 几何中心约 (3094,-1338)，实测 y=67 实心、y=68+ 空旷，站立点 y=68。
-// 玩家没睡床（实体无 SpawnX/Y/Z）时归乡不再失败，天神直接送回灯门新镇。
-// 城镇搬迁只需改这一处。
-const TOWN_SPAWN = { x: 3094, y: 68, z: -1338 }
+// 归乡落点（2026-08-30 造物主定谳：家的地址=初始千灯村）：
+// ——千灯村·千灯堂（村中心 (-540,868)，35 位村民锚点重心 (-531.6,853.9)），
+// 地表 y=62、堂内地板站立点 y=64。归乡固定千灯堂（不再查床——村外/野外
+// 睡床会劫持落点，鸣人案例）。旧灯门新镇/收编村庄 (3094,-1338) 随 2026-08-25
+// 世界重生已废弃。城镇搬迁只需改这一处。
+const TOWN_SPAWN = { x: -540, y: 64, z: 868 } // 千灯堂·千灯村中心（2026-08-30 造物主谕迁址：家的地址=初始千灯村；旧灯门新镇 3094,68,-1338 已随世界重生废弃）
 
 export interface Config {
   enabled: boolean
@@ -1705,24 +1705,17 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       await new Promise((res) => setTimeout(res, opts.latencyMs ?? 0))
     }
 
-    // 归乡：家的真相 = 玩家重生点（床）。没睡过床时回落灯门镇中心，
-    // 不再失败劝退（2026-08-19 修订）。
+    // 归乡：家的真相 = 千灯堂（千灯村中心，2026-08-30 造物主定谳）。
+    // 旧「有床送床」语义废弃——村外/野外睡床会劫持归乡落点（鸣人案例），家固定为千灯村。
     let bx = 0
     let by = 0
     let bz = 0
     let homeToTown = false
     if (atom.id === 'home') {
-      const spawn = await rcon.getSpawn(username)
-      if (spawn) {
-        bx = spawn.x
-        by = spawn.y
-        bz = spawn.z
-      } else {
-        bx = TOWN_SPAWN.x
-        by = TOWN_SPAWN.y
-        bz = TOWN_SPAWN.z
-        homeToTown = true
-      }
+      bx = TOWN_SPAWN.x
+      by = TOWN_SPAWN.y
+      bz = TOWN_SPAWN.z
+      homeToTown = true
     }
 
     // 弹道方向（2026-08-23 火球术 / 2026-08-29 慢弹档 / 2026-08-30 螺旋丸根治）：
@@ -1948,17 +1941,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     let by = 0
     let bz = 0
     if (atom.id === 'home') {
-      const spawn = await rcon.getSpawn(username)
-      if (spawn) {
-        bx = spawn.x
-        by = spawn.y
-        bz = spawn.z
-      } else {
-        // 没睡过床：回落灯门镇中心（与快路径 cast() 同一常量，2026-08-19）
-        bx = TOWN_SPAWN.x
-        by = TOWN_SPAWN.y
-        bz = TOWN_SPAWN.z
-      }
+      // 2026-08-30 定谳：归乡固定千灯堂（千灯村），不再查床（村外床劫持问题）
+      bx = TOWN_SPAWN.x
+      by = TOWN_SPAWN.y
+      bz = TOWN_SPAWN.z
     }
 
     const vars: Record<string, number | string> = {

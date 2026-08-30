@@ -3,6 +3,12 @@ import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
+import {
+  GUARD_FOLLOW_SPEC as guardFollowSpec,
+  GUARD_FOLLOW_TARGET,
+  GUARD_FOLLOW_UUID,
+  decideGuardFollow,
+} from './guard-follow.mjs'
 import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
 import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
@@ -509,8 +515,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 与 python 侧读同一份 waypoints.json。序号铁律：shared 前 + personal 后，
   // 书页第 n 行 = 公屏说 n 传去的地方。
   const waypoints = new WaypointStore(`${DATA_DIR}/waypoints.json`, [
-    { id: 1, name: '村庄广场', x: 3096, y: 67, z: -1340, dim: 'minecraft:overworld', createdAt: 0 },
-    { id: 2, name: '家', x: 3098, y: 67, z: -1337, dim: 'minecraft:overworld', createdAt: 0 },
+    { id: 1, name: '千灯村广场', x: -547, y: 64, z: 868, dim: 'minecraft:overworld', createdAt: 0 },
+    { id: 2, name: '家·千灯堂', x: -541, y: 64, z: 868, dim: 'minecraft:overworld', createdAt: 0 },
   ])
   const lastTp = new Map<string, number>() // 数字传送冷却（防连点抖动）
   /** 传送执行：tp + 粒子/音效仪式感 + 编年史。返回结果描述。 */
@@ -1245,68 +1251,81 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     })()
   }, 20_000)
 
-  // ── 公共军械库（2026-08-29 造物主谕「村里放大箱一堆装备大家随意取用」）─────
-  // 灯门镇广场 3095/3096 66 -1342 双箱+告示牌（天神手书）。6h 巡检：对照
-  // 标准清单「缺啥补啥」——空位补满、在位不动（玩家寄存私物不打扰）。
-  const ARMORY_BOXES: Array<{ x: number; y: number; z: number; base: number }> = [
-    { x: 3095, y: 66, z: -1342, base: 0 },   // 左箱 slot 0-26（replaceitem container.N）
-    { x: 3096, y: 66, z: -1342, base: 0 },   // 右箱（各箱独立 0 起）
+  // ── 公共军械库（2026-08-29 立；2026-08-30 迁址千灯堂）──────────────────
+  // 千灯堂·千灯村 (-538/-537, 63, 866) 双桶+告示牌（天神手书）。6h 巡检：
+  // 对照标准清单「缺啥补啥」——空位补满、在位不动（玩家寄存私物不打扰）。
+  // 2026-08-30 两个坑定谳：①旧灯门镇坐标随世界重生废弃，迁址；
+  // ②settlements mod 给 chest 挂 chest_waxed 附件静默拦截 item replace
+  // （回执无错但 Items 不变）——改用 barrel + data merge 直写 NBT 绕过。
+  const ARMORY_BOXES: Array<{ x: number; y: number; z: number }> = [
+    { x: -538, y: 63, z: 866 }, // 西桶：铁甲工具弓箭
+    { x: -537, y: 63, z: 866 }, // 东桶：补给+钻石高级货
   ]
-  const ARMORY_STOCK: Array<{ item: string; count: number }> = [
-    // 左箱：铁甲×3 套 + 铁工具 + 弓箭
-    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
-    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
-    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
-    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
-    { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
-    { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
-    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_sword', count: 1 },
-    { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_pickaxe', count: 1 },
-    { item: 'minecraft:iron_pickaxe', count: 1 }, { item: 'minecraft:iron_axe', count: 1 },
-    { item: 'minecraft:iron_axe', count: 1 }, { item: 'minecraft:iron_shovel', count: 1 },
-    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:bow', count: 1 },
-    { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:arrow', count: 64 },
-    { item: 'minecraft:arrow', count: 64 }, { item: 'minecraft:shield', count: 1 },
-    // 右箱：补给 + 钻石高级货（少量惊喜）+ 设施
-    { item: 'minecraft:bread', count: 64 }, { item: 'minecraft:golden_apple', count: 16 },
-    { item: 'minecraft:torch', count: 64 }, { item: 'minecraft:cooked_beef', count: 64 },
-    { item: 'minecraft:red_bed', count: 1 }, { item: 'minecraft:white_bed', count: 1 },
-    { item: 'minecraft:oak_boat', count: 1 }, { item: 'minecraft:water_bucket', count: 1 },
-    { item: 'minecraft:ender_pearl', count: 4 }, { item: 'minecraft:diamond_sword', count: 1 },
-    { item: 'minecraft:diamond_pickaxe', count: 1 }, { item: 'minecraft:diamond_helmet', count: 1 },
-    { item: 'minecraft:diamond_chestplate', count: 1 }, { item: 'minecraft:diamond_leggings', count: 1 },
-    { item: 'minecraft:diamond_boots', count: 1 }, { item: 'minecraft:enchanted_golden_apple', count: 2 },
-    { item: 'minecraft:experience_bottle', count: 64 }, { item: 'minecraft:ladder', count: 32 },
-    { item: 'minecraft:crafting_table', count: 1 }, { item: 'minecraft:furnace', count: 1 },
+  const ARMORY_STOCK: Array<Array<{ item: string; count: number }>> = [
+    // 西桶：铁甲×3 套 + 铁工具 + 弓箭 + 火把口粮
+    [
+      { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+      { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+      { item: 'minecraft:iron_helmet', count: 1 }, { item: 'minecraft:iron_chestplate', count: 1 },
+      { item: 'minecraft:iron_leggings', count: 1 }, { item: 'minecraft:iron_boots', count: 1 },
+      { item: 'minecraft:iron_sword', count: 1 }, { item: 'minecraft:iron_sword', count: 1 },
+      { item: 'minecraft:iron_pickaxe', count: 1 }, { item: 'minecraft:iron_pickaxe', count: 1 },
+      { item: 'minecraft:iron_axe', count: 1 }, { item: 'minecraft:iron_axe', count: 1 },
+      { item: 'minecraft:iron_shovel', count: 1 }, { item: 'minecraft:bow', count: 1 },
+      { item: 'minecraft:bow', count: 1 }, { item: 'minecraft:arrow', count: 64 },
+      { item: 'minecraft:arrow', count: 64 }, { item: 'minecraft:shield', count: 1 },
+      { item: 'minecraft:torch', count: 64 }, { item: 'minecraft:bread', count: 64 },
+      { item: 'minecraft:cooked_beef', count: 32 }, { item: 'minecraft:golden_apple', count: 8 },
+    ],
+    // 东桶：钻石套+补给+设施
+    [
+      { item: 'minecraft:diamond_helmet', count: 1 }, { item: 'minecraft:diamond_chestplate', count: 1 },
+      { item: 'minecraft:diamond_leggings', count: 1 }, { item: 'minecraft:diamond_boots', count: 1 },
+      { item: 'minecraft:diamond_sword', count: 1 }, { item: 'minecraft:diamond_pickaxe', count: 1 },
+      { item: 'minecraft:diamond_axe', count: 1 }, { item: 'minecraft:diamond_shovel', count: 1 },
+      { item: 'minecraft:enchanted_golden_apple', count: 2 }, { item: 'minecraft:golden_apple', count: 16 },
+      { item: 'minecraft:ender_pearl', count: 4 }, { item: 'minecraft:experience_bottle', count: 64 },
+      { item: 'minecraft:water_bucket', count: 1 }, { item: 'minecraft:oak_boat', count: 1 },
+      { item: 'minecraft:ladder', count: 32 }, { item: 'minecraft:crafting_table', count: 1 },
+      { item: 'minecraft:furnace', count: 1 }, { item: 'minecraft:red_bed', count: 1 },
+      { item: 'minecraft:white_bed', count: 1 },
+    ],
   ]
   let armoryLastCheck = ''
   setInterval(() => {
     void (async () => {
       try {
-        // 箱子是否还在（被炸/被拆则跳过本轮，下轮重探；不自动重建防误覆盖新建筑）。
-        const probe = await rcon.send('data get block 3096 66 -1342').catch(() => '')
-        const alive = /chest/i.test(probe)
+        // 桶还在否（被炸/被拆则跳过本轮；不自动重建防误覆盖新建筑）
+        const probe = await rcon.send('data get block -537 63 866').catch(() => '')
+        const alive = /barrel/i.test(probe)
         if (!alive) {
-          if (armoryLastCheck !== 'gone') { log('armory: chest gone at 3096 66 -1342, refill paused'); armoryLastCheck = 'gone' }
+          if (armoryLastCheck !== 'gone') { log('armory: barrel gone at -537 63 866, refill paused'); armoryLastCheck = 'gone' }
           return
         }
         armoryLastCheck = 'ok'
-        // 逐箱对照标准清单补空位（data get Items 全量 → 空位 replaceitem）。
-        for (const box of ARMORY_BOXES) {
-          const stock = box.x === 3095 ? ARMORY_STOCK.slice(0, 26) : ARMORY_STOCK.slice(26)
+        // 逐桶：读全量 Items → 缺位补齐 → data merge 整体写回
+        for (let bi = 0; bi < ARMORY_BOXES.length; bi++) {
+          const box = ARMORY_BOXES[bi]
+          const stock = ARMORY_STOCK[bi]
           const data = await rcon.send(`data get block ${box.x} ${box.y} ${box.z} Items`).catch(() => '')
-          const m = /Items:\[(.*)\]/s.exec(data)
-          if (!m) continue // 双箱 merge 后 Items 在主箱；空箱读不到=全空
-          const usedSlots = new Set<number>()
-          const slotRe = /\{[^{}]*Slot:(\d+)b[^{}]*\}/g
-          for (const s of data.matchAll(slotRe)) usedSlots.add(Number(s[1]))
+          if (!/Items/.test(data)) continue
+          // 解析现有槽位 → 物品（保留玩家放入/寄存的东西）
+          const items = new Map<number, { id: string; count: number }>()
+          const itemRe = /\{[^{}]*Slot:(\d+)b[^{}]*id:\s*"([a-z_:]+)"[^{}]*count:\s*(\d+)[^{}]*\}/g
+          for (const m of data.matchAll(itemRe)) items.set(Number(m[1]), { id: m[2], count: Number(m[3]) })
+          // 只补标准槽位上的空缺（在位不动）
+          let added = 0
           for (let i = 0; i < stock.length; i++) {
-            if (usedSlots.has(i)) continue
-            // 1.21.1 正确命令=item replace block ... with（replaceitem 是 1.16 老命令，
-            // 报 Unknown 且正则若匹配泛 error 会把失败当成功——坑已记 LESSONS）。
-            const r = await rcon.send(`item replace block ${box.x} ${box.y} ${box.z} container.${i} with ${stock[i].item} ${stock[i].count}`).catch(() => '')
-            if (r && !/replaced a slot/i.test(r)) log(`armory refill slot${i} unexpected: ${r.slice(0, 80)}`)
+            if (!items.has(i)) { items.set(i, { id: stock[i].item, count: stock[i].count }); added++ }
           }
+          if (added === 0) continue
+          // 全量写回（data merge；注意 1.20.5+ 字段 count 小写）
+          const nbt = 'Items:[' + [...items.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([slot, it]) => `{Slot:${slot}b,id:"${it.id}",count:${it.count}}`)
+            .join(',') + ']'
+          await rcon.send(`data merge block ${box.x} ${box.y} ${box.z} {${nbt}}`)
+          log(`armory refill @ ${box.x},${box.y},${box.z}: +${added}`)
         }
       } catch (err) { log(`armory refill failed: ${err instanceof Error ? err.message : String(err)}`) }
     })()
@@ -1370,6 +1389,34 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           await ensureLearnedBooks(name).catch((err: unknown) => log(`learnedbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
         }
       } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
+    })()
+  }, 60_000)
+
+  // 护花双卫（2026-08-30 造物主谕「萌萌上线之后让桐人或者鸣人跟随她」）：
+  // 决策逻辑抽为纯函数 src/guard-follow.mjs（tests/js/guard-follow.test.mjs 运行时覆盖）。
+  // 萌萌在线 → 每 60s 核对双卫任务，空闲即补发 follow；守卫在忙绝不打断；萌萌离线
+  // 不干预（follow 由服务端按目标离开世界自动了断，守卫恢复自由，零清理）。
+  // 实测（2026-08-30）：numen_act invoke <guard> follow {"entity_uuid":...,"distance":n}
+  // 受理为常驻任务（standing:true），跨重启重放（任务记录钉 entity_uuid）。
+  const GUARD_FOLLOW_SPEC = guardFollowSpec
+  setInterval(() => {
+    void (async () => {
+      try {
+        const out = await rcon.send('list')
+        const tail = out.includes(':') ? out.slice(out.lastIndexOf(':') + 1) : ''
+        const online = new Set(tail.split(',').map((s) => s.trim()))
+        const taskByGuard: Record<string, string> = {}
+        for (const g of GUARD_FOLLOW_SPEC) {
+          if (!online.has(g.name)) continue
+          const stRaw = await rcon.send(`numen_act invoke ${g.name} task_status {}`).catch(() => '')
+          try { taskByGuard[g.name] = (JSON.parse(stRaw) as { data?: { task?: string } })?.data?.task ?? '' } catch { taskByGuard[g.name] = '' }
+        }
+        for (const g of decideGuardFollow(online, taskByGuard)) {
+          const invoke = `numen_act invoke ${g.name} follow {"entity_uuid":"${GUARD_FOLLOW_UUID}","distance":${g.distance}}`
+          const r = await rcon.send(invoke).catch((e: unknown) => `ERR ${e instanceof Error ? e.message : String(e)}`)
+          log(`guard-follow heal: ${g.name} idle -> follow ${GUARD_FOLLOW_TARGET} (${String(r).slice(0, 80)})`)
+        }
+      } catch { /* RCON 未就绪：下轮再试 */ }
     })()
   }, 60_000)
 
@@ -2077,6 +2124,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         magic.learnViaAdvancement(subject, atom.id)
         worlddb.chronicleRecord('cast', subject, { skill: 'learn', atom: atom.id, via: 'skillbook' })
+        // 被动装备化（2026-08-30 造物主钦点）：type:passive 的法术参悟即装备——
+        // 写 passives，效果引擎自动续杯（夜视/铁躯/疾风/鱼鳃/火衣），无需施放。
+        const passiveId = (atom as { type?: string; passiveId?: string }).passiveId
+        if ((atom as { type?: string }).type === 'passive' && passiveId) {
+          magic.unlockPassive(subject, passiveId)
+          worlddb.chronicleRecord('skill', subject, { passive: passiveId, via: 'learn' })
+          reply(`[信使] 参悟成功——「${atom.name}」已融入你的身躯（被动·永久装备）：不用施放，效果常伴。`)
+          return
+        }
         reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
         return
       }
@@ -3108,7 +3164,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const key = `${name}|${def.id}`
       const when = eff.when ?? def.trigger
       const v = metricValue(name, when.metric)
-      const hit = v !== null && condHit(v, when.op, when.threshold)
+      // 装备化被动（2026-08-30）：always=true 跳过条件判定——参悟即装备，
+      // 效果引擎无条件续杯（夜视/铁躯/疾风/鱼鳃/火衣；when 只作占位不参与）。
+      const hit = (eff as { always?: boolean }).always === true
+        || (v !== null && condHit(v, when.op, when.threshold))
       const prev = passiveActive.get(key) ?? false
       if (hit) {
         const dur = Math.max(5, Math.floor(eff.durationSec ?? 25))
@@ -3802,6 +3861,19 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         return
       }
       worlddb.chronicleRecord('presence', username, { event: 'join' })
+      // 护花双卫即时触发（2026-08-30）：萌萌上线 → 15s 后（等她加载稳）给双守卫下
+      // follow 常驻任务。守卫若在忙正事会被 60s sweep 兜底补上；萌萌离线任务自动了断。
+      if (username === GUARD_FOLLOW_TARGET) {
+        setTimeout(() => {
+          void (async () => {
+            for (const g of GUARD_FOLLOW_SPEC) {
+              const invoke = `numen_act invoke ${g.name} follow {"entity_uuid":"${GUARD_FOLLOW_UUID}","distance":${g.distance}}`
+              const r = await rcon.send(invoke).catch((e: unknown) => `ERR ${e instanceof Error ? e.message : String(e)}`)
+              log(`guard-follow on-join: ${g.name} -> ${GUARD_FOLLOW_TARGET} (${String(r).slice(0, 80)})`)
+            }
+          })()
+        }, 15_000)
+      }
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
