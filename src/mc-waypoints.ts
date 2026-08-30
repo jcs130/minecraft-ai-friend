@@ -40,10 +40,27 @@ export class WaypointStore {
   private load(seedShared: Waypoint[]): WaypointsFile {
     try {
       if (existsSync(this.path)) {
-        const f = JSON.parse(readFileSync(this.path, 'utf-8')) as WaypointsFile
+        // BOM 兼容：外部工具（PowerShell Set-Content UTF8 带 BOM）写过的文件
+        // 直接 JSON.parse 会炸——炸了就走「损坏重建」把玩家个人点全灭（2026-08-30
+        // 事故：萌萌 3 个藏宝点+桐人试炼之地被清）。先剥 BOM 再解析。
+        let raw = readFileSync(this.path, 'utf-8')
+        if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1)
+        const f = JSON.parse(raw) as WaypointsFile
         if (f && Array.isArray(f.shared) && f.players) return f
+        // 结构残缺（load 出的 shared/players 不完整）：保底不动盘上文件，仅用内存种子
+        throw new Error('waypoints.json structure incomplete')
       }
-    } catch { /* 损坏重建 */ }
+    } catch (err) {
+      // 损坏保护：文件存在但读不了 → 备份原文件留证，绝不静默覆盖玩家数据。
+      // 种子只在「文件本来就不存在」时才是全新开局。
+      try {
+        if (existsSync(this.path)) {
+          const backup = `${this.path}.broken-${Date.now()}`
+          require('node:fs').copyFileSync(this.path, backup)
+          console.warn(`[waypoints] ${this.path} 解析失败（${err instanceof Error ? err.message : String(err)}），已备份到 ${backup}`)
+        }
+      } catch { /* 备份尽力 */ }
+    }
     return { version: 1, shared: seedShared, players: {} }
   }
 

@@ -271,3 +271,5 @@
 - **世界重生后坐标断代要全仓清扫**：2026-08-25 世界重生后，TOWN_SPAWN/waypoints/ARMORY/种子默认仍指旧世界 (3094~-3098,-1337~-1342)，萌萌说 2 传到 3800 格外荒地、鸣人床在野外劫持归乡。凡世界重生，grep 全部坐标常量 + 运行中数据文件（waypoints.json 等）双清；「家的地址」类常量要有单一权威（TOWN_SPAWN）。
 - **归乡语义定谳（2026-08-30 造物主谕）**：家=千灯村千灯堂固定落点，废除「有床送床」——村外睡床按原版覆盖重生点，会劫持归乡到野外。个人重生点 spawnpoint 已随迁千灯堂，床语义不再需要。
 
+
+- **BOM 害死 Node JSON.parse 再连锁数据覆盖（2026-08-30 萌萌藏宝点事故）**：PowerShell 5/7 的 Set-Content -Encoding UTF8 写出带 BOM，宿主 Node JSON.parse(readFileSync utf-8) 直接 throw；更毒的是 WaypointStore 构造即 save()——load 失败回写种子把玩家个人点全灭（data/mcdata 双份同灭）。三重防御已落：①load 先剥 BOM；②损坏时 copyFileSync 备份 .broken-<ts> 留证再重建；③铁律：改宿主 json 一律 python open(w,encoding='utf-8')（无 BOM），别用 PowerShell Set-Content。数据恢复源=world.db chronicle 表 cast 事件 detail_json 带 pos。
