@@ -43,10 +43,13 @@ services:
       # 裸原版客户端（Taro/Codex/Edward/真人）连 25599 自动过门完成 NeoForge 协商。
       # gate 容器经 shadow 网内 mc:25599 直连，不依赖宿主映射。
       - "25575:25575"
+      - "24454:24454/udp"   # 2026-08-30 Simple Voice Chat UDP（客户端语音；NAS voicechat-neoforge-1.21.1-2.6.22 上服）
     volumes:
       - ./mc:/data
       - ./mc/mods:/mods:ro   # 2026-08-29 修正: 同 ./mc/mods(即 /data/mods),itzg COPY_MODS 自拷幂等;旧 ./mods 已退役
       - ./mcdata:/mcdata   # 2026-08-26 澶╃琛ユ寕锛歴ettlementsfix 浜嬩欢娴侊紙interact/spell/status锛夎惤鏉戣繍钀ョ洰褰曪紝涓?qwenpaw /mcdata 鍚屾簮
+      # 2026-08-30 RoadWeaver data -> named volume: bind mount(gRPC-FUSE) EIO on RW atomic small-file writes killed RoadGenerationService tasks (planned roads never woven into world). Container-native ext4 = no EIO. Old bind data damaged, RW rescans on restart.
+      - roadweaver-data:/data/shadow/data/roadweaver
     networks: [shadow]
 
   # 鈹€鈹€ 鐡朵腑 QwenPaw锛氬畧鍗瓊鐨勫锛?088 console/chat锛沵cp_numen 闅忚锛夆攢鈹€
@@ -454,4 +457,5 @@ volumes:
     external: true
   vllm_compile_cache:
     external: true
+  roadweaver-data: {}
 
