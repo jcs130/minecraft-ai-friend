@@ -1079,23 +1079,47 @@
     {
      "delayMs": 150,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..2.5,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 9 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 300,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 450,
      "commands": [
-      "execute at @e[tag=rsn_{target}] as @e[distance=..2.5,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 9 minecraft:magic"
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 600,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 750,
+     "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
      ]
     },
     {
      "delayMs": 900,
      "commands": [
+      "execute at @e[tag=rsn_{target}] as @e[distance=..3,limit=3,sort=nearest,type=!minecraft:player,type=!minecraft:item,type=!minecraft:item_frame,type=!minecraft:glow_item_frame,type=!minecraft:villager,type=!minecraft:wolf,type=!minecraft:iron_golem,type=!minecraft:snow_golem,type=!minecraft:armor_stand,type=!minecraft:painting] run damage @s 6 minecraft:magic"
+     ]
+    },
+    {
+     "delayMs": 1100,
+     "commands": [
       "kill @e[tag=rsn_{target}]"
      ]
     }
    ],
-   "reply": "查克拉在掌心疯狂旋转凝聚——蓝色螺旋丸呼啸而出，风压撕裂前方一切！",
+   "reply": "查克拉在掌心疯狂旋转凝聚——蓝色螺旋丸呼啸而出，撕碎准心所指的一切！",
    "particles": [
     "minecraft:witch {px} {py+1.2} {pz} 0.4 0.4 0.4 0.1 50",
     "minecraft:electric_spark {px} {py+1.2} {pz} 0.3 0.3 0.3 0.2 30"
