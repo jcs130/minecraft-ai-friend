@@ -1,9 +1,7 @@
 {
- "at": "2026-08-30 15:11:02",
- "ts": 1788073862.7473302,
- "red": [
-  "modern-3070"
- ],
+ "at": "2026-08-30 15:41:02",
+ "ts": 1788075662.769716,
+ "red": [],
  "yellow": [],
  "detail": {
   "panel-9090": {
@@ -11,8 +9,8 @@
    "m": "200"
   },
   "modern-3070": {
-   "s": "red",
-   "m": "Remote end closed connection without response"
+   "s": "green",
+   "m": "200"
   },
   "gateway-8011": {
    "s": "green",
@@ -20,15 +18,15 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up About a minute (healthy)"
+   "m": "Up 31 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 5 seconds"
+   "m": "Up 8 minutes"
   },
   "shadow-panel": {
    "s": "green",
-   "m": "Up 19 hours"
+   "m": "Up 20 hours"
   },
   "shadow-gateway": {
    "s": "green",
@@ -36,7 +34,7 @@
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 40 hours (healthy)"
+   "m": "Up 41 hours (healthy)"
   },
   "guard-bridge": {
    "s": "green",
@@ -44,7 +42,7 @@
   },
   "guard-log-fresh": {
    "s": "green",
-   "m": "log 8s old"
+   "m": "log 9s old"
   },
   "web-entities-fresh": {
    "s": "green",
@@ -60,11 +58,11 @@
   },
   "Kirito-status": {
    "s": "green",
-   "m": "hp 20.0 food 20.0"
+   "m": "hp 20.0 food 17.0"
   },
   "Naruto-status": {
    "s": "green",
-   "m": "hp 20.0 food 9.0"
+   "m": "hp 20.0 food 18.0"
   },
   "mc-guard-kirito": {
    "s": "green",

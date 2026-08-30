@@ -1312,6 +1312,9 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   // 施法去重表（2026-08-30）：key=`player|atomId` → 上次成功执行时间戳。
   // 守卫魂 LLM 每 tick 决策可能重复咏唱同一法术（照明循环事件），窗口内拒绝。
   const castDedupe = new Map<string, number>()
+  // LLM/脚本驱动的施法者（numen 假玩家+女神化身+发行版守卫+测试体）——去重闸
+  // 维持宽窗防刷屏；名单外默认真人待遇（战斗技 3s 连招节奏）。
+  const FAKE_CASTERS = new Set(['Kirito', 'Naruto', 'Taro', 'Edward', 'TaroProbe', 'TaroProbe2', 'Goddess', 'Steve', 'Alex'])
   const balancePath = resolve(config.balancePath)
   const applyPatchToAtoms = (p: BalancePatch): boolean => {
     if (p.field === 'regenPerSec') {
@@ -1656,8 +1659,16 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     // 施法去重（2026-08-30 鸣人照明循环事件）：LLM 决策类施法者（守卫魂）可能
     // 每 tick 重复咏唱同一法术（give 刷屏/魔力空转）。同一玩家同一原子冷却窗内
     // 直接婉拒，回复里明说剩余秒数——守卫魂读到即可停止再念。
-    // 保命术（heal）窗口放窄到 8s：战斗中反复自愈是正当需求。
-    const castDedupeMs = atom.id === 'heal' ? 8000 : 20000
+    // 2026-08-30 造物主谕「螺旋丸 CD 太长」：分档——防刷屏初衷只针对 LLM 施法者，
+    // 真人被 20s 拦是误伤。真人战斗技 3s（连招节奏）/辅助 6s/造物 15s（防刷物）；
+    // 假玩家（numen 体/女神化身/测试体）维持 20s；heal 保命术统一 8s。
+    const castDedupeMs = (() => {
+      if (atom.id === 'heal') return 8000
+      if (FAKE_CASTERS.has(username)) return 20000
+      if (atom.category === 'attack') return 3000
+      if (atom.id === 'give') return 15000
+      return 6000
+    })()
     const dedupeKey = `${username}|${atom.id}`
     const lastCastAt = castDedupe.get(dedupeKey) ?? 0
     const elapsed = Date.now() - lastCastAt
