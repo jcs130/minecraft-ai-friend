@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Bot } from 'mineflayer'
 import type { RconService } from './mc-rcon.ts'
 import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
@@ -18,6 +18,7 @@ import {
   shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb,
   type CliCommand,
 } from './mc-cli.ts'
+import { WaypointStore, zhNumberToArabic, type Waypoint } from './mc-waypoints.ts'
 import { createLifecycle } from './lifecycle.ts'
 
 // 运行态数据目录：迁正仓（2026-08-20 D 步）后世界进程 cwd=正仓，运行态正本在
@@ -503,6 +504,48 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const lastPray = new Map<string, number>() // 每玩家入场节流
   const worlddb = deps.worlddb
 
+  // ── 传送点簿（2026-08-29 造物主设计「设置传送点+说数字就传」）──────────────
+  // DATA_DIR 与 /mcdata 同卷（shadow-world 双挂同源），mixin（命格书传送阵页）
+  // 与 python 侧读同一份 waypoints.json。序号铁律：shared 前 + personal 后，
+  // 书页第 n 行 = 公屏说 n 传去的地方。
+  const waypoints = new WaypointStore(`${DATA_DIR}/waypoints.json`, [
+    { id: 1, name: '村庄广场', x: 3096, y: 67, z: -1340, dim: 'minecraft:overworld', createdAt: 0 },
+    { id: 2, name: '家', x: 3098, y: 67, z: -1337, dim: 'minecraft:overworld', createdAt: 0 },
+  ])
+  const lastTp = new Map<string, number>() // 数字传送冷却（防连点抖动）
+  /** 传送执行：tp + 粒子/音效仪式感 + 编年史。返回结果描述。 */
+  async function tpWaypoint(username: string, wp: Waypoint): Promise<string> {
+    const login = resolveLogin(username)
+    await rcon.send(`tp ${login} ${wp.x} ${wp.y} ${wp.z}`).catch(() => '')
+    try {
+      await rcon.send(`execute at ${login} run particle minecraft:portal ~ ~1 ~ 0.6 0.9 0.6 0.3 90`)
+      await rcon.send(`playsound minecraft:entity.enderman.teleport master ${login}`)
+    } catch { /* 特效失败不影响传送 */ }
+    worlddb.chronicleRecord('cast', username, { skill: 'waypoint-tp', to: wp.name })
+    return `✦ 传送阵已开——「${wp.name}」（${Math.round(wp.x)}, ${Math.round(wp.z)}）。`
+  }
+  /** 公屏/私聊纯数字（1-99 或 一/二/十二…）→ 序号传送（书页同一顺序）。 */
+  async function handleNumberTeleport(username: string, message: string): Promise<boolean> {
+    const n = zhNumberToArabic(message)
+    if (n === null) return false
+    const now = Date.now()
+    if (now - (lastTp.get(username) ?? 0) < 3000) return true // 冷却中静默
+    const wp = waypoints.byIndex(username, n)
+    if (!wp) return false // 超出列表范围：当普通消息
+    lastTp.set(username, now)
+    const r = await tpWaypoint(username, wp)
+    try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ }
+    log(`number-tp ${username} -> ${n}:${wp.name}`)
+    return true
+  }
+  /** 玩家脚下坐标（RCON Pos；拿不到返回 null）。 */
+  async function playerPos(username: string): Promise<{ x: number; y: number; z: number } | null> {
+    const out = await rcon.send(`data get entity ${resolveLogin(username)} Pos`).catch(() => '')
+    const m = out.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/)
+    if (!m) return null
+    return { x: Math.floor(parseFloat(m[1])), y: Math.floor(parseFloat(m[2])), z: Math.floor(parseFloat(m[3])) }
+  }
+
   // 信使送达（2026-08-17 扛枪定调）：个人事务（觉醒/成就/升级/被动等成长通告）
   // 由信使私聊递达，不再公屏 tellraw @a——公屏只留世界级大事，人多了也不乱。
   // 守护天使 CC（2026-08-23 客户端守护登记）：女神对「主人」递话/递事件时，
@@ -924,8 +967,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
   function skillBookItem(name: string): string {
-    // custom_name SNBT：金色 + 不斜体，徽记「✦ 」+ 法术名（右键监听按此前缀识别）。
-    return `enchanted_book[custom_name={text:"✦ ${name}",color:"gold",italic:false}]`
+    // custom_name 组件（1.20.5+ SNBT）：**必须字符串化 JSON**——对象字面量 {text:...}
+    // 被 RCON 拒「Malformed component: Not a string」，这是萌萌攻击书礼包一直没发
+    // 出去、「背包没书」的根因（2026-08-29 Kirito 实测：对象格式拒/JSON 字符串过）。
+    // 金色 + 不斜体，徽记「✦ 」+ 法术名。
+    // 2026-08-29 造物主反馈「✦书右键没反应」：enchanted_book 不在 SkillBookUseMixin
+    // 的 hook 范围（只拦 WrittenBookItem.use）→ 改发 written_book + custom_data.skillbook，
+    // 右键即被 mixin 拦下写 spell-requests（skill=法术中文名）→ mc_npc 转发 /mycli cast。
+    const cn = JSON.stringify({ text: `✦ ${name}`, color: 'gold', italic: false })
+    const cnEsc = cn.replace(/'/g, "\\'")
+    return `written_book[minecraft:custom_name='${cnEsc}',minecraft:custom_data={skillbook:'${name}'}]`
   }
   // 《魔导书》= written_book 成书（1.8 起书页支持 clickEvent，1.21.1 用旧格式
   // clickEvent/value）：右键打开阅读界面（书名不带「✦ 」前缀，SkillBookHandler
@@ -969,6 +1020,111 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       log(`attack skillbooks given to ${username}: ${gift.books.join('、')} + 魔导书`)
       // 天音一句（萌萌不识字，靠听）：语音通道由面板播报/天音术承担，此处私语文字留档。
       rcon.send(`tellraw ${username} {"text":"✦ 收到攻击法术书×4 +《魔导书》：书拿在手里按右键就能放；魔导书翻开点【▶ 释放】也行！等级不够会提示，练级后再试。","color":"gold"}`).catch(() => {})
+    }
+  }
+
+  /** 学会即得书（2026-08-29 造物主问「手柄怎么施法」）：萌萌手柄基岩，命格书页
+   * clickEvent 点击施法在 Geyser 基岩端大概率不可用（Geyser 官方限制：基岩不支持
+   * 点击文本执行命令）——手柄正道 = ✦书右键（使用键）施法。查在线玩家已习法术 vs
+   * 背包已有 ✦书（RCON data get Inventory），缺的每技补一本——书即手柄按钮。 */
+  // 书匣记账（2026-08-29 三修）：data get 的 NBT 路径过滤多值在 1.21.1 报「accepts
+  // a single NBT value」——背包书名查询彻底不可用；改为 execute if items 探匣
+  // （响应 "Test passed, count: N"，短且带数量）+ 本地记账 bookbox-given.json 判重：
+  // 发匣/散书成功即记账，wantNames 差集只发增量，不再依赖背包快照（截断坑根除）。
+  function loadBookLedger(): Record<string, { boxes: string[]; books: string[] }> {
+    try {
+      return JSON.parse(readFileSync(join(DATA_DIR, 'bookbox-given.json'), 'utf-8'))
+    } catch {
+      return {}
+    }
+  }
+  function saveBookLedger(ledger: Record<string, { boxes: string[]; books: string[] }>): void {
+    mkdirSync(DATA_DIR, { recursive: true })
+    writeFileSync(join(DATA_DIR, 'bookbox-given.json'), JSON.stringify(ledger, null, 2))
+  }
+
+  async function ensureLearnedBooks(username: string): Promise<void> {
+    // 只对真人发施法书——numen 假玩家（守卫/AI 玩家）走 numen 咏唱，塞书只占背包。
+    const FAKE_PLAYERS = new Set(['Kirito', 'Naruto', 'Taro', 'Edward', 'TaroProbe', 'TaroProbe5', 'Steve', 'Alex'])
+    if (FAKE_PLAYERS.has(username)) return
+    // 2026-08-30 造物主谕「萌萌背包全被技能书占满，潜影盒发太多」：
+    // 轮盘时代萌萌不需要书匣——技能罗盘右键即放，书页文字她读不了。
+    // 全员停发书匣与散书（已发的不回收）；要书的玩家走书商/藏宝。
+    return // eslint-disable-line no-unreachable -- 书匣体系冻结（保留函数与台账）
+    try {
+      const ms = magic.getState(username)
+      if (!ms.learned || ms.learned.length === 0) return
+      const giftNames = ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? []
+      const learnedNames = ms.learned.map((id) => magic.getAtomById(id)?.name ?? id)
+      const wantNames = [...new Set([...learnedNames, ...giftNames])]
+      const ledger = loadBookLedger()
+      const rec = ledger[username] ?? { boxes: [], books: [] }
+      // ① 探匣：execute if items 短响应（永不截断），count 即匣数。
+      // ⚠ slot 范围必须用 container.*：inventory.* 对带组件（block_entity_data）的
+      // 潜影盒物品在这套 1.21.1+NeoForge 下 Test failed（实测 dirt 能过、匣探不到，
+      // container.* 两者皆准——2026-08-29 实验定谳）。
+      const boxTest = await rcon.send(`execute if items entity ${username} container.* minecraft:purple_shulker_box`).catch(() => '')
+      const boxCount = /Test passed, count: (\d+)/.exec(boxTest ?? '') ? Number(/Test passed, count: (\d+)/.exec(boxTest!)![1]) : 0
+      if (boxCount > 0) {
+        // 已有匣：新学的书散本补（记账判重，差集=增量；书在匣里丢不了，散本增量极少）。
+        for (const name of wantNames) {
+          if (rec.books.includes(name)) continue
+          const r = await rcon.send(`give ${username} ${skillBookItem(name)} 1`).catch(() => '')
+          if (r && /gave|已给予|Given/i.test(r)) {
+            rec.books.push(name)
+            log(`learned skillbook given to ${username}: ✦ ${name}（学会即得书）`)
+          }
+        }
+        ledger[username] = rec
+        saveBookLedger(ledger)
+        return
+      }
+      // 无匣：查背包满与否（全量查询仅在无匣路径用一次；截断最多误判满包跳过，不炸）。
+      const inv = await rcon.send(`data get entity ${username} Inventory`).catch(() => '')
+      if (!inv || inv.includes('No player was found')) return
+      if ((inv.match(/Slot: \d+b/g) ?? []).length >= 36) {
+        log(`learnedbook skip ${username}: inventory full`)
+        return
+      }
+      // ② 发两匣（RCON 请求 ~1446 上限，13 本一匣必超 → 法术书匣+攻击书匣，
+      // 实测 1332/900 字节安全过；已发过的匣靠记账不重发）。
+      const attackBooks = wantNames.filter((n) => !learnedNames.includes(n))
+      const boxes: Array<[string, string, string[]]> = [
+        ['法术书匣', 'light_purple', learnedNames],
+        ['攻击书匣', 'red', attackBooks],
+      ]
+      for (const [boxTitle, color, books] of boxes) {
+        if (books.length === 0) continue
+        const boxName = JSON.stringify({ text: `✦ ${boxTitle}`, color, italic: false })
+        const items = books
+          .map((n, i) => {
+            const cn = JSON.stringify({ text: `✦ ${n}`, color: 'gold', italic: false })
+            return `{Slot:${i}b,id:"minecraft:enchanted_book",count:1,components:{"minecraft:custom_name":'${cn}'}}`
+          })
+          .join(',')
+        const boxCmd = ('give ' + username + ' minecraft:purple_shulker_box'
+          + `[minecraft:custom_name='${boxName}',`
+          + `minecraft:block_entity_data={id:"minecraft:shulker_box",Items:[${items}]}] 1`)
+        // 长匣命令(~1.3KB)在复用长连接上偶发 rcon closed(连接被断,python 新连接
+        // 每次都过)——失败后重连重发一次,实测二次必过(2026-08-29)。
+        let r = ''
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          r = await rcon.send(boxCmd).catch((e) => `[err:${e instanceof Error ? e.message : String(e)}]`)
+          if (r && /gave|已给予|Given/i.test(r)) break
+          if (attempt === 1) await new Promise((res) => setTimeout(res, 2_500))
+        }
+        if (r && /gave|已给予|Given/i.test(r)) {
+          rec.boxes.push(`✦ ${boxTitle}`)
+          rec.books.push(...books)
+          log(`spellbook box given to ${username}: ✦ ${boxTitle} ×${books.length} 本预装`)
+        } else {
+          log(`spellbook box give failed for ${username} (${boxTitle}): ${(r ?? '').slice(0, 80)}`)
+        }
+      }
+      ledger[username] = rec
+      saveBookLedger(ledger)
+    } catch (err) {
+      log(`learnedbook check failed for ${username}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -1211,6 +1367,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           const name = raw.trim()
           if (!name || name === 'Goddess' || name.startsWith('sys_')) continue
           await ensureStatusBook(name).catch((err: unknown) => log(`statusbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
+          await ensureLearnedBooks(name).catch((err: unknown) => log(`learnedbook sweep error for ${name}: ${err instanceof Error ? err.message : String(err)}`))
         }
       } catch (err) { log(`statusbook sweep failed: ${err instanceof Error ? err.message : String(err)}`) /* RCON 未就绪：下轮再试 */ }
     })()
@@ -1815,6 +1972,95 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const r = await resolveChant(subject, chant)
         if (cmd.json) jsonReply({ ok: true, summary: r })
         else reply(`[信使] ${r}`)
+        return
+      }
+      case 'bookget': {
+        // 领取技能书（2026-08-29 造物主设计「命格书=技能仓库」：翻页领书 → 装备右键施法；
+        // 命格书每技能页带【✦ 领取】链接，语音说一声也行——书丢了随时再领，不再占满背包）。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli 领书 <法术名>。已学会的法术随时可领。`); return }
+        const name = cmd.args.join(' ').trim()
+        const atom = magic.listAtoms().find((a) => a.name === name || a.id === name)
+        if (!atom) { reply(`[CLI] 没有叫「${name}」的法术。/cli spells 查法术表。`); return }
+        const view = magic.getState(subject)
+        if (!view.learned.includes(atom.id) && view.innateSkill !== atom.id) {
+          reply(`[信使] 「${atom.name}」你还没学会，领不了书——先参悟或升级解锁。`)
+          return
+        }
+        const r = await rcon.send(`give ${subject} ${skillBookItem(atom.name)} 1`).catch(() => '')
+        if (!r || !/gave|已给予|Given/i.test(r)) { reply(`[信使] 书没递到你手上——人在线再领。`); return }
+        worlddb.chronicleRecord('cast', subject, { skill: 'bookget', book: atom.name })
+        reply(`[信使] ✦《${atom.name}》技能书已到手：拿在手上右键就是放。`)
+        return
+      }
+      case 'learn': {
+        // 持书参悟（2026-08-29 造物主设计「野外拾取的书用一次自动收录」）：
+        // 校验背包里有 skillbook:<名> 的成书（书=历练凭证）→ learnViaAdvancement
+        // 入册（绕等级门槛；施放仍走快路径等级闸）。命格书右键重写时自动收录成页。
+        if (!cmd.args.length) { reply(`[CLI] 用法：/cli 参悟 <法术名>——把对应的✦技能书拿在手上。`); return }
+        const name = cmd.args.join(' ').trim()
+        const atom = magic.listAtoms().find((a) => a.name === name || a.id === name)
+        if (!atom) { reply(`[CLI] 没有叫「${name}」的法术。`); return }
+        const view = magic.getState(subject)
+        if (view.learned.includes(atom.id) || view.innateSkill === atom.id) {
+          reply(`[信使] 「${atom.name}」你早已学会，收录在命格书里了。`)
+          return
+        }
+        const inv = await rcon.send(`data get entity ${subject} Inventory`).catch(() => '')
+        if (!inv || !inv.includes(`skillbook:"${atom.name}"`)) {
+          reply(`[信使] 参悟需要《✦ ${atom.name}》技能书在手——没有书，悟不出来的。`)
+          return
+        }
+        magic.learnViaAdvancement(subject, atom.id)
+        worlddb.chronicleRecord('cast', subject, { skill: 'learn', atom: atom.id, via: 'skillbook' })
+        reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
+        return
+      }
+      case 'goto': {
+        // 传送（2026-08-29 造物主设计「1234 输数字就传」）：序号=命格书传送阵页行序，
+        // 也可点名（先个人后共享，模糊包含）。公屏纯数字同走这里（handleNumberTeleport）。
+        const q = cmd.args.join(' ').trim()
+        if (!q) {
+          const list = waypoints.allFor(subject)
+          const lines = list.map((w, i) => `  ${i + 1}. ${w.name}（${Math.round(w.x)}, ${Math.round(w.z)}）${i < waypoints.sharedPoints().length ? ' §7[公共]' : ''}`)
+          replyLines([`[信使] 传送阵一览：`, ...lines, `§7 说数字（如 2）或 /cli 传送去 2/名字 即传。`])
+          return
+        }
+        const asNum = parseInt(q, 10)
+        const wp = Number.isFinite(asNum) && String(asNum) === q ? waypoints.byIndex(subject, asNum) : waypoints.byName(subject, q)
+        if (!wp) { reply(`[信使] 没有第 ${q} 个传送点，也没叫「${q}」的地方。/cli 传送点 看列表。`); return }
+        const r = await tpWaypoint(subject, wp)
+        if (cmd.json) jsonReply({ ok: true, summary: r, waypoint: wp })
+        else reply(`[信使] ${r}`)
+        return
+      }
+      case 'waypoint': {
+        // 传送点簿：查 / 记 <名字>（站的地方=安全落点）/ 删 <个人序号>
+        const sub = cmd.args[0] ?? ''
+        if (sub === '记' || sub === 'add' || sub === '记录') {
+          const name = cmd.args.slice(1).join(' ').trim()
+          const pos = await playerPos(subject)
+          if (!pos) { reply(`[信使] 没探到你脚下——人在线才能记点。`); return }
+          const wp = waypoints.add(subject, name || `藏宝点${waypoints.personal(subject).length + 1}`, pos.x, pos.y, pos.z)
+          if (!wp) { reply(`[信使] 你的传送点满了（上限 10 个）——先 /cli 传送点 删 <序号> 腾位置。`); return }
+          const idx = waypoints.allFor(subject).findIndex((w) => w === wp) + 1
+          worlddb.chronicleRecord('cast', subject, { skill: 'waypoint-add', name: wp.name, pos: `${pos.x},${pos.y},${pos.z}` })
+          reply(`[信使] 已记下——第 ${idx} 项「${wp.name}」（${pos.x}, ${pos.z}）。说 ${idx} 或翻命格书传送阵页即达。`)
+          return
+        }
+        if (sub === '删' || sub === 'del' || sub === 'remove') {
+          const n = parseInt(cmd.args[1] ?? '', 10)
+          const rm = waypoints.remove(subject, Number.isFinite(n) ? n : 0)
+          if (!rm) { reply(`[信使] 没有可删的第 ${cmd.args[1] ?? '?'} 项（只能删自己的点）。`); return }
+          reply(`[信使] 已抹去「${rm.name}」。`)
+          return
+        }
+        const list = waypoints.allFor(subject)
+        const sharedN = waypoints.sharedPoints().length
+        replyLines([
+          `[信使] 传送点簿（${list.length} 项，前 ${sharedN} 项公共）：`,
+          ...list.map((w, i) => `  ${i + 1}. ${w.name}（${Math.round(w.x)}, ${Math.round(w.z)}）${i < sharedN ? ' §7[公共]' : ''}`),
+          `§7 记新点：/cli 传送点 记 <名字>；删自己的：/cli 传送点 删 <个人序号>。`,
+        ])
         return
       }
       case 'pray': {
@@ -3494,10 +3740,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 神使手札（2026-08-23 造物主谕「所有人都有一本」）：真人/穿越者上线即发，
       // 已发名单持久化（防重启重发叠包）。sys_（守护天使）不发——魂不持物。
       ensureStatusBook(username).catch((err) => log(`ensureStatusBook error: ${err instanceof Error ? err.message : String(err)}`))
-      // 攻击技能书包（2026-08-29 造物主谕「给萌萌来几个试试」）：✦徽记书右键即施法，
-      // 上线送一份、名单持久化防重发。先萌萌（重点看护/手柄/不识字——点书即施法是
-      // 她的正道），跑顺再扩全员。
-      ensureSkillBooks(username).catch((err) => log(`ensureSkillBooks error: ${err instanceof Error ? err.message : String(err)}`))
+      // 礼包攻击书不再散着发（2026-08-29 造物主令「书都收进袋里好找、不占格子」）——
+      // 书类交付统一归 ensureLearnedBooks：没有「✦ 法术书匣」→一发预装满匣（learned ∪
+      // 礼包名单全装进去）；有匣→新书散本增量补。ensureSkillBooks 仅留作旧流程兜底。
+      // 学会即得书：上线瞬间即查 learned vs 背包 ✦书，缺的秒补——不等 60s sweep
+      // （萌萌等过一轮空手，不再等）。
+      setTimeout(() => {
+        ensureLearnedBooks(username).catch((err) => log(`ensureLearnedBooks(join) error: ${err instanceof Error ? err.message : String(err)}`))
+      }, 5_000)
       // 白纸冷启动（2026-08-20 造物主谕）：名册之外的新面孔 = 白纸 Agent/新真人，
       // 8 秒后私聊三行引导（字少，只指路不给答案），每进程每人只引导一次。
       if (!welcomed.has(username) && !transmigrators.getByUsername(username)) {
@@ -3567,6 +3817,28 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         }
         return
+      }
+      // 数字传送（2026-08-29 造物主设计「1234 输数字就传」）：公屏纯数字/中文数字
+      // （1-99、二、十二…）→ 按传送点序号传送（与命格书传送阵页同序）。语音输入
+      // 说出「2」「二」也能带出来——萌萌零打字通道。不在列表范围=当普通消息放行。
+      {
+        const nMsg = message.trim()
+        if (/^[0-9]{1,2}$/.test(nMsg) || /^[一二两三四五六七八九十]{1,3}$/.test(nMsg)) {
+          const n = zhNumberToArabic(nMsg)
+          const wp = n !== null ? waypoints.byIndex(username, n) : null
+          if (wp) {
+            const now = Date.now()
+            if (now - (lastTp.get(username) ?? 0) >= 3000) {
+              lastTp.set(username, now)
+              tpWaypoint(username, wp)
+                .then((r) => { try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ } })
+                .catch(() => { /* */ })
+              log(`number-tp ${username} -> ${n}:${wp.name}`)
+            }
+            return // 命中（含冷却中）都拦截，不再走 VIP/chat
+          }
+          // 没命中 = 普通消息，放行
+        }
       }
       if (config.vipListen.includes(username.toLowerCase())) {
         handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
@@ -3712,6 +3984,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         await handleCli(OWNER, username, cliCmd, isGuardian)
         return
       }
+      // 数字传送（私聊通道）：对女神说「2」=公屏说 2（VIP 语音常走私聊语义）。
+      const nMsg = message.trim()
+      if (/^[0-9]{1,2}$/.test(nMsg) || /^[一二两三四五六七八九十]{1,3}$/.test(nMsg)) {
+        const handled = await handleNumberTeleport(OWNER, nMsg)
+        if (handled) return
+      }
       if (isCliCommand(message)) {
         const lines = cliOverview()
         for (const ln of lines) { try { bot.whisper(username, `[手册] ${ln}`) } catch { /* not ready */ } }
@@ -3770,8 +4048,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         return
       }
-      const explicitPrayer = trimmed.startsWith('祈愿：')
-      const body = explicitPrayer ? trimmed.slice(3).trim() : trimmed
+      // 祈愿前缀（2026-08-30 造物主谕：全角冒号难打）：「祈愿：/祈愿: /祈愿，/祈愿 或直接「祈愿给我面包」都认。
+      const explicitPrayer = /^祈愿[\s:：，,、]?/.test(trimmed)
+      const body = explicitPrayer ? trimmed.replace(/^祈愿[\s:：，,、]?/, '').trim() : trimmed
       // ── 世界提问快速答疑分流（2026-08-20）：「问：」显式前缀 → 女神翻世界
       // 档案直接作答，不进祈愿队列。客户端没有服务器数据，世界知识全走这条
       // 聊天渠道（与 mc-social 信使、mc_deliver 交易耳语同一私聊总线）。

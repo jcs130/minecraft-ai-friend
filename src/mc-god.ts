@@ -1047,6 +1047,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 只对真人发施法书——numen 假玩家（守卫/AI 玩家）走 numen 咏唱，塞书只占背包。
     const FAKE_PLAYERS = new Set(['Kirito', 'Naruto', 'Taro', 'Edward', 'TaroProbe', 'TaroProbe5', 'Steve', 'Alex'])
     if (FAKE_PLAYERS.has(username)) return
+    // 2026-08-30 造物主谕「萌萌背包全被技能书占满，潜影盒发太多」：
+    // 轮盘时代萌萌不需要书匣——技能罗盘右键即放，书页文字她读不了。
+    // 全员停发书匣与散书（已发的不回收）；要书的玩家走书商/藏宝。
+    return // eslint-disable-line no-unreachable -- 书匣体系冻结（保留函数与台账）
     try {
       const ms = magic.getState(username)
       if (!ms.learned || ms.learned.length === 0) return
@@ -4044,8 +4048,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         return
       }
-      const explicitPrayer = trimmed.startsWith('祈愿：')
-      const body = explicitPrayer ? trimmed.slice(3).trim() : trimmed
+      // 祈愿前缀（2026-08-30 造物主谕：全角冒号难打）：「祈愿：/祈愿: /祈愿，/祈愿 或直接「祈愿给我面包」都认。
+      const explicitPrayer = /^祈愿[\s:：，,、]?/.test(trimmed)
+      const body = explicitPrayer ? trimmed.replace(/^祈愿[\s:：，,、]?/, '').trim() : trimmed
       // ── 世界提问快速答疑分流（2026-08-20）：「问：」显式前缀 → 女神翻世界
       // 档案直接作答，不进祈愿队列。客户端没有服务器数据，世界知识全走这条
       // 聊天渠道（与 mc-social 信使、mc_deliver 交易耳语同一私聊总线）。
