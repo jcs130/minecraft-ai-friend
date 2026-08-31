@@ -2541,7 +2541,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         }
         // 天音（2026-08-29）：萌萌等 VIP 不识字——私语神谕同步语音化（SVC 空间播放，
         // 念正文不带「[女神]」前缀，实体位置已表明是谁在说话）。
-        if (VIP_SET.has(username.toLowerCase())) speakViaGodVoice(text)
+        if (VIP_SET.has(username.toLowerCase())) speakViaGodVoice(text, username)
         // 守护天使 CC（2026-08-23）：神谕同步抄送主人绑定的守护天使，供其本地 TTS 播报。
         ccGuardian(username, text)
         // asPlayer 进来的守卫假玩家：whisper 假玩家收不到（守卫桥不读聊天），同样双写。
@@ -2802,23 +2802,33 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // 天音投递（2026-08-29）：任意文本 → god-voice text-queue——宿主 god-voice-watcher
   // 用 edge-tts 合成 mp3 后，god-voice mod(SVC) 在女神实体头顶空间播放。萌萌等装
   // SVC 客户端的玩家零读字即可听见。语音是增益：合成失败不影响文字链路。
-  function speakViaGodVoice(text: string): void {
+  // 声源跟听者（2026-08-31 实测定谳）：SVC 语音是 16 格近距衰减——对特定人说话时
+  // 必须从【听者头顶】播（targetPlayer 的实体），站她脚下/800 格外她根本听不见。
+  // 查不到听者（离线/未加载）→ 退回女神自己位置（身边有人能听见）。
+  function speakViaGodVoice(text: string, targetPlayer?: string): void {
     try {
       const gv = process.env.GODVOICE_DIR
-      const ent = getBot()?.entity?.uuid
+      const b = getBot()
+      // mineflayer bot.entity 没有 uuid 字段（2026-08-31 实测 ent=null——旧取法
+      // 让天音生产链自 08-29 起从未投队成功过）。自身 uuid 走 players 表。
+      const selfUuid = b?.username ? (b.players?.[b.username]?.uuid as string | undefined) : undefined
+      const ent = (targetPlayer ? (b?.players?.[targetPlayer]?.uuid as string | undefined) : undefined) ?? selfUuid
       if (gv && ent) {
         const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
         appendFileSync(`${gv}/text-queue/${id}.json`, JSON.stringify({ id, entity: String(ent), text: text.slice(0, 200), voice: 'goddess' }), 'utf-8')
+        log(`godvoice queued: target=${targetPlayer ?? 'self'} ent=${String(ent).slice(0, 8)} text=${text.slice(0, 24)}`)
+      } else {
+        log(`godvoice skip: gv=${gv || 'none'} ent=${ent ?? 'null'} target=${targetPlayer ?? '-'}`)
       }
-    } catch { /* 语音失败不伤文字 */ }
+    } catch (e) { log(`godvoice fail: ${e instanceof Error ? e.message : String(e)}`) }
   }
 
-  function goddessSayPublic(text: string): void {
+  function goddessSayPublic(text: string, forWhom?: string): void {
     try { getBot()?.chat(text) } catch { /* not ready */ }
     try {
       appendFileSync(PLAYER_CHAT, JSON.stringify({ ts: Date.now(), user: 'Goddess', text: text.slice(0, 256) }) + '\n')
     } catch { /* best effort */ }
-    speakViaGodVoice(text)
+    speakViaGodVoice(text, forWhom)
   }
 
   async function goddessChat(username: string, message: string): Promise<void> {
@@ -2865,27 +2875,27 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         const lastGive = lastGoddessGive.get(username) ?? 0
         const giveCool = isVip ? Math.floor(GODDESS_GIVE_COOLDOWN / 2) : GODDESS_GIVE_COOLDOWN
         if (now - lastGive < giveCool) {
-          goddessSayPublic(`${senderName}，方才才给过你，歇一歇再来～`)
+          goddessSayPublic(`${senderName}，方才才给过你，歇一歇再来～`, username)
           return
         }
         const resolved = resolveGiveItem(String(decision.item ?? ''))
         if (!resolved) { // LLM 给了白名单外物品：只回话不给货
-          goddessSayPublic(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`)
+          goddessSayPublic(`${senderName}，${text}（这东西我不能随手给，想要就私语我「祈愿：<愿望>」）`, username)
           return
         }
         const count = Math.max(1, Math.min(8, Number(decision.count) || 1))
         lastGoddessGive.set(username, now)
         try {
           await rcon.send(`give ${username} ${resolved.id} ${count}`)
-          goddessSayPublic(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`)
+          goddessSayPublic(`${senderName}，${text}（${resolved.cn}×${count} 已放入行囊）`, username)
           worlddb.chronicleRecord('chat-give', username, { item: resolved.cn, count, via: 'goddess-chat' })
           log(`goddess-chat give: ${username} <- ${resolved.id}x${count}`)
         } catch (err) {
           log(`goddess-chat give failed: ${err instanceof Error ? err.message : String(err)}`)
-          goddessSayPublic(`${senderName}，${text}`)
+          goddessSayPublic(`${senderName}，${text}`, username)
         }
       } else {
-        goddessSayPublic(`${senderName}，${text}`)
+        goddessSayPublic(`${senderName}，${text}`, username)
         worlddb.chronicleRecord('chat', username, { text: message.slice(0, 40), via: 'goddess-chat' })
         log(`goddess-chat reply to ${username}: ${text.slice(0, 50)}`)
       }
@@ -3938,6 +3948,13 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
               const player = typeof j.player === 'string' && j.player ? j.player : 'MengMeng'
               const raw = typeof j.text === 'string' ? j.text.trim() : ''
               if (!raw) continue
+              // 过期即弃（2026-08-31 实测：世界进程停 16h 后重启，把昨天的语音
+              // 转写一口气吞出来对着空气回话——人早下线了）。超 2 分钟的转写
+              // 只留日志不回话。
+              if (typeof j.ts === 'number' && Date.now() - j.ts > 120_000) {
+                log(`[mic-stale] ${player} 过期转写丢弃（${Math.round((Date.now() - j.ts) / 60000)} 分钟前）：${raw.slice(0, 40)}`)
+                continue
+              }
               const text = raw.replace(/["\]/g, ' ').replace(/[\r\n]+/g, ' ')
               log(`[mic] ${player} 语音：${text.slice(0, 60)}`)
               // ① 转写广播到公屏（世界听得见她说什么）——不 await：
