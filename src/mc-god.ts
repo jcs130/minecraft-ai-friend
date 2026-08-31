@@ -520,6 +520,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     { id: 2, name: '家·千灯堂', x: -541, y: 64, z: 868, dim: 'minecraft:overworld', createdAt: 0 },
   ])
   const lastTp = new Map<string, number>() // 数字传送冷却（防连点抖动）
+  // 点名闸记账（2026-08-31）：未点名旁白的累计数与「已教过」名册（会话内一次即止）
+  const passCount = new Map<string, number>()
+  const gateTaught = new Set<string>()
+  const senderNameOf = (u: string): string => transmigrators.getByUsername(u)?.name ?? u
   /** 传送执行：tp + 粒子/音效仪式感 + 编年史。返回结果描述。 */
   async function tpWaypoint(username: string, wp: Waypoint): Promise<string> {
     const login = resolveLogin(username)
@@ -4064,6 +4068,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         } else {
           log(`chat-pass: ${username} 未点名，女神不接话：「${message.trim().slice(0, 36)}」`)
+          // 教一次（2026-08-31）：不点名就永远没人应，孩子只会以为「神不理我」。
+          // 攒够 3 次旁白被拦，私语+语音告诉她规则；每人只教一次，之后真静默。
+          const passed = (passCount.get(username) ?? 0) + 1
+          passCount.set(username, passed)
+          if (passed === 3 && !gateTaught.has(username)) {
+            gateTaught.add(username)
+            const tip = `${senderNameOf(username)}，想让我回你，得喊我一声「女神」——不点名我听不见哦。想传送到哪个点，直接说数字就行。`
+            try { bot.whisper(username, tip) } catch { /* not ready */ }
+            speakViaGodVoice(tip, username)
+            log(`gate-taught: ${username} 已教会点名规则`)
+          }
         }
         return
       }
