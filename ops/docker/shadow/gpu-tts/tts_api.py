@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """神语阁 API — IndexTTS 2.5 本地克隆 TTS（2026-08-31 首建）。
 
-GET /tts?text=...&voice=goddess&lang=ZH&emo=happy:0.6&speed=1.0  -> wav
+GET /tts?text=...&voice=goddess&lang=ZH&emo=happy:0.6&speed=1.0          -> wav
+GET /tts?...&format=mp3                                                  -> mp3（直出，voice 侧零 ffmpeg）
 GET /voices   -> 可用嗓子列表
 GET /health   -> 就绪探针
 """
@@ -79,9 +80,28 @@ def _boot():
         print("[warmup] skipped:", e)
 
 
+def _wav_to_mp3(wav_path: str, mp3_path: str) -> str:
+    """wav(16-bit PCM) -> mp3 128kbps。lameenc 纯 python 轮子，无 ffmpeg 依赖。"""
+    import wave
+    import lameenc
+    with wave.open(wav_path, "rb") as w:
+        nch, rate = w.getnchannels(), w.getframerate()
+        pcm = w.readframes(w.getnframes())
+    enc = lameenc.Encoder()
+    enc.set_bit_rate(128)
+    enc.set_in_sample_rate(rate)
+    enc.set_channels(nch)
+    enc.set_quality(2)
+    data = enc.encode(bytes(pcm)) + enc.flush()
+    with open(mp3_path, "wb") as f:
+        f.write(data)
+    return mp3_path
+
+
 @app.get("/tts")
 def tts(text: str, voice: str = DEFAULT_VOICE, lang: str = "ZH",
-        emo: str = "", speed: float = 1.0, emo_alpha: float = 1.0):
+        emo: str = "", speed: float = 1.0, emo_alpha: float = 1.0,
+        format: str = "wav"):
     if not text.strip():
         raise HTTPException(400, "empty text")
     spk = _voice_path(voice)
@@ -97,6 +117,16 @@ def tts(text: str, voice: str = DEFAULT_VOICE, lang: str = "ZH",
         _tts.infer(**kw)
     if not os.path.isfile(out):
         raise HTTPException(500, "synthesis produced no file")
+    if format.lower() == "mp3":
+        mp3 = out[:-4] + ".mp3"
+        try:
+            _wav_to_mp3(out, mp3)
+        except Exception as e:
+            raise HTTPException(500, f"mp3 encode failed: {e}")
+        finally:
+            os.unlink(out)
+        return FileResponse(mp3, media_type="audio/mpeg",
+                            filename=os.path.basename(mp3))
     return FileResponse(out, media_type="audio/wav", filename=os.path.basename(out))
 
 

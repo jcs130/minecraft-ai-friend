@@ -13,7 +13,6 @@ god-voice-watcher.py —— 天音中继：女神侧文本任务 → edge-tts mp
 import asyncio
 import json
 import os
-import subprocess
 import sys
 import time
 import traceback
@@ -48,27 +47,15 @@ def log(msg: str) -> None:
 
 
 def synth_local(text: str, role: str, mp3: Path) -> None:
-    """本地 TTS 合成 wav → ffmpeg 转 mp3（SVC mod 队列认 mp3）。失败抛异常。"""
+    """本地 TTS 直出 mp3（神语阁 lameenc 编码，voice 侧零 ffmpeg）。失败抛异常。"""
     if not TTS_LOCAL_URL:
         raise RuntimeError("tts-local disabled")
-    qs = urllib.parse.urlencode({"text": text, "voice": role})
+    qs = urllib.parse.urlencode({"text": text, "voice": role, "format": "mp3"})
     with urllib.request.urlopen(f"{TTS_LOCAL_URL}/tts?{qs}", timeout=90) as r:
-        wav = r.read()
-    if not wav:
+        data = r.read()
+    if not data:
         raise RuntimeError("tts-local empty response")
-    tmp = mp3.with_suffix(".local.wav")
-    tmp.write_bytes(wav)
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-i", str(tmp), "-codec:a", "libmp3lame", "-qscale:a", "3", str(mp3)],
-            check=True, timeout=30,
-        )
-    finally:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
+    mp3.write_bytes(data)
 
 
 async def synth(text: str, voice: str, out: Path) -> None:

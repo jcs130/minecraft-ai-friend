@@ -340,6 +340,7 @@ services:
     volumes:
       - ./tts/checkpoints:/checkpoints:ro
       - ./tts/voices:/voices
+      - ./gpu-tts/tts_api.py:/app/tts_api.py:ro   # api 代码 bind：改码重启即生效，免重建镜像
     environment:
       TZ: Asia/Shanghai
       TTS_DEFAULT_VOICE: goddess

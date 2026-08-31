@@ -28,8 +28,9 @@ COPY repo/ /app/
 WORKDIR /app
 
 # torch/torchaudio 先单独装(最大件)，再补 fastapi 与主包依赖
+# lameenc: 纯轮子 mp3 编码器(~100KB)，API 直出 mp3，voice 侧零 ffmpeg 依赖
 RUN pip3 install --no-cache-dir "torch==2.8.*" "torchaudio==2.8.*" \
-    && pip3 install --no-cache-dir fastapi uvicorn \
+    && pip3 install --no-cache-dir fastapi uvicorn lameenc \
     && pip3 install --no-cache-dir -e .
 
 COPY tts_api.py /app/tts_api.py
