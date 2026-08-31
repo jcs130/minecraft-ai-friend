@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 REPO = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend"
 LOG = os.path.join(REPO, "ops", "docker", "shadow", "mc", "logs", "latest.log")
@@ -31,8 +32,48 @@ FULL_CREW = [
     "shadow-world",
 ]
 
+# ASR watcher 保活（2026-08-31）：watcher 自带 msvcrt 单实例锁——每跳无脑拉一次，
+# 已在跑的新实例自退，崩了的 ≤2 分钟被接班。无需另设看门狗（曾有看门狗=繁殖源）。
+WATCHER_PYW = r"C:\Users\lzl19\AppData\Local\Programs\Python\Python313\pythonw.exe"
+WATCHER_SCRIPT = os.path.join(
+    REPO, "ops", "docker", "shadow", "god-voice", "mic_asr_watcher.py"
+)
+
+
+def ensure_watcher():
+    try:
+        if os.path.isfile(WATCHER_PYW) and os.path.isfile(WATCHER_SCRIPT):
+            subprocess.Popen(
+                [WATCHER_PYW, WATCHER_SCRIPT],
+                cwd=os.path.dirname(WATCHER_SCRIPT),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception:
+        pass
+
+
 JOIN_RE = re.compile(r"(\w+) joined the game")
 LEAVE_RE = re.compile(r"(\w+) left the game")
+
+TASK_LOG = os.path.join(
+    REPO, "ops", "docker", "shadow", "mc", "data", "oncall.log"
+)  # 自写日志，不信外壳重定向
+
+
+def log(msg):
+    line = f"[{time.strftime('%H:%M:%S')}] {msg}"
+    print(line, flush=True)
+    try:
+        try:  # 心跳 18KB/天，超 1MB 滚动一次
+            if os.path.getsize(TASK_LOG) > 1024 * 1024:
+                os.replace(TASK_LOG, TASK_LOG + ".old")
+        except OSError:
+            pass
+        with open(TASK_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
 
 
 def sh(cmd):
@@ -66,8 +107,11 @@ def replay_online():
 
 
 def main():
+    ensure_watcher()  # 每跳保活（锁挡双开，与真人在否无关）
     online = replay_online()
     real_present = online & REAL_PLAYERS
+    # 值班心跳（一行/班，查岗用：证明哨还在走班）
+    log("tick online=%s" % (",".join(sorted(online)) or "-"))
     if not real_present:
         return 0
     miss = [c for c in FULL_CREW if c not in running_set()]
@@ -77,18 +121,7 @@ def main():
     subprocess.run(
         ["docker", "start"] + miss, capture_output=True, text=True, timeout=120
     )
-    line = "[oncall] real=%s woke=%s\n" % (
-        ",".join(sorted(real_present)),
-        ",".join(miss),
-    )
-    # 心跳留痕（供人查岗：为什么半夜 vllm 又活了）
-    try:
-        with open(os.path.join(REPO, "ops", "mc-oncall.log"), "a", encoding="utf-8") as f:
-            import datetime
-            f.write(datetime.datetime.now().isoformat(timespec="seconds") + " " + line)
-    except OSError:
-        pass
-    sys.stdout.write(line)
+    log("real=%s woke=%s" % (",".join(sorted(real_present)), ",".join(miss)))
     return 0
 
 
@@ -96,9 +129,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:  # 值哨绝不能把自己搞死还没人知道
-        try:
-            with open(os.path.join(REPO, "ops", "mc-oncall.log"), "a", encoding="utf-8") as f:
-                f.write("oncall error: %r\n" % (e,))
-        except OSError:
-            pass
+        log("oncall error: %r" % (e,))
         sys.exit(0)

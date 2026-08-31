@@ -49,7 +49,32 @@ def transcribe(rec, wav_path):
     return stream.result.text.strip()
 
 
+# 单实例锁（2026-08-31，guard_drive 同款方案）：多轮手工重拉曾致 2-3 个 watcher
+# 并存争抢 inbox 文件。msvcrt 区域锁随进程退出自动释放——死了不残锁，双开即退出。
+_LOCK_FH = None
+
+
+def acquire_lock():
+    global _LOCK_FH
+    try:
+        import msvcrt
+    except ImportError:
+        return True  # 非 Windows 不设防
+    _LOCK_FH = open(os.path.join(BASE, '.watcher.lock'), 'a+b')
+    try:
+        _LOCK_FH.seek(0)
+        msvcrt.locking(_LOCK_FH.fileno(), msvcrt.LK_NBLCK, 1)
+        return True
+    except OSError:
+        _LOCK_FH.close()
+        _LOCK_FH = None
+        return False
+
+
 def main():
+    if not acquire_lock():
+        print('[already-running] 另一实例持锁，本实例退出', flush=True)
+        return
     for d in (INBOX, OUTBOX, PROCESSED):
         os.makedirs(d, exist_ok=True)
     print('loading paraformer model ...', flush=True)
@@ -73,8 +98,13 @@ def main():
                     if os.path.isfile(meta):
                         os.replace(meta, os.path.join(PROCESSED, os.path.basename(meta)))
                     continue
-                # 太小的段（<0.3s）跳过
-                if os.path.getsize(w) < 16000 * 2 * 0.3:
+                # 误触过滤（2026-08-31 造物主谕「太短的当误触」）：对讲机点一下
+                # 出的是 0.02~0.16s 的极短垃圾段（下午 140 段实测：误触 <0.2s、
+                # 真实最短指令「二」0.54s、「八号哎」0.62s，中间有干净空档）。
+                # 门槛抬到 0.45s：滤掉所有点触噪声，又绝不误伤单字短指令。
+                dur = (os.path.getsize(w) - 44) / (16000 * 2)
+                if dur < 0.45:
+                    print('[skip-short]', player, f'{dur:.2f}s', os.path.basename(w), flush=True)
                     os.replace(w, os.path.join(PROCESSED, os.path.basename(w)))
                     if os.path.isfile(meta):
                         os.replace(meta, os.path.join(PROCESSED, os.path.basename(meta)))
