@@ -930,6 +930,12 @@ def render_guard_eye(g, x, y, z):
 
 
 # ---------------- 记录 ----------------
+def log(msg):
+    """模块级兜底日志（2026-09-01 R012 复盘）：造物主迭代删了旧 def log 但未迁移全部调用点，
+    react/kage/auto_bridge 等无局部 log 闭包的函数调 log() 即 NameError（多数被 try 吞、
+    偶发 'name log is not defined' 帧）。此处兜底全量恢复；drive_loop 等局部 lambda 仍优先。"""
+    print(f"[guard] {msg}", flush=True)
+
 def feed_append(g, kind, text):
     try:
         p = os.path.join(DATA, f"guard-drive-{g['tag']}.jsonl")
