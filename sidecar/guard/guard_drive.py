@@ -102,8 +102,8 @@ RENDER_TIMEOUT = 100          # 单次渲染超时（秒）；失败吞掉不阻
 # 铁律 name/ID 分离（2026-08-23 造物主定调）：numen_act 等程序化操作用 login（Kirito/Naruto），
 # 通道文件（chant/pray/goddess-orders 的 speaker/to/key）与亲卫叙事用 name（桐人/鸣人）。
 GUARDS = [
-    {"name": "桐人", "login": "Kirito", "agent": "mc-guard-kirito", "session": "guard:kirito-default-20260824", "tag": "kirito", "autonomy": True},
-    {"name": "鸣人", "login": "Naruto", "agent": "mc-guard-naruto", "session": "guard:naruto-default-20260824", "tag": "naruto", "autonomy": True},
+    {"name": "桐人", "login": "Kirito", "agent": "mc-guard-kirito", "session": "guard:kirito-default-20260824", "tag": "kirito", "autonomy": True, "owner_uuid": "0fac6539-844f-4ca7-861f-59cc77242794"},
+    {"name": "鸣人", "login": "Naruto", "agent": "mc-guard-naruto", "session": "guard:naruto-default-20260824", "tag": "naruto", "autonomy": True, "owner_uuid": "a4701dac-7077-4452-85c7-2decce8f5efc"},
 ]
 
 # ---- 与女神侧共享的通道文件（2026-08-23 造物主谕：假玩家与客户端 AI 玩家一致）----
@@ -131,18 +131,17 @@ LOST_POLL = 30            # 伴链断连时：只降频心跳（身体实体不�
 
 def _reattach_if_lost(g, threshold=5):
     """T006-d（2026-08-29 天神）：伴链断连不再干等——连续断连≥threshold 轮（30s×5≈2.5min）
-    主动 RCON 召唤重挂 numen_act summon Goddess <login>。只在「确认实体不在」的分支调用：
+    主动 RCON 召唤重挂 numen_act summon <ownerUuid> <login>。只在「确认实体不在」的分支调用：
     活实体走不到这里，无重复召唤风险；summon 失败只记日志不抛出，下轮再试。"""
     g["_lost_streak"] = g.get("_lost_streak", 0) + 1
     if g["_lost_streak"] < threshold:
         return
     g["_lost_streak"] = 0
     try:
-        out = R.cmd('numen_act summon Goddess "%s"' % g["login"])
-        log("🔁 %s 断连 %d 轮主动召唤重挂：numen_act summon Goddess %s → %s" % (g["name"], threshold, g["login"], out))
-        feed_append(g, "reattach", "断连%d轮主动重挂 summon Goddess %s" % (threshold, g["login"]))
+        out = R.cmd('numen_act summon %s "%s"' % (g.get("owner_uuid", ""), g["login"]))
+        feed_append(g, "reattach", "🔁 断连%d轮主动召唤重挂 numen_act summon <uuid> %s → %s" % (threshold, g["login"], str(out)[:200]))
     except Exception as e:
-        log("🔁 %s 主动重挂异常：%s" % (g["name"], e))
+        feed_append(g, "reattach_err", "🔁 主动重挂异常：%s" % e)
 
 # ============ 影分身分脑（2026-08-24 造物主定调） ============
 # 分身=独立进程/独立 session、上下文独立。它在的时候是一个独立的"分脑"意识：
