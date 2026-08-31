@@ -8,7 +8,8 @@
 在线判定权威：MC latest.log 重放 join/leave（不依赖 RCON——世界进程独占 RCON，
 旁路短连曾酿风暴，见 LESSONS）。只 tail 日志尾部，2 分钟一跳，成本可忽略。
 
-注册：schtask mc-oncall 每 2 分钟 pythonw 静默跑。
+注册（2026-08-31 进程收编 docker）：shadow-sentinel 容器循环跑（挂 docker.sock +
+/mclogs）；宿主旧 schtask mc-oncall 退役。路径全 env 化，容器/宿主双跑兼容。
 """
 import os
 import re
@@ -17,46 +18,29 @@ import sys
 import time
 
 REPO = r"C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend"
-LOG = os.path.join(REPO, "ops", "docker", "shadow", "mc", "logs", "latest.log")
+LOG = os.environ.get(
+    "ONCALL_LOG", os.path.join(REPO, "ops", "docker", "shadow", "mc", "logs", "latest.log")
+)
 TAIL_BYTES = 4 * 1024 * 1024  # 只回放尾部 4MB（远超 2 分钟窗口）
 
 # 真人登录名（显示名≠程序键——铁律 name/ID 分离）
 REAL_PLAYERS = {"MengMeng", "KangQiang", "MicroKQ"}
 
-# 到岗清单（docker start 顺序：模型先起、角色后进村）
+# 到岗清单（docker start 顺序：模型先起、角色后进村；asr=天耳容器，2026-08-31 收编）
+# ⚠ shadow-npc 暂除（R011 遏制）：dedup 逻辑 4h 屠 1916 村民，容器停着是遏制措施，
+# 真人在场也不能自动放它出笼——根因排除并冒烟通过前，恢复需人工。
 FULL_CREW = [
     "vllm-qwen38-ara-df2",
     "shadow-qwenpaw",
     "shadow-guard",
-    "shadow-npc",
     "shadow-world",
+    "shadow-asr",
 ]
-
-# ASR watcher 保活（2026-08-31）：watcher 自带 msvcrt 单实例锁——每跳无脑拉一次，
-# 已在跑的新实例自退，崩了的 ≤2 分钟被接班。无需另设看门狗（曾有看门狗=繁殖源）。
-WATCHER_PYW = r"C:\Users\lzl19\AppData\Local\Programs\Python\Python313\pythonw.exe"
-WATCHER_SCRIPT = os.path.join(
-    REPO, "ops", "docker", "shadow", "god-voice", "mic_asr_watcher.py"
-)
-
-
-def ensure_watcher():
-    try:
-        if os.path.isfile(WATCHER_PYW) and os.path.isfile(WATCHER_SCRIPT):
-            subprocess.Popen(
-                [WATCHER_PYW, WATCHER_SCRIPT],
-                cwd=os.path.dirname(WATCHER_SCRIPT),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-    except Exception:
-        pass
-
 
 JOIN_RE = re.compile(r"(\w+) joined the game")
 LEAVE_RE = re.compile(r"(\w+) left the game")
 
-TASK_LOG = os.path.join(
+TASK_LOG = os.environ.get("ONCALL_LOG_FILE") or os.path.join(
     REPO, "ops", "docker", "shadow", "mc", "data", "oncall.log"
 )  # 自写日志，不信外壳重定向
 
@@ -107,7 +91,6 @@ def replay_online():
 
 
 def main():
-    ensure_watcher()  # 每跳保活（锁挡双开，与真人在否无关）
     online = replay_online()
     real_present = online & REAL_PLAYERS
     # 值班心跳（一行/班，查岗用：证明哨还在走班）

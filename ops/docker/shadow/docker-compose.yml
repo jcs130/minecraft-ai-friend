@@ -268,6 +268,47 @@ services:
     networks: [shadow]
 
   # 鈹€鈹€ 鏉戞皯绁炶皶鎺ㄧ悊锛圫IS 鐩磋繛 vllm锛宔ndpoint 宸插湪 mcdata 閰嶇疆閲屾墦琛ヤ竵锛夆攢鈹€
+  # ── shadow-asr：天耳转写（mic_asr_watcher 容器化，2026-08-31 进程收编 docker 首例）
+  # 数据面：inbox 由 shadow-mc（SVC mod 落 wav）写入；outbox 由 world 的 mc-god.ts 消费
+  # （GODVOICE_DIR 卷链路：./mc/data/godvoice ↔ /godvoice ↔ /mic 同一宿主目录）。
+  # 模型 bind 只读（82MB int8，宿主权威路径）；restart=unless-stopped 顶替散养看门狗。
+  asr:
+    build:
+      context: ./god-voice
+    image: mc-asr:1.0
+    container_name: shadow-asr
+    restart: unless-stopped
+    volumes:
+      - ./mc/data/godvoice/mic:/mic
+      - C:/Users/lzl19/.copaw/workspaces/mc-god/sherpa-onnx-paraformer-zh-small-2024-03-09:/model:ro
+    environment:
+      TZ: Asia/Shanghai
+      MIC_BASE: /mic
+      ASR_MODEL_DIR: /model
+    networks: [shadow]
+    depends_on: [mc]
+
+  # ── shadow-sentinel：值班哨（mc_oncall 容器化，真人在场不许 AI 下班）。
+  # 权限面：挂 docker.sock = 可操控全机容器，仅限本机内网栈，勿再透传。
+  # 宿主 schtask mc-oncall 与 guard_drive_watchdog 同步退役（2026-08-31）。
+  sentinel:
+    build:
+      context: ./sentinel
+    image: mc-sentinel:1.0
+    container_name: shadow-sentinel
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./mc/logs:/mclogs:ro
+      - ../../../ops/mc_oncall.py:/opt/mc_oncall.py:ro
+      - ./data:/data
+    environment:
+      TZ: Asia/Shanghai
+      ONCALL_LOG: /mclogs/latest.log
+      ONCALL_LOG_FILE: /data/oncall.log
+    networks: [shadow]
+    depends_on: [mc]
+
   oracle:
     image: mc-sidecar:2.1.0
     container_name: shadow-oracle

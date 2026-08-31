@@ -1,0 +1,5 @@
+venv/
+*.bz2
+*.log
+*.jar
+__pycache__/
