@@ -1450,23 +1450,22 @@ def sel(v):
 
 def dedup_npc(v):
     """防堆积：同 tag 实体 >1 时只保留一个（多进程竞召/服务器重启竞态的历史教训）。
-    幂等三连：标记保留者 → 杀未标记 → 摘标记。
-    2026-08-29 修误杀竞态：tag add 瞬断失败（RCON 断连/实体查询空窗）时绝不下刀——
-    否则新召唤实体未带 npcKeep 会被 kill 全灭（书商·云笈反复召唤反复被杀的根因）。
-    2026-08-31 R011 修 keeper 翻转：sel() 的 limit=1 无 sort，三连调用间实体查询顺序
-    可翻转——npcKeep 落到随机名替死鬼（settlementsfix 召唤时随机名覆盖 CustomName 的
-    竞召残留）上，真本体反被 tag=!npcKeep 追杀（14:21-18:16 杀 1916 且本体名牌尽毁）。
-    keeper 一律按 name=<display> 名牌锚定：替死鬼随机名永不等于命名，翻转不可能；
-    名牌零命中（本体卸载/回填未完）时不下刀，等下拍。"""
+    2026-08-29 修误杀竞态：tag add 瞬断失败时绝不下刀。
+    2026-08-31 R011 降级为**只观测不下刀**：sel() limit=1 无 sort，三连调用间实体查询
+    顺序可翻转——npcKeep 落到随机名替死鬼（settlementsfix 召唤时随机名覆盖 CustomName、
+    回填竞召产生的同名同 tag 分身）上，真本体反被 tag=!npcKeep 追杀（14:21-18:16 杀
+    1916）。且 tag/CustomName/位置三者在替死鬼与本体间完全可互换，RCON 选择器无法
+    决定性认出 keeper（name= 中文在 RCON 报 Expected end of options）。误杀代价远大于
+    分身堆积代价——保留计数告警，杀伐交人工/插件侧清理。"""
     etype = etype_of(v)
-    keeper = '@e[type=%s,tag=%s,name="%s"]' % (etype, v["tag"], v["display"])
-    r_tag = R.cmd("tag %s add npcKeep" % keeper)
-    if not r_tag or "no entit" in str(r_tag).lower():
-        return
-    r = R.cmd("kill @e[type=%s,tag=%s,tag=!npcKeep]" % (etype, v["tag"]))
-    R.cmd("tag %s remove npcKeep" % keeper)
-    if r and "No entity" not in r:
-        print("[npc] dedup:", v["display"], "->", r.strip(), flush=True)
+    r = R.cmd("execute if entity @e[type=%s,tag=%s,limit=2]" % (etype, v["tag"]))
+    # limit=2 探测：仅当存在第二个分身时给一次观测帧（幂等、无副作用）
+    if r and "Test passed" in str(r):
+        _dup_seen = getattr(dedup_npc, "_seen", set())
+        if v["tag"] not in _dup_seen:
+            _dup_seen.add(v["tag"])
+            print("[npc] dedup-watch: %s 存在同 tag 分身（R011 只观测不杀）" % v["display"], flush=True)
+        dedup_npc._seen = _dup_seen
 
 def alive_pos(v):
     try:
