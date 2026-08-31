@@ -6,4 +6,4 @@ set PYTHONPATH=
 set GV_BASE=C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\ops\docker\shadow\mc\data\godvoice
 set TTS_LOCAL_URL=http://127.0.0.1:8100
 cd /d C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\ops\docker\shadow\tts
-hostenv\Scripts\python.exe -u ..\..\..\sidecar\god-voice-watcher.py >> host_voice.log 2>&1
+hostenv\Scripts\python.exe -u C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\sidecar\god-voice-watcher.py >> host_voice.log 2>&1

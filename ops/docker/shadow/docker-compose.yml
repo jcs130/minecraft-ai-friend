@@ -289,6 +289,9 @@ services:
     depends_on: [mc]
 
   # ── shadow-voice：天音合成中继（sidecar/god-voice-watcher 容器化，2026-08-31 补编）。
+  # 【2026-09-01 宿主化退役→灾备】天音中继主力 = 宿主 schtask god-voice-host
+  # （sidecar/host_voice_watcher.bat，GV_BASE 指同目录，TTS_LOCAL_URL=127.0.0.1:8100
+  # 调宿主神语阁）。容器版 TTS_LOCAL_URL=http://tts:8100 需容器 tts 同开才走本地嗓。
   # 前因：08-31 进程大清理时宿主实例被误杀（身份未查即入 22 尸名单），天音断线数小时——
   # 教训已刻 LESSONS。同款镜像、bind 挂源码（改码即换岗，同 sentinel/oncall 路数）。
   voice:
@@ -328,9 +331,13 @@ services:
     depends_on: [mc]
 
   # ── shadow-tts：神语阁（IndexTTS 2.5 本地克隆 TTS，2026-08-31 首建）。
+  # 【2026-09-01 宿主化退役→灾备】造物主谕：TTS 为萌萌语音命脉，脱离 docker 引擎
+  # 生命周期常驻宿主（08-31 backend 僵死事故全容器陪葬）。主力 = 宿主 schtask
+  # god-tts-host（tts/host_tts.bat + hostenv venv，127.0.0.1:8100）+ god-voice-host
+  # （sidecar/host_voice_watcher.bat 天音中继）。本容器版留作灾备：手动
+  # `docker compose --profile gpu up -d tts`（先停宿主版避免 8100 冲突）。
   # 权重与嗓子库 bind 挂载（./tts/checkpoints 5.5GB、./tts/voices）不入库；
-  # GPU profile 需 --profile gpu 启动。shadow-voice(watcher) 调 http://tts:8100/tts，
-  # 合成失败自动回退 edge-tts（保底不断粮）。
+  # GPU profile 需 --profile gpu 启动。
   tts:
     build:
       context: ./gpu-tts

@@ -10,4 +10,4 @@ set TTS_HOST=127.0.0.1
 set TTS_PORT=8100
 set HF_ENDPOINT=https://hf-mirror.com
 cd /d C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\ops\docker\shadow\tts
-hostenv\Scripts\python.exe -u gpu-tts\tts_api.py >> host_tts.log 2>&1
+hostenv\Scripts\python.exe -u ..\gpu-tts\tts_api.py >> host_tts.log 2>&1
