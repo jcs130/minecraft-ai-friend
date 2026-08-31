@@ -4001,6 +4001,42 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           return
         }
       }
+      // 数字传送前置（2026-08-31 定谳）：门牌号「二/八/12」是无点名的功能指令，
+      // 必须在点名闸之前放行——08-29 晚灯语块插到前头后，下方旧数字块对真人已成
+      // 死代码，此为其根治。命中序号→传送并拦截；不在列表→当普通消息继续走。
+      {
+        const nMsg = message.trim()
+        // 门牌号口语形：「二」「8」「八号」「8号哎」——萌萌实际转写就是「八号哎」，
+        // 只认裸数字会漏；尾缀语气词限单字，防把整句话误判成门牌。
+        const mNum = nMsg.match(/^([0-9一二两三四五六七八九十]{1,3})(?:号|点|号点)?[哎呀啊呢哦了]?$/)
+        if (mNum) {
+          const n = zhNumberToArabic(mNum[1])
+          const wp = n !== null ? waypoints.byIndex(username, n) : null
+          if (wp) {
+            const now = Date.now()
+            if (now - (lastTp.get(username) ?? 0) >= 3000) {
+              lastTp.set(username, now)
+              tpWaypoint(username, wp)
+                .then((r) => { try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ } })
+                .catch(() => { /* */ })
+              log(`number-tp ${username} -> ${n}:${wp.name}`)
+            }
+            return // 命中（含冷却中）都拦截，不再走 LLM
+          }
+        }
+      }
+      // 点名才接（2026-08-31 造物主谕「需要点名才回复」）：萌萌常对着现实里的
+      // 爸爸说话、旁白被天耳录进来——女神不再对未点名的自然语言回话。
+      // 例外放行：「祈愿：」「问：」前缀本就是对神说的；/help 等指令形保留。
+      // 数字门牌号已在前置快路径处理，不受此闸影响。
+      const GODDESS_MENTION = /(女神|天神|天音|娘娘|goddess)/i
+      // 祈愿意图词放行（防她忘喊名）：「给我面包」「帮我」「求救」这类明确求神句式
+      // 不点名也接——闸的目标是拦旁白闲聊（嗯/对/可以了），不是拦真求。
+      const PRAY_INTENT = /(祈愿|许愿|求你|求神|给我|帮我|帮帮|赐|来[个张把块]|想要|救命|救我|听不懂|怎么办)/
+      const vipChatGate = (m: string): boolean => {
+        const t = m.trim()
+        return t.startsWith('祈愿：') || t.startsWith('问：') || /^(\/|!|\?|help|手册)/i.test(t) || GODDESS_MENTION.test(t) || PRAY_INTENT.test(t)
+      }
       // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）＋ 灯语女神公屏聊天
       // （2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）：真人（VIP 与否）公屏
       // 未点名的自然语言 → 灯语女神即时理解意图、真回应（「给我来个面包」真给面包）。
@@ -4024,33 +4060,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       ) {
         if (message.trim().startsWith('祈愿：')) {
           handleWhisper(username, message).catch((err) => log(`handleWhisper(chat-pray) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
-        } else {
+        } else if (vipChatGate(message)) {
           goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+        } else {
+          log(`chat-pass: ${username} 未点名，女神不接话：「${message.trim().slice(0, 36)}」`)
         }
         return
       }
-      // 数字传送（2026-08-29 造物主设计「1234 输数字就传」）：公屏纯数字/中文数字
-      // （1-99、二、十二…）→ 按传送点序号传送（与命格书传送阵页同序）。语音输入
-      // 说出「2」「二」也能带出来——萌萌零打字通道。不在列表范围=当普通消息放行。
-      {
-        const nMsg = message.trim()
-        if (/^[0-9]{1,2}$/.test(nMsg) || /^[一二两三四五六七八九十]{1,3}$/.test(nMsg)) {
-          const n = zhNumberToArabic(nMsg)
-          const wp = n !== null ? waypoints.byIndex(username, n) : null
-          if (wp) {
-            const now = Date.now()
-            if (now - (lastTp.get(username) ?? 0) >= 3000) {
-              lastTp.set(username, now)
-              tpWaypoint(username, wp)
-                .then((r) => { try { getBot().whisper(username, `[信使] ${r}`) } catch { /* */ } })
-                .catch(() => { /* */ })
-              log(`number-tp ${username} -> ${n}:${wp.name}`)
-            }
-            return // 命中（含冷却中）都拦截，不再走 VIP/chat
-          }
-          // 没命中 = 普通消息，放行
-        }
-      }
+      // 数字传送块已前置到点名闸之前（2026-08-31 根治：此处旧块在大 if 的
+      // return 之后，对真人从来不可达——纯数字全被 goddessChat 吞了）。
       if (config.vipListen.includes(username.toLowerCase())) {
         handleWhisper(username, message).catch((err) => log(`handleWhisper(vip-chat) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
         return
