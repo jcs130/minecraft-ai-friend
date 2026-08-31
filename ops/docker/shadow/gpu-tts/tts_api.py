@@ -146,4 +146,6 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8100)
+    # 宿主常驻版只听回环（TTS_HOST=127.0.0.1）；容器版默认全网卡
+    uvicorn.run(app, host=os.environ.get("TTS_HOST", "0.0.0.0"),
+                port=int(os.environ.get("TTS_PORT", "8100")))
