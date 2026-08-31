@@ -35,6 +35,7 @@ FULL_CREW = [
     "shadow-guard",
     "shadow-world",
     "shadow-asr",
+    "shadow-voice",
 ]
 
 JOIN_RE = re.compile(r"(\w+) joined the game")

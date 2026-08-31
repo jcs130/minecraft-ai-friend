@@ -275,16 +275,33 @@ services:
   asr:
     build:
       context: ./god-voice
-    image: mc-asr:1.0
+    image: mc-voice:1.0
     container_name: shadow-asr
     restart: unless-stopped
     volumes:
-      - ./mc/data/godvoice/mic:/mic
+      - ./mc/data/godvoice:/godvoice
       - C:/Users/lzl19/.copaw/workspaces/mc-god/sherpa-onnx-paraformer-zh-small-2024-03-09:/model:ro
     environment:
       TZ: Asia/Shanghai
-      MIC_BASE: /mic
+      MIC_BASE: /godvoice/mic
       ASR_MODEL_DIR: /model
+    networks: [shadow]
+    depends_on: [mc]
+
+  # ── shadow-voice：天音合成中继（sidecar/god-voice-watcher 容器化，2026-08-31 补编）。
+  # 前因：08-31 进程大清理时宿主实例被误杀（身份未查即入 22 尸名单），天音断线数小时——
+  # 教训已刻 LESSONS。同款镜像、bind 挂源码（改码即换岗，同 sentinel/oncall 路数）。
+  voice:
+    image: mc-voice:1.0
+    container_name: shadow-voice
+    restart: unless-stopped
+    command: ["python", "-u", "/opt/asr/god-voice-watcher.py"]
+    volumes:
+      - ./mc/data/godvoice:/godvoice
+      - ../../../sidecar/god-voice-watcher.py:/opt/asr/god-voice-watcher.py:ro
+    environment:
+      TZ: Asia/Shanghai
+      GV_BASE: /godvoice
     networks: [shadow]
     depends_on: [mc]
 
