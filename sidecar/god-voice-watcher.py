@@ -13,9 +13,12 @@ god-voice-watcher.py —— 天音中继：女神侧文本任务 → edge-tts mp
 import asyncio
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -29,15 +32,43 @@ CLAIM_Q = TEXT_Q / ".claimed"
 TTS_Q = ROOT / "tts-queue"
 
 VOICES = {
-    "goddess": "zh-CN-XiaoxiaoNeural",   # 女神/旁白：温柔女声
+    "goddess": "zh-CN-XiaoxiaoNeural",   # 女神/旁白：温柔女声（edge 回退嗓）
     "kirito": "zh-CN-YunjianNeural",     # 桐人：沉稳男声
     "naruto": "zh-CN-YunxiNeural",       # 鸣人：少年活力
     "villager": "zh-CN-XiaoyiNeural",    # 村民/孩童向
 }
 
+# 神语阁（shadow-tts / IndexTTS 2.5 本地克隆嗓）：优先走它，失败回退 edge-tts。
+# role 名即 /voices/<role>.wav 嗓子文件名；缺嗓 404 自动回退，平滑迁移。
+TTS_LOCAL_URL = os.environ.get("TTS_LOCAL_URL", "").rstrip("/")
+
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def synth_local(text: str, role: str, mp3: Path) -> None:
+    """本地 TTS 合成 wav → ffmpeg 转 mp3（SVC mod 队列认 mp3）。失败抛异常。"""
+    if not TTS_LOCAL_URL:
+        raise RuntimeError("tts-local disabled")
+    qs = urllib.parse.urlencode({"text": text, "voice": role})
+    with urllib.request.urlopen(f"{TTS_LOCAL_URL}/tts?{qs}", timeout=90) as r:
+        wav = r.read()
+    if not wav:
+        raise RuntimeError("tts-local empty response")
+    tmp = mp3.with_suffix(".local.wav")
+    tmp.write_bytes(wav)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-i", str(tmp), "-codec:a", "libmp3lame", "-qscale:a", "3", str(mp3)],
+            check=True, timeout=30,
+        )
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
 
 
 async def synth(text: str, voice: str, out: Path) -> None:
@@ -70,7 +101,13 @@ def main() -> int:
                     if not text or not entity:
                         raise ValueError("empty text/entity")
                     mp3 = TTS_Q / f"{jid}.mp3"
-                    asyncio.run(synth(text, voice, mp3))
+                    engine = "edge"
+                    try:
+                        synth_local(text, role, mp3)
+                        engine = "local"
+                    except Exception as le:
+                        log(f"tts-local miss {jid}: {le}; fallback edge-tts")
+                        asyncio.run(synth(text, voice, mp3))
                     if not mp3.is_file() or mp3.stat().st_size == 0:
                         raise RuntimeError("empty mp3")
                     modjob = {
@@ -79,11 +116,13 @@ def main() -> int:
                         "file": f"data/godvoice/tts-queue/{mp3.name}",
                         "text": text,
                         "voice": voice,
+                        "engine": engine,
                     }
                     (TTS_Q / f"{jid}.json").write_text(
                         json.dumps(modjob, ensure_ascii=False), encoding="utf-8"
                     )
-                    log(f"tts queued {jid} {mp3.stat().st_size}B role={role} text={text[:30]}")
+                    log(f"tts queued {jid} {mp3.stat().st_size}B role={role} "
+                        f"engine={engine} text={text[:30]}")
                 except Exception as e:
                     log(f"job {f.name} failed: {e}")
                     try:

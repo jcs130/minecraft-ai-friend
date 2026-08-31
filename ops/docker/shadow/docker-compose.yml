@@ -302,6 +302,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       GV_BASE: /godvoice
+      TTS_LOCAL_URL: http://tts:8100   # 神语阁优先；挂了自动回退 edge-tts
     networks: [shadow]
     depends_on: [mc]
 
@@ -325,6 +326,34 @@ services:
       ONCALL_LOG_FILE: /data/oncall.log
     networks: [shadow]
     depends_on: [mc]
+
+  # ── shadow-tts：神语阁（IndexTTS 2.5 本地克隆 TTS，2026-08-31 首建）。
+  # 权重与嗓子库 bind 挂载（./tts/checkpoints 5.5GB、./tts/voices）不入库；
+  # GPU profile 需 --profile gpu 启动。shadow-voice(watcher) 调 http://tts:8100/tts，
+  # 合成失败自动回退 edge-tts（保底不断粮）。
+  tts:
+    build:
+      context: ./gpu-tts
+    image: mc-tts:1.0
+    container_name: shadow-tts
+    profiles: ["gpu"]
+    volumes:
+      - ./tts/checkpoints:/checkpoints:ro
+      - ./tts/voices:/voices
+    environment:
+      TZ: Asia/Shanghai
+      TTS_DEFAULT_VOICE: goddess
+    ports:
+      - "127.0.0.1:8100:8100"   # 只绑回环：宿主可测，不暴露外网
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks: [shadow]
 
   oracle:
     image: mc-sidecar:2.1.0
