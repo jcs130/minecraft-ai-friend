@@ -485,13 +485,9 @@ services:
     restart: unless-stopped
     networks: [shadow]
 
-  viaproxy:
-    image: ghcr.io/viaproxy/viaproxy:latest
-    container_name: shadow-viaproxy
-    restart: unless-stopped
-    volumes: ["./viaproxy:/config"]
-    ports: ["19140:19140/udp", "25568:25568/tcp"]
-    networks: [shadow]
+  # viaproxy 服务定义已于 2026-08-31 清理：终局定谳=基岩入口宿主直跑
+  # （Docker Desktop 的 UDP 端口发布到不了宿主，见上方 2026-08-26 定局注释；
+  # 生产=计划任务 ViaProxy-Bedrock-Entry + ops/docker/shadow/viaproxy/start-viaproxy.bat）。
 
 networks:
   shadow:
