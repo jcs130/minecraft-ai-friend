@@ -1628,6 +1628,8 @@ def unleash_alive():
         except Exception:
             R.s = None
 
+_MISS = {}  # R011: per-tag 连续 miss 计数（chunk 卸载瞬态不重招）
+
 def heal_npcs():
     # 2026-08-23 造物主拍板「A+B」：水平拉回阈值用全局 leash_radius(40) 放宽+软化，每 NPC 可配 radius 覆盖。
     radius = CFG.get("quests", {}).get("leash_radius", 40)
@@ -1638,12 +1640,21 @@ def heal_npcs():
             R.s = None
         pos = alive_pos(v)
         if pos is None:
+            # R011(2026-09-01) 重招节流：村民 NoAI:0b 自由溜达会走出加载 chunk，
+            # data get 瞬态 miss ≠ 丢失——旧逻辑每拍 miss 即重招，旧 chunk 重载后
+            # 实体回来 → 分身无限增殖（8h 259 只；再往前 dedup 杀阀时代=1916 死亡泵）。
+            # 连续 5 拍 miss 才视为真丢失重招，任何一拍命中即清零。
+            _MISS[v["tag"]] = _MISS.get(v["tag"], 0) + 1
+            if _MISS[v["tag"]] < 5:
+                continue
             try:
                 summon_npc(v)
+                _MISS[v["tag"]] = 0
             except Exception as e:
                 print("[npc] heal err:", v["display"], e, flush=True)
                 R.s = None
             continue
+        _MISS[v["tag"]] = 0
         # 接地自愈（2026-08-22）：以 spawn 为锚——高于锚 2+（爬屋顶/卡树冠）或低于锚 2.5+（掉坑）都拉回 spawn 地面
         try:
             sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
