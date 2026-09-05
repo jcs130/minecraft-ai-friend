@@ -39,6 +39,7 @@ export function createBot(config: Config): BotHandle {
   let disposed = false
   let currentBot: Bot | null = null
   let closeViewer: (() => void) | null = null
+  let reconnectAttempts = 0 // 连续失败计数：指数退避用，spawn 成功清零
 
   // ── 2026-08-29 协议错位自愈 ──────────────────────────────────────────────
   // 现象: 内容模组(settlements 村民语音/数据同步)的高频包会让 minecraft-protocol
@@ -99,6 +100,7 @@ export function createBot(config: Config): BotHandle {
     bot.loadPlugin(toolPlugin)
 
     bot.once('spawn', async () => {
+      reconnectAttempts = 0
       const p = bot.entity?.position
       log(`spawned at ${p ? `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})` : 'unknown'}`)
       const movements = new pf.Movements(bot)
@@ -179,10 +181,16 @@ export function createBot(config: Config): BotHandle {
     bot.on('end', (reason: string) => {
       log(`bot disconnected: ${reason}`)
       if (!disposed && config.autoReconnect) {
+        // 指数退避：连续失败越多等越久（3s→6s→12s→…→5min 封顶），spawn 成功清零。
+        // 2026-09-05 事故：Spawn/TLM mod 实体的 metadata 包 mineflayer 解析炸 → 无退避
+        // 3s 重连循环 + 每轮 RCON 风暴 → 服务器 main 线程被拖死（CPU 满核、tick 停摆）。
+        const delay = Math.min(3000 * 2 ** reconnectAttempts, 300000)
+        reconnectAttempts++
+        log(`reconnect in ${(delay / 1000).toFixed(0)}s (attempt #${reconnectAttempts})`)
         setTimeout(() => {
           if (disposed) return
           connect()
-        }, 3000)
+        }, delay)
       }
     })
 

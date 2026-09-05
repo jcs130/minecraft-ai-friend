@@ -35,7 +35,7 @@
     "pathfindingAlgorithm": "GRADIENT_DESCENT"
   },
   "roadAppearance": {
-    "roadsEnabled": true,
+    "roadsEnabled": false,
     "allowArtificial": true,
     "allowNatural": true,
     "placeWaypoints": false,

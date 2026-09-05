@@ -76,7 +76,7 @@ services:
 
   # 鈹€鈹€ 瀹堝崼妗ワ紙璐︽湰钀?./data 鍗?= 绁炰娇閫氶亾 IPC锛夆攢鈹€
   guard:
-    image: mc-sidecar:2.1.0
+    image: mc-sidecar:2.1.1
     container_name: shadow-guard
     restart: unless-stopped
     command: ["python3", "-u", "/opt/sidecar/guard/guard_drive.py"]
@@ -249,7 +249,7 @@ services:
 
   # 鈹€鈹€ 鏉戞皯涔嬮瓊锛坢cdata 鍗凤紱鍚?log + RCON 鍙戣█锛夆攢鈹€
   npc:
-    image: mc-sidecar:2.1.0
+    image: mc-sidecar:2.1.1
     container_name: shadow-npc
     restart: unless-stopped
     command: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
@@ -363,25 +363,29 @@ services:
     restart: unless-stopped
     networks: [shadow]
 
-  oracle:
-    image: mc-sidecar:2.1.0
-    container_name: shadow-oracle
-    restart: unless-stopped
-    command: ["python3", "-u", "/opt/sidecar/mc_oracle.py"]
-    volumes:
-      - ./mcdata:/mcdata
-    environment:
-      TZ: Asia/Shanghai
-      ORACLE_BIND: 0.0.0.0   # 瀹瑰櫒缃戝唴 settlements mod 缁?oracle:9001 璁块棶
-      NPC_DATA_DIR: /mcdata
-      MC_RCON_HOST: mc
-      MC_RCON_PORT: "25575"
-      RCON_PASSWORD: ${RCON_PASSWORD}
-    networks: [shadow]
+  # 鈹€鈹€ oracle锛歷illage persona inference adapter (mc_oracle.py) — RETIRED 2026-09-05
+  # settlements mod has been removed; oracle kept polling base_villager via RCON in a
+  # busy loop (Invalid entity type spam, CPU burn). Service stopped & definition kept
+  # commented for rollback reference. 鈹€鈹€
+  # oracle:
+  #   image: mc-sidecar:2.1.1
+  #   container_name: shadow-oracle
+  #   restart: unless-stopped
+  #   command: ["python3", "-u", "/opt/sidecar/mc_oracle.py"]
+  #   volumes:
+  #     - ./mcdata:/mcdata
+  #   environment:
+  #     TZ: Asia/Shanghai
+  #     ORACLE_BIND: 0.0.0.0   # 瀹瑰櫒缃戝唴 settlements mod 缁?oracle:9001 璁块棶
+  #     NPC_DATA_DIR: /mcdata
+  #     MC_RCON_HOST: mc
+  #     MC_RCON_PORT: "25575"
+  #     RCON_PASSWORD: ${RCON_PASSWORD}
+  #   networks: [shadow]
 
   # 鈹€鈹€ 杩愯惀鍙屾ˉ锛氶┍鍔ㄧ伅璇コ绁?宸℃淇笘鐣?/鐏剁伀绁徃(涓栫晫瑙傛挱鎶? 鈹€鈹€
   opsdrive:
-    image: mc-sidecar:2.1.0
+    image: mc-sidecar:2.1.1
     container_name: shadow-opsdrive
     restart: unless-stopped
     command: ["python3", "-u", "/opt/sidecar/ops/ops_drive.py"]
@@ -443,14 +447,17 @@ services:
       TZ: Asia/Shanghai
       PYTHONPATH: /app/src
       ENABLE_CHAT_API: "true"
-      MOS_CHAT_MODEL: qwen3.8-27b-uncensored
-      # chat LLM via host vllm :8890 (qwenpaw profile below)
-      CHAT_MODEL_LIST: '[{"backend":"openai","model_name_or_path":"qwen3.8-27b-uncensored","temperature":0.8,"max_tokens":4096,"top_p":0.95,"api_key":"local","api_base":"http://host.docker.internal:8890/v1","support_models":["qwen3.8-27b-uncensored","qwen3.6-27b"]}]'
-      OPENAI_API_BASE: http://host.docker.internal:8890/v1
-      MEMRADER_MODEL: qwen3.8-27b-uncensored
-      MEMREADER_GENERAL_MODEL: qwen3.8-27b-uncensored
-      MEMRADER_API_BASE: http://host.docker.internal:8890/v1
-      MEMREADER_GENERAL_API_BASE: http://host.docker.internal:8890/v1
+      MOS_CHAT_MODEL: qwen3.8-flash-next-unc
+      # chat LLM via host llama.cpp :8017 (2026-09-04 ops: 8890 vLLM 已退役, 迁 Flash-Next)
+      CHAT_MODEL_LIST: '[{"backend":"openai","model_name_or_path":"qwen3.8-flash-next-unc","temperature":0.8,"max_tokens":4096,"top_p":0.95,"api_key":"local","api_base":"http://host.docker.internal:8017/v1","extra_body":{"chat_template_kwargs":{"enable_thinking":false}},"support_models":["qwen3.8-flash-next-unc","qwen3.8-27b-uncensored","qwen3.6-27b"]}]'
+      OPENAI_API_BASE: http://host.docker.internal:8017/v1
+      MEMRADER_MODEL: qwen3.8-flash-next-unc
+      MEMREADER_GENERAL_MODEL: qwen3.8-flash-next-unc
+      MEMRADER_API_BASE: http://host.docker.internal:8017/v1
+      MEMREADER_GENERAL_API_BASE: http://host.docker.internal:8017/v1
+      # 2026-09-04 ops(小智): 基础设施 LLM 调用关思考提速(配合 patches/memos-api-config.py)
+      MOS_CHAT_EXTRA_BODY: '{"chat_template_kwargs": {"enable_thinking": false}}'
+      MEMREADER_EXTRA_BODY: '{"chat_template_kwargs": {"enable_thinking": false}}'
       # embedding: light embed stack (b5-large 1024d, ollama protocol)
       OLLAMA_API_BASE: http://embed:11434
       MOS_EMBEDDER_BACKEND: ollama
@@ -466,12 +473,19 @@ services:
       MEMSCHEDULER_REDIS_HOST: memos-redis
       MEMSCHEDULER_REDIS_PORT: "6379"
       MOS_ENABLE_SCHEDULER: "false"
+      # 2026-09-04 ops(小智): 开启记忆树重组器。此栈自 8/26 建起 MOS_ENABLE_REORGANIZE 未设(默认false),
+      # 记忆只进 neo4j/qdrant 从不进记忆树, 导致 search/chat 召回永远为空。
+      # 注意: 只覆盖增量写入; 存量 411 节点需另行回填(见当日迁移记录)
+      MOS_ENABLE_REORGANIZE: "true"
       API_SCHEDULER_ON: "true"
       ENABLE_INTERNET: "false"
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     volumes:
       - ./memos-data/api:/data
+      # 2026-09-04 ops(小智): 补丁版 config.py, 增加 MOS_CHAT_EXTRA_BODY/MEMREADER_EXTRA_BODY 钩子,
+      # 给本地 :8017 传 {"enable_thinking": false} 关思考提速。镜像升级后需重新提取核对
+      - ./patches/memos-api-config.py:/app/src/memos/api/config.py:ro
     # 2026-08-31 造物主定谳：宿主 memos-deploy 五件套退役，游戏记忆以本栈为唯一权威；
     # 8002:8000 接管宿主旧端口，宿主侧调用方（守卫桥/QwenPaw MCP）零改动无缝切换。
     ports:

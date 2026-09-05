@@ -288,3 +288,12 @@
 
 ## 2026-08-30 涓嬬彮寮€鍏充笌 GPU 浼戞伅
 - presence.ps1 涓€閿紑鍏?瑙掕壊 off/on/status + AI 杩愯惀 ai-off/ai-on); ai-on 鍏?vllm 鍚?qwenpaw(渚濊禆搴?銆?- numen 鍋囩帺瀹惰韩浣撲笉闅忓畧鍗ˉ鏂紑鑷姩鎺夌嚎, 涓嬬嚎蹇呴』 numen_act dismiss銆?- WDDM 妯″紡 nvidia-smi 鐨?utilization 甯?100% 鏄閲忓亣璞♀€斺€旂湅鍔熻€?98W=姝? 250W+=婊¤浇鎺ㄧ悊)鎵嶇湡瀹炪€?- cmd 浼犲琛?powershell here-string 蹇呯偢(鎹㈣琚帇)鈥斺€斿鏉?patch 鐢?python 鏂囦欢鍋氥€?
+
+
+## 2026-09-01 宿主端口拓扑 8·31 事故定谳（mc-god）
+
+- **8/31「LAN 玩家进不来」真因不是 mc-direct 挪口**：25566 自 8/28 方案B 就是 mc-direct 的 loopback 正典发布口（shadow compose `ports:["25566:25599"]` + start-server.py relay25565 定义双处立法）。真因是 **relay25599（host_tcp_relay 25599→gate:25700）是裸进程不自起**，shadow 栈重启后消失，而小智 8/27 注册的 MCHostRelay-MC25565 仍指 25599 → 转发落空秒断。**定谳=25566 为正典**；方案②（发布口回 25599）不可取：docker 占死 25599 后裸中继永远绑不上（本 LESSONS 前文老坑），bot 过门口就地报废。
+- **双套中继漂移是制度性隐患**：schtasks ONLOGON 版（小智管，自起）与 start-server.py relay 裸进程版（B 仓管，不自起）各指各的口。收敛原则：**schtasks 版 = 正主**（TR 对齐 start-server.py 定义），栈重启后裸进程版靠 `up --only` 复位。两套并存时任何一方改指向都要同步另一方。
+- **MCHostRelay 类 ONLOGON 任务默认带 72h 运行上限**（Stop Task If Runs 72:00:00，且无重复调度）——到期强停后不自起 = LAN 入口周期性暴毙的定时雷。治法：导出 XML 把 ExecutionTimeLimit 改 PT0S 覆盖重注册（schtasks /Change /TR 改不动时限）。
+- **排障姿势**：TCP ping 探不出「监听在但转发目标死」的半死链——必须 mcping 全链握手；netstat 无 LISTENING 但 127.0.0.1 可达 = WSL2 镜像网络发布的容器口（如 25566），别当成故障。mineflayer 工具（MC_PORT 默认 25599 的宿主脚本）被 NeoForge CONFIG 拒 = 25599 被劫持成 MC 直连、relay25599 缺位的信号。
+- **容器退出码三连判**：restart=unless-stopped 却不自启 = 显式 docker stop（人为）；Exit 0 + 日志 "Shutting down" = 优雅收 SIGTERM；Exit 137 + OOMKilled=false = stop 超时被 SIGKILL（10s 强杀），不是内存问题。shadow-voice/tts 8/31 深夜退出即此组合=司灯「神语阁」验收后计划停机，非故障。

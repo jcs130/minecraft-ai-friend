@@ -1,16 +1,26 @@
 {
- "at": "2026-08-30 15:41:02",
- "ts": 1788075662.769716,
- "red": [],
- "yellow": [],
+ "at": "2026-09-05 23:51:02",
+ "ts": 1788623462.9242408,
+ "red": [
+  "modern-3070",
+  "guard-bridge",
+  "guards-online",
+  "Kirito-status",
+  "Naruto-status",
+  "mc-guard-kirito",
+  "mc-guard-naruto"
+ ],
+ "yellow": [
+  "guard-log-fresh"
+ ],
  "detail": {
   "panel-9090": {
    "s": "green",
    "m": "200"
   },
   "modern-3070": {
-   "s": "green",
-   "m": "200"
+   "s": "red",
+   "m": "Remote end closed connection without response"
   },
   "gateway-8011": {
    "s": "green",
@@ -18,59 +28,59 @@
   },
   "shadow-mc": {
    "s": "green",
-   "m": "Up 31 minutes (healthy)"
+   "m": "Up 4 minutes (healthy)"
   },
   "shadow-world": {
    "s": "green",
-   "m": "Up 8 minutes"
+   "m": "Up 30 minutes"
   },
   "shadow-panel": {
    "s": "green",
-   "m": "Up 20 hours"
+   "m": "Up 40 minutes"
   },
   "shadow-gateway": {
    "s": "green",
-   "m": "Up 31 hours"
+   "m": "Up 40 minutes"
   },
   "shadow-qwenpaw": {
    "s": "green",
-   "m": "Up 41 hours (healthy)"
+   "m": "Up 40 minutes (healthy)"
   },
   "guard-bridge": {
-   "s": "green",
-   "m": "proc x2"
+   "s": "red",
+   "m": "shadow-guard container running but no guard_drive process"
   },
   "guard-log-fresh": {
-   "s": "green",
-   "m": "log 9s old"
+   "s": "yellow",
+   "m": "log stale 8729min"
   },
   "web-entities-fresh": {
    "s": "green",
-   "m": "1s old"
+   "m": "0s old"
   },
   "rcon": {
    "s": "green",
    "m": "ok"
   },
   "guards-online": {
-   "s": "green",
-   "m": "both"
+   "s": "red",
+   "m": "missing ['Kirito', 'Naruto']"
   },
   "Kirito-status": {
-   "s": "green",
-   "m": "hp 20.0 food 17.0"
+   "s": "red",
+   "m": "get_self_status no hp field"
   },
   "Naruto-status": {
-   "s": "green",
-   "m": "hp 20.0 food 18.0"
+   "s": "red",
+   "m": "get_self_status no hp field"
   },
   "mc-guard-kirito": {
-   "s": "green",
-   "m": "enabled"
+   "s": "red",
+   "m": "disabled(403 root cause)"
   },
   "mc-guard-naruto": {
-   "s": "green",
-   "m": "enabled"
+   "s": "red",
+   "m": "disabled(403 root cause)"
   },
   "panel-smoke": {
    "s": "green",
