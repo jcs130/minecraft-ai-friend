@@ -1,0 +1,13 @@
+#The maid pack that the client player needs to download, needs to fill in the URL value of the file
+#Example: ["https://www.dropbox.com/download/apple.zip", "https://www.dropbox.com/download/cat.zip"]
+ClientPackDownloadUrls = ["https://tlmdl.cfpa.team/file/nahida-1.0.0.zip", "https://tlmdl.cfpa.team/file/xuanxuan_sound-1.1.0.zip", "https://tlmdl.cfpa.team/file/tangyuan_sound-1.1.0.zip", "https://tlmdl.cfpa.team/file/zi_min-1.2.2.zip", "https://tlmdl.cfpa.team/file/gugu_gaga-2.1.1.zip", "http://192.168.3.133:9090/packs/ark_pepe-1.1.0.zip", "http://192.168.3.133:9090/packs/ark_bena-1.1.0.zip", "http://192.168.3.133:9090/packs/ark_myrtle-1.1.0.zip", "http://192.168.3.133:9090/packs/ark_golding-1.1.0.zip", "http://192.168.3.133:9090/packs/ark_amiya-1.1.0.zip", "http://192.168.3.133:9090/packs/ark_texas-1.1.0.zip"]
+#When turned on, when the maid AI executes more than 50ms, the entity information of the problem will be logged
+MaidAITimeDebug = false
+#The interval time (in seconds) for the maid backup mechanism to back up maid data
+# Default: 180
+# Range: > 5
+MaidBackupIntervalSeconds = 180
+#The maximum number of backups for each player when the maid backup mechanism is enabled
+# Default: 3
+# Range: 1 ~ 64
+MaidBackupMaxCount = 3
