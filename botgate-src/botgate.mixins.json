@@ -9,7 +9,16 @@
     "BetterCombatConfigTaskGateMixin",
     "ConfigTaskGateForNonNeoForgeMixin",
     "RecipePacketGateForNonNeoForgeMixin",
-    "EquipmentPacketGateForNonNeoForgeMixin"
+    "EquipmentPacketGateForNonNeoForgeMixin",
+    "SkillBookUseMixin",
+    "SkillItemUseMixin",
+    "BookAutoRestoreMixin",
+    "BookDropGuardMixin",
+    "SkillChestBootMixin",
+    "FlyBootMixin",
+    "FeatherBootsMixin",
+    "WeaponSkillMixin",
+    "AuraTickMixin"
   ],
   "injectors": {
     "defaultRequire": 1
