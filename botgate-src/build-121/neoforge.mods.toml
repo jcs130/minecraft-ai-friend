@@ -1,0 +1,19 @@
+modLoader = "javafml"
+loaderVersion = "*"
+license = "MIT"
+
+[[mods]]
+modId = "botgate"
+version = "1.0.0"
+displayName = "Bot Gate (Vanilla/Bedrock Protocol Gates)"
+description = "Five generic network gates extracted from godfix so vanilla-protocol clients (mineflayer bots, Geyser/bedrock) can negotiate and stay connected on a NeoForge server. force-optional payloads + config-task/recipe/equipment packet gating per connection type."
+
+[[dependencies.botgate]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21, 1.21.1]"
+ordering = "NONE"
+side = "BOTH"
+
+[[mixins]]
+config = "botgate.mixins.json"

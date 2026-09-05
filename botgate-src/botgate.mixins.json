@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "dev.god.botgate.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PayloadRegistrarForceOptionalMixin",
+    "CheckPacketSendGuardMixin",
+    "BetterCombatConfigTaskGateMixin",
+    "ConfigTaskGateForNonNeoForgeMixin",
+    "RecipePacketGateForNonNeoForgeMixin",
+    "EquipmentPacketGateForNonNeoForgeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

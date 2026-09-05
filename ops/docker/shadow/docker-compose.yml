@@ -161,6 +161,10 @@ services:
       # 历史注（2026-08-28 神社之门收编）：IA/drones mod 注册必需网络通道后，裸
       # mineflayer 直连会被 NeoForge CONFIG 期拒（"you are not running NeoForge"），
       # 当时的解法是 world 的 bot 一律走 gate:25700 协商边车。
+      # 2026-09-06 botgate 上线：五个通用网络门（force-optional payload +
+      # CONFIG 任务/配方包/装备包分流 + BC 门）从 settlementsfix 提炼成独立
+      # mod（botgate-src/ 自持编译），settlements 退役不再带走命脉——
+      # 女神化身保持直连 mc:25599（少一跳 gate 翻译层）。
       MC_HOST: mc
       MC_PORT: "25599"
       MC_RCON_HOST: mc
