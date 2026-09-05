@@ -101,7 +101,24 @@ def _wav_to_mp3(wav_path: str, mp3_path: str) -> str:
 @app.get("/tts")
 def tts(text: str, voice: str = DEFAULT_VOICE, lang: str = "ZH",
         emo: str = "", speed: float = 1.0, emo_alpha: float = 1.0,
-        format: str = "wav"):
+        format: str = "wav",
+        text_lang: str = "", ref_audio_path: str = "",
+        prompt_lang: str = "", prompt_text: str = "",
+        text_split_method: str = "", streaming: bool = False,
+        aux_ref_audio_paths: str = "", media_type: str = "wav",
+        cut5: str = ""):
+    # ── GPT-SoVITS 兼容层（2026-09-06：TLM 女仆 tts.json api_type=gpt-sovits 直连本阁）─
+    # TLM 以 GPT-SoVITS v2 格式调用：text/text_lang/ref_audio_path/prompt_lang…
+    # 本阁按自家参数合成；ref_audio_path 若指向 /voices 下的嗓子则采纳。
+    if text_lang:
+        tl = text_lang.lower()
+        lang = "ZH" if tl in ("zh", "zh-cn", "chinese", "中文") else lang.upper()
+    if ref_audio_path:
+        base = os.path.basename(ref_audio_path)
+        cand = os.path.splitext(base)[0]
+        if os.path.isfile(os.path.join(VOICE_DIR, cand + ".wav")) or \
+           os.path.isfile(os.path.join(VOICE_DIR, base)):
+            voice = cand
     if not text.strip():
         raise HTTPException(400, "empty text")
     spk = _voice_path(voice)
