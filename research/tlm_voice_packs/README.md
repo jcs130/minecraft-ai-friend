@@ -29,6 +29,15 @@
 
 各干员 label 集略有差异（贝娜无「戳一下」等），缺失事件留空——TLM 跳过不播，与官方包跳号行为一致。
 
+## 克隆音色（说任意话，2026-09-06 补齐）
+
+预录声音包只能播 37 句；「任意文本×同嗓」走 IndexTTS2.5 零样本克隆（参考音即音色，无需训练）：
+
+- 参考音注册：每人「任命助理」3-10s wav → `ops/docker/shadow/tts/voices/ark_<id>.wav`，容器即挂即用（`GET /voices` 可见）
+- 直连合成：`GET http://127.0.0.1:8100/tts?text=...&voice=ark_amiya&format=mp3&emo=happy:0.6`
+- 面板链路：`POST /api/tts {voice:"ark_pepe", mood:"快乐"}`——web-panel 对 `ark_*`/`goddess` 短路直连 IndexTTS（panel 容器 env `INDEX_TTS_URL=http://tts:8100`），普通音色仍走 edge-tts 云端
+- 实测：佩佩 6.4s/句（含加载），磁盘缓存同文本+音色+语气命中 ~0s
+
 ## 再生成流程
 
 1. `python tmp/fetch_full_voice.py` — 抓 6 人全量台词 JSON（biligame wiki api.php parse，label+音频 url）

@@ -220,6 +220,7 @@ services:
       MC_LOG_PATH: /mclogs/latest.log
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
+      INDEX_TTS_URL: http://tts:8100   # 克隆音色（ark_*/goddess）走本栈 IndexTTS 网关
     ports:
       - "9090:9090"
     networks: [shadow]

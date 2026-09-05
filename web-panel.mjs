@@ -32,7 +32,7 @@ const VILLAGERS_PATH = resolve(VILLAGE_DIR, 'villagers.json')
 // 2026-08-22 用户定调「TTS 走云端」：本地 IndexTTS 被 vllm 抢 GPU 慢（5~25s/句），
 // 改走微软 Edge 朗读服务（edge-tts，Python311 子进程，实测 ~2s/句，中文音色 30+）。
 // 磁盘缓存保留：同文本+同音色+同语气只合成一次（命中 ~0.03s）。
-const INDEX_TTS_URL = process.env.INDEX_TTS_URL || 'http://127.0.0.1:8085'
+const INDEX_TTS_URL = process.env.INDEX_TTS_URL || 'http://127.0.0.1:8100'
 const TTS_INFER_TIMEOUT = 45000 // IndexTTS 兜底时的超时
 const TTS_EDGE_PY = process.env.TTS_EDGE_PY || 'C:\\Users\\lzl19\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
 const TTS_EDGE_SCRIPT = resolve(process.cwd(), 'ops', 'tts_edge_synth.py')
@@ -3297,6 +3297,33 @@ const server = createServer((req, res) => {
           return
         }
       } catch {}
+      // 克隆音色（ark_* 方舟系 / goddess：IndexTTS /voices 注册的参考音，零训练即用）
+      // 2026-09-06 上线：佩佩/贝娜/桃金娘/澄闪/阿米娅/德克萨斯 —— 女仆 AI 对话与女神播报共用。
+      if (/^(ark_[a-z]+|goddess)$/.test((voice || '').trim())) {
+        const cv = voice.trim()
+        const EMO = { '快乐': 'happy:0.6', '生气': 'angry:0.6', '悲伤': 'sad:0.6', '害怕': 'afraid:0.5',
+          '厌恶': 'disgusted:0.5', '忧郁': 'melancholic:0.5', '惊讶': 'surprised:0.6', '俏皮': 'happy:0.7',
+          '温柔': 'calm:0.4', '温暖': 'calm:0.4', '严肃': 'calm:0.3', '平静': 'calm:0.3', '冷淡': 'calm:0.3', '豪爽': 'happy:0.5' }
+        const emo = EMO[moodCn] || ''
+        try {
+          const ctl = new AbortController()
+          const timer = setTimeout(() => ctl.abort(), TTS_INFER_TIMEOUT + 8000)
+          const qs = new URLSearchParams({ text: String(text).slice(0, 160), voice: cv, format: 'mp3' })
+          if (emo) qs.set('emo', emo)
+          const r = await fetch(`${INDEX_TTS_URL}/tts?${qs}`, { signal: ctl.signal })
+          clearTimeout(timer)
+          if (!r.ok) throw new Error('upstream ' + r.status)
+          const buf = Buffer.from(await r.arrayBuffer())
+          try { writeFileSync(cachePath, buf) } catch {}
+          res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' })
+          res.end(buf)
+          return
+        } catch (e) {
+          res.writeHead(502, { 'Content-Type': 'text/plain' })
+          res.end('clone tts error: ' + (e.message || e))
+          return
+        }
+      }
       // 主链路：云端 edge-tts
       try {
         const buf = await ttsEdgeSynth(text, voice, rp[0], rp[1])
@@ -3331,9 +3358,12 @@ const server = createServer((req, res) => {
     return
   }
   if (u.pathname === '/api/tts/voices' && req.method === 'GET') {
-    // edge-tts 中文音色表（静态，秒回；不依赖网关）
+    // edge-tts 中文音色表（静态，秒回；不依赖网关）+ 本机克隆音色（IndexTTS /voices）
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify({ voices: TTS_EDGE_VOICES.map(([id, name]) => id), labels: Object.fromEntries(TTS_EDGE_VOICES) }))
+    res.end(JSON.stringify({
+      voices: TTS_EDGE_VOICES.map(([id, name]) => id), labels: Object.fromEntries(TTS_EDGE_VOICES),
+      clone: { ark_pepe: '佩佩（方舟·小公主腔）', ark_bena: '贝娜（方舟·人偶小姑娘）', ark_myrtle: '桃金娘（方舟·元气小个头）', ark_golding: '澄闪（方舟·软妹絮叨）', ark_amiya: '阿米娅（方舟·萝莉主音）', ark_texas: '德克萨斯（方舟·冷淡少女）', goddess: '女神（IndexTTS 参考音）' },
+    }))
     return
   }
   // 世界控制状态：GET /api/world
