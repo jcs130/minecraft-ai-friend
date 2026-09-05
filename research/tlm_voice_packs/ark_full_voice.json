@@ -1,0 +1,1131 @@
+{
+ "佩佩": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/44/05rkbtrzg13xqefrz2898q2kbqs8yq4.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/88/mz827h8is1w4hbnhhnkqegxmlktg9xh.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/91/fe88swtu42agh019ivi6mpjmd8j4z11.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/50/cwjed7ymqwoobaltqx7dcz0mjfnwq02.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fd/puvnfw1qwqqvoeqdwfab1e42spg6pco.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9d/hu15n6dqlti94xop51qpootzuy4q8ho.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/18/g60n9mpbkqeozbauvetg713duec3qje.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a5/thrgf1jz37loxjb2ffg0gql3dhaxrqj.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/98/djsyy2q0unnu8c9kbuyhzxtiluztwuf.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/21/bqej0dduoxcrnm85157qzaybo9rn8ip.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fb/a3tcq3t6ksnvp8wckp60jgw5rt2r5qi.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e4/oojofc01uul9ib8npizm5bnrpgi6k31.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/be/idmqc2i60td95nde4w4hqr850vhcbz0.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e8/8negn5d4lctb5gqurpcxdswk222sk1y.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5d/ipo4ad9phi7qt1q6anstqd2s7a1gacj.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f6/pchy76b7sw41iufmjuhc35accqovaox.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/1c/dq59j83y5bbj6vmkzx7z8b110llj538.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/14/08cg93ndxew6fzodx2lph0oybygf4r0.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/df/ru3yn7qtch31ya1ypibtj048nkzu4t4.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9e/qirm8i5t13su6s6jcefo6kuuph7qnc5.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c9/m3k0c3ycbcj02vtz05g9x2x2lx3uc0s.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a0/216zvkr7jcda1gvlimpyki4ms9wsqun.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/8f/prbpijwwypyliq5hcnufznw0ebbacm7.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/70/ddxybz1m7anxfbfdzi0w5k85cfk5268.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9a/ko4i145wklq43bpjlah7buo2se3mnj1.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中4",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/26/tb150kyjjj4jsnxdydf3rgciau56jn2.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a7/0q5k8y2gzm3128yu3a75f7sk7ap5fw5.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/86/7wl8eu5k48pjk9tgl2k8cuaexgx9zu3.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a9/q5ogbgdssjgojqru1tshs6b0kk0blps.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/35/0mltbf0r80h4gbjukuaaygdkwsq7zon.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/3d/b2iqr1ke58ddibezcw0zo6ehhctws28.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6a/e977jjo3hr6016c56sa4tzwup4ve48q.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/83/955up160qgn1g0tctov5usl01nx7dwc.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b1/etsbxfo3bobxsxfj13ibk35u3sae8vl.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a6/j065vnggmjm5ey635ef365mdjpmkndc.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/ed/9hrj8r6ss3hr0104f77nd2wo23g99gs.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/da/k324sy98fhjiqz38ko2pszu6ge113oi.mp3",
+    "text": ""
+   }
+  ]
+ },
+ "贝娜": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/23/nlrzc1ey2bxno64yxzhgjl1thxwb3jg.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/0a/6jlwvcb2k3gl3fmxytbi197o323iorq.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/d7/n5w8ifoky5ey1tvniu9mi8l6rexu0d3.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/42/suh2neh4a9x81wlrzpwqfr0m4frzoz2.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/0e/6qlkt0mho8tqlx187m7mkqcyec945zq.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/16/l2ckjr655h4mlreb7g8futt27c1yw5b.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/38/qd2w9ihe9o9mikbsi0lbphfrckjrcvw.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/4d/gsdp25r5sb0k7yvols9vxy0le8iysyn.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fe/0jugf6wvp53f06rmxy7uaj2shtvvqva.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/87/s0ppshozrr36mz1w1vy652vkch3hp3h.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f2/0ngiqynh7jnf6mp1owlymnhhitt3m2d.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/ec/j9oj848zt6pew041agnvqsq06d7b79u.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6b/bvdhxhep5un2culym4l26d5sx878hgl.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/50/9g8wn66u0y48xjo1y41pc5bl9yrrmuc.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/55/p02b4ju0722w7mavvhdn80lrc4pu5oh.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/78/jheukt6eorza865sau2qjjnu9g7xt5g.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/ac/nxe78s2odd7lmjmrq00auw6fhqusd6b.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/88/smpqxvqjkxe3b8twelos0dvbwtsx03k.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/65/bvpre42mxd7jo3c8bzi8i4b41bt2d5c.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c5/6xbjbh5yemogflgj40meoh8wd0qf2ul.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c8/akojelwygtelkb9bjoazbg5gp1o8ju8.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7e/5vgox3dafdbzryuud5p1ab1hzuryayh.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b3/sqbjpwnkn4anq8ikephqq0hesdd5unj.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/86/2kyse1dx2b80rgaz1tkzaxqf2m2v013.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a3/66zolbjfs1b0akxvavf54lxku8ul5jq.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中4",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e8/ppv2h1hjs0p667uhhngafaw1n9yywv3.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f6/aynmhz0b9ojf1p2547snyjkc82lrv8n.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fd/k3fql8qaakpbdiwwkhdk4wo46obnyej.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a7/meixmdvvlqlfvd7ny46avyge6j0pnzr.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/bd/dag6xn2cxv4bbnebyrz809jf1kkuiyh.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/01/ey4m6lywwda5uvmiy66qviv2m7w606s.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e0/mjy9ljpin7ocx0qxid2ly9zf543mitf.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/53/i189j3kuqoyd6new71xmvwujjgpmq3t.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b8/lkxfudwlfuw8wvzxxrsu0n0u7qhv7m7.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/19/hao5uvtu297s2fakzln63ze7zr0mv9g.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/15/6sv8lb7g6mtwvd61tujs68qf4p1ek9m.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/90/td0nbvb6tjehkmxflo2otdfylzvdmm6.mp3",
+    "text": ""
+   }
+  ]
+ },
+ "桃金娘": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f6/eyqtb3914texx1z5kystmhb9e4d7rqz.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/61/8znztdcq6m724p6kze1xukflhuem3wm.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b3/3bynlfc6wntxtlfkwzent7n43yjbvnq.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/55/pje2x54thtpbwhu6l5pqup65i2f0kf0.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b6/1w6kqktm6nlqp0acwtxtyfqq41gr7xg.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/0e/3r3tgw93ravuywfzdgv34hx988aiaqh.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7a/227n4kfkghektngehn4iwuz337ftfrw.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/39/rnu22utfq3dmpknmu3e6cbwvqwl2afq.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/15/mcpjn22e7i92js8hp0r19mz2m7th6ju.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a9/aq8ckxdb1yq7y5a5f53mfuxh0dg46u4.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/bf/sf64k0wotcw08x2gdneuqq9htoxwxiz.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b0/c9jjhoojt5wbg9ir8yfp5mimn6vr93i.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/60/h0pg9jq8t7dgtmhz75jzh4klu125sa5.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/96/9votenax6ayw6a48ycd8iri0aimvb9k.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/36/rnc7e7b7fz8njc02ie840tsn730ztqy.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9b/aof82byqedja8e46byewu0xl9hcfwch.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a5/rgl454snuaronelexxhqk4hzl764c8e.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/52/iebel7b6mqqicd9e64pp2claz8ylzd1.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b1/fay62g9zvoh1enjorb5ftsfb8n8mor6.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b4/ohlgaqocuk316b932xzyyh51uxrz74d.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/02/o2mxxf6kwjxrhr3shftb4y58xgpf0v6.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/97/5f4roraevpw635y0pi3lnr9pnghdnai.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6c/n0rq8ouqpaf68ig5zgffzisjy9zqgj5.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fc/ehof5jt8t6aahp8qhf8sp9u2cnifnbn.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/1b/ljreovanp1fbr6j5n1yl1nywfmwfiek.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/20/32sfdgwfhuyr84ji2p80hzo48jyfhdc.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/41/6gp35f8wcal0es4en88twx98ywf03fs.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7f/mi6736knhieikhgxgbpitwi4moqc2i4.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/cd/8tztu3cvcor77xpd1mdq8ovfjjbdnca.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/ac/0m358gfuz3visphutggf3zs8oegid22.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/05/fnwcissy3ht5xnwfcxhxhpokq8q16d5.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/57/cgezmc100zkca53xvs2xofrr7s78bta.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/82/frccnqinp8val9p2g7rkokpq3of8r1y.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/73/p2cv8ew7ijetl21blcma4n100mz3432.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fe/nsnps0lf0f9i858mcbcd82qlt51bsxy.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/88/6b09me728dhjwh3xr0byustt2rof31q.mp3",
+    "text": ""
+   }
+  ]
+ },
+ "澄闪": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/52/i3gh2tbq86uso5oc83s7zwdn0epe33n.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f0/p7twjhldlzwwu3ax26mih072q2a1ez7.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/1e/10ampkr3vy06qovs7wv8uj96g992mii.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/1f/knbxqv79cnynbhx0fwtev43nnkh4cuo.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5c/bm28369ibrhxyx0ahsdst9gdyxkvsq2.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/97/6yesh3h7ugdwt01suli8ybj9zi8r3wa.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/8e/6jb991ktzrslqsiln348hzcg2d58wys.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/95/3r2ncvzbqm1w8goxofdcra7ms93an61.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c3/02en15lpj4omm2qb9dl154x8d9s8cma.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/91/nsj6cpfxmsuvra92ik9w3k6r1k3a5zl.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/98/2ckxwr674ejpo8eb0f6i3668bzaqncs.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9b/nqundaub23u1z9rgzfbwz7i0jv9whaw.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/94/90cmf7s6zrirnhnuy439ccr7cqn70wy.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/2a/6lh651z7g015qw13mxulc7to3gl8meg.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e7/o6c0x0bih6yvwzvj6lns5m792sirl4j.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e0/ahm6neln49v8793mbz3uj7s9agfzfn5.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a9/17w0c2f73gh4dg8ud6una1chk1usyta.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7a/1k2b618vhctjuszr7h6y10tkg5i9yqy.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/33/r1lmev246csny8b10zuf601fykm4q69.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/8d/hx8qq79o3jxp4pgwwihko0dcdbhht9m.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a9/gnf96kpv5ur20cuiqotmnxg38vaemyx.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/72/7bqxjnlryejlyyncm7yim2apon642f3.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/43/rm9wapgt532ssdcotg4yyp1967gvoe6.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/36/az5aw4mq4rspaoi2z4nkjgp6alf0cm4.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/fc/8xbyqglo5ssvnlu9dpcgq7lzgof5zp8.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中4",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/4c/9c48krioveeog5ykoiqtho73arvur6w.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/25/0b6aicfzlka3b7lcrgc3e3yaihk61pr.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/4b/nvv8lje2vgrkuekt5lvqvb25nf29pmx.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c6/80q0suhaxn48954vzq12kmvrlqmzbvx.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/4d/4jrj57sakiais430h59berpf6w16x3u.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c3/l894rw3101gamku9d57f4ebddq5v3sj.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7d/5svtscdcpavr3l9qj8921l47pniwga2.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5b/nr4dea3gt6f0ozvmgekniqid4i8bm01.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e4/so3os26gv0dpf9mqt7xgqv320qg9o48.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/73/pnbk7z2tddjsz32nhchhxm1uxalthf7.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/d8/0esgox9e2gv9z2e4o1cpwc3grkxq4gs.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b2/g2xsit65s2un3y8zbfcxzzau5foczu2.mp3",
+    "text": ""
+   }
+  ]
+ },
+ "阿米娅": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f4/2gasd4u4qeqh6wqmjocnnmml15o36ck.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c8/jku4m3n5os8xzv8o7uwjy7bpjmj31uc.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/87/cf3m2xy7dihfhc5lmstepm8h5dexj4g.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6d/hjqzdcfi5kn6947qzamuhow735tz5km.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c2/4ztnxmb4e5c78mprsx8f5swz1cjh5jf.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/28/gpmm55mcet6gunklv9bijm22g8n2jz8.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/ca/d25721q8474l8ov62tzwd1becotnv2g.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5d/7mosc8qjvic4ahf2ewvsdjt92tw4x00.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/06/f75kqtq11hrixzber20ezy95c7k7o3j.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a2/nr69e5ezlxusv7plbkhil95xmyuiryo.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c5/3dzsjahbcf1f4bazoui0o8o8ghwa93d.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/83/9axpexebr17n3drnjxggs3jzi3k1obr.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/09/sxdzzvtq49g4hdq556gnt6k58z97008.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/43/so0rmxeekx9h608b30w5fo5ixge5hsn.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/31/qgqa6a0pq29ev301of1t9vjn70q3pqk.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7e/ognx0cm7ceq4y3zsaxk3omb5xz7meic.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/08/p7qe4ade6qqut648g92ostyh495ncyf.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5e/b0eglvyc33lkx1hswc32s4gmea68eys.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/87/hdqprdfzo40voq0836nim0sxlz62b8h.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/d4/5bhav90qv85ev7nwjz0d5b1t356663v.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/96/ddt3tqz4ktn2k165zd18z5pe5qh1fh0.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/32/p8xq540zmhm72vtneup5bqcx8ymudqm.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/ed/gnj7gxvb648j4fzpa32ngamgxa5fkgc.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/18/1oj2fqrucdxgvn0ftsevx7vt64g7qrh.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/cd/pwii4wcxgt1778vh6i505iiw18ord34.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中4",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/22/qjyqdqjoezsygkuoy0d1393g4h1ka6j.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/78/955a6ngwcahgya6phdodst6ynp7vhbe.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/10/bjx77onvsqvq8xfvaagewujj0ied278.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/71/r9ivwg5ckj4k35s0t4nz2i0u9rufe54.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c4/qn0c0d27d6dms92xvn4iyl0tep5hh2o.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/97/hwpth29solmskvtwuw2033m99mf9fzy.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/43/2x9iongwkhvomwcp023yn57f58yd738.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/3c/fdnn2xca012ep1vr9wyre3mo8pbv9wy.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a8/36v8ntas3x6gdnlw81o7tjipuslq436.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/be/ak4bmr4fhl68g26l8kt2l80ce72p5w3.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/df/nix3d1emddo2kducp78x6fuqfzotsqe.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/db/c0n4leyxeqkng65p6ljdafrb9syupwi.mp3",
+    "text": ""
+   }
+  ]
+ },
+ "德克萨斯": {
+  "base": [
+   {
+    "label": "任命助理",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c5/7q20fwytf9jobabus09ibagho40iz9z.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c5/br5656pcw9jhk4me2edo8r4hj5swa5q.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/bb/btu7h6q3lyxlrh25vidus8bp9xcfrrn.mp3",
+    "text": ""
+   },
+   {
+    "label": "交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/94/5sv074v2urvkxlkexxyy9vx721u2b1b.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a3/kxrt7iaup62uxp8h4xuik0w2midobse.mp3",
+    "text": ""
+   },
+   {
+    "label": "晋升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/47/njzgm4f1zp133ys2dotswhydzbsw4p6.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈1",
+    "url": "https://patchwiki.biligame.com/images/arknights/a/a5/sh59ngp99u4i1bb6inn40jz9uile2n4.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈2",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/c2/thdcvudkeozyimifb10awirxdbnius8.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖提升后交谈3",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/20/7iup2flodz6ykcs4rr286lg10tdcmyg.mp3",
+    "text": ""
+   },
+   {
+    "label": "闲置",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/38/slv6tbocrea4wexwf5rka7q54i9aze8.mp3",
+    "text": ""
+   },
+   {
+    "label": "干员报到",
+    "url": "https://patchwiki.biligame.com/images/arknights/c/ce/6l9ye2ckn5hvxfai3mpxgg8k9wi53pd.mp3",
+    "text": ""
+   },
+   {
+    "label": "观看作战记录",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b7/5hr41mv081dm8de5d7on4rr4t6ghycj.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升1",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/80/81u73ijcp64tby5xzmfl1yy1d6r8132.mp3",
+    "text": ""
+   },
+   {
+    "label": "精英化晋升2",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/47/tj99ny4p8aad89nabnm6bx740wrpuc4.mp3",
+    "text": ""
+   },
+   {
+    "label": "编入队伍",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/76/oon2mlr28z8gqy495qeq5iee8alzm1k.mp3",
+    "text": ""
+   },
+   {
+    "label": "任命队长",
+    "url": "https://patchwiki.biligame.com/images/arknights/8/8e/ryt2jj8ocsnksspaqwcgw1m3v0ql0fp.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动出发",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/40/69i4pffmptumroxawj9f36zzhte3vc8.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动开始",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/ea/9e6zq6srtp7olv1uizhtvwzo1qlporl.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员1",
+    "url": "https://patchwiki.biligame.com/images/arknights/7/7c/7tgu32hh448f2qgn3eg9zp55ag7hhiv.mp3",
+    "text": ""
+   },
+   {
+    "label": "选中干员2",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e6/7dh8u5d5w2e675ru5zfypa6v5qtr8ll.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署1",
+    "url": "https://patchwiki.biligame.com/images/arknights/2/27/cl3n20g85u7dxn449z5xs5fng9kmvtr.mp3",
+    "text": ""
+   },
+   {
+    "label": "部署2",
+    "url": "https://patchwiki.biligame.com/images/arknights/4/46/6gy7eh25cazw74vdoopw5rg0gasmwgo.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中1",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/35/kt1z5cawu1h2z23jw9j97j8j99a14pf.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中2",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/e9/1396zb7r0i9lpk8ka8mlt9w8g8yrsci.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中3",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/98/ekneeezelm8lzbbxd6bq4axeyg178j4.mp3",
+    "text": ""
+   },
+   {
+    "label": "作战中4",
+    "url": "https://patchwiki.biligame.com/images/arknights/d/d2/58g7917n8hu6xg6ickkadu3iwpvddb6.mp3",
+    "text": ""
+   },
+   {
+    "label": "完成高难行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/f/f0/enq18m7npcuxh3hyd9bw1q7fl6nbk4m.mp3",
+    "text": ""
+   },
+   {
+    "label": "3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/1/18/5un7v139f0m7np046usno2d5jxshqda.mp3",
+    "text": ""
+   },
+   {
+    "label": "非3星结束行动",
+    "url": "https://patchwiki.biligame.com/images/arknights/e/eb/lgnvgntx2nr0jmn11v3kkkewb79ld7z.mp3",
+    "text": ""
+   },
+   {
+    "label": "行动失败",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6e/iapaczs3k1cyhvp99olkv9354em3q7x.mp3",
+    "text": ""
+   },
+   {
+    "label": "进驻设施",
+    "url": "https://patchwiki.biligame.com/images/arknights/5/5f/ikhurinnsnkrb1duiudlq3rb5ugq4mb.mp3",
+    "text": ""
+   },
+   {
+    "label": "戳一下",
+    "url": "https://patchwiki.biligame.com/images/arknights/9/9f/i5xi3qxlk8c9e32exzqlyjnk0d8os5l.mp3",
+    "text": ""
+   },
+   {
+    "label": "信赖触摸",
+    "url": "https://patchwiki.biligame.com/images/arknights/0/0a/qn9o7iwiy1b7s7doxqs5x0xaq64cwjz.mp3",
+    "text": ""
+   },
+   {
+    "label": "问候",
+    "url": "https://patchwiki.biligame.com/images/arknights/3/38/36exlvae02tdza5zrz79soad1ama3pe.mp3",
+    "text": ""
+   },
+   {
+    "label": "新年祝福",
+    "url": "https://patchwiki.biligame.com/images/arknights/b/b6/drj1rd5qaw15fqq5vvxdzl8l0f7ew3h.mp3",
+    "text": ""
+   },
+   {
+    "label": "生日",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/6a/8mkfzsom6ckc5p5b2wglwze0r56poo9.mp3",
+    "text": ""
+   },
+   {
+    "label": "标题",
+    "url": "https://patchwiki.biligame.com/images/arknights/6/65/9uw8enybx89nuw3xgfl6pmk64ehnjfx.mp3",
+    "text": ""
+   }
+  ]
+ }
+}

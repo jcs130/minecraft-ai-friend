@@ -3358,6 +3358,19 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // 客户端资源包下发：GET /packs/<name>.zip —— TLM 音色包等客户端资产
+  // （2026-09-06 方舟女仆音色包 6 只；文件宿主侧在 ops/docker/shadow/data/packs/）
+  if (u.pathname.startsWith('/packs/') && u.pathname.endsWith('.zip')) {
+    const fname = u.pathname.slice(7).replace(/[^A-Za-z0-9._-]/g, '')
+    try {
+      const buf = readFileSync(join(DATA_DIR, 'packs', fname))
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Cache-Control': 'no-cache' })
+      res.end(buf)
+    } catch {
+      res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('pack not found')
+    }
+    return
+  }
   // NPC 设置读取：GET /api/npc/settings
   if (u.pathname === '/api/npc/settings' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
