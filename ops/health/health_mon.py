@@ -52,6 +52,13 @@ CONTAINERS = ["shadow-mc", "shadow-world", "shadow-panel", "shadow-gateway", "sh
 YELLOW_ONLY = set()  # (viewer-3050 已退役)
 GUARD_AGENTS = ["mc-guard-kirito", "mc-guard-naruto"]   # QwenPaw 亲卫必须 enabled
 EXPECTED_ONLINE = ["Kirito", "Naruto"]                   # RCON list 里必须见到的身体
+# 2026-09-06 造物主定谳：守卫默认停用。flag 存在时所有守卫探测返回 white（不算红/黄），
+# 严禁任何巡检/自愈把 shadow-guard 或桐人鸣人拉起来。要恢复守卫先删 flag 且须造物主批准。
+GUARD_DISABLED_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "guard_disabled.flag")
+
+
+def guard_disabled():
+    return os.path.exists(GUARD_DISABLED_FLAG)
 
 # ---------------- Source RCON(简版,标准库) ----------------
 class Rcon:
@@ -125,6 +132,8 @@ def probe_containers():
 
 def probe_guard_bridge(auto=False, cooldown={}):
     """守卫桥存活探测（2026-08-30 双轨退役：唯一权威=shadow-guard 容器，宿主拉起链已退役）。"""
+    if guard_disabled():
+        return "white", "guard disabled by creator decree (2026-09-06) — not a fault"
     try:
         r = subprocess.run(["docker", "top", "shadow-guard"], capture_output=True, text=True, timeout=20)
         if "guard_drive.py" in (r.stdout or ""):
@@ -135,6 +144,8 @@ def probe_guard_bridge(auto=False, cooldown={}):
 
 
 def probe_guard_log_fresh():
+    if guard_disabled():
+        return "white", "guard disabled by creator decree (2026-09-06) — not a fault"
     try:
         age = time.time() - os.path.getmtime(GUARD_LOG)
         return ("green", f"log {int(age)}s old") if age < 900 else ("yellow", f"log stale {int(age/60)}min")
@@ -151,6 +162,8 @@ def probe_web_entities_fresh():
 
 
 def probe_rcon_and_guards():
+    if guard_disabled():
+        return {"guards-online": ("white", "guard disabled by creator decree (2026-09-06)")}
     """RCON 可用 + 守卫身体在线 + 两人 HP/饥饿(低=黄,濒死=红)。"""
     try:
         r = Rcon()
@@ -186,6 +199,8 @@ def probe_rcon_and_guards():
 
 
 def probe_guard_agents_enabled():
+    if guard_disabled():
+        return {"guard-agents": ("white", "guard disabled by creator decree (2026-09-06)")}
     try:
         d = json.load(io.open(COPAW_CONFIG, encoding="utf-8"))
         out = {}
