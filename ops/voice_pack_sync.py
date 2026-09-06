@@ -13,13 +13,19 @@ VOICE_MAP = {
     'tangyuan_sound': '/voices/tangyuan_sound.wav',
     'zi_min': '/voices/zi_min.wav',
     'gugu_gaga': '/voices/gugu_gaga.wav',
-    # 自家方舟包
+    # 自家方舟包（v4 1.3.0，12 个）
     'ark_pepe': '/voices/ark_pepe.wav',
     'ark_bena': '/voices/ark_bena.wav',
     'ark_myrtle': '/voices/ark_myrtle.wav',
     'ark_golding': '/voices/ark_golding.wav',
     'ark_amiya': '/voices/ark_amiya.wav',
     'ark_texas': '/voices/ark_texas.wav',
+    'ark_luo_xiaohei': '/voices/ark_luo_xiaohei.wav',
+    'ark_yueyue': '/voices/ark_yueyue.wav',
+    'ark_paopao': '/voices/ark_paopao.wav',
+    'ark_kroos': '/voices/ark_kroos.wav',
+    'ark_magallan': '/voices/ark_magallan.wav',
+    'ark_durin': '/voices/ark_durin.wav',
     # 原版包（日文原声参考）
     'touhou_little_maid': '/voices/touhou_little_maid.wav',
 }
