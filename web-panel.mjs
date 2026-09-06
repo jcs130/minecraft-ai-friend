@@ -3095,6 +3095,32 @@ const server = createServer((req, res) => {
       }
       return
     }
+    // ── STT 反代（2026-09-06）：TLM 女仆「按住键说话」音频转本地转写网关 ──
+    // 路由背景：stt-gateway 4322 端口宿主防火墙未放行（无提权），而 9090 早已对局域网开放；
+    // multipart 原样流转发到网内 http://stt-gateway:4322/v1/audio/transcription，不解包。
+    // TLM 侧 stt.json siliconflow.url 即指 http://192.168.3.133:9090/stt/transcription。
+    if (u.pathname === '/stt/transcription' && req.method === 'POST') {
+      const chunks = []
+      let total = 0
+      req.on('data', (c) => { total += c.length; if (total > 20 * 1024 * 1024) { req.destroy() } else chunks.push(c) })
+      req.on('error', () => {})
+      req.on('end', () => {
+        const body = Buffer.concat(chunks)
+        fetch('http://stt-gateway:4322/v1/audio/transcription', {
+          method: 'POST',
+          headers: { 'Content-Type': req.headers['content-type'] || 'application/octet-stream', 'Content-Length': body.length },
+          body,
+        }).then(async (r) => {
+          const txt = await r.text()
+          res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' })
+          res.end(txt)
+        }).catch((e) => {
+          res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ error: String(e) }))
+        })
+      })
+      return
+    }
     if (u.pathname === '/api/state') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify(apiState()))

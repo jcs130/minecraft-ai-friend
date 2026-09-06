@@ -52,6 +52,27 @@ services:
       - roadweaver-data:/data/shadow/data/roadweaver
     networks: [shadow]
 
+
+  # --- stt-gateway: TLM maid hold-to-talk STT gateway (2026-09-06, zero-cloud-cost).
+  # TLM client (SILICONFLOW site type) POSTs audio here; local paraformer-small
+  # (same model as shadow-asr) transcribes, returns whisper-compatible {"text"}.
+  stt-gateway:
+    build:
+      context: ./god-voice
+      dockerfile: Dockerfile.stt
+    image: mc-stt:1.0
+    container_name: shadow-stt-gateway
+    restart: unless-stopped
+    ports:
+      - "4322:4322"
+    volumes:
+      - C:/Users/lzl19/.copaw/workspaces/mc-god/sherpa-onnx-paraformer-zh-small-2024-03-09:/model:ro
+    environment:
+      TZ: Asia/Shanghai
+      ASR_MODEL_DIR: /model
+      STT_LISTEN: 0.0.0.0:4322
+    networks: [shadow]
+    depends_on: [mc]
   # 鈹€鈹€ 鐡朵腑 QwenPaw锛氬畧鍗瓊鐨勫锛?088 console/chat锛沵cp_numen 闅忚锛夆攢鈹€
   qwenpaw:
     image: qwenpaw-mc:2.1.1

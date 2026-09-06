@@ -1,0 +1,11 @@
+# stt-gateway 镜像：TLM STT 网关（whisper 兼容端点，本地 paraformer）
+# 复用天耳同款模型与 sherpa-onnx，加 fastapi/uvicorn/python-multipart（multipart 音频上传）。
+FROM python:3.12-slim
+RUN pip install --no-cache-dir sherpa-onnx numpy fastapi uvicorn python-multipart
+WORKDIR /opt/stt
+COPY stt_gateway.py /opt/stt/
+ENV TZ=Asia/Shanghai \
+    ASR_MODEL_DIR=/model \
+    STT_LISTEN=0.0.0.0:4322
+EXPOSE 4322
+CMD ["python", "-u", "/opt/stt/stt_gateway.py"]
