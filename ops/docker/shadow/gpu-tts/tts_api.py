@@ -156,6 +156,36 @@ def voices():
             "emotions": EMO_ORDER}
 
 
+# ── POST /tts：GPT-SoVITS v2 JSON 兼容端点（TLM gpt-sovits 站点直连本阁）──
+# TLM TTSGptSovitsClient 发 POST JSON：{text, text_lang, ref_audio_path,
+# prompt_lang, prompt_text, aux_ref_audio_paths, text_split_method}，
+# 期望响应为音频字节（wav）。翻译成自家参数后走上面同一条合成管线。
+@app.post("/tts")
+def tts_post(payload: dict):
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "empty text")
+    ref = str(payload.get("ref_audio_path") or "")
+    voice = DEFAULT_VOICE
+    if ref:
+        base = os.path.basename(ref)
+        cand = os.path.splitext(base)[0]
+        if os.path.isfile(os.path.join(VOICE_DIR, cand + ".wav")) or \
+           os.path.isfile(os.path.join(VOICE_DIR, base)):
+            voice = cand
+    tl = str(payload.get("text_lang") or "").lower()
+    lang = "ZH" if tl in ("zh", "zh-cn", "chinese", "中文") else tl.upper() or "ZH"
+    spk = _voice_path(voice)
+    out = f"/tmp/{uuid.uuid4().hex}.wav"
+    with _lock:
+        _tts.infer(spk_audio_prompt=spk, text=text, lang=lang,
+                   output_path=out, verbose=False)
+    if not os.path.isfile(out):
+        raise HTTPException(500, "synthesis produced no file")
+    return FileResponse(out, media_type="audio/wav",
+                        filename=os.path.basename(out))
+
+
 @app.get("/health")
 def health():
     return {"ok": _tts is not None}
