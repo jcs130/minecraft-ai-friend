@@ -99,6 +99,9 @@ services:
   guard:
     image: mc-sidecar:2.1.1
     container_name: shadow-guard
+    # 2026-09-06 造物主谕：守卫默认停用——compose up 不许拉起，须显式 --profile guard。
+    # （此前 unless-stopped 被误拉起两次：compose up 副作用 + 巡检 restart。）
+    profiles: ["guard"]
     restart: unless-stopped
     command: ["python3", "-u", "/opt/sidecar/guard/guard_drive.py"]
     volumes:
