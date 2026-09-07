@@ -200,7 +200,7 @@ services:
       retries: 3
 
   qwenpaw:
-    image: qwenpaw-mc:2.1.1
+    image: qiandengji-qwenpaw-game:2.2.0-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["qwenpaw"]

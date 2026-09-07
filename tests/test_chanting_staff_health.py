@@ -214,6 +214,7 @@ class ChantingStaffHealth(unittest.TestCase):
         with patch.object(health, 'probe_panel_http', return_value={'ok': True}), \
                 patch.object(health, 'probe_management', return_value={'ok': True}), \
                 patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
+                patch.object(health, 'probe_game_qwenpaw', return_value={'ok': True}), \
                 patch.object(health, 'probe_recorded_behavior', return_value={'ok': True}), \
                 patch.object(health, 'probe_player_commands', return_value={'ok': True}), \
                 patch.object(health, 'probe_voice_commands', return_value={'ok': True}), \

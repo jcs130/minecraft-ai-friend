@@ -357,7 +357,7 @@ class OperationsHealth(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', side_effect=read), ExitStack() as stack:
             for name in ('probe_management', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands',
                          'probe_chanting_staff', 'probe_voice_recording', 'probe_voice_boundary_deployment',
-                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team'):
+                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw'):
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             state.pop('operations')
@@ -475,7 +475,7 @@ class OperationsTeamProbe(unittest.TestCase):
     def test_team_runtime_or_behavior_failure_turns_panel_red(self):
         other = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
                  'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
-                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client')
+                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw')
         with ExitStack() as stack:
             for name in other:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
@@ -520,6 +520,8 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
     def test_game_probe_uses_anonymous_gets_and_keeps_two_roles_tool_denial(self):
         module = self.load_probe('qwenpaw_health.py')
         routes = {'/auth/status': {'enabled': False},
+                  '/version': {'version': '2.2.0'},
+                  '/healthz': {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
                   '/agents': {'agents': [{'id': name, 'enabled': True} for name in ('mc-god', 'mc-herald')]},
                   '/tools': [{'name': 'read_file', 'enabled': False}]}
         requests = []
@@ -529,6 +531,7 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             self.assertIsNone(request.get_header('Authorization'))
             return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
         with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}), \
+                patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}), \
                 patch.object(module.urllib.request, 'urlopen', side_effect=get):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -536,12 +539,50 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             result = json.loads(output.getvalue())
             self.assertTrue(result['ok']); self.assertIs(result['authEnforced'], False)
             self.assertEqual(result['authMode'], 'local-passwordless')
+            self.assertEqual([r.full_url for r in requests[1:3]], [
+                'http://127.0.0.1:8088/api/version', 'http://127.0.0.1:8088/api/healthz'])
             self.assertEqual([r.get_header('X-agent-id') for r in requests[-2:]], ['mc-god', 'mc-herald'])
             routes['/tools'][0]['enabled'] = True
             with self.assertRaises(AssertionError):
                 module.main()
             routes['/tools'][0]['enabled'] = False
             routes['/agents']['agents'].append({'id': 'foreign', 'enabled': True})
+            with self.assertRaises(AssertionError):
+                module.main()
+
+    def test_game_probe_rejects_incomplete_readiness_even_when_config_and_agent_list_are_valid(self):
+        module = self.load_probe('qwenpaw_health.py')
+        routes = {'/auth/status': {'enabled': False}, '/version': {'version': '2.2.0'},
+                  '/healthz': {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
+                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in ('mc-god', 'mc-herald')]},
+                  '/tools': [{'name': 'read_file', 'enabled': False}]}
+        def get(request, **kwargs):
+            return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
+        with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}), \
+                patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}) as config, \
+                patch.object(module.urllib.request, 'urlopen', side_effect=get):
+            for value in ({'status': 'loading', 'agents_loaded': ['mc-god', 'mc-herald']},
+                          {'status': 'ok', 'agents_loaded': []},
+                          {'status': 'ok', 'agents_loaded': ['mc-god']},
+                          {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-god']},
+                          {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', 'foreign']},
+                          {'status': 'ok', 'agents_loaded': {'mc-god': True, 'mc-herald': True}},
+                          {'status': 'ok'}):
+                routes['/healthz'] = value
+                with self.subTest(readiness=value), self.assertRaises(AssertionError):
+                    module.main()
+            routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']}
+            for value in ('2.1.0', None, 2.2):
+                routes['/version'] = {'version': value}
+                with self.subTest(version=value), self.assertRaises(AssertionError):
+                    module.main()
+            routes['/version'] = {'version': '2.2.0'}
+            for extra in (['default'], ['QwenPaw_QA_Agent_0.2'], ['default', 'QwenPaw_QA_Agent_0.2']):
+                routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', *extra]}
+                with self.subTest(disabled_builtins=extra), redirect_stdout(io.StringIO()):
+                    module.main()
+            config.return_value = set()
+            routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', 'default']}
             with self.assertRaises(AssertionError):
                 module.main()
 

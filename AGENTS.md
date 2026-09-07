@@ -23,4 +23,5 @@
 - 模组可扩展原版方块状态（当前 note_block 多 150 个），后续 minecraft 状态编号也会偏移。网页必须按实际注册表名称/属性匹配，不能只校正 mod namespace，不能给现代画面统一套用旧版近似块映射。性能与场景核对见 docs/EYE-PERFORMANCE.md。
 - 运营组页面只显示千灯纪新项目角色：不列宿主或旧环境角色、不提供跨环境筛选。qiandengji-ops 的 default 是正式司灯，必须统计；游戏会话的 default 和所有 QA 辅助配置不统计。保留完整 CLI 审计和所有环境配置，不能因展示范围而删除或停用其他 Agent。
 - 运营组已独立升级 QwenPaw 2.2.0：18090，六角色、七份职责技能、12项绑定。使用原生后台任务及项目MCP限额适配，30分钟/4次每24小时派工；模型并发1/QPM6/迭代5，关闭周期模型任务与重试。详情和实测边界见 docs/OPERATIONS-TEAM.md。版本升级阶段只涉及运营容器；2026-09-08 本轮用户另已授权为本机免密码访问修改并重建游戏 QwenPaw 容器的登录环境变量，不升级其模型或改角色配置，不得重启 Minecraft、world 或宿主 QwenPaw。登录改造不改变既有模型限额，不新增模型任务；模型或技能已配置不能声称全角色均已实测。
+- 2026-09-08 用户另外明确授权升级游戏 QwenPaw，可使用 `qwenpaw update`。游戏镜像更新为 `qiandengji-qwenpaw-game:2.2.0-qd1`（含禁用 default 时的就绪兼容补丁），仅重建游戏 QwenPaw；保留即时模型选择、会话、角色身份和已有生成限额，不按历史模型文档覆盖用户设置。升级与回退见 `world/ops/QWENPAW-LOCAL.md`。Minecraft、world、运营容器和宿主 QwenPaw 不随游戏容器升级重启。
 - 快照需要短时关闭源服自动存盘时必须 try/finally 恢复，不停止原服；SQLite 用 backup API。

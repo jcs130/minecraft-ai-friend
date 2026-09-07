@@ -1,5 +1,6 @@
 """Offline validation in the pinned image. Emits no credentials or provider URLs."""
 import asyncio
+import importlib.metadata
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,7 +16,10 @@ async def verify():
     from qwenpaw.providers.provider_manager import ProviderManager
     from qwenpaw.app.auth import verify_token
     from qwenpaw.constant import WORKING_DIR, SECRET_DIR
+    from upgrade_qwenpaw_runtime import assert_quiet, driver_cards
 
+    version = importlib.metadata.version('qwenpaw')
+    assert version in ('2.1.0', '2.2.0')
     assert Path(WORKING_DIR) == Path('/state/work') and Path(SECRET_DIR) == Path('/state/secret')
     config = load_config()
     assert {aid for aid, ref in config.agents.profiles.items() if ref.enabled} == {'mc-god', 'mc-herald'}
@@ -36,6 +40,12 @@ async def verify():
         assert not agent.running.reme_light_memory_config.memory_search_enabled
         assert not agent.coding_mode.enabled
         assert not agent.running.light_context_config.visual_compact_config.enabled
+        if version == '2.2.0':
+            assert_quiet(agent.running.model_dump(mode='json'))
+            assert not agent.fallback_models and not agent.fallback_policy.enabled
+            assert not driver_cards(Path(agent.workspace_dir))
+            from qwenpaw.agents.skill_system.workspace_service import SkillService
+            assert not SkillService(Path(agent.workspace_dir)).list_available_skills()
         toolkit = await AgentBuilder().build_toolkit(agent, agent_id=aid, ctx=ctx,
                                                      workspace_dir=agent.workspace_dir)
         count = sum(len(group.tools) for group in toolkit.tool_groups)
@@ -48,7 +58,7 @@ async def verify():
                        'selectedModelPresent': True, 'credentialDecryptable': True})
     token = (Path(SECRET_DIR) / 'console-token.txt').read_text().strip()
     assert verify_token(token) == 'qiandengji-console'
-    print(json.dumps({'project': 'qiandengji', 'ok': True, 'checks': checks,
+    print(json.dumps({'project': 'qiandengji', 'ok': True, 'packageVersion': version, 'checks': checks,
                       'consoleTokenVerified': True, 'network': 'none'}))
 
 

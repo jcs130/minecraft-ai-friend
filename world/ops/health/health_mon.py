@@ -146,14 +146,42 @@ def probe_panel_smoke():
     skillbar_editor = probe_skillbar_editor()
     chanting_client = probe_chanting_client()
     operations_team = probe_operations_team()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team)),
+    game_qwenpaw = probe_game_qwenpaw()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
-            'operations_team': operations_team}
+            'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw}
+
+
+def probe_game_qwenpaw():
+    """Verify the upgraded game service separately from historical model replies."""
+    runtime = {'ok': False}
+    try:
+        result = subprocess.run(
+            ['docker', 'exec', 'qiandengji-qwenpaw-1', 'python', '/ops/qwenpaw_health.py'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if result.returncode != 0 or len(result.stdout.encode('utf8')) > 65536:
+            raise ValueError('Invalid game readiness receipt')
+        receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
+            and receipt.get('packageVersion') == '2.2.0'
+            and type(receipt.get('agents')) is int and receipt['agents'] == 2
+            and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 0
+            and receipt.get('authMode') == 'local-passwordless'
+            and receipt.get('anonymousAccess') is True),
+            'packageVersion': receipt.get('packageVersion')}
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError, IndexError):
+        runtime = {'ok': False, 'error': 'Game QwenPaw readiness could not be verified'}
+    behavior = probe_recorded_behavior('game-qwenpaw-upgrade-smoke.json', (
+        'official-update-command', 'offline-config-migration', 'state-preserved',
+        'world-provider-connection', 'passwordless-agents-ui', 'other-runtimes-preserved'))
+    return {'ok': runtime['ok'] and behavior['ok'], 'runtime': runtime, 'behavior': behavior,
+            'scope': '2.2.0 game runtime readiness and upgrade checks; no new model inference test'}
 
 
 def probe_operations_team():
@@ -340,8 +368,11 @@ def probe_management():
             'management-dependency-preview', 'management-execution-receipt', 'management-auth-scope',
             'homepage-responsive', 'renderer-sustained-and-navigation'))
         passwordless = probe_passwordless_consoles()
-        return {'ok': all(checks.values()) and behavior['ok'] and passwordless['ok'],
-                'checks': checks, 'behavior': behavior, 'passwordless': passwordless,
+        recovery = probe_recorded_behavior('management-recovery-smoke.json', (
+            'session-first-failure-recovers', 'preview-pending-feedback',
+            'preview-single-request', 'no-mutation-replay'))
+        return {'ok': all(checks.values()) and behavior['ok'] and passwordless['ok'] and recovery['ok'],
+                'checks': checks, 'behavior': behavior, 'passwordless': passwordless, 'recovery': recovery,
                 'scope': 'Live observer/stream, current registry and management readiness; rendering evidence is recorded separately'}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return {'ok': False, 'error': 'Management or renderer readiness could not be verified'}

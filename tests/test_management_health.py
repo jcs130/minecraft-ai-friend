@@ -35,13 +35,19 @@ class ManagementHealthTests(unittest.TestCase):
                 'mappingSha256':hashlib.sha256(mapping_path.read_bytes()).hexdigest(),'vanillaStates':1}},
             '/api/eye/compatibility':summary,
         }
-    def probe(self,behavior=True):
+    def probe(self,behavior=True,recovery=True):
         def request(url,**kwargs):return io.BytesIO(json.dumps(self.routes[url.removeprefix('http://127.0.0.1:19091')]).encode())
-        with patch.object(health,'PROJECT',self.root),patch.object(health.urllib.request,'urlopen',request),patch.object(health,'probe_recorded_behavior',return_value={'ok':behavior}),patch.object(health,'probe_passwordless_consoles',return_value={'ok':behavior}):return health.probe_management()
+        def evidence(filename,*args,**kwargs):
+            return {'ok':recovery if filename=='management-recovery-smoke.json' else behavior}
+        with patch.object(health,'PROJECT',self.root),patch.object(health.urllib.request,'urlopen',request),patch.object(health,'probe_recorded_behavior',side_effect=evidence),patch.object(health,'probe_passwordless_consoles',return_value={'ok':behavior}):return health.probe_management()
     def test_current_protocol_and_recorded_behavior_both_required(self):
         self.assertTrue(self.probe()['ok']);self.assertFalse(self.probe(False)['ok'])
         self.routes['/api/eye/renderer']['worldAvailable']=False
         self.assertFalse(self.probe()['ok'])
+    def test_session_and_pending_recovery_evidence_cannot_be_replaced_by_live_health(self):
+        value=self.probe(recovery=False)
+        self.assertFalse(value['ok']);self.assertFalse(value['recovery']['ok'])
+        self.assertTrue(all(value['checks'].values()));self.assertTrue(value['passwordless']['ok'])
     def test_old_mod_registry_cannot_hide_behind_live_viewer(self):
         self.routes['/api/eye/compatibility']['registry']['sha256']='old-registry'
         result=self.probe();self.assertFalse(result['ok']);self.assertFalse(result['checks']['current_mod_assets'])
@@ -66,7 +72,7 @@ class ManagementHealthTests(unittest.TestCase):
             'probe_panel_http', 'probe_recorded_behavior', 'probe_source_record',
             'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff',
             'probe_voice_recording', 'probe_voice_boundary_deployment',
-            'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team',
+            'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw',
         )
         with ExitStack() as stack:
             no_http = stack.enter_context(patch.object(

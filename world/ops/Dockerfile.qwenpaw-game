@@ -1,0 +1,12 @@
+FROM qwenpaw-mc:2.1.1
+
+# Upgrade in an image without a running service or mounted player/secret state.
+# Refuse a newer, unreviewed release instead of silently changing the target.
+ARG QWENPAW_VERSION=2.2.0
+RUN python -c "import sys; from qwenpaw.cli.update_cmd import _fetch_latest_version; assert _fetch_latest_version() == sys.argv[1], 'Review the new stable release before rebuilding'" "$QWENPAW_VERSION" \
+    && PIP_INDEX_URL=https://pypi.org/simple PIP_DISABLE_PIP_VERSION_CHECK=1 qwenpaw update --yes \
+    && python -c "import sys, importlib.metadata; assert importlib.metadata.version('qwenpaw') == sys.argv[1]" "$QWENPAW_VERSION"
+
+# Upstream 2.2.0 never publishes readiness when the builtin default is disabled.
+COPY patch_qwenpaw_game.py /opt/patch_qwenpaw_game.py
+RUN python /opt/patch_qwenpaw_game.py
