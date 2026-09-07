@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [" G ", "GWG", " E "],
+  "key": {"G": {"item": "minecraft:gold_ingot"}, "W": {"item": "qiandeng_chanting:whispering_staff"}, "E": {"item": "minecraft:ender_pearl"}},
+  "result": {"id": "qiandeng_chanting:resonance_staff", "count": 1}
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "pack_format": 48,
+  "sources": [
+    {
+      "jar": "spawn-4.0.7-1.21.1.jar",
+      "jar_sha256": "290f52ca4bb89740f9f76d5640e4fa130293c414739066d6652c2cf25b62cf82",
+      "resource": "data/spawn/loot_table/archaeology/anthill.json",
+      "resource_sha256": "fced2f3aaf5c12da0eef9f2ff9b3c553d52912e83f597bc4f669b9337dd65eee",
+      "repair": "anthill"
+    },
+    {
+      "jar": "touhou_little_maid_spell-1.21.1-1.8.4-neoforge.jar",
+      "jar_sha256": "a6dc1563f3ef9fe4c24598e7e16386ff18feaaee5c7c3c341dda38dae841228e",
+      "resource": "data/touhou_little_maid_spell/loot_table/entities/shadow_assassin.json",
+      "resource_sha256": "3d4ed1be73aa74f0652aa547db0b01cf1c753b0dc3495e5875e8cbecbabcf9da",
+      "repair": "assassin"
+    },
+    {
+      "jar": "DungeonsArise-1.21.1-2.1.68-release.jar",
+      "jar_sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4",
+      "resource": "data/dungeons_arise/advancement/find_thornborn_towers.json",
+      "resource_sha256": "1abc11d790e1d4bfbd87b85c14adc959b42f3579867a1d9fe8e7a1c30aea3cc8",
+      "repair": "advancement"
+    },
+    {
+      "jar": "DungeonsArise-1.21.1-2.1.68-release.jar",
+      "jar_sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4",
+      "resource": "data/dungeons_arise/advancement/find_fishing_hut.json",
+      "resource_sha256": "54ad01b7729578353f2d9a6eb66f788f3d68997e7194372cc351fe7d4ffdb218",
+      "repair": "advancement"
+    }
+  ],
+  "files": [
+    {
+      "path": "data/dungeons_arise/advancement/find_fishing_hut.json",
+      "sha256": "c23ca8ecc9e2cb545c1f960ea5fb7d774212424c728d24786a8efdb7d5177aba"
+    },
+    {
+      "path": "data/dungeons_arise/advancement/find_thornborn_towers.json",
+      "sha256": "2125330f074efcacc03b19d2474482da6833c72bd706a746e547d3b4a2e10ac8"
+    },
+    {
+      "path": "data/spawn/loot_table/archaeology/anthill.json",
+      "sha256": "3ec236b93362331d2ebad6b8675f79d561369abd08cce82f12881ad575a529f1"
+    },
+    {
+      "path": "data/touhou_little_maid_spell/loot_table/entities/shadow_assassin.json",
+      "sha256": "b3d24aa070a9b8be4f45c94dd6377ed3025c9c870a7161a6d7fcd9c03678cbf5"
+    },
+    {
+      "path": "pack.mcmeta",
+      "sha256": "746333fa0519e899d3d2115d5b10de1fc95680c854127cb4e979f7cebbd2e8cb"
+    }
+  ],
+  "distribution": "dist/QiandengJi-content-fixes-1.21.1.zip",
+  "distribution_sha256": "f9e50efa62cf8622a8b0bf8d2f4c01939a7777239d584c7defe95cd1ece1cd4d"
+}

@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "target": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "ysm": "2.6.5"
+  },
+  "files": [
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/.qiandengji-generated.json",
+      "size": 1208,
+      "sha256": "666a3c127dce96612bff64339400170cce98c4a095f2541e11c8827825e604ba"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/CREDITS.txt",
+      "size": 531,
+      "sha256": "d927276507ec64d440a7ea69e36f8a98292d63ad92066cfefb5f578dc01e03e9"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/animations/main.animation.json",
+      "size": 323203,
+      "sha256": "e4252dd2f528eb2af9c63dfb88bb269f2d4ebffbfb4df9d59fc582d1a06785bf"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/animations/tac.animation.json",
+      "size": 302204,
+      "sha256": "5eb3f41a4ad226a22b41575941921a515b5cdabafde9d07061823c9690f1677c"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/avatar/dm.png",
+      "size": 5471,
+      "sha256": "5d28f00fd947e31f361da9cab6c16693d80f25988515822e078cea1f5ef08a60"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/avatar/gsl.png",
+      "size": 4738,
+      "sha256": "0bf76a1ba896f709839f9c35bb62852350b4b0f110bc9a1c4c4c5acc99f25188"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/avatar/tzz.png",
+      "size": 3433,
+      "sha256": "5067ef9a1ccad6acc4807d464f46358afd5f092ff78cf17a66ea82c613469e1e"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/lang/en_us.json",
+      "size": 958,
+      "sha256": "0466e17ac39114b00660cc0ae60377210c5f8000c482b66a11cba8f20243c3b8"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/lang/zh_cn.json",
+      "size": 958,
+      "sha256": "2a0f21efdb6faf50836cc7000a6bc28a33dc78213c592b8ca6aa544ffd3d1e61"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/models/arm.json",
+      "size": 20330,
+      "sha256": "0231ebe93d3d93411c6d86304aeae2a99bf2c31bdab50b7ab12a5572f76b23bb"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/models/main.json",
+      "size": 108113,
+      "sha256": "e61467b9612599b89808e4b27a0ef5cacdef1fa9f6e140e2ee297a44d4927496"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/textures/skin.png",
+      "size": 2855,
+      "sha256": "56f5b4f9b8d6a95f82aa24c1609347ca6a52dc97d251b3196946e9cadca847f6"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_kirito/ysm.json",
+      "size": 1568,
+      "sha256": "55763fa4681d752587d813e760a2734c0f0e7e5ef6103cc8e2cfdc45ea32fef4"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/.qiandengji-generated.json",
+      "size": 1208,
+      "sha256": "19a4afd2eaa8ab05a72f3141c220c9280cd50706e219840b5549a11237b3c035"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/CREDITS.txt",
+      "size": 531,
+      "sha256": "d927276507ec64d440a7ea69e36f8a98292d63ad92066cfefb5f578dc01e03e9"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/animations/main.animation.json",
+      "size": 323203,
+      "sha256": "e4252dd2f528eb2af9c63dfb88bb269f2d4ebffbfb4df9d59fc582d1a06785bf"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/animations/tac.animation.json",
+      "size": 302204,
+      "sha256": "5eb3f41a4ad226a22b41575941921a515b5cdabafde9d07061823c9690f1677c"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/avatar/dm.png",
+      "size": 5471,
+      "sha256": "5d28f00fd947e31f361da9cab6c16693d80f25988515822e078cea1f5ef08a60"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/avatar/gsl.png",
+      "size": 4738,
+      "sha256": "0bf76a1ba896f709839f9c35bb62852350b4b0f110bc9a1c4c4c5acc99f25188"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/avatar/tzz.png",
+      "size": 3433,
+      "sha256": "5067ef9a1ccad6acc4807d464f46358afd5f092ff78cf17a66ea82c613469e1e"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/lang/en_us.json",
+      "size": 953,
+      "sha256": "e6886b1fe0c3df976e8cdc808c9374bd71a34db169160120500a11794289a8c4"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/lang/zh_cn.json",
+      "size": 958,
+      "sha256": "1a0693f04d3cdb942bf918dbfb4fa32739b66511685e1918481934403ce8a9d6"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/models/arm.json",
+      "size": 20330,
+      "sha256": "d218411b831530e4f5d1122856928a90dc41e17334aeebe412ddcba436e612bb"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/models/main.json",
+      "size": 100621,
+      "sha256": "f2d6c96ff3fa1e2ee8a6f6d78f9a695f74fad6ae5588067bc6745448acdcde8f"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/textures/skin.png",
+      "size": 5320,
+      "sha256": "a9cc11ed07846900b99276f5ae6161960f124b59902347557830462a65efc94c"
+    },
+    {
+      "path": "config/yes_steve_model/custom/qiandengji_naruto/ysm.json",
+      "size": 1568,
+      "sha256": "b77d3455769dc47765d8418bc90e8f5ec3c93e2c92049e65aaa7e15ad1c0d0c1"
+    }
+  ]
+}

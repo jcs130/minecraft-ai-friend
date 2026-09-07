@@ -1,0 +1,616 @@
+{
+  "schema": 1,
+  "project": "qiandengji",
+  "status": "proposal_only",
+  "createdAt": "2026-09-07T11:08:57.808937+00:00",
+  "runtimeChangesPerformed": false,
+  "target": {
+    "service": "qwenpaw-ops",
+    "composeProfile": "operations",
+    "runtimeId": "qiandengji-ops",
+    "image": "qwenpaw-mc:2.1.1",
+    "imageId": "sha256:041af8111ee91ec0180a5d50ca876e89301fc9d03401ee4852858431999a3181",
+    "expectedPackageVersion": "2.1.0",
+    "endpoint": "http://127.0.0.1:18090",
+    "bindAddress": "127.0.0.1",
+    "hostPort": 18090,
+    "containerPort": 8088,
+    "stateRoot": "server/operations-agent-state",
+    "containerStateRoot": "/state",
+    "workingDirectory": "/state/work",
+    "secretDirectory": "/state/secret",
+    "home": "/state/home",
+    "consoleAuthRequired": true,
+    "networkPolicy": "separate operations network at first; only approved model egress; no game network/RCON until explicit D tool validation",
+    "initialRestartPolicy": "no",
+    "normalServerStartIncludesOperations": false
+  },
+  "preserve": {
+    "currentGameService": "qwenpaw",
+    "currentEndpoint": "http://127.0.0.1:18089",
+    "currentStateRoot": "server/agents",
+    "gameAgentIds": [
+      "mc-god",
+      "mc-herald"
+    ],
+    "mustRemainToolFree": true,
+    "doNotChangeWorldProviderUrl": true,
+    "noExistingCharacterUuidChanges": true
+  },
+  "roles": [
+    {
+      "id": "mc-god",
+      "label": "运营天神",
+      "reportsTo": "creator",
+      "role": "全局目标、重大裁量与运营验收",
+      "source": {
+        "runtime": "host",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\mc-god",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\mc-god\\agent.json",
+        "packageVersion": "2.2.0",
+        "agentConfigSha256": "b05cff2f7f503e559515f9a9d6c2fc71f90450f48b73fb1bf82bf9c136478f88",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\mc-god\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/mc-god",
+        "runtimeWorkspace": "/state/work/workspaces/mc-god",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "zhipu-cn-codingplan",
+        "model": "glm-5.3"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    },
+    {
+      "id": "default",
+      "label": "司灯",
+      "reportsTo": "mc-god",
+      "role": "项目台账、风险分派、协调与回执",
+      "source": {
+        "runtime": "shadow",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\default",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\default\\agent.json",
+        "packageVersion": "2.1.0",
+        "agentConfigSha256": "bcedf06a097dd49e393a0485877a4ab007b89c07d60106b94a168073e7d8fc2c",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\default\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/default",
+        "runtimeWorkspace": "/state/work/workspaces/default",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "aliyun-codingplan",
+        "model": "qwen3.6-plus"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    },
+    {
+      "id": "mc-herald",
+      "label": "灯语女神",
+      "reportsTo": "default",
+      "role": "世界运营巡检、行为审计与体验问题",
+      "source": {
+        "runtime": "shadow",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-herald",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-herald\\agent.json",
+        "packageVersion": "2.1.0",
+        "agentConfigSha256": "458dae3f16dd473209d3d8f98cd44780dbc2ee0ff855737dd60d379c21b7dbca",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-herald\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/mc-herald",
+        "runtimeWorkspace": "/state/work/workspaces/mc-herald",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "aliyun-codingplan",
+        "model": "qwen3.6-plus"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    },
+    {
+      "id": "mc-priest",
+      "label": "灶火祭司",
+      "reportsTo": "default",
+      "role": "世界观、剧情和活动策划提案",
+      "source": {
+        "runtime": "shadow",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-priest",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-priest\\agent.json",
+        "packageVersion": "2.1.0",
+        "agentConfigSha256": "2d1b8c8d2d2f69ff6d74d0fb2e4b53ba4ab427bb6edff63000ed6ed5fa49bcb7",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-priest\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/mc-priest",
+        "runtimeWorkspace": "/state/work/workspaces/mc-priest",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "aliyun-codingplan",
+        "model": "kimi-k2.5"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    },
+    {
+      "id": "mc-guard-kirito",
+      "label": "桐人体验官",
+      "reportsTo": "default",
+      "role": "玩家侧玩法体验与证据反馈",
+      "source": {
+        "runtime": "shadow",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-kirito",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-kirito\\agent.json",
+        "packageVersion": "2.1.0",
+        "agentConfigSha256": "18dd0f128b7560f96f3514fc9f18eda28d58481ca71441df3f1bd232e408a91a",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-kirito\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/mc-guard-kirito",
+        "runtimeWorkspace": "/state/work/workspaces/mc-guard-kirito",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "aliyun-codingplan",
+        "model": "MiniMax-M2.5"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    },
+    {
+      "id": "mc-guard-naruto",
+      "label": "鸣人体验官",
+      "reportsTo": "default",
+      "role": "玩家侧玩法体验与证据反馈",
+      "source": {
+        "runtime": "shadow",
+        "workspace": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-naruto",
+        "agentConfig": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-naruto\\agent.json",
+        "packageVersion": "2.1.0",
+        "agentConfigSha256": "09fea4cf5141d394ab5a8e35d013664ad96ae69a91994dbacf7755c68052a42d",
+        "promptFiles": [
+          "AGENTS.md",
+          "SOUL.md",
+          "PROFILE.md"
+        ],
+        "skillDirectory": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\mc-guard-naruto\\skills",
+        "skillsPolicy": "review selected SKILL.md and dependencies; never bulk-copy all skills"
+      },
+      "target": {
+        "workspace": "server/operations-agent-state/work/workspaces/mc-guard-naruto",
+        "runtimeWorkspace": "/state/work/workspaces/mc-guard-naruto",
+        "enabledOnImport": false
+      },
+      "modelSelection": {
+        "provider_id": "aliyun-codingplan",
+        "model": "glm-5.1"
+      },
+      "importFields": [
+        "id",
+        "name",
+        "description",
+        "active_model",
+        "language"
+      ],
+      "neverImportFields": [
+        "workspace_dir",
+        "backend_settings",
+        "last_dispatch",
+        "channels",
+        "tools",
+        "mcp",
+        "acp",
+        "running",
+        "plan",
+        "coding_mode",
+        "security"
+      ],
+      "promptPolicy": "preserve role and reporting line; replace all runtime/world paths and remove implied broad authority before activation",
+      "initialToolPolicy": "deny all; enable reviewed role-specific tools only after D validation"
+    }
+  ],
+  "canonicalTeamSource": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw\\workspaces\\default\\TEAM.md",
+  "excludedProfiles": [
+    "shadow/QwenPaw_QA_Agent_0.2",
+    "shadow/mc-god (old narrative projection)",
+    "host/default",
+    "host/cloud-orchestrator",
+    "host/cloud-executor",
+    "host/cloud-verifier",
+    "host/local-butler",
+    "host/uav-quality",
+    "host/mc-guard-tno-kirito"
+  ],
+  "sourceRoots": {
+    "shadow": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw",
+    "host": "C:\\Users\\lzl19\\.copaw"
+  },
+  "schemaReference": {
+    "initializer": "world/ops/init_qwenpaw_runtime.py",
+    "privateProviderImporterExample": "tools/init_qwenpaw.py",
+    "reusePolicy": "reuse schema construction/re-encryption pattern, never run the existing two-oracle initializer against operations state"
+  },
+  "privateProviderMigration": {
+    "required": true,
+    "sourceSelections": [
+      {
+        "providerId": "aliyun-codingplan",
+        "sourceSecretRoot": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\copaw.secret"
+      },
+      {
+        "providerId": "zhipu-cn-codingplan",
+        "sourceSecretRoot": "C:\\Users\\lzl19\\.copaw.secret"
+      }
+    ],
+    "targetSecretRoot": "server/operations-agent-state/secret",
+    "method": "read only selected provider definitions privately; decrypt selected ENC fields with source key only in memory; create fresh target encryption key and re-encrypt; target console credentials generated independently",
+    "neverCopy": [
+      "source .master_key",
+      "source auth database",
+      "console login/password/token",
+      "sessions",
+      "history.db",
+      "chats.json",
+      "credentials.yaml",
+      "governance databases",
+      "jobs history",
+      "request/reply inboxes"
+    ],
+    "modelAvailability": "configured selection only; remote entitlement/model support unverified"
+  },
+  "pausePolicy": {
+    "allImportedProfilesDisabled": true,
+    "rootAndPerAgentHeartbeatEnabled": false,
+    "allJobsEnabled": false,
+    "acpAllDisabled": true,
+    "mcpAllDisabled": true,
+    "builtinToolsInitiallyDisabled": true,
+    "pluginsEmpty": true,
+    "externalChannelsDisabled": true,
+    "memoryOverrides": {
+      "inbox_push_enabled": false,
+      "auto_memory_inbox_push_enabled": false,
+      "auto_dream_inbox_push_enabled": false,
+      "daily_paper_inbox_push_enabled": false,
+      "auto_memory_interval": 0,
+      "dream_cron_enabled": false,
+      "daily_paper_cron_enabled": false,
+      "memory_search_enabled": false,
+      "auto_memory_search_config.enabled": false
+    },
+    "otherOverrides": {
+      "running.auto_title_config.enabled": false,
+      "running.light_context_config.strategy": "native",
+      "plan.enabled": false,
+      "coding_mode.enabled": false
+    },
+    "doNotStart": [
+      "ops_drive",
+      "guard_drive",
+      "oracle loop",
+      "saga-trigger watcher"
+    ]
+  },
+  "dependencies": [
+    {
+      "id": "public-world-projection",
+      "path": "server/panel-state/world.json",
+      "kind": "file",
+      "requiredNow": true,
+      "runtimePath": "/public/world.json",
+      "mount": "read-only",
+      "role": "all",
+      "activation": "initial read-only source; snapshot freshness still required"
+    },
+    {
+      "id": "public-health-projection",
+      "path": "server/panel-state/health.json",
+      "kind": "file",
+      "requiredNow": true,
+      "runtimePath": "/public/health.json",
+      "mount": "read-only",
+      "role": "all",
+      "activation": "initial read-only source; historical checks labeled stale"
+    },
+    {
+      "id": "numen-mcp",
+      "path": "world/sidecar/guard/mcp_numen.py",
+      "kind": "script",
+      "requiredNow": true,
+      "runtimePath": "/ops-sidecar/guard/mcp_numen.py",
+      "mount": "read-only source only; disabled MCP",
+      "role": "testers",
+      "activation": "requires actor mapping, D queue/RCON receipt validation and least privilege"
+    },
+    {
+      "id": "numen-cli-helper",
+      "path": "world/sidecar/guard/skill_cli_client.py",
+      "kind": "script",
+      "requiredNow": true,
+      "runtimePath": "/ops-sidecar/guard/skill_cli_client.py",
+      "mount": "read-only source only",
+      "role": "testers",
+      "activation": "must accompany numen-mcp"
+    },
+    {
+      "id": "legacy-god-mcp-source",
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\sidecar\\god-channel\\mcp_god.py",
+      "kind": "script",
+      "requiredNow": true,
+      "runtimePath": null,
+      "mount": "do not mount original C source into target",
+      "role": "operations",
+      "activation": "quarantine; god_exec/god_send grant broad administrator actions"
+    },
+    {
+      "id": "legacy-god-channel-helper",
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\sidecar\\god-channel\\god_channel.py",
+      "kind": "script",
+      "requiredNow": true,
+      "runtimePath": null,
+      "mount": "do not mount original C source into target",
+      "role": "operations",
+      "activation": "review with MCP script"
+    },
+    {
+      "id": "D-god-mcp-reviewed-copy",
+      "path": "world/sidecar/god-channel/mcp_god.py",
+      "kind": "script",
+      "requiredNow": false,
+      "runtimePath": "/ops-sidecar/god-channel/mcp_god.py",
+      "mount": "not yet prepared",
+      "role": "operations",
+      "activation": "must be reviewed/restricted before activation; not implemented by this plan"
+    },
+    {
+      "id": "D-god-channel",
+      "path": "server/mc/god-channel",
+      "kind": "directory",
+      "requiredNow": true,
+      "runtimePath": "/god-channel",
+      "mount": "none initially; writable IPC only after approval and receipt tests",
+      "role": "operations",
+      "activation": "directory exists; consumer command authority must be verified separately"
+    },
+    {
+      "id": "world-data",
+      "path": "server/world-data",
+      "kind": "directory",
+      "requiredNow": true,
+      "runtimePath": "/world-data",
+      "mount": "none initially; do not expose secrets/chat/raw inboxes through broad data_read",
+      "role": "operations/testers",
+      "activation": "use public projection first; introduce exact files/queues only after validation"
+    },
+    {
+      "id": "legacy-ops-drive-source",
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\sidecar\\ops\\ops_drive.py",
+      "kind": "script",
+      "requiredNow": true,
+      "runtimePath": null,
+      "mount": "not imported",
+      "role": "supervisor",
+      "activation": "disabled until explicit single-scheduler ownership"
+    },
+    {
+      "id": "D-operations-health-probe",
+      "path": "world/ops/qwenpaw_ops_health.py",
+      "kind": "script",
+      "requiredNow": false,
+      "runtimePath": "/ops/qwenpaw_ops_health.py",
+      "mount": "not yet prepared",
+      "role": "runtime",
+      "activation": "existing qwenpaw_health.py is two-chat-agent specific; do not misreport ops readiness"
+    }
+  ],
+  "endpointRemapping": [
+    {
+      "source": "old god DATA_DIR=/data",
+      "target": "public /public snapshots first; explicit D file projection later",
+      "status": "requires_review"
+    },
+    {
+      "source": "old GOD_CHANNEL_DIR=/god-channel",
+      "target": "D server/mc/god-channel only after tool-scope and receipt review",
+      "status": "paused"
+    },
+    {
+      "source": "numen MC_RCON_HOST=mc:25575 on shadow_net",
+      "target": "D game service address on explicitly allowed network, private credential injection",
+      "status": "paused"
+    },
+    {
+      "source": "numen MC_DATA_DIR=/data",
+      "target": "D /world-data queue directory, never old C data",
+      "status": "paused"
+    },
+    {
+      "source": "memos http://shadow-memos-mcp:8003/mcp",
+      "target": "none initially; no old shared-memory write bridge",
+      "status": "disabled"
+    },
+    {
+      "source": "provider loopback URL",
+      "target": "host.docker.internal only if deliberately retaining host model backend",
+      "status": "selected-provider-only"
+    }
+  ],
+  "activationGates": [
+    "user selects migration timing",
+    "target schema roundtrip in pinned image with network none and clean temporary HOME",
+    "no imported builtin/default QA auto-template becomes enabled",
+    "private provider re-encryption and independent console authentication verified without printing values",
+    "all noninteractive triggers proven paused including ReMe internal cron",
+    "six role identities and runtimeId separation visible in management page",
+    "MCP read-only projection identity/freshness verified before any mutation tool",
+    "dedicated QA actor only: tool subject, queue, receipt, no replay, target D world verified",
+    "explicit mapping for original duplicate-named Kirito/Naruto records; no summon/rename during migration",
+    "one named supervisor owns scheduler enablement; old schedule remains disabled"
+  ],
+  "old18088DisableConditions": [
+    "inventory and preserve old workspace/prompt/skill/schedule metadata and selected provider migration source",
+    "all old callers/ops_drive/guard/oracle and host hooks identified and disabled or repointed deliberately",
+    "chosen D operations roles pass separate model/tool/receipt health gates",
+    "host non-game tasks and MemOS dependencies explicitly accounted for",
+    "archive old service with reversible restart policy decision; do not delete C source or keys",
+    "verify old18088 listener absent and current18089/gameplay unchanged; never switch qwenpaw_consoles merely by shared agentId"
+  ],
+  "notDone": [
+    "Compose service not written",
+    "target state directories not created",
+    "private credentials not read/migrated",
+    "agents not imported/enabled",
+    "no model calls",
+    "no MCP actions",
+    "no containers started/stopped",
+    "no world or character changes"
+  ],
+  "oldServicePausePolicy": "Already-authorized reversible pause of old services is independent of migration readiness; old18088DisableConditions govern declaring a completed D replacement, not a requirement to keep legacy processes running.",
+  "readOnlyValidation": {
+    "planChecksPassed": 58,
+    "planChecksFailed": 0,
+    "warnings": 4,
+    "negativeGuardChecksPassed": 5,
+    "readyForActivation": false,
+    "imageIdentityChecked": true,
+    "targetSchemaRoundtripPerformed": false,
+    "providerContentsRead": false,
+    "runtimeChangesPerformed": false
+  }
+}

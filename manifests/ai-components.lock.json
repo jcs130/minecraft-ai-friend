@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-09-07T06:38:57.3089371+08:00",
+  "purpose": "Preserve existing AI integration components for pack integration; inspection only",
+  "status": "Existing files; no changes to server or client",
+  "server_components": [
+    {
+      "file": "botgate.jar",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\mc\\mods\\botgate.jar",
+      "bytes": 67957,
+      "sha256": "b0c2a4cd9cdd2822214389248a524db99e2c633e97907301b0d4d1a8efe5c7db"
+    },
+    {
+      "file": "numen-neoforge-1.21.1-0.1.1.jar",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\mc\\mods\\numen-neoforge-1.21.1-0.1.1.jar",
+      "bytes": 2437365,
+      "sha256": "3a9af5420a5d40dcd6a24dd906d43fe4f67f25eea8ab6a082153bdcde7fae7af"
+    },
+    {
+      "file": "numen_act-neoforge-1.21.1-0.1.1.jar",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\mc\\mods\\numen_act-neoforge-1.21.1-0.1.1.jar",
+      "bytes": 34508,
+      "sha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea"
+    },
+    {
+      "file": "god-voice-0.1.0.jar",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\mc\\mods\\god-voice-0.1.0.jar",
+      "bytes": 14453,
+      "sha256": "152706d6b24ed1dabde5c6899802ad81fa774648efe390e530f19c148e740dcb"
+    }
+  ],
+  "source_locations": {
+    "world": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend",
+    "numen_source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\numen-reference",
+    "mcp_bridge": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\sidecar\\guard\\mcp_numen.py",
+    "runtime_data": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\ops\\docker\\shadow\\data"
+  },
+  "counts": {
+    "world_baseline_atoms": 71,
+    "world_runtime_atoms": 72,
+    "extra_runtime_atom": "thousand_return",
+    "mcp_source_tools": 54,
+    "agent_skill_guides": 11
+  },
+  "runtime_observation": {
+    "checked_at": "2026-09-07T06:42:16.3030576+08:00",
+    "online_players": [
+      "Goddess"
+    ],
+    "numen_body_count": 0,
+    "guard_container_status": "exited",
+    "guard_exit_code": 137,
+    "local_mcp_tool_count": 54,
+    "deployed_mcp_tool_count": 29,
+    "deployed_mcp_has_chant": true,
+    "deployed_mcp_has_get_magic_state": true,
+    "deployed_mcp_has_list_skills": false,
+    "deployed_mcp_has_read_skill": false,
+    "local_mcp_sha256": "7842e9ed183c19ff94b2a48f5a654e3b607ad7508dea00b0e48ec9e12287efc2",
+    "deployed_mcp_sha256": "a83142d89c6e9ef59f28e0423ce13c4a081d7e66d98b08c3a4244fd118f8e7fd",
+    "registered_commands_verified": [
+      "numen_act list",
+      "fly",
+      "skillenchant",
+      "skillchest"
+    ],
+    "live_cast_tested": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "dev.god.botgate.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PayloadRegistrarForceOptionalMixin",
+    "CheckPacketSendGuardMixin",
+    "BetterCombatConfigTaskGateMixin",
+    "ConfigTaskGateForNonNeoForgeMixin",
+    "RecipePacketGateForNonNeoForgeMixin",
+    "EquipmentPacketGateForNonNeoForgeMixin",
+    "ItemPacketGateForNonNeoForgeMixin",
+    "RconFrameReadMixin",
+    "SkillBookUseMixin",
+    "SkillItemUseMixin",
+    "BookAutoRestoreMixin",
+    "BookDropGuardMixin",
+    "SkillChestBootMixin",
+    "FlyBootMixin",
+    "FeatherBootsMixin",
+    "WeaponSkillMixin",
+    "AuraTickMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

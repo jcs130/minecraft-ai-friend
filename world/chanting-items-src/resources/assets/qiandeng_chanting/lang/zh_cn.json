@@ -1,0 +1,20 @@
+{
+  "item.qiandeng_chanting.whispering_staff": "旅人言灵杖",
+  "item.qiandeng_chanting.resonance_staff": "千灯共鸣杖",
+  "tooltip.qiandeng_chanting.hold": "长按使用并说出咒语，松开送出。",
+  "tooltip.qiandeng_chanting.once": "每次手势回应一句咒语；法术仍须满足原有条件。",
+  "key.categories.qiandeng_chanting": "千灯纪 · 言灵法杖",
+  "key.qiandeng_chanting.previous_slot": "举杖：上一个技能 / 语音",
+  "key.qiandeng_chanting.next_slot": "举杖：下一个技能 / 语音",
+  "binding.qiandeng_chanting.previous_slot.description": "举起言灵杖时循环选择语音或 1–8 号技能；保持瞄准，松开使用键释放。此时肩键不会切换热栏物品。",
+  "binding.qiandeng_chanting.next_slot.description": "举起言灵杖时循环选择语音或 1–8 号技能；保持瞄准，松开使用键释放。快捷栏内容可在罗盘中编辑。",
+  "hud.qiandeng_chanting.voice": "言灵 · 语音模式｜按住说话，松开送出",
+  "hud.qiandeng_chanting.selected": "言灵 · 快捷槽 %s｜%s",
+  "hud.qiandeng_chanting.examples": "例如：咏唱烟花术 / 女神，火焰弹",
+  "hud.qiandeng_chanting.release": "保持瞄准，松开使用键释放当前技能",
+  "hud.qiandeng_chanting.cycle": "%s / %s 切换 · 回到语音继续咏唱",
+  "hud.qiandeng_chanting.waiting": "同步中",
+  "hud.qiandeng_chanting.empty": "空槽",
+  "hud.qiandeng_chanting.audio_preparing": "正在接通语音…准备后即可咏唱",
+  "hud.qiandeng_chanting.audio_unavailable": "语音未就绪，可用肩键选择技能"
+}

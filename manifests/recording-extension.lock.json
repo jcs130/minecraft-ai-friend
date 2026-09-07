@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "client_only": false,
+  "server_required": true,
+  "files": [
+    {
+      "mod_id": "godvoice",
+      "filename": "god-voice-0.1.0.jar",
+      "cache_path": "vendor/god-voice-cache/god-voice-0.1.0.jar",
+      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
+      "size_bytes": 19635,
+      "client_only": false,
+      "source_build": "world/god-voice-src/build.py"
+    }
+  ]
+}

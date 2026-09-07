@@ -1,0 +1,20 @@
+{
+  "item.qiandeng_chanting.whispering_staff": "Wayfarer's Whispering Staff",
+  "item.qiandeng_chanting.resonance_staff": "Thousand-Lantern Resonance Staff",
+  "tooltip.qiandeng_chanting.hold": "Hold use, speak your chant, then release to send.",
+  "tooltip.qiandeng_chanting.once": "One chant per gesture; normal spell requirements still apply.",
+  "key.categories.qiandeng_chanting": "Qiandeng: Chanting Staves",
+  "key.qiandeng_chanting.previous_slot": "Staff: previous skill / voice",
+  "key.qiandeng_chanting.next_slot": "Staff: next skill / voice",
+  "binding.qiandeng_chanting.previous_slot.description": "While raising a chanting staff, cycle voice and slots 1–8. Keep aiming and release use to cast. Shoulder buttons keep the staff in hand.",
+  "binding.qiandeng_chanting.next_slot.description": "While raising a chanting staff, cycle voice and slots 1–8. Keep aiming and release use to cast. Edit saved skills in the compass.",
+  "hud.qiandeng_chanting.voice": "Voice mode | Hold to speak, release to send",
+  "hud.qiandeng_chanting.selected": "Quick slot %s | %s",
+  "hud.qiandeng_chanting.examples": "Say: 咏唱烟花术 / 女神，火焰弹",
+  "hud.qiandeng_chanting.release": "Keep aiming; release use to cast the selected skill",
+  "hud.qiandeng_chanting.cycle": "%s / %s: cycle | Return to voice to chant",
+  "hud.qiandeng_chanting.waiting": "Syncing",
+  "hud.qiandeng_chanting.empty": "Empty",
+  "hud.qiandeng_chanting.audio_preparing": "Connecting voice… speak when ready",
+  "hud.qiandeng_chanting.audio_unavailable": "Voice unavailable; use shoulders to select a skill"
+}

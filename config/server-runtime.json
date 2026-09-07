@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "java": 21,
+  "compose_project": "qiandengji",
+  "default_target": "server",
+  "world_name": "shadow",
+  "container_server_port": 25599,
+  "host_game_bind": "127.0.0.1",
+  "host_game_port": 25567,
+  "container_rcon_port": 25575,
+  "optional_host_rcon_bind": "127.0.0.1",
+  "optional_host_rcon_port": 25577,
+  "copy_runtime_cache": true,
+  "copy_root_files": ["eula.txt", "usercache.json", "usernamecache.json", "block-registry.json"],
+  "copy_content_directories": ["config", "defaultconfigs", ".ysm", "tlm_custom_pack", "patchouli_books"],
+  "runtime_state_files": ["advancement-names.json", "advancement-unlocks.json", "balance-overrides.json", "bookbox-given.json", "magic-atoms.json", "magic-state.json", "skill-chest.json", "skill-events.json", "skill-usage.jsonl", "statusbook-given.json", "transmigrators.json", "waypoints.json", "xp-snapshots.json", "saga-store.json", "evolve-state.json", "mystic-state.json"],
+  "runtime_supplement_files": ["world-requirements.md", "world-chronicle.md", "terra-fixed.json", "guard-places.json", "social.json", "identity-seed.json", "mc-memory.json", "self-tuning-Kirito.json", "self-tuning-Naruto.json", "status-Kirito.json", "status-Naruto.json"],
+  "runtime_supplement_directories": ["transmigrators", "village"],
+  "notes": [
+    "Production RCON and API credentials are never intentionally copied. Compose must generate a new RCON secret if it enables RCON.",
+    "MC source save-off/flush must be coordinated externally. JSON files are individually stabilized; SQLite uses online backup. This is not an atomic snapshot across processes.",
+    "world-data and mcdata remain separate because they currently contain different magic-atoms.json versions.",
+    "Cleared API keys disable maid/agent model connections until local credentials are supplied; full AI behavior is not claimed as verified."
+  ]
+}

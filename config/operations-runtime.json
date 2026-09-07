@@ -1,0 +1,342 @@
+{
+  "schema": 1,
+  "project": "qiandengji",
+  "teamPurpose": "游戏世界运营组：统筹、运营、策划与体验检查；游戏会话角色独立运行",
+  "inventoryCollector": {
+    "taskName": "QiandengJi-Operations-Inventory",
+    "kind": "windows-scheduled-task",
+    "intervalSeconds": 120,
+    "requiresLoggedInUser": true,
+    "purpose": "定时采集公开状态，单次运行结束退出；不执行模型和启停",
+    "queryCommand": "python tools/operations_inventory_task.py query"
+  },
+  "groups": {
+    "game": [
+      "mc",
+      "world",
+      "gate",
+      "npc"
+    ],
+    "dialogue": [
+      "qwenpaw"
+    ],
+    "voice": [
+      "tts",
+      "voice",
+      "asr",
+      "resources"
+    ],
+    "management": [
+      "panel",
+      "control"
+    ]
+  },
+  "services": [
+    {
+      "id": "mc",
+      "label": "Minecraft 世界",
+      "group": "game",
+      "purpose": "存档、模组与玩家进度",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "world",
+      "label": "世界玩法",
+      "group": "game",
+      "purpose": "玩家命令、世界事件与女神会话接入",
+      "dependencies": [
+        "mc"
+      ],
+      "healthRequired": true
+    },
+    {
+      "id": "gate",
+      "label": "Agent 协议入口",
+      "group": "game",
+      "purpose": "复用现有 Agent 连接协议",
+      "dependencies": [
+        "mc"
+      ],
+      "healthRequired": false
+    },
+    {
+      "id": "npc",
+      "label": "村务服务",
+      "group": "game",
+      "purpose": "既有村民事件、任务与技能书消费",
+      "dependencies": [
+        "mc",
+        "world"
+      ],
+      "healthRequired": true
+    },
+    {
+      "id": "qwenpaw",
+      "label": "游戏会话 QwenPaw",
+      "group": "dialogue",
+      "purpose": "天神、司礼的游戏会话；不等同于完整运营组",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "voice",
+      "label": "语音回复队列",
+      "group": "voice",
+      "purpose": "将回复交给本项目 TTS 合成",
+      "dependencies": [
+        "tts"
+      ],
+      "healthRequired": true
+    },
+    {
+      "id": "asr",
+      "label": "咏唱语音识别",
+      "group": "voice",
+      "purpose": "本地录音识别与施法输入",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "resources",
+      "label": "语音与模型资源",
+      "group": "voice",
+      "purpose": "本地资源包分发",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "panel",
+      "label": "独立管理台",
+      "group": "management",
+      "purpose": "公开状态与运营组管理入口",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "tts",
+      "label": "本项目语音合成",
+      "group": "voice",
+      "purpose": "D 盘独立 GPU 语音服务与女仆兼容接口",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "control",
+      "label": "管理执行服务",
+      "group": "management",
+      "purpose": "受控启停、日志和操作回执；仅内网鉴权访问",
+      "dependencies": [],
+      "healthRequired": true
+    }
+  ],
+  "externalServices": [
+    {
+      "id": "shared-tts",
+      "label": "语音合成接口",
+      "group": "dependency",
+      "container": "qiandengji-tts-1",
+      "purpose": "D 项目 TTS 的兼容接口 8100",
+      "managedBy": "D 项目 Compose",
+      "dependencies": [],
+      "required": true,
+      "healthUrl": "http://127.0.0.1:8100/health"
+    },
+    {
+      "id": "legacy-qwenpaw",
+      "label": "原游戏运营组 QwenPaw",
+      "group": "legacy-team",
+      "container": "shadow-qwenpaw",
+      "purpose": "原司灯、运营、策划及体验角色；单独显示配置与驱动状态",
+      "managedBy": "旧 shadow Compose",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "legacy-opsdrive",
+      "label": "原运营轮巡驱动",
+      "group": "legacy-team",
+      "container": "shadow-opsdrive",
+      "purpose": "旧团队主动运营驱动，退出状态不表示 Agent 配置被删除",
+      "managedBy": "旧 shadow Compose",
+      "dependencies": [
+        "legacy-qwenpaw"
+      ],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "legacy-guard",
+      "label": "原体验角色驱动",
+      "group": "legacy-team",
+      "container": "shadow-guard",
+      "purpose": "原角色巡游驱动，当前状态单独核对",
+      "managedBy": "旧 shadow Compose",
+      "dependencies": [
+        "legacy-qwenpaw"
+      ],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-gate",
+      "label": "已退役的旧协议入口",
+      "group": "retired",
+      "container": "shadow-gate",
+      "purpose": "旧 MC 已停且无连接；停用记录保留，重新启动会提示",
+      "managedBy": "退役清单 · 保留容器与回退方式",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-voice",
+      "label": "已退役的旧语音队列",
+      "group": "retired",
+      "container": "shadow-voice",
+      "purpose": "旧输入队列为空；历史合成输出保留，D 使用独立队列",
+      "managedBy": "退役清单 · 保留容器与回退方式",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-asr",
+      "label": "已退役的旧语音识别",
+      "group": "retired",
+      "container": "shadow-asr",
+      "purpose": "旧录音输入为空；历史录音保留，D 使用独立 ASR",
+      "managedBy": "退役清单 · 保留容器与回退方式",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-tts",
+      "label": "已停用旧语音合成",
+      "group": "retired",
+      "container": "shadow-tts",
+      "purpose": "模型和配音已复制到 D，旧容器停用保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-oracle",
+      "label": "旧游戏 · shadow-oracle",
+      "group": "retired",
+      "container": "shadow-oracle",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-sentinel",
+      "label": "旧游戏 · shadow-sentinel",
+      "group": "retired",
+      "container": "shadow-sentinel",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-npc",
+      "label": "旧游戏 · shadow-npc",
+      "group": "retired",
+      "container": "shadow-npc",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-world",
+      "label": "旧游戏 · shadow-world",
+      "group": "retired",
+      "container": "shadow-world",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-gateway",
+      "label": "旧游戏 · shadow-gateway",
+      "group": "retired",
+      "container": "shadow-gateway",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-panel",
+      "label": "旧游戏 · shadow-panel",
+      "group": "retired",
+      "container": "shadow-panel",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-stt-gateway",
+      "label": "旧游戏 · shadow-stt-gateway",
+      "group": "retired",
+      "container": "shadow-stt-gateway",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-mc-direct",
+      "label": "旧游戏 · mc-direct",
+      "group": "retired",
+      "container": "mc-direct",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    },
+    {
+      "id": "retired-shadow-mc",
+      "label": "旧游戏 · shadow-mc",
+      "group": "retired",
+      "container": "shadow-mc",
+      "purpose": "按用户要求停止；原数据与回退备份保留",
+      "managedBy": "退役清单",
+      "dependencies": [],
+      "required": false,
+      "desiredState": "exited",
+      "desiredRestart": "no"
+    }
+  ]
+}

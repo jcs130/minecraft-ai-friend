@@ -1,0 +1,329 @@
+name: qiandengji
+
+services:
+  mc:
+    image: itzg/minecraft-server:java21
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      EULA: "TRUE"
+      TYPE: NEOFORGE
+      VERSION: "1.21.1"
+      NEOFORGE_VERSION: "21.1.248"
+      MEMORY: "4G"
+      SERVER_PORT: "25599"
+      LEVEL: shadow
+      MOTD: "千灯纪 · 整合测试世界"
+      ONLINE_MODE: "false"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "${QIANDENG_RCON_PASSWORD:?Run python tools/project.py setup first}"
+      ENABLE_COMMAND_BLOCK: "true"
+      VIEW_DISTANCE: "6"
+      SIMULATION_DISTANCE: "6"
+      SPAWN_PROTECTION: "0"
+      PVP: "false"
+      GUI: "false"
+      TZ: Asia/Shanghai
+      JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl -Dsettlementsfix.mcdataDir=/mcdata -Dsettlementsfix.testHooks=true"
+    ports:
+      - "127.0.0.1:25567:25599"
+      - "127.0.0.1:25577:25575"
+      - "127.0.0.1:24455:24454/udp"
+    volumes:
+      - ./server/mc:/data
+      - ./server/mcdata:/mcdata
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+
+  world:
+    stop_grace_period: 45s
+    image: mc-world:2.1.38
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["/app/node_modules/.bin/tsx", "/app/bootstrap-world.mts"]
+    environment:
+      TZ: Asia/Shanghai
+      MC_HOST: mc
+      MC_PORT: "25599"
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_MAX_COMMAND_BYTES: "65522"
+      MC_DATA_DIR: /app/data
+      MC_SHARED_DATA_DIR: /mcdata
+      PANEL_STATE_DIR: /panel-data
+      STATUS_REQ: /mcdata/status-requests.jsonl
+      GODVOICE_DIR: /godvoice
+      VOICE_ALLOWED_PLAYERS: ${VOICE_ALLOWED_PLAYERS:-MengMeng}
+      MC_LOG_PATH: /mclogs/latest.log
+      MC_ADVANCEMENTS_DIR: /mcadv
+      MC_STATS_DIR: /mcstats
+      MC_GOD_NAME: Goddess
+      INTERNAL_BOT_NAMES: "RenderBot,ProbeBot,QDSmokeProbe,QDSmokeBody"
+      MC_OBSERVER: "1"
+      MC_VIEWER: "0"
+      MC_MODERN_VIEWER: "1"
+      MC_VIEWER_PUBLIC_ORIGIN: http://127.0.0.1:19092
+      MC_PANEL_ORIGIN: http://127.0.0.1:19091
+      MC_MEMORY_ENABLED: "0"
+      MC_SAGA: "0"
+      TERRAIN_FILL: "0"
+      QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+      QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
+    ports:
+      - "127.0.0.1:19092:3070"
+    volumes:
+      - ./world/src:/app/src:ro
+      - ./world/bootstrap-world.mts:/app/bootstrap-world.mts:ro
+      - ./world/admin:/app/admin:ro
+      - ./vendor/modern-viewer:/app/modern-viewer:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/panel-state:/panel-data
+      - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
+      - ./server/world-data:/app/data
+      - ./server/mcdata:/mcdata
+      - ./server/mc/logs:/mclogs:ro
+      - ./server/mc/data/godvoice:/godvoice
+      - ./server/mc/shadow/advancements:/mcadv:ro
+      - ./server/mc/shadow/stats:/mcstats:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+      # Model requests are optional at execution time. Player commands must
+      # remain available while the separately supervised QwenPaw starts/fails.
+    healthcheck:
+      test: ["CMD", "node", "-e", "const f=require('fs');const p='/app/data/world-heartbeat.json';process.exit(f.existsSync(p)&&Date.now()-f.statSync(p).mtimeMs<180000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  panel:
+    image: mc-world:2.1.38
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/admin/server.mjs"]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TZ: Asia/Shanghai
+      PANEL_HOST: 0.0.0.0
+      PANEL_PORT: "9090"
+      PANEL_PUBLIC_ORIGIN: http://127.0.0.1:19091
+      PANEL_STATE_DIR: /panel-data
+      PANEL_QWENPAW_URL: http://127.0.0.1:18089
+      PANEL_RESOURCES_URL: http://127.0.0.1:19090/packs/
+    ports:
+      - "127.0.0.1:19091:9090"
+    volumes:
+      - ./world/admin:/app/admin:ro
+      - ./server/panel-state:/panel-data:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/admin-state/secrets/admin-password.json:/run/secrets/admin-password:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:9090/healthz',{headers:{Host:'127.0.0.1:19091'}},s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>{process.exitCode=1})"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  gate:
+    image: mc-world:2.1.38
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
+    volumes:
+      - ./world/src:/app/src:ro
+    ports:
+      - "127.0.0.1:25701:25700"
+    depends_on:
+      mc:
+        condition: service_healthy
+
+  npc:
+    image: mc-sidecar:2.1.0
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
+    environment:
+      TZ: Asia/Shanghai
+      NPC_DATA_DIR: /mcdata
+      MC_DATA_DIR: /world-data
+      NPC_MAGIC_DIR: /world-data
+      NPC_LOG_PATH: /mclogs/latest.log
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_PASSWORD_FILE: /world-data/rcon-secret.txt
+      NPC_SPAWN_MISSING: "0"
+      NPC_VILLAGE_GUARD: "0"
+      NPC_GUILD_AUTOGENERATE: "0"
+      NPC_GUILD_BASIC_QUESTS: "1"
+      NPC_LLM_ENABLED: "0"
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./tools/npc_health.py:/opt/npc_health.py:ro
+      - ./server/world-data:/world-data
+      - ./server/mcdata:/mcdata
+      - ./server/mc/logs:/mclogs:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+      world:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "/opt/npc_health.py", "--state", "/mcdata/npc-health.json"]
+      interval: 20s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+
+  resources:
+    image: mc-sidecar:2.1.0
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python3", "-m", "http.server", "9090", "--directory", "/public"]
+    ports:
+      - "127.0.0.1:19090:9090"
+    volumes:
+      - ./server/public:/public:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/packs/', timeout=3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  qwenpaw:
+    image: qwenpaw-mc:2.1.1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["qwenpaw"]
+    command: ["app", "--host", "0.0.0.0", "--port", "8088", "--log-level", "info"]
+    ports:
+      - "127.0.0.1:18089:8088"
+    environment:
+      HOME: /state/home
+      QWENPAW_WORKING_DIR: /state/work
+      COPAW_WORKING_DIR: /state/work
+      QWENPAW_SECRET_DIR: /state/secret
+      COPAW_SECRET_DIR: /state/secret
+      QWENPAW_DISABLE_KEYRING: "1"
+      QWENPAW_KEYRING_ACCOUNT: qiandengji
+      QWENPAW_AUTH_ENABLED: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./server/agents:/state
+      - ./world/ops:/ops:ro
+    healthcheck:
+      test: ["CMD", "python", "/ops/qwenpaw_health.py"]
+      interval: 30s
+      timeout: 25s
+      retries: 4
+      start_period: 60s
+
+  voice:
+    image: mc-voice:1.0
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/opt/sidecar/god-voice-watcher.py"]
+    environment:
+      TZ: Asia/Shanghai
+      GV_BASE: /godvoice
+      TTS_LOCAL_URL: http://host.docker.internal:8100
+      VOICE_ALLOW_EDGE_FALLBACK: "0"
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./tools/voice_health.py:/opt/voice_health.py:ro
+      - ./server/mc/data/godvoice:/godvoice
+    healthcheck:
+      test: ["CMD", "python", "/opt/voice_health.py", "--state", "/godvoice/.voice-health.json"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  asr:
+    image: mc-voice:1.0
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/opt/sidecar/mic_asr_watcher.py"]
+    environment:
+      TZ: Asia/Shanghai
+      MIC_BASE: /godvoice/mic
+      ASR_MODEL_DIR: /model
+      ASR_THREADS: "2"
+      ASR_MIN_DUR: "0.45"
+      VOICE_ALLOWED_PLAYERS: MengMeng
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./tools/voice_health.py:/opt/voice_health.py:ro
+      - ./server/mc/data/godvoice:/godvoice
+      - ./server/asr-model:/model:ro
+    healthcheck:
+      test: ["CMD", "python", "/opt/voice_health.py", "--state", "/godvoice/mic/.asr-health.json"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  tts:
+    image: sha256:9da38721708a19a1c0528b5224a2d9e464453bd56f46f51e9c595dd27e0f56bb
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["python3", "-u", "/app/tts_api.py"]
+    environment:
+      TZ: Asia/Shanghai
+      TTS_CKPT: /checkpoints
+      TTS_VOICES: /voices
+      TTS_DEFAULT_VOICE: goddess
+      TTS_HOST: 0.0.0.0
+      TTS_PORT: "8100"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      - ./server/tts-state/app/tts_api.py:/app/tts_api.py:ro
+      - ./server/tts-state/checkpoints:/checkpoints:ro
+      - ./server/tts-state/voices:/voices:ro
+      - ./server/tts-state/tmp:/tmp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8100/health',timeout=5)).get('ok') is True"]
+      interval: 30s
+      timeout: 8s
+      start_period: 180s
+      retries: 10
+
+  control:
+    image: mc-world:2.1.38
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/admin/control-service.mjs"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./world/admin:/app/admin:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/admin-state/operations:/control-state
+      - ./server/world-data:/maintenance
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http'),f=require('fs');h.get('http://127.0.0.1:3090/healthz',{headers:{Authorization:'Bearer '+f.readFileSync('/run/secrets/control-token','utf8').trim()}},r=>{r.resume();if(r.statusCode!==200)process.exitCode=1}).on('error',()=>process.exitCode=1)"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

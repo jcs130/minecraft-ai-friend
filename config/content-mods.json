@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "target": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java": 21,
+    "fml": "4.0.43"
+  },
+  "sources": {
+    "base_pack": "C:/Users/lzl19/AppData/Roaming/.minecraft/versions/Rapid Optimization",
+    "server_mods": "C:/Users/lzl19/.copaw/workspaces/default/minecraft-ai-friend/ops/docker/shadow/mc/mods"
+  },
+  "expected_base_jar_count": 24,
+  "client_extension_locks": [
+    "manifests/controller-support.lock.json"
+  ],
+  "loader_compatibility_aliases": {
+    "minecraft": [
+      "1.21"
+    ],
+    "neoforge": [
+      "21.0.166"
+    ]
+  },
+  "loader_compatibility_evidence": "Read-only javap inspection of local fancymodloader loader-4.0.43.jar VersionSupportMatrix: MC [1.21.1] adds mod.minecraft=1.21 and mod.neoforge=21.0.166. These describe the loader itself; no fml.toml dependency overrides are written.",
+  "include_mod_ids": [
+    "abridged",
+    "alternate_current",
+    "architectury",
+    "mr_ati_structuresfabricforge",
+    "bettercombat",
+    "chineseflyingislandtower",
+    "clumps",
+    "collective",
+    "cristellib",
+    "curios",
+    "default_skill_trees",
+    "distanthorizons",
+    "drones",
+    "dungeons_arise",
+    "geckolib",
+    "godvoice",
+    "immersive_aircraft",
+    "irons_lib",
+    "irons_spellbooks",
+    "mr_japanese_castle",
+    "mr_japanese_offeringshrines",
+    "mr_japanese_temple",
+    "lithostitched",
+    "mcwbridges",
+    "mcwdoors",
+    "mcwfurnitures",
+    "mcwlights",
+    "mcwfences",
+    "mcwpaths",
+    "mcwstairs",
+    "mcwwindows",
+    "mcwpaintings",
+    "mcwroofs",
+    "mcwtrpdoors",
+    "moogs_structures",
+    "mvs",
+    "noisium",
+    "patchouli",
+    "playeranimator",
+    "prefab",
+    "puffish_attributes",
+    "puffish_skills",
+    "sophisticatedbackpacks",
+    "sophisticatedcore",
+    "sound_physics_remastered",
+    "spawn",
+    "structure_pool_api",
+    "supermartijn642configlib",
+    "t_and_t",
+    "teallib",
+    "maid_self_talk",
+    "touhou_maid_affection",
+    "touhou_little_maid_spell",
+    "touhou_little_maid",
+    "mr_trek",
+    "village_taverns",
+    "villagernames",
+    "voicechat",
+    "yes_steve_model"
+  ],
+  "exclude_server_mod_ids": [
+    "botgate",
+    "numen",
+    "numen_act",
+    "numen_api",
+    "chunky",
+    "grieflogger",
+    "incontrol",
+    "spark"
+  ],
+  "exclude_base_files": [
+    "config/sodium-fingerprint.json"
+  ],
+  "known_metadata_warnings": {
+    "iris:minecraft:[1.21,1.21.1)": "Upstream JAR targets 1.21.1 by filename/index but declares an exclusive 1.21.1 upper bound. Retained unchanged; requires launch verification, no dependency override applied.",
+    "moreculling:minecraft:[1.21,1.21.1)": "Upstream JAR targets 1.21.1 by filename/index but declares an exclusive 1.21.1 upper bound. Retained unchanged; requires launch verification, no dependency override applied."
+  },
+  "additional_conflicts": [
+    [
+      "sodium",
+      "embeddium"
+    ],
+    [
+      "iris",
+      "embeddium"
+    ],
+    [
+      "zfastnoise",
+      "moonrise"
+    ],
+    [
+      "zfastnoise",
+      "antixray"
+    ]
+  ],
+  "shared_extension_locks": [
+    "manifests/chanting-items.lock.json",
+    "manifests/recording-extension.lock.json"
+  ]
+}

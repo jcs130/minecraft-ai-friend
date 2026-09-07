@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": [],
+    "strict": true,
+    "allowImportingTsExtensions": true,
+    "noResolve": true,
+    "noEmit": true,
+    "skipLibCheck": false
+  },
+  "include": ["src/gameplay/**/*.ts", "src/gameplay/**/*.mts", "src/gameplay/**/*.cts", "src/gameplay/**/*.tsx", "src/application/**/*.ts", "src/application/**/*.mts", "src/application/**/*.cts", "src/application/**/*.tsx"]
+}

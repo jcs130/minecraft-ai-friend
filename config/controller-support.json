@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "loader": "neoforge",
+  "client_only": true,
+  "official_mods": [
+    {
+      "mod_id": "controlify",
+      "project_id": "DOUdJVEm",
+      "version_id": "RqsNKKLK",
+      "version": "3.0.1+lts+1.21.1-neoforge",
+      "filename": "controlify-3.0.1+lts+1.21.1-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/DOUdJVEm/versions/RqsNKKLK/controlify-3.0.1%2Blts%2B1.21.1-neoforge.jar",
+      "size": 7981721,
+      "sha512": "cfffb25b9e62ca39cd6f54ab0b83902feda23a763ae9e345a11609f0138de1b6c3ab7a78c8fd5b7b309795e5c6d4911fd37cd7f8722a72cca6ad18e32cec461e",
+      "sha256": "0c8b8d6e57599b516a16f2df2a7314ee96228c94f145f5d7bea2e2ec7b2f90e7",
+      "official_page": "https://modrinth.com/mod/controlify/version/RqsNKKLK"
+    },
+    {
+      "mod_id": "yet_another_config_lib_v3",
+      "project_id": "1eAoo2KR",
+      "version_id": "7TVdVtxF",
+      "version": "3.8.2+1.21.1-neoforge",
+      "filename": "yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/1eAoo2KR/versions/7TVdVtxF/yet_another_config_lib_v3-3.8.2%2B1.21.1-neoforge.jar",
+      "size": 1118651,
+      "sha512": "583de19b927ce8050c2b7d5e60b75accc69e325e5aac85c27994c82a9dec2e4e078343fa1d4c3a10d4bd7e0e524e0b3b246a18cf03db01e363a1e6f865adcf48",
+      "sha256": "b5c30321b46cfaa521645a04aff89d2804d8167a25bb23ad4b1ae8da73093a2f",
+      "official_page": "https://modrinth.com/mod/yacl/version/7TVdVtxF"
+    }
+  ],
+  "local_mod": {"mod_id": "qiandeng_controls", "version": "0.1.0", "filename": "qiandeng-controls-0.1.0.jar", "build": "world/client-controls-src/build.py"},
+  "defaults": {"wheel_keyboard": "F6", "guide_keyboard": "F7", "wheel_controller": "dpad_up", "guide_controller": "dpad_right", "voice_ptt_keyboard": "F8", "voice_ptt_controller": "dpad_left", "voice_ptt_binding": "voicechat:ptt_hold", "confirm": "south (Xbox A)", "back": "east (Xbox B)", "use_book": "left_trigger (Xbox LT)"},
+  "commands": {"wheel": "skillchest self", "panel": "skillchest panel <self> 0", "status": "mycli status", "help": "myhelp"},
+  "physical_controller_verified": false
+}

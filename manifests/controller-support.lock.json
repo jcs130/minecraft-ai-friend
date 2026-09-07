@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "client_only": true,
+  "files": [
+    {
+      "mod_id": "controlify",
+      "filename": "controlify-3.0.1+lts+1.21.1-neoforge.jar",
+      "cache_path": "vendor/controller-cache/controlify-3.0.1+lts+1.21.1-neoforge.jar",
+      "sha256": "0c8b8d6e57599b516a16f2df2a7314ee96228c94f145f5d7bea2e2ec7b2f90e7",
+      "size_bytes": 7981721,
+      "source_url": "https://cdn.modrinth.com/data/DOUdJVEm/versions/RqsNKKLK/controlify-3.0.1%2Blts%2B1.21.1-neoforge.jar",
+      "client_only": true
+    },
+    {
+      "mod_id": "yet_another_config_lib_v3",
+      "filename": "yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+      "cache_path": "vendor/controller-cache/yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+      "sha256": "b5c30321b46cfaa521645a04aff89d2804d8167a25bb23ad4b1ae8da73093a2f",
+      "size_bytes": 1118651,
+      "source_url": "https://cdn.modrinth.com/data/1eAoo2KR/versions/7TVdVtxF/yet_another_config_lib_v3-3.8.2%2B1.21.1-neoforge.jar",
+      "client_only": true
+    },
+    {
+      "mod_id": "qiandeng_controls",
+      "filename": "qiandeng-controls-0.1.0.jar",
+      "cache_path": "vendor/controller-cache/qiandeng-controls-0.1.0.jar",
+      "sha256": "67ca3e4e2993ab5eed17780d1ecac4d603fc344a751b97460aef74ea598331de",
+      "size_bytes": 13242,
+      "source_build": "world/client-controls-src/build.py",
+      "client_only": true
+    }
+  ],
+  "installed_client": true,
+  "physical_controller_verified": false,
+  "shared_content_manifest_modified": false,
+  "server_modified": false
+}

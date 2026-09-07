@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "target": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java": 21
+  },
+  "files": [
+    {
+      "path": "server/mc/mods/botgate.jar",
+      "sha256": "0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc",
+      "client_required": false
+    },
+    {
+      "path": "server/mc/mods/qiandeng-irons-bridge-0.1.0.jar",
+      "sha256": "826352269d1bb337042e083f223bf725a94a8a878f2a3b34f3c8b288f46aeee3",
+      "client_required": false
+    },
+    {
+      "path": "server/world-data/skill-catalog.json",
+      "sha256": "16e253db502324d9f07a1949a67f454086ab3bdd30a838f1035e8db9d134fca5",
+      "client_required": false
+    },
+    {
+      "path": "server/mcdata/skill-catalog.json",
+      "sha256": "16e253db502324d9f07a1949a67f454086ab3bdd30a838f1035e8db9d134fca5",
+      "client_required": false
+    },
+    {
+      "path": "server/mc/mods/qiandeng-chanting-0.1.0.jar",
+      "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5",
+      "client_required": true
+    },
+    {
+      "path": "server/mc/mods/god-voice-0.1.0.jar",
+      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
+      "client_required": false
+    }
+  ]
+}

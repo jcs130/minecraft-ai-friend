@@ -1,0 +1,329 @@
+// 世界 bootstrap —— 天神侧唯一进程，握 RCON。只应运行在 MC 服务器旁。
+//
+// 魔法之神（女神化身 Goddess）以旁观者视角常驻世界：
+//   - 公屏咏唱 → mc-magic 快路径施法（程序化、零 LLM）
+//   - 私聊祈愿 → mc-god 慢路径神谕（LLM 裁决，可拒绝/提条件）
+//   - 玩家进服 → mc-ritual 降临仪式（公屏宣读候选，聊天选天赋）
+// 一切神力经 mc-rcon（唯一 RCON 服务）落地。
+//
+// 与穿越者进程（bootstrap-mc.mts）完全解耦：通信只走 MC 聊天文字，
+// 任何一方重启/多开，另一方无感知。
+// 启动：start-world.bat
+//
+// 2026-08-21 已脱 cordis 壳：手动依赖注入（createXxx 工厂），
+// 依赖顺序 = 无依赖者先建，mc-god 最后建（依赖最多），
+// mc-magic ↔ mc-god 的循环依赖经 magic.setChronicle(god.service.record) 迟绑定解开。
+import fs from 'node:fs'
+import { startPanelPublisher } from './admin/publish.mts'
+import { startEyeService } from './admin/eye-service.mts'
+import { serveMapTiles } from './admin/map-service.mts'
+import { createBot } from './src/mc-bot.ts'
+import { createRcon } from './src/mc-rcon.ts'
+import { createLogwatch } from './src/mc-logwatch.ts'
+import { createWorlddb } from './src/mc-worlddb.ts'
+import { createTransmigrator } from './src/mc-transmigrator.ts'
+import { createMagic } from './src/mc-magic.ts'
+import { createGod } from './src/mc-god.ts'
+import { createRitual } from './src/mc-ritual.ts'
+import { createSocial } from './src/mc-social.ts'
+import { createBubble } from './src/mc-bubble.ts'
+import { createEvolveReview } from './src/mc-evolve-review.ts'
+import { createTerra } from './src/mc-terra.ts'
+import { createSaga } from './src/mc-saga.ts'
+import { startModernViewer } from './src/mc-modern-viewer.mts'
+import type { Bot } from 'mineflayer'
+
+// 运行态根（2026-08-20 D 步迁正仓）：默认 ./data（仓内自足）；迁正仓跑时经 MC_DATA_DIR 指向部署现场 data（运行态正本）
+const D = process.env.MC_DATA_DIR ?? './data'
+const RUN_MS = Number(process.env.RUN_MS ?? 0)
+// 进程级兜底：世界进程死了=没有女神（施法/祈愿/仪式全瘫），比 bot 死更伤。
+// mineflayer/RCON 内部 promise 拒绝无人可 catch 时保进程（详见 bootstrap-mc.mts 同款注释）。
+process.on('unhandledRejection', (reason) => {
+  const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  console.error(`[bootstrap-world] UNHANDLED REJECTION (suppressed): ${detail}`)
+})
+process.on('uncaughtException', (err) => {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err)
+  console.error(`[bootstrap-world] UNCAUGHT EXCEPTION (suppressed): ${detail}`)
+})
+// 女神化身名：穿越者进程靠它寻址私聊/识别公屏回复，须与穿越者侧 MC_GOD_NAME 一致。
+const godName = process.env.MC_GOD_NAME ?? 'Goddess'
+
+// ---------- 手动依赖注入装配 ----------
+const bot = createBot({
+  host: process.env.MC_HOST ?? 'localhost',
+  port: Number(process.env.MC_PORT ?? 25565),
+  username: godName,
+  autoReconnect: true,
+  viewerEnabled: process.env.MC_VIEWER === '1', // 女神天眼：MC_VIEWER=1 时开启（9090 面板无穿越者时的兜底画面）
+  viewerFirstPerson: process.env.MC_VIEWER_FP === '1',
+  viewerPort: Number(process.env.MC_VIEWER_PORT ?? 3050),
+  observer: process.env.MC_OBSERVER === '1', // 观察者化身：关物理，位置只随 RCON tp（防与重力模拟互搏掉落）
+})
+// 现代画面（萌悦 modern-viewer）：MC_MODERN_VIEWER=1 时在 :3070 起 Web 渲染宿主
+// （/ 第一人称 · /third/ 环绕跟随 · /dungeon/ 2.5D；面板默认 iframe 切到它，旧 3050 留作回退）
+const modernViewer = startModernViewer(() => bot.getBot(), { getSettleNpcs: () => settleNpcCache })
+const rcon = createRcon({
+  enabled: true,
+  host: process.env.MC_RCON_HOST ?? process.env.MC_HOST ?? 'localhost',
+  port: Number(process.env.MC_RCON_PORT ?? 25575),
+  passwordPath: `${D}/rcon-secret.txt`,
+})
+const eye = startEyeService({
+  getBot: () => bot.getBot(),
+  sendCommand: command => rcon.service.send(command),
+  token: fs.readFileSync('/run/secrets/control-token', 'utf8').trim(),
+})
+await eye.ready
+const logwatch = createLogwatch({
+  enabled: true,
+  // 原版服事件流：死亡/加入/成就实时写进 latest.log，tail 它 = 零依赖的服务器事件源
+  logPath: process.env.MC_LOG_PATH ?? './mc-server/logs/latest.log',
+  pollMs: 500,
+})
+const worlddb = createWorlddb({
+  enabled: true,
+  dbPath: `${D}/world.db`,
+  chronicleMdPath: `${D}/world-chronicle.md`,
+  memoryEnabled: process.env.MC_MEMORY_ENABLED !== '0', // 众生册（Qdrant 独立 collection，与家里 MemOS 分开）
+  qdrantUrl: process.env.MC_QDRANT_URL ?? 'http://127.0.0.1:6333',
+  qdrantCollection: 'mc_world_memory',
+  embeddingUrl: process.env.MC_EMBEDDING_URL ?? 'http://127.0.0.1:11434',
+  embeddingModel: process.env.MC_EMBEDDING_MODEL ?? 'bge-m3-cpu:latest',
+})
+const transmigrator = createTransmigrator({
+  registryPath: `${D}/transmigrators.json`,
+})
+const magic = createMagic({
+  enabled: true,
+  atomsPath: `${D}/magic-atoms.json`,
+  statePath: `${D}/magic-state.json`,
+  maxManaDefault: 100,
+  regenPerSec: 2.0,
+  balancePath: `${D}/balance-overrides.json`,
+}, { getBot: bot.getBot, rcon: rcon.service })
+const terra = createTerra({
+  enabled: true,
+  dataDir: D,
+  pollMs: 60_000,
+  maxFixesPerPoll: 5,
+}, { getBot: bot.getBot, rcon: rcon.service, worlddb: worlddb.service })
+const bubble = createBubble({
+  bubbleTtlMs: 6500,
+  followIntervalMs: 900,
+  maxTextLen: 80,
+  statRefreshMs: 60000,
+  feedPollMs: 500,
+  perPlayerCooldownMs: 900,
+}, { rcon: rcon.service, getBot: bot.getBot })
+const ritual = createRitual({
+  enabled: true,
+}, { getBot: bot.getBot, rcon: rcon.service, magic: magic.service, transmigrators: transmigrator.service })
+// 女神传声 & 信差（2026-08-17）：说话三档距离转达 + 好友制邮件。
+// 数值可被 data/social.json 覆盖（服主调参不改代码）。
+// social 需要「bot 不在线时返回 null」而非 throw，故包一层 getBotOrNull。
+const getBotOrNull = (): Bot | null => {
+  try { return bot.getBot() } catch { return null }
+}
+const social = createSocial({
+  enabled: true,
+  socialPath: `${D}/social.json`,
+  sayRadius: 48,
+  shoutRadius: 96,
+  whisperRadius: 6,
+  shoutFoodCost: 1,
+  posCacheMs: 5_000,
+  mailMaxBody: 200,
+  mailInboxCap: 50,
+  mailPerMinute: 10,
+  remindCooldownSec: 60,
+  mailReadBatch: 5,
+}, { getBot: getBotOrNull, rcon: rcon.service, worlddb: worlddb.service, transmigrators: transmigrator.service })
+// 女神的创世之笔（2026-08-18 扛枪点题）：根据在场玩家与故事，
+// 构思新咒文（热注入 magic-atoms）/神托任务（供奉核销）/大事件（三幕戏）。
+// data/saga-trigger 文件 = 手动构思把手。
+const saga = createSaga({
+  enabled: process.env.MC_SAGA !== '0',
+  qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
+  sagaMs: Number(process.env.MC_SAGA_MS ?? 6 * 3600_000),
+  firstDelayMs: Number(process.env.MC_SAGA_FIRST_MS ?? 5 * 60_000),
+  pollMs: 60_000,
+  maxAtomsPerDay: 2,
+  maxActiveQuests: 3,
+  minEventGapMs: 4 * 3600_000,
+  dataDir: D,
+}, { getBot: bot.getBot, rcon: rcon.service, magic: magic.service, worlddb: worlddb.service, transmigrators: transmigrator.service })
+// L3 提议进化·世界侧审核官（2026-08-18）：扫描 evolution-proposals/，女神裁决后
+// 核准指令落 evolution-directives-<u>.json，穿越者侧 mc-adapt 读回注入。
+const evolveReview = createEvolveReview({
+  enabled: true,
+  qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
+  pollMs: 60_000,
+  maxAttempts: 5,
+  maxDirectives: 10,
+}, { getBot: bot.getBot, worlddb: worlddb.service })
+// 女神本尊（慢路径神谕裁决）：依赖最多，最后建。
+const god = createGod({
+  enabled: true,
+  qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
+  cooldownMs: 60_000,
+  pollMs: 12_000,
+  admitCooldownMs: 30_000,
+  deathPollMs: 20_000,
+  reviewMs: 7_200_000,
+  requirementsPath: `${D}/world-requirements.md`,
+  recallTopK: 5,
+  skillEventsPath: `${D}/skill-events.json`,
+  advancementsDir: process.env.MC_ADVANCEMENTS_DIR ?? './mc-server/advancements',
+  advancementUnlocksPath: `${D}/advancement-unlocks.json`,
+  advancementNamesPath: `${D}/advancement-names.json`,
+  // 「平衡」通道白名单（私服真人玩家名不再硬编码）：默认仅女神；服主可经 MC_MAINTAINERS 注入，逗号分隔
+  maintainers: (process.env.MC_MAINTAINERS ?? 'Goddess').split(',').map(s => s.trim()).filter(Boolean),
+  // 特殊监听白名单（VIP 真人）：说的一切女神都要聆听回应，绕过冷启动/冷却；经 MC_VIP_LISTEN 注入
+  vipListen: (process.env.MC_VIP_LISTEN ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+  balanceFlushMs: 120_000,
+  bulletinPath: `${D}/balance-bulletin.json`,
+  heartbeatPath: `${D}/world-heartbeat.json`,
+}, {
+  getBot: bot.getBot,
+  rcon: rcon.service,
+  magic: magic.service,
+  worlddb: worlddb.service,
+  transmigrators: transmigrator.service,
+  logwatch: logwatch.service,
+  terra: terra.service,
+  bubble: bubble, // 咏唱可视化（2026-08-28）：技艺施放成功时头顶冒咒语气泡
+})
+// 解开 mc-magic ↔ mc-god 循环依赖：mc-magic 的 chronicle 迟绑定到 mc-god 的史官 record。
+magic.setChronicle(god.service.record)
+// 契约/魂链法术执行器（2026-08-23）：contract/trace/recall 的效果由 mc-god 落地（写 goddess-orders / tp）。
+// 2026-08-29 修：原 lambda 手动转发 4 参，吞掉了第 5 参 atomId——光环系(aura)元素分派
+// 全靠 atomId，被吞后 elem 恒空 →「此法术未通」。直接传函数引用，不再逐参转发。
+magic.setSpecialExecutor(god.service.execSpecial)
+
+// 女神天眼实体快照（2026-08-23）：周期性把 Goddess 视野内的实体写进 web-entities.json，
+// 供 9090 面板小地图标注怪物（#1 怪物显示）。女神以旁观者常驻，视野即「她所见」，
+// 覆盖以天眼为中心 / 显视距离内的 mob、村民、玩家。全服精确实体待服务端 mod 版（另立）。
+const SNAP_FILE = `${D}/web-entities.json`
+const MOB_RE = /(zombie|zombie_villager|drowned|husk|skeleton|stray|wither_skeleton|spider|cave_spider|creep|creeper|enderman|witch|slime|phantom|pillager|vindicator|ravager|evoker|vex|blaze|guardian|elder_guardian|shulker|warden|hoglin|zoglin|piglin|piglin_brute|breeze|bogged|boss|living)/i
+// 2026-08-29 智能村民上屏（造物主令）：settlements 自定义实体 mineflayer 不认识（不在 b.entities），
+// 天眼快照里一个都没有 → 面板/小地图全村隐身。补录：每 3 轮（4.5s）RCON 一条命令批量拉
+// `execute as @e[type=settlements:base_villager] run data get entity @s Pos`，回执每行自带
+// 「中文名 has the following entity data: [x, y, z]」（名字+位置一次拿全）。解析结果缓存，
+// 每轮以 isNpc=true 注入快照；RCON 失败保留旧缓存（村民不闪没）。
+// 2026-08-29 II（9090 村民=盔甲架修复）：再加拉 VillagerData（profession/level），并把名单
+// 喂给现代画面（startModernViewer 第二参数）——mineflayer 把 base_villager 错认成
+// unknown/armor stand，3070 3D 里村民全成了隐形或盔甲架；viewer 侧按 settle 名单重造实体流。
+interface SettleNpc { name: string; x: number; y: number; z: number; profession: string; level: number }
+let settleNpcCache: SettleNpc[] = []
+let snapTick = 0
+const SETTLE_YAW = new Map<string, number>() // 名字→朝向（可选增强，暂不拉）
+function parseSettleRcon(out: string): Map<string, { x: number; y: number; z: number }> {
+  const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+  const map = new Map<string, { x: number; y: number; z: number }>()
+  for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \[(-?[\d.]+)d?, (-?[\d.]+)d?, (-?[\d.]+)d?\]/g)) {
+    map.set(m[1].trim(), { x: +m[2], y: +m[3], z: +m[4] })
+  }
+  return map
+}
+function parseSettleProfessions(out: string): Map<string, { profession: string; level: number }> {
+  const clean = String(out).replace(/\u001b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '')
+  const map = new Map<string, { profession: string; level: number }>()
+  for (const m of clean.matchAll(/([^\n\r]+?) has the following entity data: \{type: "[^"]*", profession: "([^"]*)"(?:, level: (\d+))?\}/g)) {
+    map.set(m[1].trim(), { profession: m[2].replace(/^.*:/, ''), level: +(m[3] ?? 1) })
+  }
+  return map
+}
+function refreshSettleNpcs(): void {
+  Promise.all([
+    rcon.service.send('execute as @e[type=settlements:base_villager] run data get entity @s Pos'),
+    rcon.service.send('execute as @e[type=settlements:base_villager] run data get entity @s VillagerData'),
+  ])
+    .then(([posOut, profOut]) => {
+      const posMap = parseSettleRcon(posOut)
+      const profMap = parseSettleProfessions(profOut)
+      const rows: SettleNpc[] = []
+      for (const [name, p] of posMap) {
+        const prof = profMap.get(name)
+        rows.push({ name, x: p.x, y: p.y, z: p.z, profession: prof?.profession ?? 'none', level: prof?.level ?? 1 })
+      }
+      // 空结果=村民真没了（正常不会发生）；RCON 异常走 catch，缓存原地保留
+      settleNpcCache = rows
+    })
+    .catch(() => { /* RCON 未就绪/瞬时失败：用旧缓存 */ })
+}
+const snapshotTimer = setInterval(() => {
+  try {
+    const b = bot.getBot()
+    if (!b || !b.entities) return
+    const now = Date.now()
+    const out = { at: now, t: now / 1000, entities: [] as any[] }
+    for (const id of Object.keys(b.entities)) {
+      const e = b.entities[id]
+      if (!e || !e.position) continue
+      const ent = e.entity
+      const type = String(e.type ?? ent?.type ?? '')
+      // 2026-08-23：mobType getter 每次访问都打弃用 Trace（2.7GB err 日志源头），
+      // 改走 displayName（官方推荐替代，同值）。统一小写以匹配 MOB_RE 与 NPC_RE。
+      const mobType = String(e.displayName ?? ent?.displayName ?? '').toLowerCase()
+      const kind = String(e.kind ?? ent?.kind ?? '')
+      const name = String(e.username ?? ent?.name ?? '')
+      const isPlayer = type === 'player' || !!name
+      const isMob = (type === 'mob') || MOB_RE.test(type) || MOB_RE.test(mobType)
+      const isNpc = !isPlayer && !isMob && /(villager|wandering_trader|npc)/i.test(type + mobType)
+      out.entities.push({
+        id, type: mobType || type, kind, name,
+        x: Math.round(e.position.x * 10) / 10,
+        y: Math.round(e.position.y * 10) / 10,
+        z: Math.round(e.position.z * 10) / 10,
+        isMob, isNpc, isPlayer,
+      })
+    }
+    // 智能村民注入（RCON 补录，见上）
+    if (snapTick % 3 === 0) refreshSettleNpcs()
+    for (const v of settleNpcCache) {
+      out.entities.push({
+        id: 'settle:' + v.name, type: 'villager', kind: 'Village NPC', name: v.name,
+        x: Math.round(v.x * 10) / 10, y: Math.round(v.y * 10) / 10, z: Math.round(v.z * 10) / 10,
+        isMob: false, isNpc: true, isPlayer: false,
+      })
+    }
+    fs.writeFileSync(SNAP_FILE, JSON.stringify(out))
+    snapTick++
+  } catch { /* 天眼快照非关键，静默 */ }
+}, 1500)
+
+// ---------- 进程收尾：逆序 dispose ----------
+const handles = [bubble, ritual, social, saga, evolveReview, terra, god, magic, transmigrator, worlddb, logwatch, rcon, bot]
+const mapTiles = serveMapTiles(() => bot.getBot(), worlddb.service)
+await mapTiles.ready
+
+const panelPublisher = startPanelPublisher({ worldDir: D, sharedDir: process.env.MC_SHARED_DATA_DIR ?? '/mcdata', outputDir: process.env.PANEL_STATE_DIR })
+let shutdownPromise: Promise<void> | null = null
+const shutdown = (): Promise<void> => {
+  if (shutdownPromise) return shutdownPromise
+  shutdownPromise = (async () => {
+    clearInterval(snapshotTimer)
+    console.log('[bootstrap-world] shutting down ...')
+    // Parking needs the live RCON/bot adapters. Close observation endpoints
+    // before ordinary world consumers and their shared connections.
+    for (const h of [eye, modernViewer, mapTiles, panelPublisher, ...handles]) {
+      try { await h.dispose() } catch (e) {
+        console.error('[bootstrap-world] dispose error:', e instanceof Error ? e.message : String(e))
+      }
+    }
+    process.exit(0)
+  })()
+  return shutdownPromise
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
+
+console.log(`[bootstrap-world] world process armed (goddess="${godName}", sole RCON holder), running ${RUN_MS > 0 ? RUN_MS + 'ms' : 'indefinitely'} ...`)
+if (RUN_MS > 0) {
+  await new Promise((resolve) => setTimeout(resolve, RUN_MS))
+  console.log('[bootstrap-world] done, exiting')
+  await shutdown()
+} else {
+  await new Promise(() => {})
+}

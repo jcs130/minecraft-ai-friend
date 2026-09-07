@@ -1,27 +1,25 @@
-# AGENTS.md — B 仓(minecraft-ai-friend)工程纪律
+# 千灯纪整合项目
 
-## 功能上线三件套(Definition of Done,2026-08-29 立)
+目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
-> 背景:守卫桥暴死三天、背包卡被顶出视口、numen craft 坏、成就通道挂空目录——
-> 全部是造物主使用时撞见,无一主动发现。功能「写完」不等于「完成」。
+用户最新阶段决定（2026-09-07）：AI Agent 相关新功能先不做，复用已有实现；先研究并拆分现有架构，推进玩家玩法。当前拆分边界、兼容要求和顺序见 docs/ARCHITECTURE.md。
 
-一个功能只有配齐三样才算上线:
+后续补充：保留 QwenPaw，但会话接口支持替换，管理台独立运行。D 项目管理台为 19091，QwenPaw 控制台为 18089，网页天神之眼为 19092。用户后来明确要求停止旧游戏环境并保留宿主 QwenPaw；旧 9090 不再保活。最新边界见 docs/SERVER-MANAGEMENT.md。
 
-1. **健康探针**:在 `ops/health/health_mon.py` 的 manifest 里加探针
-   (HTTP/进程/容器/文件新鲜度/协议应答任一适用形式);
-2. **看门狗**:常驻进程必须被某种守护覆盖(schtasks 幂等拉活 / 容器 restart 策略 /
-   health_mon --auto 恢复动作),不允许裸进程;
-3. **冒烟断言**:改动的用户可见行为(UI 页面、API 应答)在 `health_mon.py` 的
-   `probe_panel_smoke` 模式下有断言,改完跑一遍绿了才算完。
+后续执行：普通玩家命令已提取到 application/player-commands.ts；world 不再以 QwenPaw 健康作为启动前提。保留旧授权、回执和队列去重，不把可信进程内端口暴露为无鉴权管理 API。当前证据与仍保留的历史问题见 docs/PLAYER-COMMAND-SERVICE.md；用户最新优先级是“语言即接口”：真人按住说话施法，CLI 供 Agent 与内部执行；语音接线与边界见 docs/LANGUAGE-INTERFACE.md，先验证语音再推进实物工会合同。
 
-改 UI/面板:跑 `python ops/health/health_mon.py` 看 panel-smoke。
-新常驻进程:登记到 CONTAINERS 或进程探针。
-
-## 已固化的工程铁律(踩坑沉淀,详录 LESSONS.md)
-
-- cmd.exe 内联多行 python(heredoc/`python -c` 带中文与引号)= 转义黑洞,一律落 .py 文件再跑。
-- Windows GBK stdout 下的中文比对会假阴性:比对落文件,`io.open(utf-8)`。
-- bind-mount 只读挂载的服务(web-panel.mjs / bootstrap-world.mts):改 B 仓源码后须重启对应容器才生效。
-- 镜像 COPY 的资产(资产/worker/bundle):Dockerfile 必须显式 COPY,重建镜像会丢「只活在旧镜像层」的文件。
-- RCON 探针/脚本:Source RCON 响应包按 request-id 匹配读取,双读会卡到超时假红。
-- 页签/满高不滚布局里,卡片顺序=可见性:后加的卡必须显式排位并加冒烟断言。
+- Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。
+- GitHub 主仓库是 https://github.com/jcs130/minecraft-ai-friend；D 项目沿用其历史，原世界源码位于 world/。用户要求完成开发后记得提交：每轮完成并验证的代码应提交并推送当前开发分支，说明提交号与同步状态；保留原历史，不强推。公开提交范围和本机资源恢复见 docs/GITHUB-WORKFLOW.md，不能把存档、密钥、运行报告或第三方资源产物加入源码提交。
+- D:\Projects\QiandengJi 是开发项目。原 C 盘客户端与生产服务仅作为来源；用户明确授权的旧游戏退役是例外，精确改动/备份见 reports/legacy-game-retirement.json。不要把退役入口重新启用，也不要改动宿主 QwenPaw 的非游戏工作。
+- 客户端、服务端和世界/Agent 服务分别构建。botgate 的技能箱、飞行、附魔及光环不可遗漏；Numen 本地改版不能换成同名旧副本。
+- 不以删除未知内容模组、重建世界或绕过依赖检查来掩盖启动错误。
+- 存档迁移保持 region、entities、poi、playerdata、advancements、stats、dimensions、datapacks、serverconfig，以及世界外部的技能状态/账本。
+- 生产密钥仅能存在被忽略的本地运行配置，不能进入源码、报告或分发包。
+- 测试使用本项目独立存档副本与端口；明确区分静态验证、启动、联机和实际技能效果验证。
+- 用户随后明确允许精简/合并无用旧技能。默认目录以 config/skill-catalog.json 为准；保留历史进度与既有永久奖励，不意味着继续开放所有旧主动施法。保留传送阵与指南针右键入口。
+- 最新真人交互：自研法杖长按使用举起，非阻塞小窗口默认语音；左右肩键循环语音及 8 槽，松开使用才施放。不要恢复 B 单独选择屏、额外确认或默认单独直放键的复杂流程。槽位在原技能罗盘编辑、保存在原 skillbar。录音必须保留 schema 2 首/末音包时间，不能把落盘时间当采音时间。
+- 运营组最新要求：QwenPaw 原团队承担世界运营，先治理现有进程与配置，保留可替换架构。公开清单由 tools/operations.py 采集，19091/#operations 展示；19091/#services 提供经过登录、预览确认和回执的固定维护操作。游戏会话两角色与原六角色运营组分开；迁移方案不等于已启用。旧游戏容器/入口已精确停用，TTS 已迁入 D；宿主 QwenPaw、通用模型、共享记忆服务保留，不能按 Python 或 shadow 名称批量停止。最新证据见 docs/SERVER-MANAGEMENT.md。
+- 新内容模组必须同步网页注册表与纹理模型，并进行持续 WebGL 实测；生成资产不等于成功渲染。网页内存预算、来源限制和后端鉴权不能为了兼容而移除。首页面向日常使用，不默认显示渲染器版本和内部调试面板。
+- 模组可扩展原版方块状态（当前 note_block 多 150 个），后续 minecraft 状态编号也会偏移。网页必须按实际注册表名称/属性匹配，不能只校正 mod namespace，不能给现代画面统一套用旧版近似块映射。性能与场景核对见 docs/EYE-PERFORMANCE.md。
+- 运营组页面只显示千灯纪新项目角色：不列宿主或旧环境角色、不提供跨环境筛选；内置 default/QA 辅助配置不计入项目角色统计。保留完整 CLI 审计和所有环境配置，不能因展示范围而删除或停用其他 Agent。
+- 快照需要短时关闭源服自动存盘时必须 try/finally 恢复，不停止原服；SQLite 用 backup API。

@@ -1,0 +1,409 @@
+{
+  "recorded_at": "2026-09-07T10:31:30.053001+00:00",
+  "project": "qiandengji",
+  "target": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java": 21
+  },
+  "mod_count": 71,
+  "mods": [
+    {
+      "path": "server/mc/mods/ATi Structures V1.4.6.jar",
+      "size": 13115969,
+      "sha256": "689c3ad54b321f1988572a68b850b664d335fdcdd9f7edb64af6723e434a4cd3"
+    },
+    {
+      "path": "server/mc/mods/Chunky-NeoForge-1.4.23.jar",
+      "size": 340572,
+      "sha256": "d72f235cf1f56f2c374f52c00bdda5034524b28142305a84cfc123a3f92ad274"
+    },
+    {
+      "path": "server/mc/mods/Clumps-neoforge-1.21.1-19.0.0.1.jar",
+      "size": 18382,
+      "sha256": "b524ccdace2ef8fd19f5b2074f7de1103ac5065c52553f064c00e098346c293e"
+    },
+    {
+      "path": "server/mc/mods/DistantHorizons-3.2.0-b-1.21.1-fabric-neoforge.jar",
+      "size": 30207268,
+      "sha256": "d6a7a963f794501678113e2545d8b25c90e123ef6b9256bb5716907d059e1ef5"
+    },
+    {
+      "path": "server/mc/mods/DungeonsArise-1.21.1-2.1.68-release.jar",
+      "size": 11842679,
+      "sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4"
+    },
+    {
+      "path": "server/mc/mods/MoogsStructureLib-neoforge-1.21.1-3.1.2.jar",
+      "size": 413682,
+      "sha256": "5d1e212d11b3a2b2a881f8fdd9d58fe529a73c2e7f3266d73e4970492049a48d"
+    },
+    {
+      "path": "server/mc/mods/MoogsVoyagerStructures-1.21-5.0.14.jar",
+      "size": 1796857,
+      "sha256": "28695cbb33b7af504c3b4b44dfec2449ea9c5fa4923c801d8558c965fb16bdc7"
+    },
+    {
+      "path": "server/mc/mods/Patchouli-1.21.1-93-NEOFORGE.jar",
+      "size": 646777,
+      "sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993"
+    },
+    {
+      "path": "server/mc/mods/abridged-2.0.2-neoforge-21.1.jar",
+      "size": 217186,
+      "sha256": "e346909876d72c9f14b5b9dcd4a3653fa850cac5b45be8a94fc222079fe2710d"
+    },
+    {
+      "path": "server/mc/mods/alternate_current-mc1.21-1.9.0.jar",
+      "size": 50425,
+      "sha256": "d23731fcb31cf561544fd7a97b0076b3abb42a0ece0631f86de9a1425fe046f5"
+    },
+    {
+      "path": "server/mc/mods/architectury-13.0.11-neoforge.jar",
+      "size": 584734,
+      "sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb"
+    },
+    {
+      "path": "server/mc/mods/bettercombat-neoforge-2.3.2+1.21.1.jar",
+      "size": 1041845,
+      "sha256": "afb1f28271ee3b622947f533aa754bb22ed67edd4940a3e9fdf2cca1edb7b8a9"
+    },
+    {
+      "path": "server/mc/mods/botgate.jar",
+      "size": 86601,
+      "sha256": "0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc"
+    },
+    {
+      "path": "server/mc/mods/chineseflyingislandtower-1.1.0-neoforge-1.21.1.jar",
+      "size": 110524,
+      "sha256": "c013902a5e1d930ddb876f0d7f869a59f0d9968b467d4724af5e91800eb61310"
+    },
+    {
+      "path": "server/mc/mods/cloth-config-15.0.140-neoforge.jar",
+      "size": 1163890,
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "path": "server/mc/mods/collective-1.21.1-8.39.jar",
+      "size": 1061931,
+      "sha256": "ae59b63790c3097fb01e7801c21f3e7feed13b151c2ad993895196c74381a8fe"
+    },
+    {
+      "path": "server/mc/mods/cristellib-neoforge-1.21.1-3.1.7.jar",
+      "size": 583525,
+      "sha256": "11e05dbc97bd3fe1790bd6361747240e314c1dbf40b590ea20cc691dc8396c38"
+    },
+    {
+      "path": "server/mc/mods/curios-neoforge-9.5.1+1.21.1.jar",
+      "size": 410690,
+      "sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde"
+    },
+    {
+      "path": "server/mc/mods/default_skill_trees-1.1.jar",
+      "size": 11519,
+      "sha256": "6038a4843f19ad09972cf8b218ea311ed86188c9575c866c7903202660de5d4f"
+    },
+    {
+      "path": "server/mc/mods/drones-neoforge-1.1.0.jar",
+      "size": 605819,
+      "sha256": "89a121763060b50c2b308b66433519240e120dc42ccbc7782c17c5eb5c502c46"
+    },
+    {
+      "path": "server/mc/mods/geckolib-neoforge-1.21.1-4.9.2.jar",
+      "size": 630584,
+      "sha256": "5e548466af9ab6aca7a91a7c7d4dc0dc8bc385e22958aed5da0e7bebd0fa3fba"
+    },
+    {
+      "path": "server/mc/mods/god-voice-0.1.0.jar",
+      "size": 19635,
+      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f"
+    },
+    {
+      "path": "server/mc/mods/grieflogger-1.2.6-1.21.1-neoforge.jar",
+      "size": 18953641,
+      "sha256": "21d49f13a7fae522edbd5acf2136034dce7acffc07ffe45e99e75f07554c4ff2"
+    },
+    {
+      "path": "server/mc/mods/immersive_aircraft-1.4.6+1.21.1-neoforge.jar",
+      "size": 2447578,
+      "sha256": "953222fefb9439b74760583d46dbf620ed85cc614f5ab629aec05ab6ce40ebe7"
+    },
+    {
+      "path": "server/mc/mods/incontrol-1.21-10.2.7.jar",
+      "size": 347354,
+      "sha256": "af673d816df02b00f8c5eb787fa72cf10e540bfe3ce00d4b87d08d73455080ed"
+    },
+    {
+      "path": "server/mc/mods/irons_lib-1.21.1-2.1.0.jar",
+      "size": 406284,
+      "sha256": "3d0ad1003d6edeaad2500b9922267b4192d2c603cdd846fda339b168f4deff72"
+    },
+    {
+      "path": "server/mc/mods/irons_spellbooks-1.21.1-3.16.3.jar",
+      "size": 13890045,
+      "sha256": "55a290db9b966e0c5d2f5c051d50775f3db6375cdb52730c4da528bcf5d5daa0"
+    },
+    {
+      "path": "server/mc/mods/japanese-castle-1.0.jar",
+      "size": 5622537,
+      "sha256": "971d710fcf3c2f0a3605910007ac38125b0a7c569ecd1ae98a0a0bb013340dce"
+    },
+    {
+      "path": "server/mc/mods/japanese-offering-shrines-1.0.jar",
+      "size": 1446250,
+      "sha256": "2c9a5ce2b3fbc0609eb0873ee8825daa2ef01e262c42938fcf9957c092ab9cea"
+    },
+    {
+      "path": "server/mc/mods/japanese-temple-1.0.jar",
+      "size": 3042379,
+      "sha256": "478f26ac3b83e1b5c4e44cb56652456921ad91f3fb722440d3b82699e52e339f"
+    },
+    {
+      "path": "server/mc/mods/lithium-neoforge-0.15.4+mc1.21.1.jar",
+      "size": 774220,
+      "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757"
+    },
+    {
+      "path": "server/mc/mods/lithostitched-1.8.0+beta4-neoforge-21.1.jar",
+      "size": 954028,
+      "sha256": "f9bed6228565d69166ac85edbe6159e28674a687562964e5424a8c8a477d20c0"
+    },
+    {
+      "path": "server/mc/mods/mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
+      "size": 661387,
+      "sha256": "070b817d3282760d9789b22ce13779613c8b558e02012fd5884d343175d88fd9"
+    },
+    {
+      "path": "server/mc/mods/mcw-doors-1.1.5-mc1.21.1neoforge.jar",
+      "size": 1190404,
+      "sha256": "87261e309f5e10c9910169d5acbba613cab3a2d2270698b0bd47e657a45b0518"
+    },
+    {
+      "path": "server/mc/mods/mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
+      "size": 2080436,
+      "sha256": "819fda8059b210e9de8b9275c8b8e0d931054af5a5ad47771c72d9fd4ab85e88"
+    },
+    {
+      "path": "server/mc/mods/mcw-lights-1.1.5-mc1.21.1neoforge.jar",
+      "size": 525744,
+      "sha256": "b27cd68a7673874b0f6d765bdef2a022666cc07ca0e5057209a16d1a535da9e4"
+    },
+    {
+      "path": "server/mc/mods/mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar",
+      "size": 673871,
+      "sha256": "e4b0e5a5b67decc2285e71f017fb4f60284796fa0838de3edeaf6b7cb0395735"
+    },
+    {
+      "path": "server/mc/mods/mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar",
+      "size": 777742,
+      "sha256": "f04b51518f75c8a7d5fe1be5589dbcb8a7b0d4f67373ca903578804d971b1286"
+    },
+    {
+      "path": "server/mc/mods/mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar",
+      "size": 529082,
+      "sha256": "177fe382ff22caa14983d862ead2717321315a5e4afa778d245e9acd2f61608d"
+    },
+    {
+      "path": "server/mc/mods/mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
+      "size": 1261268,
+      "sha256": "8970c40ec622edd34c9b055226b403af08ab441c77303a6dc625ae18005f8184"
+    },
+    {
+      "path": "server/mc/mods/mcw-paintings-1.1.0-mc1.21.1neoforge.jar",
+      "size": 179058,
+      "sha256": "fddf73508f3c98cadd9b3c1fe08d792141eb3db7f89134cf313ed175c3ba031c"
+    },
+    {
+      "path": "server/mc/mods/mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
+      "size": 1784829,
+      "sha256": "25c79def993a24b05b0f8494ee9417717d469bc000d5ed7c219b47dcc3b3e9c8"
+    },
+    {
+      "path": "server/mc/mods/mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar",
+      "size": 572870,
+      "sha256": "1408d46bc2e7515b25b4da8393f8dbb3d79bcd9fb6d51fcf26fe84734c2597af"
+    },
+    {
+      "path": "server/mc/mods/modernfix-neoforge-5.27.20+mc1.21.1.jar",
+      "size": 599474,
+      "sha256": "6f367ea4002c39e3cfe27e0a0be1008880a4b35a8482a78a437cfb9d8ee38273"
+    },
+    {
+      "path": "server/mc/mods/noisium-neoforge-2.3.0+mc1.21-1.21.1.jar",
+      "size": 60296,
+      "sha256": "e95209d593bc00d7c5de94f746ffd1dfbfa70ac8fbe938393ef930d00416109c"
+    },
+    {
+      "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
+      "size": 2437365,
+      "sha256": "3a9af5420a5d40dcd6a24dd906d43fe4f67f25eea8ab6a082153bdcde7fae7af"
+    },
+    {
+      "path": "server/mc/mods/numen_act-neoforge-1.21.1-0.1.1.jar",
+      "size": 34508,
+      "sha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea"
+    },
+    {
+      "path": "server/mc/mods/player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "size": 203149,
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    },
+    {
+      "path": "server/mc/mods/prefab-neoforge-1.0.9.jar",
+      "size": 9191338,
+      "sha256": "1e69a176fe5123a045ab2a65a65b0947425ad65ab6a530018b026ff523227ee5"
+    },
+    {
+      "path": "server/mc/mods/puffish_attributes-0.8.3-1.21-neoforge.jar",
+      "size": 235542,
+      "sha256": "b21c165e033360e112eb2c3426437e1ba4ebf70f971535b72b1b1891d04c87f0"
+    },
+    {
+      "path": "server/mc/mods/puffish_skills-0.18.3-1.21-neoforge.jar",
+      "size": 622594,
+      "sha256": "7da4fa1a3c6834b76389507ccfd65593f4f92208463b3d64e801cd2b44dcf19f"
+    },
+    {
+      "path": "server/mc/mods/qiandeng-chanting-0.1.0.jar",
+      "size": 65750,
+      "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5"
+    },
+    {
+      "path": "server/mc/mods/qiandeng-irons-bridge-0.1.0.jar",
+      "size": 27192,
+      "sha256": "826352269d1bb337042e083f223bf725a94a8a878f2a3b34f3c8b288f46aeee3"
+    },
+    {
+      "path": "server/mc/mods/sophisticatedbackpacks-1.21.1-3.25.78.2107.jar",
+      "size": 1172245,
+      "sha256": "2848ff4d01793268859d36263793bf042226a34efaf3a45e849833490b8cc4a1"
+    },
+    {
+      "path": "server/mc/mods/sophisticatedcore-1.21.1-1.4.90.2299.jar",
+      "size": 1687195,
+      "sha256": "517fba2004b2ce9709507b8747bab2efa5d95dd6442cc2fbf3f779b6e2e3875a"
+    },
+    {
+      "path": "server/mc/mods/sound-physics-remastered-neoforge-1.21.1-1.5.1.jar",
+      "size": 202454,
+      "sha256": "bddc71ecd4f074a101eb3785599d13c69e64025e1029aa0fd0a28fcf9bccf2ea"
+    },
+    {
+      "path": "server/mc/mods/spark-1.10.124-neoforge.jar",
+      "size": 3642581,
+      "sha256": "647e8a81afbe414dba1df4ba15fd06c5d32d4cb544e68828405e8e074c2e16db"
+    },
+    {
+      "path": "server/mc/mods/spawn-4.0.7-1.21.1.jar",
+      "size": 73638060,
+      "sha256": "290f52ca4bb89740f9f76d5640e4fa130293c414739066d6652c2cf25b62cf82"
+    },
+    {
+      "path": "server/mc/mods/structure_pool_api-neoforge-1.2.1+1.21.1.jar",
+      "size": 140459,
+      "sha256": "c18460025b07bc05fdc95bf62621c6b56f45e4eeb1c319f12787f39eb9315ea9"
+    },
+    {
+      "path": "server/mc/mods/supermartijn642configlib-1.1.8-neoforge-mc1.21.jar",
+      "size": 207514,
+      "sha256": "d2ba7b839a2268e4e223457e813d11aa2476c3bf708a7bba691d8fc851778a4b"
+    },
+    {
+      "path": "server/mc/mods/t_and_t-fabric-neoforge-1.13.11.jar",
+      "size": 3553006,
+      "sha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f"
+    },
+    {
+      "path": "server/mc/mods/teallib-1.3.teal.jar",
+      "size": 262609,
+      "sha256": "297004b131df16839a09f97ecd703ea20e89937289e5613d3711e385f9377218"
+    },
+    {
+      "path": "server/mc/mods/tlm-self-talk-1.1.2-neoforge-1.21.1.jar",
+      "size": 112509,
+      "sha256": "8d80dfc7c8ba0b2dbcaa05a35e4f653b046136a0d973e4d1cb28449aa6f78628"
+    },
+    {
+      "path": "server/mc/mods/touhou-maid-affection-1.7.2.2-neoforge.jar",
+      "size": 680484,
+      "sha256": "43b58fd558d59c04856d8ef3d9bae0b79249ee12ff4af651cc09d9cfdd44806d"
+    },
+    {
+      "path": "server/mc/mods/touhou_little_maid_spell-1.21.1-1.8.4-neoforge.jar",
+      "size": 2534810,
+      "sha256": "a6dc1563f3ef9fe4c24598e7e16386ff18feaaee5c7c3c341dda38dae841228e"
+    },
+    {
+      "path": "server/mc/mods/touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "size": 24416055,
+      "sha256": "ac7c07068be61216180a75e6845dc1e91f8c95a7c2e19ad241b81a127e7802dd"
+    },
+    {
+      "path": "server/mc/mods/trek-B0.6.2.jar",
+      "size": 12461621,
+      "sha256": "5ea0837a4b1ef02cc702d7e7e49a245f4857591696183b9d2fe56c574cbfc022"
+    },
+    {
+      "path": "server/mc/mods/village_taverns-neoforge-1.3.0+1.21.1.jar",
+      "size": 132922,
+      "sha256": "d253da1816c49494d916be389c67ae4102ae5a1f00922f3a7fc66c53fae01133"
+    },
+    {
+      "path": "server/mc/mods/villagernames-1.21.1-8.5.jar",
+      "size": 76999,
+      "sha256": "d254360090c0409b2b85b4af8168012c40745af846140cf760a35a8589504f31"
+    },
+    {
+      "path": "server/mc/mods/voicechat-neoforge-1.21.1-2.6.22.jar",
+      "size": 4918442,
+      "sha256": "63116a4d21bd57221482d971dd85822f7c723c210b60411670cdb0aa26873cac"
+    },
+    {
+      "path": "server/mc/mods/ysm-2.6.5-neoforge+mc1.21.1.jar",
+      "size": 63463229,
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+    }
+  ],
+  "repaired_datapacks": [
+    {
+      "path": "server/mc/shadow/datapacks/spellbooks/data/spellbooks/loot_table/mengmeng_attack.json",
+      "size": 3110,
+      "sha256": "73d3b05335c0c12c11e325d31d8c90cfac4661394b45672a42a4024087bf5b42"
+    },
+    {
+      "path": "server/mc/shadow/datapacks/spellbooks/data/spellbooks/loot_table/mengmeng_learned.json",
+      "size": 4563,
+      "sha256": "4f60375222417847ec2fa4738b66edb79824f332c60d7900618b42984a8e7457"
+    }
+  ],
+  "content_fixes": [
+    {
+      "path": "server/mc/shadow/datapacks/qiandeng_fixes/data/dungeons_arise/advancement/find_fishing_hut.json",
+      "size": 969,
+      "sha256": "c23ca8ecc9e2cb545c1f960ea5fb7d774212424c728d24786a8efdb7d5177aba"
+    },
+    {
+      "path": "server/mc/shadow/datapacks/qiandeng_fixes/data/dungeons_arise/advancement/find_thornborn_towers.json",
+      "size": 983,
+      "sha256": "2125330f074efcacc03b19d2474482da6833c72bd706a746e547d3b4a2e10ac8"
+    },
+    {
+      "path": "server/mc/shadow/datapacks/qiandeng_fixes/data/spawn/loot_table/archaeology/anthill.json",
+      "size": 1103,
+      "sha256": "3ec236b93362331d2ebad6b8675f79d561369abd08cce82f12881ad575a529f1"
+    },
+    {
+      "path": "server/mc/shadow/datapacks/qiandeng_fixes/data/touhou_little_maid_spell/loot_table/entities/shadow_assassin.json",
+      "size": 2694,
+      "sha256": "b3d24aa070a9b8be4f45c94dd6377ed3025c9c870a7161a6d7fcd9c03678cbf5"
+    },
+    {
+      "path": "server/mc/shadow/datapacks/qiandeng_fixes/pack.mcmeta",
+      "size": 137,
+      "sha256": "746333fa0519e899d3d2115d5b10de1fc95680c854127cb4e979f7cebbd2e8cb"
+    }
+  ],
+  "botgate_build_record": "world/botgate-src/build-record.json",
+  "source_inventory": "server/snapshot-manifest.json",
+  "note": "Local deployed files after integration; the original snapshot remains a separate historical record."
+}

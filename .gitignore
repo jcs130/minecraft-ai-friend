@@ -1,123 +1,46 @@
-# dependencies
-node_modules/
-
-# build output
-dist/
-build/
-*.tsbuildinfo
-
-# settlementsfix mod 编译中间产物（源码在 src/ 与 META-INF/，jar 产物在 dist/）
-build-settlementsfix/pkg/
-build-settlementsfix/classes/
-build-settlementsfix/compile-args.txt
-build-settlementsfix/META-INF/
-
-# logs
-*.log
-npm-debug.log*
-
-# env / secrets
+/client/
+/server/
+/server-import/
+/dist/
+assets/source-models/
+assets/prepared-models/
+/runtime/
+vendor/controller-cache/
+world/client-controls-src/build/
+world/irons-bridge-src/build/
+world/chanting-items-src/build/
+vendor/chanting-items-cache/
 .env
-.env.*
-data/rcon-secret.txt
+*.local.json
+**/node_modules/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/rcon-secret.txt
+**/credentials.yaml
+**/credentials.json
+**/*.log
+**/*.class
+world/botgate-src/botgate.jar
+**/.DS_Store
+vendor/chanting-cache/
+vendor/god-voice-cache/
 
-# OS / editor
-.DS_Store
-Thumbs.db
-*.swp
-.idea/
-.vscode/
+# Local operation evidence, progress and compressed logs stay on this host.
+/reports/
+**/*.log.gz
+**/*.pid
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.db
+**/.env
+**/.env.*
+!**/.env.example
+**/secrets/
 
-# runtime state — everything under data/ except the curated configs below
-data/*
-!data/magic-atoms.json
-!data/skill-events.json
-!data/balance-overrides.json
-!data/advancement-names.json
-!data/advancement-unlocks.json
-!data/transmigrators.json
-!data/transmigrators/
-!data/village/
-data/village/quest-ledger.jsonl
-data/village/quests-*.json
-# local MC server install (deploy-server.mjs)
-mc-server/
-sidecar/*.log* 
-sidecar/hearth-last.sse
-__pycache__/  
-.grep*.py 
-.peek*.py 
- 
-data-archive-*/ 
-
-# 本地工具链 junction/副本（A 仓 deepseek-harness/scratch-plugin，非本仓源码，勿入库）
-deepseek-harness/
-
-# 运行时日志目录（世界进程/面板/npc 的滚动日志）
-logs/
-
-# settlementsfix 构建临时目录（build.py 产生的 _sfx*/ 中间产物）
-_sfx*/
-build-settlementsfix/compile-args.txt
-
-# 备份文件（*.bak / *.bak-<date>）与临时诊断脚本、临时探测产物
-*.bak
-*.bak-*
-sidecar/guard/_diag_*.py
-sidecar/_diag_*.py
-sidecar/skin-proxy-test-*.json
-prerender_previews.mjs
-
-# 分发版打包产物（大二进制，git 不跟踪；打包时由 scripts/stage-*.py 收集）
-packaging/mc-world/assets/mc-server/
-packaging/mc-world/assets/runtime/
-packaging/mc-world/assets/world/node_modules/
-packaging/mc-world/dist/
-packaging/mc-world/logs/
-
-# 分发版运行时产物（世界进程首启自动生成/重建，不入库）
-packaging/mc-world/assets/data/rcon-secret.txt
-packaging/mc-world/assets/data/world.db
-packaging/mc-world/assets/data/world.db-shm
-packaging/mc-world/assets/data/world.db-wal
-packaging/mc-world/assets/data/world-chronicle.md
-packaging/mc-world/assets/data/world-heartbeat.json
-packaging/mc-world/assets/data/world-requirements.md
-packaging/mc-world/assets/data/saga-store.json
-packaging/mc-world/assets/data/terra-report.json
-packaging/mc-world/backend/__pycache__/
-
-# 2026-08-25 Docker 全栈：数据卷/候选与禁用模组二进制/密钥环境文件 不入库
-ops/docker/data/
-ops/docker/bare-test/
-ops/docker/datapack-candidates/
-ops/docker/goddess-data/
-ops/docker/mods-candidates/
-ops/docker/mods-disabled/
-ops/docker/*.zip
-ops/docker/*.env
-# 神社之门运行产物：门日志与按服缓存的通道知识（可再生，勿入库）
-gate-out.log
-gate-err.log
-gate*.log
-src/neoforge-handshake/knowledge-cache.json
-# 本地参考源与临时产物（大、可再生）
-tmp-neoforge-src/
-tmp-*.out
-mc-data/
-  
-# datapack 源例外：datapacks-src 内的 data/ 子目录是正经源码目录，豁免根级 data/*  
-!ops/docker/datapacks-src/**/data/  
-!ops/docker/datapacks-src/**/data/**  
-
-# 2026-08-29 viewer ̬ʲ(71MB,ֻڹ뾵,Դͷ=mc-world:2.1.36/2.1.38)
-/modern-viewer/
-/public/
-
-# runtime artifacts (2026-08-29)
-*.pid
-settlementsfix-src/javac*.txt
-ops/health/data/
-
-# CI 纯逻辑编译用的 gson（actions 里 curl 下载到根，勿误提交）
-/gson-*.jar
+# Derived game/renderer resources are restored or built from the locked inputs.
+/assets/game-models/
+/vendor/modern-viewer/*
+!/vendor/modern-viewer/runtime-budget.js

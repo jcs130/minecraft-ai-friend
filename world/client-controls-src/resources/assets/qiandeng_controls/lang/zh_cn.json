@@ -1,0 +1,16 @@
+{
+  "key.categories.qiandeng_controls": "千灯纪 · 技能与手札",
+  "key.qiandeng_controls.wheel": "打开技能轮盘",
+  "key.qiandeng_controls.guide": "打开千灯手札",
+  "binding.qiandeng_controls.wheel.description": "按一次打开已有技能轮盘；摇杆/十字键选择，A 确认释放，B 返回。",
+  "binding.qiandeng_controls.guide.description": "技能、传送阵与帮助。默认按住十字键左说话；映射可在控制器设置中修改。",
+  "screen.qiandeng_controls.title": "千灯手札",
+  "screen.qiandeng_controls.navigation": "摇杆 / 十字键选择 · A 确认 · B 返回",
+  "screen.qiandeng_controls.vitals": "生命 %s/%s  ·  饥饿 %s/20  ·  等级 %s",
+  "screen.qiandeng_controls.wheel": "技能轮盘",
+  "screen.qiandeng_controls.panel": "全部技能与传送阵",
+  "screen.qiandeng_controls.status": "我的状态",
+  "screen.qiandeng_controls.help": "使用帮助",
+  "screen.qiandeng_controls.iron": "铁魔法 · 原生法术书",
+  "screen.qiandeng_controls.fallback": "按住十字键左 / F8 说话，松开送出；例：咏唱烟花术"
+}

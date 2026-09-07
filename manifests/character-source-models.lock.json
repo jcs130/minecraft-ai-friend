@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-07T01:12:34.287294+00:00",
+  "purpose": "Preserve existing web renderer Naruto/Kirito models and PNG source skins without conversion; excluded from ready-to-use YSM distribution.",
+  "source_assets_modified": false,
+  "converted": false,
+  "directly_usable_as_ysm": false,
+  "source_metadata_author_license_claims": "Copied from embedded GLB metadata; no online re-verification was performed.",
+  "files": [
+    {
+      "source_path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\characters\\naruto-uzumaki-shippuden.glb",
+      "original_filename": "naruto-uzumaki-shippuden.glb",
+      "format": "GLB",
+      "size_bytes": 8461256,
+      "sha256": "9821ca6cb1c9478e2a3fa19fa3ed5765453fffbe2aae2709789d0112ceb376a1",
+      "directly_usable_as_ysm": false,
+      "glb_version": 2,
+      "valid_glb_structure": false,
+      "structural_errors": [
+        "First GLB chunk type 4a53504e is not standard JSON 4a534f4e. Content is inspected manually, not a successful GLTFLoader load."
+      ],
+      "chunk_type_hex": [
+        "4a53504e",
+        "42494e00"
+      ],
+      "mesh_count_total": 12,
+      "node_count_total": 1161,
+      "default_scene_node_count": 581,
+      "default_scene_mesh_count": 6,
+      "skin_count_total": 2,
+      "default_scene_skin_count": 1,
+      "default_scene_skin_joint_counts": [
+        568
+      ],
+      "animation_count": 6,
+      "animation_names": [
+        "rig.001Action",
+        "rigAction",
+        "rig.001|Anim_Naruto",
+        "rig.001|Anim_Sasuke",
+        "rig|Anim_Naruto",
+        "rig|Anim_Sasuke"
+      ],
+      "image_count": 10,
+      "external_resource_uri_count": 0,
+      "asset_metadata": {
+        "extras": {
+          "author": "ronildo.facanha (https://sketchfab.com/ronildo.facanha)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/naruto-sasuke-low-poly-rig-texture-b650b60a7bbd4f11b05a435e65116168",
+          "title": "Naruto & Sasuke Low Poly + Rig + Texture"
+        },
+        "generator": "Sketchfab-16.15.0",
+        "version": "2.0"
+      },
+      "binary_chunk_sha256": [
+        "28e2dc87fc04418881fc8c1e6334c22f71ca08ae310996c2ac0381c62662b6df"
+      ],
+      "default_scene_position_bounds": {
+        "min": [
+          -1.4242706298828125,
+          0.02129841409623623,
+          -1.4809670448303223
+        ],
+        "max": [
+          4.36703634262085,
+          6.173730850219727,
+          0.06310093402862549
+        ],
+        "size_xyz": [
+          5.791306972503662,
+          6.15243243612349,
+          1.5440679788589478
+        ],
+        "space": "Default scene mesh POSITION accessor coordinates before node transforms/skeletal pose; not Minecraft player height."
+      },
+      "destination": "assets/source-models/characters/naruto-uzumaki-shippuden.glb",
+      "role": "web_renderer_character_source_with_existing_header_defect",
+      "identical_source_paths": [
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\characters\\naruto-uzumaki-shippuden.glb",
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\packaging\\docker\\modern-viewer\\character-assets\\characters\\naruto-uzumaki-shippuden.glb"
+      ]
+    },
+    {
+      "source_path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\characters\\kirito-black-swordsman.glb",
+      "original_filename": "kirito-black-swordsman.glb",
+      "format": "GLB",
+      "size_bytes": 2259784,
+      "sha256": "d88ad5267917cd488f6fd035e3920099fa0279dc9adc873e5f51815a2fd8f4a5",
+      "directly_usable_as_ysm": false,
+      "glb_version": 2,
+      "valid_glb_structure": true,
+      "structural_errors": [],
+      "chunk_type_hex": [
+        "4a534f4e",
+        "42494e00"
+      ],
+      "mesh_count_total": 2,
+      "node_count_total": 92,
+      "default_scene_node_count": 92,
+      "default_scene_mesh_count": 2,
+      "skin_count_total": 1,
+      "default_scene_skin_count": 1,
+      "default_scene_skin_joint_counts": [
+        83
+      ],
+      "animation_count": 11,
+      "animation_names": [
+        "tr_anim_skl02",
+        "tr_anim_skl01",
+        "tr_anim_atk01",
+        "tr_anim_back",
+        "tr_anim_die",
+        "tr_anim_go",
+        "tr_anim_hit01",
+        "tr_anim_hit02",
+        "tr_anim_idle",
+        "tr_anim_run",
+        "tr_anim_show"
+      ],
+      "image_count": 1,
+      "external_resource_uri_count": 0,
+      "asset_metadata": {
+        "extras": {
+          "author": "Witsanu Superball (https://sketchfab.com/witsanusuperball)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/kirito-23103325fb2142638e597dc71accea59",
+          "title": "Kirito"
+        },
+        "generator": "Sketchfab-17.22.0",
+        "version": "2.0"
+      },
+      "binary_chunk_sha256": [
+        "724ff2196e9fdfb0eb6d40c424d520c67f3238d22d1f2b01df5336f02ed79024"
+      ],
+      "default_scene_position_bounds": {
+        "min": [
+          -1.7438530921936035,
+          0.00020810852583963424,
+          -0.6432645916938782
+        ],
+        "max": [
+          0.9895176291465759,
+          2.423542022705078,
+          0.30489617586135864
+        ],
+        "size_xyz": [
+          2.7333707213401794,
+          2.4233339141792385,
+          0.9481607675552368
+        ],
+        "space": "Default scene mesh POSITION accessor coordinates before node transforms/skeletal pose; not Minecraft player height."
+      },
+      "destination": "assets/source-models/characters/kirito-black-swordsman.glb",
+      "role": "web_renderer_rigged_character",
+      "identical_source_paths": [
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\characters\\kirito-black-swordsman.glb",
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\packaging\\docker\\modern-viewer\\character-assets\\characters\\kirito-black-swordsman.glb",
+        "C:\\Users\\lzl19\\Downloads\\kirito (2).glb"
+      ]
+    },
+    {
+      "source_path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\skins\\naruto.png",
+      "original_filename": "naruto.png",
+      "format": "PNG",
+      "size_bytes": 2762,
+      "sha256": "9a71cce4b4a8a534c486ac3ebf452fc058cd22b586e237649faa43bd11e94146",
+      "directly_usable_as_ysm": false,
+      "width": 64,
+      "height": 64,
+      "destination": "assets/source-models/characters/naruto.png",
+      "role": "minecraft_skin_source",
+      "identical_source_paths": [
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\skins\\naruto.png",
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\packaging\\docker\\modern-viewer\\character-assets\\skins\\naruto.png"
+      ]
+    },
+    {
+      "source_path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\skins\\kirito.png",
+      "original_filename": "kirito.png",
+      "format": "PNG",
+      "size_bytes": 1603,
+      "sha256": "895d8df8d30091b4a4584aa723f12a7f4f9ecdc603df7b1cb9cf2261c009d1af",
+      "directly_usable_as_ysm": false,
+      "width": 64,
+      "height": 64,
+      "destination": "assets/source-models/characters/kirito.png",
+      "role": "minecraft_skin_source",
+      "identical_source_paths": [
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\character-assets\\skins\\kirito.png",
+        "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\packaging\\docker\\modern-viewer\\character-assets\\skins\\kirito.png"
+      ]
+    }
+  ],
+  "historical_evidence": [
+    {
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\LESSONS.md",
+      "line": 93,
+      "finding": "Historical web trusted-avatar workflow names these packaged GLB files."
+    },
+    {
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\LESSONS.md",
+      "line": 94,
+      "finding": "Kirito download (2) is rigged; original and (1) are static duplicates."
+    },
+    {
+      "path": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\modern-viewer\\modern-viewer.js",
+      "line": 26192,
+      "finding": "Bundled trusted-avatar registry contains Naruto and Kirito character slugs."
+    }
+  ],
+  "prepared_derivatives": [
+    {
+      "created_at_utc": "2026-09-07T01:13:40.320387+00:00",
+      "source": "assets/source-models/characters/naruto-uzumaki-shippuden.glb",
+      "destination": "assets/prepared-models/characters/naruto-uzumaki-shippuden.glb",
+      "source_sha256": "9821ca6cb1c9478e2a3fa19fa3ed5765453fffbe2aae2709789d0112ceb376a1",
+      "sha256": "404c440b5c60a7539ec1f61492eb1d662b542e34e283bf16f2de0739b055ce33",
+      "size_bytes": 8461256,
+      "format": "GLB 2.0",
+      "operation": "Repair exactly one GLB JSON chunk type byte; no JSON, geometry, texture, animation, or pose edits.",
+      "changed_byte_offsets_zero_based": [
+        18
+      ],
+      "byte_change": {
+        "offset": 18,
+        "before_hex": "50",
+        "after_hex": "4f"
+      },
+      "source_chunk_type": "JSPN",
+      "destination_chunk_type": "JSON",
+      "valid_glb_structure": true,
+      "directly_usable_as_ysm": false,
+      "animation_count": 6,
+      "skin_count_total": 2,
+      "node_count_total": 1161,
+      "buffer_declared_bytes": 6476587,
+      "binary_chunk_bytes": 6476588,
+      "validation": {
+        "header_magic_version_length": true,
+        "chunk_order_and_lengths": true,
+        "json_parsed": true,
+        "single_embedded_buffer_size": true,
+        "buffer_views_in_bounds": true,
+        "accessors_in_bounds": true,
+        "embedded_image_views_valid": true,
+        "node_mesh_skin_scene_indices_valid": true,
+        "skin_joint_indices_valid": true,
+        "animation_references_valid": true,
+        "other_bytes_unchanged": true,
+        "renderer_load_tested": false,
+        "minecraft_or_ysm_tested": false
+      }
+    }
+  ]
+}

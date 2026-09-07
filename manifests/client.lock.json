@@ -1,0 +1,1700 @@
+{
+  "schema_version": 1,
+  "target": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java": 21,
+    "fml": "4.0.43"
+  },
+  "files": [
+    {
+      "path": "config/RuOK.toml",
+      "size": 1710,
+      "sha256": "088fc118ef5ea6ede0a291ccc488fcc4fd0da72d996a0b4b86e87d347410024f",
+      "source_sha256": "8ea9622e22a2e10bb3338792ebfd56ae93f5189d24509005a408ee65cad69dff",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "config/acceleratedrendering-client.toml",
+      "size": 29628,
+      "sha256": "fb4494b870ef2449d8d1bb1cd82dcd7c612a5064b69f70969cdfad82af78c816",
+      "source_sha256": "fb4494b870ef2449d8d1bb1cd82dcd7c612a5064b69f70969cdfad82af78c816",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/badoptimizations.txt",
+      "size": 3458,
+      "sha256": "cae5ba66971b2f61e0b523c5aeb8b8d4fa806f0bea8a1709860e4fea94426ac9",
+      "source_sha256": "cae5ba66971b2f61e0b523c5aeb8b8d4fa806f0bea8a1709860e4fea94426ac9",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/c2me.toml",
+      "size": 9528,
+      "sha256": "2ce4823e7eec432a21dcbb963203ff3a271fe0635f057a375e43f9212ea767fb",
+      "source_sha256": "c29b465343539227f4eda4c68558376b8068b873a24532139dfc0b5a4950a72e",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "config/entityculling.json",
+      "size": 2228,
+      "sha256": "e92e6772c4b6ec28b9c179c80831d56d11fc65064591424a120133d397b2ab49",
+      "source_sha256": "e92e6772c4b6ec28b9c179c80831d56d11fc65064591424a120133d397b2ab49",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/fml.toml",
+      "size": 1550,
+      "sha256": "cc59fb1039726fda3ab1eb69b06d9b9aebb7496604ea579cfb735bc5377e7825",
+      "source_sha256": "cc59fb1039726fda3ab1eb69b06d9b9aebb7496604ea579cfb735bc5377e7825",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/fzzy_config/keybinds.toml",
+      "size": 6403,
+      "sha256": "26ac5810c9b5dc5c1968827357f0a58c58ac2b6f7b082630960228e16585062f",
+      "source_sha256": "26ac5810c9b5dc5c1968827357f0a58c58ac2b6f7b082630960228e16585062f",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/immediatelyfast.json",
+      "size": 1114,
+      "sha256": "a6c9d147a51c9e432c5c74c00285cfc5ba8b6fa4a0c6686051a7168b158d0d7a",
+      "source_sha256": "a6c9d147a51c9e432c5c74c00285cfc5ba8b6fa4a0c6686051a7168b158d0d7a",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/iris-excluded.json",
+      "size": 31,
+      "sha256": "4d3264b58c502afaeca3f44e8d2db0843c54b8ba957afd21a2d450fe10dafefb",
+      "source_sha256": "4d3264b58c502afaeca3f44e8d2db0843c54b8ba957afd21a2d450fe10dafefb",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/iris.properties",
+      "size": 281,
+      "sha256": "3bedcb270f002a59060a75f6c764a36be4ef78710f731985680b757da3849950",
+      "source_sha256": "510b9b3a1368dd7af174dd4d6308765aea00acaca7247476fb5c625a2bc9caa0",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "config/ixeris.toml",
+      "size": 2143,
+      "sha256": "6670075f5a197ad07155acc99568ce9f9d4a45c1c451f4d482f06dfafb7ebf74",
+      "source_sha256": "6670075f5a197ad07155acc99568ce9f9d4a45c1c451f4d482f06dfafb7ebf74",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/krypton_fnp.yaml",
+      "size": 947,
+      "sha256": "7637131dbf6d97f0edca39274fa1afdf43260052c0b62649faf51283c5a1f0be",
+      "source_sha256": "7637131dbf6d97f0edca39274fa1afdf43260052c0b62649faf51283c5a1f0be",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/lithium.properties",
+      "size": 267,
+      "sha256": "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be",
+      "source_sha256": "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/modernfix-common.toml",
+      "size": 105,
+      "sha256": "72ca2bcea2a9946a3a54842f14eff6f7b47d8fc96ef497c1b56406643b153fd7",
+      "source_sha256": "72ca2bcea2a9946a3a54842f14eff6f7b47d8fc96ef497c1b56406643b153fd7",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/modernfix-mixins.properties",
+      "size": 5629,
+      "sha256": "fede3b30532f0b5c8cdd1f5899e0e54d6b3e84c83115a6c57be7237c100e2c48",
+      "source_sha256": "2ee16d121fb483aedc380e77ca520bb64b37ca1c638468cd6949be49fe72249c",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "config/moreculling.toml",
+      "size": 540,
+      "sha256": "db63bd41fae1b92828f13b34b93215549ca167ccf44a4c09d050fe559fa203a5",
+      "source_sha256": "db63bd41fae1b92828f13b34b93215549ca167ccf44a4c09d050fe559fa203a5",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/neoforge-client.toml",
+      "size": 578,
+      "sha256": "d58d93e2c429410d0abf25507d1679f732e1023b03bb52414348efcf5cf3ddb0",
+      "source_sha256": "d58d93e2c429410d0abf25507d1679f732e1023b03bb52414348efcf5cf3ddb0",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/neoforge-common.toml",
+      "size": 772,
+      "sha256": "fe878a2717a145cd890621eac5b3be1e1fd656f7ff9abc6e8d53f670d37474c4",
+      "source_sha256": "fe878a2717a145cd890621eac5b3be1e1fd656f7ff9abc6e8d53f670d37474c4",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/neoforge-server.toml",
+      "size": 1177,
+      "sha256": "b1e3b38d612295f8d9dfa0fbdb538a992b7a1a3b7a766c491b4e9fdf3823396f",
+      "source_sha256": "b1e3b38d612295f8d9dfa0fbdb538a992b7a1a3b7a766c491b4e9fdf3823396f",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/particle_core_config.toml",
+      "size": 306,
+      "sha256": "9f21aae26ba31a4fd9bab85c4bb4e37d10ac408aff9feed91ad6acdf1e269634",
+      "source_sha256": "9f21aae26ba31a4fd9bab85c4bb4e37d10ac408aff9feed91ad6acdf1e269634",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/particle_core_disabled_optimizations_v2.json",
+      "size": 1558,
+      "sha256": "7189bb61c58cb1030b8ee486e66abf694d257192248b9b3ac4978df2b1366f7d",
+      "source_sha256": "7189bb61c58cb1030b8ee486e66abf694d257192248b9b3ac4978df2b1366f7d",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/saturn-optimizations.toml",
+      "size": 443,
+      "sha256": "4e71aa46661b461100c7f71fc134213a167ab2b2c9fc5d8f20d46feeb48077b6",
+      "source_sha256": "4e71aa46661b461100c7f71fc134213a167ab2b2c9fc5d8f20d46feeb48077b6",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/sodium-extra-options.json",
+      "size": 2137,
+      "sha256": "6208d33b2dd4b7880896535dcdb295a3b49db240275972b07e5d7020c6ab93a2",
+      "source_sha256": "6208d33b2dd4b7880896535dcdb295a3b49db240275972b07e5d7020c6ab93a2",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/sodium-extra.properties",
+      "size": 360,
+      "sha256": "a2f1b47c1eaa119ab34727f1d43c2506cb3d7f17ba8fb4efb49e20c8e0b58e70",
+      "source_sha256": "a2f1b47c1eaa119ab34727f1d43c2506cb3d7f17ba8fb4efb49e20c8e0b58e70",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/sodium-mixins.properties",
+      "size": 258,
+      "sha256": "b627c4456e6fa0bc4b5f85e2f1cd949faedae3cb9afdaf2a5f52e6f3b6ae1f01",
+      "source_sha256": "b627c4456e6fa0bc4b5f85e2f1cd949faedae3cb9afdaf2a5f52e6f3b6ae1f01",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/sodium-options.json",
+      "size": 759,
+      "sha256": "74de6fd8bb1cb2772965012df5ace904b6bf982bf7f0df1dbfaad5f1b98a9186",
+      "source_sha256": "99f88814b32cbc806949eca401f7222b4b01fed1cfd22086c4316b50a11672ae",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "config/transition.json",
+      "size": 97,
+      "sha256": "60420a41571a4658b91babfa2b47d6fefb7c1766eeea969f51ff98ab34c2431c",
+      "source_sha256": "60420a41571a4658b91babfa2b47d6fefb7c1766eeea969f51ff98ab34c2431c",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/trender.json",
+      "size": 47,
+      "sha256": "0a282f3623f7f9443a1d10b5768865f69e58b74e000dcfb4f40399626b7a6124",
+      "source_sha256": "0a282f3623f7f9443a1d10b5768865f69e58b74e000dcfb4f40399626b7a6124",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "config/zfastnoise.mixin.properties",
+      "size": 80,
+      "sha256": "81ca21f2cd1b447a640805a01a1b47b0de40ee151e2fca07928f221950c72aa5",
+      "source_sha256": "fff2e87e93b339f59c85594ab3423e00b96ce00a07214f6f5e37300a1992a920",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "icon.png",
+      "size": 3597,
+      "sha256": "48ad9b1ecfb7188ab0f316335faf3b2f0bf90c23ee40f8947c0176b3d1bbacb4",
+      "source_sha256": "48ad9b1ecfb7188ab0f316335faf3b2f0bf90c23ee40f8947c0176b3d1bbacb4",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/ATi Structures V1.4.6.jar",
+      "size": 13115969,
+      "sha256": "689c3ad54b321f1988572a68b850b664d335fdcdd9f7edb64af6723e434a4cd3",
+      "source_sha256": "689c3ad54b321f1988572a68b850b664d335fdcdd9f7edb64af6723e434a4cd3",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/BadOptimizations-2.4.1-1.21.1.jar",
+      "size": 283566,
+      "sha256": "22e2467892d3706f43d1cf2aa637785bb8601c20b0098a82ab956e6a8fc4d2ba",
+      "source_sha256": "22e2467892d3706f43d1cf2aa637785bb8601c20b0098a82ab956e6a8fc4d2ba",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/Clumps-neoforge-1.21.1-19.0.0.1.jar",
+      "size": 18382,
+      "sha256": "b524ccdace2ef8fd19f5b2074f7de1103ac5065c52553f064c00e098346c293e",
+      "source_sha256": "b524ccdace2ef8fd19f5b2074f7de1103ac5065c52553f064c00e098346c293e",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/DistantHorizons-3.2.0-b-1.21.1-fabric-neoforge.jar",
+      "size": 30207268,
+      "sha256": "d6a7a963f794501678113e2545d8b25c90e123ef6b9256bb5716907d059e1ef5",
+      "source_sha256": "d6a7a963f794501678113e2545d8b25c90e123ef6b9256bb5716907d059e1ef5",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/DungeonsArise-1.21.1-2.1.68-release.jar",
+      "size": 11842679,
+      "sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4",
+      "source_sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/GPUTape-1.20.6-1.21x-1.0.3.jar",
+      "size": 16669,
+      "sha256": "120f5971e1998337b81205934b55e29c70f4891c6254df616e4391ed94a511cf",
+      "source_sha256": "120f5971e1998337b81205934b55e29c70f4891c6254df616e4391ed94a511cf",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar",
+      "size": 361795,
+      "sha256": "336df12f099d1a441a3e06850bea86e9c2d0c8bc022d3d9a201870a201562a04",
+      "source_sha256": "336df12f099d1a441a3e06850bea86e9c2d0c8bc022d3d9a201870a201562a04",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/Ixeris-4.6.2+1.21.1-neoforge.jar",
+      "size": 681754,
+      "sha256": "6db3e74cc13222e793fa3e49cb2576cdf7c548711bdab4d38ad64d5eb2fc2e35",
+      "source_sha256": "6db3e74cc13222e793fa3e49cb2576cdf7c548711bdab4d38ad64d5eb2fc2e35",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/MoogsStructureLib-neoforge-1.21.1-3.1.2.jar",
+      "size": 413682,
+      "sha256": "5d1e212d11b3a2b2a881f8fdd9d58fe529a73c2e7f3266d73e4970492049a48d",
+      "source_sha256": "5d1e212d11b3a2b2a881f8fdd9d58fe529a73c2e7f3266d73e4970492049a48d",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/MoogsVoyagerStructures-1.21-5.0.14.jar",
+      "size": 1796857,
+      "sha256": "28695cbb33b7af504c3b4b44dfec2449ea9c5fa4923c801d8558c965fb16bdc7",
+      "source_sha256": "28695cbb33b7af504c3b4b44dfec2449ea9c5fa4923c801d8558c965fb16bdc7",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/Patchouli-1.21.1-93-NEOFORGE.jar",
+      "size": 646777,
+      "sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993",
+      "source_sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/ScalableLux-neoforge-0.3.0-alpha.0.6-all.jar",
+      "size": 196969,
+      "sha256": "0e7f64c0668bd325ccbcd35595bf9a98ca5a9ff0ebf022ec6f85997991d4c883",
+      "source_sha256": "0e7f64c0668bd325ccbcd35595bf9a98ca5a9ff0ebf022ec6f85997991d4c883",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[C^2M 引擎] c2me-neoforge-mc1.21.1-0.4.0-alpha.0.116.jar",
+      "size": 3662294,
+      "sha256": "d8608e105a084e38ee86f01056f00a92db7fd3e480d8ad4f72d25c8b97e71248",
+      "source_sha256": "d8608e105a084e38ee86f01056f00a92db7fd3e480d8ad4f72d25c8b97e71248",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[加速渲染] acceleratedrendering-1.0.14-1.21.1-alpha.jar",
+      "size": 684365,
+      "sha256": "f567f7a88c241e5e4266ee1804bd89e31f4fd6faf31745ed14f4a0a0a0e199cc",
+      "source_sha256": "f567f7a88c241e5e4266ee1804bd89e31f4fd6faf31745ed14f4a0a0a0e199cc",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[实体渲染机制优化] entityculling-neoforge-1.10.5-mc1.21.1.jar",
+      "size": 1585287,
+      "sha256": "2eacd2bada39bf1d1ef695736646790c619c0e6cdeaf3d7e3cfc9139d26fae02",
+      "source_sha256": "2eacd2bada39bf1d1ef695736646790c619c0e6cdeaf3d7e3cfc9139d26fae02",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[现代化修复] modernfix-neoforge-5.27.20+mc1.21.1.jar",
+      "size": 599474,
+      "sha256": "6f367ea4002c39e3cfe27e0a0be1008880a4b35a8482a78a437cfb9d8ee38273",
+      "source_sha256": "6f367ea4002c39e3cfe27e0a0be1008880a4b35a8482a78a437cfb9d8ee38273",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[钌] ruok-neoforge_1.21.1_Pre-Release_5-1.7.4.jar",
+      "size": 444850,
+      "sha256": "bed7f62a66ac8ffcddb6605f1e1e9fdca23ea49d58eb33d24b28be9abf0b085d",
+      "source_sha256": "bed7f62a66ac8ffcddb6605f1e1e9fdca23ea49d58eb33d24b28be9abf0b085d",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[钠 · 扩展] sodium-extra-neoforge-0.9.3+mc1.21.1.jar",
+      "size": 465013,
+      "sha256": "fa553bce38bad6fdd478841a270a79a31dc05f87d7892b1cf839850602ac9186",
+      "source_sha256": "fa553bce38bad6fdd478841a270a79a31dc05f87d7892b1cf839850602ac9186",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[钠] sodium-neoforge-0.8.13-beta.1+mc1.21.1.jar",
+      "size": 1292065,
+      "sha256": "f58f469ee52fad019c1678a463b2c3f27042a915fdf4029242d7d243e6c4eece",
+      "source_sha256": "f58f469ee52fad019c1678a463b2c3f27042a915fdf4029242d7d243e6c4eece",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/[锂] lithium-neoforge-0.15.4+mc1.21.1.jar",
+      "size": 774220,
+      "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757",
+      "source_sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/abridged-2.0.2-neoforge-21.1.jar",
+      "size": 217186,
+      "sha256": "e346909876d72c9f14b5b9dcd4a3653fa850cac5b45be8a94fc222079fe2710d",
+      "source_sha256": "e346909876d72c9f14b5b9dcd4a3653fa850cac5b45be8a94fc222079fe2710d",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/alternate_current-mc1.21-1.9.0.jar",
+      "size": 50425,
+      "sha256": "d23731fcb31cf561544fd7a97b0076b3abb42a0ece0631f86de9a1425fe046f5",
+      "source_sha256": "d23731fcb31cf561544fd7a97b0076b3abb42a0ece0631f86de9a1425fe046f5",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/architectury-13.0.11-neoforge.jar",
+      "size": 584734,
+      "sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb",
+      "source_sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/bettercombat-neoforge-2.3.2+1.21.1.jar",
+      "size": 1041845,
+      "sha256": "afb1f28271ee3b622947f533aa754bb22ed67edd4940a3e9fdf2cca1edb7b8a9",
+      "source_sha256": "afb1f28271ee3b622947f533aa754bb22ed67edd4940a3e9fdf2cca1edb7b8a9",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/chineseflyingislandtower-1.1.0-neoforge-1.21.1.jar",
+      "size": 110524,
+      "sha256": "c013902a5e1d930ddb876f0d7f869a59f0d9968b467d4724af5e91800eb61310",
+      "source_sha256": "c013902a5e1d930ddb876f0d7f869a59f0d9968b467d4724af5e91800eb61310",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/cloth-config-15.0.140-neoforge.jar",
+      "size": 1163890,
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+      "source_sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/collective-1.21.1-8.39.jar",
+      "size": 1061931,
+      "sha256": "ae59b63790c3097fb01e7801c21f3e7feed13b151c2ad993895196c74381a8fe",
+      "source_sha256": "ae59b63790c3097fb01e7801c21f3e7feed13b151c2ad993895196c74381a8fe",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/controlify-3.0.1+lts+1.21.1-neoforge.jar",
+      "size": 7981721,
+      "sha256": "0c8b8d6e57599b516a16f2df2a7314ee96228c94f145f5d7bea2e2ec7b2f90e7",
+      "source_sha256": "0c8b8d6e57599b516a16f2df2a7314ee96228c94f145f5d7bea2e2ec7b2f90e7",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/cristellib-neoforge-1.21.1-3.1.7.jar",
+      "size": 583525,
+      "sha256": "11e05dbc97bd3fe1790bd6361747240e314c1dbf40b590ea20cc691dc8396c38",
+      "source_sha256": "11e05dbc97bd3fe1790bd6361747240e314c1dbf40b590ea20cc691dc8396c38",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/curios-neoforge-9.5.1+1.21.1.jar",
+      "size": 410690,
+      "sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde",
+      "source_sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/default_skill_trees-1.1.jar",
+      "size": 11519,
+      "sha256": "6038a4843f19ad09972cf8b218ea311ed86188c9575c866c7903202660de5d4f",
+      "source_sha256": "6038a4843f19ad09972cf8b218ea311ed86188c9575c866c7903202660de5d4f",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/drones-neoforge-1.1.0.jar",
+      "size": 605819,
+      "sha256": "89a121763060b50c2b308b66433519240e120dc42ccbc7782c17c5eb5c502c46",
+      "source_sha256": "89a121763060b50c2b308b66433519240e120dc42ccbc7782c17c5eb5c502c46",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/fism+1.21.1-neoforge-1.0.5.jar",
+      "size": 21832,
+      "sha256": "c06bf21919ecde60b8b4f001cae7bf4bd087c4384e6b217109d77dd5575b3491",
+      "source_sha256": "c06bf21919ecde60b8b4f001cae7bf4bd087c4384e6b217109d77dd5575b3491",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/fzzy_config-0.7.6+1.21+neoforge.jar",
+      "size": 2369895,
+      "sha256": "4e5cc1438087b0bc0276969e88b9ad0bdf2bcc60d6caf5fe79e18947d7a29050",
+      "source_sha256": "4e5cc1438087b0bc0276969e88b9ad0bdf2bcc60d6caf5fe79e18947d7a29050",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/geckolib-neoforge-1.21.1-4.9.2.jar",
+      "size": 630584,
+      "sha256": "5e548466af9ab6aca7a91a7c7d4dc0dc8bc385e22958aed5da0e7bebd0fa3fba",
+      "source_sha256": "5e548466af9ab6aca7a91a7c7d4dc0dc8bc385e22958aed5da0e7bebd0fa3fba",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/god-voice-0.1.0.jar",
+      "size": 19635,
+      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
+      "source_sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/immersive_aircraft-1.4.6+1.21.1-neoforge.jar",
+      "size": 2447578,
+      "sha256": "953222fefb9439b74760583d46dbf620ed85cc614f5ab629aec05ab6ce40ebe7",
+      "source_sha256": "953222fefb9439b74760583d46dbf620ed85cc614f5ab629aec05ab6ce40ebe7",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+      "size": 2540723,
+      "sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+      "source_sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/irons_lib-1.21.1-2.1.0.jar",
+      "size": 406284,
+      "sha256": "3d0ad1003d6edeaad2500b9922267b4192d2c603cdd846fda339b168f4deff72",
+      "source_sha256": "3d0ad1003d6edeaad2500b9922267b4192d2c603cdd846fda339b168f4deff72",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/irons_spellbooks-1.21.1-3.16.3.jar",
+      "size": 13890045,
+      "sha256": "55a290db9b966e0c5d2f5c051d50775f3db6375cdb52730c4da528bcf5d5daa0",
+      "source_sha256": "55a290db9b966e0c5d2f5c051d50775f3db6375cdb52730c4da528bcf5d5daa0",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/japanese-castle-1.0.jar",
+      "size": 5622537,
+      "sha256": "971d710fcf3c2f0a3605910007ac38125b0a7c569ecd1ae98a0a0bb013340dce",
+      "source_sha256": "971d710fcf3c2f0a3605910007ac38125b0a7c569ecd1ae98a0a0bb013340dce",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/japanese-offering-shrines-1.0.jar",
+      "size": 1446250,
+      "sha256": "2c9a5ce2b3fbc0609eb0873ee8825daa2ef01e262c42938fcf9957c092ab9cea",
+      "source_sha256": "2c9a5ce2b3fbc0609eb0873ee8825daa2ef01e262c42938fcf9957c092ab9cea",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/japanese-temple-1.0.jar",
+      "size": 3042379,
+      "sha256": "478f26ac3b83e1b5c4e44cb56652456921ad91f3fb722440d3b82699e52e339f",
+      "source_sha256": "478f26ac3b83e1b5c4e44cb56652456921ad91f3fb722440d3b82699e52e339f",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/kotlinforforge-5.12.0-all.jar",
+      "size": 7279264,
+      "sha256": "2785a4dd6de5c6c56065fd8eb789c82771bd2ee773c30794c23160a3b2c39139",
+      "source_sha256": "2785a4dd6de5c6c56065fd8eb789c82771bd2ee773c30794c23160a3b2c39139",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/krypton_fnp-neoforge-1.21.1-0.2.28.1-1.21.1.jar",
+      "size": 1015871,
+      "sha256": "05ebe849611daafe533fc57ed9b5156edfa9157ced04d38a7860b1e2075984b9",
+      "source_sha256": "05ebe849611daafe533fc57ed9b5156edfa9157ced04d38a7860b1e2075984b9",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/lithostitched-1.8.0+beta4-neoforge-21.1.jar",
+      "size": 954028,
+      "sha256": "f9bed6228565d69166ac85edbe6159e28674a687562964e5424a8c8a477d20c0",
+      "source_sha256": "f9bed6228565d69166ac85edbe6159e28674a687562964e5424a8c8a477d20c0",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
+      "size": 661387,
+      "sha256": "070b817d3282760d9789b22ce13779613c8b558e02012fd5884d343175d88fd9",
+      "source_sha256": "070b817d3282760d9789b22ce13779613c8b558e02012fd5884d343175d88fd9",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-doors-1.1.5-mc1.21.1neoforge.jar",
+      "size": 1190404,
+      "sha256": "87261e309f5e10c9910169d5acbba613cab3a2d2270698b0bd47e657a45b0518",
+      "source_sha256": "87261e309f5e10c9910169d5acbba613cab3a2d2270698b0bd47e657a45b0518",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
+      "size": 2080436,
+      "sha256": "819fda8059b210e9de8b9275c8b8e0d931054af5a5ad47771c72d9fd4ab85e88",
+      "source_sha256": "819fda8059b210e9de8b9275c8b8e0d931054af5a5ad47771c72d9fd4ab85e88",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-lights-1.1.5-mc1.21.1neoforge.jar",
+      "size": 525744,
+      "sha256": "b27cd68a7673874b0f6d765bdef2a022666cc07ca0e5057209a16d1a535da9e4",
+      "source_sha256": "b27cd68a7673874b0f6d765bdef2a022666cc07ca0e5057209a16d1a535da9e4",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar",
+      "size": 673871,
+      "sha256": "e4b0e5a5b67decc2285e71f017fb4f60284796fa0838de3edeaf6b7cb0395735",
+      "source_sha256": "e4b0e5a5b67decc2285e71f017fb4f60284796fa0838de3edeaf6b7cb0395735",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar",
+      "size": 777742,
+      "sha256": "f04b51518f75c8a7d5fe1be5589dbcb8a7b0d4f67373ca903578804d971b1286",
+      "source_sha256": "f04b51518f75c8a7d5fe1be5589dbcb8a7b0d4f67373ca903578804d971b1286",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar",
+      "size": 529082,
+      "sha256": "177fe382ff22caa14983d862ead2717321315a5e4afa778d245e9acd2f61608d",
+      "source_sha256": "177fe382ff22caa14983d862ead2717321315a5e4afa778d245e9acd2f61608d",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
+      "size": 1261268,
+      "sha256": "8970c40ec622edd34c9b055226b403af08ab441c77303a6dc625ae18005f8184",
+      "source_sha256": "8970c40ec622edd34c9b055226b403af08ab441c77303a6dc625ae18005f8184",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-paintings-1.1.0-mc1.21.1neoforge.jar",
+      "size": 179058,
+      "sha256": "fddf73508f3c98cadd9b3c1fe08d792141eb3db7f89134cf313ed175c3ba031c",
+      "source_sha256": "fddf73508f3c98cadd9b3c1fe08d792141eb3db7f89134cf313ed175c3ba031c",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
+      "size": 1784829,
+      "sha256": "25c79def993a24b05b0f8494ee9417717d469bc000d5ed7c219b47dcc3b3e9c8",
+      "source_sha256": "25c79def993a24b05b0f8494ee9417717d469bc000d5ed7c219b47dcc3b3e9c8",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar",
+      "size": 572870,
+      "sha256": "1408d46bc2e7515b25b4da8393f8dbb3d79bcd9fb6d51fcf26fe84734c2597af",
+      "source_sha256": "1408d46bc2e7515b25b4da8393f8dbb3d79bcd9fb6d51fcf26fe84734c2597af",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/moreculling-neoforge-1.21.1-1.0.9.jar",
+      "size": 335661,
+      "sha256": "0b7000dac4bd8218074ece026f515d8cb24fcfd19c0e9eeb882209ab82f17657",
+      "source_sha256": "0b7000dac4bd8218074ece026f515d8cb24fcfd19c0e9eeb882209ab82f17657",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/noisium-neoforge-2.3.0+mc1.21-1.21.1.jar",
+      "size": 60296,
+      "sha256": "e95209d593bc00d7c5de94f746ffd1dfbfa70ac8fbe938393ef930d00416109c",
+      "source_sha256": "e95209d593bc00d7c5de94f746ffd1dfbfa70ac8fbe938393ef930d00416109c",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/obe+1.21.1-neoforge-1.1.36-htofix.1.jar",
+      "size": 186635,
+      "sha256": "cb1c2fc2910d56ab31d4af496ef84166949fa503e91e3a3d12b56ecd1a549046",
+      "source_sha256": "cb1c2fc2910d56ab31d4af496ef84166949fa503e91e3a3d12b56ecd1a549046",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/particle_core-0.3.3+1.21+neoforge.jar",
+      "size": 138375,
+      "sha256": "38c05981d1dc8428c7ab1130b9ec7f05bca1b70f909aba9c454c9611702a8dda",
+      "source_sha256": "38c05981d1dc8428c7ab1130b9ec7f05bca1b70f909aba9c454c9611702a8dda",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "size": 203149,
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+      "source_sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/prefab-neoforge-1.0.9.jar",
+      "size": 9191338,
+      "sha256": "1e69a176fe5123a045ab2a65a65b0947425ad65ab6a530018b026ff523227ee5",
+      "source_sha256": "1e69a176fe5123a045ab2a65a65b0947425ad65ab6a530018b026ff523227ee5",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/puffish_attributes-0.8.3-1.21-neoforge.jar",
+      "size": 235542,
+      "sha256": "b21c165e033360e112eb2c3426437e1ba4ebf70f971535b72b1b1891d04c87f0",
+      "source_sha256": "b21c165e033360e112eb2c3426437e1ba4ebf70f971535b72b1b1891d04c87f0",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/puffish_skills-0.18.3-1.21-neoforge.jar",
+      "size": 622594,
+      "sha256": "7da4fa1a3c6834b76389507ccfd65593f4f92208463b3d64e801cd2b44dcf19f",
+      "source_sha256": "7da4fa1a3c6834b76389507ccfd65593f4f92208463b3d64e801cd2b44dcf19f",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/qiandeng-chanting-0.1.0.jar",
+      "size": 65750,
+      "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5",
+      "source_sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/qiandeng-controls-0.1.0.jar",
+      "size": 13242,
+      "sha256": "67ca3e4e2993ab5eed17780d1ecac4d603fc344a751b97460aef74ea598331de",
+      "source_sha256": "67ca3e4e2993ab5eed17780d1ecac4d603fc344a751b97460aef74ea598331de",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/saturn-mc1.21.1-0.1.5.jar",
+      "size": 84147,
+      "sha256": "f49f4b51faeb4e9eb7568723fa259c0da1c3460f8019597f04a54c2137b76c32",
+      "source_sha256": "f49f4b51faeb4e9eb7568723fa259c0da1c3460f8019597f04a54c2137b76c32",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/sophisticatedbackpacks-1.21.1-3.25.78.2107.jar",
+      "size": 1172245,
+      "sha256": "2848ff4d01793268859d36263793bf042226a34efaf3a45e849833490b8cc4a1",
+      "source_sha256": "2848ff4d01793268859d36263793bf042226a34efaf3a45e849833490b8cc4a1",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/sophisticatedcore-1.21.1-1.4.90.2299.jar",
+      "size": 1687195,
+      "sha256": "517fba2004b2ce9709507b8747bab2efa5d95dd6442cc2fbf3f779b6e2e3875a",
+      "source_sha256": "517fba2004b2ce9709507b8747bab2efa5d95dd6442cc2fbf3f779b6e2e3875a",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/sound-physics-remastered-neoforge-1.21.1-1.5.1.jar",
+      "size": 202454,
+      "sha256": "bddc71ecd4f074a101eb3785599d13c69e64025e1029aa0fd0a28fcf9bccf2ea",
+      "source_sha256": "bddc71ecd4f074a101eb3785599d13c69e64025e1029aa0fd0a28fcf9bccf2ea",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/spawn-4.0.7-1.21.1.jar",
+      "size": 73638060,
+      "sha256": "290f52ca4bb89740f9f76d5640e4fa130293c414739066d6652c2cf25b62cf82",
+      "source_sha256": "290f52ca4bb89740f9f76d5640e4fa130293c414739066d6652c2cf25b62cf82",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/structure_pool_api-neoforge-1.2.1+1.21.1.jar",
+      "size": 140459,
+      "sha256": "c18460025b07bc05fdc95bf62621c6b56f45e4eeb1c319f12787f39eb9315ea9",
+      "source_sha256": "c18460025b07bc05fdc95bf62621c6b56f45e4eeb1c319f12787f39eb9315ea9",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/supermartijn642configlib-1.1.8-neoforge-mc1.21.jar",
+      "size": 207514,
+      "sha256": "d2ba7b839a2268e4e223457e813d11aa2476c3bf708a7bba691d8fc851778a4b",
+      "source_sha256": "d2ba7b839a2268e4e223457e813d11aa2476c3bf708a7bba691d8fc851778a4b",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/t_and_t-fabric-neoforge-1.13.11.jar",
+      "size": 3553006,
+      "sha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "source_sha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/teallib-1.3.teal.jar",
+      "size": 262609,
+      "sha256": "297004b131df16839a09f97ecd703ea20e89937289e5613d3711e385f9377218",
+      "source_sha256": "297004b131df16839a09f97ecd703ea20e89937289e5613d3711e385f9377218",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/tlm-self-talk-1.1.2-neoforge-1.21.1.jar",
+      "size": 112509,
+      "sha256": "8d80dfc7c8ba0b2dbcaa05a35e4f653b046136a0d973e4d1cb28449aa6f78628",
+      "source_sha256": "8d80dfc7c8ba0b2dbcaa05a35e4f653b046136a0d973e4d1cb28449aa6f78628",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/touhou-maid-affection-1.7.2.2-neoforge.jar",
+      "size": 680484,
+      "sha256": "43b58fd558d59c04856d8ef3d9bae0b79249ee12ff4af651cc09d9cfdd44806d",
+      "source_sha256": "43b58fd558d59c04856d8ef3d9bae0b79249ee12ff4af651cc09d9cfdd44806d",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/touhou_little_maid_spell-1.21.1-1.8.4-neoforge.jar",
+      "size": 2534810,
+      "sha256": "a6dc1563f3ef9fe4c24598e7e16386ff18feaaee5c7c3c341dda38dae841228e",
+      "source_sha256": "a6dc1563f3ef9fe4c24598e7e16386ff18feaaee5c7c3c341dda38dae841228e",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "size": 24416055,
+      "sha256": "ac7c07068be61216180a75e6845dc1e91f8c95a7c2e19ad241b81a127e7802dd",
+      "source_sha256": "ac7c07068be61216180a75e6845dc1e91f8c95a7c2e19ad241b81a127e7802dd",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/trek-B0.6.2.jar",
+      "size": 12461621,
+      "sha256": "5ea0837a4b1ef02cc702d7e7e49a245f4857591696183b9d2fe56c574cbfc022",
+      "source_sha256": "5ea0837a4b1ef02cc702d7e7e49a245f4857591696183b9d2fe56c574cbfc022",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/village_taverns-neoforge-1.3.0+1.21.1.jar",
+      "size": 132922,
+      "sha256": "d253da1816c49494d916be389c67ae4102ae5a1f00922f3a7fc66c53fae01133",
+      "source_sha256": "d253da1816c49494d916be389c67ae4102ae5a1f00922f3a7fc66c53fae01133",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/villagernames-1.21.1-8.5.jar",
+      "size": 76999,
+      "sha256": "d254360090c0409b2b85b4af8168012c40745af846140cf760a35a8589504f31",
+      "source_sha256": "d254360090c0409b2b85b4af8168012c40745af846140cf760a35a8589504f31",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/voicechat-neoforge-1.21.1-2.6.22.jar",
+      "size": 4918442,
+      "sha256": "63116a4d21bd57221482d971dd85822f7c723c210b60411670cdb0aa26873cac",
+      "source_sha256": "63116a4d21bd57221482d971dd85822f7c723c210b60411670cdb0aa26873cac",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+      "size": 1118651,
+      "sha256": "b5c30321b46cfaa521645a04aff89d2804d8167a25bb23ad4b1ae8da73093a2f",
+      "source_sha256": "b5c30321b46cfaa521645a04aff89d2804d8167a25bb23ad4b1ae8da73093a2f",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/ysm-2.6.5-neoforge+mc1.21.1.jar",
+      "size": 63463229,
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+      "source_sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+      "source": "existing_content",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/zfastnoise-1.0.13+1.21.1+neoforge.jar",
+      "size": 39526,
+      "sha256": "36ee58475c46c56e76c199eebe48dc95aacaa1133512617dcc46053339c2fb5d",
+      "source_sha256": "36ee58475c46c56e76c199eebe48dc95aacaa1133512617dcc46053339c2fb5d",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    },
+    {
+      "path": "options.txt",
+      "size": 8658,
+      "sha256": "db00966ee16d9798e8ab0c3c6e313cb2c7a04f936acf4888ff03a212a4395f1e",
+      "source_sha256": "09c26c9be5db76ab4f2bf4ad3b6a81145d6690d1e49fe0b5aa75da26726328f6",
+      "source": "rapid_optimization",
+      "preserved_existing": true
+    },
+    {
+      "path": "resourcepacks/SodiumTranslations.zip",
+      "size": 267586,
+      "sha256": "26bd17b0f0cd32ad649c209dc48cf1f232bd8a2145031656cbff9485336305e2",
+      "source_sha256": "26bd17b0f0cd32ad649c209dc48cf1f232bd8a2145031656cbff9485336305e2",
+      "source": "rapid_optimization",
+      "preserved_existing": false
+    }
+  ],
+  "mods": [
+    {
+      "file": "[C^2M 引擎] c2me-neoforge-mc1.21.1-0.4.0-alpha.0.116.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "c2me",
+        "c2me_base",
+        "c2me_client_uncapvd",
+        "c2me_fixes_chunkio_threading_issues",
+        "c2me_fixes_general_threading_issues",
+        "c2me_fixes_worldgen_threading_issues",
+        "c2me_fixes_worldgen_vanilla_bugs",
+        "c2me_notickvd",
+        "c2me_opts_allocs",
+        "c2me_opts_chunkio",
+        "c2me_opts_dfc",
+        "c2me_opts_math",
+        "c2me_opts_natives_math",
+        "c2me_opts_scheduling",
+        "c2me_opts_worldgen_general",
+        "c2me_opts_worldgen_vanilla",
+        "c2me_rewrites_chunk_system",
+        "c2me_rewrites_chunkio",
+        "c2me_server_utils",
+        "c2me_threading_lighting"
+      ],
+      "sha256": "d8608e105a084e38ee86f01056f00a92db7fd3e480d8ad4f72d25c8b97e71248"
+    },
+    {
+      "file": "[加速渲染] acceleratedrendering-1.0.14-1.21.1-alpha.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "acceleratedrendering"
+      ],
+      "sha256": "f567f7a88c241e5e4266ee1804bd89e31f4fd6faf31745ed14f4a0a0a0e199cc"
+    },
+    {
+      "file": "[实体渲染机制优化] entityculling-neoforge-1.10.5-mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "entityculling",
+        "transition",
+        "trender"
+      ],
+      "sha256": "2eacd2bada39bf1d1ef695736646790c619c0e6cdeaf3d7e3cfc9139d26fae02"
+    },
+    {
+      "file": "[现代化修复] modernfix-neoforge-5.27.20+mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "modernfix"
+      ],
+      "sha256": "6f367ea4002c39e3cfe27e0a0be1008880a4b35a8482a78a437cfb9d8ee38273"
+    },
+    {
+      "file": "[钌] ruok-neoforge_1.21.1_Pre-Release_5-1.7.4.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "ruokmod"
+      ],
+      "sha256": "bed7f62a66ac8ffcddb6605f1e1e9fdca23ea49d58eb33d24b28be9abf0b085d"
+    },
+    {
+      "file": "[钠 · 扩展] sodium-extra-neoforge-0.9.3+mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "sodium_extra"
+      ],
+      "sha256": "fa553bce38bad6fdd478841a270a79a31dc05f87d7892b1cf839850602ac9186"
+    },
+    {
+      "file": "[钠] sodium-neoforge-0.8.13-beta.1+mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "fabric_api_base",
+        "fabric_block_view_api_v2",
+        "fabric_renderer_api_v1",
+        "fabric_rendering_data_attachment_v1",
+        "sodium"
+      ],
+      "sha256": "f58f469ee52fad019c1678a463b2c3f27042a915fdf4029242d7d243e6c4eece"
+    },
+    {
+      "file": "[锂] lithium-neoforge-0.15.4+mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "lithium"
+      ],
+      "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757"
+    },
+    {
+      "file": "BadOptimizations-2.4.1-1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "badoptimizations"
+      ],
+      "sha256": "22e2467892d3706f43d1cf2aa637785bb8601c20b0098a82ab956e6a8fc4d2ba"
+    },
+    {
+      "file": "cloth-config-15.0.140-neoforge.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "cloth_config"
+      ],
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "file": "fism+1.21.1-neoforge-1.0.5.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "fism"
+      ],
+      "sha256": "c06bf21919ecde60b8b4f001cae7bf4bd087c4384e6b217109d77dd5575b3491"
+    },
+    {
+      "file": "fzzy_config-0.7.6+1.21+neoforge.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "fzzy_config"
+      ],
+      "sha256": "4e5cc1438087b0bc0276969e88b9ad0bdf2bcc60d6caf5fe79e18947d7a29050"
+    },
+    {
+      "file": "GPUTape-1.20.6-1.21x-1.0.3.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "gpu_tape"
+      ],
+      "sha256": "120f5971e1998337b81205934b55e29c70f4891c6254df616e4391ed94a511cf"
+    },
+    {
+      "file": "ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "immediatelyfast"
+      ],
+      "sha256": "336df12f099d1a441a3e06850bea86e9c2d0c8bc022d3d9a201870a201562a04"
+    },
+    {
+      "file": "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "fabric_api_base",
+        "fabric_block_view_api_v2",
+        "fabric_renderer_api_v1",
+        "fabric_rendering_data_attachment_v1",
+        "iris"
+      ],
+      "sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314"
+    },
+    {
+      "file": "Ixeris-4.6.2+1.21.1-neoforge.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "ixeris",
+        "ixeris_dummy"
+      ],
+      "sha256": "6db3e74cc13222e793fa3e49cb2576cdf7c548711bdab4d38ad64d5eb2fc2e35"
+    },
+    {
+      "file": "kotlinforforge-5.12.0-all.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "kotlinforforge"
+      ],
+      "sha256": "2785a4dd6de5c6c56065fd8eb789c82771bd2ee773c30794c23160a3b2c39139"
+    },
+    {
+      "file": "krypton_fnp-neoforge-1.21.1-0.2.28.1-1.21.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "krypton_fnp"
+      ],
+      "sha256": "05ebe849611daafe533fc57ed9b5156edfa9157ced04d38a7860b1e2075984b9"
+    },
+    {
+      "file": "moreculling-neoforge-1.21.1-1.0.9.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "conditional_mixin",
+        "moreculling"
+      ],
+      "sha256": "0b7000dac4bd8218074ece026f515d8cb24fcfd19c0e9eeb882209ab82f17657"
+    },
+    {
+      "file": "obe+1.21.1-neoforge-1.1.36-htofix.1.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "obe"
+      ],
+      "sha256": "cb1c2fc2910d56ab31d4af496ef84166949fa503e91e3a3d12b56ecd1a549046"
+    },
+    {
+      "file": "particle_core-0.3.3+1.21+neoforge.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "conditional_mixin",
+        "particle_core"
+      ],
+      "sha256": "38c05981d1dc8428c7ab1130b9ec7f05bca1b70f909aba9c454c9611702a8dda"
+    },
+    {
+      "file": "saturn-mc1.21.1-0.1.5.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "saturn"
+      ],
+      "sha256": "f49f4b51faeb4e9eb7568723fa259c0da1c3460f8019597f04a54c2137b76c32"
+    },
+    {
+      "file": "ScalableLux-neoforge-0.3.0-alpha.0.6-all.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "scalablelux"
+      ],
+      "sha256": "0e7f64c0668bd325ccbcd35595bf9a98ca5a9ff0ebf022ec6f85997991d4c883"
+    },
+    {
+      "file": "zfastnoise-1.0.13+1.21.1+neoforge.jar",
+      "source": "rapid_optimization",
+      "ids": [
+        "zfastnoise"
+      ],
+      "sha256": "36ee58475c46c56e76c199eebe48dc95aacaa1133512617dcc46053339c2fb5d"
+    },
+    {
+      "file": "controlify-3.0.1+lts+1.21.1-neoforge.jar",
+      "source": "client_extension",
+      "ids": [
+        "controlify",
+        "yet_another_config_lib_v3"
+      ],
+      "sha256": "0c8b8d6e57599b516a16f2df2a7314ee96228c94f145f5d7bea2e2ec7b2f90e7"
+    },
+    {
+      "file": "yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+      "source": "client_extension",
+      "ids": [
+        "yet_another_config_lib_v3"
+      ],
+      "sha256": "b5c30321b46cfaa521645a04aff89d2804d8167a25bb23ad4b1ae8da73093a2f"
+    },
+    {
+      "file": "qiandeng-controls-0.1.0.jar",
+      "source": "client_extension",
+      "ids": [
+        "qiandeng_controls"
+      ],
+      "sha256": "67ca3e4e2993ab5eed17780d1ecac4d603fc344a751b97460aef74ea598331de"
+    },
+    {
+      "file": "qiandeng-chanting-0.1.0.jar",
+      "source": "shared_extension",
+      "ids": [
+        "qiandeng_chanting"
+      ],
+      "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5"
+    },
+    {
+      "file": "god-voice-0.1.0.jar",
+      "source": "shared_extension",
+      "ids": [
+        "godvoice"
+      ],
+      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f"
+    },
+    {
+      "file": "abridged-2.0.2-neoforge-21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "abridged",
+        "apollib"
+      ],
+      "sha256": "e346909876d72c9f14b5b9dcd4a3653fa850cac5b45be8a94fc222079fe2710d"
+    },
+    {
+      "file": "alternate_current-mc1.21-1.9.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "alternate_current"
+      ],
+      "sha256": "d23731fcb31cf561544fd7a97b0076b3abb42a0ece0631f86de9a1425fe046f5"
+    },
+    {
+      "file": "architectury-13.0.11-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "architectury"
+      ],
+      "sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb"
+    },
+    {
+      "file": "ATi Structures V1.4.6.jar",
+      "source": "existing_content",
+      "ids": [
+        "mr_ati_structuresfabricforge"
+      ],
+      "sha256": "689c3ad54b321f1988572a68b850b664d335fdcdd9f7edb64af6723e434a4cd3"
+    },
+    {
+      "file": "bettercombat-neoforge-2.3.2+1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "bettercombat",
+        "tiny_config"
+      ],
+      "sha256": "afb1f28271ee3b622947f533aa754bb22ed67edd4940a3e9fdf2cca1edb7b8a9"
+    },
+    {
+      "file": "chineseflyingislandtower-1.1.0-neoforge-1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "chineseflyingislandtower"
+      ],
+      "sha256": "c013902a5e1d930ddb876f0d7f869a59f0d9968b467d4724af5e91800eb61310"
+    },
+    {
+      "file": "Clumps-neoforge-1.21.1-19.0.0.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "clumps"
+      ],
+      "sha256": "b524ccdace2ef8fd19f5b2074f7de1103ac5065c52553f064c00e098346c293e"
+    },
+    {
+      "file": "collective-1.21.1-8.39.jar",
+      "source": "existing_content",
+      "ids": [
+        "collective"
+      ],
+      "sha256": "ae59b63790c3097fb01e7801c21f3e7feed13b151c2ad993895196c74381a8fe"
+    },
+    {
+      "file": "cristellib-neoforge-1.21.1-3.1.7.jar",
+      "source": "existing_content",
+      "ids": [
+        "cristellib"
+      ],
+      "sha256": "11e05dbc97bd3fe1790bd6361747240e314c1dbf40b590ea20cc691dc8396c38"
+    },
+    {
+      "file": "curios-neoforge-9.5.1+1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "curios"
+      ],
+      "sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde"
+    },
+    {
+      "file": "default_skill_trees-1.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "default_skill_trees"
+      ],
+      "sha256": "6038a4843f19ad09972cf8b218ea311ed86188c9575c866c7903202660de5d4f"
+    },
+    {
+      "file": "DistantHorizons-3.2.0-b-1.21.1-fabric-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "distanthorizons"
+      ],
+      "sha256": "d6a7a963f794501678113e2545d8b25c90e123ef6b9256bb5716907d059e1ef5"
+    },
+    {
+      "file": "drones-neoforge-1.1.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "drones"
+      ],
+      "sha256": "89a121763060b50c2b308b66433519240e120dc42ccbc7782c17c5eb5c502c46"
+    },
+    {
+      "file": "DungeonsArise-1.21.1-2.1.68-release.jar",
+      "source": "existing_content",
+      "ids": [
+        "dungeons_arise"
+      ],
+      "sha256": "7eee1eca7e3b2c6c1bede055934f391ae2e8349ffe33e106f451176d2cfcf0e4"
+    },
+    {
+      "file": "geckolib-neoforge-1.21.1-4.9.2.jar",
+      "source": "existing_content",
+      "ids": [
+        "geckolib"
+      ],
+      "sha256": "5e548466af9ab6aca7a91a7c7d4dc0dc8bc385e22958aed5da0e7bebd0fa3fba"
+    },
+    {
+      "file": "immersive_aircraft-1.4.6+1.21.1-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "immersive_aircraft"
+      ],
+      "sha256": "953222fefb9439b74760583d46dbf620ed85cc614f5ab629aec05ab6ce40ebe7"
+    },
+    {
+      "file": "irons_lib-1.21.1-2.1.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "irons_lib"
+      ],
+      "sha256": "3d0ad1003d6edeaad2500b9922267b4192d2c603cdd846fda339b168f4deff72"
+    },
+    {
+      "file": "irons_spellbooks-1.21.1-3.16.3.jar",
+      "source": "existing_content",
+      "ids": [
+        "irons_spellbooks"
+      ],
+      "sha256": "55a290db9b966e0c5d2f5c051d50775f3db6375cdb52730c4da528bcf5d5daa0"
+    },
+    {
+      "file": "japanese-castle-1.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "mr_japanese_castle"
+      ],
+      "sha256": "971d710fcf3c2f0a3605910007ac38125b0a7c569ecd1ae98a0a0bb013340dce"
+    },
+    {
+      "file": "japanese-offering-shrines-1.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "mr_japanese_offeringshrines"
+      ],
+      "sha256": "2c9a5ce2b3fbc0609eb0873ee8825daa2ef01e262c42938fcf9957c092ab9cea"
+    },
+    {
+      "file": "japanese-temple-1.0.jar",
+      "source": "existing_content",
+      "ids": [
+        "mr_japanese_temple"
+      ],
+      "sha256": "478f26ac3b83e1b5c4e44cb56652456921ad91f3fb722440d3b82699e52e339f"
+    },
+    {
+      "file": "lithostitched-1.8.0+beta4-neoforge-21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "apollib",
+        "lithostitched"
+      ],
+      "sha256": "f9bed6228565d69166ac85edbe6159e28674a687562964e5424a8c8a477d20c0"
+    },
+    {
+      "file": "mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwbridges"
+      ],
+      "sha256": "070b817d3282760d9789b22ce13779613c8b558e02012fd5884d343175d88fd9"
+    },
+    {
+      "file": "mcw-doors-1.1.5-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwdoors"
+      ],
+      "sha256": "87261e309f5e10c9910169d5acbba613cab3a2d2270698b0bd47e657a45b0518"
+    },
+    {
+      "file": "mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwfurnitures"
+      ],
+      "sha256": "819fda8059b210e9de8b9275c8b8e0d931054af5a5ad47771c72d9fd4ab85e88"
+    },
+    {
+      "file": "mcw-lights-1.1.5-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwlights"
+      ],
+      "sha256": "b27cd68a7673874b0f6d765bdef2a022666cc07ca0e5057209a16d1a535da9e4"
+    },
+    {
+      "file": "mcw-mcwfences-1.2.1-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwfences"
+      ],
+      "sha256": "e4b0e5a5b67decc2285e71f017fb4f60284796fa0838de3edeaf6b7cb0395735"
+    },
+    {
+      "file": "mcw-mcwpaths-1.1.1-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwpaths"
+      ],
+      "sha256": "f04b51518f75c8a7d5fe1be5589dbcb8a7b0d4f67373ca903578804d971b1286"
+    },
+    {
+      "file": "mcw-mcwstairs-1.0.2-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwstairs"
+      ],
+      "sha256": "177fe382ff22caa14983d862ead2717321315a5e4afa778d245e9acd2f61608d"
+    },
+    {
+      "file": "mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwwindows"
+      ],
+      "sha256": "8970c40ec622edd34c9b055226b403af08ab441c77303a6dc625ae18005f8184"
+    },
+    {
+      "file": "mcw-paintings-1.1.0-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwpaintings"
+      ],
+      "sha256": "fddf73508f3c98cadd9b3c1fe08d792141eb3db7f89134cf313ed175c3ba031c"
+    },
+    {
+      "file": "mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwroofs"
+      ],
+      "sha256": "25c79def993a24b05b0f8494ee9417717d469bc000d5ed7c219b47dcc3b3e9c8"
+    },
+    {
+      "file": "mcw-trapdoors-1.1.5-mc1.21.1neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "mcwtrpdoors"
+      ],
+      "sha256": "1408d46bc2e7515b25b4da8393f8dbb3d79bcd9fb6d51fcf26fe84734c2597af"
+    },
+    {
+      "file": "MoogsStructureLib-neoforge-1.21.1-3.1.2.jar",
+      "source": "existing_content",
+      "ids": [
+        "moogs_structures"
+      ],
+      "sha256": "5d1e212d11b3a2b2a881f8fdd9d58fe529a73c2e7f3266d73e4970492049a48d"
+    },
+    {
+      "file": "MoogsVoyagerStructures-1.21-5.0.14.jar",
+      "source": "existing_content",
+      "ids": [
+        "mvs"
+      ],
+      "sha256": "28695cbb33b7af504c3b4b44dfec2449ea9c5fa4923c801d8558c965fb16bdc7"
+    },
+    {
+      "file": "noisium-neoforge-2.3.0+mc1.21-1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "noisium"
+      ],
+      "sha256": "e95209d593bc00d7c5de94f746ffd1dfbfa70ac8fbe938393ef930d00416109c"
+    },
+    {
+      "file": "Patchouli-1.21.1-93-NEOFORGE.jar",
+      "source": "existing_content",
+      "ids": [
+        "patchouli"
+      ],
+      "sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993"
+    },
+    {
+      "file": "player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "playeranimator"
+      ],
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    },
+    {
+      "file": "prefab-neoforge-1.0.9.jar",
+      "source": "existing_content",
+      "ids": [
+        "prefab"
+      ],
+      "sha256": "1e69a176fe5123a045ab2a65a65b0947425ad65ab6a530018b026ff523227ee5"
+    },
+    {
+      "file": "puffish_attributes-0.8.3-1.21-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "puffish_attributes"
+      ],
+      "sha256": "b21c165e033360e112eb2c3426437e1ba4ebf70f971535b72b1b1891d04c87f0"
+    },
+    {
+      "file": "puffish_skills-0.18.3-1.21-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "puffish_skills"
+      ],
+      "sha256": "7da4fa1a3c6834b76389507ccfd65593f4f92208463b3d64e801cd2b44dcf19f"
+    },
+    {
+      "file": "sophisticatedbackpacks-1.21.1-3.25.78.2107.jar",
+      "source": "existing_content",
+      "ids": [
+        "sophisticatedbackpacks"
+      ],
+      "sha256": "2848ff4d01793268859d36263793bf042226a34efaf3a45e849833490b8cc4a1"
+    },
+    {
+      "file": "sophisticatedcore-1.21.1-1.4.90.2299.jar",
+      "source": "existing_content",
+      "ids": [
+        "sophisticatedcore"
+      ],
+      "sha256": "517fba2004b2ce9709507b8747bab2efa5d95dd6442cc2fbf3f779b6e2e3875a"
+    },
+    {
+      "file": "sound-physics-remastered-neoforge-1.21.1-1.5.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "sound_physics_remastered"
+      ],
+      "sha256": "bddc71ecd4f074a101eb3785599d13c69e64025e1029aa0fd0a28fcf9bccf2ea"
+    },
+    {
+      "file": "spawn-4.0.7-1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "spawn"
+      ],
+      "sha256": "290f52ca4bb89740f9f76d5640e4fa130293c414739066d6652c2cf25b62cf82"
+    },
+    {
+      "file": "structure_pool_api-neoforge-1.2.1+1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "structure_pool_api"
+      ],
+      "sha256": "c18460025b07bc05fdc95bf62621c6b56f45e4eeb1c319f12787f39eb9315ea9"
+    },
+    {
+      "file": "supermartijn642configlib-1.1.8-neoforge-mc1.21.jar",
+      "source": "existing_content",
+      "ids": [
+        "supermartijn642configlib"
+      ],
+      "sha256": "d2ba7b839a2268e4e223457e813d11aa2476c3bf708a7bba691d8fc851778a4b"
+    },
+    {
+      "file": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "source": "existing_content",
+      "ids": [
+        "t_and_t"
+      ],
+      "sha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f"
+    },
+    {
+      "file": "teallib-1.3.teal.jar",
+      "source": "existing_content",
+      "ids": [
+        "teallib"
+      ],
+      "sha256": "297004b131df16839a09f97ecd703ea20e89937289e5613d3711e385f9377218"
+    },
+    {
+      "file": "tlm-self-talk-1.1.2-neoforge-1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "maid_self_talk"
+      ],
+      "sha256": "8d80dfc7c8ba0b2dbcaa05a35e4f653b046136a0d973e4d1cb28449aa6f78628"
+    },
+    {
+      "file": "touhou-maid-affection-1.7.2.2-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "touhou_maid_affection"
+      ],
+      "sha256": "43b58fd558d59c04856d8ef3d9bae0b79249ee12ff4af651cc09d9cfdd44806d"
+    },
+    {
+      "file": "touhou_little_maid_spell-1.21.1-1.8.4-neoforge.jar",
+      "source": "existing_content",
+      "ids": [
+        "touhou_little_maid_spell"
+      ],
+      "sha256": "a6dc1563f3ef9fe4c24598e7e16386ff18feaaee5c7c3c341dda38dae841228e"
+    },
+    {
+      "file": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "touhou_little_maid"
+      ],
+      "sha256": "ac7c07068be61216180a75e6845dc1e91f8c95a7c2e19ad241b81a127e7802dd"
+    },
+    {
+      "file": "trek-B0.6.2.jar",
+      "source": "existing_content",
+      "ids": [
+        "mr_trek"
+      ],
+      "sha256": "5ea0837a4b1ef02cc702d7e7e49a245f4857591696183b9d2fe56c574cbfc022"
+    },
+    {
+      "file": "village_taverns-neoforge-1.3.0+1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "tiny_config",
+        "village_taverns"
+      ],
+      "sha256": "d253da1816c49494d916be389c67ae4102ae5a1f00922f3a7fc66c53fae01133"
+    },
+    {
+      "file": "villagernames-1.21.1-8.5.jar",
+      "source": "existing_content",
+      "ids": [
+        "villagernames"
+      ],
+      "sha256": "d254360090c0409b2b85b4af8168012c40745af846140cf760a35a8589504f31"
+    },
+    {
+      "file": "voicechat-neoforge-1.21.1-2.6.22.jar",
+      "source": "existing_content",
+      "ids": [
+        "voicechat",
+        "voicechat_api"
+      ],
+      "sha256": "63116a4d21bd57221482d971dd85822f7c723c210b60411670cdb0aa26873cac"
+    },
+    {
+      "file": "ysm-2.6.5-neoforge+mc1.21.1.jar",
+      "source": "existing_content",
+      "ids": [
+        "yes_steve_model"
+      ],
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+    }
+  ],
+  "excludes_game_binary": true
+}

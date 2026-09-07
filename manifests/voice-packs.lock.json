@@ -1,0 +1,543 @@
+{
+  "count": 18,
+  "files": [
+    {
+      "path": "tlm_custom_pack/nahida-1.0.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\official_packs\\nahida-1.0.0.zip",
+      "size": 4002682,
+      "sha256": "7abe533d07a9668db01fce5cb98f86f4a3bf1986f557ab4b1311f68490b213ad",
+      "source_sha256": "7abe533d07a9668db01fce5cb98f86f4a3bf1986f557ab4b1311f68490b213ad",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 146,
+          "paths_and_content_sha256": "825559db61e6afda8039b1104478728f4ba42ec474048feeae042fcdbdfd5c88"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/xuanxuan_sound-1.1.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\official_packs\\xuanxuan_sound-1.1.0.zip",
+      "size": 7372908,
+      "sha256": "df87a40de64cb0642f7f103a8a7337599c5c6c2357cf66afef2c2dcad24c41bd",
+      "source_sha256": "df87a40de64cb0642f7f103a8a7337599c5c6c2357cf66afef2c2dcad24c41bd",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 108,
+          "paths_and_content_sha256": "dfacd9d83dedb76ca299ea57e64704f515ab80b5a7e3ee75d70a8d1bd68a79ce"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/tangyuan_sound-1.1.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\official_packs\\tangyuan_sound-1.1.0.zip",
+      "size": 3854977,
+      "sha256": "9fa9b71e2d0b168dc58f6bf5d98190f4cf0efc0d2a5aff73223a056be6abee3b",
+      "source_sha256": "9fa9b71e2d0b168dc58f6bf5d98190f4cf0efc0d2a5aff73223a056be6abee3b",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 80,
+          "paths_and_content_sha256": "ca5745ba226f85e0925db9961864ef4290d0fe16a47035a69100ad71da8f5b33"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/zi_min-1.2.2.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\official_packs\\zi_min-1.2.2.zip",
+      "size": 550346,
+      "sha256": "bfaf11921261aa0a08c872ce3005532edf402068f2dc844977e3b0760f5360c6",
+      "source_sha256": "bfaf11921261aa0a08c872ce3005532edf402068f2dc844977e3b0760f5360c6",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 32,
+          "paths_and_content_sha256": "6a5a4b98e09f3498a94362c93fa5f71e55638284296885ff6ab100ef35d54250"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/gugu_gaga-2.1.1.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\official_packs\\gugu_gaga-2.1.1.zip",
+      "size": 764622,
+      "sha256": "b51d577972d4fa3acfbed380efb13bb70a63fe9cdf15183e839b26a6783879aa",
+      "source_sha256": "b51d577972d4fa3acfbed380efb13bb70a63fe9cdf15183e839b26a6783879aa",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 20,
+          "paths_and_content_sha256": "26582dcdebdd8965d8c1c232a0c919b85f43b791883f3a3a82ccd78c3d6d7c55"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_pepe-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_pepe\\ark_pepe-1.3.0.zip",
+      "size": 2082379,
+      "sha256": "71b451d42f8386f122071a1a34bc20cf603ebafb5563fb3e492fe6f38e254744",
+      "source_sha256": "71b451d42f8386f122071a1a34bc20cf603ebafb5563fb3e492fe6f38e254744",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "12eb0df31b3cf0a7f8aaee633c8e635e456555d1262c5968b9e459d1da5e7d87"
+        }
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_bena-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_bena\\ark_bena-1.3.0.zip",
+      "size": 2164591,
+      "sha256": "dc10fe6776ebdceb0680abc08301cad4b256aa151226eecb82a21024a759efc8",
+      "source_sha256": "67c16fcb1e6c596e45992ee0eb253fad6f600c31073f2a26ae021a2a58f28c21",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "贝娜",
+        "changed_entries": [
+          "assets/ark_bena/maid_sound.json",
+          "assets/ark_bena/lang/en_us.lang",
+          "assets/ark_bena/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_bena.name}",
+          "description": "{sound_pack.ark_bena.desc}",
+          "icon": "ark_bena:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_bena/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "05eb46978043416b28cccaf6763374653409d586cf9efbc3b77fba316fd2b470"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_myrtle-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_myrtle\\ark_myrtle-1.3.0.zip",
+      "size": 2300789,
+      "sha256": "6a3d7459736abb7e6b1ea798852ad584568a8198a4025f8c879fa7bf6e0773f3",
+      "source_sha256": "f63f28a9912e8e7bb97c258014a977946ca7a6208ea84aa26e5baf5e1c9f9009",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "桃金娘",
+        "changed_entries": [
+          "assets/ark_myrtle/maid_sound.json",
+          "assets/ark_myrtle/lang/en_us.lang",
+          "assets/ark_myrtle/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_myrtle.name}",
+          "description": "{sound_pack.ark_myrtle.desc}",
+          "icon": "ark_myrtle:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_myrtle/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "95090d1c1b4743d00ca55ad04c7e02cd141d50f6093631cb01090ec90e883e56"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_golding-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_golding\\ark_golding-1.3.0.zip",
+      "size": 2175983,
+      "sha256": "753e30bd19615aa1c9939ed2f53445eb521957b48a4a3225e2920d7540ca1f82",
+      "source_sha256": "71c46e7cec09137e917ee3d411392f890bad878737a2458d08dea4daa438c54d",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "澄闪",
+        "changed_entries": [
+          "assets/ark_golding/maid_sound.json",
+          "assets/ark_golding/lang/en_us.lang",
+          "assets/ark_golding/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_golding.name}",
+          "description": "{sound_pack.ark_golding.desc}",
+          "icon": "ark_golding:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_golding/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "a960be24810ef2eb0b104df8f792df095cdc1dcaf21cc0403d9a25a07e189400"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_amiya-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_amiya\\ark_amiya-1.3.0.zip",
+      "size": 1871563,
+      "sha256": "5148c256df13cdc9b56aa03771ca6fc84f434f47b8e2b526a4fbd635887c576c",
+      "source_sha256": "4f53b27e8072f379fd13dbb72684a53e503a6ecf437885dd0eb870bf6338db22",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "阿米娅",
+        "changed_entries": [
+          "assets/ark_amiya/maid_sound.json",
+          "assets/ark_amiya/lang/en_us.lang",
+          "assets/ark_amiya/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_amiya.name}",
+          "description": "{sound_pack.ark_amiya.desc}",
+          "icon": "ark_amiya:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_amiya/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "6353cc83f32a3d90818aca95853d7f7a2582a2f5b06becd0a6ebf79f929049bd"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_texas-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_texas\\ark_texas-1.3.0.zip",
+      "size": 1281007,
+      "sha256": "6bc24601aa3a0c257299289365696b1c599ddd5147c7258fefd7fb53100a7489",
+      "source_sha256": "48f3936ab03a5abe0d77012f70ebcfa251547f987149e0da6128441e8bb340b9",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "德克萨斯",
+        "changed_entries": [
+          "assets/ark_texas/maid_sound.json",
+          "assets/ark_texas/lang/en_us.lang",
+          "assets/ark_texas/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_texas.name}",
+          "description": "{sound_pack.ark_texas.desc}",
+          "icon": "ark_texas:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_texas/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "7689429c988ab1b1c9ad96d25cb70500f2e5659003c489cba3151af939bb6126"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_luo_xiaohei-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_luo_xiaohei\\ark_luo_xiaohei-1.3.0.zip",
+      "size": 2042358,
+      "sha256": "7b20bd0abeedc5238e77ce985a699ab45e9b8b700b69d6b22e7f5c69b1fbed85",
+      "source_sha256": "cbed9e0d72260a93b3eb50ceac2332937e8ed220964aad4540a7c4da730bb058",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "罗小黑",
+        "changed_entries": [
+          "assets/ark_luo_xiaohei/maid_sound.json",
+          "assets/ark_luo_xiaohei/lang/en_us.lang",
+          "assets/ark_luo_xiaohei/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_luo_xiaohei.name}",
+          "description": "{sound_pack.ark_luo_xiaohei.desc}",
+          "icon": "ark_luo_xiaohei:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_luo_xiaohei/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "c1d055cfd20015000251130761300f31c99105d8117af9841a3b6ec8841af92e"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_yueyue-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_yueyue\\ark_yueyue-1.3.0.zip",
+      "size": 1953327,
+      "sha256": "05bf4aecb759b846debd92cd9ced6af900ab1bbdbc0857234289ce8da9a6703d",
+      "source_sha256": "0efd9583fef3068ce869f4e0a3c1d7013684c1479ec14b29800d6b7423fe7949",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "跃跃",
+        "changed_entries": [
+          "assets/ark_yueyue/maid_sound.json",
+          "assets/ark_yueyue/lang/en_us.lang",
+          "assets/ark_yueyue/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_yueyue.name}",
+          "description": "{sound_pack.ark_yueyue.desc}",
+          "icon": "ark_yueyue:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_yueyue/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "e8bc6585c6de62762a1aa5673e01bff3406e6273fad8291126501a7cb8765787"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_paopao-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_paopao\\ark_paopao-1.3.0.zip",
+      "size": 1808334,
+      "sha256": "8ffae9f4132a21f997bfd2f80c2cc9c9d81e310baa2a11da46e3b990ae4999fd",
+      "source_sha256": "e75d562eec55673805f7d9f60c3d20018b21419d6e96d18285e14b65dab97acc",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "泡泡",
+        "changed_entries": [
+          "assets/ark_paopao/maid_sound.json",
+          "assets/ark_paopao/lang/en_us.lang",
+          "assets/ark_paopao/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_paopao.name}",
+          "description": "{sound_pack.ark_paopao.desc}",
+          "icon": "ark_paopao:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_paopao/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "d2f433761020151c07001740ee27e969354114df9ac4ab3df862f187c25e9829"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_kroos-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_kroos\\ark_kroos-1.3.0.zip",
+      "size": 2721227,
+      "sha256": "a1681ed4fad8a742002733eca9f7b35f7a86a4cdf3c8ae017adb46a65340f3f5",
+      "source_sha256": "02211421843259285824504db978becfc83f61b3a8353580274112e563583f10",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "克洛丝",
+        "changed_entries": [
+          "assets/ark_kroos/maid_sound.json",
+          "assets/ark_kroos/lang/en_us.lang",
+          "assets/ark_kroos/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_kroos.name}",
+          "description": "{sound_pack.ark_kroos.desc}",
+          "icon": "ark_kroos:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_kroos/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "3f406ed862711e76ab91ee8b79e531eced01fd89689a0cc14898783e42360730"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_magallan-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_magallan\\ark_magallan-1.3.0.zip",
+      "size": 1575589,
+      "sha256": "971a7228c5f0aed84a9aa8951a25dc702ee201e021ed2d772ffc4b9882a6b90a",
+      "source_sha256": "dffd05b0d5f98db074e40a27ed678f924ae5ebc8059059372772e41a225c4dbb",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "麦哲伦",
+        "changed_entries": [
+          "assets/ark_magallan/maid_sound.json",
+          "assets/ark_magallan/lang/en_us.lang",
+          "assets/ark_magallan/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_magallan.name}",
+          "description": "{sound_pack.ark_magallan.desc}",
+          "icon": "ark_magallan:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_magallan/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "789c5d6bd7c65277a2d9e429bed9531c942b7a72ecd2d0eb848987c74b2d1937"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/ark_durin-1.3.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\pack_v4_ark_durin\\ark_durin-1.3.0.zip",
+      "size": 1990151,
+      "sha256": "a7432928a70ecc2237ec7671068de5c2c0843e7983bc30e314f0618362427c3e",
+      "source_sha256": "c06171fab0d3de136f28c6d77584644441125182e238390011494ba4fc345c74",
+      "validation": {
+        "metadata_repaired": true,
+        "character_zh_cn": "杜林",
+        "changed_entries": [
+          "assets/ark_durin/maid_sound.json",
+          "assets/ark_durin/lang/en_us.lang",
+          "assets/ark_durin/lang/zh_cn.lang"
+        ],
+        "before": {
+          "pack_name": "{sound_pack.ark_pepe.name}",
+          "description": "{sound_pack.ark_pepe.desc}",
+          "icon": "ark_pepe:textures/sound_icon.png"
+        },
+        "after": {
+          "pack_name": "{sound_pack.ark_durin.name}",
+          "description": "{sound_pack.ark_durin.desc}",
+          "icon": "ark_durin:textures/sound_icon.png"
+        },
+        "author_credit_preserved": true,
+        "icon": {
+          "path": "assets/ark_durin/textures/sound_icon.png",
+          "sha256": "dc82dae2b41d31b0288327e8c84eea8a94a98bca5f0f204f56dd2ff6e720f94a",
+          "bytes_unchanged": true,
+          "existing_shared_artwork_preserved": true
+        },
+        "audio": {
+          "file_count": 141,
+          "paths_and_content_sha256": "5c3d54cfa094696af13df31c1293c5699ae817de592637c4ec0f1a9901fb5f80"
+        },
+        "all_audio_bytes_unchanged": true,
+        "all_other_entries_bytes_unchanged": true
+      }
+    },
+    {
+      "path": "tlm_custom_pack/atri_sound_pack-1.0.0.zip",
+      "source": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend\\tmp\\atri_sound_pack-1.0.0.zip",
+      "size": 5781983,
+      "sha256": "6088998be78e9963c429cef5d038f935c9712f7af519870f24718543d42a5864",
+      "source_sha256": "6088998be78e9963c429cef5d038f935c9712f7af519870f24718543d42a5864",
+      "validation": {
+        "metadata_repaired": false,
+        "audio": {
+          "file_count": 226,
+          "paths_and_content_sha256": "55e2e04e3799610a9276d083141bf4221b8812cb6282f77d01d5f19635d0dd74"
+        }
+      }
+    }
+  ],
+  "download_base": "http://127.0.0.1:19090/packs/",
+  "preinstalled_in_client": true,
+  "server_restart_required": true,
+  "voice_host": "127.0.0.1:24455",
+  "tts_uses_existing_local_inference": true,
+  "metadata_repair": {
+    "policy": "ark-character-labels-v1",
+    "count": 11,
+    "source_archives_read_only": true,
+    "unrelated_resources_and_audio_unchanged": true
+  }
+}

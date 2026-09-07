@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "preparedAt": "2026-09-07T11:47:58.093381+00:00",
+  "sourceImage": "sha256:d957fe4d9d224fd135f4e35e1bd33ee7c26245bc477a7052219d052dd3e028ea",
+  "sourcePath": "/app/modern-viewer",
+  "files": [
+    {
+      "path": "character-assets/characters/kirito-black-swordsman-statue.bak.glb",
+      "bytes": 1018256,
+      "sha256": "4dfad731eab7981dab003695c8f5f8ef064932faded20462c16963eb023b7e53"
+    },
+    {
+      "path": "character-assets/characters/kirito-black-swordsman.glb",
+      "bytes": 2259784,
+      "sha256": "d88ad5267917cd488f6fd035e3920099fa0279dc9adc873e5f51815a2fd8f4a5"
+    },
+    {
+      "path": "character-assets/characters/naruto-uzumaki-shippuden.glb",
+      "bytes": 8461256,
+      "sha256": "9821ca6cb1c9478e2a3fa19fa3ed5765453fffbe2aae2709789d0112ceb376a1"
+    },
+    {
+      "path": "character-assets/characters/sasuke-uchiha.glb",
+      "bytes": 8461252,
+      "sha256": "764c31225c57fa4f2eb1f0e34781f0158e67bd7e17ad58d15d73bcb14e2af164"
+    },
+    {
+      "path": "character-assets/skins/kirito.png",
+      "bytes": 1603,
+      "sha256": "895d8df8d30091b4a4584aa723f12a7f4f9ecdc603df7b1cb9cf2261c009d1af"
+    },
+    {
+      "path": "character-assets/skins/naruto.png",
+      "bytes": 2762,
+      "sha256": "9a71cce4b4a8a534c486ac3ebf452fc058cd22b586e237649faa43bd11e94146"
+    },
+    {
+      "path": "mesher.js",
+      "bytes": 1093933,
+      "sha256": "a627274a4c2e5e5de4853c54eabe9377e95edec5503be47bda0bca064b258635"
+    },
+    {
+      "path": "mesherWasm.js",
+      "bytes": 4835125,
+      "sha256": "5d199cac89ae92654ae3067bb0a401a28086142c496e7bff76a08e6dea7532d5"
+    },
+    {
+      "path": "minecraft-renderer.js",
+      "bytes": 1313270,
+      "sha256": "41f3062edc7db9b76c3ccb99804b54ca701c50917fab163fcf1641e170b06d4e"
+    },
+    {
+      "path": "minecraft-renderer.js.meta.json",
+      "bytes": 602437,
+      "sha256": "bc988a6f2c9c8a720401cdace5cd7655f7aad1be26476bcbd78dce555aa323c4"
+    },
+    {
+      "path": "mod-assets/mod-blocks-mcdata.json",
+      "bytes": 1397581,
+      "sha256": "1f8387654a84049495256091222e5ccb98e2fa13c80fb0ce6fbb0e38cd790f1a"
+    },
+    {
+      "path": "mod-assets/mod-pack.json",
+      "bytes": 10133579,
+      "sha256": "6b6d922c3f96efaee7ca361650ddff17719f378fa3c0e4d093dd0e0465caf0d2"
+    },
+    {
+      "path": "modern-viewer.js",
+      "bytes": 11405925,
+      "sha256": "85ace16464a72049c2d52ef9cae9db5d82b5effedd08eddbfc79328cebccdf4f"
+    },
+    {
+      "path": "npc-portraits/anime-professions-b-v2.png",
+      "bytes": 2516656,
+      "sha256": "7f08f908babc5e5ae9b7cc337899f0329610c85d6ade894c4b181d0283de15de"
+    },
+    {
+      "path": "npc-portraits/core-trio-anime-v2.png",
+      "bytes": 2451986,
+      "sha256": "bb109ff2042c36b6f6856475aeb2d0e16234b1957c8218fa5ab89b0c11f23efe"
+    },
+    {
+      "path": "npc-portraits/guild-receptionist-lan-fullbody-v3.png",
+      "bytes": 2009932,
+      "sha256": "305b32cf836d452a347ada89092a6ed9716c7ff4107f216048bc7382aa9c2b9c"
+    },
+    {
+      "path": "npc-portraits/guofeng-a.png",
+      "bytes": 2614533,
+      "sha256": "d6a788244353ea9b0644593f7fa0c3583a47ddb36e781b427a49e3ff7f74cfab"
+    },
+    {
+      "path": "npc-portraits/named-travellers-fullbody-v3.png",
+      "bytes": 2306131,
+      "sha256": "da7dae1b1a9cf3e6b91a102f019abf97fe394be9e9d9418e280d4f67bf628240"
+    },
+    {
+      "path": "npc-portraits/professions-a.png",
+      "bytes": 2485072,
+      "sha256": "dd454e87b9c402488efcda2529dccf1b7cb0967e66ba714811a2a561277d81c4"
+    },
+    {
+      "path": "npc-portraits/professions-b.png",
+      "bytes": 2561593,
+      "sha256": "d7c3fda00a1a57fbe177c0f7fbc8577d99f63521f1b394929b312cde06fadc25"
+    },
+    {
+      "path": "npc-portraits/village-special-cast-anime-v2.png",
+      "bytes": 2652373,
+      "sha256": "e230ab80bbc02c2cfcc3c25c0d4c682dcdc291ad85c7af6a97419bdb1e353237"
+    },
+    {
+      "path": "threeWorker.js",
+      "bytes": 3840205,
+      "sha256": "917fd0fdb8b255d8e844acde747c5a19c5b7a232ac5f2b7e20a2b7a860cd8370"
+    },
+    {
+      "path": "viewer.css",
+      "bytes": 25605,
+      "sha256": "ad25b985518809f5531ba9815d32bff6923263c81e2fd8a50552b7d1a354f13a"
+    },
+    {
+      "path": "wasm_mesher_bg.wasm",
+      "bytes": 94412,
+      "sha256": "4df2c64c7d94e3928e271ff9e818301816517a287301ad18777add8375ec2c13"
+    }
+  ]
+}

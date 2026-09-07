@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.qiandeng.chanting.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "StaffPttMixin",
+    "StaffHotbarMixin",
+    "StaffAudioMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

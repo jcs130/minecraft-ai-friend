@@ -1,0 +1,10 @@
+{
+  "defaults": {
+    "controlify:open_chat": {"type": "empty"},
+    "controlify:radial_menu": {"type": "empty"},
+    "controlify:pick_block": {"type": "empty"},
+    "voicechat:ptt_hold": {"button": "controlify:button/dpad_left"},
+    "qiandeng_controls:wheel": {"button": "controlify:button/dpad_up"},
+    "qiandeng_controls:guide": {"button": "controlify:button/dpad_right"}
+  }
+}

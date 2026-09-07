@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "sha256": "1c1b4d08c4dcda43466d97ef5729f0b6be6e60417e449d715ab21954d8f1eaa5",
+      "path": "META-INF/neoforge.mods.toml"
+    },
+    {
+      "sha256": "716263b62c8b35bebdd10fef4d247c843d0b0d3975d61ac3e9f85edee96a2413",
+      "path": "dev/god/godvoice/GodVoiceLog.java"
+    },
+    {
+      "sha256": "6564322c4f68d380fea20dbdc5d1d3a609164559c2f4e3dfb46ebb5111e4a43b",
+      "path": "dev/god/godvoice/GodVoiceMod.java"
+    },
+    {
+      "sha256": "c1f0418f509adf9615ab30458b4e2dc530326f0cc81ac60dc220ea30ac59f1d4",
+      "path": "dev/god/godvoice/GodVoicePlugin.java"
+    },
+    {
+      "sha256": "d37731ae53ca9c068ad236d764d36cb84aea565d0f5f3cd8f025840cef007275",
+      "path": "dev/god/godvoice/TtsQueueWatcher.java"
+    },
+    {
+      "sha256": "fbee4af2893e09557a9c177c5edfe9d456208fbcb94751e10302a56f89b34ac4",
+      "path": "dev/god/godvoice/MicCapture.java"
+    }
+  ],
+  "source": "Original god-voice-src, read-only import"
+}

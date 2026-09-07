@@ -1,0 +1,16 @@
+{
+  "key.categories.qiandeng_controls": "QiandengJi: Skills and Field Guide",
+  "key.qiandeng_controls.wheel": "Open Skill Wheel",
+  "key.qiandeng_controls.guide": "Open Field Guide",
+  "binding.qiandeng_controls.wheel.description": "Press once to open the existing wheel. Navigate, confirm with A, return with B.",
+  "binding.qiandeng_controls.guide.description": "Skills, waypoints and help. Hold D-pad Left to speak by default; remap in controller settings.",
+  "screen.qiandeng_controls.title": "Qiandeng Field Guide",
+  "screen.qiandeng_controls.navigation": "Stick / D-pad: select  -  A: confirm  -  B: back",
+  "screen.qiandeng_controls.vitals": "Health %s/%s  -  Food %s/20  -  Level %s",
+  "screen.qiandeng_controls.wheel": "Skill Wheel",
+  "screen.qiandeng_controls.panel": "All Skills and Waypoints",
+  "screen.qiandeng_controls.status": "My Status",
+  "screen.qiandeng_controls.help": "Help",
+  "screen.qiandeng_controls.iron": "Iron's Spells: Native Spellbook",
+  "screen.qiandeng_controls.fallback": "Hold D-pad Left / F8 to speak; release to send."
+}

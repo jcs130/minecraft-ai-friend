@@ -1,7 +1,0 @@
-# mc-world:2.2.4 — 面板：画面主导布局（修「思考流大空白」）
-# 2026-08-26 造物主反馈：布局差、思考流一大块空白。
-#   - viewer-card flex 1 1 auto（吃满左列），steps-card 压成矮条（max-height 210px）；
-#   - 「XX 思考流」更名「XX 动态」（那卡早已是聊天记录，不是思考）。
-# 用法：docker build -f packaging/docker/Dockerfile.mc-world-redesign -t mc-world:2.2.4 <repo 根>
-FROM mc-world:2.2.3
-COPY web-panel.mjs /app/web-panel.mjs

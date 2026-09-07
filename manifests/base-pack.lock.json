@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-07T06:16:43.8080436+08:00",
+  "status": "inspected_only_not_launch_tested",
+  "source_directory": "C:\\Users\\lzl19\\AppData\\Roaming\\.minecraft\\versions\\Rapid Optimization",
+  "reference_document": "C:\\Users\\lzl19\\Desktop\\异世界千灯纪-开发文档.md",
+  "source_world_repository": "C:\\Users\\lzl19\\.copaw\\workspaces\\default\\minecraft-ai-friend",
+  "base_pack": {
+    "name": "Rapid Optimization",
+    "version": "21.1Neo.2.4.0",
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java_major": 21,
+    "mod_jar_count": 24,
+    "resource_pack_count": 1,
+    "files": [
+      {
+        "path": "mods/[加速渲染] acceleratedrendering-1.0.14-1.21.1-alpha.jar",
+        "bytes": 684365,
+        "sha256": "f567f7a88c241e5e4266ee1804bd89e31f4fd6faf31745ed14f4a0a0a0e199cc",
+        "in_upstream_index": false
+      },
+      {
+        "path": "mods/[锂] lithium-neoforge-0.15.4+mc1.21.1.jar",
+        "bytes": 774220,
+        "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/[钌] ruok-neoforge_1.21.1_Pre-Release_5-1.7.4.jar",
+        "bytes": 444850,
+        "sha256": "bed7f62a66ac8ffcddb6605f1e1e9fdca23ea49d58eb33d24b28be9abf0b085d",
+        "in_upstream_index": false
+      },
+      {
+        "path": "mods/[钠 · 扩展] sodium-extra-neoforge-0.9.3+mc1.21.1.jar",
+        "bytes": 465013,
+        "sha256": "fa553bce38bad6fdd478841a270a79a31dc05f87d7892b1cf839850602ac9186",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/[钠] sodium-neoforge-0.8.13-beta.1+mc1.21.1.jar",
+        "bytes": 1292065,
+        "sha256": "f58f469ee52fad019c1678a463b2c3f27042a915fdf4029242d7d243e6c4eece",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/[实体渲染机制优化] entityculling-neoforge-1.10.5-mc1.21.1.jar",
+        "bytes": 1585287,
+        "sha256": "2eacd2bada39bf1d1ef695736646790c619c0e6cdeaf3d7e3cfc9139d26fae02",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/[现代化修复] modernfix-neoforge-5.27.20+mc1.21.1.jar",
+        "bytes": 599474,
+        "sha256": "6f367ea4002c39e3cfe27e0a0be1008880a4b35a8482a78a437cfb9d8ee38273",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/[C^2M 引擎] c2me-neoforge-mc1.21.1-0.4.0-alpha.0.116.jar",
+        "bytes": 3662294,
+        "sha256": "d8608e105a084e38ee86f01056f00a92db7fd3e480d8ad4f72d25c8b97e71248",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/BadOptimizations-2.4.1-1.21.1.jar",
+        "bytes": 283566,
+        "sha256": "22e2467892d3706f43d1cf2aa637785bb8601c20b0098a82ab956e6a8fc4d2ba",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/cloth-config-15.0.140-neoforge.jar",
+        "bytes": 1163890,
+        "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/fism+1.21.1-neoforge-1.0.5.jar",
+        "bytes": 21832,
+        "sha256": "c06bf21919ecde60b8b4f001cae7bf4bd087c4384e6b217109d77dd5575b3491",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/fzzy_config-0.7.6+1.21+neoforge.jar",
+        "bytes": 2369895,
+        "sha256": "4e5cc1438087b0bc0276969e88b9ad0bdf2bcc60d6caf5fe79e18947d7a29050",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/GPUTape-1.20.6-1.21x-1.0.3.jar",
+        "bytes": 16669,
+        "sha256": "120f5971e1998337b81205934b55e29c70f4891c6254df616e4391ed94a511cf",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar",
+        "bytes": 361795,
+        "sha256": "336df12f099d1a441a3e06850bea86e9c2d0c8bc022d3d9a201870a201562a04",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+        "bytes": 2540723,
+        "sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/Ixeris-4.6.2+1.21.1-neoforge.jar",
+        "bytes": 681754,
+        "sha256": "6db3e74cc13222e793fa3e49cb2576cdf7c548711bdab4d38ad64d5eb2fc2e35",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/kotlinforforge-5.12.0-all.jar",
+        "bytes": 7279264,
+        "sha256": "2785a4dd6de5c6c56065fd8eb789c82771bd2ee773c30794c23160a3b2c39139",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/krypton_fnp-neoforge-1.21.1-0.2.28.1-1.21.1.jar",
+        "bytes": 1015871,
+        "sha256": "05ebe849611daafe533fc57ed9b5156edfa9157ced04d38a7860b1e2075984b9",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/moreculling-neoforge-1.21.1-1.0.9.jar",
+        "bytes": 335661,
+        "sha256": "0b7000dac4bd8218074ece026f515d8cb24fcfd19c0e9eeb882209ab82f17657",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/obe+1.21.1-neoforge-1.1.36-htofix.1.jar",
+        "bytes": 186635,
+        "sha256": "cb1c2fc2910d56ab31d4af496ef84166949fa503e91e3a3d12b56ecd1a549046",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/particle_core-0.3.3+1.21+neoforge.jar",
+        "bytes": 138375,
+        "sha256": "38c05981d1dc8428c7ab1130b9ec7f05bca1b70f909aba9c454c9611702a8dda",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/saturn-mc1.21.1-0.1.5.jar",
+        "bytes": 84147,
+        "sha256": "f49f4b51faeb4e9eb7568723fa259c0da1c3460f8019597f04a54c2137b76c32",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/ScalableLux-neoforge-0.3.0-alpha.0.6-all.jar",
+        "bytes": 196969,
+        "sha256": "0e7f64c0668bd325ccbcd35595bf9a98ca5a9ff0ebf022ec6f85997991d4c883",
+        "in_upstream_index": true
+      },
+      {
+        "path": "mods/zfastnoise-1.0.13+1.21.1+neoforge.jar",
+        "bytes": 39526,
+        "sha256": "36ee58475c46c56e76c199eebe48dc95aacaa1133512617dcc46053339c2fb5d",
+        "in_upstream_index": true
+      },
+      {
+        "path": "resourcepacks/SodiumTranslations.zip",
+        "bytes": 267586,
+        "sha256": "26bd17b0f0cd32ad649c209dc48cf1f232bd8a2145031656cbff9485336305e2",
+        "in_upstream_index": true
+      }
+    ],
+    "upstream_hash_verification": [
+      {
+        "path": "mods/BadOptimizations-2.4.1-1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/cloth-config-15.0.140-neoforge.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/fism+1.21.1-neoforge-1.0.5.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/fzzy_config-0.7.6+1.21+neoforge.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/GPUTape-1.20.6-1.21x-1.0.3.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/Ixeris-4.6.2+1.21.1-neoforge.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/kotlinforforge-5.12.0-all.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/krypton_fnp-neoforge-1.21.1-0.2.28.1-1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/moreculling-neoforge-1.21.1-1.0.9.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/obe+1.21.1-neoforge-1.1.36-htofix.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/particle_core-0.3.3+1.21+neoforge.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/saturn-mc1.21.1-0.1.5.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/ScalableLux-neoforge-0.3.0-alpha.0.6-all.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/zfastnoise-1.0.13+1.21.1+neoforge.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[C^2M 引擎] c2me-neoforge-mc1.21.1-0.4.0-alpha.0.116.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[实体渲染机制优化] entityculling-neoforge-1.10.5-mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[现代化修复] modernfix-neoforge-5.27.20+mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[钠 · 扩展] sodium-extra-neoforge-0.9.3+mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[钠] sodium-neoforge-0.8.13-beta.1+mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "mods/[锂] lithium-neoforge-0.15.4+mc1.21.1.jar",
+        "sha1_match": true,
+        "sha512_match": true
+      },
+      {
+        "path": "resourcepacks/SodiumTranslations.zip",
+        "sha1_match": true,
+        "sha512_match": true
+      }
+    ]
+  },
+  "server_inventory": {
+    "declared_jar_count": 68,
+    "actual_jar_count": 70,
+    "unlisted_jars": [
+      "Patchouli-1.21.1-93-NEOFORGE.jar",
+      "ysm-2.6.5-neoforge+mc1.21.1.jar"
+    ],
+    "missing_jars": []
+  }
+}

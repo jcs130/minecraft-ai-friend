@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "client_only": false,
+  "server_required": true,
+  "files": [
+    {
+      "mod_id": "qiandeng_chanting",
+      "filename": "qiandeng-chanting-0.1.0.jar",
+      "cache_path": "vendor/chanting-cache/qiandeng-chanting-0.1.0.jar",
+      "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5",
+      "size_bytes": 65750,
+      "client_only": false,
+      "source_build": "tools/build_chanting_items.py"
+    }
+  ]
+}

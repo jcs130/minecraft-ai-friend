@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "qiandengji-numen": {
+      "command": "python",
+      "args": ["D:/Projects/QiandengJi/tools/run_numen_mcp.py"],
+      "env": {
+        "NUMEN_COMPANION": "QiandengAgent",
+        "NUMEN_DISPLAY": "千灯使者",
+        "NUMEN_NODE_MODULES": "D:/Projects/QiandengJi/world/node_modules"
+      }
+    }
+  }
+}

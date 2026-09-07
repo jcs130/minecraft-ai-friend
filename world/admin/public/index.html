@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="千灯纪独立管理台：世界运行、众生档案、村务与传送阵。">
+  <title>千灯纪 · 管理台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+  <script src="/management.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <aside class="sidebar" aria-label="管理台导航">
+    <a class="brand" href="#overview" aria-label="千灯纪管理台总览">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 40" fill="none"><path d="M16 2v5M7 9h18l3 7-3 15H7L4 16l3-7ZM8 33h16M16 33v5M10 11l2 18m10-18-2 18M4 16h24M16 10v19" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span><strong>千灯纪</strong><small>世界管理台</small></span>
+    </a>
+    <div class="sidebar-label">世界档案</div>
+    <nav class="nav-list" aria-label="主要栏目">
+      <button class="nav-item active" data-view="overview" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>总览</span><span class="nav-index">01</span></button>
+      <button class="nav-item" data-view="beings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m2 4a5 5 0 0 1 2 4v2"/></svg><span>众生</span><span class="nav-index">02</span></button>
+      <button class="nav-item" data-view="village"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7"/></svg><span>村务</span><span class="nav-index">03</span></button>
+      <button class="nav-item" data-view="world"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z"/></svg><span>世界</span><span class="nav-index">04</span></button>
+      <button class="nav-item" data-view="operations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M6 21v-3a6 6 0 0 1 12 0v3M3 8v6m18-6v6M1 11h4m14 0h4"/></svg><span>运营组</span><span class="nav-index">05</span></button>
+      <button class="nav-item" data-view="agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 3v3M8 11h.01M16 11h.01M9 16h6M1 11v4m22-4v4"/></svg><span>Agent 设置</span><span class="nav-index">06</span></button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-note"><span class="status-dot neutral" id="panel-dot"></span><span id="panel-status">正在连接管理台</span></div>
+      <p>世界运行 · 观察 · 管理</p>
+      <span class="sidebar-version">MC 1.21.1 · NeoForge</span>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div class="breadcrumb"><span>千灯纪</span><span aria-hidden="true">/</span><strong id="breadcrumb-current">总览</strong></div>
+      <div class="topbar-actions"><span class="read-only"><span aria-hidden="true">◈</span> 只读模式</span><button id="refresh-button" class="button button-secondary" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 6a7 7 0 1 0 1 7M16 2v5h-5"/></svg><span>刷新</span></button></div>
+    </header>
+    <main id="main-content" tabindex="-1">
+      <div class="page-heading"><div><p class="eyebrow" id="page-eyebrow">WORLD OVERVIEW</p><h1 id="page-title">世界运行总览</h1><p class="page-description" id="page-description">查看这片世界的近况，以及每一项记录的更新时间。</p></div><p class="refresh-time" id="refresh-time">等待首次读取</p></div>
+      <div class="management-toolbar"><span id="admin-session-label">浏览模式 · 观察与查看无需解锁</span><button id="admin-unlock" class="button button-secondary" type="button">解锁管理</button><button id="admin-logout" class="button button-secondary" type="button" hidden>锁定管理</button></div>
+      <div id="connection-notice" class="notice" role="status">正在读取世界记录…</div>
+      <div id="warnings" class="warnings" aria-label="需要留意的状态"></div>
+
+      <section id="view-overview" class="view" aria-labelledby="page-title">
+        <div class="home-launchers"><a href="#eye" class="home-launcher home-launcher-primary"><span class="eyebrow">LIVE WORLD</span><strong>天神之眼 <span aria-hidden="true">↗</span></strong><p>看看世界正在发生什么，切换观察视角。</p></a><a href="#services" class="home-launcher"><span class="eyebrow">SERVER CONTROL</span><strong>服务器管理 <span aria-hidden="true">↗</span></strong><p>检查服务、查看日志，按计划维护。</p></a><a href="#operations" class="home-launcher"><span class="eyebrow">WORLD TEAM</span><strong>世界运营组 <span aria-hidden="true">↗</span></strong><p>明确每个角色的职责、模型和运行环境。</p></a></div>
+        <div id="home-live-services" class="service-health-strip" aria-live="polite">正在读取当前服务状态…</div>
+        <div class="welcome-panel"><div><span class="welcome-label">千灯纪 · 世界近况</span><h2 id="world-headline">正在与世界连接</h2><p id="world-subtitle">管理台独立运行，世界与模型服务分别报告状态。</p></div><div class="welcome-seal" aria-hidden="true"><span>千</span><span>灯</span></div></div>
+        <div class="metric-grid" id="overview-metrics"></div>
+        <div class="two-column"><article class="card"><div class="card-heading"><div><p class="eyebrow">SERVICES</p><h2>服务运行记录</h2></div><span id="health-badge" class="badge neutral">待读取</span></div><p id="health-caption" class="card-caption"></p><div id="service-list" class="service-list"></div></article><article class="card"><div class="card-heading"><div><p class="eyebrow">WATCHING</p><h2>守望近况</h2></div><span id="world-badge" class="badge neutral">待读取</span></div><div id="world-facts" class="fact-list"></div><div class="soft-divider"></div><h3 class="small-heading">当前守望名单</h3><div id="observed-players" class="chip-list"></div><p class="footnote">名单来自世界进程的守望记录，不代表全服在线人数。</p></article></div>
+        <div class="quick-links"><a id="overview-qwenpaw" class="link-card disabled-link" aria-disabled="true"><div><span class="link-kicker">MODEL SERVICE</span><strong>QwenPaw 原控制台</strong><p>查看模型、对话与服务设置</p></div><span aria-hidden="true">↗</span></a><a id="resources-link" class="link-card disabled-link" aria-disabled="true"><div><span class="link-kicker">RESOURCES</span><strong>客户端资源</strong><p>打开当前资源包目录</p></div><span aria-hidden="true">↗</span></a></div>
+      </section>
+
+      <section id="view-beings" class="view" hidden aria-labelledby="page-title">
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">PEOPLE</p><h2>修行档案 <span id="player-count" class="heading-count"></span></h2></div><label class="search-label"><span class="sr-only">按角色名称筛选</span><input id="player-search" type="search" placeholder="查找角色" autocomplete="off"></label></div><div id="player-list" class="player-grid"></div><p class="footnote">修行档案保留角色的历史进度；有档案不表示当前在线。</p></article>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">FEATURED SKILLS</p><h2>精选秘术</h2></div><span id="skills-badge" class="badge amber"></span></div><p class="card-caption">在游戏内使用指南针打开技能罗盘。这里查看招式与学习条件。</p><div id="featured-skills" class="skill-grid"></div></article>
+        <article class="card archive-card"><details id="archive-details"><summary><span><span class="eyebrow">ARCHIVE</span><strong>旧技能与被动档案</strong></span><span id="archive-count" class="badge neutral"></span></summary><p class="card-caption">原有记录保留。归档状态、停用原因与原生法术提示以当前目录为准。</p><div id="archived-skills" class="archive-list"></div></details></article>
+      </section>
+
+      <section id="view-village" class="view" hidden aria-labelledby="page-title">
+        <div id="guild-metrics" class="metric-grid metric-grid-three"></div>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">ADVENTURERS' GUILD</p><h2>任务板</h2></div><span id="guild-badge" class="badge neutral"></span></div><p id="guild-caption" class="card-caption"></p><div class="table-scroll" tabindex="0" role="region" aria-label="公会任务表，可横向滚动"><table><thead><tr><th scope="col">编号</th><th scope="col">委托</th><th scope="col">记录状态</th><th scope="col">酬劳</th><th scope="col">接取说明</th></tr></thead><tbody id="guild-board"></tbody></table></div><p class="footnote">面板不会接单、交付或发奖；实际接取条件由游戏内公会校验。</p></article>
+        <div class="two-column"><article class="card"><div class="card-heading"><div><p class="eyebrow">REPUTATION</p><h2>公会功勋</h2></div></div><div id="guild-fame" class="reputation-list"></div></article><article class="card"><div class="card-heading"><div><p class="eyebrow">VILLAGE SERVICE</p><h2>村务状态</h2></div><span id="npc-badge" class="badge neutral"></span></div><div id="npc-facts" class="fact-list"></div><div id="npc-threads" class="chip-list thread-list"></div><p class="footnote">线程状态反映服务记录，不等于历史村民柜台已全部恢复。</p></article></div>
+      </section>
+
+      <section id="view-world" class="view" hidden aria-labelledby="page-title">
+        <div class="section-banner"><div class="banner-icon" aria-hidden="true">⌖</div><div><h2>传送阵 · 行旅名录</h2><p>已记录的落脚处，留作下一次归途。在游戏内通过指南针选择目的地。</p></div><span id="waypoint-count" class="badge amber"></span></div>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">WAYPOINTS</p><h2>传送点记录</h2></div></div><div id="waypoint-list" class="waypoint-grid"></div><p class="footnote">这里展示记录坐标；实际传送仍会检查维度、冷却与安全落点。</p></article>
+        <a class="link-card" href="#eye"><div><span class="link-kicker">LIVE WORLD</span><strong>打开天神之眼</strong><p>实时三维观察与周边地形；查看地点档案不会自动传送。</p></div><span aria-hidden="true">↗</span></a>
+      </section>
+
+      <section id="view-operations" class="view" hidden aria-labelledby="page-title">
+        <div class="section-banner"><div class="banner-icon" aria-hidden="true">◈</div><div><h2>一起照看这片世界</h2><p>查看运营角色、运行环境与服务依赖，让待处理的事情有迹可循。</p></div><span id="operations-badge" class="badge neutral">待读取</span></div>
+        <div id="operations-notice" class="notice" role="status">正在读取运营记录…</div>
+        <div id="operations-metrics" class="metric-grid"></div>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">ATTENTION</p><h2>待处理项</h2></div><span id="operations-issue-count" class="badge neutral"></span></div><div id="operations-issues" class="operations-issues"></div></article>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">RUNTIMES</p><h2>运行环境</h2></div></div><p class="card-caption">千灯纪项目的 QwenPaw 运行状态。</p><div id="operations-runtimes" class="operations-grid"></div></article>
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">TEAM</p><h2>运营角色</h2></div><span class="badge neutral">千灯纪项目</span></div><p class="card-caption">本世界的角色与职责。“已启用”表示配置允许使用，不表示角色在线或正在执行任务。</p><div id="operations-agents" class="operations-grid"></div></article>
+        <details class="card operations-details"><summary>服务与依赖档案</summary><div class="card-heading"><div><p class="eyebrow">SERVICES & DEPENDENCIES</p><h2>服务与依赖</h2></div></div><p class="card-caption">当前项目的服务、管理方式与依赖；未知状态不会当作正常。</p><div id="operations-services" class="operations-service-groups"></div></details>
+        <details class="card operations-details"><summary>终端管理命令</summary><div class="card-heading"><div><p class="eyebrow">CLI MANAGEMENT</p><h2>管理命令</h2></div><span class="badge neutral">仅供查看</span></div><p class="card-caption">命令由本机管理入口提供。确认目标和影响范围后在终端使用；日常维护可前往服务器管理页，以下命令留作终端入口。</p><div id="operations-commands" class="operations-commands"></div></details>
+      </section>
+
+      <section id="view-agent" class="view" hidden aria-labelledby="page-title">
+        <div class="section-banner"><div class="banner-icon" aria-hidden="true">◈</div><div><h2>模型服务，独立管理</h2><p>查看当前接入能力；模型与对话设置在服务原控制台中管理。</p></div><span class="badge neutral">只读</span></div>
+        <a class="link-card" href="#operations"><div><span class="link-kicker">OPERATIONS TEAM</span><strong>查看运营组</strong><p>角色职责、服务依赖与待处理项统一展示。</p></div><span aria-hidden="true">↗</span></a>
+        <div class="two-column"><article class="card"><div class="card-heading"><div><p class="eyebrow">CURRENT ADAPTER</p><h2 id="agent-label">当前接入</h2></div></div><div id="agent-facts" class="fact-list"></div><h3 class="small-heading capability-heading">声明的服务能力</h3><div id="agent-capabilities" class="capability-grid"></div><p class="footnote">能力声明不表示某个角色正在执行任务，也不代表全部游戏操作已接通。</p></article><article class="card control-card"><div class="console-symbol" aria-hidden="true">Q</div><p class="eyebrow">QWENPAW CONSOLE</p><h2>打开原控制台</h2><p>使用 QwenPaw 自己的登录与设置页面。管理台不保存或代填模型密钥。</p><a id="agent-qwenpaw" class="button button-primary disabled-link" aria-disabled="true">前往 QwenPaw <span aria-hidden="true">↗</span></a><p id="agent-endpoint" class="endpoint"></p></article></div>
+      </section>
+      <section id="view-eye" class="view" hidden aria-labelledby="page-title">
+        <div class="eye-toolbar"><div class="view-switch" role="group" aria-label="天眼视角"><button type="button" data-eye-view="first" aria-pressed="true">第一人称</button><button type="button" data-eye-view="third" aria-pressed="false">环绕观察</button><button type="button" data-eye-view="dungeon" aria-pressed="false">俯视场景</button></div><button class="button button-secondary" type="button" id="eye-reload">重新连接画面</button></div>
+        <p class="camera-help">环绕视角可拖动画面转向、滚轮调整距离；遇到墙面遮挡时，转动镜头或切换俯视查看。</p><div class="eye-layout"><article class="eye-stage"><iframe id="eye-frame" title="天神之眼实时三维画面" allow="fullscreen" referrerpolicy="no-referrer"></iframe><div id="eye-view-status" class="eye-stage-status" role="status">正在连接观察者…</div></article><aside class="eye-inspector card"><div class="card-heading"><h2>观察位置</h2><span id="eye-badge" class="badge neutral">连接中</span></div><div id="eye-observer-facts" class="fact-list"></div><label class="field-label" for="eye-target">跟随目标</label><select id="eye-target"><option value="">选择在线目标</option></select><div class="button-row"><button id="eye-follow" class="button button-primary" type="button" disabled>开始跟随</button><button id="eye-park" class="button button-secondary" type="button" disabled>停止跟随</button></div><p id="eye-follow-status" class="footnote">解锁管理后可跟随。只移动女神观察者，不移动玩家。</p><h3>周边地形</h3><img id="eye-map" alt="观察者附近已加载区块的俯视地图" hidden><p id="eye-map-status" class="footnote" role="status"></p><p class="footnote">范围为观察者周边已加载区块；切换页面停止画面连接，跟随租期最多两分钟。</p></aside></div>
+        <article class="card"><div class="card-heading"><h2>画面与模组兼容</h2><span class="badge amber">网页渲染</span></div><p>画面使用当前服务端注册表与模组资源。特殊实体、动画和着色器以游戏客户端为准；网页缺失模型不会用作实体不存在的证据。</p><p id="eye-compatibility-status" class="footnote">正在读取当前资源兼容情况…</p><div id="eye-world-summary" class="chip-list"></div></article>
+      </section>
+      <section id="view-services" class="view" hidden aria-labelledby="page-title">
+        <div class="section-banner"><div class="banner-icon" aria-hidden="true">◇</div><div><h2>让世界稳定运行</h2><p>先查看状态和日志；维护操作会列出实际影响范围，再执行并保留记录。</p></div><span id="services-badge" class="badge neutral">检查中</span></div>
+        <div id="management-message" class="notice" role="status" hidden></div>
+        <div id="managed-services" class="managed-service-grid"></div>
+        <div class="two-column"><article class="card"><div class="card-heading"><h2>服务日志</h2><button id="logs-refresh" class="button button-secondary" type="button">刷新日志</button></div><label class="field-label" for="logs-service">选择服务</label><select id="logs-service"></select><pre id="service-logs" class="log-console" tabindex="0">解锁管理后查看最近 120 行日志。</pre></article><article class="card"><div class="card-heading"><h2>操作记录</h2><span id="operation-badge" class="badge neutral">等待操作</span></div><div id="operation-history" class="operation-history"><p class="footnote">解锁管理后查看执行步骤、结果与失败恢复提示。</p></div></article></div>
+      </section>
+      <dialog id="admin-login-dialog" class="management-dialog"><form id="admin-login-form"><h2>解锁服务器管理</h2><p>管理会话持续一小时。密码保存在本机项目的私有文件中。</p><label class="field-label" for="admin-password">管理密码</label><input id="admin-password" type="password" autocomplete="current-password" required><p id="login-error" role="alert"></p><div class="button-row"><button class="button button-secondary" type="button" id="login-cancel">取消</button><button class="button button-primary" type="submit">解锁</button></div></form></dialog>
+      <dialog id="operation-dialog" class="management-dialog"><h2 id="plan-heading">确认维护范围</h2><div id="plan-description"></div><p class="footnote">计划一分钟内有效。执行期间不要重复提交，结果会显示在操作记录中。</p><div class="button-row"><button class="button button-secondary" type="button" id="plan-cancel">取消</button><button class="button button-primary" type="button" id="plan-execute">执行此计划</button></div></dialog>
+      <footer class="page-footer"><span>千灯纪 · 让每一次归途都有灯火</span><span>观察世界 · 有序管理</span></footer>
+    </main>
+  </div>
+  <div id="live-message" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
