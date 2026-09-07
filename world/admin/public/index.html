@@ -25,6 +25,7 @@
       <button class="nav-item" data-view="world"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z"/></svg><span>世界</span><span class="nav-index">04</span></button>
       <button class="nav-item" data-view="operations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M6 21v-3a6 6 0 0 1 12 0v3M3 8v6m18-6v6M1 11h4m14 0h4"/></svg><span>运营组</span><span class="nav-index">05</span></button>
       <button class="nav-item" data-view="agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 3v3M8 11h.01M16 11h.01M9 16h6M1 11v4m22-4v4"/></svg><span>Agent 设置</span><span class="nav-index">06</span></button>
+      <button class="nav-item" data-view="survivor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 7-7M13 11l7-7v5l-6 6M8 12l4 4M4 16l4 4"/></svg><span>桐人 · 自主生存</span><span class="nav-index">07</span></button>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-note"><span class="status-dot neutral" id="panel-dot"></span><span id="panel-status">正在连接管理台</span></div>
@@ -71,6 +72,12 @@
         <a class="link-card" href="#eye"><div><span class="link-kicker">LIVE WORLD</span><strong>打开天神之眼</strong><p>实时三维观察与周边地形；查看地点档案不会自动传送。</p></div><span aria-hidden="true">↗</span></a>
       </section>
 
+      <section id="view-survivor" class="view" hidden aria-labelledby="page-title">
+        <article class="card"><div class="card-heading"><div><p class="eyebrow">KIRITO · LIVE ADVENTURE</p><h2>桐人的冒险</h2></div><span id="survivor-badge" class="badge neutral">待读取</span></div><p id="survivor-freshness" class="card-caption" role="status">等待自主生存服务的状态。</p><p id="survivor-goal" class="page-description"></p><div id="survivor-metrics" class="metric-grid"></div><p id="survivor-decision" class="card-caption"></p><div class="chip-list"><a class="button button-secondary" href="#services">管理桐人服务</a><a class="button button-secondary" href="http://127.0.0.1:18091/agents" target="_blank" rel="noopener noreferrer">打开桐人控制台 ↗</a><a class="button button-secondary" href="#eye">在天神之眼观察</a></div><p class="footnote">启停前往服务器管理，选择“桐人 · 自主生存”。任务受理与实际完成分别记录，未知结果需要核对。</p></article>
+        <div class="operations-grid"><article class="card"><div class="card-heading"><h2>随身物品</h2></div><div id="survivor-inventory" class="fact-list"></div></article><article class="card"><div class="card-heading"><h2>调用预算</h2></div><div id="survivor-budgets" class="fact-list"></div><p class="footnote">后台观察不调用模型；模型请求与决策轮次分别统计，Token 记录不等于实际账单。</p></article></div>
+        <article class="card"><div class="card-heading"><h2>积累的技能</h2></div><div id="survivor-skills" class="chip-list"></div></article>
+        <article class="card"><div class="card-heading"><h2>最近的经历</h2></div><div id="survivor-episodes" class="operations-grid"></div></article>
+      </section>
       <section id="view-operations" class="view" hidden aria-labelledby="page-title">
         <div class="section-banner"><div class="banner-icon" aria-hidden="true">◈</div><div><h2>一起照看这片世界</h2><p>查看运营角色、运行环境与服务依赖，让待处理的事情有迹可循。</p></div><span id="operations-badge" class="badge neutral">待读取</span></div>
         <div id="operations-notice" class="notice" role="status">正在读取运营记录…</div>

@@ -194,6 +194,7 @@ class ChantingUiHealth(unittest.TestCase):
                 patch.object(health, 'probe_chanting_staff', return_value={'ok': True}), \
                 patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
                 patch.object(health, 'probe_game_qwenpaw', return_value={'ok': True}), \
+                patch.object(health, 'probe_survivor', return_value={'ok': True}), \
                 patch.object(health, 'probe_voice_boundary_deployment', return_value={'ok': True}), \
                 patch.object(health, 'probe_voice_recording', return_value={'ok': True}):
             self.assertTrue(health.probe_panel_smoke()['ok'])

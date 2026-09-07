@@ -15,7 +15,8 @@
       "mc",
       "world",
       "gate",
-      "npc"
+      "npc",
+      "survivor"
     ],
     "dialogue": [
       "qwenpaw"
@@ -35,6 +36,14 @@
     ]
   },
   "services": [
+    {
+      "id": "survivor",
+      "label": "桐人 · 自主生存",
+      "group": "game",
+      "purpose": "独立身体、自主规划与受控技能学习；控制台 18091",
+      "dependencies": ["mc"],
+      "healthRequired": true
+    },
     {
       "id": "mc",
       "label": "Minecraft 世界",

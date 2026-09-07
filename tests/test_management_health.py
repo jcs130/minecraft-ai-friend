@@ -72,7 +72,7 @@ class ManagementHealthTests(unittest.TestCase):
             'probe_panel_http', 'probe_recorded_behavior', 'probe_source_record',
             'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff',
             'probe_voice_recording', 'probe_voice_boundary_deployment',
-            'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw',
+            'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor',
         )
         with ExitStack() as stack:
             no_http = stack.enter_context(patch.object(

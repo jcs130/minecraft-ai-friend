@@ -80,6 +80,39 @@ export function projectHealth(raw, now = Date.now()) {
 const optionalText = (value, max = 180) => typeof value === 'string' ? value.slice(0, max) : null;
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 const nonnegative = value => number(value) !== null && value >= 0 ? value : null;
+const survivorPosition = raw => { const value = object(raw); return { x: number(value.x), y: number(value.y), z: number(value.z) }; };
+const survivorItems = (raw, signed = false) => Object.fromEntries(Object.entries(object(raw))
+  .filter(([key, n]) => key.length <= 100 && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(key)
+    && Number.isSafeInteger(n) && (signed || n >= 0)).slice(0, 64));
+function survivorAction(raw) {
+  const value = object(raw), response = object(value.result);
+  return { tool: optionalText(value.tool, 40), code: optionalText(response.code, 60), ok: bool(response.ok),
+    completionConfirmed: bool(response.completionConfirmed), acceptedAt: number(value.acceptedAt) };
+}
+export function projectSurvivor(raw, now = Date.now()) {
+  const value = object(raw);
+  if (value.schema !== 1 || value.project !== 'qiandengji-survivor' || value.bodyName !== 'Kirito' || value.character !== '桐人'
+      || typeof value.generatedAt !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value.generatedAt))
+    return { available: false, stale: true, generatedAt: null };
+  const body = object(value.body), budgets = object(value.budgets), decision = object(value.lastDecision);
+  return { available: true, ...freshness(value.generatedAt, now, 90), generatedAt: optionalText(value.generatedAt, 64),
+    character: '桐人', bodyName: 'Kirito', status: text(value.status, 64), enabled: bool(value.enabled),
+    goal: text(value.goal, 1200), pauseReason: optionalText(value.pauseReason, 120),
+    lastDecision: value.lastDecision && typeof value.lastDecision === 'object' && !Array.isArray(value.lastDecision)
+      ? { turnId: optionalText(decision.turnId, 128), at: optionalText(decision.at, 64), completed: bool(decision.completed),
+        actions: list(decision.actions).slice(-2).map(survivorAction) } : null,
+    body: { online: bool(body.online), hp: number(body.hp), hunger: number(body.hunger),
+      position: survivorPosition(body.position), counts: survivorItems(body.counts) },
+    budgets: Object.fromEntries(['decisionsUsed', 'decisionLimit', 'cooldownSeconds', 'modelRequests', 'promptTokens', 'completionTokens'].map(key => [key, count(budgets[key])])),
+    skills: list(value.skills).slice(0, 40).map(row => ({ name: text(row?.name, 80), description: text(row?.description, 400),
+      activeVersion: optionalText(row?.activeVersion, 80), draftVersion: optionalText(row?.draftVersion, 80) })),
+    episodes: list(value.episodes).slice(-12).map(row => ({ at: optionalText(row?.at, 64), kind: text(row?.kind, 60),
+      turnId: optionalText(row?.turnId, 128), taskId: optionalText(row?.taskId, 128), completed: bool(row?.completed),
+      action: optionalText(row?.action, 40), inventoryDelta: survivorItems(row?.inventoryDelta, true),
+      positionBefore: survivorPosition(row?.positionBefore), positionAfter: survivorPosition(row?.positionAfter),
+      name: optionalText(row?.name, 80), version: optionalText(row?.version, 80), status: optionalText(row?.status, 60),
+      reason: optionalText(row?.reason, 500), errorType: optionalText(row?.errorType, 80) })) };
+}
 const operationsRoles = ['mc-god', 'default', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto'];
 const roundUsage = value => ({ modelCalls: count(value.modelCalls), promptTokens: count(value.promptTokens),
   completionTokens: count(value.completionTokens), elapsedSeconds: nonnegative(value.elapsedSeconds) });

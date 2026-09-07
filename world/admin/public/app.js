@@ -1,6 +1,7 @@
 'use strict';
 
 const views = {
+  survivor: ['桐人 · 自主生存', 'AUTONOMOUS ADVENTURE', '桐人 · 自主生存', '跟随他的目标、行动与学习，了解世界里的真实进展。'],
   eye: ['天神之眼', 'LIVE WORLD', '天神之眼', '从世界中看见世界。选择视角，观察身边正在发生的故事。'],
   services: ['服务器管理', 'SERVER MANAGEMENT', '服务器管理', '当前状态、日志与维护记录集中管理，每次操作都有清楚的范围。'],
   overview: ['总览', 'WORLD OVERVIEW', '世界运行总览', '查看这片世界的近况，以及每一项记录的更新时间。'],
@@ -17,6 +18,8 @@ const dimensionNames = { 'minecraft:overworld': '主世界', 'minecraft:the_neth
 const operationsSkillNames = { 'qd-evidence-report': '证据与报告', 'qd-team-coordination': '团队协调',
   'qd-service-triage': '服务排障', 'qd-priority-review': '优先级与验收', 'qd-world-events': '世界活动策划',
   'qd-casting-acceptance': '施法与操作验收', 'qd-onboarding-exploration': '新手与探索体验' };
+serviceNames.survivor = '桐人 · 自主生存';
+servicePurposes.survivor = '自主规划、生存与技能学习';
 const byId = (id) => document.getElementById(id);
 const rows = (value) => Array.isArray(value) ? value : [];
 const record = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -339,6 +342,63 @@ function renderActiveView(data) {
   else if (activeView === 'world') renderWaypoints(data);
   else if (activeView === 'agent') renderAgent(data);
   else if (activeView === 'operations') renderOperations(data);
+  else if (activeView === 'survivor') renderSurvivor(data);
+}
+function renderSurvivor(data) {
+  const value = record(data.survivor), body = record(value.body), budgets = record(value.budgets);
+  const stale = value.available !== true || value.stale === true;
+  const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
+    cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止' };
+  const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备' };
+  const actionName = tool => actionNames[tool] || text(tool, '身体动作');
+  const actionResult = action => action.code === 'accepted' ? '已受理，实际结果待观察'
+    : action.code === 'executed' && action.completionConfirmed === true ? '已确认执行'
+    : action.code === 'outcome_unknown' ? '结果不明，需要核对'
+    : action.ok === false ? '未执行成功' : '等待确认';
+  setBadge('survivor-badge', stale ? '历史记录 / 待更新' : (states[value.status] || '状态：' + text(value.status)), !stale && body.online ? 'good' : 'neutral');
+  byId('survivor-freshness').textContent = value.available ? '记录更新：' + formatDate(value.generatedAt) + (stale ? '。已过期，请检查服务；以下为上次记录。' : '。每 15 秒读取，身体状态由后台持续观察。') : '尚无桐人的有效状态。请先检查自主生存服务。';
+  byId('survivor-goal').textContent = '当前目标：' + text(value.goal, '等待设置目标');
+  const pos = record(body.position);
+  replace('survivor-metrics', [metric('身体', body.online === true ? '在线' : body.online === false ? '离线' : '未知', 'Kirito'),
+    metric('生命', number(body.hp), '实际生命值'), metric('饥饿', number(body.hunger), '实际饥饿值'),
+    metric('位置', finite(pos.x) ? `${number(pos.x)} · ${number(pos.y)} · ${number(pos.z)}` : '未知', '世界坐标')]);
+  const decision = record(value.lastDecision);
+  byId('survivor-decision').textContent = value.lastDecision
+    ? '最近决策：' + formatDate(decision.at) + ' · ' + (decision.completed === true ? '本轮规划已结束' : decision.completed === false ? '本轮规划未完成' : '本轮结果待确认')
+      + (rows(decision.actions).length ? '。' + rows(decision.actions).map(action => actionName(action.tool) + '：' + actionResult(action)).join('；') : '。本轮没有身体动作回执。')
+    : '最近决策：尚未记录';
+  const inventory = Object.entries(record(body.counts));
+  if (inventory.length) facts('survivor-inventory', inventory.map(([id, n]) => [id, number(n)]));
+  else replace('survivor-inventory', [empty(body.online === true ? '背包暂时没有物品记录。' : '等待身体连接后读取。')]);
+  facts('survivor-budgets', [['近24小时决策', number(budgets.decisionsUsed) + ' / ' + number(budgets.decisionLimit)],
+    ['决策间隔', number(budgets.cooldownSeconds) + ' 秒'], ['累计模型请求', number(budgets.modelRequests)],
+    ['累计输入 / 输出 Token', number(budgets.promptTokens) + ' / ' + number(budgets.completionTokens)]]);
+  replace('survivor-skills', rows(value.skills).map(skill => {
+    const card = node('div', 'operation-record');
+    card.append(node('strong', '', text(skill.name)), node('p', 'card-caption', text(skill.description, '暂无描述')),
+      node('p', 'footnote', skill.activeVersion ? '已启用版本：' + skill.activeVersion : '尚无启用版本'));
+    if (skill.draftVersion) card.append(node('p', 'footnote', '草稿版本：' + skill.draftVersion));
+    return card;
+  }).concat(rows(value.skills).length ? [] : [empty('尚无技能记录。')]));
+  replace('survivor-episodes', rows(value.episodes).slice().reverse().map(row => {
+    const title = row.kind === 'decision_finished' ? (row.completed === true ? '一轮规划已结束' : '本轮规划未完成')
+      : row.kind === 'action_observed' ? actionName(row.action) + '后的实际观察'
+      : row.kind === 'skill_finished' ? (row.status === 'done' ? '技能报告本轮结束' : '技能需要重新规划')
+      : row.kind === 'skill_stopped' ? '技能执行已暂停' : row.kind === 'skill_error' ? '技能执行遇到问题' : '运行记录';
+    const card = node('div', 'operation-record'); card.append(node('strong', '', title), node('p', 'footnote', formatDate(row.at)));
+    if (row.name) card.append(node('p', 'card-caption', row.name + (row.version ? ' · ' + row.version : '')));
+    if (row.kind === 'action_observed') {
+      const changes = Object.entries(record(row.inventoryDelta)).filter(([, n]) => finite(n) && n !== 0);
+      card.append(node('p', 'card-caption', changes.length ? '背包变化：' + changes.map(([id, n]) => id + ' ' + (n > 0 ? '+' : '') + number(n)).join('，') : '背包没有数量变化。'));
+      const before = record(row.positionBefore), after = record(row.positionAfter), positionText = pos => `${number(pos.x)} · ${number(pos.y)} · ${number(pos.z)}`;
+      if (finite(before.x) && finite(after.x)) card.append(node('p', 'footnote', '位置：' + positionText(before) + ' → ' + positionText(after)));
+      card.append(node('p', 'footnote', '这些是实际状态变化，不能单独证明任务已完成。'));
+    }
+    const reasons = { skill_execution_budget: '本次技能执行达到步数或时间限制。', operator_stop: '管理者停止了本次执行。', outcome_unknown: '动作结果仍不明确，请先核对身体。' };
+    if (row.reason) card.append(node('p', 'card-caption', reasons[row.reason] || '原因：' + row.reason));
+    if (row.errorType) card.append(node('p', 'footnote', '错误类型：' + row.errorType));
+    return card;
+  }).concat(rows(value.episodes).length ? [] : [empty('最近经历会在行动后出现在这里。')]));
 }
 function render(data) {
   snapshot = data;
@@ -368,7 +428,7 @@ async function refresh(manual = false) {
     render(data);
     if (manual) byId('live-message').textContent = '记录已刷新。' + (data.stale ? '当前世界记录陈旧。' : '');
   } catch (error) {
-    if (snapshot) render({ ...snapshot, stale: true, health: { ...record(snapshot.health), stale: true }, operations: { ...record(snapshot.operations), stale: true, staleReason: 'connection' } });
+    if (snapshot) render({ ...snapshot, stale: true, health: { ...record(snapshot.health), stale: true }, survivor: { ...record(snapshot.survivor), stale: true }, operations: { ...record(snapshot.operations), stale: true, staleReason: 'connection' } });
     const notice = byId('connection-notice'); notice.hidden = false; notice.className = 'notice error';
     notice.textContent = snapshot ? '未能取得新快照，以下保留上次读取的历史记录。请稍后刷新。' : '暂时无法读取世界记录，页面会继续重试。';
     if (snapshot) {

@@ -263,6 +263,47 @@ services:
       retries: 4
       start_period: 90s
 
+  survivor:
+    image: qiandengji-survivor:2.2.0-qd1
+    pull_policy: never
+    restart: unless-stopped
+    stop_grace_period: 120s
+    init: true
+    entrypoint: ["python", "-u", "/survival/service.py"]
+    ports:
+      - "127.0.0.1:18091:8088"
+    environment:
+      TZ: Asia/Shanghai
+      HOME: /state/home
+      QWENPAW_WORKING_DIR: /state/work
+      COPAW_WORKING_DIR: /state/work
+      QWENPAW_SECRET_DIR: /state/secret
+      COPAW_SECRET_DIR: /state/secret
+      QWENPAW_DISABLE_KEYRING: "1"
+      QWENPAW_KEYRING_ACCOUNT: qiandengji-survivor
+      QWENPAW_AUTH_ENABLED: "0"
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_SECRET: /run/secrets/rcon
+    volumes:
+      - ./server/survival-agent-state:/state
+      - ./server/panel-state:/public
+      - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 160
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "/survival/health.py"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 180s
+
   voice:
     image: mc-voice:1.0
     pull_policy: never

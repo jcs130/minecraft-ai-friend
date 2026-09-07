@@ -2,9 +2,11 @@
 
 目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
-用户最新阶段决定（2026-09-07）：AI Agent 相关新功能先不做，复用已有实现；先研究并拆分现有架构，推进玩家玩法。当前拆分边界、兼容要求和顺序见 docs/ARCHITECTURE.md。
+用户阶段决定（2026-09-07）：先复用已有 Agent、拆分架构和推进玩家玩法。2026-09-08 新授权：开始一个 QwenPaw + Numen 自主生存 Agent，使用原桐人，支持自主规划、执行、反思及可编程技能学习；这取代此前“Agent 新功能先不做”的阶段限制。当前边界见 docs/AUTONOMOUS-SURVIVOR.md。
 
 后续补充：保留 QwenPaw，但会话接口支持替换，管理台独立运行。D 项目管理台为 19091，游戏 QwenPaw 为 18089，运营 QwenPaw 为 18090，网页天神之眼为 19092。用户 2026-09-08 明确要求前三个网页入口本机免密码，仅绑定 127.0.0.1；宿主 QwenPaw 8088 保持原用途和配置，旧 9090 不再保活。最新边界见 docs/SERVER-MANAGEMENT.md。
+
+自主桐人另用 survivor 单容器（QwenPaw 2.2 + 受限 JS 技能 + Numen 调度）、独立 server/survival-agent-state 和本机免密码 18091；19091/#survivor 显示状态，服务管理保留预览确认。复用 Kirito 的旧 UUID d4ac9523-4962-43ed-98c5-19b49e104048、物资及 qiandengji_kirito YSM 绑定，不启用旧守卫驱动、不改宿主 QwenPaw、不向运营六角色发放身体/RCON 权限。默认滚动24小时48次决策、180秒冷却、模型并发1/QPM4/6迭代；纯观察与已验证技能的逐步执行不逐步调用模型。技能必须草拟→测试→晋升后运行，未知动作不重放；Numen 寻路/采矿边界是预检，不能宣称硬隔离或长期自主生存已经验收。
 
 后续执行：普通玩家命令已提取到 application/player-commands.ts；world 不再以 QwenPaw 健康作为启动前提。保留旧授权、回执和队列去重，不把可信进程内端口暴露为无鉴权管理 API。当前证据与仍保留的历史问题见 docs/PLAYER-COMMAND-SERVICE.md；用户最新优先级是“语言即接口”：真人按住说话施法，CLI 供 Agent 与内部执行；语音接线与边界见 docs/LANGUAGE-INTERFACE.md，先验证语音再推进实物工会合同。
 

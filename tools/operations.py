@@ -20,7 +20,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = re.compile(r'^[a-z][a-z0-9-]{0,47}$')
-KNOWN = frozenset(('mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control'))
+KNOWN = frozenset(('mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'))
 
 
 def utc(): return datetime.now(timezone.utc).isoformat()
@@ -179,15 +179,15 @@ def lifecycle_plan(action,selected,states):
     assert action in ('start','stop','restart') and selected and set(selected)<=KNOWN
     expanded=set(selected)
     if action in ('stop','restart'):
-        if 'mc' in expanded:expanded.update(('world','npc','gate'))
+        if 'mc' in expanded:expanded.update(('world','npc','gate','survivor'))
         elif 'world' in expanded:expanded.add('npc')
         if 'tts' in expanded:expanded.add('voice')
-    stop_order=[n for n in ('npc','world','gate','voice','asr','qwenpaw-ops','qwenpaw','resources','panel','control','mc','tts') if n in expanded]
+    stop_order=[n for n in ('survivor','npc','world','gate','voice','asr','qwenpaw-ops','qwenpaw','resources','panel','control','mc','tts') if n in expanded]
     # A restart restores previously running consumers; it does not wake a
     # deliberately stopped dependent just because its prerequisite restarted.
     start=list(selected) if action=='start' else [n for n in stop_order if n in selected or states.get('qiandengji-'+n+'-1',{}).get('state')=='running']
-    start=[n for n in ('tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','panel') if n in start] if action!='stop' else []
-    dependencies={'world':['mc'],'gate':['mc'],'npc':['mc','world'],'voice':['tts']}
+    start=[n for n in ('tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','panel','survivor') if n in start] if action!='stop' else []
+    dependencies={'world':['mc'],'gate':['mc'],'npc':['mc','world'],'voice':['tts'],'survivor':['mc']}
     required=sorted({d for n in start for d in dependencies.get(n,[]) if d not in start})
     return {'project':'qiandengji','action':action,'selected':selected,'stop':stop_order if action!='start' else [],
             'saveMinecraft':action!='start' and 'mc' in expanded and states.get('qiandengji-mc-1',{}).get('state')=='running',

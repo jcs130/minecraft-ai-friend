@@ -4,10 +4,10 @@ import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
-export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control'];
+export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'];
 const MUTABLE = SERVICES.filter(x => x !== 'control');
-const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts']};
-const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','panel'];
+const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc']};
+const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','panel','survivor'];
 export function redactLog(text) {
   const sensitive = key => /(?:password|passwd|secret|token|authorization|api.?key|credential)/i.test(key);
   const redactText=value=>value.replace(/(Bearer\s+)[^\s"']+/gi,'$1[redacted]')
@@ -72,7 +72,7 @@ export function buildPlan(input, rows) {
   const byId=new Map(rows.map(r=>[r.id,r]));
   const affected=new Set(selected);
   if(input.action!=='start') {
-    if(affected.has('mc')) ['world','gate','npc'].forEach(x=>affected.add(x));
+    if(affected.has('mc')) ['world','gate','npc','survivor'].forEach(x=>affected.add(x));
     if(affected.has('world')) affected.add('npc');
     if(affected.has('tts')) affected.add('voice');
   }

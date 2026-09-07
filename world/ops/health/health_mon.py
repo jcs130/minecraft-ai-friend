@@ -60,7 +60,10 @@ MANIFEST = {
     "panel": {"health_required": True, "purpose": "Independent management page and public read models"},
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
+    "survivor": {"health_required": True, "purpose": "Kirito autonomous survival, leased Numen actions and tested skills"},
 }
+SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
+    'survivor-status-panel', 'survivor-supervised-runtime', 'autonomous-task-evidence')
 
 OPERATIONS_TEAM_CONTAINER = 'qiandengji-qwenpaw-ops-1'
 OPERATIONS_TEAM_ROLES = ('default', 'mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
@@ -149,14 +152,54 @@ def probe_panel_smoke():
     chanting_client = probe_chanting_client()
     operations_team = probe_operations_team()
     game_qwenpaw = probe_game_qwenpaw()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw)),
+    survivor = probe_survivor()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
-            'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw}
+            'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor}
+
+
+def probe_survivor():
+    """Current read-only survivor status plus separate recorded action evidence."""
+    checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False}
+    try:
+        target = PROJECT/'server/panel-state/survivor.json'
+        if target.is_symlink() or target.stat().st_size > 262144:
+            raise ValueError('invalid_snapshot')
+        source = json.loads(target.read_text(encoding='utf-8-sig'))
+        timestamp = operations_time(source.get('generatedAt'))
+        checks['snapshot_fresh'] = (source.get('schema') == 1 and source.get('project') == 'qiandengji-survivor'
+            and source.get('character') == '桐人' and source.get('bodyName') == 'Kirito'
+            and -5 <= time.time() - timestamp.timestamp() <= 90)
+        result = subprocess.run(['docker', 'inspect', 'qiandengji-survivor-1'], capture_output=True,
+            text=True, encoding='utf-8', errors='replace', timeout=12)
+        if result.returncode == 0:
+            row = json.loads(result.stdout)[0]
+            state = row.get('State', {})
+            labels = row.get('Config', {}).get('Labels', {})
+            checks['supervised_container'] = (state.get('Status') == 'running'
+                and state.get('Health', {}).get('Status') == 'healthy'
+                and labels.get('com.docker.compose.project') == 'qiandengji'
+                and labels.get('com.docker.compose.service') == 'survivor'
+                and row.get('HostConfig', {}).get('RestartPolicy', {}).get('Name') == 'unless-stopped')
+        with urllib.request.urlopen('http://127.0.0.1:19091/api/state', timeout=6) as response:
+            payload = response.read(2097153)
+        if len(payload) > 2097152:
+            raise ValueError('oversized_panel')
+        public = json.loads(payload).get('survivor', {})
+        checks['panel_projection'] = (public.get('available') is True and public.get('stale') is False
+            and public.get('character') == '桐人' and public.get('bodyName') == 'Kirito'
+            and abs((operations_time(public.get('generatedAt')) - timestamp).total_seconds()) < 30)
+        paused = source.get('status') == 'paused' and source.get('enabled') is False
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError, subprocess.TimeoutExpired):
+        paused = False
+    behavior = probe_recorded_behavior('survivor-smoke.json', SURVIVOR_SMOKE_CHECKS)
+    return {'ok': all(checks.values()) and behavior['ok'], 'checks': checks, 'paused': paused,
+        'behavior': behavior, 'scope': 'Live status, supervised container and recorded autonomy evidence; no model calls'}
 
 
 def probe_game_qwenpaw():

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "project": "qiandengji-survivor",
+  "character": "桐人",
+  "bodyName": "Kirito",
+  "bodyUuid": "d4ac9523-4962-43ed-98c5-19b49e104048",
+  "ownerUuid": "e5005711-be9f-44b7-aaad-6993c0ba5df4",
+  "dimension": "minecraft:overworld",
+  "mission": "以桐人的身份自主生活和探索。先观察已有物资与周围环境，自主选择一个小目标，执行后核对真实结果；将可复用的经验写成技能代码，测试并改善它。尊重玩家建筑和已有物资归属。",
+  "observationSeconds": 15,
+  "decisionCooldownSeconds": 180,
+  "decisionsPerDay": 48,
+  "taskTimeoutSeconds": 240,
+  "maxSkillSteps": 32,
+  "maxSkillSeconds": 900,
+  "anchor": {"x": -544, "z": 865},
+  "protectedRadius": 48,
+  "workArea": null,
+  "notice": "部署时先检查实际位置再设置采集区域。Numen 寻路只支持范围预检，不能当作服务端硬边界。"
+}

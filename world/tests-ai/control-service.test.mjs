@@ -116,7 +116,7 @@ test('explicit dependency plan does not start an already stopped NPC as a side e
 test('MC restart stops consumers, acknowledges save, stops MC then starts dependencies in order',async t=>{
   const f=await fixture(t),result=await f.operate({action:'restart',services:['mc']});
   assert.equal(result.ok,true);assert.equal(result.cleanup.lockReleased,true);
-  assert.deepEqual(result.steps.map(s=>s.name),['停止 npc','停止 gate','停止 world','保存 Minecraft','停止 mc','启动并检查 mc','启动并检查 world','启动并检查 gate','启动并检查 npc']);
+  assert.deepEqual(result.steps.map(s=>s.name),['停止 survivor','停止 npc','停止 gate','停止 world','保存 Minecraft','停止 mc','启动并检查 mc','启动并检查 world','启动并检查 gate','启动并检查 npc','启动并检查 survivor']);
   const exec=f.calls.find(c=>c.route===`/containers/${idFor('mc')}/exec`);assert.deepEqual(exec.body.Cmd,['rcon-cli','save-all','flush']);
   assert.equal((await f.request('/execute',{planId:result.id})).value.error,'plan_expired');
 });
