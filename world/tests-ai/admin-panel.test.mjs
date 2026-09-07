@@ -23,6 +23,104 @@ function operationsFixture(now = Date.now()) {
   };
 }
 
+function operationsTeamFixture(now = Date.now()) {
+  const fixture = operationsFixture(now);
+  fixture.runtimes[0].agentCount = 4; fixture.runtimes[0].enabledAgentCount = 3;
+  fixture.runtimes.push({ ...fixture.runtimes[0], id: 'qiandengji-ops', label: '千灯纪世界运营组',
+    version: '2.2.0', endpoint: 'http://127.0.0.1:18090', agentCount: 7, enabledAgentCount: 6 });
+  fixture.agents[0].label = '游戏女神';
+  fixture.agents[1] = { ...fixture.agents[0], id: 'mc-herald', label: '游戏司礼' };
+  const names = { 'mc-god': '运营天神', default: '司灯', 'mc-herald': '灯语女神',
+    'mc-priest': '灶火祭司', 'mc-guard-kirito': '桐人体验官', 'mc-guard-naruto': '鸣人体验官' };
+  fixture.agents.push(...Object.entries(names).map(([id, label]) => ({ ...fixture.agents[0], id, label,
+    runtimeId: 'qiandengji-ops', modelProvider: id === 'mc-god' ? 'zhipu-cn-codingplan' : 'aliyun-codingplan',
+    model: id === 'mc-god' ? 'glm-5.3' : 'qwen3.6-plus' })));
+  fixture.teamPolicy = { packageVersion: '2.2.0', mode: 'manual', maxConcurrentModels: 1, maxQueriesPerMinute: 6,
+    maxIterations: 5, automaticRetries: false, delegationCooldownSeconds: 1800, maxDelegationsPerDay: 4,
+    scheduledJobs: 0, heartbeat: false, roleSkills: Object.fromEntries(Object.keys(names).map(role => [role, ['qd-evidence-report']])) };
+  const specialties = { default: 'qd-team-coordination', 'mc-god': 'qd-priority-review', 'mc-herald': 'qd-service-triage',
+    'mc-priest': 'qd-world-events', 'mc-guard-kirito': 'qd-casting-acceptance', 'mc-guard-naruto': 'qd-onboarding-exploration' };
+  for (const [role, skill] of Object.entries(specialties)) fixture.teamPolicy.roleSkills[role].push(skill);
+  fixture.teamUsage = { callCount: 3, promptTokens: 1234, completionTokens: 56, cachedTokens: 800,
+    window: 'today', generatedAt: new Date(now).toISOString() };
+  fixture.teamRound = { schema: 1, project: 'qiandengji-ops', runId: 'ops-fixture', ok: true,
+    finishedAt: new Date(now).toISOString(), modelCalls: 3, promptTokens: 1234, completionTokens: 56, elapsedSeconds: 18.5,
+    roles: [{ role: 'default', ok: true, requestId: 'ops-fixture-default', summary: '整理运营待办，等待人工处理。',
+      modelCalls: 3, promptTokens: 1234, completionTokens: 56, elapsedSeconds: 18.5 }] };
+  return fixture;
+}
+
+test('operations policy, usage and round metrics expose only bounded public records', () => {
+  const fixture = operationsTeamFixture(), sentinel = 'PRIVATE_BUDGET_SENTINEL';
+  for (const field of ['teamPolicy', 'teamUsage', 'teamRound']) fixture[field].secret = sentinel;
+  fixture.teamPolicy.roleSkills.host = [sentinel]; fixture.teamRound.roles[0].providerConfig = sentinel;
+  fixture.teamPolicy.roleSkills.default.push(null, {}, '', 'qd-team-coordination', 'x'.repeat(500));
+  fixture.teamRound.roles.push({ role: 'host', summary: sentinel });
+  const result = projectOperations(fixture);
+  assert.equal(result.teamPolicy.maxConcurrentModels, 1); assert.equal(result.teamPolicy.automaticRetries, false);
+  assert.equal(result.teamPolicy.scheduledJobs, 0); assert.equal(result.teamPolicy.heartbeat, false);
+  assert.deepEqual(result.teamPolicy.roleSkills.default, ['qd-evidence-report', 'qd-team-coordination', 'x'.repeat(100)]);
+  assert.equal(result.teamUsage.callCount, 3); assert.equal(result.teamUsage.cachedTokens, 800);
+  assert.equal(result.teamRound.elapsedSeconds, 18.5); assert.equal(result.teamRound.roles[0].modelCalls, 3);
+  assert.equal(result.teamRound.roles.length, 1); assert.equal(JSON.stringify(result).includes(sentinel), false);
+});
+
+test('missing or malformed operations budgets and measured usage remain unknown instead of zero', () => {
+  const fixture = operationsTeamFixture();
+  fixture.teamPolicy.maxConcurrentModels = '1'; fixture.teamPolicy.maxIterations = -1;
+  fixture.teamPolicy.automaticRetries = 0; fixture.teamPolicy.roleSkills = { default: null, 'mc-god': [] };
+  fixture.teamUsage = { callCount: true, promptTokens: -1, completionTokens: Infinity, cachedTokens: 0.5, window: 'forever' };
+  fixture.teamRound.modelCalls = false; fixture.teamRound.elapsedSeconds = -0.1;
+  delete fixture.teamRound.roles[0].promptTokens; fixture.teamRound.roles[0].elapsedSeconds = '18';
+  const result = projectOperations(fixture);
+  assert.equal(result.teamPolicy.maxConcurrentModels, null); assert.equal(result.teamPolicy.maxIterations, null);
+  assert.equal(result.teamPolicy.automaticRetries, null); assert.equal(result.teamPolicy.roleSkills.default, null);
+  assert.deepEqual(result.teamPolicy.roleSkills['mc-god'], []);
+  for (const field of ['callCount', 'promptTokens', 'completionTokens', 'cachedTokens', 'window', 'generatedAt']) assert.equal(result.teamUsage[field], null);
+  assert.equal(result.teamRound.modelCalls, null); assert.equal(result.teamRound.elapsedSeconds, null);
+  assert.equal(result.teamRound.roles[0].promptTokens, null); assert.equal(result.teamRound.roles[0].elapsedSeconds, null);
+  for (const fixture of [operationsFixture(), { ...operationsFixture(), teamPolicy: [], teamUsage: [] },
+    operationsTeamFixture(Date.now() + 60000)]) {
+    const result = projectOperations(fixture);
+    assert.equal(result.teamPolicy, null); assert.equal(result.teamUsage, null); assert.equal(result.teamRound, null);
+  }
+});
+
+test('round summaries derive missing metrics only from a complete measured roster', () => {
+  const fixture = operationsTeamFixture();
+  for (const field of ['modelCalls', 'promptTokens', 'completionTokens', 'elapsedSeconds']) delete fixture.teamRound[field];
+  let result = projectOperations(fixture).teamRound;
+  assert.equal(result.modelCalls, 3); assert.equal(result.promptTokens, 1234);
+  assert.equal(result.completionTokens, 56); assert.equal(result.elapsedSeconds, 18.5);
+  fixture.teamRound.roles.push({ ...fixture.teamRound.roles[0], role: 'mc-herald', modelCalls: 1,
+    promptTokens: 100, completionTokens: 10, elapsedSeconds: 5 });
+  result = projectOperations(fixture).teamRound;
+  assert.equal(result.modelCalls, 4); assert.equal(result.promptTokens, 1334);
+  assert.equal(result.completionTokens, 66); assert.equal(result.elapsedSeconds, null, 'Concurrent durations must not be summed');
+  fixture.teamRound.startedAt = '2026-09-07T20:00:00+08:00';
+  fixture.teamRound.finishedAt = '2026-09-07T12:00:30.100Z';
+  assert.equal(projectOperations(fixture).teamRound.elapsedSeconds, 30.1);
+  fixture.teamRound.modelCalls = 8;
+  assert.equal(projectOperations(fixture).teamRound.modelCalls, 8, 'An explicit total may include calls outside the role reports');
+  delete fixture.teamRound.modelCalls;
+  delete fixture.teamRound.roles[1].promptTokens;
+  result = projectOperations(fixture).teamRound;
+  assert.equal(result.promptTokens, null); assert.equal(result.modelCalls, 4, 'Completeness is checked independently per metric');
+  fixture.teamRound.finishedAt = 'invalid';
+  assert.equal(projectOperations(fixture).teamRound.elapsedSeconds, null);
+  for (const roles of [[], [{ role: 'default' }], [{ ...fixture.teamRound.roles[0], role: 'host' }],
+    [fixture.teamRound.roles[0], fixture.teamRound.roles[0]],
+    [fixture.teamRound.roles[0], { role: 'host', modelCalls: 9 }]]) {
+    const result = projectOperations({ ...fixture, teamRound: { ...fixture.teamRound, roles } }).teamRound;
+    assert.equal(result.modelCalls, null); assert.equal(result.promptTokens, null);
+    assert.equal(result.completionTokens, null); assert.equal(result.elapsedSeconds, null);
+  }
+  fixture.teamRound.roles = [{ role: 'default', modelCalls: 0, promptTokens: 0, completionTokens: 0, elapsedSeconds: 0 }];
+  result = projectOperations(fixture).teamRound;
+  assert.equal(result.modelCalls, 0); assert.equal(result.promptTokens, 0);
+  assert.equal(result.completionTokens, 0); assert.equal(result.elapsedSeconds, 0, 'Measured zero remains a real zero');
+});
+
 test('operations projection keeps only named public fields and preserves unknown counts', () => {
   const now = Date.now(), fixture = operationsFixture(now), sentinel = 'PRIVATE_OPERATIONS_SENTINEL';
   fixture.secret = sentinel;
@@ -168,7 +266,7 @@ test('operations browser view remains read-only, navigable and scrollable on des
   assert.deepEqual(errors, []);
 });
 
-test('operations UI shows only project roles, excludes built-in profiles and counts the displayed scope', async t => {
+test('operations UI shows six operators and two game roles, with truthful budgets, skills and usage', async t => {
   const candidates = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe'];
   let executablePath;
@@ -182,8 +280,9 @@ test('operations UI shows only project roles, excludes built-in profiles and cou
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [], requestedMutations = [];
   page.on('pageerror', error => errors.push(error.message));
-  const fixture = operationsFixture();
-  fixture.runtimes[0].agentCount = 4; fixture.runtimes[0].enabledAgentCount = 3;
+  const fixture = operationsTeamFixture();
+  fixture.teamPolicy.roleSkills.default.push('custom-future-skill');
+  for (const field of ['modelCalls', 'promptTokens', 'completionTokens', 'elapsedSeconds']) delete fixture.teamRound[field];
   fixture.runtimes.push(
     { ...fixture.runtimes[0], id: 'host', label: 'UNRELATED_HOST_RUNTIME', endpoint: 'http://127.0.0.1:8088', agentCount: 15, enabledAgentCount: 15 },
     { ...fixture.runtimes[0], id: 'shadow', label: 'RETIRED_SHADOW_RUNTIME', endpoint: 'http://127.0.0.1:8090', agentCount: 8, enabledAgentCount: 8 });
@@ -191,7 +290,8 @@ test('operations UI shows only project roles, excludes built-in profiles and cou
     { ...fixture.agents[0], id: 'host-operator', label: 'UNRELATED_HOST_OPERATOR', runtimeId: 'host' },
     { ...fixture.agents[0], id: 'shadow-operator', label: 'RETIRED_SHADOW_OPERATOR', runtimeId: 'shadow' },
     { ...fixture.agents[0], id: 'default', label: 'BUILT_IN_DEFAULT', runtimeId: 'qiandengji' },
-    { ...fixture.agents[0], id: 'QwenPaw_QA_Agent_0.2', label: 'BUILT_IN_QA_PROFILE', runtimeId: 'qiandengji' });
+    { ...fixture.agents[0], id: 'QwenPaw_QA_Agent_0.2', label: 'BUILT_IN_QA_PROFILE', runtimeId: 'qiandengji' },
+    { ...fixture.agents[0], id: 'QwenPaw_QA_Agent_0.3', label: 'BUILT_IN_OPS_QA_PROFILE', runtimeId: 'qiandengji-ops' });
   fixture.services.push(
     { ...fixture.services[0], id: 'legacy-agent', label: 'LEGACY_TEAM_SERVICE', group: 'legacy-team' },
     { ...fixture.services[0], id: 'retired-agent', label: 'RETIRED_SERVICE', group: 'retired' },
@@ -200,9 +300,10 @@ test('operations UI shows only project roles, excludes built-in profiles and cou
     { code: 'runtime_versions_differ', severity: 'info', title: 'OLD_RUNTIME_BACKGROUND', detail: 'Historical version comparison' },
     { code: 'host_non_game_jobs', severity: 'info', title: 'UNRELATED_JOB_BACKGROUND', detail: 'Host non-game jobs' },
     { code: 'retired_game_running', severity: 'warning', title: 'RETIRED_SERVICE_DRIFT', detail: 'Unexpected old service restart still needs attention' });
-  const operations = projectOperations(fixture), originalSnapshot = JSON.stringify(operations);
-  assert.equal(operations.agents.length, 6, 'The read model must retain other environments; scoping belongs to the UI');
-  assert.equal(operations.runtimes.length, 3);
+  let operations = projectOperations(fixture);
+  const originalSnapshot = JSON.stringify(operations);
+  assert.equal(operations.agents.length, 13, 'The read model must retain other environments; scoping belongs to the UI');
+  assert.equal(operations.runtimes.length, 4);
   const world = projectWorld({ heartbeat: { ts: Date.now() }, npc: {}, board: {} });
   // Exercise the actual page scripts without contacting any project/host service.
   await page.route('**/*', async route => {
@@ -222,12 +323,16 @@ test('operations UI shows only project roles, excludes built-in profiles and cou
   await page.goto('http://operations-scope.test/#operations');
   await page.waitForFunction(() => document.getElementById('operations-badge').textContent === '快照新鲜');
   const roleIds = page.locator('#operations-agents .operations-heading .operations-id');
-  assert.deepEqual(await roleIds.allTextContents(), ['mc-god', 'reserved']);
-  assert.equal(await page.locator('#operations-agents .operations-card').count(), 2);
-  assert.match(await page.locator('#operations-agents .operations-card').nth(1).innerText(), /预留角色[\s\S]*已禁用/);
-  assert.deepEqual(await page.locator('#operations-runtimes .operations-heading .operations-id').allTextContents(), ['qiandengji']);
+  const expectedRoles = ['mc-god', 'mc-herald', 'mc-god', 'default', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto'];
+  assert.deepEqual(await roleIds.allTextContents(), expectedRoles);
+  assert.equal(await page.locator('#operations-agents .operations-card').count(), 8);
+  assert.match(await page.locator('#operations-agents .operations-card').nth(3).innerText(), /司灯[\s\S]*已启用[\s\S]*团队协调[\s\S]*custom-future-skill/);
+  const skillNames = await page.locator('#operations-agents .chip-list .chip').allTextContents();
+  for (const name of ['证据与报告', '团队协调', '服务排障', '优先级与验收', '世界活动策划', '施法与操作验收', '新手与探索体验']) assert.ok(skillNames.includes(name), name);
+  assert.equal(await page.locator('#operations-agents .chip[title="qd-team-coordination"]').innerText(), '团队协调');
+  assert.deepEqual(await page.locator('#operations-runtimes .operations-heading .operations-id').allTextContents(), ['qiandengji', 'qiandengji-ops']);
   for (const marker of ['UNRELATED_HOST_RUNTIME', 'RETIRED_SHADOW_RUNTIME', 'UNRELATED_HOST_OPERATOR',
-    'RETIRED_SHADOW_OPERATOR', 'BUILT_IN_DEFAULT', 'BUILT_IN_QA_PROFILE']) {
+    'RETIRED_SHADOW_OPERATOR', 'BUILT_IN_DEFAULT', 'BUILT_IN_QA_PROFILE', 'BUILT_IN_OPS_QA_PROFILE']) {
     assert.equal((await page.locator('#view-operations').innerText()).includes(marker), false, marker);
   }
   const metrics = await page.locator('#operations-metrics > *').evaluateAll(cards => cards.map(card => ({
@@ -235,22 +340,52 @@ test('operations UI shows only project roles, excludes built-in profiles and cou
     value: card.querySelector('.metric-value').textContent,
     detail: card.querySelector('.metric-detail').textContent,
   })));
-  assert.equal(metrics.find(row => row.label === '运行环境').value, '1');
+  assert.equal(metrics.find(row => row.label === '运行环境').value, '2');
   const agents = metrics.find(row => row.label === '启用角色');
-  assert.equal(agents.value, '1'); assert.match(agents.detail, /共 2 个项目角色/);
+  assert.equal(agents.value, '8'); assert.match(agents.detail, /共 8 个项目角色/);
   assert.equal(metrics.find(row => row.label === '服务记录').value, '2');
   assert.equal(metrics.find(row => row.label === '待处理项').value, '2');
   assert.deepEqual(await page.locator('#operations-services .operations-heading .operations-id').allTextContents(), ['voice', 'tts-local']);
   assert.deepEqual(await page.locator('#operations-issues .operations-id').allTextContents(), ['tts-owner', 'retired_game_running']);
   assert.match(await page.locator('#operations-issues').innerText(), /RETIRED_SERVICE_DRIFT/);
-  assert.match(await page.locator('#operations-runtimes').innerText(), /启用 1 \/ 登记 2/);
+  assert.match(await page.locator('#operations-runtimes').innerText(), /启用 2 \/ 登记 2/);
+  assert.match(await page.locator('#operations-runtimes').innerText(), /启用 6 \/ 登记 6/);
+  assert.equal(await page.locator('#operations-policy-version').innerText(), 'QwenPaw 2.2.0');
+  assert.match(await page.locator('#operations-policy-summary').innerText(), /按需触发.*同时 1 个模型.*每分钟最多 6 次请求.*5 轮迭代.*自动重试关闭/);
+  assert.match(await page.locator('#operations-policy-delegation').innerText(), /30 分钟.*24 小时最多 4 次.*定时任务 0 个.*心跳关闭/);
+  assert.deepEqual(await page.locator('#operations-usage-metrics .metric-value').allTextContents(), ['3', '1,234', '56', '800']);
+  assert.match(await page.locator('#operations-round-reports').innerText(), /司灯.*[\s\S]*整理运营待办[\s\S]*3 次[\s\S]*1,234 \/ 56[\s\S]*18.5 秒/);
+  assert.match(await page.locator('#operations-round-usage').innerText(), /3 次[\s\S]*1,234 \/ 56[\s\S]*18.5 秒/);
+  assert.equal(await page.locator('#operations-round-status').innerText(), '已完成');
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 780 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
+      `Team budgets and eight role cards must fit at ${width}px`);
+    await page.locator('#operations-policy-summary').scrollIntoViewIfNeeded();
+    assert.equal(await page.locator('#operations-policy-summary').isVisible(), true);
+  }
   assert.equal(await page.locator('#operations-runtime-filter').count(), 0);
   assert.equal(await page.getByRole('combobox', { name: '筛选角色所属环境' }).count(), 0);
   await page.locator('#refresh-button').click();
   await page.waitForFunction(() => !document.getElementById('refresh-button').disabled);
-  assert.deepEqual(await roleIds.allTextContents(), ['mc-god', 'reserved']);
+  assert.deepEqual(await roleIds.allTextContents(), expectedRoles);
   assert.equal(await page.evaluate(() => JSON.stringify(snapshot.operations)), originalSnapshot,
     'Rendering must not change the collected public snapshot in browser memory');
+  delete fixture.teamUsage;
+  delete fixture.teamPolicy.roleSkills.default;
+  delete fixture.teamRound.roles[0].modelCalls;
+  operations = projectOperations(fixture);
+  await page.locator('#refresh-button').click();
+  await page.waitForFunction(() => !document.getElementById('refresh-button').disabled);
+  assert.deepEqual(await page.locator('#operations-usage-metrics .metric-value').allTextContents(), ['未知', '未知', '未知', '未知']);
+  assert.match(await page.locator('#operations-usage-note').innerText(), /用量更新：未记录/);
+  assert.match(await page.locator('#operations-agents .operations-card').nth(3).innerText(), /技能记录未知/);
+  assert.match(await page.locator('#operations-round-reports').innerText(), /模型请求[\s\S]*未知/);
+  operations = projectOperations({ ...fixture, generatedAt: new Date(Date.now() - 301000).toISOString() });
+  await page.locator('#refresh-button').click();
+  await page.waitForFunction(() => document.getElementById('operations-badge').textContent === '历史快照');
+  assert.equal(await page.locator('#view-operations .badge.good').count(), 0, 'Completed historical reports must not appear current');
+  assert.match(await page.locator('#operations-round-status').innerText(), /历史/);
   assert.deepEqual(requestedMutations, []); assert.deepEqual(errors, []);
 });
 

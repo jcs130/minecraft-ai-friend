@@ -31,7 +31,7 @@ class OperationsHealth(unittest.TestCase):
         self.source = {'schema': 1, 'project': 'qiandengji', 'generatedAt': self.iso(self.NOW-1.123456),
             'runtimes': [{'id': name, 'label': name, 'kind': 'host' if name == 'host' else 'container',
                           'version': None, 'endpoint': None, 'state': 'unverified', 'purpose': 'fixture',
-                          'enabledAgentCount': None, 'agentCount': None} for name in ('qiandengji', 'shadow', 'host')],
+                          'enabledAgentCount': None, 'agentCount': None} for name in ('qiandengji', 'qiandengji-ops', 'shadow', 'host')],
             'agents': [{'id': name, 'label': name, 'runtimeId': 'qiandengji', 'enabled': True,
                         'role': 'fixture', 'modelProvider': None, 'model': None, 'toolCount': 0,
                         'mcpCount': None, 'jobCount': None} for name in ('mc-god', 'mc-herald')],
@@ -41,6 +41,9 @@ class OperationsHealth(unittest.TestCase):
                           'dependencies': ['shared-tts'] if name == 'voice' else []} for name in (*health.MANIFEST, 'shared-tts')],
             'issues': [], 'commands': [{'label': 'status', 'command': 'python tools/operations.py status'}],
             'checks': {'currentServices': True, 'sharedTts': {'ok': True, 'endpoint': 'http://127.0.0.1:8100/health'}}}
+        self.source['agents'].extend({'id': name, 'label': name, 'runtimeId': 'qiandengji-ops', 'enabled': True,
+            'role': 'fixture', 'modelProvider': None, 'model': None, 'toolCount': 0, 'mcpCount': 1, 'jobCount': 0}
+            for name in health.OPERATIONS_TEAM_ROLES)
         self.adapter = SimpleNamespace(collect_snapshot=self.collect, write_snapshot=self.write)
         for patcher in (patch.object(health, 'PROJECT', self.root), patch.object(health.time, 'time', return_value=self.NOW),
                         patch.object(health, 'OPERATIONS_COLLECTION', None),
@@ -71,6 +74,7 @@ class OperationsHealth(unittest.TestCase):
         stamp = health.operations_time(self.source['generatedAt'])
         result.update({'generatedAt': stamp.replace(microsecond=stamp.microsecond//1000*1000).isoformat(),
                        'available': True, 'stale': False, 'staleReason': None, 'ageSeconds': 2, 'ttlSeconds': 300})
+        result.update({name: deepcopy(self.source.get(name)) for name in health.OPERATIONS_TEAM_FIELDS})
         return result
 
     def refresh(self):
@@ -190,6 +194,91 @@ class OperationsHealth(unittest.TestCase):
             public[collection][0]['token'] = 'PRIVATE'
             self.assertFalse(self.probe(public)['ok'])
 
+    @staticmethod
+    def team_summary():
+        usage = {'modelCalls': 1, 'promptTokens': 120, 'completionTokens': 0, 'elapsedSeconds': 1.25}
+        return {
+            'teamPolicy': {'packageVersion': '2.2.0', 'mode': 'manual', 'maxConcurrentModels': 1,
+                'maxQueriesPerMinute': 6, 'maxIterations': 5, 'automaticRetries': False,
+                'delegationCooldownSeconds': 1800, 'maxDelegationsPerDay': 4, 'scheduledJobs': 0,
+                'heartbeat': False, 'roleSkills': {role: ['qd-evidence-report'] for role in health.OPERATIONS_TEAM_ROLES}},
+            'teamUsage': {'callCount': 1, 'promptTokens': 120, 'completionTokens': 0, 'cachedTokens': None,
+                          'window': 'today', 'generatedAt': '2026-09-08T00:00:00+08:00'},
+            'teamRound': {'runId': 'fixture-round', 'ok': True, 'finishedAt': '2026-09-08T00:00:00+08:00',
+                'mode': 'manual', **usage, 'roles': [{'role': role, 'ok': True, 'requestId': 'fixture-'+role,
+                    'summary': '资料已记录，现场效果待验', 'errorType': None, **usage} for role in health.OPERATIONS_TEAM_ROLES]},
+        }
+
+    def test_nullable_and_complete_team_projection_are_accepted(self):
+        self.refresh()
+        self.assertTrue(self.probe()['ok'])
+        self.source.update(self.team_summary())
+        self.refresh()
+        self.assertTrue(self.probe()['ok'])
+        value = self.public()
+        for name, fields in health.OPERATIONS_TEAM_FIELDS.items():
+            for field, kind in fields.items():
+                if kind not in ('bool', 'manual', 'role', 'roles', 'role_skills'):
+                    value[name][field] = None
+        value['teamPolicy']['roleSkills'] = {role: None for role in health.OPERATIONS_TEAM_ROLES}
+        value['teamRound']['roles'] = []
+        value['teamRound']['ok'] = False  # A previous failed round is data, not a live runtime check.
+        self.assertTrue(self.probe(value)['ok'])
+
+    def test_team_projection_rejects_unknown_fields_at_every_nested_level(self):
+        self.source.update(self.team_summary()); self.refresh()
+        paths = [('teamPolicy',), ('teamPolicy', 'roleSkills'), ('teamUsage',),
+                 ('teamRound',), ('teamRound', 'roles', 0)]
+        for path in paths:
+            value = self.public(); target = value
+            for key in path: target = target[key]
+            target['secret'] = 'PRIVATE'
+            self.assertFalse(self.probe(value)['ok'], path)
+        for name in health.OPERATIONS_TEAM_FIELDS:
+            for bad in ([], True, 'PRIVATE', {}):
+                value = self.public(); value[name] = bad
+                self.assertFalse(self.probe(value)['ok'], (name, bad))
+            value = self.public(); value.pop(name)
+            self.assertFalse(self.probe(value)['ok'])
+
+    def test_team_counts_booleans_enums_and_roles_are_not_coerced(self):
+        self.source.update(self.team_summary()); self.refresh()
+        cases = [(('teamUsage', 'callCount'), bad) for bad in (True, -1, 1.5, '1', 9_007_199_254_740_992)]
+        cases += [(('teamRound', 'elapsedSeconds'), bad) for bad in (True, -0.1, float('nan'), float('inf'))]
+        cases += [(('teamPolicy', 'automaticRetries'), 0), (('teamPolicy', 'mode'), 'automatic'),
+                  (('teamUsage', 'window'), 'all'), (('teamRound', 'mode'), None),
+                  (('teamRound', 'ok'), 1), (('teamRound', 'roles', 0, 'role'), 'foreign-agent'),
+                  (('teamRound', 'roles', 0, 'ok'), None),
+                  (('teamRound', 'roles', 0, 'summary'), {'text': 'PRIVATE'})]
+        for path, bad in cases:
+            value = self.public(); target = value
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = bad
+            self.assertFalse(self.probe(value)['ok'], path)
+
+    def test_team_strings_and_collections_have_projection_bounds(self):
+        self.source.update(self.team_summary()); self.refresh()
+        value = self.public()
+        value['teamRound']['runId'] = '😀'*50
+        value['teamRound']['roles'][0]['summary'] = '文'*1600
+        value['teamUsage']['callCount'] = 9_007_199_254_740_991
+        self.assertTrue(self.probe(value)['ok'])
+        for path, bad in [(('teamRound', 'runId'), '😀'*51),
+                          (('teamRound', 'roles', 0, 'summary'), '文'*1601),
+                          (('teamPolicy', 'packageVersion'), 'x'*41),
+                          (('teamUsage', 'generatedAt'), 'x'*65),
+                          (('teamPolicy', 'roleSkills', 'default'), ['s']*13),
+                          (('teamPolicy', 'roleSkills', 'default'), ['s'*101]),
+                          (('teamPolicy', 'roleSkills', 'default'), [{'script': 'PRIVATE'}])]:
+            value = self.public(); target = value
+            for key in path[:-1]: target = target[key]
+            target[path[-1]] = bad
+            self.assertFalse(self.probe(value)['ok'], path)
+        value = self.public(); value['teamRound']['roles'] *= 2
+        self.assertFalse(self.probe(value)['ok'])
+        value = self.public(); value['teamPolicy']['roleSkills'].pop('default')
+        self.assertFalse(self.probe(value)['ok'])
+
     def test_unknown_runtime_and_missing_or_duplicate_agent_service_ids_are_rejected(self):
         self.refresh()
         values = []
@@ -200,6 +289,17 @@ class OperationsHealth(unittest.TestCase):
         value = self.public(); value['runtimes'][0]['id'] = 'foreign'; values.append(value)
         for value in values:
             self.assertFalse(self.probe(value)['ok'])
+
+    def test_operations_runtime_and_all_six_project_roles_are_required_in_inventory(self):
+        self.refresh()
+        for role in health.OPERATIONS_TEAM_ROLES:
+            value = self.public()
+            value['agents'] = [row for row in value['agents']
+                               if (row['runtimeId'], row['id']) != ('qiandengji-ops', role)]
+            self.assertFalse(self.probe(value)['ok'])
+        value = self.public()
+        value['runtimes'] = [row for row in value['runtimes'] if row['id'] != 'qiandengji-ops']
+        self.assertFalse(self.probe(value)['ok'])
 
     def test_public_scalar_types_and_safe_endpoints_are_required(self):
         self.refresh()
@@ -257,7 +357,7 @@ class OperationsHealth(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', side_effect=read), ExitStack() as stack:
             for name in ('probe_management', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands',
                          'probe_chanting_staff', 'probe_voice_recording', 'probe_voice_boundary_deployment',
-                         'probe_skillbar_editor', 'probe_chanting_client'):
+                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team'):
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             state.pop('operations')
@@ -275,6 +375,117 @@ class OperationsHealth(unittest.TestCase):
         self.adapter.collect_snapshot = lambda **_: (_ for _ in ()).throw(ImportError('inventory failed'))
         self.assertFalse(self.refresh()['ok'])
         self.assertEqual(sys.path, before)
+
+
+class OperationsTeamProbe(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='qd-operations-team-health-')
+        self.root = Path(temporary.name).resolve()
+        def cleanup():
+            if (not self.root.is_relative_to(Path(tempfile.gettempdir()).resolve())
+                    or not self.root.name.startswith('qd-operations-team-health-')):
+                raise AssertionError('Unsafe temporary cleanup target')
+            temporary.cleanup()
+        self.addCleanup(cleanup)
+        self.report_path = self.root/'reports/operations-team-smoke.json'
+        self.report_path.parent.mkdir()
+        self.now = 1_788_782_400.0
+        self.receipt = {'ok': True, 'project': 'qiandengji-ops', 'packageVersion': '2.2.0', 'roles': 6,
+            'authEnforced': True, 'installedSkillBindings': 12, 'rateLimitVerified': True,
+            'driverPolicyVerified': True, 'builtinTools': 0, 'automaticJobs': 0}
+        self.report = {'schema': 1, 'project': 'qiandengji', 'ok': True,
+            'finishedAt': datetime.fromtimestamp(self.now-60, timezone.utc).isoformat(),
+            'checks': [{'name': name, 'ok': True} for name in health.OPERATIONS_TEAM_SMOKE_CHECKS]}
+        self.write_report()
+        for patcher in (patch.object(health, 'PROJECT', self.root),
+                        patch.object(health.time, 'time', return_value=self.now),
+                        patch.object(health.urllib.request, 'urlopen', side_effect=AssertionError('No HTTP or model calls'))):
+            patcher.start(); self.addCleanup(patcher.stop)
+
+    def write_report(self, value=None):
+        self.report_path.write_text(json.dumps(self.report if value is None else value), encoding='utf-8')
+
+    def probe(self, receipt=None, *, output=None, returncode=0, exception=None):
+        output = json.dumps(self.receipt if receipt is None else receipt) if output is None else output
+        result = SimpleNamespace(returncode=returncode, stdout=output, stderr='PRIVATE_DIAGNOSTIC')
+        with patch.object(health.subprocess, 'run', return_value=result, side_effect=exception) as run:
+            value = health.probe_operations_team()
+        self.assertNotIn('PRIVATE', json.dumps(value))
+        return value, run
+
+    def test_fixed_runtime_probe_and_complete_actual_behavior_contract(self):
+        value, run = self.probe(output='startup log\n'+json.dumps({**self.receipt, 'private': 'PRIVATE_SECRET'}))
+        self.assertTrue(value['ok']); self.assertTrue(value['live']); self.assertTrue(value['behavior']['ok'])
+        self.assertEqual(run.call_args.args[0], ['docker', 'exec', 'qiandengji-qwenpaw-ops-1',
+                         'python', '/ops/operations_team_health.py'])
+        self.assertEqual(run.call_args.kwargs['timeout'], 60)
+        self.assertEqual(run.call_args.kwargs['creationflags'], getattr(health.subprocess, 'CREATE_NO_WINDOW', 0))
+        self.assertTrue(health.MANIFEST['qwenpaw-ops']['health_required'])
+
+    def test_old_version_wrong_scope_counts_or_missing_guards_never_pass(self):
+        changes = [{'packageVersion': '2.1.0'}, {'project': 'shadow'}, {'roles': 5}, {'roles': 6.0},
+                   {'installedSkillBindings': 11}, {'installedSkillBindings': '12'}, {'builtinTools': False},
+                   {'builtinTools': 1}, {'automaticJobs': 1}, {'automaticJobs': False}, {'ok': 1}]
+        for key in ('authEnforced', 'rateLimitVerified', 'driverPolicyVerified'):
+            changes.extend({key: bad} for bad in (False, 1, None, 'true'))
+        for change in changes:
+            with self.subTest(change=change):
+                value, _ = self.probe({**self.receipt, **change})
+                self.assertFalse(value['ok']); self.assertFalse(value['live'])
+                self.assertTrue(value['behavior']['ok'])
+
+    def test_failed_process_timeout_and_invalid_output_cannot_reuse_green_report(self):
+        cases = [{'returncode': 1}, {'output': ''}, {'output': 'PRIVATE not JSON'}, {'output': '[]'},
+                 {'output': json.dumps(self.receipt)+'\ntrailing garbage'}, {'output': 'x'*65537},
+                 {'exception': OSError('PRIVATE')},
+                 {'exception': health.subprocess.TimeoutExpired('PRIVATE', 60)}]
+        for kwargs in cases:
+            with self.subTest(kwargs=tuple(kwargs)):
+                value, _ = self.probe(**kwargs)
+                self.assertFalse(value['ok']); self.assertFalse(value['live'])
+
+    def test_live_runtime_cannot_replace_missing_or_partial_behavior_evidence(self):
+        self.report_path.unlink()
+        value, _ = self.probe()
+        self.assertTrue(value['live']); self.assertFalse(value['ok'])
+        self.assertEqual(value['behavior']['missing_checks'], list(health.OPERATIONS_TEAM_SMOKE_CHECKS))
+        for text in ('{partial', '[]', 'null', 'x'*(256*1024+1)):
+            self.report_path.write_text(text, encoding='utf-8')
+            value, _ = self.probe(); self.assertFalse(value['ok']); self.assertTrue(value['live'])
+
+    def test_required_behavior_names_exact_success_and_identity_are_enforced(self):
+        changes = [{'checks': self.report['checks'][:-1]}, {'schema': True}, {'project': 'shadow'},
+                   {'ok': False}, {'finishedAt': '2026-09-07T12:00:00'},
+                   {'finishedAt': datetime.fromtimestamp(self.now+60, timezone.utc).isoformat()},
+                   {'checks': self.report['checks']+[self.report['checks'][0]]}]
+        for bad in (False, 1, 'true', None):
+            changes.append({'checks': [{**self.report['checks'][0], 'ok': bad}, *self.report['checks'][1:]]})
+        for change in changes:
+            with self.subTest(change=change):
+                self.write_report({**self.report, **change})
+                value, _ = self.probe(); self.assertFalse(value['ok']); self.assertTrue(value['live'])
+        self.write_report({**self.report, 'project': 'qiandengji-ops',
+            'checks': {row['name']: {'ok': True} for row in self.report['checks']}})
+        self.assertTrue(self.probe()[0]['ok'])
+
+    def test_team_runtime_or_behavior_failure_turns_panel_red(self):
+        other = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
+                 'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
+                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client')
+        with ExitStack() as stack:
+            for name in other:
+                stack.enter_context(patch.object(health, name, return_value={'ok': True}))
+            process = stack.enter_context(patch.object(health.subprocess, 'run', return_value=SimpleNamespace(
+                returncode=0, stdout=json.dumps(self.receipt), stderr='')))
+            self.assertTrue(health.probe_panel_smoke()['ok'])
+            self.report_path.unlink()
+            value = health.probe_panel_smoke()
+            self.assertFalse(value['ok']); self.assertTrue(value['operations_team']['live'])
+            self.write_report()
+            process.return_value.returncode = 1
+            value = health.probe_panel_smoke()
+            self.assertFalse(value['ok']); self.assertFalse(value['operations_team']['live'])
+            self.assertTrue(value['operations_team']['behavior']['ok'])
 
 
 if __name__ == '__main__':

@@ -21,6 +21,22 @@ OPERATIONS_FIELDS = {
     'issues': {'code', 'severity', 'title', 'detail'},
     'commands': {'label', 'command'},
 }
+# Match the public projection in world/admin/read-model.mjs, not raw runtime configuration.
+OPERATIONS_USAGE_FIELDS = {'modelCalls': 'count', 'promptTokens': 'count',
+                           'completionTokens': 'count', 'elapsedSeconds': 'nonnegative'}
+OPERATIONS_TEAM_FIELDS = {
+    'teamPolicy': {'packageVersion': 40, 'mode': 'optional_manual',
+        'maxConcurrentModels': 'count', 'maxQueriesPerMinute': 'count', 'maxIterations': 'count',
+        'automaticRetries': 'optional_bool', 'delegationCooldownSeconds': 'count',
+        'maxDelegationsPerDay': 'count', 'scheduledJobs': 'count', 'heartbeat': 'optional_bool',
+        'roleSkills': 'role_skills'},
+    'teamUsage': {'callCount': 'count', 'promptTokens': 'count', 'completionTokens': 'count',
+        'cachedTokens': 'count', 'window': 'optional_today', 'generatedAt': 64},
+    'teamRound': {'runId': 100, 'ok': 'bool', 'finishedAt': 64, 'mode': 'manual',
+        **OPERATIONS_USAGE_FIELDS, 'roles': 'roles'},
+}
+OPERATIONS_ROUND_ROLE_FIELDS = {'role': 'role', 'ok': 'bool', 'requestId': 100,
+                               'summary': 1600, 'errorType': 60, **OPERATIONS_USAGE_FIELDS}
 MANIFEST = {
     "mc": {"health_required": True, "purpose": "Imported save, NeoForge and independent chanting-item protocol"},
     "world": {"health_required": True, "purpose": "Player commands, game adapters, optional goddess dialogue and heartbeat"},
@@ -28,12 +44,20 @@ MANIFEST = {
     "npc": {"health_required": True, "purpose": "Skill-book and NPC event consumers; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
     "qwenpaw": {"health_required": True, "purpose": "Independent goddess dialogue model service"},
+    "qwenpaw-ops": {"health_required": True, "purpose": "Six-role operations team, bounded native tasks and attributed proposals"},
     "voice": {"health_required": True, "purpose": "Local voice response queue"},
     "asr": {"health_required": True, "purpose": "Local microphone speech recognition"},
     "panel": {"health_required": True, "purpose": "Independent management page and public read models"},
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
 }
+
+OPERATIONS_TEAM_CONTAINER = 'qiandengji-qwenpaw-ops-1'
+OPERATIONS_TEAM_ROLES = ('default', 'mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
+OPERATIONS_TEAM_SMOKE_CHECKS = (
+    'runtime-2.2.0', 'role-skills-installed', 'native-task-report',
+    'cost-budget-enforced', 'operations-ui', 'game-services-preserved',
+)
 
 VOICE_SMOKE_CHECKS = (
     'voice:model-endpoint-unreachable', 'voice:reserved-qa-fixture',
@@ -111,13 +135,88 @@ def probe_panel_smoke():
     voice_boundary_deployment = probe_voice_boundary_deployment()
     skillbar_editor = probe_skillbar_editor()
     chanting_client = probe_chanting_client()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client)),
+    operations_team = probe_operations_team()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,
-            'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client}
+            'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
+            'operations_team': operations_team}
+
+
+def probe_operations_team():
+    """Check the fixed D runtime without inference, and require recorded behavior separately."""
+    checks = {name: False for name in ('runtime_identity', 'six_roles', 'role_skills_installed',
+              'authentication', 'rate_limit', 'driver_policy', 'no_builtin_tools', 'no_automatic_jobs')}
+    failure = None
+    try:
+        process = subprocess.run(
+            ['docker', 'exec', OPERATIONS_TEAM_CONTAINER, 'python', '/ops/operations_team_health.py'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if process.returncode != 0:
+            raise ValueError('runtime_probe_failed')
+        if len(process.stdout.encode('utf-8')) > 65536:
+            raise ValueError('runtime_probe_oversized')
+        lines = process.stdout.strip().splitlines()
+        receipt = json.loads(lines[-1]) if lines else None
+        if not isinstance(receipt, dict) or receipt.get('ok') is not True:
+            raise ValueError('runtime_probe_invalid')
+        checks.update({
+            'runtime_identity': receipt.get('project') == 'qiandengji-ops' and receipt.get('packageVersion') == '2.2.0',
+            'six_roles': type(receipt.get('roles')) is int and receipt['roles'] == 6,
+            'role_skills_installed': type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] == 12,
+            'authentication': receipt.get('authEnforced') is True,
+            'rate_limit': receipt.get('rateLimitVerified') is True,
+            'driver_policy': receipt.get('driverPolicyVerified') is True,
+            'no_builtin_tools': type(receipt.get('builtinTools')) is int and receipt['builtinTools'] == 0,
+            'no_automatic_jobs': type(receipt.get('automaticJobs')) is int and receipt['automaticJobs'] == 0,
+        })
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError, OverflowError):
+        # Never publish container stdout/stderr, which may include private diagnostics.
+        failure = 'Operations runtime could not be verified'
+
+    filename = 'operations-team-smoke.json'
+    behavior = {'ok': False, 'report': filename, 'missing_checks': list(OPERATIONS_TEAM_SMOKE_CHECKS)}
+    try:
+        path = PROJECT/'reports'/filename
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 256 * 1024:
+            raise ValueError('Missing or oversized behavior evidence')
+        record = json.loads(path.read_text(encoding='utf-8-sig'))
+        raw_checks = record.get('checks')
+        if isinstance(raw_checks, dict):
+            rows = [{'name': name, 'ok': value.get('ok')} for name, value in raw_checks.items() if isinstance(value, dict)]
+            if len(rows) != len(raw_checks):
+                raise ValueError('Invalid behavior checks')
+        elif isinstance(raw_checks, list):
+            rows = raw_checks
+        else:
+            raise ValueError('Invalid behavior checks')
+        if not 1 <= len(rows) <= 64 or any(not isinstance(row, dict) or not isinstance(row.get('name'), str)
+                                          or not row['name'] or row.get('ok') is not True for row in rows):
+            raise ValueError('Failed or invalid behavior checks')
+        names = [row['name'] for row in rows]
+        if len(names) != len(set(names)):
+            raise ValueError('Duplicate behavior checks')
+        finished = operations_time(record.get('finishedAt'))
+        behavior.update({
+            'ok': (record.get('ok') is True and type(record.get('schema')) is int and record['schema'] == 1
+                   and record.get('project') in ('qiandengji', 'qiandengji-ops')
+                   and finished.timestamp() <= time.time() + 5
+                   and set(OPERATIONS_TEAM_SMOKE_CHECKS) <= set(names)),
+            'missing_checks': sorted(set(OPERATIONS_TEAM_SMOKE_CHECKS) - set(names)),
+            'checked_at': record.get('finishedAt'),
+        })
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        behavior['error'] = 'Recorded operations behavior is unavailable or invalid'
+    result = {'ok': all(checks.values()) and behavior['ok'], 'live': all(checks.values()),
+              'container': OPERATIONS_TEAM_CONTAINER, 'checks': checks, 'behavior': behavior,
+              'scope': 'Current authenticated configuration and separately recorded native-task/UI behavior; no model call in this probe'}
+    if failure:
+        result['error'] = failure
+    return result
 
 
 def probe_management():
@@ -531,6 +630,46 @@ def refresh_operations_snapshot():
     return dict(OPERATIONS_COLLECTION)
 
 
+def operations_team_fields_valid(value):
+    """Nullable team summaries contain only bounded public fields, never arbitrary objects."""
+    def text_valid(item, maximum):
+        # JavaScript slices UTF-16 code units; astral characters count as two.
+        return isinstance(item, str) and sum(2 if ord(c) > 0xFFFF else 1 for c in item) <= maximum
+
+    def scalar_valid(item, kind):
+        if item is None:
+            return kind not in ('bool', 'manual', 'role', 'roles', 'role_skills')
+        if type(kind) is int:
+            return text_valid(item, kind)
+        if kind == 'count':
+            return type(item) is int and 0 <= item <= 9_007_199_254_740_991
+        if kind == 'nonnegative':
+            return type(item) in (int, float) and math.isfinite(item) and item >= 0
+        if kind in ('bool', 'optional_bool'):
+            return type(item) is bool
+        if kind in ('manual', 'optional_manual'):
+            return item == 'manual'
+        if kind == 'optional_today':
+            return item == 'today'
+        if kind == 'role':
+            return isinstance(item, str) and item in OPERATIONS_TEAM_ROLES
+        if kind == 'roles':
+            return (isinstance(item, list) and len(item) <= 6
+                    and all(shape_valid(row, OPERATIONS_ROUND_ROLE_FIELDS) for row in item))
+        if kind == 'role_skills':
+            return (isinstance(item, dict) and set(item) == set(OPERATIONS_TEAM_ROLES)
+                    and all(skills is None or (isinstance(skills, list) and len(skills) <= 12
+                        and all(text_valid(skill, 100) for skill in skills)) for skills in item.values()))
+        return False
+
+    def shape_valid(item, fields):
+        return (isinstance(item, dict) and set(item) == set(fields)
+                and all(scalar_valid(item[name], kind) for name, kind in fields.items()))
+
+    return all(value.get(name) is None or shape_valid(value[name], fields)
+               for name, fields in OPERATIONS_TEAM_FIELDS.items())
+
+
 def operations_rows_valid(value):
     """The HTTP projection may expose only this fixed, bounded public schema."""
     for collection, fields in OPERATIONS_FIELDS.items():
@@ -560,7 +699,7 @@ def operations_rows_valid(value):
                     return False
             if collection == 'issues' and row['severity'] not in (None, 'error', 'warning', 'info'):
                 return False
-    return True
+    return operations_team_fields_valid(value)
 
 
 def probe_operations(value):
@@ -576,7 +715,8 @@ def probe_operations(value):
         stamp = operations_time(source['generatedAt'])
         if source['generatedAt'] != collection['snapshot_at'] or not 0 <= time.time() - stamp.timestamp() <= 300:
             raise ValueError('Operations collection is no longer current')
-        fields = {'schema', 'project', 'available', 'generatedAt', 'stale', 'staleReason', 'ageSeconds', 'ttlSeconds', *OPERATIONS_FIELDS}
+        fields = {'schema', 'project', 'available', 'generatedAt', 'stale', 'staleReason', 'ageSeconds', 'ttlSeconds',
+                  *OPERATIONS_FIELDS, *OPERATIONS_TEAM_FIELDS}
         if not isinstance(value, dict) or set(value) != fields or not operations_rows_valid(value):
             raise ValueError('Invalid or non-public operations projection')
         public_stamp = operations_time(value['generatedAt'])
@@ -584,10 +724,11 @@ def probe_operations(value):
         # preserves Python microseconds. Compare the same millisecond instant.
         matching_time = public_stamp == stamp.replace(microsecond=stamp.microsecond//1000*1000)
         runtime_ids = [row['id'] for row in value['runtimes']]
-        runtime_ok = len(runtime_ids) == 3 and set(runtime_ids) == {'qiandengji', 'shadow', 'host'}
+        runtime_ok = len(runtime_ids) == 4 and set(runtime_ids) == {'qiandengji', 'qiandengji-ops', 'shadow', 'host'}
         agent_ids = [(row['runtimeId'], row['id']) for row in value['agents']]
         agents_ok = (len(agent_ids) == len(set(agent_ids)) and all(rid in runtime_ids and isinstance(aid, str) and aid for rid, aid in agent_ids)
-                     and {('qiandengji', 'mc-god'), ('qiandengji', 'mc-herald')} <= set(agent_ids))
+                     and {('qiandengji', 'mc-god'), ('qiandengji', 'mc-herald')} <= set(agent_ids)
+                     and {('qiandengji-ops', role) for role in OPERATIONS_TEAM_ROLES} <= set(agent_ids))
         service_ids = [row['id'] for row in value['services']]
         services_ok = (all(isinstance(name, str) and name for name in service_ids) and len(service_ids) == len(set(service_ids))
                        and set(MANIFEST) | {'shared-tts'} <= set(service_ids))

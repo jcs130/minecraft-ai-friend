@@ -14,6 +14,9 @@ const serviceNames = { mc: 'Minecraft 世界', world: '世界进程', gate: '协
 const servicePurposes = { mc: '存档与游戏', world: '玩法与世界事件', gate: '角色连接', npc: '村务与公会', resources: '配音资源', qwenpaw: 'Agent 对话', voice: '语音回复队列', asr: '语音识别', panel: '世界管理入口', tts: '本项目 GPU 配音', control: '受控维护与回执' };
 const typeNames = { gather: '收购', hunt: '狩猎', visit: '远行', treasure: '藏宝', lair: '营地', boss: '首领', escort: '护送' };
 const dimensionNames = { 'minecraft:overworld': '主世界', 'minecraft:the_nether': '下界', 'minecraft:the_end': '末地' };
+const operationsSkillNames = { 'qd-evidence-report': '证据与报告', 'qd-team-coordination': '团队协调',
+  'qd-service-triage': '服务排障', 'qd-priority-review': '优先级与验收', 'qd-world-events': '世界活动策划',
+  'qd-casting-acceptance': '施法与操作验收', 'qd-onboarding-exploration': '新手与探索体验' };
 const byId = (id) => document.getElementById(id);
 const rows = (value) => Array.isArray(value) ? value : [];
 const record = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -230,9 +233,9 @@ function operationsCard(label, id, status, description, entries) {
 function renderOperations(data) {
   const ops = record(data.operations), available = ops.available === true, historical = ops.stale !== false;
   // This page is the current world's team. The collector retains the full audit inventory.
-  const runtimes = rows(ops.runtimes).filter(runtime => runtime.id === 'qiandengji');
-  const agents = rows(ops.agents).filter(agent => agent.runtimeId === 'qiandengji'
-    && !['default', 'QwenPaw_QA_Agent_0.2'].includes(agent.id));
+  const runtimes = rows(ops.runtimes).filter(runtime => ['qiandengji','qiandengji-ops'].includes(runtime.id));
+  const agents = rows(ops.agents).filter(agent => ['qiandengji','qiandengji-ops'].includes(agent.runtimeId)
+    && !/^QwenPaw_QA_Agent_/.test(agent.id) && !(agent.runtimeId === 'qiandengji' && agent.id === 'default'));
   const services = rows(ops.services).filter(service => !['legacy-team', 'retired'].includes(service.group));
   const issues = rows(ops.issues).filter(issue => !['runtime_versions_differ', 'host_non_game_jobs'].includes(issue.code));
   setBadge('operations-badge', !available ? '暂无有效快照' : historical ? '历史快照' : '快照新鲜', available && !historical ? 'good' : 'neutral');
@@ -244,6 +247,21 @@ function renderOperations(data) {
     metric('启用角色', available ? number(agents.filter(agent => agent.enabled === true).length) : '—', '共 ' + number(agents.length) + ' 个项目角色'),
     metric('服务记录', available ? number(services.length) : '—', '当前项目及所需依赖'),
     metric('待处理项', available ? number(issues.length) : '—', historical ? '来自历史快照' : '以采集范围为准')]);
+  const policy = record(ops.teamPolicy), usage = record(ops.teamUsage);
+  const measured = (value, unit = '') => finite(value) ? number(value, 1) + unit : '未知';
+  const switchState = value => value === true ? '开启' : value === false ? '关闭' : '未知';
+  setBadge('operations-policy-version', policy.packageVersion ? 'QwenPaw ' + policy.packageVersion : '版本未记录');
+  byId('operations-policy-summary').textContent = (historical ? '历史配置：' : '')
+    + (policy.mode === 'manual' ? '按需触发' : '触发方式未知') + ' · 最多同时 ' + measured(policy.maxConcurrentModels, ' 个模型')
+    + ' · 每分钟最多 ' + measured(policy.maxQueriesPerMinute, ' 次请求') + ' · 每次最多 ' + measured(policy.maxIterations, ' 轮迭代')
+    + ' · 自动重试' + switchState(policy.automaticRetries) + '。';
+  replace('operations-usage-metrics', [metric('模型请求', measured(usage.callCount), usage.window === 'today' ? '今日运营组记录' : '统计时段未知'),
+    metric('输入 Token', measured(usage.promptTokens), '供应商返回的用量'), metric('输出 Token', measured(usage.completionTokens), '供应商返回的用量'),
+    metric('缓存 Token', measured(usage.cachedTokens), '不另加到输入用量')]);
+  byId('operations-policy-delegation').textContent = '角色委派：间隔至少 ' + measured(finite(policy.delegationCooldownSeconds) ? policy.delegationCooldownSeconds / 60 : null, ' 分钟')
+    + '，24 小时最多 ' + measured(policy.maxDelegationsPerDay, ' 次') + '。定时任务 ' + measured(policy.scheduledJobs, ' 个') + '，自动心跳' + switchState(policy.heartbeat) + '。';
+  byId('operations-usage-note').textContent = (historical ? '历史快照中的用量。' : '') + '用量更新：' + formatDate(usage.generatedAt)
+    + '。仅统计独立运营组；缺失数据为未知。Token 记录不等于实际账单，套餐余额以服务商为准。';
   setBadge('operations-issue-count', available ? number(issues.length) + ' 项' : '待采集', historical ? 'neutral' : issues.length ? 'amber' : 'neutral');
   replace('operations-issues', issues.map(issue => {
     const card = node('div', 'operations-issue'), top = node('div', 'operations-heading');
@@ -265,12 +283,34 @@ function renderOperations(data) {
     } else card.append(node('p', 'footnote', '未记录可用控制台地址'));
     return card;
   }).concat(runtimes.length ? [] : [empty('暂无运行环境记录。')]));
-  replace('operations-agents', agents.map(agent => operationsCard(agent.label, agent.id,
+  replace('operations-agents', agents.map(agent => {
+    const card = operationsCard(agent.label, agent.id,
     badge((historical ? '历史 · ' : '') + (agent.enabled === true ? '已启用' : agent.enabled === false ? '已禁用' : '启用状态未知'),
       !historical && agent.enabled === true ? 'amber' : 'neutral'), agent.role,
-    [['所属项目', '千灯纪'], ['模型服务', text(agent.modelProvider)], ['模型', text(agent.model)],
-      ['已配置工具 / MCP', number(agent.toolCount) + ' / ' + number(agent.mcpCount)], ['已登记任务', number(agent.jobCount)]]))
+    [['所属职责', agent.runtimeId === 'qiandengji-ops' ? '世界运营组' : '游戏会话'], ['模型服务', text(agent.modelProvider)], ['模型', text(agent.model)],
+      ['已配置工具 / MCP', number(agent.toolCount) + ' / ' + number(agent.mcpCount)], ['已登记任务', number(agent.jobCount)]]);
+    if (agent.runtimeId === 'qiandengji-ops') {
+      const skills = record(policy.roleSkills)[agent.id], chips = node('div', 'chip-list');
+      card.append(node('p', 'small-heading', '已配置技能'));
+      rows(skills).forEach(skill => {
+        const chip = node('span', 'chip', Object.hasOwn(operationsSkillNames, skill) ? operationsSkillNames[skill] : skill);
+        chip.title = skill; chips.append(chip);
+      });
+      card.append(chips.childElementCount ? chips : node('p', 'footnote', Array.isArray(skills) ? '尚未配置技能' : '技能记录未知'));
+    }
+    return card;
+  })
     .concat(agents.length ? [] : [empty('千灯纪项目暂无运营角色配置。')]));
+  const round = record(ops.teamRound), results = rows(round.roles);
+  setBadge('operations-round-status', !round.runId ? '尚未运行' : (historical ? '历史 · ' : '') + (round.ok === true ? '已完成' : '部分未完成'), !historical && round.ok === true ? 'good' : 'neutral');
+  byId('operations-round-note').textContent = (round.runId ? '巡检结束：' + formatDate(round.finishedAt) + '。' : '') + '报告保留各角色的发现与建议；建议不会自动执行。';
+  const usageEntries = value => [['模型请求', measured(value.modelCalls, ' 次')], ['输入 / 输出 Token', measured(value.promptTokens) + ' / ' + measured(value.completionTokens)], ['用时', measured(value.elapsedSeconds, ' 秒')]];
+  if (round.runId) facts('operations-round-usage', usageEntries(round)); else replace('operations-round-usage', []);
+  replace('operations-round-reports', results.map(result => {
+    const label = agents.find(agent => agent.runtimeId === 'qiandengji-ops' && agent.id === result.role)?.label || result.role;
+    return operationsCard(label, result.requestId || result.role, badge((historical ? '历史 · ' : '') + (result.ok ? '报告已记录' : '需要检查'), historical ? 'neutral' : result.ok ? 'good' : 'amber'),
+      text(result.summary, '本轮未取得有效报告，请在运营控制台检查模型与工具状态。'), [['状态', result.ok ? '建议已留档' : text(result.errorType, '未完成')], ...usageEntries(result)]);
+  }).concat(results.length ? [] : [empty('尚无巡检报告。可在运营控制台向角色提出任务，或使用下方终端命令运行完整一轮。')]));
   const groups = new Map(); services.forEach(service => { const key = text(service.group, '未分组'); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(service); });
   replace('operations-services', [...groups].map(([label, entries]) => {
     const section = node('section', 'operations-service-group'), grid = node('div', 'operations-grid');

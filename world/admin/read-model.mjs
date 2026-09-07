@@ -79,6 +79,34 @@ export function projectHealth(raw, now = Date.now()) {
 
 const optionalText = (value, max = 180) => typeof value === 'string' ? value.slice(0, max) : null;
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+const nonnegative = value => number(value) !== null && value >= 0 ? value : null;
+const operationsRoles = ['mc-god', 'default', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto'];
+const roundUsage = value => ({ modelCalls: count(value.modelCalls), promptTokens: count(value.promptTokens),
+  completionTokens: count(value.completionTokens), elapsedSeconds: nonnegative(value.elapsedSeconds) });
+function projectOperationsRound(raw) {
+  if (raw?.schema !== 1 || raw?.project !== 'qiandengji-ops') return null;
+  const sourceRoles = list(raw.roles);
+  const roles = sourceRoles.slice(0, 6).filter(row => row && operationsRoles.includes(row.role))
+    .map(row => ({ role: row.role, ok: row.ok === true, requestId: optionalText(row.requestId, 100),
+      summary: optionalText(row.summary, 1600), errorType: optionalText(row.errorType, 60), ...roundUsage(row) }));
+  const usage = roundUsage(raw);
+  const completeRoster = roles.length > 0 && roles.length === sourceRoles.length
+    && new Set(roles.map(row => row.role)).size === roles.length;
+  for (const field of ['modelCalls', 'promptTokens', 'completionTokens']) {
+    if (raw[field] == null && completeRoster && roles.every(row => row[field] !== null)) {
+      usage[field] = count(roles.reduce((total, row) => total + row[field], 0));
+    }
+  }
+  if (raw.elapsedSeconds == null) {
+    const timestamp = value => typeof value === 'string'
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? Date.parse(value) : NaN;
+    const elapsed = (timestamp(raw.finishedAt) - timestamp(raw.startedAt)) / 1000;
+    usage.elapsedSeconds = nonnegative(elapsed)
+      ?? (completeRoster && roles.length === 1 ? roles[0].elapsedSeconds : null);
+  }
+  return { runId: optionalText(raw.runId, 100), ok: raw.ok === true,
+    finishedAt: optionalText(raw.finishedAt, 64), mode: 'manual', ...usage, roles };
+}
 function operationsEndpoint(raw) {
   if (typeof raw !== 'string' || raw.length > 2048) return null;
   try {
@@ -108,6 +136,24 @@ export function projectOperations(raw, now = Date.now()) {
   return {
     schema: 1, project: 'qiandengji', available, generatedAt: valid ? new Date(stamp).toISOString() : null,
     stale: reason !== null, staleReason: reason, ageSeconds, ttlSeconds: 300,
+    teamPolicy: available && value.teamPolicy && typeof value.teamPolicy === 'object' && !Array.isArray(value.teamPolicy) ? {
+      packageVersion: optionalText(value.teamPolicy.packageVersion, 40),
+      mode: value.teamPolicy.mode === 'manual' ? 'manual' : null,
+      maxConcurrentModels: count(value.teamPolicy.maxConcurrentModels), maxQueriesPerMinute: count(value.teamPolicy.maxQueriesPerMinute),
+      maxIterations: count(value.teamPolicy.maxIterations), automaticRetries: bool(value.teamPolicy.automaticRetries),
+      delegationCooldownSeconds: count(value.teamPolicy.delegationCooldownSeconds), maxDelegationsPerDay: count(value.teamPolicy.maxDelegationsPerDay),
+      scheduledJobs: count(value.teamPolicy.scheduledJobs), heartbeat: bool(value.teamPolicy.heartbeat),
+      roleSkills: Object.fromEntries(operationsRoles.map(role => [role,
+        Array.isArray(object(value.teamPolicy.roleSkills)[role])
+          ? [...new Set(value.teamPolicy.roleSkills[role].filter(skill => typeof skill === 'string' && skill.trim()).map(skill => text(skill, 100)))].slice(0, 12)
+          : null])),
+    } : null,
+    teamUsage: available && value.teamUsage && typeof value.teamUsage === 'object' && !Array.isArray(value.teamUsage) ? {
+      callCount: count(value.teamUsage.callCount), promptTokens: count(value.teamUsage.promptTokens),
+      completionTokens: count(value.teamUsage.completionTokens), cachedTokens: count(value.teamUsage.cachedTokens),
+      window: value.teamUsage.window === 'today' ? 'today' : null, generatedAt: optionalText(value.teamUsage.generatedAt, 64),
+    } : null,
+    teamRound: available ? projectOperationsRound(value.teamRound) : null,
     runtimes: selected('runtimes').map(row => ({
       id: optionalText(row.id, 64), label: optionalText(row.label, 100), kind: optionalText(row.kind, 40),
       version: optionalText(row.version, 60), endpoint: operationsEndpoint(row.endpoint), state: optionalText(row.state, 40),

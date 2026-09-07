@@ -29,6 +29,9 @@
     "management": [
       "panel",
       "control"
+    ],
+    "operations": [
+      "qwenpaw-ops"
     ]
   },
   "services": [
@@ -126,6 +129,14 @@
       "label": "管理执行服务",
       "group": "management",
       "purpose": "受控启停、日志和操作回执；仅内网鉴权访问",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
+      "id": "qwenpaw-ops",
+      "label": "世界运营组 QwenPaw",
+      "group": "operations",
+      "purpose": "六角色运营分析与提案；独立控制台 18090",
       "dependencies": [],
       "healthRequired": true
     }

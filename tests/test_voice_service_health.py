@@ -180,6 +180,7 @@ class VoiceServiceHealth(unittest.TestCase):
     def test_panel_retains_player_service_and_adds_voice_readiness_gate(self):
         with patch.object(health, 'probe_panel_http', return_value={'ok': True}), \
                 patch.object(health, 'probe_management', return_value={'ok': True}), \
+                patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
                 patch.object(health, 'probe_recorded_behavior', return_value={'ok': True}), \
                 patch.object(health, 'probe_chanting_staff', return_value={'ok': True}), \
                 patch.object(health, 'probe_voice_recording', return_value={'ok': True}), \

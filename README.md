@@ -4,7 +4,7 @@
 
 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，当前整合分支为 `codex/performance-foundation`，沿用原仓库历史，原世界源码已移入 `world/`。首次拉取请先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)：本仓库保存源码、配置模板、构建工具与验证方法；下文的运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些文件，也不等于已经完成环境安装。
 
-当前阶段按用户要求暂缓新增 Agent 功能，先整理现有实现与玩家玩法。第一批技能规则/存储、玩家命令和工会规则已作模块提取；实际边界、保留的耦合与后续顺序见 [代码架构与拆分记录](docs/ARCHITECTURE.md)。
+第一批技能规则/存储、玩家命令和工会规则已作模块提取；实际边界、保留的耦合与后续顺序见 [代码架构与拆分记录](docs/ARCHITECTURE.md)。最新阶段按用户要求恢复运营组改造：独立服务已升级 QwenPaw 2.2.0，安装六角色实用技能，采用有限额的原生后台协作；入口、实测和费用约束见 [运营组说明](docs/OPERATIONS-TEAM.md)。
 
 后续改造已将普通玩家命令执行从女神模块提取为独立应用服务，保持 `/mycli`、`/myhelp`、罗盘与既有 CLI 队列入口。world 启动不再等待 QwenPaw 健康；明确技能指令不调用模型，模糊咏唱、问答与祈愿仍使用原集成。验证与当前限制见 [玩家命令应用服务](docs/PLAYER-COMMAND-SERVICE.md)。
 
@@ -12,7 +12,7 @@
 
 QwenPaw 已作为默认适配器保留，会话调用支持注入替换实现。打开 **http://127.0.0.1:19091** 作为日常管理首页：天神之眼、服务维护、运营组、技能档案、村务和共享传送点统一入口。服务器管理支持登录、维护预览、日志与执行回执；密码文件位于 `server/admin-state/secrets/admin-password.txt`。最新使用与架构见 [服务器管理说明](docs/SERVER-MANAGEMENT.md)。
 
-运营治理入口为 **http://127.0.0.1:19091/#operations**：仅显示千灯纪 D 项目角色与统计，不列宿主、旧游戏和内置辅助角色。统一 CLI 为 `python tools/project.py ops status`，仍保留完整审计清单；启停只面向登记的 D 盘现有容器，先输出计划，执行时带 `--execute qiandengji`。旧游戏容器和专用宿主进程已精确停用，原数据保留；宿主 QwenPaw、通用模型和非游戏任务继续运行。TTS 已迁入 D，当前项目共 11 项服务。六角色运营组迁入 D 的 [准备方案](docs/OPERATIONS-TEAM-MIGRATION.md) 尚未启用，不能当作运营团队已上线。
+运营治理入口为 **http://127.0.0.1:19091/#operations**：显示六个运营角色和两个游戏会话角色，排除宿主、旧游戏和内置辅助角色。运营实例的 default 是正式司灯。统一 CLI 为 `python tools/project.py ops status`，保留完整审计清单；启停只面向登记的 D 容器，先输出计划，执行带 `--execute qiandengji`。旧游戏环境已精确停用，宿主 QwenPaw、通用模型和非游戏任务保留。当前项目共 12 项服务（含独立运营容器），实际部署与模型实验见 [运营组说明](docs/OPERATIONS-TEAM.md)；原迁移文档保留为准备阶段记录。
 
 结合《AI 共生与演化服务器》计划的后续方案见 [AI 共生世界设计](docs/SYMBIOSIS-WORLD-DESIGN.md)。设计保留当前底座与旧档，复用 Numen，优先补齐真人、AI 与女仆共享的实物工会合同，再发展生活、探索和世界演化；文中的新增能力是开发计划，不代表已部署。
 

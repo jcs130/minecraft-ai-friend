@@ -170,6 +170,7 @@ class VoiceBoundaryHealth(unittest.TestCase):
     def test_panel_requires_final_normal_recorder_restoration(self):
         with patch.object(health, 'probe_panel_http', return_value={'ok': True}), \
                 patch.object(health, 'probe_management', return_value={'ok': True}), \
+                patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
                 patch.object(health, 'probe_recorded_behavior', return_value={'ok': True}), \
                 patch.object(health, 'probe_source_record', return_value={'ok': True}), \
                 patch.object(health, 'probe_player_commands', return_value={'ok': True}), \

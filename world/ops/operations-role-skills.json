@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "roles": {
+    "mc-god": ["qd-evidence-report", "qd-priority-review"],
+    "default": ["qd-evidence-report", "qd-team-coordination"],
+    "mc-herald": ["qd-evidence-report", "qd-service-triage"],
+    "mc-priest": ["qd-evidence-report", "qd-world-events"],
+    "mc-guard-kirito": ["qd-evidence-report", "qd-casting-acceptance"],
+    "mc-guard-naruto": ["qd-evidence-report", "qd-onboarding-exploration"]
+  }
+}

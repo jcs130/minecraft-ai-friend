@@ -4,10 +4,10 @@ import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
-export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','voice','asr','panel','tts','control'];
+export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control'];
 const MUTABLE = SERVICES.filter(x => x !== 'control');
 const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts']};
-const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','resources','voice','asr','panel'];
+const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','panel'];
 export function redactLog(text) {
   const sensitive = key => /(?:password|passwd|secret|token|authorization|api.?key|credential)/i.test(key);
   const redactText=value=>value.replace(/(Bearer\s+)[^\s"']+/gi,'$1[redacted]')
@@ -66,7 +66,7 @@ export async function inventory(engine=dockerRequest) {
   }));
 }
 export function buildPlan(input, rows) {
-  if(!input || !['start','stop','restart'].includes(input.action) || !Array.isArray(input.services) || !input.services.length || input.services.length>10 || Object.keys(input).some(k=>!['action','services'].includes(k))) throw new Error('invalid_plan');
+  if(!input || !['start','stop','restart'].includes(input.action) || !Array.isArray(input.services) || !input.services.length || input.services.length>MUTABLE.length || Object.keys(input).some(k=>!['action','services'].includes(k))) throw new Error('invalid_plan');
   const selected=[...new Set(input.services)];
   if(selected.some(n=>!MUTABLE.includes(n))) throw new Error('unknown_service');
   const byId=new Map(rows.map(r=>[r.id,r]));

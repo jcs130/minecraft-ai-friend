@@ -16,6 +16,7 @@ from typing import Any
 # Verified package metadata for this exact local image, not its mutable tag.
 AUDITED_IMAGE_PACKAGES = {
     "sha256:041af8111ee91ec0180a5d50ca876e89301fc9d03401ee4852858431999a3181": "2.1.0",
+    "sha256:1caee098f813d59973e30a4533699b594a73c3fdcfcddb192ebf385ad004eb29": "2.2.0",
 }
 
 
@@ -110,6 +111,10 @@ def _job_count(workspace: Path) -> int | None:
 
 
 def _role(runtime: str, ident: str) -> str:
+    if runtime == 'qiandengji-ops':
+        return {'mc-god':'运营统筹与验收','default':'司灯／台账与协调','mc-herald':'运营巡检与行为审计',
+                'mc-priest':'剧情与活动策划','mc-guard-kirito':'桐人／玩法体验分析（身体未接管）',
+                'mc-guard-naruto':'鸣人／新手与协作体验分析（身体未接管）'}.get(ident,'内置辅助（停用）')
     if runtime == "qiandengji":
         return {"mc-god": "游戏神谕与对话（会话后端）", "mc-herald": "游戏答疑与传令（会话后端）"}.get(ident, "内置辅助 Agent")
     if runtime == "shadow":
@@ -131,6 +136,9 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
         ("host", "宿主 QwenPaw", "host", home / ".copaw", None, "", "宿主综合 Agent，与游戏运营组混合配置"),
     ]
     result: dict[str, Any] = {"runtimes": [], "agents": [], "issues": []}
+    if (project / 'server/operations-agent-state/work/config.json').is_file():
+        locations.insert(1, ('qiandengji-ops','千灯纪世界运营组','container',project/'server/operations-agent-state/work',
+            'qiandengji-qwenpaw-ops-1','http://127.0.0.1:18090','六角色运营：状态分析、巡检与提案；游戏写入及周期调度尚未开放'))
 
     def issue(code: str, severity: str, title: str, detail: str) -> None:
         result["issues"].append({"code": code, "severity": severity, "title": title, "detail": detail})
@@ -190,7 +198,8 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
     issue("enabled_not_running", "info", "启用不等于正在自主运行", "Agent 启用、容器健康、MCP 子进程与巡场驱动是不同状态；任务数仅为启用的 jobs.json 定义。")
     issue("runtime_versions_differ", "info", "历史版本差异（2026-09-07）", "当时审计的容器镜像标签为2.1.1、Python包2.1.0，宿主为2.2.0；这是历史记录，当前版本以各运行时可核实的字段为准。迁移应逐字段验证。")
     d_agents = [x for x in result["agents"] if x["runtimeId"] == "qiandengji" and x["enabled"]]
-    if d_agents and all(x["toolCount"] == 0 and x["mcpCount"] == 0 for x in d_agents):
+    ops_agents = [x for x in result['agents'] if x['runtimeId']=='qiandengji-ops' and x['enabled']]
+    if not ops_agents and d_agents and all(x["toolCount"] == 0 and x["mcpCount"] == 0 for x in d_agents):
         issue("D_team_not_migrated", "info", "当前 D 实例是精简会话后端", "已启用角色未配置内置工具和 MCP；完整旧运营组尚未迁入。任务定义不可读时数量保持未知，不能把会话健康当作运营组运转。")
     active_external_jobs = sum(x["jobCount"] for x in result["agents"] if x["runtimeId"] == "host"
                                and not x["id"].startswith("mc-") and x["jobCount"] is not None)

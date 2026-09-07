@@ -17,13 +17,17 @@ class ManagementHealthTests(unittest.TestCase):
         registry=self.root/'server/world-data/block-registry.json';registry.parent.mkdir(parents=True);registry.write_bytes(b'current-server-registry')
         summary={'schema':1,'registry':{'sha256':hashlib.sha256(registry.read_bytes()).hexdigest()},'ysmWebPlayback':False}
         target=self.root/'vendor/modern-viewer/mod-assets/compatibility-summary.json';target.parent.mkdir(parents=True);target.write_text(json.dumps(summary))
+        mapping={'registrySha256':summary['registry']['sha256'],'canonicalBlocksSha256':'fixture-canonical','mappings':[[0,0]]}
+        mapping_path=target.parent/'vanilla-state-map.json';mapping_path.write_text(json.dumps(mapping),encoding='utf-8')
         jar=self.root/'server/mc/mods/test.jar';jar.parent.mkdir(parents=True);jar.write_bytes(b'fixture-jar-identity')
         (target.parent/'compatibility-report.json').write_text(json.dumps({'jars':[{'sha256':hashlib.sha256(jar.read_bytes()).hexdigest(),'paths':['server/mc/mods/test.jar']}]}))
         self.routes={
             '/api/manage/session':{'configured':True,'authenticated':False,'csrf':None},
             '/api/manage/services':{'services':[{'id':name,'state':'running','health':'healthy'} for name in health.MANIFEST]},
             '/api/eye/state':{'observer':{'online':True},'limits':{'remoteInventoryAvailable':False}},
-            '/api/eye/renderer':{'ok':True,'observerOnline':True,'worldAvailable':True},
+            '/api/eye/renderer':{'ok':True,'observerOnline':True,'worldAvailable':True,'blockStates':{
+                'ready':True,'registrySha256':mapping['registrySha256'],'canonicalBlocksSha256':mapping['canonicalBlocksSha256'],
+                'mappingSha256':hashlib.sha256(mapping_path.read_bytes()).hexdigest(),'vanillaStates':1}},
             '/api/eye/compatibility':summary,
         }
     def probe(self,behavior=True):
@@ -52,7 +56,7 @@ class ManagementHealthTests(unittest.TestCase):
             'probe_panel_http', 'probe_recorded_behavior', 'probe_source_record',
             'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff',
             'probe_voice_recording', 'probe_voice_boundary_deployment',
-            'probe_skillbar_editor', 'probe_chanting_client',
+            'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team',
         )
         with ExitStack() as stack:
             no_http = stack.enter_context(patch.object(

@@ -1,0 +1,3 @@
+FROM qwenpaw-mc:2.1.1
+RUN python -m pip install --no-cache-dir --index-url https://pypi.org/simple qwenpaw==2.2.0 \
+    && python -c "import importlib.metadata; assert importlib.metadata.version('qwenpaw') == '2.2.0'"
