@@ -137,6 +137,8 @@ def probe_panel_smoke():
     eye_performance = probe_recorded_behavior('eye-performance-smoke.json', (
         'state-map-live', 'three-view-geometry', 'sustained-navigation',
         'bounded-events', 'cached-assets', 'world-progress-preserved'))
+    observer_view = probe_recorded_behavior('eye-observer-smoke.json', (
+        'first-person-no-hand', 'other-camera-views', 'static-asset-refreshed'), showHand=False)
     sources = probe_source_record('architecture-current.json')
     player_commands = probe_player_commands()
     voice_commands = probe_voice_commands()
@@ -147,9 +149,9 @@ def probe_panel_smoke():
     chanting_client = probe_chanting_client()
     operations_team = probe_operations_team()
     game_qwenpaw = probe_game_qwenpaw()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw)),
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
-            'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance,
+            'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,

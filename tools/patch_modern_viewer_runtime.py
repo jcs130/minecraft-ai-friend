@@ -34,6 +34,10 @@ def patch(data, module):
             raise ValueError('Unexpected embedded runtime boundary')
         data = data[:start] + data[end:]
     replacements = [
+        # The web eye is an observer camera; suppress both first-person hand
+        # overlays while keeping world entities and their equipment visible.
+        ('renderEntities:!0,extraBlockRenderers:!0,showHand:!0,viewBobbing:!0,fetchPlayerSkins:!1',
+         'renderEntities:!0,extraBlockRenderers:!0,showHand:!1,viewBobbing:!0,fetchPlayerSkins:!1'),
         ('callbacks:{displayCriticalError:r=>{},',
          'callbacks:{displayCriticalError:r=>{console.error("Modern renderer backend failure",r);hHe(r)},'),
         ('fetch(UCe,{cache:"reload"}),fetch(jCe,{cache:"reload"})',
