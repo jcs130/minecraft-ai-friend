@@ -391,7 +391,8 @@ class OperationsTeamProbe(unittest.TestCase):
         self.report_path.parent.mkdir()
         self.now = 1_788_782_400.0
         self.receipt = {'ok': True, 'project': 'qiandengji-ops', 'packageVersion': '2.2.0', 'roles': 6,
-            'authEnforced': True, 'installedSkillBindings': 12, 'rateLimitVerified': True,
+            'authEnforced': False, 'authEnabled': False, 'authMode': 'local-passwordless',
+            'anonymousAccess': True, 'installedSkillBindings': 12, 'rateLimitVerified': True,
             'driverPolicyVerified': True, 'builtinTools': 0, 'automaticJobs': 0}
         self.report = {'schema': 1, 'project': 'qiandengji', 'ok': True,
             'finishedAt': datetime.fromtimestamp(self.now-60, timezone.utc).isoformat(),
@@ -426,7 +427,10 @@ class OperationsTeamProbe(unittest.TestCase):
         changes = [{'packageVersion': '2.1.0'}, {'project': 'shadow'}, {'roles': 5}, {'roles': 6.0},
                    {'installedSkillBindings': 11}, {'installedSkillBindings': '12'}, {'builtinTools': False},
                    {'builtinTools': 1}, {'automaticJobs': 1}, {'automaticJobs': False}, {'ok': 1}]
-        for key in ('authEnforced', 'rateLimitVerified', 'driverPolicyVerified'):
+        changes.extend({'authMode': bad} for bad in ('authenticated', 'local', None))
+        for key in ('authEnforced', 'authEnabled'):
+            changes.extend({key: bad} for bad in (True, 0, None, 'false'))
+        for key in ('anonymousAccess', 'rateLimitVerified', 'driverPolicyVerified'):
             changes.extend({key: bad} for bad in (False, 1, None, 'true'))
         for change in changes:
             with self.subTest(change=change):
@@ -486,6 +490,60 @@ class OperationsTeamProbe(unittest.TestCase):
             value = health.probe_panel_smoke()
             self.assertFalse(value['ok']); self.assertFalse(value['operations_team']['live'])
             self.assertTrue(value['operations_team']['behavior']['ok'])
+
+
+class PasswordlessRuntimeProbe(unittest.TestCase):
+    def load_probe(self, filename):
+        path = SOURCE.parents[1]/filename
+        spec = importlib.util.spec_from_file_location('isolated_'+filename[:-3], path)
+        module = importlib.util.module_from_spec(spec)
+        stub = SimpleNamespace(ROLES=(), TOOLS=(), role_tools=lambda _: ())
+        with patch.dict(sys.modules, {'operations_team_mcp': stub}):
+            spec.loader.exec_module(module)
+        return module
+
+    def test_both_versions_require_explicit_zero_and_actual_disabled_status(self):
+        for filename in ('qwenpaw_health.py', 'operations_team_health.py'):
+            module = self.load_probe(filename)
+            with self.subTest(filename=filename), patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}):
+                calls = []
+                module.check_passwordless_auth(lambda route: calls.append(route) or {'enabled': False})
+                self.assertEqual(calls, ['/auth/status'])
+                for bad in (True, 0, None, 'false'):
+                    with self.assertRaises(AssertionError):
+                        module.check_passwordless_auth(lambda _: {'enabled': bad})
+            for flag in ('1', 'false', '', 'no'):
+                with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': flag}):
+                    with self.assertRaises(AssertionError):
+                        module.check_passwordless_auth(lambda _: self.fail('Environment must fail before HTTP'))
+
+    def test_game_probe_uses_anonymous_gets_and_keeps_two_roles_tool_denial(self):
+        module = self.load_probe('qwenpaw_health.py')
+        routes = {'/auth/status': {'enabled': False},
+                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in ('mc-god', 'mc-herald')]},
+                  '/tools': [{'name': 'read_file', 'enabled': False}]}
+        requests = []
+        def get(request, **kwargs):
+            requests.append(request)
+            self.assertEqual(request.get_method(), 'GET')
+            self.assertIsNone(request.get_header('Authorization'))
+            return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
+        with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}), \
+                patch.object(module.urllib.request, 'urlopen', side_effect=get):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                module.main()
+            result = json.loads(output.getvalue())
+            self.assertTrue(result['ok']); self.assertIs(result['authEnforced'], False)
+            self.assertEqual(result['authMode'], 'local-passwordless')
+            self.assertEqual([r.get_header('X-agent-id') for r in requests[-2:]], ['mc-god', 'mc-herald'])
+            routes['/tools'][0]['enabled'] = True
+            with self.assertRaises(AssertionError):
+                module.main()
+            routes['/tools'][0]['enabled'] = False
+            routes['/agents']['agents'].append({'id': 'foreign', 'enabled': True})
+            with self.assertRaises(AssertionError):
+                module.main()
 
 
 if __name__ == '__main__':

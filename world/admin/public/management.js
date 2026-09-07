@@ -1,9 +1,9 @@
 (() => {
   'use strict';
   const $=id=>document.getElementById(id),make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
-  const labels={mc:'Minecraft 世界',world:'世界玩法',gate:'Agent 协议入口',npc:'村务',resources:'配音与模型资源',qwenpaw:'游戏会话 QwenPaw',voice:'语音回复',asr:'咏唱识别',panel:'管理台',tts:'语音合成',control:'管理执行器'};
-  const explanations={mc:'存档、模组与玩家进度',world:'技能、世界事件与女神会话',gate:'已有 Agent 连接协议',npc:'村民、任务与技能书',resources:'客户端资源分发',qwenpaw:'游戏会话后端，与宿主团队独立',voice:'回复语音的队列处理',asr:'真人咏唱的语音识别',panel:'你正在使用的管理页面',tts:'本项目独立 GPU 推理',control:'受控操作与回执；网页不允许停止自身执行器'};
-  let authenticated=false,csrf=null,current=location.hash.slice(1)||'overview',services=[],plan=null,eye=null,view='first',lease=null,lastMap=0,busy=false,serviceSignature='',targetSignature='';
+  const labels={mc:'Minecraft 世界',world:'世界玩法',gate:'Agent 协议入口',npc:'村务',resources:'配音与模型资源',qwenpaw:'游戏会话 QwenPaw','qwenpaw-ops':'运营组 QwenPaw',voice:'语音回复',asr:'咏唱识别',panel:'管理台',tts:'语音合成',control:'管理执行器'};
+  const explanations={mc:'存档、模组与玩家进度',world:'技能、世界事件与女神会话',gate:'已有 Agent 连接协议',npc:'村民、任务与技能书',resources:'客户端资源分发',qwenpaw:'游戏会话后端，与宿主团队独立','qwenpaw-ops':'六角色运营团队、职责技能与受控协作',voice:'回复语音的队列处理',asr:'真人咏唱的语音识别',panel:'你正在使用的管理页面',tts:'本项目独立 GPU 推理',control:'受控操作与回执；网页不允许停止自身执行器'};
+  let authenticated=false,csrf=null,authMode='unknown',sessionExpiresAt=0,sessionPending=null,current=location.hash.slice(1)||'overview',services=[],plan=null,eye=null,view='first',lease=null,lastMap=0,busy=false,serviceSignature='',targetSignature='';
   let eyeBusy=false,lastServices=0,lastCompatibility=0;
   const nav=document.querySelector('.nav-list'),before=nav.querySelector('[data-view="beings"]');
   for(const [id,label,icon] of [['eye','天神之眼','◉'],['services','服务器管理','◇']]){
@@ -12,23 +12,36 @@
     button.addEventListener('click',()=>selectView(id));nav.insertBefore(button,before);
   }
   nav.querySelectorAll('.nav-index').forEach((e,i)=>{e.textContent=String(i+1).padStart(2,'0');e.setAttribute('aria-hidden','true');});
-  const messages={login_required:'请先解锁管理。',invalid_password:'密码不正确。',login_rate_limit:'尝试次数过多，请一分钟后再试。',dependency_not_ready:'依赖尚未就绪，请先启动对应服务。',plan_expired:'计划已过期，请重新预览。',operation_busy:'已有维护操作正在执行，请查看操作记录。',unverified_container:'容器状态或归属未能核实，操作没有执行。',target_not_online:'目标当前不在线。',observer_offline:'观察者暂未连接。',management_request_unavailable:'管理服务暂不可用，请检查服务状态。',csrf_required:'管理会话已变化，请重新解锁。'};
+  const messages={login_required:'管理会话已失效，请刷新页面后重新预览。',invalid_password:'密码不正确。',login_rate_limit:'尝试次数过多，请一分钟后再试。',dependency_not_ready:'依赖尚未就绪，请先启动对应服务。',plan_expired:'计划已过期，请重新预览。',operation_busy:'已有维护操作正在执行，请查看操作记录。',unverified_container:'容器状态或归属未能核实，操作没有执行。',target_not_online:'目标当前不在线。',observer_offline:'观察者暂未连接。',management_request_unavailable:'管理服务暂不可用，请检查服务状态。',csrf_required:'管理会话已变化，请刷新页面后重新预览。',local_access_required:'管理仅允许从本机入口访问。',management_not_configured:'本机管理连接尚未配置完成。'};
   async function api(route,body){
+    if(route!=='/api/manage/session'&&authMode==='local'&&(!authenticated||sessionExpiresAt<Date.now()+30000)){
+      await session();if(!authenticated)throw new Error('本机管理连接暂未就绪，请刷新页面。');
+    }
     let response;try{response=await fetch(route,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(csrf?{'X-CSRF-Token':csrf}:{})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:AbortSignal.timeout(20000)});}
     catch{throw new Error(body===undefined?'连接暂未完成，请稍后重试。':'未能确认请求结果。请先查看操作记录，避免重复提交。');}
-    const data=await response.json();if(!response.ok)throw new Error(messages[data.error]||('请求未完成：'+(data.error||response.status)));return data;
+    const data=await response.json();if(!response.ok){
+      if(['login_required','csrf_required'].includes(data.error)){authenticated=false;csrf=null;sessionExpiresAt=0;updateSession();}
+      throw new Error(messages[data.error]||('请求未完成：'+(data.error||response.status)));
+    }return data;
   }
   function message(value,bad=false){const box=$('management-message');box.hidden=!value;box.textContent=value||'';box.className='notice'+(bad?' error':'');}
   function updateSession(){
-    $('admin-session-label').textContent=authenticated?'管理已解锁 · 操作需要预览确认':'浏览模式 · 观察与查看无需解锁';
-    $('admin-unlock').hidden=authenticated;$('admin-logout').hidden=!authenticated;
-    document.querySelector('.read-only').textContent=authenticated?'管理模式':'浏览模式';
+    $('admin-session-label').textContent=authMode==='local'?(authenticated?'本机管理 · 无需密码，维护操作仍需预览确认':'本机管理连接暂未就绪，请刷新页面')
+      :authMode==='unknown'?'正在连接本机管理…':authenticated?'管理已解锁 · 操作需要预览确认':'浏览模式 · 观察与查看无需解锁';
+    $('admin-unlock').hidden=authMode!=='password'||authenticated;$('admin-logout').hidden=authMode!=='password'||!authenticated;
+    document.querySelector('.read-only').textContent=authenticated?(authMode==='local'?'本机管理':'管理模式'):'浏览模式';
     $('eye-follow').disabled=!authenticated||!$('eye-target').value||!eye?.observer?.online;
     $('eye-park').disabled=!authenticated||!eye?.follow?.active;
     renderServices();
   }
-  async function session(){try{const data=await api('/api/manage/session');authenticated=data.authenticated;csrf=data.csrf;updateSession();}catch{authenticated=false;csrf=null;updateSession();}}
-  $('admin-unlock').onclick=()=>{$('login-error').textContent='';$('admin-password').value='';$('admin-login-dialog').showModal();$('admin-password').focus();};
+  async function session(){
+    if(sessionPending)return sessionPending;
+    sessionPending=(async()=>{try{const data=await api('/api/manage/session');authMode=data.authMode==='local'?'local':'password';authenticated=data.authenticated===true;csrf=data.csrf;
+      sessionExpiresAt=Number.isFinite(data.expiresAt)?data.expiresAt:0;updateSession();
+    }catch{authenticated=false;csrf=null;sessionExpiresAt=0;updateSession();}})();
+    try{return await sessionPending;}finally{sessionPending=null;}
+  }
+  $('admin-unlock').onclick=()=>{if(authMode!=='password')return;$('login-error').textContent='';$('admin-password').value='';$('admin-login-dialog').showModal();$('admin-password').focus();};
   $('login-cancel').onclick=()=>$('admin-login-dialog').close();
   $('admin-login-form').onsubmit=async event=>{event.preventDefault();try{const data=await api('/api/manage/login',{password:$('admin-password').value});$('admin-password').value='';csrf=data.csrf;authenticated=true;$('admin-login-dialog').close();updateSession();await refresh();}catch(e){$('login-error').textContent=e.message;}};
   $('admin-logout').onclick=async()=>{try{if(lease)await park();await api('/api/manage/logout',{});authenticated=false;csrf=null;updateSession();$('service-logs').textContent='管理已锁定。';$('operation-history').replaceChildren(make('p','footnote','解锁管理后查看操作记录。'));}catch(e){message(e.message,true);}};
@@ -62,7 +75,7 @@
       for(const step of row.steps||[])card.append(make('p','operation-step',(step.status==='complete'?'✓ ':step.status==='failed'?'! ':'… ')+step.name));
       if(row.error)card.append(make('p','error-text',messages[row.error]||row.error));if(row.recovery)card.append(make('p','footnote',row.recovery));return card;}));
   }catch(e){message(e.message,true);}}
-  $('logs-refresh').onclick=async()=>{if(!authenticated){$('admin-unlock').click();return;}try{const value=await api('/api/manage/logs?service='+encodeURIComponent($('logs-service').value));$('service-logs').textContent=value.text||'暂无日志。';}catch(e){$('service-logs').textContent=e.message;}};
+  $('logs-refresh').onclick=async()=>{if(!authenticated&&authMode==='password'){$('admin-unlock').click();return;}try{const value=await api('/api/manage/logs?service='+encodeURIComponent($('logs-service').value));$('service-logs').textContent=value.text||'暂无日志。';}catch(e){$('service-logs').textContent=e.message;}};
   function showFrame(){if(current!=='eye'||document.hidden){$('eye-frame').removeAttribute('src');return;}const source='http://127.0.0.1:19092/'+(view==='first'?'':view+'/')+(new URLSearchParams(location.search).has('diagnostic')?'?diagnostic':'');if($('eye-frame').getAttribute('src')!==source)$('eye-frame').src=source;}
   document.querySelectorAll('[data-eye-view]').forEach(button=>button.onclick=()=>{view=button.dataset.eyeView;document.querySelectorAll('[data-eye-view]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));showFrame();});
   $('eye-reload').onclick=()=>{lastCompatibility=0;$('eye-frame').removeAttribute('src');showFrame();void eyeRefresh();};
@@ -74,7 +87,7 @@
     $('eye-observer-facts').replaceChildren(...values.map(([label,value])=>{const p=make('p');p.append(make('span','fact-label',label),make('strong','',value));return p;}));
     const signature=JSON.stringify(data.targets);if(signature!==targetSignature){targetSignature=signature;const selected=$('eye-target').value;$('eye-target').replaceChildren(make('option','','选择在线目标'));$('eye-target').firstChild.value='';
     for(const row of data.targets||[]){const option=make('option','',row.name+(row.nearby?' · 附近':''));option.value=row.name;$('eye-target').append(option);}if((data.targets||[]).some(t=>t.name===selected))$('eye-target').value=selected;}
-    const follow=data.follow;$('eye-follow-status').textContent=follow?.active?`正在跟随 ${follow.target} · 租期至 ${new Date(follow.expiresAt).toLocaleTimeString('zh-CN')}`:follow?.parking?'正在返回观察位置…':'未跟随。解锁管理后选择在线目标，只移动观察者。';
+    const follow=data.follow;$('eye-follow-status').textContent=follow?.active?`正在跟随 ${follow.target} · 租期至 ${new Date(follow.expiresAt).toLocaleTimeString('zh-CN')}`:follow?.parking?'正在返回观察位置…':'未跟随。选择在线目标后开始，只移动观察者。';
     $('eye-world-summary').replaceChildren(make('span','chip',`周边实体 ${data.entities?.total??'—'}`),make('span','chip',`在线可选目标 ${data.targets?.length??0}`),make('span','chip','远程玩家背包尚未接入'));
     if(pos&&Date.now()-lastMap>30000){lastMap=Date.now();$('eye-map').src='/api/eye/map.png?'+new URLSearchParams({cx:Math.round(pos.x),cz:Math.round(pos.z),r:32});$('eye-map').hidden=false;}
     updateSession();
@@ -105,7 +118,7 @@
     finally{busy=false;}
   }
   async function refresh(){if(document.hidden)return;await Promise.allSettled([refreshServices(),eyeRefresh()]);}
-  $('refresh-button').addEventListener('click',()=>{lastServices=0;lastCompatibility=0;void refresh();});
+  $('refresh-button').addEventListener('click',()=>{lastServices=0;lastCompatibility=0;void session().then(refresh);});
   document.addEventListener('qiandeng:view',event=>{const previous=current;current=event.detail;if(previous==='eye'&&current!=='eye'&&lease)void park();showFrame();void refresh();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&lease)void park();showFrame();if(!document.hidden)void refresh();});
   setInterval(()=>{if(current==='eye'&&!document.hidden&&authenticated&&lease)api('/api/eye/observer',{action:'follow',target:lease.target,renew:true,leaseId:lease.id}).catch(()=>{lease=null;});},40000);

@@ -115,6 +115,9 @@ services:
       PANEL_HOST: 0.0.0.0
       PANEL_PORT: "9090"
       PANEL_PUBLIC_ORIGIN: http://127.0.0.1:19091
+      PANEL_MANAGEMENT_AUTH_MODE: local
+      # Exact Docker Desktop peer; recheck when qiandengji_default is recreated.
+      PANEL_LOCAL_TRUSTED_PEERS: 172.20.0.1
       PANEL_STATE_DIR: /panel-data
       PANEL_QWENPAW_URL: http://127.0.0.1:18089
       PANEL_RESOURCES_URL: http://127.0.0.1:19090/packs/
@@ -124,7 +127,6 @@ services:
       - ./world/admin:/app/admin:ro
       - ./server/panel-state:/panel-data:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
-      - ./server/admin-state/secrets/admin-password.json:/run/secrets/admin-password:ro
     healthcheck:
       test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:9090/healthz',{headers:{Host:'127.0.0.1:19091'}},s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>{process.exitCode=1})"]
       interval: 20s
@@ -213,7 +215,7 @@ services:
       COPAW_SECRET_DIR: /state/secret
       QWENPAW_DISABLE_KEYRING: "1"
       QWENPAW_KEYRING_ACCOUNT: qiandengji
-      QWENPAW_AUTH_ENABLED: "1"
+      QWENPAW_AUTH_ENABLED: "0"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -243,7 +245,7 @@ services:
       COPAW_SECRET_DIR: /state/secret
       QWENPAW_DISABLE_KEYRING: "1"
       QWENPAW_KEYRING_ACCOUNT: qiandengji-ops
-      QWENPAW_AUTH_ENABLED: "1"
+      QWENPAW_AUTH_ENABLED: "0"
     volumes:
       - ./server/operations-agent-state:/state
       - ./world/ops:/ops:ro

@@ -389,6 +389,65 @@ test('operations UI shows six operators and two game roles, with truthful budget
   assert.deepEqual(requestedMutations, []); assert.deepEqual(errors, []);
 });
 
+test('local management opens without a password and renews CSRF before the reviewed operations action',async t=>{
+  let executablePath;
+  for(const candidate of ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Google/Chrome/Application/chrome.exe']){
+    try{await fs.access(candidate);executablePath=candidate;break;}catch{/* optional browser */}
+  }
+  if(!executablePath){t.skip('This local-management UI regression requires an installed Chromium browser');return;}
+  const {chromium}=await import('playwright-core'),browser=await chromium.launch({executablePath,headless:true});
+  t.after(()=>browser.close());
+  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[],mutations=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  let sessionReads=0;
+  const world=projectWorld({heartbeat:{ts:Date.now()},npc:{},board:{}});
+  await page.route('**/*',async route=>{
+    const request=route.request(),pathname=new URL(request.url()).pathname;
+    const json=value=>route.fulfill({contentType:'application/json',body:JSON.stringify(value)});
+    if(request.method()==='POST'){
+      mutations.push({route:pathname,body:request.postDataJSON(),csrf:request.headers()['x-csrf-token']});
+      if(pathname==='/api/manage/plan')return json({id:'fixture-reviewed-plan',plan:{explanation:'重启独立运营组服务。',
+        stop:['qwenpaw-ops'],start:['qwenpaw-ops'],saveMinecraft:false}});
+      if(pathname==='/api/manage/execute')return json({operationId:'fixture-operations-restart'});
+      return route.fulfill({status:404,body:'Unexpected mutation'});
+    }
+    if(pathname==='/api/manage/session'){
+      sessionReads++;
+      return json({configured:true,authMode:'local',authenticated:true,csrf:sessionReads===1?'fixture-initial-csrf':'fixture-renewed-csrf',
+        expiresAt:Date.now()+(sessionReads===1?3600000:7200000)});
+    }
+    if(pathname==='/api/manage/services')return json({services:[{id:'qwenpaw-ops',state:'running',health:'healthy',canControl:true}]});
+    if(pathname==='/api/manage/operations')return json({active:false,operations:[]});
+    if(pathname==='/api/manage/logs')return json({text:'Fixture operations log'});
+    if(pathname==='/api/state')return json({...world,operations:projectOperations(operationsTeamFixture()),stale:false,links:{},warnings:[]});
+    if(pathname==='/healthz')return json({ok:true});
+    const assets={'/':['index.html','text/html'],'/app.js':['app.js','text/javascript'],
+      '/management.js':['management.js','text/javascript'],'/style.css':['style.css','text/css']};
+    if(!Object.hasOwn(assets,pathname))return route.fulfill({status:404,body:''});
+    const [name,contentType]=assets[pathname];
+    return route.fulfill({contentType,body:await fs.readFile(new URL('../admin/public/'+name,import.meta.url),'utf8')});
+  });
+  await page.goto('http://local-management-fixture.test/#services');
+  await page.waitForFunction(()=>document.getElementById('admin-session-label').textContent.includes('无需密码'));
+  assert.equal(await page.locator('#admin-unlock').isVisible(),false);assert.equal(await page.locator('#admin-logout').isVisible(),false);
+  assert.equal(await page.locator('input[type="password"]').isVisible(),false);
+  const service=page.locator('#managed-services .managed-service').filter({has:page.getByRole('heading',{name:'运营组 QwenPaw',exact:true})});
+  await service.getByRole('button',{name:'重启',exact:true}).waitFor();
+  // Advancing only this isolated page's wall clock exercises preflight renewal.
+  await page.evaluate(()=>{const realNow=Date.now;Date.now=()=>realNow()+3580000;});
+  await service.getByRole('button',{name:'重启',exact:true}).click();
+  await page.locator('#operation-dialog').waitFor({state:'visible'});
+  assert.equal(sessionReads,2);assert.equal(await page.locator('#plan-heading').innerText(),'重启 运营组 QwenPaw');
+  assert.match(await page.locator('#plan-description').innerText(),/将停止：运营组 QwenPaw[\s\S]*将启动：运营组 QwenPaw/);
+  assert.equal((await page.locator('#operation-dialog').innerText()).includes('undefined'),false);
+  assert.deepEqual(mutations,[{route:'/api/manage/plan',body:{action:'restart',services:['qwenpaw-ops']},csrf:'fixture-renewed-csrf'}]);
+  await page.locator('#plan-execute').click();
+  await page.locator('#operation-dialog').waitFor({state:'hidden'});
+  assert.deepEqual(mutations[1],{route:'/api/manage/execute',body:{planId:'fixture-reviewed-plan'},csrf:'fixture-renewed-csrf'});
+  assert.equal(mutations.length,2,'The user must explicitly confirm exactly one execution');
+  assert.deepEqual(errors,[]);
+});
+
 test('public projection excludes raw instructions, secrets, private waypoints and reserved probes', () => {
   const sentinel = 'PRIVATE_SENTINEL';
   const result = projectWorld({ heartbeat: { ts: Date.now(), watching: ['MengMeng', 'QDGuildProbe'],

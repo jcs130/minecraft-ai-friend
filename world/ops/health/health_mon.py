@@ -14,6 +14,16 @@ from urllib.parse import urlsplit
 
 PROJECT = Path(__file__).resolve().parents[3]
 OPERATIONS_COLLECTION = None
+PASSWORDLESS_CONSOLE_CHECKS = (
+    'panel-passwordless-ui', 'game-qwen-passwordless-ui', 'operations-qwen-passwordless-ui',
+    'local-session-without-password', 'csrf-and-origin-enforced', 'localhost-port-bindings',
+    'internal-control-unauthorized', 'host-8088-preserved',
+)
+LOCAL_CONSOLE_PORTS = (
+    ('qiandengji-panel-1', '9090/tcp', '19091'),
+    ('qiandengji-qwenpaw-1', '8088/tcp', '18089'),
+    ('qiandengji-qwenpaw-ops-1', '8088/tcp', '18090'),
+)
 OPERATIONS_FIELDS = {
     'runtimes': {'id', 'label', 'kind', 'version', 'endpoint', 'state', 'purpose', 'enabledAgentCount', 'agentCount'},
     'agents': {'id', 'label', 'runtimeId', 'enabled', 'role', 'modelProvider', 'model', 'toolCount', 'mcpCount', 'jobCount'},
@@ -149,7 +159,7 @@ def probe_panel_smoke():
 def probe_operations_team():
     """Check the fixed D runtime without inference, and require recorded behavior separately."""
     checks = {name: False for name in ('runtime_identity', 'six_roles', 'role_skills_installed',
-              'authentication', 'rate_limit', 'driver_policy', 'no_builtin_tools', 'no_automatic_jobs')}
+              'passwordless_access', 'rate_limit', 'driver_policy', 'no_builtin_tools', 'no_automatic_jobs')}
     failure = None
     try:
         process = subprocess.run(
@@ -168,7 +178,9 @@ def probe_operations_team():
             'runtime_identity': receipt.get('project') == 'qiandengji-ops' and receipt.get('packageVersion') == '2.2.0',
             'six_roles': type(receipt.get('roles')) is int and receipt['roles'] == 6,
             'role_skills_installed': type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] == 12,
-            'authentication': receipt.get('authEnforced') is True,
+            'passwordless_access': (receipt.get('authMode') == 'local-passwordless'
+                and receipt.get('authEnabled') is False and receipt.get('authEnforced') is False
+                and receipt.get('anonymousAccess') is True),
             'rate_limit': receipt.get('rateLimitVerified') is True,
             'driver_policy': receipt.get('driverPolicyVerified') is True,
             'no_builtin_tools': type(receipt.get('builtinTools')) is int and receipt['builtinTools'] == 0,
@@ -213,14 +225,72 @@ def probe_operations_team():
         behavior['error'] = 'Recorded operations behavior is unavailable or invalid'
     result = {'ok': all(checks.values()) and behavior['ok'], 'live': all(checks.values()),
               'container': OPERATIONS_TEAM_CONTAINER, 'checks': checks, 'behavior': behavior,
-              'scope': 'Current authenticated configuration and separately recorded native-task/UI behavior; no model call in this probe'}
+              'scope': 'Current passwordless local configuration and separately recorded native-task/UI behavior; no model call in this probe'}
     if failure:
         result['error'] = failure
     return result
 
 
+def probe_passwordless_consoles():
+    """Verify only the three project bindings and require separate actual UI/security evidence."""
+    ports_ok = False
+    try:
+        process = subprocess.run(
+            ['docker', 'inspect', '--format', '{{json .NetworkSettings.Ports}}',
+             *(name for name, _, _ in LOCAL_CONSOLE_PORTS)],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=15,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if process.returncode != 0 or len(process.stdout.encode('utf-8')) > 16384:
+            raise ValueError('Binding inspection failed')
+        rows = [json.loads(line) for line in process.stdout.splitlines() if line.strip()]
+        ports_ok = len(rows) == len(LOCAL_CONSOLE_PORTS)
+        for row, (_, container_port, host_port) in zip(rows, LOCAL_CONSOLE_PORTS):
+            ports_ok = ports_ok and isinstance(row, dict) and (
+                row.get(container_port) == [{'HostIp': '127.0.0.1', 'HostPort': host_port}]
+                and all(value in (None, []) for key, value in row.items() if key != container_port))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
+        ports_ok = False
+
+    filename = 'passwordless-console-smoke.json'
+    behavior = {'ok': False, 'report': filename, 'missing_checks': list(PASSWORDLESS_CONSOLE_CHECKS)}
+    try:
+        path = PROJECT/'reports'/filename
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 256*1024:
+            raise ValueError('Missing or oversized passwordless evidence')
+        report = json.loads(path.read_text(encoding='utf-8-sig'))
+        raw = report.get('checks')
+        if isinstance(raw, dict):
+            rows = [{'name': name, 'ok': value.get('ok')} for name, value in raw.items()
+                    if isinstance(value, dict)]
+            if len(rows) != len(raw):
+                raise ValueError('Invalid passwordless checks')
+        else:
+            rows = raw
+        if not isinstance(rows, list) or not 1 <= len(rows) <= 64 or any(
+                not isinstance(row, dict) or not isinstance(row.get('name'), str)
+                or not row['name'] or row.get('ok') is not True for row in rows):
+            raise ValueError('Invalid or unsuccessful passwordless checks')
+        names = [row['name'] for row in rows]
+        if len(names) != len(set(names)):
+            raise ValueError('Duplicate passwordless checks')
+        finished = operations_time(report.get('finishedAt'))
+        behavior.update({
+            'ok': (report.get('ok') is True and type(report.get('schema')) is int
+                and report['schema'] == 1 and report.get('project') == 'qiandengji'
+                and finished.timestamp() <= time.time()+5
+                and set(PASSWORDLESS_CONSOLE_CHECKS) <= set(names)),
+            'missing_checks': sorted(set(PASSWORDLESS_CONSOLE_CHECKS)-set(names)),
+            'checked_at': report.get('finishedAt'),
+        })
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        behavior['error'] = 'Passwordless console behavior is unavailable or invalid'
+    return {'ok': ports_ok and behavior['ok'], 'localhost_bindings': bool(ports_ok),
+            'behavior': behavior,
+            'scope': 'Project-only published bindings and recorded passwordless UI/CSRF/internal-token checks'}
+
+
 def probe_management():
-    """Current authenticated management and renderer inputs plus exercised behavior."""
+    """Current local-session management and renderer inputs plus exercised behavior."""
     try:
         def read(route):
             with urllib.request.urlopen('http://127.0.0.1:19091' + route, timeout=6) as response:
@@ -246,7 +316,13 @@ def probe_management():
         ready = {r.get('id') for r in service_rows if r.get('state') == 'running' and r.get('health') in (None, '', 'healthy')}
         checks = {
             'management_configured': session.get('configured') is True,
-            'public_session_locked': session.get('authenticated') is False and session.get('csrf') is None,
+            'local_passwordless_session': (session.get('authMode') == 'local'
+                and session.get('authenticated') is True
+                and isinstance(session.get('csrf'), str) and len(session['csrf']) == 48
+                and all(char in '0123456789abcdef' for char in session['csrf'])
+                and type(session.get('expiresAt')) in (int, float)
+                and math.isfinite(session['expiresAt'])
+                and time.time()*1000 < session['expiresAt'] <= (time.time()+3605)*1000),
             'current_services_ready': ready == set(MANIFEST),
             'observer_connected': observer.get('observer', {}).get('online') is True,
             'renderer_stream_ready': renderer.get('ok') is True and renderer.get('observerOnline') is True and renderer.get('worldAvailable') is True,
@@ -263,7 +339,9 @@ def probe_management():
             'eye-current-modpack', 'eye-three-views', 'eye-follow-and-park',
             'management-dependency-preview', 'management-execution-receipt', 'management-auth-scope',
             'homepage-responsive', 'renderer-sustained-and-navigation'))
-        return {'ok': all(checks.values()) and behavior['ok'], 'checks': checks, 'behavior': behavior,
+        passwordless = probe_passwordless_consoles()
+        return {'ok': all(checks.values()) and behavior['ok'] and passwordless['ok'],
+                'checks': checks, 'behavior': behavior, 'passwordless': passwordless,
                 'scope': 'Live observer/stream, current registry and management readiness; rendering evidence is recorded separately'}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return {'ok': False, 'error': 'Management or renderer readiness could not be verified'}

@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual, scryptSync } from 'node:crypto';
 import http from 'node:http';
+import { isIP } from 'node:net';
 
 // Node fetch can replace Host with the destination hostname. The viewer uses
 // the exact public Host even for these two fixed internal, read-only routes.
@@ -17,10 +18,55 @@ async function input(req) {
   let body='';for await(const part of req){body+=part;if(Buffer.byteLength(body)>4096)throw new Error('body_limit');}
   return JSON.parse(body);
 }
-export function createManagementApi({passwordHash,token,controlUrl='http://control:3090',eyeUrl='http://world:3080',mapUrl='http://world:3060',viewerUrl='http://world:3070',clock=Date.now,transport=fetch}={}) {
+function peerAddress(value) {
+  if(typeof value!=='string')return null;
+  const address=value.startsWith('::ffff:')?value.slice(7):value;
+  return isIP(address)?address:null;
+}
+function localAccess({origins,trustedPeers}) {
+  if(!Array.isArray(origins)||!origins.length)throw new Error('Local management requires a loopback public origin');
+  const allowedOrigins=new Set(),allowedHosts=new Set();
+  for(const value of origins){
+    const url=new URL(value);
+    if(!['http:','https:'].includes(url.protocol)||!['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.username||url.password||url.origin!==value)
+      throw new Error('Local management requires a loopback public origin');
+    allowedOrigins.add(url.origin);allowedHosts.add(url.host);
+  }
+  if(!Array.isArray(trustedPeers))throw new Error('Local trusted peers must be exact IP addresses');
+  const peers=new Set(trustedPeers.map(value=>{
+    const address=peerAddress(value);
+    if(!address||['0.0.0.0','::','255.255.255.255'].includes(address))throw new Error('Local trusted peers must be exact IP addresses');
+    return address;
+  }));
+  return req=>{
+    // Docker's loopback-only published port may have a verified gateway peer.
+    // Never infer a peer from Forwarded, X-Forwarded-For or other client headers.
+    const address=peerAddress(req.socket?.remoteAddress);
+    const loopback=address==='::1'||(isIP(address||'')===4&&address.startsWith('127.'));
+    return !!address&&(loopback||peers.has(address))&&allowedHosts.has(req.headers.host)
+      &&(!req.headers.origin||allowedOrigins.has(req.headers.origin))&&req.headers['sec-fetch-site']!=='cross-site';
+  };
+}
+export function createManagementApi({passwordHash,token,authMode='password',localOrigins=[],localTrustedPeers=[],controlUrl='http://control:3090',eyeUrl='http://world:3080',mapUrl='http://world:3060',viewerUrl='http://world:3070',clock=Date.now,transport=fetch}={}) {
+  if(!['password','local'].includes(authMode))throw new Error('Unsupported management authentication mode');
   const sessions=new Map();let failures=0,blockedUntil=0;
-  const configured=!!passwordHash?.salt&&!!passwordHash?.hash&&typeof token==='string'&&token.length>=32;
-  const session=req=>{const id=cookies(req).qd_admin,s=sessions.get(id);if(!s||s.expiresAt<clock()){sessions.delete(id);return null;}return s;};
+  const configured=typeof token==='string'&&token.length>=32&&(authMode==='local'||!!passwordHash?.salt&&!!passwordHash?.hash);
+  const allowedLocal=authMode==='local'?localAccess({origins:localOrigins,trustedPeers:localTrustedPeers}):null;
+  const session=req=>{const id=cookies(req).qd_admin,s=sessions.get(id);if(!s||s.expiresAt<=clock()){sessions.delete(id);return null;}
+    if(allowedLocal){sessions.delete(id);sessions.set(id,s);}return s;};
+  const setSessionCookie=(res,id)=>res.setHeader('Set-Cookie','qd_admin='+id+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600');
+  const newSession=res=>{
+    for(const [id,s] of sessions)if(s.expiresAt<=clock())sessions.delete(id);
+    if(sessions.size>=20){
+      if(!allowedLocal)return null;
+      // Local health checks may discard cookies. Keep a bounded LRU instead of
+      // exhausting sign-in capacity; normal active requests keep their session.
+      sessions.delete(sessions.keys().next().value);
+    }
+    const id=randomBytes(32).toString('hex'),s={csrf:randomBytes(24).toString('hex'),expiresAt:clock()+3600000};sessions.set(id,s);
+    setSessionCookie(res,id);
+    return s;
+  };
   const upstream=async(base,route,method='GET',body)=>{
     const result=await transport(base+route,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
       body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(18000)});
@@ -31,21 +77,26 @@ export function createManagementApi({passwordHash,token,controlUrl='http://contr
     if(!url.pathname.startsWith('/api/manage/')&&!url.pathname.startsWith('/api/eye/'))return false;
     const finish=(status,value)=>{send(res,status,value);return true;};
     try {
+      if(allowedLocal&&!allowedLocal(req))return finish(403,{error:'local_access_required'});
       if(req.method==='GET'&&url.pathname==='/api/manage/session') {
-        const s=session(req);return finish(200,{configured,authenticated:!!s,csrf:s?.csrf||null,expiresAt:s?.expiresAt||null});
+        let s=session(req);
+        if(configured&&allowedLocal){
+          if(!s)s=newSession(res);
+          else if(s.expiresAt-clock()<60000){s.expiresAt=clock()+3600000;setSessionCookie(res,cookies(req).qd_admin);}
+        }
+        if(configured&&allowedLocal&&!s)return finish(429,{error:'session_limit'});
+        return finish(200,{configured,authMode,authenticated:!!s,csrf:s?.csrf||null,expiresAt:s?.expiresAt||null});
       }
       if(!configured)return finish(503,{error:'management_not_configured'});
       if(req.method==='POST'&&url.pathname==='/api/manage/login'){
+        if(allowedLocal)return finish(404,{error:'password_login_disabled'});
         if(!req.headers.origin)return finish(403,{error:'origin_required'});
         if(clock()<blockedUntil)return finish(429,{error:'login_rate_limit'});
         const value=await input(req),password=typeof value.password==='string'?value.password:'';
         if(password.length>256)return finish(400,{error:'password_length'});
         const actual=scryptSync(password,passwordHash.salt,32),expected=Buffer.from(passwordHash.hash,'hex');
         if(expected.length!==actual.length||!timingSafeEqual(actual,expected)){failures++;if(failures>=5){blockedUntil=clock()+60000;failures=0;}return finish(401,{error:'invalid_password'});}
-        failures=0;for(const [id,s] of sessions)if(s.expiresAt<clock())sessions.delete(id);
-        if(sessions.size>=20)return finish(429,{error:'session_limit'});
-        const id=randomBytes(32).toString('hex'),s={csrf:randomBytes(24).toString('hex'),expiresAt:clock()+3600000};sessions.set(id,s);
-        res.setHeader('Set-Cookie','qd_admin='+id+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600');
+        failures=0;const s=newSession(res);if(!s)return finish(429,{error:'session_limit'});
         return finish(200,{authenticated:true,csrf:s.csrf,expiresAt:s.expiresAt});
       }
       const readPublic=req.method==='GET'&&['/api/manage/services','/api/eye/state','/api/eye/map.png','/api/eye/compatibility','/api/eye/renderer'].includes(url.pathname);
@@ -68,7 +119,7 @@ export function createManagementApi({passwordHash,token,controlUrl='http://contr
         return finish(200,await viewerRead(viewerUrl+route));
       }
       if(req.method==='GET'&&url.pathname==='/api/manage/logs'){
-        const service=url.searchParams.get('service');if(!/^[a-z]{2,12}$/.test(service||''))return finish(400,{error:'invalid_service'});
+        const service=url.searchParams.get('service');if(!/^(?:[a-z]{2,12}|qwenpaw-ops)$/.test(service||''))return finish(400,{error:'invalid_service'});
         const r=await upstream(controlUrl,'/logs?service='+encodeURIComponent(service));return finish(r.status,r.value);
       }
       if(req.method==='GET'&&url.pathname==='/api/eye/map.png'){

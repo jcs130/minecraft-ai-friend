@@ -1,28 +1,27 @@
-"""Read-only authenticated local readiness probe; never submits a model request."""
+"""Read-only passwordless local readiness probe; never submits a model request."""
 import json
-from pathlib import Path
-import urllib.error
+import os
 import urllib.request
 
-PHASE = 'read-token'
+PHASE = 'auth-mode'
+
+
+def check_passwordless_auth(get):
+    assert os.environ.get('QWENPAW_AUTH_ENABLED') == '0'
+    assert get('/auth/status').get('enabled') is False
 
 def main():
     global PHASE
-    token = Path('/state/secret/console-token.txt').read_text().strip()
-    assert token
     base = 'http://127.0.0.1:8088/api'
-    def get(path, authenticated=True, aid=None):
-        headers = {'Authorization': f'Bearer {token}'} if authenticated else {}
+    def get(path, aid=None):
+        headers = {}
         if aid: headers['X-Agent-Id'] = aid
         with urllib.request.urlopen(urllib.request.Request(base + path, headers=headers), timeout=6) as res:
-            return json.loads(res.read(2 * 1024 * 1024))
-    PHASE = 'unauthenticated-request'
-    try:
-        get('/agents', authenticated=False)
-    except urllib.error.HTTPError as exc:
-        assert exc.code == 401
-    else:
-        raise RuntimeError('Isolated console did not enforce authentication')
+            body = res.read(2 * 1024 * 1024 + 1)
+            assert len(body) <= 2 * 1024 * 1024
+            return json.loads(body)
+    PHASE = 'auth-mode'
+    check_passwordless_auth(get)
     PHASE = 'agent-list'
     agents = get('/agents')['agents']
     assert {a['id'] for a in agents if a['enabled']} == {'mc-god', 'mc-herald'}
@@ -30,7 +29,8 @@ def main():
         PHASE = 'disabled-tools:' + aid
         items = get('/tools', aid=aid)
         assert items and not any(item['enabled'] for item in items)
-    print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': True,
+    print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
+                      'authMode': 'local-passwordless', 'authEnabled': False, 'anonymousAccess': True,
                       'agents': 2, 'enabledTools': 0}))
 
 

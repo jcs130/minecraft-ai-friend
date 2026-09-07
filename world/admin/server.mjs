@@ -37,7 +37,9 @@ export function createPanelServer({ stateDir, publicOrigin = 'http://127.0.0.1:9
   const allowedHosts = new Set([expected.host]);
   if (expected.hostname === '127.0.0.1') allowedHosts.add(`localhost:${expected.port || '80'}`);
   const links = { qwenpaw: publicLink(qwenpawUrl, 'http://127.0.0.1:18089'), resources: publicLink(resourcesUrl, 'http://127.0.0.1:19090/packs/') };
-  const managementApi=createManagementApi(management);
+  const localOrigins=[expected.origin];
+  if(expected.hostname==='127.0.0.1')localOrigins.push(`${expected.protocol}//localhost:${expected.port||'80'}`);
+  const managementApi=createManagementApi({...management,localOrigins});
   const send = (res, status, body, contentType = 'application/json; charset=utf-8') => {
     res.writeHead(status, { ...headers, 'Content-Type': contentType });
     res.end(contentType.startsWith('application/json') ? JSON.stringify(body) : body);
@@ -52,7 +54,9 @@ export function createPanelServer({ stateDir, publicOrigin = 'http://127.0.0.1:9
       if(await managementApi(req,res,url,send))return;
       if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return send(res, 405, { error: 'Read-only resource' }); }
       // Exact allow-list: no static directory serving or old command endpoints.
-      if (url.pathname === '/healthz') return send(res, 200, { ok: true, service: 'qiandengji-panel', schema: 1, mode: management.passwordHash && management.token ? 'authenticated-management' : 'read-only' });
+      if (url.pathname === '/healthz') return send(res, 200, { ok: true, service: 'qiandengji-panel', schema: 1,
+        mode: management.token?.length>=32 && management.authMode==='local' ? 'local-management'
+          : management.passwordHash && management.token ? 'authenticated-management' : 'read-only' });
       if (url.pathname === '/api/state') {
         const [world, health, operations] = await Promise.all([
           readSnapshot(stateDir, 'world.json'), readSnapshot(stateDir, 'health.json'), readSnapshot(stateDir, 'operations.json')]);
@@ -90,6 +94,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     publicOrigin: process.env.PANEL_PUBLIC_ORIGIN || `http://127.0.0.1:${port}`,
     qwenpawUrl: process.env.PANEL_QWENPAW_URL, resourcesUrl: process.env.PANEL_RESOURCES_URL,
     management: {
+      authMode: process.env.PANEL_MANAGEMENT_AUTH_MODE || 'password',
+      localTrustedPeers: (process.env.PANEL_LOCAL_TRUSTED_PEERS || '').split(',').map(value=>value.trim()).filter(Boolean),
       token: await fs.readFile('/run/secrets/control-token','utf8').then(x=>x.trim()).catch(()=>null),
       passwordHash: await fs.readFile('/run/secrets/admin-password','utf8').then(JSON.parse).catch(()=>null),
     } });
