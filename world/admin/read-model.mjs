@@ -89,26 +89,91 @@ function survivorAction(raw) {
   return { tool: optionalText(value.tool, 40), code: optionalText(response.code, 60), ok: bool(response.ok),
     completionConfirmed: bool(response.completionConfirmed), acceptedAt: number(value.acceptedAt) };
 }
+function survivorGameSkills(raw) {
+  const value = object(raw);
+  if (value.schema !== 1 || value.available !== true || value.historicalQuery !== true)
+    return { available: false, historicalQuery: true };
+  const abilityRows = raw => list(raw).slice(0, 24).filter(row => typeof row?.id === 'string'
+    && row.id.length <= 100 && /^[a-z0-9_.-]+(?::[a-z0-9_./-]+)?$/.test(row.id)).map(row => ({
+      id: row.id, name: text(row.name, 64) || row.id, level: count(row.level), mana: nonnegative(row.mana),
+      cooldownMs: nonnegative(row.cooldownMs), ready: bool(row.ready) }));
+  const progression = object(value.pufferfish), attributes = object(value.attributes);
+  return { available: true, historicalQuery: true, observedAt: nonnegative(value.observedAt),
+    sourceObservedAt: Object.fromEntries(['status', 'skills', 'spells irons'].map(key =>
+      [key, nonnegative(object(value.sourceObservedAt)[key])])),
+    legacyLevel: count(value.playerLevel), legacySkillsKnown: bool(value.legacySkillsKnown),
+    learned: abilityRows(value.learned), eligible: abilityRows(value.currentlyAvailable), locked: abilityRows(value.locked),
+    nativeSpells: abilityRows(value.nativeSpells), nativeSpellsKnown: bool(value.nativeSpellsKnown),
+    nativeLevel: count(value.nativeLevel), nativeMana: nonnegative(value.nativeMana), nativeMaxMana: nonnegative(value.nativeMaxMana),
+    legacyMana: nonnegative(value.legacyMana), legacyMaxMana: nonnegative(value.legacyMaxMana),
+    attributes: Object.fromEntries(['health', 'maxHealth', 'maxMana', 'manaRegen', 'spellPower', 'spellResist',
+      'cooldownReduction', 'castTimeReduction'].map(key => [key, nonnegative(attributes[key])])),
+    pufferfish: { known: bool(progression.known), ok: bool(progression.ok),
+      categories: list(progression.categories).slice(0, 12).filter(row => typeof row?.id === 'string'
+        && row.id.length <= 80 && /^[a-z0-9_.-]+(?::[a-z0-9_./-]+)?$/.test(row.id)).map(row => ({
+          id: row.id, available: bool(row.available), level: count(row.level), experience: nonnegative(row.experience),
+          pointsTotal: count(row.points_total), pointsSpent: count(row.points_spent), pointsLeft: count(row.points_left) })) },
+    truncated: value.truncated === true };
+}
+function survivorNavigationOutcome(raw) {
+  const value = object(raw);
+  if (!['success', 'failed', 'timeout', 'cancelled'].includes(value.state) || typeof value.success !== 'boolean'
+      || value.success !== (value.state === 'success') || typeof value.task_id !== 'string'
+      || !value.task_id || typeof value.navigation_epoch !== 'string' || !value.navigation_epoch) return null;
+  return { taskId: text(value.task_id, 128), epoch: text(value.navigation_epoch, 64), state: value.state,
+    success: value.success, reason: text(value.reason, 400), finishedAt: nonnegative(value.finished_at),
+    mode: optionalText(value.navigation_mode, 40), worldInteractionBlocked: bool(value.world_interaction_blocked) };
+}
+function survivorSkillBooks(raw) {
+  return list(raw).slice(0, 12).filter(row => row?.id === 'minecraft:written_book'
+    && Number.isSafeInteger(row.count) && row.count > 0 && row.count <= 64
+    && Number.isSafeInteger(row.slot) && row.slot >= 0 && row.slot <= 40
+    && typeof row.bookName === 'string' && row.bookName.length > 0 && row.bookName.length <= 64).map(row => {
+      const recognized = row.recognized === true && row.recognition === 'recognized'
+        && typeof row.skill_id === 'string' && /^[a-z0-9_.-]{1,100}$/.test(row.skill_id);
+      return { id: row.id, count: row.count, slot: row.slot, bookName: row.bookName, recognized,
+        recognition: recognized ? 'recognized' : ['unrecognized', 'catalog_unavailable', 'ambiguous'].includes(row.recognition)
+          ? row.recognition : 'unrecognized', historicalCatalog: true, catalogObservedAt: nonnegative(row.catalogObservedAt),
+        ...(recognized ? { skillId: row.skill_id, name: text(row.name, 64), requiredLevel: count(row.requiredLevel),
+          type: ['active', 'passive'].includes(row.type) ? row.type : null, knownLearned: bool(row.knownLearned) } : {}) };
+    });
+}
 export function projectSurvivor(raw, now = Date.now()) {
   const value = object(raw);
   if (value.schema !== 1 || value.project !== 'qiandengji-survivor' || value.bodyName !== 'Kirito' || value.character !== '桐人'
       || typeof value.generatedAt !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value.generatedAt))
     return { available: false, stale: true, generatedAt: null };
   const body = object(value.body), budgets = object(value.budgets), decision = object(value.lastDecision);
+  const perception = object(value.perception), environment = object(value.environment), world = object(environment.world);
   return { available: true, ...freshness(value.generatedAt, now, 90), generatedAt: optionalText(value.generatedAt, 64),
     character: '桐人', bodyName: 'Kirito', status: text(value.status, 64), enabled: bool(value.enabled),
     goal: text(value.goal, 1200), pauseReason: optionalText(value.pauseReason, 120),
+    autonomous: bool(value.autonomous), nextReviewAt: number(value.nextReviewAt),
+    goalState: optionalText(value.goalState, 40), wakeReason: optionalText(value.wakeReason, 60),
+    perception: { pendingCount: count(perception.pendingCount),
+      events: list(perception.events).slice(0, 12).map(row => ({ kind: text(row?.kind, 60),
+        at: number(row?.at), speaker: text(row?.speaker, 64), text: text(row?.text, 320),
+        beforeHp: number(row?.beforeHp), afterHp: number(row?.afterHp), addressed: bool(row?.addressed) })),
+      sources: Object.entries(object(perception.sources)).slice(0, 4).map(([name, item]) =>
+        ({ name: text(name, 64), available: bool(item?.available) })) },
+    environment: { available: bool(environment.ok), biome: optionalText(body.biome, 160),
+      weather: optionalText(world.weather, 64), dark: bool(world.is_dark_outside),
+      entities: list(environment.entities).slice(0, 20).map(row => ({ type: text(row?.type, 100),
+        name: optionalText(row?.name, 80), distance: number(row?.distance) })) },
     lastDecision: value.lastDecision && typeof value.lastDecision === 'object' && !Array.isArray(value.lastDecision)
       ? { turnId: optionalText(decision.turnId, 128), at: optionalText(decision.at, 64), completed: bool(decision.completed),
         actions: list(decision.actions).slice(-2).map(survivorAction) } : null,
     body: { online: bool(body.online), hp: number(body.hp), hunger: number(body.hunger),
-      position: survivorPosition(body.position), counts: survivorItems(body.counts) },
+      position: survivorPosition(body.position), counts: survivorItems(body.counts),
+      ownedSkillBooks: survivorSkillBooks(body.ownedSkillBooks), skillBooksTruncated: bool(body.skillBooksTruncated) },
+    gameSkills: survivorGameSkills(value.gameSkills),
     budgets: Object.fromEntries(['decisionsUsed', 'decisionLimit', 'cooldownSeconds', 'modelRequests', 'promptTokens', 'completionTokens'].map(key => [key, count(budgets[key])])),
     skills: list(value.skills).slice(0, 40).map(row => ({ name: text(row?.name, 80), description: text(row?.description, 400),
       activeVersion: optionalText(row?.activeVersion, 80), draftVersion: optionalText(row?.draftVersion, 80) })),
     episodes: list(value.episodes).slice(-12).map(row => ({ at: optionalText(row?.at, 64), kind: text(row?.kind, 60),
       turnId: optionalText(row?.turnId, 128), taskId: optionalText(row?.taskId, 128), completed: bool(row?.completed),
       action: optionalText(row?.action, 40), inventoryDelta: survivorItems(row?.inventoryDelta, true),
+      navigationOutcome: row?.action === 'goto' ? survivorNavigationOutcome(row?.navigationOutcome) : null,
       positionBefore: survivorPosition(row?.positionBefore), positionAfter: survivorPosition(row?.positionAfter),
       name: optionalText(row?.name, 80), version: optionalText(row?.version, 80), status: optionalText(row?.status, 60),
       reason: optionalText(row?.reason, 500), errorType: optionalText(row?.errorType, 80) })) };

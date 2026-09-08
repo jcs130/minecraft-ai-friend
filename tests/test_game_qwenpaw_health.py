@@ -14,7 +14,7 @@ class GameRuntimeHealth(unittest.TestCase):
     def probe(self, receipt=None, behavior=True, exit_code=0):
         if receipt is None:
             receipt = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.0',
-                       'agents': 2, 'enabledTools': 0, 'authMode': 'local-passwordless',
+                       'agents': 3, 'enabledTools': 0, 'authMode': 'local-passwordless',
                        'anonymousAccess': True}
         result = SimpleNamespace(returncode=exit_code, stdout=json.dumps(receipt))
         with patch.object(health.subprocess, 'run', return_value=result) as call, \
@@ -30,7 +30,7 @@ class GameRuntimeHealth(unittest.TestCase):
 
     def test_old_version_or_wrong_roles_cannot_pass(self):
         valid = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.0',
-                 'agents': 2, 'enabledTools': 0, 'authMode': 'local-passwordless', 'anonymousAccess': True}
+                 'agents': 3, 'enabledTools': 0, 'authMode': 'local-passwordless', 'anonymousAccess': True}
         for key, value in [('packageVersion','2.1.0'),('project','qiandengji-ops'),('agents',6),
                            ('enabledTools',1),('enabledTools',False),('anonymousAccess',False)]:
             with self.subTest(key=key, value=value):

@@ -344,20 +344,98 @@ function renderActiveView(data) {
   else if (activeView === 'operations') renderOperations(data);
   else if (activeView === 'survivor') renderSurvivor(data);
 }
+function renderSurvivorGameSkills(raw, body) {
+  const value = record(raw), available = value.available === true, sources = record(value.sourceObservedAt);
+  const queried = stamp => finite(stamp) ? '历史查询：' + formatDate(stamp) : '尚无查询时间';
+  setBadge('survivor-game-skills-badge', available ? '历史查询' : '尚未查询', 'neutral');
+  byId('survivor-game-skills-freshness').textContent = available ? queried(value.observedAt)
+    + (value.truncated ? ' · 列表较长，这里展示部分查询摘要。' : ' · 各项可能来自不同时间的查询。')
+    : '等待桐人首次查询自己的法术与成长状态。';
+  byId('survivor-legacy-query').textContent = queried(sources.skills);
+  byId('survivor-native-query').textContent = queried(sources['spells irons']);
+  byId('survivor-attributes-query').textContent = '状态查询：' + formatDate(sources.status)
+    + ' · 法术查询：' + formatDate(sources['spells irons']);
+  byId('survivor-progression-query').textContent = queried(sources.status);
+  facts('survivor-game-levels', [['女神等级', available ? number(value.legacyLevel) : '尚未查询'],
+    ['原生等级', available ? number(value.nativeLevel) : '尚未查询'],
+    ['女神法力', available ? number(value.legacyMana) + ' / ' + number(value.legacyMaxMana) : '尚未查询'],
+    ['铁魔法法力', available ? number(value.nativeMana) + ' / ' + number(value.nativeMaxMana) : '尚未查询']]);
+  const spellRows = (id, entries, known, emptyText, native = false) => replace(id,
+    known && entries.length ? entries.map(spell => {
+      const card = node('div', 'operation-record');
+      card.append(node('strong', '', text(spell.name)), node('p', 'footnote', text(spell.id)));
+      const details = [finite(spell.level) ? '等级 ' + number(spell.level) : '', finite(spell.mana) ? '法力 ' + number(spell.mana) : ''];
+      if (native) details.push(spell.ready === true ? '查询时就绪' : spell.ready === false ? '查询时未就绪' : '',
+        finite(spell.cooldownMs) ? '冷却 ' + number(spell.cooldownMs / 1000, 1) + ' 秒' : '');
+      if (details.some(Boolean)) card.append(node('p', 'card-caption', details.filter(Boolean).join(' · ')));
+      return card;
+    }) : [empty(known ? emptyText : '尚未查询，技能情况未知。')]);
+  const legacyKnown = available && value.legacySkillsKnown === true;
+  spellRows('survivor-learned', rows(value.learned), legacyKnown, '查询摘要中没有已学会的女神技能。');
+  spellRows('survivor-eligible', rows(value.eligible), legacyKnown, '查询摘要中没有待学习且已满足等级的技能。');
+  spellRows('survivor-native-spells', rows(value.nativeSpells), available && value.nativeSpellsKnown === true,
+    value.truncated ? '摘要中没有可展示的已装备法术；完整列表需再次查询。' : '上次查询未装备可用法术或卷轴。', true);
+  const progression = record(value.pufferfish);
+  if (!available || progression.known !== true) replace('survivor-progression', [empty('尚未查询成长数据。')]);
+  else if (progression.ok !== true) replace('survivor-progression', [empty('上次查询未能读取成长数据。')]);
+  else if (!rows(progression.categories).length) replace('survivor-progression', [empty('查询摘要中没有成长类别记录。')]);
+  else facts('survivor-progression', rows(progression.categories).map(category => [category.id,
+    category.available === true ? '等级 ' + number(category.level) + ' · 经验 ' + number(category.experience)
+      + ' · 技能点剩余 ' + number(category.pointsLeft) + ' / 共 ' + number(category.pointsTotal)
+      + '（已用 ' + number(category.pointsSpent) + '）' : '此成长类别暂不可用']));
+  const attributes = record(value.attributes), labels = { health: '生命', maxHealth: '最大生命', maxMana: '最大法力',
+    manaRegen: '法力恢复', spellPower: '法术强度', spellResist: '法术抗性', cooldownReduction: '冷却缩减', castTimeReduction: '施法时间缩减' };
+  const entries = Object.entries(labels).filter(([key]) => available && finite(attributes[key])).map(([key, label]) => [label, number(attributes[key], 2)]);
+  if (entries.length) facts('survivor-game-attributes', entries);
+  else replace('survivor-game-attributes', [empty('尚无可用的身体属性查询记录。')]);
+  replace('survivor-skill-books', rows(body.ownedSkillBooks).map(book => {
+    const card = node('div', 'operation-record');
+    card.append(node('strong', '', book.bookName + ' × ' + number(book.count)),
+      node('p', 'footnote', '背包槽位 ' + number(book.slot)));
+    const unknown = { catalog_unavailable: '等待技能目录查询后识别', ambiguous: '目录存在重名，技能身份待核对', unrecognized: '技能目录暂未识别此书' };
+    if (book.recognized === true) {
+      card.append(node('p', 'card-caption', text(book.name || book.skillId)
+        + (finite(book.requiredLevel) ? ' · 所需等级 ' + number(book.requiredLevel) : '')
+        + (book.type === 'passive' ? ' · 被动技能' : book.type === 'active' ? ' · 主动技能' : '')),
+        node('p', 'footnote', book.skillId + ' · 目录查询：' + formatDate(book.catalogObservedAt)));
+      if (typeof book.knownLearned === 'boolean') card.append(node('p', 'footnote', book.knownLearned ? '目录查询时已学会' : '目录查询时尚未学会'));
+    } else card.append(node('p', 'card-caption', unknown[book.recognition] || '技能身份待核对'));
+    return card;
+  }).concat(rows(body.ownedSkillBooks).length ? [] : [empty(body.online === true ? '背包记录中没有技能书。' : '等待身体连接后读取技能书。')]));
+  byId('survivor-skill-books-note').textContent = '携带技能书后仍需满足学习条件并实际参悟。'
+    + (body.skillBooksTruncated ? ' 当前仅展示部分技能书。' : '');
+}
 function renderSurvivor(data) {
   const value = record(data.survivor), body = record(value.body), budgets = record(value.budgets);
   const stale = value.available !== true || value.stale === true;
   const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
-    cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止' };
-  const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备' };
+    cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止' };
+  const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备', game_cast: '施法', game_learn: '参悟技能' };
   const actionName = tool => actionNames[tool] || text(tool, '身体动作');
-  const actionResult = action => action.code === 'accepted' ? '已受理，实际结果待观察'
+  const actionResult = action => action.code === 'accepted' ? '已受理；后续结果见最近的经历'
     : action.code === 'executed' && action.completionConfirmed === true ? '已确认执行'
     : action.code === 'outcome_unknown' ? '结果不明，需要核对'
     : action.ok === false ? '未执行成功' : '等待确认';
   setBadge('survivor-badge', stale ? '历史记录 / 待更新' : (states[value.status] || '状态：' + text(value.status)), !stale && body.online ? 'good' : 'neutral');
   byId('survivor-freshness').textContent = value.available ? '记录更新：' + formatDate(value.generatedAt) + (stale ? '。已过期，请检查服务；以下为上次记录。' : '。每 15 秒读取，身体状态由后台持续观察。') : '尚无桐人的有效状态。请先检查自主生存服务。';
   byId('survivor-goal').textContent = '当前目标：' + text(value.goal, '等待设置目标');
+  const reviews = { ongoing: '目标进行中', completed: '将选择下一个目标', blocked: '正在寻找可行办法', resting: '休息并观察' };
+  byId('survivor-autonomy').textContent = (value.autonomous ? '持续自主生活 · ' : '单次任务 · ')
+    + (reviews[value.goalState] || '观察当前目标')
+    + (value.enabled && finite(value.nextReviewAt) ? ' · 最迟复盘：' + formatDate(value.nextReviewAt * 1000) : '')
+    + (value.status === 'paused' && value.pauseReason ? ' · 暂停原因：' + value.pauseReason : '');
+  const awareness = record(value.perception), environment = record(value.environment);
+  facts('survivor-perception', [['环境', environment.available ? [text(environment.biome, '群系未知'), text(environment.weather, '天气未知'), environment.dark === true ? '夜间' : ''].filter(Boolean).join(' · ') : '等待环境读取'],
+    ['附近生物', rows(environment.entities).length ? rows(environment.entities).map(row => text(row.name || row.type)).join('、') : '当前没有可用记录'],
+    ['听觉通道', rows(awareness.sources).filter(row => row.available).length + ' / ' + rows(awareness.sources).length + ' 已接通'],
+    ['待处理事件', number(awareness.pendingCount)]]);
+  const eventLabels = { chat: '公屏聊天', goddess: '指名消息', chant_reply: '咏唱回执', system: '世界通知', damage_observed: '受到伤害', environment_changed: '环境变化', dimension_changed: '维度变化' };
+  replace('survivor-events', rows(awareness.events).map(event => {
+    const card = node('div', 'operation-record');
+    card.append(node('strong', '', (eventLabels[event.kind] || '世界事件') + (event.speaker ? ' · ' + event.speaker : '')),
+      node('p', 'card-caption', event.text || (event.kind === 'damage_observed' ? '生命 ' + number(event.beforeHp) + ' → ' + number(event.afterHp) : '已观察到变化，将在下一轮判断。')));
+    return card;
+  }).concat(rows(awareness.events).length ? [] : [empty('正在倾听，新的消息和世界变化会出现在这里。')]));
   const pos = record(body.position);
   replace('survivor-metrics', [metric('身体', body.online === true ? '在线' : body.online === false ? '离线' : '未知', 'Kirito'),
     metric('生命', number(body.hp), '实际生命值'), metric('饥饿', number(body.hunger), '实际饥饿值'),
@@ -373,6 +451,7 @@ function renderSurvivor(data) {
   facts('survivor-budgets', [['近24小时决策', number(budgets.decisionsUsed) + ' / ' + number(budgets.decisionLimit)],
     ['决策间隔', number(budgets.cooldownSeconds) + ' 秒'], ['累计模型请求', number(budgets.modelRequests)],
     ['累计输入 / 输出 Token', number(budgets.promptTokens) + ' / ' + number(budgets.completionTokens)]]);
+  renderSurvivorGameSkills(value.gameSkills, body);
   replace('survivor-skills', rows(value.skills).map(skill => {
     const card = node('div', 'operation-record');
     card.append(node('strong', '', text(skill.name)), node('p', 'card-caption', text(skill.description, '暂无描述')),
@@ -392,7 +471,14 @@ function renderSurvivor(data) {
       card.append(node('p', 'card-caption', changes.length ? '背包变化：' + changes.map(([id, n]) => id + ' ' + (n > 0 ? '+' : '') + number(n)).join('，') : '背包没有数量变化。'));
       const before = record(row.positionBefore), after = record(row.positionAfter), positionText = pos => `${number(pos.x)} · ${number(pos.y)} · ${number(pos.z)}`;
       if (finite(before.x) && finite(after.x)) card.append(node('p', 'footnote', '位置：' + positionText(before) + ' → ' + positionText(after)));
-      card.append(node('p', 'footnote', '这些是实际状态变化，不能单独证明任务已完成。'));
+      const navigation = record(row.navigationOutcome);
+      const navigationStates = { success: '导航已完成', failed: '导航失败', timeout: '导航超时', cancelled: '导航已取消' };
+      if (navigationStates[navigation.state]) {
+        card.append(node('p', 'card-caption', navigationStates[navigation.state] + ' · 原生任务回执'),
+          node('p', 'footnote', '回执时间：' + formatDate(navigation.finishedAt)));
+        if (navigation.reason) card.append(node('p', 'card-caption', '导航原因：' + navigation.reason));
+        card.append(node('p', 'footnote', '任务结果来自匹配的原生回执；上方另列实际位置与背包变化。'));
+      } else card.append(node('p', 'footnote', '这些是实际状态变化，不能单独证明任务已完成。'));
     }
     const reasons = { skill_execution_budget: '本次技能执行达到步数或时间限制。', operator_stop: '管理者停止了本次执行。', outcome_unknown: '动作结果仍不明确，请先核对身体。' };
     if (row.reason) card.append(node('p', 'card-caption', reasons[row.reason] || '原因：' + row.reason));

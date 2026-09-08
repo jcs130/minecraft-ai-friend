@@ -40,8 +40,8 @@
       "id": "survivor",
       "label": "桐人 · 自主生存",
       "group": "game",
-      "purpose": "独立身体、自主规划与受控技能学习；控制台 18091",
-      "dependencies": ["mc"],
+      "purpose": "桐人的世界感知、自主调度和技能执行；角色统一在游戏控制台 18089",
+      "dependencies": ["mc", "qwenpaw"],
       "healthRequired": true
     },
     {

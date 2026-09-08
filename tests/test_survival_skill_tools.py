@@ -159,6 +159,17 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         self.assertEqual(self.tools.remember(TURN, goal='x' * 1001)['code'], 'invalid_memory_text')
         self.assertEqual(len(read_json(self.state / 'memory.json')['history']), 16)
 
+    def test_goal_progress_and_bounded_review_are_stored_without_bypassing_budget(self):
+        self.assertTrue(self.tools.remember(TURN, goal='Find food', goal_state='completed',
+                                           review_after_seconds=300)['ok'])
+        memory = read_json(self.state / 'memory.json')
+        self.assertEqual(memory['goalState'], 'completed')
+        self.assertEqual(memory['reviewAfterSeconds'], 300)
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+        for value in (0, 179, 3601, True, 300.5):
+            self.assertEqual(self.tools.remember(TURN, review_after_seconds=value)['code'], 'invalid_review_interval')
+        self.assertEqual(self.tools.remember(TURN, goal_state='ignore_limits')['code'], 'invalid_goal_state')
+
     def test_real_program_is_drafted_tested_promoted_then_only_queued(self):
         from skill_library import SkillLibrary
         self.tools = SkillTools(self.state, SkillLibrary(self.state / 'skills'), clock=lambda: NOW)

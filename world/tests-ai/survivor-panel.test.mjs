@@ -5,8 +5,23 @@ import { projectSurvivor, projectWorld } from '../admin/read-model.mjs';
 import { SERVICES, buildPlan } from '../admin/control-service.mjs';
 
 const fixture = (now = Date.now()) => ({ schema: 1, project: 'qiandengji-survivor', character: '桐人', bodyName: 'Kirito',
-  generatedAt: new Date(now).toISOString(), status: 'observing', enabled: true, goal: '准备生存工具，探索附近环境',
-  body: { hp: 20, hunger: 18, online: true, position: { x: 100, y: 64, z: 100 }, counts: { 'minecraft:bread': 13 } },
+  generatedAt: new Date(now).toISOString(), status: 'observing', enabled: true, autonomous: true, nextReviewAt: now / 1000 + 1800,
+  goalState: 'ongoing', goal: '准备生存工具，探索附近环境',
+  perception: { pendingCount: 1, sources: { 'player-chat.jsonl': {available: true} },
+    events: [{kind: 'chat', at: now, speaker: 'Explorer', text: '桐人，附近有村庄任务。'}] },
+  environment: {ok: true, world: {weather: 'rain', is_dark_outside: false}, entities: [{type: 'minecraft:villager', distance: 5}]},
+  body: { hp: 20, hunger: 18, online: true, position: { x: 100, y: 64, z: 100 }, counts: { 'minecraft:bread': 13 },
+    ownedSkillBooks: [{id: 'minecraft:written_book', count: 1, slot: 4, bookName: '轻身秘笈', recognized: true,
+      recognition: 'recognized', skill_id: 'feather', name: '轻身术', requiredLevel: 3, type: 'passive', knownLearned: false, catalogObservedAt: now - 3600000},
+    {id: 'minecraft:written_book', count: 1, slot: 5, bookName: '无名秘笈', recognized: false, recognition: 'unrecognized'}] },
+  gameSkills: {schema: 1, available: true, historicalQuery: true, observedAt: now - 3600000,
+    sourceObservedAt: {status: now - 7200000, skills: now - 3600000, 'spells irons': now - 5400000},
+    playerLevel: 5, legacySkillsKnown: true, learned: [{id: 'rasengan', name: '螺旋丸', level: 1, mana: 10}],
+    currentlyAvailable: [{id: 'lightning', name: '闪电', level: 5, mana: 20}], locked: [],
+    nativeSpellsKnown: true, nativeSpells: [], nativeLevel: 8, nativeMana: 0, nativeMaxMana: 100,
+    legacyMana: 30, legacyMaxMana: 40, attributes: {health: 20, spellPower: 1.2},
+    pufferfish: {known: true, ok: true, categories: [{id: 'puffish_skills:combat', available: true,
+      level: 3, experience: 15, points_total: 2, points_spent: 1, points_left: 1}]}},
   lastDecision: { turnId: 'survival-fixture', completed: true, at: new Date(now).toISOString(),
     actions: [{ tool: 'mine', acceptedAt: now, result: { ok: true, code: 'accepted', completionConfirmed: false,
       result: { success: true, data: { task_id: 't1', async: true } } } }] },
@@ -16,7 +31,11 @@ const fixture = (now = Date.now()) => ({ schema: 1, project: 'qiandengji-survivo
     { at: new Date(now).toISOString(), kind: 'action_observed', action: 'mine',
       inventoryDelta: { 'minecraft:oak_log': 4, 'minecraft:bread': -1 },
       positionBefore: { x: 100, y: 64, z: 100 }, positionAfter: { x: 105, y: 64, z: 102 } },
-    { at: new Date(now).toISOString(), kind: 'skill_stopped', name: 'find_food', reason: 'skill_execution_budget' }] });
+    { at: new Date(now).toISOString(), kind: 'skill_stopped', name: 'find_food', reason: 'skill_execution_budget' },
+    { at: new Date(now).toISOString(), kind: 'action_observed', action: 'goto',
+      positionBefore: {x: 105, y: 64, z: 102}, positionAfter: {x: 106, y: 64, z: 102},
+      navigationOutcome: {task_id: 'navigation-fixture', navigation_epoch: 'epoch-fixture', state: 'failed', success: false,
+        reason: 'no_walk_only_path', finished_at: now, navigation_mode: 'walk_only', world_interaction_blocked: true}}] });
 
 test('survivor public fields are bounded and exclude private or unrelated records', () => {
   const input = fixture(); input.secrets = 'PRIVATE'; input.body.playerdata = 'PRIVATE'; input.skills[0].source = 'PRIVATE';
@@ -52,12 +71,73 @@ test('malformed decisions, versions and observed deltas stay unknown and bounded
   assert.equal(JSON.stringify(view).includes('PRIVATE'), false);
 });
 
+test('game skills retain historical known/empty distinction and reject private or malformed fields', () => {
+  const input = fixture(), raw = input.gameSkills;
+  raw.secret = 'PRIVATE'; raw.sourceObservedAt.other = 'PRIVATE'; raw.learned[0].source = 'PRIVATE';
+  raw.attributes.secret = 'PRIVATE'; raw.pufferfish.categories[0].nbt = 'PRIVATE';
+  raw.nativeMana = 0; raw.nativeMaxMana = '100'; raw.playerLevel = -1;
+  const projected = projectSurvivor(input).gameSkills;
+  assert.equal(projected.observedAt, raw.observedAt);
+  assert.equal(projected.sourceObservedAt.skills, raw.sourceObservedAt.skills);
+  assert.equal(projected.legacyLevel, null);
+  assert.equal(projected.nativeMana, 0); assert.equal(projected.nativeMaxMana, null);
+  assert.equal(projected.nativeSpellsKnown, true); assert.deepEqual(projected.nativeSpells, []);
+  assert.equal(projected.learned[0].name, '螺旋丸'); assert.equal(projected.eligible[0].name, '闪电');
+  assert.equal(projected.pufferfish.categories[0].pointsLeft, 1);
+  assert.equal(JSON.stringify(projected).includes('PRIVATE'), false);
+  raw.nativeSpellsKnown = false;
+  assert.equal(projectSurvivor(input).gameSkills.nativeSpellsKnown, false);
+  raw.learned = Array.from({length: 50}, (_, i) => ({id: 'spell_' + i, name: '长'.repeat(300)}));
+  raw.pufferfish.categories = Array.from({length: 50}, (_, i) => ({id: 'category_' + i, available: true}));
+  assert.equal(projectSurvivor(input).gameSkills.learned.length, 24);
+  assert.equal(projectSurvivor(input).gameSkills.learned[0].name.length, 64);
+  assert.equal(projectSurvivor(input).gameSkills.pufferfish.categories.length, 12);
+  raw.learned = [{id: 'invalid id', name: 'PRIVATE'}];
+  assert.deepEqual(projectSurvivor(input).gameSkills.learned, []);
+  for (const change of [{schema: 2}, {available: false}, {historicalQuery: false}]) {
+    input.gameSkills = {...raw, ...change};
+    assert.deepEqual(projectSurvivor(input).gameSkills, {available: false, historicalQuery: true});
+  }
+});
+
+test('book ownership does not imply learned skills and unknown books expose no skill identity', () => {
+  const input = fixture();
+  input.body.ownedSkillBooks[0].pages = ['PRIVATE'];
+  input.body.ownedSkillBooks[1].skill_id = 'PRIVATE'; input.body.ownedSkillBooks[1].knownLearned = true;
+  const books = projectSurvivor(input).body.ownedSkillBooks;
+  assert.equal(books[0].skillId, 'feather'); assert.equal(books[0].knownLearned, false);
+  assert.equal(books[1].recognized, false); assert.equal(Object.hasOwn(books[1], 'skillId'), false);
+  assert.equal(Object.hasOwn(books[1], 'knownLearned'), false);
+  assert.equal(JSON.stringify(books).includes('PRIVATE'), false);
+  input.body.ownedSkillBooks = Array(30).fill(input.body.ownedSkillBooks[0]);
+  assert.equal(projectSurvivor(input).body.ownedSkillBooks.length, 12);
+});
+
+test('only internally consistent native terminal navigation receipts survive projection', () => {
+  const input = fixture(), episode = input.episodes.at(-1);
+  episode.navigationOutcome.secret = 'PRIVATE';
+  let projected = projectSurvivor(input).episodes.at(-1).navigationOutcome;
+  assert.equal(projected.state, 'failed'); assert.equal(projected.success, false);
+  assert.equal(projected.taskId, 'navigation-fixture');
+  assert.equal(JSON.stringify(projected).includes('PRIVATE'), false);
+  for (const state of ['success', 'failed', 'timeout', 'cancelled']) {
+    episode.navigationOutcome.state = state; episode.navigationOutcome.success = state === 'success';
+    assert.equal(projectSurvivor(input).episodes.at(-1).navigationOutcome.state, state);
+  }
+  for (const invalid of [{state: 'running'}, {state: 'failed', success: true}, {task_id: ''}, {navigation_epoch: null}]) {
+    const malformed = structuredClone(input); Object.assign(malformed.episodes.at(-1).navigationOutcome, invalid);
+    assert.equal(projectSurvivor(malformed).episodes.at(-1).navigationOutcome, null);
+  }
+  episode.action = 'mine';
+  assert.equal(projectSurvivor(input).episodes.at(-1).navigationOutcome, null);
+});
+
 test('existing maintenance plans stop survivor before Minecraft and require ready Minecraft to start', () => {
   const rows = SERVICES.map((id, i) => ({ id, owned: true, containerId: i.toString(16).padStart(64, '0'), state: 'running', health: 'healthy' }));
   const stop = buildPlan({ action: 'stop', services: ['mc'] }, rows);
   assert.ok(stop.stop.indexOf('survivor') < stop.stop.indexOf('mc'));
   const start = buildPlan({ action: 'start', services: ['survivor'] }, rows);
-  assert.deepEqual(start.required, ['mc']); assert.deepEqual(start.start, ['survivor']);
+  assert.deepEqual(start.required, ['mc', 'qwenpaw']); assert.deepEqual(start.start, ['survivor']);
   rows.find(row => row.id === 'mc').health = 'unhealthy';
   assert.throws(() => buildPlan({ action: 'start', services: ['survivor'] }, rows), /dependency_not_ready/);
 });
@@ -98,7 +178,7 @@ test('survivor page shows real body, budget, skill and stale state without calli
   assert.match(await page.locator('#survivor-budgets').innerText(), /累计模型请求/);
   assert.doesNotMatch(await page.locator('#survivor-budgets').innerText(), /今日/);
   assert.match(await page.locator('#survivor-decision').innerText(), /本轮规划已结束/);
-  assert.match(await page.locator('#survivor-decision').innerText(), /采集：已受理，实际结果待观察/);
+  assert.match(await page.locator('#survivor-decision').innerText(), /采集：已受理；后续结果见最近的经历/);
   assert.match(await page.locator('#survivor-skills').innerText(), /find_food/);
   assert.match(await page.locator('#survivor-skills').innerText(), /已启用版本：v1/);
   assert.match(await page.locator('#survivor-skills').innerText(), /草稿版本：v2/);
@@ -106,9 +186,45 @@ test('survivor page shows real body, budget, skill and stale state without calli
   assert.match(await page.locator('#survivor-episodes').innerText(), /minecraft:bread -1/);
   assert.match(await page.locator('#survivor-episodes').innerText(), /达到步数或时间限制/);
   assert.match(await page.locator('#survivor-episodes').innerText(), /实际状态变化，不能单独证明任务已完成/);
-  assert.equal(await page.getByRole('link', { name: '打开桐人控制台 ↗' }).getAttribute('href'), 'http://127.0.0.1:18091/agents');
+  assert.equal(await page.getByRole('link', { name: '打开桐人控制台 ↗' }).getAttribute('href'), 'http://127.0.0.1:18089/agents');
+  assert.match(await page.locator('#survivor-autonomy').innerText(), /持续自主生活/);
+  assert.match(await page.locator('#survivor-perception').innerText(), /minecraft:villager/);
+  assert.match(await page.locator('#survivor-events').innerText(), /附近有村庄任务/);
+  assert.match(await page.locator('#survivor-game-skills-badge').innerText(), /历史查询/);
+  assert.match(await page.locator('#survivor-game-skills-freshness').innerText(), /历史查询/);
+  assert.match(await page.locator('#survivor-legacy-query').innerText(), /历史查询/);
+  assert.match(await page.locator('#survivor-learned').innerText(), /螺旋丸/);
+  assert.doesNotMatch(await page.locator('#survivor-learned').innerText(), /闪电/);
+  assert.match(await page.locator('#survivor-eligible').innerText(), /闪电/);
+  assert.match(await page.locator('#survivor-native-spells').innerText(), /上次查询未装备可用法术或卷轴/);
+  assert.doesNotMatch(await page.locator('#survivor-native-spells').innerText(), /已学/);
+  assert.match(await page.locator('#survivor-game-levels').innerText(), /0 \/ 100/);
+  assert.match(await page.locator('#survivor-progression').innerText(), /等级 3 · 经验 15 · 技能点剩余 1 \/ 共 2/);
+  assert.match(await page.locator('#survivor-game-attributes').innerText(), /1.2/);
+  assert.match(await page.locator('#survivor-skill-books').innerText(), /轻身秘笈/);
+  assert.match(await page.locator('#survivor-skill-books').innerText(), /目录查询时尚未学会/);
+  assert.match(await page.locator('#survivor-skill-books').innerText(), /技能目录暂未识别此书/);
+  assert.match(await page.locator('#survivor-episodes').innerText(), /导航失败 · 原生任务回执/);
+  assert.match(await page.locator('#survivor-episodes').innerText(), /no_walk_only_path/);
+  assert.doesNotMatch(await page.locator('#survivor-episodes').innerText(), /导航已完成/);
+  survivor.gameSkills.nativeSpellsKnown = false;
+  await page.getByRole('button', {name: '刷新', exact: true}).click();
+  await page.locator('#survivor-native-spells').filter({hasText: '尚未查询，技能情况未知'}).waitFor();
+  survivor.gameSkills.nativeSpellsKnown = true;
+  survivor.gameSkills.nativeSpells = [{id: 'irons_spellbooks:lightning_bolt', name: '雷电术', level: 2, mana: 20, ready: false, cooldownMs: 2500}];
+  await page.getByRole('button', {name: '刷新', exact: true}).click();
+  await page.locator('#survivor-native-spells').filter({hasText: '查询时未就绪'}).waitFor();
+  assert.match(await page.locator('#survivor-native-spells').innerText(), /冷却 2.5 秒/);
+  survivor.gameSkills = {available: false};
+  await page.getByRole('button', {name: '刷新', exact: true}).click();
+  await page.locator('#survivor-game-skills-badge').filter({hasText: '尚未查询'}).waitFor();
+  assert.match(await page.locator('#survivor-progression').innerText(), /尚未查询成长数据/);
+  assert.match(await page.locator('#survivor-learned').innerText(), /尚未查询/);
+  await page.setViewportSize({width: 390, height: 844});
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  await page.setViewportSize({width: 1280, height: 900});
   const statusLabels = { thinking: '正在思考', acting: '正在行动', waiting: '等待下一步', cooldown: '等待下次决策',
-    idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', paused: '已暂停', stopped: '服务已停止' };
+    idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', paused: '已暂停', stopped: '服务已停止' };
   for (const [status, label] of Object.entries(statusLabels)) {
     survivor = { ...survivor, status, enabled: status !== 'paused' };
     await page.getByRole('button', { name: '刷新', exact: true }).click();

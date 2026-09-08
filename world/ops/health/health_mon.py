@@ -165,7 +165,7 @@ def probe_panel_smoke():
 
 def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
-    checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False}
+    checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False, 'no_unexpected_pause': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
         if target.is_symlink() or target.stat().st_size > 262144:
@@ -175,6 +175,10 @@ def probe_survivor():
         checks['snapshot_fresh'] = (source.get('schema') == 1 and source.get('project') == 'qiandengji-survivor'
             and source.get('character') == '桐人' and source.get('bodyName') == 'Kirito'
             and -5 <= time.time() - timestamp.timestamp() <= 90)
+        reason = source.get('pauseReason') or ''
+        checks['no_unexpected_pause'] = (source.get('enabled') is True
+            and source.get('status') not in ('paused', 'stopped', 'body_offline')) or (
+            source.get('enabled') is False and reason in ('operator_pause', 'operator_stop', ''))
         result = subprocess.run(['docker', 'inspect', 'qiandengji-survivor-1'], capture_output=True,
             text=True, encoding='utf-8', errors='replace', timeout=12)
         if result.returncode == 0:
@@ -215,7 +219,7 @@ def probe_game_qwenpaw():
         receipt = json.loads(result.stdout.strip().splitlines()[-1])
         runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
             and receipt.get('packageVersion') == '2.2.0'
-            and type(receipt.get('agents')) is int and receipt['agents'] == 2
+            and type(receipt.get('agents')) is int and receipt['agents'] == 3
             and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 0
             and receipt.get('authMode') == 'local-passwordless'
             and receipt.get('anonymousAccess') is True),
@@ -881,7 +885,7 @@ def probe_operations(value):
         runtime_ok = len(runtime_ids) == 4 and set(runtime_ids) == {'qiandengji', 'qiandengji-ops', 'shadow', 'host'}
         agent_ids = [(row['runtimeId'], row['id']) for row in value['agents']]
         agents_ok = (len(agent_ids) == len(set(agent_ids)) and all(rid in runtime_ids and isinstance(aid, str) and aid for rid, aid in agent_ids)
-                     and {('qiandengji', 'mc-god'), ('qiandengji', 'mc-herald')} <= set(agent_ids)
+                     and {('qiandengji', 'mc-god'), ('qiandengji', 'mc-herald'), ('qiandengji', 'qd-survivor')} <= set(agent_ids)
                      and {('qiandengji-ops', role) for role in OPERATIONS_TEAM_ROLES} <= set(agent_ids))
         service_ids = [row['id'] for row in value['services']]
         services_ok = (all(isinstance(name, str) and name for name in service_ids) and len(service_ids) == len(set(service_ids))

@@ -72,6 +72,7 @@ function fixture() {
     rcon: { send: record('rcon.send', async command => {
       if (command.endsWith(' Pos')) return 'Probe has the following entity data: [12.5d, 70.0d, 34.5d]'
       if (command.endsWith(' Inventory')) return 'skillbook:"新术" skillbook:"夜视"'
+      if (command.startsWith('execute if items entity ') && command.endsWith(' UUID')) return 'Owner has the following entity data: [I; 0, 0, 0, 1]'
       if (command.startsWith('give ')) return 'Gave item to player'
       return 'Command completed'
     }) },
@@ -240,7 +241,10 @@ test('featured, archived and native lists are separate and invalid pages request
   const archive = (await f.dispatch('spells archive'))[0]
   assert.match(JSON.stringify(archive), /"heal"/); assert.doesNotMatch(JSON.stringify(archive), /fireworks/)
   const skills = (await f.dispatch('skills'))[0]
-  assert.doesNotMatch(JSON.stringify(skills), /"heal"|night_vision/)
+  assert.doesNotMatch(JSON.stringify([skills.learned, skills.levelGate, skills.locked]), /"heal"|night_vision/)
+  assert.ok(skills.bookSkills.some(row => row.id === 'night_vision' && row.type === 'passive' && row.learned === false))
+  assert.ok(skills.bookSkills.some(row => row.id === 'new_skill' && row.name === '新术'))
+  assert.ok(skills.bookSkills.every(row => row.id !== 'heal'))
   const native = (await f.dispatch('spells'))[0]
   assert.equal(native.spells[0].id, 'irons_spellbooks:firebolt')
   for (const body of ['spells irons 2', 'spells archive 0', 'spells legacy NaN', 'spells random']) {
@@ -406,7 +410,7 @@ test('cultivation uses the injected clock and per-subject cooldown, with no real
 })
 
 test('queue allowlist refuses extended and guardian commands before any online or AI call', async () => {
-  for (const command of ['chat 你好', 'ask 世界', 'pray 面包', 'summon 桐人 帮忙', 'guardian-cast fireworks', 'learn 新术', 'cultivate']) {
+  for (const command of ['chat 你好', 'ask 世界', 'pray 面包', 'summon 桐人 帮忙', 'guardian-cast fireworks', 'bookget 新术', 'cultivate']) {
     const f = fixture(), result = await f.app.executeRequest({ actor: 'sys_Owner', command })
     assert.equal(result.code, 'unsupported_command', command); assert.deepEqual(f.calls, []); assert.deepEqual(f.messages, [])
   }
@@ -414,6 +418,59 @@ test('queue allowlist refuses extended and guardian commands before any online o
     const f = fixture(); assert.equal((await f.app.executeRequest({ actor: 'Owner', command })).code, 'invalid_command')
     assert.deepEqual(f.calls, [])
   }
+})
+
+test('Agent mailbox learning reuses real held-book checks and records a structured receipt', async () => {
+  const f = fixture()
+  const result = await f.app.executeRequest({ actor: 'Owner', command: 'learn new_skill' })
+  assert.equal(result.ok, true); assert.equal(result.code, 'learned'); assert.equal(result.skillId, 'new_skill')
+  assert.equal(result.canCastAtCurrentLevel, true)
+  const commands = f.called('rcon.send').map(c => c.args[0])
+  assert.ok(commands.includes('execute if items entity Owner container.* minecraft:written_book[minecraft:custom_data~{skillbook:"新术"}] run data get entity Owner UUID'))
+  assert.ok(commands.every(command => !/^(give|xp|puffish_skills)\b/.test(command)))
+  assert.equal((await f.app.executeRequest({ actor: 'Owner', command: 'learn new_skill' })).code, 'already_learned')
+  assert.equal(f.called('magic.learnViaAdvancement').length, 1)
+})
+
+test('skill books in the hotbar, main inventory or offhand all count as carried proof', async () => {
+  for (const slot of [0, 8, 9, 35, 99]) {
+    const f = fixture()
+    f.behaviors['rcon.send'] = async command => {
+      if (command.endsWith(' Pos')) return 'Owner has the following entity data: [12.5d, 70.0d, 34.5d]'
+      const range = /^execute if items entity Owner (\S+) minecraft:written_book\[minecraft:custom_data~\{skillbook:"新术"\}\] run data get entity Owner UUID$/.exec(command)?.[1]
+      // Real 1.21.1 SlotRanges: inventory.* is 9–35, container.* is 0–53;
+      // the offhand slot is 99 and does not belong to either range.
+      const found = range === 'container.*' ? slot >= 0 && slot < 54
+        : range === 'inventory.*' ? slot >= 9 && slot < 36
+          : range === 'weapon.offhand' && slot === 99
+      return found ? 'Owner has the following entity data: [I; 0, 0, 0, 1]' : 'Test failed'
+    }
+    const result = await f.app.executeRequest({ actor: 'Owner', command: 'learn new_skill' })
+    assert.equal(result.code, 'learned', `carried book slot ${slot}`)
+    assert.equal(f.called('magic.learnViaAdvancement').length, 1)
+    const checks = f.called('rcon.send').map(c => c.args[0]).filter(command => command.startsWith('execute if items'))
+    assert.equal(checks.length, slot === 99 ? 2 : 1)
+    assert.ok(f.called('rcon.send').every(c => !/^(give|clear|item|xp)\b/.test(c.args[0])))
+  }
+})
+
+test('a skill-book title spoof or unknown item predicate response cannot record Agent learning', async () => {
+  for (const response of ['skillbook:"新术"', 'Test failed', 'Unknown argument', 'Owner has the following entity data: []']) {
+    const f = fixture()
+    f.behaviors['rcon.send'] = async command => command.endsWith(' Pos') ? 'entity data:' : response
+    const result = await f.app.executeRequest({ actor: 'Owner', command: 'learn new_skill' })
+    assert.equal(result.code, 'skill_book_required')
+    assert.equal(f.called('magic.learnViaAdvancement').length, 0)
+  }
+})
+
+test('learning below cast level records knowledge but does not grant levels or bypass later casting checks', async () => {
+  const f = fixture(); f.state.level = 1
+  f.atoms.find(a => a.id === 'new_skill').requiredLevel = 20
+  const result = await f.app.executeRequest({ actor: 'Owner', command: 'learn new_skill' })
+  assert.equal(result.code, 'learned'); assert.equal(result.canCastAtCurrentLevel, false)
+  assert.equal(result.requiredLevel, 20); assert.equal(f.state.level, 1)
+  assert.equal(f.called('magic.castExact').length, 0)
 })
 
 test('queue static help is offline-capable while legacy actions stop after one online check', async () => {

@@ -127,7 +127,12 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
       case 'skills': {
         const view = magic.getState(subject)
         const { panel, json } = shapeSkills(view, magic.listAtoms().filter(a => a.type !== 'passive' && (!a.catalog || a.catalog.status === 'featured')))
-        if (cmd.json) { jsonReply({ ok: true, ...json }); return }
+        if (cmd.json) {
+          const bookSkills = magic.listAtoms().filter(a => a.type === 'passive' || !a.catalog || a.catalog.status === 'featured')
+            .map(a => ({ id: a.id, name: a.name, requiredLevel: a.requiredLevel, type: a.type,
+              learned: view.learned.includes(a.id) || view.innateSkill === a.id }))
+          jsonReply({ ok: true, ...json, bookSkills }); return
+        }
         replyLines(panel.split('\n')); return
       }
       case 'spells': {
@@ -299,19 +304,31 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         // 持书参悟（2026-08-29 造物主设计「野外拾取的书用一次自动收录」）：
         // 校验背包里有 skillbook:<名> 的成书（书=历练凭证）→ learnViaAdvancement
         // 入册（绕等级门槛；施放仍走快路径等级闸）。命格书右键重写时自动收录成页。
-        if (!cmd.args.length) { reply(`[CLI] 用法：/cli 参悟 <法术名>——把对应的✦技能书拿在手上。`); return }
+        if (!cmd.args.length) { fail('usage', '用法：/mycli learn <技能ID或名称>；需要背包中已有对应的真实技能书。'); return }
+        if (subject.includes('-')) { fail('login_required', '旧技能学习记录按登录名保存，请使用绑定身体的唯一登录名。'); return }
         const name = cmd.args.join(' ').trim()
         const atom = magic.listAtoms().find((a) => a.name === name || a.id === name)
-        if (!atom) { reply(`[CLI] 没有叫「${name}」的法术。`); return }
+        if (!atom) { fail('unknown_skill', `没有叫「${name}」的法术。`); return }
         if (atom.catalog?.status === 'archived' && atom.type !== 'passive') { fail('skill_archived', `「${atom.name}」已归档：${atom.catalog.reason}`); return }
         const view = magic.getState(subject)
         if (view.learned.includes(atom.id) || view.innateSkill === atom.id) {
-          reply(`[信使] 「${atom.name}」你早已学会，收录在命格书里了。`)
+          if (cmd.json) jsonReply({ ok: true, code: 'already_learned', skillId: atom.id,
+            learned: true, summary: `「${atom.name}」已经学会。` })
+          else reply(`[信使] 「${atom.name}」你早已学会，收录在命格书里了。`)
           return
         }
-        const inv = await rcon.send(`data get entity ${subject} Inventory`).catch(() => '')
-        if (!inv || !inv.includes(`skillbook:"${atom.name}"`)) {
-          reply(`[信使] 参悟需要《✦ ${atom.name}》技能书在手——没有书，悟不出来的。`)
+        // Server-side item predicate checks the actual component, rather than
+        // finding a forged title/page containing "skillbook" in serialized NBT.
+        // Reading UUID is a read-only success sentinel; no book or XP is granted.
+        // inventory.* is only slots 9–35 in 1.21.1. container.* also includes
+        // the hotbar (and held mainhand); offhand has its own equipment slot.
+        let hasBook = false
+        for (const slots of ['container.*', 'weapon.offhand']) {
+          const proof = await rcon.send(`execute if items entity ${subject} ${slots} minecraft:written_book[minecraft:custom_data~{skillbook:${JSON.stringify(atom.name)}}] run data get entity ${subject} UUID`).catch(() => '')
+          if (/\[I;\s*-?\d+,\s*-?\d+,\s*-?\d+,\s*-?\d+\]\s*$/.test(proof)) { hasBook = true; break }
+        }
+        if (!hasBook) {
+          fail('skill_book_required', `参悟需要背包中已有《✦ ${atom.name}》技能书；没有对应书籍，未记录学习。`)
           return
         }
         magic.learnViaAdvancement(subject, atom.id)
@@ -322,10 +339,15 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         if ((atom as { type?: string }).type === 'passive' && passiveId) {
           magic.unlockPassive(subject, passiveId)
           worlddb.chronicleRecord('skill', subject, { passive: passiveId, via: 'learn' })
-          reply(`[信使] 参悟成功——「${atom.name}」已融入你的身躯（被动·永久装备）：不用施放，效果常伴。`)
+          if (cmd.json) jsonReply({ ok: true, code: 'learned', skillId: atom.id, learned: true,
+            passive: passiveId, summary: `「${atom.name}」已通过已有技能书参悟并记录为被动。` })
+          else reply(`[信使] 参悟成功——「${atom.name}」已融入你的身躯（被动·永久装备）：不用施放，效果常伴。`)
           return
         }
-        reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
+        if (cmd.json) jsonReply({ ok: true, code: 'learned', skillId: atom.id, learned: true,
+          requiredLevel: atom.requiredLevel, canCastAtCurrentLevel: view.level >= atom.requiredLevel,
+          summary: `「${atom.name}」已通过已有技能书收录；施放仍校验等级、魔力和冷却。` })
+        else reply(`[信使] 参悟成功——「${atom.name}」已录入你的命格书！等级够就能放；书可留可丢，随时 /cli 领书 ${atom.name} 再取。`)
         return
       }
       case 'goto':
@@ -467,8 +489,8 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
     const cmd = parseCli(/^(?:\/?mycli|\/?cli|!cli)\b/i.test(request.command)
       ? request.command : `/mycli ${request.command}`)
     if (!cmd || cmd.error) return { ok: false, code: 'invalid_command', summary: cmd?.error ?? '命令格式无效。' }
-    if (!['help', 'commands', 'status', 'skills', 'spells', 'cast', 'cancel', 'skillbar', 'menu', 'goto', 'waypoint'].includes(cmd.verb)) {
-      return { ok: false, code: 'unsupported_command', summary: '技能 CLI 支持 help/status/skills/spells/cast/skillbar/menu/goto/waypoint；角色对话仍使用原聊天工具。' }
+    if (!['help', 'commands', 'status', 'skills', 'spells', 'cast', 'learn', 'cancel', 'skillbar', 'menu', 'goto', 'waypoint'].includes(cmd.verb)) {
+      return { ok: false, code: 'unsupported_command', summary: '技能 CLI 支持 help/status/skills/spells/cast/learn/skillbar/menu/goto/waypoint；角色对话仍使用原聊天工具。' }
     }
     const nativeRoute = ['goto', 'waypoint', 'cancel', 'status', 'spells'].includes(cmd.verb) ||
       (cmd.verb === 'cast' && (NATIVE_SPELL_ID.test(cmd.args[0] ?? '') || request.actor.includes('-'))) ||

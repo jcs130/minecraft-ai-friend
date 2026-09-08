@@ -7,7 +7,7 @@ from numen_gateway import action_lock, read_json, write_json
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['status', 'pause', 'resume', 'mission'])
+    parser.add_argument('action', choices=['status', 'pause', 'resume', 'mission', 'autonomy'])
     parser.add_argument('--text')
     args = parser.parse_args()
     state = Path('/state/survival')
@@ -32,6 +32,10 @@ def main():
             if not isinstance(settings.get('workArea'), dict):
                 raise ValueError('Inspect and configure the work area first')
             control.update(enabled=True, pauseReason=None)
+        elif args.action == 'autonomy':
+            control.update(autonomous=True)
+            control['mission'] = read_json(state / 'settings.json')['mission']
+            control['missionChangedAt'] = int(time.time() * 1000)
         else:
             if not args.text or not 1 <= len(args.text) <= 1200:
                 parser.error('--text must be a mission of 1–1200 characters')

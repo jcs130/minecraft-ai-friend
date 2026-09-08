@@ -203,8 +203,7 @@ services:
     image: qiandengji-qwenpaw-game:2.2.0-qd1
     pull_policy: never
     restart: unless-stopped
-    entrypoint: ["qwenpaw"]
-    command: ["app", "--host", "0.0.0.0", "--port", "8088", "--log-level", "info"]
+    entrypoint: ["python", "-u", "/survival/game_service.py"]
     ports:
       - "127.0.0.1:18089:8088"
     environment:
@@ -216,11 +215,14 @@ services:
       QWENPAW_DISABLE_KEYRING: "1"
       QWENPAW_KEYRING_ACCOUNT: qiandengji
       QWENPAW_AUTH_ENABLED: "0"
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./server/agents:/state
       - ./world/ops:/ops:ro
+      - ./world/survival:/survival:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
     healthcheck:
       test: ["CMD", "python", "/ops/qwenpaw_health.py"]
       interval: 30s
@@ -264,14 +266,12 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd1
+    image: qiandengji-survivor:2.2.0-qd2
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
     init: true
     entrypoint: ["python", "-u", "/survival/service.py"]
-    ports:
-      - "127.0.0.1:18091:8088"
     environment:
       TZ: Asia/Shanghai
       HOME: /state/home
@@ -282,6 +282,10 @@ services:
       QWENPAW_DISABLE_KEYRING: "1"
       QWENPAW_KEYRING_ACCOUNT: qiandengji-survivor
       QWENPAW_AUTH_ENABLED: "0"
+      SURVIVOR_QWEN_MODE: external
+      QWENPAW_API_URL: http://qwenpaw:8088/api
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
+      SURVIVOR_SKILL_QUEUE: /survival-skills-queue
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_RCON_SECRET: /run/secrets/rcon
@@ -289,8 +293,17 @@ services:
       - ./server/survival-agent-state:/state
       - ./server/panel-state:/public
       - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
+      - ./server/world-data/skill-cli:/survival-skills-queue
+      - ./world/sidecar/guard/skills:/survival-knowledge:ro
+      - ./server/world-data/player-chat.jsonl:/world-observation/player-chat.jsonl:ro
+      - ./server/world-data/goddess-orders.jsonl:/world-observation/goddess-orders.jsonl:ro
+      - ./server/world-data/chant-reply.jsonl:/world-observation/chant-reply.jsonl:ro
+      - ./server/world-data/guard-inbox.jsonl:/world-observation/guard-inbox.jsonl:ro
     depends_on:
       mc:
+        condition: service_healthy
+      qwenpaw:
         condition: service_healthy
     mem_limit: 2g
     cpus: 2

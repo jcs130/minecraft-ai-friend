@@ -34,7 +34,8 @@ class OperationsHealth(unittest.TestCase):
                           'enabledAgentCount': None, 'agentCount': None} for name in ('qiandengji', 'qiandengji-ops', 'shadow', 'host')],
             'agents': [{'id': name, 'label': name, 'runtimeId': 'qiandengji', 'enabled': True,
                         'role': 'fixture', 'modelProvider': None, 'model': None, 'toolCount': 0,
-                        'mcpCount': None, 'jobCount': None} for name in ('mc-god', 'mc-herald')],
+                        'mcpCount': 1 if name == 'qd-survivor' else 0, 'jobCount': None}
+                       for name in ('mc-god', 'mc-herald', 'qd-survivor')],
             'services': [{'id': name, 'label': name, 'group': 'shared' if name == 'shared-tts' else 'game',
                           'container': 'shadow-tts' if name == 'shared-tts' else 'qiandengji-'+name+'-1',
                           'state': 'running', 'health': 'healthy', 'purpose': 'fixture', 'managedBy': 'fixture',
@@ -519,10 +520,11 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
 
     def test_game_probe_uses_anonymous_gets_and_keeps_two_roles_tool_denial(self):
         module = self.load_probe('qwenpaw_health.py')
+        roles = ['mc-god', 'mc-herald', 'qd-survivor']
         routes = {'/auth/status': {'enabled': False},
                   '/version': {'version': '2.2.0'},
-                  '/healthz': {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
-                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in ('mc-god', 'mc-herald')]},
+                  '/healthz': {'status': 'ok', 'agents_loaded': roles},
+                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in roles]},
                   '/tools': [{'name': 'read_file', 'enabled': False}]}
         requests = []
         def get(request, **kwargs):
@@ -539,6 +541,7 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             result = json.loads(output.getvalue())
             self.assertTrue(result['ok']); self.assertIs(result['authEnforced'], False)
             self.assertEqual(result['authMode'], 'local-passwordless')
+            self.assertEqual(result['agents'], 3)
             self.assertEqual([r.full_url for r in requests[1:3]], [
                 'http://127.0.0.1:8088/api/version', 'http://127.0.0.1:8088/api/healthz'])
             self.assertEqual([r.get_header('X-agent-id') for r in requests[-2:]], ['mc-god', 'mc-herald'])
@@ -552,9 +555,10 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
 
     def test_game_probe_rejects_incomplete_readiness_even_when_config_and_agent_list_are_valid(self):
         module = self.load_probe('qwenpaw_health.py')
+        roles = ['mc-god', 'mc-herald', 'qd-survivor']
         routes = {'/auth/status': {'enabled': False}, '/version': {'version': '2.2.0'},
-                  '/healthz': {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
-                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in ('mc-god', 'mc-herald')]},
+                  '/healthz': {'status': 'ok', 'agents_loaded': roles},
+                  '/agents': {'agents': [{'id': name, 'enabled': True} for name in roles]},
                   '/tools': [{'name': 'read_file', 'enabled': False}]}
         def get(request, **kwargs):
             return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
@@ -562,6 +566,7 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
                 patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}) as config, \
                 patch.object(module.urllib.request, 'urlopen', side_effect=get):
             for value in ({'status': 'loading', 'agents_loaded': ['mc-god', 'mc-herald']},
+                          {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
                           {'status': 'ok', 'agents_loaded': []},
                           {'status': 'ok', 'agents_loaded': ['mc-god']},
                           {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-god']},
@@ -571,18 +576,18 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
                 routes['/healthz'] = value
                 with self.subTest(readiness=value), self.assertRaises(AssertionError):
                     module.main()
-            routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']}
+            routes['/healthz'] = {'status': 'ok', 'agents_loaded': roles}
             for value in ('2.1.0', None, 2.2):
                 routes['/version'] = {'version': value}
                 with self.subTest(version=value), self.assertRaises(AssertionError):
                     module.main()
             routes['/version'] = {'version': '2.2.0'}
             for extra in (['default'], ['QwenPaw_QA_Agent_0.2'], ['default', 'QwenPaw_QA_Agent_0.2']):
-                routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', *extra]}
+                routes['/healthz'] = {'status': 'ok', 'agents_loaded': [*roles, *extra]}
                 with self.subTest(disabled_builtins=extra), redirect_stdout(io.StringIO()):
                     module.main()
             config.return_value = set()
-            routes['/healthz'] = {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', 'default']}
+            routes['/healthz'] = {'status': 'ok', 'agents_loaded': [*roles, 'default']}
             with self.assertRaises(AssertionError):
                 module.main()
 

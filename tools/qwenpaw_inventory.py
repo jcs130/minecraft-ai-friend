@@ -85,8 +85,9 @@ def _mcp_count(profile: dict[str, Any], workspace: Path, root_mcp: Any = None) -
     if not isinstance(clients, dict):
         return None
     enabled = {name: _mapping(config).get("enabled", True) is True for name, config in clients.items()}
-    # Current drivers use simple top-level name/enabled scalars. Parse only the
-    # enabled switch, never credentials, headers, arguments or endpoint content.
+    # Native YAML and the migration's JSON-as-YAML cards are both accepted.
+    # Only the top-level enabled flag leaves this function; endpoint/credentials
+    # are never added to the public inventory.
     try:
         files = list((workspace / "drivers/mcp").glob("*.yaml"))
     except OSError:
@@ -96,6 +97,15 @@ def _mcp_count(profile: dict[str, Any], workspace: Path, root_mcp: Any = None) -
             body = file.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeError):
             return None
+        if body.lstrip().startswith('{'):
+            try:
+                card = json.loads(body)
+            except ValueError:
+                return None
+            if not isinstance(card, dict) or type(card.get('enabled')) is not bool:
+                return None
+            enabled[file.stem] = card['enabled']
+            continue
         match = re.search(r"^enabled:\s*(true|false)\s*(?:#.*)?$", body, re.MULTILINE | re.IGNORECASE)
         if match:
             enabled[file.stem] = match.group(1).lower() == "true"
@@ -118,7 +128,8 @@ def _role(runtime: str, ident: str) -> str:
                 'mc-priest':'剧情与活动策划','mc-guard-kirito':'桐人／玩法体验分析（身体未接管）',
                 'mc-guard-naruto':'鸣人／新手与协作体验分析（身体未接管）'}.get(ident,'内置辅助（停用）')
     if runtime == "qiandengji":
-        return {"mc-god": "游戏神谕与对话（会话后端）", "mc-herald": "游戏答疑与传令（会话后端）"}.get(ident, "内置辅助 Agent")
+        return {"mc-god": "游戏神谕与对话（会话后端）", "mc-herald": "游戏答疑与传令（会话后端）",
+                "qd-survivor": "桐人／自主生存、世界感知与技能学习"}.get(ident, "内置辅助 Agent")
     if runtime == "shadow":
         return {"default": "司灯／旧运营组负责人", "mc-god": "天神分身／叙事与复盘", "mc-herald": "运营巡检与测试", "mc-priest": "剧情与活动策划", "mc-guard-kirito": "桐人／玩家侧体验官", "mc-guard-naruto": "鸣人／玩家侧体验官"}.get(ident, "QwenPaw 辅助 Agent")
     return {"mc-god": "宿主天神／旧世界统筹", "mc-herald": "旧世界传令", "mc-hearth": "旧世界村民代言", "mc-guard-kirito": "桐人／旧世界体验官", "mc-guard-naruto": "鸣人／旧世界体验官", "mc-guard-tno-kirito": "TNO 世界先遣角色"}.get(ident, "宿主非专属游戏 Agent")
@@ -133,7 +144,7 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
     project = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
     home = Path(user_home) if user_home is not None else Path.home()
     locations = [
-        ("qiandengji", "千灯纪 QwenPaw", "container", project / "server/agents/work", "qiandengji-qwenpaw-1", "http://127.0.0.1:18089", "当前游戏会话后端"),
+        ("qiandengji", "千灯纪 QwenPaw", "container", project / "server/agents/work", "qiandengji-qwenpaw-1", "http://127.0.0.1:18089", "游戏神谕、司礼与自主桐人的统一模型会话"),
         ("shadow", "旧世界运营组", "container", home / ".copaw/workspaces/default/minecraft-ai-friend/ops/docker/shadow/copaw", "shadow-qwenpaw", "http://127.0.0.1:18088", "旧运营组及其 MCP；主动驱动需另核"),
         ("host", "宿主 QwenPaw", "host", home / ".copaw", None, "", "宿主综合 Agent，与游戏运营组混合配置"),
     ]

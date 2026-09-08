@@ -74,9 +74,14 @@ class OperationsTests(unittest.TestCase):
     def test_dialogue_restart_does_not_stop_player_command_service(self):
         states={'qiandengji-qwenpaw-1':{'state':'running'}}
         plan=ops.lifecycle_plan('restart',['qwenpaw'],states)
-        self.assertEqual(plan['stop'],['qwenpaw'])
+        self.assertEqual(plan['stop'],['survivor','qwenpaw'])
         self.assertEqual(plan['start'],['qwenpaw'])
         self.assertFalse(plan['saveMinecraft'])
+        states['qiandengji-survivor-1']={'state':'running'}
+        plan=ops.lifecycle_plan('restart',['qwenpaw'],states)
+        self.assertEqual(plan['stop'],['survivor','qwenpaw'])
+        self.assertEqual(plan['start'],['qwenpaw','survivor'])
+        self.assertNotIn('world',plan['stop'])
 
     def test_tts_requires_successful_health_and_explicit_boolean(self):
         for payload,expected in [(b'{"ok":true}',True),(b'{"ok":1}',False),(b'{"ok":"true"}',False),

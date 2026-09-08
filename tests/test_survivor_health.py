@@ -49,6 +49,12 @@ class SurvivorHealthTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertTrue(result['paused'])
 
+    def test_runtime_error_pause_cannot_be_reported_as_healthy_observation(self):
+        self.source.update(status='paused', enabled=False, pauseReason='controller_SkillError')
+        result = self.probe()
+        self.assertFalse(result['ok'])
+        self.assertFalse(result['checks']['no_unexpected_pause'])
+
     def test_stale_future_foreign_or_missing_identity_is_not_live(self):
         for changes in ({'generatedAt': datetime.fromtimestamp(self.now-91, timezone.utc).isoformat()},
                         {'generatedAt': datetime.fromtimestamp(self.now+6, timezone.utc).isoformat()},

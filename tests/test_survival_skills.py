@@ -146,6 +146,22 @@ class SkillTests(unittest.TestCase):
             evaluate('function next(){throw new Error("sensitive user text");}', {})
         self.assertNotIn('sensitive', str(failure.exception))
 
+    def test_catalog_can_read_published_versions_while_writer_lock_is_held(self):
+        version = self.draft()
+        with self.library._lock():
+            view = self.library.catalog()
+        self.assertEqual(view['skills'][0]['draftVersion'], version)
+        self.assertEqual(view['unavailable'], [])
+
+    def test_catalog_isolates_one_corrupt_entry_without_losing_other_skills(self):
+        version = self.draft()
+        bad = Path(self.temp.name) / 'broken'
+        bad.mkdir()
+        (bad / 'head.json').write_text('malformed', encoding='utf-8')
+        view = self.library.catalog()
+        self.assertEqual(view['skills'][0]['draftVersion'], version)
+        self.assertEqual(view['unavailable'], [{'name': 'broken', 'code': 'invalid_skill_store'}])
+
 
 if __name__ == '__main__':
     unittest.main()

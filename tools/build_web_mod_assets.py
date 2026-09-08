@@ -37,6 +37,12 @@ BUDGET_PATCHES = [
 ]
 BUDGET_PRELUDE = '/* QIANDENG_RENDER_BUDGET_V1 */\nif(typeof document!=="undefined")document.documentElement.dataset.qdDiagnostic=String(new URLSearchParams(location.search).has("diagnostic"));\n'
 BUDGET_CSS = '\n/* QIANDENG_DIAGNOSTIC_OPT_IN */\nhtml:not([data-qd-diagnostic="true"]) #mod-debug-panel,html:not([data-qd-diagnostic="true"]) .viewer-hud{display:none!important}\n'
+# patch_modern_viewer_runtime.py extends this already-patched status function
+# to wait for real geometry. Recognize only that exact audited successor; never
+# replace it with the older budget-only implementation during an asset rebuild.
+READY_PREFIX = 'function v5(t,e=!1,a=!1){'
+RUNTIME_V2_READY_PREFIX = READY_PREFIX + 'if(a&&!e&&globalThis.__qdViewerRuntime&&!globalThis.__qdViewerRuntime.sceneReady){const r=t;globalThis.__qdViewerRuntime.deferReady(()=>v5(r,!1,!0));t="正在生成世界区块…";a=!1}'
+RUNTIME_V2_BUDGET_STATUS = BUDGET_PATCHES[-1][1].replace(READY_PREFIX, RUNTIME_V2_READY_PREFIX, 1)
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -283,20 +289,35 @@ def public_summary(report):
         raise ValueError("Public compatibility summary exceeds 16 KiB")
     return summary
 
-def patch_bridge():
-    path = ROOT / "vendor/modern-viewer/modern-viewer.js"
-    data = path.read_bytes().decode("utf8")
-    before = digest(path.read_bytes())
+def patch_bridge_source(data):
+    """Pure guarded transform, including the known runtime V2 successor."""
     patches = [(OLD_BRIDGE, NEW_BRIDGE), *BUDGET_PATCHES]
     for original, replacement in patches:
-        if replacement in data:
+        targets = [replacement]
+        if replacement == BUDGET_PATCHES[-1][1] and RUNTIME_V2_BUDGET_STATUS in data:
+            if (not data.startswith(BUDGET_PRELUDE)
+                    or data.count('/* QIANDENG_VIEWER_RUNTIME_V2_BEGIN */\n') != 1
+                    or data.count('/* QIANDENG_VIEWER_RUNTIME_V2_END */\n') != 1):
+                raise ValueError("Unexpected renderer runtime boundary; no blind minified patch applied")
+            targets.append(RUNTIME_V2_BUDGET_STATUS)
+        found = sum(data.count(target) for target in targets)
+        if found == 1 and data.count(original) == 0:
             continue
-        if data.count(original) != 1:
+        if found != 0 or data.count(original) != 1:
             raise ValueError("Unexpected renderer bundle; no blind minified patch applied")
         data = data.replace(original, replacement, 1)
     if not data.startswith(BUDGET_PRELUDE):
         data = BUDGET_PRELUDE + data
-    path.write_bytes(data.encode("utf8"))
+    return data
+
+
+def patch_bridge():
+    path = ROOT / "vendor/modern-viewer/modern-viewer.js"
+    before_bytes = path.read_bytes()
+    before = digest(before_bytes)
+    after_bytes = patch_bridge_source(before_bytes.decode("utf8")).encode("utf8")
+    if after_bytes != before_bytes:
+        path.write_bytes(after_bytes)
     css = ROOT / "vendor/modern-viewer/viewer.css"
     if BUDGET_CSS not in css.read_text(encoding="utf8"):
         with css.open("a", encoding="utf8", newline="") as target:

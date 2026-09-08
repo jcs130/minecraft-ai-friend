@@ -72,7 +72,8 @@ class InventoryTests(unittest.TestCase):
 
     def test_audited_image_id_is_recognized_even_after_retagging(self):
         result = self.collect(self.config(), image_tag="unrelated:renamed")
-        self.assertEqual(result["runtimes"][0]["version"], "2.1.0 (audited image package)")
+        self.assertEqual(result["runtimes"][0]["version"],
+                         inventory.AUDITED_IMAGE_PACKAGES[AUDITED_ID] + " (audited image package)")
         self.assertNotIn("qiandengji_image_unverified", [x["code"] for x in result["issues"]])
 
     def test_missing_config_or_profile_index_is_unknown_not_zero(self):
@@ -118,6 +119,19 @@ class InventoryTests(unittest.TestCase):
         with patch.object(Path, "glob", return_value=[driver]), \
                 patch.object(Path, "read_text", side_effect=PermissionError("denied")):
             self.assertIsNone(inventory._mcp_count(self.profile(), WORKSPACE))
+
+    def test_shared_survivor_has_its_game_role_and_one_http_driver(self):
+        self.assertIn('自主生存', inventory._role('qiandengji', 'qd-survivor'))
+        body = json.dumps({'enabled': True, 'endpoint': {'headers': {'Authorization': 'private-fixture'}}})
+        driver = Path('offline/mcp/numen_survival.yaml')
+        for card in (body, 'enabled: true\nendpoint:\n  headers: private-fixture\n'):
+            with self.subTest(format=card[:1]), patch.object(Path, 'glob', return_value=[driver]), \
+                    patch.object(Path, 'read_text', return_value=card):
+                self.assertEqual(inventory._mcp_count(self.profile(), WORKSPACE), 1)
+        for card in ('{"enabled":"true"}', '{broken', '{"enabled":null}'):
+            with self.subTest(invalid=card), patch.object(Path, 'glob', return_value=[driver]), \
+                    patch.object(Path, 'read_text', return_value=card):
+                self.assertIsNone(inventory._mcp_count(self.profile(), WORKSPACE))
 
     def test_json_read_failures_return_unknown(self):
         for failure in (FileNotFoundError("missing"), PermissionError("denied")):

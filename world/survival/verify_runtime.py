@@ -104,12 +104,71 @@ async def verify(require_offline=False):
             'network': 'none' if require_offline else 'not-used', 'worldActionsExecuted': 0}
 
 
+async def verify_game(require_offline=False):
+    """Validate the migrated real role without touching any other game's profile."""
+    from qwenpaw.config.config import load_agent_config
+    from qwenpaw.config.utils import load_config
+    from qwenpaw.constant import WORKING_DIR, SECRET_DIR
+    from qwenpaw.drivers.storage import load_card
+    from qwenpaw.providers.provider_manager import ProviderManager
+
+    assert importlib.metadata.version('qwenpaw') == '2.2.0'
+    assert os.environ.get('QWENPAW_AUTH_ENABLED') == '0'
+    assert Path(WORKING_DIR) == STATE / 'work' and Path(SECRET_DIR) == STATE / 'secret'
+    if require_offline:
+        assert {name for _, name in socket.if_nameindex()} == {'lo'}, 'Use --network none'
+    cfg = load_config()
+    assert {aid for aid, ref in cfg.agents.profiles.items() if ref.enabled} == {'mc-god', 'mc-herald', ROLE}
+    agent = load_agent_config(ROLE)
+    folder = STATE / 'work/workspaces' / ROLE
+    assert Path(agent.workspace_dir) == folder and agent.name == '桐人'
+    verify_running(agent.running)
+    assert not agent.heartbeat.enabled and not agent.plan.enabled and not agent.coding_mode.enabled
+    assert not agent.fallback_models and not agent.fallback_policy.enabled
+    assert not any(item.enabled for item in agent.tools.builtin_tools.values())
+    assert not any(item.enabled for item in agent.acp.agents.values())
+    assert json.loads((folder / 'jobs.json').read_text())['jobs'] == []
+    assert set(agent.mcp.clients) == {DRIVER}
+    client = agent.mcp.clients[DRIVER]
+    assert client.enabled and client.transport == 'streamable_http'
+    assert client.url == 'http://survivor:8089/mcp' and not client.command
+    assert client.headers == {'Authorization': 'Bearer ${SURVIVOR_MCP_TOKEN}'}
+    assert tuple(client.tools) == TOOL_NAMES
+    card = load_card(folder / 'drivers/mcp' / (DRIVER + '.yaml'))
+    assert card.enabled and card.endpoint['transport'] == 'streamable_http'
+    assert card.endpoint['url'] == client.url
+    binding = card.endpoint['headers']['Authorization']
+    assert binding['source'] == 'credential' and binding['format'] == 'Bearer {value}'
+    assert card.credentials[binding['credential']].ref == 'env:SURVIVOR_MCP_TOKEN'
+    assert card.policy.default_effect == 'deny'
+    assert len(card.policy.rules) == len(TOOL_NAMES)
+    assert {r.target.name for r in card.policy.rules if r.effect == 'allow' and r.subject == '*'
+            and r.target.kind == 'tool'} == set(TOOL_NAMES)
+    assert (folder / 'AGENTS.md').read_bytes() == (SOURCE / 'AGENT.md').read_bytes()
+    active = agent.active_model
+    provider = ProviderManager().get_provider(active.provider_id)
+    assert provider and provider.api_key and not provider.api_key.startswith('ENC:')
+    assert active.model in {model.id for model in provider.models + provider.extra_models}
+    assert provider.generate_kwargs.get('max_tokens') == 2048
+    migrated = json.loads((STATE / 'work/survivor-migration.json').read_text())
+    assert migrated['role'] == ROLE and migrated['sourceNativeRoleDisabled'] is True
+    return {'project': PROJECT, 'ok': True, 'role': ROLE, 'packageVersion': '2.2.0',
+            'runtime': 'shared-game-qwenpaw', 'enabledAgents': ['mc-god', 'mc-herald', ROLE],
+            'mcpTransport': 'streamable_http', 'mcpTools': list(TOOL_NAMES),
+            'credentialDecryptable': True, 'model': active.model_dump(mode='json'),
+            'preservedModelRequests': migrated['preservedModelRequests'],
+            'modelCalls': 0, 'worldActionsExecuted': 0,
+            'network': 'none' if require_offline else 'not-used'}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--offline', action='store_true')
+    parser.add_argument('--game', action='store_true', help='Verify the role inside shared game QwenPaw')
     args = parser.parse_args()
     try:
-        print(json.dumps(asyncio.run(verify(require_offline=args.offline)), ensure_ascii=False))
+        verify_target = verify_game if args.game else verify
+        print(json.dumps(asyncio.run(verify_target(require_offline=args.offline)), ensure_ascii=False))
     except Exception as exc:
         print(json.dumps({'project': PROJECT, 'ok': False, 'errorType': type(exc).__name__}))
         raise SystemExit(1)

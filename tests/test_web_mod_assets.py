@@ -63,6 +63,35 @@ class BuilderTests(unittest.TestCase):
             with self.subTest(ref=ref), self.assertRaises(ValueError):
                 builder.canonical(ref)
 
+    def test_bridge_patch_accepts_original_and_budget_output_idempotently(self):
+        source = '\n'.join([builder.OLD_BRIDGE, *(before for before, _ in builder.BUDGET_PATCHES)])
+        result = builder.patch_bridge_source(source)
+        self.assertTrue(result.startswith(builder.BUDGET_PRELUDE))
+        self.assertEqual(builder.patch_bridge_source(result), result)
+        for _, after in builder.BUDGET_PATCHES:
+            self.assertEqual(result.count(after), 1)
+
+    def test_current_runtime_observer_bundle_is_preserved_byte_for_byte(self):
+        source = (ROOT / 'vendor/modern-viewer/modern-viewer.js').read_bytes()
+        result = builder.patch_bridge_source(source.decode('utf8')).encode('utf8')
+        self.assertEqual(result, source)
+        spec = importlib.util.spec_from_file_location('runtime_patch_fixture', ROOT / 'tools/patch_modern_viewer_runtime.py')
+        runtime = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runtime)
+        self.assertEqual(runtime.patch(result.decode('utf8'), runtime.MODULE.read_text(encoding='utf8')).encode('utf8'), result)
+        self.assertIn(b'showHand:!1', result)
+        self.assertIn(b'globalThis.__qdViewerRuntime.deferReady', result)
+
+    def test_bridge_patch_rejects_unknown_duplicate_and_partial_runtime_anchors(self):
+        source = (ROOT / 'vendor/modern-viewer/modern-viewer.js').read_text(encoding='utf8')
+        variants = [source.replace('t="正在生成世界区块…";a=!1}', 't="changed";a=!1}', 1),
+                    source + builder.RUNTIME_V2_BUDGET_STATUS,
+                    source + builder.OLD_BRIDGE,
+                    source.replace('/* QIANDENG_VIEWER_RUNTIME_V2_BEGIN */\n', '', 1)]
+        for candidate in variants:
+            with self.subTest(bytes=len(candidate)), self.assertRaisesRegex(ValueError, 'no blind minified patch applied'):
+                builder.patch_bridge_source(candidate)
+
 
 class GeneratedAssetsTests(unittest.TestCase):
     @classmethod

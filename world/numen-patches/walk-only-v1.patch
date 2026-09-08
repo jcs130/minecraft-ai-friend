@@ -1,0 +1,430 @@
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java
+@@ -189,6 +189,17 @@
+      */
+     public void commit() {
+         dirty = false;
++        if (WalkOnlyNavigation.blockInteraction(player,
++                isKeyRequested(Input.CLICK_LEFT) || isKeyRequested(Input.CLICK_RIGHT))) {
++            // Stop before raycasts or item use; the task reports a bounded no-path failure next tick.
++            keys.clear();
++            target = null;
++            digger.cancel();
++            player.xxa = 0;
++            player.zza = 0;
++            player.setSprinting(false);
++            return;
++        }
+         MovementState.MovementTarget t = target;
+         target = null;
+         // 步进起点在点击相位前取样:挖掘器内部会把视线临时吸到命中点,
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java
+new file mode 100644
+--- /dev/null
++++ b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java
+@@ -0,0 +1,81 @@
++package com.dwinovo.numen.core.pathing.execute;
++
++import com.dwinovo.numen.core.pathing.bridge.ContextFactory;
++import com.dwinovo.numen.core.pathing.moves.CalculationContext;
++import com.dwinovo.numen.core.task.move.MoveToTaskRecord;
++import com.dwinovo.numen.entity.NumenPlayer;
++import com.dwinovo.numen.task.CompanionTickDispatcher;
++import com.dwinovo.numen.task.TaskRecord;
++import it.unimi.dsi.fastutil.longs.LongSet;
++import net.minecraft.world.entity.EquipmentSlot;
++import net.minecraft.world.item.enchantment.Enchantments;
++
++/** Task-local read-only navigation. No global settings or persistent player edits. */
++public final class WalkOnlyNavigation {
++    private WalkOnlyNavigation() {}
++    public static final String EPOCH = java.util.UUID.randomUUID().toString();
++    private static final java.util.LinkedHashMap<java.util.UUID, java.util.Map<String, Object>> RESULTS =
++            new java.util.LinkedHashMap<>();
++
++    /** Only final TaskSlot outcomes enter this bounded cache; idle is never inferred as success. */
++    public static synchronized void recordResult(java.util.UUID body, MoveToTaskRecord task,
++                                                 java.util.Map<String, Object> data, String reason) {
++        if (!task.getState().isTerminal()) return;
++        java.util.Map<String, Object> result = new java.util.HashMap<>(data);
++        result.put("task_id", task.publicId());
++        result.put("navigation_epoch", EPOCH);
++        result.put("state", task.getState().name().toLowerCase(java.util.Locale.ROOT));
++        result.put("success", task.getState() == com.dwinovo.numen.task.TaskState.SUCCESS);
++        result.put("reason", reason == null ? "" : reason.substring(0, Math.min(reason.length(), 400)));
++        result.put("finished_at", System.currentTimeMillis());
++        RESULTS.remove(body);
++        RESULTS.put(body, java.util.Map.copyOf(result));
++        while (RESULTS.size() > 32) RESULTS.remove(RESULTS.keySet().iterator().next());
++    }
++
++    public static synchronized java.util.Map<String, Object> lastResult(java.util.UUID body) {
++        return RESULTS.get(body);
++    }
++
++    public static final PlayerNav.ContextProvider CONTEXTS = new PlayerNav.ContextProvider() {
++        @Override public CalculationContext forSearch(NumenPlayer player, LongSet sacred, LongSet denied) {
++            return ContextFactory.forSearch(player, sacred, denied,
++                    (p, v, l, threaded, s, d) -> new CalculationContext(p, v, l, threaded, s, d, true));
++        }
++        @Override public CalculationContext forExecution(NumenPlayer player, LongSet sacred, LongSet denied) {
++            return ContextFactory.forExecution(player, sacred, denied,
++                    (p, v, l, threaded, s, d) -> new CalculationContext(p, v, l, threaded, s, d, true));
++        }
++    };
++
++    public static boolean blockInteraction(TaskRecord record, boolean clicked) {
++        if (clicked && record instanceof MoveToTaskRecord move && move.walkOnly) {
++            move.walkInteractionBlocked = true;
++            return true;
++        }
++        return false;
++    }
++
++    public static boolean isWalkOnly(TaskRecord record) {
++        return record instanceof MoveToTaskRecord move && move.walkOnly;
++    }
++
++    public static boolean isActive(NumenPlayer player) {
++        return isWalkOnly(CompanionTickDispatcher.currentTaskFor(player.getUUID()));
++    }
++
++    public static boolean blockInteraction(NumenPlayer player, boolean clicked) {
++        return clicked && blockInteraction(CompanionTickDispatcher.currentTaskFor(player.getUUID()), true);
++    }
++
++    /** Frost Walker changes world blocks even without a click. Keep the equipment; decline travel. */
++    public static boolean hasWorldChangingEquipment(NumenPlayer player) {
++        for (EquipmentSlot slot : EquipmentSlot.values()) {
++            var enchants = player.getItemBySlot(slot).getEnchantments();
++            for (var enchantment : enchants.keySet()) {
++                if (enchantment.is(Enchantments.FROST_WALKER) && enchants.getLevel(enchantment) > 0) return true;
++            }
++        }
++        return false;
++    }
++}
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/pathing/moves/CalculationContext.java b/core/common/src/main/java/com/dwinovo/numen/core/pathing/moves/CalculationContext.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/pathing/moves/CalculationContext.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/pathing/moves/CalculationContext.java
+@@ -61,6 +61,7 @@
+     /** 放置一格的成本;经 {@link #costOfPlacingAt} 取用,勿直接读。 */
+     protected final double placeBlockCost;
+     public final boolean allowBreak;
++    public final boolean walkOnly;
+     public final List<Block> allowBreakAnyway;
+     public final boolean allowParkour;
+     public final boolean allowParkourPlace;
+@@ -113,6 +114,13 @@
+     public CalculationContext(ServerPlayer player, BlockGetter view, ChunkLoadedTest loadedTest,
+                               boolean safeForThreadedUse,
+                               LongSet sacred, LongSet deniedPlace) {
++        this(player, view, loadedTest, safeForThreadedUse, sacred, deniedPlace, false);
++    }
++
++    public CalculationContext(ServerPlayer player, BlockGetter view, ChunkLoadedTest loadedTest,
++                              boolean safeForThreadedUse, LongSet sacred, LongSet deniedPlace,
++                              boolean walkOnly) {
++        this.walkOnly = walkOnly;
+         NavSettings settings = NavSettings.get();
+         this.safeForThreadedUse = safeForThreadedUse;
+         this.player = player;
+@@ -124,9 +132,9 @@
+         // 免耗材画像(创造)恒有耗材:执行层选料时会自动补一组(伸手进创造
+         // 物品栏的代码版),规划器因此敢想所有需要垫方块的路线——不然空手
+         // 创造同伴会挖坑出不来(离目标 2 格报 NO-PATH)。
+-        this.hasThrowaway = settings.allowPlace && (hasGenericThrowaway(player, settings)
++        this.hasThrowaway = !walkOnly && settings.allowPlace && (hasGenericThrowaway(player, settings)
+                 || com.dwinovo.numen.core.WorkProfile.of(player).freeMaterials());
+-        this.hasWaterBucket = settings.allowWaterBucketFall
++        this.hasWaterBucket = !walkOnly && settings.allowWaterBucketFall
+                 && hotbarHasWaterBucket(player)
+                 && player.level().dimension() != Level.NETHER;
+         // 无饥饿画像(创造)不受饱食度门限——否则 food≤6 时被切创造会永久锁死疾跑
+@@ -134,10 +142,10 @@
+                 && (!com.dwinovo.numen.core.WorkProfile.of(player).hasHunger()
+                         || player.getFoodData().getFoodLevel() > 6);
+         this.placeBlockCost = settings.blockPlacementPenalty;
+-        this.allowBreak = settings.allowBreak;
+-        this.allowBreakAnyway = List.copyOf(settings.allowBreakAnyway());
++        this.allowBreak = !walkOnly && settings.allowBreak;
++        this.allowBreakAnyway = walkOnly ? List.of() : List.copyOf(settings.allowBreakAnyway());
+         this.allowParkour = settings.allowParkour;
+-        this.allowParkourPlace = settings.allowParkourPlace;
++        this.allowParkourPlace = !walkOnly && settings.allowParkourPlace;
+         this.allowJumpAtBuildLimit = settings.allowJumpAtBuildLimit;
+         this.allowParkourAscend = settings.allowParkourAscend;
+         this.assumeWalkOnWater = settings.assumeWalkOnWater;
+@@ -145,13 +153,14 @@
+         this.frostWalker = equipmentEnchantLevel(player);
+         this.allowDiagonalDescend = settings.allowDiagonalDescend;
+         this.allowDiagonalAscend = settings.allowDiagonalAscend;
+-        this.allowDownward = settings.allowDownward;
++        this.allowDownward = !walkOnly && settings.allowDownward;
+         this.minFallHeight = 3;
+         // 落差上限不写死:摔不死的高度都可以是路,只是疼。原版摔伤 = 高度-3(半心/格),
+         // 按当前血量留 3 颗心(6 点)保命余量反推可承受高度;设置值兜底为下限。
+         int survivableFall = 3 + Math.max(0, (int) ((player.getHealth() - 6.0f) / 1.0f));
+         this.maxFallHeightNoWater = Math.min(12,
+                 Math.max(settings.maxFallHeightNoWater, survivableFall));
++        if (walkOnly) this.maxFallHeightNoWater = Math.min(3, this.maxFallHeightNoWater);
+         this.maxFallHeightBucket = settings.maxFallHeightBucket;
+         this.fallDamageCostPerPoint = settings.fallDamageCostPerPoint;
+         this.waterWalkSpeed = computeWaterWalkSpeed(player);
+@@ -280,7 +289,7 @@
+      * 否则放置罚金。
+      */
+     public double costOfPlacingAt(int x, int y, int z, BlockState current) {
+-        if (!hasThrowaway) { // 构造时已含 allowPlace 判定
++        if (walkOnly || !hasThrowaway) { // 构造时已含 allowPlace 判定
+             return COST_INF;
+         }
+         long key = BlockPos.asLong(x, y, z);
+@@ -316,6 +325,7 @@
+      * 在 {@code getStrVsBlock} 里实现,此处不参与。
+      */
+     public double breakCostMultiplierAt(int x, int y, int z, BlockState current) {
++        if (walkOnly) return COST_INF;
+         if (sacred.contains(BlockPos.asLong(x, y, z))) {
+             return COST_INF;
+         }
+@@ -330,6 +340,6 @@
+ 
+     /** 坠落中放水桶的成本(与放置罚金同价)。 */
+     public double placeBucketCost() {
+-        return placeBlockCost;
++        return walkOnly ? COST_INF : placeBlockCost;
+     }
+ }
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChain.java b/core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChain.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChain.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChain.java
+@@ -66,6 +66,9 @@
+ 
+     @Override
+     public boolean canRun(NumenPlayer companion) {
++        if (com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.isActive(companion)) {
++            return false;
++        }
+         if (WorkProfile.of(companion).fearless()) {
+             return false;
+         }
+@@ -96,6 +99,12 @@
+ 
+     @Override
+     public TaskState tick(NumenPlayer companion) {
++        if (com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.isActive(companion)) {
++            // A queued reflex must not place/reclaim water or soft blocks during strict walking.
++            placed = null;
++            reclaimTicks = 0;
++            return TaskState.RUNNING;
++        }
+         if (falling(companion)) {
+             return clutch(companion);
+         }
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
+@@ -1,4 +1,5 @@
+ package com.dwinovo.numen.core.task.move;
++import com.dwinovo.numen.core.pathing.goal.GoalCompiler;
+ import com.dwinovo.numen.core.pathing.settings.ScaffoldMaterials;
+ import com.dwinovo.numen.core.FailureType;
+ 
+@@ -88,6 +89,10 @@
+ 
+     @Override
+     protected void onStart() {
++        if (r.walkOnly && com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.hasWorldChangingEquipment(player)) {
++            fail("walk_only_v1: Frost Walker equipment changes blocks; remove it before walking", FailureType.NO_PATH);
++            return;
++        }
+         if (r.kind == MoveToTaskRecord.Kind.FIND) {
+             // 就近方块:解析 id → 离线扫描附近候选;导航等首批候选到手再建
+             var id = net.minecraft.resources.ResourceLocation.tryParse(r.block);
+@@ -121,14 +126,26 @@
+         // SACRED when solid — the route may neither dig through nor bury the very
+         // block it was asked to reach. COLUMN/YLEVEL have no block objective.
+         nav = r.kind == MoveToTaskRecord.Kind.BLOCK
+-                ? PlayerNav.to(player, this::blockCompiled, WALK_SPEED, this::reached)
+-                : PlayerNav.toGoal(player, this::goal, WALK_SPEED, this::reached);
++                ? navigation(this::blockCompiled, this::reached)
++                : navigation(() -> bareGoal(goal()), this::reached);
+         com.dwinovo.numen.core.Constants.LOG.info(
+                 "[numen-task] goto start kind={} target={},{},{} solid={}",
+                 r.kind, bx, by, bz,
+                 r.kind == MoveToTaskRecord.Kind.BLOCK && targetCellSolid());
+         // Highlight the ACTUAL requested cell (not the path's best-effort end) so the overlay
+         // box sits on the real target — e.g. a BLOCK goal under/over water that the path can
++    }
++
++    private PlayerNav navigation(java.util.function.Supplier<GoalCompiler.Compiled> compiled,
++                                 java.util.function.BooleanSupplier reached) {
++        return PlayerNav.to(player, compiled, WALK_SPEED, reached,
++                r.walkOnly ? com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.CONTEXTS
++                           : PlayerNav.ContextProvider.DEFAULT);
++    }
++
++    private GoalCompiler.Compiled bareGoal(NavGoal goal) {
++        return goal == null ? null : new GoalCompiler.Compiled(goal,
++                it.unimi.dsi.fastutil.longs.LongSets.emptySet());
+     }
+ 
+     /** The navigation goal for this move's kind. */
+@@ -205,6 +222,11 @@
+ 
+     @Override
+     protected TaskState onTick() {
++        if (r.walkOnly && (r.walkInteractionBlocked
++                || com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.hasWorldChangingEquipment(player))) {
++            fail("walk_only_v1: movement needed a prohibited block interaction or world-changing equipment; choose another route", FailureType.NO_PATH);
++            return TaskState.FAILED;
++        }
+         // reached() is checked BEFORE the nav==null guard so an already-at-target start
+         // (which never builds a nav) lands on SUCCESS rather than the defensive FAILED.
+         if (reached()) return TaskState.SUCCESS;
+@@ -244,7 +266,7 @@
+                 // FIND:打不通就近候选 -> 除名,朝余下候选重开导航
+                 if (r.kind == MoveToTaskRecord.Kind.FIND && finder.rotateAfterFailure()) {
+                     stopNav();
+-                    nav = PlayerNav.to(player, finder::contract, WALK_SPEED, this::reached);
++                    nav = navigation(finder::contract, this::reached);
+                     yield TaskState.RUNNING;
+                 }
+                 // The planner can't get closer. In water, keep waiting while the body is
+@@ -269,7 +291,7 @@
+                     nearRetried = true;
+                     stopNav();
+                     NavGoal retry = nearRetryGoal();
+-                    nav = PlayerNav.toGoal(player, () -> retry, WALK_SPEED, this::closeEnoughToSucceed);
++                    nav = navigation(() -> bareGoal(retry), this::closeEnoughToSucceed);
+                     yield TaskState.RUNNING;
+                 }
+                 String also = nearRetried
+@@ -352,7 +374,7 @@
+     private TaskState tickFindDiscovery() {
+         finder.drain();
+         if (finder.hasCandidates()) {
+-            nav = PlayerNav.to(player, finder::contract, WALK_SPEED, this::reached);
++            nav = navigation(finder::contract, this::reached);
+             return null;
+         }
+         if (finder.exhausted()) {
+@@ -372,6 +394,15 @@
+         data.put("final_y", player.getY());
+         data.put("final_z", player.getZ());
+         data.put("ground_y", gy);
++        data.put("navigation_mode", r.walkOnly ? "walk_only_v1" : "default");
++        data.put("world_interaction_blocked", r.walkInteractionBlocked);
++        String reason = switch (r.getState()) {
++            case SUCCESS -> "destination reached by native task";
++            case TIMEOUT -> "navigation timed out; destination not confirmed";
++            case CANCELLED -> "navigation cancelled before reaching destination";
++            default -> doneReason();
++        };
++        com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.recordResult(player.getUUID(), r, data, reason);
+         return data;
+     }
+ 
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java
+@@ -34,10 +34,20 @@
+     /** Namespaced block id to walk to the nearest of; null when coordinates drive. */
+     public final String block;
+     public final Kind kind;
++    /** Task-local navigation policy; never changes global NavSettings. */
++    public final boolean walkOnly;
++    /** Set by the execution guard before any prohibited click occurs. */
++    public boolean walkInteractionBlocked;
+ 
+     public MoveToTaskRecord(String toolCallId, long deadlineGameTime,
+                             Double x, Double y, Double z, String block) {
++        this(toolCallId, deadlineGameTime, x, y, z, block, false);
++    }
++
++    public MoveToTaskRecord(String toolCallId, long deadlineGameTime,
++                           Double x, Double y, Double z, String block, boolean walkOnly) {
+         super(TOOL_NAME, toolCallId, deadlineGameTime);
++        this.walkOnly = walkOnly;
+         this.x = x;
+         this.y = y;
+         this.z = z;
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java b/core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java
+@@ -21,10 +21,15 @@
+ Double z,
+             String block,
+             ToolContext ctx) {
++        return moveTo(x, y, z, block, false, ctx);
++    }
++
++    public TaskRecord moveTo(Double x, Double y, Double z, String block,
++                             boolean walkOnly, ToolContext ctx) {
+         // MoveToTaskRecord validates the x/y/z/block combination, throwing a
+         // teaching error for an ambiguous one (e.g. only x given, or block
+         // combined with coordinates).
+         return new MoveToTaskRecord(ctx.toolCallId(), ctx.deadline(DEFAULT_TIMEOUT_TICKS),
+-                x, y, z, block);
++                x, y, z, block, walkOnly);
+     }
+ }
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java b/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
+@@ -54,6 +54,12 @@
+     @Override
+     public void onServerCall(String toolCallId, JsonObject args, NumenPlayer self, Consumer<String> reply) {
+         JsonObject root = new JsonObject();
++        JsonArray navigationModes = new JsonArray();
++        navigationModes.add("walk_only_v1");
++        root.add("navigation_modes", navigationModes);
++        root.addProperty("navigation_epoch", com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.EPOCH);
++        root.add("last_navigation_result", new com.google.gson.Gson().toJsonTree(
++                com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.lastResult(self.getUUID())));
+         root.addProperty("entity_id", self.getId());
+         root.addProperty("name", self.getName().getString());
+         root.addProperty("game_mode", self.gameMode.getGameModeForPlayer().getName());
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java b/core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java
+--- a/core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java
++++ b/core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java
+@@ -18,7 +18,7 @@
+     private static final Gson GSON = new Gson();
+     private final MovementOps impl = new MovementOps();
+ 
+-    private record Args(Double x, Double y, Double z, String block) {}
++    private record Args(Double x, Double y, Double z, String block, Boolean walk_only) {}
+ 
+     @Override
+     public String name() {
+@@ -33,6 +33,7 @@
+                 • block — e.g. block:'minecraft:crafting_table'. Walks up BESIDE the one she can reach most easily and never damages it. Easiest to reach is not always closest in a straight line, so it may not be the first block scan_blocks listed — give coordinates when it has to be a specific one.
+                 • x+y+z — stand EXACTLY in that cell, digging out whatever occupies it. Use only when the exact feet cell matters; never aim it at a block you want to keep.
+                 • y — climb/descend to that elevation.
++                Optional walk_only:true forbids digging, placing and navigation item clicks for this task. Closed doors may be impassable. Existing calls default to false.
+                 BACKGROUND: a successful call means movement is already running. Do not call goto again or launch another body action while <current_task> exists; wait for matching task_finished. status=done means that destination is complete, so advance the plan and never resend identical coordinates. Only status=timeout permits the same call to resume.""";
+     }
+ 
+@@ -49,13 +50,19 @@
+                         + "or 'minecraft:chest') — never broken or buried. Give it ALONE (no coordinates); "
+                         + "she picks the one easiest to reach. ALWAYS use this form for a block you intend "
+                         + "to use or mine.")
++                .optionalBool("walk_only", "Strict walking: never break or place blocks, use buckets or click world blocks; default false.")
+                 .build();
+     }
+ 
+     @Override
+     public void onServerCall(String toolCallId, JsonObject args, NumenPlayer companion, Consumer<String> reply) {
++        if (args != null && args.has("walk_only")
++                && (!args.get("walk_only").isJsonPrimitive()
++                    || !args.get("walk_only").getAsJsonPrimitive().isBoolean())) {
++            throw new IllegalArgumentException("walk_only must be a boolean");
++        }
+         Args a = GSON.fromJson(args, Args.class);
+         setTask(companion, impl.moveTo(a.x(), a.y(), a.z(),
+-                a.block(), ctx(toolCallId, companion)), args, reply);
++                a.block(), Boolean.TRUE.equals(a.walk_only()), ctx(toolCallId, companion)), args, reply);
+     }
+ }

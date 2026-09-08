@@ -26,6 +26,7 @@ class MockRcon:
         self.position = {'x': 100, 'y': 64, 'z': 100}
         self.game_mode = 'survival'
         self.equipment = {}
+        self.navigation_modes = ['walk_only_v1']
         self.roster = 'count=1\nKirito|uuid=' + BODY_UUID + '|owner=fixture|dim=minecraft:overworld|pos=100,64,100'
         self.reply = {'success': True, 'data': {'task_id': 't1', 'task': 'mine', 'async': True}}
         self.inventory = ('Kirito has the following entity data: '
@@ -44,7 +45,8 @@ class MockRcon:
         if ' get_self_status ' in command:
             return json.dumps({'name': 'Kirito', 'hp': 20, 'max_hp': 20, 'hunger': 18,
                                'position': self.position, 'dimension': 'minecraft:overworld',
-                               'game_mode': self.game_mode, 'equipment': self.equipment})
+                               'game_mode': self.game_mode, 'equipment': self.equipment,
+                               'navigation_modes': self.navigation_modes})
         if ' task_status ' in command:
             return json.dumps({'success': True, **({'data': {'task_id': 't2', 'state': 'running'}} if self.busy else {})})
         if ' look_around ' in command:
@@ -143,6 +145,23 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.mine()['code'], 'protected_area')
         self.assertFalse(self.rcon.mutations())
 
+    def test_walk_only_capability_is_required_before_crossing_town(self):
+        self.lease()
+        self.settings.update(anchor={'x': 100, 'z': 100}, protectedRadius=32)
+        self.write('settings.json', self.settings)
+        self.rcon.navigation_modes = []
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'z': 100})['code'], 'safe_navigation_unavailable')
+        self.assertFalse(self.rcon.mutations())
+        self.rcon.navigation_modes = ['walk_only_v1']
+        result = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        self.assertTrue(result['ok'])
+        self.assertIn('"walk_only": true', self.rcon.mutations()[0])
+
+    def test_walk_target_is_bounded_to_local_neighborhood(self):
+        self.lease()
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 125, 'z': 100})['code'], 'walk_target_too_far')
+        self.assertFalse(self.rcon.mutations())
+
     def test_bounded_arguments_no_injection_or_raw_tool(self):
         self.lease()
         for args in ({'count': 9}, {'count': True}, {'block_ids': ['minecraft:oak_log\nkill @a']},
@@ -221,10 +240,78 @@ class GatewayTests(unittest.TestCase):
             listed = await server.list_tools()
             self.assertEqual({tool.name for tool in listed}, set(mcp_server.TOOL_NAMES))
             for tool in listed:
-                if tool.name not in ('status', 'look', 'skill_catalog', 'skill_read'):
+                if tool.name not in ('status', 'look', 'world_perception', 'skill_catalog', 'skill_read',
+                                     'game_skills', 'game_skill_receipt', 'knowledge_catalog', 'knowledge_read',
+                                     'request_goal'):
                     self.assertIn('turn_id', tool.inputSchema['required'])
         asyncio.run(check())
         self.assertFalse(self.rcon.calls)
+
+    def test_game_learning_uses_same_single_action_lease_and_never_raw_rcon(self):
+        self.lease()
+        result = {'success': True, 'data': {'receipt': {'ok': True, 'code': 'learned'}, 'async': False}}
+        with patch('game_skills.GameSkills.dispatch', return_value=result) as dispatch:
+            first = self.client.action(TURN, 'game_learn', {'skill_id': 'home'})
+            second = self.client.action(TURN, 'game_cast', {'skill_id': 'irons_spellbooks:shield', 'params': {}})
+        self.assertEqual(first['code'], 'executed')
+        self.assertFalse(second['ok'])
+        dispatch.assert_called_once_with('game_learn', {'skill_id': 'home'})
+        self.assertFalse(self.rcon.mutations())
+        self.assertFalse((self.state / 'unknown.json').exists())
+
+    def test_game_cast_unknown_preserves_lease_and_marker_and_cannot_replay(self):
+        self.lease()
+        def uncertain(*_):
+            self.assertTrue((self.state / 'unknown.json').exists())
+            self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 1)
+            raise GatewayError('outcome_unknown')
+        from numen_gateway import GatewayError
+        with patch('game_skills.GameSkills.dispatch', side_effect=uncertain) as dispatch:
+            result = self.client.action(TURN, 'game_cast', {'skill_id': 'irons_spellbooks:shield', 'params': {}})
+            repeat = self.client.action(TURN, 'game_cast', {'skill_id': 'irons_spellbooks:shield', 'params': {}})
+        self.assertEqual(result['code'], 'outcome_unknown'); self.assertFalse(repeat['ok'])
+        self.assertEqual(dispatch.call_count, 1)
+        with self.assertRaisesRegex(gateway.GatewayError, 'outcome_unknown'):
+            self.client.open_lease('new_0123456789abcdef', NOW * 1000 + 120000)
+
+    def test_game_cast_start_is_not_native_effect_completion(self):
+        self.lease()
+        with patch('game_skills.GameSkills.dispatch', return_value={'success': True, 'data': {
+                'async': True, 'receipt': {'ok': True, 'code': 'casting_started'}}}):
+            result = self.client.action(TURN, 'game_cast', {'skill_id': 'irons_spellbooks:shield', 'params': {}})
+        self.assertEqual(result['code'], 'accepted')
+        self.assertFalse(result['completionConfirmed'])
+
+    def test_game_cast_protects_town_and_checks_actual_legacy_destination(self):
+        self.lease()
+        with patch('game_skills.GameSkills.dispatch') as dispatch:
+            self.rcon.position['x'] = 140
+            self.assertEqual(self.client.action(TURN, 'game_cast', {
+                'skill_id': 'tp', 'params': {'distance': 30, 'direction': '东'}})['code'], 'outside_work_area')
+            self.settings.update(anchor={'x': 100, 'z': 100}, protectedRadius=8)
+            self.write('settings.json', self.settings)
+            self.rcon.position['x'] = 120
+            self.assertEqual(self.client.action(TURN, 'game_cast', {
+                'skill_id': 'tp', 'params': {'distance': 15, 'direction': '西'}})['code'], 'protected_area')
+            self.assertEqual(self.client.action(TURN, 'game_cast', {
+                'skill_id': 'spring', 'params': {'distance': 10, 'direction': '西'}})['code'], 'protected_area')
+            self.rcon.position['x'] = 100
+            self.assertEqual(self.client.action(TURN, 'game_cast', {
+                'skill_id': 'irons_spellbooks:firebolt', 'params': {}})['code'], 'protected_area')
+            dispatch.assert_not_called()
+
+    def test_unresolved_travel_and_command_target_injection_never_reach_game_dispatch(self):
+        self.lease()
+        with patch('game_skills.GameSkills.dispatch') as dispatch:
+            for skill in ('home', 'sky_walk', 'irons_spellbooks:teleport', 'irons_spellbooks:recall',
+                          'irons_spellbooks:pocket_dimension', 'newmod:unknown'):
+                self.assertEqual(self.client.action(TURN, 'game_cast', {
+                    'skill_id': skill, 'params': {}})['code'], 'game_skill_destination_unavailable')
+            for params in ({'distance': '30'}, {'distance': 31}, {'direction': 'north'},
+                           {'x': 9999}, {'target': '@a'}, {'distance': -30}):
+                self.assertFalse(self.client.action(TURN, 'game_cast', {'skill_id': 'tp', 'params': params})['ok'])
+            dispatch.assert_not_called()
+        self.assertFalse((self.state / 'unknown.json').exists())
 
 
 class FakeSocket:

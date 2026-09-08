@@ -1,0 +1,2 @@
+# Keep manifest-verified patch bytes, including required blank context markers.
+world/numen-patches/*.patch text eol=lf whitespace=-blank-at-eol

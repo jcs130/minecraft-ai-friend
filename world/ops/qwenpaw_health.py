@@ -6,6 +6,47 @@ from pathlib import Path
 import urllib.request
 
 PHASE = 'auth-mode'
+GAME_ROLES = {'mc-god', 'mc-herald', 'qd-survivor'}
+
+
+def check_survivor_config(folder):
+    """The shared console gets a scoped HTTP driver, never the body secret."""
+    from qwenpaw.drivers.storage import load_card
+    agent = json.loads((folder / 'agent.json').read_text())
+    assert agent['id'] == 'qd-survivor' and agent['name'] == '桐人'
+    assert not any(item['enabled'] for item in agent['tools']['builtin_tools'].values())
+    assert not any(item['enabled'] for item in agent['acp']['agents'].values())
+    assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
+    assert agent['heartbeat']['enabled'] is False
+    assert agent['running']['llm_max_concurrent'] == 1 and agent['running']['llm_max_qpm'] == 4
+    assert agent['running']['max_iters'] == 6 and agent['running']['llm_retry_enabled'] is False
+    assert set(agent['mcp']['clients']) == {'numen_survival'}
+    client = agent['mcp']['clients']['numen_survival']
+    assert client['enabled'] and client['transport'] == 'streamable_http'
+    assert client['url'] == 'http://survivor:8089/mcp' and not client.get('command')
+    assert client['headers'] == {'Authorization': 'Bearer ${SURVIVOR_MCP_TOKEN}'}
+    names = client['tools']
+    assert isinstance(names, list) and len(set(names)) == len(names)
+    assert {'status', 'look', 'skill_draft', 'skill_test', 'skill_promote', 'remember'} <= set(names)
+    assert not json.loads((folder / 'jobs.json').read_text())['jobs']
+    cards = [p for p in (folder / 'drivers').glob('**/*.yaml')
+             if p.name != '.legacy_mcp_migration_report.yaml']
+    assert cards == [folder / 'drivers/mcp/numen_survival.yaml']
+    card = load_card(cards[0])
+    assert card.enabled and card.endpoint['transport'] == 'streamable_http'
+    assert card.endpoint['url'] == client['url']
+    binding = card.endpoint['headers']['Authorization']
+    assert binding['source'] == 'credential' and binding['format'] == 'Bearer {value}'
+    assert card.credentials[binding['credential']].ref == 'env:SURVIVOR_MCP_TOKEN'
+    assert card.policy.default_effect == 'deny' and len(card.policy.rules) == len(names)
+    assert {r.target.name for r in card.policy.rules if r.effect == 'allow' and r.subject == '*'
+            and r.target.kind == 'tool'} == set(names)
+    # Docker healthcheck is a new process and does not inherit the entrypoint's
+    # in-memory environment. Validate the mounted source; native MCP smoke checks
+    # separately prove the running Qwen process resolves its env credential.
+    token_path = Path(os.environ.get('SURVIVOR_MCP_TOKEN_FILE', '/run/secrets/survivor-mcp'))
+    token = token_path.read_text(encoding='ascii').strip()
+    assert 32 <= len(token) <= 256 and not any(char.isspace() for char in token)
 
 
 def check_passwordless_auth(get):
@@ -18,7 +59,7 @@ def check_runtime_config():
     assert importlib.metadata.version('qwenpaw') == '2.2.0'
     config = json.loads(Path('/state/work/config.json').read_text())
     assert_quiet(config['agents']['running'])
-    assert {aid for aid, ref in config['agents']['profiles'].items() if ref['enabled']} == {'mc-god', 'mc-herald'}
+    assert {aid for aid, ref in config['agents']['profiles'].items() if ref['enabled']} == GAME_ROLES
     for aid in ('mc-god', 'mc-herald'):
         folder = Path('/state/work/workspaces')/aid
         agent = json.loads((folder/'agent.json').read_text())
@@ -32,6 +73,7 @@ def check_runtime_config():
         assert not driver_cards(folder)
         jobs = folder/'jobs.json'
         assert not jobs.exists() or not json.loads(jobs.read_text())['jobs']
+    check_survivor_config(Path('/state/work/workspaces/qd-survivor'))
     return {aid for aid in ('default', 'QwenPaw_QA_Agent_0.2')
             if config['agents']['profiles'].get(aid, {}).get('enabled') is False}
 
@@ -61,17 +103,18 @@ def main():
     assert len(loaded) == len(loaded_ids)
     # Console reads may lazily load disabled builtin workspaces. Loading is not
     # activation: only explicitly disabled builtins may accompany the game roles.
-    assert {'mc-god', 'mc-herald'} <= loaded_ids <= {'mc-god', 'mc-herald'} | disabled_builtins
+    assert GAME_ROLES <= loaded_ids <= GAME_ROLES | disabled_builtins
     PHASE = 'agent-list'
     agents = get('/agents')['agents']
-    assert {a['id'] for a in agents if a['enabled']} == {'mc-god', 'mc-herald'}
+    assert {a['id'] for a in agents if a['enabled']} == GAME_ROLES
     for aid in ['mc-god', 'mc-herald']:
         PHASE = 'disabled-tools:' + aid
         items = get('/tools', aid=aid)
         assert items and not any(item['enabled'] for item in items)
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
                       'authMode': 'local-passwordless', 'authEnabled': False, 'anonymousAccess': True,
-                      'packageVersion': '2.2.0', 'agents': 2, 'enabledTools': 0}))
+                      'packageVersion': '2.2.0', 'agents': 3, 'enabledTools': 0,
+                      'survivorMcp': 'authenticated-streamable-http'}))
 
 
 if __name__ == '__main__':

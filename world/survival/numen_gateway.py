@@ -16,7 +16,7 @@ import time
 import uuid
 
 
-TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item')
+TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
 TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
 SLOTS = ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')
@@ -145,7 +145,7 @@ class RconClient:
 
 
 def inventory_from_snbt(response):
-    """Parse NBT with nbtlib; retain item IDs/counts only, never book contents."""
+    """Retain item IDs/counts and a short skill-book tag, never book contents."""
     import nbtlib
     start = response.find('[')
     if start < 0:
@@ -160,7 +160,14 @@ def inventory_from_snbt(response):
         slot = int(row.get('Slot', -1))
         if not IDENTIFIER.fullmatch(item_id) or not 1 <= count <= 2147483647:
             raise GatewayError('inventory_invalid')
-        items.append({'id': item_id, 'count': count, 'slot': slot})
+        item = {'id': item_id, 'count': count, 'slot': slot}
+        if item_id == 'minecraft:written_book':
+            components = row.get('components', {})
+            custom = components.get('minecraft:custom_data', {}) if isinstance(components, dict) else {}
+            label = custom.get('skillbook') if isinstance(custom, dict) else None
+            if isinstance(label, str) and 1 <= len(label) <= 64 and not any(ord(c) < 32 for c in label):
+                item['bookName'] = str(label)
+        items.append(item)
         counts[item_id] = counts.get(item_id, 0) + count
     return items, counts
 
@@ -196,6 +203,11 @@ class NumenGateway:
         return body, actual
 
     def _invoke(self, tool, args=None):
+        if tool in ('game_cast', 'game_learn'):
+            from game_skills import GameSkills
+            return GameSkills(self).dispatch(tool, args)
+        if tool == 'goto':
+            args = dict(args or {}, walk_only=True)
         # Same body/tool/JSON interface as the existing guard MCP, never raw model commands.
         body = self._settings()['bodyName']
         raw = self.rcon.cmd(f'numen_act invoke "{body}" {tool} ' + json.dumps(args or {}, ensure_ascii=True))
@@ -214,8 +226,11 @@ class NumenGateway:
         body = None
         try:
             body, body_uuid = self._check_binding()
-            status = self._invoke('get_self_status')
             task = self._invoke('task_status')
+            # Read busy first. If navigation finishes between these reads we
+            # wait one more tick, rather than consume an idle body with an old
+            # terminal receipt and lose the real outcome permanently.
+            status = self._invoke('get_self_status')
             if (status.get('name') != body or task.get('success') is not True
                     or not all(self._number(status.get(k)) for k in ('hp', 'max_hp', 'hunger'))):
                 raise GatewayError('body_status_invalid')
@@ -223,6 +238,10 @@ class NumenGateway:
             if not all(self._number(pos.get(k)) for k in ('x', 'y', 'z')):
                 raise GatewayError('body_status_invalid')
             inventory, counts = inventory_from_snbt(self.rcon.cmd(f'data get entity {body} Inventory'))
+            from game_skills import cached_game_skills, owned_skill_books
+            tagged_books = [item for item in inventory if 'bookName' in item]
+            skill_books = tagged_books[:12]
+            owned_books = owned_skill_books(skill_books, cached_game_skills(self.state, now))
             data = task.get('data', {})
             task_info = {k: data[k] for k in ('task_id', 'task', 'state', 'elapsed_s', 'budget_left_s') if k in data}
             task_info.update(busy=bool(data.get('task_id')), completionConfirmed=False)
@@ -230,8 +249,19 @@ class NumenGateway:
                     'hp': status.get('hp'), 'maxHp': status.get('max_hp'), 'hunger': status.get('hunger'),
                     'position': pos, 'dimension': status.get('dimension'), 'gameMode': status.get('game_mode'),
                     'equipment': status.get('equipment', {}), 'inventory': inventory, 'counts': counts,
+                    'skillBooks': skill_books, 'ownedSkillBooks': owned_books,
+                    'skillBooksTruncated': len(tagged_books) > 12,
                     'task': task_info, 'air': status.get('air'), 'inWater': status.get('in_water'),
                     'inLava': status.get('in_lava'), 'boundaryEnforcement': 'preflight',
+                    'saturation': status.get('saturation') if self._number(status.get('saturation')) else None,
+                    'onGround': status.get('on_ground') if type(status.get('on_ground')) is bool else None,
+                    'biome': status.get('biome', '')[:100] if isinstance(status.get('biome'), str) else None,
+                    'structures': [name[:100] for name in status.get('structures', [])[:16]
+                                   if isinstance(name, str)] if isinstance(status.get('structures'), list) else [],
+                    'navigationModes': [mode[:40] for mode in status.get('navigation_modes', [])[:4]
+                                        if isinstance(mode, str)],
+                    'navigationEpoch': status.get('navigation_epoch') if isinstance(status.get('navigation_epoch'), str) else None,
+                    'navigationResult': self._navigation_result(status.get('last_navigation_result')),
                     'notice': 'Idle is not a completion receipt. Numen navigation is not geofenced.'}
         except (OSError, ValueError, TypeError, KeyError, ImportError):
             return {'schema': 1, 'ok': False, 'online': False, 'bodyName': body,
@@ -244,11 +274,53 @@ class NumenGateway:
             terrain = self.rcon.cmd(f'numen_act invoke "{body}" look_around ' + json.dumps({'radius': radius}))
             if terrain.startswith('no companion:'):
                 raise GatewayError('body_offline')
-            entities = self._invoke('scan_nearby_entities', {'radius': radius, 'type_filter': 'hostile'})
-            return {'ok': True, 'observedAt': self._now(), 'terrain': terrain[:10000],
-                    'hostiles': entities.get('entities', [])[:20], 'radius': radius}
+            entities = self._invoke('scan_nearby_entities', {'radius': radius, 'type_filter': 'all'})
+            # Native all-scan truncates at 20 nearest entities. Keep a separate
+            # hostile scan so a crowd of villagers cannot hide nearby enemies.
+            hostiles = self._invoke('scan_nearby_entities', {'radius': radius, 'type_filter': 'hostile'})
+            world = self._invoke('get_world_info')
+            conditions = {k: world[k][:100] for k in ('dimension', 'weather') if isinstance(world.get(k), str)}
+            conditions.update({k: world[k] for k in ('game_time',) if self._number(world.get(k))})
+            conditions.update({k: world[k] for k in ('is_bright_outside', 'is_dark_outside')
+                               if type(world.get(k)) is bool})
+            return {'ok': True, 'observedAt': self._now(), 'terrain': terrain[:6000],
+                    'entities': self._observed_entities(entities.get('entities'), 20),
+                    'hostiles': self._observed_entities(hostiles.get('entities'), 8),
+                    'entitiesTruncated': entities.get('truncated') is True,
+                    'hostilesTruncated': hostiles.get('truncated') is True or len(hostiles.get('entities', [])) > 8,
+                    'world': conditions, 'radius': radius,
+                    'limits': {'unloadedChunks': False, 'allKnowing': False,
+                               'notice': 'Native local scans may include occluded entities. Structure membership is not an explored entrance; block map is a spatial summary, not every block or mod mechanic.'}}
         except (OSError, ValueError, TypeError):
             return {'ok': False, 'code': 'observation_unavailable'}
+
+    @classmethod
+    def _observed_entities(cls, values, maximum):
+        result = []
+        for row in values[:maximum] if isinstance(values, list) else []:
+            if not isinstance(row, dict):
+                continue
+            item = {k: row[k][:100] for k in ('type', 'category') if isinstance(row.get(k), str)}
+            item.update({k: row[k] for k in ('id', 'distance', 'hp', 'max_hp') if cls._number(row.get(k))})
+            position = row.get('position', {})
+            if isinstance(position, dict) and all(cls._number(position.get(k)) for k in ('x', 'y', 'z')):
+                item['position'] = {k: position[k] for k in ('x', 'y', 'z')}
+            result.append(item)
+        return result
+
+    @classmethod
+    def _navigation_result(cls, raw):
+        if not isinstance(raw, dict):
+            return None
+        if (raw.get('state') not in ('success', 'failed', 'timeout', 'cancelled')
+                or type(raw.get('success')) is not bool):
+            return None
+        result = {k: raw[k][:400] for k in ('task_id', 'navigation_epoch', 'state', 'navigation_mode', 'reason')
+                  if isinstance(raw.get(k), str)}
+        result.update({k: raw[k] for k in ('final_x', 'final_y', 'final_z', 'ground_y', 'finished_at')
+                       if cls._number(raw.get(k))})
+        result.update(success=raw['success'], world_interaction_blocked=raw.get('world_interaction_blocked') is True)
+        return result
 
     def _enabled(self):
         control = read_json(self.state / 'control.json')
@@ -300,6 +372,10 @@ class NumenGateway:
     def _validate(self, tool, args):
         if tool not in TOOLS or not isinstance(args, dict):
             raise GatewayError('tool_not_allowed')
+        if tool in ('game_cast', 'game_learn'):
+            from game_skills import validate_game_action
+            validate_game_action(tool, args)
+            return
         if tool == 'goto':
             if set(args) != {'x', 'z'} or not all(self._number(args[k]) for k in ('x', 'z')):
                 raise GatewayError('invalid_move')
@@ -376,12 +452,21 @@ class NumenGateway:
                     raise GatewayError('body_busy')
                 if before.get('dimension') != self._settings().get('dimension', 'minecraft:overworld'):
                     raise GatewayError('wrong_dimension')
-                # Inventory-only actions are valid in town. Numen goto can dig/place,
-                # so travel and mining keep the additional building-protection check.
-                self._area(before['position'], 16 if tool == 'mine' else 0,
-                           protect=tool in ('mine', 'goto'))
+                if tool == 'goto' and 'walk_only_v1' not in before.get('navigationModes', []):
+                    raise GatewayError('safe_navigation_unavailable')
+                # Verified walk-only navigation may cross town; mining may not.
+                protected = tool == 'mine'
+                if tool in ('game_cast', 'game_learn'):
+                    from game_skills import is_protected_action
+                    protected = is_protected_action(tool, args)
+                self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
                 if tool == 'goto':
-                    self._area(args)
+                    self._area(args, protect=False)
+                    if math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z']) > 24:
+                        raise GatewayError('walk_target_too_far')
+                if tool in ('game_cast', 'game_learn'):
+                    from game_skills import preflight_game_action
+                    preflight_game_action(self, before, tool, args)
                 self._enabled()  # stop while read-only preflight was running
                 if lease['expiresAt'] <= self._now():
                     raise GatewayError('lease_expired')

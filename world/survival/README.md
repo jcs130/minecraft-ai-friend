@@ -1,21 +1,30 @@
-# 桐人的独立自主运行组
+# 桐人的共享角色与独立身体执行器
 
-这个目录将 QwenPaw 的规划、受验证的技能程序、Numen 的身体动作分开。QwenPaw 每轮负责自主规划和复盘；程序只计算下一步提案；控制器根据真实身体状态逐步执行。它不改变运营六角色、神谕两角色或模型权重。
+这个目录将 QwenPaw 的规划、受验证的技能程序、Numen 的身体动作分开。真实 `qd-survivor` 角色在游戏 QwenPaw `http://127.0.0.1:18089/agents` 中显示为桐人；`survivor` 容器仅负责感知、持久调度、受限程序和鉴权 HTTP MCP，不再启动独立 18091 控制台。原游戏天神、司礼以及运营六角色的模型设置和用途保留。
 
-## 初始化与验证
+## 从首轮原型迁入共享控制台
 
-先构建 `qiandengji-survivor:2.2.0-qd1`，再用项目 Python 执行：
+首轮原型已通过 `prepare_survival_agent.py` 建立隔离配置。已有部署应保留该目录，使用迁移工具将真实角色、会话和用量接入游戏实例；不重新初始化或生成另一个身体。构建当前 `qiandengji-survivor:2.2.0-qd2` 后，先只读检查：
 
 ```powershell
-python tools/prepare_survival_agent.py --check
-python tools/prepare_survival_agent.py --execute qiandengji
+python tools/migrate_survivor_to_game.py --check
 ```
 
-检查和执行只读取 `server/operations-agent-state/work/workspaces/default/agent.json` 的当前模型与对应的 Ali Coding Plan provider，不读取宿主 QwenPaw 角色。`config/survival-agent.json` 的 `bodyName` 绑定身体登录名；角色显示名为桐人。新主密钥与重加密后的单一 provider 写入被忽略的 `server/survival-agent-state`。非空目录拒绝覆盖，不复制会话、旧工具、其他角色或定时任务。
+等待两个游戏会话角色无活动任务，暂停桐人并核对 `active:null`、无待确认身体动作后，停止精确的 `qiandengji-survivor-1` 与 `qiandengji-qwenpaw-1`，再执行：
 
-执行内部运行 `docker run --network none` 初始化实际 QwenPaw 2.2 schema，再调用 `verify_runtime.py` 校验模型可解密、唯一启用角色、DriverCard 和预算，期间不调用模型、不创建身体、不启动服务。失败保留私有暂存以供排查，不能重跑覆盖已有状态。控制器的身体 UUID 验证、工作区域和启用状态另由运行配置维护。
+```powershell
+python tools/migrate_survivor_to_game.py --execute qiandengji
+```
 
-初始化会将源码默认设置复制到 `server/survival-agent-state/survival/settings.json`，并以 `enabled:false` 开始。先用 `tools/prepare_survival_body.py` 核对旧存档；该主机工具需要 `nbtlib==2.0.4`，只有显式 `--execute qiandengji` 才会备份并唤醒已存在的身份。检查实际地形后编辑运行设置的 `workArea`，再启动 `docker compose up -d --no-deps survivor`，使用 `/survival/control.py resume` 开始。未设置区域时可以查看暂停状态，但不能启用自主动作。原角色已在线时不得重复执行唤醒。
+本机已经完成这次迁移，保留迁移时的 69 次模型请求，不能再次执行 `--execute`。工具先把两套配置、统计、桐人会话及身体学习状态备份到项目 `runtime/survivor-game-migration-backups`，再复制角色、重加密独立 provider、合并按 `agent_id` 归属的原始用量并禁用旧角色。另两角色配置、当前模型选择、现有 provider 和桐人的身体/技能/预算文件不改。
+
+后续工具或角色提示更新时，待这两个容器停止且桐人暂停无活动模型任务，运行 `python tools/migrate_survivor_to_game.py --sync qiandengji`。同步只更新真实桐人的工具白名单、DriverCard 和 `AGENTS.md`，备份旧版本，保留模型选择、会话与全部用量。
+
+在 `--network none` 的临时容器中挂载游戏状态到 `/state`、当前源码到 `/survival:ro`，使用原 Qwen 工作/secret 环境及 `QWENPAW_AUTH_ENABLED=0`，运行 `python /survival/verify_runtime.py --game --offline`，可验证真实 2.2 配置、provider 解密、三角色集合与 HTTP 工具策略；不连接模型或 Minecraft。
+
+Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 MCP token，仅在子进程环境注入；Qwen DriverCard 使用 `Bearer ${SURVIVOR_MCP_TOKEN}` 引用。survivor 内部 8089 `/mcp` 校验鉴权，不发布宿主端口，`/livez` 仅返回无状态健康。`service.py` 监督 MCP 子进程和唯一调度器，使用 `QWENPAW_API_URL=http://qwenpaw:8088/api` 接入共享模型服务。
+
+身体 `Kirito` 的 UUID 与 `workArea` 仍以私有运行设置验证。原角色在线时不得重复执行 `prepare_survival_body.py` 唤醒。重新创建的实例应先独立准备、核对旧身体、设置已观察的工作区，再迁入游戏；不能覆盖现有 `server/survival-agent-state`。启动服务和 `/survival/control.py resume` 是独立操作，暂停和未知回执会阻止新动作。
 
 ## MCP 工具
 
@@ -24,18 +33,26 @@ python tools/prepare_survival_agent.py --execute qiandengji
 | 工具 | 用途 |
 |---|---|
 | `status()`、`look(radius)` | 无模型、只读身体和周边事实 |
+| `world_perception()` | 读取控制器持久感知缓存：聊天、发给自身的消息、周边及世界摘要 |
 | `move(turn_id,x,z)`、`mine(turn_id,block_ids,count)`、`craft(turn_id,item_id,count)`、`eat(turn_id,item_id)`、`equip(turn_id,item_id,slot)` | 一次受租约限制的直接身体动作 |
 | `skill_catalog()`、`skill_read(name,version)` | 查看已有程序和版本 |
+| `game_skills(scope)` | 通过原 `/mycli` 查询真实已学/可学/锁定法术及等级法力状态 |
+| `game_learn(turn_id,skill_id)`、`game_cast(turn_id,skill_id,params)` | 使用真实技能书学习或正常施法，共用单动作租约 |
+| `game_skill_receipt(request_id)` | 只读当前身体的原施法/学习回执，不重新执行 |
+| `knowledge_catalog()`、`knowledge_read(...)` | 阅读明确提供的旧世界知识包，保持只读，旧文档不构成新的事实或权限 |
+| `request_goal(goal)` | 将 QwenPaw 会话中的明确新目标交给原调度器，不直接操作身体或重置预算 |
 | `skill_draft(turn_id,name,source,fixtures,description)` | 保存纯 JS `next(state,memory)` 草稿和测试 |
 | `skill_test(turn_id,name,version)` | 使用无 IO、有限 CPU/内存的 QuickJS 测试 |
 | `skill_promote(turn_id,name,version)` | 晋升通过当前内核验证的准确版本 |
 | `skill_start(turn_id,name,version,memory,max_steps)` | 排队执行已晋升程序，与同轮直接动作互斥 |
-| `remember(turn_id,goal,lesson,next_focus)` | 保存有界学习数据和最近 16 条历史 |
+| `remember(turn_id,goal,lesson,next_focus,goal_state,review_after_seconds)` | 保存有界经验、目标状态和下次复盘时间，保留最近 16 条历史 |
 
-所有写操作共享 `action_lock`：控制器已启用、同一未过期租约、状态为 `open` 或 `used`，且没有不确定动作标记时才允许。草稿、测试、晋升和记忆不消耗身体动作次数；`skill_start` 要求 `open` 且 `actionsUsed=0`，先关闭本轮直接动作，再写 `skill-job.json`。得到 `skill_queued` 后结束模型轮次，MCP 不运行程序或触发 RCON。程序执行由控制器在该模型任务结束后启动。
+身体动作、程序学习和记忆写入共享 `action_lock`：控制器已启用、同一未过期租约、状态为 `open` 或 `used`，且没有不确定动作标记时才允许。草稿、测试、晋升和记忆不消耗身体动作次数；`skill_start` 要求 `open` 且 `actionsUsed=0`，先关闭本轮直接动作，再写 `skill-job.json`。得到 `skill_queued` 后结束模型轮次，MCP 不运行程序或触发 RCON。程序执行由控制器在该模型任务结束后启动。`request_goal` 仅排队一条明确会话目标，控制器保留当时的暂停状态和原预算，不创建第二个驱动。
 
-技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`，动作名称使用 Numen 的 `goto/mine/craft/eat/equip_item`，而非 MCP 的 `move/equip`。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。
+技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`，动作名称为 `goto/mine/craft/eat/equip_item/game_cast/game_learn`，而非 MCP 的 `move/equip`。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。法术学习保留原等级、技能书、法力、冷却和铁魔法装备规则，不能凭名称授予法术。
 
 `accepted` 只表示 Numen 受理；`skill_queued` 只表示排队。技能任务完成、库存变化、位置变化与模型自述分别保存。不确定结果禁止重放，技能程序也不能绕过身体身份、工作区、工具白名单或暂停门。记忆和环境文字始终作为数据传给规划角色，不注入系统提示。
 
-控制器每 15 秒只读观察，模型决策至少间隔 180 秒，滚动 24 小时最多 48 轮。新任务、生命/饥饿/库存改变、明显位移或新动作结果才触发下一轮；单纯时钟变化不触发。静止期间进入 `idle`；附近实体的小幅推挤也不会唤醒。正常移动的完成结果不受 8 格水平 / 4 格垂直的被动位移阈值限制。
+控制器每 15 秒观察身体与事件、每 60 秒刷新周边，模型决策至少间隔 180 秒，滚动 24 小时最多 48 轮。新目标、世界事件、生命/饥饿/库存变化、明显位移或动作结果可触发下一轮；持续模式也按模型安排的 180–3600 秒间隔复盘，默认 1800 秒，短目标完成后继续提出下一目标。平静期间进入 `observing`，没有事件也会在下次复盘继续；`idle` 仍可用于单任务模式。复盘不会绕过暂停、不确定结果或预算。
+
+聊天和目标消息从既有 append-only 世界通道按字节游标读取，待提交的事件在冷却与重启后保留，只有实际纳入模型请求的事件才确认。环境中的文字不构成系统指令；无法读取的通道和未接入的模组内部状态明确记为缺口，不宣称全知。正常移动的完成结果不受 8 格水平 / 4 格垂直的被动位移阈值限制，附近实体的小幅推挤不会额外唤醒。

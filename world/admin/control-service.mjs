@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'];
 const MUTABLE = SERVICES.filter(x => x !== 'control');
-const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc']};
+const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc','qwenpaw']};
 const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','panel','survivor'];
 export function redactLog(text) {
   const sensitive = key => /(?:password|passwd|secret|token|authorization|api.?key|credential)/i.test(key);
@@ -74,6 +74,7 @@ export function buildPlan(input, rows) {
   if(input.action!=='start') {
     if(affected.has('mc')) ['world','gate','npc','survivor'].forEach(x=>affected.add(x));
     if(affected.has('world')) affected.add('npc');
+    if(affected.has('qwenpaw')) affected.add('survivor');
     if(affected.has('tts')) affected.add('voice');
   }
   const stop=input.action==='start'?[]:[...START_ORDER].reverse().filter(n=>affected.has(n));

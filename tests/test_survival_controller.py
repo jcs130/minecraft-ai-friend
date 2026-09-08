@@ -593,6 +593,265 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(self.backend.submitted), 2)
         self.assertEqual(len(restarted.data['decisions']), 2)
 
+    def test_continuous_autonomy_reviews_unchanged_world_at_bounded_interval(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.finish_no_action_decision()
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(self.controller.data['status'], 'observing')
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.clock.now += 1680
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertEqual(self.controller.data['wakeReason'], 'autonomous_review')
+        self.assertIn('continuous_autonomy', self.backend.submitted[-1]['prompt'])
+
+    def test_completed_short_goal_selects_next_goal_without_user_message(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.finish_no_action_decision()
+        self.write('memory.json', {'goalState': 'completed', 'reviewAfterSeconds': 1800})
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+
+    def test_model_review_interval_cannot_bypass_cooldown_or_daily_budget(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.finish_no_action_decision()
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 0})
+        self.clock.now += 119
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.clock.now += 2
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.controller.tick()
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(self.controller.data['status'], 'budget_wait')
+        self.assertEqual(len(self.backend.submitted), 2)
+
+    def test_catalog_contention_does_not_disable_controller_or_cancel_model(self):
+        from skill_library import SkillError
+        self.controller.tick()
+        self.skills.catalog = lambda: (_ for _ in ()).throw(SkillError('skill_library_busy'))
+        self.controller.tick()
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(self.controller.data['status'], 'thinking')
+        self.assertFalse(self.backend.cancelled)
+        self.assertEqual(read_json(self.public)['warnings']['catalogWarning'], 'skill_library_busy')
+
+    def test_new_conversation_goal_waits_for_current_action_then_retires_old_skill(self):
+        from mcp_server import submit_goal
+        self.job(status='running')
+        self.skills.reply = {'action': {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}},
+                             'memory': {'attempts': 1}}
+        self.gateway.body['task']['busy'] = True
+        intent = submit_goal(self.state, 'Stop gathering and find a safe camp', clock=self.clock)
+        self.controller.tick()
+        self.assertEqual(self.controller.data['goalSwitchPending'], intent['intentId'])
+        self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'running')
+        self.assertFalse(self.skills.calls); self.assertFalse(self.backend.submitted)
+        self.gateway.body['task']['busy'] = False
+        self.controller.tick()
+        job = read_json(self.state / 'skill-job.json')
+        self.assertEqual(job['status'], 'cancelled'); self.assertEqual(job['reason'], 'goal_changed')
+        self.assertFalse(self.skills.calls); self.assertFalse(self.gateway.actions)
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertIn('find a safe camp', self.backend.submitted[0]['prompt'])
+        self.assertNotIn('goalSwitchPending', self.controller.data)
+
+    def test_new_goal_during_model_waits_and_does_not_start_its_old_queued_program(self):
+        from mcp_server import submit_goal
+        self.controller.tick()
+        turn_id = self.controller.data['active']['turnId']
+        self.job(turnId=turn_id)
+        submit_goal(self.state, 'Use the new exploration objective', clock=self.clock)
+        self.controller.tick()
+        self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'pending')
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.controller.tick()
+        self.controller.tick()
+        self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.skills.calls); self.assertFalse(self.gateway.actions)
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertIn('new exploration objective', self.backend.submitted[-1]['prompt'])
+
+    def test_paused_goal_intake_does_not_resume_or_reset_a_spent_budget(self):
+        from mcp_server import submit_goal
+        self.finish_no_action_decision()
+        decisions = copy.deepcopy(self.controller.data['decisions'])
+        self.controller.pause('operator_pause')
+        submit_goal(self.state, 'Remember the new camp objective', clock=self.clock)
+        self.controller.tick()
+        self.assertFalse(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(self.controller.data['decisions'], decisions)
+        self.assertIn('goalSwitchPending', self.controller.data)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_completed_memory_triggers_one_fast_review_then_respects_long_interval(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.controller.settings['decisionsPerDay'] = 8
+        self.finish_no_action_decision()
+        self.write('memory.json', {'goal': 'Observed a completed objective', 'goalState': 'completed',
+                                   'updatedAt': int(self.clock() * 1000), 'reviewAfterSeconds': 3600})
+        self.clock.now += 121
+        self.controller.tick(); self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertEqual(self.controller.data['completedReviewConsumed'], self.controller.completed_review_id())
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertEqual(self.controller.data['status'], 'observing')
+        self.clock.now += 3480
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 3)
+        self.assertEqual(self.controller.data['wakeReason'], 'autonomous_review')
+
+    def test_reaffirming_same_completed_goal_does_not_rearm_fast_review(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.controller.settings['decisionsPerDay'] = 8
+        self.write('memory.json', {'goal': 'Finished the camp', 'goalState': 'completed',
+                                   'updatedAt': 1, 'reviewAfterSeconds': 3600})
+        self.finish_no_action_decision()
+        consumed = self.controller.data['completedReviewConsumed']
+        self.write('memory.json', {'goal': 'Finished the camp', 'goalState': 'completed',
+                                   'updatedAt': 2, 'reviewAfterSeconds': 3600})
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(self.controller.completed_review_id(), consumed)
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertEqual(self.controller.data['status'], 'observing')
+
+    def test_new_completed_goal_can_trigger_next_goal_without_waiting_an_hour(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.controller.settings['decisionsPerDay'] = 8
+        self.write('memory.json', {'goal': 'first', 'goalState': 'completed', 'updatedAt': 1,
+                                   'reviewAfterSeconds': 3600})
+        self.finish_no_action_decision()
+        old = self.controller.data['completedReviewConsumed']
+        self.write('memory.json', {'goal': 'second', 'goalState': 'completed', 'updatedAt': 2,
+                                   'reviewAfterSeconds': 3600})
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertNotEqual(old, self.controller.data['completedReviewConsumed'])
+
+    def test_repeated_empty_reviews_back_off_but_new_world_fact_still_wakes(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.controller.settings['decisionsPerDay'] = 8
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 120})
+        self.finish_no_action_decision()
+        self.clock.now += 121
+        self.controller.tick(); self.controller.tick()
+        self.assertEqual(self.controller.data['noActionReviews'], 2)
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.gateway.body['hunger'] = 12
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 3)
+        self.assertEqual(self.controller.data['wakeReason'], 'world_or_goal_changed')
+
+    def test_transient_skill_read_lock_waits_locally_without_advancing_or_buying_a_decision(self):
+        from skill_library import SkillError
+        self.job(memory={'attempts': 7})
+        self.skills.reply = SkillError('skill_library_busy')
+        self.controller.tick()
+        job = read_json(self.state / 'skill-job.json')
+        self.assertEqual(job['status'], 'pending'); self.assertEqual(job['steps'], 0)
+        self.assertEqual(job['memory'], {'attempts': 7})
+        self.assertFalse(self.backend.submitted); self.assertFalse(self.gateway.actions)
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(self.controller.data['skillWaitReason'], 'skill_library_busy')
+        self.skills.reply = {'action': None, 'memory': {}, 'done': True, 'reason': 'Now observed'}
+        self.controller.tick()
+        self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'done')
+        self.assertNotIn('skillWaitReason', self.controller.data)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_transient_lease_open_lock_preserves_pre_step_program_memory(self):
+        self.job(memory={'attempts': 7})
+        self.skills.reply = {'action': {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}},
+                             'memory': {'attempts': 8}}
+        self.gateway.open_lease = lambda *_: (_ for _ in ()).throw(GatewayError('action_busy'))
+        self.controller.tick()
+        job = read_json(self.state / 'skill-job.json')
+        self.assertEqual(job['memory'], {'attempts': 7}); self.assertEqual(job['steps'], 0)
+        self.assertEqual(job['status'], 'pending')
+        self.assertFalse(self.backend.submitted); self.assertFalse(self.gateway.actions)
+
+    def test_gateway_mutex_rejection_retries_only_pure_step_and_not_model(self):
+        self.job(memory={'attempts': 7})
+        self.skills.reply = {'action': {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}},
+                             'memory': {'attempts': 8}}
+        self.gateway.result = {'ok': False, 'code': 'action_busy'}
+        self.controller.tick()
+        job = read_json(self.state / 'skill-job.json')
+        self.assertEqual(job['memory'], {'attempts': 7}); self.assertEqual(job['steps'], 0)
+        self.assertFalse(self.backend.submitted)
+        self.assertNotIn('observeAction', self.controller.data)
+        self.assertTrue(self.gateway.closed[-1])
+
+    def test_known_action_closes_lease_with_wait_instead_of_pausing_for_short_lock(self):
+        self.job()
+        self.skills.reply = {'action': {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}},
+                             'memory': {'attempts': 1}}
+        original = self.gateway.close_lease
+        def contended_close(blocking=False):
+            if not blocking:
+                raise GatewayError('action_busy')
+            return original(blocking=blocking)
+        self.gateway.close_lease = contended_close
+        self.controller.tick()
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'running')
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertFalse(self.backend.submitted)
+        self.assertIsNone(self.controller.data.get('pauseReason'))
+
+    def test_resume_clears_stale_pause_reason_on_public_snapshot(self):
+        self.controller.data['pauseReason'] = 'old_error'
+        self.controller.tick()
+        self.assertIsNone(read_json(self.public)['pauseReason'])
+
+    def test_world_events_arriving_during_model_work_are_not_acknowledged(self):
+        class Perception:
+            def __init__(self):
+                self.pending = ['chat-1']
+                self.acked = []
+            def poll(self, body, environment):
+                return {'revision': '|'.join(self.pending),
+                        'events': [{'id': identity, 'kind': 'chat', 'text': identity} for identity in self.pending],
+                        'pendingEventIds': self.pending[:]}
+            def ack(self, ids):
+                self.acked.extend(ids)
+                self.pending = [row for row in self.pending if row not in ids]
+        perception = Perception()
+        self.controller.perception = perception
+        self.controller.tick()
+        perception.pending.append('quest-2')
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.controller.tick()
+        self.assertEqual(perception.acked, ['chat-1'])
+        self.assertEqual(perception.pending, ['quest-2'])
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertIn('quest-2', self.backend.submitted[-1]['prompt'])
+
+    def test_environment_read_failure_is_visible_and_does_not_pause_body(self):
+        class Perception:
+            def poll(self, body, environment):
+                return {'revision': 'stable', 'environment': environment}
+        self.controller.perception = Perception()
+        self.gateway.observe = lambda _: (_ for _ in ()).throw(TimeoutError())
+        self.controller.tick()
+        self.assertEqual(self.controller.environment['code'], 'TimeoutError')
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(len(self.backend.submitted), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

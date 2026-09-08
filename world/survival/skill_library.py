@@ -24,7 +24,7 @@ MAX_STORE_BYTES = 262144
 MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
-ACTION_TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item')
+ACTION_TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn')
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
 VERSION = re.compile(r'[0-9a-f]{64}\Z')
 
@@ -270,19 +270,26 @@ class SkillLibrary:
         return record
 
     def catalog(self):
-        with self._lock():
-            rows = []
-            for folder in sorted(self.root.iterdir()):
-                if not NAME.fullmatch(folder.name):
-                    continue
+        # Heads are atomically replaced only after their immutable version exists.
+        # Read-only observation need not acquire the writer lock: a concurrent
+        # skill test must never shut down the embodied Agent's controller.
+        rows, unavailable = [], []
+        for folder in sorted(self.root.iterdir()):
+            if not NAME.fullmatch(folder.name):
+                continue
+            try:
                 head = self._head(folder.name)
                 version = head.get('activeVersion') or head.get('draftVersion')
                 if version:
                     record = self._record(folder.name, version)
                     rows.append({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
                                 | {'description': record['description']})
-            return {'skills': rows, 'contract': 'next(state,memory) -> {action,memory,done?,replan?,reason?}',
-                    'actionTools': list(ACTION_TOOLS), 'engine': ENGINE_PACKAGE + '==' + ENGINE_VERSION}
+            except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
+                unavailable.append({'name': folder.name,
+                                    'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
+        return {'skills': rows, 'unavailable': unavailable,
+                'contract': 'next(state,memory) -> {action,memory,done?,replan?,reason?}',
+                'actionTools': list(ACTION_TOOLS), 'engine': ENGINE_PACKAGE + '==' + ENGINE_VERSION}
 
     def read(self, name, version=None):
         with self._lock():
