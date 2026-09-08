@@ -44,6 +44,7 @@ class FakeQwen:
     def __init__(self):
         self.agents = {TEMPLATE: template()}
         self.mcp = {}
+        self.policies = {}
         self.calls = []
         self.lost_copy = False
         self.lost_task = False
@@ -77,8 +78,11 @@ class FakeQwen:
         if path == '/mcp' and method == 'POST':
             self.mcp[role] = {'key': body['client_key'], **body['client']}
             return deepcopy(self.mcp[role])
+        if path.startswith('/mcp/tools/'):
+            return [{'name': name, 'enabled': True} for name in TOOLS]
         if path.startswith('/mcp/policy/'):
-            return deepcopy(body)
+            if method == 'PUT': self.policies[role] = deepcopy(body) | {'unmanaged_rules_count': 0}
+            return deepcopy(self.policies[role])
         if path.startswith('/mcp/'):
             if method == 'PUT':
                 self.mcp[role].update(body)

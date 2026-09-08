@@ -2,15 +2,19 @@
   "schema": 1,
   "capability": "existing_body_restore_v1",
   "sourceCommit": "33bb7d06f78a3566b5a5d49ef61e0572bd1a399e",
-  "baselineJarSha256": "c86f8e26593624e0071d9e0fe95d5b09ca9c03811ea57a9c4881efd2e829c7ba",
+  "baselineJarSha256": "f93f781342c569124266a046484f5467570c7220473aef7e217d9fc7a71feb4c",
   "actuatorJarSha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea",
   "entrySource": "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java",
   "preimages": {
-    "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java": "eff1b8259d4ce76f46a3e1e4445b4ecd329789e2612c01fc70da981e0edba23c"
+    "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java": "eff1b8259d4ce76f46a3e1e4445b4ecd329789e2612c01fc70da981e0edba23c",
+    "api/common/src/main/java/com/dwinovo/numen/entity/CompanionFactory.java": "92f09b8cd8abda64193abf8d75b12c70fd44164df1090af32755fc79f3d63b38",
+    "api/common/src/main/java/com/dwinovo/numen/entity/Companions.java": "acfd32f1c027808c528937c357c206bd547e56fe285097d36081781932de2ed8",
+    "api/common/src/main/java/com/dwinovo/numen/entity/SafeSpawn.java": "d8e24d8e50bc52b29cf59cb72803ad340633fc8efac600293da6079e42a27d84"
   },
-  "restoreSourceSha256": "d8ab57e80d131b296fc98a9ef797d8a600d0eac9129293e40930b659dda264f3",
+  "restoreSourceSha256": "449e006b44d5a9ea0b43695f89749fb8b53f1176a387cdc62bd2fa26d9b2ac14",
   "classFamilies": [
     "com/dwinovo/numen/core/NumenCoreNeoForge",
     "com/dwinovo/numen/core/entity/ExistingBodyRestore"
-  ]
+  ],
+  "deathRecovery": "exact autonomous Kirito, owner offline, native post-death data, loaded safe overworld spawn, persistent claim, no inventory rollback"
 }

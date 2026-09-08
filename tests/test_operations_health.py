@@ -358,7 +358,7 @@ class OperationsHealth(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', side_effect=read), ExitStack() as stack:
             for name in ('probe_management', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands',
                          'probe_chanting_staff', 'probe_voice_recording', 'probe_voice_boundary_deployment',
-                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing'):
+                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party'):
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             state.pop('operations')
@@ -478,7 +478,7 @@ class OperationsTeamProbe(unittest.TestCase):
     def test_team_runtime_or_behavior_failure_turns_panel_red(self):
         other = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
                  'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
-                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing')
+                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party')
         with ExitStack() as stack:
             for name in other:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
@@ -504,6 +504,8 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
         route = request.full_url.removeprefix('http://127.0.0.1:8088/api')
         role = request.get_header('X-agent-id')
         if route == '/mcp/tools/qd_learning': return [{'name': name, 'enabled': True} for name in TOOL_NAMES]
+        if route == '/mcp': return [{'key': name} for name in
+            (('numen_survival', 'qd_learning') if role == 'qd-survivor' else ('qd_learning',))]
         if route == '/skills': return [{'name': name, 'enabled': True} for name in (*role_skills(role, 'game'), *NATIVE_SKILLS)]
         if route == '/cron/jobs': return [{'spec': managed_job(role, 'game'), 'state': {}}]
         return routes[route]

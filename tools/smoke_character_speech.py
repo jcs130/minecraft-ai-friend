@@ -206,7 +206,7 @@ def validate_build(root, record_path):
     require(record.get('ok') is True and record.get('speech_schema') == 2 and record.get('speech_protocol') == 2,
             'speech_build_protocol_invalid')
     required_tests = {'CaptureFenceTest': 19, 'CaptureIntervalTest': 15, 'SpeechContractTest': 21,
-        'SpeechQueueTest': 21, 'SpeechAudioPlayerContractTest': 8,
+        'SpeechQueueTest': 21, 'SpeechAudioPlayerContractTest': 8, 'SpeechHealthTest': 23,
         'StaffBoundaryRegistrationTest_absent': 3, 'StaffBoundaryRegistrationTest_present': 4}
     results = record.get('tests', {})
     require(all(isinstance(results.get(name), dict) and results[name].get('ok') is True

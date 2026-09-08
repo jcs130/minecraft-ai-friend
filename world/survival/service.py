@@ -120,8 +120,10 @@ def main():
             running = False
         signal.signal(signal.SIGTERM, stop)
         signal.signal(signal.SIGINT, stop)
+        from party import SurvivorParty
         controller = Controller(skills=SkillLibrary(STATE / 'skills'),
-                                perception=WorldPerception(STATE, public_dir='/public'))
+                                perception=WorldPerception(STATE, public_dir='/public'),
+                                party=SurvivorParty() if os.environ.get('PARTY_ENABLED') == '1' else None)
         probe = (QwenConnectionProbe(NativeToolConnection())
                  if os.environ.get('SURVIVOR_QWEN_MODE', 'external') == 'external' else None)
         try:

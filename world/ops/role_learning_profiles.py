@@ -12,6 +12,7 @@ from native_role_capabilities import configure_native, validate_native, validate
 HERE = Path(__file__).resolve().parent
 DRIVER = 'qd_learning'
 SURVIVOR_QPM = 8
+SURVIVOR_MAX_ITERS = 12
 TEXT_ROLES = {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}
 
 
@@ -43,6 +44,10 @@ def role_skills(role, runtime, source=HERE):
     result = manifest['roles'][role] if role in manifest['roles'] else manifest['roles']['qd-maid-dialogue']
     assert isinstance(result, list) and len(set(result)) == len(result) and 'qd-skill-evolution' in result
     assert all(isinstance(name, str) and re.fullmatch(r'qd-[a-z0-9-]{1,70}', name) for name in result)
+    if runtime == 'game':
+        from party_role_capabilities import party_roles
+        if role in party_roles():
+            result = [*result, 'qd-party-cooperation']
     return result
 
 
@@ -87,10 +92,12 @@ def with_learning(agent, role, runtime):
         result['running']['max_iters'] = 3
         result['running']['loop']['iteration'].update(enabled=True, max_iterations=3)
     if runtime == 'game' and role == 'qd-survivor':
-        # Six-step progressive retrieval needs a final model response. The old
-        # QPM4 limit timed out locally before step five; user authorized more
-        # CodingPlan use for working functionality on 2026-09-08.
+        # World observations and tool receipts need room for a final answer.
+        # This is the model loop; the independent body lease still allows six actions.
         result['running']['llm_max_qpm'] = SURVIVOR_QPM
+        result['running']['max_iters'] = SURVIVOR_MAX_ITERS
+        result['running'].setdefault('loop', {}).setdefault('iteration', {}).update(
+            enabled=True, max_iterations=SURVIVOR_MAX_ITERS)
     return configure_native(result, role)
 
 
@@ -106,6 +113,9 @@ def validate_learning_profile(agent, role, runtime):
         assert agent['running']['loop']['iteration']['max_iterations'] == 3
     if runtime == 'game' and role == 'qd-survivor':
         assert agent['running']['llm_max_qpm'] == SURVIVOR_QPM
+        assert agent['running']['max_iters'] == SURVIVOR_MAX_ITERS
+        assert agent['running']['loop']['iteration']['enabled'] is True
+        assert agent['running']['loop']['iteration']['max_iterations'] == SURVIVOR_MAX_ITERS
 
 
 def validate_jobs(value, role, runtime):

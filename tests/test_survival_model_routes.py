@@ -77,13 +77,14 @@ class SurvivorModelRoutesTests(unittest.TestCase):
 
     def test_submission_uses_official_builder_and_seconds_exactly_once(self):
         backend = QwenBackend(self.env)
-        builder = Mock(return_value=('agent', {'session_id': 'turn'}, None))
+        builder = Mock(return_value=('agent', {'session_id': 'life-fixed'}, None))
         backend.api = Mock(return_value={'task_id': 'task-one'})
         with patch.dict(sys.modules, {'qwenpaw.agents.tools.agent_management':
                                       SimpleNamespace(build_agent_chat_request=builder)}):
-            self.assertEqual(backend.submit('turn', 'fixture objective', 570), 'task-one')
-        builder.assert_called_once_with('qd-survivor', 'fixture objective', session_id='turn', from_agent='survival-controller')
-        backend.api.assert_called_once_with('POST', '/console/chat/task', {'session_id': 'turn', 'timeout': 570})
+            self.assertEqual(backend.submit('turn', 'fixture objective', 570,
+                session={'primarySessionId': 'life-fixed', 'userId': 'survival-controller', 'channel': 'console'}), 'task-one')
+        builder.assert_called_once_with('qd-survivor', 'fixture objective', session_id='life-fixed', from_agent='survival-controller')
+        backend.api.assert_called_once_with('POST', '/console/chat/task', {'session_id': 'life-fixed', 'channel': 'console', 'timeout': 570})
 
 
 if __name__ == '__main__':

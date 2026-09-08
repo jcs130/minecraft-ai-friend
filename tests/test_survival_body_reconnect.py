@@ -207,6 +207,43 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'restore_live_identity_conflict')
         self.assertEqual(self.rcon.calls, ['numen_act list'])
 
+    def test_native_death_recovery_can_clear_only_body_dead_after_live_identity_check(self):
+        self.rcon.roster = ONLINE
+        self.gateway.body.update(gameMode='survival', hp=20)
+        record = {'schema':1, **BINDING, 'status':'blocked', 'reason':'body_dead', 'attempts':[self.clock()-120]}
+        write_json(self.restore.path, record)
+        before_control = (self.state/'control.json').read_bytes()
+        result = self.restore.confirm_online(BINDING, self.gateway.body)
+        self.assertEqual(result['status'], 'online')
+        self.assertEqual(result['reason'], 'identity_verified')
+        self.assertEqual(result['attempts'], record['attempts'])
+        self.assertEqual((self.state/'control.json').read_bytes(), before_control)
+        self.assertEqual(self.rcon.calls, ['numen_act list'])
+        self.assertFalse(self.commands())
+
+    def test_death_recovery_does_not_clear_other_blocks_or_unhealthy_body(self):
+        self.rcon.roster = ONLINE
+        for reason in ('registry_identity_mismatch', 'saved_task_requires_review', 'playerdata_missing'):
+            record = {'schema':1, **BINDING, 'status':'blocked', 'reason':reason, 'attempts':[]}
+            write_json(self.restore.path, record)
+            self.assertEqual(self.restore.confirm_online(BINDING, self.gateway.body), record)
+        for body in (None, dict(self.gateway.body, hp=0), dict(self.gateway.body, hp=float('inf')),
+                     dict(self.gateway.body, bodyUuid=OWNER), dict(self.gateway.body, gameMode='creative')):
+            record = {'schema':1, **BINDING, 'status':'blocked', 'reason':'body_dead', 'attempts':[]}
+            write_json(self.restore.path, record)
+            self.assertEqual(self.restore.confirm_online(BINDING, body), record)
+        self.assertFalse(self.rcon.calls)
+
+    def test_dead_roster_absence_or_timeout_does_not_authorize_restore(self):
+        for roster in ('count=0', TimeoutError()):
+            self.rcon.roster = roster
+            record = {'schema':1, **BINDING, 'status':'blocked', 'reason':'body_dead', 'attempts':[]}
+            write_json(self.restore.path, record)
+            result = self.restore.confirm_online(BINDING, self.gateway.body)
+            self.assertEqual(result['status'], 'blocked')
+            self.assertEqual(result['reason'], 'body_dead')
+        self.assertFalse(self.commands())
+
 
 class BodyReconnectControllerTests(unittest.TestCase):
     setUp = fixtures.ControllerTests.setUp

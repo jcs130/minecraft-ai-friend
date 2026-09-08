@@ -953,17 +953,17 @@
     },
     {
       "path": "mods/god-voice-0.1.0.jar",
-      "size": 37896,
-      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
-      "source_sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
+      "size": 41048,
+      "sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99",
+      "source_sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99",
       "source": "client_extension",
       "preserved_existing": false
     },
     {
       "path": "mods/qiandeng-maid-bridge-0.1.0.jar",
-      "size": 27709,
-      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
-      "source_sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
+      "size": 46288,
+      "sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9",
+      "source_sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9",
       "source": "client_extension",
       "preserved_existing": false
     }
@@ -1701,7 +1701,7 @@
       "ids": [
         "godvoice"
       ],
-      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635"
+      "sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99"
     },
     {
       "file": "qiandeng-maid-bridge-0.1.0.jar",
@@ -1709,7 +1709,7 @@
       "ids": [
         "qiandeng_maid_bridge"
       ],
-      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f"
+      "sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9"
     }
   ],
   "excludes_game_binary": true

@@ -28,8 +28,10 @@ def run(args, *, timeout=90, check=True):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-isolated', action='store_true', required=True)
+    parser.add_argument('--companion', action='store_true', help='Verify normal Numen cake adoption and native following instead')
     args = parser.parse_args()
-    del args
+    qa_source = SOURCE / 'qa' / ('CompanionQa.java' if args.companion else 'MaidQa.java')
+    qa_mod = 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
     build = SOURCE / 'build'
     record = json.loads((build / 'build-record.json').read_text('utf8'))
     jar = build / 'qiandeng-maid-bridge-0.1.0.jar'
@@ -63,19 +65,19 @@ def main():
     javac = Path(os.environ.get('JDK21_BIN', r'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin')) / 'javac.exe'
     quote = lambda text: '"' + str(text).replace('\\', '/') + '"'
     (folder / 'javac.args').write_text('\n'.join(['-proc:none', '--release', '21', '-encoding', 'UTF-8', '-cp', quote(cp),
-        '-d', quote(classes), quote(SOURCE / 'qa/MaidQa.java')]), encoding='utf8')
+        '-d', quote(classes), quote(qa_source)]), encoding='utf8')
     run([str(javac), '@' + str(folder / 'javac.args')])
     with zipfile.ZipFile(data / 'mods/qiandeng-maid-qa.jar', 'w', zipfile.ZIP_DEFLATED) as output:
         for entry in classes.rglob('*.class'):
             output.write(entry, entry.relative_to(classes).as_posix())
-        output.writestr('META-INF/neoforge.mods.toml', 'modLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n[[mods]]\nmodId="qiandeng_maid_qa"\nversion="0.0.1"\ndisplayName="Isolated QA fixture"\n')
+        output.writestr('META-INF/neoforge.mods.toml', 'modLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n[[mods]]\nmodId="' + qa_mod + '"\nversion="0.0.1"\ndisplayName="Isolated QA fixture"\n')
     key = secrets.token_hex(32)
     (data / 'config/qiandeng_maid_bridge').mkdir(parents=True)
     (data / 'config/qiandeng_maid_bridge/identity.key').write_text(key, 'ascii')
     (fake / 'identity.key').write_text(key, 'ascii')
     sites = data / 'config/touhou_little_maid/sites'; sites.mkdir(parents=True)
     (sites / 'llm.json').write_text(json.dumps({name: {'id': name, 'api_type': 'qiandeng-qwen',
-        'enabled': True, 'icon': 'touhou_little_maid:textures/gui/ai_chat/openai.png',
+        'enabled': not (args.companion and name == 'deepseek'), 'icon': 'touhou_little_maid:textures/gui/ai_chat/openai.png',
         'url': 'http://npc:8091/v1/maid/chat/completions', 'secret_key': '', 'headers': {},
         'models': ['qd-maid-dialogue']} for name in ('codingplan', 'deepseek')}), 'utf8')
     (sites / 'tts.json').write_text('{}', 'utf8')
@@ -140,69 +142,74 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         else: raise RuntimeError('isolated_mc_start_timeout')
         print(json.dumps({'stage': 'server_ready'}), flush=True)
         checks['real-neoforge-start'] = True
-        setup = response('qdmaidqa setup', 'QD_MAID_QA '); maids = setup['maids']; details['setup'] = setup
-        checks['two-owned-isolated-bodies'] = len(maids) == 2 and all(m['ownerOnline'] for m in maids)
-        checks['native-deepseek-site-codec'] = all(m['siteId'] == 'deepseek' and m['siteClass'] == 'dev.qiandeng.maid.BridgeSite' for m in maids)
-        checks['native-persona-fixture'] = all(m['nativeSetting'] for m in maids)
-        listed = response('qdmaid list 0'); details['list'] = listed
-        checks['loaded-identity-discovery'] = {m['maidUuid'] for m in listed['maids']} == {m['maidUuid'] for m in maids}
-        observed = [invoke(m, 'identity') for m in maids]; details['identities'] = observed
-        checks['native-identity'] = all(r['ok'] and r['identity']['ownerUuid'] == m['ownerUuid'] for r, m in zip(observed, maids))
-        checks['native-persona-diagnostic'] = all(r['state'].get('nativeChatSetting') is True for r in observed) and all(m.get('nativeChatSetting') is True for m in listed['maids'])
-        context = invoke(maids[0], 'context', {'category': observed[0]['contextCategories'][0]}); details['context'] = context
-        checks['native-context'] = context['ok'] and isinstance(context['lines'], list) and context['trustedInstructions'] is False
-        catalog = invoke(maids[0], 'task_catalog'); details['catalog'] = catalog
-        checks['native-task-catalog'] = catalog['ok'] and len(catalog['tasks']) > 0
-        denied = invoke(maids[0], 'sit', {'sit': True}, owner=maids[1]['ownerUuid']); details['crossOwner'] = denied
-        checks['cross-owner-rejected'] = denied['ok'] is False and denied['code'] == 'owner_changed'
-        request_id = uuid.uuid4().hex
-        applied = invoke(maids[0], 'sit', {'sit': True}, request_id)
-        restored = invoke(maids[0], 'sit', {'sit': False})
-        replay = invoke(maids[0], 'sit', {'sit': True}, request_id)
-        final = invoke(maids[0], 'identity')
-        details['sit'] = {'applied': applied, 'restored': restored, 'replay': replay, 'final': final}
-        checks['native-state-switch-and-restore'] = applied['ok'] and applied['after']['sitting'] and restored['ok'] and not restored['after']['sitting']
-        checks['durable-idempotence-no-reapply'] = replay.get('replayedReceipt') is True and not final['state']['sitting']
-        conflict = invoke(maids[0], 'sit', {'sit': False}, request_id); details['conflict'] = conflict
-        checks['request-id-conflict'] = conflict['code'] == 'request_id_conflict'
-        before = final['state']
-        changes = {}
-        for op, args, restore in (
-            ('follow', {'follow': not before['following']}, {'follow': before['following']}),
-            ('schedule', {'schedule': 'NIGHT' if before['schedule'] != 'NIGHT' else 'DAY'}, {'schedule': before['schedule']}),
-            ('work', {'taskId': before['taskId']}, {'taskId': before['taskId']}),
-        ):
-            changes[op] = {'applied': invoke(maids[0], op, args), 'restored': invoke(maids[0], op, restore)}
-        details['otherNativeStates'] = changes
-        checks['native-follow-schedule-work'] = all(v['applied']['ok'] and v['restored']['ok'] and v['applied']['workCompleted'] is False for v in changes.values())
-        details['chatSubmit'] = response('qdmaidqa chat', 'QD_MAID_QA ')
-        deadline = time.monotonic() + 80
-        while time.monotonic() < deadline:
-            status = response('qdmaidqa status', 'QD_MAID_QA ')
-            if all(any('QA_REPLY_' in text for text in m['assistantHistory']) for m in status['maids']): break
-            time.sleep(2)
-        details['chatStatus'] = status
-        requests = [json.loads(line) for line in (fake / 'requests.jsonl').read_text('utf8').splitlines()] if (fake / 'requests.jsonl').exists() else []
-        details['signedRequestCount'] = len(requests)
-        checks['real-native-chat-callback'] = len(requests) == 2 and all(any('QA_REPLY_' + m['maidUuid'] in text for text in m['assistantHistory']) for m in status['maids'])
-        checks['signed-two-identity-isolation'] = len(requests) == 2 and all(r['validSignature'] and r['toolsAbsent'] for r in requests) and {r['identity']['maidUuid'] for r in requests} == {m['maidUuid'] for m in maids}
-        command('save-all flush')
-        checks['isolated-save-written'] = (data / 'qa-world/level.dat').exists()
-        run([*base, 'stop', '-t', '60', 'mc'], timeout=100)
-        run([*base, 'start', 'mc'], timeout=60)
-        deadline = time.monotonic() + 180
-        while time.monotonic() < deadline:
-            try:
-                after_restart = invoke(maids[0], 'identity')
-                if after_restart.get('ok'): break
-            except (RuntimeError, ValueError): pass
-            time.sleep(5)
-        else: raise RuntimeError('isolated_restart_identity_timeout')
-        details['afterRestart'] = after_restart
-        checks['save-restart-identity-preserved'] = after_restart['identity']['maidUuid'] == maids[0]['maidUuid'] and after_restart['identity']['ownerUuid'] == maids[0]['ownerUuid']
-        restart_replay = invoke(maids[0], 'sit', {'sit': True}, request_id)
-        still_restored = invoke(maids[0], 'identity')
-        checks['save-restart-idempotence-preserved'] = restart_replay.get('replayedReceipt') is True and not still_restored['state']['sitting']
+        if args.companion:
+            from smoke_maid_companion_checks import check_companion
+            check_companion(response=response, command=command, invoke=invoke, run=run,
+                base=base, data=data, fake=fake, checks=checks, details=details)
+        else:
+            setup = response('qdmaidqa setup', 'QD_MAID_QA '); maids = setup['maids']; details['setup'] = setup
+            checks['two-owned-isolated-bodies'] = len(maids) == 2 and all(m['ownerOnline'] for m in maids)
+            checks['native-deepseek-site-codec'] = all(m['siteId'] == 'deepseek' and m['siteClass'] == 'dev.qiandeng.maid.BridgeSite' for m in maids)
+            checks['native-persona-fixture'] = all(m['nativeSetting'] for m in maids)
+            listed = response('qdmaid list 0'); details['list'] = listed
+            checks['loaded-identity-discovery'] = {m['maidUuid'] for m in listed['maids']} == {m['maidUuid'] for m in maids}
+            observed = [invoke(m, 'identity') for m in maids]; details['identities'] = observed
+            checks['native-identity'] = all(r['ok'] and r['identity']['ownerUuid'] == m['ownerUuid'] for r, m in zip(observed, maids))
+            checks['native-persona-diagnostic'] = all(r['state'].get('nativeChatSetting') is True for r in observed) and all(m.get('nativeChatSetting') is True for m in listed['maids'])
+            context = invoke(maids[0], 'context', {'category': observed[0]['contextCategories'][0]}); details['context'] = context
+            checks['native-context'] = context['ok'] and isinstance(context['lines'], list) and context['trustedInstructions'] is False
+            catalog = invoke(maids[0], 'task_catalog'); details['catalog'] = catalog
+            checks['native-task-catalog'] = catalog['ok'] and len(catalog['tasks']) > 0
+            denied = invoke(maids[0], 'sit', {'sit': True}, owner=maids[1]['ownerUuid']); details['crossOwner'] = denied
+            checks['cross-owner-rejected'] = denied['ok'] is False and denied['code'] == 'owner_changed'
+            request_id = uuid.uuid4().hex
+            applied = invoke(maids[0], 'sit', {'sit': True}, request_id)
+            restored = invoke(maids[0], 'sit', {'sit': False})
+            replay = invoke(maids[0], 'sit', {'sit': True}, request_id)
+            final = invoke(maids[0], 'identity')
+            details['sit'] = {'applied': applied, 'restored': restored, 'replay': replay, 'final': final}
+            checks['native-state-switch-and-restore'] = applied['ok'] and applied['after']['sitting'] and restored['ok'] and not restored['after']['sitting']
+            checks['durable-idempotence-no-reapply'] = replay.get('replayedReceipt') is True and not final['state']['sitting']
+            conflict = invoke(maids[0], 'sit', {'sit': False}, request_id); details['conflict'] = conflict
+            checks['request-id-conflict'] = conflict['code'] == 'request_id_conflict'
+            before = final['state']
+            changes = {}
+            for op, args, restore in (
+                ('follow', {'follow': not before['following']}, {'follow': before['following']}),
+                ('schedule', {'schedule': 'NIGHT' if before['schedule'] != 'NIGHT' else 'DAY'}, {'schedule': before['schedule']}),
+                ('work', {'taskId': before['taskId']}, {'taskId': before['taskId']}),
+            ):
+                changes[op] = {'applied': invoke(maids[0], op, args), 'restored': invoke(maids[0], op, restore)}
+            details['otherNativeStates'] = changes
+            checks['native-follow-schedule-work'] = all(v['applied']['ok'] and v['restored']['ok'] and v['applied']['workCompleted'] is False for v in changes.values())
+            details['chatSubmit'] = response('qdmaidqa chat', 'QD_MAID_QA ')
+            deadline = time.monotonic() + 80
+            while time.monotonic() < deadline:
+                status = response('qdmaidqa status', 'QD_MAID_QA ')
+                if all(any('QA_REPLY_' in text for text in m['assistantHistory']) for m in status['maids']): break
+                time.sleep(2)
+            details['chatStatus'] = status
+            requests = [json.loads(line) for line in (fake / 'requests.jsonl').read_text('utf8').splitlines()] if (fake / 'requests.jsonl').exists() else []
+            details['signedRequestCount'] = len(requests)
+            checks['real-native-chat-callback'] = len(requests) == 2 and all(any('QA_REPLY_' + m['maidUuid'] in text for text in m['assistantHistory']) for m in status['maids'])
+            checks['signed-two-identity-isolation'] = len(requests) == 2 and all(r['validSignature'] and r['toolsAbsent'] for r in requests) and {r['identity']['maidUuid'] for r in requests} == {m['maidUuid'] for m in maids}
+            command('save-all flush')
+            checks['isolated-save-written'] = (data / 'qa-world/level.dat').exists()
+            run([*base, 'stop', '-t', '60', 'mc'], timeout=100)
+            run([*base, 'start', 'mc'], timeout=60)
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                try:
+                    after_restart = invoke(maids[0], 'identity')
+                    if after_restart.get('ok'): break
+                except (RuntimeError, ValueError): pass
+                time.sleep(5)
+            else: raise RuntimeError('isolated_restart_identity_timeout')
+            details['afterRestart'] = after_restart
+            checks['save-restart-identity-preserved'] = after_restart['identity']['maidUuid'] == maids[0]['maidUuid'] and after_restart['identity']['ownerUuid'] == maids[0]['ownerUuid']
+            restart_replay = invoke(maids[0], 'sit', {'sit': True}, request_id)
+            still_restored = invoke(maids[0], 'identity')
+            checks['save-restart-idempotence-preserved'] = restart_replay.get('replayedReceipt') is True and not still_restored['state']['sitting']
     except Exception as error:
         details['failure'] = str(error)[:4000]
         checks['execution-completed'] = False
@@ -213,7 +220,7 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
     report = {'ok': all(checks.values()), 'checks': checks, 'details': details, 'jarSha256': record['sha256'],
         'project': project, 'folder': str(folder), 'modelCalls': 0, 'ttsCalls': 0, 'productionMutations': 0,
         'liveAcceptanceScope': 'fresh isolated world, actual installed mods and native callbacks, deterministic fake NPC; no physical client or audio',
-        'fixtureSha256': hashlib.sha256((SOURCE / 'qa/MaidQa.java').read_bytes()).hexdigest(),
+        'fixtureSha256': hashlib.sha256(qa_source.read_bytes()).hexdigest(),
         'toolSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     (folder / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', 'utf8')
     print(json.dumps({'ok': report['ok'], 'checks': checks, 'report': str(folder / 'result.json')}), flush=True)

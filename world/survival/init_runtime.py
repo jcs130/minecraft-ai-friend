@@ -15,6 +15,8 @@ SOURCE = Path(__file__).resolve().parent
 PROJECT = 'qiandengji-survivor'
 ROLE = 'qd-survivor'
 DRIVER = 'numen_survival'
+MODEL_MAX_ITERS = 12
+MODEL_QPM = 8
 
 
 def write(path, value):
@@ -24,15 +26,15 @@ def write(path, value):
 
 
 def tune(running):
-    running.max_iters = 6
+    running.max_iters = MODEL_MAX_ITERS
     running.loop.iteration.enabled = True
-    running.loop.iteration.max_iterations = 6
+    running.loop.iteration.max_iterations = MODEL_MAX_ITERS
     running.max_input_length = 16384
     running.llm_retry_enabled = False
     # QwenPaw's schema requires >= 1 even when retry execution is disabled.
     running.llm_max_retries = 1
     running.llm_max_concurrent = 1
-    running.llm_max_qpm = 4
+    running.llm_max_qpm = MODEL_QPM
     running.llm_acquire_timeout = 30
     running.light_context_config.strategy = 'native'
     running.light_context_config.visual_compact_config.enabled = False

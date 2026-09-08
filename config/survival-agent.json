@@ -12,7 +12,7 @@
   "autonomous": true,
   "autonomyReviewSeconds": 1800,
   "decisionCooldownSeconds": 180,
-  "decisionsPerDay": 48,
+  "decisionsPerDay": 96,
   "taskTimeoutSeconds": 240,
   "maxSkillSteps": 32,
   "maxSkillSeconds": 900,

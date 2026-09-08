@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { freshness, projectHealth, projectOperations, projectSurvivor } from './read-model.mjs';
+import { freshness, projectHealth, projectOperations, projectSurvivor, projectParty } from './read-model.mjs';
 import { createManagementApi } from './management-api.mjs';
 
 const publicDir = fileURLToPath(new URL('./public/', import.meta.url));
@@ -58,8 +58,9 @@ export function createPanelServer({ stateDir, publicOrigin = 'http://127.0.0.1:9
         mode: management.token?.length>=32 && management.authMode==='local' ? 'local-management'
           : management.passwordHash && management.token ? 'authenticated-management' : 'read-only' });
       if (url.pathname === '/api/state') {
-        const [world, health, operations, survivor] = await Promise.all([
-          readSnapshot(stateDir, 'world.json'), readSnapshot(stateDir, 'health.json'), readSnapshot(stateDir, 'operations.json'), readSnapshot(stateDir, 'survivor.json')]);
+        const [world, health, operations, survivor, party] = await Promise.all([
+          readSnapshot(stateDir, 'world.json'), readSnapshot(stateDir, 'health.json'), readSnapshot(stateDir, 'operations.json'),
+          readSnapshot(stateDir, 'survivor.json'), readSnapshot(stateDir, 'party.json')]);
         const valid = world?.schema === 1 && typeof world.generatedAt === 'string' && world.skills && world.world && world.guild && world.npc;
         const snapshot = valid ? world : { schema: 1, available: false, generatedAt: null, world: { available: false, observedPlayers: [] },
           agent: { id: 'unknown', label: '等待运行信息', capabilities: {} }, npc: { available: false, threads: [] },
@@ -77,7 +78,7 @@ export function createPanelServer({ stateDir, publicOrigin = 'http://127.0.0.1:9
         if (valid && guildStale) warnings.push('工会轮询或任务板已过期、不可用；以下为上次记录');
         return send(res, 200, { ...snapshot, ...status, world: { ...snapshot.world, ...worldStatus },
           npc: { ...snapshot.npc, ...npcStatus }, guild: { ...snapshot.guild, stale: guildStale, pollingOk: !guildStatus.stale && !snapshot.guild.pollingError },
-          health: projectHealth(health), operations: projectOperations(operations), survivor: projectSurvivor(survivor), links, warnings });
+          health: projectHealth(health), operations: projectOperations(operations), survivor: projectSurvivor(survivor), party: projectParty(party), links, warnings });
       }
       if (assets.has(url.pathname)) {
         const [filename, contentType] = assets.get(url.pathname);

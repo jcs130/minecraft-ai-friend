@@ -65,11 +65,27 @@ class RoleLearningProfiles(unittest.TestCase):
     def test_survivor_retrieval_burst_does_not_change_concurrency_or_retry_policy(self):
         agent = {'id': 'qd-survivor', 'mcp': {'clients': {}}, 'active_model': {'model': 'current-choice'},
                  'running': {'llm_max_qpm': 4, 'llm_max_concurrent': 1, 'llm_retry_enabled': False,
-                             'max_iters': 6, 'custom_setting': 'preserved'}}
+                             'max_iters': 6, 'custom_setting': 'preserved',
+                             'loop': {'iteration': {'enabled': True, 'max_iterations': 6},
+                                      'other_loop_setting': 'preserved'}}}
         updated = contract.with_learning(agent, 'qd-survivor', 'game')
-        self.assertEqual(updated['running'], {**agent['running'], 'llm_max_qpm': 8})
+        expected = deepcopy(agent['running'])
+        expected.update(llm_max_qpm=8, max_iters=12)
+        expected['loop']['iteration']['max_iterations'] = 12
+        self.assertEqual(updated['running'], expected)
+        self.assertEqual(agent['running']['max_iters'], 6)
         self.assertEqual(updated['active_model'], agent['active_model'])
         contract.validate_learning_profile(updated, 'qd-survivor', 'game')
+
+    def test_survivor_contract_rejects_partial_or_disabled_iteration_update(self):
+        agent = contract.with_learning({'id': 'qd-survivor', 'running': {}, 'mcp': {'clients': {}}},
+                                       'qd-survivor', 'game')
+        for field in ('max_iters', 'max_iterations', 'enabled'):
+            changed = deepcopy(agent)
+            target = changed['running'] if field == 'max_iters' else changed['running']['loop']['iteration']
+            target[field] = False if field == 'enabled' else 6
+            with self.subTest(field=field), self.assertRaises(AssertionError):
+                contract.validate_learning_profile(changed, 'qd-survivor', 'game')
 
     def test_weekly_only_preserves_optout_and_rejects_unmanaged_or_delivery_changes(self):
         original = managed_job(self.role, 'operations')

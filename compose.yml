@@ -174,6 +174,10 @@ services:
       MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
       MAID_IDENTITY_KEY_FILE: /run/secrets/maid-identity
       MAID_REGISTRY_DIR: /mcdata/village/maid-agents
+      PARTY_ENABLED: "1"
+      PARTY_STATE_DIR: /mcdata/village/party
+      PARTY_PUBLIC_FILE: /party-public/party.json
+      GV_BASE: /godvoice
       QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     volumes:
@@ -187,6 +191,8 @@ services:
       - ./server/world-data:/world-data
       - ./server/mcdata:/mcdata
       - ./server/mc/logs:/mclogs:ro
+      - ./server/panel-state:/party-public
+      - ./server/mc/data/godvoice:/godvoice
     depends_on:
       mc:
         condition: service_healthy
@@ -232,6 +238,7 @@ services:
       QWENPAW_AUTH_ENABLED: "0"
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /party-roles/roles.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -240,6 +247,7 @@ services:
       - ./world/survival:/survival:ro
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
       - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
+      - ./server/mcdata/village/party/public:/party-roles:ro
     healthcheck:
       test: ["CMD", "python", "/ops/qwenpaw_health.py"]
       interval: 30s
@@ -282,7 +290,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd7
+    image: qiandengji-survivor:2.2.0-qd11
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
@@ -299,6 +307,8 @@ services:
       QWENPAW_KEYRING_ACCOUNT: qiandengji-survivor
       QWENPAW_AUTH_ENABLED: "0"
       SURVIVOR_QWEN_MODE: external
+      PARTY_ENABLED: "1"
+      PARTY_STATE_DIR: /party-state
       QWENPAW_API_URL: http://qwenpaw:8088/api
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
@@ -310,6 +320,9 @@ services:
       MC_RCON_SECRET: /run/secrets/rcon
     volumes:
       - ./server/survival-agent-state:/state
+      - ./server/mcdata/village/party:/party-state
+      - ./world/sidecar:/party-code:ro
+      - ./world/ops:/ops:ro
       - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
       - ./server/panel-state:/public
       - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro

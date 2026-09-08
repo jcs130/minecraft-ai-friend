@@ -62,7 +62,7 @@ def main():
         tests = classes/'tests'
         tests.mkdir()
         pure_sources = [HERE/'dev/god/godvoice'/name for name in ('CaptureInterval.java', 'CaptureFence.java',
-            'SpeechLane.java', 'SpeechFrames.java', 'SpeechJob.java', 'SpeechReceipts.java')]
+            'SpeechLane.java', 'SpeechFrames.java', 'SpeechJob.java', 'SpeechReceipts.java', 'SpeechHealth.java')]
         pure_cp = os.pathsep.join(str(path) for path in dependencies if path.name.startswith('gson-'))
         assert pure_cp, 'Installed Gson required for speech disk-contract tests'
         test_sources = sorted((HERE/'tests').glob('*.java'))

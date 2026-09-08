@@ -47,7 +47,9 @@ class NativeRcon:
         self.password_file = Path(password_file or os.environ['MC_RCON_PASSWORD_FILE'])
 
     def __call__(self, command):
-        if not isinstance(command, str) or not command.startswith(('qdmaid invoke ', 'qdmaid list ')) or len(command) > 1500:
+        if (not isinstance(command, str) or not command.startswith(
+                ('qdmaid invoke ', 'qdmaid list ', 'qdmaid party_say ', 'qdmaid party_speech_status '))
+                or len(command) > 1500 or any(c in command for c in ('\n', '\r', '\0'))):
             raise ValueError('maid_command_not_allowed')
         password = self.password_file.read_text(encoding='utf-8-sig').strip()
         def packet(rid, kind, text):

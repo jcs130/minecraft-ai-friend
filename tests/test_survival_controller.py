@@ -30,8 +30,9 @@ class FakeBackend:
         self.cancel_error = None
         self.cancel_reply = {'stopped': True}
 
-    def submit(self, turn_id, prompt, timeout):
-        self.submitted.append({'turnId': turn_id, 'prompt': prompt, 'timeout': timeout})
+    def submit(self, turn_id, prompt, timeout, *, session, request_context=None):
+        self.submitted.append({'turnId': turn_id, 'prompt': prompt, 'timeout': timeout,
+                               'session': copy.deepcopy(session), 'requestContext': request_context})
         if self.on_submit:
             self.on_submit(turn_id, prompt, timeout)
         return 'native-task-' + str(len(self.submitted))
@@ -76,14 +77,14 @@ class FakeGateway:
         if not 64 <= position['x'] <= 160 or not 64 <= position['z'] <= 160:
             raise GatewayError('outside_work_area')
 
-    def open_lease(self, turn_id, expires_at):
+    def open_lease(self, turn_id, expires_at, action_limit=1):
         if read_json(self.state / 'control.json').get('enabled') is not True:
             raise GatewayError('autonomy_disabled')
         if (self.state / 'unknown.json').exists():
             raise GatewayError('outcome_unknown')
         self.opened.append(turn_id)
         write_json(self.state / 'lease.json', {'schema': 1, 'turnId': turn_id, 'status': 'open',
-                   'expiresAt': expires_at, 'actionLimit': 1, 'actionsUsed': 0})
+                   'expiresAt': expires_at, 'actionLimit': action_limit, 'actionsUsed': 0})
 
     def close_lease(self, blocking=False):
         self.closed.append(blocking)
@@ -198,10 +199,11 @@ class ControllerTests(unittest.TestCase):
     def test_restart_with_active_task_never_submits_again(self):
         self.controller.tick()
         restarted = self.create()
-        self.assertEqual(restarted.data['pauseReason'], 'interrupted_model_task')
+        self.assertIsNone(restarted.data.get('pauseReason'))
         restarted.tick()
         self.assertEqual(len(self.backend.submitted), 1)
-        self.assertEqual(len(self.backend.cancelled), 1)
+        self.assertEqual(len(self.backend.cancelled), 0)
+        self.assertEqual(self.backend.polled, ['native-task-1'])
         self.assertEqual(len(restarted.data['decisions']), 1)
 
     def test_dispatch_crash_preserves_advanced_memory_and_never_replays(self):
@@ -243,6 +245,49 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(self.backend.cancelled), 1)
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_transient_observation_keeps_existing_task_then_recovers_without_resubmit(self):
+        self.controller.tick()
+        active = copy.deepcopy(self.controller.data['active'])
+        healthy = copy.deepcopy(self.gateway.body)
+        self.gateway.body = {'ok': False, 'online': None, 'code': 'observation_unavailable', 'errorType': 'TimeoutError'}
+        self.controller.tick()
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(self.controller.data['status'], 'observation_wait')
+        self.assertEqual(self.controller.data['active']['taskId'], active['taskId'])
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.actions)
+        self.assertFalse((self.state / 'body-reconnect.json').exists())
+        self.gateway.body = healthy
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [
+            {'role': 'assistant', 'type': 'message', 'status': 'completed',
+             'content': [{'type': 'text', 'text': 'Observed recovery.'}]}]}}
+        self.controller.tick()
+        self.assertIsNone(self.controller.data['active'])
+        self.assertTrue(self.controller.data['lastDecision']['completed'])
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertEqual(len(self.controller.data['decisions']), 1)
+
+    def test_unobservable_body_without_task_never_starts_restore_or_model(self):
+        self.gateway.body = {'ok': False, 'online': None, 'code': 'observation_unavailable'}
+        self.controller.tick()
+        self.assertEqual(self.controller.data['status'], 'observation_wait')
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.gateway.actions)
+        self.assertFalse((self.state / 'body-reconnect.json').exists())
+
+    def test_unknown_action_still_blocks_when_body_read_is_unavailable(self):
+        self.controller.tick()
+        self.write('unknown.json', {'schema': 1, 'turnId': self.controller.data['active']['turnId']})
+        self.gateway.body = {'ok': False, 'online': None, 'code': 'observation_unavailable'}
+        self.backend.cancel_reply = {'stopped': False, 'waitingForTerminal': True}
+        self.controller.tick()
+        self.assertEqual(self.controller.data['pauseReason'], 'action_outcome_unknown')
+        self.assertFalse(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
+        self.assertTrue((self.state / 'unknown.json').exists())
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertFalse(self.gateway.actions)
 
     def test_stop_refreshes_body_instead_of_trusting_previous_idle_snapshot(self):
         self.controller.last_body = copy.deepcopy(self.gateway.body)
@@ -376,7 +421,7 @@ class ControllerTests(unittest.TestCase):
     def finish_no_action_decision(self):
         self.controller.tick()
         self.assertIsNotNone(self.controller.data['active'])
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         self.controller.tick()
         self.assertIsNone(self.controller.data['active'])
         self.assertFalse(self.controller.data['lastDecision']['actions'])
@@ -443,7 +488,7 @@ class ControllerTests(unittest.TestCase):
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)
         self.write('control.json', {'schema': 1, 'enabled': True, 'mission': 'New mission during thinking'})
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)
         self.clock.now += 121
@@ -480,7 +525,7 @@ class ControllerTests(unittest.TestCase):
         self.clock.now += 121
         restarted.tick()
         self.assertEqual(len(self.backend.submitted), 2)
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         restarted.tick()
         restarted.pause('operator_pause_again')
         again = self.create()
@@ -668,7 +713,7 @@ class ControllerTests(unittest.TestCase):
         submit_goal(self.state, 'Use the new exploration objective', clock=self.clock)
         self.controller.tick()
         self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'pending')
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         self.controller.tick()
         self.controller.tick()
         self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'cancelled')
@@ -833,7 +878,7 @@ class ControllerTests(unittest.TestCase):
         self.controller.perception = perception
         self.controller.tick()
         perception.pending.append('quest-2')
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         self.controller.tick()
         self.assertEqual(perception.acked, ['chat-1'])
         self.assertEqual(perception.pending, ['quest-2'])

@@ -3,10 +3,10 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/sidecar'))
-from qwen_tasks import BASE, ROLES, QwenTasks, final_text, read_json, write_json
+from qwen_tasks import BASE, ROLES, LIMITS, QwenTasks, final_text, read_json, write_json
 
 
 def completed(text='完成'):
@@ -46,6 +46,19 @@ class NativeTaskTests(unittest.TestCase):
             self.client.submit('guild_quest', '2026-09-09', 'Changed prompt')
         self.assertEqual(len(self.calls), 2)
 
+    def test_native_mcp_readiness_list_is_accepted_but_task_shape_stays_strict(self):
+        token = self.root / 'fixture-token'
+        token.write_text('fixture-only-not-a-production-token', encoding='ascii')
+        client = QwenTasks(self.root / 'http-fixture', self.routes, token=token)
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b'[{"name":"identity","enabled":true}]'
+        opener = Mock(); opener.open.return_value = response
+        with patch('qwen_tasks.urllib.request.build_opener', return_value=opener):
+            self.assertEqual(client._http('GET', '/mcp/tools/maid_native', 'fixture'), [{'name': 'identity', 'enabled': True}])
+            with self.assertRaisesRegex(ValueError, 'qwen_response_invalid'):
+                client._http('GET', '/console/chat/task/task-012345abcdef', 'fixture')
+
     def test_uncertain_submission_reserved_before_io_and_never_replayed_after_restart(self):
         self.error = OSError('lost reply')
         result = self.client.submit('guild_quest', 'tomorrow', 'q')
@@ -70,7 +83,7 @@ class NativeTaskTests(unittest.TestCase):
         self.assertEqual(self.client.submit('guild_quest', 'day', 'q')['status'], 'submitted')
 
     def test_dialogue_and_maid_budget_counts_all_subjects_within_each_purpose(self):
-        for purpose, cap, interval in [('npc_dialogue',4,300), ('maid_dialogue',12,60)]:
+        for purpose, cap, interval in [('npc_dialogue',4,300), ('maid_dialogue',24,60)]:
             for i in range(cap):
                 row = self.client.submit(purpose, 'different-npc-' + str(i), 'q')
                 self.assertEqual(row['status'], 'submitted')
@@ -79,6 +92,25 @@ class NativeTaskTests(unittest.TestCase):
                     self.assertEqual(self.client.submit(purpose, 'too-soon', 'q')['status'], 'budget_blocked')
                 self.now += interval
             self.assertEqual(self.client.submit(purpose, 'extra', 'q')['status'], 'budget_blocked')
+
+    def test_maid_shared_24_includes_failed_tasks_across_independent_characters(self):
+        from types import SimpleNamespace
+        bindings = {name: {'agentId': 'role-' + name, 'sessionId': 'life-' + name} for name in ('alice', 'bob')}
+        self.client.maid_registry = SimpleNamespace(resolve=lambda maid, owner: bindings[maid])
+        self.assertEqual(LIMITS['maid_dialogue'], (24, 60))
+        for i in range(24):
+            maid = 'alice' if i % 2 else 'bob'
+            key = 'individual-' + str(i)
+            row = self.client.submit('maid_dialogue', key, 'q', maid_uuid=maid, owner_uuid='fixture-owner')
+            self.assertEqual(row['status'], 'submitted')
+            self.response = completed() if i % 2 else {'status': 'finished', 'result': {'status': 'failed', 'output': []}}
+            done = self.client.poll('maid_dialogue', key, maid_uuid=maid, owner_uuid='fixture-owner')
+            self.assertEqual(done['status'], 'completed' if i % 2 else 'failed')
+            self.now += 60
+        self.assertEqual(self.client.submit('maid_dialogue', 'extra', 'q', maid_uuid='alice',
+                         owner_uuid='fixture-owner')['status'], 'budget_blocked')
+        self.assertEqual(len(read_json(self.client.root / 'budget.json')), 24)
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 24)
 
     def test_bad_routes_and_arbitrary_purposes_never_touch_network(self):
         for changes in ({'apiUrl': 'http://evil/v1'}, {'agentId':'mc-god'}, {'runtime':'host'}):
@@ -102,6 +134,30 @@ class NativeTaskTests(unittest.TestCase):
             value = completed(); value['result']['output'][0].update(changes)
             self.assertIsNone(final_text(value))
         self.assertIsNone(final_text(completed('x' * 16001)))
+
+    def test_native_iteration_sentinel_is_failed_without_fallback_or_new_post(self):
+        for limit in (4, 6, 12):
+            value = completed('Earlier tool narration is not a final answer.')
+            value['result']['metadata'] = None
+            sentinel = completed('Max iterations (' + str(limit) + ') reached')['result']['output'][0]
+            sentinel['metadata'] = None
+            value['result']['output'].append(sentinel)
+            self.assertIsNone(final_text(value))
+        self.client.submit('maid_dialogue', 'limit-case', 'fixture input')
+        self.response = value
+        done = self.client.poll('maid_dialogue', 'limit-case')
+        self.assertEqual(done['status'], 'failed')
+        self.assertNotIn('text', done)
+        self.client.submit('maid_dialogue', 'limit-case', 'fixture input')
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
+        self.assertEqual(len(read_json(self.client.root / 'budget.json')), 1)
+
+    def test_empty_last_native_message_does_not_reuse_earlier_text(self):
+        value = completed('Earlier narration.')
+        value['result']['output'].extend(completed('')['result']['output'])
+        self.assertIsNone(final_text(value))
+        self.assertEqual(final_text(completed('The log says Max iterations (6) reached; I will wait.')),
+                         'The log says Max iterations (6) reached; I will wait.')
 
     def test_terminal_and_waiting_native_states_are_distinct(self):
         for status in ('failed', 'cancelled', 'canceled', 'error', 'timeout', 'timed_out'):

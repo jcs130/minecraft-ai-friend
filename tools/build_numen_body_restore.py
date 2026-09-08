@@ -1,4 +1,4 @@
-"""Compile exact-identity reconnect onto the verified local Numen fork; never deploy."""
+"""Compile exact-identity reconnect/death recovery onto the verified local Numen fork; never deploy."""
 import argparse
 import importlib.util
 import json
@@ -24,7 +24,7 @@ def main():
     args = parser.parse_args()
     manifest = json.loads((DIRECTORY/'restore-existing-v1.json').read_text(encoding='utf8'))
     if common.sha(args.baseline_jar.read_bytes()) != manifest['baselineJarSha256']:
-        raise SystemExit('Exact strict-arrival local Numen baseline required')
+        raise SystemExit('Exact manifest-locked local Numen baseline required; never replace another fork')
     if common.sha((ROOT/'server/mc/mods/numen_act-neoforge-1.21.1-0.1.1.jar').read_bytes()) != manifest['actuatorJarSha256']:
         raise SystemExit('Actuator changed; compatibility audit required')
     head = subprocess.check_output(['git', '-C', str(args.source), 'rev-parse', 'HEAD'], text=True).strip()

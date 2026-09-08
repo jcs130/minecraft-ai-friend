@@ -10,7 +10,7 @@
 
 离线编译、codec 测试不证明实机注册、正常进服、回调/TTS 或原生工作已验收。`python tools/smoke_maid_bridge.py --run-isolated` 使用全新临时世界、当前安装模组、内部 Docker 网络与确定性假 NPC 服务做真实启动、原生回调和存档重启验证，不挂载生产配置、存档或密钥，不发布游戏/RCON端口，不调用 LLM/TTS。仅 QA JAR 会生成两个临时 Numen 主人与女仆；其 `qa/` 代码不会进入发布 JAR。运行报告保存在被忽略的 `runtime/maid-bridge-qa-*/result.json`，包含 JAR、工具及 fixture 哈希；容器和网络在 finally 中精确移除。
 
-当前候选通过 59 个 Java 断言和 20 项隔离实机检查，包括共享 codec、旧 deepseek ID、七种原生能力、状态恢复、跨主人拒绝、两个角色同时签名请求及各自聊天历史、保存重启后 UUID/主人/幂等回执保留。它证明受控环境中的原生状态和回调链路，不证明玩家客户端实际进服、能听到音频、农耕/战斗任务完成或长期自主运行。生产集成仍应保留原实体 UUID、主人和进度，不强制加载旧区域。
+当前候选通过 99 个离线 Java 断言、原有 20 项隔离实机检查和 51 项专属伙伴检查，包括共享 codec、旧 deepseek ID、七种原生能力、正常蛋糕认领、状态恢复、跨主人拒绝、两个角色同时签名请求及各自聊天历史、保存重启后 UUID/主人/幂等回执保留。Windows 的日志测试不把未执行的符号链接断言计入通过；另有 Linux 路径测试。它证明受控环境中的原生状态和回调链路，不证明玩家客户端实际进服、能听到音频、农耕/战斗任务完成或长期自主运行。生产集成仍应保留原实体 UUID、主人和进度，不强制加载旧区域。
 
 ## 可信聊天请求
 
@@ -118,6 +118,61 @@ qdmaid invoke <base64url(JSON)，不带 padding>
 副作用之前在 `data/qiandeng-maid-bridge/receipts` 持久登记 requestId 与请求指纹，完成后原子写入回执。相同 ID/字节请求只返回历史回执（`replayedReceipt:true`），不重新操作。只剩 claim 的中断请求返回 outcome_unknown，不重放；同 ID 不同请求返回 request_id_conflict。日志目录达到4096文件时拒绝新状态切换，保留记录，不自动清理未知结果。只读观察不写该账本。
 
 主要拒绝码：`maid_not_loaded、unowned_maid、owner_changed、unknown_context_category、unknown_task、native_task_disabled、invalid_*、unexpected_field、request_id_conflict`。异常发生在可能有副作用之后、持久最终回执失败或读回状态不匹配时，phase 为 outcome_unknown；调用方应查询，不自动补偿或重放。此第一层不提供移动、任意攻击、物品赠予、经验修改、主人变更、人物资料改写或模组知识技能的额外 LLM 调用。
+
+## Numen 专属女仆接入
+
+当前 Numen 的 `interact_entity` 会自动寻路再右键；它已在隔离世界完成原生蛋糕认领，但生产初始化时出现远距离寻路并遇敌死亡。专属伙伴初始化改用下列仅控制台/权限 4 的有界命令，不加入人物的七项 MCP 权限：
+
+```text
+qdmaid companion_adopt <16到80位唯一requestId> <已加载女仆UUID> <在线Numen主人UUID>
+```
+
+它要求生存模式、女仆无主、同维度距离不超过 3 格、有视线、无打开菜单和光标物品，且主手或副手已经持有原生驯服物品。调用一次正常 `EntityMaid.interact`，进入原生 `tameMaid`，核验物品 -1、数量 +1 与真实主人；保留原生数量上限、事件和成就。不寻路、不换手、不发物品、不直接调用基类 `tame` 或设置 owner UUID。发起前应停止并发身体动作。`data/qiandeng-maid-bridge/adoption-receipts` 在交互前持久登记，重复 ID 返回历史回执；未知结果不重放，已经有主时新 ID 也拒绝交互。失败后需观察实际身体和库存，不能把受理当作成功。
+
+主人是 Numen 玩家时可用仅控制台/权限 4 的配置入口：
+
+```text
+qdmaid companion_chat <女仆的标准小写UUID> <Numen主人的标准小写UUID>
+```
+
+该命令要求已加载、已拥有的女仆，在线且真实匹配的 NumenPlayer 主人，以及已启用的全局原生 AI 聊天和模型 CharacterSetting。优先保留该女仆当前已启用且支持 `qd-maid-dialogue` 的真实 BridgeSite，否则选择唯一符合条件的桥接站点；没有候选或候选有歧义时拒绝，不自动启用旧站点。它只设置该女仆原生序列化字段 `llmSite/llmModel`；重复执行返回 `already_configured`。不修改主人、名字、模型外观、自定义人格、原生历史或 TTS，不发送聊天、不打开全局功能，也不允许输入供应商地址。变化随正常世界保存落盘，配置成功并不等于独立 Qwen 角色已注册。此入口需要安装新 JAR 后使用，构建和 QA 不会部署或重启生产服。
+
+`python -X utf8 tools/smoke_maid_bridge.py --run-isolated --companion` 使用独立 `CompanionQa.java` 和当前真实 Numen/TLM 模组。2026-09-08 的 24 项实测通过：蛋糕 3→2、女仆数量 0→1、一次原生认领事件、Numen 实际步行与女仆原生跟随、坐下阻止跟随、解除后的远距会合、主人离线与同 UUID 恢复、独立服保存重启后的归属/物资/聊天配置保留，以及配置拒绝和幂等。对应报告为 `runtime/maid-bridge-qa-76dca19660e3/result.json`。该 QA 不调用模型或 TTS，测试角色不进入生产；尚未测试载具、跨维度会合、真人进服、双方人格交流和协作产出。远距会合复用原生传送，不能宣称全程徒步。
+
+随后新增 `companion_adopt` 的 32 项实际回归通过，报告 `runtime/maid-bridge-qa-4d649c01636a/result.json`：补充了超距、视线阻挡、未持物拒绝，副手蛋糕消耗而主手铁剑保留，同 ID 回执重放、已拥有后新 ID 拒绝、回执随服务器重启保留；原生事件、数量、跟随、聊天字段和零模型调用一并重验。早期报告中的 Numen 自动寻路交互与这次有界命令是两个不同的入口。最终候选的 `runtime/maid-bridge-qa-6fafd13572fa/result.json` 通过 51 项：重验上述能力并加入 nearby 双向游戏事件、拒绝与重启防重，以及 `codingplan` 启用、`deepseek` 禁用时的正确站点选择；同产物的原桥 20 项在 `runtime/maid-bridge-qa-f7431df1a2ea/result.json`。全部为零真实模型、零 TTS 调用的独立世界测试。
+
+生产新增专属身体可使用原版管理员 `summon touhou_little_maid:maid`，指定预先记录的新 UUID、附近已加载安全位置及 `PersistenceRequired:1b`，不填写 Owner/Tame 等归属 NBT；重复执行前先按 UUID 查询，已有身体则复用，不能换 UUID 再召唤。其后由原桐人正常持蛋糕交互。具体名字、外观和位置由项目管理流程决定，不从现有真人女仆复制或转移归属。QA 的固定 UUID/坐标只属于全新隔离世界，不能作为生产运行参数。
+
+生产初始化按以下顺序记账，不能用重新召唤或回滚存档处理失败：
+
+1. 暂停桐人调度，确认没有未决身体动作；记录唯一新女仆 UUID、原桐人 UUID、位置、库存和物品来源。更新 JAR 前保存并停止 D 项目 MC，备份完整当前存档与服务端/客户端产物，同步后一次启动。
+2. 新身体可在初始化期间暂用 `NoAI:1b` 稳定位置，仅限这位新人物；检查加载、地面、空气和占用后放置。仍无主时允许在初始化范围调整她的位置，不传送桐人或挪用旧女仆。按真实蛋糕账目继续，本轮唯一初始化蛋糕已给过，不再发放。
+3. 认领写入唯一 requestId，检查回执中的 owner、物品 -1 和原生女仆数 +1。超时或未知先查实际状态与回执；即使进程重启也不改 ID 重试副作用。死亡角色先走同 UUID 原生死亡恢复，保留死亡原因和当前库存，不能恢复旧玩家数据冒充复活。
+4. 成功后配置 `companion_chat`，经已有 `sit:false`、`follow:true` 设置原生模式，**将这位新女仆的 `NoAI` 恢复为 `0b` 并读回确认**，然后保存身份供独立 Qwen 注册。原生保存会省略 false 的 NoAI 字段，可用 `execute as <精确女仆 UUID> unless entity @s[nbt={NoAI:1b}]` 核验；字段缺失不等于仍然禁用。正常跟随、真人声音与双方自主产出分别验收。
+
+失败时保留当前世界、角色和未知回执，停止依赖动作，记录临时 `NoAI` 尚未解除，不能宣称人物已经运行。产物更新失败可在停服状态恢复该次备份的原 JAR；不自动回滚世界、清死亡账本、删新身体或转移主人。2026-09-08 本机初始化命令、停止时快照、正常死亡恢复、蛋糕 0→1→0 与真实认领回执位于 `runtime/maid-companion-production-20260908/`，不进入公开仓库。小灯已经属于原桐人，NoAI 已解除、follow 已启用；这枚蛋糕是伙伴初始化供给，不能计为桐人自主合成成果。双方真实自主出行与共同产出另行验收。
+
+原生声音桥可继续复用 `BridgeClient` 的真实 owner/maid 身份校验；但 TLM 原生 `TTSCallback` 只将音频发往主人连接，Numen 主人不会自动让附近真人听到。队伍消息和附近播放仍需接入现有 `GodVoice` 角色语音队列，按女仆 UUID 和真实位置绑定；本改动未增加 TTS 转发，也未把语音入队视作真人听到。
+
+## 游戏内附近交流
+
+`qdmaid party_say <base64url JSON>` 和 `qdmaid party_speech_status <eventId>` 都只允许控制台、权限 4，不改变人物的七项身体 MCP。说话输入固定为：
+
+```json
+{"schema":1,"eventId":"标准小写UUID","speakerUuid":"真实身体UUID","listenerUuid":"真实身体UUID","text":"不超过160个Unicode字符的单行原文","textSha256":"原文UTF8的64位小写SHA256","channel":"nearby"}
+```
+
+无控制符、不截断原文；身份与文本摘要不匹配拒绝。`channel` 可省，默认 `nearby`；另一取值为 `msg`。双方必须是实际在线存活的 NumenPlayer 和其已拥有、已加载的女仆。nearby 支持两个说话方向，服务端同一 tick 检查实际位置：同维度、距离不超过 24 格，不要求视线。远处、跨维度、缺失身体或归属不匹配即终态拒绝，不先私下投递、不排队等待走近。
+
+通过检查后，向说话者附近 24 格内普通玩家发送带 `[附近]` 标记的游戏聊天文字；排除 Numen 和 NeoForge FakePlayer 连接，避免旧 guard 收件箱再次唤醒。随后同 tick 持久化接收身体的空间听觉事件，NPC 桥只能在 `heard:true` 原生回执后把这件已发生的游戏事件提供给相应 Qwen 人格。这里不调用模型或 TLM 聊天回调，也不写无标记的全服聊天日志。可选 GodVoice 配音在听见确认之后发送；音频播放状态不作为 AI 听见的依据。
+
+`msg` 字段保留，但**本版未开放私聊投递**。原版 `/msg` 的目标是玩家，桐人向女仆私聊返回 `unsupported_player_target`；女仆向玩家返回 `native_msg_unavailable`。隔离测试中的真实实体命令源薄接线未取得可验证的原生命令成功回调，因此没有把它宣称为已经听见，也未部署该实验发令代码。没有公共字幕或公共 TTS，不把失败私聊偷偷改为 nearby；不制造虚拟玩家、不用会触发额外 LLM 循环的 TLM 私聊回调代替。真人正常使用游戏原版 `/msg` 不受此桥影响。
+
+回执继续以 `QD_MAID_JSON ` 开头，固定字段为 `schema、eventId、speakerUuid、listenerUuid、textSha256、channel、ok、heard、phase、code、dimension、speakerPosition、listenerPosition、distance、radius、emittedAt、observedAt`。nearby 的 `radius` 为 24，msg 为 null；位置是原生 `[x,y,z]`，`dimension` 为说话者维度 ID，跨维度时 distance 为 null，时间为毫秒。尚无数据的字段为 null，回执不含原文。nearby 成功 `phase:heard/code:nearby_speech_heard`，确认时 observedAt 不早于 emittedAt；msg 在本版始终拒绝。未知结果只能查询 status，不能重新发命令。
+
+相同事件重复查询或提交不重播，提交返回 `already_heard`。同 ID 改身份、原文摘要或 channel 返回 `request_id_conflict`。已拒绝的同一事件也不能重新排队。
+
+`data/qiandeng-maid-bridge/party-speech/<eventId>.json` 在任何发包前强制写入 claim，完成后以单个原子文件保存 `input` 原文和服务端 `receipt`（事件类型 `nearby_speech_heard`、`nearby_speech_rejected` 或 `private_message_rejected`）。仅有 claim 或持久化失败时返回 `phase:unknown/code:outcome_unknown`，不得重发。status 只读；没有事件为 `phase:not_found/code:event_not_found`，仅保留 eventId，其余身份、channel 和位置为空。重启后仍读取原回执，观察时间更新而发声时间保留。对话请求与回答必须分别使用各自 UUID 走同一游戏入口；无法支持的收件类型明确失败。
 
 ## 核查来源
 

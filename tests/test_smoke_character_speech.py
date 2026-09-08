@@ -52,7 +52,8 @@ class CharacterSpeechSmokeTests(unittest.TestCase):
         source = self.root / 'world/god-voice-src'
         files = []
         for name in ('build.py', 'source-origin.json', 'META-INF/neoforge.mods.toml',
-                     'dev/god/godvoice/TtsQueueWatcher.java', 'tests/SpeechContractTest.java'):
+                     'dev/god/godvoice/TtsQueueWatcher.java', 'dev/god/godvoice/SpeechHealth.java',
+                     'tests/SpeechContractTest.java', 'tests/SpeechHealthTest.java'):
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('isolated fixture ' + name)
@@ -66,7 +67,7 @@ class CharacterSpeechSmokeTests(unittest.TestCase):
         svc = deployed.parent / smoke.SVC
         svc.write_bytes(b'isolated-svc-dependency')
         results = {'CaptureFenceTest': 19, 'CaptureIntervalTest': 15, 'SpeechContractTest': 21,
-            'SpeechQueueTest': 21, 'SpeechAudioPlayerContractTest': 8,
+            'SpeechQueueTest': 21, 'SpeechAudioPlayerContractTest': 8, 'SpeechHealthTest': 23,
             'StaffBoundaryRegistrationTest_absent': 3, 'StaffBoundaryRegistrationTest_present': 4}
         value = {'ok': True, 'speech_schema': 2, 'speech_protocol': 2, 'jar': str(jar), 'sha256': smoke.digest(jar),
             'tests': {name: {'ok': True, 'assertions': count} for name, count in results.items()},
@@ -78,7 +79,7 @@ class CharacterSpeechSmokeTests(unittest.TestCase):
     def test_build_requires_installed_jar_and_exact_current_source(self):
         record = self.build()
         valid = smoke.validate_build(self.root, record)
-        self.assertEqual(valid['assertions'], 91)
+        self.assertEqual(valid['assertions'], 114)
         source = self.root / 'world/god-voice-src/dev/god/godvoice/TtsQueueWatcher.java'
         source.write_text('changed after tests')
         with self.assertRaisesRegex(ValueError, 'speech_build_source_changed'):
@@ -89,6 +90,20 @@ class CharacterSpeechSmokeTests(unittest.TestCase):
         (self.root / 'world/god-voice-src/dev/god/godvoice/NewSpeech.java').write_text('untested')
         with self.assertRaisesRegex(ValueError, 'speech_build_source_coverage_mismatch'):
             smoke.validate_build(self.root, record)
+
+    def test_new_health_writer_proof_is_required(self):
+        record = self.build()
+        original = json.loads(record.read_text())
+        for proof in (None, {'ok': False, 'assertions': 23}, {'ok': True, 'assertions': 22}):
+            with self.subTest(proof=proof):
+                value = json.loads(json.dumps(original))
+                if proof is None:
+                    value['tests'].pop('SpeechHealthTest')
+                else:
+                    value['tests']['SpeechHealthTest'] = proof
+                record.write_text(json.dumps(value))
+                with self.assertRaisesRegex(ValueError, 'speech_build_tests_incomplete'):
+                    smoke.validate_build(self.root, record)
 
     def test_jar_mismatch_and_incomplete_assertions_are_rejected(self):
         record = self.build()
@@ -178,7 +193,7 @@ class CharacterSpeechSmokeTests(unittest.TestCase):
         def rcon(args, timeout):
             value = args[-1]
             if value == 'numen_act list':
-                return 'Kirito|uuid=' + actor
+                return 'count=1\nKirito|uuid=' + actor
             self.assertEqual(value, 'numen_act invoke "Kirito" get_self_status {}')
             return json.dumps({'dimension': 'minecraft:overworld'})
         def tick(_):

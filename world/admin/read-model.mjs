@@ -68,6 +68,56 @@ export function freshness(timestamp, now = Date.now(), limitSeconds = 90) {
   return { stale: ageSeconds === null || ageSeconds < -5 || ageSeconds > limitSeconds, ageSeconds };
 }
 
+const partyStates = new Set(['running', 'waiting', 'unconfigured', 'unavailable']);
+const partyMessageStates = ['pending', 'unknown', 'submitted', 'answered', 'expired', 'failed'];
+const partyCode = value => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value) ? value : null;
+const partyStamp = (value, scale = 1) => typeof value === 'number' && Number.isFinite(value)
+  && value > 0 && value * scale <= 8640000000000000 ? new Date(value * scale).toISOString() : null;
+const partyText = (value, limit) => text(value, limit)
+  .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[身份已隐藏]')
+  .replace(/\b(?:Bearer\s+\S+|(?:token|api[_-]?key|password|secret|session[_-]?id)\s*[:=]\s*["']?[^\s,"']+)/gi, '[内部资料已隐藏]');
+const partyHearing = raw => {
+  const value = object(raw), receipt = object(value.receipt);
+  const heard = value.state === 'heard' && receipt.heard === true && receipt.phase === 'heard'
+    && (receipt.channel === 'msg' || (receipt.channel === 'nearby' && receipt.radius === 24
+      && Number.isFinite(receipt.distance) && receipt.distance >= 0 && receipt.distance <= 24));
+  return { heard, channel: ['nearby', 'msg'].includes(receipt.channel) ? receipt.channel : null,
+    state: ['pending', 'unknown', 'heard', 'rejected', 'expired'].includes(value.state) ? value.state : 'unknown',
+    distance: heard && receipt.channel === 'nearby' ? receipt.distance : null, at: heard ? partyStamp(receipt.emittedAt) : null };
+};
+
+/** Independent party freshness; never expose body UUIDs, session routing or driver credentials. */
+export function projectParty(raw, now = Date.now()) {
+  const value = object(raw), updatedAt = partyStamp(value.updatedAt);
+  if (value.schema !== 1 || typeof value.enabled !== 'boolean' || !partyStates.has(value.status) || !updatedAt)
+    return { available: false, stale: true, updatedAt: null, enabled: false,
+      status: raw == null ? 'unconfigured' : 'unavailable', members: [], messages: [] };
+  const ageSeconds = (now - value.updatedAt) / 1000, budget = object(value.budget);
+  const members = list(value.members).slice(0, 2).filter(row => typeof row?.agentId === 'string'
+    && /^[A-Za-z0-9_.:-]{1,64}$/.test(row.agentId) && ['survivor', 'maid'].includes(row.kind))
+    .map(row => ({ agentId: row.agentId, displayName: partyText(row.displayName, 64) || '名称待设置', kind: row.kind }));
+  const memberIds = new Set(members.map(row => row.agentId));
+  if (value.enabled && (list(value.members).length !== 2 || memberIds.size !== 2 || new Set(members.map(row => row.kind)).size !== 2))
+    return { available: false, stale: true, updatedAt, enabled: false, status: 'unavailable', members: [], messages: [] };
+  return { available: true, updatedAt, stale: ageSeconds < -5 || ageSeconds > 90, enabled: value.enabled,
+    status: value.status, error: partyCode(value.error), members,
+    counts: Object.fromEntries(partyMessageStates.map(key => [key, count(object(value.counts)[key])])),
+    budget: { reservedDispatches24h: count(budget.reservedDispatches24h), dailyDispatchCap: count(budget.dailyDispatchCap),
+      remaining: count(budget.remaining), blocked: bool(budget.blocked), nextDispatchAt: partyStamp(budget.nextDispatchAt, 1000) },
+    messages: list(value.messages).slice(0, 8).filter(row => partyMessageStates.includes(row?.status)).map(row => {
+      const reply = object(row.reply), senderId = object(reply.sender).agentId;
+      const hearing = partyHearing(row.worldDelivery), replyHearing = partyHearing(reply.worldDelivery || row.replyDelivery);
+      const frameworkInterruption = replyHearing.heard && typeof reply.text === 'string'
+        && /^Max iterations \([0-9]+\) reached$/.test(reply.text.trim());
+      return { status: row.status, createdAt: partyStamp(row.createdAt, 1000), hearing, replyHearing,
+        frameworkInterruption,
+        senderAgentId: memberIds.has(object(row.sender).agentId) ? row.sender.agentId : null,
+        text: hearing.heard ? partyText(row.text, 160) : null,
+        detail: frameworkInterruption ? 'native_framework_interruption' : partyCode(row.detail), reply: hearing.heard && replyHearing.heard && typeof reply.text === 'string' && memberIds.has(senderId)
+          ? { text: partyText(reply.text, 160), createdAt: partyStamp(reply.createdAt, 1000), senderAgentId: senderId } : null };
+    }) };
+}
+
 export function projectHealth(raw, now = Date.now()) {
   const value = object(raw), status = freshness(value.checked_at, now, 300);
   return { available: typeof value.checked_at === 'string', checkedAt: text(value.checked_at, 40) || null,

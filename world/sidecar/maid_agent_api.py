@@ -50,11 +50,12 @@ def maid_prompt(body):
 
 
 class MaidAdapter:
-    def __init__(self, root, tasks=None, clock=time.monotonic, sleep=time.sleep, registry=None, verifier=None, native=None):
+    def __init__(self, root, tasks=None, clock=time.monotonic, sleep=time.sleep, registry=None, verifier=None, native=None, party=None):
         self.tasks = tasks or QwenTasks(root)
         self.clock, self.sleep = clock, sleep
         self.root = Path(root)
         self.registry, self.verifier, self.native = registry, verifier, native
+        self.party = party
 
     def complete(self, body, wait_seconds=48):
         prompt = maid_prompt(body)
@@ -209,7 +210,7 @@ def make_handler(adapter, token):
                 pass  # Native task remains recorded, never resubmitted.
 
         def do_GET(self):
-            if self.path == '/mcp':
+            if self.path in ('/mcp', '/party/mcp'):
                 return self.send_json(405, {'error': 'SSE not provided; use MCP POST'})
             if self.path != '/healthz':
                 return self.send_json(404, {'ok': False})
@@ -224,6 +225,65 @@ def make_handler(adapter, token):
                 self.send_json(200, result)
             except (OSError, ValueError):
                 self.send_json(503, {'ok': False, 'role': ROLE})
+
+        def party_mcp(self, raw):
+            party = getattr(adapter, 'party', None)
+            if party is None:
+                return self.send_json(503, {'error': 'party_unavailable'})
+            try:
+                actor = party.config.authenticate(self.headers.get('Authorization', ''))
+            except (ValueError, OSError):
+                return self.send_json(401, {'error': 'unauthorized_party'})
+            request = json.loads(raw)
+            if not isinstance(request, dict) or request.get('jsonrpc') != '2.0':
+                return self.send_json(400, {'error': 'invalid_jsonrpc'})
+            rid, method = request.get('id'), request.get('method')
+            if rid is not None and (type(rid) not in (str, int) or len(str(rid)) > 80):
+                return self.send_json(400, {'error': 'invalid_request_id'})
+            if method not in ('initialize', 'tools/list', 'tools/call', 'ping',
+                               'notifications/initialized', 'notifications/cancelled'):
+                return self.send_json(200, {'jsonrpc': '2.0', 'id': rid,
+                    'error': {'code': -32601, 'message': 'Method not found'}})
+            headers, result = {}, {}
+            try:
+                if method == 'initialize':
+                    if rid is None:
+                        raise ValueError('initialize_requires_id')
+                    sessions = party.root / 'mcp-sessions'
+                    if len(list(sessions.glob('*.json'))) >= 2048:
+                        raise ValueError('party_session_limit')
+                    session = uuid.uuid4().hex
+                    write_json(sessions / (session + '.json'), {'actor': actor,
+                        'revision': party.config.binding()['revision'], 'createdAt': time.time()})
+                    headers['Mcp-Session-Id'] = session
+                    version = request.get('params', {}).get('protocolVersion')
+                    result = {'protocolVersion': version if version in ('2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25') else '2025-03-26',
+                              'capabilities': {'tools': {}}, 'serverInfo': {'name': 'qiandeng-party', 'version': '1.0'}}
+                else:
+                    session = self.headers.get('Mcp-Session-Id', '')
+                    if len(session) != 32 or any(c not in '0123456789abcdef' for c in session):
+                        raise ValueError('invalid_party_session')
+                    saved = read_json(party.root / 'mcp-sessions' / (session + '.json'))
+                    if saved['actor'] != actor or saved['revision'] != party.config.binding()['revision']:
+                        raise ValueError('party_session_binding_changed')
+                    if method == 'tools/list':
+                        from party_bridge import tool_schema
+                        result = {'tools': tool_schema()}
+                    elif method == 'tools/call':
+                        if rid is None:
+                            raise ValueError('tool_call_requires_id')
+                        params = request.get('params', {})
+                        observed = party.call(actor, params.get('name'), params.get('arguments', {}), session + ':' + json.dumps(rid))
+                        result = {'content': [{'type': 'text', 'text': json.dumps(observed, ensure_ascii=False)}], 'isError': False}
+                if rid is None:
+                    self.send_response(202)
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                    return
+                return self.send_json(200, {'jsonrpc': '2.0', 'id': rid, 'result': result}, headers)
+            except (ValueError, OSError, TypeError, KeyError):
+                return self.send_json(200, {'jsonrpc': '2.0', 'id': rid,
+                    'error': {'code': -32602, 'message': 'Invalid or unavailable party request'}})
 
         def mcp(self, raw):
             if adapter.registry is None or adapter.native is None:
@@ -307,6 +367,20 @@ def make_handler(adapter, token):
                     'error': {'code': -32602, 'message': 'Invalid or unavailable fixed-self request'}})
 
         def do_DELETE(self):
+            if self.path == '/party/mcp' and getattr(adapter, 'party', None) is not None:
+                try:
+                    party = adapter.party
+                    actor = party.config.authenticate(self.headers.get('Authorization', ''))
+                    session = self.headers.get('Mcp-Session-Id', '')
+                    if len(session) != 32 or any(c not in 'abcdef0123456789' for c in session):
+                        raise ValueError('invalid_party_session')
+                    path = party.root / 'mcp-sessions' / (session + '.json')
+                    if read_json(path)['actor'] != actor:
+                        raise ValueError('party_session_wrong_actor')
+                    path.unlink()
+                    return self.send_json(200, {'ok': True})
+                except (ValueError, OSError, KeyError):
+                    return self.send_json(401, {'ok': False})
             if self.path != '/mcp' or adapter.registry is None:
                 return self.send_json(404, {'ok': False})
             try:
@@ -324,7 +398,7 @@ def make_handler(adapter, token):
                 self.send_json(401, {'ok': False})
 
         def do_POST(self):
-            if self.path not in ('/v1/chat/completions', '/v1/maid/chat/completions', '/mcp'):
+            if self.path not in ('/v1/chat/completions', '/v1/maid/chat/completions', '/mcp', '/party/mcp'):
                 return self.send_json(404, {'error': {'code': 'unknown_route'}})
             supplied = self.headers.get('Authorization', '')
             # Headers may legally arrive as Latin-1; compare bytes so malformed
@@ -339,7 +413,7 @@ def make_handler(adapter, token):
                     return self.send_json(413, {'error': {'code': 'request_size_limit'}})
             except ValueError:
                 return self.send_json(400, {'error': {'code': 'invalid_content_length'}})
-            is_mcp = self.path == '/mcp'
+            is_mcp = self.path in ('/mcp', '/party/mcp')
             if not is_mcp and not _ACTIVE.acquire(blocking=False):
                 return self.send_json(429, {'error': {'code': 'adapter_busy'}})
             try:
@@ -348,7 +422,7 @@ def make_handler(adapter, token):
                 if len(raw) != length:
                     raise ValueError('incomplete_request')
                 if is_mcp:
-                    return self.mcp(raw)
+                    return self.party_mcp(raw) if self.path == '/party/mcp' else self.mcp(raw)
                 if self.path == '/v1/maid/chat/completions':
                     status, response = adapter.complete_signed(raw, self.headers)
                 else:
@@ -371,7 +445,9 @@ def serve():
     registry = MaidRegistry()
     registry.publish()
     verifier = IdentityVerifier(os.environ['MAID_IDENTITY_KEY_FILE']) if os.environ.get('MAID_IDENTITY_KEY_FILE') else None
-    adapter = MaidAdapter(root, registry=registry, verifier=verifier, native=MaidNativeTools(registry))
+    from party_bridge import create_bridge
+    adapter = MaidAdapter(root, registry=registry, verifier=verifier, native=MaidNativeTools(registry),
+                          party=create_bridge() if os.environ.get('PARTY_ENABLED') == '1' else None)
     server = ThreadingHTTPServer(('0.0.0.0', 8091), make_handler(adapter, token))
     server.daemon_threads = True
     server.serve_forever(poll_interval=1)

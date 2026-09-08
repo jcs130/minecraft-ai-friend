@@ -25,7 +25,7 @@ class SlowSignals(unittest.TestCase):
             stream.write(json.dumps({'ts': self.clock() * 1000, 'user': 'Player', 'text': text, **fields}) + '\n')
 
     def finish(self):
-        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed'}}
+        self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}
         self.controller.tick()
 
     def advance(self, seconds=121):

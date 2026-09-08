@@ -194,7 +194,7 @@ class NavigationReceiptTests(unittest.TestCase):
             finished = False
             def cmd(self, command):
                 if command == 'numen_act list':
-                    return 'Kirito|uuid='+BODY_UUID
+                    return 'count=1\nKirito|uuid='+BODY_UUID
                 if ' task_status ' in command:
                     busy = not self.finished
                     self.finished = True  # Native task can end between consecutive read commands.

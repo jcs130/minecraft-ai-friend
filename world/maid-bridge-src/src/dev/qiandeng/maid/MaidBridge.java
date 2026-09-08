@@ -27,7 +27,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-/** Main-thread-only adapter for existing, loaded maid bodies. Never summons or assigns an owner. */
+/** Main-thread adapter for loaded bodies; normal companion setup has separate console commands. */
 @Mod(MaidBridge.MOD_ID)
 public final class MaidBridge {
     public static final String MOD_ID = "qiandeng_maid_bridge";
@@ -40,6 +40,9 @@ public final class MaidBridge {
                 .executes(c -> emit(c.getSource(), list(c.getSource().getServer(), IntegerArgumentType.getInteger(c, "offset"))))))
             .then(Commands.literal("invoke").then(Commands.argument("request", StringArgumentType.word())
                 .executes(c -> invoke(c.getSource(), StringArgumentType.getString(c, "request"))))));
+        CompanionChat.register(event.getDispatcher());
+        CompanionAdopt.register(event.getDispatcher());
+        PartySpeech.register(event.getDispatcher());
     }
     private static int invoke(CommandSourceStack source, String encoded) {
         BridgeProtocol.Request req = null;

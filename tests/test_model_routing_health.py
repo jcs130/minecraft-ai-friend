@@ -97,6 +97,7 @@ class ModelRoutingHealth(unittest.TestCase):
                     config = routing.read_json(self.root / config_path)
                     config['agents']['profiles']['qd-guild-planner']['enabled'] = False
                     self.put(config_path, config)
+
                 elif mutation == 'missing':
                     del manifest['routes']['guild_quest']
                 elif mutation == 'endpoint':
@@ -108,6 +109,14 @@ class ModelRoutingHealth(unittest.TestCase):
                 if mutation == 'disabled':
                     config['agents']['profiles']['qd-guild-planner']['enabled'] = True
                     self.put(config_path, config)
+
+    def test_manifest_cannot_claim_a_different_shared_maid_budget_than_runtime(self):
+        for field, value in (('dailyLimit', 12), ('cooldownSeconds', 0)):
+            manifest = json.loads(json.dumps(self.manifest))
+            manifest['routes']['maid_dialogue'][field] = value
+            self.put('config/model-task-routes.json', manifest)
+            with self.subTest(field=field):
+                self.assertFalse(self.probe()['checks']['route_manifest_owned'])
 
     def test_task_profile_cannot_gain_tools_heartbeat_or_jobs(self):
         folder = 'server/agents/work/workspaces/qd-maid-dialogue/'
@@ -185,7 +194,7 @@ class ModelRoutingHealth(unittest.TestCase):
         others = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
             'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
             'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client',
-            'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor')
+            'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_survivor_party')
         with ExitStack() as stack:
             for name in others:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))

@@ -96,6 +96,13 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'turn_action_already_used')
         self.assertFalse((self.state / 'skill-job.json').exists())
 
+    def test_continuous_lease_can_remember_after_each_action_but_cannot_start_program(self):
+        self.update_lease(actionLimit=6, actionsUsed=2, status='open')
+        self.assertTrue(self.tools.remember(TURN, lesson='Read the second actual receipt')['ok'])
+        self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'turn_action_already_used')
+        self.assertEqual(read_json(self.state / 'lease.json')['actionsUsed'], 2)
+        self.assertFalse((self.state / 'skill-job.json').exists())
+
     def test_start_queues_pinned_version_once_and_closes_direct_actions(self):
         value = self.tools.start(TURN, 'gather', VERSION, {'round': 1}, 12)
         self.assertTrue(value['ok'])

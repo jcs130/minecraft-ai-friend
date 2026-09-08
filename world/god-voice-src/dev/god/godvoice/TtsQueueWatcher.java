@@ -1,6 +1,5 @@
 package dev.god.godvoice;
 
-import com.google.gson.JsonObject;
 import de.maxhenkel.voicechat.api.VoicechatConnection;
 import de.maxhenkel.voicechat.api.audiochannel.AudioPlayer;
 import de.maxhenkel.voicechat.api.audiochannel.EntityAudioChannel;
@@ -52,7 +51,6 @@ public final class TtsQueueWatcher {
     private volatile long runId;
     private Thread worker;
     private ThreadPoolExecutor decoders;
-    private long lastHealthAt;
 
     private static final class Playback {
         final SpeechJob job;
@@ -85,7 +83,8 @@ public final class TtsQueueWatcher {
         decoders = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(16), task -> {
             Thread thread = new Thread(task, "godvoice-mp3-decoder"); thread.setDaemon(true); return thread;
         }, new ThreadPoolExecutor.AbortPolicy());
-        worker = new Thread(() -> loop(epoch), "godvoice-tts-watcher");
+        SpeechHealth health = new SpeechHealth();
+        worker = new Thread(() -> loop(epoch, health), "godvoice-tts-watcher");
         worker.setDaemon(true); worker.start();
         GodVoiceLog.info("speech schema 2 watcher started; per entity: one player + four waiting");
     }
@@ -111,7 +110,7 @@ public final class TtsQueueWatcher {
         }
     }
 
-    private void loop(long epoch) {
+    private void loop(long epoch, SpeechHealth health) {
         boolean recovery = true;
         while (running && runId == epoch) {
             try {
@@ -136,10 +135,18 @@ public final class TtsQueueWatcher {
                                 for (SpeechJob job : claimed) terminal(job, "cancelled", "server_stopped", null);
                                 return;
                             }
-                            tick(server, claimed, epoch);
+                            tick(server, claimed, epoch, health);
                         } catch (Exception error) { GodVoiceLog.warn("speech main-thread tick failed", error); }
                         finally { tickQueued.set(false); }
                     });
+                }
+                // Health IO stays on this existing disk watcher, never on the MC tick.
+                // Its capacity-one sample cannot accumulate work during a slow filesystem.
+                if (running && runId == epoch) {
+                    try {
+                        health.flush(epoch, System.currentTimeMillis(), sample ->
+                                SpeechHealth.writeAtomic(base, sample, () -> running && runId == epoch));
+                    } catch (IOException error) { GodVoiceLog.warn("speech heartbeat write failed", error); }
                 }
                 Thread.sleep(200);
             } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return; }
@@ -187,7 +194,7 @@ public final class TtsQueueWatcher {
         return result;
     }
 
-    private void tick(MinecraftServer server, List<SpeechJob> incoming, long epoch) {
+    private void tick(MinecraftServer server, List<SpeechJob> incoming, long epoch, SpeechHealth health) {
         if (!server.isSameThread()) throw new IllegalStateException("speech world access requires Minecraft thread");
         long now = System.currentTimeMillis();
         for (SpeechJob job : incoming) {
@@ -240,7 +247,7 @@ public final class TtsQueueWatcher {
                 });
             } catch (RuntimeException rejected) { finish(server, selected, "failed", "decoder_busy"); }
         }
-        writeHealth(now);
+        health.publish(epoch, now, active.size(), lanes.values().stream().mapToInt(SpeechLane::waitingCount).sum());
     }
     private String invalid(Playback playback, LivingEntity entity, long now) {
         if (playback.externalStop.get() != null) return playback.externalStop.get();
@@ -355,21 +362,6 @@ public final class TtsQueueWatcher {
     private void quarantine(Path path, String reason) {
         try { Files.move(path, done.resolve(path.getFileName() + "." + reason), StandardCopyOption.REPLACE_EXISTING); }
         catch (IOException error) { GodVoiceLog.warn("speech quarantine failed", error); }
-    }
-    private void writeHealth(long now) {
-        if (now - lastHealthAt < 1000) return;
-        try {
-            var status = new JsonObject();
-            status.addProperty("schema", 2); status.addProperty("protocol", 2);
-            status.addProperty("updatedAt", now); status.addProperty("activeCount", active.size());
-            status.addProperty("queuedCount", lanes.values().stream().mapToInt(SpeechLane::waitingCount).sum());
-            status.addProperty("countsIncludeLegacy", true);
-            Path temporary = base.resolve(".speech-health.json.tmp");
-            Files.writeString(temporary, status + "\n");
-            try { Files.move(temporary, base.resolve(".speech-health.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE); }
-            catch (java.nio.file.AtomicMoveNotSupportedException ignored) { Files.move(temporary, base.resolve(".speech-health.json"), StandardCopyOption.REPLACE_EXISTING); }
-            lastHealthAt = now;
-        } catch (IOException error) { GodVoiceLog.warn("speech heartbeat write failed", error); }
     }
     private static String statusFor(String code) { return "expired".equals(code) ? "expired" : "cancelled"; }
     private static String dimension(LivingEntity entity) { return entity.level().dimension().location().toString(); }

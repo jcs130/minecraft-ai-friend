@@ -255,21 +255,17 @@ class MaidRegistry:
             if any(v.get('key', v.get('client_key')) != DRIVER
                    and not (v.get('key', v.get('client_key')) == 'qd_learning' and safe_learning_client(v, role)) for v in existing):
                 raise ValueError('maid_has_unexpected_mcp')
-            if any(v.get('key', v.get('client_key')) == DRIVER for v in existing):
-                self.transport('PUT', '/mcp/' + DRIVER, role, mcp)
-            else:
-                self.transport('POST', '/mcp', role, {'client_key': DRIVER, 'client': mcp})
-            verified = self.transport('GET', '/mcp/' + DRIVER, role)
-            if (verified.get('url') != MCP_URL or verified.get('transport') != 'streamable_http'
-                    or verified.get('enabled') is not True or set(verified.get('tools') or []) != set(TOOLS)):
-                raise ValueError('maid_mcp_not_applied')
             policy = {'default_effect': 'deny', 'client_overrides': [], 'tool_defaults': [],
                       'tool_overrides': [{'source_type': 'channel', 'source_value': 'console',
                           'subject_type': 'all', 'subject_value': '', 'effect': 'allow', 'tool_name': tool}
                           for tool in TOOLS]}
-            policy_reply = self.transport('PUT', '/mcp/policy/' + DRIVER, role, policy)
-            if policy_reply.get('default_effect') != 'deny' or policy_reply.get('tool_overrides') != policy['tool_overrides']:
-                raise ValueError('maid_mcp_policy_not_applied')
+            from mcp_configuration import configure_client
+            configure_client(self.transport, role, DRIVER, mcp, policy,
+                             exists=any(v.get('key', v.get('client_key')) == DRIVER for v in existing))
+            verified = self.transport('GET', '/mcp/' + DRIVER, role)
+            if (verified.get('url') != MCP_URL or verified.get('transport') != 'streamable_http'
+                    or verified.get('enabled') is not True or set(verified.get('tools') or []) != set(TOOLS)):
+                raise ValueError('maid_mcp_not_applied')
             row.update(status='ready', registeredAt=self.clock())
             write_json(path, row)
             self.publish()

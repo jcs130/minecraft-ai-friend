@@ -5,6 +5,7 @@ roster first, then call only the strict saved-UUID restore command. Persist the
 external-effect boundary before sending; unknown outcomes are never replayed.
 """
 import json
+import math
 import re
 import time
 import uuid
@@ -67,7 +68,7 @@ class BodyReconnect:
                 return {'status': 'waiting', 'reason': 'action_busy'}
             raise
 
-    def confirm_online(self, settings):
+    def confirm_online(self, settings, body=None):
         """Reconcile a previous uncertain restore using only the live roster.
 
         This path is safe while paused or holding a gameplay lease: it never
@@ -82,7 +83,14 @@ class BodyReconnect:
                 expected = binding(settings)
                 if any(state.get(key) != value for key, value in expected.items()):
                     return {'status': 'blocked', 'reason': 'restore_binding_changed'}
-                if state.get('status') not in ('reserved', 'unknown', 'restoring'):
+                restored_death = state.get('status') == 'blocked' and state.get('reason') == 'body_dead'
+                if restored_death and not (isinstance(body, dict) and body.get('ok') is True
+                        and body.get('bodyUuid') == expected['bodyUuid']
+                        and body.get('bodyName') == expected['bodyName']
+                        and body.get('gameMode') == 'survival'
+                        and type(body.get('hp')) in (int, float) and math.isfinite(body['hp']) and body['hp'] > 0):
+                    return state
+                if state.get('status') not in ('reserved', 'unknown', 'restoring') and not restored_death:
                     return state
                 now = self.clock()
                 if now < state.get('nextConfirmationAt', 0):
@@ -95,13 +103,13 @@ class BodyReconnect:
                     if online:
                         state.update(status='online', reason='identity_verified', verifiedAt=now,
                                      readFailures=0, confirmationReason='identity_verified')
-                    else:
+                    elif not restored_death:
                         state.update(status='unknown', reason='restore_outcome_unknown',
                                      confirmationReason='restore_not_observed')
                 except Exception as error:
                     conflict = str(error) == 'restore_live_identity_conflict'
-                    state.update(status='blocked' if conflict else 'unknown',
-                                 reason='restore_live_identity_conflict' if conflict else 'restore_outcome_unknown',
+                    state.update(status='blocked' if conflict or restored_death else 'unknown',
+                                 reason='restore_live_identity_conflict' if conflict else 'body_dead' if restored_death else 'restore_outcome_unknown',
                                  confirmationReason=str(error) if isinstance(error, ValueError)
                                  else 'restore_roster_unavailable')
                 write_json(self.path, state)

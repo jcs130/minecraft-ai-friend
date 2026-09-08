@@ -47,8 +47,10 @@ class SharedGameRoleHealthTests(unittest.TestCase):
 
     def check(self):
         (self.folder / 'agent.json').write_text(json.dumps(self.agent), encoding='utf8')
-        storage = SimpleNamespace(load_card=lambda path: self.card)
-        with patch.dict(sys.modules, {'qwenpaw.drivers.storage': storage}), \
+        storage = SimpleNamespace(load_card=lambda path: self.party_card if Path(path).stem == 'qd_party' else self.card)
+        credentials = SimpleNamespace(AsyncCredentialStore=lambda _: SimpleNamespace(get_sync=lambda name:
+            SimpleNamespace(kind='static', secrets={'authorization':'Bearer '+'f'*64}, public={})))
+        with patch.dict(sys.modules, {'qwenpaw.drivers.storage': storage, 'qwenpaw.drivers.credentials':credentials}), \
              patch.dict(health.os.environ, {'SURVIVOR_MCP_TOKEN_FILE': str(self.token)}):
             health.check_survivor_config(self.folder)
 
@@ -66,6 +68,14 @@ class SharedGameRoleHealthTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.check()
 
+    def test_model_iterations_must_be_twelve_in_both_native_fields(self):
+        valid = copy.deepcopy(self.agent)
+        for field in ('max_iters', 'max_iterations', 'enabled'):
+            self.agent = copy.deepcopy(valid)
+            target = self.agent['running'] if field == 'max_iters' else self.agent['running']['loop']['iteration']
+            target[field] = False if field == 'enabled' else 6
+            with self.subTest(field=field), self.assertRaises(AssertionError): self.check()
+
     def test_other_mcp_endpoint_or_wildcard_permissions_fail(self):
         self.card.endpoint['url'] = 'http://other-agent:8089/mcp'
         with self.assertRaises(AssertionError):
@@ -81,6 +91,34 @@ class SharedGameRoleHealthTests(unittest.TestCase):
         self.token.write_text('bad')
         with self.assertRaises(AssertionError):
             self.check()
+
+    def test_bound_survivor_requires_real_party_card_and_keeps_body_rules_strict(self):
+        from test_party_role_capabilities import manifest, card_fixture
+        path = self.folder / 'party-roles.json'
+        path.write_text(json.dumps(manifest()))
+        maids = self.folder / 'maid-roles.json'
+        maids.write_text(json.dumps({'schema':1, 'bindingsValid':True, 'independentSessions':True,
+                                    'registeredCount':1, 'activeRoleIds':['fixture-maid']}))
+        self.party_card = card_fixture()
+        with patch.dict(health.os.environ, {'PARTY_ROLES_MANIFEST_FILE':str(path), 'MAID_ROLES_MANIFEST_FILE':str(maids)}):
+            learning_fixture(self.folder, 'qd-survivor')
+            with self.assertRaises(AssertionError): self.check()
+            (self.folder / 'drivers/mcp/qd_party.yaml').write_text('native fixture')
+            self.check()  # Native API Card needs no legacy MCP duplicate.
+            self.party_card.policy.default_effect = 'allow'
+            with self.assertRaises(AssertionError): self.check()
+            self.party_card.policy.default_effect = 'deny'
+            self.card.policy.default_effect = 'allow'
+            with self.assertRaises(AssertionError): self.check()
+
+    def test_unbound_survivor_cannot_gain_party_card_or_legacy_client(self):
+        from test_party_role_capabilities import card_fixture, party
+        self.party_card = card_fixture()
+        (self.folder / 'drivers/mcp/qd_party.yaml').write_text('unexpected card')
+        with self.assertRaises(AssertionError): self.check()
+        (self.folder / 'drivers/mcp/qd_party.yaml').unlink()
+        self.agent['mcp']['clients']['qd_party'] = party.client_payload('Bearer '+'f'*64)
+        with self.assertRaises(AssertionError): self.check()
 
 
 if __name__ == '__main__':

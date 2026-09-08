@@ -2206,6 +2206,7 @@ def npc_heartbeat_loop():
                      "llm_enabled": bool(CFG.get("llm", {}).get("enabled")),
                      "guild_agent_enabled": bool(GUILD_AGENT_ENABLED),
                      "maid_agent_enabled": os.environ.get("MAID_AGENT_ENABLED", "0") == "1",
+                     "party_agent_enabled": os.environ.get("PARTY_ENABLED", "0") == "1",
                      "guild_autogenerate": bool(GUILD_AUTOGENERATE),
                      "guild_requests_enabled": bool(os.environ.get("NPC_GUILD_QUEUE")),
                      "guild_requests_last_poll": getattr(sys.modules.get("guild_requests"), "_LAST_POLL", 0),
@@ -2262,6 +2263,9 @@ if __name__ == "__main__":
     if os.environ.get("MAID_AGENT_ENABLED", "0") == "1":
         import maid_agent_api
         start_npc_thread("maid-agent", maid_agent_api.serve)
+    if os.environ.get("PARTY_ENABLED", "0") == "1":
+        import party_bridge
+        start_npc_thread("party-agent", party_bridge.serve_dispatch)
     if GUILD_AGENT_ENABLED:
         import npc_planner
         start_npc_thread("guild-planner", lambda: npc_planner.collect_loop(sys.modules[__name__]))

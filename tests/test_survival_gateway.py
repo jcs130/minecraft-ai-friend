@@ -27,6 +27,9 @@ class MockRcon:
         self.game_mode = 'survival'
         self.equipment = {}
         self.navigation_modes = ['walk_only_v1', 'walk_only_strict_arrival_v2']
+        self.navigation_epoch = 'fixture-server-epoch'
+        self.navigation_result = None
+        self.task_id = 't1'
         self.roster = 'count=1\nKirito|uuid=' + BODY_UUID + '|owner=fixture|dim=minecraft:overworld|pos=100,64,100'
         self.reply = {'success': True, 'data': {'task_id': 't1', 'task': 'mine', 'async': True}}
         self.inventory = ('Kirito has the following entity data: '
@@ -46,9 +49,11 @@ class MockRcon:
             return json.dumps({'name': 'Kirito', 'hp': 20, 'max_hp': 20, 'hunger': 18,
                                'position': self.position, 'dimension': 'minecraft:overworld',
                                'game_mode': self.game_mode, 'equipment': self.equipment,
-                               'navigation_modes': self.navigation_modes})
+                               'navigation_modes': self.navigation_modes,
+                               'navigation_epoch': self.navigation_epoch,
+                               'last_navigation_result': self.navigation_result})
         if ' task_status ' in command:
-            return json.dumps({'success': True, **({'data': {'task_id': 't2', 'state': 'running'}} if self.busy else {})})
+            return json.dumps({'success': True, **({'data': {'task_id': self.task_id, 'state': 'running'}} if self.busy else {})})
         if ' look_around ' in command:
             return '...\n.@T\n...'
         if ' scan_nearby_entities ' in command:
@@ -92,6 +97,32 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(snapshot['task']['busy'])
         self.assertFalse(snapshot['task']['completionConfirmed'])
         self.assertFalse(self.rcon.mutations())
+
+    def test_observation_failure_is_unknown_not_confirmed_offline(self):
+        original = self.rcon.cmd
+        def timeout(command):
+            if ' get_self_status ' in command:
+                raise TimeoutError('fixture PRIVATE raw error')
+            return original(command)
+        self.rcon.cmd = timeout
+        result = self.client.snapshot()
+        self.assertIsNone(result['online'])
+        self.assertEqual(result['code'], 'observation_unavailable')
+        self.assertEqual(result['errorType'], 'TimeoutError')
+        self.assertEqual(result['observationStage'], 'self_status')
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.rcon.cmd = original
+        self.assertTrue(self.client.snapshot()['ok'])
+
+    def test_only_complete_roster_can_confirm_missing_body(self):
+        for raw in ('', 'count=1', 'count=0\nKirito|uuid=' + BODY_UUID,
+                    'Goddess has the following entity data: []'):
+            self.rcon.roster = raw
+            self.assertIsNone(self.client.snapshot()['online'])
+        self.rcon.roster = 'count=0\n'
+        result = self.client.snapshot()
+        self.assertIs(result['online'], False)
+        self.assertEqual(result['code'], 'body_offline')
 
     def test_duplicate_name_or_different_uuid_cannot_control_old_other_body(self):
         self.lease()

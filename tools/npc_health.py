@@ -94,6 +94,8 @@ def inspect_health(path, now=None):
             problems.append('thread_not_running:' + name)
     if data.get('maid_agent_enabled') is True and data.get('threads', {}).get('maid-agent') is not True:
         problems.append('thread_not_running:maid-agent')
+    if data.get('party_agent_enabled') is True and data.get('threads', {}).get('party-agent') is not True:
+        problems.append('thread_not_running:party-agent')
     if data.get('guild_agent_enabled') is True and data.get('threads', {}).get('guild-planner') is not True:
         problems.append('thread_not_running:guild-planner')
     if data.get('guild_requests_enabled') is True:

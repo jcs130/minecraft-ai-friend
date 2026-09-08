@@ -455,7 +455,66 @@ function renderSurvivorLife(value, stale) {
       ...(records.length ? records : [empty('上次查询没有本人已接合同。')])]);
   }
 }
+function renderParty(data) {
+  const value = record(data.party), budget = record(value.budget), counts = record(value.counts);
+  const available = value.available === true, stale = value.stale !== false;
+  const labels = { pending: '已听见 · 待思考', unknown: '思考待确认', submitted: '正在回应', answered: '已听见回复', expired: '已过期', failed: '未完成' };
+  const reasons = { busy: '队友正在处理其他事情，消息已排队。', budget_blocked: '等待调用额度或冷却恢复。',
+    body_unavailable: '等待队友的游戏身体上线。', submission_not_confirmed: '投递结果尚未确认，正在核对，暂不重复发送。',
+    binding_changed: '小队成员已变更，旧消息已停止投递。', ttl_expired: '消息已过期。',
+    recipient_unavailable: '队友暂时无法接收消息。', task_failed: '上次交流未完成，请查看后续状态。',
+    native_framework_interruption: '历史记录中曾误发模型的轮数上限提示；这是系统中断，不是角色的有效回答。' };
+  const unconfigured = value.status === 'unconfigured';
+  const status = unconfigured ? '尚未配置' : !available || value.status === 'unavailable' ? '暂不可用'
+    : stale ? '历史记录 / 待更新' : value.enabled !== true ? '尚未启用'
+    : budget.blocked === true ? '等待交流额度' : value.status === 'waiting' ? '等待处理' : '小队已连接';
+  setBadge('survivor-party-badge', status, available && !stale && value.enabled && value.status === 'running' && !budget.blocked ? 'good' : 'neutral');
+  byId('survivor-party-freshness').textContent = !available ? (unconfigured ? '尚未配置冒险小队。' : '小队状态暂时不可用。')
+    : '记录更新：' + formatDate(value.updatedAt) + (stale ? '。已超过 90 秒或连接中断，以下为历史记录。' : '。');
+  const members = rows(value.members), memberNames = new Map(members.map(member => [member.agentId, member.displayName]));
+  replace('survivor-party-members', members.map(member => node('span', 'chip',
+    text(member.displayName, '名称待设置') + ' · ' + (member.kind === 'maid' ? '女仆伙伴' : '冒险者')))
+    .concat(members.length ? [] : [empty('队员尚未登记。')]));
+  const messages = rows(value.messages), lastDetail = messages.find(message => message.detail)?.detail;
+  byId('survivor-party-reason').textContent = !available || unconfigured ? '配置完成后可查看两位队员的交流与等待原因。'
+    : stale ? '当前是否同行或正在交流尚未确认。'
+    : value.enabled !== true ? '小队交流尚未启用。'
+    : budget.blocked ? '等待调用额度或冷却恢复。' + (budget.nextDispatchAt ? ' 最早再次投递：' + formatDate(budget.nextDispatchAt) : '')
+    : value.error ? (reasons[value.error] || '小队服务正在等待恢复，请查看服务状态。')
+    : counts.unknown > 0 ? reasons.submission_not_confirmed
+    : lastDetail && reasons[lastDetail] ? reasons[lastDetail]
+    : counts.pending > 0 ? '队友已在游戏中听见说话，等待空闲或额度来思考回应。'
+    : counts.submitted > 0 ? '队友正在回应已经听见的话。' : '两人在同一世界的 24 格内交谈；女仆的游戏内私聊接入仍在完善。';
+  if (available) facts('survivor-party-counts', [
+    ['交流队列', ['pending', 'unknown', 'submitted'].map(key => labels[key] + ' ' + number(counts[key])).join(' · ')],
+    ['近期记录', ['answered', 'expired', 'failed'].map(key => labels[key] + ' ' + number(counts[key])).join(' · ')],
+    ['近 24 小时对话思考', number(budget.reservedDispatches24h) + ' / ' + number(budget.dailyDispatchCap) + ' · 剩余 ' + number(budget.remaining)],
+  ]); else replace('survivor-party-counts', []);
+  replace('survivor-party-messages', messages.map(message => {
+    const item = node('article', 'party-message'), heading = node('div', 'operations-heading');
+    heading.append(node('h3', '', text(memberNames.get(message.senderAgentId), '队员') + '在游戏里说'),
+      badge(message.frameworkInterruption ? '系统中断' : labels[message.status] || '状态待确认'));
+    item.append(heading, node('p', 'footnote', formatDate(message.createdAt)),
+      node('p', 'party-message-text', message.text || '尚未确认这句话在游戏中被听见。'));
+    if (record(message.hearing).heard) item.append(node('p', 'footnote', message.hearing.channel === 'msg'
+      ? '游戏内 /msg 私聊' : '听见时相距 ' + Number(message.hearing.distance).toFixed(1) + ' 格'));
+    if (message.reply) {
+      const reply = node('div', 'party-reply');
+      reply.append(node('h4', '', message.frameworkInterruption ? '历史系统提示' : text(memberNames.get(message.reply.senderAgentId), '队友') + '的回复'),
+        node('p', 'party-message-text', message.reply.text), node('p', 'footnote', formatDate(message.reply.createdAt)));
+      if (message.frameworkInterruption) reply.append(node('p', 'footnote', reasons.native_framework_interruption));
+      item.append(reply);
+    } else if (['rejected', 'unknown'].includes(record(message.replyHearing).state))
+      item.append(node('p', 'footnote', '尚未确认在游戏中听见回应；离得太远或身体不可用时无法送达。'));
+    else if (message.detail && reasons[message.detail]) item.append(node('p', 'footnote', reasons[message.detail]));
+    return item;
+  }).concat(messages.length ? [] : [empty(available && !unconfigured ? '暂无队伍交流记录。' : '等待小队接入后展示交流。')]));
+  let consoleLink;
+  try { consoleLink = new URL('/agents', record(data.links).qwenpaw).href; } catch { /* no known console */ }
+  setLink('survivor-party-console', consoleLink);
+}
 function renderSurvivor(data) {
+  renderParty(data);
   const value = record(data.survivor), body = record(value.body), budgets = record(value.budgets);
   const stale = value.available !== true || value.stale === true;
   const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
@@ -567,7 +626,7 @@ async function refresh(manual = false) {
     render(data);
     if (manual) byId('live-message').textContent = '记录已刷新。' + (data.stale ? '当前世界记录陈旧。' : '');
   } catch (error) {
-    if (snapshot) render({ ...snapshot, stale: true, health: { ...record(snapshot.health), stale: true }, survivor: { ...record(snapshot.survivor), stale: true }, operations: { ...record(snapshot.operations), stale: true, staleReason: 'connection' } });
+    if (snapshot) render({ ...snapshot, stale: true, health: { ...record(snapshot.health), stale: true }, survivor: { ...record(snapshot.survivor), stale: true }, party: { ...record(snapshot.party), stale: true }, operations: { ...record(snapshot.operations), stale: true, staleReason: 'connection' } });
     const notice = byId('connection-notice'); notice.hidden = false; notice.className = 'notice error';
     notice.textContent = snapshot ? '未能取得新快照，以下保留上次读取的历史记录。请稍后刷新。' : '暂时无法读取世界记录，页面会继续重试。';
     if (snapshot) {

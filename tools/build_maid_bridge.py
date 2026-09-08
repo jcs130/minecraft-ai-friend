@@ -69,8 +69,15 @@ def main():
     native = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), str(classes), cp]),
         'dev.qiandeng.maid.NativeCodecTest'], check=True, capture_output=True, text=True, timeout=30)
     codec_result = json.loads(native.stdout.strip().splitlines()[-1])
-    result = {'ok': contract.get('ok') is True and codec_result.get('ok') is True,
-        'checks': contract['checks'] + codec_result['checks'], 'suites': [contract, codec_result]}
+    journal = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), test_cp]),
+        'dev.qiandeng.maid.PartySpeechJournalTest'], check=True, capture_output=True, text=True, timeout=30)
+    journal_result = json.loads(journal.stdout.strip().splitlines()[-1])
+    companion_chat = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), str(classes), cp]),
+        'dev.qiandeng.maid.CompanionChatSiteTest'], check=True, capture_output=True, text=True, timeout=30)
+    companion_chat_result = json.loads(companion_chat.stdout.strip().splitlines()[-1])
+    suites = [contract, codec_result, journal_result, companion_chat_result]
+    result = {'ok': all(suite.get('ok') is True for suite in suites),
+        'checks': sum(suite['checks'] for suite in suites), 'suites': suites}
     if result['ok'] is not True:
         raise SystemExit('Maid bridge contract tests failed')
     target = build / 'qiandeng-maid-bridge-0.1.0.jar'

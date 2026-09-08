@@ -9,8 +9,8 @@
       "mod_id": "godvoice",
       "filename": "god-voice-0.1.0.jar",
       "cache_path": "vendor/god-voice-cache/god-voice-0.1.0.jar",
-      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
-      "size_bytes": 37896,
+      "sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99",
+      "size_bytes": 41048,
       "client_only": false,
       "source_build": "world/god-voice-src/build.py"
     }

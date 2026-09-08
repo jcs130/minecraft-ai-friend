@@ -43,6 +43,11 @@ def main():
         invocation[invocation.index('--entrypoint'):invocation.index('--entrypoint')] = [
             '--mount', f'type=bind,source={manifest},target=/maid-roles/roles.json,readonly',
             '--env', 'MAID_ROLES_MANIFEST_FILE=/maid-roles/roles.json']
+        party_manifest = ROOT / 'server/mcdata/village/party/public/roles.json'
+        if party_manifest.is_file():
+            invocation[invocation.index('--entrypoint'):invocation.index('--entrypoint')] = [
+                '--mount', f'type=bind,source={party_manifest},target=/party-roles/roles.json,readonly',
+                '--env', 'PARTY_ROLES_MANIFEST_FILE=/party-roles/roles.json']
     if args.execute:
         invocation += ['--execute', args.execute]
     print(command(invocation).strip())

@@ -157,8 +157,9 @@ def probe_panel_smoke():
     operations_team = probe_operations_team()
     game_qwenpaw = probe_game_qwenpaw()
     survivor = probe_survivor()
+    survivor_party = probe_survivor_party()
     model_routing = probe_model_routing()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, model_routing)),
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, model_routing)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -166,7 +167,17 @@ def probe_panel_smoke():
             'voice_boundary_deployment': voice_boundary_deployment,
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
             'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
-            'model_routing': model_routing}
+            'model_routing': model_routing, 'survivor_party': survivor_party}
+
+
+def probe_survivor_party():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_party_health', PROJECT / 'tools/party_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check()
+    except Exception as error:
+        return {'ok': False, 'errorType': type(error).__name__}
 
 
 def probe_model_routing():

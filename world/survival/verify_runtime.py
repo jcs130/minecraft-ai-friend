@@ -10,14 +10,14 @@ from pathlib import Path
 import re
 import socket
 
-from init_runtime import STATE, SOURCE, PROJECT, ROLE, DRIVER, TOOL_NAMES
+from init_runtime import STATE, SOURCE, PROJECT, ROLE, DRIVER, TOOL_NAMES, MODEL_MAX_ITERS, MODEL_QPM
 
 
 def verify_running(running):
-    assert running.max_iters == 6 and running.loop.iteration.enabled
-    assert running.loop.iteration.max_iterations == 6 and running.max_input_length == 16384
+    assert running.max_iters == MODEL_MAX_ITERS and running.loop.iteration.enabled
+    assert running.loop.iteration.max_iterations == MODEL_MAX_ITERS and running.max_input_length == 16384
     assert not running.llm_retry_enabled and running.llm_max_retries == 1
-    assert running.llm_max_concurrent == 1 and running.llm_max_qpm == 4
+    assert running.llm_max_concurrent == 1 and running.llm_max_qpm == MODEL_QPM
     assert not running.auto_title_config.enabled
     assert running.light_context_config.strategy == 'native'
     assert not running.light_context_config.visual_compact_config.enabled
@@ -98,8 +98,8 @@ async def verify(require_offline=False):
     return {'project': PROJECT, 'ok': True, 'packageVersion': '2.2.0', 'role': ROLE,
             'bodyName': manifest['bodyName'],
             'model': manifest['profiles'][0]['active_model'], 'builtinTools': 0,
-            'mcpTools': list(TOOL_NAMES), 'maxIterations': 6, 'maxInputLength': 16384,
-            'maxOutputTokens': 2048, 'maxConcurrentModels': 1, 'maxQueriesPerMinute': 4,
+            'mcpTools': list(TOOL_NAMES), 'maxIterations': MODEL_MAX_ITERS, 'maxInputLength': 16384,
+            'maxOutputTokens': 2048, 'maxConcurrentModels': 1, 'maxQueriesPerMinute': MODEL_QPM,
             'automaticJobs': 0, 'credentialDecryptable': True, 'modelCalls': 0,
             'network': 'none' if require_offline else 'not-used', 'worldActionsExecuted': 0}
 

@@ -198,9 +198,19 @@ class NumenGateway:
         if expected_uuid is not None and str(uuid.UUID(expected_uuid)) != expected_uuid:
             raise GatewayError('body_binding_invalid')
         roster = self.rcon.cmd('numen_act list')
-        matches = [line for line in roster.splitlines() if line.startswith(body + '|uuid=')]
+        lines = [line.strip() for line in roster.splitlines() if line.strip()]
+        if (not lines or not re.fullmatch(r'count=\d{1,3}', lines[0])
+                or int(lines[0][6:]) > 64 or len(lines) != int(lines[0][6:]) + 1
+                or any(not re.match(r'[A-Za-z0-9_]{1,16}\|uuid=[0-9a-f-]{36}(?:\||$)', line)
+                       for line in lines[1:])):
+            raise GatewayError('body_roster_unavailable')
+        matches = [line for line in lines[1:] if line.startswith(body + '|uuid=')]
+        if not matches:
+            if expected_uuid and any('|uuid=' + expected_uuid + '|' in line + '|' for line in lines[1:]):
+                raise GatewayError('body_uuid_mismatch')
+            raise GatewayError('body_offline')
         if len(matches) != 1:
-            raise GatewayError('body_offline_or_ambiguous')
+            raise GatewayError('body_roster_ambiguous')
         actual = matches[0].split('|uuid=', 1)[1].split('|', 1)[0]
         if expected_uuid is not None and actual != expected_uuid:
             raise GatewayError('body_uuid_mismatch')
@@ -231,12 +241,15 @@ class NumenGateway:
     def snapshot(self):
         now = self._now()
         body = None
+        stage = 'binding'
         try:
             body, body_uuid = self._check_binding()
+            stage = 'task_status'
             task = self._invoke('task_status')
             # Read busy first. If navigation finishes between these reads we
             # wait one more tick, rather than consume an idle body with an old
             # terminal receipt and lose the real outcome permanently.
+            stage = 'self_status'
             status = self._invoke('get_self_status')
             if (status.get('name') != body or task.get('success') is not True
                     or not all(self._number(status.get(k)) for k in ('hp', 'max_hp', 'hunger'))):
@@ -244,6 +257,7 @@ class NumenGateway:
             pos = status.get('position', {})
             if not all(self._number(pos.get(k)) for k in ('x', 'y', 'z')):
                 raise GatewayError('body_status_invalid')
+            stage = 'inventory'
             inventory, counts = inventory_from_snbt(self.rcon.cmd(f'data get entity {body} Inventory'))
             from game_skills import cached_game_skills, owned_skill_books
             tagged_books = [item for item in inventory if 'bookName' in item]
@@ -270,9 +284,11 @@ class NumenGateway:
                     'navigationEpoch': status.get('navigation_epoch') if isinstance(status.get('navigation_epoch'), str) else None,
                     'navigationResult': self._navigation_result(status.get('last_navigation_result')),
                     'notice': 'Idle is not a completion receipt. Numen navigation is not geofenced.'}
-        except (OSError, ValueError, TypeError, KeyError, ImportError):
-            return {'schema': 1, 'ok': False, 'online': False, 'bodyName': body,
-                    'observedAt': now, 'code': 'body_snapshot_unavailable'}
+        except (OSError, ValueError, TypeError, KeyError, ImportError) as error:
+            missing = isinstance(error, GatewayError) and str(error) == 'body_offline'
+            return {'schema': 1, 'ok': False, 'online': False if missing else None, 'bodyName': body,
+                    'observedAt': now, 'code': 'body_offline' if missing else 'observation_unavailable',
+                    'errorType': type(error).__name__, 'observationStage': stage}
 
     def observe(self, radius=8):
         try:
@@ -334,7 +350,7 @@ class NumenGateway:
         if control.get('schema') != 1 or control.get('enabled') is not True:
             raise GatewayError('autonomy_disabled')
 
-    def open_lease(self, turn_id, expires_at):
+    def open_lease(self, turn_id, expires_at, action_limit=1):
         with action_lock(self.state):
             self._enabled()
             if not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id):
@@ -343,10 +359,16 @@ class NumenGateway:
                 raise GatewayError('invalid_lease_expiry')
             if (self.state / 'unknown.json').exists():
                 raise GatewayError('outcome_unknown')
+            if (self.state / 'inflight-action.json').exists():
+                raise GatewayError('body_action_in_flight')
+            if type(action_limit) is not int or action_limit not in (1, 6):
+                raise GatewayError('invalid_action_limit')
             old = read_json(self.state / 'lease.json') if (self.state / 'lease.json').exists() else {}
-            if old.get('turnId') == turn_id or (old.get('status') in ('open', 'reserved') and old.get('expiresAt', 0) > self._now()):
+            if ((self.state / 'turn-actions' / (turn_id + '.json')).exists()
+                    or old.get('turnId') == turn_id
+                    or (old.get('status') in ('open', 'reserved') and old.get('expiresAt', 0) > self._now())):
                 raise GatewayError('lease_already_exists')
-            lease = {'schema': 1, 'turnId': turn_id, 'expiresAt': int(expires_at), 'actionLimit': 1,
+            lease = {'schema': 1, 'turnId': turn_id, 'expiresAt': int(expires_at), 'actionLimit': action_limit,
                      'actionsUsed': 0, 'status': 'open'}
             write_json(self.state / 'lease.json', lease)
             return lease
@@ -437,6 +459,83 @@ class NumenGateway:
             stream.flush()
             os.fsync(stream.fileno())
 
+    @staticmethod
+    def _action_snapshot(body):
+        return {k: body[k] for k in ('ok', 'bodyUuid', 'position', 'dimension', 'counts', 'hp',
+                'hunger', 'task', 'navigationEpoch', 'navigationResult', 'observedAt') if k in body}
+
+    def _save_receipt(self, receipt):
+        write_json(self.state / 'action-receipts' / (receipt['actionId'] + '.json'), receipt)
+        write_json(self.state / 'last-action.json', {'schema': 1, 'actionId': receipt['actionId']})
+
+    def turn_receipts(self, turn_id):
+        if not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id):
+            raise GatewayError('invalid_turn_id')
+        index = self.state / 'turn-actions' / (turn_id + '.json')
+        if not index.exists():
+            return []
+        result = []
+        for action_id in read_json(index).get('actionIds', [])[:6]:
+            if not isinstance(action_id, str) or not re.fullmatch(r'[0-9a-f]{32}', action_id):
+                raise GatewayError('invalid_action_id')
+            path = self.state / 'action-receipts' / (action_id + '.json')
+            if path.exists():
+                result.append(read_json(path))
+        return result
+
+    def _settle_inflight(self, body):
+        """Called under the shared mutex. Idle releases execution, never proves success."""
+        path = self.state / 'inflight-action.json'
+        if not path.exists():
+            return None
+        receipt = read_json(path)
+        if receipt.get('status') != 'in_flight':
+            return receipt
+        before = receipt['before']
+        if (body.get('ok') is not True or body.get('bodyUuid') != before.get('bodyUuid')
+                or body.get('dimension') != before.get('dimension')):
+            raise GatewayError('inflight_body_unavailable')
+        if (before.get('navigationEpoch') and body.get('navigationEpoch') != before['navigationEpoch']):
+            raise GatewayError('inflight_epoch_changed')
+        task = body.get('task', {})
+        if task.get('busy'):
+            if task.get('task_id') != receipt.get('nativeTaskId'):
+                raise GatewayError('inflight_task_mismatch')
+            return receipt
+        outcome = None
+        if receipt['tool'] == 'goto':
+            candidate = body.get('navigationResult') or {}
+            if (not receipt.get('nativeTaskId') or not before.get('navigationEpoch')
+                    or candidate.get('task_id') != receipt['nativeTaskId']
+                    or candidate.get('navigation_epoch') != before['navigationEpoch']):
+                raise GatewayError('navigation_terminal_unconfirmed')
+            outcome = candidate
+        receipt.update(status=('completed' if outcome.get('success') else 'failed') if outcome else 'observed_ended',
+                       after=self._action_snapshot(body), observedAt=self._now(),
+                       completionConfirmed=outcome is not None, navigationOutcome=outcome,
+                       notice='Idle proves no action is in flight; it does not prove the requested result.')
+        self._save_receipt(receipt)
+        self._record({**receipt, 'phase': 'observation'})
+        path.unlink()
+        return receipt
+
+    def action_status(self, body=None):
+        """Read-only world observation; reconcile our local receipt without replaying an action."""
+        try:
+            with action_lock(self.state):
+                receipt = self._settle_inflight(body or self.snapshot())
+                if receipt is None and (self.state / 'last-action.json').exists():
+                    action_id = read_json(self.state / 'last-action.json').get('actionId')
+                    if not isinstance(action_id, str) or not re.fullmatch(r'[0-9a-f]{32}', action_id):
+                        raise GatewayError('invalid_action_id')
+                    receipt = read_json(self.state / 'action-receipts' / (action_id + '.json'))
+                if (self.state / 'unknown.json').exists():
+                    return {'ok': False, 'inFlight': True, 'receipt': receipt, 'code': 'outcome_unknown'}
+                return {'ok': True, 'inFlight': bool(receipt and receipt.get('status') == 'in_flight'),
+                        'receipt': receipt}
+        except GatewayError as exc:
+            return {'ok': False, 'inFlight': True, 'code': str(exc)}
+
     def _confirm_equipment(self, args):
         # equip_item occupies Numen's syncSlot, which task_status cannot see.
         # Read the actual equipment after ticks advance; never resend the action.
@@ -460,9 +559,14 @@ class NumenGateway:
                     raise GatewayError('lease_invalid')
                 if (self.state / 'unknown.json').exists():
                     raise GatewayError('outcome_unknown')
-                if lease.get('actionLimit') != 1 or lease.get('actionsUsed') != 0:
+                if (type(lease.get('actionLimit')) is not int or lease['actionLimit'] not in (1, 6)
+                        or type(lease.get('actionsUsed')) is not int
+                        or not 0 <= lease['actionsUsed'] < lease['actionLimit']):
                     raise GatewayError('action_limit_reached')
                 before = self.snapshot()
+                pending = self._settle_inflight(before)
+                if pending and pending.get('status') == 'in_flight':
+                    raise GatewayError('body_action_in_flight')
                 if before.get('ok') is not True or before.get('gameMode') != 'survival':
                     raise GatewayError('survival_body_unavailable')
                 if before['task']['busy']:
@@ -495,13 +599,18 @@ class NumenGateway:
                 if lease['expiresAt'] <= self._now():
                     raise GatewayError('lease_expired')
                 action_id = uuid.uuid4().hex
-                lease.update(actionsUsed=1, actionId=action_id, status='reserved')
+                lease.update(actionsUsed=lease['actionsUsed'] + 1, actionId=action_id, status='reserved')
                 write_json(self.state / 'lease.json', lease)
                 # A process can die after sending but before recording the reply. Persist
                 # uncertainty first; only a definite response clears it.
                 marker = {'schema': 1, 'actionId': action_id, 'turnId': turn_id, 'tool': tool,
-                          'args': args, 'acceptedAt': self._now(), 'result': 'unknown'}
+                          'args': args, 'acceptedAt': self._now(), 'result': 'unknown',
+                          'before': self._action_snapshot(before)}
                 write_json(self.state / 'unknown.json', marker)
+                index = self.state / 'turn-actions' / (turn_id + '.json')
+                ids = read_json(index).get('actionIds', []) if index.exists() else []
+                write_json(index, {'schema': 1, 'turnId': turn_id, 'actionIds': ids + [action_id]})
+                self._save_receipt({**marker, 'schema': 2, 'status': 'unknown', 'completionConfirmed': False})
                 self._record({**marker, 'phase': 'dispatching'})
                 try:
                     reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
@@ -515,10 +624,33 @@ class NumenGateway:
                         result = {'ok': False, 'code': 'action_rejected', 'actionId': action_id, 'result': reply}
                     else:
                         raise GatewayError('outcome_unknown')
-                    lease['status'] = 'used'
-                    write_json(self.state / 'lease.json', lease)
+                    receipt = {**marker, 'schema': 2, 'result': result,
+                               'status': 'completed' if result.get('completionConfirmed') else 'rejected',
+                               'completionConfirmed': result.get('completionConfirmed') is True}
+                    if result.get('ok') and not result.get('completionConfirmed'):
+                        task_id = reply.get('data', {}).get('task_id')
+                        if tool == 'game_cast' and not task_id:
+                            # The spell bridge acknowledges casting, but exposes
+                            # no Numen task terminal. Preserve that honest receipt
+                            # and stop continuous actions for this work interval.
+                            receipt.update(status='effect_unconfirmed',
+                                notice='Casting began; no effect-completion API is available. End this work interval.')
+                            lease['actionsUsed'] = lease['actionLimit']
+                        elif not isinstance(task_id, str) or not task_id:
+                            raise GatewayError('async_task_id_missing')
+                        else:
+                            receipt.update(status='in_flight', nativeTaskId=task_id)
+                            write_json(self.state / 'inflight-action.json', receipt)
+                    else:
+                        # The response is known. Snapshot failure cannot turn it into
+                        # a success assertion or justify sending the action again.
+                        receipt.update(after=self._action_snapshot(self.snapshot()), observedAt=self._now())
+                    self._save_receipt(receipt)
                     self._record({**marker, 'phase': 'response', 'result': result, 'finishedAt': self._now()})
                     (self.state / 'unknown.json').unlink()
+                    lease['status'] = 'open' if lease['actionsUsed'] < lease['actionLimit'] else 'used'
+                    write_json(self.state / 'lease.json', lease)
+                    result['receipt'] = {k: receipt[k] for k in ('status', 'before', 'after', 'nativeTaskId') if k in receipt}
                     return result
                 except (OSError, ValueError, TypeError, KeyError):
                     lease['status'] = 'unknown'

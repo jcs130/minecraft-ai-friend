@@ -9,15 +9,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PHASE = 'auth-mode'
 from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
-from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard, SURVIVOR_QPM
+from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard, SURVIVOR_QPM, SURVIVOR_MAX_ITERS
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
+from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
+                                     check_party_inventory, check_party_api)
 
 MAID_TOOLS = {'identity', 'context', 'task_catalog', 'sit', 'follow', 'schedule', 'work'}
 
 
-def check_maid_card(card, clients, authorization):
+def check_maid_card(card, clients, authorization, role=None):
     """The unified DriverCard is authoritative; legacy MCP may be absent."""
-    assert 'qd_learning' in clients and set(clients) <= {'maid_native', 'qd_learning'}
+    assert 'qd_learning' in clients and set(clients) <= expected_drivers(role, {'maid_native', 'qd_learning'})
     assert card.name == 'maid_native' and card.protocol == 'mcp' and card.enabled is True
     assert set(card.endpoint) == {'transport', 'url', 'headers'}
     assert card.endpoint['transport'] == 'streamable_http' and card.endpoint['url'] == 'http://npc:8091/mcp'
@@ -51,9 +53,7 @@ def check_maid_card(card, clients, authorization):
 
 def check_maid_api(get, role):
     """Read native API inventory, effective console policy and actual tools."""
-    inventory = get('/mcp', aid=role)
-    assert isinstance(inventory, list) and len(inventory) == 2
-    assert {row.get('key') for row in inventory} == {'maid_native', 'qd_learning'}
+    check_party_inventory(get, role, {'maid_native', 'qd_learning'})
     client = get('/mcp/maid_native', aid=role)
     assert client['enabled'] is True and client['transport'] == 'streamable_http'
     assert client['url'] == 'http://npc:8091/mcp' and not client.get('command') and not client.get('args')
@@ -72,6 +72,8 @@ def check_maid_api(get, role):
     tools = get('/mcp/tools/maid_native', aid=role)
     assert isinstance(tools, list) and len(tools) == len(MAID_TOOLS)
     assert MAID_TOOLS == {item.get('name') for item in tools if item.get('enabled') is True}
+    if role in party_roles():
+        check_party_api(get, role)
 
 
 def check_maid_config(folder, role):
@@ -88,11 +90,14 @@ def check_maid_config(folder, role):
     assert agent['heartbeat']['enabled'] is False
     validate_native(agent, role)
     assert not any(row['enabled'] for row in agent['acp']['agents'].values())
-    assert set(driver_cards(folder)) == {folder / 'drivers/mcp/maid_native.yaml', folder / 'drivers/mcp/qd_learning.yaml'}
+    cards = driver_cards(folder)
+    assert set(cards) == {folder / ('drivers/mcp/' + name + '.yaml')
+                          for name in expected_drivers(role, {'maid_native', 'qd_learning'})}
     card = load_card(folder / 'drivers/mcp/maid_native.yaml')
     credential = AsyncCredentialStore(folder / 'credentials.yaml').get_sync('mcp/maid_native')
     assert credential.kind == 'static' and set(credential.secrets) == {'authorization'} and not credential.public
-    check_maid_card(card, agent['mcp']['clients'], credential.secrets['authorization'])
+    check_maid_card(card, agent['mcp']['clients'], credential.secrets['authorization'], role)
+    check_party_workspace(folder, role, agent, cards)
     validate_learning_workspace(folder, role, 'game')
 
 
@@ -106,8 +111,11 @@ def check_survivor_config(folder):
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
     assert agent['heartbeat']['enabled'] is False
     assert agent['running']['llm_max_concurrent'] == 1 and agent['running']['llm_max_qpm'] == SURVIVOR_QPM
-    assert agent['running']['max_iters'] == 6 and agent['running']['llm_retry_enabled'] is False
-    assert set(agent['mcp']['clients']) == {'numen_survival', 'qd_learning'}
+    assert agent['running']['max_iters'] == SURVIVOR_MAX_ITERS and agent['running']['llm_retry_enabled'] is False
+    assert agent['running']['loop']['iteration']['enabled'] is True
+    assert agent['running']['loop']['iteration']['max_iterations'] == SURVIVOR_MAX_ITERS
+    assert {'numen_survival', 'qd_learning'} <= set(agent['mcp']['clients']) <= expected_drivers(
+        'qd-survivor', {'numen_survival', 'qd_learning'})
     client = agent['mcp']['clients']['numen_survival']
     assert client['enabled'] and client['transport'] == 'streamable_http'
     assert client['url'] == 'http://survivor:8089/mcp' and not client.get('command')
@@ -118,7 +126,9 @@ def check_survivor_config(folder):
     validate_learning_workspace(folder, 'qd-survivor', 'game')
     cards = [p for p in (folder / 'drivers').glob('**/*.yaml')
              if p.name != '.legacy_mcp_migration_report.yaml']
-    assert set(cards) == {folder / 'drivers/mcp/numen_survival.yaml', folder / 'drivers/mcp/qd_learning.yaml'}
+    assert set(cards) == {folder / ('drivers/mcp/' + name + '.yaml')
+                          for name in expected_drivers('qd-survivor', {'numen_survival', 'qd_learning'})}
+    check_party_workspace(folder, 'qd-survivor', agent, cards)
     card = load_card(folder / 'drivers/mcp/numen_survival.yaml')
     assert card.enabled and card.endpoint['transport'] == 'streamable_http'
     assert card.endpoint['url'] == client['url']
@@ -181,6 +191,8 @@ def main():
     PHASE = 'runtime-config'
     disabled_builtins = check_runtime_config()
     expected_roles = set(roles('game'))
+    bound_party_roles = party_roles()
+    assert bound_party_roles <= expected_roles
     PHASE = 'native-cron-budget-guard'
     guard_verified = validate_guard('/state/work', 'game')
     PHASE = 'auth-mode'
@@ -215,6 +227,10 @@ def main():
         bindings += len(enabled_skills)
         if aid in maid_roles():
             check_maid_api(get, aid)
+        else:
+            check_party_inventory(get, aid, {'numen_survival', 'qd_learning'} if aid == 'qd-survivor' else {'qd_learning'})
+            if aid in bound_party_roles:
+                check_party_api(get, aid)
         jobs = get('/cron/jobs', aid=aid)
         validate_jobs({'jobs': [item.get('spec', item) for item in (jobs if isinstance(jobs, list) else jobs['jobs'])]}, aid, 'game')
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
@@ -223,6 +239,7 @@ def main():
                       'nativeToolPolicyVerified': True, 'officialSkillBindings': len(NATIVE_SKILLS) * len(expected_roles),
                       'survivorMcp': 'authenticated-streamable-http', 'learningMcpTools': len(TOOL_NAMES),
                       'installedSkillBindings': bindings, 'baseAgents': 6, 'maidAgents': len(maid_roles()),
+                      'partyAgents': len(bound_party_roles), 'partyDriverPolicyVerified': bool(bound_party_roles),
                       'cronBudgetGuardVerified': guard_verified,
                       'managedWeeklyJobs': len(expected_roles), 'unmanagedAutomaticJobs': 0}))
 

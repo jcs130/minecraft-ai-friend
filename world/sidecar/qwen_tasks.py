@@ -17,7 +17,7 @@ import uuid
 ROLES = {'npc_dialogue': 'qd-villager-dialogue', 'guild_quest': 'qd-guild-planner',
          'maid_dialogue': 'qd-maid-dialogue'}
 BASE = 'http://qwenpaw:8088/api'
-LIMITS = {'npc_dialogue': (4, 300), 'guild_quest': (1, 86400), 'maid_dialogue': (12, 60)}
+LIMITS = {'npc_dialogue': (4, 300), 'guild_quest': (1, 86400), 'maid_dialogue': (24, 60)}
 _LOCK = threading.RLock()
 MAX_BYTES = 262144
 
@@ -76,13 +76,15 @@ def final_text(value):
         if (not isinstance(message, dict) or message.get('role') != 'assistant'
                 or message.get('type') != 'message' or message.get('status') != 'completed'):
             continue
-        if not isinstance(message.get('content'), list):
-            continue
-        parts = [row['text'] for row in message['content'] if isinstance(row, dict)
+        content = message.get('content') if isinstance(message.get('content'), list) else []
+        parts = [row['text'] for row in content if isinstance(row, dict)
                  and row.get('type') == 'text' and isinstance(row.get('text'), str)]
         text = '\n'.join(parts).strip()
-        if text:
-            answer = text
+        # Native IterationGate reports an ordinary completed/message sentinel.
+        # Earlier narration is not a final answer when that message ends a task.
+        answer = text
+    if answer and re.fullmatch(r'Max iterations \([0-9]+\) reached', answer):
+        return None
     return answer if answer and len(answer) <= 16000 else None
 
 
@@ -117,7 +119,8 @@ class QwenTasks:
         if len(raw) > MAX_BYTES:
             raise ValueError('qwen_response_too_large')
         result = json.loads(raw)
-        if not isinstance(result, dict) and not (method == 'GET' and path == '/mcp' and isinstance(result, list)):
+        if not isinstance(result, dict) and not (method == 'GET' and isinstance(result, list)
+                and (path == '/mcp' or re.fullmatch(r'/mcp/tools/[A-Za-z0-9_-]+', path))):
             raise ValueError('qwen_response_invalid')
         return result
 
@@ -140,21 +143,66 @@ class QwenTasks:
             self.maid_registry = MaidRegistry()
         return self.maid_registry.resolve(maid_uuid, owner_uuid)
 
-    def submit(self, purpose, key, text, *, maid_uuid=None, owner_uuid=None):
+    def _refresh_maid_active(self, role, maid_uuid, owner_uuid):
+        # The native caller may stop waiting before inference finishes. Reconcile
+        # its known task before the next input, without ever replaying an unknown
+        # POST or making this gate depend on that caller returning to the game.
+        active_path = self.root / 'active-roles' / (hashlib.sha256(role.encode()).hexdigest() + '.json')
+        with state_lock(self.root):
+            if not active_path.exists():
+                return
+            active = read_json(active_path)
+            key = active.get('stateKey', '')
+            if not isinstance(key, str) or not re.fullmatch('[a-f0-9]{64}', key):
+                raise ValueError('qwen_role_gate_invalid')
+            prior = read_json(self.root / 'requests' / (key + '.json'))
+            if (prior.get('agentId') != role or prior.get('purpose') != 'maid_dialogue'
+                    or prior.get('maidUuid') != maid_uuid or prior.get('ownerUuid') != owner_uuid):
+                raise ValueError('qwen_role_gate_invalid')
+            if prior.get('status') not in ('submitted', 'running', 'poll_unavailable'):
+                return
+        # poll takes its own short ledger lock; never wait on HTTP inside it.
+        self.poll('maid_dialogue', prior['key'], maid_uuid=maid_uuid, owner_uuid=owner_uuid)
+
+    def submit(self, purpose, key, text, *, maid_uuid=None, owner_uuid=None, allowed_tools=None,
+               expected_binding=None):
         route = self._route(purpose)
         binding = self._maid_binding(purpose, maid_uuid, owner_uuid)
         role = binding['agentId'] if binding else route['agentId']
+        if expected_binding is not None:
+            actual = {'agentId': role, 'bodyUuid': maid_uuid, 'ownerUuid': owner_uuid,
+                      'sessionId': binding.get('sessionId') if binding else None,
+                      'userId': 'maid-' + maid_uuid if binding else None, 'channel': 'console'}
+            if not binding or expected_binding != actual:
+                raise ValueError('qwen_dispatch_binding_changed')
         if not isinstance(text, str) or not 1 <= len(text) <= 24000:
             raise ValueError('qwen_prompt_invalid')
+        if allowed_tools is not None and (not binding or not isinstance(allowed_tools, list)
+                or len(allowed_tools) > 256 or any(not isinstance(t, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', t) for t in allowed_tools)):
+            raise ValueError('qwen_tool_scope_invalid')
         path = self._path(purpose, key)
         digest = hashlib.sha256(text.encode('utf8')).hexdigest()
+        if binding and not path.exists():
+            self._refresh_maid_active(role, maid_uuid, owner_uuid)
         with state_lock(self.root):
             if path.exists():
                 saved = read_json(path)
                 if (saved.get('promptSha256') != digest or saved.get('agentId') != role
-                        or saved.get('maidUuid') != maid_uuid or saved.get('ownerUuid') != owner_uuid):
+                        or saved.get('maidUuid') != maid_uuid or saved.get('ownerUuid') != owner_uuid
+                        or (binding and saved.get('sessionId') != binding['sessionId'])
+                        or saved.get('allowedTools') != allowed_tools):
                     raise ValueError('qwen_request_conflict')
                 return saved | {'retryAutomatically': False}
+            # Native chat, party input and future wakeups for this character use
+            # one durable gate. Unknown submissions never age out of this gate.
+            active_path = self.root / 'active-roles' / (hashlib.sha256(role.encode()).hexdigest() + '.json')
+            if binding and active_path.exists():
+                active = read_json(active_path)
+                prior = read_json(self.root / 'requests' / (active['stateKey'] + '.json'))
+                if prior.get('agentId') != role:
+                    raise ValueError('qwen_role_gate_invalid')
+                if prior.get('status') not in ('completed', 'failed', 'not_submitted'):
+                    return {'status': 'busy', 'purpose': purpose, 'retryAutomatically': False}
             budget_path = self.root / 'budget.json'
             rows = read_json(budget_path) if budget_path.exists() else []
             if not isinstance(rows, list):
@@ -176,15 +224,22 @@ class QwenTasks:
                    'requestId': 'npc-' + uuid.uuid4().hex, 'startedAt': now, 'status': 'reserved', 'taskId': None,
                    'promptSha256': digest}
             if binding:
-                row.update(maidUuid=maid_uuid, ownerUuid=owner_uuid, sessionId=binding['sessionId'])
+                row.update(maidUuid=maid_uuid, ownerUuid=owner_uuid, sessionId=binding['sessionId'],
+                           userId='maid-' + maid_uuid, channel='console')
+            if allowed_tools is not None:
+                row['allowedTools'] = list(allowed_tools)
             # Both documents commit before POST. A crash between writes may cost
             # a reservation but cannot permit a duplicate paid request.
             write_json(budget_path, recent + [{**{k: row[k] for k in ('purpose', 'requestId', 'startedAt')}, 'stateKey': path.stem}])
             self._save(path, row)
+            if binding:
+                write_json(active_path, {'agentId': role, 'stateKey': path.stem})
         payload = {'channel': 'console', 'session_id': row.get('sessionId', row['requestId']),
-            'user_id': 'maid-' + maid_uuid if binding else 'npc-service', 'timeout': 180,
+            'user_id': row.get('userId', 'npc-service'), 'timeout': 180,
             'input': [{'role': 'user', 'content': [{'type': 'text', 'text': text}]}],
             'request_context': {'root_agent_id': 'npc-service'}}
+        if allowed_tools is not None:
+            payload['request_context']['subagent_allowed_tools'] = list(allowed_tools)
         try:
             value = self.transport('POST', '/console/chat/task', row['agentId'], payload)
             task_id = value.get('task_id')
@@ -206,7 +261,8 @@ class QwenTasks:
                 return {'status': 'not_submitted', 'retryAutomatically': False}
             row = read_json(path)
             if (row.get('purpose') != purpose or row.get('key') != key or row.get('agentId') != role
-                    or row.get('maidUuid') != maid_uuid or row.get('ownerUuid') != owner_uuid):
+                    or row.get('maidUuid') != maid_uuid or row.get('ownerUuid') != owner_uuid
+                    or (binding and row.get('sessionId') != binding['sessionId'])):
                 raise ValueError('qwen_task_not_owned')
             if row.get('status') not in ('submitted', 'running', 'poll_unavailable'):
                 return row | {'retryAutomatically': False}

@@ -221,7 +221,7 @@ class ExpandedNumenObservationTests(unittest.TestCase):
                 def cmd(self, command):
                     calls.append(command)
                     if command == 'numen_act list':
-                        return 'Kirito|uuid=' + UUID
+                        return 'count=1\nKirito|uuid=' + UUID
                     if ' look_around ' in command:
                         return 'T.@#' * 2000
                     if ' get_world_info ' in command:
@@ -251,7 +251,7 @@ class ExpandedNumenObservationTests(unittest.TestCase):
             class Rcon:
                 def cmd(self, command):
                     if command == 'numen_act list':
-                        return 'Kirito|uuid=' + UUID
+                        return 'count=1\nKirito|uuid=' + UUID
                     if 'get_self_status' in command:
                         return json.dumps({'name': 'Kirito', 'hp': 20, 'max_hp': 20, 'hunger': 5,
                             'position': {'x': 1, 'y': 70, 'z': 3}, 'biome': 'biomesoplenty:grove',

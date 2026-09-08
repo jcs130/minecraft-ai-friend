@@ -8,8 +8,10 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
+sys.path.insert(0, str(ROOT / 'world/sidecar'))
 from world_agent_profiles import WORLD_ROLES, validate_profile
 from role_learning_profiles import validate_learning_workspace
+from qwen_tasks import LIMITS as NPC_TASK_LIMITS
 
 RUNTIMES = {
     'game': ('server/agents/work', 'http://qwenpaw:8088/api'),
@@ -99,7 +101,9 @@ def probe(root=ROOT, now=None):
             and policy.get('generationOwner') == 'qwenpaw-agent'
             and policy.get('providerCredentialsOwner') == 'qwenpaw'
             and policy.get('automaticProviderFallback') is False
-            and policy.get('unknownSubmissionRetry') is False)
+            and policy.get('unknownSubmissionRetry') is False
+            and all((routes.get(purpose, {}).get('dailyLimit'), routes.get(purpose, {}).get('cooldownSeconds')) == limits
+                    for purpose, limits in NPC_TASK_LIMITS.items()))
         enabled = {}
         for runtime, (folder, _) in RUNTIMES.items():
             profiles = read_json(root / folder / 'config.json')['agents']['profiles']
