@@ -56,11 +56,19 @@ def main() -> None:
     subprocess.run([str(javac), "@" + str(argfile)], check=True, timeout=300)
     test_classes = build / "test-classes"
     test_classes.mkdir(exist_ok=True)
+    test_names = ("ActorLookupTest", "TradeRulesTest")
+    test_sources = [SOURCE / "tests" / (name + ".java") for name in test_names]
     subprocess.run([str(javac), "--release", "21", "-encoding", "UTF-8", "-cp", str(classes), "-d", str(test_classes),
-        str(SOURCE / "tests/ActorLookupTest.java")], check=True, timeout=60)
-    test = subprocess.run([str(java), "-cp", os.pathsep.join([str(classes), str(test_classes)]),
-        "dev.qiandeng.irons.ActorLookupTest"], check=True, capture_output=True, text=True, timeout=30)
-    test_result = json.loads(test.stdout)
+        *(str(path) for path in test_sources)], check=True, timeout=60)
+    test_results = []
+    for name in test_names:
+        test = subprocess.run([str(java), "-cp", os.pathsep.join([str(classes), str(test_classes)]),
+            "dev.qiandeng.irons." + name], check=True, capture_output=True, text=True, timeout=30)
+        test_results.append(json.loads(test.stdout))
+    test_result = {"ok": all(result.get("ok") is True for result in test_results),
+                   "checks": sum(result["checks"] for result in test_results), "suites": test_results}
+    if not test_result["ok"]:
+        raise SystemExit("Bridge contract tests failed")
     target = build / "qiandeng-irons-bridge-0.1.0.jar"
     entries = [(p, p.relative_to(classes).as_posix()) for p in classes.rglob("*.class")]
     entries += [(p, p.relative_to(SOURCE / "resources").as_posix()) for p in (SOURCE / "resources").rglob("*") if p.is_file()]
@@ -72,7 +80,7 @@ def main() -> None:
     with zipfile.ZipFile(target) as archive:
         if archive.testzip() is not None:
             raise SystemExit("JAR CRC validation failed")
-    inputs = [*sources, *(SOURCE / "resources").rglob("*.toml"), SOURCE / "tests/ActorLookupTest.java", Path(__file__)]
+    inputs = [*sources, *(SOURCE / "resources").rglob("*.toml"), *test_sources, Path(__file__)]
     record = {"ok": True, "minecraft": "1.21.1", "neoforge": "21.1.248", "irons_spellbooks": "1.21.1-3.16.3",
         "java_release": 21, "jar": str(target), "sha256": sha(target), "tests": test_result,
         "sources": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(inputs)},

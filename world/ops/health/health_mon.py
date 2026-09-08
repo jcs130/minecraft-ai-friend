@@ -64,6 +64,8 @@ MANIFEST = {
 }
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
     'survivor-status-panel', 'survivor-supervised-runtime', 'autonomous-task-evidence')
+SURVIVOR_ADVENTURE_CHECKS = ('native-39-tools', 'loaded-block-scan', 'physical-menu-identity',
+    'bound-guild-board', 'live-life-panel', 'resumed-model-action', 'strict-3d-arrival')
 
 OPERATIONS_TEAM_CONTAINER = 'qiandengji-qwenpaw-ops-1'
 OPERATIONS_TEAM_ROLES = ('default', 'mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
@@ -165,7 +167,8 @@ def probe_panel_smoke():
 
 def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
-    checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False, 'no_unexpected_pause': False}
+    checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
+              'adventure_projection': False, 'no_unexpected_pause': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
         if target.is_symlink() or target.stat().st_size > 262144:
@@ -198,12 +201,21 @@ def probe_survivor():
         checks['panel_projection'] = (public.get('available') is True and public.get('stale') is False
             and public.get('character') == '桐人' and public.get('bodyName') == 'Kirito'
             and abs((operations_time(public.get('generatedAt')) - timestamp).total_seconds()) < 30)
+        adventure, visible = source.get('adventure', {}), public.get('adventure', {})
+        checks['adventure_projection'] = (isinstance(adventure, dict) and isinstance(visible, dict)
+            and adventure.get('schema') == 1 and visible.get('available') is True
+            and visible.get('resources', {}).get('known') is (adventure.get('resources', {}).get('known') is True)
+            and visible.get('equipment', {}).get('known') is (adventure.get('equipment', {}).get('known') is True)
+            and isinstance(public.get('constructionAreas'), list)
+            and public.get('constructionAreasKnown') is isinstance(source.get('constructionAreas'), list))
         paused = source.get('status') == 'paused' and source.get('enabled') is False
     except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError, subprocess.TimeoutExpired):
         paused = False
     behavior = probe_recorded_behavior('survivor-smoke.json', SURVIVOR_SMOKE_CHECKS)
-    return {'ok': all(checks.values()) and behavior['ok'], 'checks': checks, 'paused': paused,
-        'behavior': behavior, 'scope': 'Live status, supervised container and recorded autonomy evidence; no model calls'}
+    adventure_behavior = probe_recorded_behavior('survivor-adventure-smoke.json', SURVIVOR_ADVENTURE_CHECKS)
+    return {'ok': all(checks.values()) and behavior['ok'] and adventure_behavior['ok'], 'checks': checks, 'paused': paused,
+        'behavior': behavior, 'adventure_behavior': adventure_behavior,
+        'scope': 'Live status and supervision; separate recorded autonomy, scan, guild-query and menu evidence. No model calls; no blanket life-goal completion.'}
 
 
 def probe_game_qwenpaw():
@@ -1002,12 +1014,22 @@ def probe_guild():
         # larger future timestamps, rather than treating every negative age as stale.
         clock_skew_tolerance = 5
         current_date = datetime.now().strftime('%Y-%m-%d')
+        consumer_age = time.time() - npc.get('guild_requests_last_poll', 0)
+        consumer_ok = (npc.get('guild_requests_enabled') is True
+                       and npc.get('threads', {}).get('guild-requests') is True
+                       and -clock_skew_tolerance <= consumer_age <= 15)
+        npcs = npc.get('guild_npcs', {})
+        npc_age = time.time() - npcs.get('checked_at', 0)
+        npc_ok = npcs.get('ok') is True and -clock_skew_tolerance <= npc_age <= 100
         ok = (-clock_skew_tolerance <= age < 100 and data.get('error_type') is None and
               data.get('basic_quests') is True and data.get('autogenerate') is False and
-              data.get('board_date') == current_date and npc.get('threads', {}).get('guild') is True)
+              data.get('board_date') == current_date and npc.get('threads', {}).get('guild') is True and consumer_ok and npc_ok)
         return {'ok': ok, 'age_seconds': round(age, 1), 'board_date': data.get('board_date'),
                 'clock_skew_tolerance_seconds': clock_skew_tolerance,
-                'task_counts': data.get('task_counts'), 'scope': 'Supervised guild polling and current board; individual legacy quest readiness is separate'}
+                'request_consumer_ok': consumer_ok, 'request_consumer_age_seconds': round(consumer_age, 1),
+                'npc_identity_ok': npc_ok, 'npcs_online': npcs.get('online'),
+                'npc_states': {r.get('key'): r.get('state') for r in npcs.get('required', [])[:32]},
+                'task_counts': data.get('task_counts'), 'scope': 'Supervised guild board and durable request consumer; individual quest outcomes require correlated receipts'}
     except (OSError, ValueError, KeyError, TypeError):
         return {'ok': False, 'error': 'Guild polling evidence is missing or invalid'}
 

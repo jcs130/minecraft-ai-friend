@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "capability": "walk_only_v1",
+  "capability": "walk_only_strict_arrival_v2",
   "sourceCommit": "33bb7d06f78a3566b5a5d49ef61e0572bd1a399e",
   "baselineJarSha256": "3a9af5420a5d40dcd6a24dd906d43fe4f67f25eea8ab6a082153bdcde7fae7af",
   "actuatorJarSha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea",
-  "patchSha256": "3affed414725ac26d797492f2340c795448351854722af74ac07da40d53f75c4",
+  "patchSha256": "dc45dd53dec67fb8009d103140428d72ecb1861d18f3281b9ae2846a85427b54",
   "preimages": {
     "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java": "3813eae97f87bf553a72af827166e7046193693c2b1b7a3c2e264fcc58e76896",
     "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java": null,
@@ -14,18 +14,24 @@
     "core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java": "6eb2347cdf070937d5843ed7db22557fb40a05eb4d87bb76f48245c1d48a3dd4",
     "core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java": "0cf6c84c59df6b5f0b43ed60ce19a875f55ffe329032fef61d7fe21838152bfc",
     "core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java": "6f7aa25b266717203894e136f68990485327f0203a47981beb58299dd2faaa44",
-    "core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java": "a39f88f3ae16e3afda3f707c737c6135689dbff254c30ad38f6b165935919aa5"
+    "core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java": "a39f88f3ae16e3afda3f707c737c6135689dbff254c30ad38f6b165935919aa5",
+    "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyArrival.java": null
   },
   "postimages": {
     "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/ExecHarness.java": "d953580532ead30f43deb6de3f82ae4014e7b00470395f8e928d188437d6f695",
-    "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java": "0c4cc12f63e0ee0e6ee07b097dc322cf8f814051928eecb950a6c1da5f3c1b12",
+    "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java": "990025f8b10e77ac051dd8aba55d718ae214f16ca0da8fde33843efd7cd9c3db",
     "core/common/src/main/java/com/dwinovo/numen/core/pathing/moves/CalculationContext.java": "f97062b69f4e08f7e65756dbf6a901e2efa545025cdffc70c54dfd460f431a3d",
     "core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChain.java": "9ea9b7298965d607abe270e9a5afc000b035add4349a76b9906b7199ddc49029",
-    "core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java": "f14467e8db9ac45879b4d1d0d2d579304b497f388efba6194e3b29b817c39a90",
+    "core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java": "1e3905c888fef484ccf9da774a0a4fc3b2ac49c8845c31748f0d8d802799038d",
     "core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToTaskRecord.java": "3e5026a5ea801c456ae9734db56de705e5f773257de63e2052c1d98b7b6ac9ca",
     "core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.java": "246bdc65a167d90fc8ecb66496360d3be4cc487a60385fe247ebffac61866740",
-    "core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java": "4af3220103d3553831aa2dd1880a454c7e503de52b4bb687ee1aea051101fa1a",
-    "core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java": "822dc8222943b93e29ef786787b1805a183d661a28f4e36b7c8cf16b466ec23e"
+    "core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java": "e21b77203dd53fdd2d36dc74f96438790c0fc6d1575e44db6360a5dfc5627127",
+    "core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToTool.java": "822dc8222943b93e29ef786787b1805a183d661a28f4e36b7c8cf16b466ec23e",
+    "core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyArrival.java": "90e6469f1b99f90c88e8ee41a2c24ff99470896967c12ffdcab88b30464c2dc6"
   },
-  "policy": "Task-local goto walk_only boolean; existing calls retain prior behavior. Requires server capability before use."
+  "policy": "Task-local walking; strict XYZ and dry supported column arrival. Existing walk_only=false and non-coordinate kinds retain prior behavior. Water transit remains enabled.",
+  "capabilities": [
+    "walk_only_v1",
+    "walk_only_strict_arrival_v2"
+  ]
 }

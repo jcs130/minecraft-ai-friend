@@ -138,6 +138,48 @@ function survivorSkillBooks(raw) {
           type: ['active', 'passive'].includes(row.type) ? row.type : null, knownLearned: bool(row.knownLearned) } : {}) };
     });
 }
+function survivorAdventure(raw) {
+  const value = object(raw);
+  if (value.schema !== 1) return {available: false};
+  const resources = object(value.resources), equipment = object(value.equipment), body = object(value.body);
+  const opportunities = object(value.opportunities), guild = object(opportunities.guild), villagers = object(opportunities.villagers);
+  const itemId = id => typeof id === 'string' && id.length <= 128 && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(id);
+  return {available: true, fresh: bool(body.fresh), observedAt: nonnegative(body.observedAt), truncated: value.truncated === true,
+    resources: {known: resources.known === true, items: Object.fromEntries(['food', 'tools', 'materials', 'agriculture', 'other'].map(key =>
+      [key, resources.known === true ? list(object(resources.items)[key]).slice(0, 8).filter(row => itemId(row?.id)
+        && count(row.count) !== null && row.count > 0).map(row => ({id: row.id, count: row.count})) : []]))},
+    equipment: {known: equipment.known === true, slots: equipment.known === true ? list(equipment.slots).slice(0, 6).filter(row =>
+      ['mainhand', 'offhand', 'head', 'chest', 'legs', 'feet'].includes(row?.slot) && itemId(row?.id)).map(row => ({slot: row.slot, id: row.id})) : []},
+    actionTools: list(object(value.capabilities).actionTools).slice(0, 32).filter(name => typeof name === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(name)),
+    guild: {known: guild.known === true, fresh: bool(guild.fresh), board: guild.known === true ? list(guild.board).slice(0, 8).map(row => ({
+      no: count(row?.no), title: text(row?.title, 100), type: text(row?.type, 32), status: text(row?.status, 40), reward: count(row?.reward)})) : []},
+    villagers: {known: villagers.known === true, fresh: bool(villagers.fresh), offersKnown: false,
+      nearby: villagers.known === true ? list(villagers.nearby).slice(0, 4).filter(row =>
+        ['minecraft:villager', 'minecraft:wandering_trader'].includes(row?.type)).map(row => ({type: row.type, distance: nonnegative(row.distance)})) : []}};
+}
+function survivorConstructionAreas(raw) {
+  const bounds = ['minX', 'maxX', 'minY', 'maxY', 'minZ', 'maxZ'];
+  return list(raw).slice(0, 8).filter(row => typeof row?.dimension === 'string' && row.dimension.length <= 100
+    && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(row.dimension) && bounds.every(key => Number.isSafeInteger(row[key]))
+    && ['X', 'Y', 'Z'].every(axis => row['min' + axis] <= row['max' + axis])).map(row => ({
+      name: optionalText(row.name, 80), dimension: row.dimension, ...Object.fromEntries(bounds.map(key => [key, row[key]]))}));
+}
+function survivorGuild(raw, actorUuid) {
+  const value = object(raw);
+  if (value.ok !== true || value.code !== 'guild_observed' || value.historicalQuery !== true || value.actor !== 'Kirito'
+    || typeof actorUuid !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actorUuid) || value.actorUuid !== actorUuid)
+    return {available: false, historicalQuery: true};
+  const item = id => typeof id === 'string' && id.length <= 100 && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(id) ? id : null;
+  return {available: true, historicalQuery: true, observedAt: nonnegative(value.observedAt),
+    boardDate: text(value.boardDate, 10), truncated: bool(value.truncated),
+    contracts: list(value.quests).slice(0, 24).filter(row => list(row?.claimedBy).includes('Kirito')
+      && typeof row?.questId === 'string' && /^\d{4}-\d{2}-\d{2}:\d{1,2}$/.test(row.questId)).map(row => ({
+      questId: row.questId, title: text(row.title, 120), type: text(row.type, 32), status: text(row.status, 40),
+      itemId: item(row.itemId), count: count(row.count), blockedReason: optionalText(row.blockedReason, 100),
+      acceptance: optionalText(row.acceptance, 160), rankRequired: count(row.rankRequired),
+      objective: {mobId: item(row.objective?.mobId), count: count(row.objective?.count),
+        dimension: item(row.objective?.dimension), radius: nonnegative(row.objective?.radius)} }))};
+}
 export function projectSurvivor(raw, now = Date.now()) {
   const value = object(raw);
   if (value.schema !== 1 || value.project !== 'qiandengji-survivor' || value.bodyName !== 'Kirito' || value.character !== '桐人'
@@ -166,7 +208,9 @@ export function projectSurvivor(raw, now = Date.now()) {
     body: { online: bool(body.online), hp: number(body.hp), hunger: number(body.hunger),
       position: survivorPosition(body.position), counts: survivorItems(body.counts),
       ownedSkillBooks: survivorSkillBooks(body.ownedSkillBooks), skillBooksTruncated: bool(body.skillBooksTruncated) },
-    gameSkills: survivorGameSkills(value.gameSkills),
+    gameSkills: survivorGameSkills(value.gameSkills), adventure: survivorAdventure(value.adventure),
+    constructionAreasKnown: Array.isArray(value.constructionAreas), constructionAreas: survivorConstructionAreas(value.constructionAreas),
+    guild: survivorGuild(value.guild, value.bodyUuid),
     budgets: Object.fromEntries(['decisionsUsed', 'decisionLimit', 'cooldownSeconds', 'modelRequests', 'promptTokens', 'completionTokens'].map(key => [key, count(budgets[key])])),
     skills: list(value.skills).slice(0, 40).map(row => ({ name: text(row?.name, 80), description: text(row?.description, 400),
       activeVersion: optionalText(row?.activeVersion, 80), draftVersion: optionalText(row?.draftVersion, 80) })),

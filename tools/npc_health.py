@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import time
 
@@ -91,6 +92,17 @@ def inspect_health(path, now=None):
     for name in ['spell', 'inbox', 'health']:
         if not data.get('threads', {}).get(name):
             problems.append('thread_not_running:' + name)
+    if data.get('guild_requests_enabled') is True:
+        stamp = data.get('guild_requests_last_poll')
+        if type(stamp) not in (int, float) or not math.isfinite(stamp) or not -5 <= now - stamp <= 15:
+            problems.append('guild_request_consumer_not_polling')
+        if data.get('threads', {}).get('guild-requests') is not True:
+            problems.append('thread_not_running:guild-requests')
+        evidence = data.get('guild_npcs', {})
+        stamp = evidence.get('checked_at')
+        if (evidence.get('ok') is not True or type(stamp) not in (int, float) or not math.isfinite(stamp)
+                or not -5 <= now - stamp <= 100):
+            problems.append('guild_npc_identity_not_ready')
     return {'ok': not problems, 'problems': problems, 'spell_consumed': data.get('spell_consumed', 0),
             'rcon_target': data.get('rcon_target'), 'spawn_missing': data.get('spawn_missing')}
 

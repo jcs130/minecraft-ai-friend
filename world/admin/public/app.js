@@ -405,12 +405,64 @@ function renderSurvivorGameSkills(raw, body) {
   byId('survivor-skill-books-note').textContent = '携带技能书后仍需满足学习条件并实际参悟。'
     + (body.skillBooksTruncated ? ' 当前仅展示部分技能书。' : '');
 }
+function renderSurvivorLife(value, stale) {
+  const life = record(value.adventure), resources = record(life.resources), gear = record(life.equipment);
+  const fresh = life.available === true && life.fresh === true && !stale;
+  setBadge('survivor-life-badge', life.available !== true ? '来源未知' : fresh ? '观察摘要' : '历史观察', 'neutral');
+  byId('survivor-life-freshness').textContent = life.available !== true ? '尚未收到生活状态，不能判断补给、装备或机会。'
+    : (fresh ? '身体观察：' : '历史身体观察：') + formatDate(life.observedAt) + (life.truncated ? ' · 仅展示部分记录' : '')
+      + '。下列机会有各自的来源时效。';
+  const labels = {food: '携带食物', tools: '工具', materials: '材料', agriculture: '农作物与种子', other: '其他物品'};
+  const items = record(resources.items);
+  facts('survivor-life-resources', Object.entries(labels).filter(([key]) => key !== 'other' || rows(items[key]).length).map(([key, label]) =>
+    [label, resources.known !== true ? '尚未观察' : rows(items[key]).length
+      ? rows(items[key]).slice(0, 4).map(row => row.id + ' ×' + number(row.count)).join('、') + (rows(items[key]).length > 4 ? ' …' : '')
+      : '摘要中没有记录']));
+  const slots = {mainhand: '主手', offhand: '副手', head: '头部', chest: '胸部', legs: '腿部', feet: '脚部'};
+  byId('survivor-life-equipment').textContent = gear.known !== true ? '装备情况尚未观察。'
+    : '装备：' + (rows(gear.slots).filter(row => row.id !== 'minecraft:air').map(row => slots[row.slot] + ' ' + row.id).join('；') || '观察时为空');
+  const guild = record(life.guild), villagers = record(life.villagers);
+  facts('survivor-life-opportunities', [['公会公示', guild.known !== true ? '尚未读取'
+    : (guild.fresh === true && !stale ? '最近公示 · ' : '历史公示 · ') + (rows(guild.board).slice(0, 3).map(row => '#' + number(row.no) + ' ' + text(row.title)).join('；') || '没有条目')],
+    ['附近商人', villagers.known !== true ? '尚未观察' : (villagers.fresh === true && !stale ? '最近观察 · ' : '历史观察 · ')
+      + (rows(villagers.nearby).map(row => (row.type === 'minecraft:wandering_trader' ? '流浪商人' : '村民')
+        + (finite(row.distance) ? ' ' + number(row.distance, 1) + ' 格' : '')).join('；') || '未发现商人') + '；报价尚未核对']]);
+  const areas = rows(value.constructionAreas);
+  byId('survivor-life-area').textContent = value.constructionAreasKnown !== true ? '建造范围尚未配置或读取。'
+    : !areas.length ? '当前没有授权建造范围。' : '授权建造范围：' + areas.slice(0, 2).map(area =>
+      text(area.name, dimensionNames[area.dimension] || area.dimension) + ' X ' + area.minX + '～' + area.maxX
+      + ' / Y ' + area.minY + '～' + area.maxY + ' / Z ' + area.minZ + '～' + area.maxZ).join('；')
+      + (areas.length > 2 ? '，另有 ' + (areas.length - 2) + ' 处' : '') + '。范围配置不代表已经建成住所。';
+  const ownGuild = record(value.guild);
+  if (ownGuild.available !== true) replace('survivor-life-contracts', [empty('本人合同进度尚未查询；公示不代表已接单或完成。')]);
+  else {
+    const contracts = rows(ownGuild.contracts), bodyCounts = record(record(value.body).counts);
+    const blocks = {missing_goods: '所需物资不足', npc_not_near: '尚未到交付人附近', quest_expired: '合同已过期',
+      claim_refused: '接单条件未满足', quest_not_owned: '不是本人合同', rank_too_low: '阶位不足'};
+    const records = contracts.map(contract => {
+      const entry = node('div', 'operation-record');
+      entry.append(node('strong', '', contract.title || contract.questId));
+      entry.append(node('p', 'footnote', '历史状态：' + text(contract.status, '未知') + ' · ' + contract.questId));
+      if (contract.itemId && finite(contract.count)) entry.append(node('p', 'footnote',
+        '需交付 ' + contract.itemId + ' ×' + number(contract.count) + '；'
+        + (resources.known !== true || record(value.body).online !== true ? '携带量尚未观察'
+          : (fresh ? '当前携带 ' : '历史携带 ') + number(bodyCounts[contract.itemId] ?? 0)) + '（不是已交付数量）'));
+      else entry.append(node('p', 'footnote', '完成进度待公会验收' + (contract.objective?.mobId ? ' · 目标 ' + contract.objective.mobId + ' ×' + number(contract.objective.count) : '')));
+      if (contract.blockedReason) entry.append(node('p', 'footnote', '缺少条件：' + (blocks[contract.blockedReason] || contract.blockedReason)));
+      return entry;
+    });
+    replace('survivor-life-contracts', [node('p', 'card-caption', '本人合同 · 历史查询 ' + formatDate(ownGuild.observedAt)),
+      ...(records.length ? records : [empty('上次查询没有本人已接合同。')])]);
+  }
+}
 function renderSurvivor(data) {
   const value = record(data.survivor), body = record(value.body), budgets = record(value.budgets);
   const stale = value.available !== true || value.stale === true;
   const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
     cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止' };
-  const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备', game_cast: '施法', game_learn: '参悟技能' };
+  const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备', game_cast: '施法', game_learn: '参悟技能',
+    place_block: '放置', farm: '耕作', open_container: '打开容器', transfer_items: '存取物品', close_container: '关闭容器',
+    sleep: '休息', trade: '村民交易', guild_claim: '接取委托', guild_deliver: '交付委托', guild_release: '退回委托' };
   const actionName = tool => actionNames[tool] || text(tool, '身体动作');
   const actionResult = action => action.code === 'accepted' ? '已受理；后续结果见最近的经历'
     : action.code === 'executed' && action.completionConfirmed === true ? '已确认执行'
@@ -452,6 +504,7 @@ function renderSurvivor(data) {
     ['决策间隔', number(budgets.cooldownSeconds) + ' 秒'], ['累计模型请求', number(budgets.modelRequests)],
     ['累计输入 / 输出 Token', number(budgets.promptTokens) + ' / ' + number(budgets.completionTokens)]]);
   renderSurvivorGameSkills(value.gameSkills, body);
+  renderSurvivorLife(value, stale);
   replace('survivor-skills', rows(value.skills).map(skill => {
     const card = node('div', 'operation-record');
     card.append(node('strong', '', text(skill.name)), node('p', 'card-caption', text(skill.description, '暂无描述')),

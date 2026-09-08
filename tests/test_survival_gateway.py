@@ -26,7 +26,7 @@ class MockRcon:
         self.position = {'x': 100, 'y': 64, 'z': 100}
         self.game_mode = 'survival'
         self.equipment = {}
-        self.navigation_modes = ['walk_only_v1']
+        self.navigation_modes = ['walk_only_v1', 'walk_only_strict_arrival_v2']
         self.roster = 'count=1\nKirito|uuid=' + BODY_UUID + '|owner=fixture|dim=minecraft:overworld|pos=100,64,100'
         self.reply = {'success': True, 'data': {'task_id': 't1', 'task': 'mine', 'async': True}}
         self.inventory = ('Kirito has the following entity data: '
@@ -153,9 +153,36 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'z': 100})['code'], 'safe_navigation_unavailable')
         self.assertFalse(self.rcon.mutations())
         self.rcon.navigation_modes = ['walk_only_v1']
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'z': 100})['code'], 'safe_navigation_unavailable')
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'y': 77, 'z': 100})['code'], 'safe_navigation_unavailable')
+        self.assertFalse(self.rcon.mutations())
+        self.rcon.navigation_modes.append('walk_only_strict_arrival_v2')
         result = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
         self.assertTrue(result['ok'])
         self.assertIn('"walk_only": true', self.rcon.mutations()[0])
+        self.assertNotIn('"y":', self.rcon.mutations()[0])
+
+    def test_observed_move_height_is_forwarded_with_walk_only(self):
+        self.lease()
+        result = self.client.action(TURN, 'goto', {'x': 110, 'y': 77.5, 'z': 100})
+        self.assertTrue(result['ok'])
+        payload = json.loads(self.rcon.mutations()[0].split(' goto ', 1)[1])
+        self.assertEqual(payload, {'x': 110, 'y': 77.5, 'z': 100, 'walk_only': True})
+
+    def test_optional_height_rejects_nonfinite_bounds_and_unrecognized_attributes(self):
+        self.lease()
+        invalid = [{'x': 110, 'z': 100, 'y': y} for y in (-65, 320, float('nan'), float('inf'), float('-inf'), True, None, '77')]
+        invalid += [{'x': 110, 'z': 100, 'y': 77, 'walk_only': False}, {'x': 110, 'z': 100, 'y': 77, 'radius': 2}, {'x': 110, 'y': 77}]
+        for args in invalid:
+            with self.subTest(args=args):
+                self.assertEqual(self.client.action(TURN, 'goto', args)['code'], 'invalid_move')
+        self.assertFalse(self.rcon.mutations())
+        self.assertFalse((self.state / 'unknown.json').exists())
+        self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 0)
+        for y in (-64, 319):
+            self.client._validate('goto', {'x': 110, 'y': y, 'z': 100})
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 125, 'y': 77, 'z': 100})['code'], 'walk_target_too_far')
+        self.assertEqual(self.client.action(TURN, 'goto', {'x': 161, 'y': 77, 'z': 100})['code'], 'outside_work_area')
 
     def test_walk_target_is_bounded_to_local_neighborhood(self):
         self.lease()
@@ -242,10 +269,55 @@ class GatewayTests(unittest.TestCase):
             for tool in listed:
                 if tool.name not in ('status', 'look', 'world_perception', 'skill_catalog', 'skill_read',
                                      'game_skills', 'game_skill_receipt', 'knowledge_catalog', 'knowledge_read',
-                                     'request_goal'):
+                                     'request_goal', 'inspect_block', 'scan_blocks', 'villager_offers',
+                                     'guild_board', 'guild_receipt', 'adventure_guide', 'inspect_container'):
                     self.assertIn('turn_id', tool.inputSchema['required'])
         asyncio.run(check())
         self.assertFalse(self.rcon.calls)
+
+    def test_mcp_move_optional_height_omits_none_and_forwards_observed_height(self):
+        async def check():
+            server = mcp_server.make_server(self.client)
+            listed = await server.list_tools()
+            tool = next(t for t in listed if t.name == 'move')
+            self.assertEqual(set(tool.inputSchema['required']), {'turn_id', 'x', 'z'})
+            self.assertIn('y', tool.inputSchema['properties'])
+            with patch.object(self.client, 'action', return_value={'ok': True}) as action:
+                await server.call_tool('move', {'turn_id': TURN, 'x': 110, 'z': 100})
+                action.assert_called_with(TURN, 'goto', {'x': 110, 'z': 100})
+                await server.call_tool('move', {'turn_id': TURN, 'x': 110, 'z': 100, 'y': None})
+                action.assert_called_with(TURN, 'goto', {'x': 110, 'z': 100})
+                await server.call_tool('move', {'turn_id': TURN, 'x': 110, 'z': 100, 'y': 77.5})
+                action.assert_called_with(TURN, 'goto', {'x': 110, 'z': 100, 'y': 77.5})
+        asyncio.run(check())
+        self.assertFalse(self.rcon.calls)
+
+    def test_world_preflight_cannot_consume_lease_or_mutate(self):
+        self.lease()
+        args = {'item_id': 'minecraft:crafting_table', 'x': 101, 'y': 64, 'z': 100}
+        with patch('world_actions.WorldActions.prepare', side_effect=gateway.GatewayError('outside_construction_area')), \
+             patch('world_actions.WorldActions.dispatch') as dispatch:
+            result = self.client.action(TURN, 'place_block', args)
+        self.assertEqual(result['code'], 'outside_construction_area')
+        self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 0)
+        self.assertFalse((self.state / 'unknown.json').exists())
+        dispatch.assert_not_called()
+
+    def test_world_dispatch_is_journaled_once_and_unknown_never_replays(self):
+        self.lease()
+        args = {'item_id': 'minecraft:crafting_table', 'x': 101, 'y': 64, 'z': 100}
+        def uncertain(plan):
+            self.assertTrue((self.state / 'unknown.json').exists())
+            self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 1)
+            raise gateway.GatewayError('outcome_unknown')
+        with patch('world_actions.WorldActions.prepare', return_value={'fixture': True}), \
+             patch('world_actions.WorldActions.dispatch', side_effect=uncertain) as dispatch:
+            result = self.client.action(TURN, 'place_block', args)
+            repeat = self.client.action(TURN, 'place_block', args)
+        self.assertEqual(result['code'], 'outcome_unknown')
+        self.assertFalse(repeat['ok'])
+        self.assertEqual(dispatch.call_count, 1)
+        self.assertTrue((self.state / 'unknown.json').exists())
 
     def test_game_learning_uses_same_single_action_lease_and_never_raw_rcon(self):
         self.lease()

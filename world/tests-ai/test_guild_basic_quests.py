@@ -7,6 +7,7 @@ import runpy
 import sys
 import tempfile
 import time
+import uuid
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -25,8 +26,12 @@ class GuildBasicTests(unittest.TestCase):
         self.folder = Path(self.temp.name)
         self.quest = {'id': 'fictional-qid', 'villager': 'hesu', 'display': 'Fixture NPC',
                       'item': 'wheat', 'zh': 'wheat', 'count': 2, 'emerald': 3}
+        jobs = {'hesu': 'farmer', 'zhujiu': 'toolsmith', 'xiaoman': 'shepherd', 'jingshui': 'cleric', 'guild_lan': 'cartographer'}
+        profiles = [{'key': key, 'display': key, 'profession': job, 'entityBinding': {
+            'uuid': str(uuid.UUID(int=i+1)), 'entityType': 'minecraft:villager', 'dimension': 'minecraft:overworld',
+            'preservePosition': True, 'lastKnownPosition': [0,64,0]}} for i,(key,job) in enumerate(jobs.items())]
         self.npc = SimpleNamespace(DATA=str(self.folder), VDIR=str(self.folder), CFG={},
-            GUILD_AUTOGENERATE=False, PROFILES=[{'key': key, 'display': key} for key in ('hesu', 'zhujiu', 'xiaoman')],
+            GUILD_AUTOGENERATE=False, PROFILES=profiles,
             R=SimpleNamespace(cmd=Mock(return_value='Fixture123 has 0 [killed_skeleton]')),
             quests_today=Mock(return_value={'quests': [self.quest]}),
             start_npc_thread=Mock(),
@@ -61,6 +66,25 @@ class GuildBasicTests(unittest.TestCase):
         path.write_bytes(original)
         self.assertEqual(self.guild.gen_board('2026-09-08'), doc)
         self.assertEqual(path.read_bytes(), original)
+        self.npc.R.cmd.assert_not_called()
+
+    def test_new_day_uses_registered_professional_bindings_without_loaded_queries(self):
+        by_key = {p['key']: p for p in self.npc.PROFILES}
+        by_key['zhujiu'].pop('entityBinding')
+        by_key['xiaoman']['profession'] = 'nitwit'
+        by_key['jingshui']['profession'] = 'armorer'
+        doc = self.guild.gen_board('2026-09-09')
+        self.assertEqual({row['from'] for row in doc['board']}, {'hesu'})
+        self.assertEqual({row['type'] for row in doc['board']}, {'gather', 'hunt'})
+        self.npc.R.cmd.assert_not_called()
+
+    def test_no_bound_qualified_receptionist_is_explicitly_unavailable(self):
+        for p in self.npc.PROFILES:
+            p.pop('entityBinding')
+        doc = self.guild.gen_board('2026-09-09')
+        self.assertEqual(doc['board'], [])
+        self.assertEqual(doc['availability']['reason'], 'no_bound_qualified_receptionist')
+        self.npc.quests_today.assert_not_called()
         self.npc.R.cmd.assert_not_called()
 
     def test_disabled_generation_cannot_spawn_through_imported_boss_or_direct_build(self):
@@ -103,6 +127,7 @@ class GuildBasicTests(unittest.TestCase):
         self.assertEqual(task['status'], 'done')
 
     def test_visit_requires_online_position_and_real_distance_before_reward(self):
+        self.npc.R.cmd.return_value = 'Fixture123 data: "minecraft:overworld"'
         task = {'type': 'visit', 'status': 'claimed', 'taker': ['Fixture123'],
                 'spot': 'far_horizon', 'pos': [0, 64, 0], 'r': 0}
         doc = {'date': time.strftime('%Y-%m-%d'), 'board': [task]}
@@ -133,11 +158,11 @@ class GuildBasicTests(unittest.TestCase):
         doc = self.guild.gen_board(time.strftime('%Y-%m-%d'))
         self.guild.BOARD = {'date': doc['date'], 'doc': doc}
         task = next(b for b in doc['board'] if b['type'] == 'hunt')
-        with patch.object(self.guild, 'hunt_score', return_value=None):
+        with patch.object(self.guild, 'hunt_score', return_value=None), patch.object(self.guild, '_near_receptionist', return_value=True):
             self.guild.claim('Fixture123', task['no'])
         self.assertEqual(task['status'], 'open')
         self.npc.ledger_append.assert_not_called()
-        with patch.object(self.guild, 'hunt_score', return_value=12):
+        with patch.object(self.guild, 'hunt_score', return_value=12), patch.object(self.guild, '_near_receptionist', return_value=True):
             self.guild.claim('Fixture123', task['no'])
         self.assertEqual(task['baseline'], {'Fixture123': 12})
         self.assertEqual(task['status'], 'claimed')

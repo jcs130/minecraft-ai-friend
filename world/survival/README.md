@@ -28,13 +28,20 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 
 ## MCP 工具
 
-`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单；QwenPaw DriverCard 默认拒绝。内置 shell、文件、浏览器、额外 Agent、后台记忆、标题、heartbeat、jobs 与失败重试都关闭。每轮最多 6 次迭代、输入 16384、输出 2048，模型并发 1、QPM 4；决策间隔和每日决策预算由控制器的持久账本执行，决策次数不等于模型调用次数。
+`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **39 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。内置 shell、文件、浏览器、额外 Agent、后台记忆、标题、heartbeat、jobs 与失败重试都关闭。每轮最多 6 次迭代、输入 16384、输出 2048，模型并发 1、QPM 4；决策间隔和每日决策预算由控制器的持久账本执行，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
 
 | 工具 | 用途 |
 |---|---|
 | `status()`、`look(radius)` | 无模型、只读身体和周边事实 |
 | `world_perception()` | 读取控制器持久感知缓存：聊天、发给自身的消息、周边及世界摘要 |
-| `move(turn_id,x,z)`、`mine(turn_id,block_ids,count)`、`craft(turn_id,item_id,count)`、`eat(turn_id,item_id)`、`equip(turn_id,item_id,slot)` | 一次受租约限制的直接身体动作 |
+| `move(turn_id,x,z,y=None)`、`mine(turn_id,block_ids,count)`、`craft(turn_id,item_id,count)`、`eat(turn_id,item_id)`、`equip(turn_id,item_id,slot)` | 一次受租约限制的直接身体动作；可靠观察实际脚高时可传 y，要求原生严格三维到达能力 |
+| `inspect_block(x,y,z)`、`scan_blocks(block_ids,radius)` | 精查真实方块，或同步扫描半径最多16格的已加载世界；最多8种ID/标签、16处最近匹配、同身体5秒冷却，未加载区域保持未知 |
+| `place_block(turn_id,item_id,x,y,z)`、`farm(turn_id,operation,x,y,z,item_id)` | 建设区内使用真实材料放置与耕作；床/门核对双格，收获要求本人已种植的成熟作物 |
+| `open_container(turn_id,x,y,z)`、`inspect_container(x,y,z)`、`transfer_items(turn_id,x,y,z,moves)`、`close_container(turn_id)` | 自己/授权实体容器，绑定坐标、菜单ID和服务器epoch；单箱/桶/熔炉，拒绝双箱与未知菜单；查询不占动作 |
+| `sleep(turn_id,x,y,z)` | 使用实际床并核对原生入睡状态，保留日间/敌怪等限制 |
+| `villager_offers(entity_id,offset)`、`trade(turn_id,entity_id,offer_index,quote)` | 近距分页查原生商人报价，按准确指纹成交一次，以原生次数与实际物品变化验收 |
+| `guild_board()`、`guild_claim(turn_id,quest_id)`、`guild_release(turn_id,quest_id)`、`guild_deliver(turn_id,quest_id)`、`guild_receipt(request_id)` | 查询原公会、承接/释放本人合同、按原规则交货与核对奖励；查询和既有回执不占动作 |
+| `adventure_guide()` | 按需读取自主生活、前置条件、真实验收与程序改进方法，不指定固定剧情 |
 | `skill_catalog()`、`skill_read(name,version)` | 查看已有程序和版本 |
 | `game_skills(scope)` | 通过原 `/mycli` 查询真实已学/可学/锁定法术及等级法力状态 |
 | `game_learn(turn_id,skill_id)`、`game_cast(turn_id,skill_id,params)` | 使用真实技能书学习或正常施法，共用单动作租约 |
@@ -49,7 +56,9 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 
 身体动作、程序学习和记忆写入共享 `action_lock`：控制器已启用、同一未过期租约、状态为 `open` 或 `used`，且没有不确定动作标记时才允许。草稿、测试、晋升和记忆不消耗身体动作次数；`skill_start` 要求 `open` 且 `actionsUsed=0`，先关闭本轮直接动作，再写 `skill-job.json`。得到 `skill_queued` 后结束模型轮次，MCP 不运行程序或触发 RCON。程序执行由控制器在该模型任务结束后启动。`request_goal` 仅排队一条明确会话目标，控制器保留当时的暂停状态和原预算，不创建第二个驱动。
 
-技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`，动作名称为 `goto/mine/craft/eat/equip_item/game_cast/game_learn`，而非 MCP 的 `move/equip`。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。法术学习保留原等级、技能书、法力、冷却和铁魔法装备规则，不能凭名称授予法术。
+技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`，当前17项动作是 `goto`、`mine`、`craft`、`eat`、`equip_item`、`game_cast`、`game_learn`、`place_block`、`farm`、`open_container`、`transfer_items`、`close_container`、`sleep`、`trade`、`guild_claim`、`guild_release`、`guild_deliver`。以 `skill_catalog().actionTools` 的当前清单为准，移动/装备不能写成 MCP 的 `move/equip`，扫描等观察工具也不是程序动作。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。法术学习保留原等级、技能书、法力、冷却和铁魔法装备规则，不能凭名称授予法术。
+
+新增 `adventure` 摘要把真实资源、装备、当前能力和公示/附近机会提供给规划器，不排序或自动派目标。`19091/#survivor` 的生活卡区分未知、历史与当前观察，展示配置建设范围和本人合同缺条件；持有物品不是已交付，配置范围不是已建成房屋。原公会缓存的 `fame` 对象与全局声望榜分别处理，实时 NPC 位置和历史导航位置也不混用。最终生产加载与实机结果由 [生活能力验证记录](../../docs/SURVIVOR-ADVENTURE.md#验证状态与尚未证明的部分) 补记，不能从工具数量推断已完成建房、收获或交易。
 
 `accepted` 只表示 Numen 受理；`skill_queued` 只表示排队。技能任务完成、库存变化、位置变化与模型自述分别保存。不确定结果禁止重放，技能程序也不能绕过身体身份、工作区、工具白名单或暂停门。记忆和环境文字始终作为数据传给规划角色，不注入系统提示。
 

@@ -164,10 +164,10 @@ def main():
         check=True, timeout=60)
     test = subprocess.run([str(args.jdk_bin/('java'+suffix)), '-cp', os.pathsep.join([str(tests), str(classes), cp]),
         'WalkOnlyContractTest'], check=True, capture_output=True, text=True, timeout=60)
-    target = build/'numen-neoforge-1.21.1-0.1.1-walk-only-v1.jar'
+    target = build/'numen-neoforge-1.21.1-0.1.1-walk-only-v2.jar'
     families = {name.split('/src/main/java/', 1)[1][:-5] for name in manifest['postimages']}
     preservation = overlay_jar(baseline, classes, target, families)
-    report = {'ok': True, 'capability': 'walk_only_v1', 'sourceCommit': head,
+    report = {'ok': True, 'capability': manifest['capability'], 'capabilities': manifest['capabilities'], 'sourceCommit': head,
         'baselineJarSha256': manifest['baselineJarSha256'], 'jar': str(target), 'sha256': sha(target.read_bytes()),
         'patchSha256': manifest['patchSha256'], 'source': str(local), 'tests': json.loads(test.stdout),
         'deployment': 'not performed', **preservation}

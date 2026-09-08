@@ -5,8 +5,21 @@ import { projectSurvivor, projectWorld } from '../admin/read-model.mjs';
 import { SERVICES, buildPlan } from '../admin/control-service.mjs';
 
 const fixture = (now = Date.now()) => ({ schema: 1, project: 'qiandengji-survivor', character: '桐人', bodyName: 'Kirito',
+  bodyUuid: '00000000-0000-0000-0000-000000000001',
   generatedAt: new Date(now).toISOString(), status: 'observing', enabled: true, autonomous: true, nextReviewAt: now / 1000 + 1800,
   goalState: 'ongoing', goal: '准备生存工具，探索附近环境',
+  adventure: {schema: 1, body: {fresh: true, observedAt: now}, resources: {known: true, items: {
+    food: [{id: 'minecraft:bread', count: 13}], tools: [{id: 'minecraft:iron_pickaxe', count: 1}],
+    materials: [{id: 'minecraft:oak_planks', count: 24}], agriculture: [{id: 'minecraft:wheat_seeds', count: 4}], other: []}},
+    equipment: {known: true, slots: [{slot: 'mainhand', id: 'minecraft:iron_pickaxe'}]},
+    capabilities: {actionTools: ['mine', 'place_block', 'farm']}, opportunities: {
+      guild: {known: true, fresh: true, board: [{no: 7, title: '交付小麦', status: 'open'}]},
+      villagers: {known: true, fresh: false, nearby: [{type: 'minecraft:villager', distance: 5}], offersKnown: false}}},
+  constructionAreas: [{name: '桐人宅地', dimension: 'minecraft:overworld', minX: 95, maxX: 110, minY: 63, maxY: 75, minZ: 95, maxZ: 110}],
+  guild: {ok: true, code: 'guild_observed', actor: 'Kirito', actorUuid: '00000000-0000-0000-0000-000000000001',
+    historicalQuery: true, observedAt: now - 3600000, boardDate: '2026-09-08', quests: [
+      {questId: '2026-09-08:7', title: '交付小麦', type: 'gather', status: 'claimed', claimedBy: ['Kirito'],
+       itemId: 'minecraft:wheat', count: 16, blockedReason: 'missing_goods'}]},
   perception: { pendingCount: 1, sources: { 'player-chat.jsonl': {available: true} },
     events: [{kind: 'chat', at: now, speaker: 'Explorer', text: '桐人，附近有村庄任务。'}] },
   environment: {ok: true, world: {weather: 'rain', is_dark_outside: false}, entities: [{type: 'minecraft:villager', distance: 5}]},
@@ -69,6 +82,43 @@ test('malformed decisions, versions and observed deltas stay unknown and bounded
   assert.equal(view.lastDecision, null); assert.equal(view.skills[0].activeVersion, null);
   assert.deepEqual(view.episodes[1].inventoryDelta, { 'minecraft:bread': -2 });
   assert.equal(JSON.stringify(view).includes('PRIVATE'), false);
+});
+
+test('life facts project only observed resources and bounded authorized areas without inventing achievements', () => {
+  const input = fixture();
+  input.adventure.resources.items.food[0].nbt = 'PRIVATE'; input.adventure.secret = 'PRIVATE';
+  input.constructionAreas[0].secret = 'PRIVATE';
+  let view = projectSurvivor(input);
+  assert.equal(view.adventure.available, true);
+  assert.equal(view.adventure.resources.items.food[0].count, 13);
+  assert.equal(view.adventure.villagers.fresh, false);
+  assert.equal(view.adventure.villagers.offersKnown, false);
+  assert.equal(view.constructionAreas[0].name, '桐人宅地');
+  assert.equal(JSON.stringify(view).includes('PRIVATE'), false);
+  assert.equal(Object.hasOwn(view.adventure, 'achievements'), false);
+  input.adventure.resources.known = false;
+  input.adventure.equipment.known = false;
+  input.adventure.resources.items.food.push({id: '<script>', count: 99});
+  input.constructionAreas[0].minX = 500;
+  view = projectSurvivor(input);
+  assert.deepEqual(view.adventure.resources.items.food, []);
+  assert.deepEqual(view.adventure.equipment.slots, []);
+  assert.deepEqual(view.constructionAreas, []);
+  input.adventure.schema = 2;
+  assert.deepEqual(projectSurvivor(input).adventure, {available: false});
+});
+
+test('guild card requires the exact body and exposes only its historical contracts', () => {
+  const input = fixture();
+  input.guild.quests.push({questId: '2026-09-08:8', title: 'PRIVATE', claimedBy: ['OtherPlayer']});
+  input.guild.quests[0].secret = 'PRIVATE';
+  let view = projectSurvivor(input).guild;
+  assert.equal(view.historicalQuery, true);
+  assert.equal(view.contracts.length, 1);
+  assert.equal(view.contracts[0].blockedReason, 'missing_goods');
+  assert.equal(JSON.stringify(view).includes('PRIVATE'), false);
+  input.guild.actorUuid = '00000000-0000-0000-0000-000000000002';
+  assert.equal(projectSurvivor(input).guild.available, false);
 });
 
 test('game skills retain historical known/empty distinction and reject private or malformed fields', () => {
@@ -190,6 +240,16 @@ test('survivor page shows real body, budget, skill and stale state without calli
   assert.match(await page.locator('#survivor-autonomy').innerText(), /持续自主生活/);
   assert.match(await page.locator('#survivor-perception').innerText(), /minecraft:villager/);
   assert.match(await page.locator('#survivor-events').innerText(), /附近有村庄任务/);
+  assert.match(await page.locator('#survivor-life-badge').innerText(), /观察摘要/);
+  assert.match(await page.locator('#survivor-life-resources').innerText(), /minecraft:wheat_seeds ×4/);
+  assert.match(await page.locator('#survivor-life-equipment').innerText(), /主手 minecraft:iron_pickaxe/);
+  assert.match(await page.locator('#survivor-life-area').innerText(), /桐人宅地 X 95～110/);
+  assert.match(await page.locator('#survivor-life-area').innerText(), /不代表已经建成住所/);
+  assert.match(await page.locator('#survivor-life-opportunities').innerText(), /历史观察 · 村民 5 格；报价尚未核对/);
+  assert.match(await page.locator('#survivor-life-contracts').innerText(), /本人合同 · 历史查询/);
+  assert.match(await page.locator('#survivor-life-contracts').innerText(), /缺少条件：所需物资不足/);
+  assert.match(await page.locator('#survivor-life-contracts').innerText(), /不是已交付数量/);
+  if (process.env.SURVIVOR_PANEL_QA_IMAGE) await page.locator('#survivor-life').screenshot({path: process.env.SURVIVOR_PANEL_QA_IMAGE});
   assert.match(await page.locator('#survivor-game-skills-badge').innerText(), /历史查询/);
   assert.match(await page.locator('#survivor-game-skills-freshness').innerText(), /历史查询/);
   assert.match(await page.locator('#survivor-legacy-query').innerText(), /历史查询/);
@@ -220,6 +280,13 @@ test('survivor page shows real body, budget, skill and stale state without calli
   await page.locator('#survivor-game-skills-badge').filter({hasText: '尚未查询'}).waitFor();
   assert.match(await page.locator('#survivor-progression').innerText(), /尚未查询成长数据/);
   assert.match(await page.locator('#survivor-learned').innerText(), /尚未查询/);
+  survivor.adventure.resources.known = false; survivor.adventure.equipment.known = false;
+  survivor.guild = {ok: false}; survivor.constructionAreas = [];
+  await page.getByRole('button', {name: '刷新', exact: true}).click();
+  await page.locator('#survivor-life-contracts').filter({hasText: '本人合同进度尚未查询'}).waitFor();
+  assert.match(await page.locator('#survivor-life-resources').innerText(), /尚未观察/);
+  assert.match(await page.locator('#survivor-life-equipment').innerText(), /尚未观察/);
+  assert.match(await page.locator('#survivor-life-area').innerText(), /当前没有授权建造范围/);
   await page.setViewportSize({width: 390, height: 844});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await page.setViewportSize({width: 1280, height: 900});
@@ -234,5 +301,9 @@ test('survivor page shows real body, budget, skill and stale state without calli
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await page.locator('#survivor-badge').filter({ hasText: '历史记录' }).waitFor();
   assert.match(await page.locator('#survivor-freshness').innerText(), /已过期/);
+  assert.match(await page.locator('#survivor-life-badge').innerText(), /历史观察/);
+  survivor.adventure = undefined;
+  await page.getByRole('button', {name: '刷新', exact: true}).click();
+  await page.locator('#survivor-life-badge').filter({hasText: '来源未知'}).waitFor();
   assert.deepEqual(errors, []);
 });

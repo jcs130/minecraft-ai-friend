@@ -24,7 +24,7 @@ MAX_STORE_BYTES = 262144
 MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
-ACTION_TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn')
+from numen_gateway import TOOLS as ACTION_TOOLS
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
 VERSION = re.compile(r'[0-9a-f]{64}\Z')
 

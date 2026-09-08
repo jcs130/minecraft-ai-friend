@@ -23,7 +23,7 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/Wa
 new file mode 100644
 --- /dev/null
 +++ b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyNavigation.java
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,98 @@
 +package com.dwinovo.numen.core.pathing.execute;
 +
 +import com.dwinovo.numen.core.pathing.bridge.ContextFactory;
@@ -88,6 +88,23 @@ new file mode 100644
 +
 +    public static boolean isActive(NumenPlayer player) {
 +        return isWalkOnly(CompanionTickDispatcher.currentTaskFor(player.getUUID()));
++    }
++
++    /** Probe the actual sole, not the full block below: slabs, stairs and fences have partial shapes. */
++    public static net.minecraft.world.phys.AABB soleProbe(net.minecraft.world.phys.AABB box) {
++        return new net.minecraft.world.phys.AABB(box.minX + 0.001, box.minY - 0.04, box.minZ + 0.001,
++                box.maxX - 0.001, box.minY + 0.001, box.maxZ - 0.001);
++    }
++
++    public static boolean drySupported(NumenPlayer player) {
++        var box = player.getBoundingBox();
++        var probe = soleProbe(box);
++        var feet = net.minecraft.core.BlockPos.containing(player.getX(), box.minY + 0.01, player.getZ());
++        var head = net.minecraft.core.BlockPos.containing(player.getX(), box.maxY - 0.01, player.getZ());
++        boolean support = player.level().getBlockCollisions(player, probe).iterator().hasNext();
++        return WalkOnlyArrival.dryLanding(player.onGround(), player.isInWater(), player.isInLava(),
++                !player.level().getFluidState(feet).isEmpty(), !player.level().getFluidState(head).isEmpty(),
++                support, player.getDeltaMovement().y);
 +    }
 +
 +    public static boolean blockInteraction(NumenPlayer player, boolean clicked) {
@@ -226,13 +243,35 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/chain/MLGChai
 diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
 --- a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
 +++ b/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCompanionTask.java
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,7 @@
  package com.dwinovo.numen.core.task.move;
 +import com.dwinovo.numen.core.pathing.goal.GoalCompiler;
++import com.dwinovo.numen.core.pathing.execute.WalkOnlyArrival;
++import com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation;
  import com.dwinovo.numen.core.pathing.settings.ScaffoldMaterials;
  import com.dwinovo.numen.core.FailureType;
  
-@@ -88,6 +89,10 @@
+@@ -72,6 +75,8 @@
+     private int settleTicks = 0;                  // ticks of no progress after the planner gave up
+     /** The one near-retry recovery rung has been consumed (ladder state — survives suspend). */
+     private boolean nearRetried;
++    private final WalkOnlyArrival.Stability walkLanding = new WalkOnlyArrival.Stability();
++    private int walkArrivalWaitTicks;
+     /** Absolute ceiling for lease renewals (start + {@link #CHECK_IN_CAP_TICKS}); 0 = unset. */
+     private long leaseCapGameTime;
+ 
+@@ -81,13 +86,20 @@
+     public MoveToCompanionTask(NumenPlayer player, MoveToTaskRecord record) {
+         super(player, record);
+         this.bx = record.x != null ? (int) Math.floor(record.x) : 0;
+-        this.by = record.y != null ? (int) Math.floor(record.y) : 0;
++        this.by = record.walkOnly && record.kind == MoveToTaskRecord.Kind.BLOCK
++                ? com.dwinovo.numen.core.pathing.util.BlockHelper.playerFeet(
++                    com.dwinovo.numen.core.pathing.cache.LoadedOnlyView.of(player.level()), record.x, record.y, record.z).getY()
++                : record.y != null ? (int) Math.floor(record.y) : 0;
+         this.bz = record.z != null ? (int) Math.floor(record.z) : 0;
+         this.blockTarget = new BlockPos(bx, by, bz);
+     }
  
      @Override
      protected void onStart() {
@@ -243,7 +282,7 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
          if (r.kind == MoveToTaskRecord.Kind.FIND) {
              // 就近方块:解析 id → 离线扫描附近候选;导航等首批候选到手再建
              var id = net.minecraft.resources.ResourceLocation.tryParse(r.block);
-@@ -121,14 +126,26 @@
+@@ -121,14 +133,26 @@
          // SACRED when solid — the route may neither dig through nor bury the very
          // block it was asked to reach. COLUMN/YLEVEL have no block objective.
          nav = r.kind == MoveToTaskRecord.Kind.BLOCK
@@ -272,7 +311,20 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
      }
  
      /** The navigation goal for this move's kind. */
-@@ -205,6 +222,11 @@
+@@ -187,6 +211,12 @@
+      * "one block short, one step too far" fall.
+      */
+     private boolean reached() {
++        if (WalkOnlyArrival.isStrict(r)) {
++            BlockPos feet = feet();
++            boolean coordinates = WalkOnlyArrival.coordinatesMatch(r.kind, bx, by, bz,
++                    feet.getX(), feet.getY(), feet.getZ());
++            return walkLanding.observe(player.level().getGameTime(), coordinates && WalkOnlyNavigation.drySupported(player));
++        }
+         return inGoalCell(feet())
+                 && inGoalCell(com.dwinovo.numen.core.pathing.moves.Movement.pathStart(player));
+     }
+@@ -205,6 +235,11 @@
  
      @Override
      protected TaskState onTick() {
@@ -284,7 +336,25 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
          // reached() is checked BEFORE the nav==null guard so an already-at-target start
          // (which never builds a nav) lands on SUCCESS rather than the defensive FAILED.
          if (reached()) return TaskState.SUCCESS;
-@@ -244,7 +266,7 @@
+@@ -239,12 +274,24 @@
+         }
+         return switch (nav.tick()) {
+             case RUNNING -> TaskState.RUNNING;
+-            case ARRIVED -> TaskState.SUCCESS;
++            case ARRIVED -> {
++                // PlayerNav may report its search goal satisfied even when the live
++                // stance is not. A water column or transient jump is not a dry arrival.
++                if (WalkOnlyArrival.isStrict(r) && !reached()) {
++                    // Water flags can lag the last step onto a dry bank. Keep the
++                    // same bounded settlement window; a truly wet endpoint still fails.
++                    if (!player.isInLava() && ++walkArrivalWaitTicks <= 20)
++                        yield TaskState.RUNNING;
++                    fail("walk_only_strict_arrival_v2: horizontal/unstable endpoint is not a dry supported destination; choose a verified landing cell", FailureType.NO_PATH);
++                    yield TaskState.FAILED;
++                }
++                yield TaskState.SUCCESS;
++            }
+             case FAILED -> {
                  // FIND:打不通就近候选 -> 除名,朝余下候选重开导航
                  if (r.kind == MoveToTaskRecord.Kind.FIND && finder.rotateAfterFailure()) {
                      stopNav();
@@ -293,7 +363,18 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
                      yield TaskState.RUNNING;
                  }
                  // The planner can't get closer. In water, keep waiting while the body is
-@@ -269,7 +291,7 @@
+@@ -254,6 +301,10 @@
+                 // goal but bails under an unreachable air one. On land a failure is final.
+                 if (player.isInWater() && settleTicks < MAX_SETTLE_TICKS) {
+                     yield TaskState.RUNNING;
++                }
++                if (WalkOnlyArrival.isStrict(r)) {
++                    fail("walk_only_strict_arrival_v2: requested destination was not reached with a dry supported stance; " + nav.failReason(), nav.failType());
++                    yield TaskState.FAILED;
+                 }
+                 // Otherwise: as close as the terrain allows → (teaching) success or fail.
+                 if (closeEnoughToSucceed()) yield TaskState.SUCCESS;
+@@ -269,7 +320,7 @@
                      nearRetried = true;
                      stopNav();
                      NavGoal retry = nearRetryGoal();
@@ -302,7 +383,15 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
                      yield TaskState.RUNNING;
                  }
                  String also = nearRetried
-@@ -352,7 +374,7 @@
+@@ -312,6 +363,7 @@
+      *  predicate on the near-retry nav this must not fire during a mid-air jump
+      *  or a sneak-hover over the edge, for the same reason as {@link #reached}. */
+     private boolean closeEnoughToSucceed() {
++        if (WalkOnlyArrival.isStrict(r)) return reached();
+         if (!player.onGround() && !player.isInWater()) {
+             return false;
+         }
+@@ -352,7 +404,7 @@
      private TaskState tickFindDiscovery() {
          finder.drain();
          if (finder.hasCandidates()) {
@@ -311,10 +400,17 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/task/move/MoveToCo
              return null;
          }
          if (finder.exhausted()) {
-@@ -372,6 +394,15 @@
+@@ -372,6 +424,22 @@
          data.put("final_y", player.getY());
          data.put("final_z", player.getZ());
          data.put("ground_y", gy);
++        if (WalkOnlyArrival.isStrict(r)) {
++            data.put("arrival_mode", r.kind == MoveToTaskRecord.Kind.BLOCK ? "block_3d" : "column_supported");
++            data.put("on_ground", player.onGround());
++            data.put("in_water", player.isInWater());
++            data.put("dry_supported", WalkOnlyNavigation.drySupported(player));
++            if (r.y != null) data.put("requested_y", r.y);
++        }
 +        data.put("navigation_mode", r.walkOnly ? "walk_only_v1" : "default");
 +        data.put("world_interaction_blocked", r.walkInteractionBlocked);
 +        String reason = switch (r.getState()) {
@@ -374,12 +470,13 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/MovementOps.
 diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java b/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
 --- a/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
 +++ b/core/common/src/main/java/com/dwinovo/numen/core/tools/perception/GetSelfStatusTool.java
-@@ -54,6 +54,12 @@
+@@ -54,6 +54,13 @@
      @Override
      public void onServerCall(String toolCallId, JsonObject args, NumenPlayer self, Consumer<String> reply) {
          JsonObject root = new JsonObject();
 +        JsonArray navigationModes = new JsonArray();
 +        navigationModes.add("walk_only_v1");
++        navigationModes.add(com.dwinovo.numen.core.pathing.execute.WalkOnlyArrival.CAPABILITY);
 +        root.add("navigation_modes", navigationModes);
 +        root.addProperty("navigation_epoch", com.dwinovo.numen.core.pathing.execute.WalkOnlyNavigation.EPOCH);
 +        root.add("last_navigation_result", new com.google.gson.Gson().toJsonTree(
@@ -428,3 +525,51 @@ diff --git a/core/common/src/main/java/com/dwinovo/numen/core/tools/work/MoveToT
 +                a.block(), Boolean.TRUE.equals(a.walk_only()), ctx(toolCallId, companion)), args, reply);
      }
  }
+diff --git a/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyArrival.java b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyArrival.java
+new file mode 100644
+--- /dev/null
++++ b/core/common/src/main/java/com/dwinovo/numen/core/pathing/execute/WalkOnlyArrival.java
+@@ -0,0 +1,43 @@
++package com.dwinovo.numen.core.pathing.execute;
++
++import com.dwinovo.numen.core.task.move.MoveToTaskRecord;
++
++/** Arrival policy only; it never changes path costs or movement inputs. */
++public final class WalkOnlyArrival {
++    public static final String CAPABILITY = "walk_only_strict_arrival_v2";
++    private WalkOnlyArrival() {}
++
++    public static boolean isStrict(MoveToTaskRecord task) {
++        return task != null && task.walkOnly
++            && (task.kind == MoveToTaskRecord.Kind.BLOCK || task.kind == MoveToTaskRecord.Kind.COLUMN);
++    }
++
++    public static boolean coordinatesMatch(MoveToTaskRecord.Kind kind, int tx, int ty, int tz,
++                                           int fx, int fy, int fz) {
++        return fx == tx && fz == tz && (kind == MoveToTaskRecord.Kind.COLUMN
++            || kind == MoveToTaskRecord.Kind.BLOCK && fy == ty);
++    }
++
++    public static boolean dryLanding(boolean onGround, boolean inWater, boolean inLava,
++                                     boolean feetWet, boolean headWet, boolean supportCollision,
++                                     double verticalSpeed) {
++        return !inWater && !inLava && !feetWet && !headWet && supportCollision
++            // Vanilla applies gravity after collision: an idle supported player
++            // commonly reports -0.0784, not zero. The sole probe is authoritative.
++            && Double.isFinite(verticalSpeed) && verticalSpeed >= -0.1 && verticalSpeed <= 0.005
++            && (onGround || verticalSpeed <= 0);
++    }
++
++    /** Several calls in one game tick must not manufacture a stable landing. */
++    public static final class Stability {
++        private long lastTick = Long.MIN_VALUE;
++        private int ticks;
++        public boolean observe(long tick, boolean valid) {
++            if (!valid) { ticks = 0; lastTick = tick; return false; }
++            if (tick == lastTick) return ticks >= 3;
++            ticks = lastTick != Long.MIN_VALUE && tick - lastTick == 1 ? ticks + 1 : 1;
++            lastTick = tick;
++            return ticks >= 3;
++        }
++    }
++}

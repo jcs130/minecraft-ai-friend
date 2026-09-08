@@ -223,6 +223,10 @@ def mode_of(v):
 def etype_of(v):
     """载体实体类型：人偶→armor_stand；实体→villager 或 base_villager（carrier 标记）。
     万家烟火融合（2026-08-20）：carrier=base_villager 的实体型村民用 mod 实体，激活行为系统。"""
+    from npc_identity import binding
+    bound = binding(v)
+    if bound:
+        return bound['entityType']
     if mode_of(v) == "stand":
         return "armor_stand"
     return "settlements:base_villager" if v.get("carrier") == "base_villager" else "villager"
@@ -510,10 +514,16 @@ def load_atoms():
         return []
 
 def gen_quests(day):
+    from guild_requests import atomic_json, read
+    from npc_identity import contract_issuer
+    if os.path.exists(quests_path(day)):
+        # A claimed/completed daily document must never be regenerated. An
+        # unreadable existing file is an error, not permission to replace it.
+        return read(quests_path(day))
     qcfg = CFG.get("quests", {})
     chance = qcfg.get("per_villager_chance", 0.55)
     cap = qcfg.get("daily_cap", 4)
-    pool = [v for v in PROFILES if v.get("quests")]
+    pool = [v for v in PROFILES if v.get("quests") and contract_issuer(v, 'gather')]
     random.shuffle(pool)
     quests = []
     for v in pool:
@@ -538,8 +548,10 @@ def gen_quests(day):
                 "done": False, "done_by": None, "done_at": None,
             }
         quests.append(q)
-    doc = {"date": day, "quests": quests}
-    json.dump(doc, open(quests_path(day), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    doc = {"date": day, "quests": quests, "availability": {
+        "ok": bool(pool), "reason": None if pool else "no_bound_qualified_issuers",
+        "eligibleIssuers": sorted(v['key'] for v in pool), "requiresLoadedChunk": False}}
+    atomic_json(quests_path(day), doc)
     print("[quest] generated %d quests for %s: %s" % (len(quests), day, [q["display"] for q in quests]), flush=True)
     return doc
 
@@ -592,82 +604,22 @@ def chronicle_append(text):
         f.write("- [%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M"), text))
 
 def turn_in(speaker, v, count, item_zh):
-    # 距离门：当面交易——玩家与 NPC 实距 > trade_proximity 格（默认 5）一律拒收，
-    # 防远程喊话白嫖（玩家不上前就能 /clear+/give 属经济漏洞）。村民档案可配 "far" 台词。
-    try:
-        limit = float(CFG.get("trade_proximity", 5))
-    except (TypeError, ValueError):
-        limit = 5.0
-    ppos = player_pos(speaker)
-    npos = alive_pos(v)
-    if ppos is None or npos is None:
-        print("[npc] trade refused (pos unknown): %s -> %s" % (speaker, v["key"]), flush=True)
-        return [v.get("far", "（手搭凉棚四下张望）没见着人影……走到我铺子跟前，当面才好交割！")]
-    dist = ((ppos[0]-npos[0])**2 + (ppos[1]-npos[1])**2 + (ppos[2]-npos[2])**2) ** 0.5
-    if dist > limit:
-        print("[npc] trade refused (far): %s %.1f blocks from %s" % (speaker, dist, v["key"]), flush=True)
-        return [v.get("far", "（手搭凉棚张望）隔着老远喊什么呢？走到我跟前来，当面点货！")]
-    q = quest_of(v["key"])
-    if not q:
-        return [v.get("quest_busy", "今日的活已经有人办完了。")]
-    aliases = ITEM_ALIASES.get(q["item"], [q["zh"]])
-    if item_zh not in aliases and item_zh != q["item"]:
-        return ["这个我今日不收——我要的是 %d 个%s。" % (q["count"], q["zh"])]
-    if count < q["count"]:
-        return [v.get("short", "数目不够，我要 {count} 个{zh}。").replace("{count}", str(q["count"])).replace("{zh}", q["zh"])]
-    # /clear 收货：响应 "Removed N items" 即实收数量
-    try:
-        r = R.cmd("clear %s minecraft:%s %d" % (speaker, q["item"], q["count"]))
-    except Exception:
-        R.s = None
-        return ["（交易被一阵怪风打断了……再试一次？）"]
-    m = re.search(r"Removed (\d+)", r)
-    got = int(m.group(1)) if m else 0
-    if got < q["count"]:
-        if got > 0:
-            R.cmd("give %s minecraft:%s %d" % (speaker, q["item"], got))  # 原路退还
-        return [v.get("short", "数目不够，我要 {count} 个{zh}。").replace("{count}", str(q["count"])).replace("{zh}", q["zh"])]
-    # 结算
-    reward_desc = []
-    if q["emerald"] > 0:
-        R.cmd("give %s minecraft:emerald %d" % (speaker, q["emerald"]))
-        reward_desc.append("%d 绿宝石" % q["emerald"])
-    if q.get("effect"):
-        R.cmd("effect give %s minecraft:%s 60 0" % (speaker, q["effect"]))
-        reward_desc.append("祝福·%s" % q["effect"])
-    lines = list(v.get("thanks", ["多谢！"]))
-    if q.get("lore_atom"):
-        atoms = load_atoms()
-        pick = random.choice(atoms) if atoms else None
-        if pick and pick.get("words"):
-            word = pick["words"][0]
-            lines.append("（压低声音）说好的秘密——「%s」。在聊天栏念出这个词，女神听得懂。" % word)
-            reward_desc.append("咒语情报")
-    q["done"], q["done_by"], q["done_at"] = True, speaker, time.strftime("%H:%M")
-    villager_hmm(v, "trade", throttle=False)  # 成交"嗯嗯"声（关键反馈，不节流）
-    json.dump(QUESTS["doc"], open(quests_path(QUESTS["date"]), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    ledger_append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "date": QUESTS["date"], "villager": q["display"],
-                   "player": speaker, "item": q["item"], "count": q["count"], "reward": ",".join(reward_desc) or "无"})
-    chronicle_append("集市｜%s 替 %s 办成今日委托（%d %s → %s）" % (speaker, q["display"], q["count"], q["zh"], "、".join(reward_desc) or "谢意"))
-    feed_append({"kind": "event", "npc": q["display"], "text": "%s 办成了 %s 的委托（%d %s → %s）" % (speaker, q["display"], q["count"], q["zh"], "、".join(reward_desc) or "谢意")})
-    try:
-        # 2026-08-23 造物主谕：确认一律 msg 点对点，不刷公屏——委托完成只告诉委托人。
-        tellraw([("[女神] ", "gold"), ("%s 办成了 %s 的今日委托。（编年史已记）" % (speaker, q["display"]), "white")], to=speaker)
-    except Exception:
-        pass
-    print("[quest] DONE %s -> %s: %s" % (speaker, q["display"], q["zh"]), flush=True)
-    # 公会钩子：该委托若在看板上，连带销板+声望+公告（未接单的裸交付也给功勋——板书即公会）
-    try:
-        import mc_guild as _G
-        if _G.settle_gather(q["id"], speaker):
-            lines.append("（柜台那头盖了个青色印章）公会看板上的这单也一并给你记功了。")
-    except Exception as e:
-        print("[guild] settle err:", e, flush=True)
-    try:
-        sync_offers([v])  # 柜台同步撤下已完成的委托（GUI/whisper 双通道一致）
-    except Exception:
-        R.s = None
-    return lines
+    """Normal NPC exchange, sharing durable settlement with the guild CLI."""
+    import mc_guild as guild
+    from guild_requests import deliver_quest
+    with guild.state_lock():
+        q = quest_of(v["key"])
+        if not q:
+            return [v.get("quest_busy", "今日的货单已被完成或正在交割，不能重复收货。")]
+        aliases = ITEM_ALIASES.get(q["item"], [q["zh"]])
+        if item_zh not in aliases and item_zh != q["item"]:
+            return ["这个我今日不收——我要的是 %d 个%s。" % (q["count"], q["zh"])]
+        if type(count) is not int or count < q["count"]:
+            return ["数目不足——我要 %d 个%s。" % (q["count"], q["zh"])]
+        result = deliver_quest(sys.modules[__name__], guild, speaker, v, q)
+        return ([*v.get("thanks", ["多谢！"]), result["summary"]]
+                if result["ok"] else [result["summary"]])
+
 
 # ---------- 原版交易柜台（Offers.Recipes 通用接口，2026-08-18） ----------
 def _offer_recipe(item_id, count, emeralds, max_uses=1):
@@ -845,7 +797,8 @@ def _scan_settle(v):
             quests = quests_today()["quests"]
         except Exception:
             continue
-        q = next((x for x in quests if x["item"] == item and x["count"] == cnt and not x.get("done")), None)
+        q = next((x for x in quests if x["item"] == item and x["count"] == cnt and not x.get("done")
+                  and (v.get('market_agg') or x.get('villager') == v.get('key'))), None)
         if q:
             owner = next((p for p in PROFILES if p["key"] == q["villager"]), v)
             try:
@@ -855,6 +808,10 @@ def _scan_settle(v):
 
 def _settle_gui_trade(v, q):
     """GUI 成交核销（轮询侦测 uses 0→1）：委托下架 + 补发奖励 + 台账。交易者取柜台 6 格内最近玩家。"""
+    doc = quests_today()
+    q = next((row for row in doc['quests'] if row.get('id') == q.get('id') and not row.get('done')), None)
+    if q is None:
+        return
     near = "@p[distance=..6,limit=1]"
     q["done"], q["done_by"], q["done_at"] = True, "(gui)", time.strftime("%H:%M")
     try:
@@ -1522,6 +1479,10 @@ def route(speaker, msg, via="public"):
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
 def sel(v):
+    from npc_identity import binding, typed_uuid_selector
+    bound = binding(v)
+    if bound:
+        return typed_uuid_selector(bound['uuid'], v['tag'])
     etype = etype_of(v)
     return '@e[type=%s,tag=%s,limit=1]' % (etype, v["tag"])
 
@@ -1547,9 +1508,8 @@ def dedup_npc(v):
 def alive_pos(v):
     try:
         r = R.cmd("data get entity %s Pos" % sel(v))
-        m = re.search(r"\[(-?[\d.]+)d, ?(-?[\d.]+)d, ?(-?[\d.]+)d\]", r)
-        if m:
-            return float(m.group(1)), float(m.group(2)), float(m.group(3))
+        from npc_identity import parse_position
+        return parse_position(r)
     except Exception:
         R.s = None
     return None
@@ -1734,6 +1694,10 @@ def heal_npcs():
                 R.s = None
             continue
         _MISS[v["tag"]] = 0
+        if v.get('entityBinding', {}).get('preservePosition') is True:
+            # A migrated entity is bound where it already lives. Legacy spawn
+            # coordinates are historical and must never become a teleport.
+            continue
         # 接地自愈（2026-08-22）：以 spawn 为锚——高于锚 2+（爬屋顶/卡树冠）或低于锚 2.5+（掉坑）都拉回 spawn 地面
         try:
             sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
@@ -2372,6 +2336,9 @@ def npc_heartbeat_loop():
                      "rcon_target": {"host": HOST, "port": PORT}, "spawn_missing": SPAWN_MISSING,
                      "llm_enabled": bool(CFG.get("llm", {}).get("enabled")),
                      "guild_autogenerate": bool(GUILD_AUTOGENERATE),
+                     "guild_requests_enabled": bool(os.environ.get("NPC_GUILD_QUEUE")),
+                     "guild_requests_last_poll": getattr(sys.modules.get("guild_requests"), "_LAST_POLL", 0),
+                     "guild_npcs": getattr(sys.modules.get("guild_requests"), "_NPC_HEALTH", {}),
                      "basic_quests": bool(getattr(sys.modules.get("mc_guild"), "BASIC_QUESTS",
                          os.environ.get("NPC_GUILD_BASIC_QUESTS", "1") == "1"))}
             temporary = path.with_suffix(".tmp")
@@ -2393,6 +2360,20 @@ def start_npc_thread(name, function):
     thread = threading.Thread(target=supervised, name="npc-" + name, daemon=True)
     _NPC_THREADS[name] = thread
     thread.start()
+
+
+def _economy_locked(function):
+    from functools import wraps
+    @wraps(function)
+    def locked(*args, **kwargs):
+        import mc_guild
+        with mc_guild.state_lock():
+            return function(*args, **kwargs)
+    return locked
+
+
+for _economy_name in ('gen_quests', 'quests_today', 'turn_in', 'sync_offers', '_scan_settle', '_settle_gui_trade'):
+    globals()[_economy_name] = _economy_locked(globals()[_economy_name])
 
 
 if __name__ == "__main__":
@@ -2428,6 +2409,9 @@ if __name__ == "__main__":
     try:
         import mc_guild
         mc_guild.start()
+        if os.environ.get("NPC_GUILD_QUEUE"):
+            import guild_requests
+            start_npc_thread("guild-requests", lambda: guild_requests.run(sys.modules[__name__]))
     except Exception as e:
         print("[guild] boot err:", e, flush=True)
     try:

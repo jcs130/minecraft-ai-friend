@@ -14,6 +14,11 @@ v2 新增（2026-08-19 众力需求）：
          收购单（gather，引用 quests）仍走发单人交易链路（零改动）。
 """
 import json, os, re, time, threading, random, math
+from contextlib import contextmanager
+from functools import wraps
+from guild_requests import atomic_json, near_npc
+import guild_inventory as inventory
+from npc_identity import contract_issuer
 import guild_rules as Rules
 import mc_npc as N  # 复用 RCON/tellraw/villagers/feed/chronicle 基建
 
@@ -24,6 +29,40 @@ BASIC_QUESTS = os.environ.get("NPC_GUILD_BASIC_QUESTS", "1") == "1"
 _HEALTH_LAST_SUCCESS = 0.0
 _START_LOCK = threading.Lock()
 _GUILD_STARTED = False
+_STATE_LOCK = threading.RLock()
+_LOCK_DEPTH = threading.local()
+
+
+@contextmanager
+def state_lock():
+    """One reentrant economy lock for GUI, NPC chat, CLI and the guild poller."""
+    with _STATE_LOCK:
+        depth = getattr(_LOCK_DEPTH, 'depth', 0)
+        _LOCK_DEPTH.depth = depth + 1
+        try:
+            if depth:
+                yield
+            else:
+                os.makedirs(VDIR, exist_ok=True)
+                with open(os.path.join(VDIR, 'guild-state.lock'), 'a+b') as handle:
+                    if os.name != 'nt':
+                        import fcntl
+                        fcntl.flock(handle, fcntl.LOCK_EX)
+                    try:
+                        yield
+                    finally:
+                        if os.name != 'nt':
+                            fcntl.flock(handle, fcntl.LOCK_UN)
+        finally:
+            _LOCK_DEPTH.depth = depth
+
+
+def state_locked(function):
+    @wraps(function)
+    def locked(*args, **kwargs):
+        with state_lock():
+            return function(*args, **kwargs)
+    return locked
 PLAZA = (-544, 65, 864)  # 广场中心（世界锚点）：2026-08-29 修正——旧值 (-101,64,167) 是换图前初始之地，朝圣「离广场300格」判定与委托生成坐标曾全错
 GATE_BOARD = (-524.5, 70, 838.4)  # 城门·任务板（公会柜台旁告示牌，灯门镇）：2026-08-29 修正——旧值 (3140,68,-1327) 为旧世界坐标，「看板」12格判定从未生效。坐标可调。
 
@@ -64,13 +103,14 @@ def fame_path():
 def load_fame():
     if os.path.exists(fame_path()):
         try:
-            return json.load(open(fame_path(), encoding="utf-8"))
+            with open(fame_path(), encoding='utf8') as handle:
+                return json.load(handle)
         except Exception:
             return {}
     return {}
 
 def save_fame(fm):
-    json.dump(fm, open(fame_path(), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    atomic_json(fame_path(), fm)
 
 def rank_of(fame):
     return Rules.rank_of(fame, RANKS)
@@ -214,6 +254,11 @@ def gen_board(day):
     hunt_cap = GCFG.get("hunt_cap", 3)
     doc = {"date": day, "board": []}
     board = doc["board"]
+    profiles = {v['key']: v for v in N.PROFILES}
+    if not contract_issuer(profiles.get('guild_lan'), 'reception'):
+        doc['availability'] = {'ok': False, 'reason': 'no_bound_qualified_receptionist', 'requiresLoadedChunk': False}
+        save_board(doc)
+        return doc
     no = 1
     # —— 收购：引用 quests_today（交付链路零改动）
     try:
@@ -221,6 +266,8 @@ def gen_board(day):
     except Exception:
         qs = []
     for q in qs:
+        if q.get('done') or not contract_issuer(profiles.get(q.get('villager')), 'gather'):
+            continue
         board.append({"no": no, "type": "gather", "rank": 0, "qid": q["id"], "from": q["villager"], "display": q["display"],
                       "title": "收购·%s" % q["zh"], "item": q["item"], "zh": q["zh"], "count": q["count"],
                       "reward": q["emerald"], "fame": 1,
@@ -237,7 +284,7 @@ def gen_board(day):
     for t in pool:
         if picked >= hunt_cap or t["from"] in used_from:
             continue
-        if t["from"] not in {v["key"] for v in N.PROFILES}:
+        if not contract_issuer(profiles.get(t['from']), 'hunt'):
             continue
         used_from.add(t["from"])
         v = next(v for v in N.PROFILES if v["key"] == t["from"])
@@ -251,7 +298,7 @@ def gen_board(day):
         no += 1
         picked += 1
     # —— 朝圣
-    for s in pick_visits(day):
+    for s in (pick_visits(day) if contract_issuer(profiles.get('jingshui'), 'visit') else []):
         board.append({"no": no, "type": "visit", "spot": s["spot"], "rank": 0, "from": "jingshui", "display": "神官·静水",
                       "title": "朝圣·%s" % s["zh"], "zh": s["zh"], "pos": s["pos"], "r": s["r"],
                       "reward": s["reward"], "fame": s["fame"], "pitch": s["desc"],
@@ -259,6 +306,7 @@ def gen_board(day):
                       "done_by": None, "done_at": None})
         no += 1
     if not N.GUILD_AUTOGENERATE:
+        doc['availability'] = {'ok': bool(board), 'reason': None if board else 'no_bound_qualified_issuers', 'requiresLoadedChunk': False}
         save_board(doc)
         return doc
     # —— v2 藏宝（青铜）：埋宝箱，挖钻石交付
@@ -328,17 +376,44 @@ def board_today():
     return doc
 
 def save_board(doc):
-    with open(guild_path(doc["date"]), "w", encoding="utf-8") as handle:
-        json.dump(doc, handle, ensure_ascii=False, indent=1)
+    atomic_json(guild_path(doc['date']), doc)
 
 # ---------------- 奖励与公告 ----------------
 def complete_task(b, how="auto", cmd_who=None):
-    """任务达成：全体队员发奖+声望+公告。b 必须已置 done 防双发。"""
+    """Persist a reward barrier and require native give receipts before fame."""
+    if b.get('status') != 'done' or (b.get('rewardOutcome') is not None and b['rewardOutcome'].get('phase') != 'waiting_for_inventory'):
+        return False
     takers = b.get("taker") or []
     if isinstance(takers, str):
         takers = [takers] if takers else []
     if not takers:
         takers = [b.get("done_by") or "?"]
+    record = {'phase': 'reserved', 'startedAt': int(time.time() * 1000), 'emeraldGiven': {}, 'fameRecorded': {}}
+    b['rewardOutcome'] = record
+    save_board(board_today())
+    if (any(not re.fullmatch(r'[A-Za-z0-9_]{1,16}', who or '') for who in takers)
+            or type(b.get('reward')) is not int or not 0 <= b['reward'] <= 64
+            or type(b.get('fame', 1)) is not int or not 0 <= b.get('fame', 1) <= 16):
+        record['phase'] = 'outcome_unknown'
+        save_board(board_today())
+        return False
+    checks = {}
+    if b.get('type') != 'gather':
+        try:
+            for who in takers:
+                snap = inventory.snapshot(N, who)
+                if snap['emeraldCapacity'] < b['reward']:
+                    raise ValueError('inventory_full')
+                checks[who] = {'actorUuid': snap['actorUuid'], 'emeraldBefore': inventory.count_item(N, who, 'minecraft:emerald')}
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            # The actual objective remains reached; no reward command ran.
+            # Retry eligibility is safe only for this explicit preflight phase.
+            b.update(status='claimed', done_at=None, done_by=None)
+            record.update(phase='waiting_for_inventory', code='inventory_full' if str(error) == 'inventory_full' else 'inventory_unavailable')
+            save_board(board_today())
+            return False
+    record['inventoryChecks'] = checks
+    save_board(board_today())
     team_txt = takers[0] if len(takers) == 1 else " 与 ".join(takers)
     promo = []
     for who in takers:
@@ -346,12 +421,29 @@ def complete_task(b, how="auto", cmd_who=None):
         # gather 单的绿宝石由发单村民在交易链路支付，公会只记功勋不重复付钱
         if b.get("type") != "gather":
             try:
-                N.R.cmd("give %s minecraft:emerald %d" % (tgt, b["reward"]))
+                if tgt != who:
+                    raise ValueError('unverified_reward_recipient')
+                if b['reward']:
+                    raw = N.R.cmd("give %s minecraft:emerald %d" % (tgt, b["reward"]))
+                    given = re.search(r'^(?:Gave|Given) (\d+) .+ to ' + re.escape(who) + r'\.?$', raw or '')
+                    if not given or int(given[1]) != b['reward']:
+                        raise ValueError('reward_outcome_unknown')
+                    emerald_after = inventory.count_item(N, who, 'minecraft:emerald')
+                    checks[who]['emeraldAfter'] = emerald_after
+                    if emerald_after - checks[who]['emeraldBefore'] != b['reward']:
+                        raise ValueError('reward_inventory_delta_unconfirmed')
+                record['emeraldGiven'][who] = b['reward']
+                save_board(board_today())
             except Exception as e:
-                print("[guild] give err:", e, flush=True)
+                record['phase'] = 'outcome_unknown'
+                save_board(board_today())
+                print("[guild] reward requires reconciliation:", type(e).__name__, flush=True)
+                return False
         # GUI 柜台结算传入的 who 是 @p 选择器（非玩家名），跳过声望记账防污染名册
         if who and not who.startswith("@"):
             old_r, new_r = add_fame(who, b.get("fame", 1))
+            record['fameRecorded'][who] = b.get('fame', 1)
+            save_board(board_today())
             if new_r != old_r:
                 promo.append("%s：%s→%s" % (who, old_r, new_r))
         try:
@@ -360,6 +452,8 @@ def complete_task(b, how="auto", cmd_who=None):
             N.R.cmd("playsound minecraft:entity.player.levelup master %s ~ ~ ~ 0.8 1.2" % tgt)
         except Exception:
             pass
+    record.update(phase='completed', finishedAt=int(time.time() * 1000))
+    save_board(board_today())
     N.tellraw([("[公会] ", "aqua"), ("%s %s委托「%s」（%s）——每人酬 %d 绿宝石，功勋 +%d！" % (
         team_txt, "组队" if len(takers) > 1 else "完成", b["title"], b["display"],
         b["reward"], b.get("fame", 1)), "aqua")])
@@ -377,6 +471,7 @@ def complete_task(b, how="auto", cmd_who=None):
     N.ledger_append({"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "type": "guild-done", "who": ",".join(takers),
                      "title": b["title"], "from": b["display"], "reward": b["reward"],
                      "fame": b.get("fame", 1), "how": how})
+    return True
 
 # ---------------- 对话协议 ----------------
 RE_CLAIM   = re.compile(r"^(?:接|承接|领受?|接下)\s*(?:委托|任务|单子)?\s*([0-9０-９]{1,2})\s*号?$")
@@ -443,17 +538,7 @@ def _near_board(who, limit=None):
 
 def _near_receptionist(who, limit=None):
     v = next((x for x in N.PROFILES if x["key"] == "guild_lan"), None)
-    if v is None:
-        return True
-    try:
-        pp = N.player_pos(who)
-        np_ = N.alive_pos(v)
-        if pp is None or np_ is None:
-            return True
-        d = ((pp[0] - np_[0]) ** 2 + (pp[1] - np_[1]) ** 2 + (pp[2] - np_[2]) ** 2) ** 0.5
-        return d <= (limit or GCFG.get("claim_proximity", 8))
-    except Exception:
-        return True
+    return near_npc(N, who, v, limit or GCFG.get('claim_proximity', 8))
 
 def _rank_gate(who, b):
     """等级门槛：返回 None=通过，否则拒绝台词。"""
@@ -478,7 +563,16 @@ def _is_far_horizon(b):
 
 
 def _new_claim_block(b):
-    gather_valid = _gather_matches(b) if b["type"] == "gather" else True
+    gather_valid = True
+    if b['type'] == 'gather':
+        try:
+            quests = N.quests_today()['quests']
+            q = next((q for q in quests if q.get('id') == b.get('qid')), None)
+            gather_valid = Rules.gather_matches(b, quests)
+        except Exception:
+            q, gather_valid = None, False
+        if q and q.get('done'):
+            return '柜台货单已结清或正在核对交割，不能再次承接。'
     return Rules.new_claim_block(b, gather_valid, N.GUILD_AUTOGENERATE)
 
 
@@ -736,9 +830,15 @@ def settle_gather(qid, who, cmd_who=None):
     b["status"] = "done"
     b["done_by"] = who
     b["done_at"] = time.strftime("%H:%M")
+    if not re.fullmatch(r'[A-Za-z0-9_]{1,16}', who or ''):
+        # Vanilla merchant usage proves goods/reward exchange, but its nearest
+        # selector does not prove who traded. Do not pay a previous claimant.
+        b['rewardOutcome'] = {'phase': 'native_trade_identity_unknown', 'fameRecorded': {}}
+        save_board(doc)
+        return True
+    b['taker'] = [who]
     save_board(doc)
-    complete_task(b, how="deliver", cmd_who=cmd_who)
-    return True
+    return complete_task(b, how="deliver", cmd_who=cmd_who) is not False
 
 # ---------------- 自动验收 ----------------
 def _write_health(doc, error=None):
@@ -785,86 +885,90 @@ def guild_tick():
     day0 = None
     doc = None
     while True:
-        try:
-            now = time.time()
-            for k in [k for k, v in PENDING_PARTY.items() if v["exp"] < now]:
-                PENDING_PARTY.pop(k, None)
-            day = time.strftime("%Y-%m-%d")
-            if day0 is None:
-                day0 = day
-            if day != day0:
-                try:
-                    old = BOARD["doc"] if BOARD["date"] == day0 and BOARD["doc"] else {"board": []}
-                    stale = [b for b in old["board"] if b["status"] == "claimed"]
-                    for b in old["board"]:
-                        if b["type"] == "boss":
-                            kill_boss(b["no"])  # 日清兜底：未被讨伐的 boss 收走
-                    if stale:
-                        names = "、".join("%s(%s)" % (b["title"], "+".join(_takers(b))) for b in stale)
-                        N.goddess("公会换板——昨日未竟的委托作废：%s。今日新板已挂，请冒险者们移步。" % names)
-                    else:
-                        N.goddess("公会今日看板已更新，%d 单委托等人来接。" % len(old["board"]))
-                except Exception:
-                    pass
-                day0 = day
-                BOARD.update(date=None, doc=None)
-            doc = board_today()
-            for b in doc["board"]:
-                if b["status"] != "claimed":
-                    continue
-                takers = _takers(b)
-                if b["type"] in ("hunt", "boss"):
-                    total = 0
-                    baseline_changed = False
-                    for who in takers:
-                        cur = hunt_score(who, b["mob"])
-                        if cur is None:
-                            continue
-                        base = (b.get("baseline") or {}).get(who)
-                        if base is None:
-                            b.setdefault("baseline", {})[who] = cur
-                            baseline_changed = True
-                            continue
-                        total += max(0, cur - base)
-                    if baseline_changed:
-                        save_board(doc)
-                    if total >= b["count"]:
-                        b["status"] = "done"
-                        b["done_by"] = takers[0]
-                        b["done_at"] = time.strftime("%H:%M")
-                        save_board(doc)
-                        complete_task(b)
-                        if b["type"] == "boss":
-                            N.goddess("捷报——%s 讨伐「暴怒的劫掠兽」成功！荒野暂告安宁。" % " 与 ".join(takers))
-                elif b["type"] == "visit":
-                    pos = b["pos"]
-                    for who in takers:
-                        try:
-                            pp = N.player_pos(who)
-                        except Exception:
-                            pp = None
-                        if pp is None:
-                            continue
-                        if _is_far_horizon(b):
-                            dx, dz = pp[0] - PLAZA[0], pp[2] - PLAZA[2]
-                            ok = (dx * dx + dz * dz) ** 0.5 >= 300
+        with state_lock():
+            try:
+                now = time.time()
+                for k in [k for k, v in PENDING_PARTY.items() if v["exp"] < now]:
+                    PENDING_PARTY.pop(k, None)
+                day = time.strftime("%Y-%m-%d")
+                if day0 is None:
+                    day0 = day
+                if day != day0:
+                    try:
+                        old = BOARD["doc"] if BOARD["date"] == day0 and BOARD["doc"] else {"board": []}
+                        stale = [b for b in old["board"] if b["status"] == "claimed"]
+                        for b in old["board"]:
+                            if b["type"] == "boss":
+                                kill_boss(b["no"])  # 日清兜底：未被讨伐的 boss 收走
+                        if stale:
+                            names = "、".join("%s(%s)" % (b["title"], "+".join(_takers(b))) for b in stale)
+                            N.goddess("公会换板——昨日未竟的委托作废：%s。今日新板已挂，请冒险者们移步。" % names)
                         else:
-                            dx, dz = pp[0] - pos[0], pp[2] - pos[2]
-                            ok = (dx * dx + dz * dz) ** 0.5 <= b["r"]
-                        if ok:
+                            N.goddess("公会今日看板已更新，%d 单委托等人来接。" % len(old["board"]))
+                    except Exception:
+                        pass
+                    day0 = day
+                    BOARD.update(date=None, doc=None)
+                doc = board_today()
+                for b in doc["board"]:
+                    if b["status"] != "claimed":
+                        continue
+                    takers = _takers(b)
+                    if b["type"] in ("hunt", "boss"):
+                        total = 0
+                        baseline_changed = False
+                        for who in takers:
+                            cur = hunt_score(who, b["mob"])
+                            if cur is None:
+                                continue
+                            base = (b.get("baseline") or {}).get(who)
+                            if base is None:
+                                b.setdefault("baseline", {})[who] = cur
+                                baseline_changed = True
+                                continue
+                            total += max(0, cur - base)
+                        if baseline_changed:
+                            save_board(doc)
+                        if total >= b["count"]:
                             b["status"] = "done"
-                            b["done_by"] = who
+                            b["done_by"] = takers[0]
                             b["done_at"] = time.strftime("%H:%M")
                             save_board(doc)
                             complete_task(b)
-                            break
-            _write_health(doc)
-        except Exception as e:
-            print("[guild] tick err:", e, flush=True)
-            try:
-                _write_health(doc, error=e)
-            except Exception:
-                pass
+                            if b["type"] == "boss":
+                                N.goddess("捷报——%s 讨伐「暴怒的劫掠兽」成功！荒野暂告安宁。" % " 与 ".join(takers))
+                    elif b["type"] == "visit":
+                        pos = b["pos"]
+                        for who in takers:
+                            try:
+                                pp = N.player_pos(who)
+                                dimension = N.R.cmd('data get entity %s Dimension' % who)
+                                if not re.search(r':\s*"minecraft:overworld"\s*$', dimension or ''):
+                                    pp = None
+                            except Exception:
+                                pp = None
+                            if pp is None or len(pp) != 3 or not all(type(n) in (int, float) and math.isfinite(n) for n in pp):
+                                continue
+                            if _is_far_horizon(b):
+                                dx, dz = pp[0] - PLAZA[0], pp[2] - PLAZA[2]
+                                ok = (dx * dx + dz * dz) ** 0.5 >= 300
+                            else:
+                                dx, dz = pp[0] - pos[0], pp[2] - pos[2]
+                                ok = (dx * dx + dz * dz) ** 0.5 <= b["r"]
+                            if ok:
+                                b["status"] = "done"
+                                b["done_by"] = who
+                                b["done_at"] = time.strftime("%H:%M")
+                                save_board(doc)
+                                complete_task(b)
+                                break
+                _write_health(doc)
+            except Exception as e:
+                print("[guild] tick err:", e, flush=True)
+                try:
+                    _write_health(doc, error=e)
+                except Exception:
+                    pass
         time.sleep(GCFG.get("tick_interval", 30))
 
 def start():
@@ -876,3 +980,9 @@ def start():
         _write_health(doc)
         N.start_npc_thread("guild", guild_tick)
         _GUILD_STARTED = True
+
+
+# Every legacy entry point shares the structured request service's lock.
+for _name in ('load_fame', 'save_fame', 'add_fame', 'gen_board', 'board_today', 'save_board',
+              'complete_task', 'register', 'claim', 'party_claim', 'party_join', 'release', 'deliver', 'settle_gather'):
+    globals()[_name] = state_locked(globals()[_name])

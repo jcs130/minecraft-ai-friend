@@ -165,6 +165,7 @@ services:
       NPC_VILLAGE_GUARD: "0"
       NPC_GUILD_AUTOGENERATE: "0"
       NPC_GUILD_BASIC_QUESTS: "1"
+      NPC_GUILD_QUEUE: /world-data/guild-cli
       NPC_LLM_ENABLED: "0"
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
@@ -286,6 +287,7 @@ services:
       QWENPAW_API_URL: http://qwenpaw:8088/api
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       SURVIVOR_SKILL_QUEUE: /survival-skills-queue
+      SURVIVOR_GUILD_QUEUE: /survival-guild-queue
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_RCON_SECRET: /run/secrets/rcon
@@ -295,6 +297,7 @@ services:
       - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
       - ./server/world-data/skill-cli:/survival-skills-queue
+      - ./server/world-data/guild-cli:/survival-guild-queue
       - ./world/sidecar/guard/skills:/survival-knowledge:ro
       - ./server/world-data/player-chat.jsonl:/world-observation/player-chat.jsonl:ro
       - ./server/world-data/goddess-orders.jsonl:/world-observation/goddess-orders.jsonl:ro

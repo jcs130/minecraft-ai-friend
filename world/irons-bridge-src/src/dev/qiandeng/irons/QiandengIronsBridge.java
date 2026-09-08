@@ -70,6 +70,9 @@ public final class QiandengIronsBridge {
         root.then(self);
         event.getDispatcher().register(root);
         WaypointTravel.register(event.getDispatcher());
+        TradeBridge.register(event.getDispatcher());
+        WorldMenuBridge.register(event.getDispatcher());
+        WorldScanBridge.register(event.getDispatcher());
     }
 
     private static int run(CommandSourceStack source, String action, String actorQuery, String spellId) {

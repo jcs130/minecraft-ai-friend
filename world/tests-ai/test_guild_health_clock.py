@@ -28,7 +28,7 @@ class GuildHealthClockTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def probe(self, age=0, *, guild_thread=True, **overrides):
+    def probe(self, age=0, *, guild_thread=True, consumer_thread=True, consumer_enabled=True, consumer_age=0, npc_ok=True, npc_age=0, **overrides):
         record = {'last_success_at': self.NOW - age, 'updated_at': self.NOW,
                   'basic_quests': True, 'autogenerate': False,
                   'board_date': datetime.now().strftime('%Y-%m-%d'),
@@ -36,7 +36,9 @@ class GuildHealthClockTests(unittest.TestCase):
         record.update(overrides)
         (self.data / 'guild-health.json').write_text(json.dumps(record), encoding='utf-8')
         (self.data / 'npc-health.json').write_text(
-            json.dumps({'threads': {'guild': guild_thread}}), encoding='utf-8')
+            json.dumps({'guild_requests_enabled': consumer_enabled, 'guild_requests_last_poll': self.NOW - consumer_age,
+                        'guild_npcs': {'ok': npc_ok, 'checked_at': self.NOW - npc_age},
+                        'threads': {'guild': guild_thread, 'guild-requests': consumer_thread}}), encoding='utf-8')
         return HEALTH.probe_guild()
 
     def test_measured_container_lead_is_healthy_and_visible(self):
@@ -74,6 +76,17 @@ class GuildHealthClockTests(unittest.TestCase):
                 self.assertFalse(self.probe(last_success_at=value)['ok'])
         (self.data / 'guild-health.json').write_text('{}', encoding='utf-8')
         self.assertFalse(HEALTH.probe_guild()['ok'])
+
+    def test_request_consumer_is_required_and_must_really_poll(self):
+        self.assertTrue(self.probe(consumer_age=15)['ok'])
+        for changes in ({'consumer_thread': False}, {'consumer_enabled': False}, {'consumer_age': 16},
+                        {'consumer_age': -6}, {'consumer_age': float('nan')}):
+            with self.subTest(changes=changes):
+                self.assertFalse(self.probe(**changes)['ok'])
+
+    def test_threads_do_not_hide_missing_required_npc_identity(self):
+        self.assertFalse(self.probe(npc_ok=False)['ok'])
+        self.assertFalse(self.probe(npc_age=101)['ok'])
 
 
 if __name__ == '__main__':

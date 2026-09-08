@@ -16,7 +16,11 @@ import time
 import uuid
 
 
-TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn')
+TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
+         'place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade',
+         'guild_claim', 'guild_release', 'guild_deliver')
+WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade')
+GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
 TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
 SLOTS = ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')
@@ -203,6 +207,9 @@ class NumenGateway:
         return body, actual
 
     def _invoke(self, tool, args=None):
+        if tool in GUILD_ACTIONS:
+            from guild import Guild
+            return Guild(self).dispatch(tool, args)
         if tool in ('game_cast', 'game_learn'):
             from game_skills import GameSkills
             return GameSkills(self).dispatch(tool, args)
@@ -372,12 +379,22 @@ class NumenGateway:
     def _validate(self, tool, args):
         if tool not in TOOLS or not isinstance(args, dict):
             raise GatewayError('tool_not_allowed')
+        if tool in WORLD_ACTIONS:
+            from world_actions import validate_world_action
+            validate_world_action(tool, args)
+            return
+        if tool in GUILD_ACTIONS:
+            from guild import validate_guild_action
+            validate_guild_action(tool, args)
+            return
         if tool in ('game_cast', 'game_learn'):
             from game_skills import validate_game_action
             validate_game_action(tool, args)
             return
         if tool == 'goto':
-            if set(args) != {'x', 'z'} or not all(self._number(args[k]) for k in ('x', 'z')):
+            if (not {'x', 'z'} <= set(args) <= {'x', 'y', 'z'}
+                    or not all(self._number(args[k]) for k in ('x', 'z'))
+                    or ('y' in args and (not self._number(args['y']) or not -64 <= args['y'] <= 319))):
                 raise GatewayError('invalid_move')
         elif tool == 'mine':
             if set(args) != {'block_ids', 'count'} or not isinstance(args['block_ids'], list) or not 1 <= len(args['block_ids']) <= 8:
@@ -452,7 +469,7 @@ class NumenGateway:
                     raise GatewayError('body_busy')
                 if before.get('dimension') != self._settings().get('dimension', 'minecraft:overworld'):
                     raise GatewayError('wrong_dimension')
-                if tool == 'goto' and 'walk_only_v1' not in before.get('navigationModes', []):
+                if tool == 'goto' and 'walk_only_strict_arrival_v2' not in before.get('navigationModes', []):
                     raise GatewayError('safe_navigation_unavailable')
                 # Verified walk-only navigation may cross town; mining may not.
                 protected = tool == 'mine'
@@ -467,6 +484,13 @@ class NumenGateway:
                 if tool in ('game_cast', 'game_learn'):
                     from game_skills import preflight_game_action
                     preflight_game_action(self, before, tool, args)
+                plan = None
+                if tool in WORLD_ACTIONS:
+                    from world_actions import WorldActions
+                    plan = WorldActions(self).prepare(tool, args, before)
+                if tool in GUILD_ACTIONS:
+                    from guild import prepare_guild_action
+                    prepare_guild_action(self, before, tool, args)
                 self._enabled()  # stop while read-only preflight was running
                 if lease['expiresAt'] <= self._now():
                     raise GatewayError('lease_expired')
@@ -480,7 +504,7 @@ class NumenGateway:
                 write_json(self.state / 'unknown.json', marker)
                 self._record({**marker, 'phase': 'dispatching'})
                 try:
-                    reply = self._invoke(tool, args)
+                    reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
                     if tool == 'equip_item' and reply.get('accepted') is True:
                         reply = self._confirm_equipment(args)
                     if reply.get('success') is True:

@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "world": "shadow",
+  "strategy": "bind_existing_only",
+  "npcs": [
+    {
+      "key": "guild_lan",
+      "tag": "npc_guild_lan",
+      "display": "公会接待员·岚",
+      "uuid": "917d5098-63bb-4e3e-a940-344a65c9d583",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -531.0865433025363,
+        67.0,
+        903.3224091195657
+      ]
+    },
+    {
+      "key": "jingshui",
+      "tag": "npc_jingshui",
+      "display": "神官·静水",
+      "uuid": "b234a98b-55ba-4bf5-9e02-9dc875d1ef52",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -555.4953729950938,
+        77.0,
+        840.6640972845485
+      ]
+    },
+    {
+      "key": "shilei",
+      "tag": "npc_shilei",
+      "display": "甲匠·石磊",
+      "uuid": "89d83235-a3c1-4780-ab27-b391997b7ca1",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -568.7633135804227,
+        71.0,
+        886.3000000119209
+      ]
+    },
+    {
+      "key": "zhujiu",
+      "tag": "npc_zhujiu",
+      "display": "守夜人·烛九",
+      "uuid": "4f789756-e1bb-4c24-a9d4-57c9ab2d31b0",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -532.0749999880791,
+        67.0,
+        900.6940115187689
+      ]
+    },
+    {
+      "key": "xiaoman",
+      "tag": "npc_xiaoman",
+      "display": "牧羊女·小满",
+      "uuid": "6957b577-c627-4cf6-86fb-0f213e4f6eec",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -528.9250000119209,
+        67.0,
+        902.0975072163144
+      ]
+    },
+    {
+      "key": "hesu",
+      "tag": "npc_hesu",
+      "display": "老农·禾叔",
+      "uuid": "817530c9-b6ce-4656-ad02-0f0daab5e63b",
+      "entityType": "minecraft:villager",
+      "dimension": "minecraft:overworld",
+      "lastKnownPosition": [
+        -560.5062647628677,
+        80.0,
+        905.2544157433966
+      ]
+    }
+  ]
+}
