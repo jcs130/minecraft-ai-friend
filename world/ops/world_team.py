@@ -7,13 +7,14 @@ from pathlib import Path
 import re
 import sqlite3
 import time
+from world_team_hosts import native_inventory
 
 MEMBERS = {
-    'game:mc-god': ('灯语女神', '世界管理员：巡查、响应、分派问题、验收运营结果'),
+    'game:mc-god': ('灯语女神 · 世界管理', '世界管理员：巡查、响应、分派问题、验收运营结果'),
     'operations:mc-god': ('天神 · 世界工程师', '读取和修改独立源码，隔离测试，提交可审阅修复'),
     'game:qd-guild-planner': ('公会 · 游戏策划', '故事、任务和活动设计，提出可校验的内容包'),
     'game:qd-survivor': ('桐人 · 内测玩家', '真实游玩、复现问题、提交文档反馈、体验复测'),
-    'game:mc-herald': ('女神 · 传声司礼', '承接 Goddess 日常传声与玩家对话，记录祈愿和沟通问题，交女神处理'),
+    'game:mc-herald': ('灯语女神 · 玩家交流', '承接 Goddess 日常传声与玩家对话，记录祈愿和沟通问题，交女神处理'),
     'game:qd-villager-dialogue': ('村民对话', '保留每位村民当前身份和对话契约，反馈村落需求与交互问题'),
     'game:qd-maid-dialogue': ('独立人物对话接口', '保留人物绑定与原生对话格式，把交互和能力问题送入团队'),
     'operations:default': ('司灯 · 项目协调', '追踪工单和日常公会运营，避免重复派工'),
@@ -118,9 +119,12 @@ class TeamStore:
             ('id', 'author', 'owner', 'status', 'version', 'updated_at')}
 
     def roster(self):
-        return {'ok': True, 'members': [{'actor': actor, 'name': value[0], 'responsibility': value[1]}
-            for actor, value in members().items()],
-            'notice': 'Qualified runtime:agent identities distinguish the two mc-god roles. '
+        inventory = members()
+        hosts = native_inventory(inventory)
+        return {'ok': True, 'members': [{'actor': actor, 'name': value[0], 'responsibility': value[1],
+                                        'nativeHost': hosts[actor]}
+            for actor, value in inventory.items()],
+            'notice': 'Actor is the durable logical author; nativeHost identifies its current Qwen console. '
                       'These are project handoffs; in-world dialogue still uses actual game channels.'}
 
     def cases(self, owner='mine', include_closed=False, limit=12):

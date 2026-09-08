@@ -6,6 +6,7 @@ import json
 import time
 from zoneinfo import ZoneInfo
 from world_team import TeamStore, digest
+from world_team_hosts import ENGINEER, SOURCE, logical_actor, native_host, require_host
 
 SCHEDULES = {
     'game:mc-god': ('qd-team-goddess', '女神 · 世界巡查与问题处理', '1-59/10 * * * *'),
@@ -36,7 +37,7 @@ def team_job(actor):
     job_id, name, cron = SCHEDULES[actor]
     runtime, role = actor.split(':', 1)
     prompt = PROMPTS[actor]
-    return {'id': job_id, 'name': name, 'enabled': True,
+    spec = {'id': job_id, 'name': name, 'enabled': True,
         'schedule': {'type': 'cron', 'cron': cron, 'timezone': 'Asia/Shanghai'},
         'task_type': 'agent', 'text': prompt,
         'request': {'input': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}]},
@@ -47,6 +48,10 @@ def team_job(actor):
                     'share_session': False, 'tool_safety': True},
         'save_result_to_inbox': False,
         'meta': {'project': 'qiandengji', 'purpose': 'world-team', 'runtime': runtime, 'role': role, 'version': 1}}
+    host = native_host(actor)
+    if actor == ENGINEER and host != SOURCE:
+        spec['meta']['nativeHost'] = host
+    return spec
 
 
 def is_team_job(job_id):
@@ -78,7 +83,11 @@ def fingerprint(store):
 async def execute(executor, job, original, runtime):
     import asyncio
     import fcntl
-    actor = runtime + ':' + executor._workspace.agent_id
+    native_role = executor._workspace.agent_id
+    actor = logical_actor(runtime, native_role)
+    if actor not in SCHEDULES:
+        return {'task_type': 'agent', 'run_id': None, 'delivery_status': 'suppressed',
+                'final_text': 'team_native_host_inactive', 'modelCalls': 0}
     validate_team_job(job.model_dump(mode='json', exclude_none=True), actor)
     store = TeamStore(actor)
     store.root.mkdir(parents=True, exist_ok=True)
@@ -90,6 +99,7 @@ async def execute(executor, job, original, runtime):
     with lock_path.open('a+b') as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: return skipped('team_cycle_already_running')
+        require_host(actor, runtime, native_role)
         current, pending = fingerprint(store)
         previous = store.cycle_state()
         if actor == 'operations:mc-god' and not pending:
@@ -102,12 +112,13 @@ async def execute(executor, job, original, runtime):
         if previous and previous['status'] in ('running', 'unknown'):
             return skipped('previous_team_cycle_requires_reconciliation')
         reservation = None
-        if runtime == 'operations':
+        if actor.startswith('operations:'):
             from operations_native_tasks import reserve_operation, finish_run
-            reservation = await asyncio.to_thread(reserve_operation, executor._workspace.agent_id, job.id)
+            reservation = await asyncio.to_thread(reserve_operation, actor.split(':', 1)[1], job.id)
             if not reservation['ok']: return skipped(reservation['code'])
         store.save_cycle(current, 'running', {'jobId': job.id})
         try:
+            require_host(actor, runtime, native_role)
             result = await original(executor, job)
             if result.get('delivery_status') in ('failed', 'error', 'no_content'):
                 store.save_cycle(current, 'failed', result)

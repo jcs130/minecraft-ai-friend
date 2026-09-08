@@ -19,7 +19,7 @@ export interface CastResult {
   ok: boolean
   code: 'ok' | 'unknown_skill' | 'ambiguous_skill' | 'invalid_params' | 'passive' |
     'level' | 'mana' | 'cooldown' | 'busy' | 'offline' | 'unavailable' |
-    'health' | 'food' | 'already_full' | 'command_failed' | 'execution_error' | 'skill_archived' | 'outcome_unknown'
+    'health' | 'food' | 'already_full' | 'command_failed' | 'execution_error' | 'skill_archived' | 'outcome_unknown' | 'no_change'
   skillId?: string
   name?: string
   summary: string
@@ -27,6 +27,7 @@ export interface CastResult {
   /** Remaining cooldown, not a new cooldown started by this rejection. */
   cooldownMs?: number
   nativeHints?: string[]
+  effectReceipt?: Record<string, unknown>
 }
 
 export interface CostSpec {

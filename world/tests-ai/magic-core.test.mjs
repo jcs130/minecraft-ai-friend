@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { springRcon } from './spring-receipt-fixture.mjs'
 
 const world = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dependencyRoot = process.env.QD_TEST_NODE_MODULES || join(world, 'node_modules')
@@ -40,6 +41,7 @@ function fixture(t, options = {}) {
   const catalogPath = join(dir, 'skill-catalog.json')
   if (options.catalog) writeFileSync(catalogPath, typeof options.catalog === 'string' ? options.catalog : JSON.stringify(options.catalog))
   const commands = []
+  const spring = springRcon(options.spring)
   const queries = []
   const position = { x: 10, y: 64, z: 20 }
   const bot = { entity: options.offline ? null : { position },
@@ -68,6 +70,8 @@ function fixture(t, options = {}) {
           code: 'teleported', actor: JSON.parse(actor), actorUuid: '00000000-0000-0000-0000-000000000001', summary: '已确认传送',
           dimension: JSON.parse(dimension), x: Number(x), y: Number(y), z: Number(z) })
       }
+      const springReply = await spring.send(command)
+      if (springReply !== undefined) return springReply
       if (options.send) return options.send(command)
       if (command.endsWith(' UUID')) return 'Entity has the following data: [I; 1, 2, 3, 4]'
       if (command.startsWith('execute if entity')) return 'No entity found'
@@ -451,7 +455,7 @@ test('featured spatial commands and effects use actor coordinates and execute-at
   const f = fixture(t, { catalog: consolidatedCatalog,
     origin: { dimension: 'minecraft:the_nether', x: 200, y: 75, z: -20 } })
   assert.equal((await f.service.castExact('QA', 'spring', { direction: '东', distance: 2 })).ok, true)
-  assert.ok(f.commands.includes('execute at QA run setblock 202 74 -20 minecraft:water'))
+  assert.ok(f.commands.some(c => c.endsWith('if dimension minecraft:the_nether run setblock 202 74 -20 minecraft:water')))
   assert.equal((await f.service.castExact('QA', 'fireworks')).ok, true)
   assert.ok(f.commands.includes('execute at QA run summon minecraft:firework_rocket 200 76 -20 {LifeTime:20}'))
   assert.ok(f.commands.filter(c => c.includes('particle ') || c.includes('playsound ')).every(c => c.startsWith('execute at QA run ')))
@@ -459,7 +463,7 @@ test('featured spatial commands and effects use actor coordinates and execute-at
 
 test('rejected or interrupted featured effects do not debit mana, learn, or blindly replay', async (t) => {
   const f = fixture(t, { catalog: consolidatedCatalog, players: { QA: { mana: 100 } },
-    send: (command) => command.includes('setblock ') ? 'Could not set the block' : 'OK' })
+    spring: { success: 0, result: 0 } })
   assert.equal((await f.service.castExact('QA', 'spring')).code, 'command_failed')
   assert.equal(f.service.getState('QA').mana, 100)
   assert.equal(f.service.getState('QA').learned.includes('spring'), false)
@@ -480,4 +484,16 @@ test('divine featured travel also uses the native dimension bridge and charges o
   const bad = fixture(t, { catalog: consolidatedCatalog, players: { QA: { mana: 100 } }, warp: () => '' })
   assert.match(await bad.service.castByGod('QA', 'home', { consumeMana: 12 }), /不要自动重发/)
   assert.equal(bad.service.getState('QA').mana, 100)
+})
+
+test('spring existing water and unattributed observed water do not debit or teach', async (t) => {
+  for (const [spring, code] of [[{ beforeWater: 1 }, 'no_change'],
+    [{ success: -1, result: -1, lostResponse: true }, 'outcome_unknown']]) {
+    const f = fixture(t, { catalog: consolidatedCatalog, players: { QA: { mana: 100 } }, spring })
+    const result = await f.service.castExact('QA', 'spring')
+    assert.equal(result.code, code)
+    assert.equal(result.ok, false)
+    assert.equal(f.service.getState('QA').mana, 100)
+    assert.equal(f.service.getState('QA').learned.includes('spring'), false)
+  }
 })

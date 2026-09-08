@@ -18,6 +18,7 @@ OPS = str(Path(__file__).resolve().parents[1] / 'ops')
 if OPS not in sys.path: sys.path.insert(0, OPS)
 from native_role_capabilities import FILE_NOTE, configure_native, sensitive_paths, validate_native
 from llm_runtime_policy import unrestricted_running
+from world_team_profiles import client as team_client, policy_payload
 
 TEMPLATE = 'qd-maid-dialogue'
 MCP_URL = 'http://npc:8091/mcp'
@@ -27,12 +28,21 @@ LIMIT = {'purpose': 'maid_dialogue', '24hCap': None, 'cooldownSeconds': 0}
 
 
 def safe_learning_client(client, role):
-    # This is the sole optional project-owned extension. The command binds its
+    # The command binds its
     # role internally; it is never inherited with the template's old role ID.
     return (isinstance(client, dict) and client.get('transport') == 'stdio'
             and client.get('command') == 'python'
             and client.get('args') == ['/ops/agent_learning_mcp.py', '--role', role, '--runtime', 'game']
             and not client.get('env') and not client.get('cwd'))
+
+
+def safe_team_client(client, role):
+    try:
+        expected = team_client(role, 'game')
+    except (AssertionError, KeyError, OSError, ValueError):
+        return False
+    return (isinstance(client, dict) and all(client.get(k) == v for k, v in expected.items())
+            and not any(client.get(k) for k in ('url', 'headers', 'cwd')))
 
 
 def validate_closed_template(agent):
@@ -52,7 +62,9 @@ def validate_closed_template(agent):
             raise ValueError('maid_template_not_quiet')
     running = agent.get('running', {})
     clients = agent.get('mcp', {}).get('clients', {})
-    if (any(name != 'qd_learning' or not safe_learning_client(client, TEMPLATE) for name, client in clients.items())
+    if (any(not ((name == 'qd_learning' and safe_learning_client(client, TEMPLATE))
+                 or (name == 'qd_world_team' and safe_team_client(client, TEMPLATE)))
+            for name, client in clients.items())
             or agent.get('fallback_models')
             or running.get('llm_retry_enabled') is not False or running.get('llm_max_concurrent') != 1
             or running.get('auto_title_config', {}).get('enabled') is not False):
@@ -86,8 +98,8 @@ def profile(template, binding):
     files['sensitive_files'] = [path for path in files.get('sensitive_files', []) if path not in template_paths]
     result = configure_native(result, role)
     validate_native(result, role)
-    # Body tools/credentials still use this character's single native DriverCard.
-    # Role skills and qd_learning are installed by the subsequent learning sync.
+    # No template-bound MCP survives creation. Drivers are installed only with
+    # this body's actual registered role, through native configuration APIs.
     return result
 
 
@@ -173,6 +185,121 @@ class MaidRegistry:
         write_json(self.root / 'public/roles.json', summary)
         return summary
 
+    def ensure_team(self, row):
+        """Repair only missing managed drivers; never replay character setup."""
+        from mcp_configuration import configure_client
+        from role_learning_profiles import learning_card, learning_client, validate_jobs
+        role = row['agentId']
+        # resolve + public membership must agree before spawning role-bound MCP.
+        self.resolve(row['maidUuid'], row['ownerUuid'])
+        expected = {'qd_world_team': team_client(role, 'game')}
+        if row.get('registrationProtocol') == 2:
+            expected['qd_learning'] = learning_client(role, 'game')
+        inventory = self.transport('GET', '/mcp', role)
+        if not isinstance(inventory, list):
+            raise ValueError('maid_mcp_inventory_invalid')
+        keys = [v.get('key', v.get('client_key')) for v in inventory]
+        if len(keys) != len(set(keys)):
+            raise ValueError('maid_mcp_inventory_invalid')
+        for key, client in expected.items():
+            policy = policy_payload(client['tools'])
+            native_client = client
+            if key == 'qd_learning':
+                # Match the existing native learning card, while retaining the
+                # canonical legacy client name in the profile mirror below.
+                metadata = learning_card(role, 'game')['config']
+                native_client = dict(client, name=metadata['display_name'], description=metadata['description'])
+                policy = {'default_effect': 'deny', 'client_overrides': [],
+                    'tool_defaults': [{'tool_name': name, 'effect': 'allow'} for name in sorted(client['tools'])],
+                    'tool_overrides': []}
+            if key not in keys:
+                configure_client(self.transport, role, key, native_client, policy, exists=False)
+            actual = self.transport('GET', '/mcp/' + key, role)
+            if (not isinstance(actual, dict) or any(actual.get(k) != v for k, v in native_client.items())
+                    or any(actual.get(k) for k in ('url', 'headers', 'cwd'))):
+                raise ValueError('maid_managed_mcp_identity_mismatch')
+            saved_policy = self.transport('GET', '/mcp/policy/' + key, role)
+            if (saved_policy.get('unmanaged_rules_count') != 0
+                    or any(saved_policy.get(k) != v for k, v in policy.items())):
+                # A known matching driver can survive a lost create response
+                # with its initial ask policy. Reconcile configuration, never
+                # replay an agent create, model request or body operation.
+                configure_client(self.transport, role, key, native_client, policy, exists=True)
+            tools = self.transport('GET', '/mcp/tools/' + key, role)
+            if (not isinstance(tools, list) or len(tools) != len(client['tools'])
+                    or {t.get('name') for t in tools if t.get('enabled') is True} != set(client['tools'])):
+                raise ValueError('maid_managed_mcp_not_active')
+        current = self.transport('GET', '/agents/' + role, role)
+        if current.get('id') != role or current.get('workspace_dir') != '/state/work/workspaces/' + role:
+            raise ValueError('maid_copied_identity_mismatch')
+        mirror = deepcopy(current.get('mcp', {'clients': {}}))
+        changed = False
+        for key, client in expected.items():
+            prior = mirror.setdefault('clients', {}).get(key)
+            if prior is not None and (any(prior.get(k) != v for k, v in client.items())
+                                      or any(prior.get(k) for k in ('url', 'headers', 'cwd'))):
+                raise ValueError('maid_managed_mcp_identity_mismatch')
+            if prior is None:
+                mirror['clients'][key] = client
+                changed = True
+        if changed:
+            saved = self.transport('PUT', '/agents/' + role, role,
+                                   {'id': role, 'name': current['name'], 'mcp': mirror})
+            if saved.get('mcp') != mirror:
+                raise ValueError('maid_managed_mcp_mirror_not_applied')
+        if row.get('registrationProtocol') == 2:
+            from agent_learning import managed_job
+            desired = managed_job(role, 'game')
+            jobs = self.transport('GET', '/cron/jobs', role)
+            if not isinstance(jobs, list):
+                raise ValueError('maid_job_inventory_invalid')
+            owned = [job for job in jobs if job.get('id') == desired['id']]
+            if not owned:
+                self.transport('PUT', '/cron/jobs/' + desired['id'], role, desired)
+                jobs = self.transport('GET', '/cron/jobs', role)
+                owned = [job for job in jobs if job.get('id') == desired['id']]
+            validate_jobs({'jobs': owned}, role, 'game')
+        return row
+
+    def install_template_skills(self, role):
+        """Copy the managed, enabled template packages through native scanning."""
+        from native_role_capabilities import NATIVE_SKILLS, native_lock
+        from role_learning_profiles import HERE, skill_references
+        names = read_json(HERE / 'game-role-skills.json')['roles'][TEMPLATE] + list(NATIVE_SKILLS)
+        source = self.transport('GET', '/skills', TEMPLATE)
+        target = self.transport('GET', '/skills', role)
+        if not isinstance(source, list) or not isinstance(target, list):
+            raise ValueError('maid_skill_inventory_invalid')
+        enabled = {v.get('name') for v in source if v.get('enabled') is True}
+        if not set(names) <= enabled:
+            raise ValueError('maid_template_skills_not_enabled')
+        installed = {v['name']: v for v in target}
+        for name in names:
+            detail = self.transport('GET', '/skills/' + name, TEMPLATE)
+            content = detail.get('content')
+            if not isinstance(content, str) or not 0 < len(content.encode('utf-8')) <= 131072:
+                raise ValueError('maid_template_skill_invalid')
+            expected_hash = (native_lock()['skills'][name]['sha256'] if name in NATIVE_SKILLS else
+                             hashlib.sha256((HERE / 'skills' / name / 'SKILL.md').read_bytes()).hexdigest())
+            if hashlib.sha256(content.encode('utf-8')).hexdigest() != expected_hash:
+                raise ValueError('maid_template_skill_source_mismatch')
+            references = {} if name in NATIVE_SKILLS else skill_references(name)
+            for page, text in references.items():
+                actual = self.transport('GET', '/skills/' + name + '/files/references/' + page, TEMPLATE)
+                if actual.get('content') != text:
+                    raise ValueError('maid_template_skill_reference_mismatch')
+            if name not in installed:
+                result = self.transport('POST', '/skills', role, {'name': name, 'content': content,
+                    'references': references, 'enable': True})
+                if result.get('created') is not True or result.get('name') != name:
+                    raise ValueError('maid_skill_not_installed')
+            current = self.transport('GET', '/skills/' + name, role)
+            if current.get('enabled') is not True or current.get('content') != content:
+                raise ValueError('maid_skill_not_applied')
+            for page, text in references.items():
+                if self.transport('GET', '/skills/' + name + '/files/references/' + page, role).get('content') != text:
+                    raise ValueError('maid_skill_reference_not_applied')
+
     def ensure(self, observed, *, name=None, persona=None, allow_unloaded=False):
         observed = identity(observed, require_loaded=not allow_unloaded)
         path = self.path(observed['maidUuid'])
@@ -187,7 +314,7 @@ class MaidRegistry:
                         raise ValueError('maid_persona_update_requires_review')
                     row['lastIdentity'] = observed
                     write_json(path, row)
-                    return row
+                    return self.ensure_team(row)
                 if row.get('status') != 'configuring' or not row.get('agentId'):
                     raise ValueError('maid_registration_uncertain_review_required')
             else:
@@ -209,14 +336,18 @@ class MaidRegistry:
                        'name': chosen + ' · ' + observed['maidUuid'][:8], 'persona': persona, 'personaRevision': 1,
                        'mcpToken': secrets.token_urlsafe(48), 'createdAt': self.clock(),
                        'status': 'copy_reserved', 'agentId': None, 'lastIdentity': observed,
+                       'registrationProtocol': 2,
                        'skillTemplate': {'id': 'maid-native-v1', 'revision': 1,
                                          'extensionPolicy': 'project-governed-role-skills'}}
                 write_json(path, row)
                 write_json(self.root / 'backups' / (generation + '-template.json'), template)
                 try:
-                    copied = self.transport('POST', '/agents/' + TEMPLATE + '/copy', TEMPLATE, {
-                        'name': row['name'], 'copy_agent_json': True, 'copy_md_files': True,
-                        'copy_skills': False, 'copy_jobs': False})
+                    # Native /copy requires copying agent.json and immediately
+                    # starts its inherited MCPs. Create a blank native role so
+                    # no tool can ever run under the template's identity.
+                    copied = self.transport('POST', '/agents', TEMPLATE, {
+                        'name': row['name'], 'backend': 'qwenpaw', 'skill_names': [],
+                        'active_model': template['active_model']})
                     role = copied.get('id')
                     if (not isinstance(role, str) or not re.fullmatch('[A-Za-z0-9_-]{4,64}', role)
                             or role in ('default', TEMPLATE, 'mc-god', 'mc-herald', 'qd-survivor')
@@ -247,6 +378,8 @@ class MaidRegistry:
                 result = self.transport('PUT', '/workspace/files/' + filename, role, {'content': content})
                 if result.get('written') is not True:
                     raise ValueError('maid_persona_not_written')
+            if row.get('registrationProtocol') == 2:
+                self.install_template_skills(role)
             mcp = {'name': '女仆自身原生能力', 'enabled': True, 'transport': 'streamable_http', 'url': MCP_URL,
                    'headers': {'Authorization': 'Bearer ' + row['mcpToken']}, 'tools': TOOLS}
             # Config APIs synchronise the native DriverCard and trigger a reload.
@@ -254,7 +387,8 @@ class MaidRegistry:
             if not isinstance(existing, list):
                 raise ValueError('maid_mcp_inventory_invalid')
             if any(v.get('key', v.get('client_key')) != DRIVER
-                   and not (v.get('key', v.get('client_key')) == 'qd_learning' and safe_learning_client(v, role)) for v in existing):
+                   and not (v.get('key', v.get('client_key')) == 'qd_learning' and safe_learning_client(v, role))
+                   and not (v.get('key', v.get('client_key')) == 'qd_world_team' and safe_team_client(v, role)) for v in existing):
                 raise ValueError('maid_has_unexpected_mcp')
             policy = {'default_effect': 'deny', 'client_overrides': [], 'tool_defaults': [],
                       'tool_overrides': [{'source_type': 'channel', 'source_value': 'console',
@@ -270,4 +404,4 @@ class MaidRegistry:
             row.update(status='ready', registeredAt=self.clock())
             write_json(path, row)
             self.publish()
-            return row
+            return self.ensure_team(row)

@@ -44,7 +44,10 @@ def rules(role):
     base = re.escape('/state/work/workspaces/' + role + '/')
     segment = r'(?!\.{1,2}(?:/|\Z))[A-Za-z0-9_.\-\u4e00-\u9fff ]+'
     path = rf'(?:{base})?{segment}(?:/{segment})*'
-    cli = rf'qwenpaw cron (?:list --agent-id {role}|(?:get|state|pause|resume) qd-learning-{role} --agent-id {role})'
+    # The moved engineer retains its historical weekly job ID, but the native
+    # CLI must address its new workspace, never the game's mc-god goddess.
+    weekly_role = 'mc-god' if role == 'qd-engineer' else role
+    cli = rf'qwenpaw cron (?:list --agent-id {role}|(?:get|state|pause|resume) qd-learning-{weekly_role} --agent-id {role})'
     def row(suffix, tools, params, patterns, description):
         return {'id': PREFIX + suffix, 'tools': list(tools), 'params': params, 'category': 'command_injection',
                 'severity': 'HIGH', 'patterns': patterns, 'exclude_patterns': [], 'description': description,
@@ -58,7 +61,7 @@ def rules(role):
         row('SKILL_NAMESPACE', ['materialize_skill'], ['name'], [r'\A(?:qd-|make-skill\Z|file_reader\Z|cron\Z)'],
             'Native learned skills use their own names; qd- names are reserved for validated game integrations.'),
     ]
-    if role == 'mc-god':
+    if role in ('mc-god', 'qd-engineer'):
         # Source is ordinary editable workspace content. Git metadata and
         # engineering records are written only by the fixed MCP/control tools.
         result.append(row('ENGINEERING_METADATA', FILE_TOOLS, ['file_path'],

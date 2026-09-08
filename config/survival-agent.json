@@ -13,7 +13,7 @@
   "autonomyReviewSeconds": 1800,
   "decisionCooldownSeconds": 0,
   "dailyPlanningLimit": null,
-  "taskTimeoutSeconds": 240,
+  "taskTimeoutSeconds": 600,
   "maxSkillSteps": 32,
   "maxSkillSeconds": 900,
   "anchor": {"x": -544, "z": 865},

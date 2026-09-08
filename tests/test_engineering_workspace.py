@@ -1,10 +1,12 @@
 from copy import deepcopy
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -54,6 +56,87 @@ class EngineeringTests(unittest.TestCase):
         row.update(status=status, exitCode=0, imageId=self.config['plans'][0]['image'])
         write(self.area / 'receipts' / (request + '.json'), row)
         return sha
+
+    @contextmanager
+    def all_source_files_appear_executable(self):
+        """Emulate Docker Desktop's 0755 source view, including on Windows."""
+        original = Path.stat
+        repo = self.repo
+        def mounted_stat(path, *args, **kwargs):
+            value = original(path, *args, **kwargs)
+            if path.is_relative_to(repo) and '.git' not in path.relative_to(repo).parts and stat.S_ISREG(value.st_mode):
+                fields = list(value)
+                fields[0] = (value.st_mode & ~0o777) | 0o755
+                return os.stat_result(fields)
+            return value
+        with patch.object(Path, 'stat', mounted_stat):
+            yield
+
+    def test_mount_execute_bits_do_not_change_snapshot_or_dirty_state(self):
+        before = self.service.status()
+        with self.all_source_files_appear_executable():
+            after = self.service.status()
+            self.assertEqual(after['sourceSha256'], before['sourceSha256'])
+            self.assertFalse(after['dirty'])
+            self.assertEqual(after['workingChanges'], [])
+            self.assertEqual(after['changed'], [])
+
+    def test_mounted_commit_preserves_tracked_executable_and_new_source_is_regular(self):
+        executable = self.repo / 'world/existing.sh'
+        executable.write_text('#!/bin/sh\nexit 0\n', newline='\n')
+        self.git('add', 'world/existing.sh')
+        self.git('update-index', '--chmod=+x', 'world/existing.sh')
+        self.git('commit', '-qm', 'existing executable')
+        old_head = self.git('rev-parse', 'HEAD').strip()
+        self.config['baseCommit'] = old_head
+        write(self.area / 'config.json', self.config)
+        self.modify()
+        (self.repo / 'world/new.py').write_text('NEW = 1\n', newline='\n')
+        with self.all_source_files_appear_executable():
+            snapshot, _ = self.service.snapshot()
+            self.assertEqual(snapshot['workingChanges'], ['world/feature.py', 'world/new.py'])
+            modes = {e['path']: e['mode'] for e in snapshot['entries']}
+            self.assertEqual(modes, {'tests/test_feature.py': '100644',
+                'world/existing.sh': '100755', 'world/feature.py': '100644', 'world/new.py': '100644'})
+            sha = self.receipt()
+            self.service.commit('only source changes', sha, 'request-0001', 'commit-0001')
+            self.assertFalse(self.service.status()['dirty'])
+        actual = {row.split('\t')[1]: row.split(' ')[0] for row in self.git('ls-tree', '-r', 'HEAD').splitlines()}
+        self.assertEqual(actual, modes)
+        self.assertEqual(self.git('diff', '--name-only', old_head, 'HEAD').splitlines(),
+                         ['world/feature.py', 'world/new.py'])
+        self.assertNotIn('mode change', self.git('diff', '--summary', old_head, 'HEAD'))
+
+    def test_staged_chmod_cannot_override_managed_head_mode(self):
+        self.git('update-index', '--chmod=+x', 'world/feature.py')
+        snapshot, _ = self.service.snapshot()
+        self.assertEqual(next(e['mode'] for e in snapshot['entries'] if e['path'] == 'world/feature.py'), '100644')
+        self.assertEqual(snapshot['workingChanges'], [])
+
+    def test_deleted_tracked_source_remains_an_actual_change(self):
+        self.source.unlink()
+        snapshot, _ = self.service.snapshot()
+        self.assertEqual(snapshot['changed'], ['world/feature.py'])
+        self.assertEqual(snapshot['workingChanges'], ['world/feature.py'])
+        sha = self.receipt()
+        self.service.commit('remove obsolete fixture', sha, 'request-0001', 'commit-0001')
+        self.assertNotIn('world/feature.py', self.git('ls-tree', '-r', '--name-only', 'HEAD'))
+
+    def test_special_git_index_modes_are_rejected_even_without_disk_links(self):
+        blob = self.service.git('hash-object', '-w', '--stdin', input=b'outside').decode().strip()
+        for mode, oid in (('120000', blob), ('160000', self.base)):
+            with self.subTest(mode=mode):
+                self.git('update-index', '--add', '--cacheinfo', mode + ',' + oid + ',world/special')
+                with self.assertRaisesRegex(ValueError, 'index_mode_not_regular'):
+                    self.service.snapshot()
+                self.git('read-tree', 'HEAD')
+
+    def test_special_head_modes_are_rejected_instead_of_becoming_regular_files(self):
+        blob = self.service.git('hash-object', '-w', '--stdin', input=b'outside').decode().strip()
+        self.git('update-index', '--add', '--cacheinfo', '120000,' + blob + ',world/link')
+        self.git('commit', '-qm', 'external symlink change')
+        with self.assertRaisesRegex(ValueError, 'source_mode_not_regular'):
+            self.service.snapshot()
 
     def test_real_local_commit_binds_fixed_test_source_without_push(self):
         self.modify(); sha = self.receipt()

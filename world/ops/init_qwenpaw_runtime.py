@@ -23,7 +23,7 @@ def lock_builtin_profiles(cfg):
     from qwenpaw.constant import BUILTIN_QA_AGENT_ID
     for aid in ('default', BUILTIN_QA_AGENT_ID):
         folder = STATE / 'work' / 'workspaces' / aid
-        closed = AgentProfileConfig(id=aid, name=f'{aid} (disabled)', workspace_dir=str(folder),
+        closed = AgentProfileConfig(id=aid, name=f'{aid} (disabled)', workspace_dir=str(folder), language=cfg.agents.language,
             tools=cfg.tools, acp=cfg.acp, security=cfg.security, channels=cfg.channels,
             heartbeat={'enabled': False}, mcp={'clients': {}})
         closed.running.light_context_config.strategy = 'native'
@@ -63,6 +63,7 @@ async def initialize():
     cfg.security.tool_guard.denied_tools = sorted(set(tc.builtin_tools) | set(DEFAULT_REGISTRY.get_all_tool_names()))
     cfg.security.allow_no_auth_hosts = []
     cfg.agents.profiles = {}
+    cfg.agents.language = "zh"
     cfg.agents.active_agent = "mc-god"
     cfg.agents.agent_order = [p["id"] for p in manifest["profiles"]]
     registry = ToolRegistry()
@@ -75,7 +76,7 @@ async def initialize():
         assert aid in {"mc-god", "mc-herald"}
         folder = STATE / "work" / "workspaces" / aid
         folder.mkdir(parents=True, exist_ok=True)
-        agent = AgentProfileConfig(id=aid, name=selected["name"], workspace_dir=str(folder),
+        agent = AgentProfileConfig(id=aid, name=selected["name"], workspace_dir=str(folder), language=selected.get("language", "zh"),
             tools=tc, acp=acp, security=cfg.security, channels=cfg.channels,
             heartbeat={"enabled": False}, mcp={"clients": {}}, active_model=selected["active_model"])
         agent.running.max_iters = 4

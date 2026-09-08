@@ -18,6 +18,8 @@ class WorldOperationsHealthTests(unittest.TestCase):
         self.now=datetime(2026,9,8,14,25,tzinfo=timezone.utc).timestamp()
         self.native={'spec':world_job(),'state':{'last_status':'success','last_error':None,
             'last_run_at':datetime.fromtimestamp(self.now-10,timezone.utc).isoformat()}}
+        self.history=[{'run_at':self.native['state']['last_run_at'],'status':'success','error':None}]
+        self.history_requests=0
         self.context={'schema':1,'updatedAt':self.now,'today':'2026-09-08','nextDay':'2026-09-09',
             'eligibleIssuers':['hesu'],'existingPlan':{'status':'completed','questCount':1,'agentId':'qd-guild-planner'},
             'receipt':None,'publication':{'day':'2026-09-08','status':'published','questCount':2,'agentQuestCount':0}}
@@ -45,6 +47,9 @@ class WorldOperationsHealthTests(unittest.TestCase):
 
     def request(self,route):
         if route=='/cron/jobs/'+probe.JOB_ID:return self.native
+        if route=='/cron/jobs/'+probe.JOB_ID+'/history':
+            self.history_requests+=1
+            return self.history
         self.assertEqual(route,'/mcp/tools/qiandeng_operations')
         return [{'name':n,'enabled':True} for n in ('operations_world_planning','operations_request_guild_plan')]
 
@@ -73,6 +78,50 @@ class WorldOperationsHealthTests(unittest.TestCase):
         self.assertTrue(self.check()['checks']['daily_run_and_report_verified'])
         self.native['state']['last_status']='failed'
         self.assertFalse(self.check()['checks']['daily_run_and_report_verified'])
+
+    def test_restart_uses_matching_persistent_native_history_and_real_report(self):
+        self.assertTrue(self.check()['ok'])
+        self.assertEqual(self.history_requests,0)
+        self.native['state']={'last_run_at':None,'last_status':None,'last_error':None}
+        result=self.check()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['evidence']['dailyRunNativeSource'],'history')
+        self.assertEqual(self.history_requests,1)
+        (self.root/self.report_path).unlink()
+        self.assertFalse(self.check()['checks']['daily_run_and_report_verified'])
+
+    def test_current_failed_or_partial_state_cannot_fall_back_to_old_success(self):
+        states=[{'last_run_at':self.history[0]['run_at'],'last_status':'failed','last_error':'failure'},
+                {'last_run_at':None,'last_status':'failed','last_error':None},
+                {'last_run_at':None,'last_status':None,'last_error':'failure'},
+                {'last_run_at':None,'last_status':'success','last_error':None},{}]
+        for state in states:
+            with self.subTest(state=state):
+                self.native['state']=state
+                self.assertFalse(self.check()['checks']['daily_run_and_report_verified'])
+        self.assertEqual(self.history_requests,0)
+
+    def test_history_must_be_same_unique_success_with_no_error(self):
+        self.native['state']={'last_run_at':None,'last_status':None,'last_error':None}
+        valid=dict(self.history[0])
+        cases=[[],[valid|{'status':'failed'}],[valid|{'error':'failure'}],
+               [valid|{'run_at':datetime.fromtimestamp(self.now-16,timezone.utc).isoformat()}],
+               [valid|{'run_at':datetime.fromtimestamp(self.now-10).isoformat()}],
+               [valid,dict(valid)],
+               [valid,valid|{'status':'failed','run_at':datetime.fromtimestamp(self.now,timezone.utc).isoformat()}]]
+        for rows in cases:
+            with self.subTest(rows=rows):
+                self.history=rows
+                self.assertFalse(self.check()['checks']['daily_run_and_report_verified'])
+
+    def test_persistent_history_keeps_the_48_hour_ledger_window(self):
+        self.native['state']={'last_run_at':None,'last_status':None,'last_error':None}
+        self.run.update(startedAt=self.now-172850,finishedAt=self.now-172801)
+        self.write('server/operations-agent-state/operations-budget/delegations.json',[self.run])
+        self.history=[{'run_at':datetime.fromtimestamp(self.run['finishedAt'],timezone.utc).isoformat(),
+                       'status':'success','error':None}]
+        self.assertFalse(self.check()['checks']['daily_run_and_report_verified'])
+        self.assertEqual(self.history_requests,0)
 
     def test_failed_or_unresolved_task_never_passes(self):
         for status in ('cron_reserved','submission_uncertain','failed'):

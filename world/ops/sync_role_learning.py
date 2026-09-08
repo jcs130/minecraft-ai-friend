@@ -15,8 +15,7 @@ import shutil
 import tempfile
 
 from role_learning_profiles import (roles, role_skills, with_learning, learning_card,
-    validate_learning_workspace, read_safe, validate_jobs, skill_references)
-from agent_learning import managed_job
+    validate_learning_workspace, read_safe, validate_jobs, skill_references, learning_identity, learning_job)
 from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content
 from llm_runtime_policy import unrestricted_running
 from life_persona import update_survivor_policy_text
@@ -111,18 +110,20 @@ def plan(state, runtime, source=HERE):
             assert path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 16384
             skill_references(name, source)
         jobs = read_safe(folder / 'jobs.json') if (folder / 'jobs.json').exists() else {'version': 2, 'jobs': []}
+        logical_role, logical_runtime = learning_identity(role, runtime)
+        weekly_id = learning_job(role, runtime)['id']
         from world_operations import JOB_ID, validate_world_job
         assert isinstance(jobs['jobs'], list)
         for job in jobs['jobs']:
             from world_team_schedule import is_team_job, validate_team_job
-            if is_team_job(job['id']): validate_team_job(job, runtime + ':' + role)
+            if is_team_job(job['id']): validate_team_job(job, logical_runtime + ':' + logical_role)
             elif job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
             elif runtime == 'game':
                 from life_review_schedule import JOB_ID as REVIEW_ID, validate_job
                 if job['id'] == REVIEW_ID: validate_job(job, role)
-                else: assert job['id'] == 'qd-learning-' + role
-            else: assert job['id'] == 'qd-learning-' + role
-        result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': 'qd-learning-' + role})
+                else: assert job['id'] == weekly_id
+            else: assert job['id'] == weekly_id
+        result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': weekly_id})
     return result
 
 
@@ -228,7 +229,7 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
         assert load_card(card_path).enabled
         jobs_path = folder / 'jobs.json'
         jobs = read_safe(jobs_path) if jobs_path.exists() else {'version': 2, 'jobs': []}
-        job = managed_job(role, runtime)
+        job = learning_job(role, runtime)
         learning_jobs = [j for j in jobs['jobs'] if j['id'] == job['id']]
         retained = [j for j in jobs['jobs'] if j['id'] != job['id']]
         if learning_jobs:

@@ -27,6 +27,7 @@ health = load('routing_panel_test', ROOT / 'world/ops/health/health_mon.py')
 from world_agent_profiles import closed_profile
 from test_role_learning_profiles import learning_fixture, native_fixture_lock
 import native_role_capabilities as native
+import world_team_profiles as team
 
 
 class ModelRoutingHealth(unittest.TestCase):
@@ -45,11 +46,30 @@ class ModelRoutingHealth(unittest.TestCase):
             for role in roles:
                 path = folder + '/workspaces/' + role
                 agent = closed_profile(profile(), role) if role in routing.WORLD_ROLES else {'id': role}
+                if role in routing.WORLD_ROLES:
+                    agent['mcp']['clients'].update(team.bindings(role,'game'))
                 self.put(path + '/agent.json', agent)
                 self.put(path + '/jobs.json', {'jobs': []})
                 self.put(path + '/skill.json', {'skills': {}})
                 if role in routing.WORLD_ROLES:
                     learning_fixture(self.root / path, role)
+                    client=team.client(role,'game')
+                    self.put(path+'/drivers/mcp/qd_world_team.yaml',{
+                        'name':team.DRIVER,'protocol':'mcp','enabled':True,
+                        'endpoint':{key:client[key] for key in ('transport','command','args','env')},
+                        'credentials':{},'config':{'tools':client['tools']},
+                        'policy':{'default_effect':'deny','rules':[
+                            {'subject':'*','effect':'allow','target':{'kind':'tool','name':name},
+                             'principal':{'source_type':'channel','source_value':'console',
+                                          'subject_type':'all','subject_value':''}}
+                            for name in client['tools']]}})
+        # Migrated source stays archived and disabled; the purpose ID is stable
+        # while its actual native role now lives in the game instance.
+        ops_config = routing.RUNTIMES['operations'][0] + '/config.json'
+        preserved = routing.read_json(self.root / ops_config)
+        preserved['agents']['profiles']['mc-god'] = {'enabled': False}
+        self.put(ops_config, preserved)
+        self.put(routing.RUNTIMES['operations'][0] + '/workspaces/mc-god/agent.json', {'id': 'mc-god'})
         self.secret = 'test-adapter-token-never-live-' * 2
         token = self.root / 'server/mcdata/village/maid-agent-token'
         token.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +130,17 @@ class ModelRoutingHealth(unittest.TestCase):
                     config['agents']['profiles']['qd-guild-planner']['enabled'] = True
                     self.put(config_path, config)
 
+    def test_engineering_purpose_preserves_id_but_never_routes_to_retired_source(self):
+        route = self.manifest['routes']['operations.priority']
+        self.assertEqual(route, {'runtime': 'game', 'agentId': 'qd-engineer',
+            'apiUrl': 'http://qwenpaw:8088/api', 'purpose': '天神工程规划与修复'})
+        self.assertTrue(self.probe()['checks']['all_route_targets_enabled'])
+        old = json.loads(json.dumps(self.manifest))
+        old['routes']['operations.priority'] = route | {
+            'runtime': 'operations', 'agentId': 'mc-god', 'apiUrl': 'http://qwenpaw-ops:8088/api'}
+        self.put('config/model-task-routes.json', old)
+        self.assertFalse(self.probe()['checks']['all_route_targets_enabled'])
+
     def test_manifest_cannot_claim_a_different_shared_maid_budget_than_runtime(self):
         for field, value in (('dailyLimit', 12), ('cooldownSeconds', 60)):
             manifest = json.loads(json.dumps(self.manifest))
@@ -133,6 +164,41 @@ class ModelRoutingHealth(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
             learning_fixture(self.root / folder, 'qd-maid-dialogue')
+
+    def test_team_driver_is_required_and_foreign_cards_or_clients_fail(self):
+        folder='server/agents/work/workspaces/qd-guild-planner/'
+        profile_path=folder+'agent.json'
+        card_path=folder+'drivers/mcp/qd_world_team.yaml'
+        original=routing.read_json(self.root/profile_path)
+        card=routing.read_json(self.root/card_path)
+        for kind in ('missing-client','missing-card','foreign-client','foreign-card'):
+            agent=json.loads(json.dumps(original))
+            if kind=='missing-client':del agent['mcp']['clients'][team.DRIVER]
+            elif kind=='missing-card':(self.root/card_path).unlink()
+            elif kind=='foreign-client':agent['mcp']['clients']['arbitrary_shell']={}
+            else:self.put(folder+'drivers/mcp/arbitrary_shell.yaml',{})
+            self.put(profile_path,agent)
+            with self.subTest(kind=kind):
+                self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
+            self.put(profile_path,original);self.put(card_path,card)
+            (self.root/(folder+'drivers/mcp/arbitrary_shell.yaml')).unlink(missing_ok=True)
+        self.assertTrue(self.probe()['checks']['quiet_world_task_profiles'])
+
+    def test_native_team_endpoint_tools_enabled_and_console_policy_are_checked(self):
+        path='server/agents/work/workspaces/qd-maid-dialogue/drivers/mcp/qd_world_team.yaml'
+        original=routing.read_json(self.root/path)
+        for kind in ('cross-role','disabled','extra-tool','allow-default','wildcard-scope'):
+            card=json.loads(json.dumps(original))
+            if kind=='cross-role':card['endpoint']['args'][-1]='operations:mc-god'
+            elif kind=='disabled':card['enabled']=False
+            elif kind=='extra-tool':card['config']['tools'].append('arbitrary_shell')
+            elif kind=='allow-default':card['policy']['default_effect']='allow'
+            else:card['policy']['rules'][0]['principal']['source_value']='*'
+            self.put(path,card)
+            with self.subTest(kind=kind):
+                self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
+        self.put(path,original)
+        self.assertTrue(self.probe()['checks']['quiet_world_task_profiles'])
 
     def test_any_saved_site_direct_url_wrong_type_or_token_is_rejected(self):
         for field, value, check in (

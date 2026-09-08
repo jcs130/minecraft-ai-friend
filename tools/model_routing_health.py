@@ -9,8 +9,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
 sys.path.insert(0, str(ROOT / 'world/sidecar'))
-from world_agent_profiles import WORLD_ROLES, validate_profile
-from role_learning_profiles import validate_learning_workspace
+from world_agent_profiles import WORLD_ROLES, validate_profile, validate_workspace
 from qwen_tasks import LIMITS as NPC_TASK_LIMITS
 
 RUNTIMES = {
@@ -127,13 +126,13 @@ def probe(root=ROOT, now=None):
         for role in WORLD_ROLES:
             folder = root / RUNTIMES['game'][0] / 'workspaces' / role
             agent = read_json(folder / 'agent.json')
-            validate_profile(agent, role)
+            validate_profile(agent, role, team=True)
             assert no_enabled(agent['acp'])
-            validate_learning_workspace(folder, role, 'game')
             drivers = folder / 'drivers'
             assert not drivers.is_symlink() and not getattr(drivers, 'is_junction', lambda: False)()
-            assert {p.relative_to(drivers).as_posix() for p in drivers.rglob('*.yaml')
-                    if p.name != '.legacy_mcp_migration_report.yaml'} == {'mcp/qd_learning.yaml'}
+            # Production text roles require both exact learning and world-team
+            # cards, including the native endpoint/tool/permission contracts.
+            validate_workspace(folder, role, team=True)
         checks['quiet_world_task_profiles'] = True
     except (OSError, ValueError, TypeError, KeyError, AttributeError, AssertionError):
         pass

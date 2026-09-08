@@ -124,11 +124,12 @@ def _job_count(workspace: Path) -> int | None:
 
 def _role(runtime: str, ident: str) -> str:
     if runtime == 'qiandengji-ops':
-        return {'mc-god':'运营统筹与验收','default':'司灯／台账与协调','mc-herald':'运营巡检与行为审计',
+        return {'mc-god':'天神／原工程师工作区（迁移后停用）','default':'司灯／台账与协调','mc-herald':'服务诊断与行为审计',
                 'mc-priest':'剧情与活动策划','mc-guard-kirito':'桐人／玩法体验分析（身体未接管）',
                 'mc-guard-naruto':'鸣人／新手与协作体验分析（身体未接管）'}.get(ident,'内置辅助（停用）')
     if runtime == "qiandengji":
-        return {"mc-god": "游戏神谕与对话（会话后端）", "mc-herald": "游戏答疑与传令（会话后端）",
+        return {"mc-god": "灯语女神／世界管理、问题协调与验收", "mc-herald": "灯语女神／玩家交流与问题受理",
+                "qd-engineer": "天神／代码巡查、修复、测试与改进提案",
                 "qd-survivor": "桐人／自主生存、世界感知与技能学习",
                 "qd-villager-dialogue": "村民个性对话与祈愿",
                 "qd-guild-planner": "公会任务策划／按日生成可校验预案",
@@ -154,7 +155,7 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
     result: dict[str, Any] = {"runtimes": [], "agents": [], "issues": []}
     if (project / 'server/operations-agent-state/work/config.json').is_file():
         locations.insert(1, ('qiandengji-ops','千灯纪世界运营组','container',project/'server/operations-agent-state/work',
-            'qiandengji-qwenpaw-ops-1','http://127.0.0.1:18090','六角色运营：状态分析、巡检与提案；游戏写入及周期调度尚未开放'))
+            'qiandengji-qwenpaw-ops-1','http://127.0.0.1:18090','项目运营支持：协调、诊断、剧情与体验分析；天神迁入游戏控制台后原实例停用'))
 
     def issue(code: str, severity: str, title: str, detail: str) -> None:
         result["issues"].append({"code": code, "severity": severity, "title": title, "detail": detail})

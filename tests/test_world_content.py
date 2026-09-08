@@ -66,6 +66,20 @@ class ContentTests(unittest.TestCase):
         self.queue.publish(ADMIN,'release-one',row['contentId'])
         return row['contentId']
 
+    def test_context_discovers_story_and_designer_handoffs_without_chat(self):
+        idea = self.queue.story('operations:mc-priest', 'story-index-one', '故事', '真实投稿', ['巡夜'])
+        submitted = self.queue.submit(DESIGNER, 'episode-index-one', self.episode())
+        rows = {r['contentId']: r for r in self.queue.context()['proposals']}
+        self.assertEqual(rows[idea['contentId']]['status'], 'story_proposed')
+        self.assertEqual(rows[submitted['contentId']]['status'], 'proposed')
+        self.assertNotIn('story', rows[idea['contentId']])
+        self.queue.publish(ADMIN, 'publish-index-one', submitted['contentId'])
+        self.assertEqual(next(r for r in self.queue.context()['proposals']
+                             if r['contentId'] == submitted['contentId'])['status'], 'approved_pending')
+        self.tick()
+        self.assertEqual(next(r for r in self.queue.context()['proposals']
+                             if r['contentId'] == submitted['contentId'])['status'], 'published')
+
     def test_publish_real_new_contracts_no_random_drops_and_keep_existing(self):
         identity=self.submit_and_approve()
         result=self.tick()['publications'][0]

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
@@ -19,6 +20,17 @@ def role_tools(role):
                      'operations_request_guild_plan') if role == 'default' else ())
 
 
+def operation_arguments(role, native_role=None, native_runtime=None):
+    if role not in ROLES:
+        raise ValueError('unknown_role')
+    args = ['/ops/operations_team_mcp.py', '--role', role]
+    if native_role is not None or native_runtime is not None:
+        if (role, native_role, native_runtime) != ('mc-god', 'qd-engineer', 'game'):
+            raise ValueError('invalid_operations_native_host')
+        args += ['--native-role', native_role, '--native-runtime', native_runtime]
+    return args
+
+
 def read_json(path, limit=2*1024*1024):
     if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
         raise ValueError('snapshot_unavailable')
@@ -29,10 +41,18 @@ def read_json(path, limit=2*1024*1024):
 
 
 class OperationsTools:
-    def __init__(self, role, public=Path('/public'), state=Path('/state/work/operations')):
+    def __init__(self, role, public=Path('/public'), state=None, *, native_role=None, native_runtime=None,
+                 workspace_root=Path('/state/work/workspaces')):
         if role not in ROLES:
             raise ValueError('unknown_role')
-        self.role, self.public, self.state = role, Path(public), Path(state)
+        operation_arguments(role, native_role, native_runtime)
+        self.role, self.public = role, Path(public)
+        self.state = Path(state) if state is not None else Path(os.environ.get('QIANDENG_OPERATIONS_STATE_DIR', '/state')) / 'work/operations'
+        self.native_role = native_role or role
+        self.workspace_root = Path(workspace_root)
+        if native_role:
+            from world_team_hosts import require_host
+            require_host('operations:' + role, native_runtime, native_role)
 
     def snapshot(self):
         result = {'schema': 1, 'role': self.role, 'observedAt': datetime.now(timezone.utc).isoformat(),
@@ -86,10 +106,19 @@ class OperationsTools:
         references = {'gameplay': 'LANGUAGE-INTERFACE.md', 'world': 'WORLD-CONTENT-STATUS.md',
                       'services': 'SERVER-MANAGEMENT.md'}
         if topic == 'my-skills':
-            root = Path('/state/work/workspaces') / self.role
+            root = self.workspace_root / self.native_role
             manifest = read_json(root/'skill.json')
-            return {'ok': True, 'skills': [{'name': name, 'content': (root/'skills'/name/'SKILL.md').read_text(encoding='utf8')[:9000]}
-                for name, entry in manifest.get('skills', {}).items() if entry.get('enabled')]}
+            rows = []
+            for name, entry in manifest.get('skills', {}).items():
+                if not entry.get('enabled'):
+                    continue
+                if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', name):
+                    raise ValueError('invalid_skill_reference')
+                path = root/'skills'/name/'SKILL.md'
+                if any(p.is_symlink() for p in (path, *path.parents)):
+                    raise ValueError('linked_skill_reference')
+                rows.append({'name': name, 'content': path.read_text(encoding='utf8')[:9000]})
+            return {'ok': True, 'skills': rows}
         if topic not in references: return {'ok': False, 'code': 'unknown_reference'}
         file = Path('/reference/docs')/references[topic]
         if not file.is_file(): return {'ok': False, 'code': 'reference_unavailable'}
@@ -131,26 +160,31 @@ def main():
     from mcp.server.fastmcp import FastMCP
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--role', choices=ROLES, required=True)
+    parser.add_argument('--native-role')
+    parser.add_argument('--native-runtime', choices=['game'])
     args = parser.parse_args()
-    tools = OperationsTools(args.role)
+    from world_team_hosts import require_host, host_tool_app
+    require_host('operations:' + args.role, args.native_runtime or 'operations', args.native_role or args.role)
+    tools = OperationsTools(args.role, native_role=args.native_role, native_runtime=args.native_runtime)
     app = FastMCP('qiandengji-operations')
+    guarded = host_tool_app(app, 'operations:' + args.role, args.native_runtime, args.native_role)
 
-    @app.tool()
+    @guarded.tool()
     def operations_snapshot() -> dict:
         """Read current project snapshots, their age and evidence hashes. Stale data is not live evidence."""
         return tools.snapshot()
 
-    @app.tool()
+    @guarded.tool()
     def operations_reports() -> dict:
         """Read recent attributed operations proposals from the six project roles."""
         return tools.reports()
 
-    @app.tool()
+    @guarded.tool()
     def submit_operations_report(request_id: str, summary: str, findings: list[str], proposed_actions: list[str]) -> dict:
         """Record an attributed, idempotent operations proposal. Does not execute any proposed action."""
         return tools.submit(request_id, summary, findings, proposed_actions)
 
-    @app.tool()
+    @guarded.tool()
     def operations_reference(topic: str) -> dict:
         """Read assigned skills or fixed project docs: my-skills, gameplay, world, services."""
         return tools.reference(topic)
@@ -160,22 +194,22 @@ def main():
         from world_operations import WorldPlanning
         planning = WorldPlanning()
 
-        @app.tool()
+        @guarded.tool()
         def operations_world_planning() -> dict:
             """Read fresh online guild candidates and the existing NPC planner receipt; no world action."""
             return planning.context()
 
-        @app.tool()
+        @guarded.tool()
         def operations_request_guild_plan() -> dict:
             """Request tomorrow's plan from the existing professional Qwen guild agent; never replace existing contracts."""
             return planning.request()
 
-        @app.tool()
+        @guarded.tool()
         def operations_delegate(to_role: str, task: str) -> dict:
             """Delegate one task to a fixed teammate via native QwenPaw tasks; one durable active task, no automatic retries."""
             return delegate(args.role, to_role, task)
 
-        @app.tool()
+        @guarded.tool()
         def operations_task(task_id: str) -> dict:
             """Read a task created by operations_delegate. Minimum 30 seconds between polls. No model call by this tool."""
             return task_status(args.role, task_id)

@@ -8,12 +8,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--role', required=True)
     parser.add_argument('--runtime', choices=('game', 'operations'), required=True)
+    parser.add_argument('--native-role')
+    parser.add_argument('--native-runtime', choices=('game', 'operations'))
     args = parser.parse_args()
-    tools = LearningTools(args.role, args.runtime)
+    tools = LearningTools(args.role, args.runtime, native_role=args.native_role, native_runtime=args.native_runtime)
     app = FastMCP('qiandeng-role-learning')
 
     def call(fn, *values):
-        try: return fn(*values)
+        try:
+            tools.assert_host()
+            return fn(*values)
         except Exception as exc:
             return {'ok': False, 'code': str(exc) if isinstance(exc, ValueError) else 'learning_unavailable',
                 'errorType': type(exc).__name__, 'retryAutomatically': False}

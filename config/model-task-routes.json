@@ -20,7 +20,7 @@
     "guild_quest": {"runtime": "game", "agentId": "qd-guild-planner", "apiUrl": "http://qwenpaw:8088/api", "purpose": "根据真实村民需求整批规划公会合同", "dailyLimit": null, "cooldownSeconds": 0},
     "maid_dialogue": {"runtime": "game", "agentId": "qd-maid-dialogue", "apiUrl": "http://qwenpaw:8088/api", "purpose": "女仆对话与个性设定", "dailyLimit": null, "cooldownSeconds": 0},
     "operations.coordination": {"runtime": "operations", "agentId": "default", "apiUrl": "http://qwenpaw-ops:8088/api", "purpose": "司灯任务分工"},
-    "operations.priority": {"runtime": "operations", "agentId": "mc-god", "apiUrl": "http://qwenpaw-ops:8088/api", "purpose": "运营优先级与验收"},
+    "operations.priority": {"runtime": "game", "agentId": "qd-engineer", "apiUrl": "http://qwenpaw:8088/api", "purpose": "天神工程规划与修复"},
     "operations.diagnostics": {"runtime": "operations", "agentId": "mc-herald", "apiUrl": "http://qwenpaw-ops:8088/api", "purpose": "服务诊断"},
     "operations.events": {"runtime": "operations", "agentId": "mc-priest", "apiUrl": "http://qwenpaw-ops:8088/api", "purpose": "剧情活动设计"},
     "operations.controls": {"runtime": "operations", "agentId": "mc-guard-kirito", "apiUrl": "http://qwenpaw-ops:8088/api", "purpose": "技能与手柄体验验收"},

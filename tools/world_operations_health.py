@@ -108,9 +108,29 @@ def check(root=ROOT,request=get,clock=time.time):
         start=run['startedAt'];finish=run['finishedAt']
         assert type(start) in (int,float) and type(finish) in (int,float) and 0<=now-finish<=172800
         native_state=native['state']
-        native_finish=datetime.fromisoformat(native_state['last_run_at'].replace('Z','+00:00'))
-        assert (native_state['last_status']=='success' and native_state.get('last_error') is None
-                and native_finish.tzinfo is not None and abs(native_finish.timestamp()-finish)<=5)
+        if native_state.get('last_run_at') is None:
+            # Qwen's in-memory CronState resets on restart. Only an explicitly
+            # empty state can use the same job's durable execution history.
+            assert all(key in native_state and native_state[key] is None
+                       for key in ('last_run_at','last_status','last_error'))
+            history=request('/cron/jobs/'+JOB_ID+'/history')
+            assert isinstance(history,list) and 0<len(history)<=200
+            runs=[]
+            for row in history:
+                stamp=datetime.fromisoformat(row['run_at'].replace('Z','+00:00'))
+                assert stamp.tzinfo is not None
+                runs.append((stamp.timestamp(),row))
+            matching=[row for stamp,row in runs if abs(stamp-finish)<=5]
+            # A later native run, conflicting duplicate, or old unrelated
+            # success must not certify this latest ledger/report pair.
+            assert len(matching)==1 and max(stamp for stamp,_ in runs)<=finish+5
+            assert matching[0]['status']=='success' and matching[0]['error'] is None
+            evidence['dailyRunNativeSource']='history'
+        else:
+            native_finish=datetime.fromisoformat(native_state['last_run_at'].replace('Z','+00:00'))
+            assert (native_state['last_status']=='success' and native_state.get('last_error') is None
+                    and native_finish.tzinfo is not None and abs(native_finish.timestamp()-finish)<=5)
+            evidence['dailyRunNativeSource']='state'
         # A saved cron state alone cannot prove a useful task ran: require its
         # own newly authored attributed report in the execution interval.
         for path in sorted((state/'work/operations/reports/default').glob('*.json'))[:200]:

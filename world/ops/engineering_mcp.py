@@ -5,14 +5,7 @@ from engineering_workspace import EngineeringWorkspace
 TOOLS = ('engineering_status', 'engineering_diff', 'engineering_test', 'engineering_test_status', 'engineering_commit')
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--role', choices=['mc-god'], required=True)
-    parser.parse_args()
-    from mcp.server.fastmcp import FastMCP
-    service = EngineeringWorkspace()
-    app = FastMCP('qiandengji-engineering')
-
+def register_engineering_tools(app, service):
     @app.tool()
     def engineering_status() -> dict:
         """查看独立源码分支、源码哈希与固定验收计划；实际源文件用本角色原生文件工具读写。"""
@@ -38,6 +31,20 @@ def main():
         """固定验收通过且源码未变时保存本地Git提交；不推送、不部署、不操作生产。"""
         return service.commit(message, expected_source_sha256, test_job_id, request_id)
 
+    return list(TOOLS)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--role', choices=['mc-god'], required=True)
+    parser.add_argument('--native-runtime', choices=['game', 'operations'])
+    parser.add_argument('--native-role')
+    args = parser.parse_args()
+    from mcp.server.fastmcp import FastMCP
+    from world_team_hosts import ENGINEER, host_tool_app
+    app = FastMCP('qiandengji-engineering')
+    bound = host_tool_app(app, ENGINEER, args.native_runtime, args.native_role)
+    register_engineering_tools(bound, EngineeringWorkspace())
     app.run(transport='stdio')
 
 

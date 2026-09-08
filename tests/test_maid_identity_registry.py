@@ -9,6 +9,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,9 +46,18 @@ class FakeQwen:
         self.agents = {TEMPLATE: template()}
         self.mcp = {}
         self.policies = {}
+        self.jobs = {}
         self.calls = []
         self.lost_copy = False
         self.lost_task = False
+        from role_learning_profiles import HERE, skill_references
+        from native_role_capabilities import NATIVE_SKILLS
+        names = read_json(HERE / 'game-role-skills.json')['roles'][TEMPLATE]
+        self.skills = {TEMPLATE: {name: {'name': name, 'enabled': True,
+            'content': (HERE / 'skills' / name / 'SKILL.md').read_text(encoding='utf-8'),
+            'references': skill_references(name)} for name in names}}
+        self.skills[TEMPLATE].update({name: {'name': name, 'enabled': True,
+            'content': 'fixture native skill ' + name, 'references': {}} for name in NATIVE_SKILLS})
 
     def __call__(self, method, path, role, body=None):
         self.calls.append((method, path, role, deepcopy(body)))
@@ -59,34 +69,56 @@ class FakeQwen:
             return {'status': 'completed', 'result': {'status': 'completed', 'output': [
                 {'role': 'assistant', 'type': 'message', 'status': 'completed',
                  'content': [{'type': 'text', 'text': '测试回复。'}]}]}}
-        if path == '/agents/' + TEMPLATE + '/copy':
+        if path == '/agents' and method == 'POST':
             if self.lost_copy:
                 raise OSError('fixture lost copy response')
             new = 'maid' + str(len(self.agents))
-            self.agents[new] = {**deepcopy(self.agents[TEMPLATE]), 'id': new,
+            self.agents[new] = {**template(), 'id': new, 'name': body['name'],
                                 'workspace_dir': '/state/work/workspaces/' + new}
+            self.skills[new] = {}
+            self.jobs[new] = []
             return {'id': new, 'workspace_dir': '/state/work/workspaces/' + new}
         if path.startswith('/agents/'):
             selected = path.split('/')[2]
             if method == 'PUT':
-                self.agents[selected] = deepcopy(body)
+                self.agents[selected].update(deepcopy(body))
             return deepcopy(self.agents[selected])
         if path.startswith('/workspace/files/'):
             return {'written': True}
+        if path == '/cron/jobs':
+            return deepcopy(self.jobs[role])
+        if path.startswith('/cron/jobs/') and method == 'PUT':
+            self.jobs[role] = [j for j in self.jobs[role] if j['id'] != body['id']] + [deepcopy(body)]
+            return deepcopy(body)
+        if path == '/skills':
+            if method == 'POST':
+                self.skills[role][body['name']] = deepcopy(body) | {'enabled': body['enable']}
+                return {'created': True, 'name': body['name']}
+            return [{'name': name, 'enabled': row['enabled']} for name, row in self.skills[role].items()]
+        if path.startswith('/skills/'):
+            name = path.split('/')[2]
+            if '/files/references/' in path:
+                return {'content': self.skills[role][name]['references'][path.rsplit('/', 1)[1]]}
+            return deepcopy(self.skills[role][name])
         if path == '/mcp' and method == 'GET':
-            return [self.mcp[role]] if role in self.mcp else []
+            return list(self.mcp.get(role, {}).values())
         if path == '/mcp' and method == 'POST':
-            self.mcp[role] = {'key': body['client_key'], **body['client']}
-            return deepcopy(self.mcp[role])
+            key = body['client_key']
+            self.mcp.setdefault(role, {})[key] = {'key': key, **body['client']}
+            self.policies[(role, key)] = {'default_effect': 'ask', 'client_overrides': [],
+                'tool_defaults': [], 'tool_overrides': [], 'unmanaged_rules_count': 0}
+            return deepcopy(self.mcp[role][key])
         if path.startswith('/mcp/tools/'):
-            return [{'name': name, 'enabled': True} for name in TOOLS]
+            return [{'name': name, 'enabled': True} for name in self.mcp[role][path.rsplit('/', 1)[1]]['tools']]
         if path.startswith('/mcp/policy/'):
-            if method == 'PUT': self.policies[role] = deepcopy(body) | {'unmanaged_rules_count': 0}
-            return deepcopy(self.policies[role])
+            key = (role, path.rsplit('/', 1)[1])
+            if method == 'PUT': self.policies[key] = deepcopy(body) | {'unmanaged_rules_count': 0}
+            return deepcopy(self.policies[key])
         if path.startswith('/mcp/'):
+            key = path.rsplit('/', 1)[1]
             if method == 'PUT':
-                self.mcp[role].update(body)
-            return deepcopy(self.mcp[role])
+                self.mcp[role][key].update(body)
+            return deepcopy(self.mcp[role][key])
         raise AssertionError((method, path))
 
 
@@ -98,6 +130,20 @@ class RegistryFixtures(unittest.TestCase):
         self.api = FakeQwen()
         self.now = 1700000000
         self.registry = MaidRegistry(self.root / 'registry', transport=self.api, clock=lambda: self.now)
+        import world_team_profiles, role_learning_profiles, native_role_capabilities
+        from world_team import MEMBERS
+        def members():
+            return {**MEMBERS, **{'game:' + role: ('fixture', 'fixture') for role in
+                self.registry.health_summary()['activeRoleIds']}}
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(world_team_profiles, 'members', side_effect=members).start()
+        mock.patch.object(role_learning_profiles, 'maid_roles', side_effect=lambda:
+            tuple(self.registry.health_summary()['activeRoleIds'])).start()
+        native = native_role_capabilities.native_lock()
+        for name in native['skills']:
+            native['skills'][name]['sha256'] = hashlib.sha256(
+                self.api.skills[TEMPLATE][name]['content'].encode()).hexdigest()
+        mock.patch.object(native_role_capabilities, 'native_lock', return_value=native).start()
         self.routes = self.root / 'routes.json'
         write_json(self.routes, {'schema': 1, 'routes': {key: {'runtime': 'game', 'apiUrl': BASE, 'agentId': role}
             for key, role in ROLES.items()}})
@@ -119,6 +165,133 @@ class RegistryFixtures(unittest.TestCase):
 
 
 class IdentityTests(RegistryFixtures):
+    def test_registered_learning_card_passes_real_native_builder_and_workspace_contract(self):
+        from qwenpaw.app.mcp.config_service import driver_policy_from_mcp_access_update
+        from qwenpaw.app.mcp.schemas import MCPAccessPolicy, MCPClientCreateRequest
+        from qwenpaw.drivers.adapters.mcp_card_builder import build_mcp_driver_card
+        from qwenpaw.drivers.storage import dump_card
+        import role_learning_profiles
+        row = self.registry.ensure(actor())
+        role = row['agentId']
+        client = self.api.mcp[role]['qd_learning']
+        policy = self.api.policies[(role, 'qd_learning')]
+        # Use Qwen's actual console-card constructor and permission converter;
+        # manually constructing an expected card would hide registration drift.
+        card = build_mcp_driver_card('qd_learning', MCPClientCreateRequest.model_validate(client), 'fixture-unused')
+        card.policy = driver_policy_from_mcp_access_update(card.policy, MCPAccessPolicy.model_validate(policy))
+        folder = self.root / 'native-workspace' / role
+        write_json(folder / 'agent.json', self.api.agents[role])
+        write_json(folder / 'jobs.json', {'jobs': self.api.jobs[role]})
+        dump_card(card, folder / 'drivers/mcp/qd_learning.yaml')
+        with mock.patch.object(role_learning_profiles, 'validate_learning_profile'), \
+                mock.patch.object(role_learning_profiles, 'validate_jobs'), \
+                mock.patch.object(role_learning_profiles, 'validate_role_skills', return_value={'required': 7}):
+            self.assertEqual(role_learning_profiles.validate_learning_workspace(folder, role, 'game'), {'required': 7})
+        self.assertEqual(self.api.agents[role]['mcp']['clients']['qd_learning']['name'], 'qd_learning')
+        self.assertEqual(self.api.policies[(role, 'qd_world_team')]['tool_defaults'], [])
+        self.assertTrue(all(r['source_value'] == 'console' for r in self.api.policies[(role, 'qd_world_team')]['tool_overrides']))
+
+    def test_new_role_never_inherits_template_driver_identity_or_jobs(self):
+        from world_team_profiles import client
+        self.api.agents[TEMPLATE]['mcp']['clients']['qd_world_team'] = client(TEMPLATE, 'game')
+        self.api.jobs[TEMPLATE] = [{'id': 'template-private-job', 'task_type': 'agent'}]
+        row = self.registry.ensure(actor())
+        role = row['agentId']
+        create = next(body for method, path, _, body in self.api.calls if method == 'POST' and path == '/agents')
+        self.assertEqual(set(create), {'name', 'backend', 'skill_names', 'active_model'})
+        self.assertEqual(create['skill_names'], [])
+        self.assertFalse(any(path.endswith('/copy') for _, path, _, _ in self.api.calls))
+        writes = [body for method, path, aid, body in self.api.calls if method == 'PUT' and path == '/agents/' + role]
+        self.assertEqual(writes[0]['mcp'], {'clients': {}})
+        team = self.api.mcp[role]['qd_world_team']
+        self.assertEqual(team['args'], ['/ops/world_team_mcp.py', '--actor', 'game:' + role])
+        self.assertFalse(any(name.startswith('world_admin_') for name in team['tools']))
+        self.assertEqual([j['id'] for j in self.api.jobs[role]], ['qd-learning-' + role])
+        self.assertEqual(self.api.jobs[role][0]['task_type'], 'text')
+        self.assertNotIn('template-private-job', str(self.api.jobs[role]))
+
+    def test_template_team_spoof_rejected_before_creation(self):
+        from world_team_profiles import client
+        valid = client(TEMPLATE, 'game')
+        for changed in ({'args': ['/ops/world_team_mcp.py', '--actor', 'game:mc-god']},
+                        {'tools': valid['tools'] + ['world_admin_rule']},
+                        {'headers': {'Authorization': 'fixture'}}, {'url': 'http://other'}):
+            self.api.agents[TEMPLATE]['mcp']['clients']['qd_world_team'] = valid | changed
+            with self.assertRaisesRegex(ValueError, 'maid_template_not_quiet'):
+                self.registry.ensure(actor())
+        self.assertFalse(any(m == 'POST' and p == '/agents' for m, p, _, _ in self.api.calls))
+
+    def test_managed_extension_starts_only_after_real_ready_publication(self):
+        original = self.registry.transport
+        def transport(method, path, role, body=None):
+            if method == 'POST' and path == '/mcp' and body['client_key'] != 'maid_native':
+                saved = self.registry.resolve(MAID_A, OWNER)
+                self.assertEqual(saved['agentId'], role)
+                self.assertIn(role, read_json(self.registry.root / 'public/roles.json')['activeRoleIds'])
+            return original(method, path, role, body)
+        self.registry.transport = transport
+        self.registry.ensure(actor())
+
+    def test_ready_driver_repair_does_not_recreate_or_rewrite_persona_model_and_jobs(self):
+        row = self.registry.ensure(actor())
+        role = row['agentId']
+        self.api.agents[role]['active_model'] = {'provider_id': 'chosen', 'model': 'chosen'}
+        self.api.jobs[role][0]['enabled'] = False
+        before = deepcopy(self.api.agents[role])
+        jobs = deepcopy(self.api.jobs[role])
+        del self.api.mcp[role]['qd_world_team']
+        offset = len(self.api.calls)
+        self.registry.ensure(actor())
+        writes = [(m, p) for m, p, _, _ in self.api.calls[offset:] if m != 'GET']
+        self.assertTrue(all(p == '/mcp' or p.startswith('/mcp/') for _, p in writes))
+        self.assertEqual(self.api.agents[role], before)
+        self.assertEqual(self.api.jobs[role], jobs)
+        self.assertEqual(self.registry.resolve(MAID_A, OWNER)['sessionId'], row['sessionId'])
+
+    def test_lost_team_create_recovers_known_driver_without_replaying_role_create(self):
+        original = self.registry.transport
+        lost = []
+        def transport(method, path, role, body=None):
+            result = original(method, path, role, body)
+            if method == 'POST' and path == '/mcp' and body['client_key'] == 'qd_world_team' and not lost:
+                lost.append(True)
+                raise OSError('lost team create response')
+            return result
+        self.registry.transport = transport
+        with self.assertRaises(OSError):
+            self.registry.ensure(actor())
+        saved = self.registry.resolve(MAID_A, OWNER)
+        self.assertEqual(self.registry.ensure(actor())['agentId'], saved['agentId'])
+        self.assertEqual(sum(m == 'POST' and p == '/agents' for m, p, _, _ in self.api.calls), 1)
+        self.assertEqual(sum(m == 'POST' and p == '/mcp' and b['client_key'] == 'qd_world_team'
+                             for m, p, _, b in self.api.calls), 1)
+
+    def test_ready_foreign_team_identity_is_never_overwritten_or_invoked(self):
+        row = self.registry.ensure(actor())
+        self.api.mcp[row['agentId']]['qd_world_team']['args'][-1] = 'game:mc-god'
+        offset = len(self.api.calls)
+        with self.assertRaisesRegex(ValueError, 'identity_mismatch'):
+            self.registry.ensure(actor())
+        self.assertTrue(all(m == 'GET' for m, _, _, _ in self.api.calls[offset:]))
+
+    def test_skill_scan_rejection_never_publishes_and_retry_keeps_existing_packages(self):
+        original = self.registry.transport
+        failed = []
+        def transport(method, path, role, body=None):
+            if method == 'POST' and path == '/skills' and body['name'] == 'qd-world-team' and not failed:
+                failed.append(True)
+                return {'created': False, 'code': 'scan_blocked'}
+            return original(method, path, role, body)
+        self.registry.transport = transport
+        with self.assertRaisesRegex(ValueError, 'skill_not_installed'):
+            self.registry.ensure(actor())
+        self.assertEqual(self.registry.health_summary()['registeredCount'], 0)
+        row = self.registry.ensure(actor())
+        self.assertEqual(sum(m == 'POST' and p == '/agents' for m, p, _, _ in self.api.calls), 1)
+        self.assertEqual(sum(m == 'POST' and p == '/skills' and b['name'] == 'qd-skill-evolution'
+                             for m, p, _, b in self.api.calls), 1)
+        self.assertEqual(set(self.api.skills[row['agentId']]), set(self.api.skills[TEMPLATE]))
+
     def test_signed_identity_valid_but_tamper_clock_owner_missing_rejected(self):
         raw, headers = self.signed()
         self.assertEqual(self.verifier.verify(raw, headers)['identity']['maidUuid'], MAID_A)
@@ -145,12 +318,11 @@ class IdentityTests(RegistryFixtures):
         self.assertIsNone(summary['sharedPurposeLimit']['24hCap'])
         self.assertEqual(summary['sharedPurposeLimit']['cooldownSeconds'], 0)
         self.assertEqual(self.registry.authenticate('Bearer ' + a['mcpToken'])['maidUuid'], MAID_A)
-        self.assertEqual(self.api.mcp[a['agentId']]['key'], 'maid_native')
-        self.assertEqual(self.api.mcp[a['agentId']]['tools'], TOOLS)
+        self.assertEqual(self.api.mcp[a['agentId']]['maid_native']['tools'], TOOLS)
         self.assertEqual(self.api.agents[a['agentId']]['active_model'], template()['active_model'])
         self.assertFalse(self.api.agents[a['agentId']]['tools']['builtin_tools']['shell']['enabled'])
         self.assertEqual(self.registry.ensure(actor())['agentId'], a['agentId'])
-        self.assertEqual(sum(path.endswith('/copy') for _, path, _, _ in self.api.calls), 2)
+        self.assertEqual(sum(method == 'POST' and path == '/agents' for method, path, _, _ in self.api.calls), 2)
 
     def test_owner_change_does_not_transfer_history_or_auto_adopt(self):
         self.registry.ensure(actor())
@@ -175,7 +347,7 @@ class IdentityTests(RegistryFixtures):
             validate_native(configured, role)
             self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
                               if tool['enabled']}, set(NATIVE_TOOLS))
-            self.assertEqual(configured['mcp'], {'clients': {}})
+            self.assertEqual(set(configured['mcp']['clients']), {'qd_world_team', 'qd_learning'})
             guard = configured['security']['tool_guard']
             def blocked(tool, parameter, value):
                 return any(rule['id'] in guard['auto_denied_rules'] and tool in rule['tools']
@@ -226,7 +398,7 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(fixed, {key: row[key] for key in ('maidUuid', 'ownerUuid', 'name', 'personaRevision')})
         self.assertIn(persona, files['SOUL.md'])
         self.assertNotIn(row['mcpToken'], ''.join(files.values()))
-        self.assertFalse(any('/skills' in path for _, path, _, _ in self.api.calls))
+        self.assertEqual(set(self.api.skills[role]), set(self.api.skills[TEMPLATE]))
         policies = [body for method, path, aid, body in self.api.calls
                     if method == 'PUT' and path == '/mcp/policy/maid_native' and aid == role]
         self.assertEqual(len(policies), 1)
@@ -240,21 +412,21 @@ class IdentityTests(RegistryFixtures):
         for _ in range(2):
             with self.assertRaisesRegex(ValueError, 'uncertain'):
                 self.registry.ensure(actor())
-        self.assertEqual(sum(path.endswith('/copy') for _, path, _, _ in self.api.calls), 1)
+        self.assertEqual(sum(method == 'POST' and path == '/agents' for method, path, _, _ in self.api.calls), 1)
         self.assertEqual(self.registry.health_summary()['activeRoleIds'], [])
 
     def test_unsafe_template_and_unknown_registration_fail_before_copy(self):
         self.api.agents[TEMPLATE]['tools']['builtin_tools']['shell']['enabled'] = True
         with self.assertRaises(ValueError):
             self.registry.ensure(actor())
-        self.assertFalse(any(path.endswith('/copy') for _, path, _, _ in self.api.calls))
+        self.assertFalse(any(method == 'POST' and path == '/agents' for method, path, _, _ in self.api.calls))
 
     def test_native_template_guard_cannot_point_at_another_role(self):
         from native_role_capabilities import configure_native
         self.api.agents[TEMPLATE] = configure_native(template(), 'some-other-role')
         with self.assertRaisesRegex(ValueError, 'maid_template_has_unsafe_tools'):
             self.registry.ensure(actor())
-        self.assertFalse(any(path.endswith('/copy') for _, path, _, _ in self.api.calls))
+        self.assertFalse(any(method == 'POST' and path == '/agents' for method, path, _, _ in self.api.calls))
 
     def test_unloaded_owned_preregistration_is_explicit_no_native_action(self):
         with self.assertRaises(ValueError):
@@ -406,7 +578,8 @@ class RegistrationCliTests(RegistryFixtures):
             'transport': 'stdio', 'command': 'python', 'args': [
                 '/ops/agent_learning_mcp.py', '--role', TEMPLATE, '--runtime', 'game']}
         binding = self.registry.ensure(actor())
-        self.assertEqual(self.api.agents[binding['agentId']]['mcp'], {'clients': {}})
+        self.assertEqual(self.api.agents[binding['agentId']]['mcp']['clients']['qd_learning']['args'], [
+            '/ops/agent_learning_mcp.py', '--role', binding['agentId'], '--runtime', 'game'])
         self.assertEqual(self.registry.resolve(MAID_A, OWNER)['skillTemplate']['extensionPolicy'],
                          'project-governed-role-skills')
 

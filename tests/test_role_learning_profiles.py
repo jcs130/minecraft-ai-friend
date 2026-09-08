@@ -56,9 +56,12 @@ class RoleLearningProfiles(unittest.TestCase):
         learning_fixture(self.folder, self.role, 'operations')
 
     def test_base_role_scopes_and_required_bindings(self):
-        self.assertEqual(sum(len(contract.role_skills(r, 'game')) for r in contract.GAME_ROLES), 18)
-        self.assertEqual(sum(len(contract.role_skills(r, 'operations')) for r in contract.OPS_ROLES), 18)
-        self.assertEqual(contract.validate_learning_workspace(self.folder, self.role, 'operations')['required'], 6)
+        self.assertEqual(sum(len(contract.role_skills(r, 'game')) for r in contract.GAME_ROLES), 24)
+        self.assertEqual(sum(len(contract.role_skills(r, 'operations')) for r in contract.OPS_ROLES), 24)
+        self.assertTrue(all('qd-world-team' in contract.role_skills(r, runtime)
+                            for runtime, roles in (('game', contract.GAME_ROLES), ('operations', contract.OPS_ROLES))
+                            for r in roles))
+        self.assertEqual(contract.validate_learning_workspace(self.folder, self.role, 'operations')['required'], 7)
         changed = deepcopy(self.agent); changed['mcp']['clients']['qd_learning']['args'][2] = 'mc-god'
         with self.assertRaises(AssertionError): contract.validate_learning_profile(changed, self.role, 'operations')
 

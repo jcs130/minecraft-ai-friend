@@ -52,19 +52,26 @@ def reserve_review(tools, job_id, clock=time.time):
 
 async def guarded_execute(executor, job, original, runtime, factory=LearningTools):
     role = executor._workspace.agent_id
+    from world_team_hosts import logical_actor, require_host
+    actor = logical_actor(runtime, role)
+    if actor is None:
+        return {'task_type': job.task_type, 'run_id': None, 'delivery_status': 'suppressed',
+                'final_text': 'team_native_host_inactive', 'modelCalls': 0}
+    # Reject the retired host or unactivated target before creating role services.
+    from world_team_schedule import is_team_job, execute as execute_team
+    if is_team_job(job.id):
+        return await execute_team(executor, job, original, runtime)
+    policy_runtime, policy_role = actor.split(':', 1)
     state = Path(executor._workspace.workspace_dir).parent.parent
     tools = factory(role, runtime, state=state)
-    managed = job.id == 'qd-learning-' + role and job.meta.get('project') == 'qiandengji'
+    managed = job.id == 'qd-learning-' + policy_role and job.meta.get('project') == 'qiandengji'
     def skipped(code):
-        record = {'schema': 1, 'role': role, 'jobId': job.id, 'checkedAt': time.time(),
+        record = {'schema': 1, 'role': policy_role, 'jobId': job.id, 'checkedAt': time.time(),
             'status': 'skipped', 'code': code, 'modelCalls': 0}
         write(tools.root / 'last-cron.json', record)
         return {'task_type': job.task_type, 'run_id': None, 'delivery_status': 'suppressed',
             'final_text': code, 'qiandeng': record}
-    from world_team_schedule import is_team_job, execute as execute_team
-    if is_team_job(job.id):
-        return await execute_team(executor, job, original, runtime)
-    if runtime == 'game':
+    if policy_runtime == 'game':
         from life_review_schedule import JOB_ID, execute as execute_life_review
         if job.id == JOB_ID:
             return await execute_life_review(executor, job)
@@ -76,21 +83,26 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
         if job.task_type == 'agent': return skipped('use_existing_game_decision_controller')
         return await original(executor, job)
     if job.task_type != 'agent': return await original(executor, job)
-    if role not in OPS_ROLES: return skipped('unregistered_operations_role')
+    if policy_role not in OPS_ROLES: return skipped('unregistered_operations_role')
     if job.dispatch.channel != 'console': return skipped('project_console_required')
     if job.runtime.timeout_seconds > 180 or job.runtime.max_concurrency != 1:
         return skipped('bounded_runtime_required')
     from world_operations import is_world_job
-    world_job = is_world_job(job, role)
+    world_job = is_world_job(job, policy_role)
     if not managed and not world_job:
         return skipped('unmanaged_operations_job')
-    from operations_native_tasks import reserve_operation, finish_run
-    reservation = await asyncio.to_thread(reserve_operation, role, str(job.id)) if world_job else await asyncio.to_thread(reserve_review, tools, str(job.id))
+    if world_job:
+        from operations_native_tasks import reserve_operation
+        reservation = await asyncio.to_thread(reserve_operation, policy_role, str(job.id))
+    else:
+        reservation = await asyncio.to_thread(reserve_review, tools, str(job.id))
     if not reservation['ok']: return skipped(reservation['code'])
-    record = {'schema': 1, 'role': role, 'jobId': job.id, 'checkedAt': time.time(),
+    from operations_native_tasks import finish_run
+    record = {'schema': 1, 'role': policy_role, 'jobId': job.id, 'checkedAt': time.time(),
         'status': 'reserved', 'runId': reservation['runId'], 'sharedBudgetCharged': True}
     write(tools.root / 'last-cron.json', record)
     try:
+        require_host(actor, runtime, role)
         result = await original(executor, job)
         delivery = result.get('delivery_status')
         terminal = 'failed' if delivery in ('failed', 'error') else 'completed'

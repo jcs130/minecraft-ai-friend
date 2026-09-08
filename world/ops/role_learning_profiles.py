@@ -18,7 +18,27 @@ TEXT_ROLES = {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}
 def roles(runtime):
     if runtime not in ('game', 'operations'):
         raise ValueError('unknown_learning_runtime')
-    return (*GAME_ROLES, *maid_roles()) if runtime == 'game' else OPS_ROLES
+    from world_team_hosts import host_config
+    moved = host_config()['phase'] == 'active'
+    if runtime == 'game':
+        return (*GAME_ROLES, *maid_roles(), *(('qd-engineer',) if moved else ()))
+    return tuple(role for role in OPS_ROLES if not (moved and role == 'mc-god'))
+
+
+def learning_identity(role, runtime, *, allow_prepared=False):
+    """Return logical (role, runtime), keeping native paths and HTTP IDs separate."""
+    from world_team_hosts import logical_actor
+    actor = logical_actor(runtime, role, allow_prepared=allow_prepared)
+    prepared_target = allow_prepared and (runtime, role) == ('game', 'qd-engineer') and actor == 'operations:mc-god'
+    if not actor or (role not in roles(runtime) and not prepared_target):
+        raise ValueError('unknown_learning_role')
+    logical_runtime, logical_role = actor.split(':', 1)
+    return logical_role, logical_runtime
+
+
+def learning_job(role, runtime):
+    logical_role, logical_runtime = learning_identity(role, runtime, allow_prepared=True)
+    return managed_job(logical_role, logical_runtime)
 
 
 def maid_roles(path=None):
@@ -35,8 +55,7 @@ def maid_roles(path=None):
 
 
 def role_skills(role, runtime, source=HERE):
-    if role not in roles(runtime):
-        raise ValueError('unknown_learning_role')
+    role, runtime = learning_identity(role, runtime, allow_prepared=True)
     filename = 'game-role-skills.json' if runtime == 'game' else 'operations-role-skills.json'
     manifest = json.loads((Path(source) / filename).read_text(encoding='utf-8-sig'))
     assert manifest['schema'] == 1 and set(manifest['roles']) == set(GAME_ROLES if runtime == 'game' else OPS_ROLES)
@@ -69,9 +88,12 @@ def skill_references(name, source=HERE):
 
 
 def learning_client(role, runtime):
-    assert role in roles(runtime)
+    logical_role, logical_runtime = learning_identity(role, runtime, allow_prepared=True)
+    args = ['/ops/agent_learning_mcp.py', '--role', logical_role, '--runtime', logical_runtime]
+    if (role, runtime) != (logical_role, logical_runtime):
+        args += ['--native-role', role, '--native-runtime', runtime]
     return {'name': DRIVER, 'enabled': True, 'transport': 'stdio', 'command': 'python',
-        'args': ['/ops/agent_learning_mcp.py', '--role', role, '--runtime', runtime], 'env': {}, 'tools': list(TOOL_NAMES)}
+        'args': args, 'env': {}, 'tools': list(TOOL_NAMES)}
 
 
 def learning_card(role, runtime):
@@ -84,7 +106,8 @@ def learning_card(role, runtime):
 
 
 def with_learning(agent, role, runtime):
-    assert agent['id'] == role and role in roles(runtime)
+    assert agent['id'] == role
+    learning_identity(role, runtime, allow_prepared=True)
     result = deepcopy(agent)
     result.setdefault('mcp', {}).setdefault('clients', {})[DRIVER] = learning_client(role, runtime)
     result['running'] = unrestricted_running(result['running'])
@@ -97,7 +120,7 @@ def validate_learning_profile(agent, role, runtime):
     expected = learning_client(role, runtime)
     client = agent['mcp']['clients'][DRIVER]
     assert agent['id'] == role
-    validate_native(agent, role)
+    validate_native(agent, role, runtime)
     assert all(client.get(key) == value for key, value in expected.items())
     assert not client.get('url') and not client.get('headers') and not client.get('cwd')
     validate_running(agent['running'])
@@ -109,7 +132,8 @@ def validate_jobs(value, role, runtime):
     from world_team_schedule import is_team_job, validate_team_job
     team = [j for j in jobs if is_team_job(j.get('id'))]
     assert len(team) <= 1
-    for row in team: validate_team_job(row, runtime + ':' + role)
+    logical_role, logical_runtime = learning_identity(role, runtime, allow_prepared=True)
+    for row in team: validate_team_job(row, logical_runtime + ':' + logical_role)
     jobs = [j for j in jobs if not is_team_job(j.get('id'))]
     if runtime == 'game':
         from life_review_schedule import JOB_ID, validate_job
@@ -125,7 +149,7 @@ def validate_jobs(value, role, runtime):
         jobs = [j for j in jobs if j.get('id') != JOB_ID]
     assert len(jobs) == 1
     actual = jobs[0]
-    expected = managed_job(role, runtime)
+    expected = managed_job(logical_role, logical_runtime)
     assert actual['id'] == expected['id'] and actual['meta'] == expected['meta']
     assert type(actual['enabled']) is bool and actual['task_type'] == expected['task_type']
     assert actual['text'] == expected['text'] and actual['save_result_to_inbox'] is False
@@ -135,7 +159,7 @@ def validate_jobs(value, role, runtime):
     assert all(actual['runtime'].get(key) == item for key, item in expected['runtime'].items())
     assert all(actual['dispatch'].get(key) == item for key, item in expected['dispatch'].items())
     assert not actual['dispatch'].get('meta')
-    if runtime == 'game':
+    if logical_runtime == 'game':
         assert actual.get('request') is None
     else:
         request = actual['request']
@@ -218,5 +242,36 @@ def validate_learning_workspace(folder, role, runtime, source=HERE):
     folder = Path(folder)
     validate_learning_profile(read_safe(folder / 'agent.json'), role, runtime)
     validate_jobs(read_safe(folder / 'jobs.json'), role, runtime)
-    assert read_safe(folder / 'drivers/mcp/qd_learning.yaml') == learning_card(role, runtime)
+    # Native MCP updates save YAML (JSON was only our initial serialization).
+    # Compare Qwen's normalized contract without changing its permission rules.
+    from dataclasses import replace
+    from qwenpaw.drivers.contracts import DriverCard
+    from qwenpaw.drivers.storage import load_card
+    path = folder / 'drivers/mcp/qd_learning.yaml'
+    assert not any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (path, *path.parents))
+    assert path.is_file() and path.stat().st_size <= 262144
+    actual = load_card(path)
+    expected = DriverCard(**learning_card(role, runtime))
+    # Qwen 2.2 build_mcp_driver_card uses the console client's `name` as its
+    # display_name. A native PUT of our canonical learning_client therefore
+    # changes the initial Chinese label to the exact driver ID. Both names
+    # belong to this one driver; description/other metadata stay exact below.
+    assert actual.config.get('display_name') in (expected.config['display_name'], DRIVER), 'learning_driver_display_name_drift'
+    expected.config['display_name'] = actual.config['display_name']
+    if 'tools' in actual.config:
+        tools = actual.config['tools']
+        assert isinstance(tools, list) and all(isinstance(name, str) for name in tools)
+        assert len(tools) == len(TOOL_NAMES) and set(tools) == set(TOOL_NAMES)
+        expected.config['tools'] = list(tools)
+    # Native policy PUT orders these independent allow rules alphabetically.
+    # Only this complete, unconditional ten-tool policy is order-independent.
+    rules = actual.policy.rules
+    assert len(rules) == len(TOOL_NAMES)
+    assert all(rule.effect == 'allow' and rule.condition is None
+               and rule.target is not None and rule.target.kind == 'tool' for rule in rules)
+    assert {rule.target.name for rule in rules} == set(TOOL_NAMES)
+    key = lambda rule: rule.target.name
+    actual = replace(actual, policy=replace(actual.policy, rules=sorted(rules, key=key)))
+    expected = replace(expected, policy=replace(expected.policy, rules=sorted(expected.policy.rules, key=key)))
+    assert actual == expected, 'learning_driver_card_drift'
     return validate_role_skills(folder, role, runtime, source)

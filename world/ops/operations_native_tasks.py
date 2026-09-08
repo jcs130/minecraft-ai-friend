@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import time
 import uuid
 import httpx
 
-STATE = Path('/state')
+STATE = Path(os.environ.get('QIANDENG_OPERATIONS_STATE_DIR', '/state'))
 SPECIALISTS = ('mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
 COOLDOWN = 0
 DAILY_LIMIT = None
@@ -18,10 +19,27 @@ TASK_TIMEOUT = 180
 TERMINAL = frozenset(('completed', 'failed', 'cancelled'))
 
 
-def api(method, route, role, **kwargs):
-    token = (STATE/'secret/console-token.txt').read_text().strip()
-    with httpx.Client(base_url='http://127.0.0.1:8088/api', timeout=15, trust_env=False,
-                      headers={'Authorization': 'Bearer '+token, 'X-Agent-Id': role}) as client:
+def target_host(role, recorded=None):
+    from world_team_hosts import native_host
+    if role not in ('default', *SPECIALISTS):
+        raise ValueError('unknown_operations_role')
+    host = recorded if recorded is not None else native_host('operations:' + role)
+    allowed = [{'runtime': 'operations', 'agentId': role}]
+    if role == 'mc-god': allowed.append({'runtime': 'game', 'agentId': 'qd-engineer'})
+    if host not in allowed: raise ValueError('invalid_operations_task_host')
+    return dict(host)
+
+
+def api(method, route, role, *, recorded_host=None, **kwargs):
+    host = target_host(role, recorded_host)
+    base = {'game': 'http://qwenpaw:8088/api', 'operations': 'http://qwenpaw-ops:8088/api'}[host['runtime']]
+    headers = {'X-Agent-Id': host['agentId']}
+    if host['runtime'] == 'operations':
+        headers['Authorization'] = 'Bearer ' + (STATE/'secret/console-token.txt').read_text().strip()
+    prefix = '/agents/' + role
+    if route == prefix or route.startswith(prefix + '/'):
+        route = '/agents/' + host['agentId'] + route[len(prefix):]
+    with httpx.Client(base_url=base, timeout=15, trust_env=False, headers=headers) as client:
         response = client.request(method, route, **kwargs)
         response.raise_for_status()
         if len(response.content) > 2*1024*1024: raise ValueError('response_limit')
@@ -103,7 +121,8 @@ def reconcile_pending():
     reconciled = []
     for row in pending:
         try:
-            value = api('GET', '/console/chat/task/' + row['taskId'], row['role'])
+            value = api('GET', '/console/chat/task/' + row['taskId'], row['role'],
+                        recorded_host=row.get('nativeHost') or {'runtime': 'operations', 'agentId': row['role']})
             native_status = value.get('status')
             if native_status in ('finished', 'completed', 'failed', 'error', 'cancelled', 'canceled', 'timeout', 'timed_out'):
                 result = value.get('result') or {}
@@ -125,6 +144,7 @@ def reserve_operation(role, job_id):
         run_id = 'world-' + uuid.uuid4().hex
         rows.append({'runId': run_id, 'requestId': run_id, 'role': role, 'jobId': job_id,
                      'startedAt': time.time(), 'status': 'cron_reserved', 'taskId': None,
+                     'nativeHost': target_host(role),
                      'source': 'native-qwen-world-cron'})
     return {'ok': True, 'runId': run_id}
 
@@ -150,16 +170,17 @@ def delegate(caller, to_role, task):
         request_id = run_id+'-'+to_role
         # Reserve before I/O: a lost response must never lead to an automatic paid retry.
         row = {'runId': run_id, 'requestId': request_id, 'role': to_role, 'startedAt': now,
-               'status': 'reserved', 'taskId': None, 'parentRunId': parent}
+               'status': 'reserved', 'taskId': None, 'parentRunId': parent,
+               'nativeHost': target_host(to_role)}
         rows.append(row)
     from qwenpaw.agents.tools.agent_management import build_agent_chat_request
     text = ('处理司灯的一次委托。调用 operations_snapshot 后使用与你职责相关的 Skill。'
             '提交 submit_operations_report，request_id 必须为 '+request_id+'。最多3条发现和3条建议；'
             '无实时证据的结论标待验证，不能执行世界修改。完成后简短返回，不回调司灯。任务：'+task)
-    _, payload, _ = build_agent_chat_request(to_role, text, session_id=request_id, from_agent=caller)
+    _, payload, _ = build_agent_chat_request(row['nativeHost']['agentId'], text, session_id=request_id, from_agent=caller)
     payload['timeout'] = TASK_TIMEOUT
     try:
-        result = api('POST', '/console/chat/task', to_role, json=payload)
+        result = api('POST', '/console/chat/task', to_role, recorded_host=row['nativeHost'], json=payload)
         task_id = result.get('task_id')
         if not isinstance(task_id, str) or not task_id: raise ValueError('missing_native_task_id')
         row.update(taskId=task_id, status='submitted')
@@ -184,7 +205,8 @@ def task_status(caller, task_id):
         if row.get('status') in TERMINAL:
             return {'ok': True, 'taskId': task_id, 'role': role, 'status': row['status'], 'cached': True}
     try:
-        value = api('GET', '/console/chat/task/'+task_id, role)
+        value = api('GET', '/console/chat/task/'+task_id, role,
+                    recorded_host=row.get('nativeHost') or {'runtime': 'operations', 'agentId': role})
         # Full result stays in native console; this tool returns only bounded task state.
         result = value.get('result') or {}
         if value.get('status') in ('finished', 'completed', 'failed', 'error', 'cancelled', 'canceled', 'timeout', 'timed_out'):

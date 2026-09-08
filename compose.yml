@@ -174,6 +174,8 @@ services:
       NPC_LLM_ENABLED: "0"
       NPC_GUILD_AGENT_ENABLED: "1"
       NPC_WORLD_OPERATIONS_REQUESTS: /ops-world-requests
+      MAID_ROLES_MANIFEST_FILE: /mcdata/village/maid-agents/public/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /mcdata/village/party/public/roles.json
       NPC_WORLD_PLANNING_PUBLIC: /party-public/world-planning.json
       MAID_AGENT_ENABLED: "1"
       MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
@@ -246,6 +248,7 @@ services:
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
       PARTY_ROLES_MANIFEST_FILE: /party-roles/roles.json
+      QIANDENG_OPERATIONS_STATE_DIR: /operations-state
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -258,6 +261,17 @@ services:
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
       - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
       - ./server/mcdata/village/party/public:/party-roles:ro
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests
+      - ./server/engineering/snapshots:/engineering/snapshots
+      - ./server/engineering/receipts:/engineering/receipts:ro
+      - ./server/engineering/state:/engineering/state
+      - ./server/operations-agent-state/operations-budget:/operations-state/operations-budget
+      - ./server/operations-agent-state/run-reports:/operations-state/run-reports:ro
+      - ./server/operations-agent-state/work/operations:/operations-state/work/operations
+      - ./server/operations-agent-state/secret/console-token.txt:/operations-state/secret/console-token.txt:ro
+      - ./docs:/reference/docs:ro
+    networks: [default, operations]
     healthcheck:
       test: ["CMD", "python", "/ops/qwenpaw_health.py"]
       interval: 30s

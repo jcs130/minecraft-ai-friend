@@ -185,7 +185,8 @@ def check_runtime_config():
     for aid in ('mc-god', 'mc-herald'):
         folder = Path('/state/work/workspaces')/aid
         agent = json.loads((folder/'agent.json').read_text())
-        if aid == 'mc-god': assert agent['name'] == '灯语女神'
+        if aid in ('mc-god', 'mc-herald'):
+            assert agent['name'] == world_team.members()['game:' + aid][0]
         assert_quiet(agent['running'])
         assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
         assert agent['heartbeat']['enabled'] is False
@@ -203,6 +204,9 @@ def check_runtime_config():
         validate_workspace(Path('/state/work/workspaces') / aid, aid, team=True)
     for aid in maid_roles():
         check_maid_config(Path('/state/work/workspaces') / aid, aid)
+    if 'qd-engineer' in roles('game'):
+        from operations_team_health import check_hosted_engineer
+        check_hosted_engineer(Path('/state/work/workspaces/qd-engineer'))
     return {aid for aid in ('default', 'QwenPaw_QA_Agent_0.2')
             if config['agents']['profiles'].get(aid, {}).get('enabled') is False}
 
@@ -241,7 +245,7 @@ def main():
     PHASE = 'agent-list'
     agents = get('/agents')['agents']
     assert {a['id'] for a in agents if a['enabled']} == expected_roles
-    for aid in ['mc-god', 'mc-herald', *WORLD_ROLES, *maid_roles()]:
+    for aid in expected_roles - {'qd-survivor'}:
         PHASE = 'native-tools:' + aid
         items = get('/tools', aid=aid)
         assert {item['name'] for item in items if item['enabled']} == set(NATIVE_TOOLS)
@@ -254,7 +258,10 @@ def main():
         enabled_skills = {item['name'] for item in get('/skills', aid=aid) if item.get('enabled') is True}
         assert set(role_skills(aid, 'game')) | set(NATIVE_SKILLS) <= enabled_skills
         bindings += len(enabled_skills)
-        if aid in maid_roles():
+        if aid == 'qd-engineer':
+            from operations_team_health import check_hosted_engineer
+            check_hosted_engineer(Path('/state/work/workspaces/qd-engineer'), lambda path: get(path, aid=aid))
+        elif aid in maid_roles():
             check_maid_api(get, aid)
         else:
             check_party_inventory(get, aid, {'numen_survival', 'qd_learning'} if aid == 'qd-survivor' else {'qd_learning'})

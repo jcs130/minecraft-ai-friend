@@ -15,7 +15,7 @@ import {
   decideGuardFollow,
 } from './guard-follow.mjs'
 import type { AtomSummary, MagicService, SpecialExecutor } from './mc-magic.ts'
-import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel } from './mc-magic.ts'
+import { GIVE_WHITELIST, BALANCE_FIELD_ALIASES, balanceFieldLabel, withSkillRequest } from './mc-magic.ts'
 import type { Transmigrator, TransmigratorRegistry } from './mc-transmigrator.ts'
 import { OFFERING_ITEM_CN, parseInventoryCounts, resolveOfferingText, type OfferingInfo } from './mc-offering.ts'
 import { CHRONICLE_TYPE_CN, adventurerRank } from './mc-worlddb.ts'
@@ -2000,7 +2000,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // Local CLI and MCP share the same dispatcher as /mycli. No chat scraping and
   // no command replay: each submitted request has one persistent correlated receipt.
   const skillQueue = config.enabled ? createSkillCliQueue(join(DATA_DIR, 'skill-cli'), async request => {
-    return playerCommands.executeRequest(request)
+    return withSkillRequest(request.id, request.actor, () => playerCommands.executeRequest(request))
   }) : null
   const pollSkillQueue = () => {
     if (disposed || !skillQueue) return

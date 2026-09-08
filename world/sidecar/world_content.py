@@ -187,7 +187,22 @@ class ContentQueue:
         try:
             value = load(self.root / 'context.json')
             require(value['schema'] == 1 and -5 <= self.clock() - value['updatedAt'] <= 120, 'stale_content_context')
-            return {'ok': True, **value}
+            # Give the next native role turn a discoverable, compact handoff;
+            # knowing an opaque content ID must not require a side-channel chat.
+            proposals = []
+            files = sorted((self.root / 'proposals').glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+            for path in files[:256]:
+                require(CONTENT_ID.fullmatch(path.stem), 'invalid_content_index_id')
+                row = load(path)
+                receipt = self.root / 'receipts' / path.name
+                publication = load(receipt) if receipt.exists() else {}
+                approved = (self.root / 'publish' / path.name).exists()
+                proposals.append({'contentId': row['contentId'], 'actor': row['actor'],
+                    'title': row['content']['title'], 'date': row['content'].get('date'),
+                    'submittedAt': row['submittedAt'],
+                    'status': publication.get('status') or ('approved_pending' if approved else row['status'])})
+            return {'ok': True, **value, 'proposals': proposals[:30],
+                    'proposalsTruncated': len(files) > 30}
         except (OSError, ValueError, KeyError, TypeError):
             return {'ok': False, 'code': 'content_context_unavailable', 'capabilities': deepcopy(BLOCKED)}
 

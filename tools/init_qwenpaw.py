@@ -21,7 +21,7 @@ from cryptography.fernet import Fernet
 PROJECT = Path(__file__).resolve().parents[1]
 TARGET = PROJECT / "server" / "agents"
 IMAGE = "qwenpaw-mc:2.1.1"
-PROFILES = {"mc-god": "千灯纪天神", "mc-herald": "千灯纪司礼"}
+PROFILES = {"mc-god": "灯语女神 · 世界管理", "mc-herald": "灯语女神 · 玩家交流"}
 
 
 def write_private(path: Path, value):
@@ -104,7 +104,7 @@ def prepare(args):
         selected["generate_kwargs"] = {k: v for k, v in kwargs.items()
                                        if k in {"temperature", "top_p", "max_tokens"} and isinstance(v, (int, float))}
         providers[(kind, pid)] = selected
-        manifest["profiles"].append({"id": aid, "name": label,
+        manifest["profiles"].append({"id": aid, "name": label, "language": "zh",
                                      "active_model": {"provider_id": pid, "model": mid},
                                      "provider_kind": kind, "local_model": local})
     manifest = select_oracle_models(manifest, args.use_source_herald_model)

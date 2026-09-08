@@ -127,6 +127,7 @@ class EngineeringWorkspace:
         command = [self.git_binary, '--no-pager', '--literal-pathspecs',
             '-c', 'core.hooksPath=' + os.devnull, '-c', 'core.fsmonitor=false',
             '-c', 'core.pager=cat', '-c', 'diff.external=', '-c', 'core.autocrlf=false',
+            '-c', 'core.fileMode=false',
             '-c', 'commit.gpgSign=false', '-c', 'protocol.allow=never',
             '-c', 'user.name=Qiandeng Operations', '-c', 'user.email=operations@qiandeng.invalid',
             '-C', str(repo), *arguments]
@@ -152,11 +153,38 @@ class EngineeringWorkspace:
             raise ValueError('engineering_git_executable_configuration')
         return self.git('rev-parse', 'HEAD').decode().strip()
 
+    def source_tree(self, revision):
+        """Read managed modes from Git, never Windows bind-mount execute bits."""
+        result = {}
+        for record in self.git('ls-tree', '-r', '-z', '--full-tree', revision).split(b'\0'):
+            if not record: continue
+            metadata, name = record.split(b'\t', 1)
+            mode, kind, oid = metadata.decode('ascii').split(' ')
+            name = relative(name.decode('utf8'))
+            if mode not in ('100644', '100755') or kind != 'blob' or not COMMIT.fullmatch(oid):
+                raise ValueError('engineering_source_mode_not_regular')
+            result[name] = (mode, oid)
+        if len(result) > MAX_FILES: raise ValueError('engineering_source_file_limit')
+        return result
+
     def snapshot(self):
         head = self.binding(); repo = Path(self.config['repo'])
+        head_tree = self.source_tree(head)
+        base = self.config['baseCommit']
+        base_tree = head_tree if base == head else self.source_tree(base)
         names = set(filter(None, self.git('ls-files', '-z', '--cached', '--others', '--exclude-standard').decode('utf8').split('\0')))
+        # Native file tools do not manage the index, but reject a symlink,
+        # submodule or unresolved merge introduced there by any other writer.
+        for record in self.git('ls-files', '--stage', '-z').split(b'\0'):
+            if not record: continue
+            metadata, name = record.split(b'\t', 1)
+            mode, oid, stage = metadata.decode('ascii').split(' ')
+            relative(name.decode('utf8'))
+            if mode not in ('100644', '100755') or stage != '0' or not COMMIT.fullmatch(oid):
+                raise ValueError('engineering_index_mode_not_regular')
+        names.update(head_tree)
         if len(names) > MAX_FILES: raise ValueError('engineering_source_file_limit')
-        entries, blobs, size = [], {}, 0
+        entries, blobs, captured_tree, size = [], {}, {}, 0
         for name in sorted(names):
             relative(name); path = unlinked(repo / name)
             if not path.exists(): continue
@@ -164,16 +192,21 @@ class EngineeringWorkspace:
                 raise ValueError('engineering_source_not_regular')
             size += path.stat().st_size
             if size > MAX_BYTES: raise ValueError('engineering_source_byte_limit')
-            data = path.read_bytes(); mode = '100755' if path.stat().st_mode & 0o111 else '100644'
+            data = path.read_bytes()
+            mode = head_tree[name][0] if name in head_tree else '100644'
             entries.append({'path': name, 'sha256': digest(data), 'mode': mode, 'size': len(data)})
             blobs[name] = data
+            # Git's blob identity binds raw captured bytes without invoking
+            # candidate filters. This checkout contract uses 40-digit Git IDs.
+            oid = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
+            captured_tree[name] = (mode, oid)
         source_sha = digest(canonical(entries))
-        changed = set(filter(None, self.git('diff', '--name-only', '-z', '--no-renames', self.config['baseCommit'], '--').decode('utf8').split('\0')))
-        tracked = set(filter(None, self.git('ls-files', '-z', '--cached').decode('utf8').split('\0')))
-        changed.update(names - tracked)
-        for name in changed: relative(name)
-        working = set(filter(None, self.git('diff', '--name-only', '-z', '--no-renames', 'HEAD', '--').decode('utf8').split('\0')))
-        working.update(names - tracked)
+        # Compare the same normalized modes/bytes that tests and commit use;
+        # mount permission noise and staged chmod cannot manufacture changes.
+        changed = {name for name in base_tree.keys() | captured_tree.keys()
+                   if base_tree.get(name) != captured_tree.get(name)}
+        working = {name for name in head_tree.keys() | captured_tree.keys()
+                   if head_tree.get(name) != captured_tree.get(name)}
         return {'head': head, 'sourceSha256': source_sha, 'entries': entries, 'changed': sorted(changed),
                 'workingChanges': sorted(working)}, blobs
 

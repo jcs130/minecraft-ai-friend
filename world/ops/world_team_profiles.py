@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from world_team import MEMBERS, members
 from world_team_mcp import COMMON_TOOLS
+from world_team_hosts import ENGINEER, TARGET, logical_actor
 
 DRIVER = 'qd_world_team'
 GAME_TEAM = frozenset(a.split(':')[1] for a in MEMBERS if a.startswith('game:'))
@@ -14,8 +15,8 @@ AGENTS_START = '<!-- qiandeng-world-team-role-v1 -->'
 AGENTS_END = '<!-- /qiandeng-world-team-role-v1 -->'
 
 
-def actor_for(role, runtime):
-    actor = runtime + ':' + role
+def actor_for(role, runtime, *, allow_prepared=False):
+    actor = logical_actor(runtime, role, allow_prepared=allow_prepared)
     return actor if actor in members() else None
 
 
@@ -30,17 +31,21 @@ def tools_for(actor):
     return result
 
 
-def client(role, runtime):
-    actor = actor_for(role, runtime)
+def client(role, runtime, *, allow_prepared=False):
+    actor = actor_for(role, runtime, allow_prepared=allow_prepared)
     if not actor: raise ValueError('not_a_world_team_role')
+    args = ['/ops/world_team_mcp.py', '--actor', actor]
+    if actor == ENGINEER and {'runtime': runtime, 'agentId': role} == TARGET:
+        args += ['--native-runtime', runtime, '--native-role', role]
     return {'name': DRIVER, 'enabled': True, 'transport': 'stdio', 'command': 'python',
-        'args': ['/ops/world_team_mcp.py', '--actor', actor], 'env': {}, 'tools': tools_for(actor)}
+        'args': args, 'env': {}, 'tools': tools_for(actor)}
 
 
-def expected_drivers(role, runtime, previous):
+def expected_drivers(role, runtime, previous, *, allow_prepared=False):
     result = set(previous)
-    if actor_for(role, runtime): result.add(DRIVER)
-    if (runtime, role) == ('operations', 'mc-god'): result.add('qd_engineering')
+    actor = actor_for(role, runtime, allow_prepared=allow_prepared)
+    if actor: result.add(DRIVER)
+    if actor == ENGINEER: result.add('qd_engineering')
     return result
 
 
@@ -58,7 +63,7 @@ def managed(text, start, end, content):
 def persona_files(actor, existing):
     name, responsibility = members()[actor]
     profile = f'项目身份：{actor}。显示角色：{name}。职责：{responsibility}。\n'
-    profile += ('游戏 Goddess 是灯语女神的世界化身；日常传声兼容入口仍经司礼 mc-herald，管理与裁决归 game:mc-god。'
+    profile += ('游戏 Goddess 是灯语女神的世界化身；玩家交流入口为 game:mc-herald，管理与裁决归 game:mc-god。'
                 '运营 operations:mc-god 是世界工程师，与女神是不同角色。所有交接写明运行实例与角色，保留原身份和经历。')
     instruction = ('你是千灯纪持续改进项目组成员。新职责与本轮已安装工具清单覆盖下文旧的“全员只能提案/不能管理服务器”等历史模板限制。'
         f'当前职责：{responsibility}。\n'
@@ -103,16 +108,20 @@ def validate_client_config(agent, role, runtime):
     return True
 
 
-def engineering_client():
+def engineering_client(role='mc-god', runtime='operations'):
     from engineering_mcp import TOOLS
+    args = ['/ops/engineering_mcp.py', '--role', 'mc-god']
+    if {'runtime': runtime, 'agentId': role} == TARGET:
+        args += ['--native-runtime', runtime, '--native-role', role]
     return {'name': 'qd_engineering', 'enabled': True, 'transport': 'stdio', 'command': 'python',
-        'args': ['/ops/engineering_mcp.py', '--role', 'mc-god'], 'env': {}, 'tools': list(TOOLS)}
+        'args': args, 'env': {}, 'tools': list(TOOLS)}
 
 
-def bindings(role, runtime):
-    if not actor_for(role, runtime): return {}
-    result = {DRIVER: client(role, runtime)}
-    if (runtime, role) == ('operations', 'mc-god'): result['qd_engineering'] = engineering_client()
+def bindings(role, runtime, *, allow_prepared=False):
+    actor = actor_for(role, runtime, allow_prepared=allow_prepared)
+    if not actor: return {}
+    result = {DRIVER: client(role, runtime, allow_prepared=allow_prepared)}
+    if actor == ENGINEER: result['qd_engineering'] = engineering_client(role, runtime)
     return result
 
 
@@ -122,12 +131,12 @@ def policy_payload(names):
             'subject_value': '', 'effect': 'allow', 'tool_name': name} for name in names]}
 
 
-def validate_workspace(folder, role, runtime):
+def validate_workspace(folder, role, runtime, *, allow_prepared=False):
     import json
     from qwenpaw.drivers.storage import load_card
     folder = Path(folder)
     agent = json.loads((folder / 'agent.json').read_text(encoding='utf-8-sig'))
-    for key, expected in bindings(role, runtime).items():
+    for key, expected in bindings(role, runtime, allow_prepared=allow_prepared).items():
         actual = agent['mcp']['clients'][key]
         assert all(actual.get(k) == v for k, v in expected.items()), 'team_client_drift'
         assert not any(actual.get(k) for k in ('url', 'headers', 'cwd'))
@@ -144,11 +153,11 @@ def validate_workspace(folder, role, runtime):
             seen.add(rule.target.name)
             p = rule.principal
             assert p and p.source_type == 'channel' and p.source_value == 'console' and p.subject_type == 'all' and p.subject_value == ''
-    return bool(bindings(role, runtime))
+    return bool(bindings(role, runtime, allow_prepared=allow_prepared))
 
 
-def check_api(get, role, runtime):
-    for key, expected in bindings(role, runtime).items():
+def check_api(get, role, runtime, *, allow_prepared=False):
+    for key, expected in bindings(role, runtime, allow_prepared=allow_prepared).items():
         actual = get('/mcp/' + key)
         assert all(actual.get(k) == v for k, v in expected.items()), 'team_api_client_drift'
         policy = get('/mcp/policy/' + key)
@@ -157,4 +166,4 @@ def check_api(get, role, runtime):
         actual_tools = get('/mcp/tools/' + key)
         assert len(actual_tools) == len(expected['tools'])
         assert {t['name'] for t in actual_tools if t.get('enabled') is True} == set(expected['tools'])
-    return bool(bindings(role, runtime))
+    return bool(bindings(role, runtime, allow_prepared=allow_prepared))

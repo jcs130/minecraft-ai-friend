@@ -1,5 +1,13 @@
 # 千灯纪整合项目
 
+2026-09-09 最新世界团队迁移已完成：既有“天神 · 世界工程师”现位于游戏Qwen18089，原生ID为 `qd-engineer`；实际浏览器确认游戏9人、运营18090五人，仍是原14个团队身份，宿主8088保持其他用途。天神的逻辑署名仍为 `operations:mc-god`，由active的 `/team/runtime-hosts.json` 精确映射到 `game:qd-engineer`，保留原会话、工单、学习与工程repo/回执，不改写历史作者。旧运营 `mc-god` 及其两项Cron已停用并完整备份；目标四个MCP、原两项Cron、游戏9人/80项技能绑定与运营5人严格健康检查均通过，司灯 `qiandeng_operations` 已原生重载新路由。工程status确认新路径下仍是原HEAD `5de7f8af`、分支与仓库，其他既有角色模型、名称和语言未变。证据在runtime/engineer-host-migration-20260909/与reports/world-team-smoke.json。游戏 `mc-god` 仍是“灯语女神 · 世界管理”，`mc-herald` 仍是“灯语女神 · 玩家交流”，与天神工程师区分。原模型、SOUL、人物UUID及生活记忆保留，新角色绑定自己的learning/team身份，不能继承模板工具身份。见 docs/WORLD-TEAM-ARCHITECTURE.md。
+
+女神10分钟巡查、天神错开4分钟、策划30分钟班次已启用原生Cron；其它角色沿用原事件/生活任务/日常班次，不为每个人额外起模型循环。角色可署名写反馈，女神/司灯分派，天神原生文件工具修改独立engineering/repo、固定隔离容器测试并提交候选；本地commit不等于推送、部署或工单验收。Boss/宝箱仍缺专属实体与结算回执，明确blocked。旧world review/dailyReport/evolveReview自动模型入口保持关闭，新班次复用已有Qwen和worker，不添加野生守护进程。
+
+实机：女神已诊断并派工程工单；“秋灯祭”content-fd5881ee422e68c006ecc176已由策划生成、女神批准、原NPC worker发布并读到真实看板，沿用当日No1/2/4原合同，不代表玩家已完成。工程师前两轮超时后，第三次原生scheduled轮真实修改候选并通过24项固定隔离测试，候选交付/上线须另验。只读入口tools/world_team_health.py；全项目历史快照漂移不能通过重写旧哈希冒充全部绿色。
+
+桐人最新运行：原240秒任务超时后，单轮时长已改600。2026-09-09修复spring空RCON回执：同requestId的MC原生storage占位、单次setblock的success/result与sourcewater后置检查共同确认成功，已有水不收费，未知不重放。旧unknown仅按原任务/call_id/turn_id与现场观察归档为resolved_effect_observed，保留当时未知事实，不补扣/补学。后续task-703ae05b4ad6真实完成新spring，beforeWater=0、success=1、result=1、afterSource=1并扣12法力；原已学，不能称新学会。它与task-cd43d244f0d3均正常结束，仍在矿坑Y49，未验收脱困。天神迁移验收后只恢复一次，task-c7bfbc0e08bc在原session自然running，原生采矿t37已受理并结束，未见autonomy_disabled且unknown=false；原UUID/session保留，仍不表示已脱困。天神02:55原生qd-team-engineer也已在18089自动开始，未手动run，尚无这轮终态验收。用途operations.priority保留旧ID但已指向game/qd-engineer，15条路由健康全绿。证据在runtime/spring-recovery-20260909/与runtime/engineer-host-migration-20260909/，不因清理显示而改写旧动作记录。
+
 2026-09-09 最新生活记忆：游戏 QwenPaw 2.2.0/ReMe 0.4.1.10 的桐人、结衣启用原生 memory_search（含动态 MemorySearch 权限）、每5个外部完成回合 Auto-Memory、每小时 Dream；不是5分钟提炼。SOUL原样保留，PROFILE/AGENTS按官方职责精确整理，根MEMORY.md不在ReMe索引，memory/与digest/按需检索。长期目标在memory/goals.md普通文件；原生/goal是有边界子任务、会话目标仅进程内，不能当跨重启人生账本。详见 docs/QWENPAW-LIFE-MEMORY.md。
 
 survivor qd15 增加真实sleep回执/原生10分钟Cron复盘信号队列（MCP44项），由原控制器在安全边界合入原生活session，按精确终态确认水位；不另开模型循环。sleep成功只证明进入睡眠，不证明睡醒。原生Heartbeat固定main会话，保持关闭。配置工具tools/configure_life_memory.py使用原生Agent/File/Cron API，固定Cron ID须用PUT、Agent更新须id+name、工具白名单还要同步legacy mirror。严格健康检查不放宽。记忆状态API原生Dependency元数据统计bug以锁版本/源SHA兼容补丁修复，只跳过统计元数据，不改变检索或组件初始化。

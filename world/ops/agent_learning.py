@@ -114,18 +114,31 @@ def managed_job(role, runtime):
 
 
 class LearningTools:
-    def __init__(self, role, runtime, state=Path('/state/work'), service=None, fetch=public_get, api=native_api, clock=time.time):
+    def __init__(self, role, runtime, state=Path('/state/work'), service=None, fetch=public_get, api=native_api, clock=time.time,
+                 *, native_role=None, native_runtime=None):
         if runtime not in ('game', 'operations'): raise ValueError('unknown_runtime')
         if not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', role): raise ValueError('invalid_role')
-        from role_learning_profiles import roles
-        if role not in roles(runtime): raise ValueError('unregistered_learning_role')
+        from role_learning_profiles import learning_identity
+        if (native_role is None) != (native_runtime is None): raise ValueError('incomplete_native_learning_binding')
+        actual_role, actual_runtime = (role, runtime) if native_role is None else (native_role, native_runtime)
+        try:
+            logical_role, logical_runtime = learning_identity(actual_role, actual_runtime)
+        except ValueError as exc:
+            raise ValueError('unregistered_learning_role') from exc
+        if native_role is not None and (role, runtime) != (logical_role, logical_runtime):
+            raise ValueError('learning_native_identity_mismatch')
         config = read(Path(state) / 'config.json')
-        if config['agents']['profiles'].get(role, {}).get('enabled') is not True: raise ValueError('role_disabled')
-        self.role, self.runtime, self.state = role, runtime, Path(state)
-        self.workspace = self.state / 'workspaces' / role
+        if config['agents']['profiles'].get(actual_role, {}).get('enabled') is not True: raise ValueError('role_disabled')
+        self.role, self.runtime, self.state = logical_role, logical_runtime, Path(state)
+        self.native_role, self.native_runtime = actual_role, actual_runtime
+        self.workspace = self.state / 'workspaces' / actual_role
         self.root = self.workspace / 'learning'
-        if read(self.workspace / 'agent.json').get('id') != role: raise ValueError('role_mismatch')
+        if read(self.workspace / 'agent.json').get('id') != actual_role: raise ValueError('role_mismatch')
         self._service, self.fetch, self.api, self.clock = service, fetch, api, clock
+
+    def assert_host(self):
+        from world_team_hosts import require_host
+        require_host(self.runtime + ':' + self.role, self.native_runtime, self.native_role)
 
     @property
     def service(self):
@@ -147,7 +160,7 @@ class LearningTools:
 
     def _reload(self, name, enabled=True):
         try:
-            result = self.api(self.role, 'POST', '/skills/' + name + ('/enable' if enabled else '/disable'))
+            result = self.api(self.native_role, 'POST', '/skills/' + name + ('/enable' if enabled else '/disable'))
             return result.get('success') is True
         except Exception:
             return False  # Files are committed; never hide uncertain runtime reload.
@@ -352,13 +365,13 @@ class LearningTools:
             job['schedule']['cron'] = f'20 {hour} * * {weekday}'
         path = '/cron/jobs/' + job['id']
         if enabled is None and weekday is None and hour is None:
-            return {'ok': True, 'job': self.api(self.role, 'GET', path),
+            return {'ok': True, 'job': self.api(self.native_role, 'GET', path),
                     'budget': 'no artificial model-call quota; serial role execution; game maintenance zero model'}
-        current = self.api(self.role, 'GET', path)
+        current = self.api(self.native_role, 'GET', path)
         if enabled is not None: job['enabled'] = enabled
         else: job['enabled'] = current['spec']['enabled']
         if weekday is None: job['schedule'] = current['spec']['schedule']
-        result = self.api(self.role, 'PUT', path, job)
+        result = self.api(self.native_role, 'PUT', path, job)
         return {'ok': True, 'job': result, 'modelCalls': 0}
 
     def maintenance(self):

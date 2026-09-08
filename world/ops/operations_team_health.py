@@ -5,7 +5,7 @@ import importlib.metadata
 import os
 from pathlib import Path
 import urllib.request
-from operations_team_mcp import ROLES, TOOLS, role_tools
+from operations_team_mcp import ROLES, TOOLS, role_tools, operation_arguments
 from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
 from llm_runtime_policy import validate_running
@@ -17,18 +17,62 @@ def check_passwordless_auth(get):
     assert get('/auth/status').get('enabled') is False
 
 
-def check_team_configuration(folder, profile, role, get, card_paths):
+def check_team_configuration(folder, profile, role, get, card_paths, *, native_role=None, runtime='operations'):
     """Strict driver inventory plus actual native workspace/API capabilities."""
     if role == 'mc-god': assert profile['name'] == '天神 · 世界工程师'
     if role == 'mc-herald': assert profile['name'] == '灯语 · 服务诊断'
-    expected = world_team.expected_drivers(role, 'operations', {'qiandeng_operations', 'qd_learning'})
+    physical = native_role or role
+    assert profile['id'] == physical
+    expected = world_team.expected_drivers(physical, runtime, {'qiandeng_operations', 'qd_learning'})
     assert set(profile['mcp']['clients']) == expected
     assert set(card_paths) == {folder / ('drivers/mcp/' + name + '.yaml') for name in expected}
-    world_team.validate_workspace(folder, role, 'operations')
+    world_team.validate_workspace(folder, physical, runtime)
     inventory = get('/mcp')
     assert isinstance(inventory, list) and len(inventory) == len(expected)
     assert {row.get('key') for row in inventory} == expected
-    world_team.check_api(get, role, 'operations')
+    world_team.check_api(get, physical, runtime)
+
+
+def check_hosted_engineer(folder, get=None):
+    """The real game workspace keeps a distinct native id and the original engineering identity."""
+    from qwenpaw.drivers.storage import load_card
+    from upgrade_qwenpaw_runtime import driver_cards
+    from world_team_hosts import require_host
+    from role_learning_profiles import role_skills
+    role, runtime = 'qd-engineer', 'game'
+    require_host('operations:mc-god', runtime, role)
+    assert folder == Path('/state/work/workspaces') / role
+    profile = json.loads((folder/'agent.json').read_text())
+    assert profile['id'] == role and profile['workspace_dir'] == str(folder)
+    assert profile['name'] == '天神 · 世界工程师'
+    assert profile['heartbeat']['enabled'] is False
+    assert profile['running']['llm_retry_enabled'] is False and profile['running']['llm_max_concurrent'] == 1
+    validate_running(profile['running'])
+    assert profile['fallback_policy']['enabled'] is False and not profile['fallback_models']
+    assert not any(a.get('enabled') for a in profile['acp']['agents'].values())
+    validate_native(profile, role, runtime=runtime)
+    validate_learning_workspace(folder, role, runtime)
+    expected = world_team.expected_drivers(role, runtime, {'qiandeng_operations', 'qd_learning'})
+    assert set(profile['mcp']['clients']) == expected
+    assert set(driver_cards(folder)) == {folder/('drivers/mcp/'+name+'.yaml') for name in expected}
+    world_team.validate_workspace(folder, role, runtime)
+    args = operation_arguments('mc-god', role, runtime)
+    item = profile['mcp']['clients']['qiandeng_operations']
+    assert item['enabled'] is True and item['transport'] == 'stdio'
+    assert item['command'] == 'python' and item['args'] == args
+    assert set(item['tools']) == set(role_tools('mc-god'))
+    assert not any(item.get(k) for k in ('url', 'headers', 'cwd', 'env'))
+    card = load_card(folder/'drivers/mcp/qiandeng_operations.yaml')
+    assert card.enabled and card.endpoint['args'] == args and card.endpoint['command'] == 'python'
+    assert card.policy.default_effect == 'deny' and len(card.policy.rules) == len(role_tools('mc-god'))
+    assert {r.target.name for r in card.policy.rules if r.effect == 'allow' and r.target.kind == 'tool'} == set(role_tools('mc-god'))
+    if get is not None:
+        check_team_configuration(folder, profile, 'mc-god', get, driver_cards(folder), native_role=role, runtime=runtime)
+        assert {r['name'] for r in get('/mcp/tools/qiandeng_operations') if r.get('enabled')} == set(role_tools('mc-god'))
+        assert {r['name'] for r in get('/tools') if r.get('enabled')} == set(NATIVE_TOOLS)
+        assert set(role_skills(role, runtime)) | set(NATIVE_SKILLS) <= {r['name'] for r in get('/skills') if r.get('enabled')}
+        validate_jobs({'jobs': [row.get('spec', row) for row in get('/cron/jobs')]}, role, runtime)
+    return profile
 
 
 def main():
@@ -47,7 +91,15 @@ def main():
             return json.loads(body)
     check_passwordless_auth(get)
     agents=get('/agents')['agents']
-    assert {a['id'] for a in agents if a['enabled']} == set(ROLES)
+    from world_team_hosts import native_host
+    active_roles = [role for role in ROLES if native_host('operations:' + role) == {'runtime': 'operations', 'agentId': role}]
+    assert {a['id'] for a in agents if a['enabled']} == set(active_roles)
+    for retired in set(ROLES) - set(active_roles):
+        assert retired == 'mc-god' and any(a['id'] == retired and a['enabled'] is False for a in agents)
+        # A native per-agent Cron read may preload a disabled workspace. Inspect
+        # the retired definition without asking Qwen to start that agent again.
+        retired_jobs = json.loads((Path('/state/work/workspaces')/retired/'jobs.json').read_text())
+        assert all(row['enabled'] is False for row in retired_jobs['jobs'])
     cfg=json.loads(Path('/state/work/config.json').read_text())
     assert cfg['agents']['running']['reme_light_memory_config']['dream_cron_enabled'] is False
     def budget(running):
@@ -56,7 +108,7 @@ def main():
     budget(cfg['agents']['running'])
     automatic_jobs = 0
     daily_jobs = 0
-    for role in ROLES:
+    for role in active_roles:
         folder=Path('/state/work/workspaces')/role
         profile=json.loads((folder/'agent.json').read_text())
         assert profile['heartbeat']['enabled'] is False
@@ -89,12 +141,12 @@ def main():
         validate_jobs({'jobs': specs}, role, 'operations')
         automatic_jobs += len(specs)
         daily_jobs += sum(row['id'] == 'qd-world-daily-default' for row in specs)
-    print(json.dumps({'ok':True,'project':'qiandengji-ops','packageVersion':'2.2.0','roles':6,'authEnforced':False,
+    print(json.dumps({'ok':True,'project':'qiandengji-ops','packageVersion':'2.2.0','roles':len(active_roles),'authEnforced':False,
         'authMode':'local-passwordless','authEnabled':False,'anonymousAccess':True,
-        'installedSkillBindings':sum(map(len,skill_map.values())) + len(NATIVE_SKILLS) * len(ROLES), 'rateLimitVerified':True, 'driverPolicyVerified':True,
-        'builtinTools':len(NATIVE_TOOLS), 'nativeToolPolicyVerified': True, 'officialSkillBindings':len(NATIVE_SKILLS) * len(ROLES),
+        'installedSkillBindings':sum(len(skill_map[r]) for r in active_roles) + len(NATIVE_SKILLS) * len(active_roles), 'rateLimitVerified':True, 'driverPolicyVerified':True,
+        'builtinTools':len(NATIVE_TOOLS), 'nativeToolPolicyVerified': True, 'officialSkillBindings':len(NATIVE_SKILLS) * len(active_roles),
         'mcpTools':list(TOOLS),'learningMcpTools':len(TOOL_NAMES),'automaticJobs':automatic_jobs,
-        'managedWeeklyJobs':6,'managedDailyJobs':daily_jobs,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
+        'managedWeeklyJobs':len(active_roles),'managedDailyJobs':daily_jobs,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
         'llmLimitPolicy':'unrestricted', 'llmPolicyVerified':True,
         'worldTeamDriverPolicyVerified':True, 'engineeringDriverPolicyVerified':True,
         'scope':'Native enabled role skills, managed cron and fixed MCP policy; model/tool execution has separate evidence'}))

@@ -19,6 +19,8 @@ import { Vec3 } from 'vec3'
 import { createLifecycle } from './lifecycle.ts'
 import { loadSkillCatalog } from './infrastructure/skill-catalog-file.ts'
 import { createWaypointTravel } from './waypoint-travel.ts'
+import { castSpring, type SpringReceipt } from './spring-effect-receipt.ts'
+export { withSkillRequest } from './spring-effect-receipt.ts'
 
 /**
  * mc-magic —— 快路径魔法系统（世界侧，程序化、零生成式 LLM）。
@@ -786,6 +788,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     if (!bot?.entity) return finish('offline', '天神尚未注视此界（女神化身离线），无法施法。')
 
     const nativeTravel = catalog !== null && (atom.id === 'home' || atom.id === 'tp')
+    let springReceipt: SpringReceipt | undefined
     const origin = catalog ? await travel.location(username) : null
     if (origin && !origin.ok) return finish(origin.code === 'outcome_unknown' ? 'outcome_unknown' : 'unavailable', origin.summary)
 
@@ -984,7 +987,19 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       if (cmdErrors.length) return commandFailure()
       if (cost.mana < 0) store.spendMana(username, cost.mana)
       // 法术效果命令（契约/魂链法术的效果已由 specialExecutor 落地，跳过 commands）
-      if (!atom.special && !nativeTravel) {
+      if (catalog && atom.id === 'spring') {
+        springReceipt = await castSpring(command => rcon.send(command), {
+          actor: username, actorUuid: String(origin?.actorUuid ?? ''), dimension: String(origin?.dimension ?? ''),
+          x: Math.round(tx), y: Math.round(ty - 1), z: Math.round(tz),
+        })
+        if (!springReceipt.ok) {
+          const unknown = ['unknown', 'effect_observed'].includes(springReceipt.state)
+          return { ...finish(unknown ? 'outcome_unknown' : springReceipt.state === 'no_change' ? 'no_change' : 'command_failed',
+            unknown ? '化水效果仍缺完整回执；已保留原请求，请查询原编号，不重发、不扣魔力或收录学习。' :
+              springReceipt.state === 'no_change' ? '目标已有水源，本次没有施法，不扣魔力或收录学习。' :
+                '化水未执行或被原生命令明确拒绝；不扣魔力或收录学习。'), effectReceipt: springReceipt }
+        }
+      } else if (!atom.special && !nativeTravel) {
         for (const rawCmd of atom.commands.map((c) => renderCommand(c, vars))) {
           let cmd = rawCmd
           // 位移/传送落点安全预检（2026-08-24 安全级修复：防 tp 进实体方块 suffocated）
@@ -1063,7 +1078,8 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       log(`cast ${atom.id} by ${username}: ${atom.commands.join('; ')} (mana ${cost.mana}, food ${cost.food}, hp ${cost.hp}, xp +${expGain})`)
       chronicle('cast', username, { skill: atom.id, mana: cost.mana, food: cost.food, hp: cost.hp, xp: expGain, level: levelAfter })
       appendSkillUsage({ ts: new Date().toISOString(), player: username, atom: atom.id, chant, mana: cost.mana, food: cost.food, hp: cost.hp, manaLeft: Math.floor(manaLeft), maxMana: pstate.maxMana, level: levelAfter, matchMode: opts?.mode ?? 'exact', tokens: opts?.tokens ?? 0, latencyMs: opts?.latencyMs ?? 0, success: cmdErrors.length === 0, ...(cmdErrors[0] ? { result: `cmd-fail: ${cmdErrors[0]}` } : {}) })
-      return finish('ok', `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（归乡固定返回千灯堂。）' : ''}`, { manaLeft })
+      return { ...finish('ok', `${reply}${costDesc}，剩余魔力 ${Math.floor(manaLeft)}/${pstate.maxMana}。${expGain > 0 ? `修为 +${expGain}。` : ''}${homeToTown ? '（归乡固定返回千灯堂。）' : ''}`, { manaLeft }),
+        ...(springReceipt ? { effectReceipt: springReceipt } : {}) }
     } catch (err) {
       return finish('execution_error', `施法中断，资源或部分效果可能已结算，未自动重试：${err instanceof Error ? err.message : String(err)}`, { manaLeft: store.get(username).mana })
     }
