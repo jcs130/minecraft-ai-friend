@@ -103,6 +103,20 @@ class ProvisioningFixture(unittest.TestCase):
 
 
 class ConfigurePartyTests(ProvisioningFixture):
+    def test_current_roster_keeps_history_binding_and_excludes_session_credentials(self):
+        from party_config import PartyConfig
+        self.apply()
+        party_root = self.root / 'server/mcdata/village/party'
+        config = PartyConfig(party_root)
+        before = config.binding()
+        private = config.private()
+        next(m for m in private['members'] if m['kind'] == 'maid')['displayName'] = '结衣'
+        write_json(party_root / 'binding.json', private)
+        roster = config.roster()
+        self.assertEqual(next(m for m in roster if m['agentId'] == 'maid-test')['displayName'], '结衣')
+        self.assertTrue(all(set(m) == {'agentId', 'bodyUuid', 'displayName'} for m in roster))
+        self.assertEqual(config.binding(), before)
+
     def test_read_only_default_has_no_registration_or_configuration_writes(self):
         result = configure.prepare(self.maid_uuid)
         self.assertTrue(result['ok'])

@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "enabled": true,
+  "bodies": [
+    {
+      "bodyUuid": "d4ac9523-4962-43ed-98c5-19b49e104048",
+      "ownerUuid": "e5005711-be9f-44b7-aaad-6993c0ba5df4",
+      "bodyName": "Kirito"
+    }
+  ]
+}

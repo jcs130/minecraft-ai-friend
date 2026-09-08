@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "capability": "autonomous_body_tick_v1",
+  "preservedCapabilities": [
+    "existing_body_restore_v1",
+    "walk_only_v1",
+    "walk_only_strict_arrival_v2"
+  ],
+  "sourceCommit": "33bb7d06f78a3566b5a5d49ef61e0572bd1a399e",
+  "baselineJarSha256": "97ed80699ef1d0e7c958566a5b2873e13d4476b6c865675547cf275c68d87d67",
+  "actuatorJarSha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea",
+  "entrySource": "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java",
+  "entryPreimageSha256": "b2427ee855d98dbb59097797b49aeb520846efb61f266a28ab8f7299625c2fc5",
+  "entryPostimageSha256": "e75ce443df1f3f39a18894d26eef6131465bfb1404564270103a44d19da0bd44",
+  "entryBaselineClassSha256": "1b171311c9a818de45cd02b49dc6379782c47e55a88a14b0928ba22dea222aa6",
+  "preimages": {
+    "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java": "eff1b8259d4ce76f46a3e1e4445b4ecd329789e2612c01fc70da981e0edba23c",
+    "api/common/src/main/java/com/dwinovo/numen/entity/CompanionChunkLoader.java": "5efb5e46cf5d4d0fa803ef8be5d445636fa2a2dcd47db254ba452fc7ba9faa39",
+    "api/common/src/main/java/com/dwinovo/numen/task/CompanionTickDispatcher.java": "657234811f7c0bd27895a478d26b137a7cd9109cf1a31513432826f3ae259cba",
+    "api/common/src/main/java/com/dwinovo/numen/mixin/ChunkMapCompanionMixin.java": "0b79232b6826ae49636218fa070d3056981aeafdea07cfe5e7acc36e8494bdfe"
+  },
+  "embeddedApiHashes": {
+    "META-INF/jarjar/com.dwinovo.numen.api.numen_api-neoforge-1.21.1-0.0.8-SNAPSHOT.jar": "48205ad1235dd4b154e045f20b6296eb17af35d5b3d5bf9d2a18a028ce0c4070"
+  },
+  "patchSha256": "e4b10fa6ea93f12b71bf56609eeb900216fee9c2fa68ddd8be3ce004d32f0eee",
+  "nativeSourceSha256": "2f7804a2b99325f06785df670dedb3704f652fdbdaa07d44b87501decc528e56",
+  "classFamilies": [
+    "com/dwinovo/numen/core/NumenCoreNeoForge",
+    "com/dwinovo/numen/core/entity/AutonomousBodyTick"
+  ],
+  "configPath": "server/mc/config/numen-autonomous-bodies.json",
+  "configSource": "config/numen-autonomous-bodies.json"
+}

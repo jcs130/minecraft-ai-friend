@@ -10,7 +10,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
 from game_skills import (GameSkills, action_command, cached_game_skills, is_protected_action,
-                         summarize_game_skills, validate_game_action)
+                         skill_access, summarize_game_skills, validate_game_action)
 from numen_gateway import GatewayError, read_json, write_json
 from mcp_server import BearerMcpApp, TOOL_NAMES
 
@@ -136,6 +136,45 @@ class GameSkillTests(unittest.TestCase):
         write_json(self.state / 'game-skills.json', {'schema': 1, 'scopes': {}, 'observedAt': 'bad'})
         self.assertFalse(cached_game_skills(self.state)['available'])
         self.assertEqual(self.gateway.calls, [])
+
+    def test_archive_and_legacy_pages_use_only_existing_read_only_cli_routes(self):
+        result = self.bridge.query('archive', 3)
+        self.assertTrue(result['ok']); self.assertEqual(result['page'], 3)
+        self.assertEqual(self.commands, ['spells archive 3'])
+        self.assertEqual(result['scope'], 'archive')
+        self.assertFalse((self.state / 'unknown.json').exists())
+        self.bridge.query('archive', 1)
+        self.bridge.query('legacy', 2)
+        self.assertEqual(self.commands, ['spells archive 3', 'spells archive', 'skills', 'spells legacy 2'])
+        self.assertEqual(set(cached_game_skills(self.state)['scopes']), {'archive:3', 'archive', 'legacy:2'})
+
+    def test_invalid_pages_never_publish_a_query(self):
+        for scope, page in [('archive', True), ('legacy', 0), ('archive', 101),
+                            ('archive', '2'), ('archive', '1\ncast tp'), ('all', 2), ('status', 2)]:
+            self.assertEqual(self.bridge.query(scope, page)['code'], 'invalid_game_skill_page')
+        self.assertEqual(self.commands, []); self.assertEqual(self.gateway.calls, [])
+
+    def test_actual_skill_progress_does_not_hide_gateway_restrictions(self):
+        observed = {'skills': {'ok': True, 'learned': [{'id': 'tp'}, {'id': 'home'}],
+                               'levelGate': [{'id': 'blood_mana'}, {'id': 'fireworks'}]},
+                    'spells irons': {'ok': True, 'spells': [{'id': 'irons_spellbooks:shield'}]}}
+        original = json.dumps(observed)
+        explained = {s['id']: s for s in skill_access(observed)['spells']}
+        self.assertEqual(explained['tp']['rule'], 'requires_unprotected_origin')
+        self.assertTrue(explained['tp']['checksTargetArea'])
+        self.assertEqual(explained['home']['rule'], 'destination_unavailable')
+        self.assertEqual(explained['blood_mana']['rule'], 'self_cast_no_town_exclusion')
+        self.assertEqual(explained['irons_spellbooks:shield']['rule'], 'self_cast_no_town_exclusion')
+        self.assertNotIn('irons_spellbooks:heal', explained)
+        self.assertEqual(json.dumps(observed), original)
+
+    def test_archive_is_not_authorization_and_failed_catalog_is_not_invented(self):
+        observed = {'spells archive 2': {'ok': True, 'atoms': [
+            {'id': 'rasengan', 'catalog': {'status': 'archived', 'nativeHints': ['irons_spellbooks:gust']}}]},
+                    'spells irons': {'ok': False, 'spells': [{'id': 'irons_spellbooks:shield'}]}}
+        explained = skill_access(observed)['spells']
+        self.assertEqual(explained, [{'id': 'rasengan', 'rule': 'archived_no_active_cast', 'checksTargetArea': False}])
+        self.assertFalse((self.state / 'unknown.json').exists())
 
     def test_receipts_cannot_cross_actor_request_or_escape_the_queue(self):
         result = self.bridge.query('irons')

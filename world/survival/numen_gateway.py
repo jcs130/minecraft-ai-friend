@@ -61,7 +61,18 @@ def write_json(path, value):
             stream.write('\n')
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temp, path)
+        # Docker Desktop bind mounts inherit Windows reader sharing locks.
+        # Retry only renaming the same fsynced bytes: never rerun a callback,
+        # overwrite the destination in place, or repeat a game/model request.
+        delays = (0.05, 0.1, 0.2, 0.4, 0.8)
+        for attempt in range(len(delays) + 1):
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError:
+                if attempt == len(delays):
+                    raise
+                time.sleep(delays[attempt])
     finally:
         temp.unlink(missing_ok=True)
 

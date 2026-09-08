@@ -1,0 +1,25 @@
+--- a/com/dwinovo/numen/core/NumenCoreNeoForge.java
++++ b/com/dwinovo/numen/core/NumenCoreNeoForge.java
+@@ -29,11 +29,14 @@
+ 
+     public NumenCoreNeoForge(IEventBus eventBus, ModContainer container) {
+         NumenCore.init();
++        com.dwinovo.numen.core.entity.AutonomousBodyTick.loadPolicy();
+ 
+         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent e) ->
+                 com.dwinovo.numen.core.entity.ExistingBodyRestore.register(e.getDispatcher()));
+ 
+         NeoForge.EVENT_BUS.addListener(NumenCoreNeoForge::onServerTickPost);
++        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent e) ->
++                com.dwinovo.numen.core.entity.AutonomousBodyTick.register(e.getDispatcher()));
+         // Debug verbs merged into the /numen root registered by the engine mod.
+         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent e) ->
+                 DebugCommands.register(e.getDispatcher()));
+@@ -58,6 +61,7 @@
+     }
+ 
+     private static void onServerTickPost(ServerTickEvent.Post event) {
++        com.dwinovo.numen.core.entity.AutonomousBodyTick.serverTick(event.getServer());
+         // 排程机器的心跳随机器归了 numen-api;core 只 tick 自己的工具配套。
+         BlockSearch.tick(event.getServer());
+         PathCaches.serverTick(event.getServer());

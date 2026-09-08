@@ -352,18 +352,18 @@ def make_server(gateway=None, skill_tools=None, http=False):
                 'source': 'maintained_adventure_guide', 'fixedMission': False}
 
     @server.tool()
-    def game_skills(scope: str = 'all') -> dict:
-        """查询实际游戏法术：all/status/legacy/irons/help；已学、等级可学、锁定、装备法术与成长。与JS行为库不同。"""
-        return game_tools.query(scope)
+    def game_skills(scope: str = 'all', page: int = 1) -> dict:
+        """查询/mycli人物法术：all/status/legacy/irons/archive/help。legacy/archive支持page分页；返回已学、等级可施放、技能书目录、原生装备及Agent实际施法边界。JS程序查skill_catalog。"""
+        return game_tools.query(scope, page)
 
     @server.tool()
     def game_cast(turn_id: str, skill_id: str, params: dict | None = None) -> dict:
-        """以桐人正常施法，消耗本轮唯一动作。完整法术ID；铁魔法需真实装备并由原生处理法力/冷却，受理不等于命中。"""
+        """以桐人正常施法，占一个身体动作步骤；先game_skills辨别已学/等级可施放和Agent边界。完整法术ID与目录参数；铁魔法需实际装备并遵守原生法力/冷却，受理不等于命中。"""
         return gateway.action(turn_id, 'game_cast', {'skill_id': skill_id, 'params': params or {}})
 
     @server.tool()
     def game_learn(turn_id: str, skill_id: str) -> dict:
-        """参悟背包中已经获得的特色技能书，消耗本轮动作；不能凭名称获取书、等级或原生铁魔法法术。"""
+        """按ownedSkillBooks已识别的skill_id参悟实际携带的特色技能书，占一个身体动作步骤；原规则验书但不扣书。主动技能等级足也可直接game_cast首次收录；不赠书/等级/Iron法术。"""
         return gateway.action(turn_id, 'game_learn', {'skill_id': skill_id})
 
     @server.tool()

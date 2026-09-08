@@ -6,6 +6,16 @@
 
 生成器为 `tools/build_web_mod_assets.py`，只读取 D JAR、根代理导出的当前注册表，以及本机原版 1.21.1 JAR 中的父模型/纹理存在性；不会连接 MC、下载资源、启动服务或改变世界。首轮真实浏览器曾显示地形和建筑，但约 60 秒后出现重复内存分配错误，因此首轮未通过持续运行验收。下述预算修复已完成离线验证；修复后的真实持续运行结果由统一部署步骤另行记录。
 
+### 2026-09-08 代码补丁后的增量来源校验
+
+Numen 自主区块、GodVoice 健康写入和女仆桥补丁改变了 3 种 JAR 的 5 个实际路径；这些代码变化没有新增贴图。新增 `tools/refresh_web_mod_provenance.py`：仅当模组路径集合不变、每个变动包能找到原报告 SHA 对应的精确旧包、全部非 class 资源逐字相同（包含完整嵌套 JAR），且最新原生导出的完整注册表与当前映射输入仅时间字段不同，才更新兼容报告的 JAR 来源记录。任一资源、方块状态编号/属性或模组集合变化均拒绝增量更新，转完整生成流程；不直接改健康布尔值。
+
+本次真实重扫 160 个服务端/客户端路径。唯一一次 `numen_act dumpregistry` 导出 4,336 方块、116,650 状态，逐字段验证其与已部署注册表语义一致。新原生导出保留在 `server/mc/block-registry.json`，SHA 为 `9c179e708b42ee77f7d97311f50ae9f49dc55d69a94f926b313f29bb1f456dc8`；运行流仍消费 `server/world-data/block-registry.json`，没有自动复制源导出的 watcher。兼容报告区分实际映射输入的 `path/sha256/generatedAt` 与新验证导出的 `sourceExportPath/sourceExportSha256/sourceExportGeneratedAt`，保留原资产生成时间，并另记 `provenanceRefresh.verifiedAt`。
+
+`mod-pack.json`、`mod-blocks-mcdata.json`、`vanilla-state-map.json` 和公开 `compatibility-summary.json` 的原始字节完全保留，没有重建纹理、改变 stateId 映射、重载浏览器或重启服务。管理 API 实测 `current_mod_jars`、`current_mod_assets`、`current_block_state_mapping` 均已通过；该结论不代表其它服务全部健康或新增一次浏览器画面验收。9 项离线回归覆盖资源/嵌套 JAR 差异、注册表变化、缺少精确基线、并发修改和旧导出拒绝。
+
+本机证据为 `reports/web-mod-provenance-refresh.json`；原报告和新导出备份在 `runtime/web-provenance-backups/c283ba11676442de96b51f469fe1562d/`，导出前原文件另存于 `runtime/web-provenance-native-export-20260908/`。复查工具不执行导出命令；统一维护步骤先生成新原生导出，再将各变动包的精确旧副本作为重复的 `--baseline <路径>` 参数，审核通过后加 `--apply`。如果仅导出时间变化，活跃映射无需为时间戳重新生成。
+
 ## 当前成果
 
 | 项目 | 结果 |

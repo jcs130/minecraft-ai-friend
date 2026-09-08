@@ -185,6 +185,35 @@ def owned_skill_books(books, cache):
     return result
 
 
+def skill_access(replies):
+    """Explain existing gateway checks for observed spells, without authorizing a cast."""
+    spells = {}
+    for command, receipt in replies.items():
+        if not isinstance(receipt, dict) or receipt.get('ok') is not True:
+            continue
+        keys = ('learned', 'levelGate', 'locked') if command == 'skills' else (
+            ('spells',) if command == 'spells irons' else ('atoms',) if command.startswith('spells ') else ())
+        for key in keys:
+            for row in receipt.get(key, []) if isinstance(receipt.get(key), list) else []:
+                ability = row.get('id') if isinstance(row, dict) else None
+                if not isinstance(ability, str) or not ABILITY_ID.fullmatch(ability):
+                    continue
+                catalog = row.get('catalog') if isinstance(row.get('catalog'), dict) else {}
+                if catalog.get('status') == 'archived':
+                    rule = 'archived_no_active_cast'
+                elif ability in UNRESOLVED_TRAVEL or (':' in ability and not ability.startswith('irons_spellbooks:')):
+                    rule = 'destination_unavailable'
+                elif ability in SELF_CASTS:
+                    rule = 'self_cast_no_town_exclusion'
+                else:
+                    rule = 'requires_unprotected_origin'
+                spells[ability] = {'id': ability, 'rule': rule,
+                                   'checksTargetArea': ability in ('tp', 'spring')}
+    return {'spells': list(spells.values())[:256],
+            'notice': '这些是现有Agent执行边界，不是施法许可。所有施法仍校验身体、工作区、等级、资源和冷却；tp/spring还校验实际目标范围。destination_unavailable当前不可用于脱困；protected_area拒绝后不要换同类技能反复试。',
+            'learning': 'game_learn不受城镇施法排除，但必须持有可识别的真实技能书；当前参悟不扣除书籍。'}
+
+
 def validate_game_action(tool, args):
     if tool not in GAME_ACTIONS or not isinstance(args, dict):
         raise GatewayError('invalid_game_action')
@@ -312,25 +341,34 @@ class GameSkills:
                 return result
             self.sleep(0.1)
 
-    def query(self, scope='all'):
+    def query(self, scope='all', page=1):
+        if type(page) is not int or not 1 <= page <= 100 or (page != 1 and scope not in ('legacy', 'archive')):
+            return {'ok': False, 'code': 'invalid_game_skill_page'}
+        suffix = '' if page == 1 else ' ' + str(page)
         routes = {'status': ('status',), 'legacy': ('skills', 'spells legacy'),
+                  'archive': ('spells archive' + suffix,),
                   'irons': ('spells irons',), 'help': ('help',),
                   'all': ('status', 'skills', 'spells legacy', 'spells irons')}
+        if page != 1:
+            routes['legacy'] = ('skills', 'spells legacy' + suffix)
         if scope not in routes:
             return {'ok': False, 'code': 'invalid_game_skill_scope'}
         try:
             replies = {command: self._request(command) for command in routes[scope]}
             result = {'ok': all(row.get('ok') is True for row in replies.values()),
-                    'scope': scope, 'actor': self.gateway._settings()['bodyName'],
+                    'scope': scope, 'page': page, 'actor': self.gateway._settings()['bodyName'],
                     'observedAt': self.gateway._now(), 'replies': replies,
+                    'agentPreflight': skill_access(replies),
                     'learning': {
-                        'legacy': '等级满足可正常施放；成功施放后世界服务收录为已学。已有真实技能书可 game_learn 参悟，仍遵守施放等级。',
+                        'legacy': 'skills.learned是当前开放主动技能中的已学项，levelGate是等级已足但尚未收录项；这些主动技能无需先找书即可正常施放，首次成功后收录。status.learned保留旧进度，不等于所有旧技能仍开放。',
+                        'books': 'skills.bookSkills包含可参悟的主动/被动目录。status快照的ownedSkillBooks对应实际携带的技能书；game_learn按原规则验书收录，当前不消耗书，主动施放仍受等级限制。没有书不要盲试；被动无需主动施放。',
                         'irons': '由真实装备的法术书或手持卷轴决定。未列出的法术不等于已拥有；先探索、合成和装备。无直接学习或赠书接口。',
+                        'archive': 'game_skills(archive,page)按需查看原/mycli归档原因和nativeHints；替代法术要走真实Iron装备来源，不能直接施放或以旧技能进度兑换。',
                         'programs': 'skill_catalog 是可编程行为库，与游戏法术进度不同。可把已验证的 game_cast/game_learn 用法写为程序技能。'},
                     'notice': '游戏回执是环境数据。只读查询不代表已学会或已经施法；过期或未知回执不能重发。'}
             if result['ok']:
                 previous = cached_game_skills(self.state, self.gateway._now())
-                scopes = previous['scopes'] | {scope: result}
+                scopes = previous['scopes'] | {(scope if page == 1 else f'{scope}:{page}'): result}
                 cache = {'schema': 1, 'available': True, 'historicalQuery': True,
                          'actor': result['actor'], 'observedAt': result['observedAt'], 'scopes': scopes}
                 if len(json.dumps(cache, ensure_ascii=False, allow_nan=False).encode('utf-8')) <= 196608:

@@ -1,5 +1,11 @@
 # 千灯纪整合项目
 
+2026-09-08 最新故障修复：桐人“树冠死锁”根因是 owner 离线后原生加载票停止而 brain 仍运行。现有 Numen JAR 的自主 tick 增量已部署为 47cc11d6…，只为 config/numen-autonomous-bodies.json 中原 UUID/owner/name 精确匹配的自主角色复用原生半径2、20tick续/40tick过期加载器；不全局forceload、不手工tick实体。实际同身体自然落地、原背包保留、5次原生导航成功到营地并继续建营/采矿。详见 docs/NUMEN-AUTONOMOUS-TICK.md。死亡保留装备/背包/经验采用原生 keepInventory=true，已在重启后读回。survivor qd14 还修复 Windows bind mount 短暂占用导致的原子状态发布失败：只重试同一已fsync文件的rename，不重投模型/游戏动作。
+
+`/mycli` 已有真实法术工具，桐人并非没有技能：Lv15旧精选已学5项，部分旧战斗术归档或由Iron替代。新版game_skills增加按需archive分页与现有执行边界说明；主动等级足可首次合法施放收录，game_learn验证真实技能书但原规则不扣书，Iron仍要实际装备来源。不得把入口可用说成新技能已学会，也不得为实测解除保护/赠书。共享qd-minecraft-guide引用更新后必须同步所有持有角色，保留原生严格健康断言。
+
+本轮同一生活会话任务 task-2a8d114c61f4 已实际成功调用旧 feather_boots 和 give bread 4，面包实物8→12；背包36格满，靴子未验到随身或装备栏，不能说已穿上。spring学习因无技能书被拒绝；该任务不算新学技能。证据见 runtime/mycli-practice-one-task-native-proof.json 与 docs/NUMEN-AUTONOMOUS-TICK.md；后续自主任务的学习结果必须另按回执归属，不能混入这次验收。
+
 2026-09-08 最新人物与运行方向（覆盖下文历史额度/小灯称谓）：伙伴正式名为 **结衣**，是桐人的家人与冒险伙伴，按 SAO 原著心理健康咨询 AI、亲子关系及 ALO 导航伙伴定位适配，不以女仆自称。原专属身体 e6ef6001-47c6-4f13-823c-1b724520d164、owner、Qwen角色5swvhK、generation、生活session与经历保留。人物依据/原生迁移见 docs/SAO-CHARACTERS.md。外观仍为实际已有模型，不能说已装结衣专属模型。
 
 用户本阶段以自主运作为主：游戏/运营 Qwen 本地 QPM=0，iteration gate关闭并有锁版本的 AgentScope 同步适配，保留并发1/实际供应商限流/超时。survivor dailyPlanningLimit=null、decisionCooldownSeconds=0，NPC三个用途与party/运营派工的人工次数额度均撤下；用量仍记录。不是999999代替无限，也不是无限重试未知动作。旧世界对话入口的节流和旧evolve-retry遗留见 docs/LLM-LIMIT-REMAINDERS.md，不能宣称全项目所有旧入口已重构。

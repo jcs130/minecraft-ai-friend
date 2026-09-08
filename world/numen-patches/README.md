@@ -58,3 +58,11 @@ survivor 的 `body_reconnect.py` 只在 enabled、无活动决策、无未确认
 部署前先保留停止后的完整存档备份，再使用 `python tools/deploy_numen_body_restore.py --record runtime/numen-body-restore-build/<build>/build-record.json` 检查；追加 `--apply qiandengji` 才执行。该脚本检查当前 JAR、actuator、构建源码和测试哈希及全部未修改条目，要求精确的 `qiandengji-mc-1` 已停止，备份被覆盖文件和锁。只替换服务端原 `numen-neoforge-1.21.1-0.1.1.jar`，缓存到被忽略的 `vendor/numen-cache/`，不向客户端增加 Numen。随后运行 `python tools/record_deployment.py` 更新整服记录。脚本不启动服务器、不创建身体，原身体是否成功加载应在随后运行中核验。
 
 重建时使用 `--baseline-jar vendor/numen-cache/baseline-numen.jar`，这个缓存保存恢复增量之前的严格步行 JAR。构建记录还保留源码、测试和构建器哈希，改动这些文件后须重新构建，不能沿用旧记录。
+
+## 自主角色的离线区块更新
+
+`tools/build_numen_autonomous.py` 在已包含恢复能力的精确 Numen 基线上增加 `autonomous_body_tick_v1`。补丁复用原生半径 2、20 tick 续票、40 tick 过期的加载器；仅为 `config/numen-autonomous-bodies.json` 中原 UUID、owner、名字全部匹配且存活的角色续票。主人在线时仍走原生实现，不手工 tick 实体。配置在启动时读取一次；修改或撤销授权需维护重启，健康探针会检查已加载配置的哈希。
+
+先运行 `python tools/deploy_numen_autonomous.py --record runtime/numen-autonomous-build/latest.json` 验证候选。保存并停止精确 D 项目 MC、完成停止后的完整世界备份后，追加 `--apply qiandengji` 安装。部署器保留全部其他 JAR 条目与恢复能力，备份被替换文件，同步服务端缓存和锁；不自行停服、启动、传送或创建身体。新增基线缓存是 `vendor/numen-cache/baseline-autonomous-numen.jar`，保留上段的旧恢复基线。重建自主增量使用新缓存作为 `--baseline-jar`。
+
+启动后以 `numen_autonomy_status` 和 `python tools/numen_autonomy_health.py` 确认真实 `ENTITY_TICKING` 与身体 tick 前进，再验收模型指定的行动。完整故障与实机证据边界见 [自主区块更新](../../docs/NUMEN-AUTONOMOUS-TICK.md)。

@@ -174,18 +174,21 @@ class LifeSessionTests(unittest.TestCase):
         self.controller.data['wakeReason'] = 'autonomous_review'
         inactive = self.controller.life_context(self.gateway.body, {}, TURN)
         self.assertNotIn('party_send', inactive['instruction'])
-        party.config = SimpleNamespace(configured=lambda: True)
+        party.config = SimpleNamespace(configured=lambda: True, roster=lambda: [
+            {'agentId': 'fixture-companion', 'bodyUuid': 'fixture-body', 'displayName': '结衣'}])
         self.controller.tick()
         submitted = self.backend.submitted[0]
         context = json.loads(submitted['prompt'].split('\n', 1)[1])
         self.assertIn('party_send(channel="nearby")', context['instruction'])
         self.assertIn('speak只播放声音', context['instruction'])
+        self.assertEqual(context['partyMembers'][0]['displayName'], '结衣')
+        self.assertIn('名单不代表对方此刻在附近或已经听见', context['instruction'])
         self.assertIsNone(submitted['requestContext'])
         self.assertFalse(party.calls)
 
     def test_incoming_reply_allowlist_does_not_leak_into_next_autonomous_task(self):
         party = FakeParty()
-        party.config = SimpleNamespace(configured=lambda: True)
+        party.config = SimpleNamespace(configured=lambda: True, roster=lambda: [])
         self.controller.party = party
         self.controller.tick()
         incoming = self.backend.submitted[0]

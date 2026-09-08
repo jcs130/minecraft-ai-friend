@@ -43,7 +43,7 @@
     },
     {
       "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
-      "sha256": "97ed80699ef1d0e7c958566a5b2873e13d4476b6c865675547cf275c68d87d67",
+      "sha256": "47cc11d609b03b62734c4772b2aa40a89ba02a5bbaab0d85ab10589d45ffec3b",
       "client_required": false
     }
   ]

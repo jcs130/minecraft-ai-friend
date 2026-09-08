@@ -213,6 +213,17 @@ def probe_world_operations():
         return {'ok':False,'error':'World daily operations evidence unavailable','modelRequests':0,'worldActions':0}
 
 
+def probe_numen_autonomy():
+    """Actual entity ticking, not just an online body or a running task brain."""
+    try:
+        spec = importlib.util.spec_from_file_location('qd_numen_autonomy_health', PROJECT/'tools/numen_autonomy_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(root=PROJECT)
+    except (OSError, ValueError, KeyError, TypeError, ImportError):
+        return {'ok': False, 'error': 'Native body tick evidence unavailable', 'modelRequests': 0, 'worldActions': 0}
+
+
 def probe_survivor_fast_behavior():
     """A current protocol needs its own bounded evidence, not the old smoke."""
     filename = 'survivor-fast-system-smoke.json'
@@ -1303,7 +1314,7 @@ def main_locked():
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
-              "world_operations": probe_world_operations()}
+              "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy()}
     report["ok"] = all(v["ok"] for v in report.values() if isinstance(v, dict) and "ok" in v)
     report["scope"] = "Service readiness and the exercised core gameplay paths; not an exhaustive content audit"
     report["unverified"] = ["Legacy NPC trade profiles", "Physical controller input", "Physical microphone input and audible playback", "Agent offscreen WebGL visual perception", "Dormant original character bodies in live play (model appearance verified on temporary Numen bodies)"]

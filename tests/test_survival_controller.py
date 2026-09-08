@@ -246,6 +246,20 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(len(self.backend.submitted), 1)
 
+    def test_restart_exposes_durable_control_pause_reason_if_controller_save_failed(self):
+        # pause() commits the control flag before saving controller diagnostics.
+        self.controller.data['pauseReason'] = None
+        self.controller.save()
+        self.write('control.json', {'schema': 1, 'enabled': False, 'pauseReason': 'controller_PermissionError'})
+        self.controller = self.create()
+        self.controller.tick()
+        public = read_json(self.public)
+        self.assertEqual(public['status'], 'paused')
+        self.assertFalse(public['enabled'])
+        self.assertEqual(public['pauseReason'], 'controller_PermissionError')
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.gateway.actions)
+
     def test_transient_observation_keeps_existing_task_then_recovers_without_resubmit(self):
         self.controller.tick()
         active = copy.deepcopy(self.controller.data['active'])

@@ -52,6 +52,11 @@ class PartyConfig:
             raise ValueError('not_party_member')
         return {k: v for k, v in found[0].items() if k != 'mcpToken'}
 
+    def roster(self):
+        """Current names for long-lived conversations, without driver/session secrets."""
+        return [{k: m[k] for k in ('agentId', 'bodyUuid', 'displayName')}
+                for m in self.private()['members']]
+
     def validate_recipient(self, role, message):
         """Recheck the reserved identity immediately before native dispatch."""
         binding = self.binding()
