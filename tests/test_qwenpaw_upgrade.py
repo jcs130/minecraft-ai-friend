@@ -13,7 +13,7 @@ spec.loader.exec_module(upgrade)
 class GameUpgrade(unittest.TestCase):
     def running(self):
         return {'max_iters': 4, 'max_input_length': 32768, 'llm_retry_enabled': True,
-            'llm_max_retries': 3, 'llm_max_concurrent': 10, 'llm_max_qpm': 600,
+            'llm_max_retries': 3, 'llm_max_concurrent': 1, 'llm_max_qpm': 600,
             'llm_acquire_timeout': 300, 'loop': {'iteration': {'enabled': True}},
             'light_context_config': {'strategy': 'scroll', 'visual_compact_config': {'enabled': True}},
             'auto_title_config': {'enabled': True}, 'reme_light_memory_config': {
@@ -36,15 +36,16 @@ class GameUpgrade(unittest.TestCase):
         merged['running']['future_option'].append(3)
         self.assertEqual(original, saved)
 
-    def test_new_helpers_are_closed_without_tightening_or_loosening_existing_generation_limits(self):
+    def test_helpers_stay_closed_and_only_explicit_request_limits_change(self):
         running = self.running()
         original = deepcopy(running)
         upgrade.pause_background(running)
         upgrade.assert_quiet(running)
         for key in original:
-            if key.startswith('llm_') or key in ('max_iters', 'max_input_length'):
+            if (key.startswith('llm_') and key != 'llm_max_qpm') or key in ('max_iters', 'max_input_length'):
                 self.assertEqual(running[key], original[key], key)
-        self.assertEqual(running['loop']['iteration']['max_iterations'], 4)
+        self.assertEqual(running['llm_max_qpm'], 0)
+        self.assertEqual(running['loop']['iteration'], {'enabled': False, 'max_iterations': None})
         upgraded = deepcopy(running)
         upgrade.pause_background(running)
         self.assertEqual(running, upgraded)
@@ -59,6 +60,16 @@ class GameUpgrade(unittest.TestCase):
         running['loop']['iteration']['max_iterations'] = 100
         with self.assertRaises(AssertionError):
             upgrade.assert_quiet(running)
+
+    def test_migration_preservation_allows_only_reviewed_quota_changes(self):
+        before = self.running(); before['llm_max_concurrent'] = 10
+        after = deepcopy(before); upgrade.pause_background(after)
+        upgrade.assert_generation_settings_preserved(before, after)
+        for key, value in [('llm_acquire_timeout', 31), ('llm_retry_enabled', False),
+                           ('max_input_length', 9999), ('max_iters', 3), ('llm_max_qpm', 600)]:
+            changed = deepcopy(after); changed[key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError):
+                upgrade.assert_generation_settings_preserved(before, changed)
 
     def test_closed_surface_denies_new_builtin_and_acp_but_rejects_existing_mcp(self):
         value = {'mcp': {'clients': {}}, 'tools': {'builtin_tools': {

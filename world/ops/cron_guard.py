@@ -30,7 +30,8 @@ def fingerprint(tools):
 
 def reserve_review(tools, job_id, clock=time.time):
     """Uses the SAME persisted ledger as operations_delegate, never a new quota."""
-    from operations_native_tasks import ledger, budget_check
+    from operations_native_tasks import ledger, budget_check, reconcile_pending
+    reconcile_pending()
     with locked(tools.root):
         digest = fingerprint(tools)
         marker = tools.root / 'last-review.json'
@@ -73,17 +74,28 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
     if job.dispatch.channel != 'console': return skipped('project_console_required')
     if job.runtime.timeout_seconds > 180 or job.runtime.max_concurrency != 1:
         return skipped('bounded_runtime_required')
-    reservation = await asyncio.to_thread(reserve_review, tools, str(job.id))
+    from world_operations import is_world_job
+    world_job = is_world_job(job, role)
+    if not managed and not world_job:
+        return skipped('unmanaged_operations_job')
+    from operations_native_tasks import reserve_operation, finish_run
+    reservation = await asyncio.to_thread(reserve_operation, role, str(job.id)) if world_job else await asyncio.to_thread(reserve_review, tools, str(job.id))
     if not reservation['ok']: return skipped(reservation['code'])
     record = {'schema': 1, 'role': role, 'jobId': job.id, 'checkedAt': time.time(),
         'status': 'reserved', 'runId': reservation['runId'], 'sharedBudgetCharged': True}
     write(tools.root / 'last-cron.json', record)
     try:
         result = await original(executor, job)
-        record.update(status='finished', finishedAt=time.time(), deliveryStatus=result.get('delivery_status'))
+        delivery = result.get('delivery_status')
+        terminal = 'failed' if delivery in ('failed', 'error') else 'completed'
+        record.update(status='finished', executionStatus='returned', finishedAt=time.time(), deliveryStatus=delivery)
+        await asyncio.to_thread(finish_run, reservation['runId'], terminal,
+                                executionStatus='returned', deliveryStatus=delivery)
         return result
     except BaseException:
         record.update(status='failed_or_interrupted', retryAutomatically=False)
+        # A raised/cancelled native execution is not a confirmed backend
+        # terminal receipt. Keep its durable reservation unresolved.
         raise
     finally:
         # This is execution status, not a claim that the agent produced a useful
@@ -96,6 +108,8 @@ def install(runtime):
     if importlib.metadata.version('qwenpaw') != '2.2.0': raise ValueError('review_new_qwen_cron_contract')
     from native_tool_runtime import install as install_native_tools
     native_guard_version = install_native_tools(runtime)
+    from llm_runtime_policy import install as install_llm_policy
+    llm_policy_version = install_llm_policy(runtime)
     from qwenpaw.app.crons.executor import CronExecutor
     if getattr(CronExecutor, '_qiandeng_learning_guard', None) == VERSION: return
     original = CronExecutor.execute
@@ -108,4 +122,5 @@ def install(runtime):
     boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     write(Path('/state/work/learning-runtime.json'), {'schema': 1, 'runtime': runtime, 'guardVersion': VERSION,
         'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
-        'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version})
+        'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
+        'llmPolicyVersion': llm_policy_version})

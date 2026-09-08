@@ -51,7 +51,7 @@ class RoleLearningProfiles(unittest.TestCase):
         self.root = Path(tmp.name); self.role = 'mc-herald'; self.folder = self.root / 'workspaces' / self.role
         write(self.root / 'config.json', {'agents': {'profiles': {self.role: {'enabled': True}}}})
         self.agent = contract.with_learning({'id': self.role, 'mcp': {'clients': {}},
-            'running': {}, 'active_model': {'model': 'user-model'}, 'user_setting': 'preserved'}, self.role, 'operations')
+            'running': {'max_iters': 5, 'llm_max_concurrent': 1}, 'active_model': {'model': 'user-model'}, 'user_setting': 'preserved'}, self.role, 'operations')
         write(self.folder / 'agent.json', self.agent)
         learning_fixture(self.folder, self.role, 'operations')
 
@@ -70,20 +70,20 @@ class RoleLearningProfiles(unittest.TestCase):
                                       'other_loop_setting': 'preserved'}}}
         updated = contract.with_learning(agent, 'qd-survivor', 'game')
         expected = deepcopy(agent['running'])
-        expected.update(llm_max_qpm=8, max_iters=12)
-        expected['loop']['iteration']['max_iterations'] = 12
+        expected.update(llm_max_qpm=0)
+        expected['loop']['iteration'].update(enabled=False, max_iterations=None)
         self.assertEqual(updated['running'], expected)
         self.assertEqual(agent['running']['max_iters'], 6)
         self.assertEqual(updated['active_model'], agent['active_model'])
         contract.validate_learning_profile(updated, 'qd-survivor', 'game')
 
-    def test_survivor_contract_rejects_partial_or_disabled_iteration_update(self):
-        agent = contract.with_learning({'id': 'qd-survivor', 'running': {}, 'mcp': {'clients': {}}},
+    def test_survivor_contract_rejects_restored_artificial_limits(self):
+        agent = contract.with_learning({'id': 'qd-survivor', 'running': {'max_iters': 12, 'llm_max_concurrent': 1}, 'mcp': {'clients': {}}},
                                        'qd-survivor', 'game')
-        for field in ('max_iters', 'max_iterations', 'enabled'):
+        for field in ('llm_max_qpm', 'max_iterations', 'enabled'):
             changed = deepcopy(agent)
-            target = changed['running'] if field == 'max_iters' else changed['running']['loop']['iteration']
-            target[field] = False if field == 'enabled' else 6
+            target = changed['running'] if field == 'llm_max_qpm' else changed['running']['loop']['iteration']
+            target[field] = True if field == 'enabled' else 6
             with self.subTest(field=field), self.assertRaises(AssertionError):
                 contract.validate_learning_profile(changed, 'qd-survivor', 'game')
 
@@ -142,7 +142,7 @@ class RoleLearningProfiles(unittest.TestCase):
         fields = ['0'] * 20; fields[19] = '100'
         (proc / '7/stat').write_text('7 (python with spaces) ' + ' '.join(fields))
         (proc / '7/cmdline').write_bytes(b'python\0/ops/learning_service.py\0--runtime\0operations\0')
-        marker = {'schema': 1, 'runtime': 'operations', 'guardVersion': 1, 'nativeToolGuardVersion': 1, 'pid': 7, 'startedAt': 1002,
+        marker = {'schema': 1, 'runtime': 'operations', 'guardVersion': 1, 'nativeToolGuardVersion': 1, 'llmPolicyVersion': 1, 'pid': 7, 'startedAt': 1002,
             'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron'}
         write(self.root / 'learning-runtime.json', marker)
         with patch.object(contract.os, 'sysconf', return_value=100, create=True):
@@ -230,6 +230,28 @@ class RoleLearningProfiles(unittest.TestCase):
         self.assertEqual(text.count('<!-- qiandeng-personal-files-v1 -->'), 1)
         (folder / 'AGENTS.md').write_text(text, encoding='utf-8')
         self.assertEqual(agent_text(folder, 'bound-maid', 'game', ROOT / 'world/ops'), text)
+
+    def test_registered_character_name_persona_notes_and_model_survive_limit_sync(self):
+        from sync_role_learning import agent_text, OLD_MAID_MODEL_LIMITS, MAID_MODEL_POLICY
+        folder = self.root / 'bound-yui'; folder.mkdir()
+        fixed = '你是结衣，桐人的家人与冒险伙伴。\n<!-- QD_SAO_PERSONA_V1 -->\n个人经历\n<!-- /QD_SAO_PERSONA_V1 -->\n'
+        for page in ('SOUL.md', 'PROFILE.md', 'notes/index.md'):
+            path = folder / page; path.parent.mkdir(exist_ok=True)
+            path.write_text(fixed + page, encoding='utf8')
+        before = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+        for legacy in OLD_MAID_MODEL_LIMITS:
+            (folder / 'AGENTS.md').write_text(fixed + legacy, encoding='utf8')
+            result = agent_text(folder, 'bound-yui', 'game', ROOT / 'world/ops')
+            self.assertTrue(result.startswith(fixed))
+            self.assertNotIn(legacy, result)
+            self.assertIn(MAID_MODEL_POLICY, result)
+            (folder / 'AGENTS.md').write_text(result, encoding='utf8')
+            self.assertEqual(agent_text(folder, 'bound-yui', 'game', ROOT / 'world/ops'), result)
+        for page, content in before.items(): self.assertEqual((folder / page).read_bytes(), content)
+        original = deepcopy(self.agent)
+        original.update(name='结衣', description='独立冒险伙伴', active_model={'model': 'chosen-now'})
+        updated = contract.with_learning(original, self.role, 'operations')
+        for key in ('name', 'description', 'active_model'): self.assertEqual(updated[key], original[key])
 
 
 if __name__ == '__main__': unittest.main()

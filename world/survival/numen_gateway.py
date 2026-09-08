@@ -30,14 +30,25 @@ class GatewayError(ValueError):
     pass
 
 
-def read_json(path):
+def _read_json(path, limit):
     path = Path(path)
-    if path.is_symlink() or path.stat().st_size > 262144:
+    if path.is_symlink() or path.stat().st_size > limit:
         raise GatewayError('invalid_state_file')
     value = json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(value, dict):
         raise GatewayError('invalid_state_file')
     return value
+
+
+def read_json(path):
+    return _read_json(path, 262144)
+
+
+def read_controller_json(path):
+    """The rolling 24-hour decision journal can exceed the small-state limit."""
+    if Path(path).name != 'controller.json':
+        raise GatewayError('invalid_controller_state_path')
+    return _read_json(path, 2 * 1024 * 1024)
 
 
 def write_json(path, value):

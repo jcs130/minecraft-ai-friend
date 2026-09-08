@@ -1,5 +1,9 @@
 # 旅行小队部署与恢复
 
+2026-09-08 当前版本：角色正式名结衣，人设与实际迁移见 [SAO-CHARACTERS.md](SAO-CHARACTERS.md)。自主服务 qd12 接入被动回复感知：普通世界/目标/原定复盘启动后才取最多8条未消费的真实 heard 回复，单独回复不唤醒；已知原生终态只确认本任务实际带入的事件，晚到或结果未知仍保留。当前模型使用无人工额度策略，有限额记录属于下文历史测试阶段。
+
+额度迁移必须保留身份代际。`party_messages` 仅允许同revision下更新 `dailyDispatchCap` 与 `cooldownSeconds` 两个推理策略字段，其余身份/结构变化仍拒绝；不要把revision提高来绕过旧回执不可见问题。部署曾暴露原same-revision整文档比较误挡null/0的情况，已加入保留pending/heard/reply/unknown的迁移回归。
+
 适用于游戏 QwenPaw 2.2、现有 NPC/survivor 容器和固定两人小队。这里的步骤不操作宿主 QwenPaw、运营组模型、真人女仆主人或 Minecraft 存档。生产协作是否通过，以当次本机报告为准；配置成功不是行为验收。
 
 ## 配置前

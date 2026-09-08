@@ -68,12 +68,12 @@ class SharedGameRoleHealthTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.check()
 
-    def test_model_iterations_must_be_twelve_in_both_native_fields(self):
+    def test_model_limits_must_be_disabled_while_native_config_remains_serializable(self):
         valid = copy.deepcopy(self.agent)
-        for field in ('max_iters', 'max_iterations', 'enabled'):
+        for field in ('llm_max_qpm', 'max_iterations', 'enabled'):
             self.agent = copy.deepcopy(valid)
-            target = self.agent['running'] if field == 'max_iters' else self.agent['running']['loop']['iteration']
-            target[field] = False if field == 'enabled' else 6
+            target = self.agent['running'] if field == 'llm_max_qpm' else self.agent['running']['loop']['iteration']
+            target[field] = True if field == 'enabled' else 6
             with self.subTest(field=field), self.assertRaises(AssertionError): self.check()
 
     def test_other_mcp_endpoint_or_wildcard_permissions_fail(self):

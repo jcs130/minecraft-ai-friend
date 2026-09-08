@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 import re
 import socket
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ops'))
+from llm_runtime_policy import disable_limits
 
 from mcp_server import TOOL_NAMES
 
@@ -16,7 +19,7 @@ PROJECT = 'qiandengji-survivor'
 ROLE = 'qd-survivor'
 DRIVER = 'numen_survival'
 MODEL_MAX_ITERS = 12
-MODEL_QPM = 8
+MODEL_QPM = 0
 
 
 def write(path, value):
@@ -27,8 +30,6 @@ def write(path, value):
 
 def tune(running):
     running.max_iters = MODEL_MAX_ITERS
-    running.loop.iteration.enabled = True
-    running.loop.iteration.max_iterations = MODEL_MAX_ITERS
     running.max_input_length = 16384
     running.llm_retry_enabled = False
     # QwenPaw's schema requires >= 1 even when retry execution is disabled.
@@ -36,6 +37,7 @@ def tune(running):
     running.llm_max_concurrent = 1
     running.llm_max_qpm = MODEL_QPM
     running.llm_acquire_timeout = 30
+    disable_limits(running)
     running.light_context_config.strategy = 'native'
     running.light_context_config.visual_compact_config.enabled = False
     running.auto_title_config.enabled = False

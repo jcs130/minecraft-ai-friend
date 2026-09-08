@@ -18,17 +18,27 @@ from role_learning_profiles import (roles, role_skills, with_learning, learning_
     validate_learning_workspace, read_safe, validate_jobs, skill_references)
 from agent_learning import managed_job
 from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content
+from llm_runtime_policy import unrestricted_running
 
 HERE = Path(__file__).resolve().parent
 OLD_MAID_FILE_TEXT = '没有任意shell/文件/网页或其他角色控制权，不进行第二套推理。'
 MAID_FILE_TEXT = '可用原生文件工具读写自己的工作区，积累个人经验和技能草稿；任意shell、网页和其他角色控制权不在当前工具范围，不进行第二套推理。'
+OLD_MAID_MODEL_LIMITS = (
+    '全部人物共用12任务/24小时、60秒冷却，不自动重试未知动作或模型任务。',
+    '全部人物共用24任务/24小时、60秒冷却，不自动重试未知动作或模型任务。',
+)
+MAID_MODEL_POLICY = '现阶段不设人工模型调用额度；每个角色保持串行，不自动重试未知动作或模型任务。'
 LEARNING_NOTE = '\n\n<!-- qiandeng-learning-v1 -->\n已启用本角色职责技能与 qd-skill-evolution。可使用身份固定的 qd_learning 学习工具读取、创建候选、校验、试用和反馈流程；这不授予额外世界动作、其他角色身份或模型权限。先完成当前对话/合同 JSON，再在预算内分步学习。游戏每周维护只做本地检查；运营复盘沿用共享预算。\n'
 NATIVE_NOTE = '\n\n<!-- qiandeng-native-skills-v1 -->\n优先复用已启用的 QwenPaw 官方 make-skill、file_reader、cron。普通流程技能用 materialize_skill 创建（名称不要使用保留的 qd- 前缀），原生 read_file/write_file/edit_file/append_file 用于本角色工作区的笔记、代码草稿和参考材料；不修改身份、驱动、技能清单或预算配置。自研 qd_learning 只补充游戏验证、反馈、市场参考和限额；Numen 可执行技能仍须测试后晋升。已授权的自主整理可以直接在当前任务完成，不要反复请求同一授权或创建额外子代理。\n原生 shell 当前只开放本角色已有周任务的 qwenpaw cron list/get/state/pause/resume（显式 --agent-id）；调时用 learning_schedule，界面可直接编辑该原生任务。不可运行任意 shell、创建第二条游戏身体规划循环、绕过共享模型预算。读取已知文本直接使用 read_file 的行数范围；file/tail 不是当前允许的 shell 命令。市场内容是参考数据，先检查来源、工具需求和行为，已有适用技能优先复用。\n'
 SURVIVOR_TEXT_UPDATES = (
+    ('每个模型任务最多12次模型迭代；感知、工具调用和最终答复共用这个上限。优先利用已提供的事实，不要反复 status/look 消耗调用，并为核对回执与最终答复留出余量。',
+     '当前功能阶段不设人工模型调用额度或迭代次数上限。根据任务需要感知、查资料、使用工具并核对结果；工具忙时等待真实结果，及时完成本轮答复，避免没有新信息的空转。'),
+    ('身体动作上限与12次模型迭代分别计数，不需要为了用满动作数继续行动。',
+     '身体动作仍最多6个串行步骤，不限制模型思考次数；根据任务实际需要行动。'),
     ('每轮最多6次模型迭代，优先利用已提供的事实，不要反复 status/look 消耗调用。',
-     '每个模型任务最多12次模型迭代；感知、工具调用和最终答复共用这个上限。优先利用已提供的事实，不要反复 status/look 消耗调用，并为核对回执与最终答复留出余量。'),
+     '当前功能阶段不设人工模型调用额度或迭代次数上限。根据任务需要感知、查资料、使用工具并核对结果；工具忙时等待真实结果，及时完成本轮答复，避免没有新信息的空转。'),
     ('这是上限，现有6次模型迭代未必足够用满。',
-     '身体动作上限与12次模型迭代分别计数，不需要为了用满动作数继续行动。'),
+     '身体动作仍最多6个串行步骤，不限制模型思考次数；根据任务实际需要行动。'),
     ('需要在世界里开口时，使用 speak(turn_id,text,interrupt=false)',
      '需要给附近玩家配音时，使用 speak(turn_id,text,interrupt=false)'),
     ('现阶段使用本地已有男声，不能自称已经采用桐人原角色配音。',
@@ -52,6 +62,8 @@ def agent_text(folder, role, runtime, source):
     # Existing UUID-bound maids keep their generated identity and user additions.
     # Only replace the exact obsolete sentence, never reconstruct their persona.
     text = text.replace(OLD_MAID_FILE_TEXT, MAID_FILE_TEXT)
+    for old in OLD_MAID_MODEL_LIMITS:
+        text = text.replace(old, MAID_MODEL_POLICY)
     if '<!-- qiandeng-learning-v1 -->' not in text:
         text = text.rstrip() + LEARNING_NOTE
     if '<!-- qiandeng-native-skills-v1 -->' not in text:
@@ -93,7 +105,11 @@ def plan(state, runtime, source=HERE):
             assert path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 16384
             skill_references(name, source)
         jobs = read_safe(folder / 'jobs.json') if (folder / 'jobs.json').exists() else {'version': 2, 'jobs': []}
-        assert isinstance(jobs['jobs'], list) and all(job['id'] == 'qd-learning-' + role for job in jobs['jobs'])
+        from world_operations import JOB_ID, validate_world_job
+        assert isinstance(jobs['jobs'], list)
+        for job in jobs['jobs']:
+            if job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
+            else: assert job['id'] == 'qd-learning-' + role
         result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': 'qd-learning-' + role})
     return result
 
@@ -121,6 +137,7 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
     shutil.copyfile(state / 'config.json', backup / 'config.json')
     config = read_safe(state / 'config.json')
     config.setdefault('security', {}).setdefault('skill_scanner', {})['mode'] = 'block'
+    config['agents']['running'] = unrestricted_running(config['agents']['running'])
     write(state / 'config.json', config)
     for item in planned:
         role, names = item['role'], item['skills']
@@ -200,13 +217,15 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
         jobs_path = folder / 'jobs.json'
         jobs = read_safe(jobs_path) if jobs_path.exists() else {'version': 2, 'jobs': []}
         job = managed_job(role, runtime)
-        if jobs['jobs']:
-            prior = jobs['jobs'][0]
+        learning_jobs = [j for j in jobs['jobs'] if j['id'] == job['id']]
+        retained = [j for j in jobs['jobs'] if j['id'] != job['id']]
+        if learning_jobs:
+            prior = learning_jobs[0]
             # Keep a role's valid weekly schedule and opt-out across source sync.
             validate_jobs({'jobs': [prior]}, role, runtime)
             job['enabled'], job['schedule'] = prior['enabled'], deepcopy(prior['schedule'])
         normalized = CronJobSpec.model_validate(job).model_dump(mode='json', exclude_none=True)
-        new_jobs = JobsFile(jobs=[CronJobSpec.model_validate(normalized)]).model_dump(mode='json', exclude_none=True)
+        new_jobs = JobsFile(jobs=[CronJobSpec.model_validate(j) for j in [normalized, *retained]]).model_dump(mode='json', exclude_none=True)
         write(jobs_path, new_jobs)
         summary = validate_learning_workspace(folder, role, runtime, source)
         assert set(names) <= {skill.name for skill in service.list_available_skills()}

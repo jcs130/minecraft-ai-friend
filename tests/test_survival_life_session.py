@@ -158,8 +158,8 @@ class LifeSessionTests(unittest.TestCase):
         self.controller.tick()
         submitted = self.backend.submitted[0]
         context = json.loads(submitted['prompt'].split('\n', 1)[1])
-        self.assertIn('最多12次迭代', context['instruction'])
-        self.assertIn('预留最后2轮', context['instruction'])
+        self.assertNotIn('最多12次迭代', context['instruction'])
+        self.assertIn('及时保存必要记忆并给最终答复', context['instruction'])
         self.assertIn('说明未解决条件', context['instruction'])
         self.assertNotIn('party_send', context['instruction'])
         self.assertIsNone(submitted['requestContext'])

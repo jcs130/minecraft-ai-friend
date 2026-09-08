@@ -34,7 +34,7 @@ def api(method, path, role, body=None):
     return json.loads(value)
 
 
-def prepare(maid_uuid, *, apply=False, name='小灯', persona=None):
+def prepare(maid_uuid, *, apply=False, name='结衣', persona=None):
     if str(uuid.UUID(maid_uuid)) != maid_uuid:
         raise ValueError('invalid_maid_uuid')
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80 or any(c in name for c in '\0\r\n'):
@@ -59,10 +59,9 @@ def prepare(maid_uuid, *, apply=False, name='小灯', persona=None):
     if registry.path(maid_uuid).exists():
         maid = registry.ensure(identity)
     else:
-        maid = registry.ensure(identity, name=name, persona=persona or (
-            '你叫小灯，是桐人的旅行伙伴。你开朗、细心，也有自己的判断与好奇心。'
-            '愿意一起探索、准备营地、收集材料和照顾彼此，但会根据真实装备与能力提出分工或不同意见。'
-            '用简短自然的中文交流，把自己的发现和经验记在个人资料里。慢慢形成自己的偏好。'))
+        default_persona = read_json(ROOT / 'config/characters/sao.json')['yui']['persona'] if name == '结衣' else (
+            '你叫' + name + '，是桐人的旅行伙伴；根据真实观察与经历参与生活，形成自己的判断。')
+        maid = registry.ensure(identity, name=name, persona=persona or default_persona)
     root = ROOT / 'server/mcdata/village/party'
     config_path = root / 'binding.json'
     members = [dict(agentId='qd-survivor', bodyUuid=settings['bodyUuid'], ownerUuid=settings['ownerUuid'],
@@ -81,7 +80,7 @@ def prepare(maid_uuid, *, apply=False, name='小灯', persona=None):
         for m in members:
             m['mcpToken'] = secrets.token_urlsafe(48)
         config = {'schema': 1, 'enabled': True, 'partyId': 'kirito-travel-party', 'revision': 1,
-                  'members': members, 'limits': {'dailyDispatchCap': 24, 'cooldownSeconds': 60,
+                  'members': members, 'limits': {'dailyDispatchCap': None, 'cooldownSeconds': 0,
                     'maxPending': 16, 'maxTextChars': 160, 'maxTtlSeconds': 86400, 'maxMessages': 10000}}
         validate_binding(config)
         write_json(config_path, config)
@@ -146,6 +145,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--maid-uuid', required=True)
     parser.add_argument('--apply', choices=['qiandengji'])
-    parser.add_argument('--name', default='小灯')
+    parser.add_argument('--name', default='结衣')
     args = parser.parse_args()
     print(json.dumps(prepare(args.maid_uuid, apply=bool(args.apply), name=args.name), ensure_ascii=True))

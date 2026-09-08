@@ -8,11 +8,10 @@ import re
 
 from agent_learning import GAME_ROLES, OPS_ROLES, TOOL_NAMES, NAME, REV, LearningTools, managed_job
 from native_role_capabilities import configure_native, validate_native, validate_native_skills
+from llm_runtime_policy import unrestricted_running, validate_running
 
 HERE = Path(__file__).resolve().parent
 DRIVER = 'qd_learning'
-SURVIVOR_QPM = 8
-SURVIVOR_MAX_ITERS = 12
 TEXT_ROLES = {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}
 
 
@@ -88,16 +87,7 @@ def with_learning(agent, role, runtime):
     assert agent['id'] == role and role in roles(runtime)
     result = deepcopy(agent)
     result.setdefault('mcp', {}).setdefault('clients', {})[DRIVER] = learning_client(role, runtime)
-    if runtime == 'game' and role in TEXT_ROLES:
-        result['running']['max_iters'] = 3
-        result['running']['loop']['iteration'].update(enabled=True, max_iterations=3)
-    if runtime == 'game' and role == 'qd-survivor':
-        # World observations and tool receipts need room for a final answer.
-        # This is the model loop; the independent body lease still allows six actions.
-        result['running']['llm_max_qpm'] = SURVIVOR_QPM
-        result['running']['max_iters'] = SURVIVOR_MAX_ITERS
-        result['running'].setdefault('loop', {}).setdefault('iteration', {}).update(
-            enabled=True, max_iterations=SURVIVOR_MAX_ITERS)
+    result['running'] = unrestricted_running(result['running'])
     return configure_native(result, role)
 
 
@@ -108,19 +98,20 @@ def validate_learning_profile(agent, role, runtime):
     validate_native(agent, role)
     assert all(client.get(key) == value for key, value in expected.items())
     assert not client.get('url') and not client.get('headers') and not client.get('cwd')
-    if runtime == 'game' and role in TEXT_ROLES:
-        assert agent['running']['max_iters'] == 3
-        assert agent['running']['loop']['iteration']['max_iterations'] == 3
-    if runtime == 'game' and role == 'qd-survivor':
-        assert agent['running']['llm_max_qpm'] == SURVIVOR_QPM
-        assert agent['running']['max_iters'] == SURVIVOR_MAX_ITERS
-        assert agent['running']['loop']['iteration']['enabled'] is True
-        assert agent['running']['loop']['iteration']['max_iterations'] == SURVIVOR_MAX_ITERS
+    validate_running(agent['running'])
 
 
 def validate_jobs(value, role, runtime):
-    assert isinstance(value, dict) and isinstance(value.get('jobs'), list) and len(value['jobs']) == 1
-    actual = value['jobs'][0]
+    assert isinstance(value, dict) and isinstance(value.get('jobs'), list)
+    jobs = list(value['jobs'])
+    if runtime == 'operations':
+        from world_operations import JOB_ID, validate_world_job
+        daily = [j for j in jobs if j.get('id') == JOB_ID]
+        assert len(daily) <= 1
+        for row in daily: validate_world_job(row, role)
+        jobs = [j for j in jobs if j.get('id') != JOB_ID]
+    assert len(jobs) == 1
+    actual = jobs[0]
     expected = managed_job(role, runtime)
     assert actual['id'] == expected['id'] and actual['meta'] == expected['meta']
     assert type(actual['enabled']) is bool and actual['task_type'] == expected['task_type']
@@ -152,6 +143,7 @@ def validate_guard(state, runtime, proc=Path('/proc')):
     marker = read_safe(Path(state) / 'learning-runtime.json')
     assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == 1
     assert marker['nativeToolGuardVersion'] == 1
+    assert marker['llmPolicyVersion'] == 1
     assert marker['qwenVersion'] == '2.2.0' and marker['scheduler'] == 'native-qwen-cron'
     pid = marker['pid']
     assert type(pid) is int and pid > 0

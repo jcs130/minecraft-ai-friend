@@ -10,6 +10,7 @@ from pathlib import Path
 from operations_team_mcp import ROLES, role_tools
 from init_operations_runtime import pause_running
 from init_qwenpaw_runtime import write
+from llm_runtime_policy import disable_limits
 
 STATE = Path('/state')
 
@@ -17,13 +18,11 @@ STATE = Path('/state')
 def tune(running):
     pause_running(running)
     running.max_iters = 5
-    running.loop.iteration.enabled = True
-    running.loop.iteration.max_iterations = 5
     running.max_input_length = 24576
     running.llm_retry_enabled = False
     running.llm_max_concurrent = 1
-    running.llm_max_qpm = 6
     running.llm_acquire_timeout = 30
+    disable_limits(running)
 
 
 def upgrade():
@@ -85,9 +84,10 @@ def upgrade():
             (folder/name).write_text(Path('/ops/operations-team-policy.md').read_text(encoding='utf8'), encoding='utf8')
     report = {'schema': 1, 'project': 'qiandengji-ops', 'ok': True,
         'generatedAt': datetime.now(timezone.utc).isoformat(), 'packageVersion': '2.2.0',
-        'mode': 'manual', 'maxConcurrentModels': 1, 'maxQueriesPerMinute': 6,
-        'maxIterations': 5, 'automaticRetries': False, 'delegationCooldownSeconds': 1800,
-        'maxDelegationsPerDay': 4, 'scheduledJobs': 0, 'heartbeat': False,
+        'mode': 'manual', 'maxConcurrentModels': 1, 'maxQueriesPerMinute': None,
+        'maxIterations': None, 'automaticRetries': False, 'delegationCooldownSeconds': 0,
+        'maxDelegationsPerDay': None, 'scheduledJobs': 0, 'heartbeat': False,
+        'llmLimitPolicy': 'unrestricted',
         'roleSkills': skill_map, 'communicationBackend': 'qwenpaw-native-background-task',
         'builtinTools': 0, 'runtimeSkillLoader': 'AgentScope Skill', 'worldActionsAllowed': False}
     write(STATE/'upgrade-report.json', report)

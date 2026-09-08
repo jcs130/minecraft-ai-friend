@@ -102,7 +102,8 @@ export function projectParty(raw, now = Date.now()) {
   return { available: true, updatedAt, stale: ageSeconds < -5 || ageSeconds > 90, enabled: value.enabled,
     status: value.status, error: partyCode(value.error), members,
     counts: Object.fromEntries(partyMessageStates.map(key => [key, count(object(value.counts)[key])])),
-    budget: { reservedDispatches24h: count(budget.reservedDispatches24h), dailyDispatchCap: count(budget.dailyDispatchCap),
+    budget: { reservedDispatches24h: count(budget.reservedDispatches24h), dailyDispatchCap: budget.dailyDispatchCap === null ? null : count(budget.dailyDispatchCap),
+      unlimited: budget.dailyDispatchCap === null,
       remaining: count(budget.remaining), blocked: bool(budget.blocked), nextDispatchAt: partyStamp(budget.nextDispatchAt, 1000) },
     messages: list(value.messages).slice(0, 8).filter(row => partyMessageStates.includes(row?.status)).map(row => {
       const reply = object(row.reply), senderId = object(reply.sender).agentId;
@@ -261,7 +262,12 @@ export function projectSurvivor(raw, now = Date.now()) {
     gameSkills: survivorGameSkills(value.gameSkills), adventure: survivorAdventure(value.adventure),
     constructionAreasKnown: Array.isArray(value.constructionAreas), constructionAreas: survivorConstructionAreas(value.constructionAreas),
     guild: survivorGuild(value.guild, value.bodyUuid),
-    budgets: Object.fromEntries(['decisionsUsed', 'decisionLimit', 'cooldownSeconds', 'modelRequests', 'promptTokens', 'completionTokens'].map(key => [key, count(budgets[key])])),
+    budgets: { ...Object.fromEntries(['decisionsUsed', 'decisionLimit', 'cooldownSeconds', 'modelRequests', 'promptTokens', 'completionTokens'].map(key => [key, count(budgets[key])])),
+      decisionLimit: budgets.decisionLimit === null ? null : count(budgets.decisionLimit),
+      dailyPlanningLimit: budgets.dailyPlanningLimit === null ? null : count(budgets.dailyPlanningLimit),
+      inferenceLimitPolicy: budgets.inferenceLimitPolicy === 'unrestricted' ? 'unrestricted' : null,
+      decisionCountScope: budgets.decisionCountScope === 'rolling_24h' ? 'rolling_24h' : null,
+      unlimited: budgets.decisionLimit === null && budgets.inferenceLimitPolicy === 'unrestricted' },
     skills: list(value.skills).slice(0, 40).map(row => ({ name: text(row?.name, 80), description: text(row?.description, 400),
       activeVersion: optionalText(row?.activeVersion, 80), draftVersion: optionalText(row?.draftVersion, 80) })),
     episodes: list(value.episodes).slice(-12).map(row => ({ at: optionalText(row?.at, 64), kind: text(row?.kind, 60),

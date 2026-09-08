@@ -74,8 +74,14 @@ class GuildPlanner:
         saved = None
         if path.exists():
             saved = read_json(path)
-            if saved.get('bindings') != bindings:
+            previous_bindings = saved.get('bindings')
+            if (not isinstance(previous_bindings, dict) or not previous_bindings
+                    or any(bindings.get(k) != v for k, v in previous_bindings.items())):
                 return {'schema': 1, 'date': day, 'status': 'bindings_changed', 'quests': {}}
+            # Plans may have selected only then-online issuers. Additional
+            # currently eligible profiles cannot rewrite that fixed plan.
+            bindings = previous_bindings
+            people = [v for v in people if v['key'] in bindings]
             if saved.get('status') == 'completed':
                 try:
                     proposed = {'date': day, 'quests': [{k: q[k] for k in ('villager', 'item', 'count', 'emerald', 'pitch')}
@@ -141,10 +147,16 @@ class GuildPlanner:
 
 
 def collect_loop(npc):
-    """Supervised, read-only network polling in the existing NPC process."""
+    """Existing supervised worker: native task collection and owned requests."""
     planner = GuildPlanner(npc.VDIR)
     while True:
-        planner.collect_pending(npc.PROFILES)
+        try:
+            planner.collect_pending(npc.PROFILES)
+            if os.environ.get('NPC_WORLD_OPERATIONS_REQUESTS'):
+                from world_operations_consumer import tick
+                tick(npc, planner)
+        except Exception as exc:
+            print('[guild-agent] collection unavailable:', type(exc).__name__, flush=True)
         time.sleep(45)
 
 

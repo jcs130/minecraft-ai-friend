@@ -8,6 +8,7 @@ import urllib.request
 from operations_team_mcp import ROLES, TOOLS, role_tools
 from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
+from llm_runtime_policy import validate_running
 
 
 def check_passwordless_auth(get):
@@ -35,9 +36,10 @@ def main():
     assert cfg['agents']['running']['reme_light_memory_config']['dream_cron_enabled'] is False
     def budget(running):
         assert running['llm_retry_enabled'] is False and running['llm_max_concurrent']==1
-        assert running['llm_max_qpm']==6 and running['max_iters']==5
-        assert running['loop']['iteration']['enabled'] and running['loop']['iteration']['max_iterations']==5
+        validate_running(running)
     budget(cfg['agents']['running'])
+    automatic_jobs = 0
+    daily_jobs = 0
     for role in ROLES:
         folder=Path('/state/work/workspaces')/role
         profile=json.loads((folder/'agent.json').read_text())
@@ -67,13 +69,17 @@ def main():
         assert set(TOOL_NAMES) <= {row.get('name') for row in get('/mcp/tools/qd_learning', role=role) if row.get('enabled') is True}
         assert set(skill_map[role]) | set(NATIVE_SKILLS) <= {row['name'] for row in get('/skills', role=role) if row.get('enabled') is True}
         jobs = get('/cron/jobs', role=role)
-        validate_jobs({'jobs': [row.get('spec', row) for row in (jobs if isinstance(jobs, list) else jobs['jobs'])]}, role, 'operations')
+        specs = [row.get('spec', row) for row in (jobs if isinstance(jobs, list) else jobs['jobs'])]
+        validate_jobs({'jobs': specs}, role, 'operations')
+        automatic_jobs += len(specs)
+        daily_jobs += sum(row['id'] == 'qd-world-daily-default' for row in specs)
     print(json.dumps({'ok':True,'project':'qiandengji-ops','packageVersion':'2.2.0','roles':6,'authEnforced':False,
         'authMode':'local-passwordless','authEnabled':False,'anonymousAccess':True,
         'installedSkillBindings':sum(map(len,skill_map.values())) + len(NATIVE_SKILLS) * len(ROLES), 'rateLimitVerified':True, 'driverPolicyVerified':True,
         'builtinTools':len(NATIVE_TOOLS), 'nativeToolPolicyVerified': True, 'officialSkillBindings':len(NATIVE_SKILLS) * len(ROLES),
-        'mcpTools':list(TOOLS),'learningMcpTools':len(TOOL_NAMES),'automaticJobs':6,
-        'managedWeeklyJobs':6,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
+        'mcpTools':list(TOOLS),'learningMcpTools':len(TOOL_NAMES),'automaticJobs':automatic_jobs,
+        'managedWeeklyJobs':6,'managedDailyJobs':daily_jobs,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
+        'llmLimitPolicy':'unrestricted', 'llmPolicyVerified':True,
         'scope':'Native enabled role skills, managed cron and fixed MCP policy; model/tool execution has separate evidence'}))
 
 

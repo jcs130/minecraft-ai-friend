@@ -170,6 +170,8 @@ services:
       NPC_GUILD_QUEUE: /world-data/guild-cli
       NPC_LLM_ENABLED: "0"
       NPC_GUILD_AGENT_ENABLED: "1"
+      NPC_WORLD_OPERATIONS_REQUESTS: /ops-world-requests
+      NPC_WORLD_PLANNING_PUBLIC: /party-public/world-planning.json
       MAID_AGENT_ENABLED: "1"
       MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
       MAID_IDENTITY_KEY_FILE: /run/secrets/maid-identity
@@ -182,6 +184,7 @@ services:
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
+      - ./server/operations-agent-state/work/operations/world-requests:/ops-world-requests:ro
       - ./tools/npc_health.py:/opt/npc_health.py:ro
       - ./tools/register_maid_agents.py:/opt/register_maid_agents.py:ro
       - ./world/ops:/opt/ops:ro
@@ -290,7 +293,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd11
+    image: qiandengji-survivor:2.2.0-qd12
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
@@ -339,7 +342,9 @@ services:
       mc:
         condition: service_healthy
       qwenpaw:
-        condition: service_healthy
+        # Qwen's full health probes this service's MCP. Start the body service
+        # first; its existing readiness gate prevents inference before tools load.
+        condition: service_started
     mem_limit: 2g
     cpus: 2
     pids_limit: 160

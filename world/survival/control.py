@@ -2,7 +2,7 @@
 import argparse
 import time
 from pathlib import Path
-from numen_gateway import action_lock, read_json, write_json
+from numen_gateway import action_lock, read_json, read_controller_json, write_json
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
         elif args.action == 'resume':
             if (state / 'unknown.json').exists():
                 raise ValueError('Reconcile the recorded uncertain action before resuming')
-            current = read_json(state / 'controller.json')
+            current = read_controller_json(state / 'controller.json')
             if current.get('active'):
                 raise ValueError('Wait for native task cancellation before resuming')
             job = read_json(state / 'skill-job.json') if (state / 'skill-job.json').exists() else {}

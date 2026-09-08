@@ -33,6 +33,12 @@ class SurvivorParty:
             raise ValueError('party_delivery_unresolved')
         return self.queue.next_pending('qd-survivor')
 
+    def heard_replies(self):
+        return self.queue.heard_replies('qd-survivor') if self.config.configured() else []
+
+    def consume_replies(self, event_ids, task_id):
+        return self.queue.consume_replies('qd-survivor', event_ids, task_id)
+
     def validate_session(self, session, settings, reservation=None):
         if not self.config.configured():
             return True

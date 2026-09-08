@@ -59,7 +59,7 @@ class BindingTests(unittest.TestCase):
             llm = Mock(return_value={})
             namespace = {'os': os, 'random': random.Random(1), 'CFG': {'quests': {'per_villager_chance': 1, 'daily_cap': 12}},
                          'PROFILES': [good,invalid,unbound], 'quests_path': lambda day: Path(tmp)/(day+'.json'),
-                         'qwen_quests': llm, 'print': lambda *a, **kw: None}
+                         'qwen_quests': llm, 'alive_pos':lambda _: [0,64,0], 'print': lambda *a, **kw: None}
             exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
             doc = namespace['gen_quests']('2026-09-09')
             self.assertEqual([q['villager'] for q in doc['quests']], ['jingshui'])

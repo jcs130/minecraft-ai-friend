@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from functools import wraps
 from guild_requests import atomic_json, near_npc
 import guild_inventory as inventory
-from npc_identity import contract_issuer
+from npc_identity import contract_issuer, valid_position
 import guild_rules as Rules
 import mc_npc as N  # 复用 RCON/tellraw/villagers/feed/chronicle 基建
 
@@ -255,6 +255,9 @@ def gen_board(day):
     doc = {"date": day, "board": []}
     board = doc["board"]
     profiles = {v['key']: v for v in N.PROFILES}
+    def online_issuer(key, kind):
+        person = profiles.get(key)
+        return contract_issuer(person, kind) and valid_position(N.alive_pos(person))
     if not contract_issuer(profiles.get('guild_lan'), 'reception'):
         doc['availability'] = {'ok': False, 'reason': 'no_bound_qualified_receptionist', 'requiresLoadedChunk': False}
         save_board(doc)
@@ -266,7 +269,7 @@ def gen_board(day):
     except Exception:
         qs = []
     for q in qs:
-        if q.get('done') or not contract_issuer(profiles.get(q.get('villager')), 'gather'):
+        if q.get('done') or not online_issuer(q.get('villager'), 'gather'):
             continue
         board.append({"no": no, "type": "gather", "rank": 0, "qid": q["id"], "from": q["villager"], "display": q["display"],
                       "title": "收购·%s" % q["zh"], "item": q["item"], "zh": q["zh"], "count": q["count"],
@@ -284,7 +287,7 @@ def gen_board(day):
     for t in pool:
         if picked >= hunt_cap or t["from"] in used_from:
             continue
-        if not contract_issuer(profiles.get(t['from']), 'hunt'):
+        if not online_issuer(t['from'], 'hunt'):
             continue
         used_from.add(t["from"])
         v = next(v for v in N.PROFILES if v["key"] == t["from"])
@@ -298,7 +301,7 @@ def gen_board(day):
         no += 1
         picked += 1
     # —— 朝圣
-    for s in (pick_visits(day) if contract_issuer(profiles.get('jingshui'), 'visit') else []):
+    for s in (pick_visits(day) if online_issuer('jingshui', 'visit') else []):
         board.append({"no": no, "type": "visit", "spot": s["spot"], "rank": 0, "from": "jingshui", "display": "神官·静水",
                       "title": "朝圣·%s" % s["zh"], "zh": s["zh"], "pos": s["pos"], "r": s["r"],
                       "reward": s["reward"], "fame": s["fame"], "pitch": s["desc"],

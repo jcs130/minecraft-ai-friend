@@ -29,6 +29,9 @@ class SurvivorHealthTests(unittest.TestCase):
                      'name': None, 'nextCheckAt': None, 'steps': 0, 'observations': 0, 'requiresModelPerStep': False},
             'slow': {'owner': 'qwenpaw', 'active': False, 'status': 'observing',
                      'readiness': {'ready': True, 'checkedAt': self.now * 1000, 'warning': None}}}
+        self.source['budgets'] = {'decisionsUsed': 106, 'decisionLimit': None, 'dailyPlanningLimit': None,
+            'inferenceLimitPolicy': 'unrestricted', 'decisionCountScope': 'rolling_24h', 'cooldownSeconds': 0}
+        self.settings = {'dailyPlanningLimit': None, 'decisionCooldownSeconds': 0}
         self.heartbeat = {'schema': 1, 'ok': True, 'at': self.now * 1000, 'fastSystemProtocol': 1}
         self.fast_report = {'schema': 1, 'project': 'qiandengji', 'fastSystemProtocol': 1,
             'ok': True, 'finishedAt': self.source['generatedAt'],
@@ -42,6 +45,7 @@ class SurvivorHealthTests(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.source), encoding='utf-8')
         for name, value in [('server/survival-agent-state/survival/heartbeat.json', self.heartbeat),
+                            ('server/survival-agent-state/survival/settings.json', self.settings),
                             ('reports/survivor-fast-system-smoke.json', self.fast_report)]:
             path = self.root / name
             if value is None:
@@ -96,6 +100,27 @@ class SurvivorHealthTests(unittest.TestCase):
     def test_manifest_tracks_only_dedicated_survivor(self):
         self.assertIn('survivor', health.MANIFEST)
         self.assertIn('autonomous-task-evidence', health.SURVIVOR_SMOKE_CHECKS)
+
+    def test_missing_or_artificial_large_limits_cannot_claim_unrestricted(self):
+        for settings in ({'decisionsPerDay': 96, 'decisionCooldownSeconds': 180},
+                         {'dailyPlanningLimit': 999999, 'decisionCooldownSeconds': 0},
+                         {'dailyPlanningLimit': 0, 'decisionCooldownSeconds': 0},
+                         {'dailyPlanningLimit': None, 'decisionCooldownSeconds': False},
+                         {'dailyPlanningLimit': None, 'decisionCooldownSeconds': 180}):
+            with self.subTest(settings=settings):
+                self.settings = settings
+                self.assertFalse(self.probe()['checks']['inference_limits_unrestricted'])
+
+    def test_old_or_coerced_budget_projection_cannot_hide_actual_policy(self):
+        original = dict(self.source['budgets'])
+        for changed in ({'decisionLimit': 0}, {'dailyPlanningLimit': 96}, {'cooldownSeconds': 180},
+                        {'decisionCountScope': 'recent_100'}, {'decisionsUsed': True}):
+            with self.subTest(changed=changed):
+                self.source['budgets'] = {**original, **changed}
+                self.assertFalse(self.probe()['checks']['inference_limits_unrestricted'])
+        self.source['budgets'] = original
+        public = {'available': True, 'stale': False, **self.source, 'budgets': {**original, 'decisionLimit': 0}}
+        self.assertFalse(self.probe(public=public)['checks']['inference_limits_unrestricted'])
 
     def test_old_autonomy_evidence_cannot_stand_in_for_new_adventure_validation(self):
         self.assertFalse(self.probe(adventure=False)['ok'])

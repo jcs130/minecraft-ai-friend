@@ -201,6 +201,18 @@ def probe_model_routing():
         return {'ok': False, 'error': 'Model routing could not be verified; no model task was submitted'}
 
 
+def probe_world_operations():
+    """Read native cron and NPC planner evidence without triggering either."""
+    try:
+        source=PROJECT/'tools/world_operations_health.py'
+        spec=importlib.util.spec_from_file_location('qd_world_operations_health',source)
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(root=PROJECT)
+    except (OSError,ValueError,KeyError,TypeError,ImportError):
+        return {'ok':False,'error':'World daily operations evidence unavailable','modelRequests':0,'worldActions':0}
+
+
 def probe_survivor_fast_behavior():
     """A current protocol needs its own bounded evidence, not the old smoke."""
     filename = 'survivor-fast-system-smoke.json'
@@ -240,7 +252,8 @@ def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
               'adventure_projection': False, 'no_unexpected_pause': False,
-              'execution_systems': False, 'fast_system_protocol': False}
+              'execution_systems': False, 'fast_system_protocol': False,
+              'inference_limits_unrestricted': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
         if target.is_symlink() or target.stat().st_size > 262144:
@@ -293,6 +306,21 @@ def probe_survivor():
         if len(payload) > 2097152:
             raise ValueError('oversized_panel')
         public = json.loads(payload).get('survivor', {})
+        settings_path = PROJECT / 'server/survival-agent-state/survival/settings.json'
+        if not settings_path.is_symlink() and settings_path.stat().st_size <= 262144:
+            settings = json.loads(settings_path.read_text(encoding='utf-8-sig'))
+            budgets, visible_budgets = source.get('budgets', {}), public.get('budgets', {})
+            checks['inference_limits_unrestricted'] = (
+                'dailyPlanningLimit' in settings and settings['dailyPlanningLimit'] is None
+                and type(settings.get('decisionCooldownSeconds')) in (int, float)
+                and settings['decisionCooldownSeconds'] == 0
+                and all(isinstance(row, dict) and row.get('inferenceLimitPolicy') == 'unrestricted'
+                    and 'decisionLimit' in row and row['decisionLimit'] is None
+                    and 'dailyPlanningLimit' in row and row['dailyPlanningLimit'] is None
+                    and type(row.get('cooldownSeconds')) in (int, float) and row['cooldownSeconds'] == 0
+                    and row.get('decisionCountScope') == 'rolling_24h'
+                    and type(row.get('decisionsUsed')) is int and row['decisionsUsed'] >= 0
+                    for row in (budgets, visible_budgets)))
         checks['panel_projection'] = (public.get('available') is True and public.get('stale') is False
             and public.get('character') == '桐人' and public.get('bodyName') == 'Kirito'
             and abs((operations_time(public.get('generatedAt')) - timestamp).total_seconds()) < 30)
@@ -1274,7 +1302,8 @@ def main_locked():
                   "advancement:find_thornborn_towers", "advancement:find_fishing_hut", "exploration-position-parser")),
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
-              "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge()}
+              "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
+              "world_operations": probe_world_operations()}
     report["ok"] = all(v["ok"] for v in report.values() if isinstance(v, dict) and "ok" in v)
     report["scope"] = "Service readiness and the exercised core gameplay paths; not an exhaustive content audit"
     report["unverified"] = ["Legacy NPC trade profiles", "Physical controller input", "Physical microphone input and audible playback", "Agent offscreen WebGL visual perception", "Dormant original character bodies in live play (model appearance verified on temporary Numen bodies)"]

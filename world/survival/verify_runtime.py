@@ -11,11 +11,12 @@ import re
 import socket
 
 from init_runtime import STATE, SOURCE, PROJECT, ROLE, DRIVER, TOOL_NAMES, MODEL_MAX_ITERS, MODEL_QPM
+from llm_runtime_policy import validate_running
 
 
 def verify_running(running):
-    assert running.max_iters == MODEL_MAX_ITERS and running.loop.iteration.enabled
-    assert running.loop.iteration.max_iterations == MODEL_MAX_ITERS and running.max_input_length == 16384
+    validate_running(running)
+    assert running.max_input_length == 16384
     assert not running.llm_retry_enabled and running.llm_max_retries == 1
     assert running.llm_max_concurrent == 1 and running.llm_max_qpm == MODEL_QPM
     assert not running.auto_title_config.enabled

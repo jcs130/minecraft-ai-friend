@@ -65,7 +65,7 @@ def main():
 
     @app.tool()
     def learning_schedule(enabled: bool | None = None, weekday: str | None = None, hour: int | None = None) -> dict:
-        """View or edit your one native weekly learning job, Asia/Shanghai. Ops reviews share 4/day budget; game maintenance has zero model calls. No immediate-run bypass."""
+        """View or edit your one native weekly learning job, Asia/Shanghai. No artificial model-call quota; role execution stays serial and game maintenance has zero model calls. No immediate-run bypass."""
         return call(tools.schedule, enabled, weekday, hour)
 
     app.run(transport='stdio')

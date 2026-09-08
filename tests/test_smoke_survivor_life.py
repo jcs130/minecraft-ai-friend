@@ -103,6 +103,15 @@ class SurvivorLifeSmokeTests(unittest.TestCase):
         self.assertFalse(self.check(result, 'same-session-after-live-restart')['required'])
         self.assertNotIn('/console/chat/task/task-old', self.calls)
 
+    def test_unrestricted_policy_is_null_and_usage_evidence_remains_real(self):
+        self.settings.update(dailyPlanningLimit=None, decisionCooldownSeconds=0)
+        self.write('settings.json', self.settings)
+        self.new_tasks()
+        result = self.collect()
+        self.assertEqual(result['configuredBudget'], {'dailyPlanningLimit': None,
+            'decisionCooldownSeconds': 0, 'inferenceLimitPolicy': 'unrestricted'})
+        self.assertEqual(self.check(result, 'native-model-usage-delta')['evidence']['delta']['modelRequests'], 4)
+
     def test_old_turns_and_local_completed_flags_cannot_fake_new_native_work(self):
         self.tasks['task-old'] = {'status': 'finished', 'result': {'status': 'completed', 'session_id': SESSION}}
         report = self.collect()

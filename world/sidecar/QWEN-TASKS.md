@@ -4,13 +4,13 @@
 
 固定路由来自只读 `/etc/qiandeng/model-task-routes.json`：
 
-| 用途 | QwenPaw 角色 | 全用途共享的滚动预算 |
+| 用途 | QwenPaw 角色 | 当前调用策略 |
 | --- | --- | --- |
-| `npc_dialogue` | `qd-villager-dialogue` | 4 次 / 24 小时，间隔 300 秒 |
-| `guild_quest` | `qd-guild-planner` | 整批 1 次 / 24 小时 |
-| `maid_dialogue` | `qd-maid-dialogue` | 12 次 / 24 小时，间隔 60 秒 |
+| `npc_dialogue` | `qd-villager-dialogue` | 无人工次数额度，按真实对话需求 |
+| `guild_quest` | `qd-guild-planner` | 无人工次数额度，同日请求仍幂等 |
+| `maid_dialogue` | 独立绑定角色，模板 `qd-maid-dialogue` | 无人工次数额度，同角色串行 |
 
-多个村民或女仆共用对应预算，不能按身体或新会话翻倍。三个用途共用活动任务限制。计费提交前持久预留，记录保存在 `/mcdata/village/qwen-tasks`；POST 结果未知不会自动重发。原生任务状态只读轮询，间隔至少 10 秒。相同用途和请求键只接受相同正文摘要；不能用相同键偷偷换问题。角色自己的并发、QPM、迭代限制仍由 QwenPaw 执行。
+当前功能阶段 `dailyLimit:null`、`cooldownSeconds:0`。三个用途按独立角色串行，互不因共享冷却阻塞。提交前持久预留，记录保存在 `/mcdata/village/qwen-tasks`；未知 POST 不会随 24 小时统计窗口过期而释放执行门，也不会自动重发。旧任务没有 active 索引时从持久请求恢复，重叠未决任务需核对。原生任务状态只读轮询，间隔至少 10 秒。相同用途和请求键只接受相同正文摘要。Qwen 并发 1、本地 QPM 0、迭代 gate 关闭；供应商实际限流、超时、身体行动和消息容量检查仍有效。
 
 `NPC_LLM_ENABLED=0` 保持普通村民闲聊为模板。即便另行启用，未取得已完成回答也只用模板；异步回答留在原生任务中，后续相同请求可读取，不让主循环等待推理，也不回退到供应商。每次任务显式附本村民的人设与有界本地回忆，保留原轨迹文件。
 

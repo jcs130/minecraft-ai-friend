@@ -352,7 +352,8 @@ class LearningTools:
             job['schedule']['cron'] = f'20 {hour} * * {weekday}'
         path = '/cron/jobs/' + job['id']
         if enabled is None and weekday is None and hour is None:
-            return {'ok': True, 'job': self.api(self.role, 'GET', path), 'budget': 'operations shared 4/24h; game maintenance zero model'}
+            return {'ok': True, 'job': self.api(self.role, 'GET', path),
+                    'budget': 'no artificial model-call quota; serial role execution; game maintenance zero model'}
         current = self.api(self.role, 'GET', path)
         if enabled is not None: job['enabled'] = enabled
         else: job['enabled'] = current['spec']['enabled']

@@ -473,7 +473,7 @@ function renderParty(data) {
     : '记录更新：' + formatDate(value.updatedAt) + (stale ? '。已超过 90 秒或连接中断，以下为历史记录。' : '。');
   const members = rows(value.members), memberNames = new Map(members.map(member => [member.agentId, member.displayName]));
   replace('survivor-party-members', members.map(member => node('span', 'chip',
-    text(member.displayName, '名称待设置') + ' · ' + (member.kind === 'maid' ? '女仆伙伴' : '冒险者')))
+    text(member.displayName, '名称待设置') + ' · ' + (member.kind === 'maid' ? '冒险伙伴' : '冒险者')))
     .concat(members.length ? [] : [empty('队员尚未登记。')]));
   const messages = rows(value.messages), lastDetail = messages.find(message => message.detail)?.detail;
   byId('survivor-party-reason').textContent = !available || unconfigured ? '配置完成后可查看两位队员的交流与等待原因。'
@@ -484,11 +484,11 @@ function renderParty(data) {
     : counts.unknown > 0 ? reasons.submission_not_confirmed
     : lastDetail && reasons[lastDetail] ? reasons[lastDetail]
     : counts.pending > 0 ? '队友已在游戏中听见说话，等待空闲或额度来思考回应。'
-    : counts.submitted > 0 ? '队友正在回应已经听见的话。' : '两人在同一世界的 24 格内交谈；女仆的游戏内私聊接入仍在完善。';
+    : counts.submitted > 0 ? '队友正在回应已经听见的话。' : '两人在同一世界的 24 格内交谈；回复会留在感知中，下一次思考时读取。';
   if (available) facts('survivor-party-counts', [
     ['交流队列', ['pending', 'unknown', 'submitted'].map(key => labels[key] + ' ' + number(counts[key])).join(' · ')],
     ['近期记录', ['answered', 'expired', 'failed'].map(key => labels[key] + ' ' + number(counts[key])).join(' · ')],
-    ['近 24 小时对话思考', number(budget.reservedDispatches24h) + ' / ' + number(budget.dailyDispatchCap) + ' · 剩余 ' + number(budget.remaining)],
+    ['近 24 小时对话思考', number(budget.reservedDispatches24h) + (budget.unlimited === true ? ' · 不设调用额度' : ' / ' + number(budget.dailyDispatchCap) + ' · 剩余 ' + number(budget.remaining))],
   ]); else replace('survivor-party-counts', []);
   replace('survivor-party-messages', messages.map(message => {
     const item = node('article', 'party-message'), heading = node('div', 'operations-heading');
@@ -518,7 +518,8 @@ function renderSurvivor(data) {
   const value = record(data.survivor), body = record(value.body), budgets = record(value.budgets);
   const stale = value.available !== true || value.stale === true;
   const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
-    cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止' };
+    cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止',
+    observation_wait: '等待世界状态恢复', party_wait: '等待队伍任务', party_reply_wait: '核对回复送达', action_confirmation_wait: '核对动作结果' };
   const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备', game_cast: '施法', game_learn: '参悟技能',
     place_block: '放置', farm: '耕作', open_container: '打开容器', transfer_items: '存取物品', close_container: '关闭容器',
     sleep: '休息', trade: '村民交易', guild_claim: '接取委托', guild_deliver: '交付委托', guild_release: '退回委托' };
@@ -559,8 +560,8 @@ function renderSurvivor(data) {
   const inventory = Object.entries(record(body.counts));
   if (inventory.length) facts('survivor-inventory', inventory.map(([id, n]) => [id, number(n)]));
   else replace('survivor-inventory', [empty(body.online === true ? '背包暂时没有物品记录。' : '等待身体连接后读取。')]);
-  facts('survivor-budgets', [['近24小时决策', number(budgets.decisionsUsed) + ' / ' + number(budgets.decisionLimit)],
-    ['决策间隔', number(budgets.cooldownSeconds) + ' 秒'], ['累计模型请求', number(budgets.modelRequests)],
+  facts('survivor-budgets', [['近24小时决策', number(budgets.decisionsUsed) + (budgets.unlimited === true ? ' · 不设调用额度' : ' / ' + number(budgets.decisionLimit))],
+    ['决策间隔', budgets.cooldownSeconds === 0 ? '无人工冷却，按事件和复盘运行' : number(budgets.cooldownSeconds) + ' 秒'], ['累计模型请求', number(budgets.modelRequests)],
     ['累计输入 / 输出 Token', number(budgets.promptTokens) + ' / ' + number(budgets.completionTokens)]]);
   renderSurvivorGameSkills(value.gameSkills, body);
   renderSurvivorLife(value, stale);

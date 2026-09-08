@@ -18,6 +18,17 @@ const fixture = (now = Date.now()) => ({ schema: 1, updatedAt: now, enabled: tru
     sender: {agentId: 'qd-survivor'}, worldDelivery: hearing(now),
     reply: {text: '我会先检查食物和工具。', createdAt: now / 1000, sender: {agentId: 'dynamic-maid-fixture'}, worldDelivery: hearing(now)}}] });
 
+test('unlimited party quota is distinct from absent usage and preserves the recorded count', () => {
+  const raw = fixture();
+  raw.budget.dailyDispatchCap = null; raw.budget.remaining = null;
+  const value = projectParty(raw);
+  assert.equal(value.budget.unlimited, true);
+  assert.equal(value.budget.dailyDispatchCap, null);
+  assert.equal(value.budget.reservedDispatches24h, 2);
+  delete raw.budget.dailyDispatchCap;
+  assert.equal(projectParty(raw).budget.unlimited, false);
+});
+
 test('party projection hides routing and credentials while retaining names, bounded dialogue and counts', () => {
   const raw = fixture(), secret = 'PRIVATE_SENTINEL';
   raw.token = secret; raw.sessionId = secret; raw.members[0].sessionId = secret; raw.members[0].mcpToken = secret;

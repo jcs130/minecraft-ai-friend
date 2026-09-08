@@ -1,6 +1,7 @@
 """Shared, credential-free contract for the text-only game-world roles."""
 from copy import deepcopy
 from role_learning_profiles import with_learning, validate_learning_profile, validate_learning_workspace
+from llm_runtime_policy import unrestricted_running, validate_running
 
 WORLD_ROLES = ('qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue')
 GAME_ROLES = {'mc-god', 'mc-herald', 'qd-survivor', *WORLD_ROLES}
@@ -38,8 +39,8 @@ def closed_profile(original, role, learning=True):
     running = result['running']
     iterations = 3 if learning else 1
     running.update(max_iters=iterations, max_input_length=12000, llm_retry_enabled=False, llm_max_retries=1,
-                   llm_max_concurrent=1, llm_max_qpm=4)
-    running['loop']['iteration'].update(enabled=True, max_iterations=iterations)
+                   llm_max_concurrent=1, llm_max_qpm=0)
+    result['running'] = running = unrestricted_running(running)
     running['light_context_config']['strategy'] = 'native'
     running['light_context_config']['visual_compact_config']['enabled'] = False
     running['auto_title_config']['enabled'] = False
@@ -80,8 +81,8 @@ def validate_profile(agent, role, learning=True):
     assert not agent['security']['allow_no_auth_hosts']
     assert_quiet(agent['running'])
     running = agent['running']
-    assert running['max_iters'] == (3 if learning else 1) and running['max_input_length'] == 12000
-    assert running['llm_max_concurrent'] == 1 and running['llm_max_qpm'] == 4
+    assert running['max_input_length'] == 12000
+    validate_running(running)
     assert running['llm_retry_enabled'] is False and running['llm_max_retries'] == 1
     assert running['reme_light_memory_config'].get('inbox_push_enabled', False) is False
     active = agent['active_model']

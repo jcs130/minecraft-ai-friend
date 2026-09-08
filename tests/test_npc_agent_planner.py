@@ -91,8 +91,7 @@ class PlannerTests(unittest.TestCase):
             factory.assert_called_once()
             self.assertEqual(plan.call_args_list[0].args,(self.day,[self.person]))
             self.assertEqual(plan.call_args_list[0].kwargs,{'submit':False})
-            self.assertEqual(plan.call_args_list[1].args,('2026-09-10',[self.person]))
-            self.assertEqual(plan.call_args_list[1].kwargs,{'submit':True})
+            self.assertEqual(plan.call_count,1, 'Only native operations requests start new future plans')
 
     def test_existing_valid_plan_is_not_lost_when_next_day_qwen_is_unavailable(self):
         source=ROOT/'world/sidecar/mc_npc.py'

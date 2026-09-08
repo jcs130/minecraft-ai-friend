@@ -174,7 +174,11 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertIsNone(self.bridge.queue.next_pending('qd-survivor'))
 
     def test_role_budget_wait_is_deferred_without_duplicate_reservation(self):
-        write_json(self.tasks.root / 'budget.json', [{'purpose': 'maid_dialogue', 'startedAt': self.now - 1}] * LIMITS['maid_dialogue'][0])
+        # An explicitly configured quota remains supported; default is unlimited.
+        from unittest.mock import patch
+        limiter = patch.dict(LIMITS, {'maid_dialogue': (1, 60)})
+        limiter.start(); self.addCleanup(limiter.stop)
+        write_json(self.tasks.root / 'budget.json', [{'purpose': 'maid_dialogue', 'startedAt': self.now - 1}])
         row = self.bridge.call('qd-survivor', 'party_send', {'text': 'test'}, 'one')
         self.bridge.tick()
         self.bridge.tick()

@@ -10,7 +10,7 @@ import re
 import time
 import uuid
 
-from numen_gateway import GatewayError, action_lock, read_json, write_json
+from numen_gateway import GatewayError, action_lock, read_json, read_controller_json, write_json
 
 PREFIX = 'QD_NUMEN_RESTORE_JSON '
 CAPABILITY = 'existing_body_restore_v1'
@@ -123,7 +123,7 @@ class BodyReconnect:
         now = self.clock()
         # Recheck authorization under the same lock as every game action.
         control = read_json(self.root/'control.json')
-        controller = read_json(self.root/'controller.json') if (self.root/'controller.json').exists() else {}
+        controller = read_controller_json(self.root/'controller.json') if (self.root/'controller.json').exists() else {}
         lease = read_json(self.root/'lease.json') if (self.root/'lease.json').exists() else {}
         if (control.get('enabled') is not True or controller.get('active')
                 or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'

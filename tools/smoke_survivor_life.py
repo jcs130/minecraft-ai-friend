@@ -342,7 +342,11 @@ def collect(state, before, get, clock=time.time):
         'tasks': tasks, 'actionReceipts': receipts, 'readErrors': errors,
         'controller': {'status': controller.get('status'), 'pauseReason': controller.get('pauseReason'),
                        'activeTaskId': (controller.get('active') or {}).get('taskId')},
-        'configuredBudget': {k: settings.get(k) for k in ('decisionsPerDay', 'decisionCooldownSeconds')},
+        'configuredBudget': {
+            'dailyPlanningLimit': settings.get('dailyPlanningLimit', settings.get('decisionsPerDay')),
+            'decisionCooldownSeconds': settings.get('decisionCooldownSeconds'),
+            'inferenceLimitPolicy': ('unrestricted' if settings.get('dailyPlanningLimit',
+                settings.get('decisionsPerDay')) is None else 'bounded')},
         'sourceHashes': source_hashes(), 'modelTasksSubmittedByProbe': 0, 'worldActionsByProbe': 0,
         'productionFilesChangedByProbe': 0,
         'limitations': ['No physical gameplay claim beyond the recorded receipts.',

@@ -67,7 +67,9 @@ class NativeTaskTests(unittest.TestCase):
         clone = QwenTasks(self.client.root, self.routes, transport=Mock(side_effect=AssertionError('must not POST')), clock=lambda: self.now)
         self.assertEqual(clone.submit('guild_quest', 'tomorrow', 'q')['status'], 'submission_uncertain')
         self.now += 500
-        self.assertEqual(self.client.submit('guild_quest', 'different-day', 'q')['status'], 'budget_blocked')
+        self.assertEqual(self.client.submit('guild_quest', 'different-day', 'q')['status'], 'busy')
+        self.now += 86401
+        self.assertEqual(clone.submit('guild_quest', 'after-24h', 'q')['status'], 'busy')
 
     def test_native_failure_and_missing_task_never_produce_answer_or_trigger_post(self):
         self.client.submit('npc_dialogue', 'a', 'q')
@@ -76,28 +78,31 @@ class NativeTaskTests(unittest.TestCase):
         self.assertEqual(self.client.poll('npc_dialogue', 'absent')['status'], 'not_submitted')
         self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
 
-    def test_shared_reservation_blocks_other_purpose_until_terminal_or_native_deadline(self):
+    def test_unrelated_roles_do_not_block_each_other_but_same_role_stays_serial(self):
         self.client.submit('npc_dialogue', 'a', 'q')
-        self.assertEqual(self.client.submit('guild_quest', 'day', 'q')['status'], 'busy')
-        self.client.poll('npc_dialogue', 'a')
         self.assertEqual(self.client.submit('guild_quest', 'day', 'q')['status'], 'submitted')
+        self.response = {'status': 'running'}
+        self.now += 90000
+        self.assertEqual(self.client.submit('npc_dialogue', 'b', 'q')['status'], 'busy')
+        self.response = completed()
+        self.now += 11
+        self.client.poll('npc_dialogue', 'a')
+        self.assertEqual(self.client.submit('npc_dialogue', 'b', 'q')['status'], 'submitted')
 
-    def test_dialogue_and_maid_budget_counts_all_subjects_within_each_purpose(self):
-        for purpose, cap, interval in [('npc_dialogue',4,300), ('maid_dialogue',24,60)]:
-            for i in range(cap):
+    def test_unlimited_purposes_keep_usage_without_a_cooldown_or_daily_cap(self):
+        for purpose in ROLES:
+            self.assertEqual(LIMITS[purpose], (None, 0))
+            for i in range(30):
                 row = self.client.submit(purpose, 'different-npc-' + str(i), 'q')
                 self.assertEqual(row['status'], 'submitted')
                 self.client.poll(purpose, 'different-npc-' + str(i))
-                if i == 0:
-                    self.assertEqual(self.client.submit(purpose, 'too-soon', 'q')['status'], 'budget_blocked')
-                self.now += interval
-            self.assertEqual(self.client.submit(purpose, 'extra', 'q')['status'], 'budget_blocked')
+        self.assertEqual(len(read_json(self.client.root / 'budget.json')), 90)
 
-    def test_maid_shared_24_includes_failed_tasks_across_independent_characters(self):
+    def test_maid_usage_includes_failed_tasks_without_blocking_independent_characters(self):
         from types import SimpleNamespace
         bindings = {name: {'agentId': 'role-' + name, 'sessionId': 'life-' + name} for name in ('alice', 'bob')}
         self.client.maid_registry = SimpleNamespace(resolve=lambda maid, owner: bindings[maid])
-        self.assertEqual(LIMITS['maid_dialogue'], (24, 60))
+        self.assertEqual(LIMITS['maid_dialogue'], (None, 0))
         for i in range(24):
             maid = 'alice' if i % 2 else 'bob'
             key = 'individual-' + str(i)
@@ -108,9 +113,18 @@ class NativeTaskTests(unittest.TestCase):
             self.assertEqual(done['status'], 'completed' if i % 2 else 'failed')
             self.now += 60
         self.assertEqual(self.client.submit('maid_dialogue', 'extra', 'q', maid_uuid='alice',
-                         owner_uuid='fixture-owner')['status'], 'budget_blocked')
-        self.assertEqual(len(read_json(self.client.root / 'budget.json')), 24)
-        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 24)
+                         owner_uuid='fixture-owner')['status'], 'submitted')
+        self.assertEqual(len(read_json(self.client.root / 'budget.json')), 25)
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 25)
+
+    def test_legacy_unknown_request_is_recovered_as_active_even_outside_usage_window(self):
+        self.error = OSError('lost POST')
+        self.client.submit('guild_quest', 'old', 'q')
+        for path in (self.client.root / 'active-roles').glob('*.json'):
+            path.unlink()
+        self.now += 172800
+        self.assertEqual(self.client.submit('guild_quest', 'new', 'q')['status'], 'busy')
+        self.assertEqual(len(self.calls), 1)
 
     def test_bad_routes_and_arbitrary_purposes_never_touch_network(self):
         for changes in ({'apiUrl': 'http://evil/v1'}, {'agentId':'mc-god'}, {'runtime':'host'}):
@@ -170,6 +184,9 @@ class NativeTaskTests(unittest.TestCase):
             self.client.submit('npc_dialogue', status, 'q')
             self.response = {'status': status}
             self.assertEqual(self.client.poll('npc_dialogue', status)['status'], 'running')
+            self.response = completed()
+            self.now += 11
+            self.client.poll('npc_dialogue', status)
         self.now += 86401
         self.client.submit('npc_dialogue', 'inner-error', 'q')
         self.response = {'status':'finished','result':{'status':'error','output':completed()['result']['output']}}

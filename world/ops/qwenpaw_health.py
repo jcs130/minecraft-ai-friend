@@ -9,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PHASE = 'auth-mode'
 from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
-from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard, SURVIVOR_QPM, SURVIVOR_MAX_ITERS
+from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
+from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
 
@@ -84,8 +85,7 @@ def check_maid_config(folder, role):
     assert agent['id'] == role and role in maid_roles()
     assert agent['workspace_dir'] == '/state/work/workspaces/' + role
     assert_quiet(agent['running'])
-    assert agent['running']['max_iters'] == agent['running']['loop']['iteration']['max_iterations'] == 4
-    assert agent['running']['llm_max_qpm'] == 4 and agent['running']['llm_max_concurrent'] == 1
+    validate_running(agent['running'])
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
     assert agent['heartbeat']['enabled'] is False
     validate_native(agent, role)
@@ -110,10 +110,8 @@ def check_survivor_config(folder):
     assert not any(item['enabled'] for item in agent['acp']['agents'].values())
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
     assert agent['heartbeat']['enabled'] is False
-    assert agent['running']['llm_max_concurrent'] == 1 and agent['running']['llm_max_qpm'] == SURVIVOR_QPM
-    assert agent['running']['max_iters'] == SURVIVOR_MAX_ITERS and agent['running']['llm_retry_enabled'] is False
-    assert agent['running']['loop']['iteration']['enabled'] is True
-    assert agent['running']['loop']['iteration']['max_iterations'] == SURVIVOR_MAX_ITERS
+    validate_running(agent['running'])
+    assert agent['running']['llm_retry_enabled'] is False
     assert {'numen_survival', 'qd_learning'} <= set(agent['mcp']['clients']) <= expected_drivers(
         'qd-survivor', {'numen_survival', 'qd_learning'})
     client = agent['mcp']['clients']['numen_survival']
@@ -241,6 +239,7 @@ def main():
                       'installedSkillBindings': bindings, 'baseAgents': 6, 'maidAgents': len(maid_roles()),
                       'partyAgents': len(bound_party_roles), 'partyDriverPolicyVerified': bool(bound_party_roles),
                       'cronBudgetGuardVerified': guard_verified,
+                      'llmLimitPolicy': 'unrestricted', 'llmPolicyVerified': True,
                       'managedWeeklyJobs': len(expected_roles), 'unmanagedAutomaticJobs': 0}))
 
 

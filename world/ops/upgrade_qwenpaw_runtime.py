@@ -10,6 +10,9 @@ import importlib.metadata
 import json
 from pathlib import Path
 import socket
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from llm_runtime_policy import unrestricted_running, validate_running
 
 STATE = Path('/state')
 VERSION = '2.2.0'
@@ -28,7 +31,7 @@ def defaults_under(original, defaults):
 
 
 def pause_background(running):
-    # Preserve generation budgets/retry policy. Only background helpers are closed.
+    # Keep retry/context choices; scoped runtimes use the explicit quota-off policy.
     running['light_context_config']['strategy'] = 'native'
     running['light_context_config']['visual_compact_config']['enabled'] = False
     running['auto_title_config']['enabled'] = False
@@ -40,9 +43,7 @@ def pause_background(running):
             memory[key] = False
     memory['auto_memory_interval'] = 0
     memory['auto_memory_search_config']['enabled'] = False
-    iteration = running['loop']['iteration']
-    if iteration.get('max_iterations') is None:
-        iteration['max_iterations'] = running['max_iters']
+    running.update(unrestricted_running(running))
 
 
 def assert_quiet(running):
@@ -56,8 +57,16 @@ def assert_quiet(running):
         assert memory[key] is False
     assert memory['auto_memory_interval'] == 0
     assert memory['auto_memory_search_config']['enabled'] is False
-    assert running['loop']['iteration']['enabled'] is True
-    assert running['loop']['iteration']['max_iterations'] == running['max_iters']
+    validate_running(running)
+
+
+def assert_generation_settings_preserved(before, after):
+    """Quota-off is explicit; retry, timeout, context and legacy values stay put."""
+    expected = unrestricted_running(before)
+    for key in before:
+        if key.startswith('llm_') or key in ('max_iters', 'max_input_length'):
+            assert after[key] == expected[key]
+    assert after['loop']['iteration'] == expected['loop']['iteration']
 
 
 def closed_surface(value, builtin_names):
@@ -123,9 +132,7 @@ def upgrade():
         closed_surface(profile, builtin_names)
         pause_background(profile['running'])
         assert profile.get('active_model') == before.get('active_model')
-        for key, value in before['running'].items():
-            if key.startswith('llm_') or key in ('max_iters', 'max_input_length'):
-                assert profile['running'][key] == value
+        assert_generation_settings_preserved(before['running'], profile['running'])
         assert_quiet(profile['running'])
         AgentProfileConfig.model_validate(profile)
         if aid in ROLES:

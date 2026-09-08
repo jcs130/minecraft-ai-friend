@@ -142,7 +142,8 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(summary['registeredCount'], 2)
         self.assertNotIn('persona', json.dumps(summary))
         self.assertNotIn(a['mcpToken'], json.dumps(summary))
-        self.assertEqual(summary['sharedPurposeLimit']['24hCap'], 12)
+        self.assertIsNone(summary['sharedPurposeLimit']['24hCap'])
+        self.assertEqual(summary['sharedPurposeLimit']['cooldownSeconds'], 0)
         self.assertEqual(self.registry.authenticate('Bearer ' + a['mcpToken'])['maidUuid'], MAID_A)
         self.assertEqual(self.api.mcp[a['agentId']]['key'], 'maid_native')
         self.assertEqual(self.api.mcp[a['agentId']]['tools'], TOOLS)
@@ -282,16 +283,15 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(adapter.complete_signed(raw, headers)[0], 200)
         self.assertEqual(len([c for c in self.api.calls if c[1] == '/console/chat/task']), 3)
 
-    def test_all_character_tasks_share_cap_and_no_unregistered_agent_override(self):
+    def test_character_tasks_have_no_artificial_cap_and_no_unregistered_agent_override(self):
         a = self.registry.ensure(actor())
         self.registry.ensure(actor(MAID_B))
-        for i in range(12):
+        for i in range(26):
             maid = MAID_A if i % 2 else MAID_B
             key = 'fixture-' + str(i)
             self.assertEqual(self.tasks.submit('maid_dialogue', key, 'q', maid_uuid=maid, owner_uuid=OWNER)['status'], 'submitted')
             self.tasks.poll('maid_dialogue', key, maid_uuid=maid, owner_uuid=OWNER)
-            self.now += 60
-        self.assertEqual(self.tasks.submit('maid_dialogue', 'extra', 'q', maid_uuid=MAID_A, owner_uuid=OWNER)['status'], 'budget_blocked')
+        self.assertEqual(self.tasks.submit('maid_dialogue', 'extra', 'q', maid_uuid=MAID_A, owner_uuid=OWNER)['status'], 'submitted')
         with self.assertRaises((OSError, ValueError)):
             self.tasks.submit('maid_dialogue', 'bad', 'q', maid_uuid=str(uuid.uuid4()), owner_uuid=OWNER)
         with self.assertRaises(ValueError):

@@ -111,7 +111,7 @@ class ModelRoutingHealth(unittest.TestCase):
                     self.put(config_path, config)
 
     def test_manifest_cannot_claim_a_different_shared_maid_budget_than_runtime(self):
-        for field, value in (('dailyLimit', 12), ('cooldownSeconds', 0)):
+        for field, value in (('dailyLimit', 12), ('cooldownSeconds', 60)):
             manifest = json.loads(json.dumps(self.manifest))
             manifest['routes']['maid_dialogue'][field] = value
             self.put('config/model-task-routes.json', manifest)

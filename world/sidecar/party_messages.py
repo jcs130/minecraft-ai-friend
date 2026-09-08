@@ -34,7 +34,7 @@ IDENTITY_FIELDS = ('agentId', 'bodyUuid', 'ownerUuid', 'sessionId', 'userId', 'c
 ACTIVE = ('unknown', 'submitted')
 DEFER_REASONS = frozenset(('busy', 'budget_blocked', 'body_unavailable'))
 TERMINAL = ('answered', 'expired', 'failed')
-DEFAULT_LIMITS = {'dailyDispatchCap': 12, 'cooldownSeconds': 60, 'maxPending': 32,
+DEFAULT_LIMITS = {'dailyDispatchCap': None, 'cooldownSeconds': 0, 'maxPending': 32,
                   'maxTextChars': 8000, 'maxTtlSeconds': 86400, 'maxMessages': 10000}
 
 
@@ -93,10 +93,23 @@ def validate_binding(value):
               'maxPending': (1, 1000), 'maxTextChars': (1, 16000),
               'maxTtlSeconds': (1, 604800), 'maxMessages': (1, 100000)}
     for key, (lo, hi) in bounds.items():
+        if key == 'dailyDispatchCap' and limits[key] is None:
+            continue
         _require(type(limits[key]) is int and lo <= limits[key] <= hi, 'invalid_party_limits')
     return {'schema': 1, 'partyId': _identifier(value.get('partyId'), 'id'),
             'revision': value['revision'], 'enabled': value.get('enabled', True),
             'members': sorted(projected, key=lambda m: m['agentId']), 'limits': limits}
+
+
+def _binding_generation(value):
+    """Inference rate policy is not a new speaker/recipient identity generation.
+
+    Only the two validated, trusted configuration fields are mutable in place.
+    Owner/session/role, enablement and all queue/content limits still require
+    the existing revision contract. No message or reservation is rewritten.
+    """
+    return {**value, 'limits': {key: limit for key, limit in value['limits'].items()
+            if key not in ('dailyDispatchCap', 'cooldownSeconds')}}
 
 
 class PartyMessages:
@@ -123,6 +136,10 @@ class PartyMessages:
                 event_id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(message_id),
                 kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, receipt TEXT)''')
             db.execute('CREATE INDEX IF NOT EXISTS party_pending ON messages(recipient,status,created)')
+            db.execute('''CREATE TABLE IF NOT EXISTS reply_consumptions (
+                event_id TEXT NOT NULL REFERENCES world_speech(event_id), consumer TEXT NOT NULL,
+                task_id TEXT NOT NULL, consumed_at REAL NOT NULL,
+                PRIMARY KEY(event_id,consumer))''')
             db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS party_active_recipient ON messages(recipient)
                           WHERE status IN ('unknown','submitted')''')
             self._binding(db)
@@ -160,7 +177,8 @@ class PartyMessages:
             previous = json.loads(row['value'])
             _require(previous['partyId'] == binding['partyId'], 'party_id_changed')
             _require(binding['revision'] >= previous['revision'], 'party_binding_rollback')
-            _require(binding['revision'] != previous['revision'] or row['value'] == encoded,
+            _require(binding['revision'] != previous['revision']
+                     or _binding_generation(previous) == _binding_generation(binding),
                      'party_binding_revision_collision')
         db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('binding',?)", (encoded,))
         # Only unsent work expires. UNKNOWN/SUBMITTED still occupy their lane.
@@ -305,21 +323,114 @@ class PartyMessages:
                              "ORDER BY m.created,m.rowid LIMIT 1", (recipient_agent_id, self._now())).fetchone()
             return self._public(row) if row else None
 
+    @staticmethod
+    def _reply_observation(binding, member, row):
+        """Only actual hearing for this exact current identity becomes input."""
+        original = json.loads(row['payload'])
+        reply = json.loads(row['reply']) if row['reply'] else {}
+        event = json.loads(row['world_payload'])
+        other = next(m for m in binding['members'] if m != member)
+        if (original.get('partyId') != binding['partyId']
+                or original.get('bindingRevision') != binding['revision']
+                or original.get('sender') != member or original.get('recipient') != other
+                or reply.get('recipient') != member or reply.get('sender') != other
+                or reply.get('requiresReply') is not False or reply.get('hop') != 1
+                or reply.get('messageId') != row['event_id']
+                or reply.get('replyTo') != row['message_id']
+                or event.get('bindingRevision') != binding['revision']):
+            return None
+        text = reply.get('text')
+        speech_text(text)
+        # Same native IterationGate sentinel rejected by qwen_tasks.final_text.
+        if re.fullmatch(r'Max iterations \([0-9]+\) reached', text.strip()):
+            return None
+        expected = speech_event(row['event_id'], other['bodyUuid'], member['bodyUuid'],
+                                text, reply.get('channel', 'nearby'))
+        if any(event.get(key) != value for key, value in expected.items()):
+            return None
+        receipt = validate_receipt(json.loads(row['world_receipt']), expected)
+        delivery = reply.get('worldDelivery', {})
+        if (receipt['phase'] != 'heard' or receipt['heard'] is not True
+                or delivery.get('state') != 'heard' or delivery.get('eventId') != row['event_id']
+                or delivery.get('receipt') != receipt):
+            return None
+        return {'eventId': row['event_id'], 'replyTo': row['message_id'],
+                'partyId': binding['partyId'], 'bindingRevision': binding['revision'],
+                'sender': other, 'recipient': member, 'text': text, 'receipt': receipt,
+                'requiresReply': False, 'trusted': False}
+
+    def _reply_rows(self, db, binding, member):
+        return db.execute("SELECT m.*,w.event_id,w.payload AS world_payload,w.receipt AS world_receipt "
+            "FROM messages m JOIN world_speech w ON w.message_id=m.message_id "
+            "WHERE m.sender=? AND m.binding_revision=? AND m.status='answered' "
+            "AND w.kind='reply' AND w.state='heard' ORDER BY w.rowid",
+            (member['agentId'], binding['revision']))
+
+    def heard_replies(self, actor, *, limit=8):
+        """Read-only input selection, not a request/callback or an acknowledgement."""
+        _require(type(limit) is int and 1 <= limit <= 8, 'invalid_party_reply_limit')
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, actor)
+            if not binding['enabled']:
+                return []
+            consumer = _json(member)
+            consumed = {r[0] for r in db.execute('SELECT event_id FROM reply_consumptions WHERE consumer=?', (consumer,))}
+            found = []
+            for row in self._reply_rows(db, binding, member):
+                if row['event_id'] in consumed:
+                    continue
+                try:
+                    observation = self._reply_observation(binding, member, row)
+                except (ValueError, TypeError, KeyError):
+                    observation = None
+                if observation:
+                    found.append(observation)
+                    if len(found) == limit:
+                        break
+            return found
+
+    def consume_replies(self, actor, event_ids, task_id):
+        """Trusted controller only, after the exact native task is known terminal."""
+        _require(isinstance(event_ids, list) and len(event_ids) <= 8
+                 and len(set(event_ids)) == len(event_ids), 'invalid_party_reply_ids')
+        for event_id in event_ids:
+            _uuid(event_id)
+        _require(isinstance(task_id, str) and re.fullmatch(r'task-[0-9a-f]{12}', task_id), 'invalid_party_task_id')
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, actor)
+            consumer = _json(member)
+            selected = {row['event_id']: row for row in self._reply_rows(db, binding, member)
+                        if row['event_id'] in event_ids}
+            for event_id in event_ids:
+                previous = db.execute('SELECT task_id FROM reply_consumptions WHERE event_id=? AND consumer=?',
+                                      (event_id, consumer)).fetchone()
+                if previous:
+                    _require(previous['task_id'] == task_id, 'party_reply_consumption_collision')
+                    continue
+                _require(event_id in selected and self._reply_observation(binding, member, selected[event_id]) is not None,
+                         'party_reply_not_heard_by_current_identity')
+                db.execute('INSERT INTO reply_consumptions(event_id,consumer,task_id,consumed_at) VALUES (?,?,?,?)',
+                           (event_id, consumer, task_id, self._now()))
+        return {'consumed': list(event_ids), 'taskId': task_id}
+
     def _budget(self, db, binding):
         now = self._now()
         rows = db.execute("SELECT created,usage FROM reservations WHERE state<>'deferred' AND created>?",
                           (now - 86400,)).fetchall()
         limits = binding['limits']
         recent = [row['created'] for row in rows]
-        cooldown_until = max(recent) + limits['cooldownSeconds'] if recent else 0
-        cap_until = (sorted(recent)[len(recent) - limits['dailyDispatchCap']] + 86400
-                     if len(recent) >= limits['dailyDispatchCap'] else 0)
+        cap = limits['dailyDispatchCap']
+        cooldown_until = max(recent) + limits['cooldownSeconds'] if recent and limits['cooldownSeconds'] > 0 else 0
+        cap_until = (sorted(recent)[len(recent) - cap] + 86400
+                     if cap is not None and len(recent) >= cap else 0)
         recorded = [json.loads(row['usage']) for row in rows if row['usage'] is not None]
         known_usage = {key: sum(usage.get(key, 0) for usage in recorded)
                        for key in {key for usage in recorded for key in usage}}
         return {'reservedDispatches24h': len(recent), 'dailyDispatchCap': limits['dailyDispatchCap'],
-                'remaining': max(0, limits['dailyDispatchCap'] - len(recent)),
-                'blocked': len(recent) >= limits['dailyDispatchCap'] or now < cooldown_until,
+                'remaining': None if cap is None else max(0, cap - len(recent)),
+                'blocked': (cap is not None and len(recent) >= cap) or now < cooldown_until,
                 'nextDispatchAt': max(cooldown_until, cap_until),
                 'usageRecordedDispatches24h': len(recorded), 'knownUsage24h': known_usage,
                 'countsUnknownAsReserved': True, 'roleBudgetSeparate': True}

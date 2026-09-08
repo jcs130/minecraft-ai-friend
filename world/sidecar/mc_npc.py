@@ -518,7 +518,7 @@ def load_atoms():
 
 def gen_quests(day):
     from guild_requests import atomic_json, read
-    from npc_identity import contract_issuer
+    from npc_identity import contract_issuer, valid_position
     if os.path.exists(quests_path(day)):
         # A claimed/completed daily document must never be regenerated. An
         # unreadable existing file is an error, not permission to replace it.
@@ -528,6 +528,9 @@ def gen_quests(day):
     cap = qcfg.get("daily_cap", 4)
     pool = [v for v in PROFILES if contract_issuer(v, 'gather')]
     proposed = qwen_quests(pool, day)
+    # New contracts need an observable issuer. Existing day files above remain
+    # byte-preserved even when their owner later becomes unavailable.
+    pool = [v for v in pool if valid_position(alive_pos(v))]
     random.shuffle(pool)
     quests = []
     for v in pool:
@@ -549,7 +552,7 @@ def gen_quests(day):
         quests.append(q)
     doc = {"date": day, "quests": quests, "availability": {
         "ok": bool(pool), "reason": None if pool else "no_bound_qualified_issuers",
-        "eligibleIssuers": sorted(v['key'] for v in pool), "requiresLoadedChunk": False}}
+        "eligibleIssuers": sorted(v['key'] for v in pool), "requiresLoadedChunk": True}}
     atomic_json(quests_path(day), doc)
     print("[quest] generated %d quests for %s: %s" % (len(quests), day, [q["display"] for q in quests]), flush=True)
     return doc
@@ -1208,7 +1211,7 @@ def god_reply_loop():
 # ---------- Qwen 角色整批策划；npc_planner 校验，原经济流程发布 ----------
 
 def qwen_quests(profiles, day):
-    """Consume today's candidate and asynchronously prepare the following day."""
+    """Consume today's immutable candidate; native operations cron requests new plans."""
     if not GUILD_AGENT_ENABLED or not profiles:
         return {}
     from npc_planner import GuildPlanner
@@ -1219,10 +1222,6 @@ def qwen_quests(profiles, day):
     except (OSError, ValueError, TypeError, KeyError) as exc:
         print('[guild-agent] unavailable:', type(exc).__name__, flush=True)
         return {}
-    try:
-        planner.plan((date.fromisoformat(day) + timedelta(days=1)).isoformat(), profiles, submit=True)
-    except (OSError, ValueError, TypeError, KeyError) as exc:
-        print('[guild-agent] next-day unavailable:', type(exc).__name__, flush=True)
     return plan.get('quests', {}) if plan.get('status') == 'completed' else {}
 
 # ---------- 路由 ----------

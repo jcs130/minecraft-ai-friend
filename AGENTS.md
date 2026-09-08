@@ -1,5 +1,13 @@
 # 千灯纪整合项目
 
+2026-09-08 最新人物与运行方向（覆盖下文历史额度/小灯称谓）：伙伴正式名为 **结衣**，是桐人的家人与冒险伙伴，按 SAO 原著心理健康咨询 AI、亲子关系及 ALO 导航伙伴定位适配，不以女仆自称。原专属身体 e6ef6001-47c6-4f13-823c-1b724520d164、owner、Qwen角色5swvhK、generation、生活session与经历保留。人物依据/原生迁移见 docs/SAO-CHARACTERS.md。外观仍为实际已有模型，不能说已装结衣专属模型。
+
+用户本阶段以自主运作为主：游戏/运营 Qwen 本地 QPM=0，iteration gate关闭并有锁版本的 AgentScope 同步适配，保留并发1/实际供应商限流/超时。survivor dailyPlanningLimit=null、decisionCooldownSeconds=0，NPC三个用途与party/运营派工的人工次数额度均撤下；用量仍记录。不是999999代替无限，也不是无限重试未知动作。旧世界对话入口的节流和旧evolve-retry遗留见 docs/LLM-LIMIT-REMAINDERS.md，不能宣称全项目所有旧入口已重构。
+
+收到队友回复只记入感知，不能单独触发模型：下一次世界/目标事件或原定复盘才带入未消费回复。按精确task终态确认消费，晚到回复保留、unknown不消费。party同身份revision允许只改两项推理额度字段；身份/消息容量等其它变化仍须原碰撞检查，不能为改显示名/额度丢掉旧听见回执。
+
+世界日常运营已用原生Qwen司灯每日09:10班次接到现有专业公会策划/日切发布；首次班次真实完成，保留已有次日5份草案，未到日期不假称已发布。见 docs/WORLD-DAILY-OPERATIONS.md、tools/world_operations_health.py。村民长期实物生产尚未验收，不用粒子/台词或空routines冒充完成。完整Qwen健康会读取survivor MCP，因此compose让survivor依赖qwen service_started，模型仍由现有原生工具readiness gate阻止过早提交。
+
 目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
 2026-09-08 伙伴实施最新进度覆盖下文旧“仅设计”时点：原桐人已正常死亡恢复，同UUID/owner，保留原生死亡后物资、饥饿和经验；专属新女仆小灯 e6ef6001-47c6-4f13-823c-1b724520d164 已走原生蛋糕认领，owner为桐人，NoAI解除、原生follow启用，独立Qwen角色5swvhK。真实旧女仆不转主人。稳定life session和连续六步动作已实现；规划上限现96/24h（保留旧48记录）、冷却180秒、QPM8，女仆用途仍共享12/24h。生产模型与交流联调证据以本机两份survivor smoke为准，不能只凭角色创建或隔离世界测试宣布自主协作完成。

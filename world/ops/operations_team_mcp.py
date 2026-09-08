@@ -15,7 +15,8 @@ TOOLS = ('operations_snapshot', 'operations_reports', 'submit_operations_report'
 
 
 def role_tools(role):
-    return TOOLS + (('operations_delegate', 'operations_task') if role == 'default' else ())
+    return TOOLS + (('operations_delegate', 'operations_task', 'operations_world_planning',
+                     'operations_request_guild_plan') if role == 'default' else ())
 
 
 def read_json(path, limit=2*1024*1024):
@@ -156,10 +157,22 @@ def main():
 
     if args.role == 'default':
         from operations_native_tasks import delegate, task_status
+        from world_operations import WorldPlanning
+        planning = WorldPlanning()
+
+        @app.tool()
+        def operations_world_planning() -> dict:
+            """Read fresh online guild candidates and the existing NPC planner receipt; no world action."""
+            return planning.context()
+
+        @app.tool()
+        def operations_request_guild_plan() -> dict:
+            """Request tomorrow's plan from the existing professional Qwen guild agent; never replace existing contracts."""
+            return planning.request()
 
         @app.tool()
         def operations_delegate(to_role: str, task: str) -> dict:
-            """Delegate one bounded task to a fixed teammate via native QwenPaw tasks. 30-minute cooldown, 4 per 24 hours, no retries."""
+            """Delegate one task to a fixed teammate via native QwenPaw tasks; one durable active task, no automatic retries."""
             return delegate(args.role, to_role, task)
 
         @app.tool()

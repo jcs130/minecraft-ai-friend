@@ -126,6 +126,16 @@ class LearningTests(unittest.TestCase):
             self.assertEqual(job['runtime']['max_concurrency'], 1)
             self.assertEqual(job['task_type'], 'agent' if runtime == 'operations' else 'text')
 
+    def test_schedule_discloses_quota_off_without_changing_the_job(self):
+        calls = []
+        def api(role, method, path, *args):
+            calls.append((role, method, path)); return {'spec': managed_job(role, 'operations')}
+        self.tool.api = api
+        result = self.tool.schedule()
+        self.assertIn('no artificial model-call quota', result['budget'])
+        self.assertNotIn('4/24h', result['budget'])
+        self.assertEqual(calls, [(self.role, 'GET', '/cron/jobs/qd-learning-' + self.role)])
+
     def test_game_cron_maintenance_has_no_model_and_agent_cron_is_blocked(self):
         executor = SimpleNamespace(_workspace=SimpleNamespace(agent_id=self.role, workspace_dir=self.folder))
         job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text')
@@ -147,10 +157,10 @@ class LearningTests(unittest.TestCase):
             self.assertTrue(first['ok'])
             self.assertEqual(reserve_review(self.tool, 'job', lambda: self.now)['code'], 'no_new_learning_evidence')
             with native.ledger() as rows:
-                self.assertEqual(native.budget_check(rows, self.now), 'delegation_cooldown')
+                self.assertEqual(native.budget_check(rows, self.now), 'operations_task_unresolved')
                 self.assertEqual(rows[0]['source'], 'native-qwen-cron')
             self.tool.feedback('role-review', 'unverified', '有一个新的观察需要在下次任务中进一步核对')
-            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'delegation_cooldown')
+            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'operations_task_unresolved')
 
 
 if __name__ == '__main__': unittest.main()

@@ -17,13 +17,13 @@ import uuid
 ROLES = {'npc_dialogue': 'qd-villager-dialogue', 'guild_quest': 'qd-guild-planner',
          'maid_dialogue': 'qd-maid-dialogue'}
 BASE = 'http://qwenpaw:8088/api'
-LIMITS = {'npc_dialogue': (4, 300), 'guild_quest': (1, 86400), 'maid_dialogue': (24, 60)}
+LIMITS = {purpose: (None, 0) for purpose in ROLES}
 _LOCK = threading.RLock()
 MAX_BYTES = 262144
 
 
-def read_json(path):
-    if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+def read_json(path, *, max_bytes=MAX_BYTES):
+    if path.is_symlink() or path.stat().st_size > max_bytes:
         raise ValueError('invalid_qwen_state')
     return json.loads(path.read_text(encoding='utf-8-sig'))
 
@@ -143,26 +143,39 @@ class QwenTasks:
             self.maid_registry = MaidRegistry()
         return self.maid_registry.resolve(maid_uuid, owner_uuid)
 
-    def _refresh_maid_active(self, role, maid_uuid, owner_uuid):
+    def _refresh_role_active(self, role, purpose, maid_uuid, owner_uuid):
         # The native caller may stop waiting before inference finishes. Reconcile
         # its known task before the next input, without ever replaying an unknown
         # POST or making this gate depend on that caller returning to the game.
         active_path = self.root / 'active-roles' / (hashlib.sha256(role.encode()).hexdigest() + '.json')
         with state_lock(self.root):
             if not active_path.exists():
-                return
+                # Upgrade pre-gate roles without expiring unknown submissions.
+                # The append-only request records, not the rolling usage window,
+                # are authoritative for work which might still be executing.
+                unresolved = []
+                for path in (self.root / 'requests').glob('*.json'):
+                    saved = read_json(path)
+                    if (saved.get('agentId') == role
+                            and saved.get('status') not in ('completed', 'failed', 'not_submitted')):
+                        unresolved.append(path.stem)
+                if len(unresolved) > 1:
+                    raise ValueError('qwen_legacy_role_overlap_requires_review')
+                if not unresolved:
+                    return
+                write_json(active_path, {'agentId': role, 'stateKey': unresolved[0]})
             active = read_json(active_path)
             key = active.get('stateKey', '')
             if not isinstance(key, str) or not re.fullmatch('[a-f0-9]{64}', key):
                 raise ValueError('qwen_role_gate_invalid')
             prior = read_json(self.root / 'requests' / (key + '.json'))
-            if (prior.get('agentId') != role or prior.get('purpose') != 'maid_dialogue'
+            if (prior.get('agentId') != role or prior.get('purpose') != purpose
                     or prior.get('maidUuid') != maid_uuid or prior.get('ownerUuid') != owner_uuid):
                 raise ValueError('qwen_role_gate_invalid')
             if prior.get('status') not in ('submitted', 'running', 'poll_unavailable'):
                 return
         # poll takes its own short ledger lock; never wait on HTTP inside it.
-        self.poll('maid_dialogue', prior['key'], maid_uuid=maid_uuid, owner_uuid=owner_uuid)
+        self.poll(purpose, prior['key'], maid_uuid=maid_uuid, owner_uuid=owner_uuid)
 
     def submit(self, purpose, key, text, *, maid_uuid=None, owner_uuid=None, allowed_tools=None,
                expected_binding=None):
@@ -182,8 +195,8 @@ class QwenTasks:
             raise ValueError('qwen_tool_scope_invalid')
         path = self._path(purpose, key)
         digest = hashlib.sha256(text.encode('utf8')).hexdigest()
-        if binding and not path.exists():
-            self._refresh_maid_active(role, maid_uuid, owner_uuid)
+        if not path.exists():
+            self._refresh_role_active(role, purpose, maid_uuid, owner_uuid)
         with state_lock(self.root):
             if path.exists():
                 saved = read_json(path)
@@ -196,7 +209,7 @@ class QwenTasks:
             # Native chat, party input and future wakeups for this character use
             # one durable gate. Unknown submissions never age out of this gate.
             active_path = self.root / 'active-roles' / (hashlib.sha256(role.encode()).hexdigest() + '.json')
-            if binding and active_path.exists():
+            if active_path.exists():
                 active = read_json(active_path)
                 prior = read_json(self.root / 'requests' / (active['stateKey'] + '.json'))
                 if prior.get('agentId') != role:
@@ -204,7 +217,7 @@ class QwenTasks:
                 if prior.get('status') not in ('completed', 'failed', 'not_submitted'):
                     return {'status': 'busy', 'purpose': purpose, 'retryAutomatically': False}
             budget_path = self.root / 'budget.json'
-            rows = read_json(budget_path) if budget_path.exists() else []
+            rows = read_json(budget_path, max_bytes=8 * 1024 * 1024) if budget_path.exists() else []
             if not isinstance(rows, list):
                 raise ValueError('qwen_budget_invalid')
             now = self.clock()
@@ -212,14 +225,9 @@ class QwenTasks:
             recent = [row for row in rows if now - row['startedAt'] < 86400]
             owned = [row for row in recent if row['purpose'] == purpose]
             cap, cooldown = LIMITS[purpose]
-            if len(owned) >= cap or any(now - row['startedAt'] < cooldown for row in owned):
+            if ((cap is not None and len(owned) >= cap)
+                    or (cooldown > 0 and any(now - row['startedAt'] < cooldown for row in owned))):
                 return {'status': 'budget_blocked', 'purpose': purpose, 'retryAutomatically': False}
-            for reservation in recent:
-                if now - reservation['startedAt'] >= 190:
-                    continue
-                saved = read_json(self.root / 'requests' / (reservation['stateKey'] + '.json')) if reservation.get('stateKey') else {}
-                if saved.get('status') not in ('completed', 'failed'):
-                    return {'status': 'busy', 'purpose': purpose, 'retryAutomatically': False}
             row = {'schema': 1, 'purpose': purpose, 'agentId': role, 'key': key,
                    'requestId': 'npc-' + uuid.uuid4().hex, 'startedAt': now, 'status': 'reserved', 'taskId': None,
                    'promptSha256': digest}
@@ -232,8 +240,7 @@ class QwenTasks:
             # a reservation but cannot permit a duplicate paid request.
             write_json(budget_path, recent + [{**{k: row[k] for k in ('purpose', 'requestId', 'startedAt')}, 'stateKey': path.stem}])
             self._save(path, row)
-            if binding:
-                write_json(active_path, {'agentId': role, 'stateKey': path.stem})
+            write_json(active_path, {'agentId': role, 'stateKey': path.stem})
         payload = {'channel': 'console', 'session_id': row.get('sessionId', row['requestId']),
             'user_id': row.get('userId', 'npc-service'), 'timeout': 180,
             'input': [{'role': 'user', 'content': [{'type': 'text', 'text': text}]}],

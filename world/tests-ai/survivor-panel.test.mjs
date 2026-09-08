@@ -4,6 +4,19 @@ import fs from 'node:fs/promises';
 import { projectSurvivor, projectWorld } from '../admin/read-model.mjs';
 import { SERVICES, buildPlan } from '../admin/control-service.mjs';
 
+test('unlimited inference is explicit and missing policy does not imply unlimited usage', () => {
+  const value = fixture();
+  value.budgets = {decisionsUsed: 145, decisionLimit: null, dailyPlanningLimit: null,
+    cooldownSeconds: 0, inferenceLimitPolicy: 'unrestricted', decisionCountScope: 'rolling_24h'};
+  const budget = projectSurvivor(value).budgets;
+  assert.equal(budget.unlimited, true);
+  assert.equal(budget.decisionsUsed, 145);
+  assert.equal(budget.dailyPlanningLimit, null);
+  assert.equal(budget.inferenceLimitPolicy, 'unrestricted');
+  delete value.budgets.inferenceLimitPolicy;
+  assert.equal(projectSurvivor(value).budgets.unlimited, false);
+});
+
 const fixture = (now = Date.now()) => ({ schema: 1, project: 'qiandengji-survivor', character: '桐人', bodyName: 'Kirito',
   bodyUuid: '00000000-0000-0000-0000-000000000001',
   generatedAt: new Date(now).toISOString(), status: 'observing', enabled: true, autonomous: true, nextReviewAt: now / 1000 + 1800,
