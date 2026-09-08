@@ -34,6 +34,8 @@
 
 TLM 模组自带 `touhou_little_maid` 默认声音和 `littlemaid_peco` 声音；后者确实在本项目 TLM JAR 与自动解包资源中存在。自定义声音由当前 TLM 1.5.3 的 `CustomSoundLoader.loadSoundPack` / `loadSoundEvent` 读取 `maid_sound.json` 和 `assets/<namespace>/sounds/maid/...`，因此无需把没有原版 `sounds.json` 认作坏包。审计记录了攻击、闲置、受伤、驯服、天气等事件目录的文件数。
 
+2026-09-08 补充：[发声链路调研](MAID-VOICE-PIPELINE.md) 区分附近玩家的预录事件音与只给主人发送的普通 AI 语音，并实证定位了本地 PCM WAV 与当前 TLM 解码器不兼容。先前 HTTP 合成验收不代表客户端可播放；该调研未部署格式修复。
+
 ## 已有女仆的声音绑定与补漏
 
 对原 C 盘 shadow 与 D 盘副本的实体 region 做离线 NBT 扫描，各找到 3 位保存中的女仆，模型和声音选择相同。没有加载旧区域、传送角色或编辑实体。
