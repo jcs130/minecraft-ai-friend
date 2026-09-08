@@ -8,6 +8,8 @@ export interface ModelUsage {
 }
 
 export interface ModelRequest {
+  /** Registered workload; production resolves its Agent and API from the task directory. */
+  purpose?: string
   roleId: string
   sessionId: string
   userId: string

@@ -173,6 +173,7 @@ class VoiceBoundaryHealth(unittest.TestCase):
                 patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
                 patch.object(health, 'probe_game_qwenpaw', return_value={'ok': True}), \
                 patch.object(health, 'probe_survivor', return_value={'ok': True}), \
+                patch.object(health, 'probe_model_routing', return_value={'ok': True}), \
                 patch.object(health, 'probe_recorded_behavior', return_value={'ok': True}), \
                 patch.object(health, 'probe_source_record', return_value={'ok': True}), \
                 patch.object(health, 'probe_player_commands', return_value={'ok': True}), \

@@ -231,7 +231,9 @@ def sync_role(source=None, target=None, backups=None, run=subprocess.run):
     if read(source / 'survival/control.json').get('enabled') is not False or read(source / 'survival/controller.json').get('active'):
         raise ValueError('survivor_must_be_paused_and_idle')
     config = read(target / 'work/config.json')
-    if {aid for aid, ref in config['agents']['profiles'].items() if ref.get('enabled')} != {'mc-god', 'mc-herald', ROLE}:
+    enabled_roles = {aid for aid, ref in config['agents']['profiles'].items() if ref.get('enabled')}
+    base_roles = {'mc-god', 'mc-herald', ROLE}
+    if enabled_roles not in (base_roles, base_roles | {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}):
         raise ValueError('unexpected_game_roles')
     folder = target / 'work/workspaces' / ROLE
     agent = read(folder / 'agent.json')
@@ -242,7 +244,7 @@ def sync_role(source=None, target=None, backups=None, run=subprocess.run):
             or client.get('headers') != {'Authorization': 'Bearer ${SURVIVOR_MCP_TOKEN}'}):
         raise ValueError('unexpected_shared_mcp_binding')
     protected = {path: path.read_bytes() for path in [target / 'work/config.json', target / 'work/token_usage.json',
-        *(target / 'work/workspaces' / aid / 'agent.json' for aid in ('mc-god', 'mc-herald'))]}
+        *(target / 'work/workspaces' / aid / 'agent.json' for aid in enabled_roles - {ROLE})]}
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-sync'
     backup = backups / stamp
     backup.mkdir(parents=True, exist_ok=False)

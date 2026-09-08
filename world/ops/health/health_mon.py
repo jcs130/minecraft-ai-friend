@@ -155,14 +155,37 @@ def probe_panel_smoke():
     operations_team = probe_operations_team()
     game_qwenpaw = probe_game_qwenpaw()
     survivor = probe_survivor()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor)),
+    model_routing = probe_model_routing()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, model_routing)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
-            'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor}
+            'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
+            'model_routing': model_routing}
+
+
+def probe_model_routing():
+    """Inspect local routing only; this probe never creates a model task."""
+    try:
+        source = Path(__file__).resolve().parents[3] / 'tools/model_routing_health.py'
+        spec = importlib.util.spec_from_file_location('model_routing_health', source)
+        module = importlib.util.module_from_spec(spec)
+        paths = list(sys.path)
+        try:
+            # validate_profile imports its runtime helper lazily during probe().
+            # Keep both project helper roots available until all checks finish.
+            sys.path[:0] = [str(source.parent), str(source.parents[1] / 'world/ops')]
+            spec.loader.exec_module(module)
+            runtime = module.probe(PROJECT)
+            behavior = probe_recorded_behavior('model-routing-smoke.json', module.SMOKE_CHECKS)
+            return {'ok': runtime['ok'] and behavior['ok'], 'runtime': runtime, 'behavior': behavior}
+        finally:
+            sys.path[:] = paths
+    except (OSError, ValueError, TypeError, AttributeError, ImportError):
+        return {'ok': False, 'error': 'Model routing could not be verified; no model task was submitted'}
 
 
 def probe_survivor():
@@ -231,7 +254,7 @@ def probe_game_qwenpaw():
         receipt = json.loads(result.stdout.strip().splitlines()[-1])
         runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
             and receipt.get('packageVersion') == '2.2.0'
-            and type(receipt.get('agents')) is int and receipt['agents'] == 3
+            and type(receipt.get('agents')) is int and receipt['agents'] == 6
             and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 0
             and receipt.get('authMode') == 'local-passwordless'
             and receipt.get('anonymousAccess') is True),

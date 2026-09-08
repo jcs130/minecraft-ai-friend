@@ -17,12 +17,14 @@ async def verify():
     from qwenpaw.app.auth import verify_token
     from qwenpaw.constant import WORKING_DIR, SECRET_DIR
     from upgrade_qwenpaw_runtime import assert_quiet, driver_cards
+    from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
 
     version = importlib.metadata.version('qwenpaw')
     assert version in ('2.1.0', '2.2.0')
     assert Path(WORKING_DIR) == Path('/state/work') and Path(SECRET_DIR) == Path('/state/secret')
     config = load_config()
-    assert {aid for aid, ref in config.agents.profiles.items() if ref.enabled} == {'mc-god', 'mc-herald'}
+    enabled = {aid for aid, ref in config.agents.profiles.items() if ref.enabled}
+    assert enabled in ({'mc-god', 'mc-herald'}, {'mc-god', 'mc-herald', 'qd-survivor'}, GAME_ROLES)
     assert {'default', 'QwenPaw_QA_Agent_0.2'} <= set(config.agents.profiles)
     assert not config.security.allow_no_auth_hosts
     registry = ToolRegistry()
@@ -31,7 +33,7 @@ async def verify():
     ctx = SimpleNamespace(workspace=SimpleNamespace(local_workspace=local_ws))
     providers = ProviderManager()
     checks = []
-    for aid in ['mc-god', 'mc-herald']:
+    for aid in ['mc-god', 'mc-herald', *(role for role in WORLD_ROLES if role in enabled)]:
         agent = load_agent_config(aid)
         assert not agent.mcp.clients
         assert not any(v.enabled for v in agent.acp.agents.values())
@@ -46,6 +48,8 @@ async def verify():
             assert not driver_cards(Path(agent.workspace_dir))
             from qwenpaw.agents.skill_system.workspace_service import SkillService
             assert not SkillService(Path(agent.workspace_dir)).list_available_skills()
+            if aid in WORLD_ROLES:
+                validate_workspace(Path(agent.workspace_dir), aid)
         toolkit = await AgentBuilder().build_toolkit(agent, agent_id=aid, ctx=ctx,
                                                      workspace_dir=agent.workspace_dir)
         count = sum(len(group.tools) for group in toolkit.tool_groups)

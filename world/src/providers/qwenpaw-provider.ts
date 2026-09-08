@@ -3,9 +3,7 @@ import type { ModelProvider, ModelReply, ModelRequest, ModelUsage } from './mode
 import { DEFAULT_MODEL_PROVIDER_INFO } from './provider-info.ts'
 
 export interface QwenpawProviderOptions {
-  /** Preserve the disabled saga/evolution consumers' historical header contract. */
-  legacyHeaders?: boolean
-  /** God includes up to 200 response characters; the two legacy callers omit them. */
+  /** Include up to 200 response characters in HTTP errors unless explicitly disabled. */
   includeChatErrorBody?: boolean
   fetch?: typeof globalThis.fetch
   headers?: (roleId: string) => Record<string, string>
@@ -72,9 +70,7 @@ export function createQwenpawProvider(chatUrl: string, options: QwenpawProviderO
   const now = options.now ?? Date.now
   const sleep = options.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
   const timeout = options.timeoutSignal ?? AbortSignal.timeout
-  const headers = options.headers ?? (options.legacyHeaders
-    ? (roleId: string) => ({ 'Content-Type': 'application/json', 'X-Agent-Id': roleId })
-    : qwenpawHeaders)
+  const headers = options.headers ?? qwenpawHeaders
   return {
     info: DEFAULT_MODEL_PROVIDER_INFO,
     async chat(request) {
@@ -91,7 +87,8 @@ export function createQwenpawProvider(chatUrl: string, options: QwenpawProviderO
       // Capture once for the submitted task, as the existing consumer did.
       const taskHeaders = headers(request.roleId)
       const post = await send(`${base}/console/chat/task`, { method: 'POST', headers: taskHeaders,
-        signal: timeout(30_000), body: JSON.stringify({ ...payload(request), timeout: 570_000 }) })
+        // QwenPaw's task timeout is in seconds; AbortSignal and the local deadline use milliseconds.
+        signal: timeout(30_000), body: JSON.stringify({ ...payload(request), timeout: 570 }) })
       if (!post.ok) throw new Error(`goddess task submit ${post.status}: ${(await post.text()).slice(0, 200)}`)
       const { task_id: taskId } = await post.json() as { task_id?: string }
       if (!taskId) throw new Error('goddess task: no task_id')

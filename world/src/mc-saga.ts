@@ -278,8 +278,8 @@ export function createSaga(config: Config, deps: SagaDeps): SagaHandle {
   const log = (msg: string) => console.log(`[mc-saga] ${msg}`)
   const lc = createLifecycle()
   if (!config.enabled) return { dispose: () => {} }
-  const modelProvider = createWorldModelProvider({ qwenpawUrl: config.qwenpawUrl, provider: deps.modelProvider,
-    qwenpaw: { legacyHeaders: true, includeChatErrorBody: false } })
+  const modelProvider = createWorldModelProvider({ qwenpawUrl: config.qwenpawUrl, provider: deps.modelProvider, purpose: 'world.saga',
+    qwenpaw: { includeChatErrorBody: false } })
   const dataDir = resolve(config.dataDir)
   mkdirSync(dataDir, { recursive: true })
   const storePath = join(dataDir, 'saga-store.json')

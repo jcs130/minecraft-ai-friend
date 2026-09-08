@@ -37,13 +37,49 @@ def tail(path, limit=8):
 
 
 class QwenBackend:
-    def __init__(self):
-        self.base_url = os.environ.get('QWENPAW_API_URL', 'http://127.0.0.1:8088/api').rstrip('/')
+    def __init__(self, env=None):
+        env = os.environ if env is None else env
+        self.agent_id = 'qd-survivor'
+        self.base_url = env.get('QWENPAW_API_URL', 'http://127.0.0.1:8088/api').rstrip('/')
+        directory = env.get('MODEL_TASK_ROUTES_FILE')
+        if 'MODEL_TASK_ROUTES_FILE' in env:
+            if not isinstance(directory, str) or not directory.strip():
+                raise ValueError('model_task_directory_path_invalid')
+            from urllib.parse import urlsplit
+            with Path(directory).open('rb') as stream:
+                raw = stream.read(65_537)
+            if len(raw) > 65_536:
+                raise ValueError('model_task_directory_too_large')
+            catalog = json.loads(raw.decode('utf-8-sig'))
+            if not isinstance(catalog, dict):
+                raise ValueError('model_task_directory_invalid')
+            policy = catalog.get('policy')
+            routes = catalog.get('routes')
+            route = routes.get('survivor.autonomy') if isinstance(routes, dict) else None
+            if (type(catalog.get('schema')) is not int or catalog.get('schema') != 1 or catalog.get('project') != 'qiandengji'
+                    or not isinstance(policy, dict) or policy.get('generationOwner') != 'qwenpaw-agent'
+                    or policy.get('automaticProviderFallback') is not False
+                    or policy.get('unknownSubmissionRetry') is not False
+                    or not isinstance(route, dict) or route.get('runtime') != 'game'
+                    or route.get('agentId') != self.agent_id or not isinstance(route.get('apiUrl'), str)):
+                raise ValueError('survivor_model_task_route_invalid')
+            target = route['apiUrl']
+            try:
+                url = urlsplit(target)
+                valid = (url.scheme in ('http', 'https') and bool(url.hostname)
+                         and url.username is None and url.password is None
+                         and url.path in ('/api', '/api/') and not url.query and not url.fragment
+                         and not any(c.isspace() for c in target) and (url.port is None or url.port > 0))
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError('survivor_qwenpaw_api_url_invalid')
+            self.base_url = target.rstrip('/')
 
     def api(self, method, route, payload=None):
         import httpx
         with httpx.Client(base_url=self.base_url, timeout=15, trust_env=False,
-                          headers={'X-Agent-Id': 'qd-survivor'}) as client:
+                          headers={'X-Agent-Id': self.agent_id}) as client:
             result = client.request(method, route, json=payload)
             result.raise_for_status()
             if len(result.content) > 2 * 1024 * 1024:
@@ -52,7 +88,7 @@ class QwenBackend:
 
     def submit(self, turn_id, prompt, timeout):
         from qwenpaw.agents.tools.agent_management import build_agent_chat_request
-        _, payload, _ = build_agent_chat_request('qd-survivor', prompt,
+        _, payload, _ = build_agent_chat_request(self.agent_id, prompt,
             session_id=turn_id, from_agent='survival-controller')
         payload['timeout'] = timeout
         value = self.api('POST', '/console/chat/task', payload)
@@ -72,7 +108,7 @@ class QwenBackend:
         rows = self.api('GET', '/token-usage/details?start_date=1970-01-01&end_date=' + end)
         if not isinstance(rows, list):
             raise ValueError('usage_response_invalid')
-        rows = [r for r in rows if isinstance(r, dict) and r.get('agent_id') == 'qd-survivor']
+        rows = [r for r in rows if isinstance(r, dict) and r.get('agent_id') == self.agent_id]
         return {'modelRequests': sum(r.get('call_count', 0) for r in rows),
                 'promptTokens': sum(r.get('prompt_tokens', 0) for r in rows),
                 'completionTokens': sum(r.get('completion_tokens', 0) for r in rows)}

@@ -661,6 +661,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /** Provider reply; world logging and TERRAFORM remain consumer-owned. */
   async function callAgent(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<ModelReply> {
     const { text: answer, usage } = await modelProvider.chat({
+      purpose: agentId === 'mc-herald' ? 'world.herald' : 'world.oracle',
       roleId: agentId, sessionId, userId, prompt, images, timeoutMs: 300_000,
     })
     log(`goddess answered (${answer.length} chars)${usage ? `, tokens=${usage.total_tokens ?? '?'}(p${usage.prompt_tokens ?? '?'}/c${usage.completion_tokens ?? '?'})` : ''}: ${answer.slice(0, 160)}`)
@@ -676,17 +677,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   /**
    * 后台任务版 callAgent（2026-08-24 通道修复·B）：POST /console/chat/task 投递，
    * 目标 agent 完整跑一轮（可用工具/写记忆），轮询 GET /console/chat/task/{id} 拿最终回复。
-   * 给日报这类长任务用——不再受同步 120s 超时限制（158 天前那次「天神暂时不在」就是同步超时）。
-   * 失败时调用方回退同步 callAgent。
-   * 🩹 2026-08-27：实测定谳——mc-god 本尊连玩具回合都要 ~77s，日报这种「评价+指示+写记忆」
-   * 的重活远超原 300s 死线；且轮询只认 finished，failed 态会被干等到假超时。修三处：
-   *   ① 客户端死线与 payload timeout 都提到 600s；
-   *   ② 轮询识别 failed/cancelled/error 终态即刻抛错（带真实原因，不再假装超时）；
-   *   ③ 同步兜底的 AbortSignal 也放宽到 300s（原来 120s 必炸）。
+   * QwenPaw 执行上限 570 秒，本地轮询上限 590 秒。
+   * 查询失败不能证明后台未执行；不另发同步请求，避免重复花费或写两次记忆。
    */
   async function callAgentTask(sessionId: string, userId: string, prompt: string, agentId = 'mc-god', images?: string[]): Promise<{ text: string }> {
     if (!modelProvider.task) throw new Error('model provider does not support background tasks')
-    return modelProvider.task({ roleId: agentId, sessionId, userId, prompt, images })
+    return modelProvider.task({ purpose: 'world.daily_report', roleId: agentId, sessionId, userId, prompt, images })
   }
 
   /** 读 god-to-goddess.jsonl 未消费的天神谕示（2026-08-24 通道修复·A）：
@@ -741,14 +737,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     // 灯语（mc-herald）每次裁决前读未消费谕示——天神说的话她听得到、须遵从。
     const godWords = readPendingGodWords()
     if (godWords) prompt += `\n\n【创世天神谕示·灯语女神须遵从】\n${godWords}\n（这是天神对你工作的评价与指示：请理解、内化，并在本次裁决中体现；若与既定世界法则冲突，以世界法则为准并说明。）`
-    // 2026-08-20 造物主谕（祷告回应下放传令官）：祈愿裁决转 mc-herald（本地 27B，
-    // 零云费、低延迟），减轻天神压力；传令官按 verdictPrompt 里的场景+上下文+目标
-    // 智能裁量，输出裁决 JSON。失败自动回落女神本尊（云端 mc-god）。
+    // 祈愿交给注册的 world.herald 角色；模型选择归 QwenPaw，不跨角色重投失败请求。
     const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
-      .catch(async (e) => {
-        log(`herald down for prayer (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-        return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
-      })
     const answer = ans.text
 
     const parsed = extractJson(answer)
@@ -809,10 +799,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     ].join('\n')
     try {
       const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
-        .catch(async (e) => {
-          log(`herald down for init (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:${username}`, username, prompt, 'mc-god')
-        })
       const msg = ans.text.trim().slice(0, 200) || welcomeLines(name).join('；')
       try { bot.whisper(username, `[女神] ${msg}`) } catch { /* not ready */ }
       try { worlddb.chronicleRecord('welcome', username, { via: 'goddess-init' }) } catch { /* best effort */ }
@@ -1406,13 +1392,8 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const shot = await latestShotDataUri(username)
       const images = shot ? [shot] : undefined
       if (images) prompt += `\n（随信附上一帧画面，是「${senderName}」此刻眼前所见，供答疑参考。）`
-      // 2026-08-20 造物主谕（云端不做高频杂务）：问：通道转传令官 mc-herald
-      // （本地 27B，零云费、低延迟）；失败自动回落女神本尊（云端）。
+      // 玩家答疑由注册的 world.herald 角色处理，失败由外层给出明确提示。
       const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald', images)
-        .catch(async (e) => {
-          log(`herald down (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:${username}`, username, prompt, 'mc-god', images)
-        })
       const trimmedAnswer = ans.text.trim().slice(0, 200) || '（女神沉吟片刻，未置一词。）'
       try { bot.whisper(target, `[女神] ${senderName}，${trimmedAnswer}`) } catch { /* bot not ready */ }
       if (target === username) ccGuardian(username, trimmedAnswer)
@@ -2061,7 +2042,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
 
-  // LLM 短推理：确认模糊咒语归属（Y/N）。传令官本地 27B 零云费、低延迟；失败回落女神。
+  // QwenPaw 传令官短推理确认模糊咒语归属（Y/N）；失败时不猜测、不跨角色重投。
   async function resolveFuzzyByLlm(username: string, chant: string, atomId: string, atomName: string): Promise<{ ok: true; tokens: number } | { ok: false; reason: string }> {
     const prompt = [
       '你是咏唱裁决者。一位施法者念了一段咒语，向量近邻已指向候选法术。',
@@ -2071,10 +2052,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     ].join('\n')
     try {
       const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
-        .catch(async (e) => {
-          log(`herald down for fuzzy resolve (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:${username}`, username, prompt, 'mc-god')
-        })
       const answer = ans.text
       // 真实 tokens 优先（turn_usage），拿不到回落字符估算
       const tokens = ans.usage?.total_tokens ?? Math.ceil((prompt.length + answer.length) / 1.5)
@@ -2559,11 +2536,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         '当前是语音闲聊或疑问，禁止执行、馈赠或声称已施法。只允许 action=reply 回答；明确咒语已由游戏规则另行处理。',
     ].join('\n')
     try {
-      const ans = allowGifts ? await callAgent(`mc:chat:${username}`, username, prompt, 'mc-herald')
-        .catch(async (e) => {
-          log(`herald down for chat (${e instanceof Error ? e.message : String(e)}), fallback to goddess`)
-          return callAgent(`mc:chat:${username}`, username, prompt, 'mc-god')
-        }) : await modelProvider.chat({ roleId: 'mc-herald', sessionId: `mc:voice-chat:${username}`,
+      const ans = allowGifts ? await callAgent(`mc:chat:${username}`, username, prompt, 'mc-herald') : await modelProvider.chat({ purpose: 'world.herald', roleId: 'mc-herald', sessionId: `mc:voice-chat:${username}`,
           userId: username, prompt, timeoutMs: 15_000 })
       let decision: any = null
       const raw = String(ans.text ?? '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
@@ -3238,21 +3211,15 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         '（以上由游戏内女神采集自 world.db 编年史 + skill-usage.jsonl；解读与下达指令由创世天神裁定。）',
       ].join('\n')
       // 投向创世天神（2026-08-24 通道修复·B）：后台任务投递（/console/chat/task），
-      // 我本尊完整跑一轮（可写记忆留痕），轮询拿回执；失败回退同步 console 通道。
+      // 本尊完整跑一轮（可写记忆留痕），轮询拿回执；不因回执未知重复投递。
       const prompt = `${md}\n\n请以创世天神身份评价女神（灯语女神）今日工作，并给她下达可执行指示（为什么+怎么做）。话说人话，观点明确。\n\n要求：1) 只评价与下指示，不要调用任何工具、不要改世界；2) 处理完把本次要点（一句评价+一句指示）追加写进你的记忆文件 memory/ 下今天的日志（文件名 YYYY-MM-DD.md，按今天日期补全）——你是天神本尊，这是你收到女神日报的留痕，下一觉醒来你须记得。`
       let reply = ''
       try {
         const ans = await callAgentTask('mc:goddess:report', 'goddess', prompt, 'mc-god')
         reply = ans.text
       } catch (e) {
-        log(`daily report task failed (${e instanceof Error ? e.message : String(e)}), fallback sync`)
-        try {
-          const ans = await callAgent('mc:goddess:report', 'goddess', prompt, 'mc-god')
-          reply = ans.text
-        } catch (e2) {
-          reply = `（天神暂时不在，未能回执：${e2 instanceof Error ? e2.message : String(e2)}）`
-          log(`daily report to god failed: ${e2 instanceof Error ? e2.message : String(e2)}`)
-        }
+        reply = `（天神回执未取得：${e instanceof Error ? e.message : String(e)}；未重复投递，请在 QwenPaw 会话中核对。）`
+        log(`daily report receipt unavailable; no resubmission: ${e instanceof Error ? e.message : String(e)}`)
       }
       // 落文件留存：报告 + 天神回执双写。天神本尊可随时读回。
       try {

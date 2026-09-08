@@ -78,8 +78,8 @@ export function createEvolveReview(config: Config, deps: EvolveReviewDeps): Evol
   const log = (msg: string) => console.log(`[mc-evolve-review] ${msg}`)
   const lc = createLifecycle()
   if (!config.enabled) return { dispose: () => {} }
-  const modelProvider = createWorldModelProvider({ qwenpawUrl: config.qwenpawUrl, provider: deps.modelProvider,
-    qwenpaw: { legacyHeaders: true, includeChatErrorBody: false } })
+  const modelProvider = createWorldModelProvider({ qwenpawUrl: config.qwenpawUrl, provider: deps.modelProvider, purpose: 'world.evolution_review',
+    qwenpaw: { includeChatErrorBody: false } })
   // 2026-08-24：数据目录锚到运行态正本（MC_DATA_DIR），不要写死 './data'——
   // 世界进程 cwd=正仓，'./data' 会落到仓库拷贝而非 scratch 活体。
   const dataDir = process.env.MC_DATA_DIR || './data'

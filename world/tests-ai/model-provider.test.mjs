@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -19,11 +19,14 @@ await build({ stdin: { contents: `
   export * from './providers/qwenpaw-provider.ts';
   export * from './providers/world-model-provider.ts';
   export * from './providers/provider-info.ts';
+  export * from './providers/model-task-routes.ts';
   export { qwenpawHeaders } from './qwenpaw-auth.ts';
 `, resolveDir: join(world, 'src'), loader: 'ts' }, outfile: modulePath,
   bundle: true, platform: 'node', format: 'esm', logLevel: 'silent' })
 const { createQwenpawProvider, createWorldModelProvider, describeModelProvider,
-  DEFAULT_MODEL_PROVIDER_INFO, parseQwenpawSse, extractQwenpawTaskText, qwenpawHeaders } = await import(pathToFileURL(modulePath).href)
+  DEFAULT_MODEL_PROVIDER_INFO, parseQwenpawSse, extractQwenpawTaskText, qwenpawHeaders,
+  loadWorldModelRoutes } = await import(pathToFileURL(modulePath).href)
+const routesFile = join(world, '..', 'config', 'model-task-routes.json')
 
 const URL = 'http://qwenpaw.fixture.invalid/api/console/chat'
 const request = { roleId: 'mc-herald', userId: 'QAUser', sessionId: 'mc:QAUser', prompt: '夹具请求，保持原文',
@@ -88,14 +91,25 @@ test('buffered SSE survives UTF-8 network chunk boundaries without returning par
   assert.equal((await h.provider.chat(request)).text, '中文分片')
 })
 
-test('legacy disabled callers retain bare headers and omit HTTP error bodies', async () => {
+test('all callers use shared authentication even when they omit HTTP error bodies', async () => {
+  const originalToken = process.env.QWENPAW_CONSOLE_TOKEN
+  const originalFile = process.env.QWENPAW_CONSOLE_TOKEN_FILE
+  delete process.env.QWENPAW_CONSOLE_TOKEN_FILE
+  process.env.QWENPAW_CONSOLE_TOKEN = 'shared.fixture'
+  try {
   const h = harness([new Response('fixture detail', { status: 403 })],
-    { headers: undefined, legacyHeaders: true, includeChatErrorBody: false })
+    { headers: undefined, includeChatErrorBody: false })
   await assert.rejects(h.provider.chat({ ...request, roleId: 'mc-god' }), /^Error: goddess API 403$/)
-  assert.deepEqual(h.calls[0].headers, { 'Content-Type': 'application/json', 'X-Agent-Id': 'mc-god' })
+  assert.deepEqual(h.calls[0].headers, { 'Content-Type': 'application/json', 'X-Agent-Id': 'mc-god', Authorization: 'Bearer shared.fixture' })
   assert.equal(h.calls.length, 1)
   const detailed = harness([new Response('x'.repeat(250), { status: 503 })])
   await assert.rejects(detailed.provider.chat(request), error => error.message === 'goddess API 503: ' + 'x'.repeat(200))
+  } finally {
+    if (originalToken === undefined) delete process.env.QWENPAW_CONSOLE_TOKEN
+    else process.env.QWENPAW_CONSOLE_TOKEN = originalToken
+    if (originalFile === undefined) delete process.env.QWENPAW_CONSOLE_TOKEN_FILE
+    else process.env.QWENPAW_CONSOLE_TOKEN_FILE = originalFile
+  }
 })
 
 test('task submission, polling, timeout payload and final output keep the existing contract', async () => {
@@ -104,7 +118,7 @@ test('task submission, polling, timeout payload and final output keep the existi
       { content: [{ type: 'text', text: ' 完成' }, { type: 'image', image_url: 'not-text' }, { type: 'text', text: '回执 ' }] }] } })])
   assert.deepEqual(await h.provider.task(request), { text: '完成\n回执' })
   assert.equal(h.calls[0].url, URL + '/task')
-  assert.equal(h.calls[0].body.timeout, 570_000)
+  assert.equal(h.calls[0].body.timeout, 570, 'QwenPaw interprets this field as seconds')
   assert.equal(h.calls[0].body.session_id, request.sessionId)
   assert.equal(h.calls[0].body.input[0].content[0].image_url, request.images[0])
   assert.ok(h.calls.slice(1).every(call => call.url === URL + '/task/task-fixture' && !call.body && !call.method))
@@ -162,8 +176,68 @@ test('injected replacement wins, needs no QwenPaw HTTP, and public metadata refl
   assert.deepEqual(info, { id: 'fixture-conversations', label: 'Fixture conversations', capabilities: { chat: true, task: false } })
   info.capabilities.chat = false
   assert.equal(provider.info.capabilities.chat, true)
-  const defaultProvider = createWorldModelProvider({ qwenpawUrl: URL })
+  const defaultProvider = createWorldModelProvider({ qwenpawUrl: URL, routesFile })
   assert.deepEqual(describeModelProvider(defaultProvider), DEFAULT_MODEL_PROVIDER_INFO)
+})
+
+test('production uses the registered workload role and API, never caller role or legacy endpoint', async () => {
+  const catalog = JSON.parse(readFileSync(routesFile, 'utf8'))
+  for (const [purpose, route] of Object.entries(catalog.routes)) if (purpose.startsWith('world.')) {
+    route.agentId = 'fixture-' + purpose.replaceAll('.', '-').replaceAll('_', '-')
+    route.apiUrl = 'http://qwen-' + purpose.slice(6).replaceAll('_', '-') + '.fixture.invalid/api'
+  }
+  const registered = join(temp, 'routes.json')
+  writeFileSync(registered, JSON.stringify(catalog))
+  const calls = []
+  const provider = createWorldModelProvider({ qwenpawUrl: 'https://raw-provider.fixture.invalid/v1/chat/completions', routesFile: registered,
+    qwenpaw: { headers: role => ({ 'X-Agent-Id': role }), fetch: async (url, init) => {
+      calls.push({ url, headers: init.headers, body: JSON.parse(init.body) })
+      return new Response(answer('registered role'))
+    } } })
+  for (const purpose of ['world.oracle', 'world.herald', 'world.saga', 'world.evolution_review', 'world.daily_report']) {
+    assert.equal((await provider.chat({ ...request, purpose, roleId: 'injected-admin' })).text, 'registered role')
+    const actual = calls.at(-1)
+    assert.equal(actual.url, catalog.routes[purpose].apiUrl + '/console/chat')
+    assert.equal(actual.headers['X-Agent-Id'], catalog.routes[purpose].agentId)
+    assert.equal(actual.body.purpose, undefined)
+    assert.equal(actual.body.model, undefined)
+  }
+  await assert.rejects(provider.chat({ ...request, purpose: 'operations.priority' }), /Unregistered/)
+  assert.equal(calls.length, 5)
+})
+
+test('a rejected registered role produces one request and no cross-role fallback', async () => {
+  let calls = 0
+  const provider = createWorldModelProvider({ qwenpawUrl: URL, routesFile,
+    qwenpaw: { headers: () => ({}), fetch: async () => { calls++; throw new Error('outcome unknown') } } })
+  await assert.rejects(provider.chat({ ...request, purpose: 'world.herald' }), /outcome unknown/)
+  assert.equal(calls, 1)
+  const source = readFileSync(join(world, 'src/mc-god.ts'), 'utf8')
+  assert.doesNotMatch(source, /herald down|fallback sync/)
+  assert.equal((source.match(/callAgent(?:Task)?\('mc:goddess:report'/g) || []).length, 1)
+})
+
+test('missing, malformed or non-QwenPaw task directories fail before any request', () => {
+  assert.throws(() => loadWorldModelRoutes(join(temp, 'missing.json')))
+  const fixture = join(temp, 'invalid-routes.json')
+  const mutations = [
+    c => { c.policy.automaticProviderFallback = true },
+    c => { c.policy.unknownSubmissionRetry = true },
+    c => { c.routes['world.herald'].runtime = 'operations' },
+    c => { delete c.routes['world.saga'] },
+    c => { c.routes['world.oracle'].agentId = 'bad\nheader' },
+    c => { c.routes['world.oracle'].apiUrl = 'https://vendor.fixture.invalid/v1/chat/completions' },
+    c => { c.routes['world.oracle'].apiUrl = 'https://embedded-secret@qwen.fixture.invalid/api' },
+    c => { c.routes['world.oracle'].apiUrl = 'http://qwen.fixture.invalid/api?token=secret' },
+  ]
+  for (const mutate of mutations) {
+    const catalog = JSON.parse(readFileSync(routesFile, 'utf8'))
+    mutate(catalog); writeFileSync(fixture, JSON.stringify(catalog))
+    assert.throws(() => createWorldModelProvider({ qwenpawUrl: URL, routesFile: fixture,
+      qwenpaw: { fetch: () => assert.fail('invalid configuration must not make a request') } }))
+  }
+  writeFileSync(fixture, ' '.repeat(65_537))
+  assert.throws(() => loadWorldModelRoutes(fixture), /size limit/)
 })
 
 test('all three production consumers still bundle with the shared provider adapter', async () => {

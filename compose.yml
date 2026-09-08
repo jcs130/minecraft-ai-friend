@@ -74,11 +74,13 @@ services:
       TERRAIN_FILL: "0"
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     ports:
       - "127.0.0.1:19092:3070"
     volumes:
       - ./world/src:/app/src:ro
       - ./world/bootstrap-world.mts:/app/bootstrap-world.mts:ro
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
       - ./world/admin:/app/admin:ro
       - ./vendor/modern-viewer:/app/modern-viewer:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
@@ -167,9 +169,16 @@ services:
       NPC_GUILD_BASIC_QUESTS: "1"
       NPC_GUILD_QUEUE: /world-data/guild-cli
       NPC_LLM_ENABLED: "0"
+      NPC_GUILD_AGENT_ENABLED: "1"
+      MAID_AGENT_ENABLED: "1"
+      MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
+      QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
       - ./tools/npc_health.py:/opt/npc_health.py:ro
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
+      - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
       - ./server/world-data:/world-data
       - ./server/mcdata:/mcdata
       - ./server/mc/logs:/mclogs:ro
@@ -267,7 +276,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd2
+    image: qiandengji-survivor:2.2.0-qd3
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
@@ -285,6 +294,7 @@ services:
       QWENPAW_AUTH_ENABLED: "0"
       SURVIVOR_QWEN_MODE: external
       QWENPAW_API_URL: http://qwenpaw:8088/api
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       SURVIVOR_SKILL_QUEUE: /survival-skills-queue
       SURVIVOR_GUILD_QUEUE: /survival-guild-queue
@@ -293,6 +303,7 @@ services:
       MC_RCON_SECRET: /run/secrets/rcon
     volumes:
       - ./server/survival-agent-state:/state
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
       - ./server/panel-state:/public
       - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro

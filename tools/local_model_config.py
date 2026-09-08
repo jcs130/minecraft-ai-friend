@@ -1,6 +1,7 @@
-"""Restore this user's existing model settings only into ignored local runtime.
+"""Restore this user's speech-recognition credentials into ignored local runtime.
 
 Does not put credentials into the client pack, source tree, console or reports.
+Generative model credentials belong exclusively to QwenPaw Agent configuration.
 """
 import json
 from pathlib import Path
@@ -24,7 +25,7 @@ def restore(source, target):
 
 def main():
     changed = []
-    for name in ("llm.json", "stt.json"):
+    for name in ("stt.json",):
         source = SOURCE / name
         target = TARGET / name
         if not source.is_file() or not target.is_file():
@@ -35,6 +36,7 @@ def main():
         target.write_text(json.dumps(local, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         changed.append(name)
     print(json.dumps({"local_model_config_restored": changed,
+                      "retired": ["llm.json"], "generation_owner": "qwenpaw-agent",
                       "destination": str(TARGET), "included_in_distribution": False}))
 
 

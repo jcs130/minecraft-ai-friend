@@ -48,7 +48,7 @@ class NpcHealthFlags(unittest.TestCase):
             '_RCON_LAST_OK': 100, '_SPELL_LAST_POLL': 99, '_SPELL_CONSUMED': 7,
             '_NPC_THREADS': {'health': SimpleNamespace(is_alive=lambda: True)},
             'HOST': 'fixture-mc', 'PORT': 25575, 'SPAWN_MISSING': False,
-            'GUILD_AUTOGENERATE': autogenerate,
+            'GUILD_AUTOGENERATE': autogenerate, 'GUILD_AGENT_ENABLED': False,
             # Deliberately include private provider fields: the writer must only
             # project the effective enabled flag, never this configuration object.
             'CFG': {'llm': {'enabled': enabled, 'endpoint': 'fixture-not-exported',
@@ -85,7 +85,8 @@ class NpcHealthFlags(unittest.TestCase):
         state = self.snapshot()
         old_fields = {'updated_at', 'pid', 'rcon_last_ok', 'spell_last_poll', 'spell_consumed',
                       'threads', 'rcon_target', 'spawn_missing'}
-        new_fields = {'llm_enabled', 'guild_autogenerate', 'basic_quests', 'guild_requests_enabled'}
+        new_fields = {'llm_enabled', 'guild_autogenerate', 'basic_quests', 'guild_requests_enabled',
+                      'guild_agent_enabled', 'maid_agent_enabled'}
         self.assertEqual(set(state), old_fields | new_fields | {'guild_requests_last_poll', 'guild_npcs'})
         self.assertTrue(all(type(state[name]) is bool for name in new_fields))
         self.assertEqual(state['guild_requests_last_poll'], 0)

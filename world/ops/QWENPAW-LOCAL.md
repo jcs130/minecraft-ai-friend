@@ -1,4 +1,6 @@
-# 独立神谕服务
+# 游戏 QwenPaw 服务
+
+当前游戏实例已包含原神谕双角色、真实桐人及村民/公会/女仆三个专职角色，共6个启用角色。模型任务统一入口、追加注册与本轮验证见 [MODEL-TASK-ROUTING.md](../../docs/MODEL-TASK-ROUTING.md)。以下保留神谕服务的初始化与升级历史，不应重跑旧初始化覆盖当前角色。
 
 本项目仅整合原有 `mc-god` 和 `mc-herald` 神谕能力。游戏运行镜像为 `qiandengji-qwenpaw-game:2.2.0-qd1`（官方包 2.2.0 加项目就绪兼容补丁），与六角色运营容器、宿主 QwenPaw 分开。最初初始化使用 `qwenpaw-mc:2.1.1`（实际 Python 包 2.1.0）；旧初始化器仍锁定这个来源，再通过下述离线迁移进入 2.2。不要把宿主配置整包搬入，也不要对已有游戏状态重跑初始化。
 
@@ -93,6 +95,6 @@ docker build -f world/ops/Dockerfile.qwenpaw-game -t qiandengji-qwenpaw-game:2.2
 
 回退时先停止游戏 `qwenpaw`，保留失败状态供排查，恢复本次完整私有备份，把 Compose 的游戏镜像改回 `qwenpaw-mc:2.1.1` 再单独启动。不要只降级镜像而沿用已经迁移的配置。Minecraft、world、六角色运营容器和宿主 8088 不参与游戏 QwenPaw 升级。
 
-本轮只读协议审查还记录了一个原有待办：`world/src/providers/qwenpaw-provider.ts` 的后台任务 JSON `timeout: 570000` 被 QwenPaw 解释为秒；应改为 570 秒，保留本地轮询上限 590000 毫秒。这在 2.1 与 2.2 均存在，须随之后的 world 维护验证部署，本次没有为了修改它重启玩法服务。
+模型入口整合已将 `world/src/providers/qwenpaw-provider.ts` 的后台任务 JSON 修正为 `timeout: 570` 秒，本地轮询上限仍为 590000 毫秒。后台回执未知时不再转同步重复投递，传令官请求失败也不跨角色重投。生产 world 从 `MODEL_TASK_ROUTES_FILE` 加载中央用途目录，按 `world.oracle`、`world.herald`、`world.saga`、`world.evolution_review`、`world.daily_report` 选择注册的 QwenPaw Agent 与 API；三类消费者统一读取控制台认证。部署验收由维护流程记录，源码测试不代表线上已更新。
 
 宿主本地模型 provider 的 loopback 主机已转换为 `host.docker.internal`，端口与 API 路径保留。此地址仅用于原选定的本地语言模型服务，不能替换为旧 QwenPaw Agent API。若该模型服务只监听宿主 loopback，容器可达性需要启动后确认；云模型与本地模型的实际回答均不在离线检查中冒充成功。

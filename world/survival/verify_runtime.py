@@ -111,6 +111,9 @@ async def verify_game(require_offline=False):
     from qwenpaw.constant import WORKING_DIR, SECRET_DIR
     from qwenpaw.drivers.storage import load_card
     from qwenpaw.providers.provider_manager import ProviderManager
+    import sys
+    sys.path.insert(0, '/ops')
+    from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
 
     assert importlib.metadata.version('qwenpaw') == '2.2.0'
     assert os.environ.get('QWENPAW_AUTH_ENABLED') == '0'
@@ -118,7 +121,12 @@ async def verify_game(require_offline=False):
     if require_offline:
         assert {name for _, name in socket.if_nameindex()} == {'lo'}, 'Use --network none'
     cfg = load_config()
-    assert {aid for aid, ref in cfg.agents.profiles.items() if ref.enabled} == {'mc-god', 'mc-herald', ROLE}
+    assert {aid for aid, ref in cfg.agents.profiles.items() if ref.enabled} == GAME_ROLES
+    for world_role in WORLD_ROLES:
+        world_agent = validate_workspace(STATE / 'work/workspaces' / world_role, world_role)
+        world_provider = ProviderManager().get_provider(world_agent['active_model']['provider_id'])
+        assert world_provider and world_agent['active_model']['model'] in {m.id for m in world_provider.models + world_provider.extra_models}
+        assert not world_provider.require_api_key or (world_provider.api_key and not world_provider.api_key.startswith('ENC:'))
     agent = load_agent_config(ROLE)
     folder = STATE / 'work/workspaces' / ROLE
     assert Path(agent.workspace_dir) == folder and agent.name == '桐人'
@@ -153,7 +161,7 @@ async def verify_game(require_offline=False):
     migrated = json.loads((STATE / 'work/survivor-migration.json').read_text())
     assert migrated['role'] == ROLE and migrated['sourceNativeRoleDisabled'] is True
     return {'project': PROJECT, 'ok': True, 'role': ROLE, 'packageVersion': '2.2.0',
-            'runtime': 'shared-game-qwenpaw', 'enabledAgents': ['mc-god', 'mc-herald', ROLE],
+            'runtime': 'shared-game-qwenpaw', 'enabledAgents': sorted(GAME_ROLES),
             'mcpTransport': 'streamable_http', 'mcpTools': list(TOOL_NAMES),
             'credentialDecryptable': True, 'model': active.model_dump(mode='json'),
             'preservedModelRequests': migrated['preservedModelRequests'],

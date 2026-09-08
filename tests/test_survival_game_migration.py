@@ -183,6 +183,27 @@ class SharedGameMigrationTests(unittest.TestCase):
             migration.sync_role(self.source, self.target, self.backups, run=self.runner)
         self.assertEqual(self.files(self.root), before)
 
+    def test_sync_with_six_game_roles_preserves_new_role_models_and_history(self):
+        self.migrate(execute=True)
+        config_path = self.target / 'work/config.json'
+        config = migration.read(config_path)
+        for role in ('qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'):
+            config['agents']['profiles'][role] = {'enabled': True}
+            config['agents']['agent_order'].append(role)
+            folder = self.target / 'work/workspaces' / role
+            self.write(folder / 'agent.json', {'id': role,
+                'active_model': {'provider_id': 'user-chosen', 'model': role + '-model'}})
+            self.write(folder / 'sessions/retained.json', {'history': role + '-history'})
+        self.write(config_path, config)
+        prompt = self.target / 'work/workspaces/qd-survivor/AGENTS.md'
+        prompt.write_text('previous prompt', encoding='utf-8')
+        before = self.files(self.target)
+        migration.sync_role(self.source, self.target, self.backups, run=self.runner)
+        after = self.files(self.target)
+        self.assertEqual({name for name in before if before[name] != after[name]},
+                         {'work/workspaces/qd-survivor/AGENTS.md'})
+        self.assertEqual(set(after), set(before))
+
 
 if __name__ == '__main__':
     unittest.main()

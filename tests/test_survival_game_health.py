@@ -46,8 +46,9 @@ class SharedGameRoleHealthTests(unittest.TestCase):
              patch.dict(health.os.environ, {'SURVIVOR_MCP_TOKEN_FILE': str(self.token)}):
             health.check_survivor_config(self.folder)
 
-    def test_real_three_roles_and_scoped_http_config_are_required(self):
-        self.assertEqual(health.GAME_ROLES, {'mc-god', 'mc-herald', 'qd-survivor'})
+    def test_real_six_roles_and_scoped_http_config_are_required(self):
+        self.assertEqual(health.GAME_ROLES, {'mc-god', 'mc-herald', 'qd-survivor',
+            'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'})
         self.check()
 
     def test_shell_and_stdio_cannot_be_added_to_survivor(self):

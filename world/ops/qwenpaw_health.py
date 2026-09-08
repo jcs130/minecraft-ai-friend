@@ -4,9 +4,11 @@ import importlib.metadata
 import os
 from pathlib import Path
 import urllib.request
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PHASE = 'auth-mode'
-GAME_ROLES = {'mc-god', 'mc-herald', 'qd-survivor'}
+from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
 
 
 def check_survivor_config(folder):
@@ -74,6 +76,8 @@ def check_runtime_config():
         jobs = folder/'jobs.json'
         assert not jobs.exists() or not json.loads(jobs.read_text())['jobs']
     check_survivor_config(Path('/state/work/workspaces/qd-survivor'))
+    for aid in WORLD_ROLES:
+        validate_workspace(Path('/state/work/workspaces') / aid, aid)
     return {aid for aid in ('default', 'QwenPaw_QA_Agent_0.2')
             if config['agents']['profiles'].get(aid, {}).get('enabled') is False}
 
@@ -107,13 +111,13 @@ def main():
     PHASE = 'agent-list'
     agents = get('/agents')['agents']
     assert {a['id'] for a in agents if a['enabled']} == GAME_ROLES
-    for aid in ['mc-god', 'mc-herald']:
+    for aid in ['mc-god', 'mc-herald', *WORLD_ROLES]:
         PHASE = 'disabled-tools:' + aid
         items = get('/tools', aid=aid)
         assert items and not any(item['enabled'] for item in items)
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
                       'authMode': 'local-passwordless', 'authEnabled': False, 'anonymousAccess': True,
-                      'packageVersion': '2.2.0', 'agents': 3, 'enabledTools': 0,
+                      'packageVersion': '2.2.0', 'agents': len(GAME_ROLES), 'enabledTools': 0,
                       'survivorMcp': 'authenticated-streamable-http'}))
 
 

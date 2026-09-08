@@ -56,15 +56,15 @@ class BindingTests(unittest.TestCase):
         invalid = self.profile | {'key': 'shilei', 'display': '石磊', 'profession': 'nitwit', 'quests': [template]}
         unbound = {'key': 'zhujiu', 'display': '烛九', 'profession': 'toolsmith', 'carrier': 'base_villager', 'quests': [template]}
         with tempfile.TemporaryDirectory() as tmp:
-            llm = Mock(return_value=None)
+            llm = Mock(return_value={})
             namespace = {'os': os, 'random': random.Random(1), 'CFG': {'quests': {'per_villager_chance': 1, 'daily_cap': 12}},
                          'PROFILES': [good,invalid,unbound], 'quests_path': lambda day: Path(tmp)/(day+'.json'),
-                         'llm_quest': llm, 'print': lambda *a, **kw: None}
+                         'qwen_quests': llm, 'print': lambda *a, **kw: None}
             exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
             doc = namespace['gen_quests']('2026-09-09')
             self.assertEqual([q['villager'] for q in doc['quests']], ['jingshui'])
             self.assertEqual(doc['availability']['eligibleIssuers'], ['jingshui'])
-            llm.assert_called_once_with(good, '2026-09-09')
+            llm.assert_called_once_with([good], '2026-09-09')
             before = (Path(tmp)/'2026-09-09.json').read_bytes()
             namespace['PROFILES'] = []
             self.assertEqual(namespace['gen_quests']('2026-09-09'), doc)

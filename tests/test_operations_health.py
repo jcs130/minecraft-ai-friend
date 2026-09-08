@@ -358,7 +358,7 @@ class OperationsHealth(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', side_effect=read), ExitStack() as stack:
             for name in ('probe_management', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands',
                          'probe_chanting_staff', 'probe_voice_recording', 'probe_voice_boundary_deployment',
-                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor'):
+                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing'):
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             state.pop('operations')
@@ -476,7 +476,7 @@ class OperationsTeamProbe(unittest.TestCase):
     def test_team_runtime_or_behavior_failure_turns_panel_red(self):
         other = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
                  'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
-                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor')
+                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing')
         with ExitStack() as stack:
             for name in other:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
@@ -518,9 +518,9 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
                     with self.assertRaises(AssertionError):
                         module.check_passwordless_auth(lambda _: self.fail('Environment must fail before HTTP'))
 
-    def test_game_probe_uses_anonymous_gets_and_keeps_two_roles_tool_denial(self):
+    def test_game_probe_uses_anonymous_gets_and_keeps_five_text_roles_tool_denial(self):
         module = self.load_probe('qwenpaw_health.py')
-        roles = ['mc-god', 'mc-herald', 'qd-survivor']
+        roles = ['mc-god', 'mc-herald', 'qd-survivor', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue']
         routes = {'/auth/status': {'enabled': False},
                   '/version': {'version': '2.2.0'},
                   '/healthz': {'status': 'ok', 'agents_loaded': roles},
@@ -541,10 +541,11 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             result = json.loads(output.getvalue())
             self.assertTrue(result['ok']); self.assertIs(result['authEnforced'], False)
             self.assertEqual(result['authMode'], 'local-passwordless')
-            self.assertEqual(result['agents'], 3)
+            self.assertEqual(result['agents'], 6)
             self.assertEqual([r.full_url for r in requests[1:3]], [
                 'http://127.0.0.1:8088/api/version', 'http://127.0.0.1:8088/api/healthz'])
-            self.assertEqual([r.get_header('X-agent-id') for r in requests[-2:]], ['mc-god', 'mc-herald'])
+            self.assertEqual([r.get_header('X-agent-id') for r in requests[-5:]],
+                             ['mc-god', 'mc-herald', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'])
             routes['/tools'][0]['enabled'] = True
             with self.assertRaises(AssertionError):
                 module.main()
@@ -555,7 +556,7 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
 
     def test_game_probe_rejects_incomplete_readiness_even_when_config_and_agent_list_are_valid(self):
         module = self.load_probe('qwenpaw_health.py')
-        roles = ['mc-god', 'mc-herald', 'qd-survivor']
+        roles = ['mc-god', 'mc-herald', 'qd-survivor', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue']
         routes = {'/auth/status': {'enabled': False}, '/version': {'version': '2.2.0'},
                   '/healthz': {'status': 'ok', 'agents_loaded': roles},
                   '/agents': {'agents': [{'id': name, 'enabled': True} for name in roles]},
@@ -566,6 +567,7 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
                 patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}) as config, \
                 patch.object(module.urllib.request, 'urlopen', side_effect=get):
             for value in ({'status': 'loading', 'agents_loaded': ['mc-god', 'mc-herald']},
+                          {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', 'qd-survivor']},
                           {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald']},
                           {'status': 'ok', 'agents_loaded': []},
                           {'status': 'ok', 'agents_loaded': ['mc-god']},
