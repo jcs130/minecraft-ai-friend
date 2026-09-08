@@ -8,7 +8,7 @@ import sys
 import time
 import uuid
 
-TOOL_NAMES = ('status', 'look', 'move', 'mine', 'craft', 'eat', 'equip',
+TOOL_NAMES = ('status', 'look', 'move', 'mine', 'craft', 'lookup_recipe', 'eat', 'equip',
               'skill_catalog', 'skill_read', 'skill_draft', 'skill_test',
               'skill_promote', 'skill_start', 'remember', 'game_skills',
               'game_cast', 'game_learn', 'game_skill_receipt', 'world_perception',
@@ -228,6 +228,12 @@ def make_server(gateway=None, skill_tools=None, http=False):
     def craft(turn_id: str, item_id: str, count: int = 1) -> dict:
         """使用真实背包材料合成 1–16 个物品；3×3 配方需附近有工作台。"""
         return gateway.action(turn_id, 'craft', {'item_id': item_id, 'count': count})
+
+    @server.tool()
+    def lookup_recipe(item_id: str) -> dict:
+        """按完整物品ID只读查询当前服务器配方，含使用标准配方类型的模组。最多4条，未覆盖特殊机器/动态配方；材料简称不可猜完整ID。不消耗动作，不合成。"""
+        from recipe_lookup import lookup_recipe as query
+        return query(gateway, item_id)
 
     @server.tool()
     def eat(turn_id: str, item_id: str) -> dict:

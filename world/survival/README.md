@@ -28,11 +28,12 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 
 ## MCP 工具
 
-`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **39 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。内置 shell、文件、浏览器、额外 Agent、后台记忆、标题、heartbeat、jobs 与失败重试都关闭。每轮最多 6 次迭代、输入 16384、输出 2048，模型并发 1、QPM 4；决策间隔和每日决策预算由控制器的持久账本执行，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
+`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **43 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。Qwen 已启用原生技能、角色范围内文件工具及受限周任务管理，见 [原生能力](../../docs/ROLE-LEARNING.md)；生存适配器继续只负责观察与游戏执行。每轮最多 6 次迭代、输入 16384、输出 2048，模型并发 1、QPM 8；决策间隔和每日决策预算由控制器的持久账本执行，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
 
 | 工具 | 用途 |
 |---|---|
 | `status()`、`look(radius)` | 无模型、只读身体和周边事实 |
+| `lookup_recipe(item_id)` | 按完整物品ID查询当前服务器原生支持的配方，每次最多四条；不试合成、不占动作租约，自定义机器覆盖有限 |
 | `world_perception()` | 读取控制器持久感知缓存：聊天、发给自身的消息、周边及世界摘要 |
 | `move(turn_id,x,z,y=None)`、`mine(turn_id,block_ids,count)`、`craft(turn_id,item_id,count)`、`eat(turn_id,item_id)`、`equip(turn_id,item_id,slot)` | 一次受租约限制的直接身体动作；可靠观察实际脚高时可传 y，要求原生严格三维到达能力 |
 | `inspect_block(x,y,z)`、`scan_blocks(block_ids,radius)` | 精查真实方块，或同步扫描半径最多16格的已加载世界；最多8种ID/标签、16处最近匹配、同身体5秒冷却，未加载区域保持未知 |
@@ -47,6 +48,7 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 | `game_learn(turn_id,skill_id)`、`game_cast(turn_id,skill_id,params)` | 使用真实技能书学习或正常施法，共用单动作租约 |
 | `game_skill_receipt(request_id)` | 只读当前身体的原施法/学习回执，不重新执行 |
 | `knowledge_catalog()`、`knowledge_read(...)` | 阅读明确提供的旧世界知识包，保持只读，旧文档不构成新的事实或权限 |
+| Qwen 原生 `Skill`、`read_file` | 按需加载 `qd-minecraft-guide` 简短入口和单篇玩法参考，不一次注入所有资料；见 [渐进披露](../../docs/PROGRESSIVE-GAME-KNOWLEDGE.md) |
 | `request_goal(goal)` | 将 QwenPaw 会话中的明确新目标交给原调度器，不直接操作身体或重置预算 |
 | `skill_draft(turn_id,name,source,fixtures,description)` | 保存纯 JS `next(state,memory)` 草稿和测试 |
 | `skill_test(turn_id,name,version)` | 使用无 IO、有限 CPU/内存的 QuickJS 测试 |

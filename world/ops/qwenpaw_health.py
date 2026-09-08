@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PHASE = 'auth-mode'
 from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
-from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard
+from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard, SURVIVOR_QPM
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
 
 MAID_TOOLS = {'identity', 'context', 'task_catalog', 'sit', 'follow', 'schedule', 'work'}
@@ -105,7 +105,7 @@ def check_survivor_config(folder):
     assert not any(item['enabled'] for item in agent['acp']['agents'].values())
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
     assert agent['heartbeat']['enabled'] is False
-    assert agent['running']['llm_max_concurrent'] == 1 and agent['running']['llm_max_qpm'] == 4
+    assert agent['running']['llm_max_concurrent'] == 1 and agent['running']['llm_max_qpm'] == SURVIVOR_QPM
     assert agent['running']['max_iters'] == 6 and agent['running']['llm_retry_enabled'] is False
     assert set(agent['mcp']['clients']) == {'numen_survival', 'qd_learning'}
     client = agent['mcp']['clients']['numen_survival']

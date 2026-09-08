@@ -2,6 +2,8 @@
 
 目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
+2026-09-08 玩法资料后续要求：使用 QwenPaw 原生渐进披露，`qd-minecraft-guide` 简介→Skill短正文→read_file单篇references；不能把百科、所有配方和旧路线塞进上下文。桐人 MCP 新增只读 lookup_recipe，总计43项，复用当前Numen RecipeManager，仅覆盖标准配方类型而非所有机器。详见 docs/PROGRESSIVE-GAME-KNOWLEDGE.md。用户允许当前功能验证多用 CodingPlan；真实模型实验必须记录实际调用与结果，不因预算优先级放宽就制造无任务的高频循环。实测QPM4会在渐进查阅第5轮前本地超时，现桐人QPM8、并发1、单任务6迭代；自主48次/24h与180秒间隔保留。Qwen限流器进程缓存需重启游戏Qwen才能应用新QPM。
+
 2026-09-08 后续阶段覆盖下文旧的“仅设计/工具全禁”限制：用户要求技能优先复用官方与市场，已采用 QwenPaw 官方 make-skill、file_reader、cron，普通技能原生创建，游戏可执行程序仍须测试。游戏6个基础角色加注册女仆独立角色、运营6角色均按自身工作区管理；官方工具检查需读取当前workspace角色，不能只改agent.json却保留全局guard。原生周任务复用现有预算，无额外Agent守护进程。具体边界见 docs/ROLE-LEARNING.md。
 
 人物桥接本轮已部署：GodVoice角色语音、TLM真实身份签名/MCP及原生设置包，见 docs/MAID-BRIDGE-IMPLEMENTATION.md。有主的旧女仆注册为独立Qwen角色，未加载区块仍休眠，无主的两位不自动收养。Numen恢复补丁已让原桐人同UUID重新上线，48次/24h决策额度保留；不能把budget_wait说成正在继续新目标。MCP现42项，新增speak/speech_status/stop_speaking。声音解码、队列及隔离世界测试不等于真人听到或女仆跨天自主经营已验收。

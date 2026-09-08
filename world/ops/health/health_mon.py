@@ -1218,6 +1218,16 @@ def probe_agent_learning():
         return {'ok': False, 'error': 'Agent learning evidence unavailable'}
 
 
+def probe_game_knowledge():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_game_knowledge_health', PROJECT / 'tools/game_knowledge_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(PROJECT)
+    except Exception as exc:
+        return {'ok': False, 'errorType': type(exc).__name__, 'error': 'Game knowledge reference or recipe tool unavailable'}
+
+
 def main_locked():
     operations = refresh_operations_snapshot()
     report = {"checked_at": datetime.now(timezone.utc).isoformat(), "project": "qiandengji",
@@ -1253,7 +1263,7 @@ def main_locked():
                   "advancement:find_thornborn_towers", "advancement:find_fishing_hut", "exploration-position-parser")),
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
-              "agent_learning": probe_agent_learning()}
+              "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge()}
     report["ok"] = all(v["ok"] for v in report.values() if isinstance(v, dict) and "ok" in v)
     report["scope"] = "Service readiness and the exercised core gameplay paths; not an exhaustive content audit"
     report["unverified"] = ["Legacy NPC trade profiles", "Physical controller input", "Physical microphone input and audible playback", "Agent offscreen WebGL visual perception", "Dormant original character bodies in live play (model appearance verified on temporary Numen bodies)"]

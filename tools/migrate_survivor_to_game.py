@@ -24,6 +24,8 @@ from cryptography.fernet import Fernet
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
 from mcp_server import TOOL_NAMES
+sys.path.insert(0, str(ROOT / 'world/ops'))
+from role_learning_profiles import maid_roles
 
 ROLE = 'qd-survivor'
 PROVIDER = 'qd-survivor-codingplan'
@@ -233,7 +235,9 @@ def sync_role(source=None, target=None, backups=None, run=subprocess.run):
     config = read(target / 'work/config.json')
     enabled_roles = {aid for aid, ref in config['agents']['profiles'].items() if ref.get('enabled')}
     base_roles = {'mc-god', 'mc-herald', ROLE}
-    if enabled_roles not in (base_roles, base_roles | {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}):
+    registered = set(maid_roles(target.parent / 'mcdata/village/maid-agents/public/roles.json'))
+    if enabled_roles not in (base_roles | registered,
+            base_roles | {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'} | registered):
         raise ValueError('unexpected_game_roles')
     folder = target / 'work/workspaces' / ROLE
     agent = read(folder / 'agent.json')

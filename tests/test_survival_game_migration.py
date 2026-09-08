@@ -183,6 +183,26 @@ class SharedGameMigrationTests(unittest.TestCase):
             migration.sync_role(self.source, self.target, self.backups, run=self.runner)
         self.assertEqual(self.files(self.root), before)
 
+    def test_sync_preserves_registered_independent_maid_and_rejects_unknown_role(self):
+        self.migrate(execute=True)
+        role = 'maid-registered'; path = self.target.parent / 'mcdata/village/maid-agents/public/roles.json'
+        self.write(path, {'schema': 1, 'activeRoleIds': [role], 'registeredCount': 1,
+                          'bindingsValid': True, 'independentSessions': True})
+        config_path = self.target / 'work/config.json'; config = migration.read(config_path)
+        config['agents']['profiles'][role] = {'enabled': True}
+        self.write(config_path, config)
+        agent_path = self.target / 'work/workspaces' / role / 'agent.json'
+        self.write(agent_path, {'id': role, 'active_model': {'model': 'maid-model'}})
+        original = agent_path.read_bytes()
+        migration.sync_role(self.source, self.target, self.backups, run=self.runner)
+        self.assertEqual(agent_path.read_bytes(), original)
+        config['agents']['profiles']['unregistered-role'] = {'enabled': True}
+        self.write(config_path, config)
+        before = self.files(self.root)
+        with self.assertRaisesRegex(ValueError, 'unexpected_game_roles'):
+            migration.sync_role(self.source, self.target, self.backups, run=self.runner)
+        self.assertEqual(self.files(self.root), before)
+
     def test_sync_with_six_game_roles_preserves_new_role_models_and_history(self):
         self.migrate(execute=True)
         config_path = self.target / 'work/config.json'

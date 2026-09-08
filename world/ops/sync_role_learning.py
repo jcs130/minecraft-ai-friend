@@ -12,9 +12,10 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import tempfile
 
 from role_learning_profiles import (roles, role_skills, with_learning, learning_card,
-    validate_learning_workspace, read_safe, validate_jobs)
+    validate_learning_workspace, read_safe, validate_jobs, skill_references)
 from agent_learning import managed_job
 from native_role_capabilities import NATIVE_SKILLS, native_content
 
@@ -55,6 +56,7 @@ def plan(state, runtime, source=HERE):
         for name in names:
             path = Path(source) / 'skills' / name / 'SKILL.md'
             assert path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 16384
+            skill_references(name, source)
         jobs = read_safe(folder / 'jobs.json') if (folder / 'jobs.json').exists() else {'version': 2, 'jobs': []}
         assert isinstance(jobs['jobs'], list) and all(job['id'] == 'qd-learning-' + role for job in jobs['jobs'])
         result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': 'qd-learning-' + role})
@@ -89,7 +91,9 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
         role, names = item['role'], item['skills']
         folder = state / 'workspaces' / role
         for relative in ['agent.json', 'AGENTS.md', 'skill.json', 'jobs.json', 'drivers/mcp/qd_learning.yaml',
-                         *['skills/' + name + '/SKILL.md' for name in [*names, *NATIVE_SKILLS]]]:
+                         *['skills/' + name + '/SKILL.md' for name in [*names, *NATIVE_SKILLS]],
+                         *['skills/' + name + '/references/' + page for name in names
+                           for page in skill_references(name, folder)]]:
             path = folder / relative
             if path.exists():
                 assert path.resolve().is_relative_to(folder.resolve()) and not path.is_symlink()
@@ -109,11 +113,38 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
         manifest = read_safe(folder / 'skill.json') if (folder / 'skill.json').exists() else {'skills': {}}
         for name in names:
             content = (source / 'skills' / name / 'SKILL.md').read_text(encoding='utf-8')
+            references = skill_references(name, source)
             if name in manifest['skills']:
+                previous = skill_references(name, folder)
+                if previous != references:
+                    # save_skill only updates SKILL.md. Scan the complete candidate
+                    # with Qwen before changing references in the stopped workspace.
+                    with tempfile.TemporaryDirectory(prefix='qd-reference-scan-') as temporary:
+                        candidate = SkillService(Path(temporary))
+                        assert candidate.create_skill(name, content, references=references or None,
+                            enable=False, installed_from='qiandengji-repository') == name
+                    directory = folder / 'skills' / name / 'references'
+                    directory.mkdir(exist_ok=True)
+                    assert directory.resolve().is_relative_to(folder.resolve())
+                    for page, body in references.items():
+                        target = directory / page
+                        # Interrupted writes must not leave an illegal file in
+                        # references that prevents the next sync from recovering.
+                        temporary = backup / role / 'reference-stage' / name / page
+                        temporary.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            with temporary.open('x', encoding='utf-8', newline='\n') as stream:
+                                stream.write(body)
+                            temporary.replace(target)
+                        finally:
+                            temporary.unlink(missing_ok=True)
+                    for page in previous.keys() - references.keys():
+                        (directory / page).unlink()
                 result = service.save_skill(skill_name=name, content=content)
                 assert result.get('success'), result.get('reason')
             else:
-                assert service.create_skill(name, content, enable=True, installed_from='qiandengji-repository') == name
+                assert service.create_skill(name, content, references=references or None,
+                    enable=True, installed_from='qiandengji-repository') == name
             assert service.enable_skill(name)['success'] is True
             assert service.set_skill_channels(name, ['all']) is True
         for name in NATIVE_SKILLS:

@@ -2,6 +2,8 @@
 
 通用能力优先使用 QwenPaw 2.2.0：技能正文由原生 SkillService 管理，定时任务由原生 CronManager 执行，读写文件与创建技能使用官方工具。`world/ops/native-role-skills.json` 锁定采用的官方技能原包；项目技能只补充游戏接口、职责与实际验证要求。原生技能和项目技能都在对应 Agent 的技能页显示。
 
+玩法知识使用 [渐进式游戏资料](PROGRESSIVE-GAME-KNOWLEDGE.md)：游戏角色启用 `qd-minecraft-guide`，常驻仅名称/简介，任务相关正文及参考页通过原生 Skill、read_file 分步读取；配方查询复用 Numen 当前服务器数据。
+
 游戏 18089 与运营 18090 分开管理。每个角色只使用自身的工作区、技能与任务。宿主 8088 继续用于原有其他工作。工作区内置工具使用 Qwen ToolGuard 做执行前检查，这不是操作系统级文件沙箱；不把任意容器 shell 开放给游戏角色。
 
 ## 两种技能

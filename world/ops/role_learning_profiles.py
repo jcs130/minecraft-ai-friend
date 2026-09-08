@@ -11,6 +11,7 @@ from native_role_capabilities import configure_native, validate_native, validate
 
 HERE = Path(__file__).resolve().parent
 DRIVER = 'qd_learning'
+SURVIVOR_QPM = 8
 TEXT_ROLES = {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}
 
 
@@ -39,9 +40,27 @@ def role_skills(role, runtime, source=HERE):
     filename = 'game-role-skills.json' if runtime == 'game' else 'operations-role-skills.json'
     manifest = json.loads((Path(source) / filename).read_text(encoding='utf-8-sig'))
     assert manifest['schema'] == 1 and set(manifest['roles']) == set(GAME_ROLES if runtime == 'game' else OPS_ROLES)
-    result = manifest['roles'][role] if role in manifest['roles'] else ['qd-skill-evolution', 'qd-maid-personality']
+    result = manifest['roles'][role] if role in manifest['roles'] else manifest['roles']['qd-maid-dialogue']
     assert isinstance(result, list) and len(set(result)) == len(result) and 'qd-skill-evolution' in result
     assert all(isinstance(name, str) and re.fullmatch(r'qd-[a-z0-9-]{1,70}', name) for name in result)
+    return result
+
+
+def skill_references(name, source=HERE):
+    """Small repository reference pages; native Qwen loads them only on demand."""
+    assert re.fullmatch(r'qd-[a-z0-9-]{1,70}', name)
+    root = Path(source) / 'skills' / name / 'references'
+    assert not any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (root, *root.parents))
+    if not root.exists():
+        return {}
+    files = sorted(root.iterdir())
+    assert len(files) <= 32
+    result = {}
+    for path in files:
+        assert path.is_file() and not path.is_symlink() and re.fullmatch(r'[a-z0-9-]+\.md', path.name)
+        assert 0 < path.stat().st_size <= 16384
+        result[path.name] = path.read_text(encoding='utf-8')
+    assert sum(len(body.encode('utf-8')) for body in result.values()) <= 131072
     return result
 
 
@@ -67,6 +86,11 @@ def with_learning(agent, role, runtime):
     if runtime == 'game' and role in TEXT_ROLES:
         result['running']['max_iters'] = 3
         result['running']['loop']['iteration'].update(enabled=True, max_iterations=3)
+    if runtime == 'game' and role == 'qd-survivor':
+        # Six-step progressive retrieval needs a final model response. The old
+        # QPM4 limit timed out locally before step five; user authorized more
+        # CodingPlan use for working functionality on 2026-09-08.
+        result['running']['llm_max_qpm'] = SURVIVOR_QPM
     return configure_native(result, role)
 
 
@@ -80,6 +104,8 @@ def validate_learning_profile(agent, role, runtime):
     if runtime == 'game' and role in TEXT_ROLES:
         assert agent['running']['max_iters'] == 3
         assert agent['running']['loop']['iteration']['max_iterations'] == 3
+    if runtime == 'game' and role == 'qd-survivor':
+        assert agent['running']['llm_max_qpm'] == SURVIVOR_QPM
 
 
 def validate_jobs(value, role, runtime):
@@ -147,6 +173,9 @@ def validate_role_skills(folder, role, runtime, source=HERE):
         assert row['enabled'] is True and ('all' in row['channels'] or 'console' in row['channels'])
         path = folder / 'skills' / name / 'SKILL.md'
         assert not path.is_symlink() and path.read_bytes() == (Path(source) / 'skills' / name / 'SKILL.md').read_bytes()
+        references = skill_references(name, source)
+        deployed = skill_references(name, folder)
+        assert deployed == references, 'managed skill references differ from repository'
     index_path = folder / 'learning/index.json'
     index = read_safe(index_path) if index_path.exists() else {'schema': 1, 'skills': {}}
     assert index['schema'] == 1 and isinstance(index['skills'], dict) and len(index['skills']) <= 8
@@ -166,6 +195,7 @@ def validate_role_skills(folder, role, runtime, source=HERE):
         assert (folder / 'skills' / name / 'SKILL.md').read_text(encoding='utf-8') == LearningTools.markdown(draft)
     native = validate_native_skills(folder, entries)
     return {'required': len(expected) + native, 'projectSkills': len(expected), 'builtinSkills': native,
+            'referencePages': sum(len(skill_references(name, source)) for name in expected),
             'learned': len(learned), 'learnedEnabled': sum(row['enabled'] for row in learned.values())}
 
 
