@@ -121,6 +121,7 @@
   ],
   "shared_extension_locks": [
     "manifests/chanting-items.lock.json",
-    "manifests/recording-extension.lock.json"
+    "manifests/recording-extension.lock.json",
+    "manifests/maid-bridge.lock.json"
   ]
 }

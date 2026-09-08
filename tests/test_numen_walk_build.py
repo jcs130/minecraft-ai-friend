@@ -67,6 +67,17 @@ class WalkBuildTests(unittest.TestCase):
         self.assertEqual(set(manifest['preimages']), set(manifest['postimages']))
         self.assertEqual(manifest['baselineJarSha256'], '3a9af5420a5d40dcd6a24dd906d43fe4f67f25eea8ab6a082153bdcde7fae7af')
 
+    def test_existing_restore_overlay_is_scoped_to_core_entry_and_command(self):
+        directory = ROOT/'world/numen-patches'
+        manifest = json.loads((directory/'restore-existing-v1.json').read_text(encoding='utf8'))
+        source = directory/'restore-src/com/dwinovo/numen/core/entity/ExistingBodyRestore.java'
+        self.assertEqual(builder.sha(builder.normalized(source)), manifest['restoreSourceSha256'])
+        self.assertEqual(set(manifest['classFamilies']), {'com/dwinovo/numen/core/NumenCoreNeoForge',
+                                                        'com/dwinovo/numen/core/entity/ExistingBodyRestore'})
+        self.assertEqual(manifest['baselineJarSha256'], 'c86f8e26593624e0071d9e0fe95d5b09ca9c03811ea57a9c4881efd2e829c7ba')
+        self.assertNotIn('Companions.summon(', source.read_text(encoding='utf8'))
+        self.assertNotIn('UUID.randomUUID(', source.read_text(encoding='utf8'))
+
 
 if __name__ == '__main__':
     unittest.main()

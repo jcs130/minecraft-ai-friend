@@ -528,14 +528,6 @@
       "preserved_existing": false
     },
     {
-      "path": "mods/god-voice-0.1.0.jar",
-      "size": 19635,
-      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
-      "source_sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
-      "source": "client_extension",
-      "preserved_existing": false
-    },
-    {
       "path": "mods/immersive_aircraft-1.4.6+1.21.1-neoforge.jar",
       "size": 2447578,
       "sha256": "953222fefb9439b74760583d46dbf620ed85cc614f5ab629aec05ab6ce40ebe7",
@@ -958,6 +950,22 @@
       "source_sha256": "26bd17b0f0cd32ad649c209dc48cf1f232bd8a2145031656cbff9485336305e2",
       "source": "rapid_optimization",
       "preserved_existing": false
+    },
+    {
+      "path": "mods/god-voice-0.1.0.jar",
+      "size": 37896,
+      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
+      "source_sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
+      "source": "client_extension",
+      "preserved_existing": false
+    },
+    {
+      "path": "mods/qiandeng-maid-bridge-0.1.0.jar",
+      "size": 27709,
+      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
+      "source_sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
+      "source": "client_extension",
+      "preserved_existing": false
     }
   ],
   "mods": [
@@ -1217,14 +1225,6 @@
         "qiandeng_chanting"
       ],
       "sha256": "b867d1ffe7252ad412bb3ddc9b955eb35f94cabe75aa70ea2ee58233cd03f9e5"
-    },
-    {
-      "file": "god-voice-0.1.0.jar",
-      "source": "shared_extension",
-      "ids": [
-        "godvoice"
-      ],
-      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f"
     },
     {
       "file": "abridged-2.0.2-neoforge-21.1.jar",
@@ -1694,6 +1694,22 @@
         "yes_steve_model"
       ],
       "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+    },
+    {
+      "file": "god-voice-0.1.0.jar",
+      "source": "client_extension",
+      "ids": [
+        "godvoice"
+      ],
+      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635"
+    },
+    {
+      "file": "qiandeng-maid-bridge-0.1.0.jar",
+      "source": "client_extension",
+      "ids": [
+        "qiandeng_maid_bridge"
+      ],
+      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f"
     }
   ],
   "excludes_game_binary": true

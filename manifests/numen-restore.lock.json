@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "capability": "existing_body_restore_v1",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "client_required": false,
+  "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
+  "sha256": "f93f781342c569124266a046484f5467570c7220473aef7e217d9fc7a71feb4c",
+  "size_bytes": 2448908,
+  "cache_path": "vendor/numen-cache/numen-neoforge-1.21.1-0.1.1.jar",
+  "source_build": "tools/build_numen_body_restore.py",
+  "baseline_sha256": "c86f8e26593624e0071d9e0fe95d5b09ca9c03811ea57a9c4881efd2e829c7ba",
+  "preserved_entries": 495
+}

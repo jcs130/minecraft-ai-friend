@@ -8,9 +8,12 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
+import stat
 import tomllib
+import uuid
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +28,52 @@ CHARACTERS = {
     'ark_texas': '德克萨斯', 'ark_yueyue': '跃跃',
 }
 PACK_DIRECTORIES = ('client/tlm_custom_pack', 'server/mc/tlm_custom_pack', 'server/public/packs')
+MAID_TTS_URL = 'http://host.docker.internal:8100/tts/maid'
+
+
+def maid_tts_config(data):
+    """Change only the existing GPT-SoVITS URL; preserve voice and private fields."""
+    if not isinstance(data, dict) or not isinstance(data.get('gpt-sovits'), dict):
+        raise ValueError('Existing GPT-SoVITS site is required')
+    result = copy.deepcopy(data)
+    result['gpt-sovits']['url'] = MAID_TTS_URL
+    return result
+
+
+def prepare_maid_tts(root=ROOT):
+    path = root / 'server/mc/config/touhou_little_maid/sites/tts.json'
+    backup_dir = root / 'server/tts-state/backups'
+    for target in (path, backup_dir):
+        if not target.resolve().is_relative_to(root.resolve()):
+            raise ValueError('TTS configuration must stay inside this project')
+        for ancestor in (target, *target.parents):
+            if ancestor == root.parent:
+                break
+            if ancestor.exists() and (ancestor.is_symlink() or bool(getattr(ancestor.lstat(), 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)):
+                raise ValueError('Linked TTS configuration path is not permitted')
+    previous = path.read_bytes()
+    data = json.loads(previous)
+    updated = maid_tts_config(data)
+    if data == updated:
+        return {'changed': False, 'endpoint': MAID_TTS_URL, 'serviceActions': False}
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / ('maid-site-' + uuid.uuid4().hex + '.json')
+    with backup.open('xb') as handle:
+        handle.write(previous)
+    temporary = path.with_name(path.name + '.stage-' + uuid.uuid4().hex)
+    try:
+        with temporary.open('x', encoding='utf-8', newline='\n') as handle:
+            handle.write(json.dumps(updated, ensure_ascii=False, indent=2) + '\n')
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.read_bytes() != previous:
+            raise ValueError('TTS site changed during preparation')
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return {'changed': True, 'endpoint': MAID_TTS_URL,
+            'backup': str(backup.relative_to(root)), 'serviceActions': False, 'siteReloadRequired': True}
 
 
 def sha256(data):
@@ -130,7 +179,13 @@ def prepare_archive(name, source_bytes):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--packs-only', action='store_true', help='Only prepare ZIPs and the public lock manifest')
+    parser.add_argument('--tts-only', action='store_true', help='Back up and update only the maid TTS URL, without preparing packs')
     args = parser.parse_args()
+    if args.tts_only:
+        if args.packs_only:
+            parser.error('--tts-only and --packs-only are mutually exclusive')
+        print(json.dumps(prepare_maid_tts()))
+        return
     config = ROOT / 'server/mc/config/touhou_little_maid-server.toml'
     text = config.read_text(encoding='utf-8')
     raw = re.search(r'^ClientPackDownloadUrls\s*=\s*(\[.*\])$', text, re.M)
@@ -173,10 +228,7 @@ def main():
         svc = ROOT / 'server/mc/config/voicechat/voicechat-server.properties'
         svc.write_text(re.sub(r'^voice_host=.*$', 'voice_host=127.0.0.1:24455',
                              svc.read_text(encoding='utf-8'), flags=re.M), encoding='utf-8')
-        tts = ROOT / 'server/mc/config/touhou_little_maid/sites/tts.json'
-        data = json.loads(tts.read_text(encoding='utf-8'))
-        data['gpt-sovits']['url'] = 'http://host.docker.internal:8100/tts'
-        tts.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        prepare_maid_tts()
     report = {'count': len(files), 'files': files, 'download_base': 'http://127.0.0.1:19090/packs/',
               'preinstalled_in_client': True, 'server_restart_required': True,
               'voice_host': '127.0.0.1:24455', 'tts_uses_existing_local_inference': True,

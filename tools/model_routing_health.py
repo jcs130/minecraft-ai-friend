@@ -9,6 +9,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
 from world_agent_profiles import WORLD_ROLES, validate_profile
+from role_learning_profiles import validate_learning_workspace
 
 RUNTIMES = {
     'game': ('server/agents/work', 'http://qwenpaw:8088/api'),
@@ -21,6 +22,7 @@ ROUTE_NAMES = {
     'operations.events', 'operations.controls', 'operations.exploration',
 }
 MAID_URL = 'http://npc:8091/v1/chat/completions'
+MAID_IDENTITY_URL = 'http://npc:8091/v1/maid/chat/completions'
 SMOKE_CHECKS = (
     'routes-resolve-to-enabled-agents', 'three-text-only-profiles',
     'maid-sites-preserved-and-routed', 'maid-adapter-auth-and-budget',
@@ -122,13 +124,12 @@ def probe(root=ROOT, now=None):
             folder = root / RUNTIMES['game'][0] / 'workspaces' / role
             agent = read_json(folder / 'agent.json')
             validate_profile(agent, role)
-            assert no_enabled(agent['tools']) and no_enabled(agent['acp'])
-            assert read_json(folder / 'jobs.json')['jobs'] == []
-            skills = folder / 'skill.json'
-            assert not skills.exists() or no_enabled(read_json(skills))
+            assert no_enabled(agent['acp'])
+            validate_learning_workspace(folder, role, 'game')
             drivers = folder / 'drivers'
             assert not drivers.is_symlink() and not getattr(drivers, 'is_junction', lambda: False)()
-            assert not any(p.name != '.legacy_mcp_migration_report.yaml' for p in drivers.rglob('*.yaml'))
+            assert {p.relative_to(drivers).as_posix() for p in drivers.rglob('*.yaml')
+                    if p.name != '.legacy_mcp_migration_report.yaml'} == {'mcp/qd_learning.yaml'}
         checks['quiet_world_task_profiles'] = True
     except (OSError, ValueError, TypeError, KeyError, AttributeError, AssertionError):
         pass
@@ -136,14 +137,20 @@ def probe(root=ROOT, now=None):
         sites = read_json(root / 'server/mc/config/touhou_little_maid/sites/llm.json')
         checks['maid_sites_through_agent'] = bool(sites) and any(row.get('enabled') is True for row in sites.values()) and all(
             isinstance(row, dict) and row.get('id') == site_id and type(row.get('enabled')) is bool
-            and row.get('url') == MAID_URL and row.get('api_type') == 'openai'
+            and (row.get('url'), row.get('api_type')) in ((MAID_URL, 'openai'), (MAID_IDENTITY_URL, 'qiandeng-qwen'))
             and bounded_model_labels(row.get('models')) and row.get('headers') == {}
             for site_id, row in sites.items())
         token = read_text(root / 'server/mcdata/village/maid-agent-token', 512).strip()
         valid_token = 32 <= len(token) <= 256 and token.isascii() and all(33 <= ord(c) <= 126 for c in token)
+        identity_key_valid = False
+        if any(row.get('api_type') == 'qiandeng-qwen' for row in sites.values()):
+            identity_key = read_text(root / 'server/mc/config/qiandeng_maid_bridge/identity.key', 258).strip()
+            identity_key_valid = (32 <= len(identity_key) <= 256 and identity_key.isascii()
+                                  and all(33 <= ord(c) <= 126 for c in identity_key))
         checks['maid_adapter_token_match'] = valid_token and bool(sites) and all(
-            isinstance(row.get('secret_key'), str) and row['secret_key'].isascii()
-            and hmac.compare_digest(row['secret_key'], token) for row in sites.values())
+            (identity_key_valid and row.get('secret_key') == '' if row.get('api_type') == 'qiandeng-qwen'
+             else isinstance(row.get('secret_key'), str) and row['secret_key'].isascii()
+                  and hmac.compare_digest(row['secret_key'], token)) for row in sites.values())
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
     try:

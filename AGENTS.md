@@ -2,6 +2,10 @@
 
 目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
+2026-09-08 后续阶段覆盖下文旧的“仅设计/工具全禁”限制：用户要求技能优先复用官方与市场，已采用 QwenPaw 官方 make-skill、file_reader、cron，普通技能原生创建，游戏可执行程序仍须测试。游戏6个基础角色加注册女仆独立角色、运营6角色均按自身工作区管理；官方工具检查需读取当前workspace角色，不能只改agent.json却保留全局guard。原生周任务复用现有预算，无额外Agent守护进程。具体边界见 docs/ROLE-LEARNING.md。
+
+人物桥接本轮已部署：GodVoice角色语音、TLM真实身份签名/MCP及原生设置包，见 docs/MAID-BRIDGE-IMPLEMENTATION.md。有主的旧女仆注册为独立Qwen角色，未加载区块仍休眠，无主的两位不自动收养。Numen恢复补丁已让原桐人同UUID重新上线，48次/24h决策额度保留；不能把budget_wait说成正在继续新目标。MCP现42项，新增speak/speech_status/stop_speaking。声音解码、队列及隔离世界测试不等于真人听到或女仆跨天自主经营已验收。
+
 用户阶段决定（2026-09-07）：先复用已有 Agent、拆分架构和推进玩家玩法。2026-09-08 新授权：开始一个 QwenPaw + Numen 自主生存 Agent，使用原桐人，支持自主规划、执行、反思及可编程技能学习；这取代此前“Agent 新功能先不做”的阶段限制。当前边界见 docs/AUTONOMOUS-SURVIVOR.md。
 
 后续补充：保留 QwenPaw，但会话接口支持替换，管理台独立运行。D 项目管理台为 19091，游戏 QwenPaw 为 18089，运营 QwenPaw 为 18090，网页天神之眼为 19092。用户 2026-09-08 明确要求前三个网页入口本机免密码，仅绑定 127.0.0.1；宿主 QwenPaw 8088 保持原用途和配置，旧 9090 不再保活。最新边界见 docs/SERVER-MANAGEMENT.md。

@@ -87,11 +87,12 @@ def final_text(value):
 
 
 class QwenTasks:
-    def __init__(self, root, routes=None, token=None, transport=None, clock=time.time):
+    def __init__(self, root, routes=None, token=None, transport=None, clock=time.time, maid_registry=None):
         self.root, self.clock = Path(root), clock
         self.routes = Path(routes or '/etc/qiandeng/model-task-routes.json')
         self.token = Path(token or os.environ.get('QWENPAW_CONSOLE_TOKEN_FILE', '/run/secrets/qwenpaw-console-token'))
         self.transport = transport or self._http
+        self.maid_registry = maid_registry
 
     def _route(self, purpose):
         if purpose not in ROLES:
@@ -116,7 +117,7 @@ class QwenTasks:
         if len(raw) > MAX_BYTES:
             raise ValueError('qwen_response_too_large')
         result = json.loads(raw)
-        if not isinstance(result, dict):
+        if not isinstance(result, dict) and not (method == 'GET' and path == '/mcp' and isinstance(result, list)):
             raise ValueError('qwen_response_invalid')
         return result
 
@@ -129,8 +130,20 @@ class QwenTasks:
         write_json(path, row)
         return row | {'retryAutomatically': False}
 
-    def submit(self, purpose, key, text):
+    def _maid_binding(self, purpose, maid_uuid, owner_uuid):
+        if maid_uuid is None and owner_uuid is None:
+            return None
+        if purpose != 'maid_dialogue':
+            raise ValueError('maid_purpose_required')
+        if self.maid_registry is None:
+            from maid_registry import MaidRegistry
+            self.maid_registry = MaidRegistry()
+        return self.maid_registry.resolve(maid_uuid, owner_uuid)
+
+    def submit(self, purpose, key, text, *, maid_uuid=None, owner_uuid=None):
         route = self._route(purpose)
+        binding = self._maid_binding(purpose, maid_uuid, owner_uuid)
+        role = binding['agentId'] if binding else route['agentId']
         if not isinstance(text, str) or not 1 <= len(text) <= 24000:
             raise ValueError('qwen_prompt_invalid')
         path = self._path(purpose, key)
@@ -138,7 +151,8 @@ class QwenTasks:
         with state_lock(self.root):
             if path.exists():
                 saved = read_json(path)
-                if saved.get('promptSha256') != digest:
+                if (saved.get('promptSha256') != digest or saved.get('agentId') != role
+                        or saved.get('maidUuid') != maid_uuid or saved.get('ownerUuid') != owner_uuid):
                     raise ValueError('qwen_request_conflict')
                 return saved | {'retryAutomatically': False}
             budget_path = self.root / 'budget.json'
@@ -158,14 +172,17 @@ class QwenTasks:
                 saved = read_json(self.root / 'requests' / (reservation['stateKey'] + '.json')) if reservation.get('stateKey') else {}
                 if saved.get('status') not in ('completed', 'failed'):
                     return {'status': 'busy', 'purpose': purpose, 'retryAutomatically': False}
-            row = {'schema': 1, 'purpose': purpose, 'agentId': route['agentId'], 'key': key,
+            row = {'schema': 1, 'purpose': purpose, 'agentId': role, 'key': key,
                    'requestId': 'npc-' + uuid.uuid4().hex, 'startedAt': now, 'status': 'reserved', 'taskId': None,
                    'promptSha256': digest}
+            if binding:
+                row.update(maidUuid=maid_uuid, ownerUuid=owner_uuid, sessionId=binding['sessionId'])
             # Both documents commit before POST. A crash between writes may cost
             # a reservation but cannot permit a duplicate paid request.
             write_json(budget_path, recent + [{**{k: row[k] for k in ('purpose', 'requestId', 'startedAt')}, 'stateKey': path.stem}])
             self._save(path, row)
-        payload = {'channel': 'console', 'session_id': row['requestId'], 'user_id': 'npc-service', 'timeout': 180,
+        payload = {'channel': 'console', 'session_id': row.get('sessionId', row['requestId']),
+            'user_id': 'maid-' + maid_uuid if binding else 'npc-service', 'timeout': 180,
             'input': [{'role': 'user', 'content': [{'type': 'text', 'text': text}]}],
             'request_context': {'root_agent_id': 'npc-service'}}
         try:
@@ -179,14 +196,17 @@ class QwenTasks:
         with state_lock(self.root):
             return self._save(path, row)
 
-    def poll(self, purpose, key):
+    def poll(self, purpose, key, *, maid_uuid=None, owner_uuid=None):
         self._route(purpose)
+        binding = self._maid_binding(purpose, maid_uuid, owner_uuid)
+        role = binding['agentId'] if binding else ROLES[purpose]
         path = self._path(purpose, key)
         with state_lock(self.root):
             if not path.exists():
                 return {'status': 'not_submitted', 'retryAutomatically': False}
             row = read_json(path)
-            if row.get('purpose') != purpose or row.get('key') != key or row.get('agentId') != ROLES[purpose]:
+            if (row.get('purpose') != purpose or row.get('key') != key or row.get('agentId') != role
+                    or row.get('maidUuid') != maid_uuid or row.get('ownerUuid') != owner_uuid):
                 raise ValueError('qwen_task_not_owned')
             if row.get('status') not in ('submitted', 'running', 'poll_unavailable'):
                 return row | {'retryAutomatically': False}

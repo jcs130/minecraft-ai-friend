@@ -13,7 +13,17 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
-from world_agent_profiles import WORLD_ROLES, GAME_ROLES, closed_profile, validate_workspace
+from world_agent_profiles import WORLD_ROLES, GAME_ROLES, closed_profile as _closed_profile, validate_workspace as _validate_workspace
+
+
+# Initial registration stays closed until the separate offline native skill scan
+# succeeds. Runtime health never uses this staging-only validation mode.
+def closed_profile(original, role):
+    return _closed_profile(original, role, learning=False)
+
+
+def validate_workspace(folder, role):
+    return _validate_workspace(folder, role, learning=False)
 
 
 def safe(path):

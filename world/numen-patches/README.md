@@ -44,3 +44,17 @@ python -m unittest discover -s tests -p test_numen_walk_build.py
 终态来自原 `TaskSlot` 已确定的 `success/failed/timeout/cancelled`。缓存最多保存 32 个身体各一条记录；服务器重启清空。消费者必须同时匹配受理回执的任务 ID 和执行前观察到的服务器 epoch，不能把空闲或旧回执作为新动作成功。
 
 编译测试验证任务隔离、执行点击闸门、旧调用兼容、序列化、真实终态缓存、XYZ 高度匹配、水中/空中拒绝、连续 tick 稳定和半砖/农田鞋底探针。构建器测试验证来源校验、类族替换和其他功能条目的完整保留。真实寻路、门墙与村庄环境的行为需要部署后的独立实机证据，编译成功不等同于实机验收。
+
+## 原身体重连增量
+
+`python tools/build_numen_body_restore.py` 在已验证的严格步行产物上仅替换 core 入口类并新增 `ExistingBodyRestore`。`restore-existing-v1.json` 固定输入 JAR、actuator、入口源码和新增源码哈希；其余 class、嵌套 API、资源逐项校验不变。生成文件和构建记录位于被忽略的 `runtime/numen-body-restore-build/`，不自动部署。
+
+仅服务端控制台/RCON 的四级命令 `numen_restore_existing <bodyUUID> <ownerUUID> <name>` 恢复注册表中已有身体。先检查 UUID/name/owner、存档存在和可读、存档 UUID/NumenOwner/维度/存活生存状态、物品槽位及当前注册表可解码的 ItemStack；原生有未完任务时拒绝自动恢复。缺档、死亡或身份不符均明确拒绝，绝不调用 summon、新建 UUID、改物资、替换皮肤或指定传送位置。通过后仅复用原 `Companions.respawn` 与原 `.dat` 加载流程。
+
+回执前缀 `QD_NUMEN_RESTORE_JSON `，能力 `existing_body_restore_v1`，包含同一 bodyUuid/ownerUuid/bodyName、ok、code、phase（restored/observed/rejected/unknown）。原生每身体 60 秒冷却，最多跟踪 64 个身份。成功说明原身份已上线；所有模组物品 components、等级和模型最终是否保持仍需部署后用真实存档与上线状态比对，编译测试不能代替实机验收。
+
+survivor 的 `body_reconnect.py` 只在 enabled、无活动决策、无未确认动作或开放租约时工作。感知失败先读原生在线名单，明确缺席后才预留一次恢复；名单读取失败是退避，不是身体不存在。每天最多 3 次原生恢复尝试。请求结果未知或进程中断于预留后，只能通过后续名单确认原身份在线，不能再次重放。状态持久在 `body-reconnect.json`，管理摘要为 `bodyReconnect`；blocked/unknown 需要核查具体原因，不自动清状态。恢复不修改任何模型、预算、目标或程序状态，下一观察周期继续原调度。
+
+部署前先保留停止后的完整存档备份，再使用 `python tools/deploy_numen_body_restore.py --record runtime/numen-body-restore-build/<build>/build-record.json` 检查；追加 `--apply qiandengji` 才执行。该脚本检查当前 JAR、actuator、构建源码和测试哈希及全部未修改条目，要求精确的 `qiandengji-mc-1` 已停止，备份被覆盖文件和锁。只替换服务端原 `numen-neoforge-1.21.1-0.1.1.jar`，缓存到被忽略的 `vendor/numen-cache/`，不向客户端增加 Numen。随后运行 `python tools/record_deployment.py` 更新整服记录。脚本不启动服务器、不创建身体，原身体是否成功加载应在随后运行中核验。
+
+重建时使用 `--baseline-jar vendor/numen-cache/baseline-numen.jar`，这个缓存保存恢复增量之前的严格步行 JAR。构建记录还保留源码、测试和构建器哈希，改动这些文件后须重新构建，不能沿用旧记录。

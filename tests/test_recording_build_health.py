@@ -70,7 +70,7 @@ class RecordingBuildHealth(unittest.TestCase):
         self.assertEqual(result['recording_schema'], 2)
         self.assertEqual(result['previous_sha256'], '0'*64)
         self.assertEqual(result['current_sha256'], self.sha(self.paths[0]))
-        self.assertTrue(result['preserved_playback_and_entrypoints'])
+        self.assertTrue(result['preserved_recorder_and_entrypoints'])
         self.assertTrue(result['capture_interval_tests'])
 
     def test_schema_identity_destination_and_allowlist_contract_required(self):

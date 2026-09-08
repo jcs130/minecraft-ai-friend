@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import urllib.request
 from operations_team_mcp import ROLES, TOOLS, role_tools
+from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
+from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
 
 
 def check_passwordless_auth(get):
@@ -17,6 +19,7 @@ def main():
     from qwenpaw.drivers.storage import load_card
     from qwenpaw.agents.skill_system.workspace_service import SkillService
     assert importlib.metadata.version('qwenpaw')=='2.2.0'
+    guard_verified = validate_guard('/state/work', 'operations')
     skill_map=json.loads(Path('/ops/operations-role-skills.json').read_text())['roles']
     def get(route, role=None):
         headers = {}
@@ -41,11 +44,11 @@ def main():
         assert profile['heartbeat']['enabled'] is False
         budget(profile['running'])
         assert profile['fallback_policy']['enabled'] is False and not profile['fallback_models']
-        assert not any(a.get('enabled') for a in profile['tools']['builtin_tools'].values())
+        validate_native(profile, role)
         assert not any(a.get('enabled') for a in profile['acp']['agents'].values())
-        assert json.loads((folder/'jobs.json').read_text())['jobs'] == []
+        validate_learning_workspace(folder, role, 'operations')
         mcp=profile['mcp']['clients']
-        assert set(mcp)=={'qiandeng_operations'}
+        assert set(mcp)=={'qiandeng_operations', 'qd_learning'}
         item=mcp['qiandeng_operations']
         assert item['enabled'] and item['command']=='python' and item['args']==['/ops/operations_team_mcp.py','--role',role]
         assert set(item['tools'])==set(role_tools(role))
@@ -55,15 +58,23 @@ def main():
         assert len(card.policy.rules)==len(role_tools(role))
         assert {r.target.name for r in card.policy.rules if r.effect=='allow' and r.target.kind=='tool'}==set(role_tools(role))
         skills=SkillService(folder)
-        assert {s.name for s in skills.list_available_skills()}==set(skill_map[role])
+        assert set(skill_map[role]) <= {s.name for s in skills.list_available_skills()}
         for name in skill_map[role]:
             assert (folder/'skills'/name/'SKILL.md').read_bytes()==(Path('/ops/skills')/name/'SKILL.md').read_bytes()
         exposed=get('/tools',role=role)
-        assert not any(item['enabled'] for item in exposed)
+        assert {item['name'] for item in exposed if item['enabled']} == set(NATIVE_TOOLS)
+        from agent_learning import TOOL_NAMES
+        assert set(TOOL_NAMES) <= {row.get('name') for row in get('/mcp/tools/qd_learning', role=role) if row.get('enabled') is True}
+        assert set(skill_map[role]) | set(NATIVE_SKILLS) <= {row['name'] for row in get('/skills', role=role) if row.get('enabled') is True}
+        jobs = get('/cron/jobs', role=role)
+        validate_jobs({'jobs': [row.get('spec', row) for row in (jobs if isinstance(jobs, list) else jobs['jobs'])]}, role, 'operations')
     print(json.dumps({'ok':True,'project':'qiandengji-ops','packageVersion':'2.2.0','roles':6,'authEnforced':False,
         'authMode':'local-passwordless','authEnabled':False,'anonymousAccess':True,
-        'installedSkillBindings':sum(map(len,skill_map.values())), 'rateLimitVerified':True, 'driverPolicyVerified':True,
-        'builtinTools':0,'mcpTools':list(TOOLS),'automaticJobs':0,'scope':'passwordless local runtime and fixed configuration; model/tool execution has separate evidence'}))
+        'installedSkillBindings':sum(map(len,skill_map.values())) + len(NATIVE_SKILLS) * len(ROLES), 'rateLimitVerified':True, 'driverPolicyVerified':True,
+        'builtinTools':len(NATIVE_TOOLS), 'nativeToolPolicyVerified': True, 'officialSkillBindings':len(NATIVE_SKILLS) * len(ROLES),
+        'mcpTools':list(TOOLS),'learningMcpTools':len(TOOL_NAMES),'automaticJobs':6,
+        'managedWeeklyJobs':6,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
+        'scope':'Native enabled role skills, managed cron and fixed MCP policy; model/tool execution has separate evidence'}))
 
 
 if __name__=='__main__':

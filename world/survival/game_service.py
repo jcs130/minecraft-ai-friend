@@ -1,5 +1,6 @@
 """Start the shared game QwenPaw with the survivor MCP credential in memory."""
 import os
+import sys
 from pathlib import Path
 
 
@@ -14,5 +15,9 @@ def environment(source=None):
 
 
 if __name__ == '__main__':
-    os.execvpe('qwenpaw', ['qwenpaw', 'app', '--host', '0.0.0.0', '--port', '8088',
-                         '--log-level', 'info'], environment())
+    os.environ.update(environment())
+    sys.path.insert(0, '/ops')
+    from cron_guard import install
+    install('game')
+    from qwenpaw.cli.main import cli
+    cli(args=['app', '--host', '0.0.0.0', '--port', '8088', '--log-level', 'info'], prog_name='qwenpaw')

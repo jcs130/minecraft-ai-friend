@@ -14,8 +14,9 @@ class GameRuntimeHealth(unittest.TestCase):
     def probe(self, receipt=None, behavior=True, exit_code=0):
         if receipt is None:
             receipt = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.0',
-                       'agents': 6, 'enabledTools': 0, 'authMode': 'local-passwordless',
-                       'anonymousAccess': True}
+                       'agents': 6, 'enabledTools': 7, 'authMode': 'local-passwordless', 'nativeToolPolicyVerified': True,
+                       'anonymousAccess': True, 'baseAgents': 6, 'maidAgents': 0,
+                       'cronBudgetGuardVerified': True, 'installedSkillBindings': 30}
         result = SimpleNamespace(returncode=exit_code, stdout=json.dumps(receipt))
         with patch.object(health.subprocess, 'run', return_value=result) as call, \
                 patch.object(health, 'probe_recorded_behavior', return_value={'ok': behavior}):
@@ -30,9 +31,11 @@ class GameRuntimeHealth(unittest.TestCase):
 
     def test_old_version_or_wrong_roles_cannot_pass(self):
         valid = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.0',
-                 'agents': 6, 'enabledTools': 0, 'authMode': 'local-passwordless', 'anonymousAccess': True}
+                 'agents': 6, 'enabledTools': 7, 'authMode': 'local-passwordless', 'anonymousAccess': True,
+                 'baseAgents': 6, 'maidAgents': 0, 'cronBudgetGuardVerified': True, 'installedSkillBindings': 30, 'nativeToolPolicyVerified': True}
         for key, value in [('packageVersion','2.1.0'),('project','qiandengji-ops'),('agents',3),
-                           ('enabledTools',1),('enabledTools',False),('anonymousAccess',False)]:
+                           ('enabledTools',1),('enabledTools',False),('anonymousAccess',False),
+                           ('maidAgents',1),('cronBudgetGuardVerified',False),('installedSkillBindings',0),('nativeToolPolicyVerified',False)]:
             with self.subTest(key=key, value=value):
                 self.assertFalse(self.probe({**valid,key:value})['ok'])
 

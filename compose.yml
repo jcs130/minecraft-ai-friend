@@ -172,13 +172,18 @@ services:
       NPC_GUILD_AGENT_ENABLED: "1"
       MAID_AGENT_ENABLED: "1"
       MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
+      MAID_IDENTITY_KEY_FILE: /run/secrets/maid-identity
+      MAID_REGISTRY_DIR: /mcdata/village/maid-agents
       QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
       - ./tools/npc_health.py:/opt/npc_health.py:ro
+      - ./tools/register_maid_agents.py:/opt/register_maid_agents.py:ro
+      - ./world/ops:/opt/ops:ro
       - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
       - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
+      - ./server/mc/config/qiandeng_maid_bridge/identity.key:/run/secrets/maid-identity:ro
       - ./server/world-data:/world-data
       - ./server/mcdata:/mcdata
       - ./server/mc/logs:/mclogs:ro
@@ -226,6 +231,7 @@ services:
       QWENPAW_KEYRING_ACCOUNT: qiandengji
       QWENPAW_AUTH_ENABLED: "0"
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
+      MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -233,6 +239,7 @@ services:
       - ./world/ops:/ops:ro
       - ./world/survival:/survival:ro
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
+      - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
     healthcheck:
       test: ["CMD", "python", "/ops/qwenpaw_health.py"]
       interval: 30s
@@ -245,8 +252,7 @@ services:
     image: qiandengji-qwenpaw-ops:2.2.0
     pull_policy: never
     restart: unless-stopped
-    entrypoint: ["qwenpaw"]
-    command: ["app", "--host", "0.0.0.0", "--port", "8088", "--log-level", "info"]
+    entrypoint: ["python", "-u", "/ops/learning_service.py", "--runtime", "operations"]
     ports:
       - "127.0.0.1:18090:8088"
     environment:
@@ -276,7 +282,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd4
+    image: qiandengji-survivor:2.2.0-qd5
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
@@ -298,6 +304,7 @@ services:
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       SURVIVOR_SKILL_QUEUE: /survival-skills-queue
       SURVIVOR_GUILD_QUEUE: /survival-guild-queue
+      GV_BASE: /godvoice
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_RCON_SECRET: /run/secrets/rcon
@@ -309,6 +316,7 @@ services:
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
       - ./server/world-data/skill-cli:/survival-skills-queue
       - ./server/world-data/guild-cli:/survival-guild-queue
+      - ./server/mc/data/godvoice:/godvoice
       - ./world/sidecar/guard/skills:/survival-knowledge:ro
       - ./server/world-data/player-chat.jsonl:/world-observation/player-chat.jsonl:ro
       - ./server/world-data/goddess-orders.jsonl:/world-observation/goddess-orders.jsonl:ro

@@ -20,6 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from voice_paths import voice_root, local_tts_url, job_id, atomic_json, heartbeat
+from character_speech import SpeechBroker, SpeechWorker, delivery_order
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -60,6 +61,16 @@ def synth_local(text: str, role: str, mp3: Path) -> None:
     temporary.replace(mp3)
 
 
+def speech_audio(text: str, voice_id: str) -> bytes:
+    qs = urllib.parse.urlencode({'text': text, 'voice': voice_id, 'format': 'mp3'})
+    request = urllib.request.Request(f'{TTS_LOCAL_URL}/tts?{qs}', headers={'Accept': 'audio/mpeg'})
+    with urllib.request.urlopen(request, timeout=90) as response:
+        if response.headers.get_content_type() != 'audio/mpeg':
+            raise ValueError('speech_audio_format_invalid')
+        data = response.read(4 * 1024 * 1024 + 1)
+    return data
+
+
 async def synth(text: str, voice: str, out: Path) -> None:
     import edge_tts
     tts = edge_tts.Communicate(text, voice)
@@ -67,6 +78,7 @@ async def synth(text: str, voice: str, out: Path) -> None:
 
 
 def main() -> int:
+    speech = SpeechWorker(SpeechBroker(ROOT), speech_audio)
     for d in (TEXT_Q, CLAIM_Q, TTS_Q):
         d.mkdir(parents=True, exist_ok=True)
     log(f"god-voice-watcher armed (local TTS): text-queue={TEXT_Q}")
@@ -74,7 +86,7 @@ def main() -> int:
     while True:
         try:
             heartbeat(ROOT, 'voice', state='polling')
-            for f in sorted(TEXT_Q.glob("*.json")):
+            for f in sorted(TEXT_Q.glob("*.json"), key=delivery_order):
                 # 认领：抢进 .claimed/ 才算拿到（多实例并存杜绝双合成双播）
                 claimed = CLAIM_Q / f.name
                 try:
@@ -83,6 +95,11 @@ def main() -> int:
                     continue
                 try:
                     job = json.loads(claimed.read_text(encoding="utf-8"))
+                    if job.get('schema') == 2:
+                        heartbeat(ROOT, 'voice', state='synthesizing', speechSchema=2)
+                        speech.process(job)
+                        claimed.unlink()
+                        continue
                     role = str(job.get("voice") or "goddess")
                     voice = VOICES.get(role, VOICES["goddess"])
                     text = str(job.get("text") or "").strip()[:220]
@@ -111,8 +128,7 @@ def main() -> int:
                         "engine": engine,
                     }
                     atomic_json(TTS_Q / f"{jid}.json", modjob)
-                    log(f"tts queued {jid} {mp3.stat().st_size}B role={role} "
-                        f"engine={engine} text={text[:30]}")
+                    log(f"tts queued {jid} {mp3.stat().st_size}B role={role} engine={engine}")
                 except Exception as e:
                     log(f"job {f.name} failed: {e}")
                     try:

@@ -317,8 +317,13 @@ def probe_game_qwenpaw():
         receipt = json.loads(result.stdout.strip().splitlines()[-1])
         runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
             and receipt.get('packageVersion') == '2.2.0'
-            and type(receipt.get('agents')) is int and receipt['agents'] == 6
-            and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 0
+            and type(receipt.get('agents')) is int
+            and type(receipt.get('maidAgents')) is int and 0 <= receipt['maidAgents'] <= 64
+            and receipt.get('baseAgents') == 6 and receipt['agents'] == 6 + receipt['maidAgents']
+            and receipt.get('cronBudgetGuardVerified') is True
+            and type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] >= 30
+            and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 7
+            and receipt.get('nativeToolPolicyVerified') is True
             and receipt.get('authMode') == 'local-passwordless'
             and receipt.get('anonymousAccess') is True),
             'packageVersion': receipt.get('packageVersion')}
@@ -334,7 +339,7 @@ def probe_game_qwenpaw():
 def probe_operations_team():
     """Check the fixed D runtime without inference, and require recorded behavior separately."""
     checks = {name: False for name in ('runtime_identity', 'six_roles', 'role_skills_installed',
-              'passwordless_access', 'rate_limit', 'driver_policy', 'no_builtin_tools', 'no_automatic_jobs')}
+              'passwordless_access', 'rate_limit', 'driver_policy', 'native_tools_scoped', 'managed_weekly_jobs')}
     failure = None
     try:
         process = subprocess.run(
@@ -352,14 +357,17 @@ def probe_operations_team():
         checks.update({
             'runtime_identity': receipt.get('project') == 'qiandengji-ops' and receipt.get('packageVersion') == '2.2.0',
             'six_roles': type(receipt.get('roles')) is int and receipt['roles'] == 6,
-            'role_skills_installed': type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] == 12,
+            'role_skills_installed': type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] >= 36,
             'passwordless_access': (receipt.get('authMode') == 'local-passwordless'
                 and receipt.get('authEnabled') is False and receipt.get('authEnforced') is False
                 and receipt.get('anonymousAccess') is True),
             'rate_limit': receipt.get('rateLimitVerified') is True,
             'driver_policy': receipt.get('driverPolicyVerified') is True,
-            'no_builtin_tools': type(receipt.get('builtinTools')) is int and receipt['builtinTools'] == 0,
-            'no_automatic_jobs': type(receipt.get('automaticJobs')) is int and receipt['automaticJobs'] == 0,
+            'native_tools_scoped': (type(receipt.get('builtinTools')) is int and receipt['builtinTools'] == 7
+                and receipt.get('nativeToolPolicyVerified') is True),
+            'managed_weekly_jobs': (type(receipt.get('managedWeeklyJobs')) is int and receipt['managedWeeklyJobs'] == 6
+                and type(receipt.get('unmanagedAutomaticJobs')) is int and receipt['unmanagedAutomaticJobs'] == 0
+                and receipt.get('cronBudgetGuardVerified') is True),
         })
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError, OverflowError):
         # Never publish container stdout/stderr, which may include private diagnostics.
@@ -677,7 +685,12 @@ def probe_voice_recording():
         names = {row.get('path') for row in rows if isinstance(row, dict) and isinstance(row.get('path'), str)} if isinstance(rows, list) else set()
         missing_sources = sorted(set(RECORDING_REQUIRED_SOURCES) - names)
         preserved = report.get('unchanged_server_bytecode')
-        preservation_ok = isinstance(preserved, dict) and all(preserved.get(name) is True for name in RECORDING_PRESERVED_CLASSES)
+        expected_preserved = RECORDING_PRESERVED_CLASSES
+        if report.get('speech_schema') == 2 and report.get('playback_replaced_explicitly') is True:
+            expected_preserved = tuple('dev/god/godvoice/' + name + '.class' for name in (
+                'GodVoiceLog', 'GodVoiceMod', 'GodVoicePlugin', 'CaptureFence', 'CaptureInterval',
+                'MicCapture', 'MicCapture$WavWriter', 'StaffBoundaryListener'))
+        preservation_ok = isinstance(preserved, dict) and all(preserved.get(name) is True for name in expected_preserved)
         test = report.get('tests', {}).get('CaptureIntervalTest', {})
         tests_ok = (isinstance(test, dict) and test.get('ok') is True
                     and type(test.get('assertions')) is int and test['assertions'] >= 15)
@@ -689,7 +702,8 @@ def probe_voice_recording():
                 'report': filename, 'recording_schema': report.get('recording_schema'),
                 'previous_sha256': previous, 'current_sha256': digest, 'mismatches': mismatches,
                 'missing_sources': missing_sources, 'sources': sources,
-                'preserved_playback_and_entrypoints': preservation_ok, 'capture_interval_tests': tests_ok,
+                'preserved_recorder_and_entrypoints': preservation_ok, 'capture_interval_tests': tests_ok,
+                'playback_replaced_explicitly': report.get('playback_replaced_explicitly') is True,
                 'scope': 'Current client/server schema-2 recorder bytes and reviewed build sources; physical SVC capture remains separate'}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return {'ok': False, 'report': filename, 'sources': sources,
@@ -1160,6 +1174,50 @@ def probe_architecture():
         return {'ok': False, 'error': 'Architecture regression evidence unavailable or invalid'}
 
 
+def probe_character_speech():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_character_speech_health', PROJECT / 'tools/character_speech_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        live = module.check(PROJECT)
+        behavior = probe_recorded_behavior('character-speech-smoke.json', (
+            'native-speech-tools', 'actor-voice-isolation', 'lease-bound-speech',
+            'late-synthesis-cancelled', 'playback-queue-contract', 'local-audio-decoder'))
+        return {'ok': live['ok'] and behavior['ok'], 'live': live, 'behavior': behavior,
+                'scope': 'Current playback protocol and exercised speech boundaries; audible client output remains separate'}
+    except (OSError, ValueError, AttributeError, ImportError):
+        return {'ok': False, 'error': 'Character speech probe unavailable'}
+
+
+def probe_maid_bridge():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_maid_bridge_health', PROJECT / 'tools/maid_bridge_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result = module.check(PROJECT)
+        return {**result, 'supervised_by': 'Minecraft and NPC Docker restart policies',
+            'scope': 'Live signed bridge and registered identities; original unloaded characters remain dormant. Native actions tested in a separate world.'}
+    except (OSError, ValueError, AttributeError, ImportError):
+        return {'ok': False, 'error': 'Maid bridge probe unavailable'}
+
+
+def probe_agent_learning():
+    """Recorded real MCP checks stay separate from model learning outcomes."""
+    try:
+        audit = json.loads((PROJECT / 'reports/agent-runtime-audit.json').read_text('utf8'))
+        smoke = json.loads((PROJECT / 'reports/agent-learning-smoke.json').read_text('utf8'))
+        source_ok = bool(audit.get('sourceHashes')) and all(
+            (PROJECT / path).resolve().is_relative_to(PROJECT.resolve())
+            and hashlib.sha256((PROJECT / path).read_bytes()).hexdigest() == digest
+            for path, digest in audit.get('sourceHashes', {}).items())
+        return {'ok': audit.get('ok') is True and smoke.get('ok') is True and source_ok,
+            'nativeMcpSmoke': smoke.get('ok') is True, 'sourceCurrent': source_ok,
+            'supervisedBy': 'QwenPaw native runtime and Docker restart policies',
+            'scope': 'Skills, native schedules and actual MCP protocol; model learning outcomes require separate evidence.'}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {'ok': False, 'error': 'Agent learning evidence unavailable'}
+
+
 def main_locked():
     operations = refresh_operations_snapshot()
     report = {"checked_at": datetime.now(timezone.utc).isoformat(), "project": "qiandengji",
@@ -1193,7 +1251,9 @@ def main_locked():
               "exploration_rewards": probe_recorded_behavior("content-fixes-smoke.json", (
                   "content-datapack-enabled", "anthill-loot-generated", "assassin-loot-generated",
                   "advancement:find_thornborn_towers", "advancement:find_fishing_hut", "exploration-position-parser")),
-              "voice_inference": probe_recorded_behavior("voice-inference-*.json")}
+              "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
+              "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
+              "agent_learning": probe_agent_learning()}
     report["ok"] = all(v["ok"] for v in report.values() if isinstance(v, dict) and "ok" in v)
     report["scope"] = "Service readiness and the exercised core gameplay paths; not an exhaustive content audit"
     report["unverified"] = ["Legacy NPC trade profiles", "Physical controller input", "Physical microphone input and audible playback", "Agent offscreen WebGL visual perception", "Dormant original character bodies in live play (model appearance verified on temporary Numen bodies)"]

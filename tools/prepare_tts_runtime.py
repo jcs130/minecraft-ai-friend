@@ -21,6 +21,7 @@ import uuid
 PROJECT = Path(__file__).resolve().parents[1]
 TARGET = PROJECT / "server/tts-state"
 SOURCE = Path("C:/Users/lzl19/.copaw/workspaces/default/minecraft-ai-friend/ops/docker/shadow")
+API_SOURCE = PROJECT / "world/tts/tts_api.py"
 IMAGE_ID = "sha256:9da38721708a19a1c0528b5224a2d9e464453bd56f46f51e9c595dd27e0f56bb"
 INFER_SHA256 = "9049c151924cb003968df12957816dff31fc0cb983adf2e364219ef941930093"
 REQUIRED_MODELS = {
@@ -168,7 +169,7 @@ def prepare() -> dict:
         raise ValueError("Voice tree contains unexpected non-WAV assets")
     if not {"goddess.wav", "touhou_little_maid.wav"} <= {p.name for p in voices}:
         raise ValueError("Required goddess/maid reference voices are missing")
-    api = SOURCE / "gpu-tts/tts_api.py"
+    api = API_SOURCE
     if not api.is_file() or linked(api):
         raise ValueError("Audited API source is missing or linked")
     compile(api.read_text(encoding="utf-8-sig"), str(api), "exec")  # parse only; never import/infer
@@ -203,6 +204,68 @@ def prepare() -> dict:
     write_owned_json("source-manifest.json", manifest)
     write_owned_json("compose.service.json", compose_service())
     return {key: manifest[key] for key in ("status", "modelFiles", "voiceFiles", "fileCount", "bytes", "inferenceTested", "switched")}
+
+
+def sync_api() -> dict:
+    """Explicitly update only the D API bind file, preserving an exact backup.
+
+    This does not restart a container, rewrite Compose, copy models/reference
+    voices or change the maid site. The caller must restart TTS and verify it.
+    """
+    if not TARGET.resolve().is_relative_to(PROJECT.resolve()) or PROJECT.drive.upper() != "D:":
+        raise ValueError("API sync is restricted to this D project")
+    for ancestor in (PROJECT, PROJECT / "server"):
+        if linked(ancestor):
+            raise ValueError("Linked project data ancestors are not permitted")
+    if not API_SOURCE.is_file() or linked(API_SOURCE):
+        raise ValueError("Project API source is missing or linked")
+    source_bytes = API_SOURCE.read_bytes()
+    compile(source_bytes.decode("utf-8-sig"), str(API_SOURCE), "exec")
+    expected = hashlib.sha256(source_bytes).hexdigest()
+    api = safe_target(TARGET, "app/tts_api.py")
+    manifest_path = safe_target(TARGET, "source-manifest.json")
+    previous_bytes = manifest_path.read_bytes()
+    manifest = json.loads(previous_bytes)
+    if manifest.get("producer") != "prepare_tts_runtime.py":
+        raise ValueError("Existing manifest is not owned by this preparer")
+    records = [x for x in manifest.get("files", []) if x.get("path") == "app/tts_api.py"]
+    workers = [x for x in manifest.get("workers", []) if x.get("path") == "/app/tts_api.py"]
+    old = api.read_bytes()
+    old_hash = hashlib.sha256(old).hexdigest()
+    if len(records) != 1 or len(workers) != 1 or records[0].get("sha256") != old_hash or workers[0].get("sha256") != old_hash:
+        raise ValueError("Runtime API differs from its ownership manifest; review before replacing")
+    if expected == old_hash:
+        return {"changed": False, "sha256": expected, "serviceActions": False}
+    backup_relative = "backups/api-" + uuid.uuid4().hex
+    copy_verified(api, TARGET, backup_relative + "/tts_api.py")
+    copy_verified(manifest_path, TARGET, backup_relative + "/source-manifest.json")
+    records[0].update(bytes=len(source_bytes), sha256=expected, source=str(API_SOURCE), verified=True)
+    workers[0].update(origin="D project world/tts/tts_api.py", sha256=expected)
+    manifest["bytes"] = sum(x["bytes"] for x in manifest["files"])
+    manifest["apiUpdatedAt"] = datetime.now(timezone.utc).isoformat()
+    manifest["apiBackup"] = backup_relative
+    manifest["apiDeployment"] = "source_synced_restart_and_smoke_required"
+    stage = api.with_name(api.name + ".stage-" + uuid.uuid4().hex)
+    try:
+        with stage.open("xb") as handle:
+            handle.write(source_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if api.read_bytes() != old or manifest_path.read_bytes() != previous_bytes or API_SOURCE.read_bytes() != source_bytes:
+            raise ValueError("Source or runtime changed during API sync")
+        os.replace(stage, api)
+        try:
+            write_owned_json("source-manifest.json", manifest)
+        except Exception:
+            # Roll back this single-file replacement, never touch other assets.
+            stage.write_bytes(old)
+            os.replace(stage, api)
+            raise
+    finally:
+        if stage.exists():
+            stage.unlink()
+    return {"changed": True, "sha256": expected, "backup": backup_relative,
+            "serviceActions": False, "restartRequired": True}
 
 
 def self_test() -> dict:
@@ -246,7 +309,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prepare", action="store_true", help="Copy and SHA-256 verify assets into D; no service actions")
     parser.add_argument("--self-test", action="store_true", help="Small offline path and overwrite checks")
+    parser.add_argument("--sync-api", action="store_true", help="Back up and update only the project-owned API; no service actions")
     args = parser.parse_args()
-    if args.prepare == args.self_test:
-        parser.error("Choose exactly one of --prepare or --self-test")
-    print(json.dumps(prepare() if args.prepare else self_test(), ensure_ascii=False, indent=2))
+    if sum((args.prepare, args.self_test, args.sync_api)) != 1:
+        parser.error("Choose exactly one of --prepare, --self-test or --sync-api")
+    print(json.dumps(sync_api() if args.sync_api else prepare() if args.prepare else self_test(), ensure_ascii=False, indent=2))

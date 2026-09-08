@@ -393,8 +393,9 @@ class OperationsTeamProbe(unittest.TestCase):
         self.now = 1_788_782_400.0
         self.receipt = {'ok': True, 'project': 'qiandengji-ops', 'packageVersion': '2.2.0', 'roles': 6,
             'authEnforced': False, 'authEnabled': False, 'authMode': 'local-passwordless',
-            'anonymousAccess': True, 'installedSkillBindings': 12, 'rateLimitVerified': True,
-            'driverPolicyVerified': True, 'builtinTools': 0, 'automaticJobs': 0}
+            'anonymousAccess': True, 'installedSkillBindings': 36, 'rateLimitVerified': True,
+            'driverPolicyVerified': True, 'builtinTools': 7, 'managedWeeklyJobs': 6, 'nativeToolPolicyVerified': True,
+            'unmanagedAutomaticJobs': 0, 'cronBudgetGuardVerified': True}
         self.report = {'schema': 1, 'project': 'qiandengji', 'ok': True,
             'finishedAt': datetime.fromtimestamp(self.now-60, timezone.utc).isoformat(),
             'checks': [{'name': name, 'ok': True} for name in health.OPERATIONS_TEAM_SMOKE_CHECKS]}
@@ -427,11 +428,12 @@ class OperationsTeamProbe(unittest.TestCase):
     def test_old_version_wrong_scope_counts_or_missing_guards_never_pass(self):
         changes = [{'packageVersion': '2.1.0'}, {'project': 'shadow'}, {'roles': 5}, {'roles': 6.0},
                    {'installedSkillBindings': 11}, {'installedSkillBindings': '12'}, {'builtinTools': False},
-                   {'builtinTools': 1}, {'automaticJobs': 1}, {'automaticJobs': False}, {'ok': 1}]
+                   {'builtinTools': 1}, {'managedWeeklyJobs': 0}, {'unmanagedAutomaticJobs': 1},
+                   {'unmanagedAutomaticJobs': False}, {'cronBudgetGuardVerified': False}, {'ok': 1}]
         changes.extend({'authMode': bad} for bad in ('authenticated', 'local', None))
         for key in ('authEnforced', 'authEnabled'):
             changes.extend({key: bad} for bad in (True, 0, None, 'false'))
-        for key in ('anonymousAccess', 'rateLimitVerified', 'driverPolicyVerified'):
+        for key in ('anonymousAccess', 'rateLimitVerified', 'driverPolicyVerified', 'nativeToolPolicyVerified'):
             changes.extend({key: bad} for bad in (False, 1, None, 'true'))
         for change in changes:
             with self.subTest(change=change):
@@ -494,6 +496,18 @@ class OperationsTeamProbe(unittest.TestCase):
 
 
 class PasswordlessRuntimeProbe(unittest.TestCase):
+    @staticmethod
+    def learning_reply(request, routes):
+        from agent_learning import TOOL_NAMES, managed_job
+        from role_learning_profiles import role_skills
+        from native_role_capabilities import NATIVE_SKILLS
+        route = request.full_url.removeprefix('http://127.0.0.1:8088/api')
+        role = request.get_header('X-agent-id')
+        if route == '/mcp/tools/qd_learning': return [{'name': name, 'enabled': True} for name in TOOL_NAMES]
+        if route == '/skills': return [{'name': name, 'enabled': True} for name in (*role_skills(role, 'game'), *NATIVE_SKILLS)]
+        if route == '/cron/jobs': return [{'spec': managed_job(role, 'game'), 'state': {}}]
+        return routes[route]
+
     def load_probe(self, filename):
         path = SOURCE.parents[1]/filename
         spec = importlib.util.spec_from_file_location('isolated_'+filename[:-3], path)
@@ -518,22 +532,23 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
                     with self.assertRaises(AssertionError):
                         module.check_passwordless_auth(lambda _: self.fail('Environment must fail before HTTP'))
 
-    def test_game_probe_uses_anonymous_gets_and_keeps_five_text_roles_tool_denial(self):
+    def test_game_probe_uses_anonymous_gets_and_checks_exact_native_tools(self):
         module = self.load_probe('qwenpaw_health.py')
         roles = ['mc-god', 'mc-herald', 'qd-survivor', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue']
         routes = {'/auth/status': {'enabled': False},
                   '/version': {'version': '2.2.0'},
                   '/healthz': {'status': 'ok', 'agents_loaded': roles},
                   '/agents': {'agents': [{'id': name, 'enabled': True} for name in roles]},
-                  '/tools': [{'name': 'read_file', 'enabled': False}]}
+                  '/tools': [{'name': name, 'enabled': True} for name in module.NATIVE_TOOLS]}
         requests = []
         def get(request, **kwargs):
             requests.append(request)
             self.assertEqual(request.get_method(), 'GET')
             self.assertIsNone(request.get_header('Authorization'))
-            return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
+            return io.BytesIO(json.dumps(self.learning_reply(request, routes)).encode())
         with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}), \
                 patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}), \
+                patch.object(module, 'validate_guard', return_value=True), \
                 patch.object(module.urllib.request, 'urlopen', side_effect=get):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -544,12 +559,12 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             self.assertEqual(result['agents'], 6)
             self.assertEqual([r.full_url for r in requests[1:3]], [
                 'http://127.0.0.1:8088/api/version', 'http://127.0.0.1:8088/api/healthz'])
-            self.assertEqual([r.get_header('X-agent-id') for r in requests[-5:]],
+            self.assertEqual([r.get_header('X-agent-id') for r in requests if r.full_url.endswith('/api/tools')],
                              ['mc-god', 'mc-herald', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'])
-            routes['/tools'][0]['enabled'] = True
+            routes['/tools'][0]['enabled'] = False
             with self.assertRaises(AssertionError):
                 module.main()
-            routes['/tools'][0]['enabled'] = False
+            routes['/tools'][0]['enabled'] = True
             routes['/agents']['agents'].append({'id': 'foreign', 'enabled': True})
             with self.assertRaises(AssertionError):
                 module.main()
@@ -560,11 +575,12 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
         routes = {'/auth/status': {'enabled': False}, '/version': {'version': '2.2.0'},
                   '/healthz': {'status': 'ok', 'agents_loaded': roles},
                   '/agents': {'agents': [{'id': name, 'enabled': True} for name in roles]},
-                  '/tools': [{'name': 'read_file', 'enabled': False}]}
+                  '/tools': [{'name': name, 'enabled': True} for name in module.NATIVE_TOOLS]}
         def get(request, **kwargs):
-            return io.BytesIO(json.dumps(routes[request.full_url.removeprefix('http://127.0.0.1:8088/api')]).encode())
+            return io.BytesIO(json.dumps(self.learning_reply(request, routes)).encode())
         with patch.dict(module.os.environ, {'QWENPAW_AUTH_ENABLED': '0'}), \
                 patch.object(module, 'check_runtime_config', return_value={'default', 'QwenPaw_QA_Agent_0.2'}) as config, \
+                patch.object(module, 'validate_guard', return_value=True), \
                 patch.object(module.urllib.request, 'urlopen', side_effect=get):
             for value in ({'status': 'loading', 'agents_loaded': ['mc-god', 'mc-herald']},
                           {'status': 'ok', 'agents_loaded': ['mc-god', 'mc-herald', 'qd-survivor']},

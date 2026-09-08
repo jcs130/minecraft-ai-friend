@@ -25,6 +25,9 @@ world/botgate-src/botgate.jar
 **/.DS_Store
 vendor/chanting-cache/
 vendor/god-voice-cache/
+vendor/maid-bridge-cache/
+vendor/numen-cache/
+world/maid-bridge-src/build/
 
 # Local operation evidence, progress and compressed logs stay on this host.
 /reports/

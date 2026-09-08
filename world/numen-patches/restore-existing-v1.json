@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "capability": "existing_body_restore_v1",
+  "sourceCommit": "33bb7d06f78a3566b5a5d49ef61e0572bd1a399e",
+  "baselineJarSha256": "c86f8e26593624e0071d9e0fe95d5b09ca9c03811ea57a9c4881efd2e829c7ba",
+  "actuatorJarSha256": "a0f18b280f524e419f975c0e4e1045b0c38dca3fc9ccc3cb15a9782b82a0f4ea",
+  "entrySource": "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java",
+  "preimages": {
+    "core/neoforge/src/main/java/com/dwinovo/numen/core/NumenCoreNeoForge.java": "eff1b8259d4ce76f46a3e1e4445b4ecd329789e2612c01fc70da981e0edba23c"
+  },
+  "restoreSourceSha256": "d8ab57e80d131b296fc98a9ef797d8a600d0eac9129293e40930b659dda264f3",
+  "classFamilies": [
+    "com/dwinovo/numen/core/NumenCoreNeoForge",
+    "com/dwinovo/numen/core/entity/ExistingBodyRestore"
+  ]
+}

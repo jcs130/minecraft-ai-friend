@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "client_only": false,
+  "server_required": true,
+  "files": [
+    {
+      "mod_id": "qiandeng_maid_bridge",
+      "filename": "qiandeng-maid-bridge-0.1.0.jar",
+      "cache_path": "vendor/maid-bridge-cache/qiandeng-maid-bridge-0.1.0.jar",
+      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
+      "size_bytes": 27709,
+      "client_only": false,
+      "source_build": "tools/build_maid_bridge.py"
+    }
+  ]
+}

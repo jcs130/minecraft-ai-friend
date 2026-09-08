@@ -13,13 +13,18 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('shared_game_health', ROOT / 'world/ops/qwenpaw_health.py')
 health = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(health)
+from role_learning_profiles import with_learning
+from test_role_learning_profiles import learning_fixture, native_fixture_lock
+import native_role_capabilities as native
 
 
 class SharedGameRoleHealthTests(unittest.TestCase):
     def setUp(self):
+        native_patch = patch.object(native, 'native_lock', return_value=native_fixture_lock())
+        native_patch.start(); self.addCleanup(native_patch.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.folder = Path(temporary.name)
+        self.folder = Path(temporary.name) / 'qd-survivor'; self.folder.mkdir()
         self.token = self.folder / 'mcp-token'
         self.token.write_text('f' * 64)
         names = ['status', 'look', 'skill_draft', 'skill_test', 'skill_promote', 'remember']
@@ -37,7 +42,8 @@ class SharedGameRoleHealthTests(unittest.TestCase):
                 effect='allow', subject='*', target=SimpleNamespace(name=name, kind='tool')) for name in names]))
         (self.folder / 'drivers/mcp').mkdir(parents=True)
         (self.folder / 'drivers/mcp/numen_survival.yaml').write_text('fixture')
-        (self.folder / 'jobs.json').write_text('{"jobs":[]}')
+        self.agent = with_learning(self.agent, 'qd-survivor', 'game')
+        learning_fixture(self.folder, 'qd-survivor')
 
     def check(self):
         (self.folder / 'agent.json').write_text(json.dumps(self.agent), encoding='utf8')

@@ -1,0 +1,19 @@
+{
+  "package": "qwenpaw",
+  "skills": {
+    "file_reader": {
+      "source": "file_reader-zh",
+      "sha256": "1921533df90ebb61a245808acfed74077356c4da809721bf46a5b567bdca515d"
+    },
+    "cron": {
+      "source": "cron-zh",
+      "sha256": "c233e36d7c0a454edbb4f1f77960c4f34e0bde95e94b8dc93c6b19cf2de28cd5"
+    },
+    "make-skill": {
+      "source": "make-skill-zh",
+      "sha256": "ace46f89bbc918022208c86cdbfeef79da06eccb10e735fa650ad35c978eb317"
+    }
+  },
+  "schema": 1,
+  "packageVersion": "2.2.0"
+}

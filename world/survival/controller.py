@@ -443,6 +443,8 @@ class Controller:
             'bodyName': self.settings['bodyName'], 'bodyUuid': self.settings['bodyUuid'],
             'generatedAt': utc(), 'enabled': control.get('enabled') is True,
             'status': self.data['status'], 'pauseReason': self.data.get('pauseReason'),
+            'bodyReconnect': {k: self.data.get('bodyReconnect', {}).get(k) for k in
+                              ('status', 'reason', 'checkedAt', 'nextCheckAt', 'verifiedAt')},
             'goal': (memory.get('goal') if memory.get('updatedAt', 0) >= control.get('missionChangedAt', 0)
                      else None) or control.get('mission') or self.settings['mission'],
             'body': self.last_body, 'lastDecision': self.data.get('lastDecision'),
@@ -747,6 +749,14 @@ class Controller:
         body = self.gateway.snapshot()
         self.last_body = body
         self.perceive(body)
+        if body.get('ok'):
+            from body_reconnect import BodyReconnect
+            try:
+                confirmed = BodyReconnect(self.gateway, self.clock).confirm_online(self.settings)
+                if confirmed is not None:
+                    self.data['bodyReconnect'] = confirmed
+            except (ValueError, OSError):
+                self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
         if control.get('enabled') is True:
             self.data.pop('pauseReason', None)
         if control.get('enabled') is not True:
@@ -762,6 +772,11 @@ class Controller:
             self.stop_actions()
         elif not body.get('ok'):
             self.data['status'] = 'body_offline'
+            from body_reconnect import BodyReconnect
+            try:
+                self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
+            except (ValueError, OSError):
+                self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
         elif self.data.get('active'):
             self.poll_model(body)
         else:

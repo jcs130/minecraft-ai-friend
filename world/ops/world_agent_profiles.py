@@ -1,5 +1,6 @@
 """Shared, credential-free contract for the text-only game-world roles."""
 from copy import deepcopy
+from role_learning_profiles import with_learning, validate_learning_profile, validate_learning_workspace
 
 WORLD_ROLES = ('qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue')
 GAME_ROLES = {'mc-god', 'mc-herald', 'qd-survivor', *WORLD_ROLES}
@@ -17,7 +18,7 @@ def disabled(value):
     return deepcopy(value)
 
 
-def closed_profile(original, role):
+def closed_profile(original, role, learning=True):
     if role not in WORLD_ROLES:
         raise ValueError('unknown_world_role')
     result = deepcopy(original)
@@ -35,9 +36,10 @@ def closed_profile(original, role):
     if isinstance(result['channels'].get('console'), dict):
         result['channels']['console']['enabled'] = True
     running = result['running']
-    running.update(max_iters=1, max_input_length=12000, llm_retry_enabled=False, llm_max_retries=1,
+    iterations = 3 if learning else 1
+    running.update(max_iters=iterations, max_input_length=12000, llm_retry_enabled=False, llm_max_retries=1,
                    llm_max_concurrent=1, llm_max_qpm=4)
-    running['loop']['iteration'].update(enabled=True, max_iterations=1)
+    running['loop']['iteration'].update(enabled=True, max_iterations=iterations)
     running['light_context_config']['strategy'] = 'native'
     running['light_context_config']['visual_compact_config']['enabled'] = False
     running['auto_title_config']['enabled'] = False
@@ -51,20 +53,24 @@ def closed_profile(original, role):
     memory['auto_memory_search_config']['enabled'] = False
     guard = result['security']['tool_guard']
     guard['denied_tools'] = sorted(set(guard.get('denied_tools', [])) | set(result['tools']['builtin_tools']))
-    validate_profile(result, role)
+    if learning:
+        result = with_learning(result, role, 'game')
+    validate_profile(result, role, learning=learning)
     return result
 
 
-def validate_profile(agent, role):
+def validate_profile(agent, role, learning=True):
     from upgrade_qwenpaw_runtime import assert_quiet
     assert role in WORLD_ROLES and agent['id'] == role and agent['name'] == LABELS[role]
     assert agent['workspace_dir'] == '/state/work/workspaces/' + role
     assert agent['backend'] == 'qwenpaw' and not agent.get('backend_settings')
     assert agent['thinking_level'] == 'off'
     assert agent['system_prompt_files'] == ['AGENTS.md', 'SOUL.md', 'PROFILE.md']
-    assert not agent['mcp']['clients'] and agent['heartbeat']['enabled'] is False
+    assert set(agent['mcp']['clients']) == ({'qd_learning'} if learning else set()) and agent['heartbeat']['enabled'] is False
+    if learning:
+        validate_learning_profile(agent, role, 'game')
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
-    for group in (agent['tools']['builtin_tools'], agent['acp']['agents']):
+    for group in ((agent['acp']['agents'],) if learning else (agent['tools']['builtin_tools'], agent['acp']['agents'])):
         assert not any(item.get('enabled') for item in group.values())
     assert not agent['plan']['enabled'] and not agent['coding_mode']['enabled']
     assert agent.get('llm_routing', {}) == disabled(agent.get('llm_routing', {}))
@@ -74,7 +80,7 @@ def validate_profile(agent, role):
     assert not agent['security']['allow_no_auth_hosts']
     assert_quiet(agent['running'])
     running = agent['running']
-    assert running['max_iters'] == 1 and running['max_input_length'] == 12000
+    assert running['max_iters'] == (3 if learning else 1) and running['max_input_length'] == 12000
     assert running['llm_max_concurrent'] == 1 and running['llm_max_qpm'] == 4
     assert running['llm_retry_enabled'] is False and running['llm_max_retries'] == 1
     assert running['reme_light_memory_config'].get('inbox_push_enabled', False) is False
@@ -83,13 +89,15 @@ def validate_profile(agent, role):
     assert isinstance(active.get('model'), str) and active['model']
 
 
-def validate_workspace(folder, role):
+def validate_workspace(folder, role, learning=True):
     import json
     from upgrade_qwenpaw_runtime import driver_cards
     agent = json.loads((folder / 'agent.json').read_text(encoding='utf-8'))
-    validate_profile(agent, role)
-    assert not driver_cards(folder)
-    assert json.loads((folder / 'jobs.json').read_text(encoding='utf-8'))['jobs'] == []
-    skills = folder / 'skill.json'
-    assert not skills.exists() or not any(item.get('enabled') for item in json.loads(skills.read_text(encoding='utf-8')).get('skills', {}).values())
+    validate_profile(agent, role, learning=learning)
+    assert driver_cards(folder) == ([folder / 'drivers/mcp/qd_learning.yaml'] if learning else [])
+    if learning:
+        validate_learning_workspace(folder, role, 'game')
+    else:
+        assert not json.loads((folder / 'jobs.json').read_text())['jobs']
+        assert not any(row.get('enabled') for row in json.loads((folder / 'skill.json').read_text())['skills'].values())
     return agent

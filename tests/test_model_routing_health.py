@@ -25,10 +25,14 @@ def load(name, path):
 routing = load('routing_health_test', ROOT / 'tools/model_routing_health.py')
 health = load('routing_panel_test', ROOT / 'world/ops/health/health_mon.py')
 from world_agent_profiles import closed_profile
+from test_role_learning_profiles import learning_fixture, native_fixture_lock
+import native_role_capabilities as native
 
 
 class ModelRoutingHealth(unittest.TestCase):
     def setUp(self):
+        native_patch = patch.object(native, 'native_lock', return_value=native_fixture_lock())
+        native_patch.start(); self.addCleanup(native_patch.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -44,6 +48,8 @@ class ModelRoutingHealth(unittest.TestCase):
                 self.put(path + '/agent.json', agent)
                 self.put(path + '/jobs.json', {'jobs': []})
                 self.put(path + '/skill.json', {'skills': {}})
+                if role in routing.WORLD_ROLES:
+                    learning_fixture(self.root / path, role)
         self.secret = 'test-adapter-token-never-live-' * 2
         token = self.root / 'server/mcdata/village/maid-agent-token'
         token.parent.mkdir(parents=True, exist_ok=True)
@@ -109,7 +115,7 @@ class ModelRoutingHealth(unittest.TestCase):
         for kind in ('tools', 'heartbeat', 'jobs'):
             agent = json.loads(json.dumps(original))
             if kind == 'tools':
-                agent['tools']['builtin_tools']['execute_shell_command']['enabled'] = True
+                agent['security']['tool_guard']['custom_rules'] = []
             elif kind == 'heartbeat':
                 agent['heartbeat']['enabled'] = True
             else:
@@ -117,7 +123,7 @@ class ModelRoutingHealth(unittest.TestCase):
             self.put(folder + 'agent.json', agent)
             with self.subTest(kind=kind):
                 self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
-            self.put(folder + 'jobs.json', {'jobs': []})
+            learning_fixture(self.root / folder, 'qd-maid-dialogue')
 
     def test_any_saved_site_direct_url_wrong_type_or_token_is_rejected(self):
         for field, value, check in (
@@ -204,6 +210,11 @@ health.PROJECT = Path(sys.argv[2])
 before = list(sys.path)
 assert 'world_agent_profiles' not in sys.modules
 assert 'upgrade_qwenpaw_runtime' not in sys.modules
+sys.path.insert(0, str(Path(sys.argv[1]).parents[1]))
+import native_role_capabilities
+import hashlib
+native_role_capabilities.native_lock = lambda: {'skills': {name: {'sha256': hashlib.sha256(('fixture-' + name).encode()).hexdigest()} for name in native_role_capabilities.NATIVE_SKILLS}}
+sys.path[:] = before
 if sys.argv[3] == 'fail':
     def missing_report(*args, **kwargs):
         raise ImportError('isolated fixture report failure')

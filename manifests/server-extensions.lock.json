@@ -33,7 +33,17 @@
     },
     {
       "path": "server/mc/mods/god-voice-0.1.0.jar",
-      "sha256": "3e51723d57771262268bfe8ee92d7ef897528608ccb1b371471c31d8ac9d5c7f",
+      "sha256": "9a4e6855116b1c46018b2969217e4bf49bf34aface50e8ca281fe97956f22635",
+      "client_required": true
+    },
+    {
+      "path": "server/mc/mods/qiandeng-maid-bridge-0.1.0.jar",
+      "sha256": "0fcd7a642f641d707f57f9a0ca929c7cf1198a57c98d624e8315de1e580bef6f",
+      "client_required": true
+    },
+    {
+      "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
+      "sha256": "f93f781342c569124266a046484f5467570c7220473aef7e217d9fc7a71feb4c",
       "client_required": false
     }
   ]
