@@ -1,5 +1,6 @@
 """Read-only survivor health uses current evidence, including intentional pauses."""
 from datetime import datetime, timezone
+import copy
 import importlib.util
 import io
 import json
@@ -23,6 +24,15 @@ class SurvivorHealthTests(unittest.TestCase):
         self.source = {'schema': 1, 'project': 'qiandengji-survivor', 'character': '桐人', 'bodyName': 'Kirito',
             'generatedAt': datetime.fromtimestamp(self.now, timezone.utc).isoformat(), 'status': 'observing', 'enabled': True,
             'adventure': {'schema': 1, 'resources': {'known': True}, 'equipment': {'known': False}}, 'constructionAreas': []}
+        self.source['executionSystems'] = {'schema': 1, 'automaticFoodReflex': False,
+            'fast': {'owner': 'native-ai-and-tested-programs', 'active': False, 'waiting': False,
+                     'name': None, 'nextCheckAt': None, 'steps': 0, 'observations': 0, 'requiresModelPerStep': False},
+            'slow': {'owner': 'qwenpaw', 'active': False, 'status': 'observing',
+                     'readiness': {'ready': True, 'checkedAt': self.now * 1000, 'warning': None}}}
+        self.heartbeat = {'schema': 1, 'ok': True, 'at': self.now * 1000, 'fastSystemProtocol': 1}
+        self.fast_report = {'schema': 1, 'project': 'qiandengji', 'fastSystemProtocol': 1,
+            'ok': True, 'finishedAt': self.source['generatedAt'],
+            'checks': [{'name': name, 'ok': True} for name in health.SURVIVOR_FAST_SYSTEM_CHECKS]}
         self.container = {'State': {'Status': 'running', 'Health': {'Status': 'healthy'}},
             'Config': {'Labels': {'com.docker.compose.project': 'qiandengji', 'com.docker.compose.service': 'survivor'}},
             'HostConfig': {'RestartPolicy': {'Name': 'unless-stopped'}}}
@@ -31,6 +41,14 @@ class SurvivorHealthTests(unittest.TestCase):
         target = self.root/'server/panel-state/survivor.json'
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.source), encoding='utf-8')
+        for name, value in [('server/survival-agent-state/survival/heartbeat.json', self.heartbeat),
+                            ('reports/survivor-fast-system-smoke.json', self.fast_report)]:
+            path = self.root / name
+            if value is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(value), encoding='utf-8')
         projection = public or {'available': True, 'stale': False, **self.source,
             'adventure': {'available': True, 'resources': {'known': True}, 'equipment': {'known': False}},
             'constructionAreasKnown': True}
@@ -48,12 +66,14 @@ class SurvivorHealthTests(unittest.TestCase):
 
     def test_intentionally_paused_worker_remains_healthy_without_model_work(self):
         self.source.update(status='paused', enabled=False)
+        self.source['executionSystems']['slow']['status'] = 'paused'
         result = self.probe()
         self.assertTrue(result['ok'])
         self.assertTrue(result['paused'])
 
     def test_runtime_error_pause_cannot_be_reported_as_healthy_observation(self):
         self.source.update(status='paused', enabled=False, pauseReason='controller_SkillError')
+        self.source['executionSystems']['slow']['status'] = 'paused'
         result = self.probe()
         self.assertFalse(result['ok'])
         self.assertFalse(result['checks']['no_unexpected_pause'])
@@ -86,6 +106,63 @@ class SurvivorHealthTests(unittest.TestCase):
         result = self.probe()
         self.assertFalse(result['ok'])
         self.assertFalse(result['checks']['adventure_projection'])
+
+    def test_old_live_snapshot_without_fast_slow_contract_cannot_reuse_green_reports(self):
+        self.source.pop('executionSystems')
+        result = self.probe()
+        self.assertTrue(result['fast_system_behavior']['ok'])
+        self.assertFalse(result['checks']['execution_systems'])
+        self.assertFalse(result['ok'])
+
+    def test_fast_slow_contract_cannot_claim_model_per_step_or_automatic_reflex(self):
+        original = copy.deepcopy(self.source['executionSystems'])
+        invalid = [dict(original, schema=True), dict(original, automaticFoodReflex=True),
+            dict(original, fast={**original['fast'], 'requiresModelPerStep': True}),
+            dict(original, fast={**original['fast'], 'steps': True}),
+            dict(original, fast={**original['fast'], 'nextCheckAt': float('nan')}),
+            dict(original, slow={**original['slow'], 'owner': 'direct-provider'})]
+        for value in invalid:
+            with self.subTest(value=value):
+                self.source['executionSystems'] = value
+                result = self.probe()
+                self.assertFalse(result['checks']['execution_systems'])
+                self.assertFalse(result['ok'])
+
+    def test_missing_old_stale_or_future_heartbeat_cannot_establish_current_protocol(self):
+        original = dict(self.heartbeat)
+        for value in (None, {k: v for k, v in original.items() if k != 'fastSystemProtocol'},
+                      dict(original, fastSystemProtocol=True), dict(original, at=(self.now - 91) * 1000),
+                      dict(original, at=(self.now + 6) * 1000)):
+            with self.subTest(value=value):
+                self.heartbeat = value
+                result = self.probe()
+                self.assertFalse(result['checks']['fast_system_protocol'])
+                self.assertFalse(result['ok'])
+
+    def test_old_generic_reports_do_not_replace_specific_behavior_evidence(self):
+        original = copy.deepcopy(self.fast_report)
+        invalid = [None, {k: v for k, v in original.items() if k != 'fastSystemProtocol'},
+            dict(original, fastSystemProtocol=True), dict(original, checks=original['checks'][:-1]),
+            dict(original, checks=[{'name': name, 'ok': 1} for name in health.SURVIVOR_FAST_SYSTEM_CHECKS]),
+            dict(original, checks=original['checks'] + [original['checks'][0]]),
+            dict(original, project='host'), dict(original, finishedAt=datetime.fromtimestamp(self.now + 6, timezone.utc).isoformat())]
+        for value in invalid:
+            with self.subTest(value=value):
+                self.fast_report = value
+                result = self.probe()
+                self.assertTrue(all(result['checks'].values()))
+                self.assertFalse(result['fast_system_behavior']['ok'])
+                self.assertFalse(result['ok'])
+
+    def test_offline_qwen_diagnostics_do_not_invalidate_fast_layer_protocol(self):
+        self.source['executionSystems']['slow']['readiness'] = {
+            'ready': False, 'checkedAt': self.now * 1000, 'warning': 'native_survivor_tools_unavailable'}
+        result = self.probe()
+        self.assertTrue(result['checks']['execution_systems'])
+        self.assertTrue(result['checks']['fast_system_protocol'])
+        # The separate existing Qwen/container probes still determine health.
+        self.container['State']['Health']['Status'] = 'unhealthy'
+        self.assertFalse(self.probe()['ok'])
 
 
 if __name__ == '__main__':

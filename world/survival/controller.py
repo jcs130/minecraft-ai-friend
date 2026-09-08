@@ -147,19 +147,16 @@ class Controller:
 
     def decision_signature(self, body, control):
         """Inference is triggered by a new mission, game observation or skill outcome."""
+        from perception import slow_outcome, slow_vitals
         last_outcome = next((r for r in reversed(self.data.get('episodes', []))
             if r.get('kind') in ('action_observed', 'skill_finished', 'skill_error', 'skill_stopped')), None)
-        if last_outcome:
-            # Repeating an unchanged rejected action is not a new world fact.
-            # Its timestamp alone must not bypass the model's quiet review
-            # interval and spend another decision every cooldown.
-            last_outcome = {key: value for key, value in last_outcome.items() if key != 'at'}
+        last_outcome = slow_outcome(last_outcome)
         value = {'mission': control.get('mission') or self.settings['mission'],
-            'counts': body.get('counts'), 'hp': body.get('hp'), 'hunger': body.get('hunger'),
+            'counts': body.get('counts'), 'vitals': slow_vitals(body, self.data.get('slowVitalBaseline')),
             'skillBooks': sorted((row.get('bookName', ''), row.get('count', 0))
                                 for row in body.get('skillBooks', []) if isinstance(row, dict)),
             'dimension': body.get('dimension'), 'outcome': last_outcome,
-            'perception': self.awareness.get('revision'),
+            'perception': self.awareness.get('wakeRevision', self.awareness.get('revision')),
             'missionChangedAt': control.get('missionChangedAt')}
         return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
 
@@ -191,17 +188,25 @@ class Controller:
 
     def usage(self):
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
-            if self.usage_cache is not None and self.clock() - self.usage_at < 60:
-                return dict(self.usage_cache)
+            unknown = {'modelRequests': None, 'promptTokens': None, 'completionTokens': None}
+            if self.data.get('qwenReadiness', {}).get('ready') is False:
+                return unknown
+            now = self.clock()
+            if self.usage_at and now - self.usage_at < 60:
+                return dict(self.usage_cache) if self.usage_cache is not None else unknown
+            # A failed read is a sample too. Do not stall every body tick with
+            # repeated statistics requests while the model service is offline.
+            self.usage_at = now
             try:
                 value = self.backend.usage()
                 if any(type(v) not in (int, float) or v < 0 for v in value.values()):
                     raise ValueError('usage_counter_invalid')
-                self.usage_cache, self.usage_at = value, self.clock()
+                self.usage_cache = value
                 return dict(value)
             except Exception:
                 # Never claim unknown usage is zero, or attribute other roles' calls.
-                return {'modelRequests': None, 'promptTokens': None, 'completionTokens': None}
+                self.usage_cache = None
+                return unknown
         try:
             path = self.root.parent / 'work/token_usage.json'
             if path.stat().st_size > 4 * 1024 * 1024:
@@ -298,6 +303,7 @@ class Controller:
             return {'available': False, 'fresh': False, 'notice': 'Use guild_board for the actual contracts.'}
 
     def planning_context(self, body, control, turn_id):
+        from perception import prioritize_events, event_wakes
         """Retrieve bounded working memory; accumulated history is not the prompt."""
         memory = self.memory()
         current = {k: memory[k][:700] for k in ('goal', 'lesson', 'nextFocus') if isinstance(memory.get(k), str)}
@@ -305,7 +311,7 @@ class Controller:
         current['recentLessons'] = [row['lesson'][:240] for row in memory.get('history', [])[-2:]
                                     if isinstance(row, dict) and isinstance(row.get('lesson'), str)]
         awareness = dict(self.awareness)
-        events = self.awareness.get('events', [])[:6]
+        events = prioritize_events(self.awareness.get('events', []))[:6]
         awareness.update(events=events, pendingEventIds=[r['id'] for r in events if isinstance(r, dict) and r.get('id')])
         environment = dict(self.environment or self.gateway.observe(8))
         if isinstance(environment.get('terrain'), str):
@@ -357,8 +363,14 @@ class Controller:
             context['skills'] = {'notice': 'Use skill_catalog to retrieve learned programs.'}
             context['gameSkills'] = {'notice': 'Use game_skills for current spell and level facts.'}
             context['memory'] = {k: v for k, v in current.items() if k != 'recentLessons'}
-            context['perception'] = {'events': [], 'pendingEventIds': [],
-                                     'notice': 'Pending observations remain available through world_perception.'}
+            # Reserve room for the actual addressed/urgent messages. A tool read
+            # cannot acknowledge a message omitted from this task's reservation.
+            # Ambient overflow stays observable without forcing another model turn.
+            urgent = [{key: row[key] for key in ('id', 'kind', 'at', 'speaker', 'text', 'addressed',
+                'trusted', 'beforeHp', 'afterHp', 'before', 'after') if key in row}
+                for row in events if event_wakes(row)][:3]
+            context['perception'] = {'events': urgent, 'pendingEventIds': [r['id'] for r in urgent if r.get('id')],
+                                     'notice': 'Remaining observations stay pending and are available through world_perception.'}
             context['adventure'] = {'notice': 'Use current status, skill_catalog, guild_board and adventure_guide as needed.'}
         return context
 
@@ -446,9 +458,13 @@ class Controller:
             'warnings': {k: self.data[k] for k in ('catalogWarning', 'perceptionWarning') if self.data.get(k)},
             'boundaryEnforcement': 'preflight',
             'scope': 'Model-led planning and versioned executable skills. No weight training.'}
+        from fast_execution import systems_status
+        job_path = self.root / 'skill-job.json'
+        job = read_json(job_path) if job_path.exists() else {}
+        value['executionSystems'] = systems_status(self.data, job, now)
         write_json(self.public, value)
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
-            'status': self.data['status'], 'ok': True})
+            'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1})
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -508,6 +524,18 @@ class Controller:
             self.record('action_observed', action=pending['action'], **self.delta(pending['before'], body),
                         navigationOutcome=outcome,
                         notice='These are observed changes, not a blanket task-success assertion.')
+            path = self.root / 'skill-job.json'
+            if pending.get('skillTurnId') and path.exists():
+                job = read_json(path)
+                if (job.get('lastTurnId') == pending['skillTurnId']
+                        and job.get('version') == pending.get('skillVersion')):
+                    job['lastExecution'] = {'turnId': pending['skillTurnId'], 'tool': pending['action'],
+                        'nativeTaskId': pending.get('nativeTaskId'), 'navigationEpoch': pending.get('navigationEpoch'),
+                        'status': ('succeeded' if outcome.get('success') is True else 'failed') if outcome else 'observed',
+                        'completionConfirmed': outcome is not None,
+                        'navigationOutcome': outcome, 'observedAt': int(self.clock() * 1000),
+                        **self.delta(pending['before'], body)}
+                    write_json(path, job)
             self.data['observeAction'] = None
             self.save()
 
@@ -554,11 +582,15 @@ class Controller:
         if completed and self.perception:
             self.perception.ack(active.get('eventIds', []))
             self.awareness = self.perception.poll(body, self.environment)
+        from perception import slow_vitals
+        self.data['slowVitalBaseline'] = slow_vitals(active['before'], self.data.get('slowVitalBaseline'))
         self.data['lastDecisionSignature'] = self.decision_signature(active['before'],
             {'mission': active.get('mission') or read_json(self.root / 'control.json').get('mission'),
              'missionChangedAt': active.get('missionChangedAt')})
-        # Events arriving while the model was thinking remain pending and wake it.
-        if self.awareness.get('pendingEventIds'):
+        # New addressed/urgent events survive the exact-ID ack and wake planning.
+        # Ordinary chatter remains available for a later review, without buying
+        # one extra model task for each leftover context page.
+        if self.awareness.get('pendingWakeEventIds', self.awareness.get('pendingEventIds')):
             self.data['lastDecisionSignature'] = None
         self.data['lastReviewAt'] = self.clock()
         self.data['lastDecisionPosition'] = body.get('position')
@@ -584,15 +616,29 @@ class Controller:
             write_json(path, job)
             self.record('skill_stopped', name=job['name'], reason=job['reason'])
             return False
+        if now < job.get('nextRunAt', 0):
+            self.data.update(status='executing_skill', skillWaitReason='program_wait')
+            return True
         try:
-            observed = dict(body, execution={'lastResult': job.get('lastResult'),
-                'evidence': self.data.get('episodes', [])[-3:]},
+            from fast_execution import execution_state, program_observation
+            observed = dict(body, execution=execution_state(job, self.data.get('episodes', []), body, now),
                 environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
                 adventure=self.adventure(body), guild=self.cached_guild(),
                 constructionAreas=self.settings.get('constructionAreas', [])[:8])
             plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
             self.data.pop('skillWaitReason', None)
-            job.update(memory=plan['memory'], status='running', reason=plan.get('reason', ''), steps=job['steps'] + 1)
+            job.pop('nextRunAt', None)
+            passive = 'waitSeconds' in plan or 'observe' in plan
+            job.update(memory=plan['memory'], status='running', reason=plan.get('reason', ''),
+                       steps=job['steps'] + (0 if passive else 1))
+            if 'waitSeconds' in plan:
+                job['nextRunAt'] = now + plan['waitSeconds']
+                self.data['skillWaitReason'] = 'program_wait'
+            elif 'observe' in plan:
+                job['lastObservation'] = program_observation(self.gateway, plan['observe'], body, now)
+                job['observations'] = job.get('observations', 0) + 1
+                job['nextRunAt'] = now + max(15, self.settings['observationSeconds'])
+                self.data['skillWaitReason'] = 'program_observation'
             if plan.get('done') or plan.get('replan'):
                 job['status'] = 'done' if plan.get('done') else 'replan'
                 write_json(path, job)
@@ -622,7 +668,13 @@ class Controller:
                     job['status'] = 'running'
                     self.data['observeAction'] = {'action': action['tool'], 'before': body,
                         'nativeTaskId': outcome.get('result', {}).get('data', {}).get('task_id'),
-                        'navigationEpoch': body.get('navigationEpoch')}
+                        'navigationEpoch': body.get('navigationEpoch'), 'skillTurnId': turn_id,
+                        'skillVersion': job['version']}
+                job['lastExecution'] = {'turnId': turn_id, 'tool': action['tool'],
+                    'nativeTaskId': outcome.get('result', {}).get('data', {}).get('task_id'),
+                    'navigationEpoch': body.get('navigationEpoch'), 'observedAt': int(now * 1000),
+                    'status': 'accepted' if outcome.get('ok') else 'failed',
+                    'completionConfirmed': outcome.get('completionConfirmed') is True}
                 job['lastResult'] = outcome
             write_json(path, job)
             self.data['status'] = 'executing_skill'

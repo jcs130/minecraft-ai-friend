@@ -1,7 +1,8 @@
 """Versioned programs learned by the embodied Agent, evaluated without host IO.
 
 JavaScript implements next(state, memory). It can calculate one proposed Numen
-action; only the separately maintained gateway can execute that proposal. No
+action, bounded wait, or whitelisted observation; only the separately maintained
+controller/gateway can execute that proposal. No
 Python callbacks, filesystem, process, network, or game objects enter QuickJS.
 Tests certify the supplied examples, not general correctness in a live world.
 """
@@ -25,6 +26,9 @@ MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
 from numen_gateway import TOOLS as ACTION_TOOLS
+OBSERVATION_TOOLS = ('inspect_block', 'inspect_container')
+MIN_WAIT_SECONDS = 15
+MAX_WAIT_SECONDS = 300
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
 VERSION = re.compile(r'[0-9a-f]{64}\Z')
 
@@ -72,12 +76,33 @@ def _kernel_version():
     return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
+def _wait_seconds(value):
+    if type(value) is not int or not MIN_WAIT_SECONDS <= value <= MAX_WAIT_SECONDS:
+        raise SkillError('invalid_skill_wait')
+    return value
+
+
+def _observation(value):
+    """Validate only a proposal. Physical reach and ownership remain gateway work."""
+    if (not isinstance(value, dict) or set(value) != {'tool', 'args'}
+            or value['tool'] not in OBSERVATION_TOOLS or not isinstance(value['args'], dict)
+            or set(value['args']) != {'x', 'y', 'z'}):
+        raise SkillError('invalid_skill_observation')
+    for key, low, high in (('x', -29999984, 29999984), ('y', -64, 319), ('z', -29999984, 29999984)):
+        coordinate = value['args'][key]
+        if type(coordinate) is not int or not low <= coordinate <= high:
+            raise SkillError('invalid_skill_observation')
+    return value
+
+
 def _validate_result(value):
-    if not isinstance(value, dict) or set(value) - {'action', 'memory', 'done', 'replan', 'reason'}:
+    if not isinstance(value, dict) or set(value) - {
+            'action', 'memory', 'done', 'replan', 'reason', 'waitSeconds', 'observe'}:
         raise SkillError('invalid_skill_result')
-    if 'action' not in value or not isinstance(value.get('memory'), dict):
+    if (not isinstance(value.get('memory'), dict)
+            or not any(key in value for key in ('action', 'waitSeconds', 'observe'))):
         raise SkillError('invalid_skill_result')
-    action = value['action']
+    action = value.get('action')
     if action is not None:
         if not isinstance(action, dict) or set(action) != {'tool', 'args'}:
             raise SkillError('invalid_skill_action')
@@ -93,9 +118,16 @@ def _validate_result(value):
         raise SkillError('action_with_terminal_result')
     if value.get('done') and value.get('replan'):
         raise SkillError('conflicting_terminal_result')
+    extra = {}
+    if 'waitSeconds' in value:
+        extra['waitSeconds'] = _wait_seconds(value['waitSeconds'])
+    if 'observe' in value:
+        extra['observe'] = _observation(value['observe'])
+    if extra and (len(extra) > 1 or action is not None or value.get('done') or value.get('replan')):
+        raise SkillError('conflicting_skill_requests')
     _json(value['memory'], 16384)
     return dict(action=action, memory=value['memory'], done=value.get('done', False),
-                replan=value.get('replan', False), reason=value.get('reason', ''))
+                replan=value.get('replan', False), reason=value.get('reason', '')) | extra
 
 
 def evaluate(source, state, memory=None):
@@ -162,11 +194,12 @@ def _fixtures(fixtures):
     inputs = set()
     for row in fixtures:
         if not isinstance(row, dict) or set(row) - {
-                'state', 'memory', 'expectedActionTool', 'done', 'replan', 'expectedAction', 'expectedMemory'}:
+                'state', 'memory', 'expectedActionTool', 'done', 'replan', 'expectedAction',
+                'expectedMemory', 'expectedWaitSeconds', 'expectedObserve'}:
             raise SkillError('invalid_fixture')
         if not isinstance(row.get('state'), dict) or not isinstance(row.get('memory', {}), dict):
             raise SkillError('invalid_fixture_input')
-        if not any(key in row for key in ('expectedActionTool', 'done')):
+        if not any(key in row for key in ('expectedActionTool', 'done', 'expectedWaitSeconds', 'expectedObserve')):
             raise SkillError('fixture_expectation_required')
         if 'expectedActionTool' in row and row['expectedActionTool'] not in (None, *ACTION_TOOLS):
             raise SkillError('invalid_fixture_expectation')
@@ -175,6 +208,10 @@ def _fixtures(fixtures):
                 raise SkillError('invalid_fixture_expectation')
         if 'expectedMemory' in row and not isinstance(row['expectedMemory'], dict):
             raise SkillError('invalid_fixture_expectation')
+        if row.get('expectedWaitSeconds') is not None:
+            _wait_seconds(row['expectedWaitSeconds'])
+        if row.get('expectedObserve') is not None:
+            _observation(row['expectedObserve'])
         inputs.add(_json({'state': row['state'], 'memory': row.get('memory', {})}))
     if len(inputs) < 2:
         raise SkillError('distinct_fixture_inputs_required')
@@ -288,8 +325,12 @@ class SkillLibrary:
                 unavailable.append({'name': folder.name,
                                     'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
         return {'skills': rows, 'unavailable': unavailable,
-                'contract': 'next(state,memory) -> {action,memory,done?,replan?,reason?}',
-                'actionTools': list(ACTION_TOOLS), 'engine': ENGINE_PACKAGE + '==' + ENGINE_VERSION}
+                'contract': 'next(state,memory) -> {action?,memory,done?,replan?,reason?,waitSeconds?,observe?}; '
+                            'one action, wait, observation or terminal result per step; '
+                            'action may be omitted only for waitSeconds or observe',
+                'actionTools': list(ACTION_TOOLS), 'observationTools': list(OBSERVATION_TOOLS),
+                'waitSeconds': {'minimum': MIN_WAIT_SECONDS, 'maximum': MAX_WAIT_SECONDS},
+                'engine': ENGINE_PACKAGE + '==' + ENGINE_VERSION}
 
     def read(self, name, version=None):
         with self._lock():
@@ -341,6 +382,10 @@ class SkillLibrary:
                     passed = passed and all(result[key] == fixture[key] for key in ('done', 'replan') if key in fixture)
                     passed = passed and ('expectedAction' not in fixture or result['action'] == fixture['expectedAction'])
                     passed = passed and ('expectedMemory' not in fixture or result['memory'] == fixture['expectedMemory'])
+                    passed = passed and ('expectedWaitSeconds' not in fixture
+                                         or result.get('waitSeconds') == fixture['expectedWaitSeconds'])
+                    passed = passed and ('expectedObserve' not in fixture
+                                         or result.get('observe') == fixture['expectedObserve'])
                     cases.append({'index': index, 'passed': passed, 'actual': result})
                 except SkillError as exc:
                     cases.append({'index': index, 'passed': False, 'error': str(exc),

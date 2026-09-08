@@ -276,7 +276,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd3
+    image: qiandengji-survivor:2.2.0-qd4
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s

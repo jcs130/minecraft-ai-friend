@@ -66,6 +66,8 @@ SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unk
     'survivor-status-panel', 'survivor-supervised-runtime', 'autonomous-task-evidence')
 SURVIVOR_ADVENTURE_CHECKS = ('native-39-tools', 'loaded-block-scan', 'physical-menu-identity',
     'bound-guild-board', 'live-life-panel', 'resumed-model-action', 'strict-3d-arrival')
+SURVIVOR_FAST_SYSTEM_CHECKS = ('bounded-program-wait', 'program-read-only-observation',
+    'slow-signal-batching', 'qwen-independent-execution', 'original-skill-retested')
 
 OPERATIONS_TEAM_CONTAINER = 'qiandengji-qwenpaw-ops-1'
 OPERATIONS_TEAM_ROLES = ('default', 'mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
@@ -188,10 +190,46 @@ def probe_model_routing():
         return {'ok': False, 'error': 'Model routing could not be verified; no model task was submitted'}
 
 
+def probe_survivor_fast_behavior():
+    """A current protocol needs its own bounded evidence, not the old smoke."""
+    filename = 'survivor-fast-system-smoke.json'
+    result = {'ok': False, 'report': filename, 'missing_checks': list(SURVIVOR_FAST_SYSTEM_CHECKS)}
+    try:
+        path = PROJECT / 'reports' / filename
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 262144:
+            raise ValueError('invalid_fast_system_report')
+        report = json.loads(path.read_text(encoding='utf-8-sig'))
+        if (type(report.get('schema')) is not int or report['schema'] != 1
+                or report.get('project') != 'qiandengji' or report.get('ok') is not True
+                or type(report.get('fastSystemProtocol')) is not int or report['fastSystemProtocol'] != 1):
+            raise ValueError('fast_system_report_protocol_missing')
+        rows = report.get('checks')
+        if isinstance(rows, dict):
+            if any(not isinstance(value, dict) for value in rows.values()):
+                raise ValueError('invalid_fast_system_checks')
+            rows = [{'name': name, 'ok': value.get('ok')} for name, value in rows.items()]
+        if (not isinstance(rows, list) or not 1 <= len(rows) <= 64
+                or any(not isinstance(row, dict) or not isinstance(row.get('name'), str)
+                       or not row['name'] or row.get('ok') is not True for row in rows)):
+            raise ValueError('invalid_fast_system_checks')
+        names = [row['name'] for row in rows]
+        if len(names) != len(set(names)):
+            raise ValueError('duplicate_fast_system_check')
+        result['missing_checks'] = sorted(set(SURVIVOR_FAST_SYSTEM_CHECKS) - set(names))
+        finished = operations_time(report.get('finishedAt'))
+        if finished.timestamp() > time.time() + 5:
+            raise ValueError('future_fast_system_report')
+        result.update(ok=not result['missing_checks'], checked_at=report['finishedAt'])
+    except (OSError, ValueError, TypeError, AttributeError, KeyError, OverflowError):
+        result['error'] = 'Fast-system behavior evidence is missing or invalid'
+    return result
+
+
 def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
-              'adventure_projection': False, 'no_unexpected_pause': False}
+              'adventure_projection': False, 'no_unexpected_pause': False,
+              'execution_systems': False, 'fast_system_protocol': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
         if target.is_symlink() or target.stat().st_size > 262144:
@@ -201,6 +239,29 @@ def probe_survivor():
         checks['snapshot_fresh'] = (source.get('schema') == 1 and source.get('project') == 'qiandengji-survivor'
             and source.get('character') == '桐人' and source.get('bodyName') == 'Kirito'
             and -5 <= time.time() - timestamp.timestamp() <= 90)
+        systems = source.get('executionSystems')
+        if isinstance(systems, dict):
+            fast, slow = systems.get('fast'), systems.get('slow')
+            checks['execution_systems'] = (type(systems.get('schema')) is int and systems['schema'] == 1
+                and systems.get('automaticFoodReflex') is False
+                and isinstance(fast, dict) and isinstance(slow, dict)
+                and fast.get('owner') == 'native-ai-and-tested-programs'
+                and fast.get('requiresModelPerStep') is False
+                and type(fast.get('active')) is bool and type(fast.get('waiting')) is bool
+                and all(type(fast.get(key)) is int and fast[key] >= 0 for key in ('steps', 'observations'))
+                and (fast.get('name') is None or isinstance(fast.get('name'), str) and len(fast['name']) <= 48)
+                and (fast.get('nextCheckAt') is None or type(fast.get('nextCheckAt')) in (int, float)
+                     and math.isfinite(fast['nextCheckAt']) and fast['nextCheckAt'] >= 0)
+                and slow.get('owner') == 'qwenpaw' and type(slow.get('active')) is bool
+                and isinstance(slow.get('status'), str) and slow['status'] == source.get('status')
+                and 'readiness' in slow)
+        heartbeat_path = PROJECT / 'server/survival-agent-state/survival/heartbeat.json'
+        if not heartbeat_path.is_symlink() and heartbeat_path.stat().st_size <= 16384:
+            heartbeat = json.loads(heartbeat_path.read_text(encoding='utf-8-sig'))
+            checks['fast_system_protocol'] = (type(heartbeat.get('schema')) is int and heartbeat['schema'] == 1
+                and heartbeat.get('ok') is True and type(heartbeat.get('fastSystemProtocol')) is int
+                and heartbeat['fastSystemProtocol'] == 1 and type(heartbeat.get('at')) in (int, float)
+                and math.isfinite(heartbeat['at']) and -5 <= time.time() - heartbeat['at'] / 1000 <= 90)
         reason = source.get('pauseReason') or ''
         checks['no_unexpected_pause'] = (source.get('enabled') is True
             and source.get('status') not in ('paused', 'stopped', 'body_offline')) or (
@@ -236,9 +297,11 @@ def probe_survivor():
         paused = False
     behavior = probe_recorded_behavior('survivor-smoke.json', SURVIVOR_SMOKE_CHECKS)
     adventure_behavior = probe_recorded_behavior('survivor-adventure-smoke.json', SURVIVOR_ADVENTURE_CHECKS)
-    return {'ok': all(checks.values()) and behavior['ok'] and adventure_behavior['ok'], 'checks': checks, 'paused': paused,
+    fast_behavior = probe_survivor_fast_behavior()
+    return {'ok': all(checks.values()) and behavior['ok'] and adventure_behavior['ok'] and fast_behavior['ok'], 'checks': checks, 'paused': paused,
         'behavior': behavior, 'adventure_behavior': adventure_behavior,
-        'scope': 'Live status and supervision; separate recorded autonomy, scan, guild-query and menu evidence. No model calls; no blanket life-goal completion.'}
+        'fast_system_behavior': fast_behavior,
+        'scope': 'Live status, fast/slow protocol and supervision; separate recorded behavior evidence. No model calls; no blanket life-goal completion.'}
 
 
 def probe_game_qwenpaw():
