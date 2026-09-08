@@ -21,9 +21,16 @@ def register_team_tools(app, actor, state=Path('/team')):
         snapshot = OperationsTools('mc-god').snapshot()
         snapshot.pop('worldActionsAllowed', None)
         snapshot['worldActionsExecuted'] = 0
+        sections = snapshot.get('snapshots') if isinstance(snapshot.get('snapshots'), dict) else {}
+        stale = sorted(name for name, section in sections.items()
+                       if isinstance(section, dict) and section.get('fresh') is False)
+        snapshot['staleSnapshots'] = stale
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
-                      'A report or tested commit is not proof of a deployed game fix.'}
+                      'A report or tested commit is not proof of a deployed game fix.'
+                      + (' Sections listed in staleSnapshots are expired inspection records, '
+                         'not current health or current faults; re-verify before reporting.'
+                         if stale else '')}
 
     @app.tool()
     def team_cases(owner: str = 'mine', include_closed: bool = False, limit: int = 12) -> dict:
