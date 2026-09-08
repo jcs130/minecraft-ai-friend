@@ -32,6 +32,7 @@ class GuildBasicTests(unittest.TestCase):
             'preservePosition': True, 'lastKnownPosition': [0,64,0]}} for i,(key,job) in enumerate(jobs.items())]
         self.npc = SimpleNamespace(DATA=str(self.folder), VDIR=str(self.folder), CFG={},
             GUILD_AUTOGENERATE=False, PROFILES=profiles,
+            alive_pos=Mock(return_value=[0, 64, 0]),
             R=SimpleNamespace(cmd=Mock(return_value='Fixture123 has 0 [killed_skeleton]')),
             quests_today=Mock(return_value={'quests': [self.quest]}),
             start_npc_thread=Mock(),

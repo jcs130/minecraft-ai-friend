@@ -106,6 +106,11 @@ def validate_learning_profile(agent, role, runtime):
 def validate_jobs(value, role, runtime):
     assert isinstance(value, dict) and isinstance(value.get('jobs'), list)
     jobs = list(value['jobs'])
+    from world_team_schedule import is_team_job, validate_team_job
+    team = [j for j in jobs if is_team_job(j.get('id'))]
+    assert len(team) <= 1
+    for row in team: validate_team_job(row, runtime + ':' + role)
+    jobs = [j for j in jobs if not is_team_job(j.get('id'))]
     if runtime == 'game':
         from life_review_schedule import JOB_ID, validate_job
         reviews = [j for j in jobs if j.get('id') == JOB_ID]

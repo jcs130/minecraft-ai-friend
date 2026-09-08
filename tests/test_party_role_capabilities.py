@@ -46,7 +46,7 @@ class PartyCapabilityTests(unittest.TestCase):
         self.card = card_fixture()
         self.client = party.client_payload(self.authorization)
         self.policy = party.policy_payload() | {'unmanaged_rules_count':0}
-        self.api = {'/mcp':[{'key':'numen_survival'}, {'key':'qd_learning'}, {'key':'qd_party'}],
+        self.api = {'/mcp':[{'key':'numen_survival'}, {'key':'qd_learning'}, {'key':'qd_party'}, {'key':'qd_world_team'}],
             '/mcp/qd_party':self.client, '/mcp/policy/qd_party':self.policy,
             '/mcp/tools/qd_party':[{'name':name,'enabled':True} for name in party.TOOLS]}
         self.calls = []
@@ -61,9 +61,11 @@ class PartyCapabilityTests(unittest.TestCase):
     def test_only_manifest_pair_gains_the_driver(self):
         self.assertEqual(party.party_roles(), {'qd-survivor','fixture-maid'})
         for role in ('qd-survivor','fixture-maid'):
-            self.assertEqual(party.expected_drivers(role, {'qd_learning'}), {'qd_learning','qd_party'})
+            expected = {'qd_learning','qd_party','qd_world_team'}
+            self.assertEqual(party.expected_drivers(role, {'qd_learning'}), expected)
         for role in ('mc-god','mc-herald','qd-maid-dialogue','another-maid','default',None):
-            self.assertEqual(party.expected_drivers(role, {'qd_learning'}), {'qd_learning'})
+            expected = {'qd_learning'} | ({'qd_world_team'} if role in ('mc-god','mc-herald','qd-maid-dialogue') else set())
+            self.assertEqual(party.expected_drivers(role, {'qd_learning'}), expected)
 
     def test_absent_optional_manifest_means_disabled_but_configured_missing_is_error(self):
         missing = self.root / 'absent.json'

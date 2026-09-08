@@ -15,6 +15,7 @@ from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
 from life_memory_policy import validate_profile as validate_life_memory
+import world_team_profiles as world_team
 
 MAID_TOOLS = {'identity', 'context', 'task_catalog', 'sit', 'follow', 'schedule', 'work'}
 
@@ -95,6 +96,8 @@ def check_maid_api(get, role):
     assert MAID_TOOLS == {item.get('name') for item in tools if item.get('enabled') is True}
     if role in party_roles():
         check_party_api(get, role)
+    if world_team.actor_for(role, 'game'):
+        world_team.check_api(lambda path: get(path, aid=role), role, 'game')
 
 
 def check_maid_config(folder, role):
@@ -118,6 +121,8 @@ def check_maid_config(folder, role):
     assert credential.kind == 'static' and set(credential.secrets) == {'authorization'} and not credential.public
     check_maid_card(card, agent['mcp']['clients'], credential.secrets['authorization'], role)
     check_party_workspace(folder, role, agent, cards)
+    if world_team.actor_for(role, 'game'):
+        world_team.validate_workspace(folder, role, 'game')
     validate_learning_workspace(folder, role, 'game')
 
 
@@ -148,6 +153,7 @@ def check_survivor_config(folder):
     assert set(cards) == {folder / ('drivers/mcp/' + name + '.yaml')
                           for name in expected_drivers('qd-survivor', {'numen_survival', 'qd_learning'})}
     check_party_workspace(folder, 'qd-survivor', agent, cards)
+    world_team.validate_workspace(folder, 'qd-survivor', 'game')
     card = load_card(folder / 'drivers/mcp/numen_survival.yaml')
     assert card.enabled and card.endpoint['transport'] == 'streamable_http'
     assert card.endpoint['url'] == client['url']
@@ -179,18 +185,22 @@ def check_runtime_config():
     for aid in ('mc-god', 'mc-herald'):
         folder = Path('/state/work/workspaces')/aid
         agent = json.loads((folder/'agent.json').read_text())
+        if aid == 'mc-god': assert agent['name'] == '灯语女神'
         assert_quiet(agent['running'])
         assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
         assert agent['heartbeat']['enabled'] is False
         validate_native(agent, aid)
         assert not any(item['enabled'] for item in agent['acp']['agents'].values())
-        assert set(agent['mcp']['clients']) == {'qd_learning'}
+        expected = expected_drivers(aid, {'qd_learning'})
+        assert set(agent['mcp']['clients']) == expected
         # The 2.2 unified driver registry is separate from the legacy /tools API.
-        assert driver_cards(folder) == [folder / 'drivers/mcp/qd_learning.yaml']
+        assert set(driver_cards(folder)) == {folder / ('drivers/mcp/' + name + '.yaml') for name in expected}
+        if world_team.actor_for(aid, 'game'):
+            world_team.validate_workspace(folder, aid, 'game')
         validate_learning_workspace(folder, aid, 'game')
     check_survivor_config(Path('/state/work/workspaces/qd-survivor'))
     for aid in WORLD_ROLES:
-        validate_workspace(Path('/state/work/workspaces') / aid, aid)
+        validate_workspace(Path('/state/work/workspaces') / aid, aid, team=True)
     for aid in maid_roles():
         check_maid_config(Path('/state/work/workspaces') / aid, aid)
     return {aid for aid in ('default', 'QwenPaw_QA_Agent_0.2')
@@ -250,6 +260,8 @@ def main():
             check_party_inventory(get, aid, {'numen_survival', 'qd_learning'} if aid == 'qd-survivor' else {'qd_learning'})
             if aid in bound_party_roles:
                 check_party_api(get, aid)
+        if aid not in maid_roles() and world_team.actor_for(aid, 'game'):
+            world_team.check_api(lambda path: get(path, aid=aid), aid, 'game')
         jobs = get('/cron/jobs', aid=aid)
         validate_jobs({'jobs': [item.get('spec', item) for item in (jobs if isinstance(jobs, list) else jobs['jobs'])]}, aid, 'game')
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
@@ -259,6 +271,8 @@ def main():
                       'survivorMcp': 'authenticated-streamable-http', 'learningMcpTools': len(TOOL_NAMES),
                       'installedSkillBindings': bindings, 'baseAgents': 6, 'maidAgents': len(maid_roles()),
                       'partyAgents': len(bound_party_roles), 'partyDriverPolicyVerified': bool(bound_party_roles),
+                      'worldTeamAgents': sum(bool(world_team.actor_for(aid, 'game')) for aid in expected_roles),
+                      'worldTeamDriverPolicyVerified': True,
                       'cronBudgetGuardVerified': guard_verified,
                       'llmLimitPolicy': 'unrestricted', 'llmPolicyVerified': True,
                       'managedWeeklyJobs': len(expected_roles), 'unmanagedAutomaticJobs': 0}))

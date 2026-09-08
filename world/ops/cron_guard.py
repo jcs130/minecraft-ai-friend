@@ -61,6 +61,9 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
         write(tools.root / 'last-cron.json', record)
         return {'task_type': job.task_type, 'run_id': None, 'delivery_status': 'suppressed',
             'final_text': code, 'qiandeng': record}
+    from world_team_schedule import is_team_job, execute as execute_team
+    if is_team_job(job.id):
+        return await execute_team(executor, job, original, runtime)
     if runtime == 'game':
         from life_review_schedule import JOB_ID, execute as execute_life_review
         if job.id == JOB_ID:

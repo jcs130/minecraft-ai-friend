@@ -9,6 +9,7 @@ from operations_team_mcp import ROLES, TOOLS, role_tools
 from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
 from llm_runtime_policy import validate_running
+import world_team_profiles as world_team
 
 
 def check_passwordless_auth(get):
@@ -16,8 +17,23 @@ def check_passwordless_auth(get):
     assert get('/auth/status').get('enabled') is False
 
 
+def check_team_configuration(folder, profile, role, get, card_paths):
+    """Strict driver inventory plus actual native workspace/API capabilities."""
+    if role == 'mc-god': assert profile['name'] == '天神 · 世界工程师'
+    if role == 'mc-herald': assert profile['name'] == '灯语 · 服务诊断'
+    expected = world_team.expected_drivers(role, 'operations', {'qiandeng_operations', 'qd_learning'})
+    assert set(profile['mcp']['clients']) == expected
+    assert set(card_paths) == {folder / ('drivers/mcp/' + name + '.yaml') for name in expected}
+    world_team.validate_workspace(folder, role, 'operations')
+    inventory = get('/mcp')
+    assert isinstance(inventory, list) and len(inventory) == len(expected)
+    assert {row.get('key') for row in inventory} == expected
+    world_team.check_api(get, role, 'operations')
+
+
 def main():
     from qwenpaw.drivers.storage import load_card
+    from upgrade_qwenpaw_runtime import driver_cards
     from qwenpaw.agents.skill_system.workspace_service import SkillService
     assert importlib.metadata.version('qwenpaw')=='2.2.0'
     guard_verified = validate_guard('/state/work', 'operations')
@@ -50,7 +66,7 @@ def main():
         assert not any(a.get('enabled') for a in profile['acp']['agents'].values())
         validate_learning_workspace(folder, role, 'operations')
         mcp=profile['mcp']['clients']
-        assert set(mcp)=={'qiandeng_operations', 'qd_learning'}
+        check_team_configuration(folder, profile, role, lambda path: get(path, role=role), driver_cards(folder))
         item=mcp['qiandeng_operations']
         assert item['enabled'] and item['command']=='python' and item['args']==['/ops/operations_team_mcp.py','--role',role]
         assert set(item['tools'])==set(role_tools(role))
@@ -80,6 +96,7 @@ def main():
         'mcpTools':list(TOOLS),'learningMcpTools':len(TOOL_NAMES),'automaticJobs':automatic_jobs,
         'managedWeeklyJobs':6,'managedDailyJobs':daily_jobs,'unmanagedAutomaticJobs':0, 'cronBudgetGuardVerified':guard_verified,
         'llmLimitPolicy':'unrestricted', 'llmPolicyVerified':True,
+        'worldTeamDriverPolicyVerified':True, 'engineeringDriverPolicyVerified':True,
         'scope':'Native enabled role skills, managed cron and fixed MCP policy; model/tool execution has separate evidence'}))
 
 

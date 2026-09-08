@@ -522,9 +522,15 @@ export interface GodHandle {
   dispose: () => void
 }
 
+/** Legacy automatic model jobs are opt-in; native Qwen team scheduling owns operations. */
+export function legacyGodModelJobs(env: Record<string, string | undefined> = process.env) {
+  return { review: env.WORLD_GOD_REVIEW_ENABLED === '1', dailyReport: env.WORLD_GOD_DAILY_REPORT_ENABLED === '1' }
+}
+
 /** 已脱 cordis 壳（2026-08-21）：bootstrap-world.mts 显式 createGod(config, deps) 装配。 */
 export function createGod(config: Config, deps: GodDeps): GodHandle {
   const log = (msg: string) => console.log(`[mc-god] ${msg}`)
+  const automaticModelJobs = legacyGodModelJobs()
   const lc = createLifecycle()
   const modelProvider = createWorldModelProvider({ qwenpawUrl: config.qwenpawUrl, provider: deps.modelProvider })
   // 女神化身实例随重连变化，须每次现取。
@@ -2713,6 +2719,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         pid: process.pid,
         goddess: getBot()?.username ?? null,
         agentProvider: describeModelProvider(modelProvider),
+        automaticModelJobs,
         playerCommands: { schema: 1, ready: !disposed, queueEnabled: !!skillQueue, modelRequired: false },
         voiceCommands: { ...voiceInbox.status(), ready: !disposed && voiceInbox.status().ready },
         watching,
@@ -3177,6 +3184,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
 
   /** 女神每日分析日报：中午填坑后采集当日数据 → 报告 → 投向创世天神（mc-god）。 */
   async function maybeRunDailyReport(gt: { day: number; tod: number }): Promise<void> {
+    if (!automaticModelJobs.dailyReport) return
     if (reportBusy) return
     if (gt.day < 0) return
     if (gt.tod < FILL_NOON_START || gt.tod > FILL_NOON_END) return
@@ -3332,6 +3340,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   let reviewBusy = false
   let stopReview: (() => void) | null = null
   async function runReview(): Promise<void> {
+    if (!automaticModelJobs.review) return
     if (reviewBusy) return
     reviewBusy = true
     try {
@@ -3386,7 +3395,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
   function scheduleReview() {
-    if (disposed) return
+    if (disposed || !automaticModelJobs.review) return
     stopReview = lc.setTimeout(() => {
       runReview().finally(() => scheduleReview())
     }, config.reviewMs)

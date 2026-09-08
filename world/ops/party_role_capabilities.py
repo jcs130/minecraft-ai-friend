@@ -59,7 +59,9 @@ def party_roles():
 
 
 def expected_drivers(role, base_drivers):
-    return set(base_drivers) | ({DRIVER} if role in party_roles() else set())
+    from world_team_profiles import expected_drivers as team_drivers
+    party = set(base_drivers) | ({DRIVER} if role in party_roles() else set())
+    return team_drivers(role, 'game', party) if isinstance(role, str) else party
 
 
 def _authorization(value):

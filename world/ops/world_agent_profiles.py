@@ -60,14 +60,21 @@ def closed_profile(original, role, learning=True):
     return result
 
 
-def validate_profile(agent, role, learning=True):
+def validate_profile(agent, role, learning=True, team=None):
     from upgrade_qwenpaw_runtime import assert_quiet
+    import world_team_profiles as world_team
     assert role in WORLD_ROLES and agent['id'] == role and agent['name'] == LABELS[role]
     assert agent['workspace_dir'] == '/state/work/workspaces/' + role
     assert agent['backend'] == 'qwenpaw' and not agent.get('backend_settings')
     assert agent['thinking_level'] == 'off'
     assert agent['system_prompt_files'] == ['AGENTS.md', 'SOUL.md', 'PROFILE.md']
-    assert set(agent['mcp']['clients']) == ({'qd_learning'} if learning else set()) and agent['heartbeat']['enabled'] is False
+    # Initial/legacy text-role construction may precede team provisioning.
+    # The production health caller explicitly requires team=True.
+    if team is None: team = world_team.DRIVER in agent['mcp']['clients']
+    expected = {'qd_learning'} if learning else set()
+    if team: expected = world_team.expected_drivers(role, 'game', expected)
+    assert set(agent['mcp']['clients']) == expected and agent['heartbeat']['enabled'] is False
+    if team: world_team.validate_client_config(agent, role, 'game')
     if learning:
         validate_learning_profile(agent, role, 'game')
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
@@ -90,12 +97,17 @@ def validate_profile(agent, role, learning=True):
     assert isinstance(active.get('model'), str) and active['model']
 
 
-def validate_workspace(folder, role, learning=True):
+def validate_workspace(folder, role, learning=True, team=None):
     import json
     from upgrade_qwenpaw_runtime import driver_cards
     agent = json.loads((folder / 'agent.json').read_text(encoding='utf-8'))
-    validate_profile(agent, role, learning=learning)
-    assert driver_cards(folder) == ([folder / 'drivers/mcp/qd_learning.yaml'] if learning else [])
+    import world_team_profiles as world_team
+    if team is None: team = world_team.DRIVER in agent['mcp']['clients']
+    validate_profile(agent, role, learning=learning, team=team)
+    expected = {'qd_learning'} if learning else set()
+    if team: expected = world_team.expected_drivers(role, 'game', expected)
+    assert set(driver_cards(folder)) == {folder / ('drivers/mcp/' + name + '.yaml') for name in expected}
+    if team: world_team.validate_workspace(folder, role, 'game')
     if learning:
         validate_learning_workspace(folder, role, 'game')
     else:

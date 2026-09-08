@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { createEngineeringRunner } from './engineering-runner.mjs';
 
 export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'];
 const MUTABLE = SERVICES.filter(x => x !== 'control');
@@ -238,4 +239,11 @@ export function createControlServer({token,stateDir,maintenanceDir,engine=docker
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
   const token=(await fs.readFile('/run/secrets/control-token','utf8')).trim();
   createControlServer({token,stateDir:'/control-state',maintenanceDir:'/maintenance'}).listen(3090,'0.0.0.0');
+  // Optional fixed test queue uses this already supervised control process.
+  // No model-supplied Docker options or production mounts reach the runner.
+  if(process.env.QIANDENG_ENGINEERING_ENABLED==='1'){
+    const runner=createEngineeringRunner({engine:dockerRequest,redact:redactLog});
+    runner.start();
+    process.once('SIGTERM',()=>runner.stop());
+  }
 }

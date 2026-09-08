@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "roles": {
-    "mc-god": ["qd-skill-evolution", "qd-world-oracle", "qd-minecraft-guide"],
-    "mc-herald": ["qd-skill-evolution", "qd-world-chronicle", "qd-minecraft-guide"],
-    "qd-survivor": ["qd-skill-evolution", "qd-survivor-practice", "qd-minecraft-guide"],
-    "qd-villager-dialogue": ["qd-skill-evolution", "qd-villager-dialogue", "qd-minecraft-guide"],
-    "qd-guild-planner": ["qd-skill-evolution", "qd-guild-planning", "qd-minecraft-guide"],
-    "qd-maid-dialogue": ["qd-skill-evolution", "qd-maid-personality", "qd-minecraft-guide"]
+    "mc-god": ["qd-skill-evolution", "qd-world-oracle", "qd-minecraft-guide", "qd-world-team"],
+    "mc-herald": ["qd-skill-evolution", "qd-world-chronicle", "qd-minecraft-guide", "qd-world-team"],
+    "qd-survivor": ["qd-skill-evolution", "qd-survivor-practice", "qd-minecraft-guide", "qd-world-team"],
+    "qd-villager-dialogue": ["qd-skill-evolution", "qd-villager-dialogue", "qd-minecraft-guide", "qd-world-team"],
+    "qd-guild-planner": ["qd-skill-evolution", "qd-guild-planning", "qd-minecraft-guide", "qd-world-team"],
+    "qd-maid-dialogue": ["qd-skill-evolution", "qd-maid-personality", "qd-minecraft-guide", "qd-world-team"]
   }
 }

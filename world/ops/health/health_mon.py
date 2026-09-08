@@ -159,7 +159,8 @@ def probe_panel_smoke():
     survivor = probe_survivor()
     survivor_party = probe_survivor_party()
     model_routing = probe_model_routing()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, model_routing)),
+    world_team = probe_world_team()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, model_routing, world_team)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -167,7 +168,110 @@ def probe_panel_smoke():
             'voice_boundary_deployment': voice_boundary_deployment,
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
             'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
-            'model_routing': model_routing, 'survivor_party': survivor_party}
+            'model_routing': model_routing, 'survivor_party': survivor_party, 'world_team': world_team}
+
+
+def probe_world_team():
+    """Only local metadata, no model/admin request or world action is issued.
+
+    A fresh consumer establishes availability. Counts are reported separately;
+    they cannot establish that a particular quest, fix or gameplay test passed.
+    """
+    now = time.time()
+    checks, evidence = {}, {}
+
+    def read(relative, maximum=262144):
+        path = PROJECT / relative
+        if any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (path, *path.parents)):
+            raise ValueError('linked_team_probe')
+        with path.open('rb') as stream:
+            raw = stream.read(maximum + 1)
+        if len(raw) > maximum:
+            raise ValueError('team_probe_size')
+        result = json.loads(raw.decode('utf-8-sig'))
+        if not isinstance(result, dict):
+            raise ValueError('team_probe_shape')
+        return result
+
+    def fresh(value, maximum=120, milliseconds=False):
+        if type(value) not in (int, float) or not math.isfinite(value):
+            return False
+        stamp = value / 1000 if milliseconds else value
+        return -5 <= now - stamp <= maximum
+
+    try:
+        npc = read('server/mcdata/npc-health.json')
+        collector = read('server/team-state/collector-health.json')
+        stages = collector['stages']
+        checks['existing_npc_worker'] = (fresh(npc.get('updated_at'), 100)
+            and npc.get('guild_agent_enabled') is True and npc.get('threads', {}).get('guild-planner') is True)
+        checks['team_collector'] = (collector.get('schema') == 1 and collector.get('protocol') == 1
+            and collector.get('owner') == 'npc:guild-planner' and fresh(collector.get('updatedAt'))
+            and collector.get('ok') is True and collector.get('newThreads') == 0
+            and collector.get('contentOuterGuildLock') is False
+            and all(isinstance(stages.get(name), dict) and stages[name].get('ok') is True
+                    and fresh(stages[name].get('checkedAt')) for name in ('admin', 'content', 'planning', 'operations')))
+        evidence['stages'] = {name: {'ok': stages.get(name, {}).get('ok') is True}
+                              for name in ('admin', 'content', 'planning', 'operations')}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        checks.setdefault('existing_npc_worker', False)
+        checks['team_collector'] = False
+    try:
+        admin = read('server/team-state/admin/consumer.json', 16384)
+        counts = {name: admin.get(name) for name in ('pending', 'unresolved', 'completed')}
+        valid_counts = all(type(v) is int and v >= 0 for v in counts.values())
+        checks['admin_consumer'] = (admin.get('schema') == 1 and admin.get('protocol') == 1
+            and fresh(admin.get('updatedAt'), milliseconds=True) and admin.get('actor') == 'game:mc-god'
+            and type(admin.get('modelCalls')) is int and admin.get('modelCalls') == 0
+            and admin.get('retriesWorldWrites') is False and valid_counts)
+        checks['admin_no_unresolved_write'] = valid_counts and counts['unresolved'] == 0
+        if valid_counts:
+            evidence['admin'] = counts
+    except (OSError, ValueError, KeyError, TypeError):
+        checks['admin_consumer'] = checks['admin_no_unresolved_write'] = False
+    try:
+        content = read('server/team-state/content/status.json')
+        context = read('server/team-state/content/context.json')
+        capabilities = content['capabilities']
+        publications = content['publications']
+        required = ('story', 'gather', 'hunt', 'visit', 'existing', 'boss', 'chest')
+        valid_capabilities = (isinstance(capabilities, dict)
+            and all(isinstance(capabilities.get(name), dict) and type(capabilities[name].get('ready')) is bool for name in required))
+        valid_publications = (isinstance(publications, list) and len(publications) <= 256
+            and all(isinstance(row, dict) and row.get('status') in
+                    ('published', 'scheduled', 'blocked', 'expired', 'publication_unconfirmed') for row in publications))
+        checks['content_consumer'] = (content.get('schema') == 1 and context.get('schema') == 1
+            and fresh(content.get('updatedAt')) and fresh(context.get('updatedAt'))
+            and valid_capabilities and valid_publications
+            and all(capabilities[name]['ready'] is True for name in ('story', 'gather', 'hunt', 'visit', 'existing')))
+        checks['content_no_unknown_publication'] = valid_publications and all(row['status'] != 'publication_unconfirmed' for row in publications)
+        if valid_capabilities:
+            evidence['contentCapabilities'] = {name: capabilities[name]['ready'] for name in required}
+        if valid_publications:
+            evidence['contentPublications'] = {status: sum(row['status'] == status for row in publications)
+                for status in ('published', 'scheduled', 'blocked', 'expired', 'publication_unconfirmed')}
+        evidence['receptionReady'] = context.get('receptionReady') is True
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        checks['content_consumer'] = checks['content_no_unknown_publication'] = False
+    try:
+        world = read('server/world-data/world-heartbeat.json')
+        checks['legacy_automatic_models_disabled'] = (fresh(world.get('ts'), 100, milliseconds=True)
+            and world.get('automaticModelJobs') == {'review': False, 'dailyReport': False})
+    except (OSError, ValueError, KeyError, TypeError):
+        checks['legacy_automatic_models_disabled'] = False
+    try:
+        engineering = read('server/engineering/receipts/_runner.json', 16384)
+        busy = engineering.get('busy')
+        checks['engineering_runner'] = (engineering.get('schema') == 1 and engineering.get('enabled') is True
+            and type(busy) is bool and fresh(engineering.get('updatedAt'), 330 if busy else 45, milliseconds=True)
+            and engineering.get('error') is None)
+        evidence['engineering'] = {'busy': busy if type(busy) is bool else None,
+                                   'hasError': engineering.get('error') is not None}
+    except (OSError, ValueError, KeyError, TypeError):
+        checks['engineering_runner'] = False
+    return {'ok': all(checks.values()), 'checks': checks, 'evidence': evidence,
+            'modelRequests': 0, 'worldActions': 0,
+            'scope': 'Existing supervised consumers, readiness and unresolved receipts; individual gameplay/publication/test success needs correlated evidence.'}
 
 
 def probe_survivor_party():
@@ -1314,7 +1418,8 @@ def main_locked():
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
-              "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy()}
+              "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
+              "world_team": probe_world_team()}
     report["ok"] = all(v["ok"] for v in report.values() if isinstance(v, dict) and "ok" in v)
     report["scope"] = "Service readiness and the exercised core gameplay paths; not an exhaustive content audit"
     report["unverified"] = ["Legacy NPC trade profiles", "Physical controller input", "Physical microphone input and audible playback", "Agent offscreen WebGL visual perception", "Dormant original character bodies in live play (model appearance verified on temporary Numen bodies)"]

@@ -146,17 +146,80 @@ class GuildPlanner:
         return results
 
 
+def collect_once(npc, planner, *, state=Path('/team'), admin=None, guild=None, clock=time.time):
+    """Independent stages in the existing worker; never hold a guild lock here.
+
+    The content publisher owns its own guild/economy locks. A failed HTTP poll
+    must not prevent already-authorized local admin/content work from running.
+    """
+    state = Path(state)
+    stages = {}
+
+    def attempt(name, function):
+        try:
+            value = function()
+            stages[name] = {'ok': True, 'checkedAt': clock()}
+            return value
+        except Exception as exc:
+            stages[name] = {'ok': False, 'checkedAt': clock(), 'errorType': type(exc).__name__}
+            print('[guild-agent] ' + name + ' unavailable:', type(exc).__name__, flush=True)
+            return None
+
+    def team_root():
+        if not state.is_dir() or any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)()
+                                     for p in (state, *state.parents)):
+            raise ValueError('team_mount_unavailable')
+        return state
+
+    def admin_tick():
+        from world_admin_consumer import WorldAdminConsumer
+        consumer = admin if admin is not None else WorldAdminConsumer(root=team_root(), clock=clock)
+        return consumer.tick()
+
+    def content_tick():
+        import world_content
+        if guild is None:
+            import mc_guild
+            actual_guild = mc_guild
+        else:
+            actual_guild = guild
+        return world_content.tick(npc, actual_guild, state=team_root(), clock=clock)
+
+    # Prioritize local queues before network-only collection; no extra thread.
+    attempt('admin', admin_tick)
+    attempt('content', content_tick)
+    collected = attempt('planning', lambda: planner.collect_pending(npc.PROFILES))
+    if isinstance(collected, dict) and any(str(v).startswith('collector_error:') for v in collected.values()):
+        stages['planning'].update(ok=False, errorType='PlanCollectionUnavailable')
+    if os.environ.get('NPC_WORLD_OPERATIONS_REQUESTS'):
+        def operations_tick():
+            from world_operations_consumer import tick
+            return tick(npc, planner)
+        attempt('operations', operations_tick)
+    else:
+        stages['operations'] = {'ok': True, 'checkedAt': clock(), 'enabled': False}
+    report = {'schema': 1, 'protocol': 1, 'updatedAt': clock(), 'owner': 'npc:guild-planner',
+              'ok': all(stage['ok'] for stage in stages.values()), 'stages': stages,
+              'newThreads': 0, 'contentOuterGuildLock': False}
+    try:
+        write_json(team_root() / 'collector-health.json', report)
+    except Exception as exc:
+        # Publication failure remains visible; the supervised loop still lives.
+        report.update(ok=False, publicationError=type(exc).__name__)
+        print('[guild-agent] team health unavailable:', type(exc).__name__, flush=True)
+    return report
+
+
 def collect_loop(npc):
-    """Existing supervised worker: native task collection and owned requests."""
-    planner = GuildPlanner(npc.VDIR)
+    """Existing supervised worker: task collection, admin and content queues."""
+    planner = None
     while True:
         try:
-            planner.collect_pending(npc.PROFILES)
-            if os.environ.get('NPC_WORLD_OPERATIONS_REQUESTS'):
-                from world_operations_consumer import tick
-                tick(npc, planner)
+            if planner is None:
+                planner = GuildPlanner(npc.VDIR)
+            collect_once(npc, planner, state=Path(os.environ.get('NPC_TEAM_STATE', '/team')))
         except Exception as exc:
-            print('[guild-agent] collection unavailable:', type(exc).__name__, flush=True)
+            print('[guild-agent] collector unavailable:', type(exc).__name__, flush=True)
         time.sleep(45)
 
 

@@ -49,7 +49,7 @@ def rules(role):
         return {'id': PREFIX + suffix, 'tools': list(tools), 'params': params, 'category': 'command_injection',
                 'severity': 'HIGH', 'patterns': patterns, 'exclude_patterns': [], 'description': description,
                 'remediation': 'Use this role workspace and its existing native weekly job.'}
-    return [
+    result = [
         row('FILE_SCOPE', FILE_TOOLS, ['file_path'], [rf'\A(?!{path}\Z)'], 'Files belong to the current role workspace.'),
         row('MANAGED_WRITE', FILE_TOOLS[1:], ['file_path'],
             [rf'\A(?:{base})?(?:AGENTS\.md|SOUL\.md|PROFILE\.md|agent\.json|skill\.json|jobs\.json|drivers(?:/|\Z)|learning(?:/|\Z)|skills/(?:qd-|make-skill/|file_reader/|cron/))'],
@@ -58,6 +58,14 @@ def rules(role):
         row('SKILL_NAMESPACE', ['materialize_skill'], ['name'], [r'\A(?:qd-|make-skill\Z|file_reader\Z|cron\Z)'],
             'Native learned skills use their own names; qd- names are reserved for validated game integrations.'),
     ]
+    if role == 'mc-god':
+        # Source is ordinary editable workspace content. Git metadata and
+        # engineering records are written only by the fixed MCP/control tools.
+        result.append(row('ENGINEERING_METADATA', FILE_TOOLS, ['file_path'],
+            [rf'(?i:\A(?:{base})?engineering/(?!repo/))',
+             rf'(?i:\A(?:{base})?engineering/repo/(?:[^/]+/)*\.git[ .]*(?:/|\Z))'],
+            'Engineering Git metadata and receipts are managed by the engineering tools.'))
+    return result
 
 
 def sensitive_paths(role):

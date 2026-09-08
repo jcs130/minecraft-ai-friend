@@ -70,6 +70,9 @@ services:
       MC_VIEWER_PUBLIC_ORIGIN: http://127.0.0.1:19092
       MC_PANEL_ORIGIN: http://127.0.0.1:19091
       MC_MEMORY_ENABLED: "0"
+      WORLD_GOD_REVIEW_ENABLED: "0"
+      WORLD_GOD_DAILY_REPORT_ENABLED: "0"
+      WORLD_LEGACY_EVOLVE_REVIEW_ENABLED: "0"
       MC_SAGA: "0"
       TERRAIN_FILL: "0"
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
@@ -188,6 +191,7 @@ services:
       - ./tools/npc_health.py:/opt/npc_health.py:ro
       - ./tools/register_maid_agents.py:/opt/register_maid_agents.py:ro
       - ./world/ops:/opt/ops:ro
+      - ./server/team-state:/team
       - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
       - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
       - ./server/mc/config/qiandeng_maid_bridge/identity.key:/run/secrets/maid-identity:ro
@@ -246,6 +250,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./server/agents:/state
+      - ./server/team-state:/team
+      - ./server/panel-state:/public:ro
+      - ./world/sidecar:/ops-sidecar:ro
       - ./world/ops:/ops:ro
       - ./world/survival:/survival:ro
       - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
@@ -275,8 +282,19 @@ services:
       QWENPAW_DISABLE_KEYRING: "1"
       QWENPAW_KEYRING_ACCOUNT: qiandengji-ops
       QWENPAW_AUTH_ENABLED: "0"
+      MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /party-roles/roles.json
     volumes:
       - ./server/operations-agent-state:/state
+      - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
+      - ./server/mcdata/village/party/public:/party-roles:ro
+      - ./server/team-state:/team
+      - ./world/sidecar:/ops-sidecar:ro
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests
+      - ./server/engineering/snapshots:/engineering/snapshots
+      - ./server/engineering/receipts:/engineering/receipts:ro
+      - ./server/engineering/state:/engineering/state
       - ./world/ops:/ops:ro
       - ./server/panel-state:/public:ro
       - ./docs:/reference/docs:ro
@@ -446,11 +464,17 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    environment:
+      QIANDENG_ENGINEERING_ENABLED: "1"
     volumes:
       - ./world/admin:/app/admin:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
       - ./server/admin-state/operations:/control-state
       - ./server/world-data:/maintenance
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests:ro
+      - ./server/engineering/snapshots:/engineering/snapshots:ro
+      - ./server/engineering/receipts:/engineering/receipts
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "node", "-e", "const h=require('http'),f=require('fs');h.get('http://127.0.0.1:3090/healthz',{headers:{Authorization:'Bearer '+f.readFileSync('/run/secrets/control-token','utf8').trim()}},r=>{r.resume();if(r.statusCode!==200)process.exitCode=1}).on('error',()=>process.exitCode=1)"]

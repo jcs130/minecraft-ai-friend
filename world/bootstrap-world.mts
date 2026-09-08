@@ -156,7 +156,7 @@ const saga = createSaga({
 // L3 提议进化·世界侧审核官（2026-08-18）：扫描 evolution-proposals/，女神裁决后
 // 核准指令落 evolution-directives-<u>.json，穿越者侧 mc-adapt 读回注入。
 const evolveReview = createEvolveReview({
-  enabled: true,
+  enabled: process.env.WORLD_LEGACY_EVOLVE_REVIEW_ENABLED === '1',
   qwenpawUrl: process.env.QWENPAW_CONSOLE_URL ?? 'http://127.0.0.1:8088/api/console/chat',
   pollMs: 60_000,
   maxAttempts: 5,

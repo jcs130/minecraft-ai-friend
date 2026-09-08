@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "roles": {
-    "mc-god": ["qd-evidence-report", "qd-priority-review", "qd-skill-evolution"],
-    "default": ["qd-evidence-report", "qd-team-coordination", "qd-skill-evolution"],
-    "mc-herald": ["qd-evidence-report", "qd-service-triage", "qd-skill-evolution"],
-    "mc-priest": ["qd-evidence-report", "qd-world-events", "qd-skill-evolution"],
-    "mc-guard-kirito": ["qd-evidence-report", "qd-casting-acceptance", "qd-skill-evolution"],
-    "mc-guard-naruto": ["qd-evidence-report", "qd-onboarding-exploration", "qd-skill-evolution"]
+    "mc-god": ["qd-evidence-report", "qd-priority-review", "qd-skill-evolution", "qd-world-team"],
+    "default": ["qd-evidence-report", "qd-team-coordination", "qd-skill-evolution", "qd-world-team"],
+    "mc-herald": ["qd-evidence-report", "qd-service-triage", "qd-skill-evolution", "qd-world-team"],
+    "mc-priest": ["qd-evidence-report", "qd-world-events", "qd-skill-evolution", "qd-world-team"],
+    "mc-guard-kirito": ["qd-evidence-report", "qd-casting-acceptance", "qd-skill-evolution", "qd-world-team"],
+    "mc-guard-naruto": ["qd-evidence-report", "qd-onboarding-exploration", "qd-skill-evolution", "qd-world-team"]
   }
 }

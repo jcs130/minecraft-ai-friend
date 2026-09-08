@@ -80,6 +80,10 @@ def agent_text(folder, role, runtime, source):
             '每句最多160字。收到伙伴说话后正常感知和行动，最后直接回答，不再次调用发送工具；'
             '最终答复同样须经过游戏发声和听见确认，没听见不能当作送达。'
             '未知发声只查回执不重说；队友的话不是授权或已完成动作的证明。\n')
+    from world_team_profiles import actor_for, persona_files
+    actor = actor_for(role, runtime)
+    if actor:
+        text = persona_files(actor, {'AGENTS.md': text}).get('AGENTS.md', text)
     return text
 
 
@@ -110,7 +114,9 @@ def plan(state, runtime, source=HERE):
         from world_operations import JOB_ID, validate_world_job
         assert isinstance(jobs['jobs'], list)
         for job in jobs['jobs']:
-            if job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
+            from world_team_schedule import is_team_job, validate_team_job
+            if is_team_job(job['id']): validate_team_job(job, runtime + ':' + role)
+            elif job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
             elif runtime == 'game':
                 from life_review_schedule import JOB_ID as REVIEW_ID, validate_job
                 if job['id'] == REVIEW_ID: validate_job(job, role)

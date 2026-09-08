@@ -484,6 +484,7 @@ RE_JOIN    = re.compile(r"^(?:入队|应战|加入|同意入队|来吧)$")
 RE_RELEASE = re.compile(r"^放弃\s*(?:委托|任务|单子)?\s*([0-9０-９]{1,2})\s*号?$")
 RE_DELIVER = re.compile(r"^(?:交|交付|交割|上交)\s*(?:委托|任务|单子)?\s*([0-9０-９]{1,2})\s*号?$")
 RE_REG     = re.compile(r"^(?:注册|入会|登记|报名)(?:成为冒险者|冒险者)?$")
+RE_ACTIVITY = re.compile(r"^(?:活动|剧情|详情)\s*(?:委托|任务)?\s*([0-9０-９]{1,2})\s*号?$")
 
 PENDING_PARTY = {}  # invitee -> {"no":, "leader":, "exp":ts}
 
@@ -499,6 +500,11 @@ def route_guild(speaker, msg, rest, hit_v):
     guildish = any(w in msg for w in ("公会", "冒险者", "功勋"))
     if not (is_lan or guildish or "看板" in msg):
         return None
+    activity = RE_ACTIVITY.match(rest)
+    if activity:
+        if is_lan or guildish or _near_board(speaker):
+            return activity_lines(_zh_num(activity.group(1)))
+        return ["请到公会柜台或城门看板旁查看活动正文。"]
     if "看板" in msg or "委托列表" in msg or "任务列表" in msg or (is_lan and any(w in rest for w in ("单子", "委托", "任务"))):
         if is_lan or guildish or _near_board(speaker):
             return board_lines()
@@ -582,6 +588,7 @@ def _new_claim_block(b):
 def board_lines():
     doc = board_today()
     out = [Rules.board_header(doc["date"])]
+    out.extend(_episode_lines(doc))
     for b in doc["board"]:
         mark = Rules.board_mark(b, RANKS)
         if b["status"] not in ("done", "claimed"):
@@ -590,6 +597,30 @@ def board_lines():
         out.append(Rules.board_row(b, mark, RANKS))
     out.append(Rules.BOARD_FOOTER)
     return out
+
+
+def _episode_lines(doc, no=None):
+    from pathlib import Path
+    state = Path(os.environ.get('NPC_WORLD_TEAM_ROOT', '/team'))
+    # Legacy/offline guilds have no content mount. Keep their ordinary board
+    # display independent of the optional publisher and its imports.
+    if not (state / 'content' / 'published-days' / (str(doc.get('date')) + '.json')).is_file():
+        return []
+    from world_content import episode_lines
+    return episode_lines(doc, state=state, quest_no=no)
+
+
+def activity_lines(no):
+    """Published story text alongside the existing numbered contract."""
+    doc = board_today()
+    row = next((b for b in doc['board'] if b['no'] == no), None)
+    if row is None:
+        return ['今日看板没有 No.%d。' % no]
+    lines = _episode_lines(doc, no)
+    if lines:
+        return lines
+    return [Rules.board_row(row, Rules.board_mark(row, RANKS), RANKS),
+            str(row.get('pitch') or '这笔委托暂未关联已确认发布的故事活动。')]
 
 def my_lines(who):
     doc = board_today()
