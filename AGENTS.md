@@ -17,6 +17,7 @@
 2026-09-08 用户要求所有生成式模型调用归 QwenPaw Agent 管理：用途目录为 config/model-task-routes.json。游戏18089共6角色，新增 qd-villager-dialogue、qd-guild-planner、qd-maid-dialogue；运营18090原6角色、宿主8088保持原用途。禁止业务侧直连供应商、未知提交重投、失败跨角色重复请求。新角色首次沿用mc-herald当前模型，之后同步保留即时选择、历史和用量。公会每日整批1次规划预案，已存在合同不重写；村民对话4次/24h（环境开关仍关），女仆12次/24h，均是用途共享预算而非每人物翻倍。女仆兼容线程只迁移文本，不宣称已迁移模组全部工具；ASR/TTS和本地向量服务不属于生成式任务。角色注册、接口边界、部署与验收见 docs/MODEL-TASK-ROUTING.md。
 
 - Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。
+- 女仆后续方向（2026-09-08）：每位女仆独立 QwenPaw 人格、名字、会话和记忆，模型供应商与女仆用途预算仍共享。复用已装 TLM 1.5.3 Tool/Context/原生工作 AI，不能按名字或提示词猜实体 UUID，不能让模组和 QwenPaw 各跑一条推理循环。核查与待实施边界见 docs/MAID-AGENTS-DESIGN.md；本轮只完成可行性与架构，独立人物 MCP 未上线，现有共享文本入口保持运行。
 - GitHub 主仓库是 https://github.com/jcs130/minecraft-ai-friend；D 项目沿用其历史，原世界源码位于 world/。用户要求完成开发后记得提交：每轮完成并验证的代码应提交并推送当前开发分支，说明提交号与同步状态；保留原历史，不强推。公开提交范围和本机资源恢复见 docs/GITHUB-WORKFLOW.md，不能把存档、密钥、运行报告或第三方资源产物加入源码提交。
 - D:\Projects\QiandengJi 是开发项目。原 C 盘客户端与生产服务仅作为来源；用户明确授权的旧游戏退役是例外，精确改动/备份见 reports/legacy-game-retirement.json。不要把退役入口重新启用，也不要改动宿主 QwenPaw 的非游戏工作。
 - 客户端、服务端和世界/Agent 服务分别构建。botgate 的技能箱、飞行、附魔及光环不可遗漏；Numen 本地改版不能换成同名旧副本。
