@@ -15,6 +15,7 @@ NATIVE_SKILLS = ('make-skill', 'file_reader', 'cron')
 FILE_TOOLS = ('read_file', 'write_file', 'edit_file', 'append_file')
 NATIVE_TOOLS = (*FILE_TOOLS, 'materialize_skill', 'get_current_time', 'execute_shell_command')
 PREFIX = 'QD_NATIVE_'
+FILE_NOTE = '\n\n<!-- qiandeng-personal-files-v1 -->\n你已获准使用 Qwen 原生 read_file、write_file、append_file、edit_file，在自己的工作区持久保存经验、失败复盘、参考资料和代码草稿，不需要再次请求文件写入许可。建议 notes/index.md 仅记主题、短摘要和路径，notes/ 下分主题记录事实/来源/时间/适用条件/未验证事项，drafts/ 保存草稿；已有内容先读再追加或定点修改。资料不会自动全部加载；当前任务需要旧经验时先读简短索引，再读相关一页。写入成功以工具回执为准，关键资料读回核对。若本角色已启用 qd-skill-evolution，需要整理方法时按需读取其 references/notes.md；成熟流程可通过原生 materialize_skill 保存，已启用官方 make-skill 时优先参照其流程。尚未安装的技能与参考页不能当作已可用。\n个人文件可长期积累；写下计划或代码不代表游戏已经执行或技能测试通过。文件工作与当前任务共用一次推理流程，不另起后台模型循环。身份、驱动和预算等受管理配置仍由对应服务维护。\n'
 
 
 def packaged_skills_root():

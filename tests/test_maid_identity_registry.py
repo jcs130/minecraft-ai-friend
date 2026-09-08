@@ -5,6 +5,7 @@ import hmac
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -155,14 +156,79 @@ class IdentityTests(RegistryFixtures):
             self.registry.ensure(actor(ownerUuid=None))
         self.assertEqual(len(self.api.calls), count)
 
-    def test_native_template_is_closed_until_new_role_policy_is_synced(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/ops'))
-        from native_role_capabilities import configure_native
+    def test_registration_rebinds_native_file_and_cron_guards_for_each_character(self):
+        from native_role_capabilities import NATIVE_TOOLS, configure_native, validate_native
         self.api.agents[TEMPLATE] = configure_native(template(), TEMPLATE)
-        row = self.registry.ensure(actor())
-        configured = self.api.agents[row['agentId']]
-        self.assertFalse(any(tool['enabled'] for tool in configured['tools']['builtin_tools'].values()))
-        self.assertTrue(set(configured['tools']['builtin_tools']) <= set(configured['security']['tool_guard']['denied_tools']))
+        custom_sensitive = '/fixture/private-reference'
+        self.api.agents[TEMPLATE]['security']['file_guard']['sensitive_files'].append(custom_sensitive)
+        self.api.agents[TEMPLATE] = configure_native(self.api.agents[TEMPLATE], TEMPLATE)
+        source = deepcopy(self.api.agents[TEMPLATE])
+        a, b = self.registry.ensure(actor()), self.registry.ensure(actor(MAID_B))
+        for own, other in ((a, b), (b, a)):
+            role = own['agentId']
+            configured = self.api.agents[role]
+            validate_native(configured, role)
+            self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
+                              if tool['enabled']}, set(NATIVE_TOOLS))
+            self.assertEqual(configured['mcp'], {'clients': {}})
+            guard = configured['security']['tool_guard']
+            def blocked(tool, parameter, value):
+                return any(rule['id'] in guard['auto_denied_rules'] and tool in rule['tools']
+                    and parameter in rule['params'] and any(re.search(pattern, value) for pattern in rule['patterns'])
+                    for rule in guard['custom_rules'])
+            for path in ('notes/个人经验.md', '/state/work/workspaces/' + role + '/drafts/skill.py'):
+                for tool in ('read_file', 'write_file', 'append_file', 'edit_file'):
+                    self.assertFalse(blocked(tool, 'file_path', path), (role, tool, path))
+            for target in (TEMPLATE, other['agentId']):
+                path = '/state/work/workspaces/' + target + '/notes/private.md'
+                self.assertTrue(blocked('read_file', 'file_path', path), path)
+                self.assertTrue(blocked('write_file', 'file_path', path), path)
+                self.assertTrue(blocked('execute_shell_command', 'command', 'qwenpaw cron list --agent-id ' + target))
+            for path in ('AGENTS.md', 'SOUL.md', 'PROFILE.md', 'agent.json', 'drivers/mcp/maid_native.yaml'):
+                self.assertTrue(blocked('write_file', 'file_path', path), path)
+            self.assertFalse(blocked('execute_shell_command', 'command', 'qwenpaw cron list --agent-id ' + role))
+            self.assertTrue(blocked('execute_shell_command', 'command', 'python anything.py'))
+            sensitive = configured['security']['file_guard']['sensitive_files']
+            self.assertIn(custom_sensitive, sensitive)
+            self.assertIn('/run/secrets/', sensitive)
+            self.assertIn('/state/work/workspaces/' + role + '/agent.json', sensitive)
+            self.assertFalse(any(path.startswith('/state/work/workspaces/' + TEMPLATE + '/') for path in sensitive))
+            self.assertEqual(configured['active_model'], source['active_model'])
+        self.assertEqual(self.api.agents[TEMPLATE], source)
+
+    def test_new_character_has_shared_file_note_without_claiming_skills_installed(self):
+        from native_role_capabilities import FILE_NOTE, NATIVE_TOOLS, validate_native
+        from sync_role_learning import FILE_NOTE as SYNC_FILE_NOTE
+        persona = '只属于这一位人物的人设。'
+        row = self.registry.ensure(actor(), name='独立人物', persona=persona)
+        role = row['agentId']
+        configured = self.api.agents[role]
+        # This fixture begins with the legacy closed template, not pre-enabled tools.
+        validate_native(configured, role)
+        self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
+                          if tool['enabled']}, set(NATIVE_TOOLS))
+        files = {path.removeprefix('/workspace/files/'): body['content']
+                 for method, path, aid, body in self.api.calls
+                 if method == 'PUT' and path.startswith('/workspace/files/') and aid == role}
+        self.assertEqual(FILE_NOTE, SYNC_FILE_NOTE)
+        self.assertIn(FILE_NOTE, files['AGENTS.md'])
+        self.assertEqual(files['AGENTS.md'].count('<!-- qiandeng-personal-files-v1 -->'), 1)
+        self.assertIn('若本角色已启用 qd-skill-evolution', files['AGENTS.md'])
+        self.assertIn('尚未安装的技能与参考页不能当作已可用', files['AGENTS.md'])
+        self.assertNotIn('技能学习使用本角色 qd_learning', files['AGENTS.md'])
+        self.assertNotIn('已启用本角色职责技能', files['AGENTS.md'])
+        fixed = json.loads(files['PROFILE.md'].split('\n\n', 1)[1])
+        self.assertEqual(fixed, {key: row[key] for key in ('maidUuid', 'ownerUuid', 'name', 'personaRevision')})
+        self.assertIn(persona, files['SOUL.md'])
+        self.assertNotIn(row['mcpToken'], ''.join(files.values()))
+        self.assertFalse(any('/skills' in path for _, path, _, _ in self.api.calls))
+        policies = [body for method, path, aid, body in self.api.calls
+                    if method == 'PUT' and path == '/mcp/policy/maid_native' and aid == role]
+        self.assertEqual(len(policies), 1)
+        self.assertEqual(policies[0]['default_effect'], 'deny')
+        self.assertEqual(policies[0]['tool_overrides'], [
+            {'source_type': 'channel', 'source_value': 'console', 'subject_type': 'all',
+             'subject_value': '', 'effect': 'allow', 'tool_name': tool} for tool in TOOLS])
 
     def test_uncertain_copy_is_not_retried_or_published(self):
         self.api.lost_copy = True
@@ -175,6 +241,13 @@ class IdentityTests(RegistryFixtures):
     def test_unsafe_template_and_unknown_registration_fail_before_copy(self):
         self.api.agents[TEMPLATE]['tools']['builtin_tools']['shell']['enabled'] = True
         with self.assertRaises(ValueError):
+            self.registry.ensure(actor())
+        self.assertFalse(any(path.endswith('/copy') for _, path, _, _ in self.api.calls))
+
+    def test_native_template_guard_cannot_point_at_another_role(self):
+        from native_role_capabilities import configure_native
+        self.api.agents[TEMPLATE] = configure_native(template(), 'some-other-role')
+        with self.assertRaisesRegex(ValueError, 'maid_template_has_unsafe_tools'):
             self.registry.ensure(actor())
         self.assertFalse(any(path.endswith('/copy') for _, path, _, _ in self.api.calls))
 

@@ -201,5 +201,19 @@ class RoleLearningProfiles(unittest.TestCase):
         (folder / 'AGENTS.md').write_text(text, encoding='utf-8')
         self.assertEqual(agent_text(folder, 'native-copy', 'game', ROOT / 'world/ops'), text)
 
+    def test_personal_file_migration_keeps_existing_maid_notes_and_is_idempotent(self):
+        from sync_role_learning import agent_text, OLD_MAID_FILE_TEXT, MAID_FILE_TEXT, NATIVE_NOTE
+        folder = self.root / 'bound-maid'; folder.mkdir()
+        original = 'Bound UUID: original-identity.\n' + OLD_MAID_FILE_TEXT + NATIVE_NOTE + '\n用户保留的人设补充。\n'
+        (folder / 'AGENTS.md').write_text(original, encoding='utf-8')
+        text = agent_text(folder, 'bound-maid', 'game', ROOT / 'world/ops')
+        self.assertIn('Bound UUID: original-identity.', text)
+        self.assertIn('用户保留的人设补充。', text)
+        self.assertIn(MAID_FILE_TEXT, text)
+        self.assertNotIn(OLD_MAID_FILE_TEXT, text)
+        self.assertEqual(text.count('<!-- qiandeng-personal-files-v1 -->'), 1)
+        (folder / 'AGENTS.md').write_text(text, encoding='utf-8')
+        self.assertEqual(agent_text(folder, 'bound-maid', 'game', ROOT / 'world/ops'), text)
+
 
 if __name__ == '__main__': unittest.main()

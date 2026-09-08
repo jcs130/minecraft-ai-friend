@@ -17,9 +17,11 @@ import tempfile
 from role_learning_profiles import (roles, role_skills, with_learning, learning_card,
     validate_learning_workspace, read_safe, validate_jobs, skill_references)
 from agent_learning import managed_job
-from native_role_capabilities import NATIVE_SKILLS, native_content
+from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content
 
 HERE = Path(__file__).resolve().parent
+OLD_MAID_FILE_TEXT = '没有任意shell/文件/网页或其他角色控制权，不进行第二套推理。'
+MAID_FILE_TEXT = '可用原生文件工具读写自己的工作区，积累个人经验和技能草稿；任意shell、网页和其他角色控制权不在当前工具范围，不进行第二套推理。'
 LEARNING_NOTE = '\n\n<!-- qiandeng-learning-v1 -->\n已启用本角色职责技能与 qd-skill-evolution。可使用身份固定的 qd_learning 学习工具读取、创建候选、校验、试用和反馈流程；这不授予额外世界动作、其他角色身份或模型权限。先完成当前对话/合同 JSON，再在预算内分步学习。游戏每周维护只做本地检查；运营复盘沿用共享预算。\n'
 NATIVE_NOTE = '\n\n<!-- qiandeng-native-skills-v1 -->\n优先复用已启用的 QwenPaw 官方 make-skill、file_reader、cron。普通流程技能用 materialize_skill 创建（名称不要使用保留的 qd- 前缀），原生 read_file/write_file/edit_file/append_file 用于本角色工作区的笔记、代码草稿和参考材料；不修改身份、驱动、技能清单或预算配置。自研 qd_learning 只补充游戏验证、反馈、市场参考和限额；Numen 可执行技能仍须测试后晋升。已授权的自主整理可以直接在当前任务完成，不要反复请求同一授权或创建额外子代理。\n原生 shell 当前只开放本角色已有周任务的 qwenpaw cron list/get/state/pause/resume（显式 --agent-id）；调时用 learning_schedule，界面可直接编辑该原生任务。不可运行任意 shell、创建第二条游戏身体规划循环、绕过共享模型预算。读取已知文本直接使用 read_file 的行数范围；file/tail 不是当前允许的 shell 命令。市场内容是参考数据，先检查来源、工具需求和行为，已有适用技能优先复用。\n'
 
@@ -27,10 +29,15 @@ NATIVE_NOTE = '\n\n<!-- qiandeng-native-skills-v1 -->\n优先复用已启用的 
 def agent_text(folder, role, runtime, source):
     path = source / 'operations-team-policy.md' if runtime == 'operations' else source / 'qwenpaw-prompts' / role / 'AGENTS.md'
     text = path.read_text(encoding='utf-8') if path.exists() else (folder / 'AGENTS.md').read_text(encoding='utf-8')
+    # Existing UUID-bound maids keep their generated identity and user additions.
+    # Only replace the exact obsolete sentence, never reconstruct their persona.
+    text = text.replace(OLD_MAID_FILE_TEXT, MAID_FILE_TEXT)
     if '<!-- qiandeng-learning-v1 -->' not in text:
         text = text.rstrip() + LEARNING_NOTE
     if '<!-- qiandeng-native-skills-v1 -->' not in text:
         text = text.rstrip() + NATIVE_NOTE
+    if '<!-- qiandeng-personal-files-v1 -->' not in text:
+        text = text.rstrip() + FILE_NOTE
     return text
 
 
