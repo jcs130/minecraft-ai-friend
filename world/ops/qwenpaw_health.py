@@ -14,8 +14,28 @@ from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILL
 from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
+from life_memory_policy import validate_profile as validate_life_memory
 
 MAID_TOOLS = {'identity', 'context', 'task_catalog', 'sit', 'follow', 'schedule', 'work'}
+
+
+def check_role_memory(agent, role):
+    """Two bound life roles use ReMe; other profiles retain the quiet contract."""
+    from upgrade_qwenpaw_runtime import assert_quiet
+    if not validate_life_memory(agent, role, runtime='game'):
+        assert_quiet(agent['running'])
+        return
+    running = agent['running']
+    assert running['light_context_config']['strategy'] == 'native'
+    assert running['light_context_config']['visual_compact_config']['enabled'] is False
+    assert running['auto_title_config']['enabled'] is False
+    memory = running['reme_light_memory_config']
+    # These unrelated automatic features were not authorized by life memory.
+    for key in ('daily_paper_cron_enabled', 'auto_memory_inbox_push_enabled',
+                'auto_dream_inbox_push_enabled', 'daily_paper_inbox_push_enabled'):
+        assert memory[key] is False
+    assert memory.get('inbox_push_enabled') in (None, False)
+    validate_running(running)
 
 
 def check_maid_card(card, clients, authorization, role=None):
@@ -84,7 +104,7 @@ def check_maid_config(folder, role):
     agent = json.loads((folder / 'agent.json').read_text())
     assert agent['id'] == role and role in maid_roles()
     assert agent['workspace_dir'] == '/state/work/workspaces/' + role
-    assert_quiet(agent['running'])
+    check_role_memory(agent, role)
     validate_running(agent['running'])
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False
     assert agent['heartbeat']['enabled'] is False
@@ -106,6 +126,7 @@ def check_survivor_config(folder):
     from qwenpaw.drivers.storage import load_card
     agent = json.loads((folder / 'agent.json').read_text())
     assert agent['id'] == 'qd-survivor' and agent['name'] == '桐人'
+    check_role_memory(agent, 'qd-survivor')
     validate_native(agent, 'qd-survivor')
     assert not any(item['enabled'] for item in agent['acp']['agents'].values())
     assert not agent['fallback_models'] and agent['fallback_policy']['enabled'] is False

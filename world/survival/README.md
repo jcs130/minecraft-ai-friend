@@ -28,7 +28,7 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 
 ## MCP 工具
 
-`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **43 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。Qwen 已启用原生技能、角色范围内文件工具及受限周任务管理，见 [原生能力](../../docs/ROLE-LEARNING.md)；生存适配器继续只负责观察与游戏执行。每个模型任务最多 12 次模型迭代；每轮身体仍最多 6 个串行动作，输入 16384、输出 2048，模型并发 1、QPM 8；决策间隔和每日决策预算由控制器的持久账本执行，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
+`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **44 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。Qwen 已启用原生技能、角色范围内文件工具及受管周任务管理，见 [原生能力](../../docs/ROLE-LEARNING.md)；生存适配器继续只负责观察与游戏执行。当前 QPM=0、模型迭代门关闭、模型并发1，`dailyPlanningLimit: null`、`decisionCooldownSeconds: 0`；供应商限制、超时和真实用量记录仍保留。每轮身体最多6个串行动作，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
 
 | 工具 | 用途 |
 |---|---|
@@ -50,6 +50,7 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 | `knowledge_catalog()`、`knowledge_read(...)` | 阅读明确提供的旧世界知识包，保持只读，旧文档不构成新的事实或权限 |
 | Qwen 原生 `Skill`、`read_file` | 按需加载 `qd-minecraft-guide` 简短入口和单篇玩法参考，不一次注入所有资料；见 [渐进披露](../../docs/PROGRESSIVE-GAME-KNOWLEDGE.md) |
 | `request_goal(goal)` | 将 QwenPaw 会话中的明确新目标交给原调度器，不直接操作身体或重置预算 |
+| `request_review(request_id,reason="scheduled")` | 只排队合并复盘信号，固定ID持久防重，不改变用户目标、暂停或直接派模型；由原生活任务入口处理 |
 | `skill_draft(turn_id,name,source,fixtures,description)` | 保存纯 JS `next(state,memory)` 草稿和测试 |
 | `skill_test(turn_id,name,version)` | 使用无 IO、有限 CPU/内存的 QuickJS 测试 |
 | `skill_promote(turn_id,name,version)` | 晋升通过当前内核验证的准确版本 |
@@ -65,6 +66,10 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 `accepted` 只表示 Numen 受理；`skill_queued` 只表示排队。技能任务完成、库存变化、位置变化与模型自述分别保存。不确定结果禁止重放，技能程序也不能绕过身体身份、工作区、工具白名单或暂停门。记忆和环境文字始终作为数据传给规划角色，不注入系统提示。
 
 控制器每 15 秒观察身体与事件、每 60 秒刷新周边。当前功能阶段 `dailyPlanningLimit: null`、`decisionCooldownSeconds: 0`，取消人工模型次数与冷却门，原用量继续记录。新目标、世界事件、生命/饥饿/库存变化、明显位移或动作结果可触发下一轮；持续模式也按模型安排的 180–3600 秒间隔复盘，默认 1800 秒，短目标完成后继续提出下一目标。平静期间进入 `observing`，没有事件也会在下次复盘继续；`idle` 仍可用于单任务模式。回复先记入感知，单独收到回复不提前触发复盘。暂停、身体串行与不确定结果检查仍有效。
+
+新增复盘信号管线供原生 Qwen 定时任务接入：调度检查只调用 `request_review`，不运行第二份角色任务。`reviews.sqlite3` 持久保存请求ID和序号；当前待处理信号合成一个有界上下文，忙时保留。控制器在原有安全边界捕获精确序号并写进 `active.review`，沿用原 `life-session.json`、用户使命、任务与动作租约。已知原生任务终态确认这一批；期间新到的信号留给下一批，未知提交不重投。成功入睡的原生动作回执可内部产生 `sleep_completed`，外部不能伪造该原因；它不证明已睡足或醒来。复盘先读取身体状态，按需整理记忆与原生文件中的长期目标索引，不为整理而打断睡眠。此段描述源码合同，定时任务配置、上线状态与真实模型复盘应另按部署证据验收。
+
+长期目标账本固定为角色工作区 `memory/goals.md`，由 `MEMORY.md` 保留短索引，便于原生 ReMe 读取；其他参考资料仍可从 `notes/index.md` 渐进查阅。QwenPaw 2.2 的原生 `/goal` 是当前会话内可选的连续子目标模式，其运行状态存在进程内 `GoalMode._sessions`，没有长期账本的跨重启恢复保证；不替代上述文件、控制器任务账本或身体租约，也不另开并行生存任务。
 
 `life-session.json` 固定生活会话身份，跨任务沿用同一 Qwen chat；任务、租约和逐动作回执仍各有独立编号。一次任务可选择最多六个串行直接动作，或一个已晋升程序，不能混用；在途和未知动作先核对回执。Qwen 没有精确 task 取消入口时，暂停先关闭身体租约并等原任务终态，不猜测聊天已停止。旅行伙伴的来信也在此控制器中串行处理，参见 [连续会话](../../docs/LLM-SURVIVAL-SESSION-DESIGN.md) 与 [双人小队](../../docs/SURVIVOR-MAID-PARTY.md)。
 

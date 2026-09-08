@@ -88,7 +88,9 @@ def with_learning(agent, role, runtime):
     result = deepcopy(agent)
     result.setdefault('mcp', {}).setdefault('clients', {})[DRIVER] = learning_client(role, runtime)
     result['running'] = unrestricted_running(result['running'])
-    return configure_native(result, role)
+    from life_memory_policy import apply_profile
+    result = apply_profile(result, role, runtime)
+    return configure_native(result, role, runtime=runtime)
 
 
 def validate_learning_profile(agent, role, runtime):
@@ -104,6 +106,12 @@ def validate_learning_profile(agent, role, runtime):
 def validate_jobs(value, role, runtime):
     assert isinstance(value, dict) and isinstance(value.get('jobs'), list)
     jobs = list(value['jobs'])
+    if runtime == 'game':
+        from life_review_schedule import JOB_ID, validate_job
+        reviews = [j for j in jobs if j.get('id') == JOB_ID]
+        assert len(reviews) <= 1
+        for row in reviews: validate_job(row, role)
+        jobs = [j for j in jobs if j.get('id') != JOB_ID]
     if runtime == 'operations':
         from world_operations import JOB_ID, validate_world_job
         daily = [j for j in jobs if j.get('id') == JOB_ID]

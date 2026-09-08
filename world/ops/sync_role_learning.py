@@ -19,6 +19,7 @@ from role_learning_profiles import (roles, role_skills, with_learning, learning_
 from agent_learning import managed_job
 from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content
 from llm_runtime_policy import unrestricted_running
+from life_persona import update_survivor_policy_text
 
 HERE = Path(__file__).resolve().parent
 OLD_MAID_FILE_TEXT = '没有任意shell/文件/网页或其他角色控制权，不进行第二套推理。'
@@ -48,6 +49,7 @@ SURVIVOR_TEXT_UPDATES = (
 
 def update_survivor_text(text):
     """Replace only known stale sentences; preserve user additions and all other prompts."""
+    text = update_survivor_policy_text(text)
     for old, new in SURVIVOR_TEXT_UPDATES:
         if new not in text:
             text = text.replace(old, new)
@@ -109,6 +111,10 @@ def plan(state, runtime, source=HERE):
         assert isinstance(jobs['jobs'], list)
         for job in jobs['jobs']:
             if job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
+            elif runtime == 'game':
+                from life_review_schedule import JOB_ID as REVIEW_ID, validate_job
+                if job['id'] == REVIEW_ID: validate_job(job, role)
+                else: assert job['id'] == 'qd-learning-' + role
             else: assert job['id'] == 'qd-learning-' + role
         result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': 'qd-learning-' + role})
     return result

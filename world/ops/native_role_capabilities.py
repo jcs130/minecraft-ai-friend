@@ -9,6 +9,7 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+from life_memory_policy import dynamic_memory_tools
 
 HERE = Path(__file__).resolve().parent
 NATIVE_SKILLS = ('make-skill', 'file_reader', 'cron')
@@ -66,7 +67,7 @@ def sensitive_paths(role):
             '/state/work/config.json', '/state/work/providers.json']
 
 
-def configure_native(agent, role):
+def configure_native(agent, role, runtime='game'):
     result = deepcopy(agent)
     result['tools'] = result.get('tools') or {}
     tools = result['tools'].setdefault('builtin_tools', {})
@@ -80,7 +81,10 @@ def configure_native(agent, role):
     guard = security.setdefault('tool_guard', {})
     guard['enabled'] = True
     guard['guarded_tools'] = sorted(set(guard.get('guarded_tools') or []) | set(NATIVE_TOOLS))
-    guard['denied_tools'] = sorted((set(guard.get('denied_tools', [])) | set(tools)) - set(NATIVE_TOOLS))
+    # Qwen adds ReMe tools after the workspace builtin list. Preserve only the
+    # approved life-role memory aliases; do not invent builtin tool entries.
+    dynamic_tools = dynamic_memory_tools(result, role, runtime)
+    guard['denied_tools'] = sorted((set(guard.get('denied_tools', [])) | set(tools)) - set(NATIVE_TOOLS) - dynamic_tools)
     guard['custom_rules'] = [row for row in guard.get('custom_rules', []) if not row['id'].startswith(PREFIX)] + rules(role)
     required = {row['id'] for row in rules(role)} | {'SENSITIVE_FILE_BLOCK', 'SAFETY_CHECKS_DESTRUCTIVE_COMMAND'}
     guard['auto_denied_rules'] = sorted(set(guard.get('auto_denied_rules', [])) | required)
@@ -94,9 +98,9 @@ def configure_native(agent, role):
     return result
 
 
-def validate_native(agent, role):
+def validate_native(agent, role, runtime='game'):
     assert {name for name, value in agent['tools']['builtin_tools'].items() if value['enabled']} == set(NATIVE_TOOLS)
-    expected = configure_native(agent, role)
+    expected = configure_native(agent, role, runtime)
     assert agent['security'] == expected['security'] and agent['approval_level'] == 'AUTO'
 
 

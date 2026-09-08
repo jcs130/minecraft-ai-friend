@@ -1,5 +1,11 @@
 # 千灯纪整合项目
 
+2026-09-09 最新生活记忆：游戏 QwenPaw 2.2.0/ReMe 0.4.1.10 的桐人、结衣启用原生 memory_search（含动态 MemorySearch 权限）、每5个外部完成回合 Auto-Memory、每小时 Dream；不是5分钟提炼。SOUL原样保留，PROFILE/AGENTS按官方职责精确整理，根MEMORY.md不在ReMe索引，memory/与digest/按需检索。长期目标在memory/goals.md普通文件；原生/goal是有边界子任务、会话目标仅进程内，不能当跨重启人生账本。详见 docs/QWENPAW-LIFE-MEMORY.md。
+
+survivor qd15 增加真实sleep回执/原生10分钟Cron复盘信号队列（MCP44项），由原控制器在安全边界合入原生活session，按精确终态确认水位；不另开模型循环。sleep成功只证明进入睡眠，不证明睡醒。原生Heartbeat固定main会话，保持关闭。配置工具tools/configure_life_memory.py使用原生Agent/File/Cron API，固定Cron ID须用PUT、Agent更新须id+name、工具白名单还要同步legacy mirror。严格健康检查不放宽。记忆状态API原生Dependency元数据统计bug以锁版本/源SHA兼容补丁修复，只跳过统计元数据，不改变检索或组件初始化。
+
+本轮首个复盘 task-c55d625759a0 已在原聊天真实edit_file写入目标和MEMORY；00:10原生Cron自动成功，结衣AutoMemory已真实生成日期日记与来源mem_session。模型总结可能错误，不能据此宣称法术、装备或玩法全部掌握。后续矿坑受阻不是旧tick故障：同原营地XZ范围的施工minY已精确从62补到55，角色仍用自己的44泥土，需自行搭阶并按回执验收；不传送救场、不把单格预检说成整条脱困成功。
+
 2026-09-08 最新故障修复：桐人“树冠死锁”根因是 owner 离线后原生加载票停止而 brain 仍运行。现有 Numen JAR 的自主 tick 增量已部署为 47cc11d6…，只为 config/numen-autonomous-bodies.json 中原 UUID/owner/name 精确匹配的自主角色复用原生半径2、20tick续/40tick过期加载器；不全局forceload、不手工tick实体。实际同身体自然落地、原背包保留、5次原生导航成功到营地并继续建营/采矿。详见 docs/NUMEN-AUTONOMOUS-TICK.md。死亡保留装备/背包/经验采用原生 keepInventory=true，已在重启后读回。survivor qd14 还修复 Windows bind mount 短暂占用导致的原子状态发布失败：只重试同一已fsync文件的rename，不重投模型/游戏动作。
 
 `/mycli` 已有真实法术工具，桐人并非没有技能：Lv15旧精选已学5项，部分旧战斗术归档或由Iron替代。新版game_skills增加按需archive分页与现有执行边界说明；主动等级足可首次合法施放收录，game_learn验证真实技能书但原规则不扣书，Iron仍要实际装备来源。不得把入口可用说成新技能已学会，也不得为实测解除保护/赠书。共享qd-minecraft-guide引用更新后必须同步所有持有角色，保留原生严格健康断言。

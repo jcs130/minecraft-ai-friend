@@ -62,6 +62,9 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
         return {'task_type': job.task_type, 'run_id': None, 'delivery_status': 'suppressed',
             'final_text': code, 'qiandeng': record}
     if runtime == 'game':
+        from life_review_schedule import JOB_ID, execute as execute_life_review
+        if job.id == JOB_ID:
+            return await execute_life_review(executor, job)
         if managed and job.task_type == 'text':
             result = await asyncio.to_thread(tools.maintenance)
             write(tools.root / 'last-cron.json', result | {'status': 'local_maintenance', 'jobId': job.id})
@@ -110,6 +113,8 @@ def install(runtime):
     native_guard_version = install_native_tools(runtime)
     from llm_runtime_policy import install as install_llm_policy
     llm_policy_version = install_llm_policy(runtime)
+    from reme_status_compat import install as install_reme_status
+    reme_status_version = install_reme_status(runtime)
     from qwenpaw.app.crons.executor import CronExecutor
     if getattr(CronExecutor, '_qiandeng_learning_guard', None) == VERSION: return
     original = CronExecutor.execute
@@ -123,4 +128,4 @@ def install(runtime):
     write(Path('/state/work/learning-runtime.json'), {'schema': 1, 'runtime': runtime, 'guardVersion': VERSION,
         'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
         'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
-        'llmPolicyVersion': llm_policy_version})
+        'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version})
