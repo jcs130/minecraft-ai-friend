@@ -2,6 +2,8 @@
 
 目标优先级：保持 Rapid Optimization 基础，让原 shadow 存档及玩家进度可继续使用；在此基础上检查并补齐遗留的群系、世界多样性、村民、怪物与探索内容（用户 2026-09-07 后续要求）。
 
+2026-09-08 连续生存方向：用户要求参考旧Numen策略，让Agent在持久主session里主动MCP感知、连续行动、编程和学习，尽量把生活决策交给LLM。研究确认当前turn_id兼作session_id导致每轮新会话；设计见 docs/LLM-SURVIVAL-SESSION-DESIGN.md，本轮尚未部署。后续应同时处理稳定会话键、取消、重启恢复、统一串行入口、逐动作回执和按需感知，不能只替换session常量或增大actionLimit；原生身体执行、身份/物资/防重边界继续保留。
+
 2026-09-08 个人资料授权：游戏与运营角色可用 Qwen 原生文件工具在各自工作区保存、追加、修订经验、参考材料及代码草稿；普通记录无须再次请求写入许可。清理旧提示中含糊的文件禁用描述，保持人物身份与用户资料。notes/index.md 短索引→相关笔记按需读取；方法见 qd-skill-evolution/references/notes.md，不额外启动模型循环。文件保存与执行技能验收分开，Numen 程序内核无文件访问的边界仍保留。
 
 2026-09-08 玩法资料后续要求：使用 QwenPaw 原生渐进披露，`qd-minecraft-guide` 简介→Skill短正文→read_file单篇references；不能把百科、所有配方和旧路线塞进上下文。桐人 MCP 新增只读 lookup_recipe，总计43项，复用当前Numen RecipeManager，仅覆盖标准配方类型而非所有机器。详见 docs/PROGRESSIVE-GAME-KNOWLEDGE.md。用户允许当前功能验证多用 CodingPlan；真实模型实验必须记录实际调用与结果，不因预算优先级放宽就制造无任务的高频循环。实测QPM4会在渐进查阅第5轮前本地超时，现桐人QPM8、并发1、单任务6迭代；自主48次/24h与180秒间隔保留。Qwen限流器进程缓存需重启游戏Qwen才能应用新QPM。
