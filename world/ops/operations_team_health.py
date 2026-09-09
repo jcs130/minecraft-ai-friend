@@ -138,11 +138,15 @@ def main():
     assert {a['id'] for a in agents if a['enabled']} == set(active_roles)
     from world_team_hosts import active_ops_sources
     migrated = active_ops_sources()
-    for retired in set(ROLES) - set(active_roles):
+    retired_roles = set(ROLES) - set(active_roles)
+    # The instance's active default agent cannot be toggled disabled; while its
+    # migration is active it stays enabled with every schedule halted, and the
+    # retirement proof is the on-disk job state checked below.
+    untoggleable = {'default'} if 'default' in retired_roles else set()
+    assert {a['id'] for a in agents if a['enabled']} == set(active_roles) | untoggleable
+    for retired in retired_roles:
         assert retired in migrated
         if retired == 'default':
-            # Native toggle refuses to disable the instance's active default
-            # agent; the fully halted schedule below is the retirement proof.
             assert any(a['id'] == 'default' for a in agents)
         else:
             assert any(a['id'] == retired and a['enabled'] is False for a in agents)
