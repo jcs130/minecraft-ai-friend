@@ -158,8 +158,13 @@ def transform_profile(profile, entry):
     # The absolute tool entrypoint and explicitly mounted state roots do not
     # need a cwd; keeping the old path could select another role's workspace.
     result['mcp']['clients']['qiandeng_operations']['cwd'] = ''
+    # The game instance hosts this role under its own native tool surface and
+    # guards; the operations-side tool configuration is not carried over.
+    from native_role_capabilities import configure_native, validate_native
+    result = configure_native(result, target_role, runtime='game')
     AgentProfileConfig.model_validate(deepcopy(result))
     validate_learning_profile(result, target_role, 'game')
+    validate_native(result, target_role, runtime='game')
     for key in ('active_model', 'fallback_models', 'running', 'language', 'name'):
         if result.get(key) != profile.get(key): raise ValueError('unrelated_profile_change:' + key)
     return result

@@ -139,7 +139,13 @@ def main():
     from world_team_hosts import active_ops_sources
     migrated = active_ops_sources()
     for retired in set(ROLES) - set(active_roles):
-        assert retired in migrated and any(a['id'] == retired and a['enabled'] is False for a in agents)
+        assert retired in migrated
+        if retired == 'default':
+            # Native toggle refuses to disable the instance's active default
+            # agent; the fully halted schedule below is the retirement proof.
+            assert any(a['id'] == 'default' for a in agents)
+        else:
+            assert any(a['id'] == retired and a['enabled'] is False for a in agents)
         # A native per-agent Cron read may preload a disabled workspace. Inspect
         # the retired definition without asking Qwen to start that agent again.
         retired_jobs = json.loads((Path('/state/work/workspaces')/retired/'jobs.json').read_text())

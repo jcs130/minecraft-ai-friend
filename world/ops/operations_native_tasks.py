@@ -20,12 +20,14 @@ TERMINAL = frozenset(('completed', 'failed', 'cancelled'))
 
 
 def target_host(role, recorded=None):
-    from world_team_hosts import native_host
+    from world_team_hosts import migration_for, native_host
     if role not in ('default', *SPECIALISTS):
         raise ValueError('unknown_operations_role')
     host = recorded if recorded is not None else native_host('operations:' + role)
     allowed = [{'runtime': 'operations', 'agentId': role}]
-    if role == 'mc-god': allowed.append({'runtime': 'game', 'agentId': 'qd-engineer'})
+    entry = migration_for('operations:' + role)
+    if entry is not None:
+        allowed.append(dict(entry['target']))
     if host not in allowed: raise ValueError('invalid_operations_task_host')
     return dict(host)
 
