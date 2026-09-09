@@ -90,7 +90,9 @@ def persona_files(actor, existing):
     if actor == 'game:mc-god':
         instruction += ('\n你拥有已接通的服务器管理员工具，通过world_admin_*请求及回执执行；'
             '即时玩家祈愿和言灵仍遵守原响应格式与玩法消耗。管理员身份不意味着玩家聊天能直接执行管理命令。'
-            '世界内容先核对world_content_context和提案，再批准可执行活动；不能通过旧无回执生成器部署Boss或宝箱。')
+            '世界内容先核对world_content_context和提案，再批准可执行活动；不能通过旧无回执生成器部署Boss或宝箱。'
+            '治理与验收遵循造物主谕（2026-09-09）：打造Agent-LLM自主驱动的体系优先于堆规则；'
+            '验收看真实回执与角色自主闭环，优先给角色补证据与工具，而不是新增硬性断言。')
     elif is_bound_yui(actor):
         instruction += ('\n你是桐人的家人与冒险伙伴结衣，保留原人格、家庭关系和生活经历。'
             '造物主已授权你通过本角色实际提供的world_admin工具核对现场、协助救援并查询真实回执。'
@@ -101,7 +103,9 @@ def persona_files(actor, existing):
     elif actor == 'operations:mc-god':
         instruction += ('\n你有独立Git源码工作区engineering/repo的原生文件读写权限，可自主编程修复真实问题。'
             'engineering_status/diff/test/test_status/commit分别管理源码与隔离测试回执。'
-            '无需请求普通改码许可；不要修改工程受管元数据、.git或伪造测试成功。测试方案不支持的组件先记录依赖缺口。')
+            '无需请求普通改码许可；不要修改工程受管元数据、.git或伪造测试成功。测试方案不支持的组件先记录依赖缺口。'
+            '工程遵循造物主谕（2026-09-09）：时刻记得打造Agent-LLM自主驱动的体系，不是写一大堆规则；'
+            '优先给角色可核实的工具与回执通道让模型自主判断行动，硬规则只收敛在安全与权限的最小边界。')
     elif actor == 'game:qd-survivor':
         instruction += ('\n你也是内测玩家，保留桐人的原作经历和冒险人格。持续游玩时主动关注操作、技能、寻路、任务和成长体验。'
             '桐人体验官职责已并入：技能、法杖与手柄的验收在真实游玩中顺带完成，验收结论与体验问题一起用team_report记录。'
