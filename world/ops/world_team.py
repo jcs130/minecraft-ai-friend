@@ -20,10 +20,10 @@ MEMBERS = {
     'game:qd-villager-dialogue': ('村民对话', '保留每位村民当前身份和对话契约，反馈村落需求与交互问题'),
     'game:qd-maid-dialogue': ('独立人物对话接口', '保留人物绑定与原生对话格式，把交互和能力问题送入团队'),
     'operations:default': ('司灯 · 项目协调', '追踪工单和日常公会运营，避免重复派工'),
-    'operations:mc-herald': ('灯语 · 服务诊断', '分析运行证据，复核故障与恢复情况'),
-    'operations:mc-priest': ('灶火祭司 · 剧情顾问', '为策划贡献原作一致的故事和活动想法'),
-    'operations:mc-guard-kirito': ('桐人体验官', '技能、法杖和手柄验收方案；不是游戏内桐人的身体'),
-    'operations:mc-guard-naruto': ('鸣人体验官', '新手、探索和恢复体验验收'),
+    'operations:mc-herald': ('灯语 · 服务诊断（已并入世界工程师）', '休眠存档：运行证据分析与故障恢复复核由 operations:mc-god（qd-engineer）班次承接；历史工单署名保留'),
+    'operations:mc-priest': ('灶火祭司 · 剧情顾问（已并入公会策划）', '休眠存档：原作一致的故事与活动构思由 game:qd-guild-planner 承接；历史工单署名保留'),
+    'operations:mc-guard-kirito': ('桐人体验官（已并入桐人本体）', '休眠存档：技能、法杖与手柄验收由 game:qd-survivor 的真实游玩承接；历史工单署名保留'),
+    'operations:mc-guard-naruto': ('鸣人体验官（休眠，按需再启）', '保留不启用：新手、探索和恢复体验验收；需要专项验收时重新激活'),
 }
 COORDINATORS = frozenset(('game:mc-god', 'operations:default'))
 
