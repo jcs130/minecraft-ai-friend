@@ -18,19 +18,21 @@ TEXT_ROLES = {'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'}
 def roles(runtime):
     if runtime not in ('game', 'operations'):
         raise ValueError('unknown_learning_runtime')
-    from world_team_hosts import host_config
-    moved = host_config()['phase'] == 'active'
+    from world_team_hosts import active_game_targets, active_ops_sources
     if runtime == 'game':
         from team_recruitment import specialists
-        return (*GAME_ROLES, *maid_roles(), *(('qd-engineer',) if moved else ()), *specialists(include_pending=True))
-    return tuple(role for role in OPS_ROLES if not (moved and role == 'mc-god'))
+        return (*GAME_ROLES, *maid_roles(), *active_game_targets(), *specialists(include_pending=True))
+    retired = active_ops_sources()
+    return tuple(role for role in OPS_ROLES if role not in retired)
 
 
 def learning_identity(role, runtime, *, allow_prepared=False):
     """Return logical (role, runtime), keeping native paths and HTTP IDs separate."""
-    from world_team_hosts import logical_actor
+    from world_team_hosts import logical_actor, migration_for
     actor = logical_actor(runtime, role, allow_prepared=allow_prepared)
-    prepared_target = allow_prepared and (runtime, role) == ('game', 'qd-engineer') and actor == 'operations:mc-god'
+    entry = migration_for(actor) if actor else None
+    prepared_target = bool(allow_prepared and entry is not None
+                           and entry['target'] == {'runtime': runtime, 'agentId': role})
     if not actor or (role not in roles(runtime) and not prepared_target):
         raise ValueError('unknown_learning_role')
     logical_runtime, logical_role = actor.split(':', 1)

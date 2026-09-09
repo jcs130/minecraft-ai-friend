@@ -3,7 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from world_team import MEMBERS, members
 from world_team_mcp import COMMON_TOOLS
-from world_team_hosts import ENGINEER, TARGET, logical_actor
+from world_team_hosts import ENGINEER, TARGET, logical_actor, migration_for
 
 DRIVER = 'qd_world_team'
 GAME_TEAM = frozenset(a.split(':')[1] for a in MEMBERS if a.startswith('game:'))
@@ -39,7 +39,8 @@ def client(role, runtime, *, allow_prepared=False):
     actor = actor_for(role, runtime, allow_prepared=allow_prepared)
     if not actor: raise ValueError('not_a_world_team_role')
     args = ['/ops/world_team_mcp.py', '--actor', actor]
-    if actor == ENGINEER and {'runtime': runtime, 'agentId': role} == TARGET:
+    entry = migration_for(actor)
+    if entry is not None and {'runtime': runtime, 'agentId': role} == entry['target']:
         args += ['--native-runtime', runtime, '--native-role', role]
     return {'name': DRIVER, 'enabled': True, 'transport': 'stdio', 'command': 'python',
         'args': args, 'env': {}, 'tools': tools_for(actor)}

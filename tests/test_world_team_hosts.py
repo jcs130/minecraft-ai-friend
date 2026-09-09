@@ -263,4 +263,158 @@ class HostMappingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('case_id', tools['team_update']['required'])
 
 
+class MultiMigrationTests(unittest.TestCase):
+    """Schema-2 registry: independent phases, one game instance hosts every role."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.path = self.root / 'runtime-hosts.json'
+        self.env = patch.dict(os.environ, {'TEAM_RUNTIME_HOSTS_FILE': str(self.path)})
+        self.env.start(); self.addCleanup(self.env.stop)
+
+    def phases(self, declared):
+        self.path.write_text(json.dumps({'schema': 2, 'phases': declared}), encoding='utf-8')
+
+    def test_registry_is_predefined_unique_and_target_disjoint(self):
+        actors = [row['logicalActor'] for row in hosts.MIGRATIONS.values()]
+        self.assertEqual(len(set(actors)), len(actors))
+        sources = [(r['source']['runtime'], r['source']['agentId']) for r in hosts.MIGRATIONS.values()]
+        targets = [(r['target']['runtime'], r['target']['agentId']) for r in hosts.MIGRATIONS.values()]
+        self.assertEqual(len(set(sources)), len(set(targets)), len(hosts.MIGRATIONS))
+        self.assertFalse(set(sources) & set(targets))
+        self.assertEqual(hosts.MIGRATIONS[hosts.MIGRATION]['target'], hosts.TARGET)
+        for row in hosts.MIGRATIONS.values():
+            self.assertEqual(row['source']['runtime'], 'operations')
+            self.assertEqual(row['target']['runtime'], 'game')
+
+    def test_missing_manifest_keeps_every_legacy_host(self):
+        self.assertEqual(set(hosts.registry_config().values()), {'legacy'})
+        self.assertEqual(hosts.host_config()['phase'], 'legacy')
+        self.assertEqual(hosts.native_host('operations:default'), {'runtime': 'operations', 'agentId': 'default'})
+        self.assertEqual(hosts.logical_actor('operations', 'default'), 'operations:default')
+        self.assertIsNone(hosts.logical_actor('game', 'qd-steward'))
+        self.assertEqual(hosts.active_game_targets(), ())
+        self.assertEqual(hosts.active_ops_sources(), frozenset())
+        from role_learning_profiles import roles
+        self.assertNotIn('qd-steward', roles('game'))
+        self.assertIn('default', roles('operations'))
+
+    def test_steward_active_moves_host_roles_and_bindings_only(self):
+        self.phases({'steward-to-game-v1': 'active'})
+        self.assertEqual(hosts.native_host('operations:default'), {'runtime': 'game', 'agentId': 'qd-steward'})
+        self.assertEqual(hosts.logical_actor('game', 'qd-steward'), 'operations:default')
+        self.assertIsNone(hosts.logical_actor('operations', 'default'))
+        self.assertEqual(hosts.active_game_targets(), ('qd-steward',))
+        self.assertEqual(hosts.active_ops_sources(), frozenset({'default'}))
+        with self.assertRaisesRegex(ValueError, 'native_host_is_not_logical_actor'):
+            hosts.native_host('game:qd-steward')
+        from role_learning_profiles import roles
+        self.assertIn('qd-steward', roles('game'))
+        self.assertNotIn('default', roles('operations'))
+        self.assertNotIn('qd-engineer', roles('game'))
+        self.assertEqual(profiles.bindings('default', 'operations'), {})
+        ready = profiles.bindings('qd-steward', 'game')
+        self.assertEqual(ready['qd_world_team']['args'],
+            ['/ops/world_team_mcp.py', '--actor', 'operations:default', '--native-runtime', 'game', '--native-role', 'qd-steward'])
+        self.assertEqual(ready['qd_world_team']['tools'], profiles.tools_for('operations:default'))
+
+    def test_same_id_migration_switches_runtime_not_identity(self):
+        self.phases({'priest-to-game-v1': 'active'})
+        self.assertEqual(hosts.native_host('operations:mc-priest'), {'runtime': 'game', 'agentId': 'mc-priest'})
+        self.assertEqual(hosts.logical_actor('game', 'mc-priest'), 'operations:mc-priest')
+        self.assertIsNone(hosts.logical_actor('operations', 'mc-priest'))
+        with self.assertRaisesRegex(ValueError, 'native_host_is_not_logical_actor'):
+            hosts.native_host('game:mc-priest')
+        roster = TeamStore('operations:mc-priest', self.root).roster()['members']
+        priest = next(row for row in roster if row['actor'] == 'operations:mc-priest')
+        self.assertEqual(priest['nativeHost'], {'runtime': 'game', 'agentId': 'mc-priest'})
+
+    def test_prepared_target_configures_but_never_executes(self):
+        self.phases({'diagnostics-to-game-v1': 'prepared'})
+        self.assertEqual(hosts.native_host('operations:mc-herald'), {'runtime': 'operations', 'agentId': 'mc-herald'})
+        self.assertEqual(hosts.logical_actor('operations', 'mc-herald'), 'operations:mc-herald')
+        self.assertIsNone(hosts.logical_actor('game', 'qd-diagnostics'))
+        from role_learning_profiles import learning_identity
+        self.assertEqual(learning_identity('qd-diagnostics', 'game', allow_prepared=True), ('mc-herald', 'operations'))
+        with self.assertRaisesRegex(ValueError, 'unknown_learning_role'):
+            learning_identity('qd-diagnostics', 'game')
+        self.assertEqual(profiles.bindings('qd-diagnostics', 'game'), {})
+        ready = profiles.bindings('qd-diagnostics', 'game', allow_prepared=True)
+        self.assertEqual(ready['qd_world_team']['args'],
+            ['/ops/world_team_mcp.py', '--actor', 'operations:mc-herald', '--native-runtime', 'game', '--native-role', 'qd-diagnostics'])
+        with self.assertRaisesRegex(ValueError, 'team_native_host_inactive'):
+            hosts.host_tool_app(N(tools={}), 'operations:mc-herald', 'game', 'qd-diagnostics')
+
+    def test_phases_are_independent_and_engineer_view_is_unchanged(self):
+        self.phases({'engineer-to-game-v1': 'active'})
+        self.assertTrue(hosts.active_hosted_engineer())
+        self.assertEqual(hosts.host_config(), {'schema': 1, 'migration': hosts.MIGRATION, 'phase': 'active',
+            'logicalActor': hosts.ENGINEER, 'source': dict(hosts.SOURCE), 'target': dict(hosts.TARGET)})
+        self.assertEqual(hosts.native_host(hosts.ENGINEER), hosts.TARGET)
+        self.assertEqual(hosts.native_host('operations:default'), {'runtime': 'operations', 'agentId': 'default'})
+        self.phases({'engineer-to-game-v1': 'active', 'guard-naruto-to-game-v1': 'active'})
+        self.assertEqual(hosts.active_game_targets(), ('qd-engineer', 'mc-guard-naruto'))
+        self.assertEqual(hosts.logical_actor('game', 'mc-guard-naruto'), 'operations:mc-guard-naruto')
+        self.assertEqual(hosts.logical_actor('operations', 'mc-god'), None)
+
+    def test_schema1_manifest_still_maps_to_the_engineer_entry(self):
+        self.path.write_text(json.dumps({'schema': 1, 'migration': hosts.MIGRATION, 'phase': 'active',
+            'logicalActor': hosts.ENGINEER, 'source': dict(hosts.SOURCE), 'target': dict(hosts.TARGET)}), encoding='utf-8')
+        phases = hosts.registry_config()
+        self.assertEqual(phases[hosts.MIGRATION], 'active')
+        self.assertEqual(phases['steward-to-game-v1'], 'legacy')
+        self.assertEqual(hosts.native_host(hosts.ENGINEER), hosts.TARGET)
+
+    def test_schema2_validation_rejects_unknown_or_malformed_declarations(self):
+        for bad in ({'schema': 2, 'phases': {'unknown-migration': 'active'}},
+                    {'schema': 2, 'phases': {'steward-to-game-v1': 'unknown'}},
+                    {'schema': 2, 'phases': {'steward-to-game-v1': 'legacy'}},
+                    {'schema': 2, 'phases': []},
+                    {'schema': 3, 'phases': {}}, {'schema': 2, 'phases': {}, 'extra': 1},
+                    {'schema': 2}):
+            with self.subTest(bad=bad):
+                self.path.write_text(json.dumps(bad), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    hosts.registry_config()
+        self.path.write_text(json.dumps({'schema': 2, 'phases': {}}), encoding='utf-8')
+        self.assertEqual(set(hosts.registry_config().values()), {'legacy'})
+        self.path.write_text('{"schema":2,"phases":{},"phases":{"steward-to-game-v1":"active"}}', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            hosts.registry_config()
+        self.phases({'steward-to-game-v1': 'active'})
+        with patch.object(Path, 'is_symlink', lambda p: p == self.path):
+            with self.assertRaisesRegex(ValueError, 'linked'):
+                hosts.registry_config()
+
+    def test_mcp_guard_follows_each_roles_own_phase(self):
+        class App:
+            def __init__(self): self.tools = {}
+            def tool(self):
+                def add(fn): self.tools[fn.__name__] = fn; return fn
+                return add
+        self.phases({'steward-to-game-v1': 'prepared'})
+        retired = App()
+        bound = hosts.host_tool_app(retired, 'operations:default')
+        @bound.tool()
+        def operations_snapshot():
+            return 'ran-on-legacy'
+        self.assertEqual(retired.tools['operations_snapshot'](), 'ran-on-legacy')
+        self.phases({'steward-to-game-v1': 'active'})
+        with self.assertRaisesRegex(ValueError, 'team_native_host_inactive'):
+            retired.tools['operations_snapshot']()
+        with self.assertRaisesRegex(ValueError, 'team_native_host_inactive'):
+            hosts.host_tool_app(App(), 'operations:default')
+        target = App()
+        target_bound = hosts.host_tool_app(target, 'operations:default', 'game', 'qd-steward')
+        @target_bound.tool()
+        def operations_reference():
+            return 'ran-on-new-host'
+        self.assertEqual(target.tools['operations_reference'](), 'ran-on-new-host')
+        unmigrated = App()
+        self.assertIs(hosts.host_tool_app(unmigrated, 'game:mc-god'), unmigrated)
+        with self.assertRaisesRegex(ValueError, 'unexpected_team_native_host'):
+            hosts.host_tool_app(App(), 'game:mc-god', 'game', 'qd-steward')
+
+
 if __name__ == '__main__': unittest.main()

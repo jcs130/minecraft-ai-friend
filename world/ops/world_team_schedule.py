@@ -6,7 +6,7 @@ import json
 import time
 from zoneinfo import ZoneInfo
 from world_team import TeamStore, digest
-from world_team_hosts import ENGINEER, SOURCE, logical_actor, native_host, require_host
+from world_team_hosts import logical_actor, migration_for, native_host, require_host
 
 SCHEDULES = {
     'game:mc-god': ('qd-team-goddess', '女神 · 世界巡查与问题处理', '1-59/10 * * * *'),
@@ -49,7 +49,8 @@ def team_job(actor):
         'save_result_to_inbox': False,
         'meta': {'project': 'qiandengji', 'purpose': 'world-team', 'runtime': runtime, 'role': role, 'version': 1}}
     host = native_host(actor)
-    if actor == ENGINEER and host != SOURCE:
+    entry = migration_for(actor)
+    if entry is not None and host != entry['source']:
         spec['meta']['nativeHost'] = host
     return spec
 
