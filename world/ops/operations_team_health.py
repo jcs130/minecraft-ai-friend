@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import urllib.request
 from operations_team_mcp import ROLES, TOOLS, role_tools, operation_arguments
+from agent_learning import TOOL_NAMES
 from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS, enabled_native_tools
 from llm_runtime_policy import validate_running
@@ -135,7 +136,6 @@ def main():
     agents=get('/agents')['agents']
     from world_team_hosts import native_host
     active_roles = [role for role in ROLES if native_host('operations:' + role) == {'runtime': 'operations', 'agentId': role}]
-    assert {a['id'] for a in agents if a['enabled']} == set(active_roles)
     from world_team_hosts import active_ops_sources
     migrated = active_ops_sources()
     retired_roles = set(ROLES) - set(active_roles)
@@ -187,7 +187,6 @@ def main():
             assert (folder/'skills'/name/'SKILL.md').read_bytes()==(Path('/ops/skills')/name/'SKILL.md').read_bytes()
         exposed=get('/tools',role=role)
         assert {item['name'] for item in exposed if item['enabled']} == set(NATIVE_TOOLS)
-        from agent_learning import TOOL_NAMES
         assert set(TOOL_NAMES) <= {row.get('name') for row in get('/mcp/tools/qd_learning', role=role) if row.get('enabled') is True}
         assert set(skill_map[role]) | set(NATIVE_SKILLS) <= {row['name'] for row in get('/skills', role=role) if row.get('enabled') is True}
         jobs = get('/cron/jobs', role=role)

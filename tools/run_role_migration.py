@@ -251,7 +251,15 @@ class Runner:
         for key, client in sorted(ready['mcp']['clients'].items()):
             self.api(GAME, 'PUT', '/mcp/' + key, client, agent=self.target, timeout=60)
             wait_active(call, self.target, key, client['tools'], timeout=120)
-            policy = policy_payload(client['tools'])
+            if key == 'qd_learning':
+                # The learning card contract uses unconditional wildcard rules;
+                # native expresses those as console tool defaults, never as
+                # channel-principal overrides (source_type is Literal[channel]).
+                policy = {'default_effect': 'deny', 'client_overrides': [],
+                          'tool_defaults': [{'tool_name': name, 'effect': 'allow'} for name in client['tools']],
+                          'tool_overrides': []}
+            else:
+                policy = policy_payload(client['tools'])
             _verify_policy(self.api(GAME, 'PUT', '/mcp/policy/' + key, policy, agent=self.target), policy)
             _verify_policy(self.api(GAME, 'GET', '/mcp/policy/' + key, agent=self.target), policy)
         for job in ready_jobs:
