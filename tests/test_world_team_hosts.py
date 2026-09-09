@@ -440,4 +440,42 @@ class MultiMigrationTests(unittest.TestCase):
         self.assertIsNone(hosts.active_hosted_source('mc-god', 'game'))
 
 
+    def test_retired_and_dormant_targets_lose_authority_and_leave_roles(self):
+        self.path.write_text(json.dumps({'schema': 2, 'phases': {
+            'engineer-to-game-v1': 'active', 'priest-to-game-v1': 'active',
+            'guard-kirito-to-game-v1': 'active', 'guard-naruto-to-game-v1': 'active'},
+            'retired': ['mc-priest', 'mc-guard-kirito'], 'dormant': ['mc-guard-naruto']}), encoding='utf-8')
+        self.assertEqual(hosts.active_game_targets(), ('qd-engineer',))
+        retired, dormant = hosts.archived_game_targets()
+        self.assertEqual(retired, frozenset({'mc-priest', 'mc-guard-kirito'}))
+        self.assertEqual(dormant, frozenset({'mc-guard-naruto'}))
+        self.assertIsNone(hosts.logical_actor('game', 'mc-priest'))
+        self.assertIsNone(hosts.logical_actor('game', 'mc-guard-naruto'))
+        self.assertEqual(hosts.logical_actor('game', 'qd-engineer'), hosts.ENGINEER)
+        # Display mapping keeps pointing at the archived workspace.
+        self.assertEqual(hosts.native_host('operations:mc-priest'), {'runtime': 'game', 'agentId': 'mc-priest'})
+        from role_learning_profiles import roles
+        self.assertNotIn('mc-priest', roles('game'))
+        self.assertNotIn('mc-guard-naruto', roles('game'))
+        self.assertIn('qd-engineer', roles('game'))
+        self.assertEqual(profiles.bindings('mc-priest', 'game'), {})
+        # An archived role's old MCP process has no authority anywhere.
+        with self.assertRaisesRegex(ValueError, 'team_native_host_inactive'):
+            hosts.host_tool_app(N(tools={}), 'operations:mc-priest', 'game', 'mc-priest')
+
+    def test_retirement_declaration_is_validated(self):
+        for bad in ({'schema': 2, 'phases': {}, 'retired': ['mc-priest']},
+                    {'schema': 2, 'phases': {'priest-to-game-v1': 'prepared'}, 'retired': ['mc-priest']},
+                    {'schema': 2, 'phases': {'priest-to-game-v1': 'active'}, 'retired': ['qd-survivor']},
+                    {'schema': 2, 'phases': {'priest-to-game-v1': 'active'},
+                     'retired': ['mc-priest'], 'dormant': ['mc-priest']},
+                    {'schema': 2, 'phases': {'priest-to-game-v1': 'active'}, 'retired': 'mc-priest'},
+                    {'schema': 2, 'phases': {'priest-to-game-v1': 'active'},
+                     'retired': ['mc-priest', 'mc-priest']}):
+            with self.subTest(bad=bad):
+                self.path.write_text(json.dumps(bad), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    hosts.registry_config()
+
+
 if __name__ == '__main__': unittest.main()

@@ -2248,7 +2248,18 @@ for _economy_name in ('gen_quests', 'quests_today', 'turn_in', 'sync_offers', '_
 
 
 if __name__ == "__main__":
-    R.connect()
+    # After a stack restart MC may still be booting; retry the first RCON
+    # connection with backoff instead of exiting into docker's restart loop
+    # (2026-09-09 boot-race crash-loop, single-QwenPaw consolidation night).
+    for _attempt in range(120):
+        try:
+            R.connect()
+            break
+        except OSError:
+            if _attempt == 119:
+                raise
+            print("[npc] waiting for MC RCON, retry in 5s (%d/120)" % (_attempt + 1,), flush=True)
+            time.sleep(5)
     # New queues are initialized only inside the explicitly configured D mounts.
     for path in (INBOX, SPELL_REQ):
         Path(path).touch(exist_ok=True)

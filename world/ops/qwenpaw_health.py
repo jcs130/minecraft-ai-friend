@@ -205,12 +205,14 @@ def check_runtime_config():
         validate_workspace(Path('/state/work/workspaces') / aid, aid, team=True)
     for aid in maid_roles():
         check_maid_config(Path('/state/work/workspaces') / aid, aid)
-    from world_team_hosts import MIGRATIONS, phase_of
+    from world_team_hosts import MIGRATIONS, archived_game_targets, phase_of
     from operations_team_health import check_hosted_engineer, check_hosted_ops_role
+    retired_ids, dormant_ids = archived_game_targets()
     for entry in MIGRATIONS.values():
-        if entry['target']['runtime'] != 'game' or phase_of(entry['migration']) != 'active':
-            continue
         native = entry['target']['agentId']
+        if (entry['target']['runtime'] != 'game' or phase_of(entry['migration']) != 'active'
+                or native in retired_ids or native in dormant_ids):
+            continue
         folder = Path('/state/work/workspaces') / native
         if native == 'qd-engineer':
             check_hosted_engineer(folder)
@@ -260,8 +262,11 @@ def main():
     loaded_ids = set(loaded)
     assert len(loaded) == len(loaded_ids)
     # Console reads may lazily load disabled builtin workspaces. Loading is not
-    # activation: only explicitly disabled builtins may accompany the game roles.
-    assert expected_roles <= loaded_ids <= expected_roles | disabled_builtins
+    # activation: only explicitly disabled builtins and archived (retired or
+    # dormant) consolidation targets may accompany the active game roles.
+    from world_team_hosts import archived_game_targets
+    retired_ids, dormant_ids = archived_game_targets()
+    assert expected_roles <= loaded_ids <= expected_roles | disabled_builtins | set(retired_ids) | set(dormant_ids)
     PHASE = 'agent-list'
     agents = get('/agents')['agents']
     assert {a['id'] for a in agents if a['enabled']} == expected_roles

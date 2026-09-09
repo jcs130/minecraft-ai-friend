@@ -54,13 +54,13 @@ def _legacy_phases():
     return {name: 'legacy' for name in MIGRATIONS}
 
 
-def registry_config(path=None):
-    """Per-migration phases from the bounded manifest; schema 1 stays readable."""
+def _load_registry(path=None):
+    """Full registry: phases plus post-migration retired/dormant target sets."""
     path = Path(path or os.environ.get('TEAM_RUNTIME_HOSTS_FILE', '/team/runtime-hosts.json'))
     if any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (path, *path.parents)):
         raise ValueError('linked_team_host_manifest')
     if not path.exists():
-        return _legacy_phases()
+        return {'phases': _legacy_phases(), 'retired': frozenset(), 'dormant': frozenset()}
     with path.open('rb') as stream:
         raw = stream.read(8193)
     if len(raw) > 8192:
@@ -84,8 +84,8 @@ def registry_config(path=None):
             raise ValueError('invalid_team_host_manifest')
         phases = _legacy_phases()
         phases[MIGRATION] = value['phase']
-        return phases
-    if value['schema'] != 2 or set(value) != {'schema', 'phases'}:
+        return {'phases': phases, 'retired': frozenset(), 'dormant': frozenset()}
+    if value['schema'] != 2 or not {'schema', 'phases'} <= set(value) <= {'schema', 'phases', 'retired', 'dormant'}:
         raise ValueError('invalid_team_host_manifest')
     declared = value['phases']
     if (not isinstance(declared, dict) or not set(declared) <= set(MIGRATIONS)
@@ -93,7 +93,32 @@ def registry_config(path=None):
         raise ValueError('invalid_team_host_manifest')
     phases = _legacy_phases()
     phases.update(declared)
-    return phases
+    sets = {}
+    for field in ('retired', 'dormant'):
+        rows = value.get(field, [])
+        if not isinstance(rows, list) or len(set(rows)) != len(rows):
+            raise ValueError('invalid_team_host_manifest')
+        for native_id in rows:
+            entry = _BY_TARGET.get(('game', native_id))
+            # Only a migrated role can be retired/dormant, and only after its
+            # migration is active; the workspace archive stays under the target.
+            if entry is None or phases[entry['migration']] != 'active':
+                raise ValueError('retirement_requires_active_migration')
+        sets[field] = frozenset(rows)
+    if sets['retired'] & sets['dormant']:
+        raise ValueError('invalid_team_host_manifest')
+    return {'phases': phases, **sets}
+
+
+def registry_config(path=None):
+    """Per-migration phases from the bounded manifest; schema 1 stays readable."""
+    return _load_registry(path)['phases']
+
+
+def archived_game_targets(path=None):
+    """(retired, dormant) native target IDs consolidated away after migration."""
+    registry = _load_registry(path)
+    return registry['retired'], registry['dormant']
 
 
 def host_config(path=None):
@@ -160,11 +185,20 @@ def native_host(actor, *, config=None):
 
 def logical_actor(runtime, role, *, allow_prepared=False, config=None):
     """Reverse binding. A retired source or inactive target has no authority."""
-    phases = _phases(config)
+    if config is None:
+        registry = _load_registry()
+        phases = registry['phases']
+        archived = registry['retired'] | registry['dormant']
+    else:
+        phases, archived = _phases(config), frozenset()
     location = (runtime, role)
     entry = _BY_TARGET.get(location)
     if entry is not None:
         phase = phases[entry['migration']]
+        # A consolidated-away role keeps its archived workspace under the target
+        # ID but holds no execution authority anywhere.
+        if phase == 'active' and role in archived:
+            return None
         return entry['logicalActor'] if phase == 'active' or (allow_prepared and phase == 'prepared') else None
     entry = _BY_SOURCE.get(location)
     if entry is not None:
@@ -184,9 +218,10 @@ def active_hosted_engineer():
 
 def active_game_targets():
     """Native IDs hosted by the game instance through an active migration."""
-    phases = registry_config()
+    registry = _load_registry()
+    phases, skip = registry['phases'], registry['retired'] | registry['dormant']
     return tuple(row['target']['agentId'] for row in MIGRATIONS.values()
-                 if phases[row['migration']] == 'active')
+                 if phases[row['migration']] == 'active' and row['target']['agentId'] not in skip)
 
 
 def active_ops_sources():
