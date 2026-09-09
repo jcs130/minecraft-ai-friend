@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 PHASE = 'auth-mode'
 from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
 from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard
-from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
+from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS, enabled_native_tools
 from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
@@ -207,6 +207,17 @@ def check_runtime_config():
     if 'qd-engineer' in roles('game'):
         from operations_team_health import check_hosted_engineer
         check_hosted_engineer(Path('/state/work/workspaces/qd-engineer'))
+    from team_recruitment import specialists
+    for aid, row in specialists(include_pending=True).items():
+        assert row['status'] == 'active', 'specialist_provisioning_incomplete'
+        folder = Path('/state/work/workspaces') / aid
+        agent = json.loads((folder / 'agent.json').read_text())
+        assert agent['name'] == row['name'] and agent['description'] == row['profession']
+        assert agent['workspace_dir'] == str(folder) and agent['heartbeat']['enabled'] is False
+        assert set(agent['mcp']['clients']) == {'qd_learning', 'qd_world_team'}
+        validate_native(agent, aid)
+        validate_learning_workspace(folder, aid, 'game')
+        world_team.validate_workspace(folder, aid, 'game')
     return {aid for aid in ('default', 'QwenPaw_QA_Agent_0.2')
             if config['agents']['profiles'].get(aid, {}).get('enabled') is False}
 
@@ -248,7 +259,7 @@ def main():
     for aid in expected_roles - {'qd-survivor'}:
         PHASE = 'native-tools:' + aid
         items = get('/tools', aid=aid)
-        assert {item['name'] for item in items if item['enabled']} == set(NATIVE_TOOLS)
+        assert {item['name'] for item in items if item['enabled']} == enabled_native_tools(aid)
     from agent_learning import TOOL_NAMES
     from role_learning_profiles import role_skills, validate_jobs
     bindings = 0

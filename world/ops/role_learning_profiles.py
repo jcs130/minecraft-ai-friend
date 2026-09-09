@@ -21,7 +21,8 @@ def roles(runtime):
     from world_team_hosts import host_config
     moved = host_config()['phase'] == 'active'
     if runtime == 'game':
-        return (*GAME_ROLES, *maid_roles(), *(('qd-engineer',) if moved else ()))
+        from team_recruitment import specialists
+        return (*GAME_ROLES, *maid_roles(), *(('qd-engineer',) if moved else ()), *specialists(include_pending=True))
     return tuple(role for role in OPS_ROLES if not (moved and role == 'mc-god'))
 
 
@@ -56,6 +57,9 @@ def maid_roles(path=None):
 
 def role_skills(role, runtime, source=HERE):
     role, runtime = learning_identity(role, runtime, allow_prepared=True)
+    from team_recruitment import specialists, SPECIALIST_SKILLS
+    if runtime == 'game' and role in specialists(include_pending=True):
+        return list(SPECIALIST_SKILLS)
     filename = 'game-role-skills.json' if runtime == 'game' else 'operations-role-skills.json'
     manifest = json.loads((Path(source) / filename).read_text(encoding='utf-8-sig'))
     assert manifest['schema'] == 1 and set(manifest['roles']) == set(GAME_ROLES if runtime == 'game' else OPS_ROLES)
@@ -63,9 +67,11 @@ def role_skills(role, runtime, source=HERE):
     assert isinstance(result, list) and len(set(result)) == len(result) and 'qd-skill-evolution' in result
     assert all(isinstance(name, str) and re.fullmatch(r'qd-[a-z0-9-]{1,70}', name) for name in result)
     if runtime == 'game':
-        from party_role_capabilities import party_roles
+        from party_role_capabilities import party_roles, is_bound_yui
         if role in party_roles():
             result = [*result, 'qd-party-cooperation']
+        if is_bound_yui('game:' + role):
+            result = [*result, 'qd-yui-rescue']
     return result
 
 

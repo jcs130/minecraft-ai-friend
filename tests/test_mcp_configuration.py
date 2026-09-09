@@ -58,6 +58,43 @@ class ConfigurationTests(unittest.TestCase):
             configure_client(lost, 'fixture', 'qd_party', CLIENT, POLICY, exists=False)
         self.assertEqual(calls, [('POST', '/mcp')])
 
+    def test_expansion_waits_for_exact_old_then_new_handler_without_repeating_write(self):
+        reads = iter([['party_status'], ['party_status'], ['party_status', 'party_rescue']])
+        def api(method, path, role, body=None):
+            if path == '/mcp/tools/qd_party':
+                self.calls.append((method, path))
+                return [{'name': name, 'enabled': True} for name in next(reads)]
+            return self.api(method, path, role, body)
+        def sleep(seconds): self.now += seconds
+        configure_client(api, 'fixture', 'qd_party', CLIENT | {'tools': ['party_status', 'party_rescue']},
+                         POLICY, exists=True, previous_tools=['party_status'],
+                         clock=lambda: self.now, sleep=sleep)
+        self.assertEqual(self.calls.count(('PUT', '/mcp/qd_party')), 1)
+        self.assertEqual(self.calls.count(('GET', '/mcp/tools/qd_party')), 3)
+        self.assertGreater(self.now, 0)
+
+    def test_expansion_rejects_unexpected_active_tools_before_any_mutation(self):
+        def unexpected(method, path, role, body=None):
+            self.calls.append((method, path))
+            return [{'name': 'arbitrary_shell', 'enabled': True}]
+        with self.assertRaisesRegex(ValueError, 'tools_mismatch'):
+            configure_client(unexpected, 'fixture', 'qd_party', CLIENT, POLICY,
+                             exists=True, previous_tools=['old_status'])
+        self.assertTrue(all(method == 'GET' for method, _ in self.calls))
+
+    def test_reloaded_server_new_tools_remain_denied_until_explicit_policy_update(self):
+        tools = ['party_status', 'party_rescue']
+        def api(method, path, role, body=None):
+            if path == '/mcp/tools/qd_party':
+                self.calls.append((method, path))
+                applied = self.policy['default_effect'] == 'deny'
+                return [{'name': name, 'enabled': name == 'party_status' or applied} for name in tools]
+            return self.api(method, path, role, body)
+        configure_client(api, 'fixture', 'qd_party', CLIENT | {'tools': tools}, POLICY,
+                         exists=True, previous_tools=['party_status'])
+        self.assertEqual(self.calls.count(('PUT', '/mcp/qd_party')), 1)
+        self.assertEqual(self.policy['default_effect'], 'deny')
+
     def test_wait_retries_reads_only_and_fails_closed_if_never_active(self):
         def unavailable(method, path, role, body=None):
             self.calls.append((method, path))

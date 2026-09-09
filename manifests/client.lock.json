@@ -961,9 +961,9 @@
     },
     {
       "path": "mods/qiandeng-maid-bridge-0.1.0.jar",
-      "size": 46288,
-      "sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9",
-      "source_sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9",
+      "size": 63372,
+      "sha256": "2b9fd77ef84db55281242aa0c2be224e058a73bef4e108edf91070526f650e99",
+      "source_sha256": "2b9fd77ef84db55281242aa0c2be224e058a73bef4e108edf91070526f650e99",
       "source": "client_extension",
       "preserved_existing": false
     }
@@ -1709,7 +1709,7 @@
       "ids": [
         "qiandeng_maid_bridge"
       ],
-      "sha256": "e66178ad6bcc12b025af74d02411d6ae6560459dbfe6a016587a2828eb4972b9"
+      "sha256": "2b9fd77ef84db55281242aa0c2be224e058a73bef4e108edf91070526f650e99"
     }
   ],
   "excludes_game_binary": true

@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "name": "game-production",
+  "repository": "https://github.com/MistRain-1/game-design-skill",
+  "commit": "7ece53df48ebf6fa364660d7f67f4cc0b44dc97f",
+  "retrievedAt": "2026-09-09",
+  "license": "MIT",
+  "selection": "Standalone game-production skill and its single required reference; original text preserved.",
+  "executableFilesIncluded": false,
+  "upstreamScriptsExecuted": false,
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sourcePath": "game-production/SKILL.md",
+      "sourceUrl": "https://raw.githubusercontent.com/MistRain-1/game-design-skill/7ece53df48ebf6fa364660d7f67f4cc0b44dc97f/game-production/SKILL.md",
+      "sha256": "5f399869b366d2e250844a1f4cb56f11794baf6df09fecc0d407f63222aa6de3",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "path": "references/design-lenses.md",
+      "sourcePath": "game-production/references/design-lenses.md",
+      "sourceUrl": "https://raw.githubusercontent.com/MistRain-1/game-design-skill/7ece53df48ebf6fa364660d7f67f4cc0b44dc97f/game-production/references/design-lenses.md",
+      "sha256": "1e91f67b93520c37c93ba2655c2b316ea27bb4392c049a3c96c2ce886372a600",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "path": "LICENSE",
+      "sourcePath": "LICENSE",
+      "sourceUrl": "https://raw.githubusercontent.com/MistRain-1/game-design-skill/7ece53df48ebf6fa364660d7f67f4cc0b44dc97f/LICENSE",
+      "sha256": "6ae329fb14b30996e9681a9b0c63b1641a687ccc22b01dac29ba8d1dbb2ab797",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "path": "NOTICE.md",
+      "sourcePath": "NOTICE.md",
+      "sourceUrl": "https://raw.githubusercontent.com/MistRain-1/game-design-skill/7ece53df48ebf6fa364660d7f67f4cc0b44dc97f/NOTICE.md",
+      "sha256": "305140c7f4a33475f4bef28a28d3725727e7cc90c8e966358e682e1b2590c03d",
+      "license": "MIT",
+      "modified": false
+    }
+  ]
+}

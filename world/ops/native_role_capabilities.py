@@ -15,6 +15,13 @@ HERE = Path(__file__).resolve().parent
 NATIVE_SKILLS = ('make-skill', 'file_reader', 'cron')
 FILE_TOOLS = ('read_file', 'write_file', 'edit_file', 'append_file')
 NATIVE_TOOLS = (*FILE_TOOLS, 'materialize_skill', 'get_current_time', 'execute_shell_command')
+
+
+def enabled_native_tools(role, runtime='game'):
+    from team_native_policy import native_tools
+    # A validated caller supplies its own role. Dynamic identities are checked
+    # again by the runtime against the persisted team registry.
+    return set(NATIVE_TOOLS) | set(native_tools(role, runtime, registered_roles=(role,)))
 PREFIX = 'QD_NATIVE_'
 FILE_NOTE = '\n\n<!-- qiandeng-personal-files-v1 -->\n你已获准使用 Qwen 原生 read_file、write_file、append_file、edit_file，在自己的工作区持久保存经验、失败复盘、参考资料和代码草稿，不需要再次请求文件写入许可。建议 notes/index.md 仅记主题、短摘要和路径，notes/ 下分主题记录事实/来源/时间/适用条件/未验证事项，drafts/ 保存草稿；已有内容先读再追加或定点修改。资料不会自动全部加载；当前任务需要旧经验时先读简短索引，再读相关一页。写入成功以工具回执为准，关键资料读回核对。若本角色已启用 qd-skill-evolution，需要整理方法时按需读取其 references/notes.md；成熟流程可通过原生 materialize_skill 保存，已启用官方 make-skill 时优先参照其流程。尚未安装的技能与参考页不能当作已可用。\n个人文件可长期积累；写下计划或代码不代表游戏已经执行或技能测试通过。文件工作与当前任务共用一次推理流程，不另起后台模型循环。身份、驱动和预算等受管理配置仍由对应服务维护。\n'
 
@@ -82,20 +89,21 @@ def configure_native(agent, role, runtime='game'):
     result = deepcopy(agent)
     result['tools'] = result.get('tools') or {}
     tools = result['tools'].setdefault('builtin_tools', {})
-    for name in NATIVE_TOOLS:
+    enabled = enabled_native_tools(role, runtime)
+    for name in enabled:
         tools.setdefault(name, {'name': name, 'config': {}})['enabled'] = True
     for name, value in tools.items():
-        if name not in NATIVE_TOOLS:
+        if name not in enabled:
             value['enabled'] = False
     result['security'] = result.get('security') or {}
     security = result['security']
     guard = security.setdefault('tool_guard', {})
     guard['enabled'] = True
-    guard['guarded_tools'] = sorted(set(guard.get('guarded_tools') or []) | set(NATIVE_TOOLS))
+    guard['guarded_tools'] = sorted(set(guard.get('guarded_tools') or []) | enabled)
     # Qwen adds ReMe tools after the workspace builtin list. Preserve only the
     # approved life-role memory aliases; do not invent builtin tool entries.
     dynamic_tools = dynamic_memory_tools(result, role, runtime)
-    guard['denied_tools'] = sorted((set(guard.get('denied_tools', [])) | set(tools)) - set(NATIVE_TOOLS) - dynamic_tools)
+    guard['denied_tools'] = sorted((set(guard.get('denied_tools', [])) | set(tools)) - enabled - dynamic_tools)
     guard['custom_rules'] = [row for row in guard.get('custom_rules', []) if not row['id'].startswith(PREFIX)] + rules(role)
     required = {row['id'] for row in rules(role)} | {'SENSITIVE_FILE_BLOCK', 'SAFETY_CHECKS_DESTRUCTIVE_COMMAND'}
     guard['auto_denied_rules'] = sorted(set(guard.get('auto_denied_rules', [])) | required)
@@ -110,7 +118,7 @@ def configure_native(agent, role, runtime='game'):
 
 
 def validate_native(agent, role, runtime='game'):
-    assert {name for name, value in agent['tools']['builtin_tools'].items() if value['enabled']} == set(NATIVE_TOOLS)
+    assert {name for name, value in agent['tools']['builtin_tools'].items() if value['enabled']} == enabled_native_tools(role, runtime)
     expected = configure_native(agent, role, runtime)
     assert agent['security'] == expected['security'] and agent['approval_level'] == 'AUTO'
 

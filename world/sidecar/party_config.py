@@ -80,7 +80,10 @@ class PartyConfig:
 
 def recipient_tools(body_driver, body_tools, learning_tools=()):
     # Qwen 2.2 DriverCapabilityTool uses <driver>__<tool>, not bare MCP names.
-    files = ('Skill', 'read_file', 'write_file', 'edit_file', 'append_file', 'materialize_skill', 'get_current_time')
+    # ReMe exposes memory_search; MemorySearch is its governance alias only.
+    # This allowlist retains an enabled native memory tool, never enables one.
+    files = ('Skill', 'read_file', 'write_file', 'edit_file', 'append_file',
+             'materialize_skill', 'get_current_time', 'memory_search')
     return list(files) + [body_driver + '__' + name for name in body_tools] + [
         'qd_learning__' + name for name in learning_tools] + [
         'qd_party__party_status', 'qd_party__party_message_read']

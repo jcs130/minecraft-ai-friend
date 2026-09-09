@@ -189,6 +189,8 @@ services:
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
+      - ./world/survival:/opt/survival:ro
+      - ./server/survival-agent-state/survival:/survivor-state
       - ./server/operations-agent-state/work/operations/world-requests:/ops-world-requests:ro
       - ./tools/npc_health.py:/opt/npc_health.py:ro
       - ./tools/register_maid_agents.py:/opt/register_maid_agents.py:ro

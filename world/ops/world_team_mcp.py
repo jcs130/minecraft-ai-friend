@@ -10,7 +10,8 @@ import stat
 import time
 from world_team import members, TeamStore
 
-COMMON_TOOLS = ('team_roster', 'team_context', 'team_cases', 'team_case', 'team_report', 'team_update')
+COMMON_TOOLS = ('team_roster', 'team_context', 'team_cases', 'team_case', 'team_report', 'team_update',
+                'team_request_help', 'team_help_status')
 
 
 def survivor_snapshot(public=Path('/public'), clock=time.time):
@@ -122,13 +123,15 @@ def register_team_tools(app, actor, state=Path('/team')):
 
     @app.tool()
     def team_report(request_id: str, dedupe_key: str, title: str, category: str,
-                    observed: str, expected: str, evidence: list[str]) -> dict:
+                    observed: str, expected: str, evidence: list[str], assign_to: str | None = None) -> dict:
         """Write an attributed Markdown feedback document and durable case. Categories: bug/gameplay/content/operations/improvement.
 
         Include actual task/action IDs, times and reproducible observations. Reuse a stable dedupe_key for the same issue;
         request_id identifies this exact report. Missing features and suggested fixes are not completed results.
+        Only verified Yui or Goddess may set assign_to="operations:mc-god" for a new engineering request.
+        An existing issue keeps its current assignee; read owner in the receipt. This cannot close another role's work.
         """
-        return store.report(request_id, dedupe_key, title, category, observed, expected, evidence)
+        return store.report(request_id, dedupe_key, title, category, observed, expected, evidence, assign_to)
 
     @app.tool()
     def team_update(request_id: str, case_id: str, expected_version: int, status: str,
@@ -139,6 +142,37 @@ def register_team_tools(app, actor, state=Path('/team')):
         deployments and gameplay outcomes need independent receipts. On case_changed read again; do not overwrite.
         """
         return store.update(request_id, case_id, expected_version, status, note, evidence, assign_to)
+
+    @app.tool()
+    def team_request_help(case_id: str, recipient: str = 'owner') -> dict:
+        """Ask the responsible operations Agent to handle an existing issue now via a native Qwen background task.
+
+        First record real evidence with team_report. Same case version/recipient is submitted once, even after timeout.
+        recipient is owner or a qualified operational actor (game:mc-god, operations:mc-god, game:qd-guild-planner).
+        Does not send game dialogue or wake the reporting character on reply. Keep helpId and read status later.
+        """
+        from team_help import request_help
+        return request_help(actor, case_id, recipient, root=state)
+
+    @app.tool()
+    def team_help_status(help_id: str) -> dict:
+        """Read an existing native help task; unknown submissions are not repeated. Check the case for repair evidence."""
+        from team_help import help_status
+        return help_status(actor, help_id, root=state)
+
+    from team_recruitment import MANAGERS
+    if actor in MANAGERS:
+        @app.tool()
+        def team_recruit(profession_key: str, name: str, profession: str) -> dict:
+            """Recruit a persistent professional Agent into game Qwen (18089) with its own workspace and skills.
+
+            First inspect team_roster and reuse existing specialists. Stable profession_key is lowercase ASCII 3-36 chars.
+            A repeat returns the same person; name/profession cannot silently change. No body/admin credentials inherited.
+            The new member gets the current planner model route and ordinary file/learning/team tools, no new daemon.
+            Temporary analysis instead uses the available native spawn_subagent tool. Creation makes no model call.
+            """
+            from team_recruitment import recruit
+            return recruit(actor, profession_key, name, profession)
     return list(COMMON_TOOLS)
 
 
@@ -153,7 +187,8 @@ def main():
     from world_team_hosts import host_tool_app
     bound = host_tool_app(app, args.actor, args.native_runtime, args.native_role)
     register_team_tools(bound, args.actor)
-    if args.actor == 'game:mc-god':
+    from party_role_capabilities import is_bound_yui
+    if args.actor == 'game:mc-god' or is_bound_yui(args.actor):
         from world_admin_tools import register_admin_tools
         register_admin_tools(app, args.actor)
     if args.actor in ('game:mc-god', 'game:qd-guild-planner', 'operations:mc-priest'):

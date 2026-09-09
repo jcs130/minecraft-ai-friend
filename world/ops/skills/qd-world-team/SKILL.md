@@ -17,6 +17,8 @@ description: 千灯纪世界团队处理真实游玩反馈、跨角色工单、�
 - 工程师读写独立源码、测试与提交：`references/engineering.md`。
 - 女神检查与执行已有服务器管理：`references/administration.md`。
 - 原生班次、持久会话与经验积累：`references/schedule-memory.md`。
+- 反复受阻需要立即联系运营组：`references/native-help.md`。
+- 临时专家与长期职业招募：`references/recruitment.md`。
 
 普通经验可用 Qwen 原生文件工具写入自己的工作区，无须反复请求写笔记许可。优先复用已启用的官方 `make-skill`、`file_reader`、`cron` 和其他适用技能；不要为这套协作重新实现文件工具、调度器或供应商调用。是否有某项工具以本角色当前实际暴露为准，本技能不授予隐藏的管理权限。
 

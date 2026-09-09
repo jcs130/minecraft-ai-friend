@@ -94,7 +94,7 @@ class TeamLifeContextTests(unittest.TestCase):
         self.assertEqual(result['survivor'], projection)
         self.assertEqual(result['world']['worldActionsExecuted'], 0)
         self.assertNotIn('worldActionsAllowed', result['world'])
-        self.assertEqual(len(app.tools), 6)
+        self.assertEqual(set(app.tools), set(team.COMMON_TOOLS) | {'team_recruit'})
 
 
 if __name__ == '__main__': unittest.main()

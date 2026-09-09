@@ -12,7 +12,8 @@ import struct
 import time
 import uuid
 
-from world_admin_tools import ADMIN_ACTOR, AdminStore, RULES, TIMES, canonical, fingerprint, validate
+from world_admin_tools import ADMIN_ACTOR, AdminStore, RULES, TIMES, authorized_admin, canonical, fingerprint, validate
+from world_rescue import NativeRescue
 
 ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 WEATHER_ACK = {'clear': 'Set the weather to clear', 'rain': 'Set the weather to rain',
@@ -28,6 +29,13 @@ class NativeAdminRcon:
 
     @staticmethod
     def allowed(command):
+        uid = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+        if re.fullmatch(r'qdmaid (?:rescue_inspect|rescue_status) ' + uid, command):
+            return True
+        if re.fullmatch(r'qdmaid rescue ' + uid + ' ' + uid + r' (?:kirito|yui)', command):
+            return True
+        if command == 'numen_act invoke "Kirito" task_status {}':
+            return True
         if command in ('list', 'time query daytime', 'time query gametime', 'time query day'):
             return True
         if command in {'gamerule ' + rule for rule in RULES}:
@@ -109,8 +117,9 @@ def time_value(raw):
 
 
 class WorldAdminConsumer:
-    def __init__(self, root=Path('/team'), run=None, clock=time.time):
+    def __init__(self, root=Path('/team'), run=None, clock=time.time, rescue_guard=None):
         self.store, self.run, self.clock = AdminStore(root, clock), run or NativeAdminRcon(), clock
+        self.rescue = NativeRescue(self.store, self.run, rescue_guard)
         self.last_tick = None
 
     def _read_time(self):
@@ -134,8 +143,10 @@ class WorldAdminConsumer:
     def _perform(self, row):
         args = validate(row['kind'], json.loads(row['args']))
         if (fingerprint(row['actor'], row['kind'], args) != row['fingerprint']
-                or (row['kind'] != 'diagnostics' and row['actor'] != ADMIN_ACTOR)):
+                or (row['kind'] != 'diagnostics' and not authorized_admin(row['actor']))):
             raise ValueError('admin_request_invalid')
+        if row['kind'] in ('rescue_inspect', 'rescue'):
+            return self.rescue.perform(row, args)
         before, mutation_sent = {}, False
         try:
             kind = row['kind']
@@ -156,6 +167,8 @@ class WorldAdminConsumer:
             if self.store.stamp() > row['expires']:
                 return 'rejected', {'ok': False, 'code': 'expired_before_write', 'executionConfirmed': False, 'before': before}
             self.store.prepared(row, before)
+            if not authorized_admin(row['actor']):
+                return 'rejected', {'ok': False, 'code': 'admin_actor_required', 'executionConfirmed': False}
             # The claim has been durably committed before even the precondition.
             # It remains unresolved if the process dies anywhere after this point.
             mutation_sent = True
@@ -199,13 +212,18 @@ class WorldAdminConsumer:
     def tick(self):
         """At most one request; call from the existing NPC supervised tick."""
         self.last_tick = self.store.stamp()
+        self._reconcile_rescues()
         row = self.store.claim()
         if row is not None:
             try:
                 status, receipt = self._perform(row)
             except (ValueError, KeyError, TypeError):
                 status, receipt = 'rejected', {'ok': False, 'code': 'invalid_request', 'executionConfirmed': False}
-            self.store.finish(row, status, receipt)
+            if status == 'deferred':
+                self.store.defer(row, receipt)
+            else:
+                self.store.finish(row, status, receipt)
+        self._rescue_feedback()
         result = self.health()
         path = self.store.root / 'consumer.json'
         if path.is_symlink():
@@ -221,9 +239,39 @@ class WorldAdminConsumer:
             temporary.unlink(missing_ok=True)
         return result
 
+    def _reconcile_rescues(self):
+        with self.store.connect() as db:
+            rows = [dict(row) for row in db.execute("SELECT * FROM requests WHERE kind='rescue' AND status IN ('claimed','unknown') ORDER BY created LIMIT 4")]
+        for row in rows:
+            try:
+                self.rescue.reconcile(row)
+            except Exception:
+                # The original receipt stays unknown. This is not permission
+                # to send a second teleport, even after a process restart.
+                pass
+
+    def _rescue_feedback(self):
+        from world_team import record_admin_feedback
+        with self.store.connect() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS feedback (id TEXT NOT NULL, status TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(id,status))')
+            rows = [dict(row) for row in db.execute("SELECT * FROM requests r WHERE kind='rescue' AND (status IN ('completed','rejected','unknown') OR (status='claimed' AND claimed<?)) AND NOT EXISTS (SELECT 1 FROM feedback f WHERE f.id=r.id AND f.status=CASE WHEN r.status='claimed' THEN 'unknown' ELSE r.status END) ORDER BY created LIMIT 4", (self.store.stamp() - 30_000,))]
+        for row in rows:
+            try:
+                receipt = self.store.view(row)
+                result = record_admin_feedback(self.store.root.parent, row['actor'], row['id'], receipt)
+                if result.get('ok'):
+                    with self.store.connect() as db:
+                        db.execute('INSERT OR IGNORE INTO feedback VALUES (?,?,?)', (row['id'], receipt['status'], canonical(result)))
+            except Exception:
+                # Retry only durable engineering documentation next tick.
+                # The original admin request can never be executed again.
+                pass
+
     def health(self):
         with self.store.connect() as db:
             counts = dict(db.execute('SELECT status,COUNT(*) FROM requests GROUP BY status').fetchall())
         return {'schema': 1, 'protocol': 1, 'updatedAt': self.last_tick, 'actor': ADMIN_ACTOR,
+                'sharedAdminQueue': True,
+                'authorizedActors': [actor for actor in (ADMIN_ACTOR, 'game:5swvhK') if authorized_admin(actor)],
                 'pending': counts.get('queued', 0), 'unresolved': counts.get('claimed', 0) + counts.get('unknown', 0),
                 'completed': counts.get('completed', 0), 'modelCalls': 0, 'retriesWorldWrites': False}

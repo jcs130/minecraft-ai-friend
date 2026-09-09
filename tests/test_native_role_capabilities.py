@@ -85,6 +85,7 @@ class InstalledNativeImplementation(unittest.TestCase):
         from qwenpaw.agents.tools.file_io import write_file, read_file
         from qwenpaw.agents.tools.shell import execute_shell_command
         from qwenpaw.agents.tools.make_skill_tools import materialize_skill
+        from qwenpaw.agents.tools.agent_management import list_agents, check_agent_task, spawn_subagent, submit_to_agent
         from qwenpaw.governance.resource_governor import ResourceGovernor
         from qwenpaw.governance.policy import load_governance_policy
         from qwenpaw.governance.tool_registry import DEFAULT_REGISTRY
@@ -103,6 +104,11 @@ class InstalledNativeImplementation(unittest.TestCase):
         self.assertFalse((WORKING_DIR / 'config.json').exists())
         WORKING_DIR.mkdir(parents=True, exist_ok=True)
         (WORKING_DIR / 'config.json').write_text(Config().model_dump_json())
+        # This receipt lives only in the disposable container's tmpfs. It tests
+        # the production ownership lookup without issuing a native model task.
+        receipt_dir = Path('/team/native-help'); receipt_dir.mkdir(parents=True, exist_ok=True)
+        (receipt_dir / ('help-' + 'a' * 24 + '.json')).write_text(json.dumps({
+            'actor': 'game:mc-herald', 'recipient': 'game:mc-god', 'taskId': 'task-0123456789ab'}))
         folders = {}
         for role in ('mc-herald', 'mc-god'):
             folder = WORKING_DIR / 'workspaces' / role; folder.mkdir(parents=True)
@@ -125,6 +131,34 @@ class InstalledNativeImplementation(unittest.TestCase):
                 self.assertEqual(passthrough.behavior, PermissionBehavior.ALLOW)
                 cron = await make(execute_shell_command).check_permissions({'command': 'qwenpaw cron list --agent-id ' + role})
                 self.assertEqual(cron.behavior, PermissionBehavior.ALLOW, (wrapper, cron))
+                discovery = await make(list_agents).check_permissions({})
+                self.assertEqual(discovery.behavior, PermissionBehavior.ALLOW, (wrapper, role, discovery))
+                for arguments in ({'base_url': 'http://host.docker.internal:8088'},
+                                  {'base_url': None}, {'from_agent': 'mc-god'}):
+                    denied = await make(list_agents).check_permissions(arguments)
+                    self.assertEqual(denied.behavior, PermissionBehavior.DENY, (wrapper, role, arguments, denied))
+                owned_task = await make(check_agent_task).check_permissions({'task_id': 'task-0123456789ab'})
+                self.assertEqual(owned_task.behavior, PermissionBehavior.ALLOW, (wrapper, role, owned_task))
+                malformed_task = await make(check_agent_task).check_permissions({'task_id': '../other-session'})
+                self.assertEqual(malformed_task.behavior, PermissionBehavior.DENY)
+                if role == 'mc-herald':
+                    unowned_task = await make(check_agent_task).check_permissions({'task_id': 'task-ffffffffffff'})
+                    self.assertEqual(unowned_task.behavior, PermissionBehavior.DENY)
+                safe_task = {'task': 'Read a relevant skill and draft notes.',
+                             'allowed_tools': ['Skill', 'read_file', 'write_file'], 'background': True}
+                spawn = await make(spawn_subagent).check_permissions(safe_task)
+                self.assertEqual(spawn.behavior, PermissionBehavior.ALLOW if role == 'mc-god'
+                                 else PermissionBehavior.DENY, (wrapper, role, spawn))
+                for arguments in ({'task': 'Investigate'},
+                                  {**safe_task, 'allowed_tools': ['submit_to_agent']},
+                                  {**safe_task, 'allowed_tools': ['qd_world_team__team_recruit']},
+                                  {**safe_task, 'fork': True}, {**safe_task, 'batch': []}):
+                    denied = await make(spawn_subagent).check_permissions(arguments)
+                    self.assertEqual(denied.behavior, PermissionBehavior.DENY, (wrapper, role, arguments, denied))
+                wrong_target = await make(submit_to_agent).check_permissions({
+                    'to_agent': 'qd-survivor', 'text': 'case-' + '1' * 20,
+                    'session_id': 'world-case:case-' + '1' * 20 + ':qd-survivor'})
+                self.assertEqual(wrong_target.behavior, PermissionBehavior.DENY)
                 other = 'mc-god' if role == 'mc-herald' else 'mc-herald'
                 for func, arguments in [(read_file, {'file_path': str(folders[other] / 'notes.txt')}),
                     (write_file, {'file_path': 'agent.json', 'content': '{}'}),

@@ -17,6 +17,10 @@ URL = 'http://npc:8091/party/mcp'
 TOOLS = ('party_status', 'party_send', 'party_message_read')
 MANIFEST_ENV = 'PARTY_ROLES_MANIFEST_FILE'
 DEFAULT_MANIFEST = '/party-roles/roles.json'
+YUI_AGENT_ID = '5swvhK'
+YUI_BODY_UUID = 'e6ef6001-47c6-4f13-823c-1b724520d164'
+SURVIVOR_BODY_UUID = 'd4ac9523-4962-43ed-98c5-19b49e104048'
+YUI_ACTOR = 'game:' + YUI_AGENT_ID
 
 
 def party_members(path=None, registered_maids=None):
@@ -56,6 +60,24 @@ def party_members(path=None, registered_maids=None):
 
 def party_roles():
     return {member['agentId'] for member in party_members()}
+
+
+def is_bound_yui(actor):
+    """The user's one explicit administrator grant, verified against the pair.
+
+    A display name, an arbitrary registered maid, or a reused role with another
+    body cannot inherit it. Read the managed manifests each time; no permission
+    cache survives an identity/registration change. Missing evidence denies.
+    """
+    if actor != YUI_ACTOR:
+        return False
+    try:
+        rows = party_members()
+        expected = {('maid', YUI_AGENT_ID, YUI_BODY_UUID),
+                    ('survivor', 'qd-survivor', SURVIVOR_BODY_UUID)}
+        return {(row['kind'], row['agentId'], row['bodyUuid']) for row in rows} == expected
+    except (OSError, ValueError, TypeError, KeyError, AssertionError, RecursionError):
+        return False
 
 
 def expected_drivers(role, base_drivers):

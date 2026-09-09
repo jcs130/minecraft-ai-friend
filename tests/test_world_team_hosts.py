@@ -256,7 +256,7 @@ class HostMappingTests(unittest.IsolatedAsyncioTestCase):
         # Registration/listing never invokes the fake domain service or model.
         engineering_mcp.register_engineering_tools(bound, N())
         tools = {tool.name: tool.inputSchema for tool in await app.list_tools()}
-        self.assertEqual(set(tools), set(world_team_mcp.COMMON_TOOLS) | set(engineering_mcp.TOOLS))
+        self.assertEqual(set(tools), set(world_team_mcp.COMMON_TOOLS) | {'team_recruit'} | set(engineering_mcp.TOOLS))
         self.assertEqual(set(tools['engineering_commit']['required']),
             {'message', 'expected_source_sha256', 'test_job_id', 'request_id'})
         self.assertEqual(tools['engineering_diff']['properties']['max_chars']['type'], 'integer')

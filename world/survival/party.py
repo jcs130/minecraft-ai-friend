@@ -87,4 +87,6 @@ class SurvivorParty:
         if str(ops) not in sys.path:
             sys.path.insert(0, str(ops))
         from agent_learning import TOOL_NAMES as LEARNING_TOOLS
-        return {'subagent_allowed_tools': recipient_tools('numen_survival', TOOL_NAMES, LEARNING_TOOLS)}
+        from world_team_profiles import tools_for
+        return {'subagent_allowed_tools': recipient_tools('numen_survival', TOOL_NAMES, LEARNING_TOOLS)
+                + ['qd_world_team__' + name for name in tools_for('game:qd-survivor')]}

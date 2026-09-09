@@ -19,6 +19,7 @@ sys.path[:0] = [str(ROOT / 'world/ops'), str(ROOT / 'world/sidecar')]
 os.environ.setdefault('MAID_ROLES_MANIFEST_FILE', str(ROOT / 'server/mcdata/village/maid-agents/public/roles.json'))
 os.environ.setdefault('PARTY_ROLES_MANIFEST_FILE', str(ROOT / 'server/mcdata/village/party/public/roles.json'))
 os.environ.setdefault('TEAM_RUNTIME_HOSTS_FILE', str(ROOT / 'server/team-state/runtime-hosts.json'))
+os.environ.setdefault('TEAM_SPECIALISTS_FILE', str(ROOT / 'server/team-state/specialists.json'))
 from world_team import members
 from world_team_hosts import ENGINEER, SOURCE, TARGET, native_host, require_host
 from world_team_profiles import bindings, persona_files, policy_payload, check_api

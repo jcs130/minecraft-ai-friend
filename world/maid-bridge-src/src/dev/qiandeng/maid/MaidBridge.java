@@ -32,7 +32,10 @@ import java.util.UUID;
 public final class MaidBridge {
     public static final String MOD_ID = "qiandeng_maid_bridge";
     private static final ReceiptJournal JOURNAL = new ReceiptJournal(Path.of("data/qiandeng-maid-bridge/receipts"));
-    public MaidBridge() { NeoForge.EVENT_BUS.addListener(this::register); }
+    public MaidBridge() {
+        CompanionProtection.install();
+        NeoForge.EVENT_BUS.addListener(this::register);
+    }
     private void register(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("qdmaid")
             .requires(s -> s.hasPermission(4) && s.getEntity() == null)
@@ -43,6 +46,8 @@ public final class MaidBridge {
         CompanionChat.register(event.getDispatcher());
         CompanionAdopt.register(event.getDispatcher());
         PartySpeech.register(event.getDispatcher());
+        CompanionProtection.register(event.getDispatcher());
+        YuiRescue.register(event.getDispatcher());
     }
     private static int invoke(CommandSourceStack source, String encoded) {
         BridgeProtocol.Request req = null;

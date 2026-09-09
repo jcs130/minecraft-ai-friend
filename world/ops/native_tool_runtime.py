@@ -19,7 +19,7 @@ CACHE = {}
 INSTALLED = False
 
 
-def role_engine(role, folder):
+def role_engine(role, folder, runtime='game'):
     from qwenpaw.security.tool_guard.engine import ToolGuardEngine
     from qwenpaw.security.tool_guard.guardians.file_guardian import FilePathToolGuardian
     from qwenpaw.security.tool_guard.guardians.rule_guardian import RuleBasedToolGuardian, GuardRule
@@ -28,8 +28,8 @@ def role_engine(role, folder):
     data = path.read_bytes()
     profile = json.loads(data)
     assert profile['id'] == role and profile['workspace_dir'] == str(folder)
-    validate_native(profile, role)
-    key = (role, hashlib.sha256(data).hexdigest())
+    validate_native(profile, role, runtime)
+    key = (runtime, role, hashlib.sha256(data).hexdigest())
     if key in CACHE:
         return CACHE[key]
     engine = ToolGuardEngine(enabled=True)
@@ -87,7 +87,9 @@ def install(runtime):
         async def scoped(self, input_data=None, context=None, *args, **kwargs):
             # MCP/driver capabilities already have their own fixed policies and
             # credentials. Do not intercept their world or learning operations.
-            if self.name not in NATIVE_TOOLS:
+            from team_native_policy import canonical_tool, validate as validate_team
+            team_tool = canonical_tool(self.name)
+            if self.name not in NATIVE_TOOLS and team_tool is None:
                 return await original(self, input_data, context, *args, **kwargs)
             request = getattr(self, '_qp_request_context', None) or {}
             role = getattr(self, '_qp_agent_id', None) or request.get('agent_id')
@@ -100,7 +102,22 @@ def install(runtime):
                 governor = getattr(self, '_qp_governor', None)
                 if governor is not None:
                     assert Path(governor.workspace_dir).resolve() == folder.resolve()
-                engine = await asyncio.to_thread(role_engine, role, folder)
+                engine = await asyncio.to_thread(role_engine, role, folder, runtime)
+                if team_tool:
+                    from world_team import TeamStore
+                    from world_team_hosts import logical_actor
+                    actor = logical_actor(runtime, role)
+                    def case_check(source, target, case_id):
+                        value = TeamStore(actor).case(case_id)
+                        return value.get('ok') is True and (actor in (value['case']['author'], value['case']['owner'])
+                            or role in ('mc-god', 'qd-engineer', 'qd-guild-planner'))
+                    def task_check(source, task_id):
+                        # Task API exposes metadata only after checking the caller
+                        # owns the persisted handoff. No cross-character sessions.
+                        from team_help import owns_task
+                        return owns_task(actor, task_id)
+                    validate_team(role, input_data or {}, self.name, runtime=runtime,
+                        registered_roles=roles(runtime), case_check=case_check, task_check=task_check)
                 allowed = await asyncio.to_thread(check, engine, self.name, input_data or {})
                 assert allowed
             except Exception:

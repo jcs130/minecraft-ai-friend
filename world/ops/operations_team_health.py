@@ -7,7 +7,7 @@ from pathlib import Path
 import urllib.request
 from operations_team_mcp import ROLES, TOOLS, role_tools, operation_arguments
 from role_learning_profiles import validate_learning_workspace, validate_jobs, validate_guard
-from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS
+from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS, enabled_native_tools
 from llm_runtime_policy import validate_running
 import world_team_profiles as world_team
 
@@ -69,7 +69,7 @@ def check_hosted_engineer(folder, get=None):
     if get is not None:
         check_team_configuration(folder, profile, 'mc-god', get, driver_cards(folder), native_role=role, runtime=runtime)
         assert {r['name'] for r in get('/mcp/tools/qiandeng_operations') if r.get('enabled')} == set(role_tools('mc-god'))
-        assert {r['name'] for r in get('/tools') if r.get('enabled')} == set(NATIVE_TOOLS)
+        assert {r['name'] for r in get('/tools') if r.get('enabled')} == enabled_native_tools(role, runtime)
         assert set(role_skills(role, runtime)) | set(NATIVE_SKILLS) <= {r['name'] for r in get('/skills') if r.get('enabled')}
         validate_jobs({'jobs': [row.get('spec', row) for row in get('/cron/jobs')]}, role, runtime)
     return profile
@@ -114,7 +114,7 @@ def main():
         assert profile['heartbeat']['enabled'] is False
         budget(profile['running'])
         assert profile['fallback_policy']['enabled'] is False and not profile['fallback_models']
-        validate_native(profile, role)
+        validate_native(profile, role, runtime='operations')
         assert not any(a.get('enabled') for a in profile['acp']['agents'].values())
         validate_learning_workspace(folder, role, 'operations')
         mcp=profile['mcp']['clients']

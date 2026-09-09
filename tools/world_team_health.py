@@ -292,6 +292,7 @@ def collect(root=ROOT, request=api, probe=process_probe):
     os.environ.setdefault('MAID_ROLES_MANIFEST_FILE', str(root / 'server/mcdata/village/maid-agents/public/roles.json'))
     os.environ.setdefault('PARTY_ROLES_MANIFEST_FILE', str(root / 'server/mcdata/village/party/public/roles.json'))
     os.environ.setdefault('TEAM_RUNTIME_HOSTS_FILE', str(root / 'server/team-state/runtime-hosts.json'))
+    os.environ.setdefault('TEAM_SPECIALISTS_FILE', str(root / 'server/team-state/specialists.json'))
     inventory = members()
     hosts = native_inventory(inventory)
     report = {'schema': 1, 'project': 'qiandengji', 'checkedAt': datetime.now(timezone.utc).isoformat(),

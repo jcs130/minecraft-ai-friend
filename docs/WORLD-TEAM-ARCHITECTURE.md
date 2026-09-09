@@ -77,6 +77,18 @@ NPC 原有 worker 消费批准请求，依旧由原公会锁、货单、击杀/�
 
 [world_admin_tools.py](../world/ops/world_admin_tools.py) 只接既有授权的类型化管理请求与回执。女神可查询现场诊断和允许的规则、时间、天气操作；`keepInventory` 保持 true。它不是任意服务器命令接口。请求未知后只查原回执，不换编号再执行。
 
+2026-09-09 新授权仅扩展给当前已核实的结衣：角色 `5swvhK`、原身体 `e6ef6001-47c6-4f13-823c-1b724520d164` 与原桐人组成的注册队伍。显示名或通用女仆模板不授予权限。女神与结衣各拥有七项类型化管理工具，新增 `world_admin_rescue_inspect` 和 `world_admin_rescue`；结衣没有生产 shell 或任意 RCON。结衣、女神可用 `team_report(assign_to="operations:mc-god")` 把新技能与代码问题直接交天神，不能借此改派或关闭别人的已有工单。
+
+救援先取得同一请求者的新鲜原生观测，再由原 NPC worker 串行执行；原生身份、owner、位置和安全落点复验以及实际前后回执才证明移动完成。queued 不是成功，unknown 只查询同一原生请求，不能再发一次移动。救援结果自动生成原角色署名的工程反馈；同请求 unknown 后取得 completed 证明只更新原工单证据，不再救援也不自动关单。辅助救援不算桐人自主脱困或成长。
+
+伙伴输入仍走原游戏听见通道和原生活 session。只有精确已绑定结衣、接收身份一致且本次白名单含救援观测、执行与回执三工具时，`QwenTasks` 新任务的原生超时从180秒增为600秒；其它女仆、直接普通对话和其它用途保持180秒。超时值在首次提交前随请求落盘，已存在或未知请求不重投。`world_admin_receipt(wait_seconds=50)` 只等原请求；已装 Qwen 2.2 的 stdio MCP 默认读取超时300秒足够，无须改全局超时。Yui 的兼容字段 `max_iters` 从4改12，原本关闭的 iteration gate 保持关闭，模型、并发1及当前无限额策略不变。
+
+本轮原生配置同步已完成：14个实际角色持有的共享技能逐一读回、保存并原生扫描，只有结衣安装 `qd-yui-rescue` 与三篇参考；女神/结衣的 `qd_world_team` 分别实际启用16/13项工具。其它模型、配置、MCP和三份人格文件保持原值；人格修订及 Minecraft 救援部署由后续维护步骤独立记录。同步无模型调用、无游戏动作、无服务重启，备份与原生回执在 `runtime/yui-admin-native-sync/20260908T192327024501Z/`，此前女神两份共享技能变更备份在同目录前一批 `20260908T192223280489Z/`。11项专属授权/回执/600秒/去重测试、16项原任务回归、8项MCP重载回归通过；配置就绪不代表已完成一次真实救援。
+
+维护还发现结衣旧 `task-d0d283af1f8b` 的原生进程缓存已失效（404），旧请求仍 `poll_unavailable` 并占着串行位置。无法从后来会话内容证明该次任务成功，因此保留原请求、用量、会话和 active 指针，只在停止 NPC、确认精确角色原生 active=0 后写独立 `operator-reconciliations/<stateKey>.json`，明确 `released_without_result`。新代码可接收后续独立输入；同旧 key 仍返回旧未知，不重投、不伪造回答，也不由普通超时或404自动解锁。3项新增恢复回归覆盖身份/活跃证据拒绝、原请求不变及指针遗失后恢复，共14项结衣专项检查通过；精确维护证据在 `runtime/yui-admin-native-sync/expired-task-maintenance/`。
+
+NPC恢复后，原生部分HTTP driver仍为已保存但inactive，按原配置分别恢复结衣的 maid_native/qd_party、桐人的qd_party及另一既有女仆的maid_native连接，权限、模型与人格保持原值。游戏9角色/81项技能绑定与运营5角色/35项绑定的完整严格健康检查随后通过；两位伙伴分别实际有maid_native7、Numen44和qd_party3项工具。重连证据在同维护目录的 `http-reconnect-20260908T193859/` 与 `http-reconnect-20260908T194047/`。连接和配置健康仍不等于已完成本次救援，真实动作须读取原请求回执。
+
 `/team/content/` 包含 context、proposals、publish 请求、receipts、published 正文和按日索引；数据不是模型可以任意改写的个人笔记。详细 schema 与调用过程通过 [qd-world-team 技能](../world/ops/skills/qd-world-team/SKILL.md) 按需披露，正文保持短索引。两个技能绑定清单向游戏六个基础身份、运营六个身份追加该技能，独立人物通过原模板同步继承；原生官方技能及其余能力配置分别保留。
 
 本轮内容隔离验证覆盖17项新合同/幂等/恢复/显示测试、15项原公会基本任务和23项生存公会检查。最终上线还应核对原生工具可见性、受管任务真实执行、实际看板和库存/结算回执；这些测试不证明 Boss、宝箱或任意世界建设已经可用。

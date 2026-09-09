@@ -88,6 +88,20 @@ def final_text(value):
     return answer if answer and len(answer) <= 16000 else None
 
 
+def native_task_timeout(role, maid_uuid, owner_uuid, allowed_tools, expected_binding):
+    """Only the authenticated pair input with rescue tools needs longer waits."""
+    if expected_binding is None or allowed_tools is None:
+        return 180
+    from party_role_capabilities import is_bound_yui, YUI_AGENT_ID, YUI_BODY_UUID, SURVIVOR_BODY_UUID
+    rescue_tools = {'qd_world_team__world_admin_rescue_inspect', 'qd_world_team__world_admin_rescue',
+                    'qd_world_team__world_admin_receipt'}
+    if (role == YUI_AGENT_ID and maid_uuid == YUI_BODY_UUID and owner_uuid == SURVIVOR_BODY_UUID
+            and expected_binding is not None and allowed_tools is not None
+            and rescue_tools <= set(allowed_tools) and is_bound_yui('game:' + role)):
+        return 600
+    return 180
+
+
 class QwenTasks:
     def __init__(self, root, routes=None, token=None, transport=None, clock=time.time, maid_registry=None):
         self.root, self.clock = Path(root), clock
@@ -133,6 +147,38 @@ class QwenTasks:
         write_json(path, row)
         return row | {'retryAutomatically': False}
 
+    @staticmethod
+    def request_identity(row):
+        return {key: row.get(key) for key in ('purpose', 'agentId', 'key', 'requestId', 'taskId', 'promptSha256',
+            'startedAt', 'maidUuid', 'ownerUuid', 'sessionId', 'userId', 'channel', 'allowedTools')}
+
+    def _operator_released(self, state_key, row):
+        """An explicit maintenance proof releases a lane, never invents a result.
+
+        Original request, usage, task/session and repeated-key behavior remain
+        unchanged. No automatic timeout, 404 handler or model can issue a proof.
+        """
+        path = self.root / 'operator-reconciliations' / (state_key + '.json')
+        if not path.exists():
+            return False
+        from party_role_capabilities import is_bound_yui, YUI_AGENT_ID, YUI_BODY_UUID, SURVIVOR_BODY_UUID
+        value = read_json(path)
+        if (value.get('schema') != 1 or value.get('status') != 'released_without_result'
+                or value.get('operator') != 'project-maintenance' or value.get('stateKey') != state_key
+                or value.get('requestIdentity') != self.request_identity(row)
+                or value.get('resultVerified') is not False or value.get('retryOriginalRequest') is not False
+                or value.get('nativeTaskHttpStatus') != 404 or value.get('nativeRunningTaskCount') != 0
+                or value.get('npcStopped') is not True
+                or not isinstance(value.get('sourceRequestSha256'), str)
+                or not re.fullmatch('[a-f0-9]{64}', value['sourceRequestSha256'])
+                or type(value.get('observedAt')) is not int or value['observedAt'] < row['startedAt'] * 1000
+                or row.get('purpose') != 'maid_dialogue' or row.get('agentId') != YUI_AGENT_ID
+                or row.get('maidUuid') != YUI_BODY_UUID or row.get('ownerUuid') != SURVIVOR_BODY_UUID
+                or not re.fullmatch(r'task-[0-9a-f]{12}', row.get('taskId', ''))
+                or not is_bound_yui('game:' + row['agentId'])):
+            raise ValueError('qwen_operator_reconciliation_invalid')
+        return True
+
     def _maid_binding(self, purpose, maid_uuid, owner_uuid):
         if maid_uuid is None and owner_uuid is None:
             return None
@@ -157,7 +203,8 @@ class QwenTasks:
                 for path in (self.root / 'requests').glob('*.json'):
                     saved = read_json(path)
                     if (saved.get('agentId') == role
-                            and saved.get('status') not in ('completed', 'failed', 'not_submitted')):
+                            and saved.get('status') not in ('completed', 'failed', 'not_submitted')
+                            and not self._operator_released(path.stem, saved)):
                         unresolved.append(path.stem)
                 if len(unresolved) > 1:
                     raise ValueError('qwen_legacy_role_overlap_requires_review')
@@ -172,6 +219,8 @@ class QwenTasks:
             if (prior.get('agentId') != role or prior.get('purpose') != purpose
                     or prior.get('maidUuid') != maid_uuid or prior.get('ownerUuid') != owner_uuid):
                 raise ValueError('qwen_role_gate_invalid')
+            if self._operator_released(key, prior):
+                return
             if prior.get('status') not in ('submitted', 'running', 'poll_unavailable'):
                 return
         # poll takes its own short ledger lock; never wait on HTTP inside it.
@@ -214,7 +263,8 @@ class QwenTasks:
                 prior = read_json(self.root / 'requests' / (active['stateKey'] + '.json'))
                 if prior.get('agentId') != role:
                     raise ValueError('qwen_role_gate_invalid')
-                if prior.get('status') not in ('completed', 'failed', 'not_submitted'):
+                if (prior.get('status') not in ('completed', 'failed', 'not_submitted')
+                        and not self._operator_released(active['stateKey'], prior)):
                     return {'status': 'busy', 'purpose': purpose, 'retryAutomatically': False}
             budget_path = self.root / 'budget.json'
             rows = read_json(budget_path, max_bytes=8 * 1024 * 1024) if budget_path.exists() else []
@@ -230,7 +280,8 @@ class QwenTasks:
                 return {'status': 'budget_blocked', 'purpose': purpose, 'retryAutomatically': False}
             row = {'schema': 1, 'purpose': purpose, 'agentId': role, 'key': key,
                    'requestId': 'npc-' + uuid.uuid4().hex, 'startedAt': now, 'status': 'reserved', 'taskId': None,
-                   'promptSha256': digest}
+                   'promptSha256': digest,
+                   'timeoutSeconds': native_task_timeout(role, maid_uuid, owner_uuid, allowed_tools, expected_binding)}
             if binding:
                 row.update(maidUuid=maid_uuid, ownerUuid=owner_uuid, sessionId=binding['sessionId'],
                            userId='maid-' + maid_uuid, channel='console')
@@ -242,7 +293,7 @@ class QwenTasks:
             self._save(path, row)
             write_json(active_path, {'agentId': role, 'stateKey': path.stem})
         payload = {'channel': 'console', 'session_id': row.get('sessionId', row['requestId']),
-            'user_id': row.get('userId', 'npc-service'), 'timeout': 180,
+            'user_id': row.get('userId', 'npc-service'), 'timeout': row['timeoutSeconds'],
             'input': [{'role': 'user', 'content': [{'type': 'text', 'text': text}]}],
             'request_context': {'root_agent_id': 'npc-service'}}
         if allowed_tools is not None:
@@ -273,6 +324,9 @@ class QwenTasks:
                 raise ValueError('qwen_task_not_owned')
             if row.get('status') not in ('submitted', 'running', 'poll_unavailable'):
                 return row | {'retryAutomatically': False}
+            if self._operator_released(path.stem, row):
+                return row | {'retryAutomatically': False, 'operatorReconciliation': 'released_without_result',
+                              'resultVerified': False}
             if not re.fullmatch(r'task-[0-9a-f]{12}', row.get('taskId', '')):
                 raise ValueError('qwen_task_not_owned')
             if self.clock() - row.get('lastPollAt', 0) < 10:

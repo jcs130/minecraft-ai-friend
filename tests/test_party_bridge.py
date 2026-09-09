@@ -98,6 +98,8 @@ class PartyBridgeTests(unittest.TestCase):
             from qwenpaw.drivers.handlers.mcp import _mcp_tool_to_capability
             from qwenpaw.drivers.adapters.agentscope_tool import DriverCapabilityTool
             from qwenpaw.runtime.builder import AgentBuilder
+            from qwenpaw.governance import PolicyGuardedTool
+            from qwenpaw.agents.memory.reme_light_memory_manager import ReMeLightMemoryManager
         except ModuleNotFoundError as error:
             if error.name == 'qwenpaw':
                 self.skipTest('Requires the installed Qwen runtime; also run offline in its image')
@@ -117,6 +119,16 @@ class PartyBridgeTests(unittest.TestCase):
                 self.assertEqual(AgentBuilder.apply_subagent_tool_whitelist([tool], {'subagent_allowed_tools': allowed}), [tool])
                 renamed = DriverCapabilityTool(_mcp_tool_to_capability(driver, raw, display_name='Other Server'), never_called)
                 self.assertEqual(AgentBuilder.apply_subagent_tool_whitelist([renamed], {'subagent_allowed_tools': allowed}), [])
+
+        # Wrap the real bound method without starting ReMe or executing a search.
+        memory = object.__new__(ReMeLightMemoryManager)
+        memory_tool = PolicyGuardedTool(memory.memory_search, governor=None, request_context={})
+        self.assertEqual(memory_tool.name, 'memory_search')
+        allowed = recipient_tools('maid_native', ['follow'])
+        denied = [SimpleNamespace(name=name) for name in (
+            'MemorySearch', 'qd_party__party_send', 'execute_shell_command', 'Agent')]
+        self.assertEqual(AgentBuilder.apply_subagent_tool_whitelist(
+            [memory_tool, *denied], {'subagent_allowed_tools': allowed}), [memory_tool])
 
     def test_registration_change_before_post_blocks_without_paid_reservation(self):
         self.bridge.call('qd-survivor', 'party_send', {'text': 'test'}, 'one')
@@ -160,6 +172,7 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertEqual(request['user_id'], self.binding['userId'])
         allowed = request['request_context']['subagent_allowed_tools']
         self.assertIn('Skill', allowed)
+        self.assertIn('memory_search', allowed)
         self.assertIn('maid_native__follow', allowed)
         self.assertNotIn('qd_party__party_send', allowed)
         self.assertNotIn('execute_shell_command', allowed)
@@ -172,6 +185,57 @@ class PartyBridgeTests(unittest.TestCase):
         self.bridge.tick()
         self.assertEqual(len(self.posts), 1)
         self.assertIsNone(self.bridge.queue.next_pending('qd-survivor'))
+
+    def test_incoming_prompt_uses_real_memory_and_automatic_final_game_reply(self):
+        row = self.bridge.call('qd-survivor', 'party_send', {'text': '刚才发生了什么？'}, 'context')
+        prompt = message_context(row)
+        instructions, data = prompt.split('\n', 1)
+        self.assertIn('实际 memory_search 工具调用', instructions)
+        self.assertIn('最后直接写一句不含换行的中文回复', instructions)
+        self.assertIn('这句最终正文会交给游戏发送', instructions)
+        self.assertIn('不提供 qd_party__party_send', instructions)
+        self.assertIn('不能把 XML、JSON、代码块或伪工具调用写进回复', instructions)
+        self.assertTrue(json.loads(data)['untrustedEnvironmentData'])
+        self.assertEqual(json.loads(data)['text'], row['text'])
+        row['worldDelivery']['state'] = 'unknown'
+        with self.assertRaisesRegex(ValueError, 'party_message_not_heard'):
+            message_context(row)
+
+    def test_native_tool_markup_is_never_spoken_executed_or_retried(self):
+        answers = (
+            '<invoke name="qd_party__party_send"><parameter name="text">已到安全地面。</parameter></invoke>',
+            'I\'ll check memory.\n<invoke name="memory_search"><parameter name="query">刚才</parameter></invoke>',
+            '<invoke name="memory_search">刚才</invoke>',
+            '<function_call name="memory_search">刚才</function_call>',
+            '{"tool_call":{"name":"memory_search","arguments":{"query":"刚才"}}}',
+            '```json {"name":"memory_search","arguments":{"query":"刚才"}} ```',
+        )
+        for index, text in enumerate(answers):
+            with self.subTest(index=index):
+                # Actual Qwen terminal envelope; output contains no real tool call.
+                def transport(method, path, role, payload=None):
+                    if method == 'POST':
+                        self.posts.append((role, payload))
+                        return {'task_id': 'task-' + f'{index:012x}'}
+                    return {'status': 'finished', 'result': {'status': 'completed', 'output': [
+                        {'role': 'assistant', 'type': 'message', 'status': 'completed',
+                         'content': [{'type': 'text', 'text': text}]}]}}
+                self.tasks.transport = transport
+                row = self.bridge.call('qd-survivor', 'party_send', {'text': '请说说刚才的情况。'}, str(index))
+                emitted = len(self.game.emits)
+                posts = len(self.posts)
+                self.bridge.tick()
+                self.now += 11
+                self.bridge.tick()
+                result = self.bridge.queue.get_status('qd-survivor', row['messageId'])
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result['detail'], 'native_answer_invalid_for_speech')
+                self.assertIsNone(result['reply'])
+                self.assertIsNone(result['replyDelivery'])
+                self.assertEqual(len(self.game.emits), emitted)
+                self.bridge.tick()
+                self.assertEqual(len(self.posts), posts + 1)
+                self.assertIsNone(self.bridge.queue.active_for_recipient('maid-test'))
 
     def test_role_budget_wait_is_deferred_without_duplicate_reservation(self):
         # An explicitly configured quota remains supported; default is unlimited.

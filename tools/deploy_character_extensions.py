@@ -22,14 +22,17 @@ def write(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf8')
 
 
-def deploy(speech_record, apply=False):
-    speech_record = speech_record.resolve()
-    if not speech_record.is_relative_to(ROOT / 'runtime'): raise ValueError('speech_record_outside_runtime')
-    speech = read(speech_record)
+def deploy(speech_record=None, apply=False, maid_only=False):
+    speech = None
+    if not maid_only:
+        speech_record = speech_record.resolve()
+        if not speech_record.is_relative_to(ROOT / 'runtime'): raise ValueError('speech_record_outside_runtime')
+        speech = read(speech_record)
     maid_record = ROOT / 'world/maid-bridge-src/build/build-record.json'
     maid = read(maid_record)
-    artifacts = [(speech, ROOT / 'vendor/god-voice-cache', 'godvoice', 'manifests/recording-extension.lock.json'),
-                 (maid, ROOT / 'vendor/maid-bridge-cache', 'qiandeng_maid_bridge', 'manifests/maid-bridge.lock.json')]
+    artifacts = [(maid, ROOT / 'vendor/maid-bridge-cache', 'qiandeng_maid_bridge', 'manifests/maid-bridge.lock.json')]
+    if speech:
+        artifacts.insert(0, (speech, ROOT / 'vendor/god-voice-cache', 'godvoice', 'manifests/recording-extension.lock.json'))
     for record, cache, mod_id, lock in artifacts:
         jar = Path(record['jar']).resolve()
         if not jar.is_relative_to(ROOT) or jar.is_symlink() or sha(jar) != record['sha256'] or record['ok'] is not True:
@@ -39,9 +42,9 @@ def deploy(speech_record, apply=False):
             path = (ROOT / row['path']).resolve()
             if not path.is_relative_to(ROOT) or path.is_symlink() or sha(path) != row['sha256']:
                 raise ValueError('source_changed_after_build')
-    if speech.get('speech_protocol') != 2 or speech.get('playback_replaced_explicitly') is not True:
+    if speech and (speech.get('speech_protocol') != 2 or speech.get('playback_replaced_explicitly') is not True):
         raise ValueError('speech_protocol_not_verified')
-    if not all(row.get('ok') for row in speech['tests'].values()) or maid['tests']['ok'] is not True:
+    if (speech and not all(row.get('ok') for row in speech['tests'].values())) or maid['tests']['ok'] is not True:
         raise ValueError('artifact_tests_failed')
     config = read(ROOT / 'server/mc/data/godvoice/config.json')
     if config != {'listen': ['MengMeng']}: raise ValueError('recorder_allowlist_changed')
@@ -92,10 +95,16 @@ def deploy(speech_record, apply=False):
     if 'manifests/maid-bridge.lock.json' not in content['shared_extension_locks']:
         content['shared_extension_locks'].append('manifests/maid-bridge.lock.json')
     preserve(content_path); write(content_path, content)
-    recording_path = ROOT / 'reports/recording-build.json'; preserve(recording_path)
-    write(recording_path, speech | {'jar': str(ROOT / 'vendor/god-voice-cache/god-voice-0.1.0.jar'),
-        'deployed_path': 'server/mc/mods/god-voice-0.1.0.jar', 'recording_allowlist_expanded': False,
-        'scope': 'Recorder bytes preserved; speech queue explicitly replaced and tested. Physical capture/playback separate.'})
+    if speech:
+        recording_path = ROOT / 'reports/recording-build.json'; preserve(recording_path)
+        write(recording_path, speech | {'jar': str(ROOT / 'vendor/god-voice-cache/god-voice-0.1.0.jar'),
+            'deployed_path': 'server/mc/mods/god-voice-0.1.0.jar', 'recording_allowlist_expanded': False,
+            'scope': 'Recorder bytes preserved; speech queue explicitly replaced and tested. Physical capture/playback separate.'})
+    protection = ROOT / 'config/companion-protection.json'
+    if protection.exists():
+        target = ROOT / 'server/mc/config/qiandeng-companion-protection.json'
+        preserve(target); shutil.copy2(protection, target)
+        if sha(target) != sha(protection): raise ValueError('protection_config_copy_mismatch')
     result.update(backup=str(backup), touched=touched, finishedAt=datetime.now(timezone.utc).isoformat())
     write(backup / 'deployment.json', result)
     write(ROOT / 'reports/character-extensions-deployment.json', result)
@@ -104,11 +113,14 @@ def deploy(speech_record, apply=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--speech-record', type=Path, required=True)
+    parser.add_argument('--speech-record', type=Path)
+    parser.add_argument('--maid-only', action='store_true', help='Deploy only the verified companion bridge and protection configuration')
     parser.add_argument('--apply', choices=['qiandengji'])
     args = parser.parse_args()
+    if not args.maid_only and args.speech_record is None:
+        parser.error('--speech-record is required unless --maid-only is selected')
     try:
-        print(json.dumps(deploy(args.speech_record, bool(args.apply)), ensure_ascii=False))
+        print(json.dumps(deploy(args.speech_record, bool(args.apply), maid_only=args.maid_only), ensure_ascii=False))
     except Exception as exc:
         print(json.dumps({'ok': False, 'errorType': type(exc).__name__, 'error': str(exc)[:160]}))
         sys.exit(1)

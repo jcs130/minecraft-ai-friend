@@ -1,6 +1,8 @@
 # 女神的世界管理与回执
 
-本页适用于 `game:mc-god`。先用 `team_context` 找出值得处理的一项真实问题；需要现场数据时用 `world_admin_diagnostics(request_id)`，随后查询 `world_admin_receipt(request_id)`。排队返回不表示已经看到玩家数、世界时间或规则。
+本页适用于 `game:mc-god` 和已核验原身体与队伍绑定的结衣。先用 `team_context` 找出值得处理的一项真实问题；需要现场数据时用 `world_admin_diagnostics(request_id)`，随后查询 `world_admin_receipt(request_id)`。排队返回不表示已经看到玩家数、世界时间或规则。
+
+桐人或结衣受困时，可用 `world_admin_rescue_inspect(request_id)` 获取原队伍的现场与安全落点，再读取原请求回执。仅在观察已完成且仍新鲜时，调用 `world_admin_rescue(request_id, observation_request_id, target, reason)`；target 只支持 kirito/yui，不接受任意玩家或坐标。原生在同维度已加载地形重验身体、所有权、碰撞和落点后执行一次救援；身体忙时等待，未知结果只查原回执。completed 且 executionConfirmed=true 才能说救援成功。每次救援终态自动留下交给天神的工程反馈；一次救援不代表根因已经修复。
 
 当前具体管理工具是 `world_admin_rule(request_id,rule,value)`、`world_admin_time(request_id,time)`、`world_admin_weather(request_id,weather,duration_seconds)`。只能使用工具当前允许的枚举：time 为 day/noon/night/midnight，weather 为 clear/rain/thunder，时长1–600秒。规则选项由实际工具实现限制，`keepInventory` 必须保持 true；不用任意命令文本替代枚举参数。这些操作改变真实服务器世界，应服务于已有任务与事实，而不是为了巡查结果好看随意改变时间天气。
 

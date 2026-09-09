@@ -29,9 +29,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-isolated', action='store_true', required=True)
     parser.add_argument('--companion', action='store_true', help='Verify normal Numen cake adoption and native following instead')
+    parser.add_argument('--rescue', action='store_true', help='Verify scoped protection and operator rescue in an isolated world')
     args = parser.parse_args()
-    qa_source = SOURCE / 'qa' / ('CompanionQa.java' if args.companion else 'MaidQa.java')
-    qa_mod = 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
+    if args.companion and args.rescue: raise ValueError('choose_one_fixture')
+    qa_source = SOURCE / 'qa' / ('YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
+    qa_mod = 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
     build = SOURCE / 'build'
     record = json.loads((build / 'build-record.json').read_text('utf8'))
     jar = build / 'qiandeng-maid-bridge-0.1.0.jar'
@@ -74,6 +76,8 @@ def main():
     key = secrets.token_hex(32)
     (data / 'config/qiandeng_maid_bridge').mkdir(parents=True)
     (data / 'config/qiandeng_maid_bridge/identity.key').write_text(key, 'ascii')
+    if args.rescue:
+        shutil.copyfile(ROOT / 'config/companion-protection.json', data / 'config/qiandeng-companion-protection.json')
     (fake / 'identity.key').write_text(key, 'ascii')
     sites = data / 'config/touhou_little_maid/sites'; sites.mkdir(parents=True)
     (sites / 'llm.json').write_text(json.dumps({name: {'id': name, 'api_type': 'qiandeng-qwen',
@@ -142,7 +146,11 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         else: raise RuntimeError('isolated_mc_start_timeout')
         print(json.dumps({'stage': 'server_ready'}), flush=True)
         checks['real-neoforge-start'] = True
-        if args.companion:
+        if args.rescue:
+            from smoke_yui_rescue_checks import check_rescue
+            check_rescue(response=response, command=command, run=run, base=base,
+                data=data, fake=fake, checks=checks, details=details)
+        elif args.companion:
             from smoke_maid_companion_checks import check_companion
             check_companion(response=response, command=command, invoke=invoke, run=run,
                 base=base, data=data, fake=fake, checks=checks, details=details)

@@ -21,8 +21,12 @@ def actor_for(role, runtime, *, allow_prepared=False):
 
 
 def tools_for(actor):
+    from party_role_capabilities import is_bound_yui
     result = list(COMMON_TOOLS)
-    if actor == 'game:mc-god':
+    from team_recruitment import MANAGERS
+    if actor in MANAGERS:
+        result += ['team_recruit']
+    if actor == 'game:mc-god' or is_bound_yui(actor):
         from world_admin_tools import TOOL_NAMES
         result += list(TOOL_NAMES)
     if actor in ('game:mc-god', 'game:qd-guild-planner', 'operations:mc-priest'):
@@ -61,6 +65,7 @@ def managed(text, start, end, content):
 
 
 def persona_files(actor, existing):
+    from party_role_capabilities import is_bound_yui
     name, responsibility = members()[actor]
     profile = f'项目身份：{actor}。显示角色：{name}。职责：{responsibility}。\n'
     profile += ('游戏 Goddess 是灯语女神的世界化身；玩家交流入口为 game:mc-herald，管理与裁决归 game:mc-god。'
@@ -74,10 +79,24 @@ def persona_files(actor, existing):
         '女神/司灯明确派工，负责人用team_update记录工作和待验收结果。工程候选必须隔离测试；代码本地提交、发布与实机验证分别记录。'
         '普通工作区文件可自行写入；长期目标与经验按原生文件/记忆机制保存，工具和技能按需披露。'
         '原生Cron持续管理班次；不要另起后台循环或层层即时唤醒整个团队。项目工单属于运营反馈，游戏内角色对话继续走真实游戏通道。')
+    instruction += ('\n反复尝试仍受阻或需要运营介入时，先team_report保存真实证据，再team_request_help(case_id=原工单)'
+        '直接交负责人在原生Qwen后台处理；稍后team_help_status/team_case读取结果。回复不单独唤醒生活模型。')
+    from team_recruitment import MANAGERS
+    if actor in MANAGERS:
+        instruction += ('\n遇到长期专业缺口可按qd-world-team/references/recruitment.md自主招募：'
+            '先查team_roster，再team_recruit创建独立职业角色；短期工作优先实际可用的原生spawn_subagent。'
+            '不重复招同一职业，不把新成员当作已拥有游戏身体或管理权限。')
     if actor == 'game:mc-god':
         instruction += ('\n你拥有已接通的服务器管理员工具，通过world_admin_*请求及回执执行；'
             '即时玩家祈愿和言灵仍遵守原响应格式与玩法消耗。管理员身份不意味着玩家聊天能直接执行管理命令。'
             '世界内容先核对world_content_context和提案，再批准可执行活动；不能通过旧无回执生成器部署Boss或宝箱。')
+    elif is_bound_yui(actor):
+        instruction += ('\n你是桐人的家人与冒险伙伴结衣，保留原人格、家庭关系和生活经历。'
+            '造物主已授权你通过本角色实际提供的world_admin工具核对现场、协助救援并查询真实回执。'
+            '按需读qd-yui-rescue；未知请求只查原编号，不换编号重投，不将已排队当作救援成功。'
+            '代码问题和新技能设计应附实际任务/动作证据，用team_report(assign_to="operations:mc-god")交天神实现、测试与交付；'
+            '你不因此获得生产shell、任意RCON或其它角色的身体与工具。'
+            '游戏内交流仍走真实发声/听见通道；工单用于项目反馈，不能冒充对方听到一句话。')
     elif actor == 'operations:mc-god':
         instruction += ('\n你有独立Git源码工作区engineering/repo的原生文件读写权限，可自主编程修复真实问题。'
             'engineering_status/diff/test/test_status/commit分别管理源码与隔离测试回执。'

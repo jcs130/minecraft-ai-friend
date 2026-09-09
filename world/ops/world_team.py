@@ -7,7 +7,9 @@ from pathlib import Path
 import re
 import sqlite3
 import time
-from world_team_hosts import native_inventory
+import math
+import uuid
+from world_team_hosts import ENGINEER, native_inventory
 
 MEMBERS = {
     'game:mc-god': ('灯语女神 · 世界管理', '世界管理员：巡查、响应、分派问题、验收运营结果'),
@@ -28,6 +30,9 @@ COORDINATORS = frozenset(('game:mc-god', 'operations:default'))
 
 def members():
     result = dict(MEMBERS)
+    from team_recruitment import specialists
+    for role, entry in specialists(include_pending=True).items():
+        result['game:' + role] = (entry['name'], entry['profession'])
     manifest = Path(os.environ.get('MAID_ROLES_MANIFEST_FILE', '/maid-roles/roles.json'))
     if manifest.exists():
         if any(p.is_symlink() for p in (manifest, *manifest.parents)) or manifest.stat().st_size > 16384:
@@ -49,6 +54,10 @@ def members():
                     result[actor] = (text(row['displayName'], 160, 'character_name'), result[actor][1])
     elif os.environ.get('MAID_ROLES_MANIFEST_FILE'):
         raise ValueError('missing_team_character_manifest')
+    from party_role_capabilities import YUI_ACTOR, is_bound_yui
+    if YUI_ACTOR in result and is_bound_yui(YUI_ACTOR):
+        result[YUI_ACTOR] = (result[YUI_ACTOR][0],
+            '保持姓名、人格、家庭关系和生活会话；依据真实观察协助救援，反馈世界问题，将代码与新技能需求交天神实现')
     return result
 STATUSES = frozenset(('open', 'working', 'blocked', 'needs_review', 'resolved', 'duplicate'))
 KEY = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{3,119}')
@@ -66,6 +75,84 @@ def text(value, limit, field):
     if not isinstance(value, str) or not 1 <= len(value.strip()) <= limit:
         raise ValueError('invalid_' + field)
     return value.strip()
+
+
+def _admin_positions(snapshot):
+    """Project only bounded location/identity facts, never inventory or chat."""
+    def body(value):
+        if not isinstance(value, dict): return {}
+        result = {}
+        for key in ('bodyUuid', 'uuid', 'entityUuid', 'ownerUuid'):
+            raw = value.get(key)
+            if isinstance(raw, str):
+                try:
+                    if str(uuid.UUID(raw)) == raw: result[key] = raw
+                except ValueError: pass
+        dimension = value.get('dimension')
+        if isinstance(dimension, str) and re.fullmatch(r'[a-z0-9_.-]+:[a-z0-9_./-]{1,100}', dimension):
+            result['dimension'] = dimension
+        for key in ('position', 'pos'):
+            raw = value.get(key)
+            numbers = [raw.get(axis) for axis in ('x', 'y', 'z')] if isinstance(raw, dict) else raw
+            if isinstance(numbers, (list, tuple)) and len(numbers) == 3 and all(
+                    type(n) in (int, float) and math.isfinite(n) and abs(n) <= 30_000_000 for n in numbers):
+                result['position'] = dict(zip(('x', 'y', 'z'), numbers))
+        if 'position' not in result:
+            numbers = [value.get(axis) for axis in ('x', 'y', 'z')]
+            if all(type(n) in (int, float) and math.isfinite(n) and abs(n) <= 30_000_000 for n in numbers):
+                result['position'] = dict(zip(('x', 'y', 'z'), numbers))
+        return result
+    result = body(snapshot)
+    if isinstance(snapshot, dict):
+        for key in ('target', 'kirito', 'yui', 'body', 'destination', 'landing'):
+            row = body(snapshot.get(key))
+            if row: result[key] = row
+    return result
+
+
+def record_admin_feedback(state, actor, request_id, receipt):
+    """Idempotently hand a persisted rescue outcome to the original engineer.
+
+    Called after AdminStore.finish, or later from that same stored receipt.
+    This only records project evidence; it never runs or retries a world action.
+    """
+    from world_admin_tools import AdminStore
+    if (not isinstance(receipt, dict) or receipt.get('schema') != 1
+            or receipt.get('requestId') != request_id or receipt.get('actor') != actor
+            or receipt.get('operation') != 'rescue'
+            or receipt.get('status') not in ('completed', 'rejected', 'unknown')):
+        raise ValueError('admin_feedback_terminal_receipt_required')
+    saved = AdminStore(state).receipt(actor, request_id)
+    if encode(saved) != encode(receipt):
+        raise ValueError('admin_feedback_receipt_changed')
+    args = saved.get('args') or {}
+    target = args.get('target')
+    if target not in ('kirito', 'yui') or not isinstance(args.get('reason'), str):
+        raise ValueError('admin_feedback_rescue_identity_invalid')
+    code = saved.get('code')
+    if not isinstance(code, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,120}', code):
+        raise ValueError('admin_feedback_code_invalid')
+    identity = digest([actor, request_id])[:32]
+    observations = {'before': _admin_positions(saved.get('before')), 'after': _admin_positions(saved.get('after'))}
+    # Status reconciliation may later prove the same native request completed.
+    # One case per rescue, one idempotent evidence update per distinct outcome;
+    # polling timestamps/feedback markers must not create another report.
+    facts = {'actor': actor, 'requestId': request_id, 'status': saved['status'], 'code': code,
+             'args': args, 'executionConfirmed': saved.get('executionConfirmed') is True,
+             **observations}
+    facts_sha = digest(facts)
+    observed = ('原管理员救援请求：' + request_id + '\n'
+        + '状态：' + saved['status'] + '；回执码：' + code
+        + '；真实执行已确认：' + str(saved.get('executionConfirmed') is True) + '\n'
+        + '救援原因（请求中的待核实材料）：' + args['reason'][:800] + '\n'
+        + '回执中的已观察身份与位置（缺失字段不推断）：' + encode(observations))
+    result = TeamStore(actor, state).report('admin-feedback-' + facts_sha[:32], 'admin-rescue-' + identity,
+        ('桐人' if target == 'kirito' else '结衣') + '救援结果与能力改进反馈', 'gameplay', observed,
+        '检查真实受阻原因；需要代码或新技能时，在独立工程中实现并测试，交付后再验收。此单不等于已修复或已脱困。',
+        ['admin-request:' + request_id, 'admin-receipt-facts-sha256:' + facts_sha,
+         'admin-status:' + saved['status'] + ';code:' + code], assign_to=ENGINEER)
+    return result | {'adminRequestId': request_id, 'adminStatus': saved['status'],
+                     'receiptFactsSha256': facts_sha, 'worldActionsExecuted': 0}
 
 
 class TeamStore:
@@ -149,12 +236,18 @@ class TeamStore:
                       for r in db.execute('SELECT * FROM events WHERE case_id=? ORDER BY seq DESC LIMIT 20', (case_id,))]
         return {'ok': True, 'case': self._case(row), 'events': list(reversed(events))}
 
-    def report(self, request_id, dedupe_key, title, category, observed, expected, evidence):
+    def report(self, request_id, dedupe_key, title, category, observed, expected, evidence, assign_to=None):
         if not isinstance(dedupe_key, str) or not KEY.fullmatch(dedupe_key): raise ValueError('invalid_dedupe_key')
         if category not in ('bug', 'gameplay', 'content', 'operations', 'improvement'): raise ValueError('invalid_category')
+        if assign_to is not None:
+            from party_role_capabilities import is_bound_yui
+            if assign_to != ENGINEER or (self.actor != 'game:mc-god' and not is_bound_yui(self.actor)):
+                raise ValueError('report_assignment_not_allowed')
         payload = dict(dedupe_key=dedupe_key, title=text(title, 160, 'title'), category=category,
                        observed=text(observed, 6000, 'observed'), expected=text(expected, 2000, 'expected'),
                        evidence=self._evidence(evidence))
+        # Keep the original default-call fingerprint, including across restarts.
+        if assign_to is not None: payload['assign_to'] = assign_to
         with self.db() as db:
             previous = self._previous(db, request_id, payload)
             if previous: return previous
@@ -170,7 +263,7 @@ class TeamStore:
                 case_id = 'case-' + digest([self.actor, dedupe_key])[:20]
                 document_name = 'feedback/' + self.actor.replace(':', '__') + '/' + case_id + '.md'
                 db.execute('INSERT INTO cases VALUES (?,?,?,?,?,?,?,?)',
-                    (case_id, self.actor, dedupe_key, 'game:mc-god', 'open', 1, self.clock(), encode(payload | {'document': document_name})))
+                    (case_id, self.actor, dedupe_key, assign_to or 'game:mc-god', 'open', 1, self.clock(), encode(payload | {'document': document_name})))
                 document = self.root / document_name
                 document.parent.mkdir(parents=True, exist_ok=True)
                 if document.is_symlink() or document.parent.is_symlink(): raise ValueError('linked_feedback')
@@ -181,7 +274,8 @@ class TeamStore:
             db.execute('INSERT INTO events(case_id,actor,at,body) VALUES (?,?,?,?)',
                        (case_id, self.actor, self.clock(), encode({'type': 'feedback', **payload})))
             result = {'ok': True, 'code': 'feedback_recorded', 'caseId': case_id,
-                      'document': self._case(db.execute('SELECT * FROM cases WHERE id=?', (case_id,)).fetchone())['document']}
+                      'document': self._case(db.execute('SELECT * FROM cases WHERE id=?', (case_id,)).fetchone())['document'],
+                      'owner': db.execute('SELECT owner FROM cases WHERE id=?', (case_id,)).fetchone()['owner']}
             return self._record(db, request_id, payload, result)
 
     @staticmethod

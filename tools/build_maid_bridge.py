@@ -75,7 +75,13 @@ def main():
     companion_chat = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), str(classes), cp]),
         'dev.qiandeng.maid.CompanionChatSiteTest'], check=True, capture_output=True, text=True, timeout=30)
     companion_chat_result = json.loads(companion_chat.stdout.strip().splitlines()[-1])
-    suites = [contract, codec_result, journal_result, companion_chat_result]
+    protection = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), test_cp]),
+        'dev.qiandeng.maid.CompanionProtectionPolicyTest'], check=True, capture_output=True, text=True, timeout=30)
+    protection_result = json.loads(protection.stdout.strip().splitlines()[-1])
+    rescue = subprocess.run([str(java), '-cp', os.pathsep.join([str(test_classes), test_cp]),
+        'dev.qiandeng.maid.RescueJournalTest'], check=True, capture_output=True, text=True, timeout=30)
+    rescue_result = json.loads(rescue.stdout.strip().splitlines()[-1])
+    suites = [contract, codec_result, journal_result, companion_chat_result, protection_result, rescue_result]
     result = {'ok': all(suite.get('ok') is True for suite in suites),
         'checks': sum(suite['checks'] for suite in suites), 'suites': suites}
     if result['ok'] is not True:
