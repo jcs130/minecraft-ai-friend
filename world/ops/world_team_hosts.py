@@ -126,6 +126,20 @@ def migration_for(actor):
     return _BY_ACTOR.get(actor) if isinstance(actor, str) else None
 
 
+def logical_role_of_target(native_id, runtime='game'):
+    """Predefined source role behind a target native ID, regardless of phase."""
+    entry = _BY_TARGET.get((runtime, native_id))
+    return entry['source']['agentId'] if entry is not None else None
+
+
+def active_hosted_source(native_id, runtime='game'):
+    """Source role of an ACTIVE migration onto this native host, else None."""
+    entry = _BY_TARGET.get((runtime, native_id))
+    if entry is None or registry_config()[entry['migration']] != 'active':
+        return None
+    return entry['source']['agentId']
+
+
 def phase_of(migration, config=None):
     return _phases(config)[migration]
 

@@ -75,6 +75,48 @@ def check_hosted_engineer(folder, get=None):
     return profile
 
 
+def check_hosted_ops_role(logical_role, native_role, folder, get=None):
+    """A migrated operations role keeps its identity, drivers and jobs on the game instance."""
+    from qwenpaw.drivers.storage import load_card
+    from upgrade_qwenpaw_runtime import driver_cards
+    from world_team_hosts import require_host
+    from role_learning_profiles import role_skills
+    runtime = 'game'
+    require_host('operations:' + logical_role, runtime, native_role)
+    assert folder == Path('/state/work/workspaces') / native_role
+    profile = json.loads((folder/'agent.json').read_text())
+    assert profile['id'] == native_role and profile['workspace_dir'] == str(folder)
+    if logical_role == 'mc-herald': assert profile['name'] == '灯语 · 服务诊断'
+    assert profile['heartbeat']['enabled'] is False
+    assert profile['running']['llm_retry_enabled'] is False and profile['running']['llm_max_concurrent'] == 1
+    validate_running(profile['running'])
+    assert profile['fallback_policy']['enabled'] is False and not profile['fallback_models']
+    assert not any(a.get('enabled') for a in profile['acp']['agents'].values())
+    validate_native(profile, native_role, runtime=runtime)
+    validate_learning_workspace(folder, native_role, runtime)
+    expected = world_team.expected_drivers(native_role, runtime, {'qiandeng_operations', 'qd_learning'})
+    assert set(profile['mcp']['clients']) == expected
+    assert set(driver_cards(folder)) == {folder/('drivers/mcp/'+name+'.yaml') for name in expected}
+    world_team.validate_workspace(folder, native_role, runtime)
+    args = operation_arguments(logical_role, native_role, runtime)
+    item = profile['mcp']['clients']['qiandeng_operations']
+    assert item['enabled'] is True and item['transport'] == 'stdio'
+    assert item['command'] == 'python' and item['args'] == args
+    assert set(item['tools']) == set(role_tools(logical_role))
+    assert not any(item.get(k) for k in ('url', 'headers', 'cwd', 'env'))
+    card = load_card(folder/'drivers/mcp/qiandeng_operations.yaml')
+    assert card.enabled and card.endpoint['args'] == args and card.endpoint['command'] == 'python'
+    assert card.policy.default_effect == 'deny' and len(card.policy.rules) == len(role_tools(logical_role))
+    assert {r.target.name for r in card.policy.rules if r.effect == 'allow' and r.target.kind == 'tool'} == set(role_tools(logical_role))
+    if get is not None:
+        check_team_configuration(folder, profile, logical_role, get, driver_cards(folder), native_role=native_role, runtime=runtime)
+        assert {r['name'] for r in get('/mcp/tools/qiandeng_operations') if r.get('enabled')} == set(role_tools(logical_role))
+        assert {r['name'] for r in get('/tools') if r.get('enabled')} == enabled_native_tools(native_role, runtime)
+        assert set(role_skills(native_role, runtime)) | set(NATIVE_SKILLS) <= {r['name'] for r in get('/skills') if r.get('enabled')}
+        validate_jobs({'jobs': [row.get('spec', row) for row in get('/cron/jobs')]}, native_role, runtime)
+    return profile
+
+
 def main():
     from qwenpaw.drivers.storage import load_card
     from upgrade_qwenpaw_runtime import driver_cards
@@ -94,8 +136,10 @@ def main():
     from world_team_hosts import native_host
     active_roles = [role for role in ROLES if native_host('operations:' + role) == {'runtime': 'operations', 'agentId': role}]
     assert {a['id'] for a in agents if a['enabled']} == set(active_roles)
+    from world_team_hosts import active_ops_sources
+    migrated = active_ops_sources()
     for retired in set(ROLES) - set(active_roles):
-        assert retired == 'mc-god' and any(a['id'] == retired and a['enabled'] is False for a in agents)
+        assert retired in migrated and any(a['id'] == retired and a['enabled'] is False for a in agents)
         # A native per-agent Cron read may preload a disabled workspace. Inspect
         # the retired definition without asking Qwen to start that agent again.
         retired_jobs = json.loads((Path('/state/work/workspaces')/retired/'jobs.json').read_text())

@@ -51,9 +51,10 @@ def rules(role):
     base = re.escape('/state/work/workspaces/' + role + '/')
     segment = r'(?!\.{1,2}(?:/|\Z))[A-Za-z0-9_.\-\u4e00-\u9fff ]+'
     path = rf'(?:{base})?{segment}(?:/{segment})*'
-    # The moved engineer retains its historical weekly job ID, but the native
-    # CLI must address its new workspace, never the game's mc-god goddess.
-    weekly_role = 'mc-god' if role == 'qd-engineer' else role
+    # A migrated role retains its historical weekly job ID, but the native
+    # CLI must address its new workspace, never a same-named game role.
+    from world_team_hosts import logical_role_of_target
+    weekly_role = logical_role_of_target(role) or role
     cli = rf'qwenpaw cron (?:list --agent-id {role}|(?:get|state|pause|resume) qd-learning-{weekly_role} --agent-id {role})'
     def row(suffix, tools, params, patterns, description):
         return {'id': PREFIX + suffix, 'tools': list(tools), 'params': params, 'category': 'command_injection',

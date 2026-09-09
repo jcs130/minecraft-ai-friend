@@ -417,4 +417,27 @@ class MultiMigrationTests(unittest.TestCase):
             hosts.host_tool_app(App(), 'game:mc-god', 'game', 'qd-steward')
 
 
+    def test_native_cli_rules_map_target_ids_to_historical_weekly_jobs(self):
+        from native_role_capabilities import rules
+        cases = {'qd-engineer': 'qd-learning-mc-god', 'qd-steward': 'qd-learning-default',
+                 'qd-diagnostics': 'qd-learning-mc-herald', 'mc-priest': 'qd-learning-mc-priest',
+                 'mc-guard-kirito': 'qd-learning-mc-guard-kirito', 'mc-guard-naruto': 'qd-learning-mc-guard-naruto'}
+        for native, weekly in cases.items():
+            with self.subTest(native=native):
+                text = json.dumps(rules(native), ensure_ascii=False)
+                self.assertIn(weekly + ' --agent-id ' + native, text)
+
+    def test_target_lookup_helpers_follow_phase(self):
+        self.assertEqual(hosts.logical_role_of_target('qd-steward'), 'default')
+        self.assertEqual(hosts.logical_role_of_target('mc-priest', 'game'), 'mc-priest')
+        self.assertIsNone(hosts.logical_role_of_target('mc-herald', 'game'))
+        self.assertIsNone(hosts.logical_role_of_target('mc-god', 'game'))
+        self.assertIsNone(hosts.logical_role_of_target('default', 'operations'))
+        self.assertIsNone(hosts.active_hosted_source('qd-steward'))
+        self.phases({'steward-to-game-v1': 'active'})
+        self.assertEqual(hosts.active_hosted_source('qd-steward'), 'default')
+        self.assertIsNone(hosts.active_hosted_source('qd-diagnostics'))
+        self.assertIsNone(hosts.active_hosted_source('mc-god', 'game'))
+
+
 if __name__ == '__main__': unittest.main()

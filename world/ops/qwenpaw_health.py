@@ -11,6 +11,7 @@ PHASE = 'auth-mode'
 from world_agent_profiles import GAME_ROLES, WORLD_ROLES, validate_workspace
 from role_learning_profiles import validate_learning_workspace, roles, maid_roles, validate_guard
 from native_role_capabilities import validate_native, NATIVE_TOOLS, NATIVE_SKILLS, enabled_native_tools
+from world_team_hosts import active_hosted_source as hosted_source
 from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
@@ -204,9 +205,17 @@ def check_runtime_config():
         validate_workspace(Path('/state/work/workspaces') / aid, aid, team=True)
     for aid in maid_roles():
         check_maid_config(Path('/state/work/workspaces') / aid, aid)
-    if 'qd-engineer' in roles('game'):
-        from operations_team_health import check_hosted_engineer
-        check_hosted_engineer(Path('/state/work/workspaces/qd-engineer'))
+    from world_team_hosts import MIGRATIONS, phase_of
+    from operations_team_health import check_hosted_engineer, check_hosted_ops_role
+    for entry in MIGRATIONS.values():
+        if entry['target']['runtime'] != 'game' or phase_of(entry['migration']) != 'active':
+            continue
+        native = entry['target']['agentId']
+        folder = Path('/state/work/workspaces') / native
+        if native == 'qd-engineer':
+            check_hosted_engineer(folder)
+        else:
+            check_hosted_ops_role(entry['source']['agentId'], native, folder)
     from team_recruitment import specialists
     for aid, row in specialists(include_pending=True).items():
         assert row['status'] == 'active', 'specialist_provisioning_incomplete'
@@ -269,9 +278,14 @@ def main():
         enabled_skills = {item['name'] for item in get('/skills', aid=aid) if item.get('enabled') is True}
         assert set(role_skills(aid, 'game')) | set(NATIVE_SKILLS) <= enabled_skills
         bindings += len(enabled_skills)
+        hosted = hosted_source(aid)
         if aid == 'qd-engineer':
             from operations_team_health import check_hosted_engineer
             check_hosted_engineer(Path('/state/work/workspaces/qd-engineer'), lambda path: get(path, aid=aid))
+        elif hosted is not None:
+            from operations_team_health import check_hosted_ops_role
+            check_hosted_ops_role(hosted, aid, Path('/state/work/workspaces') / aid,
+                                  lambda path: get(path, aid=aid))
         elif aid in maid_roles():
             check_maid_api(get, aid)
         else:
