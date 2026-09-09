@@ -149,11 +149,11 @@ def validate_jobs(value, role, runtime):
         assert len(reviews) <= 1
         for row in reviews: validate_job(row, role)
         jobs = [j for j in jobs if j.get('id') != JOB_ID]
-    if runtime == 'operations':
+    if logical_runtime == 'operations':
         from world_operations import JOB_ID, validate_world_job
         daily = [j for j in jobs if j.get('id') == JOB_ID]
         assert len(daily) <= 1
-        for row in daily: validate_world_job(row, role)
+        for row in daily: validate_world_job(row, logical_role)
         jobs = [j for j in jobs if j.get('id') != JOB_ID]
     assert len(jobs) == 1
     actual = jobs[0]

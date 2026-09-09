@@ -25,7 +25,10 @@ def operation_arguments(role, native_role=None, native_runtime=None):
         raise ValueError('unknown_role')
     args = ['/ops/operations_team_mcp.py', '--role', role]
     if native_role is not None or native_runtime is not None:
-        if (role, native_role, native_runtime) != ('mc-god', 'qd-engineer', 'game'):
+        from world_team_hosts import migration_for
+        entry = migration_for('operations:' + role)
+        if (entry is None or native_runtime != entry['target']['runtime']
+                or native_role != entry['target']['agentId']):
             raise ValueError('invalid_operations_native_host')
         args += ['--native-role', native_role, '--native-runtime', native_runtime]
     return args
