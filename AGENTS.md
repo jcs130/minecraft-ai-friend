@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-13 客户端注册表报错：远端实际运行实例未识别两支 qiandeng_chanting 法杖。D项目两端staff SHA一致b867…f9e5；旧分发0.1.0～0.1.3未打包staff，0.1.4还缺当前maid-bridge且god-voice已旧。已从严格client锁导出0.1.5-local完整mrpack（88mods/164覆盖文件）及staff+精确voicechat依赖的小补丁；无服务端/存档改动。外机须安装并完整重启，不能把包校验成功当成已进服；此前用户“能连接”只证明网络/服务器可见，不覆盖这次模组同步失败。详见docs/CLIENT-REGISTRY-COMPATIBILITY.md。
+
 2026-09-13 局域网入口按用户要求改为默认 TCP 25565（对外 0.0.0.0），当前 LAN 为 192.168.3.133；Simple Voice Chat 对外 UDP24455，voice_host=24455 沿用客户端连接主机。原127.0.0.1:25567只作宿主脚本兼容入口，内部mc:25599和管理/RCON回环边界保留。无专用服LAN广播，玩家应手动添加192.168.3.133；不增宿主广播进程。此条覆盖旧“游戏仅本机25567”说明。
 
 默认127.0.0.1:25565真实协议握手通过；用户已回复确认另一台局域网电脑能看到并连接。本机经自身192.168.3.133回连超时仍如实记录，当前WSL mirrored未启用experimental.hostAddressLoopback；不能把自回连限制等同远端LAN失败，也不把用户确认冒充自动化客户端登录。全局WSL/防火墙未改，详见docs/GAME-RUNTIME-LAYOUT.md的LAN说明。
