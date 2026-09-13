@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+最终实机补充：autonomy4第五轮task-9753bd8c52cd的t23在5分钟内正常到达营地边缘，第六轮task-82eb6573e214已自动接续，未知0，仍原session；未触发自动stop，不能冒称自动截止分支已实机覆盖。工程01:05轮尝试test被engineering_fixed_checks_changed拒绝，固定tests/test_world_team.py与tests/test_world_team_schedule.py字节不匹配；未入队/执行/提交，01:11超时正常释放。工程验收仍待处理，不能改受管hash凑绿。
+
 2026-09-14 最终增量：survivor现为2.2.0-autonomy4，Qwen保持autonomy3进程加/ops挂载补丁。连续原会话模型回合及放置/导航已实测；第四回合后发现原生自卫反射freeze会无限延长goto时间。原t22经一次精确停止取得同epoch的cancelled终态，原controller自然结算failed，不冒充自动超时触发。新增只由controller驱动的goto总等待5分钟：准确身体/维度/epoch/taskId匹配、持久停止意图后发一次task_stop，真实终态才结算，未知不重发也不泛停；其它任务不类推。导航8/controller68/Linux网关31/生活伙伴41项通过。原UUID/session/背包保留，无MC/Qwen重启；详见docs/AUTONOMY-RECOVERY.md。
 
 最终团队增量：team_context公共投影不构造旧OperationsTools身份，10实际注册卡协议与10生产driver重连均验证；女神已3轮自然完成，修复后真实context0.236秒。工程status默认不扫描工作树，paths定向查询才展示该范围，dirty/sourceSha256为null表示未验；capture_source/test/commit仍完整新鲜字节。真实自然轮status1.364秒、定向diff1.758秒；工程师改了独立候选代码但未测试/提交，不能当线上修复。00:55超时正常释放，01:05下轮自然启动。10角色工程引用已原生同步，引用更新会原样ETag保存SKILL.md使扫描缓存失效再enable；角色配置不变，Qwen完整10角色/94技能检查通过。

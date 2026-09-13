@@ -69,3 +69,7 @@
 该修复经 Linux 导航 8 项、控制器 68 项、网关 31 项、生活及伙伴 41 项回归，并复核固定版本 Numen 确实按 `task_id` 匹配后停止。最终只更新 survivor 为 `2.2.0-autonomy4`，镜像 ID `2c2e54bd3fd3bb997b0ce159d4cccdb1e98cd2b25efe93b4416f33ec80cd4fff`，构建回执 `runtime/qwenpaw-recovery-20260913T170523Z-52dd6a80/build-result.json`。新构建入口支持 `--target survivor`，不会覆盖原双服务构建回执。更新前持共享 Linux 锁备份 7 份状态文件至 `survival/maintenance/autonomy4-1789318985`，确认模型、身体动作均已结束。
 
 运行容器中的控制器、网关、动作和控制入口四份源码均与本次源文件哈希一致。Qwen 的启动时间仍为 16:17:55 UTC、Minecraft 仍为 15:55:05 UTC，均未随本次 survivor 更新重启；现有 Qwen 工具连接检查自行恢复就绪后，使用原 control resume 恢复生活循环。原身体、原生活 session 和已完成/失败记录继续保留。
+
+最终观察：新镜像上的第五轮 `task-9753bd8c52cd` 完成，导航 `t23` 在五分钟上限前真实到达 `(-638.67,64,1045.33)`；随后自动开始第六轮 `task-82eb6573e214`，仍为原生活会话，控制 enabled=true、无 pauseReason、无 unknown。本次导航没有生成停止意图，属于正常到达，不算自动截止分支的实机触发。前后原回执保存在 `runtime/navigation-deadline-live-20260914/`，最终持续运行只读验收为 `runtime/life-autonomy4-final-20260914.json`，所有必需检查通过。
+
+仍需由工程流程处理的事项：天神 01:05 自然轮确实尝试调用 `engineering_test`，但收到 `engineering_fixed_checks_changed`。当前独立候选的 `tests/test_world_team.py` 与 `tests/test_world_team_schedule.py` 不匹配受管固定检查字节；该请求没有入队、执行测试或产生提交。01:11 本轮超时后的占位已正常释放，不能将安全拒绝计作测试通过，也不能通过改写批准哈希让检查变绿。这是候选代码验收问题，不能将“自主调度与工具恢复”扩大为“自主代码交付已完成”。
