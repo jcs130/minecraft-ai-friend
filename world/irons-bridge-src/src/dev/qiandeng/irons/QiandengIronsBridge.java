@@ -44,6 +44,7 @@ public final class QiandengIronsBridge {
 
     public QiandengIronsBridge() {
         NeoForge.EVENT_BUS.addListener(this::registerCommands);
+        if (ModList.get().isLoaded("numen")) WorldInteractionBridge.install();
     }
 
     private void registerCommands(RegisterCommandsEvent event) {
@@ -73,6 +74,7 @@ public final class QiandengIronsBridge {
         TradeBridge.register(event.getDispatcher());
         WorldMenuBridge.register(event.getDispatcher());
         WorldScanBridge.register(event.getDispatcher());
+        if (ModList.get().isLoaded("numen")) WorldInteractionBridge.register(event.getDispatcher());
     }
 
     private static int run(CommandSourceStack source, String action, String actorQuery, String spellId) {

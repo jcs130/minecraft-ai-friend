@@ -1,10 +1,10 @@
 # 世界工程师的独立源码与测试
 
-本页适用于 `operations:mc-god`。先读取真实工单和 `engineering_status()`：确认独立 repo、分支、baseCommit、当前 `sourceSha256`、差异列表与 `testPlans`。不要猜路径、计划 ID 或以本技能推定工具已经启用。源码工作区通常位于本角色的 `engineering/repo/`，实际以工具返回与原生文件权限为准。
+本页适用于 `operations:mc-god`。先读取真实工单和 `engineering_status()` 的轻量概览：确认独立 repo、分支、baseCommit、HEAD 与 `testPlans`。默认只查看已提交的 base→HEAD 差异：`committedChanges` 最多列前 50 项，`committedChangeCount` 为总数，`committedChangesTruncated` 表示未全列出。默认不扫描工作树，`dirty/changed/workingChanges/sourceSha256=null`、`snapshotCaptured=false`；不能把 null 当成没有修改，也不能作为验收哈希。不要猜路径、计划 ID 或以本技能推定工具已经启用。源码工作区通常位于本角色的 `engineering/repo/`，实际以工具返回与原生文件权限为准。
 
-用 Qwen 原生 `read_file/write_file/append_file/edit_file` 读取和修改该独立工作区中的真实代码。先读相关工程说明与已有实现，选择最小可复现问题，保留用户补充和无关改动。不要改 `.git`、受管工程配置、测试基线、工具权限或生产文件来让验收通过。`engineering_diff(max_chars=24000)` 显示有界差异，未跟踪新文件仍须原生读回确认。
+用 Qwen 原生 `read_file/write_file/append_file/edit_file` 读取和修改该独立工作区中的真实代码。先读相关工程说明与已有实现，选择最小可复现问题，保留用户补充和无关改动。不要改 `.git`、受管工程配置、测试基线、工具权限或生产文件来让验收通过。查看本事项工作树时传 1–32 个相对文件或目录，例如 `engineering_status(paths=["world/ops/world_team.py"])` 和 `engineering_diff(paths=["world/ops/world_team.py"], max_chars=24000)`，返回的工作树状态或差异只覆盖 `inspectionPaths`，不能外推为全仓无改动。`engineering_diff()` 没有传 paths 时返回 `requiresPaths=true/text=null`，含义是需要限定范围，不是没有差异；未跟踪新文件仍须原生读回确认。
 
-准备验证时重新取源哈希，再调用：
+准备验证时按需调用 `engineering_status(capture_source=true)`，不要同时传 paths；等待完整的新鲜字节快照，确认 `snapshotCaptured=true` 并使用本次 `sourceSha256`，再调用：
 
 `engineering_test(plan_id, expected_source_sha256, request_id)`
 

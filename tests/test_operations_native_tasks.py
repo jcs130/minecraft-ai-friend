@@ -24,26 +24,29 @@ class NativeTaskTests(unittest.TestCase):
 
     def test_rejected_role_cannot_call_api(self):
         with patch.object(native,'api') as api:
-            for caller,target in [('mc-herald','default'),('default','default'),('default','host-admin')]:
+            targets = ['default', 'host-admin', 'mc-herald', 'qd-diagnostics', 'mc-priest',
+                       'mc-guard-kirito', 'mc-guard-naruto', 'qd-survivor', 'qd-guild-planner', '5swvhK']
+            for caller,target in [('mc-herald','default')] + [('default', role) for role in targets]:
                 self.assertFalse(native.delegate(caller,target,'task')['ok'])
             api.assert_not_called()
+        self.assertFalse((self.root/'operations-budget/delegations.json').exists())
 
     def test_native_submission_and_durable_single_active_task(self):
         with patch.object(native,'api',return_value={'task_id':'task-fixture'}) as api:
-            result=native.delegate('default','mc-herald','检查采集时间')
+            result=native.delegate('default','mc-god','检查采集时间')
             self.assertTrue(result['ok'])
             payload=api.call_args.kwargs['json']
             self.assertEqual(payload['timeout'],180)
             self.assertEqual(payload['request_context']['root_agent_id'],'default')
-            self.assertEqual(native.delegate('default','mc-priest','第二项')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','第二项')['code'],'operations_task_unresolved')
             self.assertEqual(sum(c.args[0] == 'POST' for c in api.call_args_list),1)
 
     def test_uncertain_submission_is_charged_and_not_retried(self):
         with patch.object(native,'api',side_effect=TimeoutError) as api:
-            value=native.delegate('default','mc-herald','检查状态')
+            value=native.delegate('default','mc-god','检查状态')
             self.assertEqual(value['status'],'submission_uncertain')
             self.assertFalse(value['retryAutomatically'])
-            self.assertEqual(native.delegate('default','mc-herald','同样任务')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','同样任务')['code'],'operations_task_unresolved')
             self.assertEqual(api.call_count,1)
 
     def test_no_daily_or_cooldown_cap_but_unknown_never_ages_out(self):
@@ -54,27 +57,27 @@ class NativeTaskTests(unittest.TestCase):
 
     def test_finished_receipt_is_written_before_next_submission(self):
         with patch.object(native,'api',return_value={'task_id':'task-fixture'}):
-            native.delegate('default','mc-herald','一')
+            native.delegate('default','mc-god','一')
         with patch.object(native,'api',side_effect=[{'status':'finished','result':{'status':'completed'}}, {'task_id':'task-next'}]) as api:
-            self.assertTrue(native.delegate('default','mc-priest','二')['ok'])
+            self.assertTrue(native.delegate('default','mc-god','二')['ok'])
             self.assertEqual([c.args[0] for c in api.call_args_list],['GET','POST'])
         with native.ledger() as rows:
             self.assertEqual(next(r for r in rows if r['taskId']=='task-fixture')['status'],'completed')
 
     def test_receipt_unavailable_blocks_new_submissions(self):
         with patch.object(native,'api',return_value={'task_id':'task-fixture'}):
-            native.delegate('default','mc-herald','一')
+            native.delegate('default','mc-god','一')
         with patch.object(native,'api',side_effect=TimeoutError) as api:
-            self.assertEqual(native.delegate('default','mc-priest','二')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','二')['code'],'operations_task_unresolved')
             self.assertEqual([c.args[0] for c in api.call_args_list],['GET'])
 
     def test_fixed_coordinator_parent_can_have_only_one_child(self):
         from world_operations import JOB_ID
         parent=native.reserve_operation('default',JOB_ID)
         with patch.object(native,'api',return_value={'task_id':'task-child'}) as api:
-            child=native.delegate('default','mc-herald','检查当前事实')
+            child=native.delegate('default','mc-god','检查当前事实')
             self.assertTrue(child['ok']);self.assertEqual(child['parentRunId'],parent['runId'])
-            self.assertEqual(native.delegate('default','mc-priest','第二个')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','第二个')['code'],'operations_task_unresolved')
             self.assertEqual(sum(c.args[0]=='POST' for c in api.call_args_list),1)
         native.finish_run(parent['runId'],'completed')
         with native.ledger() as rows:self.assertEqual(native.budget_check(rows,0),'operations_task_unresolved')
@@ -82,7 +85,7 @@ class NativeTaskTests(unittest.TestCase):
     def test_non_coordinator_cron_never_grants_parent_exception(self):
         native.reserve_operation('default','qd-learning-default')
         with patch.object(native,'api') as api:
-            self.assertEqual(native.delegate('default','mc-herald','任务')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','任务')['code'],'operations_task_unresolved')
             api.assert_not_called()
 
     def archive(self, row):
@@ -99,7 +102,7 @@ class NativeTaskTests(unittest.TestCase):
         return path,archive
 
     def test_exact_archived_native_completion_resolves_missing_live_task(self):
-        with patch.object(native,'api',return_value={'task_id':'task-fixture'}):row=native.delegate('default','mc-herald','一')
+        with patch.object(native,'api',return_value={'task_id':'task-fixture'}):row=native.delegate('default','mc-god','一')
         self.archive(row)
         with patch.object(native,'api',side_effect=TimeoutError):
             self.assertEqual(native.reconcile_pending()['reconciled'],[row['runId']])
@@ -108,8 +111,24 @@ class NativeTaskTests(unittest.TestCase):
             self.assertEqual(rows[0]['terminalEvidence'],'archived_native_receipt')
             self.assertEqual(len(rows[0]['evidenceSha256']),64)
 
+    def test_retired_role_preserves_exact_historical_receipt_reconciliation(self):
+        for role in ('mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto'):
+            run_id = 'ops-historical-' + role
+            row = {'runId': run_id, 'role': role, 'requestId': run_id+'-'+role,
+                   'taskId': 'task-old-'+role, 'startedAt': 100, 'status': 'submitted'}
+            with native.ledger() as rows: rows.append(row)
+            self.archive(row)
+            with patch.object(native,'api',side_effect=TimeoutError) as api:
+                self.assertEqual(native.reconcile_pending()['reconciled'], [run_id])
+                self.assertEqual(api.call_args.args, ('GET', '/console/chat/task/'+row['taskId'], role))
+                self.assertEqual(api.call_args.kwargs['recorded_host'], {'runtime':'operations','agentId':role})
+            with native.ledger() as rows:
+                saved = next(r for r in rows if r['runId'] == run_id)
+                self.assertEqual(saved['status'], 'completed')
+                self.assertEqual(saved['terminalEvidence'], 'archived_native_receipt')
+
     def test_wrong_archive_identity_or_missing_record_never_releases(self):
-        with patch.object(native,'api',return_value={'task_id':'task-fixture'}):row=native.delegate('default','mc-herald','一')
+        with patch.object(native,'api',return_value={'task_id':'task-fixture'}):row=native.delegate('default','mc-god','一')
         for change in ({'taskId':'other'},{'requestId':'other'},{'role':'mc-priest'},
                        {'nativeResultStatus':'running'},{'reportRecorded':False}):
             path,archive=self.archive(row);archive['roles'][0].update(change);path.write_text(json.dumps(archive))
@@ -120,7 +139,7 @@ class NativeTaskTests(unittest.TestCase):
 
     def test_task_ownership_and_poll_throttle(self):
         with patch.object(native,'api',return_value={'task_id':'task-fixture'}):
-            native.delegate('default','mc-herald','测试')
+            native.delegate('default','mc-god','测试')
         with patch.object(native,'api',return_value={'status':'finished','result':{'status':'completed'}}) as api:
             self.assertFalse(native.task_status('mc-herald','task-fixture')['ok'])
             self.assertEqual(native.task_status('default','other-task')['code'],'unknown_task')

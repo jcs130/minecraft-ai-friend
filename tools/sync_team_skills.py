@@ -163,6 +163,21 @@ def sync(actors, names, *, apply=False, root=ROOT, call=api, upload=upload_refer
                     require(current and current['content'] == desired[name][p], 'native_file_readback_mismatch')
                     journal['completed'].append({'actor': r['actor'], 'skill': name, 'file': p, 'sha256': sha(current['content'])})
                     write('journal.json', journal)
+                if 'SKILL.md' not in r['changes']:
+                    # Qwen 2.2 scan cache keys use the skill directory and only
+                    # its immediate files' mtimes. Editing references/ alone
+                    # does not invalidate that signature. A native same-value
+                    # save atomically replaces this immediate file without
+                    # changing its content or bypassing optimistic concurrency.
+                    path = 'skills/' + name + '/SKILL.md'
+                    old = r['before']['SKILL.md']
+                    mutation(r, 'PUT', file_route(path), {'content': old['content']}, {'If-Match': old['etag']})
+                    current = read_file(call, runtime, role, path)
+                    require(current and current['content'] == old['content']
+                            and current['etag'] != old['etag'], 'native_scan_cache_invalidation_unconfirmed')
+                    journal['completed'].append({'actor': r['actor'], 'skill': name, 'file': 'SKILL.md',
+                        'sha256': sha(current['content']), 'nativeSameContentSaveForScan': True})
+                    write('journal.json', journal)
             # This is a fresh native security scan, not merely manifest refresh.
             enabled = mutation(r, 'POST', '/skills/' + name + '/enable')
             require(enabled.get('enabled') is True, 'native_skill_scan_enable_unconfirmed')

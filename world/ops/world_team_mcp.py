@@ -96,8 +96,8 @@ def register_team_tools(app, actor, state=Path('/team')):
     @app.tool()
     def team_context() -> dict:
         """Read world/service snapshots, survivor controller state and assigned cases. Missing or stale life metadata is unknown."""
-        from operations_team_mcp import OperationsTools
-        snapshot = OperationsTools('mc-god').snapshot()
+        from operations_team_mcp import public_snapshot
+        snapshot = public_snapshot()
         snapshot.pop('worldActionsAllowed', None)
         snapshot['worldActionsExecuted'] = 0
         sections = snapshot.get('snapshots') if isinstance(snapshot.get('snapshots'), dict) else {}
@@ -117,9 +117,15 @@ def register_team_tools(app, actor, state=Path('/team')):
         return store.cases(owner, include_closed, limit)
 
     @app.tool()
-    def team_case(case_id: str) -> dict:
-        """Read one issue and attributed updates, including current version for a safe handoff."""
-        return store.case(case_id)
+    def team_case(case_id: str, event_limit: int = 3, before_seq: int | None = None) -> dict:
+        """Read one current issue/version and its latest 3 complete attributed events.
+
+        Select an issue from the short team_cases index first. For evidence needed from older history,
+        pass next_before_seq as before_seq; event_limit accepts 1-20. Each page is chronological,
+        has_more signals older pages, and all original audit events remain available. Do not expand
+        every issue or page before advancing the selected work.
+        """
+        return store.case(case_id, event_limit, before_seq)
 
     @app.tool()
     def team_report(request_id: str, dedupe_key: str, title: str, category: str,

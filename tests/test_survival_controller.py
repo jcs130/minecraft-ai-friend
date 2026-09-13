@@ -8,6 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
 from controller import Controller
+from control import update_control
 from numen_gateway import read_json, write_json, GatewayError
 
 BODY_UUID = 'd4ac9523-4962-43ed-98c5-19b49e104048'
@@ -152,6 +153,143 @@ class ControllerTests(unittest.TestCase):
                  'memory': {'attempts': 0}, 'maxSteps': 8, **updates}
         self.write('skill-job.json', value)
         return value
+
+    def drain(self):
+        self.controller.save()
+        return update_control(self.state, 'drain', clock=self.clock)
+
+    def terminal(self, status='completed'):
+        self.backend.reply = {'status': 'finished', 'result': {'status': status,
+            'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed',
+                        'content': [{'type': 'text', 'text': 'Observed this round.'}]}]}}
+
+    def test_drain_preserves_current_native_turn_and_lease_then_pauses(self):
+        self.controller.tick()
+        active = copy.deepcopy(self.controller.data['active'])
+        lease = read_json(self.state / 'lease.json')
+        requested = self.drain()
+        self.assertTrue(requested['enabled'])
+        self.assertEqual(requested['drain']['taskId'], active['taskId'])
+        self.controller.tick()
+        self.assertEqual(self.controller.data['active'], active)
+        self.assertEqual(read_json(self.state / 'lease.json'), lease)
+        self.assertFalse(self.backend.cancelled)
+        self.terminal()
+        self.controller.tick()
+        control = read_json(self.state / 'control.json')
+        self.assertFalse(control['enabled'])
+        self.assertEqual(control['pauseReason'], 'operator_drain')
+        self.assertEqual(control['drain']['terminalTaskId'], active['taskId'])
+        self.assertEqual(control['drain']['sessionId'], active['sessionId'])
+        self.assertEqual(control['drain']['status'], 'completed')
+        self.assertEqual(self.controller.data['status'], 'paused')
+        self.assertFalse(self.backend.cancelled)
+        self.assertNotIn('task_stop', self.gateway.invoked)
+        self.clock.now += 121
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertEqual(read_json(self.public)['drain']['status'], 'completed')
+
+    def test_drain_on_native_failure_preserves_failure_receipt(self):
+        self.controller.tick()
+        self.drain()
+        self.terminal('failed')
+        self.controller.tick()
+        self.assertEqual(self.controller.data['pauseReason'], 'operator_drain')
+        self.assertFalse(self.controller.data['lastDecision']['completed'])
+        self.assertFalse(read_json(self.state / 'control.json')['drain']['nativeTaskCompleted'])
+        self.assertFalse(self.backend.cancelled)
+
+    def test_drain_waits_for_async_action_and_refreshes_old_idle_snapshot(self):
+        self.controller.tick()
+        self.drain()
+        self.terminal()
+        original_poll = self.backend.poll
+        def after_snapshot(task_id):
+            self.gateway.body['task']['busy'] = True
+            return original_poll(task_id)
+        self.backend.poll = after_snapshot
+        self.controller.tick()
+        self.assertIsNone(self.controller.data['active'])
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.controller.tick()
+        self.assertFalse(self.backend.cancelled)
+        self.assertNotIn('task_stop', self.gateway.invoked)
+        self.gateway.body['task']['busy'] = False
+        self.controller.tick()
+        self.assertFalse(read_json(self.state / 'control.json')['enabled'])
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_drain_does_not_bypass_unknown_or_rename_its_pause_reason(self):
+        self.controller.tick()
+        self.drain()
+        self.write('unknown.json', {'actionId': 'a' * 32})
+        self.controller.tick()
+        self.assertEqual(self.controller.data['pauseReason'], 'action_outcome_unknown')
+        self.assertEqual(read_json(self.state / 'control.json')['drain']['status'], 'requested')
+        self.assertTrue((self.state / 'unknown.json').exists())
+
+    def test_drain_at_idle_boundary_preserves_queued_skill_without_dispatch(self):
+        self.job(status='running')
+        before = read_json(self.state / 'skill-job.json')
+        self.drain()
+        self.controller.tick()
+        self.assertFalse(self.skills.calls)
+        self.assertFalse(self.gateway.actions)
+        self.assertFalse(self.backend.submitted)
+        self.assertEqual(read_json(self.state / 'skill-job.json'), before)
+        self.assertEqual(self.controller.data['pauseReason'], 'operator_drain')
+
+    def test_drain_survives_restart_resume_clears_request_and_keeps_evidence(self):
+        self.controller.tick()
+        self.drain()
+        request_id = read_json(self.state / 'control.json')['drain']['requestId']
+        self.assertEqual(self.drain()['drain']['requestId'], request_id)
+        restarted = self.create()
+        restarted.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.terminal()
+        restarted.tick()
+        resumed = update_control(self.state, 'resume', clock=self.clock)
+        self.assertTrue(resumed['enabled'])
+        self.assertNotIn('drain', resumed)
+        self.assertEqual(resumed['lastDrain']['requestId'], request_id)
+        self.assertEqual(resumed['lastDrain']['status'], 'completed')
+
+    def test_drain_arriving_during_context_construction_does_not_reserve_next_turn(self):
+        original_open = self.gateway.open_lease
+        def late_drain(*args, **kwargs):
+            original_open(*args, **kwargs)
+            self.drain()
+        self.gateway.open_lease = late_drain
+        self.controller.tick()
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.controller.data['decisions'])
+        self.assertIsNone(self.controller.data['active'])
+        self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
+        self.assertEqual(self.controller.data['pauseReason'], 'operator_drain')
+
+    def test_navigation_stop_unknown_is_not_reissued_by_generic_pause_cleanup(self):
+        self.gateway.body['task'] = {'busy': True, 'task_id': 't22'}
+        self.gateway.navigation_stop_pending = lambda body: body['task']['task_id'] == 't22'
+        self.controller.pause('action_outcome_unknown')
+        self.controller.tick()
+        self.assertNotIn('task_stop', self.gateway.invoked)
+        self.assertEqual(self.controller.data['cancellationStatus'], 'navigation_stop_uncertain')
+
+    def test_controller_only_deadline_hook_returns_fresh_terminal_for_drain(self):
+        self.gateway.body['task'] = {'busy': True, 'task_id': 't22'}
+        calls = []
+        def enforce(body):
+            calls.append(copy.deepcopy(body))
+            self.gateway.body['task'] = {'busy': False}
+            return self.gateway.snapshot()
+        self.gateway.enforce_navigation_deadline = enforce
+        self.drain()
+        self.controller.tick()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.controller.data['pauseReason'], 'operator_drain')
+        self.assertFalse(self.backend.submitted)
 
     def test_submission_persists_budget_and_reservation_before_http(self):
         def before_http(turn_id, prompt, timeout):

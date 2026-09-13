@@ -46,6 +46,49 @@ class HostedOperationsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             OperationsTools('mc-god', native_role='qd-engineer', native_runtime='game')
 
+    def test_hosted_storage_uses_exact_native_identity_without_inherited_environment(self):
+        from operations_state import state_root
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ['TEAM_RUNTIME_HOSTS_FILE'] = str(self.manifest)
+            service = OperationsTools('mc-god', native_role='qd-engineer', native_runtime='game')
+            self.assertEqual(service.state, Path('/operations-state/work/operations'))
+            self.assertEqual(state_root('mc-god', native_role='qd-engineer', native_runtime='game'),
+                             Path('/operations-state'))
+            self.assertEqual(state_root('default'), Path('/state'))
+            with self.assertRaises(ValueError): state_root('mc-god')
+            with self.assertRaises(ValueError):
+                state_root('mc-god', native_role='mc-god', native_runtime='game')
+        with patch.dict(os.environ, {'QIANDENG_OPERATIONS_STATE_DIR':'/wrong-legacy-storage'}):
+            self.assertEqual(OperationsTools('mc-god',native_role='qd-engineer',native_runtime='game').state,
+                             Path('/operations-state/work/operations'))
+
+    @unittest.skipIf(os.name=='nt','native module uses Linux fcntl')
+    def test_coordinator_binds_reports_planning_and_delegation_to_same_shared_state(self):
+        import types
+        from world_team_hosts import MIGRATIONS
+        from world_operations import WorldPlanning
+        self.manifest.write_text(json.dumps({'schema':2,
+            'phases':{name:'active' for name in MIGRATIONS},
+            'retired':['qd-diagnostics','mc-priest','mc-guard-kirito'],'dormant':['mc-guard-naruto']}))
+        registered = {}
+        class App:
+            def __init__(self, name): pass
+            def tool(self):
+                def register(fn): registered[fn.__name__] = fn; return fn
+                return register
+            def run(self, **kwargs): pass
+        with patch.dict(os.environ, {'QIANDENG_OPERATIONS_STATE_DIR':'/wrong-filtered-value'}), \
+                patch.object(native,'STATE',Path('/state')), \
+                patch.dict(sys.modules, {'mcp.server.fastmcp':types.SimpleNamespace(FastMCP=App)}), \
+                patch.object(sys,'argv',['operations_team_mcp.py','--role','default',
+                    '--native-role','qd-steward','--native-runtime','game']), \
+                patch('world_operations.WorldPlanning', wraps=WorldPlanning) as planning:
+            mcp_module.main()
+            self.assertEqual(native.STATE, Path('/operations-state'))
+            self.assertEqual(planning.call_args.kwargs['state'], Path('/operations-state/work/operations'))
+            snapshot = registered['operations_snapshot']()
+            self.assertEqual(snapshot['operationsStateDirectory'], '/operations-state/work/operations')
+
     @unittest.skipIf(os.name=='nt','real fcntl ledger is tested in Linux image')
     def test_new_requests_use_game_host_and_legacy_pending_stays_at_original_host(self):
         with patch.object(native,'STATE',self.root), patch.object(native,'api',return_value={'task_id':'task-new'}) as api:
@@ -72,6 +115,27 @@ class HostedOperationsTests(unittest.TestCase):
             self.assertEqual(client.request.call_args.args,('GET','/agents/qd-engineer/agent-status'))
         with self.assertRaises(ValueError):
             native.target_host('mc-god',{'runtime':'game','agentId':'mc-god'})
+
+    @unittest.skipIf(os.name=='nt','native module uses Linux fcntl')
+    def test_consolidated_roles_keep_native_coordinator_and_archived_task_hosts(self):
+        from world_team_hosts import MIGRATIONS
+        self.manifest.write_text(json.dumps({'schema':2,
+            'phases':{name:'active' for name in MIGRATIONS},
+            'retired':['qd-diagnostics','mc-priest','mc-guard-kirito'], 'dormant':['mc-guard-naruto']}))
+        with patch.object(native,'STATE',self.root), patch.object(native,'api',return_value={'task_id':'task-new'}) as api:
+            result = native.delegate('default','mc-god','inspect current source')
+            payload = api.call_args.kwargs['json']
+            self.assertEqual(result['role'], 'mc-god')
+            self.assertEqual(result['nativeHost'], TARGET)
+            self.assertEqual(payload['request_context']['root_agent_id'], 'qd-steward')
+        for role, target in [('mc-herald','qd-diagnostics'), ('mc-priest','mc-priest'),
+                             ('mc-guard-kirito','mc-guard-kirito'), ('mc-guard-naruto','mc-guard-naruto')]:
+            with self.assertRaisesRegex(ValueError,'team_native_host_inactive'):
+                native.target_host(role)
+            original = {'runtime':'operations','agentId':role}
+            migrated = {'runtime':'game','agentId':target}
+            self.assertEqual(native.target_host(role, original), original)
+            self.assertEqual(native.target_host(role, migrated), migrated)
 
     def test_existing_stdio_engineer_tools_recheck_host_after_cutover(self):
         import types

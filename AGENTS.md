@@ -1,5 +1,15 @@
 # 千灯纪整合项目
 
+2026-09-14 最终增量：survivor现为2.2.0-autonomy4，Qwen保持autonomy3进程加/ops挂载补丁。连续原会话模型回合及放置/导航已实测；第四回合后发现原生自卫反射freeze会无限延长goto时间。原t22经一次精确停止取得同epoch的cancelled终态，原controller自然结算failed，不冒充自动超时触发。新增只由controller驱动的goto总等待5分钟：准确身体/维度/epoch/taskId匹配、持久停止意图后发一次task_stop，真实终态才结算，未知不重发也不泛停；其它任务不类推。导航8/controller68/Linux网关31/生活伙伴41项通过。原UUID/session/背包保留，无MC/Qwen重启；详见docs/AUTONOMY-RECOVERY.md。
+
+最终团队增量：team_context公共投影不构造旧OperationsTools身份，10实际注册卡协议与10生产driver重连均验证；女神已3轮自然完成，修复后真实context0.236秒。工程status默认不扫描工作树，paths定向查询才展示该范围，dirty/sourceSha256为null表示未验；capture_source/test/commit仍完整新鲜字节。真实自然轮status1.364秒、定向diff1.758秒；工程师改了独立候选代码但未测试/提交，不能当线上修复。00:55超时正常释放，01:05下轮自然启动。10角色工程引用已原生同步，引用更新会原样ETag保存SKILL.md使扫描缓存失效再enable；角色配置不变，Qwen完整10角色/94技能检查通过。
+
+2026-09-14 自主运行恢复覆盖下文暂停/旧路由状态：用户已确认客户端可以进入。已按当前Qwen原生进程与逐动作证据归档旧桐人孤儿任务、旧运营周期和共享占位，不能把404改成完成或重投旧动作。游戏Qwen与survivor现用2.2.0-autonomy3镜像，原UUID、背包、生活session和角色即时模型均保留；新增原控制器drain，在当前回合及物理动作收尾后暂停，resume保留lastDrain。宿主8088未动，无新增宿主循环。部署/历史恢复见docs/AUTONOMY-RECOVERY.md与docs/SURVIVOR-DRAIN-AND-INTERACTION-RECEIPTS.md。
+
+服务端Iron桥98aead6d…efa7668新增Numen原TaskRecord交互回执。放置/农耕/开容器每个actionId只提交一次，初始RCON响应缺失或损坏后只读同ID查询；确认点击终态仍须另验实际效果，效果未验证返回带观察的普通失败，真实未知保留阻断。已受理请求跨重启不重放，预检拒绝暂不持久化。独立72mod实机23项通过，包含真实Python正常/丢首ACK两场景各一次物品消耗；生产曾明确日志拒绝的木板与迟到验收成功的泥土各自原始证据归档，不能混淆。新增只读world_interaction_health探针，旧全项目源码证明不改写。
+
+运营四条旧用途路由已并入现役天神/策划/桐人，默认司灯与工程MCP、手工CLI均按精确宿主选择/operations-state，不依赖MCP未继承的自定义环境变量。原生Cron guard2对明确timeout/cancelled释放当前执行占位，其它unknown仍须核对。team_case默认最近3条完整事件并可向前分页；女神每轮一个事项、480秒，其余工程/策划仍360秒，原节奏与模型不变。10角色技能引用已原生同步。司灯日报及专业策划任务已真实完成，9月14日日切发布石磊/烛九两张货单，禾叔仍草案，不能宣称三张全发布或玩家已完成。详见docs/OPERATIONS-AUTONOMY-RECOVERY.md。
+
 2026-09-13 客户端注册表报错：远端实际运行实例未识别两支 qiandeng_chanting 法杖。D项目两端staff SHA一致b867…f9e5；旧分发0.1.0～0.1.3未打包staff，0.1.4还缺当前maid-bridge且god-voice已旧。已从严格client锁导出0.1.5-local完整mrpack（88mods/164覆盖文件）及staff+精确voicechat依赖的小补丁；无服务端/存档改动。外机须安装并完整重启，不能把包校验成功当成已进服；此前用户“能连接”只证明网络/服务器可见，不覆盖这次模组同步失败。详见docs/CLIENT-REGISTRY-COMPATIBILITY.md。
 
 2026-09-13 局域网入口按用户要求改为默认 TCP 25565（对外 0.0.0.0），当前 LAN 为 192.168.3.133；Simple Voice Chat 对外 UDP24455，voice_host=24455 沿用客户端连接主机。原127.0.0.1:25567只作宿主脚本兼容入口，内部mc:25599和管理/RCON回环边界保留。无专用服LAN广播，玩家应手动添加192.168.3.133；不增宿主广播进程。此条覆盖旧“游戏仅本机25567”说明。

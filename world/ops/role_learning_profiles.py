@@ -186,7 +186,7 @@ def read_safe(path):
 def validate_guard(state, runtime, proc=Path('/proc')):
     """A stale startup marker or reused PID must not certify the cron guard."""
     marker = read_safe(Path(state) / 'learning-runtime.json')
-    assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == 1
+    assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == 2
     assert marker['nativeToolGuardVersion'] == 1
     assert marker['llmPolicyVersion'] == 1
     assert marker['qwenVersion'] == '2.2.0' and marker['scheduler'] == 'native-qwen-cron'

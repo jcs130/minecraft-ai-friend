@@ -12,16 +12,29 @@ import uuid
 import httpx
 
 STATE = Path(os.environ.get('QIANDENG_OPERATIONS_STATE_DIR', '/state'))
-SPECIALISTS = ('mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
+# Only the engineer retains the operations report contract after consolidation.
+# Planner and survivor work uses their existing team/planning/life entry points;
+# a second background chat must not bypass the survivor's session and lease.
+SPECIALISTS = ('mc-god',)
+# Old task IDs/hosts remain queryable without granting new execution authority.
+RECORDED_ROLES = ('default', 'mc-god', 'mc-herald', 'mc-priest', 'mc-guard-kirito', 'mc-guard-naruto')
 COOLDOWN = 0
 DAILY_LIMIT = None
 TASK_TIMEOUT = 180
 TERMINAL = frozenset(('completed', 'failed', 'cancelled'))
 
 
+def bind_state(role, *, native_role=None, native_runtime=None):
+    """A role-bound MCP must share the scheduler's ledger despite env filtering."""
+    from operations_state import state_root
+    global STATE
+    STATE = state_root(role, native_role=native_role, native_runtime=native_runtime)
+    return STATE
+
+
 def target_host(role, recorded=None):
-    from world_team_hosts import migration_for, native_host
-    if role not in ('default', *SPECIALISTS):
+    from world_team_hosts import migration_for, native_host, require_host
+    if role not in RECORDED_ROLES:
         raise ValueError('unknown_operations_role')
     host = recorded if recorded is not None else native_host('operations:' + role)
     allowed = [{'runtime': 'operations', 'agentId': role}]
@@ -29,6 +42,8 @@ def target_host(role, recorded=None):
     if entry is not None:
         allowed.append(dict(entry['target']))
     if host not in allowed: raise ValueError('invalid_operations_task_host')
+    if recorded is None:
+        require_host('operations:' + role, host['runtime'], host['agentId'])
     return dict(host)
 
 
@@ -85,7 +100,7 @@ def archived_terminal(row):
     try:
         run_id, role, request_id = row['runId'], row['role'], row['requestId']
         if (not isinstance(run_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,120}', run_id)
-                or role not in SPECIALISTS or request_id != run_id+'-'+role): return False
+                or role not in RECORDED_ROLES[1:] or request_id != run_id+'-'+role): return False
         archive_path = STATE/'run-reports'/(run_id+'.json')
         report_path = STATE/'work/operations/reports'/role/(request_id+'.json')
         def read_evidence(path):
@@ -156,6 +171,7 @@ def delegate(caller, to_role, task):
         return {'ok': False, 'code': 'role_not_allowed'}
     if not isinstance(task, str) or not 1 <= len(task.strip()) <= 1800:
         return {'ok': False, 'code': 'invalid_task'}
+    caller_host = target_host(caller)
     reconcile_pending()
     with ledger() as rows:
         now = time.time()
@@ -179,7 +195,8 @@ def delegate(caller, to_role, task):
     text = ('处理司灯的一次委托。调用 operations_snapshot 后使用与你职责相关的 Skill。'
             '提交 submit_operations_report，request_id 必须为 '+request_id+'。最多3条发现和3条建议；'
             '无实时证据的结论标待验证，不能执行世界修改。完成后简短返回，不回调司灯。任务：'+task)
-    _, payload, _ = build_agent_chat_request(row['nativeHost']['agentId'], text, session_id=request_id, from_agent=caller)
+    _, payload, _ = build_agent_chat_request(row['nativeHost']['agentId'], text, session_id=request_id,
+        from_agent=caller_host['agentId'])
     payload['timeout'] = TASK_TIMEOUT
     try:
         result = api('POST', '/console/chat/task', to_role, recorded_host=row['nativeHost'], json=payload)

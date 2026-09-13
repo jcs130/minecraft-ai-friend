@@ -228,13 +228,29 @@ class TeamStore:
             ('id', 'title', 'category', 'author', 'owner', 'status', 'version', 'updated_at', 'document')} for row in rows],
             'notice': 'Case status is attributed team reporting. Read receipts before declaring a fix live.'}
 
-    def case(self, case_id):
+    def case(self, case_id, event_limit=3, before_seq=None):
+        if type(event_limit) is not int or not 1 <= event_limit <= 20:
+            raise ValueError('invalid_event_limit')
+        if before_seq is not None and (type(before_seq) is not int or before_seq < 1):
+            raise ValueError('invalid_before_seq')
         with self.db() as db:
             row = db.execute('SELECT * FROM cases WHERE id=?', (case_id,)).fetchone()
             if not row: return {'ok': False, 'code': 'case_not_found'}
-            events = [{'actor': r['actor'], 'at': r['at'], **json.loads(r['body'])}
-                      for r in db.execute('SELECT * FROM events WHERE case_id=? ORDER BY seq DESC LIMIT 20', (case_id,))]
-        return {'ok': True, 'case': self._case(row), 'events': list(reversed(events))}
+            query, args = 'SELECT * FROM events WHERE case_id=?', [case_id]
+            if before_seq is not None:
+                query += ' AND seq<?'; args.append(before_seq)
+            query += ' ORDER BY seq DESC LIMIT ?'; args.append(event_limit + 1)
+            found = list(db.execute(query, args))
+            selected = found[:event_limit]
+            events = [json.loads(r['body']) | {'seq': r['seq'], 'actor': r['actor'], 'at': r['at']}
+                      for r in reversed(selected)]
+        has_more = len(found) > event_limit
+        return {'ok': True, 'case': self._case(row), 'events': events,
+                'has_more': has_more,
+                'next_before_seq': selected[-1]['seq'] if has_more else None,
+                'notice': 'Current case/version with a chronological page of original events. '
+                          'Older events remain available using next_before_seq as before_seq; '
+                          'read them only when needed to verify the selected issue.'}
 
     def report(self, request_id, dedupe_key, title, category, observed, expected, evidence, assign_to=None):
         if not isinstance(dedupe_key, str) or not KEY.fullmatch(dedupe_key): raise ValueError('invalid_dedupe_key')

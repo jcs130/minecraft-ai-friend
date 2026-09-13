@@ -1,5 +1,13 @@
 # 大模型统一交给 QwenPaw Agent
 
+2026-09-13 路由修复：当前 10 个启用角色统一在游戏 QwenPaw 18089，宿主 8088 保持原用途，旧运营实例留在归档 profile。以下旧实例、额度和人物部署描述属于早期记录，以根 AGENTS 的最新运行状态为准。
+
+运营用途保留原名称和历史：`operations.diagnostics` → `qd-engineer`，`operations.events` → `qd-guild-planner`，`operations.controls` / `operations.exploration` → `qd-survivor`。这是职责目录，不是通用后台派工入口。当前 world 消费者只接受五项 `world.*`，NPC 只接受原三类用途，生活控制器只使用 `survivor.autonomy`。活动通过团队工单/原公会入口，体验通过团队工单交原生活会话处理；不会为桐人创建第二条生活推理循环。
+
+`operations_delegate` 只允许逻辑角色 `mc-god`（实际 `game:qd-engineer`）完成一次运营证据报告；原生请求根角色跟随司灯当前宿主 `qd-steward`。四个停用/休眠角色不接受新委托，但原账本、角色署名、原任务 ID 与记录的宿主保留，旧回执仍可查询。工单创建、原生任务受理、实际执行和完成验收须分别核对。
+
+迁移后运营 MCP 不依赖父容器的状态目录环境变量：Qwen 的子进程环境白名单会过滤它。`operations_state.py` 依据已验证的逻辑角色和原生 `--native-runtime/--native-role`，将游戏托管运营角色的报告、规划请求和派工账本绑定到 `/operations-state`；原运营实例仍使用 `/state`。`WorldPlanning` 必须显式复用 `OperationsTools.state`，否则工具回执可能成功但文件仍落在游戏目录，NPC 消费者读不到。首次实机暴露的原报告/请求保持原字节、ID 和时间交接到共享目录，不重新调用司灯。
+
 2026-09-08 后续设计：用户要求每位女仆拥有独立人格 Agent，复用原生能力为 MCP。已核实的接口、身份桥和实施边界见 [女仆独立 Agent 设计](MAID-AGENTS-DESIGN.md)。当前本文描述的共享文本入口仍在线，独立人物与身体工具尚未部署。
 
 所有生成式模型推理由 QwenPaw 里的具名 Agent 执行。游戏代码只提交任务、读取结果并校验游戏行为，不配置供应商密钥、不自行选择云模型，不在失败后另换角色再请求一次。

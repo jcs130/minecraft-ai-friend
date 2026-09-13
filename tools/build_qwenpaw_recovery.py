@@ -51,7 +51,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--index-url', default='https://pypi.org/simple')
+    parser.add_argument('--tag-suffix', default='recovery1',
+                        help='New immutable image release suffix; defaults to the original recovery release')
+    parser.add_argument('--target', choices=['both', 'game', 'survivor'], default='both',
+                        help='Build only the selected service when its peer must keep running')
     args = parser.parse_args()
+    import re
+    if not re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,48}', args.tag_suffix):
+        parser.error('invalid image tag suffix')
+    tags = {key: value.rsplit('-', 1)[0] + '-' + args.tag_suffix for key, value in TAGS.items()}
+    if args.target != 'both':
+        tags = {args.target: tags[args.target]}
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     run = ROOT / 'runtime' / ('qwenpaw-recovery-' + stamp + '-' + uuid.uuid4().hex[:8])
     sources = stage(run / 'context')
@@ -61,7 +71,7 @@ def main():
               'historicalImagesRecreated': False}
     (run / 'source-manifest.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     if args.build:
-        for target, tag in TAGS.items():
+        for target, tag in tags.items():
             command = ['docker', 'build', '--progress', 'plain', '--target', target,
                        '--build-arg', 'PIP_INDEX_URL=' + args.index_url,
                        '-t', tag, str(run / 'context')]
@@ -72,7 +82,8 @@ def main():
             image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', tag], encoding='utf-8'))[0]
             report['images'][target] = {'tag': tag, 'id': image['Id'], 'size': image['Size']}
             (run / 'build-result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-        published = ROOT / 'server' / 'runtime-images' / 'qwenpaw-recovery.json'
+        receipt_name = 'qwenpaw-recovery.json' if args.target == 'both' else args.target + '-recovery.json'
+        published = ROOT / 'server' / 'runtime-images' / receipt_name
         published.parent.mkdir(parents=True, exist_ok=True)
         published.write_text(json.dumps(report | {'buildReceipt': str(run / 'build-result.json')}, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'ok': True, 'receipt': str(run / 'build-result.json'),

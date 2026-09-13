@@ -43,6 +43,42 @@ def read_json(path, limit=2*1024*1024):
     return value
 
 
+def public_snapshot(public=Path('/public')):
+    """Read the shared, bounded observation projection without adopting an operations identity."""
+    public = Path(public)
+    result = {'schema': 1, 'observedAt': datetime.now(timezone.utc).isoformat(),
+              'mode': 'observation_and_proposals', 'worldActionsAllowed': False, 'snapshots': {}}
+    for name in ('world', 'health', 'operations'):
+        try:
+            source = read_json(public / (name + '.json'))
+            stamp = source.get('generatedAt') or source.get('checked_at') or source.get('timestamp') or source.get('ts')
+            if isinstance(stamp, (int, float)):
+                at = datetime.fromtimestamp(stamp / 1000, timezone.utc)
+            else:
+                at = datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
+                if at.tzinfo is None: raise ValueError('timestamp_without_timezone')
+            age = (datetime.now(timezone.utc) - at).total_seconds()
+            fresh = -5 <= age <= 300
+            if name == 'operations':
+                body = {k: source.get(k) for k in ('checks', 'services', 'issues')}
+                body['services'] = [{k:s[k] for k in ('id','label','group','state','health','ready') if k in s}
+                    for s in source.get('services', []) if s.get('group') not in ('legacy-team', 'retired')]
+                body['issues'] = [s for s in source.get('issues', []) if s.get('code') not in ('runtime_versions_differ', 'host_non_game_jobs')]
+            elif name == 'health':
+                body = {k: source.get(k) for k in ('ok', 'services', 'scope', 'unverified')}
+            else:
+                # Avoid resending the full archived skill catalog every model round.
+                body = {k:source[k] for k in ('available','world','npc','players','waypoints','guild','warnings') if k in source}
+                skills=source.get('skills',{})
+                body['skills']={k:skills[k] for k in ('available','featured','archivedCount','passiveCount') if k in skills}
+            result['snapshots'][name] = {'fresh': fresh, 'ageSeconds': round(age, 1), 'timestamp': stamp,
+                'sha256': hashlib.sha256(json.dumps(source, sort_keys=True, ensure_ascii=False).encode()).hexdigest(), 'data': body}
+        except (OSError, ValueError, TypeError, OverflowError):
+            result['snapshots'][name] = {'fresh': False, 'code': 'snapshot_unavailable'}
+    result['ok'] = all(v['fresh'] for v in result['snapshots'].values())
+    return result
+
+
 class OperationsTools:
     def __init__(self, role, public=Path('/public'), state=None, *, native_role=None, native_runtime=None,
                  workspace_root=Path('/state/work/workspaces')):
@@ -50,7 +86,9 @@ class OperationsTools:
             raise ValueError('unknown_role')
         operation_arguments(role, native_role, native_runtime)
         self.role, self.public = role, Path(public)
-        self.state = Path(state) if state is not None else Path(os.environ.get('QIANDENG_OPERATIONS_STATE_DIR', '/state')) / 'work/operations'
+        from operations_state import state_root
+        self.state = Path(state) if state is not None else state_root(role,
+            native_role=native_role, native_runtime=native_runtime) / 'work/operations'
         self.native_role = native_role or role
         self.workspace_root = Path(workspace_root)
         if native_role:
@@ -58,37 +96,7 @@ class OperationsTools:
             require_host('operations:' + role, native_runtime, native_role)
 
     def snapshot(self):
-        result = {'schema': 1, 'role': self.role, 'observedAt': datetime.now(timezone.utc).isoformat(),
-                  'mode': 'observation_and_proposals', 'worldActionsAllowed': False, 'snapshots': {}}
-        for name in ('world', 'health', 'operations'):
-            try:
-                source = read_json(self.public / (name + '.json'))
-                stamp = source.get('generatedAt') or source.get('checked_at') or source.get('timestamp') or source.get('ts')
-                if isinstance(stamp, (int, float)):
-                    at = datetime.fromtimestamp(stamp / 1000, timezone.utc)
-                else:
-                    at = datetime.fromisoformat(str(stamp).replace('Z', '+00:00'))
-                    if at.tzinfo is None: raise ValueError('timestamp_without_timezone')
-                age = (datetime.now(timezone.utc) - at).total_seconds()
-                fresh = -5 <= age <= 300
-                if name == 'operations':
-                    body = {k: source.get(k) for k in ('checks', 'services', 'issues')}
-                    body['services'] = [{k:s[k] for k in ('id','label','group','state','health','ready') if k in s}
-                        for s in source.get('services', []) if s.get('group') not in ('legacy-team', 'retired')]
-                    body['issues'] = [s for s in source.get('issues', []) if s.get('code') not in ('runtime_versions_differ', 'host_non_game_jobs')]
-                elif name == 'health':
-                    body = {k: source.get(k) for k in ('ok', 'services', 'scope', 'unverified')}
-                else:
-                    # Avoid resending the full archived skill catalog every model round.
-                    body = {k:source[k] for k in ('available','world','npc','players','waypoints','guild','warnings') if k in source}
-                    skills=source.get('skills',{})
-                    body['skills']={k:skills[k] for k in ('available','featured','archivedCount','passiveCount') if k in skills}
-                result['snapshots'][name] = {'fresh': fresh, 'ageSeconds': round(age, 1), 'timestamp': stamp,
-                    'sha256': hashlib.sha256(json.dumps(source, sort_keys=True, ensure_ascii=False).encode()).hexdigest(), 'data': body}
-            except (OSError, ValueError, TypeError, OverflowError):
-                result['snapshots'][name] = {'fresh': False, 'code': 'snapshot_unavailable'}
-        result['ok'] = all(v['fresh'] for v in result['snapshots'].values())
-        return result
+        return public_snapshot(self.public) | {'role': self.role, 'operationsStateDirectory': str(self.state)}
 
     def reports(self):
         rows = []
@@ -193,9 +201,10 @@ def main():
         return tools.reference(topic)
 
     if args.role == 'default':
-        from operations_native_tasks import delegate, task_status
+        from operations_native_tasks import bind_state, delegate, task_status
+        bind_state(args.role, native_role=args.native_role, native_runtime=args.native_runtime)
         from world_operations import WorldPlanning
-        planning = WorldPlanning()
+        planning = WorldPlanning(public=tools.public, state=tools.state)
 
         @guarded.tool()
         def operations_world_planning() -> dict:
@@ -209,7 +218,11 @@ def main():
 
         @guarded.tool()
         def operations_delegate(to_role: str, task: str) -> dict:
-            """Delegate one task to a fixed teammate via native QwenPaw tasks; one durable active task, no automatic retries."""
+            """Delegate one evidence/report task to mc-god (the hosted world engineer).
+
+            Other roles are retired or use existing team/planning/life entry
+            points. One durable active task; no automatic retries.
+            """
             return delegate(args.role, to_role, task)
 
         @guarded.tool()

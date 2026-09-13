@@ -61,6 +61,76 @@ class TeamTests(unittest.TestCase):
         self.report('feedback-test-0002', '同问题再次发生')
         self.assertEqual(self.goddess.case(case_id)['case']['status'], 'open')
 
+    def test_case_pages_preserve_every_event_and_current_version(self):
+        case_id = self.report()['caseId']
+        for n in range(1, 8):
+            self.report('feedback-page-' + str(n), 'Original observation ' + str(n))
+        with self.goddess.db() as db:
+            before = [tuple(row) for row in db.execute('SELECT * FROM events ORDER BY seq')]
+        first = self.goddess.case(case_id)
+        self.assertEqual([e['observed'] for e in first['events']],
+                         ['Original observation ' + str(n) for n in (5, 6, 7)])
+        self.assertTrue(first['has_more'])
+        # Another writer can append while this reader is walking older evidence.
+        self.report('feedback-page-late', 'Late observation')
+        newer = first['events']
+        cursor = first['next_before_seq']
+        while cursor is not None:
+            page = self.goddess.case(case_id, event_limit=2, before_seq=cursor)
+            self.assertEqual(page['case']['version'], 9)
+            self.assertLess(page['events'][-1]['seq'], cursor)
+            newer = page['events'] + newer
+            cursor = page['next_before_seq']
+        self.assertEqual([e['seq'] for e in newer], [row[0] for row in before])
+        self.assertEqual(newer[0]['actor'], 'game:qd-survivor')
+        self.assertEqual(newer[0]['evidence'], ['task-test / action-test: failed'])
+        with self.goddess.db() as db:
+            self.assertEqual([tuple(row) for row in db.execute('SELECT * FROM events ORDER BY seq')][:-1], before)
+
+    def test_case_page_boundary_and_validation(self):
+        case_id = self.report()['caseId']
+        for n in range(2): self.report('feedback-boundary-' + str(n))
+        page = self.goddess.case(case_id)
+        self.assertFalse(page['has_more'])
+        self.assertIsNone(page['next_before_seq'])
+        empty = self.goddess.case(case_id, before_seq=page['events'][0]['seq'])
+        self.assertEqual(empty['events'], [])
+        self.assertFalse(empty['has_more'])
+        for bad in (0, 21, True, 1.5, '3'):
+            with self.assertRaisesRegex(ValueError, 'invalid_event_limit'):
+                self.goddess.case(case_id, event_limit=bad)
+        for bad in (0, -1, True, 1.5, '2'):
+            with self.assertRaisesRegex(ValueError, 'invalid_before_seq'):
+                self.goddess.case(case_id, before_seq=bad)
+
+    def test_registered_case_tool_exposes_progressive_history(self):
+        from world_team_mcp import register_team_tools
+        class App:
+            def __init__(self): self.tools = {}
+            def tool(self):
+                def add(fn): self.tools[fn.__name__] = fn; return fn
+                return add
+        app = App()
+        register_team_tools(app, 'game:mc-god', self.path)
+        case_id = self.report()['caseId']
+        self.report('feedback-tool-second')
+        page = app.tools['team_case'](case_id, event_limit=1)
+        self.assertTrue(page['has_more'])
+        older = app.tools['team_case'](case_id, before_seq=page['next_before_seq'])
+        self.assertEqual(len(older['events']), 1)
+        self.assertFalse(older['has_more'])
+
+    def test_case_cursor_does_not_include_other_cases(self):
+        case_id = self.report()['caseId']
+        other = self.goddess.report('other-report', 'different-issue', 'Other issue', 'bug',
+                                   'Unrelated evidence', 'Expected behavior', ['other:1'])
+        self.report('feedback-isolated-second')
+        page = self.goddess.case(case_id, event_limit=1)
+        older = self.goddess.case(case_id, before_seq=page['next_before_seq'])
+        self.assertEqual(len(older['events']), 1)
+        self.assertNotEqual(older['events'][0]['seq'], self.goddess.case(other['caseId'])['events'][0]['seq'])
+        self.assertFalse(older['has_more'])
+
     def test_unregistered_role_and_evidenceless_claim_rejected(self):
         with self.assertRaisesRegex(ValueError, 'unregistered'):
             TeamStore('mc-god', self.path)

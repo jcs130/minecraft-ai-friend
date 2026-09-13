@@ -40,8 +40,19 @@ def main() -> None:
         raise SystemExit("Exact installed Iron's 1.21.1-3.16.3 JAR is required")
     # Other mod libraries supply referenced types (Curios, Iron's Lib, GeckoLib).
     mod_jars = sorted(p for p in args.mods.glob("*.jar") if not p.name.startswith("qiandeng-irons-bridge-"))
-    classpath = os.pathsep.join([*selected, *(str(p) for p in mod_jars)])
     build = (SOURCE / "build").resolve()
+    build.mkdir(parents=True, exist_ok=True)
+    # The server-only interaction receipt adapter uses the installed Numen API.
+    # Its public types live in the exact main mod's nested jar, not the mod root.
+    numen = args.mods / "numen-neoforge-1.21.1-0.1.1.jar"
+    with zipfile.ZipFile(numen) as archive:
+        api_entries = [n for n in archive.namelist() if n.startswith("META-INF/jarjar/")
+                       and n.endswith(".jar") and "numen_api" in n]
+        if len(api_entries) != 1:
+            raise SystemExit("Exact installed Numen API dependency required")
+        numen_api = build / "numen-api-dependency.jar"
+        numen_api.write_bytes(archive.read(api_entries[0]))
+    classpath = os.pathsep.join([*selected, str(numen_api), *(str(p) for p in mod_jars)])
     classes = build / "classes"
     if not build.is_relative_to(SOURCE.resolve()):
         raise SystemExit("Build output escaped owned source directory")

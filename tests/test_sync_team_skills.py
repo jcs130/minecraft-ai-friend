@@ -1,6 +1,7 @@
 """Native managed-file sync must not clobber concurrent edits or active roles."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -103,6 +104,50 @@ class SyncTeamSkillTests(unittest.TestCase):
         self.native.busy = True
         with self.assertRaisesRegex(ValueError, 'native_role_busy'): self.run_sync()
         self.assertTrue(all(c[0] == 'GET' for c in self.native.calls))
+
+    def test_reference_only_update_invalidates_scan_with_same_content_etag_save(self):
+        self.native.files['skills/qd-test/SKILL.md'][0] = 'new skill'
+        result = self.run_sync()
+        puts = [c for c in self.native.calls if c[0] == 'PUT']
+        self.assertEqual(puts[-1][2], {'content': 'new skill'})
+        self.assertEqual(puts[-1][3], {'If-Match': 'v1'})
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlparse(puts[-1][1]).query)['path'],
+                         ['skills/qd-test/SKILL.md'])
+        self.assertLess(self.native.calls.index(puts[-1]),
+                        next(i for i,c in enumerate(self.native.calls) if c[1].endswith('/enable')))
+        self.assertEqual(self.native.files['skills/qd-test/SKILL.md'][0], 'new skill')
+        journal = json.loads((Path(result['backup'])/'journal.json').read_text('utf8'))
+        self.assertTrue(any(r.get('nativeSameContentSaveForScan') for r in journal['completed']))
+
+    def test_reference_only_scan_touch_preserves_concurrent_skill_edit(self):
+        self.native.files['skills/qd-test/SKILL.md'][0] = 'new skill'
+        def call(*args, **kwargs):
+            if args[1] == 'PUT' and urllib.parse.parse_qs(urllib.parse.urlparse(args[2]).query).get('path') == ['skills/qd-test/SKILL.md']:
+                self.native.race = True
+            return self.native(*args, **kwargs)
+        with self.assertRaises(urllib.error.HTTPError):
+            syncer.sync(['operations:mc-god'], ['qd-test'], apply=True, root=self.root, call=call, upload=self.native.upload)
+        self.assertEqual(self.native.files['skills/qd-test/SKILL.md'][0], 'concurrent personal edit')
+        self.assertFalse(self.native.skills['qd-test'])
+        self.assertFalse(any(c[1].endswith('/enable') for c in self.native.calls))
+
+    def test_native_same_value_save_changes_actual_scan_signature(self):
+        try:
+            from qwenpaw.services.workspace_files import save_text_file, file_etag
+            from qwenpaw.security.skill_scanner import _get_dir_mtime, compute_skill_content_hash
+        except ImportError:
+            self.skipTest('pinned Qwen file/scanner implementation is tested in the Linux image')
+        skill = self.root/'native-scan-fixture'; refs = skill/'references'; refs.mkdir(parents=True)
+        main = skill/'SKILL.md'; ref = refs/'a.md'
+        main.write_text('Unchanged skill',encoding='utf8'); ref.write_text('Old reference',encoding='utf8')
+        for path in (main, ref, refs, skill): os.utime(path, (1000,1000))
+        before = _get_dir_mtime(skill)
+        save_text_file(skill, 'references/a.md', 'Updated reference', file_etag(ref.stat()))
+        self.assertEqual(_get_dir_mtime(skill), before)
+        source_hash = compute_skill_content_hash(skill)
+        save_text_file(skill, 'SKILL.md', main.read_text('utf8'), file_etag(main.stat()))
+        self.assertNotEqual(_get_dir_mtime(skill), before)
+        self.assertEqual(compute_skill_content_hash(skill), source_hash)
 
     def test_becomes_busy_at_mutation_boundary_does_not_write(self):
         original = self.native

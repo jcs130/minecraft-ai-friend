@@ -1,10 +1,12 @@
 """Real Numen contract fixtures, no live game, runtime writes, or model calls."""
 import copy
+import base64
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
@@ -38,6 +40,10 @@ class FakeGateway:
         self.qualified_slots = {}
         self.on_menu_page = lambda reply: None
         self.native_reply = {'accepted': True}
+        self.interaction_receipts = {}
+        self.interaction_states = []
+        self.on_interaction_receipt = lambda reply: None
+        self.interaction_epoch = '90123456-1234-1234-1234-123456789abc'
         self.on_interact = lambda args: None
         self.on_transfer = lambda args: None
         self.scan_reply = None
@@ -102,6 +108,21 @@ class FakeGateway:
 
     def cmd(self, command):
         self.calls.append(('rcon', command))
+        if command.startswith(f'qdworld interact {BODY} '):
+            _, _, _, request, payload = command.split(' ')
+            args = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+            native = self._invoke('interact_at', args)
+            result = native if 'success' in native else {'success': True, 'message': 'native single click ended'}
+            self.interaction_receipts[request] = {'schema': 1, 'capability': 'numen_interaction_receipt_v1',
+                'actorUuid': BODY, 'requestId': request, 'tool': 'interact_at', 'args': args,
+                'epoch': self.interaction_epoch, 'status': 'terminal', 'result': result}
+        if command.startswith((f'qdworld interact {BODY} ', f'qdworld interaction {BODY} ')):
+            request = command.split(' ')[3]
+            receipt = copy.deepcopy(self.interaction_receipts[request])
+            if self.interaction_states:
+                receipt['status'] = self.interaction_states.pop(0)
+            self.on_interaction_receipt(receipt)
+            return 'QD_WORLD_INTERACTION_JSON ' + json.dumps(receipt)
         if command.startswith(f'qdworld scan {BODY} '):
             radius = int(command.split(' ')[3])
             reply = self.scan_reply if self.scan_reply is not None else self.scan_response(radius_searched=radius)
@@ -155,7 +176,9 @@ class WorldActionTests(unittest.TestCase):
         self.world = WorldActions(self.gateway, sleep=lambda _: None, max_polls=2)
 
     def prepare(self, tool='place_block', args=None):
-        return self.world.prepare(tool, args if args is not None else {**POINT, 'item_id': 'minecraft:oak_planks'}, self.gateway.snapshot())
+        plan = self.world.prepare(tool, args if args is not None else {**POINT, 'item_id': 'minecraft:oak_planks'}, self.gateway.snapshot())
+        plan['actionId'] = uuid.uuid4().hex
+        return plan
 
     def own(self, point, block):
         write_json(self.state / 'world-owned.json', {'schema': 1, 'blocks': {
@@ -205,14 +228,166 @@ class WorldActionTests(unittest.TestCase):
         self.assertIn('world-owned.json', [p.name for p in self.state.iterdir()])
 
     def test_accepted_click_without_world_change_never_claims_completed_or_replays(self):
+        result = self.world.dispatch(self.prepare())
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['verified'])
+        self.assertFalse(result['data']['retryAutomatically'])
+        self.assertEqual(result['data']['nativeInteractionReceipt']['status'], 'terminal')
+        self.assertEqual(result['data']['latestObservation']['blocks'][0]['block'], 'minecraft:air')
+        self.assertEqual(result['data']['latestObservation']['body']['counts']['minecraft:oak_planks'], 8)
+        self.assertEqual(len(self.gateway.mutations()), 1)
+
+    def test_native_occlusion_terminal_is_a_normal_rejection_with_exact_receipt(self):
+        self.gateway.native_reply = {'success': False, 'message': 'aim is blocked by short_grass'}
+        plan = self.prepare()
+        result = self.world.dispatch(plan)
+        self.assertFalse(result['success'])
+        self.assertEqual('aim is blocked by short_grass', result['message'])
+        receipt = result['data']['nativeInteractionReceipt']
+        self.assertEqual(plan['actionId'], receipt['requestId'])
+        self.assertEqual('terminal', receipt['status'])
+        self.assertFalse(result['data']['retryAutomatically'])
+        self.assertEqual(1, len(self.gateway.mutations()))
+        self.assertFalse((self.state / 'world-owned.json').exists())
+
+    def test_native_pending_reads_same_request_until_terminal_without_resend(self):
+        self.gateway.interaction_states = ['accepted', 'terminal']
+        self.gateway.native_reply = {'success': False, 'message': 'native rejection after a tick'}
+        result = self.world.dispatch(self.prepare())
+        self.assertFalse(result['success'])
+        commands = [args for tool, args in self.gateway.calls if tool == 'rcon']
+        self.assertEqual(1, sum(command.startswith('qdworld interact ') for command in commands))
+        self.assertEqual(1, sum(command.startswith('qdworld interaction ') for command in commands))
+        self.assertEqual(1, len(self.gateway.mutations()))
+
+    def test_native_pending_without_terminal_keeps_unknown(self):
+        self.gateway.interaction_states = ['accepted', 'running']
         with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
             self.world.dispatch(self.prepare())
+        self.assertEqual(1, len(self.gateway.mutations()))
+
+    def test_native_receipt_identity_and_arguments_cannot_be_substituted(self):
+        for field, value in [('requestId', 'f' * 32), ('actorUuid', MERCHANT), ('tool', 'other'),
+                             ('epoch', 'not-an-epoch'), ('args', {'x': 100, 'y': 63, 'z': 99})]:
+            with self.subTest(field=field):
+                self.gateway.on_interaction_receipt = lambda reply, k=field, v=value: reply.update({k: v})
+                with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+                    self.world.dispatch(self.prepare())
+
+    def test_native_epoch_change_while_waiting_keeps_unknown(self):
+        self.gateway.interaction_states = ['accepted', 'terminal']
+        self.gateway.native_reply = {'success': False, 'message': 'old rejection'}
+        calls = []
+        def change(receipt):
+            calls.append(receipt)
+            if len(calls) == 2:
+                receipt['epoch'] = '80123456-1234-1234-1234-123456789abc'
+        self.gateway.on_interaction_receipt = change
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.world.dispatch(self.prepare())
+        self.assertEqual(1, len(self.gateway.mutations()))
+
+    def test_native_unknown_cannot_be_coerced_to_a_rejection(self):
+        self.gateway.interaction_states = ['unknown']
+        self.gateway.native_reply = {'success': False, 'message': 'missing after restart'}
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.world.dispatch(self.prepare())
+
+    def test_native_predispatch_rejection_requires_explicit_no_dispatch(self):
+        self.gateway.native_reply = {'success': False, 'message': 'another interaction occupies the body'}
+        self.gateway.interaction_states = ['rejected']
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.world.dispatch(self.prepare())
+        self.gateway.interaction_states = ['rejected']
+        self.gateway.on_interaction_receipt = lambda receipt: receipt.update(dispatched=False)
+        result = self.world.dispatch(self.prepare())
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['dispatched'])
+
+    def test_lost_native_response_never_resends(self):
+        def lost(_):
+            raise ConnectionError('fixture lost response after one dispatch')
+        self.gateway.on_interaction_receipt = lost
+        plan = self.prepare()
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.world.dispatch(plan)
+        commands = [args for tool, args in self.gateway.calls if tool == 'rcon']
+        self.assertEqual(1, sum(command.startswith('qdworld interact ') for command in commands))
+        self.assertEqual(1, sum(command.startswith('qdworld interaction ') for command in commands))
+        self.assertEqual(1, len(self.gateway.mutations()))
+        diagnostic = read_json(self.state / 'world-interaction-receipts' / (plan['actionId'] + '.json'))
+        self.assertEqual(diagnostic['firstFailure']['code'], 'rcon_response_unavailable')
+        self.assertEqual(diagnostic['firstFailure']['errorType'], 'ConnectionError')
+        self.assertNotIn('fixture lost response', json.dumps(diagnostic))
+
+    def test_lost_initial_ack_recovers_by_same_id_query_and_verifies_single_effect(self):
+        def place(args):
+            self.gateway.set_block(POINT, 'minecraft:oak_planks')
+            self.gateway.body['counts']['minecraft:oak_planks'] -= 1
+        self.gateway.on_interact = place
+        calls = []
+        def lose_first(reply):
+            calls.append(reply)
+            if len(calls) == 1:
+                raise ConnectionError('discarded first ACK')
+        self.gateway.on_interaction_receipt = lose_first
+        plan = self.prepare()
+        result = self.world.dispatch(plan)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['data']['evidence']['inventoryDelta']['minecraft:oak_planks'], -1)
+        self.assertEqual(1, len(self.gateway.mutations()))
+        diagnostic = read_json(self.state / 'world-interaction-receipts' / (plan['actionId'] + '.json'))
+        self.assertEqual(diagnostic['stage'], 'query')
+        self.assertEqual(diagnostic['lastValidatedReceipt']['requestId'], plan['actionId'])
+        self.assertEqual(diagnostic['lastValidatedReceipt']['status'], 'terminal')
+        self.assertEqual(diagnostic['firstFailure']['code'], 'rcon_response_unavailable')
+
+    def test_empty_or_unparseable_initial_ack_only_queries_then_returns_native_rejection(self):
+        original_cmd = self.gateway.cmd
+        self.gateway.native_reply = {'success': False, 'message': 'native rejected the click'}
+        for lost in ('', 'QD_WORLD_INTERACTION_JSON {not json'):
+            with self.subTest(lost=lost):
+                def first_response(command):
+                    result = original_cmd(command)
+                    return lost if command.startswith('qdworld interact ') else result
+                self.gateway.cmd = first_response
+                result = self.world.dispatch(self.prepare())
+                self.assertFalse(result['success'])
+                self.assertEqual(result['message'], 'native rejected the click')
+        self.assertEqual(len(self.gateway.mutations()), 2)
+
+    def test_native_terminal_with_unavailable_world_read_is_unverified_not_executing_unknown(self):
+        original = self.gateway._invoke
+        def lose_observation(tool, args=None):
+            if tool == 'inspect_block' and self.gateway.interaction_receipts:
+                raise ConnectionError('world read unavailable')
+            return original(tool, args)
+        self.gateway._invoke = lose_observation
+        result = self.world.dispatch(self.prepare())
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['verified'])
+        self.assertEqual(result['data']['latestObservation']['errorType'], 'ConnectionError')
         self.assertEqual(len(self.gateway.mutations()), 1)
+
+    def test_terminal_without_actual_native_result_remains_unknown(self):
+        self.gateway.on_interaction_receipt = lambda receipt: receipt.pop('result')
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.world.dispatch(self.prepare())
+
+    def test_missing_action_identity_refuses_before_mutation(self):
+        plan = self.prepare()
+        plan.pop('actionId')
+        result = self.world.dispatch(plan)
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['dispatched'])
+        self.assertEqual('world_interaction_request_id_missing', result['message'])
+        self.assertFalse(self.gateway.mutations())
 
     def test_placed_block_without_material_consumption_is_not_verified(self):
         self.gateway.on_interact = lambda _: self.gateway.set_block(POINT, 'minecraft:oak_planks')
-        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
-            self.world.dispatch(self.prepare())
+        result = self.world.dispatch(self.prepare())
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['verified'])
 
     def test_bed_second_cell_and_door_upper_cell_are_protected(self):
         self.gateway.set_block(POINT | {'z': 99}, 'minecraft:chest')
@@ -319,8 +494,9 @@ class WorldActionTests(unittest.TestCase):
 
     def test_opening_same_menu_class_at_different_block_does_not_authorize(self):
         self.gateway.gui_position = POINT | {'x': 101}
-        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
-            self.open_storage()
+        result = self.open_storage()
+        self.assertFalse(result['success'])
+        self.assertFalse(result['data']['verified'])
         self.assertFalse((self.state / 'world-gui.json').exists())
         self.assertEqual(len(self.gateway.mutations()), 1)
 

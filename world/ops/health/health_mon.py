@@ -197,6 +197,43 @@ def probe_panel_smoke():
             'model_routing': model_routing, 'survivor_party': survivor_party, 'world_team': world_team}
 
 
+def probe_operations_cycles():
+    """Detect stuck leases independently of native Cron's successful skips."""
+    import sqlite3
+    from contextlib import closing
+    try:
+        path = PROJECT / 'server/team-state/team.sqlite3'
+        budget = PROJECT / 'server/operations-agent-state/operations-budget/delegations.json'
+        for target in (path, budget):
+            if any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (target, *target.parents)):
+                raise ValueError('linked_cycle_health')
+        with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            cycles = [{'actor': r[0], 'status': r[1], 'startedAt': r[2]}
+                      for r in db.execute('SELECT actor,status,at FROM cycles LIMIT 100')]
+        if budget.stat().st_size > 262144:
+            raise ValueError('operations_ledger_too_large')
+        rows = json.loads(budget.read_text(encoding='utf-8-sig'))
+        if not isinstance(rows, list):
+            raise ValueError('operations_ledger_invalid')
+        now = time.time()
+        blocked = []
+        for row in cycles:
+            age = now - row['startedAt']
+            # Native deadline plus its 90s cleanup/grace window; goddess has an 8-minute shift.
+            stale_after = 570 if row['actor'] == 'game:mc-god' else 450
+            if row['status'] == 'unknown' or (row['status'] == 'running' and age > stale_after):
+                blocked.append({'kind': 'team-cycle', 'actor': row['actor'], 'status': row['status']})
+        pending = [r for r in rows if r.get('status') not in ('completed', 'failed', 'cancelled')]
+        for row in pending:
+            if row.get('status') in ('submission_uncertain', 'unknown') or now - row['startedAt'] > 450:
+                blocked.append({'kind': 'operations-reservation', 'runId': row['runId'], 'status': row['status']})
+        return {'ok': not blocked, 'blocked': blocked, 'pendingReservations': len(pending),
+                'modelRequests': 0, 'worldActions': 0, 'automaticRelease': False}
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.Error) as error:
+        return {'ok': False, 'errorType': type(error).__name__, 'automaticRelease': False}
+
+
 def probe_world_team():
     """Only local metadata, no model/admin request or world action is issued.
 
@@ -205,6 +242,9 @@ def probe_world_team():
     """
     now = time.time()
     checks, evidence = {}, {}
+    cycles = probe_operations_cycles()
+    checks['native_cycles_unblocked'] = cycles['ok']
+    evidence['nativeCycles'] = cycles
 
     def read(relative, maximum=262144):
         path = PROJECT / relative
@@ -389,6 +429,18 @@ def probe_survivor_fast_behavior():
     return result
 
 
+def probe_world_interaction():
+    """Query an unused native receipt ID; never submit an interaction."""
+    try:
+        spec = importlib.util.spec_from_file_location('qd_world_interaction_health', PROJECT/'tools/world_interaction_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(root=PROJECT)
+    except (OSError, ValueError, KeyError, TypeError, ImportError):
+        return {'ok': False, 'error': 'Native interaction receipt evidence unavailable',
+                'modelRequests': 0, 'worldActions': 0, 'interactionSubmissions': 0}
+
+
 def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
@@ -430,7 +482,7 @@ def probe_survivor():
         reason = source.get('pauseReason') or ''
         checks['no_unexpected_pause'] = (source.get('enabled') is True
             and source.get('status') not in ('paused', 'stopped', 'body_offline')) or (
-            source.get('enabled') is False and reason in ('operator_pause', 'operator_stop', ''))
+            source.get('enabled') is False and reason in ('operator_pause', 'operator_stop', 'operator_drain', ''))
         result = subprocess.run(['docker', 'inspect', 'qiandengji-survivor-1'], capture_output=True,
             text=True, encoding='utf-8', errors='replace', timeout=12)
         if result.returncode == 0:
@@ -478,9 +530,11 @@ def probe_survivor():
     behavior = probe_recorded_behavior('survivor-smoke.json', SURVIVOR_SMOKE_CHECKS)
     adventure_behavior = probe_recorded_behavior('survivor-adventure-smoke.json', SURVIVOR_ADVENTURE_CHECKS)
     fast_behavior = probe_survivor_fast_behavior()
+    interaction = probe_world_interaction()
+    checks['native_interaction_receipts'] = interaction['ok']
     return {'ok': all(checks.values()) and behavior['ok'] and adventure_behavior['ok'] and fast_behavior['ok'], 'checks': checks, 'paused': paused,
         'behavior': behavior, 'adventure_behavior': adventure_behavior,
-        'fast_system_behavior': fast_behavior,
+        'fast_system_behavior': fast_behavior, 'native_interaction': interaction,
         'scope': 'Live status, fast/slow protocol and supervision; separate recorded behavior evidence. No model calls; no blanket life-goal completion.'}
 
 

@@ -7,14 +7,14 @@ TOOLS = ('engineering_status', 'engineering_diff', 'engineering_test', 'engineer
 
 def register_engineering_tools(app, service):
     @app.tool()
-    def engineering_status() -> dict:
-        """查看独立源码分支、源码哈希与固定验收计划；实际源文件用本角色原生文件工具读写。"""
-        return service.status()
+    def engineering_status(capture_source: bool = False, paths: list[str] | None = None) -> dict:
+        """快速查看分支和固定验收计划；paths限定1-32个相对文件或目录才查工作改动，默认dirty=null表示未扫描。准备测试时才设capture_source=true（不传paths），完整读取当前源码取得新鲜sourceSha256。"""
+        return service.status(capture_source=capture_source, paths=paths)
 
     @app.tool()
-    def engineering_diff(max_chars: int = 24000) -> dict:
-        """查看有界代码差异；未跟踪文件需用原生read_file读取，差异不是已部署证明。"""
-        return service.diff(max_chars)
+    def engineering_diff(max_chars: int = 24000, paths: list[str] | None = None) -> dict:
+        """paths指定1-32个相对文件或目录，按需查看其Git差异；省略paths不扫描工作树。不生成源码快照，未跟踪文件需原生read_file读取。"""
+        return service.diff(max_chars, paths=paths)
 
     @app.tool()
     def engineering_test(plan_id: str, expected_source_sha256: str, request_id: str) -> dict:

@@ -224,6 +224,44 @@ class Controller:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
         self.save()
 
+    def drain_at_boundary(self, body):
+        """Stop scheduling after the current native turn and physical action settle."""
+        initial = read_json(self.root / 'control.json')
+        if (self.data.get('active') or initial.get('enabled') is not True
+                or (initial.get('drain') or {}).get('status') != 'requested'):
+            return False
+        # A model can finish after starting an asynchronous native action. The
+        # snapshot from the beginning of this tick may predate that action.
+        body = self.gateway.snapshot()
+        with action_lock(self.root, blocking=True):
+            control = read_json(self.root / 'control.json')
+            drain = control.get('drain') or {}
+            if control.get('enabled') is not True or drain.get('status') != 'requested':
+                return False
+            # Unknown retains its existing stronger stop path. No native stop,
+            # action dispatch, or receipt inference belongs to this boundary.
+            if (self.data.get('active') or body.get('ok') is not True or body.get('task', {}).get('busy') is not False
+                    or self.data.get('actionExecution', {}).get('inFlight')
+                    or (self.root / 'unknown.json').exists() or (self.root / 'inflight-action.json').exists()):
+                return False
+            lease_path = self.root / 'lease.json'
+            lease = read_json(lease_path) if lease_path.exists() else {}
+            if lease.get('status') in ('reserved', 'unknown'):
+                return False
+            if lease.get('status') == 'open':
+                write_json(lease_path, lease | {'status': 'closed'})
+            last = self.data.get('lastDecision') or {}
+            evidence = drain | {'status': 'completed', 'completedAt': int(self.clock() * 1000),
+                'terminalTurnId': last.get('turnId'), 'terminalTaskId': last.get('taskId'),
+                'nativeTaskCompleted': last.get('nativeTaskCompleted'),
+                'completionConfirmed': (self.data.get('actionExecution', {}).get('receipt') or {}).get('completionConfirmed'),
+                'actionReplayed': False, 'nativeTaskCancelled': False}
+            control.update(enabled=False, pauseReason='operator_drain', drain=evidence)
+            write_json(self.root / 'control.json', control)
+        self.data.update(status='paused', pauseReason='operator_drain')
+        self.record('operator_drained', **evidence)
+        return True
+
     def usage(self):
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
             unknown = {'modelRequests': None, 'promptTokens': None, 'completionTokens': None}
@@ -593,6 +631,7 @@ class Controller:
             'bodyName': self.settings['bodyName'], 'bodyUuid': self.settings['bodyUuid'],
             'generatedAt': utc(), 'enabled': control.get('enabled') is True,
             'status': self.data['status'], 'pauseReason': self.data.get('pauseReason') or control.get('pauseReason'),
+            'drain': control.get('drain'),
             'bodyReconnect': {k: self.data.get('bodyReconnect', {}).get(k) for k in
                               ('status', 'reason', 'checkedAt', 'nextCheckAt', 'verifiedAt')},
             'goal': (memory.get('goal') if memory.get('updatedAt', 0) >= control.get('missionChangedAt', 0)
@@ -669,12 +708,17 @@ class Controller:
                         self.data['cancellationStatus'] = 'native_terminal_confirmed'
         self.last_body = self.gateway.snapshot()
         if self.last_body.get('ok') and self.last_body.get('task', {}).get('busy'):
-            reply = self.gateway._invoke('task_stop')
-            if reply.get('success') is not True:
-                after = self.gateway.snapshot()
-                if not after.get('ok') or after.get('task', {}).get('busy'):
-                    self.pause('game_stop_uncertain')
-                    confirmed = False
+            if (hasattr(self.gateway, 'navigation_stop_pending')
+                    and self.gateway.navigation_stop_pending(self.last_body)):
+                self.data['cancellationStatus'] = 'navigation_stop_uncertain'
+                confirmed = False
+            else:
+                reply = self.gateway._invoke('task_stop')
+                if reply.get('success') is not True:
+                    after = self.gateway.snapshot()
+                    if not after.get('ok') or after.get('task', {}).get('busy'):
+                        self.pause('game_stop_uncertain')
+                        confirmed = False
         path = self.root / 'skill-job.json'
         if path.exists():
             job = read_json(path)
@@ -970,6 +1014,8 @@ class Controller:
             return False
 
     def submit_model(self, body, control):
+        if self.drain_at_boundary(body):
+            return
         now = self.clock()
         recent = [r for r in self.data['decisions'] if now - r['startedAt'] < 86400]
         limit, cooldown = self.daily_planning_limit(), self.model_cooldown()
@@ -1023,19 +1069,30 @@ class Controller:
         if requested_review:
             active['review'] = requested_review
         self.gateway.open_lease(turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, action_limit=6)
-        if message is not None:
-            reservation = self.party.reserve(message)
-            if not reservation or reservation.get('claimed') is not True:
-                self.gateway.close_lease(blocking=True)
-                self.data['status'] = 'party_wait'
-                return
-            active['partyReservation'] = reservation
-        self.data['active'] = active
-        self.reserve_review_state(active)
-        self.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now}]
-        self.data['nextDecisionAt'] = now + cooldown
-        self.data['status'] = 'thinking'
-        self.save()
+        # Serialize the final reservation with local operator control. A drain
+        # arriving during context construction must not buy a new model turn.
+        reserved = False
+        with action_lock(self.root, blocking=True):
+            latest = read_json(self.root / 'control.json')
+            if latest.get('enabled') is True and (latest.get('drain') or {}).get('status') != 'requested':
+                if message is not None:
+                    reservation = self.party.reserve(message)
+                    if reservation and reservation.get('claimed') is True:
+                        active['partyReservation'] = reservation
+                    else:
+                        self.data['status'] = 'party_wait'
+                if message is None or active.get('partyReservation'):
+                    self.data['active'] = active
+                    self.reserve_review_state(active)
+                    self.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now}]
+                    self.data['nextDecisionAt'] = now + cooldown
+                    self.data['status'] = 'thinking'
+                    self.save()
+                    reserved = True
+        if not reserved:
+            self.gateway.close_lease(blocking=True)
+            self.drain_at_boundary(body)
+            return
         try:
             if active.get('partyReservation') and hasattr(self.party, 'validate_session'):
                 self.party.validate_session(self.session, self.settings, reservation=active['partyReservation'])
@@ -1065,6 +1122,8 @@ class Controller:
     def tick(self):
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         body = self.gateway.snapshot()
+        if hasattr(self.gateway, 'enforce_navigation_deadline'):
+            body = self.gateway.enforce_navigation_deadline(body)
         self.last_body = body
         if hasattr(self.gateway, 'action_status'):
             execution = self.gateway.action_status(body)
@@ -1124,8 +1183,12 @@ class Controller:
                 self.data['status'] = 'acting'
             else:
                 self.finish_action_observation(body)
-                self.switch_goal_at_boundary()
-                if not self.tick_skill(body):
-                    self.submit_model(body, control)
+                if not self.drain_at_boundary(body):
+                    self.switch_goal_at_boundary()
+                    if not self.tick_skill(body):
+                        self.submit_model(body, control)
+        # Model terminal and pending physical actions may settle this tick.
+        # Preserve other pause reasons, including every unknown outcome.
+        self.drain_at_boundary(body)
         self.save()
         self.publish()

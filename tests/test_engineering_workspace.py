@@ -16,6 +16,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
 from engineering_workspace import EngineeringWorkspace, canonical, digest, write
+from engineering_mcp import register_engineering_tools, TOOLS
 from native_role_capabilities import configure_native
 
 
@@ -47,10 +48,10 @@ class EngineeringTests(unittest.TestCase):
 
     def modify(self):
         self.source.write_text('VALUE = 2\n', newline='\n')
-        return self.service.status()['sourceSha256']
+        return self.service.status(capture_source=True)['sourceSha256']
 
     def receipt(self, request='request-0001', status='passed'):
-        sha = self.service.status()['sourceSha256']
+        sha = self.service.status(capture_source=True)['sourceSha256']
         self.service.test('python-fixed', sha, request)
         row = json.loads((self.area / 'requests' / (request + '.json')).read_text())
         row.update(status=status, exitCode=0, imageId=self.config['plans'][0]['image'])
@@ -73,13 +74,133 @@ class EngineeringTests(unittest.TestCase):
             yield
 
     def test_mount_execute_bits_do_not_change_snapshot_or_dirty_state(self):
-        before = self.service.status()
+        before = self.service.status(capture_source=True)
         with self.all_source_files_appear_executable():
-            after = self.service.status()
+            after = self.service.status(capture_source=True)
             self.assertEqual(after['sourceSha256'], before['sourceSha256'])
             self.assertFalse(after['dirty'])
             self.assertEqual(after['workingChanges'], [])
             self.assertEqual(after['changed'], [])
+
+    def test_overview_and_diff_do_not_capture_or_read_all_source_bytes(self):
+        self.source.write_text('VALUE = 2\n', newline='\n')
+        (self.repo / 'world/new.py').write_text('NEW = 1\n', newline='\n')
+        self.check.unlink()
+        with patch.object(self.service, 'snapshot', side_effect=AssertionError('full snapshot during inspection')):
+            with patch.object(Path, 'read_bytes', side_effect=AssertionError('Python source read during inspection')):
+                status = self.service.status(paths=['world', 'tests'])
+                diff = self.service.diff(paths=['world', 'tests'])
+        wanted = ['tests/test_feature.py', 'world/feature.py', 'world/new.py']
+        self.assertEqual(status['changed'], wanted)
+        self.assertEqual(status['workingChanges'], wanted)
+        self.assertTrue(status['dirty'])
+        for result in (status, diff):
+            self.assertEqual(result['changed'], wanted)
+            self.assertIsNone(result['sourceSha256'])
+            self.assertFalse(result['snapshotCaptured'])
+            self.assertEqual(result['comparison'], 'git_worktree_paths')
+            self.assertEqual(result['inspectionPaths'], ['tests', 'world'])
+        self.assertEqual(diff['untracked'], ['world/new.py'])
+        self.assertIn('+VALUE = 2', diff['text'])
+        self.assertIn('deleted file', diff['text'])
+
+    def test_overview_distinguishes_base_changes_from_uncommitted_changes(self):
+        self.source.write_text('VALUE = 2\n', newline='\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'candidate')
+        status = self.service.status(paths=['world/feature.py'])
+        self.assertEqual(status['changed'], ['world/feature.py'])
+        self.assertEqual(status['workingChanges'], [])
+        self.assertFalse(status['dirty'])
+        self.assertIn('+VALUE = 2', self.service.diff(paths=['world/feature.py'])['text'])
+
+    def test_default_status_and_diff_never_scan_the_working_tree(self):
+        self.source.write_text('VALUE = 2\n', newline='\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'candidate')
+        head = self.git('rev-parse', 'HEAD').strip()
+        with patch.object(self.service, 'git', wraps=self.service.git) as called:
+            status = self.service.status()
+            diff = self.service.diff()
+        for call in called.call_args_list:
+            args = call.args
+            self.assertNotEqual(args[0], 'ls-files')
+            if args[0] == 'diff':
+                self.assertEqual(args[-3:], (self.base, head, '--'))
+        self.assertIsNone(status['dirty'])
+        self.assertIsNone(status['changed'])
+        self.assertIsNone(status['workingChanges'])
+        self.assertEqual(status['committedChanges'], ['world/feature.py'])
+        self.assertTrue(diff['requiresPaths'])
+        self.assertIsNone(diff['text'])
+        self.assertIsNone(diff['truncated'])
+
+    def test_path_inspection_reports_only_its_requested_scope(self):
+        self.source.write_text('VALUE = 2\n', newline='\n')
+        self.check.unlink()
+        status = self.service.status(paths=['world/feature.py'])
+        self.assertEqual(status['changed'], ['world/feature.py'])
+        self.assertEqual(status['inspectionPaths'], ['world/feature.py'])
+        self.assertEqual(self.service.diff(paths=['world/feature.py'])['changed'], ['world/feature.py'])
+        for paths in ([], ['.'], ['../escape'], ['world/*.py'], ['world'] * 33):
+            # Git metacharacters are literal paths, never expressions.
+            if paths == ['world/*.py']:
+                self.assertEqual(self.service.status(paths=paths)['changed'], [])
+                continue
+            with self.assertRaises(ValueError): self.service.status(paths=paths)
+        with self.assertRaisesRegex(ValueError, 'full_snapshot_requires_all_paths'):
+            self.service.status(capture_source=True, paths=['world/feature.py'])
+
+    def test_committed_overview_is_bounded_and_can_be_narrowed_by_path(self):
+        for number in range(55):
+            (self.repo / 'world' / f'added-{number:02}.py').write_text('VALUE = 1\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'many committed files')
+        status = self.service.status()
+        self.assertEqual(status['committedChangeCount'], 55)
+        self.assertEqual(len(status['committedChanges']), 50)
+        self.assertTrue(status['committedChangesTruncated'])
+        scoped = self.service.status(paths=['world/added-54.py'])
+        self.assertEqual(scoped['committedChanges'], ['world/added-54.py'])
+        self.assertEqual(scoped['committedChangeCount'], 1)
+        self.assertFalse(scoped['committedChangesTruncated'])
+
+    def test_same_size_same_mtime_edit_requires_fresh_snapshot_for_test_and_commit(self):
+        self.modify(); sha = self.receipt()
+        before = self.source.stat()
+        self.source.write_bytes(b'VALUE = 3\n')
+        os.utime(self.source, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertEqual(self.source.stat().st_size, before.st_size)
+        self.assertEqual(self.source.stat().st_mtime_ns, before.st_mtime_ns)
+        for action in (
+                lambda: self.service.test('python-fixed', sha, 'request-0002'),
+                lambda: self.service.commit('fix', sha, 'request-0001', 'commit-0001')):
+            with self.assertRaisesRegex(ValueError, 'engineering_source_changed'):
+                action()
+        current = self.service.status(capture_source=True)
+        self.assertTrue(current['snapshotCaptured'])
+        self.assertEqual(current['comparison'], 'captured_bytes')
+        self.assertNotEqual(current['sourceSha256'], sha)
+        self.assertFalse((self.area / 'requests/request-0002.json').exists())
+        self.assertFalse((self.area / 'state/commit-commit-0001.json').exists())
+
+    def test_status_requires_explicit_boolean_to_capture_source(self):
+        for invalid in ('false', 1, None):
+            with self.assertRaisesRegex(ValueError, 'engineering_invalid_capture_source'):
+                self.service.status(capture_source=invalid)
+
+    def test_native_status_defaults_to_overview_and_exposes_explicit_snapshot(self):
+        class App:
+            def __init__(self): self.functions = {}
+            def tool(self):
+                def register(function):
+                    self.functions[function.__name__] = function
+                    return function
+                return register
+        app = App()
+        self.assertEqual(register_engineering_tools(app, self.service), list(TOOLS))
+        status = app.functions['engineering_status']
+        with patch.object(self.service, 'status', return_value={'ok': True}) as called:
+            status(); called.assert_called_with(capture_source=False, paths=None)
+            status(capture_source=True); called.assert_called_with(capture_source=True, paths=None)
+            status(paths=['world/feature.py']); called.assert_called_with(capture_source=False, paths=['world/feature.py'])
 
     def test_mounted_commit_preserves_tracked_executable_and_new_source_is_regular(self):
         executable = self.repo / 'world/existing.sh'
@@ -100,7 +221,7 @@ class EngineeringTests(unittest.TestCase):
                 'world/existing.sh': '100755', 'world/feature.py': '100644', 'world/new.py': '100644'})
             sha = self.receipt()
             self.service.commit('only source changes', sha, 'request-0001', 'commit-0001')
-            self.assertFalse(self.service.status()['dirty'])
+            self.assertFalse(self.service.status(capture_source=True)['dirty'])
         actual = {row.split('\t')[1]: row.split(' ')[0] for row in self.git('ls-tree', '-r', 'HEAD').splitlines()}
         self.assertEqual(actual, modes)
         self.assertEqual(self.git('diff', '--name-only', old_head, 'HEAD').splitlines(),
@@ -156,11 +277,11 @@ class EngineeringTests(unittest.TestCase):
     def test_edited_fixed_checks_and_uncovered_changes_cannot_buy_a_pass(self):
         self.check.write_text('raise SystemExit(0)\n')
         with self.assertRaisesRegex(ValueError, 'fixed_checks_changed'):
-            self.service.test('python-fixed', self.service.status()['sourceSha256'], 'request-0001')
+            self.service.test('python-fixed', self.service.status(capture_source=True)['sourceSha256'], 'request-0001')
         self.check.write_bytes(self.git('show', 'HEAD:tests/test_feature.py').encode())
         (self.repo / 'production.yml').write_text('changed\n')
         with self.assertRaisesRegex(ValueError, 'not_covered'):
-            self.service.test('python-fixed', self.service.status()['sourceSha256'], 'request-0002')
+            self.service.test('python-fixed', self.service.status(capture_source=True)['sourceSha256'], 'request-0002')
 
     def test_failed_or_changed_source_cannot_commit(self):
         self.modify(); sha = self.receipt(status='failed')

@@ -88,27 +88,27 @@
   },
   "operations.diagnostics": {
    "runtime": "game",
-   "agentId": "qd-diagnostics",
+   "agentId": "qd-engineer",
    "apiUrl": "http://qwenpaw:8088/api",
    "purpose": "服务诊断"
   },
   "operations.events": {
    "runtime": "game",
-   "agentId": "mc-priest",
+   "agentId": "qd-guild-planner",
    "apiUrl": "http://qwenpaw:8088/api",
-   "purpose": "剧情活动设计"
+   "purpose": "剧情活动设计，经团队工单或已有公会规划入口交接"
   },
   "operations.controls": {
    "runtime": "game",
-   "agentId": "mc-guard-kirito",
+   "agentId": "qd-survivor",
    "apiUrl": "http://qwenpaw:8088/api",
-   "purpose": "技能与手柄体验验收"
+   "purpose": "技能与手柄体验验收，经团队工单交原生活会话，不另开后台任务"
   },
   "operations.exploration": {
    "runtime": "game",
-   "agentId": "mc-guard-naruto",
+   "agentId": "qd-survivor",
    "apiUrl": "http://qwenpaw:8088/api",
-   "purpose": "新手和探索体验验收"
+   "purpose": "新手和探索体验验收，经团队工单交原生活会话，不另开后台任务"
   }
  }
 }

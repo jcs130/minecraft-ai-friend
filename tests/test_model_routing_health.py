@@ -31,6 +31,14 @@ import world_team_profiles as team
 
 
 class ModelRoutingHealth(unittest.TestCase):
+    def test_consolidated_operations_routes_use_current_responsible_roles(self):
+        routes = json.loads((ROOT/'config/model-task-routes.json').read_text(encoding='utf-8'))['routes']
+        for purpose, role in {'diagnostics':'qd-engineer', 'events':'qd-guild-planner',
+                              'controls':'qd-survivor', 'exploration':'qd-survivor'}.items():
+            route = routes['operations.'+purpose]
+            self.assertEqual((route['runtime'],route['agentId'],route['apiUrl']),
+                             ('game',role,'http://qwenpaw:8088/api'))
+
     def setUp(self):
         native_patch = patch.object(native, 'native_lock', return_value=native_fixture_lock())
         native_patch.start(); self.addCleanup(native_patch.stop)

@@ -198,6 +198,9 @@ def inventory_from_snbt(response):
     return items, counts
 
 
+NAVIGATION_MAX_WAIT_MS = 5 * 60 * 1000
+
+
 class NumenGateway:
     def __init__(self, state_dir=Path('/state/survival'), rcon=None, clock=time.time):
         self.state = Path(state_dir)
@@ -541,6 +544,122 @@ class NumenGateway:
         path.unlink()
         return receipt
 
+    @staticmethod
+    def _navigation_terminal_matches(body, receipt):
+        before = receipt.get('before', {})
+        terminal = body.get('navigationResult') or {}
+        return (body.get('ok') is True and body.get('bodyUuid') == before.get('bodyUuid')
+                and body.get('dimension') == before.get('dimension')
+                and body.get('navigationEpoch') == before.get('navigationEpoch')
+                and body.get('task', {}).get('busy') is False
+                and terminal.get('task_id') == receipt.get('nativeTaskId')
+                and terminal.get('navigation_epoch') == before.get('navigationEpoch')
+                and terminal.get('state') in ('success', 'failed', 'timeout', 'cancelled')
+                and type(terminal.get('success')) is bool
+                and terminal['success'] == (terminal['state'] == 'success'))
+
+    def navigation_stop_pending(self, body):
+        """Prevent generic pause cleanup from repeating an uncertain exact stop."""
+        inflight = self.state / 'inflight-action.json'
+        if not inflight.exists():
+            return False
+        receipt = read_json(inflight)
+        action_id = receipt.get('actionId')
+        if (receipt.get('tool') != 'goto' or not isinstance(action_id, str)
+                or not re.fullmatch('[0-9a-f]{32}', action_id)):
+            return False
+        path = self.state / 'navigation-stops' / (action_id + '.json')
+        if not path.exists():
+            return False
+        # Any durable claim forbids a generic resend for this same live task;
+        # a damaged/conflicting journal is not permission to stop it again.
+        before = receipt.get('before', {})
+        return (body.get('bodyUuid') == before.get('bodyUuid')
+                and body.get('navigationEpoch') == before.get('navigationEpoch')
+                and body.get('task', {}).get('task_id') == receipt.get('nativeTaskId'))
+
+    def enforce_navigation_deadline(self, body):
+        """Controller-only execution boundary; read-only MCP status never calls this.
+
+        Native reflex preemption freezes goto's execution deadline indefinitely.
+        Its existing five-minute check-in cap also bounds total occupied time
+        here. A durable exact stop claim prevents retransmission after a crash.
+        """
+        inflight = self.state / 'inflight-action.json'
+        if not inflight.exists() or (self.state / 'unknown.json').exists():
+            return body
+        receipt = read_json(inflight)
+        accepted = receipt.get('acceptedAt')
+        if (receipt.get('tool') != 'goto' or receipt.get('status') != 'in_flight'
+                or type(accepted) is not int or not 0 < accepted <= self._now() - NAVIGATION_MAX_WAIT_MS):
+            return body
+        with action_lock(self.state, blocking=True):
+            if (not inflight.exists() or read_json(inflight) != receipt
+                    or (self.state / 'unknown.json').exists()
+                    or read_json(self.state / 'control.json').get('enabled') is not True):
+                return body
+            action_id, task_id = receipt.get('actionId'), receipt.get('nativeTaskId')
+            before = receipt.get('before', {})
+            if (not isinstance(action_id, str) or not re.fullmatch('[0-9a-f]{32}', action_id)
+                    or not isinstance(task_id, str) or not re.fullmatch('t[0-9]+', task_id)
+                    or not isinstance(before.get('navigationEpoch'), str) or not before['navigationEpoch']):
+                return body
+            fresh = self.snapshot()
+            if self._navigation_terminal_matches(fresh, receipt):
+                return fresh
+            if (fresh.get('ok') is not True or fresh.get('bodyUuid') != before.get('bodyUuid')
+                    or fresh.get('dimension') != before.get('dimension')
+                    or fresh.get('navigationEpoch') != before['navigationEpoch']
+                    or fresh.get('task', {}).get('busy') is not True
+                    or fresh['task'].get('task_id') != task_id):
+                return fresh  # Existing action_status reports the mismatch; never stop another task.
+            path = self.state / 'navigation-stops' / (action_id + '.json')
+            journal = read_json(path) if path.exists() else None
+            identity = {'actionId': action_id, 'nativeTaskId': task_id, 'bodyUuid': before['bodyUuid'],
+                        'navigationEpoch': before['navigationEpoch']}
+            if journal is not None and any(journal.get(key) != value for key, value in identity.items()):
+                raise GatewayError('navigation_stop_identity_mismatch')
+            if journal is None:
+                journal = {'schema': 1, **identity, 'phase': 'dispatching', 'requestedAt': self._now(),
+                           'reason': 'navigation_total_wait_limit', 'maxWaitMs': NAVIGATION_MAX_WAIT_MS,
+                           'acceptedAt': accepted, 'beforeStop': self._action_snapshot(fresh),
+                           'actionReplayed': False, 'retryAutomatically': False}
+                write_json(path, journal)  # Claim before sending; an existing claim is read-only forever.
+                try:
+                    journal['stopReply'] = self._invoke('task_stop', {'task_id': task_id})
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    journal['stopErrorType'] = type(exc).__name__
+                journal['phase'] = 'awaiting_terminal'
+                write_json(path, journal)
+            # A lost ACK or process restart may still have a genuine terminal.
+            # Queries cannot repeat a stop, navigate, or change the world.
+            for _ in range(8):
+                time.sleep(.25)
+                fresh = self.snapshot()
+                if self._navigation_terminal_matches(fresh, receipt):
+                    journal.update(phase='terminal_confirmed', observedAt=self._now(),
+                                   terminal=fresh['navigationResult'])
+                    write_json(path, journal)
+                    receipt['navigationStop'] = journal
+                    self._save_receipt(receipt)
+                    write_json(inflight, receipt)
+                    self._record({**receipt, 'phase': 'navigation_stop', 'reason': journal['reason']})
+                    return fresh  # Normal _settle_inflight consumes only this real terminal.
+            journal.update(phase='outcome_unknown', observedAt=self._now(),
+                           lastObservation=self._action_snapshot(fresh))
+            write_json(path, journal)
+            receipt['navigationStop'] = journal
+            self._save_receipt(receipt)
+            write_json(inflight, receipt)
+            write_json(self.state / 'unknown.json', {**receipt, 'schema': 1, 'result': 'unknown',
+                       'reason': 'navigation_stop_outcome_unknown'})
+            lease_path = self.state / 'lease.json'
+            lease = read_json(lease_path) if lease_path.exists() else {}
+            if lease.get('actionId') == action_id:
+                write_json(lease_path, lease | {'status': 'unknown'})
+            self._record({**receipt, 'phase': 'navigation_stop', 'code': 'outcome_unknown'})
+            return fresh
+
     def action_status(self, body=None):
         """Read-only world observation; reconcile our local receipt without replaying an action."""
         try:
@@ -621,6 +740,10 @@ class NumenGateway:
                 if lease['expiresAt'] <= self._now():
                     raise GatewayError('lease_expired')
                 action_id = uuid.uuid4().hex
+                if plan is not None:
+                    # The native interaction journal shares this exact durable
+                    # action identity; retries may query it but never re-dispatch.
+                    plan['actionId'] = action_id
                 lease.update(actionsUsed=lease['actionsUsed'] + 1, actionId=action_id, status='reserved')
                 write_json(self.state / 'lease.json', lease)
                 # A process can die after sending but before recording the reply. Persist
@@ -674,11 +797,20 @@ class NumenGateway:
                     write_json(self.state / 'lease.json', lease)
                     result['receipt'] = {k: receipt[k] for k in ('status', 'before', 'after', 'nativeTaskId') if k in receipt}
                     return result
-                except (OSError, ValueError, TypeError, KeyError):
+                except (OSError, ValueError, TypeError, KeyError) as exc:
                     lease['status'] = 'unknown'
                     write_json(self.state / 'lease.json', lease)
                     result = {'ok': False, 'code': 'outcome_unknown', 'actionId': action_id,
-                              'notice': 'Do not resend. Inspect body and ask the operator to reconcile.'}
+                              'notice': 'Do not resend. Inspect body and ask the operator to reconcile.',
+                              'errorType': type(exc).__name__}
+                    diagnostic_path = self.state / 'world-interaction-receipts' / (action_id + '.json')
+                    if tool in ('place_block', 'farm', 'open_container') and diagnostic_path.exists():
+                        try:
+                            diagnostic = read_json(diagnostic_path)
+                            result['nativeInteractionDiagnostic'] = {key: diagnostic[key] for key in
+                                ('stage', 'code', 'attempt', 'observedAt') if key in diagnostic}
+                        except (OSError, ValueError, TypeError, KeyError):
+                            pass
                     self._record({**marker, 'phase': 'response', 'result': result, 'finishedAt': self._now()})
                     return result
         except GatewayError as exc:

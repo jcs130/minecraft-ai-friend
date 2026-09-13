@@ -40,7 +40,7 @@ class SurvivorHealthTests(unittest.TestCase):
             'Config': {'Labels': {'com.docker.compose.project': 'qiandengji', 'com.docker.compose.service': 'survivor'}},
             'HostConfig': {'RestartPolicy': {'Name': 'unless-stopped'}}}
 
-    def probe(self, behavior=True, public=None, adventure=True):
+    def probe(self, behavior=True, public=None, adventure=True, interaction=True):
         target = self.root/'server/panel-state/survivor.json'
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.source), encoding='utf-8')
@@ -57,6 +57,7 @@ class SurvivorHealthTests(unittest.TestCase):
             'adventure': {'available': True, 'resources': {'known': True}, 'equipment': {'known': False}},
             'constructionAreasKnown': True}
         with patch.object(health, 'PROJECT', self.root), patch.object(health.time, 'time', return_value=self.now), \
+             patch.object(health, 'probe_world_interaction', return_value={'ok': interaction}), \
              patch.object(health.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps([self.container]))), \
              patch.object(health.urllib.request, 'urlopen', return_value=io.BytesIO(json.dumps({'survivor': projection}).encode())), \
              patch.object(health, 'probe_recorded_behavior', side_effect=lambda name, *a: {'ok': adventure if name=='survivor-adventure-smoke.json' else behavior}):
@@ -67,6 +68,11 @@ class SurvivorHealthTests(unittest.TestCase):
         self.assertFalse(self.probe(behavior=False)['ok'])
         self.container['State']['Health']['Status'] = 'unhealthy'
         self.assertFalse(self.probe()['ok'])
+
+    def test_missing_native_interaction_protocol_cannot_use_old_behavior_green(self):
+        result = self.probe(interaction=False)
+        self.assertFalse(result['ok'])
+        self.assertFalse(result['checks']['native_interaction_receipts'])
 
     def test_intentionally_paused_worker_remains_healthy_without_model_work(self):
         self.source.update(status='paused', enabled=False)
@@ -100,6 +106,13 @@ class SurvivorHealthTests(unittest.TestCase):
     def test_manifest_tracks_only_dedicated_survivor(self):
         self.assertIn('survivor', health.MANIFEST)
         self.assertIn('autonomous-task-evidence', health.SURVIVOR_SMOKE_CHECKS)
+
+    def test_completed_operator_drain_is_intentional_but_unknown_remains_a_fault(self):
+        self.source.update(enabled=False, status='paused', pauseReason='operator_drain')
+        self.source['executionSystems']['slow']['status'] = 'paused'
+        self.assertTrue(self.probe()['checks']['no_unexpected_pause'])
+        self.source['pauseReason'] = 'action_outcome_unknown'
+        self.assertFalse(self.probe()['checks']['no_unexpected_pause'])
 
     def test_missing_or_artificial_large_limits_cannot_claim_unrestricted(self):
         for settings in ({'decisionsPerDay': 96, 'decisionCooldownSeconds': 180},

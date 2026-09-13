@@ -340,6 +340,7 @@ class GatewayTests(unittest.TestCase):
         def uncertain(plan):
             self.assertTrue((self.state / 'unknown.json').exists())
             self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 1)
+            self.assertEqual(plan['actionId'], gateway.read_json(self.state / 'unknown.json')['actionId'])
             raise gateway.GatewayError('outcome_unknown')
         with patch('world_actions.WorldActions.prepare', return_value={'fixture': True}), \
              patch('world_actions.WorldActions.dispatch', side_effect=uncertain) as dispatch:
@@ -349,6 +350,25 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(repeat['ok'])
         self.assertEqual(dispatch.call_count, 1)
         self.assertTrue((self.state / 'unknown.json').exists())
+
+    def test_known_native_world_rejection_preserves_receipt_and_releases_marker(self):
+        self.lease()
+        args = {'item_id': 'minecraft:oak_planks', 'x': 101, 'y': 64, 'z': 100}
+        def rejected(plan):
+            request = gateway.read_json(self.state / 'unknown.json')['actionId']
+            self.assertEqual(request, plan['actionId'])
+            return {'success': False, 'message': 'aim blocked by short_grass',
+                    'data': {'nativeInteractionReceipt': {'requestId': request, 'status': 'terminal',
+                            'result': {'success': False, 'message': 'aim blocked by short_grass'}}}}
+        with patch('world_actions.WorldActions.prepare', return_value={}), \
+             patch('world_actions.WorldActions.dispatch', side_effect=rejected):
+            result = self.client.action(TURN, 'place_block', args)
+        self.assertEqual('action_rejected', result['code'])
+        self.assertFalse((self.state / 'unknown.json').exists())
+        receipt = gateway.read_json(self.state / 'action-receipts' / (result['actionId'] + '.json'))
+        self.assertEqual('rejected', receipt['status'])
+        self.assertFalse(receipt['completionConfirmed'])
+        self.assertEqual(result['actionId'], receipt['result']['result']['data']['nativeInteractionReceipt']['requestId'])
 
     def test_game_learning_uses_same_single_action_lease_and_never_raw_rcon(self):
         self.lease()

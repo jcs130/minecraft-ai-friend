@@ -9,7 +9,7 @@ import time
 import uuid
 from agent_learning import LearningTools, OPS_ROLES, locked, read, write
 
-VERSION = 1
+VERSION = 2
 
 
 def fingerprint(tools):
@@ -110,10 +110,20 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
         await asyncio.to_thread(finish_run, reservation['runId'], terminal,
                                 executionStatus='returned', deliveryStatus=delivery)
         return result
+    except (asyncio.TimeoutError, asyncio.CancelledError) as error:
+        # The pinned native CronExecutor awaits the stopped stream and finalizes
+        # timeout/cancelled before raising. Its execution is over, while any
+        # uncertain world effect remains in the separate domain receipt ledger.
+        native_terminal = 'timeout' if isinstance(error, asyncio.TimeoutError) else 'cancelled'
+        record.update(status='failed', finishedAt=time.time(), nativeTerminal=native_terminal,
+                      resultCompleted=False)
+        await asyncio.to_thread(finish_run, reservation['runId'], 'failed',
+                                nativeTerminal=native_terminal, resultCompleted=False)
+        raise
     except BaseException:
         record.update(status='failed_or_interrupted', retryAutomatically=False)
-        # A raised/cancelled native execution is not a confirmed backend
-        # terminal receipt. Keep its durable reservation unresolved.
+        # Any other exception is not a confirmed backend terminal receipt.
+        # Keep its durable reservation unresolved.
         raise
     finally:
         # This is execution status, not a claim that the agent produced a useful

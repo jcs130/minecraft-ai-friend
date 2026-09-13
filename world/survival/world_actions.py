@@ -4,6 +4,7 @@ The gateway calls prepare() before reserving its lease and dispatch() only after
 persisting the uncertainty marker. There is no raw command, free-material build,
 teleport, inventory NBT write, or replacement of existing buildings here.
 """
+import base64
 import json
 import math
 from pathlib import Path
@@ -619,6 +620,86 @@ class WorldActions:
             raise GatewayError('outcome_unknown')
         return reply
 
+    def _interaction(self, plan, args):
+        """One native sync-slot request, then exact receipt reads only.
+
+        The old numen_act invoke endpoint drops runSync's eventual TaskResult.
+        Its generic accepted reply cannot distinguish an occluded click from a
+        still-running interaction. The bridge retains the actual TaskRecord.
+        """
+        request_id = plan.get('actionId')
+        if not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id):
+            raise GatewayError('world_interaction_request_id_missing')
+        actor = str(uuid.UUID(plan['bodyUuid']))
+        encoded = base64.urlsafe_b64encode(json.dumps(args, sort_keys=True, separators=(',', ':'),
+                                                     ensure_ascii=True).encode('ascii')).decode('ascii').rstrip('=')
+        command = f'qdworld interact {actor} {request_id} {encoded}'
+        epoch = None
+        diagnostic = {'schema': 1, 'actionId': request_id, 'actorUuid': actor,
+                      'tool': 'interact_at', 'args': args, 'stage': 'dispatch', 'attempt': 0}
+        path = self.state / 'world-interaction-receipts' / (request_id + '.json')
+        def note(code, **values):
+            diagnostic.update(code=code, observedAt=self.gateway._now(), **values)
+            event = {key: diagnostic[key] for key in ('stage', 'attempt', 'code', 'observedAt', 'errorType') if key in diagnostic}
+            if code not in ('native_interaction_pending', 'native_interaction_terminal_validated'):
+                diagnostic.setdefault('firstFailure', event)
+            diagnostic['events'] = (diagnostic.get('events', []) + [event])[-8:]
+            write_json(path, diagnostic)
+        for poll in range(self.max_polls):
+            if poll:
+                self.sleep(.25)
+                command = f'qdworld interaction {actor} {request_id}'
+            diagnostic.update(stage='dispatch' if poll == 0 else 'query', attempt=poll + 1)
+            try:
+                raw = self.gateway.rcon.cmd(command)
+            except (OSError, ValueError, TypeError) as exc:
+                note('rcon_response_unavailable', errorType=type(exc).__name__)
+                continue  # A durable request ID permits reads, never a second interact.
+            prefix = 'QD_WORLD_INTERACTION_JSON '
+            lines = [line[len(prefix):] for line in raw.splitlines() if line.startswith(prefix)] if isinstance(raw, str) else []
+            if len(lines) != 1 or len(lines[0].encode('utf8')) > 24000:
+                note('native_interaction_response_missing_or_oversized')
+                continue
+            try:
+                receipt = json.loads(lines[0])
+            except (ValueError, TypeError):
+                note('native_interaction_json_invalid')
+                continue
+            try:
+                if (not isinstance(receipt, dict) or receipt.get('schema') != 1
+                        or receipt.get('capability') != 'numen_interaction_receipt_v1'
+                        or receipt.get('actorUuid') != actor or receipt.get('requestId') != request_id
+                        or receipt.get('tool') != 'interact_at'
+                        or json.dumps(receipt.get('args'), sort_keys=True, separators=(',', ':'))
+                           != json.dumps(args, sort_keys=True, separators=(',', ':'))
+                        or str(uuid.UUID(receipt.get('epoch', ''))) != receipt['epoch']
+                        or epoch is not None and epoch != receipt['epoch']):
+                    raise ValueError('native_interaction_identity_mismatch')
+                epoch = receipt['epoch']
+                status = receipt.get('status')
+                if status in ('accepted', 'running'):
+                    note('native_interaction_pending', lastValidatedReceipt=receipt)
+                    continue
+                result = receipt.get('result')
+                if (status not in ('terminal', 'rejected') or not isinstance(result, dict)
+                        or type(result.get('success')) is not bool
+                        or not isinstance(result.get('message'), str)
+                        or not isinstance(result.get('data', {}), dict)
+                        or status == 'rejected' and (receipt.get('dispatched') is not False
+                                                    or result['success'] is not False)):
+                    raise ValueError('native_interaction_terminal_missing')
+                note('native_interaction_terminal_validated', lastValidatedReceipt=receipt)
+                return result | {'data': result.get('data', {}) | {
+                    'nativeInteractionReceipt': receipt, 'dispatched': status != 'rejected',
+                    'retryAutomatically': False}}
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                # Invalid, lost, or different-epoch receipts never justify replay.
+                code = str(exc) if str(exc) in ('native_interaction_identity_mismatch', 'native_interaction_terminal_missing') else 'native_interaction_invalid'
+                note(code, stage='validation')
+                raise GatewayError('outcome_unknown')
+        note('native_interaction_terminal_not_observed', stage='exhausted')
+        raise GatewayError('outcome_unknown')
+
     def dispatch(self, plan):
         """Called once under the gateway lock; never repeats a mutation."""
         if not isinstance(plan, dict) or plan.get('schema') != 1:
@@ -635,6 +716,11 @@ class WorldActions:
             fresh = self.prepare(tool, args, current)
             if fresh.get('expected') != plan.get('expected'):
                 raise GatewayError('world_target_changed')
+            if tool in ('place_block', 'farm', 'open_container'):
+                request_id = plan.get('actionId')
+                if not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id):
+                    raise GatewayError('world_interaction_request_id_missing')
+                fresh['actionId'] = request_id
         except (OSError, ValueError, TypeError, KeyError) as exc:
             return {'success': False, 'message': str(exc) if isinstance(exc, GatewayError) else 'world_preflight_unavailable',
                     'data': {'dispatched': False, 'retryAutomatically': False}}
@@ -662,16 +748,42 @@ class WorldActions:
             native_args = {'button': 'right' if right else 'left', **aim, 'hold_ticks': 0}
             if args.get('item_id') is not None:
                 native_args['item_id'] = args['item_id']
-            reply = self._native('interact_at', native_args)
+            reply = self._interaction(plan, native_args)
         if reply.get('success') is False:
             return reply
+        interaction = reply.get('data', {}).get('nativeInteractionReceipt', {})
+        # _interaction validated the actor, request, args, epoch and original
+        # TaskResult. A finished click is distinct from achieving our domain
+        # postcondition (for example, the body can occupy the placement cell).
+        ended_interaction = (tool in ('place_block', 'farm', 'open_container')
+                             and interaction.get('status') == 'terminal'
+                             and interaction.get('requestId') == plan.get('actionId')
+                             and interaction.get('actorUuid') == plan['bodyUuid']
+                             and interaction.get('args') == native_args
+                             and interaction.get('result', {}).get('success') is True)
+        observation = {}
         for poll in range(self.max_polls):
             if poll:
                 self.sleep(.25)
-            evidence = self._evidence(plan)
+            observation = {}
+            try:
+                evidence = self._evidence(plan, observation)
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                if not ended_interaction:
+                    raise
+                evidence = None
+                observation.update(available=False, errorType=type(exc).__name__)
             if evidence is not None:
                 return {'success': True, 'message': 'Verified ordinary player interaction against current world state.',
                         'data': {'async': False, 'verified': True, 'evidence': evidence, 'nativeReceipt': reply}}
+        if ended_interaction:
+            return {'success': False,
+                    'message': 'world_effect_not_verified: native interaction ended; inspect current state and replan.',
+                    'data': {'async': False, 'verified': False, 'retryAutomatically': False,
+                             'nativeInteractionReceipt': interaction, 'nativeReceipt': reply,
+                             'expected': plan['expected'], 'countsBefore': plan['countsBefore'],
+                             'latestObservation': observation,
+                             'notice': 'The native click ended. Its intended world effect is not confirmed; no action was replayed.'}}
         return self._unconfirmed()
 
     def _verify_trade(self, plan, reply):
@@ -715,10 +827,12 @@ class WorldActions:
     def _unconfirmed():
         raise GatewayError('outcome_unknown')
 
-    def _evidence(self, plan):
+    def _evidence(self, plan, observation=None):
+        observation = {} if observation is None else observation
         tool, args = plan['tool'], plan['args']
         if tool in ('open_container', 'close_container', 'transfer_items'):
             gui = self._menu()
+            observation['gui'] = gui
             if tool == 'close_container':
                 if gui['menu'] != 'InventoryMenu' or gui.get('cursorEmpty') is not True:
                     return None
@@ -749,10 +863,13 @@ class WorldActions:
                 return None
             return {'inventoryDelta': actual, 'gui': gui, 'transfersConfirmed': True}
         blocks = [self._block(target) for target in plan['expected']]
+        observation['blocks'] = blocks
+        body = self.gateway.snapshot()
+        observation['body'] = {key: body[key] for key in ('ok', 'code', 'bodyUuid', 'dimension', 'position',
+                                                        'counts', 'task', 'observedAt') if key in body}
         for expected, actual in zip(plan['expected'], blocks):
             if actual['block'] != expected['block'] or any(str(actual['properties'].get(k)) != str(v) for k, v in expected.get('properties', {}).items()):
                 return None
-        body = self.gateway.snapshot()
         if body.get('ok') is not True:
             return None
         delta = {item: body.get('counts', {}).get(item, 0) - plan['countsBefore'].get(item, 0)

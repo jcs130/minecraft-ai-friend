@@ -158,11 +158,31 @@ class WorldOperationsTests(unittest.TestCase):
             'runtime':SimpleNamespace(**spec['runtime'])}))
         workspace=self.root/'work/workspaces/default';workspace.mkdir(parents=True)
         executor=SimpleNamespace(_workspace=SimpleNamespace(agent_id='default',workspace_dir=workspace))
-        async def interrupted(*args):raise TimeoutError('native outcome uncertain')
+        async def interrupted(*args):raise RuntimeError('native outcome uncertain')
         with patch.object(native,'STATE',self.root):
-            with self.assertRaises(TimeoutError):asyncio.run(guarded_execute(executor,job,interrupted,'operations',
+            with self.assertRaises(RuntimeError):asyncio.run(guarded_execute(executor,job,interrupted,'operations',
                 factory=lambda *a,**k:SimpleNamespace(root=workspace/'learning')))
             with native.ledger() as rows:self.assertEqual(native.budget_check(rows,self.now),'operations_task_unresolved')
+
+    @unittest.skipIf(os.name=='nt','uses real Linux durable flock')
+    def test_native_timeout_and_cancelled_cron_end_lease_without_claiming_result(self):
+        import operations_native_tasks as native
+        from cron_guard import guarded_execute
+        spec=world_job();job=SimpleNamespace(**(spec|{'dispatch':SimpleNamespace(**spec['dispatch']),
+            'runtime':SimpleNamespace(**spec['runtime'])}))
+        workspace=self.root/'work/workspaces/default';workspace.mkdir(parents=True)
+        executor=SimpleNamespace(_workspace=SimpleNamespace(agent_id='default',workspace_dir=workspace))
+        for exception,terminal in ((asyncio.TimeoutError,'timeout'),(asyncio.CancelledError,'cancelled')):
+            async def stopped(*args):raise exception()
+            with self.subTest(terminal=terminal),patch.object(native,'STATE',self.root):
+                with self.assertRaises(exception):asyncio.run(guarded_execute(executor,job,stopped,'operations',
+                    factory=lambda *a,**k:SimpleNamespace(root=workspace/'learning')))
+                with native.ledger() as rows:
+                    self.assertIsNone(native.budget_check(rows,self.now))
+                    latest=max(rows,key=lambda row:row['startedAt'])
+                    self.assertEqual(latest['status'],'failed')
+                    self.assertEqual(latest['nativeTerminal'],terminal)
+                    self.assertFalse(latest['resultCompleted'])
 
     @unittest.skipIf(os.name=='nt','uses real Linux durable flock')
     def test_failed_delivery_is_terminal_failure_not_success(self):

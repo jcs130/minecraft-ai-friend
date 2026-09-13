@@ -210,20 +210,68 @@ class EngineeringWorkspace:
         return {'head': head, 'sourceSha256': source_sha, 'entries': entries, 'changed': sorted(changed),
                 'workingChanges': sorted(working)}, blobs
 
-    def status(self):
-        snapshot, _ = self.snapshot(); cfg = self.config
+    def overview(self, paths=None, *, include_working=True):
+        """Git's live change summary, not an attestation of all source bytes.
+
+        Ordinary inspection must not read/hash every file over a Windows bind
+        mount. Only an explicit snapshot, test or commit captures those bytes.
+        """
+        if paths is not None:
+            if not isinstance(paths, list) or not 1 <= len(paths) <= 32:
+                raise ValueError('engineering_invalid_inspection_paths')
+            paths = sorted({relative(name) for name in paths})
+        head = self.binding(); cfg = self.config
+        def names(*arguments):
+            result = {relative(name) for name in self.git(*arguments).decode('utf8').split('\0') if name}
+            if len(result) > MAX_FILES: raise ValueError('engineering_source_file_limit')
+            return result
+        arguments = ('diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '-z')
+        committed = sorted(set() if cfg['baseCommit'] == head else
+                           names(*arguments, cfg['baseCommit'], head, '--', *(paths or [])))
+        commit_summary = {'committedChanges': committed[:50], 'committedChangeCount': len(committed),
+                          'committedChangesTruncated': len(committed) > 50}
+        if paths is None:
+            return {'head': head, 'sourceSha256': None, 'changed': None, 'workingChanges': None,
+                    'untracked': None, 'inspectionPaths': [], **commit_summary}
+        untracked = names('ls-files', '-z', '--others', '--exclude-standard', '--', *paths)
+        changed = names(*arguments, cfg['baseCommit'], '--', *paths) | untracked
+        working = (changed if head == cfg['baseCommit'] else
+                   names(*arguments, head, '--', *paths) | untracked) if include_working else None
+        return {'head': head, 'sourceSha256': None, 'changed': sorted(changed),
+                'workingChanges': sorted(working) if working is not None else None,
+                'untracked': sorted(untracked), 'inspectionPaths': paths, **commit_summary}
+
+    def status(self, capture_source=False, paths=None):
+        if type(capture_source) is not bool: raise ValueError('engineering_invalid_capture_source')
+        if capture_source and paths is not None: raise ValueError('engineering_full_snapshot_requires_all_paths')
+        snapshot = self.snapshot()[0] if capture_source else self.overview(paths)
+        cfg = self.config
         return {'ok': True, 'role': ROLE, 'repo': cfg['repo'], 'baseCommit': cfg['baseCommit'], 'branch': cfg['branch'],
                 **{k: snapshot[k] for k in ('head', 'sourceSha256', 'changed', 'workingChanges')},
-                'dirty': bool(snapshot['workingChanges']),
+                'snapshotCaptured': capture_source,
+                'comparison': 'captured_bytes' if capture_source else ('git_worktree_paths' if paths else 'git_commits'),
+                'inspectionPaths': None if capture_source else snapshot['inspectionPaths'],
+                **({} if capture_source else {k: snapshot[k] for k in
+                   ('committedChanges', 'committedChangeCount', 'committedChangesTruncated')}),
+                'dirty': bool(snapshot['workingChanges']) if snapshot['workingChanges'] is not None else None,
+                'notice': ('Full current source bytes captured.' if capture_source else
+                           'Working changes/dirty apply only to inspectionPaths; null means uninspected. Supply paths for current changes. Before testing, call engineering_status(capture_source=true) for a fresh full sourceSha256.'),
                 'testPlans': [{'id': p['id'], 'coverage': p['coverage'], 'checks': list(p['checks'])} for p in cfg['plans']]}
 
-    def diff(self, max_chars=24000):
+    def diff(self, max_chars=24000, paths=None):
         if type(max_chars) is not int or not 1000 <= max_chars <= 24000: raise ValueError('engineering_invalid_diff_limit')
-        snapshot, _ = self.snapshot()
-        body = self.git('diff', '--no-ext-diff', '--no-textconv', '--no-renames', self.config['baseCommit'], '--').decode('utf8', 'replace')
-        return {'ok': True, 'sourceSha256': snapshot['sourceSha256'], 'changed': snapshot['changed'],
-                'text': body[:max_chars], 'truncated': len(body) > max_chars,
-                'notice': 'Untracked files appear in changed; read their source with native read_file.'}
+        snapshot = self.overview(paths, include_working=False)
+        body = (self.git('diff', '--no-ext-diff', '--no-textconv', '--no-renames', self.config['baseCommit'], '--',
+                         *snapshot['inspectionPaths']).decode('utf8', 'replace') if paths else None)
+        return {'ok': True, 'head': snapshot['head'], 'sourceSha256': None, 'snapshotCaptured': False,
+                'comparison': 'git_worktree_paths' if paths else 'git_commits',
+                'requiresPaths': paths is None, 'inspectionPaths': snapshot['inspectionPaths'],
+                **{k: snapshot[k] for k in ('committedChanges', 'committedChangeCount', 'committedChangesTruncated')},
+                'changed': snapshot['changed'], 'untracked': snapshot['untracked'],
+                'text': body[:max_chars] if body is not None else None,
+                'truncated': len(body) > max_chars if body is not None else None,
+                'notice': ('Supply paths (1-32 relative source files/directories) to inspect the working tree; it has not been scanned.' if paths is None else
+                           'Git diff only for inspectionPaths; no source snapshot. Untracked files appear in changed; read their source with native read_file.')}
 
     def plan(self, plan_id, snapshot):
         plan = next((p for p in self.config['plans'] if p['id'] == plan_id), None)

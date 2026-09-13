@@ -56,6 +56,34 @@ class TeamScheduleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['final_text'], 'previous_team_cycle_requires_reconciliation')
         self.assertEqual(self.calls, 2)
 
+    async def test_cancelled_engineer_releases_only_its_known_terminal_lease(self):
+        goddess = TeamStore('game:mc-god', self.root)
+        report = goddess.report('test-report', 'test-case', 'A reproducible bug', 'bug', 'Observed', 'Expected', ['fixture:1'])
+        goddess.update('test-route', report['caseId'], 1, 'open', 'Route', ['fixture:1'], 'operations:mc-god')
+        finished = []
+        self.native.finish_run = lambda *args, **details: finished.append((args, details))
+        async def cancelled(): raise asyncio.CancelledError()
+        with self.assertRaises(asyncio.CancelledError):
+            await self.run_role('operations:mc-god', cancelled)
+        state = TeamStore('operations:mc-god', self.root).cycle_state()
+        self.assertEqual(state['status'], 'failed')
+        self.assertEqual(finished, [(('run-1', 'failed'), {'nativeCancellationConfirmed': True})])
+        await self.run_role('operations:mc-god')
+        self.assertEqual(self.calls, 2)
+
+    async def test_failed_designer_can_inspect_again_but_unknown_same_work_cannot(self):
+        async def timeout(): raise asyncio.TimeoutError()
+        with self.assertRaises(asyncio.TimeoutError):
+            await self.run_role('game:qd-guild-planner', timeout)
+        await self.run_role('game:qd-guild-planner')
+        self.assertEqual(self.calls, 2)
+        store = TeamStore('game:qd-guild-planner', self.root)
+        current = store.cycle_state()
+        store.save_cycle(current['fingerprint'], 'unknown')
+        result = await self.run_role('game:qd-guild-planner')
+        self.assertEqual(result['final_text'], 'previous_team_cycle_requires_reconciliation')
+        self.assertEqual(self.calls, 2)
+
     async def test_shared_operations_reservation_can_block_engineer(self):
         goddess = TeamStore('game:mc-god', self.root)
         report = goddess.report('test-report', 'test-case', 'A reproducible bug', 'bug', 'Observed', 'Expected', ['fixture:1'])
@@ -112,6 +140,18 @@ class TeamScheduleTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AssertionError): schedule.validate_team_job(job, 'operations:mc-god')
         job['runtime']['share_session'] = True
         with self.assertRaises(AssertionError): schedule.validate_team_job(job, 'game:mc-god')
+
+    def test_goddess_deadline_is_scoped_and_strictly_validated(self):
+        for actor in schedule.SCHEDULES:
+            job = schedule.team_job(actor)
+            self.assertEqual(job['runtime']['timeout_seconds'], 480 if actor == 'game:mc-god' else 360)
+            self.assertEqual(job['runtime']['max_concurrency'], 1)
+            self.assertFalse(job['runtime']['share_session'])
+            schedule.validate_team_job(job, actor)
+        job = schedule.team_job('game:mc-god')
+        job['runtime']['timeout_seconds'] = 360
+        with self.assertRaisesRegex(AssertionError, 'team_cron_drift:runtime'):
+            schedule.validate_team_job(job, 'game:mc-god')
 
     def test_persona_keeps_soul_and_user_text(self):
         existing = {'SOUL.md': 'User personality', 'AGENTS.md': 'User instructions', 'PROFILE.md': 'User profile'}

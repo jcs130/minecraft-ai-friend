@@ -5,12 +5,9 @@ Shared persisted delegation budget also applies to the coordinator's MCP calls.
 import argparse
 from datetime import datetime, timezone
 import json
-from pathlib import Path
 import time
-from operations_native_tasks import api, delegate, SPECIALISTS, TASK_TIMEOUT
+from operations_native_tasks import api, bind_state, delegate, target_host, SPECIALISTS, TASK_TIMEOUT
 from operations_team_mcp import read_json
-
-STATE=Path('/state')
 
 
 def usage():
@@ -19,6 +16,10 @@ def usage():
 
 
 def run(role, task):
+    host=target_host('default')
+    # The CLI and role-bound MCP must use the same verified coordinator host,
+    # including its shared ledger when the native child environment is filtered.
+    state=bind_state('default',native_runtime=host['runtime'],native_role=host['agentId'])
     before=usage()
     submission=delegate('default',role,task)
     if not submission['ok']:
@@ -35,7 +36,7 @@ def run(role, task):
         else:
             result['errorType']='TotalTimeout'
             api('POST','/console/chat/stop',role,params={'chat_id':submission['requestId']})
-        report=read_json(STATE/'work/operations/reports'/role/(submission['requestId']+'.json'),32768)
+        report=read_json(state/'work/operations/reports'/role/(submission['requestId']+'.json'),32768)
         result['reportRecorded']=report.get('requestId')==submission['requestId'] and report.get('worldActionsExecuted')==0
         result['ok']=result['reportRecorded'] and result.get('nativeResultStatus')=='completed'
         result['summary']=report['summary'][:600]
@@ -54,7 +55,7 @@ def run(role, task):
         'finishedAt':datetime.now(timezone.utc).isoformat(),'ok':result['ok'],'roles':[result],
         'mode':'manual','maxConcurrentModels':1,'worldActionsExecuted':0,
         'backend':'qwenpaw-native-background-task','usageScope':'runtime counter delta during this experiment'}
-    folder=STATE/'run-reports'; folder.mkdir(exist_ok=True)
+    folder=state/'run-reports'; folder.mkdir(exist_ok=True)
     for name in (submission['runId'],'latest'):
         (folder/(name+'.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
     print(json.dumps(report,ensure_ascii=False))
@@ -63,7 +64,7 @@ def run(role, task):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--role',choices=SPECIALISTS,default='mc-herald')
+    parser.add_argument('--role',choices=SPECIALISTS,default='mc-god')
     parser.add_argument('--task',default='核对现有快照的时间、可用性和一项最值得优先处理的运营问题。')
     args=parser.parse_args()
     raise SystemExit(run(args.role,args.task))

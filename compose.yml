@@ -234,9 +234,14 @@ services:
       retries: 3
 
   qwenpaw:
-    image: qiandengji-qwenpaw-game:2.2.0-recovery1
+    image: qiandengji-qwenpaw-game:2.2.0-autonomy3
     pull_policy: never
     restart: unless-stopped
+    # Native HTTP MCP clients are loaded with each role. Start their NPC
+    # endpoint before QwenPaw so a cold boot does not leave inactive clients.
+    depends_on:
+      npc:
+        condition: service_healthy
     entrypoint: ["python", "-u", "/survival/game_service.py"]
     ports:
       - "127.0.0.1:18089:8088"
@@ -333,7 +338,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-recovery1
+    image: qiandengji-survivor:2.2.0-autonomy4
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s

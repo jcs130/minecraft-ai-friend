@@ -146,8 +146,13 @@ class TeamHealthTests(unittest.TestCase):
             'server/team-state/content/context.json': {'schema':1,'updatedAt':self.now,'receptionReady':False,'private':'DO_NOT_PROJECT'},
             'server/world-data/world-heartbeat.json': {'ts':self.now*1000,'automaticModelJobs':{'review':False,'dailyReport':False}},
             'server/engineering/receipts/_runner.json': {'schema':1,'updatedAt':self.now*1000,'enabled':True,'busy':False,'error':None},
+            'server/operations-agent-state/operations-budget/delegations.json': [],
         }
         self.save()
+        import sqlite3
+        from contextlib import closing
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute('CREATE TABLE cycles(actor,status,at)')
 
     def save(self):
         for relative, value in self.docs.items():
@@ -165,6 +170,35 @@ class TeamHealthTests(unittest.TestCase):
         self.assertNotIn('DO_NOT_PROJECT', json.dumps(result))
         self.assertEqual(result['worldActions'], 0)
         self.assertEqual(before, {str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
+    def test_native_successful_skips_do_not_hide_orphaned_cycle_or_shared_lease(self):
+        import sqlite3
+        from contextlib import closing
+        path = self.root / 'server/team-state/team.sqlite3'
+        with closing(sqlite3.connect(path)) as db, db:
+            db.execute('INSERT INTO cycles VALUES(?,?,?)', ('game:mc-god', 'running', self.now - 571))
+        result = health.probe_world_team()
+        self.assertFalse(result['checks']['native_cycles_unblocked'])
+        self.assertEqual(result['evidence']['nativeCycles']['blocked'][0]['kind'], 'team-cycle')
+        with closing(sqlite3.connect(path)) as db, db:
+            db.execute('DELETE FROM cycles')
+        self.docs['server/operations-agent-state/operations-budget/delegations.json'] = [
+            {'runId': 'old-cron', 'status': 'cron_reserved', 'startedAt': self.now - 451}]
+        self.save()
+        result = health.probe_operations_cycles()
+        self.assertFalse(result['ok'])
+        self.assertFalse(result['automaticRelease'])
+        self.assertEqual(result['blocked'][0]['kind'], 'operations-reservation')
+
+    def test_inflight_cycle_is_healthy_but_unknown_is_reported_without_release(self):
+        import sqlite3
+        from contextlib import closing
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute('INSERT INTO cycles VALUES(?,?,?)', ('game:mc-god', 'running', self.now - 470))
+        self.assertTrue(health.probe_operations_cycles()['ok'])
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute("UPDATE cycles SET status='unknown'")
+        self.assertFalse(health.probe_operations_cycles()['ok'])
 
     def test_missing_protocol_or_failed_stage_cannot_use_healthy_npc_as_proof(self):
         self.docs['server/team-state/collector-health.json']['protocol'] = 0

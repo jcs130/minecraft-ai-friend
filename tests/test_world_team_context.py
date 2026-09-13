@@ -88,13 +88,43 @@ class TeamLifeContextTests(unittest.TestCase):
         app = App()
         team.register_team_tools(app, 'game:mc-god', state=self.root / 'team')
         projection = self.snapshot()
-        with patch('operations_team_mcp.OperationsTools.snapshot', return_value={'ok': True, 'worldActionsAllowed': False}), \
+        with patch('operations_team_mcp.public_snapshot', return_value={'ok': True, 'worldActionsAllowed': False}), \
              patch.object(team, 'survivor_snapshot', return_value=projection):
             result = app.tools['team_context']()
         self.assertEqual(result['survivor'], projection)
         self.assertEqual(result['world']['worldActionsExecuted'], 0)
         self.assertNotIn('worldActionsAllowed', result['world'])
         self.assertEqual(set(app.tools), set(team.COMMON_TOOLS) | {'team_recruit'})
+
+    def test_all_registered_roles_read_public_context_without_an_operations_identity(self):
+        from operations_team_mcp import public_snapshot
+        from world_team import members
+        stamp = datetime.now(timezone.utc).isoformat()
+        public = self.root / 'public'; public.mkdir()
+        for name in ('world', 'health', 'operations'):
+            (public / (name + '.json')).write_text(json.dumps({'generatedAt': stamp,
+                'available': True, 'ok': True, 'services': [], 'issues': [], 'private': 'PRIVATE_OMITTED'}), encoding='utf8')
+        before = {p.name: p.read_bytes() for p in public.iterdir()}
+        class App:
+            def __init__(self): self.tools = {}
+            def tool(self):
+                def add(fn): self.tools[fn.__name__] = fn; return fn
+                return add
+        with patch('operations_team_mcp.public_snapshot', side_effect=lambda: public_snapshot(public)), \
+             patch('operations_team_mcp.OperationsTools', side_effect=AssertionError('must_not_adopt_operations_identity')), \
+             patch('operations_state.state_root', side_effect=AssertionError('public_context_has_no_private_state')), \
+             patch.object(team, 'survivor_snapshot', return_value={'status': 'unknown', 'fresh': False}):
+            for actor in members():
+                with self.subTest(actor=actor):
+                    app = App(); team.register_team_tools(app, actor, state=self.root / 'team')
+                    result = app.tools['team_context']()
+                    self.assertEqual(result['actor'], actor)
+                    self.assertTrue(result['world']['ok'])
+                    self.assertEqual(result['world']['worldActionsExecuted'], 0)
+                    self.assertNotIn('role', result['world'])
+                    self.assertNotIn('operationsStateDirectory', result['world'])
+                    self.assertNotIn('PRIVATE_', json.dumps(result))
+        self.assertEqual(before, {p.name: p.read_bytes() for p in public.iterdir()})
 
 
 if __name__ == '__main__': unittest.main()
