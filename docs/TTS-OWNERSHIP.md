@@ -1,5 +1,7 @@
 # 千灯纪 TTS 接管与验收
 
+**2026-09-13 更新：** 当前硬件为 RTX 3090 24GB，生成式 LLM 全部使用云端，游戏语音恢复为本机 GPU IndexTTS。旧 Docker 镜像已不可见，新增可重建镜像 `qiandengji-tts:2.5-qd1` 与独立运行证明；下文旧镜像 ID 和 9 月 7 日验收保留为历史记录。当前部署、命令和边界见 [本地语音与云端 LLM](LOCAL-SPEECH-CLOUD-LLM.md)。
+
 2026-09-07 本轮已将 TTS 所需 79 个资产完整复制到 `D:/Projects/QiandengJi/server/tts-state`，共 **8,508,340,107 bytes**，逐文件核对源与目标 SHA-256。统一运维已完成切换：D `qiandengji-tts-1` 健康运行、旧 `shadow-tts` 已停止，继续提供本机 8100 兼容入口。真实 HTTP 合成和隔离队列消费验收共 10 项通过，见 `reports/tts-ownership-transfer.json` 与 `reports/tts-ownership-smoke.json`。本文保留准备时来源审计，并在末节记录切换后实测边界。
 
 ## 当前所有者与兼容范围

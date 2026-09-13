@@ -201,7 +201,9 @@ def _boot():
     global _tts
     from indextts.infer_v2_5 import IndexTTS2
     _tts = IndexTTS2(cfg_path=os.path.join(CKPT_DIR, "config.yaml"),
-                     model_dir=CKPT_DIR, use_bf16=True)
+                     model_dir=CKPT_DIR, use_bf16=True,
+                     device=os.environ.get("TTS_DEVICE", "cuda:0"),
+                     use_cuda_kernel=False, use_qwen_emo=False)
     if os.environ.get("TTS_WARMUP", "1") != "0":
         try:
             # Warmup is local only and leaves no generated speech behind.
@@ -261,7 +263,9 @@ def voices():
 @app.get("/health")
 def health():
     return {"ok": _tts is not None, "apiVersion": 2, "maidEndpoint": "/tts/maid",
-            "maidMediaType": "audio/mpeg", "maxTextChars": MAX_TEXT_CHARS}
+            "maidMediaType": "audio/mpeg", "maxTextChars": MAX_TEXT_CHARS,
+            "engine": "IndexTTS-2.5", "device": getattr(_tts, "device", None),
+            "textEmotionModelLoaded": getattr(_tts, "qwen_emo", None) is not None}
 
 
 if __name__ == "__main__":

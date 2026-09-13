@@ -437,7 +437,7 @@ services:
       retries: 3
 
   tts:
-    image: sha256:9da38721708a19a1c0528b5224a2d9e464453bd56f46f51e9c595dd27e0f56bb
+    image: qiandengji-tts:2.5-qd1
     pull_policy: never
     restart: unless-stopped
     working_dir: /app
@@ -447,8 +447,11 @@ services:
       TTS_CKPT: /checkpoints
       TTS_VOICES: /voices
       TTS_DEFAULT_VOICE: goddess
+      TTS_DEVICE: cuda:0
       TTS_HOST: 0.0.0.0
       TTS_PORT: "8100"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     ports:

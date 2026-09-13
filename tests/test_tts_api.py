@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 import wave
@@ -143,8 +144,29 @@ class TtsApiTests(unittest.TestCase):
         health = self.client.get("/health").json()
         self.assertTrue(health["ok"])
         self.assertEqual(health["maidEndpoint"], "/tts/maid")
+        self.assertFalse(health["textEmotionModelLoaded"])
         self.assertEqual(self.engine.calls, [])
         self.assert_clean()
+
+    def test_startup_disables_text_emotion_model_and_exposes_actual_device(self):
+        module = types.ModuleType("indextts.infer_v2_5")
+        def create_engine(**options):
+            # Model initialization is the boundary where an extra local LLM
+            # could otherwise be loaded. Audio inference itself stays mocked.
+            self.assertIs(options["use_qwen_emo"], False)
+            self.assertIs(options["use_cuda_kernel"], False)
+            self.assertTrue(options["use_bf16"])
+            return types.SimpleNamespace(device=options["device"], qwen_emo=None)
+        module.IndexTTS2 = create_engine
+        with patch.dict("sys.modules", {"indextts.infer_v2_5": module}), \
+             patch.dict("os.environ", {"TTS_WARMUP": "0", "TTS_DEVICE": "cuda:0"}):
+            api._boot()
+        health = self.client.get("/health").json()
+        self.assertTrue(health["ok"])
+        self.assertEqual(health["device"], "cuda:0")
+        self.assertFalse(health["textEmotionModelLoaded"])
+        api._tts.qwen_emo = object()
+        self.assertTrue(self.client.get("/health").json()["textEmotionModelLoaded"])
 
     def test_missing_output_is_error_not_audio_success(self):
         with patch.object(self.engine, "infer", return_value=None):
