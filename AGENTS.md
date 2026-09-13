@@ -1,5 +1,11 @@
 # 千灯纪整合项目
 
+2026-09-13 最新 D 盘服务整理覆盖下文空引擎/双运营实例记录：已从固定依赖真实重建缺失镜像，项目仍为 `D:\Projects\QiandengJi`，Docker Desktop 实际 WSL 镜像磁盘已迁到 `D:\docker-data\DockerDesktopWSL\disk\docker_data.vhdx`，迁移后原镜像 ID/标签/容器挂载核验通过。默认 13 个活动 Compose 服务（新增容器 inventory，包含 survivor），原 `qwenpaw-ops` 归档到 legacy-operations profile；10 个启用角色/94 项技能绑定均在游戏 QwenPaw 18089，宿主 8088 保持原用途。公开状态每 120 秒由容器采集，旧 Windows 游戏任务保持 Disabled。恢复前备份 27,157 文件且逐项校验。原 shadow 世界已加载，两个游戏协议入口、keepInventory=true、本机免密码管理、观察者及 GPU Kokoro 健康通过实际检查。桐人仍按原 cancellation_uncertain 暂停，旧任务不可因服务恢复而重投/清除，游戏可连接不代表自主生存已恢复。详见 docs/GAME-RUNTIME-LAYOUT.md；历史源码哈希和旧验收不改写。
+
+公开库存唯一写者为 inventory 容器：宿主 status/doctor 读当前快照，snapshot 和完整 health 刷新通过已验证容器 ID 执行固定 --once，完整审计只写 reports。实测 Windows msvcrt 与 Docker bind 上 Linux flock 不互通，不能恢复为宿主和容器各自加锁写同一公开文件；Linux 发布者间互斥已验证。见 docs/INVENTORY-CONTAINER.md。
+
+恢复后的完整审计不是全绿：除历史源码证明漂移外，15 条模型用途路由中 diagnostics/events/controls/exploration 仍指向已停用的 qd-diagnostics/mc-priest/mc-guard-kirito/mc-guard-naruto，旧 operations_native_tasks.SPECIALISTS 也仍允许委派这些目标，是实际待修问题；不得把 probe 放绿或重新激活重复角色来遮掩。当前日报回执、桐人持续 tick/伙伴通信亦未重新验收。本轮只完成 D 盘容器服务恢复与守护，不能说自主世界闭环全部完成。详见 docs/GAME-RUNTIME-LAYOUT.md。
+
 2026-09-13 语音实时性最新方向覆盖下文 IndexTTS 启用记录：用户指定复用 C 盘 Kokoro，游戏 Compose 的 `tts` 改用本地 Kokoro 82M v1.1-zh（Kokoro/Misaki 0.9.4），GPU 推理、运行时离线，全部生成式 LLM 仍走 QwenPaw 云端。旧 47 个音色 ID 映射到已安装的 `zf_001` / `zm_010`，不宣称仍具备克隆效果或 IndexTTS 情感控制。桐人 `cosy_male` 用男声，结衣 `cosy_female` 用女声。只替换既有 Docker TTS，不新增宿主常驻进程；旧 Index 镜像、资产、来源清单保持可回滚。部署和实际延迟证据见 docs/KOKORO-TTS.md。
 
 2026-09-13 硬件与推理部署方向：本机为 i9-13900K、64GB 内存、RTX 3090 24GB。用户明确本机不运行通用 LLM，游戏生成式推理全部由 QwenPaw 角色调用云端；当前启用角色为八个阿里云 CodingPlan、女神与天神两个智谱 CodingPlan，保留即时模型选择。GPU 可用于游戏专属 IndexTTS 2.5，保留本地 ASR 与语音链路；TTS 显式 `use_qwen_emo=False`，不加载额外文本情感 LLM。宿主 QwenPaw 8088 保持原用途，不能因进程名或端口猜测而停止其它服务。旧 Docker 引擎中镜像和容器已不可见，恢复必须使用真实重建记录，不能冒充原不可变镜像；D 盘世界、角色会话和技能数据保留。

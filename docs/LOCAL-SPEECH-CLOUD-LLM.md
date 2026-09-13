@@ -81,6 +81,6 @@ docker compose -f compose.yml -f world/tts/compose.index-rollback.yml up -d --no
 
 这三条为预热后的单次样本，不代表并发压测或长文本延迟。合成后容器内存采样约 3.19GiB；全机 GPU 已用 7,232MiB，包含桌面原有占用，不能当作 TTS 独占显存。实际安装的 TLM 1.5.3 解码器读到女仆 MP3 的 95,616 字节 PCM、22,050Hz；同时确认它拒绝 PCM WAV，因此保留专用 MP3 接口。
 
-24 项离线单元测试、新烟测工具 10 项自检及实际运行烟测 10 项检查通过。新烟测共请求三次 TTS，没有生成式 LLM 调用、声卡播放或玩家队列写入。本机证据在 `runtime/cloud-tts-20260913/tts-runtime-smoke.json` 和该目录的独立音频记录；这些运行文件不进入公开仓库。当前仅恢复 TTS，Minecraft、游戏 QwenPaw 与语音队列服务仍未启动。
+24 项离线单元测试、新烟测工具 10 项自检及实际运行烟测 10 项检查通过。新烟测共请求三次 TTS，没有生成式 LLM 调用、声卡播放或玩家队列写入。本机证据在 `runtime/cloud-tts-20260913/tts-runtime-smoke.json` 和该目录的独立音频记录；这些运行文件不进入公开仓库。该 IndexTTS 验收阶段仅恢复 TTS；后续同日已切换 Kokoro 并恢复其余游戏容器，当前部署见 [D 盘 Docker 服务布局](GAME-RUNTIME-LAYOUT.md)，不能将本节历史性能数据视为当前 Kokoro 数据。
 
 资料：[IndexTTS 官方项目与安装说明](https://github.com/index-tts/index-tts)、[PyTorch 官方历史版本](https://pytorch.org/get-started/previous-versions/)。本次沿用原审计推理源码，没有用最新分支覆盖模型实现。

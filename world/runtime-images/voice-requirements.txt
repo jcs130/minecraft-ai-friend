@@ -1,0 +1,4 @@
+# CPU ASR and the existing opt-in fallback; Kokoro runs in its own GPU service.
+sherpa-onnx==1.13.8
+numpy==2.2.6
+edge-tts==7.2.8

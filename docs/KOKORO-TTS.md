@@ -64,6 +64,6 @@ docker compose -f compose.yml -f world/tts/compose.index-rollback.yml up -d --no
 
 合成后容器内存约 1.883GiB；整机显存已用 2,438MiB，包含桌面等原有占用，不能当作独占显存。相同机器此前 IndexTTS 合成后采样约 3.19GiB 容器内存、整机显存已用 7,232MiB。
 
-完整结果在本地 `runtime/kokoro-20260913/kokoro-runtime-smoke.json`，没有声卡播放、玩家队列写入或生成式 LLM 调用。HTTP 音频可用不等于真人已在游戏中听到；当前 Minecraft、游戏 QwenPaw 和语音队列消费者尚未恢复运行，后续需验证 GodVoice 播放回执和人物实际发声。
+完整结果在本地 `runtime/kokoro-20260913/kokoro-runtime-smoke.json`，没有声卡播放、玩家队列写入或生成式 LLM 调用。该阶段尚未恢复 Minecraft、游戏 QwenPaw 和语音队列消费者；后续同日已完成 [D 盘 Docker 服务恢复](GAME-RUNTIME-LAYOUT.md)，并再次确认 GPU Kokoro 健康。HTTP 音频可用仍不等于真人已在游戏中听到，GodVoice 播放回执和人物实际发声需分别验证。
 
 资料：[Kokoro 官方项目](https://github.com/hexgrad/kokoro)、[v1.1 中文模型与音色说明](https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh)、[Misaki 官方发音处理](https://github.com/hexgrad/misaki)。

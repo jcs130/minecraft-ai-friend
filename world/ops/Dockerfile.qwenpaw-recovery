@@ -1,0 +1,26 @@
+# Recovery does not depend on the unavailable, historical qwenpaw-mc image.
+# Build context is staged by tools/build_qwenpaw_recovery.py; no world or secrets.
+FROM python:3.11-slim-bookworm@sha256:528257d48c1da0dcecc2e725d1ae34498d60c965f1241e39cd6a85a8859bdf84 AS game
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ENV TZ=Asia/Shanghai PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl build-essential libglib2.0-0 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+# These three versions are the contracts checked by the existing runtime hooks.
+# Transformers keeps the previously deployed 4.x contract, without local LLMs.
+RUN python -m pip install --no-cache-dir --index-url "$PIP_INDEX_URL" \
+    qwenpaw==2.2.0 agentscope==2.0.7.post1 reme-ai==0.4.1.10 \
+    transformers==4.57.1 nbtlib==2.0.4 quickjs-ng==0.16.2.1
+COPY ops /ops
+COPY survival /survival
+COPY character_speech.py /survival/character_speech.py
+COPY qwenpaw_recovery_probe.py /opt/qwenpaw_recovery_probe.py
+RUN python /ops/patch_qwenpaw_game.py \
+    && python /opt/qwenpaw_recovery_probe.py
+WORKDIR /state
+EXPOSE 8088
+ENTRYPOINT ["python", "-u", "/survival/game_service.py"]
+
+FROM game AS survivor
+EXPOSE 8089
+ENTRYPOINT ["python", "-u", "/survival/service.py"]

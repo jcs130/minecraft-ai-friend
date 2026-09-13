@@ -2,7 +2,7 @@ name: qiandengji
 
 services:
   mc:
-    image: itzg/minecraft-server:java21
+    image: itzg/minecraft-server:java21@sha256:f71707d922f9d616c654ff504bf41e4d09dbf4fa1cd9776ccca660bb2accbab8
     pull_policy: never
     restart: unless-stopped
     environment:
@@ -42,7 +42,7 @@ services:
 
   world:
     stop_grace_period: 45s
-    image: mc-world:2.1.38
+    image: qiandengji-world:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["/app/node_modules/.bin/tsx", "/app/bootstrap-world.mts"]
@@ -108,7 +108,7 @@ services:
       retries: 3
 
   panel:
-    image: mc-world:2.1.38
+    image: qiandengji-world:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["node", "/app/admin/server.mjs"]
@@ -122,7 +122,7 @@ services:
       PANEL_PUBLIC_ORIGIN: http://127.0.0.1:19091
       PANEL_MANAGEMENT_AUTH_MODE: local
       # Exact Docker Desktop peer; recheck when qiandengji_default is recreated.
-      PANEL_LOCAL_TRUSTED_PEERS: 172.20.0.1
+      PANEL_LOCAL_TRUSTED_PEERS: 172.18.0.1
       PANEL_STATE_DIR: /panel-data
       PANEL_QWENPAW_URL: http://127.0.0.1:18089
       PANEL_RESOURCES_URL: http://127.0.0.1:19090/packs/
@@ -140,7 +140,7 @@ services:
       retries: 3
 
   gate:
-    image: mc-world:2.1.38
+    image: qiandengji-world:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
@@ -153,7 +153,7 @@ services:
         condition: service_healthy
 
   npc:
-    image: mc-sidecar:2.1.0
+    image: qiandengji-sidecar:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
@@ -217,7 +217,7 @@ services:
       retries: 3
 
   resources:
-    image: mc-sidecar:2.1.0
+    image: qiandengji-sidecar:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["python3", "-m", "http.server", "9090", "--directory", "/public"]
@@ -232,7 +232,7 @@ services:
       retries: 3
 
   qwenpaw:
-    image: qiandengji-qwenpaw-game:2.2.0-qd1
+    image: qiandengji-qwenpaw-game:2.2.0-recovery1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["python", "-u", "/survival/game_service.py"]
@@ -276,13 +276,17 @@ services:
     networks: [default, operations]
     healthcheck:
       test: ["CMD", "python", "/ops/qwenpaw_health.py"]
-      interval: 30s
-      timeout: 25s
+      # Full native audit covers ten roles and 94 enabled skill bindings.
+      # Measured at ~40s after deduplicating reads within one probe.
+      interval: 120s
+      timeout: 120s
       retries: 4
       start_period: 60s
 
   qwenpaw-ops:
-    profiles: [operations]
+    # Archived after the ten-role team was consolidated into game QwenPaw.
+    # Retain its data and definition for explicit recovery; never start by default.
+    profiles: [legacy-operations]
     image: qiandengji-qwenpaw-ops:2.2.0
     pull_policy: never
     restart: unless-stopped
@@ -327,7 +331,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-qd15
+    image: qiandengji-survivor:2.2.0-recovery1
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s
@@ -392,7 +396,7 @@ services:
       start_period: 180s
 
   voice:
-    image: mc-voice:1.0
+    image: qiandengji-voice:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["python", "-u", "/opt/sidecar/god-voice-watcher.py"]
@@ -413,7 +417,7 @@ services:
       retries: 3
 
   asr:
-    image: mc-voice:1.0
+    image: qiandengji-voice:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["python", "-u", "/opt/sidecar/mic_asr_watcher.py"]
@@ -478,7 +482,7 @@ services:
       retries: 10
 
   control:
-    image: mc-world:2.1.38
+    image: qiandengji-world:20260913-qd1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["node", "/app/admin/control-service.mjs"]
@@ -502,6 +506,34 @@ services:
       interval: 20s
       timeout: 5s
       start_period: 10s
+      retries: 3
+
+  inventory:
+    image: qiandengji-sidecar:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /project
+    entrypoint: ["python3", "-u", "/project/tools/inventory_service.py"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./tools:/project/tools:ro
+      - ./config:/project/config:ro
+      - ./world/ops:/project/world/ops:ro
+      - ./server/agents/work:/project/server/agents/work:ro
+      - ./server/team-state:/project/server/team-state:ro
+      - ./server/panel-state:/project/server/panel-state
+      - ./server/inventory-state:/project/server/inventory-state
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python3", "/project/tools/inventory_service.py", "--health"]
+      interval: 30s
+      timeout: 8s
+      start_period: 45s
       retries: 3
 
 networks:

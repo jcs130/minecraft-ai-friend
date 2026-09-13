@@ -358,7 +358,7 @@ class OperationsHealth(unittest.TestCase):
         with patch.object(health.urllib.request, 'urlopen', side_effect=read), ExitStack() as stack:
             for name in ('probe_management', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands',
                          'probe_chanting_staff', 'probe_voice_recording', 'probe_voice_boundary_deployment',
-                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party'):
+                         'probe_skillbar_editor', 'probe_chanting_client', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party', 'probe_world_team'):
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             state.pop('operations')
@@ -478,7 +478,7 @@ class OperationsTeamProbe(unittest.TestCase):
     def test_team_runtime_or_behavior_failure_turns_panel_red(self):
         other = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
                  'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
-                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party')
+                 'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_survivor_party', 'probe_world_team')
         with ExitStack() as stack:
             for name in other:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
@@ -495,14 +495,90 @@ class OperationsTeamProbe(unittest.TestCase):
             self.assertTrue(value['operations_team']['behavior']['ok'])
 
 
+class ConsolidatedOperationsProbe(unittest.TestCase):
+    def setUp(self):
+        temporary=tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root=Path(temporary.name)
+        (self.root/'config').mkdir()
+        (self.root/'config/operations-runtime.json').write_bytes(
+            (SOURCE.parents[3]/'config/operations-runtime.json').read_bytes())
+        mapping=self.root/'server/team-state/runtime-hosts.json'
+        mapping.parent.mkdir(parents=True)
+        mapping.write_text(json.dumps({'schema':2,'phases':{
+            'steward-to-game-v1':'active','engineer-to-game-v1':'active'}}))
+        patcher=patch.object(health,'PROJECT',self.root)
+        patcher.start();self.addCleanup(patcher.stop)
+
+    def test_current_services_require_thirteen_and_ignore_absent_archive(self):
+        active=health.current_service_manifest()
+        self.assertEqual(len(active),13)
+        self.assertNotIn('qwenpaw-ops',active)
+        rows=[{'Service':name,'State':'running','Health':'healthy'} for name in active]
+        process=SimpleNamespace(returncode=0,stdout=json.dumps(rows))
+        with patch.object(health.subprocess,'run',return_value=process):
+            result=health.probe_services()
+            self.assertTrue(result['ok']);self.assertEqual(len(result['checks']),13)
+            rows[0]['Health']='unhealthy';process.stdout=json.dumps(rows)
+            self.assertFalse(health.probe_services()['ok'])
+
+    def test_managed_refresh_and_failure_never_publish_from_host(self):
+        folder=self.root/'server/panel-state';folder.mkdir(parents=True,exist_ok=True)
+        source={'schema':1,'project':'qiandengji','generatedAt':datetime.now(timezone.utc).isoformat(),
+                'checks':{'currentServices':True,'sharedTts':{'ok':True,'endpoint':'http://127.0.0.1:8100/health'}}}
+        path=folder/'operations.json';path.write_text(json.dumps(source));original=path.read_bytes()
+        (folder/'health.json').write_text('collector-owned')
+        adapter=SimpleNamespace(managed_snapshot=lambda **_: source)
+        with patch.object(health,'load_operations_adapter',return_value=adapter):
+            self.assertTrue(health.refresh_operations_snapshot()['ok'])
+            adapter.managed_snapshot=lambda **_: (_ for _ in ()).throw(RuntimeError('refresh failed'))
+            self.assertFalse(health.refresh_operations_snapshot()['ok'])
+            self.assertEqual(path.read_bytes(),original)
+            with redirect_stdout(io.StringIO()):health.inventory_lock_failure('inventory_busy')
+        self.assertEqual((folder/'health.json').read_text(),'collector-owned')
+
+    def test_archived_team_uses_current_game_and_world_team_without_old_acceptance(self):
+        with patch.object(health,'probe_game_qwenpaw',return_value={'runtime':{'ok':True},'behavior':{'ok':False}}),\
+             patch.object(health,'probe_world_team',return_value={'ok':True}) as team,\
+             patch.object(health.subprocess,'run',side_effect=AssertionError('Do not execute archived Qwen')):
+            result=health.probe_operations_team()
+            self.assertTrue(result['ok'])
+            self.assertEqual(result['container'],'qiandengji-qwenpaw-1')
+            self.assertFalse(result['archived']['historicalAcceptanceReused'])
+            self.assertNotIn('six_roles',result.get('checks',{}))
+            team.return_value={'ok':False}
+            self.assertFalse(health.probe_operations_team()['ok'])
+
+    def test_game_readiness_requires_current_native_role_and_skill_inventory_receipt(self):
+        roles=['mc-god','mc-herald','qd-survivor','qd-engineer','qd-steward',
+               'qd-guild-planner','qd-villager-dialogue','qd-maid-dialogue','yui','other-maid']
+        receipt={'ok':True,'project':'qiandengji','packageVersion':'2.2.0','agents':10,
+                 'baseAgents':6,'maidAgents':2,'hostedAgents':2,'expectedAgents':roles,
+                 'configuredSkillBindings':94,'installedSkillBindings':94,'skillInventoryVerified':True,
+                 'cronBudgetGuardVerified':True,'enabledTools':7,'nativeToolPolicyVerified':True,
+                 'authMode':'local-passwordless','anonymousAccess':True}
+        process=SimpleNamespace(returncode=0,stdout=json.dumps(receipt))
+        with patch.object(health.subprocess,'run',return_value=process) as run,\
+             patch.object(health,'probe_recorded_behavior',return_value={'ok':False}):
+            self.assertTrue(health.probe_game_qwenpaw()['runtime']['ok'])
+            self.assertEqual(run.call_args.kwargs['timeout'],120)
+            for changed in ({'skillInventoryVerified':False},{'agents':9},{'expectedAgents':roles[:-1]},
+                            {'expectedAgents':roles+[roles[0]]},{'hostedAgents':0}):
+                process.stdout=json.dumps({**receipt,**changed})
+                self.assertFalse(health.probe_game_qwenpaw()['runtime']['ok'])
+
+
 class PasswordlessRuntimeProbe(unittest.TestCase):
     @staticmethod
     def learning_reply(request, routes):
         from agent_learning import TOOL_NAMES, managed_job
         from role_learning_profiles import role_skills
-        from native_role_capabilities import NATIVE_SKILLS
+        from native_role_capabilities import NATIVE_SKILLS, enabled_native_tools
         route = request.full_url.removeprefix('http://127.0.0.1:8088/api')
         role = request.get_header('X-agent-id')
+        if route == '/tools':
+            disabled={row['name'] for row in routes['/tools'] if row.get('enabled') is False}
+            return [{'name':name,'enabled':name not in disabled} for name in enabled_native_tools(role)]
         if route == '/mcp/tools/qd_learning': return [{'name': name, 'enabled': True} for name in TOOL_NAMES]
         if route == '/mcp': return [{'key': name} for name in
             (('numen_survival', 'qd_learning') if role == 'qd-survivor' else ('qd_learning',))]
@@ -514,9 +590,36 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
         path = SOURCE.parents[1]/filename
         spec = importlib.util.spec_from_file_location('isolated_'+filename[:-3], path)
         module = importlib.util.module_from_spec(spec)
-        stub = SimpleNamespace(ROLES=(), TOOLS=(), role_tools=lambda _: ())
+        stub = SimpleNamespace(ROLES=(), TOOLS=(), role_tools=lambda _: (),operation_arguments=lambda *args: [])
         with patch.dict(sys.modules, {'operations_team_mcp': stub}):
             spec.loader.exec_module(module)
+        if filename == 'qwenpaw_health.py':
+            # This fixture isolates passwordless GETs, role tools and readiness.
+            # Real migration/team/party policies have their own focused tests.
+            temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+            root=Path(temporary.name)
+            # patch.dict restores newly imported modules too. Match the module
+            # imported later by the real party-driver helper, not an orphaned
+            # import retained by this isolated health module.
+            module.world_team=importlib.import_module('world_team_profiles')
+            from role_learning_profiles import GAME_ROLES,role_skills
+            from native_role_capabilities import NATIVE_SKILLS
+            for role in GAME_ROLES:
+                folder=root/role;folder.mkdir()
+                (folder/'skill.json').write_text(json.dumps({'schema_version':'workspace-skill-manifest.v1',
+                    'skills':{name:{'enabled':True} for name in (*role_skills(role,'game'),*NATIVE_SKILLS)}}),encoding='utf-8')
+            def fixture_path(value):
+                path=Path(value)
+                prefix=Path('/state/work/workspaces')
+                return root/path.relative_to(prefix) if path.is_relative_to(prefix) else path
+            patches=(patch.object(module,'Path',side_effect=fixture_path),
+                     patch.object(module,'roles',return_value=GAME_ROLES),
+                     patch.object(module,'maid_roles',return_value=()),
+                     patch.object(module,'party_roles',return_value=set()),
+                     patch.object(module,'hosted_source',return_value=None),
+                     patch.object(module.world_team,'actor_for',return_value=None))
+            for patcher in patches:
+                patcher.start();self.addCleanup(patcher.stop)
         return module
 
     def test_both_versions_require_explicit_zero_and_actual_disabled_status(self):
@@ -559,9 +662,12 @@ class PasswordlessRuntimeProbe(unittest.TestCase):
             self.assertTrue(result['ok']); self.assertIs(result['authEnforced'], False)
             self.assertEqual(result['authMode'], 'local-passwordless')
             self.assertEqual(result['agents'], 6)
+            self.assertEqual(result['expectedAgents'],sorted(roles))
+            self.assertTrue(result['skillInventoryVerified'])
+            self.assertEqual(result['configuredSkillBindings'],result['installedSkillBindings'])
             self.assertEqual([r.full_url for r in requests[1:3]], [
                 'http://127.0.0.1:8088/api/version', 'http://127.0.0.1:8088/api/healthz'])
-            self.assertEqual([r.get_header('X-agent-id') for r in requests if r.full_url.endswith('/api/tools')],
+            self.assertCountEqual([r.get_header('X-agent-id') for r in requests if r.full_url.endswith('/api/tools')],
                              ['mc-god', 'mc-herald', 'qd-villager-dialogue', 'qd-guild-planner', 'qd-maid-dialogue'])
             routes['/tools'][0]['enabled'] = False
             with self.assertRaises(AssertionError):

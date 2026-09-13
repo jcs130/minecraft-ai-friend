@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import urllib.request
 import sys
+import time
+from copy import deepcopy
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PHASE = 'auth-mode'
@@ -177,6 +179,26 @@ def check_passwordless_auth(get):
     assert get('/auth/status').get('enabled') is False
 
 
+def check_skill_inventory(folder, items):
+    """A role's actual Console inventory must match its own native manifest."""
+    manifest=json.loads((Path(folder)/'skill.json').read_text(encoding='utf-8-sig'))
+    # QwenPaw 2.2 store.read_skill_manifest also reads the released legacy
+    # {skills, version} shape; three existing world roles still use it.
+    legacy=set(manifest)=={'skills','version'} and type(manifest.get('version')) is int
+    assert manifest.get('schema_version') == 'workspace-skill-manifest.v1' or legacy
+    entries=manifest['skills']
+    assert isinstance(entries,dict) and all(isinstance(row,dict) and type(row.get('enabled')) is bool
+                                            for row in entries.values())
+    configured={name for name,row in entries.items() if row['enabled'] is True}
+    assert isinstance(items,list) and all(isinstance(row,dict) and isinstance(row.get('name'),str)
+                                         and type(row.get('enabled')) is bool for row in items)
+    names=[row['name'] for row in items]
+    assert len(names)==len(set(names)), 'duplicate_native_skill_names'
+    exposed={row['name'] for row in items if row['enabled'] is True}
+    assert exposed == configured, 'native_skill_inventory_differs_from_role_manifest'
+    return exposed
+
+
 def check_runtime_config():
     from upgrade_qwenpaw_runtime import assert_quiet, driver_cards
     assert importlib.metadata.version('qwenpaw') == '2.2.0'
@@ -235,14 +257,21 @@ def check_runtime_config():
 
 def main():
     global PHASE
+    started=time.monotonic()
     base = 'http://127.0.0.1:8088/api'
+    responses={}
     def get(path, aid=None):
+        # Multiple role checks share these read-only endpoints. Cache only
+        # within this invocation; never certify from an earlier health run.
+        key=(path,aid)
+        if key in responses:return deepcopy(responses[key])
         headers = {}
         if aid: headers['X-Agent-Id'] = aid
         with urllib.request.urlopen(urllib.request.Request(base + path, headers=headers), timeout=6) as res:
             body = res.read(2 * 1024 * 1024 + 1)
             assert len(body) <= 2 * 1024 * 1024
-            return json.loads(body)
+            responses[key]=json.loads(body)
+            return deepcopy(responses[key])
     PHASE = 'runtime-config'
     disabled_builtins = check_runtime_config()
     expected_roles = set(roles('game'))
@@ -280,7 +309,7 @@ def main():
     for aid in expected_roles:
         PHASE = 'native-learning:' + aid
         assert set(TOOL_NAMES) <= {item.get('name') for item in get('/mcp/tools/qd_learning', aid=aid) if item.get('enabled') is True}
-        enabled_skills = {item['name'] for item in get('/skills', aid=aid) if item.get('enabled') is True}
+        enabled_skills = check_skill_inventory(Path('/state/work/workspaces')/aid,get('/skills', aid=aid))
         assert set(role_skills(aid, 'game')) | set(NATIVE_SKILLS) <= enabled_skills
         bindings += len(enabled_skills)
         hosted = hosted_source(aid)
@@ -304,9 +333,13 @@ def main():
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
                       'authMode': 'local-passwordless', 'authEnabled': False, 'anonymousAccess': True,
                       'packageVersion': '2.2.0', 'agents': len(expected_roles), 'enabledTools': len(NATIVE_TOOLS),
+                      'expectedAgents': sorted(expected_roles),
+                      'nativeReadRequests': len(responses), 'elapsedSeconds': round(time.monotonic()-started,3),
                       'nativeToolPolicyVerified': True, 'officialSkillBindings': len(NATIVE_SKILLS) * len(expected_roles),
                       'survivorMcp': 'authenticated-streamable-http', 'learningMcpTools': len(TOOL_NAMES),
                       'installedSkillBindings': bindings, 'baseAgents': 6, 'maidAgents': len(maid_roles()),
+                      'configuredSkillBindings': bindings, 'skillInventoryVerified': True,
+                      'hostedAgents': sum(hosted_source(aid) is not None for aid in expected_roles),
                       'partyAgents': len(bound_party_roles), 'partyDriverPolicyVerified': bool(bound_party_roles),
                       'worldTeamAgents': sum(bool(world_team.actor_for(aid, 'game')) for aid in expected_roles),
                       'worldTeamDriverPolicyVerified': True,

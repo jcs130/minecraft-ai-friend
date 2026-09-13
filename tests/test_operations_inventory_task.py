@@ -193,7 +193,7 @@ class InventoryTaskTests(unittest.TestCase):
             self.assertEqual(child.returncode, 0)
             with locking.inventory_lock(self.root) as acquired:
                 self.assertTrue(acquired)
-            self.assertTrue((self.root/'runtime/operations-inventory.lock').is_file())
+            self.assertTrue((self.root/'server/inventory-state/operations-inventory.lock').is_file())
         finally:
             if child.poll() is None:
                 child.kill()

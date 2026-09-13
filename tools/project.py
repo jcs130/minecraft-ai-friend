@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SERVICES = ("tts", "mc", "world", "gate", "npc", "resources", "qwenpaw",
+                    "voice", "asr", "control", "panel", "survivor", "inventory")
 
 
 def docker(*args, check=True, capture=False):
@@ -31,13 +33,50 @@ def setup():
             out.write("\nQIANDENG_RCON_PASSWORD=" + password + "\n")
     data = ROOT / "server" / "world-data"
     data.mkdir(parents=True, exist_ok=True)
-    (data / "rcon-secret.txt").write_text(password, encoding="utf-8")
+    secret = data / "rcon-secret.txt"
+    if secret.exists() and secret.read_text(encoding="utf8").strip() != password:
+        raise ValueError("Existing RCON credential differs from .env; reconcile without overwriting it")
+    if not secret.exists():
+        secret.write_text(password, encoding="utf-8")
     # Static fallback definitions only; the imported player's progression wins.
     for source in (ROOT / "world" / "data").glob("*.json"):
         target = data / source.name
         if not target.exists():
             target.write_bytes(source.read_bytes())
     print("Local runtime configured. Credentials are stored only in ignored local files.")
+
+
+def preflight(selected):
+    """Refuse missing images/binds before Docker can create empty data paths."""
+    config = json.loads(docker("config", "--format", "json", capture=True).stdout)
+    services = config["services"]
+    if not selected or any(name not in services or name not in DEFAULT_SERVICES for name in selected):
+        raise ValueError("Choose current game services; archived operations is not a startup target")
+    required = set(selected)
+    pending = list(selected)
+    while pending:
+        for dependency in services[pending.pop()].get("depends_on", {}):
+            if dependency not in required:
+                required.add(dependency)
+                pending.append(dependency)
+    missing = []
+    for name in sorted(required):
+        service = services[name]
+        image = subprocess.run(["docker", "image", "inspect", service["image"], "--format", "{{.Id}}"],
+                               capture_output=True, timeout=20,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if image.returncode:
+            missing.append(name + ": image " + service["image"])
+        for mount in service.get("volumes", []):
+            source = mount.get("source", "")
+            if source == "/var/run/docker.sock" and mount.get("target") == source:
+                continue
+            path = Path(source)
+            if mount.get("type") != "bind" or not path.resolve().is_relative_to(ROOT.resolve()) or not path.exists():
+                missing.append(name + ": missing or external bind " + source)
+    if missing:
+        raise ValueError("Game startup prerequisites are incomplete:\n" + "\n".join(missing))
+    return selected
 
 
 def main():
@@ -53,8 +92,9 @@ def main():
     elif args.action == "start":
         if not (ROOT / "server" / "mc" / "shadow" / "level.dat").is_file():
             ap.error("No imported shadow save. Import the existing save before starting.")
+        selected = preflight(args.extra or list(DEFAULT_SERVICES))
         setup()
-        docker("up", "-d", *(args.extra or ["tts", "mc", "world", "gate", "npc", "resources", "qwenpaw", "voice", "asr", "control", "panel"]))
+        docker("up", "-d", "--wait", "--wait-timeout", "600", *selected)
     elif args.action == "stop":
         docker("stop", *args.extra)
     elif args.action == "status":

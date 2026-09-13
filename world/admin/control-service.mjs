@@ -5,10 +5,10 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createEngineeringRunner } from './engineering-runner.mjs';
 
-export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'];
+export const SERVICES = ['mc','world','gate','npc','resources','qwenpaw','voice','asr','panel','tts','control','survivor','inventory'];
 const MUTABLE = SERVICES.filter(x => x !== 'control');
 const DEPENDENCIES = {world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc','qwenpaw']};
-const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','panel','survivor'];
+const START_ORDER = ['tts','mc','world','gate','npc','qwenpaw','resources','voice','asr','panel','survivor','inventory'];
 export function redactLog(text) {
   const sensitive = key => /(?:password|passwd|secret|token|authorization|api.?key|credential)/i.test(key);
   const redactText=value=>value.replace(/(Bearer\s+)[^\s"']+/gi,'$1[redacted]')

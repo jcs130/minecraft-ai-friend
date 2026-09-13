@@ -1,0 +1,9 @@
+FROM python:3.11-slim-bookworm@sha256:528257d48c1da0dcecc2e725d1ae34498d60c965f1241e39cd6a85a8859bdf84
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/sidecar:/opt/ops:/opt/survival
+COPY world/sidecar /opt/sidecar
+COPY world/ops /opt/ops
+COPY world/survival /opt/survival
+COPY tools/npc_health.py /opt/npc_health.py
+COPY tools/register_maid_agents.py /opt/register_maid_agents.py
+RUN python -m compileall -q /opt/sidecar /opt/ops /opt/survival
+CMD ["python3", "-u", "/opt/sidecar/mc_npc.py"]

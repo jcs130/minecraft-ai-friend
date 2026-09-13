@@ -1,0 +1,8 @@
+FROM python:3.11-slim-bookworm@sha256:528257d48c1da0dcecc2e725d1ae34498d60c965f1241e39cd6a85a8859bdf84
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+COPY world/runtime-images/voice-requirements.txt /opt/voice-requirements.txt
+RUN pip install --no-cache-dir -r /opt/voice-requirements.txt
+COPY world/sidecar /opt/sidecar
+COPY tools/voice_health.py /opt/voice_health.py
+RUN python -c "import sherpa_onnx, numpy, edge_tts; print(sherpa_onnx.__version__)"
+CMD ["python3", "-u", "/opt/sidecar/god-voice-watcher.py"]

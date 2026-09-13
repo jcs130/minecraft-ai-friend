@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('world_ops_probe',ROOT/'tools/world_operations_health.py')
@@ -151,6 +152,36 @@ class WorldOperationsHealthTests(unittest.TestCase):
         def failure(_):raise OSError('unavailable')
         result=probe.check(self.root,failure,lambda:self.now)
         self.assertFalse(result['checks']['native_daily_job_enabled']);self.assertFalse(result['ok'])
+
+    def test_active_steward_uses_game_host_and_preserves_original_daily_authorship(self):
+        self.write('server/team-state/runtime-hosts.json',{'schema':2,'phases':{'steward-to-game-v1':'active'}})
+        result=self.check()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['evidence']['nativeHost'],{'runtime':'game','agentId':'qd-steward'})
+        self.assertEqual(self.native['spec']['meta']['role'],'default')
+        self.assertTrue(result['checks']['daily_run_and_report_verified'])
+
+    def test_http_probe_uses_selected_projects_native_host(self):
+        self.write('server/team-state/runtime-hosts.json',{'schema':2,'phases':{'steward-to-game-v1':'active'}})
+        observed=[]
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def read(self,*args):return b'{}'
+        class Opener:
+            def open(self,request,**kwargs):
+                observed.append(request)
+                return Response()
+        with patch.object(probe.urllib.request,'build_opener',return_value=Opener()):
+            probe.get('/cron/jobs/'+probe.JOB_ID,root=self.root)
+        self.assertEqual(observed[0].full_url,'http://127.0.0.1:18089/api/cron/jobs/'+probe.JOB_ID)
+        self.assertEqual(observed[0].get_header('X-agent-id'),'qd-steward')
+
+    def test_prepared_steward_remains_legacy_but_archived_target_is_rejected(self):
+        self.write('server/team-state/runtime-hosts.json',{'schema':2,'phases':{'steward-to-game-v1':'prepared'}})
+        self.assertEqual(probe.operations_host(self.root),{'runtime':'operations','agentId':'default'})
+        self.write('server/team-state/runtime-hosts.json',{'schema':2,'phases':{'steward-to-game-v1':'active'},'retired':['qd-steward']})
+        self.assertFalse(self.check()['checks']['native_daily_job_enabled'])
 
     def test_manifest_probe_uses_selected_project_and_reports_unavailable(self):
         spec=importlib.util.spec_from_file_location('world_ops_manifest_fixture',ROOT/'world/ops/health/health_mon.py')

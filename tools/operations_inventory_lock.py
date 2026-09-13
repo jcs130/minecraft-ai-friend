@@ -14,7 +14,9 @@ import time
 def inventory_lock(root, wait_seconds=0):
     if isinstance(wait_seconds, bool) or not 0 <= wait_seconds <= 100:
         raise ValueError('Lock wait must be between zero and 100 seconds')
-    path = Path(root) / 'runtime/operations-inventory.lock'
+    # Host CLI and the managed container mount this exact D-project directory.
+    # /project/runtime used to map elsewhere, creating two unrelated locks.
+    path = Path(root) / 'server/inventory-state/operations-inventory.lock'
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = path.open('a+b')
     acquired = False

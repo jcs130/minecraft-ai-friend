@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "project": "qiandengji",
-  "teamPurpose": "游戏世界运营组：统筹、运营、策划与体验检查；游戏会话角色独立运行",
+  "teamPurpose": "游戏世界团队：10 个现有角色统一在游戏 QwenPaw 18089；旧运营实例归档保留",
   "inventoryCollector": {
-    "taskName": "QiandengJi-Operations-Inventory",
-    "kind": "windows-scheduled-task",
+    "container": "qiandengji-inventory-1",
+    "kind": "docker-compose-service",
     "intervalSeconds": 120,
-    "requiresLoggedInUser": true,
-    "purpose": "定时采集公开状态，单次运行结束退出；不执行模型和启停",
-    "queryCommand": "python tools/operations_inventory_task.py query"
+    "requiresLoggedInUser": false,
+    "purpose": "容器内定时采集公开状态；仅查询，不执行模型和启停",
+    "queryCommand": "docker compose ps inventory"
   },
   "groups": {
     "game": [
@@ -29,11 +29,10 @@
     ],
     "management": [
       "panel",
-      "control"
+      "control",
+      "inventory"
     ],
-    "operations": [
-      "qwenpaw-ops"
-    ]
+    "operations": ["qwenpaw"]
   },
   "services": [
     {
@@ -85,9 +84,9 @@
     },
     {
       "id": "qwenpaw",
-      "label": "游戏会话 QwenPaw",
+      "label": "游戏世界团队 QwenPaw",
       "group": "dialogue",
-      "purpose": "天神、司礼的游戏会话；不等同于完整运营组",
+      "purpose": "女神、天神、司灯、策划、桐人与结衣等 10 个现有角色的会话、技能与原生任务",
       "dependencies": [],
       "healthRequired": true
     },
@@ -142,10 +141,19 @@
       "healthRequired": true
     },
     {
+      "id": "inventory",
+      "label": "状态采集",
+      "group": "management",
+      "purpose": "每两分钟更新本游戏世界的服务和角色状态，Docker 守护，不运行模型",
+      "dependencies": [],
+      "healthRequired": true
+    },
+    {
       "id": "qwenpaw-ops",
-      "label": "世界运营组 QwenPaw",
+      "label": "旧运营 QwenPaw（已归档）",
       "group": "operations",
-      "purpose": "六角色运营分析与提案；独立控制台 18090",
+      "purpose": "原角色已合并到游戏 18089；保留历史数据，禁止自动启动重复团队",
+      "active": false,
       "dependencies": [],
       "healthRequired": true
     }

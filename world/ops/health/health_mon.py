@@ -53,7 +53,7 @@ MANIFEST = {
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
     "npc": {"health_required": True, "purpose": "Skill-book and NPC event consumers; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
-    "qwenpaw": {"health_required": True, "purpose": "Independent goddess dialogue model service"},
+    "qwenpaw": {"health_required": True, "purpose": "Current ten-role world team, cloud models and native tasks"},
     "qwenpaw-ops": {"health_required": True, "purpose": "Six-role operations team, bounded native tasks and attributed proposals"},
     "voice": {"health_required": True, "purpose": "Local voice response queue"},
     "asr": {"health_required": True, "purpose": "Local microphone speech recognition"},
@@ -61,6 +61,7 @@ MANIFEST = {
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
     "survivor": {"health_required": True, "purpose": "Kirito autonomous survival, leased Numen actions and tested skills"},
+    "inventory": {"health_required": True, "purpose": "Read-only Docker-managed current project inventory publication"},
 }
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
     'survivor-status-panel', 'survivor-supervised-runtime', 'autonomous-task-evidence')
@@ -75,6 +76,31 @@ OPERATIONS_TEAM_SMOKE_CHECKS = (
     'runtime-2.2.0', 'role-skills-installed', 'native-task-report',
     'cost-budget-enforced', 'operations-ui', 'game-services-preserved',
 )
+
+
+def current_service_manifest():
+    """Keep historical registration while checking only explicitly active services."""
+    path = PROJECT/'config/operations-runtime.json'
+    if not path.exists():
+        return MANIFEST  # Historical fixtures/deployments have no active flag.
+    value = json.loads(path.read_text('utf-8-sig'))
+    rows = value.get('services', [])
+    if (value.get('schema') != 1 or value.get('project') != 'qiandengji'
+            or len(rows) != len(MANIFEST) or {row['id'] for row in rows} != set(MANIFEST)
+            or any(type(row.get('active', True)) is not bool for row in rows)):
+        raise ValueError('invalid_current_service_registry')
+    return {row['id']: MANIFEST[row['id']] for row in rows if row.get('active', True)}
+
+
+def operations_consolidated():
+    """Only the native, validated active steward migration changes team ownership."""
+    path = PROJECT/'server/team-state/runtime-hosts.json'
+    if not path.exists():
+        return False
+    spec = importlib.util.spec_from_file_location('health_team_hosts', Path(__file__).resolve().parents[1]/'world_team_hosts.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module._load_registry(path)['phases'].get('steward-to-game-v1') == 'active'
 
 VOICE_SMOKE_CHECKS = (
     'voice:model-endpoint-unreachable', 'voice:reserved-qa-fixture',
@@ -124,7 +150,7 @@ def probe_services():
     rows = rows if isinstance(rows, list) else [rows]
     services = {row.get("Service"): row for row in rows}
     checks = {}
-    for name, expected in MANIFEST.items():
+    for name, expected in current_service_manifest().items():
         row = services.get(name, {})
         running = row.get("State") == "running"
         healthy = row.get("Health") == "healthy" if expected["health_required"] else True
@@ -464,16 +490,28 @@ def probe_game_qwenpaw():
     try:
         result = subprocess.run(
             ['docker', 'exec', 'qiandengji-qwenpaw-1', 'python', '/ops/qwenpaw_health.py'],
-            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45,
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if result.returncode != 0 or len(result.stdout.encode('utf8')) > 65536:
             raise ValueError('Invalid game readiness receipt')
         receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        consolidated = operations_consolidated()
+        expected = receipt.get('expectedAgents')
+        role_count_ok = (isinstance(expected, list) and len(expected) == len(set(expected))
+            and all(isinstance(name, str) and name for name in expected)
+            and {'mc-god', 'mc-herald', 'qd-survivor', 'qd-engineer', 'qd-steward'} <= set(expected)
+            and receipt.get('agents') == len(expected)
+            and receipt.get('hostedAgents') == 2
+            and receipt.get('skillInventoryVerified') is True
+            and type(receipt.get('configuredSkillBindings')) is int
+            and receipt['configuredSkillBindings'] >= 30
+            and receipt.get('installedSkillBindings') == receipt['configuredSkillBindings']) if consolidated else (
+                receipt.get('agents') == 6 + receipt.get('maidAgents', -100))
         runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
             and receipt.get('packageVersion') == '2.2.0'
             and type(receipt.get('agents')) is int
             and type(receipt.get('maidAgents')) is int and 0 <= receipt['maidAgents'] <= 64
-            and receipt.get('baseAgents') == 6 and receipt['agents'] == 6 + receipt['maidAgents']
+            and receipt.get('baseAgents') == 6 and role_count_ok
             and receipt.get('cronBudgetGuardVerified') is True
             and type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] >= 30
             and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 7
@@ -492,6 +530,18 @@ def probe_game_qwenpaw():
 
 def probe_operations_team():
     """Check the fixed D runtime without inference, and require recorded behavior separately."""
+    try:
+        if operations_consolidated():
+            game = probe_game_qwenpaw()
+            team = probe_world_team()
+            live = game.get('runtime', {}).get('ok') is True and team.get('ok') is True
+            return {'ok': live, 'live': live, 'status': 'consolidated',
+                'container': 'qiandengji-qwenpaw-1', 'game': game.get('runtime'), 'world_team': team,
+                'archived': {'container': OPERATIONS_TEAM_CONTAINER, 'report': 'operations-team-smoke.json',
+                             'status': 'archived', 'historicalAcceptanceReused': False},
+                'scope': 'Active native steward migration; current game readiness and world-team probes. Legacy six-role acceptance remains archived.'}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {'ok': False, 'live': False, 'error': 'Current operations host mapping could not be verified'}
     checks = {name: False for name in ('runtime_identity', 'six_roles', 'role_skills_installed',
               'passwordless_access', 'rate_limit', 'driver_policy', 'native_tools_scoped', 'managed_weekly_jobs')}
     failure = None
@@ -572,16 +622,18 @@ def probe_passwordless_consoles():
     """Verify only the three project bindings and require separate actual UI/security evidence."""
     ports_ok = False
     try:
+        bindings = tuple(row for row in LOCAL_CONSOLE_PORTS
+                         if row[0] != OPERATIONS_TEAM_CONTAINER or not operations_consolidated())
         process = subprocess.run(
             ['docker', 'inspect', '--format', '{{json .NetworkSettings.Ports}}',
-             *(name for name, _, _ in LOCAL_CONSOLE_PORTS)],
+             *(name for name, _, _ in bindings)],
             capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=15,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if process.returncode != 0 or len(process.stdout.encode('utf-8')) > 16384:
             raise ValueError('Binding inspection failed')
         rows = [json.loads(line) for line in process.stdout.splitlines() if line.strip()]
-        ports_ok = len(rows) == len(LOCAL_CONSOLE_PORTS)
-        for row, (_, container_port, host_port) in zip(rows, LOCAL_CONSOLE_PORTS):
+        ports_ok = len(rows) == len(bindings)
+        for row, (_, container_port, host_port) in zip(rows, bindings):
             ports_ok = ports_ok and isinstance(row, dict) and (
                 row.get(container_port) == [{'HostIp': '127.0.0.1', 'HostPort': host_port}]
                 and all(value in (None, []) for key, value in row.items() if key != container_port))
@@ -660,7 +712,7 @@ def probe_management():
                 and type(session.get('expiresAt')) in (int, float)
                 and math.isfinite(session['expiresAt'])
                 and time.time()*1000 < session['expiresAt'] <= (time.time()+3605)*1000),
-            'current_services_ready': ready == set(MANIFEST),
+            'current_services_ready': ready == set(current_service_manifest()),
             'observer_connected': observer.get('observer', {}).get('online') is True,
             'renderer_stream_ready': renderer.get('ok') is True and renderer.get('observerOnline') is True and renderer.get('worldAvailable') is True,
             'current_mod_assets': compatibility == expected and compatibility.get('registry', {}).get('sha256') == registration,
@@ -1005,17 +1057,27 @@ def load_operations_adapter():
     return module
 
 
+def managed_inventory_publication():
+    path=PROJECT/'config/operations-runtime.json'
+    if not path.exists():return False
+    try:
+        return json.loads(path.read_text('utf-8-sig')).get('inventoryCollector',{}).get('kind')=='docker-compose-service'
+    except (OSError,ValueError,AttributeError):
+        return True  # Unreadable current ownership never enables a host writer.
+
+
 def refresh_operations_snapshot():
     """Collect before all other checks, binding this run to its actual snapshot."""
     global OPERATIONS_COLLECTION
     OPERATIONS_COLLECTION = {'ok': False, 'collected': False}
     old_path = list(sys.path)
     target = PROJECT/'server/panel-state/operations.json'
+    managed = managed_inventory_publication()
     try:
         # The collector's inventory import must resolve from this project's tools.
         sys.path.insert(0, str(PROJECT/'tools'))
         adapter = load_operations_adapter()
-        snapshot = adapter.collect_snapshot(root=PROJECT)
+        snapshot = adapter.managed_snapshot(root=PROJECT,refresh=True) if managed else adapter.collect_snapshot(root=PROJECT)
         if (not isinstance(snapshot, dict) or type(snapshot.get('schema')) is not int or snapshot['schema'] != 1
                 or snapshot.get('project') != 'qiandengji'
                 or not 0 <= time.time() - operations_time(snapshot['generatedAt']).timestamp() <= 300):
@@ -1024,7 +1086,8 @@ def refresh_operations_snapshot():
         shared = checks.get('sharedTts', {})
         core_ok = checks.get('currentServices') is True
         shared_ok = shared.get('ok') is True and shared.get('endpoint') == 'http://127.0.0.1:8100/health'
-        adapter.write_snapshot(snapshot, root=PROJECT)
+        if not managed:
+            adapter.write_snapshot(snapshot, root=PROJECT)
         written = target.read_bytes()
         if json.loads(written) != snapshot:
             raise ValueError('Published operations snapshot differs from this collection')
@@ -1035,6 +1098,9 @@ def refresh_operations_snapshot():
     except Exception as exc:
         OPERATIONS_COLLECTION = {'ok': False, 'collected': False, 'error_type': type(exc).__name__,
             'error': 'Operations collection failed; previous success is not evidence for this check'}
+        if managed:
+            OPERATIONS_COLLECTION['publication_owner']='inventory-container'
+            return dict(OPERATIONS_COLLECTION)
         # Publish the failure itself so a previously green UI snapshot is not
         # presented as a new successful collection. No runtime configuration changes.
         failure = {'schema': 1, 'project': 'qiandengji', 'generatedAt': datetime.now(timezone.utc).isoformat(),
@@ -1148,14 +1214,18 @@ def probe_operations(value):
         # preserves Python microseconds. Compare the same millisecond instant.
         matching_time = public_stamp == stamp.replace(microsecond=stamp.microsecond//1000*1000)
         runtime_ids = [row['id'] for row in value['runtimes']]
-        runtime_ok = len(runtime_ids) == 4 and set(runtime_ids) == {'qiandengji', 'qiandengji-ops', 'shadow', 'host'}
+        consolidated = operations_consolidated()
+        runtime_ok = ((len(runtime_ids) == 4 and set(runtime_ids) == {'qiandengji', 'qiandengji-ops', 'shadow', 'host'})
+                      or (consolidated and runtime_ids == ['qiandengji']))
         agent_ids = [(row['runtimeId'], row['id']) for row in value['agents']]
+        team_ids = ({('qiandengji', 'qd-steward'), ('qiandengji', 'qd-engineer')}
+                    if consolidated else {('qiandengji-ops', role) for role in OPERATIONS_TEAM_ROLES})
         agents_ok = (len(agent_ids) == len(set(agent_ids)) and all(rid in runtime_ids and isinstance(aid, str) and aid for rid, aid in agent_ids)
                      and {('qiandengji', 'mc-god'), ('qiandengji', 'mc-herald'), ('qiandengji', 'qd-survivor')} <= set(agent_ids)
-                     and {('qiandengji-ops', role) for role in OPERATIONS_TEAM_ROLES} <= set(agent_ids))
+                     and team_ids <= set(agent_ids))
         service_ids = [row['id'] for row in value['services']]
         services_ok = (all(isinstance(name, str) and name for name in service_ids) and len(service_ids) == len(set(service_ids))
-                       and set(MANIFEST) | {'shared-tts'} <= set(service_ids))
+                       and set(current_service_manifest()) | {'shared-tts'} <= set(service_ids))
         checks = source.get('checks', {})
         shared = checks.get('sharedTts', {})
         core_ok = checks.get('currentServices') is True
@@ -1426,6 +1496,11 @@ def main_locked():
     output = PROJECT / "reports" / "runtime-health.json"
     output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if managed_inventory_publication():
+        # Full source/gameplay audits own reports/ only; the runtime collector
+        # remains the sole publisher of operations.json and health.json.
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     public = PROJECT / 'server' / 'panel-state'
     public.mkdir(parents=True, exist_ok=True)
     public_services = {**report['services'].get('checks', {}), 'shared-tts': {
@@ -1456,8 +1531,9 @@ def inventory_lock_failure(reason):
               'operations_inventory': dict(OPERATIONS_COLLECTION),
               'scope': 'Inventory verification could not acquire its publication window; retry required'}
     public = {'checked_at': report['checked_at'], 'ok': False, 'services': {}, 'reason': reason, 'retry': True}
-    for target, value in ((PROJECT/'reports/runtime-health.json', report),
-                          (PROJECT/'server/panel-state/health.json', public)):
+    targets=[(PROJECT/'reports/runtime-health.json', report)]
+    if not managed_inventory_publication():targets.append((PROJECT/'server/panel-state/health.json', public))
+    for target, value in targets:
         temporary = None
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1479,6 +1555,8 @@ def main():
     # Hold through the HTTP read and report publication, not just collection:
     # the panel must still expose this run's exact snapshot receipt.
     try:
+        if managed_inventory_publication():
+            return main_locked()
         lock = load_inventory_lock()
         with lock(PROJECT, wait_seconds=10) as acquired:
             if not acquired:

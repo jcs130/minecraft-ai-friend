@@ -7,6 +7,7 @@ values are configured identifiers, not a live availability or billing check.
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
 import re
 import subprocess
@@ -19,6 +20,10 @@ AUDITED_IMAGE_PACKAGES = {
     "sha256:a48facbff0b21e897ef34e43bf08b93f04f02a0a8e3bfcc37ef520527de6a751": "2.2.0",
     "sha256:041af8111ee91ec0180a5d50ca876e89301fc9d03401ee4852858431999a3181": "2.1.0",
     "sha256:1caee098f813d59973e30a4533699b594a73c3fdcfcddb192ebf385ad004eb29": "2.2.0",
+    # Clean Linux rebuild, four version/source-locked hooks and Console assets
+    # verified in the image; server/runtime-images/qwenpaw-recovery.json.
+    "sha256:f0699f5cf3944ce34f96e3d24261aee96c31b309ac83629d8c39292ea8ea2303": "2.2.0",
+    "sha256:78d69d882f287d56f2bd1cb00f946c6d9dcf2412f2dbf7a424ab694a4e1c6e09": "2.2.0",
 }
 
 
@@ -122,6 +127,31 @@ def _job_count(workspace: Path) -> int | None:
     return sum(job.get("enabled") is True for job in jobs)
 
 
+def _skill_count(workspace: Path) -> int | None:
+    manifest=_read_json(workspace/'skill.json')
+    if not manifest:
+        return None
+    legacy=set(manifest)=={'skills','version'} and type(manifest.get('version')) is int
+    if manifest.get('schema_version') != 'workspace-skill-manifest.v1' and not legacy:
+        return None
+    skills=manifest.get('skills')
+    if not isinstance(skills,dict) or any(not isinstance(row,dict) or type(row.get('enabled')) is not bool
+                                         for row in skills.values()):
+        return None
+    return sum(row['enabled'] for row in skills.values())
+
+
+def _team_registry(project: Path):
+    # Reuse the exact bounded migration parser; do not interpret an unchecked
+    # JSON phase as permission to hide a currently active operations instance.
+    path=Path(__file__).resolve().parents[1]/'world/ops/world_team_hosts.py'
+    spec=importlib.util.spec_from_file_location('inventory_team_hosts',path)
+    module=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    registry=module._load_registry(project/'server/team-state/runtime-hosts.json')
+    return module,registry
+
+
 def _role(runtime: str, ident: str) -> str:
     if runtime == 'qiandengji-ops':
         return {'mc-god':'天神／原工程师工作区（迁移后停用）','default':'司灯／台账与协调','mc-herald':'服务诊断与行为审计',
@@ -130,6 +160,7 @@ def _role(runtime: str, ident: str) -> str:
     if runtime == "qiandengji":
         return {"mc-god": "灯语女神／世界管理、问题协调与验收", "mc-herald": "灯语女神／玩家交流与问题受理",
                 "qd-engineer": "天神／代码巡查、修复、测试与改进提案",
+                "qd-steward": "司灯／世界运营、任务协调与台账",
                 "qd-survivor": "桐人／自主生存、世界感知与技能学习",
                 "qd-villager-dialogue": "村民个性对话与祈愿",
                 "qd-guild-planner": "公会任务策划／按日生成可校验预案",
@@ -160,6 +191,12 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
     def issue(code: str, severity: str, title: str, detail: str) -> None:
         result["issues"].append({"code": code, "severity": severity, "title": title, "detail": detail})
 
+    try:
+        host_module,registry=_team_registry(project)
+    except (OSError,ValueError,TypeError):
+        host_module,registry=None,None
+        issue('team_host_registry_unavailable','warning','团队运行身份不可核实','保留配置与容器事实；不把迁移状态读取失败当作运营实例已归档。')
+
     for rid, label, kind, base, container_name, endpoint, purpose in locations:
         source_config = _read_json(base / "config.json")
         config = _mapping(source_config)
@@ -171,6 +208,13 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
                    "endpoint": endpoint, "state": "unverified", "purpose": purpose,
                    "enabledAgentCount": sum(_mapping(v).get("enabled") is True for v in profiles.values()) if profiles_known else None,
                    "agentCount": len(profiles) if profiles_known else None}
+        retired_sources=set()
+        archived_targets=set()
+        if registry is not None:
+            retired_sources={row['source']['agentId'] for row in host_module.MIGRATIONS.values()
+                             if registry['phases'][row['migration']]=='active'}
+            archived_targets=registry['retired'] | registry['dormant']
+        archived_runtime=rid=='qiandengji-ops' and registry is not None and len(retired_sources)==len(host_module.MIGRATIONS)
         if container_name:
             observed = _container(container_name)
             runtime["state"] = observed.get("state", "unavailable")
@@ -182,6 +226,13 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
                 runtime["version"] = package_version + " (audited image package)"
             elif observed:
                 issue(f"{rid}_image_unverified", "warning", f"{label}镜像待核", "当前 immutable image ID 未命中已审计镜像；版本显示 unknown，不根据标签推断包版本。")
+            if archived_runtime:
+                runtime['lifecycle']='archived'
+                runtime['purpose']='运营角色已迁入游戏控制台；此处仅保留历史会话、台账及配置'
+                if runtime['state'] in ('unavailable','exited','created','dead'):
+                    runtime['endpoint']=''
+                else:
+                    issue('archived_operations_runtime_running','warning','归档运营实例仍运行','运行身份已迁到游戏 QwenPaw；需检查旧实例，不能把它当成新的独立团队。')
         else:
             last_api = _mapping(config.get("last_api"))
             port = last_api.get("port")
@@ -204,12 +255,23 @@ def collect_qwenpaw_inventory(project_root: str | Path | None = None, user_home:
             tools = _mapping(profile_values.get("tools")).get("builtin_tools")
             tools = root_tools if tools is None else tools
             model = _mapping(profile_values.get("active_model"))
+            effective=index.get('enabled') is True
+            if rid=='qiandengji-ops' and ident in retired_sources:
+                effective=False
+            if rid=='qiandengji' and ident in archived_targets:
+                effective=False
+            if registry is None and rid in ('qiandengji','qiandengji-ops'):
+                effective=None
             result["agents"].append({"id": ident, "label": _text(profile_values.get("name")) or ident, "runtimeId": rid,
                 "enabled": index.get("enabled") is True, "role": _role(rid, ident),
+                "effectiveEnabled": effective,
                 "modelProvider": _text(model.get("provider_id"), 100), "model": _text(model.get("model"), 100),
                 "toolCount": sum(_mapping(v).get("enabled") is True for v in tools.values()) if profile is not None and isinstance(tools, dict) else None,
                 "mcpCount": _mcp_count(profile, workspace, config.get("mcp")) if profile is not None else None,
-                "jobCount": _job_count(workspace) if profile is not None else None})
+                "jobCount": _job_count(workspace) if profile is not None else None,
+                "skillCount": _skill_count(workspace) if profile is not None else None})
+        runtime['activeAgentCount']=(sum(row['effectiveEnabled'] is True for row in result['agents'] if row['runtimeId']==rid)
+                                     if profiles_known and (registry is not None or rid not in ('qiandengji','qiandengji-ops')) else None)
         result["runtimes"].append(runtime)
 
     issue("enabled_not_running", "info", "启用不等于正在自主运行", "Agent 启用、容器健康、MCP 子进程与巡场驱动是不同状态；任务数仅为启用的 jobs.json 定义。")

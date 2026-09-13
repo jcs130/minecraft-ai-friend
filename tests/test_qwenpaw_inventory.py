@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -152,6 +153,40 @@ class InventoryTests(unittest.TestCase):
         note = next(x for x in result["issues"] if x["code"] == "runtime_versions_differ")
         self.assertIn("历史", note["title"])
         self.assertIn("当时审计", note["detail"])
+
+    def test_consolidated_operations_default_stays_auditable_but_is_not_active(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            def write(relative,value):
+                path=root/relative;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text(json.dumps(value),encoding='utf-8')
+            module,_=inventory._team_registry(root)
+            write('server/team-state/runtime-hosts.json',{'schema':2,
+                  'phases':{name:'active' for name in module.MIGRATIONS},
+                  'retired':['mc-priest','qd-diagnostics','mc-guard-kirito'],'dormant':['mc-guard-naruto']})
+            write('server/operations-agent-state/work/config.json',{'agents':{'profiles':{'default':{'enabled':True}}}})
+            write('server/operations-agent-state/work/workspaces/default/agent.json',self.profile())
+            write('server/agents/work/config.json',{'agents':{'profiles':{'qd-steward':{'enabled':True}}}})
+            write('server/agents/work/workspaces/qd-steward/agent.json',self.profile())
+            with patch.object(inventory,'_container',return_value={}):
+                result=inventory.collect_qwenpaw_inventory(root,root/'unrelated-home')
+            ops=next(row for row in result['runtimes'] if row['id']=='qiandengji-ops')
+            old=next(row for row in result['agents'] if row['runtimeId']=='qiandengji-ops')
+            new=next(row for row in result['agents'] if row['runtimeId']=='qiandengji')
+            self.assertEqual((ops['lifecycle'],ops['endpoint'],ops['activeAgentCount']),('archived','',0))
+            self.assertTrue(old['enabled'])
+            self.assertFalse(old['effectiveEnabled'])
+            self.assertTrue(new['effectiveEnabled'])
+            self.assertIn('司灯',new['role'])
+
+    def test_skill_count_requires_explicit_well_formed_native_manifest(self):
+        with patch.object(inventory,'_read_json',return_value={
+                'schema_version':'workspace-skill-manifest.v1','skills':{'one':{'enabled':True},'two':{'enabled':False}}}):
+            self.assertEqual(inventory._skill_count(WORKSPACE),1)
+        with patch.object(inventory,'_read_json',return_value={'skills':{'one':{'enabled':True}}}):
+            self.assertIsNone(inventory._skill_count(WORKSPACE))
+        with patch.object(inventory,'_read_json',return_value={'version':123,'skills':{'one':{'enabled':True}}}):
+            self.assertEqual(inventory._skill_count(WORKSPACE),1)
 
 
 if __name__ == "__main__":

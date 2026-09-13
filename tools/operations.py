@@ -20,7 +20,46 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = re.compile(r'^[a-z][a-z0-9-]{0,47}$')
-KNOWN = frozenset(('mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor'))
+KNOWN = frozenset(('mc','world','gate','npc','resources','qwenpaw','qwenpaw-ops','voice','asr','panel','tts','control','survivor','inventory'))
+_INVENTORY_PUBLISHER = False
+
+
+class ContainerMissing(RuntimeError):
+    """Docker answered explicitly that the inspected object does not exist."""
+
+
+def active_services(registry):
+    return {row['id'] for row in registry['services'] if row.get('active', True) is True}
+
+
+def managed_inventory_enabled(root=ROOT):
+    if not (root/'config/operations-runtime.json').is_file():
+        return False
+    collector=read_registry(root).get('inventoryCollector',{})
+    if collector.get('kind')!='docker-compose-service':return False
+    if collector.get('container')!='qiandengji-inventory-1':
+        raise ValueError('Unexpected inventory runtime identity')
+    return True
+
+
+def managed_snapshot(root=ROOT,refresh=False):
+    """All current publication executes inside the registered Linux collector."""
+    if not managed_inventory_enabled(root):raise ValueError('Managed inventory is not registered')
+    state=inspect_containers(['qiandengji-inventory-1'])['qiandengji-inventory-1']
+    if (state.get('project')!='qiandengji' or state.get('service')!='inventory'
+            or state.get('state')!='running' or state.get('restart')!='unless-stopped'
+            or not re.fullmatch(r'[0-9a-f]{64}',state.get('id') or '')):
+        raise ValueError('Managed inventory container is unavailable or foreign')
+    if refresh:
+        command(['docker','exec',state['id'],'python3','/project/tools/inventory_service.py','--once'],60)
+    path=root/'server/panel-state/operations.json'
+    if path.stat().st_size>2*1024*1024:raise ValueError('Oversized inventory snapshot')
+    value=json.loads(path.read_text('utf-8'))
+    stamp=datetime.fromisoformat(value['generatedAt'].replace('Z','+00:00'))
+    if (value.get('schema')!=1 or value.get('project')!='qiandengji' or stamp.tzinfo is None
+            or not 0<=(datetime.now(timezone.utc)-stamp).total_seconds()<=300):
+        raise ValueError('Managed inventory snapshot is invalid or stale')
+    return value
 
 
 def utc(): return datetime.now(timezone.utc).isoformat()
@@ -35,6 +74,7 @@ def read_registry(root=ROOT):
         assert NAME.fullmatch(key) and isinstance(members,list) and set(members)<=KNOWN
     for row in services+value['externalServices']:
         assert NAME.fullmatch(row['id']) and isinstance(row['dependencies'],list)
+        assert type(row.get('active', True)) is bool
     for row in value['externalServices']:
         assert NAME.fullmatch(row['container'])
         assert not row.get('healthUrl') or row['healthUrl']=='http://127.0.0.1:8100/health'
@@ -44,7 +84,10 @@ def read_registry(root=ROOT):
 def command(args, timeout=40):
     proc=subprocess.run(args,cwd=ROOT,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=timeout,
                         creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    if proc.returncode: raise RuntimeError('Operation unavailable: '+args[0])
+    if proc.returncode:
+        if args[:2] == ['docker', 'inspect'] and re.search(r'No such (?:object|container):', proc.stderr):
+            raise ContainerMissing('The inspected container is absent')
+        raise RuntimeError('Operation unavailable: '+args[0])
     return proc.stdout
 
 
@@ -63,6 +106,8 @@ def inspect_containers(names):
                 'project':labels.get('com.docker.compose.project'), 'service':labels.get('com.docker.compose.service'),
                 'restart':row.get('HostConfig',{}).get('RestartPolicy',{}).get('Name',''),
                 'id':row.get('Id'),'startedAt':state.get('StartedAt')}
+        except ContainerMissing:
+            result[name]={'state':'absent','health':'not-applicable','project':None,'restart':None}
         except Exception:
             result[name]={'state':'unavailable','health':'unknown','project':None,'restart':None}
     return result
@@ -84,9 +129,16 @@ def probe_shared_tts(opener=urllib.request.urlopen):
 def collect_snapshot(root=ROOT):
     registry=read_registry(root)
     names=['qiandengji-'+row['id']+'-1' for row in registry['services']]+[row['container'] for row in registry['externalServices']]
-    states=inspect_containers(names); rows=[]; issues=[]; core_ok=True
+    states=inspect_containers(names); rows=[]; archived=[]; issues=[]; core_ok=True
     for row in registry['services']:
         name='qiandengji-'+row['id']+'-1'; state=states[name]
+        if row.get('active', True) is False:
+            archived.append({key:row[key] for key in ('id','label','purpose')}|
+                            {'container':name,'state':state['state'],'lifecycle':'archived'})
+            if state['state']=='running':
+                issues.append({'code':'archive-running:'+row['id'],'severity':'warning','title':row['label']+'意外运行',
+                               'detail':'该服务已归档；请核对重复运行来源，巡检不会自动启停。'})
+            continue
         owned=state.get('project')=='qiandengji' and state.get('service')==row['id']
         ready=owned and state['state']=='running' and (not row['healthRequired'] or state['health']=='healthy')
         supervised=state.get('restart')=='unless-stopped'
@@ -100,10 +152,10 @@ def collect_snapshot(root=ROOT):
         state=states[row['container']]
         rows.append({key:row[key] for key in ('id','label','group','container','purpose','managedBy','dependencies')}|
                     {'state':state['state'],'health':('healthy' if dependency['ok'] else 'unhealthy') if row['id']=='shared-tts' else state['health']})
-        if row.get('desiredState')=='exited' and state['state']!='exited':
+        if row.get('desiredState')=='exited' and state['state'] not in ('exited','absent'):
             issues.append({'code':'retirement-drift:'+row['id'],'severity':'warning','title':row['label']+'状态有变化',
                            'detail':'登记的期望状态为退出，当前为 '+state['state']+'。请核对是否有其他启动器将其拉起；巡检不会擅自再次停止。'})
-        if row.get('desiredRestart')=='no' and state.get('restart')!='no':
+        if row.get('desiredRestart')=='no' and state['state']!='absent' and state.get('restart')!='no':
             issues.append({'code':'retirement-policy:'+row['id'],'severity':'warning','title':row['label']+'启动策略有变化',
                            'detail':'退役环境应保持 restart=no；检查是否有其他管理入口更改策略。'})
     if not dependency['ok']:issues.append({'code':'shared-tts','severity':'error','title':'语音合成不可用','detail':'语音回复依赖本项目 tts 的 8100 端口；语音队列存活不能代替此依赖检查。'})
@@ -137,12 +189,15 @@ def collect_snapshot(root=ROOT):
             'completionTokens':sum(r.get('completion_tokens',0) for r in bucket.values()),
             'cachedTokens':sum(r.get('cache_read_tokens',0) for r in bucket.values()) if any('cache_read_tokens' in r for r in bucket.values()) else None}
     except (OSError,ValueError,TypeError,AttributeError): pass
-    return {'schema':1,'project':'qiandengji','generatedAt':utc(),'runtimes':runtimes,'agents':agents,'services':rows,'issues':issues,'teamRound':team_round,
+    if 'qwenpaw-ops' not in active_services(registry):
+        # Old native-task receipts remain on disk, not today's team's policy/usage.
+        team_round=None; team_policy=None; team_usage=None
+    return {'schema':1,'project':'qiandengji','generatedAt':utc(),'runtimes':runtimes,'agents':agents,'services':rows,'archivedServices':archived,'issues':issues,'teamRound':team_round,
             'teamPolicy':team_policy,'teamUsage':team_usage,
         'commands':[{'label':'查看全部状态','command':'python tools/operations.py status'},
                     {'label':'检查服务与依赖','command':'python tools/operations.py doctor'},
                     {'label':'刷新管理台运营清单','command':'python tools/operations.py snapshot'},
-                    {'label':'运行一次运营组巡检（最多同时两个模型）','command':'docker exec qiandengji-qwenpaw-ops-1 python /ops/operations_team_run.py'},
+                    {'label':'检查当前世界团队（只读）','command':'python tools/world_team_health.py'},
                     {'label':'查看安全启停方案','command':'python tools/operations.py restart panel'},
                     {'label':'执行已指定服务重启','command':'python tools/operations.py restart panel --execute qiandengji'}],
         'checks':{'currentServices':core_ok,'sharedTts':dependency},
@@ -150,6 +205,8 @@ def collect_snapshot(root=ROOT):
 
 
 def write_snapshot(value,root=ROOT):
+    if managed_inventory_enabled(root) and not _INVENTORY_PUBLISHER:
+        raise RuntimeError('Current public inventory is written only by the managed container')
     target=root/'server/panel-state/operations.json'; target.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=target.parent,prefix='.operations-',suffix='.tmp',delete=False) as stream:
         temporary=Path(stream.name)
@@ -158,9 +215,10 @@ def write_snapshot(value,root=ROOT):
     finally:temporary.unlink(missing_ok=True)
     # Reuse the supervised two-minute inventory job for live service health.
     # Full deployment/gameplay evidence remains in reports/runtime-health.json.
+    expected=active_services(read_registry(root))
     services={r['id']:{'ok':r.get('ready') is True,'state':r.get('state','unknown'),
-        'health':r.get('health','unknown')} for r in value.get('services',[]) if r.get('id') in KNOWN}
-    health={'checked_at':value['generatedAt'],'ok':len(services)==len(KNOWN) and all(r['ok'] for r in services.values()),
+        'health':r.get('health','unknown')} for r in value.get('services',[]) if r.get('id') in expected}
+    health={'checked_at':value['generatedAt'],'ok':set(services)==expected and all(r['ok'] for r in services.values()),
         'services':services,'scope':'Current owned container health from the supervised inventory; gameplay evidence is separate.'}
     with tempfile.NamedTemporaryFile(mode='w',encoding='utf8',dir=target.parent,prefix='.health-',suffix='.tmp',delete=False) as stream:
         temporary=Path(stream.name); stream.write(json.dumps(health,ensure_ascii=False)+'\n')
@@ -170,24 +228,27 @@ def write_snapshot(value,root=ROOT):
 
 def select_services(requested,group,registry):
     if group and requested:raise ValueError('Choose either a group or explicit services')
-    chosen=list(registry['groups'][group]) if group and group!='all' else sorted(KNOWN) if group=='all' else requested
-    if not chosen or any(name not in KNOWN for name in chosen):raise ValueError('Only explicitly registered D project services are allowed')
+    active=active_services(registry)
+    chosen=list(registry['groups'][group]) if group and group!='all' else sorted(active) if group=='all' else requested
+    if not chosen or any(name not in active for name in chosen):raise ValueError('Only active registered D project services are allowed; archived services cannot be started')
     return list(dict.fromkeys(chosen))
 
 
 def lifecycle_plan(action,selected,states):
     assert action in ('start','stop','restart') and selected and set(selected)<=KNOWN
+    if not set(selected)<=active_services(read_registry()):
+        raise ValueError('Archived services cannot be lifecycle targets')
     expanded=set(selected)
     if action in ('stop','restart'):
         if 'mc' in expanded:expanded.update(('world','npc','gate','survivor'))
         elif 'world' in expanded:expanded.add('npc')
         if 'tts' in expanded:expanded.add('voice')
         if 'qwenpaw' in expanded:expanded.add('survivor')
-    stop_order=[n for n in ('survivor','npc','world','gate','voice','asr','qwenpaw-ops','qwenpaw','resources','panel','control','mc','tts') if n in expanded]
+    stop_order=[n for n in ('survivor','npc','world','gate','voice','asr','qwenpaw-ops','qwenpaw','resources','panel','control','inventory','mc','tts') if n in expanded]
     # A restart restores previously running consumers; it does not wake a
     # deliberately stopped dependent just because its prerequisite restarted.
     start=list(selected) if action=='start' else [n for n in stop_order if n in selected or states.get('qiandengji-'+n+'-1',{}).get('state')=='running']
-    start=[n for n in ('tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','panel','survivor') if n in start] if action!='stop' else []
+    start=[n for n in ('tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','inventory','panel','survivor') if n in start] if action!='stop' else []
     dependencies={'world':['mc'],'gate':['mc'],'npc':['mc','world'],'voice':['tts'],'survivor':['mc','qwenpaw']}
     required=sorted({d for n in start for d in dependencies.get(n,[]) if d not in start})
     return {'project':'qiandengji','action':action,'selected':selected,'stop':stop_order if action!='start' else [],
@@ -280,6 +341,10 @@ def main(argv=None):
         registry=read_registry()
         if args.action in ('status','doctor','snapshot'):
             if args.services or args.group or args.execute:raise ValueError('Read operations take no lifecycle targets')
+            if managed_inventory_enabled(ROOT):
+                result=managed_snapshot(ROOT,refresh=args.action=='snapshot')
+                print(json.dumps(result,ensure_ascii=False,indent=2))
+                return 1 if args.action=='doctor' and not (result['checks']['currentServices'] and result['checks']['sharedTts']['ok']) else 0
             from operations_inventory_lock import inventory_lock
             with inventory_lock(ROOT) as acquired:
                 if not acquired:

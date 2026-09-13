@@ -11,6 +11,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'world/ops'))
 from world_operations import JOB_ID, validate_world_job
+from world_team_hosts import native_host, registry_config, archived_game_targets
 
 SOURCES = (
     'world/ops/operations_native_tasks.py', 'world/ops/cron_guard.py',
@@ -32,8 +33,20 @@ def read(path, maximum=262144):
     return json.loads(raw.decode('utf-8-sig'))
 
 
-def get(route):
-    request=urllib.request.Request('http://127.0.0.1:18090/api'+route,headers={'X-Agent-Id':'default'})
+def operations_host(root=ROOT):
+    """Resolve the steward's current native host without rewriting authorship."""
+    registry=Path(root)/'server/team-state/runtime-hosts.json'
+    host=native_host('operations:default',config=registry_config(registry))
+    retired,dormant=archived_game_targets(registry)
+    if host['runtime']=='game' and host['agentId'] in retired | dormant:
+        raise ValueError('daily_operations_role_archived')
+    return host
+
+
+def get(route,root=ROOT,host=None):
+    host=operations_host(root) if host is None else host
+    bases={'game':'http://127.0.0.1:18089/api','operations':'http://127.0.0.1:18090/api'}
+    request=urllib.request.Request(bases[host['runtime']]+route,headers={'X-Agent-Id':host['agentId']})
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self,*args,**kwargs):raise ValueError('redirect_not_allowed')
     with urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect()).open(request,timeout=8) as response:
@@ -46,7 +59,7 @@ def fresh(value,now,age=90):
     return type(value) in (int,float) and math.isfinite(value) and -5<=now-value<=age
 
 
-def check(root=ROOT,request=get,clock=time.time):
+def check(root=ROOT,request=None,clock=time.time):
     root=Path(root);now=clock()
     today=datetime.fromtimestamp(now,timezone(timedelta(hours=8))).date()
     day=today.isoformat();next_day=(today+timedelta(days=1)).isoformat()
@@ -55,6 +68,10 @@ def check(root=ROOT,request=get,clock=time.time):
     evidence={'dailyRun':'not_verified','dailyReport':False,'guildPlan':'not_verified',
               'publishedQuests':None,'agentPublishedQuests':None,'nextDayPublication':'not_due'}
     try:
+        host=operations_host(root)
+        evidence['nativeHost']=host
+        if request is None:
+            request=lambda route:get(route,root=root,host=host)
         native=request('/cron/jobs/'+JOB_ID)
         spec=native['spec'];validate_world_job(spec,'default')
         checks['native_daily_job_enabled']=spec['enabled'] is True
