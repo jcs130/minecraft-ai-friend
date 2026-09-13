@@ -1,0 +1,13 @@
+# Explicit rollback to the retained IndexTTS image and unchanged runtime files.
+# docker compose -f compose.yml -f world/tts/compose.index-rollback.yml up -d --no-deps tts
+services:
+  tts:
+    image: qiandengji-tts:2.5-qd1
+    environment:
+      TTS_ENGINE: index
+      TTS_CKPT: /checkpoints
+    volumes: !override
+      - ./server/tts-state/app/tts_api.py:/app/tts_api.py:ro
+      - ./server/tts-state/checkpoints:/checkpoints:ro
+      - ./server/tts-state/voices:/voices:ro
+      - ./server/tts-state/tmp:/tmp

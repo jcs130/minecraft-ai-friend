@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-13 语音实时性最新方向覆盖下文 IndexTTS 启用记录：用户指定复用 C 盘 Kokoro，游戏 Compose 的 `tts` 改用本地 Kokoro 82M v1.1-zh（Kokoro/Misaki 0.9.4），GPU 推理、运行时离线，全部生成式 LLM 仍走 QwenPaw 云端。旧 47 个音色 ID 映射到已安装的 `zf_001` / `zm_010`，不宣称仍具备克隆效果或 IndexTTS 情感控制。桐人 `cosy_male` 用男声，结衣 `cosy_female` 用女声。只替换既有 Docker TTS，不新增宿主常驻进程；旧 Index 镜像、资产、来源清单保持可回滚。部署和实际延迟证据见 docs/KOKORO-TTS.md。
+
 2026-09-13 硬件与推理部署方向：本机为 i9-13900K、64GB 内存、RTX 3090 24GB。用户明确本机不运行通用 LLM，游戏生成式推理全部由 QwenPaw 角色调用云端；当前启用角色为八个阿里云 CodingPlan、女神与天神两个智谱 CodingPlan，保留即时模型选择。GPU 可用于游戏专属 IndexTTS 2.5，保留本地 ASR 与语音链路；TTS 显式 `use_qwen_emo=False`，不加载额外文本情感 LLM。宿主 QwenPaw 8088 保持原用途，不能因进程名或端口猜测而停止其它服务。旧 Docker 引擎中镜像和容器已不可见，恢复必须使用真实重建记录，不能冒充原不可变镜像；D 盘世界、角色会话和技能数据保留。
 
 2026-09-09 最新世界团队迁移已完成：既有“天神 · 世界工程师”现位于游戏Qwen18089，原生ID为 `qd-engineer`；实际浏览器确认游戏9人、运营18090五人，仍是原14个团队身份，宿主8088保持其他用途。天神的逻辑署名仍为 `operations:mc-god`，由active的 `/team/runtime-hosts.json` 精确映射到 `game:qd-engineer`，保留原会话、工单、学习与工程repo/回执，不改写历史作者。旧运营 `mc-god` 及其两项Cron已停用并完整备份；目标四个MCP、原两项Cron、游戏9人/80项技能绑定与运营5人严格健康检查均通过，司灯 `qiandeng_operations` 已原生重载新路由。工程status确认新路径下仍是原HEAD `5de7f8af`、分支与仓库，其他既有角色模型、名称和语言未变。证据在runtime/engineer-host-migration-20260909/与reports/world-team-smoke.json。游戏 `mc-god` 仍是“灯语女神 · 世界管理”，`mc-herald` 仍是“灯语女神 · 玩家交流”，与天神工程师区分。原模型、SOUL、人物UUID及生活记忆保留，新角色绑定自己的learning/team身份，不能继承模板工具身份。见 docs/WORLD-TEAM-ARCHITECTURE.md。

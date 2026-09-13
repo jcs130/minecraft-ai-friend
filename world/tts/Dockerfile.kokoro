@@ -1,0 +1,27 @@
+# Reuse the already built CUDA/PyTorch runtime; keep its IndexTTS image intact.
+# Audited local base ID: sha256:2419c6efd2c3f0802cfa6cd39f1ad2073cc6b488f4c3c5c131bf9531869ed677
+# Build from the project root:
+# docker build --pull=false -f world/tts/Dockerfile.kokoro -t qiandengji-tts:kokoro-1.1-qd1 world/tts
+ARG BASE_IMAGE=qiandengji-tts:2.5-qd1
+FROM ${BASE_IMAGE} AS kokoro-deps
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    PYTHONUNBUFFERED=1 \
+    TTS_ENGINE=kokoro \
+    KOKORO_MODEL_DIR=/kokoro/model
+RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --index-url "$PIP_INDEX_URL" \
+        kokoro==0.9.4 'misaki[en,zh]==0.9.4' spacy==3.8.16 \
+        https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl \
+    && python -m pip check \
+    && python -c "import spacy; from misaki import en, zh; assert spacy.util.is_package('en_core_web_sm')" \
+    && python -m pip freeze > /opt/qiandengji/kokoro-packages.txt
+
+FROM kokoro-deps AS runtime
+WORKDIR /app
+ENV KOKORO_MODEL_DIR=/kokoro
+COPY tts_api.py kokoro_engine.py /app/
+EXPOSE 8100
+CMD ["python3", "-u", "/app/tts_api.py"]

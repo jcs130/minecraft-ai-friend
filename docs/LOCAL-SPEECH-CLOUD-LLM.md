@@ -1,5 +1,7 @@
 # 本地语音与云端 LLM
 
+同日后续更新：用户指定改用 C 盘已有的 Kokoro，以降低游戏语音等待时间。当前 TTS 部署、实测和回滚入口见 [KOKORO-TTS.md](KOKORO-TTS.md)。本文的 IndexTTS 恢复过程及其 2.8–3.0 秒样本作为历史基线保留。
+
 2026-09-13 起，千灯纪采用以下部署方式：游戏、语音识别和语音合成在本机运行；人物判断、对话内容、任务规划和代码创作统一由 QwenPaw 调用云端 LLM。本机 QwenPaw 负责会话、工具与调度，并不需要在本机加载通用语言模型。
 
 ```mermaid
@@ -9,7 +11,7 @@ flowchart LR
     Cloud --> Agent
     Agent --> Action[MCP 与原生游戏动作]
     Agent --> Speech[角色台词与游戏对话通道]
-    Speech --> TTS[本机 IndexTTS 2.5]
+    Speech --> TTS[本机 Kokoro v1.1-zh]
     TTS --> Audio[GodVoice / 女仆语音播放]
     Mic[玩家语音] --> ASR[本机语音识别]
     ASR --> Skill[咏唱与技能接口]
@@ -17,17 +19,17 @@ flowchart LR
 
 ## 硬件与运行分工
 
-本次检测到 i9-13900K、64GB 内存、RTX 3090 24GB。GPU 用于游戏 TTS，API 使用 CUDA/BF16，CPU 计算线程环境变量设为 4，合成沿用单任务串行处理。保留默认 PyTorch 运算实现，不要求在启动时编译额外 CUDA 内核。
+本次检测到 i9-13900K、64GB 内存、RTX 3090 24GB。GPU 用于游戏 TTS，CPU 计算线程环境变量设为 4，合成沿用单任务串行处理。IndexTTS 历史恢复使用 CUDA/BF16；后续 Kokoro 沿用其原生模型精度和 PyTorch CUDA 运算，不要求在启动时编译额外 CUDA 内核。
 
 当前 WSL/Docker 配置仍限制为 14GB 内存、8GB swap，不能将整机 64GB 直接视为容器可用容量。本次没有修改这个全局上限；恢复完整游戏服务时应结合各服务占用重新核对。
 
-TTS 显式传入 `use_qwen_emo=False`，不加载可选的文本情感 Qwen 模型；声音参考和显式情感向量仍走原合成接口。语音模型本身继续在本机推理，不把声音合成转给角色的云端 LLM。`/health` 提供实际 `device`、`textEmotionModelLoaded`，健康查询不会触发合成。
+历史 IndexTTS 显式传入 `use_qwen_emo=False`，不加载可选的文本情感 Qwen 模型。当前 Kokoro 同样不加载文本情感模型，旧声音 ID 只作为音色别名，且不支持情感向量。语音模型本身继续在本机推理，不把声音合成转给角色的云端 LLM。`/health` 提供实际 `device`、`textEmotionModelLoaded` 和能力字段，健康查询不会触发合成。
 
 当前游戏工作区的十个启用角色均配置云端模型：八个阿里云 CodingPlan，女神与天神使用智谱 CodingPlan。未启用 QwenPaw 自动模型路由或本地 LLM 回退；项目现有任务用途路由仍用于选择负责的角色。ASR、语音生成和向量检索独立于通用 LLM；旧可选 Ollama embedding 代码不可达会跳过，不需要为此启用 Ollama。
 
 宿主 QwenPaw 8088 保留原用途。不能把不明 Python 进程或 8000 端口当成本地 LLM 后停止；本次未改动这些服务。
 
-## 从空 Docker 引擎恢复 TTS
+## 历史：从空 Docker 引擎恢复 IndexTTS
 
 此前的 `sha256:9da38721…` 镜像已不可用，不能靠重新标记其它镜像冒充恢复。新入口以审计过的 IndexTTS 推理源码和固定 Python 基座构建 `qiandengji-tts:2.5-qd1`，成功后记录真实新镜像 ID。既有权重和 47 个声音样本仍位于被 Git 忽略的 `server/tts-state`。
 
@@ -44,10 +46,10 @@ TTS 显式传入 `use_qwen_emo=False`，不加载可选的文本情感 Qwen 模�
 # API 更新会先保存旧副本，只同步 API 与其来源记录。
 .\run-python.bat tools/prepare_tts_runtime.py --sync-api
 
-# 单独启动本项目语音服务。
-docker compose up -d --no-deps tts
+# 当前默认已是 Kokoro；显式回滚才启动历史 IndexTTS。
+docker compose -f compose.yml -f world/tts/compose.index-rollback.yml up -d --no-deps tts
 
-# 实际合成 WAV、MP3 和女仆格式，验证解码；不播放、不写玩家队列。
+# 历史 Index 专用验收要求源码与当时构建回执一致；不用于 Kokoro。
 .\run-python.bat tools/smoke_tts_runtime.py
 ```
 

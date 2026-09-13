@@ -159,7 +159,7 @@ class TtsApiTests(unittest.TestCase):
             return types.SimpleNamespace(device=options["device"], qwen_emo=None)
         module.IndexTTS2 = create_engine
         with patch.dict("sys.modules", {"indextts.infer_v2_5": module}), \
-             patch.dict("os.environ", {"TTS_WARMUP": "0", "TTS_DEVICE": "cuda:0"}):
+             patch.dict("os.environ", {"TTS_ENGINE": "index", "TTS_WARMUP": "0", "TTS_DEVICE": "cuda:0"}):
             api._boot()
         health = self.client.get("/health").json()
         self.assertTrue(health["ok"])
@@ -172,6 +172,41 @@ class TtsApiTests(unittest.TestCase):
         with patch.object(self.engine, "infer", return_value=None):
             self.assertEqual(self.client.post("/tts/maid", json={"text": "test"}).status_code, 500)
         self.assert_clean()
+
+    def test_kokoro_capabilities_and_unsupported_controls_are_truthful(self):
+        self.engine.engine_name = "Kokoro-82M-v1.1-zh"
+        self.engine.voiceMappings = {"goddess": "zf_001", "touhou_little_maid": "zf_001"}
+        catalogue = self.client.get("/voices").json()
+        self.assertEqual(catalogue["voices"], ["goddess", "touhou_little_maid"])
+        self.assertEqual(catalogue["nativeVoices"], ["zf_001"])
+        self.assertFalse(catalogue["voiceCloning"])
+        self.assertEqual(catalogue["emotions"], [])
+        health = self.client.get("/health").json()
+        self.assertEqual(health["engine"], self.engine.engine_name)
+        self.assertFalse(health["emotionsSupported"])
+        for extra in ({"emo": "happy:0.5"}, {"lang": "ja"}):
+            self.assertEqual(self.client.get("/tts", params={"text": "test", **extra}).status_code, 422)
+        self.assertEqual(self.engine.calls, [])
+        self.assertEqual(self.client.get("/tts", params={"text": "测试 hello"}).status_code, 200)
+        self.assert_clean()
+
+    def test_kokoro_boot_uses_alias_config_and_rejects_unmapped_game_voice(self):
+        module = types.ModuleType("kokoro_engine")
+        options = []
+        module.KokoroEngine = lambda **kwargs: options.append(kwargs) or self.engine
+        mapping = self.root / "mapping.json"
+        aliases = {"goddess": "zf_001", "touhou_little_maid": "zf_001"}
+        mapping.write_text(json.dumps({"aliases": aliases}), encoding="utf8")
+        with patch.dict("sys.modules", {"kokoro_engine": module}), patch.dict("os.environ", {
+                "TTS_ENGINE": "kokoro", "TTS_VOICE_MAP": str(mapping), "TTS_WARMUP": "0",
+                "KOKORO_MODEL_DIR": str(self.root / "model"), "TTS_DEVICE": "cuda:0"}):
+            api._boot()
+            self.assertEqual(options[0]["voice_mappings"], aliases)
+            self.assertEqual(options[0]["device"], "cuda:0")
+            (self.voices / "new_voice.wav").write_bytes(b"fixture")
+            with self.assertRaisesRegex(ValueError, "aliases"):
+                api._boot()
+            self.assertEqual(len(options), 1)
 
 
 if __name__ == "__main__":

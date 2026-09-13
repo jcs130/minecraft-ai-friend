@@ -1,4 +1,4 @@
-"""IndexTTS 2.5 HTTP adapter; models/reference audio stay in local runtime data.
+"""Game speech HTTP adapter; Kokoro and legacy IndexTTS share one contract.
 
 GET /tts keeps its WAV/default and format=mp3 contract. POST /tts remains WAV.
 POST /tts/maid accepts the TLM GPT-SoVITS JSON shape and always returns MP3:
@@ -8,6 +8,7 @@ No endpoint calls a language model, streams partial speech, or plays audio.
 from __future__ import annotations
 
 import math
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -26,6 +27,10 @@ MAX_BODY_BYTES = 32768
 EMO_ORDER = ["happy", "angry", "sad", "afraid", "disgusted", "melancholic", "surprised", "calm"]
 _tts = None
 _lock = threading.Lock()
+
+
+def _is_kokoro() -> bool:
+    return str(getattr(_tts, "engine_name", "")).startswith("Kokoro")
 
 
 class BodyLimit:
@@ -169,6 +174,11 @@ def _render(text: str, voice: str, lang: str, *, mp3: bool = False, **options):
     spk = _voice_path(voice)
     if _tts is None:
         raise HTTPException(503, "synthesizer not ready")
+    if _is_kokoro():
+        if lang.lower().replace("_", "-") not in ("zh", "zh-cn", "chinese", "中文", "z", "en", "en-us", "english", "a"):
+            raise HTTPException(422, "Kokoro supports Chinese and English in this deployment")
+        if any(options.get("emo_vector") or []):
+            raise HTTPException(422, "Kokoro does not support IndexTTS emotion vectors")
     # A bounded queue protects GPU work; callers receive a clear busy result,
     # not a success receipt or an unbounded thread waiting for another request.
     if not _lock.acquire(timeout=2):
@@ -199,11 +209,24 @@ def _render(text: str, voice: str, lang: str, *, mp3: bool = False, **options):
 @app.on_event("startup")
 def _boot():
     global _tts
-    from indextts.infer_v2_5 import IndexTTS2
-    _tts = IndexTTS2(cfg_path=os.path.join(CKPT_DIR, "config.yaml"),
-                     model_dir=CKPT_DIR, use_bf16=True,
-                     device=os.environ.get("TTS_DEVICE", "cuda:0"),
-                     use_cuda_kernel=False, use_qwen_emo=False)
+    engine = os.environ.get("TTS_ENGINE", "index").lower()
+    if engine == "kokoro":
+        from kokoro_engine import KokoroEngine
+        mapping = json.loads(Path(os.environ.get("TTS_VOICE_MAP", "/app/kokoro-voices.json")).read_text(encoding="utf-8"))
+        aliases = mapping["aliases"]
+        existing = {p.stem for p in Path(VOICE_DIR).glob("*.wav") if p.is_file()}
+        if existing != set(aliases) or DEFAULT_VOICE not in aliases:
+            raise ValueError("Kokoro aliases must match the installed game voice catalogue")
+        _tts = KokoroEngine(model_dir=os.environ.get("KOKORO_MODEL_DIR", "/kokoro"),
+                            voice_mappings=aliases, device=os.environ.get("TTS_DEVICE", "cuda:0"))
+    elif engine == "index":
+        from indextts.infer_v2_5 import IndexTTS2
+        _tts = IndexTTS2(cfg_path=os.path.join(CKPT_DIR, "config.yaml"),
+                         model_dir=CKPT_DIR, use_bf16=True,
+                         device=os.environ.get("TTS_DEVICE", "cuda:0"),
+                         use_cuda_kernel=False, use_qwen_emo=False)
+    else:
+        raise ValueError("TTS_ENGINE must be kokoro or index")
     if os.environ.get("TTS_WARMUP", "1") != "0":
         try:
             # Warmup is local only and leaves no generated speech behind.
@@ -211,6 +234,9 @@ def _boot():
                 _tts.infer(spk_audio_prompt=_voice_path(DEFAULT_VOICE), text="神谕预热。",
                            lang="ZH", output_path=str(Path(temporary) / "warmup.wav"), verbose=False)
         except Exception:
+            if engine == "kokoro":
+                _tts = None
+                raise  # A broken new speech engine must not announce readiness.
             print("[warmup] skipped")
 
 
@@ -239,7 +265,8 @@ def _post(payload: dict, *, maid: bool):
     tl = _string(payload.get("text_lang") or "", "text_lang", 32).lower()
     lang = "ZH" if tl in ("zh", "zh-cn", "chinese", "中文") else tl.upper() or "ZH"
     # GPT-SoVITS prompt/splitting/media_type/streaming fields remain accepted.
-    # IndexTTS uses the local reference itself; responses are complete files.
+    # IndexTTS reads the reference; Kokoro resolves its basename to a native
+    # voice. Responses are complete files; Kokoro does not clone the reference.
     return _render(text, voice, lang, mp3=maid)
 
 
@@ -257,15 +284,23 @@ def tts_maid(payload: dict):
 def voices():
     if not os.path.isdir(VOICE_DIR):
         return {"voices": []}
-    return {"voices": sorted(p.stem for p in Path(VOICE_DIR).glob("*.wav") if p.is_file()), "emotions": EMO_ORDER}
+    result = {"voices": sorted(p.stem for p in Path(VOICE_DIR).glob("*.wav") if p.is_file()),
+              "emotions": [] if _is_kokoro() else EMO_ORDER,
+              "voiceCloning": not _is_kokoro()}
+    if _is_kokoro():
+        result.update(voiceMappings=_tts.voiceMappings,
+                      nativeVoices=sorted(set(_tts.voiceMappings.values())))
+    return result
 
 
 @app.get("/health")
 def health():
     return {"ok": _tts is not None, "apiVersion": 2, "maidEndpoint": "/tts/maid",
             "maidMediaType": "audio/mpeg", "maxTextChars": MAX_TEXT_CHARS,
-            "engine": "IndexTTS-2.5", "device": getattr(_tts, "device", None),
-            "textEmotionModelLoaded": getattr(_tts, "qwen_emo", None) is not None}
+            "engine": getattr(_tts, "engine_name", "IndexTTS-2.5"), "device": getattr(_tts, "device", None),
+            "textEmotionModelLoaded": getattr(_tts, "qwen_emo", None) is not None,
+            "voiceCloning": not _is_kokoro(), "emotionsSupported": not _is_kokoro(),
+            "nativeVoices": sorted(set(getattr(_tts, "voiceMappings", {}).values()))}
 
 
 if __name__ == "__main__":

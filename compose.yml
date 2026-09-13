@@ -437,14 +437,16 @@ services:
       retries: 3
 
   tts:
-    image: qiandengji-tts:2.5-qd1
+    image: qiandengji-tts:kokoro-1.1-qd1
     pull_policy: never
     restart: unless-stopped
     working_dir: /app
     entrypoint: ["python3", "-u", "/app/tts_api.py"]
     environment:
       TZ: Asia/Shanghai
-      TTS_CKPT: /checkpoints
+      TTS_ENGINE: kokoro
+      KOKORO_MODEL_DIR: /kokoro
+      TTS_VOICE_MAP: /app/kokoro-voices.json
       TTS_VOICES: /voices
       TTS_DEFAULT_VOICE: goddess
       TTS_DEVICE: cuda:0
@@ -457,10 +459,10 @@ services:
     ports:
       - "127.0.0.1:8100:8100"
     volumes:
-      - ./server/tts-state/app/tts_api.py:/app/tts_api.py:ro
-      - ./server/tts-state/checkpoints:/checkpoints:ro
+      - ./server/kokoro-state/model:/kokoro:ro
+      - ./config/kokoro-voices.json:/app/kokoro-voices.json:ro
       - ./server/tts-state/voices:/voices:ro
-      - ./server/tts-state/tmp:/tmp
+      - ./server/kokoro-state/tmp:/tmp
     deploy:
       resources:
         reservations:
