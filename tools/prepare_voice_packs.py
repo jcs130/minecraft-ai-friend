@@ -226,12 +226,13 @@ def main():
         tomllib.loads(text)
         config.write_text(text, encoding='utf-8')
         svc = ROOT / 'server/mc/config/voicechat/voicechat-server.properties'
-        svc.write_text(re.sub(r'^voice_host=.*$', 'voice_host=127.0.0.1:24455',
+        # Port-only advertisement follows the player's actual game host (LAN or loopback).
+        svc.write_text(re.sub(r'^voice_host=.*$', 'voice_host=24455',
                              svc.read_text(encoding='utf-8'), flags=re.M), encoding='utf-8')
         prepare_maid_tts()
     report = {'count': len(files), 'files': files, 'download_base': 'http://127.0.0.1:19090/packs/',
               'preinstalled_in_client': True, 'server_restart_required': True,
-              'voice_host': '127.0.0.1:24455', 'tts_uses_existing_local_inference': True,
+              'voice_host': '24455', 'tts_uses_existing_local_inference': True,
               'metadata_repair': {'policy': 'ark-character-labels-v1',
                                   'count': sum(f['validation']['metadata_repaired'] for f in files),
                                   'source_archives_read_only': True,

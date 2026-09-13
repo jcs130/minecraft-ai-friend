@@ -1,5 +1,9 @@
 # 千灯纪整合项目
 
+2026-09-13 局域网入口按用户要求改为默认 TCP 25565（对外 0.0.0.0），当前 LAN 为 192.168.3.133；Simple Voice Chat 对外 UDP24455，voice_host=24455 沿用客户端连接主机。原127.0.0.1:25567只作宿主脚本兼容入口，内部mc:25599和管理/RCON回环边界保留。无专用服LAN广播，玩家应手动添加192.168.3.133；不增宿主广播进程。此条覆盖旧“游戏仅本机25567”说明。
+
+默认127.0.0.1:25565真实协议握手通过；用户已回复确认另一台局域网电脑能看到并连接。本机经自身192.168.3.133回连超时仍如实记录，当前WSL mirrored未启用experimental.hostAddressLoopback；不能把自回连限制等同远端LAN失败，也不把用户确认冒充自动化客户端登录。全局WSL/防火墙未改，详见docs/GAME-RUNTIME-LAYOUT.md的LAN说明。
+
 2026-09-13 最新 D 盘服务整理覆盖下文空引擎/双运营实例记录：已从固定依赖真实重建缺失镜像，项目仍为 `D:\Projects\QiandengJi`，Docker Desktop 实际 WSL 镜像磁盘已迁到 `D:\docker-data\DockerDesktopWSL\disk\docker_data.vhdx`，迁移后原镜像 ID/标签/容器挂载核验通过。默认 13 个活动 Compose 服务（新增容器 inventory，包含 survivor），原 `qwenpaw-ops` 归档到 legacy-operations profile；10 个启用角色/94 项技能绑定均在游戏 QwenPaw 18089，宿主 8088 保持原用途。公开状态每 120 秒由容器采集，旧 Windows 游戏任务保持 Disabled。恢复前备份 27,157 文件且逐项校验。原 shadow 世界已加载，两个游戏协议入口、keepInventory=true、本机免密码管理、观察者及 GPU Kokoro 健康通过实际检查。桐人仍按原 cancellation_uncertain 暂停，旧任务不可因服务恢复而重投/清除，游戏可连接不代表自主生存已恢复。详见 docs/GAME-RUNTIME-LAYOUT.md；历史源码哈希和旧验收不改写。
 
 公开库存唯一写者为 inventory 容器：宿主 status/doctor 读当前快照，snapshot 和完整 health 刷新通过已验证容器 ID 执行固定 --once，完整审计只写 reports。实测 Windows msvcrt 与 Docker bind 上 Linux flock 不互通，不能恢复为宿主和容器各自加锁写同一公开文件；Linux 发布者间互斥已验证。见 docs/INVENTORY-CONTAINER.md。

@@ -1,4 +1,4 @@
-"""Read-only Minecraft status handshake against both isolated entry points."""
+"""Read-only Java status checks for the standard port, local alias and Agent gate."""
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -38,10 +38,10 @@ def read_varint(sock):
     raise ValueError('Invalid VarInt')
 
 
-def probe(port):
-    host = b'127.0.0.1'
-    handshake = b'\x00' + varint(767) + varint(len(host)) + host + struct.pack('>H', port) + b'\x01'
-    with socket.create_connection(('127.0.0.1', port), timeout=5) as sock:
+def probe(port, host='127.0.0.1'):
+    encoded_host = host.encode('utf8')
+    handshake = b'\x00' + varint(767) + varint(len(encoded_host)) + encoded_host + struct.pack('>H', port) + b'\x01'
+    with socket.create_connection((host, port), timeout=5) as sock:
         sock.sendall(varint(len(handshake)) + handshake + b'\x01\x00')
         packet_size = read_varint(sock)
         if not 3 <= packet_size <= 1024 * 1024:
@@ -53,12 +53,12 @@ def probe(port):
             raise ValueError('Invalid JSON status length')
         data = json.loads(read_exact(sock, size))
         return {'ok': data['version']['protocol'] == 767,
-                'port': port, 'protocol': data['version']['protocol'], 'version': data['version']['name']}
+                'host': host, 'port': port, 'protocol': data['version']['protocol'], 'version': data['version']['name']}
 
 
 def main():
     checks = {}
-    for name, port in [('direct', 25567), ('gate', 25701)]:
+    for name, port in [('standard', 25565), ('direct', 25567), ('gate', 25701)]:
         try:
             checks[name] = probe(port)
         except Exception as exc:

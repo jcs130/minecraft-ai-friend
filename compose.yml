@@ -27,9 +27,11 @@ services:
       TZ: Asia/Shanghai
       JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl -Dsettlementsfix.mcdataDir=/mcdata -Dsettlementsfix.testHooks=true"
     ports:
+      - "0.0.0.0:25565:25599"
+      # Preserve existing host-side scripts without exposing the old port to LAN.
       - "127.0.0.1:25567:25599"
       - "127.0.0.1:25577:25575"
-      - "127.0.0.1:24455:24454/udp"
+      - "0.0.0.0:24455:24454/udp"
     volumes:
       - ./server/mc:/data
       - ./server/mcdata:/mcdata
