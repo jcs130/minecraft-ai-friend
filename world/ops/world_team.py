@@ -51,6 +51,9 @@ def members():
     return result
 STATUSES = frozenset(('open', 'working', 'blocked', 'needs_review', 'resolved', 'duplicate'))
 KEY = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{3,119}')
+EPOCH_TOLERANCE_SEC = 120.0
+WORLD_EPOCH_HISTORY_LIMIT = 32
+WORLD_EPOCH_REPORT_LIMIT = 8
 
 
 def encode(value):
@@ -210,6 +213,36 @@ class TeamStore:
                        (case_id, self.actor, self.clock(), encode({'type': 'update', **payload})))
             return self._record(db, request_id, payload, {'ok': True, 'code': 'case_updated',
                 'caseId': case_id, 'version': expected_version + 1, 'owner': owner, 'status': status})
+
+    def record_world_epoch(self, started_at, observed_at):
+        """Fold a derived world-process start epoch into a bounded restart observation log.
+
+        World-process restarts (case-3a152890) were tracked by recomputing updatedAt minus
+        uptimeSec by hand across shifts and were misread twice; persisting the derived epoch
+        here turns restart detection into a receipt channel any role can read back. Readings
+        within EPOCH_TOLERANCE_SEC fold into the same epoch, storage keeps the newest
+        WORLD_EPOCH_HISTORY_LIMIT entries, and the report returns the most recent
+        WORLD_EPOCH_REPORT_LIMIT entries oldest-first.
+        """
+        with self.db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS world_epochs (started_at REAL PRIMARY KEY, '
+                       'first_observed REAL NOT NULL, last_observed REAL NOT NULL, reads INTEGER NOT NULL)')
+            rows = db.execute('SELECT * FROM world_epochs ORDER BY started_at DESC').fetchall()
+            match = next((row for row in rows
+                          if abs(row['started_at'] - started_at) <= EPOCH_TOLERANCE_SEC), None)
+            if match is not None:
+                db.execute('UPDATE world_epochs SET last_observed=MAX(last_observed,?), reads=reads+1 '
+                           'WHERE started_at=?', (observed_at, match['started_at']))
+            else:
+                db.execute('INSERT OR REPLACE INTO world_epochs VALUES (?,?,?,1)',
+                           (started_at, observed_at, observed_at))
+            db.execute('DELETE FROM world_epochs WHERE started_at NOT IN (SELECT started_at FROM '
+                       'world_epochs ORDER BY started_at DESC LIMIT ?)', (WORLD_EPOCH_HISTORY_LIMIT,))
+            recent = db.execute('SELECT * FROM world_epochs ORDER BY started_at DESC LIMIT ?',
+                                (WORLD_EPOCH_REPORT_LIMIT,)).fetchall()
+        return [{'startedAt': row['started_at'], 'firstObserved': row['first_observed'],
+                 'lastObserved': row['last_observed'], 'reads': row['reads']}
+                for row in reversed(recent)]
 
     def work_fingerprint(self):
         with self.db() as db:

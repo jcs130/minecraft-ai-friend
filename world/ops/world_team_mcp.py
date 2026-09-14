@@ -1,5 +1,6 @@
 """Qwen-owned stdio project collaboration tools, with identity bound at startup."""
 import argparse
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from world_team import members, TeamStore
 
@@ -53,6 +54,40 @@ def npc_llm_enabled(sections):
     return enabled if isinstance(enabled, bool) else None
 
 
+def _parse_time(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        marker = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return marker.replace(tzinfo=timezone.utc) if marker.tzinfo is None else marker
+
+
+def _iso(moment):
+    return moment.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+def world_process_epoch(sections):
+    """Derived world-process start time (updatedAt minus uptimeSec) from a fresh world record.
+
+    None for stale, malformed or partial records: an expired inspection record never feeds the
+    epoch history. The derivation exists because hand-recomputed epochs were misread twice
+    while tracking the world-process restart pattern in case-3a152890bff3ed93af8b.
+    """
+    world = sections.get('world') if isinstance(sections.get('world'), dict) else {}
+    if world.get('fresh') is False:
+        return None
+    data = world.get('data') if isinstance(world.get('data'), dict) else {}
+    inner = data.get('world') if isinstance(data.get('world'), dict) else {}
+    updated_at, uptime = inner.get('updatedAt'), inner.get('uptimeSec')
+    marker = _parse_time(updated_at)
+    if marker is None or isinstance(uptime, bool) \
+            or not isinstance(uptime, (int, float)) or uptime < 0:
+        return None
+    return marker - timedelta(seconds=uptime)
+
+
 def register_team_tools(app, actor, state=Path('/team')):
     store = TeamStore(actor, state)
 
@@ -94,6 +129,22 @@ def register_team_tools(app, actor, state=Path('/team')):
                           ' owner configuration decision'
                           + ('; the world record carrying it is expired' if 'world' in stale else '')
                           + '.')
+        epoch = world_process_epoch(sections)
+        if epoch is not None:
+            world_section = sections.get('world') if isinstance(sections.get('world'), dict) else {}
+            observed = _parse_time(world_section.get('timestamp')) or epoch
+            history = store.record_world_epoch(epoch.timestamp(), observed.timestamp())
+            snapshot['worldProcessEpoch'] = _iso(epoch)
+            snapshot['worldProcessEpochs'] = [
+                {**row, 'startedAt': _iso(datetime.fromtimestamp(row['startedAt'], tz=timezone.utc)),
+                 'firstObserved': _iso(datetime.fromtimestamp(row['firstObserved'], tz=timezone.utc)),
+                 'lastObserved': _iso(datetime.fromtimestamp(row['lastObserved'], tz=timezone.utc))}
+                for row in history]
+            if len(history) > 1:
+                notes += (' worldProcessEpochs lists derived world-process start epochs observed through'
+                          ' this store; a new entry means the world process restarted near its startedAt'
+                          ' (derived as updatedAt minus uptimeSec, tolerance folds reading jitter).'
+                          ' Container-level restart causes still need host RestartCount/StartedAt receipts.')
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
                       'A report or tested commit is not proof of a deployed game fix.' + notes}
