@@ -70,6 +70,8 @@ def check():
         life = value.get('life') or {}
         checks['life_consumer_loaded'] = (life.get('enabled') is True and life.get('signalVersion') == 1
             and life.get('status') not in ('unknown', 'request_ledger_missing', 'failed', None))
+        checks['life_progression_loaded'] = life.get('progressionVersion') == 1
+        checks['ordered_reply_transport_loaded'] = value.get('replyTransportVersion') == 2
         jobs = get('http://127.0.0.1:18089/api/cron/jobs', ROLE)
         managed = [job for job in jobs if job.get('id') == JOB_ID]
         checks['native_life_schedule_enabled'] = len(managed) == 1 and managed[0].get('enabled') is True

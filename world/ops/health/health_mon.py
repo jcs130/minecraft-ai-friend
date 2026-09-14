@@ -185,9 +185,10 @@ def probe_panel_smoke():
     survivor = probe_survivor()
     survivor_party = probe_survivor_party()
     companion_ticking = probe_companion_ticking()
+    navigation_sense = probe_navigation_sense()
     model_routing = probe_model_routing()
     world_team = probe_world_team()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, model_routing, world_team)),
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -196,6 +197,7 @@ def probe_panel_smoke():
             'skillbar_editor': skillbar_editor, 'chanting_client': chanting_client,
             'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
+            'navigation_sense': navigation_sense,
             'world_team': world_team}
 
 
@@ -405,6 +407,21 @@ def probe_companion_ticking():
         return module.check()
     except (OSError, ValueError, KeyError, TypeError, ImportError):
         return {'ok': False, 'error': 'Companion body tick evidence unavailable', 'modelRequests': 0, 'worldActions': 0}
+
+
+def probe_navigation_sense():
+    """One current native scheduler read; no movement or inferred history."""
+    before_path = list(sys.path)
+    try:
+        sys.path.insert(0, str(PROJECT/'tools'))
+        spec = importlib.util.spec_from_file_location('qd_navigation_sense_health', PROJECT/'tools/navigation_sense_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.probe(root=PROJECT)
+    except (OSError, ValueError, KeyError, TypeError, ImportError):
+        return {'ok': False, 'error': 'Native navigation evidence unavailable', 'modelRequests': 0, 'worldActions': 0}
+    finally:
+        sys.path[:] = before_path
 
 
 def probe_survivor_fast_behavior():

@@ -26,7 +26,19 @@ PROMPT = ('这是你原生活会话的定期继续，不是来自其他角色的
     '调用与新鲜回执支持的行为才能列为本轮成果；completed只表示模型回合结束，不证明游戏目标完成。'
     '先比较历史事件日期与当前时间，检查记忆是否陈旧、误把旧事记成今天或夸大成果；发现错误时'
     '用新观察和真实来源追加一条带日期的纠正，保留原历史，不删除或重写旧事件来掩盖错误。'
-    '有用的真实进展、问题和下一步写入自己的记忆或目标文件。最后简短总结完成与未完成的事；'
+    '这是一轮生活推进，不是例行写日记。currentObservation是本轮只读身体快照；capabilities只展示原生任务目录'
+    '第一页与实际启用工具，更多玩法按需task_catalog翻页或读相关技能，不要猜工作模式ID。'
+    'continuation中的摘要是上一模型的自述，不是游戏回执；先核对其中的未完成目标与当前位置、物品、'
+    '工具和伙伴新回复。然后自行决定一个有价值的小步骤、一个需要解决的阻塞，或有理由的休息。'
+    '选择工作时先确认原生task_catalog、所需工具材料与可达地点，再用真实work等工具交给原生AI执行；'
+    '目录未提供的浇水/移动/取物能力不要凭想象承诺，有缺口可协商可行分工或向运营组报告。'
+    '仅看到identity里的activity=work不代表正在耕作，taskId=idle也不代表已启动工作；'
+    '切换模式后的真实产出仍要另查，不把建议、同意分工或等待写成实际完成。'
+    '坐标与地点名称先核对，不把跟随到的每个地方都叫营地；旧作物状态、救援次数不复制成今天的新事实。'
+    '不要检索这段周期提示词；只有具体记忆缺口才查一次相关关键词，已有结果够用就继续。'
+    '有用的新进展、问题和下一步写入自己的记忆或目标文件；没有新事实不用重复追加同一份状态日记。'
+    '末尾用不超过400字留下当前小目标、实际新结果及来源、未完成或阻塞、下一步，供原会话下一轮接续。'
+    '休息可以是自主选择，但说明在等待哪个可观察变化，不必每10分钟重写相同等待记录。'
     '这里的最终总结只保留在自己的生活会话，不会自动广播给队友。\n')
 
 
@@ -49,7 +61,7 @@ class PartyLife:
         self.world_clock = world_clock
         self.root = bridge.root / 'life'
 
-    def _round_context(self, signal, replies, started):
+    def _round_context(self, signal, replies, started, state, member):
         try:
             world = self.world_clock()
         except (OSError, ValueError, TypeError, KeyError) as error:
@@ -59,10 +71,36 @@ class PartyLife:
                   'createdAtIso': iso_time(row['createdAt']),
                   'ageSecondsAtRoundStart': int(started - row['createdAt']), 'status': row['status']}
                  for row in history]
+        try:
+            observed = self.bridge.observation(member | {'kind': 'maid'})
+            snapshot = {'available': True, 'identity': observed.get('identity'), 'state': observed.get('state'),
+                        'observedAt': observed.get('observedAt'), 'readAt': self.clock()}
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            snapshot = {'available': False, 'errorType': type(error).__name__}
+        try:
+            binding = self.bridge.registry.resolve(member['bodyUuid'], member['ownerUuid'])
+            catalog = self.bridge.native.invoke(binding, 'task_catalog', {'offset': 0})
+            if catalog.get('ok') is not True or not isinstance(catalog.get('tasks'), list):
+                raise ValueError('native_catalog_unavailable')
+            catalog = {k: catalog.get(k) for k in ('observedAt', 'offset', 'nextOffset', 'total', 'truncated', 'tasks')}
+            catalog['available'] = True
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            catalog = {'available': False, 'errorType': type(error).__name__}
+        try:
+            tools = self.bridge.tasks.transport('GET', '/mcp/tools/maid_native', YUI_AGENT_ID)
+            if not isinstance(tools, list):
+                raise ValueError('native_tools_unavailable')
+            enabled = ['maid_native__' + t['name'] for t in tools if t.get('enabled') is True
+                       and 'maid_native__' + t.get('name', '') in self._scope()]
+            capabilities = {'available': True, 'enabledBodyTools': enabled, 'catalog': catalog}
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            capabilities = {'available': False, 'errorType': type(error).__name__, 'catalog': catalog}
         return {'round': {'signalId': signal['requestId'], 'startedAt': started, 'startedAtIso': iso_time(started),
                          'scheduledAt': signal['scheduledAt'], 'scheduledAtIso': iso_time(signal['scheduledAt']),
                          'timezone': 'Asia/Shanghai', 'pastConversationIsNotCurrentAchievement': True},
                 'worldClock': world | {'observedAt': self.clock(), 'observedAtIso': iso_time(self.clock())},
+                'currentObservation': snapshot, 'capabilities': capabilities,
+                'continuation': state.get('continuation'), 'previousRound': state.get('lastResult'),
                 'historicalMessages': dated, 'partyReplies': replies, 'untrustedEnvironmentData': True}
 
     def _member(self):
@@ -115,6 +153,12 @@ class PartyLife:
                     receipt = {key: row.get(key) for key in ('requestId', 'taskId', 'sessionId', 'status', 'finishedAt')}
                     receipt.update(signalId=active['signalId'], replyIds=active['replyIds'],
                                    finalSummaryIsPrivate=True, automaticSpeech=False)
+                    if row['status'] == 'completed' and isinstance(row.get('text'), str):
+                        text = row['text']
+                        state['continuation'] = {'taskId': row['taskId'], 'finishedAt': row.get('finishedAt'),
+                            'summary': text[:800], 'summaryTruncated': len(text) > 800,
+                            'summarySha256': hashlib.sha256(text.encode()).hexdigest(),
+                            'modelClaimNotActionReceipt': True, 'sourceSessionId': row.get('sessionId')}
                     write_json(self.root / 'receipts' / (active['key'] + '.json'), receipt)
                     state.update(active=None, lastSlot=active['slot'], status='waiting', lastResult=receipt)
                     self._save(state)
@@ -139,11 +183,14 @@ class PartyLife:
                     return state | {'status': 'party_input_priority'}
                 replies = self.bridge.queue.heard_replies(YUI_AGENT_ID)
                 started = self.clock()
-                context = self._round_context(signal, replies, started)
+                context = self._round_context(signal, replies, started, state, member)
+                position = (context['currentObservation'].get('identity') or {}).get('position')
+                first = ('结衣本轮生活 ' + iso_time(started) + '，当前位置' + str(position) +
+                         '，新收到伙伴回复' + str(len(replies)) + '条。')
                 active = {'key': 'party-life-' + hashlib.sha256(signal['requestId'].encode()).hexdigest(),
                     'signalId': signal['requestId'], 'slot': signal['slot'], 'member': member,
                     'replyIds': [r['eventId'] for r in replies],
-                    'prompt': PROMPT + json.dumps(context, ensure_ascii=False),
+                    'prompt': first + PROMPT + json.dumps(context, ensure_ascii=False),
                     'allowedTools': self._scope(), 'claimedAt': started}
                 state.update(active=active, status='reserved')
                 self._save(state)
@@ -171,9 +218,10 @@ class PartyLife:
     def summary(self):
         path = self.root / 'controller.json'
         if not path.exists():
-            return {'enabled': True, 'signalVersion': 1, 'status': 'waiting_for_native_signal'}
+            return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1, 'status': 'waiting_for_native_signal'}
         state = read_json(path)
         active = state.get('active') or {}
-        return {'enabled': True, 'signalVersion': 1, 'status': state.get('status'), 'lastSlot': state.get('lastSlot'),
+        return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1,
+                'status': state.get('status'), 'lastSlot': state.get('lastSlot'),
                 'active': {k: active.get(k) for k in ('signalId', 'taskId', 'requestId')} if active else None,
                 'lastResult': state.get('lastResult')}

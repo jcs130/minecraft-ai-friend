@@ -237,6 +237,25 @@ class PartyBridgeTests(unittest.TestCase):
                 self.assertEqual(len(self.posts), posts + 1)
                 self.assertIsNone(self.bridge.queue.active_for_recipient('maid-test'))
 
+    def test_long_native_answer_is_sent_in_full_without_another_model_task(self):
+        from test_party_reply_segments import LONG
+        from party_world import reply_text
+        original = self.tasks.transport
+        def transport(method, path, role, payload=None):
+            result = original(method, path, role, payload)
+            if method == 'GET':
+                result['result']['output'][0]['content'][0]['text'] = LONG
+            return result
+        self.tasks.transport = transport
+        row = self.bridge.call('qd-survivor', 'party_send', {'text': '目前怎么样？'}, 'long-reply')
+        self.bridge.tick(); self.now += 11; self.bridge.tick()
+        answer = self.bridge.queue.get_status('qd-survivor', row['messageId'])
+        self.assertEqual(answer['status'], 'answered')
+        self.assertEqual(answer['reply']['sourceText'], LONG)
+        self.assertEqual(answer['reply']['text'], reply_text(LONG))
+        self.assertEqual(len(self.game.emits), 3)  # one request, two answer fragments
+        self.bridge.tick(); self.assertEqual(len(self.posts), 1)
+
     def test_role_budget_wait_is_deferred_without_duplicate_reservation(self):
         # An explicitly configured quota remains supported; default is unlimited.
         from unittest.mock import patch

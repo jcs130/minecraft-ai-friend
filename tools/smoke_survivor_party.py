@@ -21,6 +21,7 @@ USAGE_FIELDS = ('call_count', 'prompt_tokens', 'completion_tokens')
 BEHAVIOR_SOURCES = ('world/sidecar/party_messages.py', 'world/sidecar/party_bridge.py',
     'world/sidecar/mcp_configuration.py', 'world/sidecar/maid_registry.py',
     'world/sidecar/party_world.py', 'world/sidecar/party_config.py', 'world/sidecar/qwen_tasks.py',
+    'world/sidecar/party_life.py',
     'world/sidecar/maid_agent_api.py', 'world/survival/party.py', 'world/survival/controller.py',
     'world/survival/life_session.py', 'world/maid-bridge-src/src/dev/qiandeng/maid/PartySpeech.java',
     'world/maid-bridge-src/src/dev/qiandeng/maid/PartySpeechJournal.java')
@@ -49,7 +50,7 @@ def behavior_source_hashes(root=ROOT):
 
 def verify_game_dialogue(row, game):
     """Read both actual Minecraft speech receipts; private drafts are not dialogue."""
-    from party_world import speech_event, validate_receipt
+    from party_world import speech_event, validate_receipt, message_speech_parts
     observed = []
     try:
         payload, reply = json.loads(row['payload']), json.loads(row['reply'])
@@ -70,22 +71,33 @@ def verify_game_dialogue(row, game):
                 return {'verified': False, 'code': 'world_hearing_unconfirmed', 'events': observed}
             if delivery.get('eventId') != message['messageId']:
                 return {'verified': False, 'code': 'world_event_chain_mismatch', 'events': observed}
-            event = speech_event(delivery['eventId'], message['sender']['bodyUuid'], message['recipient']['bodyUuid'],
-                                 message['text'], message.get('channel', 'nearby'))
-            saved = validate_receipt(delivery.get('receipt'), event)
-            live = validate_receipt(game.status(event['eventId']), event)
-            immutable = ('eventId', 'speakerUuid', 'listenerUuid', 'textSha256', 'channel', 'phase', 'ok', 'heard',
-                         'emittedAt', 'dimension', 'speakerPosition', 'listenerPosition', 'distance', 'radius')
-            heard = (live['phase'] == saved['phase'] == 'heard' and live['heard'] is True
-                     and all(live[k] == saved[k] for k in immutable))
-            before_model = kind != 'request' or live['emittedAt'] <= dispatch * 1000 + 1000
-            observed.append({'kind': kind, 'eventId': event['eventId'], 'channel': event['channel'],
-                'phase': live['phase'], 'heard': live['heard'], 'emittedAt': live['emittedAt'],
-                'distance': live['distance'], 'radius': live['radius'],
-                'verified': heard and before_model})
+            parts = message_speech_parts(message)
+            proofs = delivery.get('parts') if len(parts) > 1 else [delivery]
+            if not isinstance(proofs, list) or len(proofs) != len(parts):
+                raise ValueError('world_part_proofs_missing')
+            previous_emitted = 0
+            for index, (part, proof) in enumerate(zip(parts, proofs)):
+                if proof.get('eventId') != part['eventId'] or proof.get('state') != 'heard':
+                    raise ValueError('world_part_chain_mismatch')
+                event = speech_event(part['eventId'], message['sender']['bodyUuid'], message['recipient']['bodyUuid'],
+                                     part['text'], message.get('channel', 'nearby'))
+                saved = validate_receipt(proof.get('receipt'), event)
+                live = validate_receipt(game.status(event['eventId']), event)
+                immutable = ('eventId', 'speakerUuid', 'listenerUuid', 'textSha256', 'channel', 'phase', 'ok', 'heard',
+                             'emittedAt', 'dimension', 'speakerPosition', 'listenerPosition', 'distance', 'radius')
+                heard = (live['phase'] == saved['phase'] == 'heard' and live['heard'] is True
+                         and all(live[k] == saved[k] for k in immutable)
+                         and live['emittedAt'] >= previous_emitted)
+                before_model = kind != 'request' or live['emittedAt'] <= dispatch * 1000 + 1000
+                previous_emitted = live['emittedAt']
+                observed.append({'kind': kind, 'part': index + 1, 'parts': len(parts),
+                    'eventId': event['eventId'], 'channel': event['channel'],
+                    'phase': live['phase'], 'heard': live['heard'], 'emittedAt': live['emittedAt'],
+                    'distance': live['distance'], 'radius': live['radius'],
+                    'verified': heard and before_model})
     except Exception as error:
         return {'verified': False, 'code': 'world_receipt_unverified', 'errorType': type(error).__name__, 'events': observed}
-    return {'verified': len(observed) == 2 and all(r['verified'] for r in observed),
+    return {'verified': len(observed) >= 2 and all(r['verified'] for r in observed),
             'events': observed, 'clockSkewToleranceMs': 1000}
 
 
@@ -159,6 +171,11 @@ def verify_reply(row, members, party, native, chats):
         and (chat.get('session_id'), chat.get('user_id'), chat.get('channel')) ==
             (recipient['sessionId'], recipient['userId'], recipient['channel'])]
     answer = final_text(native)
+    from party_world import reply_text
+    try:
+        formatted = reply_text(answer)
+    except ValueError:
+        formatted = None
     valid = bool(identities and payload.get('partyId') == party['partyId']
         and payload.get('bindingRevision') == row['binding_revision'] == party['revision']
         and row['status'] == row['reservation_state'] == 'answered'
@@ -166,7 +183,8 @@ def verify_reply(row, members, party, native, chats):
         and reply.get('sender') == payload['recipient'] and reply.get('recipient') == payload['sender']
         and reply.get('replyTo') == row['message_id'] and reply.get('requiresReply') is False
         and result.get('session_id') == recipient['sessionId'] and len(matches) == 1
-        and answer is not None and answer == reply.get('text'))
+        and answer is not None and formatted == reply.get('text')
+        and answer == reply.get('sourceText', reply.get('text')))
     return {'messageId': row['message_id'], 'senderAgentId': row['sender'], 'recipientAgentId': row['recipient'],
             'taskId': row['task_id'], 'nativeStatus': native.get('status'), 'verified': valid,
             'requestSha256': text_hash(payload.get('text', '')), 'replySha256': text_hash(reply.get('text', '')),

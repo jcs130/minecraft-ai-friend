@@ -209,6 +209,8 @@ class NavigationReceiptTests(unittest.TestCase):
                     return json.dumps(result)
                 if command == 'data get entity Kirito Inventory':
                     return '[]'
+                if command.startswith('qdworld navigation_sense '):
+                    return 'Unknown command: navigation_sense'
                 raise AssertionError('Unexpected command: '+command)
         client = NumenGateway(self.state, BoundaryRcon(), clock=lambda: NOW)
         with patch('numen_gateway.inventory_from_snbt', return_value=([], {})):

@@ -27,7 +27,7 @@ import re
 import sqlite3
 import time
 import uuid
-from party_world import speech_event, speech_text, validate_receipt
+from party_world import speech_event, speech_text, validate_receipt, reply_text, reply_parts, message_speech_parts
 
 
 IDENTITY_FIELDS = ('agentId', 'bodyUuid', 'ownerUuid', 'sessionId', 'userId', 'channel')
@@ -323,8 +323,7 @@ class PartyMessages:
                              "ORDER BY m.created,m.rowid LIMIT 1", (recipient_agent_id, self._now())).fetchone()
             return self._public(row) if row else None
 
-    @staticmethod
-    def _reply_observation(binding, member, row):
+    def _reply_observation(self, binding, member, row, db):
         """Only actual hearing for this exact current identity becomes input."""
         original = json.loads(row['payload'])
         reply = json.loads(row['reply']) if row['reply'] else {}
@@ -340,9 +339,39 @@ class PartyMessages:
                 or event.get('bindingRevision') != binding['revision']):
             return None
         text = reply.get('text')
+        if 'speechParts' in reply:
+            parts = message_speech_parts(reply)
+            delivery = reply.get('worldDelivery', {})
+            saved = delivery.get('parts', [])
+            if (delivery.get('state') != 'heard' or delivery.get('eventId') != row['event_id']
+                    or len(saved) != len(parts)):
+                return None
+            receipts = []
+            previous_emitted = 0
+            for part, proof in zip(parts, saved):
+                stored = self._world_row(db, part['eventId'])
+                expected = speech_event(part['eventId'], other['bodyUuid'], member['bodyUuid'],
+                                        part['text'], reply.get('channel', 'nearby'))
+                payload = json.loads(stored['payload'])
+                if (stored['message_id'] != row['message_id'] or stored['kind'] != 'reply'
+                        or stored['state'] != 'heard' or payload.get('bindingRevision') != binding['revision']
+                        or any(payload.get(k) != v for k, v in expected.items())):
+                    return None
+                receipt = validate_receipt(json.loads(stored['receipt']), expected)
+                if (receipt['heard'] is not True or receipt['phase'] != 'heard'
+                        or receipt['emittedAt'] < previous_emitted
+                        or proof != {'eventId': part['eventId'], 'state': 'heard', 'receipt': receipt}):
+                    return None
+                previous_emitted = receipt['emittedAt']
+                receipts.append(receipt)
+            return {'eventId': row['event_id'], 'replyTo': row['message_id'],
+                    'partyId': binding['partyId'], 'bindingRevision': binding['revision'],
+                    'sender': other, 'recipient': member, 'text': text,
+                    'receipt': {'kind': 'ordered_game_speech', 'heard': True, 'parts': receipts},
+                    'requiresReply': False, 'trusted': False}
         speech_text(text)
         # Same native IterationGate sentinel rejected by qwen_tasks.final_text.
-        if re.fullmatch(r'Max iterations \([0-9]+\) reached', text.strip()):
+        if re.fullmatch(r'Max iterations \([0-9]+\) reached|Doom loop: agent stuck after [0-9]+ consecutive repetitions', text.strip()):
             return None
         expected = speech_event(row['event_id'], other['bodyUuid'], member['bodyUuid'],
                                 text, reply.get('channel', 'nearby'))
@@ -360,11 +389,17 @@ class PartyMessages:
                 'requiresReply': False, 'trusted': False}
 
     def _reply_rows(self, db, binding, member):
-        return db.execute("SELECT m.*,w.event_id,w.payload AS world_payload,w.receipt AS world_receipt "
+        rows = db.execute("SELECT m.*,w.event_id,w.payload AS world_payload,w.receipt AS world_receipt "
             "FROM messages m JOIN world_speech w ON w.message_id=m.message_id "
             "WHERE m.sender=? AND m.binding_revision=? AND m.status='answered' "
             "AND w.kind='reply' AND w.state='heard' ORDER BY w.rowid",
             (member['agentId'], binding['revision']))
+        for row in rows:
+            try:
+                if json.loads(row['reply'])['messageId'] == row['event_id']:
+                    yield row
+            except (ValueError, TypeError, KeyError):
+                continue
 
     def heard_replies(self, actor, *, limit=8):
         """Read-only input selection, not a request/callback or an acknowledgement."""
@@ -381,7 +416,7 @@ class PartyMessages:
                 if row['event_id'] in consumed:
                     continue
                 try:
-                    observation = self._reply_observation(binding, member, row)
+                    observation = self._reply_observation(binding, member, row, db)
                 except (ValueError, TypeError, KeyError):
                     observation = None
                 if observation:
@@ -409,7 +444,7 @@ class PartyMessages:
                 if previous:
                     _require(previous['task_id'] == task_id, 'party_reply_consumption_collision')
                     continue
-                _require(event_id in selected and self._reply_observation(binding, member, selected[event_id]) is not None,
+                _require(event_id in selected and self._reply_observation(binding, member, selected[event_id], db) is not None,
                          'party_reply_not_heard_by_current_identity')
                 db.execute('INSERT INTO reply_consumptions(event_id,consumer,task_id,consumed_at) VALUES (?,?,?,?)',
                            (event_id, consumer, task_id, self._now()))
@@ -529,6 +564,9 @@ class PartyMessages:
         return self._finish(reservation_id, task_id, reason=_identifier(reason, 'failure_reason', 80), usage=usage)
 
     def _finish(self, reservation_id, task_id, *, text=None, reason=None, usage=None):
+        source_text = text
+        if text is not None:
+            text = reply_text(text)
         if usage is not None:
             _require(isinstance(usage, dict) and set(usage) <= {'modelCalls', 'inputTokens', 'outputTokens', 'totalTokens'}
                      and all(type(v) is int and 0 <= v <= 10**12 for v in usage.values()), 'invalid_party_usage')
@@ -538,11 +576,10 @@ class PartyMessages:
             _require(isinstance(task_id, str) and row['task_id'] == task_id and reservation['task_id'] == task_id,
                      'party_task_not_owned')
             state = 'answered' if text is not None else 'failed'
-            if text is not None:
-                speech_text(text)
             old_reply = json.loads(row['reply']) if row['reply'] else None
             if old_reply and text is not None:
-                _require(old_reply['text'] == text, 'party_terminal_collision')
+                _require(old_reply['text'] == text and old_reply.get('sourceText', old_reply['text']) == source_text,
+                         'party_terminal_collision')
                 return self._public(row)
             if row['status'] in TERMINAL:
                 _require(row['status'] == state and (old_reply['text'] == text if old_reply else row['detail'] == reason),
@@ -559,8 +596,17 @@ class PartyMessages:
                          'createdAt': self._now(), 'requiresReply': False, 'deliveryState': 'recorded',
                          'bindingCurrent': original['bindingRevision'] == binding['revision'], 'usage': usage}
                 reply['worldDelivery'] = {'eventId': reply['messageId'], 'state': 'pending', 'receipt': None}
-                self._insert_world(db, reply, row['message_id'], 'reply', self._now() + 300,
-                                   revision=original['bindingRevision'])
+                parts = reply_parts(text, reply['messageId'])
+                if source_text != text:
+                    reply['sourceText'] = source_text
+                if len(parts) > 1:
+                    reply['speechParts'] = parts
+                    reply['worldDelivery']['parts'] = [{'eventId': p['eventId'], 'state': 'pending', 'receipt': None}
+                                                       for p in parts]
+                for part in parts:
+                    self._insert_world(db, reply | {'messageId': part['eventId'], 'text': part['text']},
+                                       row['message_id'], 'reply', self._now() + 300,
+                                       revision=original['bindingRevision'])
                 state = 'submitted'  # Native output exists; the recipient has not heard it yet.
                 reason = 'reply_waiting_for_world'
             db.execute('UPDATE reservations SET state=?,reason=?,usage=? WHERE reservation_id=?',
@@ -600,6 +646,28 @@ class PartyMessages:
             self._binding(db)
             return self._world_public(self._world_row(db, event_id))
 
+    def delivery_events(self, event_id):
+        """Trusted ordered delivery plan; never a model-visible draft."""
+        with self._transaction() as db:
+            self._binding(db)
+            event = self._world_row(db, event_id)
+            message = self._row(db, event['message_id'])
+            reply = json.loads(message['reply']) if message['reply'] else None
+            if reply and reply.get('speechParts') and event_id == reply['messageId']:
+                return [self._world_public(self._world_row(db, p['eventId'])) for p in message_speech_parts(reply)]
+            return [self._world_public(event)]
+
+    def world_delivery(self, event_id):
+        with self._transaction() as db:
+            self._binding(db)
+            event = self._world_row(db, event_id)
+            message = self._row(db, event['message_id'])
+            reply = json.loads(message['reply']) if message['reply'] else None
+            if reply and reply.get('speechParts') and event_id == reply['messageId']:
+                message_speech_parts(reply)
+                return dict(reply['worldDelivery'])
+            return self._world_public(event)
+
     def claim_world(self, event_id):
         """The single write grant is committed UNKNOWN before RCON is called."""
         with self._transaction() as db:
@@ -608,6 +676,14 @@ class PartyMessages:
             event = self._world_public(row)
             if row['state'] != 'pending':
                 return event | {'claimed': False}
+            message = self._row(db, row['message_id'])
+            reply = json.loads(message['reply']) if message['reply'] else None
+            if row['kind'] == 'reply' and reply and reply.get('speechParts'):
+                parts = message_speech_parts(reply)
+                index = next(i for i, p in enumerate(parts) if p['eventId'] == event_id)
+                if (message['status'] == 'failed'
+                        or any(self._world_row(db, p['eventId'])['state'] != 'heard' for p in parts[:index])):
+                    return event | {'claimed': False}
             if (not binding['enabled'] or event['bindingRevision'] != binding['revision']
                     or event['expiresAt'] <= self._now()):
                 self._set_world(db, row, 'expired', None)
@@ -636,7 +712,15 @@ class PartyMessages:
         message = self._row(db, event['message_id'])
         column = 'payload' if event['kind'] == 'request' else 'reply'
         content = json.loads(message[column])
-        content['worldDelivery'] = {'eventId': event['event_id'], 'state': state, 'receipt': receipt}
+        if event['kind'] == 'reply' and content.get('speechParts'):
+            proofs = [self._world_public(self._world_row(db, p['eventId'])) for p in message_speech_parts(content)]
+            states = [p['state'] for p in proofs]
+            state = ('heard' if all(s == 'heard' for s in states) else
+                     next((s for s in ('rejected', 'expired', 'unknown') if s in states), 'pending'))
+            content['worldDelivery'] = {'eventId': content['messageId'], 'state': state, 'receipt': None,
+                'parts': [{k: p[k] for k in ('eventId', 'state', 'receipt')} for p in proofs]}
+        else:
+            content['worldDelivery'] = {'eventId': event['event_id'], 'state': state, 'receipt': receipt}
         db.execute('UPDATE messages SET ' + column + '=? WHERE message_id=?',
                    (_json(content), message['message_id']))
         if event['kind'] == 'reply' and state in ('heard', 'rejected', 'expired'):

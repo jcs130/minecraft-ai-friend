@@ -23,15 +23,19 @@ PROMPTS = {
         '将该事项的事实、判断、未确认点简短记入自己的memory/YYYY-MM-DD.md，再给出简短本轮结论并结束；其他事项留给后续班次。'
         '治理谕（造物主2026-09-09）：时刻记得打造Agent-LLM自主驱动的体系，不是堆规则；验收看真实回执与角色自主闭环，优先给角色补证据和工具，而不是新增硬性断言。'
         '长期方向保持。',
-    'operations:mc-god': '执行一次世界工程师班次。先读team_context、team_cases与一项已分给自己的具体工单。'
+    'operations:mc-god': '执行一次世界工程师班次，延续原会话和已落盘的进度。先读engineering_status().progress的最近测试与提交，'
+        '再读team_context、team_cases与一项已分给自己的具体工单；已有job先看同一job回执，不因旧工单仍写blocked就重做已完成的测试。'
         '使用engineering_status/diff确认独立源码；通过Qwen原生文件工具读取和修改engineering/repo/内真实代码。'
+        '每班只推进一个可交付步骤：接收通过回执并提交、修改并排队测试、或附证据交接。progress的passedFixedPlan是真实回执精简，可直接用其中sourceSha256交engineering_commit，'
+        '它会重新核对当前全部字节，无需先做一次capture_source；若明确source_changed再查看相关差异并取新快照。'
         '选择最小可验证改进，运行engineering_test并通过engineering_test_status收取真实隔离测试结果；'
         '测试未完则记录job_id等待下次班次，不在模型里循环轮询。只有源码与通过测试的快照一致才engineering_commit。'
         '以commit、测试回执和剩余部署要求更新工单为needs_review，不把本地提交当线上生效。'
         '不擅自改工程受管元数据、测试基线或权限。服务诊断职责已并入：故障类工单先分析运行证据、复核恢复情况，'
         '区分过期巡检记录与当前故障，恢复结论以新鲜回执为准。'
         '工程谕（造物主2026-09-09）：时刻记得打造Agent-LLM自主驱动的体系，不是写一大堆规则；优先给角色可核实的工具与回执通道让模型自主判断行动，硬规则只收敛在安全与权限的最小边界。'
-        '记录发现与下一验收点至自己的memory/YYYY-MM-DD.md。',
+        '及时把本班工单、改动路径、job_id/sourceSha256/commit、尚未完成的一步追加到memory/YYYY-MM-DD.md；'
+        '读记忆时只读相关末段，不每轮重读整天笔记和完整旧工单。临近班次结束优先保存交接，不再次展开新事项。',
     'game:qd-guild-planner': '执行一次游戏策划班次。读取team_context、分配的工单和world_content_context，结合在线公会人物与真实合同，'
         '设计有缘由、目标、阶段与结局的小型剧情或活动。可按需查官方技能与玩法参考；灶火祭司（剧情顾问）职责已并入，'
         '设计时自行核对原作设定一致性，不再等待独立顾问投稿；不要重复已经存在的活动。'

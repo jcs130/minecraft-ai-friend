@@ -75,6 +75,7 @@ public final class QiandengIronsBridge {
         WorldMenuBridge.register(event.getDispatcher());
         WorldScanBridge.register(event.getDispatcher());
         if (ModList.get().isLoaded("numen")) WorldInteractionBridge.register(event.getDispatcher());
+        if (ModList.get().isLoaded("numen")) WorldNavigationSense.register(event.getDispatcher());
     }
 
     private static int run(CommandSourceStack source, String action, String actorQuery, String spellId) {

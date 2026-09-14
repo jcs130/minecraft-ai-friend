@@ -9,7 +9,7 @@ import uuid
 
 from party_config import PartyConfig, PARTY_TOOLS, recipient_tools
 from party_messages import PartyMessages
-from party_world import GameSpeech, reconcile_world, speech_text
+from party_world import GameSpeech, reconcile_world, speech_text, reply_text, message_speech_parts
 from qwen_tasks import QwenTasks, read_json, write_json
 
 
@@ -146,7 +146,7 @@ class PartyBridge:
                 self.queue.mark_submitted(active['reservationId'], row['taskId'])
             if row.get('status') == 'completed':
                 try:
-                    speech_text(row['text'])
+                    reply_text(row['text'])
                     # Model-generated tool syntax is never a game utterance or
                     # an executable request. Ordinary player input is unchanged.
                     if re.search(r'<\s*/?\s*(?:invoke|tool(?:_calls?|_use)?|function(?:_calls?)?)\b'
@@ -206,11 +206,16 @@ class PartyBridge:
             member = members.get(reply['sender']['agentId'])
             if member is None or any(member.get(k) != v for k, v in reply['sender'].items()):
                 continue
-            self._speak(member, reply['messageId'], reply['text'], reply['worldDelivery'])
+            parts = message_speech_parts(reply)
+            if len(parts) == 1:
+                self._speak(member, reply['messageId'], reply['text'], reply['worldDelivery'])
+            else:
+                for part, delivery in zip(parts, reply['worldDelivery']['parts']):
+                    self._speak(member, part['eventId'], part['text'], delivery)
 
     def publish(self):
         value = {'schema': 1, 'updatedAt': int(self.clock() * 1000), 'enabled': False,
-                 'status': 'unconfigured', 'error': self.last_error}
+                 'status': 'unconfigured', 'error': self.last_error, 'replyTransportVersion': 2}
         if self.config.configured():
             try:
                 config = self.config.private()
@@ -242,9 +247,12 @@ def public_delivery(delivery):
     if not delivery:
         return None
     receipt = delivery.get('receipt')
-    return {'state': delivery['state'], 'receipt': {k: receipt.get(k)
+    result = {'state': delivery['state'], 'receipt': {k: receipt.get(k)
             for k in ('heard', 'phase', 'channel', 'code', 'distance', 'radius', 'emittedAt', 'observedAt')}
             if receipt else None}
+    if 'parts' in delivery:
+        result['parts'] = [{'eventId': part['eventId'], **public_delivery(part)} for part in delivery['parts']]
+    return result
 
 
 def create_bridge():

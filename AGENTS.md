@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-14 11:10 优化已部署：默认13个Compose服务运行，survivor为2.2.0-autonomy9（7eb8e44f…29b4b），游戏Qwen仍autonomy3并已重载ops，原16项Cron恢复，宿主8088未动。工程完整字节快照44.740→3.888秒且字典全等；原生工程班次status1.772秒读到progress。新增只读Numen控制者/落脚点证据，原桐人session两轮真实含新上下文并完成5次goto、放置及进食，捕获mob_defense。修复成功恢复被计入3次失败重试上限：旧attempts全保留，原loop一次恢复后只读确认上线，无手工清状态/重投。结衣两轮完成且新问答heard，21项party健康通过；没有work产出，多段回复仅离线验证，唯一线上长回复实验因模型输出工具XML被正确拒绝。天神10:55轮因GLM5.3原生30秒stream idle提前失败，不能称360秒总截止或工程闭环完成；近距move拒绝仍缺当时原点证据。新原生验收替换前归档旧报告原字节，完整panel仍有旧来源证明失败，不能改哈希凑绿。见docs/AUTONOMY-OPTIMIZATION.md。
+
 2026-09-14 08:00 当前运行覆盖下文旧暂停/候选环境结论：13 个默认 Compose 服务运行；survivor 为 2.2.0-autonomy7，游戏 Qwen 仍 autonomy3 加已加载 Cron guard3，宿主8088未动。已修复动作锁外检查引发的误暂停、原结衣外围区块不 tick、食物原生回执与截止、NPC 日志 ENODATA、ReMe 通用前缀检索及 Doom 终止识别。原 UUID/session/背包/人物模型保留。结衣新增原生10分钟生活信号，由既有NPC线程消费，无新守护进程。两次新请求/回复均在游戏实际heard，下一原生活轮精确消费两条回复，桐人实际种植两株小麦；结衣随行与交流已验，未验她亲自耕作。最新生活/队伍只读 smoke 及19项party健康检查通过，旧报告原字节已归档而非改哈希凑绿。NPC最后安全重启后已resume；详见docs/COMPANION-AUTONOMY-REPAIR.md。
 
 原工程候选环境已按清单迁移，历史/引用及四份批准测试字节保留，纯模式纠正子提交30f04f5、固定可用镜像和组合测试计划已生效。07:55天神自然读取新回归并真实排队，暴露正式runner继承服务ENTRYPOINT的问题；现已修复并单独重启control，9项runner回归通过。两项新增候选测试前置/异常断言已修正，正式job maintenance-20260914-runner-entrypoint-01真实120次执行全部通过，源SHA798fa1db…9452，测试容器已移除；候选业务未部署。工程/学习原Cron均恢复，下一工程08:15。不能改批准hash或重放旧未知模型任务，候选后续提交需重新核对源字节。详见docs/ENGINEERING-CANDIDATE-RECOVERY.md。

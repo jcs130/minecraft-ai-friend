@@ -137,6 +137,74 @@ class LifeSessionTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['actionLimit'], 6)
         self.assertIn('MCP', context['instruction'])
 
+    def test_next_turn_retains_failed_target_and_reason_without_inventing_success(self):
+        self.controller.data['wakeReason'] = 'review'
+        self.controller.data['lastDecision'] = {'actions': [{
+            'actionId': 'a' * 32, 'tool': 'farm', 'status': 'rejected',
+            'completionConfirmed': False,
+            'args': {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds', 'x': 100, 'y': 65, 'z': 101},
+            'result': {'ok': False, 'code': 'action_rejected', 'result': {
+                'success': False, 'message': 'world_effect_not_verified: native interaction ended'}},
+            'after': {'position': {'x': 100.5, 'y': 64, 'z': 100.5}, 'counts': {'minecraft:wheat_seeds': 25}}}]}
+        context = self.controller.life_context(self.gateway.body, {}, 'new-turn')
+        row = context['recentActionReceipts'][0]
+        self.assertEqual(row['requested']['y'], 65)
+        self.assertEqual(row['positionAfter']['y'], 64)
+        self.assertEqual(row['outcomeDetail'], 'world_effect_not_verified: native interaction ended')
+        self.assertEqual(row['status'], 'rejected')
+        self.assertFalse(row['completionConfirmed'])
+        self.assertNotIn('counts', row)
+        self.assertNotIn('after', row)
+
+    def test_native_body_controller_and_landing_advice_reach_original_life_session(self):
+        self.controller.data['wakeReason'] = 'world_observation'
+        control = {'available': True, 'kind': 'reflex', 'name': 'AvoidDanger',
+                   'nativeAvoidanceActive': True, 'sample': 'last_native_scheduler_selection'}
+        self.gateway.body['bodyControl'] = control
+        destination = {'requested': {'x': 102, 'y': 64, 'z': 101},
+            'requestedStanceClear': False, 'candidates': [{'x': 102.5, 'y': 65, 'z': 101.5, 'pathVerified': False}],
+            'destinationChanged': False, 'pathVerified': False}
+        self.controller.data['lastDecision'] = {'actions': [{'tool': 'goto', 'status': 'failed',
+            'completionConfirmed': True, 'args': destination['requested'],
+            'navigationSense': {'ok': True, 'destination': destination}}]}
+        context = self.controller.life_context(self.gateway.body, {'mission': 'Return to camp'}, 'new-turn')
+        self.assertEqual(context['body']['bodyControl'], control)
+        self.assertEqual(context['recentActionReceipts'][0]['navigationSense']['destination'], destination)
+        self.assertEqual(context['mission'], 'Return to camp')
+        self.assertEqual(context['sessionId'], self.controller.session['primarySessionId'])
+        self.assertIn('currentTime', context)
+        self.assertEqual(self.gateway.actions, [])
+
+    def test_optional_receipt_shapes_and_large_candidate_list_do_not_break_continuation(self):
+        from controller import life_action_evidence
+        for optional in ({'args': ['x'], 'result': ['error'], 'after': 'unavailable'},
+                         {'result': {'result': 'unknown'}, 'navigationSense': ['bad']},
+                         {'result': {'result': {'data': ['legacy-output']}}}):
+            row = life_action_evidence({'status': 'unknown', 'completionConfirmed': False, **optional})
+            self.assertEqual(row['status'], 'unknown')
+            self.assertFalse(row['completionConfirmed'])
+            self.assertNotIn('navigationSense', row)
+        candidate = {'x': 102.5, 'y': 65, 'z': 101.5, 'pathVerified': False,
+                     'supportBlock': 'minecraft:dirt', 'inventory': ['large-private-payload'] * 100}
+        original = {'status': 'failed', 'completionConfirmed': False,
+            'navigationSense': {'ok': True, 'position': {'x': 100.5, 'y': 64, 'z': 100.5, 'extra': [1] * 100},
+                'bodyControl': {'available': False, 'code': 'unavailable', 'extra': [1] * 100},
+                'destination': {'requested': {'x': 102, 'y': 64, 'z': 101}, 'pathVerified': False,
+                    'destinationChanged': False, 'candidates': [copy.deepcopy(candidate) for _ in range(100)],
+                    'unknownNestedPayload': {'extra': [1] * 100}}}}
+        before = copy.deepcopy(original)
+        projected = life_action_evidence(original)
+        destination = projected['navigationSense']['destination']
+        self.assertEqual(len(destination['candidates']), 5)
+        self.assertEqual(destination['requested'], {'x': 102, 'y': 64, 'z': 101})
+        self.assertFalse(destination['destinationChanged'])
+        self.assertFalse(destination['pathVerified'])
+        self.assertTrue(projected['navigationSenseTruncatedForContext'])
+        self.assertNotIn('inventory', json.dumps(projected))
+        self.assertNotIn('unknownNestedPayload', destination)
+        self.assertNotIn('extra', json.dumps(projected))
+        self.assertEqual(original, before)
+
     def test_qwen_request_build_uses_stable_three_part_identity(self):
         backend = QwenBackend(env={})
         calls = []

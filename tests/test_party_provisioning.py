@@ -176,7 +176,8 @@ class PartyHealthTests(ProvisioningFixture):
         self.now = 100000
         self.public = {'schema': 1, 'enabled': True, 'status': 'running', 'error': None,
                        'updatedAt': self.now * 1000, 'partyId': self.config['partyId'], 'members': self.members,
-                       'life': {'enabled': True, 'signalVersion': 1, 'status': 'waiting'}}
+                       'replyTransportVersion': 2,
+                       'life': {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1, 'status': 'waiting'}}
         from party_life_schedule import JOB_ID, ROLE, managed_job
         self.life_job = managed_job()
         self.life_signal = {'jobId': JOB_ID, 'role': ROLE, 'scheduledAt': self.now}

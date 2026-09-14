@@ -292,6 +292,10 @@ class NumenGateway:
             data = task.get('data', {})
             task_info = {k: data[k] for k in ('task_id', 'task', 'state', 'elapsed_s', 'budget_left_s') if k in data}
             task_info.update(busy=bool(data.get('task_id')), completionConfirmed=False)
+            from navigation_sense import NavigationSense
+            control_sample = NavigationSense(self).read(body_uuid, status.get('dimension'))
+            body_control = {**control_sample['bodyControl'], **{k: control_sample[k]
+                for k in ('actorUuid', 'dimension', 'observedAt', 'gameTime', 'bodyTickCount') if k in control_sample}}
             return {'schema': 1, 'ok': True, 'online': True, 'bodyName': body, 'bodyUuid': body_uuid, 'observedAt': now,
                     'hp': status.get('hp'), 'maxHp': status.get('max_hp'), 'hunger': status.get('hunger'),
                     'position': pos, 'dimension': status.get('dimension'), 'gameMode': status.get('game_mode'),
@@ -309,6 +313,7 @@ class NumenGateway:
                                         if isinstance(mode, str)],
                     'navigationEpoch': status.get('navigation_epoch') if isinstance(status.get('navigation_epoch'), str) else None,
                     'navigationResult': self._navigation_result(status.get('last_navigation_result')),
+                    'bodyControl': body_control,
                     'notice': 'Idle is not a completion receipt. Numen navigation is not geofenced.'}
         except (OSError, ValueError, TypeError, KeyError, ImportError) as error:
             missing = isinstance(error, GatewayError) and str(error) == 'body_offline'
@@ -488,7 +493,7 @@ class NumenGateway:
     @staticmethod
     def _action_snapshot(body):
         return {k: body[k] for k in ('ok', 'bodyUuid', 'position', 'dimension', 'counts', 'hp',
-                'hunger', 'task', 'navigationEpoch', 'navigationResult', 'observedAt') if k in body}
+                'hunger', 'task', 'navigationEpoch', 'navigationResult', 'bodyControl', 'observedAt') if k in body}
 
     def _save_receipt(self, receipt):
         write_json(self.state / 'action-receipts' / (receipt['actionId'] + '.json'), receipt)
@@ -552,6 +557,9 @@ class NumenGateway:
         if food_outcome is not None:
             receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
                            notice='Completion is the exact original native eating task result.')
+        if receipt['tool'] == 'goto' and outcome is not None and outcome.get('success') is not True:
+            from navigation_sense import NavigationSense
+            receipt['navigationSense'] = NavigationSense(self).for_destination(body, receipt['args'])
         self._save_receipt(receipt)
         self._record({**receipt, 'phase': 'observation'})
         path.unlink()
@@ -783,6 +791,10 @@ class NumenGateway:
                     from game_skills import preflight_game_action
                     preflight_game_action(self, before, tool, args)
                 plan = None
+                navigation_sense = None
+                if tool == 'goto':
+                    from navigation_sense import NavigationSense
+                    navigation_sense = NavigationSense(self).for_destination(before, args)
                 if tool in WORLD_ACTIONS:
                     from world_actions import WorldActions
                     plan = WorldActions(self).prepare(tool, args, before)
@@ -828,9 +840,13 @@ class NumenGateway:
                             result['completionConfirmed'] = True
                     else:
                         raise GatewayError('outcome_unknown')
+                    if navigation_sense is not None:
+                        result['navigationSense'] = navigation_sense
                     receipt = {**marker, 'schema': 2, 'result': result,
                                'status': 'completed' if result.get('completionConfirmed') else 'rejected',
                                'completionConfirmed': result.get('completionConfirmed') is True}
+                    if navigation_sense is not None:
+                        receipt['navigationSense'] = navigation_sense
                     if result.get('completionConfirmed') and result.get('ok') is False:
                         receipt['status'] = 'failed'
                     if result.get('ok') and not result.get('completionConfirmed'):

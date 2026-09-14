@@ -136,6 +136,59 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(len(self.commands()), 3)
         self.assertEqual(read_json(self.restore.path)['reason'], 'restore_attempt_limit')
 
+    def test_four_separate_successful_restore_cycles_preserve_history_and_remain_allowed(self):
+        expected_times = []
+        for _ in range(4):
+            self.rcon.roster = 'count=0'
+            expected_times.append(self.clock())
+            result = BodyReconnect(self.gateway, self.clock).tick(BINDING)
+            self.assertEqual(result['status'], 'online')
+            self.assertEqual(result['verifiedAt'], self.clock())
+            self.assertEqual(result['attempts'], expected_times)
+            self.clock.now += 61
+        self.assertEqual(len(self.commands()), 4)
+        self.assertTrue(all(command == 'numen_restore_existing '+fixtures.BODY_UUID+' '+OWNER+' Kirito'
+                            for command in self.commands()))
+
+    def test_legacy_successful_attempt_limit_checks_roster_without_waiting_until_tonight(self):
+        attempts = [self.clock()-300, self.clock()-200, self.clock()-100]
+        record = {'schema':1, **BINDING, 'status':'waiting', 'reason':'restore_attempt_limit',
+                  'attempts':attempts, 'verifiedAt':self.clock()-100, 'nextCheckAt':self.clock()+86000}
+        write_json(self.restore.path, record)
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'online')
+        self.assertEqual(result['attempts'], attempts+[self.clock()])
+        self.assertEqual(self.rcon.calls.count('numen_act list'), 2)
+        self.assertEqual(len(self.commands()), 1)
+
+    def test_success_does_not_clear_three_later_rejections_or_unknown_boundary(self):
+        old_success = self.clock()-1000
+        history = [old_success, self.clock()-300, self.clock()-200, self.clock()-100]
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'waiting', 'reason':'restore_attempt_limit',
+            'attempts':history, 'verifiedAt':old_success, 'nextCheckAt':self.clock()+86000})
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['reason'], 'restore_attempt_limit')
+        self.assertEqual(result['attempts'], history)
+        self.assertFalse(self.rcon.calls)
+        # Even a verifiedAt newer than every old attempt cannot erase an unknown
+        # external-effect boundary. Only a fresh, matching roster may settle it.
+        for status in ('reserved', 'unknown', 'restoring'):
+            write_json(self.restore.path, {'schema':1, **BINDING, 'status':status,
+                'reason':'restore_outcome_unknown', 'attempts':history, 'verifiedAt':self.clock(), 'nextCheckAt':0})
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['status'], 'unknown')
+            self.assertEqual(result['attempts'], history)
+        self.assertFalse(self.commands())
+
+    def test_rejection_backoff_counts_new_failures_after_success_not_historical_restores(self):
+        history = [self.clock()-1000+i for i in range(12)]
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'online',
+            'attempts':history, 'verifiedAt':self.clock()-100, 'nextCheckAt':0})
+        self.rcon.response.update(ok=False, phase='rejected', code='dimension_unavailable')
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['nextCheckAt'], self.clock()+120)
+        self.assertEqual(result['attempts'], history+[self.clock()])
+
     def test_identity_changes_require_review(self):
         self.rcon.roster = ONLINE; self.restore.tick(BINDING)
         self.assertEqual(self.restore.tick({**BINDING,'ownerUuid':fixtures.BODY_UUID})['reason'], 'restore_binding_changed')

@@ -9,7 +9,7 @@ if str(SIDECAR) not in sys.path:
 from party_config import PartyConfig, recipient_tools
 from party_messages import PartyMessages
 from party_bridge import message_context
-from party_world import GameSpeech, reconcile_world, delivery_result, speech_text
+from party_world import GameSpeech, reconcile_world, delivery_result, reply_text
 
 
 class SurvivorParty:
@@ -67,7 +67,7 @@ class SurvivorParty:
         if not text:
             return self.failed(reservation, task_id, 'native_no_final_answer')
         try:
-            speech_text(text)
+            reply_text(text)
         except ValueError:
             return self.failed(reservation, task_id, 'native_answer_invalid_for_speech')
         row = self.queue.mark_answered(reservation['reservationId'], task_id, text)

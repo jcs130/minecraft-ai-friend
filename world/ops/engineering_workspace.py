@@ -4,14 +4,17 @@ Git is invoked with hooks, filters from global config, external diff and network
 protocols disabled. Candidate Python/JS is executed only by the control runner.
 """
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
+import threading
 import time
 
 HEX = re.compile(r'[0-9a-f]{64}')
@@ -35,6 +38,103 @@ def unlinked(path):
     if any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (path, *path.parents)):
         raise ValueError('engineering_linked_path')
     return path
+
+
+class SourceReader:
+    """One capture's anchored directory handles, never a byte/mtime cache.
+
+    Production runs on Linux: open each parent once with O_NOFOLLOW, then read
+    every file through that handle. Revalidate directory names before accepting
+    the capture, so replacement/renaming cannot turn an anchored old directory
+    into an attestation of the current checkout. Other platforms retain full
+    per-file path validation.
+    """
+    def __init__(self, root, capture_limit=None):
+        self.root = unlinked(root)
+        self.directories = {}
+        self.lock = threading.RLock()
+        self.capture_limit, self.reserved_bytes = capture_limit, 0
+        self.anchored = (os.open in os.supports_dir_fd and os.stat in os.supports_dir_fd
+                         and hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY'))
+
+    def __enter__(self):
+        if self.anchored:
+            descriptor = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            self.directories[()] = (descriptor, os.fstat(descriptor))
+        return self
+
+    def directory(self, parts):
+        with self.lock:
+            if parts not in self.directories:
+                parent = self.directory(parts[:-1])
+                descriptor = os.open(parts[-1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                self.directories[parts] = (descriptor, os.fstat(descriptor))
+            return self.directories[parts][0]
+
+    @staticmethod
+    def identity(value):
+        return value.st_dev, value.st_ino
+
+    def read(self, name, remaining):
+        parts = tuple(relative(name).split('/'))
+        try:
+            if self.anchored:
+                descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                     dir_fd=self.directory(parts[:-1]))
+                stream = os.fdopen(descriptor, 'rb')
+            else:
+                path = unlinked(self.root / name)
+                path_before = path.stat()
+                if not stat.S_ISREG(path_before.st_mode): raise ValueError('engineering_source_not_regular')
+                stream = path.open('rb')
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise ValueError('engineering_source_not_regular') from error
+        with stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                raise ValueError('engineering_source_not_regular')
+            if not self.anchored and self.identity(path_before) != self.identity(before):
+                raise ValueError('engineering_source_changed_during_capture')
+            if before.st_size > remaining: raise ValueError('engineering_source_byte_limit')
+            with self.lock:
+                if self.capture_limit is not None:
+                    if self.reserved_bytes + before.st_size > self.capture_limit:
+                        raise ValueError('engineering_source_byte_limit')
+                    self.reserved_bytes += before.st_size
+            data = stream.read(before.st_size + 1)
+            if len(data) > remaining: raise ValueError('engineering_source_byte_limit')
+            after = os.fstat(stream.fileno())
+            if (self.identity(before) != self.identity(after) or before.st_size != after.st_size
+                    or before.st_mtime_ns != after.st_mtime_ns or before.st_ctime_ns != after.st_ctime_ns
+                    or after.st_nlink != 1 or len(data) != before.st_size):
+                raise ValueError('engineering_source_changed_during_capture')
+            current = (os.stat(parts[-1], dir_fd=self.directory(parts[:-1]), follow_symlinks=False)
+                       if self.anchored else unlinked(self.root / name).stat())
+            # Windows Python's fstat/stat expose different ctime semantics.
+            # Compare path times to path times and handle times to handle times;
+            # inode identity still binds the two views to the same file.
+            path_reference = after if self.anchored else path_before
+            if (self.identity(current) != self.identity(after) or not stat.S_ISREG(current.st_mode)
+                    or current.st_nlink != 1 or current.st_size != after.st_size
+                    or current.st_mtime_ns != path_reference.st_mtime_ns
+                    or current.st_ctime_ns != path_reference.st_ctime_ns):
+                raise ValueError('engineering_source_changed_during_capture')
+            return data
+
+    def __exit__(self, kind, value, traceback):
+        try:
+            if kind is None and self.anchored:
+                unlinked(self.root)
+                for parts, (_, observed) in self.directories.items():
+                    current = (os.stat(parts[-1], dir_fd=self.directories[parts[:-1]][0], follow_symlinks=False)
+                               if parts else os.stat(self.root, follow_symlinks=False))
+                    if not stat.S_ISDIR(current.st_mode) or self.identity(current) != self.identity(observed):
+                        raise ValueError('engineering_source_directory_changed')
+        finally:
+            for descriptor, _ in self.directories.values(): os.close(descriptor)
+            self.directories.clear()
 
 
 def relative(value):
@@ -185,21 +285,26 @@ class EngineeringWorkspace:
         names.update(head_tree)
         if len(names) > MAX_FILES: raise ValueError('engineering_source_file_limit')
         entries, blobs, captured_tree, size = [], {}, {}, 0
-        for name in sorted(names):
-            relative(name); path = unlinked(repo / name)
-            if not path.exists(): continue
-            if not path.is_file() or path.stat().st_nlink > 1:
-                raise ValueError('engineering_source_not_regular')
-            size += path.stat().st_size
-            if size > MAX_BYTES: raise ValueError('engineering_source_byte_limit')
-            data = path.read_bytes()
-            mode = head_tree[name][0] if name in head_tree else '100644'
-            entries.append({'path': name, 'sha256': digest(data), 'mode': mode, 'size': len(data)})
-            blobs[name] = data
-            # Git's blob identity binds raw captured bytes without invoking
-            # candidate filters. This checkout contract uses 40-digit Git IDs.
-            oid = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
-            captured_tree[name] = (mode, oid)
+        ordered = sorted(names)
+        # Four short-lived I/O workers overlap bind-mount round trips, not model
+        # calls. At most 16 queued reads; SourceReader reserves the aggregate
+        # byte budget before reading. All workers finish before handles close.
+        with SourceReader(repo, capture_limit=MAX_BYTES) as source:
+            with ThreadPoolExecutor(max_workers=4, thread_name_prefix='engineering-capture') as pool:
+                for offset in range(0, len(ordered), 16):
+                    batch = ordered[offset:offset + 16]
+                    futures = [pool.submit(source.read, name, MAX_BYTES) for name in batch]
+                    for name, future in zip(batch, futures):
+                        data = future.result()
+                        if data is None: continue
+                        size += len(data)
+                        mode = head_tree[name][0] if name in head_tree else '100644'
+                        entries.append({'path': name, 'sha256': digest(data), 'mode': mode, 'size': len(data)})
+                        blobs[name] = data
+                        # Git blob identity binds raw captured bytes without
+                        # invoking candidate filters or bind-mount file modes.
+                        oid = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
+                        captured_tree[name] = (mode, oid)
         source_sha = digest(canonical(entries))
         # Compare the same normalized modes/bytes that tests and commit use;
         # mount permission noise and staged chmod cannot manufacture changes.
@@ -256,7 +361,63 @@ class EngineeringWorkspace:
                 'dirty': bool(snapshot['workingChanges']) if snapshot['workingChanges'] is not None else None,
                 'notice': ('Full current source bytes captured.' if capture_source else
                            'Working changes/dirty apply only to inspectionPaths; null means uninspected. Supply paths for current changes. Before testing, call engineering_status(capture_source=true) for a fresh full sourceSha256.'),
-                'testPlans': [{'id': p['id'], 'coverage': p['coverage'], 'checks': list(p['checks'])} for p in cfg['plans']]}
+                'testPlans': [{'id': p['id'], 'coverage': p['coverage'], 'checks': list(p['checks'])} for p in cfg['plans']],
+                'progress': self.progress(snapshot['head'], snapshot['sourceSha256'])}
+
+    def progress(self, head, source_sha=None):
+        """Small durable receipt index for resuming a shift; no source scans.
+
+        File times order the index only. Reuse/acceptance still requires the
+        actual request/receipt identities and a fresh byte capture at commit.
+        """
+        cfg = self.config
+        def recent(folder, pattern, limit):
+            folder = unlinked(self.root / folder)
+            if not folder.exists(): return [], False
+            paths = list(folder.glob(pattern))
+            if len(paths) > MAX_FILES: raise ValueError('engineering_record_file_limit')
+            paths.sort(key=lambda path: unlinked(path).stat().st_mtime_ns, reverse=True)
+            return paths[:limit], len(paths) > limit
+        tests, commits, errors = [], [], []
+        paths, tests_truncated = recent('requests', '*.json', 8)
+        for path in paths:
+            try:
+                request = read(path)
+                if (request.get('schema') != 1 or request.get('role') != ROLE
+                        or request.get('baseCommit') != cfg['baseCommit'] or request.get('branch') != cfg['branch']
+                        or request.get('jobId') != path.stem or not IDENTITY.fullmatch(path.stem)):
+                    raise ValueError('engineering_request_binding_mismatch')
+                receipt = self.test_status(path.stem)
+                plan = next((p for p in cfg['plans'] if p['id'] == request['planId']), None)
+                plan_current = plan is not None and digest(canonical(plan)) == request['planSha256']
+                passed = (receipt.get('status') == 'passed' and receipt.get('exitCode') == 0
+                          and plan_current and receipt.get('imageId') == plan['image'])
+                tests.append({'jobId': path.stem, 'planId': request['planId'],
+                    'status': receipt['status'], 'sourceSha256': request['sourceSha256'],
+                    'headAtTest': request['head'], 'currentPlanMatches': plan_current,
+                    'passedFixedPlan': passed,
+                    'currentSourceMatches': source_sha == request['sourceSha256'] if source_sha is not None else None})
+            except (ValueError, KeyError, OSError, TypeError):
+                errors.append({'record': path.name, 'code': 'engineering_progress_record_unavailable'})
+        paths, commits_truncated = recent('state', 'commit-*.json', 4)
+        for path in paths:
+            try:
+                row = read(path); intent = row['intent']
+                if not HEX.fullmatch(intent.get('sourceSha256', '')):
+                    raise ValueError('engineering_invalid_commit_record')
+                commits.append({'requestId': path.stem.removeprefix('commit-'), 'status': row['status'],
+                    'commit': row.get('commit'), 'sourceSha256': intent['sourceSha256'],
+                    'testJobId': intent['testJobId'], 'isCurrentHead': row.get('commit') == head,
+                    'pushed': row.get('pushed')})
+            except (ValueError, KeyError, OSError, TypeError):
+                errors.append({'record': path.name, 'code': 'engineering_progress_record_unavailable'})
+        return {'recentTests': tests, 'testsTruncated': tests_truncated,
+                'recentCommits': commits, 'commitsTruncated': commits_truncated, 'errors': errors,
+                'sourceVerified': source_sha is not None,
+                'notice': 'Read this durable progress before restarting old work. A historical pass is not current-source acceptance. '
+                          'For an existing passed job, engineering_commit with its sourceSha256 performs its own fresh byte check; '
+                          'no preliminary full capture is needed. If source changed, capture once after edits and queue a new test. '
+                          'For a queued/running job, query the same job next shift. A local commit still needs separate deployment review.'}
 
     def diff(self, max_chars=24000, paths=None):
         if type(max_chars) is not int or not 1000 <= max_chars <= 24000: raise ValueError('engineering_invalid_diff_limit')

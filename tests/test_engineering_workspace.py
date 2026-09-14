@@ -1,5 +1,6 @@
 from copy import deepcopy
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -15,7 +16,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
-from engineering_workspace import EngineeringWorkspace, canonical, digest, write
+from engineering_workspace import EngineeringWorkspace, SourceReader, canonical, digest, write
 from engineering_mcp import register_engineering_tools, TOOLS
 from native_role_capabilities import configure_native
 
@@ -321,6 +322,130 @@ class EngineeringTests(unittest.TestCase):
                      'engineering/state/commit.json', '/engineering/receipts/forged.json'):
             self.assertTrue(blocked(name), name)
         self.assertFalse(blocked('engineering/repo/world/feature.py'))
+
+    def test_progress_resumes_verified_job_without_claiming_current_source_pass(self):
+        self.modify(); sha = self.receipt()
+        self.source.write_text('VALUE = 3\n', newline='\n')
+        with patch.object(self.service, 'snapshot', side_effect=AssertionError('progress scanned source')):
+            progress = self.service.status()['progress']
+        test = progress['recentTests'][0]
+        self.assertEqual(test['jobId'], 'request-0001')
+        self.assertEqual(test['sourceSha256'], sha)
+        self.assertTrue(test['passedFixedPlan'])
+        self.assertIsNone(test['currentSourceMatches'])
+        self.assertFalse(progress['sourceVerified'])
+        current = self.service.status(capture_source=True)['progress']['recentTests'][0]
+        self.assertFalse(current['currentSourceMatches'])
+        with self.assertRaisesRegex(ValueError, 'source_changed'):
+            self.service.commit('must reject drift', sha, 'request-0001', 'commit-0001')
+
+    def test_progress_exposes_committed_and_unknown_journals_without_replaying(self):
+        self.modify(); sha = self.receipt()
+        result = self.service.commit('candidate', sha, 'request-0001', 'commit-0001')
+        write(self.area / 'state/commit-commit-0002.json', {'status': 'unknown', 'intent': {
+            'sourceSha256': sha, 'testJobId': 'request-0001', 'message': 'unknown'}})
+        progress = self.service.status()['progress']
+        rows = {row['requestId']: row for row in progress['recentCommits']}
+        self.assertTrue(rows['commit-0001']['isCurrentHead'])
+        self.assertEqual(rows['commit-0001']['commit'], result['commit'])
+        self.assertFalse(rows['commit-0001']['pushed'])
+        self.assertEqual(rows['commit-0002']['status'], 'unknown')
+        self.assertFalse(rows['commit-0002']['isCurrentHead'])
+
+    def test_progress_refuses_mismatched_receipt_and_changed_fixed_plan(self):
+        self.modify(); self.receipt()
+        self.config['plans'][0]['image'] = 'sha256:' + '2' * 64
+        write(self.area / 'config.json', self.config)
+        progress = self.service.status()['progress']
+        self.assertFalse(progress['recentTests'][0]['currentPlanMatches'])
+        self.assertFalse(progress['recentTests'][0]['passedFixedPlan'])
+        file = self.area / 'receipts/request-0001.json'
+        row = json.loads(file.read_text()); row['sourceSha256'] = '3' * 64; write(file, row)
+        progress = self.service.status()['progress']
+        self.assertEqual(progress['recentTests'], [])
+        self.assertEqual(progress['errors'][0]['code'], 'engineering_progress_record_unavailable')
+
+    def test_progress_is_bounded_and_does_not_return_test_logs(self):
+        self.modify(); self.receipt()
+        template = json.loads((self.area / 'requests/request-0001.json').read_text())
+        for number in range(10):
+            row = {**template, 'jobId': f'request-{number+10:04d}'}
+            write(self.area / 'requests' / (row['jobId'] + '.json'), row)
+        progress = self.service.status()['progress']
+        self.assertEqual(len(progress['recentTests']), 8)
+        self.assertTrue(progress['testsTruncated'])
+        self.assertTrue(all(row['status'] == 'queued' for row in progress['recentTests']))
+        self.assertTrue(all('log' not in row for row in progress['recentTests']))
+
+
+class SourceReaderTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / 'repo'; (self.root / 'nested').mkdir(parents=True)
+        (self.root / 'nested/one').write_bytes(b'one')
+        (self.root / 'nested/two').write_bytes(b'two')
+
+    def test_missing_source_and_actual_byte_limit_are_preserved(self):
+        with SourceReader(self.root) as reader:
+            self.assertIsNone(reader.read('missing/file', 4))
+            self.assertEqual(reader.read('nested/one', 3), b'one')
+            with self.assertRaisesRegex(ValueError, 'source_byte_limit'):
+                reader.read('nested/two', 2)
+
+    @unittest.skipUnless(os.name == 'posix', 'production Linux descriptor traversal')
+    def test_links_and_nonregular_sources_fail_closed(self):
+        outside = Path(self.tmp.name) / 'outside'; outside.write_bytes(b'private')
+        for kind in ('symlink', 'hardlink', 'directory', 'fifo'):
+            with self.subTest(kind=kind):
+                bad = self.root / 'nested/bad'
+                if kind == 'symlink': bad.symlink_to(outside)
+                elif kind == 'hardlink': os.link(outside, bad)
+                elif kind == 'directory': bad.mkdir()
+                else: os.mkfifo(bad)
+                with self.assertRaisesRegex(ValueError, 'source_not_regular'):
+                    with SourceReader(self.root) as reader: reader.read('nested/bad', 100)
+                bad.rmdir() if bad.is_dir() else bad.unlink()
+
+    @unittest.skipUnless(os.name == 'posix', 'production Linux descriptor traversal')
+    def test_replacing_a_previously_opened_parent_does_not_follow_new_link(self):
+        outside = Path(self.tmp.name) / 'outside'; outside.mkdir()
+        (outside / 'two').write_bytes(b'private')
+        with self.assertRaisesRegex(ValueError, 'source_directory_changed'):
+            with SourceReader(self.root) as reader:
+                self.assertEqual(reader.read('nested/one', 10), b'one')
+                (self.root / 'nested').rename(self.root / 'original')
+                (self.root / 'nested').symlink_to(outside, target_is_directory=True)
+                self.assertEqual(reader.read('nested/two', 10), b'two')
+        self.assertEqual(reader.directories, {})
+
+    @unittest.skipUnless(os.name == 'posix', 'production Linux descriptor traversal')
+    def test_replacing_root_directory_invalidates_capture(self):
+        with self.assertRaisesRegex(ValueError, 'source_directory_changed'):
+            with SourceReader(self.root) as reader:
+                self.assertEqual(reader.read('nested/one', 3), b'one')
+                self.root.rename(self.root.with_name('original'))
+                self.root.mkdir()
+
+    def test_each_capture_reads_same_size_same_mtime_changes(self):
+        path = self.root / 'nested/one'; before = path.stat()
+        with SourceReader(self.root) as reader: self.assertEqual(reader.read('nested/one', 3), b'one')
+        path.write_bytes(b'new'); os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        with SourceReader(self.root) as reader: self.assertEqual(reader.read('nested/one', 3), b'new')
+
+    def test_parallel_reads_reserve_one_total_byte_budget_before_allocating(self):
+        names = [f'nested/entry-{number}' for number in range(40)]
+        for name in names: (self.root / name).write_bytes(b'x' * 1024)
+        successes, failures = 0, 0
+        with SourceReader(self.root, capture_limit=10240) as reader:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = [pool.submit(reader.read, name, 10240) for name in names]
+                for future in futures:
+                    try:
+                        self.assertEqual(len(future.result()), 1024); successes += 1
+                    except ValueError as error:
+                        self.assertEqual(str(error), 'engineering_source_byte_limit'); failures += 1
+            self.assertEqual(reader.reserved_bytes, 10240)
+        self.assertEqual((successes, failures), (10, 30))
 
 
 if __name__ == '__main__': unittest.main()

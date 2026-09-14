@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/sidecar'))
@@ -81,8 +82,12 @@ class HeardReplyTests(unittest.TestCase):
 
     def test_pending_rejected_and_old_framework_reply_do_not_wake(self):
         self.answer(phase='rejected')
-        self.answer('Max iterations (6) reached')
-        self.answer('Max iterations (12) reached')
+        # Reproduce bytes written by the old adapter which permitted sentinels.
+        # New writes reject them; old, already-heard history must still be ignored.
+        with patch('party_messages.reply_text', side_effect=lambda text: text), \
+                patch('party_world.reply_text', side_effect=lambda text: text):
+            self.answer('Max iterations (6) reached')
+            self.answer('Max iterations (12) reached')
         _, pending = self.answer(phase='pending')
         self.assertEqual(self.queue.heard_replies(self.actor), [])
         with self.assertRaisesRegex(ValueError, 'not_heard'):

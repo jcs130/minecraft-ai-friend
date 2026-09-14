@@ -8,6 +8,56 @@ import re
 import unicodedata
 import uuid
 
+MAX_REPLY_CHARS = 960
+MAX_REPLY_PARTS = 8
+
+
+def reply_text(text):
+    """Format a complete model answer for speech, without summarizing or cutting it."""
+    if (not isinstance(text, str) or not text.strip() or len(text) > MAX_REPLY_CHARS
+            or any(unicodedata.category(c) in ('Cc', 'Cs', 'Cf', 'Zl', 'Zp')
+                   and c not in '\r\n\t' for c in text)):
+        raise ValueError('invalid_party_reply_text')
+    if (re.search(r'<\s*/?\s*(?:invoke|tool(?:_calls?|_use)?|function(?:_calls?)?)\b'
+                  r'|```|"(?:tool_calls?|tool_use|function_call)"\s*:', text, re.IGNORECASE)
+            or re.fullmatch(r'Max iterations \([0-9]+\) reached|Doom loop: agent stuck after [0-9]+ consecutive repetitions', text.strip())):
+        raise ValueError('native_answer_contains_tool_syntax')
+    return re.sub(r'[\r\n\t]+', ' ', text).strip()
+
+
+def reply_parts(text, event_id):
+    """Stable ordered fragments whose exact concatenation is the complete speech."""
+    text = reply_text(text)
+    parts = []
+    while text:
+        end = min(160, len(text))
+        if end < len(text):
+            boundaries = [i + 1 for i, c in enumerate(text[:end]) if c in '。！？；.!?; ' and i >= 79]
+            if boundaries:
+                end = boundaries[-1]
+        part, text = text[:end], text[end:]
+        # Whitespace-only tails attach to the preceding fragment; no words disappear.
+        if text and not text.strip() and len(part) + len(text) <= 160:
+            part += text; text = ''
+        speech_text(part)
+        index = len(parts)
+        parts.append({'eventId': event_id if index == 0 else str(uuid.uuid5(uuid.UUID(event_id), 'part:' + str(index + 1))),
+                      'text': part})
+        if len(parts) > MAX_REPLY_PARTS:
+            raise ValueError('party_reply_too_many_parts')
+    return parts
+
+
+def message_speech_parts(message):
+    """Validate stored fragments before interpreting any group of native receipts."""
+    if 'speechParts' not in message:
+        speech_text(message['text'])
+        return [{'eventId': message['messageId'], 'text': message['text']}]
+    parts = reply_parts(message['text'], message['messageId'])
+    if len(parts) < 2 or message['speechParts'] != parts:
+        raise ValueError('party_reply_parts_changed')
+    return parts
+
 
 def speech_text(text):
     if (not isinstance(text, str) or not text.strip() or len(text) > 160
@@ -101,6 +151,15 @@ class GameSpeech:
 
 def reconcile_world(queue, game, event_id, *, allow_dispatch=True):
     """Only the transaction's first claimant may write; never retry an uncertain say."""
+    parts = queue.delivery_events(event_id)
+    for part in parts:
+        result = _reconcile_one(queue, game, part['eventId'], allow_dispatch=allow_dispatch)
+        if result['state'] != 'heard':
+            break  # Later words are never delivered before earlier words are heard.
+    return queue.world_delivery(event_id)
+
+
+def _reconcile_one(queue, game, event_id, *, allow_dispatch=True):
     event = queue.claim_world(event_id) if allow_dispatch else queue.world_event(event_id)
     if event['state'] in ('heard', 'rejected', 'expired') or event['state'] == 'pending':
         return event

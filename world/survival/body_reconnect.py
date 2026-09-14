@@ -16,6 +16,17 @@ PREFIX = 'QD_NUMEN_RESTORE_JSON '
 CAPABILITY = 'existing_body_restore_v1'
 
 
+def unverified_attempts(state, now):
+    """Budget only the current unsuccessful episode; keep the historical ledger."""
+    attempts = state.get('attempts', [])
+    if (not isinstance(attempts, list) or any(type(at) not in (int, float)
+            or not math.isfinite(at) or at < 0 for at in attempts)):
+        raise ValueError('restore_attempt_history_invalid')
+    verified = state.get('verifiedAt')
+    verified = verified if type(verified) in (int, float) and math.isfinite(verified) and 0 <= verified <= now else None
+    return [at for at in attempts if now - at < 86400 and (verified is None or at > verified)]
+
+
 def binding(settings):
     name = settings.get('bodyName')
     if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_]{1,16}', name):
@@ -133,9 +144,17 @@ class BodyReconnect:
         state = read_json(self.path) if self.path.exists() else {'schema': 1, **expected, 'attempts': []}
         if any(state.get(key) != value for key, value in expected.items()):
             return {'status': 'blocked', 'reason': 'restore_binding_changed'}
-        if now < state.get('nextCheckAt', 0):
-            return state
         if state.get('status') == 'blocked':
+            return state
+        attempts = unverified_attempts(state, now)
+        # Earlier versions counted successful maintenance restores against a daily
+        # lifetime quota. Only that obsolete limit may bypass its old backoff;
+        # uncertainty and all other read/rejection backoffs retain their boundary.
+        verified = state.get('verifiedAt')
+        cleared_old_limit = (state.get('status') == 'waiting' and state.get('reason') == 'restore_attempt_limit'
+            and type(verified) in (int, float) and math.isfinite(verified) and 0 <= verified <= now
+            and len(attempts) < 3 and any(at <= verified for at in state.get('attempts', [])))
+        if now < state.get('nextCheckAt', 0) and not cleared_old_limit:
             return state
         state['checkedAt'] = now
         state['nextCheckAt'] = now + 60
@@ -162,12 +181,11 @@ class BodyReconnect:
             state.update(status='unknown', reason='restore_outcome_unknown')
             write_json(self.path, state)
             return state
-        attempts = [at for at in state.get('attempts', []) if now - at < 86400]
         if len(attempts) >= 3:
-            state.update(status='waiting', reason='restore_attempt_limit', nextCheckAt=attempts[0]+86400)
+            state.update(status='waiting', reason='restore_attempt_limit', nextCheckAt=min(attempts)+86400)
             write_json(self.path, state)
             return state
-        state.update(status='reserved', reason='restore_reserved', attempts=attempts+[now])
+        state.update(status='reserved', reason='restore_reserved', attempts=state.get('attempts', [])+[now])
         write_json(self.path, state)
         command = ('numen_restore_existing ' + expected['bodyUuid'] + ' ' + expected['ownerUuid']
                    + ' ' + expected['bodyName'])
@@ -191,7 +209,7 @@ class BodyReconnect:
                 code = result.get('code', 'restore_rejected')
                 state.update(status='waiting' if code in ('restore_cooldown', 'dimension_unavailable', 'playerdata_unavailable')
                              else 'blocked', reason=code)
-                state['nextCheckAt'] = now + min(900, 60 * 2 ** len(state['attempts']))
+                state['nextCheckAt'] = now + min(900, 60 * 2 ** (len(attempts) + 1))
             else:
                 raise ValueError('restore_outcome_unknown')
         except Exception:

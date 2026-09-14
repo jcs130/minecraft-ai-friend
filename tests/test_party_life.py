@@ -203,6 +203,51 @@ class PartyLifeTests(unittest.TestCase):
         self.assertEqual(self.posts[0][1]['input'][0]['content'][0]['text'], saved['active']['prompt'])
         self.assertEqual(self.life.summary()['active']['signalId'], JOB_ID + ':600:2')
 
+    def test_live_catalog_and_enabled_tools_are_bounded_observations_not_actions(self):
+        original = self.tasks.transport
+        self.tasks.transport = lambda method, path, role, payload=None: (
+            [{'name': 'identity', 'enabled': True}, {'name': 'work', 'enabled': False}]
+            if path == '/mcp/tools/maid_native' else original(method, path, role, payload))
+        calls = []
+        def observe(actor, op, args):
+            calls.append((op, args))
+            if op == 'task_catalog':
+                return {'ok': True, 'tasks': [{'taskId': 'fixture:farming', 'enabled': True}],
+                        'offset': 0, 'nextOffset': 1, 'total': 9, 'truncated': True, 'observedAt': 1201000}
+            return {'ok': True, 'identity': {'position': [1, 64, 2]},
+                    'state': {'ownerOnline': True, 'taskId': 'fixture:idle'}, 'observedAt': 1201000}
+        self.bridge.native.invoke = observe
+        self.signal(); self.life.tick()
+        prompt = self.posts[0][1]['input'][0]['content'][0]['text']
+        context = json.loads(prompt.split('\n', 1)[1])
+        self.assertEqual(context['currentObservation']['identity']['position'], [1, 64, 2])
+        self.assertEqual(context['capabilities']['enabledBodyTools'], ['maid_native__identity'])
+        self.assertTrue(context['capabilities']['catalog']['truncated'])
+        self.assertEqual(context['capabilities']['catalog']['nextOffset'], 1)
+        self.assertEqual([op for op, args in calls].count('task_catalog'), 1)
+        self.assertTrue(all(op in ('identity', 'task_catalog') for op, args in calls))
+        self.assertNotIn('fixture:farming', prompt.split('\n', 1)[0])  # no automatic work selection
+
+    def test_completed_summary_is_short_continuation_not_claimed_game_receipt(self):
+        self.signal(); self.life.tick(); self.now += 11; self.status = 'finished'; self.life.tick()
+        self.signal(3); self.now += 600; self.status = 'running'; self.life.tick()
+        context = json.loads(self.posts[-1][1]['input'][0]['content'][0]['text'].split('\n', 1)[1])
+        continuation = context['continuation']
+        self.assertEqual(continuation['taskId'], 'task-000000000001')
+        self.assertEqual(continuation['sourceSessionId'], 'maid-original-life')
+        self.assertTrue(continuation['modelClaimNotActionReceipt'])
+        self.assertFalse(continuation['summaryTruncated'])
+        self.assertIn('下一步仍待验证', continuation['summary'])
+
+    def test_failed_round_does_not_replace_previous_valid_continuation(self):
+        self.signal(); self.life.tick(); self.now += 11; self.status = 'finished'; self.life.tick()
+        before = json.loads((self.root / 'life/controller.json').read_text())['continuation']
+        self.signal(3); self.now += 600; self.status = 'running'; self.life.tick()
+        self.now += 11; self.status = 'failed'; self.life.tick()
+        after = json.loads((self.root / 'life/controller.json').read_text())
+        self.assertEqual(after['continuation'], before)
+        self.assertEqual(after['lastResult']['status'], 'failed')
+
 
 class PartyLifeScheduleTests(unittest.TestCase):
     def test_guard_routes_signal_without_original_model_executor(self):
