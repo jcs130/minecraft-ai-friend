@@ -54,6 +54,8 @@ KEY = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{3,119}')
 EPOCH_TOLERANCE_SEC = 120.0
 WORLD_EPOCH_HISTORY_LIMIT = 32
 WORLD_EPOCH_REPORT_LIMIT = 8
+HEALTH_INCIDENT_HISTORY_LIMIT = 32
+HEALTH_INCIDENT_REPORT_LIMIT = 8
 
 
 def encode(value):
@@ -242,6 +244,53 @@ class TeamStore:
                                 (WORLD_EPOCH_REPORT_LIMIT,)).fetchall()
         return [{'startedAt': row['started_at'], 'firstObserved': row['first_observed'],
                  'lastObserved': row['last_observed'], 'reads': row['reads']}
+                for row in reversed(recent)]
+
+    def record_health_observation(self, unhealthy, observed_at):
+        """Persist per-service unhealthy windows observed through fresh team_context reads (case-6457).
+
+        Probe incidents were tallied by hand from inspection snapshots across shifts; persisting
+        each observation here turns the incident series into a receipt channel any role can read
+        back. An unhealthy read opens or extends its service window, the next healthy read closes
+        it with recovered_after as the recovery upper bound, and healthy_before brackets the onset
+        lower bound. Storage keeps the newest HEALTH_INCIDENT_HISTORY_LIMIT windows and the report
+        returns the most recent HEALTH_INCIDENT_REPORT_LIMIT entries oldest-first.
+        """
+        names = sorted(set(unhealthy))
+        with self.db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS health_reads (id INTEGER PRIMARY KEY CHECK (id=1), '
+                       'last_healthy REAL NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS health_incidents (service TEXT NOT NULL, '
+                       'first_observed REAL NOT NULL, last_observed REAL NOT NULL, healthy_before REAL, '
+                       'recovered_after REAL, reads INTEGER NOT NULL, PRIMARY KEY(service, first_observed))')
+            healthy = db.execute('SELECT last_healthy FROM health_reads WHERE id=1').fetchone()
+            healthy_before = healthy['last_healthy'] if healthy else None
+            for row in db.execute('SELECT DISTINCT service FROM health_incidents '
+                                  'WHERE recovered_after IS NULL').fetchall():
+                if row['service'] not in names:
+                    db.execute('UPDATE health_incidents SET recovered_after=? '
+                               'WHERE service=? AND recovered_after IS NULL', (observed_at, row['service']))
+            for name in names:
+                open_row = db.execute('SELECT first_observed FROM health_incidents '
+                                      'WHERE service=? AND recovered_after IS NULL', (name,)).fetchone()
+                if open_row is not None:
+                    db.execute('UPDATE health_incidents SET last_observed=MAX(last_observed,?), reads=reads+1 '
+                               'WHERE service=? AND first_observed=?',
+                               (observed_at, name, open_row['first_observed']))
+                else:
+                    db.execute('INSERT INTO health_incidents VALUES (?,?,?,?,?,1)',
+                               (name, observed_at, observed_at, healthy_before, None))
+            if not names:
+                db.execute('INSERT INTO health_reads VALUES (1,?) ON CONFLICT(id) DO UPDATE SET '
+                           'last_healthy=MAX(last_healthy, excluded.last_healthy)', (observed_at,))
+            db.execute('DELETE FROM health_incidents WHERE first_observed NOT IN (SELECT first_observed FROM '
+                       'health_incidents ORDER BY first_observed DESC LIMIT ?)',
+                       (HEALTH_INCIDENT_HISTORY_LIMIT,))
+            recent = db.execute('SELECT * FROM health_incidents ORDER BY first_observed DESC LIMIT ?',
+                                (HEALTH_INCIDENT_REPORT_LIMIT,)).fetchall()
+        return [{'service': row['service'], 'firstObserved': row['first_observed'],
+                 'lastObserved': row['last_observed'], 'healthyBefore': row['healthy_before'],
+                 'recoveredAfter': row['recovered_after'], 'reads': row['reads']}
                 for row in reversed(recent)]
 
     def work_fingerprint(self):

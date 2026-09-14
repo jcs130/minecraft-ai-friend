@@ -145,6 +145,27 @@ def register_team_tools(app, actor, state=Path('/team')):
                           ' this store; a new entry means the world process restarted near its startedAt'
                           ' (derived as updatedAt minus uptimeSec, tolerance folds reading jitter).'
                           ' Container-level restart causes still need host RestartCount/StartedAt receipts.')
+        health_section = sections.get('health') if isinstance(sections.get('health'), dict) else {}
+        health_observed = _parse_time(health_section.get('timestamp'))
+        if health_observed is not None and health_section.get('fresh') is not False \
+                and isinstance(health_section.get('data'), dict):
+            incidents = store.record_health_observation(unhealthy, health_observed.timestamp())
+            if incidents:
+                snapshot['healthIncidents'] = [
+                    {**row,
+                     'firstObserved': _iso(datetime.fromtimestamp(row['firstObserved'], tz=timezone.utc)),
+                     'lastObserved': _iso(datetime.fromtimestamp(row['lastObserved'], tz=timezone.utc)),
+                     'healthyBefore': None if row['healthyBefore'] is None else
+                        _iso(datetime.fromtimestamp(row['healthyBefore'], tz=timezone.utc)),
+                     'recoveredAfter': None if row['recoveredAfter'] is None else
+                        _iso(datetime.fromtimestamp(row['recoveredAfter'], tz=timezone.utc))}
+                    for row in incidents]
+                notes += (' healthIncidents lists per-service unhealthy windows observed through this'
+                          ' store; a window spans its unhealthy reads (firstObserved..lastObserved) with'
+                          ' healthyBefore and recoveredAfter bracketing the true fault bounds;'
+                          ' recurring windows are a pattern to investigate, and a running-but-unhealthy'
+                          ' divergence still needs in-window functional evidence plus host receipts'
+                          ' before a probe fault is declared.')
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
                       'A report or tested commit is not proof of a deployed game fix.' + notes}
