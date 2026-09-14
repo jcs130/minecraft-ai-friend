@@ -63,6 +63,45 @@ guardrails. Raw `(prompt, completion)` text stays in QwenPaw by design
 (controller poll_model comment) and is out of scope here — that is Step1b.
 
 
+## Step1a increment: lease channel, crash markers, strict lint
+
+Ported 2026-09-15 from the preserved v2 draft (the pieces the canonical
+reader still lacked), pinned line-by-line against
+`world/survival/numen_gateway.py` (unchanged f48e2ef8 → c1fce7b):
+
+- `turn-actions/<turnId>.json` indexes `{schema:1, turnId, actionIds}`.
+  `load_turn_actions()` validates the shape (file stem must equal turnId,
+  every id must be uuid4().hex) and flags indexes longer than six ids as
+  overflow instead of truncating — the gateway itself re-reads only the
+  first six (`turn_receipts` slices `[:6]`).
+- `lease.json` `{schema:1, turnId, expiresAt, actionLimit, actionsUsed,
+  status}` (+`actionId` once reserved). `load_lease()` projects those fields
+  and reports a lease that breaks the pinned shape instead of guessing.
+  Pinned: actionLimit ∈ {1,6}; status ∈ open/reserved/used/closed/unknown.
+- `crash_markers()` reports whether `unknown.json` (uncertain outcome,
+  do-not-resend), `inflight-action.json` (async receipt awaiting settle) and
+  `last-action.json` (pointer) exist.
+- `lint_receipts()` strict second-pass lint over loaded receipts: actionId
+  shape, turnId shape, tool ∈ gateway TOOLS, status among the seven the
+  gateway writes, completionConfirmed consistency for the four statuses set
+  in `action()` (completed/rejected/effect_unconfirmed/in_flight), and
+  receipts larger than the gateway's 262144-byte read_json limit (the
+  gateway could never re-read them). Settle-path statuses
+  (failed/observed_ended) keep their flag unpinned.
+- The summary card now carries byte totals (receipts folder plus both jsonl
+  logs — the data-volume numbers G1 wanted for Step2 sizing) and
+  `turnActions`/`lease`/`crashMarkers`/`receiptLint` sections; `dataset()`
+  also exposes the raw turnId→actionIds join for training-time grouping.
+
+A drift-guard test re-reads numen_gateway.py and pins every literal above
+(TOOLS tuple equality, TURN_ID regex, the 262144 limit, the (1,6) limit
+check, the `[:6]` slice, marker write sites, the status transition lines).
+An `in_flight` receipt inside action-receipts/ is legitimate writer state
+(the receipt is persisted before the async settle rewrites it); a lingering
+one means the body is still working or the settle never ran — the card shows
+it in byStatus plus crashMarkers, and the reader never treats it as an
+error.
+
 ## Step1b: prompt-side deterministic rebuild (`tests/survival_prompt_rebuild.py`)
 
 The autonomy wake prompt is built by `life_context()` plus one serialization

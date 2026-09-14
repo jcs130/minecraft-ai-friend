@@ -7,12 +7,15 @@ with actionId/turnId, legacy rows without, decision_finished labels).
 """
 import json
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import survival_trajectory as trajectory
+
+GATEWAY_SOURCE = Path(__file__).resolve().parents[1] / 'world' / 'survival' / 'numen_gateway.py'
 
 IRON, BREAD, RAW_IRON = 'minecraft:iron_ingot', 'minecraft:bread', 'minecraft:raw_iron'
 A, B, C, D, E = 'a' * 32, 'b' * 32, 'c' * 32, 'd' * 32, 'e' * 32
@@ -130,6 +133,24 @@ class TrajectoryReaderTests(unittest.TestCase):
         (folder / 'notes.txt').write_text('operator note', encoding='utf-8')
         (self.root / 'episodes.jsonl').write_text('\n'.join(episodes_lines()) + '\n', encoding='utf-8')
         (self.root / 'actions.jsonl').write_text('\n'.join(actions_lines()) + '\n', encoding='utf-8')
+        # Lease channel written by numen_gateway open_lease/action/close_lease.
+        turn_dir = self.root / 'turn-actions'
+        turn_dir.mkdir()
+        (turn_dir / (TURN1 + '.json')).write_text(
+            json.dumps({'schema': 1, 'turnId': TURN1, 'actionIds': [A, B]}), encoding='utf-8')
+        # Seven ids exceed the gateway's six-per-lease re-read cap.
+        (turn_dir / (TURN2 + '.json')).write_text(
+            json.dumps({'schema': 1, 'turnId': TURN2,
+                        'actionIds': [C, D, A, B, E, 'f' * 32, '1' * 32]}), encoding='utf-8')
+        (turn_dir / 'broken.json').write_text('{"schema": 0}', encoding='utf-8')
+        (turn_dir / 'mismatch.json').write_text(
+            json.dumps({'schema': 1, 'turnId': TURN3, 'actionIds': [E]}), encoding='utf-8')
+        (turn_dir / 'notes.txt').write_text('ignored', encoding='utf-8')
+        (self.root / 'lease.json').write_text(
+            json.dumps({'schema': 1, 'turnId': TURN1, 'expiresAt': 6600000, 'actionLimit': 6,
+                        'actionsUsed': 2, 'status': 'used', 'actionId': B}), encoding='utf-8')
+        (self.root / 'last-action.json').write_text(
+            json.dumps({'schema': 1, 'actionId': E}), encoding='utf-8')
 
     def test_receipt_loader_orders_counts_and_flags(self):
         loaded = trajectory.load_receipts(self.root)
@@ -223,6 +244,113 @@ class TrajectoryReaderTests(unittest.TestCase):
         self.assertEqual(len(bundle['transitions']), 5)
         self.assertEqual(len(bundle['turns']), 3)
         self.assertEqual(bundle['summary']['receipts']['total'], 5)
+        self.assertEqual(bundle['turnActions'], {TURN1: [A, B],
+                                                 TURN2: [C, D, A, B, E, 'f' * 32, '1' * 32]})
+
+    def test_turn_actions_index_validated_with_overflow_flag(self):
+        loaded = trajectory.load_turn_actions(self.root)
+        self.assertEqual(loaded['turns'], {TURN1: [A, B],
+                                           TURN2: [C, D, A, B, E, 'f' * 32, '1' * 32]})
+        self.assertEqual(loaded['overflow'],
+                         [{'file': TURN2 + '.json', 'actionCount': 7}])
+        self.assertEqual(loaded['invalid'],
+                         [{'file': 'broken.json', 'reason': 'unreadable_or_invalid'},
+                          {'file': 'mismatch.json', 'reason': 'unreadable_or_invalid'}])
+        self.assertEqual(loaded['ignoredFiles'], 1)
+
+    def test_lease_loader_pins_gateway_shape(self):
+        loaded = trajectory.load_lease(self.root)
+        self.assertIsNone(loaded['invalid'])
+        self.assertEqual(loaded['lease'],
+                         {'turnId': TURN1, 'status': 'used', 'actionLimit': 6,
+                          'actionsUsed': 2, 'expiresAt': 6600000, 'actionId': B})
+        empty = trajectory.load_lease(self.root / 'absent')
+        self.assertIsNone(empty['lease'])
+        self.assertIsNone(empty['invalid'])
+
+    def test_invalid_lease_shape_is_reported_not_guessed(self):
+        lease_path = self.root / 'lease.json'
+        original = lease_path.read_text(encoding='utf-8')
+        lease_path.write_text(json.dumps({'schema': 1, 'turnId': 'short', 'status': 'exploded',
+                                          'actionLimit': 3, 'actionsUsed': 0}), encoding='utf-8')
+        try:
+            loaded = trajectory.load_lease(self.root)
+            self.assertIsNone(loaded['lease'])
+            self.assertEqual(loaded['invalid'],
+                             {'file': 'lease.json', 'reason': 'unreadable_or_invalid'})
+        finally:
+            lease_path.write_text(original, encoding='utf-8')
+
+    def test_crash_markers_report_uncertainty_files(self):
+        markers = trajectory.crash_markers(self.root)
+        self.assertFalse(markers['unknownOutcome'])
+        self.assertFalse(markers['inflightAction'])
+        self.assertTrue(markers['lastActionPointer'])
+
+    def test_receipt_lint_flags_writer_contract_violations(self):
+        good = receipts()[1]  # B: mine, completed, completionConfirmed True
+        self.assertEqual(trajectory.lint_receipts([good]), [])
+        cases = [
+            (dict(good, turnId='short'), ['turn_id_shape']),
+            (dict(good, tool='dig'), ['tool_not_in_gateway_tools']),
+            (dict(good, status='exploded'), ['status_not_written_by_gateway']),
+            (dict(good, status='completed', completionConfirmed=False),
+             ['completed_without_confirmation']),
+            (dict(good, status='rejected', completionConfirmed=True),
+             ['rejected_with_confirmation']),
+            (dict(good, status='effect_unconfirmed', completionConfirmed=True),
+             ['effect_unconfirmed_with_confirmation']),
+            (dict(good, status='in_flight', completionConfirmed=True),
+             ['in_flight_with_confirmation']),
+        ]
+        flagged = trajectory.lint_receipts([row for row, _ in cases])
+        self.assertEqual([row['problems'] for row in flagged], [codes for _, codes in cases])
+        oversized = trajectory.lint_receipts([dict(good)], {good['actionId'] + '.json': 262145})
+        self.assertEqual(oversized[0]['problems'], ['exceeds_gateway_read_limit'])
+
+    def test_summarize_extends_card_with_lease_channel_and_markers(self):
+        card = trajectory.summarize(self.root)
+        self.assertEqual(card['turnActions'],
+                         {'files': 2, 'indexedActions': 9,
+                          'overflow': [{'file': TURN2 + '.json', 'actionCount': 7}],
+                          'invalidFiles': ['broken.json', 'mismatch.json'],
+                          'ignoredFiles': 1, 'cap': 6})
+        self.assertEqual(card['lease']['lease']['status'], 'used')
+        self.assertIsNone(card['lease']['invalid'])
+        self.assertEqual(card['crashMarkers'], {'unknownOutcome': False,
+                                                'inflightAction': False,
+                                                'lastActionPointer': True})
+        self.assertEqual(card['receiptLint']['suspicious'], [])
+        self.assertEqual(card['receiptLint']['gatewayReadLimitBytes'], 262144)
+        self.assertGreater(card['bytes']['receipts'], 0)
+        self.assertGreater(card['bytes']['actionsLog'], 0)
+        self.assertGreater(card['bytes']['episodesLog'], 0)
+
+    def test_gateway_literals_drift_guard(self):
+        """Pins every gateway literal the reader mirrors; any writer-side
+        change breaks here first instead of silently diverging."""
+        source = GATEWAY_SOURCE.read_text(encoding='utf-8')
+        for fragment in (
+                r"TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')",
+                'return _read_json(path, 262144)',
+                "if type(action_limit) is not int or action_limit not in (1, 6):",
+                "for action_id in read_json(index).get('actionIds', [])[:6]:",
+                "write_json(self.state / 'unknown.json', marker)",
+                "write_json(self.state / 'inflight-action.json', receipt)",
+                "write_json(self.state / 'last-action.json', {'schema': 1, 'actionId': receipt['actionId']})",
+                "'status': 'completed' if result.get('completionConfirmed') else 'rejected'",
+                "receipt.update(status='effect_unconfirmed',",
+                "receipt.update(status='in_flight', nativeTaskId=task_id)",
+                "actionId=action_id, status='reserved')",
+                "lease['status'] = 'open' if lease['actionsUsed'] < lease['actionLimit'] else 'used'",
+                "lease['status'] = 'closed'",
+                "lease['status'] = 'unknown'",
+        ):
+            self.assertIn(fragment, source)
+        start = source.index('TOOLS = (')
+        end = source.index(')', start)
+        self.assertEqual(tuple(re.findall(r"'([a-z_]+)'", source[start:end])),
+                         trajectory.GATEWAY_TOOLS)
 
 
 if __name__ == '__main__':

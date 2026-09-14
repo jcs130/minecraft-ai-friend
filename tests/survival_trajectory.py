@@ -9,7 +9,17 @@ tool/args/acceptedAt/result/status/completionConfirmed and, once settled,
 after/observedAt (+nativeTaskId/navigationOutcome/notice); result is the string
 'unknown' on the crash-safe marker form. episode rows are {'at': iso-utc,
 'kind': ..., **values} with action_observed/action_response (legacy rows lack
-actionId/turnId), decision_finished and skill_* kinds.
+actionId/turnId), decision_finished and skill_* kinds. The lease channel is
+pinned from the same file: turn-actions/<turnId>.json stores {schema:1,
+turnId, actionIds} (the gateway re-reads at most the first six ids),
+lease.json stores {schema:1, turnId, expiresAt int-ms, actionLimit 1|6,
+actionsUsed, status open|reserved|used|closed|unknown} plus actionId once
+reserved, and unknown.json / inflight-action.json / last-action.json are the
+crash-safety markers around an uncertain action. An in_flight receipt is also
+persisted to action-receipts/ before the async settle rewrites it, so a
+lingering one means the body is still working or the settle never ran; and
+read_json refuses state files above 262144 bytes, so larger receipts are
+lint-flagged as gateway-unreadable rather than silently accepted.
 
 Placement: tests/ is the only tree the fixed engineering plan covers for new
 files; this is an offline analysis module and production services must never
@@ -29,6 +39,20 @@ SNAPSHOT_KEYS = ('ok', 'bodyUuid', 'position', 'dimension', 'counts', 'hp', 'hun
 SKILL_KINDS = ('skill_finished', 'skill_stopped', 'skill_error')
 MAX_RECEIPT_BYTES = 1 << 20
 MAX_LINE_BYTES = 1 << 20
+# Pinned against world/survival/numen_gateway.py (actionId is uuid4().hex,
+# TURN_ID regex verbatim, TOOLS tuple verbatim, read_json small-state limit,
+# open_lease action_limit check, turn_receipts [:6] index slice).
+ACTION_ID_RE = re.compile(r'^[0-9a-f]{32}$')
+TURN_ID_RE = re.compile(r'^[A-Za-z0-9_-]{16,128}$')
+GATEWAY_TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
+                 'place_block', 'farm', 'open_container', 'transfer_items', 'close_container',
+                 'sleep', 'trade', 'guild_claim', 'guild_release', 'guild_deliver')
+RECEIPT_STATUSES = ('unknown', 'completed', 'rejected', 'effect_unconfirmed', 'in_flight',
+                    'failed', 'observed_ended')
+LEASE_STATUSES = ('open', 'reserved', 'used', 'closed', 'unknown')
+LEASE_ACTION_LIMITS = (1, 6)
+GATEWAY_READ_LIMIT = 262144
+TURN_ACTION_CAP = 6
 
 
 def _number(value):
@@ -83,17 +107,20 @@ def _navigation_success(receipt):
 
 def load_receipts(state_dir):
     """Every well-formed action receipt, oldest first. Non-receipt file names
-    are ignored; receipt files that do not conform are reported, not guessed."""
+    are ignored; receipt files that do not conform are reported, not guessed.
+    Per-file byte sizes are returned alongside so lint can flag receipts the
+    gateway itself could no longer re-read."""
     folder = Path(state_dir) / 'action-receipts'
     if not folder.is_dir():
-        return {'receipts': [], 'invalid': [], 'ignoredFiles': 0}
-    receipts, invalid, ignored = [], [], 0
+        return {'receipts': [], 'invalid': [], 'ignoredFiles': 0, 'sizes': {}}
+    receipts, invalid, ignored, sizes = [], [], 0, {}
     for path in sorted(folder.iterdir()):
         if not RECEIPT_NAME.match(path.name):
             ignored += 1
             continue
         try:
-            if path.stat().st_size > MAX_RECEIPT_BYTES:
+            size = path.stat().st_size
+            if size > MAX_RECEIPT_BYTES:
                 raise ValueError('receipt_too_large')
             receipt = json.loads(path.read_text(encoding='utf-8'))
             if (not isinstance(receipt, dict) or receipt.get('schema') != 2
@@ -104,9 +131,10 @@ def load_receipts(state_dir):
         except (OSError, ValueError):
             invalid.append({'file': path.name, 'reason': 'unreadable_or_invalid'})
             continue
+        sizes[path.name] = size
         receipts.append(receipt)
     receipts.sort(key=lambda row: (_stamp(row.get('acceptedAt')), row.get('actionId') or ''))
-    return {'receipts': receipts, 'invalid': invalid, 'ignoredFiles': ignored}
+    return {'receipts': receipts, 'invalid': invalid, 'ignoredFiles': ignored, 'sizes': sizes}
 
 
 def load_jsonl(path):
@@ -134,6 +162,131 @@ def load_jsonl(path):
             else:
                 malformed += 1
     return {'rows': rows, 'malformed': malformed}
+
+
+def load_turn_actions(state_dir):
+    """turn-actions/<turnId>.json indexes: {schema:1, turnId, actionIds}.
+    Validates the writer shape (file stem must equal turnId, every id must be
+    uuid4().hex) and flags indexes longer than TURN_ACTION_CAP as overflow
+    instead of truncating — the gateway itself re-reads only the first six."""
+    folder = Path(state_dir) / 'turn-actions'
+    result = {'turns': {}, 'invalid': [], 'overflow': [], 'ignoredFiles': 0}
+    if not folder.is_dir():
+        return result
+    for path in sorted(folder.iterdir()):
+        if path.suffix != '.json':
+            result['ignoredFiles'] += 1
+            continue
+        try:
+            if path.stat().st_size > MAX_RECEIPT_BYTES:
+                raise ValueError('turn_actions_too_large')
+            index = json.loads(path.read_text(encoding='utf-8'))
+            if (not isinstance(index, dict) or index.get('schema') != 1
+                    or not isinstance(index.get('turnId'), str)
+                    or index['turnId'] != path.name[:-5]
+                    or not isinstance(index.get('actionIds'), list)
+                    or not all(isinstance(item, str) and ACTION_ID_RE.match(item)
+                               for item in index['actionIds'])):
+                raise ValueError('turn_actions_schema_invalid')
+        except (OSError, ValueError):
+            result['invalid'].append({'file': path.name, 'reason': 'unreadable_or_invalid'})
+            continue
+        if not TURN_ID_RE.match(index['turnId']):
+            result['invalid'].append({'file': path.name, 'reason': 'turn_id_invalid'})
+            continue
+        result['turns'][index['turnId']] = list(index['actionIds'])
+        if len(index['actionIds']) > TURN_ACTION_CAP:
+            result['overflow'].append({'file': path.name, 'actionCount': len(index['actionIds'])})
+    return result
+
+
+def load_lease(state_dir):
+    """The single lease row written by open_lease/close_lease: {schema:1,
+    turnId, expiresAt, actionLimit, actionsUsed, status} (+actionId once
+    reserved). A lease that breaks the pinned shape is reported, never
+    guessed into a projection."""
+    path = Path(state_dir) / 'lease.json'
+    if not path.exists():
+        return {'lease': None, 'invalid': None}
+    try:
+        if path.stat().st_size > MAX_RECEIPT_BYTES:
+            raise ValueError('lease_too_large')
+        lease = json.loads(path.read_text(encoding='utf-8'))
+        if (not isinstance(lease, dict) or lease.get('schema') != 1
+                or not isinstance(lease.get('turnId'), str)
+                or not TURN_ID_RE.match(lease['turnId'])
+                or lease.get('status') not in LEASE_STATUSES
+                or lease.get('actionLimit') not in LEASE_ACTION_LIMITS
+                or type(lease.get('actionsUsed')) is not int
+                or type(lease.get('expiresAt')) is not int):
+            raise ValueError('lease_schema_invalid')
+    except (OSError, ValueError):
+        return {'lease': None, 'invalid': {'file': 'lease.json', 'reason': 'unreadable_or_invalid'}}
+    return {'lease': {key: lease.get(key) for key in
+                      ('turnId', 'status', 'actionLimit', 'actionsUsed', 'expiresAt', 'actionId')},
+            'invalid': None}
+
+
+def crash_markers(state_dir):
+    """Crash-safety markers around an uncertain action: unknown.json is the
+    do-not-resend uncertainty marker, inflight-action.json holds the async
+    receipt awaiting settle, last-action.json is the last receipt pointer."""
+    state_dir = Path(state_dir)
+    return {'unknownOutcome': (state_dir / 'unknown.json').exists(),
+            'inflightAction': (state_dir / 'inflight-action.json').exists(),
+            'lastActionPointer': (state_dir / 'last-action.json').exists()}
+
+
+def lint_receipts(receipts, file_bytes=None):
+    """Strict second-pass lint of loaded receipts against pinned writer
+    invariants (numen_gateway action()/open_lease). Only facts verified in
+    that source are checked; settle-path statuses (failed/observed_ended)
+    keep their completionConfirmed value unpinned here. Returns one row per
+    receipt with the list of problems, never raises on foreign data."""
+    file_bytes = file_bytes or {}
+    suspicious = []
+    for receipt in receipts:
+        action_id = receipt.get('actionId')
+        problems = []
+        if not isinstance(action_id, str) or not ACTION_ID_RE.match(action_id):
+            problems.append('action_id_shape')
+        if not isinstance(receipt.get('turnId'), str) or not TURN_ID_RE.match(receipt['turnId']):
+            problems.append('turn_id_shape')
+        if receipt.get('tool') not in GATEWAY_TOOLS:
+            problems.append('tool_not_in_gateway_tools')
+        if receipt.get('status') not in RECEIPT_STATUSES:
+            problems.append('status_not_written_by_gateway')
+        confirmed = receipt.get('completionConfirmed') is True
+        if receipt.get('status') == 'completed' and not confirmed:
+            problems.append('completed_without_confirmation')
+        if receipt.get('status') == 'rejected' and confirmed:
+            problems.append('rejected_with_confirmation')
+        if receipt.get('status') == 'effect_unconfirmed' and confirmed:
+            problems.append('effect_unconfirmed_with_confirmation')
+        if receipt.get('status') == 'in_flight' and confirmed:
+            problems.append('in_flight_with_confirmation')
+        size = file_bytes.get((action_id or '') + '.json')
+        if size is not None and size > GATEWAY_READ_LIMIT:
+            problems.append('exceeds_gateway_read_limit')
+        if problems:
+            suspicious.append({'file': (action_id or 'unknown') + '.json', 'problems': problems})
+    return suspicious
+
+
+def _file_bytes(path):
+    path = Path(path)
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def _folder_json_bytes(folder):
+    folder = Path(folder)
+    if not folder.is_dir():
+        return 0
+    return sum(path.stat().st_size for path in sorted(folder.iterdir())
+               if path.suffix == '.json' and path.is_file())
 
 
 def transitions(receipts):
@@ -210,6 +363,12 @@ def summarize(state_dir):
     episodes = load_jsonl(state_dir / 'episodes.jsonl')
     rows = transitions(receipts['receipts'])
     turns = turn_rows(rows, episodes['rows'])
+    turn_actions = load_turn_actions(state_dir)
+    lease_state = load_lease(state_dir)
+    lint = lint_receipts(receipts['receipts'], receipts.get('sizes', {}))
+    state_bytes = {'receipts': _folder_json_bytes(state_dir / 'action-receipts'),
+                   'actionsLog': _file_bytes(state_dir / 'actions.jsonl'),
+                   'episodesLog': _file_bytes(state_dir / 'episodes.jsonl')}
     by_status = {}
     for receipt in receipts['receipts']:
         status = receipt.get('status')
@@ -254,6 +413,16 @@ def summarize(state_dir):
                       'lastReceiptAcceptedAt': max(stamps) if stamps else None,
                       'firstEpisodeAt': min(episode_times).isoformat() if episode_times else None,
                       'lastEpisodeAt': max(episode_times).isoformat() if episode_times else None},
+        'turnActions': {'files': len(turn_actions['turns']),
+                        'indexedActions': sum(len(ids) for ids in turn_actions['turns'].values()),
+                        'overflow': turn_actions['overflow'],
+                        'invalidFiles': [row['file'] for row in turn_actions['invalid']],
+                        'ignoredFiles': turn_actions['ignoredFiles'],
+                        'cap': TURN_ACTION_CAP},
+        'lease': lease_state,
+        'crashMarkers': crash_markers(state_dir),
+        'receiptLint': {'gatewayReadLimitBytes': GATEWAY_READ_LIMIT, 'suspicious': lint},
+        'bytes': state_bytes,
         'rewardHooks': ('per transition: inventoryDelta/displacement/hpDelta/hungerDelta/'
                         'navigationSuccess; per turn: decision.completed; memory.goalState '
                         'and skill_* join later at training time'),
@@ -269,4 +438,5 @@ def dataset(state_dir):
     rows = transitions(receipts['receipts'])
     return {'summary': summarize(state_dir), 'transitions': rows,
             'turns': turn_rows(rows, episodes['rows']),
+            'turnActions': load_turn_actions(state_dir)['turns'],
             'invalidReceipts': receipts['invalid']}
