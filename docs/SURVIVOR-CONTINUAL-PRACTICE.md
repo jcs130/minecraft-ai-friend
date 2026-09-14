@@ -45,3 +45,11 @@
 `/healthz` 只公开聚合计数、版本与安装源码 SHA，不返回私人目标或凭据；`/mcp` 仍需原内部鉴权。新 `survival_practice` 探针已接入 `health_mon.py` 清单及 panel smoke，由原 Docker restart 策略守护。独立新探针通过不等于全项目历史验收报告全部有效；旧面板总体仍存在历史证据漂移和库存采集校验问题。
 
 部署与原生配置证据保存在忽略目录 `runtime/survival-practice-20260914/`，独立行为报告为 `reports/survival-practice-smoke.json`。实际生产实践的结果应以该次运行 ID、版本及回执另行记录，不能由服务健康推断。
+
+## 首轮自主编程的生产证据
+
+20:45，原生活会话中的 `task-2be59ef73469` 正常完成。角色自己读取新指南并创建 `farm_harvest_replant`，首次四例测试有一个 expectedMemory 不匹配；它自行修订，最终六例全部通过并晋升 `2ad6b78faf5324b136acb4d516bf37931d86893e12189bbf6579cda842965f0f`。原生任务输出、原技能版本/测试/晋升文件与独立副本验证一致，开发助手未代写这份程序。
+
+角色此前反复遇到 invalid_fixture，是因为旧样例加入了不支持的 description、expectedDone、expectedMemoryStep；新指南提供了合法完整示例。这次已经证明角色能用新说明纠正测试并保存程序。记录时它判断作物尚未成熟，计划下一正常生活轮 skill_start，生产实践台账仍为0。因此尚未验收这份程序在游戏中的收割、重种效果，也没有证据宣称长期、跨场景自我进化已完成。原目标队列保留了本阶段学习里程碑，完成后继续农场与公会等自主生活。
+
+同期完整 QwenPaw 检查与世界团队检查通过：原10角色、96绑定、16Cron保留，模型额度策略仍为 unrestricted；13正式服务运行，其中12项有Docker健康检查且正常，gate无独立健康检查。共享学习说明已逐一同步10角色。因本次health_mon接线而过期的结衣Python行为证明已先备份，再实际重跑19项原隔离用例重新发布；没有篡改历史哈希。新的survival_practice和maid_perception面板项通过，其余历史总体面板问题仍单列。

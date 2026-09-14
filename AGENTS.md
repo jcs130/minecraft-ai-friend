@@ -4,6 +4,8 @@
 
 桐人实践正文/渐进参考页已通过原生API部署并扫描启用；共享qd-skill-evolution官方写文件/MakeSkill2.0说明同步全部10原角色，按各自自然idle更新，模型/人设/原enable/16Cron均保留。完整Qwen检查确认10角色96绑定与unrestricted策略。新增学习里程碑通过原目标队列进入原会话，角色自行选择当前生存工作中的可复用程序练习，不另起Prime daemon或反思模型；实际完成与改进仍须用具体生产run和回执验收。
 
+20:45原task-2be59ef73469已自主读指南、draft/test修复expectedMemory、6/6通过并晋升farm_harvest_replant版本2ad6b78f…965f0f。未代写其程序；原输出/源码测试与独立副本一致。角色当时等作物成熟、计划下一正常轮start，practice台账仍0，不能称收割重种或长时间自主进化已实测。此前invalid_fixture来自旧额外字段description/expectedDone/expectedMemoryStep，已由模型按新合法例修正。结衣旧Python报告仅health_mon哈希因本次接线漂移，已备份后真实19用例重跑发布，未手改旧hash。
+
 2026-09-14 19:32 当前覆盖下文“结衣busy尚未排队”：正常TLM结衣输入已接入持久私有感知收件箱，Java仅最后user+HMAC→七字段202收件→原PartyLife十分钟signal/原session精确批次消费。新输入不POST模型、不立即唤醒、不复制全部历史；speaker无法从TLM callback证明，不能冒认主人说话或把私有原文转party公开广播。普通其他人物及设定/摘要callback保留同步；不宣称真人已收到延迟逐条回答。新JSON转义长度/只读SQLite快照/精确ID消费/失败未知不自动重放已覆盖，详见docs/YUI-DIALOGUE-INBOX.md。
 
 现役maid bridge为b4b94edb…d0e7e，MC/NPC正常退出0、21,242文件2,425,392,752字节备份后部署到server/client/cache/X盘，Qwen仍原18:31的2.2.1进程与模型。原16Cron/准入/自主19:26:56恢复，19:27桐人task-5c1d5c714608与结衣task-04fcb73faa1b启动；19:32结衣已完成原生活轮，桐人已接续task-777601769e41。13正式服务已恢复正常，网页观察者靠原退避重连恢复；不再暂停或重复resume。新收件probe独立要求生产契约+19新Python用例+19真实隔离Java行为及安装源码一致，原桥20实机回归/211Java断言另验，旧QA失败与旧smoke原字节保留，不能改历史hash凑绿；全项目其他历史证明过期不在本次收件修复中被宣称解决。
