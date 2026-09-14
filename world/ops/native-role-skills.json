@@ -15,5 +15,43 @@
     }
   },
   "schema": 1,
-  "packageVersion": "2.2.0"
+  "packageVersion": "2.2.0",
+  "versions": {
+    "2.2.1": {
+      "package": "qwenpaw",
+      "packageVersion": "2.2.1",
+      "schema": 2,
+      "skills": {
+        "file_reader": {
+          "source": "file_reader-zh",
+          "sha256": "1921533df90ebb61a245808acfed74077356c4da809721bf46a5b567bdca515d",
+          "files": {
+            "SKILL.md": "1921533df90ebb61a245808acfed74077356c4da809721bf46a5b567bdca515d"
+          }
+        },
+        "cron": {
+          "source": "cron-zh",
+          "sha256": "c233e36d7c0a454edbb4f1f77960c4f34e0bde95e94b8dc93c6b19cf2de28cd5",
+          "files": {
+            "SKILL.md": "c233e36d7c0a454edbb4f1f77960c4f34e0bde95e94b8dc93c6b19cf2de28cd5"
+          }
+        },
+        "make-skill": {
+          "source": "make-skill-zh",
+          "sha256": "aae568e5a5fc225273dc5e98f629c580d3413f984847f170b6252ab13bb3946d",
+          "files": {
+            "references/behavior-testing.md": "18ef022309abc4fc960f7cbfa1a6bae8d0cdb40585ab0c5c24929d6e1fea149a",
+            "references/run-batch.md": "3a4b6cf873f46ee49b96ed8c8f7a385897dfbc4f3d97405d13d200dddd2b36f5",
+            "references/type-and-package.md": "f6344e5a7685a3d9f0f228411b83bd7699e4bf326ae44184c81b0495db63a0a4",
+            "scripts/create_plan.py": "b631e5424ef38e2b2ebc834586f1c2e2689ffc3a3af367adc1179f5bc323d761",
+            "scripts/init_draft.py": "a6a06e68defb946515b230de3667c81242865d91ef97dfdb1653089005d55703",
+            "scripts/publish_skill.py": "a7b4d3b99a74e45e3b384cf6febbd080ec6e8b89471613f2cc3eb4881b693d84",
+            "scripts/validate_skill.py": "09860bb6c85123ed3a9309b0bbfaaa8324fe7c56bbfd0f98a8c623ebfa4141a4",
+            "SKILL.md": "aae568e5a5fc225273dc5e98f629c580d3413f984847f170b6252ab13bb3946d"
+          },
+          "scannerContentSha256": "f28c0599361f7caea2caf427925e0118aed9b4713132eeaf441f5bfe8988b69a"
+        }
+      }
+    }
+  }
 }

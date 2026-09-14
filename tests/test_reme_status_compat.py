@@ -5,6 +5,7 @@ process. They do not start ReMe, access a role workspace or call any model.
 """
 import asyncio
 import importlib.util
+import importlib.metadata
 import inspect
 from pathlib import Path
 import sys
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world' / 'ops'))
 import reme_status_compat as compat
 
 NATIVE = importlib.util.find_spec('reme') is not None
+NATIVE_VERSION = importlib.metadata.version('reme-ai') if NATIVE else None
 
 
 class PatchContractTests(unittest.TestCase):
@@ -33,7 +35,7 @@ class PatchContractTests(unittest.TestCase):
             compat.install('host')
 
 
-@unittest.skipUnless(NATIVE, 'native ReMe tests require the Qwen runtime')
+@unittest.skipUnless(NATIVE_VERSION == '0.4.1.10', 'old pinned ReMe required')
 class NativeStatusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -117,6 +119,54 @@ class NativeStatusTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'versions'):
                 compat.install('game')
         self.assertIs(self.native._component_size, self.original)
+
+
+@unittest.skipUnless(NATIVE_VERSION == '0.4.1.11', 'new pinned ReMe required')
+class NativeUpstreamStatusTests(unittest.TestCase):
+    def test_native_dependency_metadata_and_status_succeed_without_patch(self):
+        from reme.components.base_component import BaseComponent, Dependency
+        from reme.enumeration import ComponentEnum
+        from reme.steps.common import status
+        component = object.__new__(BaseComponent)
+        component._is_started = True
+        component._binding_specs = {'keyword_index': Dependency(ComponentEnum.KEYWORD_INDEX, 'default')}
+        component.payload = {'known': ['fixture observation']}
+        original = status._component_size
+        execute = status.StatusStep.execute
+        dependency_getattr = Dependency.__getattr__
+        self.assertGreater(original(component), 0)
+        for runtime in ('game', 'operations', 'game'):
+            self.assertEqual(compat.install(runtime), 0)
+            self.assertIs(status._component_size, original)
+        self.assertFalse(hasattr(original, compat._MARKER))
+        step = object.__new__(status.StatusStep)
+        step.app_context = SimpleNamespace(components={ComponentEnum.FILE_STORE: {'default': component}})
+        step.context = SimpleNamespace(response=SimpleNamespace(answer='', metadata={}))
+        result = asyncio.run(step.execute())
+        self.assertGreater(result.metadata['status']['memory']['components_total_bytes'], 0)
+        self.assertTrue(result.answer)
+        self.assertIs(status.StatusStep.execute, execute)
+        self.assertIs(Dependency.__getattr__, dependency_getattr)
+        with self.assertRaisesRegex(RuntimeError, 'accessed before start'):
+            getattr(component._binding_specs['keyword_index'], '__dict__')
+
+    def test_native_source_drift_refuses_without_replacing_function(self):
+        from reme.steps.common import status
+        original = status._component_size
+        with patch.object(compat.inspect, 'getsource', return_value='unreviewed native source'):
+            with self.assertRaisesRegex(ValueError, 'review_new_reme_status_source'):
+                compat.install('game')
+        self.assertIs(status._component_size, original)
+
+    def test_native_unrelated_introspection_error_still_surfaces(self):
+        from reme.steps.common import status
+        class UnrelatedFailure:
+            __slots__ = ()
+            def __getattr__(self, name):
+                raise RuntimeError('unrelated introspection failure')
+        self.assertEqual(compat.install('game'), 0)
+        with self.assertRaisesRegex(RuntimeError, 'unrelated introspection failure'):
+            status._component_size(UnrelatedFailure())
 
 
 if __name__ == '__main__':

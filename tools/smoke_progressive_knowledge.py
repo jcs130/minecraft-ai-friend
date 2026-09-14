@@ -18,7 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def container_check():
     import asyncio
-    import importlib.metadata
     assert os.environ.get('QIANDENG_PROGRESSIVE_QA') == '1'
     sys.path.insert(0, '/ops')
     from agentscope.tool import Toolkit
@@ -31,7 +30,8 @@ def container_check():
     from native_role_capabilities import configure_native
     from native_tool_runtime import role_engine, check
 
-    assert importlib.metadata.version('qwenpaw') == '2.2.0'
+    from qwenpaw_runtime_contract import release
+    version = release()
     base = Path('/state/work')
     assert not (base / 'config.json').exists() and not (base / 'workspaces').exists(), 'This smoke must run in an empty disposable tmpfs'
     folder = base / 'workspaces/mc-herald'; folder.mkdir(parents=True)
@@ -73,7 +73,7 @@ def container_check():
         assert 'REFERENCE_ONLY_MARKER' in content and 'RECIPE_ONLY_MARKER' not in content
         assert service.load_skill_file(name, 'references/recipes/sticks.json') == '{"fixture":"RECIPE_ONLY_MARKER"}'
         assert service.load_skill_file(name, '../agent.json') is None
-        return {'ok': True, 'packageVersion': '2.2.0', 'modelRequests': 0, 'networkRequests': 0,
+        return {'ok': True, 'packageVersion': version, 'modelRequests': 0, 'networkRequests': 0,
             'productionMutation': False, 'fixtureOnly': True, 'metadataChars': len(metadata), 'viewerTool': viewer.name,
             'checks': [{'name': item, 'ok': True} for item in (
                 'metadata-only-default-context', 'native-Skill-tool-exposed', 'Skill-only-loads-index-body',

@@ -1,8 +1,10 @@
 """Read-only local routing/configuration probe; never submits tasks or uses HTTP."""
 from pathlib import Path
+import hashlib
 import hmac
 import json
 import math
+import subprocess
 import sys
 import time
 
@@ -11,6 +13,8 @@ sys.path.insert(0, str(ROOT / 'world/ops'))
 sys.path.insert(0, str(ROOT / 'world/sidecar'))
 from world_agent_profiles import WORLD_ROLES, validate_profile, validate_workspace
 from qwen_tasks import LIMITS as NPC_TASK_LIMITS
+from native_role_capabilities import package_version
+from qwenpaw_runtime_contract import RELEASES
 
 RUNTIMES = {
     'game': ('server/agents/work', 'http://qwenpaw:8088/api'),
@@ -33,6 +37,86 @@ CHECK_NAMES = (
     'route_manifest_owned', 'all_route_targets_enabled', 'quiet_world_task_profiles',
     'maid_sites_through_agent', 'maid_adapter_token_match', 'npc_maid_thread_fresh',
 )
+PROFILE_SOURCES = ('world_agent_profiles.py', 'role_learning_profiles.py',
+    'native_role_capabilities.py', 'native-role-skills.json', 'llm_runtime_policy.py',
+    'world_team_profiles.py', 'qwenpaw_runtime_contract.py')
+
+# Host Qwen may deliberately remain on the previous release. Validate an
+# upgraded game with its installed native contracts instead of weakening the
+# tool/security/package checks to match the host. This only reads state.
+NATIVE_PROFILE_PROBE = r'''
+import hashlib,json,sys
+from pathlib import Path
+sys.path.insert(0,'/ops')
+from qwenpaw_runtime_contract import release
+from role_learning_profiles import validate_guard
+from world_agent_profiles import WORLD_ROLES,validate_workspace
+version=release()
+assert version == sys.argv[1]
+state=Path('/state/work')
+marker=json.loads((state/'learning-runtime.json').read_text())
+assert marker['qwenVersion'] == version
+assert validate_guard(state,'game')
+def no_enabled(value):
+    if isinstance(value,dict):
+        return all(item is False if name == 'enabled' else no_enabled(item) for name,item in value.items())
+    if isinstance(value,list):
+        return all(no_enabled(item) for item in value)
+    return True
+for role in WORLD_ROLES:
+    folder=state/'workspaces'/role
+    drivers=folder/'drivers'
+    assert not drivers.is_symlink()
+    agent=validate_workspace(folder,role,team=True)
+    assert no_enabled(agent['acp'])
+sources=json.loads(sys.argv[2])
+assert all('/' not in name and '\\' not in name for name in sources)
+print(json.dumps({'ok':True,'packageVersion':version,'roles':list(WORLD_ROLES),
+    'modelCalls':0,'guardVerified':True,'sourceHashes':{
+        name:hashlib.sha256((Path('/ops')/name).read_bytes()).hexdigest() for name in sources}}))
+'''
+
+
+def check_native_world_profiles(version, root):
+    """Fixed game container only; never redirect arbitrary fixture roots."""
+    assert Path(root).resolve() == ROOT.resolve()
+    assert version in RELEASES
+    result = subprocess.run(['docker', 'exec', 'qiandengji-qwenpaw-1', 'python', '-c',
+        NATIVE_PROFILE_PROBE, version, json.dumps(PROFILE_SOURCES)],
+        capture_output=True, text=True, encoding='utf-8', timeout=45,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    assert result.returncode == 0 and len(result.stdout.encode('utf8')) <= 16384
+    value = json.loads(result.stdout.strip().splitlines()[-1])
+    assert value.get('ok') is True and value.get('packageVersion') == version
+    assert value.get('roles') == list(WORLD_ROLES) and value.get('modelCalls') == 0
+    assert value.get('guardVerified') is True
+    assert value.get('sourceHashes') == {name: hashlib.sha256(
+        (Path(root)/'world/ops'/name).read_bytes()).hexdigest() for name in PROFILE_SOURCES}
+
+
+def validate_world_profiles(root):
+    root = Path(root)
+    state = root / RUNTIMES['game'][0]
+    local_version = package_version()
+    marker_path = state / 'learning-runtime.json'
+    if marker_path.exists():
+        marker = read_json(marker_path)
+        assert marker.get('runtime') == 'game' and marker.get('qwenVersion') in RELEASES
+        target_version = marker['qwenVersion']
+    else:
+        assert root.resolve() != ROOT.resolve(), 'game_runtime_marker_required'
+        target_version = local_version
+    if target_version != local_version:
+        check_native_world_profiles(target_version, root)
+        return
+    for role in WORLD_ROLES:
+        folder = state / 'workspaces' / role
+        agent = read_json(folder / 'agent.json')
+        validate_profile(agent, role, team=True)
+        assert no_enabled(agent['acp'])
+        drivers = folder / 'drivers'
+        assert not drivers.is_symlink() and not getattr(drivers, 'is_junction', lambda: False)()
+        validate_workspace(folder, role, team=True)
 
 
 def read_text(path, limit=262144):
@@ -87,7 +171,6 @@ def bounded_model_labels(value):
 def probe(root=ROOT, now=None):
     """Return only named booleans/counts, never configuration bodies or credentials."""
     root = Path(root).absolute()
-    now = time.time() if now is None else now
     checks = dict.fromkeys(CHECK_NAMES, False)
     routes, sites = {}, {}
     try:
@@ -123,18 +206,10 @@ def probe(root=ROOT, now=None):
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
     try:
-        for role in WORLD_ROLES:
-            folder = root / RUNTIMES['game'][0] / 'workspaces' / role
-            agent = read_json(folder / 'agent.json')
-            validate_profile(agent, role, team=True)
-            assert no_enabled(agent['acp'])
-            drivers = folder / 'drivers'
-            assert not drivers.is_symlink() and not getattr(drivers, 'is_junction', lambda: False)()
-            # Production text roles require both exact learning and world-team
-            # cards, including the native endpoint/tool/permission contracts.
-            validate_workspace(folder, role, team=True)
+        validate_world_profiles(root)
         checks['quiet_world_task_profiles'] = True
-    except (OSError, ValueError, TypeError, KeyError, AttributeError, AssertionError):
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, AssertionError,
+            IndexError, subprocess.SubprocessError):
         pass
     try:
         sites = read_json(root / 'server/mc/config/touhou_little_maid/sites/llm.json')
@@ -159,8 +234,11 @@ def probe(root=ROOT, now=None):
     try:
         heartbeat = read_json(root / 'server/mcdata/npc-health.json')
         updated = heartbeat.get('updated_at')
+        # Native cross-release profile validation can take several seconds;
+        # compare the latest heartbeat to the time it was actually sampled.
+        checked_now = time.time() if now is None else now
         checks['npc_maid_thread_fresh'] = (
-            type(updated) in (int, float) and math.isfinite(updated) and -5 <= now - updated <= 90
+            type(updated) in (int, float) and math.isfinite(updated) and -5 <= checked_now - updated <= 90
             and heartbeat.get('maid_agent_enabled') is True
             and heartbeat.get('threads', {}).get('maid-agent') is True)
     except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError):

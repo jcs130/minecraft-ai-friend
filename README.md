@@ -10,7 +10,7 @@
 
 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，当前整合分支为 `codex/performance-foundation`，沿用原仓库历史，原世界源码已移入 `world/`。首次拉取请先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)：本仓库保存源码、配置模板、构建工具与验证方法；下文的运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些文件，也不等于已经完成环境安装。
 
-第一批技能规则/存储、玩家命令和工会规则已作模块提取；实际边界、保留的耦合与后续顺序见 [代码架构与拆分记录](docs/ARCHITECTURE.md)。QwenPaw 当前为 2.2.0，运营角色与游戏角色统一在游戏实例；[运营组说明](docs/OPERATIONS-TEAM.md) 保留早期六角色独立运营阶段的设计与实验，当前服务和角色数量以本页顶部运行布局为准。
+第一批技能规则/存储、玩家命令和工会规则已作模块提取；实际边界、保留的耦合与后续顺序见 [代码架构与拆分记录](docs/ARCHITECTURE.md)。游戏 QwenPaw 当前为 **2.2.1**，运营角色与游戏角色统一在游戏实例；原10角色、记忆、会话与16项Cron保留，官方 MakeSkill 2.0 完整包已接入，见 [升级记录](docs/QWENPAW-221-UPGRADE.md) 和 [能力与市场复用](docs/QWENPAW-CAPABILITY-REUSE.md)。[运营组说明](docs/OPERATIONS-TEAM.md) 保留早期六角色独立运营阶段的设计与实验，当前服务和角色数量以本页顶部运行布局为准。
 
 后续改造已将普通玩家命令执行从女神模块提取为独立应用服务，保持 `/mycli`、`/myhelp`、罗盘与既有 CLI 队列入口。world 启动不再等待 QwenPaw 健康；明确技能指令不调用模型，模糊咏唱、问答与祈愿仍使用原集成。验证与当前限制见 [玩家命令应用服务](docs/PLAYER-COMMAND-SERVICE.md)。
 

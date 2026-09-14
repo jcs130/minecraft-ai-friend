@@ -16,7 +16,7 @@ import tempfile
 
 from role_learning_profiles import (roles, role_skills, with_learning, learning_card,
     validate_learning_workspace, read_safe, validate_jobs, skill_references, learning_identity, learning_job)
-from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content
+from native_role_capabilities import FILE_NOTE, NATIVE_SKILLS, native_content, package_version
 from llm_runtime_policy import unrestricted_running
 from life_persona import update_survivor_policy_text
 
@@ -71,6 +71,18 @@ def agent_text(folder, role, runtime, source):
         text = text.rstrip() + NATIVE_NOTE
     if '<!-- qiandeng-personal-files-v1 -->' not in text:
         text = text.rstrip() + FILE_NOTE
+    if package_version() == '2.2.1':
+        text = text.replace('普通流程技能用 materialize_skill 创建（名称不要使用保留的 qd- 前缀）',
+            '普通流程技能用官方 make-skill 2.0 的四个本地脚本创建（名称不要使用保留的 qd- 前缀）')
+        text = text.replace('成熟流程可通过原生 materialize_skill 保存，已启用官方 make-skill 时优先参照其流程。',
+            '成熟流程参照已启用的官方 make-skill 2.0，通过四个本地脚本保存并校验。')
+        text = text.replace('原生 shell 当前只开放本角色已有周任务的 qwenpaw cron list/get/state/pause/resume（显式 --agent-id）',
+            '原生 shell 开放本角色已有周任务的 qwenpaw cron list/get/state/pause/resume（显式 --agent-id），'
+            '以及官方 make-skill 目录的 create_plan/init_draft/validate_skill/publish_skill 四个脚本；'
+            '输入 JSON 用原生文件工具保存到本角色 notes/ 或 drafts/ 下，然后执行 '
+            'python -B scripts/<脚本>.py --input /state/work/workspaces/<当前角色>/notes/<输入>.json，'
+            'cwd 必须是 /state/work/workspaces/<当前角色>/skills/make-skill，'
+            'JSON 的 workspace 也必须是当前角色工作区。publish_skill 只在本工作区安装；不上传市场')
     from party_role_capabilities import party_roles
     if runtime == 'game' and role in party_roles() and '<!-- qiandeng-party-v1 -->' not in text:
         text = text.rstrip() + ('\n\n<!-- qiandeng-party-v1 -->\n你有一位独立旅行伙伴。qd-party-cooperation提供游戏内协作方法，'
@@ -151,9 +163,14 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
     backup.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(state / 'config.json', backup / 'config.json')
     config = read_safe(state / 'config.json')
-    config.setdefault('security', {}).setdefault('skill_scanner', {})['mode'] = 'block'
+    from native_role_capabilities import configure_native_scanner
+    security = config.setdefault('security', {})
+    security['skill_scanner'] = configure_native_scanner(security.get('skill_scanner'))
     config['agents']['running'] = unrestricted_running(config['agents']['running'])
     write(state / 'config.json', config)
+    if package_version() == '2.2.1':
+        from native_skill_sync import sync_native_pool
+        sync_native_pool(state, backup)
     for item in planned:
         role, names = item['role'], item['skills']
         folder = state / 'workspaces' / role
@@ -215,6 +232,12 @@ def synchronize(state, runtime, source=HERE, backup_root=None):
             assert service.enable_skill(name)['success'] is True
             assert service.set_skill_channels(name, ['all']) is True
         for name in NATIVE_SKILLS:
+            if package_version() == '2.2.1':
+                from native_skill_sync import sync_native_skill
+                sync_native_skill(service, folder, name, backup)
+                assert service.enable_skill(name)['success'] is True
+                assert service.set_skill_channels(name, ['all']) is True
+                continue
             content = native_content(name)
             if name in manifest['skills']:
                 # Never silently overwrite a user-edited official skill.

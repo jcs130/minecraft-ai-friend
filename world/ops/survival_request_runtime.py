@@ -5,7 +5,6 @@ the exact submitted ID, lease expiry and action count. No tool argument is
 filled, repaired or retried, and no conversation history is rewritten.
 """
 from functools import wraps
-import importlib.metadata
 import inspect
 import json
 import re
@@ -53,9 +52,10 @@ def wrap_prepare(original):
 
 
 def install(runtime):
-    if (runtime != 'game' or importlib.metadata.version('qwenpaw') != '2.2.0'
-            or importlib.metadata.version('agentscope') != '2.0.7.post1'):
+    if runtime != 'game':
         raise ValueError('review_native_survival_request_contract')
+    from qwenpaw_runtime_contract import verify_sources, verify_callable
+    verify_sources('agent', 'builder')
     from qwenpaw.agents.react_agent import QwenPawAgent
     existing = getattr(QwenPawAgent, '_qiandeng_survival_request', None)
     if existing == VERSION:
@@ -65,6 +65,7 @@ def install(runtime):
     original = QwenPawAgent._prepare_model_input
     if tuple(inspect.signature(original).parameters) != ('self',):
         raise ValueError('native_survival_request_signature_changed')
+    verify_callable('prepare_model_input', original)
     QwenPawAgent._prepare_model_input = wrap_prepare(original)
     QwenPawAgent._qiandeng_survival_request = VERSION
     return VERSION

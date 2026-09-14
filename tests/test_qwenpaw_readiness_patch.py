@@ -2,6 +2,7 @@
 import ast
 import asyncio
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('readiness_patch', ROOT/'world/ops/patch_qwenpaw_game.py')
 patch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patch)
-IMAGE = 'qiandengji-qwenpaw-game:2.2.0'
+IMAGE = os.environ.get('QIANDENG_QWEN_TEST_IMAGE', 'qiandengji-qwenpaw-game:2.2.0')
 
 
 class ReadinessPatch(unittest.TestCase):
@@ -30,6 +31,9 @@ class ReadinessPatch(unittest.TestCase):
             raise RuntimeError('Could not read the pinned public package source')
         cls.original = probe.stdout
         cls.patched = patch.patch_source(cls.original, '2.2.0')
+        # The reviewed 2.2.1 wheel ships this exact original manager source.
+        if patch.patch_source(cls.original, '2.2.1') != cls.patched:
+            raise AssertionError('Release readiness semantics diverged')
 
     def run_startup(self, enabled, failures=(), callback_error=False, patched=True):
         # Compile only the actual method: no server/workspace/model is created.

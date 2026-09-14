@@ -110,7 +110,11 @@ class LifeMemoryPolicyTests(unittest.TestCase):
         validate_native(actual, 'qd-survivor')
         self.assertTrue(life.validate_profile(actual, 'qd-survivor'))
         enabled = {name for name, row in actual['tools']['builtin_tools'].items() if row['enabled']}
-        self.assertEqual(enabled, set(NATIVE_TOOLS))
+        # Kirito has the two read-only team tools in both reviewed releases.
+        # Do not derive the expectation from the same role-policy function:
+        # granting dispatch/spawn authority must still fail this regression.
+        self.assertEqual(enabled, set(NATIVE_TOOLS) | {'list_agents', 'check_agent_task'})
+        self.assertFalse(enabled & {'chat_with_agent', 'submit_to_agent', 'spawn_subagent'})
         self.assertFalse(set(actual['tools']['builtin_tools']) & life.MEMORY_TOOLS)
         self.assertEqual(configure_native(actual, 'qd-survivor'), actual)
 

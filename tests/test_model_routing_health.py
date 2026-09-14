@@ -40,7 +40,11 @@ class ModelRoutingHealth(unittest.TestCase):
                              ('game',role,'http://qwenpaw:8088/api'))
 
     def setUp(self):
-        native_patch = patch.object(native, 'native_lock', return_value=native_fixture_lock())
+        fixture_lock = native_fixture_lock()
+        # 2.2.1's scanner also owns an exact reviewed package-content hash.
+        # This fixture contains only test bytes, so use an explicit test hash.
+        fixture_lock['skills']['make-skill']['scannerContentSha256'] = 'a' * 64
+        native_patch = patch.object(native, 'native_lock', return_value=fixture_lock)
         native_patch.start(); self.addCleanup(native_patch.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -114,6 +118,80 @@ class ModelRoutingHealth(unittest.TestCase):
         self.assertEqual(result['modelCalls'], 0)
         self.assertNotIn(self.secret, json.dumps(result))
         self.assertEqual(self.files(), before)
+
+    def test_cross_release_uses_exact_game_runtime_without_host_profile_fallback(self):
+        for local, target in (('2.2.0', '2.2.1'), ('2.2.1', '2.2.0')):
+            self.put('server/agents/work/learning-runtime.json',
+                     {'runtime': 'game', 'qwenVersion': target})
+            with self.subTest(local=local, target=target), \
+                    patch.object(routing, 'package_version', return_value=local), \
+                    patch.object(routing, 'check_native_world_profiles') as native_check, \
+                    patch.object(routing, 'validate_profile', side_effect=AssertionError('wrong host contract')):
+                self.assertTrue(self.probe()['checks']['quiet_world_task_profiles'])
+                native_check.assert_called_once_with(target, self.root)
+            with patch.object(routing, 'package_version', return_value=local), \
+                    patch.object(routing, 'check_native_world_profiles', side_effect=ValueError('native drift')):
+                self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
+
+    def test_same_release_keeps_full_local_contract_unknown_marker_fails_closed(self):
+        local = routing.package_version()
+        self.put('server/agents/work/learning-runtime.json', {'runtime': 'game', 'qwenVersion': local})
+        with patch.object(routing, 'check_native_world_profiles', side_effect=AssertionError('no docker')):
+            self.assertTrue(self.probe()['checks']['quiet_world_task_profiles'])
+            folder = 'server/agents/work/workspaces/qd-guild-planner/agent.json'
+            agent = routing.read_json(self.root/folder)
+            agent['tools']['builtin_tools']['unreviewed_tool'] = {'enabled': True}
+            self.put(folder, agent)
+            self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
+        for marker in ({'runtime': 'game', 'qwenVersion': '2.2.2'},
+                       {'runtime': 'operations', 'qwenVersion': local}):
+            self.put('server/agents/work/learning-runtime.json', marker)
+            with patch.object(routing, 'check_native_world_profiles') as native_check:
+                self.assertFalse(self.probe()['checks']['quiet_world_task_profiles'])
+                native_check.assert_not_called()
+
+    def test_default_clock_samples_after_slow_native_profile_check(self):
+        with patch.object(routing.time, 'time', return_value=self.now) as clock:
+            def profiles_finish(_root):
+                clock.return_value = self.now + 35
+                self.put('server/mcdata/npc-health.json', self.heartbeat | {'updated_at': self.now + 35})
+            with patch.object(routing, 'validate_world_profiles', side_effect=profiles_finish):
+                self.assertTrue(routing.probe(self.root)['checks']['npc_maid_thread_fresh'])
+                # Explicit caller time remains authoritative, including future
+                # heartbeat rejection; tests and recorded snapshots retain it.
+                self.assertFalse(routing.probe(self.root, self.now)['checks']['npc_maid_thread_fresh'])
+
+    def test_native_reply_requires_exact_roles_version_process_guard_and_source_bytes(self):
+        import hashlib
+        from copy import deepcopy
+        for name in routing.PROFILE_SOURCES:
+            path = self.root/'world/ops'/name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(('explicit-source-fixture-'+name).encode())
+        reply = {'ok': True, 'packageVersion': '2.2.1', 'roles': list(routing.WORLD_ROLES),
+                 'modelCalls': 0, 'guardVerified': True, 'sourceHashes': {
+                     name: hashlib.sha256((self.root/'world/ops'/name).read_bytes()).hexdigest()
+                     for name in routing.PROFILE_SOURCES}}
+        with patch.object(routing, 'ROOT', self.root), patch.object(routing.subprocess, 'run') as execute:
+            execute.return_value = subprocess.CompletedProcess([], 0, json.dumps(reply), '')
+            routing.check_native_world_profiles('2.2.1', self.root)
+            command = execute.call_args.args[0]
+            self.assertEqual(command[:5], ['docker', 'exec', 'qiandengji-qwenpaw-1', 'python', '-c'])
+            self.assertEqual(command[5], routing.NATIVE_PROFILE_PROBE)
+            self.assertEqual(command[6], '2.2.1')
+            for key, value in (('ok', False), ('packageVersion', '2.2.0'),
+                               ('roles', ['qd-guild-planner']), ('modelCalls', 1),
+                               ('guardVerified', False), ('sourceHashes', {})):
+                changed = deepcopy(reply); changed[key] = value
+                execute.return_value = subprocess.CompletedProcess([], 0, json.dumps(changed), '')
+                with self.subTest(field=key), self.assertRaises(AssertionError):
+                    routing.check_native_world_profiles('2.2.1', self.root)
+            execute.return_value = subprocess.CompletedProcess([], 1, json.dumps(reply), '')
+            with self.assertRaises(AssertionError): routing.check_native_world_profiles('2.2.1', self.root)
+            execute.reset_mock()
+            with self.assertRaises(AssertionError): routing.check_native_world_profiles('2.2.1', self.root/'other')
+            with self.assertRaises(AssertionError): routing.check_native_world_profiles('2.2.2', self.root)
+            execute.assert_not_called()
 
     def test_disabled_role_missing_route_and_external_endpoint_fail(self):
         for mutation in ('disabled', 'missing', 'endpoint', 'invalid-role-path'):
@@ -268,7 +346,8 @@ class ModelRoutingHealth(unittest.TestCase):
         others = ('probe_panel_http', 'probe_management', 'probe_recorded_behavior', 'probe_source_record',
             'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording',
             'probe_voice_boundary_deployment', 'probe_skillbar_editor', 'probe_chanting_client',
-            'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_survivor_party')
+            'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_survivor_party',
+            'probe_companion_ticking', 'probe_navigation_sense', 'probe_world_team')
         with ExitStack() as stack:
             for name in others:
                 stack.enter_context(patch.object(health, name, return_value={'ok': True}))
@@ -296,7 +375,9 @@ assert 'upgrade_qwenpaw_runtime' not in sys.modules
 sys.path.insert(0, str(Path(sys.argv[1]).parents[1]))
 import native_role_capabilities
 import hashlib
-native_role_capabilities.native_lock = lambda: {'skills': {name: {'sha256': hashlib.sha256(('fixture-' + name).encode()).hexdigest()} for name in native_role_capabilities.NATIVE_SKILLS}}
+fixture_lock = {'skills': {name: {'sha256': hashlib.sha256(('fixture-' + name).encode()).hexdigest()} for name in native_role_capabilities.NATIVE_SKILLS}}
+fixture_lock['skills']['make-skill']['scannerContentSha256'] = 'a' * 64
+native_role_capabilities.native_lock = lambda *args, **kwargs: fixture_lock
 sys.path[:] = before
 if sys.argv[3] == 'fail':
     def missing_report(*args, **kwargs):

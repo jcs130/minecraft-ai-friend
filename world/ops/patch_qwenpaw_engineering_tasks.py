@@ -6,11 +6,12 @@ import json
 
 VERSION = '2.2.0'
 SOURCE_SHA256 = 'd588541a0ab41e8233ed27b4de52efe0f9ef714b49de2494b22ddac11ecd49c3'
+SOURCE_VERSIONS = {VERSION: SOURCE_SHA256, '2.2.1': SOURCE_SHA256}
 MARKER = 'QIANDENG_ENGINEERING_TASK_RUNTIME_VERSION = 1\n'
 
 
 def patch_source(source, version):
-    if version != VERSION or hashlib.sha256(source.encode()).hexdigest() != SOURCE_SHA256:
+    if version not in SOURCE_VERSIONS or hashlib.sha256(source.encode()).hexdigest() != SOURCE_VERSIONS[version]:
         raise ValueError('review_engineering_native_background_source')
     function = next(node for node in ast.parse(source).body
                     if isinstance(node, ast.AsyncFunctionDef) and node.name == 'post_console_chat_task')
@@ -55,7 +56,7 @@ def main():
     temp.write_text(patched, encoding='utf8')
     temp.chmod(path.stat().st_mode)
     temp.replace(path)
-    print(json.dumps({'ok': True, 'patch': 'scoped-engineering-native-help', 'packageVersion': VERSION,
+    print(json.dumps({'ok': True, 'patch': 'scoped-engineering-native-help', 'packageVersion': package.version,
         'sourceSha256': SOURCE_SHA256, 'patchedSha256': hashlib.sha256(patched.encode()).hexdigest()}))
 
 

@@ -1,5 +1,7 @@
 # 游戏 QwenPaw 服务
 
+2026-09-14 升级维护入口：当前 Compose 目标为 `qiandengji-qwenpaw-game:2.2.1-memory1`，游戏控制台仍在 18089，现役团队为10角色。升级过程与验证见 [QWENPAW-221-UPGRADE.md](../../docs/QWENPAW-221-UPGRADE.md)，原生能力及市场复用见 [QWENPAW-CAPABILITY-REUSE.md](../../docs/QWENPAW-CAPABILITY-REUSE.md)。以下是早期初始化历史，角色数量、镜像和旧迁移命令不代表当前运行状态；已有世界禁止重跑旧初始化器。
+
 当前游戏实例已包含原神谕双角色、真实桐人及村民/公会/女仆三个专职角色，共6个启用角色。模型任务统一入口、追加注册与本轮验证见 [MODEL-TASK-ROUTING.md](../../docs/MODEL-TASK-ROUTING.md)。以下保留神谕服务的初始化与升级历史，不应重跑旧初始化覆盖当前角色。
 
 本项目仅整合原有 `mc-god` 和 `mc-herald` 神谕能力。游戏运行镜像为 `qiandengji-qwenpaw-game:2.2.0-qd1`（官方包 2.2.0 加项目就绪兼容补丁），与六角色运营容器、宿主 QwenPaw 分开。最初初始化使用 `qwenpaw-mc:2.1.1`（实际 Python 包 2.1.0）；旧初始化器仍锁定这个来源，再通过下述离线迁移进入 2.2。不要把宿主配置整包搬入，也不要对已有游戏状态重跑初始化。

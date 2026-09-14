@@ -1,7 +1,6 @@
 """Keep native Qwen scheduling; put the existing budget before agent cron I/O."""
 import asyncio
 import hashlib
-import importlib.metadata
 import json
 import os
 from pathlib import Path
@@ -136,7 +135,8 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
 
 def install(runtime):
     if runtime not in ('game', 'operations'): raise ValueError('invalid_learning_runtime')
-    if importlib.metadata.version('qwenpaw') != '2.2.0': raise ValueError('review_new_qwen_cron_contract')
+    from qwenpaw_runtime_contract import release
+    qwen_version = release()
     from native_tool_runtime import install as install_native_tools
     native_guard_version = install_native_tools(runtime)
     from llm_runtime_policy import install as install_llm_policy
@@ -158,7 +158,7 @@ def install(runtime):
     process_ticks = int(Path('/proc/self/stat').read_text().rsplit(')', 1)[1].split()[19])
     boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     write(Path('/state/work/learning-runtime.json'), {'schema': 1, 'runtime': runtime, 'guardVersion': VERSION,
-        'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
+        'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': qwen_version, 'scheduler': 'native-qwen-cron',
         'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
         'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version,
         'partyLifeSignalVersion': 1, 'engineeringCronRuntimeVersion': engineering_cron_version,

@@ -30,6 +30,37 @@ class NativeTaskTests(unittest.TestCase):
             return {'task_id': 'task-012345abcdef'} if method == 'POST' else self.response
         self.client = QwenTasks(self.root / 'state', self.routes, transport=api, clock=lambda: self.now)
 
+    def test_maintenance_blocks_only_new_reservations_and_can_resume(self):
+        admission = self.client.root / 'admission.json'
+        write_json(admission, {'schema': 1, 'paused': True, 'operator': 'project-maintenance'})
+        result = self.client.submit('guild_quest', 'fresh', 'new input')
+        self.assertEqual((result['status'], result['reason']), ('busy', 'runtime_maintenance'))
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.client.root / 'budget.json').exists())
+        self.assertFalse(self.client._path('guild_quest', 'fresh').exists())
+        write_json(admission, {'schema': 1, 'paused': False, 'operator': 'project-maintenance'})
+        self.assertEqual(self.client.submit('guild_quest', 'fresh', 'new input')['status'], 'submitted')
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
+
+    def test_maintenance_preserves_original_task_poll_and_exact_key_without_replay(self):
+        original = self.client.submit('guild_quest', 'original', 'original input')
+        write_json(self.client.root / 'admission.json',
+                   {'schema': 1, 'paused': True, 'operator': 'project-maintenance'})
+        same = self.client.submit('guild_quest', 'original', 'original input')
+        self.assertEqual(same['taskId'], original['taskId'])
+        self.assertEqual(self.client.poll('guild_quest', 'original')['status'], 'completed')
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
+        self.assertEqual(self.client.submit('guild_quest', 'next', 'new input')['status'], 'busy')
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
+
+    def test_invalid_maintenance_control_never_submits(self):
+        for value in ([], {'schema': 1, 'paused': 'false', 'operator': 'project-maintenance'},
+                      {'schema': 1, 'paused': False, 'operator': 'untrusted'}):
+            write_json(self.client.root / 'admission.json', value)
+            with self.assertRaisesRegex(ValueError, 'qwen_admission_control_invalid'):
+                self.client.submit('guild_quest', 'fresh', 'new input')
+            self.assertEqual(self.calls, [])
+
     def test_exact_native_route_no_provider_and_poll_extracts_only_completed_text(self):
         row = self.client.submit('guild_quest', '2026-09-09', '拟单')
         self.assertEqual(row['status'], 'submitted')

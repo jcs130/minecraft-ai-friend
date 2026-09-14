@@ -17,7 +17,32 @@ BACKENDS = {'auto_memory_step': 'qiandeng_life_auto_memory_step',
 CONTRACT = {
     'config': '322920851f0670d3f8db54e4b436a9b41e7519e3e9a53bb63d685a263720fb9d',
 }
+REVIEWED_VERSIONS = frozenset({('2.2.0', '0.4.1.10'), ('2.2.1', '0.4.1.11')})
+UPSTREAM_221_CONTRACT = {
+    'format_history': '484557db2153e6547a1e67f3984a3584f569d5fe5225c5a42dd8d1f2dd7b2afd',
+    'auto_format_history': 'ef0ab3261526263e6473dd6fa82dc1d90e67bc2970a78900fcf274476498a87c',
+    'auto_execute': '5f59e9087a0985cad02633fceb1a875fbe46ca7e2f6f097d3bb2ff6364669c7d',
+}
 _MARKER = '_qiandeng_life_memory_evidence'
+
+
+def check_upstream_contract(versions):
+    """Review the actual ReMe formatter rather than assuming upgrade fixes it.
+
+    0.4.1.11 still renders text only and retains the explicit subclass hook.
+    Keep receipts on the original input path and native lifecycle unchanged.
+    """
+    if versions not in REVIEWED_VERSIONS:
+        raise ValueError('review_new_life_memory_versions')
+    if versions == ('2.2.1', '0.4.1.11'):
+        from reme.steps.evolve._evolve import format_history
+        from reme.steps.evolve.auto_memory import AutoMemoryStep
+        functions = {'format_history': format_history,
+                     'auto_format_history': AutoMemoryStep._format_history,
+                     'auto_execute': AutoMemoryStep.execute}
+        for key, function in functions.items():
+            if hashlib.sha256(inspect.getsource(function).encode()).hexdigest() != UPSTREAM_221_CONTRACT[key]:
+                raise ValueError('review_new_life_memory_' + key)
 
 
 def member_for(role, workspace, members=None):
@@ -88,8 +113,8 @@ def install(runtime):
         return 0
     if runtime != 'game':
         raise ValueError('invalid_life_memory_runtime')
-    if (importlib.metadata.version('qwenpaw'), importlib.metadata.version('reme-ai')) != ('2.2.0', '0.4.1.10'):
-        raise ValueError('review_new_life_memory_versions')
+    versions = (importlib.metadata.version('qwenpaw'), importlib.metadata.version('reme-ai'))
+    check_upstream_contract(versions)
     from qwenpaw.agents.memory import reme_light_memory_manager as manager
     original = manager.get_reme_app_config
     if getattr(original, _MARKER, None) == VERSION:

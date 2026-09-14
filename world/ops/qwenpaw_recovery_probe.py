@@ -9,8 +9,9 @@ import sys
 
 def main():
     sys.path.insert(0, '/ops')
-    expected = {'qwenpaw': '2.2.0', 'agentscope': '2.0.7.post1',
-                'reme-ai': '0.4.1.10', 'nbtlib': '2.0.4',
+    from qwenpaw_runtime_contract import release, RELEASES
+    version = release()
+    expected = {'qwenpaw': version, **RELEASES[version], 'nbtlib': '2.0.4',
                 'quickjs-ng': '0.16.2.1', 'transformers': '4.57.1'}
     actual = {name: importlib.metadata.version(name) for name in expected}
     assert actual == expected, actual
@@ -18,7 +19,8 @@ def main():
     from reme_status_compat import install as reme_install
     from native_tool_runtime import install as tools_install
     assert llm_install('game') == 1
-    assert reme_install('game') == 1
+    reme_compat = reme_install('game')
+    assert reme_compat == (0 if version == '2.2.1' else 1)
     assert tools_install('game') == 1
     from survival_turn_runtime import install as finish_install
     from life_memory_evidence_runtime import install as memory_install
@@ -41,10 +43,13 @@ def main():
     package = importlib.metadata.distribution('qwenpaw')
     assert any(str(f).endswith('index.html') for f in package.files), 'console assets missing'
     print(json.dumps({'ok': True, 'versions': actual,
+                      'remeStatus': 'upstream-native' if reme_compat == 0 else 'scoped-compatibility',
                       'readinessSourceSha256': hashlib.sha256(source).hexdigest(),
                       'modelCalls': 0, 'stateMounted': False,
-                      'patches': ['readiness', 'iteration-policy', 'reme-status', 'native-tools',
-                                  'explicit-survival-finish', 'life-memory-evidence', 'engineering-native-help']}))
+                      'patches': ['readiness', 'iteration-policy',
+                                  *(['reme-status'] if reme_compat else []), 'native-tools',
+                                  'explicit-survival-finish', 'survival-request-context',
+                                  'life-memory-evidence', 'engineering-native-help']}))
 
 
 if __name__ == '__main__':

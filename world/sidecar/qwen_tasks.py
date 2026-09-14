@@ -255,6 +255,19 @@ class QwenTasks:
                         or saved.get('allowedTools') != allowed_tools):
                     raise ValueError('qwen_request_conflict')
                 return saved | {'retryAutomatically': False}
+            # During an explicit runtime upgrade the HTTP/MCP service remains
+            # available for discovery and original-task polling. Do not reserve
+            # a fresh model request while its Qwen process is being replaced.
+            admission_path = self.root / 'admission.json'
+            if admission_path.exists():
+                admission = read_json(admission_path, max_bytes=16384)
+                if (not isinstance(admission, dict) or admission.get('schema') != 1
+                        or type(admission.get('paused')) is not bool
+                        or admission.get('operator') != 'project-maintenance'):
+                    raise ValueError('qwen_admission_control_invalid')
+                if admission['paused']:
+                    return {'status': 'busy', 'purpose': purpose,
+                            'reason': 'runtime_maintenance', 'retryAutomatically': False}
             # Native chat, party input and future wakeups for this character use
             # one durable gate. Unknown submissions never age out of this gate.
             active_path = self.root / 'active-roles' / (hashlib.sha256(role.encode()).hexdigest() + '.json')

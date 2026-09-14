@@ -154,6 +154,29 @@ class EvidenceTests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_unreviewed_versions_fail_before_accessing_memory(self):
+        for versions in [('2.2.1', '0.4.1.10'), ('2.2.0', '0.4.1.11'), ('future', 'future')]:
+            with self.subTest(versions=versions):
+                with self.assertRaisesRegex(ValueError, 'review_new_life_memory_versions'):
+                    runtime.check_upstream_contract(versions)
+
+    @unittest.skipUnless(importlib.util.find_spec('reme'), 'pinned native container required')
+    def test_native_formatter_still_omits_actions_and_source_is_reviewed(self):
+        import importlib.metadata
+        from reme.steps.evolve._evolve import format_history
+        from agentscope.message import Msg
+        versions = (importlib.metadata.version('qwenpaw'), importlib.metadata.version('reme-ai'))
+        runtime.check_upstream_contract(versions)
+        messages = [Msg.model_validate(m) for m in conversation([('numen_survival__eat', response())])]
+        native = format_history(messages)
+        self.assertIn('I ate and built a castle.', native)
+        self.assertNotIn('completionConfirmed', native)
+        self.assertNotIn('numen_survival__eat', native)
+        if versions == ('2.2.1', '0.4.1.11'):
+            with patch.object(runtime.inspect, 'getsource', return_value='changed upstream'):
+                with self.assertRaisesRegex(ValueError, 'review_new_life_memory_format_history'):
+                    runtime.check_upstream_contract(versions)
+
     def test_exact_pair_scope_and_other_config_unchanged(self):
         self.assertIsNone(runtime.member_for('qd-engineer', '/state/work/workspaces/qd-engineer', pair()))
         self.assertIsNone(runtime.member_for('qd-survivor', '/other/qd-survivor', pair()))

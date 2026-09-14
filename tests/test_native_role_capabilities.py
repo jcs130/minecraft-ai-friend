@@ -57,6 +57,9 @@ class NativeRoleCapabilities(unittest.TestCase):
         self.assertFalse(self.blocked('read_file', 'file_path', 'skills/make-skill/SKILL.md'))
 
     def test_native_skill_names_cannot_impersonate_project_managed_skills(self):
+        if native.package_version() == '2.2.1':
+            self.assertNotIn('materialize_skill', native.NATIVE_TOOLS)
+            return
         self.assertFalse(self.blocked('materialize_skill', 'name', 'review-farm-observation'))
         self.assertTrue(self.blocked('materialize_skill', 'name', 'qd-learned-bypass'))
 
@@ -75,7 +78,8 @@ class NativeRoleCapabilities(unittest.TestCase):
 
 
 @unittest.skipUnless(os.name == 'posix' and os.environ.get('QWENPAW_WORKING_DIR') == '/state/work'
-    and importlib.util.find_spec('qwenpaw'), 'Run inside the disposable pinned Qwen image with QWENPAW_WORKING_DIR=/state/work')
+    and importlib.util.find_spec('qwenpaw') and native.package_version() == '2.2.0',
+    'Legacy materialize_skill checks require disposable QwenPaw 2.2.0; 2.2.1 uses test_native_make_skill_policy')
 class InstalledNativeImplementation(unittest.TestCase):
     def test_z_real_policy_and_legacy_wrappers_bind_each_role(self):
         import asyncio

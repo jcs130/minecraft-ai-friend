@@ -29,6 +29,16 @@ class GameRuntimeHealth(unittest.TestCase):
         self.assertFalse(self.probe(behavior=False)['ok'])
         self.assertFalse(self.probe(exit_code=1)['ok'])
 
+    def test_reviewed_new_release_requires_the_same_behavior_evidence(self):
+        valid = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.1',
+                 'agents': 6, 'enabledTools': 6, 'authMode': 'local-passwordless',
+                 'anonymousAccess': True, 'baseAgents': 6, 'maidAgents': 0,
+                 'cronBudgetGuardVerified': True, 'installedSkillBindings': 30,
+                 'nativeToolPolicyVerified': True}
+        self.assertTrue(self.probe(valid)['ok'])
+        self.assertFalse(self.probe(valid, behavior=False)['ok'])
+        self.assertFalse(self.probe({**valid, 'packageVersion': '2.2.2'})['ok'])
+
     def test_old_version_or_wrong_roles_cannot_pass(self):
         valid = {'ok': True, 'project': 'qiandengji', 'packageVersion': '2.2.0',
                  'agents': 6, 'enabledTools': 7, 'authMode': 'local-passwordless', 'anonymousAccess': True,

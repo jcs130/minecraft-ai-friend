@@ -201,7 +201,8 @@ def check_skill_inventory(folder, items):
 
 def check_runtime_config():
     from upgrade_qwenpaw_runtime import assert_quiet, driver_cards
-    assert importlib.metadata.version('qwenpaw') == '2.2.0'
+    from qwenpaw_runtime_contract import release
+    release()
     config = json.loads(Path('/state/work/config.json').read_text())
     assert_quiet(config['agents']['running'])
     assert {aid for aid, ref in config['agents']['profiles'].items() if ref['enabled']} == set(roles('game'))
@@ -280,6 +281,9 @@ def main():
     PHASE = 'native-cron-budget-guard'
     guard_verified = validate_guard('/state/work', 'game')
     marker = json.loads(Path('/state/work/learning-runtime.json').read_text())
+    from qwenpaw_runtime_contract import release
+    actual_version = release()
+    assert marker['qwenVersion'] == actual_version
     assert marker.get('survivalTurnRuntimeVersion') == 3
     assert marker.get('survivalRequestRuntimeVersion') == 1
     assert marker.get('lifeMemoryEvidenceVersion') == 1
@@ -289,7 +293,7 @@ def main():
     PHASE = 'auth-mode'
     check_passwordless_auth(get)
     PHASE = 'api-version'
-    assert get('/version').get('version') == '2.2.0'
+    assert get('/version').get('version') == actual_version
     PHASE = 'readiness'
     ready = get('/healthz')
     assert ready.get('status') == 'ok'
@@ -339,7 +343,7 @@ def main():
         validate_jobs({'jobs': [item.get('spec', item) for item in (jobs if isinstance(jobs, list) else jobs['jobs'])]}, aid, 'game')
     print(json.dumps({'project': 'qiandengji', 'ok': True, 'authEnforced': False,
                       'authMode': 'local-passwordless', 'authEnabled': False, 'anonymousAccess': True,
-                      'packageVersion': '2.2.0', 'agents': len(expected_roles), 'enabledTools': len(NATIVE_TOOLS),
+                      'packageVersion': actual_version, 'agents': len(expected_roles), 'enabledTools': len(NATIVE_TOOLS),
                       'expectedAgents': sorted(expected_roles),
                       'nativeReadRequests': len(responses), 'elapsedSeconds': round(time.monotonic()-started,3),
                       'nativeToolPolicyVerified': True, 'officialSkillBindings': len(NATIVE_SKILLS) * len(expected_roles),

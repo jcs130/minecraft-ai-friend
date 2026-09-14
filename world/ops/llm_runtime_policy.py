@@ -7,13 +7,10 @@ restores the serializable native config before any model/tool work starts.
 """
 from copy import deepcopy
 from functools import wraps
-import importlib.metadata
 import inspect
 import math
 
 VERSION = 1
-QWEN_VERSION = '2.2.0'
-AGENTSCOPE_VERSION = '2.0.7.post1'
 
 
 def unrestricted_running(running):
@@ -68,9 +65,8 @@ def wrap_next_action(original):
 def install(runtime):
     if runtime not in ('game', 'operations'):
         raise ValueError('invalid_llm_policy_runtime')
-    if (importlib.metadata.version('qwenpaw') != QWEN_VERSION
-            or importlib.metadata.version('agentscope') != AGENTSCOPE_VERSION):
-        raise ValueError('review_new_qwen_iteration_contract')
+    from qwenpaw_runtime_contract import verify_sources, verify_callable
+    verify_sources('agent')
     from qwenpaw.agents.react_agent import QwenPawAgent
     from agentscope.agent import Agent
     if getattr(QwenPawAgent, '_qiandeng_llm_policy', None) == VERSION:
@@ -78,6 +74,7 @@ def install(runtime):
     assert QwenPawAgent._next_action is Agent._next_action
     assert not inspect.iscoroutinefunction(Agent._next_action)
     assert tuple(inspect.signature(Agent._next_action).parameters) == ('self', 'final_msg')
+    verify_callable('next_action', Agent._next_action)
     QwenPawAgent._next_action = wrap_next_action(Agent._next_action)
     QwenPawAgent._qiandeng_llm_policy = VERSION
     return VERSION

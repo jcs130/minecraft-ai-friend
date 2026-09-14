@@ -158,6 +158,8 @@ services:
     image: qiandengji-sidecar:20260913-qd1
     pull_policy: never
     restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 30s
     entrypoint: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
     environment:
       TZ: Asia/Shanghai
@@ -234,7 +236,7 @@ services:
       retries: 3
 
   qwenpaw:
-    image: qiandengji-qwenpaw-game:2.2.0-autonomy16
+    image: qiandengji-qwenpaw-game:2.2.1-memory1
     pull_policy: never
     restart: unless-stopped
     # Native HTTP MCP clients are loaded with each role. Start their NPC

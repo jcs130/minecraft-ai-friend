@@ -195,7 +195,8 @@ def validate_guard(state, runtime, proc=Path('/proc')):
     assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == VERSION
     assert marker['nativeToolGuardVersion'] == 1
     assert marker['llmPolicyVersion'] == 1
-    assert marker['qwenVersion'] == '2.2.0' and marker['scheduler'] == 'native-qwen-cron'
+    from qwenpaw_runtime_contract import RELEASES
+    assert marker['qwenVersion'] in RELEASES and marker['scheduler'] == 'native-qwen-cron'
     pid = marker['pid']
     assert type(pid) is int and pid > 0
     command = (Path(proc) / str(pid) / 'cmdline').read_bytes().split(b'\0')

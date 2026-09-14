@@ -1,5 +1,11 @@
 # 千灯纪整合项目
 
+2026-09-14 18:39 最新运行：游戏18089已升级QwenPaw2.2.1/ReMe0.4.1.11，正式image为qiandengji-qwenpaw-game:2.2.1-memory1（41ddc296…408c4）；宿主8088、Minecraft、survivor aut18未随包升级重启。原10角色/96技能绑定/16Cron、即时模型、人设、会话记忆全部保留，18:33已恢复自主。官方MakeSkill2.0完整脚本及公共技能池已更新；基础工具6项，旧materialize_skill已移除，勿恢复旧工具凑计数。原生ReMe统计修复已采用，生活真实回执扩展继续保留，AutoMemory5外部回合/小时Dream/native上下文参数原样，Scroll/AutoFin/第三方插件未启用。升级及复用研究见docs/QWENPAW-221-UPGRADE.md与docs/QWENPAW-CAPABILITY-REUSE.md，旧初始化器不可重跑。
+
+本次先排空原生任务和18点Dream，Qwen/NPC正常退出0，5910文件335MB逐字节备份；最小迁移先副本后正式，工具SHA23e9f83d…b7dd，仅130预期工作文件变化，其他4637原字节不动；幂等再执行4767工作文件全等。维护已结束，不要再次暂停/重放；NPC新增operator admission需相同维护ID恢复，stop_signal=SIGINT。结衣task-256878865747执行后未被NPC收取终态，新进程404/idle0/NPC停机核验后仅独立released_without_result证明，原结果未核实、原记录/预算/session不改。今后停Qwen前须收取所有active-roles指向的原任务终态，不能只看native active=0。
+
+新版首轮实机：桐人task-3cb90737680e在原life-e522…会话自主进食、4次导航、remember，18:38:18控制器确认completed/nativeTaskCompleted，18:38:33自然进入task-96294f6eb6f9。结衣同原session已有两轮完成，第三轮继续；各自并发1，未发现升级阻断。101次原生健康GET/10角色/96绑定通过，13服务运行正常；全项目旧architecture/skillbar等历史验收仍有来源过期，不能改旧hash凑绿或把这次升级说成全部游戏玩法验收完成。
+
 2026-09-14 17:42 最终实机：结衣新signed输入task-b0f72dabda12已在原session真实completed，旧占位修复已线上覆盖；游戏callback无独立持久回执，不能称本条已heard。17:37:30另一个新输入被正在运行的party-life正常busy拒绝，未入模型；旧错误未复发，忙时排队尚未实现，不能将笼统桥接日志当成同一请求。17:41:53桐人已自动接续task-e10b556f9053、无新unknown，13服务健康、16原Cron/模型保留，自主保持enabled。不要重新暂停或重投旧请求；最终证据见下述文档。
 
 2026-09-14 17:37 最新恢复：17:22仅为结衣对话适配维护暂停原16Cron，原桐人回合17:26:48自然drain、天神长任务自然结束后，仅NPC17:34:20重载（主服/Qwen/survivor不再重启）。MaidAdapter现接受QwenTasks对原9/9占位严格核验的released_without_result，只供不同新输入；旧task-d0d283af1f8b保持poll_unavailable、不重投、不改成功。94相关测试过；1042文件/1043047字节NPC状态备份，原maid与两party持久MCP session重载后3次只读tools/list全200，身份/请求/证明原字节保留。17:36:11恢复原16Cron和自主控制，17:37确认13服务健康、16班次完整spec及10角色即时模型/名称相同；桐人task-71dbd4226e58和结衣原会话新任务自然开始、无unknown。之前aut18两轮已自然完成并确认7导航成功/2进食和真实游戏heard回复，结衣主动工作/装备建造与模型总结准确性不能因此称全部完成。当前继续运行，不要按下文旧维护状态再次resume/重放；完整证据见docs/AUTONOMY-PROGRESS-REPAIR.md。

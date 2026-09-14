@@ -632,13 +632,14 @@ def probe_game_qwenpaw():
             and receipt.get('installedSkillBindings') == receipt['configuredSkillBindings']) if consolidated else (
                 receipt.get('agents') == 6 + receipt.get('maidAgents', -100))
         runtime = {'ok': (receipt.get('ok') is True and receipt.get('project') == 'qiandengji'
-            and receipt.get('packageVersion') == '2.2.0'
+            and receipt.get('packageVersion') in ('2.2.0', '2.2.1')
             and type(receipt.get('agents')) is int
             and type(receipt.get('maidAgents')) is int and 0 <= receipt['maidAgents'] <= 64
             and receipt.get('baseAgents') == 6 and role_count_ok
             and receipt.get('cronBudgetGuardVerified') is True
             and type(receipt.get('installedSkillBindings')) is int and receipt['installedSkillBindings'] >= 30
-            and type(receipt.get('enabledTools')) is int and receipt['enabledTools'] == 7
+            and type(receipt.get('enabledTools')) is int
+            and receipt['enabledTools'] == (6 if receipt.get('packageVersion') == '2.2.1' else 7)
             and receipt.get('nativeToolPolicyVerified') is True
             and receipt.get('authMode') == 'local-passwordless'
             and receipt.get('anonymousAccess') is True),
@@ -649,7 +650,7 @@ def probe_game_qwenpaw():
         'official-update-command', 'offline-config-migration', 'state-preserved',
         'world-provider-connection', 'passwordless-agents-ui', 'other-runtimes-preserved'))
     return {'ok': runtime['ok'] and behavior['ok'], 'runtime': runtime, 'behavior': behavior,
-            'scope': '2.2.0 game runtime readiness and upgrade checks; no new model inference test'}
+            'scope': 'Reviewed game runtime readiness and upgrade evidence; no new model inference test'}
 
 
 def probe_operations_team():

@@ -14,8 +14,8 @@ import subprocess
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-TAGS = {'game': 'qiandengji-qwenpaw-game:2.2.0-recovery1',
-        'survivor': 'qiandengji-survivor:2.2.0-recovery1'}
+TAGS = {'game': 'qiandengji-qwenpaw-game:2.2.1-recovery1',
+        'survivor': 'qiandengji-survivor:2.2.1-recovery1'}
 
 
 def digest(path):

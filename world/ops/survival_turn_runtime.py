@@ -5,7 +5,6 @@ Ordinary remember calls remain checkpoints. Only the current successful MCP
 call with finish_turn=true supplies the model-authored final answer.
 """
 from functools import wraps
-import importlib.metadata
 import inspect
 import json
 import re
@@ -128,9 +127,8 @@ def wrap_reasoning_impl(original):
 def install(runtime):
     if runtime != 'game':
         raise ValueError('survival_finish_requires_game_runtime')
-    if (importlib.metadata.version('qwenpaw') != '2.2.0'
-            or importlib.metadata.version('agentscope') != '2.0.7.post1'):
-        raise ValueError('review_native_survival_finish_contract')
+    from qwenpaw_runtime_contract import verify_sources, verify_callable
+    verify_sources('agent', 'builder')
     from qwenpaw.agents.react_agent import QwenPawAgent
     if getattr(QwenPawAgent, '_qiandeng_survival_finish', None) == VERSION:
         return VERSION
@@ -139,6 +137,7 @@ def install(runtime):
     original = QwenPawAgent._reasoning_impl
     if tuple(inspect.signature(original).parameters) != ('self', 'tool_choice'):
         raise ValueError('native_survival_finish_signature_changed')
+    verify_callable('reasoning_impl', original)
     QwenPawAgent._reasoning_impl = wrap_reasoning_impl(original)
     QwenPawAgent._qiandeng_survival_finish = VERSION
     return VERSION

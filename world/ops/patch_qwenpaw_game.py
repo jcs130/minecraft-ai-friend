@@ -1,10 +1,11 @@
-"""Build-only readiness fix for QwenPaw 2.2.0 with the default agent disabled."""
+"""Build-only readiness fix for reviewed QwenPaw releases, default disabled."""
 import hashlib
 import importlib.metadata
 import json
 
 VERSION = '2.2.0'
 SOURCE_SHA256 = '656627f256fcdb081861019139f06c00592537751b8d10252d0f73062f5b2ad1'
+SOURCE_VERSIONS = {VERSION: SOURCE_SHA256, '2.2.1': SOURCE_SHA256}
 ANCHOR = '''        # Build result mapping
         result_map = dict(results)
         success_count = sum(1 for success in result_map.values() if success)
@@ -31,10 +32,10 @@ REPLACEMENT = '''        # Build result mapping
 
 
 def patch_source(source, version):
-    if version != VERSION:
+    if version not in SOURCE_VERSIONS:
         raise ValueError('Review the readiness patch before changing QwenPaw version')
-    if hashlib.sha256(source.encode('utf-8')).hexdigest() != SOURCE_SHA256:
-        raise ValueError('QwenPaw source differs from the reviewed 2.2.0 release')
+    if hashlib.sha256(source.encode('utf-8')).hexdigest() != SOURCE_VERSIONS[version]:
+        raise ValueError('QwenPaw source differs from the reviewed release')
     if source.count(ANCHOR) != 1:
         raise ValueError('QwenPaw readiness patch context is not unique')
     return source.replace(ANCHOR, REPLACEMENT, 1)
@@ -50,7 +51,7 @@ def main():
     temporary.write_text(patched, encoding='utf-8')
     temporary.chmod(path.stat().st_mode)
     temporary.replace(path)
-    print(json.dumps({'project': 'qiandengji', 'ok': True, 'packageVersion': VERSION,
+    print(json.dumps({'project': 'qiandengji', 'ok': True, 'packageVersion': package.version,
                       'patch': 'disabled-default-readiness',
                       'sourceSha256': SOURCE_SHA256,
                       'patchedSha256': hashlib.sha256(patched.encode('utf-8')).hexdigest()}))

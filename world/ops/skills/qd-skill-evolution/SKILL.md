@@ -5,7 +5,9 @@ description: 保存和查阅个人经验、资料与代码草稿；反复遇到�
 
 # 有证据地改进自己的技能
 
-优先复用已有技能。已启用的官方 `make-skill` 用于把普通工作流交给原生 `materialize_skill` 保存、扫描和启用；官方 `file_reader` 与原生文件工具用于本角色笔记和参考材料；官方 `cron` 管理已有原生周任务。普通技能使用自己的名称，不占用项目保留的 `qd-` 前缀。不要为了套用下面的流程重新实现这些官方能力。
+优先复用已有技能。已启用的官方 `make-skill` 用于保存、扫描和启用普通工作流，按当前版本的正文执行；官方 `file_reader` 与原生文件工具用于本角色笔记和参考材料；官方 `cron` 管理已有原生周任务。普通技能使用自己的名称，不占用项目保留的 `qd-` 前缀。不要为了套用下面的流程重新实现这些官方能力。
+
+QwenPaw 2.2.1 的 make-skill 2.0 使用四个官方本地脚本，旧版的 `materialize_skill` 已不适用。先读取该 Skill。用原生文件工具将脚本输入 JSON 保存到自己的 `notes/` 或 `drafts/`，执行 `python -B scripts/<脚本>.py --input /state/work/workspaces/<当前角色>/notes/<输入>.json`，cwd 是自己的 `skills/make-skill` 完整路径；`-B` 保持官方包不产生缓存文件。脚本限 `create_plan`、`init_draft`、`validate_skill`、`publish_skill`；有 workspace 字段时填写自己的工作区。沿用已获授权的个人资料与普通流程整理，在当前任务内前台完成，不重复请求同一授权；仅当新增操作超出原授权时再询问。普通说明技能可采用 test=off，仍须官方校验及扫描；未做行为测试如实说明。游戏程序仍走原晋升流程，不能将官方发布当作游戏动作验收。此处 publish 只在本角色工作区安装，不是上传市场。
 
 个人经验可以直接写文件，不必先创建技能。用 `write_file` 保存新主题，用 `append_file` 追加结果，用 `edit_file` 修正已经读过的内容；原生工具会创建需要的父目录。建议以 `notes/index.md` 的短索引指向各主题笔记，`drafts/` 放代码和流程草稿。当前任务需要旧经验时只读索引和相关一页。需要记录模板、修订方法或从笔记提炼技能时，再用 `read_file` 读取本技能目录下的 `references/notes.md`。
 

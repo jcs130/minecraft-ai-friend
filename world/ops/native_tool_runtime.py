@@ -7,7 +7,6 @@ the official file/shell/materialization implementations remain unchanged.
 import asyncio
 from contextvars import ContextVar
 import hashlib
-import importlib.metadata
 import json
 from pathlib import Path
 
@@ -71,7 +70,8 @@ def install(runtime):
     global INSTALLED
     if INSTALLED:
         return VERSION
-    assert importlib.metadata.version('qwenpaw') == '2.2.0'
+    from qwenpaw_runtime_contract import verify_sources
+    verify_sources('policy', 'legacy', 'engine', 'file_guard', 'rule_guard')
     from agentscope.permission import PermissionBehavior, PermissionDecision
     from qwenpaw.config.context import get_current_workspace_dir
     from qwenpaw.constant import WORKING_DIR
@@ -118,6 +118,12 @@ def install(runtime):
                         return owns_task(actor, task_id)
                     validate_team(role, input_data or {}, self.name, runtime=runtime,
                         registered_roles=roles(runtime), case_check=case_check, task_check=task_check)
+                arguments = input_data or {}
+                command = arguments.get('command')
+                if (self.name == 'execute_shell_command' and isinstance(command, str)
+                        and command.startswith('python -B scripts/')):
+                    from native_make_skill_policy import validate_shell
+                    validate_shell(role, arguments, folder)
                 allowed = await asyncio.to_thread(check, engine, self.name, input_data or {})
                 assert allowed
             except Exception:

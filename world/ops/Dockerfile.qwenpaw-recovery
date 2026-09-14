@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # These three versions are the contracts checked by the existing runtime hooks.
 # Transformers keeps the previously deployed 4.x contract, without local LLMs.
 RUN python -m pip install --no-cache-dir --index-url "$PIP_INDEX_URL" \
-    qwenpaw==2.2.0 agentscope==2.0.7.post1 reme-ai==0.4.1.10 \
+    qwenpaw==2.2.1 agentscope==2.0.7.post1 reme-ai==0.4.1.11 \
     transformers==4.57.1 nbtlib==2.0.4 quickjs-ng==0.16.2.1
 COPY ops /ops
 COPY survival /survival

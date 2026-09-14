@@ -16,6 +16,7 @@ from typing import Any
 
 # Verified package metadata for this exact local image, not its mutable tag.
 AUDITED_IMAGE_PACKAGES = {
+    "sha256:41ddc296a4e8f281a18651c0a06dbd7c1b90b29dece4a40f6fa9b97812c408c4": "2.2.1",
     "sha256:2f8b935ba6e64a60299700d6e9fd2affdfeb12824d39d566fb8112c76a809122": "2.2.0",
     "sha256:a48facbff0b21e897ef34e43bf08b93f04f02a0a8e3bfcc37ef520527de6a751": "2.2.0",
     "sha256:041af8111ee91ec0180a5d50ca876e89301fc9d03401ee4852858431999a3181": "2.1.0",

@@ -1,8 +1,8 @@
 """No model requests: inspect the native backend and scheduler heartbeat."""
-import importlib.metadata
 import json
 import os
 from pathlib import Path
+import sys
 import time
 import urllib.request
 from native_tools import require_ready
@@ -10,7 +10,9 @@ from native_tools import require_ready
 
 def check():
     state = Path('/state')
-    assert importlib.metadata.version('qwenpaw') == '2.2.0'
+    sys.path.insert(0, '/ops')
+    from qwenpaw_runtime_contract import release
+    release()
     assert os.environ.get('QWENPAW_AUTH_ENABLED') == '0'
     external = os.environ.get('SURVIVOR_QWEN_MODE', 'external') == 'external'
     if not external:
