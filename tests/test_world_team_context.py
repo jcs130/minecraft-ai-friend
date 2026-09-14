@@ -77,5 +77,50 @@ class TeamContextFreshnessTests(unittest.TestCase):
         self.assertEqual(malformed['world']['unhealthyServices'], [])
 
 
+class NpcLlmEnabledTests(unittest.TestCase):
+    """case-761672: llmEnabled=false is explicit compose config, surfaced as such."""
+
+    def context(self, npc, fresh=True):
+        registered = {}
+
+        class App:
+            def tool(self):
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        fake = N(snapshot=lambda: {'snapshots': {'world': {'fresh': fresh, 'data': {'npc': npc}}}})
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_disabled_flag_is_summarised_as_explicit_configuration(self):
+        result = self.context({'available': True, 'llmEnabled': False,
+                               'spawnMissing': False, 'threads': [{'name': 'inbox', 'ok': True}]})
+        self.assertIs(result['world']['npcLlmEnabled'], False)
+        self.assertIn('NPC_LLM_ENABLED', result['notice'])
+        self.assertIn('not by itself a service fault', result['notice'])
+        self.assertIn('owner configuration decision', result['notice'])
+
+    def test_enabled_flag_is_summarised_without_the_config_note(self):
+        result = self.context({'available': True, 'llmEnabled': True})
+        self.assertIs(result['world']['npcLlmEnabled'], True)
+        self.assertNotIn('NPC_LLM_ENABLED', result['notice'])
+
+    def test_absent_or_malformed_npc_record_stays_quiet(self):
+        for npc in ({}, {'llmEnabled': 'false'}, {'llmEnabled': None}, 'not-a-dict'):
+            result = self.context(npc)
+            self.assertNotIn('npcLlmEnabled', result['world'])
+            self.assertNotIn('NPC_LLM_ENABLED', result['notice'])
+
+    def test_expired_world_record_qualifies_the_config_note(self):
+        result = self.context({'llmEnabled': False}, fresh=False)
+        self.assertEqual(result['world']['staleSnapshots'], ['world'])
+        self.assertIs(result['world']['npcLlmEnabled'], False)
+        self.assertIn('the world record carrying it is expired', result['notice'])
+
+
 if __name__ == '__main__':
     unittest.main()

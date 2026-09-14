@@ -38,6 +38,21 @@ def unhealthy_service_evidence(sections):
     return unhealthy, evidence
 
 
+def npc_llm_enabled(sections):
+    """Raw npc llmEnabled flag from the world record, or None when absent or malformed.
+
+    compose.yml ships NPC_LLM_ENABLED="0" for the npc sidecar. case-761672 burned many
+    shifts re-diagnosing that explicit setting as a live model-service outage while every
+    npc thread stayed ok, so team_context surfaces the flag together with the
+    configuration-versus-fault distinction instead of leaving it buried in raw data.
+    """
+    world = sections.get('world') if isinstance(sections.get('world'), dict) else {}
+    data = world.get('data') if isinstance(world.get('data'), dict) else {}
+    npc = data.get('npc') if isinstance(data.get('npc'), dict) else {}
+    enabled = npc.get('llmEnabled')
+    return enabled if isinstance(enabled, bool) else None
+
+
 def register_team_tools(app, actor, state=Path('/team')):
     store = TeamStore(actor, state)
 
@@ -70,6 +85,15 @@ def register_team_tools(app, actor, state=Path('/team')):
                       + '; unhealthyServiceEvidence carries each service state/health/ready fields so a'
                         ' running-but-unhealthy divergence can be judged from the record itself'
                       + '; a single record is not a recurrence pattern.')
+        llm_enabled = npc_llm_enabled(sections)
+        if llm_enabled is not None:
+            snapshot['npcLlmEnabled'] = llm_enabled
+            if llm_enabled is False:
+                notes += (' npcLlmEnabled=false is the explicit deployment setting for the npc sidecar'
+                          ' (compose NPC_LLM_ENABLED), not by itself a service fault; changing it is an'
+                          ' owner configuration decision'
+                          + ('; the world record carrying it is expired' if 'world' in stale else '')
+                          + '.')
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
                       'A report or tested commit is not proof of a deployed game fix.' + notes}

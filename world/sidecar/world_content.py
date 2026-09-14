@@ -19,6 +19,10 @@ from qwen_tasks import read_json, write_json, state_lock
 from guild_rules import gather_matches, is_far_horizon
 
 ACTORS = ('game:qd-guild-planner', 'game:mc-god', 'operations:mc-priest')
+# Terminal publication outcomes (see _publish_one). A proposal record must
+# never keep reporting 'proposed' once its receipt reached one of these:
+# receipts are authoritative for the top-level status shown by read().
+TERMINAL_PUBLICATION = ('published', 'blocked', 'expired')
 ID = re.compile(r'[A-Za-z0-9_-]{1,80}\Z')
 CONTENT_ID = re.compile(r'content-[a-f0-9]{24}\Z')
 MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
@@ -213,7 +217,30 @@ class ContentQueue:
             return {'ok': False, 'code': 'content_not_found'}
         row = load(path)
         publication = self.root / 'receipts' / (content_id + '.json')
-        return {'ok': True, **row, 'publication': load(publication) if publication.exists() else None}
+        receipt = load(publication) if publication.exists() else None
+        if (isinstance(receipt, dict) and row.get('status') == 'proposed'
+                and receipt.get('status') in TERMINAL_PUBLICATION):
+            # A terminal publication receipt wins over a proposal record that
+            # missed the update, so world_content_read never answers
+            # status='proposed' beside a published/blocked/expired receipt.
+            # This stays read-only (publish/tick heal the durable record);
+            # read() also runs inside their locks.
+            row = {**row, 'status': receipt['status'], 'statusSource': 'publication'}
+        return {'ok': True, **row, 'publication': receipt}
+
+    def _sync_proposal_status(self, content_id, status):
+        """Publication receipts are authoritative: when one reaches a
+        terminal outcome the proposal record's top-level status follows, so
+        acceptance shifts never re-approve or misread already-published
+        content (case content-read-top-status-vs-publication-published)."""
+        require(status in TERMINAL_PUBLICATION, 'invalid_content_publication_status')
+        path = self.root / 'proposals' / (content_id + '.json')
+        if not path.exists():
+            return
+        row = load(path)
+        if row.get('status') == 'proposed' and row.get('contentId') == content_id:
+            row['status'] = status
+            save(path, row)
 
     def submit(self, actor, request_id, payload):
         require(actor == 'game:qd-guild-planner', 'content_designer_required')
@@ -476,7 +503,8 @@ def _publish_one(queue, npc, guild, request, current, clock):
     content = proposal['content']
     receipt_path = queue.root / 'receipts' / (content_id + '.json')
     receipt = load(receipt_path) if receipt_path.exists() else None
-    if receipt and receipt['status'] in ('published', 'blocked', 'expired'):
+    if receipt and receipt['status'] in TERMINAL_PUBLICATION:
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
     day = date.fromisoformat(content['date'])
     if day > current:
@@ -484,6 +512,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
     if day < current:
         receipt = {'contentId': content_id, 'status': 'expired', 'date': content['date'], 'updatedAt': clock()}
         save(receipt_path, receipt)
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
     with guild.state_lock():
         # Initialize today's normal publication first, then append without its
@@ -506,6 +535,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
             except ValueError as exc:
                 receipt = {'contentId': content_id, 'status': 'blocked', 'code': str(exc), 'updatedAt': clock()}
                 save(receipt_path, receipt)
+                queue._sync_proposal_status(content_id, receipt['status'])
                 return receipt
             receipt = {'schema': 1, 'contentId': content_id, 'status': 'publishing', 'date': content['date'],
                        'proposalSha256': request['proposalSha256'], 'startedAt': clock(), 'worldActionsExecuted': 0,
@@ -547,6 +577,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
                        newContracts=len(receipt['boardRows']), referencedContracts=len(receipt['references']),
                        questIds=episode['questIds'])
         save(receipt_path, receipt)
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
 
 
@@ -622,6 +653,21 @@ def tick(npc, guild, *, state=Path('/team'), today=None, clock=time.time):
                 results.append(_publish_one(queue, npc, guild, request, current, clock))
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 results.append({'contentId': path.stem, 'status': 'publication_unconfirmed', 'errorType': type(exc).__name__})
+        # Reconcile proposal records whose receipts already reached a
+        # terminal outcome before the direct status sync existed; receipts
+        # win, the record is healed instead of re-derived or left stale.
+        for path in sorted((queue.root / 'proposals').glob('*.json')):
+            try:
+                if not CONTENT_ID.fullmatch(path.stem):
+                    continue
+                receipt_path = queue.root / 'receipts' / (path.stem + '.json')
+                if not receipt_path.exists():
+                    continue
+                receipt = load(receipt_path)
+                if receipt.get('status') in TERMINAL_PUBLICATION:
+                    queue._sync_proposal_status(path.stem, receipt['status'])
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
         context = make_context(npc, guild, today=current, clock=clock)
         save(queue.root / 'context.json', context)
         public = {'schema': 1, 'updatedAt': clock(), 'publications': [{k: r.get(k) for k in
