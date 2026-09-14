@@ -57,6 +57,10 @@ class MaidMcpHttpTests(RegistryFixtures):
         session = self.initialize()
         _, _, reply = self.request({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}, session=session)
         self.assertEqual([t['name'] for t in reply['result']['tools']], TOOLS)
+        catalog = next(t for t in reply['result']['tools'] if t['name'] == 'task_catalog')
+        self.assertEqual(catalog['inputSchema']['properties']['query']['type'], 'string')
+        self.assertEqual(catalog['inputSchema']['required'], [])
+        self.assertIn('farm', catalog['description'])
         for schema in reply['result']['tools']:
             self.assertFalse(schema['inputSchema']['additionalProperties'])
             self.assertNotIn('maidUuid', schema['inputSchema']['properties'])

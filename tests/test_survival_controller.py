@@ -7,12 +7,40 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
-from controller import Controller
+from controller import Controller, main_inventory_summary
 from control import update_control
 from numen_gateway import read_json, write_json, GatewayError
 
 BODY_UUID = 'd4ac9523-4962-43ed-98c5-19b49e104048'
 VERSION = 'a' * 64
+
+
+class MainInventorySummaryTests(unittest.TestCase):
+    def test_main_slots_are_distinct_and_equipment_does_not_consume_them(self):
+        items = [{'slot': slot, 'id': 'minecraft:dirt', 'count': 64} for slot in range(36)]
+        items += [copy.deepcopy(items[0]), {'slot': 100, 'id': 'minecraft:iron_boots', 'count': 1},
+                  {'slot': -106, 'id': 'minecraft:shield', 'count': 1}]
+        body = {'ok': True, 'inventory': items, 'counts': {'minecraft:dirt': 1}}
+        before = copy.deepcopy(body)
+        self.assertEqual(main_inventory_summary(body),
+                         {'capacity': 36, 'occupiedSlots': 36, 'freeSlots': 0, 'available': True})
+        self.assertEqual(body, before)
+        body['inventory'] = [items[0], items[0], items[-1]]
+        self.assertEqual(main_inventory_summary(body)['freeSlots'], 35)
+
+    def test_only_a_valid_empty_snapshot_proves_empty_main_inventory(self):
+        self.assertEqual(main_inventory_summary({'ok': True, 'inventory': []}),
+                         {'capacity': 36, 'occupiedSlots': 0, 'freeSlots': 36, 'available': True})
+        for change in ({}, {'inventory': None}, {'inventory': {}}, {'inventory': ['invalid']},
+                       {'inventory': [{'id': 'minecraft:dirt', 'count': 1}]},
+                       {'inventory': [{'slot': True, 'id': 'minecraft:dirt', 'count': 1}]},
+                       {'inventory': [{'slot': 0, 'id': 'minecraft:dirt', 'count': 0}]},
+                       {'inventory': [{'slot': 0, 'id': 'minecraft:dirt', 'count': True}]},
+                       {'inventory': [{'slot': 0, 'count': 1}]},
+                       {'ok': False, 'inventory': []}):
+            with self.subTest(change=change):
+                self.assertEqual(main_inventory_summary({'ok': True, **change}),
+                                 {'capacity': 36, 'occupiedSlots': None, 'freeSlots': None, 'available': False})
 
 
 class FakeClock:
@@ -162,6 +190,21 @@ class ControllerTests(unittest.TestCase):
         self.backend.reply = {'status': 'finished', 'result': {'status': status,
             'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed',
                         'content': [{'type': 'text', 'text': 'Observed this round.'}]}]}}
+
+    def test_planning_context_carries_current_main_inventory_without_full_items_or_actions(self):
+        self.controller.data['wakeReason'] = 'initial'
+        body = self.gateway.snapshot()
+        body['inventory'] = [{'slot': slot, 'id': 'minecraft:dirt', 'count': 64} for slot in range(36)]
+        context = self.controller.planning_context(body, {}, 'turn-inventory')
+        self.assertEqual(context['body']['mainInventory'],
+                         {'capacity': 36, 'occupiedSlots': 36, 'freeSlots': 0, 'available': True})
+        self.assertNotIn('inventory', context['body'])
+        self.assertEqual(context['body']['counts'], body['counts'])
+        body['inventory'].pop()
+        context = self.controller.planning_context(body, {}, 'turn-inventory-next')
+        self.assertEqual(context['body']['mainInventory']['freeSlots'], 1)
+        self.assertEqual(self.gateway.actions, [])
+        self.assertEqual(self.backend.submitted, [])
 
     def test_drain_preserves_current_native_turn_and_lease_then_pauses(self):
         self.controller.tick()

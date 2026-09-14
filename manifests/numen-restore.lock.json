@@ -5,18 +5,19 @@
   "neoforge": "21.1.248",
   "client_required": false,
   "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
-  "sha256": "47cc11d609b03b62734c4772b2aa40a89ba02a5bbaab0d85ab10589d45ffec3b",
-  "size_bytes": 2460603,
+  "sha256": "bda81485d7a6760bb0288b232f251f4a12972936bd6c47104b1094b43397b1c8",
+  "size_bytes": 2463475,
   "cache_path": "vendor/numen-cache/numen-neoforge-1.21.1-0.1.1.jar",
-  "source_build": "tools/build_numen_autonomous.py",
-  "baseline_sha256": "97ed80699ef1d0e7c958566a5b2873e13d4476b6c865675547cf275c68d87d67",
-  "preserved_entries": 496,
+  "source_build": "tools/build_numen_world_tick_v3.py",
+  "baseline_sha256": "47cc11d609b03b62734c4772b2aa40a89ba02a5bbaab0d85ab10589d45ffec3b",
+  "preserved_entries": 497,
   "capabilities": [
     "existing_body_restore_v1",
     "walk_only_v1",
     "walk_only_strict_arrival_v2",
-    "autonomous_body_tick_v1"
+    "autonomous_body_tick_v1",
+    "autonomous_world_tick_v3"
   ],
-  "baseline_cache_path": "vendor/numen-cache/baseline-autonomous-numen.jar",
+  "baseline_cache_path": "vendor/numen-cache/baseline-world-tick-v3-numen.jar",
   "autonomous_config": "server/mc/config/numen-autonomous-bodies.json"
 }

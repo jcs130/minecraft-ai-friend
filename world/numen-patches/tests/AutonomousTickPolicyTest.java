@@ -92,6 +92,15 @@ public final class AutonomousTickPolicyTest {
                 OWNER, "Kirito", -1, false), "invalid death marker denied");
         check(!AutonomousBodyTick.eligible(permitted, BODY, OWNER, "Kirito", true, false,
                 OWNER, "Kirito", 0, true), "online owner stays with original native ticket path");
+        var region = AutonomousBodyTick.worldChunks(-40, 65);
+        check(region.size() == 9, "exact 3x3 world tick area");
+        check(region.contains(net.minecraft.world.level.ChunkPos.asLong(-40, 65)), "signed center preserved");
+        var adjacent = AutonomousBodyTick.worldChunks(-39, 65);
+        var overlap = new java.util.HashSet<>(region); overlap.retainAll(adjacent);
+        check(overlap.size() == 6, "neighbor move retains six own tickets");
+        var leaving = new java.util.HashSet<>(region); leaving.removeAll(adjacent);
+        check(leaving.size() == 3, "neighbor move releases only three old tickets");
+        check(java.util.Collections.disjoint(region, AutonomousBodyTick.worldChunks(-37, 65)), "distant move releases all old tickets");
         System.out.println("{\"ok\":true,\"assertions\":" + checks
                 + ",\"scope\":\"compiled authorization gate only; no game body or chunk created\"}");
     }

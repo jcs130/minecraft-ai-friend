@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CAPABILITY = 'autonomous_body_tick_v1'
 PREFIX = 'QD_NUMEN_AUTONOMY_JSON'
 BUILD_RECORD = 'runtime/numen-autonomous-build/latest.json'
+WORLD_BUILD_RECORD = 'runtime/numen-world-tick-build/latest.json'
+WORLD_CAPABILITY = 'autonomous_world_tick_v2'
+NEIGHBOR_BUILD_RECORD = 'runtime/numen-world-tick-v3-build/latest.json'
+NEIGHBOR_CAPABILITY = 'autonomous_world_tick_v3'
 CONFIG = 'server/mc/config/numen-autonomous-bodies.json'
 JAR = 'server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar'
 CHECKS = ('artifact_matches_build', 'source_current', 'exact_body_binding',
@@ -86,10 +90,22 @@ def check(root=ROOT, sample=read_status, pause=time.sleep, clock=time.time):
     checks = dict.fromkeys(CHECKS, False)
     evidence = {'samples': 0, 'entityTicking': False, 'bodyTicksAdvanced': None,
                 'serverTicksAdvanced': None, 'loadedChunkAloneIsEvidence': False}
+    world_tick = False
+    world_capability = WORLD_CAPABILITY
     try:
         record = document(root, BUILD_RECORD)
+        for build_file, capability in ((WORLD_BUILD_RECORD, WORLD_CAPABILITY), (NEIGHBOR_BUILD_RECORD, NEIGHBOR_CAPABILITY)):
+            if not (root / build_file).is_file(): continue
+            candidate = document(root, build_file)
+            if (candidate.get('capability') == capability
+                    and candidate.get('sha256') == digest_file(root, JAR)):
+                record = candidate
+                world_tick = True
+                world_capability = capability
+                checks['bounded_world_tick_ticket'] = False
+                checks['native_random_tick_eligible'] = False
         checks['artifact_matches_build'] = (record.get('ok') is True
-            and record.get('capability') == CAPABILITY
+            and record.get('capability') == (world_capability if world_tick else CAPABILITY)
             and isinstance(record.get('sha256'), str)
             and digest_file(root, JAR) == record['sha256'])
         sources = record.get('sourceFiles')
@@ -133,6 +149,21 @@ def check(root=ROOT, sample=read_status, pause=time.sleep, clock=time.time):
             assert body.get('eligible') is True or body.get('ownerOnline') is True
             rows.append(body)
         checks['entity_ticking'] = all(row.get('entityTicking') is True for row in rows)
+        if world_tick:
+            checks['bounded_world_tick_ticket'] = all(s.get('worldTickCapability') == world_capability
+                and s.get('worldTickRadius') == 2 and s.get('worldTickForceTicks') is True
+                and s.get('worldTickTimeoutTicks') == 40 and s.get('worldTickRefreshTicks') == 20 for s in samples)
+            checks['native_random_tick_eligible'] = all(row.get('worldTickTicketActive') is True
+                and row.get('nativeForceTicks') is True
+                and integer(row.get('worldTickLastRefreshServerTick'))
+                and 0 <= status['serverTick'] - row['worldTickLastRefreshServerTick'] < 40
+                for status, row in zip(samples, rows))
+            if world_capability == NEIGHBOR_CAPABILITY:
+                checks['bounded_world_tick_neighborhood'] = all(s.get('worldTickChunkRadius') == 1
+                    and s.get('worldTickChunkCount') == 9 for s in samples)
+                checks['nine_chunks_native_ticking'] = all(row.get('worldTickNativeForcedCount') == 9
+                    and row.get('worldTickEntityTickingCount') == 9 for row in rows)
+            evidence['nativeRandomTickEligible'] = checks['native_random_tick_eligible']
         evidence['entityTicking'] = checks['entity_ticking']
         ticks = [r.get('bodyTickCount') for r in rows]
         server_ticks = [s.get('serverTick') for s in samples]

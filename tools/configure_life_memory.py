@@ -144,7 +144,10 @@ def activate_runtime():
     """Enable the reviewed signal after the new MCP endpoint is running."""
     import time
     from mcp_server import TOOL_NAMES
-    assert len(TOOL_NAMES) == 44 and 'request_review' in TOOL_NAMES
+    assert len(TOOL_NAMES) == 45 and {'request_review', 'drop_items'} <= set(TOOL_NAMES)
+    # Only these two reviewed additions may be absent in older native cards.
+    known_scopes = tuple(set(TOOL_NAMES) - missing for missing in
+                         (set(), {'request_review'}, {'drop_items'}, {'request_review', 'drop_items'}))
     role = 'qd-survivor'
     control = json.loads((ROOT / 'server/survival-agent-state/survival/control.json').read_text(encoding='utf-8-sig'))
     controller = json.loads((ROOT / 'server/survival-agent-state/survival/controller.json').read_text(encoding='utf-8-sig'))
@@ -153,15 +156,16 @@ def activate_runtime():
     assert {row['name'] for row in value} == set(TOOL_NAMES), 'new MCP endpoint required'
     client = api('GET', '/mcp/numen_survival', role)
     assert client.get('url') == 'http://survivor:8089/mcp' and client.get('enabled') is True
-    assert set(client.get('tools') or []) in (set(TOOL_NAMES), set(TOOL_NAMES) - {'request_review'})
+    assert set(client.get('tools') or []) in known_scopes
     before = api('GET', '/mcp/policy/numen_survival', role)
     assert before['default_effect'] == 'deny' and before['unmanaged_rules_count'] == 0
     assert not before['client_overrides'] and not before['tool_overrides']
     assert all(row['effect'] == 'allow' for row in before['tool_defaults'])
-    assert {row['tool_name'] for row in before['tool_defaults']} in (set(TOOL_NAMES), set(TOOL_NAMES) - {'request_review'})
+    assert {row['tool_name'] for row in before['tool_defaults']} in known_scopes
     proposed = {key: deepcopy(before[key]) for key in ('default_effect', 'client_overrides', 'tool_defaults', 'tool_overrides')}
-    if not any(row['tool_name'] == 'request_review' for row in proposed['tool_defaults']):
-        proposed['tool_defaults'].append({'tool_name': 'request_review', 'effect': 'allow'})
+    for name in ('request_review', 'drop_items'):
+        if not any(row['tool_name'] == name for row in proposed['tool_defaults']):
+            proposed['tool_defaults'].append({'tool_name': name, 'effect': 'allow'})
     backup = ROOT / 'runtime/life-memory-activation' / str(time.time_ns())
     write_json(backup / 'before.json', {'client': client, 'policy': before})
     # Preserve credentials and all existing rules; write policy before the
@@ -171,7 +175,7 @@ def activate_runtime():
     deadline = time.monotonic() + 30
     while True:
         value = api('GET', '/mcp/tools/numen_survival', role)
-        if len(value) == 44 and all(row.get('enabled') is True for row in value): break
+        if len(value) == 45 and {row['name'] for row in value} == set(TOOL_NAMES) and all(row.get('enabled') is True for row in value): break
         if time.monotonic() >= deadline: raise ValueError('native_review_tool_not_ready')
         time.sleep(.25)
     actual = api('GET', '/mcp/policy/numen_survival', role)
@@ -186,7 +190,7 @@ def activate_runtime():
     legacy = profile['mcp']['clients']['numen_survival']
     assert legacy['url'] == after_client['url'] and legacy['transport'] == after_client['transport']
     if set(legacy.get('tools') or []) != set(TOOL_NAMES):
-        assert set(legacy.get('tools') or []) == set(TOOL_NAMES) - {'request_review'}
+        assert set(legacy.get('tools') or []) in known_scopes
         write_json(backup / 'legacy-profile-before.json', profile)
         legacy['tools'] = list(TOOL_NAMES)
         api('PUT', '/agents/' + role, role, {'id': role, 'name': profile['name'], 'mcp': profile['mcp']})
@@ -195,7 +199,7 @@ def activate_runtime():
     api('POST', '/cron/jobs/' + JOB_ID + '/resume', role)
     actual_job = next(job for job in api('GET', '/cron/jobs', role) if job['id'] == JOB_ID)
     assert actual_job['enabled'] is True
-    result = {'ok': True, 'cron': JOB_ID, 'nativeTools': 44,
+    result = {'ok': True, 'cron': JOB_ID, 'nativeTools': 45,
               'controllerStillPaused': True, 'modelCalls': 0, 'worldActions': 0, 'backup': str(backup)}
     write_json(backup / 'receipt.json', result)
     return result

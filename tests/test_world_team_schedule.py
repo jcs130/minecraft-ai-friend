@@ -93,6 +93,26 @@ class TeamScheduleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['modelCalls'], 0)
         self.assertEqual(self.calls, 0)
 
+    async def test_engineer_inner_timeout_is_not_reported_as_total_deadline(self):
+        goddess = TeamStore('game:mc-god', self.root)
+        report = goddess.report('inner-timeout', 'inner-case', 'A reproducible bug', 'bug',
+                                'Observed', 'Expected', ['fixture:1'])
+        goddess.update('inner-route', report['caseId'], 1, 'working', 'Route',
+                       ['fixture:1'], 'operations:mc-god')
+        finished = []
+        self.native.finish_run = lambda *args, **details: finished.append((args, details))
+        class NativeStreamTimeout(asyncio.TimeoutError):
+            pass
+        async def timeout():
+            raise NativeStreamTimeout()
+        with self.assertRaises(NativeStreamTimeout):
+            await self.run_role('operations:mc-god', timeout)
+        state = TeamStore('operations:mc-god', self.root).cycle_state()
+        self.assertEqual(state['status'], 'failed')
+        self.assertFalse(finished[0][1]['totalDeadlineApplied'])
+        self.assertTrue(finished[0][1]['nativeInnerTimeout'])
+        self.assertEqual(finished[0][1]['errorType'], 'NativeStreamTimeout')
+
     async def test_native_rate_limit_failure_releases_execution_not_tool_receipts(self):
         try:
             from qwenpaw.providers.retry_chat_model import _AcquireTimeoutError

@@ -31,10 +31,14 @@ def main():
     parser.add_argument('--companion', action='store_true', help='Verify normal Numen cake adoption and native following instead')
     parser.add_argument('--rescue', action='store_true', help='Verify scoped protection and operator rescue in an isolated world')
     parser.add_argument('--ticking', action='store_true', help='Verify bounded body ticks and native following far from spawn')
+    parser.add_argument('--world-tick', action='store_true', help='Verify native crop ticks for authorized Numen/maid bodies')
+    parser.add_argument('--numen-jar', type=Path, help='Optional verified Numen world-tick candidate, isolated copy only')
+    parser.add_argument('--iron-jar', type=Path, help='Optional verified Iron bridge candidate, isolated copy only')
+    parser.add_argument('--drop-qa', action='store_true', help='Include the independent physical inventory-drop fixture')
     args = parser.parse_args()
-    if sum((args.companion, args.rescue, args.ticking)) > 1: raise ValueError('choose_one_fixture')
-    qa_source = SOURCE / 'qa' / ('CompanionTickQa.java' if args.ticking else 'YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
-    qa_mod = 'qiandeng_companion_tick_qa' if args.ticking else 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
+    if sum((args.companion, args.rescue, args.ticking, args.world_tick)) > 1: raise ValueError('choose_one_fixture')
+    qa_source = SOURCE / 'qa' / ('WorldTickQa.java' if args.world_tick else 'CompanionTickQa.java' if args.ticking else 'YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
+    qa_mod = 'qiandeng_world_tick_qa' if args.world_tick else 'qiandeng_companion_tick_qa' if args.ticking else 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
     build = SOURCE / 'build'
     record = json.loads((build / 'build-record.json').read_text('utf8'))
     jar = build / 'qiandeng-maid-bridge-0.1.0.jar'
@@ -56,6 +60,28 @@ def main():
         if not mod.name.startswith('qiandeng-maid-bridge-'):
             shutil.copyfile(mod, data / 'mods' / mod.name)
     shutil.copyfile(jar, data / 'mods' / jar.name)
+    if args.numen_jar:
+        native_record = json.loads((ROOT/'runtime/numen-world-tick-build/latest.json').read_text('utf8'))
+        newer = ROOT/'runtime/numen-world-tick-v3-build/latest.json'
+        if newer.is_file():
+            candidate = json.loads(newer.read_text('utf8'))
+            if Path(candidate['jar']).resolve() == args.numen_jar.resolve(): native_record = candidate
+        if (args.numen_jar.resolve() != Path(native_record['jar']).resolve()
+                or hashlib.sha256(args.numen_jar.read_bytes()).hexdigest() != native_record['sha256']
+                or any(hashlib.sha256((ROOT/name).read_bytes()).hexdigest()!=digest
+                    for name,digest in native_record['sourceFiles'].items())):
+            raise ValueError('numen_candidate_not_current_verified_build')
+        shutil.copyfile(args.numen_jar,data/'mods/numen-neoforge-1.21.1-0.1.1.jar')
+    if args.world_tick and not args.numen_jar: raise ValueError('world_tick_requires_candidate')
+    if args.iron_jar:
+        iron_record=json.loads((ROOT/'world/irons-bridge-src/build/build-record.json').read_text('utf8'))
+        if (args.iron_jar.resolve()!=Path(iron_record['jar']).resolve()
+                or hashlib.sha256(args.iron_jar.read_bytes()).hexdigest()!=iron_record['sha256']
+                or any(hashlib.sha256((ROOT/name).read_bytes()).hexdigest()!=digest
+                    for name,digest in iron_record['sources'].items())):
+            raise ValueError('iron_candidate_not_current_verified_build')
+        shutil.copyfile(args.iron_jar,data/'mods/qiandeng-irons-bridge-0.1.0.jar')
+    if args.drop_qa and not args.iron_jar:raise ValueError('drop_qa_requires_candidate')
     spec = importlib.util.spec_from_file_location('maid_qa_classpath', ROOT / 'world/botgate-src/build.py')
     helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
     embedded = folder / 'numen-api.jar'
@@ -67,24 +93,34 @@ def main():
     classes = folder / 'qa-classes'; classes.mkdir()
     javac = Path(os.environ.get('JDK21_BIN', r'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin')) / 'javac.exe'
     quote = lambda text: '"' + str(text).replace('\\', '/') + '"'
+    qa_sources=[qa_source]
+    if args.drop_qa:qa_sources.append(ROOT/'world/irons-bridge-src/qa/DropQa.java')
     (folder / 'javac.args').write_text('\n'.join(['-proc:none', '--release', '21', '-encoding', 'UTF-8', '-cp', quote(cp),
-        '-d', quote(classes), quote(qa_source)]), encoding='utf8')
+        '-d', quote(classes), *(quote(p) for p in qa_sources)]), encoding='utf8')
     run([str(javac), '@' + str(folder / 'javac.args')])
     with zipfile.ZipFile(data / 'mods/qiandeng-maid-qa.jar', 'w', zipfile.ZIP_DEFLATED) as output:
         for entry in classes.rglob('*.class'):
             output.write(entry, entry.relative_to(classes).as_posix())
-        output.writestr('META-INF/neoforge.mods.toml', 'modLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n[[mods]]\nmodId="' + qa_mod + '"\nversion="0.0.1"\ndisplayName="Isolated QA fixture"\n')
+        metadata='modLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n[[mods]]\nmodId="'+qa_mod+'"\nversion="0.0.1"\ndisplayName="Isolated QA fixture"\n'
+        if args.drop_qa:metadata+='[[mods]]\nmodId="qiandeng_drop_qa"\nversion="0.0.1"\ndisplayName="Isolated drop QA fixture"\n'
+        output.writestr('META-INF/neoforge.mods.toml',metadata)
     key = secrets.token_hex(32)
     (data / 'config/qiandeng_maid_bridge').mkdir(parents=True)
     (data / 'config/qiandeng_maid_bridge/identity.key').write_text(key, 'ascii')
     if args.rescue:
         shutil.copyfile(ROOT / 'config/companion-protection.json', data / 'config/qiandeng-companion-protection.json')
-    if args.ticking:
+    if args.ticking or args.world_tick:
         (data / 'config/qiandeng-companion-ticking.json').write_text(json.dumps({'schema': 1, 'enabled': True,
             'bodyUuid': '43e4eb68-80b2-4a3e-b9ad-04851ea92a38', 'ownerUuid': 'ec782851-295d-4d60-8847-8b5084de4241'}), 'utf8')
         (data / 'config/numen-autonomous-bodies.json').write_text(json.dumps({'schema': 1, 'enabled': True,
             'bodies': [{'bodyUuid': 'ec782851-295d-4d60-8847-8b5084de4241',
                         'ownerUuid': '40faf2cc-c96b-49e0-a951-8e55e4a7f159', 'bodyName': 'CompanionQA'}]}), 'utf8')
+    if args.drop_qa:
+        path=data/'config/numen-autonomous-bodies.json'
+        policy=json.loads(path.read_text('utf8')) if path.exists() else {'schema':1,'enabled':True,'bodies':[]}
+        policy['bodies'].append({'bodyUuid':'c580fd66-6311-46db-a839-3b0032f6d001',
+            'ownerUuid':'c580fd66-6311-46db-a839-3b0032f6d002','bodyName':'DropQa'})
+        path.write_text(json.dumps(policy),'utf8')
     (fake / 'identity.key').write_text(key, 'ascii')
     sites = data / 'config/touhou_little_maid/sites'; sites.mkdir(parents=True)
     (sites / 'llm.json').write_text(json.dumps({name: {'id': name, 'api_type': 'qiandeng-qwen',
@@ -154,7 +190,14 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         else: raise RuntimeError('isolated_mc_start_timeout')
         print(json.dumps({'stage': 'server_ready'}), flush=True)
         checks['real-neoforge-start'] = True
-        if args.ticking:
+        if args.drop_qa:
+            from smoke_drop_checks import check_drop
+            check_drop(response=response,command=command,run=run,base=base,folder=folder,checks=checks,details=details)
+        if args.world_tick:
+            from smoke_world_tick_checks import check_world_tick
+            check_world_tick(response=response, command=command, invoke=invoke, run=run, base=base,
+                data=data, fake=fake, checks=checks, details=details)
+        elif args.ticking:
             from smoke_maid_ticking_checks import check_ticking
             check_ticking(response=response, command=command, invoke=invoke, run=run, base=base,
                 data=data, fake=fake, checks=checks, details=details)
@@ -233,14 +276,19 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
     except Exception as error:
         details['failure'] = str(error)[:4000]
         checks['execution-completed'] = False
+        (folder/'failure.json').write_text(json.dumps({'checks':checks,'details':details},ensure_ascii=False,indent=2),'utf8')
+        print(json.dumps({'stage':'failed','reason':details['failure'],'folder':str(folder)}),flush=True)
     finally:
         (folder / 'server-final.log').write_text(run([*base, 'logs', '--no-color'], check=False).stdout, 'utf8')
         teardown = run([*base, 'down', '--timeout', '60'], timeout=120, check=False)
         checks['isolated-services-removed'] = teardown.returncode == 0 and not run([*base, 'ps', '-a', '-q'], check=False).stdout.strip()
     report = {'ok': all(checks.values()), 'checks': checks, 'details': details, 'jarSha256': record['sha256'],
         'project': project, 'folder': str(folder), 'modelCalls': 0, 'ttsCalls': 0, 'productionMutations': 0,
+        'numenJarSha256': hashlib.sha256((data/'mods/numen-neoforge-1.21.1-0.1.1.jar').read_bytes()).hexdigest(),
+        'ironJarSha256': hashlib.sha256((data/'mods/qiandeng-irons-bridge-0.1.0.jar').read_bytes()).hexdigest(),
         'liveAcceptanceScope': 'fresh isolated world, actual installed mods and native callbacks, deterministic fake NPC; no physical client or audio',
         'fixtureSha256': hashlib.sha256(qa_source.read_bytes()).hexdigest(),
+        'fixtureHashes':{p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in qa_sources},
         'toolSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     (folder / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', 'utf8')
     print(json.dumps({'ok': report['ok'], 'checks': checks, 'report': str(folder / 'result.json')}), flush=True)

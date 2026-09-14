@@ -27,7 +27,9 @@ PROMPT = ('这是你原生活会话的定期继续，不是来自其他角色的
     '先比较历史事件日期与当前时间，检查记忆是否陈旧、误把旧事记成今天或夸大成果；发现错误时'
     '用新观察和真实来源追加一条带日期的纠正，保留原历史，不删除或重写旧事件来掩盖错误。'
     '这是一轮生活推进，不是例行写日记。currentObservation是本轮只读身体快照；capabilities只展示原生任务目录'
-    '第一页与实际启用工具，更多玩法按需task_catalog翻页或读相关技能，不要猜工作模式ID。'
+    '第一页与实际启用工具，更多玩法按需task_catalog(query="关键词")搜索或按nextOffset翻页，'
+    '例如找农耕可搜索farm。搜索读取真实任务ID/名称/摘要；truncated表示还没查完，页失败也不能'
+    '证明没有能力，不要仅看前两页就判定缺少某项工作。需要时读相关技能，不要猜工作模式ID。'
     'continuation中的摘要是上一模型的自述，不是游戏回执；先核对其中的未完成目标与当前位置、物品、'
     '工具和伙伴新回复。然后自行决定一个有价值的小步骤、一个需要解决的阻塞，或有理由的休息。'
     '选择工作时先确认原生task_catalog、所需工具材料与可达地点，再用真实work等工具交给原生AI执行；'
@@ -216,12 +218,14 @@ class PartyLife:
             return state
 
     def summary(self):
+        from maid_native_tools import TASK_SEARCH_VERSION
         path = self.root / 'controller.json'
         if not path.exists():
-            return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1, 'status': 'waiting_for_native_signal'}
+            return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1,
+                    'taskSearchVersion': TASK_SEARCH_VERSION, 'status': 'waiting_for_native_signal'}
         state = read_json(path)
         active = state.get('active') or {}
-        return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1,
+        return {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1, 'taskSearchVersion': TASK_SEARCH_VERSION,
                 'status': state.get('status'), 'lastSlot': state.get('lastSlot'),
                 'active': {k: active.get(k) for k in ('signalId', 'taskId', 'requestId')} if active else None,
                 'lastResult': state.get('lastResult')}

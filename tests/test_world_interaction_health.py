@@ -23,10 +23,11 @@ class WorldInteractionHealthTests(unittest.TestCase):
             'ownerUuid': 'e5005711-be9f-44b7-aaad-6993c0ba5df4', 'bodyName': 'Kirito'}
         self.write(probe.SETTINGS, self.identity)
         self.write(probe.CONFIG, {'schema': 1, 'enabled': True, 'bodies': [self.identity]})
-        for name in (probe.JAR, probe.BUILD_JAR, *probe.REQUIRED_SOURCES):
+        for name in (probe.JAR, probe.BUILD_JAR, probe.NUMEN, *probe.REQUIRED_SOURCES):
             path = self.root/name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'fixture')
         self.record = {'ok': True, 'sha256': probe.digest(self.root, probe.JAR),
-            'sources': {name: probe.digest(self.root, name) for name in probe.REQUIRED_SOURCES}}
+            'sources': {name: probe.digest(self.root, name) for name in probe.REQUIRED_SOURCES},
+            'dependencies': {Path(probe.NUMEN).name: probe.digest(self.root, probe.NUMEN)}}
         self.write(probe.BUILD_RECORD, self.record)
         self.manifest = {'schema_version': 1, 'files': [{'path': probe.JAR, 'sha256': self.record['sha256']}]}
         self.write(probe.MANIFEST, self.manifest)
@@ -36,22 +37,24 @@ class WorldInteractionHealthTests(unittest.TestCase):
         path = self.root/name; path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value), encoding='utf8')
 
-    def sample(self, body, request):
-        self.calls.append((body, request))
+    def sample(self, body, request, operation='interaction'):
+        self.calls.append((body, request, operation))
         return {'schema': 1, 'capability': probe.CAPABILITY, 'actorUuid': body, 'requestId': request,
-            'epoch': '90123456-1234-1234-1234-123456789abc', 'tool': 'interact_at',
+            'epoch': '90123456-1234-1234-1234-123456789abc', 'tool': 'drop_items' if operation == 'dropping' else 'interact_at',
             'status': 'unknown', 'code': 'request_not_found', 'observedAt': self.now*1000}
 
     def check(self, sample=None):
         return probe.check(self.root, sample or self.sample, lambda: self.now)
 
-    def test_healthy_is_one_unused_query_without_writes(self):
+    def test_healthy_is_two_unused_queries_without_writes(self):
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         result = self.check()
         self.assertTrue(result['ok'])
-        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.calls), 2)
         self.assertRegex(self.calls[0][1], '^[0-9a-f]{32}$')
         self.assertEqual(result['interactionSubmissions'], 0)
+        self.assertEqual(result['dropSubmissions'], 0)
+        self.assertEqual([row[2] for row in self.calls], ['interaction', 'dropping'])
         self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
     def test_build_manifest_installed_and_sources_must_all_match(self):
@@ -69,8 +72,17 @@ class WorldInteractionHealthTests(unittest.TestCase):
                 {'epoch': 'invalid'}, {'code': 'native_runtime_interrupted'}, {'status': 'accepted'},
                 {'observedAt': (self.now-16)*1000}, {'result': {'success': True}}):
             with self.subTest(changes=changes):
-                result = self.check(lambda body, request: self.sample(body, request) | changes)
+                result = self.check(lambda body, request, operation: self.sample(body, request, operation) | changes)
                 self.assertFalse(result['checks']['native_receipt_protocol'])
+
+    def test_drop_protocol_or_numen_dependency_cannot_be_substituted(self):
+        def wrong_drop(body, request, operation):
+            return self.sample(body, request, 'interaction')
+        result = self.check(wrong_drop)
+        self.assertTrue(result['checks']['native_receipt_protocol'])
+        self.assertFalse(result['checks']['native_drop_receipt_protocol'])
+        (self.root/probe.NUMEN).write_bytes(b'new Numen requires actual rebuild')
+        self.assertFalse(self.check()['checks']['pinned_numen_dependency'])
 
     def test_wrong_body_binding_prevents_native_query(self):
         self.write(probe.CONFIG, {'schema': 1, 'enabled': True, 'bodies': []})

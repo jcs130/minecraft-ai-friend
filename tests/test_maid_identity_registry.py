@@ -123,6 +123,16 @@ class FakeQwen:
 
 
 class RegistryFixtures(unittest.TestCase):
+    def assert_registered_native_scope(self, configured, role):
+        from native_role_capabilities import NATIVE_TOOLS, enabled_native_tools
+        # Registered non-leads already have the two read-only team tools.
+        # Keep an explicit scope assertion so future permission growth fails
+        # this fixture instead of silently following the production helper.
+        expected = set(NATIVE_TOOLS) | {'list_agents', 'check_agent_task'}
+        self.assertEqual(enabled_native_tools(role, 'game'), expected)
+        self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
+                          if tool['enabled']}, expected)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -334,7 +344,7 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(len(self.api.calls), count)
 
     def test_registration_rebinds_native_file_and_cron_guards_for_each_character(self):
-        from native_role_capabilities import NATIVE_TOOLS, configure_native, validate_native
+        from native_role_capabilities import configure_native, validate_native
         self.api.agents[TEMPLATE] = configure_native(template(), TEMPLATE)
         custom_sensitive = '/fixture/private-reference'
         self.api.agents[TEMPLATE]['security']['file_guard']['sensitive_files'].append(custom_sensitive)
@@ -345,8 +355,7 @@ class IdentityTests(RegistryFixtures):
             role = own['agentId']
             configured = self.api.agents[role]
             validate_native(configured, role)
-            self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
-                              if tool['enabled']}, set(NATIVE_TOOLS))
+            self.assert_registered_native_scope(configured, role)
             self.assertEqual(set(configured['mcp']['clients']), {'qd_world_team', 'qd_learning'})
             guard = configured['security']['tool_guard']
             def blocked(tool, parameter, value):
@@ -374,7 +383,7 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(self.api.agents[TEMPLATE], source)
 
     def test_new_character_has_shared_file_note_without_claiming_skills_installed(self):
-        from native_role_capabilities import FILE_NOTE, NATIVE_TOOLS, validate_native
+        from native_role_capabilities import FILE_NOTE, validate_native
         from sync_role_learning import FILE_NOTE as SYNC_FILE_NOTE
         persona = '只属于这一位人物的人设。'
         row = self.registry.ensure(actor(), name='独立人物', persona=persona)
@@ -382,8 +391,7 @@ class IdentityTests(RegistryFixtures):
         configured = self.api.agents[role]
         # This fixture begins with the legacy closed template, not pre-enabled tools.
         validate_native(configured, role)
-        self.assertEqual({name for name, tool in configured['tools']['builtin_tools'].items()
-                          if tool['enabled']}, set(NATIVE_TOOLS))
+        self.assert_registered_native_scope(configured, role)
         files = {path.removeprefix('/workspace/files/'): body['content']
                  for method, path, aid, body in self.api.calls
                  if method == 'PUT' and path.startswith('/workspace/files/') and aid == role}
@@ -416,9 +424,14 @@ class IdentityTests(RegistryFixtures):
         self.assertEqual(self.registry.health_summary()['activeRoleIds'], [])
 
     def test_unsafe_template_and_unknown_registration_fail_before_copy(self):
-        self.api.agents[TEMPLATE]['tools']['builtin_tools']['shell']['enabled'] = True
-        with self.assertRaises(ValueError):
-            self.registry.ensure(actor())
+        from native_role_capabilities import configure_native
+        allowed = configure_native(template(), TEMPLATE)
+        for tool in ('shell', 'unapproved_fixture_tool', 'spawn_subagent', 'submit_to_agent', 'chat_with_agent'):
+            with self.subTest(tool=tool):
+                self.api.agents[TEMPLATE] = deepcopy(allowed)
+                self.api.agents[TEMPLATE]['tools']['builtin_tools'][tool] = {'enabled': True}
+                with self.assertRaisesRegex(ValueError, 'maid_template_has_unsafe_tools'):
+                    self.registry.ensure(actor())
         self.assertFalse(any(method == 'POST' and path == '/agents' for method, path, _, _ in self.api.calls))
 
     def test_native_template_guard_cannot_point_at_another_role(self):
@@ -493,6 +506,94 @@ class IdentityTests(RegistryFixtures):
 
 
 class NativeTests(RegistryFixtures):
+    def catalog_native(self, count=23, failed_offset=None, malformed=None):
+        import base64
+        self.catalog_requests = []
+        def run(command):
+            encoded = command.split()[-1]
+            req = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
+            self.catalog_requests.append(req)
+            offset = req['args']['offset']
+            if offset == failed_offset:
+                raise OSError('lost read response')
+            rows = [{'taskId': 'fixture:task_' + str(i), 'name': 'Task ' + str(i), 'enabled': True,
+                     'summary': 'Ordinary native work'} for i in range(offset, min(offset + 4, count))]
+            for row in rows:
+                if row['taskId'] == 'fixture:task_8':
+                    row.update(taskId='touhou_little_maid:farm', name='耕作', summary='Grow crops')
+            value = {'schema': 1, 'engine': 'qiandeng_maid_bridge', 'ok': True, 'phase': 'observed',
+                     **{k: req[k] for k in ('requestId', 'maidUuid', 'ownerUuid', 'operation')},
+                     'offset': offset, 'nextOffset': min(offset + 4, count), 'total': count,
+                     'truncated': offset + 4 < count, 'tasks': rows, 'observedAt': int(self.now * 1000)}
+            if malformed:
+                malformed(value)
+            return 'QD_MAID_JSON ' + json.dumps(value)
+        return MaidNativeTools(self.registry, run)
+
+    def test_task_search_finds_later_pages_by_real_id_name_or_summary(self):
+        bound = self.registry.ensure(actor())
+        for query in ('FARM', '耕作', 'grow crops'):
+            native = self.catalog_native()
+            value = native.invoke(bound, 'task_catalog', {'query': query})
+            self.assertTrue(value['ok'])
+            self.assertEqual([r['taskId'] for r in value['tasks']], ['touhou_little_maid:farm'])
+            self.assertEqual((value['searchedEntries'], value['total'], value['nextOffset']), (23, 23, 23))
+            self.assertTrue(value['searchComplete'])
+            self.assertFalse(value['truncated'])
+            self.assertEqual([r['args'] for r in self.catalog_requests], [{'offset': n} for n in range(0, 23, 4)])
+            self.assertTrue(all(r['operation'] == 'task_catalog' and r['maidUuid'] == bound['maidUuid']
+                                and r['ownerUuid'] == bound['ownerUuid'] for r in self.catalog_requests))
+            self.assertFalse((self.registry.root / 'actions').exists())
+
+    def test_task_search_bound_and_continuation_do_not_claim_absence(self):
+        bound = self.registry.ensure(actor())
+        native = self.catalog_native(count=70)
+        value = native.invoke(bound, 'task_catalog', {'query': 'not present'})
+        self.assertEqual((value['pagesRead'], value['searchedEntries'], value['nextOffset']), (16, 64, 64))
+        self.assertTrue(value['truncated'])
+        self.assertFalse(value['searchComplete'])
+        self.assertFalse(value['absenceConfirmed'])
+        tail = native.invoke(bound, 'task_catalog', {'query': 'not present', 'offset': value['nextOffset']})
+        self.assertEqual(tail['searchedEntries'], 6)
+        self.assertTrue(tail['searchComplete'])
+        self.assertFalse(tail['absenceConfirmed'])  # this call did not scan the prefix
+
+    def test_failed_page_preserves_matches_and_resume_offset_without_retry(self):
+        bound = self.registry.ensure(actor())
+        native = self.catalog_native(failed_offset=12)
+        value = native.invoke(bound, 'task_catalog', {'query': 'farm'})
+        self.assertFalse(value['ok'])
+        self.assertEqual(value['error'], 'observation_unavailable')
+        self.assertEqual(value['nextOffset'], 12)
+        self.assertEqual(value['searchedEntries'], 12)
+        self.assertEqual(len(value['tasks']), 1)
+        self.assertTrue(value['truncated'])
+        self.assertFalse(value['searchComplete'])
+        self.assertFalse(value['absenceConfirmed'])
+        self.assertEqual(len(self.catalog_requests), 4)
+
+    def test_invalid_pagination_or_foreign_reply_cannot_prove_search_complete(self):
+        bound = self.registry.ensure(actor())
+        for mutate in (lambda row: row.update(nextOffset=0), lambda row: row.update(maidUuid=MAID_B),
+                       lambda row: row.update(total=22) if row['offset'] == 4 else None):
+            value = self.catalog_native(malformed=mutate).invoke(bound, 'task_catalog', {'query': 'farm'})
+            self.assertFalse(value['ok'])
+            self.assertTrue(value['truncated'])
+            self.assertFalse(value['absenceConfirmed'])
+
+    def test_original_catalog_remains_single_native_page_and_invalid_query_does_not_read(self):
+        bound = self.registry.ensure(actor())
+        native = self.catalog_native()
+        value = native.invoke(bound, 'task_catalog', {'offset': 4})
+        self.assertEqual(value['engine'], 'qiandeng_maid_bridge')
+        self.assertEqual(value['offset'], 4)
+        self.assertNotIn('searchComplete', value)
+        self.assertEqual(len(self.catalog_requests), 1)
+        for query in ('', '   ', 'x' * 81, 'farm\n', None, 3):
+            with self.assertRaisesRegex(ValueError, 'invalid_task_query'):
+                native.invoke(bound, 'task_catalog', {'query': query})
+        self.assertEqual(len(self.catalog_requests), 1)
+
     def native(self, malformed=False, unknown=False):
         self.native_calls = []
         def run(command):

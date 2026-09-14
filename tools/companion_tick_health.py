@@ -14,7 +14,7 @@ from maid_native_tools import NativeRcon, parse_reply
 
 def check():
     checks = {name: False for name in ('deployed_current_artifact', 'exact_binding', 'native_policy_eligible',
-        'bounded_region_ticket', 'actual_entity_ticking', 'body_tick_progress')}
+        'bounded_region_ticket', 'actual_entity_ticking', 'body_tick_progress', 'native_random_tick_eligible')}
     samples = []
     try:
         expected_raw = (ROOT / 'config/companion-ticking.json').read_bytes()
@@ -43,6 +43,12 @@ def check():
         checks['native_policy_eligible'] = all(t['configState'] == 'enabled' and t['eligible'] is True for t in ticks)
         checks['bounded_region_ticket'] = all(t['radius'] == 2 and t['timeoutTicks'] == 40 and t['refreshTicks'] == 20 for t in ticks)
         checks['actual_entity_ticking'] = all(t['entityTicking'] is True for t in ticks)
+        checks['native_random_tick_eligible'] = all(t.get('worldTickCapability') == 'autonomous_world_tick_v3'
+            and t.get('forceTicks') is True and t.get('nativeForceTicks') is True for t in ticks)
+        checks['bounded_world_tick_neighborhood'] = all(t.get('worldTickChunkRadius') == 1
+            and t.get('worldTickChunkCount') == 9 for t in ticks)
+        checks['nine_chunks_native_ticking'] = all(t.get('worldTickNativeForcedCount') == 9
+            and t.get('worldTickEntityTickingCount') == 9 for t in ticks)
         body_delta = ticks[1]['bodyTickCount'] - ticks[0]['bodyTickCount']
         server_delta = ticks[1]['serverTick'] - ticks[0]['serverTick']
         checks['body_tick_progress'] = (all(type(t[k]) is int for t in ticks for k in ('bodyTickCount', 'serverTick'))

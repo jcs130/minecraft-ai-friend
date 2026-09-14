@@ -75,6 +75,19 @@ def agent_update(profile, **changes):
     return {'id': profile['id'], 'name': profile['name'], 'language': language, **changes}
 
 
+def upgraded_engineering_job(existing, actor):
+    """Refresh managed prompt/deadline metadata, preserving native session/state."""
+    if actor != ENGINEER:
+        return existing
+    expected = team_job(actor)
+    updated = deepcopy(existing)
+    updated['text'] = expected['text']
+    updated['request']['input'] = expected['request']['input']
+    updated['meta']['engineeringExecution'] = expected['meta']['engineeringExecution']
+    validate_team_job(updated, actor)
+    return updated
+
+
 def configure(mode='preview'):
     inventory = members()
     journal = []
@@ -117,6 +130,11 @@ def configure(mode='preview'):
             if actor in SCHEDULES and not any(j['id'] == team_job(actor)['id'] for j in jobs):
                 job = team_job(actor); job['enabled'] = False
                 api(runtime, 'PUT', '/cron/jobs/' + job['id'], role, job)
+            elif actor == ENGINEER:
+                job = next(j for j in jobs if j['id'] == team_job(actor)['id'])
+                updated_job = upgraded_engineering_job(job, actor)
+                if updated_job != job:
+                    api(runtime, 'PUT', '/cron/jobs/' + job['id'], role, updated_job)
         elif mode == 'drivers':
             request = lambda method, path, selected, body=None: api(runtime, method, path, selected, body)
             keys = {row['key'] for row in api(runtime, 'GET', '/mcp', role)}

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "capability": "autonomous_world_tick_v2",
+  "baselineJarSha256": "47cc11d609b03b62734c4772b2aa40a89ba02a5bbaab0d85ab10589d45ffec3b",
+  "baselineClassHashes": {
+    "META-INF/jarjar/com.dwinovo.numen.api.numen_api-neoforge-1.21.1-0.0.8-SNAPSHOT.jar": "48205ad1235dd4b154e045f20b6296eb17af35d5b3d5bf9d2a18a028ce0c4070",
+    "com/dwinovo/numen/core/NumenCoreNeoForge.class": "c748ef119e8024b9ebd3a2abf4f3041c2cf16a683540ef342fec65629a10100b",
+    "com/dwinovo/numen/core/entity/AutonomousBodyTick$AllowedBody.class": "7199b4af471dfa62c8596338f544090900fecb0ea3615fac39e8f9541a27c9de",
+    "com/dwinovo/numen/core/entity/AutonomousBodyTick.class": "bab03e646354ac105a34b8ee90948159fb9133e6c9b33b3b02f8590675045fac"
+  },
+  "classFamilies": [
+    "com/dwinovo/numen/core/entity/AutonomousBodyTick"
+  ],
+  "preservedCapabilities": [
+    "autonomous_body_tick_v1",
+    "existing_body_restore_v1",
+    "walk_only_v1",
+    "walk_only_strict_arrival_v2"
+  ],
+  "policy": "Existing exact UUID/owner/name grants only. Native expiring radius-2 forceTicks tickets, no manual ticks or client tracking.",
+  "previousManifest": "world/numen-patches/autonomous-body-tick-v1.json"
+}

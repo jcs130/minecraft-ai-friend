@@ -151,7 +151,7 @@ class ActivateLifeMemoryTests(unittest.TestCase):
     def setUp(self):
         from mcp_server import TOOL_NAMES
         self.names = list(TOOL_NAMES)
-        self.assertEqual(len(self.names), 44)
+        self.assertEqual(len(self.names), 45)
         self.old_names = [name for name in self.names if name != 'request_review']
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -202,7 +202,7 @@ class ActivateLifeMemoryTests(unittest.TestCase):
             self.assertEqual(method, 'PUT')
             self.assertEqual(body, {'tools': self.names})
             # Qwen 2.2 writes only DriverCard here; deliberately leave the
-            # legacy profile at 43 to reproduce the production health failure.
+            # legacy profile at the old scope to reproduce the health failure.
             self.client['tools'] = list(body['tools'])
             return {'success': True}
         if route == '/mcp/numen_survival':
@@ -240,7 +240,7 @@ class ActivateLifeMemoryTests(unittest.TestCase):
         self.assertTrue(all(method == 'GET' for method, _, _ in self.calls))
         self.assert_not_resumed()
 
-    def test_43_to_44_updates_card_policy_and_legacy_without_masking_credentials(self):
+    def test_review_addition_updates_card_policy_and_legacy_without_masking_credentials(self):
         result = config.activate_runtime()
         self.assertEqual(self.client['tools'], self.names)
         self.assertEqual(self.profile['mcp']['clients']['numen_survival']['tools'], self.names)
@@ -258,7 +258,7 @@ class ActivateLifeMemoryTests(unittest.TestCase):
         self.assertEqual(mutations, [
             ('PUT', '/mcp/policy/numen_survival'), ('PUT', '/mcp/tools/numen_survival'),
             ('PUT', '/agents/qd-survivor'), ('POST', '/cron/jobs/' + config.JOB_ID + '/resume')])
-        self.assertEqual((result['nativeTools'], result['modelCalls'], result['worldActions']), (44, 0, 0))
+        self.assertEqual((result['nativeTools'], result['modelCalls'], result['worldActions']), (45, 0, 0))
         backup = Path(result['backup'])
         self.assertEqual(json.loads((backup / 'legacy-profile-before.json').read_text()), self.original_profile)
 
@@ -270,7 +270,7 @@ class ActivateLifeMemoryTests(unittest.TestCase):
         self.calls.clear()
         config.activate_runtime()
         self.assertEqual(self.profile, after)
-        self.assertEqual(len(self.policy['tool_defaults']), 44)
+        self.assertEqual(len(self.policy['tool_defaults']), 45)
         self.assertFalse(any(route.startswith('/agents/') for _, route, _ in self.calls))
         self.assertEqual(len(self.jobs), 2)
 
@@ -330,8 +330,8 @@ class ActivateLifeMemoryTests(unittest.TestCase):
         self.assertEqual(self.profile, self.original_profile)
         self.assertEqual(sum(method == 'PUT' and route == '/mcp/tools/numen_survival'
                              for method, route, _ in self.calls), 1)
-        # Explicit operator recovery reads the authoritative 44-card state,
-        # repairs only the 43-tool mirror and resumes the one existing job.
+        # Explicit operator recovery reads the authoritative card state,
+        # repairs only the old mirror and resumes the one existing job.
         config.activate_runtime()
         self.assertTrue(self.jobs[-1]['enabled'])
         self.assertEqual(self.profile['mcp']['clients']['numen_survival']['tools'], self.names)
@@ -344,6 +344,32 @@ class ActivateLifeMemoryTests(unittest.TestCase):
         self.assertEqual(self.profile_path.read_bytes(), before)
         self.assert_not_resumed()
         self.assertFalse(any(route.startswith('/agents/') for _, route, _ in self.calls))
+
+    def test_pre_drop_44_scope_adds_only_drop_preserving_review_and_all_profile_fields(self):
+        names = [name for name in self.names if name != 'drop_items']
+        self.client['tools'] = names
+        self.profile['mcp']['clients']['numen_survival']['tools'] = names
+        self.save(self.profile_path, self.profile)
+        original = deepcopy(self.profile)
+        self.policy['tool_defaults'] = [{'tool_name': name, 'effect': 'allow'} for name in names]
+        before_policy = deepcopy(self.policy)
+        config.activate_runtime()
+        original['mcp']['clients']['numen_survival']['tools'] = self.names
+        before_policy['tool_defaults'].append({'tool_name': 'drop_items', 'effect': 'allow'})
+        self.assertEqual(self.profile, original)
+        self.assertEqual(self.policy, before_policy)
+
+    def test_pre_review_and_drop_43_scope_adds_exactly_both(self):
+        names = [name for name in self.names if name not in ('drop_items', 'request_review')]
+        self.client['tools'] = names
+        self.profile['mcp']['clients']['numen_survival']['tools'] = names
+        self.save(self.profile_path, self.profile)
+        self.policy['tool_defaults'] = [{'tool_name': name, 'effect': 'allow'} for name in names]
+        config.activate_runtime()
+        self.assertEqual(self.client['tools'], self.names)
+        self.assertEqual(len(self.policy['tool_defaults']), 45)
+        self.assertEqual(self.policy['tool_defaults'][-2:], [
+            {'tool_name': 'request_review', 'effect': 'allow'}, {'tool_name': 'drop_items', 'effect': 'allow'}])
 
 
 if __name__ == '__main__': unittest.main()

@@ -13,7 +13,7 @@ TOOL_NAMES = ('status', 'look', 'move', 'mine', 'craft', 'lookup_recipe', 'eat',
               'skill_promote', 'skill_start', 'remember', 'game_skills',
               'game_cast', 'game_learn', 'game_skill_receipt', 'world_perception',
               'knowledge_catalog', 'knowledge_read', 'request_goal', 'request_review',
-              'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container',
+              'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
               'speak', 'speech_status', 'stop_speaking')
@@ -52,10 +52,15 @@ class SkillTools:
         return lease
 
     def _write(self, turn_id, operation):
-        from numen_gateway import action_lock, GatewayError
+        from numen_gateway import action_lock, GatewayError, invalid_lease_response
         try:
             with action_lock(self.state):
-                lease = self._lease(turn_id)
+                try:
+                    lease = self._lease(turn_id)
+                except GatewayError as exc:
+                    if str(exc) == 'lease_invalid':
+                        return invalid_lease_response()
+                    raise
                 return operation(lease)
         except GatewayError as exc:
             return {'ok': False, 'code': str(exc), 'retryAutomatically': False}
@@ -125,12 +130,33 @@ class SkillTools:
             history = previous.get('history', [])
             if not isinstance(history, list):
                 raise GatewayError('invalid_memory_history')
-            row = {**values, 'at': int(self.clock() * 1000), 'turnId': turn_id}
-            value = {'schema': 1, **values, 'updatedAt': row['at'],
-                     'history': (history + [row])[-16:], 'source': 'agent_learning_data'}
-            write_json(path, value)
-            return {'ok': True, 'code': 'memory_recorded', 'updatedAt': row['at'],
-                    'historyEntries': len(value['history'])}
+            last = history[-1] if history and isinstance(history[-1], dict) else {}
+            unchanged = (previous.get('schema') == 1
+                         and previous.get('source') == 'agent_learning_data'
+                         and last.get('turnId') == turn_id
+                         and type(previous.get('updatedAt')) is int
+                         and previous['updatedAt'] == last.get('at')
+                         and all(previous.get(key) == item and last.get(key) == item
+                                 for key, item in values.items()))
+            if unchanged:
+                # Only the current checkpoint in this same authorized turn is
+                # idempotent. Preserve its bytes and review time; a later turn
+                # or changed facts must still be recorded normally.
+                value = previous
+            else:
+                row = {**values, 'at': int(self.clock() * 1000), 'turnId': turn_id}
+                value = {'schema': 1, **values, 'updatedAt': row['at'],
+                         'history': (history + [row])[-16:], 'source': 'agent_learning_data'}
+                write_json(path, value)
+            return {'ok': True, 'code': 'memory_recorded', 'memorySaved': True,
+                    'changed': not unchanged, 'updatedAt': value['updatedAt'],
+                    'historyEntries': len(value['history']), 'noRepeatNeeded': True,
+                    'nextReviewAfterSeconds': review_after_seconds,
+                    'nextReviewScheduler': 'existing_life_controller',
+                    'instruction': '记忆已保存，无需重复调用确认。若本轮已完成或需要等待，现在给出最终答复；'
+                        '原生活控制器会在本轮结束后按目标状态、请求的复盘间隔和真实事件安排接续，'
+                        '无需在此等待计时或另建循环。若仍有必要工作，可依据真实观察继续。'
+                        '本回执只确认保存记忆，不证明游戏目标完成，不改变动作租约或暂停状态。'}
         return self._write(turn_id, save)
 
 
@@ -233,7 +259,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def move(turn_id: str, x: float, z: float, y: float | None = None) -> dict:
-        """不挖不搭走到24格水平距离内的已观察位置；仅可靠知道目标脚部高度时传y（-64至319），否则省略自动选高度。本轮唯一动作，受理后结束；同xz不证明已到高处柜台。"""
+        """不挖不搭走到24格水平距离内的已观察位置；仅可靠知道目标脚部高度时传y（-64至319），否则省略自动选高度。受理后用status(wait_seconds=10)查该任务终态；仍在途则结束等待，明确终态后可用剩余动作继续。同xz不证明已到高处柜台；距离拒绝会附当时原点、目标与实际水平距离。"""
         args = {'x': x, 'z': z}
         if y is not None:
             args['y'] = y
@@ -279,6 +305,11 @@ def make_server(gateway=None, skill_tools=None, http=False):
     def place_block(turn_id: str, item_id: str, x: int, y: int, z: int) -> dict:
         """用背包内材料在建设区近距放置一块建筑材料/床/工作台等；x/y/z是目的格。须有实体支撑，不能替换已有建筑，床和门验证双格。"""
         return gateway.action(turn_id, 'place_block', {'item_id': item_id, 'x': x, 'y': y, 'z': z})
+
+    @server.tool()
+    def drop_items(turn_id: str, item_id: str, count: int) -> dict:
+        """向面朝方向丢出主背包1–64件物品，保留附魔/耐久/名称等组件。用于整理背包或递给附近队友；掉落实体已出现不代表队友已经拾取。未知不要重发。"""
+        return gateway.action(turn_id, 'drop_items', {'item_id': item_id, 'count': count})
 
     @server.tool()
     def farm(turn_id: str, operation: str, x: int, y: int, z: int, item_id: str | None = None) -> dict:
@@ -425,7 +456,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
     @server.tool()
     def remember(turn_id: str, goal: str = '', lesson: str = '', next_focus: str = '',
                  goal_state: str = 'ongoing', review_after_seconds: int = 1800) -> dict:
-        """保存目标/经验/关注点；goal_state ongoing/completed/blocked/resting。自行安排180–3600秒后再评估，当前无人工推理次数额度，动作租约仍有效。"""
+        """持久保存目标/经验/关注点，成功后无需重复确认；同轮完全相同内容不重写。goal_state ongoing/completed/blocked/resting，review_after_seconds为180–3600秒。需要等待或本轮已完成时直接给最终答复，原生活控制器在本轮结束后安排后续评估，无需工具内等计时或另建循环；仍有必要工作可继续。本工具不证明游戏目标完成，也不改变动作租约、暂停或权限。"""
         return skill_tools.remember(turn_id, goal, lesson, next_focus, goal_state, review_after_seconds)
 
     return server

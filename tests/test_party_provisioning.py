@@ -177,7 +177,10 @@ class PartyHealthTests(ProvisioningFixture):
         self.public = {'schema': 1, 'enabled': True, 'status': 'running', 'error': None,
                        'updatedAt': self.now * 1000, 'partyId': self.config['partyId'], 'members': self.members,
                        'replyTransportVersion': 2,
-                       'life': {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1, 'status': 'waiting'}}
+                       'life': {'enabled': True, 'signalVersion': 1, 'progressionVersion': 1,
+                                'taskSearchVersion': 1, 'status': 'waiting'}}
+        self.catalog_tool = {'name': 'task_catalog', 'enabled': True,
+                             'input_schema': {'properties': {'query': {'type': 'string'}}}}
         from party_life_schedule import JOB_ID, ROLE, managed_job
         self.life_job = managed_job()
         self.life_signal = {'jobId': JOB_ID, 'role': ROLE, 'scheduledAt': self.now}
@@ -210,6 +213,7 @@ class PartyHealthTests(ProvisioningFixture):
             return [deepcopy(self.life_job)]
         self.assertIn(role, ('qd-survivor', 'maid-test'))
         if url.endswith('/mcp/tools/qd_party'): return [{'name': name, 'enabled': True} for name in TOOLS]
+        if url.endswith('/mcp/tools/maid_native'): return [deepcopy(self.catalog_tool)]
         if url.endswith('/mcp/qd_party'): return self.client_info(role)
         if url.endswith('/mcp/policy/qd_party'): return deepcopy(self.policies[role])
         self.fail('Unexpected read-only API request: ' + url)
@@ -226,6 +230,13 @@ class PartyHealthTests(ProvisioningFixture):
 
     def test_live_binding_policy_session_and_correlated_evidence_pass(self):
         self.assertTrue(self.probe()['ok'])
+
+    def test_task_search_needs_both_loaded_worker_and_native_qwen_schema(self):
+        self.catalog_tool['input_schema']['properties'].pop('query')
+        self.assertFalse(self.probe()['checks']['native_task_search_loaded'])
+        self.catalog_tool['input_schema']['properties']['query'] = {'type': 'string'}
+        self.public['life'].pop('taskSearchVersion'); self.save()
+        self.assertFalse(self.probe()['checks']['native_task_search_loaded'])
 
     def test_life_loaded_is_not_proof_of_a_running_native_schedule(self):
         self.life_job['enabled'] = False

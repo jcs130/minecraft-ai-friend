@@ -9,8 +9,8 @@
       "mod_id": "qiandeng_maid_bridge",
       "filename": "qiandeng-maid-bridge-0.1.0.jar",
       "cache_path": "vendor/maid-bridge-cache/qiandeng-maid-bridge-0.1.0.jar",
-      "sha256": "b47940211aecd26ca164e580b482c382f60dc61d93b2369166baa5f1da3eacef",
-      "size_bytes": 68212,
+      "sha256": "fd51566d090c34a7c1c5fbc8909276f11beb48cbf158b5a4a4a738dc5d449d66",
+      "size_bytes": 69265,
       "client_only": false,
       "source_build": "tools/build_maid_bridge.py"
     }

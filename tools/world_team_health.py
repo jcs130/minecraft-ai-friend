@@ -27,7 +27,7 @@ CONTENT_ID = 'content-fd5881ee422e68c006ecc176'
 BASELINE_ID = 'world-team-baseline-20260909'
 SOURCE_FILES = ('world/ops/world_team.py', 'world/ops/world_team_mcp.py',
     'world/ops/world_team_hosts.py', 'world/ops/cron_guard.py',
-    'world/ops/world_team_profiles.py', 'world/ops/world_team_schedule.py',
+    'world/ops/world_team_profiles.py', 'world/ops/world_team_schedule.py', 'world/ops/engineering_cron_runtime.py',
     'world/ops/world_admin_tools.py', 'world/sidecar/world_admin_consumer.py',
     'world/sidecar/world_content.py', 'world/sidecar/npc_planner.py',
     'world/ops/engineering_workspace.py', 'world/ops/engineering_mcp.py', 'world/admin/engineering-runner.mjs',
@@ -330,6 +330,7 @@ def collect(root=ROOT, request=api, probe=process_probe):
     for actor in SCHEDULES:
         runtime, role = hosts[actor]['runtime'], hosts[actor]['agentId']
         def schedule_check():
+            from engineering_cron_runtime import execution_policy
             expected = team_job(actor); job_id = expected['id']
             row = request(runtime, '/cron/jobs/' + job_id, role)
             validate_team_job(row['spec'], actor)
@@ -344,6 +345,7 @@ def collect(root=ROOT, request=api, probe=process_probe):
             trace = session_metadata(read(session, 4194304)) if session.exists() else None
             return member_identity(actor, inventory) | {'nativeHost': hosts[actor], 'jobId': job_id, 'enabled': True, 'specExact': True,
                 'schedule': row['spec']['schedule'], 'sessionId': target['session_id'], 'userId': target['user_id'],
+                'executionPolicy': execution_policy(row['spec'], actor),
                 'nativeState': {k: state.get(k) for k in ('next_run_at', 'last_run_at', 'last_status')}
                     | {'hasError': bool(state.get('last_error'))},
                 'history': [{k: h.get(k) for k in ('run_at', 'status', 'trigger')} | {'hasError': bool(h.get('error'))}

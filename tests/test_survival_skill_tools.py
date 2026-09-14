@@ -89,6 +89,58 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         self.assertFalse((self.state / 'memory.json').exists())
         self.assertFalse((self.state / 'skill-job.json').exists())
 
+    def test_wrong_id_guidance_never_reveals_or_repairs_the_current_lease(self):
+        with action_lock(self.state):
+            pass
+        files = lambda: {p.name: p.read_bytes() for p in self.state.iterdir() if p.is_file()}
+        before = files()
+        for wrong in ('mem-' + 'a' * 32, 'task-' + 'b' * 24, 't18', TURN[:-1], None):
+            with self.subTest(wrong=wrong):
+                result = self.tools.remember(wrong, goal='must not be saved')
+                self.assertEqual(result['code'], 'lease_invalid')
+                self.assertFalse(result['dispatched'])
+                self.assertFalse(result['writePerformed'])
+                self.assertFalse(result['retryAutomatically'])
+                self.assertNotIn(TURN, json.dumps(result))
+                self.assertFalse({'turnId', 'turn_id', 'lease', 'currentLease'} & result.keys())
+                self.assertIn('原样复制最新生活输入', result['instruction'])
+                self.assertIn('等待下一次生活输入', result['instruction'])
+                self.assertIn('不要继续猜测或自动重试', result['instruction'])
+                self.assertEqual(files(), before)
+        self.assertEqual(self.library.calls, [])
+
+    def test_invalid_closed_expired_and_unknown_memory_leases_remain_denied(self):
+        with action_lock(self.state):
+            pass
+        for fields in ({'status': 'closed'}, {'status': 'reserved'}, {'status': 'unknown'},
+                       {'status': 'open', 'expiresAt': NOW * 1000}):
+            with self.subTest(fields=fields):
+                self.update_lease(**fields)
+                before = (self.state / 'lease.json').read_bytes()
+                result = self.tools.remember(TURN, goal='must not be saved')
+                self.assertEqual(result['code'], 'lease_invalid')
+                self.assertFalse(result['writePerformed'])
+                self.assertNotIn(TURN, json.dumps(result))
+                self.assertEqual((self.state / 'lease.json').read_bytes(), before)
+                self.assertFalse((self.state / 'memory.json').exists())
+        self.update_lease(status='open', expiresAt=NOW * 1000 + 60000)
+        write_json(self.state / 'unknown.json', {'actionId': 'uncertain'})
+        marker = (self.state / 'unknown.json').read_bytes()
+        self.assertEqual(self.tools.remember(TURN, goal='must not be saved'),
+                         {'ok': False, 'code': 'outcome_unknown', 'retryAutomatically': False})
+        self.assertEqual((self.state / 'unknown.json').read_bytes(), marker)
+        self.assertFalse((self.state / 'memory.json').exists())
+
+    def test_post_operation_error_does_not_claim_a_pre_operation_rejection(self):
+        from numen_gateway import GatewayError
+        def operation(_):
+            write_json(self.state / 'fixture-write.json', {'written': True})
+            raise GatewayError('lease_invalid')
+        result = self.tools._write(TURN, operation)
+        self.assertEqual(read_json(self.state / 'fixture-write.json'), {'written': True})
+        self.assertNotIn('writePerformed', result)
+        self.assertNotIn('instruction', result)
+
     def test_used_lease_allows_learning_but_not_skill_start(self):
         self.update_lease(status='used', actionsUsed=1)
         self.assertTrue(self.tools.remember(TURN, lesson='observed result')['ok'])
@@ -176,6 +228,64 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         for value in (0, 179, 3601, True, 300.5):
             self.assertEqual(self.tools.remember(TURN, review_after_seconds=value)['code'], 'invalid_review_interval')
         self.assertEqual(self.tools.remember(TURN, goal_state='ignore_limits')['code'], 'invalid_goal_state')
+
+    def test_same_turn_memory_retry_preserves_bytes_history_and_review_time(self):
+        args = dict(goal='Wait for wheat', lesson='Observed age 1', next_focus='Inspect farm',
+                    goal_state='resting', review_after_seconds=300)
+        first = self.tools.remember(TURN, **args)
+        saved = (self.state / 'memory.json').read_bytes()
+        # A new tool object models a reconnect/restart: deduplication is durable.
+        reconnected = SkillTools(self.state, self.library, clock=lambda: NOW + 10)
+        with patch('numen_gateway.write_json', side_effect=AssertionError('duplicate must not write')):
+            duplicate = reconnected.remember(TURN, **args)
+        self.assertTrue(first['changed'])
+        self.assertFalse(duplicate['changed'])
+        self.assertEqual(duplicate['updatedAt'], first['updatedAt'])
+        self.assertEqual(duplicate['historyEntries'], 1)
+        self.assertEqual((self.state / 'memory.json').read_bytes(), saved)
+        for receipt in (first, duplicate):
+            self.assertTrue(receipt['memorySaved'])
+            self.assertTrue(receipt['noRepeatNeeded'])
+            self.assertEqual(receipt['nextReviewAfterSeconds'], 300)
+            self.assertEqual(receipt['nextReviewScheduler'], 'existing_life_controller')
+            self.assertIn('现在给出最终答复', receipt['instruction'])
+            self.assertIn('若仍有必要工作', receipt['instruction'])
+            self.assertIn('不证明游戏目标完成', receipt['instruction'])
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+        self.assertEqual(read_json(self.state / 'control.json'), self.control)
+
+    def test_changed_memory_and_same_memory_in_new_turn_are_new_checkpoints(self):
+        args = dict(goal='Wait for wheat', lesson='Observed age 1', next_focus='Inspect farm',
+                    goal_state='resting', review_after_seconds=300)
+        self.tools.remember(TURN, **args)
+        for key, value in dict(goal='Gather seeds', lesson='Observed age 2',
+                               next_focus='Inspect water', goal_state='ongoing',
+                               review_after_seconds=600).items():
+            args[key] = value
+            self.assertTrue(self.tools.remember(TURN, **args)['changed'])
+        self.assertEqual(len(read_json(self.state / 'memory.json')['history']), 6)
+        next_turn = 'turn_fixture_9876543210'
+        self.update_lease(turnId=next_turn)
+        self.assertTrue(self.tools.remember(next_turn, **args)['changed'])
+        self.assertEqual(len(read_json(self.state / 'memory.json')['history']), 7)
+
+    def test_memory_deduplication_cannot_bypass_revoked_lease(self):
+        self.tools.remember(TURN, goal='Wait')
+        saved = (self.state / 'memory.json').read_bytes()
+        self.update_lease(status='closed')
+        denied = self.tools.remember(TURN, goal='Wait')
+        self.assertEqual(denied['code'], 'lease_invalid')
+        self.assertNotIn('memorySaved', denied)
+        self.assertEqual((self.state / 'memory.json').read_bytes(), saved)
+
+    def test_memory_write_failure_cannot_claim_saved_or_finish(self):
+        with patch('numen_gateway.write_json', side_effect=OSError('fixture write failed')):
+            failed = self.tools.remember(TURN, goal='Wait')
+        self.assertFalse(failed['ok'])
+        self.assertNotIn('memorySaved', failed)
+        self.assertNotIn('nextReviewAfterSeconds', failed)
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+        self.assertFalse((self.state / 'memory.json').exists())
 
     def test_real_program_is_drafted_tested_promoted_then_only_queued(self):
         from skill_library import SkillLibrary

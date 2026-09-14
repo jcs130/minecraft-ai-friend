@@ -53,7 +53,7 @@ MANIFEST = {
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
     "npc": {"health_required": True, "purpose": "Skill-book and NPC event consumers; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
-    "qwenpaw": {"health_required": True, "purpose": "Current ten-role world team, cloud models and native tasks"},
+    "qwenpaw": {"health_required": True, "purpose": "Current world team, cloud models and native tasks; engineering guard and owned no-deadline cycle checked by world_team"},
     "qwenpaw-ops": {"health_required": True, "purpose": "Six-role operations team, bounded native tasks and attributed proposals"},
     "voice": {"health_required": True, "purpose": "Local voice response queue"},
     "asr": {"health_required": True, "purpose": "Local microphone speech recognition"},
@@ -201,6 +201,27 @@ def probe_panel_smoke():
             'world_team': world_team}
 
 
+def probe_engineering_cron_runtime():
+    """Validate the live guard, job policy and exact native/lease ownership."""
+    try:
+        process = subprocess.run(['docker', 'exec', 'qiandengji-qwenpaw-1', 'python',
+                                  '/ops/engineering_cron_runtime.py', '--running'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=15,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if process.returncode != 0 or len(process.stdout.encode('utf8')) > 16384:
+            raise ValueError('engineering_runtime_not_verified')
+        value = json.loads(process.stdout.strip().splitlines()[-1])
+        if (value.get('ok') is not True or value.get('jobId') != 'qd-team-engineer'
+                or value.get('agentId') != 'qd-engineer' or value.get('adapterVersion') != 1
+                or value.get('policy') != 'no_total_deadline' or value.get('effectiveTimeoutSeconds') is not None
+                or value.get('nativeSchemaTimeoutIsEffective') is not False or value.get('maxConcurrency') != 1
+                or value.get('modelCalls') != 0 or value.get('worldActions') != 0):
+            raise ValueError('engineering_runtime_not_verified')
+        return value
+    except (OSError, ValueError, TypeError, IndexError, subprocess.SubprocessError) as error:
+        return {'ok': False, 'errorType': type(error).__name__}
+
+
 def probe_operations_cycles():
     """Detect stuck leases independently of native Cron's successful skips."""
     import sqlite3
@@ -221,18 +242,35 @@ def probe_operations_cycles():
         if not isinstance(rows, list):
             raise ValueError('operations_ledger_invalid')
         now = time.time()
+        engineering = None
+        # Historical fixtures and old deployments without this role keep their
+        # original deadlines; a present current role must prove its live policy.
+        if (PROJECT / 'server/agents/work/workspaces/qd-engineer/jobs.json').is_file():
+            engineering = probe_engineering_cron_runtime()
+        ownership = (engineering or {}).get('runningEvidence', {})
+        stamp = ownership.get('checkedAt')
+        checked_now = time.time()
+        verified = ((engineering or {}).get('ok') is True and ownership.get('verified') is True
+            and ownership.get('actor') == 'operations:mc-god' and ownership.get('jobId') == 'qd-team-engineer'
+            and type(stamp) in (int, float) and math.isfinite(stamp) and -5 <= checked_now - stamp <= 30)
         blocked = []
         for row in cycles:
             age = now - row['startedAt']
             # Native deadline plus its 90s cleanup/grace window; goddess has an 8-minute shift.
             stale_after = 570 if row['actor'] == 'game:mc-god' else 450
-            if row['status'] == 'unknown' or (row['status'] == 'running' and age > stale_after):
+            owned = verified and row['actor'] == 'operations:mc-god' and row['startedAt'] == ownership.get('cycleStartedAt')
+            if row['status'] == 'unknown' or (row['status'] == 'running' and age > stale_after and not owned):
                 blocked.append({'kind': 'team-cycle', 'actor': row['actor'], 'status': row['status']})
         pending = [r for r in rows if r.get('status') not in ('completed', 'failed', 'cancelled')]
         for row in pending:
-            if row.get('status') in ('submission_uncertain', 'unknown') or now - row['startedAt'] > 450:
+            owned = (verified and row.get('status') == 'cron_reserved'
+                and row.get('role') == 'mc-god' and row.get('jobId') == 'qd-team-engineer'
+                and row.get('runId') == ownership.get('reservationRunId')
+                and row.get('startedAt') == ownership.get('reservationStartedAt'))
+            if row.get('status') in ('submission_uncertain', 'unknown') or (now - row['startedAt'] > 450 and not owned):
                 blocked.append({'kind': 'operations-reservation', 'runId': row['runId'], 'status': row['status']})
-        return {'ok': not blocked, 'blocked': blocked, 'pendingReservations': len(pending),
+        return {'ok': not blocked and (engineering is None or engineering.get('ok') is True),
+                'blocked': blocked, 'pendingReservations': len(pending), 'engineeringRuntime': engineering,
                 'modelRequests': 0, 'worldActions': 0, 'automaticRelease': False}
     except (OSError, ValueError, TypeError, KeyError, sqlite3.Error) as error:
         return {'ok': False, 'errorType': type(error).__name__, 'automaticRelease': False}
@@ -249,6 +287,8 @@ def probe_world_team():
     cycles = probe_operations_cycles()
     checks['native_cycles_unblocked'] = cycles['ok']
     evidence['nativeCycles'] = cycles
+    if cycles.get('engineeringRuntime') is not None:
+        checks['engineering_cron_runtime'] = cycles['engineeringRuntime'].get('ok') is True
 
     def read(relative, maximum=262144):
         path = PROJECT / relative

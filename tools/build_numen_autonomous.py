@@ -14,8 +14,10 @@ import build_numen_walk_only as common
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTORY = ROOT / 'world/numen-patches'
 MANIFEST = DIRECTORY / 'autonomous-body-tick-v1.json'
-NATIVE = DIRECTORY / 'autonomous-src/com/dwinovo/numen/core/entity/AutonomousBodyTick.java'
-TEST = DIRECTORY / 'tests/AutonomousTickPolicyTest.java'
+VERSION_SOURCE = DIRECTORY / 'versions/autonomous-body-tick-v1'
+ARCHIVE = VERSION_SOURCE / 'archive.json'
+NATIVE = VERSION_SOURCE / 'src/com/dwinovo/numen/core/entity/AutonomousBodyTick.java'
+TEST = VERSION_SOURCE / 'tests/AutonomousTickPolicyTest.java'
 ENTRY = 'com/dwinovo/numen/core/NumenCoreNeoForge.java'
 
 
@@ -48,10 +50,18 @@ def main():
     native_source = json.loads((ROOT / 'manifests/ai-components.lock.json').read_text(encoding='utf-8-sig'))['source_locations']['numen_source']
     parser.add_argument('--source', type=Path, default=Path(native_source))
     parser.add_argument('--baseline-jar', type=Path, default=ROOT / 'server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar')
+    parser.add_argument('--output-root', type=Path, default=ROOT / 'runtime/numen-autonomous-build')
+    parser.add_argument('--no-latest', action='store_true', help='Keep existing latest records unchanged when rebuilding history.')
     parser.add_argument('--jdk-bin', type=Path, default=Path(os.environ.get('JDK21_BIN',
         r'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin')))
     args = parser.parse_args()
     manifest = json.loads(MANIFEST.read_text(encoding='utf8'))
+    archive = json.loads(ARCHIVE.read_text(encoding='utf8'))
+    if (archive.get('schema') != 1 or archive.get('capability') != manifest['capability']
+            or archive.get('baselineJarSha256') != manifest['baselineJarSha256']
+            or any(common.sha(common.normalized(VERSION_SOURCE / name)) != digest
+                for name, digest in archive['sourceHashes'].items())):
+        raise ValueError('historical_v1_source_archive_changed')
     originals = verify_baseline(args.baseline_jar, manifest)
     actuator = ROOT / 'server/mc/mods/numen_act-neoforge-1.21.1-0.1.1.jar'
     if common.sha(actuator.read_bytes()) != manifest['actuatorJarSha256']:
@@ -68,7 +78,10 @@ def main():
     original = restored_entry((args.source / manifest['entrySource']).read_text(encoding='utf8'))
     if common.sha(original.encode('utf8')) != manifest['entryPreimageSha256']:
         raise ValueError('restored_entry_preimage_changed')
-    build = ROOT / 'runtime/numen-autonomous-build' / uuid.uuid4().hex
+    output_root = args.output_root.resolve()
+    if not output_root.is_relative_to((ROOT/'runtime').resolve()):
+        raise ValueError('output_must_be_project_runtime')
+    build = output_root / uuid.uuid4().hex
     source, classes, tests = build / 'source', build / 'classes', build / 'tests'
     source.mkdir(parents=True); classes.mkdir(); tests.mkdir()
     baseline = build / 'baseline-numen.jar'
@@ -106,8 +119,10 @@ def main():
         raise ValueError('autonomous_policy_test_failed')
     jar = build / 'numen-neoforge-1.21.1-0.1.1-autonomous-v1.jar'
     preservation = common.overlay_jar(baseline, classes, jar, set(manifest['classFamilies']))
+    if common.sha(jar.read_bytes()) != archive['expectedOutputJarSha256']:
+        raise ValueError('historical_v1_output_differs_from_approved_jar')
     evidence = (Path(__file__).resolve(), ROOT / 'tools/build_numen_walk_only.py', ROOT / 'world/botgate-src/build.py',
-                MANIFEST, patch, NATIVE, TEST, ROOT / manifest['configSource'])
+                MANIFEST, patch, ARCHIVE, NATIVE, TEST, ROOT / manifest['configSource'])
     record = {'ok': True, 'capability': manifest['capability'], 'preservedCapabilities': manifest['preservedCapabilities'],
         'jar': str(jar), 'sha256': common.sha(jar.read_bytes()), 'baselineJar': str(baseline),
         'baselineJarSha256': manifest['baselineJarSha256'], 'sourceCommit': head, 'source': str(source),
@@ -116,7 +131,7 @@ def main():
         'sourceFiles': {p.relative_to(ROOT).as_posix(): common.sha(p.read_bytes()) for p in evidence},
         'tests': assertions, 'deployment': 'not performed', 'configPath': manifest['configPath'],
         'livePhysicsVerified': False, **preservation}
-    for path in (build / 'build-record.json', build.parent / 'latest.json'):
+    for path in ([build / 'build-record.json'] + ([] if args.no_latest else [build.parent / 'latest.json'])):
         path.write_text(json.dumps(record, indent=2) + '\n', encoding='utf8')
     print(json.dumps({key: record[key] for key in ('ok', 'jar', 'sha256', 'tests', 'preservedEntries', 'deployment')}))
 

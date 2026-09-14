@@ -234,7 +234,7 @@ services:
       retries: 3
 
   qwenpaw:
-    image: qiandengji-qwenpaw-game:2.2.0-autonomy3
+    image: qiandengji-qwenpaw-game:2.2.0-autonomy11
     pull_policy: never
     restart: unless-stopped
     # Native HTTP MCP clients are loaded with each role. Start their NPC
@@ -338,7 +338,7 @@ services:
       start_period: 90s
 
   survivor:
-    image: qiandengji-survivor:2.2.0-autonomy9
+    image: qiandengji-survivor:2.2.0-autonomy14
     pull_policy: never
     restart: unless-stopped
     stop_grace_period: 120s

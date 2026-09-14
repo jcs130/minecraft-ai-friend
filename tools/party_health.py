@@ -71,6 +71,11 @@ def check():
         checks['life_consumer_loaded'] = (life.get('enabled') is True and life.get('signalVersion') == 1
             and life.get('status') not in ('unknown', 'request_ledger_missing', 'failed', None))
         checks['life_progression_loaded'] = life.get('progressionVersion') == 1
+        native_tools = get('http://127.0.0.1:18089/api/mcp/tools/maid_native', maid['agentId'])
+        catalog_tools = [tool for tool in native_tools if tool.get('name') == 'task_catalog'] if isinstance(native_tools, list) else []
+        checks['native_task_search_loaded'] = (life.get('taskSearchVersion') == 1 and len(catalog_tools) == 1
+            and catalog_tools[0].get('enabled') is True
+            and catalog_tools[0].get('input_schema', {}).get('properties', {}).get('query', {}).get('type') == 'string')
         checks['ordered_reply_transport_loaded'] = value.get('replyTransportVersion') == 2
         jobs = get('http://127.0.0.1:18089/api/cron/jobs', ROLE)
         managed = [job for job in jobs if job.get('id') == JOB_ID]

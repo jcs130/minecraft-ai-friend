@@ -44,14 +44,18 @@ public final class WorldInteractionBridge {
 
     private WorldInteractionBridge() {}
 
-    public static void install() { NeoForge.EVENT_BUS.addListener(WorldInteractionBridge::tick); }
+    public static void install() {
+        NativeDropTask.install();
+        NeoForge.EVENT_BUS.addListener(WorldInteractionBridge::tick);
+    }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("qdworld").requires(s -> s.hasPermission(2));
-        for (String action : new String[]{"interact", "interaction", "eat", "eating"}) {
-            String tool = action.equals("eat") || action.equals("eating") ? "eat" : "interact_at";
+        for (String action : new String[]{"interact", "interaction", "eat", "eating", "drop", "dropping"}) {
+            String tool = action.equals("drop") || action.equals("dropping") ? "drop_items"
+                : action.equals("eat") || action.equals("eating") ? "eat" : "interact_at";
             var request = Commands.argument("request", StringArgumentType.word());
-            if (action.equals("interact") || action.equals("eat")) request.then(Commands.argument("payload", StringArgumentType.word())
+            if (action.equals("interact") || action.equals("eat") || action.equals("drop")) request.then(Commands.argument("payload", StringArgumentType.word())
                 .executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
                     StringArgumentType.getString(c, "request"), StringArgumentType.getString(c, "payload"), tool)));
             else request.executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
@@ -106,6 +110,16 @@ public final class WorldInteractionBridge {
         byte[] raw = Base64.getUrlDecoder().decode(encoded);
         if (raw.length > 2048) throw new IllegalArgumentException("invalid_interaction_payload");
         var args = JsonParser.parseString(new String(raw, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (tool.equals("drop_items")) {
+            if (!args.keySet().equals(Set.of("item_id", "count"))
+                    || !args.get("item_id").isJsonPrimitive() || !args.getAsJsonPrimitive("item_id").isString()
+                    || !args.get("item_id").getAsString().matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,100}")
+                    || !args.get("count").isJsonPrimitive() || !args.getAsJsonPrimitive("count").isNumber()
+                    || !args.get("count").getAsString().matches("[0-9]{1,2}")
+                    || args.get("count").getAsInt() < 1 || args.get("count").getAsInt() > 64)
+                throw new IllegalArgumentException("invalid_drop_arguments");
+            return args;
+        }
         if (tool.equals("eat")) {
             if (!args.keySet().equals(Set.of("item_id")) || !args.get("item_id").isJsonPrimitive()
                     || !args.getAsJsonPrimitive("item_id").isString()
@@ -203,11 +217,15 @@ public final class WorldInteractionBridge {
                         args.get("y").getAsInt() + .5, args.get("z").getAsInt() + .5) > 20.25)
                     throw new IllegalArgumentException("interaction_target_out_of_reach");
                 var context = new ToolContext("mcp-" + id, actor.level().getGameTime());
-                TaskRecord record = tool.equals("eat")
+                TaskRecord record = tool.equals("drop_items")
+                    ? new NativeDropTask.Record(id, actor.level().getGameTime(), args.get("item_id").getAsString(), args.get("count").getAsInt())
+                    : tool.equals("eat")
                     ? new InventoryOps().eatItem(args.get("item_id").getAsString(), context)
                     : new BlockActionOps().interactAt(args.get("button").getAsString(),
                     args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt(), 0,
                     args.has("item_id") ? args.get("item_id").getAsString() : null, context);
+                if (record instanceof NativeDropTask.Record drop && NativeDropTask.count(actor, drop.item) < drop.count)
+                    throw new IllegalArgumentException("insufficient_main_inventory_items");
                 out.addProperty("status", "accepted");
                 out.addProperty("dispatched", true);
                 out.addProperty("nativeTaskId", record.publicId());

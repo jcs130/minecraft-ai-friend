@@ -19,6 +19,7 @@ import uuid
 TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
          'place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade',
          'guild_claim', 'guild_release', 'guild_deliver')
+DIRECT_ACTIONS = ('drop_items',)  # Excluded from the existing executable-skill kernel.
 WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade')
 GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
@@ -28,6 +29,17 @@ SLOTS = ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')
 
 class GatewayError(ValueError):
     pass
+
+
+def invalid_lease_response():
+    """Pre-operation rejection only; never read or disclose a capability ID."""
+    return {'ok': False, 'code': 'lease_invalid', 'dispatched': False,
+            'writePerformed': False, 'retryAutomatically': False,
+            'instruction': '本次操作因租约无效未执行、未写入。需要 turn_id 的工具只能原样复制最新生活输入中的 turn_id；'
+                '不要使用 mem-编号、task/t任务编号，也不要生成、截短或补全编号。'
+                '找不到正确的原编号时，直接给出最终答复说明无法继续，并等待下一次生活输入；'
+                '不要继续猜测或自动重试。若编号已经原样复制仍被拒绝，也应结束本轮等待；'
+                '关闭、过期或受保护的租约不能复用，本回执不会延长或恢复授权。'}
 
 
 def _read_json(path, limit):
@@ -163,10 +175,27 @@ class RconClient:
             else:
                 raise ConnectionError('rcon_auth_response_missing')
             stream.sendall(self._packet(2, 2, command))
-            for _ in range(16):
+            parts, response_bytes = [], 0
+            end_requested = False
+            for _ in range(256):
                 rid, kind, response = self._receive(stream)
                 if (rid, kind) == (2, 0):
-                    return response
+                    response_bytes += len(response.encode('utf-8'))
+                    if response_bytes > 1048576:
+                        raise ConnectionError('rcon_response_too_large')
+                    parts.append(response)
+                    if not end_requested:
+                        # Minecraft splits one reply into same-ID 4096-character
+                        # frames, without a final-frame flag. After its first
+                        # frame, send a distinct-ID type-0 protocol probe. The
+                        # native server responds only after all command frames;
+                        # this is not another command or a mutation retry.
+                        stream.sendall(self._packet(3, 0, ''))
+                        end_requested = True
+                elif rid == 3:
+                    if not end_requested or kind != 0 or response != 'Unknown request 0':
+                        raise ConnectionError('rcon_invalid_response_end')
+                    return ''.join(parts)
             raise ConnectionError('rcon_response_missing')
 
 
@@ -430,7 +459,7 @@ class NumenGateway:
             raise GatewayError('invalid_item_id')
 
     def _validate(self, tool, args):
-        if tool not in TOOLS or not isinstance(args, dict):
+        if tool not in (*TOOLS, *DIRECT_ACTIONS) or not isinstance(args, dict):
             raise GatewayError('tool_not_allowed')
         if tool in WORLD_ACTIONS:
             from world_actions import validate_world_action
@@ -464,6 +493,11 @@ class NumenGateway:
             if set(args) != {'item_id'}:
                 raise GatewayError('invalid_eat')
             self._item(args['item_id'])
+        elif tool == 'drop_items':
+            if set(args) != {'item_id', 'count'}:
+                raise GatewayError('invalid_drop')
+            self._item(args['item_id'])
+            self._integer(args['count'], 1, 64)
         elif tool == 'equip_item':
             if set(args) != {'item_id', 'action', 'slot'} or args['action'] != 'equip' or args['slot'] not in SLOTS:
                 raise GatewayError('invalid_equip')
@@ -758,7 +792,7 @@ class NumenGateway:
                 if (not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id) or lease.get('turnId') != turn_id
                         or lease.get('schema') != 1 or lease.get('status') != 'open'
                         or lease.get('expiresAt', 0) <= self._now()):
-                    raise GatewayError('lease_invalid')
+                    return invalid_lease_response()
                 if (self.state / 'unknown.json').exists():
                     raise GatewayError('outcome_unknown')
                 if (type(lease.get('actionLimit')) is not int or lease['actionLimit'] not in (1, 6)
@@ -785,11 +819,29 @@ class NumenGateway:
                 self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
                 if tool == 'goto':
                     self._area(args, protect=False)
-                    if math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z']) > 24:
-                        raise GatewayError('walk_target_too_far')
+                    distance = math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z'])
+                    if distance > 24:
+                        result = {'ok': False, 'code': 'walk_target_too_far', 'dispatched': False,
+                                  'navigationPreflight': {'bodyUuid': before['bodyUuid'],
+                                      'dimension': before['dimension'], 'observedAt': before['observedAt'],
+                                      'origin': dict(before['position']), 'requested': dict(args),
+                                      'horizontalDistance': distance, 'maxHorizontalDistance': 24,
+                                      'distanceMetric': 'horizontal_euclidean', 'destinationChanged': False}}
+                        # A rejection has no native action ID and consumes no lease.
+                        # Keep its exact origin for subsequent diagnosis, not a later
+                        # position sampled after a reflex or another action moved us.
+                        try:
+                            self._record({'turnId': turn_id, 'tool': tool, 'args': dict(args),
+                                          'phase': 'preflight_rejected', 'observedAt': self._now(), 'result': result})
+                        except OSError:
+                            result['auditLogAvailable'] = False
+                        return result
                 if tool in ('game_cast', 'game_learn'):
                     from game_skills import preflight_game_action
                     preflight_game_action(self, before, tool, args)
+                if tool == 'drop_items':
+                    from drop_actions import preflight
+                    preflight(before, args)
                 plan = None
                 navigation_sense = None
                 if tool == 'goto':
@@ -826,6 +878,9 @@ class NumenGateway:
                     if tool == 'eat':
                         from food_actions import FoodActions
                         reply = FoodActions(self).dispatch(action_id, before, args)
+                    elif tool == 'drop_items':
+                        from drop_actions import DropActions
+                        reply = DropActions(self).dispatch(action_id, before, args)
                     else:
                         reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
                     if tool == 'equip_item' and reply.get('accepted') is True:
@@ -837,6 +892,8 @@ class NumenGateway:
                     elif reply.get('success') is False:
                         result = {'ok': False, 'code': 'action_rejected', 'actionId': action_id, 'result': reply}
                         if tool == 'eat' and reply.get('nativeFoodReceipt', {}).get('status') == 'terminal':
+                            result['completionConfirmed'] = True
+                        if tool == 'drop_items' and reply.get('nativeDropReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
                     else:
                         raise GatewayError('outcome_unknown')

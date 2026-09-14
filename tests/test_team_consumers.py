@@ -200,6 +200,60 @@ class TeamHealthTests(unittest.TestCase):
             db.execute("UPDATE cycles SET status='unknown'")
         self.assertFalse(health.probe_operations_cycles()['ok'])
 
+    def engineering_fixture(self):
+        import sqlite3
+        from contextlib import closing
+        started = self.now - 86400
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute('INSERT INTO cycles VALUES(?,?,?)', ('operations:mc-god', 'running', started))
+        self.docs['server/agents/work/workspaces/qd-engineer/jobs.json'] = {'jobs': []}
+        self.docs['server/operations-agent-state/operations-budget/delegations.json'] = [
+            {'runId': 'current-cron', 'status': 'cron_reserved', 'role': 'mc-god',
+             'jobId': 'qd-team-engineer', 'startedAt': started - 0.02}]
+        self.save()
+        evidence = {'ok': True, 'policy': 'no_total_deadline', 'runningEvidence': {
+            'verified': True, 'actor': 'operations:mc-god', 'jobId': 'qd-team-engineer',
+            'checkedAt': self.now, 'cycleStartedAt': started, 'reservationRunId': 'current-cron',
+            'reservationStartedAt': started - 0.02}}
+        return patch.object(health, 'probe_engineering_cron_runtime', return_value=evidence), evidence
+
+    def test_verified_original_engineering_run_is_not_stale_after_450_seconds(self):
+        probe, evidence = self.engineering_fixture()
+        with probe:
+            result = health.probe_world_team()
+        self.assertTrue(result['ok'], result)
+        self.assertTrue(result['checks']['engineering_cron_runtime'])
+        self.assertEqual(result['evidence']['nativeCycles']['blocked'], [])
+        self.assertFalse(result['evidence']['nativeCycles']['automaticRelease'])
+
+    def test_stale_guard_missing_native_or_mismatched_original_lease_stays_red(self):
+        probe, evidence = self.engineering_fixture()
+        from copy import deepcopy
+        original = deepcopy(evidence)
+        for change in ('guard', 'native', 'cycle', 'reservation', 'stale'):
+            evidence.clear(); evidence.update(deepcopy(original))
+            if change == 'guard': evidence['ok'] = False
+            if change == 'native': evidence['runningEvidence']['verified'] = False
+            if change == 'cycle': evidence['runningEvidence']['cycleStartedAt'] -= 600
+            if change == 'reservation': evidence['runningEvidence']['reservationRunId'] = 'other-cron'
+            if change == 'stale': evidence['runningEvidence']['checkedAt'] -= 31
+            with probe:
+                self.assertFalse(health.probe_operations_cycles()['ok'], change)
+
+    def test_verified_engineer_does_not_hide_unknown_or_another_role_timeout(self):
+        import sqlite3
+        from contextlib import closing
+        probe, evidence = self.engineering_fixture()
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute('INSERT INTO cycles VALUES(?,?,?)', ('game:qd-guild-planner', 'running', self.now - 451))
+        with probe:
+            self.assertFalse(health.probe_operations_cycles()['ok'])
+        with closing(sqlite3.connect(self.root / 'server/team-state/team.sqlite3')) as db, db:
+            db.execute('DELETE FROM cycles WHERE actor=?', ('game:qd-guild-planner',))
+            db.execute("UPDATE cycles SET status='unknown'")
+        with probe:
+            self.assertFalse(health.probe_operations_cycles()['ok'])
+
     def test_missing_protocol_or_failed_stage_cannot_use_healthy_npc_as_proof(self):
         self.docs['server/team-state/collector-health.json']['protocol'] = 0
         self.save()

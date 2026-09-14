@@ -60,6 +60,43 @@ class NumenAutonomyHealthTests(unittest.TestCase):
         self.assertEqual(result['worldActions'], 0); self.assertEqual(result['modelRequests'], 0)
         self.assertEqual(before, {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
+    def world_tick_candidate(self):
+        self.write(probe.WORLD_BUILD_RECORD, {**self.record,'capability':probe.WORLD_CAPABILITY})
+        for status in (self.first,self.second):
+            status.update(worldTickCapability=probe.WORLD_CAPABILITY,worldTickRadius=2,worldTickForceTicks=True,
+                worldTickTimeoutTicks=40,worldTickRefreshTicks=20)
+            status['bodies'][0].update(worldTickTicketActive=True,nativeForceTicks=True,
+                worldTickLastRefreshServerTick=status['serverTick']-2)
+
+    def test_world_tick_artifact_requires_actual_native_force_flag(self):
+        self.world_tick_candidate()
+        self.assertTrue(self.check()['ok'])
+        self.second['bodies'][0]['nativeForceTicks']=False
+        self.assertFalse(self.check()['checks']['native_random_tick_eligible'])
+
+    def test_world_tick_history_does_not_replace_unrelated_artifact(self):
+        self.write(probe.WORLD_BUILD_RECORD, {**self.record,'capability':probe.WORLD_CAPABILITY,'sha256':'0'*64})
+        self.assertTrue(self.check()['ok'])
+
+    def test_v3_requires_bounded_neighborhood_and_all_nine_actual_ticks(self):
+        self.world_tick_candidate()
+        self.write(probe.NEIGHBOR_BUILD_RECORD, {**self.record,'capability':probe.NEIGHBOR_CAPABILITY})
+        for status in (self.first,self.second):
+            status.update(worldTickCapability=probe.NEIGHBOR_CAPABILITY,worldTickChunkRadius=1,worldTickChunkCount=9)
+            status['bodies'][0].update(worldTickNativeForcedCount=9,worldTickEntityTickingCount=9)
+        self.assertTrue(self.check()['ok'])
+        self.second['bodies'][0]['worldTickNativeForcedCount']=8
+        self.assertFalse(self.check()['checks']['nine_chunks_native_ticking'])
+        self.second['worldTickChunkRadius']=2
+        self.assertFalse(self.check()['checks']['bounded_world_tick_neighborhood'])
+
+    def test_world_tick_stale_ticket_or_expanded_radius_fails(self):
+        self.world_tick_candidate()
+        self.second['bodies'][0]['worldTickLastRefreshServerTick']=900
+        self.assertFalse(self.check()['checks']['native_random_tick_eligible'])
+        self.second['worldTickRadius']=8
+        self.assertFalse(self.check()['checks']['bounded_world_tick_ticket'])
+
     def test_online_brain_with_frozen_physics_is_not_healthy(self):
         for status in (self.first, self.second): status['bodies'][0]['entityTicking'] = False
         self.second['bodies'][0]['bodyTickCount'] = 300

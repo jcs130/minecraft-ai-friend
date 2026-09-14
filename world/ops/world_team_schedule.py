@@ -7,6 +7,7 @@ import time
 from zoneinfo import ZoneInfo
 from world_team import TeamStore, digest
 from world_team_hosts import logical_actor, migration_for, native_host, require_host
+from engineering_cron_runtime import ACTOR as ENGINEER, POLICY as ENGINEERING_POLICY, execution_job
 
 SCHEDULES = {
     'game:mc-god': ('qd-team-goddess', '女神 · 世界巡查与问题处理', '1-59/10 * * * *'),
@@ -35,7 +36,8 @@ PROMPTS = {
         '区分过期巡检记录与当前故障，恢复结论以新鲜回执为准。'
         '工程谕（造物主2026-09-09）：时刻记得打造Agent-LLM自主驱动的体系，不是写一大堆规则；优先给角色可核实的工具与回执通道让模型自主判断行动，硬规则只收敛在安全与权限的最小边界。'
         '及时把本班工单、改动路径、job_id/sourceSha256/commit、尚未完成的一步追加到memory/YYYY-MM-DD.md；'
-        '读记忆时只读相关末段，不每轮重读整天笔记和完整旧工单。临近班次结束优先保存交接，不再次展开新事项。',
+        '读记忆时只读相关末段，不每轮重读整天笔记和完整旧工单。本工程任务没有总时长截止，可以完整推理并完成当前交付步骤；'
+        '持续保存进度，仍在执行时后续定时信号不叠加新的工程任务。',
     'game:qd-guild-planner': '执行一次游戏策划班次。读取team_context、分配的工单和world_content_context，结合在线公会人物与真实合同，'
         '设计有缘由、目标、阶段与结局的小型剧情或活动。可按需查官方技能与玩法参考；灶火祭司（剧情顾问）职责已并入，'
         '设计时自行核对原作设定一致性，不再等待独立顾问投稿；不要重复已经存在的活动。'
@@ -61,6 +63,8 @@ def team_job(actor):
         'save_result_to_inbox': False,
         'meta': {'project': 'qiandengji', 'purpose': 'world-team', 'runtime': runtime, 'role': role, 'version': 1}}
     host = native_host(actor)
+    if actor == ENGINEER:
+        spec['meta']['engineeringExecution'] = dict(ENGINEERING_POLICY)
     entry = migration_for(actor)
     if entry is not None and host != entry['source']:
         spec['meta']['nativeHost'] = host
@@ -142,7 +146,7 @@ async def execute(executor, job, original, runtime):
         store.save_cycle(current, 'running', {'jobId': job.id})
         try:
             require_host(actor, runtime, native_role)
-            result = await original(executor, job)
+            result = await original(executor, execution_job(job, actor))
             if result.get('delivery_status') in ('failed', 'error', 'no_content'):
                 store.save_cycle(current, 'failed', result)
             else:
@@ -153,13 +157,20 @@ async def execute(executor, job, original, runtime):
                 terminal = 'failed' if result.get('delivery_status') in ('failed', 'error', 'no_content') else 'completed'
                 await asyncio.to_thread(finish_run, reservation['runId'], terminal, jobId=job.id)
             return result
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as error:
             # CronExecutor's wait_for has awaited stream cancellation before
             # raising this known terminal. World action uncertainty remains in
             # its separate receipt ledger; a future inspection may report it.
-            store.save_cycle(current, 'failed', {'jobId': job.id, 'nativeTimeoutConfirmed': True})
+            details = {'jobId': job.id, 'nativeTimeoutConfirmed': True}
+            if actor == ENGINEER:
+                # With no outer deadline this is a native inner timeout (e.g.
+                # stream idle), not the old 360-second engineering cutoff.
+                details.update(totalDeadlineApplied=False, nativeInnerTimeout=True,
+                               errorType=type(error).__name__)
+            store.save_cycle(current, 'failed', details)
             if reservation:
-                await asyncio.to_thread(finish_run, reservation['runId'], 'failed', nativeTimeoutConfirmed=True)
+                await asyncio.to_thread(finish_run, reservation['runId'], 'failed',
+                                        **{k: v for k, v in details.items() if k != 'jobId'})
             raise
         except asyncio.CancelledError:
             # Native CronExecutor has awaited stream cancellation and finalized

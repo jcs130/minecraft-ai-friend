@@ -227,6 +227,9 @@ class PartyLifeTests(unittest.TestCase):
         self.assertEqual([op for op, args in calls].count('task_catalog'), 1)
         self.assertTrue(all(op in ('identity', 'task_catalog') for op, args in calls))
         self.assertNotIn('fixture:farming', prompt.split('\n', 1)[0])  # no automatic work selection
+        self.assertIn('task_catalog(query=', prompt.split('\n', 1)[0])
+        self.assertIn('truncated', prompt.split('\n', 1)[0])
+        self.assertEqual(self.life.summary()['taskSearchVersion'], 1)
 
     def test_completed_summary_is_short_continuation_not_claimed_game_receipt(self):
         self.signal(); self.life.tick(); self.now += 11; self.status = 'finished'; self.life.tick()

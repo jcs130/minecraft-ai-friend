@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "capability": "autonomous_body_tick_v1",
+  "expectedOutputJarSha256": "47cc11d609b03b62734c4772b2aa40a89ba02a5bbaab0d85ab10589d45ffec3b",
+  "baselineJarSha256": "97ed80699ef1d0e7c958566a5b2873e13d4476b6c865675547cf275c68d87d67",
+  "sourceHashes": {
+    "src/com/dwinovo/numen/core/entity/AutonomousBodyTick.java": "2f7804a2b99325f06785df670dedb3704f652fdbdaa07d44b87501decc528e56",
+    "tests/AutonomousTickPolicyTest.java": "29c00216e3f19a1d3818772ecbc53b91b30cad65ba1f259888dad4848b09c92f"
+  },
+  "provenance": {
+    "testGitCommit": "2ed50cb78b819258a99219309120344e1b68e484",
+    "testOriginalPath": "world/numen-patches/tests/AutonomousTickPolicyTest.java",
+    "testOriginalRawSha256": "29c00216e3f19a1d3818772ecbc53b91b30cad65ba1f259888dad4848b09c92f",
+    "nativeSource": "2ed50cb78b819258a99219309120344e1b68e484:world/numen-patches/autonomous-src/com/dwinovo/numen/core/entity/AutonomousBodyTick.java",
+    "nativeNormalizedSha256": "2f7804a2b99325f06785df670dedb3704f652fdbdaa07d44b87501decc528e56"
+  }
+}

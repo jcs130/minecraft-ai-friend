@@ -9,7 +9,7 @@ import time
 import uuid
 from agent_learning import LearningTools, OPS_ROLES, locked, read, write
 
-VERSION = 3
+VERSION = 4
 
 
 def fingerprint(tools):
@@ -146,6 +146,8 @@ def install(runtime):
     from qwenpaw.app.crons.executor import CronExecutor
     if getattr(CronExecutor, '_qiandeng_learning_guard', None) == VERSION: return
     original = CronExecutor.execute
+    from engineering_cron_runtime import check_native_contract, VERSION as engineering_cron_version
+    check_native_contract(original)
     async def execute(self, job):
         return await guarded_execute(self, job, original, runtime)
     CronExecutor.execute = execute
@@ -157,4 +159,4 @@ def install(runtime):
         'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
         'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
         'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version,
-        'partyLifeSignalVersion': 1})
+        'partyLifeSignalVersion': 1, 'engineeringCronRuntimeVersion': engineering_cron_version})

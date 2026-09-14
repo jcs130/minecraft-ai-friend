@@ -12,9 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.Set;
 
-/** Gives one authorized body vanilla entity ticks; TLM still decides all movement.
- * Numen's radius-2 ticket ticks only its centre chunk, not the whole loaded pad.
+/** Gives one authorized body vanilla entity and nearby world ticks; TLM decides movement.
+ * Nine native radius-2 tickets cover only the centre and eight adjacent chunks.
  * No entity creation, chunk search/load, direct tick, AI replacement or teleport.
  */
 public final class CompanionTick {
@@ -68,6 +69,7 @@ public final class CompanionTick {
     private static void onTick(ServerTickEvent.Post event) {
         EntityMaid maid = loaded(event.getServer());
         if (maid == null || !eligible(maid)) {
+            releasePrevious();
             previousLevel = null; previousChunk = Long.MIN_VALUE; countdown = 0;
             // Existing region tickets expire naturally after forty ticks; never remove another ticket.
             return;
@@ -75,9 +77,28 @@ public final class CompanionTick {
         ServerLevel level = (ServerLevel) maid.level();
         ChunkPos pos = maid.chunkPosition();
         if (level == previousLevel && pos.toLong() == previousChunk && --countdown > 0) return;
+        Set<Long> targets = CompanionTickPolicy.worldChunks(pos.x, pos.z);
+        if (level != previousLevel || pos.toLong() != previousChunk)
+            releasePreviousExcept(level == previousLevel ? targets : Set.of());
         previousLevel = level; previousChunk = pos.toLong(); countdown = REFRESH_TICKS;
-        level.getChunkSource().addRegionTicket(TICKET, pos, RADIUS, pos);
+        // Entity tickets without NeoForge's forceTicks flag skip vanilla random
+        // block ticks when Numen is the only player: its viewer ticket is disabled.
+        for (long key : targets) {
+            ChunkPos target = new ChunkPos(key);
+            level.getChunkSource().addRegionTicket(TICKET, target, RADIUS, target, true);
+        }
         lastRefreshServerTick = event.getServer().getTickCount();
+    }
+
+    private static void releasePrevious() { releasePreviousExcept(Set.of()); }
+
+    private static void releasePreviousExcept(Set<Long> retained) {
+        if (previousLevel == null || previousChunk == Long.MIN_VALUE) return;
+        ChunkPos pos = new ChunkPos(previousChunk);
+        for (long key : CompanionTickPolicy.worldChunks(pos.x, pos.z)) if (!retained.contains(key)) {
+            ChunkPos target = new ChunkPos(key);
+            previousLevel.getChunkSource().removeRegionTicket(TICKET, target, RADIUS, target, true);
+        }
     }
 
     public static JsonObject status(EntityMaid maid) {
@@ -89,6 +110,19 @@ public final class CompanionTick {
         out.addProperty("serverTick", maid.getServer().getTickCount());
         out.addProperty("radius", RADIUS); out.addProperty("timeoutTicks", TIMEOUT_TICKS);
         out.addProperty("refreshTicks", REFRESH_TICKS);
+        out.addProperty("forceTicks", true);
+        out.addProperty("nativeForceTicks", ((ServerLevel) maid.level()).getChunkSource().chunkMap
+            .getDistanceManager().shouldForceTicks(maid.chunkPosition().toLong()));
+        out.addProperty("worldTickCapability", "autonomous_world_tick_v3");
+        out.addProperty("worldTickChunkRadius", 1); out.addProperty("worldTickChunkCount", 9);
+        int forceCount = 0, entityCount = 0;
+        ServerLevel level = (ServerLevel) maid.level();
+        for (long key : CompanionTickPolicy.worldChunks(maid.chunkPosition().x, maid.chunkPosition().z)) {
+            if (level.getChunkSource().chunkMap.getDistanceManager().shouldForceTicks(key)) forceCount++;
+            if (level.isPositionEntityTicking(new ChunkPos(key).getMiddleBlockPosition(0))) entityCount++;
+        }
+        out.addProperty("worldTickNativeForcedCount", forceCount);
+        out.addProperty("worldTickEntityTickingCount", entityCount);
         if (policy.bodyUuid() != null && policy.bodyUuid().equals(maid.getUUID()))
             out.addProperty("lastRefreshServerTick", lastRefreshServerTick);
         else out.add("lastRefreshServerTick", com.google.gson.JsonNull.INSTANCE);

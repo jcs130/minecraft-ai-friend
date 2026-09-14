@@ -147,6 +147,45 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.mine()['code'], 'lease_invalid')
         self.assertFalse(self.rcon.mutations())
 
+    def test_wrong_id_action_guidance_cannot_expose_or_repair_a_lease(self):
+        self.lease()
+        files = lambda: {p.name: p.read_bytes() for p in self.state.iterdir() if p.is_file()}
+        before = files()
+        for wrong in ('mem-' + 'a' * 32, 'task-' + 'b' * 24, 't18', TURN[:-1], None):
+            with self.subTest(wrong=wrong):
+                result = self.mine(wrong)
+                self.assertEqual(result['code'], 'lease_invalid')
+                self.assertFalse(result['dispatched'])
+                self.assertFalse(result['writePerformed'])
+                self.assertFalse(result['retryAutomatically'])
+                self.assertNotIn(TURN, json.dumps(result))
+                self.assertFalse({'turnId', 'turn_id', 'lease', 'currentLease'} & result.keys())
+                self.assertIn('原样复制最新生活输入', result['instruction'])
+                self.assertIn('不要继续猜测或自动重试', result['instruction'])
+                self.assertEqual(files(), before)
+                self.assertFalse(self.rcon.calls)
+
+    def test_invalid_closed_expired_and_unknown_action_leases_remain_denied(self):
+        self.lease()
+        original = gateway.read_json(self.state / 'lease.json')
+        for change in ({'status': 'closed'}, {'status': 'reserved'}, {'status': 'unknown'},
+                       {'expiresAt': NOW * 1000}):
+            with self.subTest(change=change):
+                self.write('lease.json', original | change)
+                before = (self.state / 'lease.json').read_bytes()
+                result = self.mine()
+                self.assertEqual(result['code'], 'lease_invalid')
+                self.assertFalse(result['dispatched'])
+                self.assertNotIn(TURN, json.dumps(result))
+                self.assertEqual((self.state / 'lease.json').read_bytes(), before)
+                self.assertFalse(self.rcon.calls)
+        self.write('lease.json', original)
+        self.write('unknown.json', {'actionId': 'unresolved'})
+        marker = (self.state / 'unknown.json').read_bytes()
+        self.assertEqual(self.mine(), {'ok': False, 'code': 'outcome_unknown'})
+        self.assertEqual((self.state / 'unknown.json').read_bytes(), marker)
+        self.assertFalse(self.rcon.calls)
+
     def test_one_action_per_lease_and_no_duplicate_turn_reset(self):
         self.lease()
         self.assertEqual(self.mine()['code'], 'accepted')
@@ -218,6 +257,39 @@ class GatewayTests(unittest.TestCase):
     def test_walk_target_is_bounded_to_local_neighborhood(self):
         self.lease()
         self.assertEqual(self.client.action(TURN, 'goto', {'x': 125, 'z': 100})['code'], 'walk_target_too_far')
+        self.assertFalse(self.rcon.mutations())
+
+    def test_walk_rejection_preserves_exact_preflight_origin_without_action_or_lease_use(self):
+        self.lease()
+        self.rcon.position = {'x': 95.5, 'y': 65, 'z': 94}
+        result = self.client.action(TURN, 'goto', {'x': 120, 'y': 77, 'z': 108})
+        self.assertEqual(result['code'], 'walk_target_too_far')
+        self.assertFalse(result['dispatched'])
+        evidence = result['navigationPreflight']
+        self.assertEqual(evidence['origin'], {'x': 95.5, 'y': 65, 'z': 94})
+        self.assertEqual(evidence['requested'], {'x': 120, 'y': 77, 'z': 108})
+        self.assertAlmostEqual(evidence['horizontalDistance'], (24.5 ** 2 + 14 ** 2) ** .5)
+        self.assertEqual(evidence['maxHorizontalDistance'], 24)
+        self.assertEqual(evidence['bodyUuid'], BODY_UUID)
+        self.assertEqual(evidence['observedAt'], NOW * 1000)
+        self.rcon.position['x'] = 120
+        self.assertEqual(evidence['origin']['x'], 95.5)
+        recorded = json.loads((self.state / 'actions.jsonl').read_text().strip())
+        self.assertEqual(recorded['result'], result)
+        self.assertEqual(recorded['phase'], 'preflight_rejected')
+        self.assertNotIn('actionId', recorded)
+        self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 0)
+        self.assertFalse((self.state / 'unknown.json').exists())
+        self.assertFalse((self.state / 'last-action.json').exists())
+        self.assertFalse(self.rcon.mutations())
+
+    def test_walk_rejection_does_not_depend_on_audit_log_availability(self):
+        self.lease()
+        with patch.object(self.client, '_record', side_effect=OSError('unavailable')):
+            result = self.client.action(TURN, 'goto', {'x': 125, 'z': 100})
+        self.assertEqual(result['code'], 'walk_target_too_far')
+        self.assertFalse(result['auditLogAvailable'])
+        self.assertEqual(result['navigationPreflight']['origin'], self.rcon.position)
         self.assertFalse(self.rcon.mutations())
 
     def test_bounded_arguments_no_injection_or_raw_tool(self):
@@ -438,15 +510,16 @@ class GatewayTests(unittest.TestCase):
 
 
 class FakeSocket:
-    def __init__(self, packets):
+    def __init__(self, packets, read_chunk=3):
         self.data = b''.join(packets)
         self.sent = []
+        self.read_chunk = read_chunk
     def __enter__(self): return self
     def __exit__(self, *args): pass
     def settimeout(self, timeout): pass
     def sendall(self, value): self.sent.append(value)
     def recv(self, count):
-        part, self.data = self.data[:min(count, 3)], self.data[min(count, 3):]
+        part, self.data = self.data[:min(count, self.read_chunk)], self.data[min(count, self.read_chunk):]
         return part
 
 
@@ -456,12 +529,55 @@ class RconTests(unittest.TestCase):
             secret = Path(folder) / 'secret'
             secret.write_text('fixture-only')
             packet = gateway.RconClient._packet
-            sock = FakeSocket([packet(1, 0, ''), packet(1, 2, ''), packet(998, 0, 'stale'), packet(2, 0, '{"success":true}')])
+            sock = FakeSocket([packet(1, 0, ''), packet(1, 2, ''), packet(998, 0, 'stale'),
+                               packet(2, 0, '{"success":true}'), packet(3, 0, 'Unknown request 0')])
             with patch.object(gateway.socket, 'create_connection', return_value=sock) as connect:
                 result = gateway.RconClient(secret=secret).cmd('numen_act list')
             self.assertEqual(result, '{"success":true}')
-            self.assertEqual(len(sock.sent), 2)
+            self.assertEqual(len(sock.sent), 3)
+            self.assertEqual(sock.sent[-1], packet(3, 0, ''))
             connect.assert_called_once()
+
+    def test_split_reply_requires_exact_end_and_sends_command_only_once(self):
+        packet = gateway.RconClient._packet
+        with tempfile.TemporaryDirectory() as folder:
+            secret = Path(folder) / 'secret'; secret.write_text('fixture-only')
+            for response in ('', 'x' * 4096, 'x' * 8192, '中' * 5000):
+                with self.subTest(length=len(response)):
+                    chunks = [response[i:i + 4096] for i in range(0, len(response), 4096)] or ['']
+                    sock = FakeSocket([packet(1, 2, ''),
+                        *[packet(2, 0, chunk) for chunk in chunks],
+                        packet(997, 0, 'other request'), packet(3, 0, 'Unknown request 0')])
+                    with patch.object(gateway.socket, 'create_connection', return_value=sock):
+                        self.assertEqual(gateway.RconClient(secret=secret).cmd('fixture_command'), response)
+                    self.assertEqual(sock.sent, [packet(1, 3, 'fixture-only'),
+                                                packet(2, 2, 'fixture_command'), packet(3, 0, '')])
+
+    def test_incomplete_malformed_and_oversized_response_never_returns_partial(self):
+        packet = gateway.RconClient._packet
+        variants = [[], [packet(3, 2, 'Unknown request 0')], [packet(3, 0, 'wrong terminator')],
+                    [packet(998, 0, 'Unknown request 0')],
+                    [packet(2, 0, 'x' * 600000), packet(2, 0, 'y' * 600000)],
+                    [packet(998, 0, '')] * 256]
+        with tempfile.TemporaryDirectory() as folder:
+            secret = Path(folder) / 'secret'; secret.write_text('fixture-only')
+            for index, suffix in enumerate(variants):
+                with self.subTest(index=index):
+                    sock = FakeSocket([packet(1, 2, ''), packet(2, 0, 'partial'), *suffix], read_chunk=8192)
+                    with patch.object(gateway.socket, 'create_connection', return_value=sock):
+                        with self.assertRaises(ConnectionError):
+                            gateway.RconClient(secret=secret).cmd('fixture_command')
+                    self.assertEqual(len([p for p in sock.sent if p == packet(2, 2, 'fixture_command')]), 1)
+
+    def test_end_marker_before_first_command_frame_is_not_completion(self):
+        packet = gateway.RconClient._packet
+        with tempfile.TemporaryDirectory() as folder:
+            secret = Path(folder) / 'secret'; secret.write_text('fixture-only')
+            sock = FakeSocket([packet(1, 2, ''), packet(3, 0, 'Unknown request 0')])
+            with patch.object(gateway.socket, 'create_connection', return_value=sock):
+                with self.assertRaisesRegex(ConnectionError, 'rcon_invalid_response_end'):
+                    gateway.RconClient(secret=secret).cmd('fixture_command')
+            self.assertEqual(len(sock.sent), 2)
 
     def test_auth_failure_never_sends_command(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -200,7 +200,7 @@ class HostMappingTests(unittest.IsolatedAsyncioTestCase):
         bound = hosts.host_tool_app(app, hosts.ENGINEER)
         world_team_mcp.register_team_tools(bound, hosts.ENGINEER, state=self.root)
         calls = []
-        service = N(status=lambda: calls.append('status'),
+        service = N(status=lambda **kwargs: calls.append('status'),
                     commit=lambda *args: calls.append('commit'))
         engineering_mcp.register_engineering_tools(bound, service)
         app.tools['engineering_status']()

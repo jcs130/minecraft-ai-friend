@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JAR = 'server/mc/mods/qiandeng-irons-bridge-0.1.0.jar'
 BUILD_JAR = 'world/irons-bridge-src/build/qiandeng-irons-bridge-0.1.0.jar'
 BUILD_RECORD = 'world/irons-bridge-src/build/build-record.json'
+NUMEN = 'server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar'
 MANIFEST = 'manifests/server-extensions.lock.json'
 SETTINGS = 'server/survival-agent-state/survival/settings.json'
 CONFIG = 'server/mc/config/numen-autonomous-bodies.json'
@@ -19,6 +20,7 @@ PREFIX = 'QD_WORLD_INTERACTION_JSON '
 CAPABILITY = 'numen_interaction_receipt_v1'
 REQUIRED_SOURCES = {'tools/build_irons_bridge.py',
     'world/irons-bridge-src/src/dev/qiandeng/irons/QiandengIronsBridge.java',
+    'world/irons-bridge-src/src/dev/qiandeng/irons/NativeDropTask.java',
     'world/irons-bridge-src/src/dev/qiandeng/irons/WorldInteractionBridge.java'}
 
 
@@ -64,11 +66,11 @@ def parse_reply(raw):
     return value
 
 
-def read_status(body, request):
-    if not canonical(body) or not re.fullmatch('[0-9a-f]{32}', request):
+def read_status(body, request, operation='interaction'):
+    if operation not in ('interaction', 'dropping') or not canonical(body) or not re.fullmatch('[0-9a-f]{32}', request):
         raise ValueError('invalid_probe_identity')
     result = subprocess.run(['docker', 'exec', 'qiandengji-mc-1', 'rcon-cli',
-        f'qdworld interaction {body} {request}'], capture_output=True, text=True,
+        f'qdworld {operation} {body} {request}'], capture_output=True, text=True,
         encoding='utf8', errors='replace', timeout=12, check=False)
     if result.returncode:
         raise ValueError('native_query_unavailable')
@@ -76,8 +78,8 @@ def read_status(body, request):
 
 
 def check(root=ROOT, sample=read_status, clock=time.time):
-    checks = dict.fromkeys(('artifact_matches_build_and_manifest', 'source_current',
-                           'exact_body_binding', 'native_receipt_protocol'), False)
+    checks = dict.fromkeys(('artifact_matches_build_and_manifest', 'source_current', 'pinned_numen_dependency',
+                           'exact_body_binding', 'native_receipt_protocol', 'native_drop_receipt_protocol'), False)
     evidence = {'queries': 0}
     try:
         record = document(root, BUILD_RECORD)
@@ -91,6 +93,7 @@ def check(root=ROOT, sample=read_status, clock=time.time):
         sources = record.get('sources')
         checks['source_current'] = (isinstance(sources, dict) and REQUIRED_SOURCES <= set(sources)
             and len(sources) <= 100 and all(digest(root, name) == sha for name, sha in sources.items()))
+        checks['pinned_numen_dependency'] = record.get('dependencies', {}).get(Path(NUMEN).name) == digest(root, NUMEN)
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
     try:
@@ -101,23 +104,26 @@ def check(root=ROOT, sample=read_status, clock=time.time):
             and expected['bodyName'] == 'Kirito' and config.get('schema') == 1
             and config.get('enabled') is True and config.get('bodies') == [expected])
         if checks['exact_body_binding']:
-            request = uuid.uuid4().hex
-            evidence.update(queries=1, bodyUuid=expected['bodyUuid'], requestId=request)
-            reply = sample(expected['bodyUuid'], request)
-            at = reply.get('observedAt')
-            checks['native_receipt_protocol'] = (type(reply.get('schema')) is int and reply['schema'] == 1
-                and reply.get('capability') == CAPABILITY and reply.get('actorUuid') == expected['bodyUuid']
-                and reply.get('requestId') == request and canonical(reply.get('epoch'))
-                and reply.get('tool') == 'interact_at' and reply.get('status') == 'unknown'
-                and reply.get('code') == 'request_not_found' and 'result' not in reply
-                and reply.get('dispatched') is not True and type(at) in (int, float)
-                and math.isfinite(at) and -5 <= clock() - at / 1000 <= 15)
-            evidence.update(status=reply.get('status'), code=reply.get('code'), epoch=reply.get('epoch'))
+            for operation, tool, key in (('interaction', 'interact_at', 'native_receipt_protocol'),
+                                        ('dropping', 'drop_items', 'native_drop_receipt_protocol')):
+                request = uuid.uuid4().hex
+                evidence.update(queries=evidence['queries'] + 1, bodyUuid=expected['bodyUuid'])
+                reply = sample(expected['bodyUuid'], request, operation)
+                at = reply.get('observedAt')
+                checks[key] = (type(reply.get('schema')) is int and reply['schema'] == 1
+                    and reply.get('capability') == CAPABILITY and reply.get('actorUuid') == expected['bodyUuid']
+                    and reply.get('requestId') == request and canonical(reply.get('epoch'))
+                    and reply.get('tool') == tool and reply.get('status') == 'unknown'
+                    and reply.get('code') == 'request_not_found' and 'result' not in reply
+                    and reply.get('dispatched') is not True and type(at) in (int, float)
+                    and math.isfinite(at) and -5 <= clock() - at / 1000 <= 15)
+                evidence[operation] = {'requestId': request, 'status': reply.get('status'),
+                                       'code': reply.get('code'), 'epoch': reply.get('epoch')}
     except (OSError, ValueError, TypeError, KeyError, AttributeError, subprocess.SubprocessError):
         pass
     return {'ok': all(checks.values()), 'checks': checks, 'evidence': evidence,
-        'modelRequests': 0, 'worldActions': 0, 'interactionSubmissions': 0,
-        'scope': 'Current installed build and one unused native request query; no interaction or historical proof rewrite.'}
+        'modelRequests': 0, 'worldActions': 0, 'interactionSubmissions': 0, 'dropSubmissions': 0,
+        'scope': 'Current installed build and unused interaction/drop request queries; no action or historical proof rewrite.'}
 
 
 if __name__ == '__main__':

@@ -137,6 +137,90 @@ class LifeSessionTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['actionLimit'], 6)
         self.assertIn('MCP', context['instruction'])
 
+    def test_life_context_projects_current_main_inventory_and_preserves_unknown(self):
+        self.controller.data['wakeReason'] = 'world_observation'
+        self.gateway.body['inventory'] = [
+            {'slot': 0, 'id': 'minecraft:dirt', 'count': 64},
+            {'slot': 0, 'id': 'minecraft:dirt', 'count': 64},
+            {'slot': 35, 'id': 'minecraft:bread', 'count': 2},
+            {'slot': 100, 'id': 'minecraft:iron_boots', 'count': 1},
+            {'slot': -106, 'id': 'minecraft:shield', 'count': 1}]
+        context = self.controller.life_context(self.gateway.body, {}, 'turn-inventory')
+        self.assertEqual(context['body']['mainInventory'],
+                         {'capacity': 36, 'occupiedSlots': 2, 'freeSlots': 34, 'available': True})
+        self.assertNotIn('inventory', context['body'])
+        self.assertNotIn('counts', context['body'])
+        self.assertIn('drop_items', context['instruction'])
+        self.assertIn('丢出不等于队友已拾取', context['instruction'])
+        self.gateway.body.pop('inventory')
+        for body in (self.gateway.body, self.gateway.body | {'inventory': {'slot': 0}}):
+            context = self.controller.life_context(body, {}, 'turn-unknown-inventory')
+            self.assertEqual(context['body']['mainInventory'],
+                             {'capacity': 36, 'occupiedSlots': None, 'freeSlots': None, 'available': False})
+
+    def test_actual_native_submission_includes_main_inventory_in_original_life_session(self):
+        try:
+            import qwenpaw.agents.tools.agent_management
+        except ImportError:
+            self.skipTest('Native request-builder check runs in the isolated Qwen image.')
+        original_session = copy.deepcopy(self.controller.session)
+        self.gateway.body['inventory'] = [
+            {'slot': slot, 'id': 'minecraft:dirt', 'count': 64} for slot in range(36)]
+        self.gateway.body['bodyControl'] = {'available': True, 'kind': 'reflex', 'name': 'AvoidDanger'}
+        self.gateway.body['onGround'] = True
+        self.controller.data['lastDecision'] = {'actions': [{'tool': 'goto', 'status': 'failed',
+            'completionConfirmed': True, 'args': {'x': 102, 'y': 64, 'z': 101},
+            'navigationSense': {'ok': True, 'destination': {'pathVerified': False,
+                'candidates': [{'x': 102.5, 'y': 65, 'z': 101.5, 'pathVerified': False}]}}}]}
+        backend = QwenBackend(env={})
+        calls = []
+        def api(method, route, payload=None):
+            calls.append((method, route, copy.deepcopy(payload)))
+            if (method, route) == ('POST', '/console/chat/task'):
+                return {'task_id': 'native-inventory-context'}
+            if method == 'GET' and route.startswith('/chats?'):
+                return []
+            raise AssertionError('Unexpected native request: ' + method + ' ' + route)
+        backend.api = api
+        self.controller.backend = backend
+        with patch.object(self.controller, 'planning_context', side_effect=AssertionError('legacy context must not submit')):
+            self.controller.tick()
+        posts = [payload for method, route, payload in calls if method == 'POST']
+        self.assertEqual(len(posts), 1)
+        payload = posts[0]
+        self.assertEqual(payload['session_id'], original_session['primarySessionId'])
+        self.assertEqual(payload['user_id'], original_session['userId'])
+        self.assertEqual(payload['channel'], original_session['channel'])
+        self.assertEqual(payload['request_context'], {'root_agent_id': original_session['userId']})
+        texts = [part['text'] for message in payload['input'] for part in message['content'] if part['type'] == 'text']
+        marker = '（当前生活任务；以下为本轮事实）：\n'
+        submitted = [text.split(marker, 1)[1] for text in texts if marker in text]
+        self.assertEqual(len(submitted), 1)
+        context = json.loads(submitted[0])
+        self.assertEqual(context['body']['mainInventory'],
+                         {'capacity': 36, 'occupiedSlots': 36, 'freeSlots': 0, 'available': True})
+        self.assertEqual(context['sessionId'], original_session['primarySessionId'])
+        self.assertEqual(context['mission'], self.settings['mission'])
+        self.assertEqual(context['body']['bodyControl'], self.gateway.body['bodyControl'])
+        self.assertTrue(context['body']['onGround'])
+        self.assertIn('currentTime', context)
+        self.assertFalse(context['recentActionReceipts'][0]['navigationSense']['destination']['pathVerified'])
+        self.assertIn('drop_items', context['instruction'])
+        self.assertIn('building.md', context['instruction'])
+        self.assertIn('需要turn_id的工具（含remember）必须原样使用本条输入的turn_id，不另造ID', context['instruction'])
+        self.assertEqual(context['turn_id'], self.controller.data['active']['turnId'])
+        self.assertEqual(context['turn_id'], read_json(self.state / 'lease.json')['turnId'])
+        self.assertNotIn('inventory', context['body'])
+        self.assertEqual(self.gateway.actions, [])
+        self.assertEqual(read_json(self.state / 'lease.json')['actionLimit'], 6)
+
+    def test_submitted_missing_inventory_stays_unknown_not_empty(self):
+        self.controller.tick()
+        context = json.loads(self.backend.submitted[0]['prompt'].split('\n', 1)[1])
+        self.assertEqual(context['body']['mainInventory'],
+                         {'capacity': 36, 'occupiedSlots': None, 'freeSlots': None, 'available': False})
+        self.assertEqual(self.gateway.actions, [])
+
     def test_next_turn_retains_failed_target_and_reason_without_inventing_success(self):
         self.controller.data['wakeReason'] = 'review'
         self.controller.data['lastDecision'] = {'actions': [{

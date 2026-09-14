@@ -23,6 +23,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--libraries", type=Path, default=ROOT / "server/mc/libraries")
     parser.add_argument("--mods", type=Path, default=ROOT / "server/mc/mods")
+    parser.add_argument("--numen-jar", type=Path, help="Exact candidate Numen dependency; no production JAR replacement")
     parser.add_argument("--jdk-bin", type=Path, default=Path(os.environ.get(
         "JDK21_BIN", r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin")))
     args = parser.parse_args()
@@ -40,11 +41,14 @@ def main() -> None:
         raise SystemExit("Exact installed Iron's 1.21.1-3.16.3 JAR is required")
     # Other mod libraries supply referenced types (Curios, Iron's Lib, GeckoLib).
     mod_jars = sorted(p for p in args.mods.glob("*.jar") if not p.name.startswith("qiandeng-irons-bridge-"))
+    if args.numen_jar:
+        if not args.numen_jar.is_file(): raise SystemExit("Numen candidate JAR missing")
+        mod_jars = [p for p in mod_jars if p.name != 'numen-neoforge-1.21.1-0.1.1.jar'] + [args.numen_jar.resolve()]
     build = (SOURCE / "build").resolve()
     build.mkdir(parents=True, exist_ok=True)
     # The server-only interaction receipt adapter uses the installed Numen API.
     # Its public types live in the exact main mod's nested jar, not the mod root.
-    numen = args.mods / "numen-neoforge-1.21.1-0.1.1.jar"
+    numen = args.numen_jar.resolve() if args.numen_jar else args.mods / "numen-neoforge-1.21.1-0.1.1.jar"
     with zipfile.ZipFile(numen) as archive:
         api_entries = [n for n in archive.namelist() if n.startswith("META-INF/jarjar/")
                        and n.endswith(".jar") and "numen_api" in n]
@@ -95,7 +99,9 @@ def main() -> None:
     record = {"ok": True, "minecraft": "1.21.1", "neoforge": "21.1.248", "irons_spellbooks": "1.21.1-3.16.3",
         "java_release": 21, "jar": str(target), "sha256": sha(target), "tests": test_result,
         "sources": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(inputs)},
-        "dependencies": {p.name: sha(p) for p in mod_jars}, "deployment": "not performed", "native_cast_live_test": "pending"}
+        "dependencies": {('numen-neoforge-1.21.1-0.1.1.jar' if p == numen else p.name): sha(p) for p in mod_jars},
+        "dependencySourcePaths": {('numen-neoforge-1.21.1-0.1.1.jar' if p == numen else p.name): str(p) for p in mod_jars},
+        "deployment": "not performed", "native_cast_live_test": "pending"}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: record[k] for k in ("ok", "jar", "sha256", "tests", "deployment", "native_cast_live_test")}))
 
