@@ -21,7 +21,7 @@ BODY='d4ac9523-4962-43ed-98c5-19b49e104048'
 OWNER='e5005711-be9f-44b7-aaad-6993c0ba5df4'
 ARGS={'button':'right','x':3,'y':-60,'z':0,'hold_ticks':0,'item_id':'minecraft:dirt'}
 PREFIX='QD_WORLD_INTERACTION_JSON '
-PYTHON_SOURCES=('world_actions.py','numen_gateway.py')
+PYTHON_SOURCES=('world_actions.py','numen_gateway.py','food_actions.py')
 PYTHON_CLIENT=r'''
 import hashlib,json,sys,time,uuid
 from pathlib import Path
@@ -60,6 +60,31 @@ except Exception as exc:error=type(exc).__name__+':'+str(exc)
 diagnostics={str(p.relative_to(state)):json.loads(p.read_text()) for p in state.rglob('*.json')}
 print(json.dumps({'mode':mode,'actionId':request,'result':result,'error':error,'commands':commands,
     'responses':responses,'diagnostics':diagnostics,'elapsedSeconds':round(time.monotonic()-began,3)},ensure_ascii=True))
+'''
+
+FOOD_CLIENT=r'''
+import json,sys,time,uuid
+from pathlib import Path
+from types import SimpleNamespace
+from numen_gateway import RconClient
+from food_actions import FoodActions
+body='d4ac9523-4962-43ed-98c5-19b49e104048';request=uuid.uuid4().hex
+mode=sys.argv[1];native=RconClient(host='mc',port=25575,secret=Path('/qa/rcon-secret'))
+commands=[]
+class Transport:
+    def cmd(self,command):
+        assert command.startswith(('qdworld eat '+body+' '+request+' ', 'qdworld eating '+body+' '+request))
+        commands.append(command);raw=native.cmd(command)
+        if len(commands)==1 and mode=='food-lost-ack':raise ConnectionError('injected_lost_ack')
+        return raw
+gateway=SimpleNamespace(rcon=Transport());client=FoodActions(gateway)
+before={'bodyUuid':body};args={'item_id':'minecraft:bread'}
+reply=client.dispatch(request,before,args)
+receipt={'actionId':request,'before':before,'args':args,'result':{'result':reply}}
+terminal=reply.get('nativeFoodReceipt');deadline=time.monotonic()+30
+while terminal.get('status')!='terminal' and time.monotonic()<deadline:
+    time.sleep(.2);terminal=client.terminal(receipt) or {}
+print(json.dumps({'actionId':request,'reply':reply,'terminal':terminal,'commands':commands}))
 '''
 
 
@@ -140,6 +165,7 @@ def python_fixture(folder):
         shutil.copyfile(source,directory/'survival'/name)
         sources['world/survival/'+name]=sha(source)
     (directory/'interaction_client.py').write_text(PYTHON_CLIENT,'utf8')
+    (directory/'food_client.py').write_text(FOOD_CLIENT,'utf8')
     compose=json.loads((folder/'compose.json').read_text('utf8'))
     # Prepared fixtures from the earlier Java-only QA retain the secret in their
     # private compose manifest; never copy any production RCON configuration.
@@ -287,6 +313,51 @@ def main():
             same=query(request);after_query=ground()
             checks['python-'+mode+'-exact-receipt-no-extra-effect']=stable(same)==stable(receipt) and after_query['placementBlock']=='minecraft:air' and after_query['dirt']==after_python['dirt']
             checkpoint('python-'+mode+'-verified')
+        # Food uses the same retained TaskRecord journal, but the native timed
+        # EatCompanionTask and current slot. Never grant items outside this QA world.
+        assert response('qdinteractionqa food_setup')['ok']
+        food_args={'item_id':'minecraft:bread'}
+        food_payload=base64.urlsafe_b64encode(json.dumps(food_args).encode()).decode().rstrip('=')
+        food_success=None
+        for mode in ('food-normal','food-lost-ack'):
+            assert response('qdinteractionqa food_hungry')['ok']
+            before_food=ground()
+            output=run([*base,'run','--rm','--no-deps','-T','--entrypoint','python','python-qa',
+                        '-B','/qa/food_client.py',mode],timeout=60)
+            client=json.loads(output.stdout.strip());after_food=ground();terminal=client['terminal']
+            details[mode]={'client':client,'before':before_food,'after':after_food}
+            food_success=terminal
+            checks[mode+'-native-success']=terminal['status']=='terminal' and terminal['nativeState']=='SUCCESS' and terminal['result']['success'] is True
+            checks[mode+'-consumes-once']=after_food['bread']==before_food['bread']-1 and after_food['hunger']==20
+            checks[mode+'-one-send-query-only']=len(client['commands'])>=2 and client['commands'][0].startswith('qdworld eat ') and all(command==f'qdworld eating {BODY} '+client['actionId'] for command in client['commands'][1:])
+            duplicate=response(f'qdworld eat {BODY} '+client['actionId']+' '+food_payload,PREFIX)
+            checks[mode+'-duplicate-never-consumes']=stable(duplicate)==stable(terminal) and ground()['bread']==after_food['bread']
+            assert all(checks.values()),details[mode]
+            checkpoint(mode+'-verified')
+        full_id=uuid.uuid4().hex
+        full=response(f'qdworld eat {BODY} {full_id} {food_payload}',PREFIX)
+        deadline=time.monotonic()+20
+        while full['status'] in ('accepted','running') and time.monotonic()<deadline:
+            time.sleep(.2);full=response(f'qdworld eating {BODY} {full_id}',PREFIX)
+        checks['food-full-native-failure-no-spend']=full['status']=='terminal' and full['nativeState']=='FAILED' and full['result']['success'] is False and ground()['bread']==after_food['bread']
+        details['food-full']=full
+        assert checks['food-full-native-failure-no-spend'],full
+        food_pending=uuid.uuid4().hex
+        assert response('qdinteractionqa food_hungry')['ok']
+        before_food_restart=ground();assert response('qdinteractionqa food_arm_'+food_pending)['ok']
+        command('save-all flush');run([*base,'stop','-t','60','mc'],timeout=100)
+        food_file=journal_dir/(BODY+'-'+food_pending+'.json')
+        pending_food=json.loads(food_file.read_text('utf8'));food_sha=sha(food_file)
+        checks['food-real-accepted-at-shutdown']=pending_food['status']=='accepted' and pending_food['tool']=='eat'
+        run([*base,'start','mc'],timeout=60);boot();assert response('qdinteractionqa restore')['ok']
+        time.sleep(3);after_food_restart=ground()
+        food_unknown=response(f'qdworld eating {BODY} {food_pending}',PREFIX)
+        food_duplicate=response(f'qdworld eat {BODY} {food_pending} {food_payload}',PREFIX)
+        food_old=response(f'qdworld eating {BODY} '+food_success['requestId'],PREFIX)
+        checks['food-interrupted-never-replayed']=food_unknown['status']=='unknown' and food_duplicate['status']=='unknown' and sha(food_file)==food_sha and after_food_restart['bread']==before_food_restart['bread'] and after_food_restart['persistedTaskTool']==''
+        checks['food-old-terminal-keeps-original-epoch']=stable(food_old)==stable(food_success)
+        details['food-restart']={'accepted':pending_food,'unknown':food_unknown,'duplicate':food_duplicate,'before':before_food_restart,'after':after_food_restart}
+        checkpoint('food-restart-verified')
     except Exception as error:
         checks['execution-completed']=False;details['failure']=str(error)[:5000]
     finally:

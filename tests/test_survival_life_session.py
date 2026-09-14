@@ -630,15 +630,18 @@ class ContinuousActionTests(unittest.TestCase):
 
     def test_async_move_requires_same_native_task_and_epoch_before_next_action(self):
         self.lease()
+        # Exercise the navigation barrier with an immediate native action.
+        # Timed food now needs its separate qdworld receipt fixture/protocol.
+        next_action = ('craft', {'item_id': 'minecraft:stick', 'count': 1})
         first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
         self.assertEqual(first['code'], 'accepted')
         self.rcon.busy = True
-        self.assertEqual(self.client.action(TURN, 'eat', {'item_id': 'minecraft:bread'})['code'], 'body_action_in_flight')
+        self.assertEqual(self.client.action(TURN, *next_action)['code'], 'body_action_in_flight')
         self.rcon.busy = False
         self.rcon.navigation_result = {'task_id': 'wrong', 'navigation_epoch': self.rcon.navigation_epoch,
                                        'state': 'success', 'success': True}
         self.assertEqual(self.client.action_status()['code'], 'navigation_terminal_unconfirmed')
-        self.assertFalse(self.client.action(TURN, 'eat', {'item_id': 'minecraft:bread'})['ok'])
+        self.assertFalse(self.client.action(TURN, *next_action)['ok'])
         self.rcon.navigation_result['task_id'] = 't1'
         self.rcon.navigation_result.update(state='failed', success=False)
         result = self.client.action_status()
@@ -646,7 +649,7 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertEqual(result['receipt']['status'], 'failed')
         self.assertTrue(result['receipt']['completionConfirmed'])
         self.rcon.reply = {'success': True}
-        self.assertTrue(self.client.action(TURN, 'eat', {'item_id': 'minecraft:bread'})['ok'])
+        self.assertTrue(self.client.action(TURN, *next_action)['ok'])
         self.assertEqual(len(self.rcon.mutations()), 2)
 
     def test_unknown_mutation_blocks_all_following_actions_and_survives_restart(self):

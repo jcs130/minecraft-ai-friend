@@ -13,7 +13,7 @@
     },
     {
       "path": "server/mc/mods/qiandeng-irons-bridge-0.1.0.jar",
-      "sha256": "98aead6db86c0656b812f2ec398f2e34839870b3e41ad9866265c80f5efa7668",
+      "sha256": "1f3c18027ee921827cbe06e34edfed3d811867043f5b484d48e886a4ce3a4dbd",
       "client_required": false
     },
     {
@@ -43,7 +43,7 @@
     },
     {
       "path": "server/mc/mods/qiandeng-maid-bridge-0.1.0.jar",
-      "sha256": "2b9fd77ef84db55281242aa0c2be224e058a73bef4e108edf91070526f650e99",
+      "sha256": "b47940211aecd26ca164e580b482c382f60dc61d93b2369166baa5f1da3eacef",
       "client_required": true
     }
   ]

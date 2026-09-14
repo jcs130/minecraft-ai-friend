@@ -35,8 +35,8 @@ def bind_chat(state, session, chat_id):
     write_json(Path(state) / 'life-session.json', session)
 
 
-def final_text(native):
-    """Last completed assistant message, excluding native framework termination text."""
+def _last_completed_text(native):
+    """Read the native terminal message without substituting earlier narration."""
     if not isinstance(native, dict) or native.get('status') != 'completed':
         return ''
     answer = ''
@@ -55,7 +55,23 @@ def final_text(native):
         # empty or a framework sentinel. Qwen 2.2 IterationGate emits the latter
         # with ordinary completed/message metadata, even after successful tools.
         answer = text
+    return answer
+
+
+def framework_failure(native):
+    """Qwen 2.2 gates serialize these failures as ordinary completed messages."""
+    answer = _last_completed_text(native)
+    if re.fullmatch(r'Doom loop: agent stuck after [0-9]+ consecutive repetitions', answer):
+        return 'native_doom_loop'
     if re.fullmatch(r'Max iterations \([0-9]+\) reached', answer):
+        return 'native_final_answer_missing'
+    return None
+
+
+def final_text(native):
+    """Last completed assistant message, excluding native framework termination text."""
+    answer = _last_completed_text(native)
+    if framework_failure(native):
         return ''
     # A partial/truncated answer is not silently substituted as a complete reply.
     return answer if len(answer) <= 6000 else ''

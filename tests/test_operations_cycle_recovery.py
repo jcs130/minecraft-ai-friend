@@ -67,6 +67,27 @@ class OperationsCycleRecoveryTests(unittest.TestCase):
                            lambda: saved.append(list(intents)), call=lost)
         self.assertEqual(intents, ['actor'])
 
+    def test_exact_native_rate_limit_terminal_without_replaying_the_failed_run(self):
+        from world_team_schedule import team_job
+        job = team_job('operations:mc-god')
+        trace = {'run_id': 'exact-limit-trace', 'status': 'error',
+            'error': "_AcquireTimeoutError('Rate limit exceeded')", 'created_at': 11, 'completed_at': 12,
+            'meta': {'job_id': job['id'], 'task_type': 'agent',
+                'target_session_id': job['dispatch']['target']['session_id'],
+                'target_user_id': job['dispatch']['target']['user_id']}}
+        row = self.row | {'jobId': job['id']}
+        original = dict(row)
+        result = reconciliation_evidence(row, job, 5, self.idle, trace)
+        self.assertEqual(result['terminalEvidence'], 'exact_native_rate_limit_trace_and_current_idle')
+        self.assertEqual(row, original)
+        cycle = {'status': 'unknown', 'at': 13}
+        self.assertEqual(reconciliation_evidence(cycle, job, 5, self.idle, trace, cycle=True), result)
+        for changed in (trace | {'status': 'running'}, trace | {'error': 'connection lost'},
+                        trace | {'meta': trace['meta'] | {'target_session_id': 'another-session'}},
+                        trace | {'completed_at': 2}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                reconciliation_evidence(cycle, job, 5, self.idle, changed, cycle=True)
+
     def test_one_failed_restore_does_not_skip_others_or_retry_uncertain_put(self):
         actors = ['first', 'second']
         jobs = {a: a + '-job' for a in actors}

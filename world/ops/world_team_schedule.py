@@ -67,6 +67,15 @@ def is_team_job(job_id):
     return job_id in {value[0] for value in SCHEDULES.values()}
 
 
+def native_rate_limit_ended(error):
+    """The pinned executor finalizes this failed stream before propagating it."""
+    try:
+        from qwenpaw.providers.retry_chat_model import _AcquireTimeoutError
+    except ImportError:
+        return False
+    return isinstance(error, _AcquireTimeoutError)
+
+
 def validate_team_job(value, actor):
     expected = team_job(actor)
     for key in ('id', 'name', 'task_type', 'text', 'meta', 'save_result_to_inbox'):
@@ -156,6 +165,17 @@ async def execute(executor, job, original, runtime):
             if reservation:
                 await asyncio.to_thread(finish_run, reservation['runId'], 'failed', nativeCancellationConfirmed=True)
             raise
-        except BaseException:
-            store.save_cycle(current, 'unknown', {'jobId': job.id, 'retryAutomatically': False})
+        except BaseException as error:
+            if native_rate_limit_ended(error):
+                # This is the native model-permit timeout, not an uncertain
+                # transport/write result. A later scheduled inspection is safe;
+                # already issued tool requests keep their separate receipts.
+                details = {'jobId': job.id, 'nativeRateLimitConfirmed': True,
+                           'resultCompleted': False, 'oldWorkReplayed': False}
+                store.save_cycle(current, 'failed', details)
+                if reservation:
+                    await asyncio.to_thread(finish_run, reservation['runId'], 'failed', **details)
+            else:
+                store.save_cycle(current, 'unknown', {'jobId': job.id, 'retryAutomatically': False,
+                                                     'errorType': type(error).__name__})
             raise

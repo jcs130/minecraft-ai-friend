@@ -199,6 +199,7 @@ def inventory_from_snbt(response):
 
 
 NAVIGATION_MAX_WAIT_MS = 5 * 60 * 1000
+FOOD_MAX_WAIT_MS = 60 * 1000
 
 
 class NumenGateway:
@@ -528,6 +529,7 @@ class NumenGateway:
                 raise GatewayError('inflight_task_mismatch')
             return receipt
         outcome = None
+        food_outcome = None
         if receipt['tool'] == 'goto':
             candidate = body.get('navigationResult') or {}
             if (not receipt.get('nativeTaskId') or not before.get('navigationEpoch')
@@ -535,10 +537,21 @@ class NumenGateway:
                     or candidate.get('navigation_epoch') != before['navigationEpoch']):
                 raise GatewayError('navigation_terminal_unconfirmed')
             outcome = candidate
+        elif receipt['tool'] == 'eat' and receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt'):
+            from food_actions import FoodActions
+            food_outcome = FoodActions(self).terminal(receipt)
+            if food_outcome is None:
+                # Idle can precede delivery of the exact native record; retain the
+                # in-flight identity rather than discard its eventual terminal.
+                return receipt
+            outcome = food_outcome['result']
         receipt.update(status=('completed' if outcome.get('success') else 'failed') if outcome else 'observed_ended',
                        after=self._action_snapshot(body), observedAt=self._now(),
                        completionConfirmed=outcome is not None, navigationOutcome=outcome,
                        notice='Idle proves no action is in flight; it does not prove the requested result.')
+        if food_outcome is not None:
+            receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
+                           notice='Completion is the exact original native eating task result.')
         self._save_receipt(receipt)
         self._record({**receipt, 'phase': 'observation'})
         path.unlink()
@@ -558,6 +571,40 @@ class NumenGateway:
                 and type(terminal.get('success')) is bool
                 and terminal['success'] == (terminal['state'] == 'success'))
 
+    @staticmethod
+    def _deadline_kind(receipt):
+        if receipt.get('tool') == 'goto':
+            return 'navigation', NAVIGATION_MAX_WAIT_MS, 'navigationStop'
+        native = receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt')
+        if (receipt.get('tool') == 'eat' and isinstance(native, dict)
+                and native.get('tool') == 'eat' and native.get('requestId') == receipt.get('actionId')
+                and native.get('actorUuid') == receipt.get('before', {}).get('bodyUuid')
+                and native.get('args') == receipt.get('args')
+                and native.get('nativeTaskId') == receipt.get('nativeTaskId')
+                and isinstance(native.get('epoch'), str) and native['epoch']):
+            return 'food', FOOD_MAX_WAIT_MS, 'foodStop'
+        return None  # Old eating receipts do not gain a fabricated completion API.
+
+    def _stop_journal_path(self, tool, action_id):
+        # Keep existing goto journals and readers compatible. Both types use the
+        # same exact-stop implementation below; food has a separate filename scope.
+        return self.state / ('navigation-stops' if tool == 'goto' else 'action-stops') / (action_id + '.json')
+
+    def _deadline_terminal(self, body, receipt):
+        if receipt['tool'] == 'goto':
+            return body['navigationResult'] if self._navigation_terminal_matches(body, receipt) else None
+        before = receipt.get('before', {})
+        if (body.get('ok') is not True or body.get('bodyUuid') != before.get('bodyUuid')
+                or body.get('dimension') != before.get('dimension')
+                or body.get('navigationEpoch') != before.get('navigationEpoch')
+                or body.get('task', {}).get('busy') is not False):
+            return None
+        from food_actions import FoodActions
+        try:
+            return FoodActions(self).terminal(receipt)
+        except (OSError, ValueError, TypeError, KeyError):
+            return None  # Missing exact proof is never converted to success or a repeated stop.
+
     def navigation_stop_pending(self, body):
         """Prevent generic pause cleanup from repeating an uncertain exact stop."""
         inflight = self.state / 'inflight-action.json'
@@ -565,10 +612,10 @@ class NumenGateway:
             return False
         receipt = read_json(inflight)
         action_id = receipt.get('actionId')
-        if (receipt.get('tool') != 'goto' or not isinstance(action_id, str)
+        if (receipt.get('tool') not in ('goto', 'eat') or not isinstance(action_id, str)
                 or not re.fullmatch('[0-9a-f]{32}', action_id)):
             return False
-        path = self.state / 'navigation-stops' / (action_id + '.json')
+        path = self._stop_journal_path(receipt['tool'], action_id)
         if not path.exists():
             return False
         # Any durable claim forbids a generic resend for this same live task;
@@ -581,18 +628,21 @@ class NumenGateway:
     def enforce_navigation_deadline(self, body):
         """Controller-only execution boundary; read-only MCP status never calls this.
 
-        Native reflex preemption freezes goto's execution deadline indefinitely.
-        Its existing five-minute check-in cap also bounds total occupied time
-        here. A durable exact stop claim prevents retransmission after a crash.
+        Compatibility entry point for the shared goto/eat total waiting boundary.
+        Native reflex preemption freezes their execution budgets indefinitely:
+        goto retains 300 seconds, journalled timed food use gets 60 seconds.
+        A durable exact stop claim prevents retransmission after a crash.
         """
         inflight = self.state / 'inflight-action.json'
         if not inflight.exists() or (self.state / 'unknown.json').exists():
             return body
         receipt = read_json(inflight)
         accepted = receipt.get('acceptedAt')
-        if (receipt.get('tool') != 'goto' or receipt.get('status') != 'in_flight'
-                or type(accepted) is not int or not 0 < accepted <= self._now() - NAVIGATION_MAX_WAIT_MS):
+        kind = self._deadline_kind(receipt)
+        if (kind is None or receipt.get('status') != 'in_flight'
+                or type(accepted) is not int or not 0 < accepted <= self._now() - kind[1]):
             return body
+        label, max_wait_ms, receipt_key = kind
         with action_lock(self.state, blocking=True):
             if (not inflight.exists() or read_json(inflight) != receipt
                     or (self.state / 'unknown.json').exists()
@@ -605,7 +655,7 @@ class NumenGateway:
                     or not isinstance(before.get('navigationEpoch'), str) or not before['navigationEpoch']):
                 return body
             fresh = self.snapshot()
-            if self._navigation_terminal_matches(fresh, receipt):
+            if self._deadline_terminal(fresh, receipt) is not None:
                 return fresh
             if (fresh.get('ok') is not True or fresh.get('bodyUuid') != before.get('bodyUuid')
                     or fresh.get('dimension') != before.get('dimension')
@@ -613,15 +663,17 @@ class NumenGateway:
                     or fresh.get('task', {}).get('busy') is not True
                     or fresh['task'].get('task_id') != task_id):
                 return fresh  # Existing action_status reports the mismatch; never stop another task.
-            path = self.state / 'navigation-stops' / (action_id + '.json')
+            path = self._stop_journal_path(receipt['tool'], action_id)
             journal = read_json(path) if path.exists() else None
             identity = {'actionId': action_id, 'nativeTaskId': task_id, 'bodyUuid': before['bodyUuid'],
                         'navigationEpoch': before['navigationEpoch']}
+            if receipt['tool'] == 'eat':
+                identity.update(tool='eat', foodEpoch=receipt['result']['result']['nativeFoodReceipt']['epoch'])
             if journal is not None and any(journal.get(key) != value for key, value in identity.items()):
-                raise GatewayError('navigation_stop_identity_mismatch')
+                raise GatewayError(label + '_stop_identity_mismatch')
             if journal is None:
                 journal = {'schema': 1, **identity, 'phase': 'dispatching', 'requestedAt': self._now(),
-                           'reason': 'navigation_total_wait_limit', 'maxWaitMs': NAVIGATION_MAX_WAIT_MS,
+                           'reason': label + '_total_wait_limit', 'maxWaitMs': max_wait_ms,
                            'acceptedAt': accepted, 'beforeStop': self._action_snapshot(fresh),
                            'actionReplayed': False, 'retryAutomatically': False}
                 write_json(path, journal)  # Claim before sending; an existing claim is read-only forever.
@@ -636,28 +688,29 @@ class NumenGateway:
             for _ in range(8):
                 time.sleep(.25)
                 fresh = self.snapshot()
-                if self._navigation_terminal_matches(fresh, receipt):
+                terminal = self._deadline_terminal(fresh, receipt)
+                if terminal is not None:
                     journal.update(phase='terminal_confirmed', observedAt=self._now(),
-                                   terminal=fresh['navigationResult'])
+                                   terminal=terminal)
                     write_json(path, journal)
-                    receipt['navigationStop'] = journal
+                    receipt[receipt_key] = journal
                     self._save_receipt(receipt)
                     write_json(inflight, receipt)
-                    self._record({**receipt, 'phase': 'navigation_stop', 'reason': journal['reason']})
+                    self._record({**receipt, 'phase': label + '_stop', 'reason': journal['reason']})
                     return fresh  # Normal _settle_inflight consumes only this real terminal.
             journal.update(phase='outcome_unknown', observedAt=self._now(),
                            lastObservation=self._action_snapshot(fresh))
             write_json(path, journal)
-            receipt['navigationStop'] = journal
+            receipt[receipt_key] = journal
             self._save_receipt(receipt)
             write_json(inflight, receipt)
             write_json(self.state / 'unknown.json', {**receipt, 'schema': 1, 'result': 'unknown',
-                       'reason': 'navigation_stop_outcome_unknown'})
+                       'reason': label + '_stop_outcome_unknown'})
             lease_path = self.state / 'lease.json'
             lease = read_json(lease_path) if lease_path.exists() else {}
             if lease.get('actionId') == action_id:
                 write_json(lease_path, lease | {'status': 'unknown'})
-            self._record({**receipt, 'phase': 'navigation_stop', 'code': 'outcome_unknown'})
+            self._record({**receipt, 'phase': label + '_stop', 'code': 'outcome_unknown'})
             return fresh
 
     def action_status(self, body=None):
@@ -758,7 +811,11 @@ class NumenGateway:
                 self._save_receipt({**marker, 'schema': 2, 'status': 'unknown', 'completionConfirmed': False})
                 self._record({**marker, 'phase': 'dispatching'})
                 try:
-                    reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
+                    if tool == 'eat':
+                        from food_actions import FoodActions
+                        reply = FoodActions(self).dispatch(action_id, before, args)
+                    else:
+                        reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
                     if tool == 'equip_item' and reply.get('accepted') is True:
                         reply = self._confirm_equipment(args)
                     if reply.get('success') is True:
@@ -767,11 +824,15 @@ class NumenGateway:
                                   'completionConfirmed': not reply.get('data', {}).get('async', False)}
                     elif reply.get('success') is False:
                         result = {'ok': False, 'code': 'action_rejected', 'actionId': action_id, 'result': reply}
+                        if tool == 'eat' and reply.get('nativeFoodReceipt', {}).get('status') == 'terminal':
+                            result['completionConfirmed'] = True
                     else:
                         raise GatewayError('outcome_unknown')
                     receipt = {**marker, 'schema': 2, 'result': result,
                                'status': 'completed' if result.get('completionConfirmed') else 'rejected',
                                'completionConfirmed': result.get('completionConfirmed') is True}
+                    if result.get('completionConfirmed') and result.get('ok') is False:
+                        receipt['status'] = 'failed'
                     if result.get('ok') and not result.get('completionConfirmed'):
                         task_id = reply.get('data', {}).get('task_id')
                         if tool == 'game_cast' and not task_id:

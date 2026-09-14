@@ -83,7 +83,7 @@ def final_text(value):
         # Native IterationGate reports an ordinary completed/message sentinel.
         # Earlier narration is not a final answer when that message ends a task.
         answer = text
-    if answer and re.fullmatch(r'Max iterations \([0-9]+\) reached', answer):
+    if answer and re.fullmatch(r'(?:Max iterations \([0-9]+\) reached|Doom loop: agent stuck after [0-9]+ consecutive repetitions)', answer):
         return None
     return answer if answer and len(answer) <= 16000 else None
 

@@ -1,5 +1,9 @@
 # 千灯纪整合项目
 
+2026-09-14 08:00 当前运行覆盖下文旧暂停/候选环境结论：13 个默认 Compose 服务运行；survivor 为 2.2.0-autonomy7，游戏 Qwen 仍 autonomy3 加已加载 Cron guard3，宿主8088未动。已修复动作锁外检查引发的误暂停、原结衣外围区块不 tick、食物原生回执与截止、NPC 日志 ENODATA、ReMe 通用前缀检索及 Doom 终止识别。原 UUID/session/背包/人物模型保留。结衣新增原生10分钟生活信号，由既有NPC线程消费，无新守护进程。两次新请求/回复均在游戏实际heard，下一原生活轮精确消费两条回复，桐人实际种植两株小麦；结衣随行与交流已验，未验她亲自耕作。最新生活/队伍只读 smoke 及19项party健康检查通过，旧报告原字节已归档而非改哈希凑绿。NPC最后安全重启后已resume；详见docs/COMPANION-AUTONOMY-REPAIR.md。
+
+原工程候选环境已按清单迁移，历史/引用及四份批准测试字节保留，纯模式纠正子提交30f04f5、固定可用镜像和组合测试计划已生效。07:55天神自然读取新回归并真实排队，暴露正式runner继承服务ENTRYPOINT的问题；现已修复并单独重启control，9项runner回归通过。两项新增候选测试前置/异常断言已修正，正式job maintenance-20260914-runner-entrypoint-01真实120次执行全部通过，源SHA798fa1db…9452，测试容器已移除；候选业务未部署。工程/学习原Cron均恢复，下一工程08:15。不能改批准hash或重放旧未知模型任务，候选后续提交需重新核对源字节。详见docs/ENGINEERING-CANDIDATE-RECOVERY.md。
+
 最终实机补充：autonomy4第五轮task-9753bd8c52cd的t23在5分钟内正常到达营地边缘，第六轮task-82eb6573e214已自动接续，未知0，仍原session；未触发自动stop，不能冒称自动截止分支已实机覆盖。工程01:05轮尝试test被engineering_fixed_checks_changed拒绝，固定tests/test_world_team.py与tests/test_world_team_schedule.py字节不匹配；未入队/执行/提交，01:11超时正常释放。工程验收仍待处理，不能改受管hash凑绿。
 
 2026-09-14 最终增量：survivor现为2.2.0-autonomy4，Qwen保持autonomy3进程加/ops挂载补丁。连续原会话模型回合及放置/导航已实测；第四回合后发现原生自卫反射freeze会无限延长goto时间。原t22经一次精确停止取得同epoch的cancelled终态，原controller自然结算failed，不冒充自动超时触发。新增只由controller驱动的goto总等待5分钟：准确身体/维度/epoch/taskId匹配、持久停止意图后发一次task_stop，真实终态才结算，未知不重发也不泛停；其它任务不类推。导航8/controller68/Linux网关31/生活伙伴41项通过。原UUID/session/背包保留，无MC/Qwen重启；详见docs/AUTONOMY-RECOVERY.md。

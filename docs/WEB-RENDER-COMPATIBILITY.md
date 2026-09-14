@@ -1,5 +1,13 @@
 # 天神之眼渲染资产兼容性
 
+### 2026-09-14 伙伴与进食补丁后的当前来源校验
+
+本次两个 Java 代码补丁使 3 个实际路径的 JAR SHA 改变（服务端 Iron 桥、两端女仆桥），当前 `management.current_mod_jars` 因兼容来源记录尚未更新而失败。使用既有 `refresh_web_mod_provenance.py` 对精确旧包逐项验证：两个包的全部非 class 资源保持原始字节，160 个模组路径集合未变；单次原生 `numen_act dumpregistry` 导出的 4,336 方块 / 116,650 状态与运行映射完整语义一致。
+
+严格预检通过后，只更新当前 `compatibility-report.json` 的 JAR 来源与新导出验证信息。新导出 SHA 为 `01cd556f8d7aec9976019942b04f20dc7c8ff51c3d1fb10e07f644e312133dba`；运行注册表仍为 `b34ebce167948b2822130cc6136f7cb690a2f2538eae4b87f18b415528b7bd42`。纹理包、方块表、原版状态映射及公开摘要四份文件的 SHA 全部保持不变，未重启 MC、Qwen 或网页服务，没有重写旧 smoke 报告，也未把来源验证当作新增画面实测。
+
+实际管理探针所有 9 项通过，包含 `current_mod_jars`、`current_mod_assets`、`current_block_state_mapping` 与在线观察者/渲染流。新验证、旧兼容报告备份及实时结果在 `runtime/web-provenance-backups/c87111c420de47b48570ab96465e09cf/`；导出前原文件在 `runtime/web-provenance-native-export-20260913T233323011Z/`。
+
 最终联合部署后，2026-09-07 20:27–20:35 在真实管理页持续查看第一人称、环绕和俯视画面，实测拖动镜头、切换栏目；未再出现内存分配错误或浏览器错误，离开后服务端画面会话归零。记录见 `reports/management-platform-smoke.json`。这是已加载区域的持续实测，不是全部模组模型逐项验收。最后仅将俯视画面的无障碍说明改为“只观察”，没有改变几何或渲染预算。
 
 本轮已按当前 D 实例重建网页资产：**71 个服务端 JAR、87 个客户端 JAR，共 95 个不同 SHA-256 的 JAR**，ZIP 完整性全部通过，重复资源内容冲突为 0。这里的“扫描”表示提取可供既有网页渲染器消费的 JSON/PNG，不表示在网页运行了全部 Java 模组。

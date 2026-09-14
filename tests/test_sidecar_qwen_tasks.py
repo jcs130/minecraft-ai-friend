@@ -173,6 +173,19 @@ class NativeTaskTests(unittest.TestCase):
         self.assertEqual(final_text(completed('The log says Max iterations (6) reached; I will wait.')),
                          'The log says Max iterations (6) reached; I will wait.')
 
+    def test_doom_loop_cannot_be_spoken_as_a_character_reply_or_retried(self):
+        self.client.submit('maid_dialogue', 'doom-case', 'fixture input')
+        self.response = completed('Earlier narration.')
+        self.response['result']['output'].extend(
+            completed('Doom loop: agent stuck after 4 consecutive repetitions')['result']['output'])
+        done = self.client.poll('maid_dialogue', 'doom-case')
+        self.assertEqual(done['status'], 'failed')
+        self.assertNotIn('text', done)
+        self.client.submit('maid_dialogue', 'doom-case', 'fixture input')
+        self.assertEqual(sum(c[0] == 'POST' for c in self.calls), 1)
+        explanation = 'I stopped after the log reported Doom loop: agent stuck after 4 consecutive repetitions.'
+        self.assertEqual(final_text(completed(explanation)), explanation)
+
     def test_terminal_and_waiting_native_states_are_distinct(self):
         for status in ('failed', 'cancelled', 'canceled', 'error', 'timeout', 'timed_out'):
             self.now += 86401

@@ -93,6 +93,30 @@ class TeamScheduleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['modelCalls'], 0)
         self.assertEqual(self.calls, 0)
 
+    async def test_native_rate_limit_failure_releases_execution_not_tool_receipts(self):
+        try:
+            from qwenpaw.providers.retry_chat_model import _AcquireTimeoutError
+        except ImportError:
+            self.skipTest('Run this case in the pinned QwenPaw image')
+        goddess = TeamStore('game:mc-god', self.root)
+        report = goddess.report('limit-report', 'limit-case', 'A reproducible bug', 'bug',
+                                'Observed', 'Expected', ['fixture:1'])
+        goddess.update('limit-route', report['caseId'], 1, 'open', 'Route', ['fixture:1'], 'operations:mc-god')
+        finished = []
+        self.native.finish_run = lambda *args, **details: finished.append((args, details))
+        receipt = self.root / 'unknown-world-action.json'
+        receipt.write_bytes(b'uncertain effect; never replay')
+        async def limited():
+            raise _AcquireTimeoutError('Rate limit exceeded')
+        with self.assertRaises(_AcquireTimeoutError):
+            await self.run_role('operations:mc-god', limited)
+        self.assertEqual(TeamStore('operations:mc-god', self.root).cycle_state()['status'], 'failed')
+        self.assertEqual(finished[0][0], ('run-1', 'failed'))
+        self.assertTrue(finished[0][1]['nativeRateLimitConfirmed'])
+        self.assertEqual(receipt.read_bytes(), b'uncertain effect; never replay')
+        await self.run_role('operations:mc-god')
+        self.assertEqual(self.calls, 2)
+
     async def test_working_engineer_can_continue_without_fabricated_new_evidence(self):
         goddess = TeamStore('game:mc-god', self.root)
         report = goddess.report('test-report', 'test-case', 'A reproducible bug', 'bug', 'Observed', 'Expected', ['fixture:1'])

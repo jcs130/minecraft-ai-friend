@@ -119,8 +119,10 @@ def plan(state, runtime, source=HERE):
             if is_team_job(job['id']): validate_team_job(job, logical_runtime + ':' + logical_role)
             elif job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
             elif runtime == 'game':
+                from party_life_schedule import JOB_ID as PARTY_LIFE_ID, validate_job as validate_party_life
                 from life_review_schedule import JOB_ID as REVIEW_ID, validate_job
                 if job['id'] == REVIEW_ID: validate_job(job, role)
+                elif job['id'] == PARTY_LIFE_ID: validate_party_life(job, role)
                 else: assert job['id'] == weekly_id
             else: assert job['id'] == weekly_id
         result.append({'role': role, 'skills': names, 'builtinSkills': list(NATIVE_SKILLS), 'driver': 'qd_learning', 'job': weekly_id})

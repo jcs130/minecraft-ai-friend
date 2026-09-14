@@ -46,7 +46,7 @@ async function fixture(t){
 
 test('fixed Docker contract contains only immutable source, no network or production authority',async t=>{
   const f=await fixture(t);const spec=containerSpec(f.config,f.request,validatePlan(f.config,f.request));
-  assert.equal(spec.Image,f.plan.image);assert.deepEqual(spec.Cmd,f.plan.argv);assert.equal(spec.User,'65534:65534');
+  assert.equal(spec.Image,f.plan.image);assert.deepEqual(spec.Entrypoint,['python']);assert.deepEqual(spec.Cmd,f.plan.argv.slice(1));assert.equal(spec.User,'65534:65534');
   assert.equal(spec.HostConfig.NetworkMode,'none');assert.equal(spec.HostConfig.ReadonlyRootfs,true);assert.deepEqual(spec.HostConfig.CapDrop,['ALL']);
   assert.equal(spec.HostConfig.Mounts.length,1);assert.equal(spec.HostConfig.Mounts[0].ReadOnly,true);assert.equal(spec.HostConfig.Mounts[0].Target,'/workspace');
   assert.equal(spec.HostConfig.RestartPolicy.Name,'no');assert.equal(spec.HostConfig.Memory,536870912);assert.equal(spec.HostConfig.PidsLimit,64);
@@ -54,9 +54,25 @@ test('fixed Docker contract contains only immutable source, no network or produc
   assert.throws(()=>validatePlan(f.config,{...f.request,planSha256:'0'.repeat(64)}),/invalid_fixed_test_plan/);
 });
 
+test('fixed exec vector replaces image service entrypoint and keeps every argument literal',async t=>{
+  const f=await fixture(t);
+  for(const argv of [['python'],['python','-m','unittest','discover','-p','test_world_*.py'],
+                     ['node','--test','tests/name with spaces.mjs','$(untrusted)','; exit 0']]){
+    const plan={...f.plan,argv},request={...f.request,planSha256:sha(JSON.stringify(plan))};
+    const config={...f.config,plans:[plan]},spec=containerSpec(config,request,validatePlan(config,request));
+    assert.deepEqual(spec.Entrypoint,[argv[0]]);
+    assert.deepEqual(spec.Cmd,argv.slice(1));
+    assert.deepEqual([...spec.Entrypoint,...spec.Cmd],argv);
+    assert.notEqual(spec.Entrypoint[0],'/bin/sh');
+    assert(!spec.HostConfig.Mounts.some(m=>m.Target.includes('secrets')));
+  }
+});
+
 test('passed receipt binds actual exit, source, plan and image; duplicate tick does not repeat',async t=>{
   const f=await fixture(t),runner=createEngineeringRunner(f.options);await runner.tick();
   const result=await f.read();assert.equal(result.status,'passed');assert.equal(result.exitCode,0);assert.equal(result.imageId,f.plan.image);
+  const create=f.calls.find(c=>c.route.startsWith('/containers/create'));
+  assert.deepEqual(create.body.Entrypoint,[f.plan.argv[0]]);assert.deepEqual(create.body.Cmd,f.plan.argv.slice(1));
   assert.equal(result.sourceSha256,f.request.sourceSha256);assert.equal(result.planSha256,f.request.planSha256);assert.equal(result.containerRemoved,true);
   await runner.tick();assert.equal(f.calls.filter(c=>c.route.startsWith('/containers/create')).length,1);
 });

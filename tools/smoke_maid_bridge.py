@@ -30,10 +30,11 @@ def main():
     parser.add_argument('--run-isolated', action='store_true', required=True)
     parser.add_argument('--companion', action='store_true', help='Verify normal Numen cake adoption and native following instead')
     parser.add_argument('--rescue', action='store_true', help='Verify scoped protection and operator rescue in an isolated world')
+    parser.add_argument('--ticking', action='store_true', help='Verify bounded body ticks and native following far from spawn')
     args = parser.parse_args()
-    if args.companion and args.rescue: raise ValueError('choose_one_fixture')
-    qa_source = SOURCE / 'qa' / ('YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
-    qa_mod = 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
+    if sum((args.companion, args.rescue, args.ticking)) > 1: raise ValueError('choose_one_fixture')
+    qa_source = SOURCE / 'qa' / ('CompanionTickQa.java' if args.ticking else 'YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
+    qa_mod = 'qiandeng_companion_tick_qa' if args.ticking else 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
     build = SOURCE / 'build'
     record = json.loads((build / 'build-record.json').read_text('utf8'))
     jar = build / 'qiandeng-maid-bridge-0.1.0.jar'
@@ -78,6 +79,12 @@ def main():
     (data / 'config/qiandeng_maid_bridge/identity.key').write_text(key, 'ascii')
     if args.rescue:
         shutil.copyfile(ROOT / 'config/companion-protection.json', data / 'config/qiandeng-companion-protection.json')
+    if args.ticking:
+        (data / 'config/qiandeng-companion-ticking.json').write_text(json.dumps({'schema': 1, 'enabled': True,
+            'bodyUuid': '43e4eb68-80b2-4a3e-b9ad-04851ea92a38', 'ownerUuid': 'ec782851-295d-4d60-8847-8b5084de4241'}), 'utf8')
+        (data / 'config/numen-autonomous-bodies.json').write_text(json.dumps({'schema': 1, 'enabled': True,
+            'bodies': [{'bodyUuid': 'ec782851-295d-4d60-8847-8b5084de4241',
+                        'ownerUuid': '40faf2cc-c96b-49e0-a951-8e55e4a7f159', 'bodyName': 'CompanionQA'}]}), 'utf8')
     (fake / 'identity.key').write_text(key, 'ascii')
     sites = data / 'config/touhou_little_maid/sites'; sites.mkdir(parents=True)
     (sites / 'llm.json').write_text(json.dumps({name: {'id': name, 'api_type': 'qiandeng-qwen',
@@ -112,7 +119,8 @@ class Handler(BaseHTTPRequestHandler):
 ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
 ''', 'utf8')
     mc_image = run(['docker', 'image', 'inspect', 'itzg/minecraft-server:java21', '--format', '{{.Id}}']).stdout.strip()
-    py_image = run(['docker', 'image', 'inspect', 'qiandengji-survivor:2.2.0-qd5', '--format', '{{.Id}}']).stdout.strip()
+    # Reuse the current local image by immutable ID; no registry pull or production mount.
+    py_image = run(['docker', 'inspect', 'qiandengji-survivor-1', '--format', '{{.Image}}']).stdout.strip()
     compose = {'services': {
         'npc': {'image': py_image, 'entrypoint': ['python', '/fake/server.py'], 'volumes': [f'{fake.as_posix()}:/fake'], 'networks': ['qa']},
         'mc': {'image': mc_image, 'entrypoint': ['java', '-Xms1G', '-Xmx3G', '@libraries/net/neoforged/neoforge/21.1.248/unix_args.txt', 'nogui'],
@@ -146,7 +154,11 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         else: raise RuntimeError('isolated_mc_start_timeout')
         print(json.dumps({'stage': 'server_ready'}), flush=True)
         checks['real-neoforge-start'] = True
-        if args.rescue:
+        if args.ticking:
+            from smoke_maid_ticking_checks import check_ticking
+            check_ticking(response=response, command=command, invoke=invoke, run=run, base=base,
+                data=data, fake=fake, checks=checks, details=details)
+        elif args.rescue:
             from smoke_yui_rescue_checks import check_rescue
             check_rescue(response=response, command=command, run=run, base=base,
                 data=data, fake=fake, checks=checks, details=details)

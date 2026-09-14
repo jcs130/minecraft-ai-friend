@@ -35,6 +35,7 @@ public final class InteractionQa {
     static final BlockPos PLACEMENT=new BlockPos(2,-60,0);
     static final BlockPos GRASS=PLACEMENT.above();
     private String shutdownRequest;
+    private boolean shutdownFood;
     public InteractionQa(){NeoForge.EVENT_BUS.addListener(this::register);NeoForge.EVENT_BUS.addListener(this::stopping);}
 
     void stopping(ServerStoppingEvent event){
@@ -43,10 +44,11 @@ public final class InteractionQa {
         JsonObject args=new JsonObject();args.addProperty("button","right");
         args.addProperty("x",TARGET.getX());args.addProperty("y",TARGET.getY());args.addProperty("z",TARGET.getZ());
         args.addProperty("hold_ticks",0);args.addProperty("item_id","minecraft:dirt");
+        if(shutdownFood){args=new JsonObject();args.addProperty("item_id","minecraft:bread");}
         String payload=Base64.getUrlEncoder().withoutPadding().encodeToString(args.toString().getBytes(StandardCharsets.UTF_8));
         // A real accepted request at shutdown, after the final tick. No fabricated native journal.
         server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),
-            "qdworld interact "+BODY+" "+shutdownRequest+" "+payload);
+            "qdworld "+(shutdownFood?"eat":"interact")+" "+BODY+" "+shutdownRequest+" "+payload);
     }
 
     void register(RegisterCommandsEvent event){
@@ -96,11 +98,21 @@ public final class InteractionQa {
                                 throw new IllegalStateException("exact_saved_fixture_required");
                             body=CompanionFactory.spawn(server,BODY,"Kirito",OWNER,level,null);
                         }
+                    }else if(action.equals("food_setup") || action.equals("food_hungry")){
+                        if(body==null || CompanionTickDispatcher.currentTaskFor(BODY)!=null)
+                            throw new IllegalStateException("idle_existing_body_required");
+                        if(action.equals("food_setup"))body.getInventory().setItem(1,new ItemStack(Items.BREAD,8));
+                        body.getFoodData().setFoodLevel(15);body.getFoodData().setSaturation(0);
+                    }else if(action.startsWith("food_arm_")){
+                        String request=action.substring(9);
+                        if(!request.matches("[0-9a-f]{32}") || body==null || !body.onGround())
+                            throw new IllegalStateException("valid_shutdown_request_required");
+                        shutdownRequest=request;shutdownFood=true;
                     }else if(action.startsWith("arm_")){
                         String request=action.substring(4);
                         if(!request.matches("[0-9a-f]{32}") || body==null || !body.onGround())
                             throw new IllegalStateException("valid_shutdown_request_required");
-                        shutdownRequest=request;
+                        shutdownRequest=request;shutdownFood=false;
                     }else if(!action.equals("status"))throw new IllegalStateException("unknown_fixture_action");
                     out.addProperty("ok",true);
                 }catch(Exception error){out.addProperty("ok",false);out.addProperty("error",error.toString());}
@@ -118,6 +130,10 @@ public final class InteractionQa {
                 if(body!=null){
                     out.addProperty("uuid",body.getStringUUID());out.addProperty("ownerUuid",body.getOwnerUuid().toString());
                     out.addProperty("dirt",body.getInventory().countItem(Items.DIRT));
+                    out.addProperty("bread",body.getInventory().countItem(Items.BREAD));
+                    out.addProperty("hunger",body.getFoodData().getFoodLevel());
+                    var registered=registry.find(BODY);
+                    out.addProperty("persistedTaskTool",registered==null?"":registered.taskTool());
                     out.addProperty("x",body.getX());out.addProperty("y",body.getY());out.addProperty("z",body.getZ());
                     out.addProperty("onGround",body.onGround());
                     out.addProperty("gameMode",body.gameMode.getGameModeForPlayer().getName());

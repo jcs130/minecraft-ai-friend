@@ -61,6 +61,10 @@ def self_test():
             healthy['threads']['spell'] = False
             with patch.object(Path, 'read_text', return_value=json.dumps(healthy)):
                 self.assertFalse(inspect_health('/unused', now=105)['ok'])
+            healthy['threads']['spell'] = True
+            healthy['log_tail_error'] = ['OSError', 61]
+            with patch.object(Path, 'read_text', return_value=json.dumps(healthy)):
+                self.assertIn('log_reader_unavailable', inspect_health('/unused', now=105)['problems'])
 
         def test_imported_nested_shop_preserves_items_without_writing_profiles(self):
             funcs = [node for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -83,6 +87,8 @@ def inspect_health(path, now=None):
     except (OSError, ValueError):
         return {'ok': False, 'reason': 'missing_or_unreadable_heartbeat'}
     problems = []
+    if data.get('log_tail_error') is not None:
+        problems.append('log_reader_unavailable')
     if now - data.get('updated_at', 0) > 30:
         problems.append('stale_heartbeat')
     if now - data.get('rcon_last_ok', 0) > 40:

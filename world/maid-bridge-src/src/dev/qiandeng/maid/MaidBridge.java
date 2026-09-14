@@ -34,6 +34,7 @@ public final class MaidBridge {
     private static final ReceiptJournal JOURNAL = new ReceiptJournal(Path.of("data/qiandeng-maid-bridge/receipts"));
     public MaidBridge() {
         CompanionProtection.install();
+        CompanionTick.install();
         NeoForge.EVENT_BUS.addListener(this::register);
     }
     private void register(RegisterCommandsEvent event) {
@@ -118,6 +119,7 @@ public final class MaidBridge {
         out.addProperty("taskId", maid.getTask().getUid().toString());
         out.addProperty("ownerOnline", maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer);
         out.addProperty("nativeChatSetting", maid.getAiChatManager().getSetting().isPresent());
+        out.add("ticking", CompanionTick.status(maid));
         return out;
     }
     private static JsonObject perform(EntityMaid maid, BridgeProtocol.Request req) {

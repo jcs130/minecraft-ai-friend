@@ -144,6 +144,11 @@ def validate_jobs(value, role, runtime):
     for row in team: validate_team_job(row, logical_runtime + ':' + logical_role)
     jobs = [j for j in jobs if not is_team_job(j.get('id'))]
     if runtime == 'game':
+        from party_life_schedule import JOB_ID as PARTY_LIFE_ID, validate_job as validate_party_life
+        party_life = [j for j in jobs if j.get('id') == PARTY_LIFE_ID]
+        assert len(party_life) <= 1
+        for row in party_life: validate_party_life(row, role)
+        jobs = [j for j in jobs if j.get('id') != PARTY_LIFE_ID]
         from life_review_schedule import JOB_ID, validate_job
         reviews = [j for j in jobs if j.get('id') == JOB_ID]
         assert len(reviews) <= 1
@@ -186,7 +191,8 @@ def read_safe(path):
 def validate_guard(state, runtime, proc=Path('/proc')):
     """A stale startup marker or reused PID must not certify the cron guard."""
     marker = read_safe(Path(state) / 'learning-runtime.json')
-    assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == 2
+    from cron_guard import VERSION
+    assert marker['schema'] == 1 and marker['runtime'] == runtime and marker['guardVersion'] == VERSION
     assert marker['nativeToolGuardVersion'] == 1
     assert marker['llmPolicyVersion'] == 1
     assert marker['qwenVersion'] == '2.2.0' and marker['scheduler'] == 'native-qwen-cron'

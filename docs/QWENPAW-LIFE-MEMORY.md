@@ -106,6 +106,22 @@ Dream 不自动改写根目录 `MEMORY.md`，也不替代当前游戏执行或�
 
 上线验收区分：开关和工具就绪、实际笔记保存与检索、Dream 新材料提炼、游戏行为技能通过测试和晋升。没有把 `/goal` 开成跨重启无限循环，也没有把记忆摘要自动转换为已学技能、物品奖励或权限。
 
+## 2026-09-14：生活会话重复检索与框架终态
+
+真实任务 `task-b815dbf5e9b2` 在原生活 session 中连续四次调用相同 `memory_search` query，返回旧记忆后仍重复，最终由 Qwen 的 DoomLoopGate 停止。原任务证据保留在本机 `runtime/companion-repair-20260914/doom-task.json`，不修改历史结果。外层 `finished`、内层 `completed` 只表示原生请求已收口；最后的 `Doom loop: agent stuck after 4 consecutive repetitions` 是框架停止文字，不能当作角色完成任务、成功答复伙伴。
+
+已直接核对游戏容器 QwenPaw 2.2.0 源码：
+
+- `agents/memory/base_memory_manager.py` 的 `_build_query` 只取最新外部用户文本前 50 个字符。官方 agent-chat 的发送者前缀已占大部分长度，旧通用首行使实际 query 固定为 `[Agent survival-controller requesting] 本轮受控任务与环境事实`，未包含具体任务。
+- `agents/middlewares.py` 每个外部回合只自动检索一次，随后缓存结果并插在该用户输入之后，保持时序；没有证据说明这个 hook 发起了四次重复检索。四次真实工具调用有独立 call ID，其正文及思考模仿原生自动检索合成消息的前言。
+- 官方记忆 guidance 是需要过往事实时检索，并非每次动作前强制检索。`loop/gates/doom_loop.py` 和默认配置明确以终止消息结束重复调用。
+
+最小调整只在现有生活控制器：把真实使命放在输入开头，给原生检索留下有效主题；明确当前身体与动作回执优先于旧位置/障碍记录，已有成功检索结果即可使用，新增尚未解答的经验问题才按具体主题补查。下一轮可读到上一轮明确失败的任务 ID 与原因，自主选择后续目标。保留原官方 ReMe、memory_search、Auto-Memory、Dream、人格、模型和生活 session，不加独立循环、不禁用重复检测。
+
+`life_session.framework_failure` 精确识别原生 Doom 停止文本，控制器记录 `completed=false`、`failureReason=native_doom_loop`，同时保留真实 `nativeTaskCompleted=true` 及本轮已完成的游戏动作。停止文本不投递为伙伴答复，未知或旧动作不重放；普通回复中描述这个报错仍是正常文本。
+
+新增四个回归覆盖真实状态形状、精确终态/普通解释区分、使命检索主题、实际原生 ReMe 50 字符提取和同会话接续；Linux 原生镜像生活会话 41 项、控制器 68 项及派发竞态 4 项通过。对原任务 JSON 只读运行分类确认为 `native_doom_loop`。这些验证证明协议与提示已修正；是否改善模型的实际下一轮行为仍须部署后观察，不能仅凭提示词更改宣称自主闭环已恢复。
+
 ### 记忆状态页兼容修复
 
 实际 `/api/agents/{role}/memory/status` 曾返回500：原生统计函数递归访问保留在 `_binding_specs` 的 `Dependency` 元数据，触发其故意抛出的“accessed before start”。实际关键词搜索已成功，不能据此断言索引未启动。

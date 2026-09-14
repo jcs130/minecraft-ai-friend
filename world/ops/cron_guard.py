@@ -9,7 +9,7 @@ import time
 import uuid
 from agent_learning import LearningTools, OPS_ROLES, locked, read, write
 
-VERSION = 2
+VERSION = 3
 
 
 def fingerprint(tools):
@@ -72,6 +72,9 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
         return {'task_type': job.task_type, 'run_id': None, 'delivery_status': 'suppressed',
             'final_text': code, 'qiandeng': record}
     if policy_runtime == 'game':
+        from party_life_schedule import JOB_ID as PARTY_LIFE_ID, execute as execute_party_life
+        if job.id == PARTY_LIFE_ID:
+            return await execute_party_life(executor, job)
         from life_review_schedule import JOB_ID, execute as execute_life_review
         if job.id == JOB_ID:
             return await execute_life_review(executor, job)
@@ -153,4 +156,5 @@ def install(runtime):
     write(Path('/state/work/learning-runtime.json'), {'schema': 1, 'runtime': runtime, 'guardVersion': VERSION,
         'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
         'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
-        'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version})
+        'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version,
+        'partyLifeSignalVersion': 1})

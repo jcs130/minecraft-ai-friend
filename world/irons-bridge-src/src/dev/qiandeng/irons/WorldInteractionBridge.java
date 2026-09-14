@@ -2,10 +2,12 @@ package dev.qiandeng.irons;
 
 import com.dwinovo.numen.agent.tool.api.ToolContext;
 import com.dwinovo.numen.core.tools.BlockActionOps;
+import com.dwinovo.numen.core.tools.InventoryOps;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.task.CompanionTickDispatcher;
 import com.dwinovo.numen.task.TaskDispatch;
 import com.dwinovo.numen.task.TaskRecord;
+import com.dwinovo.numen.task.TaskPersistence;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
@@ -46,13 +48,14 @@ public final class WorldInteractionBridge {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("qdworld").requires(s -> s.hasPermission(2));
-        for (String action : new String[]{"interact", "interaction"}) {
+        for (String action : new String[]{"interact", "interaction", "eat", "eating"}) {
+            String tool = action.equals("eat") || action.equals("eating") ? "eat" : "interact_at";
             var request = Commands.argument("request", StringArgumentType.word());
-            if (action.equals("interact")) request.then(Commands.argument("payload", StringArgumentType.word())
+            if (action.equals("interact") || action.equals("eat")) request.then(Commands.argument("payload", StringArgumentType.word())
                 .executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
-                    StringArgumentType.getString(c, "request"), StringArgumentType.getString(c, "payload"))));
+                    StringArgumentType.getString(c, "request"), StringArgumentType.getString(c, "payload"), tool)));
             else request.executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
-                StringArgumentType.getString(c, "request"), null));
+                StringArgumentType.getString(c, "request"), null, tool));
             root.then(Commands.literal(action).then(Commands.argument("actor", StringArgumentType.word()).then(request)));
         }
         dispatcher.register(root);
@@ -66,14 +69,14 @@ public final class WorldInteractionBridge {
         }
     }
 
-    private static JsonObject base(String actor, String id, JsonObject args) {
+    private static JsonObject base(String actor, String id, JsonObject args, String tool) {
         var out = new JsonObject();
         out.addProperty("schema", 1);
         out.addProperty("capability", CAPABILITY);
         out.addProperty("actorUuid", actor);
         out.addProperty("requestId", id);
         out.addProperty("epoch", epoch);
-        out.addProperty("tool", "interact_at");
+        out.addProperty("tool", tool);
         if (args != null) out.add("args", args.deepCopy());
         out.addProperty("observedAt", System.currentTimeMillis());
         return out;
@@ -97,12 +100,19 @@ public final class WorldInteractionBridge {
         return out;
     }
 
-    private static JsonObject arguments(String encoded) {
+    private static JsonObject arguments(String encoded, String tool) {
         if (encoded.length() > 4096 || !encoded.matches("[A-Za-z0-9_=-]+"))
             throw new IllegalArgumentException("invalid_interaction_payload");
         byte[] raw = Base64.getUrlDecoder().decode(encoded);
         if (raw.length > 2048) throw new IllegalArgumentException("invalid_interaction_payload");
         var args = JsonParser.parseString(new String(raw, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (tool.equals("eat")) {
+            if (!args.keySet().equals(Set.of("item_id")) || !args.get("item_id").isJsonPrimitive()
+                    || !args.getAsJsonPrimitive("item_id").isString()
+                    || !args.get("item_id").getAsString().matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,100}"))
+                throw new IllegalArgumentException("invalid_food_arguments");
+            return args;
+        }
         var required = Set.of("button", "x", "y", "z", "hold_ticks");
         var allowed = Set.of("button", "x", "y", "z", "hold_ticks", "item_id");
         if (!args.keySet().containsAll(required) || !allowed.containsAll(args.keySet())
@@ -143,15 +153,16 @@ public final class WorldInteractionBridge {
         if (!claim) Files.move(target, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    private static JsonObject prior(Path path, String key, String actor, String id, JsonObject args) throws Exception {
+    private static JsonObject prior(Path path, String key, String actor, String id, JsonObject args, String tool) throws Exception {
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return PENDING.containsKey(key)
-            ? unknown(base(actor, id, args), "interaction_claim_missing") : null;
+            ? unknown(base(actor, id, args, tool), "interaction_claim_missing") : null;
         Pending pending = PENDING.get(key);
         if (pending != null) finish(key, pending);
         JsonObject row = read(path);
         if (!actor.equals(row.get("actorUuid").getAsString()) || !id.equals(row.get("requestId").getAsString())
+                || !tool.equals(row.get("tool").getAsString())
                 || (args != null && !args.equals(row.getAsJsonObject("args"))))
-            return unknown(base(actor, id, args), "request_identity_conflict");
+            return unknown(base(actor, id, args, tool), "request_identity_conflict");
         String status = row.get("status").getAsString();
         if ((status.equals("accepted") || status.equals("running")) && !PENDING.containsKey(key))
             return unknown(row, "native_runtime_interrupted");
@@ -159,10 +170,10 @@ public final class WorldInteractionBridge {
         return row;
     }
 
-    private static int run(CommandSourceStack source, String actorId, String id, String payload) {
+    private static int run(CommandSourceStack source, String actorId, String id, String payload, String tool) {
         server(source.getServer());
         JsonObject args = null;
-        JsonObject out = base(actorId, id, null);
+        JsonObject out = base(actorId, id, null, tool);
         Path path = null;
         String key = actorId + "/" + id;
         boolean claimed = false;
@@ -170,30 +181,33 @@ public final class WorldInteractionBridge {
         try {
             if (!UUID.fromString(actorId).toString().equals(actorId) || !id.matches("[0-9a-f]{32}"))
                 throw new IllegalArgumentException("invalid_interaction_identity");
-            if (payload != null) args = arguments(payload);
-            out = base(actorId, id, args);
+            if (payload != null) args = arguments(payload, tool);
+            out = base(actorId, id, args, tool);
             path = file(source.getServer(), actorId, id);
             existing = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
-            var previous = prior(path, key, actorId, id, args);
+            var previous = prior(path, key, actorId, id, args, tool);
             if (previous != null) out = previous;
             else if (payload == null) out = unknown(out, "request_not_found");
             else {
                 var player = QiandengIronsBridge.resolve(source.getServer(), actorId);
                 if (!(player instanceof NumenPlayer actor) || !actor.isAlive() || actor.hasDisconnected()
-                        || actor.gameMode.getGameModeForPlayer() != GameType.SURVIVAL || !actor.onGround())
+                        || actor.gameMode.getGameModeForPlayer() != GameType.SURVIVAL
+                        || (tool.equals("interact_at") && !actor.onGround()))
                     throw new IllegalArgumentException("live_survival_numen_required");
                 var active = CompanionTickDispatcher.currentTaskFor(actor.getUUID());
                 if ((active != null && !active.getState().isTerminal())
                         || PENDING.values().stream().anyMatch(p -> actorId.equals(p.row().get("actorUuid").getAsString())))
                     throw new IllegalArgumentException("native_body_busy");
                 if (PENDING.size() >= 64) throw new IllegalArgumentException("interaction_bridge_busy");
-                if (actor.distanceToSqr(args.get("x").getAsInt() + .5, args.get("y").getAsInt() + .5,
-                        args.get("z").getAsInt() + .5) > 20.25)
+                if (tool.equals("interact_at") && actor.distanceToSqr(args.get("x").getAsInt() + .5,
+                        args.get("y").getAsInt() + .5, args.get("z").getAsInt() + .5) > 20.25)
                     throw new IllegalArgumentException("interaction_target_out_of_reach");
-                TaskRecord record = new BlockActionOps().interactAt(args.get("button").getAsString(),
+                var context = new ToolContext("mcp-" + id, actor.level().getGameTime());
+                TaskRecord record = tool.equals("eat")
+                    ? new InventoryOps().eatItem(args.get("item_id").getAsString(), context)
+                    : new BlockActionOps().interactAt(args.get("button").getAsString(),
                     args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt(), 0,
-                    args.has("item_id") ? args.get("item_id").getAsString() : null,
-                    new ToolContext("mcp-" + id, actor.level().getGameTime()));
+                    args.has("item_id") ? args.get("item_id").getAsString() : null, context);
                 out.addProperty("status", "accepted");
                 out.addProperty("dispatched", true);
                 out.addProperty("nativeTaskId", record.publicId());
@@ -202,9 +216,18 @@ public final class WorldInteractionBridge {
                 claimed = true;
                 Pending pending = new Pending(path, out.deepCopy(), record);
                 PENDING.put(key, pending);
-                TaskDispatch.runSync(actor, record, ignored -> {});
+                if (tool.equals("eat")) {
+                    try { TaskDispatch.setTask(actor, record, args, ignored -> {}); }
+                    finally {
+                        // This exact external request is journalled above. Numen's ordinary
+                        // standing-task persistence replays tool arguments after restart;
+                        // a consumable request must instead remain unknown, never eat twice.
+                        TaskPersistence.forget(actor);
+                    }
+                }
+                else TaskDispatch.runSync(actor, record, ignored -> {});
                 finish(key, pending);
-                out = prior(path, key, actorId, id, args);
+                out = prior(path, key, actorId, id, args, tool);
             }
         } catch (Exception error) {
             if (claimed || existing || payload == null) {

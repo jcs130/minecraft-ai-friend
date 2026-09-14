@@ -145,7 +145,7 @@ class RoleLearningProfiles(unittest.TestCase):
         fields = ['0'] * 20; fields[19] = '100'
         (proc / '7/stat').write_text('7 (python with spaces) ' + ' '.join(fields))
         (proc / '7/cmdline').write_bytes(b'python\0/ops/learning_service.py\0--runtime\0operations\0')
-        marker = {'schema': 1, 'runtime': 'operations', 'guardVersion': 2, 'nativeToolGuardVersion': 1, 'llmPolicyVersion': 1, 'pid': 7, 'startedAt': 1002,
+        marker = {'schema': 1, 'runtime': 'operations', 'guardVersion': 3, 'nativeToolGuardVersion': 1, 'llmPolicyVersion': 1, 'pid': 7, 'startedAt': 1002,
             'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron'}
         write(self.root / 'learning-runtime.json', marker)
         with patch.object(contract.os, 'sysconf', return_value=100, create=True):

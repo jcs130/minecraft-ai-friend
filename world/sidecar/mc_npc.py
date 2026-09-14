@@ -1593,6 +1593,7 @@ def heal_npcs():
 RE_CHAT = re.compile(r"<([A-Za-z0-9_\u4e00-\u9fff]{1,16})> (.+)")
 RE_SAY = re.compile(r"\]: (?:\[Not Secure\] )?\[([A-Za-z0-9_\u4e00-\u9fff]{1,16})\] (.+)")
 _last_heal = 0.0
+_LOG_READER = None
 
 def _decode_unicode_escapes(msg):
     if "\\u" in msg:
@@ -1612,9 +1613,11 @@ def parse_line(ln):
     return None, None
 
 def tail_forever():
+    from log_tail import LogTail
+    global _LOG_READER
     last_cd = {}
-    f = open(LOG, "r", encoding="utf-8", errors="replace")
-    f.seek(0, 2)
+    f = LogTail(LOG, report=lambda text: print(text, flush=True))
+    _LOG_READER = f
     print("[npc] engine v2 up, tailing", LOG, flush=True)
     while True:
         line = f.readline()
@@ -1670,21 +1673,8 @@ def tail_forever():
             except Exception as e:
                 print("[offer] sync err:", e, flush=True)
             heal_npcs()
-        try:
-            # 轮转检测双信号（2026-08-20 修：日志轮转后旧句柄 stale 致聊天全失聪）
-            #  ① size 回退：清空重写类轮转（新文件 size < 旧句柄已读位置）
-            #  ② inode 漂移：重命名+新建类轮转（路径 stat 与句柄 fstat 的 file index 不一致）
-            rotated = os.path.getsize(LOG) < f.tell()
-            if not rotated:
-                sp, sh = os.stat(LOG), os.fstat(f.fileno())
-                rotated = (sp.st_ino != sh.st_ino)
-            if rotated:
-                f.close()
-                f = open(LOG, "r", encoding="utf-8", errors="replace")
-                f.seek(0, 2)
-                print("[npc] log rotated, reopened", flush=True)
-        except OSError:
-            pass
+        # LogTail handles rotation and transient bind-mount read errors without
+        # terminating the NPC process or replaying an already dispatched line.
         time.sleep(0.5)
 
 # ---------- WHISPER-TRADE：耳语收件箱（世界进程 mc-god「交易：」分流写入）----------
@@ -2199,6 +2189,7 @@ def npc_heartbeat_loop():
             if time.time() - _RCON_LAST_OK > 20:
                 R.cmd("list")
             state = {"updated_at": time.time(), "pid": os.getpid(), "rcon_last_ok": _RCON_LAST_OK,
+                     "log_tail_error": _LOG_READER.error if _LOG_READER is not None else None,
                      "spell_last_poll": _SPELL_LAST_POLL, "spell_consumed": _SPELL_CONSUMED,
                      "threads": {name: thread.is_alive() for name, thread in _NPC_THREADS.items()},
                      "rcon_target": {"host": HOST, "port": PORT}, "spawn_missing": SPAWN_MISSING,

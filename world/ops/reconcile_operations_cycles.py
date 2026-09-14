@@ -64,6 +64,17 @@ def verify_native_cancelled(trace, record, job, *, cycle=False):
     """Match the native executor's exact job, target session and run interval."""
     require(trace.get('status') == 'cancelled' and trace.get('error') == 'execution cancelled',
             'native_cancellation_not_confirmed')
+    verify_native_interval(trace, record, job, cycle=cycle)
+
+
+def verify_native_rate_limit(trace, record, job, *, cycle=False):
+    require(trace.get('status') == 'error'
+            and trace.get('error') == "_AcquireTimeoutError('Rate limit exceeded')",
+            'native_rate_limit_terminal_not_confirmed')
+    verify_native_interval(trace, record, job, cycle=cycle)
+
+
+def verify_native_interval(trace, record, job, *, cycle=False):
     meta = trace.get('meta', {})
     target = job['dispatch']['target']
     require(meta.get('job_id') == job['id'] and meta.get('task_type') == 'agent'
@@ -84,6 +95,10 @@ def verify_native_cancelled(trace, record, job, *, cycle=False):
 def reconciliation_evidence(record, job, started_at, live, trace=None, *, cycle=False):
     require(live.get('status') == 'idle' and live.get('running_task_count') == 0, 'native_role_not_idle')
     if trace and trace.get('meta', {}).get('job_id') == job['id']:
+        if trace.get('status') == 'error':
+            verify_native_rate_limit(trace, record, job, cycle=cycle)
+            return {'terminalEvidence': 'exact_native_rate_limit_trace_and_current_idle',
+                    'nativeTraceId': trace['run_id']}
         verify_native_cancelled(trace, record, job, cycle=cycle)
         return {'terminalEvidence': 'exact_native_cancelled_trace_and_current_idle', 'nativeTraceId': trace['run_id']}
     verify_abandoned(record, started_at, live, cycle=cycle)
@@ -139,7 +154,7 @@ def pause_schedule(actor, jobs, roles, intents, checkpoint, call=native):
     call('POST', '/cron/jobs/' + jobs[actor] + '/pause', roles[actor]['agentId'])
 
 
-def reconcile(apply=False, cancelled_trace=None):
+def reconcile(apply=False, cancelled_trace=None, terminal_trace=None):
     import fcntl
     from operations_native_tasks import ledger, TERMINAL
     process = process_evidence()
@@ -154,13 +169,15 @@ def reconcile(apply=False, cancelled_trace=None):
         'cycles': [], 'reservations': [], 'native': {}, 'restoredJobs': [], 'restoreErrors': [],
         'pauseIntents': [], 'pauseAcknowledged': [], 'evidenceByRecord': {}}
     trace = None
-    if cancelled_trace:
-        require(str(uuid.UUID(cancelled_trace)) == cancelled_trace, 'invalid_native_trace_id')
-        path = Path('/state/work/inbox_traces') / (cancelled_trace + '.json')
+    require(not (cancelled_trace and terminal_trace), 'choose_one_native_trace')
+    trace_id = cancelled_trace or terminal_trace
+    if trace_id:
+        require(str(uuid.UUID(trace_id)) == trace_id, 'invalid_native_trace_id')
+        path = Path('/state/work/inbox_traces') / (trace_id + '.json')
         require(not any(p.is_symlink() for p in (path, *path.parents)), 'linked_native_trace')
         trace = json.loads(path.read_text())
-        require(trace.get('run_id') == cancelled_trace, 'native_trace_identity_mismatch')
-        audit['nativeCancellationTrace'] = trace
+        require(trace.get('run_id') == trace_id, 'native_trace_identity_mismatch')
+        audit['nativeCancellationTrace' if cancelled_trace else 'nativeTerminalTrace'] = trace
     paused = audit['pauseIntents']
     report = None
     if apply:
@@ -241,5 +258,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--cancelled-trace', help='Exact native cancelled trace UUID for a current-process reload')
+    parser.add_argument('--terminal-trace', help='Exact finalized native model-permit timeout trace UUID')
     args = parser.parse_args()
-    print(json.dumps(reconcile(args.apply, args.cancelled_trace), ensure_ascii=False))
+    print(json.dumps(reconcile(args.apply, args.cancelled_trace, args.terminal_trace), ensure_ascii=False))

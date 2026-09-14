@@ -66,6 +66,19 @@ def check():
         checks['supervised_dispatch_fresh'] = (value.get('enabled') is True and value.get('status') == 'running'
             and value.get('error') is None and value.get('partyId') == config['partyId']
             and -5 <= time.time() - value.get('updatedAt', 0) / 1000 <= 90)
+        from party_life_schedule import JOB_ID, ROLE, validate_job
+        life = value.get('life') or {}
+        checks['life_consumer_loaded'] = (life.get('enabled') is True and life.get('signalVersion') == 1
+            and life.get('status') not in ('unknown', 'request_ledger_missing', 'failed', None))
+        jobs = get('http://127.0.0.1:18089/api/cron/jobs', ROLE)
+        managed = [job for job in jobs if job.get('id') == JOB_ID]
+        checks['native_life_schedule_enabled'] = len(managed) == 1 and managed[0].get('enabled') is True
+        if len(managed) == 1:
+            validate_job(managed[0], ROLE)
+        signal = read_json(ROOT / 'server/team-state/party-life' / ROLE / 'latest-signal.json')
+        stamp = signal.get('scheduledAt')
+        checks['native_life_signal_recent'] = (signal.get('jobId') == JOB_ID and signal.get('role') == ROLE
+            and type(stamp) in (int, float) and -5 <= time.time() - stamp <= 1200)
         panel = get('http://127.0.0.1:19091/api/state').get('party', {})
         checks['panel_party_live'] = (panel.get('available') is True and panel.get('enabled') is True
             and panel.get('stale') is False and panel.get('status') == 'running' and panel.get('error') is None

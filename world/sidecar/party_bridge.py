@@ -230,6 +230,8 @@ class PartyBridge:
                                    'sender': {'agentId': m['reply']['sender']['agentId']}}
                                   if m.get('reply') and m['reply'].get('channel', 'nearby') == 'nearby' else None)}
                         for m in summary['messages']])
+                if getattr(self, 'life', None) is not None:
+                    value['life'] = self.life.summary()
             except Exception as error:
                 value.update(status='unavailable', error=type(error).__name__)
         write_json(self.public, value)
@@ -257,10 +259,13 @@ def create_bridge():
 
 def serve_dispatch():
     bridge = create_bridge()
+    from party_life import PartyLife
+    bridge.life = PartyLife(bridge)
     while True:
         try:
             if bridge.config.configured():
                 bridge.tick()
+                bridge.life.tick()
             bridge.last_error = None
         except Exception as error:
             bridge.last_error = str(error) if isinstance(error, ValueError) else type(error).__name__

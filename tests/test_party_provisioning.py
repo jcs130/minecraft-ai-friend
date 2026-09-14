@@ -175,7 +175,11 @@ class PartyHealthTests(ProvisioningFixture):
                        {'skills': {'qd-party-cooperation': {'enabled': True}}})
         self.now = 100000
         self.public = {'schema': 1, 'enabled': True, 'status': 'running', 'error': None,
-                       'updatedAt': self.now * 1000, 'partyId': self.config['partyId'], 'members': self.members}
+                       'updatedAt': self.now * 1000, 'partyId': self.config['partyId'], 'members': self.members,
+                       'life': {'enabled': True, 'signalVersion': 1, 'status': 'waiting'}}
+        from party_life_schedule import JOB_ID, ROLE, managed_job
+        self.life_job = managed_job()
+        self.life_signal = {'jobId': JOB_ID, 'role': ROLE, 'scheduledAt': self.now}
         self.panel = {'available': True, 'enabled': True, 'stale': False, 'status': 'running', 'error': None,
                       'members': [{k: m[k] for k in ('agentId', 'displayName', 'kind')} for m in self.members]}
         self.report = {'schema': 1, 'ok': True, 'partyId': self.config['partyId'], 'bindingRevision': self.config['revision'],
@@ -194,9 +198,15 @@ class PartyHealthTests(ProvisioningFixture):
     def save(self):
         write_json(self.root / 'server/panel-state/party.json', self.public)
         write_json(self.root / 'reports/survivor-party-smoke.json', self.report)
+        from party_life_schedule import ROLE
+        write_json(self.root / 'server/team-state/party-life' / ROLE / 'latest-signal.json', self.life_signal)
 
     def get(self, url, role=None):
         if url == 'http://127.0.0.1:19091/api/state': return {'party': deepcopy(self.panel)}
+        if url.endswith('/cron/jobs'):
+            from party_life_schedule import ROLE
+            self.assertEqual(role, ROLE)
+            return [deepcopy(self.life_job)]
         self.assertIn(role, ('qd-survivor', 'maid-test'))
         if url.endswith('/mcp/tools/qd_party'): return [{'name': name, 'enabled': True} for name in TOOLS]
         if url.endswith('/mcp/qd_party'): return self.client_info(role)
@@ -215,6 +225,20 @@ class PartyHealthTests(ProvisioningFixture):
 
     def test_live_binding_policy_session_and_correlated_evidence_pass(self):
         self.assertTrue(self.probe()['ok'])
+
+    def test_life_loaded_is_not_proof_of_a_running_native_schedule(self):
+        self.life_job['enabled'] = False
+        result = self.probe()
+        self.assertFalse(result['checks']['native_life_schedule_enabled'])
+        self.assertTrue(result['checks']['life_consumer_loaded'])
+        self.life_job['enabled'] = True
+        self.life_signal['scheduledAt'] = self.now - 1201
+        self.save()
+        self.assertFalse(self.probe()['checks']['native_life_signal_recent'])
+        self.life_signal['scheduledAt'] = self.now
+        self.public['life']['status'] = 'request_ledger_missing'
+        self.save()
+        self.assertFalse(self.probe()['checks']['life_consumer_loaded'])
 
     def test_running_dispatch_error_is_not_hidden_by_fresh_heartbeat(self):
         self.public.update(status='waiting', error='body_unavailable'); self.save()

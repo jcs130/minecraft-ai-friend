@@ -38,7 +38,10 @@ export function validatePlan(config,request){
   return plan;
 }
 export function containerSpec(config,request,plan){
-  return {Image:plan.image,Cmd:plan.argv,WorkingDir:'/workspace',User:'65534:65534',
+  // Docker appends Cmd to an inherited image ENTRYPOINT. Bind both parts of
+  // the administrator-approved exec vector, including an empty argument list;
+  // a service image must never start its daemon instead of the fixed checks.
+  return {Image:plan.image,Entrypoint:plan.argv.slice(0,1),Cmd:plan.argv.slice(1),WorkingDir:'/workspace',User:'65534:65534',
     Env:['HOME=/tmp','TMPDIR=/tmp','PYTHONDONTWRITEBYTECODE=1','PYTHONNOUSERSITE=1','PYTHONPATH=','NODE_OPTIONS='],
     Labels:{'qiandeng.engineering':'1','qiandeng.engineering.job':request.jobId,'qiandeng.engineering.source':request.sourceSha256},
     AttachStdout:false,AttachStderr:false,OpenStdin:false,Tty:false,
