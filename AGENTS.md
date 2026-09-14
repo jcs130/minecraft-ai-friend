@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-14 11:21 思考配置核实：游戏Qwen的天神qd-engineer确为智谱Coding Plan/glm-5.3。官方5.3始终思考、默认max且不支持disabled；角色thinking_level=off因当前用户追加模型缺少映射没有进入SDK请求，不能当作关闭思考。禁网原生factory/SDK拦截确认未发thinking/reasoning_effort，合成reasoning_content会被正常接收并续流超时。11:05、11:15自然轮实际均到360秒总截止且有推理/工具活动；10:55的约202秒/30秒idle是另一类故障，未证明由思考导致。本次只读，无生产修改/模型调用/重启；详见docs/AUTONOMY-OPTIMIZATION.md新增核实段。
+
 2026-09-14 11:10 优化已部署：默认13个Compose服务运行，survivor为2.2.0-autonomy9（7eb8e44f…29b4b），游戏Qwen仍autonomy3并已重载ops，原16项Cron恢复，宿主8088未动。工程完整字节快照44.740→3.888秒且字典全等；原生工程班次status1.772秒读到progress。新增只读Numen控制者/落脚点证据，原桐人session两轮真实含新上下文并完成5次goto、放置及进食，捕获mob_defense。修复成功恢复被计入3次失败重试上限：旧attempts全保留，原loop一次恢复后只读确认上线，无手工清状态/重投。结衣两轮完成且新问答heard，21项party健康通过；没有work产出，多段回复仅离线验证，唯一线上长回复实验因模型输出工具XML被正确拒绝。天神10:55轮因GLM5.3原生30秒stream idle提前失败，不能称360秒总截止或工程闭环完成；近距move拒绝仍缺当时原点证据。新原生验收替换前归档旧报告原字节，完整panel仍有旧来源证明失败，不能改哈希凑绿。见docs/AUTONOMY-OPTIMIZATION.md。
 
 2026-09-14 08:00 当前运行覆盖下文旧暂停/候选环境结论：13 个默认 Compose 服务运行；survivor 为 2.2.0-autonomy7，游戏 Qwen 仍 autonomy3 加已加载 Cron guard3，宿主8088未动。已修复动作锁外检查引发的误暂停、原结衣外围区块不 tick、食物原生回执与截止、NPC 日志 ENODATA、ReMe 通用前缀检索及 Doom 终止识别。原 UUID/session/背包/人物模型保留。结衣新增原生10分钟生活信号，由既有NPC线程消费，无新守护进程。两次新请求/回复均在游戏实际heard，下一原生活轮精确消费两条回复，桐人实际种植两株小麦；结衣随行与交流已验，未验她亲自耕作。最新生活/队伍只读 smoke 及19项party健康检查通过，旧报告原字节已归档而非改哈希凑绿。NPC最后安全重启后已resume；详见docs/COMPANION-AUTONOMY-REPAIR.md。
