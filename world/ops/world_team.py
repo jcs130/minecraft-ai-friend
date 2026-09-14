@@ -56,6 +56,7 @@ WORLD_EPOCH_HISTORY_LIMIT = 32
 WORLD_EPOCH_REPORT_LIMIT = 8
 HEALTH_INCIDENT_HISTORY_LIMIT = 32
 HEALTH_INCIDENT_REPORT_LIMIT = 8
+HEALTH_CONTROLLER_REPORT_LIMIT = 8
 
 
 def encode(value):
@@ -246,7 +247,26 @@ class TeamStore:
                  'lastObserved': row['last_observed'], 'reads': row['reads']}
                 for row in reversed(recent)]
 
-    def record_health_observation(self, unhealthy, observed_at):
+    @staticmethod
+    def _controller_sample(controller):
+        """Plain survivor controller fields worth keeping, or None when carrying no evidence.
+
+        case-7772e059: the survivor container record showed exited/unhealthy while the controller
+        re-established online (bodyReconnect restored_identity_verified); sampling the controller
+        view on each unhealthy read keeps that pairing as a receipt channel instead of a
+        hand-copied divergence. A snapshot layer that does not expose the channel (None) stays
+        quiet, while an existing but expired or unreadable section still records fresh=false with
+        empty fields because a missing controller report during an unhealthy window is evidence.
+        """
+        if not isinstance(controller, dict):
+            return None
+        sample = {}
+        for key in ('fresh', 'status', 'bodyOnline', 'reconnectStatus', 'reconnectReason'):
+            value = controller.get(key)
+            sample[key] = value if value is None or isinstance(value, (bool, str, int)) else None
+        return None if all(value is None for value in sample.values()) else sample
+
+    def record_health_observation(self, unhealthy, observed_at, controller=None):
         """Persist per-service unhealthy windows observed through fresh team_context reads (case-6457).
 
         Probe incidents were tallied by hand from inspection snapshots across shifts; persisting
@@ -254,15 +274,22 @@ class TeamStore:
         back. An unhealthy read opens or extends its service window, the next healthy read closes
         it with recovered_after as the recovery upper bound, and healthy_before brackets the onset
         lower bound. Storage keeps the newest HEALTH_INCIDENT_HISTORY_LIMIT windows and the report
-        returns the most recent HEALTH_INCIDENT_REPORT_LIMIT entries oldest-first.
+        returns the most recent HEALTH_INCIDENT_REPORT_LIMIT entries oldest-first. When the survivor
+        service is unhealthy, the controller self-report passed as controller is sampled on the same
+        read (case-7772e059: an exited container verdict beside a controller that restored online
+        with restored_identity_verified had to be hand-copied); samples land in bounded
+        health_controller_reads and ride along on the survivor windows they were observed in.
         """
         names = sorted(set(unhealthy))
+        sample = self._controller_sample(controller) if 'survivor' in names else None
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS health_reads (id INTEGER PRIMARY KEY CHECK (id=1), '
                        'last_healthy REAL NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS health_incidents (service TEXT NOT NULL, '
                        'first_observed REAL NOT NULL, last_observed REAL NOT NULL, healthy_before REAL, '
                        'recovered_after REAL, reads INTEGER NOT NULL, PRIMARY KEY(service, first_observed))')
+            db.execute('CREATE TABLE IF NOT EXISTS health_controller_reads (service TEXT NOT NULL, '
+                       'observed_at REAL NOT NULL, sample TEXT NOT NULL, PRIMARY KEY(service, observed_at))')
             healthy = db.execute('SELECT last_healthy FROM health_reads WHERE id=1').fetchone()
             healthy_before = healthy['last_healthy'] if healthy else None
             for row in db.execute('SELECT DISTINCT service FROM health_incidents '
@@ -283,15 +310,31 @@ class TeamStore:
             if not names:
                 db.execute('INSERT INTO health_reads VALUES (1,?) ON CONFLICT(id) DO UPDATE SET '
                            'last_healthy=MAX(last_healthy, excluded.last_healthy)', (observed_at,))
+            if sample is not None:
+                db.execute('INSERT OR REPLACE INTO health_controller_reads VALUES (?,?,?)',
+                           ('survivor', observed_at, encode(sample)))
+                db.execute('DELETE FROM health_controller_reads WHERE observed_at NOT IN '
+                           '(SELECT observed_at FROM health_controller_reads '
+                           'ORDER BY observed_at DESC LIMIT ?)', (HEALTH_INCIDENT_HISTORY_LIMIT,))
             db.execute('DELETE FROM health_incidents WHERE first_observed NOT IN (SELECT first_observed FROM '
                        'health_incidents ORDER BY first_observed DESC LIMIT ?)',
                        (HEALTH_INCIDENT_HISTORY_LIMIT,))
             recent = db.execute('SELECT * FROM health_incidents ORDER BY first_observed DESC LIMIT ?',
                                 (HEALTH_INCIDENT_REPORT_LIMIT,)).fetchall()
-        return [{'service': row['service'], 'firstObserved': row['first_observed'],
-                 'lastObserved': row['last_observed'], 'healthyBefore': row['healthy_before'],
-                 'recoveredAfter': row['recovered_after'], 'reads': row['reads']}
-                for row in reversed(recent)]
+            controller_rows = db.execute('SELECT observed_at, sample FROM health_controller_reads '
+                                         'WHERE service=? ORDER BY observed_at', ('survivor',)).fetchall()
+        reported = []
+        for row in reversed(recent):
+            entry = {'service': row['service'], 'firstObserved': row['first_observed'],
+                     'lastObserved': row['last_observed'], 'healthyBefore': row['healthy_before'],
+                     'recoveredAfter': row['recovered_after'], 'reads': row['reads']}
+            if row['service'] == 'survivor':
+                window = [json.loads(item['sample']) for item in controller_rows
+                          if row['first_observed'] <= item['observed_at'] <= row['last_observed']]
+                if window:
+                    entry['controllerReads'] = window[:HEALTH_CONTROLLER_REPORT_LIMIT]
+            reported.append(entry)
+        return reported
 
     def work_fingerprint(self):
         with self.db() as db:

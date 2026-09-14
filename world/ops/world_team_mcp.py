@@ -39,6 +39,31 @@ def unhealthy_service_evidence(sections):
     return unhealthy, evidence
 
 
+def survivor_controller_evidence(snapshot):
+    """Plain survivor controller fields from the snapshot layer, or None when the channel is absent.
+
+    The health inspection record measures the survivor container healthcheck while the controller
+    self-report (public survivor.json, surfaced by OperationsTools.snapshot) describes its body and
+    reconnect state. case-7772e059: an exited/unhealthy container verdict sat beside a controller
+    that restored online with restored_identity_verified and the pairing had to be hand-copied.
+    Any dict section yields evidence so an expired or unreadable controller record still records
+    fresh=false during an unhealthy window; None is reserved for snapshot layers that do not
+    expose the channel at all.
+    """
+    section = snapshot.get('survivor') if isinstance(snapshot, dict) else None
+    if not isinstance(section, dict):
+        return None
+    data = section.get('data') if isinstance(section.get('data'), dict) else {}
+
+    def pick(key):
+        value = data.get(key)
+        return value if value is None or isinstance(value, (str, bool, int)) else None
+
+    return {'fresh': section.get('fresh') is True, 'status': pick('status'),
+            'bodyOnline': pick('bodyOnline'), 'reconnectStatus': pick('reconnectStatus'),
+            'reconnectReason': pick('reconnectReason')}
+
+
 def npc_llm_enabled(sections):
     """Raw npc llmEnabled flag from the world record, or None when absent or malformed.
 
@@ -110,6 +135,7 @@ def register_team_tools(app, actor, state=Path('/team')):
         unhealthy, evidence = unhealthy_service_evidence(sections)
         snapshot['unhealthyServices'] = unhealthy
         snapshot['unhealthyServiceEvidence'] = evidence
+        controller = survivor_controller_evidence(snapshot)
         notes = ''
         if stale:
             notes += (' Sections listed in staleSnapshots are expired inspection records, '
@@ -149,7 +175,7 @@ def register_team_tools(app, actor, state=Path('/team')):
         health_observed = _parse_time(health_section.get('timestamp'))
         if health_observed is not None and health_section.get('fresh') is not False \
                 and isinstance(health_section.get('data'), dict):
-            incidents = store.record_health_observation(unhealthy, health_observed.timestamp())
+            incidents = store.record_health_observation(unhealthy, health_observed.timestamp(), controller)
             if incidents:
                 snapshot['healthIncidents'] = [
                     {**row,
@@ -166,6 +192,13 @@ def register_team_tools(app, actor, state=Path('/team')):
                           ' recurring windows are a pattern to investigate, and a running-but-unhealthy'
                           ' divergence still needs in-window functional evidence plus host receipts'
                           ' before a probe fault is declared.')
+                if any('controllerReads' in row for row in snapshot['healthIncidents']):
+                    notes += (' survivor controllerReads pair each unhealthy window with the survivor'
+                              " controller's own report sampled on the same reads (bodyOnline and"
+                              ' bodyReconnect; fresh=false marks an expired or unavailable controller'
+                              ' record); an exited container verdict beside a controller view that'
+                              ' restored online marks a flap candidate whose exit cause still needs'
+                              ' host receipts such as RestartCount, exit code, OOMKilled or docker events.')
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
                       'A report or tested commit is not proof of a deployed game fix.' + notes}
