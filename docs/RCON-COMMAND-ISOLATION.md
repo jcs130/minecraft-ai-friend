@@ -1,6 +1,6 @@
 # RCON 命令回执隔离
 
-本轮候选修复位于现有服务端 `botgate.jar`，没有新增代理或常驻进程。每个 RCON 连接依然使用原生认证、命令权限、主线程执行、请求编号和分包协议；仅将完整的 `ServerInterface.runCommand` 调用放在同一个私有锁中。
+本轮修复位于现有服务端 `botgate.jar`，没有新增代理或常驻进程。每个 RCON 连接依然使用原生认证、命令权限、主线程执行、请求编号和分包协议；仅将完整的 `ServerInterface.runCommand` 调用放在同一个私有锁中。
 
 ## 已核实的问题
 
@@ -39,3 +39,5 @@
 先等现有原生任务自然收尾并完成既有停服备份，替换服务端 `server/mc/mods/botgate.jar` 后重启 Minecraft。更新当前 `world/botgate-src/build-record.json` 的真实候选及源码记录，并同步 `manifests/server-extensions.lock.json` 的 botgate 项；历史 `ai-components` 来源记录不改。
 
 发布新隔离报告前逐字节归档已有同名报告，再发布本次真实记录到 `reports/rcon-transaction-smoke.json`。原认证/分帧 smoke 也必须在当前 JAR 上实际执行，先归档旧记录。不能用更新旧报告中的 JAR/source 哈希代替新验收。该文档记录候选与验证合同，部署完成与否以根线程的实际部署记录为准。
+
+2026-09-14 17:04:36 已按上述范围部署当前候选。17:08 正式主服执行原认证/分帧测试 12/12 通过，临时 storage 已清理；独立 RCON 健康与 health_mon 对应探针均 5/5，旧报告原字节保持。部署及原存档/角色恢复见 [自主运行修复记录](AUTONOMY-PROGRESS-REPAIR.md)。

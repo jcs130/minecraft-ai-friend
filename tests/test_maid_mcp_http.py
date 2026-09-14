@@ -102,6 +102,30 @@ class MaidMcpHttpTests(RegistryFixtures):
         self.assertIn('error', self.request(payload, session=session)[2])
         self.assertEqual(len(self.native_calls), 1)
 
+    def test_persisted_session_survives_adapter_server_replacement_without_reconfiguration(self):
+        session = self.initialize()
+        saved = self.registry.root / 'mcp-sessions' / (session + '.json')
+        before = saved.read_bytes()
+        self.stop()
+        # A new registry, adapter and HTTP handler model an NPC-only restart.
+        # Neither the session nor the caller's credentials/config is replaced.
+        registry = fixtures.MaidRegistry(self.registry.root, transport=self.api, clock=lambda: self.now)
+        adapter = MaidAdapter(self.tasks.root, self.tasks, registry=registry, verifier=self.verifier,
+                              native=self.native, sleep=lambda _: None)
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(adapter, 'legacy-' + 't' * 48))
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={'poll_interval': 0.02}, daemon=True)
+        self.thread.start()
+        status, _, reply = self.request({'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'}, session=session)
+        self.assertEqual(status, 200)
+        self.assertEqual({tool['name'] for tool in reply['result']['tools']}, set(TOOLS))
+        self.assertEqual(saved.read_bytes(), before)
+        _, _, foreign = self.request({'jsonrpc': '2.0', 'id': 21, 'method': 'tools/list'},
+                                     who=self.b, session=session)
+        self.assertIn('error', foreign)
+        self.assertEqual(self.native_calls, [])
+        self.assertFalse(any(call[1] == '/console/chat/task' for call in self.api.calls))
+
     def test_signed_endpoint_needs_signature_not_legacy_bearer(self):
         raw, headers = self.signed()
         self.assertEqual(self.request({}, raw=raw, path='/v1/maid/chat/completions')[0], 400)

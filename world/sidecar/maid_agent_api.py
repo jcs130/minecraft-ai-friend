@@ -109,7 +109,12 @@ class MaidAdapter:
         pending = memory.get('pendingKey')
         if pending and pending != key:
             prior = self.tasks.poll('maid_dialogue', pending, **kw)
-            if prior.get('status') not in ('completed', 'failed', 'not_submitted'):
+            # poll verifies the original request, current character/session and
+            # explicit maintenance proof. A release permits a different input,
+            # never treats the old outcome as known or resubmits its key.
+            released = (prior.get('operatorReconciliation') == 'released_without_result'
+                        and prior.get('resultVerified') is False)
+            if prior.get('status') not in ('completed', 'failed', 'not_submitted') and not released:
                 return 409, {'error': {'code': 'previous_maid_task_unresolved'}, 'retry_automatically': False}
         with state_lock(self.registry.root):
             if prompt_path.exists():
