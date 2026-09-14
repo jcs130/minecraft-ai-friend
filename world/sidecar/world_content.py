@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import date, timedelta
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import time
@@ -26,6 +27,13 @@ TERMINAL_PUBLICATION = ('published', 'blocked', 'expired')
 ID = re.compile(r'[A-Za-z0-9_-]{1,80}\Z')
 CONTENT_ID = re.compile(r'content-[a-f0-9]{24}\Z')
 MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
+# The gateway goto pre-check (world/survival/numen_gateway.py, action()) rejects
+# a single goto whose horizontal displacement — math.hypot on x/z only, y never
+# participates — exceeds this many blocks; goto is walk-only with strict
+# arrival. Value re-verified 2026-09-15 (case-fe0b3f68 seq309). The constant
+# itself lives outside this file, so tests pin the copied default instead of
+# trusting the copy silently.
+GOTO_SINGLE_HOP_LIMIT = 24
 # Adapter progress for case boss-chest-adapter-missing: the four receipt
 # capabilities map to scout/place/proof/cleanup; 'ledger' is the durable
 # receipt store underneath them (SiteQueue, implemented and covered by
@@ -194,6 +202,50 @@ def validate_episode(payload, context):
     return result
 
 
+def _reachability_axes(point, code):
+    require(isinstance(point, dict) and type(point.get('x')) in (int, float)
+            and type(point.get('z')) in (int, float), code)
+    return float(point['x']), float(point['z'])
+
+
+def classify_reachability(target, anchor, waypoints=()):
+    """Horizontal accounting for one contract destination; pure geometry.
+
+    Same yardstick as the gateway goto pre-check: y never participates and
+    one goto covers at most GOTO_SINGLE_HOP_LIMIT blocks. A relay suggestion
+    is a decomposition to verify, never proof of reachability — only real
+    in-world goto receipts can confirm each leg.
+    """
+    tx, tz = _reachability_axes(target, 'invalid_reachability_target')
+    ax, az = _reachability_axes(anchor, 'invalid_reachability_anchor')
+    distance = math.hypot(tx - ax, tz - az)
+    hops = math.ceil(distance / GOTO_SINGLE_HOP_LIMIT)
+    if distance <= GOTO_SINGLE_HOP_LIMIT:
+        band = 'single_hop'
+        suggestion = '单次goto水平可达，无需前置；仍以实际goto回执为准。'
+    elif distance <= 2 * GOTO_SINGLE_HOP_LIMIT:
+        band = 'relay_within_two_hops'
+        suggestion = '超单跳上限：标注「空间传送/御空术」前置，或拆成两段每段≤24格的中继；中继实测前不算已验证可达。'
+    else:
+        band = 'beyond_two_hops'
+        suggestion = '两跳仍不可达：仅向有传送能力的玩家推荐，或重设目的地。'
+    legs = []
+    for waypoint in waypoints or ():
+        wx, wz = _reachability_axes(waypoint, 'invalid_reachability_waypoint')
+        first, second = math.hypot(wx - ax, wz - az), math.hypot(tx - wx, tz - wz)
+        if first <= GOTO_SINGLE_HOP_LIMIT and second <= GOTO_SINGLE_HOP_LIMIT:
+            legs.append((max(first, second), waypoint))
+    relay = None
+    if legs:
+        max_leg, waypoint = min(legs, key=lambda leg: leg[0])
+        relay = {axis: waypoint[axis] for axis in ('x', 'y', 'z') if axis in waypoint}
+        relay['name'] = waypoint.get('name')
+        relay['maxLeg'] = round(max_leg, 1)
+    return {'horizontalDistance': round(distance, 1), 'requiredHops': hops,
+            'singleHopLimit': GOTO_SINGLE_HOP_LIMIT, 'band': band,
+            'relayViaWaypoint': relay, 'suggestion': suggestion}
+
+
 class ContentQueue:
     def __init__(self, state=Path('/team'), *, clock=time.time):
         self.root, self.clock = safe(Path(state) / 'content'), clock
@@ -205,6 +257,39 @@ class ContentQueue:
             return {'ok': True, **value}
         except (OSError, ValueError, KeyError, TypeError):
             return {'ok': False, 'code': 'content_context_unavailable', 'capabilities': deepcopy(BLOCKED)}
+
+    def reachability(self, actor, target=None, issuer=None, anchor=None, waypoints=None):
+        """Account one contract destination against the goto pre-check limit.
+
+        Pure arithmetic over real coordinates; worldActionsExecuted stays 0.
+        Exactly one of target/issuer names the destination: an explicit
+        target plus explicit anchor works without fresh context, while an
+        issuer lookup or the default guild anchor needs one. A stale context
+        is reported, never guessed around.
+        """
+        require(actor in ACTORS, 'invalid_content_actor')
+        require((target is None) != (issuer is None), 'invalid_reachability_source')
+        context = None
+        if issuer is not None:
+            context = self.context()
+            require(context.get('ok'), 'content_context_unavailable')
+            require(isinstance(issuer, str), 'invalid_content_issuer')
+            person = next((p for p in context['issuers'] if p['key'] == issuer), None)
+            require(person is not None, 'content_issuer_unavailable')
+            target = {'x': person['position'][0], 'y': person['position'][1], 'z': person['position'][2]}
+        if anchor is None:
+            context = context or self.context()
+            require(context.get('ok'), 'content_context_unavailable')
+            origin = context['destinations']['far_horizon']['origin']
+            anchor = {'x': origin[0], 'y': origin[1], 'z': origin[2]}
+            anchor_source = 'context_far_horizon_origin'
+        else:
+            anchor_source = 'explicit'
+        result = classify_reachability(target, anchor, waypoints or ())
+        return {'ok': True, 'actor': actor,
+                'target': {axis: target.get(axis) for axis in ('x', 'y', 'z')},
+                'anchor': {axis: anchor.get(axis) for axis in ('x', 'y', 'z')},
+                'anchorSource': anchor_source, **result, 'worldActionsExecuted': 0}
 
     def _id(self, actor, request_id):
         require(actor in ACTORS and isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_content_actor_or_request')

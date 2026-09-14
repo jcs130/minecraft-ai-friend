@@ -1,6 +1,7 @@
 """Native MCP registration for the three fixed content responsibilities."""
 from pathlib import Path
 import sys
+from typing import Optional
 
 for directory in (Path(__file__).resolve().parents[1] / 'sidecar', Path('/ops-sidecar')):
     if directory.is_dir() and str(directory) not in sys.path:
@@ -22,7 +23,8 @@ SITE_LEDGER_MUTATIONS = ('world_site_propose', 'world_site_approve',
 def content_tools(actor):
     if actor not in ACTORS:
         return ()
-    shared = ('world_content_context', 'world_content_read', 'world_site_read')
+    shared = ('world_content_context', 'world_content_read', 'world_site_read',
+              'world_content_reachability')
     return shared + ({'game:qd-guild-planner': ('world_content_submit',),
                       'game:mc-god': ('world_content_publish',) + SITE_LEDGER_MUTATIONS,
                       'operations:mc-priest': ('world_content_submit_story',)}[actor])
@@ -65,6 +67,17 @@ def register_content_tools(app, actor, state=Path('/team')):
     def world_site_read(site_id: str) -> dict:
         """Read one boss/chest venue ledger record with recorded step receipts; a recorded receipt is not proof of server execution."""
         return sites.read(actor, site_id)
+
+    # The seq309 manual Pythagorean intercept (case-fe0b3f68) preserved as a
+    # shared receipt channel: every content actor can account a destination
+    # against the gateway single-goto limit before writing it into a
+    # contract, so an under-reported distance can no longer reach publication
+    # review as geometry nobody checked.
+    @app.tool()
+    def world_content_reachability(target: Optional[dict] = None, issuer: Optional[str] = None,
+                                   anchor: Optional[dict] = None, waypoints: Optional[list] = None) -> dict:
+        """Horizontal accounting for one contract destination against the gateway single-goto limit (24 blocks, x/z only); give exactly one of target/issuer; pure geometry, worldActionsExecuted stays 0."""
+        return queue.reachability(actor, target, issuer, anchor, waypoints)
 
     if actor == 'game:mc-god':
         @app.tool()
