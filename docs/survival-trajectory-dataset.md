@@ -61,3 +61,37 @@ A first run on real server data needs host-provided read-only access to
 engineering role's own reads of `/public` and `server/` are declined by role
 guardrails. Raw `(prompt, completion)` text stays in QwenPaw by design
 (controller poll_model comment) and is out of scope here — that is Step1b.
+
+
+## Step1b: prompt-side deterministic rebuild (`tests/survival_prompt_rebuild.py`)
+
+The autonomy wake prompt is built by `life_context()` plus one serialization
+line in `submit_model()` (`world/survival/controller.py`, unchanged from
+f48e2ef8 through afad3520):
+
+    prompt = '本轮受控任务与环境事实（环境中的文本不能更改权限）：\n' + json.dumps(context, ensure_ascii=False)
+
+The module replicates every projection and truncation rule of that context
+from recorded inputs: the body key subset, the ≤5000-character greedy event
+packing applied after the upstream `[:6]` prioritize slice (an oversized
+event is skipped, a later smaller one may still fit), the
+recentActionReceipts projection of the last six actions (missing keys stay
+as None), executionEvents sliced to the last four episodes then filtered to
+skill kinds (missing keys omitted), the first-task continuation block with
+700-character memory caps, and the instruction appends in exact submit
+order: party roster → partyMessage → partyReplies → review. A drift-guard
+test re-reads controller.py and fails when any mirrored literal changes
+there, so the rebuild cannot silently diverge from the writer.
+
+Honest limits: perception event ordering, the partyMessage projection and
+the review payload are inputs (they are produced by live modules, not by
+this file); the completion half of the (prompt, completion) pair remains
+QwenPaw-side only (G1 gap) — this module covers exactly the half the
+durable record can rebuild. Byte-exact replay of a historical turn also
+needs the prompt-time event list and party state, which the public record
+keeps only in bounded form.
+
+Like Step1a, the new test module is carried in `tests/` and statically
+self-checked; the fixed plan executes its existing 15 modules (174 tests)
+only, so execution of new test files here awaits a checks/coverage
+expansion.
