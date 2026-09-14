@@ -32,7 +32,8 @@ class SurvivorHealthTests(unittest.TestCase):
         self.source['budgets'] = {'decisionsUsed': 106, 'decisionLimit': None, 'dailyPlanningLimit': None,
             'inferenceLimitPolicy': 'unrestricted', 'decisionCountScope': 'rolling_24h', 'cooldownSeconds': 0}
         self.settings = {'dailyPlanningLimit': None, 'decisionCooldownSeconds': 0}
-        self.heartbeat = {'schema': 1, 'ok': True, 'at': self.now * 1000, 'fastSystemProtocol': 1}
+        self.heartbeat = {'schema': 1, 'ok': True, 'at': self.now * 1000, 'fastSystemProtocol': 1,
+                          'selfPlanningVersion': 1}
         self.fast_report = {'schema': 1, 'project': 'qiandengji', 'fastSystemProtocol': 1,
             'ok': True, 'finishedAt': self.source['generatedAt'],
             'checks': [{'name': name, 'ok': True} for name in health.SURVIVOR_FAST_SYSTEM_CHECKS]}
@@ -175,6 +176,16 @@ class SurvivorHealthTests(unittest.TestCase):
                 self.heartbeat = value
                 result = self.probe()
                 self.assertFalse(result['checks']['fast_system_protocol'])
+                self.assertFalse(result['ok'])
+
+    def test_old_worker_cannot_claim_loaded_self_planning_guidance(self):
+        original = dict(self.heartbeat)
+        for value in (None, True, 0, 2, '1'):
+            with self.subTest(version=value):
+                self.heartbeat = dict(original, selfPlanningVersion=value)
+                result = self.probe()
+                self.assertTrue(result['checks']['fast_system_protocol'])
+                self.assertFalse(result['checks']['self_planning_protocol'])
                 self.assertFalse(result['ok'])
 
     def test_old_generic_reports_do_not_replace_specific_behavior_evidence(self):

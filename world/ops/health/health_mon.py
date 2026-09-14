@@ -60,7 +60,7 @@ MANIFEST = {
     "panel": {"health_required": True, "purpose": "Independent management page and public read models"},
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
-    "survivor": {"health_required": True, "purpose": "Kirito autonomous survival, leased Numen actions, tested skills and durable practice receipts"},
+    "survivor": {"health_required": True, "purpose": "Kirito self-directed adventure planning, leased Numen actions, tested skills and durable practice receipts"},
     "inventory": {"health_required": True, "purpose": "Read-only Docker-managed current project inventory publication"},
 }
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
@@ -517,7 +517,7 @@ def probe_survivor():
     """Current read-only survivor status plus separate recorded action evidence."""
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
               'adventure_projection': False, 'no_unexpected_pause': False,
-              'execution_systems': False, 'fast_system_protocol': False,
+              'execution_systems': False, 'fast_system_protocol': False, 'self_planning_protocol': False,
               'inference_limits_unrestricted': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
@@ -551,6 +551,10 @@ def probe_survivor():
                 and heartbeat.get('ok') is True and type(heartbeat.get('fastSystemProtocol')) is int
                 and heartbeat['fastSystemProtocol'] == 1 and type(heartbeat.get('at')) in (int, float)
                 and math.isfinite(heartbeat['at']) and -5 <= time.time() - heartbeat['at'] / 1000 <= 90)
+            # Loaded guidance protocol only; this is not proof of a completed
+            # plan or expedition. Those require the model's notes and receipts.
+            checks['self_planning_protocol'] = (checks['fast_system_protocol']
+                and type(heartbeat.get('selfPlanningVersion')) is int and heartbeat['selfPlanningVersion'] == 1)
         reason = source.get('pauseReason') or ''
         checks['no_unexpected_pause'] = (source.get('enabled') is True
             and source.get('status') not in ('paused', 'stopped', 'body_offline')) or (

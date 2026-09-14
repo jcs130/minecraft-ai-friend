@@ -37,6 +37,39 @@ def tail(path, limit=8):
     return values
 
 
+def life_planning_subject(mission, memory, decisions, mission_changed_at=0):
+    """A bounded recall hint, never a replacement for the operator's mission.
+
+    A late remember from a superseded turn is not current planning, even when
+    its write timestamp follows the new mission. Use the original reservation
+    to establish that the remembering turn began under the current mission.
+    """
+    def stamp(value):
+        return type(value) in (int, float) and math.isfinite(value) and value >= 0
+
+    subject = mission
+    updated = memory.get('updatedAt')
+    history = memory.get('history')
+    last = history[-1] if isinstance(history, list) and history and isinstance(history[-1], dict) else {}
+    turn_id = last.get('turnId')
+    checkpoint_matches = (memory.get('schema') == 1 and memory.get('source') == 'agent_learning_data'
+                          and type(updated) is int and type(last.get('at')) is int and last['at'] == updated
+                          and all(key in memory and key in last and memory[key] == last[key]
+                                  for key in ('goal', 'nextFocus', 'goalState')))
+    if (checkpoint_matches and stamp(mission_changed_at) and stamp(updated) and updated > 0
+            and updated >= mission_changed_at and isinstance(turn_id, str) and turn_id):
+        decision = next((row for row in reversed(decisions)
+                         if row.get('turnId') == turn_id), None)
+        started = decision.get('startedAt') if decision else None
+        # A same-millisecond legacy reservation is ambiguous; the mission is
+        # the safe recall hint until a later turn writes its own working goal.
+        if stamp(started) and mission_changed_at < started * 1000 <= updated:
+            keys = ('nextFocus',) if memory.get('goalState') == 'completed' else ('nextFocus', 'goal')
+            subject = next((memory[key] for key in keys
+                            if isinstance(memory.get(key), str) and memory[key].strip()), mission)
+    return ' '.join(str(subject).split())[:160]
+
+
 def main_inventory_summary(body):
     """Count distinct occupied main slots from this snapshot, never item totals."""
     result = {'capacity': 36, 'occupiedSlots': None, 'freeSlots': None, 'available': False}
@@ -625,6 +658,16 @@ class Controller:
                     'dimension', 'gameMode', 'task', 'observedAt', 'bodyControl',
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
             'adventure': self.adventure(body),
+            'planning': {'version': 1, 'goalFile': 'memory/goals.md',
+                'reference': 'skills/qd-survivor-practice/references/long-term-planning.md',
+                'selectionAuthority': 'model',
+                'instruction': '依据自己的SOUL.md、PROFILE.md与真实经历，自主选择和修订长期方向；'
+                    '新使命、阶段完成或持续受阻时，按需读规划参考与memory/goals.md，'
+                    '为当前有限里程碑写明选择理由、实际完成证据和转向条件。'
+                    '目标范围和先后由你决定，不按固定任务轮换；等待时评估其它有意义的推进机会。'
+                    '阶段变化时用原生文件工具更新自己的目标文件，MEMORY.md保留短索引，remember保存当前进度和下一步。'
+                    '本轮开头的工作记忆主题仅用于检索，不替代mission和longTermMission；旧试验和旧观察不自动成为长期使命。'
+                    '写下计划、程序done或模型总结都不证明完成，验收须引用实际观察或本人动作回执。'},
             'learningPractice': self.practice_context(),
             'learningUpdate': {'revision': 'practice-queued-summary-v2',
                 'reference': 'skills/qd-survivor-practice/references/program-practice.md',
@@ -832,7 +875,8 @@ class Controller:
         value['executionSystems'] = systems_status(self.data, job, now)
         write_json(self.public, value)
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
-            'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1})
+            'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
+            'selfPlanningVersion': 1})
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -1250,7 +1294,8 @@ class Controller:
         # Native ReMe searches only the first 50 characters, including the
         # official agent-chat sender prefix. Put real task subject first so it
         # does not retrieve the same boilerplate across every life turn.
-        subject = ' '.join(str(context['mission']).split())[:160]
+        subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
+                                        control.get('missionChangedAt', 0))
         prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': self.session['primarySessionId'], 'userId': self.session['userId'],
