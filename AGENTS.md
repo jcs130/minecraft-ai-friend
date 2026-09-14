@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-14 17:42 最终实机：结衣新signed输入task-b0f72dabda12已在原session真实completed，旧占位修复已线上覆盖；游戏callback无独立持久回执，不能称本条已heard。17:37:30另一个新输入被正在运行的party-life正常busy拒绝，未入模型；旧错误未复发，忙时排队尚未实现，不能将笼统桥接日志当成同一请求。17:41:53桐人已自动接续task-e10b556f9053、无新unknown，13服务健康、16原Cron/模型保留，自主保持enabled。不要重新暂停或重投旧请求；最终证据见下述文档。
+
 2026-09-14 17:37 最新恢复：17:22仅为结衣对话适配维护暂停原16Cron，原桐人回合17:26:48自然drain、天神长任务自然结束后，仅NPC17:34:20重载（主服/Qwen/survivor不再重启）。MaidAdapter现接受QwenTasks对原9/9占位严格核验的released_without_result，只供不同新输入；旧task-d0d283af1f8b保持poll_unavailable、不重投、不改成功。94相关测试过；1042文件/1043047字节NPC状态备份，原maid与两party持久MCP session重载后3次只读tools/list全200，身份/请求/证明原字节保留。17:36:11恢复原16Cron和自主控制，17:37确认13服务健康、16班次完整spec及10角色即时模型/名称相同；桐人task-71dbd4226e58和结衣原会话新任务自然开始、无unknown。之前aut18两轮已自然完成并确认7导航成功/2进食和真实游戏heard回复，结衣主动工作/装备建造与模型总结准确性不能因此称全部完成。当前继续运行，不要按下文旧维护状态再次resume/重放；完整证据见docs/AUTONOMY-PROGRESS-REPAIR.md。
 
 2026-09-14 17:10 最新覆盖下文aut17暂停状态：MC现役botgate为6ca6c1ed…15022a，修复多个RCON客户端共享控制台缓冲区竞争，完整原生命令私有锁串行，无新代理/客户端变更；旧版真实96请求11串线，新版96/96，227 Java断言、6健康回归与正式主服17:08协议12/12、健康5/5通过。survivor为2.2.0-autonomy18（70e2ee83…f3ef），Qwen仍autonomy16但本次停服后重启。16:32原goto未知已16:58人工按原身体/t554到达/原Qwen终态审核，仅关闭旧lease及活动阻断；原未知/无ACK/effectAttributionVerified=false全部保留，不可改成功或重放。新网关保存后续实际私有回执，种植预检返回原请求空气格/支撑格，不改坐标；152生存回归过。完整停服备份36193文件/3054644179字节SHA核验，原16Cron、模型与自主控制17:10:37恢复。world_team_health现役10与历史4分开，旧18090不查；当前批准工程计划原生runner新baseline current-plan-01已145测试通过/容器删除，显式迁移health且旧证据不覆盖，候选业务未部署。最终aut18实机窗口须看docs/AUTONOMY-PROGRESS-REPAIR.md后续证据，不借旧aut16两轮当证明；不得称装备/住房/结衣农耕闭环全部已完成。
