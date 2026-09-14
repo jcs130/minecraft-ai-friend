@@ -21,5 +21,9 @@ subprocess.run([build.JAVAC, "-proc:none", "--release", "21", "-encoding", "UTF-
                 "-cp", test_cp, "-d", str(root / "tests"),
                 *map(str, test_sources)], check=True)
 for source in test_sources:
+    # RCON must use the actual NeoForge console class: NeoForge appends a line
+    # break to each response, unlike the unpatched Bootstrap test classpath.
+    runtime_cp = (os.pathsep.join([str(root / "tests"), str(root), cp])
+                  if source.stem == "RconCommandTransactionTest" else test_cp)
     subprocess.run([str(Path(build.JDK) / ("java.exe" if os.name == "nt" else "java")),
-                    "-cp", test_cp, source.stem], cwd=root / "tests", check=True)
+                    "-cp", runtime_cp, source.stem], cwd=root / "tests", check=True)

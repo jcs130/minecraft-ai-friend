@@ -1,6 +1,8 @@
 package dev.god.botgate.mixin;
 
 import dev.god.botgate.RconFrameReader;
+import dev.god.botgate.RconCommandTransaction;
+import net.minecraft.server.ServerInterface;
 import net.minecraft.server.rcon.thread.RconClient;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,6 +23,17 @@ public class RconFrameReadMixin {
     @Shadow @Final private Socket client;
     @Shadow @Final @Mutable private byte[] buf;
     @Unique private BufferedInputStream botgate$rconInput;
+
+    @Redirect(method = "run", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/ServerInterface;runCommand(Ljava/lang/String;)Ljava/lang/String;"),
+            require = 1, expect = 1)
+    private String botgate$runCommand(ServerInterface server, String command) {
+        // DedicatedServer.runCommand clears and reads one shared console buffer
+        // outside executeBlocking. Different sockets otherwise race despite
+        // correctly framed, request-ID-matched replies. Wrap the entire native
+        // call, leaving auth, permission checks, dispatch and errors untouched.
+        return RconCommandTransaction.run(() -> server.runCommand(command));
+    }
 
     @Redirect(method = "run", at = @At(value = "NEW", target = "java/io/BufferedInputStream"), require = 1)
     private BufferedInputStream botgate$reuseInput(InputStream input) {

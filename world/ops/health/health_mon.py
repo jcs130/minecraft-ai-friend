@@ -1427,6 +1427,16 @@ def probe_recorded_behavior(pattern, required_names=(), **required_values):
             "checked_at": report.get("finishedAt", report.get("checked_at"))}
 
 
+def probe_rcon_protocol():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_rcon_protocol_health', PROJECT / 'tools/rcon_protocol_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(PROJECT)
+    except (OSError, ValueError, ImportError, AttributeError):
+        return {'ok': False, 'error': 'Current RCON protocol evidence is unavailable'}
+
+
 def probe_statusbook():
     path = PROJECT / "reports/npc-trade-runtime.json"
     try:
@@ -1601,7 +1611,7 @@ def main_locked():
               "architecture": probe_architecture(),
               "panel_smoke": probe_panel_smoke(),
               "entry_points": probe_recorded_behavior("mc-endpoints.json"),
-              "rcon_protocol": probe_recorded_behavior("rcon-live-smoke.json"),
+              "rcon_protocol": probe_rcon_protocol(),
               "statusbook": probe_statusbook(),
               "content_files": probe_content_files(),
               "guild": probe_guild(),

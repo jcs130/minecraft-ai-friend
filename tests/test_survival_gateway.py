@@ -315,6 +315,43 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(self.mine()['ok'])
         self.assertEqual(len(self.rcon.mutations()), 1)
         self.assertNotIn('credential', (self.state / 'actions.jsonl').read_text())
+        diagnostic = gateway.read_json(self.state / 'native-action-diagnostics' / (result['actionId'] + '.json'))
+        self.assertFalse(diagnostic['nativeReplyAvailable'])
+        self.assertNotIn('credential', json.dumps(diagnostic))
+
+    def test_invalid_native_reply_is_preserved_privately_without_replay_or_success(self):
+        self.lease()
+        original = self.rcon.cmd
+        raw = 'invoke error: fixture after task started'
+        def native(command):
+            if ' mine ' in command:
+                self.rcon.calls.append(command)
+                return raw
+            return original(command)
+        self.rcon.cmd = native
+        result = self.mine()
+        self.assertEqual(result['code'], 'outcome_unknown')
+        self.assertTrue(result['nativeDiagnosticRecorded'])
+        diagnostic = gateway.read_json(self.state / 'native-action-diagnostics' / (result['actionId'] + '.json'))
+        self.assertEqual(diagnostic['nativeReply'], raw)
+        self.assertEqual(diagnostic['errorCode'], 'numen_reply_invalid')
+        self.assertFalse(diagnostic['nativeReplyTruncated'])
+        self.assertNotIn(raw, json.dumps(result))
+        self.assertTrue((self.state / 'unknown.json').exists())
+        self.assertEqual(gateway.read_json(self.state / 'action-receipts' / (result['actionId'] + '.json'))['status'], 'unknown')
+        self.assertFalse(self.mine()['ok'])
+        self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_nonterminal_native_ack_is_evidence_only_not_success(self):
+        self.lease()
+        self.rcon.reply = {'accepted': True, 'note': 'no immediate reply'}
+        result = self.mine()
+        self.assertEqual(result['code'], 'outcome_unknown')
+        diagnostic = gateway.read_json(self.state / 'native-action-diagnostics' / (result['actionId'] + '.json'))
+        self.assertEqual(json.loads(diagnostic['nativeReply']), self.rcon.reply)
+        self.assertFalse(result['ok'])
+        self.assertTrue((self.state / 'unknown.json').exists())
+        self.assertEqual(len(self.rcon.mutations()), 1)
 
     def test_crash_marker_precedes_send_and_survives_reserved_lease(self):
         self.lease()
@@ -405,6 +442,34 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 0)
         self.assertFalse((self.state / 'unknown.json').exists())
         dispatch.assert_not_called()
+
+    def test_farm_preflight_returns_original_observations_without_action_or_raw_metadata(self):
+        self.lease()
+        args = {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds',
+                'x': 101, 'y': 65, 'z': 100}
+        error = gateway.GatewayError('plant_requires_farmland')
+        error.details = {'schema': 1, 'kind': 'farm_preflight', 'operation': 'plant',
+            'requested': {'x': 101, 'y': 65, 'z': 100},
+            'target': {'x': 101, 'y': 65, 'z': 100, 'block': 'minecraft:air'},
+            'support': {'x': 101, 'y': 64, 'z': 100, 'block': 'minecraft:air'},
+            'expectedSupport': 'minecraft:farmland', 'dispatched': False,
+            'writePerformed': False, 'retryAutomatically': False,
+            'instruction': 'Inspect the requested crop cell and its support.',
+            'nativeReply': 'PRIVATE RAW EXCEPTION'}
+        lease_before = (self.state / 'lease.json').read_bytes()
+        with patch('world_actions.WorldActions.prepare', side_effect=error), \
+             patch('world_actions.WorldActions.dispatch') as dispatch:
+            result = self.client.action(TURN, 'farm', args)
+        self.assertEqual(result['code'], 'plant_requires_farmland')
+        self.assertEqual(result['farmPreflight']['requested'], error.details['requested'])
+        self.assertEqual(result['farmPreflight']['support'], error.details['support'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease_before)
+        self.assertFalse((self.state / 'unknown.json').exists())
+        dispatch.assert_not_called()
+        error.args = ('outside_construction_area',)
+        with patch('world_actions.WorldActions.prepare', side_effect=error):
+            self.assertNotIn('farmPreflight', self.client.action(TURN, 'farm', args))
 
     def test_world_dispatch_is_journaled_once_and_unknown_never_replays(self):
         self.lease()

@@ -526,8 +526,24 @@ class WorldActions:
                     raise GatewayError('invalid_planting_target_or_seed')
                 support = point | {'y': point['y'] - 1}
                 self._area(support, before, construction=True)
-                if self._block(support)['block'] != 'minecraft:farmland':
-                    raise GatewayError('plant_requires_farmland')
+                support_block = self._block(support)
+                if support_block['block'] != 'minecraft:farmland':
+                    # Both observations already belong to this preflight. Keep
+                    # the requested cell unchanged; a failed soil check is not
+                    # permission to search for or plant in another cell.
+                    error = GatewayError('plant_requires_farmland')
+                    error.details = {
+                        'schema': 1, 'kind': 'farm_preflight', 'operation': 'plant',
+                        'requested': point, 'target': block, 'support': support_block,
+                        'expectedSupport': 'minecraft:farmland',
+                        'dispatched': False, 'writePerformed': False, 'retryAutomatically': False,
+                        'instruction': '本次未种植。plant 的 x/y/z 是作物所在的空气格，'
+                            '其正下方一格 (x,y-1,z) 必须是 minecraft:farmland。'
+                            'target 和 support 是本次预检实际读取的方块；没有检查再下一层，'
+                            '也没有更改目标坐标。请根据这些观测核对作物格和耕地格，'
+                            '需要时用 inspect_block 再观察，然后自行选择下一步；'
+                            '仅改变站位不会改变请求格下方的方块。'}
+                    raise error
                 self._top_face(support, before)
                 plan['aim'] = support
                 plan['expected'] = [point | {'block': CROPS[item][0]}]

@@ -1,6 +1,6 @@
 """Pure fixture tests; never contact Qwen, trigger models or mutate the world."""
 import hashlib
-from contextlib import closing
+from contextlib import closing, ExitStack
 import importlib.util
 import json
 import os
@@ -77,7 +77,7 @@ class WorldTeamSmokeTests(unittest.TestCase):
                 mock.patch.object(smoke, 'team_metadata', return_value={}), \
                 mock.patch.object(smoke, 'admin_metadata', return_value={}), \
                 mock.patch.object(smoke, 'content_metadata', return_value={}), \
-                mock.patch.object(smoke, 'engineering_metadata', return_value={}), \
+                mock.patch.object(smoke, 'engineering_metadata', return_value={'status': 'passed'}), \
                 mock.patch.object(smoke, 'survivor_metadata', return_value={'enabled': True}):
             result = smoke.collect(self.root, request=request, probe=lambda root: {'ok': True})
         self.assertTrue(result['ok'], result['errors'])
@@ -87,8 +87,90 @@ class WorldTeamSmokeTests(unittest.TestCase):
         cron = result['nativeSchedules'][0]
         self.assertEqual(cron['sessionId'], 'world-team-operations-mc-god')
         self.assertEqual(cron['dedicatedSession']['usage']['input_tokens'], 7)
-        self.assertFalse(any(runtime == 'operations' and role == 'mc-god' for runtime, route, role in calls))
+        self.assertFalse(any(runtime == 'operations' for runtime, route, role in calls))
+        self.assertNotIn('operations-agents', result['checks'])
+        self.assertEqual(result['nativeRuntimes']['operations'],
+                         {'status': 'not_required', 'activeRoles': 0, 'queried': False})
         self.assertEqual(result['modelRequests'], 0)
+
+    def collect_roster(self, inventory, manifest, native_rows, baseline=None):
+        import world_team
+        import world_team_profiles as profiles
+        import world_team_schedule as schedule
+        import role_learning_profiles
+        from native_role_capabilities import NATIVE_SKILLS
+        path = self.write('server/team-state/runtime-hosts.json', manifest)
+        calls, bindings, authored = [], [], []
+        def request(runtime, route, role):
+            calls.append((runtime, route, role))
+            if route == '/agents': return {'agents': native_rows[runtime]}
+            if route == '/skills': return [{'name': name, 'enabled': True} for name in NATIVE_SKILLS]
+            raise AssertionError('unexpected native request')
+        def metadata(path, roster):
+            authored.extend(roster)
+            return {}
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.dict(os.environ, {'TEAM_RUNTIME_HOSTS_FILE': str(path)}))
+            stack.enter_context(mock.patch.object(world_team, 'members', return_value=inventory))
+            stack.enter_context(mock.patch.object(profiles, 'check_api', side_effect=lambda get, role, runtime: bindings.append((runtime,role))))
+            stack.enter_context(mock.patch.object(role_learning_profiles, 'role_skills', return_value=[]))
+            stack.enter_context(mock.patch.object(schedule, 'SCHEDULES', {}))
+            stack.enter_context(mock.patch.object(smoke, 'sha', return_value='0'*64))
+            stack.enter_context(mock.patch.object(smoke, 'team_metadata', side_effect=metadata))
+            for name in ('admin_metadata','content_metadata'):
+                stack.enter_context(mock.patch.object(smoke,name,return_value={}))
+            stack.enter_context(mock.patch.object(smoke,'engineering_metadata',return_value=baseline or {'status':'passed'}))
+            stack.enter_context(mock.patch.object(smoke,'survivor_metadata',return_value={'enabled':True}))
+            result=smoke.collect(self.root,request=request,probe=lambda root:{'ok':True})
+        return result,calls,bindings,authored
+
+    def migrated_roster(self):
+        import world_team_hosts as hosts
+        inventory={hosts.ENGINEER:('天神','scope'),'operations:mc-herald':('旧诊断','history'),
+                   'operations:mc-guard-naruto':('旧鸣人','history')}
+        manifest={'schema':2,'phases':{name:'active' for name in hosts.MIGRATIONS},
+                  'retired':['qd-diagnostics'],'dormant':['mc-guard-naruto']}
+        rows={'game':[{'id':'qd-engineer','enabled':True},{'id':'qd-diagnostics','enabled':False},
+                      {'id':'mc-guard-naruto','enabled':False}]}
+        return inventory,manifest,rows
+
+    def test_current_runtime_only_and_historical_authors_preserved_without_execution_checks(self):
+        inventory,manifest,rows=self.migrated_roster()
+        result,calls,bindings,authored=self.collect_roster(inventory,manifest,rows)
+        self.assertTrue(result['ok'],result['errors'])
+        self.assertEqual(set(authored),set(inventory))
+        self.assertEqual(bindings,[('game','qd-engineer')])
+        self.assertEqual([r['actor'] for r in result['roles']],['operations:mc-god'])
+        self.assertEqual({r['status'] for r in result['historicalRoles']},{'retired','dormant'})
+        self.assertTrue(all(r['executionRequired'] is False for r in result['historicalRoles']))
+        self.assertFalse(any(runtime=='operations' for runtime,_,_ in calls))
+        self.assertNotIn('role:operations:mc-herald',result['checks'])
+
+    def test_missing_active_extra_active_or_reenabled_archive_still_fails_roster(self):
+        for change in ('missing','unexpected','reactivated'):
+            inventory,manifest,rows=self.migrated_roster()
+            if change=='missing':rows['game'][0]['enabled']=False
+            elif change=='reactivated':rows['game'][1]['enabled']=True
+            else:rows['game'].append({'id':'unknown','enabled':True})
+            result,_,_,_=self.collect_roster(inventory,manifest,rows)
+            self.assertFalse(result['checks']['game-agents'],change)
+            self.assertFalse(result['configurationReady'],change)
+
+    def test_legacy_runtime_is_still_checked_when_it_has_an_active_role(self):
+        inventory={'operations:default':('司灯','scope')}
+        result,calls,bindings,_=self.collect_roster(inventory,{'schema':2,'phases':{}},
+            {'operations':[{'id':'default','enabled':True}]})
+        self.assertTrue(result['ok'])
+        self.assertIn(('operations','/agents','default'),calls)
+        self.assertEqual(bindings,[('operations','default')])
+        self.assertFalse(any(runtime=='game' for runtime,_,_ in calls))
+
+    def test_unknown_host_authority_is_not_silently_classified_as_history(self):
+        import world_team_hosts as hosts
+        inventory,manifest,rows=self.migrated_roster()
+        with mock.patch.object(hosts,'logical_actor',return_value=None):
+            with self.assertRaisesRegex(ValueError,'team_native_host_identity_invalid'):
+                self.collect_roster(inventory,manifest,rows)
 
     def test_trace_never_discloses_text_arguments_errors_or_domain_success(self):
         message = {'role': 'assistant', 'error': {'message': 'PRIVATE_ERROR'},
@@ -165,25 +247,26 @@ class WorldTeamSmokeTests(unittest.TestCase):
         self.assertNotIn('HIDDEN', json.dumps(result))
         self.assertTrue(all(runtime == 'game' and role == 'qd-survivor' for runtime, _, role in calls))
 
-    def engineering(self):
+    def engineering(self, baseline_id=None):
         from engineering_workspace import canonical, digest
+        baseline_id = baseline_id or smoke.BASELINE_ID
         folder = 'server/engineering/'
         test_body = b'assert True\n'
         test_sha = hashlib.sha256(test_body).hexdigest()
         entries = [{'path': 'tests/fixed.py', 'sha256': test_sha, 'mode': '100644', 'size': len(test_body)}]
         source = digest(canonical(entries))
         plan = {'id': 'fixed', 'image': 'sha256:' + '1' * 64, 'checks': {'tests/fixed.py': test_sha}}
-        request = {'schema': 1, 'role': 'mc-god', 'jobId': smoke.BASELINE_ID, 'planId': 'fixed',
+        request = {'schema': 1, 'role': 'mc-god', 'jobId': baseline_id, 'planId': 'fixed',
             'sourceSha256': source, 'planSha256': digest(canonical(plan)), 'baseCommit': 'a' * 40,
             'head': 'a' * 40, 'branch': 'codex/ops-fixture'}
-        self.write(folder + 'requests/' + smoke.BASELINE_ID + '.json', request)
+        self.write(folder + 'requests/' + baseline_id + '.json', request)
         receipt = request | {'status': 'passed', 'exitCode': 0, 'imageId': plan['image'], 'containerRemoved': True,
             'log': 'Ran 8 tests in 0.01s\nOK\n'}
-        path = self.write(folder + 'receipts/' + smoke.BASELINE_ID + '.json', receipt)
+        path = self.write(folder + 'receipts/' + baseline_id + '.json', receipt)
         self.write(folder + 'config.json', {'plans': [plan]})
         self.write(folder + 'snapshots/' + source + '/manifest.json', {'sourceSha256': source, 'entries': entries})
         source_path = self.root / folder / 'snapshots' / source / 'source/tests/fixed.py'
-        source_path.parent.mkdir(parents=True)
+        source_path.parent.mkdir(parents=True, exist_ok=True)
         source_path.write_bytes(test_body)
         return path, receipt, source_path
 
@@ -202,6 +285,56 @@ class WorldTeamSmokeTests(unittest.TestCase):
             path.write_text(json.dumps(receipt | patch))
             with self.assertRaises(ValueError):
                 smoke.engineering_metadata(self.root)
+
+    def test_migrated_old_plan_stays_unverified_with_clear_reason_and_intact_history(self):
+        path,receipt,_=self.engineering(smoke.HISTORICAL_BASELINE_ID)
+        original=path.read_bytes()
+        self.write('server/engineering/config.json',{'plans':[{'id':'replacement-plan'}]})
+        baseline=smoke.engineering_metadata(self.root, smoke.HISTORICAL_BASELINE_ID)
+        self.assertEqual(baseline['status'],'not_verified')
+        self.assertEqual(baseline['code'],'engineering_baseline_plan_not_current')
+        self.assertEqual(baseline['recordedPlanId'],'fixed')
+        self.assertEqual(baseline['currentPlanIds'],['replacement-plan'])
+        self.assertFalse(baseline['currentPlanVerified'])
+        self.assertEqual(path.read_bytes(),original)
+        inventory,manifest,rows=self.migrated_roster()
+        result,_,_,_=self.collect_roster(inventory,manifest,rows,baseline=baseline)
+        self.assertTrue(result['configurationReady'])
+        self.assertFalse(result['checks']['engineering-baseline'])
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['errors']['engineering-baseline'],'engineering_baseline_plan_not_current')
+        path.write_text(json.dumps(receipt|{'jobId':'unrelated'}))
+        with self.assertRaisesRegex(ValueError,'receipt_identity_mismatch'):
+            smoke.engineering_metadata(self.root, smoke.HISTORICAL_BASELINE_ID)
+
+    def test_baseline_migration_is_explicit_and_preserves_historical_receipt(self):
+        old, _, _ = self.engineering(smoke.HISTORICAL_BASELINE_ID)
+        original = old.read_bytes()
+        current, _, _ = self.engineering()
+        self.assertNotEqual(smoke.BASELINE_ID, smoke.HISTORICAL_BASELINE_ID)
+        self.assertEqual(smoke.engineering_metadata(self.root)['jobId'], smoke.BASELINE_ID)
+        self.assertEqual(smoke.engineering_metadata(self.root, smoke.HISTORICAL_BASELINE_ID)['jobId'],
+                         smoke.HISTORICAL_BASELINE_ID)
+        self.assertEqual(old.read_bytes(), original)
+        current.unlink()
+        # A historical passed job is never silently substituted for the exact
+        # selected baseline, even when its source and plan are identical.
+        with self.assertRaises(FileNotFoundError):
+            smoke.engineering_metadata(self.root)
+        self.assertEqual(old.read_bytes(), original)
+
+    def test_baseline_selector_and_request_role_cannot_escape_identity_checks(self):
+        self.engineering()
+        for value in ('../other', '/tmp/other', 'x', None):
+            with mock.patch.object(smoke, 'read') as reader:
+                with self.assertRaisesRegex(ValueError, 'baseline_id_invalid'):
+                    smoke.engineering_metadata(self.root, value)
+                reader.assert_not_called()
+        request = self.root / 'server/engineering/requests' / (smoke.BASELINE_ID + '.json')
+        data = json.loads(request.read_text())
+        request.write_text(json.dumps(data | {'role': 'other'}))
+        with self.assertRaisesRegex(ValueError, 'receipt_identity_mismatch'):
+            smoke.engineering_metadata(self.root)
 
 
 if __name__ == '__main__':

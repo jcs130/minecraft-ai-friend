@@ -3,7 +3,7 @@
   "neoforge": "21.1.248",
   "java_release": 21,
   "jar": "D:\\Projects\\QiandengJi\\world\\botgate-src\\botgate.jar",
-  "sha256": "6ca6c1ed262417187a0447e727c3a753a8b82d4d50e30442b64a55ff2b15022a",
+  "sha256": "0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc",
   "sources": {
     "botgate.mixins.json": "832d41358b5c5d0224e87295f16835a10317ec0efe0c9063089051f9d4a43ff5",
     "build-121/neoforge.mods.toml": "57b2882715029edc1b8f8ae66ee7b99c90549579ceeab7dc36a8cdb93304804b",
@@ -29,13 +29,12 @@
     "dev/god/botgate/mixin/FlyBootMixin.java": "2d8a92e33b0b626469f05146cb216f1d1a9164da4d169cd7186519bbe99d0d17",
     "dev/god/botgate/mixin/ItemPacketGateForNonNeoForgeMixin.java": "0fe50016bf892b36d81f4ce45fda8ba614cc1a0ef582abee09335d47eddfbf98",
     "dev/god/botgate/mixin/PayloadRegistrarForceOptionalMixin.java": "5527e04cb7ba86c6ec6d07c178afe10d18f22dbb35cc585e19ac7fe1831df03f",
-    "dev/god/botgate/mixin/RconFrameReadMixin.java": "0e26672b163ad5eee25cf54a165f6276b22a70b2988b76851effd2dcf33285ec",
+    "dev/god/botgate/mixin/RconFrameReadMixin.java": "5a89a81a1d62de0dbc6bacb8de8cdf4d32bf4bac4a4be226d2af421deaa51b0f",
     "dev/god/botgate/mixin/RecipePacketGateForNonNeoForgeMixin.java": "8be2490e395174a17db09bf0872820bf2e1bb6c14cbcf9aa954de8cdfe0e424f",
     "dev/god/botgate/mixin/SkillBookUseMixin.java": "e0c8109f93cfbd791d41aeeb17896c5e6832fa895fa76d032888a02b67d80e16",
     "dev/god/botgate/mixin/SkillChestBootMixin.java": "f84be9d7bddce660e1bee6eb2ebdf2d4733e6d2e38afbe60d41139cdb9846a46",
     "dev/god/botgate/mixin/SkillItemUseMixin.java": "babfa7e561ac81ee4761b44d90243bb79fafdfe283789d92e6cdcc2eb214d05e",
-    "dev/god/botgate/mixin/WeaponSkillMixin.java": "90c67cc2a1243ca77b5a87dc242e7e7ad469cbc4c15d86115930a842bdb82e34",
-    "dev/god/botgate/RconCommandTransaction.java": "591a8db59b70a077c7819b120bf51d10354be5678a23a0a97a1c0bb8fa70891c"
+    "dev/god/botgate/mixin/WeaponSkillMixin.java": "90c67cc2a1243ca77b5a87dc242e7e7ad469cbc4c15d86115930a842bdb82e34"
   },
   "classpath": {
     "net\\neoforged\\neoforge\\21.1.248\\neoforge-21.1.248-server.jar": "1808fab692dc44b2d474295d1cdd9f1fe8a7dceab4f594210873646fafdf1359",
@@ -107,38 +106,5 @@
     "org\\joml\\joml\\1.10.5\\joml-1.10.5.jar": "cac9f22f83a7aa33eebda73c16ff5261e3cb4911b6bafcf4c79ea486099d0c9a",
     "org\\lz4\\lz4-java\\1.8.0\\lz4-java-1.8.0.jar": "d74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef",
     "net\\neoforged\\neoforge\\21.1.248\\neoforge-21.1.248-universal.jar": "90a56f70425711b4e1a4b94ff0c2904ae9f6d74ca6478b3b2152ac794a07b8e5"
-  },
-  "incremental_build": {
-    "schema": 1,
-    "minecraft": "1.21.1",
-    "neoforge": "21.1.248",
-    "javaRelease": 21,
-    "marker": "rcon-command-transaction-v1",
-    "jar": "D:\\Projects\\QiandengJi\\runtime\\botgate-rcon-transaction-build\\71ee26bb8d1e\\botgate.jar",
-    "sha256": "6ca6c1ed262417187a0447e727c3a753a8b82d4d50e30442b64a55ff2b15022a",
-    "baseJar": "D:\\Projects\\QiandengJi\\server\\mc\\mods\\botgate.jar",
-    "baseSha256": "0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc",
-    "nativeClassSha256": {
-      "net/minecraft/server/rcon/thread/RconClient.class": "6526d9619e7afcb767bc67255357c47f6763d261fe97494d4c653aababf684f2",
-      "net/minecraft/server/dedicated/DedicatedServer.class": "b5f39364751dd9c38b0ff9604e2193e6d20abb49b453e45ebf263d00c480658c",
-      "net/minecraft/server/rcon/RconConsoleSource.class": "86c59f0d57d8ded0794c9a38b7a8c7d741b1c4870d23d0294b992d90e5ae1940"
-    },
-    "sourceFiles": {
-      "tools/build_botgate_rcon_transaction.py": "984505cc0c1c6103d221b14fce56c29be654ea415a1349011db08502d4a739dd",
-      "world/botgate-src/build.py": "b81372f87482aa01d1c52edfdca02026a702e70b6f18f07049716e94e79e7f6d",
-      "world/botgate-src/dev/god/botgate/RconCommandTransaction.java": "591a8db59b70a077c7819b120bf51d10354be5678a23a0a97a1c0bb8fa70891c",
-      "world/botgate-src/dev/god/botgate/mixin/RconFrameReadMixin.java": "0e26672b163ad5eee25cf54a165f6276b22a70b2988b76851effd2dcf33285ec"
-    },
-    "changedEntries": [
-      "dev/god/botgate/mixin/RconFrameReadMixin.class"
-    ],
-    "addedEntries": [
-      "dev/god/botgate/RconCommandTransaction.class"
-    ],
-    "otherEntriesIdentical": true,
-    "productionJarUnchanged": true,
-    "deployed": true,
-    "baseRecordSha256": "bcb99ca06f11839ac5395691a67c6eb8c09d3bdee4c184debd52a8c79facedef",
-    "baseRecord": "world/botgate-src/history/build-0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc.json"
   }
 }

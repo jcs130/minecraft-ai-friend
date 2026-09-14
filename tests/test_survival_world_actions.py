@@ -441,6 +441,50 @@ class WorldActionTests(unittest.TestCase):
             self.prepare('farm', {**POINT, 'operation': 'harvest', 'item_id': None})
         self.assertFalse(self.gateway.mutations())
 
+    def test_plant_height_error_returns_only_existing_preflight_observations(self):
+        soil = POINT | {'y': 63}
+        self.gateway.set_block(soil, 'minecraft:farmland', {'moisture': '7'})
+        requested = POINT | {'y': 65}
+        args = requested | {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds'}
+        original = copy.deepcopy(args)
+        before = self.gateway.snapshot()
+        with self.assertRaisesRegex(GatewayError, '^plant_requires_farmland$') as caught:
+            self.prepare('farm', args)
+        detail = caught.exception.details
+        self.assertEqual(detail['kind'], 'farm_preflight')
+        self.assertEqual(detail['operation'], 'plant')
+        self.assertEqual(detail['requested'], requested)
+        self.assertEqual({k: detail['target'][k] for k in POINT}, requested)
+        self.assertEqual({k: detail['support'][k] for k in POINT}, POINT)
+        self.assertEqual(detail['target']['block'], 'minecraft:air')
+        self.assertEqual(detail['support']['block'], 'minecraft:air')
+        self.assertEqual(detail['target']['observedAt'], self.gateway._now())
+        self.assertEqual(detail['support']['observedAt'], self.gateway._now())
+        self.assertEqual(detail['expectedSupport'], 'minecraft:farmland')
+        self.assertIs(detail['dispatched'], False)
+        self.assertIs(detail['writePerformed'], False)
+        self.assertIs(detail['retryAutomatically'], False)
+        self.assertEqual(args, original)
+        self.assertEqual(self.gateway.snapshot(), before)
+        self.assertEqual(self.gateway.calls, [('inspect_block', requested), ('inspect_block', POINT)])
+        self.assertFalse(list(self.state.iterdir()))
+
+    def test_plant_diagnostic_reports_observed_support_and_preserves_other_rejections(self):
+        support = POINT | {'y': 63}
+        self.gateway.set_block(support, 'minecraft:stone')
+        with self.assertRaisesRegex(GatewayError, '^plant_requires_farmland$') as caught:
+            self.prepare('farm', POINT | {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds'})
+        self.assertEqual(caught.exception.details['support']['block'], 'minecraft:stone')
+        self.assertEqual({k: caught.exception.details['support'][k] for k in POINT}, support)
+        self.assertEqual(len(self.gateway.calls), 2)
+        self.gateway.calls.clear()
+        self.gateway.set_block(POINT, 'minecraft:farmland')
+        with self.assertRaisesRegex(GatewayError, '^invalid_planting_target_or_seed$') as occupied:
+            self.prepare('farm', POINT | {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds'})
+        self.assertFalse(hasattr(occupied.exception, 'details'))
+        self.assertEqual(self.gateway.calls, [('inspect_block', POINT)])
+        self.assertFalse(self.gateway.mutations())
+
     def open_storage(self):
         self.gateway.set_block(POINT, 'minecraft:chest')
         self.own(POINT, 'minecraft:chest')

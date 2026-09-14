@@ -288,9 +288,13 @@ class NumenGateway:
         try:
             result = json.loads(raw)
         except (ValueError, TypeError):
-            raise GatewayError('numen_reply_invalid')
+            error = GatewayError('numen_reply_invalid')
+            error.native_reply = raw
+            raise error
         if not isinstance(result, dict):
-            raise GatewayError('numen_reply_invalid')
+            error = GatewayError('numen_reply_invalid')
+            error.native_reply = raw
+            raise error
         return result
 
     def snapshot(self):
@@ -874,6 +878,7 @@ class NumenGateway:
                 write_json(index, {'schema': 1, 'turnId': turn_id, 'actionIds': ids + [action_id]})
                 self._save_receipt({**marker, 'schema': 2, 'status': 'unknown', 'completionConfirmed': False})
                 self._record({**marker, 'phase': 'dispatching'})
+                reply = None
                 try:
                     if tool == 'eat':
                         from food_actions import FoodActions
@@ -937,6 +942,27 @@ class NumenGateway:
                     result = {'ok': False, 'code': 'outcome_unknown', 'actionId': action_id,
                               'notice': 'Do not resend. Inspect body and ask the operator to reconcile.',
                               'errorType': type(exc).__name__}
+                    # A native task can start before its reply fails. Preserve
+                    # the actual private response for diagnosis; never turn it
+                    # into success, infer an ACK, or replay the command.
+                    import hashlib
+                    raw = getattr(exc, 'native_reply', None)
+                    if not isinstance(raw, str) and isinstance(reply, dict):
+                        raw = json.dumps(reply, ensure_ascii=False)
+                    code = str(exc) if isinstance(exc, GatewayError) else ''
+                    code = code if re.fullmatch(r'[a-z][a-z0-9_]{0,79}', code) else None
+                    diagnostic = {'schema': 1, 'actionId': action_id, 'turnId': turn_id,
+                        'tool': tool, 'recordedAt': self._now(), 'errorType': type(exc).__name__,
+                        'errorCode': code, 'nativeReplyAvailable': isinstance(raw, str)}
+                    if isinstance(raw, str):
+                        data = raw.encode('utf-8')
+                        diagnostic.update(nativeReply=raw[:16000], nativeReplySha256=hashlib.sha256(data).hexdigest(),
+                                          nativeReplyTruncated=len(raw) > 16000)
+                    try:
+                        write_json(self.state / 'native-action-diagnostics' / (action_id + '.json'), diagnostic)
+                        result['nativeDiagnosticRecorded'] = True
+                    except (OSError, ValueError, TypeError):
+                        result['nativeDiagnosticRecorded'] = False
                     diagnostic_path = self.state / 'world-interaction-receipts' / (action_id + '.json')
                     if tool in ('place_block', 'farm', 'open_container') and diagnostic_path.exists():
                         try:
@@ -948,6 +974,20 @@ class NumenGateway:
                     self._record({**marker, 'phase': 'response', 'result': result, 'finishedAt': self._now()})
                     return result
         except GatewayError as exc:
-            return {'ok': False, 'code': str(exc)}
+            result = {'ok': False, 'code': str(exc)}
+            details = getattr(exc, 'details', None)
+            # Only this pre-dispatch observation contract is model-facing.
+            # Raw native responses and arbitrary exception metadata stay private.
+            if (str(exc) == 'plant_requires_farmland' and tool == 'farm'
+                    and isinstance(details, dict) and details.get('schema') == 1
+                    and details.get('kind') == 'farm_preflight'
+                    and details.get('operation') == 'plant'
+                    and details.get('dispatched') is False
+                    and details.get('writePerformed') is False):
+                result['farmPreflight'] = {key: details[key] for key in (
+                    'schema', 'kind', 'operation', 'requested', 'target', 'support',
+                    'expectedSupport', 'dispatched', 'writePerformed',
+                    'retryAutomatically', 'instruction') if key in details}
+            return result
         except (OSError, ValueError, TypeError, KeyError):
             return {'ok': False, 'code': 'gateway_unavailable'}

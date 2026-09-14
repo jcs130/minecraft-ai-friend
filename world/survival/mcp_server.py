@@ -117,10 +117,23 @@ class SkillTools:
                  goal_state='ongoing', review_after_seconds=1800, finish_turn=False, summary=''):
         from numen_gateway import read_json, write_json, GatewayError
         def save(_):
-            if type(finish_turn) is not bool or not isinstance(summary, str) or len(summary) > 600 or '\0' in summary:
-                raise GatewayError('invalid_turn_completion')
-            if finish_turn and (not summary.strip() or '<tool' in summary.lower() or '</tool' in summary.lower()):
-                raise GatewayError('invalid_turn_completion')
+            completion_valid = (type(finish_turn) is bool and isinstance(summary, str)
+                and len(summary) <= 600 and '\0' not in summary
+                and (not finish_turn or (bool(summary.strip())
+                     and '<tool' not in summary.lower() and '</tool' not in summary.lower())))
+            if not completion_valid:
+                # This branch runs after the original lease check but before
+                # any write. Name the invalid field so the model can correct
+                # its own request, without inventing a summary or a new ID.
+                return {'ok': False, 'code': 'invalid_turn_completion',
+                    'memorySaved': False, 'turnFinished': False, 'writePerformed': False,
+                    'retryAutomatically': False,
+                    'fields': {'finish_turn': 'boolean',
+                               'summary': 'finish_turn=true 时必须同时提供1–600字非空纯文本，不能含工具XML或空字符'},
+                    'instruction': '这是结束参数校验失败，不是lease_invalid；本次记忆没有保存，回合没有结束。'
+                        'finish_turn=true 必须同时传 summary，例如 summary="本轮观察已记录，等待后续观察。"，'
+                        '请用你自己对实际结果的简短总结替换例文。不要修改lesson来解决缺少summary，也不要另造turn_id。'
+                        '可在原租约仍有效时使用本轮原turn_id补齐summary；只存中途进度则用finish_turn=false。'}
             values = {'goal': goal, 'lesson': lesson, 'nextFocus': next_focus}
             if any(not isinstance(text, str) or len(text) > 1000 for text in values.values()):
                 raise GatewayError('invalid_memory_text')
@@ -319,7 +332,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def farm(turn_id: str, operation: str, x: int, y: int, z: int, item_id: str | None = None) -> dict:
-        """建设区内正常耕作：till(土格+锄ID)、plant(土上空气格+种子ID)、harvest(成熟作物格，item_id=null)。检查真实土壤/age与物品；消耗一次动作。"""
+        """建设区内正常耕作。till：x/y/z 是要锄的泥土/草方块格，item_id=锄ID；plant：x/y/z 是作物应占的空气格，其下方 (x,y-1,z) 必须是耕地，item_id=种子ID；harvest：x/y/z 是成熟作物格，item_id=null。比如耕地 y=63，种植和采收用 y=64，不是玩家眼睛高度，也不再加一层。先用 inspect_block 核实目标/下方方块与 age；改变站位不会纠正错误的目标高度。检查真实物品，执行后核对回执。"""
         return gateway.action(turn_id, 'farm', {'operation': operation, 'item_id': item_id, 'x': x, 'y': y, 'z': z})
 
     @server.tool()

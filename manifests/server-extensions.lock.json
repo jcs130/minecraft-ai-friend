@@ -8,7 +8,7 @@
   "files": [
     {
       "path": "server/mc/mods/botgate.jar",
-      "sha256": "0705a6f9e44b8851833328c094b2295bc5014c1280522b7059a743ba7c21a0bc",
+      "sha256": "6ca6c1ed262417187a0447e727c3a753a8b82d4d50e30442b64a55ff2b15022a",
       "client_required": false
     },
     {

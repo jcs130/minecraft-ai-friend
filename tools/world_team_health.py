@@ -24,7 +24,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'world/ops'), str(ROOT / 'world/sidecar')]
 PORTS = {'game': 18089, 'operations': 18090}
 CONTENT_ID = 'content-fd5881ee422e68c006ecc176'
-BASELINE_ID = 'world-team-baseline-20260909'
+# Explicitly migrated only after the current approved plan passed its formal
+# runner. Historical IDs remain readable; never select an arbitrary passed job.
+HISTORICAL_BASELINE_ID = 'world-team-baseline-20260909'
+BASELINE_ID = 'world-team-baseline-20260914-current-plan-01'
 SOURCE_FILES = ('world/ops/world_team.py', 'world/ops/world_team_mcp.py',
     'world/ops/world_team_hosts.py', 'world/ops/cron_guard.py',
     'world/ops/world_team_profiles.py', 'world/ops/world_team_schedule.py', 'world/ops/engineering_cron_runtime.py',
@@ -178,18 +181,34 @@ def content_metadata(root):
             'playerCompletionVerified': False, 'receiptSha256': sha(folder / 'receipts' / (CONTENT_ID + '.json'))}
 
 
-def engineering_metadata(root):
+def engineering_metadata(root, baseline_id=BASELINE_ID):
     from engineering_workspace import canonical, digest, relative
+    require(isinstance(baseline_id, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{7,79}', baseline_id),
+            'engineering_baseline_id_invalid')
     folder = root / 'server/engineering'
-    request = read(folder / 'requests' / (BASELINE_ID + '.json'))
-    receipt = read(folder / 'receipts' / (BASELINE_ID + '.json'))
+    request = read(folder / 'requests' / (baseline_id + '.json'))
+    receipt = read(folder / 'receipts' / (baseline_id + '.json'))
     config = read(folder / 'config.json')
-    plan = next(p for p in config['plans'] if p['id'] == receipt['planId'])
-    require(receipt.get('schema') == 1 and receipt.get('jobId') == BASELINE_ID
+    require(request.get('schema') == 1 and request.get('role') == 'mc-god'
+            and request.get('jobId') == baseline_id
+            and receipt.get('schema') == 1 and receipt.get('jobId') == baseline_id
             and receipt.get('role') == 'mc-god'
             and all(receipt.get(k) == request.get(k) for k in
                     ('jobId', 'sourceSha256', 'planSha256', 'baseCommit', 'branch', 'head', 'planId')),
             'engineering_receipt_identity_mismatch')
+    plans = [p for p in config['plans'] if p['id'] == receipt['planId']]
+    require(len(plans) <= 1, 'engineering_duplicate_plan_id')
+    if not plans:
+        # This old receipt cannot certify a different approved plan. Keep the
+        # missing current-baseline evidence visible, without altering history.
+        return {'jobId': baseline_id, 'status': 'not_verified',
+            'code': 'engineering_baseline_plan_not_current',
+            'recordedPlanId': receipt['planId'], 'currentPlanIds': [p['id'] for p in config['plans']],
+            'recordedReceiptStatus': receipt.get('status'), 'currentPlanVerified': False,
+            'candidateFixDeployed': 'not_verified',
+            'reason': '旧基线的计划已不在当前批准配置中；迁移后的计划尚未由此记录验证。',
+            'scope': 'Historical receipt retained; no current baseline test or deployment was run.'}
+    plan = plans[0]
     require(receipt.get('status') == 'passed' and receipt.get('exitCode') == 0
             and receipt.get('containerRemoved') is True and receipt.get('imageId') == plan['image']
             and receipt.get('planSha256') == digest(canonical(plan)), 'engineering_baseline_not_passed')
@@ -202,7 +221,7 @@ def engineering_metadata(root):
     for name, expected in plan['checks'].items():
         require(sha(snapshot / 'source' / relative(name)) == expected, 'engineering_fixed_test_mismatch')
     counts = re.findall(r'Ran ([0-9]+) tests? in ', receipt.get('log', ''))
-    return {'jobId': BASELINE_ID, 'status': 'passed', 'exitCode': 0, 'fixedChecksVerified': len(plan['checks']),
+    return {'jobId': baseline_id, 'status': 'passed', 'exitCode': 0, 'fixedChecksVerified': len(plan['checks']),
             'testsReported': int(counts[-1]) if counts else None, 'sourceSha256': source_sha,
             'imageId': receipt['imageId'], 'finishedAt': receipt.get('finishedAt'),
             'candidateFixDeployed': 'not_verified',
@@ -281,9 +300,29 @@ def member_identity(actor, inventory):
     return {'actor': actor, 'displayName': inventory[actor][0]}
 
 
+def execution_roster(inventory):
+    """Separate current execution authority from retained historical authors."""
+    from world_team_hosts import native_inventory, archived_game_targets, logical_actor
+    hosts = native_inventory(inventory)
+    retired, dormant = archived_game_targets()
+    active, historical = {}, []
+    for actor, host in hosts.items():
+        current = logical_actor(host['runtime'], host['agentId'])
+        archived = host['runtime'] == 'game' and host['agentId'] in retired | dormant
+        if archived:
+            require(current is None, 'archived_team_role_has_execution_authority')
+            historical.append(member_identity(actor, inventory) | {'nativeHost': host,
+                'status': 'retired' if host['agentId'] in retired else 'dormant',
+                'executionRequired': False})
+        else:
+            require(current == actor, 'team_native_host_identity_invalid')
+            active[actor] = host
+    return active, historical
+
+
 def collect(root=ROOT, request=api, probe=process_probe):
     from world_team import members
-    from world_team_hosts import native_inventory, host_config
+    from world_team_hosts import host_config
     from world_team_profiles import check_api
     from world_team_schedule import SCHEDULES, team_job, validate_team_job
     from role_learning_profiles import role_skills
@@ -294,10 +333,11 @@ def collect(root=ROOT, request=api, probe=process_probe):
     os.environ.setdefault('TEAM_RUNTIME_HOSTS_FILE', str(root / 'server/team-state/runtime-hosts.json'))
     os.environ.setdefault('TEAM_SPECIALISTS_FILE', str(root / 'server/team-state/specialists.json'))
     inventory = members()
-    hosts = native_inventory(inventory)
+    hosts, historical = execution_roster(inventory)
     report = {'schema': 1, 'project': 'qiandengji', 'checkedAt': datetime.now(timezone.utc).isoformat(),
         'modelRequests': 0, 'worldActions': 0, 'cronTriggers': 0, 'mcpInvocations': 0,
-        'checks': {}, 'roles': [], 'nativeSchedules': [], 'sections': {}, 'errors': {},
+        'checks': {}, 'roles': [], 'historicalRoles': historical, 'nativeRuntimes': {},
+        'nativeSchedules': [], 'sections': {}, 'errors': {},
         'nativeHostPhase': host_config()['phase'],
         'sourceHashes': {name: sha(root / name) for name in SOURCE_FILES}}
     def stage(name, fn):
@@ -308,13 +348,20 @@ def collect(root=ROOT, request=api, probe=process_probe):
             # Exception messages can contain private tool outputs or paths.
             report['errors'][name] = type(error).__name__
             return None
-    refs = {runtime: stage(runtime + '-agents', lambda runtime=runtime:
-            request(runtime, '/agents', 'mc-god' if runtime == 'game' else 'default')['agents']) for runtime in PORTS}
-    for runtime, rows in refs.items():
+    refs = {}
+    for runtime in PORTS:
         expected = {row['agentId'] for row in hosts.values() if row['runtime'] == runtime}
+        if not expected:
+            report['nativeRuntimes'][runtime] = {'status': 'not_required', 'activeRoles': 0, 'queried': False}
+            continue
+        role = sorted(expected)[0]
+        rows = stage(runtime + '-agents', lambda runtime=runtime, role=role:
+                     request(runtime, '/agents', role)['agents'])
+        refs[runtime] = rows
+        report['nativeRuntimes'][runtime] = {'status': 'checked', 'activeRoles': len(expected), 'queried': True}
         report['checks'][runtime + '-agents'] = isinstance(rows, list) and {
             row['id'] for row in rows if row.get('enabled') is True} == expected
-    for actor in inventory:
+    for actor in hosts:
         runtime, role = hosts[actor]['runtime'], hosts[actor]['agentId']
         def role_check():
             require(any(r['id'] == role and r.get('enabled') is True for r in refs[runtime] or []), 'role_not_enabled')
@@ -328,9 +375,10 @@ def collect(root=ROOT, request=api, probe=process_probe):
         result = stage('role:' + actor, role_check)
         report['roles'].append(result or member_identity(actor, inventory) | {'nativeBindingsVerified': False})
     for actor in SCHEDULES:
-        runtime, role = hosts[actor]['runtime'], hosts[actor]['agentId']
         def schedule_check():
             from engineering_cron_runtime import execution_policy
+            require(actor in hosts, 'scheduled_role_not_active')
+            runtime, role = hosts[actor]['runtime'], hosts[actor]['agentId']
             expected = team_job(actor); job_id = expected['id']
             row = request(runtime, '/cron/jobs/' + job_id, role)
             validate_team_job(row['spec'], actor)
@@ -357,6 +405,11 @@ def collect(root=ROOT, request=api, probe=process_probe):
                      ('published-story', lambda: content_metadata(root)), ('engineering-baseline', lambda: engineering_metadata(root)),
                      ('survivor-life', lambda: survivor_metadata(root, request=request)), ('process-health', lambda: probe(root))):
         report['sections'][name] = stage(name, fn)
+        if name == 'engineering-baseline' and report['sections'][name] is not None:
+            baseline = report['sections'][name]
+            report['checks'][name] = baseline.get('status') == 'passed'
+            if not report['checks'][name]:
+                report['errors'][name] = baseline.get('code', 'engineering_baseline_not_verified')
     report['checks']['process-health'] = report['checks']['process-health'] and report['sections']['process-health'].get('ok') is True
     report['configurationReady'] = all(v for k, v in report['checks'].items()
                                        if k.startswith(('role:', 'schedule:')) or k.endswith('-agents'))

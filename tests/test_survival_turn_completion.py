@@ -59,6 +59,24 @@ class TurnCompletionTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertIsNone(completion_summary(self.agent))
 
+    def test_missing_summary_names_field_without_saving_or_closing_and_can_be_corrected(self):
+        self.fixture(finish_turn=False)
+        saved = (self.state / 'memory.json').read_bytes()
+        lease = (self.state / 'lease.json').read_bytes()
+        _, rejected = self.fixture(summary='')
+        self.assertEqual(rejected['code'], 'invalid_turn_completion')
+        self.assertIn('summary', rejected['fields'])
+        self.assertFalse(rejected['memorySaved'])
+        self.assertFalse(rejected['writePerformed'])
+        self.assertFalse(rejected['turnFinished'])
+        self.assertIsNone(completion_summary(self.agent))
+        self.assertEqual((self.state / 'memory.json').read_bytes(), saved)
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease)
+        _, corrected = self.fixture(summary='已完成本轮观察。')
+        self.assertTrue(corrected['memorySaved'])
+        self.assertEqual(completion_summary(self.agent), '已完成本轮观察。')
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease)
+
     def test_old_reply_other_role_other_tool_and_unmatched_receipt_cannot_end(self):
         self.fixture()
         original = copy.deepcopy(self.agent)
