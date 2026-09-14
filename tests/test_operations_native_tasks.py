@@ -1,6 +1,7 @@
 """Run in the operations image: deterministic task/budget tests, no model calls."""
 import importlib.util
 import json
+from copy import deepcopy
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -54,6 +55,81 @@ class NativeTaskTests(unittest.TestCase):
         self.assertIsNone(native.DAILY_LIMIT); self.assertEqual(native.COOLDOWN,0)
         self.assertIsNone(native.budget_check([{'startedAt':now,'status':'completed'}]*500,now))
         self.assertEqual(native.budget_check([{'startedAt':0,'status':'submission_uncertain'}],now),'operations_task_unresolved')
+
+    def test_new_terminal_at_pending_head_survives_full_history_compaction(self):
+        old = [{'runId': 'old-'+str(i), 'status': 'completed', 'startedAt': i,
+                'finishedAt': i + 1} for i in range(100)]
+        current = {'runId': 'newest', 'status': 'cron_reserved', 'startedAt': 1000}
+        unknown = {'runId': 'unknown', 'status': 'submission_uncertain', 'startedAt': 0}
+        with native.ledger() as rows:
+            rows.extend([current, unknown, *old])
+        self.assertTrue(native.finish_run('newest', 'completed', nativeStatus='success'))
+        with native.ledger() as rows:
+            self.assertEqual(len(rows), 101)
+            self.assertEqual(next(r for r in rows if r['runId'] == 'newest')['status'], 'completed')
+            self.assertEqual(next(r for r in rows if r['runId'] == 'unknown'), unknown)
+            self.assertNotIn('old-0', {r['runId'] for r in rows})
+            self.assertIn('old-99', {r['runId'] for r in rows})
+
+    def test_terminal_retention_uses_completion_order_not_start_or_row_position(self):
+        slow = {'runId': 'slow', 'status': 'completed', 'startedAt': 1, 'finishedAt': 500}
+        quick = {'runId': 'quick', 'status': 'failed', 'startedAt': 400, 'finishedAt': 401}
+        cancelled = {'runId': 'cancelled', 'status': 'cancelled', 'startedAt': 402, 'finishedAt': 403}
+        rows = [slow, quick, cancelled]
+        self.assertEqual(native.compact_ledger(rows, 2), [cancelled, slow])
+        self.assertEqual(rows, [slow, quick, cancelled])
+
+    def engineer_fixture(self):
+        row = {'role': 'mc-god', 'jobId': 'qd-team-engineer', 'status': 'cron_reserved',
+            'taskId': None, 'nativeHost': {'runtime': 'game', 'agentId': 'qd-engineer'},
+            'source': 'native-qwen-world-cron', 'runId': 'world-engineer-original',
+            'requestId': 'world-engineer-original', 'startedAt': 100}
+        evidence = {'ok': True, 'policy': 'no_total_deadline', 'runningEvidence': {
+            'verified': True, 'checks': {key: True for key in ('nativeCronRunning', 'guardOwnsCycleLock',
+                'cycleIdentity', 'originalReservation', 'startOwnership')},
+            'checkedAt': 200, 'actor': 'operations:mc-god', 'jobId': 'qd-team-engineer',
+            'reservationRunId': row['runId'], 'reservationStartedAt': row['startedAt']}}
+        return row, evidence
+
+    def test_only_exact_daily_can_overlap_verified_engineer_without_releasing_it(self):
+        from world_operations import JOB_ID
+        row, evidence = self.engineer_fixture()
+        with native.ledger() as rows: rows.append(deepcopy(row))
+        with patch.object(native, 'target_host', return_value={'runtime':'game','agentId':'qd-steward'}), \
+                patch.object(native, 'engineering_overlap_evidence', return_value=evidence), \
+                patch.object(native.time, 'time', return_value=200), patch.object(native, 'api') as api:
+            result = native.reserve_operation('default', JOB_ID)
+            self.assertTrue(result['ok'])
+            api.assert_not_called()
+            self.assertEqual(native.reserve_operation('default', JOB_ID)['code'], 'operations_task_unresolved')
+        with native.ledger() as rows:
+            self.assertEqual(next(r for r in rows if r['runId']==row['runId']), row)
+            daily = next(r for r in rows if r['runId']==result['runId'])
+            self.assertEqual(daily['parallelWithVerifiedRun'], {'runId':row['runId'],'verifiedAt':200})
+            self.assertEqual(len(rows), 2)
+
+    def test_daily_overlap_rejects_unknown_foreign_other_jobs_and_incomplete_proof(self):
+        from world_operations import JOB_ID
+        row, evidence = self.engineer_fixture()
+        with patch.object(native, 'target_host', return_value={'runtime':'game','agentId':'qd-steward'}), \
+                patch.object(native, 'engineering_overlap_evidence', return_value=evidence) as probe:
+            for role, job in (('mc-god', JOB_ID), ('default','qd-learning-default')):
+                self.assertIsNone(native.daily_engineering_overlap(role,job,[row],200))
+            for change in ({'status':'submission_uncertain'}, {'role':'default'}, {'jobId':'other'},
+                           {'nativeHost':{'runtime':'operations','agentId':'mc-god'}}, {'taskId':'unknown'}):
+                self.assertIsNone(native.daily_engineering_overlap('default',JOB_ID,[dict(row,**change)],200))
+            self.assertIsNone(native.daily_engineering_overlap('default',JOB_ID,[row,{'status':'unknown'}],200))
+            probe.assert_not_called()
+            for key in evidence['runningEvidence']['checks']:
+                bad = deepcopy(evidence); bad['runningEvidence']['checks'][key] = False; probe.return_value=bad
+                self.assertIsNone(native.daily_engineering_overlap('default',JOB_ID,[row],200))
+            for change in ({'verified':False},{'checkedAt':169},{'checkedAt':206},{'checkedAt':float('nan')},
+                           {'reservationRunId':'other'},{'reservationStartedAt':99}):
+                bad=deepcopy(evidence);bad['runningEvidence'].update(change);probe.return_value=bad
+                self.assertIsNone(native.daily_engineering_overlap('default',JOB_ID,[row],200))
+            probe.return_value=evidence
+            with patch.object(native, 'target_host', return_value={'runtime':'operations','agentId':'default'}):
+                self.assertIsNone(native.daily_engineering_overlap('default',JOB_ID,[row],200))
 
     def test_finished_receipt_is_written_before_next_submission(self):
         with patch.object(native,'api',return_value={'task_id':'task-fixture'}):

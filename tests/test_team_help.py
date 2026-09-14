@@ -1,4 +1,6 @@
 from pathlib import Path
+import io
+import json
 import sys
 import tempfile
 import types
@@ -49,7 +51,7 @@ class HelpTests(unittest.TestCase):
         self.case_id = self.player.report('request-test-0001', 'pit-path-failure', '无法脱困', 'bug',
             '导航工具失败，有回执', '恢复可行路径', ['task-123 / failed'])['caseId']
         self.calls = []
-        self.outcome = {'task_id': 'task-123456abcdef'}
+        self.outcome = {'task_id': 'task-123456abcdef', 'timeout': None}
 
     def request(self, runtime, role, method, path, body=None):
         self.calls.append((runtime, role, method, path, body))
@@ -116,6 +118,49 @@ class HelpTests(unittest.TestCase):
         self.assertIn('qd-engineer', result['sessionId'])
         self.assertIn('qd_engineering__engineering_test',
                       self.calls[0][4]['request_context']['subagent_allowed_tools'])
+        payload = self.calls[0][4]
+        self.assertEqual(result['engineeringExecution']['totalTimeout'], 'none')
+        self.assertEqual(result['engineeringExecution']['maxConcurrency'], 1)
+        self.assertEqual(payload['request_context'][help_lane.CONTEXT_KEY]['helpId'], result['helpId'])
+        self.assertEqual(result['requestSha256'], world_team.digest(payload))
+
+    def test_engineer_busy_is_known_no_start_and_reuses_case_version_on_later_call(self):
+        detail = {'detail': {'code': 'engineering_busy', 'taskStarted': False, 'modelCalls': 0,
+                             'status': 'deferred', 'sameCaseVersionCanRetry': True}}
+        self.outcome = urllib.error.HTTPError('local', 409, 'busy', {}, io.BytesIO(json.dumps(detail).encode()))
+        first = self.help(recipient=ENGINEER)
+        self.assertEqual(first['status'], 'deferred')
+        self.assertFalse(first['nativeTaskStarted'])
+        self.assertEqual(first['modelCalls'], 0)
+        self.assertFalse(first['automaticRetry'])
+        self.assertEqual(self.goddess.case(self.case_id)['case']['version'], 1)
+        self.outcome = {'task_id': 'task-123456abcdef', 'timeout': None}
+        next_result = self.help(recipient=ENGINEER)
+        self.assertTrue(next_result['ok'])
+        self.assertEqual(next_result['helpId'], first['helpId'])
+        self.assertEqual(next_result['caseVersion'], first['caseVersion'])
+        self.assertEqual(next_result['sessionId'], first['sessionId'])
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(self.help(recipient=ENGINEER), next_result)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_unknown_engineering_submission_never_becomes_busy_retry(self):
+        self.outcome = TimeoutError('lost acknowledgement')
+        first = self.help(recipient=ENGINEER)
+        self.assertEqual(first['status'], 'unknown')
+        self.outcome = {'task_id': 'task-123456abcdef'}
+        self.assertEqual(self.help(recipient=ENGINEER), first)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_engineering_old_server_receipt_is_known_task_but_unverified_policy(self):
+        self.outcome = {'task_id': 'task-123456abcdef', 'timeout': 600}
+        result = self.help(recipient=ENGINEER)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['status'], 'submitted')
+        self.assertEqual(result['taskId'], 'task-123456abcdef')
+        self.assertEqual(result['code'], 'engineering_execution_policy_unverified')
+        self.assertEqual(self.help(recipient=ENGINEER), result)
+        self.assertEqual(len(self.calls), 1)
 
     def test_notification_task_cannot_recurse_or_recruit(self):
         self.help()

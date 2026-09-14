@@ -9,4 +9,6 @@ RUN python -c "import sys; from qwenpaw.cli.update_cmd import _fetch_latest_vers
 
 # Upstream 2.2.0 never publishes readiness when the builtin default is disabled.
 COPY patch_qwenpaw_game.py /opt/patch_qwenpaw_game.py
-RUN python /opt/patch_qwenpaw_game.py
+COPY patch_qwenpaw_engineering_tasks.py /opt/patch_qwenpaw_engineering_tasks.py
+RUN python /opt/patch_qwenpaw_game.py \
+    && python /opt/patch_qwenpaw_engineering_tasks.py

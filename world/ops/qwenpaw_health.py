@@ -279,6 +279,13 @@ def main():
     assert bound_party_roles <= expected_roles
     PHASE = 'native-cron-budget-guard'
     guard_verified = validate_guard('/state/work', 'game')
+    marker = json.loads(Path('/state/work/learning-runtime.json').read_text())
+    assert marker.get('survivalTurnRuntimeVersion') == 3
+    assert marker.get('survivalRequestRuntimeVersion') == 1
+    assert marker.get('lifeMemoryEvidenceVersion') == 1
+    sys.path.insert(0, '/survival')
+    from native_tools import valid_tools
+    assert valid_tools(get('/mcp/tools/numen_survival', aid='qd-survivor'))
     PHASE = 'auth-mode'
     check_passwordless_auth(get)
     PHASE = 'api-version'
@@ -344,6 +351,8 @@ def main():
                       'worldTeamAgents': sum(bool(world_team.actor_for(aid, 'game')) for aid in expected_roles),
                       'worldTeamDriverPolicyVerified': True,
                       'cronBudgetGuardVerified': guard_verified,
+                      'explicitSurvivalFinishVerified': True, 'survivalRequestRuntimeVersion': 1,
+                      'lifeMemoryEvidenceVersion': 1,
                       'llmLimitPolicy': 'unrestricted', 'llmPolicyVerified': True,
                       'managedWeeklyJobs': len(expected_roles), 'unmanagedAutomaticJobs': 0}))
 

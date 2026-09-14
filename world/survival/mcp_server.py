@@ -114,9 +114,13 @@ class SkillTools:
         return self._write(turn_id, queue)
 
     def remember(self, turn_id, goal='', lesson='', next_focus='',
-                 goal_state='ongoing', review_after_seconds=1800):
+                 goal_state='ongoing', review_after_seconds=1800, finish_turn=False, summary=''):
         from numen_gateway import read_json, write_json, GatewayError
         def save(_):
+            if type(finish_turn) is not bool or not isinstance(summary, str) or len(summary) > 600 or '\0' in summary:
+                raise GatewayError('invalid_turn_completion')
+            if finish_turn and (not summary.strip() or '<tool' in summary.lower() or '</tool' in summary.lower()):
+                raise GatewayError('invalid_turn_completion')
             values = {'goal': goal, 'lesson': lesson, 'nextFocus': next_focus}
             if any(not isinstance(text, str) or len(text) > 1000 for text in values.values()):
                 raise GatewayError('invalid_memory_text')
@@ -153,6 +157,8 @@ class SkillTools:
                     'historyEntries': len(value['history']), 'noRepeatNeeded': True,
                     'nextReviewAfterSeconds': review_after_seconds,
                     'nextReviewScheduler': 'existing_life_controller',
+                    'turnCompletion': {'requested': finish_turn, 'summary': summary.strip() if finish_turn else '',
+                        'contract': 'qiandeng-survival-turn-v1'},
                     'instruction': '记忆已保存，无需重复调用确认。若本轮已完成或需要等待，现在给出最终答复；'
                         '原生活控制器会在本轮结束后按目标状态、请求的复盘间隔和真实事件安排接续，'
                         '无需在此等待计时或另建循环。若仍有必要工作，可依据真实观察继续。'
@@ -414,7 +420,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def request_goal(goal: str) -> dict:
-        """从桐人的Qwen对话提交/调整目标，最多1200字；只排队目标，不施放、移动、自动恢复暂停或重置调用预算。"""
+        """用户在Qwen普通对话交代新的游戏目标时，排队交给生活调度器，最多1200字。自主生活轮选择的临时步骤/等待用remember保存，不用本工具固化成永久指令。此工具不施放、移动、恢复暂停或重置预算。"""
         return submit_goal(gateway.state, goal, gateway.clock)
 
     @server.tool()
@@ -455,9 +461,10 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def remember(turn_id: str, goal: str = '', lesson: str = '', next_focus: str = '',
-                 goal_state: str = 'ongoing', review_after_seconds: int = 1800) -> dict:
-        """持久保存目标/经验/关注点，成功后无需重复确认；同轮完全相同内容不重写。goal_state ongoing/completed/blocked/resting，review_after_seconds为180–3600秒。需要等待或本轮已完成时直接给最终答复，原生活控制器在本轮结束后安排后续评估，无需工具内等计时或另建循环；仍有必要工作可继续。本工具不证明游戏目标完成，也不改变动作租约、暂停或权限。"""
-        return skill_tools.remember(turn_id, goal, lesson, next_focus, goal_state, review_after_seconds)
+                 goal_state: str = 'ongoing', review_after_seconds: int = 1800,
+                 finish_turn: bool = False, summary: str = '') -> dict:
+        """保存目标/经验和复盘间隔（180–3600秒）。等待或结束本轮时传finish_turn=true和最多600字summary：保存成功后Qwen原生回合直接以你的summary结束，不再调用模型空等。还要行动时保持false。同轮相同记忆不重写；goal_state为ongoing/completed/blocked/resting。summary只陈述真实回执证明的成果与待办；结束本轮不等于完成游戏目标，不暂停自主运行，也不改变动作租约。"""
+        return skill_tools.remember(turn_id, goal, lesson, next_focus, goal_state, review_after_seconds, finish_turn, summary)
 
     return server
 

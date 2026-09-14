@@ -66,13 +66,30 @@ def execution_job(job, actor):
 def running_ownership(cycle, reservations, *, native_running, lock_owned, now):
     """Correlate the existing original cycle/lease, not merely its age or label."""
     pending = [row for row in reservations if row.get('status') not in ('completed', 'failed', 'cancelled')]
-    reservation = pending[0] if len(pending) == 1 else {}
+    engineer = [row for row in pending if row.get('role') == 'mc-god' and row.get('jobId') == JOB_ID]
+    reservation = engineer[0] if len(engineer) == 1 else {}
+    others = [row for row in pending if row is not reservation]
+    from world_operations import JOB_ID as daily_job_id
+    def correlated_daily(row):
+        proof = row.get('parallelWithVerifiedRun')
+        if not isinstance(proof, dict):
+            return False
+        times = (reservation.get('startedAt'), proof.get('verifiedAt'), row.get('startedAt'), now)
+        return (row.get('role') == 'default' and row.get('jobId') == daily_job_id
+            and row.get('status') == 'cron_reserved' and row.get('taskId') is None
+            and row.get('nativeHost') == {'runtime': 'game', 'agentId': 'qd-steward'}
+            and row.get('source') == 'native-qwen-world-cron'
+            and isinstance(row.get('runId'), str) and row.get('requestId') == row['runId']
+            and proof.get('runId') == reservation.get('runId')
+            and all(type(value) in (int, float) and math.isfinite(value) for value in times)
+            and times[0] <= times[1] <= times[2] <= times[1] + 30 and times[2] <= now + 5)
+    reservation_set_valid = len(engineer) == 1 and (not others or (len(others) == 1 and correlated_daily(others[0])))
     at, started = cycle.get('at'), reservation.get('startedAt')
     numbers = all(type(value) in (int, float) and math.isfinite(value) for value in (at, started, now))
     checks = {'nativeCronRunning': native_running is True, 'guardOwnsCycleLock': lock_owned is True,
               'cycleIdentity': cycle.get('actor') == ACTOR and cycle.get('status') == 'running'
                    and cycle.get('result') == {'jobId': JOB_ID},
-              'originalReservation': len(pending) == 1 and reservation.get('status') == 'cron_reserved'
+              'originalReservation': reservation_set_valid and reservation.get('status') == 'cron_reserved'
                    and reservation.get('role') == 'mc-god' and reservation.get('jobId') == JOB_ID
                    and reservation.get('nativeHost') == {'runtime': 'game', 'agentId': 'qd-engineer'}
                    and reservation.get('source') == 'native-qwen-world-cron'
@@ -173,12 +190,16 @@ def health(state=Path('/state/work'), proc=Path('/proc'), *, include_running=Fal
     marker = read_safe(state / 'learning-runtime.json')
     if marker.get('engineeringCronRuntimeVersion') != VERSION:
         raise ValueError('engineering_no_deadline_adapter_not_loaded')
+    from engineering_task_runtime import VERSION as task_version, POLICY as task_policy
+    if marker.get('engineeringTaskRuntimeVersion') != task_version:
+        raise ValueError('engineering_native_help_adapter_not_loaded')
     document = read_safe(state / 'workspaces/qd-engineer/jobs.json')
     job = next(row for row in document['jobs'] if row['id'] == JOB_ID)
     from world_team_schedule import validate_team_job
     validate_team_job(job, ACTOR)
     result = {'ok': True, 'jobId': JOB_ID, 'agentId': 'qd-engineer', 'enabled': job['enabled'],
-              'adapterVersion': VERSION, **execution_policy(job, ACTOR), 'modelCalls': 0, 'worldActions': 0}
+              'adapterVersion': VERSION, **execution_policy(job, ACTOR),
+              'nativeHelpExecution': task_policy, 'modelCalls': 0, 'worldActions': 0}
     if include_running:
         import sqlite3
         from contextlib import closing

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -73,16 +74,86 @@ def ledger():
         yield rows
         pending = folder/'delegations.tmp'
         # Never evict an unresolved submission when pruning old history.
-        keep = [r for r in rows if r.get('status') not in TERMINAL]
-        keep += [r for r in rows if r.get('status') in TERMINAL][-100:]
+        keep = compact_ledger(rows)
         pending.write_text(json.dumps(keep, ensure_ascii=False), encoding='utf8')
         pending.replace(file)
+
+
+def compact_ledger(rows, terminal_limit=100):
+    """Keep unresolved work and the newest real terminal records, not list tails.
+
+    Pending records are stored first. A newly completed record therefore becomes
+    the first terminal row, so tail slicing alone used to delete it immediately.
+    Historical records need no rewriting; completion/start times determine age.
+    """
+    if (not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows)
+            or type(terminal_limit) is not int or not 1 <= terminal_limit <= 100):
+        raise ValueError('invalid_operations_ledger')
+    def terminal_age(indexed):
+        index, row = indexed
+        for key in ('finishedAt', 'startedAt'):
+            stamp = row.get(key)
+            if type(stamp) in (int, float) and math.isfinite(stamp) and stamp >= 0:
+                return stamp, index
+        return 0, index
+    unresolved = [row for row in rows if row.get('status') not in TERMINAL]
+    terminal = [(index, row) for index, row in enumerate(rows) if row.get('status') in TERMINAL]
+    terminal.sort(key=terminal_age)
+    return unresolved + [row for _, row in terminal[-terminal_limit:]]
 
 
 def budget_check(rows, now, parent_run_id=None):
     if any(r.get('status') not in TERMINAL and (parent_run_id is None or r.get('runId') != parent_run_id) for r in rows):
         return 'operations_task_unresolved'
     return None
+
+
+def engineering_overlap_evidence():
+    """The existing read-only probe binds native execution, kernel lock and ledger."""
+    from engineering_cron_runtime import health
+    return health(include_running=True)
+
+
+def daily_engineering_overlap(role, job_id, rows, now):
+    """Only the steward's original daily shift may overlap a proven engineer.
+
+    This is not a generic per-role quota relaxation. Unknown/foreign/same-role
+    work remains blocking, and no record is released or reconciled by this read.
+    """
+    from world_operations import JOB_ID
+    if role != 'default' or job_id != JOB_ID:
+        return None
+    pending = [row for row in rows if row.get('status') not in TERMINAL]
+    if len(pending) != 1:
+        return None
+    row = pending[0]
+    if (row.get('role') != 'mc-god' or row.get('jobId') != 'qd-team-engineer'
+            or row.get('status') != 'cron_reserved' or row.get('taskId') is not None
+            or row.get('nativeHost') != {'runtime': 'game', 'agentId': 'qd-engineer'}
+            or row.get('source') != 'native-qwen-world-cron'
+            or not isinstance(row.get('runId'), str) or row.get('requestId') != row['runId']):
+        return None
+    try:
+        if target_host('default') != {'runtime': 'game', 'agentId': 'qd-steward'}:
+            return None
+        evidence = engineering_overlap_evidence()
+        running = evidence.get('runningEvidence', {})
+        checks = running.get('checks', {})
+        stamp = running.get('checkedAt')
+        if (evidence.get('ok') is not True or evidence.get('policy') != 'no_total_deadline'
+                or running.get('verified') is not True
+                or not all(checks.get(key) is True for key in ('nativeCronRunning', 'guardOwnsCycleLock',
+                    'cycleIdentity', 'originalReservation', 'startOwnership'))
+                or running.get('actor') != 'operations:mc-god'
+                or running.get('jobId') != row['jobId']
+                or running.get('reservationRunId') != row['runId']
+                or running.get('reservationStartedAt') != row.get('startedAt')
+                or type(stamp) not in (int, float) or not math.isfinite(stamp)
+                or not -5 <= now - stamp <= 30):
+            return None
+        return {'runId': row['runId'], 'verifiedAt': stamp}
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
 
 
 def finish_run(run_id, status, **details):
@@ -156,13 +227,17 @@ def reconcile_pending():
 def reserve_operation(role, job_id):
     reconcile_pending()
     with ledger() as rows:
-        blocked = budget_check(rows, time.time())
+        now = time.time()
+        overlap = daily_engineering_overlap(role, job_id, rows, now)
+        blocked = budget_check(rows, now, overlap['runId'] if overlap else None)
         if blocked: return {'ok': False, 'code': blocked}
         run_id = 'world-' + uuid.uuid4().hex
         rows.append({'runId': run_id, 'requestId': run_id, 'role': role, 'jobId': job_id,
                      'startedAt': time.time(), 'status': 'cron_reserved', 'taskId': None,
                      'nativeHost': target_host(role),
                      'source': 'native-qwen-world-cron'})
+        if overlap:
+            rows[-1]['parallelWithVerifiedRun'] = overlap
     return {'ok': True, 'runId': run_id}
 
 

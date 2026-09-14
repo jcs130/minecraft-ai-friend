@@ -35,10 +35,16 @@ def request(base, route, payload=None):
 
 
 def valid_tools(value):
-    return (isinstance(value, list) and len(value) == len(TOOL_NAMES)
+    basic = (isinstance(value, list) and len(value) == len(TOOL_NAMES)
         and all(isinstance(row, dict) and isinstance(row.get('name'), str)
                 and row.get('enabled') is True and isinstance(row.get('input_schema'), dict) for row in value)
         and {row['name'] for row in value} == set(TOOL_NAMES))
+    if not basic:
+        return False
+    properties = next(row for row in value if row['name'] == 'remember')['input_schema'].get('properties', {})
+    return (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
+            and properties.get('finish_turn', {}).get('default') is False
+            and properties.get('summary', {}).get('type') == 'string')
 
 
 def require_ready(base_url=None):

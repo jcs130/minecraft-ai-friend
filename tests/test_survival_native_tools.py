@@ -14,7 +14,9 @@ import native_tools as native
 
 
 def tools():
-    return [{'name': name, 'enabled': True, 'input_schema': {'type': 'object'}} for name in native.TOOL_NAMES]
+    return [{'name': name, 'enabled': True, 'input_schema': {'type': 'object', 'properties':
+        {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
+        if name == 'remember' else {}}} for name in native.TOOL_NAMES]
 
 
 def saved():
@@ -46,6 +48,14 @@ class NativeToolConnectionTests(unittest.TestCase):
                 self.assertFalse(native.require_ready())
         with patch.object(native, 'request', side_effect=OSError('connection unavailable')):
             self.assertFalse(native.require_ready())
+
+    def test_old_cached_remember_schema_requires_native_reload(self):
+        before = tools()
+        next(row for row in before if row['name'] == 'remember')['input_schema']['properties'] = {}
+        self.assertFalse(native.valid_tools(before))
+        with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
+            self.assertTrue(native.NativeToolConnection().ensure_ready())
+            self.assertEqual(request.call_args_list[2].args[1], native.TOOLS_ROUTE)
 
     def test_saved_inactive_driver_reloads_through_exact_whitelist_then_requires_get(self):
         with patch.object(native, 'request', side_effect=[OSError(), saved(), tools(), []]) as request:

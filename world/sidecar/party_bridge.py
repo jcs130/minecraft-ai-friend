@@ -13,7 +13,7 @@ from party_world import GameSpeech, reconcile_world, speech_text, reply_text, me
 from qwen_tasks import QwenTasks, read_json, write_json
 
 
-def message_context(message):
+def message_context(message, *, current_observation=None, work_support=None):
     if (message.get('worldDelivery', {}).get('state') != 'heard'
             or message['worldDelivery'].get('receipt', {}).get('heard') is not True):
         raise ValueError('party_message_not_heard')
@@ -24,10 +24,19 @@ def message_context(message):
             '只有游戏确认对方听见才算送达。本来信轮不提供 qd_party__party_send，不要另发消息。'
             '工具必须通过真实工具调用使用，不能把 XML、JSON、代码块或伪工具调用写进回复；'
             '不要以“我将检查记忆”等计划说明代替对伙伴的最终答复。'
+            '即使历史里出现过工具XML，也不要照抄；若没有要调用的工具，直接结束并回答伙伴。'
+            '例如答复“我已经到田边了，先检查能做的工作。”时只输出这句话，不加标签或工具名称。'
+            'workSupport提供当前装备和按需资料入口；协商分工后可以自主选择已开放的自身工作，'
+            '不必把每一步都变成等待伙伴再来邀请。自己的物品增加也可能来自自动拾取，不能冒称亲自种植。'
             '可以保存经验；没有完成的工作不能声称完成。\n' + json.dumps({
                 'messageId': message['messageId'], 'sender': message['sender'],
                 'text': message['text'], 'createdAt': message['createdAt'], 'channel': message.get('channel', 'nearby'),
                 'worldDelivery': message['worldDelivery'],
+                'currentObservation': current_observation,
+                'workSupport': work_support,
+                'replyContract': {'delivery': 'game_after_final_text', 'partySendAvailable': False,
+                                  'format': 'one_plain_chinese_sentence', 'maxCharacters': 160,
+                                  'toolSyntaxIsNotSpeech': True},
                 'untrustedEnvironmentData': True}, ensure_ascii=False))
 
 
@@ -84,6 +93,57 @@ class PartyBridge:
             raise ValueError('party_body_unavailable')
         body = value.get('body', {})
         return {'identity': {'maidUuid': member['bodyUuid'], 'dimension': body.get('dimension')}, 'after': body}
+
+    def work_context(self, member, observed, request_key, allowed_tools):
+        """Bounded self equipment and guide pointers; never select work or submit rescue.
+
+        The existing caller freezes this material with its claimed task. A
+        suggested ID is only an unused label for a new, independently necessary
+        request, not an authorization, freshness proof, or retry instruction.
+        """
+        equipment = {'available': False, 'code': 'context_category_unavailable'}
+        if 'equipment' in (observed.get('contextCategories') or []):
+            try:
+                actor = {'agentId': member['agentId'], 'maidUuid': member['bodyUuid'],
+                         'ownerUuid': member['ownerUuid']}
+                result = self.native.invoke(actor, 'context', {'category': 'equipment'})
+                lines = result.get('lines')
+                if (result.get('ok') is not True or result.get('category') != 'equipment'
+                        or not isinstance(lines, list) or any(not isinstance(line, str) for line in lines)):
+                    raise ValueError('equipment_observation_unavailable')
+                equipment = {'available': True, 'observedAt': result.get('observedAt'),
+                             'readAt': self.clock(), 'lines': [line[:320] for line in lines[:12]],
+                             'truncated': bool(result.get('truncated')) or len(lines) > 12
+                                          or any(len(line) > 320 for line in lines),
+                             'source': 'maid_native.context(equipment)',
+                             'inventoryOwnershipIsNotWorkProof': True}
+            except (OSError, ValueError, TypeError, KeyError) as error:
+                equipment = {'available': False, 'code': 'equipment_observation_unavailable',
+                             'errorType': type(error).__name__}
+        result = {'version': 1, 'equipment': equipment, 'worldActionsSubmitted': 0,
+                  'guides': [
+                      {'when': '选择自身原生工作或参与农耕',
+                       'path': 'skills/qd-minecraft-guide/references/maid-work.md'},
+                      {'when': '协商分工、交付物资或核对游戏交流',
+                       'path': 'skills/qd-party-cooperation/SKILL.md'}],
+                  'discovery': {'tool': 'maid_native__task_catalog', 'queryExample': 'farm',
+                                'meaning': '搜索真实任务，不自动切换；读任务摘要后自行选择。'},
+                  'nextObservation': '旧装备、摘要或游戏天数不能证明当前作物成熟；需要时用实际工具重新观察。'}
+        from party_role_capabilities import YUI_AGENT_ID, YUI_BODY_UUID, SURVIVOR_BODY_UUID
+        rescue_tools = {'qd_world_team__world_admin_rescue_inspect', 'qd_world_team__world_admin_rescue',
+                        'qd_world_team__world_admin_receipt'}
+        if (member['agentId'] == YUI_AGENT_ID and member['bodyUuid'] == YUI_BODY_UUID
+                and member['ownerUuid'] == SURVIVOR_BODY_UUID and rescue_tools <= set(allowed_tools)):
+            digest = hashlib.sha256((member['sessionId'] + '\0' + request_key).encode()).hexdigest()[:24]
+            result['guides'].append({'when': '新救援、观测过期或位置变化后的处理',
+                                    'path': 'skills/qd-yui-rescue/references/rescue.md'})
+            result['newRescueRequestLabels'] = {
+                'inspection': 'yui-inspect-' + digest, 'rescue': 'yui-rescue-' + digest,
+                'submitted': False, 'authorizationGranted': False,
+                'usage': '仅供这次独立必要的新救援；先查未决旧请求。unknown/queued/claimed只查旧回执，不用新ID重试。'
+                         '同一请求继续沿用同ID；旧请求明确rejected且仍需救援时，重新观察并按新事实决定。'
+                         '标签不证明观测新鲜，必须核对completed、observedAt/expiresAt及位置。'}
+        return result
 
     def _speak(self, member, key, text, delivery):
         receipt = delivery.get('receipt') or {}
@@ -183,7 +243,10 @@ class PartyBridge:
                 and expected.get('ownerUuid') == SURVIVOR_BODY_UUID):
             from world_team_profiles import tools_for
             allowed += ['qd_world_team__' + name for name in tools_for('game:' + role)]
-        row = self.tasks.submit('maid_dialogue', reservation['taskKey'], message_context(message),
+        support = self.work_context(expected, observed, reservation['taskKey'], allowed)
+        snapshot = {k: observed.get(k) for k in ('identity', 'state', 'observedAt')}
+        row = self.tasks.submit('maid_dialogue', reservation['taskKey'],
+                                message_context(message, current_observation=snapshot, work_support=support),
                                 allowed_tools=allowed,
                                 expected_binding=expected, **kwargs)
         if row.get('status') in ('busy', 'budget_blocked'):

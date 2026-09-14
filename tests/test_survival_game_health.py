@@ -56,8 +56,10 @@ class SharedGameRoleHealthTests(unittest.TestCase):
 
     def check(self):
         (self.folder / 'agent.json').write_text(json.dumps(self.agent), encoding='utf8')
+        from qwenpaw.drivers.storage import load_card as load_native_card
         storage = SimpleNamespace(load_card=lambda path: self.party_card if Path(path).stem == 'qd_party'
-            else self.team_card if Path(path).stem == 'qd_world_team' else self.card)
+            else self.team_card if Path(path).stem == 'qd_world_team'
+            else load_native_card(path) if Path(path).stem == 'qd_learning' else self.card)
         credentials = SimpleNamespace(AsyncCredentialStore=lambda _: SimpleNamespace(get_sync=lambda name:
             SimpleNamespace(kind='static', secrets={'authorization':'Bearer '+'f'*64}, public={})))
         with patch.dict(sys.modules, {'qwenpaw.drivers.storage': storage, 'qwenpaw.drivers.credentials':credentials}), \

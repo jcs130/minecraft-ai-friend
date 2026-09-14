@@ -174,6 +174,11 @@ class QwenBackend:
         payload['channel'] = session['channel']
         if request_context is not None:
             payload['request_context'] = request_context
+        # Native request metadata survives ReMe's conversation compaction.
+        # Preserve scope fields; this reference does not change the MCP lease.
+        payload['request_context'] = {**payload.get('request_context', {}),
+            'qiandeng_survival_turn': {'version': 1, 'turn_id': turn_id,
+                                      'session_id': session['primarySessionId']}}
         payload['timeout'] = timeout
         value = self.api('POST', '/console/chat/task', payload)
         import re
@@ -477,6 +482,7 @@ class Controller:
                 'message': str(native.get('message', ''))[:600],
                 'completionConfirmed': receipt.get('completionConfirmed') is True}
         context = {'turn_id': turn_id, 'mission': control.get('mission') or self.settings['mission'],
+            'longTermMission': self.settings['mission'],
             'body': compact_body, 'environment': environment, 'perception': awareness,
             'wakeReason': self.data['wakeReason'], 'mode': 'continuous_autonomy' if self.autonomy(control) else 'single_mission',
             'memory': current, 'gameSkills': self.cached_game_skills(), 'adventure': self.adventure(body),
@@ -554,11 +560,17 @@ class Controller:
         context = {'turn_id': turn_id, 'sessionId': self.session['primarySessionId'],
             'currentTime': datetime.fromtimestamp(self.clock(), timezone.utc).isoformat(),
             'mission': control.get('mission') or self.settings['mission'],
+            'longTermMission': self.settings['mission'],
             'mode': 'continuous_autonomy' if self.autonomy(control) else 'single_mission',
             'wakeReason': self.data['wakeReason'],
             'body': {k: body[k] for k in ('ok', 'bodyName', 'bodyUuid', 'hp', 'hunger', 'position',
                     'dimension', 'gameMode', 'task', 'observedAt', 'bodyControl',
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
+            'adventure': self.adventure(body),
+            'capabilityUpdate': {'revision': 'survival-progress-20260914-v1',
+                'inventory': 'drop_items可直接丢出已有主背包物品。腾格通常需要移走整槽；丢出少量而该槽仍有剩余，不会增加空槽。按当前需求自主选择存放、使用或舍弃。',
+                'reference': 'skills/qd-minecraft-guide/references/building.md',
+                'memoryNotice': '旧笔记中“没有丢弃工具、只能逐块放泥土腾格”的结论已过期；不要继续把它总结为现行方法。'},
             'perception': {'events': bounded_events,
                 'pendingEventIds': [e['id'] for e in bounded_events if e.get('id')]},
             'recentActionReceipts': [life_action_evidence(row)
@@ -571,6 +583,12 @@ class Controller:
                 '当前turn_id最多6个串行动作；同步明确回执后可继续，异步仍在途则结束等待完成事件；'
                 'accepted或idle都不是目标成功。未知副作用不重放。未直接行动时可skill_start。'
                 '按需读取自己的笔记、技能、配方、任务。remember保存目标状态与下次检查时间。'
+                '决定等待或结束本轮时用remember(finish_turn=true,summary=你的简短总结)，保存成功会直接结束原生回合；'
+                '只存中途进度则finish_turn=false。不在同一回合重复查空感知来等待作物生长。'
+                'adventure是当前资源与装备事实，不是固定任务路线。等待作物前评估能否推进其它已有目标，'
+                '例如实际缺少的装备、储物或住所；若决定休息，按真实等待需求选择review_after_seconds。'
+                'continuous_autonomy下，当前短目标完成后继续longTermMission；自己的下一小目标用remember记录，'
+                '不通过request_goal把临时等待或旧身体数值固化为后续每轮的任务。'
                 '本项目不额外限制模型调用次数或迭代；及时保存必要记忆并给最终答复，不必用满动作额度。'
                 '反复受阻时调整小目标或说明未解决条件，不为同一障碍耗尽整轮；最终答复最多三句话。'
                 '以本轮身体观察和真实动作回执为当前事实，旧记忆只作经验；记忆中的位置、障碍和伙伴称谓可能已过期。'

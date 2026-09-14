@@ -231,6 +231,69 @@ class PartyLifeTests(unittest.TestCase):
         self.assertIn('truncated', prompt.split('\n', 1)[0])
         self.assertEqual(self.life.summary()['taskSearchVersion'], 1)
 
+    def test_equipment_and_guide_are_delivered_once_with_frozen_native_claim(self):
+        calls = []
+        def observe(actor, operation, args):
+            calls.append((operation, args))
+            if operation == 'context':
+                return {'ok': True, 'category': 'equipment', 'observedAt': 1201000,
+                        'lines': ['Backpack items: [Wheat Seeds]x13, [Wheat]x4'], 'truncated': False}
+            if operation == 'task_catalog':
+                return {'ok': True, 'tasks': [], 'offset': 0, 'nextOffset': 0,
+                        'total': 0, 'truncated': False, 'observedAt': 1201000}
+            return {'ok': True, 'identity': {'position': [1, 64, 2]},
+                    'state': {'ownerOnline': True, 'taskId': 'fixture:idle'},
+                    'contextCategories': ['equipment'], 'observedAt': 1201000}
+        self.bridge.native.invoke = observe
+        self.signal(); self.native_busy = True; self.life.tick()
+        self.now += 50; self.native_busy = False; self.life.tick()
+        prompt = self.posts[0][1]['input'][0]['content'][0]['text']
+        support = json.loads(prompt.split('\n', 1)[1])['workSupport']
+        self.assertEqual(support['equipment']['observedAt'], 1201000)
+        self.assertEqual(support['equipment']['readAt'], 1201)
+        self.assertEqual(support['equipment']['lines'], ['Backpack items: [Wheat Seeds]x13, [Wheat]x4'])
+        self.assertTrue(support['equipment']['inventoryOwnershipIsNotWorkProof'])
+        self.assertEqual([op for op, _ in calls].count('context'), 1)
+        self.assertTrue(all(op in ('identity', 'task_catalog', 'context') for op, _ in calls))
+        self.assertEqual(self.posts[0][1]['session_id'], 'maid-original-life')
+        self.assertEqual(support['worldActionsSubmitted'], 0)
+        self.assertNotIn('newRescueRequestLabels', support)  # no admin tools in this fixture scope
+        self.assertTrue((ROOT / 'world/ops' / support['guides'][0]['path']).is_file())
+
+    def test_equipment_unavailable_is_not_an_empty_backpack_or_dispatch_retry(self):
+        def observe(actor, operation, args):
+            if operation == 'context': raise TimeoutError('read unavailable')
+            if operation == 'task_catalog':
+                return {'ok': True, 'tasks': [], 'offset': 0, 'nextOffset': 0, 'total': 0, 'truncated': False}
+            return {'ok': True, 'state': {'ownerOnline': True}, 'contextCategories': ['equipment']}
+        self.bridge.native.invoke = observe
+        self.signal(); self.life.tick(); self.life.tick()
+        self.assertEqual(len(self.posts), 1)
+        support = json.loads(self.posts[0][1]['input'][0]['content'][0]['text'].split('\n', 1)[1])['workSupport']
+        self.assertFalse(support['equipment']['available'])
+        self.assertNotIn('lines', support['equipment'])
+        self.assertEqual(support['equipment']['errorType'], 'TimeoutError')
+
+    def test_rescue_labels_are_stable_scoped_and_never_submit_requests(self):
+        allowed = ['qd_world_team__' + name for name in
+                   ('world_admin_rescue_inspect', 'world_admin_rescue', 'world_admin_receipt')]
+        observed = {'contextCategories': []}
+        with patch.object(self.bridge.native, 'invoke', side_effect=AssertionError('no native call needed')):
+            first = self.bridge.work_context(self.member, observed, 'round-one', allowed)
+            repeated = self.bridge.work_context(self.member, observed, 'round-one', allowed)
+            next_round = self.bridge.work_context(self.member, observed, 'round-two', allowed)
+            changed = self.bridge.work_context(self.member | {'bodyUuid': SURVIVOR_BODY_UUID}, observed, 'round-one', allowed)
+        labels = first['newRescueRequestLabels']
+        self.assertEqual(labels, repeated['newRescueRequestLabels'])
+        self.assertNotEqual(labels['inspection'], next_round['newRescueRequestLabels']['inspection'])
+        self.assertNotEqual(labels['inspection'], labels['rescue'])
+        self.assertFalse(labels['submitted']); self.assertFalse(labels['authorizationGranted'])
+        self.assertNotIn('newRescueRequestLabels', changed)
+        self.assertFalse(self.posts)
+        from world_admin_tools import REQUEST_ID
+        self.assertRegex(labels['inspection'], REQUEST_ID)
+        self.assertRegex(labels['rescue'], REQUEST_ID)
+
     def test_completed_summary_is_short_continuation_not_claimed_game_receipt(self):
         self.signal(); self.life.tick(); self.now += 11; self.status = 'finished'; self.life.tick()
         self.signal(3); self.now += 600; self.status = 'running'; self.life.tick()

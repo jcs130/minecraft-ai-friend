@@ -186,6 +186,33 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertEqual(len(self.posts), 1)
         self.assertIsNone(self.bridge.queue.next_pending('qd-survivor'))
 
+    def test_incoming_task_receives_real_equipment_and_plain_final_reply_contract(self):
+        calls = []
+        def native(actor, operation, args):
+            calls.append((operation, args))
+            if operation == 'context':
+                return {'ok': True, 'category': 'equipment', 'observedAt': 100000000,
+                        'lines': ['Backpack items: [Wheat Seeds]x5'], 'truncated': False}
+            return {'ok': True, 'identity': {'position': [3, 64, 5]},
+                    'state': {'ownerOnline': True, 'taskId': 'fixture:idle'},
+                    'contextCategories': ['equipment'], 'observedAt': 100000000}
+        self.native.invoke = native
+        self.bridge.call('qd-survivor', 'party_send', {'text': '一起照看农田。'}, 'cooperate')
+        self.bridge.tick()
+        role, request = self.posts[0]
+        context = json.loads(request['input'][0]['content'][0]['text'].split('\n', 1)[1])
+        self.assertEqual(context['currentObservation']['identity']['position'], [3, 64, 5])
+        self.assertEqual(context['workSupport']['equipment']['lines'], ['Backpack items: [Wheat Seeds]x5'])
+        self.assertTrue(context['workSupport']['equipment']['available'])
+        self.assertFalse(context['replyContract']['partySendAvailable'])
+        self.assertTrue(context['replyContract']['toolSyntaxIsNotSpeech'])
+        self.assertEqual(context['replyContract']['delivery'], 'game_after_final_text')
+        self.assertEqual(request['session_id'], 'maid-abc')
+        self.assertEqual(role, 'maid-test')
+        self.assertNotIn('newRescueRequestLabels', context['workSupport'])
+        self.assertTrue(all(op in ('identity', 'context') for op, _ in calls))
+        self.assertEqual(len(self.posts), 1)
+
     def test_incoming_prompt_uses_real_memory_and_automatic_final_game_reply(self):
         row = self.bridge.call('qd-survivor', 'party_send', {'text': '刚才发生了什么？'}, 'context')
         prompt = message_context(row)

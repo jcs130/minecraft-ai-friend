@@ -7,6 +7,7 @@ from agent_learning import locked, read, write
 from world_team import TeamStore, digest, members
 from world_team_hosts import native_host, ENGINEER
 from team_recruitment import api, MANAGERS
+from engineering_task_runtime import CONTEXT_KEY, POLICY as ENGINEERING_POLICY, VERSION as ENGINEERING_TASK_VERSION
 
 
 def owns_task(actor, task_id, root=Path('/team')):
@@ -42,8 +43,20 @@ def request_help(actor, case_id, recipient='owner', *, root=Path('/team'), reque
     directory = Path(root) / 'native-help'
     path = directory / (key + '.json')
     with locked(directory):
+        attempts = []
         if path.exists():
-            return read(path)
+            previous = read(path)
+            # Only an exact native no-start admission rejection can be retried
+            # by a later ordinary tool call, with the SAME case/version/helpId.
+            # Unknown or accepted submissions are never submitted again.
+            if not (previous.get('status') == 'deferred'
+                    and previous.get('code') in ('engineering_busy', 'engineering_cycle_unresolved')
+                    and previous.get('nativeTaskStarted') is False
+                    and previous.get('modelCalls') == 0
+                    and previous.get('sameCaseVersionCanRetry') is True
+                    and previous.get('taskId') is None):
+                return previous
+            attempts = previous.get('admissionAttempts', [])
         from world_team_profiles import tools_for
         from engineering_mcp import TOOLS as ENGINEERING_TOOLS
         from native_role_capabilities import FILE_TOOLS
@@ -64,10 +77,17 @@ def request_help(actor, case_id, recipient='owner', *, root=Path('/team'), reque
             'input': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}],
             'request_context': {'root_agent_id': host['agentId'], 'subagent_allowed_tools': allowed},
             'timeout': 600}
+        if target == ENGINEER:
+            if host != {'runtime': 'game', 'agentId': 'qd-engineer'}:
+                raise ValueError('engineering_help_active_host_required')
+            payload['request_context'][CONTEXT_KEY] = {'version': ENGINEERING_TASK_VERSION, 'helpId': key}
         result = {'ok': False, 'helpId': key, 'caseId': case_id, 'caseVersion': case['version'],
             'actor': actor, 'recipient': target, 'nativeHost': host, 'sessionId': session,
             'status': 'unknown', 'submittedAt': time.time(), 'automaticRetry': False,
             'transport': 'qwenpaw-native-background-task', 'worldFixConfirmed': False}
+        if target == ENGINEER:
+            result.update(engineeringExecution=ENGINEERING_POLICY, requestSha256=digest(payload),
+                          admissionAttempts=attempts)
         # A persisted claim survives process loss. Unknown submissions are never
         # silently repeated; the case remains on the native inspection schedule.
         write(path, result)
@@ -78,9 +98,33 @@ def request_help(actor, case_id, recipient='owner', *, root=Path('/team'), reque
                 result['code'] = 'native_task_receipt_unrecognized'
             else:
                 result.update(ok=True, status='submitted', taskId=task_id)
+                if target == ENGINEER:
+                    result['nativeExecutionPolicyVerified'] = 'timeout' in receipt and receipt['timeout'] is None
+                    if not result['nativeExecutionPolicyVerified']:
+                        # A task ID is accepted work even if an old server ignored
+                        # the policy. Keep it queryable; never retry this request.
+                        result.update(ok=False, code='engineering_execution_policy_unverified')
         except urllib.error.HTTPError as error:
-            result.update(status='rejected' if error.code in (400, 403, 404, 409, 422) else 'unknown',
-                          code='native_http_' + str(error.code))
+            detail = None
+            if error.code == 409 and target == ENGINEER:
+                try:
+                    import json
+                    raw = error.read(4097)
+                    if len(raw) <= 4096:
+                        detail = json.loads(raw).get('detail')
+                except (OSError, ValueError, AttributeError):
+                    pass
+            if (isinstance(detail, dict) and detail.get('code') in ('engineering_busy', 'engineering_cycle_unresolved')
+                    and detail.get('taskStarted') is False and detail.get('modelCalls') == 0
+                    and detail.get('sameCaseVersionCanRetry') is True):
+                result.update(status='deferred', code=detail['code'], nativeTaskStarted=False,
+                    modelCalls=0, sameCaseVersionCanRetry=True,
+                    notice='天神正在处理原有工程任务，本次未启动模型。保留原工单；后续正常班次可按同一版本再次请求，无需制造新版本。')
+                result['admissionAttempts'] = attempts + [{'at': time.time(), 'status': 'deferred',
+                    'code': detail['code'], 'nativeTaskStarted': False}]
+            else:
+                result.update(status='rejected' if error.code in (400, 403, 404, 409, 422) else 'unknown',
+                              code='native_http_' + str(error.code))
         except (OSError, ValueError, TimeoutError):
             result['code'] = 'native_submission_unknown'
         write(path, result)

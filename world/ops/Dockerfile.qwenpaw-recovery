@@ -16,6 +16,7 @@ COPY survival /survival
 COPY character_speech.py /survival/character_speech.py
 COPY qwenpaw_recovery_probe.py /opt/qwenpaw_recovery_probe.py
 RUN python /ops/patch_qwenpaw_game.py \
+    && python /ops/patch_qwenpaw_engineering_tasks.py \
     && python /opt/qwenpaw_recovery_probe.py
 WORKDIR /state
 EXPOSE 8088

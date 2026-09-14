@@ -217,6 +217,22 @@ class EngineeringOwnershipTests(unittest.TestCase):
                                             native_running=True, lock_owned=True, now=self.now)
         self.assertFalse(duplicate['verified'])
 
+    def test_verified_daily_sibling_keeps_engineering_ownership_but_other_pending_does_not(self):
+        from world_operations import JOB_ID as daily_job
+        daily = {'role':'default','jobId':daily_job,'status':'cron_reserved','taskId':None,
+            'nativeHost':{'runtime':'game','agentId':'qd-steward'},'source':'native-qwen-world-cron',
+            'runId':'world-daily','requestId':'world-daily','startedAt':self.now-10,
+            'parallelWithVerifiedRun':{'runId':self.reservation['runId'],'verifiedAt':self.now-11}}
+        def observe(rows):
+            return policy.running_ownership(self.cycle,rows,native_running=True,lock_owned=True,now=self.now)
+        self.assertTrue(observe([self.reservation,daily])['verified'])
+        for change in ({'status':'unknown'},{'role':'mc-god'},{'taskId':'task-other'},
+                       {'parallelWithVerifiedRun':{'runId':'other','verifiedAt':self.now-11}},
+                       {'startedAt':self.now-50},{'jobId':'qd-learning-default'},
+                       {'nativeHost':{'runtime':'operations','agentId':'default'}}):
+            self.assertFalse(observe([self.reservation,dict(daily,**change)])['verified'],change)
+        self.assertFalse(observe([self.reservation,daily,deepcopy(daily)])['verified'])
+
     def test_kernel_lock_requires_exact_file_and_pid(self):
         try:
             import fcntl
@@ -275,7 +291,8 @@ class EngineeringOwnershipTests(unittest.TestCase):
             root = Path(tmp); state = root / 'work'; team = root / 'team'; team.mkdir()
             workspace = state / 'workspaces/qd-engineer'; workspace.mkdir(parents=True)
             job = schedule.team_job(policy.ACTOR)
-            (state / 'learning-runtime.json').write_text(json.dumps({'engineeringCronRuntimeVersion': 1, 'pid': 1}))
+            (state / 'learning-runtime.json').write_text(json.dumps({'engineeringCronRuntimeVersion': 1,
+                'engineeringTaskRuntimeVersion': 1, 'pid': 1}))
             (workspace / 'jobs.json').write_text(json.dumps({'jobs': [job]}))
             ledger = root / 'delegations.json'; ledger.write_text(json.dumps([self.reservation]))
             with closing(sqlite3.connect(team / 'team.sqlite3')) as db, db:

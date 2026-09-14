@@ -9,7 +9,7 @@ import time
 import uuid
 from agent_learning import LearningTools, OPS_ROLES, locked, read, write
 
-VERSION = 4
+VERSION = 5
 
 
 def fingerprint(tools):
@@ -148,6 +148,8 @@ def install(runtime):
     original = CronExecutor.execute
     from engineering_cron_runtime import check_native_contract, VERSION as engineering_cron_version
     check_native_contract(original)
+    from engineering_task_runtime import check_native_contract as check_task_contract
+    engineering_task_version = check_task_contract() if runtime == 'game' else None
     async def execute(self, job):
         return await guarded_execute(self, job, original, runtime)
     CronExecutor.execute = execute
@@ -159,4 +161,5 @@ def install(runtime):
         'pid': os.getpid(), 'startedAt': time.time(), 'qwenVersion': '2.2.0', 'scheduler': 'native-qwen-cron',
         'processStartTicks': process_ticks, 'bootId': boot_id, 'nativeToolGuardVersion': native_guard_version,
         'llmPolicyVersion': llm_policy_version, 'remeStatusCompatVersion': reme_status_version,
-        'partyLifeSignalVersion': 1, 'engineeringCronRuntimeVersion': engineering_cron_version})
+        'partyLifeSignalVersion': 1, 'engineeringCronRuntimeVersion': engineering_cron_version,
+        'engineeringTaskRuntimeVersion': engineering_task_version})

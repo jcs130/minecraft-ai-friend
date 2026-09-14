@@ -133,6 +133,10 @@ class LifeSessionTests(unittest.TestCase):
         context = json.loads(prompt.split('\n', 1)[1])
         self.assertNotIn('counts', context['body'])
         self.assertNotIn('environment', context)
+        self.assertEqual(context['longTermMission'], self.settings['mission'])
+        self.assertEqual(context['adventure']['selectionAuthority'], 'model')
+        self.assertEqual(context['adventure']['body']['hp'], self.gateway.body['hp'])
+        self.assertIn('drop_items', context['capabilityUpdate']['inventory'])
         self.assertNotIn('guild', context)
         self.assertEqual(read_json(self.state / 'lease.json')['actionLimit'], 6)
         self.assertIn('MCP', context['instruction'])
@@ -191,7 +195,10 @@ class LifeSessionTests(unittest.TestCase):
         self.assertEqual(payload['session_id'], original_session['primarySessionId'])
         self.assertEqual(payload['user_id'], original_session['userId'])
         self.assertEqual(payload['channel'], original_session['channel'])
-        self.assertEqual(payload['request_context'], {'root_agent_id': original_session['userId']})
+        self.assertEqual(payload['request_context'], {'root_agent_id': original_session['userId'],
+            'qiandeng_survival_turn': {'version': 1,
+                'turn_id': self.controller.data['active']['turnId'],
+                'session_id': original_session['primarySessionId']}})
         texts = [part['text'] for message in payload['input'] for part in message['content'] if part['type'] == 'text']
         marker = '（当前生活任务；以下为本轮事实）：\n'
         submitted = [text.split(marker, 1)[1] for text in texts if marker in text]

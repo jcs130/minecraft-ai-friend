@@ -20,6 +20,14 @@ def main():
     assert llm_install('game') == 1
     assert reme_install('game') == 1
     assert tools_install('game') == 1
+    from survival_turn_runtime import install as finish_install
+    from life_memory_evidence_runtime import install as memory_install
+    assert finish_install('game') == 3
+    from survival_request_runtime import install as request_install
+    assert request_install('game') == 1
+    assert memory_install('game') == 1
+    from engineering_task_runtime import check_native_contract
+    assert check_native_contract() == 1
     from qwenpaw.app.crons.executor import CronExecutor
     assert inspect.iscoroutinefunction(CronExecutor.execute)
     from qwenpaw.config.config import Config, AgentProfileConfig
@@ -35,7 +43,8 @@ def main():
     print(json.dumps({'ok': True, 'versions': actual,
                       'readinessSourceSha256': hashlib.sha256(source).hexdigest(),
                       'modelCalls': 0, 'stateMounted': False,
-                      'patches': ['readiness', 'iteration-policy', 'reme-status', 'native-tools']}))
+                      'patches': ['readiness', 'iteration-policy', 'reme-status', 'native-tools',
+                                  'explicit-survival-finish', 'life-memory-evidence', 'engineering-native-help']}))
 
 
 if __name__ == '__main__':

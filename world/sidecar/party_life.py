@@ -33,11 +33,17 @@ PROMPT = ('这是你原生活会话的定期继续，不是来自其他角色的
     'continuation中的摘要是上一模型的自述，不是游戏回执；先核对其中的未完成目标与当前位置、物品、'
     '工具和伙伴新回复。然后自行决定一个有价值的小步骤、一个需要解决的阻塞，或有理由的休息。'
     '选择工作时先确认原生task_catalog、所需工具材料与可达地点，再用真实work等工具交给原生AI执行；'
+    'workSupport含自身当前装备与可按需read_file的资料路径，选择玩法时先读对应的一篇。'
+    '与爸爸商定的分工可以自主推进，不必等每10分钟再互相邀请；也可以依据新事实改约或有理由地休息。'
+    '农耕不是必须目标：若选择它，查询目录并决定一个自己能执行的原生工作，不能以“准备帮忙”等待代替开始。'
     '目录未提供的浇水/移动/取物能力不要凭想象承诺，有缺口可协商可行分工或向运营组报告。'
     '仅看到identity里的activity=work不代表正在耕作，taskId=idle也不代表已启动工作；'
     '切换模式后的真实产出仍要另查，不把建议、同意分工或等待写成实际完成。'
     '坐标与地点名称先核对，不把跟随到的每个地方都叫营地；旧作物状态、救援次数不复制成今天的新事实。'
     '不要检索这段周期提示词；只有具体记忆缺口才查一次相关关键词，已有结果够用就继续。'
+    '背包增加只证明自己持有物资，可能是原生自动拾取；只有工作与世界回执才支持亲自耕作。'
+    '救援需要新鲜观测；workSupport的建议request_id只是本轮新请求标签，未提交也不授予权限。'
+    '遇到replayedReceipt先核对实际observedAt/expiresAt；未知旧救援只查原ID，明确拒绝后才按新事实重新决定。'
     '有用的新进展、问题和下一步写入自己的记忆或目标文件；没有新事实不用重复追加同一份状态日记。'
     '末尾用不超过400字留下当前小目标、实际新结果及来源、未完成或阻塞、下一步，供原会话下一轮接续。'
     '休息可以是自主选择，但说明在等待哪个可观察变化，不必每10分钟重写相同等待记录。'
@@ -97,11 +103,13 @@ class PartyLife:
             capabilities = {'available': True, 'enabledBodyTools': enabled, 'catalog': catalog}
         except (OSError, ValueError, TypeError, KeyError) as error:
             capabilities = {'available': False, 'errorType': type(error).__name__, 'catalog': catalog}
+        support = self.bridge.work_context(member, observed if snapshot['available'] else {},
+                                           signal['requestId'], self._scope())
         return {'round': {'signalId': signal['requestId'], 'startedAt': started, 'startedAtIso': iso_time(started),
                          'scheduledAt': signal['scheduledAt'], 'scheduledAtIso': iso_time(signal['scheduledAt']),
                          'timezone': 'Asia/Shanghai', 'pastConversationIsNotCurrentAchievement': True},
                 'worldClock': world | {'observedAt': self.clock(), 'observedAtIso': iso_time(self.clock())},
-                'currentObservation': snapshot, 'capabilities': capabilities,
+                'currentObservation': snapshot, 'capabilities': capabilities, 'workSupport': support,
                 'continuation': state.get('continuation'), 'previousRound': state.get('lastResult'),
                 'historicalMessages': dated, 'partyReplies': replies, 'untrustedEnvironmentData': True}
 
