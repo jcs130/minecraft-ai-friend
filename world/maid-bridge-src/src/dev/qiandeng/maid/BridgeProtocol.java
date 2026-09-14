@@ -123,6 +123,22 @@ public final class BridgeProtocol {
         } catch (Failure e) { throw e; }
         catch (RuntimeException e) { throw new Failure("invalid_reply"); }
     }
+    public static void requireQueuedReceipt(byte[] bytes, String requestId) {
+        if (bytes == null || bytes.length > 4096) throw new Failure("invalid_queue_receipt");
+        try {
+            uuid(requestId);
+            JsonObject value = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (!value.keySet().equals(Set.of("schema", "object", "request_id", "state", "persisted",
+                    "wake_requested", "assistant_reply"))
+                    || !value.get("schema").isJsonPrimitive() || !value.getAsJsonPrimitive("schema").isNumber()
+                    || !value.get("schema").toString().equals("1")
+                    || !string(value, "object", 64).equals("qiandeng.maid.input_receipt")
+                    || !string(value, "request_id", 36).equals(requestId)
+                    || !string(value, "state", 16).equals("queued")
+                    || !bool(value, "persisted") || bool(value, "wake_requested") || bool(value, "assistant_reply"))
+                throw new Failure("invalid_queue_receipt");
+        } catch (RuntimeException invalid) { throw new Failure("invalid_queue_receipt"); }
+    }
     public static String clip(String text, int max) {
         if (text == null) return "";
         return text.length() <= max ? text : text.substring(0, max);

@@ -51,7 +51,7 @@ MANIFEST = {
     "mc": {"health_required": True, "purpose": "Imported save, NeoForge and independent chanting-item protocol"},
     "world": {"health_required": True, "purpose": "Player commands, game adapters, optional goddess dialogue and heartbeat"},
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
-    "npc": {"health_required": True, "purpose": "Skill-book and NPC event consumers; legacy merchant availability audited separately"},
+    "npc": {"health_required": True, "purpose": "Skill-book, NPC event consumers and persistent maid perception inbox; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
     "qwenpaw": {"health_required": True, "purpose": "Current world team, cloud models and native tasks; engineering guard and owned no-deadline cycle checked by world_team"},
     "qwenpaw-ops": {"health_required": True, "purpose": "Six-role operations team, bounded native tasks and attributed proposals"},
@@ -188,7 +188,8 @@ def probe_panel_smoke():
     navigation_sense = probe_navigation_sense()
     model_routing = probe_model_routing()
     world_team = probe_world_team()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team)),
+    maid_perception = probe_maid_perception()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -198,7 +199,7 @@ def probe_panel_smoke():
             'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
-            'world_team': world_team}
+            'world_team': world_team, 'maid_perception': maid_perception}
 
 
 def probe_engineering_cron_runtime():
@@ -1560,6 +1561,23 @@ def probe_maid_bridge():
         return {'ok': False, 'error': 'Maid bridge probe unavailable'}
 
 
+def probe_maid_perception():
+    """Private inbox runtime and its own new evidence; do not replace bridge history."""
+    try:
+        spec = importlib.util.spec_from_file_location('qd_maid_perception_health', PROJECT / 'tools/maid_perception_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        live, behavior = module.check(PROJECT), module.behavior(PROJECT)
+        native_behavior = module.native_behavior(PROJECT)
+        return {'ok': live['ok'] and behavior['ok'] and native_behavior['ok'],
+            'live': live, 'behavior': behavior, 'native_behavior': native_behavior,
+            'supervised_by': 'Existing NPC Docker restart policy and native Qwen life signals',
+            'scope': 'Durable signed perception without input-triggered model calls; '
+                     'queued input is not character speech or verified in-game delivery.'}
+    except (OSError, ValueError, AttributeError, ImportError):
+        return {'ok': False, 'error': 'Maid perception probe unavailable'}
+
+
 def probe_agent_learning():
     """Recorded real MCP checks stay separate from model learning outcomes."""
     try:
@@ -1622,6 +1640,7 @@ def main_locked():
                   "advancement:find_thornborn_towers", "advancement:find_fishing_hut", "exploration-position-parser")),
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
+              "maid_perception": probe_maid_perception(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
               "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
               "world_team": probe_world_team()}

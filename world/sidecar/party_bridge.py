@@ -66,6 +66,7 @@ class PartyBridge:
         self.game = game or GameSpeech()
         self.public = Path(public or os.environ.get('PARTY_PUBLIC_FILE', '/party-public/party.json'))
         self._queue = None
+        self._perception_inbox = None
         self.last_error = None
 
     @property
@@ -73,6 +74,13 @@ class PartyBridge:
         if self._queue is None:
             self._queue = PartyMessages(self.root, self.config.binding, clock=self.clock)
         return self._queue
+
+    @property
+    def perception_inbox(self):
+        if self._perception_inbox is None:
+            from maid_perception_inbox import MaidPerceptionInbox
+            self._perception_inbox = MaidPerceptionInbox(self.root / 'dialogue-inbox', clock=self.clock)
+        return self._perception_inbox
 
     def observation(self, member):
         if member['kind'] == 'maid':

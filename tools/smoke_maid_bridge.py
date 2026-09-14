@@ -32,13 +32,14 @@ def main():
     parser.add_argument('--rescue', action='store_true', help='Verify scoped protection and operator rescue in an isolated world')
     parser.add_argument('--ticking', action='store_true', help='Verify bounded body ticks and native following far from spawn')
     parser.add_argument('--world-tick', action='store_true', help='Verify native crop ticks for authorized Numen/maid bodies')
+    parser.add_argument('--perception', action='store_true', help='Verify Yui native chat receipt-only input accumulation')
     parser.add_argument('--numen-jar', type=Path, help='Optional verified Numen world-tick candidate, isolated copy only')
     parser.add_argument('--iron-jar', type=Path, help='Optional verified Iron bridge candidate, isolated copy only')
     parser.add_argument('--drop-qa', action='store_true', help='Include the independent physical inventory-drop fixture')
     args = parser.parse_args()
-    if sum((args.companion, args.rescue, args.ticking, args.world_tick)) > 1: raise ValueError('choose_one_fixture')
-    qa_source = SOURCE / 'qa' / ('WorldTickQa.java' if args.world_tick else 'CompanionTickQa.java' if args.ticking else 'YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
-    qa_mod = 'qiandeng_world_tick_qa' if args.world_tick else 'qiandeng_companion_tick_qa' if args.ticking else 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
+    if sum((args.companion, args.rescue, args.ticking, args.world_tick, args.perception)) > 1: raise ValueError('choose_one_fixture')
+    qa_source = SOURCE / 'qa' / ('PerceptionQa.java' if args.perception else 'WorldTickQa.java' if args.world_tick else 'CompanionTickQa.java' if args.ticking else 'YuiRescueQa.java' if args.rescue else 'CompanionQa.java' if args.companion else 'MaidQa.java')
+    qa_mod = 'qiandeng_maid_perception_qa' if args.perception else 'qiandeng_world_tick_qa' if args.world_tick else 'qiandeng_companion_tick_qa' if args.ticking else 'qiandeng_yui_rescue_qa' if args.rescue else 'qiandeng_companion_qa' if args.companion else 'qiandeng_maid_qa'
     build = SOURCE / 'build'
     record = json.loads((build / 'build-record.json').read_text('utf8'))
     jar = build / 'qiandeng-maid-bridge-0.1.0.jar'
@@ -154,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
   self.send_response(200 if valid else 403);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
 ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
 ''', 'utf8')
+    if args.perception:
+        from smoke_maid_perception_checks import fake_server_source
+        (fake / 'server.py').write_text(fake_server_source(), 'utf8')
     mc_image = run(['docker', 'image', 'inspect', 'itzg/minecraft-server:java21', '--format', '{{.Id}}']).stdout.strip()
     # Reuse the current local image by immutable ID; no registry pull or production mount.
     py_image = run(['docker', 'inspect', 'qiandengji-survivor-1', '--format', '{{.Image}}']).stdout.strip()
@@ -193,7 +197,11 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         if args.drop_qa:
             from smoke_drop_checks import check_drop
             check_drop(response=response,command=command,run=run,base=base,folder=folder,checks=checks,details=details)
-        if args.world_tick:
+        if args.perception:
+            from smoke_maid_perception_checks import check_perception
+            check_perception(response=response, command=command, run=run, base=base,
+                data=data, fake=fake, checks=checks, details=details)
+        elif args.world_tick:
             from smoke_world_tick_checks import check_world_tick
             check_world_tick(response=response, command=command, invoke=invoke, run=run, base=base,
                 data=data, fake=fake, checks=checks, details=details)
@@ -237,12 +245,12 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
             checks['request-id-conflict'] = conflict['code'] == 'request_id_conflict'
             before = final['state']
             changes = {}
-            for op, args, restore in (
+            for op, op_args, restore in (
                 ('follow', {'follow': not before['following']}, {'follow': before['following']}),
                 ('schedule', {'schedule': 'NIGHT' if before['schedule'] != 'NIGHT' else 'DAY'}, {'schedule': before['schedule']}),
                 ('work', {'taskId': before['taskId']}, {'taskId': before['taskId']}),
             ):
-                changes[op] = {'applied': invoke(maids[0], op, args), 'restored': invoke(maids[0], op, restore)}
+                changes[op] = {'applied': invoke(maids[0], op, op_args), 'restored': invoke(maids[0], op, restore)}
             details['otherNativeStates'] = changes
             checks['native-follow-schedule-work'] = all(v['applied']['ok'] and v['restored']['ok'] and v['applied']['workCompleted'] is False for v in changes.values())
             details['chatSubmit'] = response('qdmaidqa chat', 'QD_MAID_QA ')
@@ -290,6 +298,9 @@ ThreadingHTTPServer(('0.0.0.0',8091),Handler).serve_forever()
         'fixtureSha256': hashlib.sha256(qa_source.read_bytes()).hexdigest(),
         'fixtureHashes':{p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in qa_sources},
         'toolSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    if args.perception:
+        report['perceptionChecksSha256'] = hashlib.sha256((ROOT/'tools/smoke_maid_perception_checks.py').read_bytes()).hexdigest()
+        report['fakeNpcSha256'] = hashlib.sha256((fake/'server.py').read_bytes()).hexdigest()
     (folder / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', 'utf8')
     print(json.dumps({'ok': report['ok'], 'checks': checks, 'report': str(folder / 'result.json')}), flush=True)
     return 0 if report['ok'] else 1

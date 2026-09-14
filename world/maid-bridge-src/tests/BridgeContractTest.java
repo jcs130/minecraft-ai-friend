@@ -80,6 +80,41 @@ public final class BridgeContractTest {
         failure("tool_reply_rejected", () -> BridgeProtocol.replyText("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"x\",\"tool_calls\":[]}}]}".getBytes()));
         failure("response_too_large", () -> BridgeProtocol.replyText(new byte[16385]));
 
+        // A queued input is not an OpenAI completion and cannot become speech.
+        var queued = new JsonObject(); queued.addProperty("schema", 1);
+        queued.addProperty("object", "qiandeng.maid.input_receipt"); queued.addProperty("request_id", MAID);
+        queued.addProperty("state", "queued"); queued.addProperty("persisted", true);
+        queued.addProperty("wake_requested", false); queued.addProperty("assistant_reply", false);
+        BridgeProtocol.requireQueuedReceipt(queued.toString().getBytes(StandardCharsets.UTF_8), MAID); check(true);
+        failure("invalid_reply", () -> BridgeProtocol.replyText(queued.toString().getBytes(StandardCharsets.UTF_8)));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(textReply, MAID));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(queued.toString().getBytes(StandardCharsets.UTF_8), OWNER));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(queued.toString().getBytes(StandardCharsets.UTF_8), "not-a-uuid"));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(new byte[4097], MAID));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt("[]".getBytes(StandardCharsets.UTF_8), MAID));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt("{".getBytes(StandardCharsets.UTF_8), MAID));
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(null, MAID));
+        for (String field : queued.keySet()) {
+            var missing = queued.deepCopy(); missing.remove(field);
+            failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(missing.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        }
+        for (String field : List.of("persisted", "wake_requested", "assistant_reply")) {
+            var flipped = queued.deepCopy(); flipped.addProperty(field, !queued.get(field).getAsBoolean());
+            failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(flipped.toString().getBytes(StandardCharsets.UTF_8), MAID));
+            var quoted = queued.deepCopy(); quoted.addProperty(field, queued.get(field).getAsString());
+            failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(quoted.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        }
+        var wrongObject = queued.deepCopy(); wrongObject.addProperty("object", "chat.completion");
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(wrongObject.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        var wrongState = queued.deepCopy(); wrongState.addProperty("state", "completed");
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(wrongState.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        var quotedSchema = queued.deepCopy(); quotedSchema.addProperty("schema", "1");
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(quotedSchema.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        var decimalSchema = queued.deepCopy(); decimalSchema.addProperty("schema", 1.0);
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(decimalSchema.toString().getBytes(StandardCharsets.UTF_8), MAID));
+        var extra = queued.deepCopy(); extra.addProperty("content", "not an assistant answer");
+        failure("invalid_queue_receipt", () -> BridgeProtocol.requireQueuedReceipt(extra.toString().getBytes(StandardCharsets.UTF_8), MAID));
+
         var root = Files.createTempDirectory("qd-maid-journal-test-");
         try {
             var journal = new ReceiptJournal(root);

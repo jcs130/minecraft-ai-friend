@@ -17,11 +17,14 @@ from qwen_tasks import QwenTasks, read_json, write_json, state_lock
 from maid_identity import IdentityVerifier
 from maid_registry import MaidRegistry
 from maid_native_tools import MaidNativeTools, TOOL_NAMES, READS
+from maid_perception_inbox import DELIVERY, binding_key
+from party_role_capabilities import YUI_AGENT_ID
 
 ROLE = 'qd-maid-dialogue'
 BODY_LIMIT = 65536
 PROMPT_LIMIT = 22000
 _ACTIVE = threading.BoundedSemaphore(1)
+_SIGNED_INGRESS = threading.BoundedSemaphore(16)
 
 
 def maid_prompt(body):
@@ -56,6 +59,9 @@ class MaidAdapter:
         self.root = Path(root)
         self.registry, self.verifier, self.native = registry, verifier, native
         self.party = party
+        if party is not None:
+            # Initialize durable storage at service construction, never a GET.
+            party.perception_inbox
 
     def complete(self, body, wait_seconds=48):
         prompt = maid_prompt(body)
@@ -87,6 +93,16 @@ class MaidAdapter:
         trusted = self.verifier.verify(raw, headers)
         body, actor = trusted['body'], trusted['identity']
         maid_prompt(body)  # Preserve strict text-only and aggregate size validation.
+        if body.get('qd_delivery') is not None:
+            if body['qd_delivery'] != DELIVERY or self.party is None:
+                raise ValueError('perception_consumer_unavailable')
+            # Only the existing original life consumer qualifies. No character
+            # registration, model POST, pendingKey release or wake on receipt.
+            binding = self.registry.resolve(actor['maidUuid'], actor['ownerUuid'])
+            member = self.party.config.member(YUI_AGENT_ID)
+            if binding_key(binding) != binding_key(member):
+                raise ValueError('perception_consumer_binding_changed')
+            return 202, self.party.perception_inbox.accept(trusted, binding)
         receipt_path = self.registry.root / 'signed-requests' / (trusted['requestId'] + '.json')
         with state_lock(self.registry.root):
             if receipt_path.exists():
@@ -231,6 +247,12 @@ def make_handler(adapter, token):
                                   nativeMcpEnabled=bool(adapter.registry is not None and adapter.native is not None))
                     if adapter.registry is not None:
                         result['registry'] = adapter.registry.health_summary()
+                    if adapter.party is not None:
+                        member = adapter.party.config.member(YUI_AGENT_ID)
+                        binding = adapter.registry.resolve(member['bodyUuid'], member['ownerUuid'])
+                        if binding_key(binding) != binding_key(member):
+                            raise ValueError('perception_consumer_binding_changed')
+                        result['perceptionInbox'] = adapter.party.perception_inbox.summary(binding)
                 self.send_json(200, result)
             except (OSError, ValueError):
                 self.send_json(503, {'ok': False, 'role': ROLE})
@@ -423,7 +445,9 @@ def make_handler(adapter, token):
             except ValueError:
                 return self.send_json(400, {'error': {'code': 'invalid_content_length'}})
             is_mcp = self.path in ('/mcp', '/party/mcp')
-            if not is_mcp and not _ACTIVE.acquire(blocking=False):
+            signed = self.path == '/v1/maid/chat/completions'
+            held = None if is_mcp else (_SIGNED_INGRESS if signed else _ACTIVE)
+            if held is not None and not held.acquire(blocking=False):
                 return self.send_json(429, {'error': {'code': 'adapter_busy'}})
             try:
                 self.connection.settimeout(5)
@@ -432,7 +456,16 @@ def make_handler(adapter, token):
                     raise ValueError('incomplete_request')
                 if is_mcp:
                     return self.party_mcp(raw) if self.path == '/party/mcp' else self.mcp(raw)
-                if self.path == '/v1/maid/chat/completions':
+                if signed:
+                    parsed = json.loads(raw)
+                    if not isinstance(parsed, dict) or parsed.get('qd_delivery') != DELIVERY:
+                        # The short ingress lane is never held by a legacy
+                        # 48-second model wait. Queue metadata is still HMAC
+                        # verified by complete_signed before it can be stored.
+                        held.release(); held = None
+                        if not _ACTIVE.acquire(blocking=False):
+                            return self.send_json(429, {'error': {'code': 'adapter_busy'}})
+                        held = _ACTIVE
                     status, response = adapter.complete_signed(raw, self.headers)
                 else:
                     status, response = adapter.complete(json.loads(raw))
@@ -442,8 +475,8 @@ def make_handler(adapter, token):
             except Exception:
                 self.send_json(503, {'error': {'code': 'qwen_adapter_unavailable'}, 'retry_automatically': False})
             finally:
-                if not is_mcp:
-                    _ACTIVE.release()
+                if held is not None:
+                    held.release()
 
     return Handler
 

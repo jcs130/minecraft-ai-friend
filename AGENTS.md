@@ -1,5 +1,9 @@
 # 千灯纪整合项目
 
+2026-09-14 19:32 当前覆盖下文“结衣busy尚未排队”：正常TLM结衣输入已接入持久私有感知收件箱，Java仅最后user+HMAC→七字段202收件→原PartyLife十分钟signal/原session精确批次消费。新输入不POST模型、不立即唤醒、不复制全部历史；speaker无法从TLM callback证明，不能冒认主人说话或把私有原文转party公开广播。普通其他人物及设定/摘要callback保留同步；不宣称真人已收到延迟逐条回答。新JSON转义长度/只读SQLite快照/精确ID消费/失败未知不自动重放已覆盖，详见docs/YUI-DIALOGUE-INBOX.md。
+
+现役maid bridge为b4b94edb…d0e7e，MC/NPC正常退出0、21,242文件2,425,392,752字节备份后部署到server/client/cache/X盘，Qwen仍原18:31的2.2.1进程与模型。原16Cron/准入/自主19:26:56恢复，19:27桐人task-5c1d5c714608与结衣task-04fcb73faa1b启动；19:32结衣已完成原生活轮，桐人已接续task-777601769e41。13正式服务已恢复正常，网页观察者靠原退避重连恢复；不再暂停或重复resume。新收件probe独立要求生产契约+19新Python用例+19真实隔离Java行为及安装源码一致，原桥20实机回归/211Java断言另验，旧QA失败与旧smoke原字节保留，不能改历史hash凑绿；全项目其他历史证明过期不在本次收件修复中被宣称解决。
+
 2026-09-14 18:39 最新运行：游戏18089已升级QwenPaw2.2.1/ReMe0.4.1.11，正式image为qiandengji-qwenpaw-game:2.2.1-memory1（41ddc296…408c4）；宿主8088、Minecraft、survivor aut18未随包升级重启。原10角色/96技能绑定/16Cron、即时模型、人设、会话记忆全部保留，18:33已恢复自主。官方MakeSkill2.0完整脚本及公共技能池已更新；基础工具6项，旧materialize_skill已移除，勿恢复旧工具凑计数。原生ReMe统计修复已采用，生活真实回执扩展继续保留，AutoMemory5外部回合/小时Dream/native上下文参数原样，Scroll/AutoFin/第三方插件未启用。升级及复用研究见docs/QWENPAW-221-UPGRADE.md与docs/QWENPAW-CAPABILITY-REUSE.md，旧初始化器不可重跑。
 
 本次先排空原生任务和18点Dream，Qwen/NPC正常退出0，5910文件335MB逐字节备份；最小迁移先副本后正式，工具SHA23e9f83d…b7dd，仅130预期工作文件变化，其他4637原字节不动；幂等再执行4767工作文件全等。维护已结束，不要再次暂停/重放；NPC新增operator admission需相同维护ID恢复，stop_signal=SIGINT。结衣task-256878865747执行后未被NPC收取终态，新进程404/idle0/NPC停机核验后仅独立released_without_result证明，原结果未核实、原记录/预算/session不改。今后停Qwen前须收取所有active-roles指向的原任务终态，不能只看native active=0。
