@@ -15,7 +15,7 @@
 
 新任务需要旧经验时，读取索引，再读取相关的一页。当前服务器数据和实际回执优先于旧笔记；配方、地点、材料、模组版本变化时重新核对。不要把整套资料复制进常驻身份提示词或每轮上下文。
 
-重复验证有用的方法可以通过官方 `make-skill` / `materialize_skill` 保存成个人技能：简介写触发条件，正文写短流程，详细资料放在该技能的 references 中。代码可以保存在 `drafts/` 继续修改；可执行 Minecraft 程序仍通过现有 `skill_draft → skill_test → skill_promote` 验证，写出代码和创建 Markdown 本身不代表已经测试。
+重复验证有用的方法可以通过官方 `make-skill` 保存成个人技能：先读当前版本正文，QwenPaw 2.2.1 使用 `create_plan → init_draft → validate_skill → publish_skill` 四个官方脚本，具体输入、路径和 cwd 按本技能主文执行。简介写触发条件，正文写短流程，详细资料放在该技能的 references 中。代码可以保存在 `drafts/` 继续修改；可执行 Minecraft 程序仍通过现有 `skill_draft → skill_test → skill_promote → skill_start` 试运行，并核对真实实践回执。写出代码、创建 Markdown 或 fixture 通过本身都不证明游戏效果。
 
 共享村民或兼容女仆对话角色只沉淀通用方法；具体人物事实必须按已核验的身份分开记录，缺少可靠身份时不建立个人长期记录。独立女仆只保存自己的经历，不把另一个人物的台词当成自己的记忆。
 

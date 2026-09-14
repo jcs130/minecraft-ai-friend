@@ -1,0 +1,7 @@
+# Incremental deployment on the verified existing survivor runtime. All behavior
+# sources are copied explicitly; no package/model/runtime upgrade is implied.
+ARG SURVIVOR_BASE=qiandengji-survivor:2.2.0-autonomy18
+FROM ${SURVIVOR_BASE}
+COPY world/survival /survival
+COPY world/sidecar/character_speech.py /survival/character_speech.py
+ENTRYPOINT ["python", "-u", "/survival/service.py"]

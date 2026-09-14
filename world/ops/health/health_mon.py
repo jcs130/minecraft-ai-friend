@@ -60,7 +60,7 @@ MANIFEST = {
     "panel": {"health_required": True, "purpose": "Independent management page and public read models"},
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
-    "survivor": {"health_required": True, "purpose": "Kirito autonomous survival, leased Numen actions and tested skills"},
+    "survivor": {"health_required": True, "purpose": "Kirito autonomous survival, leased Numen actions, tested skills and durable practice receipts"},
     "inventory": {"health_required": True, "purpose": "Read-only Docker-managed current project inventory publication"},
 }
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
@@ -189,7 +189,8 @@ def probe_panel_smoke():
     model_routing = probe_model_routing()
     world_team = probe_world_team()
     maid_perception = probe_maid_perception()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception)),
+    survival_practice = probe_survival_practice()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -199,7 +200,7 @@ def probe_panel_smoke():
             'operations_team': operations_team, 'game_qwenpaw': game_qwenpaw, 'survivor': survivor,
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
-            'world_team': world_team, 'maid_perception': maid_perception}
+            'world_team': world_team, 'maid_perception': maid_perception, 'survival_practice': survival_practice}
 
 
 def probe_engineering_cron_runtime():
@@ -1578,6 +1579,21 @@ def probe_maid_perception():
         return {'ok': False, 'error': 'Maid perception probe unavailable'}
 
 
+def probe_survival_practice():
+    """Keep current ledger readiness and its separate isolated behavior evidence explicit."""
+    try:
+        spec = importlib.util.spec_from_file_location('qd_survival_practice_health', PROJECT / 'tools/survival_practice_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        live, behavior = module.check(PROJECT), module.behavior(PROJECT)
+        return {'ok': live['ok'] and behavior['ok'], 'live': live, 'behavior': behavior,
+            'supervised_by': 'Existing survivor Docker restart policy and original autonomous loop',
+            'scope': 'Durable practice bookkeeping and exact receipts; readiness and isolated tests '
+                     'do not establish a completed game goal or improved skill.'}
+    except (OSError, ValueError, AttributeError, ImportError, KeyError, TypeError):
+        return {'ok': False, 'error': 'Survival practice probe unavailable'}
+
+
 def probe_agent_learning():
     """Recorded real MCP checks stay separate from model learning outcomes."""
     try:
@@ -1641,6 +1657,7 @@ def main_locked():
               "voice_inference": probe_recorded_behavior("voice-inference-*.json"),
               "character_speech": probe_character_speech(), "maid_bridge": probe_maid_bridge(),
               "maid_perception": probe_maid_perception(),
+              "survival_practice": probe_survival_practice(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
               "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
               "world_team": probe_world_team()}

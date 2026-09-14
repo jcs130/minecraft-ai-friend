@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/survival'))
@@ -16,7 +17,10 @@ import native_tools as native
 def tools():
     return [{'name': name, 'enabled': True, 'input_schema': {'type': 'object', 'properties':
         {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
-        if name == 'remember' else {}}} for name in native.TOOL_NAMES]
+        if name == 'remember' else
+        {'objective' if name == 'skill_start' else 'refinement':
+         {'default': None, 'anyOf': [{'type': 'object'}, {'type': 'null'}]}}
+        if name in ('skill_start', 'skill_draft') else {}}} for name in native.TOOL_NAMES]
 
 
 def saved():
@@ -56,6 +60,17 @@ class NativeToolConnectionTests(unittest.TestCase):
         with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
             self.assertTrue(native.NativeToolConnection().ensure_ready())
             self.assertEqual(request.call_args_list[2].args[1], native.TOOLS_ROUTE)
+
+    def test_old_practice_schema_requires_reload_and_new_arguments_remain_optional(self):
+        for name, field in (('skill_start', 'objective'), ('skill_draft', 'refinement')):
+            before = tools()
+            schema = next(row for row in before if row['name'] == name)['input_schema']
+            schema['properties'].pop(field)
+            self.assertFalse(native.valid_tools(before))
+            after = tools()
+            next(row for row in after if row['name'] == name)['input_schema']['required'] = [field]
+            self.assertFalse(native.valid_tools(after))
+        self.assertTrue(native.valid_tools(tools()))
 
     def test_saved_inactive_driver_reloads_through_exact_whitelist_then_requires_get(self):
         with patch.object(native, 'request', side_effect=[OSError(), saved(), tools(), []]) as request:
@@ -106,7 +121,8 @@ class NativeToolConnectionTests(unittest.TestCase):
             (root / 'game-migration.json').write_text('{}')
             (root / 'survival/heartbeat.json').write_text(json.dumps({'ok': True, 'at': time.time() * 1000, 'status': 'paused'}))
             values = [{'ok': True}, {'status': 'ok', 'agents_loaded': ['qd-survivor']}, {'enabled': False}]
-            with patch.object(health, 'Path', return_value=root), patch.object(health.importlib.metadata, 'version', return_value='2.2.0'), \
+            with patch.object(health, 'Path', return_value=root), \
+                 patch.dict(sys.modules, {'qwenpaw_runtime_contract': SimpleNamespace(release=lambda: None)}), \
                  patch.dict(health.os.environ, {'QWENPAW_AUTH_ENABLED': '0', 'SURVIVOR_QWEN_MODE': 'external'}), \
                  patch.object(health.urllib.request, 'urlopen', side_effect=[io.BytesIO(json.dumps(v).encode()) for v in values]), \
                  patch.object(health, 'require_ready', return_value=False):

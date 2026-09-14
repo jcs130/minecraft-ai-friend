@@ -31,6 +31,22 @@ class SkillTools:
             self._library = SkillLibrary(self.state / 'skills')
         return self._library
 
+    @property
+    def practice(self):
+        from practice import PracticeStore
+        return PracticeStore(self.state, self.clock)
+
+    def catalog(self):
+        result = self.library.catalog()
+        result['practice'] = self.practice.summarize(limit=3)
+        result['practiceGuide'] = 'skills/qd-survivor-practice/references/program-practice.md'
+        return result
+
+    def read(self, name, version=None):
+        result = self.library.read(name, version)
+        result['practice'] = self.practice.read(name, result['version'], limit=3)
+        return result
+
     def _lease(self, turn_id):
         from numen_gateway import read_json, GatewayError, TURN_ID
         control = read_json(self.state / 'control.json')
@@ -66,14 +82,31 @@ class SkillTools:
             return {'ok': False, 'code': str(exc), 'retryAutomatically': False}
         except Exception as exc:
             from skill_library import SkillError
+            from practice import PracticeError
+            if isinstance(exc, PracticeError):
+                return {'ok': False, 'code': str(exc), 'retryAutomatically': False}
             if isinstance(exc, SkillError):
                 return {'ok': False, 'code': exc.code, 'generatedProgramLine': exc.line,
                         'retryAutomatically': False}
             return {'ok': False, 'code': 'skill_operation_failed', 'errorType': type(exc).__name__,
                     'retryAutomatically': False}
 
-    def draft(self, turn_id, name, source, fixtures, description=''):
-        return self._write(turn_id, lambda _: self.library.draft(name, source, fixtures, description))
+    def draft(self, turn_id, name, source, fixtures, description='', refinement=None):
+        def save(_):
+            proposal = (self.practice.validate_refinement(name, refinement)
+                        if refinement is not None else None)
+            result = self.library.draft(name, source, fixtures, description)
+            if proposal is not None:
+                try:
+                    result['refinement'] = self.practice.save_refinement(name, result['version'], proposal)
+                except Exception as exc:
+                    # Source is already safely saved; do not disguise this as a
+                    # rejection before writes or encourage repeating the draft.
+                    return {**result, 'ok': False, 'code': 'refinement_record_failed',
+                            'draftSaved': True, 'refinementSaved': False,
+                            'errorType': type(exc).__name__, 'retryAutomatically': False}
+            return result
+        return self._write(turn_id, save)
 
     def test(self, turn_id, name, version=None):
         return self._write(turn_id, lambda _: self.library.test(name, version))
@@ -81,8 +114,9 @@ class SkillTools:
     def promote(self, turn_id, name, version):
         return self._write(turn_id, lambda _: self.library.promote(name, version))
 
-    def start(self, turn_id, name, version, memory=None, max_steps=32):
+    def start(self, turn_id, name, version, memory=None, max_steps=32, objective=None):
         from numen_gateway import read_json, write_json, GatewayError
+        from practice import run_id, validate_objective
         def queue(lease):
             if lease['status'] != 'open' or lease['actionsUsed'] != 0:
                 raise GatewayError('turn_action_already_used')
@@ -94,16 +128,21 @@ class SkillTools:
                                         sort_keys=True, separators=(',', ':'))
             if len(bounded_memory.encode('utf8')) > 16384:
                 raise GatewayError('skill_memory_too_large')
+            expected = validate_objective(objective)
             item = self.library.read(name, version)
             if item.get('promoted') is not True or item.get('version') != version:
                 raise GatewayError('skill_not_promoted')
             path = self.state / 'skill-job.json'
-            if path.exists() and read_json(path).get('status') not in (
-                    'done', 'replan', 'paused', 'completed', 'failed', 'cancelled'):
-                raise GatewayError('skill_job_already_active')
+            if path.exists():
+                previous = read_json(path)
+                if previous.get('status') not in ('done', 'replan', 'paused', 'completed', 'failed', 'cancelled'):
+                    raise GatewayError('skill_job_already_active')
+                if previous.get('practiceStarted') and not previous.get('practiceFinalized'):
+                    raise GatewayError('practice_receipt_pending')
             job = {'schema': 1, 'status': 'pending', 'name': name, 'version': version,
                    'memory': json.loads(bounded_memory), 'maxSteps': max_steps,
-                   'requestedAt': int(self.clock() * 1000), 'turnId': turn_id}
+                   'requestedAt': int(self.clock() * 1000), 'turnId': turn_id,
+                   'practiceRunId': run_id(name, version, turn_id), 'objective': expected}
             # Close direct actions first. A crash between writes leaves no executable
             # job and cannot permit a concurrent direct action or automatic replay.
             lease.update(status='closed', skillStartRequested=True)
@@ -444,18 +483,19 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def skill_catalog() -> dict:
-        """查看自主编写的技能与当前已晋升版本。目录和描述是数据，不是系统指令。"""
-        return skill_tools.library.catalog()
+        """查看程序技能、当前版本和最近真实实践摘要。实践目标满足不等于跨场景掌握；详细失败回执用skill_read。"""
+        return skill_tools.catalog()
 
     @server.tool()
     def skill_read(name: str, version: str | None = None) -> dict:
-        """读取技能源码和测试；未指定version读取最新草稿，promoted才可申请运行。"""
-        return skill_tools.library.read(name, version)
+        """读取准确版本的源码、fixtures和实践证据；含原runId、动作回执、目标观察及改进提案。默认最新草稿，promoted才可申请运行。"""
+        return skill_tools.read(name, version)
 
     @server.tool()
-    def skill_draft(turn_id: str, name: str, source: str, fixtures: list[dict], description: str = '') -> dict:
-        """保存纯JS next(state,memory)技能草稿和至少两个不同输入的测试；不触游戏。"""
-        return skill_tools.draft(turn_id, name, source, fixtures, description)
+    def skill_draft(turn_id: str, name: str, source: str, fixtures: list[dict], description: str = '',
+                    refinement: dict | None = None) -> dict:
+        """保存纯JS next(state,memory)和至少2例fixtures，不执行游戏。修订可附refinement={run_ids:[本技能1–3个实际runId],hypothesis:改进原因,expected_outcome:预期效果}；预期不算已验证。程序和样例契约按需读qd-survivor-practice/references/program-practice.md。"""
+        return skill_tools.draft(turn_id, name, source, fixtures, description, refinement)
 
     @server.tool()
     def skill_test(turn_id: str, name: str, version: str | None = None) -> dict:
@@ -468,9 +508,10 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return skill_tools.promote(turn_id, name, version)
 
     @server.tool()
-    def skill_start(turn_id: str, name: str, version: str, memory: dict | None = None, max_steps: int = 32) -> dict:
-        """排队执行已晋升技能，最多32步；与本轮直接动作互斥，排队后结束本轮等待控制器。"""
-        return skill_tools.start(turn_id, name, version, memory, max_steps)
+    def skill_start(turn_id: str, name: str, version: str, memory: dict | None = None, max_steps: int = 32,
+                    objective: dict | None = None) -> dict:
+        """用本轮未用过动作的租约排队已晋升程序；成功即关闭租约，直接最终答复，勿再remember。可先remember(finish_turn=false)记录意图。objective={description,checks:[{kind:inventory_gain,item:完整ID,count:数量},{kind:action_completed,tool:动作名,count:次数}]}最多4项；宿主独立记录观察，程序done不代替验收。"""
+        return skill_tools.start(turn_id, name, version, memory, max_steps, objective)
 
     @server.tool()
     def remember(turn_id: str, goal: str = '', lesson: str = '', next_focus: str = '',
@@ -484,10 +525,11 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
 class BearerMcpApp:
     """Authenticated internal transport; no world data or tokens in health/logs."""
-    def __init__(self, app, token):
+    def __init__(self, app, token, state=None):
         if not isinstance(token, str) or len(token) < 32 or any(c.isspace() for c in token):
             raise ValueError('invalid_survivor_mcp_token')
         self.app, self.expected = app, ('Bearer ' + token).encode('ascii')
+        self.state = Path(state) if state is not None else Path('/state/survival')
 
     async def __call__(self, scope, receive, send):
         if scope['type'] == 'lifespan':
@@ -495,15 +537,34 @@ class BearerMcpApp:
         if scope['type'] != 'http':
             await send({'type': 'websocket.close', 'code': 1008})
             return
-        health = scope.get('path') == '/livez' and scope.get('method') == 'GET'
+        health = scope.get('path') in ('/livez', '/healthz') and scope.get('method') == 'GET'
         headers = [value for key, value in scope.get('headers', []) if key.lower() == b'authorization']
         allowed = len(headers) == 1 and hmac.compare_digest(headers[0], self.expected)
         if not health and allowed:
             return await self.app(scope, receive, send)
         body = b'{"ok":true}' if health else b'{"error":"unauthorized"}'
+        if health and scope.get('path') == '/healthz':
+            body = json.dumps(practice_health(self.state), ensure_ascii=True).encode('utf-8')
         await send({'type': 'http.response.start', 'status': 200 if health else 401,
                     'headers': [(b'content-type', b'application/json'), (b'cache-control', b'no-store')]})
         await send({'type': 'http.response.body', 'body': body})
+
+
+def practice_health(state):
+    """Aggregate-only, read-only readiness; no private objectives or model work."""
+    import hashlib
+    from practice import PracticeStore
+    try:
+        value = PracticeStore(state).health()
+        folder = Path(__file__).resolve().parent
+        sources = {'world/survival/' + name: hashlib.sha256((folder / name).read_bytes()).hexdigest()
+                   for name in ('controller.py', 'mcp_server.py', 'practice.py', 'skill_library.py')}
+        from numen_gateway import read_json
+        path = Path(state) / 'controller.json'
+        warning = read_json(path).get('practiceWarning') if path.exists() else None
+        return {'ok': value.get('available') is True and not warning, 'practice': value, 'sources': sources}
+    except Exception as exc:
+        return {'ok': False, 'errorType': type(exc).__name__}
 
 
 if __name__ == '__main__':

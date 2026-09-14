@@ -242,6 +242,13 @@ class Controller:
         self.settings = read_json(self.root / 'settings.json')
         from life_session import load_session
         self.session = load_session(self.root, self.settings)
+        from practice import PracticeStore
+        self.practice = PracticeStore(self.root, self.clock) if self.skills else None
+        if self.practice is not None:
+            try:
+                self.practice.initialize()
+            except Exception as exc:
+                self.data['practiceWarning'] = type(exc).__name__
         # A known task survives a controller restart when Qwen is still alive.
         # A lost POST response or Qwen's missing in-memory task must never be sent again.
         active = self.data.get('active')
@@ -381,6 +388,57 @@ class Controller:
     def memory(self):
         path = self.root / 'memory.json'
         return read_json(path) if path.exists() else {}
+
+    def practice_context(self):
+        if self.practice is None:
+            return {'available': False, 'runs': []}
+        try:
+            return self.practice.summarize(limit=2)
+        except Exception as exc:
+            self.data['practiceWarning'] = type(exc).__name__
+            return {'available': False, 'runs': [], 'errorType': type(exc).__name__}
+
+    def collect_practice_receipts(self, turn_id, rows):
+        if self.practice is not None:
+            try:
+                # The durable step index selects the original run. A late
+                # receipt never belongs to whichever job happens to be current.
+                self.practice.capture_turn(turn_id, rows)
+            except Exception as exc:
+                self.data['practiceWarning'] = type(exc).__name__
+
+    def settle_practice(self):
+        path = self.root / 'skill-job.json'
+        if self.practice is None or not path.exists():
+            return
+        job = read_json(path)
+        if (not job.get('practiceRunId') or not job.get('practiceStarted')
+                or job.get('practiceFinalized') or job.get('status') not in
+                ('done', 'replan', 'paused', 'completed', 'failed', 'cancelled')):
+            return
+        try:
+            body = self.gateway.snapshot()
+            if body.get('ok') is not True:
+                return
+            # Freeze the first terminal observation before receipt recovery.
+            # A late read must not attribute the next goal's inventory changes.
+            self.practice.finish(job['practiceRunId'], job, body)
+            if hasattr(self.gateway, 'turn_receipts'):
+                # Re-read the original run's bounded step index, including an
+                # earlier receipt whose first capture failed before last-action
+                # advanced. Failed reads keep finalization pending for recovery.
+                for turn_id in self.practice.turns(job['practiceRunId']):
+                    self.practice.capture_turn(turn_id, self.gateway.turn_receipts(turn_id))
+            result = self.practice.finish(job['practiceRunId'], job, body)
+            job['practiceFinalized'] = True
+            write_json(path, job)
+            self.data.pop('practiceWarning', None)
+            self.record('practice_recorded', runId=job['practiceRunId'], name=job['name'],
+                        version=job['version'], status=job['status'],
+                        notice='Recorded practice is not proof of general skill mastery.')
+            return result
+        except Exception as exc:
+            self.data['practiceWarning'] = type(exc).__name__
 
     def conversation_intent(self, control):
         path = self.root / 'conversation-intent.json'
@@ -567,6 +625,15 @@ class Controller:
                     'dimension', 'gameMode', 'task', 'observedAt', 'bodyControl',
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
             'adventure': self.adventure(body),
+            'learningPractice': self.practice_context(),
+            'learningUpdate': {'revision': 'practice-evidence-v1',
+                'reference': 'skills/qd-survivor-practice/references/program-practice.md',
+                'instruction': '当前小目标和改进办法由你决定。发现重复操作或重复失败时，按需读程序实践指南，'
+                    '用skill_read查看准确版本的真实实践与失败样本；提炼小程序后draft/test/promote，'
+                    '再在尚未使用身体动作的新回合skill_start实际练习。可附objective固定本次验收条件；'
+                    '先remember(finish_turn=false)记录意图，再start，排队成功后直接最终答复，不再调用remember。'
+                    '后续正常生活轮查看实践回执，根据结果修订，skill_draft可用refinement关联同技能原run_ids。'
+                    '测试通过、程序done、观察到目标、跨场景掌握分别记录。学习不要求额外发声或每轮新建技能。'},
             'capabilityUpdate': {'revision': 'survival-progress-20260914-v1',
                 'inventory': 'drop_items可直接丢出已有主背包物品。腾格通常需要移走整槽；丢出少量而该槽仍有剩余，不会增加空槽。按当前需求自主选择存放、使用或舍弃。',
                 'reference': 'skills/qd-minecraft-guide/references/building.md',
@@ -632,6 +699,7 @@ class Controller:
             return [r for r in tail(self.root / 'actions.jsonl', 128)
                     if r.get('turnId') == turn_id and r.get('phase') == 'response']
         rows = self.gateway.turn_receipts(turn_id)
+        self.collect_practice_receipts(turn_id, rows)
         seen = self.data.setdefault('receiptObservations', [])
         for row in rows:
             # Deduplication belongs to the persistent queue, not the 64-row
@@ -1023,6 +1091,19 @@ class Controller:
         job = read_json(path)
         if job.get('status') not in ('pending', 'running'):
             return False
+        if job.get('practiceRunId') and not job.get('practiceStarted'):
+            try:
+                self.practice.begin(job, body)
+                job['practiceStarted'] = True
+                write_json(path, job)
+            except Exception as exc:
+                # Failed evidence admission cannot send a game action. The
+                # ordinary life loop remains able to inspect or choose another goal.
+                job.update(status='replan', reason='practice_admission_failed')
+                write_json(path, job)
+                self.data['practiceWarning'] = type(exc).__name__
+                self.record('skill_error', name=job['name'], errorType=type(exc).__name__)
+                return False
         now = self.clock()
         job.setdefault('startedAt', now)
         job.setdefault('steps', 0)
@@ -1065,6 +1146,8 @@ class Controller:
             action = plan.get('action')
             if action:
                 turn_id = 'skill-' + uuid.uuid4().hex
+                if job.get('practiceRunId'):
+                    self.practice.step(job['practiceRunId'], turn_id, turn_id, action['tool'], action['args'])
                 self.gateway.open_lease(turn_id, (now + 60) * 1000)
                 # Save program memory before external effects. A crash never repeats this step.
                 job['lastTurnId'] = turn_id
@@ -1310,9 +1393,18 @@ class Controller:
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):
-                        self.submit_model(body, control)
+                        # The next life turn receives the freshly settled run,
+                        # rather than waiting another model round to discover it.
+                        self.settle_practice()
+                        path = self.root / 'skill-job.json'
+                        job = read_json(path) if path.exists() else {}
+                        if job.get('practiceStarted') and not job.get('practiceFinalized'):
+                            self.data['status'] = 'practice_confirmation_wait'
+                        else:
+                            self.submit_model(body, control)
         # Model terminal and pending physical actions may settle this tick.
         # Preserve other pause reasons, including every unknown outcome.
         self.drain_at_boundary(body)
+        self.settle_practice()
         self.save()
         self.publish()

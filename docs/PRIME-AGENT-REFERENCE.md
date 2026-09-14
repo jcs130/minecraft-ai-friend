@@ -1,6 +1,6 @@
 # Prime Agent 与千灯纪的长期自主成长
 
-核查日期：2026-09-14。结论：优先借鉴可修订的经验、持久目标、结果验收及程序化上下文；继续由游戏 Docker 内 QwenPaw 承担模型调用，Numen/TLM 承担身体执行。本次完成源码研究和接入设计，没有安装 Prime、切换运行框架、修改角色配置或发起生产模型实验。
+核查日期：2026-09-14。结论：优先借鉴可修订的经验、持久目标、结果验收及程序化上下文；继续由游戏 Docker 内 QwenPaw 承担模型调用，Numen/TLM 承担身体执行。本文记录研究时点；后续已实施的版本化实践、回执与技能部署见 [持续实践实现](SURVIVOR-CONTINUAL-PRACTICE.md)，没有安装第二套 Prime 运行服务。
 
 研究固定于 Prime 官方提交 [`4a4a2305eb58ab1081f72b3a85da4c962acf70bd`](https://github.com/PrimeIntellect-ai/prime-agent/tree/4a4a2305eb58ab1081f72b3a85da4c962acf70bd)，仓库采用 [MIT](https://github.com/PrimeIntellect-ai/prime-agent/blob/4a4a2305eb58ab1081f72b3a85da4c962acf70bd/LICENSE)。本文没有复制第三方实现。以后移植源码应记录固定来源并保留相应许可证。
 

@@ -160,8 +160,10 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         self.assertTrue(value['ok'])
         self.assertFalse(value['executionConfirmed'])
         job = read_json(self.state / 'skill-job.json')
+        from practice import run_id
         self.assertEqual(job, {'schema': 1, 'status': 'pending', 'name': 'gather', 'version': VERSION,
-                              'memory': {'round': 1}, 'maxSteps': 12, 'requestedAt': NOW * 1000, 'turnId': TURN})
+                              'memory': {'round': 1}, 'maxSteps': 12, 'requestedAt': NOW * 1000, 'turnId': TURN,
+                              'objective': None, 'practiceRunId': run_id('gather', VERSION, TURN)})
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'lease_invalid')
         self.assertEqual(self.library.calls, [('read', ('gather', VERSION))])

@@ -42,9 +42,16 @@ def valid_tools(value):
     if not basic:
         return False
     properties = next(row for row in value if row['name'] == 'remember')['input_schema'].get('properties', {})
-    return (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
+    memory_ready = (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
             and properties.get('finish_turn', {}).get('default') is False
             and properties.get('summary', {}).get('type') == 'string')
+    for name, field in (('skill_start', 'objective'), ('skill_draft', 'refinement')):
+        schema = next(row for row in value if row['name'] == name)['input_schema']
+        parameter = schema.get('properties', {}).get(field, {})
+        if (parameter.get('default', 'missing') is not None or field in schema.get('required', [])
+                or not any(part.get('type') == 'object' for part in parameter.get('anyOf', []))):
+            return False
+    return memory_ready
 
 
 def require_ready(base_url=None):
