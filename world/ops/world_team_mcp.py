@@ -6,6 +6,38 @@ from world_team import members, TeamStore
 COMMON_TOOLS = ('team_roster', 'team_context', 'team_cases', 'team_case', 'team_report', 'team_update')
 
 
+def _plain(value):
+    return value if value is None or isinstance(value, (str, bool, int)) else None
+
+
+def unhealthy_service_evidence(sections):
+    """Names plus raw state/health/ready fields for services a health record marks not ok.
+
+    Container state, health-check semantics and panel readiness fail independently
+    (case-3a152890: one record showed qwenpaw unhealthy while dialogue stayed usable).
+    Returning the raw fields lets each role judge a divergence from the record itself.
+    """
+    health = sections.get('health') if isinstance(sections.get('health'), dict) else {}
+    data = health.get('data') if isinstance(health.get('data'), dict) else {}
+    rows = data.get('services') if isinstance(data.get('services'), dict) else {}
+    unhealthy = sorted(name for name, svc in rows.items()
+                       if isinstance(svc, dict) and svc.get('ok') is False)
+    operations = sections.get('operations') if isinstance(sections.get('operations'), dict) else {}
+    ops_data = operations.get('data') if isinstance(operations.get('data'), dict) else {}
+    ops_rows = ops_data.get('services')
+    readiness = {row.get('id'): row for row in ops_rows
+                 if isinstance(row, dict) and isinstance(row.get('id'), str)
+                } if isinstance(ops_rows, list) else {}
+    evidence = []
+    for name in unhealthy:
+        svc = rows.get(name)
+        svc = svc if isinstance(svc, dict) else {}
+        evidence.append({'name': name, 'state': _plain(svc.get('state')),
+                         'health': _plain(svc.get('health')),
+                         'ready': _plain(readiness.get(name, {}).get('ready'))})
+    return unhealthy, evidence
+
+
 def register_team_tools(app, actor, state=Path('/team')):
     store = TeamStore(actor, state)
 
@@ -25,12 +57,22 @@ def register_team_tools(app, actor, state=Path('/team')):
         stale = sorted(name for name, section in sections.items()
                        if isinstance(section, dict) and section.get('fresh') is False)
         snapshot['staleSnapshots'] = stale
+        unhealthy, evidence = unhealthy_service_evidence(sections)
+        snapshot['unhealthyServices'] = unhealthy
+        snapshot['unhealthyServiceEvidence'] = evidence
+        notes = ''
+        if stale:
+            notes += (' Sections listed in staleSnapshots are expired inspection records, '
+                      'not current health or current faults; re-verify before reporting.')
+        if unhealthy:
+            notes += (' Services in unhealthyServices are marked not ok by the health inspection record'
+                      + (' (that record is expired; re-verify before reporting)' if 'health' in stale else '')
+                      + '; unhealthyServiceEvidence carries each service state/health/ready fields so a'
+                        ' running-but-unhealthy divergence can be judged from the record itself'
+                      + '; a single record is not a recurrence pattern.')
         return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
-                      'A report or tested commit is not proof of a deployed game fix.'
-                      + (' Sections listed in staleSnapshots are expired inspection records, '
-                         'not current health or current faults; re-verify before reporting.'
-                         if stale else '')}
+                      'A report or tested commit is not proof of a deployed game fix.' + notes}
 
     @app.tool()
     def team_cases(owner: str = 'mine', include_closed: bool = False, limit: int = 12) -> dict:

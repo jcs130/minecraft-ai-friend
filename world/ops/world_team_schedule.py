@@ -75,6 +75,13 @@ def fingerprint(store):
     return digest(material), pending
 
 
+# Native runs are cancelled by timeout_seconds(360) + misfire_grace(90); the extra
+# margin covers stream teardown. A cycle still marked running/unknown past this
+# horizon is an orphan left by a recycled process, so the role's own next shift
+# reconciles it and retries — no maintainer script required (case-704a09d2).
+ORPHAN_CYCLE_AFTER = 360 + 90 + 300
+
+
 async def execute(executor, job, original, runtime):
     import asyncio
     import fcntl
@@ -99,16 +106,32 @@ async def execute(executor, job, original, runtime):
                 row['status'] in ('open', 'working') for row in store.cases(limit=30)['cases'])
             if not actionable: return skipped('no_new_team_work')
         # Previous uncertain work is not replayed just because another timer fired.
+        orphan = None
         if previous and previous['status'] in ('running', 'unknown'):
-            return skipped('previous_team_cycle_requires_reconciliation')
+            age = store.clock() - float(previous['at'] or 0)
+            if age < ORPHAN_CYCLE_AFTER:
+                return skipped('previous_team_cycle_requires_reconciliation')
+            # The flock above proves no live executor holds this cycle here, and
+            # no native run can outlive timeout+grace: a record still uncertain
+            # past that horizon is an orphan from a recycled process, not active
+            # work. This shift reconciles it itself and becomes the retry.
+            try: prior = json.loads(previous['result'] or '{}')
+            except ValueError: prior = {}
+            if not isinstance(prior, dict): prior = {}
+            orphan = {'orphanStatus': previous['status'], 'orphanAt': previous['at'],
+                'orphanAgeSeconds': round(age, 3), 'jobId': prior.get('jobId', job.id)}
+            store.save_cycle(previous['fingerprint'], 'failed',
+                prior | orphan | {'orphanReconciled': True})
         reservation = None
         if runtime == 'operations':
             from operations_native_tasks import reserve_operation, finish_run
             reservation = await asyncio.to_thread(reserve_operation, executor._workspace.agent_id, job.id)
             if not reservation['ok']: return skipped(reservation['code'])
-        store.save_cycle(current, 'running', {'jobId': job.id})
+        store.save_cycle(current, 'running',
+            {'jobId': job.id, **({'reconciledOrphan': orphan} if orphan else {})})
         try:
-            result = await original(executor, job)
+            result = dict(await original(executor, job))
+            if orphan: result['reconciledOrphan'] = orphan
             if result.get('delivery_status') in ('failed', 'error', 'no_content'):
                 store.save_cycle(current, 'failed', result)
             else:
@@ -128,5 +151,5 @@ async def execute(executor, job, original, runtime):
                 await asyncio.to_thread(finish_run, reservation['runId'], 'failed', nativeTimeoutConfirmed=True)
             raise
         except BaseException:
-            store.save_cycle(current, 'unknown', {'jobId': job.id, 'retryAutomatically': False})
+            store.save_cycle(current, 'unknown', {'jobId': job.id, 'selfRetryAfterSeconds': ORPHAN_CYCLE_AFTER})
             raise

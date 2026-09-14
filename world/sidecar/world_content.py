@@ -22,12 +22,23 @@ ACTORS = ('game:qd-guild-planner', 'game:mc-god', 'operations:mc-priest')
 ID = re.compile(r'[A-Za-z0-9_-]{1,80}\Z')
 CONTENT_ID = re.compile(r'content-[a-f0-9]{24}\Z')
 MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
+# Adapter progress for case boss-chest-adapter-missing: the four receipt
+# capabilities map to scout/place/proof/cleanup; 'ledger' is the durable
+# receipt store underneath them (SiteQueue, implemented and covered by
+# offline tests; slice two exposes it to roles through world_content_tools
+# so the repairOwner can propose/approve/record/recover venues via MCP).
+# 'implemented' never means the server-facing step ran, so scout/place/
+# proof/cleanup stay 'planned' until a real server bridge appends receipts.
 BLOCKED = {
     'boss': {'ready': False, 'code': 'boss_adapter_missing',
              'missing': ['勘察并确认场地', '原生生成前后UUID回执', '绑定本次首领的击杀证明', '清理与未知状态恢复'],
+             'steps': {'scout': 'planned', 'place': 'planned', 'proof': 'planned', 'cleanup': 'planned',
+                       'ledger': 'implemented'},
              'repairOwner': 'game:mc-god'},
     'chest': {'ready': False, 'code': 'chest_adapter_missing',
               'missing': ['勘察并确认场地', '方块与物品放置前后回执', '本次宝箱战利品归属证明', '未知状态恢复'],
+              'steps': {'scout': 'planned', 'place': 'planned', 'proof': 'planned', 'cleanup': 'planned',
+                        'ledger': 'implemented'},
               'repairOwner': 'game:mc-god'},
 }
 
@@ -252,6 +263,157 @@ class ContentQueue:
             else:
                 save(path, request)
         return {'ok': True, 'code': 'publication_requested', 'contentId': content_id, 'worldActionsExecuted': 0}
+
+
+SITE_KINDS = ('boss', 'chest')
+SITE_STEPS = ('scout', 'place', 'proof', 'cleanup')
+SITE_ID = re.compile(r'site-[a-f0-9]{24}\Z')
+SITE_RESULT = dict(zip(SITE_STEPS, ('scouted', 'placed', 'proven', 'closed')))
+SITE_PREVIOUS = dict(zip(SITE_STEPS, ('approved', 'scouted', 'placed', 'proven')))
+SITE_DISTANCE = {'boss': (120, 300), 'chest': (60, 200)}
+
+
+class SiteQueue:
+    """Durable venue ledger for the planned boss/chest adapters.
+
+    Slice one of case boss-chest-adapter-missing: receipt storage, ordered
+    transitions and crash recovery are implemented and verified offline. This
+    class never runs a server command; the future server bridge may only
+    append step receipts here, and a receipt missing after the record claimed
+    it stays explicitly unknown instead of being re-derived.
+    """
+
+    def __init__(self, state=Path('/team'), *, anchor=(0, 64, 0), clock=time.time):
+        self.root, self.anchor, self.clock = safe(Path(state) / 'sites'), tuple(anchor), clock
+
+    def _path(self, site_id):
+        require(isinstance(site_id, str) and SITE_ID.fullmatch(site_id), 'invalid_site_id')
+        return self.root / 'sites' / (site_id + '.json')
+
+    def _receipt_path(self, site_id, step):
+        require(step in SITE_STEPS, 'invalid_site_step')
+        return self.root / 'receipts' / (site_id + '-' + step + '.json')
+
+    def _venue_distance(self, venue):
+        require(isinstance(venue, dict) and set(venue) == {'x', 'y', 'z'}, 'invalid_site_venue')
+        require(all(type(venue[axis]) is int for axis in ('x', 'y', 'z')), 'invalid_site_venue')
+        require(-30000000 <= venue['x'] <= 30000000 and -30000000 <= venue['z'] <= 30000000
+                and -64 <= venue['y'] <= 380, 'invalid_site_venue')
+        return ((venue['x'] - self.anchor[0]) ** 2 + (venue['z'] - self.anchor[2]) ** 2) ** 0.5
+
+    def propose(self, actor, request_id, kind, venue, note=''):
+        """Register one candidate venue; no world state is touched or assumed."""
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        require(kind in SITE_KINDS, 'invalid_site_kind')
+        distance = self._venue_distance(venue)
+        low, high = SITE_DISTANCE[kind]
+        require(low <= distance <= high, 'site_venue_distance_out_of_band')
+        require(isinstance(note, str), 'invalid_content_text')
+        payload = {'kind': kind, 'venue': {axis: venue[axis] for axis in ('x', 'y', 'z')},
+                   'note': text(note, 120) if note.strip() else ''}
+        site_id = 'site-' + digest([actor, request_id])[:24]
+        path = self._path(site_id)
+        with state_lock(self.root):
+            if path.exists():
+                require(load(path)['payloadSha256'] == digest(payload), 'site_request_conflict')
+                return {'ok': True, 'code': 'already_proposed', 'siteId': site_id, 'worldActionsExecuted': 0}
+            save(path, {'schema': 1, 'siteId': site_id, 'actor': actor, 'requestId': request_id,
+                        'kind': kind, 'venue': payload['venue'], 'note': payload['note'],
+                        'payloadSha256': digest(payload), 'status': 'proposed',
+                        'steps': {step: 'pending' for step in SITE_STEPS}, 'receipts': {},
+                        'anchor': list(self.anchor), 'distance': round(distance, 1),
+                        'createdAt': self.clock(), 'worldActionsExecuted': 0})
+        return {'ok': True, 'code': 'site_proposed', 'siteId': site_id, 'worldActionsExecuted': 0}
+
+    def approve(self, actor, request_id, site_id):
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        with state_lock(self.root):
+            path = self._path(site_id)
+            if not path.exists():
+                return {'ok': False, 'code': 'site_not_found'}
+            row = load(path)
+            if row['status'] == 'approved':
+                require(row['approvedRequestId'] == request_id, 'site_request_conflict')
+                return {'ok': True, 'code': 'already_approved', 'siteId': site_id, 'worldActionsExecuted': 0}
+            require(row['status'] == 'proposed', 'site_not_approvable')
+            row.update(status='approved', approvedRequestId=request_id, approvedAt=self.clock())
+            save(path, row)
+        return {'ok': True, 'code': 'site_approved', 'siteId': site_id, 'worldActionsExecuted': 0}
+
+    def record(self, actor, request_id, site_id, step, evidence):
+        """Append one step receipt. Evidence comes from the caller's own
+        verified channel; replaying identical evidence is idempotent and heals
+        a record that missed the update, differing evidence is a conflict."""
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        require(step in SITE_STEPS, 'invalid_site_step')
+        require(isinstance(evidence, dict) and evidence, 'invalid_site_evidence')
+        receipt_path = self._receipt_path(site_id, step)
+        with state_lock(self.root):
+            path = self._path(site_id)
+            require(path.exists(), 'invalid_site_id')
+            row = load(path)
+            require(row['status'] not in ('proposed', 'blocked', 'outcome_unknown'), 'site_step_not_acceptable')
+            if receipt_path.exists():
+                require(load(receipt_path)['evidenceSha256'] == digest(evidence), 'site_step_conflict')
+            else:
+                require(row['status'] == SITE_PREVIOUS[step], 'site_step_out_of_order')
+                save(receipt_path, {'schema': 1, 'siteId': site_id, 'step': step, 'actor': actor,
+                                    'requestId': request_id, 'evidence': deepcopy(evidence),
+                                    'evidenceSha256': digest(evidence), 'recordedAt': self.clock()})
+            if row['steps'].get(step) != 'recorded':
+                row['steps'][step] = 'recorded'
+                row['receipts'] = {**row.get('receipts', {}), step: digest(evidence)}
+                row['status'] = SITE_RESULT[step]
+                save(path, row)
+        return {'ok': True, 'code': 'site_step_recorded', 'siteId': site_id, 'step': step,
+                'status': row['status'], 'worldActionsExecuted': 0}
+
+    def read(self, actor, site_id):
+        require(actor in ACTORS, 'invalid_site_actor_or_id')
+        path = self._path(site_id)
+        if not path.exists():
+            return {'ok': False, 'code': 'site_not_found'}
+        return {'ok': True, **load(path)}
+
+    def recover(self, actor, site_id):
+        """Reconcile the record against receipts on disk. Receipts win when
+        the record missed them; a claimed-but-missing receipt is unknown and
+        freezes the site instead of being re-derived or overwritten."""
+        require(actor in ACTORS, 'invalid_site_actor_or_id')
+        with state_lock(self.root):
+            path = self._path(site_id)
+            require(path.exists(), 'invalid_site_id')
+            row = load(path)
+            original_status = row['status']
+            recorded, unknown, healed = [], [], []
+            for step in SITE_STEPS:
+                receipt_path = self._receipt_path(site_id, step)
+                claimed = row['steps'].get(step) == 'recorded'
+                if receipt_path.exists():
+                    recorded.append(step)
+                    if not claimed:
+                        healed.append(step)
+                elif claimed:
+                    unknown.append(step)
+            changed = False
+            for step in healed:
+                row['steps'][step] = 'recorded'
+                row['receipts'] = {**row.get('receipts', {}), step: load(self._receipt_path(site_id, step))['evidenceSha256']}
+                changed = True
+            if unknown:
+                row['status'] = 'outcome_unknown'
+            elif recorded:
+                row['status'] = SITE_RESULT[recorded[-1]]
+            if changed or row['status'] != original_status:
+                save(path, row)
+            return {'ok': True, 'siteId': site_id, 'kind': row['kind'], 'status': row['status'],
+                    'steps': dict(row['steps']), 'unknown': unknown, 'recovered': healed,
+                    'nextStep': (SITE_STEPS[len(recorded)] if not unknown and len(recorded) < len(SITE_STEPS)
+                                 and row['status'] != 'proposed' else None),
+                    'worldActionsExecuted': 0}
 
 
 def _contract_rows(content_id, content, context, guild, first_no):

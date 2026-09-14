@@ -51,6 +51,31 @@ class TeamContextFreshnessTests(unittest.TestCase):
         self.assertEqual(result['world']['staleSnapshots'], [])
         self.assertNotIn('expired inspection records', result['notice'])
 
+    def test_unhealthy_services_are_summarised_from_health_record(self):
+        result = self.context({'snapshots': {'health': {'fresh': True, 'data': {
+            'ok': False, 'services': {
+                'mc': {'ok': True}, 'qwenpaw': {'ok': False}, 'npc': {'ok': True}}}}}})
+        self.assertEqual(result['world']['unhealthyServices'], ['qwenpaw'])
+        self.assertIn('health inspection record', result['notice'])
+        self.assertNotIn('that record is expired', result['notice'])
+
+    def test_unhealthy_services_flag_expired_when_health_record_is_stale(self):
+        result = self.context({'snapshots': {'health': {'fresh': False, 'data': {
+            'ok': False, 'services': {'qwenpaw': {'ok': False}}}}}})
+        self.assertEqual(result['world']['staleSnapshots'], ['health'])
+        self.assertEqual(result['world']['unhealthyServices'], ['qwenpaw'])
+        self.assertIn('that record is expired', result['notice'])
+
+    def test_unhealthy_services_stay_quiet_when_health_data_missing_or_malformed(self):
+        result = self.context({'snapshots': {'health': {'fresh': True, 'data': {}},
+                                             'operations': {'fresh': True, 'data': {
+                                                 'services': {'qwenpaw': {'ok': False}}}}}})
+        self.assertEqual(result['world']['unhealthyServices'], [])
+        self.assertNotIn('health inspection record', result['notice'])
+        malformed = self.context({'snapshots': {'health': {'fresh': True, 'data': {
+            'services': ['qwenpaw', 'npc']}}}})
+        self.assertEqual(malformed['world']['unhealthyServices'], [])
+
 
 if __name__ == '__main__':
     unittest.main()
