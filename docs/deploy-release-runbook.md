@@ -2,8 +2,8 @@
 
 状态：**提案（未执行）**。本文档本身已随分支提交入库；本文描述的任何宿主/容器步骤均未执行，方案B仍是未启用候选。
 工单：case-3834fa1201946bc290c6（deploy-release-receipt-channel-missing）。
-当前发布对象：分支 codex/ops-world-improvements HEAD = dc2032b0ecd3ce7837c70c9b1d0747cdcc3483df（本地未推送队列 6 笔：85ec3be→108f82e→da70e4e→c70fa29f→65e567b→dc2032b；HEAD 双回执 = mc-god-20260915-reachability-test2 passed 174 tests + mc-god-20260915-deploy-baseline-dc2032b-1 passed）。
-撰写：operations:mc-god，2026-09-14（源码亲读基线：head=85ec3be 工作树）；2026-09-15 03:56 CST 更新发布对象至分支 HEAD 与 6 笔队列（原「首次适用对象 85ec3be」表述废止，reset 到中途节点=部署旧代码）。
+当前发布对象：分支 codex/ops-world-improvements HEAD = d4dd33ea66425d352d103d1cb55a68b20593dbda（本地未推送队列 11 笔：85ec3be→108f82e→da70e4e→c70fa29f→65e567b→dc2032b→f48e2ef8→afad352→c1fce7b→e41f401→d4dd33ea；HEAD 回执 = mc-god-20260915-step1b2-contract-test1 passed 174 tests，engineering_commit d4dd33ea 对快照 feb4b4ba… 全字节复核通过。f48e2ef8→d4dd33ea 五笔仅触 tests/ 与 docs/，不改生产运行时文件，无需追加重启容器）。
+撰写：operations:mc-god，2026-09-14（源码亲读基线：head=85ec3be 工作树）；2026-09-15 03:56 CST 更新发布对象至分支 HEAD 与 6 笔队列（原「首次适用对象 85ec3be」表述废止，reset 到中途节点=部署旧代码）；2026-09-15 07:27 CST 更新发布对象至 d4dd33ea 与 11 笔队列（f48e2ef8=本 runbook 03:56 同步件；afad352/c1fce7b/e41f401/d4dd33ea=Step1 生存轨迹数据集管线四件，case-638934f646fe2ffeebfe，经 owner 静态审阅与 game:mc-god 过程级验收 seq362）。
 
 ## 1. 事实基线（全部源码/compose 亲读）
 
@@ -26,11 +26,11 @@
 
 步骤（宿主/管理侧执行，工程侧只收与核验回执）：
 
-1. 宿主：生产检出同步到发布对象 dc2032b（或按发布策略合并后检出分支 HEAD）。
-   注意：队列 6 笔均 pushed=false（推送通道缺失即本工单主题），生产检出 `git fetch` 远端**拿不到这些提交**；
+1. 宿主：生产检出同步到发布对象 d4dd33ea（或按发布策略合并后检出分支 HEAD）。
+   注意：队列 11 笔均 pushed=false（推送通道缺失即本工单主题），生产检出 `git fetch` 远端**拿不到这些提交**；
    宿主可改从工程工作区本地路径取提交（示例，以宿主实际发布策略为准）：
    `git fetch /state/work/workspaces/qd-engineer/engineering/repo codex/ops-world-improvements && git checkout -B codex/ops-world-improvements FETCH_HEAD`。
-   回执：`git rev-parse HEAD`（应=dc2032b…）+ `git status --porcelain`（应为空）。
+   回执：`git rev-parse HEAD`（应=d4dd33ea…）+ `git status --porcelain`（应为空）。
 2. 重启受影响服务（compose.yml 未变，重启即可）：qwenpaw、qwenpaw-ops、npc、survivor。
    优先走 control /plan+/execute（action=restart）：自动处理 qwenpaw→survivor 依赖序、mc 保存、健康门，
    并在 /operations 留下持久回执（operationId、steps）。
@@ -41,7 +41,7 @@
      （ready=false 为设计，翻 true 需服务端四步桥接）；随后 world_site_propose→approve→record→recover 真实走一次。
    - case-704a09d：观察一次班次中途回收后下一班自愈（orphanReconciled 回执）。
    - 共享提交内其余候选：team_context 的 npcLlmEnabled 汇总措辞、world_admin 链回执正常。
-   - 队列后续各笔（108f82e 内容状态同步自愈、da70e4e 纪元追踪、c70fa29f 健康事件追踪、65e567b survivor 控制器证据、dc2032b world_content_reachability 工具）：生效核验点以各对应工单事件流为准；每笔均有 passed 隔离测试回执，commit→testJobId 映射可查工程 progress recentCommits（receipts 亲读来源，非推断）。
+   - 队列后续各笔（108f82e 内容状态同步自愈、da70e4e 纪元追踪、c70fa29f 健康事件追踪、65e567b survivor 控制器证据、dc2032b world_content_reachability 工具、f48e2ef8 本 runbook 同步件、afad352 Step1a 轨迹读取器、c1fce7b Step1b prompt 重建镜像、e41f401 Step1a v2 turn-actions/lease/lint 与 bytes 统计段、d4dd33ea Step1b2 turn-completions 导出契约）：生效核验点以各对应工单事件流为准；每笔均有 passed 隔离测试回执，commit→testJobId 映射可查工程 progress recentCommits（receipts 亲读来源，非推断）。后五笔（f48e2ef8→d4dd33ea）只落 tests/ 与 docs/、不进生产运行时，生效核验=宿主 rev-parse 基线核验 + case-638934f646fe2ffeebfe 的真实数据首跑（待部署+宿主只读通道），无容器行为可观察。
 4. 各单以“部署回执（git rev-parse + control operationId）+ 各自核验回执”分别关闭；**本地 commit 永远不当作已生效**。
 
 ## 3. 方案B：可复用的发布回执通道（工程候选，需先批）
@@ -56,7 +56,7 @@
   coverage 内（待扩展，见运营提案 ops-20260914T1224-engineering-coverage-qwenpaw-health）；实现将沿用 runner
   既有风格：字节校验、防重放、失败终态、回执持久。
 
-### B1 实现候选已就绪（2026-09-14 工作树，未启用未部署）
+### B1 实现候选已就绪（未入 git、未启用未部署；主体文件以自忽略 .gitignore 停放在工作树磁盘、git 不可见，control-service.mjs 接线片段存工程角色 drafts/wip-backup-20260914/）
 
 按 game:mc-god seq167 采纳的方向实现：`world/admin/publish-executor.mjs` + `control-service.mjs` opt-in 装配
 （`QIANDENG_PUBLISH_ENABLED==='1'` 才启动，默认关闭）+ `tests/test_world_publish_channel.py` 静态契约测试。
