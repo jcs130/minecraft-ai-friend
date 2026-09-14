@@ -97,6 +97,22 @@ test('malformed decisions, versions and observed deltas stay unknown and bounded
   assert.equal(JSON.stringify(view).includes('PRIVATE'), false);
 });
 
+test('transient inference wait is visible without leaking provider dumps or guessing quota', () => {
+  const input = fixture();
+  input.status = 'inference_backoff';
+  input.lastInferenceFailure = {kind:'provider_throttled',summary:'云端短时请求或资源限流；不代表套餐额度耗尽。',
+    code:'MODEL_QUOTA_EXCEEDED',observedAt:Date.now(),trace:'PRIVATE',requestHeaders:'PRIVATE'};
+  input.inferenceBackoff = {schema:1,kind:'provider_throttled',attempt:2,nextAttemptAt:Date.now()/1000+120,secret:'PRIVATE'};
+  const view = projectSurvivor(input);
+  assert.equal(view.lastInferenceFailure.kind,'provider_throttled');
+  assert.equal(view.inferenceBackoff.attempt,2);
+  assert.equal(JSON.stringify(view).includes('PRIVATE'),false);
+  input.inferenceBackoff.nextAttemptAt = 'tomorrow';
+  input.lastInferenceFailure.kind = 'unknown-untrusted-label';
+  assert.equal(projectSurvivor(input).inferenceBackoff,null);
+  assert.equal(projectSurvivor(input).lastInferenceFailure,null);
+});
+
 test('life facts project only observed resources and bounded authorized areas without inventing achievements', () => {
   const input = fixture();
   input.adventure.resources.items.food[0].nbt = 'PRIVATE'; input.adventure.secret = 'PRIVATE';
@@ -304,7 +320,7 @@ test('survivor page shows real body, budget, skill and stale state without calli
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await page.setViewportSize({width: 1280, height: 900});
   const statusLabels = { thinking: '正在思考', acting: '正在行动', waiting: '等待下一步', cooldown: '等待下次决策',
-    idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', paused: '已暂停', stopped: '服务已停止' };
+    idle: '等待新任务或环境变化', inference_backoff: '云端暂时限流，稍后继续', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', paused: '已暂停', stopped: '服务已停止' };
   for (const [status, label] of Object.entries(statusLabels)) {
     survivor = { ...survivor, status, enabled: status !== 'paused' };
     await page.getByRole('button', { name: '刷新', exact: true }).click();

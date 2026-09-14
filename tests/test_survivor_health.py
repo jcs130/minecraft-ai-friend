@@ -23,6 +23,7 @@ class SurvivorHealthTests(unittest.TestCase):
         self.now = 1800000000
         self.source = {'schema': 1, 'project': 'qiandengji-survivor', 'character': '桐人', 'bodyName': 'Kirito',
             'generatedAt': datetime.fromtimestamp(self.now, timezone.utc).isoformat(), 'status': 'observing', 'enabled': True,
+            'lastInferenceFailure': None, 'inferenceBackoff': None,
             'adventure': {'schema': 1, 'resources': {'known': True}, 'equipment': {'known': False}}, 'constructionAreas': []}
         self.source['executionSystems'] = {'schema': 1, 'automaticFoodReflex': False,
             'fast': {'owner': 'native-ai-and-tested-programs', 'active': False, 'waiting': False,
@@ -33,7 +34,7 @@ class SurvivorHealthTests(unittest.TestCase):
             'inferenceLimitPolicy': 'unrestricted', 'decisionCountScope': 'rolling_24h', 'cooldownSeconds': 0}
         self.settings = {'dailyPlanningLimit': None, 'decisionCooldownSeconds': 0}
         self.heartbeat = {'schema': 1, 'ok': True, 'at': self.now * 1000, 'fastSystemProtocol': 1,
-                          'selfPlanningVersion': 1}
+                          'selfPlanningVersion': 1, 'visionProtocol': 1, 'inferenceFailureVersion': 1}
         self.fast_report = {'schema': 1, 'project': 'qiandengji', 'fastSystemProtocol': 1,
             'ok': True, 'finishedAt': self.source['generatedAt'],
             'checks': [{'name': name, 'ok': True} for name in health.SURVIVOR_FAST_SYSTEM_CHECKS]}
@@ -74,6 +75,15 @@ class SurvivorHealthTests(unittest.TestCase):
         result = self.probe(interaction=False)
         self.assertFalse(result['ok'])
         self.assertFalse(result['checks']['native_interaction_receipts'])
+
+    def test_panel_must_expose_bounded_inference_state_even_when_no_failure(self):
+        del self.source['inferenceBackoff']
+        self.assertFalse(self.probe()['checks']['inference_projection'])
+        self.source['inferenceBackoff'] = {'schema': 1, 'kind': 'provider_throttled', 'attempt': 1,
+                                          'failedAt': self.now, 'nextAttemptAt': self.now + 60}
+        self.assertTrue(self.probe()['checks']['inference_projection'])
+        self.source['inferenceBackoff']['privateDump'] = 'must-not-leak'
+        self.assertFalse(self.probe()['checks']['inference_projection'])
 
     def test_intentionally_paused_worker_remains_healthy_without_model_work(self):
         self.source.update(status='paused', enabled=False)
@@ -187,6 +197,16 @@ class SurvivorHealthTests(unittest.TestCase):
                 self.assertTrue(result['checks']['fast_system_protocol'])
                 self.assertFalse(result['checks']['self_planning_protocol'])
                 self.assertFalse(result['ok'])
+
+    def test_old_or_coerced_visual_and_failure_protocols_cannot_claim_loaded(self):
+        original = dict(self.heartbeat)
+        for field, check in [('visionProtocol', 'vision_protocol'), ('inferenceFailureVersion', 'inference_failure_protocol')]:
+            for value in (None, True, 0, '1', 2):
+                with self.subTest(field=field, value=value):
+                    self.heartbeat = dict(original, **{field: value})
+                    result = self.probe()
+                    self.assertFalse(result['checks'][check])
+                    self.assertFalse(result['ok'])
 
     def test_old_generic_reports_do_not_replace_specific_behavior_evidence(self):
         original = copy.deepcopy(self.fast_report)

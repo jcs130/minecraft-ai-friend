@@ -43,6 +43,6 @@
 
 因此本次已观察到“亲历→自主选阶段→写原生目标→执行非农耕动作→保存下一步”的原循环。尚不代表已经探索多个据点、完成整条装备路线，或长期规划已完全准确；个人计划中还存在待查配方、距离及旧条目，需要后续原生检索、工具核验和复盘纠正。
 
-22:37及22:40的后续任务 `task-9a2ac3024dff`、`task-4899179f7e3f` 被云端拒绝。第一条原生错误转储确认为 `openai.RateLimitError`、HTTP429、`error.code=throttling`、`usage allocated quota exceeded`，不是此前的本地 `_AcquireTimeoutError`。这些失败轮没有游戏动作；没有换模型或重放请求。服务健康不代表供应商当前接受推理，后续自主推进受该外部限流/配额影响，恢复时间尚未确定。
+22:37及22:40的后续任务 `task-9a2ac3024dff`、`task-4899179f7e3f` 被云端拒绝。第一条原生错误转储确认为 `openai.RateLimitError`、HTTP429、`error.code=throttling`、`usage allocated quota exceeded`，不是此前的本地 `_AcquireTimeoutError`。这些失败轮没有游戏动作；没有换模型或重放请求。更正此前“限流/配额”的笼统描述：按[阿里官方FAQ](https://help.aliyun.com/zh/model-studio/coding-plan-faq)，此明确usage原因属于短时请求或资源峰值限流，不能判成套餐窗口耗尽。23:19之后部署的恢复逻辑及23:22/23:23原会话真实成功回合见[后续记录](SURVIVOR-MULTIMODAL-RECOVERY.md)。
 
 本机维护、API备份、测试和原回合证据：`runtime/self-directed-adventure-20260914/`。该目录不入Git，含运行态资料；不要重复执行已完成的维护或目标提交脚本。

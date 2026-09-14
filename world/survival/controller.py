@@ -658,6 +658,8 @@ class Controller:
                     'dimension', 'gameMode', 'task', 'observedAt', 'bodyControl',
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
             'adventure': self.adventure(body),
+            'visualPerception': {'tool': 'view_scene', 'view': 'native_semantic_map',
+                'instruction': '需要营地布局、方位或局部通路判断时，按需调用view_scene看真实PNG并结合inspect_block；不是第一视角截图，不用每轮取图。'},
             'planning': {'version': 1, 'goalFile': 'memory/goals.md',
                 'reference': 'skills/qd-survivor-practice/references/long-term-planning.md',
                 'selectionAuthority': 'model',
@@ -840,6 +842,9 @@ class Controller:
         memory = self.memory()
         skills = self.catalog().get('skills', [])
         control = read_json(self.root / 'control.json')
+        from inference_errors import public_inference_state
+        inference_failure, inference_backoff = public_inference_state(
+            self.data.get('lastInferenceFailure'), self.data.get('inferenceBackoff'), now)
         value = {'schema': 1, 'project': 'qiandengji-survivor', 'character': '桐人',
             'bodyName': self.settings['bodyName'], 'bodyUuid': self.settings['bodyUuid'],
             'generatedAt': utc(), 'enabled': control.get('enabled') is True,
@@ -852,6 +857,8 @@ class Controller:
             'body': self.last_body, 'lastDecision': self.data.get('lastDecision'),
             'lifeSession': {k: self.session.get(k) for k in ('primarySessionId', 'chatId', 'agentId', 'userId', 'channel')},
             'sessionProtocol': 1, 'actionExecution': self.data.get('actionExecution'),
+            'lastInferenceFailure': inference_failure,
+            'inferenceBackoff': inference_backoff,
             'cancellationStatus': self.data.get('cancellationStatus'),
             'partyDelivery': self.data.get('partyDelivery'),
             'skills': skills, 'episodes': self.data.get('episodes', [])[-8:],
@@ -876,7 +883,7 @@ class Controller:
         write_json(self.public, value)
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
-            'selfPlanningVersion': 1})
+            'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1})
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -1027,11 +1034,22 @@ class Controller:
         completed = native_completed and bool(answer)
         failure_reason = (framework_failure(native) or
                           ('native_final_answer_missing' if native_completed and not answer else 'native_task_failed'))
+        from inference_errors import classify_inference_error, TRANSIENT_KINDS, next_backoff
+        inference_failure = None
+        if not completed:
+            inference_failure = (terminal.get('inferenceFailure') if terminal else None)
+            if inference_failure is None:
+                # Only a confirmed native failure can justify a new later turn.
+                error = native.get('error') if (native.get('status') == 'failed'
+                    and result.get('status') in ('finished', 'completed', 'failed')) else None
+                inference_failure = classify_inference_error(error)
+                inference_failure.update(taskId=active['taskId'], turnId=active['turnId'],
+                                         observedAt=int(self.clock() * 1000))
         # Native messages remain in QwenPaw; the public record has bounded metadata.
         if not terminal:
             self.record('decision_finished', turnId=active['turnId'], taskId=active['taskId'],
                         resultStatus=native.get('status'), completed=completed, nativeTaskCompleted=native_completed,
-                        failureReason=None if completed else failure_reason)
+                        failureReason=None if completed else failure_reason, inferenceFailure=inference_failure)
         self.gateway.close_lease(blocking=True)
         actions = self.collect_action_receipts(active['turnId'])
         if actions and not hasattr(self.gateway, 'turn_receipts'):
@@ -1042,6 +1060,7 @@ class Controller:
             self.data['lastDecision'] = {'turnId': active['turnId'], 'completed': completed,
                                          'nativeTaskCompleted': native_completed,
                                          'failureReason': None if completed else failure_reason,
+                                         'inferenceFailure': inference_failure,
                                          'taskId': active['taskId'], 'sessionId': active.get('sessionId'),
                                          'chatId': active.get('chatId'), 'actions': actions[-6:], 'at': utc()}
             job_path = self.root / 'skill-job.json'
@@ -1055,7 +1074,7 @@ class Controller:
             # repeat this idempotent receipt write, never the model submission.
             if not terminal:
                 active['nativeTerminal'] = {'text': answer, 'completed': completed,
-                                            'failureReason': failure_reason}
+                                            'failureReason': failure_reason, 'inferenceFailure': inference_failure}
             # Completing a native model task is not proof the game heard its answer.
             self.data['lastDecision'].update(modelCompleted=completed, completed=False)
             self.save()
@@ -1089,9 +1108,24 @@ class Controller:
             self.data['lastDecisionSignature'] = None
         self.data['lastReviewAt'] = self.clock()
         self.data['lastDecisionPosition'] = body.get('position')
-        self.data['failures'] = 0 if completed else self.data.get('failures', 0) + 1
-        if self.data['failures'] >= 2:
-            self.pause('repeated_model_failure')
+        if completed:
+            self.data['failures'] = 0
+            self.data.pop('lastInferenceFailure', None)
+            self.data.pop('inferenceBackoff', None)
+        else:
+            self.data['lastInferenceFailure'] = inference_failure
+            if inference_failure['kind'] in TRANSIENT_KINDS:
+                try:
+                    self.data['inferenceBackoff'] = next_backoff(inference_failure['kind'],
+                        self.data.get('inferenceBackoff'), self.clock(), active['taskId'], active['turnId'])
+                    self.data['status'] = 'inference_backoff'
+                except ValueError:
+                    self.pause('inference_backoff_invalid')
+            else:
+                self.data.pop('inferenceBackoff', None)
+                self.data['failures'] = self.data.get('failures', 0) + 1
+                if self.data['failures'] >= 2:
+                    self.pause('repeated_model_failure')
         self.save()
 
     def deliver_party_terminal(self, active, *, allow_dispatch=True):
@@ -1249,6 +1283,17 @@ class Controller:
         if self.drain_at_boundary(body):
             return
         now = self.clock()
+        backoff = self.data.get('inferenceBackoff')
+        if backoff is not None:
+            from inference_errors import validate_backoff
+            try:
+                validate_backoff(backoff, now)
+            except ValueError:
+                self.pause('inference_backoff_invalid')
+                return
+            if now < backoff['nextAttemptAt']:
+                self.data['status'] = 'inference_backoff'
+                return
         recent = [r for r in self.data['decisions'] if now - r['startedAt'] < 86400]
         limit, cooldown = self.daily_planning_limit(), self.model_cooldown()
         if limit is not None and len(recent) >= limit:
@@ -1261,7 +1306,8 @@ class Controller:
             self.party.validate_session(self.session, self.settings)
         message = self.party.pending() if self.party else None
         requested_review = self.reviews.pending()
-        changed = (message is not None or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
+        changed = (backoff is not None or message is not None
+                   or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
                    or self.meaningful_displacement(body))
         review = self.next_review(control)
         if not changed and requested_review is None and (review is None or now < review):
@@ -1279,6 +1325,7 @@ class Controller:
         # independently due life task; receiving one never buys another task.
         replies = self.party.heard_replies() if self.party and hasattr(self.party, 'heard_replies') else []
         self.data['wakeReason'] = ('party_message' if message is not None else
+                                  'inference_recovery' if backoff is not None else
                                   'world_or_goal_changed' if changed else
                                   'requested_review' if requested_review else 'autonomous_review')
         self.perceive(body)

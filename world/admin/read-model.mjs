@@ -238,10 +238,17 @@ export function projectSurvivor(raw, now = Date.now()) {
     return { available: false, stale: true, generatedAt: null };
   const body = object(value.body), budgets = object(value.budgets), decision = object(value.lastDecision);
   const perception = object(value.perception), environment = object(value.environment), world = object(environment.world);
+  const failure = object(value.lastInferenceFailure), backoff = object(value.inferenceBackoff);
+  const knownFailure = ['provider_throttled', 'provider_concurrency', 'provider_window_exhausted', 'local_queue_timeout', 'unknown'].includes(failure.kind);
   return { available: true, ...freshness(value.generatedAt, now, 90), generatedAt: optionalText(value.generatedAt, 64),
     character: '桐人', bodyName: 'Kirito', status: text(value.status, 64), enabled: bool(value.enabled),
     goal: text(value.goal, 1200), pauseReason: optionalText(value.pauseReason, 120),
     autonomous: bool(value.autonomous), nextReviewAt: number(value.nextReviewAt),
+    lastInferenceFailure: knownFailure ? { kind: failure.kind, summary: text(failure.summary, 240),
+      code: optionalText(failure.code, 80), observedAt: number(failure.observedAt) } : null,
+    inferenceBackoff: backoff.schema === 1 && ['provider_throttled', 'provider_concurrency'].includes(backoff.kind)
+      && Number.isSafeInteger(backoff.attempt) && backoff.attempt > 0 && number(backoff.nextAttemptAt) !== null
+      ? { kind: backoff.kind, attempt: backoff.attempt, nextAttemptAt: backoff.nextAttemptAt } : null,
     goalState: optionalText(value.goalState, 40), wakeReason: optionalText(value.wakeReason, 60),
     perception: { pendingCount: count(perception.pendingCount),
       events: list(perception.events).slice(0, 12).map(row => ({ kind: text(row?.kind, 60),

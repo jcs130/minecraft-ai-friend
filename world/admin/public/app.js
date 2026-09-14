@@ -519,7 +519,7 @@ function renderSurvivor(data) {
   const stale = value.available !== true || value.stale === true;
   const states = { paused: '已暂停', observing: '观察世界', thinking: '正在思考', acting: '正在行动', waiting: '等待下一步',
     cooldown: '等待下次决策', idle: '等待新任务或环境变化', budget_wait: '等待决策额度恢复', waiting_for_tools: '等待世界工具连接', executing_skill: '正在执行已学技能', body_offline: '等待身体连接', stopped: '服务已停止',
-    observation_wait: '等待世界状态恢复', party_wait: '等待队伍任务', party_reply_wait: '核对回复送达', action_confirmation_wait: '核对动作结果' };
+    observation_wait: '等待世界状态恢复', inference_backoff: '云端暂时限流，稍后继续', party_wait: '等待队伍任务', party_reply_wait: '核对回复送达', action_confirmation_wait: '核对动作结果' };
   const actionNames = { goto: '移动', mine: '采集', craft: '合成', eat: '进食', equip_item: '装备', game_cast: '施法', game_learn: '参悟技能',
     place_block: '放置', farm: '耕作', open_container: '打开容器', transfer_items: '存取物品', close_container: '关闭容器',
     sleep: '休息', trade: '村民交易', guild_claim: '接取委托', guild_deliver: '交付委托', guild_release: '退回委托' };
@@ -535,6 +535,7 @@ function renderSurvivor(data) {
   byId('survivor-autonomy').textContent = (value.autonomous ? '持续自主生活 · ' : '单次任务 · ')
     + (reviews[value.goalState] || '观察当前目标')
     + (value.enabled && finite(value.nextReviewAt) ? ' · 最迟复盘：' + formatDate(value.nextReviewAt * 1000) : '')
+    + (value.enabled && finite(value.inferenceBackoff?.nextAttemptAt) ? ' · 下次可继续：' + formatDate(value.inferenceBackoff.nextAttemptAt * 1000) : '')
     + (value.status === 'paused' && value.pauseReason ? ' · 暂停原因：' + value.pauseReason : '');
   const awareness = record(value.perception), environment = record(value.environment);
   facts('survivor-perception', [['环境', environment.available ? [text(environment.biome, '群系未知'), text(environment.weather, '天气未知'), environment.dark === true ? '夜间' : ''].filter(Boolean).join(' · ') : '等待环境读取'],
@@ -556,6 +557,7 @@ function renderSurvivor(data) {
   byId('survivor-decision').textContent = value.lastDecision
     ? '最近决策：' + formatDate(decision.at) + ' · ' + (decision.completed === true ? '本轮规划已结束' : decision.completed === false ? '本轮规划未完成' : '本轮结果待确认')
       + (rows(decision.actions).length ? '。' + rows(decision.actions).map(action => actionName(action.tool) + '：' + actionResult(action)).join('；') : '。本轮没有身体动作回执。')
+      + (value.lastInferenceFailure?.summary ? ' ' + text(value.lastInferenceFailure.summary) : '')
     : '最近决策：尚未记录';
   const inventory = Object.entries(record(body.counts));
   if (inventory.length) facts('survivor-inventory', inventory.map(([id, n]) => [id, number(n)]));

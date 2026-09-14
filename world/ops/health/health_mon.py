@@ -60,7 +60,7 @@ MANIFEST = {
     "panel": {"health_required": True, "purpose": "Independent management page and public read models"},
     "tts": {"health_required": True, "purpose": "D owned GPU voice synthesis and maid compatibility API"},
     "control": {"health_required": True, "purpose": "Authenticated bounded service management and operation receipts"},
-    "survivor": {"health_required": True, "purpose": "Kirito self-directed adventure planning, leased Numen actions, tested skills and durable practice receipts"},
+    "survivor": {"health_required": True, "purpose": "Kirito self-directed adventure, on-demand scene images, transient inference recovery and leased Numen actions"},
     "inventory": {"health_required": True, "purpose": "Read-only Docker-managed current project inventory publication"},
 }
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
@@ -518,6 +518,7 @@ def probe_survivor():
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
               'adventure_projection': False, 'no_unexpected_pause': False,
               'execution_systems': False, 'fast_system_protocol': False, 'self_planning_protocol': False,
+              'vision_protocol': False, 'inference_failure_protocol': False, 'inference_projection': False,
               'inference_limits_unrestricted': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
@@ -555,6 +556,10 @@ def probe_survivor():
             # plan or expedition. Those require the model's notes and receipts.
             checks['self_planning_protocol'] = (checks['fast_system_protocol']
                 and type(heartbeat.get('selfPlanningVersion')) is int and heartbeat['selfPlanningVersion'] == 1)
+            checks['vision_protocol'] = (checks['fast_system_protocol']
+                and type(heartbeat.get('visionProtocol')) is int and heartbeat['visionProtocol'] == 1)
+            checks['inference_failure_protocol'] = (checks['fast_system_protocol']
+                and type(heartbeat.get('inferenceFailureVersion')) is int and heartbeat['inferenceFailureVersion'] == 1)
         reason = source.get('pauseReason') or ''
         checks['no_unexpected_pause'] = (source.get('enabled') is True
             and source.get('status') not in ('paused', 'stopped', 'body_offline')) or (
@@ -575,6 +580,12 @@ def probe_survivor():
         if len(payload) > 2097152:
             raise ValueError('oversized_panel')
         public = json.loads(payload).get('survivor', {})
+        checks['inference_projection'] = all(key in public and (
+            public[key] is None or isinstance(public[key], dict) and required <= set(public[key])
+            and set(public[key]) <= allowed) for key, required, allowed in (
+                ('lastInferenceFailure', {'kind', 'summary'}, {'kind', 'summary', 'code', 'observedAt'}),
+                ('inferenceBackoff', {'schema', 'kind', 'attempt', 'failedAt', 'nextAttemptAt'},
+                 {'schema', 'kind', 'attempt', 'failedAt', 'nextAttemptAt'})))
         settings_path = PROJECT / 'server/survival-agent-state/survival/settings.json'
         if not settings_path.is_symlink() and settings_path.stat().st_size <= 262144:
             settings = json.loads(settings_path.read_text(encoding='utf-8-sig'))

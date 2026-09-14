@@ -130,6 +130,23 @@ def check_maid_config(folder, role):
     validate_learning_workspace(folder, role, 'game')
 
 
+def check_survivor_card_scope(card, names):
+    """Discovery is not permission: the current native card must allow every tool."""
+    assert isinstance(names, (list, tuple)) and len(set(names)) == len(names)
+    actual = card.config.get('tools')
+    assert isinstance(actual, list) and len(actual) == len(names) and set(actual) == set(names)
+    assert card.policy.default_effect == 'deny' and len(card.policy.rules) == len(names)
+    found = set()
+    for rule in card.policy.rules:
+        assert rule.effect == 'allow' and rule.subject == '*' and rule.condition is None
+        assert rule.target.kind == 'tool' and rule.target.name in names and rule.target.name not in found
+        principal = rule.principal
+        assert principal is not None and all(getattr(principal, key) == '*' for key in
+            ('source_type', 'source_value', 'subject_type', 'subject_value'))
+        found.add(rule.target.name)
+    assert found == set(names)
+
+
 def check_survivor_config(folder):
     """The shared console gets a scoped HTTP driver, never the body secret."""
     from qwenpaw.drivers.storage import load_card
@@ -168,9 +185,12 @@ def check_survivor_config(folder):
     binding = card.endpoint['headers']['Authorization']
     assert binding['source'] == 'credential' and binding['format'] == 'Bearer {value}'
     assert card.credentials[binding['credential']].ref == 'env:SURVIVOR_MCP_TOKEN'
-    assert card.policy.default_effect == 'deny' and len(card.policy.rules) == len(names)
-    assert {r.target.name for r in card.policy.rules if r.effect == 'allow' and r.subject == '*'
-            and r.target.kind == 'tool'} == set(names)
+    sys.path.insert(0, '/survival')
+    from mcp_server import TOOL_NAMES as survivor_names
+    # agent.json's migrated MCP record may retain its old discovery list. The
+    # unified card is authoritative; never compare two equally stale lists.
+    assert set(names) <= set(survivor_names)
+    check_survivor_card_scope(card, survivor_names)
     # Docker healthcheck is a new process and does not inherit the entrypoint's
     # in-memory environment. Validate the mounted source; native MCP smoke checks
     # separately prove the running Qwen process resolves its env credential.
