@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+22:40 收尾新增运行事实：桐人原task-9a2ac3024dff及task-4899179f7e3f连续被qwen3.5-plus云端配额/限流拒绝；原转储明确openai.RateLimitError HTTP429 throttling / usage allocated quota exceeded，不能套用下文21:13本地AcquireTimeout结论。任务891f33ca98b6已制作装备铁剑的实际成果保留，后两失败轮无动作。服务健康仍正常、原自主未关，但不能称后续LLM已恢复。未换模型、未追加重试或重放；详见自主规划文档收尾记录。
+
 2026-09-14 22:37 自主规划覆盖下文旧survivor镜像/临时农耕使命：已部署autonomy22，game Qwen仍2.2.1-memory1，只排空桐人2原Cron与survivor后重建并恢复；13服务运行、12健康，16原Cron启用。config/survival-agent.json保存人格/经历驱动的长期使命，经原submit_goal应用到当前身体；旧农耕调试不再是使命。规划用原生memory/goals.md和现有qd-survivor-practice的2按需参考页，不加调度器或固定任务轮换。检索subject从真实remember.history[-1].turnId关联原decision.startedAt，旧轮迟到记忆不能抢新使命。原模型、人设、body、life session、QPM0与迭代关闭保留。task-891f33ca98b6在原会话自主选基础装备阶段，22:36:51已实际导航/合成/装备铁剑，不只写计划；未称据点探索或全部玩法完成。129相关测试+34实践+19收件箱、30部署检查通过，相关panel探针green，旧全项目历史smoke仍非全绿。详见docs/SURVIVOR-SELF-DIRECTED-PLANNING.md；runtime/self-directed-adventure-20260914已完成维护，勿重跑旧pause/goal脚本。
 
 2026-09-14 21:55 原生能力实施覆盖下文旧native上下文：游戏Qwen2.2.1-memory1、survivor aut21镜像保持，已排空原16Cron/NPC准入与两生活/记忆任务、备份7604文件后重启原npc/qwenpaw/survivor并恢复。Minecraft/宿主Qwen未重启。两角色light_context.strategy=scroll、history_retention_days=0，原tool offload_retention_days=30保留（原生API只准1..365，曾422明确拒绝0，读回未变后才修正重提）。官方startup按chats回填桐人53session338行、结衣1session89行，原session/chats逐字保留；实际原生活session已构建Scroll并只注册structured recall_history，无Python工具，无新daemon。配置工具tools/configure_life_context.py默认preview；勿重跑旧初始化器或用旧session覆盖新Scroll经历。
