@@ -21,6 +21,17 @@ lingering one means the body is still working or the settle never ran; and
 read_json refuses state files above 262144 bytes, so larger receipts are
 lint-flagged as gateway-unreadable rather than silently accepted.
 
+The Step1b second-half increment adds the completion-side export contract:
+turn-completions/<turnId>.json files {schema:1, turnId equal to the file stem,
+taskId (native task id, shape pinned to QwenBackend.submit's validation in
+world/survival/controller.py), source, finalText string (possibly empty when
+the native task failed), optional promptSha256 64-hex / sessionId /
+exportedAt / messages}, capped at 2 MiB like QwenBackend.api's native
+response limit. No writer for this folder exists in the repo yet; the loader
+validates the shape, reports foreign files instead of guessing, and the
+dataset join cross-checks taskId against the decision_finished episode row
+(which already records turnId+taskId).
+
 Placement: tests/ is the only tree the fixed engineering plan covers for new
 files; this is an offline analysis module and production services must never
 import it. The intended home world/ops/survival_trajectory.py follows the
@@ -53,6 +64,18 @@ LEASE_STATUSES = ('open', 'reserved', 'used', 'closed', 'unknown')
 LEASE_ACTION_LIMITS = (1, 6)
 GATEWAY_READ_LIMIT = 262144
 TURN_ACTION_CAP = 6
+# Completion-side export contract (Step1b second half). turn-completions/
+# has no writer in this repo yet; this is the target shape for the pending
+# QwenPaw-side export channel decision. The taskId shape is pinned to
+# QwenBackend.submit's validation (world/survival/controller.py), the 2 MiB
+# cap mirrors QwenBackend.api's native response limit, and promptSha256 when
+# present is sha256 over the exact submitted prompt string — it exists to
+# calibrate tests/survival_prompt_rebuild against real exports.
+NATIVE_TASK_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
+PROMPT_SHA256_RE = re.compile(r'^[0-9a-f]{64}$')
+MAX_COMPLETION_BYTES = 2 * 1024 * 1024
+COMPLETION_KEYS = ('turnId', 'taskId', 'source', 'finalText', 'promptSha256',
+                   'sessionId', 'exportedAt', 'hasMessages', 'messageCount')
 
 
 def _number(value):
@@ -237,6 +260,48 @@ def crash_markers(state_dir):
             'lastActionPointer': (state_dir / 'last-action.json').exists()}
 
 
+def load_completions(state_dir):
+    """turn-completions/<turnId>.json: the proposed Step1b export contract for
+    the completion half of each (prompt, completion) pair. No writer in this
+    repo exists yet; a file that does not match the pinned shape is reported,
+    never guessed into the join."""
+    folder = Path(state_dir) / 'turn-completions'
+    result = {'byTurn': {}, 'invalid': [], 'ignoredFiles': 0}
+    if not folder.is_dir():
+        return result
+    for path in sorted(folder.iterdir()):
+        if path.suffix != '.json':
+            result['ignoredFiles'] += 1
+            continue
+        try:
+            if path.stat().st_size > MAX_COMPLETION_BYTES:
+                raise ValueError('completion_too_large')
+            row = json.loads(path.read_text(encoding='utf-8'))
+            digest = row.get('promptSha256') if isinstance(row, dict) else None
+            if (not isinstance(row, dict) or row.get('schema') != 1
+                    or not isinstance(row.get('turnId'), str)
+                    or row['turnId'] != path.name[:-5]
+                    or not TURN_ID_RE.match(row['turnId'])
+                    or not isinstance(row.get('taskId'), str)
+                    or not NATIVE_TASK_ID_RE.match(row['taskId'])
+                    or not isinstance(row.get('source'), str) or not row['source']
+                    or not isinstance(row.get('finalText'), str)
+                    or not (digest is None or (isinstance(digest, str)
+                                               and PROMPT_SHA256_RE.match(digest)))):
+                raise ValueError('completion_schema_invalid')
+        except (OSError, ValueError):
+            result['invalid'].append({'file': path.name, 'reason': 'unreadable_or_invalid'})
+            continue
+        messages = row.get('messages')
+        result['byTurn'][row['turnId']] = {
+            'turnId': row['turnId'], 'taskId': row['taskId'], 'source': row['source'],
+            'finalText': row['finalText'], 'promptSha256': digest,
+            'sessionId': row.get('sessionId'), 'exportedAt': row.get('exportedAt'),
+            'hasMessages': isinstance(messages, list),
+            'messageCount': len(messages) if isinstance(messages, list) else None}
+    return result
+
+
 def lint_receipts(receipts, file_bytes=None):
     """Strict second-pass lint of loaded receipts against pinned writer
     invariants (numen_gateway action()/open_lease). Only facts verified in
@@ -354,6 +419,33 @@ def turn_rows(transition_rows, episodes):
     return turns
 
 
+def _join_completions(turns, completions):
+    """Attach the completion half to matching turns and cross-check the join
+    keys the controller already records: decision_finished carries turnId and
+    the native taskId, so a completion whose taskId disagrees with the turn's
+    own decision row is a mismatch, never a silent join."""
+    by_turn = completions['byTurn']
+    matched, mismatches, seen = 0, [], set()
+    for turn in turns:
+        row = by_turn.get(turn['turnId'])
+        if row is None:
+            continue
+        seen.add(turn['turnId'])
+        matched += 1
+        turn['completion'] = row
+        decision_task = (turn.get('decision') or {}).get('taskId')
+        if isinstance(decision_task, str) and decision_task != row['taskId']:
+            mismatches.append({'turnId': turn['turnId'], 'completionTaskId': row['taskId'],
+                               'decisionTaskId': decision_task})
+    return {'valid': len(by_turn),
+            'invalid': completions['invalid'],
+            'ignoredFiles': completions['ignoredFiles'],
+            'matchedTurns': matched,
+            'orphanFiles': sorted(set(by_turn) - seen),
+            'taskIdMismatches': mismatches,
+            'writerStatus': 'contract-only: no writer for turn-completions/ exists yet'}
+
+
 def summarize(state_dir):
     """Data-card skeleton (gate G2): counts and ranges read straight from the
     files. No gameplay success is inferred here."""
@@ -365,6 +457,7 @@ def summarize(state_dir):
     turns = turn_rows(rows, episodes['rows'])
     turn_actions = load_turn_actions(state_dir)
     lease_state = load_lease(state_dir)
+    completions = load_completions(state_dir)
     lint = lint_receipts(receipts['receipts'], receipts.get('sizes', {}))
     state_bytes = {'receipts': _folder_json_bytes(state_dir / 'action-receipts'),
                    'actionsLog': _file_bytes(state_dir / 'actions.jsonl'),
@@ -421,13 +514,15 @@ def summarize(state_dir):
                         'cap': TURN_ACTION_CAP},
         'lease': lease_state,
         'crashMarkers': crash_markers(state_dir),
+        'completions': _join_completions(turns, completions),
         'receiptLint': {'gatewayReadLimitBytes': GATEWAY_READ_LIMIT, 'suspicious': lint},
         'bytes': state_bytes,
         'rewardHooks': ('per transition: inventoryDelta/displacement/hpDelta/hungerDelta/'
                         'navigationSuccess; per turn: decision.completed; memory.goalState '
                         'and skill_* join later at training time'),
-        'datasetNote': ('Action side only; (prompt, completion) originals stay in QwenPaw '
-                        '(Step1b export channel).')}
+        'datasetNote': ('Action side plus the turn-completions/ contract; the raw '
+                        '(prompt, completion) originals stay in QwenPaw until the '
+                        'Step1b export channel writes them.')}
 
 
 def dataset(state_dir):
@@ -436,7 +531,9 @@ def dataset(state_dir):
     receipts = load_receipts(state_dir)
     episodes = load_jsonl(state_dir / 'episodes.jsonl')
     rows = transitions(receipts['receipts'])
+    turns = turn_rows(rows, episodes['rows'])
     return {'summary': summarize(state_dir), 'transitions': rows,
-            'turns': turn_rows(rows, episodes['rows']),
+            'turns': turns,
+            'completions': _join_completions(turns, load_completions(state_dir)),
             'turnActions': load_turn_actions(state_dir)['turns'],
             'invalidReceipts': receipts['invalid']}

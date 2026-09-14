@@ -134,3 +134,56 @@ Like Step1a, the new test module is carried in `tests/` and statically
 self-checked; the fixed plan executes its existing 15 modules (174 tests)
 only, so execution of new test files here awaits a checks/coverage
 expansion.
+
+## Step1b second half: completion-side export contract (writer pending)
+
+The completion half of each `(prompt, completion)` pair is the one thing the
+durable survivor record does not keep. Verified against
+`world/survival/controller.py` (unchanged f48e2ef8 → e41f4015):
+
+- `poll_model()` computes the final answer (`answer = final_text(native)`)
+  but records only bounded metadata — its own comment says native messages
+  remain in QwenPaw. The party-delivery path holds the text only until the
+  speech event settles, then drops it; nothing durable keeps completion
+  text.
+- The join keys are already durable: `decision_finished` episode rows carry
+  `turnId` **and** the native `taskId`, and `QwenBackend.submit` validates
+  task ids as `[A-Za-z0-9_-]{1,128}`.
+- The exact submitted prompt string is `prefix + json.dumps(context)` where
+  `context['turn_id']` is the first key, so an export keyed by native taskId
+  can recover the turn id from the prompt deterministically.
+
+This module therefore pins the target contract so the export channel has
+something concrete to write and the dataset can pair the halves the moment
+the channel exists:
+
+    turn-completions/<turnId>.json
+    { "schema": 1, "turnId": "<must equal file stem>",
+      "taskId": "<native task id, [A-Za-z0-9_-]{1,128}>",
+      "source": "<e.g. qwenpaw-export | controller-final-answer>",
+      "finalText": "<string; may be empty when the native task failed>",
+      "promptSha256": "<optional, 64 lowercase hex, sha256 of the exact
+                       submitted prompt string>",
+      "sessionId": "<optional>", "exportedAt": "<optional>",
+      "messages": [<optional native message list, exported as-is>] }
+
+- `load_completions()` validates the shape (2 MiB per file, mirroring
+  `QwenBackend.api`'s native response cap) and reports foreign or invalid
+  files instead of guessing.
+- `dataset()`/`summarize()` join completions onto turns and cross-check the
+  `taskId` against the turn's own `decision_finished` row: disagreement is
+  reported as `taskIdMismatches`, files without a matching turn as
+  `orphanFiles`.
+- `promptSha256` exists to calibrate `survival_prompt_rebuild`: once real
+  exports exist, hashing the rebuilt prompt and comparing per turn measures
+  the mirror's fidelity on live data.
+
+No writer exists yet. Two channel options remain open for decision (both
+outside this batch's coverage allowlist): (a) a QwenPaw-side export keyed by
+native taskId — the only place the full message stream (intermediate
+assistant turns and tool calls) still exists; (b) a controller-side
+persistence of `finalText` at `decision_finished` time, which covers only
+the final answer but needs no new service. `finalText` alone is the final
+answer, not the whole completion; SFT/GRPO on the full policy output needs
+option (a). A drift-guard test pins the controller facts above so this
+contract cannot silently diverge from the writer side.

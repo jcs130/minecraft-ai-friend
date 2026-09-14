@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import survival_trajectory as trajectory
 
 GATEWAY_SOURCE = Path(__file__).resolve().parents[1] / 'world' / 'survival' / 'numen_gateway.py'
+CONTROLLER_SOURCE = Path(__file__).resolve().parents[1] / 'world' / 'survival' / 'controller.py'
 
 IRON, BREAD, RAW_IRON = 'minecraft:iron_ingot', 'minecraft:bread', 'minecraft:raw_iron'
 A, B, C, D, E = 'a' * 32, 'b' * 32, 'c' * 32, 'd' * 32, 'e' * 32
@@ -151,6 +152,36 @@ class TrajectoryReaderTests(unittest.TestCase):
                         'actionsUsed': 2, 'status': 'used', 'actionId': B}), encoding='utf-8')
         (self.root / 'last-action.json').write_text(
             json.dumps({'schema': 1, 'actionId': E}), encoding='utf-8')
+        # Step1b second half: the proposed turn-completions/ export contract.
+        completions_dir = self.root / 'turn-completions'
+        completions_dir.mkdir()
+        (completions_dir / (TURN1 + '.json')).write_text(json.dumps({
+            'schema': 1, 'turnId': TURN1, 'taskId': 'task-1111', 'source': 'qwenpaw-export',
+            'finalText': '已把铁矿运回，接下来整理仓库。', 'promptSha256': 'a' * 64,
+            'sessionId': 'session-1', 'exportedAt': '2026-09-15T04:00:25+00:00',
+            'messages': [{'role': 'assistant'}, {'role': 'assistant'}]}), encoding='utf-8')
+        # Valid shape, but the taskId disagrees with decision_finished task-2222.
+        (completions_dir / (TURN2 + '.json')).write_text(json.dumps({
+            'schema': 1, 'turnId': TURN2, 'taskId': 'task-mismatch-2222',
+            'source': 'qwenpaw-export', 'finalText': ''}), encoding='utf-8')
+        # Valid shape but no receipts exist for this turn id: orphan file.
+        (completions_dir / 'turn-20260915-9999.json').write_text(json.dumps({
+            'schema': 1, 'turnId': 'turn-20260915-9999', 'taskId': 'task-9999',
+            'source': 'qwenpaw-export', 'finalText': 'orphan'}), encoding='utf-8')
+        (completions_dir / 'broken.json').write_text('{"schema": 0}', encoding='utf-8')
+        (completions_dir / 'turn-20260915-000a.json').write_text(json.dumps({
+            'schema': 1, 'turnId': 'turn-20260915-000b', 'taskId': 'task-1',
+            'source': 'x', 'finalText': ''}), encoding='utf-8')  # stem != turnId
+        (completions_dir / 'turn-20260915-000c.json').write_text(json.dumps({
+            'schema': 1, 'turnId': 'turn-20260915-000c', 'taskId': 'bad task id!',
+            'source': 'x', 'finalText': ''}), encoding='utf-8')  # taskId shape
+        (completions_dir / 'turn-20260915-000d.json').write_text(json.dumps({
+            'schema': 1, 'turnId': 'turn-20260915-000d', 'taskId': 'task-1',
+            'source': 'x'}), encoding='utf-8')  # finalText missing
+        (completions_dir / 'turn-20260915-000e.json').write_text(json.dumps({
+            'schema': 1, 'turnId': 'turn-20260915-000e', 'taskId': 'task-1',
+            'source': 'x', 'finalText': '', 'promptSha256': 'z' * 64}), encoding='utf-8')
+        (completions_dir / 'notes.txt').write_text('ignored', encoding='utf-8')
 
     def test_receipt_loader_orders_counts_and_flags(self):
         loaded = trajectory.load_receipts(self.root)
@@ -351,6 +382,84 @@ class TrajectoryReaderTests(unittest.TestCase):
         end = source.index(')', start)
         self.assertEqual(tuple(re.findall(r"'([a-z_]+)'", source[start:end])),
                          trajectory.GATEWAY_TOOLS)
+
+    def test_completion_loader_validates_contract_shape(self):
+        loaded = trajectory.load_completions(self.root)
+        self.assertEqual(sorted(loaded['byTurn']),
+                         [TURN1, TURN2, 'turn-20260915-9999'])
+        self.assertEqual(loaded['byTurn'][TURN1],
+                         {'turnId': TURN1, 'taskId': 'task-1111', 'source': 'qwenpaw-export',
+                          'finalText': '已把铁矿运回，接下来整理仓库。',
+                          'promptSha256': 'a' * 64, 'sessionId': 'session-1',
+                          'exportedAt': '2026-09-15T04:00:25+00:00',
+                          'hasMessages': True, 'messageCount': 2})
+        minimal = loaded['byTurn'][TURN2]
+        self.assertEqual(minimal['finalText'], '')  # a failed native task has no answer
+        self.assertIsNone(minimal['promptSha256'])
+        self.assertIsNone(minimal['sessionId'])
+        self.assertIsNone(minimal['exportedAt'])
+        self.assertIsNone(minimal['messageCount'])
+        self.assertFalse(minimal['hasMessages'])
+        self.assertEqual(loaded['invalid'],
+                         [{'file': name, 'reason': 'unreadable_or_invalid'} for name in
+                          ['broken.json', 'turn-20260915-000a.json', 'turn-20260915-000c.json',
+                           'turn-20260915-000d.json', 'turn-20260915-000e.json']])
+        self.assertEqual(loaded['ignoredFiles'], 1)  # notes.txt
+
+    def test_completion_join_attaches_and_cross_checks_task_ids(self):
+        bundle = trajectory.dataset(self.root)
+        turns = {turn['turnId']: turn for turn in bundle['turns']}
+        self.assertEqual(turns[TURN1]['completion']['taskId'], 'task-1111')
+        self.assertEqual(turns[TURN2]['completion']['finalText'], '')
+        self.assertNotIn('completion', turns[TURN3])  # no file for that turn
+        self.assertEqual(bundle['completions'],
+                         {'valid': 3,
+                          'invalid': [{'file': name, 'reason': 'unreadable_or_invalid'}
+                                      for name in ['broken.json', 'turn-20260915-000a.json',
+                                                   'turn-20260915-000c.json',
+                                                   'turn-20260915-000d.json',
+                                                   'turn-20260915-000e.json']],
+                          'ignoredFiles': 1,
+                          'matchedTurns': 2,
+                          'orphanFiles': ['turn-20260915-9999'],
+                          'taskIdMismatches': [{'turnId': TURN2,
+                                                'completionTaskId': 'task-mismatch-2222',
+                                                'decisionTaskId': 'task-2222'}],
+                          'writerStatus':
+                              'contract-only: no writer for turn-completions/ exists yet'})
+
+    def test_summary_card_carries_completion_contract_section(self):
+        card = trajectory.summarize(self.root)
+        self.assertEqual(card['completions']['valid'], 3)
+        self.assertEqual(card['completions']['matchedTurns'], 2)
+        self.assertEqual(card['completions']['orphanFiles'], ['turn-20260915-9999'])
+        self.assertEqual(len(card['completions']['taskIdMismatches']), 1)
+        self.assertIn('contract-only', card['completions']['writerStatus'])
+        empty = trajectory.load_completions(self.root / 'absent')
+        self.assertEqual(empty, {'byTurn': {}, 'invalid': [], 'ignoredFiles': 0})
+        absent_card = trajectory.summarize(self.root / 'absent')
+        self.assertEqual(absent_card['completions']['matchedTurns'], 0)
+
+    def test_completion_contract_drift_guard(self):
+        """Pins the controller facts the completion contract depends on: the
+        native task-id shape validated in QwenBackend.submit, the
+        decision_finished join write, the final answer that poll_model sees
+        but does not persist, and QwenBackend.api's 2 MiB response cap."""
+        source = CONTROLLER_SOURCE.read_text(encoding='utf-8')
+        for fragment in (
+                "re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value['task_id'])",
+                "self.record('decision_finished', turnId=active['turnId'], taskId=active['taskId'],",
+                "answer = final_text(native)",
+                "# Native messages remain in QwenPaw; the public record has bounded metadata.",
+                "if len(result.content) > 2 * 1024 * 1024:",
+        ):
+            self.assertIn(fragment, source)
+        self.assertEqual(trajectory.NATIVE_TASK_ID_RE.pattern, '^[A-Za-z0-9_-]{1,128}$')
+        self.assertEqual(trajectory.PROMPT_SHA256_RE.pattern, '^[0-9a-f]{64}$')
+        self.assertEqual(trajectory.MAX_COMPLETION_BYTES, 2 * 1024 * 1024)
+        self.assertEqual(trajectory.COMPLETION_KEYS,
+                         ('turnId', 'taskId', 'source', 'finalText', 'promptSha256',
+                          'sessionId', 'exportedAt', 'hasMessages', 'messageCount'))
 
 
 if __name__ == '__main__':
