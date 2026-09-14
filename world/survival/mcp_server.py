@@ -114,10 +114,19 @@ class SkillTools:
     def promote(self, turn_id, name, version):
         return self._write(turn_id, lambda _: self.library.promote(name, version))
 
-    def start(self, turn_id, name, version, memory=None, max_steps=32, objective=None):
+    def start(self, turn_id, name, version, memory=None, max_steps=32, objective=None, summary=''):
         from numen_gateway import read_json, write_json, GatewayError
         from practice import run_id, validate_objective
         def queue(lease):
+            if (not isinstance(summary, str) or len(summary) > 600 or '\0' in summary
+                    or summary != '' and (not summary.strip() or '<tool' in summary.lower()
+                                          or '</tool' in summary.lower())):
+                return {'ok': False, 'code': 'invalid_skill_start_summary',
+                    'skillQueued': False, 'turnFinished': False, 'writePerformed': False,
+                    'retryAutomatically': False,
+                    'fields': {'summary': '可省略或留空；提供时须为1–600字非空纯文本，不能含工具XML或空字符'},
+                    'instruction': '本次程序未排队，回合未结束。请修正summary；租约仍有效时可沿用本轮原turn_id。'
+                        '总结只能说明已核实的结果与排队意图，不能把排队说成已执行。'}
             if lease['status'] != 'open' or lease['actionsUsed'] != 0:
                 raise GatewayError('turn_action_already_used')
             if type(max_steps) is not int or not 1 <= max_steps <= 32:
@@ -148,8 +157,12 @@ class SkillTools:
             lease.update(status='closed', skillStartRequested=True)
             write_json(self.state / 'lease.json', lease)
             write_json(path, job)
-            return {'ok': True, 'code': 'skill_queued', 'job': job,
-                    'executionConfirmed': False, 'retryAutomatically': False}
+            result = {'ok': True, 'code': 'skill_queued', 'name': name, 'version': version,
+                      'turnId': turn_id, 'job': job, 'executionConfirmed': False, 'retryAutomatically': False}
+            if summary:
+                result['turnCompletion'] = {'requested': True, 'contract': 'qiandeng-survival-turn-v1',
+                                            'summary': summary.strip()}
+            return result
         return self._write(turn_id, queue)
 
     def remember(self, turn_id, goal='', lesson='', next_focus='',
@@ -509,9 +522,9 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def skill_start(turn_id: str, name: str, version: str, memory: dict | None = None, max_steps: int = 32,
-                    objective: dict | None = None) -> dict:
-        """用本轮未用过动作的租约排队已晋升程序；成功即关闭租约，直接最终答复，勿再remember。可先remember(finish_turn=false)记录意图。objective={description,checks:[{kind:inventory_gain,item:完整ID,count:数量},{kind:action_completed,tool:动作名,count:次数}]}最多4项；宿主独立记录观察，程序done不代替验收。"""
-        return skill_tools.start(turn_id, name, version, memory, max_steps, objective)
+                    objective: dict | None = None, summary: str = '') -> dict:
+        """用本轮未用过动作的租约排队已晋升程序。建议提供最多600字summary说明实际观察和排队意图：成功排队后原生回合直接以该总结结束，勿再remember；只是排队，不等于已执行或完成目标。省略summary仍兼容，成功后直接最终答复。可先remember(finish_turn=false)记录意图。objective={description,checks:[{kind:inventory_gain,item:完整ID,count:数量},{kind:action_completed,tool:动作名,count:次数}]}最多4项；宿主独立记录观察，程序done不代替验收。"""
+        return skill_tools.start(turn_id, name, version, memory, max_steps, objective, summary)
 
     @server.tool()
     def remember(turn_id: str, goal: str = '', lesson: str = '', next_focus: str = '',

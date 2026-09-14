@@ -34,7 +34,7 @@ PROMPT = ('这是你原生活会话的定期继续，不是来自其他角色的
     '工具和伙伴新回复。然后自行决定一个有价值的小步骤、一个需要解决的阻塞，或有理由的休息。'
     '选择工作时先确认原生task_catalog、所需工具材料与可达地点，再用真实work等工具交给原生AI执行；'
     'workSupport含自身当前装备与可按需read_file的资料路径，选择玩法时先读对应的一篇。'
-    '与爸爸商定的分工可以自主推进，不必等每10分钟再互相邀请；也可以依据新事实改约或有理由地休息。'
+    '与爸爸商定的分工可以自主推进，不必等下次生活信号再互相邀请；也可以依据新事实改约或有理由地休息。'
     '农耕不是必须目标：若选择它，查询目录并决定一个自己能执行的原生工作，不能以“准备帮忙”等待代替开始。'
     '目录未提供的浇水/移动/取物能力不要凭想象承诺，有缺口可协商可行分工或向运营组报告。'
     '仅看到identity里的activity=work不代表正在耕作，taskId=idle也不代表已启动工作；'
@@ -46,7 +46,7 @@ PROMPT = ('这是你原生活会话的定期继续，不是来自其他角色的
     '遇到replayedReceipt先核对实际observedAt/expiresAt；未知旧救援只查原ID，明确拒绝后才按新事实重新决定。'
     '有用的新进展、问题和下一步写入自己的记忆或目标文件；没有新事实不用重复追加同一份状态日记。'
     '末尾用不超过400字留下当前小目标、实际新结果及来源、未完成或阻塞、下一步，供原会话下一轮接续。'
-    '休息可以是自主选择，但说明在等待哪个可观察变化，不必每10分钟重写相同等待记录。'
+    '休息可以是自主选择，但说明在等待哪个可观察变化，不必每次生活信号都重写相同等待记录。'
     '这里的最终总结只保留在自己的生活会话，不会自动广播给队友。\n')
 
 INBOX_NOTE = ('privateDialogueInputs是你忙碌期间原生游戏对话的私有收件，已按完整事件分批。'
@@ -131,12 +131,14 @@ class PartyLife:
         if not path.exists():
             return None
         value = read_json(path)
-        from party_life_schedule import JOB_ID
+        from party_life_schedule import JOB_ID, slot_epoch
+        slot_seconds = value.get('slotSeconds', 600)
+        slot_epoch(value.get('slot'), slot_seconds)
         roster = [{k: m[k] for k in ('agentId', 'bodyUuid', 'displayName', 'kind')}
                   for m in self.bridge.config.private()['members']]
         if (value.get('schema') != 1 or value.get('role') != YUI_AGENT_ID
                 or value.get('jobId') != JOB_ID or type(value.get('slot')) is not int or value['slot'] < 0
-                or value.get('requestId') != JOB_ID + ':600:' + str(value['slot'])
+                or value.get('requestId') != JOB_ID + ':' + str(slot_seconds) + ':' + str(value['slot'])
                 or sorted(value.get('members', []), key=lambda m: m['agentId']) != sorted(roster, key=lambda m: m['agentId'])):
             raise ValueError('party_life_signal_invalid')
         return value
@@ -152,6 +154,7 @@ class PartyLife:
             'qd_world_team__' + name for name in tools_for('game:' + YUI_AGENT_ID)]
 
     def tick(self):
+        from party_life_schedule import slot_epoch
         member = self._member()
         kwargs = {'maid_uuid': member['bodyUuid'], 'owner_uuid': member['ownerUuid']}
         # One existing Linux worker owns consumption; this lock also makes an
@@ -185,7 +188,8 @@ class PartyLife:
                             'summarySha256': hashlib.sha256(text.encode()).hexdigest(),
                             'modelClaimNotActionReceipt': True, 'sourceSessionId': row.get('sessionId')}
                     write_json(self.root / 'receipts' / (active['key'] + '.json'), receipt)
-                    state.update(active=None, lastSlot=active['slot'], status='waiting', lastResult=receipt)
+                    state.update(active=None, lastSlot=active['slot'],
+                                 lastSlotSeconds=active.get('slotSeconds', 600), status='waiting', lastResult=receipt)
                     self._save(state)
                     return state
                 if row.get('status') != 'not_submitted':
@@ -201,7 +205,8 @@ class PartyLife:
                 # If the request exists, QwenTasks returns it and never re-POSTs.
             else:
                 signal = self._signal()
-                if signal is None or signal['slot'] <= state['lastSlot']:
+                if signal is None or slot_epoch(signal['slot'], signal.get('slotSeconds', 600)) <= slot_epoch(
+                        state['lastSlot'], state.get('lastSlotSeconds', 600)):
                     return state
                 if (self.bridge.queue.active_for_recipient(YUI_AGENT_ID)
                         or self.bridge.queue.next_pending(YUI_AGENT_ID)):
@@ -223,6 +228,7 @@ class PartyLife:
                     raise ValueError('party_life_context_too_large')
                 active = {'key': 'party-life-' + hashlib.sha256(signal['requestId'].encode()).hexdigest(),
                     'signalId': signal['requestId'], 'slot': signal['slot'], 'member': member,
+                    'slotSeconds': signal.get('slotSeconds', 600),
                     'replyIds': [r['eventId'] for r in replies],
                     'inputIds': [event['eventId'] for event in inputs['events']],
                     'prompt': prompt,

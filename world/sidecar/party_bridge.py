@@ -43,9 +43,10 @@ def message_context(message, *, current_observation=None, work_support=None):
 def tool_schema():
     defs = {
         'party_status': ({}, [], '查看自己的固定队友、最近交流、回复和队伍额度；不调用模型。'),
-        'party_send': ({'text': {'type': 'string', 'minLength': 1, 'maxLength': 160},
+        'party_send': ({'text': {'type': 'string', 'minLength': 1, 'maxLength': 160,
+                               'description': '非空单行文字，最多160字；不要包含换行、制表符或控制字符。'},
                         'channel': {'type': 'string', 'enum': ['nearby', 'msg'], 'default': 'nearby'}}, ['text'],
-                       '让自己的游戏身体向固定队友说话。nearby需同维度24格内；msg本版本尚未接通，会返回游戏拒绝，不会转后台私信。游戏确认接收后对方才思考；失败不自动重发。'),
+                       '让自己的游戏身体向固定队友说一句单行文字，text不含换行或控制字符。nearby需同维度24格内；msg本版本尚未接通，会返回游戏拒绝，不会转后台私信。参数拒绝时本次未入队、未向游戏发送；不代改文本，不自动重发。游戏确认接收后对方才思考。'),
         'party_message_read': ({'message_id': {'type': 'string', 'format': 'uuid'}}, ['message_id'],
                               '读取本队消息及关联回复，不唤醒模型；未完成时不要频繁轮询。'),
     }
@@ -54,6 +55,49 @@ def tool_schema():
              'readOnlyHint': name != 'party_send', 'destructiveHint': False,
              'idempotentHint': True, 'openWorldHint': False}}
             for name, (props, required, desc) in defs.items()]
+
+
+class PartySendArgumentError(ValueError):
+    """Only raised before enqueue; execution failures must never use this receipt."""
+    REASONS = {
+        ('arguments', 'invalid_fields'): 'arguments must contain text and only the optional channel field',
+        ('text', 'string_required'): 'text must be a string',
+        ('text', 'nonempty_required'): 'text must contain non-whitespace characters',
+        ('text', 'too_long'): 'text must contain at most 160 characters',
+        ('text', 'single_line_required'): 'text must be a single line with no line breaks',
+        ('text', 'unsupported_control_character'): 'text must not contain tabs, control or format characters',
+        ('channel', 'invalid_channel'): 'channel must be nearby or msg',
+    }
+
+    def __init__(self, field, reason):
+        hint = self.REASONS[field, reason]
+        self.data = {'code': 'party_send_invalid_argument', 'field': field, 'reason': reason,
+                     'enqueued': False, 'worldSendAttempted': False, 'retryAutomatically': False}
+        super().__init__('party_send_invalid_argument: ' + hint +
+                         '. This attempt was not queued or sent to the game. No automatic retry.')
+
+
+def validate_send_arguments(args):
+    """Explain the existing speech contract without changing the user's text."""
+    if not isinstance(args, dict) or 'text' not in args or set(args) - {'text', 'channel'}:
+        raise PartySendArgumentError('arguments', 'invalid_fields')
+    text = args['text']
+    try:
+        speech_text(text)
+    except ValueError:
+        if not isinstance(text, str):
+            reason = 'string_required'
+        elif not text.strip():
+            reason = 'nonempty_required'
+        elif len(text) > 160:
+            reason = 'too_long'
+        elif any(c in '\r\n\x85\u2028\u2029' for c in text):
+            reason = 'single_line_required'
+        else:
+            reason = 'unsupported_control_character'
+        raise PartySendArgumentError('text', reason) from None
+    if args.get('channel', 'nearby') not in ('nearby', 'msg'):
+        raise PartySendArgumentError('channel', 'invalid_channel')
 
 
 class PartyBridge:
@@ -173,6 +217,8 @@ class PartyBridge:
 
     def call(self, role, operation, args, request_key):
         self.config.member(role)
+        if operation == 'party_send':
+            validate_send_arguments(args)
         if not isinstance(args, dict) or operation not in PARTY_TOOLS:
             raise ValueError('invalid_party_tool')
         expected = {'party_status': set(), 'party_send': {'text'}, 'party_message_read': {'message_id'}}[operation]

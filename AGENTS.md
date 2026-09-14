@@ -1,5 +1,13 @@
 # 千灯纪整合项目
 
+2026-09-14 21:25 自主吞吐更新覆盖下文旧周期/镜像：survivor最终为 `qiandengji-survivor:2.2.0-autonomy21`，QwenPaw仍游戏2.2.1-memory1，已重启加载原生收尾 VERSION4；NPC重载，Minecraft和其余服务未重启，宿主Qwen未改。原16Cron/NPC准入/自主已恢复，10角色名称模型、2原session不变，13服务运行/12有探针服务健康。桐人/结衣人工每日预算null、模型QPM0、iteration.disabled本就无上限，继续身体串行、未知不重放，旧max_iters12不是有效限制。本地LLM并发1实际按provider:model共享（不是身体单飞锁），本轮没有改大该容量。结衣原life Cron改每3分钟（不是新增），新slotSeconds180兼容旧600信号/在途任务，忙时只取最新。详见docs/AUTONOMY-THROUGHPUT.md。
+
+skill_start可传模型summary，只有实际skill_queued且原name/version/turnId及总结一致才原生结束，不额外模型收尾；旧remember路径保留。实际工具schema及原角色两页SKILL已同步，内核文件未动。58原生接口/收尾/缓存测试、34新镜像实践测试、19收件箱测试通过，原报告归档后真实重跑；最终30只读部署检查全过。本次game_qwenpaw、survival_practice、maid_perception探针通过，全项目历史证据仍非全绿，不得修改旧hash假通过。结衣party_send的换行错误已明确field/reason及未入队/未发送，不代改文本或重发。
+
+21:13 task-d7273f4104e3 的MODEL_QUOTA_EXCEEDED实为本地_AcquireTimeoutError，供应商调用前30秒等槽超时，无真实429/额度耗尽证据，21:15下一轮自然成功。21:24用tools/configure_survivor_queue_wait.py --apply仅把桐人原生running.llm_acquire_timeout30→120，原生GET全profile只变该字段，Yui300保持；相关8项Windows/同版隔离测试通过。最后只排空survivor与其2原Cron，部署aut21同步离线初始化120默认，随后恢复，勿重跑旧初始化器。新版Qwen健康检查等待>=120，profile备份/回执在runtime/survivor-queue-wait/20260914T132430240013Z。
+
+桐人首个farm程序已实际跑29观察/0身体步后维护停止，不能说完全没运行或成功；原因是读取memory.obsResult而真实入口state.execution.observation.result。21:08恢复后已自行直接harvest/replant，再用summary排队旧程序；已通过原目标队列给出准确实践反馈，让其自行修订而非代写技能。结衣仍为原生动作+ReMe/Markdown学习，尚未接同等QuickJS实践账本。缓存当日结衣记录约64%，桐人记录0但适配器缺字段也会记0，不可断言供应商零命中或把缓存比等同套餐费用节省。
+
 2026-09-14 持续实践已部署：survivor 更新为 `qiandengji-survivor:2.2.0-autonomy19`，原任务自然排空、1,067文件备份后仅换该容器，原身体/生活session/聊天保留；QwenPaw仍游戏18089的2.2.1，Minecraft/NPC/Qwen及宿主8088未重启。`skill_start`可附固定objective，`skill_draft`可附refinement关联真实原run_ids；同一原控制器把步骤/回执/首次终态观察持久写入practice.sqlite3，补采失败暂缓下一模型、只读原动作不重放。旧skill_library内核未改，旧晋升版本仍有效，旧已完成运行不补造实践。program done、客观观察、动作确认与掌握分开，masteryVerified始终false。34独立实践测试、237相关回归通过；新运行和panel探针通过，全项目历史smoke仍有旧证据漂移，不以改旧hash凑绿。详见docs/SURVIVOR-CONTINUAL-PRACTICE.md。
 
 桐人实践正文/渐进参考页已通过原生API部署并扫描启用；共享qd-skill-evolution官方写文件/MakeSkill2.0说明同步全部10原角色，按各自自然idle更新，模型/人设/原enable/16Cron均保留。完整Qwen检查确认10角色96绑定与unrestricted策略。新增学习里程碑通过原目标队列进入原会话，角色自行选择当前生存工作中的可复用程序练习，不另起Prime daemon或反思模型；实际完成与改进仍须用具体生产run和回执验收。

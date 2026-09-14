@@ -1,8 +1,10 @@
 """Learning/queue authorization tests with a fake library and no game/model IO."""
+import asyncio
 import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -159,6 +161,8 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         value = self.tools.start(TURN, 'gather', VERSION, {'round': 1}, 12)
         self.assertTrue(value['ok'])
         self.assertFalse(value['executionConfirmed'])
+        self.assertEqual((value['name'], value['version'], value['turnId']), ('gather', VERSION, TURN))
+        self.assertNotIn('turnCompletion', value)
         job = read_json(self.state / 'skill-job.json')
         from practice import run_id
         self.assertEqual(job, {'schema': 1, 'status': 'pending', 'name': 'gather', 'version': VERSION,
@@ -167,6 +171,72 @@ class SurvivalSkillToolsTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'lease_invalid')
         self.assertEqual(self.library.calls, [('read', ('gather', VERSION))])
+
+    def test_start_summary_requests_native_finish_only_after_exact_job_is_saved(self):
+        summary = '  已检查背包，程序已排队，实际执行结果仍待观察。\n'
+        value = self.tools.start(TURN, 'gather', VERSION, summary=summary)
+        self.assertTrue(value['ok'])
+        self.assertEqual((value['name'], value['version'], value['turnId']), ('gather', VERSION, TURN))
+        self.assertEqual(value['turnCompletion'], {'requested': True,
+            'contract': 'qiandeng-survival-turn-v1', 'summary': summary.strip()})
+        self.assertFalse(value['executionConfirmed'])
+        self.assertEqual(read_json(self.state / 'skill-job.json'), value['job'])
+        self.assertNotIn('summary', value['job'])
+        self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
+        retried = self.tools.start(TURN, 'gather', VERSION, summary=summary)
+        self.assertFalse(retried['ok'])
+        self.assertNotIn('turnCompletion', retried)
+        self.assertEqual(read_json(self.state / 'skill-job.json'), value['job'])
+
+    def test_invalid_start_summary_is_correctable_without_writing_or_reading_library(self):
+        lease = (self.state / 'lease.json').read_bytes()
+        for summary in (None, True, 123, [], {}, ' ', '\n\t', 'x' * 601, 'text\0text',
+                        '<tool_call>queued</tool_call>', '</TOOL>'):
+            with self.subTest(summary=summary), patch('numen_gateway.write_json') as write:
+                value = self.tools.start(TURN, 'gather', VERSION, summary=summary)
+                self.assertEqual(value['code'], 'invalid_skill_start_summary')
+                self.assertFalse(value['skillQueued'])
+                self.assertFalse(value['turnFinished'])
+                self.assertFalse(value['writePerformed'])
+                self.assertEqual(set(value['fields']), {'summary'})
+                self.assertNotIn('turnCompletion', value)
+                write.assert_not_called()
+        self.assertEqual(self.library.calls, [])
+        self.assertFalse((self.state / 'skill-job.json').exists())
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease)
+        fixed = self.tools.start(TURN, 'gather', VERSION, summary='观' * 600)
+        self.assertTrue(fixed['ok'])
+        self.assertEqual(len(fixed['turnCompletion']['summary']), 600)
+
+    def test_empty_start_summary_and_rejected_start_never_request_completion(self):
+        self.library.promoted = False
+        rejected = self.tools.start(TURN, 'gather', VERSION, summary='只记录未执行的意图。')
+        self.assertEqual(rejected['code'], 'skill_not_promoted')
+        self.assertNotIn('turnCompletion', rejected)
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+        self.library.promoted = True
+        value = self.tools.start(TURN, 'gather', VERSION, summary='')
+        self.assertTrue(value['ok'])
+        self.assertNotIn('turnCompletion', value)
+
+    def test_mcp_start_forwards_optional_summary_and_preserves_queued_receipt(self):
+        from mcp_server import make_server
+        async def check():
+            server = make_server(SimpleNamespace(state=self.state, clock=lambda: NOW), self.tools)
+            listed = await server.list_tools()
+            from native_tools import valid_tools
+            self.assertTrue(valid_tools([{'name': tool.name, 'enabled': True, 'input_schema': tool.inputSchema}
+                                         for tool in listed]))
+            schema = next(tool for tool in listed if tool.name == 'skill_start').inputSchema
+            self.assertEqual(schema['properties']['summary']['type'], 'string')
+            self.assertEqual(schema['properties']['summary']['default'], '')
+            self.assertNotIn('summary', schema['required'])
+            with patch.object(self.tools, 'start', wraps=self.tools.start) as start:
+                await server.call_tool('skill_start', {'turn_id': TURN, 'name': 'gather', 'version': VERSION,
+                                                      'summary': '已排队，执行结果待观察。'})
+                start.assert_called_once_with(TURN, 'gather', VERSION, None, 32, None, '已排队，执行结果待观察。')
+            self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'pending')
+        asyncio.run(check())
 
     def test_unpromoted_active_job_and_invalid_inputs_cannot_close_lease(self):
         self.library.promoted = False
@@ -202,7 +272,9 @@ class SurvivalSkillToolsTests(unittest.TestCase):
                 raise OSError('fixture write failure')
             original(path, value)
         with patch('numen_gateway.write_json', side_effect=fail_job):
-            self.assertFalse(self.tools.start(TURN, 'gather', VERSION)['ok'])
+            failed = self.tools.start(TURN, 'gather', VERSION, summary='排队成功后才结束。')
+            self.assertFalse(failed['ok'])
+            self.assertNotIn('turnCompletion', failed)
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'lease_invalid')
         self.assertFalse((self.state / 'skill-job.json').exists())

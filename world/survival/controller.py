@@ -626,12 +626,13 @@ class Controller:
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
             'adventure': self.adventure(body),
             'learningPractice': self.practice_context(),
-            'learningUpdate': {'revision': 'practice-evidence-v1',
+            'learningUpdate': {'revision': 'practice-queued-summary-v2',
                 'reference': 'skills/qd-survivor-practice/references/program-practice.md',
                 'instruction': '当前小目标和改进办法由你决定。发现重复操作或重复失败时，按需读程序实践指南，'
                     '用skill_read查看准确版本的真实实践与失败样本；提炼小程序后draft/test/promote，'
                     '再在尚未使用身体动作的新回合skill_start实际练习。可附objective固定本次验收条件；'
-                    '先remember(finish_turn=false)记录意图，再start，排队成功后直接最终答复，不再调用remember。'
+                    '先remember(finish_turn=false)记录意图，再skill_start(summary=你的简短排队总结)，'
+                    '成功排队会以该summary直接结束原生回合，不再调用remember，也不表示程序已执行。'
                     '后续正常生活轮查看实践回执，根据结果修订，skill_draft可用refinement关联同技能原run_ids。'
                     '测试通过、程序done、观察到目标、跨场景掌握分别记录。学习不要求额外发声或每轮新建技能。'},
             'capabilityUpdate': {'revision': 'survival-progress-20260914-v1',

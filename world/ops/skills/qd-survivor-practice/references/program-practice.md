@@ -64,7 +64,7 @@ function next(state, memory) {
 
 开始前必须有本条生活输入提供的原 turn_id，且本轮身体动作尚未消耗（actionsUsed=0）。已经直接行动的回合只整理结果，把程序试验留给下一正常生活回合；不要伪造编号、续租或另起模型任务。先 `remember` 保存试验目标、确切版本、预期和下一步，保持 `finish_turn=false`。
 
-然后 `skill_start(turn_id, name, version, memory={}, max_steps=3, objective=...)`。本例的 objective 可取：
+然后 `skill_start(turn_id, name, version, memory={}, max_steps=3, objective=..., summary="已提交本次试验，等待实际执行后核对结果。")`。summary 用你自己的最多600字简短总结，只陈述排队与待验证事项。本例的 objective 可取：
 
 ```json
 {"description":"在当前配方和资源允许时完成一次小批木棍合成","checks":[{"kind":"inventory_gain","item":"minecraft:stick","count":1},{"kind":"action_completed","tool":"craft","count":1}]}
@@ -72,7 +72,7 @@ function next(state, memory) {
 
 objective 最多4条检查，count 为正整数；inventory_gain 检查指定物品净增量，action_completed 检查该实际动作的完成回执。根据本次小目标设置，不能拿已存在的物品冒充新增。检查通过只说明本次观察满足目标；拾取、其他世界变化仍可能影响物品数量，不自动证明因果或熟练掌握。
 
-`skill_start` 返回排队成功不等于执行完成；受理后本轮租约已关闭，直接给最终文字结束当前原生回合，不再 remember、执行身体动作或轮询等待。控制器按原任务边界执行，不需要每步调用模型。
+`skill_start` 返回排队成功不等于执行完成；受理后本轮租约已关闭。提供 summary 时，成功回执会让 QwenPaw 直接用你的总结结束当前原生回合，省去额外模型调用。不再 remember、执行身体动作或轮询等待。未提供 summary 的旧调用仍兼容，此时自行给出最终文字结束。参数被拒绝则按具体字段修正，不能当成排队成功。控制器按原任务边界执行，不需要每步调用模型。
 
 下一正常生活回合用 `skill_read` 查这次实践：核对 practice ID、确切版本、目标检查、动作回执和前后状态。失败、未确认或结果不符合预期时，记录实际差异与待验证原因，再用该实践 ID 修订同一技能；重测新版本，再决定是否试运行。需要回退时读取保留的旧版本，对当前内核重测后重新晋升，并显式指定版本运行。无证据支持的改动不做。
 

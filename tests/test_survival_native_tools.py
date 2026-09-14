@@ -15,12 +15,18 @@ import native_tools as native
 
 
 def tools():
-    return [{'name': name, 'enabled': True, 'input_schema': {'type': 'object', 'properties':
-        {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
-        if name == 'remember' else
-        {'objective' if name == 'skill_start' else 'refinement':
-         {'default': None, 'anyOf': [{'type': 'object'}, {'type': 'null'}]}}
-        if name in ('skill_start', 'skill_draft') else {}}} for name in native.TOOL_NAMES]
+    rows = []
+    for name in native.TOOL_NAMES:
+        properties = {}
+        if name == 'remember':
+            properties = {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
+        elif name in ('skill_start', 'skill_draft'):
+            properties['objective' if name == 'skill_start' else 'refinement'] = {
+                'default': None, 'anyOf': [{'type': 'object'}, {'type': 'null'}]}
+            if name == 'skill_start':
+                properties['summary'] = {'type': 'string', 'default': ''}
+        rows.append({'name': name, 'enabled': True, 'input_schema': {'type': 'object', 'properties': properties}})
+    return rows
 
 
 def saved():
@@ -71,6 +77,22 @@ class NativeToolConnectionTests(unittest.TestCase):
             next(row for row in after if row['name'] == name)['input_schema']['required'] = [field]
             self.assertFalse(native.valid_tools(after))
         self.assertTrue(native.valid_tools(tools()))
+
+    def test_old_start_summary_cache_reloads_and_only_optional_string_default_is_ready(self):
+        before = tools()
+        next(row for row in before if row['name'] == 'skill_start')['input_schema']['properties'].pop('summary')
+        self.assertFalse(native.valid_tools(before))
+        with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
+            self.assertTrue(native.NativeToolConnection().ensure_ready())
+            self.assertEqual(request.call_args_list[2].args[1:], (native.TOOLS_ROUTE, {'tools': list(native.TOOL_NAMES)}))
+        for parameter in ({'type': 'string'}, {'type': 'string', 'default': None},
+                          {'type': 'boolean', 'default': ''}, {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': ''}):
+            invalid = tools()
+            next(row for row in invalid if row['name'] == 'skill_start')['input_schema']['properties']['summary'] = parameter
+            self.assertFalse(native.valid_tools(invalid))
+        required = tools()
+        next(row for row in required if row['name'] == 'skill_start')['input_schema']['required'] = ['summary']
+        self.assertFalse(native.valid_tools(required))
 
     def test_saved_inactive_driver_reloads_through_exact_whitelist_then_requires_get(self):
         with patch.object(native, 'request', side_effect=[OSError(), saved(), tools(), []]) as request:

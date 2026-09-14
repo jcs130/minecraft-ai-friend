@@ -1,16 +1,18 @@
 """Honor a model's explicit finish request via the existing native reply exit.
 
 No timer, repetition counter, game action, model call or fabricated completion.
-Ordinary remember calls remain checkpoints. Only the current successful MCP
-call with finish_turn=true supplies the model-authored final answer.
+Ordinary remember calls remain checkpoints. The current successful remember
+or program queue receipt may carry the model-authored final answer. Queue
+acceptance ends deliberation; it does not assert program execution or success.
 """
 from functools import wraps
 import inspect
 import json
 import re
 
-VERSION = 3
+VERSION = 4
 TOOL = 'numen_survival__remember'
+START_TOOL = 'numen_survival__skill_start'
 CONTRACT = 'qiandeng-survival-turn-v1'
 
 
@@ -34,7 +36,7 @@ def completion_summary(agent):
     calls = message.get_content_blocks('tool_call')
     results = message.get_content_blocks('tool_result')
     # Only the final selected tool may close a round; never drop later calls.
-    if not calls or calls[-1].name != TOOL:
+    if not calls or calls[-1].name not in (TOOL, START_TOOL):
         return None
     call = calls[-1]
     if getattr(agent, '_qiandeng_survival_finish_emitted', None) == (message.id, call.id):
@@ -45,12 +47,14 @@ def completion_summary(agent):
             args = json.loads(args)
         except ValueError:
             return None
-    if not isinstance(args, dict) or args.get('finish_turn') is not True:
+    if not isinstance(args, dict):
+        return None
+    if call.name == TOOL and args.get('finish_turn') is not True:
         return None
     summary = args.get('summary')
     if not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 600:
         return None
-    matching = [row for row in results if row.id == call.id and row.name == TOOL]
+    matching = [row for row in results if row.id == call.id and row.name == call.name]
     if len(matching) != 1 or matching[0].state != 'success':
         return None
     result = matching[0].output
@@ -72,11 +76,20 @@ def completion_summary(agent):
         if not isinstance(result, dict):
             return None
         intent = result.get('turnCompletion', {})
-        if (result.get('ok') is not True or result.get('code') != 'memory_recorded'
-                or result.get('memorySaved') is not True or not isinstance(intent, dict)
+        if (result.get('ok') is not True or not isinstance(intent, dict)
                 or intent.get('requested') is not True or intent.get('contract') != CONTRACT
                 or intent.get('summary') != summary.strip()):
             return None
+        if call.name == TOOL:
+            if result.get('code') != 'memory_recorded' or result.get('memorySaved') is not True:
+                return None
+        else:
+            if result.get('code') != 'skill_queued' or result.get('executionConfirmed') is not False:
+                return None
+            for arg_key, receipt_key in (('name', 'name'), ('version', 'version'), ('turn_id', 'turnId')):
+                value = args.get(arg_key)
+                if not isinstance(value, str) or not value.strip() or result.get(receipt_key) != value:
+                    return None
     except (ValueError, TypeError):
         return None
     return summary.strip()

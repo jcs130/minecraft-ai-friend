@@ -36,7 +36,7 @@ def tune(running):
     running.llm_max_retries = 1
     running.llm_max_concurrent = 1
     running.llm_max_qpm = MODEL_QPM
-    running.llm_acquire_timeout = 30
+    running.llm_acquire_timeout = 120
     disable_limits(running)
     running.light_context_config.strategy = 'native'
     running.light_context_config.visual_compact_config.enabled = False

@@ -9,12 +9,13 @@ from party_role_capabilities import YUI_AGENT_ID, is_bound_yui, party_members
 ROLE = YUI_AGENT_ID
 JOB_ID = 'qd-life-review-' + ROLE
 SIGNALS = Path('/team/party-life')
+INTERVAL_SECONDS = 180
 TEXT = '让结衣在原生活会话继续观察、照顾自己、与桐人协作和总结学习；等待当前任务结束，不强制聊天。'
 
 
 def managed_job():
-    return {'id': JOB_ID, 'name': '结衣 · 每10分钟自主生活', 'enabled': True,
-        'schedule': {'type': 'cron', 'cron': '7-57/10 * * * *', 'timezone': 'Asia/Shanghai'},
+    return {'id': JOB_ID, 'name': '结衣 · 每3分钟自主生活', 'enabled': True,
+        'schedule': {'type': 'cron', 'cron': '1-58/3 * * * *', 'timezone': 'Asia/Shanghai'},
         'task_type': 'text', 'text': TEXT,
         'dispatch': {'type': 'channel', 'channel': 'console',
             'target': {'user_id': 'party-life-controller', 'session_id': JOB_ID},
@@ -36,20 +37,30 @@ def validate_job(value, role):
     assert not value.get('request')
 
 
+def slot_epoch(slot, slot_seconds=600):
+    """Compare the original ten-minute and current three-minute slots in time."""
+    if (type(slot) is not int or slot < -1 or type(slot_seconds) is not int
+            or slot_seconds not in (600, INTERVAL_SECONDS)):
+        raise ValueError('party_life_signal_invalid')
+    return slot * slot_seconds
+
+
 def publish_signal(role, *, root=SIGNALS, now=None, members=None):
     if role != ROLE or not is_bound_yui('game:' + role):
         raise ValueError('party_life_identity_not_bound')
     roster = list(party_members()) if members is None else members
     now = time.time() if now is None else now
-    slot = int(now // 600)
+    slot = int(now // INTERVAL_SECONDS)
     value = {'schema': 1, 'role': role, 'jobId': JOB_ID,
-             'requestId': JOB_ID + ':600:' + str(slot), 'slot': slot,
+             'requestId': JOB_ID + ':' + str(INTERVAL_SECONDS) + ':' + str(slot),
+             'slot': slot, 'slotSeconds': INTERVAL_SECONDS,
              'scheduledAt': now, 'members': roster}
     folder = Path(root) / role
     with locked(folder):
         path = folder / 'latest-signal.json'
         previous = read(path) if path.exists() else None
-        if previous and previous.get('slot', -1) >= slot:
+        if previous and slot_epoch(previous.get('slot', -1), previous.get('slotSeconds', 600)) >= slot_epoch(
+                slot, INTERVAL_SECONDS):
             if previous.get('members') != roster or previous.get('role') != role:
                 raise ValueError('party_life_signal_binding_changed')
             return previous | {'coalesced': True}

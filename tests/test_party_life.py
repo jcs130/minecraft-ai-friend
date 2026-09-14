@@ -59,9 +59,12 @@ class PartyLifeTests(unittest.TestCase):
             world_clock=lambda: {'available': True, 'gameTime': 100000, 'day': 4, 'daytime': 4000})
         self.life._scope = lambda: ['maid_native__identity', 'memory_search', 'qd_party__party_send']
 
-    def signal(self, slot=2):
-        value = {'schema': 1, 'jobId': JOB_ID, 'role': ROLE, 'requestId': JOB_ID + ':600:' + str(slot),
-                 'slot': slot, 'scheduledAt': slot * 600, 'members': self.roster}
+    def signal(self, slot=2, slot_seconds=None):
+        seconds = 600 if slot_seconds is None else slot_seconds
+        value = {'schema': 1, 'jobId': JOB_ID, 'role': ROLE, 'requestId': JOB_ID + ':' + str(seconds) + ':' + str(slot),
+                 'slot': slot, 'scheduledAt': slot * seconds, 'members': self.roster}
+        if slot_seconds is not None:
+            value['slotSeconds'] = slot_seconds
         write_json(self.root / 'signals' / ROLE / 'latest-signal.json', value)
         return value
 
@@ -160,6 +163,64 @@ class PartyLifeTests(unittest.TestCase):
         self.status = 'running'; self.life.tick()
         self.assertEqual(len(self.posts), 2)
         self.assertEqual(self.life.summary()['active']['signalId'], JOB_ID + ':600:7')
+
+    def test_old_active_finishes_then_latest_three_minute_signal_keeps_original_session(self):
+        self.signal(); self.life.tick()
+        path = self.root / 'life/controller.json'
+        saved = json.loads(path.read_text())
+        saved['active'].pop('slotSeconds')  # Actual legacy persisted intent.
+        write_json(path, saved)
+        original_active = deepcopy(saved['active'])
+        self.signal(8, 180); self.now = 1441; self.life.tick()
+        self.signal(9, 180); self.now = 1621; self.life.tick()
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(json.loads(path.read_text())['active']['prompt'], original_active['prompt'])
+        self.status = 'finished'; self.now += 11; self.life.tick()
+        finished = json.loads(path.read_text())
+        self.assertEqual((finished['lastSlot'], finished['lastSlotSeconds']), (2, 600))
+        self.assertEqual(finished['lastResult']['signalId'], JOB_ID + ':600:2')
+        self.status = 'running'; self.life.tick()
+        self.assertEqual(len(self.posts), 2)
+        self.assertEqual(self.life.summary()['active']['signalId'], JOB_ID + ':180:9')
+        self.assertEqual(self.posts[0][1]['session_id'], self.posts[1][1]['session_id'])
+        self.assertEqual(json.loads(path.read_text())['active']['slotSeconds'], 180)
+
+    def test_epoch_comparison_does_not_replay_older_larger_slot_after_migration(self):
+        path = self.root / 'life/controller.json'
+        write_json(path, {'schema': 1, 'lastSlot': 2, 'active': None})
+        before = path.read_bytes()
+        self.signal(6, 180)  # 1080 is older than legacy slot 2 at 1200.
+        self.life.tick()
+        self.assertFalse(self.posts)
+        self.assertEqual(path.read_bytes(), before)
+        self.signal(7, 180); self.now = 1261; self.life.tick()
+        self.assertEqual(len(self.posts), 1)
+        self.now += 11; self.status = 'finished'; self.life.tick()
+        self.assertEqual(json.loads(path.read_text())['lastSlotSeconds'], 180)
+        self.life.tick()
+        self.assertEqual(len(self.posts), 1)
+        self.signal(2); self.life.tick()
+        self.assertEqual(len(self.posts), 1)
+
+    def test_unknown_legacy_request_keeps_original_gate_with_three_minute_signals(self):
+        self.signal(); self.drop_post = True; self.life.tick()
+        self.signal(9, 180); self.now += 700
+        restored = PartyLife(self.bridge, signals=self.root / 'signals', clock=lambda: self.now)
+        self.assertEqual(restored.tick()['status'], 'submission_uncertain')
+        self.assertEqual(len(self.posts), 1)
+
+    def test_signal_interval_cannot_relabel_a_request_or_accept_arbitrary_cadence(self):
+        for seconds in (True, 0, 60, 300):
+            with self.subTest(seconds=seconds):
+                self.signal(7, seconds)
+                with self.assertRaisesRegex(ValueError, 'party_life_signal_invalid'):
+                    self.life.tick()
+        value = self.signal(7, 180)
+        value['requestId'] = JOB_ID + ':600:7'
+        write_json(self.root / 'signals' / ROLE / 'latest-signal.json', value)
+        with self.assertRaisesRegex(ValueError, 'party_life_signal_invalid'):
+            self.life.tick()
+        self.assertFalse(self.posts)
 
     def test_reply_only_acknowledged_after_exact_completed_task(self):
         self.signal(); reply = {'eventId': 'reply-one', 'text': '真实听见', 'requiresReply': False}
@@ -334,7 +395,7 @@ class PartyLifeScheduleTests(unittest.TestCase):
 
     def test_fixed_zero_model_schedule_and_wrong_role_denied(self):
         value = managed_job(); validate_job(value, ROLE)
-        self.assertEqual(value['schedule']['cron'], '7-57/10 * * * *')
+        self.assertEqual(value['schedule']['cron'], '1-58/3 * * * *')
         self.assertEqual(value['task_type'], 'text'); self.assertNotIn('request', value)
         value['enabled'] = False; validate_job(value, ROLE)
         with self.assertRaises(AssertionError): validate_job(value, 'qd-survivor')
@@ -345,11 +406,29 @@ class PartyLifeScheduleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch('party_life_schedule.is_bound_yui', return_value=True):
             roster = [{'agentId': ROLE}]
             first = publish_signal(ROLE, root=folder, now=1201, members=roster)
-            second = publish_signal(ROLE, root=folder, now=1300, members=roster)
+            second = publish_signal(ROLE, root=folder, now=1250, members=roster)
             older = publish_signal(ROLE, root=folder, now=600, members=roster)
             self.assertEqual(first['requestId'], second['requestId'])
             self.assertEqual(first['requestId'], older['requestId'])
             self.assertTrue(second['coalesced'])
+            self.assertEqual(first['requestId'], JOB_ID + ':180:6')
+            self.assertEqual(first['slotSeconds'], 180)
+
+    def test_publish_compares_legacy_and_new_slots_by_epoch_without_rewriting_old_bytes(self):
+        with tempfile.TemporaryDirectory() as folder, patch('party_life_schedule.is_bound_yui', return_value=True):
+            roster = [{'agentId': ROLE}]
+            path = Path(folder) / ROLE / 'latest-signal.json'
+            legacy = {'schema': 1, 'role': ROLE, 'jobId': JOB_ID, 'requestId': JOB_ID + ':600:2',
+                      'slot': 2, 'scheduledAt': 1201, 'members': roster}
+            write_json(path, legacy); before = path.read_bytes()
+            earlier = publish_signal(ROLE, root=folder, now=1250, members=roster)
+            self.assertEqual(earlier['requestId'], legacy['requestId'])
+            self.assertEqual(path.read_bytes(), before)
+            newer = publish_signal(ROLE, root=folder, now=1261, members=roster)
+            self.assertEqual(newer['requestId'], JOB_ID + ':180:7')
+            self.assertEqual(newer['slotSeconds'], 180)
+            same = publish_signal(ROLE, root=folder, now=1400, members=roster)
+            self.assertEqual(same['requestId'], newer['requestId'])
 
     def test_cron_only_publishes_and_keeps_workspace_receipt(self):
         calls = []

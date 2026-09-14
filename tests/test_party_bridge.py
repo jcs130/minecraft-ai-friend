@@ -8,12 +8,13 @@ import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'world/sidecar'), str(ROOT / 'world/ops'), str(ROOT / 'world/survival')]
 from party_config import PartyConfig, recipient_tools
-from party_bridge import PartyBridge, message_context, tool_schema
+from party_bridge import PartyBridge, PartySendArgumentError, message_context, tool_schema
 from maid_agent_api import MaidAdapter, make_handler
 from qwen_tasks import QwenTasks, write_json, LIMITS
 from party import SurvivorParty
@@ -56,6 +57,40 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertEqual(result['recipient']['agentId'], 'maid-test')
         self.assertNotIn('mcpToken', json.dumps(result))
         with self.assertRaises(ValueError): self.bridge.call('qd-survivor', 'party_send', {'text': 'x', 'to': 'other'}, 'two')
+
+    def test_invalid_send_arguments_never_enqueue_emit_or_disclose_text(self):
+        private = 'private-dialogue-marker'
+        cases = [({'text': private + '\n\nhello'}, 'text', 'single_line_required'),
+                 ({'text': private + '\rhello'}, 'text', 'single_line_required'),
+                 ({'text': private + '\u2028hello'}, 'text', 'single_line_required'),
+                 ({'text': private + '\tworld'}, 'text', 'unsupported_control_character'),
+                 ({'text': private + '\0world'}, 'text', 'unsupported_control_character'),
+                 ({'text': private + '\u200bworld'}, 'text', 'unsupported_control_character'),
+                 ({'text': private * 20}, 'text', 'too_long'),
+                 ({'text': ' \n '}, 'text', 'nonempty_required'),
+                 ({'text': {'private': private}}, 'text', 'string_required'),
+                 ({}, 'arguments', 'invalid_fields'),
+                 ({'text': private, 'to': private}, 'arguments', 'invalid_fields'),
+                 ({'text': private, 'channel': private}, 'channel', 'invalid_channel')]
+        for args, field, reason in cases:
+            with self.subTest(field=field, reason=reason), self.assertRaises(PartySendArgumentError) as raised:
+                self.bridge.call('qd-survivor', 'party_send', args, 'invalid-attempt')
+            error = raised.exception
+            self.assertEqual(error.data, {'code': 'party_send_invalid_argument', 'field': field,
+                'reason': reason, 'enqueued': False, 'worldSendAttempted': False, 'retryAutomatically': False})
+            self.assertNotIn(private, str(error) + json.dumps(error.data))
+            self.assertIsNone(self.bridge._queue)
+            self.assertEqual(self.game.emits, [])
+            self.assertEqual(self.posts, [])
+
+    def test_valid_send_retains_exact_text_and_original_idempotence(self):
+        original = '  爸爸，我已经到田边了。🌾  '
+        first = self.bridge.call('qd-survivor', 'party_send', {'text': original}, 'unchanged-text')
+        repeated = self.bridge.call('qd-survivor', 'party_send', {'text': original}, 'unchanged-text')
+        self.assertEqual(first, repeated)
+        self.assertEqual(first['text'], original)
+        self.assertEqual([event['text'] for event in self.game.emits], [original])
+        self.assertEqual(self.posts, [])
 
     def survivor_public(self):
         row = {'generatedAt': datetime.fromtimestamp(self.now, timezone.utc).isoformat(),
@@ -444,7 +479,7 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertNotIn('sessionId', json.dumps(public))
         self.assertEqual(public['members'][1]['displayName'], 'Maid')
 
-    def test_http_mcp_authorization_session_binding_and_retry(self):
+    def http_request(self):
         adapter = MaidAdapter(self.tasks.root, tasks=self.tasks, party=self.bridge)
         server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(adapter, 'legacy-' + 't' * 48))
         thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .02}, daemon=True)
@@ -459,6 +494,10 @@ class PartyBridgeTests(unittest.TestCase):
                 response = connection.getresponse()
                 return response.status, dict(response.headers), json.loads(response.read())
             finally: connection.close()
+        return request
+
+    def test_http_mcp_authorization_session_binding_and_retry(self):
+        request = self.http_request()
         init = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-11-25'}}
         status, headers, _ = request(init)
         self.assertEqual(status, 200)
@@ -470,6 +509,38 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertIn('error', request(call, token='m' * 48, session=session)[2])
         self.assertEqual(request(init, token='x' * 48)[0], 401)
         self.assertEqual(len(self.bridge.queue.overview('qd-survivor')['messages']), 1)
+
+    def test_http_send_parameter_feedback_keeps_protocol_and_execution_errors_distinct(self):
+        request = self.http_request()
+        _, headers, _ = request({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                                  'params': {'protocolVersion': '2025-11-25'}})
+        session = headers['Mcp-Session-Id']
+        original = 'private-dialogue-marker\n\n秘密内容'
+        call = {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call',
+                'params': {'name': 'party_send', 'arguments': {'text': original}}}
+        status, _, response = request(call, session=session)
+        self.assertEqual(status, 200)
+        self.assertEqual(response['jsonrpc'], '2.0')
+        self.assertEqual(response['id'], 2)
+        self.assertEqual(response['error']['code'], -32602)
+        self.assertEqual(response['error']['data'], {'code': 'party_send_invalid_argument',
+            'field': 'text', 'reason': 'single_line_required', 'enqueued': False,
+            'worldSendAttempted': False, 'retryAutomatically': False})
+        self.assertIn('text must be a single line', response['error']['message'])
+        self.assertIn('not queued or sent to the game', response['error']['message'])
+        self.assertNotIn('private-dialogue-marker', json.dumps(response))
+        self.assertNotIn('秘密内容', json.dumps(response, ensure_ascii=False))
+        self.assertIsNone(self.bridge._queue)
+        self.assertEqual(self.game.emits, [])
+        self.assertEqual(self.posts, [])
+        # A session/authentication or execution failure cannot claim non-delivery.
+        wrong_actor = request(call, token='m' * 48, session=session)[2]
+        self.assertEqual(wrong_actor['error'], {'code': -32602,
+            'message': 'Invalid or unavailable party request'})
+        with patch.object(self.bridge, 'call', side_effect=ValueError('private execution details')):
+            failed = request(call, session=session)[2]
+        self.assertEqual(failed['error'], {'code': -32602,
+            'message': 'Invalid or unavailable party request'})
 
 
 if __name__ == '__main__': unittest.main()

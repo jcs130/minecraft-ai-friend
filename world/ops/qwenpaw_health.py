@@ -141,6 +141,10 @@ def check_survivor_config(folder):
     assert agent['heartbeat']['enabled'] is False
     validate_running(agent['running'])
     assert agent['running']['llm_retry_enabled'] is False
+    # Shared model slots may also serve memory or another role. Do not regress
+    # the survivor to the old 30-second local admission timeout.
+    wait = agent['running'].get('llm_acquire_timeout')
+    assert type(wait) in (int, float) and wait >= 120
     assert {'numen_survival', 'qd_learning'} <= set(agent['mcp']['clients']) <= expected_drivers(
         'qd-survivor', {'numen_survival', 'qd_learning'})
     client = agent['mcp']['clients']['numen_survival']
@@ -284,7 +288,7 @@ def main():
     from qwenpaw_runtime_contract import release
     actual_version = release()
     assert marker['qwenVersion'] == actual_version
-    assert marker.get('survivalTurnRuntimeVersion') == 3
+    assert marker.get('survivalTurnRuntimeVersion') == 4
     assert marker.get('survivalRequestRuntimeVersion') == 1
     assert marker.get('lifeMemoryEvidenceVersion') == 1
     sys.path.insert(0, '/survival')

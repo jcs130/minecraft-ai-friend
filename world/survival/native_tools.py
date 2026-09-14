@@ -45,6 +45,11 @@ def valid_tools(value):
     memory_ready = (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
             and properties.get('finish_turn', {}).get('default') is False
             and properties.get('summary', {}).get('type') == 'string')
+    start_schema = next(row for row in value if row['name'] == 'skill_start')['input_schema']
+    summary = start_schema.get('properties', {}).get('summary', {})
+    if (not isinstance(summary, dict) or summary.get('type') != 'string'
+            or summary.get('default') != '' or 'summary' in start_schema.get('required', [])):
+        return False
     for name, field in (('skill_start', 'objective'), ('skill_draft', 'refinement')):
         schema = next(row for row in value if row['name'] == name)['input_schema']
         parameter = schema.get('properties', {}).get(field, {})

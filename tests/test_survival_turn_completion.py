@@ -8,7 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
-from survival_turn_runtime import completion_summary, wrap_reasoning_impl, TOOL
+from survival_turn_runtime import completion_summary, wrap_reasoning_impl, TOOL, START_TOOL, CONTRACT
 from test_survival_skill_tools import SurvivalSkillToolsTests, TURN
 
 EXTERNAL_SESSION = 'life-0123456789abcdef0123456789abcdef'
@@ -136,6 +136,81 @@ class TurnCompletionTests(unittest.TestCase):
         self.agent._request_context = {}
         self.assertIsNone(completion_summary(self.agent))
 
+    def start_fixture(self, **values):
+        self.fixture(finish_turn=False)
+        args = {'turn_id': TURN, 'name': 'gather', 'version': 'a' * 64,
+                'summary': '程序已排队，等待实际执行回执。'} | values
+        result = {'ok': True, 'code': 'skill_queued', 'executionConfirmed': False,
+                  'name': args['name'], 'version': args['version'], 'turnId': args['turn_id'],
+                  'turnCompletion': {'requested': True, 'contract': CONTRACT,
+                                     'summary': str(args['summary']).strip()}}
+        self.message.calls[0] = NS(id='call-current', name=START_TOOL, input=args)
+        self.message.results[0] = NS(id='call-current', name=START_TOOL, state='success',
+                                     output=json.dumps(result))
+        return args, result
+
+    def test_start_receipt_ends_with_only_current_model_summary(self):
+        args, result = self.start_fixture(summary='  程序已排队，等待实际执行回执。  ')
+        self.assertEqual(completion_summary(self.agent), args['summary'].strip())
+        self.assertFalse(result['executionConfirmed'])
+        self.message.calls[0].input = json.dumps(args)
+        self.message.results[0].output = [{'type': 'text', 'text': json.dumps(json.dumps(result))}]
+        self.assertEqual(completion_summary(self.agent), args['summary'].strip())
+
+    def test_start_missing_invalid_or_unrequested_summary_does_not_end(self):
+        for summary in ('', '  ', None, False, 'x' * 601):
+            with self.subTest(summary_type=type(summary).__name__):
+                self.start_fixture(summary=summary)
+                self.assertIsNone(completion_summary(self.agent))
+        _, result = self.start_fixture()
+        result['turnCompletion']['requested'] = False
+        self.message.results[0].output = json.dumps(result)
+        self.assertIsNone(completion_summary(self.agent))
+        self.start_fixture()
+        self.message.calls[0].input.pop('summary')
+        self.assertIsNone(completion_summary(self.agent))
+
+    def test_start_requires_matching_queue_identity_and_unexecuted_receipt(self):
+        for key, value in (('ok', False), ('code', 'skill_rejected'),
+                           ('executionConfirmed', True), ('executionConfirmed', 0),
+                           ('executionConfirmed', None), ('name', 'other'),
+                           ('version', 'b' * 64), ('turnId', 'other-turn')):
+            with self.subTest(key=key, value=value):
+                _, result = self.start_fixture()
+                result[key] = value
+                self.message.results[0].output = json.dumps(result)
+                self.assertIsNone(completion_summary(self.agent))
+        for key in ('name', 'version', 'turnId', 'executionConfirmed', 'turnCompletion'):
+            _, result = self.start_fixture()
+            result.pop(key)
+            self.message.results[0].output = json.dumps(result)
+            self.assertIsNone(completion_summary(self.agent), key)
+        for key in ('name', 'version', 'turn_id'):
+            self.start_fixture(**{key: ''})
+            self.assertIsNone(completion_summary(self.agent), key)
+        for key, value in (('contract', 'other-contract'), ('summary', 'another summary')):
+            _, result = self.start_fixture()
+            result['turnCompletion'][key] = value
+            self.message.results[0].output = json.dumps(result)
+            self.assertIsNone(completion_summary(self.agent), key)
+
+    def test_start_ambiguous_receipt_foreign_reply_and_later_tool_never_shortcut(self):
+        self.start_fixture()
+        self.message.results.append(copy.deepcopy(self.message.results[0]))
+        self.assertIsNone(completion_summary(self.agent))
+        self.start_fixture()
+        self.message.results[0].state = 'error'
+        self.assertIsNone(completion_summary(self.agent))
+        self.start_fixture()
+        self.message.calls.append(NS(id='later', name='numen_survival__status', input={}))
+        self.assertIsNone(completion_summary(self.agent))
+        self.start_fixture()
+        self.agent.state.reply_id = 'older-reply'
+        self.assertIsNone(completion_summary(self.agent))
+        self.start_fixture()
+        self.agent._request_context['user_id'] = 'another-user'
+        self.assertIsNone(completion_summary(self.agent))
+
 
 class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
     """Real Qwen/AgentScope reply, tool execution, text events and persistence.
@@ -144,7 +219,8 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
     provider, game server, production workspace or process is accessed.
     """
     async def scenario(self, order=('remember',), finish=True, role='qd-survivor', gate_continue=False,
-                       unlimited=False, high_iteration=None, request_overrides=None):
+                       unlimited=False, high_iteration=None, request_overrides=None,
+                       start_receipt_overrides=None, summary_value=None):
         from unittest.mock import patch
         from agentscope.agent import ReActConfig
         from agentscope.message import ToolCallBlock, TextBlock, UserMsg
@@ -154,7 +230,7 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         from qwenpaw.config.config import AgentProfileConfig
         from qwenpaw.runtime.builder import AgentBuilder
 
-        summary = '已保存本轮观察，等待下一轮。'
+        summary = '已保存本轮观察，等待下一轮。' if summary_value is None else summary_value
         calls, executed, saved = [], [], []
         async def remember(finish_turn: bool, summary: str):
             executed.append('remember')
@@ -164,8 +240,15 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         async def other():
             executed.append('other')
             return 'observed'
+        async def start(turn_id: str, name: str, version: str, summary: str = ''):
+            executed.append('start')
+            return json.dumps({'ok': True, 'code': 'skill_queued', 'executionConfirmed': False,
+                'name': name, 'version': version, 'turnId': turn_id,
+                'turnCompletion': {'requested': bool(summary.strip()), 'summary': summary.strip(),
+                    'contract': CONTRACT}} | (start_receipt_overrides or {}))
         toolkit = Toolkit()
         await toolkit.add_tool(FunctionTool(remember, name=TOOL, is_concurrency_safe=False))
+        await toolkit.add_tool(FunctionTool(start, name=START_TOOL, is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(other, name='other', is_concurrency_safe=False))
         manager = NS(on_save=lambda agent, blocks: saved.extend(blocks))
         async def compress(agent, config): pass
@@ -202,9 +285,12 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
             if len(calls) == 1:
                 if high_iteration is not None:
                     agent.state.cur_iter = high_iteration
-                return ChatResponse(content=[ToolCallBlock(id=f'call-{i}',
-                    name=TOOL if name == 'remember' else 'other',
-                    input=json.dumps({'finish_turn': finish, 'summary': summary}) if name == 'remember' else '{}')
+                names = {'remember': TOOL, 'start': START_TOOL, 'other': 'other'}
+                args = {'remember': {'finish_turn': finish, 'summary': summary},
+                        'start': {'turn_id': TURN, 'name': 'gather', 'version': 'a' * 64, 'summary': summary},
+                        'other': {}}
+                return ChatResponse(content=[ToolCallBlock(id=f'call-{i}', name=names[name],
+                    input=json.dumps(args[name]))
                     for i, name in enumerate(order)], is_last=True)
             return ChatResponse(content=[TextBlock(text='模型后续文本。')], is_last=True)
         agent._call_model = model_call
@@ -247,6 +333,33 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         result = await self.scenario(order=('remember', 'other'))
         self.assertEqual(result.executed, ['remember', 'other'])
         self.assertEqual(result.calls, 2)
+
+    async def test_native_start_queue_stream_persists_summary_without_next_model_call(self):
+        from agentscope.event import TextBlockDeltaEvent, ReplyEndEvent, ModelCallStartEvent
+        result = await self.scenario(order=('start',), summary_value='程序已排队，等待实际执行回执。')
+        self.assertEqual(result.calls, 1)
+        self.assertEqual(result.executed, ['start'])
+        self.assertEqual(''.join(e.delta for e in result.events if isinstance(e, TextBlockDeltaEvent)), result.summary)
+        self.assertEqual(sum(isinstance(e, ModelCallStartEvent) for e in result.events), 1)
+        self.assertEqual([e.finished_reason for e in result.events if isinstance(e, ReplyEndEvent)], ['completed'])
+        self.assertEqual(result.state['state']['context'][-1]['content'][-1]['text'], result.summary)
+        self.assertEqual(result.total_calls, 2)
+
+    async def test_native_start_rejected_optional_summary_and_other_identity_keep_model_loop(self):
+        for options in ({'summary_value': ''}, {'start_receipt_overrides': {'ok': False}},
+                        {'start_receipt_overrides': {'version': 'b' * 64}},
+                        {'role': 'qd-engineer'}):
+            with self.subTest(options=options):
+                result = await self.scenario(order=('start',), **options)
+                self.assertEqual(result.calls, 2)
+
+    async def test_native_start_never_drops_later_tools(self):
+        result = await self.scenario(order=('start', 'other'))
+        self.assertEqual(result.executed, ['start', 'other'])
+        self.assertEqual(result.calls, 2)
+        result = await self.scenario(order=('other', 'start'))
+        self.assertEqual(result.executed, ['other', 'start'])
+        self.assertEqual(result.calls, 1)
 
     async def test_native_earlier_queued_tool_executes_before_finish(self):
         result = await self.scenario(order=('other', 'remember'))

@@ -11,7 +11,7 @@ description: 桐人的生存与成长实践：采矿、建造、农耕、交易�
 
 反复做的已理解行为适合编程。先用 skill_catalog、skill_read 查已有程序及实践证据；需要新写或修订时，按需 read_file 读取本技能的 references/program-practice.md，完成 skill_draft → skill_test → skill_promote → skill_start → 核对实践结果。修订绑定同一技能的真实 practice ID、改进假设和预期；每次试运行设可观察目标，fixture 通过、排队、程序 done 与实际目标达成都分别记录。失败或结果不明先复盘，不盲重试；跨情境反复成功后才谈掌握。不要手改测试通过标志；程序内核变化须重测原版本。learning_* 维护自身 Markdown 判断流程，其校验不是程序或世界效果验证。
 
-skill_start 要用当前输入原样提供、尚未执行身体动作的新租约（actionsUsed=0）。先 remember 保存试验目标、版本和下一步，保持 finish_turn=false；再 start。受理会关闭本轮租约，此时直接用最终文字结束原生回合，不再 remember 或派身体动作。既有控制器随后执行程序，无需逐步请求模型；下一正常生活回合查 skill_read 的版本与实践回执，再依据真实结果保留、修订或回退。
+skill_start 要用当前输入原样提供、尚未执行身体动作的新租约（actionsUsed=0）。先 remember 保存试验目标、版本和下一步，保持 finish_turn=false；再 skill_start，同时传 summary 写出最多600字的简短排队总结。成功排队后会以你的 summary 直接结束原生回合，不再 remember 或派身体动作；排队不等于执行完成。既有控制器随后执行程序，无需逐步请求模型；下一正常生活回合查 skill_read 的版本与实践回执，再依据真实结果保留、修订或回退。
 
 成长目标先按需 game_skills("legacy")：learned 是当前开放的已学主动技能，levelGate 是等级足够可直接正常施放、首次成功后收录的主动技能，不要求先找书。game_skills("status") 的旧学习记录可能包含归档技能，不能按旧名盲试；有疑问再查 archive 分页。实际携带且已识别的技能书可 game_learn 参悟（原规则验书但不扣书），被动学习后不需要主动施放。Iron 法术则查 irons 中真实装备的来源，不能凭空学会。
 
