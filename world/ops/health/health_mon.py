@@ -53,7 +53,7 @@ MANIFEST = {
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
     "npc": {"health_required": True, "purpose": "Skill-book, NPC event consumers and persistent maid perception inbox; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
-    "qwenpaw": {"health_required": True, "purpose": "Current world team, cloud models and native tasks; engineering guard and owned no-deadline cycle checked by world_team"},
+    "qwenpaw": {"health_required": True, "purpose": "Current world team, cloud models, native Scroll history and ReMe practice evidence; supervised native tasks"},
     "qwenpaw-ops": {"health_required": True, "purpose": "Six-role operations team, bounded native tasks and attributed proposals"},
     "voice": {"health_required": True, "purpose": "Local voice response queue"},
     "asr": {"health_required": True, "purpose": "Local microphone speech recognition"},
@@ -643,6 +643,11 @@ def probe_game_qwenpaw():
             and type(receipt.get('enabledTools')) is int
             and receipt['enabledTools'] == (6 if receipt.get('packageVersion') == '2.2.1' else 7)
             and receipt.get('nativeToolPolicyVerified') is True
+            and receipt.get('lifeContextStrategy') == 'scroll'
+            and receipt.get('lifeHistoryRetentionDays') == 0
+            and receipt.get('lifeMemoryEvidenceVersion') == 2
+            and receipt.get('lifeHistoryVerified') is True
+            and receipt.get('lifeHistoryAgents') == 2
             and receipt.get('authMode') == 'local-passwordless'
             and receipt.get('anonymousAccess') is True),
             'packageVersion': receipt.get('packageVersion')}

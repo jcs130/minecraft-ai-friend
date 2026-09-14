@@ -556,6 +556,8 @@ class ConsolidatedOperationsProbe(unittest.TestCase):
                  'baseAgents':6,'maidAgents':2,'hostedAgents':2,'expectedAgents':roles,
                  'configuredSkillBindings':94,'installedSkillBindings':94,'skillInventoryVerified':True,
                  'cronBudgetGuardVerified':True,'enabledTools':7,'nativeToolPolicyVerified':True,
+                 'lifeContextStrategy':'scroll','lifeHistoryRetentionDays':0,'lifeMemoryEvidenceVersion':2,
+                 'lifeHistoryVerified':True,'lifeHistoryAgents':2,
                  'authMode':'local-passwordless','anonymousAccess':True}
         process=SimpleNamespace(returncode=0,stdout=json.dumps(receipt))
         with patch.object(health.subprocess,'run',return_value=process) as run,\

@@ -18,6 +18,7 @@ from llm_runtime_policy import validate_running
 from party_role_capabilities import (party_roles, expected_drivers, check_party_workspace,
                                      check_party_inventory, check_party_api)
 from life_memory_policy import validate_profile as validate_life_memory
+from life_context_policy import validate_profile as validate_life_context, validate_history
 import world_team_profiles as world_team
 
 MAID_TOOLS = {'identity', 'context', 'task_catalog', 'sit', 'follow', 'schedule', 'work'}
@@ -30,7 +31,7 @@ def check_role_memory(agent, role):
         assert_quiet(agent['running'])
         return
     running = agent['running']
-    assert running['light_context_config']['strategy'] == 'native'
+    assert validate_life_context(agent, role, runtime='game')
     assert running['light_context_config']['visual_compact_config']['enabled'] is False
     assert running['auto_title_config']['enabled'] is False
     memory = running['reme_light_memory_config']
@@ -290,7 +291,8 @@ def main():
     assert marker['qwenVersion'] == actual_version
     assert marker.get('survivalTurnRuntimeVersion') == 4
     assert marker.get('survivalRequestRuntimeVersion') == 1
-    assert marker.get('lifeMemoryEvidenceVersion') == 1
+    from life_memory_evidence_runtime import VERSION as evidence_version
+    assert marker.get('lifeMemoryEvidenceVersion') == evidence_version
     sys.path.insert(0, '/survival')
     from native_tools import valid_tools
     assert valid_tools(get('/mcp/tools/numen_survival', aid='qd-survivor'))
@@ -321,10 +323,13 @@ def main():
     from agent_learning import TOOL_NAMES
     from role_learning_profiles import role_skills, validate_jobs
     bindings = 0
+    life_histories = {}
     for aid in expected_roles:
         PHASE = 'native-learning:' + aid
         assert set(TOOL_NAMES) <= {item.get('name') for item in get('/mcp/tools/qd_learning', aid=aid) if item.get('enabled') is True}
         enabled_skills = check_skill_inventory(Path('/state/work/workspaces')/aid,get('/skills', aid=aid))
+        if aid in bound_party_roles:
+            life_histories[aid] = validate_history(Path('/state/work/workspaces') / aid)
         assert set(role_skills(aid, 'game')) | set(NATIVE_SKILLS) <= enabled_skills
         bindings += len(enabled_skills)
         hosted = hosted_source(aid)
@@ -360,7 +365,10 @@ def main():
                       'worldTeamDriverPolicyVerified': True,
                       'cronBudgetGuardVerified': guard_verified,
                       'explicitSurvivalFinishVerified': True, 'survivalRequestRuntimeVersion': 1,
-                      'lifeMemoryEvidenceVersion': 1,
+                      'lifeMemoryEvidenceVersion': evidence_version,
+                      'lifeContextStrategy': 'scroll', 'lifeHistoryRetentionDays': 0,
+                      'lifeHistoryVerified': bool(life_histories) and len(life_histories) == len(bound_party_roles),
+                      'lifeHistoryAgents': len(life_histories),
                       'llmLimitPolicy': 'unrestricted', 'llmPolicyVerified': True,
                       'managedWeeklyJobs': len(expected_roles), 'unmanagedAutomaticJobs': 0}))
 

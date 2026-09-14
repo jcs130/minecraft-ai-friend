@@ -131,7 +131,7 @@ def install(runtime):
         role = str(workspace).rsplit('/', 1)[-1]
         if member_for(role, workspace):
             for name, cls in zip(BACKENDS.values(), classes):
-                value.registry.add(name, cls, owner='qiandeng-life-memory-evidence-v1')
+                value.registry.add(name, cls, owner='qiandeng-life-memory-evidence-v' + str(VERSION))
         return value
 
     def app_config(*, working_dir, agent_config, user_timezone=None):

@@ -29,7 +29,7 @@ BASE_ROLES = frozenset({
 BASIC_TOOLS = frozenset({'list_agents', 'check_agent_task'})
 SUBAGENT_TOOLS = frozenset({
     'Skill', 'read_file', 'write_file', 'append_file', 'edit_file',
-    'materialize_skill', 'get_current_time',
+    'get_current_time',
 })
 CASE_PATTERN = re.compile(r'(?<![A-Za-z0-9_-])case-[0-9a-f]{20}(?![A-Za-z0-9_-])')
 ROLE_PATTERN = re.compile(r'[A-Za-z0-9_-]{4,64}')
@@ -38,6 +38,17 @@ ROLE_PATTERN = re.compile(r'[A-Za-z0-9_-]{4,64}')
 def canonical_tool(name):
     """Resolve only verified Qwen function/permission names; unknown -> None."""
     return TOOL_ALIASES.get(name) if isinstance(name, str) else None
+
+
+def make_skill_tool():
+    """Select the installed native creator; its role guard still runs in children."""
+    # Import lazily: native_role_capabilities uses native_tools during setup.
+    from native_role_capabilities import package_version
+    return 'execute_shell_command' if package_version() == '2.2.1' else 'materialize_skill'
+
+
+def subagent_tools():
+    return SUBAGENT_TOOLS | {make_skill_tool()}
 
 
 def _role(actor, runtime):
@@ -147,8 +158,9 @@ def validate(actor, arguments, tool, *, runtime='game', registered_roles=(),
         if 'background' in arguments and not isinstance(arguments['background'], bool):
             raise ValueError('team_subagent_background_invalid')
         allowed = arguments.get('allowed_tools')
+        available = subagent_tools()
         if (not isinstance(allowed, list)
-                or not all(isinstance(item, str) and item in SUBAGENT_TOOLS for item in allowed)
+                or not all(isinstance(item, str) and item in available for item in allowed)
                 or len(allowed) != len(set(allowed))):
             raise ValueError('team_subagent_explicit_safe_tools_required')
         skills = arguments.get('skills')

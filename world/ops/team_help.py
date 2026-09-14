@@ -60,7 +60,12 @@ def request_help(actor, case_id, recipient='owner', *, root=Path('/team'), reque
         from world_team_profiles import tools_for
         from engineering_mcp import TOOLS as ENGINEERING_TOOLS
         from native_role_capabilities import FILE_TOOLS
-        allowed = ['Skill', *FILE_TOOLS, 'materialize_skill', 'get_current_time', 'memory_search']
+        from team_native_policy import make_skill_tool
+        # Qwen 2.2.1 replaced materialize_skill with the official four scripts.
+        # The final subagent whitelist must retain their native shell entry;
+        # native_tool_runtime still applies the recipient's command/cwd/hash
+        # checks before execution. Legacy workspaces retain their original tool.
+        allowed = ['Skill', *FILE_TOOLS, make_skill_tool(), 'get_current_time', 'memory_search']
         allowed += ['qd_world_team__' + tool for tool in tools_for(target)
                     if tool not in ('team_request_help', 'team_help_status', 'team_recruit')]
         if target == ENGINEER:

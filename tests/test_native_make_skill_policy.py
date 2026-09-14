@@ -140,7 +140,9 @@ class InstalledOfficialMakeSkill(unittest.TestCase):
         native_tool_runtime.install('game')
         set_current_workspace_dir(workspace)
         governor=ResourceGovernor(str(workspace)); governor.start()
-        request={'agent_id':role,'session_id':'make-skill-qa','approval_level':'AUTO'}
+        request={'agent_id':role,'session_id':'make-skill-qa','approval_level':'AUTO',
+                 'root_agent_id':role, '_spawn_subagent':True,
+                 'subagent_allowed_tools':['read_file','write_file','execute_shell_command']}
         directory=workspace/'skills/make-skill'
         def tool(func,kind='policy'):
             return PolicyGuardedTool(func,governor=governor,request_context=request) if kind=='policy' else GuardedFunctionTool(func,agent_id=role,request_context=request)

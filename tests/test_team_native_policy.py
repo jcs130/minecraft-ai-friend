@@ -1,7 +1,10 @@
 from copy import deepcopy
 from pathlib import Path
+import asyncio
 import sys
+import types
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
@@ -102,14 +105,53 @@ class TeamNativePolicyTests(unittest.TestCase):
                 self.validate({'task_id': value}, 'check_agent_task')
 
     def test_subagent_requires_explicit_non_recursive_tool_selection(self):
-        for allowed in (None, '[]', ['submit_to_agent'], ['spawn_subagent'], ['execute_shell_command'],
+        for allowed in (None, '[]', ['submit_to_agent'], ['spawn_subagent'],
                         ['numen_mine'], ['mcp__qd_world_team__team_admin'], ['read_file', 'read_file']):
             with self.assertRaisesRegex(ValueError, 'explicit_safe_tools_required'):
                 self.validate({'task': 'Review issue', 'allowed_tools': allowed}, 'spawn_subagent')
-        for allowed in ([], ['Skill', 'read_file'], ['write_file', 'materialize_skill', 'get_current_time']):
+        for allowed in ([], ['Skill', 'read_file'], ['write_file', 'get_current_time']):
             args = {'task': 'Draft notes', 'allowed_tools': allowed, 'background': True,
                     'skills': ['make-skill', 'qd-game-design'], 'fork': False}
             self.assertEqual(self.validate(args, 'spawn_subagent'), args)
+
+    def test_subagent_make_skill_entry_matches_native_version(self):
+        for version, selected, excluded in (
+            ('2.2.0', 'materialize_skill', 'execute_shell_command'),
+            ('2.2.1', 'execute_shell_command', 'materialize_skill'),
+        ):
+            with self.subTest(version=version), \
+                 patch('native_role_capabilities.package_version', return_value=version):
+                arguments = {'task': 'Save the reviewed procedure with MakeSkill',
+                             'fork': False, 'allowed_tools': ['read_file', selected],
+                             'skills': ['make-skill']}
+                self.assertEqual(self.validate(arguments, 'spawn_subagent'), arguments)
+                self.assertNotIn(excluded, policy.subagent_tools())
+                with self.assertRaisesRegex(ValueError, 'explicit_safe_tools_required'):
+                    self.validate({**arguments, 'allowed_tools': [excluded]}, 'spawn_subagent')
+
+    def test_native_child_context_and_final_filter_keep_guarded_entry_only(self):
+        try:
+            from qwenpaw.agents.tools import agent_management
+            from qwenpaw.runtime.builder import AgentBuilder
+        except ImportError:
+            self.skipTest('Requires the native QwenPaw runtime')
+        with patch('native_role_capabilities.package_version', return_value='2.2.1'):
+            args = self.validate({'task': 'Review and save a procedure', 'fork': False,
+                                  'allowed_tools': ['read_file', 'execute_shell_command'],
+                                  'skills': ['make-skill']}, 'spawn_subagent')
+        with patch.object(agent_management, 'load_agent_config',
+                          return_value=types.SimpleNamespace(subagent_model=None)):
+            context = asyncio.run(agent_management._build_subagent_request_context(
+                'mc-god', allowed_tools=args['allowed_tools'], skills=args['skills']))
+        self.assertEqual(context['root_agent_id'], 'mc-god')
+        self.assertIs(context['_spawn_subagent'], True)
+        self.assertEqual(context['subagent_skills'], ['make-skill'])
+        self.assertNotIn('model_slot_override', context)
+        candidates = [types.SimpleNamespace(name=name) for name in (
+            'read_file', 'execute_shell_command', 'materialize_skill', 'spawn_subagent',
+            'qd_world_team__team_recruit', 'numen_survival__act')]
+        actual = AgentBuilder.apply_subagent_tool_whitelist(candidates, context)
+        self.assertEqual([tool.name for tool in actual], ['read_file', 'execute_shell_command'])
 
     def test_subagent_disallows_batch_fork_and_ambiguous_booleans(self):
         base = {'task': 'Draft notes', 'allowed_tools': []}

@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT/'world/ops'))
 import life_memory_policy as life
 from native_role_capabilities import NATIVE_TOOLS, configure_native, validate_native
 from qwenpaw_health import check_role_memory
+from life_context_policy import apply_profile as with_context
 
 
 def profile(role='qd-survivor'):
@@ -18,7 +19,9 @@ def profile(role='qd-survivor'):
         'identityExtension': {'generation': 7, 'bodyUuid': 'unchanged-body'},
         'running': {'memory_manager_backend': 'remelight', 'max_iters': 12, 'llm_max_qpm': 0,
             'llm_max_concurrent': 1, 'loop': {'iteration': {'enabled': False, 'max_iterations': None}},
-            'light_context_config': {'strategy': 'native', 'visual_compact_config': {'enabled': False}},
+            'light_context_config': {'strategy': 'native', 'visual_compact_config': {'enabled': False},
+                'scroll_config': {'db_filename': 'history.db', 'history_retention_days': 30, 'allow_unsandboxed': False},
+                'tool_result_pruning_config': {'offload_retention_days': 30}},
             'auto_title_config': {'enabled': False},
             'reme_light_memory_config': {'auto_memory_interval': 0, 'memory_search_enabled': False,
                 'dream_cron_enabled': False, 'dream_cron': '0 23 * * *',
@@ -29,7 +32,7 @@ def profile(role='qd-survivor'):
                 'embedding_model_config': {'model': 'existing-embedding', 'api_key': 'fixture-not-a-secret'},
                 'reranker_config': {'enabled': False, 'model': 'existing-reranker'},
                 'daily_dir': 'memory', 'digest_dir': 'digest', 'needs_reindex': False}},
-        'security': {'tool_guard': {'denied_tools': ['MemorySearch', 'memory_search', 'Browser', 'OtherDenied']}}}
+        'security': {'sandbox_enabled': False, 'tool_guard': {'denied_tools': ['MemorySearch', 'memory_search', 'Browser', 'OtherDenied']}}}
 
 
 class LifeMemoryPolicyTests(unittest.TestCase):
@@ -126,7 +129,7 @@ class LifeMemoryPolicyTests(unittest.TestCase):
         self.assertTrue(life.MEMORY_TOOLS <= set(actual['security']['tool_guard']['denied_tools']))
 
     def test_selected_health_accepts_policy_and_rejects_unrelated_features(self):
-        actual = life.apply_profile(profile(), 'qd-survivor')
+        actual = with_context(life.apply_profile(profile(), 'qd-survivor'), 'qd-survivor')
         check_role_memory(actual, 'qd-survivor')
         actual['running']['reme_light_memory_config']['daily_paper_cron_enabled'] = True
         with self.assertRaises(AssertionError): check_role_memory(actual, 'qd-survivor')

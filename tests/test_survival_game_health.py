@@ -16,6 +16,7 @@ spec.loader.exec_module(health)
 from role_learning_profiles import with_learning
 from test_role_learning_profiles import learning_fixture, native_fixture_lock
 from test_life_memory_policy import profile as memory_profile
+from life_context_policy import apply_profile as with_context
 from test_world_team_health import team_card
 import world_team_profiles as world_team
 import native_role_capabilities as native
@@ -23,7 +24,9 @@ import native_role_capabilities as native
 
 class SharedGameRoleHealthTests(unittest.TestCase):
     def setUp(self):
-        native_patch = patch.object(native, 'native_lock', return_value=native_fixture_lock())
+        fixture_lock = native_fixture_lock()
+        fixture_lock['skills']['make-skill']['scannerContentSha256'] = 'f' * 64
+        native_patch = patch.object(native, 'native_lock', return_value=fixture_lock)
         native_patch.start(); self.addCleanup(native_patch.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -47,6 +50,9 @@ class SharedGameRoleHealthTests(unittest.TestCase):
         (self.folder / 'drivers/mcp/numen_survival.yaml').write_text('fixture')
         self.agent['workspace_dir'] = '/state/work/workspaces/qd-survivor'
         self.agent['running'] = memory_profile()['running']
+        self.agent['running']['llm_acquire_timeout'] = 120
+        self.agent['security'] = {'sandbox_enabled': False}
+        self.agent = with_context(self.agent, 'qd-survivor')
         self.agent['running']['llm_retry_enabled'] = False
         self.agent = with_learning(self.agent, 'qd-survivor', 'game')
         self.agent['mcp']['clients'].update(world_team.bindings('qd-survivor', 'game'))
@@ -114,6 +120,7 @@ class SharedGameRoleHealthTests(unittest.TestCase):
         self.party_card = card_fixture()
         with patch.dict(health.os.environ, {'PARTY_ROLES_MANIFEST_FILE':str(path), 'MAID_ROLES_MANIFEST_FILE':str(maids)}):
             self.agent = with_learning(self.agent, 'qd-survivor', 'game')
+            self.agent = with_context(self.agent, 'qd-survivor')
             learning_fixture(self.folder, 'qd-survivor')
             with self.assertRaises(AssertionError): self.check()
             (self.folder / 'drivers/mcp/qd_party.yaml').write_text('native fixture')

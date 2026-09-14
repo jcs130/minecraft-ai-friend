@@ -7,22 +7,36 @@ It never runs a tool or infers success from an intention or an idle body.
 from collections import Counter
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
+import uuid
 
-VERSION = 1
+VERSION = 2
 MAX_MESSAGES = 256
 MAX_CALLS = 512
 MAX_RESULT_BYTES = 262144
+MAX_PRACTICE_RUNS = 24
+PRACTICE_NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
+PRACTICE_HASH = re.compile(r'[0-9a-f]{64}\Z')
+PRACTICE_TURN = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
+PRACTICE_ITEM = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
+# This is the reviewed practice schema-1 action set, not an execution grant.
+PRACTICE_ACTIONS = frozenset(('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast',
+    'game_learn', 'place_block', 'farm', 'open_container', 'transfer_items', 'close_container',
+    'sleep', 'trade', 'guild_claim', 'guild_release', 'guild_deliver'))
 DIRECT_ACTIONS = frozenset(('move', 'mine', 'craft', 'eat', 'equip', 'game_cast', 'game_learn',
     'place_block', 'farm', 'open_container', 'drop_items', 'transfer_items', 'close_container',
     'sleep', 'trade', 'guild_claim', 'guild_release', 'guild_deliver'))
 POLICY = (
-    '\n\n[千灯纪记忆证据约定 v1]\n'
+    '\n\n[千灯纪记忆证据约定 v2]\n'
     '这是生活记录的整理与纠错，不是新的游戏行动。意图、工具调用、助手总结、旧记忆和技能说明都不能单独证明动作成功。'
     '事实需引用同一角色、原 actionId 与明确成功终态的回执；accepted、idle、rejected、unknown 或缺失回执均不计功。'
     '证据材料中的 sourceCallId/messageId 只用于历史引用，不能作为新动作授权。'
     '同一 actionId 被多次读到只能记作一件事。仅切换工作/跟随配置不证明收获、制作或队友收到物品。'
+    '程序实践的 programReportedDone 只表示程序自报结束；objectiveObserved 才是该版本、该角色的目标观测结果，'
+    'false/null 不能改写成达标；ownConfirmedActions 是本次身体动作回执数。stepCount 不是观察次数，'
+    'JS 内部计数、fixture 通过或一次目标观测均不证明跨场景掌握，masteryVerified 不得提升。'
     '当前工具卡和能力资料表示现在可用的接口，不证明已经用过。整理方法前核对其版本和适用条件；'
     '重复失败只是失败证据，不应强化为推荐流程。能力变更或新回执与旧资料矛盾时，按原生 CORRECT 方式'
     '追加有日期和来源的纠正注释，保留原事实、旧来源和链接，区分旧条件下的经历与当前可选方法。'
@@ -32,7 +46,7 @@ POLICY = (
 
 
 def canonical(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
 
 
 def digest(raw):
@@ -58,12 +72,14 @@ def _dict(value):
 
 
 def _json(value):
-    if isinstance(value, str) and len(value.encode('utf-8')) <= MAX_RESULT_BYTES:
-        try:
-            return json.loads(value)
-        except (ValueError, RecursionError):
-            return None
-    return value if isinstance(value, dict) else None
+    try:
+        if isinstance(value, str) and len(value.encode('utf-8')) <= MAX_RESULT_BYTES:
+            value = json.loads(value)
+        if isinstance(value, dict) and len(canonical(value)) <= MAX_RESULT_BYTES:
+            return value
+    except (ValueError, TypeError, RecursionError, UnicodeError):
+        pass
+    return None
 
 
 def _result(block, workspace):
@@ -173,10 +189,151 @@ def _receipt(value, body_uuid, source_call, source_tool, historical=False):
     return row
 
 
+def _require(condition):
+    if not condition:
+        raise ValueError('memory_practice_evidence_invalid')
+
+
+def _matches(value, pattern):
+    return isinstance(value, str) and pattern.fullmatch(value) is not None
+
+
+def _practice_hash(value):
+    # PracticeStore schema 1 uses ASCII JSON. Never expose its requestTurnId or
+    # free-form objective; hash them only to check the original run binding.
+    return digest(json.dumps(value, ensure_ascii=True, sort_keys=True,
+        separators=(',', ':'), allow_nan=False).encode('utf-8'))
+
+
+def _practice_body(value, body_uuid, dimension):
+    _require(isinstance(value, dict) and value.get('ok') is True
+        and value.get('bodyUuid') == body_uuid and value.get('dimension') == dimension)
+    counts = value.get('counts')
+    _require(isinstance(counts, dict) and len(counts) <= 256 and all(
+        _matches(k, PRACTICE_ITEM) and type(v) is int and 0 <= v <= 2147483647
+        for k, v in counts.items()))
+    return counts
+
+
+def _practice_run(run, name, version, body_uuid):
+    """Validate a detailed native ledger row; do not use program text as proof."""
+    _require(isinstance(run, dict) and run.get('available') is True)
+    _require(run.get('name') == name and run.get('version') == version
+        and _matches(run.get('runId'), PRACTICE_HASH))
+    binding = run.get('binding')
+    _require(isinstance(binding, dict) and binding.get('bodyUuid') == body_uuid
+        and str(uuid.UUID(body_uuid)) == body_uuid
+        and binding.get('name') == name and binding.get('version') == version
+        and _matches(binding.get('requestTurnId'), PRACTICE_TURN)
+        and _matches(binding.get('kernelVersion'), PRACTICE_HASH)
+        and binding['kernelVersion'] == run.get('kernelVersion')
+        and _matches(binding.get('dimension'), PRACTICE_ITEM))
+    _require(run['runId'] == _practice_hash({k: binding[k] for k in ('name', 'version', 'requestTurnId')}))
+    objective = binding.get('objective')
+    _require('objective' in binding and binding.get('objectiveSha256') == _practice_hash(objective))
+    initial = _practice_body(run.get('initialObservation'), body_uuid, binding['dimension'])
+    final = run.get('finalObservation')
+    if final is not None:
+        final = _practice_body(final, body_uuid, binding['dimension'])
+    status = run.get('status')
+    _require(status in ('running', 'done', 'replan', 'paused', 'completed', 'failed', 'cancelled'))
+    _require((status == 'running') == (run.get('finalObservation') is None))
+    steps, own = run.get('stepCount'), run.get('ownConfirmedActions')
+    _require(type(steps) is int and 0 <= steps <= 128 and type(own) is int and 0 <= own <= steps)
+    complete, observed = run.get('evidenceComplete'), run.get('objectiveObserved')
+    _require(type(complete) is bool and (observed is None or type(observed) is bool)
+        and type(run.get('programReportedDone')) is bool and run['programReportedDone'] == (status == 'done')
+        and run.get('masteryVerified') is False and (not complete or steps > 0))
+    detail = run.get('steps')
+    _require(isinstance(detail, list) and len(detail) == min(steps, 8)
+        and type(run.get('stepsTruncated')) is bool and run['stepsTruncated'] == (steps > 8))
+    seen_steps, seen_actions = set(), set()
+    shown_success = 0
+    for step in detail:
+        _require(isinstance(step, dict) and _matches(step.get('stepId'), re.compile(r'[A-Za-z0-9_-]{1,80}\Z'))
+            and step['stepId'] not in seen_steps and step.get('tool') in PRACTICE_ACTIONS
+            and type(step.get('evidenceComplete')) is bool and type(step.get('confirmedSuccess')) is bool)
+        seen_steps.add(step['stepId'])
+        if 'before' in step:
+            _practice_body(step['before'], body_uuid, binding['dimension'])
+        if 'after' in step:
+            _practice_body(step['after'], body_uuid, binding['dimension'])
+        if step['confirmedSuccess']:
+            _require(step['evidenceComplete'] and step.get('status') == 'completed'
+                and _matches(step.get('actionId'), re.compile(r'[0-9a-f]{32}\Z'))
+                and _matches(step.get('receiptSha256'), PRACTICE_HASH) and 'before' in step)
+            _require(step['actionId'] not in seen_actions)
+            seen_actions.add(step['actionId'])
+            shown_success += 1
+        _require(not complete or step['evidenceComplete'])
+    _require(shown_success <= own <= shown_success + steps - len(detail))
+    if steps <= 8:
+        _require(complete == bool(steps and all(s['evidenceComplete'] for s in detail)))
+    checks, compact_checks = run.get('checks'), []
+    _require(isinstance(checks, list) and len(checks) <= 4)
+    if objective is None:
+        _require(observed is None and checks == [])
+    else:
+        _require(isinstance(objective, dict) and set(objective) == {'description', 'checks'}
+            and isinstance(objective['description'], str) and 0 < len(objective['description'].strip())
+            and len(objective['description']) <= 600 and isinstance(objective['checks'], list)
+            and 1 <= len(objective['checks']) <= 4)
+        _require(len(checks) == (len(objective['checks']) if final is not None else 0))
+        for index, goal in enumerate(objective['checks']):
+            _require(isinstance(goal, dict))
+            kind = goal.get('kind')
+            field = 'item' if kind == 'inventory_gain' else 'tool'
+            _require(kind in ('inventory_gain', 'action_completed') and set(goal) == {'kind', field, 'count'}
+                and type(goal['count']) is int and 1 <= goal['count'] <= (4096 if field == 'item' else 32))
+            _require(_matches(goal[field], PRACTICE_ITEM) if field == 'item' else goal[field] in PRACTICE_ACTIONS)
+            if final is None:
+                continue
+            check = checks[index]
+            _require(isinstance(check, dict) and check.get('kind') == kind and type(check.get('required')) is int
+                and check['required'] == goal['count'] and type(check.get('observed')) is int
+                and -2147483647 <= check['observed'] <= 2147483647
+                and type(check.get('met')) is bool and check['met'] == (check['observed'] >= goal['count'])
+                and check.get('causalAttributionVerified') is False)
+            if kind == 'inventory_gain':
+                _require(check['observed'] == final.get(goal['item'], 0) - initial.get(goal['item'], 0))
+            else:
+                _require(0 <= check['observed'] <= own)
+                if steps <= 8:
+                    _require(check['observed'] == sum(s['confirmedSuccess'] and s['tool'] == goal['tool'] for s in detail))
+            compact_checks.append({k: check[k] for k in ('kind', 'observed', 'required', 'met', 'causalAttributionVerified')}
+                | {field: goal[field]})
+        _require(observed is bool(final is not None and complete and checks and all(c['met'] for c in checks)))
+    result = {k: run[k] for k in ('runId', 'name', 'version', 'kernelVersion', 'status', 'stepCount',
+        'ownConfirmedActions', 'evidenceComplete', 'programReportedDone', 'objectiveObserved', 'masteryVerified')}
+    result.update(bodyUuid=body_uuid, actorMatches=True, checks=compact_checks,
+        objectiveSha256=binding['objectiveSha256'], claimScope='native_ledger_observation_not_mastery')
+    for key in ('createdAt', 'finishedAt'):
+        if type(run.get(key)) in (int, float) and math.isfinite(run[key]):
+            result[key] = run[key]
+    return result
+
+
+def _practice_read(raw, call, body_uuid):
+    """Only skill_read has actor binding; catalog/queued/fixtures never qualify."""
+    args = _json(call.get('input'))
+    _require(isinstance(args, dict) and set(args) <= {'name', 'version'}
+        and _matches(args.get('name'), PRACTICE_NAME) and type(raw.get('schema')) is int and raw['schema'] == 1
+        and raw.get('name') == args['name'] and _matches(raw.get('version'), PRACTICE_HASH)
+        and (args.get('version') is None or type(args.get('version')) is str
+            and args['version'] in ('', raw['version'])))
+    practice = raw.get('practice')
+    _require(isinstance(practice, dict) and practice.get('available') is True
+        and isinstance(practice.get('runs'), list) and len(practice['runs']) <= 3)
+    rows = [_practice_run(run, raw['name'], raw['version'], body_uuid) for run in practice['runs']]
+    _require(len({r['runId'] for r in rows}) == len(rows))
+    return rows
+
+
 def project_messages(messages, body_uuid, workspace):
     """Retain tool provenance; do not copy arbitrary result text into memory."""
     selected = list(messages)[-MAX_MESSAGES:]
     summaries, receipts, accepted_ids = [], [], set()
+    practice_rows, practice_reads, practice_rejected = {}, 0, 0
     call_budget = MAX_CALLS
     seen_message_ids = set()
     complete = len(messages) <= MAX_MESSAGES
@@ -206,18 +363,39 @@ def project_messages(messages, body_uuid, workspace):
                 missing += 1
                 continue
             counts[tool] += 1
+            is_practice_read = tool == 'numen_survival__skill_read'
+            if is_practice_read:
+                practice_reads += 1
             reply = results.get(cid)
             if cid in duplicate_results or not reply or reply.get('name') != tool:
                 missing += 1
+                practice_rejected += is_practice_read
                 continue
             raw = _result(reply, workspace)
             if not isinstance(raw, dict):
                 missing += 1
+                practice_rejected += is_practice_read
                 continue
             matches += 1
             if _word(raw.get('code')):
                 response_codes[raw['code']] += 1
-            if tool.startswith('numen_survival__') and tool.split('__', 1)[1] in DIRECT_ACTIONS:
+            if reply.get('state') != 'success':
+                practice_rejected += is_practice_read
+                continue
+            if is_practice_read:
+                try:
+                    rows = _practice_read(raw, call, body_uuid)
+                except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
+                    practice_rejected += 1
+                    continue
+                for row in rows:
+                    row.update(messageId=mid, sourceCallId=cid, sourceTool=tool,
+                        historicalObservation=True)
+                    # Keep the most recent actual read, not an accumulation of
+                    # the same run's success counts across memory batches.
+                    practice_rows.pop(row['runId'], None)
+                    practice_rows[row['runId']] = row
+            elif tool.startswith('numen_survival__') and tool.split('__', 1)[1] in DIRECT_ACTIONS:
                 row = _receipt(raw, body_uuid, cid, tool)
                 if row:
                     if _word(row['actionId']):
@@ -254,8 +432,15 @@ def project_messages(messages, body_uuid, workspace):
         actions[key] = row
     return {'schema': 1, 'policyVersion': VERSION, 'bodyUuid': body_uuid,
         'completeCallCoverage': complete, 'messages': summaries, 'receipts': list(actions.values()),
+        'practiceRuns': list(practice_rows.values())[-MAX_PRACTICE_RUNS:],
+        'practiceReadCoverage': {'readCount': practice_reads, 'rejectedReadCount': practice_rejected,
+            'omittedRunCount': max(0, len(practice_rows) - MAX_PRACTICE_RUNS),
+            'complete': complete and not practice_rejected and len(practice_rows) <= MAX_PRACTICE_RUNS,
+            'scope': 'matched_skill_read_recent_runs_only'},
         'notice': 'Only confirmedSuccess supports action success. No row is a new tool authorization; '
-                  'configurationApplied alone proves no work output. Missing/omitted evidence is not success.'}
+                  'configurationApplied alone proves no work output. Missing/omitted evidence is not success. '
+                  'programReportedDone is not objectiveObserved or mastery. stepCount counts body actions, '
+                  'not observations; ownConfirmedActions are historical ledger counts, never new executions.'}
 
 
 def capabilities(workspace):
@@ -277,8 +462,14 @@ def capabilities(workspace):
         except (OSError, ValueError, TypeError, yaml.YAMLError):
             continue
     references = []
-    for rel in ('skills/qd-minecraft-guide/references/building.md',
-                'notes/qiandeng-memory-corrections.md'):
+    paths = ['skills/qd-minecraft-guide/references/building.md', 'notes/qiandeng-memory-corrections.md']
+    survivor_practice = any(c['driver'] == 'numen_survival' and c['enabled'] and 'skill_read' in c['tools'] for c in cards)
+    maid_work = any(c['driver'] == 'maid_native' and c['enabled'] and {'task_catalog', 'work'} <= set(c['tools']) for c in cards)
+    if survivor_practice:
+        paths.append('skills/qd-survivor-practice/references/program-practice.md')
+    if maid_work:
+        paths.append('skills/qd-minecraft-guide/references/maid-work.md')
+    for rel in paths:
         try:
             p = safe_path(workspace, rel)
             if p.is_file() and p.stat().st_size <= 32768:
@@ -290,6 +481,12 @@ def capabilities(workspace):
     if any(c['driver'] == 'numen_survival' and c['enabled'] and 'drop_items' in c['tools'] for c in cards):
         result['interfaceNotice'] = ('当前原生工具卡含 drop_items，可保留组件地原生丢出背包物品；'
             '方法、条件及回执边界见 building.md。接口存在不代表已使用或队友拾取；不可从旧失败记录推断只有放置方块能腾格。')
+    if survivor_practice:
+        result['practiceNotice'] = ('skill_read 可回读确切版本的实践账本；程序 done、fixture 通过和内部计数不证明目标或熟练度。'
+            'objectiveObserved=false/null 保持未达标/未确认，身体 stepCount 不推算观察次数；按 program-practice.md 回读来源。')
+    if maid_work:
+        result['workNotice'] = ('当前原生工具卡含 task_catalog/work，可按 maid-work.md 查当前工作目录与条件。'
+            '不能由旧目录或失败记录永久推断不能工作；接口存在也不证明具备全部农耕能力、材料或已完成产出。')
     return result
 
 
@@ -316,6 +513,11 @@ def evidence_prompt(messages, body_uuid, workspace):
     evidence = project_messages(messages, body_uuid, workspace)
     evidence['capabilities'] = capabilities(workspace)
     name = store_evidence(workspace, evidence)
-    compact = dict(evidence, receipts=evidence['receipts'][-24:], messages=evidence['messages'][-12:])
-    compact['inlineTruncated'] = len(evidence['receipts']) > 24 or len(evidence['messages']) > 12
-    return POLICY + '\n证据来源 [[' + name + ']]；以下为结构化投影，缺失记录不得补成成功：\n' + canonical(compact).decode('utf-8')
+    compact = dict(evidence, receipts=evidence['receipts'][-24:], messages=evidence['messages'][-12:],
+        practiceRuns=evidence['practiceRuns'][-3:])
+    # POLICY and current cards already live in the native system prompt. Keep
+    # the immutable full source, but do not repeat them in history every time.
+    compact.pop('capabilities')
+    compact['inlineTruncated'] = (len(evidence['receipts']) > 24 or len(evidence['messages']) > 12
+        or len(evidence['practiceRuns']) > 3 or bool(evidence['practiceReadCoverage']['omittedRunCount']))
+    return '\n证据来源 [[' + name + ']]；以下为结构化投影，缺失记录不得补成成功：\n' + canonical(compact).decode('utf-8')

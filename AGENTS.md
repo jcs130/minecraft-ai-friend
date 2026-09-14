@@ -1,5 +1,9 @@
 # 千灯纪整合项目
 
+2026-09-14 21:55 原生能力实施覆盖下文旧native上下文：游戏Qwen2.2.1-memory1、survivor aut21镜像保持，已排空原16Cron/NPC准入与两生活/记忆任务、备份7604文件后重启原npc/qwenpaw/survivor并恢复。Minecraft/宿主Qwen未重启。两角色light_context.strategy=scroll、history_retention_days=0，原tool offload_retention_days=30保留（原生API只准1..365，曾422明确拒绝0，读回未变后才修正重提）。官方startup按chats回填桐人53session338行、结衣1session89行，原session/chats逐字保留；实际原生活session已构建Scroll并只注册structured recall_history，无Python工具，无新daemon。配置工具tools/configure_life_context.py默认preview；勿重跑旧初始化器或用旧session覆盖新Scroll经历。
+
+ReMe证据VERSION2已加载，skill_read.practice同演员/版本/绑定验证进入原AutoMemory/Dream，programReportedDone、objectiveObserved、身体动作和掌握分开；stepCount不是观察次数，false/null不改成功。72324f4农耕原run确证done/目标false/身体动作0/熟练度false；两工作区notes+当天memory+结衣旧digest9文件经nativeETag追加纠正和原生能力渐进入口，旧来源保留。运营工单与lead spawn白名单已按实际版本复用MakeSkill2.0四脚本，原guard仍限本角色路径/命令/完整包hash，未扩大人格权限或直接人物私聊。10原角色96技能绑定、16原Cron、模型/persona/body/session不变，QPM0与迭代关闭保留。针对性同版隔离测试与实时Qwen健康通过，旧宽泛健康fixture/全项目历史smoke仍非全绿；不改历史hash冒充验收。详见docs/QWENPAW-NATIVE-LIFE.md，本机证据runtime/native-capabilities-20260914，配置前原档runtime/life-context-configuration/20260914T135202581114Z。
+
 2026-09-14 21:25 自主吞吐更新覆盖下文旧周期/镜像：survivor最终为 `qiandengji-survivor:2.2.0-autonomy21`，QwenPaw仍游戏2.2.1-memory1，已重启加载原生收尾 VERSION4；NPC重载，Minecraft和其余服务未重启，宿主Qwen未改。原16Cron/NPC准入/自主已恢复，10角色名称模型、2原session不变，13服务运行/12有探针服务健康。桐人/结衣人工每日预算null、模型QPM0、iteration.disabled本就无上限，继续身体串行、未知不重放，旧max_iters12不是有效限制。本地LLM并发1实际按provider:model共享（不是身体单飞锁），本轮没有改大该容量。结衣原life Cron改每3分钟（不是新增），新slotSeconds180兼容旧600信号/在途任务，忙时只取最新。详见docs/AUTONOMY-THROUGHPUT.md。
 
 skill_start可传模型summary，只有实际skill_queued且原name/version/turnId及总结一致才原生结束，不额外模型收尾；旧remember路径保留。实际工具schema及原角色两页SKILL已同步，内核文件未动。58原生接口/收尾/缓存测试、34新镜像实践测试、19收件箱测试通过，原报告归档后真实重跑；最终30只读部署检查全过。本次game_qwenpaw、survival_practice、maid_perception探针通过，全项目历史证据仍非全绿，不得修改旧hash假通过。结衣party_send的换行错误已明确field/reason及未入队/未发送，不代改文本或重发。

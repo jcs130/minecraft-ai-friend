@@ -22,6 +22,17 @@ ENGINEER = 'operations:mc-god'
 
 
 class HelpTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Import outside patch.dict(sys.modules): unloading only part of the
+        # native dependency graph at test cleanup corrupts later YAML loaders.
+        try:
+            from qwenpaw.runtime.builder import AgentBuilder
+        except ImportError:
+            cls.native_builder = None
+        else:
+            cls.native_builder = AgentBuilder
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
@@ -43,7 +54,8 @@ class HelpTests(unittest.TestCase):
             'world_team_profiles': types.SimpleNamespace(tools_for=lambda target:
                 ['team_case', 'team_update', 'team_request_help', 'team_help_status', 'team_recruit']),
             'engineering_mcp': types.SimpleNamespace(TOOLS=('engineering_status', 'engineering_test')),
-            'native_role_capabilities': types.SimpleNamespace(FILE_TOOLS=('read_file', 'write_file', 'edit_file')),
+            'native_role_capabilities': types.SimpleNamespace(FILE_TOOLS=('read_file', 'write_file', 'edit_file'),
+                                                              package_version=lambda: '2.2.1'),
         })
         context.start(); self.addCleanup(context.stop)
         self.player = world_team.TeamStore(PLAYER, self.root)
@@ -167,8 +179,32 @@ class HelpTests(unittest.TestCase):
         allowed = self.calls[0][4]['request_context']['subagent_allowed_tools']
         self.assertIn('qd_world_team__team_case', allowed)
         for forbidden in ('team_request_help', 'team_recruit', 'spawn_subagent', 'submit_to_agent',
-                          'chat_with_agent', 'execute_shell_command'):
+                          'chat_with_agent'):
             self.assertFalse(any(forbidden in item for item in allowed), forbidden)
+
+    def test_make_skill_entry_matches_installed_version_without_enabling_both(self):
+        for version, selected, excluded in (
+            ('2.2.0', 'materialize_skill', 'execute_shell_command'),
+            ('2.2.1', 'execute_shell_command', 'materialize_skill'),
+        ):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as folder:
+                with patch.object(help_lane, 'TeamStore', return_value=self.player), \
+                     patch.object(sys.modules['native_role_capabilities'], 'package_version', return_value=version):
+                    help_lane.request_help(PLAYER, self.case_id, root=Path(folder), request=self.request)
+                allowed = self.calls[-1][4]['request_context']['subagent_allowed_tools']
+                self.assertIn(selected, allowed)
+                self.assertNotIn(excluded, allowed)
+
+    def test_current_native_final_filter_keeps_make_skill_and_excludes_recursive_tools(self):
+        if self.native_builder is None:
+            self.skipTest('Native AgentBuilder requires the QwenPaw runtime')
+        self.help()
+        request_context = self.calls[0][4]['request_context']
+        candidates = [types.SimpleNamespace(name=name) for name in (
+            'execute_shell_command', 'materialize_skill', 'read_file', 'spawn_subagent',
+            'submit_to_agent', 'qd_world_team__team_recruit', 'numen_survival__act')]
+        actual = self.native_builder.apply_subagent_tool_whitelist(candidates, request_context)
+        self.assertEqual([tool.name for tool in actual], ['execute_shell_command', 'read_file'])
 
     def test_task_final_status_uses_nested_result_without_claiming_world_fix(self):
         result = self.help()

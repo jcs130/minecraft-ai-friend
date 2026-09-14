@@ -219,8 +219,8 @@ class RuntimeTests(unittest.TestCase):
         self.addCleanup(setattr, manager, 'get_reme_app_config', prior)
         self.addCleanup(setattr, application, 'resolve_plugin_runtime', resolver)
         with patch('party_role_capabilities.party_members', return_value=pair()):
-            self.assertEqual(runtime.install('game'), 1)
-            self.assertEqual(runtime.install('game'), 1)
+            self.assertEqual(runtime.install('game'), 2)
+            self.assertEqual(runtime.install('game'), 2)
             profile = AgentProfileConfig(id='qd-survivor', name='Kirito', workspace_dir='/state/work/workspaces/qd-survivor')
             cfg = manager.get_reme_app_config(working_dir=profile.workspace_dir, agent_config=profile)
             self.assertEqual(cfg['jobs']['auto_memory']['steps'][0]['backend'], runtime.BACKENDS['auto_memory_step'])
