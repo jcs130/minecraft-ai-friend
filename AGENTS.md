@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-14 13:15 最终实测补充：autonomy14原会话两轮正常（无Doom/lease_invalid），正确remember一次；新错误说明分支本窗未触发。桐人自主采收成熟小麦，补种首次top_face_unreachable后自行move再补种成功，同株age5→6→7、采收air、重种0→1。桐人背包未增小麦，但结衣前后种子3→5、小麦0→1，确认团队资源回收（未采集具体掉落实体UUID）。新life/party smoke均通过，旧报告原字节归档后发布，party健康22/22。仍不能称结衣自主farm/武装建造全部完成。日报补跑提交前遇13:15天神正常占位，原预算检查实际全局串行，POST0；不以取消天神任务解锁，也不伪称今日日报已补。此全局准入是另一个明确待修问题。见docs/AUTONOMOUS-SURVIVAL-ROLLOUT.md。
+
 2026-09-14 13:07 最终增量覆盖下条autonomy13版本：survivor现为2.2.0-autonomy14（2a8409a4…276819），Qwen仍autonomy11。延长观察aut13四轮为3正常/1错误编号反复remember触发Doom，随后自然恢复；mainInventory已在真实原生用户输入落盘确认。aut14仅补租约失败的静态恢复说明，未执行/未写入仅在预检成立，不返回正确ID、不补ID、不放宽、不暴露status租约；63回归通过，原会话与MC/Qwen未重启。结衣原功能实机20/20与健康10/10另验通过，原26项world-tick/drop记录仍保留。完整健康旧审计32/37通过，司灯今日日报09:10实际被operations_task_unresolved跳过且modelCalls0，尚未补跑；其余历史来源证明不能改hash凑绿。正常无武器退避不是传送/永久死锁，仍缺正式attack租约入口与Enemy分类修正；不得宣称装备/建造/耕作自主闭环全完成。见docs/AUTONOMOUS-SURVIVAL-ROLLOUT.md的最新实际窗口。
 
 2026-09-14 12:51 自主生存增量已上线：survivor为2.2.0-autonomy13（49b46d19…86173），游戏Qwen为autonomy11，宿主8088未改。天神原qd-team-engineer取消总截止，原GLM-5.3/会话/单并发保留；12:15原轮453.62秒正常完成，12:25另起新轮，提交/测试仍因候选源码变化与计划覆盖被拒，不能称工程部署完成。Numen与结衣精确身份周围3×3区块原生force/entity ticking，v3组合实机26/26过；旧v1/v2源码归档并精确可重建。新增drop_items第45工具及组件完整/未知不重发回执，原生scope已同步；task_catalog支持分页搜索farm，10角色96技能绑定。修复重复remember的幂等/收尾、实际life_context漏主包槽位/精确turn_id说明、survivor长RCON回执截断。12:35后两原会话轮正常结束无Doom，真实10导航+1进食，第二轮正确租约记忆保存一次；结衣真实游戏heard交流，尚无自主耕作/丢物/建造证据。最后12:51只重启survivor补实际输入与RCON，MC/Qwen没重启，原UUID/session/模型/背包保留，后续须用新的观察窗口验收；不要拿前两轮替代最终增量证明。源码与新证据见docs/AUTONOMOUS-SURVIVAL-ROLLOUT.md，旧报告原字节保留，不改hash凑绿。
