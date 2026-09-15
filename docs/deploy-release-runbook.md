@@ -2,8 +2,9 @@
 
 状态：**提案（未执行）**。本文档本身已随分支提交入库；本文描述的任何宿主/容器步骤均未执行，方案B仍是未启用候选。
 工单：case-3834fa1201946bc290c6（deploy-release-receipt-channel-missing）。
-当前发布对象：分支 codex/ops-world-improvements HEAD = ed58097277f8aeed5b0cac26cf51cb7d9b26d6c8（本地未推送队列 12 笔：85ec3be→108f82e→da70e4e→c70fa29f→65e567b→dc2032b→f48e2ef8→afad352→c1fce7b→e41f401→d4dd33ea→ed580972；HEAD 回执 = mc-god-20260915-runbook-sync2-test1 passed 174 tests 与 mc-god-20260915-deploy-baseline-ed580972-1 passed（第七次基线双口径），engineering_commit ed580972 对快照 7a63dd5f… 全字节复核通过。f48e2ef8→ed580972 六笔仅触 tests/ 与 docs/，不改生产运行时文件，无需追加重启容器）。
-撰写：operations:mc-god，2026-09-14（源码亲读基线：head=85ec3be 工作树）；2026-09-15 03:56 CST 更新发布对象至分支 HEAD 与 6 笔队列（原「首次适用对象 85ec3be」表述废止，reset 到中途节点=部署旧代码）；2026-09-15 07:27 CST 更新发布对象至 d4dd33ea 与 11 笔队列（f48e2ef8=本 runbook 03:56 同步件；afad352/c1fce7b/e41f401/d4dd33ea=Step1 生存轨迹数据集管线四件，case-638934f646fe2ffeebfe，经 owner 静态审阅与 game:mc-god 过程级验收 seq362）；2026-09-15 08:06 CST 更新发布对象至 ed580972 与 12 笔队列（ed580972=07:27 同步件的落库件，仅触 docs/deploy-release-runbook.md；deploy-baseline-ed580972-1 passed 174 tests 收讫，case-3834fa1201946bc290c6 v30）。
+当前发布对象（基线锚）：分支 codex/ops-world-improvements 上的 4eda664037cf983a3a8e51b390460ade65b77bdd（HEAD 回执 = mc-god-20260915-runbook-sync3-test1 passed 174 tests 与 mc-god-20260915-deploy-baseline-4eda664-1 passed（第八次基线双口径），engineering_commit 4eda664 对快照 21cc109f… 全字节复核通过）。本地未推送队列 13 笔（本同步件落库后 14 笔）：85ec3be→108f82e→da70e4e→c70fa29f→65e567b→dc2032b 六笔触生产运行时，其后 f48e2ef8→afad352→c1fce7b→e41f401→d4dd33ea→ed580972→4eda664（及本同步件）为 docs/tests-only 后缀链，不进生产运行时、无需追加重启容器。
+**docs/tests-only 后缀规则（2026-09-15 08:47 CST 固化）**：锚之后的提交若只触 docs/ 与 tests/ 路径，其运行时字节与锚等价（tests/、docs/ 不在生产 bind mount 内，§1 事实基线），宿主可直接检出分支 HEAD，无需等本文档改锚；宿主自验命令 `git log --name-only --pretty=format: 4eda664..HEAD | sort -u`，输出（空行忽略）应全部以 docs/ 或 tests/ 开头，HEAD==锚时空输出即通过。据此本文档**停止随 docs-only 提交逐笔滚动同步**（消除「滞后 1 笔稳态」的无限同步链）；一旦后缀链出现 docs//tests/ 以外路径（world/、compose.yml 等），必须先更新本锚、排队并通过 deploy-baseline 全计划测试后，宿主方可部署新锚。
+撰写：operations:mc-god，2026-09-14（源码亲读基线：head=85ec3be 工作树）；2026-09-15 03:56 CST 更新发布对象至分支 HEAD 与 6 笔队列（原「首次适用对象 85ec3be」表述废止，reset 到中途节点=部署旧代码）；2026-09-15 07:27 CST 更新发布对象至 d4dd33ea 与 11 笔队列（f48e2ef8=本 runbook 03:56 同步件；afad352/c1fce7b/e41f401/d4dd33ea=Step1 生存轨迹数据集管线四件，case-638934f646fe2ffeebfe，经 owner 静态审阅与 game:mc-god 过程级验收 seq362）；2026-09-15 08:06 CST 更新发布对象至 ed580972 与 12 笔队列（ed580972=07:27 同步件的落库件，仅触 docs/deploy-release-runbook.md；deploy-baseline-ed580972-1 passed 174 tests 收讫，case-3834fa1201946bc290c6 v30）；2026-09-15 08:47 CST 更新发布对象（基线锚）至 4eda664（deploy-baseline-4eda664-1 passed 收讫，case-3834fa1201946bc290c6 v33）并固化 docs/tests-only 后缀规则——锚后仅触 docs//tests/ 的提交与锚运行时等价，宿主检出 HEAD 前以 git log --name-only 自验，本文档停止逐笔滚动同步，消除滞后 1 笔稳态与无限同步链。
 
 ## 1. 事实基线（全部源码/compose 亲读）
 
@@ -26,11 +27,11 @@
 
 步骤（宿主/管理侧执行，工程侧只收与核验回执）：
 
-1. 宿主：生产检出同步到发布对象 ed580972（或按发布策略合并后检出分支 HEAD）。
-   注意：队列 12 笔均 pushed=false（推送通道缺失即本工单主题），生产检出 `git fetch` 远端**拿不到这些提交**；
+1. 宿主：生产检出同步到发布对象（基线锚）4eda664037cf983a3a8e51b390460ade65b77bdd；锚之后的提交若仅触 docs/ 与 tests/（文首后缀规则），可直接检出分支 HEAD，运行时字节与锚等价。
+   注意：队列 13 笔均 pushed=false（推送通道缺失即本工单主题），生产检出 `git fetch` 远端**拿不到这些提交**；
    宿主可改从工程工作区本地路径取提交（示例，以宿主实际发布策略为准）：
    `git fetch /state/work/workspaces/qd-engineer/engineering/repo codex/ops-world-improvements && git checkout -B codex/ops-world-improvements FETCH_HEAD`。
-   回执：`git rev-parse HEAD`（应=ed580972…）+ `git status --porcelain`（应为空）。
+   回执：`git rev-parse HEAD`（应=4eda664…；按后缀规则检出 HEAD 时回执实际值，并附 `git log --name-only --pretty=format: 4eda664..HEAD | sort -u` 自验输出）+ `git status --porcelain`（应为空）。
 2. 重启受影响服务（compose.yml 未变，重启即可）：qwenpaw、qwenpaw-ops、npc、survivor。
    优先走 control /plan+/execute（action=restart）：自动处理 qwenpaw→survivor 依赖序、mc 保存、健康门，
    并在 /operations 留下持久回执（operationId、steps）。
@@ -41,7 +42,7 @@
      （ready=false 为设计，翻 true 需服务端四步桥接）；随后 world_site_propose→approve→record→recover 真实走一次。
    - case-704a09d：观察一次班次中途回收后下一班自愈（orphanReconciled 回执）。
    - 共享提交内其余候选：team_context 的 npcLlmEnabled 汇总措辞、world_admin 链回执正常。
-   - 队列后续各笔（108f82e 内容状态同步自愈、da70e4e 纪元追踪、c70fa29f 健康事件追踪、65e567b survivor 控制器证据、dc2032b world_content_reachability 工具、f48e2ef8 本 runbook 同步件、afad352 Step1a 轨迹读取器、c1fce7b Step1b prompt 重建镜像、e41f401 Step1a v2 turn-actions/lease/lint 与 bytes 统计段、d4dd33ea Step1b2 turn-completions 导出契约、ed580972 本 runbook 发布对象同步件落库（d4dd33ea→ed580972））：生效核验点以各对应工单事件流为准；每笔均有 passed 隔离测试回执，commit→testJobId 映射可查工程 progress recentCommits（receipts 亲读来源，非推断）。后六笔（f48e2ef8→ed580972）只落 tests/ 与 docs/、不进生产运行时，生效核验=宿主 rev-parse 基线核验 + case-638934f646fe2ffeebfe 的真实数据首跑（待部署+宿主只读通道），无容器行为可观察。
+   - 队列后续各笔（108f82e 内容状态同步自愈、da70e4e 纪元追踪、c70fa29f 健康事件追踪、65e567b survivor 控制器证据、dc2032b world_content_reachability 工具、f48e2ef8 本 runbook 同步件、afad352 Step1a 轨迹读取器、c1fce7b Step1b prompt 重建镜像、e41f401 Step1a v2 turn-actions/lease/lint 与 bytes 统计段、d4dd33ea Step1b2 turn-completions 导出契约、ed580972/4eda664 两笔 runbook 发布对象同步件落库）：生效核验点以各对应工单事件流为准；每笔均有 passed 隔离测试回执，commit→testJobId 映射可查工程 progress recentCommits（receipts 亲读来源，非推断）。docs/tests-only 后缀链（f48e2ef8 起，现场以 `git log --name-only --pretty=format: 4eda664..HEAD` 枚举，本同步件及后续 docs/tests-only 提交自动并入）只落 tests/ 与 docs/、不进生产运行时，生效核验=宿主 rev-parse 基线核验 + case-638934f646fe2ffeebfe 的真实数据首跑（待部署+宿主只读通道），无容器行为可观察。
 4. 各单以“部署回执（git rev-parse + control operationId）+ 各自核验回执”分别关闭；**本地 commit 永远不当作已生效**。
 
 ## 3. 方案B：可复用的发布回执通道（工程候选，需先批）
