@@ -14,6 +14,11 @@ from numen_gateway import GatewayError, action_lock, read_json, read_controller_
 
 PREFIX = 'QD_NUMEN_RESTORE_JSON '
 CAPABILITY = 'existing_body_restore_v1'
+# A body-loss pause is exactly the state this reconnector exists to resolve.
+# In-game death (a normal survival event) and mid-decision body loss both land
+# here; the strict restore command's own dead-branch handles respawn, so the
+# channel must stay open or the pause can never lift without an operator.
+BODY_PAUSE_REASONS = frozenset({'body_lost_during_decision', 'body_dead'})
 
 
 def unverified_attempts(state, now):
@@ -130,13 +135,33 @@ class BodyReconnect:
                 return None
             raise
 
+    def _auto_resume(self, control, resume_after_restore, now):
+        """Lift a body-loss pause once the body is verifiably back.
+
+        Mirrors control.py resume's exact write (enabled=True, pauseReason=None)
+        so the supervised loop resumes decisions without an operator. Only the
+        pause reasons that gate on body presence qualify; every other stop
+        (operator, unknown marker, model policy) keeps its explicit resume.
+        """
+        if not resume_after_restore:
+            return
+        control.update(enabled=True, pauseReason=None,
+                       autoResumedAt=now, autoResumeReason='body_restored')
+        write_json(self.root/'control.json', control)
+
     def _tick(self, settings):
         now = self.clock()
         # Recheck authorization under the same lock as every game action.
         control = read_json(self.root/'control.json')
         controller = read_controller_json(self.root/'controller.json') if (self.root/'controller.json').exists() else {}
         lease = read_json(self.root/'lease.json') if (self.root/'lease.json').exists() else {}
-        if (control.get('enabled') is not True or controller.get('active')
+        # Body-loss pauses keep the restore channel open: resolving the missing
+        # body is the only way out of that pause, and the strict restore command
+        # revalidates every guard (identity, task ledger, playerdata) itself.
+        resume_after_restore = (control.get('enabled') is not True
+                                and control.get('pauseReason') in BODY_PAUSE_REASONS)
+        if ((control.get('enabled') is not True and not resume_after_restore)
+                or controller.get('active')
                 or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'
                 or (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
             return {'status': 'waiting', 'reason': 'restore_not_authorized'}
@@ -174,6 +199,7 @@ class BodyReconnect:
         state['readFailures'] = 0
         if online:
             state.update(status='online', reason='identity_verified', verifiedAt=now)
+            self._auto_resume(control, resume_after_restore, now)
             write_json(self.path, state)
             return state
         if state.get('status') in ('reserved', 'unknown', 'restoring'):
@@ -205,6 +231,7 @@ class BodyReconnect:
                 if not roster_online(self.gateway.rcon.cmd('numen_act list'), expected):
                     raise ValueError('restore_not_observed')
                 state.update(status='online', reason='restored_identity_verified', verifiedAt=now)
+                self._auto_resume(control, resume_after_restore, now)
             elif result.get('phase') == 'rejected':
                 code = result.get('code', 'restore_rejected')
                 state.update(status='waiting' if code in ('restore_cooldown', 'dimension_unavailable', 'playerdata_unavailable')
