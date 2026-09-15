@@ -129,7 +129,8 @@ public final class QiandengIronsBridge {
         return out;
     }
 
-    static JsonObject describe(ServerPlayer player, String action) {
+    /** Read-only optional integration used by the skill compass on the server thread. */
+    public static JsonObject describe(ServerPlayer player, String action) {
         var out = response(player, action, true, "ok", action.equals("list") ? "已装备的原生法术" : "原生施法状态");
         addStatus(out, player);
         if (action.equals("list")) {
@@ -225,6 +226,7 @@ public final class QiandengIronsBridge {
         out.addProperty("id", option.id());
         out.addProperty("name", spell.getDisplayName(player).getString());
         out.addProperty("nameKey", spell.getComponentId());
+        out.addProperty("school", spell.getSchoolType().getId().toString());
         out.addProperty("level", level);
         out.addProperty("mana", option.source().consumesMana() ? spell.getManaCost(level) : 0);
         var cooldown = data.getPlayerCooldowns().getSpellCooldowns().get(option.id());

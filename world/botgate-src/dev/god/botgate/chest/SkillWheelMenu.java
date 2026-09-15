@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Compatibility name for the unified 27-slot compass. Existing callers retain their entry point.
+ * Compatibility name for the categorized compass. Existing callers retain their entry point.
  */
 public class SkillWheelMenu extends SkillChestMenu {
 

@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.util.List;
 
-/** All compass/book/keybind entry points share the same vanilla 27-slot menu. */
+/** All compass/book/keybind entry points share the categorized vanilla chest. */
 public final class SkillChestCommands {
     private static final Logger GODFIX = LoggerFactory.getLogger("godfix-skillchest");
     private enum View { MAIN, WAYPOINTS, ARCHIVE, ITEMS, SKILLBAR, SKILLBAR_CHOICES }
@@ -59,6 +59,7 @@ public final class SkillChestCommands {
     public static void openItemsFor(ServerPlayer player, int page) { openPage(player, page, View.ITEMS); }
     public static void openWaypointsFor(ServerPlayer player, int page) { openPage(player, page, View.WAYPOINTS); }
     public static void openArchiveFor(ServerPlayer player, int page) { openPage(player, page, View.ARCHIVE); }
+    public static void openCategoryFor(ServerPlayer player, String category) { openPage(player, 0, View.MAIN, 0, SkillChestLayout.validFilter(category)); }
     public static void openSkillbarFor(ServerPlayer player) { openPage(player, 0, View.SKILLBAR); }
     public static void openSkillbarChoicesFor(ServerPlayer player, int slot, int page) {
         if (slot >= 1 && slot <= SkillChestLayout.SKILLBAR_SLOTS) openPage(player, page, View.SKILLBAR_CHOICES, slot);
@@ -68,35 +69,41 @@ public final class SkillChestCommands {
         return openPage(player, requested, view, 0);
     }
     private static boolean openPage(ServerPlayer player, int requested, View view, int selectedSlot) {
+        return openPage(player, requested, view, selectedSlot, "all");
+    }
+    private static boolean openPage(ServerPlayer player, int requested, View view, int selectedSlot, String category) {
         try {
             Path dir = Path.of(System.getProperty("settlementsfix.mcdataDir", "/mcdata"));
             SkillChestIO.PanelData data = SkillChestIO.load(dir.resolve("magic-state.json"), dir.resolve("magic-atoms.json"),
                     dir.resolve("waypoints.json"), dir.resolve("skill-chest.json"), dir.resolve("skill-catalog.json"), player.getGameProfile().getName());
+            SkillChestNative.refresh(data.config, player);
+            List<SkillChestLayout.SkillInfo> directory = SkillChestLayout.compassSkills(data.config, data.catalogSkills, data.passiveSkills);
+            List<SkillChestLayout.SkillInfo> choices = SkillChestLayout.compassSkills(data.config, data.skills, List.of());
             int pages = switch (view) {
-                case MAIN -> SkillChestLayout.pagesFor(data.skills);
+                case MAIN -> SkillChestLayout.pagesFor(SkillChestLayout.filtered(data.config, directory, category));
                 case ARCHIVE -> SkillChestLayout.pagesFor(data.archivedSkills);
                 case WAYPOINTS -> SkillChestLayout.waypointPagesFor(data.waypoints);
                 case ITEMS -> SkillChestLayout.itemPagesFor(data.config.giveItems);
                 case SKILLBAR -> 1;
-                case SKILLBAR_CHOICES -> SkillChestLayout.skillbarChoicePagesFor(data.skills);
+                case SKILLBAR_CHOICES -> SkillChestLayout.skillbarChoicePagesFor(choices);
             };
             int page = Math.max(0, Math.min(requested, pages - 1));
             List<SkillChestLayout.Entry> entries = switch (view) {
-                case MAIN -> SkillChestLayout.build(data.config, data.skills, data.waypoints, page);
+                case MAIN -> SkillChestLayout.buildFiltered(data.config, directory, page, category);
                 case ARCHIVE -> SkillChestLayout.buildArchive(data.config, data.archivedSkills, page);
                 case WAYPOINTS -> SkillChestLayout.buildWaypoints(data.config, data.waypoints, page);
                 case ITEMS -> SkillChestLayout.buildItemGrid(data.config, data.config.giveItems, page);
-                case SKILLBAR -> SkillChestLayout.buildSkillbar(data.config, data.skills, data.skillbar, data.skillbarAvailable);
-                case SKILLBAR_CHOICES -> SkillChestLayout.buildSkillbarChoices(data.config, data.skills, data.skillbar, selectedSlot, page);
+                case SKILLBAR -> SkillChestLayout.buildSkillbar(data.config, choices, data.skillbar, data.skillbarAvailable);
+                case SKILLBAR_CHOICES -> SkillChestLayout.buildSkillbarChoices(data.config, choices, data.skillbar, selectedSlot, page);
             };
-            String label = switch (view) { case MAIN -> "技能罗盘"; case ARCHIVE -> "旧技能档案 · 只读"; case WAYPOINTS -> "传送阵"; case ITEMS -> "造物 · 选择物品";
+            String label = switch (view) { case MAIN -> "技能罗盘 · " + SkillChestLayout.filterName(category); case ARCHIVE -> "旧技能档案 · 只读"; case WAYPOINTS -> "传送阵"; case ITEMS -> "造物 · 选择物品";
                 case SKILLBAR -> "快捷栏 · 8 槽"; case SKILLBAR_CHOICES -> "快捷槽 " + selectedSlot + " · 选择秘术"; };
             Component title = Component.literal(label + " · " + (page + 1) + "/" + pages);
             var opened = player.openMenu(new net.minecraft.world.MenuProvider() {
                 @Override public net.minecraft.world.inventory.AbstractContainerMenu createMenu(int id, net.minecraft.world.entity.player.Inventory inv,
                                                                                              net.minecraft.world.entity.player.Player who) {
                     return new SkillChestMenu(id, inv, player, entries, page, data.config.debounceMs,
-                            target -> openPage(player, target, view, selectedSlot), target -> openItemsFor(player, target),
+                            target -> openPage(player, target, view, selectedSlot, category), target -> openItemsFor(player, target),
                             target -> openWaypointsFor(player, target), target -> openArchiveFor(player, target), () -> openFor(player, 0));
                 }
                 @Override public Component getDisplayName() { return title; }

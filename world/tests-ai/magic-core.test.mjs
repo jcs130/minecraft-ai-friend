@@ -298,13 +298,14 @@ test('consolidated catalogue covers every atom, preserves passive metadata, and 
   const f = fixture(t, { catalog: consolidatedCatalog })
   const list = f.service.listAtoms()
   assert.equal(list.length, 72)
-  assert.equal(list.filter((a) => a.catalog.status === 'featured').length, 8)
-  assert.equal(list.filter((a) => a.catalog.status === 'archived').length, 64)
+  assert.equal(list.filter((a) => a.catalog.status === 'featured').length, 35)
+  assert.equal(list.filter((a) => a.catalog.status === 'archived').length, 37)
   assert.equal(list.filter((a) => a.type === 'passive').length, 7)
   const archive = f.service.getAtomById('chain_lightning')
   archive.catalog.nativeHints.push('fake:mutation')
   archive.catalog.reason = 'changed'
-  assert.deepEqual(f.service.getAtomById('chain_lightning').catalog.nativeHints, ['irons_spellbooks:chain_lightning'])
+  assert.deepEqual(f.service.getAtomById('chain_lightning').catalog.nativeHints, [])
+  assert.equal(f.service.getAtomById('chain_lightning').catalog.nativeSpell, 'irons_spellbooks:chain_lightning')
   assert.notEqual(f.service.getAtomById('chain_lightning').catalog.reason, 'changed')
   assert.equal(f.service.getAtomById('sky_walk').icon, 'minecraft:elytra')
   assert.equal(f.service.getAtomById('night_eye').passiveId, 'night_vision')
@@ -358,7 +359,7 @@ test('archived slot IDs are hidden in-place without rewriting existing saved slo
     learned: atoms.map((a) => a.id), innateSkill: 'chain_lightning', skillbar: original,
   } } })
   const before = readFileSync(f.statePath, 'utf8')
-  const expected = ['', 'home', '', '', 'tp', '', 'give', 'fireworks']
+  const expected = ['heal', 'home', '', 'chain_lightning', 'tp', '', 'give', 'fireworks']
   assert.deepEqual(f.service.getSkillbar('QA'), expected)
   assert.deepEqual(f.service.getState('QA').skillbar, expected)
   assert.equal(readFileSync(f.statePath, 'utf8'), before)
@@ -368,8 +369,8 @@ test('archived slot IDs are hidden in-place without rewriting existing saved slo
 
 test('default bars use featured order and new archived bindings cannot enter a slot', (t) => {
   const f = fixture(t, { catalog: consolidatedCatalog, players: { QA: { learned: atoms.map((a) => a.id) } } })
-  assert.deepEqual(f.service.getSkillbar('QA'), consolidatedCatalog.featured)
-  assert.deepEqual(f.service.setSkillbar('QA', ['heal', '', 'home', 'chain_lightning', 'fireworks']), ['', '', 'home', '', 'fireworks'])
+  assert.deepEqual(f.service.getSkillbar('QA'), consolidatedCatalog.featured.slice(0, SKILLBAR_SLOTS))
+  assert.deepEqual(f.service.setSkillbar('QA', ['initiate', '', 'home', 'purge', 'fireworks']), ['', '', 'home', '', 'fireworks'])
   assert.deepEqual(f.service.getSkillbar('QA'), ['', '', 'home', '', 'fireworks'])
 })
 
@@ -403,10 +404,10 @@ test('failed or deleted hot-reload catalogue leaves the previous archive gate ac
   const f = fixture(t, { catalog: consolidatedCatalog })
   writeFileSync(f.catalogPath, JSON.stringify({ ...consolidatedCatalog, featured: [] }))
   assert.throws(() => f.service.reloadAtoms(), /[Ii]nvalid skill catalogue/)
-  assert.equal((await f.service.castExact('QA', 'heal')).code, 'skill_archived')
+  assert.equal((await f.service.castExact('QA', 'initiate')).code, 'skill_archived')
   rmSync(f.catalogPath)
   assert.throws(() => f.service.reloadAtoms(), /catalogue disappeared/)
-  assert.equal((await f.service.castExact('QA', 'heal')).code, 'skill_archived')
+  assert.equal((await f.service.castExact('QA', 'initiate')).code, 'skill_archived')
   assert.deepEqual(f.queries, [])
   assert.deepEqual(f.commands, [])
 })

@@ -48,7 +48,7 @@ public class SkillChestMenu extends ChestMenu {
                           List<SkillChestLayout.Entry> entries, int page, long debounceMs,
                           Consumer<Integer> pageTurner, Consumer<Integer> items, Consumer<Integer> waypoints,
                           Consumer<Integer> archive, Runnable home) {
-        super(MenuType.GENERIC_9x3, id, inv, buildContainer(entries), 3);
+        super(MenuType.GENERIC_9x6, id, inv, buildContainer(entries), SkillChestLayout.ROWS);
         this.player = player; this.entries = List.copyOf(entries); this.page = page;
         this.pageTurner = pageTurner; this.itemPanelOpener = items;
         this.waypointOpener = waypoints; this.archiveOpener = archive; this.homeOpener = home;
@@ -65,19 +65,25 @@ public class SkillChestMenu extends ChestMenu {
             if (item == null || item == Items.AIR) item = Items.GRAY_STAINED_GLASS_PANE;
             ItemStack stack = new ItemStack(item);
             ChatFormatting color = switch (entry.kind) {
-                case NATIVE -> ChatFormatting.LIGHT_PURPLE;
+                case NATIVE, NATIVE_SPELL -> ChatFormatting.LIGHT_PURPLE;
                 case WAYPOINT, WARP_HUB -> ChatFormatting.AQUA;
                 case SKILL, ITEM, SKILLBAR_SLOT, SKILLBAR_EDIT -> ChatFormatting.GOLD;
-                case ARCHIVED, INFO, EMPTY -> ChatFormatting.GRAY;
+                case ARCHIVED, INFO, EMPTY, LOCKED -> ChatFormatting.GRAY;
+                case PASSIVE -> ChatFormatting.GREEN;
+                case CATEGORY -> entry.selected ? ChatFormatting.YELLOW : ChatFormatting.WHITE;
                 default -> ChatFormatting.WHITE;
             };
-            stack.set(DataComponents.CUSTOM_NAME, Component.literal(entry.name.isEmpty() ? " " : entry.name)
+            Component label = entry.nameKey == null ? Component.literal(entry.name.isEmpty() ? " " : entry.name)
+                    : Component.literal(entry.namePrefix).append(Component.translatable(entry.nameKey));
+            stack.set(DataComponents.CUSTOM_NAME, label.copy()
                     .withStyle(style -> style.withColor(color).withItalic(false)));
+            if (entry.selected) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
             List<Component> lore = new ArrayList<>();
             if (!entry.lore.isEmpty()) for (String line : entry.lore.split("\\n"))
                 lore.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
             String instruction = switch (entry.kind) {
                 case SKILL -> "give".equals(entry.id) ? "A / 左键：选择物品" : "A / 左键：确认释放";
+                case NATIVE_SPELL -> "A / 左键：按原生规则施法";
                 case WAYPOINT -> "A / 左键：确认传送";
                 case ITEM -> "A / 左键：确认造物";
                 case NATIVE, WARP_HUB, ARCHIVE_HUB, SKILLBAR_HUB, SKILLBAR_SLOT -> "A / 左键：打开";
@@ -87,6 +93,8 @@ public class SkillChestMenu extends ChestMenu {
                 case REFRESH -> "A / 左键：刷新";
                 case CLOSE -> "A / 左键：关闭";
                 case ARCHIVED -> "只读档案";
+                case PASSIVE, LOCKED -> "仅浏览，不会施法";
+                case CATEGORY -> "A / 左键：切换分类";
                 default -> "";
             };
             if (!instruction.isEmpty()) lore.add(Component.literal(instruction).withStyle(ChatFormatting.DARK_GRAY));
@@ -108,7 +116,7 @@ public class SkillChestMenu extends ChestMenu {
         player.closeContainer();
         try {
             switch (entry.kind) {
-                case SKILL, WAYPOINT, ITEM, NATIVE, SKILLBAR_EDIT -> {
+                case SKILL, WAYPOINT, ITEM, NATIVE, NATIVE_SPELL, SKILLBAR_EDIT -> {
                     if (entry.command != null) {
                         player.server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), entry.command);
                         if (entry.kind == SkillChestLayout.Kind.SKILLBAR_EDIT)
@@ -121,6 +129,7 @@ public class SkillChestMenu extends ChestMenu {
                 case ARCHIVE_HUB -> { if (archiveOpener != null) archiveOpener.accept(0); }
                 case SKILLBAR_HUB -> SkillChestCommands.openSkillbarFor(player);
                 case SKILLBAR_SLOT -> SkillChestCommands.openSkillbarChoicesFor(player, SkillChestLayout.navTarget(entry), 0);
+                case CATEGORY -> SkillChestCommands.openCategoryFor(player, entry.id);
                 case HOME -> { if (homeOpener != null) homeOpener.run(); }
                 default -> { }
             }

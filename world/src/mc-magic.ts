@@ -18,6 +18,8 @@ import type { RconService } from './mc-rcon.ts'
 import { Vec3 } from 'vec3'
 import { createLifecycle } from './lifecycle.ts'
 import { loadSkillCatalog } from './infrastructure/skill-catalog-file.ts'
+import { IRON_SPELL_ID } from './gameplay/magic/catalog.ts'
+import { createIronsSpellClient } from './irons-spell-client.ts'
 import { createWaypointTravel } from './waypoint-travel.ts'
 import { castSpring, type SpringReceipt } from './spring-effect-receipt.ts'
 export { withSkillRequest } from './spring-effect-receipt.ts'
@@ -216,6 +218,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   const getBot = deps.getBot
   const rcon = deps.rcon
   const travel = createWaypointTravel((command) => rcon.send(command))
+  const irons = createIronsSpellClient((command) => rcon.send(command))
 
   // ── 世界史官：把大事记写入女神的编年史（mc-god 提供，可选注入）────
   // 咏唱/升级/降临天赋都发生在 mc-magic，由这里上报；
@@ -326,7 +329,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
   // 服务端击退 mineflayer 客户端无法模拟（易造成位置失同步），且污染 bot 的
   // 环境感知。每 60s 清扫一次（新鲜咒弹接触即爆，不受影响，只清哑弹）。
   const sweepWindCharges = async (): Promise<void> => {
-    if (catalog && catalog.entries.get('windburst')?.status !== 'featured') return
+    if (catalog && (catalog.entries.get('windburst')?.status !== 'featured' || catalog.entries.get('windburst')?.nativeSpell)) return
     try {
       await rcon.send('kill @e[type=minecraft:wind_charge]')
     } catch { /* RCON 短暂不可用时跳过，下一轮再扫 */ }
@@ -361,9 +364,32 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     const hints = entry.nativeHints.length ? `可选原生法术：${entry.nativeHints.join('、')}；须先取得并装备对应法术书或卷轴，按原生法力与冷却施放。` : ''
     return castResult('skill_archived', `「${atom.name}」已归档，不能再施放。${entry.reason}${hints}`, atom, { nativeHints: [...entry.nativeHints] })
   }
+  const nativeMapping = (atom: Atom): string | undefined => catalog?.entries.get(atom.id)?.nativeSpell
+  const nativeFailures = [
+    'invalid_actor', 'invalid_skill_id', 'actor_not_found', 'ambiguous_actor', 'actor_unavailable',
+    'not_equipped', 'unlearned', 'native_denied', 'bridge_error', 'bridge_unavailable',
+    'mana', 'cooldown', 'busy', 'outcome_unknown',
+  ] as const
+  const nativeFailureCode = (code: string) => nativeFailures.find((known) => known === code)
+  async function castNativeMapping(username: string, atom: Atom, nativeSpell: string): Promise<CastResult> {
+    const receipt = await irons.cast(username, nativeSpell)
+    const spell = receipt.spell
+    const matchingSpell = typeof spell === 'object' && spell !== null && !Array.isArray(spell) &&
+      'id' in spell && spell.id === nativeSpell
+    const accepted = receipt.ok === true && receipt.code === 'casting_started' && receipt.accepted === true && matchingSpell
+    const failureCode = nativeFailureCode(receipt.code)
+    const rejected = receipt.ok === false && failureCode !== undefined &&
+      (spell === undefined || matchingSpell)
+    const code = accepted ? 'casting_started' : rejected && failureCode ? failureCode : 'outcome_unknown'
+    const detail = accepted ? '原生施法已开始；效果与消耗由原生流程处理，完成情况仍待确认。'
+      : rejected && typeof receipt.summary === 'string' ? receipt.summary : '原生回执不匹配，结果待核实；未自动重发。'
+    return { ok: accepted, code, skillId: atom.id, name: atom.name,
+      summary: `「${atom.name}」使用原生法术 ${nativeSpell}（主题替代）。${detail}`,
+      engine: 'irons_spellbooks', nativeSpell, executionConfirmed: false, effectReceipt: receipt }
+  }
   lc.setTimeout(() => warmSuggestCorpus(atoms), 3_000)
   // Retired windburst must not keep globally deleting legitimate native projectiles.
-  if (!catalog || catalog.entries.get('windburst')?.status === 'featured') lc.setTimeout(sweepWindCharges, 60_000)
+  if (!catalog || (catalog.entries.get('windburst')?.status === 'featured' && !catalog.entries.get('windburst')?.nativeSpell)) lc.setTimeout(sweepWindCharges, 60_000)
   log(`loaded ${atoms.length} atoms from ${atomsPath}`)
 
   // ── 天平引擎（覆盖层）：基准表只读，补丁热更 ─────────────────────
@@ -510,9 +536,10 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const clean: string[] = []
       for (const id of ids.slice(0, SKILLBAR_SLOTS)) {
         if (id === '') { clean.push(''); continue }
-        if (seen.has(id) || (!p.learned.includes(id) && p.innateSkill !== id) ||
+        const native = typeof id === 'string' && id.length <= 128 && IRON_SPELL_ID.test(id)
+        if (seen.has(id) || (!native && ((!p.learned.includes(id) && p.innateSkill !== id) ||
             !atoms.some((a) => a.id === id && a.type !== 'passive') ||
-            catalog?.entries.get(id)?.status === 'archived') { clean.push(''); continue }
+            catalog?.entries.get(id)?.status === 'archived'))) { clean.push(''); continue }
         seen.add(id); clean.push(id)
       }
       p.skillbar = clean.length ? clean : undefined
@@ -536,6 +563,12 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       if ('code' in resolved) return castResult(resolved.code, resolved.summary)
       const archived = archivedResult(resolved.atom)
       if (archived) return archived
+      if (nativeMapping(resolved.atom)) {
+        if (!params || typeof params !== 'object' || Array.isArray(params) || Object.keys(params).length) {
+          return castResult('invalid_params', '原生映射使用当前原生瞄准与法术规则，不接受旧技能参数。', resolved.atom)
+        }
+        return cast(username, key, { forceAtom: resolved.atom, params: {} })
+      }
       const parsed = exactParams(resolved.atom, params)
       if ('error' in parsed) return castResult('invalid_params', parsed.error, resolved.atom)
       return cast(username, key, { forceAtom: resolved.atom, params: parsed.params })
@@ -680,6 +713,8 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
         return performCast(username, chant, { forceAtom: vm.atom, mode: 'vector', latencyMs: FUZZY_CAST_DELAY_MS })
       }
       if (vm && vm.similarity >= SUGGEST_THRESHOLD) {
+        // Native aliases have no legacy MP or token surcharge even before LLM disambiguation.
+        if (nativeMapping(vm.atom)) throw new NeedLlmError(vm.atom.id, body, vm.similarity)
         // 中置信：LLM 推理前先代码预判（2026-08-23 造物主谕：tokens 判断成败，代码写、零 LLM）。
         // 预估成本 = 历史 EMA（无历史字符估算兜底），总耗 = 基础魔力 + ⌈est/50⌉（上限 80）；
         // 玩家魔力折不出 → 直接拦截拒绝（不浪费 LLM 调用），precheck_deny 入台账供学习闭环对照。
@@ -715,6 +750,8 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     }
     const archived = archivedResult(atom)
     if (archived) return archived
+    const nativeSpell = nativeMapping(atom)
+    if (nativeSpell) return castNativeMapping(username, atom, nativeSpell)
     const baseCost = computeCost(atom, params)
     // 模糊施法代价（2026-08-23）：vector = base×1.5；llm = base + ⌈tokens/50⌉（上限 80）
     const fuzzyTokenMana = opts?.mode === 'llm' && opts.tokens
@@ -1092,6 +1129,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     if (!atom) return `未知技艺「${atomId}」，神迹未成。`
     const archived = archivedResult(atom)
     if (archived) return archived.summary
+    if (nativeMapping(atom)) return (await cast(username, atomId, { forceAtom: atom, params: {} })).summary
     if (atom.type === 'passive') return (await cast(username, atomId, { forceAtom: atom })).summary
     const bot = getBot()
     if (!bot.entity) return '女神化身离线，神迹未成。'
@@ -1242,6 +1280,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     if (!atom) return `未知技艺「${atomId}」，代施未成。`
     const archived = archivedResult(atom)
     if (archived) return archived.summary
+    if (nativeMapping(atom)) return (await cast(owner, atomId, { forceAtom: atom, params: {} })).summary
     const pstate = store.get(owner)
     // 闸一：主人已习得 或 出生天赋
     if (!pstate.learned.includes(atomId) && pstate.innateSkill !== atomId) {

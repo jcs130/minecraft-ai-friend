@@ -262,6 +262,48 @@ test('skillbar slot 8 moves an existing skill without compacting holes or duplic
   assert.equal(f.state.skillbar[1], ''); assert.equal(f.state.skillbar[7], 'fireworks')
 })
 
+test('native spell binding keeps eight-slot positions and uses equipment metadata without casting', async () => {
+  const f = fixture(), synced = []
+  f.deps.syncStaffBar = async (_actor, slots) => { synced.push(clone(slots)); return { ok: true } }
+  const [result] = await f.dispatch('skillbar set 8 irons_spellbooks:firebolt')
+  assert.equal(result.ok, true)
+  assert.deepEqual(f.state.skillbar, ['fireworks', 'tp', '', '', '', '', '', 'irons_spellbooks:firebolt'])
+  assert.equal(result.skillbar.at(-1).name, '火焰弹')
+  assert.equal(synced[0].length, 8)
+  assert.equal(synced[0][7].chant, '咏唱火焰弹')
+  assert.equal(f.called('irons.request').length, 1)
+  assert.equal(f.called('irons.cast').length, 0)
+  assert.equal(f.called('magic.castExact').length, 0)
+  await f.dispatch('skillbar set 3 irons_spellbooks:firebolt')
+  assert.equal(f.state.skillbar[2], 'irons_spellbooks:firebolt')
+  assert.equal(f.state.skillbar[7], '')
+})
+
+test('native slot casts once through the native port, including the staff gesture path', async () => {
+  const f = fixture(); f.state.skillbar = ['', '', '', '', '', '', '', 'irons_spellbooks:firebolt']
+  f.deps.claimStaff = async () => ({ ok: true, code: 'claimed' })
+  const [result] = await f.dispatch('staff-cast 8')
+  assert.equal(result.slot, 8); assert.equal(result.code, 'casting_started')
+  assert.deepEqual(f.called('irons.cast').map(c => c.args), [['Owner', 'irons_spellbooks:firebolt']])
+  assert.equal(f.called('magic.castExact').length, 0)
+})
+
+test('unequipped native references survive a refresh but cannot be newly bound', async () => {
+  const f = fixture(); f.state.skillbar = ['', 'irons_spellbooks:heal', '', '', '', '', '', 'tp']
+  const before = clone(f.state.skillbar)
+  const [view] = await f.dispatch('skillbar')
+  assert.equal(view.skillbar[0].id, 'irons_spellbooks:heal')
+  const [denied] = await f.dispatch('skillbar set 5 irons_spellbooks:heal')
+  assert.equal(denied.code, 'not_equipped')
+  f.behaviors['irons.request'] = async () => ({ ok: false, code: 'outcome_unknown', summary: '未收到列表' })
+  const [unknown] = await f.dispatch('skillbar set 5 irons_spellbooks:firebolt')
+  assert.equal(unknown.code, 'outcome_unknown')
+  await f.dispatch('skillbar sync')
+  assert.deepEqual(f.state.skillbar, before)
+  assert.equal(f.called('magic.setSkillbar').length, 0)
+  assert.equal(f.called('irons.cast').length, 0)
+})
+
 test('skillbar rejects invalid slots, unknown, passive, archived and unlearned skills without writes', async () => {
   for (const [body, code] of [['set 9 fireworks', 'invalid_slot'], ['set 1 no_such_skill', 'unknown_skill'],
     ['set 1 night_vision', 'passive'], ['set 1 heal', 'skill_archived'], ['set 1 new_skill', 'not_learned'], ['typo', 'invalid_subcommand']]) {

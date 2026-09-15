@@ -1,5 +1,19 @@
 # AI 与技能兼容修复（开发副本）
 
+## 2026-09-15 儿童陪伴模式（灯语女神适龄语音互动）
+
+新增一层"儿童模式"，让白名单小朋友（当前 `MengMeng` / 萌萌）直接对麦克风说话，由灯语女神用适龄温暖语音回应、陪聊、陪玩文字小游戏，并可要东西送到背包。复用现有 mc-herald 语音管道，不新建角色、不碰施法/馈赠的服务端规则，不动结衣/自主生存/工程 Cron。
+
+- 新增 `src/gameplay/child-companion.ts`：`resolveChildCompanion`（按登录名大小写不敏感匹配白名单）、`buildGoddessChatPrompt`（child 为空时逐字复现原成人 prompt；为儿童时换成"大姐姐朋友"人设，短句、多鼓励、可陪玩、禁恐怖/血腥/骂人/成人内容、不假装真人、提醒休息找爸妈；reply/give JSON 契约不变）、`sanitizeChildReply`（兜底过滤明确不适宜词，游戏正常用词如剑/怪物不拦）。
+- 改 `src/mc-god.ts`：`Config` 加可选 `childCompanion`；`goddessChat` 用 `buildGoddessChatPrompt` 并对儿童回复过兜底网；语音 conversation 端口对儿童**免 `vipChatGate` 点名准入**，并按 `allowGifts`（默认 true）开启馈赠——物品仍受服务端 give 白名单+冷却约束。成人语音路径行为不变（仍 reply-only、仍要点名）。
+- 改 `bootstrap-world.mts`：`loadChildCompanion` 读 `CHILD_COMPANION_FILE`，缺失/损坏一律按关闭处理，不崩进程；注入 `createGod`。
+- 新增 `config/child-companion.json`；改 `compose.yml` 世界服务 env `CHILD_COMPANION_FILE` + 只读挂载（照 `model-task-routes.json` 模式）。
+
+离线验证：新增 `tests-ai/child-companion.test.mjs` 7/7；相关回归 spoken-commands/spoken-intent/voice-command-inbox/goddess-* 共 39/39；`tsc -p tsconfig.gameplay.json` 0 错；全仓 `tsc -p tsconfig.json` 的 152 错为既有基线、落点不在本次改动行。**未做**真人麦克风、SVC 实采、云端模型对儿童人设实际输出、游戏内真实 give 入包的实测；主动搭话与事件触发为后续阶段，未实现。设计与验收边界见 `docs/CHILD-COMPANION.md`。
+
+# AI 与技能兼容修复（开发副本）
+
+
 2026-09-07。本轮以现有玩法整合、旧存档兼容为目标。修改及集成验证仅针对 D 盘独立开发项目和原存档副本，不部署到 C 盘生产服务。MCP 保持原有 54 个工具，未新增回执工具、未更改 chant 文案或消耗判定。真实 RCON 和登录检查只使用独立端口与保留 QA 身份，结束清理在线测试角色。
 
 ## 修改

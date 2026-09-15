@@ -17,7 +17,7 @@ import java.util.Map;
 public final class SkillChestIO {
     public static final class PanelData {
         public final SkillChestLayout.Config config;
-        public final List<SkillChestLayout.SkillInfo> skills, archivedSkills;
+        public final List<SkillChestLayout.SkillInfo> skills, archivedSkills, catalogSkills, passiveSkills;
         public final List<SkillChestLayout.WaypointInfo> waypoints;
         /** Original slot positions from the existing lowercase skillbar field; never persisted here. */
         public final List<String> skillbar;
@@ -25,10 +25,12 @@ public final class SkillChestIO {
         public final Integer mana, maxMana;
         PanelData(SkillChestLayout.Config config, List<SkillChestLayout.SkillInfo> skills,
                   List<SkillChestLayout.SkillInfo> archivedSkills, List<SkillChestLayout.WaypointInfo> waypoints,
-                  Integer mana, Integer maxMana, List<String> skillbar, boolean skillbarAvailable) {
+                  Integer mana, Integer maxMana, List<String> skillbar, boolean skillbarAvailable,
+                  List<SkillChestLayout.SkillInfo> catalogSkills, List<SkillChestLayout.SkillInfo> passiveSkills) {
             this.config = config; this.skills = skills; this.archivedSkills = archivedSkills;
             this.waypoints = waypoints; this.mana = mana; this.maxMana = maxMana;
             this.skillbar = List.copyOf(skillbar); this.skillbarAvailable = skillbarAvailable;
+            this.catalogSkills = List.copyOf(catalogSkills); this.passiveSkills = List.copyOf(passiveSkills);
         }
     }
 
@@ -46,6 +48,7 @@ public final class SkillChestIO {
             if (SkillChestLayout.validSkillId(id)) atoms.putIfAbsent(id, atom);
         }
         JsonObject me = obj(obj(readJson(statePath), "players"), player);
+        cfg.learningSnapshotAvailable = me != null;
         Integer mana = nullableInt(me, "mana"), maxMana = nullableInt(me, "maxMana");
         if (me != null) cfg.stateSummary = "秘术魔力：" + (mana == null ? "—" : mana) + "/" + (maxMana == null ? "—" : maxMana)
                 + "（同步快照）\n等级：" + strOf(me, "level", "—");
@@ -57,7 +60,17 @@ public final class SkillChestIO {
         }
         String innate = strOf(me, "innateSkill", null);
         if (SkillChestLayout.validSkillId(innate)) learned.add(innate);
-        for (String id : learned) {
+        JsonArray passiveRecords = arr(me, "passives");
+        if (passiveRecords != null) for (JsonElement value : passiveRecords) {
+            String id = primitiveString(value, null);
+            if (SkillChestLayout.validSkillId(id) && "passive".equals(strOf(atoms.get(id), "type", "active"))) learned.add(id);
+        }
+        cfg.learned.addAll(learned);
+        LinkedHashSet<String> visible = new LinkedHashSet<>(cfg.featured); visible.addAll(learned);
+        for (var entry : atoms.entrySet()) if ("passive".equals(strOf(entry.getValue(), "type", "active"))) {
+            cfg.passives.add(entry.getKey()); visible.add(entry.getKey());
+        }
+        for (String id : visible) {
             JsonObject atom = atoms.get(id);
             cfg.skillNames.put(id, clean(strOf(atom, "name", id), 80));
             String icon = strOf(atom, "icon", null);
@@ -82,16 +95,20 @@ public final class SkillChestIO {
                 if (!defaults.isEmpty()) lore += "\n默认：" + String.join(" / ", defaults);
             }
             if (obj(atom, "paramCosts") != null) lore += "\n参数消耗另计，确认时由服务器结算";
-            lore += id.equals(innate) ? "\n已掌握 · 出生天赋免等级门槛" : "\n需要等级：" + strOf(atom, "requiredLevel", "1") + "\n已学主动秘术";
+            if (cfg.passives.contains(id)) lore = "被动天赋，持续/条件效果以原世界规则为准";
+            lore += id.equals(innate) ? "\n已掌握 · 出生天赋免等级门槛" : "\n需要等级：" + strOf(atom, "requiredLevel", "1")
+                    + (learned.contains(id) ? "\n已学" : "\n尚未解锁");
             cfg.skillLore.put(id, atom == null ? "旧定义暂不可读取，进度记录保留" : lore);
         }
-        List<SkillChestLayout.SkillInfo> skills = new ArrayList<>(), archived = new ArrayList<>();
+        List<SkillChestLayout.SkillInfo> skills = new ArrayList<>(), archived = new ArrayList<>(), catalogSkills = new ArrayList<>(), passiveSkills = new ArrayList<>();
         // Never turn a missing catalog into the old 72-skill menu.
         if (cfg.catalogAvailable) for (String id : cfg.featured) {
             JsonObject atom = atoms.get(id);
+            if (atom != null && !cfg.passives.contains(id) && !cfg.archived.containsKey(id)) catalogSkills.add(new SkillChestLayout.SkillInfo(id));
             if (learned.contains(id) && atom != null && !"passive".equals(strOf(atom, "type", "active")) && !cfg.archived.containsKey(id))
                 skills.add(new SkillChestLayout.SkillInfo(id));
         }
+        for (String id : cfg.passives) passiveSkills.add(new SkillChestLayout.SkillInfo(id));
         for (String id : learned) {
             if ("passive".equals(strOf(atoms.get(id), "type", "active"))) continue;
             if (!cfg.catalogAvailable || !cfg.featured.contains(id) || cfg.archived.containsKey(id) || !atoms.containsKey(id))
@@ -102,10 +119,11 @@ public final class SkillChestIO {
         for (int slot = 0; slot < SkillChestLayout.SKILLBAR_SLOTS; slot++) {
             String id = storedBar != null && slot < storedBar.size() ? primitiveString(storedBar.get(slot), null) : "";
             // Keep holes and disabled old IDs visible. Malformed values are labels only, never commands.
-            skillbar.add(id != null && (id.isEmpty() || SkillChestLayout.validSkillId(id)) ? id : "（记录异常）");
+            skillbar.add(id != null && (id.isEmpty() || SkillChestLayout.validBarId(id)) ? id : "（记录异常）");
         }
-        return new PanelData(cfg, skills, archived, loadWaypoints(waypointPath, player), mana, maxMana,
-                skillbar, storedBar != null && !storedBar.isEmpty());
+        return new PanelData(cfg, SkillChestLayout.sortSkills(cfg, skills), SkillChestLayout.sortSkills(cfg, archived),
+                loadWaypoints(waypointPath, player), mana, maxMana, skillbar, storedBar != null && !storedBar.isEmpty(),
+                SkillChestLayout.sortSkills(cfg, catalogSkills), SkillChestLayout.sortSkills(cfg, passiveSkills));
     }
 
     public static List<SkillChestLayout.WaypointInfo> loadWaypoints(Path waypointPath, String player) {
@@ -168,6 +186,31 @@ public final class SkillChestIO {
             if (SkillChestLayout.validSkillId(id) && !cfg.featured.contains(id)) cfg.featured.add(id);
         }
         copyIcons(cfg, obj(root, "icons"));
+        JsonObject details = obj(root, "featuredDetails");
+        if (details != null) for (String id : cfg.featured) {
+            String nativeId = strOf(obj(details, id), "nativeSpell", null);
+            if (SkillChestLayout.validNativeId(nativeId)) cfg.nativeMappings.put(id, nativeId);
+        }
+        JsonObject categories = obj(root, "categories");
+        if (categories != null) for (var category : categories.entrySet()) {
+            if (!category.getValue().isJsonObject()) continue;
+            JsonObject row = category.getValue().getAsJsonObject();
+            String group = strOf(row, "group", category.getKey());
+            group = switch (group) {
+                case "combat", "support", "life", "passive" -> group;
+                case "travel", "movement", "exploration" -> "movement";
+                case "supply", "terrain", "equipment", "cosmetic" -> "life";
+                default -> "life";
+            };
+            JsonArray ids = arr(row, "ids");
+            if (ids == null) continue;
+            for (JsonElement value : ids) {
+                String id = primitiveString(value, null);
+                if (!SkillChestLayout.validSkillId(id)) continue;
+                cfg.order.putIfAbsent(id, cfg.order.size());
+                cfg.groups.putIfAbsent(id, group);
+            }
+        }
         JsonObject archive = obj(root, "archived");
         if (archive != null) for (var item : archive.entrySet()) {
             if (!SkillChestLayout.validSkillId(item.getKey()) || !item.getValue().isJsonObject()) continue;

@@ -2,6 +2,12 @@ import { createPlayerCommands } from './application/player-commands.ts'
 import { createSpokenCommands } from './application/spoken-commands.ts'
 import { createVoiceCommandInbox } from './voice-command-inbox.ts'
 import { createChantingStaffClient } from './chanting-staff-client.ts'
+import {
+  buildGoddessChatPrompt,
+  resolveChildCompanion,
+  sanitizeChildReply,
+  type ChildCompanionConfig,
+} from './gameplay/child-companion.ts'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, rm } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -165,6 +171,9 @@ export interface Config {
    *  冷却节流），并可按处境主动调派守护者或动用服务器权限施以援手。
    *  逗号分隔注入（MC_VIP_LISTEN），默认空表。 */
   vipListen: string[]
+  /** 儿童陪伴模式：白名单玩家走适龄女神人设（config/child-companion.json）。
+   *  仅影响 prompt 人设与对话准入，不改施法/馈赠的服务端规则。可选，缺省关闭。 */
+  childCompanion?: ChildCompanionConfig
   /** 天平公告攒批窗口：调整即时生效但公告攒一波一起发（版本更新式，防公屏刷屏）。 */
   balanceFlushMs: number
   /** 攒批队列落盘文件（重启不丢未发公告）。 */
@@ -1973,11 +1982,17 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     async conversation(actor, text) {
       // Speech already classified as conversation must never be re-sniffed for
       // casts, prayers, admin rules or item gifts by the public chat dispatcher.
-      if (!vipChatGate(text) || pendingSpokenConversation.has(actor) || pendingSpokenConversation.size >= 2) return
+      const child = resolveChildCompanion(config.childCompanion, actor)
+      // A whitelisted child talks to the goddess on purpose (PTT/VOX already gated
+      // capture), so she does not need the 点名/祈愿 prefix that adult chat requires.
+      if ((!child && !vipChatGate(text)) || pendingSpokenConversation.has(actor) || pendingSpokenConversation.size >= 2) return
       pendingSpokenConversation.add(actor)
       // Optional dialogue cannot hold the microphone command queue while a
       // model is slow. One pending reply per player, at most two in total.
-      void goddessChat(actor, text, false).catch(() => undefined).finally(() => pendingSpokenConversation.delete(actor))
+      // A child may also ask for items; the server-side give whitelist and
+      // cooldown still bound what is actually delivered. Adults stay reply-only.
+      const allowGifts = child ? child.allowGifts !== false : false
+      void goddessChat(actor, text, allowGifts).catch(() => undefined).finally(() => pendingSpokenConversation.delete(actor))
     },
   })
   const voiceInbox = createVoiceCommandInbox({
@@ -2521,26 +2536,12 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     if (now - lastAt < cool) return // 静默节流（公屏聊天不打扰，不做「稍候」提醒）
     lastGoddessChat.set(username, now)
     const t = transmigrators.getByUsername(username)
-    const senderName = t?.name ?? username
-    const prompt = [
-      '你是这个方块世界的「灯语女神」（游戏内化身 Goddess），温柔幽默、说话大白话、简短。',
-      '真人玩家在公屏说了句话，你要理解他真正的意思并做出回应——比如他要面包，你就真的送面包。',
-      '你的神力边界：可以送日常小物（面包/火把/煤/原木/圆石/苹果/熟牛肉/木石铁工具剑/床/船/梯子/盾牌/玻璃/萤石/灯笼/铁锭/水桶/锄头），不能送贵重物（钻石/绿宝石/金锭/合金/附魔书）——要贵重物就指他私语 /msg Goddess 祈愿：<愿望>。',
-      '',
-      `玩家名：${senderName}（登录名 ${username}）`,
-      `他说：「${message.slice(0, 120)}」`,
-      // 已持有的技能书（2026-08-29 萌萌反复要「技能书火球术」）：书已在她包里，
-      // LLM 要能引导她右键用书，而不是反复「听岔了」。
-      ...(ATTACK_BOOK_GIFT.find((g) => g.to === username)
-        ? [`他已持有技能书：${ATTACK_BOOK_GIFT.find((g) => g.to === username)!.books.join('、')}（拿书按右键即施法）——他要法术/技能/书时，引导他右键用这些书，不要送新的。`]
-        : []),
-      '',
-      '只输出一行 JSON，不要 markdown 代码块，两种格式二选一：',
-      '{"action":"reply","text":"<你说的话，30字内，大白话>"}',
-      '{"action":"give","item":"<物品中文名>","count":<1-8>,"text":"<你说的话，30字内>"}',
-      allowGifts ? '规则：他要日常物品且合理 → give；问路/问玩法/求助 → reply 给答案（需要大力帮忙时让他私语祈愿）；闲聊 → 自然聊回来；无理取闹 → 温柔拒绝。' :
-        '当前是语音闲聊或疑问，禁止执行、馈赠或声称已施法。只允许 action=reply 回答；明确咒语已由游戏规则另行处理。',
-    ].join('\n')
+    const child = resolveChildCompanion(config.childCompanion, username)
+    const senderName = child?.displayName ?? t?.name ?? username
+    const prompt = buildGoddessChatPrompt({
+      senderName, username, message, allowGifts, child,
+      heldBooks: ATTACK_BOOK_GIFT.find((g) => g.to === username)?.books ?? [],
+    })
     try {
       const ans = allowGifts ? await callAgent(`mc:chat:${username}`, username, prompt, 'mc-herald') : await modelProvider.chat({ purpose: 'world.herald', roleId: 'mc-herald', sessionId: `mc:voice-chat:${username}`,
           userId: username, prompt, timeoutMs: 15_000 })
@@ -2548,7 +2549,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       const raw = String(ans.text ?? '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
       const m = raw.match(/\{[\s\S]*\}/)
       if (m) { try { decision = JSON.parse(m[0]) } catch { /* 非 JSON 落 reply */ } }
-      const text = !allowGifts && decision?.action === 'give' ? '听到了。想施法可以直接说出咒语。' : String(decision?.text ?? '').trim().slice(0, 60) || raw.slice(0, 60) || '……'
+      let text = !allowGifts && decision?.action === 'give' ? '听到了。想施法可以直接说出咒语。' : String(decision?.text ?? '').trim().slice(0, 60) || raw.slice(0, 60) || '……'
+      // A young child only ever hears an age-appropriate line, even if the model
+      // drifts; the persona prompt is the real control, this is the last net.
+      if (child) text = sanitizeChildReply(text)
       if (allowGifts && decision?.action === 'give') {
         const lastGive = lastGoddessGive.get(username) ?? 0
         const giveCool = isVip ? Math.floor(GODDESS_GIVE_COOLDOWN / 2) : GODDESS_GIVE_COOLDOWN

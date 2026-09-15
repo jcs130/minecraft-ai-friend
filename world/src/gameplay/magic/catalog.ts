@@ -4,7 +4,16 @@ export interface SkillCatalogEntry {
   status: 'featured' | 'archived'
   reason: string
   nativeHints: string[]
+  /** A thematic alias for this exact native spell, never a grant or legacy fallback. */
+  nativeSpell?: string
+  category?: string
+  group?: SkillCatalogGroup
 }
+
+export type SkillCatalogGroup = 'combat' | 'support' | 'movement' | 'life' | 'passive' | 'native'
+export const IRON_SPELL_ID = /^irons_spellbooks:[a-z0-9_./-]+$/
+const categoryId = /^[a-z][a-z0-9_]{0,63}$/
+const groups: readonly string[] = ['combat', 'support', 'movement', 'life', 'passive', 'native']
 
 export interface SkillCatalog {
   featured: string[]
@@ -41,7 +50,15 @@ export function validateSkillCatalog(raw: unknown, atoms: readonly CatalogAtom[]
     if (known.get(id)?.type === 'passive') return fail(`passive ${id} cannot be featured as active`)
     const detail = details[id]
     if (detail !== undefined && (!object(detail) || !nonempty(detail.reason))) return fail(`invalid featured details ${id}`)
-    entries.set(id, { status: 'featured', reason: object(detail) ? String(detail.reason) : '精选特色技能', nativeHints: [] })
+    if (object(detail) && detail.category !== undefined &&
+        (typeof detail.category !== 'string' || !categoryId.test(detail.category))) return fail(`invalid category for ${id}`)
+    if (object(detail) && detail.nativeSpell !== undefined &&
+        (typeof detail.nativeSpell !== 'string' || detail.nativeSpell.length > 128 || !IRON_SPELL_ID.test(detail.nativeSpell) ||
+         typeof detail.category !== 'string')) return fail(`invalid native spell mapping ${id}`)
+    entries.set(id, { status: 'featured', reason: object(detail) ? String(detail.reason) : '精选特色技能', nativeHints: [],
+      ...(object(detail) && typeof detail.category === 'string' ? { category: detail.category } : {}),
+      ...(object(detail) && typeof detail.nativeSpell === 'string' ? { nativeSpell: detail.nativeSpell } : {}),
+    })
     featured.push(id)
   }
   for (const id of Object.keys(details)) if (!featured.includes(id)) return fail(`unknown/non-featured detail ${id}`)
@@ -49,6 +66,7 @@ export function validateSkillCatalog(raw: unknown, atoms: readonly CatalogAtom[]
     if (!known.has(id)) return fail(`unknown archived ID ${id}`)
     if (entries.has(id)) return fail(`duplicate classification ${id}`)
     if (!object(row) || !nonempty(row.reason) || !nonempty(row.kind) || !Array.isArray(row.nativeHints) ||
+        row.nativeSpell !== undefined ||
         row.nativeHints.some((v) => typeof v !== 'string' || !resourceId.test(v)) ||
         new Set(row.nativeHints).size !== row.nativeHints.length) return fail(`invalid archived entry ${id}`)
     if ((known.get(id)?.type === 'passive') !== (row.kind === 'passive')) return fail(`passive classification mismatch ${id}`)
@@ -68,12 +86,20 @@ export function validateSkillCatalog(raw: unknown, atoms: readonly CatalogAtom[]
     if (!object(raw.categories)) return fail('categories must be an object')
     const categorized = new Set<string>()
     for (const [category, row] of Object.entries(raw.categories)) {
-      if (!object(row) || !nonempty(row.name) || !Array.isArray(row.ids)) return fail(`invalid category ${category}`)
+      if (!categoryId.test(category) || !object(row) || !nonempty(row.name) || !Array.isArray(row.ids) ||
+          (row.group !== undefined && (typeof row.group !== 'string' || !groups.includes(row.group)))) return fail(`invalid category ${category}`)
       for (const id of row.ids) {
         if (typeof id !== 'string' || !known.has(id) || categorized.has(id)) return fail(`unknown/duplicate category ID ${String(id)}`)
         categorized.add(id)
+        const entry = entries.get(id)!
+        if (entry.category !== undefined && entry.category !== category) return fail(`category mismatch ${id}`)
+        entry.category = category
+        if (row.group !== undefined) entry.group = row.group as SkillCatalogGroup
       }
     }
+    for (const [id, entry] of entries) if (entry.nativeSpell && !categorized.has(id)) return fail(`uncategorized native mapping ${id}`)
+  } else if ([...entries.values()].some((entry) => entry.nativeSpell)) {
+    return fail('native mappings require categories')
   }
   return { featured, entries, icons }
 }

@@ -3,6 +3,8 @@ import {
   shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb, type CliCommand,
 } from '../gameplay/commands/player-cli.ts'
 import { NATIVE_SPELL_ID } from '../gameplay/native/contracts.ts'
+import type { NativeSpell } from '../gameplay/native/contracts.ts'
+import { nativeSpellIcon } from '../gameplay/native/spell-display.ts'
 import type { PlayerCommandPorts, PlayerCommandRequest } from './player-command-ports.ts'
 
 export const EXTENDED_PLAYER_COMMANDS = new Set(['pray', 'offering', 'ask', 'chat', 'summon'])
@@ -21,7 +23,7 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
     const native = NATIVE_SPELL_ID.test(input.skill) || (!magic.getAtomById(input.skill) && !hasLegacyAlias)
     if (native) {
       if (Object.keys(input.params).length) return { ok: false, code: 'invalid_params', summary: '铁魔法的等级与威力由装备决定，不接受额外施法参数。' }
-      return irons.cast(subject, input.skill)
+      return { ...await irons.cast(subject, input.skill), ...(input.slot ? { slot: input.slot } : {}) }
     }
     if (subject.includes('-')) return { ok: false, code: 'login_required', summary: '旧秘术进度按登录名保存；请使用唯一登录名施放旧秘术。UUID 可用于原生铁魔法。' }
     const result = await magic.castExact(subject, input.skill, input.params)
@@ -184,8 +186,21 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         //   /mycli skillbar auto      → 重置为推荐栏
         const sub = cmd.args[0] ?? ''
         const all = magic.listAtoms()
-        const nameOf = (id: string) => all.find((x) => x.id === id)?.name ?? id
-        const iconOf = (id: string) => all.find((x) => x.id === id)?.icon ?? 'minecraft:paper'
+        const nativeBinding = (id: string) => id.length <= 128 && /^irons_spellbooks:[a-z0-9_./-]+$/.test(id)
+        const currentBar = magic.getSkillbar(subject)
+        const requestedId = sub === 'set' ? cmd.args.slice(2).join(' ').trim() : ''
+        // One on-demand read per command, only when the bar contains a native
+        // reference. A failed read never erases an existing player binding.
+        let equipped: NativeSpell[] = []
+        let nativeRead: Awaited<ReturnType<typeof irons.request>> | undefined
+        if (nativeBinding(requestedId) || currentBar.some(nativeBinding)) {
+          try { nativeRead = await irons.request('list', subject) }
+          catch { nativeRead = { ok: false, code: 'bridge_unavailable', summary: '原生法术列表暂不可用。' } }
+          if (nativeRead.ok) equipped = nativeRead.spells ?? []
+        }
+        const nameOf = (id: string) => all.find((x) => x.id === id)?.name ?? equipped.find(s => s.id === id)?.name ?? id
+        const iconOf = (id: string) => all.find((x) => x.id === id)?.icon
+          ?? (nativeBinding(id) ? nativeSpellIcon(equipped.find(s => s.id === id) ?? { id }) : 'minecraft:paper')
         const barView = (bar: string[]) => bar
           .map((id, i) => (id ? { slot: i + 1, id, name: nameOf(id), icon: iconOf(id) } : null))
           .filter((x): x is { slot: number; id: string; name: string; icon: string } => x !== null)
@@ -195,20 +210,20 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
           const slots = Array.from({ length: 8 }, (_, i) => {
             const id = bar[i] ?? '', atom = all.find(a => a.id === id)
             return { slot: i + 1, id, name: id ? nameOf(id) : '', icon: id ? iconOf(id) : 'minecraft:paper',
-              chant: atom ? `咏唱${atom.name}` : '' }
+              chant: atom ? `咏唱${atom.name}` : equipped.some(s => s.id === id) ? `咏唱${nameOf(id)}` : '' }
           })
           try { return await deps.syncStaffBar(subject, slots) }
           catch { return { ok: false, code: 'staff_gate_unavailable', summary: '快捷栏显示暂时无法同步。' } }
         }
         if (sub === 'sync') {
           if (cmd.args.length !== 1) { fail('invalid_params', '用法：skillbar sync。'); return }
-          const result = await syncHud(magic.getSkillbar(subject))
+          const result = await syncHud(currentBar)
           // Quiet HUD refresh; no repeated whispers while the staff is held.
           if (cmd.json) jsonReply(result)
           return
         }
         if (sub === 'set' || sub === 'clear') {
-          const bar = magic.getSkillbar(subject)
+          const bar = [...currentBar]
           const slot = /^[1-8]$/.test(cmd.args[1] ?? '') ? Number(cmd.args[1]) : 0
           if (!slot || slot < 1 || slot > 8) { fail('invalid_slot', `用法：/mycli skillbar ${sub} <1-8>${sub === 'set' ? ' <法术名>' : ''}。`); return }
           while (bar.length < slot) bar.push('')
@@ -216,16 +231,24 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
           else {
             const nameOrId = cmd.args.slice(2).join(' ').trim()
             const atom = all.find((a) => a.name === nameOrId || a.id === nameOrId)
-            if (!atom) { fail('unknown_skill', `没有叫「${nameOrId}」的法术。/mycli spells 查表。`); return }
-            if (atom.type === 'passive') { fail('passive', '被动能力自动生效，不占主动施法槽。'); return }
-            if (atom.catalog?.status === 'archived') { fail('skill_archived', `「${atom.name}」已归档：${atom.catalog.reason}。/mycli spells irons 查看原生法术。`); return }
-            const view = magic.getState(subject)
-            const pool = [...view.learned, ...(view.innateSkill ? [view.innateSkill] : [])]
-            if (!pool.includes(atom.id)) { fail('not_learned', `「${atom.name}」你还没学会，进不了技能栏。`); return }
+            let bindId: string
+            if (nativeBinding(nameOrId)) {
+              if (!nativeRead?.ok) { fail(nativeRead?.code ?? 'bridge_unavailable', nativeRead?.summary ?? '原生法术列表暂不可用。'); return }
+              if (!equipped.some(s => s.id === nameOrId)) { fail('not_equipped', '请先装备含有此法术的法术书，或手持对应卷轴，再绑定快捷槽。'); return }
+              bindId = nameOrId
+            } else {
+              if (!atom) { fail('unknown_skill', `没有叫「${nameOrId}」的法术。/mycli spells 查表；原生法术请用完整注册 ID。`); return }
+              if (atom.type === 'passive') { fail('passive', '被动能力自动生效，不占主动施法槽。'); return }
+              if (atom.catalog?.status === 'archived') { fail('skill_archived', `「${atom.name}」已归档：${atom.catalog.reason}。/mycli spells irons 查看原生法术。`); return }
+              const view = magic.getState(subject)
+              const pool = [...view.learned, ...(view.innateSkill ? [view.innateSkill] : [])]
+              if (!pool.includes(atom.id)) { fail('not_learned', `「${atom.name}」你还没学会，进不了技能栏。`); return }
+              bindId = atom.id
+            }
             // Rebinding an already displayed skill moves it to the requested slot.
             // Otherwise the core duplicate filter would keep the earlier slot instead.
-            for (let i = 0; i < bar.length; i++) if (bar[i] === atom.id) bar[i] = ''
-            bar[slot - 1] = atom.id
+            for (let i = 0; i < bar.length; i++) if (bar[i] === bindId) bar[i] = ''
+            bar[slot - 1] = bindId
           }
           const next = magic.setSkillbar(subject, bar)
           await syncHud(next)
@@ -243,7 +266,7 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         }
         if (sub) { fail('invalid_subcommand', 'skillbar 支持 set、clear、auto；不带参数查看。'); return }
         // 查看模式（默认；json 给客户端 HUD：icon 字段即物品图标）
-        const bar = magic.getSkillbar(subject)
+        const bar = currentBar
         if (cmd.json) { jsonReply({ ok: true, skillbar: barView(bar) }); return }
         if (!barView(bar).length) { reply(`[信使] 技能栏是空的——/mycli skillbar set <1-8> <法术名>，或 skillbar auto 一键推荐。`); return }
         replyLines([

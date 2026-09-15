@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "enabled": true,
+  "players": [
+    {
+      "name": "mengmeng",
+      "displayName": "萌萌",
+      "ageBand": "child",
+      "allowGifts": true
+    }
+  ]
+}

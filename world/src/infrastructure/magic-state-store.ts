@@ -55,7 +55,10 @@ export class MagicStateStore {
   skillbar(username: string, atoms: Atom[], catalog: SkillCatalog | null = null): string[] {
     const p = this.get(username)
     const known = new Set<string>([...p.learned, ...(p.innateSkill ? [p.innateSkill] : [])])
-    const valid = (id: string) => known.has(id) && atoms.some((a) => a.id === id && a.type !== 'passive')
+    // Native bindings are references, not grants. Keep their exact slots when a
+    // book is unequipped; the native bridge checks equipment on every cast.
+    const valid = (id: string) => (typeof id === 'string' && id.length <= 128 && /^irons_spellbooks:[a-z0-9_./-]+$/.test(id))
+      || (known.has(id) && atoms.some((a) => a.id === id && a.type !== 'passive'))
     if (p.skillbar?.length) {
       const seen = new Set<string>()
       const alive = p.skillbar.slice(0, SKILLBAR_SLOTS).map((id) => {

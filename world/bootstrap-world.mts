@@ -24,6 +24,7 @@ import { createWorlddb } from './src/mc-worlddb.ts'
 import { createTransmigrator } from './src/mc-transmigrator.ts'
 import { createMagic } from './src/mc-magic.ts'
 import { createGod } from './src/mc-god.ts'
+import type { ChildCompanionConfig } from './src/gameplay/child-companion.ts'
 import { createRitual } from './src/mc-ritual.ts'
 import { createSocial } from './src/mc-social.ts'
 import { createBubble } from './src/mc-bubble.ts'
@@ -48,6 +49,22 @@ process.on('uncaughtException', (err) => {
 })
 // 女神化身名：穿越者进程靠它寻址私聊/识别公屏回复，须与穿越者侧 MC_GOD_NAME 一致。
 const godName = process.env.MC_GOD_NAME ?? 'Goddess'
+
+// 儿童陪伴配置（config/child-companion.json，经 CHILD_COMPANION_FILE 挂载注入）。
+// 缺失或损坏一律按关闭处理——不能因为读不到配置就让面向孩子的功能误开或崩进程。
+function loadChildCompanion(path: string | undefined): ChildCompanionConfig {
+  const disabled: ChildCompanionConfig = { enabled: false, players: [] }
+  if (!path) return disabled
+  try {
+    if (!fs.existsSync(path)) return disabled
+    const raw = JSON.parse(fs.readFileSync(path, 'utf-8')) as Partial<ChildCompanionConfig>
+    return { enabled: raw?.enabled !== false, players: Array.isArray(raw?.players) ? raw.players : [] }
+  } catch (e) {
+    console.warn(`[bootstrap-world] child-companion config unreadable, disabled: ${e instanceof Error ? e.message : String(e)}`)
+    return disabled
+  }
+}
+const childCompanion = loadChildCompanion(process.env.CHILD_COMPANION_FILE)
 
 // ---------- 手动依赖注入装配 ----------
 const bot = createBot({
@@ -181,6 +198,8 @@ const god = createGod({
   maintainers: (process.env.MC_MAINTAINERS ?? 'Goddess').split(',').map(s => s.trim()).filter(Boolean),
   // 特殊监听白名单（VIP 真人）：说的一切女神都要聆听回应，绕过冷启动/冷却；经 MC_VIP_LISTEN 注入
   vipListen: (process.env.MC_VIP_LISTEN ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+  // 儿童陪伴模式：白名单玩家走适龄女神人设，可语音聊天/要东西；缺省关闭
+  childCompanion,
   balanceFlushMs: 120_000,
   bulletinPath: `${D}/balance-bulletin.json`,
   heartbeatPath: `${D}/world-heartbeat.json`,

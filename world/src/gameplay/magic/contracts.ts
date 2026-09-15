@@ -15,11 +15,16 @@ export interface AtomParam {
 
 export const SKILLBAR_SLOTS = 8
 
+/** Native bridge codes stay visible; acceptance does not prove a completed effect. */
+export type NativeCastCode = 'casting_started' | 'native_denied' | 'not_equipped' | 'unlearned' |
+  'invalid_actor' | 'invalid_skill_id' | 'actor_not_found' | 'ambiguous_actor' | 'actor_unavailable' |
+  'bridge_unavailable' | 'bridge_error'
+
 export interface CastResult {
   ok: boolean
   code: 'ok' | 'unknown_skill' | 'ambiguous_skill' | 'invalid_params' | 'passive' |
     'level' | 'mana' | 'cooldown' | 'busy' | 'offline' | 'unavailable' |
-    'health' | 'food' | 'already_full' | 'command_failed' | 'execution_error' | 'skill_archived' | 'outcome_unknown' | 'no_change'
+    'health' | 'food' | 'already_full' | 'command_failed' | 'execution_error' | 'skill_archived' | 'outcome_unknown' | 'no_change' | NativeCastCode
   skillId?: string
   name?: string
   summary: string
@@ -28,6 +33,10 @@ export interface CastResult {
   cooldownMs?: number
   nativeHints?: string[]
   effectReceipt?: Record<string, unknown>
+  engine?: 'irons_spellbooks'
+  nativeSpell?: string
+  /** Native casting_started is acceptance, never a completed damage/healing claim. */
+  executionConfirmed?: false
 }
 
 export interface CostSpec {
@@ -170,7 +179,8 @@ export interface MagicService {
   getState(username: string): MagicPlayerView
   /**
    * 女神代施（慢路径）：以神力替祈愿者施展一项技艺。
-   * 不校验等级、不扣祈愿者的魔力/饱食/生命（神力自担），也不记学习/经验。
+   * 旧特色法术不校验等级、不扣祈愿者三资源，也不记学习/经验。
+   * 原生映射仍必须拥有装备法术来源，遵守原生法力与冷却，没有神力豁免。
    * 视觉特效（粒子/音效/大字）与快路径完全一致。返回执行结果描述。
    */
   castByGod(username: string, atomId: string, opts?: GodCastOpts): Promise<string>
@@ -201,7 +211,8 @@ export interface MagicService {
   /* ── 技能栏（2026-08-30 造物主设计「圆盘可编辑+数字键快捷施法」）── */
   /** 读技能栏（无则自动按推荐表默认填充并持久化）。 */
   getSkillbar(username: string): string[]
-  /** 整栏写入（≤8 槽、去重、只收已学/天赋），返回落定后的栏。 */
+  /** 整栏写入（≤8 槽、原位去重）；旧 ID 须已学/天赋，原生完整 ID 仅存绑定。
+   * CLI 在设置时查装备来源，施法时仍由原生重验。 */
   setSkillbar(username: string, ids: string[]): string[]
   /* ── 成长体系（2026-08-17 路线 A 定稿：等级复用原生 XpLevel；魔力为体系自有属性）── */
   /** 魔力上限基础公式：100 + 12 × (XpLevel − 1)；最终 = 此值 + maxManaBonus。 */

@@ -80,12 +80,14 @@ services:
       QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
       QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
+      CHILD_COMPANION_FILE: /etc/qiandeng/child-companion.json
     ports:
       - "127.0.0.1:19092:3070"
     volumes:
       - ./world/src:/app/src:ro
       - ./world/bootstrap-world.mts:/app/bootstrap-world.mts:ro
       - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
+      - ./config/child-companion.json:/etc/qiandeng/child-companion.json:ro
       - ./world/admin:/app/admin:ro
       - ./vendor/modern-viewer:/app/modern-viewer:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
