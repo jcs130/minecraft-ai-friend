@@ -140,6 +140,8 @@ def main():
             if probe is not None and running and proc.poll() is None:
                 probe.start()
             last_qwen_warning = object()
+            gateway_error_count = 0
+            GATEWAY_ERROR_LIMIT = 5
             while running and proc.poll() is None:
                 started = time.monotonic()
                 try:
@@ -150,7 +152,19 @@ def main():
                             print(json.dumps({'event': 'qwen_connection', **diagnostic}), flush=True)
                             last_qwen_warning = diagnostic['warning']
                     controller.tick()
+                    gateway_error_count = 0
                 except Exception as exc:
+                    # Transient gateway errors (RCON reconnect, MC restart,
+                    # network blip) self-heal on the next tick; only pause
+                    # after consecutive failures or non-transient exceptions.
+                    if type(exc).__name__ == 'GatewayError':
+                        gateway_error_count += 1
+                        if gateway_error_count < GATEWAY_ERROR_LIMIT:
+                            print(json.dumps({'event': 'gateway_retry',
+                                              'attempt': gateway_error_count,
+                                              'error': str(exc)[:100]}), flush=True)
+                            time.sleep(2)
+                            continue
                     # Unknown effects require attention; restart must not spend again.
                     controller.pause('controller_' + type(exc).__name__)
                     try:
