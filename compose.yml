@@ -371,6 +371,7 @@ services:
       MC_RCON_PORT: "25575"
       MC_RCON_SECRET: /run/secrets/rcon
     volumes:
+      - ./world/survival:/survival
       - ./server/survival-agent-state:/state
       - ./server/mcdata/village/party:/party-state
       - ./world/sidecar:/party-code:ro
