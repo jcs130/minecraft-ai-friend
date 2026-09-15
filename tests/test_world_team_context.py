@@ -122,5 +122,66 @@ class NpcLlmEnabledTests(unittest.TestCase):
         self.assertIn('the world record carrying it is expired', result['notice'])
 
 
+class PlayersRosterTests(unittest.TestCase):
+    """case-08e101df69170a7ece6d: players is a registry, not a live online list."""
+
+    def context(self, players, observed=None, fresh=True):
+        registered = {}
+
+        class App:
+            def tool(self):
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        data = {'players': players}
+        if observed is not None:
+            data['world'] = {'observedPlayers': observed}
+        fake = N(snapshot=lambda: {'snapshots': {'world': {'fresh': fresh, 'data': data}}})
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_registry_names_cross_checked_against_observed_players(self):
+        result = self.context(
+            [{'name': 'Kirito', 'level': 17}, {'name': 'Goddess', 'level': 1},
+             {'name': 'MengMeng', 'level': 45}],
+            observed=['Goddess'])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['registryCount'], 3)
+        self.assertEqual(roster['registry'], ['Goddess', 'Kirito', 'MengMeng'])
+        self.assertEqual(roster['observedPlayers'], ['Goddess'])
+        self.assertEqual(roster['registryNotObserved'], ['Kirito', 'MengMeng'])
+        self.assertEqual(roster['observedNotInRegistry'], [])
+        self.assertIn('not a live online list', result['notice'])
+        self.assertIn('case-08e101df69170a7ece6d', result['notice'])
+
+    def test_observed_names_missing_from_registry_are_flagged(self):
+        result = self.context([{'name': 'Kirito'}], observed=['Goddess'])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['observedNotInRegistry'], ['Goddess'])
+
+    def test_registry_without_observation_channel_reports_all_names_unobserved(self):
+        result = self.context([{'name': 'Kirito'}, 'not-a-dict', {}, {'name': ''}])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['registryCount'], 1)
+        self.assertEqual(roster['registryNotObserved'], ['Kirito'])
+        self.assertEqual(roster['observedPlayers'], [])
+
+    def test_absent_or_malformed_players_stay_quiet(self):
+        for players in ('not-a-list', {'name': 'Kirito'}, None):
+            result = self.context(players)
+            self.assertNotIn('playersRoster', result['world'])
+            self.assertNotIn('playersRoster', result['notice'])
+
+    def test_expired_world_record_qualifies_roster_note(self):
+        result = self.context([{'name': 'Kirito'}], observed=[], fresh=False)
+        self.assertEqual(result['world']['staleSnapshots'], ['world'])
+        self.assertIn('playersRoster', result['world'])
+        self.assertIn('the world record carrying it is expired', result['notice'])
+
+
 if __name__ == '__main__':
     unittest.main()

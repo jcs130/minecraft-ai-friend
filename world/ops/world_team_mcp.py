@@ -79,6 +79,34 @@ def npc_llm_enabled(sections):
     return enabled if isinstance(enabled, bool) else None
 
 
+def players_roster_view(sections):
+    """The world record's players registry crossed with its own observation, or None.
+
+    case-08e101df69170a7ece6d: the world snapshot's players array is a known-player
+    registry (level, mana, skill counts), and it kept listing Kirito after the body was
+    lost while native rcon showed only Goddess online; that misread drove a rescue
+    attempt the live world correctly rejected. The registry is not a live online list,
+    and the record's observedPlayers can lag or stay empty while players are online,
+    so this view returns both name sets and both differences to keep the distinction
+    readable from the record itself instead of hand-recomputed per shift.
+    """
+    world = sections.get('world') if isinstance(sections.get('world'), dict) else {}
+    data = world.get('data') if isinstance(world.get('data'), dict) else {}
+    players = data.get('players')
+    if not isinstance(players, list):
+        return None
+    registry = sorted({row['name'] for row in players
+                       if isinstance(row, dict) and isinstance(row.get('name'), str)
+                       and row['name'].strip()})
+    inner = data.get('world') if isinstance(data.get('world'), dict) else {}
+    observed = inner.get('observedPlayers')
+    online = sorted({name for name in observed if isinstance(name, str) and name.strip()}) \
+        if isinstance(observed, list) else []
+    return {'registryCount': len(registry), 'registry': registry, 'observedPlayers': online,
+            'registryNotObserved': sorted(set(registry) - set(online)),
+            'observedNotInRegistry': sorted(set(online) - set(registry))}
+
+
 def _parse_time(value):
     if not isinstance(value, str):
         return None
@@ -155,6 +183,17 @@ def register_team_tools(app, actor, state=Path('/team')):
                           ' owner configuration decision'
                           + ('; the world record carrying it is expired' if 'world' in stale else '')
                           + '.')
+        roster = players_roster_view(sections)
+        if roster is not None:
+            snapshot['playersRoster'] = roster
+            notes += (' playersRoster cross-checks the world record\'s players array (a known-player'
+                      ' registry with level and mana) against the same record\'s observedPlayers:'
+                      ' registryNotObserved lists registry names the record is not currently observing;'
+                      ' the registry is not a live online list and observedPlayers can lag or stay empty,'
+                      ' so online status needs a fresh rcon list receipt (case-08e101df69170a7ece6d: the'
+                      ' registry kept listing Kirito while native rcon showed only Goddess online)'
+                      + ('; the world record carrying it is expired' if 'world' in stale else '')
+                      + '.')
         epoch = world_process_epoch(sections)
         if epoch is not None:
             world_section = sections.get('world') if isinstance(sections.get('world'), dict) else {}
