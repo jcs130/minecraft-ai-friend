@@ -15,7 +15,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'world/ops'), str(ROOT / 'world/sidecar')]
 from world_admin_tools import ADMIN_ACTOR, AdminStore, RULES, TIMES, TOOL_NAMES, WorldAdminTools, register_admin_tools
-from world_admin_consumer import NativeAdminRcon, WorldAdminConsumer, clean, rule_value, time_value
+from world_admin_consumer import NativeAdminRcon, WorldAdminConsumer, clean, roster, rule_value, time_value
 
 
 class Minecraft:
@@ -26,13 +26,20 @@ class Minecraft:
         self.calls = []
         self.before_write = lambda: None
         self.fail = None
+        self.players = ['Goddess', 'Kirito']
+        self.list_format = 'legacy'
 
     def __call__(self, command):
         self.calls.append(command)
         if command == self.fail:
             raise TimeoutError('fixture')
         if command == 'list':
-            return 'There are 2 of a max of 20 players online: Goddess, Kirito'
+            names = ', '.join(self.players)
+            if self.list_format == 'modern':
+                return 'There are %d players online (max %d): %s' % (len(self.players), 20, names)
+            if self.list_format == 'unexpected':
+                return '3 players are presently connected'
+            return 'There are %d of a max of %d players online: %s' % (len(self.players), 20, names)
         if command == 'time query daytime':
             return 'The time is ' + str(self.daytime)
         if command.startswith('gamerule '):
@@ -131,6 +138,8 @@ class AdminIntegrationTests(unittest.TestCase):
         result = self.tools.receipt('request-0001')
         self.assertEqual(result['status'], 'rejected')
         self.assertEqual(result['code'], 'precondition_unavailable')
+        self.assertEqual(result['errorType'], 'TimeoutError')
+        self.assertEqual(result['errorDetail'], 'fixture')
         self.assertEqual(self.game.calls, ['gamerule keepInventory'])
 
     def test_lost_mutation_reply_blocks_new_write_not_diagnostics_never_replays(self):
@@ -186,6 +195,35 @@ class AdminIntegrationTests(unittest.TestCase):
         self.assertIsNone(result['observation']['weather'])
         self.assertFalse(result['executionConfirmed'])
         self.assertTrue(all(NativeAdminRcon.allowed(c) and not c.startswith(('time set', 'weather ')) for c in self.game.calls))
+
+    def test_diagnostics_parse_both_native_list_wordings_and_cjk_roster(self):
+        # case-04ad7313: the live server emits the "(max N)" wording and offline-mode
+        # rosters include CJK-named bodies; both must observe, not reject.
+        self.game.players = ['MengMeng', '桐人', 'RenderBot']
+        for wording in ('legacy', 'modern'):
+            with self.subTest(wording=wording):
+                self.game.list_format = wording
+                request = 'diagnose-' + wording
+                self.assertTrue(self.tools.submit(request, 'diagnostics', {})['ok'])
+                self.consumer.tick()
+                result = self.tools.receipt(request)
+                self.assertEqual(result['code'], 'observed')
+                self.assertEqual(result['observation']['playerCount'], 3)
+                self.assertEqual(result['observation']['maxPlayers'], 20)
+                self.assertEqual(result['observation']['players'], ['MengMeng', '桐人', 'RenderBot'])
+                self.assertEqual(result['observation']['gamerules']['keepInventory'], True)
+
+    def test_unknown_list_wording_rejects_with_self_describing_detail(self):
+        self.game.list_format = 'unexpected'
+        self.tools.submit('diagnose-drift', 'diagnostics', {})
+        self.consumer.tick()
+        result = self.tools.receipt('diagnose-drift')
+        self.assertEqual(result['status'], 'rejected')
+        self.assertEqual(result['code'], 'precondition_unavailable')
+        self.assertEqual(result['errorType'], 'ValueError')
+        self.assertTrue(result['errorDetail'].startswith('player_count_unconfirmed'))
+        self.assertIn('presently connected', result['errorDetail'])
+        self.assertFalse(result['executionConfirmed'])
 
     def test_weather_uses_explicit_seconds_and_native_ack_not_faked_independent_observation(self):
         self.submit('weather', {'weather': 'thunder', 'durationSeconds': 30})
@@ -264,6 +302,15 @@ class AdminIntegrationTests(unittest.TestCase):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_roster_accepts_both_native_wordings_and_fails_closed(self):
+        self.assertEqual(roster('There are 2 of a max of 20 players online: A, B'), (2, 20, ['A', 'B']))
+        self.assertEqual(roster('There are 11 players online (max 20): MengMeng, 桐人'), (11, 20, ['MengMeng', '桐人']))
+        self.assertEqual(roster('There are 0 of a max of 20 players online:'), (0, 20, []))
+        self.assertEqual(roster('\x1b[32mThere are 1 players online (max 20): Kirito\x1b[0m'), (1, 20, ['Kirito']))
+        for raw in ('Players online: A', '', 'There are -1 of a max of 20 players online: A'):
+            with self.assertRaises(ValueError):
+                roster(raw)
+
     def test_exact_native_translations_and_reject_unrelated_true_or_numbers(self):
         self.assertTrue(rule_value('\x1b[32mGamerule keepInventory is currently set to: true\x1b[0m', 'keepInventory'))
         self.assertEqual(time_value('The time is 1234'), 1234)

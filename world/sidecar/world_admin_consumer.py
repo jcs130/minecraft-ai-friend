@@ -18,6 +18,16 @@ from world_rescue import NativeRescue
 ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 WEATHER_ACK = {'clear': 'Set the weather to clear', 'rain': 'Set the weather to rain',
                'thunder': 'Set the weather to rain & thunder'}
+# Live offline-mode usernames include CJK names (e.g. 桐人/鸣人 bodies); this mirrors
+# the project-wide chat/speaker charset in mc_npc instead of ASCII-only usernames.
+NAME = re.compile(r'[A-Za-z0-9_\u4e00-\u9fff]{1,16}')
+# Vanilla /list wording changed across server versions ("of a max of N" -> "(max N)").
+# The integration rig and the live world run different versions; accept both so a
+# version gap cannot blank admin diagnostics (case-04ad7313f7e6110fd212).
+LIST_FORMATS = (
+    re.compile(r'There are (\d{1,6}) of a max of (\d{1,6}) players online:\s*(.*)'),
+    re.compile(r'There are (\d{1,6}) players online \(max (\d{1,6})\):\s*(.*)'),
+)
 
 
 class NativeAdminRcon:
@@ -116,6 +126,18 @@ def time_value(raw):
     return int(match[1])
 
 
+def roster(raw):
+    """Parse one native /list reply into (count, max, names); unknown wording fails closed."""
+    text = clean(raw)
+    for pattern in LIST_FORMATS:
+        match = pattern.fullmatch(text)
+        if match:
+            names = [name.strip() for name in match[3].split(',') if name.strip()]
+            return int(match[1]), int(match[2]), names
+    # Carry a bounded raw prefix so a future wording drift names itself in the receipt.
+    raise ValueError('player_count_unconfirmed: ' + text[:80])
+
+
 class WorldAdminConsumer:
     def __init__(self, root=Path('/team'), run=None, clock=time.time, rescue_guard=None):
         self.store, self.run, self.clock = AdminStore(root, clock), run or NativeAdminRcon(), clock
@@ -126,15 +148,11 @@ class WorldAdminConsumer:
         return time_value(self.run('time query daytime'))
 
     def _diagnostics(self):
-        raw = clean(self.run('list'))
-        match = re.fullmatch(r'There are (\d{1,6}) of a max of (\d{1,6}) players online:\s*(.*)', raw)
-        if not match:
-            raise ValueError('player_count_unconfirmed')
-        names = [name.strip() for name in match[3].split(',') if name.strip()]
-        if any(not re.fullmatch(r'[A-Za-z0-9_]{1,16}', name) for name in names) or len(names) != int(match[1]):
+        count, maximum, names = roster(self.run('list'))
+        if any(not NAME.fullmatch(name) for name in names) or len(names) != count:
             raise ValueError('player_names_unconfirmed')
-        return {'observedAt': self.store.stamp(), 'source': 'minecraft-1.21.1-native-rcon',
-                'playerCount': int(match[1]), 'maxPlayers': int(match[2]), 'players': names[:64],
+        return {'observedAt': self.store.stamp(), 'source': 'minecraft-native-rcon',
+                'playerCount': count, 'maxPlayers': maximum, 'players': names[:64],
                 'playersTruncated': len(names) > 64, 'daytime': self._read_time(),
                 'gamerules': {rule: rule_value(self.run('gamerule ' + rule), rule) for rule in RULES},
                 'weather': None, 'weatherObserved': False,
@@ -207,7 +225,7 @@ class WorldAdminConsumer:
             return ('unknown' if mutation_sent else 'rejected'), {
                 'ok': False, 'code': 'outcome_unknown' if mutation_sent else 'precondition_unavailable',
                 'executionConfirmed': False, 'before': before, 'errorType': type(error).__name__,
-                'retryAutomatically': False}
+                'errorDetail': str(error)[:200], 'retryAutomatically': False}
 
     def tick(self):
         """At most one request; call from the existing NPC supervised tick."""

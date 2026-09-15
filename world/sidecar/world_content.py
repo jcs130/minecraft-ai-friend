@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import date, timedelta
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import time
@@ -19,15 +20,37 @@ from qwen_tasks import read_json, write_json, state_lock
 from guild_rules import gather_matches, is_far_horizon
 
 ACTORS = ('game:qd-guild-planner', 'game:mc-god', 'operations:mc-priest')
+# Terminal publication outcomes (see _publish_one). A proposal record must
+# never keep reporting 'proposed' once its receipt reached one of these:
+# receipts are authoritative for the top-level status shown by read().
+TERMINAL_PUBLICATION = ('published', 'blocked', 'expired')
 ID = re.compile(r'[A-Za-z0-9_-]{1,80}\Z')
 CONTENT_ID = re.compile(r'content-[a-f0-9]{24}\Z')
 MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
+# The gateway goto pre-check (world/survival/numen_gateway.py, action()) rejects
+# a single goto whose horizontal displacement — math.hypot on x/z only, y never
+# participates — exceeds this many blocks; goto is walk-only with strict
+# arrival. Value re-verified 2026-09-15 (case-fe0b3f68 seq309). The constant
+# itself lives outside this file, so tests pin the copied default instead of
+# trusting the copy silently.
+GOTO_SINGLE_HOP_LIMIT = 24
+# Adapter progress for case boss-chest-adapter-missing: the four receipt
+# capabilities map to scout/place/proof/cleanup; 'ledger' is the durable
+# receipt store underneath them (SiteQueue, implemented and covered by
+# offline tests; slice two exposes it to roles through world_content_tools
+# so the repairOwner can propose/approve/record/recover venues via MCP).
+# 'implemented' never means the server-facing step ran, so scout/place/
+# proof/cleanup stay 'planned' until a real server bridge appends receipts.
 BLOCKED = {
     'boss': {'ready': False, 'code': 'boss_adapter_missing',
              'missing': ['勘察并确认场地', '原生生成前后UUID回执', '绑定本次首领的击杀证明', '清理与未知状态恢复'],
+             'steps': {'scout': 'planned', 'place': 'planned', 'proof': 'planned', 'cleanup': 'planned',
+                       'ledger': 'implemented'},
              'repairOwner': 'game:mc-god'},
     'chest': {'ready': False, 'code': 'chest_adapter_missing',
               'missing': ['勘察并确认场地', '方块与物品放置前后回执', '本次宝箱战利品归属证明', '未知状态恢复'],
+              'steps': {'scout': 'planned', 'place': 'planned', 'proof': 'planned', 'cleanup': 'planned',
+                        'ledger': 'implemented'},
               'repairOwner': 'game:mc-god'},
 }
 
@@ -179,6 +202,50 @@ def validate_episode(payload, context):
     return result
 
 
+def _reachability_axes(point, code):
+    require(isinstance(point, dict) and type(point.get('x')) in (int, float)
+            and type(point.get('z')) in (int, float), code)
+    return float(point['x']), float(point['z'])
+
+
+def classify_reachability(target, anchor, waypoints=()):
+    """Horizontal accounting for one contract destination; pure geometry.
+
+    Same yardstick as the gateway goto pre-check: y never participates and
+    one goto covers at most GOTO_SINGLE_HOP_LIMIT blocks. A relay suggestion
+    is a decomposition to verify, never proof of reachability — only real
+    in-world goto receipts can confirm each leg.
+    """
+    tx, tz = _reachability_axes(target, 'invalid_reachability_target')
+    ax, az = _reachability_axes(anchor, 'invalid_reachability_anchor')
+    distance = math.hypot(tx - ax, tz - az)
+    hops = math.ceil(distance / GOTO_SINGLE_HOP_LIMIT)
+    if distance <= GOTO_SINGLE_HOP_LIMIT:
+        band = 'single_hop'
+        suggestion = '单次goto水平可达，无需前置；仍以实际goto回执为准。'
+    elif distance <= 2 * GOTO_SINGLE_HOP_LIMIT:
+        band = 'relay_within_two_hops'
+        suggestion = '超单跳上限：标注「空间传送/御空术」前置，或拆成两段每段≤24格的中继；中继实测前不算已验证可达。'
+    else:
+        band = 'beyond_two_hops'
+        suggestion = '两跳仍不可达：仅向有传送能力的玩家推荐，或重设目的地。'
+    legs = []
+    for waypoint in waypoints or ():
+        wx, wz = _reachability_axes(waypoint, 'invalid_reachability_waypoint')
+        first, second = math.hypot(wx - ax, wz - az), math.hypot(tx - wx, tz - wz)
+        if first <= GOTO_SINGLE_HOP_LIMIT and second <= GOTO_SINGLE_HOP_LIMIT:
+            legs.append((max(first, second), waypoint))
+    relay = None
+    if legs:
+        max_leg, waypoint = min(legs, key=lambda leg: leg[0])
+        relay = {axis: waypoint[axis] for axis in ('x', 'y', 'z') if axis in waypoint}
+        relay['name'] = waypoint.get('name')
+        relay['maxLeg'] = round(max_leg, 1)
+    return {'horizontalDistance': round(distance, 1), 'requiredHops': hops,
+            'singleHopLimit': GOTO_SINGLE_HOP_LIMIT, 'band': band,
+            'relayViaWaypoint': relay, 'suggestion': suggestion}
+
+
 class ContentQueue:
     def __init__(self, state=Path('/team'), *, clock=time.time):
         self.root, self.clock = safe(Path(state) / 'content'), clock
@@ -206,6 +273,39 @@ class ContentQueue:
         except (OSError, ValueError, KeyError, TypeError):
             return {'ok': False, 'code': 'content_context_unavailable', 'capabilities': deepcopy(BLOCKED)}
 
+    def reachability(self, actor, target=None, issuer=None, anchor=None, waypoints=None):
+        """Account one contract destination against the goto pre-check limit.
+
+        Pure arithmetic over real coordinates; worldActionsExecuted stays 0.
+        Exactly one of target/issuer names the destination: an explicit
+        target plus explicit anchor works without fresh context, while an
+        issuer lookup or the default guild anchor needs one. A stale context
+        is reported, never guessed around.
+        """
+        require(actor in ACTORS, 'invalid_content_actor')
+        require((target is None) != (issuer is None), 'invalid_reachability_source')
+        context = None
+        if issuer is not None:
+            context = self.context()
+            require(context.get('ok'), 'content_context_unavailable')
+            require(isinstance(issuer, str), 'invalid_content_issuer')
+            person = next((p for p in context['issuers'] if p['key'] == issuer), None)
+            require(person is not None, 'content_issuer_unavailable')
+            target = {'x': person['position'][0], 'y': person['position'][1], 'z': person['position'][2]}
+        if anchor is None:
+            context = context or self.context()
+            require(context.get('ok'), 'content_context_unavailable')
+            origin = context['destinations']['far_horizon']['origin']
+            anchor = {'x': origin[0], 'y': origin[1], 'z': origin[2]}
+            anchor_source = 'context_far_horizon_origin'
+        else:
+            anchor_source = 'explicit'
+        result = classify_reachability(target, anchor, waypoints or ())
+        return {'ok': True, 'actor': actor,
+                'target': {axis: target.get(axis) for axis in ('x', 'y', 'z')},
+                'anchor': {axis: anchor.get(axis) for axis in ('x', 'y', 'z')},
+                'anchorSource': anchor_source, **result, 'worldActionsExecuted': 0}
+
     def _id(self, actor, request_id):
         require(actor in ACTORS and isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_content_actor_or_request')
         return 'content-' + digest([actor, request_id])[:24]
@@ -217,7 +317,30 @@ class ContentQueue:
             return {'ok': False, 'code': 'content_not_found'}
         row = load(path)
         publication = self.root / 'receipts' / (content_id + '.json')
-        return {'ok': True, **row, 'publication': load(publication) if publication.exists() else None}
+        receipt = load(publication) if publication.exists() else None
+        if (isinstance(receipt, dict) and row.get('status') == 'proposed'
+                and receipt.get('status') in TERMINAL_PUBLICATION):
+            # A terminal publication receipt wins over a proposal record that
+            # missed the update, so world_content_read never answers
+            # status='proposed' beside a published/blocked/expired receipt.
+            # This stays read-only (publish/tick heal the durable record);
+            # read() also runs inside their locks.
+            row = {**row, 'status': receipt['status'], 'statusSource': 'publication'}
+        return {'ok': True, **row, 'publication': receipt}
+
+    def _sync_proposal_status(self, content_id, status):
+        """Publication receipts are authoritative: when one reaches a
+        terminal outcome the proposal record's top-level status follows, so
+        acceptance shifts never re-approve or misread already-published
+        content (case content-read-top-status-vs-publication-published)."""
+        require(status in TERMINAL_PUBLICATION, 'invalid_content_publication_status')
+        path = self.root / 'proposals' / (content_id + '.json')
+        if not path.exists():
+            return
+        row = load(path)
+        if row.get('status') == 'proposed' and row.get('contentId') == content_id:
+            row['status'] = status
+            save(path, row)
 
     def submit(self, actor, request_id, payload):
         require(actor == 'game:qd-guild-planner', 'content_designer_required')
@@ -267,6 +390,157 @@ class ContentQueue:
             else:
                 save(path, request)
         return {'ok': True, 'code': 'publication_requested', 'contentId': content_id, 'worldActionsExecuted': 0}
+
+
+SITE_KINDS = ('boss', 'chest')
+SITE_STEPS = ('scout', 'place', 'proof', 'cleanup')
+SITE_ID = re.compile(r'site-[a-f0-9]{24}\Z')
+SITE_RESULT = dict(zip(SITE_STEPS, ('scouted', 'placed', 'proven', 'closed')))
+SITE_PREVIOUS = dict(zip(SITE_STEPS, ('approved', 'scouted', 'placed', 'proven')))
+SITE_DISTANCE = {'boss': (120, 300), 'chest': (60, 200)}
+
+
+class SiteQueue:
+    """Durable venue ledger for the planned boss/chest adapters.
+
+    Slice one of case boss-chest-adapter-missing: receipt storage, ordered
+    transitions and crash recovery are implemented and verified offline. This
+    class never runs a server command; the future server bridge may only
+    append step receipts here, and a receipt missing after the record claimed
+    it stays explicitly unknown instead of being re-derived.
+    """
+
+    def __init__(self, state=Path('/team'), *, anchor=(0, 64, 0), clock=time.time):
+        self.root, self.anchor, self.clock = safe(Path(state) / 'sites'), tuple(anchor), clock
+
+    def _path(self, site_id):
+        require(isinstance(site_id, str) and SITE_ID.fullmatch(site_id), 'invalid_site_id')
+        return self.root / 'sites' / (site_id + '.json')
+
+    def _receipt_path(self, site_id, step):
+        require(step in SITE_STEPS, 'invalid_site_step')
+        return self.root / 'receipts' / (site_id + '-' + step + '.json')
+
+    def _venue_distance(self, venue):
+        require(isinstance(venue, dict) and set(venue) == {'x', 'y', 'z'}, 'invalid_site_venue')
+        require(all(type(venue[axis]) is int for axis in ('x', 'y', 'z')), 'invalid_site_venue')
+        require(-30000000 <= venue['x'] <= 30000000 and -30000000 <= venue['z'] <= 30000000
+                and -64 <= venue['y'] <= 380, 'invalid_site_venue')
+        return ((venue['x'] - self.anchor[0]) ** 2 + (venue['z'] - self.anchor[2]) ** 2) ** 0.5
+
+    def propose(self, actor, request_id, kind, venue, note=''):
+        """Register one candidate venue; no world state is touched or assumed."""
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        require(kind in SITE_KINDS, 'invalid_site_kind')
+        distance = self._venue_distance(venue)
+        low, high = SITE_DISTANCE[kind]
+        require(low <= distance <= high, 'site_venue_distance_out_of_band')
+        require(isinstance(note, str), 'invalid_content_text')
+        payload = {'kind': kind, 'venue': {axis: venue[axis] for axis in ('x', 'y', 'z')},
+                   'note': text(note, 120) if note.strip() else ''}
+        site_id = 'site-' + digest([actor, request_id])[:24]
+        path = self._path(site_id)
+        with state_lock(self.root):
+            if path.exists():
+                require(load(path)['payloadSha256'] == digest(payload), 'site_request_conflict')
+                return {'ok': True, 'code': 'already_proposed', 'siteId': site_id, 'worldActionsExecuted': 0}
+            save(path, {'schema': 1, 'siteId': site_id, 'actor': actor, 'requestId': request_id,
+                        'kind': kind, 'venue': payload['venue'], 'note': payload['note'],
+                        'payloadSha256': digest(payload), 'status': 'proposed',
+                        'steps': {step: 'pending' for step in SITE_STEPS}, 'receipts': {},
+                        'anchor': list(self.anchor), 'distance': round(distance, 1),
+                        'createdAt': self.clock(), 'worldActionsExecuted': 0})
+        return {'ok': True, 'code': 'site_proposed', 'siteId': site_id, 'worldActionsExecuted': 0}
+
+    def approve(self, actor, request_id, site_id):
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        with state_lock(self.root):
+            path = self._path(site_id)
+            if not path.exists():
+                return {'ok': False, 'code': 'site_not_found'}
+            row = load(path)
+            if row['status'] == 'approved':
+                require(row['approvedRequestId'] == request_id, 'site_request_conflict')
+                return {'ok': True, 'code': 'already_approved', 'siteId': site_id, 'worldActionsExecuted': 0}
+            require(row['status'] == 'proposed', 'site_not_approvable')
+            row.update(status='approved', approvedRequestId=request_id, approvedAt=self.clock())
+            save(path, row)
+        return {'ok': True, 'code': 'site_approved', 'siteId': site_id, 'worldActionsExecuted': 0}
+
+    def record(self, actor, request_id, site_id, step, evidence):
+        """Append one step receipt. Evidence comes from the caller's own
+        verified channel; replaying identical evidence is idempotent and heals
+        a record that missed the update, differing evidence is a conflict."""
+        require(actor == 'game:mc-god', 'site_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_site_request')
+        require(step in SITE_STEPS, 'invalid_site_step')
+        require(isinstance(evidence, dict) and evidence, 'invalid_site_evidence')
+        receipt_path = self._receipt_path(site_id, step)
+        with state_lock(self.root):
+            path = self._path(site_id)
+            require(path.exists(), 'invalid_site_id')
+            row = load(path)
+            require(row['status'] not in ('proposed', 'blocked', 'outcome_unknown'), 'site_step_not_acceptable')
+            if receipt_path.exists():
+                require(load(receipt_path)['evidenceSha256'] == digest(evidence), 'site_step_conflict')
+            else:
+                require(row['status'] == SITE_PREVIOUS[step], 'site_step_out_of_order')
+                save(receipt_path, {'schema': 1, 'siteId': site_id, 'step': step, 'actor': actor,
+                                    'requestId': request_id, 'evidence': deepcopy(evidence),
+                                    'evidenceSha256': digest(evidence), 'recordedAt': self.clock()})
+            if row['steps'].get(step) != 'recorded':
+                row['steps'][step] = 'recorded'
+                row['receipts'] = {**row.get('receipts', {}), step: digest(evidence)}
+                row['status'] = SITE_RESULT[step]
+                save(path, row)
+        return {'ok': True, 'code': 'site_step_recorded', 'siteId': site_id, 'step': step,
+                'status': row['status'], 'worldActionsExecuted': 0}
+
+    def read(self, actor, site_id):
+        require(actor in ACTORS, 'invalid_site_actor_or_id')
+        path = self._path(site_id)
+        if not path.exists():
+            return {'ok': False, 'code': 'site_not_found'}
+        return {'ok': True, **load(path)}
+
+    def recover(self, actor, site_id):
+        """Reconcile the record against receipts on disk. Receipts win when
+        the record missed them; a claimed-but-missing receipt is unknown and
+        freezes the site instead of being re-derived or overwritten."""
+        require(actor in ACTORS, 'invalid_site_actor_or_id')
+        with state_lock(self.root):
+            path = self._path(site_id)
+            require(path.exists(), 'invalid_site_id')
+            row = load(path)
+            original_status = row['status']
+            recorded, unknown, healed = [], [], []
+            for step in SITE_STEPS:
+                receipt_path = self._receipt_path(site_id, step)
+                claimed = row['steps'].get(step) == 'recorded'
+                if receipt_path.exists():
+                    recorded.append(step)
+                    if not claimed:
+                        healed.append(step)
+                elif claimed:
+                    unknown.append(step)
+            changed = False
+            for step in healed:
+                row['steps'][step] = 'recorded'
+                row['receipts'] = {**row.get('receipts', {}), step: load(self._receipt_path(site_id, step))['evidenceSha256']}
+                changed = True
+            if unknown:
+                row['status'] = 'outcome_unknown'
+            elif recorded:
+                row['status'] = SITE_RESULT[recorded[-1]]
+            if changed or row['status'] != original_status:
+                save(path, row)
+            return {'ok': True, 'siteId': site_id, 'kind': row['kind'], 'status': row['status'],
+                    'steps': dict(row['steps']), 'unknown': unknown, 'recovered': healed,
+                    'nextStep': (SITE_STEPS[len(recorded)] if not unknown and len(recorded) < len(SITE_STEPS)
+                                 and row['status'] != 'proposed' else None),
+                    'worldActionsExecuted': 0}
 
 
 def _contract_rows(content_id, content, context, guild, first_no):
@@ -329,7 +603,8 @@ def _publish_one(queue, npc, guild, request, current, clock):
     content = proposal['content']
     receipt_path = queue.root / 'receipts' / (content_id + '.json')
     receipt = load(receipt_path) if receipt_path.exists() else None
-    if receipt and receipt['status'] in ('published', 'blocked', 'expired'):
+    if receipt and receipt['status'] in TERMINAL_PUBLICATION:
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
     day = date.fromisoformat(content['date'])
     if day > current:
@@ -337,6 +612,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
     if day < current:
         receipt = {'contentId': content_id, 'status': 'expired', 'date': content['date'], 'updatedAt': clock()}
         save(receipt_path, receipt)
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
     with guild.state_lock():
         # Initialize today's normal publication first, then append without its
@@ -359,6 +635,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
             except ValueError as exc:
                 receipt = {'contentId': content_id, 'status': 'blocked', 'code': str(exc), 'updatedAt': clock()}
                 save(receipt_path, receipt)
+                queue._sync_proposal_status(content_id, receipt['status'])
                 return receipt
             receipt = {'schema': 1, 'contentId': content_id, 'status': 'publishing', 'date': content['date'],
                        'proposalSha256': request['proposalSha256'], 'startedAt': clock(), 'worldActionsExecuted': 0,
@@ -400,6 +677,7 @@ def _publish_one(queue, npc, guild, request, current, clock):
                        newContracts=len(receipt['boardRows']), referencedContracts=len(receipt['references']),
                        questIds=episode['questIds'])
         save(receipt_path, receipt)
+        queue._sync_proposal_status(content_id, receipt['status'])
         return receipt
 
 
@@ -475,6 +753,21 @@ def tick(npc, guild, *, state=Path('/team'), today=None, clock=time.time):
                 results.append(_publish_one(queue, npc, guild, request, current, clock))
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 results.append({'contentId': path.stem, 'status': 'publication_unconfirmed', 'errorType': type(exc).__name__})
+        # Reconcile proposal records whose receipts already reached a
+        # terminal outcome before the direct status sync existed; receipts
+        # win, the record is healed instead of re-derived or left stale.
+        for path in sorted((queue.root / 'proposals').glob('*.json')):
+            try:
+                if not CONTENT_ID.fullmatch(path.stem):
+                    continue
+                receipt_path = queue.root / 'receipts' / (path.stem + '.json')
+                if not receipt_path.exists():
+                    continue
+                receipt = load(receipt_path)
+                if receipt.get('status') in TERMINAL_PUBLICATION:
+                    queue._sync_proposal_status(path.stem, receipt['status'])
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
         context = make_context(npc, guild, today=current, clock=clock)
         save(queue.root / 'context.json', context)
         public = {'schema': 1, 'updatedAt': clock(), 'publications': [{k: r.get(k) for k in

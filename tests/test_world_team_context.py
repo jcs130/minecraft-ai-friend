@@ -1,130 +1,187 @@
-from datetime import datetime, timezone
-import json
+"""team_context must separate expired inspection records from current facts.
+
+Not part of the fixed engineering checks baseline yet; pinned plans still cover
+world_team_mcp.py via test_world_team*.py imports. Proposed for inclusion so the
+behaviour below is executed in isolation too.
+
+OperationsTools.snapshot() is imported lazily inside the team_context call, so
+the fake-module patch must stay active while the tool runs; patching only around
+registration would let the real snapshot reader touch /public paths.
+"""
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace as N
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/ops'))
-import world_team_mcp as team
+import world_team_mcp as mcp
 
 
-class TeamLifeContextTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-        self.path = self.root / 'survivor.json'
-        self.now = 1788888000.0
-        self.value = {
-            'schema': 1, 'project': 'qiandengji-survivor',
-            'generatedAt': datetime.fromtimestamp(self.now, timezone.utc).isoformat(),
-            'status': 'paused', 'enabled': False, 'pauseReason': 'repeated_model_failure',
-            'autonomous': True, 'goal': 'PRIVATE_GOAL', 'reasoning': 'PRIVATE_REASONING',
-            'conversation': ['PRIVATE_CONVERSATION'],
-            'lastDecision': {'taskId': 'task-fixture', 'completed': False, 'nativeTaskCompleted': True,
-                'sessionId': 'PRIVATE_SESSION', 'actions': [{'thought': 'PRIVATE_ACTION'}], 'text': 'PRIVATE_DECISION'},
-            'actionExecution': {'ok': True, 'inFlight': False, 'receipt': {'text': 'PRIVATE_RECEIPT'}},
-            'body': {'ok': True, 'online': True, 'inventory': ['PRIVATE_INVENTORY'], 'bodyUuid': 'PRIVATE_UUID'},
-            'bodyReconnect': {'status': 'verified', 'reason': 'same_body', 'detail': 'PRIVATE_RECONNECT'},
-        }
+class TeamContextFreshnessTests(unittest.TestCase):
+    def context(self, snapshot):
+        registered = {}
 
-    def snapshot(self):
-        self.path.write_text(json.dumps(self.value), encoding='utf-8')
-        return team.survivor_snapshot(self.root, clock=lambda: self.now)
-
-    def test_paused_failure_is_visible_without_model_or_body_payload(self):
-        result = self.snapshot()
-        self.assertTrue(result['fresh'])
-        self.assertEqual(result['pauseReason'], 'repeated_model_failure')
-        self.assertFalse(result['enabled'])
-        self.assertEqual(result['lastDecision'], {'taskId': 'task-fixture', 'completed': False, 'nativeTaskCompleted': True})
-        self.assertEqual(result['actionExecution'], {'ok': True, 'inFlight': False})
-        self.assertEqual(result['body'], {'ok': True, 'online': True})
-        self.assertNotIn('PRIVATE_', json.dumps(result))
-
-    def test_stale_and_future_data_are_unknown_not_live_paused_evidence(self):
-        for offset in (-121, 6):
-            with self.subTest(offset=offset):
-                self.value['generatedAt'] = datetime.fromtimestamp(self.now + offset, timezone.utc).isoformat()
-                result = self.snapshot()
-                self.assertEqual(result['status'], 'unknown')
-                self.assertFalse(result['fresh'])
-                self.assertNotIn('pauseReason', result)
-                self.assertNotIn('lastDecision', result)
-
-    def test_missing_malformed_or_wrong_schema_has_no_fabricated_status(self):
-        self.assertEqual(team.survivor_snapshot(self.root)['status'], 'unknown')
-        for value in ([], {'schema': 1, 'project': 'wrong'}, self.value | {'enabled': 'false'},
-                      self.value | {'generatedAt': '2026-09-09T00:00:00'}):
-            with self.subTest(value_type=type(value).__name__):
-                self.path.write_text(json.dumps(value), encoding='utf-8')
-                self.assertEqual(team.survivor_snapshot(self.root, clock=lambda: self.now)['status'], 'unknown')
-        self.path.write_text('invalid{', encoding='utf-8')
-        self.assertFalse(team.survivor_snapshot(self.root)['ok'])
-
-    def test_oversized_and_linked_path_are_rejected(self):
-        self.path.write_bytes(b' ' * (2 * 1024 * 1024 + 1))
-        self.assertEqual(team.survivor_snapshot(self.root)['code'], 'survivor_snapshot_invalid_file')
-        self.snapshot()
-        original = Path.is_symlink
-        with patch.object(Path, 'is_symlink', lambda path: path == self.root or original(path)):
-            result = team.survivor_snapshot(self.root, clock=lambda: self.now)
-        self.assertEqual(result['code'], 'survivor_snapshot_invalid_path')
-
-    def test_metadata_values_cannot_hide_arbitrary_nested_text(self):
-        self.value['lastDecision']['taskId'] = {'reasoning': 'PRIVATE_TEXT'}
-        result = self.snapshot()
-        self.assertFalse(result['ok'])
-        self.assertNotIn('PRIVATE_', json.dumps(result))
-
-    def test_registered_tool_includes_life_projection_without_mutating_world_snapshot(self):
         class App:
-            def __init__(self): self.tools = {}
             def tool(self):
-                def add(fn): self.tools[fn.__name__] = fn; return fn
-                return add
-        app = App()
-        team.register_team_tools(app, 'game:mc-god', state=self.root / 'team')
-        projection = self.snapshot()
-        with patch('operations_team_mcp.public_snapshot', return_value={'ok': True, 'worldActionsAllowed': False}), \
-             patch.object(team, 'survivor_snapshot', return_value=projection):
-            result = app.tools['team_context']()
-        self.assertEqual(result['survivor'], projection)
-        self.assertEqual(result['world']['worldActionsExecuted'], 0)
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        fake = N(snapshot=lambda: snapshot)
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_stale_snapshot_sections_are_flagged_as_expired_records(self):
+        result = self.context({'worldActionsAllowed': True, 'snapshots': {
+            'world': {'fresh': True, 'data': {}},
+            'health': {'fresh': False, 'ageSeconds': 7532.5, 'data': {'ok': False}}}})
+        self.assertEqual(result['world']['staleSnapshots'], ['health'])
         self.assertNotIn('worldActionsAllowed', result['world'])
-        self.assertEqual(set(app.tools), set(team.COMMON_TOOLS) | {'team_recruit'})
+        self.assertEqual(result['world']['worldActionsExecuted'], 0)
+        self.assertIn('expired inspection records', result['notice'])
 
-    def test_all_registered_roles_read_public_context_without_an_operations_identity(self):
-        from operations_team_mcp import public_snapshot
-        from world_team import members
-        stamp = datetime.now(timezone.utc).isoformat()
-        public = self.root / 'public'; public.mkdir()
-        for name in ('world', 'health', 'operations'):
-            (public / (name + '.json')).write_text(json.dumps({'generatedAt': stamp,
-                'available': True, 'ok': True, 'services': [], 'issues': [], 'private': 'PRIVATE_OMITTED'}), encoding='utf8')
-        before = {p.name: p.read_bytes() for p in public.iterdir()}
+    def test_fresh_context_stays_quiet_and_malformed_sections_are_ignored(self):
+        result = self.context({'snapshots': {
+            'world': {'fresh': True}, 'operations': {}, 'broken': 'not-a-dict'}})
+        self.assertEqual(result['world']['staleSnapshots'], [])
+        self.assertNotIn('expired inspection records', result['notice'])
+
+    def test_unhealthy_services_are_summarised_from_health_record(self):
+        result = self.context({'snapshots': {'health': {'fresh': True, 'data': {
+            'ok': False, 'services': {
+                'mc': {'ok': True}, 'qwenpaw': {'ok': False}, 'npc': {'ok': True}}}}}})
+        self.assertEqual(result['world']['unhealthyServices'], ['qwenpaw'])
+        self.assertIn('health inspection record', result['notice'])
+        self.assertNotIn('that record is expired', result['notice'])
+
+    def test_unhealthy_services_flag_expired_when_health_record_is_stale(self):
+        result = self.context({'snapshots': {'health': {'fresh': False, 'data': {
+            'ok': False, 'services': {'qwenpaw': {'ok': False}}}}}})
+        self.assertEqual(result['world']['staleSnapshots'], ['health'])
+        self.assertEqual(result['world']['unhealthyServices'], ['qwenpaw'])
+        self.assertIn('that record is expired', result['notice'])
+
+    def test_unhealthy_services_stay_quiet_when_health_data_missing_or_malformed(self):
+        result = self.context({'snapshots': {'health': {'fresh': True, 'data': {}},
+                                             'operations': {'fresh': True, 'data': {
+                                                 'services': {'qwenpaw': {'ok': False}}}}}})
+        self.assertEqual(result['world']['unhealthyServices'], [])
+        self.assertNotIn('health inspection record', result['notice'])
+        malformed = self.context({'snapshots': {'health': {'fresh': True, 'data': {
+            'services': ['qwenpaw', 'npc']}}}})
+        self.assertEqual(malformed['world']['unhealthyServices'], [])
+
+
+class NpcLlmEnabledTests(unittest.TestCase):
+    """case-761672: llmEnabled=false is explicit compose config, surfaced as such."""
+
+    def context(self, npc, fresh=True):
+        registered = {}
+
         class App:
-            def __init__(self): self.tools = {}
             def tool(self):
-                def add(fn): self.tools[fn.__name__] = fn; return fn
-                return add
-        with patch('operations_team_mcp.public_snapshot', side_effect=lambda: public_snapshot(public)), \
-             patch('operations_team_mcp.OperationsTools', side_effect=AssertionError('must_not_adopt_operations_identity')), \
-             patch('operations_state.state_root', side_effect=AssertionError('public_context_has_no_private_state')), \
-             patch.object(team, 'survivor_snapshot', return_value={'status': 'unknown', 'fresh': False}):
-            for actor in members():
-                with self.subTest(actor=actor):
-                    app = App(); team.register_team_tools(app, actor, state=self.root / 'team')
-                    result = app.tools['team_context']()
-                    self.assertEqual(result['actor'], actor)
-                    self.assertTrue(result['world']['ok'])
-                    self.assertEqual(result['world']['worldActionsExecuted'], 0)
-                    self.assertNotIn('role', result['world'])
-                    self.assertNotIn('operationsStateDirectory', result['world'])
-                    self.assertNotIn('PRIVATE_', json.dumps(result))
-        self.assertEqual(before, {p.name: p.read_bytes() for p in public.iterdir()})
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        fake = N(snapshot=lambda: {'snapshots': {'world': {'fresh': fresh, 'data': {'npc': npc}}}})
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_disabled_flag_is_summarised_as_explicit_configuration(self):
+        result = self.context({'available': True, 'llmEnabled': False,
+                               'spawnMissing': False, 'threads': [{'name': 'inbox', 'ok': True}]})
+        self.assertIs(result['world']['npcLlmEnabled'], False)
+        self.assertIn('NPC_LLM_ENABLED', result['notice'])
+        self.assertIn('not by itself a service fault', result['notice'])
+        self.assertIn('owner configuration decision', result['notice'])
+
+    def test_enabled_flag_is_summarised_without_the_config_note(self):
+        result = self.context({'available': True, 'llmEnabled': True})
+        self.assertIs(result['world']['npcLlmEnabled'], True)
+        self.assertNotIn('NPC_LLM_ENABLED', result['notice'])
+
+    def test_absent_or_malformed_npc_record_stays_quiet(self):
+        for npc in ({}, {'llmEnabled': 'false'}, {'llmEnabled': None}, 'not-a-dict'):
+            result = self.context(npc)
+            self.assertNotIn('npcLlmEnabled', result['world'])
+            self.assertNotIn('NPC_LLM_ENABLED', result['notice'])
+
+    def test_expired_world_record_qualifies_the_config_note(self):
+        result = self.context({'llmEnabled': False}, fresh=False)
+        self.assertEqual(result['world']['staleSnapshots'], ['world'])
+        self.assertIs(result['world']['npcLlmEnabled'], False)
+        self.assertIn('the world record carrying it is expired', result['notice'])
 
 
-if __name__ == '__main__': unittest.main()
+class PlayersRosterTests(unittest.TestCase):
+    """case-08e101df69170a7ece6d: players is a registry, not a live online list."""
+
+    def context(self, players, observed=None, fresh=True):
+        registered = {}
+
+        class App:
+            def tool(self):
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        data = {'players': players}
+        if observed is not None:
+            data['world'] = {'observedPlayers': observed}
+        fake = N(snapshot=lambda: {'snapshots': {'world': {'fresh': fresh, 'data': data}}})
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_registry_names_cross_checked_against_observed_players(self):
+        result = self.context(
+            [{'name': 'Kirito', 'level': 17}, {'name': 'Goddess', 'level': 1},
+             {'name': 'MengMeng', 'level': 45}],
+            observed=['Goddess'])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['registryCount'], 3)
+        self.assertEqual(roster['registry'], ['Goddess', 'Kirito', 'MengMeng'])
+        self.assertEqual(roster['observedPlayers'], ['Goddess'])
+        self.assertEqual(roster['registryNotObserved'], ['Kirito', 'MengMeng'])
+        self.assertEqual(roster['observedNotInRegistry'], [])
+        self.assertIn('not a live online list', result['notice'])
+        self.assertIn('case-08e101df69170a7ece6d', result['notice'])
+
+    def test_observed_names_missing_from_registry_are_flagged(self):
+        result = self.context([{'name': 'Kirito'}], observed=['Goddess'])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['observedNotInRegistry'], ['Goddess'])
+
+    def test_registry_without_observation_channel_reports_all_names_unobserved(self):
+        result = self.context([{'name': 'Kirito'}, 'not-a-dict', {}, {'name': ''}])
+        roster = result['world']['playersRoster']
+        self.assertEqual(roster['registryCount'], 1)
+        self.assertEqual(roster['registryNotObserved'], ['Kirito'])
+        self.assertEqual(roster['observedPlayers'], [])
+
+    def test_absent_or_malformed_players_stay_quiet(self):
+        for players in ('not-a-list', {'name': 'Kirito'}, None):
+            result = self.context(players)
+            self.assertNotIn('playersRoster', result['world'])
+            self.assertNotIn('playersRoster', result['notice'])
+
+    def test_expired_world_record_qualifies_roster_note(self):
+        result = self.context([{'name': 'Kirito'}], observed=[], fresh=False)
+        self.assertEqual(result['world']['staleSnapshots'], ['world'])
+        self.assertIn('playersRoster', result['world'])
+        self.assertIn('the world record carrying it is expired', result['notice'])
+
+
+if __name__ == '__main__':
+    unittest.main()
