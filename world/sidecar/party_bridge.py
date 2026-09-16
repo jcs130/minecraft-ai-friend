@@ -226,7 +226,8 @@ class PartyBridge:
                 or not expected <= set(args)):
             raise ValueError('invalid_party_arguments')
         if operation == 'party_status':
-            return {'ok': True, **self.queue.overview(role, limit=8)}
+            summary = self.queue.overview(role, limit=8)
+            return {'ok': True, **agent_party_status(summary, self.config.private()['members'])}
         if operation == 'party_message_read':
             return {'ok': True, **self.queue.get_status(role, args['message_id'])}
         speech_text(args['text'])
@@ -370,6 +371,42 @@ def public_delivery(delivery):
     if 'parts' in delivery:
         result['parts'] = [{'eventId': part['eventId'], **public_delivery(part)} for part in delivery['parts']]
     return result
+
+
+def agent_party_status(summary, members):
+    """Agent-facing projection of a full ``overview`` summary.
+
+    The dispatcher (speak_replies/publish) and the unit tests consume the full
+    ``_public`` rows, but the model only needs who said what, whether it was
+    heard, and the budget. ``members`` is the configured roster, which carries
+    displayName/kind; the persisted binding rows instead keep raw identity fields
+    (bodyUuid/ownerUuid/sessionId/userId). Projecting through the roster both
+    surfaces readable names and drops those identity fields, the delivery
+    receipts, and the per-message bookkeeping that inflated each party_status
+    call to ~35 KB. Text/reply already carry _public's hearing privacy.
+    """
+    identity = {m['agentId']: {k: m[k] for k in ('agentId', 'displayName', 'kind') if m.get(k) is not None}
+                for m in members}
+
+    def who(person):
+        return dict(identity.get(person.get('agentId'), {'agentId': person.get('agentId')}))
+
+    messages = []
+    for m in summary['messages']:
+        reply = m.get('reply')
+        messages.append({'messageId': m.get('messageId'), 'status': m.get('status'),
+            'createdAt': m.get('createdAt'), 'channel': m.get('channel', 'nearby'),
+            'text': m.get('text'), 'detail': m.get('detail'),
+            'sender': who(m['sender']), 'recipient': who(m['recipient']),
+            'heard': m.get('worldDelivery', {}).get('state') == 'heard',
+            'reply': ({'text': reply.get('text'), 'createdAt': reply.get('createdAt'),
+                       'channel': reply.get('channel', 'nearby'), 'sender': who(reply['sender']),
+                       'heard': reply.get('worldDelivery', {}).get('state') == 'heard'}
+                      if reply else None)})
+    return {'partyId': summary['partyId'], 'bindingRevision': summary['bindingRevision'],
+            'enabled': summary['enabled'], 'counts': summary['counts'], 'budget': summary['budget'],
+            'members': [dict(identity[m['agentId']]) for m in members],
+            'messages': messages}
 
 
 def create_bridge():

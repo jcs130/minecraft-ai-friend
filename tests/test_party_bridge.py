@@ -479,6 +479,35 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertNotIn('sessionId', json.dumps(public))
         self.assertEqual(public['members'][1]['displayName'], 'Maid')
 
+    def test_agent_party_status_is_bounded_compact_projection(self):
+        self.survivor_public()
+        row = self.bridge.queue.enqueue('maid-test', '我们先做什么？')
+        confirm_heard(self.bridge.queue, row['messageId'])
+        reservation = self.bridge.queue.reserve_dispatch(row['messageId'], 'qd-survivor')
+        self.bridge.queue.mark_submitted(reservation['reservationId'], 'task-112233aabbcc')
+        answered = self.bridge.queue.mark_answered(reservation['reservationId'], 'task-112233aabbcc', '先看看周围。')
+        confirm_heard(self.bridge.queue, answered['replyDelivery']['eventId'])
+
+        status = self.bridge.call('qd-survivor', 'party_status', {}, 'status')
+        self.assertTrue(status['ok'])
+        message = status['messages'][0]
+        # The agent still sees who said what, that it was heard, and the reply.
+        self.assertEqual(message['text'], '我们先做什么？')
+        self.assertEqual(message['sender'], {'agentId': 'maid-test', 'displayName': 'Maid', 'kind': 'maid'})
+        self.assertTrue(message['heard'])
+        self.assertEqual(message['reply']['text'], '先看看周围。')
+        self.assertTrue(message['reply']['heard'])
+        self.assertEqual(status['members'][0]['displayName'], 'Kirito')
+        self.assertIn('budget', status); self.assertIn('counts', status)
+        # Internal bookkeeping and full identities never reach the model.
+        blob = json.dumps(status, ensure_ascii=False)
+        for leaked in ('mcpToken', 'sessionId', 'bodyUuid', 'bindingSha256',
+                       'reservationId', 'taskId', 'taskKey', 'receipt'):
+            self.assertNotIn(leaked, blob)
+        # The projection is materially smaller than the full overview rows.
+        full = json.dumps(self.bridge.queue.overview('qd-survivor', limit=8), ensure_ascii=False)
+        self.assertLess(len(blob), len(full))
+
     def http_request(self):
         adapter = MaidAdapter(self.tasks.root, tasks=self.tasks, party=self.bridge)
         server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(adapter, 'legacy-' + 't' * 48))
