@@ -14,7 +14,8 @@ from pathlib import Path
 import time
 import uuid
 
-from numen_gateway import NumenGateway, GatewayError, read_json, read_controller_json, write_json, action_lock
+from numen_gateway import (NumenGateway, GatewayError, read_json, read_controller_json,
+    write_json, action_lock, receipt_evidence)
 
 
 def utc():
@@ -92,49 +93,7 @@ def main_inventory_summary(body):
 
 def life_action_evidence(row):
     """Carry the last attempt's actual target/reason, without its full inventory."""
-    def asdict(value):
-        return value if isinstance(value, dict) else {}
-    def fields(value, names):
-        return {key: item for key, item in asdict(value).items()
-                if key in names and type(item) in (str, int, float, bool, type(None))}
-    def point(value):
-        return fields(value, ('x', 'y', 'z'))
-    row = asdict(row)
-    summary = {key: row.get(key) for key in ('actionId', 'tool', 'status',
-        'completionConfirmed', 'nativeTaskId', 'navigationOutcome', 'observedAt')}
-    args = asdict(row.get('args'))
-    summary['requested'] = fields(args, ('x', 'y', 'z', 'item_id', 'operation', 'skill_id'))
-    result = asdict(row.get('result'))
-    native = asdict(result.get('result'))
-    reason = native.get('message') or result.get('code')
-    if isinstance(reason, str):
-        summary['outcomeDetail'] = reason[:360]
-    after = asdict(row.get('after'))
-    if point(after.get('position')):
-        summary['positionAfter'] = point(after['position'])
-    sense = asdict(row.get('navigationSense')) or asdict(asdict(native.get('data')).get('navigationSense'))
-    if sense:
-        projected = fields(sense, ('ok', 'code', 'observedAt'))
-        if point(sense.get('position')):
-            projected['position'] = point(sense['position'])
-        if isinstance(sense.get('bodyControl'), dict):
-            projected['bodyControl'] = fields(sense['bodyControl'],
-                ('available', 'kind', 'name', 'nativeAvoidanceActive', 'sample', 'code', 'notice'))
-        if isinstance(sense.get('destination'), dict):
-            dest = sense['destination']
-            target = fields(dest, ('available', 'requestedStanceClear', 'requestedStanceSupported',
-                'pathVerified', 'destinationChanged', 'examinedCells', 'unloadedCells', 'truncated',
-                'code', 'targetBlock', 'notice'))
-            if point(dest.get('requested')):
-                target['requested'] = point(dest['requested'])
-            if isinstance(dest.get('candidates'), list):
-                target['candidates'] = [fields(candidate, ('x', 'y', 'z', 'pathVerified', 'supportBlock'))
-                    for candidate in dest['candidates'][:5] if isinstance(candidate, dict)]
-                if len(dest['candidates']) > 5:
-                    summary['navigationSenseTruncatedForContext'] = True
-            projected['destination'] = target
-        summary['navigationSense'] = projected
-    return summary
+    return receipt_evidence(row)
 
 
 class QwenBackend:

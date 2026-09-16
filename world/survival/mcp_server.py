@@ -255,8 +255,11 @@ def read_status(gateway, wait_seconds=0, *, monotonic=time.monotonic, sleep=time
         body = gateway.snapshot()
         execution = gateway.action_status(body)
         if isinstance(execution.get('receipt'), dict):
-            # Do not reveal the active capability to an unrelated console read.
-            execution = dict(execution, receipt={k: v for k, v in execution['receipt'].items() if k != 'turnId'})
+            # Compact the receipt to outcome facts (dropping before/after body
+            # snapshots and the raw native result) and never reveal the active
+            # capability to an unrelated console read; receipt_evidence keeps no turnId.
+            from numen_gateway import receipt_evidence
+            execution = dict(execution, receipt=receipt_evidence(execution['receipt']))
         body['actionExecution'] = execution
         remaining = deadline - monotonic()
         if not execution.get('ok') or not execution.get('inFlight') or remaining <= 0:

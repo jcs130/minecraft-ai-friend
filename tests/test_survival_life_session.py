@@ -884,6 +884,23 @@ class BoundedStatusTests(unittest.TestCase):
         self.assertEqual(self.waits, [2] * 5)
         self.assertNotIn('turnId', result['actionExecution']['receipt'])
 
+    def test_status_receipt_is_compacted_to_outcome_facts(self):
+        bulky = {'private-payload': [1] * 500}
+        self.receipt = {'actionId': 'a', 'turnId': 'private-current-capability', 'tool': 'goto',
+            'status': 'completed', 'completionConfirmed': True, 'observedAt': 'now',
+            'args': {'x': 102, 'y': 64, 'z': 101}, 'result': {'result': {'message': 'arrived'}},
+            'before': bulky, 'after': dict(bulky, position={'x': 102, 'y': 64, 'z': 101})}
+        self.action_status = lambda body: {'ok': True, 'inFlight': False, 'receipt': self.receipt}
+        receipt = self.read(0)['actionExecution']['receipt']
+        self.assertEqual(receipt['actionId'], 'a')
+        self.assertEqual(receipt['status'], 'completed')
+        self.assertEqual(receipt['outcomeDetail'], 'arrived')
+        self.assertEqual(receipt['positionAfter'], {'x': 102, 'y': 64, 'z': 101})
+        self.assertNotIn('turnId', receipt)
+        self.assertNotIn('before', receipt)
+        self.assertNotIn('after', receipt)
+        self.assertNotIn('private-payload', json.dumps(receipt))
+
     def test_terminal_returns_early_and_unknown_never_busy_polls(self):
         self.finish_at = 2
         self.assertFalse(self.read(10)['actionExecution']['inFlight'])

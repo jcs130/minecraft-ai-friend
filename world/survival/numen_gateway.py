@@ -46,6 +46,59 @@ def invalid_lease_response():
                 '关闭、过期或受保护的租约不能复用，本回执不会延长或恢复授权。'}
 
 
+def receipt_evidence(row):
+    """Carry the last attempt's actual target/reason, without its full inventory.
+
+    Single source of truth for the agent-facing reduction of a stored receipt.
+    The full ``before``/``after`` body snapshots and raw native ``result`` are
+    dropped: the current status snapshot is already this turn's authoritative
+    observation, so re-sending them every turn only inflates the prompt.
+    """
+    def asdict(value):
+        return value if isinstance(value, dict) else {}
+    def fields(value, names):
+        return {key: item for key, item in asdict(value).items()
+                if key in names and type(item) in (str, int, float, bool, type(None))}
+    def point(value):
+        return fields(value, ('x', 'y', 'z'))
+    row = asdict(row)
+    summary = {key: row.get(key) for key in ('actionId', 'tool', 'status',
+        'completionConfirmed', 'nativeTaskId', 'navigationOutcome', 'observedAt')}
+    args = asdict(row.get('args'))
+    summary['requested'] = fields(args, ('x', 'y', 'z', 'item_id', 'operation', 'skill_id'))
+    result = asdict(row.get('result'))
+    native = asdict(result.get('result'))
+    reason = native.get('message') or result.get('code')
+    if isinstance(reason, str):
+        summary['outcomeDetail'] = reason[:360]
+    after = asdict(row.get('after'))
+    if point(after.get('position')):
+        summary['positionAfter'] = point(after['position'])
+    sense = asdict(row.get('navigationSense')) or asdict(asdict(native.get('data')).get('navigationSense'))
+    if sense:
+        projected = fields(sense, ('ok', 'code', 'observedAt'))
+        if point(sense.get('position')):
+            projected['position'] = point(sense['position'])
+        if isinstance(sense.get('bodyControl'), dict):
+            projected['bodyControl'] = fields(sense['bodyControl'],
+                ('available', 'kind', 'name', 'nativeAvoidanceActive', 'sample', 'code', 'notice'))
+        if isinstance(sense.get('destination'), dict):
+            dest = sense['destination']
+            target = fields(dest, ('available', 'requestedStanceClear', 'requestedStanceSupported',
+                'pathVerified', 'destinationChanged', 'examinedCells', 'unloadedCells', 'truncated',
+                'code', 'targetBlock', 'notice'))
+            if point(dest.get('requested')):
+                target['requested'] = point(dest['requested'])
+            if isinstance(dest.get('candidates'), list):
+                target['candidates'] = [fields(candidate, ('x', 'y', 'z', 'pathVerified', 'supportBlock'))
+                    for candidate in dest['candidates'][:5] if isinstance(candidate, dict)]
+                if len(dest['candidates']) > 5:
+                    summary['navigationSenseTruncatedForContext'] = True
+            projected['destination'] = target
+        summary['navigationSense'] = projected
+    return summary
+
+
 def _read_json(path, limit):
     path = Path(path)
     if path.is_symlink() or path.stat().st_size > limit:
