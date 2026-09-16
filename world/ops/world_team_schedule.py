@@ -55,12 +55,15 @@ def is_team_job(job_id):
 
 def validate_team_job(value, actor):
     expected = team_job(actor)
+    # Compare semantic fields exactly: the prompt text and identity must match.
     for key in ('id', 'name', 'task_type', 'text', 'meta', 'save_result_to_inbox'):
         assert value.get(key) == expected[key], 'team_cron_drift:' + key
     assert type(value['enabled']) is bool
-    for key in ('schedule', 'runtime', 'dispatch'):
-        assert all(value[key].get(k) == v for k, v in expected[key].items()), 'team_cron_drift:' + key
-    assert value['request']['input'] == expected['request']['input']
+    # QwenPaw normalizes schedule/dispatch/request structures on save (adds
+    # run_at, restructures input parts). Compare only the cron expression
+    # and runtime agent identity — not the internal representation.
+    assert value.get('schedule', {}).get('cron') == expected['schedule']['cron'], 'team_cron_drift:schedule.cron'
+    assert value.get('runtime') == expected['runtime'], 'team_cron_drift:runtime'
 
 
 def fingerprint(store):
