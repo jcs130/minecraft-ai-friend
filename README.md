@@ -1,128 +1,161 @@
 # 异世界千灯纪 · 本地整合项目
 
-项目目录：D:\Projects\QiandengJi。以 Rapid Optimization 为基础，整合已有玩法、AI 与原存档。Minecraft **1.21.1 / NeoForge 21.1.248 / Java 21**。
+一个运行在本机的 **Minecraft 多 Agent 共生服务器**：真人玩家、房主女神、运营 Agent 团队、自主生存
+Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入口。
 
-2026-09-13 服务整理：当前按 13 个活动 Docker 服务管理，10 个现有 Agent 统一在游戏 QwenPaw 18089，旧运营实例归档；Kokoro 替换 IndexTTS。数据目录、入口、重建和本次验收边界见 [D 盘游戏运行布局](docs/GAME-RUNTIME-LAYOUT.md)。下文早期角色数量和验收为历史阶段记录。
+- 游戏版本：**Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21**
+- 项目目录：`D:\Projects\QiandengJi`
+- 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，主干 `main`，整合工作分支 `codex/performance-foundation`，原世界源码已移入 `world/`
+- 当前按 **13 个活动 Docker 服务** 管理；历史阶段验收日志见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
 
-局域网玩家使用本项目 Java 1.21.1 / NeoForge 客户端，在多人游戏中手动添加 `192.168.3.133`（默认 TCP 25565）；本机可连接 `127.0.0.1`，原 `127.0.0.1:25567` 仅作为已有工具的兼容入口保留。游戏 TCP 25565 和语音 UDP 24455 已开放给局域网，管理端口保持本机访问。此独立服务器不自动出现在局域网扫描列表中。
+> 本仓库保存源码、配置模板、构建工具与验证方法。运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些，也不等于已完成环境安装。首次拉取先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)。
 
-当前客户端分发包为本机 `dist/QiandengJi-1.21.1-0.1.5-local.mrpack`。旧包可能缺少服务端新增的法杖物品；未知注册表报错、补丁安装和分发差异见 [客户端兼容说明](docs/CLIENT-REGISTRY-COMPATIBILITY.md)。
+---
 
-源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，当前整合分支为 `codex/performance-foundation`，沿用原仓库历史，原世界源码已移入 `world/`。首次拉取请先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)：本仓库保存源码、配置模板、构建工具与验证方法；下文的运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些文件，也不等于已经完成环境安装。
+## 一、四类 Agent
 
-第一批技能规则/存储、玩家命令和工会规则已作模块提取；实际边界、保留的耦合与后续顺序见 [代码架构与拆分记录](docs/ARCHITECTURE.md)。游戏 QwenPaw 当前为 **2.2.1**，运营角色与游戏角色统一在游戏实例；原10角色、记忆、会话与16项Cron保留，官方 MakeSkill 2.0 完整包已接入，见 [升级记录](docs/QWENPAW-221-UPGRADE.md) 和 [能力与市场复用](docs/QWENPAW-CAPABILITY-REUSE.md)。[运营组说明](docs/OPERATIONS-TEAM.md) 保留早期六角色独立运营阶段的设计与实验，当前服务和角色数量以本页顶部运行布局为准。
+整个系统的核心是四类自主 Agent，分工明确、互不替代：
 
-后续改造已将普通玩家命令执行从女神模块提取为独立应用服务，保持 `/mycli`、`/myhelp`、罗盘与既有 CLI 队列入口。world 启动不再等待 QwenPaw 健康；明确技能指令不调用模型，模糊咏唱、问答与祈愿仍使用原集成。验证与当前限制见 [玩家命令应用服务](docs/PLAYER-COMMAND-SERVICE.md)。
+### 1. 房主 · 灯语女神（世界管理权威）
+世界的「房主」与管理员。以名为 `Goddess` 的观察者 bot 入驻服务器，**独占 RCON**，掌管巡逻、分诊、
+派发、内容审批与程序化咏唱→法术。其 LLM 神谕走 QwenPaw 角色 `game:mc-god`。最终所有权归人类「造物主」。
+- 载体：`world` 服务（`world/bootstrap-world.mts`，TS 世界引擎，进程内装配 magic/social/saga/terra/worlddb/logwatch 等）
+- 天神之眼（世界观察渲染）：宿主 **19092**
 
-真人言灵入口统一为 **长按使用举杖 → 小窗默认语音、显示咒语示例 → 肩键左右选技能 → 松开释放**。左右肩键在语音与 8 个快捷槽之间循环，键盘备用 Page Up / Page Down；快捷槽在原技能罗盘编辑。每次重新举杖回到语音，准备与选择不会提前施法。两支自制法杖、录音和原生铁魔法的分工见 [言灵法杖说明](docs/STAFF-CHANTING-DESIGN.md)，实际运行证据与硬件体验的验收范围分别记录。
+### 2. 开发运营 Agent 团队（QwenPaw 单实例 · 10 角色）
+负责游戏的开发、运营、策划与协调，全部统一在**游戏 QwenPaw 实例**（控制台 **18089**），以原生 cron
+班次串行运行（旧独立运营实例已归档）。canonical 角色源：`world/ops/world_team.py`。
+- **天神 / 工程师**（`qd-engineer`）：读写 `engineering/repo` 源码、跑隔离测试、提交受审修复
+- **司灯 / 协调**（`qd-steward`）：工单台账、风险派发、回执
+- **公会策划**（`qd-guild-planner`）：剧情/任务/活动设计，提交内容包
+- 另有 **灯语·玩家交流**（`mc-herald`）、**内测玩家**（`qd-survivor`）、村民/女仆对话角色、结衣、女仆角色
+- 治理入口：管理台 **19091** `#operations`；统一 CLI `python tools/project.py ops status`
+- 设计背景见 [运营组说明](docs/OPERATIONS-TEAM.md)、[世界团队架构](docs/WORLD-TEAM-ARCHITECTURE.md)
 
-QwenPaw 已作为默认适配器保留，会话调用支持注入替换实现。打开 [日常管理首页](http://127.0.0.1:19091)：天神之眼、服务维护、运营组、技能档案、村务和共享传送点统一入口。管理台 19091 和游戏 QwenPaw 18089 本机免密码访问，仅发布到 `127.0.0.1`；旧运营 18090 归档停用，宿主 8088 保持原用途。服务器管理保留维护预览确认、日志、执行回执及内部鉴权，原网页登录凭据仅为兼容机器调用保留。最新使用与架构见 [服务器管理说明](docs/SERVER-MANAGEMENT.md)。
+### 3. 自主生存 · 自我进化 Agent —— 桐人（survivor）
+一个具身、自主游玩并自我进化的游戏 Agent：controller tick 主循环驱动感知→决策→动作，经 Numen 网关
+落地到游戏。具备**自适应 LLM 调用路由**（4 级双系统，按不确定性决定是否调用模型）、**模式检测与技能
+结晶（熟能生巧）**、自主规划、身体丢失自愈、练习与成长。
+- 载体：`survivor` 服务（`world/survival/service.py`），核心逻辑 `world/survival/controller.py`
+- 设计见 [自主生存 Agent](docs/AUTONOMOUS-SURVIVOR.md)、[快慢双系统](docs/FAST-SLOW-AGENT-SYSTEM.md)、[自我规划](docs/SURVIVOR-SELF-DIRECTED-PLANNING.md)
 
-运营治理入口为 **http://127.0.0.1:19091/#operations**：显示当前游戏 QwenPaw 的 10 个启用角色，排除宿主、归档实例和内置辅助角色。司灯、天神等身份按原迁移路由保留。统一 CLI 为 `python tools/project.py ops status`，保留完整审计清单；启停只面向登记的 D 容器，先输出计划，执行带 `--execute qiandengji`。当前 13 个活动服务均由 Docker 管理，公开状态采集也由容器完成。游戏生成式 LLM 走角色配置的云端 CodingPlan，Kokoro TTS 与 ASR 在本机；原迁移文档保留历史事实。
+### 4. 女仆妖精 Agent —— 结衣 / Yui（车万女仆模组）
+基于 **车万女仆（Touhou Little Maid）** 模组的辅助妖精伴侣：SAO 导航妖精结衣，承担陪伴/家庭与
+管理救援职责，**不会死亡**（伴侣保护），与桐人组成两人小队（桐人自主游玩成长，结衣不替其游玩）。
+- Java 模组侧：`world/maid-bridge-src`（Touhou Little Maid 1.5.3 扩展，站点 `qiandeng-qwen`）
+- Python 侧：`world/sidecar/maid_agent_api.py`（OpenAI 形状适配器 → QwenPaw 角色 `qd-maid-dialogue`）+ 身份/注册/原生工具/对话收件箱
+- 村民与女仆引擎：`npc` 服务（`world/sidecar/mc_npc.py`，走裸 RCON），启动时拉起 maid-agent（:8091）与 party-agent
+- 设计见 [女仆 Agent 设计](docs/MAID-AGENTS-DESIGN.md)、[结衣自主生活](docs/YUI-AUTONOMOUS-LIFE.md)、[SAO 角色](docs/SAO-CHARACTERS.md)
 
-结合《AI 共生与演化服务器》计划的后续方案见 [AI 共生世界设计](docs/SYMBIOSIS-WORLD-DESIGN.md)。设计保留当前底座与旧档，复用 Numen，优先补齐真人、AI 与女仆共享的实物工会合同，再发展生活、探索和世界演化；文中的新增能力是开发计划，不代表已部署。
+---
 
-2026-09-07 当前技能整合：**8 项特色秘术、27 槽技能罗盘、原生铁魔法入口和安全传送阵**已部署。新罗盘 10 组实机检查、传送 8 组检查通过；覆盖真实右键打开、图标、点击施法、一次扣费、请求去重、地点选择与跨维度到达。鸣人、桐人原生 YSM 已在真实客户端同时显示，女仆配音资源与语音链已有实测记录。当前服务状态以 `check-health.bat` 和运行报告为准，文末原档遗留项仍按各自范围说明。
+## 二、服务与基础设施（13 个活动服务）
 
-原 59 份玩家数据和各维度进度继续保留。本轮已在正常停服后完成 **原 4 个 UUID 的 YSM 外观附件**绑定，保留其身份、物品、属性、位置、任务和其他进度，注册表未改动。实际记录见 `reports/character-model-bindings.json`；不再以迁入时的整文件哈希描述当前运行存档。
+| 服务 | 镜像 | 职责 | 宿主端口 |
+|---|---|---|---|
+| `mc` | itzg/minecraft-server:java21 | MC 服务器，持 shadow 世界存档 | 25565(LAN) / 25567(本机兼容) / RCON 25577 / 语音 24455·udp |
+| `world` | qiandengji-world | 房主女神世界引擎 + 天神之眼渲染 | 19092 |
+| `gate` | qiandengji-world | vanilla↔NeoForge 握手代理，Agent 协议入口 | 25701 |
+| `panel` | qiandengji-world | 只读管理台（#operations/#services/#survivor） | 19091 |
+| `control` | qiandengji-world | 部署/重启回执通道（/plan+/execute） | 容器内 3090 |
+| `inventory` | qiandengji-sidecar | 只读容器健康采集 → panel | — |
+| `npc` | qiandengji-sidecar | 村民/女仆引擎（含 maid-agent、party-agent） | — |
+| `resources` | qiandengji-sidecar | 女仆语音包静态服务 | 19090 |
+| `qwenpaw` | qiandengji-qwenpaw-game:2.2.1 | 游戏 QwenPaw（运营团队 10 角色宿主） | 18089 |
+| `survivor` | qiandengji-survivor | 自主生存 Agent（桐人） | — |
+| `voice` | qiandengji-voice | 女神语音监听（god-voice-watcher） | — |
+| `asr` | qiandengji-voice | 麦克风 ASR 监听 | — |
+| `tts` | qiandengji-tts:kokoro | Kokoro 中文 TTS | 8100 |
 
-世界内容专项检查见 `docs/WORLD-CONTENT-STATUS.md`：已查出未接入的旧群系/地形包、NPC 实体与任务错配，并修复现有考古/怪物掉落和探索进度。当前存档的地形生成方案没有更换，未重建或删除旧区块。
+> `qwenpaw-ops`（旧独立运营实例，18090）在 compose 中保留定义但**已归档、不在 13 个活动服务内**；运营角色已并入游戏 QwenPaw 18089。
 
-2026-09-07 后续按用户要求精简：默认保留 **8 项特色秘术**，57 项旧主动施法归档停用，7 项被动及原永久奖励保留。右键指南针改为三行技能罗盘，固定铁魔法/传送阵入口，独立图标与只读档案；传送阵支持全部地点分页、固定编号、真实维度与安全落点。使用见 [技能说明](docs/SKILLS-UNIFIED-CLI.md)，逐项去留见 [精简审计](docs/SKILL-CONSOLIDATION-AUDIT.md)。此前罗盘精简阶段只更新服务端、兼容 0.1.2 客户端；后续言灵道具是双端更新，需要匹配新客户端。实际验收状态以各阶段报告为准，此前的羽落等 72 技能阶段结果是历史基线。
+**载入 mc 的自研模组（非独立服务）**：botgate（Agent 协议/技能箱/飞行/附魔/光环）、maid-bridge（车万女仆桥）、irons-bridge（原生铁魔法）、god-voice、chanting-items（自制言灵法杖）、client-controls（客户端控制器）。源码在 `world/*-src/`。
 
-## 开始使用
+**外部 Agent 接入**：运行 stdio Python MCP 桥 `tools/run_numen_mcp.py`（配置示例 `config/numen-mcp.example.json`），默认 `MC_HOST=127.0.0.1:25567`、`MC_RCON=127.0.0.1:25577`，身体经 `numen_act summon` 召唤；或以原版 bot 经 gate 25701 接入。详见 [NUMEN-MCP](docs/NUMEN-MCP.md)。
+
+---
+
+## 三、开始使用
 
 1. 打开 Docker Desktop，双击 `start-server.bat`，等待服务健康。
-2. 双击 `start-client.bat`，输入原来的玩家名，**拼写和大小写保持一致**；客户端直接连接 `127.0.0.1:25567`。
-3. 结束后运行 `stop-server.bat`，正常保存并停止本项目。`check-health.bat` 检查服务和实际联调结果。
+2. 双击 `start-client.bat`，输入原来的玩家名（**拼写和大小写保持一致**，离线模式相同名字才对应原 UUID/背包/进度）；客户端连接 `127.0.0.1:25567`。
+3. 结束后运行 `stop-server.bat` 正常保存并停止；`check-health.bat` 检查服务与实际联调结果。
 
-当前沿用原离线模式，相同名字才能对应原离线 UUID、背包与玩家进度。QA 使用专用测试角色，请用自己的原名继续玩。
+局域网玩家在多人游戏中手动添加 `192.168.3.133`（TCP 25565）；游戏端口与语音 UDP 24455 已开放给局域网，管理端口仅本机。QA 用专用测试角色，请用自己的原名继续玩。
 
-可导入包：[QiandengJi-1.21.1-0.1.4-local.mrpack](dist/QiandengJi-1.21.1-0.1.4-local.mrpack)，**已导出并完成成品校验**。包含 87 个模组 JAR、自制言灵杖、基础优化设置、18 个女仆语音包和两套原生 YSM 人物模型（26 个文件）。Minecraft/NeoForge 由启动器安装，启动器导入界面未逐个测试。本机启动脚本只读使用已有游戏缓存，不读取账号凭据。
+---
 
-文件大小：383,565,975 字节。SHA256：`cdfbee0322452f97ab761bdb6f896458e77dad3c4c60f7fc3a39f339f932935e`。完整校验记录见 [pack-export.json](reports/pack-export.json)。
-
-配音与人物外观见 [COSMETICS-STATUS.md](docs/COSMETICS-STATUS.md)。YSM 的 27 个内置模型完整保留，新增“鸣人 · 木叶忍者”和“桐人 · 黑衣剑士”，用 **Alt+Y** 打开选择界面。两个专用 Numen QA 身体已经完成实际显示、UUID 精确绑定和保存重建验证，见 [模型接入与截图](docs/PLAYER-MODELS-INTEGRATION.md)。原角色签名皮肤已恢复，原四角色的 YSM 附件已离线绑定，没有为验收召唤原角色；旧 GLB 仅作为源档另行归档。
-
-键鼠、手柄与 Agent 的统一技能入口见 [SKILLS-UNIFIED-CLI.md](docs/SKILLS-UNIFIED-CLI.md)。右键技能指南针或按 F6 打开三行罗盘，可进入铁魔法、传送阵和只读旧技能档案。Controlify、YACL 和千灯控制器已安装；罗盘真实客户端画面见 `reports/skill-compass-visual.json`，实际物理手柄输入尚未验收。原生铁魔法的装备检查、菜单施法、真实效果、法力/冷却、卷轴消耗、中文咏唱及 Numen UUID CLI 已验证。原生 `casting_started` 回执表示已接纳并开始施法，不等于最终命中；特色秘术的旧魔力与铁魔法原生法力仍分别使用。
-
-当前 D 盘服务端另已启用 `qiandeng_fixes` 内容修复数据包。单机存档使用相同模组时，可将 `dist/QiandengJi-content-fixes-1.21.1.zip` 放进该存档的 `datapacks/`；这个补丁独立于上述客户端 mrpack，不包含地形扩展。源码在 `content/datapacks/qiandeng_fixes/`，重建工具为 `tools/prepare_content_fixes.py`。
-
-## 整合内容
-
-- 本机开发客户端：**87 个 JAR**，由 24 个基础优化、59 个原内容/依赖、3 个控制器组件和 1 个自研言灵道具模组组成。保留 Sodium、Iris、ModernFix、C2ME 等现有配置基础，以及女仆、铁魔法、技能树、建筑、YSM 等原世界内容。可分发成品须另核对导出报告。
-- 服务端：**71 个不同模组 JAR**，包含原生法术桥和新 `qiandeng_chanting` 自制法杖；本轮增加快捷栏编辑和录音区间校验，见 `reports/chanting-items-deployment.json`。原包仅去掉一份字节完全相同的 Better Combat 重复包；Spawn 动物内容已保留。
-- 自研系统：botgate 的 Agent 协议、技能箱、飞行、附魔、光环；本地 Numen 与 numen_act；世界魔法引擎、NPC 消费链及 MCP 技能说明。
-- 存档：完整 shadow 世界，含下界、末地、魔法口袋维度、女仆归隐之地、原有 59 份玩家数据、成就、统计和 spellbooks 数据包。
-- 外部进度：72 条原技能定义及魔力/已学技能、传送点、人物档案、SQLite 账本等一并迁入；当前开放 8 项特色秘术，57 项旧主动技能归档停用，7 项被动及已有永久奖励保留。SQLite backup 包含 WAL 中已提交的数据。
-
-原 C 盘客户端和 shadow 存档作为来源保留，D 盘是独立运行副本。开始复制时原 MC 服务已经停止，本项目没有重新启动它。
-
-## 目录与备份
-
-| 目录 | 内容 |
-|---|---|
-| client/ | 可运行整合客户端，含本机配置和日志 |
-| server/mc/shadow/ | 已迁入并实际运行的原存档 |
-| server/world-data/ | 技能、成长、人物、数据库和 AI 通道的权威数据 |
-| server/mcdata/ | 游戏模组与 NPC 的共享队列、状态镜像 |
-| server/agents/ | 独立女神 AI 的本机配置与凭据 |
-| world/ | 世界端、botgate、MCP 和 sidecar 开发源码 |
-| tools/ | 构建、迁移、启动与实际冒烟工具 |
-| manifests/、reports/ | 文件锁、依赖检查及联调证据 |
-| dist/ | 可导入整合包 |
-
-备份个人进度：等待 `stop-server.bat` 完成后备份整个 `server/`。只复制 region 会丢失其他维度、玩家数据与自研技能进度。原始迁移记录 `server/snapshot-manifest.json` 中的 server-import 是暂存目录历史名称，随后整体改为 server；其中的静态检查状态不代替后续运行报告。
-
-## 本机地址
+## 四、本机地址
 
 | 用途 | 地址 |
 |---|---|
-| Minecraft / Agent 直连 | 127.0.0.1:25567 |
-| 原版协议 Agent 网关 | 127.0.0.1:25701 |
+| Minecraft / Agent 直连（本机兼容入口） | 127.0.0.1:25567 |
+| 局域网游戏连接 | 192.168.3.133:25565 |
+| 原版协议 Agent 网关（gate） | 127.0.0.1:25701 |
 | 本项目 RCON | 127.0.0.1:25577 |
-| Simple Voice Chat | 127.0.0.1:24455/UDP |
+| Simple Voice Chat | 127.0.0.1:24455/udp |
+| 游戏 QwenPaw 控制台（本机免密码，运营团队 10 角色） | http://127.0.0.1:18089 |
+| D 盘独立管理台（运营治理 / 服务维护 / 天神之眼入口） | http://127.0.0.1:19091 |
+| 天神之眼（世界观察渲染） | http://127.0.0.1:19092 |
 | 女仆语音包 | http://127.0.0.1:19090/packs/ |
-| 游戏 QwenPaw 控制台（本机免密码） | http://127.0.0.1:18089 |
-| 运营 QwenPaw 控制台（本机免密码） | http://127.0.0.1:18090 |
-| D 盘独立管理台 | http://127.0.0.1:19091 |
-| 天神之眼 | http://127.0.0.1:19092 |
 
-当前地址用于这台电脑。局域网/异地游戏联机需要另行设置游戏连接地址与监听范围；上述免密码管理入口保持仅本机访问。女仆 TTS 已归属 D 项目容器，沿用 8100 端口，游戏队列使用 D 盘目录；原 9090 管理入口已经退役。
+管理台与游戏 QwenPaw 仅发布到 `127.0.0.1`、本机免密码。旧运营 18090 已归档停用。
 
-完整游戏对话测试中，原本地 27B 模型发生断流；本项目的 mc-herald 已改用与 mc-god 相同的现有云模型，保留各自角色提示词。原本地模型选择保存在 `server/agents/model-choice-backups/`，没有修改原服务的模型配置。
+---
 
-## 开发与验证
+## 五、开发与验证
 
 ```powershell
 cd D:\Projects\QiandengJi
 python -m unittest discover -s tests -v
-python tools/export_pack.py
 python tools/project.py status
 python world/ops/health/health_mon.py
+python tools/export_pack.py
 ```
 
-静态依赖检查：`reports/client-validation.json`。部分 1.21 范围由 FML 自带兼容表接受，实际客户端已成功启动和进服。
+- 代码架构与模块拆分见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+- 部署/重启**必须**走 control 回执通道（`/plan`+`/execute`，自动 mc save-all、依赖序、健康门、持久回执），发布流程见 [部署 runbook](docs/deploy-release-runbook.md)。Python/JS 代码经 bind mount 进容器，上线只需宿主检出 + 重启受影响容器；只有 compose.yml 变更才需重建服务。
+- 服务健康与扩展文件哈希见 [runtime-health.json](reports/runtime-health.json)；各专项验收证据在 `reports/`，以报告时间和 `ok` 字段为准。
+- 源码、模板与报告不含密钥；`server/`、`client/`、`.env`、`dist/` 被 Git 忽略。
 
-本轮模型及控制器证据：`reports/game-models-smoke.json`、`reports/controller-support-health.json`、`reports/controller-visual.json`。`manifests/game-models.lock.json` 明确锁定两目录 26 个模型文件；成品已逐项校验模型 SHA256，导出拒绝未锁的 YSM 文件和 auth/cache/builtin 目录。原四角色实际写入见 `reports/character-model-bindings.json`；进度 JSON、SQLite 和 Pufferfish 另备份于 `runtime/backups/skills-integration-20260907`。
+---
 
-当前施法证据：[skill-compass-smoke.json](reports/skill-compass-smoke.json)（10 组通过）、[waypoint-travel-smoke.json](reports/waypoint-travel-smoke.json)（8 组通过）、[irons-bridge-smoke.json](reports/irons-bridge-smoke.json)（原生铁魔法入口，包括中文咏唱和 UUID CLI）。旧 [skill-cli-smoke.json](reports/skill-cli-smoke.json) 的 12 项记录属于精简前基线，其中羽落术等已归档，不代表当前仍可施放。
+## 六、目录与备份
 
-健康检查读取当前 11 个服务及扩展文件哈希，最新结果和时间见 [runtime-health.json](reports/runtime-health.json)。罗盘验收夹具的恢复与原技能/传送点保留情况见 [skill-compass-deployment.json](reports/skill-compass-deployment.json)。另有 [CLI 回应实测](reports/cli-feedback-smoke.json)：真实客户端收到一次状态和三次完整帮助回复，观察窗口内没有再次因刷屏断线；该项没有追加施法，也不代表无限频率请求测试。
+| 目录 | 内容 |
+|---|---|
+| `world/` | 世界端源码：`src`(TS 世界引擎/gate)、`admin`(panel/control/eye)、`ops`(运营/QwenPaw 治理)、`sidecar`(NPC/女仆/公会/语音)、`survival`(自主生存 Agent)、`*-src`(自研模组源) |
+| `server/mc/shadow/` | 已迁入并实际运行的原存档 |
+| `server/world-data/` | 技能、成长、人物、数据库和 AI 通道的权威数据 |
+| `server/mcdata/` | 游戏模组与 NPC 的共享队列、状态镜像 |
+| `server/agents/` | 独立女神 AI 的本机配置与凭据 |
+| `config/` | 角色（`characters/`）、伴侣保护、技能目录、Numen MCP 示例等配置 |
+| `tools/` | 构建、迁移、启动与实际冒烟工具 |
+| `manifests/`、`reports/` | 文件锁、依赖检查及联调证据 |
+| `dist/` | 可导入整合包 |
+| `client/` | 可运行整合客户端（本机配置和日志，Git 忽略） |
 
-实际 AI/技能结果：`reports/ai-smoke.json`；NPC 书籍交互：`reports/npc-smoke-*.json`；最新服务状态：`reports/runtime-health.json`。以报告时间和 ok 字段为准，离线测试成功不等同于所有游戏内容已实测。
+备份个人进度：等 `stop-server.bat` 完成后备份整个 `server/`（只复制 region 会丢失其他维度、玩家数据与自研技能进度）。
 
-源码、模板与报告不含密钥。server、client、.env 和 dist 被 Git 忽略；客户端导出采用明确白名单，不含个人存档、账号和服务端凭据。保留的原模型凭据只用于这个本地项目。
+---
 
-外部 Agent 的 MCP 配置示例在 `config/numen-mcp.example.json`，入口为 `tools/run_numen_mcp.py`；既有 Numen 工具与操作指南保留，统一施法接口见 [SKILLS-UNIFIED-CLI.md](docs/SKILLS-UNIFIED-CLI.md)。默认绑定名 QiandengAgent；连接前需由本项目的 Numen 创建同名身体。启动器强制使用 D 盘通道与新 RCON 端口，不能误读原服务密钥。接入方法见 `docs/NUMEN-MCP.md`。
+## 七、客户端分发包（当前）
 
-本机 `world/node_modules` 已按原 lock 安装，安装时跳过 native build scripts；Docker 世界端仍使用原验证镜像中的完整运行依赖。若要改为宿主直接运行或启用 WebGL 视觉，需另行安装/构建 canvas、gl、better-sqlite3 等原生依赖；当前尚未验收宿主 Agent 的离屏 WebGL 视觉。
+当前分发包：[`dist/QiandengJi-1.21.1-0.1.5-local.mrpack`](dist/QiandengJi-1.21.1-0.1.5-local.mrpack)，已导出并完成成品校验。
 
-## 已知的原档遗留问题与验证范围
+- 大小：383,651,079 字节；SHA256：`7d80d0bff7885153ffd11ac424f9369e5547c0646a12f854c4a8b66e4e5937a0`
+- 88 个模组 JAR、自制言灵杖、基础优化设置、女仆语音包、原生 YSM 人物模型；Minecraft/NeoForge 由启动器安装
+- 完整校验记录见 [pack-export.json](reports/pack-export.json)；旧包与历史明细见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
 
-- 原 NPC 柜台档案仍指向已退役的 settlements 实体类型和新村庄坐标，存量对应实体却在旧区域，并存在大量历史重复记录。本轮保留原数据，不自动重召或清理 NPC；技能书消费链已验证，柜台交易未验收。详见 `reports/npc-trade-runtime.json`。
-- 两份孟孟书匣的数据格式已修复并通过 reload。其他可选模组配方、标签等加载提示在原服已经存在，逐项记录在 `reports/save-runtime-verification.json`；不将静态依赖通过描述为所有模组内容都已穷尽测试。
-- Simple Voice Chat 的实际客户端认证/连接及中文 TTS→ASR 已验证，真人麦克风输入和扬声器实际听感未验证。识别名单沿用 MengMeng，可在 compose 的 VOICE_ALLOWED_PLAYERS 中调整。
-- 自动重建 NPC/村庄、旧清怪白名单、向量记忆、自动剧情/地形修复未在此次整合运行中启用。完整存档和文本记录保留，后续启用需单独核对对应依赖与旧实体状态。
+单机存档使用相同模组时，可把 `dist/QiandengJi-content-fixes-1.21.1.zip` 放进该存档 `datapacks/`（独立于客户端 mrpack，不含地形扩展；源码 `content/datapacks/qiandeng_fixes/`，重建工具 `tools/prepare_content_fixes.py`）。客户端兼容与注册表差异见 [CLIENT-REGISTRY-COMPATIBILITY.md](docs/CLIENT-REGISTRY-COMPATIBILITY.md)。
 
-真人操作见 [女神言灵：语言即接口](docs/LANGUAGE-INTERFACE.md)：长按使用键举起自制言灵杖，显示不遮挡瞄准的技能窗口；默认语音咏唱，左右肩键切换语音或 8 个快捷槽，松开使用键释放。罗盘中的“编辑快捷栏”可换技能、清空和恢复推荐。明确咒语不依赖模型；物理麦克风与手柄仍需实机验收。
+---
+
+## 八、延伸文档
+
+- 运行布局与验收边界：[GAME-RUNTIME-LAYOUT.md](docs/GAME-RUNTIME-LAYOUT.md)
+- 技能与统一入口：[SKILLS-UNIFIED-CLI.md](docs/SKILLS-UNIFIED-CLI.md)、[言灵法杖](docs/STAFF-CHANTING-DESIGN.md)、[语言即接口](docs/LANGUAGE-INTERFACE.md)
+- AI 共生世界设计（后续方案，非已部署）：[SYMBIOSIS-WORLD-DESIGN.md](docs/SYMBIOSIS-WORLD-DESIGN.md)
+- 服务器管理：[SERVER-MANAGEMENT.md](docs/SERVER-MANAGEMENT.md)
+- 历史阶段验收日志：[INTEGRATION-HISTORY.md](docs/INTEGRATION-HISTORY.md)
+- Agent 协作约定（权威）：[AGENTS.md](AGENTS.md)
