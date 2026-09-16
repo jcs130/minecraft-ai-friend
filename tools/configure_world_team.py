@@ -21,7 +21,7 @@ os.environ.setdefault('PARTY_ROLES_MANIFEST_FILE', str(ROOT / 'server/mcdata/vil
 os.environ.setdefault('TEAM_RUNTIME_HOSTS_FILE', str(ROOT / 'server/team-state/runtime-hosts.json'))
 os.environ.setdefault('TEAM_SPECIALISTS_FILE', str(ROOT / 'server/team-state/specialists.json'))
 from world_team import members
-from world_team_hosts import ENGINEER, SOURCE, TARGET, native_host, require_host
+from world_team_hosts import ENGINEER, SOURCE, TARGET, logical_actor, native_host, require_host
 from world_team_profiles import bindings, persona_files, policy_payload, check_api
 from world_team_schedule import SCHEDULES, team_job, validate_team_job
 from role_learning_profiles import skill_references
@@ -95,6 +95,12 @@ def configure(mode='preview'):
     for actor in inventory:
         host = native_host(actor)
         runtime, role = host['runtime'], host['agentId']
+        # Archived (retired/dormant) members keep a display host but hold no
+        # execution authority and have no live driver/cron to provision; skip them
+        # instead of aborting the whole run on require_host.
+        if logical_actor(runtime, role) != actor:
+            journal.append({'actor': actor, 'nativeHost': host, 'skipped': 'team_native_host_inactive'})
+            continue
         require_host(actor, runtime, role)
         before = api(runtime, 'GET', '/agents/' + role, role)
         assert before['id'] == role
@@ -146,13 +152,38 @@ def configure(mode='preview'):
                 pass
             if not ready:
                 for key, client in bindings(role, runtime).items():
-                    configure_client(request, role, key, client, policy_payload(client['tools']), exists=key in keys)
+                    previous = None
+                    if key in keys:
+                        try:
+                            live_tools = api(runtime, 'GET', '/mcp/tools/' + key, role)
+                            if isinstance(live_tools, list) and live_tools:
+                                previous = [t['name'] for t in live_tools
+                                            if isinstance(t, dict) and t.get('enabled') is True
+                                            and isinstance(t.get('name'), str)]
+                                if not previous:
+                                    previous = None
+                        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+                            pass
+                    configure_client(request, role, key, client,
+                                     policy_payload(client['tools']),
+                                     exists=key in keys, previous_tools=previous)
             # Native DriverCards and the legacy profile mirror must agree.
             current = api(runtime, 'GET', '/agents/' + role, role)
             mcp = deepcopy(current['mcp']); mcp['clients'].update(bindings(role, runtime))
             if mcp != current['mcp']:
                 api(runtime, 'PUT', '/agents/' + role, role, agent_update(current, mcp=mcp))
             check_api(lambda path: api(runtime, 'GET', path, role), role, runtime)
+        elif mode == 'cron' and actor in SCHEDULES:
+            spec = team_job(actor)
+            jobs = api(runtime, 'GET', '/cron/jobs', role)
+            live = next((j for j in jobs if j['id'] == spec['id']), None)
+            if live is not None:
+                write(backup / runtime / role / ('cron-' + spec['id'] + '-before.json'), live)
+            # Pause through the code/spec transition: 'activate' validates the live
+            # job against the restored team_job and resumes it, so no shift fires
+            # against a spec the running code would reject as team_cron_drift.
+            spec['enabled'] = False
+            api(runtime, 'PUT', '/cron/jobs/' + spec['id'], role, spec)
         elif mode == 'activate' and actor in SCHEDULES:
             job = next(j for j in api(runtime, 'GET', '/cron/jobs', role) if j['id'] == team_job(actor)['id'])
             validate_team_job(job, actor)
@@ -171,6 +202,6 @@ def configure(mode='preview'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mode', choices=['preview', 'files', 'drivers', 'activate'], default='preview')
+    parser.add_argument('--mode', choices=['preview', 'files', 'cron', 'drivers', 'activate'], default='preview')
     args = parser.parse_args()
     print(json.dumps(configure(args.mode), ensure_ascii=False))

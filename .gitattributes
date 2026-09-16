@@ -1,2 +1,5 @@
 # Keep manifest-verified patch bytes, including required blank context markers.
 world/numen-patches/*.patch text eol=lf whitespace=-blank-at-eol
+
+# Health check compares skill bytes against workspace copies deployed via text-mode API (LF).
+world/ops/skills/** text eol=lf

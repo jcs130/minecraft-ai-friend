@@ -470,7 +470,8 @@ def main():
         require_host(args.actor, args.native_runtime, args.native_role)
         app = host_tool_app(server, args.actor, args.native_runtime, args.native_role)
     register_team_tools(app, args.actor)
-    if args.actor == 'game:mc-god':
+    from party_role_capabilities import is_bound_yui
+    if args.actor == 'game:mc-god' or is_bound_yui(args.actor):
         from world_admin_tools import register_admin_tools
         register_admin_tools(app, args.actor)
     if args.actor in ('game:mc-god', 'game:qd-guild-planner', 'operations:mc-priest'):
