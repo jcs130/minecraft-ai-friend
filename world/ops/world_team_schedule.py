@@ -11,6 +11,12 @@ SCHEDULES = {
     'game:mc-god': ('qd-team-goddess', '女神 · 世界巡查与问题处理', '1-59/10 * * * *'),
     'operations:mc-god': ('qd-team-engineer', '天神 · 工程改进与验收', '5-59/10 * * * *'),
     'game:qd-guild-planner': ('qd-team-designer', '公会 · 剧情与活动策划', '3,33 * * * *'),
+    # Migration alias: the engineer's native host is game/qd-engineer after the
+    # single-QwenPaw consolidation, but its logical identity remains
+    # operations:mc-god. The runtime actor resolution builds
+    # runtime + ':' + agent_id which yields 'game:qd-engineer'; alias it
+    # to the same schedule entry so validate_team_job finds it.
+    'game:qd-engineer': ('qd-team-engineer', '天神 · 工程改进与验收', '5-59/10 * * * *'),
 }
 PROMPTS = {
     'game:mc-god': '执行一次世界管理员班次。使用team_context和team_cases读取新鲜事实与未结问题，按需读具体工单。'
