@@ -1403,6 +1403,49 @@ class Controller:
         except Exception:
             self.pause('model_submission_uncertain')
 
+    def _adaptive_route(self, body):
+        """Adaptive LLM invocation router (case-af65b29d): decide whether
+        this situation actually needs the model, or whether a familiar
+        pattern can be continued without any model cost. Returns None
+        when routing is unavailable so the caller falls through to the
+        normal submit_model path."""
+        try:
+            from adaptive_router import route
+        except ImportError:
+            return None
+        perception = {
+            'biome': body.get('biome', ''),
+            'known_biomes': self.data.get('knownBiomes', ['plains', 'forest']),
+            'nearby_hostiles': len(body.get('nearbyHostiles') or []),
+            'unknown_blocks_nearby': 0,
+            'dimension': body.get('dimension', 'overworld'),
+            'hp': body.get('health', {}).get('hp', 20)
+                  if isinstance(body.get('health'), dict) else body.get('hp', 20),
+            'under_attack': bool((body.get('combat') or {}).get('engaged')),
+            'party_message_pending': bool((body.get('party') or {}).get('pendingMessages')),
+            'inventory_changed_significantly': False,
+            'current_activity': self.data.get('currentActivity', ''),
+            'goto_in_progress': body.get('task', {}).get('busy', False),
+            'inventory_summary': body.get('inventorySummary') or {},
+        }
+        history = {
+            'recent_receipts': tail(self.root / 'last-action.json', 8),
+            'last_perception': self.data.get('lastPerception') or {},
+        }
+        goals = self.data.get('goals') or {}
+        skills = self.data.get('skills') or []
+        routing = route(perception, history, goals, skills,
+                        self.data.get('lastModelCallAt', 0), self.clock())
+        self.data['lastRouting'] = {
+            'level': routing['level'], 'name': routing['level_name'],
+            'score': routing['score'], 'reason': routing['reason'],
+            'signals': routing.get('signals'),
+        }
+        self.data['lastPerception'] = perception
+        if routing.get('should_call_llm'):
+            self.data['lastModelCallAt'] = self.clock()
+        return routing
+
     def tick(self):
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         body = self.gateway.snapshot()
@@ -1494,7 +1537,14 @@ class Controller:
                         if job.get('practiceStarted') and not job.get('practiceFinalized'):
                             self.data['status'] = 'practice_confirmation_wait'
                         else:
-                            self.submit_model(body, control)
+                            # Adaptive router (case-af65b29d): skip the LLM call
+                            # when the situation is familiar and a cached
+                            # response suffices. Level 0 = zero model cost.
+                            routing = self._adaptive_route(body)
+                            if routing and routing.get('level') == 0:
+                                self.data['status'] = 'adaptive_skip'
+                            else:
+                                self.submit_model(body, control)
         # Model terminal and pending physical actions may settle this tick.
         # Preserve other pause reasons, including every unknown outcome.
         self.drain_at_boundary(body)
