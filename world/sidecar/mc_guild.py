@@ -589,12 +589,20 @@ def board_lines():
     doc = board_today()
     out = [Rules.board_header(doc["date"])]
     out.extend(_episode_lines(doc))
+    withdrawn = 0
     for b in doc["board"]:
+        if b.get("status") == "withdrawn":
+            # Taken down by an explicit administrator receipt; show the count,
+            # never a claimable "可接" row for a dead contract.
+            withdrawn += 1
+            continue
         mark = Rules.board_mark(b, RANKS)
         if b["status"] not in ("done", "claimed"):
             if _new_claim_block(b):
                 mark = Rules.BOARD_PAUSED_MARK
         out.append(Rules.board_row(b, mark, RANKS))
+    if withdrawn:
+        out.append("（另有 %d 单已被公会下架，不再办理。）" % withdrawn)
     out.append(Rules.BOARD_FOOTER)
     return out
 
@@ -616,6 +624,8 @@ def activity_lines(no):
     row = next((b for b in doc['board'] if b['no'] == no), None)
     if row is None:
         return ['今日看板没有 No.%d。' % no]
+    if row.get('status') == 'withdrawn':
+        return ['No.%d 已被公会下架，不再办理。' % no]
     lines = _episode_lines(doc, no)
     if lines:
         return lines
@@ -657,6 +667,8 @@ def claim(who, no):
         return ["No.%d 已经办完了。挑别的吧。" % no]
     if b["status"] == "claimed":
         return ["No.%d 被 %s 接走了。手快有手慢无。" % (no, "+".join(_takers(b)))]
+    if b.get("status") == "withdrawn":
+        return ["No.%d 已被公会下架，不再办理——挑别的单子吧。" % no]
     if b.get("party"):
         return ["No.%d 是组队委托，得 %d 人画押。说「组队接 %d 邀请 队友名」，等他回「入队」就成军。" % (
             no, b["party"], no)]
@@ -707,6 +719,8 @@ def party_claim(who, no, invitee):
         return ["No.%d 已经办完了。" % no]
     if b["status"] == "claimed":
         return ["No.%d 已经被 %s 接走了。" % (no, "+".join(_takers(b)))]
+    if b.get("status") == "withdrawn":
+        return ["No.%d 已被公会下架，不再办理——挑别的单子吧。" % no]
     if not b.get("party"):
         return ["No.%d 不是组队委托，单人「接 %d」就行。" % (no, no)]
     if not _near_receptionist(who):
@@ -823,6 +837,8 @@ def deliver(who, no):
     b = next((x for x in doc["board"] if x["no"] == no), None)
     if b is None:
         return ["没有 No.%d 这一单。" % no]
+    if b.get("status") == "withdrawn":
+        return ["No.%d 已被公会下架，不再办理。" % no]
     if b["type"] == "gather":
         return ["收购单的货交给发单人 %s 本人——对他说「交易：%s 给%d%s」。" % (
             b["display"], b["display"].split("·")[-1], b["count"], b["zh"])]
@@ -859,7 +875,9 @@ def settle_gather(qid, who, cmd_who=None):
     """turn_in / GUI 成交钩子：按 quests 引用 id 销板。返回是否命中。"""
     doc = board_today()
     b = next((x for x in doc["board"] if x["type"] == "gather" and x.get("qid") == qid), None)
-    if b is None or b["status"] == "done" or not _gather_matches(b):
+    # A withdrawn contract must not be settled back to done by a late trade:
+    # takedown is an explicit administrator decision with its own receipt.
+    if b is None or b.get("status") in ("done", "withdrawn") or not _gather_matches(b):
         return False
     b["status"] = "done"
     b["done_by"] = who

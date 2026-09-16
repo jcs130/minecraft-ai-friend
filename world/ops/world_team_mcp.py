@@ -79,6 +79,34 @@ def npc_llm_enabled(sections):
     return enabled if isinstance(enabled, bool) else None
 
 
+def npc_health_subchecks(sections):
+    """Raw npc healthcheck inputs from the world record, or None when the record has none.
+
+    The npc container healthcheck (tools/npc_health.py) gates on more than thread
+    liveness: rcon activity, spell and guild-request polling, and the guild NPC
+    identity evidence all count toward the verdict. case-874c6b4133a5affd763b: a
+    running-but-unhealthy verdict sat beside a 15-thread all-ok projection with no
+    snapshot field naming the failing sub-check, so the projected timestamps and
+    the guild identity summary are surfaced verbatim for exactly that divergence.
+    """
+    world = sections.get('world') if isinstance(sections.get('world'), dict) else {}
+    data = world.get('data') if isinstance(world.get('data'), dict) else {}
+    npc = data.get('npc') if isinstance(data.get('npc'), dict) else {}
+    guild = npc.get('guildNpcs') if isinstance(npc.get('guildNpcs'), dict) else {}
+    rows = guild.get('required') if isinstance(guild.get('required'), list) else []
+    view = {'rconLastOkAt': _plain(npc.get('rconLastOkAt')),
+            'spellLastPollAt': _plain(npc.get('spellLastPollAt')),
+            'guildRequestsLastPollAt': _plain(npc.get('guildRequestsLastPollAt')),
+            'guildNpcsOk': guild.get('ok') if isinstance(guild.get('ok'), bool) else None,
+            'guildNpcsCheckedAt': _plain(guild.get('checkedAt')),
+            'guildNpcsStates': {row.get('key'): _plain(row.get('state')) for row in rows
+                                if isinstance(row, dict) and isinstance(row.get('key'), str)}}
+    scalars = [value for key, value in view.items() if key != 'guildNpcsStates']
+    if not view['guildNpcsStates'] and all(value is None for value in scalars):
+        return None
+    return view
+
+
 def players_roster_view(sections):
     """The world record's players registry crossed with its own observation, or None.
 
@@ -183,6 +211,17 @@ def register_team_tools(app, actor, state=Path('/team')):
                           ' owner configuration decision'
                           + ('; the world record carrying it is expired' if 'world' in stale else '')
                           + '.')
+        subchecks = npc_health_subchecks(sections)
+        if subchecks is not None:
+            snapshot['npcHealthSubchecks'] = subchecks
+            notes += (' npcHealthSubchecks surfaces the npc record fields the container healthcheck'
+                      ' actually judges (rconLastOkAt, spellLastPollAt, guildRequestsLastPollAt and'
+                      ' the guild NPC identity summary); when an unhealthy verdict sits beside all-ok'
+                      " threads, compare each timestamp with the record's own npc updatedAt and read"
+                      ' guildNpcsStates to name the failing sub-check instead of guessing between'
+                      ' rcon, polling and guild-identity causes'
+                      + ('; the world record carrying them is expired' if 'world' in stale else '')
+                      + ' (case-874c6b4133a5affd763b).')
         roster = players_roster_view(sections)
         if roster is not None:
             snapshot['playersRoster'] = roster

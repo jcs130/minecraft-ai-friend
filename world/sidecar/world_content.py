@@ -26,6 +26,11 @@ ACTORS = ('game:qd-guild-planner', 'game:mc-god', 'operations:mc-priest')
 TERMINAL_PUBLICATION = ('published', 'blocked', 'expired')
 ID = re.compile(r'[A-Za-z0-9_-]{1,80}\Z')
 CONTENT_ID = re.compile(r'content-[a-f0-9]{24}\Z')
+# Contract takedown requests (see ContentQueue.withdraw and _withdraw_one).
+# Same receipt-authority rule as TERMINAL_PUBLICATION: a withdraw request
+# never keeps reporting queued once its receipt reached one of these.
+WITHDRAW_ID = re.compile(r'withdraw-[a-f0-9]{24}\Z')
+WITHDRAW_TERMINAL = ('withdrawn', 'rejected')
 MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
 # The gateway goto pre-check (world/survival/numen_gateway.py, action()) rejects
 # a single goto whose horizontal displacement — math.hypot on x/z only, y never
@@ -34,6 +39,48 @@ MOBS = {'skeleton': '骷髅', 'zombie': '僵尸', 'spider': '蜘蛛'}
 # itself lives outside this file, so tests pin the copied default instead of
 # trusting the copy silently.
 GOTO_SINGLE_HOP_LIMIT = 24
+# One tp cast (world/survival/game_skills.py preflight_game_action) moves at
+# most 30 blocks along one of eight fixed compass directions, and the featured
+# legacy skill costs 20 mana per cast (skills board, team_context 2026-09-15).
+# Same pinning rule as GOTO_SINGLE_HOP_LIMIT: the source lives outside this
+# file, tests keep the copies honest.
+TP_SINGLE_CAST_LIMIT = 30
+TP_CAST_MANA = 20
+# Observed water corridors (case-52f0d5bb65c49ef1cb2a, 2026-09-15). Each entry
+# records real observed positions with their evidence sources — never a
+# surveyed river shape. A travel segment that crosses or even touches the
+# bank-to-bank connector MIGHT have to cross the observed water, so the
+# reachability answer flags it instead of offering a plain walking relay; no
+# flag never means the terrain elsewhere is clear. Only real in-world
+# receipts confirm any leg. Dispatch-time enforcement of these corridors in
+# world/survival/numen_gateway.py (goto refusal before the walk is sent) is a
+# PARKED code candidate — world/survival/ sits outside the only fixed test
+# plan's coverage, so it has not landed; this advisory copy is the live half
+# and the pinning home. Entry semantics: 'banks' holds the observed pair
+# (east point, west point) and minWidthBlocks is the confirmed in-water
+# LOWER bound along that connector — for the north pocket the west point is
+# an in-water wading observation, not a dry west bank, and the pocket's west
+# edge was never observed (ruling on rivercase-18/19, case-b29410d5d257b5c1387b).
+OBSERVED_WATER_CROSSINGS = (
+    {'id': 'village-camp-river-2026-09-15',
+     'banks': ((-582.8, 847.3), (-639.0, 1055.0)),
+     'minWidthBlocks': 70,
+     'observedAt': '2026-09-15',
+     'sources': ('goddess-inspect-20260915-rivercase-1',
+                 'admin-receipt:goddess-rescue-20260915-rivercase-1:native_teleport_confirmed',
+                 'case-fe0b3f68e8db75ca00fb:turn-survival-31477b791a7443e3b32fd6ae6e6c63cf',
+                 'case-0956bd215e5a4c7b0699:camp-reference',
+                 'goddess-rescue-20260915-rivercase-2:native_teleport_confirmed',
+                 'goddess-rescue-20260915-rivercase-3:native_teleport_confirmed',
+                 'case-3c85d05fe93243fca371:seq442-fourth-stall-double-observed')},
+    {'id': 'river-north-pocket-2026-09-15',
+     'banks': ((-596.36, 805.46), (-602.51, 804.51)),
+     'minWidthBlocks': 3,
+     'observedAt': '2026-09-15',
+     'sources': ('goddess-inspect-20260915-rivercase-18:yui-east-dry-y63',
+                 'goddess-inspect-20260915-rivercase-19:yui-west-wading-y61.6-moving',
+                 'case-3c85d05fe93243fca371:rivercase-9-19-kirito-stall-y59-in-water')},
+)
 # Adapter progress for case boss-chest-adapter-missing: the four receipt
 # capabilities map to scout/place/proof/cleanup; 'ledger' is the durable
 # receipt store underneath them (SiteQueue, implemented and covered by
@@ -95,10 +142,34 @@ def objective(row):
 def make_context(npc, guild, *, today=None, clock=time.time):
     current = today or date.today()
     receptionist = next((p for p in npc.PROFILES if contract_issuer(p, 'reception')), None)
-    try:
-        reception_ready = receptionist is not None and valid_position(npc.alive_pos(receptionist))
-    except Exception:
-        reception_ready = False
+    # Read-only visibility (case content-reception-frozen-20260915): the
+    # reception gate is a fact about the receptionist NPC (guild_lan), so a
+    # closed gate must document why instead of answering a bare false.
+    # Reason vocabulary: 'receptionist_missing' = no roster profile holds the
+    # reception issuer role (missing profile/binding/profession, folded by
+    # contract_issuer); 'receptionist_position_unavailable' = alive_pos
+    # raised, errorType names the exception class;
+    # 'receptionist_position_invalid' = alive_pos returned something that is
+    # not a finite 3-axis position, observedPositionType names the shape;
+    # None = gate open. This reports facts for operators, it never changes
+    # the gate: receptionReady below stays the single authority that
+    # validate_episode reads.
+    reception = {'ready': False, 'reason': 'receptionist_missing', 'receptionist': None}
+    if receptionist is not None:
+        reception['receptionist'] = receptionist['key']
+        reception['reason'] = 'receptionist_position_unavailable'
+        try:
+            position = npc.alive_pos(receptionist)
+        except Exception as exc:
+            reception['errorType'] = type(exc).__name__
+        else:
+            if valid_position(position):
+                reception = {'ready': True, 'reason': None,
+                             'receptionist': receptionist['key'], 'position': list(position)}
+            else:
+                reception['reason'] = 'receptionist_position_invalid'
+                reception['observedPositionType'] = type(position).__name__
+    reception_ready = reception['ready']
     issuers = []
     for person in npc.PROFILES:
         kinds = [kind for kind in ('gather', 'hunt', 'visit') if contract_issuer(person, kind)]
@@ -112,6 +183,7 @@ def make_context(npc, guild, *, today=None, clock=time.time):
             issuers.append({'key': person['key'], 'display': person['display'],
                             'uuid': binding(person)['uuid'], 'profession': person['profession'],
                             'kinds': kinds, 'position': list(position)})
+    issuer_keys = {p['key'] for p in issuers}
     days = {}
     for day in (current, current + timedelta(days=1)):
         name = day.isoformat()
@@ -119,16 +191,22 @@ def make_context(npc, guild, *, today=None, clock=time.time):
         board = load(board_path) if board_path.exists() else {'date': name, 'board': []}
         quest_path = Path(npc.quests_path(name))
         quests = load(quest_path) if quest_path.exists() else {'date': name, 'quests': []}
-        days[name] = {'contracts': [
-            {'questId': name + ':' + str(b['no']), 'title': b['title'], 'type': b['type'],
-             'issuer': b.get('from'), 'status': b['status'], 'objective': objective(b),
-             'objectiveSha256': digest(objective(b))}
-            for b in board['board'] if b['type'] in ('gather', 'hunt', 'visit') and not b.get('party')
-            and (b['type'] != 'gather' or gather_matches(b, quests['quests']))
-            and (b['type'] != 'visit' or is_far_horizon(b))],
+        # issuerReady is read-only visibility (case contract-takedown-tool-missing):
+        # a board contract whose issuer left the roster stays listed with its
+        # real status instead of silently vanishing; it flags the delivery
+        # dead-end, never auto-expires the contract.
+        rows = [{'questId': name + ':' + str(b['no']), 'title': b['title'], 'type': b['type'],
+                 'issuer': b.get('from'), 'issuerReady': b.get('from') in issuer_keys,
+                 'status': b['status'], 'objective': objective(b),
+                 'objectiveSha256': digest(objective(b))}
+                for b in board['board'] if b['type'] in ('gather', 'hunt', 'visit') and not b.get('party')
+                and (b['type'] != 'gather' or gather_matches(b, quests['quests']))
+                and (b['type'] != 'visit' or is_far_horizon(b))]
+        days[name] = {'contracts': rows,
+            'issuerMissingContracts': [r['questId'] for r in rows if not r['issuerReady']],
             'busyGatherIssuers': sorted({q['villager'] for q in quests['quests'] if not q.get('done')})}
     return {'schema': 1, 'updatedAt': clock(), 'today': current.isoformat(), 'days': days,
-            'receptionReady': reception_ready,
+            'receptionReady': reception_ready, 'reception': reception,
             'issuers': issuers, 'items': QUEST_ITEMS, 'mobs': MOBS,
             'proposalFormat': {'fields': ['date', 'title', 'story', 'ending', 'stages'],
                 'stages': {'common': ['id', 'kind', 'title', 'pitch'],
@@ -143,6 +221,10 @@ def make_context(npc, guild, *, today=None, clock=time.time):
                 'origin': list(guild.PLAZA), 'minimumDistance': 300,
                 'description': '从公会既定锚点外出300格，复用实际位置验收；不代表某处遗迹已经生成。'}},
             'capabilities': {**{k: {'ready': True} for k in ('story', 'gather', 'hunt', 'visit', 'existing')},
+                             'withdraw': {'ready': True, 'operator': 'game:mc-god',
+                                          'request': 'world_content_withdraw(request_id, day, no, reason)',
+                                          'contractStatusAfter': 'withdrawn',
+                                          'acceptance': 'world_content_context lists the questId with status withdrawn; guild claim/delivery refuse it'},
                              **deepcopy(BLOCKED)}}
 
 
@@ -208,13 +290,63 @@ def _reachability_axes(point, code):
     return float(point['x']), float(point['z'])
 
 
+def _segments_cross(p1, p2, p3, p4):
+    """True when 2-D segments p1-p2 and p3-p4 properly cross or touch."""
+    def turn(p, q, r):
+        cross = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+        return 0 if abs(cross) <= 1e-9 else (1 if cross > 0 else -1)
+
+    def between(p, q, r):
+        return (min(p[0], r[0]) - 1e-9 <= q[0] <= max(p[0], r[0]) + 1e-9
+                and min(p[1], r[1]) - 1e-9 <= q[1] <= max(p[1], r[1]) + 1e-9)
+
+    d1, d2 = turn(p3, p4, p1), turn(p3, p4, p2)
+    d3, d4 = turn(p1, p2, p3), turn(p1, p2, p4)
+    if ((d1 > 0 > d2) or (d1 < 0 < d2)) and ((d3 > 0 > d4) or (d3 < 0 < d4)):
+        return True
+    return ((d1 == 0 and between(p3, p1, p4)) or (d2 == 0 and between(p3, p2, p4))
+            or (d3 == 0 and between(p1, p3, p2)) or (d4 == 0 and between(p1, p4, p2)))
+
+
+def _observed_water_crossings(travel_from, travel_to):
+    """Advisory flags for straight travel segments touching an observed corridor.
+
+    Pure arithmetic over recorded observations; a flag is a warning to verify,
+    never proof that the leg is blocked, and the tp relay arithmetic is an
+    estimate, never a cast permission or a landing guarantee.
+    """
+    rows = []
+    for barrier in OBSERVED_WATER_CROSSINGS:
+        (ex, ez), (wx, wz) = barrier['banks']
+        if _segments_cross(travel_from, travel_to, (ex, ez), (wx, wz)):
+            casts = math.ceil(barrier['minWidthBlocks'] / TP_SINGLE_CAST_LIMIT)
+            rows.append({'id': barrier['id'], 'minWidthBlocks': barrier['minWidthBlocks'],
+                         'observedAt': barrier['observedAt'], 'sources': list(barrier['sources']),
+                         'tpSingleCastLimit': TP_SINGLE_CAST_LIMIT,
+                         'tpRelayCasts': casts, 'tpManaEstimate': casts * TP_CAST_MANA})
+    return rows
+
+
 def classify_reachability(target, anchor, waypoints=()):
     """Horizontal accounting for one contract destination; pure geometry.
 
     Same yardstick as the gateway goto pre-check: y never participates and
     one goto covers at most GOTO_SINGLE_HOP_LIMIT blocks. A relay suggestion
     is a decomposition to verify, never proof of reachability — only real
-    in-world goto receipts can confirm each leg.
+    in-world goto receipts can confirm each leg. Water corridors enter only
+    as observed-corridor flags with their evidence sources; they warn that a
+    leg may be un-walkable, they do not survey the river.
+
+    contractKinds encodes the accepted two-band grading (case-daefa622
+    v7, Goddess acceptance seq497 2026-09-15, stated for the village plaza
+    anchor): a gather delivery stays plausible only within two hops, so
+    gather is held out beyond 2 * the single-hop limit and — conservatively,
+    because walk_only cannot cross observed water — also whenever the
+    straight leg touches an observed corridor; hunt stays admissible in
+    every band. This is arithmetic for contract-generation checks, never
+    permission: a gather without a holdout still needs real goto receipts
+    per leg, and answers computed against a non-plaza anchor are arithmetic
+    on that anchor, not the accepted ruling.
     """
     tx, tz = _reachability_axes(target, 'invalid_reachability_target')
     ax, az = _reachability_axes(anchor, 'invalid_reachability_anchor')
@@ -241,9 +373,28 @@ def classify_reachability(target, anchor, waypoints=()):
         relay = {axis: waypoint[axis] for axis in ('x', 'y', 'z') if axis in waypoint}
         relay['name'] = waypoint.get('name')
         relay['maxLeg'] = round(max_leg, 1)
+    crossings = _observed_water_crossings((ax, az), (tx, tz))
+    if crossings:
+        widest = max(row['minWidthBlocks'] for row in crossings)
+        casts = math.ceil(widest / TP_SINGLE_CAST_LIMIT)
+        suggestion += ('跨水警示：该直线与已观测跨水走廊相交（%s），walk_only 不可渡水，'
+                       '上述中继只是几何拆分；需实测绕行或评估 tp 分跳'
+                       '（每跳≤%d格、约%d跳、估%d法力；tp 受固定方向、落点安全、'
+                       '城镇保护区与工作区校验，中途落点可用性未实测）；实测回执前不算可达。'
+                       % ('、'.join(row['id'] for row in crossings), TP_SINGLE_CAST_LIMIT,
+                          casts, casts * TP_CAST_MANA))
+    if distance > 2 * GOTO_SINGLE_HOP_LIMIT:
+        gather_holdout = 'distance_beyond_two_hops'
+    elif crossings:
+        gather_holdout = 'observed_water_crossing'
+    else:
+        gather_holdout = None
     return {'horizontalDistance': round(distance, 1), 'requiredHops': hops,
             'singleHopLimit': GOTO_SINGLE_HOP_LIMIT, 'band': band,
-            'relayViaWaypoint': relay, 'suggestion': suggestion}
+            'contractKinds': {'gather': gather_holdout is None, 'hunt': True,
+                              'gatherHeldOutBy': gather_holdout,
+                              'rule': 'case-daefa622bfc27d29180a:v7'},
+            'relayViaWaypoint': relay, 'waterCrossings': crossings, 'suggestion': suggestion}
 
 
 class ContentQueue:
@@ -390,6 +541,54 @@ class ContentQueue:
             else:
                 save(path, request)
         return {'ok': True, 'code': 'publication_requested', 'contentId': content_id, 'worldActionsExecuted': 0}
+
+    def withdraw(self, actor, request_id, day, no, reason=''):
+        """Queue one board-contract takedown for the supervised content tick.
+
+        case contract-takedown-tool-missing: the issuing NPC may leave the
+        roster while its contract still sits on the board, leaving players
+        unable to deliver. This submit side only pins the contract identity
+        (objective sha256) from fresh context and writes a durable request;
+        the board itself is changed by tick/_withdraw_one under the guild
+        economy lock, with before/after receipts. Replaying the same request
+        id returns the terminal receipt once one exists — checked before the
+        fresh-context gates, because an executed takedown legitimately no
+        longer passes them — while a different payload under the same id is
+        a conflict, exactly like publish/submit.
+        """
+        require(actor == 'game:mc-god', 'content_administrator_required')
+        require(isinstance(request_id, str) and ID.fullmatch(request_id), 'invalid_content_actor_or_request')
+        require(isinstance(day, str), 'invalid_withdraw_day')
+        require(type(no) is int and 1 <= no <= 99, 'invalid_withdraw_number')
+        note = text(reason, 120) if isinstance(reason, str) and reason.strip() else ''
+        payload_sha = digest([day, no, note])
+        withdraw_id = 'withdraw-' + digest([actor, request_id])[:24]
+        path = self.root / 'withdraw' / (withdraw_id + '.json')
+        with state_lock(self.root):
+            if path.exists():
+                old = load(path)
+                require(old['payloadSha256'] == payload_sha, 'withdraw_request_conflict')
+                receipt_path = self.root / 'receipts' / (withdraw_id + '.json')
+                receipt = load(receipt_path) if receipt_path.exists() else None
+                if isinstance(receipt, dict) and receipt.get('status') in WITHDRAW_TERMINAL:
+                    return {'ok': True, 'code': 'withdraw_' + receipt['status'], 'withdrawId': withdraw_id,
+                            'receipt': receipt, 'worldActionsExecuted': 0}
+                return {'ok': True, 'code': 'withdraw_queued', 'withdrawId': withdraw_id, 'worldActionsExecuted': 0}
+            context = self.context()
+            require(context.get('ok'), 'content_context_unavailable')
+            require(day in context['days'], 'invalid_withdraw_day')
+            quest_id = day + ':' + str(no)
+            contract = next((c for c in context['days'][day]['contracts'] if c['questId'] == quest_id), None)
+            require(contract is not None, 'content_contract_unavailable')
+            require(contract['status'] != 'withdrawn', 'withdraw_contract_withdrawn')
+            require(contract['status'] in ('open', 'claimed'), 'withdraw_contract_not_active')
+            request = {'schema': 1, 'withdrawId': withdraw_id, 'actor': actor, 'requestId': request_id,
+                       'day': day, 'no': no, 'questId': quest_id, 'reason': note,
+                       'objectiveSha256': contract['objectiveSha256'],
+                       'payloadSha256': payload_sha, 'requestedAt': self.clock(),
+                       'worldActionsExecuted': 0}
+            save(path, request)
+        return {'ok': True, 'code': 'withdraw_queued', 'withdrawId': withdraw_id, 'worldActionsExecuted': 0}
 
 
 SITE_KINDS = ('boss', 'chest')
@@ -681,6 +880,85 @@ def _publish_one(queue, npc, guild, request, current, clock):
         return receipt
 
 
+def _withdraw_one(queue, npc, guild, request, current, clock):
+    """Apply one queued takedown under the guild lock; receipts decide.
+
+    Same crash contract as _publish_one: the intermediate 'withdrawing'
+    receipt is the durable write plan. After a crash a row already marked
+    withdrawn on the board only gets its terminal receipt healed — the
+    settled board is never rewritten — while a row still open/claimed has
+    the write redone. Every terminal outcome carries the board sha256
+    before and after the change, so acceptance is rereading the real
+    contract state, never trusting the receipt text alone.
+    """
+    withdraw_id = request['withdrawId']
+    require(request.get('actor') == 'game:mc-god' and request.get('schema') == 1
+            and isinstance(request.get('day'), str) and type(request.get('no')) is int
+            and WITHDRAW_ID.fullmatch(withdraw_id), 'invalid_withdraw_request')
+    receipt_path = queue.root / 'receipts' / (withdraw_id + '.json')
+    receipt = load(receipt_path) if receipt_path.exists() else None
+    if receipt and receipt['status'] in WITHDRAW_TERMINAL:
+        return receipt
+    day, no = request['day'], request['no']
+    if date.fromisoformat(day) > current:
+        return {'withdrawId': withdraw_id, 'status': 'scheduled', 'day': day}
+    if date.fromisoformat(day) < current:
+        receipt = {'schema': 1, 'withdrawId': withdraw_id, 'status': 'rejected',
+                   'code': 'withdraw_day_past', 'day': day, 'no': no, 'updatedAt': clock()}
+        save(receipt_path, receipt)
+        return receipt
+    with guild.state_lock():
+        board_path = Path(guild.guild_path(day))
+        require(board_path.exists(), 'withdraw_board_missing')
+        doc = load(board_path)
+        row = next((b for b in doc['board'] if b.get('no') == no), None)
+        require(row is not None, 'withdraw_contract_missing')
+        if digest(objective(row)) != request['objectiveSha256']:
+            # The pinned objective moved after the request: the takedown is
+            # permanently rejected with a receipt, never silently retried.
+            receipt = {'schema': 1, 'withdrawId': withdraw_id, 'status': 'rejected',
+                       'code': 'withdraw_contract_changed', 'day': day, 'no': no,
+                       'title': row.get('title'), 'updatedAt': clock(),
+                       'boardSha256': digest(doc)}
+            save(receipt_path, receipt)
+            return receipt
+        if not receipt:
+            receipt = {'schema': 1, 'withdrawId': withdraw_id, 'status': 'withdrawing', 'day': day,
+                       'no': no, 'actor': 'game:mc-god', 'requestId': request.get('requestId'),
+                       'reason': request.get('reason'), 'objectiveSha256': request['objectiveSha256'],
+                       'startedAt': clock(), 'before': {'boardSha256': digest(doc)},
+                       'worldActionsExecuted': 0}
+            save(receipt_path, receipt)
+        released, healed = [], False
+        if row.get('status') != 'withdrawn':
+            require(row.get('status') in ('open', 'claimed'), 'withdraw_contract_not_active')
+            released = list(row.get('taker') or [])
+            row.update(status='withdrawn', withdrawnAt=clock(), withdrawnBy='game:mc-god',
+                       withdrawId=withdraw_id, taker=[], taken_at=None)
+            if row.get('type') == 'boss':
+                # The board row is the ledger; a summoned boss entity, if any
+                # adapter ever adds one, must not outlive its contract.
+                try:
+                    killer = getattr(guild, 'kill_boss', None)
+                    if killer:
+                        killer(no)
+                except Exception:
+                    pass
+            save(board_path, doc)
+            if hasattr(guild, 'BOARD'):
+                guild.BOARD.update(date=day, doc=doc)
+        else:
+            healed = True
+        receipt.update(status='withdrawn', updatedAt=clock(), title=row.get('title'),
+                       type=row.get('type'), after={'boardSha256': digest(load(board_path))})
+        if healed:
+            receipt['recoveredFromBoard'] = True
+        else:
+            receipt.update(releasedTakers=released, boardContractsChanged=1)
+        save(receipt_path, receipt)
+        return receipt
+
+
 def episode_lines(board, *, state=Path('/team'), quest_no=None):
     """Read-only player text; only confirmed publications matching this board."""
     try:
@@ -728,7 +1006,8 @@ def episode_lines(board, *, state=Path('/team'), quest_no=None):
                 for index_no, (stage, no) in enumerate(zip(episode['stages'], nums), 1):
                     lines.append('第%d步「%s」：%s（No.%d，当前%s）' % (
                         index_no, text(stage['title'], 60), text(stage['pitch'], 80), no,
-                        {'open':'可接', 'claimed':'有人承接', 'done':'该合同已结算'}.get(by_no[no]['status'], '状态待核对')))
+                        {'open':'可接', 'claimed':'有人承接', 'done':'该合同已结算',
+                         'withdrawn':'该合同已下架'}.get(by_no[no]['status'], '状态待核对')))
                 lines.append('预设结局（剧情文本，不是通关回执）：' + text(episode['ending'], 240))
                 lines.append('路线顺序供参考；逐单接取，实际完成与奖励只看原公会记录。')
         if quest_no is None and len(episodes) > 3:
@@ -746,6 +1025,16 @@ def tick(npc, guild, *, state=Path('/team'), today=None, clock=time.time):
     current = today or date.today()
     results = []
     with state_lock(queue.root):
+        # Takedowns run before publications: a package referencing a contract
+        # that is being withdrawn must fail its publication revalidation
+        # instead of landing on a dead board row.
+        for path in sorted((queue.root / 'withdraw').glob('*.json')):
+            try:
+                request = load(path)
+                require(WITHDRAW_ID.fullmatch(path.stem) and request.get('withdrawId') == path.stem, 'invalid_withdraw_request_file')
+                results.append(_withdraw_one(queue, npc, guild, request, current, clock))
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                results.append({'withdrawId': path.stem, 'status': 'withdraw_unconfirmed', 'errorType': type(exc).__name__})
         for path in sorted((queue.root / 'publish').glob('*.json')):
             try:
                 request = load(path)
@@ -772,6 +1061,8 @@ def tick(npc, guild, *, state=Path('/team'), today=None, clock=time.time):
         save(queue.root / 'context.json', context)
         public = {'schema': 1, 'updatedAt': clock(), 'publications': [{k: r.get(k) for k in
             ('contentId', 'status', 'code', 'date', 'newContracts', 'referencedContracts', 'questIds', 'publishedAt') if k in r}
-            for r in results], 'capabilities': context['capabilities']}
+            for r in results], 'withdrawals': [{k: r.get(k) for k in
+            ('withdrawId', 'status', 'code', 'day', 'no', 'title', 'updatedAt') if k in r}
+            for r in results if r.get('withdrawId')], 'capabilities': context['capabilities']}
         save(queue.root / 'status.json', public)
         return public

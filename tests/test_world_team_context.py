@@ -122,6 +122,63 @@ class NpcLlmEnabledTests(unittest.TestCase):
         self.assertIn('the world record carrying it is expired', result['notice'])
 
 
+class NpcHealthSubchecksTests(unittest.TestCase):
+    """case-874c6b4133a5affd763b: name the failing healthcheck sub-check from the record."""
+
+    def context(self, npc, fresh=True):
+        registered = {}
+
+        class App:
+            def tool(self):
+                def deco(fn):
+                    registered[fn.__name__] = fn
+                    return fn
+                return deco
+
+        fake = N(snapshot=lambda: {'snapshots': {'world': {'fresh': fresh, 'data': {'npc': npc}}}})
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}):
+            mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
+            return registered['team_context']()
+
+    def test_subcheck_fields_and_guild_states_are_surfaced(self):
+        stamp = '2026-09-15T03:40:55.795Z'
+        result = self.context({'available': True, 'updatedAt': stamp,
+                               'rconLastOkAt': stamp, 'spellLastPollAt': stamp,
+                               'guildRequestsLastPollAt': stamp,
+                               'guildNpcs': {'ok': False, 'checkedAt': stamp, 'online': 0,
+                                             'required': [{'key': 'guild_lan',
+                                                           'state': 'missing_in_loaded_chunk'}]},
+                               'threads': [{'name': 'inbox', 'ok': True}]})
+        view = result['world']['npcHealthSubchecks']
+        self.assertEqual(view['rconLastOkAt'], stamp)
+        self.assertEqual(view['guildRequestsLastPollAt'], stamp)
+        self.assertIs(view['guildNpcsOk'], False)
+        self.assertEqual(view['guildNpcsCheckedAt'], stamp)
+        self.assertEqual(view['guildNpcsStates'], {'guild_lan': 'missing_in_loaded_chunk'})
+        self.assertIn('npcHealthSubchecks', result['notice'])
+        self.assertIn('case-874c6b4133a5affd763b', result['notice'])
+
+    def test_partial_records_surface_available_fields_only(self):
+        result = self.context({'guildNpcs': {'ok': True, 'required': 'not-a-list'}})
+        view = result['world']['npcHealthSubchecks']
+        self.assertIsNone(view['rconLastOkAt'])
+        self.assertIs(view['guildNpcsOk'], True)
+        self.assertEqual(view['guildNpcsStates'], {})
+
+    def test_absent_or_malformed_subchecks_stay_quiet(self):
+        for npc in ({}, {'threads': [{'name': 'inbox', 'ok': True}]},
+                    {'rconLastOkAt': None, 'guildNpcs': 'not-a-dict'}, 'not-a-dict'):
+            result = self.context(npc)
+            self.assertNotIn('npcHealthSubchecks', result['world'])
+
+    def test_expired_world_record_qualifies_the_subcheck_note(self):
+        result = self.context({'rconLastOkAt': '2026-09-15T03:40:55.795Z'}, fresh=False)
+        self.assertEqual(result['world']['staleSnapshots'], ['world'])
+        self.assertIn('npcHealthSubchecks', result['world'])
+        self.assertIn('the world record carrying them is expired', result['notice'])
+
+
 class PlayersRosterTests(unittest.TestCase):
     """case-08e101df69170a7ece6d: players is a registry, not a live online list."""
 
