@@ -94,7 +94,12 @@ ORPHAN_CYCLE_AFTER = 360 + 90 + 300
 async def execute(executor, job, original, runtime):
     import asyncio
     import fcntl
-    actor = runtime + ':' + executor._workspace.agent_id
+    from world_team_hosts import logical_actor
+    # The runtime builds the actor from runtime + native agent_id (e.g.
+    # 'game:qd-engineer'), but team stores and schedules use logical actors
+    # (e.g. 'operations:mc-god'). Resolve through the migration mapping.
+    runtime_actor = runtime + ':' + executor._workspace.agent_id
+    actor = logical_actor(runtime, executor._workspace.agent_id) or runtime_actor
     validate_team_job(job.model_dump(mode='json', exclude_none=True), actor)
     store = TeamStore(actor)
     store.root.mkdir(parents=True, exist_ok=True)
