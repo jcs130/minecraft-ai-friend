@@ -85,7 +85,7 @@ def register_content_tools(app, actor, state=Path('/team')):
     @app.tool()
     def world_content_reachability(target: Optional[dict] = None, issuer: Optional[str] = None,
                                    anchor: Optional[dict] = None, waypoints: Optional[list] = None) -> dict:
-        """Horizontal accounting for one contract destination against the gateway single-goto limit (24 blocks, x/z only); also flags intersections with observed water corridors (advisory with tp relay arithmetic, never proof); give exactly one of target/issuer; pure geometry, worldActionsExecuted stays 0."""
+        """Horizontal accounting for one contract destination against the gateway single-goto limit (24 blocks, x/z only); also flags intersections with observed water corridors (advisory with tp relay arithmetic, never proof) and reports admissible contract kinds per the accepted two-band rule (gather held out beyond two hops or across observed water, hunt always); give exactly one of target/issuer; pure geometry, worldActionsExecuted stays 0."""
         return queue.reachability(actor, target, issuer, anchor, waypoints)
 
     if actor == 'game:mc-god':

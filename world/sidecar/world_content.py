@@ -142,10 +142,34 @@ def objective(row):
 def make_context(npc, guild, *, today=None, clock=time.time):
     current = today or date.today()
     receptionist = next((p for p in npc.PROFILES if contract_issuer(p, 'reception')), None)
-    try:
-        reception_ready = receptionist is not None and valid_position(npc.alive_pos(receptionist))
-    except Exception:
-        reception_ready = False
+    # Read-only visibility (case content-reception-frozen-20260915): the
+    # reception gate is a fact about the receptionist NPC (guild_lan), so a
+    # closed gate must document why instead of answering a bare false.
+    # Reason vocabulary: 'receptionist_missing' = no roster profile holds the
+    # reception issuer role (missing profile/binding/profession, folded by
+    # contract_issuer); 'receptionist_position_unavailable' = alive_pos
+    # raised, errorType names the exception class;
+    # 'receptionist_position_invalid' = alive_pos returned something that is
+    # not a finite 3-axis position, observedPositionType names the shape;
+    # None = gate open. This reports facts for operators, it never changes
+    # the gate: receptionReady below stays the single authority that
+    # validate_episode reads.
+    reception = {'ready': False, 'reason': 'receptionist_missing', 'receptionist': None}
+    if receptionist is not None:
+        reception['receptionist'] = receptionist['key']
+        reception['reason'] = 'receptionist_position_unavailable'
+        try:
+            position = npc.alive_pos(receptionist)
+        except Exception as exc:
+            reception['errorType'] = type(exc).__name__
+        else:
+            if valid_position(position):
+                reception = {'ready': True, 'reason': None,
+                             'receptionist': receptionist['key'], 'position': list(position)}
+            else:
+                reception['reason'] = 'receptionist_position_invalid'
+                reception['observedPositionType'] = type(position).__name__
+    reception_ready = reception['ready']
     issuers = []
     for person in npc.PROFILES:
         kinds = [kind for kind in ('gather', 'hunt', 'visit') if contract_issuer(person, kind)]
@@ -182,7 +206,7 @@ def make_context(npc, guild, *, today=None, clock=time.time):
             'issuerMissingContracts': [r['questId'] for r in rows if not r['issuerReady']],
             'busyGatherIssuers': sorted({q['villager'] for q in quests['quests'] if not q.get('done')})}
     return {'schema': 1, 'updatedAt': clock(), 'today': current.isoformat(), 'days': days,
-            'receptionReady': reception_ready,
+            'receptionReady': reception_ready, 'reception': reception,
             'issuers': issuers, 'items': QUEST_ITEMS, 'mobs': MOBS,
             'proposalFormat': {'fields': ['date', 'title', 'story', 'ending', 'stages'],
                 'stages': {'common': ['id', 'kind', 'title', 'pitch'],
@@ -312,6 +336,17 @@ def classify_reachability(target, anchor, waypoints=()):
     in-world goto receipts can confirm each leg. Water corridors enter only
     as observed-corridor flags with their evidence sources; they warn that a
     leg may be un-walkable, they do not survey the river.
+
+    contractKinds encodes the accepted two-band grading (case-daefa622
+    v7, Goddess acceptance seq497 2026-09-15, stated for the village plaza
+    anchor): a gather delivery stays plausible only within two hops, so
+    gather is held out beyond 2 * the single-hop limit and — conservatively,
+    because walk_only cannot cross observed water — also whenever the
+    straight leg touches an observed corridor; hunt stays admissible in
+    every band. This is arithmetic for contract-generation checks, never
+    permission: a gather without a holdout still needs real goto receipts
+    per leg, and answers computed against a non-plaza anchor are arithmetic
+    on that anchor, not the accepted ruling.
     """
     tx, tz = _reachability_axes(target, 'invalid_reachability_target')
     ax, az = _reachability_axes(anchor, 'invalid_reachability_anchor')
@@ -348,8 +383,17 @@ def classify_reachability(target, anchor, waypoints=()):
                        '城镇保护区与工作区校验，中途落点可用性未实测）；实测回执前不算可达。'
                        % ('、'.join(row['id'] for row in crossings), TP_SINGLE_CAST_LIMIT,
                           casts, casts * TP_CAST_MANA))
+    if distance > 2 * GOTO_SINGLE_HOP_LIMIT:
+        gather_holdout = 'distance_beyond_two_hops'
+    elif crossings:
+        gather_holdout = 'observed_water_crossing'
+    else:
+        gather_holdout = None
     return {'horizontalDistance': round(distance, 1), 'requiredHops': hops,
             'singleHopLimit': GOTO_SINGLE_HOP_LIMIT, 'band': band,
+            'contractKinds': {'gather': gather_holdout is None, 'hunt': True,
+                              'gatherHeldOutBy': gather_holdout,
+                              'rule': 'case-daefa622bfc27d29180a:v7'},
             'relayViaWaypoint': relay, 'waterCrossings': crossings, 'suggestion': suggestion}
 
 

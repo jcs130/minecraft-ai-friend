@@ -30,6 +30,7 @@ MINE_RELAY = {'name': '矿道中转', 'x': -557, 'y': 64, 'z': 877}
 RIVER_EAST_BANK = {'x': -582.8, 'y': 64, 'z': 847.3}   # observed stuck point, east bank
 RIVER_RESCUE_SPOT = {'x': -577.5, 'y': 66, 'z': 842.5}  # admin teleport landing
 CAMP = {'x': -639, 'y': 64, 'z': 1055}                  # west of the river
+EAST_BANK_EDGE = {'x': -590, 'y': 64, 'z': 850}         # 46.6 out; leg crosses the observed river
 
 
 class ClassifyReachabilityTests(unittest.TestCase):
@@ -120,6 +121,42 @@ class ObservedWaterCrossingTests(unittest.TestCase):
         self.assertEqual(content.classify_reachability(CAMP, PLAZA_WAYPOINT),
                          content.classify_reachability({'x': -639, 'y': 319, 'z': 1055},
                                                         {'x': -547, 'y': -60, 'z': 868}))
+
+
+class ContractKindAdmissibilityTests(unittest.TestCase):
+    """The Goddess-accepted two-band grading (case-daefa622bfc27d29180a v7,
+    seq497 2026-09-15): relay-band targets keep gather with a stated
+    prerequisite, beyond-two-hops targets are hunt-only. Encoded as
+    arithmetic so the daily check cannot regress into another hand-copied
+    table that mislabels the band — the planner did exactly that twice
+    (seq304 Shi Lei 22 blocks, seq490 He Shu tagged beyond at 39.2)."""
+
+    def test_distance_rule_for_the_real_villagers(self):
+        expected = [(SHI_LEI, True, None), (HE_SHU, True, None),
+                    ({'x': -547, 'y': 64, 'z': 880}, True, None),
+                    (ZHU_JIU, False, 'distance_beyond_two_hops')]
+        for target, gather, holdout in expected:
+            kinds = content.classify_reachability(target, PLAZA_WAYPOINT)['contractKinds']
+            self.assertEqual(kinds['gather'], gather, target)
+            self.assertTrue(kinds['hunt'])
+            self.assertEqual(kinds['gatherHeldOutBy'], holdout, target)
+            self.assertEqual(kinds['rule'], 'case-daefa622bfc27d29180a:v7')
+
+    def test_observed_water_holds_out_a_relay_band_gather(self):
+        row = content.classify_reachability(EAST_BANK_EDGE, PLAZA_WAYPOINT)
+        self.assertEqual((row['horizontalDistance'], row['band']), (46.6, 'relay_within_two_hops'))
+        self.assertTrue(row['waterCrossings'])
+        self.assertFalse(row['contractKinds']['gather'])
+        self.assertEqual(row['contractKinds']['gatherHeldOutBy'], 'observed_water_crossing')
+
+    def test_the_queue_path_carries_the_rule(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        queue = content.ContentQueue(Path(tmp.name))
+        row = queue.reachability(DESIGNER, target=SHI_LEI, anchor=PLAZA_WAYPOINT)
+        self.assertTrue(row['contractKinds']['gather'])
+        self.assertEqual(row['contractKinds']['rule'], 'case-daefa622bfc27d29180a:v7')
+        self.assertEqual(row['worldActionsExecuted'], 0)
 
 
 class QueueReachabilityTests(unittest.TestCase):
