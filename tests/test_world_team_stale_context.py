@@ -1,7 +1,8 @@
-"""Freshness tests integrated from the Agent's reviewed commit 5de7f8af.
+"""Freshness tests for the team_context inspection records.
 
-Keep the lazy public snapshot import patched during invocation, and isolate
-the root branch's separate survivor projection from live /public reads.
+The inspection record comes from OperationsTools and the survivor controller
+channel from survivor_snapshot; both are patched here so the freshness rules are
+exercised without live /public reads.
 """
 from pathlib import Path
 import sys
@@ -26,7 +27,8 @@ class TeamContextFreshnessTests(unittest.TestCase):
                 return deco
 
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
-        with patch.dict(sys.modules, {'operations_team_mcp': N(public_snapshot=lambda: dict(snapshot))}), \
+        fake = N(snapshot=lambda: dict(snapshot))
+        with patch.dict(sys.modules, {'operations_team_mcp': N(OperationsTools=lambda actor: fake)}), \
              patch.object(mcp, 'survivor_snapshot', return_value={'status': 'unknown', 'fresh': False}):
             mcp.register_team_tools(App(), 'operations:mc-god', state=Path(tmp.name))
             return registered['team_context']()

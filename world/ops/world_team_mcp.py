@@ -1,10 +1,17 @@
 """Qwen-owned stdio project collaboration tools, with identity bound at startup."""
 import argparse
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import os
 from pathlib import Path
+import re
+import stat
+import time
 from world_team import members, TeamStore
 
-COMMON_TOOLS = ('team_roster', 'team_context', 'team_cases', 'team_case', 'team_report', 'team_update')
+COMMON_TOOLS = ('team_roster', 'team_context', 'team_cases', 'team_case', 'team_report', 'team_update',
+                'team_request_help', 'team_help_status')
 
 
 def _plain(value):
@@ -40,15 +47,15 @@ def unhealthy_service_evidence(sections):
 
 
 def survivor_controller_evidence(snapshot):
-    """Plain survivor controller fields from the snapshot layer, or None when the channel is absent.
+    """Plain survivor controller fields from a survivor section, or None when the channel is absent.
 
     The health inspection record measures the survivor container healthcheck while the controller
-    self-report (public survivor.json, surfaced by OperationsTools.snapshot) describes its body and
-    reconnect state. case-7772e059: an exited/unhealthy container verdict sat beside a controller
-    that restored online with restored_identity_verified and the pairing had to be hand-copied.
-    Any dict section yields evidence so an expired or unreadable controller record still records
-    fresh=false during an unhealthy window; None is reserved for snapshot layers that do not
-    expose the channel at all.
+    self-report (/public/survivor.json, read by survivor_snapshot and adapted by survivor_section)
+    describes its body and reconnect state. case-7772e059: an exited/unhealthy container verdict sat
+    beside a controller that restored online with restored_identity_verified and the pairing had to be
+    hand-copied. Any dict section yields evidence so an expired or unreadable controller record still
+    records fresh=false during an unhealthy window; None is reserved for an absent channel. Publishing
+    survivor.json as an OperationsTools snapshot section remains a parked, coverage-gated candidate.
     """
     section = snapshot.get('survivor') if isinstance(snapshot, dict) else None
     if not isinstance(section, dict):
@@ -169,6 +176,97 @@ def world_process_epoch(sections):
     return marker - timedelta(seconds=uptime)
 
 
+def survivor_snapshot(public=Path('/public'), clock=time.time):
+    """Read fixed public controller metadata; never include model or gameplay text."""
+    source = '/public/survivor.json'
+    unknown = {'ok': False, 'fresh': False, 'status': 'unknown', 'source': source}
+    try:
+        root = Path(public)
+        path = root / 'survivor.json'
+        if not root.is_absolute() or any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)()
+                                        for p in (path, *path.parents)):
+            return unknown | {'code': 'survivor_snapshot_invalid_path'}
+        size_limit = 2 * 1024 * 1024
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > size_limit:
+            return unknown | {'code': 'survivor_snapshot_invalid_file'}
+        with path.open('rb') as handle:
+            before = os.fstat(handle.fileno())
+            raw = handle.read(size_limit + 1)
+            after = os.fstat(handle.fileno())
+        if len(raw) > size_limit or (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            return unknown | {'code': 'survivor_snapshot_changed_or_oversized'}
+        value = json.loads(raw.decode('utf-8-sig'))
+        if not isinstance(value, dict) or value.get('schema') != 1 or value.get('project') != 'qiandengji-survivor':
+            raise ValueError('invalid_schema')
+        stamp = value['generatedAt']
+        if not isinstance(stamp, str) or len(stamp) > 64:
+            raise ValueError('invalid_timestamp')
+        at = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+        if at.tzinfo is None:
+            raise ValueError('timestamp_without_timezone')
+        age = clock() - at.timestamp()
+        if not -5 <= age <= 120:
+            return unknown | {'code': 'survivor_snapshot_stale', 'timestamp': stamp, 'ageSeconds': round(age, 1)}
+
+        def metadata(row, codes=(), flags=()):
+            if row is None:
+                return {}
+            if not isinstance(row, dict):
+                raise ValueError('invalid_metadata')
+            result = {}
+            for key in codes:
+                item = row.get(key)
+                if item is None:
+                    continue
+                if not isinstance(item, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}', item):
+                    raise ValueError('invalid_metadata_code')
+                result[key] = item
+            for key in flags:
+                if key not in row:
+                    continue
+                if type(row[key]) is not bool:
+                    raise ValueError('invalid_metadata_flag')
+                result[key] = row[key]
+            return result
+
+        result = metadata(value, ('status', 'pauseReason', 'cancellationStatus', 'wakeReason', 'goalState'),
+                          ('enabled', 'autonomous'))
+        if 'status' not in result or 'enabled' not in result:
+            raise ValueError('missing_controller_state')
+        result['lastDecision'] = metadata(value.get('lastDecision'), ('taskId',),
+            ('completed', 'nativeTaskCompleted', 'modelCompleted'))
+        result['actionExecution'] = metadata(value.get('actionExecution'), flags=('ok', 'inFlight'))
+        result['body'] = metadata(value.get('body'), flags=('ok', 'online'))
+        result['bodyReconnect'] = metadata(value.get('bodyReconnect'), ('status', 'reason'))
+        return result | {'ok': True, 'fresh': True, 'source': source, 'timestamp': stamp,
+            'ageSeconds': round(age, 1), 'sha256': hashlib.sha256(raw).hexdigest(),
+            'notice': 'Controller metadata only. lastDecision is the last recorded decision, not proof of an active task; '
+                      'paused or unavailable does not mean the body is dead. No model thoughts or dialogue are included.'}
+    except (OSError, ValueError, TypeError, KeyError, OverflowError, RecursionError):
+        return unknown | {'code': 'survivor_snapshot_unavailable'}
+
+
+def survivor_section(snapshot):
+    """Adapt the controller read into the section shape survivor_controller_evidence takes.
+
+    The evidence layer reads flat bodyOnline/reconnectStatus/reconnectReason keys
+    while survivor_snapshot reports body.online and bodyReconnect.status/reason,
+    so the pairing needs this mapping to yield anything at all. The controller
+    channel is read here rather than published as an OperationsTools snapshot
+    section: that wider exposure is still a parked, coverage-gated candidate.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    body = snapshot.get('body') if isinstance(snapshot.get('body'), dict) else {}
+    reconnect = snapshot.get('bodyReconnect') if isinstance(snapshot.get('bodyReconnect'), dict) else {}
+    return {'fresh': snapshot.get('fresh') is True, 'timestamp': snapshot.get('timestamp'),
+            'ageSeconds': snapshot.get('ageSeconds'), 'sha256': snapshot.get('sha256'),
+            'data': {'status': snapshot.get('status'), 'bodyOnline': body.get('online'),
+                     'reconnectStatus': reconnect.get('status'),
+                     'reconnectReason': reconnect.get('reason')}}
+
+
 def register_team_tools(app, actor, state=Path('/team')):
     store = TeamStore(actor, state)
 
@@ -191,7 +289,8 @@ def register_team_tools(app, actor, state=Path('/team')):
         unhealthy, evidence = unhealthy_service_evidence(sections)
         snapshot['unhealthyServices'] = unhealthy
         snapshot['unhealthyServiceEvidence'] = evidence
-        controller = survivor_controller_evidence(snapshot)
+        controller_snapshot = survivor_snapshot()
+        controller = survivor_controller_evidence({'survivor': survivor_section(controller_snapshot)})
         notes = ''
         if stale:
             notes += (' Sections listed in staleSnapshots are expired inspection records, '
@@ -277,7 +376,8 @@ def register_team_tools(app, actor, state=Path('/team')):
                               ' record); an exited container verdict beside a controller view that'
                               ' restored online marks a flap candidate whose exit cause still needs'
                               ' host receipts such as RestartCount, exit code, OOMKilled or docker events.')
-        return {'ok': True, 'actor': actor, 'world': snapshot, 'work': store.cases(),
+        return {'ok': True, 'actor': actor, 'world': snapshot, 'survivor': controller_snapshot,
+            'work': store.cases(),
             'notice': 'In-world dialogue must use game channels. These documents are project feedback. '
                       'A report or tested commit is not proof of a deployed game fix.' + notes}
 
@@ -287,19 +387,27 @@ def register_team_tools(app, actor, state=Path('/team')):
         return store.cases(owner, include_closed, limit)
 
     @app.tool()
-    def team_case(case_id: str) -> dict:
-        """Read one issue and attributed updates, including current version for a safe handoff."""
-        return store.case(case_id)
+    def team_case(case_id: str, event_limit: int = 3, before_seq: int | None = None) -> dict:
+        """Read one current issue/version and its latest 3 complete attributed events.
+
+        Select an issue from the short team_cases index first. For evidence needed from older history,
+        pass next_before_seq as before_seq; event_limit accepts 1-20. Each page is chronological,
+        has_more signals older pages, and all original audit events remain available. Do not expand
+        every issue or page before advancing the selected work.
+        """
+        return store.case(case_id, event_limit, before_seq)
 
     @app.tool()
     def team_report(request_id: str, dedupe_key: str, title: str, category: str,
-                    observed: str, expected: str, evidence: list[str]) -> dict:
+                    observed: str, expected: str, evidence: list[str], assign_to: str | None = None) -> dict:
         """Write an attributed Markdown feedback document and durable case. Categories: bug/gameplay/content/operations/improvement.
 
         Include actual task/action IDs, times and reproducible observations. Reuse a stable dedupe_key for the same issue;
         request_id identifies this exact report. Missing features and suggested fixes are not completed results.
+        Only verified Yui or Goddess may set assign_to="operations:mc-god" for a new engineering request.
+        An existing issue keeps its current assignee; read owner in the receipt. This cannot close another role's work.
         """
-        return store.report(request_id, dedupe_key, title, category, observed, expected, evidence)
+        return store.report(request_id, dedupe_key, title, category, observed, expected, evidence, assign_to)
 
     @app.tool()
     def team_update(request_id: str, case_id: str, expected_version: int, status: str,
@@ -310,6 +418,37 @@ def register_team_tools(app, actor, state=Path('/team')):
         deployments and gameplay outcomes need independent receipts. On case_changed read again; do not overwrite.
         """
         return store.update(request_id, case_id, expected_version, status, note, evidence, assign_to)
+
+    @app.tool()
+    def team_request_help(case_id: str, recipient: str = 'owner') -> dict:
+        """Ask the responsible operations Agent to handle an existing issue now via a native Qwen background task.
+
+        First record real evidence with team_report. Same case version/recipient is submitted once, even after timeout.
+        recipient is owner or a qualified operational actor (game:mc-god, operations:mc-god, game:qd-guild-planner).
+        Does not send game dialogue or wake the reporting character on reply. Keep helpId and read status later.
+        """
+        from team_help import request_help
+        return request_help(actor, case_id, recipient, root=state)
+
+    @app.tool()
+    def team_help_status(help_id: str) -> dict:
+        """Read an existing native help task; unknown submissions are not repeated. Check the case for repair evidence."""
+        from team_help import help_status
+        return help_status(actor, help_id, root=state)
+
+    from team_recruitment import MANAGERS
+    if actor in MANAGERS:
+        @app.tool()
+        def team_recruit(profession_key: str, name: str, profession: str) -> dict:
+            """Recruit a persistent professional Agent into game Qwen (18089) with its own workspace and skills.
+
+            First inspect team_roster and reuse existing specialists. Stable profession_key is lowercase ASCII 3-36 chars.
+            A repeat returns the same person; name/profession cannot silently change. No body/admin credentials inherited.
+            The new member gets the current planner model route and ordinary file/learning/team tools, no new daemon.
+            Temporary analysis instead uses the available native spawn_subagent tool. Creation makes no model call.
+            """
+            from team_recruitment import recruit
+            return recruit(actor, profession_key, name, profession)
     return list(COMMON_TOOLS)
 
 
