@@ -26,7 +26,7 @@ def content_tools(actor):
     shared = ('world_content_context', 'world_content_read', 'world_site_read',
               'world_content_reachability')
     return shared + ({'game:qd-guild-planner': ('world_content_submit',),
-                      'game:mc-god': ('world_content_publish',) + SITE_LEDGER_MUTATIONS,
+                      'game:mc-god': ('world_content_publish', 'world_content_withdraw') + SITE_LEDGER_MUTATIONS,
                       'operations:mc-priest': ('world_content_submit_story',)}[actor])
 
 
@@ -57,6 +57,11 @@ def register_content_tools(app, actor, state=Path('/team')):
         def world_content_publish(request_id: str, content_id: str) -> dict:
             """Approve one designer package for existing NPC publication; inspect the receipt afterward, never assume queued means published."""
             return queue.publish(actor, request_id, content_id)
+
+        @app.tool()
+        def world_content_withdraw(request_id: str, day: str, no: int, reason: str = '') -> dict:
+            """Take one listed board contract off the board (status->withdrawn) via the supervised content tick; contract identity is pinned from fresh context, replay of the same request returns the receipt; verify with world_content_context, never assume queued means withdrawn."""
+            return queue.withdraw(actor, request_id, day, no, reason)
     else:
         @app.tool()
         def world_content_submit_story(request_id: str, title: str, story: str, objectives: list[str]) -> dict:
@@ -72,11 +77,15 @@ def register_content_tools(app, actor, state=Path('/team')):
     # shared receipt channel: every content actor can account a destination
     # against the gateway single-goto limit before writing it into a
     # contract, so an under-reported distance can no longer reach publication
-    # review as geometry nobody checked.
+    # review as geometry nobody checked. case-52f0d5bb adds the observed
+    # water-corridor flags: a leg whose straight line touches an observed
+    # river corridor is reported with its evidence sources and tp relay
+    # arithmetic, so a cross-river walk relay is never offered as if water
+    # were walkable terrain.
     @app.tool()
     def world_content_reachability(target: Optional[dict] = None, issuer: Optional[str] = None,
                                    anchor: Optional[dict] = None, waypoints: Optional[list] = None) -> dict:
-        """Horizontal accounting for one contract destination against the gateway single-goto limit (24 blocks, x/z only); give exactly one of target/issuer; pure geometry, worldActionsExecuted stays 0."""
+        """Horizontal accounting for one contract destination against the gateway single-goto limit (24 blocks, x/z only); also flags intersections with observed water corridors (advisory with tp relay arithmetic, never proof); give exactly one of target/issuer; pure geometry, worldActionsExecuted stays 0."""
         return queue.reachability(actor, target, issuer, anchor, waypoints)
 
     if actor == 'game:mc-god':

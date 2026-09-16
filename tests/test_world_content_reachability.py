@@ -27,6 +27,9 @@ HE_SHU = {'x': -560, 'y': 80, 'z': 905}           # 39.2
 ZHU_JIU = {'x': -538, 'y': 68, 'z': 768}          # 100.4, beyond two hops
 HOME_HALL = {'name': '家·千灯堂', 'x': -541, 'y': 64, 'z': 868}
 MINE_RELAY = {'name': '矿道中转', 'x': -557, 'y': 64, 'z': 877}
+RIVER_EAST_BANK = {'x': -582.8, 'y': 64, 'z': 847.3}   # observed stuck point, east bank
+RIVER_RESCUE_SPOT = {'x': -577.5, 'y': 66, 'z': 842.5}  # admin teleport landing
+CAMP = {'x': -639, 'y': 64, 'z': 1055}                  # west of the river
 
 
 class ClassifyReachabilityTests(unittest.TestCase):
@@ -76,6 +79,49 @@ class ClassifyReachabilityTests(unittest.TestCase):
             content.classify_reachability(SHI_LEI, PLAZA_WAYPOINT, ({'x': 1},))
 
 
+class ObservedWaterCrossingTests(unittest.TestCase):
+    """case-52f0d5bb65c49ef1cb2a: a >70-block river stopped every westward
+    walk_only navigation and needed an admin teleport. The reachability
+    channel must never again present a cross-river leg as a plain walking
+    relay: intersections with the observed corridor are flagged with their
+    evidence sources and tp arithmetic, and stay advisory forever."""
+
+    def test_tp_constants_are_pinned(self):
+        self.assertEqual(content.TP_SINGLE_CAST_LIMIT, 30)
+        self.assertEqual(content.TP_CAST_MANA, 20)
+
+    def test_village_to_camp_flags_the_observed_river(self):
+        row = content.classify_reachability(CAMP, PLAZA_WAYPOINT)
+        self.assertEqual(row['band'], 'beyond_two_hops')
+        crossing, = row['waterCrossings']
+        self.assertEqual(crossing['id'], 'village-camp-river-2026-09-15')
+        self.assertEqual(crossing['minWidthBlocks'], 70)
+        self.assertEqual(crossing['tpRelayCasts'], 3)
+        self.assertEqual(crossing['tpManaEstimate'], 60)
+        self.assertIn('goddess-inspect-20260915-rivercase-1', crossing['sources'])
+        self.assertIn('跨水警示', row['suggestion'])
+        self.assertIn('实测回执前不算可达', row['suggestion'])
+
+    def test_village_side_targets_stay_unflagged(self):
+        for target in (SHI_LEI, HE_SHU, ZHU_JIU, RIVER_RESCUE_SPOT):
+            row = content.classify_reachability(target, PLAZA_WAYPOINT)
+            self.assertEqual(row['waterCrossings'], [], target)
+            self.assertNotIn('跨水警示', row['suggestion'])
+
+    def test_bank_and_camp_endpoints_touch_the_connector_and_flag(self):
+        # Documented conservative semantics: a leg starting or ending exactly
+        # on an observed bank point touches the corridor connector and is
+        # flagged. The rescue shuffle itself therefore flags; that is the safe
+        # direction to be wrong in, never the other way.
+        row = content.classify_reachability(RIVER_RESCUE_SPOT, RIVER_EAST_BANK)
+        self.assertEqual(len(row['waterCrossings']), 1)
+
+    def test_water_flags_are_y_independent_like_everything_else(self):
+        self.assertEqual(content.classify_reachability(CAMP, PLAZA_WAYPOINT),
+                         content.classify_reachability({'x': -639, 'y': 319, 'z': 1055},
+                                                        {'x': -547, 'y': -60, 'z': 868}))
+
+
 class QueueReachabilityTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -123,6 +169,14 @@ class QueueReachabilityTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'source'):
                 self.queue.reachability(ADMIN, **kwargs)
 
+    def test_water_crossing_survives_the_queue_path(self):
+        row = self.queue.reachability(DESIGNER, target=CAMP, anchor=PLAZA_WAYPOINT)
+        self.assertTrue(row['ok'])
+        self.assertEqual(row['waterCrossings'][0]['tpRelayCasts'], 3)
+        self.assertEqual(row['waterCrossings'][0]['tpManaEstimate'], 60)
+        self.assertIn('跨水警示', row['suggestion'])
+        self.assertEqual(row['worldActionsExecuted'], 0)
+
 
 class ReachabilityToolTests(unittest.TestCase):
     def setUp(self):
@@ -163,6 +217,13 @@ class ReachabilityToolTests(unittest.TestCase):
         self.assertEqual((row['horizontalDistance'], row['band']), (32.6, 'relay_within_two_hops'))
         self.assertEqual(row['relayViaWaypoint']['maxLeg'], 18.4)
         self.assertEqual(row['anchorSource'], 'explicit')
+
+    def test_tool_reports_water_crossings_for_camp_legs(self):
+        row = self.app(DESIGNER).tools['world_content_reachability'](
+            target=CAMP, anchor=PLAZA_WAYPOINT)
+        self.assertEqual(row['waterCrossings'][0]['id'], 'village-camp-river-2026-09-15')
+        self.assertIn('实测回执前不算可达', row['suggestion'])
+        self.assertEqual(row['worldActionsExecuted'], 0)
 
 
 if __name__ == '__main__':
