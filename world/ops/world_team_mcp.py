@@ -317,8 +317,19 @@ def main():
     from mcp.server.fastmcp import FastMCP
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--actor', choices=members(), required=True)
+    parser.add_argument('--native-runtime', default=None,
+                        help='native host runtime declared by a migrated driver card')
+    parser.add_argument('--native-role', default=None,
+                        help='native host role declared by a migrated driver card')
     args = parser.parse_args()
-    app = FastMCP('qiandengji-project-team')
+    if (args.native_runtime is None) != (args.native_role is None):
+        parser.error('--native-runtime and --native-role must be given together')
+    server = FastMCP('qiandengji-project-team')
+    app = server
+    if args.native_runtime is not None:
+        from world_team_hosts import require_host, host_tool_app
+        require_host(args.actor, args.native_runtime, args.native_role)
+        app = host_tool_app(server, args.actor, args.native_runtime, args.native_role)
     register_team_tools(app, args.actor)
     if args.actor == 'game:mc-god':
         from world_admin_tools import register_admin_tools
@@ -326,7 +337,7 @@ def main():
     if args.actor in ('game:mc-god', 'game:qd-guild-planner', 'operations:mc-priest'):
         from world_content_tools import register_content_tools
         register_content_tools(app, args.actor)
-    app.run(transport='stdio')
+    server.run(transport='stdio')
 
 
 if __name__ == '__main__':
