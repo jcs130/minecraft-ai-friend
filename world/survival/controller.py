@@ -803,6 +803,11 @@ class Controller:
             delay = 1800
         floor = self.review_floor()
         delay = min(3600, max(floor, delay))
+        # Crystallization hint accelerates the next review (熟能生巧):
+        # a detected pattern deserves reflection sooner than the regular
+        # 30-min cadence, but never more often than the floor.
+        if self.data.get('crystallizationHint'):
+            delay = min(delay, floor)
         completed = self.completed_review_id(memory)
         if completed and completed != self.data.get('completedReviewConsumed'):
             delay = floor
@@ -1338,17 +1343,23 @@ class Controller:
                 '按需用Qwen原生文件和记忆整理已核验事实、失败原因与一个可改进点。'
                 '长期目标及下一步保存在自己的memory/goals.md，MEMORY.md保留短索引，remember记录当前工作状态；'
                 '区分已验证、待验证和受阻。普通笔记不等于程序已学会，程序仍须真实测试。')
+        # Crystallization (case-9f5b2099 熟能生巧): inject pattern hints into
+        # the review/dream context, not the main action prompt. The agent
+        # reflects on repeating patterns during its scheduled review cycle —
+        # like sleep consolidation of muscle memory — and decides whether to
+        # draft a skill. Hints are one-shot (popped after injection).
+        hint = self.data.pop('crystallizationHint', None)
+        if hint:
+            context['crystallizationHint'] = hint
+            context['instruction'] += ('【熟能生巧】检测到你最近在重复一个行为模式：'
+                + hint.get('message', '')
+                + ' 如果决定编程化，用 skill_draft 创建草稿（参考 farm_harvest_replant 的做法）。')
         # Native ReMe searches only the first 50 characters, including the
         # official agent-chat sender prefix. Put real task subject first so it
         # does not retrieve the same boilerplate across every life turn.
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
                                         control.get('missionChangedAt', 0))
         prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
-        # Crystallization hint (case-9f5b2099): inject the pattern detection
-        # result into the LLM prompt so the agent can decide to create a skill.
-        hint = self.data.pop('crystallizationHint', None)
-        if hint:
-            prompt += '\n\n【熟能生巧提示】' + hint.get('message', '')
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': self.session['primarySessionId'], 'userId': self.session['userId'],
                   'channel': self.session['channel'], 'chatId': self.session.get('chatId'),

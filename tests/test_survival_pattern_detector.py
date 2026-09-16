@@ -94,6 +94,27 @@ class PatternDetectorTests(unittest.TestCase):
         detector.clear_hint()
         self.assertIsNone(detector.get_pending_hint())
 
+    def test_stale_hint_cleared_when_pattern_stops(self):
+        receipts_dir = self.dir / 'receipts'
+        receipts_dir.mkdir(exist_ok=True)
+        # Create repeating pattern
+        make_receipts(receipts_dir, ['goto', 'mine'] * 4)
+        detector = PatternDetector(self.dir)
+        hints = detector.check(receipts_dir)
+        self.assertTrue(len(hints) >= 1)
+        self.assertTrue(self.dir.joinpath('crystallization-hint.json').exists())
+
+        # Now replace with non-repeating actions
+        for f in receipts_dir.glob('*.json'):
+            f.unlink()
+        make_receipts(receipts_dir, ['eat', 'sleep', 'craft', 'equip'], start_time=2000000)
+        # Reset cooldown for this test
+        detector._last_hints.clear()
+        hints2 = detector.check(receipts_dir)
+        self.assertEqual(len(hints2), 0)
+        # Hint file should be cleared (stale)
+        self.assertFalse(self.dir.joinpath('crystallization-hint.json').exists())
+
     def test_mixed_patterns_prioritizes_longer(self):
         detector = PatternDetector(self.dir)
         # [goto, mine, craft] * 3 also contains [goto, mine] * 3

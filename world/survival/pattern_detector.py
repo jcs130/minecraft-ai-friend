@@ -98,8 +98,9 @@ class PatternDetector:
     def check(self, receipts_dir: Path) -> list:
         """Main entry: analyze recent receipts, return crystallization hints.
 
-        Returns a list of hint dicts ready for prompt injection.
-        Returns empty list if no new patterns detected or in cooldown.
+        Returns a list of hint dicts. Returns empty list if no new patterns
+        detected or in cooldown. Hints are stored persistently and consumed
+        by the controller's review cycle (dream), not the main action loop.
         """
         tools = self._recent_tools(receipts_dir)
         if not tools:
@@ -107,6 +108,9 @@ class PatternDetector:
 
         patterns = self.detect_patterns(tools)
         if not patterns:
+            # Clear stale hint file if pattern is no longer repeating
+            if self.hint_path.exists():
+                self.hint_path.unlink()
             return []
 
         now = self.clock()
@@ -138,7 +142,7 @@ class PatternDetector:
             hints.append(hint)
             self._last_hints[seq_key] = now
 
-        # Persist the latest hint for observability
+        # Persist for the review/dream cycle to consume
         if hints:
             self.hint_path.write_text(
                 json.dumps(hints[:MAX_HINTS_PER_TICK], ensure_ascii=False, indent=2) + '\n',
