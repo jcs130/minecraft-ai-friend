@@ -4,6 +4,7 @@ No navigation or crafting implementation lives here. Actions use exactly the
 numen_act invoke contract used by sidecar/guard/mcp_numen.py. RCON framing follows
 src/rcon.ts: match request IDs, authenticate explicitly, never replay a command.
 """
+import base64
 from contextlib import contextmanager
 import json
 import math
@@ -240,6 +241,67 @@ class NumenGateway:
         self.rcon = rcon or RconClient()
         self.clock = clock
 
+    def _native_roster(self):
+        return self.rcon.cmd('numen_act list')
+
+    def _native_restore_existing(self, body_uuid, owner_uuid, body_name):
+        return self.rcon.cmd('numen_restore_existing ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
+
+    def _native_recipe(self, body_name, item_id):
+        return self.rcon.cmd('numen_act invoke ' + json.dumps(body_name) + ' lookup_recipe '
+                             + json.dumps({'item_id': item_id}, ensure_ascii=True))
+
+    def _native_scene(self, body_name, radius):
+        return self.rcon.cmd(f'numen_act invoke "{body_name}" look_around ' + json.dumps({'radius': radius}))
+
+    def _native_navigation_sense(self, body_uuid, requested):
+        command = 'qdworld navigation_sense ' + body_uuid
+        if requested is not None:
+            command += ' ' + ' '.join(str(requested[k]) for k in ('x', 'y', 'z'))
+        return self.rcon.cmd(command)
+
+    def _native_eat(self, actor, action_id, args):
+        payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
+        return self.rcon.cmd(f'qdworld eat {actor} {action_id} {payload}')
+
+    def _native_eating(self, actor, action_id):
+        return self.rcon.cmd(f'qdworld eating {actor} {action_id}')
+
+    def _native_drop(self, actor, action_id, args):
+        payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
+        return self.rcon.cmd(f'qdworld drop {actor} {action_id} {payload}')
+
+    def _native_dropping(self, actor, action_id):
+        return self.rcon.cmd(f'qdworld dropping {actor} {action_id}')
+
+    def _native_gui(self, actor_uuid, offset):
+        return self.rcon.cmd(f'qdworld gui {actor_uuid} {offset}')
+
+    def _native_scan(self, actor_uuid, radius, block_ids):
+        return self.rcon.cmd(f'qdworld scan {actor_uuid} {radius} ' + ','.join(block_ids))
+
+    def _native_offers(self, actor_uuid, entity_id, offset):
+        return self.rcon.cmd(f'qdtrade offers {actor_uuid} {entity_id} {offset}')
+
+    def _native_trade(self, actor_uuid, entity_id, offer_index, quote):
+        return self.rcon.cmd(f'qdtrade trade {actor_uuid} {entity_id} {offer_index} {quote}')
+
+    def _native_interact(self, actor, request_id, args):
+        encoded = base64.urlsafe_b64encode(json.dumps(args, sort_keys=True, separators=(',', ':'),
+                                                     ensure_ascii=True).encode('ascii')).decode('ascii').rstrip('=')
+        return self.rcon.cmd(f'qdworld interact {actor} {request_id} {encoded}')
+
+    def _native_interaction(self, actor, request_id):
+        return self.rcon.cmd(f'qdworld interaction {actor} {request_id}')
+
+    def inspect_block(self, x, y, z):
+        from world_actions import WorldActions
+        return WorldActions(self).inspect(x, y, z)
+
+    def inspect_container(self, x, y, z):
+        from world_actions import WorldActions
+        return WorldActions(self).container_view(x, y, z)
+
     def _now(self):
         return int(self.clock() * 1000)
 
@@ -255,7 +317,7 @@ class NumenGateway:
         expected_uuid = settings.get('bodyUuid')
         if expected_uuid is not None and str(uuid.UUID(expected_uuid)) != expected_uuid:
             raise GatewayError('body_binding_invalid')
-        roster = self.rcon.cmd('numen_act list')
+        roster = self._native_roster()
         lines = [line.strip() for line in roster.splitlines() if line.strip()]
         if (not lines or not re.fullmatch(r'count=\d{1,3}', lines[0])
                 or int(lines[0][6:]) > 64 or len(lines) != int(lines[0][6:]) + 1
@@ -361,7 +423,7 @@ class NumenGateway:
         try:
             self._integer(radius, 4, 12)
             body, _ = self._check_binding()
-            terrain = self.rcon.cmd(f'numen_act invoke "{body}" look_around ' + json.dumps({'radius': radius}))
+            terrain = self._native_scene(body, radius)
             if terrain.startswith('no companion:'):
                 raise GatewayError('body_offline')
             entities = self._invoke('scan_nearby_entities', {'radius': radius, 'type_filter': 'all'})

@@ -7,7 +7,6 @@ textures, line of sight, entity positions, or mod mechanics from those glyphs.
 from collections import OrderedDict
 import hashlib
 import io
-import json
 import math
 import re
 import threading
@@ -181,8 +180,7 @@ class SceneView:
             check_time()
             before_dimension, before = _status_sample(self.gateway._invoke('get_self_status'), body)
             check_time()
-            raw = self.gateway.rcon.cmd(f'numen_act invoke "{body}" look_around '
-                                       + json.dumps({'radius': radius}))
+            raw = self.gateway._native_scene(body, radius)
             grid = parse_native_grid(raw, radius)
             check_time()
             dimension, after = _status_sample(self.gateway._invoke('get_self_status'), body)

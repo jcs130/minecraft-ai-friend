@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
@@ -54,6 +55,70 @@ class KnowledgeTests(unittest.TestCase):
         for name in ('containers', 'combat_basics', 'building_design', 'world_atlas',
                      'building_design/references/log_cabin'):
             self.assertTrue(library.read(name, max_chars=500)['ok'])
+
+
+class KnowledgePathTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def write_pack(self, root, name, content):
+        path = root / name / 'SKILL.md'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+        return path
+
+    def test_explicit_roots_override_environment_and_read_independently_after_restart(self):
+        roots = [self.root / name for name in ('kirito', 'naruto')]
+        fallback = self.root / 'fallback'
+        paths = [self.write_pack(root, 'tier_progression', content)
+                 for root, content in zip(roots + [fallback],
+                                          ('Kirito reference', 'Naruto reference', 'Environment decoy'))]
+        paths += [self.write_pack(roots[0], 'combat_basics', 'Kirito combat'),
+                  self.write_pack(roots[1], 'containers', 'Naruto containers')]
+        before = {path: path.read_bytes() for path in paths}
+        with patch.dict('knowledge.os.environ', {'SURVIVOR_KNOWLEDGE_ROOT': str(fallback)}):
+            libraries = [KnowledgeLibrary(roots[0]), KnowledgeLibrary(str(roots[1]))]
+            hashes = []
+            for index, root in enumerate(roots):
+                with self.subTest(root=root):
+                    expected_names = {'tier_progression', ('combat_basics', 'containers')[index]}
+                    first = libraries[index].read('tier_progression')
+                    self.assertTrue(first['ok'])
+                    self.assertEqual(first['content'], ('Kirito reference', 'Naruto reference')[index])
+                    hashes.append(first['sha256'])
+                    for library in (libraries[index], KnowledgeLibrary(root)):
+                        self.assertEqual(library.root, root.absolute())
+                        self.assertEqual(library.read('tier_progression'), first)
+                        self.assertEqual({item['name'] for item in library.catalog()['items']}, expected_names)
+                        self.assertFalse(library.read(('containers', 'combat_basics')[index])['ok'])
+            self.assertNotEqual(*hashes)
+        # KnowledgeLibrary is read-only: restart/read/catalog must not rewrite either pack.
+        self.assertEqual({path: path.read_bytes() for path in paths}, before)
+
+    def test_omitted_and_none_root_capture_environment_fallback_per_instance(self):
+        libraries = []
+        for name in ('first', 'second'):
+            root = self.root / name
+            self.write_pack(root, 'tier_progression', name)
+            with patch.dict('knowledge.os.environ', {'SURVIVOR_KNOWLEDGE_ROOT': str(root)}):
+                for kwargs in ({}, {'root': None}):
+                    libraries.append((KnowledgeLibrary(**kwargs), root, name))
+        # Changing/restoring the process environment cannot redirect an existing instance.
+        for library, root, content in libraries:
+            with self.subTest(root=root):
+                self.assertEqual(library.root, root.absolute())
+                self.assertEqual(library.read('tier_progression')['content'], content)
+
+    def test_unset_environment_keeps_legacy_default_without_production_io(self):
+        with patch.dict('knowledge.os.environ', {}, clear=True):
+            for kwargs in ({}, {'root': None}):
+                with self.subTest(kwargs=kwargs), patch('knowledge.Path') as path:
+                    path.return_value.absolute.return_value = self.root
+                    library = KnowledgeLibrary(**kwargs)
+                    path.assert_called_once_with('/survival-knowledge')
+                    self.assertEqual(library.root, self.root)
 
 
 class ConversationGoalTests(unittest.TestCase):

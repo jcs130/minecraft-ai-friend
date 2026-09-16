@@ -2,15 +2,15 @@
 import json
 import math
 
+from world_adapter import WorldAdapter
+
 OBSERVATION_LIMIT = 16384
 
 
-def program_observation(gateway, request, body, now):
+def program_observation(gateway: WorldAdapter, request, body, now):
     """Execute one already-validated read with the same checks as the MCP tool."""
-    from world_actions import WorldActions
     from numen_gateway import GatewayError
-    tools = WorldActions(gateway)
-    methods = {'inspect_block': tools.inspect, 'inspect_container': tools.container_view}
+    methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container}
     method = methods.get(request.get('tool'))
     if method is None:
         raise ValueError('unsupported_program_observation')

@@ -115,7 +115,7 @@ class BodyReconnect:
                 # lost response promptly, but repeated read failures stay bounded.
                 state.update(confirmationCheckedAt=now, nextConfirmationAt=now + 60)
                 try:
-                    online = roster_online(self.gateway.rcon.cmd('numen_act list'), expected)
+                    online = roster_online(self.gateway._native_roster(), expected)
                     if online:
                         state.update(status='online', reason='identity_verified', verifiedAt=now,
                                      readFailures=0, confirmationReason='identity_verified')
@@ -184,7 +184,7 @@ class BodyReconnect:
         state['checkedAt'] = now
         state['nextCheckAt'] = now + 60
         try:
-            online = roster_online(self.gateway.rcon.cmd('numen_act list'), expected)
+            online = roster_online(self.gateway._native_roster(), expected)
         except Exception as error:
             uncertain = state.get('status') in ('reserved', 'unknown', 'restoring')
             state.update(status='unknown' if uncertain else 'waiting',
@@ -213,10 +213,8 @@ class BodyReconnect:
             return state
         state.update(status='reserved', reason='restore_reserved', attempts=state.get('attempts', [])+[now])
         write_json(self.path, state)
-        command = ('numen_restore_existing ' + expected['bodyUuid'] + ' ' + expected['ownerUuid']
-                   + ' ' + expected['bodyName'])
         try:
-            raw = self.gateway.rcon.cmd(command)
+            raw = self.gateway._native_restore_existing(expected['bodyUuid'], expected['ownerUuid'], expected['bodyName'])
             if not isinstance(raw, str) or len(raw.encode('utf8')) > 4096 or not raw.strip().startswith(PREFIX):
                 raise ValueError('restore_reply_invalid')
             result = json.loads(raw.strip()[len(PREFIX):])
@@ -228,7 +226,7 @@ class BodyReconnect:
                 # Final confirmation is a separate native live-roster observation.
                 state.update(status='restoring', reason='awaiting_identity_observation')
                 write_json(self.path, state)
-                if not roster_online(self.gateway.rcon.cmd('numen_act list'), expected):
+                if not roster_online(self.gateway._native_roster(), expected):
                     raise ValueError('restore_not_observed')
                 state.update(status='online', reason='restored_identity_verified', verifiedAt=now)
                 self._auto_resume(control, resume_after_restore, now)

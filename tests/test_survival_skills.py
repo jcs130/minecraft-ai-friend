@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
@@ -161,6 +162,54 @@ class SkillTests(unittest.TestCase):
         view = self.library.catalog()
         self.assertEqual(view['skills'][0]['draftVersion'], version)
         self.assertEqual(view['unavailable'], [{'name': 'broken', 'code': 'invalid_skill_store'}])
+
+
+class SkillPathTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def test_explicit_roots_keep_same_named_drafts_independent_after_restart(self):
+        roots = [self.root / name for name in ('kirito', 'naruto')]
+        libraries = [SkillLibrary(roots[0]), SkillLibrary(str(roots[1]))]
+        versions = [library.draft('gather_wood', SOURCE, FIXTURES, description)['version']
+                    for library, description in zip(libraries, ('Kirito wood', 'Naruto wood'))]
+        self.assertNotEqual(*versions)
+        for index, root in enumerate(roots):
+            with self.subTest(root=root):
+                stored = json.loads((root / 'gather_wood' / 'versions' /
+                                     (versions[index] + '.json')).read_text(encoding='utf-8'))
+                self.assertEqual(stored['source'], SOURCE)
+                for library in (libraries[index], SkillLibrary(root)):
+                    self.assertEqual(library.root, root.absolute())
+                    record = library.read('gather_wood')
+                    self.assertEqual(record['version'], versions[index])
+                    self.assertEqual(record['description'], ('Kirito wood', 'Naruto wood')[index])
+                    self.assertEqual(record['fixtures'], FIXTURES)
+                    self.assertFalse(record['promoted'])
+                    self.assertEqual(library.catalog()['skills'], [{
+                        'name': 'gather_wood', 'draftVersion': versions[index],
+                        'activeVersion': None, 'description': record['description']}])
+                    with self.assertRaisesRegex(SkillError, 'skill_not_found'):
+                        library.read('gather_wood', versions[1 - index])
+
+        other_head = roots[1] / 'gather_wood' / 'head.json'
+        before = other_head.read_bytes()
+        updated = libraries[0].draft('gather_wood', SOURCE, FIXTURES, 'Kirito revised')['version']
+        self.assertEqual(SkillLibrary(roots[0]).read('gather_wood')['version'], updated)
+        self.assertEqual(SkillLibrary(roots[0]).read('gather_wood', versions[0])['version'], versions[0])
+        self.assertEqual(other_head.read_bytes(), before)
+        self.assertEqual(SkillLibrary(roots[1]).read('gather_wood')['version'], versions[1])
+
+    def test_omitted_and_none_root_keep_legacy_default_without_production_io(self):
+        for kwargs in ({}, {'root': None}):
+            with self.subTest(kwargs=kwargs), patch('skill_library.Path') as path:
+                # Check the chosen default, but redirect all constructor IO to a temporary root.
+                path.return_value.absolute.return_value = self.root
+                library = SkillLibrary(**kwargs)
+                path.assert_called_once_with('/state/survival/skills')
+                self.assertEqual(library.root, self.root)
 
 
 if __name__ == '__main__':

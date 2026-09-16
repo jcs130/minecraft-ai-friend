@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -14,6 +15,11 @@ BOB = '22222222-2222-4222-8222-222222222222'
 
 
 class SpeechTest(unittest.TestCase):
+    def test_bind_mounted_speech_copies_have_identical_bytes(self):
+        source = (ROOT / 'world/sidecar/character_speech.py').read_bytes()
+        survivor = (ROOT / 'world/survival/character_speech.py').read_bytes()
+        self.assertEqual(hashlib.sha256(source).digest(), hashlib.sha256(survivor).digest())
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

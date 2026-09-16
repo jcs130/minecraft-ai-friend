@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'world/survival'))
 import test_survival_controller as fixtures
 from body_reconnect import BodyReconnect, PREFIX, binding, roster_online
-from numen_gateway import read_json, write_json
+from numen_gateway import NumenGateway, read_json, write_json
 
 OWNER = 'e5005711-be9f-44b7-aaad-6993c0ba5df4'
 BINDING = {'bodyName':'Kirito', 'bodyUuid':fixtures.BODY_UUID, 'ownerUuid':OWNER}
@@ -37,11 +37,16 @@ class Rcon:
         return PREFIX+json.dumps(self.response)
 
 
+class ReconnectGateway(fixtures.FakeGateway):
+    _native_roster = NumenGateway._native_roster
+    _native_restore_existing = NumenGateway._native_restore_existing
+
+
 class BodyReconnectTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
         self.state = Path(temporary.name); self.clock = fixtures.FakeClock()
-        self.gateway = fixtures.FakeGateway(self.state, self.clock); self.gateway.rcon = Rcon()
+        self.gateway = ReconnectGateway(self.state, self.clock); self.gateway.rcon = Rcon()
         self.rcon = self.gateway.rcon
         write_json(self.state/'control.json', {'enabled':True})
         write_json(self.state/'controller.json', {'active':None})
@@ -299,7 +304,10 @@ class BodyReconnectTests(unittest.TestCase):
 
 
 class BodyReconnectControllerTests(unittest.TestCase):
-    setUp = fixtures.ControllerTests.setUp
+    def setUp(self):
+        with patch.object(fixtures, 'FakeGateway', ReconnectGateway):
+            fixtures.ControllerTests.setUp(self)
+
     create = fixtures.ControllerTests.create
     write = fixtures.ControllerTests.write
 

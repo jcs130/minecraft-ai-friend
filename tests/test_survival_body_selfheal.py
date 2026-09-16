@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/survival'))
 from unittest.mock import MagicMock
 
 import body_reconnect
+from numen_gateway import NumenGateway
 
 SETTINGS = {'bodyName': 'Kirito', 'bodyUuid': 'd4ac9523-4962-43ed-98c5-19b49e104048',
             'ownerUuid': 'e5005711-be9f-44b7-aaad-6993c0ba5df4'}
@@ -18,8 +19,7 @@ class Harness:
         (self.root / 'control.json').write_text(json.dumps(control), encoding='utf-8')
         (self.root / 'controller.json').write_text('{}', encoding='utf-8')
         self.roster = roster
-        self.gateway = MagicMock()
-        self.gateway.state = self.root
+        self.gateway = NumenGateway(self.root, rcon=MagicMock(), clock=lambda: 1000.0)
         self.gateway.rcon.cmd = self._cmd
         self.reconnect = body_reconnect.BodyReconnect(self.gateway, clock=lambda: 1000.0)
 

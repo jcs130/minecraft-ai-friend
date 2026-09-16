@@ -10,7 +10,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
-from numen_gateway import GatewayError, read_json, write_json
+from numen_gateway import GatewayError, NumenGateway, read_json, write_json
 from world_actions import WorldActions, validate_world_action, parse_gui
 
 BODY = 'd4ac9523-4962-43ed-98c5-19b49e104048'
@@ -23,7 +23,7 @@ def gui(menu='InventoryMenu', container='  0: -\n', mine='  3: coal x5\n'):
             + 'your inventory (non-empty):\n' + mine + 'cursor: -\n'}
 
 
-class FakeGateway:
+class FakeGateway(NumenGateway):
     def __init__(self, state):
         self.state, self.calls, self.blocks = state, [], {}
         self.body = {'ok': True, 'gameMode': 'survival', 'bodyUuid': BODY, 'bodyName': 'Kirito',

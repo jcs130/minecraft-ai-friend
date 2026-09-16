@@ -35,7 +35,7 @@ class NavigationSenseTests(unittest.TestCase):
     def setUp(self):
         self.request={'x':10.,'y':64.,'z':10.};self.row=sample(self.request);self.commands=[]
         def command(text):self.commands.append(text);return PREFIX+json.dumps(self.row)
-        self.gateway=SimpleNamespace(rcon=SimpleNamespace(cmd=command),_now=lambda:NOW)
+        self.gateway=NumenGateway(rcon=SimpleNamespace(cmd=command),clock=lambda:NOW/1000)
         self.client=NavigationSense(self.gateway)
 
     def test_exact_native_reflex_current_sample_not_queued_task(self):

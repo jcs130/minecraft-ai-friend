@@ -64,9 +64,22 @@ flowchart TD
 |---|---|---|---|
 | 容器编队控制面 | `world/admin/fleet/control-core.mjs` | `world/admin/topology.qiandengji.mjs` 提供服务表、依赖序、健康门与互锁文件名；`control-service.mjs` 只做装配 | `world/tests-ai/control-core.test.mjs`、`control-service.test.mjs`（原测试零改动通过） |
 | Agent 安全提交工作区 | `world/ops/engineering_workspace.py`、`world/admin/engineering-runner.mjs` | 执行者身份与批准分支名是构造参数（默认仍是 `mc-god` 与 `codex/ops-*`） | [Agent 安全提交工作区](AGENT-SAFE-COMMIT.md)、`tests/test_engineering_workspace.py`、`world/tests-ai/engineering-runner.test.mjs` |
-| 自进化 Agent 内核 | `world/survival/` 的 11 个文件，清单见 [KERNEL.md](../world/survival/KERNEL.md) | 只经一个世界适配面（当前实现 `numen_gateway`）访问 Minecraft | `tests/test_survival_kernel_boundary.py` 断言内核 import ⊆ 标准库 + 内核自身 + 已声明适配面 |
+| 自进化 Agent 内核 | `world/survival/` 的 11 个文件，清单见 [KERNEL.md](../world/survival/KERNEL.md) | 状态目录/观测源/身份由构造参数注入；`WorldAdapter` 定义租约、动作、回执与只读观测，当前实现为 `NumenGateway` | `tests/test_survival_kernel_boundary.py` 守住导入边界；`test_survival_world_adapter.py` 验证协议与 RCON 收口；路径测试验证实例隔离 |
 
-三块都不含 Minecraft 词汇的说法只对前两块成立。自进化内核仍依赖本项目自研模组的 `numen_act` / `qdworld` 方言，所以诚实的形态是“内核 + 一个 Minecraft 适配器”，适配器接口尚未抽出；`world/survival` 另有 8 个文件绕过适配面直接发 RCON，见 KERNEL.md。
+三块都不含 Minecraft 词汇的说法只对前两块成立。自进化组件的形态仍是“内核 + 一个 Minecraft 适配器”，不是可直接装到任意服务器的独立模组。原七个直连模块的 RCON 命令已收回网关私有方法；租约、未知标记、精确回执与禁止重放保持原实现。`fast_execution` 改为消费 `WorldAdapter`，但动作词表、事件/知识语义及领域模块的原生响应格式仍需另行适配；源码位置、Compose、角色配置和原状态未迁移。
+
+## Sidecar 中的共享库边界
+
+以下四个文件虽位于 `world/sidecar/`，但不只服务 NPC sidecar；修改时必须核对相应的 survival、ops 消费者。
+
+| 共享文件 | 现有消费者 | 职责 |
+|---|---|---|
+| `party_messages.py` | sidecar 的 `party_bridge.py`、survival 的 `party.py` | 队伍消息与持久回执 |
+| `party_config.py` | sidecar 的 `party_bridge.py` / `party_life.py`、survival 的 `party.py` | 队伍配置与接收方工具范围 |
+| `character_speech.py` | sidecar 的 `god-voice-watcher.py`、survival 的 `speech.py` | 角色语音请求、合成和播放回执 |
+| `world_content.py` | sidecar 内容队列、ops 的 `world_content_tools.py` | 内容与站点请求/回执契约 |
+
+Compose 的 `/party-code`、`/ops-sidecar` 挂载维持现有平铺 Python 导入根，不另建包、不替换文件队列。`world/survival/character_speech.py` 必须保留：运行时 `/survival` bind mount 会遮盖镜像 COPY 内容，删掉副本会破坏导入。`tests/test_character_speech.py` 对两份文件做 SHA-256 相等断言，修改必须同步，不能靠删除一份消除重复。
 
 ## 研究后确认的剩余耦合
 

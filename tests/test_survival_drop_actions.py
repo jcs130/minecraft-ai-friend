@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-from types import SimpleNamespace
 import unittest
 import uuid
 from unittest.mock import patch
@@ -73,7 +72,7 @@ class DropRcon(MockRcon):
 class DropReceiptTests(unittest.TestCase):
     def setUp(self):
         self.rcon = DropRcon()
-        self.client = DropActions(SimpleNamespace(rcon=self.rcon), sleep=lambda _: None, max_polls=2)
+        self.client = DropActions(NumenGateway(rcon=self.rcon), sleep=lambda _: None, max_polls=2)
 
     def send(self):
         return self.client.dispatch(ACTION, BEFORE, ARGS)
@@ -113,7 +112,7 @@ class DropReceiptTests(unittest.TestCase):
                 sockets = [FakeSocket(frames + ([] if lose_end else [packet(3, 0, 'Unknown request 0')]))]
                 if lose_end:
                     sockets.append(FakeSocket(frames + [packet(3, 0, 'Unknown request 0')]))
-                client = DropActions(SimpleNamespace(rcon=RconClient(secret=secret)), sleep=lambda _: None)
+                client = DropActions(NumenGateway(rcon=RconClient(secret=secret)), sleep=lambda _: None)
                 with patch('numen_gateway.socket.create_connection', side_effect=sockets):
                     result = client.dispatch(ACTION, BEFORE, args)
                 self.assertTrue(result['success'])
@@ -207,7 +206,7 @@ class DropGatewayTests(unittest.TestCase):
         async def check():
             server = make_server(self.gateway)
             listed = await server.list_tools()
-            self.assertEqual(len(listed), 45)
+            self.assertEqual(len(listed), 46)
             self.assertEqual({tool.name for tool in listed}, set(TOOL_NAMES))
             tool = next(tool for tool in listed if tool.name == 'drop_items')
             self.assertEqual(set(tool.inputSchema['required']), {'turn_id', 'item_id', 'count'})

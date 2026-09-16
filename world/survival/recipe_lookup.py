@@ -38,9 +38,7 @@ def lookup_recipe(gateway, item_id):
             return {**base, 'ok': False, 'code': 'body_binding_invalid'}
         # Capture the checked actor, rather than re-read settings in _invoke.
         # Both command name and argument keys are fixed, with no raw-command API.
-        command = ('numen_act invoke ' + json.dumps(name) + ' lookup_recipe '
-                   + json.dumps({'item_id': item_id}, ensure_ascii=True))
-        raw = gateway.rcon.cmd(command)
+        raw = gateway._native_recipe(name, item_id)
     except (OSError, ValueError, TypeError, KeyError):
         return {**base, 'ok': False, 'code': 'recipe_lookup_unavailable'}
     base.update(bodyName=name, bodyUuid=actual_uuid, observedAt=gateway._now())

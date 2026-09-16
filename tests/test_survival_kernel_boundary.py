@@ -19,11 +19,10 @@ SURVIVAL = Path(__file__).parents[1] / 'world/survival'
 KERNEL = {'pattern_detector', 'adaptive_router', 'review', 'practice', 'skill_library',
           'progression', 'perception', 'inference_errors', 'life_session', 'knowledge',
           'fast_execution'}
-# Everything the kernel needs from the Minecraft side. numen_gateway is the
-# current world adapter; world_actions is its action vocabulary.
+# The kernel's declared world contract and existing gateway utilities.
 ADAPTER = {'numen_gateway': {'GatewayError', 'IDENTIFIER', 'TOOLS', 'TURN_ID',
                              'action_lock', 'read_json', 'write_json'},
-           'world_actions': {'WorldActions'}}
+           'world_adapter': {'WorldAdapter'}}
 # Third-party native extensions installed only in the survivor image.
 OPTIONAL = {'quickjs'}
 

@@ -1,5 +1,4 @@
 """One component-preserving native toss, followed only by exact receipt reads."""
-import base64
 import json
 import math
 import re
@@ -85,13 +84,12 @@ class DropActions:
             raise GatewayError('drop_receipt_unconfirmed') from error
 
     def dispatch(self, action_id, before, args):
-        payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
         actor = before['bodyUuid']
         # The gateway already persisted this request's uncertainty marker.
         # This is the only mutation send, including after a lost initial ACK.
         expected = None
         try:
-            row = self._read(self.gateway.rcon.cmd(f'qdworld drop {actor} {action_id} {payload}'),
+            row = self._read(self.gateway._native_drop(actor, action_id, args),
                              action_id, before, args)
             expected = row if row.get('status') != 'rejected' else None
         except (OSError, ValueError, TypeError):
@@ -102,7 +100,7 @@ class DropActions:
             if attempt == self.max_polls:
                 break
             self.sleep(.2)
-            row = self._read(self.gateway.rcon.cmd(f'qdworld dropping {actor} {action_id}'),
+            row = self._read(self.gateway._native_dropping(actor, action_id),
                              action_id, before, args, expected)
             if expected is None:
                 expected = row

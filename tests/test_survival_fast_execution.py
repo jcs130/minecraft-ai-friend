@@ -17,6 +17,14 @@ EPOCH = 'dfab5ecd-e1e2-4d92-9739-23686c40d53e'
 OTHER_EPOCH = 'fa7bb32f-5998-4587-b567-21bdf28104ee'
 
 
+class ObservationGateway(FakeGateway):
+    def inspect_block(self, x, y, z):
+        raise AssertionError('Unexpected block observation')
+
+    def inspect_container(self, x, y, z):
+        raise AssertionError('Unexpected container observation')
+
+
 class FastExecutionTests(unittest.TestCase):
     # Reuse only fixtures, not ControllerTests: discovery must not rerun its suite.
     def setUp(self):
@@ -26,7 +34,7 @@ class FastExecutionTests(unittest.TestCase):
         self.public = Path(temporary.name) / 'public/survivor.json'
         self.state.mkdir()
         self.clock, self.backend, self.skills = FakeClock(), FakeBackend(), FakeSkills()
-        self.gateway = FakeGateway(self.state, self.clock)
+        self.gateway = ObservationGateway(self.state, self.clock)
         self.gateway.body['navigationEpoch'] = EPOCH
         self.settings = {'schema': 1, 'bodyName': 'Kirito', 'bodyUuid': BODY_UUID,
                          'mission': 'Continue locally while the furnace works',
@@ -188,7 +196,7 @@ class FastExecutionTests(unittest.TestCase):
         self.job(lastResult=previous_action)
         self.observe()
         result = {'ok': True, **POINT, 'block': 'minecraft:wheat', 'properties': {'age': '7'}}
-        with patch('world_actions.WorldActions.inspect', return_value=result) as inspect:
+        with patch.object(self.gateway, 'inspect_block', return_value=result) as inspect:
             self.controller.tick()
             saved = self.saved_job()
             self.assertEqual(saved['steps'], 0)
@@ -210,8 +218,8 @@ class FastExecutionTests(unittest.TestCase):
         self.job()
         self.observe('inspect_container')
         result = {'ok': True, 'point': POINT, 'gui': {'containerId': 7, 'slots': {}}}
-        with (patch('world_actions.WorldActions.container_view', return_value=result) as inspect,
-              patch('world_actions.WorldActions.inspect') as block):
+        with (patch.object(self.gateway, 'inspect_container', return_value=result) as inspect,
+              patch.object(self.gateway, 'inspect_block') as block):
             self.controller.tick()
             inspect.assert_called_once_with(**POINT)
             block.assert_not_called()
@@ -221,7 +229,7 @@ class FastExecutionTests(unittest.TestCase):
     def test_failed_observation_is_data_for_program_and_not_an_automatic_retry(self):
         self.job(lastResult={'ok': True, 'code': 'previous_action'})
         self.observe('inspect_container')
-        with patch('world_actions.WorldActions.container_view',
+        with patch.object(self.gateway, 'inspect_container',
                    side_effect=GatewayError('physical_container_not_open')) as inspect:
             self.controller.tick()
             self.clock.now += 5
@@ -267,10 +275,10 @@ class FastExecutionTests(unittest.TestCase):
     def test_observation_result_size_is_bounded_and_failure_does_not_leak_exception_text(self):
         request = {'tool': 'inspect_block', 'args': POINT}
         for returned in ({'ok': True, 'data': 'x' * 20000}, ['invalid']):
-            with patch('world_actions.WorldActions.inspect', return_value=returned):
+            with patch.object(self.gateway, 'inspect_block', return_value=returned):
                 observation = program_observation(self.gateway, request, self.gateway.body, self.clock())
             self.assertEqual(observation['result'], {'ok': False, 'code': 'ValueError'})
-        with patch('world_actions.WorldActions.inspect', side_effect=OSError('private filesystem path')):
+        with patch.object(self.gateway, 'inspect_block', side_effect=OSError('private filesystem path')):
             observation = program_observation(self.gateway, request, self.gateway.body, self.clock())
         self.assertEqual(observation['result'], {'ok': False, 'code': 'OSError'})
 

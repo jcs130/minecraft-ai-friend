@@ -211,6 +211,156 @@ class PerceptionTests(unittest.TestCase):
         self.assertEqual(self.reader.cached()['events'], [])
 
 
+class PerceptionPathTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def make_reader(self, name, **kwargs):
+        options = {'world_dir': self.root / name / 'world',
+                   'public_dir': self.root / name / 'public', 'clock': lambda: NOW}
+        options.update(kwargs)
+        return WorldPerception(self.root / name / 'state', **options)
+
+    def append(self, world, filename='player-chat.jsonl', **record):
+        world.mkdir(parents=True, exist_ok=True)
+        with (world / filename).open('a', encoding='utf-8') as stream:
+            stream.write(json.dumps({'ts': NOW * 1000, **record}, ensure_ascii=False) + '\n')
+
+    def test_explicit_directories_override_environment_and_persist_independently(self):
+        for name in ('first', 'second', 'fallback'):
+            world, public = self.root / name / 'world', self.root / name / 'public'
+            self.append(world, user='Taro', text=name + ' chat')
+            write_json(world / 'magic-state.json', {'players': {'Kirito': {'learned': [name]}}})
+            write_json(public / 'world.json', {'available': True,
+                'generatedAt': datetime.fromtimestamp(NOW, timezone.utc).isoformat(),
+                'guild': {'stale': False, 'board': [{'no': 1, 'title': name + ' board'}]}})
+        inputs = {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        fallback = self.root / 'fallback' / 'world'
+        with patch.dict('perception.os.environ', {'SURVIVOR_WORLD_OBSERVATION_DIR': str(fallback)}):
+            readers = [self.make_reader(name) for name in ('first', 'second')]
+            views = []
+            for name, reader in zip(('first', 'second'), readers):
+                with self.subTest(name=name):
+                    self.assertEqual(reader.world_dir, self.root / name / 'world')
+                    self.assertEqual(reader.public_dir, self.root / name / 'public')
+                    self.assertEqual(reader.path, self.root / name / 'state' / 'perception.json')
+                    view = reader.poll({})
+                    views.append(view)
+                    self.assertEqual([row['text'] for row in view['events']], [name + ' chat'])
+                    self.assertEqual(view['progression']['learned'], [name])
+                    self.assertEqual(view['world']['board'][0]['title'], name + ' board')
+                    restarted = self.make_reader(name)
+                    self.assertEqual(restarted.cached(), view)
+                    self.assertEqual(restarted.data['cursors'], reader.data['cursors'])
+                    again = restarted.poll({})
+                    self.assertEqual(again['events'], view['events'])
+                    self.assertEqual(again['pendingEventIds'], view['pendingEventIds'])
+                    self.assertFalse(again['sources']['player-chat.jsonl']['reset'])
+
+            second_before = readers[1].path.read_bytes()
+            readers[0].ack(views[0]['pendingEventIds'])
+            self.assertEqual(readers[1].path.read_bytes(), second_before)
+            self.assertEqual(self.make_reader('first').poll({})['events'], [])
+            self.assertEqual(self.make_reader('second').poll({})['events'], views[1]['events'])
+        self.assertEqual({path: path.read_bytes() for path in inputs}, inputs)
+        self.assertFalse((self.root / 'fallback' / 'state').exists())
+
+    def test_injected_identities_filter_shared_channels_and_keep_separate_state(self):
+        world = self.root / 'shared-world'
+        identities = (('Kirito', '桐人'), ('Naruto', '鸣人'))
+        private_texts = {name: set() for name, _ in identities}
+        for name, display in identities:
+            for alias in (name, display):
+                self.append(world, user=alias, text=alias + ' public chat')
+                for filename, (_, recipient) in CHANNELS.items():
+                    if recipient:
+                        text = alias + ' private ' + filename
+                        self.append(world, filename, **{recipient: alias}, text=text)
+                        private_texts[name].add(text)
+            self.append(world, user='Taro', text=display + ' help')
+        write_json(world / 'magic-state.json', {'players': {
+            name: {'learned': [name + '_skill']} for name, _ in identities}})
+        readers, bodies, views = [], [], []
+        for index, (name, display) in enumerate(identities):
+            with self.subTest(name=name):
+                reader = self.make_reader(name, world_dir=world, body_name=name, display_name=display)
+                body = {'ok': True, 'bodyUuid': name + '-uuid', 'hp': 20 - index * 10}
+                view = reader.poll(body)
+                readers.append(reader)
+                bodies.append(body)
+                views.append(view)
+                private = [row for row in view['events'] if row['source'] != 'player-chat.jsonl']
+                self.assertEqual({row['text'] for row in private}, private_texts[name])
+                self.assertTrue(all(row['addressed'] for row in private))
+                other_name, other_display = identities[1 - index]
+                chat = {row['text']: row['addressed'] for row in view['events'] if row['kind'] == 'chat'}
+                self.assertEqual(chat, {other_name + ' public chat': False,
+                    other_display + ' public chat': False, display + ' help': True,
+                    other_display + ' help': False})
+                self.assertTrue(all(row['trusted'] is False for row in view['events']))
+                self.assertEqual(view['progression']['bodyName'], name)
+                self.assertEqual(view['progression']['learned'], [name + '_skill'])
+                restarted = self.make_reader(name, world_dir=world, body_name=name, display_name=display)
+                self.assertEqual(restarted.cached(), view)
+                self.assertEqual(restarted.data['body']['bodyUuid'], body['bodyUuid'])
+                self.assertEqual(restarted.poll(body)['events'], view['events'])
+
+        # IDs from another character cannot acknowledge this character's private events.
+        first_before = readers[0].path.read_bytes()
+        readers[1].ack(views[0]['pendingEventIds'])
+        second = self.make_reader('Naruto', world_dir=world, body_name='Naruto', display_name='鸣人')
+        private = [row['text'] for row in second.poll(bodies[1])['events']
+                   if row['source'] != 'player-chat.jsonl']
+        self.assertEqual(set(private), private_texts['Naruto'])
+        self.assertEqual(readers[0].path.read_bytes(), first_before)
+
+    def test_public_progression_fallback_uses_each_injected_identity(self):
+        public = self.root / 'shared-public'
+        write_json(public / 'world.json', {'available': True,
+            'generatedAt': datetime.fromtimestamp(NOW, timezone.utc).isoformat(),
+            'players': [{'name': 'Kirito', 'level': 5, 'learnedCount': 23},
+                        {'name': 'Naruto', 'level': 2, 'learnedCount': 7}]})
+        for name, display, level, learned in (('Kirito', '桐人', 5, 23), ('Naruto', '鸣人', 2, 7)):
+            with self.subTest(name=name):
+                reader = self.make_reader(name, public_dir=public, body_name=name, display_name=display)
+                progression = reader.poll({})['progression']
+                self.assertEqual(progression['source'], 'public/world.json')
+                self.assertEqual(progression['bodyName'], name)
+                self.assertEqual((progression['level'], progression['learnedCount']), (level, learned))
+                self.assertFalse(progression['detailAvailable'])
+
+    def test_omitted_and_none_world_dir_capture_environment_fallback_per_instance(self):
+        readers = []
+        for name in ('first', 'second'):
+            world = self.root / name / 'world'
+            self.append(world, user='Taro', text=name)
+            with patch.dict('perception.os.environ', {'SURVIVOR_WORLD_OBSERVATION_DIR': str(world)}):
+                for index, kwargs in enumerate(({}, {'world_dir': None})):
+                    reader = WorldPerception(self.root / name / str(index),
+                        public_dir=self.root / name / 'public', clock=lambda: NOW, **kwargs)
+                    readers.append((reader, world, name))
+        for reader, world, text in readers:
+            with self.subTest(world=world):
+                self.assertEqual(reader.world_dir, world)
+                self.assertEqual([row['text'] for row in reader.poll({})['events']], [text])
+
+    def test_unset_environment_keeps_legacy_defaults_without_production_io(self):
+        with patch.dict('perception.os.environ', {}, clear=True), \
+                patch('perception.Path.exists', return_value=False), \
+                patch('perception.read_json', side_effect=AssertionError('unexpected state read')) as read:
+            for kwargs in ({}, {'world_dir': None}):
+                with self.subTest(kwargs=kwargs):
+                    # Constructor only; neither default observation directory is read or written.
+                    reader = WorldPerception(self.root, **kwargs)
+                    self.assertEqual(reader.world_dir, Path('/world-observation'))
+                    self.assertEqual(reader.public_dir, Path('/public'))
+                    self.assertEqual((reader.body_name, reader.display_name), ('Kirito', '桐人'))
+                    self.assertEqual(reader.path, self.root / 'perception.json')
+            read.assert_not_called()
+
+
 class ExpandedNumenObservationTests(unittest.TestCase):
     def test_observation_projects_all_entities_and_independent_threat_scan(self):
         with tempfile.TemporaryDirectory() as temporary:

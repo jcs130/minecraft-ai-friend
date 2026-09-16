@@ -30,12 +30,10 @@ class NavigationSense:
         try:
             if str(uuid.UUID(body_uuid)) != body_uuid or not isinstance(dimension, str):
                 raise ValueError('invalid_body_identity')
-            command = 'qdworld navigation_sense ' + body_uuid
             if requested is not None:
                 if not point(requested) or not -64 <= requested['y'] <= 319 or any(abs(requested[k]) > 29999980 for k in ('x', 'z')):
                     raise ValueError('invalid_survey_point')
-                command += ' ' + ' '.join(str(requested[k]) for k in ('x', 'y', 'z'))
-            raw = self.gateway.rcon.cmd(command)
+            raw = self.gateway._native_navigation_sense(body_uuid, requested)
             if not isinstance(raw, str) or len(raw.encode('utf-8')) > 10000 or not raw.startswith(PREFIX):
                 raise ValueError('invalid_sense_envelope')
             row = json.loads(raw[len(PREFIX):])

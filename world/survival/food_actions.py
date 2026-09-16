@@ -2,7 +2,6 @@
 
 Never infer success from hunger or inventory, and never redispatch an old request.
 """
-import base64
 import json
 import re
 
@@ -53,15 +52,14 @@ class FoodActions:
             raise GatewayError('food_receipt_unconfirmed') from error
 
     def dispatch(self, action_id, before, args):
-        payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
         actor = before['bodyUuid']
         # action() has already durably reserved this exact ID under the shared lock.
         try:
-            raw = self.gateway.rcon.cmd(f'qdworld eat {actor} {action_id} {payload}')
+            raw = self.gateway._native_eat(actor, action_id, args)
             row = self._read(raw, action_id, before, args)
         except (OSError, ValueError, TypeError):
             # A lost acknowledgement does not grant permission to consume again.
-            raw = self.gateway.rcon.cmd(f'qdworld eating {actor} {action_id}')
+            raw = self.gateway._native_eating(actor, action_id)
             row = self._read(raw, action_id, before, args)
         if row['status'] in ('terminal', 'rejected'):
             return {**row['result'], 'nativeFoodReceipt': row}
@@ -73,6 +71,6 @@ class FoodActions:
         expected = receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt')
         if not isinstance(expected, dict):
             raise GatewayError('food_receipt_unavailable')
-        raw = self.gateway.rcon.cmd(f"qdworld eating {receipt['before']['bodyUuid']} {receipt['actionId']}")
+        raw = self.gateway._native_eating(receipt['before']['bodyUuid'], receipt['actionId'])
         row = self._read(raw, receipt['actionId'], receipt['before'], receipt['args'], expected)
         return row if row['status'] == 'terminal' else None

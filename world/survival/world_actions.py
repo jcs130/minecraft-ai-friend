@@ -4,7 +4,6 @@ The gateway calls prepare() before reserving its lease and dispatch() only after
 persisting the uncertainty marker. There is no raw command, free-material build,
 teleport, inventory NBT write, or replacement of existing buildings here.
 """
-import base64
 import json
 import math
 from pathlib import Path
@@ -215,7 +214,7 @@ class WorldActions:
             if offset in seen or len(seen) >= 11:
                 raise GatewayError('physical_menu_page_invalid')
             seen.add(offset)
-            raw = self.gateway.rcon.cmd(f'qdworld gui {actor_uuid} {offset}')
+            raw = self.gateway._native_gui(actor_uuid, offset)
             lines = [line for line in raw.splitlines() if line.startswith('QD_WORLD_JSON ')]
             if len(lines) != 1:
                 raise GatewayError('physical_menu_bridge_unavailable')
@@ -293,7 +292,7 @@ class WorldActions:
             raise GatewayError('body_snapshot_unavailable')
         self._area(before['position'], before)
         actor_uuid = str(uuid.UUID(before['bodyUuid']))
-        raw = self.gateway.rcon.cmd(f'qdworld scan {actor_uuid} {radius} ' + ','.join(block_ids))
+        raw = self.gateway._native_scan(actor_uuid, radius, block_ids)
         try:
             lines = [line[len('QD_WORLD_SCAN_JSON '):] for line in raw.splitlines() if line.startswith('QD_WORLD_SCAN_JSON ')]
             if len(lines) != 1 or len(lines[0].encode('utf-8')) > 3000:
@@ -364,16 +363,14 @@ class WorldActions:
         _integer(entity_id, 1, 2147483647)
         _, actor_uuid = self.gateway._check_binding()
         actor_uuid = str(uuid.UUID(actor_uuid))
-        command = f'qdtrade {action} {actor_uuid} {entity_id}'
         if action == 'trade':
             validate_world_action('trade', {'entity_id': entity_id, 'offer_index': offer_index, 'quote': quote})
-            command += f' {offer_index} {quote}'
+            raw = self.gateway._native_trade(actor_uuid, entity_id, offer_index, quote)
         elif action == 'offers':
             _integer(offset, 0, 19)
-            command += f' {offset}'
+            raw = self.gateway._native_offers(actor_uuid, entity_id, offset)
         else:
             raise GatewayError('invalid_trade_action')
-        raw = self.gateway.rcon.cmd(command)
         lines = [line for line in raw.splitlines() if line.startswith('QD_TRADE_JSON ')]
         if len(lines) != 1:
             raise GatewayError('outcome_unknown' if action == 'trade' else 'merchant_bridge_unavailable')
@@ -647,9 +644,6 @@ class WorldActions:
         if not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id):
             raise GatewayError('world_interaction_request_id_missing')
         actor = str(uuid.UUID(plan['bodyUuid']))
-        encoded = base64.urlsafe_b64encode(json.dumps(args, sort_keys=True, separators=(',', ':'),
-                                                     ensure_ascii=True).encode('ascii')).decode('ascii').rstrip('=')
-        command = f'qdworld interact {actor} {request_id} {encoded}'
         epoch = None
         diagnostic = {'schema': 1, 'actionId': request_id, 'actorUuid': actor,
                       'tool': 'interact_at', 'args': args, 'stage': 'dispatch', 'attempt': 0}
@@ -664,10 +658,10 @@ class WorldActions:
         for poll in range(self.max_polls):
             if poll:
                 self.sleep(.25)
-                command = f'qdworld interaction {actor} {request_id}'
             diagnostic.update(stage='dispatch' if poll == 0 else 'query', attempt=poll + 1)
             try:
-                raw = self.gateway.rcon.cmd(command)
+                raw = (self.gateway._native_interaction(actor, request_id) if poll
+                       else self.gateway._native_interact(actor, request_id, args))
             except (OSError, ValueError, TypeError) as exc:
                 note('rcon_response_unavailable', errorType=type(exc).__name__)
                 continue  # A durable request ID permits reads, never a second interact.
