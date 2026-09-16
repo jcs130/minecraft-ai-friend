@@ -22,7 +22,10 @@ COMMIT = re.compile(r'[0-9a-f]{40}')
 IDENTITY = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{7,79}')
 MAX_BYTES = 128 * 1024 * 1024
 MAX_FILES = 20000
+# The only project-specific bindings: which actor may own a request, and which
+# branch names an approved plan may target. Both are constructor arguments.
 ROLE = 'mc-god'
+BRANCH = r'codex/ops-[A-Za-z0-9_-]{1,80}'
 
 
 def canonical(value):
@@ -167,10 +170,10 @@ def write(path, value):
         temporary.unlink(missing_ok=True)
 
 
-def validate_config(value):
-    if value.get('schema') != 1 or value.get('enabled') is not True or value.get('role') != ROLE:
+def validate_config(value, role=ROLE, branch=BRANCH):
+    if value.get('schema') != 1 or value.get('enabled') is not True or value.get('role') != role:
         raise ValueError('engineering_not_enabled')
-    if not COMMIT.fullmatch(value.get('baseCommit', '')) or not re.fullmatch(r'codex/ops-[A-Za-z0-9_-]{1,80}', value.get('branch', '')):
+    if not COMMIT.fullmatch(value.get('baseCommit', '')) or not re.fullmatch(branch, value.get('branch', '')):
         raise ValueError('engineering_invalid_binding')
     if not isinstance(value.get('repo'), str) or not Path(value['repo']).is_absolute():
         raise ValueError('engineering_invalid_repository')
@@ -195,14 +198,15 @@ def validate_config(value):
 
 
 class EngineeringWorkspace:
-    def __init__(self, config='/engineering/config.json', root='/engineering', git=None):
+    def __init__(self, config='/engineering/config.json', root='/engineering', git=None, role=ROLE, branch=BRANCH):
         self.config_path, self.root = Path(config), unlinked(root)
+        self.role, self.branch_pattern = role, branch
         self.git_binary = git or shutil.which('git')
         if not self.git_binary: raise ValueError('engineering_git_missing')
 
     @property
     def config(self):
-        return validate_config(read(self.config_path))
+        return validate_config(read(self.config_path), self.role, self.branch_pattern)
 
     @contextmanager
     def locked(self):
@@ -351,7 +355,7 @@ class EngineeringWorkspace:
         if capture_source and paths is not None: raise ValueError('engineering_full_snapshot_requires_all_paths')
         snapshot = self.snapshot()[0] if capture_source else self.overview(paths)
         cfg = self.config
-        return {'ok': True, 'role': ROLE, 'repo': cfg['repo'], 'baseCommit': cfg['baseCommit'], 'branch': cfg['branch'],
+        return {'ok': True, 'role': self.role, 'repo': cfg['repo'], 'baseCommit': cfg['baseCommit'], 'branch': cfg['branch'],
                 **{k: snapshot[k] for k in ('head', 'sourceSha256', 'changed', 'workingChanges')},
                 'snapshotCaptured': capture_source,
                 'comparison': 'captured_bytes' if capture_source else ('git_worktree_paths' if paths else 'git_commits'),
@@ -383,7 +387,7 @@ class EngineeringWorkspace:
         for path in paths:
             try:
                 request = read(path)
-                if (request.get('schema') != 1 or request.get('role') != ROLE
+                if (request.get('schema') != 1 or request.get('role') != self.role
                         or request.get('baseCommit') != cfg['baseCommit'] or request.get('branch') != cfg['branch']
                         or request.get('jobId') != path.stem or not IDENTITY.fullmatch(path.stem)):
                     raise ValueError('engineering_request_binding_mismatch')
@@ -452,7 +456,7 @@ class EngineeringWorkspace:
             snapshot, blobs = self.snapshot()
             if snapshot['sourceSha256'] != expected_source_sha256: raise ValueError('engineering_source_changed')
             plan = self.plan(plan_id, snapshot)
-            request = {'schema': 1, 'jobId': request_id, 'role': ROLE, 'planId': plan_id,
+            request = {'schema': 1, 'jobId': request_id, 'role': self.role, 'planId': plan_id,
                        'sourceSha256': expected_source_sha256, 'planSha256': digest(canonical(plan)),
                        'baseCommit': self.config['baseCommit'], 'branch': self.config['branch'], 'head': snapshot['head']}
             dest = self.root / 'requests' / (request_id + '.json')

@@ -54,6 +54,15 @@ test('fixed Docker contract contains only immutable source, no network or produc
   assert.throws(()=>validatePlan(f.config,{...f.request,planSha256:'0'.repeat(64)}),/invalid_fixed_test_plan/);
 });
 
+test('the expected actor is injected, and a role mismatch on either side is refused',async t=>{
+  const f=await fixture(t),role='shop-engineer';
+  const config={...f.config,role},request={...f.request,role};
+  assert.equal(validatePlan(config,request,role).id,f.plan.id);
+  assert.throws(()=>validatePlan(config,request),/invalid_engineering_request/);
+  assert.throws(()=>validatePlan(config,f.request,role),/invalid_engineering_request/);
+  assert.throws(()=>validatePlan(f.config,request,role),/invalid_engineering_request/);
+});
+
 test('fixed exec vector replaces image service entrypoint and keeps every argument literal',async t=>{
   const f=await fixture(t);
   for(const argv of [['python'],['python','-m','unittest','discover','-p','test_world_*.py'],

@@ -6,6 +6,8 @@ import {createHash} from 'node:crypto';
 
 const hex = /^[a-f0-9]{64}$/;
 const id = /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/;
+// The only project binding: which actor may own a request. Injectable per runner.
+const ROLE = 'mc-god';
 const sha = value => createHash('sha256').update(value).digest('hex');
 const encoded = value => Buffer.from(JSON.stringify(value));
 const fail = code => {throw new Error(code);};
@@ -30,8 +32,8 @@ async function write(file,value){
   const temporary=file+'.'+Math.random().toString(16).slice(2)+'.tmp';
   await fs.writeFile(temporary,encoded(value),{flag:'wx',mode:0o600});await fs.rename(temporary,file);
 }
-export function validatePlan(config,request){
-  if(config.schema!==1||config.enabled!==true||config.role!=='mc-god'||request.schema!==1||request.role!=='mc-god'||!id.test(request.jobId)||!hex.test(request.sourceSha256)||request.baseCommit!==config.baseCommit||request.branch!==config.branch)fail('invalid_engineering_request');
+export function validatePlan(config,request,role=ROLE){
+  if(config.schema!==1||config.enabled!==true||config.role!==role||request.schema!==1||request.role!==role||!id.test(request.jobId)||!hex.test(request.sourceSha256)||request.baseCommit!==config.baseCommit||request.branch!==config.branch)fail('invalid_engineering_request');
   const plan=config.plans?.find(p=>p.id===request.planId);
   if(!plan||!/^sha256:[a-f0-9]{64}$/.test(plan.image)||sha(encoded(plan))!==request.planSha256||!Array.isArray(plan.argv)||!plan.argv.length||plan.argv.some(a=>typeof a!=='string'||!a||a.includes('\0'))||!Number.isInteger(plan.timeoutSeconds)||plan.timeoutSeconds<1||plan.timeoutSeconds>300||!Array.isArray(plan.coverage)||!plan.coverage.length||!plan.checks||!Object.keys(plan.checks).length)fail('invalid_fixed_test_plan');
   if(typeof config.snapshotHostRoot!=='string'||!config.snapshotHostRoot.startsWith('/')||config.snapshotHostRoot.includes('\0')||config.snapshotHostRoot.split('/').includes('..'))fail('docker_snapshot_root_required');
@@ -77,7 +79,7 @@ export async function verifySnapshot(root,request,plan){
   return manifest;
 }
 
-export function createEngineeringRunner({root='/engineering',configFile=path.join(root,'config.json'),engine,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms)),redact=String}={}){
+export function createEngineeringRunner({root='/engineering',configFile=path.join(root,'config.json'),engine,role=ROLE,clock=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms)),redact=String}={}){
   if(typeof engine!=='function')fail('engineering_engine_required');
   let busy=false,timer=null,stopped=false,error=null,configured=false;
   const receiptFile=job=>path.join(root,'receipts',job+'.json');
@@ -93,7 +95,7 @@ export function createEngineeringRunner({root='/engineering',configFile=path.joi
     await engine('DELETE','/containers/'+row.Id+'?force=1&v=1');
   };
   async function execute(config,request){
-    const plan=validatePlan(config,request);await verifySnapshot(root,request,plan);
+    const plan=validatePlan(config,request,role);await verifySnapshot(root,request,plan);
     const record={schema:1,...request,status:'running',startedAt:clock(),imageId:plan.image,exitCode:null};
     // Claim is durable before Docker create. A lost response never creates a
     // second container; restart recovery only inspects/cleans this exact name.

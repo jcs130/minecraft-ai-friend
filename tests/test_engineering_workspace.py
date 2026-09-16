@@ -303,6 +303,24 @@ class EngineeringTests(unittest.TestCase):
         with patch.object(Path, 'is_dir', return_value=False):
             with self.assertRaisesRegex(ValueError, 'independent_clone'): self.service.git('status')
 
+    def test_actor_and_approved_branch_naming_are_injected_not_hardwired(self):
+        self.git('switch', '-qc', 'release/agent-1')
+        other = deepcopy(self.config)
+        other.update(role='shop-engineer', branch='release/agent-1')
+        write(self.area / 'other.json', other)
+        service = EngineeringWorkspace(self.area / 'other.json', self.area,
+                                       role='shop-engineer', branch=r'release/[a-z0-9-]{1,40}')
+        self.assertEqual(service.status()['role'], 'shop-engineer')
+        service.test('python-fixed', service.status(capture_source=True)['sourceSha256'], 'request-0002')
+        request = json.loads((self.area / 'requests/request-0002.json').read_text())
+        self.assertEqual(request['role'], 'shop-engineer')
+        # Neither binding accepts the other's configuration.
+        with self.assertRaisesRegex(ValueError, 'not_enabled'):
+            EngineeringWorkspace(self.area / 'other.json', self.area).config
+        with self.assertRaisesRegex(ValueError, 'not_enabled'):
+            EngineeringWorkspace(self.area / 'config.json', self.area, role='shop-engineer',
+                                 branch=r'release/[a-z0-9-]{1,40}').config
+
     def test_git_hooks_and_filters_cannot_execute(self):
         marker = self.root / 'hook-ran'
         hook = self.repo / '.git/hooks/pre-commit'
