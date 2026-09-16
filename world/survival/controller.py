@@ -1344,6 +1344,11 @@ class Controller:
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
                                         control.get('missionChangedAt', 0))
         prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
+        # Crystallization hint (case-9f5b2099): inject the pattern detection
+        # result into the LLM prompt so the agent can decide to create a skill.
+        hint = self.data.pop('crystallizationHint', None)
+        if hint:
+            prompt += '\n\n【熟能生巧提示】' + hint.get('message', '')
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': self.session['primarySessionId'], 'userId': self.session['userId'],
                   'channel': self.session['channel'], 'chatId': self.session.get('chatId'),
@@ -1402,6 +1407,23 @@ class Controller:
                     self.data['sessionWarning'] = type(exc).__name__
         except Exception:
             self.pause('model_submission_uncertain')
+
+    def _check_patterns(self):
+        """Pattern detection for skill crystallization (case-9f5b2099).
+        Watches the receipt stream for repeating tool sequences; when a
+        pattern repeats enough times, produces a hint that gets injected
+        into the next LLM decision prompt. Pure observation — never acts."""
+        try:
+            from pattern_detector import PatternDetector
+            receipts_dir = self.root / 'action-receipts'
+            if not receipts_dir.is_dir():
+                return
+            detector = PatternDetector(self.root, self.clock)
+            hints = detector.check(receipts_dir)
+            if hints:
+                self.data['crystallizationHint'] = hints[0]
+        except Exception:
+            pass  # Pattern detection is advisory; never blocks the main loop
 
     def _adaptive_route(self, body):
         """Adaptive LLM invocation router (case-af65b29d): decide whether
@@ -1526,6 +1548,9 @@ class Controller:
                 self.data['status'] = 'acting'
             else:
                 self.finish_action_observation(body)
+                # Pattern detection (case-9f5b2099 熟能生巧): check for repeating
+                # action sequences and crystallize them into skill hints.
+                self._check_patterns()
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):
