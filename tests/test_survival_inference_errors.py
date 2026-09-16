@@ -32,11 +32,15 @@ class ClassificationTests(unittest.TestCase):
                     self.assertEqual(actual['window'], prefix)
 
     def test_local_acquire_and_unknown_do_not_guess_exhausted_windows(self):
-        self.assertEqual(classify_inference_error(error('_AcquireTimeoutError: Rate limit exceeded'))['kind'],
-                         'local_queue_timeout')
+        # The native acquire timeout reaches the classifier both with its explicit
+        # type text and re-coded as MODEL_QUOTA_EXCEEDED + a generic rate-limit
+        # message; both are the transient local queue wait, never a window guess.
+        for detail in ('_AcquireTimeoutError: Rate limit exceeded', 'Rate limit exceeded'):
+            with self.subTest(detail=detail):
+                self.assertEqual(classify_inference_error(error(detail))['kind'], 'local_queue_timeout')
         self.assertEqual(classify_inference_error({'code': 'RATE_LIMIT_EXCEEDED', 'message': 'Rate limit exceeded'})['kind'],
                          'unknown')
-        for value in (None, {}, {'code': 'MODEL_QUOTA_EXCEEDED'}, error('Rate limit exceeded'),
+        for value in (None, {}, {'code': 'MODEL_QUOTA_EXCEEDED'},
                       error('Quota exceeded'), error('hourly allocated quota exceeded'),
                       error('usage allocated quota exceeded; month allocated quota exceeded'),
                       error('x' * 8193), {'message': ['usage allocated quota exceeded']}):
@@ -160,6 +164,28 @@ class InferenceBackoffTests(unittest.TestCase):
         self.assertEqual(self.controller.data['inferenceBackoff']['attempt'], 1)
         self.assertEqual(self.controller.data['lastInferenceFailure']['kind'], 'provider_concurrency')
 
+    def test_local_queue_timeout_backs_off_and_retries_without_repeated_failure_pause(self):
+        for detail in (error('Rate limit exceeded'), error('_AcquireTimeoutError: Rate limit exceeded')):
+            with self.subTest(detail=detail['message']):
+                self.setUp()
+                self.controller.tick()
+                self.fail(detail)
+                self.assertEqual(self.controller.data['lastInferenceFailure']['kind'], 'local_queue_timeout')
+                self.assertEqual(self.controller.data['inferenceBackoff']['attempt'], 1)
+                self.assertEqual(self.controller.data['status'], 'inference_backoff')
+                self.assertEqual(self.controller.data['failures'], 0)
+                self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+                self.due()
+                self.assertEqual(len(self.backend.submitted), 2)
+                self.assertEqual(self.controller.data['wakeReason'], 'inference_recovery')
+                self.fail(detail)
+                self.assertEqual(self.controller.data['inferenceBackoff']['attempt'], 2)
+                self.assertEqual(self.controller.data['failures'], 0)
+                self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+                public = read_json(self.public)
+                self.assertEqual(public['lastInferenceFailure']['kind'], 'local_queue_timeout')
+                self.assertEqual(public['inferenceBackoff']['attempt'], 2)
+
     def test_known_failure_preserves_actual_actions_and_original_error(self):
         self.controller.tick()
         turn = self.controller.data['active']['turnId']
@@ -175,7 +201,7 @@ class InferenceBackoffTests(unittest.TestCase):
         self.assertEqual(self.controller.data['lastInferenceFailure']['code'], 'MODEL_QUOTA_EXCEEDED')
 
     def test_unclassified_and_window_failures_keep_existing_repeated_failure_stop(self):
-        for detail in (error('Rate limit exceeded'), error('month allocated quota exceeded')):
+        for detail in (error('Quota exceeded'), error('month allocated quota exceeded')):
             with self.subTest(detail=detail['message']):
                 self.setUp()
                 self.controller.tick()

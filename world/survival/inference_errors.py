@@ -3,7 +3,9 @@ import math
 import re
 
 
-TRANSIENT_KINDS = frozenset(('provider_throttled', 'provider_concurrency'))
+# A local queue acquire timeout is the survivor's own concurrency gate, not a
+# cloud quota, so it is retried with a bounded backoff instead of pausing autonomy.
+TRANSIENT_KINDS = frozenset(('provider_throttled', 'provider_concurrency', 'local_queue_timeout'))
 SUMMARIES = {
     'provider_throttled': '供应商短时限流，不代表套餐额度用尽',
     'provider_concurrency': '供应商当前并发受限',
@@ -29,6 +31,15 @@ def classify_inference_error(error):
         if code == 'MODEL_QUOTA_EXCEEDED' and re.search(r'(?<![a-z_])' + prefix + r' allocated quota exceeded(?![a-z_])', message):
             matches.append((kind, prefix if kind == 'provider_window_exhausted' else None))
     if re.search(r'(?<![a-z_])_?acquiretimeouterror(?![a-z_])', message):
+        matches.append(('local_queue_timeout', None))
+    # The native layer re-codes a local concurrency acquire timeout as
+    # MODEL_QUOTA_EXCEEDED with a generic rate-limit message and no allocated
+    # quota window. Recognise that exact signature as the transient local queue
+    # wait it is, so it backs off and retries instead of pausing autonomy. Any
+    # allocated-quota text, other code, or conflicting match stays unknown.
+    if (not matches and code == 'MODEL_QUOTA_EXCEEDED'
+            and not re.search(r'allocated quota exceeded', message)
+            and re.search(r'(?<![a-z_])rate limit exceeded(?![a-z_])', message)):
         matches.append(('local_queue_timeout', None))
     # Conflicting causes are not evidence for an automatic short cooldown.
     if len(matches) == 1:
