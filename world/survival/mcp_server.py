@@ -272,7 +272,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
         from numen_gateway import NumenGateway
         gateway = NumenGateway()
     skill_tools = skill_tools or SkillTools(gateway.state, clock=gateway.clock)
-    from game_skills import GameSkills
+    from game_skills import GameSkills, bounded_all_skills_view
     game_tools = GameSkills(gateway)
     from knowledge import KnowledgeLibrary
     knowledge = KnowledgeLibrary()
@@ -469,8 +469,8 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def game_skills(scope: str = 'all', page: int = 1) -> dict:
-        """查询/mycli人物法术：all/status/legacy/irons/archive/help。legacy/archive支持page分页；返回已学、等级可施放、技能书目录、原生装备及Agent实际施法边界。JS程序查skill_catalog。"""
-        return game_tools.query(scope, page)
+        """查询/mycli人物法术：all/status/legacy/irons/archive/help。legacy/archive支持page分页；返回已学、等级可施放、技能书目录、原生装备及Agent实际施法边界。all是有界视图：省略status前世flavor与legacy原始atoms（其归档/边界规则已并入agentPreflight，原文按需查legacy/archive），完整能力摘要每轮已随gameSkills提供。targeted scope仍返回原始replies。JS程序查skill_catalog。"""
+        return bounded_all_skills_view(game_tools.query(scope, page))
 
     @server.tool()
     def game_cast(turn_id: str, skill_id: str, params: dict | None = None) -> dict:

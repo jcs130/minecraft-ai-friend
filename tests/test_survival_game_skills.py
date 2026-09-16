@@ -9,8 +9,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
-from game_skills import (GameSkills, action_command, cached_game_skills, is_protected_action,
-                         skill_access, summarize_game_skills, validate_game_action)
+from game_skills import (GameSkills, action_command, bounded_all_skills_view, cached_game_skills,
+                         is_protected_action, skill_access, summarize_game_skills, validate_game_action)
 from numen_gateway import GatewayError, read_json, write_json
 from mcp_server import BearerMcpApp, TOOL_NAMES
 
@@ -67,6 +67,60 @@ class GameSkillTests(unittest.TestCase):
         self.assertEqual(len(self.gateway.calls), 4)
         self.assertFalse((self.state / 'unknown.json').exists())
         self.assertIn('真实装备', result['learning']['irons'])
+
+    def test_bounded_all_view_drops_flavor_and_legacy_atoms_without_mutation(self):
+        result = {'ok': True, 'scope': 'all', 'page': 1, 'actor': 'Kirito', 'observedAt': 1000,
+            'replies': {
+                'status': {'ok': True, 'requestId': 'r1', 'mana': 90, 'backstory': '前世' * 200,
+                           'native': {'ok': True, 'level': 8}},
+                'skills': {'ok': True, 'requestId': 'r2', 'playerLevel': 8, 'learned': [{'id': 'home'}],
+                           'levelGate': [{'id': 'tp'}], 'locked': [],
+                           'bookSkills': [{'id': 'feather_boots', 'name': '羽靴', 'type': 'active'}]},
+                'spells legacy': {'ok': True, 'requestId': 'r3', 'total': 8, 'pages': 1,
+                                  'atoms': [{'id': 'x' * 80, 'catalog': {'status': 'archived'}} for _ in range(8)]},
+                'spells irons': {'ok': True, 'requestId': 'r4', 'spells': []}},
+            'agentPreflight': {'spells': [{'id': 'home', 'rule': 'destination_unavailable'}]},
+            'learning': {'irons': '真实装备'}, 'notice': 'env data'}
+        original = json.dumps(result, ensure_ascii=False)
+        view = bounded_all_skills_view(result)
+        # The input is the cached object; it must never be mutated.
+        self.assertEqual(json.dumps(result, ensure_ascii=False), original)
+        self.assertIn('backstory', result['replies']['status'])
+        # Flavor text and heavy legacy atoms are gone from the agent-facing view.
+        self.assertNotIn('backstory', view['replies']['status'])
+        self.assertEqual(view['replies']['status']['mana'], 90)
+        legacy = view['replies']['spells legacy']
+        self.assertNotIn('atoms', legacy)
+        self.assertEqual(legacy['omitted'], 'raw_atoms_removed_from_all_view')
+        self.assertEqual(legacy['total'], 8)
+        # Documented agent paths and the execution boundary are preserved.
+        self.assertEqual(view['replies']['skills']['bookSkills'][0]['id'], 'feather_boots')
+        self.assertEqual(view['agentPreflight'], result['agentPreflight'])
+        self.assertEqual(view['boundedView'], 'all_omits_status_backstory_and_legacy_atoms')
+        self.assertLess(len(json.dumps(view, ensure_ascii=False)), len(original))
+
+    def test_bounded_view_passes_through_other_scopes_and_failures(self):
+        for scope in ('status', 'legacy', 'irons', 'archive', 'help'):
+            passthrough = {'ok': True, 'scope': scope, 'replies': {'status': {'backstory': 'x'}}}
+            self.assertIs(bounded_all_skills_view(passthrough), passthrough)
+        failed = {'ok': False, 'scope': 'all', 'replies': {'status': {'backstory': 'x'}}}
+        self.assertIs(bounded_all_skills_view(failed), failed)
+        unavailable = {'ok': False, 'code': 'game_skill_query_unavailable'}
+        self.assertIs(bounded_all_skills_view(unavailable), unavailable)
+
+    def test_mcp_all_view_bounds_return_while_query_and_cache_keep_full_replies(self):
+        self.reply.update(backstory='前世' * 200, bookSkills=[{'id': 'feather_boots', 'name': '羽靴'}],
+                          learned=[{'id': 'home'}], atoms=[{'id': 'a' * 60}])
+        full = self.bridge.query('all')
+        # query()'s own return and the on-disk cache keep the full raw replies,
+        # so summarize_game_skills / owned_skill_books and the contract tests hold.
+        self.assertIn('backstory', full['replies']['status'])
+        cached = cached_game_skills(self.state)
+        self.assertIn('backstory', cached['scopes']['all']['replies']['status'])
+        view = bounded_all_skills_view(full)
+        self.assertNotIn('backstory', view['replies']['status'])
+        self.assertNotIn('atoms', view['replies']['spells legacy'])
+        self.assertEqual(view['replies']['skills']['bookSkills'][0]['id'], 'feather_boots')
 
     def test_mutation_requires_existing_gateway_unknown_marker(self):
         with self.assertRaises(OSError):

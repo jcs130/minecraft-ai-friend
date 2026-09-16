@@ -10,7 +10,7 @@
 
 ## 查询、学习、施放
 
-桐人用 `game_skills(scope, page=1)` 看真实修为、学习条件、已学特色技能和已装备铁魔法；scope 可取 `all`、`status`、`legacy`、`irons`、`archive`、`help`。`legacy` 与 `archive` 可按返回的 pages 继续分页；归档默认不随 all 加载。只查询当前问题需要的范围，不每轮把完整目录再读一遍。
+桐人用 `game_skills(scope, page=1)` 看真实修为、学习条件、已学特色技能和已装备铁魔法；scope 可取 `all`、`status`、`legacy`、`irons`、`archive`、`help`。`legacy` 与 `archive` 可按返回的 pages 继续分页；归档默认不随 all 加载。`all` 是有界视图：省略 status 前世 flavor 与 legacy 原始 atoms（其归档与施法边界规则已并入返回的 `agentPreflight`，需要原文时按 `legacy`/`archive` 分页查），完整能力摘要每轮已随 life context 的 `gameSkills` 提供；targeted scope（`status`/`legacy`/`irons`/`archive`/`help`）仍返回原始 replies。只查询当前问题需要的范围，不每轮把完整目录再读一遍。
 
 `legacy` 的 `skills.learned` 是当前开放主动技能中的已学项；`levelGate` 是等级已足、尚未收录的主动技能。这些主动技能允许直接按原条件施放，首次成功后收录，不要求先取得技能书。`status.learned` 保留旧进度，含历史技能，不能把它当成当前可施放清单。
 

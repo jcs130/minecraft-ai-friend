@@ -214,6 +214,37 @@ def skill_access(replies):
             'learning': 'game_learn不受城镇施法排除，但必须持有可识别的真实技能书；当前参悟不扣除书籍。'}
 
 
+def bounded_all_skills_view(result):
+    """Agent-facing bound for the heavy default ``all`` scope; never mutates input.
+
+    The per-turn life context already carries ``summarize_game_skills`` and
+    ``query`` still caches the full raw replies, so the raw ``all`` dump is
+    mostly redundant for decisions. Drop the ``status.backstory`` flavor text and
+    the ``spells legacy`` atoms — the latter are already distilled into
+    ``agentPreflight`` inside ``query`` and remain available on demand via the
+    ``legacy``/``archive`` scopes. Targeted scopes are the raw drill-down and are
+    returned unchanged.
+    """
+    if not isinstance(result, dict) or result.get('scope') != 'all' or result.get('ok') is not True:
+        return result
+    replies = result.get('replies')
+    if not isinstance(replies, dict):
+        return result
+    bounded_replies = dict(replies)
+    status = bounded_replies.get('status')
+    if isinstance(status, dict) and 'backstory' in status:
+        bounded_replies['status'] = {key: value for key, value in status.items() if key != 'backstory'}
+    legacy = bounded_replies.get('spells legacy')
+    if isinstance(legacy, dict):
+        bounded_replies['spells legacy'] = {'omitted': 'raw_atoms_removed_from_all_view',
+            'total': legacy.get('total'), 'pages': legacy.get('pages'),
+            'detail': 'agentPreflight已含归档与施法边界规则；原始atoms及nativeHints用game_skills("legacy",page)或game_skills("archive",page)查看。'}
+    bounded = dict(result)
+    bounded['replies'] = bounded_replies
+    bounded['boundedView'] = 'all_omits_status_backstory_and_legacy_atoms'
+    return bounded
+
+
 def validate_game_action(tool, args):
     if tool not in GAME_ACTIONS or not isinstance(args, dict):
         raise GatewayError('invalid_game_action')
