@@ -56,6 +56,18 @@ flowchart TD
 
 工会的生成器、领取、组队、交易、结算和线程没有迁入新规则模块；它仍是原工会，**尚未成为实物托管的 GuildCore**。新规则模块也不负责发奖或修改任务状态。
 
+## 按业务价值划出的可独立组件
+
+以下三块按“拿出去也能用”划界，文件都没有移出本仓库，边界由契约文档加防漂移测试钉住。
+
+| 组件 | 内核文件 | 项目绑定如何注入 | 边界由什么守住 |
+|---|---|---|---|
+| 容器编队控制面 | `world/admin/fleet/control-core.mjs` | `world/admin/topology.qiandengji.mjs` 提供服务表、依赖序、健康门与互锁文件名；`control-service.mjs` 只做装配 | `world/tests-ai/control-core.test.mjs`、`control-service.test.mjs`（原测试零改动通过） |
+| Agent 安全提交工作区 | `world/ops/engineering_workspace.py`、`world/admin/engineering-runner.mjs` | 执行者身份与批准分支名是构造参数（默认仍是 `mc-god` 与 `codex/ops-*`） | [Agent 安全提交工作区](AGENT-SAFE-COMMIT.md)、`tests/test_engineering_workspace.py`、`world/tests-ai/engineering-runner.test.mjs` |
+| 自进化 Agent 内核 | `world/survival/` 的 11 个文件，清单见 [KERNEL.md](../world/survival/KERNEL.md) | 只经一个世界适配面（当前实现 `numen_gateway`）访问 Minecraft | `tests/test_survival_kernel_boundary.py` 断言内核 import ⊆ 标准库 + 内核自身 + 已声明适配面 |
+
+三块都不含 Minecraft 词汇的说法只对前两块成立。自进化内核仍依赖本项目自研模组的 `numen_act` / `qdworld` 方言，所以诚实的形态是“内核 + 一个 Minecraft 适配器”，适配器接口尚未抽出；`world/survival` 另有 8 个文件绕过适配面直接发 RCON，见 KERNEL.md。
+
 ## 研究后确认的剩余耦合
 
 | 位置 | 当前事实 | 下一步应怎样拆 |
