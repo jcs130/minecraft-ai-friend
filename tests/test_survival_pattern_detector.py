@@ -81,6 +81,18 @@ class PatternDetectorTests(unittest.TestCase):
         hints2 = detector.check(receipts_dir)
         self.assertEqual(len(hints2), 0)
 
+    def test_cooldown_persists_across_detector_instances(self):
+        # The controller constructs a fresh PatternDetector every tick, so the
+        # cooldown must be reloaded from disk rather than lost with the instance.
+        receipts_dir = self.dir / 'receipts'
+        receipts_dir.mkdir()
+        make_receipts(receipts_dir, ['goto', 'farm'] * 5)
+        hints1 = PatternDetector(self.dir).check(receipts_dir)
+        self.assertTrue(len(hints1) >= 1)
+        # A brand-new instance (next tick) must still see the cooldown.
+        hints2 = PatternDetector(self.dir).check(receipts_dir)
+        self.assertEqual(len(hints2), 0)
+
     def test_get_pending_hint(self):
         receipts_dir = self.dir / 'receipts'
         receipts_dir.mkdir()

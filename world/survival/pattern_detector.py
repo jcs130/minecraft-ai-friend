@@ -30,7 +30,32 @@ class PatternDetector:
         self.state_dir = Path(state_dir)
         self.clock = clock
         self.hint_path = self.state_dir / 'crystallization-hint.json'
-        self._last_hints = {}
+        self.cooldown_path = self.state_dir / 'pattern-cooldown.json'
+        self._last_hints = self._load_cooldown()
+
+    def _load_cooldown(self) -> dict:
+        """Reload per-pattern hint timestamps so the cooldown survives across
+        ticks (the controller builds a fresh detector each tick) and restarts."""
+        try:
+            data = json.loads(self.cooldown_path.read_text(encoding='utf-8'))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items() if isinstance(v, (int, float))}
+
+    def _save_cooldown(self):
+        """Persist cooldown timestamps, dropping entries that have already
+        expired so the file does not grow without bound."""
+        now = self.clock()
+        live = {k: v for k, v in self._last_hints.items()
+                if now - v < COOLDOWN_SECONDS}
+        self._last_hints = live
+        try:
+            self.cooldown_path.write_text(
+                json.dumps(live, ensure_ascii=False) + '\n', encoding='utf-8')
+        except OSError:
+            pass  # Cooldown persistence is best-effort; never block detection.
 
     def _recent_tools(self, receipts_dir: Path) -> list:
         """Extract tool names from the most recent receipts, oldest first."""
@@ -141,6 +166,9 @@ class PatternDetector:
             }
             hints.append(hint)
             self._last_hints[seq_key] = now
+
+        if hints:
+            self._save_cooldown()
 
         # Persist for the review/dream cycle to consume
         if hints:

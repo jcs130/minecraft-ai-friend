@@ -25,6 +25,9 @@ GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
 TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
 SLOTS = ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')
+# Cap the on-disk receipt archive so the directory (and the survivor's
+# per-tick pattern scan over it) does not grow without bound.
+MAX_ACTION_RECEIPTS = 200
 
 
 class GatewayError(ValueError):
@@ -534,8 +537,34 @@ class NumenGateway:
                 'hunger', 'task', 'navigationEpoch', 'navigationResult', 'bodyControl', 'observedAt') if k in body}
 
     def _save_receipt(self, receipt):
-        write_json(self.state / 'action-receipts' / (receipt['actionId'] + '.json'), receipt)
+        receipts_dir = self.state / 'action-receipts'
+        write_json(receipts_dir / (receipt['actionId'] + '.json'), receipt)
         write_json(self.state / 'last-action.json', {'schema': 1, 'actionId': receipt['actionId']})
+        self._prune_receipts(receipts_dir)
+
+    def _prune_receipts(self, receipts_dir):
+        """Cap the receipt archive so it (and the survivor's per-tick pattern
+        scan over it) does not grow without bound. Keeps the newest receipts;
+        the in-flight action is never pruned. Best-effort: pruning failures
+        must not break the action path."""
+        try:
+            files = list(receipts_dir.glob('*.json'))
+            if len(files) <= MAX_ACTION_RECEIPTS:
+                return
+            protected = set()
+            inflight = self.state / 'inflight-action.json'
+            if inflight.exists():
+                try:
+                    protected.add(read_json(inflight).get('actionId'))
+                except (OSError, ValueError):
+                    pass
+            files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            for path in files[MAX_ACTION_RECEIPTS:]:
+                if path.stem in protected:
+                    continue
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def turn_receipts(self, turn_id):
         if not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id):

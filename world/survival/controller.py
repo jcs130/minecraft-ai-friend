@@ -1473,6 +1473,7 @@ class Controller:
             'level': routing['level'], 'name': routing['level_name'],
             'score': routing['score'], 'reason': routing['reason'],
             'signals': routing.get('signals'),
+            'suggestion': routing.get('suggested_action'),
         }
         self.data['lastPerception'] = perception
         if routing.get('should_call_llm'):
@@ -1576,8 +1577,15 @@ class Controller:
                             # Adaptive router (case-af65b29d): skip the LLM call
                             # when the situation is familiar and a cached
                             # response suffices. Level 0 = zero model cost.
+                            # This branch is only reached when no task is busy
+                            # and no skill is running, so honor SKIP only when
+                            # something is genuinely continuing server-side;
+                            # otherwise think rather than dead-idle until
+                            # time_drift re-escalates minutes later.
                             routing = self._adaptive_route(body)
-                            if routing and routing.get('level') == 0:
+                            continues = (routing or {}).get('suggested_action') in (
+                                'continue_goto', 'continue_farming_skill')
+                            if routing and routing.get('level') == 0 and continues:
                                 self.data['status'] = 'adaptive_skip'
                             else:
                                 self.submit_model(body, control)
