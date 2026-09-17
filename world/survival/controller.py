@@ -1320,7 +1320,10 @@ class Controller:
             context['crystallizationHint'] = hint
             context['instruction'] += ('【熟能生巧】检测到你最近在重复一个行为模式：'
                 + hint.get('message', '')
-                + ' 如果决定编程化，用 skill_draft 创建草稿（参考 farm_harvest_replant 的做法）。')
+                + ' 如果决定编程化，用 skill_draft 创建草稿（参考 farm_harvest_replant 的做法）。'
+                + ' 本轮回合请明确二选一：①用 skill_draft 落地；'
+                  '②一句话说明此刻不落地的理由，并把它写进 lesson——'
+                  '不要既不落地也不表态，那会让这条线索看起来像从没出现过。')
         # Environment penalties (2026-09-17): the world's own verdict is stronger
         # evidence than any internal guess, so it goes into the same reflection
         # cycle — and, being ground truth, it must not be argued away.

@@ -175,6 +175,17 @@ class PatternDetector:
             self.hint_path.write_text(
                 json.dumps(hints[:MAX_HINTS_PER_TICK], ensure_ascii=False, indent=2) + '\n',
                 encoding='utf-8')
+            # The ledger is the difference between "nothing happened" and "we cannot
+            # see what happened": three days of hints with zero drafts was invisible
+            # without it.
+            try:
+                import json as _json, time as _time
+                with (self.state_dir / 'crystallization-ledger.jsonl').open('a', encoding='utf-8') as _stream:
+                    _stream.write(_json.dumps({'at': _time.time(), 'kind': 'hint',
+                        'sequence': hints[0].get('sequence') if hints else None,
+                        'repeats': hints[0].get('repeats') if hints else None}, ensure_ascii=False) + '\n')
+            except (OSError, ValueError):
+                pass
 
         return hints[:MAX_HINTS_PER_TICK]
 

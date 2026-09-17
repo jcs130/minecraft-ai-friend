@@ -315,9 +315,9 @@ class NumenGateway:
         return self.rcon.cmd('numen_act list')
 
     def _native_restore_existing(self, body_uuid, owner_uuid, body_name):
-        # The command moved from our core patch into our actuator, where it belongs: the
-        # reply envelope stays identical so the reconnect contract is untouched.
-        return self.rcon.cmd('numen_act restore ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
+        # The command moved from our core patch into our actuator, where it belongs, and
+        # keeps its name and reply envelope so the reconnect contract is untouched.
+        return self.rcon.cmd('numen_restore_existing ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
 
     def _native_recipe(self, body_name, item_id):
         return self.rcon.cmd('numen_act invoke ' + json.dumps(body_name) + ' lookup_recipe '
