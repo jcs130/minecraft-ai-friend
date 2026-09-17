@@ -31,11 +31,18 @@ def main():
         assert args.execute == project and metadata['State']['Running'] is False, 'exact Qwen runtime must be stopped first'
     state = (ROOT / relative).resolve()
     assert state.is_relative_to(ROOT.resolve()) and state.is_dir() and not state.is_symlink()
+    # roles() reads the team migration registry to resolve migrated operators
+    # (e.g. operations:default hosted on game-side qd-steward). Production
+    # qwenpaw bind-mounts server/team-state to /team; mirror that read-only so
+    # the offline role set matches the enabled profiles in config.json.
+    hosts = (ROOT / 'server/team-state/runtime-hosts.json').resolve()
+    assert hosts.is_relative_to(ROOT.resolve()) and hosts.is_file() and not hosts.is_symlink()
     mode = '' if args.execute else ',readonly'
     invocation = ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none',
         '--env', 'HOME=/tmp/qiandeng-learning-home', '--env', 'QWENPAW_WORKING_DIR=/state/work',
         '--mount', f'type=bind,source={state},target=/state/work{mode}',
         '--mount', f'type=bind,source={ROOT / "world/ops"},target=/ops,readonly',
+        '--mount', f'type=bind,source={hosts},target=/team/runtime-hosts.json,readonly',
         '--entrypoint', 'python', args.image or metadata['Image'], '/ops/sync_role_learning.py', '--runtime', args.runtime]
     if args.runtime == 'game':
         manifest = ROOT / 'server/mcdata/village/maid-agents/public/roles.json'
