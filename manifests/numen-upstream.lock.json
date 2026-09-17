@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "project": "qiandengji",
+  "subject": "numen (third-party open-source mod)",
+  "upstream": {
+    "repository": "https://github.com/Dwinovo/minecraft-numen",
+    "author": "dwinovo",
+    "displayName": "Numen",
+    "license": "LGPL-3.0-only",
+    "licenseSource": "META-INF/neoforge.mods.toml in the published jar; the source tree also carries COPYING (GPL-3.0) and LICENSE (LGPL-3.0)",
+    "licenseNote": "LGPL obligations are honoured by keeping the upstream license and this record of our changes; we do not relicense or present Numen as our own work."
+  },
+  "tracked": {
+    "release": {
+      "tag": "v0.1.3-1.21.1-beta",
+      "published": "2026-09-11",
+      "asset": "numen-neoforge-1.21.1-0.1.3.jar",
+      "sha256": "5e60dd459ff4f52ddd6aefda905d70fd64f823fcff8bdf234e26b798fcb1e000",
+      "sizeBytes": 2633911,
+      "cachePath": "vendor/numen-upstream/numen-neoforge-1.21.1-0.1.3.jar",
+      "note": "Newest published build for Minecraft 1.21.1. It predates upstream HEAD, so it does not contain the newest pathing rework."
+    },
+    "head": {
+      "commit": "e627089ddf6870f01968903214366fb430bd7190",
+      "committed": "2026-09-16T12:06:34+08:00",
+      "note": "Newest source. No published jar for 1.21.1, so adopting it means building it ourselves."
+    }
+  },
+  "deployed": {
+    "artifact": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
+    "sha256": "bda81485d7a6760bb0288b232f251f4a12972936bd6c47104b1094b43397b1c8",
+    "modVersion": "0.1.1",
+    "note": "Upstream 0.1.1 binary with the project patch chain compiled on top. Recorded in manifests/numen-restore.lock.json."
+  },
+  "ourChanges": [
+    {
+      "capability": "walk_only_strict_arrival_v2",
+      "source": "world/numen-patches/walk-only-v1.patch",
+      "why": "Task-local walking with a strict, verified arrival, so the survivor cannot believe it arrived somewhere it did not. The gateway refuses walk_only goto without it."
+    },
+    {
+      "capability": "existing_body_restore_v1",
+      "source": "world/numen-patches/restore-existing-v1.json",
+      "why": "Restores an existing saved body by its own identity instead of summoning a new one; the survivor reconnect path depends on it."
+    },
+    {
+      "capability": "autonomous_body_tick_v1",
+      "source": "world/numen-patches/autonomous-body-tick-v1.json",
+      "why": "Keeps the companion body ticking without a client attached."
+    },
+    {
+      "capability": "autonomous_world_tick_v2 / v3",
+      "source": "world/numen-patches/autonomous-world-tick-v2.json, autonomous-world-tick-v3.json",
+      "why": "Keeps the surrounding world ticking while only server-side bodies are present."
+    }
+  ],
+  "capabilityCheck": {
+    "method": "exact identifier search over the decompressed .class/.json/.toml entries of each jar",
+    "result": "None of the five capabilities above are present in the upstream release jar; adopting upstream as-is would break walk_only goto (safe_navigation_unavailable) and body restore.",
+    "checkedAt": "2026-09-17"
+  },
+  "syncPolicy": "Adopt upstream as the baseline and re-apply our capability patches onto it; never drop the patch chain in place. Requires a stopped server, a rebuild of all five capabilities and revalidation of each on the live world."
+}
