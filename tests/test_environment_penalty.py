@@ -150,6 +150,22 @@ class NoOutputTests(unittest.TestCase):
         self.assertIn('环境反馈', text)
         self.assertIn('赶路', text)
 
+    def test_the_message_does_not_claim_the_pack_shrank_when_it_grew(self):
+        """Live 2026-09-17: the hint said '背包也没涨' while its own record said
+        inventoryGained was true. A message must not assert what was not measured."""
+        from environment_penalty import _message
+        grown = detect([executed('goto', {'x': -600.0 + i, 'z': 900.0},
+                                 counts={'minecraft:wheat': i + 1}, at=self.BASE + i * 90000)
+                        for i in range(7)])
+        self.assertEqual([s['kind'] for s in grown], ['no_output'])
+        self.assertTrue(grown[0]['inventoryGained'])
+        self.assertNotIn('背包也没涨', _message(grown))
+
+        flat = detect([executed('goto', {'x': -600.0 + i, 'z': 900.0}, at=self.BASE + i * 90000)
+                       for i in range(7)])
+        self.assertFalse(flat[0]['inventoryGained'])
+        self.assertIn('背包也没涨', _message(flat))
+
 
 class DamageTests(unittest.TestCase):
     def test_a_near_death_result_reports_even_once(self):

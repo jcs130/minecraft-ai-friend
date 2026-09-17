@@ -262,11 +262,17 @@ def _message(signals):
                 '换手段或换目标，别继续原地重复。'
                 % (s['tool'], s['target'], s['repeats']))
         elif s['kind'] == 'no_output':
+            # Only claim what was measured: the pack may well have grown (a
+            # pickup, an earlier harvest) without anything being produced on
+            # purpose. Asserting otherwise would repeat the exact mistake this
+            # module exists to avoid — the live hint said "背包也没涨" while its
+            # own record said inventoryGained was true.
+            pack = '、背包也没涨' if not s.get('inventoryGained') else ''
             parts.append(
-                '%d 个动作、约 %d 分钟，没有任何生产性产出（没种成、没挖到、没合成），背包也没涨，'
+                '%d 个动作、约 %d 分钟，没有任何生产性产出（没种成、没挖到、没合成）%s，'
                 '主要在做 %s。如果你确实在赶路或观察，这没问题；'
                 '如果你本意是完成某件事，那就是当前做法不奏效——换手段，别再把时间花在同一条路上。'
-                % (s['actions'], s['span'] // 60, '、'.join(s['tools'])))
+                % (s['actions'], s['span'] // 60, pack, '、'.join(s['tools'])))
     return '【环境反馈】' + ' '.join(parts)
 
 
