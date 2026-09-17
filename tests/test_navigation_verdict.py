@@ -96,6 +96,20 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(len(found['candidates']), 2)
         self.assertEqual(found['candidates'][0]['supportBlock'], 'minecraft:grass_block')
 
+    def test_an_unusable_target_with_no_candidates_never_says_pick_one(self):
+        """Observed live at 19:2x: a water target whose survey returned no candidates,
+        while the instruction still said 'pick one from candidates'."""
+        args = {'x': -775.0, 'z': 1102.0}
+        dest = {'available': True, 'requestedStanceClear': False, 'requestedStanceSupported': False,
+                'code': 'target_contains_fluid', 'targetBlock': 'minecraft:water',
+                'requested': {'x': -775.0, 'y': 61.0, 'z': 1102.0}, 'candidates': []}
+        found = verdict(survey(dest), REJECTED, args)
+        self.assertEqual(found['code'], 'destination_unusable')
+        self.assertEqual(found['action'], 'move_clear_then_retry')
+        self.assertEqual(found['candidates'], [])
+        self.assertNotIn('candidates 里挑', found['instruction'])
+        self.assertIn('干处', found['instruction'])
+
     def test_an_unsurveyed_destination_is_retried_before_being_abandoned(self):
         args, dest = UNSURVEYED_CASE
         found = verdict(survey(dest), REJECTED, args)

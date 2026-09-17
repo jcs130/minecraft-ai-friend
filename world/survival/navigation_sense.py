@@ -144,11 +144,19 @@ def verdict(survey, outcome, args=None):
                 'instruction': '环境勘察显示这个目标格是干净且有支撑的（下方可站），'
                     '失败发生在最后的落稳判定上，不是目标选错。'
                     '原样重发一次同一个 goto 即可；不要改坐标、不要去找别的格。'}
+    usable = [dict(c) for c in (dest.get('candidates') or [])[:5] if isinstance(c, dict)]
+    if usable:
+        return {'schema': 1, 'code': 'destination_unusable', 'targetUsable': False,
+                'action': 'choose_candidate', 'targetBlock': block, 'candidates': usable,
+                'instruction': '这个目标格本身站不住（目标方块 %s 不适合落脚）。'
+                    '从 candidates 里挑一个（它们各自带 supportBlock，都是勘察过的可站立格），'
+                    '用它的 x/y/z 重新 goto。' % (block or 'unknown')}
+    # No candidates is not the same finding. Telling an agent to pick from an
+    # empty list is an instruction whose premise was never checked - the exact
+    # defect this verdict exists to remove, so it must not reappear here.
     return {'schema': 1, 'code': 'destination_unusable', 'targetUsable': False,
-            'action': 'choose_candidate', 'targetBlock': block,
-            'candidates': [dict(c) for c in (dest.get('candidates') or [])[:5]
-                           if isinstance(c, dict)],
-            'instruction': '这个目标格本身站不住（目标方块 %s 不适合落脚）。'
-                '从 candidates 里挑一个（它们各自带 supportBlock，都是勘察过的可站立格），'
-                '用它的 x/y/z 重新 goto。' % (block or 'unknown')}
+            'action': 'move_clear_then_retry', 'targetBlock': block, 'candidates': [],
+            'instruction': '这个目标格本身站不住（目标方块 %s），而附近这一次没勘察到可站立格。'
+                '先走到最近的干处（离开水面/爬上地面），再重新 goto 目标；'
+                '或先用 inspect_block 看清目标下方是什么方块再来。' % (block or 'unknown')}
 
