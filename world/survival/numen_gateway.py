@@ -703,6 +703,33 @@ class NumenGateway:
                 result.append(read_json(path))
         return result
 
+    def _observed_arrival(self, receipt, body):
+        """Judge a finished goto from the body itself.
+
+        The evidence a server-side observer actually has: the task is gone and the
+        body has stopped where it stopped. This states what was observed and does
+        not claim the requested work succeeded - the same discipline the rest of the
+        receipt path follows.
+        """
+        args = receipt.get('args') or {}
+        position = body.get('position') or {}
+        if not all(self._number(position.get(k)) for k in ('x', 'y', 'z')):
+            return None
+        if not (self._number(args.get('x')) and self._number(args.get('z'))):
+            return None
+        distance = math.hypot(position['x'] - args['x'], position['z'] - args['z'])
+        if self._number(args.get('y')):
+            arrived = math.floor(position['y']) == math.floor(args['y']) and distance <= 1.5
+        else:
+            arrived = distance <= 1.5
+        return {'task_id': receipt.get('nativeTaskId'), 'state': 'ended', 'success': arrived,
+                'navigation_mode': 'observed_from_body',
+                'final_x': position['x'], 'final_y': position['y'], 'final_z': position['z'],
+                'requested': {k: args.get(k) for k in ('x', 'y', 'z') if k in args},
+                'horizontalDistance': round(distance, 2),
+                'reason': 'the task ended and the core keeps no readable navigation terminal; '
+                          'arrival is judged from the body against the request'}
+
     def _settle_inflight(self, body):
         """Called under the shared mutex. Idle releases execution, never proves success."""
         path = self.state / 'inflight-action.json'
@@ -746,11 +773,19 @@ class NumenGateway:
         food_outcome = None
         if receipt['tool'] == 'goto':
             candidate = body.get('navigationResult') or {}
-            if (not receipt.get('nativeTaskId') or not before.get('navigationEpoch')
-                    or candidate.get('task_id') != receipt['nativeTaskId']
-                    or candidate.get('navigation_epoch') != before['navigationEpoch']):
-                raise GatewayError('navigation_terminal_unconfirmed')
-            outcome = candidate
+            if (receipt.get('nativeTaskId') and before.get('navigationEpoch')
+                    and candidate.get('task_id') == receipt['nativeTaskId']
+                    and candidate.get('navigation_epoch') == before['navigationEpoch']):
+                outcome = candidate
+            else:
+                # Upstream reports completion as an event to the owner's client and no
+                # longer keeps a navigation terminal a server-side observer can read
+                # (its status carries no navigation_epoch and no last_navigation_result).
+                # Asking for that terminal would wait forever: 2026-09-17, the first
+                # goto after the swap ended natively while the loop waited on it.
+                outcome = self._observed_arrival(receipt, body)
+                if outcome is None:
+                    return receipt  # nothing to judge against: keep the identity, do not guess
         elif receipt['tool'] == 'eat' and receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt'):
             from food_actions import FoodActions
             food_outcome = FoodActions(self).terminal(receipt)
