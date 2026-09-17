@@ -80,3 +80,75 @@ class NavigationSense:
         result['requestArguments'] = dict(args)
         result['surveyYSource'] = 'requested' if 'y' in args else 'current_body_height'
         return result
+
+
+# The strict walk-only arrival and this read-only survey judge "can I stand here"
+# differently: the survey reads the block under the requested point, while the
+# arrival probes the live bounding box sole and waits for a settled stance. On
+# 2026-09-17 that gap turned a valid destination into repeated failures, and the
+# generic message ("choose a verified landing cell") sent the agent hunting for a
+# different cell for a hundred minutes when the requested one was already fine.
+STRICT_ARRIVAL_MARKER = 'walk_only_strict_arrival_v2'
+
+
+def verdict(survey, outcome, args=None):
+    """What a failed walk-only goto actually means, from the survey already taken.
+
+    Returns None when this is not a strict-arrival failure, so the caller leaves
+    every other outcome untouched. Otherwise the caller gets the one fact that
+    decides the next move. Ordered most specific first, because the generic
+    "choose a verified landing cell" misdirected a live agent for a hundred
+    minutes when its requested cell had been fine all along.
+    """
+    reason = outcome.get('reason') if isinstance(outcome, dict) else None
+    if not isinstance(reason, str) or STRICT_ARRIVAL_MARKER not in reason:
+        return None
+
+    # 1. A coordinate on a cell boundary is a category error for a contract
+    #    defined on feet CELLS: floor(-640.5) is -641, while a body settling at
+    #    -639.98 occupies -640. Success becomes a coin flip. The gateway must not
+    #    quietly rewrite the destination, so name the integer cell instead.
+    if isinstance(args, dict):
+        for axis in ('x', 'z'):
+            value = args.get(axis)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if float(value).is_integer():
+                continue
+            return {'schema': 1, 'code': 'destination_cell_ambiguous', 'targetUsable': None,
+                    'axis': axis, 'requested': float(value), 'cell': int(math.floor(value)),
+                    'action': 'resend_integer_cell',
+                    'instruction': '你给的 %s=%s 正好落在格边界上，而落点判定是按整格算的'
+                        '（floor 后是 %d），所以站哪一侧全靠运气。'
+                        '把 x/z 都改成整数（该方向取 %d）再发一次。'
+                        % (axis, value, int(math.floor(value)), int(math.floor(value)))}
+
+    dest = (survey or {}).get('destination') if isinstance(survey, dict) else None
+    if not isinstance(dest, dict) or dest.get('available') is not True:
+        code = (dest or {}).get('code') if isinstance(dest, dict) else None
+        return {'schema': 1, 'code': 'destination_not_surveyable', 'targetUsable': None,
+                'surveyCode': code,
+                'action': 'retry_once',
+                'instruction': '导航失败，且本次没能勘察到目标（%s）。目标本身尚未被证伪：'
+                    '原样重发一次这个 goto；若再失败，换一个相邻的整数格。' % (code or 'unknown')}
+
+    # 2. The survey reads the block under the point; the arrival probes the live
+    #    sole. When they disagree, the destination is not the problem.
+    clear = dest.get('requestedStanceClear') is True
+    supported = dest.get('requestedStanceSupported') is True
+    block = dest.get('targetBlock')
+    if clear and supported:
+        return {'schema': 1, 'code': 'destination_usable_settle_failed', 'targetUsable': True,
+                'action': 'retry_same_target',
+                'target': dict(dest.get('requested') or {}), 'targetBlock': block,
+                'instruction': '环境勘察显示这个目标格是干净且有支撑的（下方可站），'
+                    '失败发生在最后的落稳判定上，不是目标选错。'
+                    '原样重发一次同一个 goto 即可；不要改坐标、不要去找别的格。'}
+    return {'schema': 1, 'code': 'destination_unusable', 'targetUsable': False,
+            'action': 'choose_candidate', 'targetBlock': block,
+            'candidates': [dict(c) for c in (dest.get('candidates') or [])[:5]
+                           if isinstance(c, dict)],
+            'instruction': '这个目标格本身站不住（目标方块 %s 不适合落脚）。'
+                '从 candidates 里挑一个（它们各自带 supportBlock，都是勘察过的可站立格），'
+                '用它的 x/y/z 重新 goto。' % (block or 'unknown')}
+

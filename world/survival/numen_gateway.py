@@ -96,6 +96,13 @@ def receipt_evidence(row):
                     summary['navigationSenseTruncatedForContext'] = True
             projected['destination'] = target
         summary['navigationSense'] = projected
+    # The verdict is the model-facing half: it states whether the destination was
+    # usable, so a strict-arrival failure stops reading as "find another cell".
+    found = row.get('navigationVerdict')
+    if not isinstance(found, dict) and isinstance(result.get('result'), dict):
+        found = result['result'].get('navigationVerdict')
+    if isinstance(found, dict):
+        summary['navigationVerdict'] = found
     return summary
 
 
@@ -740,8 +747,16 @@ class NumenGateway:
             receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
                            notice='Completion is the exact original native eating task result.')
         if receipt['tool'] == 'goto' and outcome is not None and outcome.get('success') is not True:
-            from navigation_sense import NavigationSense
-            receipt['navigationSense'] = NavigationSense(self).for_destination(body, receipt['args'])
+            from navigation_sense import NavigationSense, verdict
+            survey = NavigationSense(self).for_destination(body, receipt['args'])
+            receipt['navigationSense'] = survey
+            # A failed strict arrival alone does not say whether the destination or
+            # the landing was at fault, and its generic wording sends an agent
+            # hunting for another cell even when the requested one was fine. Say
+            # which case this is, once, from the survey already taken.
+            found = verdict(survey, outcome, receipt.get('args'))
+            if found is not None:
+                receipt['navigationVerdict'] = found
         self._save_receipt(receipt)
         self._record({**receipt, 'phase': 'observation'})
         path.unlink()
