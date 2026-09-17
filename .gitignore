@@ -47,3 +47,4 @@ world/maid-bridge-src/build/
 /assets/game-models/
 /vendor/modern-viewer/*
 !/vendor/modern-viewer/runtime-budget.js
+vendor/numen-upstream/
