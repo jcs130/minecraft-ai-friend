@@ -84,6 +84,45 @@
 **权威源（迁移期，别搞混）**：五个能力全部迁入并通过实机验收之前，
 构建输入的权威仍是 `world/numen-patches/`；**本树此刻仅供阅读与迁移**。迁完之后反过来。
 
+## 迁移已完成：世界跑在上游 0.1.3 上（2026-09-17 夜）
+
+造物主定调「现在就弄吧，用上他的寻路能力，我们自己写的东西应该和他的解耦」后，当晚完成。
+
+**换装方式**：停服 → 全量备份世界（2.3 GB，`runtime/numen-swap-backup/20260917T154018Z/`，含每个文件的哈希记录）
+→ 换 jar → 起服 → 实机验收。加载确认：`Numen 0.1.3 (numen)` / `Numen 0.1.3 (numen_api)` /
+`Numen Server Actuator 0.1.3 (numen_act)`，版本升级被识别为 `0.1.1 -> 0.1.3`。
+
+**`numen_api` 由 jarjar 内嵌满足**——不要另外放 api jar，那会重复 mod id。
+
+**退休的补丁**（上游 0.1.3 已原生提供，不再叠加）：
+
+| 我们当年补丁 | 上游对应物 |
+| --- | --- |
+| `existing_body_restore_v1` | `Companions.respawn` / `restorePending` / `respawnAllOwnedBy` / `onDeath` / `tickRespawns` |
+| 自主 body/world tick | 同上（`tickRespawns` 等） |
+| `walk_only_strict_arrival_v2` | `pathing/plan/RoutePlanner` + `RouteBook` + `plan_route` |
+| （死亡信号） | `CompanionRegistry.pendingDead` |
+| （搭桥/立柱阻塞） | `Entry.scaffoldMaterials` |
+
+**保留的是我们自己的东西**：actuator（`numen_act`，上游没有它）、`irons-bridge`、`maid-bridge`——
+三者只依赖上游公共 API。actuator 的移植差异**只有一处**（`CompanionRegistry.snapshot()` 上游改名，
+集成树里加了只读 `all()`，因为我们的命令按名字寻址而上游访问器是 owner 维度）。
+`irons-bridge` 对上游一次编过、**零源码改动**（35 项检查通过）；`maid-bridge` **无需重编**——
+它用类名字符串识别 numen 主人，没有编译期依赖。
+
+**Python 侧**不再依赖我们的补丁：不再注入 `walk_only` 参数；撤掉「必须播报
+`walk_only_strict_arrival_v2`」的硬闸（上游永远不会播报，留着等于拒绝所有 goto）；
+身体恢复从「发命令」改为「观察」——`numen_restore_existing` 是我们补丁加在 core 里的命令，
+上游没有。
+
+**顺带修的两处**（都是换装过程自己暴露的）：
+- 导航 epoch 不再匹配的悬挂 in-flight，现按「observed-ended」关闭（**绝不算成功、绝不重放**）——
+  它的终态永不会到达，等下去会把循环冻住（本次冻了四小时）。
+- `service.py` 在暂停前打印 traceback——只留异常类名，等于把证据吞了（本次为此手工二分了一小时）。
+
+**验收证据**：桐人按**原 UUID** 恢复（上游 summon 按名幂等）、hp 20、结衣在他旁边、
+控制器自动抬起暂停；在新 core 上的第一个动作 `goto` 被受理并**真的把他移动了 13 格**。
+
 ## 待办（截至本文件）
 
 - 正式同步**尚未执行**：需要停服窗口 + 基线选择（HEAD 自建 vs release 0.1.3）。
