@@ -256,7 +256,7 @@ def parse_roster_deaths(raw, body_name=None):
         except ValueError:
             respawn_ms = 0
         out.append({'name': name, 'uuid': values.get('uuid'), 'cause': values.get('cause'),
-                    'respawnMs': respawn_ms})
+                    'respawnMs': respawn_ms, 'diedAt': values.get('diedAt')})
     return out
 
 
@@ -287,7 +287,11 @@ def check(state_dir, read_roster, now=None, body_name=None):
     # once: the death's own identity is its name plus the respawn window it was
     # first seen with.
     for death in deaths:
-        identity = '%s:%s' % (death['name'], death['respawnMs'])
+        # One death is recorded once. The registry stamps each death with the tick it
+        # happened on, so two deaths of the same body are two different records even
+        # when no respawn window is reported.
+        stamp = death.get('diedAt') or death.get('respawnMs')
+        identity = '%s:%s' % (death['name'], stamp)
         if state.get('lastDeathKey') == identity:
             continue
         state['lastDeathKey'] = identity

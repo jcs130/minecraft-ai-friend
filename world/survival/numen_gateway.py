@@ -301,11 +301,23 @@ class NumenGateway:
         self.rcon = rcon or RconClient()
         self.clock = clock
 
+    def _native_summon(self, owner_uuid, body_name):
+        """Restore a companion through our own actuator, by name.
+
+        Upstream restores bodies when their owner logs in, and this world's owner is a
+        fixed non-playing uuid, so nothing happens on its own. numen_act is our module
+        and its summon is idempotent by name, which is what keeps the restored body the
+        same body: same uuid, same save.
+        """
+        return self.rcon.cmd('numen_act summon ' + owner_uuid + ' ' + body_name)
+
     def _native_roster(self):
         return self.rcon.cmd('numen_act list')
 
     def _native_restore_existing(self, body_uuid, owner_uuid, body_name):
-        return self.rcon.cmd('numen_restore_existing ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
+        # The command moved from our core patch into our actuator, where it belongs: the
+        # reply envelope stays identical so the reconnect contract is untouched.
+        return self.rcon.cmd('numen_act restore ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
 
     def _native_recipe(self, body_name, item_id):
         return self.rcon.cmd('numen_act invoke ' + json.dumps(body_name) + ' lookup_recipe '

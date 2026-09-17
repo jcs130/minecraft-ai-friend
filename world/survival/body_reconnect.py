@@ -52,10 +52,18 @@ def roster_online(raw, expected):
     if not lines or not re.fullmatch(r'count=\d{1,3}', lines[0]):
         raise ValueError('restore_roster_invalid')
     count = int(lines[0][6:])
-    if count > 64 or len(lines) != count + 1:
+    if count > 64:
+        raise ValueError('restore_roster_invalid')
+    # The roster may append a catalogue section for companions that are in the registry
+    # but not in the world (dead, or waiting on a respawn). Presence is the online
+    # section only: counting a dead body as presence would report a lost body as found,
+    # which is the one mistake this reconnector must not make.
+    online = lines[1:1 + count]
+    tail = lines[1 + count:]
+    if len(online) != count or (tail and not re.fullmatch(r'dead=\d{1,3}', tail[0])):
         raise ValueError('restore_roster_invalid')
     matches = []
-    for line in lines[1:]:
+    for line in online:
         fields = line.split('|')
         if len(fields) < 5:
             raise ValueError('restore_roster_invalid')

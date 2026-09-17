@@ -1,0 +1,31 @@
+modLoader = "javafml"
+loaderVersion = "${neoforge_loader_version_range}"
+license = "MIT"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${version}"
+displayName = "Numen Server Actuator"
+authors = "mc-god"
+description = '''服务端 RCON 桥：把 Numen 假玩家与工具（Companions / ToolRegistry / NumenTool）暴露给外部 agent。命令 numen_act list/summon/invoke/dismiss，供 QwenPaw 亲卫经 RCON 直驱服务端假玩家（b 路亲卫上脑）。'''
+
+[[dependencies.${mod_id}]]
+modId = "numen_api"
+type="required"
+versionRange = "[0.0,)"
+ordering = "AFTER"
+side = "SERVER"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type="required"
+versionRange = "[${neoforge_version},)"
+ordering = "NONE"
+side = "SERVER"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type="required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "SERVER"
