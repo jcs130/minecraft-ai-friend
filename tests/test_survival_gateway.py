@@ -474,6 +474,38 @@ class GatewayTests(unittest.TestCase):
         with patch('world_actions.WorldActions.prepare', side_effect=error):
             self.assertNotIn('farmPreflight', self.client.action(TURN, 'farm', args))
 
+    def test_not_air_plant_rejection_reaches_the_model_with_the_offending_cell(self):
+        """2026-09-17: the not-air rejection used to reach the model as a bare code.
+
+        A live agent then read it as a positioning problem and re-navigated to the
+        same coordinate for twenty minutes. The observation is now surfaced so the
+        caller can correct its own coordinate instead of guessing.
+        """
+        self.lease()
+        args = {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds',
+                'x': 101, 'y': 64, 'z': 100}
+        error = gateway.GatewayError('invalid_planting_target_or_seed')
+        error.details = {'schema': 1, 'kind': 'farm_preflight', 'operation': 'plant',
+            'requested': {'x': 101, 'y': 64, 'z': 100},
+            'target': {'x': 101, 'y': 64, 'z': 100, 'block': 'minecraft:farmland'},
+            'expectedTarget': 'minecraft:air', 'dispatched': False,
+            'writePerformed': False, 'retryAutomatically': False,
+            'instruction': 'plant 的 x/y/z 是空气格；若耕地位于 (x,y,z) 请改传 (x,y+1,z)。',
+            'nativeReply': 'PRIVATE RAW EXCEPTION'}
+        lease_before = (self.state / 'lease.json').read_bytes()
+        with patch('world_actions.WorldActions.prepare', side_effect=error), \
+             patch('world_actions.WorldActions.dispatch') as dispatch:
+            result = self.client.action(TURN, 'farm', args)
+        self.assertEqual(result['code'], 'invalid_planting_target_or_seed')
+        self.assertEqual(result['farmPreflight']['requested'], error.details['requested'])
+        self.assertEqual(result['farmPreflight']['target'], error.details['target'])
+        self.assertEqual(result['farmPreflight']['expectedTarget'], 'minecraft:air')
+        self.assertIn('x,y+1,z', result['farmPreflight']['instruction'])
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease_before)
+        self.assertFalse((self.state / 'unknown.json').exists())
+        dispatch.assert_not_called()
+
     def test_world_dispatch_is_journaled_once_and_unknown_never_replays(self):
         self.lease()
         args = {'item_id': 'minecraft:crafting_table', 'x': 101, 'y': 64, 'z': 100}

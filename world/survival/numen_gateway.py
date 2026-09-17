@@ -1122,7 +1122,12 @@ class NumenGateway:
             details = getattr(exc, 'details', None)
             # Only this pre-dispatch observation contract is model-facing.
             # Raw native responses and arbitrary exception metadata stay private.
-            if (str(exc) == 'plant_requires_farmland' and tool == 'farm'
+            # 2026-09-17: the not-air branch joined this contract. Both rejections
+            # surface one pre-read cell with no dispatch and no write, so both are
+            # the same observation class; the bare form was read by a live agent as
+            # a positioning problem and produced a twenty-minute re-navigation loop.
+            if (str(exc) in ('plant_requires_farmland', 'invalid_planting_target_or_seed')
+                    and tool == 'farm'
                     and isinstance(details, dict) and details.get('schema') == 1
                     and details.get('kind') == 'farm_preflight'
                     and details.get('operation') == 'plant'
@@ -1130,7 +1135,7 @@ class NumenGateway:
                     and details.get('writePerformed') is False):
                 result['farmPreflight'] = {key: details[key] for key in (
                     'schema', 'kind', 'operation', 'requested', 'target', 'support',
-                    'expectedSupport', 'dispatched', 'writePerformed',
+                    'expectedSupport', 'expectedTarget', 'dispatched', 'writePerformed',
                     'retryAutomatically', 'instruction') if key in details}
             return result
         except (OSError, ValueError, TypeError, KeyError):

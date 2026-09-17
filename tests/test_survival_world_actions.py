@@ -481,7 +481,22 @@ class WorldActionTests(unittest.TestCase):
         self.gateway.set_block(POINT, 'minecraft:farmland')
         with self.assertRaisesRegex(GatewayError, '^invalid_planting_target_or_seed$') as occupied:
             self.prepare('farm', POINT | {'operation': 'plant', 'item_id': 'minecraft:wheat_seeds'})
-        self.assertFalse(hasattr(occupied.exception, 'details'))
+        # 2026-09-17: this rejection used to be deliberately bare. A live agent then
+        # named the farmland cell instead of the air cell above it, read the bare
+        # form as a positioning problem, and re-navigated to the same coordinate for
+        # twenty minutes while every goto reported success. It now carries the same
+        # preflight observation as the farmland branch - still one pre-read cell,
+        # no dispatch and no write, so the contract does not widen.
+        detail = occupied.exception.details
+        self.assertEqual(detail['kind'], 'farm_preflight')
+        self.assertEqual(detail['operation'], 'plant')
+        self.assertEqual(detail['requested'], POINT)
+        self.assertEqual(detail['target']['block'], 'minecraft:farmland')
+        self.assertEqual(detail['expectedTarget'], 'minecraft:air')
+        self.assertIs(detail['dispatched'], False)
+        self.assertIs(detail['writePerformed'], False)
+        self.assertIs(detail['retryAutomatically'], False)
+        self.assertIn('x,y+1,z', detail['instruction'])
         self.assertEqual(self.gateway.calls, [('inspect_block', POINT)])
         self.assertFalse(self.gateway.mutations())
 

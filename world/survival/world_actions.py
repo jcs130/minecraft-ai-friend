@@ -519,8 +519,28 @@ class WorldActions:
                 plan['expected'] = [point | {'block': 'minecraft:farmland'}]
                 plan['aim'] = point
             elif operation == 'plant':
-                if item not in CROPS or block['block'] not in AIR:
+                if item not in CROPS:
                     raise GatewayError('invalid_planting_target_or_seed')
+                if block['block'] not in AIR:
+                    # 2026-09-17: plant's x/y/z is the AIR cell the crop will occupy,
+                    # never the farmland block itself. Passing the soil's own
+                    # coordinate used to draw this bare rejection, which a live agent
+                    # read as a positioning problem - it then re-navigated to the same
+                    # spot for twenty minutes while every goto reported success. The
+                    # observation owed here is the same class as the farmland branch
+                    # below (one pre-read cell, no dispatch, no write), so the same
+                    # diagnosis is owed with it.
+                    error = GatewayError('invalid_planting_target_or_seed')
+                    error.details = {
+                        'schema': 1, 'kind': 'farm_preflight', 'operation': 'plant',
+                        'requested': point, 'target': block,
+                        'expectedTarget': 'minecraft:air',
+                        'dispatched': False, 'writePerformed': False, 'retryAutomatically': False,
+                        'instruction': '本次未种植。plant 的 x/y/z 是作物要占据的空气格，'
+                            '不是耕地格本身；若你要种的那格耕地位于 (x,y,z)，'
+                            '请改传 (x,y+1,z)。target 是本次预先实际读取的请求格方块；'
+                            '仅改变站位不会改变请求格的方块。'}
+                    raise error
                 support = point | {'y': point['y'] - 1}
                 self._area(support, before, construction=True)
                 support_block = self._block(support)
