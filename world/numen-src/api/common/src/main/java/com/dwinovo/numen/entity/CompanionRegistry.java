@@ -180,6 +180,18 @@ public final class CompanionRegistry extends SavedData {
         setDirty();
     }
 
+    /**
+     * Read-only view of every registered companion.
+     *
+     * <p>QiandengJi integration addition: our server actuator's commands address a
+     * companion by name alone, and the upstream accessors are owner-scoped
+     * ({@link #ownedBy(UUID)}) or dead-only ({@link #pendingDead()}). This adds the
+     * missing enumeration without changing any existing behaviour.
+     */
+    public List<Map.Entry<UUID, Entry>> all() {
+        return new ArrayList<>(entries.entrySet());
+    }
+
     public Entry find(UUID companionUuid) {
         return entries.get(companionUuid);
     }

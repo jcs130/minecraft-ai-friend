@@ -403,8 +403,8 @@ class NumenGateway:
         if tool in ('game_cast', 'game_learn'):
             from game_skills import GameSkills
             return GameSkills(self).dispatch(tool, args)
-        if tool == 'goto':
-            args = dict(args or {}, walk_only=True)
+        # walk_only was this project's own navigation flag, not upstream's; passing an
+        # unknown argument is not the way to ask for a route. Upstream owns navigation.
         # Same body/tool/JSON interface as the existing guard MCP, never raw model commands.
         body = self._settings()['bodyName']
         raw = self.rcon.cmd(f'numen_act invoke "{body}" {tool} ' + json.dumps(args or {}, ensure_ascii=True))
@@ -716,7 +716,27 @@ class NumenGateway:
                 or body.get('dimension') != before.get('dimension')):
             raise GatewayError('inflight_body_unavailable')
         if (before.get('navigationEpoch') and body.get('navigationEpoch') != before['navigationEpoch']):
-            raise GatewayError('inflight_epoch_changed')
+            # The process that owned this task is gone (a restart, or a mod swap):
+            # its terminal can never arrive, so the outcome is permanently
+            # unknowable. Close it as observed-ended - never as success, and never
+            # by replaying it - and release the marker, otherwise the loop waits on
+            # an answer that no one will ever send. 2026-09-17: an epoch change cost
+            # half an hour of a body that had already been restored.
+            receipt.update(status='observed_ended', completionConfirmed=False,
+                           navigationOutcome=None, observedAt=self._now(),
+                           notice='The navigation epoch that owned this action is gone; the '
+                                  'outcome is unknowable. This action is not replayed.')
+            self._save_receipt(receipt)
+            path.unlink(missing_ok=True)
+            try:
+                lease_path = self.state / 'lease.json'
+                lease = read_json(lease_path) if lease_path.exists() else {}
+                if lease.get('actionId') == receipt.get('actionId'):
+                    lease['status'] = 'closed'
+                    write_json(lease_path, lease)
+            except (OSError, ValueError):
+                pass
+            return receipt
         task = body.get('task', {})
         if task.get('busy'):
             if task.get('task_id') != receipt.get('nativeTaskId'):
@@ -972,9 +992,11 @@ class NumenGateway:
                     raise GatewayError('body_busy')
                 if before.get('dimension') != self._settings().get('dimension', 'minecraft:overworld'):
                     raise GatewayError('wrong_dimension')
-                if tool == 'goto' and 'walk_only_strict_arrival_v2' not in before.get('navigationModes', []):
-                    raise GatewayError('safe_navigation_unavailable')
-                # Verified walk-only navigation may cross town; mining may not.
+                # Navigation belongs to upstream, which does not advertise our patched
+                # strict-arrival mode; requiring it would refuse every goto. What we
+                # still rely on is the navigation outcome in the receipt, which is a
+                # description of what happened rather than a promise about a mode.
+                # Verified navigation may cross town; mining may not.
                 protected = tool == 'mine'
                 if tool in ('game_cast', 'game_learn'):
                     from game_skills import is_protected_action

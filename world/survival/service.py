@@ -166,6 +166,11 @@ def main():
                             time.sleep(2)
                             continue
                     # Unknown effects require attention; restart must not spend again.
+                    # Keep the traceback: a pause whose only record is the exception's
+                    # class name cannot be diagnosed without guessing. 2026-09-17: a
+                    # ValueError here cost an hour of bisecting the tick by hand.
+                    import traceback
+                    traceback.print_exc()
                     controller.pause('controller_' + type(exc).__name__)
                     try:
                         controller.stop_actions()
