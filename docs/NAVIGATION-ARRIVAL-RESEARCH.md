@@ -64,10 +64,26 @@
 
 | 序 | 事项 | 成本 | 收益 |
 | --- | --- | --- | --- |
-| **A** | 给 `invalid_planting_target_or_seed` 补 details/instruction（照隔壁 `plant_requires_farmland` 的样子：请求格实读方块、期望语义"y 应为土壤格 +1"、support 格） | 极小（单分支） | **直接消除本轮误诊**；任何 Agent 看一眼就能自纠 |
+| **A** | 给 `invalid_planting_target_or_seed` 补 details/instruction（照隔壁 `plant_requires_farmland` 的样子：请求格实读方块、期望语义"y 应为土壤格 +1"、support 格） | 极小（单分支） | **直接消除本轮误诊**；任何 Agent 看一眼就能自纠 —— **✅ 2026-09-17 已实现并实战验证，见下** |
 | **B** | plant 放宽受理：若请求格是 farmland，则自动取其上格为目标（或返回专门错误码 `use_air_cell_above` 而非笼统 invalid） | 小 | 容忍坐标语义误用；须守住"请求格不被静默改写"的既有原则 |
 | **C** | **停滞检测/重定向**（进化机制第 1 项，见 `EVOLUTION-MECHANISM-PLAN.md`） | 中 | 与根因无关地兜住**一切**循环，含将来未知的类型 |
 | **D** | 精确落位的闭环接近原语（第四节） | 大 | 仅当确实出现"必须站上某格"的任务时才需要；**目前没有证据需要** |
+
+### A 项落地实录（2026-09-17，commit `691f5f1`）
+
+- **改动**：`world_actions.py` 拆分原合并判断，not-air 分支补 `farm_preflight` 观测（requested/target/
+  expectedTarget/instruction，含 `(x,y+1,z)` 更正指引）；`numen_gateway.py` 把模型可见闸从只认
+  `plant_requires_farmland` 放宽到两个码，并把 `expectedTarget` 加入白名单。**这是有意翻转一个既有决定**——
+  原测试名就叫 `..._preserves_other_rejections` 且断言 not-air 不带 details；翻转理由：两个分支是同一类观测
+  （单格预读、未派发、未写入），farmland 分支已确立这类信息安全且对模型可见，not-air 只是当时被漏掉。测试已同步
+  改为断言新契约并写明缘由。
+- **实测（够分清"代码对"与"真的管用"）**：容器内 **96/96 测试通过**；随后经女神正门
+  `goddess-orders.jsonl` 递出更正指引，桐人**自己把教训写进 memory**（「plant 填作物占据的空气格 (x,y+1,z)，
+  不是耕地格」），按 y=65 重种，**世界实测** `(-639,64,1054)=farmland`、`(-639,65,1054)=wheat`，
+  邻格扫描另有一格小麦；**同坐标 goto 循环停止**（指令后 6 次 goto 仅 2 个不同目标，对比此前 27 次打转）。
+- **一个重要反证**：agent 面向的文档**本来就写对了**——`farming.md` 有「不把土格当作播种位置」，工具描述有
+  「改变站位不会纠正错误的目标高度」。**拿着正确答案仍然踩坑**，说明单靠文档不够，失败瞬间的自纠信号（本项）
+  与停滞检测（C 项）才是有效层。
 
 不建议：更换/替换寻路算法（第二节已排除）。
 
