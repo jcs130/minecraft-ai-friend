@@ -441,6 +441,44 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(self.backend.submitted)
         self.assertFalse(self.gateway.actions)
 
+    def test_a_body_loss_pause_still_reaches_the_restorer(self):
+        """2026-09-17: killed mid-decision, then paused-and-idle for half an hour.
+
+        The paused branch ran before the body-offline branch, so the one code
+        path that restores a body was unreachable exactly when a body was gone:
+        the loop stayed alive (controller.json kept being written) and nothing
+        acted. A body-loss pause must keep the restore channel, which is what
+        body_reconnect already assumes when it authorizes these reasons.
+        """
+        reasons = []
+        self.gateway._native_roster = lambda: (reasons.append('roster'), 'count=0')[1]
+        self.gateway._native_restore_existing = lambda *args: (reasons.append('restore'), '')[1]
+        # The restorer binds the saved owner before it will touch a body; the
+        # fixture settings predate that field.
+        self.write('settings.json', {**self.settings, 'ownerUuid': 'e5005711-be9f-44b7-aaad-6993c0ba5df4'})
+        self.write('control.json', {'schema': 1, 'enabled': False,
+                                    'pauseReason': 'body_lost_during_decision'})
+        self.gateway.body = {'ok': False, 'online': False, 'code': 'body_unavailable'}
+        self.controller = self.create()
+        self.controller.tick()
+        self.assertIn('roster', reasons, 'the restorer was never reached while paused')
+        self.assertIn('restore', reasons, 'the restorer read the roster but did not reserve a restore')
+        self.assertEqual(self.controller.data['status'], 'paused')
+        self.assertTrue((self.state / 'body-reconnect.json').exists())
+        self.assertFalse(self.backend.submitted)
+
+    def test_an_operator_pause_does_not_reach_the_restorer(self):
+        """Every other stop keeps its explicit resume; only body loss self-heals."""
+        reasons = []
+        self.gateway._native_roster = lambda: (reasons.append('roster'), 'count=0')[1]
+        self.write('control.json', {'schema': 1, 'enabled': False, 'pauseReason': 'operator_stop'})
+        self.gateway.body = {'ok': False, 'online': False, 'code': 'body_unavailable'}
+        self.controller = self.create()
+        self.controller.tick()
+        self.assertEqual(reasons, [])
+        self.assertFalse((self.state / 'body-reconnect.json').exists())
+
+
     def test_transient_observation_keeps_existing_task_then_recovers_without_resubmit(self):
         self.controller.tick()
         active = copy.deepcopy(self.controller.data['active'])

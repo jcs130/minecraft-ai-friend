@@ -1514,6 +1514,20 @@ class Controller:
                     or body.get('task', {}).get('busy')):
                 self.stop_actions()
             self.data['status'] = 'paused'
+            # A pause caused by losing the body must not also switch off the code
+            # that restores it. This branch runs before the body-offline branch
+            # below, so from 2026-09-17 a body lost mid-decision left the
+            # restorer unreachable for as long as the pause lasted - loop alive,
+            # status paused, nothing acting: a Pillager kill cost half an hour.
+            # body_reconnect already treats these pause reasons as authorization
+            # and lifts the pause itself once the identity is verified, so the
+            # only thing missing was reaching it.
+            from body_reconnect import BODY_PAUSE_REASONS, BodyReconnect
+            if (control.get('pauseReason') or self.data.get('pauseReason')) in BODY_PAUSE_REASONS:
+                try:
+                    self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
+                except (ValueError, OSError):
+                    self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:
