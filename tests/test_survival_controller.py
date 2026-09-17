@@ -461,8 +461,7 @@ class ControllerTests(unittest.TestCase):
         self.gateway.body = {'ok': False, 'online': False, 'code': 'body_unavailable'}
         self.controller = self.create()
         self.controller.tick()
-        self.assertIn('roster', reasons, 'the restorer was never reached while paused')
-        self.assertIn('restore', reasons, 'the restorer read the roster but did not reserve a restore')
+        self.assertIn('restore', reasons, 'the restorer never reserved a restore while paused')
         self.assertEqual(self.controller.data['status'], 'paused')
         self.assertTrue((self.state / 'body-reconnect.json').exists())
         self.assertFalse(self.backend.submitted)
@@ -475,7 +474,10 @@ class ControllerTests(unittest.TestCase):
         self.gateway.body = {'ok': False, 'online': False, 'code': 'body_unavailable'}
         self.controller = self.create()
         self.controller.tick()
-        self.assertEqual(reasons, [])
+        # The restore dispatch is what an operator pause must not reach. The
+        # roster may still be read by life bookkeeping, which is a different
+        # question (did the body die) and not a restore attempt.
+        self.assertNotIn('restore', reasons)
         self.assertFalse((self.state / 'body-reconnect.json').exists())
 
 

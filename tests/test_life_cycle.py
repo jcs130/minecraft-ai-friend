@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/survival'))
 import life_cycle
-from life_cycle import (check, collect, consume, latest_death, note, parse_death_count,
+from life_cycle import (check, collect, consume, latest_death, note, parse_roster_deaths,
                         pending_note, record, rotate_session, take_rotation)
 
 SETTINGS = {'bodyName': 'Kirito', 'bodyUuid': 'd4ac9523-4962-43ed-98c5-19b49e104048',
@@ -56,19 +56,45 @@ class Harness(unittest.TestCase):
 
 
 class ParseTests(unittest.TestCase):
-    def test_the_real_reply_parses(self):
-        self.assertEqual(parse_death_count('Kirito has 19 [mcdeaths]'), 19)
+    """The roster is the body's own report. Absent keys mean 'not reported'."""
 
-    def test_an_unreadable_reply_is_unknown_not_zero(self):
-        for raw in (None, '', 'No player was found', 'Kirito has [mcdeaths]',
-                    'Unknown scoreboard objective'):
-            self.assertIsNone(parse_death_count(raw))
+    def test_a_dead_line_reports_the_death_and_the_cause(self):
+        raw = ('count=1\n'
+               'Kirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048|owner=e5005711-be9f-44b7-aaad-6993c0ba5df4'
+               '|dim=minecraft:overworld|pos=-748,60,1085|dead=1|respawnMs=30000|cause=shot by Pillager')
+        deaths = parse_roster_deaths(raw)
+        self.assertEqual(len(deaths), 1)
+        self.assertEqual(deaths[0]['name'], 'Kirito')
+        self.assertEqual(deaths[0]['cause'], 'shot by Pillager')
+        self.assertEqual(deaths[0]['respawnMs'], 30000)
+
+    def test_a_live_line_is_not_a_death(self):
+        raw = ('count=1\n'
+               'Kirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048|owner=e500711-be9f-44b7-aaad-6993c0ba5df4'
+               '|dim=minecraft:overworld|pos=-541,63,870|respawnMs=-1')
+        self.assertEqual(parse_roster_deaths(raw), [])
+
+    def test_a_line_without_the_fields_reports_nothing(self):
+        """Today's roster carries no death keys; that is not evidence of a death."""
+        raw = ('count=1\n'
+               'Kirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048|owner=e5005711-be9f-44b7-aaad-6993c0ba5df4'
+               '|dim=minecraft:overworld|pos=-541,63,870')
+        self.assertEqual(parse_roster_deaths(raw), [])
+
+    def test_another_companion_is_not_our_death(self):
+        raw = ('count=2\n'
+               'Yui|uuid=e6ef6001-47c6-4f13-823c-1b724520d164|dead=1|respawnMs=0\n'
+               'Kirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048|respawnMs=-1\n')
+        self.assertEqual(parse_roster_deaths(raw, body_name='Kirito'), [])
+
+    def test_garbage_reports_nothing(self):
+        for raw in (None, '', 'count=0', 'noise', 42):
+            self.assertEqual(parse_roster_deaths(raw), [])
 
 
 class CollectTests(Harness):
     def test_the_record_carries_the_facts_of_the_life_that_ended(self):
-        facts = collect(self.root, 'mcdeaths 18 -> 19', now=1789644195.0)
-        self.assertEqual(facts['reason'], 'mcdeaths 18 -> 19')
+        facts = collect(self.root, 'roster death (respawn in 30000ms)', now=1789644195.0)
         self.assertEqual(facts['bodyName'], 'Kirito')
         self.assertEqual(facts['sessionId'], 'life-' + 'a' * 32)
         self.assertEqual(facts['lastPosition'], {'x': -751.0, 'y': 63, 'z': 1085.0})
@@ -89,40 +115,40 @@ class CollectTests(Harness):
         self.assertIn('挡了 3 次', text)
 
 
+DEAD_LINE = ('count=1\nKirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048'
+             '|owner=e5005711-be9f-44b7-aaad-6993c0ba5df4|dim=minecraft:overworld'
+             '|pos=-748,60,1085|dead=1|respawnMs=30000|cause=shot by Pillager')
+LIVE_LINE = ('count=1\nKirito|uuid=d4ac9523-4962-43ed-98c5-19b49e104048'
+             '|owner=e5005711-be9f-44b7-aaad-6993c0ba5df4|dim=minecraft:overworld'
+             '|pos=-541,63,870|respawnMs=-1')
+
+
 class DetectionTests(Harness):
-    def test_first_reading_never_invents_a_death(self):
-        self.assertIsNone(check(self.root, lambda: 'Kirito has 19 [mcdeaths]'))
+    def test_a_live_body_is_never_a_death(self):
+        self.assertIsNone(check(self.root, lambda: LIVE_LINE, body_name='Kirito'))
         self.assertFalse((self.root / 'deaths').exists())
 
-    def test_an_increase_is_a_death_and_is_archived(self):
-        check(self.root, lambda: 'Kirito has 19 [mcdeaths]')
-        facts = check(self.root, lambda: 'Kirito has 21 [mcdeaths]')
+    def test_a_dead_roster_line_is_archived_once(self):
+        facts = check(self.root, lambda: DEAD_LINE, body_name='Kirito')
         self.assertIsNotNone(facts)
-        self.assertEqual(facts['reason'], 'mcdeaths 19 -> 21')
+        self.assertIn('shot by Pillager', facts['reason'])
         self.assertTrue(list((self.root / 'deaths').glob('*.json')))
         log = (self.root / 'life-log.jsonl').read_text(encoding='utf-8').strip().splitlines()
         self.assertEqual(len(log), 1)
-        self.assertEqual(json.loads(log[0])['reason'], 'mcdeaths 19 -> 21')
-        # the death is armed for the next session, not rotated while the body is gone
-        state = json.loads((self.root / 'life-cycle.json').read_text(encoding='utf-8'))
-        self.assertEqual(state['pendingDeathId'], facts['id'])
+        # reading the same dead state again is not a second death
+        self.assertIsNone(check(self.root, lambda: DEAD_LINE, body_name='Kirito'))
+        self.assertEqual(len((self.root / 'life-log.jsonl').read_text(encoding='utf-8').strip().splitlines()), 1)
 
-    def test_an_unchanged_counter_is_not_a_death(self):
-        check(self.root, lambda: 'Kirito has 19 [mcdeaths]')
-        self.assertIsNone(check(self.root, lambda: 'Kirito has 19 [mcdeaths]'))
+    def test_an_unreadable_roster_is_not_a_death(self):
+        check(self.root, lambda: DEAD_LINE, body_name='Kirito')
+        self.assertIsNone(check(self.root, lambda: 'No entity was found', body_name='Kirito'))
+        self.assertEqual(len(list((self.root / 'deaths').glob('*.json'))), 1)
 
-    def test_a_failed_read_does_not_move_the_counter(self):
-        check(self.root, lambda: 'Kirito has 19 [mcdeaths]')
-        self.assertIsNone(check(self.root, lambda: 'No player was found'))
-        self.assertEqual(json.loads((self.root / 'life-cycle.json').read_text(encoding='utf-8'))['lastDeathCount'], 19)
-        # and a later real reading still detects the increase
-        self.assertIsNotNone(check(self.root, lambda: 'Kirito has 20 [mcdeaths]'))
 
 
 class RotationTests(Harness):
     def death(self):
-        check(self.root, lambda: 'Kirito has 19 [mcdeaths]')
-        return check(self.root, lambda: 'Kirito has 20 [mcdeaths]')
+        return check(self.root, lambda: DEAD_LINE, body_name='Kirito')
 
     def test_a_new_life_gets_a_new_session_without_losing_the_binding(self):
         self.death()

@@ -15,7 +15,6 @@ Rotating the session keeps the next life's context clean without discarding
 memory: the conversation identity changes, the durable memory files do not.
 """
 import json
-import re
 import time
 import uuid
 from pathlib import Path
@@ -24,20 +23,8 @@ SCHEMA = 1
 DEATHS_DIR = 'deaths'
 LIFE_LOG = 'life-log.jsonl'
 LIFE_STATE = 'life-cycle.json'
+CHECK_INTERVAL_SECONDS = 60
 RECENT_ACTIONS = 8
-# The world side polls this same objective to chronicle deaths, so one life
-# boundary has one authority and the two readings cannot drift apart.
-DEATH_COUNT_RE = re.compile(r'has\s+(\d{1,6})\s+\[mcdeaths\]')
-
-
-def parse_death_count(raw):
-    """`Kirito has 19 [mcdeaths]` -> 19. Anything else is unknown, not zero."""
-    if not isinstance(raw, str):
-        return None
-    match = DEATH_COUNT_RE.search(raw)
-    return int(match.group(1)) if match else None
-
-
 def _read(path, default=None):
     try:
         value = json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -235,31 +222,78 @@ def consume(session):
     return False
 
 
-def check(state_dir, read_count, now=None):
-    """Detect a new death from the world's own counter.
+def parse_roster_deaths(raw, body_name=None):
+    """Deaths as the body's own roster reports them.
 
-    ``read_count`` is a callable returning the raw scoreboard reply, so this stays
-    testable and the transport stays with the caller. A count that cannot be read
-    is not a death; a count that went up is one. Returns the archived record when
-    a new death was seen, otherwise None.
+    The mod keeps the authoritative death state (CompanionRegistry.diedAt plus
+    CompanionRoster.respawnInMs) on the server, and the roster line is the
+    body-side way to say it. Keys are read tolerantly: a roster line that does
+    not carry them means "no death reported", never "no death happened".
+
+    Returns a list of {'name', 'uuid', 'cause', 'respawnMs'}.
+    """
+    if not isinstance(raw, str):
+        return []
+    out = []
+    for line in raw.strip().splitlines()[1:]:
+        fields = line.split('|')
+        if len(fields) < 2:
+            continue
+        values = {}
+        for part in fields[1:]:
+            if '=' in part:
+                key, _, value = part.partition('=')
+                values[key.strip()] = value.strip()
+        name = fields[0].strip()
+        if body_name and name != body_name:
+            continue
+        respawn = values.get('respawnMs') or values.get('respawn')
+        dead = values.get('dead') in ('1', 'true', 'yes') or (respawn not in (None, '', '-1'))
+        if not dead:
+            continue
+        try:
+            respawn_ms = int(respawn) if respawn not in (None, '') else 0
+        except ValueError:
+            respawn_ms = 0
+        out.append({'name': name, 'uuid': values.get('uuid'), 'cause': values.get('cause'),
+                    'respawnMs': respawn_ms})
+    return out
+
+
+def check(state_dir, read_roster, now=None, body_name=None):
+    """Detect a death from the body's own roster.
+
+    ``read_roster`` is the transport (a callable returning the raw native roster
+    reply), keeping this testable and keeping the survivor off the server
+    administration surface: a life boundary is the body's business to report, not
+    something to be inferred from the server's own bookkeeping.
     """
     state_dir = Path(state_dir)
     now = time.time() if now is None else now
     path = state_dir / LIFE_STATE
     state = _read(path, {}) or {}
+    # A death can only be observed while the body is gone, and the roster read is
+    # an RCON round trip: throttle it instead of paying one per tick.
+    if now < state.get('nextCheckAt', 0):
+        return None
+    state['nextCheckAt'] = now + CHECK_INTERVAL_SECONDS
     try:
-        current = parse_death_count(read_count())
+        deaths = parse_roster_deaths(read_roster(), body_name)
     except Exception:
         return None
-    if current is None:
-        return None
-    previous = state.get('lastDeathCount')
-    state.update(schema=SCHEMA, lastDeathCount=current, checkedAt=int(now * 1000))
+    state.update(schema=SCHEMA, checkedAt=int(now * 1000))
     fresh = None
-    if type(previous) is int and current > previous:
-        # A death happened between the two readings; the record says so plainly
-        # rather than pretending to know which one it was.
-        facts = collect(state_dir, 'mcdeaths %d -> %d' % (previous, current), now=now)
+    # The roster reports the state, not the transition, so one death is recorded
+    # once: the death's own identity is its name plus the respawn window it was
+    # first seen with.
+    for death in deaths:
+        identity = '%s:%s' % (death['name'], death['respawnMs'])
+        if state.get('lastDeathKey') == identity:
+            continue
+        state['lastDeathKey'] = identity
+        facts = collect(state_dir, 'roster death%s%s' % (
+            ' by ' + str(death['cause']) if death.get('cause') else '',
+            ' (respawn in %dms)' % death['respawnMs']), now=now)
         record(state_dir, facts)
         state['pendingDeathId'] = facts['id']
         state['lastDeathAt'] = facts['at']

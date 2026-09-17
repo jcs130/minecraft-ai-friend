@@ -1406,14 +1406,18 @@ class Controller:
         into the new session's first turn. Rotation waits for the body to be back,
         so a new life never opens while the old one's body is still missing.
         """
+        from body_reconnect import BODY_PAUSE_REASONS
         try:
             from life_cycle import check, take_rotation
             name = self.settings.get('bodyName')
-            if not isinstance(name, str) or not hasattr(self.gateway, '_native_death_count'):
+            if not isinstance(name, str) or not hasattr(self.gateway, '_native_roster'):
                 return
-            # A death is recorded even while paused: losing the body is exactly
-            # when the previous life ended, and the pause does not change that.
-            check(self.root, lambda: self.gateway._native_death_count(name))
+            # The signal is the body's own roster, not the server's bookkeeping: a
+            # life boundary is the body's to report. It is only worth asking while
+            # the body is missing, which is also the only window in which a death
+            # can be observed at all - so a healthy body costs no extra RCON read.
+            if body.get('ok') is not True or control.get('pauseReason') in BODY_PAUSE_REASONS:
+                check(self.root, self.gateway._native_roster, body_name=name)
             if body.get('ok') is True and body.get('gameMode') == 'survival':
                 rotated = take_rotation(self.root, self.settings)
                 if rotated is not None:
