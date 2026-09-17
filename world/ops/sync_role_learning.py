@@ -129,7 +129,7 @@ def plan(state, runtime, source=HERE):
         for job in jobs['jobs']:
             from world_team_schedule import is_team_job, validate_team_job
             if is_team_job(job['id']): validate_team_job(job, logical_runtime + ':' + logical_role)
-            elif job['id'] == JOB_ID and runtime == 'operations': validate_world_job(job, role)
+            elif job['id'] == JOB_ID and logical_runtime == 'operations': validate_world_job(job, logical_role)
             elif runtime == 'game':
                 from party_life_schedule import JOB_ID as PARTY_LIFE_ID, validate_job as validate_party_life
                 from life_review_schedule import JOB_ID as REVIEW_ID, validate_job
