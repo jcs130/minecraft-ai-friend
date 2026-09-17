@@ -765,7 +765,9 @@ class Controller:
         # Crystallization hint accelerates the next review (熟能生巧):
         # a detected pattern deserves reflection sooner than the regular
         # 30-min cadence, but never more often than the floor.
-        if self.data.get('crystallizationHint'):
+        # An environment penalty accelerates it too — a world that is refusing
+        # or hurting the body is the case where waiting 30 minutes costs most.
+        if self.data.get('crystallizationHint') or self.data.get('environmentPenaltyHint'):
             delay = min(delay, floor)
         completed = self.completed_review_id(memory)
         if completed and completed != self.data.get('completedReviewConsumed'):
@@ -1313,6 +1315,15 @@ class Controller:
             context['instruction'] += ('【熟能生巧】检测到你最近在重复一个行为模式：'
                 + hint.get('message', '')
                 + ' 如果决定编程化，用 skill_draft 创建草稿（参考 farm_harvest_replant 的做法）。')
+        # Environment penalties (2026-09-17): the world's own verdict is stronger
+        # evidence than any internal guess, so it goes into the same reflection
+        # cycle — and, being ground truth, it must not be argued away.
+        penalty = self.data.pop('environmentPenaltyHint', None)
+        if penalty:
+            context['environmentPenaltyHint'] = penalty
+            context['instruction'] += (penalty.get('message', '')
+                + ' 这是环境实测的结果，不是推测：先照着它核对事实，'
+                '再决定改参数、改做法还是换目标；不清楚原因就先观察，不要重发同样的请求。')
         # Native ReMe searches only the first 50 characters, including the
         # official agent-chat sender prefix. Put real task subject first so it
         # does not retrieve the same boilerplate across every life turn.
@@ -1394,6 +1405,27 @@ class Controller:
                 self.data['crystallizationHint'] = hints[0]
         except Exception:
             pass  # Pattern detection is advisory; never blocks the main loop
+
+    def _check_environment_penalties(self):
+        """Environment verdicts as evolution triggers (2026-09-17 造物主谕:
+        the world is already a validation environment, so lost health and a
+        world that refuses are feedback, not background noise).
+
+        Sibling of _check_patterns, reading the same receipts. That one infers
+        from internal repetition and fires on legitimate work too; this one
+        reads what the world actually said. Pure observation — never acts, and
+        never blocks the main loop."""
+        try:
+            from environment_penalty import EnvironmentPenaltyDetector
+            receipts_dir = self.root / 'action-receipts'
+            if not receipts_dir.is_dir():
+                return
+            detector = EnvironmentPenaltyDetector(self.root, self.clock)
+            hints = detector.check(receipts_dir)
+            if hints:
+                self.data['environmentPenaltyHint'] = hints[0]
+        except Exception:
+            pass
 
     def _adaptive_route(self, body):
         """Adaptive LLM invocation router (case-af65b29d): decide whether
@@ -1522,6 +1554,10 @@ class Controller:
                 # Pattern detection (case-9f5b2099 熟能生巧): check for repeating
                 # action sequences and crystallize them into skill hints.
                 self._check_patterns()
+                # Environment penalties (2026-09-17): the world's own verdicts —
+                # a repeated refusal, lost health, a target that never changes —
+                # are triggers in their own right, not just background.
+                self._check_environment_penalties()
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):
