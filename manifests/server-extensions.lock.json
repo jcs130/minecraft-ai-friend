@@ -43,7 +43,7 @@
     },
     {
       "path": "server/mc/mods/qiandeng-maid-bridge-0.1.0.jar",
-      "sha256": "fd51566d090c34a7c1c5fbc8909276f11beb48cbf158b5a4a4a738dc5d449d66",
+      "sha256": "0ae2f222b0f5b0602aae4222e50c7798cad579aa944e8459a781cda857c048e7",
       "client_required": true
     }
   ]

@@ -2264,6 +2264,17 @@ if __name__ == "__main__":
     if os.environ.get("MAID_AGENT_ENABLED", "0") == "1":
         import maid_agent_api
         start_npc_thread("maid-agent", maid_agent_api.serve)
+    if os.environ.get("MAID_GUARDIAN_ENABLED", "0") == "1":
+        # Body guardian for the authorized companion maid: observes presence and
+        # re-summons after confirmed loss (five consecutive misses, heal_npcs R011
+        # lesson) always with PersistenceRequired=1b, the 2026-09-17 root cause.
+        import maid_guardian
+        _maid_guardian = maid_guardian.MaidGuardian(
+            R.cmd,
+            os.path.join(VDIR, "companion-guardian.json"),
+            os.path.join(VDIR, "maid-guardian-state.json"),
+            os.environ.get("MAID_BACKUP_DIR") or None)
+        start_npc_thread("maid-guardian", lambda: maid_guardian.loop(_maid_guardian))
     if os.environ.get("PARTY_ENABLED", "0") == "1":
         import party_bridge
         start_npc_thread("party-agent", party_bridge.serve_dispatch)

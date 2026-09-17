@@ -18,7 +18,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 
-/** Native damage/death protection only. Never moves, recreates, retames, heals on a timer or runs an LLM. */
+/** Native damage/death/persistence protection only. Never moves, recreates, retames, heals on a timer or runs an LLM.
+ *
+ * <p>Persistence: an authorized body is marked {@code setPersistenceRequired()} wherever it
+ * joins a level or is guarded. Without that vanilla flag the server treats the maid as an
+ * ordinary entity and despawns it once its chunk has been unloaded for a while — the
+ * 2026-09-17 finding that explained Yui disappearing while every other maid stayed.
+ */
 public final class CompanionProtection {
     public static final Path CONFIG = Path.of("config/qiandeng-companion-protection.json");
     private static CompanionProtectionPolicy policy = CompanionProtectionPolicy.disabled();
@@ -49,15 +55,24 @@ public final class CompanionProtection {
         return !maid.level().isClientSide && !maid.isRemoved()
             && policy.matches(maid.getUUID(), maid.getOwnerUUID());
     }
+    /** Pins the body against vanilla despawn. Server-side flag only; no movement, no recreation. */
+    static void enforcePersistence(EntityMaid maid) {
+        if (matches(maid) && !maid.isPersistenceRequired()) maid.setPersistenceRequired();
+    }
     static void onJoin(EntityJoinLevelEvent event) {
         if (!event.getLevel().isClientSide && event.getEntity() instanceof EntityMaid maid
-                && matches(maid) && maid.isAlive()) maid.setEntityInvulnerable(true);
+                && matches(maid) && maid.isAlive()) {
+            maid.setEntityInvulnerable(true);
+            // Without this flag vanilla despawns the body after its chunk stays unloaded.
+            if (!maid.isPersistenceRequired()) maid.setPersistenceRequired();
+        }
     }
     static void onAttack(MaidAttackEvent event) {
         EntityMaid maid = event.getMaid();
         if (matches(maid)) {
             // TLM's setter updates both vanilla and synced/saved Invulnerable state.
             maid.setEntityInvulnerable(true);
+            if (!maid.isPersistenceRequired()) maid.setPersistenceRequired();
             event.setCanceled(true);
         }
     }
@@ -65,6 +80,7 @@ public final class CompanionProtection {
         if (event.getEntity() instanceof EntityMaid maid && matches(maid)) {
             // Covers death entering NeoForge directly. Does not recreate an already removed body.
             maid.setEntityInvulnerable(true);
+            if (!maid.isPersistenceRequired()) maid.setPersistenceRequired();
             if (!(maid.getHealth() > 0)) maid.setHealth(Math.min(1.0f, maid.getMaxHealth()));
             event.setCanceled(true);
         }
@@ -73,6 +89,7 @@ public final class CompanionProtection {
         EntityMaid maid = event.getMaid();
         if (matches(maid)) {
             maid.setEntityInvulnerable(true);
+            if (!maid.isPersistenceRequired()) maid.setPersistenceRequired();
             if (!(maid.getHealth() > 0)) maid.setHealth(Math.min(1.0f, maid.getMaxHealth()));
             event.setCanceled(true);
         }
@@ -83,11 +100,14 @@ public final class CompanionProtection {
         out.addProperty("configMatched", matches(maid));
         out.addProperty("nativeInvulnerable", maid.isInvulnerable());
         out.addProperty("tlmInvulnerable", maid.getIsInvulnerable());
+        out.addProperty("nativePersistenceRequired", maid.isPersistenceRequired());
         out.addProperty("damageGuard", matches(maid));
         out.addProperty("deathGuard", matches(maid));
         out.addProperty("health", maid.getHealth());
         out.addProperty("alive", maid.isAlive());
-        out.addProperty("removalGuard", false);
+        // Persistence is enforced on join and on every guard path, so removal is covered
+        // for loaded bodies; an unloaded body still needs the external re-summon guardian.
+        out.addProperty("removalGuard", matches(maid) && maid.isPersistenceRequired());
         return out;
     }
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {

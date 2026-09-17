@@ -96,6 +96,7 @@ services:
       - ./server/world-data:/app/data
       - ./server/mcdata:/mcdata
       - ./server/mc/logs:/mclogs:ro
+      - ./server/mc/shadow/data/maid_backups:/maid-backups:ro
       - ./server/mc/data/godvoice:/godvoice
       - ./server/mc/shadow/advancements:/mcadv:ro
       - ./server/mc/shadow/stats:/mcstats:ro
@@ -184,6 +185,8 @@ services:
       PARTY_ROLES_MANIFEST_FILE: /mcdata/village/party/public/roles.json
       NPC_WORLD_PLANNING_PUBLIC: /party-public/world-planning.json
       MAID_AGENT_ENABLED: "1"
+      MAID_GUARDIAN_ENABLED: "1"
+      MAID_BACKUP_DIR: /maid-backups
       MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
       MAID_IDENTITY_KEY_FILE: /run/secrets/maid-identity
       MAID_REGISTRY_DIR: /mcdata/village/maid-agents
@@ -208,6 +211,7 @@ services:
       - ./server/world-data:/world-data
       - ./server/mcdata:/mcdata
       - ./server/mc/logs:/mclogs:ro
+      - ./server/mc/shadow/data/maid_backups:/maid-backups:ro
       - ./server/panel-state:/party-public
       - ./server/mc/data/godvoice:/godvoice
     depends_on:
