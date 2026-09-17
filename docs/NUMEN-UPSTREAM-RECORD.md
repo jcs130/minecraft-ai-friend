@@ -68,6 +68,22 @@
    - 无客户端时身体与世界照常 tick
 5. 更新本文件与 `manifests/numen-upstream.lock.json` 的版本/哈希
 
+## 集成方式已改为源码集成（2026-09-17 造物主定调）
+
+**"还是直接源码集成吧，毕竟使用场景不同"** —— 上游默认场景是**给玩家客户端用**，而我们是
+**纯服务端自主 agent、无客户端接入**，且要严格到达 / 按原身份恢复 / 无人时照常 tick。
+继续"上游 jar + 二进制补丁"的叠法，每次同步都要重解一遍 class family 与哈希；源码集成后
+我们的改动有明确落点、上游更新变成一次普通 rebase。
+
+- 源码树：**`world/numen-src/`**（上游整树除去 `docs/` 与 `.github/`，1077 文件 / 8.5 MB，
+  许可证 `LICENSE`/`COPYING`/`LICENSE-ASSETS` 原样保留）
+- 集成版本：commit **`e627089ddf6870f01968903214366fb430bd7190`**（2026-09-16）
+- 集成说明与改动清单：**`world/numen-src/INTEGRATION.md`**
+- 机器档：`manifests/numen-upstream.lock.json` 的 `integration` 段
+
+**权威源（迁移期，别搞混）**：五个能力全部迁入并通过实机验收之前，
+构建输入的权威仍是 `world/numen-patches/`；**本树此刻仅供阅读与迁移**。迁完之后反过来。
+
 ## 待办（截至本文件）
 
 - 正式同步**尚未执行**：需要停服窗口 + 基线选择（HEAD 自建 vs release 0.1.3）。

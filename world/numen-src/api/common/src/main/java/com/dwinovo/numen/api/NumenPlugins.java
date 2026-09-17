@@ -1,0 +1,201 @@
+package com.dwinovo.numen.api;
+
+import com.dwinovo.numen.Constants;
+import com.dwinovo.numen.agent.inbox.EventTypes;
+import com.dwinovo.numen.agent.tool.NumenTool;
+import com.dwinovo.numen.agent.tool.ToolRegistry;
+import com.dwinovo.numen.entity.CompanionEvents;
+import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.event.NumenEvents;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+/**
+ * 插件的登记处:{@code NumenPlugins.register(numen -> …)}。
+ *
+ * <h2>时机不必你操心</h2>
+ * 插件在自己模组的构造期登记就行。引擎内部该就绪的东西各有各的时机(工具注册表在
+ * 类加载时就有,技能与头像要等客户端起来),这里替你等——先登记的先跑,能跑的立刻跑,
+ * 跑不了的等它就绪。
+ *
+ * <h2>专用服务器上会安静地少几样</h2>
+ * 技能和头像只活在玩家的客户端上。它们由客户端启动时{@linkplain #bindClient 接上来};
+ * 专用服务器上没人接,于是 {@code bundleSkills} / {@code registerPortrait} 就是空操作。
+ * <b>"有没有接上"本身就是判据</b>,不必再去问一遍"我现在是不是客户端"——那种问法
+ * 每个加载器一个写法,写在插件里就是每个插件一个写法。
+ */
+public final class NumenPlugins {
+
+    /** 客户端接上来的那几样;专用服务器上一直是 null,于是相关调用自然成空操作。 */
+    private static volatile Consumer<Path> skills;
+    private static volatile ClientInput clientInput;
+    /** 客户端接上来了没有。它同时就是"我现在是不是客户端"的答案。 */
+    private static volatile boolean clientReady;
+
+    private static final NumenApi API = new Impl();
+
+    private NumenPlugins() {}
+
+    /** 登记一个插件。可在任何时候调用,通常在你模组的构造期。 */
+    public static void register(NumenPlugin plugin) {
+        if (plugin == null) return;
+        try {
+            plugin.setup(API);
+        } catch (RuntimeException e) {
+            Constants.LOG.error("[numen] 插件登记失败,它挂的东西可能只生效了一半", e);
+        }
+    }
+
+    /** 主人客户端那一侧的输入口,形状与 {@link NumenApi#emit(UUID, String, String)} 相同。 */
+    @FunctionalInterface
+    public interface ClientInput {
+        Delivery emit(UUID companion, String type, String text);
+    }
+
+    /**
+     * 客户端起来时把只在客户端存在的能力接上来。<b>引擎内部调用</b>,插件不该碰。
+     */
+    public static void bindClient(Consumer<Path> skillSink, ClientInput input) {
+        skills = skillSink;
+        clientInput = input;
+        clientReady = true;
+        for (Runnable r : PENDING) runClientBlock(r);
+        for (Path root : PENDING_SKILLS) skillSink.accept(root);
+        PENDING.clear();
+        PENDING_SKILLS.clear();
+    }
+
+    /**
+     * 客户端还没接上时先攒着,接上再跑。
+     *
+     * <p>插件在自己的 {@code @Mod} 构造器里登记,而引擎的客户端入口也是一个
+     * {@code @Mod} 构造器——谁先谁后由加载器的模组排序决定。不攒的话,插件生不生效
+     * 就成了排序的函数:同一份代码换个加载器、加个别的模组就可能整块静默失效,
+     * 而且没有任何报错。专用服务器上没人来接,这两个表原样留着不跑,正是要的行为。
+     */
+    /**
+     * 插件挂在 {@code <runtime_state>} 上的现算片段。见 {@link NumenApi#contributeState}。
+     * 用 CopyOnWriteArrayList:登记发生在加载期,读发生在每次请求,读远多于写。
+     */
+    private static final List<Function<UUID, String>> STATE = new CopyOnWriteArrayList<>();
+
+    /** 插件从身体上读的状态片段。见 {@link NumenApi#contributeBodyState}。 */
+    private static final List<Function<NumenPlayer, String>> BODY_STATE = new CopyOnWriteArrayList<>();
+
+    /** 汇总所有插件对这只同伴的客户端现算片段。<b>引擎内部调用</b>。 */
+    public static String stateFragments(UUID companion) {
+        return joinFragments(STATE, companion);
+    }
+
+    /** 汇总所有插件从这具身体上读的状态片段。<b>引擎内部调用</b>(服务端)。 */
+    public static String bodyStateFragments(NumenPlayer body) {
+        return joinFragments(BODY_STATE, body);
+    }
+
+    /** 正算不出来的片段。身体片段每次状态检查都要算,一个坏插件不能每秒把日志刷二十条。 */
+    private static final Set<Function<?, String>> FAILING = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 按登记顺序拼起来,空的不占位。
+     *
+     * <p>某个插件算炸了不能连累整条请求或整个身体检查——它自己那段丢掉,别人的照常挂上。同一个片段连着出错
+     * 只在第一次记日志,算出来一次就重新计。
+     */
+    private static <T> String joinFragments(List<Function<T, String>> fragments, T subject) {
+        if (fragments.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (Function<T, String> f : fragments) {
+            try {
+                String x = f.apply(subject);
+                if (FAILING.remove(f)) {
+                    Constants.LOG.info("[numen] 插件的运行期状态又算得出来了");
+                }
+                if (x != null && !x.isBlank()) sb.append(x);
+            } catch (RuntimeException e) {
+                if (FAILING.add(f)) {
+                    Constants.LOG.error("[numen] 插件的运行期状态算不出来,这一段跳过(接着出错不再重复记)", e);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private static final List<Runnable> PENDING = new ArrayList<>();
+    private static final List<Path> PENDING_SKILLS = new ArrayList<>();
+
+    private static void runClientBlock(Runnable r) {
+        try {
+            r.run();
+        } catch (RuntimeException e) {
+            Constants.LOG.error("[numen] 插件的客户端初始化出错", e);
+        }
+    }
+
+    private static final class Impl implements NumenApi {
+
+        @Override
+        public <T> void on(CompanionEvent<T> event, Consumer<T> handler) {
+            CompanionEvents.subscribe(event, handler);
+        }
+
+        @Override
+        public void registerTool(NumenTool tool) {
+            ToolRegistry.register(tool);
+        }
+
+        @Override
+        public void bundleSkills(Path skillsRoot) {
+            if (skillsRoot == null) return;
+            Consumer<Path> sink = skills;
+            if (sink != null) sink.accept(skillsRoot); else PENDING_SKILLS.add(skillsRoot);
+        }
+
+        @Override
+        public void onClient(Runnable clientOnly) {
+            if (clientOnly == null) return;
+            if (clientReady) runClientBlock(clientOnly); else PENDING.add(clientOnly);
+        }
+
+        @Override
+        public void contributeState(Function<UUID, String> fragment) {
+            if (fragment != null) STATE.add(fragment);
+        }
+
+        @Override
+        public void contributeBodyState(Function<NumenPlayer, String> fragment) {
+            if (fragment != null) BODY_STATE.add(fragment);
+        }
+
+        @Override
+        public Path configDir() {
+            return com.dwinovo.numen.NumenPaths.config();
+        }
+
+        @Override
+        public void registerEventType(String type, boolean alwaysUrgent) {
+            EventTypes.register(EventTypes.event(type, alwaysUrgent));
+        }
+
+        @Override
+        public void emit(NumenPlayer companion, String type, Map<String, String> attrs, String text,
+                         boolean urgent) {
+            NumenEvents.emit(companion, type, attrs, text, urgent);
+        }
+
+        @Override
+        public Delivery emit(UUID companion, String type, String text) {
+            NumenEvents.requireClientInput(type);
+            ClientInput input = clientInput;
+            return input == null ? Delivery.REJECTED : input.emit(companion, type, text);
+        }
+    }
+}

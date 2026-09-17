@@ -59,5 +59,23 @@
     "result": "None of the five capabilities above are present in the upstream release jar; adopting upstream as-is would break walk_only goto (safe_navigation_unavailable) and body restore.",
     "checkedAt": "2026-09-17"
   },
-  "syncPolicy": "Adopt upstream as the baseline and re-apply our capability patches onto it; never drop the patch chain in place. Requires a stopped server, a rebuild of all five capabilities and revalidation of each on the live world."
+  "syncPolicy": "Adopt upstream as the baseline and re-apply our capability patches onto it; never drop the patch chain in place. Requires a stopped server, a rebuild of all five capabilities and revalidation of each on the live world.",
+  "integration": {
+    "model": "source integration",
+    "decidedAt": "2026-09-17",
+    "why": "Our use case differs from the upstream default: a server-side autonomous agent with no client attached, requiring strict arrival, restore-by-identity and unattended ticking. Those capabilities are absent from the upstream release, so maintaining them as binary patch deltas over a released jar costs a class-family re-derivation on every sync. Integrating the source gives our changes a defined place and a version to compare against.",
+    "sourcePath": "world/numen-src",
+    "sourceCommit": "e627089ddf6870f01968903214366fb430bd7190",
+    "licenseFilesKept": [
+      "LICENSE",
+      "COPYING",
+      "LICENSE-ASSETS"
+    ],
+    "excluded": [
+      "docs/ (upstream documentation, linked not vendored)",
+      ".github/"
+    ],
+    "authority": "Until all five capabilities are folded into the tree and validated on the live world, world/numen-patches/ remains the authoritative build input; afterwards the tree is authoritative and the patches become history plus the capability contract.",
+    "status": "vendoried; capability fold-in, build and deploy pending a stopped-server window"
+  }
 }

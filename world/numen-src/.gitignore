@@ -1,0 +1,42 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea/*
+!.idea/scopes
+
+# vscode
+.vscode/
+
+# gradle
+# 别写成裸的 build:那会命中任意层级上任何叫 build 的目录,包括 Java 包
+# com/dwinovo/numen/core/build/ —— 新建的源码文件会被静默吞掉,本机照常编译,
+# 干净 clone 直接编译失败。判据是位置:构建产物在项目根下,包目录在 src/ 里面。
+build/
+!**/src/**/build/
+.gradle
+
+# other
+eclipse
+run
+runs
+logs
+.vfox
+
+# datagen output — regenerated via ./gradlew :fabric:runDatagen + :neoforge:runData
+**/generated/
+
+# Claude local tooling (skills, settings, etc.) — not mod source
+.claude/
+
+**/.env
+!**/.env.example
