@@ -1297,6 +1297,12 @@ class Controller:
         self.perceive(body)
         turn_id = 'survival-' + uuid.uuid4().hex
         context = self.life_context(body, control, turn_id, message, replies)
+        from life_cycle import pending_note
+        death_note = pending_note(self.session, self.root)
+        if death_note:
+            # The first turn of a life that began with a death carries the record
+            # of how the last one ended. Once, not every turn.
+            context['lifeDeath'] = death_note
         if requested_review:
             context['review'] = requested_review
             context['instruction'] += ('本轮合并了待复盘信号，保留用户长期使命，不为定时检查另造目标。'
@@ -1373,6 +1379,9 @@ class Controller:
             active['taskId'] = self.backend.submit(turn_id, prompt, self.settings['taskTimeoutSeconds'],
                 session=self.session, request_context=request_context)
             active['phase'] = 'submitted'
+            from life_cycle import consume
+            if consume(self.session):
+                self.save()  # the new life's death note has been delivered
             self.save()
             if active.get('partyReservation'):
                 self.party.submitted(active['partyReservation'], active['taskId'])
@@ -1388,6 +1397,32 @@ class Controller:
                     self.data['sessionWarning'] = type(exc).__name__
         except Exception:
             self.pause('model_submission_uncertain')
+
+    def _check_life_cycle(self, body):
+        """One life per session: a death is written down, then a new conversation.
+
+        Creator's directive (2026-09-17). The record is deterministic and lives in
+        deaths/ plus life-log.jsonl; the reflection stays the agent's own, carried
+        into the new session's first turn. Rotation waits for the body to be back,
+        so a new life never opens while the old one's body is still missing.
+        """
+        try:
+            from life_cycle import check, take_rotation
+            name = self.settings.get('bodyName')
+            if not isinstance(name, str) or not hasattr(self.gateway, '_native_death_count'):
+                return
+            # A death is recorded even while paused: losing the body is exactly
+            # when the previous life ended, and the pause does not change that.
+            check(self.root, lambda: self.gateway._native_death_count(name))
+            if body.get('ok') is True and body.get('gameMode') == 'survival':
+                rotated = take_rotation(self.root, self.settings)
+                if rotated is not None:
+                    self.session = rotated
+                    self.data['lifeStarted'] = {
+                        'previousSessionId': rotated.get('previousSessionId'),
+                        'freshFromDeath': rotated.get('freshFromDeath')}
+        except Exception:
+            pass  # Life bookkeeping is advisory; it never blocks the loop.
 
     def _check_patterns(self):
         """Pattern detection for skill crystallization (case-9f5b2099).
@@ -1499,6 +1534,7 @@ class Controller:
             except GatewayError as exc:
                 self.data['actionExecution'] = {'ok': False, 'inFlight': True, 'code': str(exc)}
         self.perceive(body)
+        self._check_life_cycle(body)
         if body.get('ok'):
             from body_reconnect import BodyReconnect
             try:

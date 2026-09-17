@@ -307,6 +307,14 @@ class NumenGateway:
     def _native_restore_existing(self, body_uuid, owner_uuid, body_name):
         return self.rcon.cmd('numen_restore_existing ' + body_uuid + ' ' + owner_uuid + ' ' + body_name)
 
+    def _native_death_count(self, body_name):
+        """The world's own death counter; the world side polls the same objective.
+
+        One life boundary, one authority: reading the same scoreboard the
+        chronicle uses means a death cannot be counted twice in two ways.
+        """
+        return self.rcon.cmd('scoreboard players get ' + body_name + ' mcdeaths')
+
     def _native_recipe(self, body_name, item_id):
         return self.rcon.cmd('numen_act invoke ' + json.dumps(body_name) + ' lookup_recipe '
                              + json.dumps({'item_id': item_id}, ensure_ascii=True))
