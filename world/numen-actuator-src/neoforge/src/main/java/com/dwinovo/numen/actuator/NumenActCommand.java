@@ -60,6 +60,8 @@ public final class NumenActCommand {
         registerRestore(dispatcher);
         dispatcher.register(Commands.literal("numen_act")
                 .requires(src -> src.hasPermission(2)) // RCON / op 2 级
+                .then(Commands.literal("pad")
+                        .executes(NumenActCommand::pad))
                 .then(Commands.literal("list")
                         .executes(NumenActCommand::list))
                 .then(Commands.literal("summon")
@@ -93,6 +95,15 @@ public final class NumenActCommand {
                                                 .executes(NumenActCommand::whisper)))))
                 .then(Commands.literal("dumpregistry") // 导出全块状态注册表（name→stateId→properties），喂 mineflayer mcData 注入 + 网页端 stateId→块名映射
                         .executes(NumenActCommand::dumpRegistry)));
+    }
+
+    // ==================== pad ====================
+
+    /** Report the companion chunk pad: what is configured, and what was stamped. */
+    private static int pad(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        src.sendSuccess(() -> Component.literal(CompanionPad.status(src.getServer())), false);
+        return 1;
     }
 
     // ==================== list ====================

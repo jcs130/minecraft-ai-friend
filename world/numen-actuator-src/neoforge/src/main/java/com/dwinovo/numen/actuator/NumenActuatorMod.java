@@ -22,6 +22,9 @@ public final class NumenActuatorMod {
         NeoForge.EVENT_BUS.addListener(NumenActuatorMod::onRegisterCommands);
         // 神使通道：进程内控制面（文件队列 + 世界信标），见 GodChannel。
         NeoForge.EVENT_BUS.addListener(GodChannel::onServerTick);
+        // 同伴区块票据（2026-09-18）：给假身体一张与玩家等量的加载垫，
+        // 否则它只能加载自己走过的那条线，离开即 target_chunk_unloaded。见 CompanionPad。
+        NeoForge.EVENT_BUS.addListener(CompanionPad::onServerTick);
         // 技能书右键施法（2026-08-29）：✦ 徽记书右键 → 私语 /cli cast，见 SkillBookHandler。
         NeoForge.EVENT_BUS.addListener(SkillBookHandler::onRightClickItem);
         NeoForge.EVENT_BUS.addListener(SkillBookHandler::onPlayerLoggedOut);
