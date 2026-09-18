@@ -133,8 +133,13 @@ P0 消除的是这一次的具体误诊；P1 消除的是这一类——**任何
   钉住命中；**零假阳性已用活体数据实测**（productive 窗口不触发）。
   **生产尚未真实触发过**——需要"目标停滞 ≥20 分钟 ∧ 环境同窗口报 no_output/repeated_rejection"
   这个组合真的发生（也就是他真的一次卡住 20 分钟），所以该分支只由单测保证、未跑过生产。
-- **P2** 共享技能库 per-world：**未实现**（`SkillLibrary` 仍是单 agent 单根）。
-- **P3** world-notes / focus notes：**部分落地（2026-09-18）**——结构（`server/agents/work/world-notes/{focus,experiments,synthesis,open-questions}`）、约定（`docs/WORLD-NOTES.md`，含 focus note 五字段）、lint（`tools/world_notes_lint.py`：字段完整性/赛道去重/过期）、以及 **P1 第④步的落点**（停滞触发时写 focus note 记录，落在角色自己的 state 里）都已完成；**未完成的是"跨角色可读"**——角色的文件权限是默认拒绝 workspace 之外（`QD_NATIVE_FILE_SCOPE` 负向断言），要让 A 角色读到 B 角色的笔记，必须改那条生成规则（及其生成器与健康断言），属松绑权限模型，待造物主拍板。**P2 共享技能库卡在同一处**（`agent_learning` 的 root 是 per-workspace）。
+- **P2** 共享技能库 per-world：**✅ 2026-09-18 落地**——`agent_learning` 的激活动作现在会把
+  已验证并启用的技能**发布到 `/state/work/world-skills/`**（记录发布者）；`status()` 列出
+  其他角色发布的技能，`read_skill` 本地缺失时回退读共享并标注 `inherited` + `origin`。
+  **边界**：草稿与验证仍私有（只有成品外流）；发布是尽力而为（共享树不可用不得拖垮本角色激活）。
+  10 个活跃角色均已获准读写该目录。效果由 5 项双角色单测钉住；**完整活体链路（A 角色激活→B 角色
+  在自己班次里继承）待生产触发**。
+- **P3** world-notes / focus notes：**✅ 落地（2026-09-18，含跨角色可读）**——结构（`server/agents/work/world-notes/{focus,experiments,synthesis,open-questions}`）、约定（`docs/WORLD-NOTES.md`，含 focus note 五字段）、lint（`tools/world_notes_lint.py`：字段完整性/赛道去重/过期）、以及 **P1 第④步的落点**（停滞触发时写 focus note 记录，落在角色自己的 state 里）都已完成；**未完成的是"跨角色可读"**——角色的文件权限是默认拒绝 workspace 之外（`QD_NATIVE_FILE_SCOPE` 负向断言），要让 A 角色读到 B 角色的笔记，必须改那条生成规则（及其生成器与健康断言），属松绑权限模型，待造物主拍板。**P2 共享技能库卡在同一处**（`agent_learning` 的 root 是 per-workspace）。
 - stagnation 的判据阈值（10 分钟、冷却 15 分钟、32 个目标上限）是**按当日真实数据定的初值**，
   须随更多真实回放继续调。
 - Polar RL（第 5 层）不在本次范围。
