@@ -40,6 +40,9 @@ def enabled_native_tools(role, runtime='game'):
 PREFIX = 'QD_NATIVE_'
 # Shared across every role: the world-level notes tree (docs/WORLD-NOTES.md).
 WORLD_NOTES = '/state/work/world-notes/'
+# P2 (2026-09-18): skills a role validated and activated are published here for the
+# other roles to inherit; drafts stay private.
+WORLD_SKILLS = '/state/work/world-skills/'
 
 FILE_NOTE = '\n\n<!-- qiandeng-personal-files-v1 -->\n你已获准使用 Qwen 原生 read_file、write_file、append_file、edit_file，在自己的工作区持久保存经验、失败复盘、参考资料和代码草稿，不需要再次请求文件写入许可。建议 notes/index.md 仅记主题、短摘要和路径，notes/ 下分主题记录事实/来源/时间/适用条件/未验证事项，drafts/ 保存草稿；已有内容先读再追加或定点修改。资料不会自动全部加载；当前任务需要旧经验时先读简短索引，再读相关一页。写入成功以工具回执为准，关键资料读回核对。若本角色已启用 qd-skill-evolution，需要整理方法时按需读取其 references/notes.md；成熟流程可通过原生 materialize_skill 保存，已启用官方 make-skill 时优先参照其流程。尚未安装的技能与参考页不能当作已可用。\n个人文件可长期积累；写下计划或代码不代表游戏已经执行或技能测试通过。文件工作与当前任务共用一次推理流程，不另起后台模型循环。身份、驱动和预算等受管理配置仍由对应服务维护。\n'
 
@@ -134,7 +137,7 @@ def rules(role):
     # that pins that ("a role cannot read another role's notes") still holds. Only the
     # explicitly shared tree is opened, which is the difference between "shared" and
     # "someone else's private memory".
-    shared = re.escape(WORLD_NOTES)
+    shared = rf'(?:{re.escape(WORLD_NOTES)}|{re.escape(WORLD_SKILLS)})'
     path = rf'(?:{base}|{shared})?{segment}(?:/{segment})*'
     # A migrated role retains its historical weekly job ID, but the native
     # CLI must address its new workspace, never a same-named game role.

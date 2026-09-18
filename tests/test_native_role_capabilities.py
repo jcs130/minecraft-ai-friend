@@ -59,7 +59,8 @@ class NativeRoleCapabilities(unittest.TestCase):
     def test_shared_world_notes_are_open_while_role_isolation_holds(self):
         """The shared tree is deliberate (docs/WORLD-NOTES.md); private workspaces are not."""
         for path in ('/state/work/world-notes/focus/farm-navigation.md',
-                     'world-notes/focus/farm-navigation.md'):
+                     'world-notes/focus/farm-navigation.md',
+                     '/state/work/world-skills/qd-farm-sweep/abc.json'):
             self.assertFalse(self.blocked('read_file', 'file_path', path), path)
         self.assertFalse(self.blocked('write_file', 'file_path',
                                       '/state/work/world-notes/experiments/x.md'))

@@ -133,6 +133,12 @@ class LearningTools:
         self.native_role, self.native_runtime = actual_role, actual_runtime
         self.workspace = self.state / 'workspaces' / actual_role
         self.root = self.workspace / 'learning'
+        # P2 (2026-09-18): validated, activated skills are published here so every role
+        # in this world can inherit them. Drafts and validation stay private to the role
+        # that wrote them - the sandbox discipline is unchanged, only finished work is
+        # shared. Readings of it are marked with their origin so an inherited skill is
+        # never mistaken for one's own. Design: docs/WORLD-NOTES.md's sibling convention.
+        self.shared = Path(str(state)) / 'world-skills'
         if read(self.workspace / 'agent.json').get('id') != actual_role: raise ValueError('role_mismatch')
         self._service, self.fetch, self.api, self.clock = service, fetch, api, clock
 
@@ -188,6 +194,8 @@ class LearningTools:
                 'recentFeedback': index['feedback'][-8:], 'reviewPending': index['reviewPending'],
                 'availableTools': sorted(self.allowed_tools()), 'maxLearnedSkills': 8,
                 'programLearning': 'numen_survival skill_draft → skill_test → skill_promote' if self.role == 'qd-survivor' else None,
+                # P2: what other roles published, so inheriting is a choice and not a guess.
+                'sharedSkills': self.shared_skills(),
                 'notice': 'Procedural validation checks format and tool scope only. Feedback is reported evidence, not independent verification.'}
 
     def read_skill(self, name, revision=''):
@@ -196,9 +204,30 @@ class LearningTools:
             if revision: return {'ok': True, 'draft': self._revision(name, revision)}
             path = self.workspace / 'skills' / name / 'SKILL.md'
             if path.is_symlink() or any(p.is_symlink() for p in path.parents): raise ValueError('linked_skill')
+            if not path.exists():
+                inherited = self._inherited(name)
+                if inherited is not None:
+                    return inherited
             raw = path.read_bytes()
             if len(raw) > 16384: raise ValueError('skill_read_limit')
             return {'ok': True, 'name': name, 'content': raw.decode('utf8'), 'role': self.role}
+
+    def _inherited(self, name):
+        """A skill published by another role, read back in this module's own format."""
+        try:
+            index = read(self.shared / 'index.json')
+            entry = (index.get('skills') or {}).get(name)
+            if not entry or entry.get('origin') == self.role:
+                return None
+            value = read(self.shared / name / (entry['revision'] + '.json'))
+        except (OSError, ValueError):
+            return None
+        if value.get('name') != name or value.get('revision') != entry.get('revision'):
+            return None
+        return {'ok': True, 'name': name, 'revision': entry['revision'], 'role': self.role,
+                'origin': entry.get('origin'), 'inherited': True,
+                'content': self.markdown(value)}
+
 
     def draft(self, name, description, steps, tools, cases):
         if not isinstance(name, str) or not NAME.fullmatch(name): raise ValueError('use_qd_learned_name')
@@ -287,7 +316,40 @@ class LearningTools:
                 'enabled': True, 'failures': 0, 'activatedAt': self.clock(), 'behaviorVerified': False}
             index['skills'][name] = entry; index['reviewPending'] = False; self._save(index)
             intent_path.unlink(missing_ok=True)
-            return {'ok': True, 'name': name, **entry, 'reloadRequested': self._reload(name), 'status': 'experimental_workflow'}
+        self._publish(name, value, revision)
+        return {'ok': True, 'name': name, **entry, 'reloadRequested': self._reload(name), 'status': 'experimental_workflow'}
+
+    def _publish(self, name, value, revision):
+        """Offer an activated skill to the world. Best-effort by design.
+
+        A role's own activation must not fail because the shared tree is unavailable:
+        publishing is a courtesy to the other roles, not part of this role's contract.
+        """
+        try:
+            with locked(self.shared):
+                folder = self.shared / name
+                folder.mkdir(parents=True, exist_ok=True)
+                write(folder / (revision + '.json'),
+                      {'schema': 1, 'name': name, 'revision': revision,
+                       'description': value['description'], 'steps': value['steps'],
+                       'tools': value['tools'], 'origin': self.role, 'publishedAt': self.clock()})
+                path = self.shared / 'index.json'
+                index = read(path) if path.exists() else {'schema': 1, 'skills': {}}
+                index['skills'][name] = {'revision': revision, 'origin': self.role,
+                                         'publishedAt': self.clock(), 'tools': value['tools']}
+                write(path, index)
+        except (OSError, ValueError):
+            pass
+
+    def shared_skills(self):
+        """What other roles have published, so a role can see what it may inherit."""
+        try:
+            path = self.shared / 'index.json'
+            index = read(path) if path.exists() else {'skills': {}}
+        except (OSError, ValueError):
+            return {}
+        return {name: entry for name, entry in (index.get('skills') or {}).items()
+                if entry.get('origin') != self.role}
 
     def feedback(self, name, outcome, evidence, revision=''):
         if not isinstance(evidence, str) or not 12 <= len(evidence) <= 1200: raise ValueError('evidence_required')
