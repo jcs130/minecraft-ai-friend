@@ -486,10 +486,46 @@ class NumenGateway:
                     'bodyControl': body_control,
                     'notice': 'Idle is not a completion receipt. Numen navigation is not geofenced.'}
         except (OSError, ValueError, TypeError, KeyError, ImportError) as error:
-            missing = isinstance(error, GatewayError) and str(error) == 'body_offline'
+            text = str(error)
+            missing = (isinstance(error, GatewayError) and text == 'body_offline')
+            if not missing:
+                # A dead companion is not a failed read. The native surface answers
+                # "no companion: <name>" for one that is gone, and an unreadable body is
+                # not necessarily an absent one - so when the error does not already say
+                # it, ask the roster, which is authoritative for presence. Reporting
+                # "unknown" here parked the controller in observation_wait for two hours
+                # while the body was dead and the reconnect never got its turn.
+                missing = 'no companion' in text.lower() or self._body_absent_from_roster(body)
             return {'schema': 1, 'ok': False, 'online': False if missing else None, 'bodyName': body,
                     'observedAt': now, 'code': 'body_offline' if missing else 'observation_unavailable',
                     'errorType': type(error).__name__, 'observationStage': stage}
+
+    def _body_absent_from_roster(self, body):
+        """True only when the roster positively does not list the body.
+
+        The roster's online section is the presence authority; its catalogue section
+        (dead or awaiting respawn) is not presence. A read that fails tells us nothing
+        and must keep answering "unknown", never "gone".
+        """
+        try:
+            raw = self._native_roster()
+        except (OSError, ValueError):
+            return False
+        if not isinstance(raw, str):
+            return False
+        lines = [line.strip() for line in raw.strip().splitlines() if line.strip()]
+        if not lines or not lines[0].startswith('count='):
+            return False
+        try:
+            count = int(lines[0][6:])
+        except ValueError:
+            return False
+        for line in lines[1:1 + count]:
+            fields = line.split('|')
+            values = dict(part.split('=', 1) for part in fields[1:] if '=' in part)
+            if fields[0] == body or values.get('uuid') == body:
+                return False
+        return True
 
     def observe(self, radius=8):
         try:
