@@ -18,6 +18,9 @@ import time
 from pathlib import Path
 
 NOTES = Path(os.environ.get('WORLD_NOTES_DIR', '/state/work/world-notes'))
+# QwenPaw 的 PawApp 目录：控制台按请求实时扫描它，所以建目录即生效（无需重启）。
+PLUGINS = Path(os.environ.get('QWENPAW_PLUGINS_DIR', '/state/work/plugins'))
+PAGE_ID = 'evolution-board'
 WORKSPACES = Path('/state/work/workspaces')
 LEARNING_SELF = Path(__file__).resolve()
 
@@ -216,6 +219,136 @@ def board_rows():
     return rows
 
 
+PAGE_HTML = """<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>自我改进 · 元层看板</title>
+<style>
+ :root{--bg:#0f1115;--card:#171a21;--line:#252a34;--txt:#e6e8ee;--dim:#8b93a7;
+        --ok:#3fbf7f;--warn:#e2b93b;--bad:#e5605e;--acc:#6aa9ff}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--txt);
+      font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+ header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;
+        flex-wrap:wrap;gap:16px;align-items:baseline}
+ h1{font-size:17px;margin:0;font-weight:600}
+ .meta{color:var(--dim);font-size:12px}
+ .kpis{display:flex;gap:10px;flex-wrap:wrap;margin:16px 22px 0}
+ .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
+       padding:10px 14px;min-width:120px}
+ .kpi b{display:block;font-size:20px;margin-top:2px}
+ main{padding:16px 22px 40px}
+ table{width:100%;border-collapse:collapse;background:var(--card);
+        border:1px solid var(--line);border-radius:12px;overflow:hidden}
+ th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+ th{color:var(--dim);font-weight:500;background:#12151b}
+ tr:last-child td{border-bottom:0}
+ td.num{text-align:right;font-variant-numeric:tabular-nums}
+ .flag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;
+        border:1px solid var(--line);margin-right:4px;color:var(--dim)}
+ .flag.bad{color:#ffd9d8;border-color:#5c2a29;background:#2a1716}
+ .flag.warn{color:#f6e2b0;border-color:#5a4a1e;background:#26200f}
+ .flag.good{color:#cfead9;border-color:#245239;background:#12241a}
+ code{color:var(--acc)}
+ .foot{margin-top:14px;color:var(--dim);font-size:12px}
+ details{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+ summary{cursor:pointer;color:var(--acc);font-size:13px}
+ pre{white-space:pre-wrap;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>自我改进 · 元层看板</h1>
+  <span class="meta" id="stamp">加载中…</span>
+  <span class="meta">每 60 秒自动刷新</span>
+</header>
+<div class="kpis" id="kpis"></div>
+<main>
+  <table>
+    <thead><tr>
+      <th>角色</th><th>上次班次</th><th>多久前</th>
+      <th class="num">技能草稿</th><th class="num">知识产物</th>
+      <th>知识新鲜度</th><th>红旗</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <details><summary>规则（这份看板背后的政策）</summary><pre id="policy"></pre></details>
+  <div class="foot">数据来自 <code>world/ops/evolution_policy.py</code> 生成的两份文件，与共享笔记树同源。</div>
+</main>
+<script>
+const FLAG = {'no_knowledge':'bad','knowledge_stale':'warn','no_skill_draft_yet':'warn'};
+function cls(f){
+  if(f.startsWith('gate:')||f==='no_knowledge') return 'bad';
+  if(f==='knowledge_stale'||f==='no_skill_draft_yet') return 'warn';
+  return '';
+}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function tick(){
+  const r = await fetch('board.json?ts=' + Date.now());
+  const d = await r.json();
+  const roles = d.roles || [];
+  const flagged = roles.filter(x=>(x.flags||[]).length);
+  const drafts = roles.reduce((a,x)=>a+(x.drafts||0),0);
+  const know = roles.reduce((a,x)=>a+(x.knowledge||0),0);
+  document.getElementById('stamp').textContent =
+    '生成于 ' + new Date((d.generatedAt||0)*1000).toLocaleString() + ' ｜ 角色 ' + roles.length + ' ｜ 红旗 ' + flagged.length;
+  document.getElementById('kpis').innerHTML =
+    [['角色', roles.length, ''],['红旗', flagged.length, flagged.length?'bad':'good'],
+     ['技能草稿', drafts, drafts?'good':'warn'],['知识产物', know, '']]
+    .map(([k,v,c])=>`<div class="kpi">${k}<b class="${c}">${v}</b></div>`).join('');
+  document.getElementById('rows').innerHTML = roles.map(x=>{
+    const s = x.lastShift || {};
+    const flags = (x.flags||[]).map(f=>`<span class="flag ${cls(f)}">${esc(f)}</span>`).join('') || '<span class="flag good">—</span>';
+    return `<tr><td><b>${esc(x.role)}</b></td><td>${esc(s.code||'—')}</td>`
+      + `<td class="num">${s.ageMinutes!=null?Math.round(s.ageMinutes)+' 分钟':'—'}</td>`
+      + `<td class="num">${x.drafts??0}</td><td class="num">${x.knowledge??0}</td>`
+      + `<td>${x.knowledgeFreshMinutes!=null?Math.round(x.knowledgeFreshMinutes)+' 分钟前':'—'}</td>`
+      + `<td>${flags}</td></tr>`;
+  }).join('');
+  try{
+    const p = await (await fetch('policy.json?ts='+Date.now())).json();
+    document.getElementById('policy').textContent = JSON.stringify({
+      cadence:p.cadence, evidence:p.evidence, insideTheTurn:p.insideTheTurn,
+      acceptance:p.acceptance, agentMayNotTouch:p.agentMayNotTouch
+    }, null, 1);
+  }catch(e){}
+}
+tick(); setInterval(tick, 60000);
+</script>
+</body>
+</html>
+"""
+
+
+def write_pawapp(policy, rows):
+    """把它做成 QwenPaw 控制台里的一个真页面（PawApp），而不是一份 md 文件。
+
+    控制台按请求实时扫描 plugins 目录，所以建目录即生效、不需要重启；
+    静态资源由控制台自己的 /api/pawapps/<id>/static/... 伺服，页面就与它同源取数。
+    """
+    folder = PLUGINS / PAGE_ID
+    folder.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        'id': PAGE_ID,
+        'name': '自我改进看板',
+        'version': '1.0.0',
+        'description': '这套自我改进体系的元层看板：一角色一行，看谁在动、谁被拦、谁红了。',
+        'type': 'app',
+        'meta': {'pawapp': {'category': 'monitor', 'icon': '📈',
+                            'entry_page': 'index.html', 'launch_scope': 'global'},
+                 'settings': []},
+    }
+    (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
+    (folder / 'index.html').write_text(PAGE_HTML, encoding='utf-8')
+    (folder / 'board.json').write_text(
+        json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False), encoding='utf-8')
+    (folder / 'policy.json').write_text(json.dumps(policy, ensure_ascii=False), encoding='utf-8')
+    return {'appId': PAGE_ID, 'dir': str(folder),
+            'entry': '/api/pawapps/%s/static/index.html' % PAGE_ID}
+
+
 def write_outputs():
     facts = code_facts()
     NOTES.mkdir(parents=True, exist_ok=True)
@@ -269,8 +402,10 @@ def write_outputs():
             mirrored.append(role)
         except OSError:
             continue
+    page = write_pawapp(policy, rows)
     return {'ok': True, 'roles': len(rows), 'flagged': len(flagged),
-            'notes': str(NOTES), 'cron': facts['shiftCron'], 'mirroredInto': mirrored}
+            'notes': str(NOTES), 'cron': facts['shiftCron'], 'mirroredInto': mirrored,
+            'page': page}
 
 
 def main():
