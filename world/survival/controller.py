@@ -298,7 +298,18 @@ class QwenBackend:
         task_id = active.get('taskId')
         if not task_id:
             raise ValueError('native_task_identity_unknown')
-        terminal = self.poll(task_id)
+        try:
+            terminal = self.poll(task_id)
+        except Exception as error:
+            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
+                # The task endpoint answers 404 for a task that is gone. That is proof
+                # the turn is already terminal: nothing left to cancel, nothing to wait
+                # for. Without this, cancel() raised on every attempt, the caller's
+                # except ran pause('cancellation_uncertain') every tick, and Kirito sat
+                # frozen for forty minutes on task-c9bc619f34a2 with cycles stuck at 88.
+                # Any other failure stays unknown and keeps the conservative wait.
+                return {'stopped': True, 'alreadyTerminal': True, 'absent': True}
+            raise
         if terminal.get('status') in ('finished', 'completed', 'failed', 'cancelled', 'canceled'):
             return {'stopped': True, 'alreadyTerminal': True}
         if terminal.get('status') not in ('running', 'pending', 'queued'):
