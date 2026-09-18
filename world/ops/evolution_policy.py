@@ -51,7 +51,15 @@ def code_facts():
         _const('/survival/controller.py', 'EVOLUTION_CANDIDATE_FIRST_CYCLE'),
         _const('/survival/controller.py', 'EVOLUTION_CANDIDATE_FROM_CYCLE'),
         _const('/survival/controller.py', 'EVOLUTION_CANDIDATE_EVERY'))
-    facts['abandonStallSeconds'] = _const('/opt/sidecar/party_life.py', 'ABANDON_STALL_SECONDS')
+    # sidecar 在不同容器里挂在不同路径（npc: /opt/sidecar，qwenpaw: /ops-sidecar），
+    # 两个都试，免得又出现"读不到就写 None"的假空白。
+    for candidate in ('/ops-sidecar/party_life.py', '/opt/sidecar/party_life.py'):
+        value = _const(candidate, 'ABANDON_STALL_SECONDS')
+        if value is not None:
+            facts['abandonStallSeconds'] = value
+            break
+    else:
+        facts['abandonStallSeconds'] = None
     facts['minPatternRepeats'] = _const('/survival/controller.py', 'MIN_PATTERN_REPEATS')
     facts['evidenceTrees'] = ['digest', 'notes', 'memory']
     facts['knowledgeCapPerTree'] = 200
