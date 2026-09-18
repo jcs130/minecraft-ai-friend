@@ -1851,6 +1851,11 @@ class Controller:
                                                            else 'native_task_absent')
                         self.data.pop('pauseReason', None)
                         self.data['status'] = 'waiting'
+                        # pause() also wrote control.json (enabled=False + the reason) and
+                        # that file is what actually holds the lane down. Lifting only the
+                        # data-side reason left Kirito reading as paused with nothing to
+                        # resume him. This mirrors the write body_reconnect uses.
+                        control.update(enabled=True, pauseReason=None)
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:
