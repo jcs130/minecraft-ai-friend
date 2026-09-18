@@ -56,6 +56,18 @@ class NativeRoleCapabilities(unittest.TestCase):
             self.assertTrue(self.blocked('write_file', 'file_path', path), path)
         self.assertFalse(self.blocked('read_file', 'file_path', 'skills/make-skill/SKILL.md'))
 
+    def test_shared_world_notes_are_open_while_role_isolation_holds(self):
+        """The shared tree is deliberate (docs/WORLD-NOTES.md); private workspaces are not."""
+        for path in ('/state/work/world-notes/focus/farm-navigation.md',
+                     'world-notes/focus/farm-navigation.md'):
+            self.assertFalse(self.blocked('read_file', 'file_path', path), path)
+        self.assertFalse(self.blocked('write_file', 'file_path',
+                                      '/state/work/world-notes/experiments/x.md'))
+        # Isolation is untouched: another role's workspace is still not readable.
+        self.assertTrue(self.blocked('read_file', 'file_path',
+                                     '/state/work/workspaces/default/notes.md'))
+        self.assertTrue(self.blocked('write_file', 'file_path', '/state/work/world-notes/../config.json'))
+
     def test_native_skill_names_cannot_impersonate_project_managed_skills(self):
         if native.package_version() == '2.2.1':
             self.assertNotIn('materialize_skill', native.NATIVE_TOOLS)

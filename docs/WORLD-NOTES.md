@@ -54,12 +54,15 @@ server/agents/work/world-notes/        （容器内 /state/work/world-notes/）
 3. **过期**：超过 N 天没动过的 focus note 列出来——要么续，要么把 `Posture` 改成 `idle`
    并把结论移进 `synthesis/`，别让它以"进行中"的样子挂着。
 
-## 当前的准入边界（诚实记录）
+## 准入：已开通（2026-09-18，造物主定调「放开吧」）
 
-角色的文件权限是**默认拒绝 workspace 之外**的（`QD_NATIVE_FILE_SCOPE` 负向断言，见
-`world/ops/native_tool_runtime.py`）。因此**"任一角色读到别的角色写的笔记"目前尚未开通**：
-要让各角色的 `read_file`/`write_file` 能落到本目录，需要改那条生成规则（及其生成器与健康断言），
-属于**松绑 agent 权限模型**的动作，须由造物主拍板。
+**各角色的 `read_file`/`write_file` 现已可直接读写本目录**：`native_role_capabilities.rules()` 里
+`QD_NATIVE_FILE_SCOPE` 的允许根从"仅本角色 workspace"扩为"本角色 workspace **或** `/state/work/world-notes/`"，
+并经 `tools/configure_world_team.py --mode files` 重新下发到全部 10 个角色。
 
-在那之前，本目录的内容由**宿主侧**写入与同步（`tools/world_notes_sync.py` 把各角色 state 里的
-focus 记录汇总到 `focus/`），角色若要读，需要先开通上述规则。
+**隔离未被削弱**（这一点是刻意的）：别的角色的 workspace 仍然被拒——
+活体实测：共享笔记读/写 = ALLOW ✓、自己 workspace = ALLOW ✓、
+`/state/work/workspaces/mc-god/notes.txt` = **DENY** ✓、`/state/work/world-notes/../config.json` = **DENY** ✓。
+
+写笔记的入口有两个：角色自己 `write_file` 到本目录；以及停滞重定向触发时由
+`stagnation_detector` 在其 state 里留下的记录（宿主侧可同步过来）。

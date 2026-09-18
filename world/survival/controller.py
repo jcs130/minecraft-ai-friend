@@ -1356,7 +1356,9 @@ class Controller:
         if pivot:
             context['stagnationHint'] = pivot
             context['instruction'] += ('【重定向】' + pivot.get('message', '')
-                + ' 按这四步走：' + pivot.get('pivot', ''))
+                + ' 按这四步走：' + pivot.get('pivot', '')
+                + ' 第④步落在共享笔记里：/state/work/world-notes/focus/<赛道>.md'
+                  '（五字段见 docs/WORLD-NOTES.md；那里是全体角色共用的，别人也会读到你的结论）。')
         penalty = self.data.pop('environmentPenaltyHint', None)
         if penalty:
             context['environmentPenaltyHint'] = penalty
