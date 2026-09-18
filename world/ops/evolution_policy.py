@@ -254,8 +254,21 @@ def write_outputs():
     (NOTES / 'evolution-board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False, indent=1),
         encoding='utf-8')
+    # 控制台只按工作区浏览文件（越界预览默认关闭），所以除了共享笔记树，还要镜像一份
+    # 进一个**已启用**的 agent 工作区，这样在 QwenPaw 的 Web 面板里点开就能看到。
+    mirrored = []
+    for role in ('mc-god', 'qd-survivor'):
+        folder = WORKSPACES / role
+        if not folder.is_dir():
+            continue
+        try:
+            for name in ('evolution-board.md', 'evolution-policy.md'):
+                (folder / name).write_text((NOTES / name).read_text(encoding='utf-8'), encoding='utf-8')
+            mirrored.append(role)
+        except OSError:
+            continue
     return {'ok': True, 'roles': len(rows), 'flagged': len(flagged),
-            'notes': str(NOTES), 'cron': facts['shiftCron']}
+            'notes': str(NOTES), 'cron': facts['shiftCron'], 'mirroredInto': mirrored}
 
 
 def main():
