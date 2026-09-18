@@ -41,52 +41,100 @@ def tail(path, limit=8):
 # Asking the model to go find its own repeating problem produced eleven asks and zero
 # drafts: discovery plus evidence gathering is too heavy for a survival hot path, so it
 # loses every time. These hand it a pattern that is already proven by the ledgers.
-EVOLUTION_CANDIDATE_CYCLES = (3, 9, 27)
+EVOLUTION_CANDIDATE_FIRST_CYCLE = 3
+EVOLUTION_CANDIDATE_FROM_CYCLE = 9
+EVOLUTION_CANDIDATE_EVERY = 3
 EPISODE_TAIL_ROWS = 200
 MIN_PATTERN_REPEATS = 3
 MAX_QUOTED_EPISODES = 3
 MAX_CANDIDATE_CHARS = 900
+PATTERN_LENGTHS = (2, 3)
+COOLDOWN_NOTE = '模式名取自 pattern-cooldown.json'
+SEQUENCE_NOTE = '模式名是从这段动作序列里枚举出来的'
+
+
+def evolution_candidate_due(cycles_since):
+    """Whether this dry spell has earned one candidate. Pure.
+
+    A ladder of three fixed shifts meant missing one cost fifty four more, so the ask
+    almost never landed on a shift that still had the pattern in view. Three keeps the
+    early look, and from nine on every third shift keeps asking until a draft ships.
+    """
+    if cycles_since == EVOLUTION_CANDIDATE_FIRST_CYCLE:
+        return True
+    # A failed quota read hands back {}, so cycles_since can be None, and None >= 9 raises
+    # in Python 3. Test the type before comparing; None == 3 above is already safely False.
+    return (type(cycles_since) is int and cycles_since >= EVOLUTION_CANDIDATE_FROM_CYCLE
+            and cycles_since % EVOLUTION_CANDIDATE_EVERY == 0)
+
+
+def _pattern_hits(episodes, actions, parts):
+    """Adjacent non-overlapping occurrences of parts, as the episode closing each one."""
+    found, index = [], 0
+    while index <= len(actions) - len(parts):
+        if actions[index:index + len(parts)] == parts:
+            found.append(episodes[index + len(parts) - 1])
+            index += len(parts)
+        else:
+            index += 1
+    return found
+
+
+def _sequence_patterns(actions):
+    """Adjacent 2-3 tuples from the action sequence, most frequent and longest first.
+
+    Enumerating is what keeps the candidate alive once pattern-cooldown.json has expired:
+    the detector prunes it to a five minute window, so a pattern that repeated a dozen
+    times an hour ago is invisible there and still plainly visible in the episodes tail.
+    Raw counts are only a prefilter - overlapping hits can exceed the non-overlapping
+    count the caller actually quotes, so every gram is recounted before it is promoted.
+    """
+    raw = {}
+    for size in PATTERN_LENGTHS:
+        for index in range(len(actions) - size + 1):
+            gram = tuple(actions[index:index + size])
+            raw[gram] = raw.get(gram, 0) + 1
+    return sorted((gram for gram, count in raw.items() if count >= MIN_PATTERN_REPEATS),
+                  key=lambda gram: (-raw[gram], -len(gram), gram))
 
 
 def evolution_candidate(state_dir):
     """One repeating pattern, quoted from ledgers that already exist. Pure and read-only.
 
-    Pattern names come from pattern-cooldown.json, which the detector only writes once a
-    sequence has already repeated. Counts and receipts come from the tail of
-    episodes.jsonl. Nothing here is inferred, so every line can be grepped back to a file.
-    Returns '' when nothing qualifies, leaving the prompt byte-identical.
+    Counts and receipts always come from the tail of episodes.jsonl, and every quoted line
+    is a record from that file. A name is taken from pattern-cooldown.json when one of its
+    entries still repeats enough, and otherwise enumerated from the action sequence: the
+    cooldown table is the detector's short-term memory, and it goes quiet precisely when a
+    pattern is old enough to be worth crystallizing. Nothing here is inferred, so the first
+    line says which file supplied the name. Returns '' when nothing qualifies, leaving the
+    prompt byte-identical.
     """
     root = Path(state_dir)
     try:
         cooldown = json.loads((root / 'pattern-cooldown.json').read_text(encoding='utf-8'))
     except (OSError, ValueError):
-        return ''
-    if not isinstance(cooldown, dict):
-        return ''
-    names = sorted(k for k in cooldown
-                   if isinstance(k, str) and len(k.split('|')) >= 2 and all(k.split('|')))
-    if not names:
-        return ''
+        cooldown = {}
     episodes = [row for row in tail(root / 'episodes.jsonl', EPISODE_TAIL_ROWS)
                 if isinstance(row, dict) and row.get('kind') == 'action_observed'
                 and isinstance(row.get('action'), str) and isinstance(row.get('at'), str)]
     actions = [row['action'] for row in episodes]
-    best, hits = None, []
-    for name in names:
-        parts = name.split('|')
-        found, index = [], 0
-        while index <= len(actions) - len(parts):
-            if actions[index:index + len(parts)] == parts:
-                found.append(episodes[index + len(parts) - 1])
-                index += len(parts)
-            else:
-                index += 1
-        if len(found) > len(hits):
-            best, hits = name, found
+    best, hits, note = None, [], ''
+    if isinstance(cooldown, dict):
+        names = sorted(k for k in cooldown
+                       if isinstance(k, str) and len(k.split('|')) >= 2 and all(k.split('|')))
+        for name in names:
+            found = _pattern_hits(episodes, actions, name.split('|'))
+            if len(found) > len(hits):
+                best, hits, note = name, found, COOLDOWN_NOTE
+    if best is None or len(hits) < MIN_PATTERN_REPEATS:
+        for gram in _sequence_patterns(actions):
+            found = _pattern_hits(episodes, actions, list(gram))
+            if len(found) >= MIN_PATTERN_REPEATS and len(found) > len(hits):
+                best, hits, note = '|'.join(gram), found, SEQUENCE_NOTE
     if best is None or len(hits) < MIN_PATTERN_REPEATS:
         return ''
     lines = ['【进化候选·台账取证】模式 %s 在 episodes.jsonl 尾部这段真实轨迹里重复出现了 %d 次；'
-             '模式名取自 pattern-cooldown.json，次数是逐条数出来的，不是估计。' % (best, len(hits)),
+             '%s，次数是逐条数出来的，不是估计。' % (best, len(hits), note),
              '逐字回执（时间 / 动作 / 结果）：']
     lines += ['- %s %s %s' % (row['at'], row['action'], row.get('receiptStatus'))
               for row in hits[-MAX_QUOTED_EPISODES:]]
@@ -1434,7 +1482,7 @@ class Controller:
         # Appending to a dict value keeps json.dumps in charge of escaping, so the
         # prompt still parses after split('\n', 1)[1].
         candidate = (evolution_candidate(self.root)
-                     if provider.get('cyclesSince') in EVOLUTION_CANDIDATE_CYCLES else '')
+                     if evolution_candidate_due(provider.get('cyclesSince')) else '')
         if candidate:
             context['instruction'] += candidate
 
