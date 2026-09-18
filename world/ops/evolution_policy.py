@@ -465,7 +465,7 @@ def write_pawapp(policy, rows, numbers=None):
         'description': '这套自我改进体系的元层看板：一角色一行，看谁在动、谁被拦、谁红了。',
         'type': 'app',
         'meta': {'pawapp': {'category': 'monitor', 'icon': '📈',
-                            'entry_page': 'index.html', 'launch_scope': 'global'},
+                            'entry_page': 'index.html', 'launch_scope': 'page'},
                  'settings': []},
     }
     (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')

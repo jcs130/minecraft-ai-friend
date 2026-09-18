@@ -20,7 +20,7 @@ GODS_EYE_PLUGIN = {
     'description': '世界观察渲染：本机 127.0.0.1:19092 的 modern-viewer 画面（Goddess 观察者视角）嵌在这里。',
     'type': 'app',
     'meta': {'pawapp': {'category': 'monitor', 'icon': '👁',
-                        'entry_page': 'index.html', 'launch_scope': 'global'},
+                        'entry_page': 'index.html', 'launch_scope': 'page'},
              'settings': []},
 }
 
