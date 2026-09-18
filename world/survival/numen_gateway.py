@@ -520,6 +520,22 @@ class NumenGateway:
             count = int(lines[0][6:])
         except ValueError:
             return False
+        # Only a well-formed roster can confirm an absence. A count that disagrees with
+        # the lines under it is a contradiction, and reading a contradiction as "gone"
+        # would restore a body that is merely unreadable - the opposite mistake, and the
+        # more expensive one.
+        tail = lines[1 + count:]
+        if len(lines[1:1 + count]) != count:
+            return False
+        if tail:
+            if not tail[0].startswith('dead='):
+                return False
+            try:
+                dead = int(tail[0][5:])
+            except ValueError:
+                return False
+            if len(tail[1:]) != dead:
+                return False
         for line in lines[1:1 + count]:
             fields = line.split('|')
             values = dict(part.split('=', 1) for part in fields[1:] if '=' in part)

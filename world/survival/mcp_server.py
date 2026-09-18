@@ -28,7 +28,9 @@ class SkillTools:
     def library(self):
         if self._library is None:
             from skill_library import SkillLibrary
-            self._library = SkillLibrary(self.state / 'skills')
+            # P2：可选的世界级共享技能库（只读消费，写只走显式 publish）。
+        self._library = SkillLibrary(self.state / 'skills',
+                                     world_root=os.environ.get('WORLD_SKILLS_DIR'))
         return self._library
 
     @property

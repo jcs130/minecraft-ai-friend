@@ -365,6 +365,8 @@ services:
       SURVIVOR_QWEN_MODE: external
       PARTY_ENABLED: "1"
       PARTY_STATE_DIR: /party-state
+      # P2：世界级共享技能库，与 npc 侧共享同一目录（server/mcdata/village/party）
+      WORLD_SKILLS_DIR: /party-state/skills-world
       QWENPAW_API_URL: http://qwenpaw:8088/api
       MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
       SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp

@@ -221,7 +221,7 @@ def _fixtures(fixtures):
 
 class SkillLibrary:
     """Immutable versions and separately recorded tests/promotion references."""
-    def __init__(self, root=None):
+    def __init__(self, root=None, world_root=None):
         self.root = Path(root or '/state/survival/skills').absolute()
         # Never follow a link out of the dedicated skill store, even if a local
         # administrator has accidentally pointed it at another runtime folder.
@@ -229,16 +229,38 @@ class SkillLibrary:
             if path.is_symlink():
                 raise SkillError('linked_skill_store')
         self.root.mkdir(parents=True, exist_ok=True)
+        # P2: an optional shared store, read here and written only by publish().
+        # One agent's tested skill becomes usable by the others without any agent
+        # being able to write into another's store: sharing is explicit, and reads
+        # always prefer our own copy so a local fix is never shadowed.
+        self.world_root = Path(world_root).absolute() if world_root else None
+        if self.world_root is not None:
+            for path in (self.world_root, *self.world_root.parents):
+                if path.is_symlink():
+                    raise SkillError('linked_skill_store')
+            self.world_root.mkdir(parents=True, exist_ok=True)
 
-    def _path(self, *parts):
-        path = self.root
+    def _at(self, base, *parts):
+        path = base
         for part in parts:
             path = path / part
             if path.is_symlink():
                 raise SkillError('linked_skill_store')
-        if not path.resolve().is_relative_to(self.root.resolve()):
+        if not path.resolve().is_relative_to(Path(base).resolve()):
             raise SkillError('invalid_skill_path')
         return path
+
+    def _path(self, *parts):
+        return self._at(self.root, *parts)
+
+    def _base_for(self, name):
+        """Which store holds this skill: our own first, then the shared one."""
+        _identifier(name, NAME, 'skill_name')
+        if (self.root / name).exists():
+            return self.root, False
+        if self.world_root is not None and (self.world_root / name).exists():
+            return self.world_root, True
+        return self.root, False
 
     @contextmanager
     def _lock(self):
@@ -292,16 +314,18 @@ class SkillLibrary:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def _head(self, name):
+    def _head(self, name, base=None):
         _identifier(name, NAME, 'skill_name')
-        return self._load(self._path(name, 'head.json'),
+        base = base or self._base_for(name)[0]
+        return self._load(self._at(base, name, 'head.json'),
                           {'schema': 1, 'name': name, 'draftVersion': None,
                            'activeVersion': None, 'promotions': []})
 
-    def _record(self, name, version):
+    def _record(self, name, version, base=None):
         _identifier(name, NAME, 'skill_name')
         _identifier(version, VERSION, 'skill_version')
-        record = self._load(self._path(name, 'versions', version + '.json'))
+        base = base or self._base_for(name)[0]
+        record = self._load(self._at(base, name, 'versions', version + '.json'))
         if record.get('name') != name or _hash(record) != version:
             raise SkillError('skill_version_changed')
         return record
@@ -324,6 +348,28 @@ class SkillLibrary:
             except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
                 unavailable.append({'name': folder.name,
                                     'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
+        # P2: skills published to the world store are offered here too, marked so the
+        # caller can tell them apart. A local skill of the same name always wins, which
+        # is what lets this agent keep its own fix for a shared skill.
+        local_names = {row['name'] for row in rows}
+        if self.world_root is not None:
+            try:
+                folders = sorted(self.world_root.iterdir())
+            except OSError:
+                folders = []
+            for folder in folders:
+                if not NAME.fullmatch(folder.name) or folder.name in local_names:
+                    continue
+                try:
+                    head = self._head(folder.name, self.world_root)
+                    version = head.get('activeVersion') or head.get('draftVersion')
+                    if version:
+                        record = self._record(folder.name, version, self.world_root)
+                        rows.append({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
+                                    | {'description': record['description'], 'shared': True})
+                except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
+                    unavailable.append({'name': folder.name, 'shared': True,
+                                        'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
         return {'skills': rows, 'unavailable': unavailable,
                 'contract': 'next(state,memory) -> {action?,memory,done?,replan?,reason?,waitSeconds?,observe?}; '
                             'one action, wait, observation or terminal result per step; '
@@ -338,8 +384,10 @@ class SkillLibrary:
             version = version or head.get('draftVersion') or head.get('activeVersion')
             if not version:
                 raise SkillError('skill_not_found')
-            record = self._record(name, version)
+            base, shared = self._base_for(name)
+            record = self._record(name, version, base)
             return record | {'version': version, 'active': head.get('activeVersion') == version,
+                             'shared': shared,
                              'promoted': any(row['version'] == version for row in head['promotions'])}
 
     def draft(self, name, source, fixtures, description=''):
@@ -396,9 +444,10 @@ class SkillLibrary:
             self._write(self._path(name, 'reports', version + '.json'), report)
             return report
 
-    def _tested(self, name, version):
-        self._record(name, version)
-        report = self._load(self._path(name, 'reports', version + '.json'))
+    def _tested(self, name, version, base=None):
+        base = base or self._base_for(name)[0]
+        self._record(name, version, base)
+        report = self._load(self._at(base, name, 'reports', version + '.json'))
         if (report.get('version') != version or report.get('passed') is not True
                 or report.get('kernelVersion') != _kernel_version()
                 or report.get('engineVersion') != ENGINE_VERSION
@@ -419,7 +468,15 @@ class SkillLibrary:
             return {'name': name, 'version': version, 'activeVersion': version,
                     'previousVersion': previous, 'promoted': True}
 
-    def run(self, name, state, memory=None, version=None):
+    def publish(self, name, version=None):
+        """Copy one of our promoted skills into the world store, explicitly.
+
+        This is the only path that writes there, and it only ever copies a skill we
+        already own: no agent can write into another's store, and nothing is shared
+        until someone says so. Idempotent for a version already published.
+        """
+        if self.world_root is None:
+            raise SkillError('shared_skill_store_unavailable')
         with self._lock():
             head = self._head(name)
             version = version or head.get('activeVersion')
@@ -427,5 +484,37 @@ class SkillLibrary:
                 raise SkillError('promoted_skill_required')
             self._tested(name, version)
             record = self._record(name, version)
+            target = self._at(self.world_root, name)
+            head_path = self._at(self.world_root, name, 'head.json')
+            # _load's `default=None` means "raise when missing", so absence has to
+            # be tested here rather than passed in as a default.
+            existing = self._load(head_path) if head_path.exists() else None
+            if existing is not None and existing.get('activeVersion') == version:
+                return {'name': name, 'version': version, 'shared': True, 'published': False,
+                        'reason': 'already_published'}
+            self._write(self._at(self.world_root, name, 'versions', version + '.json'), record)
+            self._write(self._at(self.world_root, name, 'reports', version + '.json'),
+                        self._load(self._path(name, 'reports', version + '.json')))
+            published = existing or {'schema': 1, 'name': name, 'draftVersion': None,
+                                     'activeVersion': None, 'promotions': []}
+            published['activeVersion'] = version
+            if not any(row.get('version') == version for row in published.setdefault('promotions', [])):
+                published['promotions'].append({'version': version, 'promotedAt': time.time(),
+                                                'publishedBy': 'local'})
+            self._write(self._at(self.world_root, name, 'head.json'), published)
+            return {'name': name, 'version': version, 'shared': True, 'published': True,
+                    'path': str(target)}
+
+    def run(self, name, state, memory=None, version=None):
+        with self._lock():
+            base, shared = self._base_for(name)
+            head = self._head(name, base)
+            version = version or head.get('activeVersion')
+            if not version or not any(row['version'] == version for row in head['promotions']):
+                raise SkillError('promoted_skill_required')
+            self._tested(name, version, base)
+            record = self._record(name, version, base)
             result = evaluate(record['source'], state, memory)
-            return result | {'skill': {'name': name, 'version': version}}
+            # ``shared`` tells the caller this body came from the world store, so a
+            # skill another agent wrote can be used - and audited - here.
+            return result | {'skill': {'name': name, 'version': version, 'shared': shared}}

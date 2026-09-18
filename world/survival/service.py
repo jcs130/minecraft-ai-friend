@@ -121,7 +121,8 @@ def main():
         signal.signal(signal.SIGTERM, stop)
         signal.signal(signal.SIGINT, stop)
         from party import SurvivorParty
-        controller = Controller(skills=SkillLibrary(STATE / 'skills'),
+        controller = Controller(skills=SkillLibrary(STATE / 'skills',
+                                             world_root=os.environ.get('WORLD_SKILLS_DIR')),
                                 perception=WorldPerception(STATE, public_dir='/public'),
                                 party=SurvivorParty() if os.environ.get('PARTY_ENABLED') == '1' else None)
         probe = (QwenConnectionProbe(NativeToolConnection())

@@ -215,29 +215,29 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(self.mine()['code'], 'protected_area')
         self.assertFalse(self.rcon.mutations())
 
-    def test_walk_only_capability_is_required_before_crossing_town(self):
+    def test_goto_no_longer_requires_our_patched_navigation_mode(self):
+        """2026-09-18: navigation belongs to upstream, which never advertises the strict
+        arrival mode we used to patch in. Requiring it refused every goto on an upstream
+        body, so the gate is gone; what the receipt records is the outcome itself."""
         self.lease()
         self.settings.update(anchor={'x': 100, 'z': 100}, protectedRadius=32)
         self.write('settings.json', self.settings)
+        # Advertising nothing at all is the strongest form of the claim: if a goto is
+        # accepted with an empty mode list, it is accepted on any upstream body. One
+        # action per turn, because an accepted action consumes the lease's budget.
         self.rcon.navigation_modes = []
-        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'z': 100})['code'], 'safe_navigation_unavailable')
-        self.assertFalse(self.rcon.mutations())
-        self.rcon.navigation_modes = ['walk_only_v1']
-        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'z': 100})['code'], 'safe_navigation_unavailable')
-        self.assertEqual(self.client.action(TURN, 'goto', {'x': 110, 'y': 77, 'z': 100})['code'], 'safe_navigation_unavailable')
-        self.assertFalse(self.rcon.mutations())
-        self.rcon.navigation_modes.append('walk_only_strict_arrival_v2')
         result = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
         self.assertTrue(result['ok'])
-        self.assertIn('"walk_only": true', self.rcon.mutations()[0])
-        self.assertNotIn('"y":', self.rcon.mutations()[0])
+        self.assertNotIn('"walk_only"', self.rcon.mutations()[0])
 
-    def test_observed_move_height_is_forwarded_with_walk_only(self):
+    def test_observed_move_height_is_forwarded(self):
+        """The observed height still reaches the body; our own walk_only flag no longer
+        rides along, because upstream owns the navigation mode now."""
         self.lease()
         result = self.client.action(TURN, 'goto', {'x': 110, 'y': 77.5, 'z': 100})
         self.assertTrue(result['ok'])
         payload = json.loads(self.rcon.mutations()[0].split(' goto ', 1)[1])
-        self.assertEqual(payload, {'x': 110, 'y': 77.5, 'z': 100, 'walk_only': True})
+        self.assertEqual(payload, {'x': 110, 'y': 77.5, 'z': 100})
 
     def test_optional_height_rejects_nonfinite_bounds_and_unrecognized_attributes(self):
         self.lease()

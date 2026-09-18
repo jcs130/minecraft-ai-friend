@@ -24,9 +24,11 @@ SCHEMA = 1
 HINT_PATH_NAME = 'stagnation-hint.json'
 STATE_PATH_NAME = 'stagnation-state.json'
 # A goal that has not moved for this long, while the world reports no production, is
-# stale rather than merely slow. Twenty minutes is twice the review cadence.
-MIN_STAGNATION_SECONDS = 1200
-COOLDOWN_SECONDS = 1800
+# stale rather than merely slow. Ten minutes is one review cadence: waiting two cycles
+# before saying anything let a stall run for twenty minutes before anyone noticed
+# (2026-09-18), and the review is where this hint lands anyway.
+MIN_STAGNATION_SECONDS = 600
+COOLDOWN_SECONDS = 900
 MAX_HINT_BYTES = 8192
 CORROBORATING = ('no_output', 'repeated_rejection')
 

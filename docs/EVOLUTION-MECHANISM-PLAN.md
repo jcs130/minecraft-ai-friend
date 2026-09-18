@@ -37,7 +37,7 @@
 
 ### P1 · 停滞重定向与**环境惩罚触发**（最大缺口）
 
-**✅ 2026-09-18 落地**：环境惩罚触发行 `env_penalty`（层1，早前完成）；**本日补上层2 停滞检测 + pivot 注入 + 路由升 PLAN**——`world/survival/stagnation_detector.py`（目标跨 20 分钟不动 ∧ 环境同窗口报 no_output/repeated_rejection 才命中）、复盘注入四步 pivot、`adaptive_router` 加 `STAGNATION` 硬覆盖（升 Level 3）；实测零假阳性（他修复后的 productive 窗口不触发）。详见文末落地实录。
+**✅ 2026-09-18 落地**：环境惩罚触发行 `env_penalty`（层1，早前完成）；**本日补上层2 停滞检测 + pivot 注入 + 路由升 PLAN**——`world/survival/stagnation_detector.py`（目标跨 10 分钟不动（= 一轮复盘节奏） ∧ 环境同窗口报 no_output/repeated_rejection 才命中）、复盘注入四步 pivot、`adaptive_router` 加 `STAGNATION` 硬覆盖（升 Level 3）；实测零假阳性（他修复后的 productive 窗口不触发）。详见文末落地实录。
 
 > 2026-09-17 造物主谕：「游戏环境应该是个完美的验证环境（类似于仿真），比如扣血、卡死都应该是进化的诱因。」
 > 据此 P1 的触发器**分层**：**层 1 环境真值（零假阳性）为主，层 2 内部推断（有假阳性）为辅**。
@@ -72,6 +72,8 @@
 - **依赖**：无。既有 `pattern_detector` 通路即模板；**采集无需新增**（信号已在 `episodes.jsonl`）。
 
 ### P2 · 共享技能库 per-agent → per-world
+
+**✅ 2026-09-18 落地**：`SkillLibrary` 增加**只读的 world 根**（`world_root`，环境变量 `WORLD_SKILLS_DIR`，本服 = `/party-state/skills-world`，与 npc 侧同目录）。读取回落到共享库并在回执标注 `shared: true`，`run` 亦可用；**写只走显式 `publish()`**，draft 永不触碰共享库；**本地同名技能永远遮盖共享版**（本 agent 的修正不被覆盖）；publish 只拷贝自己已 promote 的技能、幂等、无 world 根则完全关闭。8 项跨 agent 验收测试（容器内跑，需 QuickJS）。
 
 - **问题**：桐人的技能锁在自己 workspace（`server/survival-agent-state/survival/skills/`），
   结衣与其他角色无法复用。CORAL 数据：跨 Agent 继承占 66% 新最优、此类改进率是平均 2 倍。
@@ -134,6 +136,6 @@ P0 消除的是这一次的具体误诊；P1 消除的是这一类——**任何
 - **P2** 共享技能库 per-world：**未实现**（`SkillLibrary` 仍是单 agent 单根）。
 - **P3** world-notes / focus notes：**未实现**（全仓无该路径）；P1 第④步（写 focus note 声明赛道）
   因此暂时落在 lesson 里。
-- stagnation 的判据阈值（20 分钟、冷却 30 分钟、32 个目标上限）是**按当日真实数据定的初值**，
+- stagnation 的判据阈值（10 分钟、冷却 15 分钟、32 个目标上限）是**按当日真实数据定的初值**，
   须随更多真实回放继续调。
 - Polar RL（第 5 层）不在本次范围。
