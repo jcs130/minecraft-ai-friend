@@ -272,7 +272,22 @@ def board_rows():
         if not (folder / 'skills' / 'qd-skill-evolution').exists():
             continue
         row = {'role': role}
-        marker = learning / 'last-cron.json'
+        # 班次是按**逻辑身份**跑的（迁移后 qd-engineer 的作业其实是 qd-learning-mc-god），
+        # 所以要去逻辑角色自己的工作区读那份 last-cron；按角色自己的目录读，会把迁移前的
+        # 陈旧副本当成现状 —— 2026-09-19 就是这样把"工程师 6642 分钟没跑"报了出来，
+        # 而它的作业一直在每小时跑。
+        runtime = 'game'
+        try:
+            from role_learning_profiles import learning_identity
+            logical_role, logical_runtime = learning_identity(role, runtime)
+        except Exception:
+            logical_role, logical_runtime = role, runtime
+        if logical_role != role:
+            row['shiftJob'] = 'qd-learning-' + logical_role
+            row['shiftVia'] = logical_role
+        marker = (WORKSPACES / logical_role / 'learning' / 'last-cron.json')
+        if not marker.exists():
+            marker = learning / 'last-cron.json'
         if marker.exists():
             try:
                 record = json.loads(marker.read_text(encoding='utf-8'))
@@ -604,8 +619,10 @@ def write_outputs():
     lines = []
     for row in rows:
         shift = row['lastShift'] or {}
-        lines.append('| %s | %s | %s | %d | %d | %s | %s |' % (
-            row['role'], shift.get('code') or '—',
+        lines.append('| %s%s | %s | %s | %d | %d | %s | %s |' % (
+            row['role'],
+            ('（经 %s）' % row['shiftVia']) if row.get('shiftVia') else '',
+            shift.get('code') or '—',
             ('%.0f 分钟' % shift['ageMinutes']) if shift else '—',
             row['drafts'], row['knowledge'],
             ('%.0f 分钟前' % row['knowledgeFreshMinutes']) if row.get('knowledgeFreshMinutes') is not None else '—',
