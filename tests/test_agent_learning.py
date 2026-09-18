@@ -124,7 +124,9 @@ class LearningTests(unittest.TestCase):
         for runtime in ('game', 'operations'):
             job = managed_job(self.role, runtime)
             self.assertEqual(job['runtime']['max_concurrency'], 1)
-            self.assertEqual(job['task_type'], 'agent' if runtime == 'operations' else 'text')
+            # Hourly shift for every runtime (creator, 2026-09-18). Game roles used to
+            # be dispatched as text, which never started a model.
+            self.assertEqual(job['task_type'], 'agent')
 
     def test_schedule_discloses_quota_off_without_changing_the_job(self):
         calls = []
@@ -136,16 +138,33 @@ class LearningTests(unittest.TestCase):
         self.assertNotIn('4/24h', result['budget'])
         self.assertEqual(calls, [(self.role, 'GET', '/cron/jobs/qd-learning-' + self.role)])
 
-    def test_game_cron_maintenance_has_no_model_and_agent_cron_is_blocked(self):
+    def test_game_shift_local_maintenance_still_runs_without_a_model(self):
         executor = SimpleNamespace(_workspace=SimpleNamespace(agent_id=self.role, workspace_dir=self.folder))
-        job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text')
+        job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text',
+                              dispatch=SimpleNamespace(channel='console'),
+                              runtime=SimpleNamespace(timeout_seconds=180, max_concurrency=1))
+
+        async def forbidden(*args): self.fail('Unexpected model call')
+        result = asyncio.run(guarded_execute(executor, job, forbidden, 'game',
+                                             lambda *a, **k: self.tool))
+        self.assertEqual(result['qiandeng']['modelCalls'], 0)
+
+    @unittest.skipIf(os.name == 'nt', 'evidence gate uses the Linux shared task ledger')
+    def test_game_shift_agent_task_goes_through_the_evidence_gate(self):
+        executor = SimpleNamespace(_workspace=SimpleNamespace(agent_id=self.role, workspace_dir=self.folder))
+        job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text',
+                              dispatch=SimpleNamespace(channel='console'),
+                              runtime=SimpleNamespace(timeout_seconds=180, max_concurrency=1))
         async def forbidden(*args): self.fail('Unexpected model call')
         factory = lambda *args, **kwargs: self.tool
         result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
         self.assertEqual(result['qiandeng']['modelCalls'], 0)
+        # An agent-type shift is no longer refused outright for a game role; it is
+        # admitted only when the role has new evidence, so an hourly attempt with
+        # nothing new costs no model call at all.
         job.task_type = 'agent'
         result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
-        self.assertEqual(result['qiandeng']['code'], 'use_existing_game_decision_controller')
+        self.assertEqual(result['qiandeng']['code'], 'no_new_learning_evidence')
 
     @unittest.skipIf(os.name == 'nt', 'uses actual Linux operations ledger')
     def test_ops_cron_and_delegate_share_existing_ledger_and_uncertain_reservation(self):

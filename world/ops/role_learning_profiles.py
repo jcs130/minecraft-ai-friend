@@ -168,7 +168,11 @@ def validate_jobs(value, role, runtime):
     assert actual['text'] == expected['text'] and actual['save_result_to_inbox'] is False
     schedule = actual['schedule']
     assert schedule['type'] == 'cron' and schedule['timezone'] == 'Asia/Shanghai'
-    assert re.fullmatch(r'20 (?:[0-9]|1[0-9]|2[0-3]) \* \* (?:mon|tue|wed|thu|fri|sat|sun)', schedule['cron'])
+    # Hourly (creator, 2026-09-18) or the older per-weekday slot both stay valid, so a
+    # role left on the old cadence is not broken by this change.
+    assert (schedule['cron'] == '20 * * * *'
+            or re.fullmatch(r'20 (?:[0-9]|1[0-9]|2[0-3]) \* \* (?:mon|tue|wed|thu|fri|sat|sun)',
+                            schedule['cron']))
     assert all(actual['runtime'].get(key) == item for key, item in expected['runtime'].items())
     assert all(actual['dispatch'].get(key) == item for key, item in expected['dispatch'].items())
     assert not actual['dispatch'].get('meta')

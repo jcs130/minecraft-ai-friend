@@ -82,10 +82,15 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
             write(tools.root / 'last-cron.json', result | {'status': 'local_maintenance', 'jobId': job.id})
             return {'task_type': 'text', 'run_id': None, 'delivery_status': 'suppressed',
                 'final_text': '本角色技能维护完成；待改进项在下次正常任务中处理。', 'qiandeng': result}
-        if job.task_type == 'agent': return skipped('use_existing_game_decision_controller')
-        return await original(executor, job)
+        # A game role's managed shift is allowed to run a model now (creator,
+        # 2026-09-18), but only through the same evidence gate the operations lane
+        # uses: an hourly attempt with no new evidence is refused by reserve_review
+        # and costs nothing. This is the existing controller learning, not a second
+        # survival loop - the old blanket refusal is what kept every game role at
+        # zero drafts while still asking them to consolidate.
+        if job.task_type != 'agent': return await original(executor, job)
     if job.task_type != 'agent': return await original(executor, job)
-    if policy_role not in OPS_ROLES: return skipped('unregistered_operations_role')
+    if policy_role not in OPS_ROLES and not managed: return skipped('unregistered_operations_role')
     if job.dispatch.channel != 'console': return skipped('project_console_required')
     if job.runtime.timeout_seconds > 180 or job.runtime.max_concurrency != 1:
         return skipped('bounded_runtime_required')

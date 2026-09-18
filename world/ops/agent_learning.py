@@ -96,20 +96,25 @@ def managed_job(role, runtime):
     index = roles.index(role) if role in roles else 6
     day = ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')[index]
     purpose = 'review' if runtime == 'operations' else 'maintenance'
+    # Hourly rather than one weekday per role (creator, 2026-09-18): a weekly slot
+    # meant a role waited up to seven days to consolidate anything, and the shift it
+    # did get was dispatched as text that never started a model. The hourly attempt is
+    # cheap because reserve_review refuses when the evidence fingerprint is unchanged,
+    # so a model runs only when the role actually has something new to look at.
     prompt = ('复盘本角色近期有证据的任务、learning_status 中的待改进项。必要时使用自己的 learning_* 工具改进一项流程，'
               '技能正文用 learning_read 读取；已有职责技能用 operations_reference(my-skills) 读取。'
               '最多改进一项；没有证据就保留待验证，不虚构技能实测、不委派额外模型任务。'
               '把结果记为 learning_feedback；世界行为程序仍须原生技能测试。')
     job = {'id': 'qd-learning-' + role, 'name': '每周技能复盘' if runtime == 'operations' else '每周技能维护（零模型）',
-        'enabled': True, 'schedule': {'type': 'cron', 'cron': f'20 {10 + index % 3} * * {day}', 'timezone': 'Asia/Shanghai'},
-        'task_type': 'agent' if runtime == 'operations' else 'text', 'text': prompt,
+        'enabled': True, 'schedule': {'type': 'cron', 'cron': '20 * * * *', 'timezone': 'Asia/Shanghai'},
+        'task_type': 'agent', 'text': prompt,
         'request': {'input': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}]},
         'dispatch': {'type': 'channel', 'channel': 'console', 'target': {'user_id': 'qiandeng-learning',
             'session_id': 'qd-learning-' + role}, 'mode': 'final', 'silent': runtime == 'operations'},
         'runtime': {'max_concurrency': 1, 'timeout_seconds': 180, 'misfire_grace_seconds': 300,
             'share_session': False, 'tool_safety': True}, 'save_result_to_inbox': False,
         'meta': {'project': 'qiandengji', 'purpose': purpose, 'runtime': runtime, 'role': role, 'version': 1}}
-    if runtime != 'operations': job.pop('request')
+    # 'request' stays for every runtime: an agent task needs its input payload.
     return job
 
 
