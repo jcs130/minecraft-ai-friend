@@ -180,7 +180,15 @@ def validate_jobs(value, role, runtime):
     assert all(actual['dispatch'].get(key) == item for key, item in expected['dispatch'].items())
     assert not actual['dispatch'].get('meta')
     if logical_runtime == 'game':
-        assert actual.get('request') is None
+        # An agent shift needs its input payload; the legacy text dispatch must not carry
+        # one. The old blanket "no request" rule is what an agent-shaped job now violates,
+        # which is exactly how the first hourly deploy took the runtime config down.
+        if actual['task_type'] == 'agent':
+            assert (isinstance(actual.get('request'), dict)
+                    and isinstance(actual['request'].get('input'), list)
+                    and actual['request']['input'])
+        else:
+            assert actual.get('request') is None
     else:
         request = actual['request']
         assert request['input'] == expected['request']['input']
