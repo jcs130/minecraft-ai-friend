@@ -1835,7 +1835,16 @@ class Controller:
                 # the pause - that wait is correct.
                 active = self.data.get('active')
                 task_id = (active or {}).get('taskId')
-                if active and task_id:
+                if not active:
+                    # An orphaned cancellation pause. stop_actions() runs earlier in this
+                    # same branch and, with the 404-is-terminal rule, already clears the
+                    # turn - so by the time control flow reaches here there is nothing
+                    # left to cancel or wait for, and only the stale control.json reason
+                    # keeps the lane down. That is exactly what held Kirito at cycles=88.
+                    control.update(enabled=True, pauseReason=None)
+                    self.data.pop('pauseReason', None)
+                    self.data['status'] = 'waiting'
+                elif task_id:
                     try:
                         terminal = self.backend.poll(task_id)
                         absent = False
