@@ -8,6 +8,28 @@ from pathlib import Path
 import time
 
 
+
+def heartbeat_path():
+    """心跳文件的默认位置：宿主布局与容器布局都要能命中。
+
+    本文件在宿主仓库里是 tools/npc_health.py，所以 parents[1] 是仓库根，
+    server/mcdata/npc-health.json 正确 ✓；但在容器里它被挂在 /opt/npc_health.py，
+    parents[1] 变成 '/'，于是会去找 /server/mcdata/... —— 而容器把宿主的
+    server/mcdata 挂在 /mcdata ✗。2026-09-19 就是这个不一致让健康检查一直报
+    missing_or_unreadable_heartbeat，而心跳文件本身是新鲜的。
+    """
+    here = Path(__file__).resolve()
+    for candidate in (here.parents[1] / 'server/mcdata/npc-health.json',
+                      Path('/mcdata/npc-health.json')):
+        if candidate.exists():
+            return candidate
+    for candidate in (here.parents[1] / 'server/mcdata/npc-health.json',
+                      Path('/mcdata/npc-health.json')):
+        if candidate.parent.is_dir():
+            return candidate
+    return here.parents[1] / 'server/mcdata/npc-health.json'
+
+
 def self_test():
     """Exercise the copied light-spell consumer with fake files/RCON only."""
     import ast
@@ -121,7 +143,7 @@ def inspect_health(path, now=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--state', type=Path, default=Path(__file__).resolve().parents[1] / 'server/mcdata/npc-health.json')
+    parser.add_argument('--state', type=Path, default=heartbeat_path())
     parser.add_argument('--self-test', action='store_true', help='Run offline consumer/health checks without contacting Minecraft')
     args = parser.parse_args()
     if args.self_test:
