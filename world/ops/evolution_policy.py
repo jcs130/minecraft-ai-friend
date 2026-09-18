@@ -472,7 +472,7 @@ def write_pawapp(policy, rows, numbers=None):
         # "PawApp frontend plugin not found"：它找不到 entry.frontend，就认为这个 App 没有前端。
         'entry': {'frontend': 'ui/index.js'},
         'meta': {'pawapp': {'category': 'monitor', 'icon': '📈',
-                            'entry_page': '/plugin/evolution-board', 'launch_scope': 'page'},
+                            'entry_page': '/apps/evolution-board', 'launch_scope': 'page'},
                  'settings': []},
     }
     (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')

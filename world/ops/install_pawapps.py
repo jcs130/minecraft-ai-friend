@@ -25,7 +25,7 @@ GODS_EYE_PLUGIN = {
     # 与 evolution-board 同一契约：前端是一个 JS 模块，entry_page 是路由。
     'entry': {'frontend': 'ui/index.js'},
     'meta': {'pawapp': {'category': 'monitor', 'icon': '👁',
-                        'entry_page': '/plugin/gods-eye', 'launch_scope': 'page'},
+                        'entry_page': '/apps/gods-eye', 'launch_scope': 'page'},
              'settings': []},
 }
 
