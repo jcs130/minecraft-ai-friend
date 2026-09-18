@@ -594,6 +594,8 @@ def write_outputs():
         frozen='\n'.join('- %s：%s' % (k, v) for k, v in FROZEN_KNOBS.items())), encoding='utf-8')
 
     rows = board_rows()
+    # 指标要在看板用到它之前算好；也只能算一次 —— 算两次会把红旗史重复追加一行。
+    numbers = metrics(rows)
     flagged = [row for row in rows if row['flags']]
     header = ('# 自我改进 · 元层看板（自动生成）\n\n'
               '生成时间：%s ｜ 角色数：%d ｜ 红旗：%d\n\n'
@@ -648,7 +650,6 @@ def write_outputs():
             mirrored.append(role)
         except OSError:
             continue
-    numbers = metrics(rows)
     page = write_pawapp(policy, rows, numbers)
     return {'ok': True, 'roles': len(rows), 'flagged': len(flagged),
             'notes': str(NOTES), 'cron': facts['shiftCron'], 'mirroredInto': mirrored,
