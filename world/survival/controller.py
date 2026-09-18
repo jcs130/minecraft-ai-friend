@@ -767,7 +767,8 @@ class Controller:
         # 30-min cadence, but never more often than the floor.
         # An environment penalty accelerates it too — a world that is refusing
         # or hurting the body is the case where waiting 30 minutes costs most.
-        if self.data.get('crystallizationHint') or self.data.get('environmentPenaltyHint'):
+        if (self.data.get('crystallizationHint') or self.data.get('environmentPenaltyHint')
+                or self.data.get('stagnationHint')):
             delay = min(delay, floor)
         completed = self.completed_review_id(memory)
         if completed and completed != self.data.get('completedReviewConsumed'):
@@ -1351,6 +1352,11 @@ class Controller:
         # Environment penalties (2026-09-17): the world's own verdict is stronger
         # evidence than any internal guess, so it goes into the same reflection
         # cycle — and, being ground truth, it must not be argued away.
+        pivot = self.data.pop('stagnationHint', None)
+        if pivot:
+            context['stagnationHint'] = pivot
+            context['instruction'] += ('【重定向】' + pivot.get('message', '')
+                + ' 按这四步走：' + pivot.get('pivot', ''))
         penalty = self.data.pop('environmentPenaltyHint', None)
         if penalty:
             context['environmentPenaltyHint'] = penalty
@@ -1455,6 +1461,30 @@ class Controller:
         except Exception:
             pass  # Life bookkeeping is advisory; it never blocks the loop.
 
+    def _check_stagnation(self):
+        """P1: a goal that has stopped advancing, corroborated by the environment.
+
+        The sibling above reads the world; this reads the agent's own intent, which the
+        world cannot see. Per the design, environment truth leads and this corroborates:
+        a stale goal alone does not fire, because a long haul (walking somewhere,
+        waiting for a crop) is a legitimately unchanged goal.
+        """
+        try:
+            from stagnation_detector import StagnationDetector
+            memory_path = self.root / 'memory.json'
+            if not memory_path.exists():
+                return
+            import json as _json
+            memory = _json.loads(memory_path.read_text(encoding='utf-8-sig'))
+            if not isinstance(memory, dict):
+                return
+            detector = StagnationDetector(self.root, self.clock)
+            hints = detector.check(memory, self.data.get('environmentSignals') or [])
+            if hints:
+                self.data['stagnationHint'] = hints[0]
+        except Exception:
+            pass  # Advisory, like its siblings: it never blocks the loop.
+
     def _check_patterns(self):
         """Pattern detection for skill crystallization (case-9f5b2099).
         Watches the receipt stream for repeating tool sequences; when a
@@ -1486,6 +1516,11 @@ class Controller:
             receipts_dir = self.root / 'action-receipts'
             if not receipts_dir.is_dir():
                 return
+            from environment_penalty import detect as penalty_detect, parse as penalty_parse
+            # One reading of the receipts, shared with the stagnation detector below:
+            # the world's verdict is evidence for both, and a second parse would be a
+            # second opinion about the same facts.
+            self.data['environmentSignals'] = penalty_detect(penalty_parse(receipts_dir))
             detector = EnvironmentPenaltyDetector(self.root, self.clock)
             hints = detector.check(receipts_dir)
             if hints:
@@ -1521,6 +1556,8 @@ class Controller:
         history = {
             'recent_receipts': tail(self.root / 'last-action.json', 8),
             'last_perception': self.data.get('lastPerception') or {},
+            # P1: a corroborated stale goal escalates the route (see adaptive_router).
+            'stagnation': bool(self.data.get('stagnationHint')),
         }
         goals = self.data.get('goals') or {}
         skills = self.data.get('skills') or []
@@ -1639,6 +1676,8 @@ class Controller:
                 # a repeated refusal, lost health, a target that never changes —
                 # are triggers in their own right, not just background.
                 self._check_environment_penalties()
+                # P1 停滞重定向：目标本身是否还在推进（与上一条同源、不同问题）
+                self._check_stagnation()
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):

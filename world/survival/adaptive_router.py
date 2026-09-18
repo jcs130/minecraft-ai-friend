@@ -174,6 +174,13 @@ def route(perception: dict, history: dict, goals: dict, skills: list,
     elif signals['failure_rate'] > 0.5:
         composite = max(composite, 0.85)
         reason = 'REPEATED_FAILURE'
+    elif history.get('stagnation'):
+        # P1: the goal has stopped advancing and the environment agrees that the time is
+        # not being turned into anything. That is not a routine decision - it needs the
+        # full reasoning level, and this input is only ever set by the stagnation
+        # detector, which fires only with that corroboration.
+        composite = max(composite, 0.85)
+        reason = 'STAGNATION'
     else:
         reason = 'composite'
 

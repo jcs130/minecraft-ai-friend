@@ -202,3 +202,22 @@ class RouterContractTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StagnationTests(unittest.TestCase):
+    """P1: a corroborated stale goal escalates the route to full reasoning.
+
+    The flag is only ever set by the stagnation detector, which fires only when the
+    environment layer also reports that nothing is being produced - so this escalation
+    cannot be triggered by a long haul alone.
+    """
+
+    def test_a_corroborated_stale_goal_escalates_to_plan(self):
+        routing = route(base_perception(), base_history(stagnation=True), base_goals(), [])
+        self.assertEqual(routing['level'], 3)
+        self.assertEqual(routing['reason'], 'STAGNATION')
+        self.assertTrue(routing['should_call_llm'])
+
+    def test_without_the_flag_nothing_changes(self):
+        routing = route(base_perception(), base_history(), base_goals(), [])
+        self.assertNotEqual(routing['reason'], 'STAGNATION')
