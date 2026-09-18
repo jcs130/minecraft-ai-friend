@@ -215,8 +215,17 @@ class PartyLife:
                 started = self.clock()
                 context = self._round_context(signal, replies, started, state, member)
                 position = (context['currentObservation'].get('identity') or {}).get('position')
+                # The quota rides on the FIRST line on purpose: the prompt is
+                # preamble + JSON, and the round tests read the payload with
+                # split('\n', 1)[1]. Appending it to the preamble glues Chinese text onto the
+                # JSON and breaks every parse - which is exactly what happened. Line one is
+                # discarded by that split, so this stays readable to the model and invisible
+                # to the parsers.
                 first = ('结衣本轮生活 ' + iso_time(started) + '，当前位置' + str(position) +
-                         '，新收到伙伴回复' + str(len(replies)) + '条。')
+                         '，新收到伙伴回复' + str(len(replies)) + '条。' +
+                         '【进化】本轮必须交代这件事：用 learning_draft 产出一份草稿，'
+                         '或明确写一句"本轮没有可固化的东西"并说明为什么。'
+                         '你验证并启用的技能会发布到世界共享库，其他角色可以直接继承。')
                 # Bound the total native prompt too; whole unselected messages
                 # stay on disk. New arrivals cannot enlarge a running batch.
                 # The same evolution quota Kirito's controller carries (2026-09-18). Yui
@@ -226,10 +235,7 @@ class PartyLife:
                 # lane ends up with zero output. Ask each round to close the loop either
                 # way, and say where a finished skill goes - declining on the record is
                 # different from silence.
-                evolution = ('【进化】本轮必须交代这件事：用 learning_draft 产出一份草稿，'
-                             '或明确写一句"本轮没有可固化的东西"并说明为什么。'
-                             '你验证并启用的技能会发布到世界共享库，其他角色可以直接继承。')
-                preamble = first + INBOX_NOTE + PROMPT + evolution
+                preamble = first + INBOX_NOTE + PROMPT
                 remaining = 24000 - len(preamble + json.dumps(context, ensure_ascii=False)) - 320
                 inputs = self.bridge.perception_inbox.pending(member, max_chars=remaining)
                 context['privateDialogueInputs'] = inputs
