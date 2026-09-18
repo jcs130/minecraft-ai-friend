@@ -48,7 +48,7 @@
 ## 四、健康与产出（都是查出来的）
 
 - 容器：**13/13 在跑**，12 个有健康检查的全绿；`qiandengji-qwenpaw-1` 健康 `ok=true`（2.2.1，10 角色）。
-- 世界：3 人在线 —— `Kirito`（y=95，血 18.4/20）、`Goddess`、**`Neko`**。
+- 世界：3 人在线 —— `Kirito`（y=95，血 18.4/20）、`Goddess`、`Neko`（**外部 AI 客户端，实验用**，非本世界角色）。
 - 工单系统（最近 30 单）：`improvement 6` / `bug 11` / `gameplay 8` / `content 2` / `operations 3`；
   状态 `open 6` / **`blocked 10`** / `resolved 4` / `working 7` / `needs_review 2` / `duplicate 1`。
 - 知识产物：桐人 **565** 个、结衣 **298** 个（近 2 小时各 +6/+5）——**固化一直在发生**。
@@ -62,7 +62,7 @@
 | 2 | **技能级草稿恒为 0**（14 角色） | 看板 `no_skill_draft_yet` × 14；根因判为**缺第 4 层度量**（没有元指标，就无法判断改动是否让"下一轮更好"）|
 | 3 | **`qd-engineer` 的班次 6642 分钟没跑** | 看板 `lastShift.ageMinutes=6642`（它的作业在逻辑身份上归 `mc-god`，本地 `jobs.json` 是陈旧副本）|
 | 4 | **3 个对话角色知识产物为 0** | `mc-herald` / `qd-maid-dialogue` / `qd-villager-dialogue` → `no_knowledge` |
-| 5 | **世界里有位不速之客**：`Neko` 满血站在 Goddess 坐标上，village 数据里查不到 | RCON `list` + `data get entity Neko Pos` = `(-543.5, 189, 867.5)` |
+| 5 | ~~不速之客~~ **已查明：外部 AI 客户端**（造物主 2026-09-19 告知，在做实验）——它不在 village 名册、不属任何角色绑定，故不在本世界治理与工单口径内；已记入名册 | RCON `list` + `data get entity Neko Pos` = `(-543.5, 189, 867.5)`，满血 20/20 |
 | 6 | **10 单 `blocked`** 里含 4 单基础设施工单（工程提交通道、survival 验收覆盖、npc 健康、内容提案过期） | 工单列表（见上）|
 
 ## 六、RSI 路线图状态
