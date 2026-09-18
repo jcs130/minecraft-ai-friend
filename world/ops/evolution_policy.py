@@ -415,7 +415,7 @@ tick(); setInterval(tick, 60000);
 """
 
 
-def write_pawapp(policy, rows):
+def write_pawapp(policy, rows, numbers=None):
     """把它做成 QwenPaw 控制台里的一个真页面（PawApp），而不是一份 md 文件。
 
     控制台按请求实时扫描 plugins 目录，所以建目录即生效、不需要重启；
@@ -436,7 +436,8 @@ def write_pawapp(policy, rows):
     (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     (folder / 'index.html').write_text(PAGE_HTML, encoding='utf-8')
     (folder / 'board.json').write_text(
-        json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False), encoding='utf-8')
+        json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows,
+                    'metrics': numbers or {}}, ensure_ascii=False), encoding='utf-8')
     (folder / 'policy.json').write_text(json.dumps(policy, ensure_ascii=False), encoding='utf-8')
     return {'appId': PAGE_ID, 'dir': str(folder),
             'entry': '/api/pawapps/%s/static/index.html' % PAGE_ID}
@@ -458,6 +459,116 @@ def proposals():
              'status': row.get('status'), 'version': row.get('version'),
              'title': (row.get('title') or '')[:70]}
             for row in result.get('cases', []) if row.get('category') == 'improvement']
+
+
+
+def _learning_totals():
+    """技能级产出：drafts 与已启用技能（激活在 learning/index.json 的 skills）。"""
+    drafts = 0
+    activated = 0
+    for folder in WORKSPACES.iterdir():
+        if not folder.is_dir():
+            continue
+        tree = folder / 'learning' / 'drafts'
+        if tree.is_dir():
+            drafts += len([x for x in tree.rglob('*') if x.is_file()])
+        index = folder / 'learning' / 'index.json'
+        if index.exists():
+            try:
+                activated += len((json.loads(index.read_text(encoding='utf-8')).get('skills') or {}))
+            except (OSError, ValueError):
+                pass
+    shared = Path('/state/work/world-skills')
+    published = len([x for x in shared.rglob('*') if x.is_file()]) if shared.is_dir() else 0
+    return drafts, activated, published
+
+
+def _case_totals():
+    """工单侧：未结分布 + 已结单的处理时长（events 里有时刻）。"""
+    try:
+        from world_team import TeamStore
+        store = TeamStore('game:mc-god')
+        rows = store.cases(owner='all', include_closed=True, limit=30).get('cases', [])
+    except Exception as error:
+        return {'error': type(error).__name__}
+    counts = {}
+    for row in rows:
+        counts[row.get('status')] = counts.get(row.get('status'), 0) + 1
+    durations = []
+    for row in rows:
+        if row.get('status') != 'resolved':
+            continue
+        try:
+            events = store.case(row['id'], event_limit=20).get('events') or []
+        except Exception:
+            continue
+        stamps = [e.get('at') for e in events if isinstance(e.get('at'), (int, float))]
+        if len(stamps) >= 2:
+            durations.append((max(stamps) - min(stamps)) / 60.0)
+    durations.sort()
+    return {'counts': counts, 'resolvedSampled': len(durations),
+            'resolutionMedianMinutes': round(durations[len(durations) // 2], 1) if durations else None}
+
+
+def _flag_history(rows):
+    """红旗史：某个红旗**第一次出现**到现在多久 —— "被发现了多久还没处理"的数字。
+
+    以前没有这个数，所以"故障处理要多快"只能靠感觉 ✗；看板每次都追加一行，
+    于是每个红旗的年龄都是算出来的，不是估的。
+    """
+    path = NOTES / 'flag-history.jsonl'
+    now = time.time()
+    current = {}
+    for row in rows:
+        for flag in row.get('flags') or []:
+            current['%s|%s' % (row['role'], flag)] = True
+    with path.open('a', encoding='utf-8') as stream:
+        stream.write(json.dumps({'at': now, 'flags': sorted(current)}, ensure_ascii=False) + '\n')
+    first = {}
+    try:
+        for line in path.read_text(encoding='utf-8').splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            for key in record.get('flags') or []:
+                first.setdefault(key, record.get('at'))
+    except (OSError, ValueError):
+        pass
+    ages = []
+    for key in sorted(current):
+        seen = first.get(key, now)
+        ages.append({'flag': key, 'minutes': round((now - seen) / 60.0, 1)})
+    ages.sort(key=lambda item: -item['minutes'])
+    return ages
+
+
+def metrics(rows):
+    """第 4 层：把"改进是否让下一轮更好"变成数。
+
+    只统计数据真的支持的东西；支持不了的就写明没有记录 —— 编一个好看的数比没有数更糟，
+    因为它会让下一轮的自改变成优化一个幻觉。
+    """
+    drafts, activated, published = _learning_totals()
+    cases = _case_totals()
+    report = {
+        'schema': 1, 'generatedAt': time.time(),
+        'skillLevel': {'drafts': drafts, 'activated': activated, 'sharedPublished': published,
+                       'inherited': None,
+                       'inheritedNote': '没有记录：learning/index.json 未记技能来源角色，'
+                                        '所以"跨角色继承"目前无法计算 —— 要它成为数字，先让索引记来源。'},
+        'cases': cases,
+        'flagAges': _flag_history(rows),
+        'honestLimits': [
+            '技能级产出全为 0 时，任何"改进效果"都只能是相对基线说的，不能凭空说变好',
+            '继承率需要索引记录来源角色；回退率需要 feedback 里有失败记录',
+        ],
+    }
+    baseline = NOTES / 'metrics-baseline.json'
+    if not baseline.exists():
+        baseline.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
+        report['baselineRecorded'] = True
+    (NOTES / 'metrics.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
+    return report
 
 
 def write_outputs():
@@ -505,6 +616,19 @@ def write_outputs():
         body += '\n'.join('| %s | %s | %s | %s | %s |' % (
             row.get('id', '—'), row.get('role', '—'), row.get('status', '—'),
             row.get('owner') or '未指派', row.get('title', '')) for row in pending) + '\n'
+    skill = numbers['skillLevel']
+    body += ('\n## 指标（第 4 层：改进是否让下一轮更好）\n\n'
+             '- 技能级产出：草稿 **%s** ／ 已启用 **%s** ／ 已发布到世界技能库 **%s**'
+             '（继承率：%s）\n'
+             '- 工单：%s；已结单样本 %s 条，中位处理时长 %s 分钟\n'
+             '- 红旗年龄（被发现了多久还没处理，最老三条）：%s\n'
+             % (skill['drafts'], skill['activated'], skill['sharedPublished'],
+                skill['inheritedNote'] if skill['inherited'] is None else skill['inherited'],
+                json.dumps(numbers['cases'].get('counts', {}), ensure_ascii=False),
+                numbers['cases'].get('resolvedSampled'),
+                numbers['cases'].get('resolutionMedianMinutes'),
+                '、'.join('%s=%.0f 分钟' % (item['flag'], item['minutes'])
+                          for item in numbers['flagAges'][:3]) or '无'))
     (NOTES / 'evolution-board.md').write_text(body, encoding='utf-8')
     (NOTES / 'evolution-board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False, indent=1),
@@ -524,7 +648,8 @@ def write_outputs():
             mirrored.append(role)
         except OSError:
             continue
-    page = write_pawapp(policy, rows)
+    numbers = metrics(rows)
+    page = write_pawapp(policy, rows, numbers)
     return {'ok': True, 'roles': len(rows), 'flagged': len(flagged),
             'notes': str(NOTES), 'cron': facts['shiftCron'], 'mirroredInto': mirrored,
             'page': page}
