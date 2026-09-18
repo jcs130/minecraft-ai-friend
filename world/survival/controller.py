@@ -1470,21 +1470,35 @@ class Controller:
         # one way or the other, so declining is a decision on the record instead of silence.
         provider = self._evolution_quota()
         context['evolutionQuota'] = provider
-        context['instruction'] += (
-            '【进化】本班复盘必须交代这件事，二选一：'
-            '①用 learning_draft（或桐人的 skill_draft）产出一份草稿；'
-            '②明确写一句"本班没有可固化的东西"并说明为什么，写进 lesson。'
-            '既不产出也不表态，等于让经验随你这一班一起消失。'
-            '你验证并启用的技能会发布到世界共享库，**其他角色可以直接继承**——'
-            '这就是你这一班能留给这个世界的、比多收一筐麦子更久的东西。'
-            + ('（你已经 %d 个班次没有产出任何草稿了。）' % provider['cyclesSince'] if provider.get('cyclesSince') else ''))
-        # Gate first: on an ordinary turn the three ledgers are never even opened.
-        # Appending to a dict value keeps json.dumps in charge of escaping, so the
-        # prompt still parses after split('\n', 1)[1].
-        candidate = (evolution_candidate(self.root)
-                     if evolution_candidate_due(provider.get('cyclesSince')) else '')
-        if candidate:
-            context['instruction'] += candidate
+        # Fifty-seven cycles of "review, and while you are at it consolidate something"
+        # produced zero drafts. The ask was not too quiet, it was in the wrong place: as
+        # one more line inside a survival turn, learning always loses to the next real
+        # task. So a due cycle stops being a survival turn with a note attached and
+        # becomes the learning shift itself - with survival still winning whenever the
+        # body is actually in danger, because a dead role writes no skills.
+        due = evolution_candidate_due(provider.get('cyclesSince'))
+        if due:
+            context['instruction'] += (
+                '【本班·学习班次】本班的正事只有一件：把近期真实经历固化成技能，顺序做——'
+                '①learning_status 看自己已有的技能与待改进项；'
+                '②从有真实证据的重复操作或失败里选一项；'
+                '③learning_draft 产出草稿（触发描述、步骤、2–5 个用例，至少一成一败）并用 learning_validate 校验；'
+                '④若本周期确实没有值得固化的东西，明确写一句"本周期无可固化"并说明理由，写进自己的 notes。'
+                '两者必居其一：既不产出也不表态，等于让这段时间的经验白过。'
+                '除非你的身体此刻正受威胁（血量低、被敌怪围、身处险地），那时生存优先、本班顺延；'
+                '安全无虞就把这一班交给固化，而不是再多收一筐麦子——'
+                '你验证并启用的技能会发布到世界技能库，其他角色可以直接继承。'
+                + ('（你已经 %d 个班次没有产出任何草稿了。）' % provider['cyclesSince'] if provider.get('cyclesSince') else ''))
+            # Gate first: on an ordinary turn the three ledgers are never even opened.
+            # Appending to a dict value keeps json.dumps in charge of escaping, so the
+            # prompt still parses after split('\n', 1)[1].
+            candidate = evolution_candidate(self.root)
+            if candidate:
+                context['instruction'] += candidate
+        elif provider.get('cyclesSince'):
+            context['instruction'] += (
+                '【进化】本班若有余力，交代一句：产出草稿，或写明"本周期无可固化"。'
+                '（已经 %d 个班次没有产出了。）' % provider['cyclesSince'])
 
         pivot = self.data.pop('stagnationHint', None)
         if pivot:
