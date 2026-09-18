@@ -22,7 +22,23 @@ def fingerprint(tools):
     for path in sorted((tools.root / 'drafts').glob('*/*.json'))[:48]:
         if path.is_symlink(): raise ValueError('linked_draft_evidence')
         drafts.append([path.parent.name, path.stem])
-    material = {'skills': index['skills'], 'feedback': index['feedback'], 'reports': rows, 'drafts': drafts}
+    # The roles consolidate into their own knowledge trees - digest/wiki,
+    # digest/procedure, notes and memory - and leave the learning index empty. That is why
+    # fingerprint() returned None for a role with 553 knowledge files, and why every hourly
+    # attempt answered no_new_learning_evidence while six files were written in one hour.
+    # Watch what the role actually writes, bounded so this stays cheap and deterministic.
+    knowledge = []
+    workspace = tools.root.parent
+    for sub in ('digest', 'notes', 'memory'):
+        folder = workspace / sub
+        if not folder.is_dir():
+            continue
+        for path in sorted(item for item in folder.rglob('*') if item.is_file())[:200]:
+            if path.is_symlink():
+                continue
+            stat = path.stat()
+            knowledge.append([str(path.relative_to(workspace)), stat.st_size, stat.st_mtime_ns])
+    material = {'skills': index['skills'], 'feedback': index['feedback'], 'reports': rows, 'drafts': drafts, 'knowledge': knowledge[:300]}
     if not any(material.values()) and not index['reviewPending']: return None
     return hashlib.sha256(json.dumps(material, sort_keys=True, ensure_ascii=False).encode('utf8')).hexdigest()
 
