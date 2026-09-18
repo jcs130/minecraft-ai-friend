@@ -1352,6 +1352,22 @@ class Controller:
         # Environment penalties (2026-09-17): the world's own verdict is stronger
         # evidence than any internal guess, so it goes into the same reflection
         # cycle — and, being ground truth, it must not be argued away.
+        # Evolution is a deliverable, not a permission. The skill both roles carry already
+        # documents the draft -> validate -> activate flow, and it also says the current
+        # world task comes first and learning can be deferred - which is exactly why
+        # fifteen roles have produced zero drafts. This asks every review to close the loop
+        # one way or the other, so declining is a decision on the record instead of silence.
+        provider = self._evolution_quota()
+        context['evolutionQuota'] = provider
+        context['instruction'] += (
+            '【进化】本班复盘必须交代这件事，二选一：'
+            '①用 learning_draft（或桐人的 skill_draft）产出一份草稿；'
+            '②明确写一句"本班没有可固化的东西"并说明为什么，写进 lesson。'
+            '既不产出也不表态，等于让经验随你这一班一起消失。'
+            '你验证并启用的技能会发布到世界共享库，**其他角色可以直接继承**——'
+            '这就是你这一班能留给这个世界的、比多收一筐麦子更久的东西。'
+            + ('（你已经 %d 个班次没有产出任何草稿了。）' % provider['cyclesSince'] if provider.get('cyclesSince') else ''))
+
         pivot = self.data.pop('stagnationHint', None)
         if pivot:
             context['stagnationHint'] = pivot
@@ -1462,6 +1478,37 @@ class Controller:
                         'freshFromDeath': rotated.get('freshFromDeath')}
         except Exception:
             pass  # Life bookkeeping is advisory; it never blocks the loop.
+
+    def _evolution_quota(self):
+        """How long this role has gone without producing anything to keep.
+
+        Counts reviews, not hours: the loop the roles actually run is the review cycle.
+        Evidence is the role's own learning tree - drafts and activations - so this never
+        has to guess whether an attempt happened.
+        """
+        try:
+            workspace = self.root.parent if (self.root.parent / 'skills').exists() else self.root
+            learning = workspace / 'learning'
+            produced = 0
+            for sub in ('drafts', 'activations'):
+                folder = learning / sub
+                if folder.is_dir():
+                    produced += len([p for p in folder.rglob('*') if p.is_file()])
+            state = self.data.setdefault('evolutionQuota', {})
+            seen = int(state.get('produced', -1))
+            if produced != seen:
+                state.update(produced=produced, cyclesSince=0)
+            else:
+                state['cyclesSince'] = int(state.get('cyclesSince', 0)) + 1
+            # Measurable: one line per review, so 'asked N times, produced M' is answerable.
+            import json as _json, time as _time
+            with (self.root / 'crystallization-ledger.jsonl').open('a', encoding='utf-8') as _stream:
+                _stream.write(_json.dumps({'at': _time.time(), 'kind': 'evolution_quota',
+                                           'produced': produced,
+                                           'cyclesSince': state['cyclesSince']}, ensure_ascii=False) + '\n')
+            return {'produced': produced, 'cyclesSince': state['cyclesSince']}
+        except Exception:
+            return {}
 
     def _check_stagnation(self):
         """P1: a goal that has stopped advancing, corroborated by the environment.

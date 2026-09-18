@@ -219,7 +219,17 @@ class PartyLife:
                          '，新收到伙伴回复' + str(len(replies)) + '条。')
                 # Bound the total native prompt too; whole unselected messages
                 # stay on disk. New arrivals cannot enlarge a running batch.
-                preamble = first + INBOX_NOTE + PROMPT
+                # The same evolution quota Kirito's controller carries (2026-09-18). Yui
+                # has the full learning tool surface and a qd-skill-evolution skill, and has
+                # still never produced a draft: her own skill text says the current world
+                # task comes first and learning can be deferred, which is precisely how a
+                # lane ends up with zero output. Ask each round to close the loop either
+                # way, and say where a finished skill goes - declining on the record is
+                # different from silence.
+                evolution = ('【进化】本轮必须交代这件事：用 learning_draft 产出一份草稿，'
+                             '或明确写一句"本轮没有可固化的东西"并说明为什么。'
+                             '你验证并启用的技能会发布到世界共享库，其他角色可以直接继承。')
+                preamble = first + INBOX_NOTE + PROMPT + evolution
                 remaining = 24000 - len(preamble + json.dumps(context, ensure_ascii=False)) - 320
                 inputs = self.bridge.perception_inbox.pending(member, max_chars=remaining)
                 context['privateDialogueInputs'] = inputs
