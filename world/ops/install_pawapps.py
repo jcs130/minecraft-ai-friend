@@ -13,14 +13,19 @@ from pathlib import Path
 
 PLUGINS = Path('/state/work/plugins')
 
+GODS_EYE_UI = '/**\n * 天神之眼 — 前端入口（运行时加载的插件模块）。\n *\n * 由宿主用 Blob URL + 动态 import 载入，自己注册一条 React 路由。\n * React / antd 从 window.QwenPaw.host 取，不需要打包器。\n * 页面本体复用已做好的静态页（同源 iframe），所以这里只做"路由 + 开窗"。\n */\n(function () {\n  var QwenPaw = window.QwenPaw;\n  if (!QwenPaw || !QwenPaw.host || !QwenPaw.registerRoutes) {\n    console.error("[gods-eye] window.QwenPaw 尚未就绪，无法注册路由");\n    return;\n  }\n  var React = QwenPaw.host.React;\n  function Page() {\n    return React.createElement("iframe", {\n      src: "/api/pawapps/gods-eye/static/index.html",\n      title: "天神之眼",\n      style: { width: "100%", height: "calc(100vh - 140px)", border: 0, borderRadius: 12, background: "#0b0d11" }\n    });\n  }\n  QwenPaw.registerRoutes("gods-eye", [\n    { path: "/plugin/gods-eye", component: Page, label: "天神之眼", icon: "👁", priority: 42 }\n  ]);\n})();\n'
+
+
 GODS_EYE_PLUGIN = {
     'id': 'gods-eye',
     'name': '天神之眼',
     'version': '1.0.0',
     'description': '世界观察渲染：本机 127.0.0.1:19092 的 modern-viewer 画面（Goddess 观察者视角）嵌在这里。',
     'type': 'app',
+    # 与 evolution-board 同一契约：前端是一个 JS 模块，entry_page 是路由。
+    'entry': {'frontend': 'ui/index.js'},
     'meta': {'pawapp': {'category': 'monitor', 'icon': '👁',
-                        'entry_page': 'index.html', 'launch_scope': 'page'},
+                        'entry_page': '/plugin/gods-eye', 'launch_scope': 'page'},
              'settings': []},
 }
 
@@ -76,6 +81,8 @@ def install(app_id, manifest, page):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     (folder / 'index.html').write_text(page, encoding='utf-8')
+    (folder / 'ui').mkdir(exist_ok=True)
+    (folder / 'ui' / 'index.js').write_text(GODS_EYE_UI, encoding='utf-8')
     return {'appId': app_id, 'dir': str(folder),
             'entry': '/api/pawapps/%s/static/index.html' % app_id}
 

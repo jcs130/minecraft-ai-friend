@@ -327,6 +327,9 @@ def board_rows():
     return rows
 
 
+UI_JS = '/**\n * 自我改进看板 — 前端入口（运行时加载的插件模块）。\n *\n * 由宿主用 Blob URL + 动态 import 载入，自己注册一条 React 路由。\n * React / antd 从 window.QwenPaw.host 取，不需要打包器。\n * 页面本体复用已做好的静态页（同源 iframe），所以这里只做"路由 + 开窗"。\n */\n(function () {\n  var QwenPaw = window.QwenPaw;\n  if (!QwenPaw || !QwenPaw.host || !QwenPaw.registerRoutes) {\n    console.error("[evolution-board] window.QwenPaw 尚未就绪，无法注册路由");\n    return;\n  }\n  var React = QwenPaw.host.React;\n  function Page() {\n    return React.createElement("iframe", {\n      src: "/api/pawapps/evolution-board/static/index.html",\n      title: "自我改进看板",\n      style: { width: "100%", height: "calc(100vh - 140px)", border: 0, borderRadius: 12, background: "#0b0d11" }\n    });\n  }\n  QwenPaw.registerRoutes("evolution-board", [\n    { path: "/plugin/evolution-board", component: Page, label: "自我改进看板", icon: "📈", priority: 41 }\n  ]);\n})();\n'
+
+
 PAGE_HTML = """<!doctype html>
 <html lang="zh">
 <head>
@@ -464,12 +467,18 @@ def write_pawapp(policy, rows, numbers=None):
         'version': '1.0.0',
         'description': '这套自我改进体系的元层看板：一角色一行，看谁在动、谁被拦、谁红了。',
         'type': 'app',
+        # 前端入口是一个 JS 模块（宿主用 Blob URL 动态 import，自己注册 React 路由），
+        # entry_page 是**路由**而不是文件名 —— 2026-09-19 我给了 index.html，于是控制台报
+        # "PawApp frontend plugin not found"：它找不到 entry.frontend，就认为这个 App 没有前端。
+        'entry': {'frontend': 'ui/index.js'},
         'meta': {'pawapp': {'category': 'monitor', 'icon': '📈',
-                            'entry_page': 'index.html', 'launch_scope': 'page'},
+                            'entry_page': '/plugin/evolution-board', 'launch_scope': 'page'},
                  'settings': []},
     }
     (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     (folder / 'index.html').write_text(PAGE_HTML, encoding='utf-8')
+    (folder / 'ui').mkdir(exist_ok=True)
+    (folder / 'ui' / 'index.js').write_text(UI_JS, encoding='utf-8')
     (folder / 'board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows,
                     'metrics': numbers or {}}, ensure_ascii=False), encoding='utf-8')
