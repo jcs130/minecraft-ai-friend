@@ -361,6 +361,11 @@ PAGE_HTML = """<!doctype html>
  .flag.good{color:#cfead9;border-color:#245239;background:#12241a}
  code{color:var(--acc)}
  .foot{margin-top:14px;color:var(--dim);font-size:12px}
+ .cards{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 0}
+ .card2{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:190px}
+ .card2 .t{color:var(--dim);font-size:12px}
+ .card2 .v{font-size:19px;margin-top:3px;font-variant-numeric:tabular-nums}
+ .card2 .n{color:var(--dim);font-size:11px;margin-top:2px}
  details{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
  summary{cursor:pointer;color:var(--acc);font-size:13px}
  pre{white-space:pre-wrap;color:var(--dim);font-size:12px}
@@ -382,6 +387,7 @@ PAGE_HTML = """<!doctype html>
     </tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  <section id="metrics" class="cards"></section>
   <details><summary>规则（这份看板背后的政策）</summary><pre id="policy"></pre></details>
   <div class="foot">数据来自 <code>world/ops/evolution_policy.py</code> 生成的两份文件，与共享笔记树同源。</div>
 </main>
@@ -415,6 +421,16 @@ async function tick(){
       + `<td>${x.knowledgeFreshMinutes!=null?Math.round(x.knowledgeFreshMinutes)+' 分钟前':'—'}</td>`
       + `<td>${flags}</td></tr>`;
   }).join('');
+  const m = d.metrics || {}, sk = m.skillLevel || {}, cs = m.cases || {};
+  const ages = (m.flagAges || []).slice(0, 3);
+  document.getElementById('metrics').innerHTML = [
+    ['技能级产出', (sk.drafts ?? 0) + ' / ' + (sk.activated ?? 0) + ' / ' + (sk.sharedPublished ?? 0),
+      '草稿 / 已启用 / 已发布共享', (sk.drafts ? '' : 'warn')],
+    ['工单', Object.entries(cs.counts || {}).map(([k, v]) => k + ' ' + v).join(' · ') || '—',
+      '已结单中位处理 ' + (cs.resolutionMedianMinutes ?? '—') + ' 分钟', ''],
+    ['红旗年龄', ages.length ? ages.map(a => Math.round(a.minutes) + '′').join(' / ') : '—',
+      ages.length ? ages.map(a => a.flag.split('|')[0]).join(' / ') : '暂无历史', ages.length > 60 * 24 ? 'bad' : '']
+  ].map(([t, v, n, c]) => `<div class="card2"><div class="t">${t}</div><div class="v ${c}">${v}</div><div class="n">${n}</div></div>`).join('');
   try{
     const p = await (await fetch('policy.json?ts='+Date.now())).json();
     document.getElementById('policy').textContent = JSON.stringify({

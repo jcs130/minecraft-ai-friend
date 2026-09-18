@@ -65,6 +65,28 @@ def reserve_review(tools, job_id, clock=time.time):
         return {'ok': True, 'runId': run_id}
 
 
+
+BOARD_STAMP_SECONDS = 1500
+
+
+def _refresh_board(tools):
+    """按节流刷新元层看板与指标；永不抛异常、永不起模型。"""
+    try:
+        stamp = Path(tools.root) / 'board-refresh.json'
+        now = time.time()
+        if stamp.exists():
+            try:
+                if now - (json.loads(stamp.read_text(encoding='utf-8')).get('at') or 0) < BOARD_STAMP_SECONDS:
+                    return
+            except (OSError, ValueError):
+                pass
+        import evolution_policy
+        evolution_policy.write_outputs()
+        write(stamp, {'schema': 1, 'at': now, 'by': 'cron_guard'})
+    except Exception:
+        return
+
+
 async def guarded_execute(executor, job, original, runtime, factory=LearningTools):
     role = executor._workspace.agent_id
     from world_team_hosts import logical_actor, require_host
@@ -80,6 +102,10 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
     state = Path(executor._workspace.workspace_dir).parent.parent
     tools = factory(role, runtime, state=state)
     managed = job.id == 'qd-learning-' + policy_role and job.meta.get('project') == 'qiandengji'
+    # 看板与指标每小时跟着班次刷新一次 —— 这样"被发现多久没处理"的数字才会自己往前走，
+    # 而且不需要新建一个 cron。**绝不能让它影响班次**：任何异常都吞掉，最坏只是看板旧一轮。
+    _refresh_board(tools)
+
     def skipped(code):
         record = {'schema': 1, 'role': policy_role, 'jobId': job.id, 'checkedAt': time.time(),
             'status': 'skipped', 'code': code, 'modelCalls': 0}
