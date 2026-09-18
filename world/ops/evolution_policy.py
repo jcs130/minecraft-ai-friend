@@ -443,20 +443,21 @@ def write_pawapp(policy, rows):
 
 
 def proposals():
-    """待审提议 —— 提了没人看就等于没提，所以它必须出现在看板上。"""
-    folder = NOTES / 'policy-proposals'
-    rows = []
-    if folder.is_dir():
-        for path in sorted(folder.glob('*.json'))[:60]:
-            try:
-                value = json.loads(path.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                continue
-            rows.append({'file': path.name, 'role': value.get('submittedBy'),
-                         'status': value.get('status'), 'note': (value.get('note') or '')[:80],
-                         'knobs': [c.get('knob') for c in (value.get('accepted') or [])],
-                         'problems': value.get('problems') or []})
-    return rows
+    """待审的政策提议 —— 读**世界的工单系统**，不是自己的私有目录。
+
+    曾经我在这里另起过一套 policy-proposals/ 载体；那是重复造轮子：工单系统早有
+    case id、dedupe、owner、status 与版本。现在这里只做一件事：把 category=improvement
+    的未结工单读出来，让"提了没人看"不可能发生。
+    """
+    try:
+        from world_team import TeamStore
+        result = TeamStore('game:mc-god').cases(owner='all', include_closed=False, limit=30)
+    except Exception as error:
+        return [{'error': type(error).__name__}]
+    return [{'id': row.get('id'), 'role': row.get('author'), 'owner': row.get('owner'),
+             'status': row.get('status'), 'version': row.get('version'),
+             'title': (row.get('title') or '')[:70]}
+            for row in result.get('cases', []) if row.get('category') == 'improvement']
 
 
 def write_outputs():
@@ -499,11 +500,11 @@ def write_outputs():
     body = header + '\n'.join(lines) + '\n'
     pending = proposals()
     if pending:
-        body += ('\n## 待审的政策提议（第 2 层）\n\n'
-                 '| 提交者 | 状态 | 想改什么 | 说明 |\n|---|---|---|---|\n')
-        body += '\n'.join('| %s | %s | %s | %s |' % (
-            row['role'], row['status'], '、'.join(row['knobs']) or '—', row['note'])
-            for row in pending) + '\n'
+        body += ('\n## 待审的改进提议（工单系统 · category=improvement）\n\n'
+                 '| 工单 | 提交者 | 状态 | 归属 | 标题 |\n|---|---|---|---|---|\n')
+        body += '\n'.join('| %s | %s | %s | %s | %s |' % (
+            row.get('id', '—'), row.get('role', '—'), row.get('status', '—'),
+            row.get('owner') or '未指派', row.get('title', '')) for row in pending) + '\n'
     (NOTES / 'evolution-board.md').write_text(body, encoding='utf-8')
     (NOTES / 'evolution-board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False, indent=1),
