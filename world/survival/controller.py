@@ -1841,7 +1841,14 @@ class Controller:
                     # turn - so by the time control flow reaches here there is nothing
                     # left to cancel or wait for, and only the stale control.json reason
                     # keeps the lane down. That is exactly what held Kirito at cycles=88.
-                    control.update(enabled=True, pauseReason=None)
+                    # The write must mirror pause(): re-read under the same lock and write
+                    # the file, because the in-memory control dict never reaches disk and
+                    # the next tick reads the file again.
+                    with action_lock(self.root, blocking=True):
+                        latest = (read_json(self.root / 'control.json')
+                                  if (self.root / 'control.json').exists() else {'schema': 1})
+                        latest.update(enabled=True, pauseReason=None)
+                        write_json(self.root / 'control.json', latest)
                     self.data.pop('pauseReason', None)
                     self.data['status'] = 'waiting'
                 elif task_id:
@@ -1872,10 +1879,13 @@ class Controller:
                         self.data.pop('pauseReason', None)
                         self.data['status'] = 'waiting'
                         # pause() also wrote control.json (enabled=False + the reason) and
-                        # that file is what actually holds the lane down. Lifting only the
-                        # data-side reason left Kirito reading as paused with nothing to
-                        # resume him. This mirrors the write body_reconnect uses.
-                        control.update(enabled=True, pauseReason=None)
+                        # that file is what actually holds the lane down. Mirror that write
+                        # exactly - re-read under the lock, then persist.
+                        with action_lock(self.root, blocking=True):
+                            latest = (read_json(self.root / 'control.json')
+                                      if (self.root / 'control.json').exists() else {'schema': 1})
+                            latest.update(enabled=True, pauseReason=None)
+                            write_json(self.root / 'control.json', latest)
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:
