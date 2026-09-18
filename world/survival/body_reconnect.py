@@ -169,7 +169,12 @@ class BodyReconnect:
         resume_after_restore = (control.get('enabled') is not True
                                 and control.get('pauseReason') in BODY_PAUSE_REASONS)
         if ((control.get('enabled') is not True and not resume_after_restore)
-                or controller.get('active')
+                # A decision record left over from the moment the body disappeared must
+                # not block the restore: a body-loss pause means that decision cannot
+                # proceed at all, which is precisely why this channel is kept open for
+                # it. Without this the two guards contradict each other and nothing
+                # restores the body - observed live on 2026-09-18.
+                or (controller.get('active') and not resume_after_restore)
                 or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'
                 or (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
             return {'status': 'waiting', 'reason': 'restore_not_authorized'}
@@ -251,7 +256,12 @@ class BodyReconnect:
         resume_after_restore = (control.get('enabled') is not True
                                 and control.get('pauseReason') in BODY_PAUSE_REASONS)
         if ((control.get('enabled') is not True and not resume_after_restore)
-                or controller.get('active')
+                # A decision record left over from the moment the body disappeared must
+                # not block the restore: a body-loss pause means that decision cannot
+                # proceed at all, which is precisely why this channel is kept open for
+                # it. Without this the two guards contradict each other and nothing
+                # restores the body - observed live on 2026-09-18.
+                or (controller.get('active') and not resume_after_restore)
                 or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'
                 or (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
             return {'status': 'waiting', 'reason': 'restore_not_authorized'}

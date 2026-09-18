@@ -1,3 +1,12 @@
+"""ONE-OFF operator reconcile for the 2026-09-14 goto hang.
+
+Not a reusable tool: its constants (actionId, taskId, sha) are pinned to that
+single incident. Written out because the codebase lacked a generic path for an
+in-flight action whose navigation terminal can never arrive; that generic path
+now exists in numen_gateway._settle_inflight (epoch change -> observed-ended), so
+a future hang of this class should not need a script like this one.
+"""
+
 """One operator-only observed-effect resolution for Kirito's 2026-09-14 goto.
 
 Default is read-only. --execute qiandengji archives evidence and a resolution

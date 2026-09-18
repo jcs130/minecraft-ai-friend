@@ -1002,7 +1002,25 @@ class Controller:
                           ('native_final_answer_missing' if native_completed and not answer else 'native_task_failed'))
         from inference_errors import classify_inference_error, TRANSIENT_KINDS, next_backoff
         inference_failure = None
-        if not completed:
+        # A doom loop is not a model failure: the model answered, repeatedly, and the
+        # runtime stopped it. Calling that an unknown inference error both hides the
+        # cause and mislabels the pause, and the repetition itself is the stagnation
+        # this world's evolution pipeline exists to break.
+        doom_loop = failure_reason == 'native_doom_loop'
+        if doom_loop:
+            self.data['lastFailureReason'] = failure_reason
+            inference_failure = {'kind': 'doom_loop', 'code': 'native_doom_loop',
+                                 'summary': '模型没有失败：它连续重复同一动作，被运行时判为死循环而停下',
+                                 'taskId': active['taskId'], 'turnId': active['turnId'],
+                                 'observedAt': int(self.clock() * 1000)}
+            try:
+                import json as _json, time as _time
+                with (self.root / 'crystallization-ledger.jsonl').open('a', encoding='utf-8') as _stream:
+                    _stream.write(_json.dumps({'at': _time.time(), 'kind': 'doom_loop',
+                                               'turnId': active['turnId']}, ensure_ascii=False) + '\n')
+            except (OSError, ValueError):
+                pass
+        elif not completed:
             inference_failure = (terminal.get('inferenceFailure') if terminal else None)
             if inference_failure is None:
                 # Only a confirmed native failure can justify a new later turn.
@@ -1033,6 +1051,8 @@ class Controller:
             job = read_json(job_path) if job_path.exists() else {}
             queued_skill = job.get('turnId') == active['turnId'] and job.get('status') in ('pending', 'running')
             acted = any(row.get('result', {}).get('ok') is True for row in actions)
+            if completed:
+                self.data.pop('lastFailureReason', None)
             self.data['noActionReviews'] = (min(6, self.data.get('noActionReviews', 0) + 1)
                                            if completed and not acted and not queued_skill else 0)
         if active.get('partyReservation') and self.party:
@@ -1091,7 +1111,11 @@ class Controller:
                 self.data.pop('inferenceBackoff', None)
                 self.data['failures'] = self.data.get('failures', 0) + 1
                 if self.data['failures'] >= 2:
-                    self.pause('repeated_model_failure')
+                    # Name what actually happened. "repeated_model_failure" reads as a
+                    # broken model; a doom loop means the model kept choosing the same
+                    # action, which is an approach problem with a known remedy.
+                    self.pause('doom_loop' if self.data.get('lastFailureReason') == 'native_doom_loop'
+                               else 'repeated_model_failure')
         self.save()
 
     def deliver_party_terminal(self, active, *, allow_dispatch=True):
