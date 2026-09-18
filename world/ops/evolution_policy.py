@@ -257,7 +257,9 @@ def write_outputs():
     # 控制台只按工作区浏览文件（越界预览默认关闭），所以除了共享笔记树，还要镜像一份
     # 进一个**已启用**的 agent 工作区，这样在 QwenPaw 的 Web 面板里点开就能看到。
     mirrored = []
-    for role in ('mc-god', 'qd-survivor'):
+    # mc-god = 灯语女神·世界管理，qd-steward = 司灯（项目协调人），qd-survivor = 桐人：
+    # 三个都已启用，面板里点开工作区就能看到。角色自己也可以读共享那份。
+    for role in ('mc-god', 'qd-steward', 'qd-survivor'):
         folder = WORKSPACES / role
         if not folder.is_dir():
             continue
