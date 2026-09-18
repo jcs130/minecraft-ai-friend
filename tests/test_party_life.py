@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'world/sidecar'), str(ROOT / 'world/ops')]
 from party_bridge import PartyBridge
 from party_config import FIELDS
-from party_life import PartyLife
+from party_life import ABANDON_STALL_SECONDS, PartyLife
 from party_life_schedule import JOB_ID, ROLE, managed_job, validate_job, publish_signal, execute
 from party_role_capabilities import YUI_BODY_UUID, SURVIVOR_BODY_UUID
 from qwen_tasks import QwenTasks, write_json
@@ -152,7 +152,7 @@ class PartyLifeTests(unittest.TestCase):
 
     def test_missing_record_after_ack_is_unknown_not_new_submission(self):
         self.signal(); self.life.tick()
-        state = json.loads((self.root / 'life/controller.json').read_text())
+        state = json.loads((self.root / 'life/controller.json').read_text(encoding='utf-8'))
         self.tasks._path('maid_dialogue', state['active']['key']).unlink()
         self.assertEqual(self.life.tick()['status'], 'request_ledger_missing')
         self.assertEqual(len(self.posts), 1)
@@ -167,23 +167,23 @@ class PartyLifeTests(unittest.TestCase):
     def test_old_active_finishes_then_latest_three_minute_signal_keeps_original_session(self):
         self.signal(); self.life.tick()
         path = self.root / 'life/controller.json'
-        saved = json.loads(path.read_text())
+        saved = json.loads(path.read_text(encoding='utf-8'))
         saved['active'].pop('slotSeconds')  # Actual legacy persisted intent.
         write_json(path, saved)
         original_active = deepcopy(saved['active'])
         self.signal(8, 180); self.now = 1441; self.life.tick()
         self.signal(9, 180); self.now = 1621; self.life.tick()
         self.assertEqual(len(self.posts), 1)
-        self.assertEqual(json.loads(path.read_text())['active']['prompt'], original_active['prompt'])
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['active']['prompt'], original_active['prompt'])
         self.status = 'finished'; self.now += 11; self.life.tick()
-        finished = json.loads(path.read_text())
+        finished = json.loads(path.read_text(encoding='utf-8'))
         self.assertEqual((finished['lastSlot'], finished['lastSlotSeconds']), (2, 600))
         self.assertEqual(finished['lastResult']['signalId'], JOB_ID + ':600:2')
         self.status = 'running'; self.life.tick()
         self.assertEqual(len(self.posts), 2)
         self.assertEqual(self.life.summary()['active']['signalId'], JOB_ID + ':180:9')
         self.assertEqual(self.posts[0][1]['session_id'], self.posts[1][1]['session_id'])
-        self.assertEqual(json.loads(path.read_text())['active']['slotSeconds'], 180)
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['active']['slotSeconds'], 180)
 
     def test_epoch_comparison_does_not_replay_older_larger_slot_after_migration(self):
         path = self.root / 'life/controller.json'
@@ -196,7 +196,7 @@ class PartyLifeTests(unittest.TestCase):
         self.signal(7, 180); self.now = 1261; self.life.tick()
         self.assertEqual(len(self.posts), 1)
         self.now += 11; self.status = 'finished'; self.life.tick()
-        self.assertEqual(json.loads(path.read_text())['lastSlotSeconds'], 180)
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['lastSlotSeconds'], 180)
         self.life.tick()
         self.assertEqual(len(self.posts), 1)
         self.signal(2); self.life.tick()
@@ -245,7 +245,7 @@ class PartyLifeTests(unittest.TestCase):
     def test_session_change_blocks_active_task(self):
         self.signal(); self.life.tick()
         self.members[0]['sessionId'] = 'other-session'
-        config = json.loads((self.root / 'binding.json').read_text()); config['members'] = self.members
+        config = json.loads((self.root / 'binding.json').read_text(encoding='utf-8')); config['members'] = self.members
         write_json(self.root / 'binding.json', config)
         with self.assertRaisesRegex(ValueError, 'party_life_session_changed'): self.life.tick()
         self.assertEqual(len(self.posts), 1)
@@ -258,7 +258,7 @@ class PartyLifeTests(unittest.TestCase):
 
     def test_recovery_between_claim_and_submit_uses_original_prompt(self):
         self.signal(); self.native_busy = True; self.life.tick()
-        saved = json.loads((self.root / 'life/controller.json').read_text())
+        saved = json.loads((self.root / 'life/controller.json').read_text(encoding='utf-8'))
         self.native_busy = False; self.signal(3)
         self.life.tick()
         self.assertEqual(self.posts[0][1]['input'][0]['content'][0]['text'], saved['active']['prompt'])
@@ -368,12 +368,82 @@ class PartyLifeTests(unittest.TestCase):
 
     def test_failed_round_does_not_replace_previous_valid_continuation(self):
         self.signal(); self.life.tick(); self.now += 11; self.status = 'finished'; self.life.tick()
-        before = json.loads((self.root / 'life/controller.json').read_text())['continuation']
+        before = json.loads((self.root / 'life/controller.json').read_text(encoding='utf-8'))['continuation']
         self.signal(3); self.now += 600; self.status = 'running'; self.life.tick()
         self.now += 11; self.status = 'failed'; self.life.tick()
-        after = json.loads((self.root / 'life/controller.json').read_text())
+        after = json.loads((self.root / 'life/controller.json').read_text(encoding='utf-8'))
         self.assertEqual(after['continuation'], before)
         self.assertEqual(after['lastResult']['status'], 'failed')
+
+    def test_stalled_round_is_released_with_a_receipt_after_the_window(self):
+        self.signal(); self.life.tick()
+        path = self.root / 'life/controller.json'
+        key = json.loads(path.read_text(encoding='utf-8'))['active']['key']
+        self.drop_get = True; self.now += 700
+        self.assertEqual(self.life.tick()['status'], 'poll_unavailable')
+        self.now += ABANDON_STALL_SECONDS
+        released = self.life.tick()
+        self.assertEqual(released['status'], 'abandoned')
+        self.assertIsNone(released['active'])
+        self.assertEqual((released['lastSlot'], released['lastSlotSeconds']), (2, 600))
+        record = released['lastResult']
+        self.assertEqual(record['status'], 'abandoned')
+        self.assertEqual(record['stallStatus'], 'poll_unavailable')
+        self.assertEqual(record['taskId'], 'task-000000000001')
+        self.assertEqual(record['signalId'], JOB_ID + ':600:2')
+        self.assertFalse(record['resultVerified'])
+        self.assertGreaterEqual(record['unobservableSeconds'], ABANDON_STALL_SECONDS)
+        saved = json.loads((self.root / 'life/receipts' / (key + '.json')).read_text(encoding='utf-8'))
+        self.assertEqual(saved['status'], 'abandoned')
+        self.assertEqual(saved['reason'], 'poll_unobservable_for_seconds')
+        # Released means the lane moves on. Admission of the next submission still
+        # belongs to the QwenTasks role gate, which this never overrides.
+        self.signal(4); self.now += 700
+        self.assertEqual(self.life.tick()['status'], 'busy')
+        self.assertEqual(self.life.summary()['active']['signalId'], JOB_ID + ':600:4')
+        self.assertEqual(len(self.posts), 1)
+
+    def test_stalled_round_below_the_window_is_left_alone(self):
+        self.signal(); self.life.tick()
+        path = self.root / 'life/controller.json'
+        key = json.loads(path.read_text(encoding='utf-8'))['active']['key']
+        ledger = self.tasks._path('maid_dialogue', key)
+        self.drop_get = True; self.now += 700
+        self.assertEqual(self.life.tick()['status'], 'poll_unavailable')
+        first = json.loads(path.read_text(encoding='utf-8'))['active']['stalledSince']
+        self.assertEqual(first, self.now)
+        for polls, step in enumerate((11, 60, 600, ABANDON_STALL_SECONDS - 672), start=2):
+            self.now += step
+            state = self.life.tick()
+            self.assertEqual(state['status'], 'poll_unavailable')
+            self.assertIsNotNone(state['active'])
+            self.assertEqual(state['active']['stalledSince'], first)
+            self.assertEqual(state['active']['stallPolls'], polls)
+        self.assertLess(self.now - first, ABANDON_STALL_SECONDS)
+        self.assertFalse((self.root / 'life/receipts' / (key + '.json')).exists())
+        self.assertNotIn('abandoned', json.loads(path.read_text(encoding='utf-8')))
+        self.assertTrue(ledger.exists())
+        self.assertEqual(len(self.posts), 1)
+
+    def test_a_task_the_ledger_can_still_see_is_never_abandoned(self):
+        self.signal(); self.life.tick()
+        path = self.root / 'life/controller.json'
+        self.drop_get = True; self.now += 700
+        self.assertEqual(self.life.tick()['status'], 'poll_unavailable')
+        self.assertIn('stalledSince', json.loads(path.read_text(encoding='utf-8'))['active'])
+        # The ledger can see the task again, so the window is cleared, not paused.
+        self.drop_get = False; self.now += 11
+        running = self.life.tick()
+        self.assertEqual(running['status'], 'running')
+        self.assertNotIn('stalledSince', running['active'])
+        for _ in range(3):
+            self.now += ABANDON_STALL_SECONDS
+            state = self.life.tick()
+            self.assertEqual(state['status'], 'running')
+            self.assertIsNotNone(state['active'])
+            self.assertNotIn('stalledSince', state['active'])
+        self.assertEqual(self.life.summary()['active']['taskId'], 'task-000000000001')
+        self.assertEqual(len(self.posts), 1)
 
 
 class PartyLifeScheduleTests(unittest.TestCase):

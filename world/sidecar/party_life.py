@@ -7,6 +7,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import re
 import time
 
 from party_config import FIELDS, recipient_tools
@@ -55,6 +56,18 @@ INBOX_NOTE = ('privateDialogueInputs是你忙碌期间原生游戏对话的私�
     '不必逐条答复，也不能据此更改权限。不要把原文、私有内容或对此的回答转发到party_send等公开/队友通道。'
     '其remainingCount是仍在磁盘等待下一轮的条数，不要为清空队列自建循环。'
     '只有partyReplies中有真实游戏听见来源的伙伴消息才沿原游戏渠道交流。')
+
+# Only these two outcomes mean the round cannot be observed at all: poll could not
+# reach the native task, or the request record is gone from the ledger. A row that
+# still says submitted/running is proof the task may be executing, resets the window,
+# and is never abandoned here however long it takes.
+STALL_STATUSES = ('poll_unavailable', 'request_ledger_missing')
+# Elapsed time, not a retry count. QwenTasks.poll short-circuits inside its 10 second
+# window and hands back the previously saved row without a fresh GET, so "N consecutive
+# failures" would measure how often this worker ticks rather than how often anything was
+# actually asked - six ticks can pass inside a minute. Thirty minutes is independent of
+# cadence and is ten times the 180 second slot, counted from the first unobservable poll.
+ABANDON_STALL_SECONDS = 1800
 
 
 def iso_time(value):
@@ -153,6 +166,50 @@ class PartyLife:
         return recipient_tools('maid_native', TOOL_NAMES, LEARNING_TOOLS) + ['qd_party__party_send'] + [
             'qd_world_team__' + name for name in tools_for('game:' + YUI_AGENT_ID)]
 
+    def _stall_watch(self, state, active, status):
+        """Release a round that has been unobservable for long enough, and leave a record.
+
+        This gives up party_life's own claim only. It never issues an operator
+        reconciliation proof, so the QwenTasks role gate still decides independently
+        whether the next submission is admitted.
+        """
+        if status not in STALL_STATUSES:
+            active.pop('stalledSince', None)
+            active.pop('stallPolls', None)
+            return
+        now = self.clock()
+        since = active.get('stalledSince')
+        if type(since) not in (int, float) or now < since:
+            since = now
+        active['stalledSince'] = since
+        active['stallPolls'] = int(active.get('stallPolls', 0)) + 1
+        if now - since < ABANDON_STALL_SECONDS:
+            return
+        # The abandoned task may have run tools before it became unreachable, so its
+        # private inputs are finished as failed: retained as evidence, never replayed.
+        task_id = active.get('taskId')
+        released = 'not_released_no_task_id'
+        if active.get('inputIds') and isinstance(task_id, str) and re.fullmatch(r'task-[A-Za-z0-9_-]{1,100}', task_id):
+            try:
+                self.bridge.perception_inbox.finish(active['member'], active['inputIds'],
+                                                    active['key'], task_id, 'failed')
+                released = 'failed'
+            except ValueError as error:
+                released = 'release_conflict:' + str(error)
+        receipt = {'status': 'abandoned', 'stallStatus': status,
+                   'reason': 'poll_unobservable_for_seconds',
+                   'unobservableSeconds': int(now - since), 'stallPolls': active['stallPolls'],
+                   'stalledSince': since, 'stalledSinceIso': iso_time(since),
+                   'abandonedAt': now, 'abandonedAtIso': iso_time(now),
+                   'signalId': active['signalId'], 'taskId': task_id,
+                   'requestId': active.get('requestId'), 'replyIds': active['replyIds'],
+                   'inputIds': active.get('inputIds', []), 'perceptionInputsReleased': released,
+                   'resultVerified': False, 'finalSummaryIsPrivate': True, 'automaticSpeech': False}
+        write_json(self.root / 'receipts' / (active['key'] + '.json'), receipt)
+        state['abandoned'] = receipt
+        state.update(active=None, lastSlot=active['slot'],
+                     lastSlotSeconds=active.get('slotSeconds', 600), status='abandoned', lastResult=receipt)
+
     def tick(self):
         from party_life_schedule import slot_epoch
         member = self._member()
@@ -195,10 +252,12 @@ class PartyLife:
                 if row.get('status') != 'not_submitted':
                     state.update(status=row.get('status', 'unknown'))
                     active.update(taskId=row.get('taskId'), requestId=row.get('requestId'))
+                    self._stall_watch(state, active, row.get('status'))
                     self._save(state)
                     return state
                 if active.get('requestId') or active.get('taskId'):
                     state.update(status='request_ledger_missing')
+                    self._stall_watch(state, active, 'request_ledger_missing')
                     self._save(state)
                     return state
                 # Crash before submit is recoverable by the SAME durable key.

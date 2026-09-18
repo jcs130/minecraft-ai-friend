@@ -38,6 +38,69 @@ def tail(path, limit=8):
     return values
 
 
+# Asking the model to go find its own repeating problem produced eleven asks and zero
+# drafts: discovery plus evidence gathering is too heavy for a survival hot path, so it
+# loses every time. These hand it a pattern that is already proven by the ledgers.
+EVOLUTION_CANDIDATE_CYCLES = (3, 9, 27)
+EPISODE_TAIL_ROWS = 200
+MIN_PATTERN_REPEATS = 3
+MAX_QUOTED_EPISODES = 3
+MAX_CANDIDATE_CHARS = 900
+
+
+def evolution_candidate(state_dir):
+    """One repeating pattern, quoted from ledgers that already exist. Pure and read-only.
+
+    Pattern names come from pattern-cooldown.json, which the detector only writes once a
+    sequence has already repeated. Counts and receipts come from the tail of
+    episodes.jsonl. Nothing here is inferred, so every line can be grepped back to a file.
+    Returns '' when nothing qualifies, leaving the prompt byte-identical.
+    """
+    root = Path(state_dir)
+    try:
+        cooldown = json.loads((root / 'pattern-cooldown.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return ''
+    if not isinstance(cooldown, dict):
+        return ''
+    names = sorted(k for k in cooldown
+                   if isinstance(k, str) and len(k.split('|')) >= 2 and all(k.split('|')))
+    if not names:
+        return ''
+    episodes = [row for row in tail(root / 'episodes.jsonl', EPISODE_TAIL_ROWS)
+                if isinstance(row, dict) and row.get('kind') == 'action_observed'
+                and isinstance(row.get('action'), str) and isinstance(row.get('at'), str)]
+    actions = [row['action'] for row in episodes]
+    best, hits = None, []
+    for name in names:
+        parts = name.split('|')
+        found, index = [], 0
+        while index <= len(actions) - len(parts):
+            if actions[index:index + len(parts)] == parts:
+                found.append(episodes[index + len(parts) - 1])
+                index += len(parts)
+            else:
+                index += 1
+        if len(found) > len(hits):
+            best, hits = name, found
+    if best is None or len(hits) < MIN_PATTERN_REPEATS:
+        return ''
+    lines = ['【进化候选·台账取证】模式 %s 在 episodes.jsonl 尾部这段真实轨迹里重复出现了 %d 次；'
+             '模式名取自 pattern-cooldown.json，次数是逐条数出来的，不是估计。' % (best, len(hits)),
+             '逐字回执（时间 / 动作 / 结果）：']
+    lines += ['- %s %s %s' % (row['at'], row['action'], row.get('receiptStatus'))
+              for row in hits[-MAX_QUOTED_EPISODES:]]
+    try:
+        tracked = json.loads((root / 'stagnation-state.json').read_text(encoding='utf-8')).get('tracked')
+    except (OSError, ValueError):
+        tracked = None
+    if isinstance(tracked, dict) and tracked:
+        lines.append('stagnation-state.json 里还登记着 %d 个曾经卡住不动的不同目标。' % len(tracked))
+    lines.append('问题已经替你找到了，不用再自己发现：本轮二选一——用 learning_draft 把这个重复流程'
+                 '固化成技能，或写一句它为什么不值得固化。')
+    return '\n'.join(lines)[:MAX_CANDIDATE_CHARS]
+
+
 def life_planning_subject(mission, memory, decisions, mission_changed_at=0):
     """A bounded recall hint, never a replacement for the operator's mission.
 
@@ -1367,6 +1430,13 @@ class Controller:
             '你验证并启用的技能会发布到世界共享库，**其他角色可以直接继承**——'
             '这就是你这一班能留给这个世界的、比多收一筐麦子更久的东西。'
             + ('（你已经 %d 个班次没有产出任何草稿了。）' % provider['cyclesSince'] if provider.get('cyclesSince') else ''))
+        # Gate first: on an ordinary turn the three ledgers are never even opened.
+        # Appending to a dict value keeps json.dumps in charge of escaping, so the
+        # prompt still parses after split('\n', 1)[1].
+        candidate = (evolution_candidate(self.root)
+                     if provider.get('cyclesSince') in EVOLUTION_CANDIDATE_CYCLES else '')
+        if candidate:
+            context['instruction'] += candidate
 
         pivot = self.data.pop('stagnationHint', None)
         if pivot:
