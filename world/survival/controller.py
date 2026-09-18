@@ -970,6 +970,22 @@ class Controller:
         job = read_json(job_path) if job_path.exists() else {}
         value['executionSystems'] = systems_status(self.data, job, now)
         write_json(self.public, value)
+        # 动作连贯性指标：节流计算、写共享位置给元层看板读。
+        # 与看板刷新同样的纪律 —— 指标绝不能让被度量的东西坏掉：任何异常都吞掉。
+        try:
+            stamp_path = self.root / 'coherence-stamp.json'
+            last = 0
+            if stamp_path.exists():
+                try:
+                    last = json.loads(stamp_path.read_text(encoding='utf-8')).get('at') or 0
+                except (OSError, ValueError):
+                    last = 0
+            if now - last >= 300:
+                import coherence
+                coherence.write(self.data)
+                write_json(stamp_path, {'schema': 1, 'at': now})
+        except Exception:
+            pass
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
             'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1})

@@ -421,13 +421,17 @@ async function tick(){
       + `<td>${x.knowledgeFreshMinutes!=null?Math.round(x.knowledgeFreshMinutes)+' 分钟前':'—'}</td>`
       + `<td>${flags}</td></tr>`;
   }).join('');
-  const m = d.metrics || {}, sk = m.skillLevel || {}, cs = m.cases || {};
+  const m = d.metrics || {}, sk = m.skillLevel || {}, cs = m.cases || {}, sv = m.survival || {};
   const ages = (m.flagAges || []).slice(0, 3);
   document.getElementById('metrics').innerHTML = [
     ['技能级产出', (sk.drafts ?? 0) + ' / ' + (sk.activated ?? 0) + ' / ' + (sk.sharedPublished ?? 0),
       '草稿 / 已启用 / 已发布共享', (sk.drafts ? '' : 'warn')],
     ['工单', Object.entries(cs.counts || {}).map(([k, v]) => k + ' ' + v).join(' · ') || '—',
       '已结单中位处理 ' + (cs.resolutionMedianMinutes ?? '—') + ' 分钟', ''],
+    ['动作连贯性', sv.closedLoop ? ('闭环 ' + Math.round((sv.closedLoop.rate ?? 0) * 100) + '%') : '—',
+      sv.repeats ? ('重复占比 ' + Math.round((sv.repeats.share ?? 0) * 100) + '% · 停滞目标 ' + ((sv.stalledGoals || {}).count ?? '—')
+        + ' · 最长决策间隔 ' + Math.round(((sv.decisionGaps || {}).maxSeconds ?? 0) / 60) + '′') : '等生存侧写首个文件',
+      sv.closedLoop && (sv.closedLoop.rate ?? 1) < 0.5 ? 'bad' : ''],
     ['红旗年龄', ages.length ? ages.map(a => Math.round(a.minutes) + '′').join(' / ') : '—',
       ages.length ? ages.map(a => a.flag.split('|')[0]).join(' / ') : '暂无历史', ages.length > 60 * 24 ? 'bad' : '']
   ].map(([t, v, n, c]) => `<div class="card2"><div class="t">${t}</div><div class="v ${c}">${v}</div><div class="n">${n}</div></div>`).join('');
@@ -581,8 +585,21 @@ def metrics(rows):
     """
     drafts, activated, published = _learning_totals()
     cases = _case_totals()
+    survival = None
+    try:
+        shared = Path('/public/survival-metrics.json')
+        if shared.exists():
+            value = json.loads(shared.read_text(encoding='utf-8'))
+            survival = {'at': value.get('at'), 'ageMinutes': round((time.time() - (value.get('at') or 0)) / 60, 1),
+                        'closedLoop': value.get('closedLoop'), 'repeats': value.get('repeats'),
+                        'decisionGaps': value.get('decisionGaps'), 'stalledGoals': value.get('stalledGoals'),
+                        'noOutputSignals': value.get('noOutputSignals'),
+                        'noActionReviews': value.get('noActionReviews')}
+    except Exception:
+        survival = None
     report = {
         'schema': 1, 'generatedAt': time.time(),
+        'survival': survival,
         'skillLevel': {'drafts': drafts, 'activated': activated, 'sharedPublished': published,
                        'inherited': None,
                        'inheritedNote': '没有记录：learning/index.json 未记技能来源角色，'
@@ -657,13 +674,23 @@ def write_outputs():
              '（继承率：%s）\n'
              '- 工单：%s；已结单样本 %s 条，中位处理时长 %s 分钟\n'
              '- 红旗年龄（被发现了多久还没处理，最老三条）：%s\n'
+             '%s\n'
              % (skill['drafts'], skill['activated'], skill['sharedPublished'],
                 skill['inheritedNote'] if skill['inherited'] is None else skill['inherited'],
                 json.dumps(numbers['cases'].get('counts', {}), ensure_ascii=False),
                 numbers['cases'].get('resolvedSampled'),
                 numbers['cases'].get('resolutionMedianMinutes'),
                 '、'.join('%s=%.0f 分钟' % (item['flag'], item['minutes'])
-                          for item in numbers['flagAges'][:3]) or '无'))
+                          for item in numbers['flagAges'][:3]) or '无',
+                ('- 动作连贯性（生存侧自算，%.0f 分钟前）：闭环率 %s；重复占比 %s；决策间隔中位/最长 %ss/%ss；停滞目标 %s 个（最老 %s 分钟）'
+                 % (numbers['survival']['ageMinutes'],
+                    numbers['survival']['closedLoop'].get('rate') if numbers['survival'].get('closedLoop') else '—',
+                    numbers['survival']['repeats'].get('share') if numbers['survival'].get('repeats') else '—',
+                    (numbers['survival']['decisionGaps'] or {}).get('medianSeconds'),
+                    (numbers['survival']['decisionGaps'] or {}).get('maxSeconds'),
+                    (numbers['survival']['stalledGoals'] or {}).get('count'),
+                    (numbers['survival']['stalledGoals'] or {}).get('oldestMinutes')))
+                if numbers.get('survival') else '- 动作连贯性：生存侧还没写出共享文件（等下一个周期）'))
     (NOTES / 'evolution-board.md').write_text(body, encoding='utf-8')
     (NOTES / 'evolution-board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False, indent=1),
