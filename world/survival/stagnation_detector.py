@@ -147,6 +147,32 @@ class StagnationDetector:
                 'corroboration': finding['corroboration']}
         (state.setdefault('lastHintAt', {}))[goal] = now
         self._save(state)
+        # P1 step 4 ("declare the lane"): leave a focus note behind, so the lane and its
+        # exit condition outlive this agent's own memory. The agent writes the reflection
+        # into its lesson; this is the record. It lands in the agent's own state directory
+        # because the role guard keeps file access inside the workspace, and the host side
+        # publishes it to world-notes/focus (see docs/WORLD-NOTES.md).
+        try:
+            folder = self.state_dir / 'focus-notes'
+            folder.mkdir(parents=True, exist_ok=True)
+            slug = re.sub(r'[^0-9a-zA-Z\u4e00-\u9fff]+', '-', finding['goal'])[:40].strip('-') or 'lane'
+            path = folder / ('%s.md' % slug)
+            previous = path.read_text(encoding='utf-8') if path.exists() else ''
+            entry = ('\n- %s 停滞 %d 分钟（状态 %s），环境佐证：%s；要求按四步重定向。'
+                     % (time.strftime('%Y-%m-%d %H:%M', time.localtime(now)),
+                        finding['unchangedSeconds'] // 60, finding['goalState'],
+                        '、'.join(finding['corroboration'])))
+            if not previous:
+                previous = ('# %s\n\n> by %s · %s\n\n'
+                            '- **Posture**: explore\n- **Lane**: %s\n'
+                            '- **Budget**: 由该角色自定；超预算先回营地\n'
+                            '- **Abandon-if**: 同一目标再停滞 20 分钟而无净变化\n'
+                            '- **Why-EV**: 该目标已被判定为停滞，值得换方向而不是继续投入\n\n## 记录\n'
+                            % (finding['goal'][:60], 'qd-survivor',
+                               time.strftime('%Y-%m-%d', time.localtime(now)), finding['goal'][:120]))
+            path.write_text(previous.rstrip() + '\n' + entry + '\n', encoding='utf-8')
+        except (OSError, ValueError):
+            pass
         try:
             self.hint_path.write_text(json.dumps([hint], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         except OSError:

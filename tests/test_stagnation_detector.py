@@ -110,5 +110,29 @@ class DetectorTests(unittest.TestCase):
         self.assertLessEqual(len(state['tracked']), 32)
 
 
+    def test_a_pivot_leaves_a_focus_note_behind(self):
+        """P1 step 4: the lane and its exit condition must outlive the agent's memory."""
+        self.detector.check(HELD_GOAL, NO_OUTPUT)
+        self.now[0] += MIN_STAGNATION_SECONDS + 60
+        self.detector.check(HELD_GOAL, NO_OUTPUT)
+        notes = list((self.root / 'focus-notes').glob('*.md'))
+        self.assertEqual(len(notes), 1)
+        text = notes[0].read_text(encoding='utf-8')
+        for field in ('Posture', 'Lane', 'Budget', 'Abandon-if', 'Why-EV'):
+            self.assertIn(field, text)
+        self.assertIn('停滞', text)
+
+    def test_a_second_pivot_appends_rather_than_overwrites(self):
+        self.detector.check(HELD_GOAL, NO_OUTPUT)
+        self.now[0] += MIN_STAGNATION_SECONDS + 60
+        self.detector.check(HELD_GOAL, NO_OUTPUT)
+        self.now[0] += COOLDOWN_SECONDS + 60
+        self.detector.check(HELD_GOAL, NO_OUTPUT)
+        note = next((self.root / 'focus-notes').glob('*.md'))
+        text = note.read_text(encoding='utf-8')
+        # The header fields mention stagnation too, so count the log entries themselves.
+        self.assertEqual(text.count('环境佐证'), 2)
+        self.assertEqual(text.count('Posture'), 1)   # one header, not two
+
 if __name__ == '__main__':
     unittest.main()
