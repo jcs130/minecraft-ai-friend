@@ -127,6 +127,8 @@ POLICY_JSON = lambda f: {
         'shared': '/state/work/world-notes/',
     },
     'guardVersion': f['guardVersion'],
+    'editableKnobs': EDITABLE_KNOBS,
+    'frozenKnobs': FROZEN_KNOBS,
 }
 
 POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
@@ -162,6 +164,14 @@ POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
 ## 六、角色**不许**碰的东西（改这些要经天神/造物主）
 {forbidden}
 
+## 六之二、角色可以提议改的（第 2 层）
+{freeknobs}
+
+**冻结区**（角色不得提议，须走造物主/天神）：
+{frozen}
+
+提议用 `learning_policy_draft` 提交；批准与否由天神裁决，**激活只能由操作员落地**。
+
 ## 七、机器在哪
 {machinery}
 
@@ -169,6 +179,89 @@ POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
 **看板**：同目录 `evolution-board.md` —— 一角色一行，看谁在动、谁被拦、谁红了。
 """
 
+
+
+# ---- 第 2 层：谁能改"怎么改" ------------------------------------------------
+# 角色可以**提议**改这些；每一支都写明类型与边界，校验器照它判。
+# 这是有意的窄门：只开放"怎么学"，不开放"能不能碰世界"。
+EDITABLE_KNOBS = {
+    'shift.cron': {'kind': 'cron', 'allowed': ['20 * * * *', '20 */2 * * *', '20 10 * * mon'],
+                   'why': '班次节奏：多久敲一次门'},
+    'evidence.trees': {'kind': 'list', 'allowed_values': ['digest', 'notes', 'memory', 'learning/drafts'],
+                       'min': 1, 'max': 4, 'why': '什么算新证据：指纹要不要看这几棵树'},
+    'quota.minPatternRepeats': {'kind': 'int', 'min': 2, 'max': 6,
+                               'why': '台账候选要求同一模式至少重复几次'},
+    'quota.candidateChars': {'kind': 'int', 'min': 300, 'max': 2000,
+                             'why': '喂给角色看的候选块长度上限'},
+    'shift.promptNote': {'kind': 'text', 'max_length': 600,
+                         'why': '本班提示里加一句自己的话（会附在班次提示后）'},
+}
+
+FROZEN_KNOBS = {
+    'permissions': '权限、冷却、守卫名单（tool_guard / denied_tools / guarded_tools）',
+    'adjudication': '神谕裁决与祈愿处理',
+    'credentials': '网络出口与凭据',
+    'auto_disable_threshold': '“两次失败自动停用”这类阈值本身（否则可以自己放宽自己）',
+    'identity': '角色身份、驱动与预算等受管配置',
+    'self_activation': '自己批准自己的提议（激活只能由操作员/天神落地）',
+}
+
+
+def validate_proposal(role, changes, note):
+    """角色提一条"改改进机制"的申请。只做形式与边界校验，不落地任何东西。
+
+    返回 (ok, receipt)。无论通过与否都给出可读理由 —— 拒绝要能说清为什么，
+    否则角色只会盲试。
+    """
+    problems = []
+    if not isinstance(role, str) or not role:
+        problems.append('role_missing')
+    if not isinstance(note, str) or len(note.strip()) < 12:
+        problems.append('note_too_short: 说清为什么该改（至少一句）')
+    if not isinstance(changes, list) or not changes:
+        problems.append('changes_missing')
+    accepted = []
+    for item in (changes or []):
+        if not isinstance(item, dict):
+            problems.append('change_not_object')
+            continue
+        knob = item.get('knob')
+        value = item.get('value')
+        if not isinstance(knob, str):
+            problems.append('knob_missing')
+            continue
+        if knob in FROZEN_KNOBS:
+            problems.append('%s: 这一项属于冻结区（%s）—— 角色不能提议，须走造物主/天神' % (knob, FROZEN_KNOBS[knob]))
+            continue
+        spec = EDITABLE_KNOBS.get(knob)
+        if spec is None:
+            problems.append('%s: 不在可提议清单里' % knob)
+            continue
+        kind = spec['kind']
+        if kind == 'cron':
+            if value not in spec['allowed']:
+                problems.append('%s: 只接受 %s' % (knob, spec['allowed']))
+                continue
+        elif kind == 'int':
+            if type(value) is not int or not spec['min'] <= value <= spec['max']:
+                problems.append('%s: 需要 %d..%d 的整数' % (knob, spec['min'], spec['max']))
+                continue
+        elif kind == 'text':
+            if not isinstance(value, str) or len(value) > spec['max_length']:
+                problems.append('%s: 文本且不超过 %d 字' % (knob, spec['max_length']))
+                continue
+        elif kind == 'list':
+            if (not isinstance(value, list) or not value
+                    or any(v not in spec['allowed_values'] for v in value)
+                    or not spec['min'] <= len(value) <= spec['max']):
+                problems.append('%s: 只能是 %s 里选 %d..%d 项' % (
+                    knob, spec['allowed_values'], spec['min'], spec['max']))
+                continue
+        accepted.append({'knob': knob, 'value': value, 'why': spec['why']})
+    return (not problems), {'schema': 1, 'role': role, 'note': note.strip()[:600],
+                            'accepted': accepted, 'problems': problems,
+                            'status': 'pending_operator_review' if not problems else 'rejected',
+                            'activation': '只能由操作员/天神落地；角色不得自行激活'}
 
 def board_rows():
     rows = []
@@ -349,6 +442,23 @@ def write_pawapp(policy, rows):
             'entry': '/api/pawapps/%s/static/index.html' % PAGE_ID}
 
 
+def proposals():
+    """待审提议 —— 提了没人看就等于没提，所以它必须出现在看板上。"""
+    folder = NOTES / 'policy-proposals'
+    rows = []
+    if folder.is_dir():
+        for path in sorted(folder.glob('*.json'))[:60]:
+            try:
+                value = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+            rows.append({'file': path.name, 'role': value.get('submittedBy'),
+                         'status': value.get('status'), 'note': (value.get('note') or '')[:80],
+                         'knobs': [c.get('knob') for c in (value.get('accepted') or [])],
+                         'problems': value.get('problems') or []})
+    return rows
+
+
 def write_outputs():
     facts = code_facts()
     NOTES.mkdir(parents=True, exist_ok=True)
@@ -366,7 +476,10 @@ def write_outputs():
         timeout=facts['shiftTimeoutSeconds'], conc=facts['shiftMaxConcurrency'],
         material=material, decisions=decisions, quota=facts['quotaCycles'],
         stall=facts['abandonStallSeconds'], maxskills=policy['acceptance']['maxLearnedSkills'],
-        forbidden=forbidden, machinery=machinery), encoding='utf-8')
+        forbidden=forbidden, machinery=machinery,
+        freeknobs='\n'.join('- `%s` —— %s（%s）' % (k, v['why'], v['kind'])
+                          for k, v in EDITABLE_KNOBS.items()),
+        frozen='\n'.join('- %s：%s' % (k, v) for k, v in FROZEN_KNOBS.items())), encoding='utf-8')
 
     rows = board_rows()
     flagged = [row for row in rows if row['flags']]
@@ -383,7 +496,15 @@ def write_outputs():
             row['drafts'], row['knowledge'],
             ('%.0f 分钟前' % row['knowledgeFreshMinutes']) if row.get('knowledgeFreshMinutes') is not None else '—',
             '、'.join(row['flags']) or '—'))
-    (NOTES / 'evolution-board.md').write_text(header + '\n'.join(lines) + '\n', encoding='utf-8')
+    body = header + '\n'.join(lines) + '\n'
+    pending = proposals()
+    if pending:
+        body += ('\n## 待审的政策提议（第 2 层）\n\n'
+                 '| 提交者 | 状态 | 想改什么 | 说明 |\n|---|---|---|---|\n')
+        body += '\n'.join('| %s | %s | %s | %s |' % (
+            row['role'], row['status'], '、'.join(row['knobs']) or '—', row['note'])
+            for row in pending) + '\n'
+    (NOTES / 'evolution-board.md').write_text(body, encoding='utf-8')
     (NOTES / 'evolution-board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows}, ensure_ascii=False, indent=1),
         encoding='utf-8')

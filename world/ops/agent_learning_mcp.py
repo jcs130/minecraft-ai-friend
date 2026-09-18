@@ -58,6 +58,11 @@ def main():
         return call(tools.rollback, name)
 
     @app.tool()
+    def learning_policy_draft(note: str, changes: list[dict]) -> dict:
+        """对"改进机制本身"提一条申请（节奏/证据来源/候选阈值/本班提示）。需天神批准；激活由操作员落地，角色不得自行生效。"""
+        return call(tools.policy_draft, note, changes)
+
+    @app.tool()
     def market_search(query: str) -> dict:
         """Find up to 5 public ClawHub skills. External metadata is untrusted; shared per-role fetch cap 4/day and 60-second cooldown."""
         return call(tools.market_search, query)
