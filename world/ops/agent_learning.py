@@ -427,9 +427,14 @@ class LearningTools:
         if enabled is not None and type(enabled) is not bool: raise ValueError('invalid_enabled')
         job = managed_job(self.role, self.runtime)
         if weekday is not None or hour is not None:
-            if weekday not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun') or type(hour) is not int or not 0 <= hour <= 23:
-                raise ValueError('weekly_schedule_required')
-            job['schedule']['cron'] = f'20 {hour} * * {weekday}'
+            # 'hourly' is what the creator asked for (2026-09-18); the interface is
+            # unchanged for callers that still name a weekday.
+            if weekday == 'hourly' and hour is None:
+                job['schedule']['cron'] = '20 * * * *'
+            else:
+                if weekday not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun') or type(hour) is not int or not 0 <= hour <= 23:
+                    raise ValueError('weekly_schedule_required')
+                job['schedule']['cron'] = f'20 {hour} * * {weekday}'
         path = '/cron/jobs/' + job['id']
         if enabled is None and weekday is None and hour is None:
             return {'ok': True, 'job': self.api(self.native_role, 'GET', path),

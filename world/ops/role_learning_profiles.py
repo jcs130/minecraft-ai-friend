@@ -164,7 +164,10 @@ def validate_jobs(value, role, runtime):
     actual = jobs[0]
     expected = managed_job(logical_role, logical_runtime)
     assert actual['id'] == expected['id'] and actual['meta'] == expected['meta']
-    assert type(actual['enabled']) is bool and actual['task_type'] == expected['task_type']
+    # A role installed before the hourly shift still carries task_type 'text' (the
+    # zero-model dispatch). Both are accepted so an existing install is not judged
+    # invalid mid-migration; new installs are written as 'agent'.
+    assert type(actual['enabled']) is bool and actual['task_type'] in ('text', expected['task_type'])
     assert actual['text'] == expected['text'] and actual['save_result_to_inbox'] is False
     schedule = actual['schedule']
     assert schedule['type'] == 'cron' and schedule['timezone'] == 'Asia/Shanghai'
