@@ -1813,6 +1813,44 @@ class Controller:
                     self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
                 except (ValueError, OSError):
                     self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
+            elif (control.get('pauseReason') or self.data.get('pauseReason')) == 'cancellation_uncertain':
+                # A cancel whose terminal never arrives paused this lane for good: the
+                # body-pause branch above resumes its own reasons, this one had no
+                # branch at all. On 2026-09-18 that left Kirito frozen for forty
+                # minutes waiting on task-c9bc619f34a2, which had already 404'd.
+                # The task ledger is the evidence: a terminal status settles it, and a
+                # 404 proves the task is gone, so the cancellation is concluded. No
+                # result is invented, and a task that still answers as running keeps
+                # the pause - that wait is correct.
+                active = self.data.get('active')
+                task_id = (active or {}).get('taskId')
+                if active and task_id:
+                    try:
+                        terminal = self.backend.poll(task_id)
+                        absent = False
+                    except Exception as error:
+                        terminal, absent = None, True
+                        probe = type(error).__name__
+                    status = '' if absent else str((terminal or {}).get('status') or '').lower()
+                    settled = status in ('finished', 'completed', 'failed', 'cancelled', 'canceled')
+                    if settled or absent:
+                        if absent:
+                            active['nativeTerminal'] = {'text': '', 'completed': False,
+                                'failureReason': 'native_task_absent', 'probe': probe}
+                        else:
+                            active['nativeTerminal'] = {'text': '', 'completed': False,
+                                'failureReason': 'native_task_' + status}
+                        self.save()
+                        if self.party and active.get('partyReservation'):
+                            try:
+                                self.deliver_party_terminal(active, allow_dispatch=False)
+                            except Exception:
+                                pass
+                        self.data['active'] = None
+                        self.data['cancellationStatus'] = ('native_terminal_confirmed' if settled
+                                                           else 'native_task_absent')
+                        self.data.pop('pauseReason', None)
+                        self.data['status'] = 'waiting'
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:
