@@ -886,17 +886,20 @@ export function startModernViewer(getBot, options = {}) {
   const firstPersonFov = Number(process.env.MC_MODERN_VIEWER_FP_FOV ?? 110)
   const dashboardOrigin = viewerOrigin(process.env.MC_PANEL_ORIGIN ?? 'http://127.0.0.1:19091')
   const publicOrigin = viewerOrigin(process.env.MC_VIEWER_PUBLIC_ORIGIN ?? 'http://127.0.0.1:19092')
+  // QwenPaw 控制台（18089）也允许把这块画面嵌进去：控制台里的「天神之眼」PawApp 就是它。
+  // 与另外两个 origin 一样由环境变量控制，默认值即当前部署。
+  const consoleOrigin = viewerOrigin(process.env.MC_CONSOLE_ORIGIN ?? 'http://127.0.0.1:18089')
   // 2026-08-29 II（9090 村民=盔甲架修复）：settle 村民名单供给（RCON 补录，bootstrap-world 喂）。
   // mineflayer 不认 settlements:base_villager → 实体流里错认成 unknown/armor stand，
   // 3070 3D 画面村民要么隐身要么画成盔甲架。据此名单重造村民实体流 + 压制错认幽灵。
   const getSettleNpcs = typeof options.getSettleNpcs === 'function' ? options.getSettleNpcs : null
 
   return createViewerLifecycle(getBot,
-    bot => startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, getSettleNpcs, options.blockStateMapping),
+    bot => startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs, options.blockStateMapping),
     { enabled: process.env.MC_MODERN_VIEWER === '1' })
 }
 
-function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, getSettleNpcs, providedStateMapping) {
+function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs, providedStateMapping) {
   loadViewerDependencies()
   const blockStateMapping = providedStateMapping ?? loadViewerBlockMapping(path.join(ASSET_ROOT, 'mod-assets/vanilla-state-map.json'),
     process.env.MC_MOD_BLOCK_REGISTRY ?? '/app/data/block-registry.json', captureVanillaBlockTables(bot.version))
@@ -972,7 +975,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, g
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'none'",
-        `frame-ancestors 'self' ${dashboardOrigin}`,
+        `frame-ancestors 'self' ${dashboardOrigin} ${consoleOrigin}`,
       ].join('; '))
       res.setHeader('X-Content-Type-Options', 'nosniff')
       res.setHeader('Referrer-Policy', 'no-referrer')
