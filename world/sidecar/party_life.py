@@ -196,7 +196,20 @@ class PartyLife:
                 released = 'failed'
             except ValueError as error:
                 released = 'release_conflict:' + str(error)
+        # A machine may not forge an operator proof, and QwenTasks deliberately
+        # never auto-releases on a 404. So the abandoned round must SAY it needs one:
+        # without this line the native request keeps holding the model slot and the
+        # other lane starves - which is exactly what happened on 2026-09-18, when a
+        # released round still blocked every dialogue dispatch for hours.
+        stem = None
+        try:
+            stem = self.bridge.tasks._path('maid_dialogue', active['key']).stem
+        except Exception:
+            stem = None
         receipt = {'status': 'abandoned', 'stallStatus': status,
+                   'needsOperatorReconciliation': True,
+                   'nativeRequestStateKey': stem,
+                   'nativeTaskId': active.get('taskId'),
                    'reason': 'poll_unobservable_for_seconds',
                    'unobservableSeconds': int(now - since), 'stallPolls': active['stallPolls'],
                    'stalledSince': since, 'stalledSinceIso': iso_time(since),

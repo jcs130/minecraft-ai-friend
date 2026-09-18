@@ -393,9 +393,18 @@ class PartyLifeTests(unittest.TestCase):
         self.assertEqual(record['signalId'], JOB_ID + ':600:2')
         self.assertFalse(record['resultVerified'])
         self.assertGreaterEqual(record['unobservableSeconds'], ABANDON_STALL_SECONDS)
+        # A machine may not forge an operator release, so the abandoned round has to
+        # say out loud that a native request is still holding the model slot. Without
+        # this the other lane starves while the receipt claims everything is fine.
+        self.assertTrue(record['needsOperatorReconciliation'])
+        self.assertEqual(record['nativeRequestStateKey'],
+                         self.tasks._path('maid_dialogue', key).stem)
+        self.assertEqual(record['nativeTaskId'], 'task-000000000001')
         saved = json.loads((self.root / 'life/receipts' / (key + '.json')).read_text(encoding='utf-8'))
         self.assertEqual(saved['status'], 'abandoned')
         self.assertEqual(saved['reason'], 'poll_unobservable_for_seconds')
+        self.assertTrue(saved['needsOperatorReconciliation'])
+        self.assertEqual(saved['nativeRequestStateKey'], record['nativeRequestStateKey'])
         # Released means the lane moves on. Admission of the next submission still
         # belongs to the QwenTasks role gate, which this never overrides.
         self.signal(4); self.now += 700
