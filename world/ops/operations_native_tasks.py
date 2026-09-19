@@ -202,11 +202,41 @@ def archived_terminal(row):
         return False
 
 
+# 一次"占位但从未提交"的预留，多久之后可以按证据收尾。
+# 它没有 taskId，所以永远问不到原生终态 —— 不设这条，一本账会被一行永久堵死
+# （2026-09-19：world-e8636ffbee91435da52054ed659cfdf7 就这样堵了 45.7 小时，
+#   期间五个角色的学习班次每小时都答 operations_task_unresolved）。
+# 门槛给足：只在远超任何合理提交延迟后才动手。
+NEVER_SUBMITTED_GRACE_SECONDS = 1800
+
+
+def reconcile_never_submitted(now=None):
+    """收尾"预留了但从未提交"的行：无 taskId ⇒ 物理上不可能有终态。
+
+    这不是放宽预算，而是把一本账从"永远读不到终态"里救出来：
+    只动 taskId 为空、且已超过宽限期的行，逐行写明证据与原因。
+    """
+    now = time.time() if now is None else now
+    released = []
+    with ledger() as rows:
+        stale = [dict(r) for r in rows
+                 if r.get('status') not in TERMINAL and not r.get('taskId')
+                 and now - (r.get('startedAt') or now) > NEVER_SUBMITTED_GRACE_SECONDS]
+    for row in stale:
+        if finish_run(row['runId'], 'failed', nativeStatus='never_submitted',
+                      resultStatus='reservation_without_task',
+                      note='cron_reserved 且无 taskId：从未提交原生任务，不可能有终态；'
+                           '超过 %d 秒宽限期后按证据收尾' % NEVER_SUBMITTED_GRACE_SECONDS):
+            released.append(row['runId'])
+    return {'released': released}
+
+
 def reconcile_pending():
     """Read only known native tasks; missing/unknown receipts never free a lease."""
+    never = reconcile_never_submitted()
     with ledger() as rows:
         pending = [dict(r) for r in rows if r.get('status') not in TERMINAL and r.get('taskId')]
-    reconciled = []
+    reconciled = list(never.get('released') or [])
     for row in pending:
         try:
             value = api('GET', '/console/chat/task/' + row['taskId'], row['role'],
