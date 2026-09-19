@@ -120,3 +120,25 @@
 3. RCON 直连（宿主 `127.0.0.1:25575`）被拒；仓内可用姿势是 `docker exec <mc 容器> python3 /app/rcon_cmd.py <pw> 127.0.0.1 25575 <命令>`（见 `resource/god_rcon.py`）。要在游戏里给它派活，走这条。
 4. `_supervisor` 监督层（botwatch/bridge/medic/ticket）**尚未拉起**——它才是"自主生存"的外环，目前只跑了内核。
 5. 未细读：`admin_mission.js`(40 KB)、`commands/actions.js`(46 KB)、`vision/`（相机+渲染+视觉解释）、`oracle`（X-ray 路由）、`water_navigation.js`(46 KB)。
+
+---
+
+## 六、追加（同日更晚）：把它的视觉真打开，并顺手补完两个他们留下的坑
+
+**先更正本文开头的一处判断** ✗：本机**就有**本地模型 —— **`127.0.0.1:8017` = `qwen3.8-27b-turbo-unc`**（OpenAI 兼容 ✓，capabilities 含 `completion,multimodal` ✓，**热态 29.6 tok/s** ✓，为局域网那台 ollama 的 3 倍 ✓）；配套 `127.0.0.1:8087 = local-embedding` ✓。这正是小喵（agent `local-butler`，"基于本地 Qwen3.8-27B、零云端依赖"）在用的那一套 ✓。**教训**：判断"本机有没有服务"必须先枚举真实监听端口 ✓，不能拿一张固定端口表去试 ✓。NekoX 现已整套切过去 ✓（`model`/`code_model`/`vision_model` 用 `api=lmstudio` ✓ 指向 8017 ✓；`embedding` 指 8087 ✓）—— 选 `lmstudio` 而不选 `vllm` 有两个硬理由 ✓：`lmstudio.sendRequest` **会把 profile 的 `params` 透传** ✓（`vllm.js` 不透传 ✗ → 我先前设的 max_tokens 一直没生效 ✓），且它**会自动剥 `</think>` 块** ✓；另外 `vllm.js` **没有 `embed()`** ✓ 而 lmstudio 有 ✓。
+
+**"64 秒断线"结案**：不是它的 bug ✓，是**我的启动方式** ✗ —— Windows 作业对象会把我这条 shell 的**整棵进程树**收走 ✓（连我起的看门狗一起 ✗）。正解 = **计划任务**：`schtasks /create /tn NekoX-Local /tr "cmd /c watch-nekox.bat" /sc onlogon /f` ✓（`/end` 只杀任务进程 ✓、node 会孤儿化活下来占端口 ✓ → 新实例秒退 `rc=0` ✓；须按 CommandLine 精确杀 ✓）。补丁版看门狗把退出码写进 `watch.log` ✓ —— **正是它记下的 `exit rc=-1` 指认真凶** ✓。
+
+### task#12（他们注释里挂着、一直没人做的那件事）
+`vision_interpreter._ensureCamera` 里进程内 `Camera` 会刷 **88 条 `ReferenceError: THREE is not defined`** ✓ —— prismarine-viewer 的**实体网格**要一个全局 `THREE` ✓，进程内没人设 ✓。修法 = 在 `await import('./camera.js')` **之前**注入（它是 import 期解析 ✓）：`globalThis.THREE = (await import('three')).default` ✓ → 报错 **88 → 0** ✓。
+
+### task#13（#12 修完才露出来的雷）
+THREE 一注入，实体网格**真的开始提交 GL 命令** ✓ → 撞中 `render_worker.mjs` 开头写死的那个故障：**headless-gl 在 Windows 上原生崩溃，进程退出码 -1（4294967295）、无 JS 栈、JS 层拦不住** ✓✓ —— `watch.log` 当场记到 `exit rc=-1` ✓、bot 掉线 ✓。**这就是他们把 `NEKO_DISABLE_INPROC_VISION=1` 设成默认的真正原因** ✓（不是保守 ✓ 是有实测 19 次崩溃归档 ✓）。
+正解是它自己代码里那条：**同一个渲染器搬进一次性子进程** ✓（`camera_proc.js` + `render_worker.mjs` ✓ 崩只杀 worker ✓ 父进程 2 秒重试重生 ✓ bot 不掉线 ✓）。我把**按需视觉**的默认路径也换成了它 ✓，三处改动（补丁存 `world-notes/neko-vision-task12-13.patch` ✓）：
+1. `_ensureCamera`：默认 `CameraProc` ✓（`NEKO_VISION_INPROC=1` 才走老的进程内路 ✓），并把它的 `capture()→base64` 适配成 `analyzeImage()` 要的**文件名**契约 ✓；
+2. 等 `'ready'` 加 **30 秒超时** ✓（构造函数自启 `_init()` 且每 2 秒重试 ✓，不兜住就会永久挂住视觉管线 ✓）；
+3. `analyzeImage(null)` **如实回"相机没准备好"** ✓ 而不是读 `null.jpg` 让模型瞎编 ✓。
+
+**验收** ✓：两轮 `lookAtPosition` ✓ → **THREE 报错 0** ✓、`watch.log` 再无 `rc=-1` ✓、进程数 3→4 ✓（多的那个就是隔离渲染子进程 ✓）、第二轮给出**含实体的真图像描述** ✓（"Bright daytime sky. A parrot is perched on a distant tree branch…" ✓）；第一轮 worker 未就绪 ✓ → **null 兜底当场生效** ✓。
+
+**仍未了** ✗：① 它先前自称在「末地小岛」而实为村心 ✓（世界模型字段可疑 ✓ 与本轮视觉描述互相矛盾 ✓ —— 说明**别拿它的话当世界事实** ✓）；② 周期截图通道 `NEKO_AGENT_SCREENSHOT_INTERVAL_MS` 仍关着 ✓（只开了按需 ✓）；③ `_supervisor` 外环（botwatch/bridge/medic/ticket）还没拉 ✓；④ 同度量对照实验（本地 vs 云端）没做 ✓。

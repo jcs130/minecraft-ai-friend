@@ -1,0 +1,354 @@
+# mc-agent-neko 按需视觉修复（天神 2026-09-19）
+# task#12: 注入 globalThis.THREE —— prismarine-viewer 实体网格要它，否则每次看图刷 88 条
+#          "ReferenceError: THREE is not defined"（本仓注释里挂着但一直没人做的那件事）。
+# task#13: 默认改用子进程隔离渲染器 CameraProc + render_worker.mjs —— 因为 #12 修好后
+#          实体网格真提交了，进程内 headless-gl 反而原生崩溃（watch.log 记 exit rc=-1，无 JS 栈）。
+#          子进程崩只杀 worker，父进程重生，bot 不掉线；capture() 返回 null 时如实告知模型。
+# 应用：git apply 本补丁到 mc-agent-neko 仓库根。
+
+diff --git a/src/agent/vision/vision_interpreter.js b/src/agent/vision/vision_interpreter.js
+index 2b94b13..d2ac514 100644
+--- a/src/agent/vision/vision_interpreter.js
++++ b/src/agent/vision/vision_interpreter.js
+@@ -1,140 +1,200 @@
+-import { Vec3 } from 'vec3';
+-import fs from 'fs';
+-
+-// NOTE (local deploy): `Camera` (./camera.js) is LAZY-loaded via dynamic import() in
+-// _ensureCamera() below, NOT statically imported. camera.js pulls in
+-// node-canvas-webgl + prismarine-viewer + three + headless-gl, and STATICALLY importing
+-// that chain crashes Node 22's ESM/CJS loader (ERR_INTERNAL_ASSERTION) at startup even
+-// though headless-gl is now built. Deferring the import to first use (when the bot is
+-// in-world and a screenshot is actually requested) avoids the loader bug entirely.
+-// ★The lazy import only fixes the STARTUP loader crash — the capture-time native crash
+-// risk of the in-process renderer remains (see the ★RISK note in _ensureCamera below);
+-// set NEKO_DISABLE_INPROC_VISION=1 to hard-disable in-process vision.
+-
+-export class VisionInterpreter {
+-    constructor(agent, allow_vision) {
+-        this.agent = agent;
+-        // Vision RE-ENABLED (headless-gl built). The Camera is created lazily on first
+-        // use via _ensureCamera() so the renderer chain isn't imported at startup.
+-        this.allow_vision = allow_vision;
+-        this.fp = './bots/'+agent.name+'/screenshots/';
+-        this.camera = null;
+-        this._cameraInit = null;
+-    }
+-
+-    // Lazily create the prismarine-viewer Camera and wait until its world view is ready.
+-    // Uses dynamic import() to keep the headless-gl/prismarine-viewer chain out of the
+-    // static module graph (see note above).
+-    async _ensureCamera() {
+-        // Kill-switch: the IN-PROCESS renderer below can native-crash the agent (see the
+-        // ★RISK note at the import site). NEKO_DISABLE_INPROC_VISION=1 disables on-demand
+-        // vision entirely — throw a clear error (the action layer reports command errors)
+-        // instead of ever constructing Camera in this process.
+-        if (process.env.NEKO_DISABLE_INPROC_VISION === '1') {
+-            throw new Error('In-process vision is disabled (NEKO_DISABLE_INPROC_VISION=1); use the ws_server child-process camera feed instead.');
+-        }
+-        if (this.camera) return this.camera;
+-        if (this._cameraInit) return this._cameraInit;
+-        const init = (async () => {
+-            // ★RISK (why the old code hard-disabled vision): camera.js runs
+-            // node-canvas-webgl + THREE.WebGLRenderer over headless-gl IN THIS PROCESS.
+-            // That renderer has a documented intermittent NATIVE crash (Windows exit -1 /
+-            // 4294967295, uncatchable by JS) — one bad capture can kill the whole agent
+-            // (exit → auto-restart → bot offline → AFK death). ws_server isolates the SAME
+-            // renderer in a child process for exactly this reason (see CameraProc in
+-            // src/websocket/ws_server.js) — that is the isolation precedent if this ever
+-            // needs hardening; until then NEKO_DISABLE_INPROC_VISION=1 is the off switch.
+-            const { Camera } = await import('./camera.js');
+-            const cam = new Camera(this.agent.bot, this.fp);
+-            if (!cam.worldView) {
+-                // 'ready' can legitimately NEVER fire: camera.js emits it from
+-                // _init().then() with no .catch, so a rejected worldView init swallows the
+-                // event. Bound the wait — reject (clearing the cache below) so callers get
+-                // a real error instead of an eternally-pending vision pipeline.
+-                await new Promise((resolve, reject) => {
+-                    const tm = setTimeout(() => reject(new Error('Camera init timed out: no ready event within 20s')), 20000);
+-                    cam.once('ready', () => { clearTimeout(tm); resolve(); });
+-                });
+-            }
+-            this.camera = cam;
+-            return cam;
+-        })();
+-        // Cache the in-flight promise so concurrent callers share one init, but CLEAR the
+-        // cache on rejection — a permanently-cached rejected/hung promise would poison every
+-        // later vision call for the process lifetime, when a simple retry often succeeds.
+-        this._cameraInit = init.catch((err) => {
+-            this._cameraInit = null;
+-            throw err;
+-        });
+-        return this._cameraInit;
+-    }
+-
+-    async lookAtPlayer(player_name, direction) {
+-        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
+-            return "Vision is disabled. Use other methods to describe the environment.";
+-        }
+-        let result = "";
+-        const bot = this.agent.bot;
+-        const player = bot.players[player_name]?.entity;
+-        if (!player) {
+-            return `Could not find player ${player_name}`;
+-        }
+-
+-        await this._ensureCamera();
+-        let filename;
+-        if (direction === 'with') {
+-            await bot.look(player.yaw, player.pitch);
+-            result = `Looking in the same direction as ${player_name}\n`;
+-            filename = await this.camera.capture();
+-        } else {
+-            await bot.lookAt(new Vec3(player.position.x, player.position.y + player.height, player.position.z));
+-            result = `Looking at player ${player_name}\n`;
+-            filename = await this.camera.capture();
+-
+-        }
+-
+-        return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+-    }
+-
+-    async lookAtPosition(x, y, z) {
+-        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
+-            return "Vision is disabled. Use other methods to describe the environment.";
+-        }
+-        let result = "";
+-        const bot = this.agent.bot;
+-        await bot.lookAt(new Vec3(x, y + 2, z));
+-        result = `Looking at coordinate ${x}, ${y}, ${z}\n`;
+-
+-        await this._ensureCamera();
+-        let filename = await this.camera.capture();
+-
+-        return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+-    }
+-
+-    getCenterBlockInfo() {
+-        const bot = this.agent.bot;
+-        const maxDistance = 128; // Maximum distance to check for blocks
+-        const targetBlock = bot.blockAtCursor(maxDistance);
+-        
+-        if (targetBlock) {
+-            return `Block at center view: ${targetBlock.name} at (${targetBlock.position.x}, ${targetBlock.position.y}, ${targetBlock.position.z})`;
+-        } else {
+-            return "No block in center view";
+-        }
+-    }
+-
+-    async analyzeImage(filename) {
+-        try {
+-            const imageBuffer = await fs.promises.readFile(`${this.fp}/${filename}.jpg`);
+-            const messages = this.agent.history.getHistory();
+-
+-            const blockInfo = this.getCenterBlockInfo();
+-            const result = await this.agent.prompter.promptVision(messages, imageBuffer);
+-            return result + `\n${blockInfo}`;
+-
+-        } catch (error) {
+-            console.warn('Error reading image:', error);
+-            return `Error reading image: ${error.message}`;
+-        }
+-    }
++import { Vec3 } from 'vec3';
++import fs from 'fs';
++
++// NOTE (local deploy): `Camera` (./camera.js) is LAZY-loaded via dynamic import() in
++// _ensureCamera() below, NOT statically imported. camera.js pulls in
++// node-canvas-webgl + prismarine-viewer + three + headless-gl, and STATICALLY importing
++// that chain crashes Node 22's ESM/CJS loader (ERR_INTERNAL_ASSERTION) at startup even
++// though headless-gl is now built. Deferring the import to first use (when the bot is
++// in-world and a screenshot is actually requested) avoids the loader bug entirely.
++// ★The lazy import only fixes the STARTUP loader crash — the capture-time native crash
++// risk of the in-process renderer remains (see the ★RISK note in _ensureCamera below);
++// set NEKO_DISABLE_INPROC_VISION=1 to hard-disable in-process vision.
++
++export class VisionInterpreter {
++    constructor(agent, allow_vision) {
++        this.agent = agent;
++        // Vision RE-ENABLED (headless-gl built). The Camera is created lazily on first
++        // use via _ensureCamera() so the renderer chain isn't imported at startup.
++        this.allow_vision = allow_vision;
++        this.fp = './bots/'+agent.name+'/screenshots/';
++        this.camera = null;
++        this._cameraInit = null;
++    }
++
++    // Lazily create the prismarine-viewer Camera and wait until its world view is ready.
++    // Uses dynamic import() to keep the headless-gl/prismarine-viewer chain out of the
++    // static module graph (see note above).
++    async _ensureCamera() {
++        // Kill-switch: the IN-PROCESS renderer below can native-crash the agent (see the
++        // ★RISK note at the import site). NEKO_DISABLE_INPROC_VISION=1 disables on-demand
++        // vision entirely — throw a clear error (the action layer reports command errors)
++        // instead of ever constructing Camera in this process.
++        // Kill-switch semantics (★天神 2026-09-19): NEKO_DISABLE_INPROC_VISION=1 used to kill
++        // on-demand vision outright. It now only forbids the fragile IN-PROCESS renderer — which
++        // is no longer the default path anyway (see task#13 below) — so vision survives the flag.
++        if (process.env.NEKO_DISABLE_INPROC_VISION === '1' && process.env.NEKO_VISION_INPROC === '1') {
++            throw new Error('In-process vision is disabled (NEKO_DISABLE_INPROC_VISION=1); unset NEKO_VISION_INPROC to use the crash-safe child-process renderer.');
++        }
++        if (this.camera) return this.camera;
++        if (this._cameraInit) return this._cameraInit;
++        const init = (async () => {
++            // ★RISK (why the old code hard-disabled vision): camera.js runs
++            // node-canvas-webgl + THREE.WebGLRenderer over headless-gl IN THIS PROCESS.
++            // That renderer has a documented intermittent NATIVE crash (Windows exit -1 /
++            // 4294967295, uncatchable by JS) — one bad capture can kill the whole agent
++            // (exit → auto-restart → bot offline → AFK death). ws_server isolates the SAME
++            // renderer in a child process for exactly this reason (see CameraProc in
++            // src/websocket/ws_server.js) — that is the isolation precedent if this ever
++            // needs hardening; until then NEKO_DISABLE_INPROC_VISION=1 is the off switch.
++            // ★task#12 (天神 2026-09-19): prismarine-viewer's entity-mesh code reads a GLOBAL
++            // `THREE`, which nothing sets in-process → every capture used to flood
++            // "ReferenceError: THREE is not defined" (observed 88× in one lookAtPosition call,
++            // so mobs/entities never rendered into the frame). Inject it BEFORE the camera module
++            // graph loads, because prismarine-viewer resolves it at import time. This is exactly
++            // the fix the note above defers ("once vision_interpreter injects globalThis.THREE").
++            if (!globalThis.THREE) {
++                const _t = await import('three');
++                globalThis.THREE = _t.default ?? _t;
++                console.log('[vision] injected globalThis.THREE for prismarine-viewer (task#12)');
++            }
++            // ★task#13 (天神 2026-09-19): DEFAULT = the crash-safe ISOLATED renderer.
++            // Injecting THREE (task#12) silenced the 88× "THREE is not defined" mesh errors —
++            // which then let headless-gl actually submit entity meshes and native-crashed the
++            // agent (watch.log "exit rc=-1", no JS stack: exactly the fault documented at the
++            // top of render_worker.mjs). CameraProc runs the SAME renderer in a throwaway child
++            // process: a GL fault kills only the worker, camera_proc respawns it, the bot stays
++            // online. Its capture() hands back base64 instead of a filename, so wrap it into the
++            // filename contract analyzeImage() already expects. Opt into the old in-proc path
++            // with NEKO_VISION_INPROC=1 (for experiments only — it can take the agent down).
++            if (process.env.NEKO_VISION_INPROC !== '1') {
++                const { CameraProc } = await import('./camera_proc.js');
++                const proc = new CameraProc(this.agent.bot, this.fp);
++                if (!proc.worldView) {
++                    // Constructor self-calls _init() and retries every 2s; 'ready' fires once the
++                    // worker reports up. Bound the wait so a silently failing worker cannot hang
++                    // the whole vision pipeline forever (same trap the in-proc path documents).
++                    await new Promise((resolve, reject) => {
++                        const tm = setTimeout(() => reject(new Error('CameraProc init timed out: no ready event within 30s')), 30000);
++                        proc.once('ready', () => { clearTimeout(tm); resolve(); });
++                    });
++                }
++                const fp = this.fp;
++                const wrapped = {
++                    kind: 'proc',
++                    raw: proc,
++                    async capture() {
++                        const b64 = await proc.capture();
++                        // null = worker (re)starting, bot not spawned, or no collision-safe eye
++                        // position. Callers must treat it as "look again in a moment".
++                        if (!b64) return null;
++                        const name = `screenshot_${new Date().toISOString().replace(/[:.]/g, '-')}`;
++                        await fs.promises.mkdir(fp, { recursive: true });
++                        await fs.promises.writeFile(`${fp}/${name}.jpg`, Buffer.from(b64, 'base64'));
++                        return name;
++                    },
++                };
++                this.camera = wrapped;
++                console.log('[vision] using isolated CameraProc renderer (crash-safe child process)');
++                return wrapped;
++            }
++            const { Camera } = await import('./camera.js');
++            const cam = new Camera(this.agent.bot, this.fp);
++            if (!cam.worldView) {
++                // 'ready' can legitimately NEVER fire: camera.js emits it from
++                // _init().then() with no .catch, so a rejected worldView init swallows the
++                // event. Bound the wait — reject (clearing the cache below) so callers get
++                // a real error instead of an eternally-pending vision pipeline.
++                await new Promise((resolve, reject) => {
++                    const tm = setTimeout(() => reject(new Error('Camera init timed out: no ready event within 20s')), 20000);
++                    cam.once('ready', () => { clearTimeout(tm); resolve(); });
++                });
++            }
++            this.camera = cam;
++            return cam;
++        })();
++        // Cache the in-flight promise so concurrent callers share one init, but CLEAR the
++        // cache on rejection — a permanently-cached rejected/hung promise would poison every
++        // later vision call for the process lifetime, when a simple retry often succeeds.
++        this._cameraInit = init.catch((err) => {
++            this._cameraInit = null;
++            throw err;
++        });
++        return this._cameraInit;
++    }
++
++    async lookAtPlayer(player_name, direction) {
++        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
++            return "Vision is disabled. Use other methods to describe the environment.";
++        }
++        let result = "";
++        const bot = this.agent.bot;
++        const player = bot.players[player_name]?.entity;
++        if (!player) {
++            return `Could not find player ${player_name}`;
++        }
++
++        await this._ensureCamera();
++        let filename;
++        if (direction === 'with') {
++            await bot.look(player.yaw, player.pitch);
++            result = `Looking in the same direction as ${player_name}\n`;
++            filename = await this.camera.capture();
++        } else {
++            await bot.lookAt(new Vec3(player.position.x, player.position.y + player.height, player.position.z));
++            result = `Looking at player ${player_name}\n`;
++            filename = await this.camera.capture();
++
++        }
++
++        return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
++    }
++
++    async lookAtPosition(x, y, z) {
++        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
++            return "Vision is disabled. Use other methods to describe the environment.";
++        }
++        let result = "";
++        const bot = this.agent.bot;
++        await bot.lookAt(new Vec3(x, y + 2, z));
++        result = `Looking at coordinate ${x}, ${y}, ${z}\n`;
++
++        await this._ensureCamera();
++        let filename = await this.camera.capture();
++
++        return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
++    }
++
++    getCenterBlockInfo() {
++        const bot = this.agent.bot;
++        const maxDistance = 128; // Maximum distance to check for blocks
++        const targetBlock = bot.blockAtCursor(maxDistance);
++        
++        if (targetBlock) {
++            return `Block at center view: ${targetBlock.name} at (${targetBlock.position.x}, ${targetBlock.position.y}, ${targetBlock.position.z})`;
++        } else {
++            return "No block in center view";
++        }
++    }
++
++    async analyzeImage(filename) {
++        if (!filename) {
++            // CameraProc returns null while its render worker is (re)starting, while the bot is
++            // not spawned, or when no collision-safe eye position exists. Say so plainly instead
++            // of reading "null.jpg" and letting the model invent what it "saw".
++            return 'Camera not ready (render worker restarting, or no collision-safe eye position). Fall back to block/entity data, or ask again in a few seconds.';
++        }
++        try {
++            const imageBuffer = await fs.promises.readFile(`${this.fp}/${filename}.jpg`);
++            const messages = this.agent.history.getHistory();
++
++            const blockInfo = this.getCenterBlockInfo();
++            const result = await this.agent.prompter.promptVision(messages, imageBuffer);
++            return result + `\n${blockInfo}`;
++
++        } catch (error) {
++            console.warn('Error reading image:', error);
++            return `Error reading image: ${error.message}`;
++        }
++    }
+ } 
+\ No newline at end of file
+warning: in the working copy of 'src/agent/vision/vision_interpreter.js', LF will be replaced by CRLF the next time Git touches it
