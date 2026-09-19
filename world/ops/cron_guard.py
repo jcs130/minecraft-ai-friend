@@ -134,7 +134,9 @@ async def guarded_execute(executor, job, original, runtime, factory=LearningTool
     if job.task_type != 'agent': return await original(executor, job)
     if policy_role not in OPS_ROLES and not managed: return skipped('unregistered_operations_role')
     if job.dispatch.channel != 'console': return skipped('project_console_required')
-    if job.runtime.timeout_seconds > 180 or job.runtime.max_concurrency != 1:
+    # 受管的学习班次要写完草稿并校验，按分钟计；其余作业仍守 180 秒上限。
+    budget = 900 if managed else 180
+    if job.runtime.timeout_seconds > budget or job.runtime.max_concurrency != 1:
         return skipped('bounded_runtime_required')
     from world_operations import is_world_job
     world_job = is_world_job(job, policy_role)

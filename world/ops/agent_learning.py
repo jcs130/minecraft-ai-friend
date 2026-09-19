@@ -113,7 +113,8 @@ def managed_job(role, runtime):
         'request': {'input': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}]},
         'dispatch': {'type': 'channel', 'channel': 'console', 'target': {'user_id': 'qiandeng-learning',
             'session_id': 'qd-learning-' + role}, 'mode': 'final', 'silent': runtime == 'operations'},
-        'runtime': {'max_concurrency': 1, 'timeout_seconds': 180, 'misfire_grace_seconds': 300,
+        # 180 秒对一轮真正的学习太短：2026-09-19 的日志显示班次确实建起了 agent（tools=78）、开始读自己的记忆，然后在 180 秒被 cron 掐死（TimeoutError）。学习要写草稿+校验，按分钟计；这里给 900 秒，其余作业仍受 180 秒上限约束（cron_guard 里按是否受管区分）。
+        'runtime': {'max_concurrency': 1, 'timeout_seconds': 900, 'misfire_grace_seconds': 300,
             'share_session': False, 'tool_safety': True}, 'save_result_to_inbox': False,
         'meta': {'project': 'qiandengji', 'purpose': purpose, 'runtime': runtime, 'role': role, 'version': 1}}
     # 'request' stays for every runtime: an agent task needs its input payload.
