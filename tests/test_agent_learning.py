@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/ops'))
+from evolution_policy import validate_proposal
 from agent_learning import LearningTools, TOOL_NAMES, managed_job, owed_shift_roles, read, write
 from cron_guard import guarded_execute, reserve_review
 
@@ -101,6 +102,33 @@ class LearningTests(unittest.TestCase):
         after = [item for item in self.tool.status()['drafts'] if item['name'] == row['name']][0]
         self.assertTrue(after['activated'])
         self.assertIn(row['name'], self.tool.status()['skills'])
+
+    def test_policy_proposal_needs_a_counterfactual_or_it_is_not_actionable(self):
+        """借 ModularRSI 的纪律：不给反事实的改动是在给自己埋回归。
+
+        写不出来 → no_verdict（不是错误，但不推进）；自判「不会改变结果」→ not_actionable
+        （这是正确答案）；三样齐备且自判会改变结果 → 才送天神裁决。
+        """
+        ok, receipt = validate_proposal('qd-survivor', [{'knob': 'shift.cron', 'value': '20 * * * *'}],
+                                        '我觉得节奏太慢了，想换一换试试看。')
+        self.assertFalse(ok)
+        self.assertEqual(receipt['status'], 'no_verdict')
+        self.assertTrue(any('no_counterfactual_metric' in item for item in receipt['noVerdict']))
+        ok, receipt = validate_proposal(
+            'qd-survivor', [{'knob': 'shift.cron', 'value': '20 * * * *'}],
+            '上一个整点有三个角色被闸跳过，想让欠班的角色更快轮到。',
+            metric='activated 数', would_change_outcome=False,
+            evidence=['board: qd-guild-planner 欠班 2 小时'])
+        self.assertFalse(ok)
+        self.assertEqual(receipt['status'], 'not_actionable')
+        ok, receipt = validate_proposal(
+            'qd-survivor', [{'knob': 'shift.cron', 'value': '20 */2 * * *'}],
+            '每小时一轮太多空转，想改成每两小时一轮看产出会不会更集中。',
+            metric='activated 数 / 班次产出率', would_change_outcome=True,
+            evidence=['metrics: activated=2，每小时班次中约一半 no_new_learning_evidence'])
+        self.assertTrue(ok)
+        self.assertEqual(receipt['status'], 'pending_operator_review')
+        self.assertEqual(receipt['schema'], 2)
 
     def test_shift_prompt_tells_the_role_how_to_finish_what_it_started(self):
         """班次提示必须写明续做路径，否则模型只写草稿就散场。"""

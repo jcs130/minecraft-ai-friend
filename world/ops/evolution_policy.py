@@ -131,6 +131,13 @@ POLICY_JSON = lambda f: {
     'guardVersion': f['guardVersion'],
     'editableKnobs': EDITABLE_KNOBS,
     'frozenKnobs': FROZEN_KNOBS,
+    'proposalVerdicts': {
+        'pending_operator_review': '反事实齐备且自判会改变结果 → 送天神裁决',
+        'no_verdict': '不足以判：没写清会让哪个真实指标动 / 没给证据 / 没做判断 —— 不是错误，但不推进',
+        'not_actionable': '自判「不会改变结果」 —— 这是正确答案：这条改动只是凑数，回归风险大于收益',
+        'rejected': '越界或形式不合（冻结区 / 不在清单 / 取值超界）',
+    },
+    'counterfactualRule': '任何对改进机制本身的提议都必须给反事实：会让哪个真实指标动、你判断会不会改变结果、证据是什么。写不出即为 no_verdict（借 ModularRSI：不给反事实的边际改动 = 回归）。',
 }
 
 POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
@@ -174,6 +181,9 @@ POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
 
 提议用 `learning_policy_draft` 提交；批准与否由天神裁决，**激活只能由操作员落地**。
 
+**反事实纪律（借 ModularRSI）**：提议必须写明 ① 它会让哪个**真实指标**动（如 闭环率 / 重复占比 / activated 数）② 你判断它会不会改变结果（true/false）③ 证据（回执 / 日志 / 看板数字）。四种结局都公开：`pending_operator_review` / **`no_verdict`（不足以判，不是错误）** / **`not_actionable`（自判不会改变结果 —— 正确答案）** / `rejected`（越界）。
+> 不给反事实的边际改动 = 一个回归在排队。**「没有可行动作」是好答案，不是失败。**
+
 ## 七、机器在哪
 {machinery}
 
@@ -186,21 +196,44 @@ POLICY_MD = """# 自我改进体系 · 规则（自动生成，勿手改）
 # ---- 第 2 层：谁能改"怎么改" ------------------------------------------------
 # 角色可以**提议**改这些；每一支都写明类型与边界，校验器照它判。
 # 这是有意的窄门：只开放"怎么学"，不开放"能不能碰世界"。
+# 每个旋钮配一张"眼镜"（借 ModularRSI 的 _MODULE_LENS）：covers=它管什么、
+# yardstick=强系统在这一维长什么样（好让提议者看见自己缺什么）、probes=起手该问什么。
 EDITABLE_KNOBS = {
+    # 每个旋钮配一张"眼镜"（借 ModularRSI 的 _MODULE_LENS）：covers=它管什么、
+    # yardstick=强系统在这一维长什么样（让提议者看见自己缺什么）、probes=起手该问什么。
     'shift.cron': {'kind': 'cron', 'allowed': ['20 * * * *', '20 */2 * * *', '20 10 * * mon'],
-                   'why': '班次节奏：多久敲一次门'},
+                   'why': '班次节奏：多久敲一次门',
+                   'covers': '学习班次多久敲一次门',
+                   'yardstick': '强系统的固化节奏与经验产出速度相称：产出快则敲得勤，产出慢则省着用——'
+                                '节奏本身不产生能力，它只是让能力有机会发生',
+                   'probes': '这一小时里真有几件值得固化的东西吗？调快只会让空转更贵，调慢则让未完成的工作等更久'},
     'evidence.trees': {'kind': 'list', 'allowed_values': ['digest', 'notes', 'memory', 'learning/drafts'],
-                       'min': 1, 'max': 4, 'why': '什么算新证据：指纹要不要看这几棵树'},
+                       'min': 1, 'max': 4, 'why': '什么算新证据：指纹要不要看这几棵树',
+                       'covers': '"什么算新证据"的取材范围',
+                       'yardstick': '强系统只把真实落盘的变化当证据：指纹没动就不开会，且取材要覆盖角色真正在写的地方',
+                       'probes': '上一班为什么说没有新证据？是真的没动静，还是闸看错了地方？'},
     'quota.minPatternRepeats': {'kind': 'int', 'min': 2, 'max': 6,
-                               'why': '台账候选要求同一模式至少重复几次'},
+                                'why': '台账候选要求同一模式至少重复几次',
+                                'covers': '判定"这是重复模式"的重复次数门槛',
+                                'yardstick': '强系统要求复现足够多才称之为模式：既能滤掉偶发，也不至于永远等不到',
+                                'probes': '门槛下调会多出哪些其实是噪音的"模式"？上调会不会再也触发不了？'},
     'quota.candidateChars': {'kind': 'int', 'min': 300, 'max': 2000,
-                             'why': '喂给角色看的候选块长度上限'},
-    # 属于改进机制本身：取消状态悬着多久后按证据结案（回执照不到的窗口长度）。
+                             'why': '喂给角色看的候选块长度上限',
+                             'covers': '候选证据块能有多长',
+                             'yardstick': '强系统把证据嚼碎端上来，但不用它淹没判断',
+                             'probes': '截短会丢掉关键回执吗？加长后模型还读得到最后吗？'},
     'cancellation.settleSeconds': {'kind': 'int', 'min': 60, 'max': 1800,
-                                   'why': '取消状态悬着多久后按证据结案'},
+                                   'why': '取消状态悬着多久后按证据结案（回执照不到的窗口长度）',
+                                   'covers': '取消/未知状态悬多久之后按证据结案',
+                                   'yardstick': '强系统不让"结果未知"无限拖延反馈：到窗口就按证据结案并留痕',
+                                   'probes': '窗口太短会误杀仍在飞的任务吗？太长会继续吃掉回执吗？'},
     'shift.promptNote': {'kind': 'text', 'max_length': 600,
-                         'why': '本班提示里加一句自己的话（会附在班次提示后）'},
+                         'why': '本班提示里加一句自己的话（会附在班次提示后）',
+                         'covers': '本班提示里自己能加的那一句',
+                         'yardstick': '强系统只加真正改变行为的一句，不靠堆话增加存在感',
+                         'probes': '这一句会让下一班做出不同动作吗？若不会，它只是噪音'},
 }
+
 
 FROZEN_KNOBS = {
     'permissions': '权限、冷却、守卫名单（tool_guard / denied_tools / guarded_tools）',
@@ -212,19 +245,32 @@ FROZEN_KNOBS = {
 }
 
 
-def validate_proposal(role, changes, note):
+def validate_proposal(role, changes, note, metric=None, would_change_outcome=None, evidence=None):
     """角色提一条"改改进机制"的申请。只做形式与边界校验，不落地任何东西。
 
     返回 (ok, receipt)。无论通过与否都给出可读理由 —— 拒绝要能说清为什么，
     否则角色只会盲试。
     """
     problems = []
+    noverdict = []
     if not isinstance(role, str) or not role:
         problems.append('role_missing')
     if not isinstance(note, str) or len(note.strip()) < 12:
         problems.append('note_too_short: 说清为什么该改（至少一句）')
     if not isinstance(changes, list) or not changes:
         problems.append('changes_missing')
+    # 反事实纪律（借 ModularRSI）：改动必须说清"它会让哪个**真实指标**动"。
+    # 写不出来即为**不足以判**（no verdict）——按它的原话：造一个边际改动来凑数，
+    # 等于给自己埋一个回归；"没有可行动作"才是正确答案。这里把它记成**独立的、可见的结论**。
+    if not isinstance(metric, str) or len(metric.strip()) < 4:
+        noverdict.append('no_counterfactual_metric: 说清这条改动会让哪个真实指标动'
+                         '（如 闭环率 / 重复占比 / activated 数）')
+    if would_change_outcome is None:
+        noverdict.append('no_counterfactual_judgment: 明确写 true/false —— 你判断它会不会让结果改变；'
+                         '判断为 false 是正确答案，不算失败')
+    if not isinstance(evidence, list) or not [x for x in evidence if str(x).strip()]:
+        noverdict.append('no_counterfactual_evidence: 至少给一条证据（回执/日志/看板数字）')
+
     accepted = []
     for item in (changes or []):
         if not isinstance(item, dict):
@@ -263,10 +309,22 @@ def validate_proposal(role, changes, note):
                     knob, spec['allowed_values'], spec['min'], spec['max']))
                 continue
         accepted.append({'knob': knob, 'value': value, 'why': spec['why']})
-    return (not problems), {'schema': 1, 'role': role, 'note': note.strip()[:600],
-                            'accepted': accepted, 'problems': problems,
-                            'status': 'pending_operator_review' if not problems else 'rejected',
-                            'activation': '只能由操作员/天神落地；角色不得自行激活'}
+    if problems:
+        status = 'rejected'
+    elif noverdict:
+        status = 'no_verdict'
+    elif would_change_outcome is False:
+        status = 'not_actionable'
+    else:
+        status = 'pending_operator_review'
+    return (status == 'pending_operator_review'), {
+        'schema': 2, 'role': role, 'note': note.strip()[:600],
+        'metric': (metric or '').strip()[:160],
+        'wouldChangeOutcome': would_change_outcome,
+        'evidence': [str(x)[:200] for x in (evidence or [])][:6],
+        'accepted': accepted, 'problems': problems, 'noVerdict': noverdict,
+        'status': status,
+        'activation': '只能由操作员/天神落地；角色不得自行激活'}
 
 def board_rows():
     rows = []
@@ -651,8 +709,10 @@ def write_outputs():
         material=material, decisions=decisions, quota=facts['quotaCycles'],
         stall=facts['abandonStallSeconds'], maxskills=policy['acceptance']['maxLearnedSkills'],
         forbidden=forbidden, machinery=machinery,
-        freeknobs='\n'.join('- `%s` —— %s（%s）' % (k, v['why'], v['kind'])
-                          for k, v in EDITABLE_KNOBS.items()),
+        freeknobs='\n\n'.join(
+            '- `%s`（%s）—— %s\n    管什么：%s\n    强系统什么样：%s\n    该先问什么：%s'
+            % (k, v['kind'], v['why'], v.get('covers', '—'), v.get('yardstick', '—'), v.get('probes', '—'))
+            for k, v in EDITABLE_KNOBS.items()),
         frozen='\n'.join('- %s：%s' % (k, v) for k, v in FROZEN_KNOBS.items())), encoding='utf-8')
 
     rows = board_rows()
