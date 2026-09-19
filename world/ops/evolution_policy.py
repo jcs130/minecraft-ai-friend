@@ -494,8 +494,8 @@ async function tick(){
       '草稿 / 已启用 / 已发布共享', (sk.drafts ? '' : 'warn')],
     ['工单', Object.entries(cs.counts || {}).map(([k, v]) => k + ' ' + v).join(' · ') || '—',
       '已结单中位处理 ' + (cs.resolutionMedianMinutes ?? '—') + ' 分钟', ''],
-    ['动作连贯性', sv.closedLoop ? ('闭环 ' + Math.round((sv.closedLoop.rate ?? 0) * 100) + '%') : '—',
-      sv.repeats ? ('重复占比 ' + Math.round((sv.repeats.share ?? 0) * 100) + '% · 停滞目标 ' + ((sv.stalledGoals || {}).count ?? '—')
+    ['动作连贯性', sv.closedLoop?.rate != null ? ((sv.schema === 2 ? '动作确认成功 ' : '旧口径闭环 ') + Math.round(sv.closedLoop.rate * 100) + '%') : '证据不足',
+      sv.repeats ? ((sv.schema === 2 ? '同参连续重复 ' : '旧口径重复 ') + (sv.repeats.share != null ? Math.round(sv.repeats.share * 100) + '%' : '证据不足') + ' · 停滞目标 ' + ((sv.stalledGoals || {}).count ?? '—')
         + ' · 最长决策间隔 ' + Math.round(((sv.decisionGaps || {}).maxSeconds ?? 0) / 60) + '′') : '等生存侧写首个文件',
       sv.closedLoop && (sv.closedLoop.rate ?? 1) < 0.5 ? 'bad' : ''],
     ['红旗年龄', ages.length ? ages.map(a => Math.round(a.minutes) + '′').join(' / ') : '—',
@@ -662,7 +662,8 @@ def metrics(rows):
         shared = Path('/public/survival-metrics.json')
         if shared.exists():
             value = json.loads(shared.read_text(encoding='utf-8'))
-            survival = {'at': value.get('at'), 'ageMinutes': round((time.time() - (value.get('at') or 0)) / 60, 1),
+            survival = {'schema': value.get('schema'), 'evidence': value.get('evidence'),
+                        'at': value.get('at'), 'ageMinutes': round((time.time() - (value.get('at') or 0)) / 60, 1),
                         'closedLoop': value.get('closedLoop'), 'repeats': value.get('repeats'),
                         'decisionGaps': value.get('decisionGaps'), 'stalledGoals': value.get('stalledGoals'),
                         'noOutputSignals': value.get('noOutputSignals'),

@@ -5,12 +5,14 @@
 2026-09-19 造物主点出这一点时，世界里的证据其实已经摊在那儿了：
 environmentSignals 里一条 no_output（24 个动作、19587 秒、工具 goto/eat/game_cast）。
 
-这个模块只读本进程已有的账本，不算新指标、不起模型、不发动作。
+这个模块只读本进程已有的账本；指标用于诊断，不起模型、不发动作。
 """
 import json
 import time
-from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
+
+from execution_evidence import load_receipts, repeats, summarize
 
 STATE = Path('/state/survival')
 SHARED = Path('/public') / 'survival-metrics.json'
@@ -39,59 +41,26 @@ def _tail_jsonl(path, limit):
 
 
 def _closed_loop(rows):
-    """动作闭环率：手伸出去，事情做成了没有。"""
-    codes = Counter()
-    for row in rows:
-        result = row.get('result') if isinstance(row.get('result'), dict) else {}
-        codes[str(result.get('code') or result.get('status') or 'unknown')] += 1
-    total = sum(codes.values()) or 1
-    good = sum(count for code, count in codes.items() if code in ('accepted', 'ok', 'completed'))
-    return {'sampled': sum(codes.values()), 'succeeded': good,
-            'rate': round(good / total, 3), 'codes': dict(codes.most_common(6))}
+    """已确认动作成功率；不是任务完成率。只消费最终回执。"""
+    return summarize(rows)
 
 
-def _repeat_share(episodes):
-    """重复占比：这段动作里有多少个，落在"重复≥3 次"的短序列里。"""
-    actions = [row.get('action') for row in episodes
-               if row.get('kind') == 'action_observed' and isinstance(row.get('action'), str)]
-    if len(actions) < 6:
-        return {'window': len(actions), 'inRepeats': 0, 'share': None}
-    found = {}
-    for size in (2, 3):
-        index = 0
-        while index <= len(actions) - size:
-            gram = tuple(actions[index:index + size])
-            found[gram] = found.get(gram, 0) + 1
-            index += 1
-    repeated = {gram for gram, count in found.items() if count >= MIN_REPEATS}
-    inside = 0
-    for size in (3, 2):
-        index = 0
-        while index <= len(actions) - size:
-            gram = tuple(actions[index:index + size])
-            if gram in repeated:
-                inside += size
-                index += size
-            else:
-                index += 1
-    inside = min(inside, len(actions))
-    return {'window': len(actions), 'inRepeats': inside,
-            'share': round(inside / len(actions), 3),
-            'topRepeats': ['|'.join(gram) + '×%d' % count
-                           for gram, count in sorted(found.items(), key=lambda kv: -kv[1])[:3]
-                           if count >= MIN_REPEATS]}
+def _repeat_share(receipts):
+    return repeats(receipts, MIN_REPEATS)
 
 
 def _decision_gaps(episodes):
-    """决策间隔：中位与最长 —— 最长那个就是"卡住了多久"。"""
+    """已完成决策的间隔；不能据此认定当前卡住时长。"""
     stamps = [row.get('at') for row in episodes if row.get('kind') == 'decision_finished']
     parsed = []
     for value in stamps:
         try:
-            parsed.append(time.mktime(time.strptime(value[:19], '%Y-%m-%dT%H:%M:%S')))
-        except (TypeError, ValueError):
+            stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            if stamp.tzinfo is not None:
+                parsed.append(stamp.astimezone(timezone.utc).timestamp())
+        except (AttributeError, TypeError, ValueError):
             continue
-    parsed.sort()
+    parsed = sorted(set(parsed))
     gaps = [round(b - a) for a, b in zip(parsed, parsed[1:])]
     if not gaps:
         return {'samples': 0, 'medianSeconds': None, 'maxSeconds': None}
@@ -102,7 +71,11 @@ def _decision_gaps(episodes):
 def collect(controller=None):
     controller = controller or {}
     episodes = _tail_jsonl(STATE / 'episodes.jsonl', PATTERN_WINDOW)
-    actions = _tail_jsonl(STATE / 'actions.jsonl', ACTION_WINDOW)
+    records, errors = load_receipts(STATE / 'action-receipts', ACTION_WINDOW)
+    actions = [record['receipt'] for record in records]
+    repetition = _repeat_share(actions) if not errors else {
+        'window': len(actions), 'share': None, 'inRepeats': None,
+        'longestIdenticalRun': None, 'reason': 'incomplete_receipt_sequence'}
     stalled = {}
     try:
         stalled = json.loads((STATE / 'stagnation-state.json').read_text(encoding='utf-8')).get('tracked') or {}
@@ -110,14 +83,17 @@ def collect(controller=None):
         pass
     now = time.time()
     oldest = None
-    if stalled:
-        oldest_stamp = min((value.get('at') or now) for value in stalled.values() if isinstance(value, dict))
-        oldest = round((now - oldest_stamp) / 60)
+    stamps = [value.get('at') for value in stalled.values() if isinstance(value, dict)
+              and isinstance(value.get('at'), (int, float))]
+    if stamps:
+        oldest = max(0, round((now - min(stamps)) / 60))
     signals = controller.get('environmentSignals') or []
     return {
-        'schema': 1, 'at': now, 'generatedBy': 'world/survival/coherence.py',
+        'schema': 2, 'at': now, 'generatedBy': 'world/survival/coherence.py',
+        'evidence': {'source': 'action-receipts', 'errors': errors,
+                     'window': 'latest retained files; not all historical actions'},
         'closedLoop': _closed_loop(actions),
-        'repeats': _repeat_share(episodes),
+        'repeats': repetition,
         'decisionGaps': _decision_gaps(episodes),
         'stalledGoals': {'count': len(stalled), 'oldestMinutes': oldest,
                          'examples': [key[:40] for key in list(stalled)[:3]]},
@@ -125,8 +101,8 @@ def collect(controller=None):
                              'spanSeconds': s.get('span'), 'tools': (s.get('tools') or [])[:4]}
                             for s in signals[:3]],
         'noActionReviews': controller.get('noActionReviews'),
-        'note': '动作连贯性：闭环率=手伸出去事做成了没有；重复占比=有多少动作落在重复≥3 次的短序列里；'
-                '决策间隔最长值=卡住多久；停滞目标=方向是否还在原地。',
+        'note': '确认成功率仅统计留存动作回执，不证明目标完成；重复要求同身体、维度、工具及参数，'
+                '重复本身不证明停滞。决策间隔不等于当前卡住时长。schema 1 与 2 不可直接比较。',
     }
 
 

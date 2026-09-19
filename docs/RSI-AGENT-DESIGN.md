@@ -1,9 +1,13 @@
 # 真正的 RSI Agent · 合并设计（ModularRSI × mc-agent-neko × 千灯纪现状）
 
+> 2026-09-20 源码复核：参见 [四项目代码研究](OPEN-SOURCE-AGENT-CODE-STUDY.md)。本页历史上线数字不是现状验收。
+> 新的重点参考为 Cortico；Neko 也保留模型选择与仲裁，不能概括为“LLM 不是驱动者”。
+> 当前诊断已修正 accepted≠完成、同参连续重复与未知态；这是统计修正，不是能力提升证明。
+
 > 本文是把两样外部资产与**我们自己的现状**对齐后的可执行设计。
 > 两样资产：①**ModularRSI**（`github.com/IQuestLab/ModularRSI`，论文 2609.14857）——
 > harness 自演化，精髓是「把改动管到能归因」；②**mc-agent-neko**（`github.com/wehos/mc-agent-neko`，
-> mindcraft 重度 fork）——精髓是「**LLM 不是驱动者**」的分层驱动与监督。
+> mindcraft 重度 fork）——参考其模型决策、程序执行与身体协调分工。
 >
 > **法则（造物主 2026-09-19 定）**：**只有比原来更好，才算进化。**
 > 每一阶段都必须带"拆前 / 拆后"的可比数字，否则不算完成。
@@ -31,7 +35,7 @@
 | **同任务 + 同代码**的对照（否则差异归因不到改动） | ModularRSI `k_roll.py` |
 | **对比配对**：把同一件事的成功/失败轨迹并排，蒸馏成结构化的"发现项" | ModularRSI `trajectory_analysis.py` |
 | **生成世**（generation）+ 谱系（archive/provenance）+ 可回退 | ModularRSI `generations/` |
-| **动作不由 LLM 驱动**：确定性技能 + 反射层 + 身体独占 | neko 六层架构 |
+| **模型选目标和策略，程序执行技能**；中断、续做、身体所有权有真实证据 | Cortico + neko |
 | **单一仲裁器 + 迟滞**（防振荡与互绞） | neko §4.1 Arbiter |
 | **监督层**：watchdog 阈值 / inbox+sticky 投递 / overseer 只判断不接管 | neko |
 | **真规划脱困**（有全知方块查询就不该用启发式） | neko EscapePlanner |
@@ -66,7 +70,8 @@
 
 ### P1 归因最小闭环（**下一步**）
 - **做什么**：把"同一角色同一任务的成功/失败回执"配对（先做**桐人**）：
-  - 数据源已有：`actions.jsonl`（成/拒/未知）、`episodes.jsonl`、`death_log`、`coherence-metrics.json`
+  - 数据源：以 `action-receipts/*.json` 的持久回执判终态；`actions.jsonl` 是阶段日志，`action_observed` 也不是成功。辅以 episodes、death_log 与 coherence。
+  - 同参数成败只能用于观察性分析；受控对照还必须绑定任务、初始存档、bundle、模型配置和预算。
   - 新增：`stuck_loop(Nx)` = **同一动作参数的最长连续重复**（补现有"重复占比"）
   - 产出：一条结构化**发现项**（`task / divergence / evidence / would_change / suggested_change`），
     走**工单**（`category=improvement` ✓ 复用现成载体）
@@ -78,9 +83,10 @@
   + `archive.json`（superseded / excluded）+ 失败即标 `superseded`
 - **验收**：任一当前生效的旋钮，都能回答"它是哪一代、依据哪条证据、由谁批准"
 
-### P3 驱动层搬出提示词（neko 的正解）
-- **做什么**：桐人的动作策略从"提示词一大段"搬成**确定性技能**（可热加载）；LLM 只保留三件事：
-  人类聊天、求援、**提案**（含改机制）。清掉动作提示里的改进内容（cron/quota/候选块 → 移到学习班次）
+### P3 模型决策与可续做的程序执行
+- **做什么**：高频动作由原生 AI 与验证过的技能执行；LLM 保留目标选择、计划、现场判断、交流与反思。
+  按 Cortico 的任务/步骤回执处理暂停、未知结果和续做，减少无变化观察的重复上下文。
+  不能把自主 Agent 限成只会聊天、求援和提案，也不能用硬编码日程代替角色决策。
 - **验收**：①动作提示字节数**下降**（拆前/拆后对比）②动作成功率/闭环率**不下降** ③学习产出**不下降**
 
 ### P4 单一仲裁器 + 身体独占（neko §4.1）
