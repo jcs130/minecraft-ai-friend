@@ -147,3 +147,22 @@ THREE 一注入，实体网格**真的开始提交 GL 命令** ✓ → 撞中 `r
 - **纪律**：所以"视觉通了"**不等于**"它看见的就是世界事实" ✓。**别拿它的话当世界事实** ✓ —— 这条今天又救了一次 ✓。
 
 **仍未了** ✗：① 它先前自称在「末地小岛」而实为村心 ✓（世界模型字段可疑 ✓ 与本轮视觉描述互相矛盾 ✓ —— 说明**别拿它的话当世界事实** ✓）；② 周期截图通道 `NEKO_AGENT_SCREENSHOT_INTERVAL_MS` 仍关着 ✓（只开了按需 ✓）；③ `_supervisor` 外环（botwatch/bridge/medic/ticket）还没拉 ✓；④ 同度量对照实验（本地 vs 云端）没做 ✓。
+
+---
+
+## 七、再追加：它自报"我在末地小岛"的真根因（我上一条判错了，现更正 ✗）
+
+**判错的更正** ✓：我先前写"那是模型 confabulation（看着浮空方块瞎编）"✗ —— **不对** ✓。装上 $STATS 位置行之后复测 ✓，它报 `维度：overworld ✓ 坐标：-543.5,188.0,868.5 ✓` 与服务端**完全一致** ✓，**唯独 `生态域：small_end_islands`** ✗ —— 说明**它是在如实汇报自己读到的数据 ✓，而那个数据源是脏的** ✓✓。
+
+**真 bug（两处同源 ✓）**：`mc.getAllBiomes()` 返回的是**按 mcdata 自身顺序排的数组** ✓，而 `bot.world.getBiome(pos)` 返回的是**服务端下发的网络 biome id** ✓ —— **两者不同序** ✗ → 用 id 去数数组下标 ✓ 必然错位 ✗。实测表现：**主世界 y=188 的平原被读成 `small_end_islands`** ✓✓；且 id 越界时 `mc.getAllBiomes()[id].name` 直接抛 `undefined (reading 'name')` ✗（本轮日志里确实抓到过这条 TypeError ✓）。
+- `src/models/prompter.js` `$STATS` ✗ → 模型自述位置错 ✓
+- `src/agent/library/world.js:518 getBiomeName()` ✗ → **这条更值钱** ✓：它喂给 `full_state` 与 **migration / badBiome** 一类决策 ✓ —— **也就是说它的"要不要搬家、这里危不危险"可能一直在用错的生态域做判断** ✓✓
+
+**修法** ✓：改用 **`bot.registry.biomes[id].name`** ✓（服务端权威映射 ✓），mcdata 只作兜底 ✓ 并守住越界 ✗。补丁存 `world-notes/neko-grounding-task14.patch` ✓。
+**验收** ✓：修后它自报 `overworld / plains / -543.5,188.0,868.5` ✓ 与 `data get entity NekoX Dimension`、`locate biome minecraft:plains（0 blocks away）`、`data get entity NekoX Pos` **四项全对** ✓✓；`small_end_islands` 字符串**全仓零命中** ✓ 亦证它不是代码写死 ✓。
+
+**顺带定谳的第二个问题（比位置更值钱 ✓✓）**：它长时间 **`PERSISTENT PIN — 6 kicks ineffective over 35min`** ✗ 的死锁真因是
+```
+action "mode:self_preservation" trying to interrupt current action "action:collectBlocks"
+```
+—— **自保反射一次次掐断 LLM 刚发起的采集动作** ✓✗（89 次空转 ✓、任务 0 产出 ✓）。它自己报警说 "needs a **relocating recovery venture**" ✓ —— **知道该搬家却没有对应提案/技能** ✓。这正是 §二.3 身体所有权仲裁该覆盖的那一对（`self_preservation` vs `collectBlocks` ✓），但这条抢占走的是老的 `interrupt_code` 路 ✓ **没进 arbiter** ✓ → **仲裁器的覆盖面有洞** ✓✓。另外：我把它 tp 到地面（y=63 ✓）后 **它自己又爬回了 y=188 的浮空塔** ✓ → 说明有个持续目标在把它拽回去 ✓（值得单独查 ✓）。
