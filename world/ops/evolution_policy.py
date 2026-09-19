@@ -90,6 +90,8 @@ POLICY_JSON = lambda f: {
     },
     'gateDecisions': {
         'no_new_learning_evidence': '指纹没动 —— 这是最常见的结果，不是故障',
+        'reserved_for_unfinished_draft': '本班让位：另有一个角色手里压着没验完/没启用的草稿，'
+                                        '且自那草稿出现后还没轮到过它 —— 预算先给它（它跑过一班后此条自动失效）',
         'operations_task_unresolved': '同一共享账本里还有未结的运营任务，先结它',
         'bounded_runtime_required': '超时>180s 或并发≠1 的班次不接受',
         'project_console_required': '班次必须走 console 通道',

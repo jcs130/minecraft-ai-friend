@@ -46,7 +46,17 @@ def fingerprint(tools):
 def reserve_review(tools, job_id, clock=time.time):
     """Uses the SAME persisted ledger as operations_delegate, never a new quota."""
     from operations_native_tasks import ledger, budget_check, reconcile_pending
+    from agent_learning import owed_shift_roles
     reconcile_pending()
+    # 共享预算每整点只放一轮，谁先抢谁得 —— 但"手里有没做完的活"的角色应当优先。
+    # 只在**确实有人欠着**且本角色不欠时让位；该角色跑过班次后此条自动失效，
+    # 所以它不会变成新的饿死。
+    owed = owed_shift_roles(tools.state)
+    if owed:
+        mine = getattr(tools, 'native_role', None) or tools.role
+        if mine not in [row['role'] for row in owed]:
+            return {'ok': False, 'code': 'reserved_for_unfinished_draft',
+                    'owed': [row['role'] for row in owed][:4]}
     with locked(tools.root):
         digest = fingerprint(tools)
         marker = tools.root / 'last-review.json'

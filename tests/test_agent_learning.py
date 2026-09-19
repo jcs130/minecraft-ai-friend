@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/ops'))
-from agent_learning import LearningTools, TOOL_NAMES, managed_job, read, write
+from agent_learning import LearningTools, TOOL_NAMES, managed_job, owed_shift_roles, read, write
 from cron_guard import guarded_execute, reserve_review
 
 
@@ -109,6 +109,30 @@ class LearningTests(unittest.TestCase):
         self.assertIn('learning_validate(name, revision)', text)
         self.assertIn('learning_activate(name, revision)', text)
         self.assertIn('learning_draft', text)
+
+    def test_role_holding_an_unfinished_draft_is_owed_the_next_shift(self):
+        """2026-09-19：共享预算每整点只放一轮、谁先抢谁得，压着未完成草稿的角色可能永远轮不到。
+
+       （桐人的草稿就等了 10 小时才等到一班。）所以把"欠班次"的角色排前面；但判据必须
+        **可自清** —— 它跑过一班之后就不再欠，否则这条优先级自己会变成新的饿死。
+        """
+        self.assertEqual(owed_shift_roles(self.state), [])
+        row = self.draft()
+        owed = owed_shift_roles(self.state)
+        self.assertEqual([item['role'] for item in owed], [self.role])
+        self.assertEqual(owed[0]['unfinished'], 1)
+        draft_path = self.tool.root / 'drafts' / row['name'] / (row['revision'] + '.json')
+        write(self.tool.root / 'last-review.json',
+              {'schema': 1, 'reservedAt': os.path.getmtime(str(draft_path)) + 5})
+        # 已轮到过一班：不再欠（自清）
+        self.assertEqual(owed_shift_roles(self.state), [])
+        write(self.tool.root / 'last-review.json', {'schema': 1, 'reservedAt': 0})
+        self.tool.validate(row['name'], row['revision'])
+        # 校验过但没启用，仍然算"活没干完"
+        self.assertEqual([item['role'] for item in owed_shift_roles(self.state)], [self.role])
+        self.tool.activate(row['name'], row['revision'])
+        # 启用之后才算干完
+        self.assertEqual(owed_shift_roles(self.state), [])
 
     def test_failure_feedback_disables_exact_revision(self):
         row = self.active()

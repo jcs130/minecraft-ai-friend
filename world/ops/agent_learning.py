@@ -133,6 +133,74 @@ def managed_job(role, runtime):
     return job
 
 
+
+def owed_shift_roles(state, limit=24):
+    """哪些角色"欠着一班"：手里有没验完/没启用的草稿，而且自那草稿出现后还没轮到过班次。
+
+    背景（2026-09-19）：学习预算全局共享，每个整点只放一轮，**谁先抢谁得**。
+    于是持着未完成草稿的角色可能永远轮不到 —— 草稿就烂在抽屉里，而"启用"这一步
+    恰恰是经验变能力的唯一出口（桐人那轮就这么拖了 10 小时才轮上）。
+
+    判据刻意做成**可自清**的：该角色跑过一班之后（last-review 的 reservedAt 晚于草稿
+    mtime），它就不再算"欠"，别人下一轮便能正常上 —— 否则这条优先级会变成新的饿死。
+    """
+    from pathlib import Path as _Path
+    rows = []
+    root = _Path(state) / 'workspaces'
+    config = None
+    try:
+        config = read(_Path(state) / 'config.json')
+    except (OSError, ValueError):
+        config = None
+    profiles = ((config or {}).get('agents') or {}).get('profiles') or {}
+    if not root.is_dir():
+        return rows
+    for folder in sorted(item for item in root.iterdir() if item.is_dir() and not item.is_symlink())[:limit]:
+        if profiles and profiles.get(folder.name, {}).get('enabled') is not True:
+            continue
+        learning = folder / 'learning'
+        drafts = learning / 'drafts'
+        if not drafts.is_dir():
+            continue
+        newest = 0.0
+        unfinished = 0
+        try:
+            index = read(learning / 'index.json')
+        except (OSError, ValueError):
+            index = {}
+        skills = (index.get('skills') or {})
+        for path in sorted(item for item in drafts.glob('*/*.json') if not item.is_symlink()):
+            revision = path.stem
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
+            validated = False
+            checked = learning / 'validation' / (revision + '.json')
+            if checked.exists() and not checked.is_symlink():
+                try:
+                    validated = read(checked).get('ok') is True
+                except (OSError, ValueError):
+                    validated = False
+            if validated:
+                active = skills.get(path.parent.name) or {}
+                if active.get('enabled') and active.get('revision') == revision:
+                    continue
+            unfinished += 1
+        if not unfinished:
+            continue
+        replied = 0.0
+        marker = learning / 'last-review.json'
+        if marker.exists():
+            try:
+                replied = read(marker).get('reservedAt') or 0
+            except (OSError, ValueError):
+                replied = 0
+        if replied < newest:
+            rows.append({'role': folder.name, 'unfinished': unfinished})
+    return rows
+
+
 class LearningTools:
     def __init__(self, role, runtime, state=Path('/state/work'), service=None, fetch=public_get, api=native_api, clock=time.time,
                  *, native_role=None, native_runtime=None):
