@@ -65,7 +65,9 @@ services:
       MC_ADVANCEMENTS_DIR: /mcadv
       MC_STATS_DIR: /mcstats
       MC_GOD_NAME: Goddess
-      INTERNAL_BOT_NAMES: "RenderBot,ProbeBot,QDSmokeProbe,QDSmokeBody"
+      # ★2026-09-20 造物主谕：live 是直播机位账号（不是旅人）→ 登记为内部号，
+      #   女神/气泡/降临仪式/社交四处一律按机器账号跳过，别对它搭话或赐福。
+      INTERNAL_BOT_NAMES: "RenderBot,ProbeBot,QDSmokeProbe,QDSmokeBody,live"
       MC_OBSERVER: "1"
       MC_VIEWER: "0"
       MC_MODERN_VIEWER: "1"
