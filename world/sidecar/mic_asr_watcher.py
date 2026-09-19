@@ -24,6 +24,22 @@ VOICE_ALLOWED_PLAYERS = {name.strip() for name in os.environ.get('VOICE_ALLOWED_
 # 出 0.02~0.16s 垃圾段，真实最短指令「二」0.54s、「八号哎」0.62s，中间有干净
 # 空档。取 0.45s：滤掉点触噪声，不误伤单字短指令；skip 打日志可追溯误删。
 MIN_DUR_S = float(os.environ.get('ASR_MIN_DUR', '0.45'))
+# 元数据宽限期（2026-09-19）：录音的 wav 与 .txt 是**分开**落盘的，谁先谁后不定。
+# 旧行为是"wav 超过 5 秒还没等到 txt 就归档丢弃" ✗ —— ASR 忙一轮（几百毫秒~数秒）
+# 就会咬到真人：萌萌今天两句全丢，seen 账本里至今没有任何真人片段。
+# 元数据本身只接受 120 秒内的录音（MAX_INPUT_AGE_MS），所以宽限给足 120 秒不改变
+# 任何安全语义，只是不再因为"两份文件差了几秒"丢掉一句话。
+METADATA_GRACE_S = float(os.environ.get('ASR_METADATA_GRACE', '120'))
+# 转写台账：outbox 里的那条会被女神 bot 消费即删，于是"她说了什么"事后无可查。
+# 每段终局（published / 失败）都追加一行，留给世界复盘。
+LEDGER = os.path.join(BASE, 'transcripts.jsonl')
+# 单实例所有权（跨 Windows 宿主 / Linux 容器都有效）：
+# 旧版在 Linux 里 msvcrt 直接不可用 → acquire_lock() 恒真 → **等于没锁**，
+# 与宿主"渡备用"实例并存时互相抢同一段（[loop-fail] 就是这么来的）。
+OWNER_FILE = os.path.join(BASE, '.watcher.owner')
+# 心跳 1 秒一次（每轮 poll 都刷），TTL 取 10 秒：既容不下第二个活实例，
+# 又不会让"刚重启的新实例"被自己前身的残影挡在门外（它等 ≤10 秒就接管）。
+OWNER_TTL_S = 10.0
 MAX_INPUT_AGE_MS = 120_000
 MAX_DUR_S = 120
 MAX_JOB_ID = 100
@@ -69,21 +85,61 @@ def transcribe(rec, wav_path):
 _LOCK_FH = None
 
 
-def acquire_lock():
-    global _LOCK_FH
+def owner_alive(ttl=OWNER_TTL_S):
     try:
-        import msvcrt
-    except ImportError:
-        return True  # 非 Windows 由 claim 兜底
+        return (time.time() - os.path.getmtime(OWNER_FILE)) < ttl
+    except OSError:
+        return False
+
+
+def refresh_owner():
+    """心跳：每轮刷新 mtime，过期的所有权可被接管（杀不掉的旧实例不会永远占位）。"""
     try:
-        _LOCK_FH = open(os.path.join(BASE, '.watcher.lock'), 'a+b')
-        _LOCK_FH.seek(0)
-        msvcrt.locking(_LOCK_FH.fileno(), msvcrt.LK_NBLCK, 1)
+        os.utime(OWNER_FILE, None)
         return True
     except OSError:
-        _LOCK_FH.close()
-        _LOCK_FH = None
         return False
+
+
+def acquire_lock():
+    """O_EXCL 建所有权文件；已存在则等它过期再接管。
+
+    与旧的 msvcrt 版不同，这一版在 Linux 容器里**同样有效**——今天的事故正出在那里：
+    容器内 import msvcrt 失败 → 恒真返回 → 宿主与容器两端同时消费同一队列。
+
+    启动时最多等 OWNER_TTL_S + 5 秒：活着的实例会持续刷新心跳（我们永不接管它），
+    而"刚重启、前身残影还在"的场景会在一个 TTL 内自然过期，之后由我们接手 ✓。
+    """
+    global _LOCK_FH
+    payload = json.dumps({'pid': os.getpid(), 'at': time.time()}, ensure_ascii=False)
+    deadline = time.time() + OWNER_TTL_S + 5
+    while True:
+        try:
+            handle = os.open(OWNER_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(handle, 'w', encoding='utf-8') as stream:
+                stream.write(payload)
+            _LOCK_FH = True
+            return True
+        except FileExistsError:
+            if owner_alive() and time.time() < deadline:
+                time.sleep(1)
+                continue
+            try:
+                os.unlink(OWNER_FILE)
+                print('[owner-takeover] 接管过期所有权', flush=True)
+            except OSError:
+                return True  # 抢不动就退回旧行为：靠 claim 兜底
+        except OSError:
+            return True  # 无法建立所有权时退回旧行为：靠 claim 兜底
+
+
+
+def release_lock():
+    if _LOCK_FH:
+        try:
+            os.unlink(OWNER_FILE)
+        except OSError:
+            pass
 
 
 def claim(path):
@@ -108,8 +164,18 @@ def archive(path):
             rejected.mkdir(exist_ok=True)
             destination = rejected / (str(time.time_ns()) + '-' + os.path.basename(path))
         os.replace(path, str(destination))
-    except OSError:
-        pass
+    except OSError as error:
+        # 静默是今晚所有故障的共同点：归档失败会让 wav 永久卡在 processing/ 而没人知道。
+        print('[archive-fail]', os.path.basename(path), error, flush=True)
+
+
+def ledger(record):
+    """追加一行转写台账。写不进去也不能影响主流程。"""
+    try:
+        with open(LEDGER, 'a', encoding='utf-8') as stream:
+            stream.write(json.dumps(record, ensure_ascii=False) + '\n')
+    except OSError as error:
+        print('[ledger-fail]', error, flush=True)
 
 
 def recording_metadata(value, now_ms):
@@ -178,10 +244,20 @@ def process_recording(rec, wav_path):
         time.sleep(0.2)
     if not os.path.isfile(meta_src) and not os.path.isfile(meta):
         # WAV and metadata are published separately by the current recorder.
-        if time.time() - Path(claimed).stat().st_mtime < 5:
-            os.rename(claimed, str(source))
+        try:
+            wav_age = time.time() - Path(claimed).stat().st_mtime
+        except OSError:
+            # 文件已被别的实例挪走（多实例并存时常见）——不是错误，交给它继续。
+            return 'claim_moved'
+        if wav_age < METADATA_GRACE_S:
+            try:
+                os.rename(claimed, str(source))
+            except OSError:
+                return 'claim_moved'
             return 'metadata_pending'
         archive(claimed)
+        ledger({'schema': 1, 'result': 'missing_metadata', 'id': identifier,
+                'at': int(time.time() * 1000), 'wavAgeSeconds': round(wav_age, 1)})
         return 'missing_metadata'
     if Path(meta_src).is_symlink() or Path(meta).is_symlink():
         archive(claimed)
@@ -239,6 +315,10 @@ def process_recording(rec, wav_path):
             'emittedAt': emitted_at, 'wav': source.name})
     except Exception:
         return finish('publication_uncertain')
+    ledger({'schema': 2, 'result': 'published', 'id': identifier, 'player': player,
+            'text': text, 'ts': completed_at, 'recordedAt': recorded_at,
+            'recordingEndedAt': recording_ended_at, 'emittedAt': emitted_at,
+            'wav': source.name, 'durationSeconds': round(dur, 2)})
     print('[asr]', player, '=>', text, f'({dur:.2f}s)', flush=True)
     return finish('published')
 
@@ -252,13 +332,28 @@ def main():
         os.makedirs(d, exist_ok=True)
     print('loading paraformer model ...', flush=True)
     rec = make_recognizer()
-    print('mic asr watcher running, inbox =', INBOX, 'min_dur =', MIN_DUR_S, flush=True)
+    print('mic asr watcher running, inbox =', INBOX, 'min_dur =', MIN_DUR_S,
+          'metadata_grace =', METADATA_GRACE_S, flush=True)
+    # processing/ 的抢救**只在启动时做一次**：它本来是为"崩溃丢件"准备的，
+    # 放进轮询循环会与正在处理的 claim 打架（把别人手里的 wav 挪走 → [loop-fail]）。
+    try:
+        for pw in glob.glob(os.path.join(PROCESSING, '*.wav')):
+            try:
+                if time.time() - os.path.getmtime(pw) > 300:
+                    os.rename(pw, os.path.join(INBOX, os.path.basename(pw)))
+                    print('[startup-restore]', os.path.basename(pw), flush=True)
+            except OSError:
+                continue
+    except Exception as error:
+        print('[startup-restore-fail]', error, flush=True)
     while True:
         try:
             heartbeat(BASE, 'asr', state='polling', model_loaded=True)
+            refresh_owner()
             for w in sorted(glob.glob(os.path.join(INBOX, '*.wav'))):
                 result = process_recording(rec, w)
-                if result != 'published':
+                # 瞬态结果不刷屏：metadata_pending 每轮都会出现，claim 竞争同理。
+                if result not in ('published', 'metadata_pending', 'claim_moved', 'already_claimed'):
                     print('[asr-job]', os.path.basename(w), result, flush=True)
                 if result == 'asr_retry':
                     time.sleep(3)
@@ -267,15 +362,11 @@ def main():
         # 幽灵 meta 清理：wav 被搬走而 meta 迟到的孤儿 txt，静置 60s+ 归档
         try:
             for mt in glob.glob(os.path.join(INBOX, '*.txt')):
-                if not os.path.isfile(mt[:-4] + '.wav') and (time.time() - os.path.getmtime(mt)) > 60:
-                    archive(mt)
-            # processing/ 里超时 5 分钟的遗留（崩溃丢的）放回 inbox
-            for pw in glob.glob(os.path.join(PROCESSING, '*.wav')):
-                if time.time() - os.path.getmtime(pw) > 300:
-                    try:
-                        os.rename(pw, os.path.join(INBOX, os.path.basename(pw)))
-                    except OSError:
-                        pass
+                try:
+                    if not os.path.isfile(mt[:-4] + '.wav') and (time.time() - os.path.getmtime(mt)) > 60:
+                        archive(mt)
+                except OSError:
+                    continue
         except Exception as e:
             print('[sweep-fail]', e, flush=True)
         time.sleep(POLL)

@@ -182,13 +182,54 @@ class AsrRecordingQueue(unittest.TestCase):
         self.assertEqual(output['emittedAt'], self.NOW-100)
         self.assertEqual(output['ts'], self.NOW+5000)
 
-    def test_missing_metadata_waits_briefly_then_rejects_without_identity(self):
+    def test_missing_metadata_waits_out_the_grace_window_then_rejects(self):
+        """2026-09-19 契约变更：宽限期从 5 秒拉到 METADATA_GRACE_S（默认 120 秒）。
+
+        录音的 wav 与 .txt 是分开落盘的；旧行为"wav 超过 5 秒还没等到 txt 就归档丢弃"
+        在 ASR 忙一轮时就会咬到真人——萌萌当天两句全丢，.asr-seen.json 里至今没有任何
+        真人片段。宽限给足不改变任何安全语义：元数据本身只接受 120 秒内的录音。
+        """
         path = self.recording(metadata=False)
         self.assertEqual(self.run_recording(path), 'metadata_pending')
         self.assertTrue(path.exists())
-        self.clock.return_value = (self.NOW+6000)/1000
+        self.clock.return_value = (self.NOW+6000)/1000          # 6 秒：仍在宽限内
+        self.assertEqual(self.run_recording(path), 'metadata_pending')
+        self.assertTrue(path.exists())
+        self.clock.return_value = (self.NOW+121000)/1000        # 超宽限：才判缺失
         self.assertEqual(self.run_recording(path), 'missing_metadata')
         self.recognize.assert_not_called()
+
+    def test_metadata_arriving_late_still_publishes(self):
+        """wav 先到、txt 数秒后才到 —— 这句话必须被转写，而不是丢掉。"""
+        path = self.recording(metadata=False)
+        self.assertEqual(self.run_recording(path), 'metadata_pending')
+        self.clock.return_value = (self.NOW+6000)/1000
+        self.recording('voice-123', self.metadata())           # txt 迟到 6 秒
+        self.assertEqual(self.run_recording(path), 'published')
+        output = json.loads((self.base/'outbox/voice-123.json').read_text(encoding='utf-8'))
+        self.assertEqual(output['text'], '咏唱：烟花术')
+
+    def test_transcript_is_kept_in_a_ledger_after_the_world_consumes_it(self):
+        """outbox 会被女神 bot 消费即删 → 必须在台账里留一份可查的记录。"""
+        self.assertEqual(self.run_recording(self.recording()), 'published')
+        (self.base/'outbox/voice-123.json').unlink()            # 模拟世界消费
+        rows = [json.loads(line) for line in
+                (self.base/'transcripts.jsonl').read_text(encoding='utf-8').splitlines()]
+        published = [row for row in rows if row['result'] == 'published']
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0]['player'], 'MengMeng')
+        self.assertEqual(published[0]['text'], '咏唱：烟花术')
+        self.assertEqual(published[0]['recordedAt'], self.NOW-2500)
+
+    def test_metadata_loss_is_recorded_so_it_cannot_stay_invisible(self):
+        path = self.recording(metadata=False)
+        self.run_recording(path)
+        self.clock.return_value = (self.NOW+121000)/1000
+        self.assertEqual(self.run_recording(path), 'missing_metadata')
+        rows = [json.loads(line) for line in
+                (self.base/'transcripts.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.assertEqual([row['result'] for row in rows], ['missing_metadata'])
+        self.assertIn('wavAgeSeconds', rows[0])
 
     def test_audio_too_short_or_long_is_not_transcribed(self):
         for name, seconds, code in [('tap', 0.1, 'short_recording'), ('long', 120.1, 'long_recording')]:
