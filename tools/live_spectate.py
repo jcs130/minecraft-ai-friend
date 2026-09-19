@@ -6,13 +6,19 @@
 
 用法：
     python live_spectate.py start NekoX     # 让直播机位附身观战 NekoX
+    python live_spectate.py switch Kirito   # 换人（等价于再 start 一次，不必先 stop）
     python live_spectate.py stop            # 取消观战，机位归回生存
     python live_spectate.py status          # 看机位/目标状态
     python live_spectate.py list            # 列出可附身的在线玩家
 
+★直播中更快的切人办法（零权限、原版机制，不用跑本脚本）✓：
+    旁观模式下按【鼠标中键】打开观战菜单 → "Teleport to Player" → 选中要看的人 ✓
+    （键位出处：客户端 options.txt 的 key.spectatorHotbar = mouse.middle ✓）
+    另：F4 = 观战时切换光影效果（toggleSpectatorShaderEffects ✓）
+
 前提与注意（都是官方行为，不是本脚本的限制）：
   * 观战者必须在旁观模式 —— start 会自动切 ✓
-  * 观战者【自己一动】镜头就脱离锁定（原版设定 ✓）；要重新锁上再跑一次 start 即可 ✓
+  * 观战者【自己一动】镜头就脱离锁定（原版设定 ✓）；要重新锁上再 start / 或中键菜单选一次 ✓
   * 一个名字只能一个客户端 ✓，所以 live 由直播端真实客户端登录，本脚本只下命令不登录 ✓
 """
 import subprocess
@@ -108,7 +114,8 @@ def do_list():
 
 def main(argv):
     action = argv[1] if len(argv) > 1 else 'status'
-    if action == 'start' and len(argv) > 2:
+    # switch 就是再 start 一次：/spectate 可以直接换目标，不必先 stop（实测 ✓）。
+    if action in ('start', 'switch') and len(argv) > 2:
         return do_start(argv[2])
     if action == 'stop':
         return do_stop()
