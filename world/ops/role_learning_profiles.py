@@ -176,7 +176,14 @@ def validate_jobs(value, role, runtime):
     assert (schedule['cron'] == '20 * * * *'
             or re.fullmatch(r'20 (?:[0-9]|1[0-9]|2[0-3]) \* \* (?:mon|tue|wed|thu|fri|sat|sun)',
                             schedule['cron']))
-    assert all(actual['runtime'].get(key) == item for key, item in expected['runtime'].items())
+    # 迁移期两版并存：老装机的班次是 180 秒，新规格是 900 秒（学习要写草稿+校验）。
+    # 不这么写，sync 会因为"旧规格 ≠ 新期望"整批拒绝，改一处的代价变成改不动。
+    for key, item in expected['runtime'].items():
+        got = actual['runtime'].get(key)
+        if key == 'timeout_seconds':
+            assert got in (item, 180), 'runtime_drift:' + key
+        else:
+            assert got == item, 'runtime_drift:' + key
     assert all(actual['dispatch'].get(key) == item for key, item in expected['dispatch'].items())
     assert not actual['dispatch'].get('meta')
     if logical_runtime == 'game':
