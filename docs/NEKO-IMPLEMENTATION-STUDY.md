@@ -166,3 +166,23 @@ THREE 一注入，实体网格**真的开始提交 GL 命令** ✓ → 撞中 `r
 action "mode:self_preservation" trying to interrupt current action "action:collectBlocks"
 ```
 —— **自保反射一次次掐断 LLM 刚发起的采集动作** ✓✗（89 次空转 ✓、任务 0 产出 ✓）。它自己报警说 "needs a **relocating recovery venture**" ✓ —— **知道该搬家却没有对应提案/技能** ✓。这正是 §二.3 身体所有权仲裁该覆盖的那一对（`self_preservation` vs `collectBlocks` ✓），但这条抢占走的是老的 `interrupt_code` 路 ✓ **没进 arbiter** ✓ → **仲裁器的覆盖面有洞** ✓✓。另外：我把它 tp 到地面（y=63 ✓）后 **它自己又爬回了 y=188 的浮空塔** ✓ → 说明有个持续目标在把它拽回去 ✓（值得单独查 ✓）。
+
+---
+
+## 八、task#15 结案：PERSISTENT PIN 的真正根因 = 动作从不领身体令牌 ✓✓
+
+**我先前判"抢占绕开了 arbiter"是不准确的** ✗ —— 读码定谳 ✓：`modes.js:7231` ✓ 反射**确实查了**仲裁 ✓（`if (_enforce && _verdict.winner !== 'claimant') return;` ✓），问题是 **`action_manager.runAction` 从不登记 bodyOwner** ✓ → `currentOwner()` 返回 null ✓ → `arbiter.js:209` 直接短路 **`body unowned → claimant wins`** ✓✓ —— 所以 self_preservation 每一拍都**合法地**赢走身体 ✓、掐死 `action:collectBlocks` ✓ → 35 分钟 6 次强拆无效 ✓✓。**仲裁器没被绕过 ✓ 是它被告知"身体没人用"** ✓ —— 这个区别很关键 ✓：不是加规则 ✗ 是**补令牌** ✓。
+
+**修法（三处 ✓，补丁 `world-notes/neko-body-ownership-task15.patch`）**：`runAction` 开始时 `setBodyOwner(bot, actionLabel, kind)` ✓；成功路径与 catch 路径都 `releaseBodyOwner(bot, actionLabel)` ✓（**出错也必须还 ✓，否则身体被一条死动作永久占住 ✓ 会是更糟的死锁 ✓**；owner-tag 语义保证只还自己的 ✓）。**刻意不加第二次仲裁调用** ✓（modes 已调 ✓ 再调就是重复烧 LLM ✗）。
+
+**实测验收** ✓（从本次启动行起算 ✓）：`trying to interrupt` **0** ✓、`PERSISTENT PIN` **0** ✓、`Infinite action loop` **0** ✓、`reconnectNow` **0** ✓；技能真执行 ✓（`!runSkill("nightShelter","mode=seal")` 解析并跑 ✓）；角色从 y=188 浮空塔回到 **y=64 地面** ✓✓。
+
+## 九、附身观战（live = B 站直播端真实客户端 ✓）
+
+`live` 是**真实客户端**（可开光影 ✓），要"附身到 Agent 身上观战" ✓。因 MC 一名一端 ✓，它**不能**同时是观战服务的机器人号 ✓ → 走**外挂跟随器** ✓：`tools/live_spectate.py` ✓
+
+- 命令 ✓：`start <目标>` / `stop` / `status` / `loop` ✓（常驻循环由计划任务 `LiveSpectate` 拉 ✓，`/sc onlogon` ✓）
+- 机制 ✓：`gamemode spectator live` ✓ + 每 0.5 s `tp live <目标>` ✓；停止时归位 + 回生存 ✓
+- **心跳续租** ✓：跟随器活着且挂着目标就续租 ✓ → **直播端晚点上线也接得上** ✓；跟随器进程死了没人续 → 租约过期自动停 ✓ **不留幽灵机位** ✓
+- 安全 ✓：只发 `tp`/`gamemode` ✓ 不碰背包属性 ✓；目标须在 `ALLOWED_TARGETS` ✓；机位不在线不发命令 ✓（不刷 RCON 错）✓；归位点只在真取到坐标时才存 ✓
+- 配套 ✓：`live` 已进 `INTERNAL_BOT_NAMES` ✓ + `EXCLUDE_PROX` ✓ → 不被赐福/不回话/NPC 不凑到镜头前搭话 ✓（world 已重建生效 ✓、npc 已 force-recreate 生效 ✓）

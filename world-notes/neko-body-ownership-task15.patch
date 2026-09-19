@@ -1,0 +1,506 @@
+# mc-agent-neko 身体所有权令牌修复（天神 2026-09-20，task#15）
+# 根因：LLM 发起的动作从不登记 bodyOwner → arbiter currentOwner()=null →
+#       resolve() 短路成 "body unowned → claimant wins"（arbiter.js:209），
+#       于是 self_preservation 每拍都"合法"抢走身体、掐死 collectBlocks，
+#       形成 PERSISTENT PIN（实测 6 kicks / 35min 无效）。
+# 修法：runAction 领令牌、正常与异常路径都归还（owner-tag 语义，只还自己的）。
+# 实测：interrupt 刷屏 0 条、PERSISTENT PIN 0 条、技能可执行、角色回到地面 y=64。
+
+diff --git a/src/agent/action_manager.js b/src/agent/action_manager.js
+index da56c7f..a8a5482 100644
+--- a/src/agent/action_manager.js
++++ b/src/agent/action_manager.js
+@@ -1,236 +1,256 @@
+-export class ActionManager {
+-    constructor(agent) {
+-        this.agent = agent;
+-        this.executing = false;
+-        this.currentActionLabel = '';
+-        this.currentActionFn = null;
+-        this.timedout = false;
+-        this.resume_func = null;
+-        this.resume_name = '';
+-        this.last_action_time = 0;
+-        this.recent_action_counter = 0;
+-    }
+-
+-    async resumeAction(actionFn, timeout) {
+-        return this._executeResume(actionFn, timeout);
+-    }
+-
+-    async runAction(actionLabel, actionFn, { timeout, resume = false } = {}) {
+-        if (resume) {
+-            return this._executeResume(actionLabel, actionFn, timeout);
+-        } else {
+-            return this._executeAction(actionLabel, actionFn, timeout);
+-        }
+-    }
+-
+-    async stop(fromTimeout = false) {
+-        if (!this.executing) return;
+-
+-        let waitTime = 0;
+-        const checkInterval = 300; // Check every 300ms
+-        const logInterval = 2000; // Only log every 2 seconds to reduce spam
+-        // ★2026-07-08 用户令: 软卡顿阶梯 = 先脱困(这里靠 requestInterrupt 循环打断) 15s,
+-        //   到点仍没停【才重连】(不再 cleanKill→process.exit)。
+-        const maxWaitTime = 15000; // 15s interrupt window before escalating
+-        let lastLogTime = 0;
+-
+-        while (this.executing && waitTime < maxWaitTime) {
+-            this.agent.requestInterrupt();
+-
+-            // Only log occasionally to avoid spam
+-            if (waitTime - lastLogTime >= logInterval) {
+-                console.log(`Waiting for code to finish executing... (${(waitTime / 1000).toFixed(1)}s)`);
+-                lastLogTime = waitTime;
+-            }
+-
+-            await new Promise(resolve => setTimeout(resolve, checkInterval));
+-            waitTime += checkInterval;
+-        }
+-
+-        if (this.executing) {
+-            // ★2026-07-08 用户令: 动作 15s 拒绝停止【绝不 process.exit】。强制放行(置 executing=false,
+-            //   让重连后的新动作能跑) + reconnectNow 重进世界。挂死的旧动作攥着旧 bot, 重连后对旧 bot
+-            //   的操作自然空转/被拒, 其 catch 也会再次置 executing=false, 无害。
+-            this.executing = false;
+-            this.currentActionLabel = '';
+-            this.currentActionFn = null;
+-            // ★2026-07-09 用户令 (newAction 不得阻塞导致掉线): 若此刻正有一条 !newAction 在【编写+执行】
+-            //   (bot._newActionActive), "15s 没停" 多半是码在正常跑/慢 —— "等码不算卡", 不是恶意拒停。
+-            //   只强制放行身体 (上面已置 executing=false, 抢占者可继续), 绝不 reconnect —— 断线会把整条
+-            //   newAction 连同连接一起打断。真·卡死的兜底是 code_timeout: 那条路显式 stop(true) 传
+-            //   fromTimeout, 绕过此保护照旧重连 (与 modes.js unstuck 的 _newActionActive 早退同源规则)。
+-            const protectNewAction = !fromTimeout && !!(this.agent && this.agent.bot && this.agent.bot._newActionActive);
+-            if (protectNewAction) {
+-                console.warn('Code did not stop after 15s, but a newAction is active — force-release only, NO reconnect ("等码不算卡"; code_timeout is the terminal escape).');
+-            } else {
+-                console.warn('Code did not stop after 15s — forcing release + reconnect (NO process exit).');
+-                try { this.agent.reconnectNow('action-refused-stop'); } catch (e) {}
+-            }
+-        }
+-    }
+-
+-    cancelResume() {
+-        this.resume_func = null;
+-        this.resume_name = null;
+-    }
+-
+-    async _executeResume(actionLabel = null, actionFn = null, timeout = 10) {
+-        const new_resume = actionFn != null;
+-        if (new_resume) { // start new resume
+-            this.resume_func = actionFn;
+-            assert(actionLabel != null, 'actionLabel is required for new resume');
+-            this.resume_name = actionLabel;
+-        }
+-        if (this.resume_func != null && (this.agent.isIdle() || new_resume) && (!this.agent.self_prompter.isActive() || new_resume)) {
+-            this.currentActionLabel = this.resume_name;
+-            let res = await this._executeAction(this.resume_name, this.resume_func, timeout);
+-            this.currentActionLabel = '';
+-            return res;
+-        } else {
+-            return { success: false, message: null, interrupted: false, timedout: false };
+-        }
+-    }
+-
+-    async _executeAction(actionLabel, actionFn, timeout = 10) {
+-        let TIMEOUT;
+-        try {
+-            if (this.last_action_time > 0) {
+-                let time_diff = Date.now() - this.last_action_time;
+-                if (time_diff < 20) {
+-                    this.recent_action_counter++;
+-                }
+-                else {
+-                    this.recent_action_counter = 0;
+-                }
+-                if (this.recent_action_counter > 3) {
+-                    console.warn('Fast action loop detected, cancelling resume.');
+-                    this.cancelResume(); // likely cause of repetition
+-                }
+-                if (this.recent_action_counter > 5) {
+-                    // ★2026-07-08 用户令: 动作打转【不再 cleanKill→process.exit】。counter>3 已 cancelResume
+-                    //   试图断掉重复源; 到 >5 仍在死循环 → reconnectNow 重进世界打断它, 进程照常活着。
+-                    this.cancelResume();
+-                    this.recent_action_counter = 0;
+-                    // ★2026-07-09 用户令 (newAction 不得阻塞导致掉线): newAction 期间即使检出打转也不 reconnect
+-                    //   —— cancelResume 已断掉重复源 (软处理足够), 断线会把正在跑的 newAction 一起打断。
+-                    if (this.agent && this.agent.bot && this.agent.bot._newActionActive) {
+-                        console.error('Infinite action loop detected during an active newAction — cancelResume only, NO reconnect (禁断线重连).');
+-                        return { success: false, message: 'Infinite action loop during newAction; resume cancelled (no reconnect).', interrupted: true, timedout: false };
+-                    }
+-                    console.error('Infinite action loop detected — cancelling resume + reconnect (NO process exit).');
+-                    try { this.agent.reconnectNow('infinite-action-loop'); } catch (e) {}
+-                    return { success: false, message: 'Infinite action loop detected, reconnecting.', interrupted: true, timedout: false };
+-                }
+-            }
+-            this.last_action_time = Date.now();
+-            console.log('executing code...\n');
+-
+-            // await current action to finish (executing=false), with 10 seconds timeout
+-            // also tell agent.bot to stop various actions
+-            if (this.executing) {
+-                console.log(`action "${actionLabel}" trying to interrupt current action "${this.currentActionLabel}"`);
+-            }
+-            await this.stop();
+-
+-            // clear bot logs and reset interrupt code
+-            this.agent.clearBotLogs();
+-
+-            this.executing = true;
+-            this.currentActionLabel = actionLabel;
+-            this.currentActionFn = actionFn;
+-
+-            // timeout in minutes
+-            if (timeout > 0) {
+-                TIMEOUT = this._startTimeout(timeout);
+-            }
+-
+-            // start the action
+-            await actionFn();
+-
+-            // mark action as finished + cleanup
+-            this.executing = false;
+-            this.currentActionLabel = '';
+-            this.currentActionFn = null;
+-            clearTimeout(TIMEOUT);
+-
+-            // get bot activity summary
+-            let output = this.getBotOutputSummary();
+-            let interrupted = this.agent.bot.interrupt_code;
+-            let timedout = this.timedout;
+-            this.agent.clearBotLogs();
+-
+-            // if not interrupted and not generating, emit idle event
+-            if (!interrupted) {
+-                this.agent.bot.emit('idle');
+-            }
+-
+-            // return action status report
+-            return { success: true, message: output, interrupted, timedout };
+-        } catch (err) {
+-            this.executing = false;
+-            this.currentActionLabel = '';
+-            this.currentActionFn = null;
+-            clearTimeout(TIMEOUT);
+-            this.cancelResume();
+-            
+-            const errMsg = err.message || err.toString();
+-            const isInterrupt = errMsg.includes('interrupted') || errMsg.includes('Interrupted') || this.agent.bot.interrupt_code;
+-            
+-            // Only log full stack for real errors, not normal interrupts
+-            if (isInterrupt) {
+-                // Interrupts are expected behavior, minimal logging
+-                console.log(`Action interrupted: ${actionLabel}`);
+-            } else {
+-                console.error("Code execution triggered catch:", err);
+-                console.error(err.stack);
+-            }
+-            
+-            await this.stop();
+-            const errStr = err.toString();
+-
+-            let message;
+-            if (isInterrupt) {
+-                // Clean message for interrupts
+-                message = this.getBotOutputSummary() + '(action interrupted)\n';
+-            } else {
+-                message = this.getBotOutputSummary() +
+-                    '!!Code threw exception!!\n' +
+-                    'Error: ' + errStr + '\n' +
+-                    'Stack trace:\n' + err.stack + '\n';
+-            }
+-
+-            let interrupted = this.agent.bot.interrupt_code;
+-            this.agent.clearBotLogs();
+-            if (!interrupted) {
+-                this.agent.bot.emit('idle');
+-            }
+-            return { success: false, message, interrupted: isInterrupt || interrupted, timedout: false };
+-        }
+-    }
+-
+-    getBotOutputSummary() {
+-        const { bot } = this.agent;
+-        if (bot.interrupt_code && !this.timedout) return '';
+-        let output = bot.output;
+-        const MAX_OUT = 500;
+-        if (output.length > MAX_OUT) {
+-            output = `Action output is very long (${output.length} chars) and has been shortened.\n
+-          First outputs:\n${output.substring(0, MAX_OUT / 2)}\n...skipping many lines.\nFinal outputs:\n ${output.substring(output.length - MAX_OUT / 2)}`;
+-        }
+-        else {
+-            output = 'Action output:\n' + output.toString();
+-        }
+-        bot.output = '';
+-        return output;
+-    }
+-
+-    _startTimeout(TIMEOUT_MINS = 10) {
+-        return setTimeout(async () => {
+-            console.warn(`Code execution timed out after ${TIMEOUT_MINS} minutes. Attempting force stop.`);
+-            this.timedout = true;
+-            this.agent.history.add('system', `Code execution timed out after ${TIMEOUT_MINS} minutes. Attempting force stop.`);
+-            await this.stop(true); // fromTimeout: this IS the "真卡死" terminal — bypass the newAction reconnect-guard so a genuinely wedged code can still reconnect
+-        }, TIMEOUT_MINS * 60 * 1000);
+-    }
+-
++// ★task#15 (天神 2026-09-20): the body (pathfinder goal / control states / dig) is a shared
++// resource. modes.js already asks the arbiter before preempting, but LLM-initiated actions never
++// registered ownership — so arbiterCurrentOwner() was always null and resolve() short-circuited to
++// "body unowned → claimant wins" (arbiter.js:209). Result: self_preservation legally yanked the
++// body off collectBlocks on every tick = the PERSISTENT PIN livelock. Claiming the token here is
++// what makes the EXISTING arbitration actually apply to action-vs-reflex conflicts.
++import { setBodyOwner, releaseBodyOwner } from './framework/arbiter.js';
++
++export class ActionManager {
++    constructor(agent) {
++        this.agent = agent;
++        this.executing = false;
++        this.currentActionLabel = '';
++        this.currentActionFn = null;
++        this.timedout = false;
++        this.resume_func = null;
++        this.resume_name = '';
++        this.last_action_time = 0;
++        this.recent_action_counter = 0;
++    }
++
++    async resumeAction(actionFn, timeout) {
++        return this._executeResume(actionFn, timeout);
++    }
++
++    async runAction(actionLabel, actionFn, { timeout, resume = false } = {}) {
++        if (resume) {
++            return this._executeResume(actionLabel, actionFn, timeout);
++        } else {
++            return this._executeAction(actionLabel, actionFn, timeout);
++        }
++    }
++
++    async stop(fromTimeout = false) {
++        if (!this.executing) return;
++
++        let waitTime = 0;
++        const checkInterval = 300; // Check every 300ms
++        const logInterval = 2000; // Only log every 2 seconds to reduce spam
++        // ★2026-07-08 用户令: 软卡顿阶梯 = 先脱困(这里靠 requestInterrupt 循环打断) 15s,
++        //   到点仍没停【才重连】(不再 cleanKill→process.exit)。
++        const maxWaitTime = 15000; // 15s interrupt window before escalating
++        let lastLogTime = 0;
++
++        while (this.executing && waitTime < maxWaitTime) {
++            this.agent.requestInterrupt();
++
++            // Only log occasionally to avoid spam
++            if (waitTime - lastLogTime >= logInterval) {
++                console.log(`Waiting for code to finish executing... (${(waitTime / 1000).toFixed(1)}s)`);
++                lastLogTime = waitTime;
++            }
++
++            await new Promise(resolve => setTimeout(resolve, checkInterval));
++            waitTime += checkInterval;
++        }
++
++        if (this.executing) {
++            // ★2026-07-08 用户令: 动作 15s 拒绝停止【绝不 process.exit】。强制放行(置 executing=false,
++            //   让重连后的新动作能跑) + reconnectNow 重进世界。挂死的旧动作攥着旧 bot, 重连后对旧 bot
++            //   的操作自然空转/被拒, 其 catch 也会再次置 executing=false, 无害。
++            this.executing = false;
++            this.currentActionLabel = '';
++            this.currentActionFn = null;
++            // ★2026-07-09 用户令 (newAction 不得阻塞导致掉线): 若此刻正有一条 !newAction 在【编写+执行】
++            //   (bot._newActionActive), "15s 没停" 多半是码在正常跑/慢 —— "等码不算卡", 不是恶意拒停。
++            //   只强制放行身体 (上面已置 executing=false, 抢占者可继续), 绝不 reconnect —— 断线会把整条
++            //   newAction 连同连接一起打断。真·卡死的兜底是 code_timeout: 那条路显式 stop(true) 传
++            //   fromTimeout, 绕过此保护照旧重连 (与 modes.js unstuck 的 _newActionActive 早退同源规则)。
++            const protectNewAction = !fromTimeout && !!(this.agent && this.agent.bot && this.agent.bot._newActionActive);
++            if (protectNewAction) {
++                console.warn('Code did not stop after 15s, but a newAction is active — force-release only, NO reconnect ("等码不算卡"; code_timeout is the terminal escape).');
++            } else {
++                console.warn('Code did not stop after 15s — forcing release + reconnect (NO process exit).');
++                try { this.agent.reconnectNow('action-refused-stop'); } catch (e) {}
++            }
++        }
++    }
++
++    cancelResume() {
++        this.resume_func = null;
++        this.resume_name = null;
++    }
++
++    async _executeResume(actionLabel = null, actionFn = null, timeout = 10) {
++        const new_resume = actionFn != null;
++        if (new_resume) { // start new resume
++            this.resume_func = actionFn;
++            assert(actionLabel != null, 'actionLabel is required for new resume');
++            this.resume_name = actionLabel;
++        }
++        if (this.resume_func != null && (this.agent.isIdle() || new_resume) && (!this.agent.self_prompter.isActive() || new_resume)) {
++            this.currentActionLabel = this.resume_name;
++            let res = await this._executeAction(this.resume_name, this.resume_func, timeout);
++            this.currentActionLabel = '';
++            return res;
++        } else {
++            return { success: false, message: null, interrupted: false, timedout: false };
++        }
++    }
++
++    async _executeAction(actionLabel, actionFn, timeout = 10) {
++        let TIMEOUT;
++        try {
++            if (this.last_action_time > 0) {
++                let time_diff = Date.now() - this.last_action_time;
++                if (time_diff < 20) {
++                    this.recent_action_counter++;
++                }
++                else {
++                    this.recent_action_counter = 0;
++                }
++                if (this.recent_action_counter > 3) {
++                    console.warn('Fast action loop detected, cancelling resume.');
++                    this.cancelResume(); // likely cause of repetition
++                }
++                if (this.recent_action_counter > 5) {
++                    // ★2026-07-08 用户令: 动作打转【不再 cleanKill→process.exit】。counter>3 已 cancelResume
++                    //   试图断掉重复源; 到 >5 仍在死循环 → reconnectNow 重进世界打断它, 进程照常活着。
++                    this.cancelResume();
++                    this.recent_action_counter = 0;
++                    // ★2026-07-09 用户令 (newAction 不得阻塞导致掉线): newAction 期间即使检出打转也不 reconnect
++                    //   —— cancelResume 已断掉重复源 (软处理足够), 断线会把正在跑的 newAction 一起打断。
++                    if (this.agent && this.agent.bot && this.agent.bot._newActionActive) {
++                        console.error('Infinite action loop detected during an active newAction — cancelResume only, NO reconnect (禁断线重连).');
++                        return { success: false, message: 'Infinite action loop during newAction; resume cancelled (no reconnect).', interrupted: true, timedout: false };
++                    }
++                    console.error('Infinite action loop detected — cancelling resume + reconnect (NO process exit).');
++                    try { this.agent.reconnectNow('infinite-action-loop'); } catch (e) {}
++                    return { success: false, message: 'Infinite action loop detected, reconnecting.', interrupted: true, timedout: false };
++                }
++            }
++            this.last_action_time = Date.now();
++            console.log('executing code...\n');
++
++            // await current action to finish (executing=false), with 10 seconds timeout
++            // also tell agent.bot to stop various actions
++            if (this.executing) {
++                console.log(`action "${actionLabel}" trying to interrupt current action "${this.currentActionLabel}"`);
++            }
++            await this.stop();
++
++            // clear bot logs and reset interrupt code
++            this.agent.clearBotLogs();
++
++            this.executing = true;
++            this.currentActionLabel = actionLabel;
++            this.currentActionFn = actionFn;
++            // ★task#15: claim the body for the duration of this action (same owner-tag semantics
++            // modes.js uses: only the current holder can release it). Never let this throw —
++            // an arbitration bookkeeping failure must not break the action itself.
++            try {
++                setBodyOwner(this.agent.bot, actionLabel,
++                    String(actionLabel).startsWith('mode:') ? 'mode' : 'action');
++            } catch (e) {}
++
++            // timeout in minutes
++            if (timeout > 0) {
++                TIMEOUT = this._startTimeout(timeout);
++            }
++
++            // start the action
++            await actionFn();
++
++            // mark action as finished + cleanup
++            this.executing = false;
++            this.currentActionLabel = '';
++            this.currentActionFn = null;
++            clearTimeout(TIMEOUT);
++            // ★task#15: release our claim (no-op if a later holder already took over).
++            try { releaseBodyOwner(this.agent.bot, actionLabel); } catch (e) {}
++
++            // get bot activity summary
++            let output = this.getBotOutputSummary();
++            let interrupted = this.agent.bot.interrupt_code;
++            let timedout = this.timedout;
++            this.agent.clearBotLogs();
++
++            // if not interrupted and not generating, emit idle event
++            if (!interrupted) {
++                this.agent.bot.emit('idle');
++            }
++
++            // return action status report
++            return { success: true, message: output, interrupted, timedout };
++        } catch (err) {
++            this.executing = false;
++            this.currentActionLabel = '';
++            this.currentActionFn = null;
++            clearTimeout(TIMEOUT);
++            // ★task#15: the claim must be released on the error path too, or the body stays
++            // "owned" by a dead action and every later reflex is refused (a worse livelock).
++            try { releaseBodyOwner(this.agent.bot, actionLabel); } catch (e) {}
++            this.cancelResume();
++            
++            const errMsg = err.message || err.toString();
++            const isInterrupt = errMsg.includes('interrupted') || errMsg.includes('Interrupted') || this.agent.bot.interrupt_code;
++            
++            // Only log full stack for real errors, not normal interrupts
++            if (isInterrupt) {
++                // Interrupts are expected behavior, minimal logging
++                console.log(`Action interrupted: ${actionLabel}`);
++            } else {
++                console.error("Code execution triggered catch:", err);
++                console.error(err.stack);
++            }
++            
++            await this.stop();
++            const errStr = err.toString();
++
++            let message;
++            if (isInterrupt) {
++                // Clean message for interrupts
++                message = this.getBotOutputSummary() + '(action interrupted)\n';
++            } else {
++                message = this.getBotOutputSummary() +
++                    '!!Code threw exception!!\n' +
++                    'Error: ' + errStr + '\n' +
++                    'Stack trace:\n' + err.stack + '\n';
++            }
++
++            let interrupted = this.agent.bot.interrupt_code;
++            this.agent.clearBotLogs();
++            if (!interrupted) {
++                this.agent.bot.emit('idle');
++            }
++            return { success: false, message, interrupted: isInterrupt || interrupted, timedout: false };
++        }
++    }
++
++    getBotOutputSummary() {
++        const { bot } = this.agent;
++        if (bot.interrupt_code && !this.timedout) return '';
++        let output = bot.output;
++        const MAX_OUT = 500;
++        if (output.length > MAX_OUT) {
++            output = `Action output is very long (${output.length} chars) and has been shortened.\n
++          First outputs:\n${output.substring(0, MAX_OUT / 2)}\n...skipping many lines.\nFinal outputs:\n ${output.substring(output.length - MAX_OUT / 2)}`;
++        }
++        else {
++            output = 'Action output:\n' + output.toString();
++        }
++        bot.output = '';
++        return output;
++    }
++
++    _startTimeout(TIMEOUT_MINS = 10) {
++        return setTimeout(async () => {
++            console.warn(`Code execution timed out after ${TIMEOUT_MINS} minutes. Attempting force stop.`);
++            this.timedout = true;
++            this.agent.history.add('system', `Code execution timed out after ${TIMEOUT_MINS} minutes. Attempting force stop.`);
++            await this.stop(true); // fromTimeout: this IS the "真卡死" terminal — bypass the newAction reconnect-guard so a genuinely wedged code can still reconnect
++        }, TIMEOUT_MINS * 60 * 1000);
++    }
++
+ }
+\ No newline at end of file
+warning: in the working copy of 'src/agent/action_manager.js', LF will be replaced by CRLF the next time Git touches it
