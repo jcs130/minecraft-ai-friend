@@ -193,6 +193,9 @@ EDITABLE_KNOBS = {
                                'why': '台账候选要求同一模式至少重复几次'},
     'quota.candidateChars': {'kind': 'int', 'min': 300, 'max': 2000,
                              'why': '喂给角色看的候选块长度上限'},
+    # 属于改进机制本身：取消状态悬着多久后按证据结案（回执照不到的窗口长度）。
+    'cancellation.settleSeconds': {'kind': 'int', 'min': 60, 'max': 1800,
+                                   'why': '取消状态悬着多久后按证据结案'},
     'shift.promptNote': {'kind': 'text', 'max_length': 600,
                          'why': '本班提示里加一句自己的话（会附在班次提示后）'},
 }

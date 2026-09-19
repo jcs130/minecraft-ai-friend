@@ -1782,7 +1782,70 @@ class Controller:
             self.data['lastModelCallAt'] = self.clock()
         return routing
 
+
+    # 悬着的取消状态：多久（自首次不可观测起算）之后按证据结案。
+    # 它属于"改进机制"本身：窗口写进政策文件，可由角色提议改动
+    # （evolution_policy.EDITABLE_KNOBS 的 cancellation.settleSeconds）。
+    CANCELLATION_SETTLE_SECONDS = 300
+
+    def settle_cancellation(self):
+        """把悬着的 cancellationStatus 按证据结案，而不是无限等一个不会来的终态。
+
+        2026-09-19：他 24 小时里 184/475 个动作拿到 unknown —— 近四成，且集中在
+        goto/farm/equip_item 这些核心动作上。根因就在此处：stop_actions 一旦写下
+        waiting_for_native_terminal，就再也没有人去探过 —— 而那个原生任务其实早已 404，
+        终态永远不会来，这一窗里所有动作的回执就永远缺一块。
+
+        回执是学习的原料：拿不到回执就学不到「我做成没做成」，于是只能重复（重复占比 1.00）、
+        只能写字（知识 15 份/天而能力化为 0）、四天做成率 57–60% 一动不动。
+
+        每轮复探一次，三种结局都写清楚：终态即结案；404 / 超窗不可观测按证据结案；
+        仍在跑就继续等 —— 那是正确的等待。
+        """
+        if self.data.get('cancellationStatus') != 'waiting_for_native_terminal':
+            return None
+        active = self.data.get('active') or {}
+        task_id = active.get('taskId')
+
+        def settle(status, **fields):
+            self.data['cancellationStatus'] = status
+            active.pop('cancelRequested', None)
+            active.pop('cancellationStalledSince', None)
+            self.record('cancellation_settled', status=status, taskId=task_id,
+                        turnId=active.get('turnId'), **fields)
+            self.save()
+
+        if not task_id:
+            settle('native_task_absent', reason='no_task_id')
+            return 'absent'
+        now = self.clock()
+        try:
+            terminal = self.backend.poll(task_id)
+            native = str((terminal or {}).get('status') or '').lower()
+        except Exception as error:
+            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
+                settle('native_task_absent', reason='http_404')
+                return 'absent'
+            native = None
+        if native in ('finished', 'completed', 'failed', 'cancelled', 'canceled', 'timeout', 'timed_out'):
+            settle('native_terminal_confirmed', reason='native_terminal', nativeStatus=native)
+            return 'terminal'
+        if native in ('running', 'pending', 'queued'):
+            active.pop('cancellationStalledSince', None)
+            return 'running'
+        since = active.get('cancellationStalledSince')
+        if type(since) not in (int, float) or now < since:
+            active['cancellationStalledSince'] = now
+            self.save()
+            return 'waiting'
+        if now - since < self.CANCELLATION_SETTLE_SECONDS:
+            return 'waiting'
+        settle('native_task_unobservable', reason='unobservable_beyond_window', seconds=int(now - since))
+        return 'unobservable'
+
     def tick(self):
+        # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
+        self.settle_cancellation()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         body = self.gateway.snapshot()
         if hasattr(self.gateway, 'enforce_navigation_deadline'):
