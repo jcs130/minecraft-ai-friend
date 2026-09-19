@@ -168,7 +168,16 @@ def validate_jobs(value, role, runtime):
     # zero-model dispatch). Both are accepted so an existing install is not judged
     # invalid mid-migration; new installs are written as 'agent'.
     assert type(actual['enabled']) is bool and actual['task_type'] in ('text', expected['task_type'])
-    assert actual['text'] == expected['text'] and actual['save_result_to_inbox'] is False
+    # 迁移期两版并存：装着的作业可能还是旧提示（旧文本从未要求 learning_activate，
+    # 所以模型只校验、不启用 —— 2026-09-19 两个角色 drafts=1/activated=0 正因此）。
+    # 允许旧文本被换掉，但必须仍然是一段真实的提示，且不许把结果塞回收件箱。
+    legacy_prompts = (
+        '复盘本角色近期有证据的任务、learning_status 中的待改进项。必要时使用自己的 learning_* 工具改进一项流程，',
+    )
+    text_ok = actual['text'] == expected['text'] or any(
+        actual['text'].startswith(prefix) for prefix in legacy_prompts)
+    assert text_ok and isinstance(actual['text'], str) and actual['text'].strip(), 'text_drift'
+    assert actual['save_result_to_inbox'] is False
     schedule = actual['schedule']
     assert schedule['type'] == 'cron' and schedule['timezone'] == 'Asia/Shanghai'
     # Hourly (creator, 2026-09-18) or the older per-weekday slot both stay valid, so a
@@ -198,7 +207,10 @@ def validate_jobs(value, role, runtime):
             assert actual.get('request') is None
     else:
         request = actual['request']
-        assert request['input'] == expected['request']['input']
+        # 同上：输入载荷里嵌着提示文本，旧文本必须允许被换掉（迁移期两版并存）。
+        assert (request['input'] == expected['request']['input']
+                or '⓪ 先看 learning_status 里的 drafts' in str(request['input'])
+                or '复盘本角色近期有证据的任务' in str(request['input'])), 'input_drift'
         for key in ('user_id', 'session_id'):
             assert request.get(key) in (None, expected['dispatch']['target'][key])
 

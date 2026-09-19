@@ -81,6 +81,35 @@ class LearningTests(unittest.TestCase):
         self.cases[1]['kind'] = 'success'
         with self.assertRaisesRegex(ValueError, 'negative_case'): self.draft()
 
+    def test_status_carries_the_revision_that_unlocks_an_unfinished_draft(self):
+        """2026-09-19：草稿必须带着 revision 出现在 status 里。
+
+        validate/activate 都要 revision，而它只产生于 draft() 的那次返回；上一班写完就走、
+        下一班拿不到 revision，"经验变能力"这一步在结构上就做不成——生产里两个角色
+        drafts=1 / activated=0 就是这么来的。
+        """
+        row = self.draft()
+        listed = [item for item in self.tool.status()['drafts'] if item['name'] == row['name']]
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(listed[0]['revision'], row['revision'])
+        self.assertFalse(listed[0]['validated'])
+        self.assertFalse(listed[0]['activated'])
+        self.tool.validate(row['name'], row['revision'])
+        self.assertTrue([item for item in self.tool.status()['drafts']
+                         if item['name'] == row['name']][0]['validated'])
+        self.tool.activate(row['name'], row['revision'])
+        after = [item for item in self.tool.status()['drafts'] if item['name'] == row['name']][0]
+        self.assertTrue(after['activated'])
+        self.assertIn(row['name'], self.tool.status()['skills'])
+
+    def test_shift_prompt_tells_the_role_how_to_finish_what_it_started(self):
+        """班次提示必须写明续做路径，否则模型只写草稿就散场。"""
+        text = managed_job(self.role, 'game')['text']
+        self.assertIn('drafts', text)
+        self.assertIn('learning_validate(name, revision)', text)
+        self.assertIn('learning_activate(name, revision)', text)
+        self.assertIn('learning_draft', text)
+
     def test_failure_feedback_disables_exact_revision(self):
         row = self.active()
         with self.assertRaises(ValueError): self.tool.feedback(row['name'], 'failure', '实际回执明确记录了本次行动失败', '0' * 64)

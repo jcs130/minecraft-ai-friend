@@ -103,11 +103,23 @@ def managed_job(role, runtime):
     # did get was dispatched as text that never started a model. The hourly attempt is
     # cheap because reserve_review refuses when the evidence fingerprint is unchanged,
     # so a model runs only when the role actually has something new to look at.
-    prompt = ('复盘本角色近期有证据的任务、learning_status 中的待改进项。必要时使用自己的 learning_* 工具改进一项流程，'
-              '技能正文用 learning_read 读取；已有职责技能用 operations_reference(my-skills) 读取。'
-              '最多改进一项；没有证据就保留待验证，不虚构技能实测、不委派额外模型任务。'
-              '把结果记为 learning_feedback；世界行为程序仍须原生技能测试。')
-    job = {'id': 'qd-learning-' + role, 'name': '每周技能复盘' if runtime == 'operations' else '每周技能维护（零模型）',
+    # 2026-09-19：提示改成"做完为止"。旧文本只说"必要时改进一项流程"，没有任何
+    # 关于草稿→校验→启用的要求，于是模型写完草稿就散场：两个角色 drafts=1/activated=0 ✗。
+    # 而 learning_validate/activate 都需要 revision，它只在 draft() 的那次返回里出现过——
+    # 上一班写完就走、下一班拿不到 revision，"最后一步"在结构上就做不成。所以：
+    # ⓪ 先续做（status.drafts 已经把 revision 摆在眼前），③ 再要求 draft 之后紧接着 validate+activate。
+    prompt = ('本班只做一件事：把近期真实经历里值得留下的东西固化成技能，并**做完**。'
+              '⓪ 先看 learning_status 里的 drafts —— 那是上一班没做完的活。只要有一份还没 validated/activated，'
+              '本班第一件事就是把它做完：learning_validate(name, revision) → learning_activate(name, revision)。'
+              '草稿本身不改变任何行为，只有启用之后它才会以 SKILL.md 进入你的技能表、才可能被别的角色继承；'
+              '把没验完的草稿留在抽屉里，等于这一趟白干。'
+              '① 再看自己已有的技能与待改进项；② 从近期有证据的任务、失败或重复操作里选一项；'
+              '③ 用 learning_draft 产出草稿（触发描述、步骤、2–5 个用例，至少一成一败），紧接 learning_validate 校验，'
+              '通过就 learning_activate 启用；④ 若本周期确实没有值得固化的东西，明确写一句"本周期无可固化"并写进自己的 notes。'
+              '两者必居其一：既不产出也不表态，等于让这段时间的经验白过。'
+              '你验证并启用的技能会发布到世界技能库，其他角色可以直接继承。'
+              '最多推进一项；不虚构实测证据、不委派额外模型任务；世界行为程序仍须原生技能测试，结果用 learning_feedback 记录。')
+    job = {'id': 'qd-learning-' + role, 'name': '学习班次（每小时）',
         'enabled': True, 'schedule': {'type': 'cron', 'cron': '20 * * * *', 'timezone': 'Asia/Shanghai'},
         'task_type': 'agent', 'text': prompt,
         'request': {'input': [{'role': 'user', 'content': [{'type': 'text', 'text': prompt}]}]},
@@ -201,10 +213,49 @@ class LearningTools:
             return {'ok': True, 'role': self.role, 'runtime': self.runtime, 'skills': index['skills'],
                 'recentFeedback': index['feedback'][-8:], 'reviewPending': index['reviewPending'],
                 'availableTools': sorted(self.allowed_tools()), 'maxLearnedSkills': 8,
+                # 草稿连同 revision 一并列出（2026-09-19）。没有它，下一班拿不到 revision，
+                # learning_validate/activate 就永远够不着 —— 两个角色 drafts=1/activated=0
+                # 正是这么来的：草稿不是没写，是写完就够不着了。
+                'drafts': self.drafts(),
                 'programLearning': 'numen_survival skill_draft → skill_test → skill_promote' if self.role == 'qd-survivor' else None,
                 # P2: what other roles published, so inheriting is a choice and not a guess.
                 'sharedSkills': self.shared_skills(),
                 'notice': 'Procedural validation checks format and tool scope only. Feedback is reported evidence, not independent verification.'}
+
+    def drafts(self, limit=20):
+        """本角色的草稿抽屉：名字、revision、验过没有、启用没有。
+
+        这是"最后一里"的前提：learning_validate(name, revision) 与
+        learning_activate(name, revision) 都需要 revision，而它只产生于 draft()
+        的那次返回。上一班写完就走，下一班再也拿不到这个 revision —— 草稿于是
+        永远停在抽屉里，"经验变能力"这一步在结构上就做不成。
+        """
+        index = self._index()
+        rows = []
+        folder = self.root / 'drafts'
+        if not folder.is_dir():
+            return rows
+        names = sorted(item for item in folder.iterdir()
+                       if item.is_dir() and not item.is_symlink())[:limit]
+        for name_dir in names:
+            candidates = sorted((item for item in name_dir.glob('*.json') if not item.is_symlink()),
+                                key=lambda item: item.name, reverse=True)[:2]
+            for path in candidates:
+                revision = path.stem
+                active = index['skills'].get(name_dir.name) or {}
+                validated = False
+                checked = self.root / 'validation' / (revision + '.json')
+                if checked.exists() and not checked.is_symlink():
+                    try:
+                        validated = read(checked).get('ok') is True
+                    except (OSError, ValueError):
+                        validated = False
+                rows.append({'name': name_dir.name, 'revision': revision,
+                             'validated': validated,
+                             'activated': bool(active.get('enabled')) and active.get('revision') == revision,
+                             'updatedAt': int(path.stat().st_mtime)})
+        return rows
+
 
     def read_skill(self, name, revision=''):
         if not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', name): raise ValueError('invalid_skill_name')
