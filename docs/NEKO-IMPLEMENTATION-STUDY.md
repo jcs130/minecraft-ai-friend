@@ -176,13 +176,34 @@ action "mode:self_preservation" trying to interrupt current action "action:colle
 **修法（三处 ✓，补丁 `world-notes/neko-body-ownership-task15.patch`）**：`runAction` 开始时 `setBodyOwner(bot, actionLabel, kind)` ✓；成功路径与 catch 路径都 `releaseBodyOwner(bot, actionLabel)` ✓（**出错也必须还 ✓，否则身体被一条死动作永久占住 ✓ 会是更糟的死锁 ✓**；owner-tag 语义保证只还自己的 ✓）。**刻意不加第二次仲裁调用** ✓（modes 已调 ✓ 再调就是重复烧 LLM ✗）。
 
 **实测验收** ✓（从本次启动行起算 ✓）：`trying to interrupt` **0** ✓、`PERSISTENT PIN` **0** ✓、`Infinite action loop` **0** ✓、`reconnectNow` **0** ✓；技能真执行 ✓（`!runSkill("nightShelter","mode=seal")` 解析并跑 ✓）；角色从 y=188 浮空塔回到 **y=64 地面** ✓✓。
+## 九、附身观战（live = B 站直播端真实客户端 ✓）—— 用官方的，别自造 ✓✓
 
-## 九、附身观战（live = B 站直播端真实客户端 ✓）
+**我第一版做错了** ✗：写了个外部跟随器，每 0.5 s 发一次 `tp live <目标>` ✓ —— 那是土办法 ✗，
+造物主一句「**应该有官方的标准观战方法**」点醒 ✓，查证结果 ✓✓：
 
-`live` 是**真实客户端**（可开光影 ✓），要"附身到 Agent 身上观战" ✓。因 MC 一名一端 ✓，它**不能**同时是观战服务的机器人号 ✓ → 走**外挂跟随器** ✓：`tools/live_spectate.py` ✓
+**权威来源两条（都不用联网 ✓）**：
+1. **本机 Java 客户端 jar 里的语言文件** ✓ —— `versions/1.21.1/1.21.1.jar` → `assets/minecraft/lang/en_us.json` ✓，
+   搜 `spectat` 直接命中官方命令文案 ✓：`commands.spectate.success.started = "Now spectating %s"` ✓、
+   `commands.spectate.not_spectator` ✓、`commands.spectate.self = "Cannot spectate yourself"` ✓、
+   以及官方观战菜单 `spectatorMenu.teleport = "Teleport to Player"` ✓、键位 `key.spectatorOutlines` ✓。
+2. **服务端自己报语法** ✓ —— RCON `/help spectate` → **`/spectate [<target>] [<player>]`** ✓✓
+   （注意参数序 ✓：**第二个才是观战者** ✗ 我一开始按直觉写 `spectate live NekoX` ✓ 被服务端纠正
+   "NekoX is not in spectator mode" ✓✓ —— 报错信息本身就是最好的文档 ✓）
 
-- 命令 ✓：`start <目标>` / `stop` / `status` / `loop` ✓（常驻循环由计划任务 `LiveSpectate` 拉 ✓，`/sc onlogon` ✓）
-- 机制 ✓：`gamemode spectator live` ✓ + 每 0.5 s `tp live <目标>` ✓；停止时归位 + 回生存 ✓
-- **心跳续租** ✓：跟随器活着且挂着目标就续租 ✓ → **直播端晚点上线也接得上** ✓；跟随器进程死了没人续 → 租约过期自动停 ✓ **不留幽灵机位** ✓
-- 安全 ✓：只发 `tp`/`gamemode` ✓ 不碰背包属性 ✓；目标须在 `ALLOWED_TARGETS` ✓；机位不在线不发命令 ✓（不刷 RCON 错）✓；归位点只在真取到坐标时才存 ✓
-- 配套 ✓：`live` 已进 `INTERNAL_BOT_NAMES` ✓ + `EXCLUDE_PROX` ✓ → 不被赐福/不回话/NPC 不凑到镜头前搭话 ✓（world 已重建生效 ✓、npc 已 force-recreate 生效 ✓）
+**改完之后** ✓：`tools/live_spectate.py` 缩成两条命令 ✓
+```
+gamemode spectator live
+spectate <目标> live          # 服务端把镜头锁到目标实体上
+execute as live run spectate stop   # 裸 spectate stop 在控制台没有执行者上下文 ✗
+```
+外部循环、租约文件、心跳、计划任务**全部删除** ✓✓（`LiveSpectate` 任务已 delete ✓、bat/ps1/state/log 已清 ✓）。
+
+**实测验收** ✓✓：`spectate NekoX live` → `Now spectating NekoX` ✓；随后约 24 秒内 3 次采样 ✓
+`live` 与 `NekoX` 坐标**逐字节相同**（`-604.000307154949, 63.500640620466925, 868.8073550239485` ✓✓）
+= **服务端镜头锁在跟 ✓ 不是我在 tp** ✓；live `gameType=3` ✓、NekoX `gameType=0` ✓；stop/重挂均正常 ✓。
+
+**两条原版行为要记住** ✓（不是脚本的限制 ✓）：
+- 观战者**自己一动**镜头就脱锁 ✓（原版设定 ✓）→ 再跑一次 `start` 即可 ✓
+- 一个名字只能一个客户端 ✓ → `live` 由直播端真实客户端登录 ✓，脚本只下命令不登录 ✓
+配套 ✓：`live` 已在 `INTERNAL_BOT_NAMES` + `EXCLUDE_PROX` ✓ → 不被赐福、不回话、NPC 不凑到镜头前搭话 ✓
+（world 已重建生效 ✓、npc 已 force-recreate 生效 ✓）

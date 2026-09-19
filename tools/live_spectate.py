@@ -1,195 +1,109 @@
-"""live_spectate.py — 直播机位「附身观战」跟随器（天神 2026-09-20）
+"""live_spectate.py — 直播机位「附身观战」开关（官方 /spectate 版）
 
-用途：把真实客户端 `live`（B 站直播端，可开光影）附身到某个 Agent 身上观战。
-机制：租约文件驱动 —— 有租约才跟随，没租约就归位并休眠；进程本身可常驻。
+★2026-09-20 定谳：Java 版 1.21 有官方观战命令，服务端直接把观战者的镜头锁到目标实体上
+（`/help spectate` → `/spectate [<target>] [<player>]`）。所以这里【不需要】外部跟随循环 ——
+之前那版每 0.5s 发一次 tp 是土办法，会跟服务端镜头锁打架，也已经废弃 ✗。
 
-    python live_spectate.py start NekoX        # 开始观战 NekoX
-    python live_spectate.py start 桐人          # 换目标（写租约即生效）
-    python live_spectate.py stop               # 停止并把 live 送回原地
-    python live_spectate.py status             # 看当前租约/在线情况
-    python live_spectate.py loop               # 常驻跟随循环（由计划任务拉这个）
+用法：
+    python live_spectate.py start NekoX     # 让直播机位附身观战 NekoX
+    python live_spectate.py stop            # 取消观战，机位归回生存
+    python live_spectate.py status          # 看机位/目标状态
+    python live_spectate.py list            # 列出可附身的在线玩家
 
-设计约束（都写死在下面）：
-  * 只允许跟随"名册内"的目标，且绝不写任何玩家背包/属性 —— 只发 tp/gamemode。
-  * live 不在服时不发任何命令，避免 RCON 报错刷屏。
-  * 租约带 TTL：控制端崩了，跟随会在过期后自动停并把 live 归位（不留幽灵机位）。
+前提与注意（都是官方行为，不是本脚本的限制）：
+  * 观战者必须在旁观模式 —— start 会自动切 ✓
+  * 观战者【自己一动】镜头就脱离锁定（原版设定 ✓）；要重新锁上再跑一次 start 即可 ✓
+  * 一个名字只能一个客户端 ✓，所以 live 由直播端真实客户端登录，本脚本只下命令不登录 ✓
 """
-import json
-import socket
-import struct
 import subprocess
 import sys
-import time
-from pathlib import Path
 
-CAMERA = 'live'                       # 直播机位账号（真实客户端）
-STATE = Path(__file__).resolve().parent.parent / 'server' / 'world-data' / 'live-spectate.json'
-LEASE_TTL = 300.0                     # 租约有效期（秒）：控制端失联即自动停
-FOLLOW_INTERVAL = 0.5                 # 跟随频率（秒）
-ALLOWED_TARGETS = {'NekoX', 'Kirito', 'Naruto', 'Edward', 'Steve', 'Alex', 'MengMeng', 'live'}
-# 宿主侧 RCON：compose 把容器 25575 映射到 127.0.0.1:25577（只绑回环，不出网）。
-RCON_HOST, RCON_PORT = '127.0.0.1', 25577
-_PW = None
+CAMERA = 'live'                       # 直播机位账号（B 站直播端的真实客户端）
+ALLOWED_TARGETS = {'NekoX', 'Kirito', 'Naruto', 'Edward', 'Steve', 'Alex', 'MengMeng',
+                   'Goddess', 'live'}
+RCON_HOST, RCON_PORT = '127.0.0.1', 25577      # compose 把容器 25575 只映射到宿主回环
 
 
 def _password():
-    """口令现读自容器 server.properties，不落盘不进仓库。"""
-    global _PW
-    if _PW is None:
-        r = subprocess.run(['docker', 'exec', 'qiandengji-mc-1', 'sh', '-c',
-                            "grep -E '^rcon.password' /data/server.properties | cut -d= -f2"],
-                           capture_output=True, text=True, timeout=30,
-                           encoding='utf-8', errors='replace')
-        _PW = (r.stdout or '').strip()
-        if not _PW:
-            raise RuntimeError('rcon password unavailable')
-    return _PW
+    r = subprocess.run(['docker', 'exec', 'qiandengji-mc-1', 'sh', '-c',
+                        "grep -E '^rcon.password' /data/server.properties | cut -d= -f2"],
+                       capture_output=True, text=True, timeout=30,
+                       encoding='utf-8', errors='replace')
+    pw = (r.stdout or '').strip()
+    if not pw:
+        raise RuntimeError('rcon password unavailable')
+    return pw
 
 
-class _Rcon:
-    def __init__(self):
-        self.s = socket.create_connection((RCON_HOST, RCON_PORT), timeout=10)
-        self.n = 100
-        self._send(99, 3, _password())
-        self._recv()
+def rcon(cmd):
+    """一条命令一个连接：观战是低频操作，不值得维护长连接。"""
+    import socket
+    import struct
+    s = socket.create_connection((RCON_HOST, RCON_PORT), timeout=10)
 
-    def _send(self, i, t, b):
+    def send(i, t, b):
         p = struct.pack('<ii', i, t) + b.encode('utf-8') + b'\x00\x00'
-        self.s.sendall(struct.pack('<i', len(p)) + p)
+        s.sendall(struct.pack('<i', len(p)) + p)
 
-    def _recv(self):
-        hdr = self.s.recv(4)
+    def recv():
+        hdr = s.recv(4)
         if len(hdr) < 4:
             return ''
         ln = struct.unpack('<i', hdr)[0]
         d = b''
         while len(d) < ln:
-            chunk = self.s.recv(ln - len(d))
+            chunk = s.recv(ln - len(d))
             if not chunk:
                 break
             d += chunk
         return d[8:-2].decode('utf-8', 'replace').strip() if len(d) > 10 else ''
 
-    def cmd(self, command):
-        self.n += 1
-        self._send(self.n, 2, command)
-        return self._recv()
-
-    def close(self):
-        try:
-            self.s.close()
-        except Exception:
-            pass
-
-
-_CONN = None
-
-
-def rcon(cmd):
-    """单条 RCON 命令；连接断了就自动重建（跟随器要能长活）。"""
-    global _CONN
-    for _ in range(2):
-        try:
-            if _CONN is None:
-                _CONN = _Rcon()
-            return _CONN.cmd(cmd)
-        except Exception:
-            if _CONN:
-                _CONN.close()
-            _CONN = None
-    return '(rcon failed)'
-
-
-def load():
     try:
-        return json.loads(STATE.read_text(encoding='utf-8'))
-    except Exception:
-        return {}
+        send(99, 3, _password())
+        recv()
+        send(100, 2, cmd)
+        return recv()
+    finally:
+        s.close()
 
 
-def save(state):
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
-
-
-def lease_active(state):
-    return bool(state.get('target')) and time.time() - float(state.get('at', 0)) < LEASE_TTL
-
-
-def online(name):
-    out = rcon('data get entity %s Health' % name)
-    return 'entity data' in out
+def _clean(text):
+    return ' '.join((text or '').split())
 
 
 def do_start(target):
     if target not in ALLOWED_TARGETS:
-        print('refused: %r 不在允许观战的名册里（改 ALLOWED_TARGETS 再加）' % target)
+        print('refused: %r 不在可附身名册里（ALLOWED_TARGETS 加一下再来）' % target)
         return 2
-    state = load()
-    if not state.get('home'):
-        pos = rcon('data get entity %s Pos' % CAMERA)
-        # 只有真拿到坐标才算captured到归位点；机位此刻不在线就留空，别存错误文案。
-        if 'entity data' in pos and '[' in pos:
-            state['home'] = pos
-    state['target'] = target
-    state['at'] = time.time()
-    save(state)
-    print(rcon('gamemode spectator %s' % CAMERA))
-    print('观战已挂上：%s → %s（机位上线即自动附身；跟随器进程若死，租约过期自动停）' % (CAMERA, target))
+    print('  1) %s' % _clean(rcon('gamemode spectator %s' % CAMERA)))
+    # 官方语法：/spectate <target> <player> —— 第二个参数才是要当镜头的那个号。
+    print('  2) %s' % _clean(rcon('spectate %s %s' % (target, CAMERA))))
+    print('  机位 %s 已锁定观战 %s；若你手动一动镜头会脱锁（原版行为），再跑一次 start 即可。' % (CAMERA, target))
     return 0
 
 
 def do_stop():
-    state = load()
-    state['target'] = None
-    state['at'] = time.time()
-    save(state)
-    if state.get('home') and 'entity data' in str(state.get('home')):
-        print(rcon('%s' % ('gamemode survival %s' % CAMERA)))
-    print('已停止观战（live 归位交由 loop 执行，或手动 tp）')
+    # 裸 `spectate stop` 在控制台没有执行者上下文 → 用 execute as 把身份给对。
+    print('  1) %s' % (_clean(rcon('execute as %s run spectate stop' % CAMERA)) or '（已停止观战）'))
+    print('  2) %s' % _clean(rcon('gamemode survival %s' % CAMERA)))
     return 0
 
 
 def do_status():
-    state = load()
-    print(json.dumps({'camera_online': online(CAMERA), 'lease_active': lease_active(state),
-                      'target': state.get('target'), 'age': round(time.time() - float(state.get('at', 0)), 1),
-                      'home_captured': bool(state.get('home'))}, ensure_ascii=False, indent=2))
+    for who in (CAMERA, 'NekoX'):
+        pos = _clean(rcon('data get entity %s Pos' % who))
+        hp = _clean(rcon('data get entity %s Health' % who))
+        gm = _clean(rcon('data get entity %s playerGameType' % who))
+        print('  %-6s pos=%s | health=%s | gameType=%s' % (
+            who, pos[pos.find('['):] if '[' in pos else '?', hp[-6:] if hp else '?', gm[-4:] if gm else '?'))
+    print('  在线:', _clean(rcon('list'))[-120:])
     return 0
 
 
-def do_loop():
-    """常驻循环：有租约就跟，没租约就归位后小睡。
-
-    ★心跳续租：只要"跟随器活着 且 机位在线"，就刷新租约时间 —— 这样直播端晚点上线
-    也不会因为 TTL 先到期而错过；而跟随器进程本身死了就没人续租，租约自然过期，
-    不会留下一个永远在拽镜头的幽灵机位。
-    """
-    parked = True
-    while True:
-        state = load()
-        if state.get('target'):
-            # 心跳：只要跟随器活着且挂着目标就续租，机位晚点上线也接得上。
-            state['at'] = time.time()
-            save(state)
-        if lease_active(state) and online(CAMERA):
-            target = state['target']
-            if not online(target):
-                time.sleep(2)
-                continue
-            rcon('tp %s %s' % (CAMERA, target))
-            parked = False
-            time.sleep(FOLLOW_INTERVAL)
-            continue
-        if not parked:
-            home = state.get('home') or ''
-            if 'entity data' in home:
-                nums = home[home.find('[') + 1:home.find(']')].split(',')
-                if len(nums) == 3:
-                    rcon('tp %s %s %s %s' % (CAMERA, nums[0].strip(), nums[1].strip(), nums[2].strip()))
-            rcon('gamemode survival %s' % CAMERA)
-            parked = True
-        time.sleep(2)
+def do_list():
+    print(' ', _clean(rcon('list'))[-200:])
+    print('  可附身目标:', ', '.join(sorted(t for t in ALLOWED_TARGETS if t != CAMERA)))
+    return 0
 
 
 def main(argv):
@@ -200,8 +114,8 @@ def main(argv):
         return do_stop()
     if action == 'status':
         return do_status()
-    if action == 'loop':
-        return do_loop()
+    if action == 'list':
+        return do_list()
     print(__doc__)
     return 2
 
