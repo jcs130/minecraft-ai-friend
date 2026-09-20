@@ -1,6 +1,6 @@
 # 千灯纪整合项目
 
-2026-09-20 RSI 实施候选：原工程恢复工具现支持可信提交三方升级、旧dirty/history保留、hash绑定unknown搁置、固定具身/团队测试和原生idle→disabled维护；18回归通过。提交失败仅增受控步骤诊断，不重试、不改旧unknown；现役Qwen镜像38/38通过，旧工程完整隔离副本292项通过且真实提交成功，历史故障尚未复现。L1 status增加可选brief（默认full兼容），只省背包槽位、保留最新状态/终态/未知保护，按需提示和原生schema健康同步；40条轨迹离线字节-34.35%，不是token/时延/成功率收益。组合固定镜像371项通过，Node UI另行24项通过；部署状态见docs/RSI-AGENT-DESIGN.md的最新实施记录，不重跑旧归档或自动开启旧工程Cron。
+2026-09-20 RSI 第一阶段已部署：L1 status可选brief（默认full）、按需读取、policy_draft证据持久化及提交失败诊断已上线；20具身/34实践smoke与实际源hash一致，相关探针通过。40条历史输出投影字节-34.35%，实时只读full9121/brief6211；13:00–14:02:49九个已完成回合共43次工具调用，八次status均未选brief（采用0），增量正常；模型轮次完成不等于游戏目标成功，不能称已实际节省token/时延或提高成功率。原工程工作区已升级base67283d9/迁移HEADb4b9a04，双亲保留旧36de676，原11dirty及42unknown保留；331团队/456组合固定测试、24恢复工具回归通过。维护已结束，勿重跑旧归档/升级/锁恢复或自动开启原qd-team-engineer Cron。十角色profile保持；13:04十六Cron相同，13:22桐人原学习工具重复enable刷新自己旧模板，其余十五条未变。原生工单case-a7b7f2916f0992c04101的_pending_publications候选已完成修订，test-03绑定源9f15483c…74c47，482测试通过且容器已删；commit-02在read-tree失败（EngineeringGitError/128），原unknown保留。现场空index.lock隔离复现只解释此次失败，不归因旧42条unknown；无主锁已受控归档，工程角色profile/Cron精确恢复。新事务commit-03成功提交81c41e95（父b4b9a04），task-bbb8d3c78dbe completed，工单v10 needs_review；工程HEAD与回执一致、工作树干净。12个提交路径包含原11dirty保留内容及1个新测试，不能全算本轮新创；候选pushed=false、未部署，旧42条及本轮commit-02 unknown原字节保持。最终交付以docs/RSI-AGENT-DESIGN.md最新记录为准。L3独立世界A/B与保留场景尚未验证，旧全局健康问题不冒充已修复。
 
 2026-09-20 RSI 研究附带最小源码修复：policy_draft 沿用 TeamStore case 去重，持久保留有界校验回执/原 changes/因果未验证标记；请求标识绑定提交内容，同样重试幂等，新证据追加同案。新增5回归通过；Linux learning 唯一旧账本测试失败已用 b1db1ce 基线复现，TeamStore10通过；未部署到运行服务。此修复仅补证据链，不代表完成 L3。
 

@@ -2,7 +2,7 @@
 
 2026-09-20。本文按用户最新方向重写，替代旧“五层架构”和按草稿数量判定进化的方案。目标是在本项目 Minecraft Agent 上跑通可验证的自我改进；三层是本项目的设计，ModularRSI 论文并未提出这组三层命名。
 
-当前源码基线为 `b1db1ce`（具身重构）；现役能力与部署证据见 [EMBODIED-AGENT.md](EMBODIED-AGENT.md)。本文区分已具备的机制与待实现的实验闭环，不把研究、技能发布、工具启用称为 RSI 成功。
+研究开始时的具身源码基线为 `b1db1ce`；本轮已部署 L1 状态输出优化，并把原工程工作区升级到可信基线 `67283d9`、迁移提交 `b4b9a042`。后续原生工程任务已交付本地候选提交 `81c41e95`，工单待审，未推送、未部署。现役能力与部署证据见 [EMBODIED-AGENT.md](EMBODIED-AGENT.md)，工程应用记录见第 10 节。本文区分已应用机制与待验证的实验闭环，不把研究、技能发布或工具启用称为 RSI 成功。
 
 ## 1. 三层各自改进什么
 
@@ -80,6 +80,8 @@ flowchart TD
 
 现状限制：具身路径已具备增量确认、感知入口与只读交流，但外层默认观察仍为 15 秒、本地技能等待仍为 15–300 秒；逐 tick 控制在 Numen。供应商并发按 provider:model 共享，session 分开并不自动带来同时推理。下一轮要测量并改进原生事件到决策的链路，不能简单把 RCON 轮询调快就称为快速闭环。
 
+本轮已经实施的最小优化是 `status(detail="brief")`，只省略背包槽位；每次仍读取新状态并核对原行动终态，保留 counts、安全信息和未知保护，默认 full 不变。没有实现同轮状态缓存，也没有取消外部 MCP 必需的任务轮询。40 条真实历史状态投影减少 34.345% 输出字节；部署后的单次 MCP 读取为 9,121 → 6,211 字节。两者均不是模型延迟或游戏成功率的受控实验，详细证据见具身部署记录。
+
 分别统计排队、模型首 token、模型生成、工具等待、身体终态到下一次决策的时间；同时统计目标完成率、身体空闲时间、交流 p50/p95、重复上下文字节和供应商实际 usage。应用层提示变短不能直接换算 token 或费用节省。
 
 ## 4. L2：沉淀有适用条件的经验和技能
@@ -115,17 +117,17 @@ Plan4MC 提供的启发是将技能表达为前置条件、消耗、需求和产
 
 这里的原生协作是项目对 Qwen 后台任务的适配，不是标准 A2A wire protocol。身份映射见 `world/ops/world_team_hosts.py`，派工/去重见 `world_team.py` 与 `team_help.py`，源码/测试/提交绑定见 `engineering_workspace.py`，固定隔离执行见 `world/admin/engineering-runner.mjs`。工程师只能提交候选，女神/司灯才有工单分派与结案权限。
 
-**目前尚未具备的关键条件：**
+**研究阶段核查到的缺口（历史状态，已应用变更见第 10 节）：**
 
 - 工程师角色和工程工具已启用，但 `qd-team-engineer` Cron 为 `enabled=false`、`next_run_at=null`，不能称正在周期自主改码。它的 `qd-learning-mc-god` 学习班次仍启用，角色未整体停用。
-- 工程独立仓仍为 `baseCommit=600ffa3`、`HEAD=36de676` 的旧基线；缺当前 `embodiment.py`、`dialogue.py`、`sensors.py` 和 `practice.py`。必须保留旧改动与交付记录后接入当前基线。
-- 唯一现役计划 `team-guild-admin-python` 的源码修改面覆盖团队/公会/行政，未覆盖 `world/survival/*`。原 runner 健康、旧测试通过不表示新大脑已获得合格验收链。
-- 最近存在 unknown 的工程提交 journal；要对原请求和实际 HEAD 核对后衔接，不能因状态未知重投提交。
+- 当时工程独立仓为 `baseCommit=600ffa3`、`HEAD=36de676`，缺具身重构的 `embodiment.py`、`dialogue.py`、`sensors.py` 和 `practice.py`。
+- 当时唯一计划 `team-guild-admin-python` 只覆盖团队/公会/行政，未覆盖 `world/survival/*`；旧测试通过不能代替新大脑的验收。
+- 存在 unknown 工程提交 journal；需要对原请求和实际 HEAD 核对，不能因状态未知重投提交。
 - `learning_policy_draft` 已把有限配置旋钮提议转为工单，但填写 `would_change_outcome=true` 只是改进假设，不是因果证明，也不是任意模块源码修改授权。
 
-因此，第一项工程工作是对齐原工程工作区、现有测试计划与当前具身基线，再让这位工程师执行模块改进；本轮研究没有开启其旧 Cron 或覆盖独立仓。
+上述核查确定了实施顺序：先保留旧工作区和未知回执，再对齐基线与固定测试。现在这次升级已完成，工程角色与原 Cron 状态已恢复；其 `qd-team-engineer` 仍保持原来的关闭状态，真实验证通过原生求助任务提交，不把它说成周期自主改码。
 
-刷新需扩展已有 `tools/prepare_engineering_recovery.py` 的 prepare/test/apply 路径：保留现有实际文件、分支和交付记录，在候选副本整合新基线，验证后再替换。该工具当前只做旧恢复任务的计划调整，并不会升级 baseCommit 或导入具身源码，不能原样运行就声称同步完成。`prepare_world_engineering.py` 是旧首次初始化器，不能重跑覆盖现有仓库。恢复到可测试状态也不等于候选已通过 RSI 晋升。
+升级复用并扩展了 `tools/prepare_engineering_recovery.py` 的 prepare/test/quiesce/apply 路径；研究阶段的旧工具仅调整恢复计划，不能升级 baseCommit，这一限制已由本轮显式升级模式补齐。没有重跑首次初始化器覆盖旧仓库。恢复到可测试状态仍不等于候选已通过 RSI 晋升。
 
 ## 6. 从跨任务发现到新一代机制
 
@@ -145,6 +147,8 @@ Plan4MC 提供的启发是将技能表达为前置条件、消耗、需求和产
 `task/objective hash、初始存档与物资 hash、世界/模组/配方版本、身体与维度、harness 源码 hash、模块组合、skill 版本、memoryEpoch 与检索快照、模型/工具配置、预算、随机种子、评测器版本、原始回执引用`。
 
 环境仍可能有随机性与外部扰动，须记录并多次采样；固定 seed 不等于完全复现。目标完成判断独立于候选，未知结果不伪造为成功；基础设施失败的数量与排除原因一起报告。少数试跑仅为初步证据。
+
+现有独立 NeoForge QA 环境可复用，但不能直接把旧 `server_snapshot.py` 产物当作上述完整实验快照：其运行态映射仍从源目录 `data` 取数据，而现役项目使用 `server/world-data`，且未完整绑定新的具身日志、行为上下文、实践台账和 Qwen 记忆状态。本轮未调用它重置或复制生产世界。开展 A/B 前须先对齐实际路径和状态清单，验证恢复后的等价初始条件；这仍是下一阶段工作。
 
 最终保留场景不回流给编辑 Agent 反复调参；若已用于修订，则转为开发材料并另建保留集。经验来自旧记忆档案时保持来源标签，不能重新混入新默认记忆。
 
@@ -170,27 +174,29 @@ Plan4MC 提供的启发是将技能表达为前置条件、消耗、需求和产
 
 | 顺序 | 最小交付 | 验收 |
 | --- | --- | --- |
-| 0：复用链对齐 | 给原工程师当前具身基线；处理旧工作树/unknown 交付；扩展原固定测试计划到相关生存模块 | 当前字节可捕获、固定隔离测试能运行、提交绑定同一版本；旧记录保留 |
-| 1：L1 基线与效率 | 测量延迟组成，改进现有事件/终态唤醒与按行为提供上下文/工具 | 目标成功率不回退；重复上下文、身体空闲及交流延迟有可比数字 |
+| 0：复用链对齐（已应用） | 工程师已接入基线 `67283d9` 与具身固定计划；旧改动和 unknown 保留 | 迁移两计划 331/456 项通过；原生候选另经 482 项测试并本地提交 `81c41e95`，工单待审、未部署 |
+| 1：L1 基线与效率（部分完成） | brief 状态投影和按需读取已部署；继续测量事件到决策链路 | 输出字节减少已测；目标成功率、身体空闲及交流延迟仍需可比实验 |
 | 2：L2 跨任务复用 | 在原台账/技能库补充适用条件、采用证据、反例和计划关系 | 在不同初始情境复用成功；能区分未采用、失败和已验证；不按草稿数验收 |
 | 3：首个 L3 实验 | 从导航、合成或容器交互等不同任务中寻找同类观察/上下文/工具问题，选一个真实证据支持的模块候选 | 冻结基线与候选，独立存档 A/B 与保留场景，目标/代价/失败报告和可回退新代 |
 | 4：扩大泛化范围 | 再加入视觉研究、MineDojo backend 与必要的多模块整合 | 本服模组任务与跨环境分别报告；不拿旧环境结果替代实际部署验收 |
 
-“观察/上下文重复”是待检验的候选方向，不是已经证明的共同根因。任务难度应覆盖可获得成功/失败反馈的场景，避免只有轻易成功或当前完全不可做的任务。
+重复背包槽位输出已经在本轮轨迹中量化并缩减；它是否造成延迟或任务失败、其余观察/上下文是否需要改动仍待检验，不能归为已经证明的共同根因。任务难度应覆盖可获得成功/失败反馈的场景，避免只有轻易成功或当前完全不可做的任务。
 
-首轮闭环成功应能完整展示：真实多任务经历 → Agent 自主定位机制问题 → 既有工程师产生候选 → 固定实验显示收益 → 保留任务未明显退化 → 形成有来源的新代并可回退。单次闭环证明一次改进；新代再次产生并验证后继改进，才构成更强的递归证据。当前已部署的是具身与实践基础，尚无这条完整链路的验收结果。
+首轮闭环成功应能完整展示：真实多任务经历 → Agent 自主定位机制问题 → 既有工程师产生候选 → 固定实验显示收益 → 保留任务未明显退化 → 形成有来源的新代并可回退。单次闭环证明一次改进；新代再次产生并验证后继改进，才构成更强的递归证据。当前已有具身与实践基础、首个 L1 优化及工程工作区升级，尚无这条完整链路的收益验收。
 
 ## 9. 研究阶段交付（实施前记录）
 
-完成论文和关键实现研究、角色/工程权限及现役状态核查，形成上述三层架构、复用映射与实施验收条件。旧具身部署记录继续保留；不将旧配额、旧代码副本或旧测试通过转述成当前 RSI 运行情况。本轮未启动外部机器人、训练 MineCLIP/RL、重置游戏世界、开启工程班次或实施自动机制晋升。
+研究阶段完成论文和关键实现研究、角色/工程权限及现役状态核查，形成上述三层架构、复用映射与实施验收条件。以下保留该阶段事实，不能读作最新部署状态；后续实施见第 10 节。当时未启动外部机器人、训练 MineCLIP/RL、重置游戏世界、开启工程班次或实施自动机制晋升。
 
 另修复原 `LearningTools.policy_draft` 的证据交接：以前指标、反事实判断和来源证据仅返回调用者，没有完整进入工单；相同 changes 的新证据还会碰撞旧 request ID。现在沿用原 case 去重键，在既有事件中保存校验后的有界回执和原 changes，明确 `causalityVerified=false`，由实际提交内容生成请求标识。相同重试幂等，新理由/新证据形成同案新事件，历史事件保留；超出工单容量明确拒绝，不写入截断的审计记录。
 
-沿用既有校验器的 note 600 字、metric 160 字、evidence 最多六条/每条 200 字限制，不能把该记录称为原请求字节归档。源码修复不改变模型、权限、班次或激活规则；运行态尚未部署此修复，不能当作 L3 已运行。
+沿用既有校验器的 note 600 字、metric 160 字、evidence 最多六条/每条 200 字限制，不能把该记录称为原请求字节归档。源码修复不改变模型、权限、班次或激活规则。研究阶段尚未部署；现已随 13:00 的维护应用，但证据交接修复本身仍不是 L3 收益证明。
 
-验证：新增五项真实临时 TeamStore/SQLite 回归，覆盖重建后读取、历史保留、重复/新增证据、no_verdict 与容量拒绝。Windows learning 为 20 通过/2 个既有 Linux 专用跳过，TeamStore 10 通过；同版 Qwen 镜像的禁网、非 root、只读源码容器内 learning 为 21 通过/1 失败，TeamStore 10 通过。唯一失败 `test_ops_cron_and_delegate_share_existing_ledger_and_uncertain_reservation` 在 `b1db1ce` 原代码/原测试下同样复现（16 通过/1 失败），不归因于本次补丁，也未改其旧断言凑绿。文档相对链接及 43 个固定 GitHub 路径均核对存在。
+当时验证：新增五项真实临时 TeamStore/SQLite 回归，覆盖重建后读取、历史保留、重复/新增证据、no_verdict 与容量拒绝。Windows learning 为 20 通过/2 个既有 Linux 专用跳过，TeamStore 10 通过；同版 Qwen 镜像的禁网、非 root、只读源码容器内 learning 为 21 通过/1 失败，TeamStore 10 通过。唯一失败 `test_ops_cron_and_delegate_share_existing_ledger_and_uncertain_reservation` 在 `b1db1ce` 原代码/原测试下同样复现（16 通过/1 失败），不归因于该补丁，也未改其旧断言凑绿。文档相对链接及 43 个固定 GitHub 路径均核对存在。这批历史结果不替代升级后的固定计划验收。
 
 ## 10. 工程链与首个 L1 候选的实施
+
+部署后的采用观察：13:00–14:02:49 九个已完成回合、43 次工具调用中，八次 `status` 均省略 detail，brief 实际采用为零。行为 session 的增量和终态确认继续工作，但输出投影能力尚未在这批自主调用中发挥作用；后续应验证调用默认、提示与按需详情的实际采用效果，不能仅凭增加参数便宣称效率提高。此处统计原生模型回合完成，不等同游戏目标达成率。
 
 原 `prepare_engineering_recovery.py` 增加可信本地提交升级模式：按真实 Git 共同祖先合并工程师已提交历史，再把实际未提交/未跟踪/删除内容三方合并回来。固定检查的许可基线与 Git 共同祖先分别核验，已合入主线后修正的代码不会被旧提交再次覆盖。合并提交保留旧 HEAD 与新基线两个父节点，冲突明确停在隔离目录。固定测试由可信提交产生，工程师不能通过改固定检查绕过验收；组合 Python 计划覆盖原团队业务和已选具身模块。独立 Node UI 测试明确列为另一运行环境的检查，不记作 Python 通过项。
 
@@ -198,8 +204,30 @@ Plan4MC 提供的启发是将技能表达为前置条件、消耗、需求和产
 
 未提交改动确有冲突时，可由维护者精读后提供 `--working-resolutions <JSON>`：逐项绑定 old HEAD、目标提交、base/local/incoming 三侧字节及已复核结果的 SHA256，只能覆盖此次真实 dirty 冲突集合，不能覆盖固定检查或已提交历史冲突。审核原件、合并结果和旧工作区一并备份，合并内容仍是未提交工作；测试和应用阶段再次核验。该入口解决工作区升级冲突，不赋予工程 Agent 修改自己的验收门槛的权限。
 
-42 条历史 unknown 已逐项复核，保留原始状态，维护记录只标注 `archived_unresolved_no_replay`，不改成成功、不重新执行。旧工程完整隔离副本在现役固定镜像通过 292 项测试并成功提交，历史失败尚不能复现。原提交工具补受控失败步骤、异常类型及退出码，保留未知结果语义；分支更新后失败也不会自动回滚或重放。新诊断回归在现役 Qwen 镜像 38/38 通过。
+维护工具按单操作者串行使用。离线 test 尚无常驻工程 runner 那样的运行中持久回执；已有同源 passed 后再次测试若中断，旧 passed 仍是历史证据，不能描述为最新重跑成功。test/quiesce 也不提供多操作者并发调度；本次按准备、测试、排空、应用依次完成，无并发维护。
+
+42 条历史 unknown 已逐项复核，保留原始状态，维护记录只标注 `archived_unresolved_no_replay`，不改成成功、不重新执行。旧工程完整隔离副本在现役固定镜像通过 292 项测试并成功提交，当时未能复现旧 42 条记录的失败。原提交工具补受控失败步骤、异常类型及退出码，保留未知结果语义；分支更新后失败也不会自动回滚或重放。新诊断回归在现役 Qwen 镜像 38/38 通过。后续新事务的空锁复现见下文，不能回填为这批历史记录的共同根因。
 
 首个 L1 候选来自导航、合成等轮次中反复返回完整背包的观察问题：沿用 `status` 增加可选 brief 投影和按需读取说明，同时使原健康检查识别新 schema。40 条真实输出的离线字节减少 34.35%，独立 fixture 保持真实终态、未知保护和物品变化；详情见 [具身部署记录](EMBODIED-AGENT.md)。这只是可测的感知输出改进，完整 L3 仍需要工程角色自主产生候选、独立世界 A/B 和保留场景验收。
 
-2026-09-20 13:00 已部署 L1 状态投影、按需读取提示、policy_draft 证据修复及工程提交诊断。维护先暂停原班次/NPC准入并排空，随后只重启原 survivor 和游戏 Qwen；Minecraft 保持运行。现役字节的隔离 smoke 20/20 通过，具身健康与原生工具就绪通过，真实 MCP brief/full 读取成功（48工具）。原十角色完整 profile、十六个 Cron spec 均读回一致，自主与 NPC 准入已恢复。Qwen 的旧 `mc-god/qd-learning-mc-god` text_drift 与 NPC 的 guild_npc_identity_not_ready 仍存在，不能称全局健康全绿。工程工作区升级另有下文最终记录，L1 部署不代表已切换工程副本。
+2026-09-20 13:00 已部署 L1 状态投影、按需读取提示、policy_draft 证据修复及工程提交诊断。维护先暂停原班次/NPC 准入并排空，随后只重启原 survivor 和游戏 Qwen；Minecraft 保持运行。生产字节的具身 smoke 20/20、实践 smoke 34/34 通过，分别记录 12/15 个与现役文件一致的源码哈希；模型调用、游戏动作及生产修改计数均为 0。真实 MCP brief/full 读取成功（48 个工具），一次输出为 9,121/6,211 字节。生产报告为 `reports/embodied-agent-smoke.json`、`reports/survival-practice-smoke.json`；本机部署证据为 `runtime/rsi-engineering-upgrade/live-status-probe.json` 及同目录 `panel-smoke.json`。
+
+工程升级随后已实际应用，不能再表述为“工程副本尚未同步”。现役工程基线为 `67283d9ac9e018c2ad11b0af3d62a9e27ffd620b`，迁移提交 `b4b9a0424c50dfc191e6ce5c42102d3f04567f4a` 保留旧 HEAD `36de676` 和新基线 `67283d9` 两个父节点。11 条原未提交/未跟踪改动经合并保留；两处冲突经显式源码哈希复核，旧原件仍在完整备份中。42 条 unknown 原状态及回执保留，未重新提交或标成成功。
+
+固定计划 `team-guild-admin-python` 为 331/331 通过，新增 `embodied-team-python` 为 456/456 通过；两计划共享部分测试，不相加为独立案例数。升级恢复工具另有 24 项回归通过。两计划均使用固定 Qwen 镜像 `sha256:45dc7f061c09489b7d36d5b1499b830a3b14176835c0bc9afaa233d60df2299f`。应用回执 `candidateAcceptance=passed`、`historyRewritten=false`、`oldReceiptsPreserved=true`，同时 `businessCodeDeployed=false`：升级工程师的候选工作区不等于部署其业务改动。
+
+应用及恢复收据在开发目录 `runtime/rsi-engineering-upgrade/apply-result.json`、`test-result.json`、`engineer-resumed.json`。完整旧工作区和工程记录保存在生产 `server/engineering/migrations/20260920T051644-32e782f4/`，其中固定测试日志记录上述 331/456 项结果。工程师 profile 与原 Cron 状态已恢复；原 `qd-team-engineer` Cron 仍关闭，未借升级开启新的周期任务。
+
+原生工程验证已走到真实修改、独立审查和固定测试：工单 `case-a7b7f2916f0992c04101` 沿用原 `qd-engineer` 与同一 session；工程师修复 `_pending_publications` 的读取范围、坏回执未知标记和诊断体积，新增回归，并根据审查纠正 Python 3.11 目录 API 会提前完整枚举的问题。最新快照 `9f15483c85fef816e2ef6d6acd26b6903e2a4429ea3190d37fc2ffdaced74c47` 的正式作业 `mc-god-20260920-pending-pub-bounded-test-03` 已通过 482 次执行，exitCode=0，结束后源码核验通过且容器已删除（`containerRemoved=true`）。具体边界见具身部署记录，本次不宣称前序 proposal/receipt 全链路修复。
+
+首次任务 `task-3f4239feaf34` 的模型响应流中断已明确记录 failed，后续在确认终态后通过新工单版本续接，没有重投旧 unknown。原角色提交任务 `task-d0b86246fe30` 随后调用 `mc-god-20260920-pending-pub-bounded-commit-02`，诊断确定失败阶段为 `read-tree`、异常为 `EngineeringGitError`、exitCode=128；原 journal 仍为 `unknown`。现场空 `.git/index.lock` 已在隔离副本复现同一阶段和退出码，可解释此次提交失败，但不能归因旧 42 条 unknown。
+
+锁维护已完成：停用工程角色后归档经核验无主的空锁，操作前后 HEAD、index、2,310 个源码文件与 61 条 journal 完全一致；随后 profile 和原 Cron 精确恢复。旧 42 条 unknown 与本轮 commit-02 unknown 均保持原字节，不修改成功、不自动重试。核验记录在本机 `runtime/rsi-engineering-upgrade/lock-recovery/recovered.json` 与 `resumed.json`。
+
+最终由原生任务 `task-bbb8d3c78dbe` 以新事务 `mc-god-20260920-pending-pub-bounded-commit-03` 完成提交，任务 completed、提交状态 `committed`，工单 v10 为 `needs_review`。提交 `81c41e95a3c7ec3cb94ba18790fabac8767ce7a7` 的父节点为 `b4b9a042`，绑定同一 `9f15483c…74c47` 源快照与 test-03 的 482 项测试；`git --no-optional-locks` 验证 HEAD 与回执一致、工作树干净。12 个提交路径包含旧 11 项 dirty 内容的保留及本轮修订，另有新回归 `tests/test_world_content_pending_publications_bounded.py`，不能把全部路径归为本轮新增。候选 `pushed=false`、未部署，交付证据为本机 `runtime/rsi-engineering-upgrade/native-engineer-delivery.json`。
+
+该次验证由维护者给任务与审查意见，已验证原工程角色修改、测试、本地提交和工单交接的能力，不是 Agent 自主发现机制问题或完成世界 A/B 的证据。正式测试和原 unknown journal 保存在生产 `server/engineering/receipts/`、`server/engineering/state/`，原生派工与审查记录在本机 `runtime/rsi-engineering-upgrade/`。
+
+13:04 的 L1 恢复检查时十角色 profile、十六个 Cron 定义及启用状态与维护前一致，自主和 NPC 准入正常。13:22 桐人在原学习班次再次调用 `learning_schedule(enabled=true)`，既有实现重建其完整 spec，补入原模板的 policy_draft 说明；13:28 复核其余十五条定义、全部 profile 与启用状态不变。该变化有原生调用和成功回执，不归为维护主动改写，细节见具身部署记录。
+
+Qwen 仍有旧 `mc-god/qd-learning-mc-god` 的 `text_drift`（实际 572 字符、校验期望 700）；NPC 仍因 `hesu=missing_in_loaded_chunk` 报 `guild_npc_identity_not_ready`。实践旧报告的源码失效已通过真实重测修复；其余面板组件状态与此前具身部署基线一致，不能称全局健康全绿。完整 L3 仍缺独立世界 A/B、保留场景与后继代收益验证。
