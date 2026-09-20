@@ -15,6 +15,7 @@ description: 千灯纪世界团队处理真实游玩反馈、跨角色工单、�
 - 复现问题、记录证据、交接或复测：`references/work-orders.md`。
 - 设计故事、投稿、提交与发布活动：`references/content.md`。
 - 工程师读写独立源码、测试与提交：`references/engineering.md`。
+- 技能可用性、数值平衡或性能改进：`references/skill-balance-performance.md`，复用原工单与工程验证。
 - 女神检查与执行已有服务器管理：`references/administration.md`。
 - 原生班次、持久会话与经验积累：`references/schedule-memory.md`。
 - 反复受阻需要立即联系运营组：`references/native-help.md`。

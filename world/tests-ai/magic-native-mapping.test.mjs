@@ -80,6 +80,17 @@ test('catalogue restores 35 active entries, 26 explicit mappings and 35 distinct
   }
 })
 
+test('balance refuses ineffective native alias patches and non-finite globals without changing history', t => {
+  const f = fixture(t)
+  const handle = f.service
+  assert.ok(handle)
+  const before = handle.listBalance()
+  assert.equal(handle.applyBalancePatch('rasengan', 'cost.mana', 1, 'qa', 'test').ok, false)
+  assert.equal(handle.applyBalancePatch('*', 'regenPerSec', NaN, 'qa', 'test').ok, false)
+  assert.equal(handle.applyBalancePatch('*', 'regenPerSec', Infinity, 'qa', 'test').ok, false)
+  assert.deepEqual(handle.listBalance(), before)
+})
+
 test('malformed or unclassified mapping metadata fails closed', () => {
   const invalid = [
     raw => { raw.featuredDetails.rasengan.nativeSpell = 'gust' },

@@ -8,7 +8,7 @@
   "files": [
     {
       "path": "server/mc/mods/botgate.jar",
-      "sha256": "6ca6c1ed262417187a0447e727c3a753a8b82d4d50e30442b64a55ff2b15022a",
+      "sha256": "8f669d9fe4d70a24c6967db28b9867963469603c44685f13371685d7e5c0a240",
       "client_required": false
     },
     {
@@ -18,12 +18,12 @@
     },
     {
       "path": "server/world-data/skill-catalog.json",
-      "sha256": "16e253db502324d9f07a1949a67f454086ab3bdd30a838f1035e8db9d134fca5",
+      "sha256": "a44beebfb78985a17d025b768bcf38622e91d0e33134068569b1b49bd5c17cbf",
       "client_required": false
     },
     {
       "path": "server/mcdata/skill-catalog.json",
-      "sha256": "16e253db502324d9f07a1949a67f454086ab3bdd30a838f1035e8db9d134fca5",
+      "sha256": "a44beebfb78985a17d025b768bcf38622e91d0e33134068569b1b49bd5c17cbf",
       "client_required": false
     },
     {

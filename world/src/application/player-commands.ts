@@ -1,6 +1,6 @@
 import {
   parseCli, parseCastInput, cliOverview, cliAllCommands, cliVerbHelp, CLI_VERBS,
-  shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb, type CliCommand,
+  shapeStatus, shapeSkills, shapeSpells, shapeInnate, canonicalVerb, describeSkill, IRON_GUIDE, type CliCommand,
 } from '../gameplay/commands/player-cli.ts'
 import { NATIVE_SPELL_ID } from '../gameplay/native/contracts.ts'
 import type { NativeSpell } from '../gameplay/native/contracts.ts'
@@ -83,6 +83,22 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
       }
       case 'help': {
         const v = cmd.args[0] ?? ''
+        if (cmd.args.length > 1) { fail('invalid_params', '用法：help [命令|技能ID|irons]。'); return }
+        if (v === 'irons' || v === '铁魔法') {
+          if (cmd.json) jsonReply({ ok: true, topic: 'irons', steps: IRON_GUIDE, nextCommands: ['spells', 'status'], source: 'https://iron.wiki/progression/' })
+          else replyLines(IRON_GUIDE)
+          return
+        }
+        const atom = v && !canonicalVerb(v) ? magic.getAtomById(v) : null
+        if (atom) {
+          if (subject.includes('-')) { fail('login_required', '女神秘术进度使用唯一登录名查询。'); return }
+          const native = atom.catalog?.nativeSpell ? await irons.request('list', subject) : { ok: false, code: 'not_queried', summary: '' }
+          const detail = describeSkill(atom, magic.getState(subject), native)
+          if (cmd.json) jsonReply({ ok: true, skill: detail })
+          else replyLines([`${detail.name} · ${detail.id} · ${detail.availability.reason}`, detail.nextStep,
+            JSON.stringify(detail.requirements), `参数：${JSON.stringify(detail.params)}`, detail.castCommand ? `/mycli ${detail.castCommand}` : '无需主动施放'])
+          return
+        }
         const lines = v ? cliVerbHelp(canonicalVerb(v) ?? v) : cliOverview()
         if (cmd.json) jsonReply({ ok: true, help: lines })
         else replyLines(lines)
@@ -97,7 +113,7 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
           return
         }
         const section = cmd.args[0] ?? ''
-        if (cmd.args.length > 1 || (section && !['waypoints', 'archive', 'skillbar'].includes(section))) { fail('invalid_params', '用法：menu、menu irons、menu waypoints、menu archive 或 menu skillbar。'); return }
+        if (cmd.args.length > 1 || (section && !['waypoints', 'archive', 'skillbar', 'guide'].includes(section))) { fail('invalid_params', '用法：menu [guide|irons|waypoints|archive|skillbar]。'); return }
         let ok = false
         try {
           const pos = parseNbtPosition(await rcon.send(`data get entity ${resolveLogin(subject)} Pos`))
@@ -127,13 +143,18 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         replyLines(panel.replace('魔力：', '秘术魔力：').split('\n').filter(line => !native.ok || (!line.startsWith('生命：') && !line.startsWith('✦ 状态')))); return
       }
       case 'skills': {
+        if (subject.includes('-')) { fail('login_required', '女神秘术进度使用唯一登录名；UUID 可用 spells 查询原生法术。'); return }
         const view = magic.getState(subject)
         const { panel, json } = shapeSkills(view, magic.listAtoms().filter(a => a.type !== 'passive' && (!a.catalog || a.catalog.status === 'featured')))
         if (cmd.json) {
           const bookSkills = magic.listAtoms().filter(a => a.type === 'passive' || !a.catalog || a.catalog.status === 'featured')
             .map(a => ({ id: a.id, name: a.name, requiredLevel: a.requiredLevel, type: a.type,
               learned: view.learned.includes(a.id) || view.innateSkill === a.id }))
-          jsonReply({ ok: true, ...json, bookSkills }); return
+          const native = await irons.request('list', subject)
+          const details = magic.listAtoms().filter(a => a.type === 'passive' || !a.catalog || a.catalog.status === 'featured')
+            .map(a => { const d = describeSkill(a, view, native); return { id: d.id, engine: d.engine,
+              nativeSpell: d.nativeSpell, learned: d.learned, reason: d.availability.reason, helpCommand: `help ${d.id}` } })
+          jsonReply({ ok: true, ...json, bookSkills, details, nativeQuery: { ok: native.ok, code: native.code }, snapshotOnly: true }); return
         }
         replyLines(panel.split('\n')); return
       }
@@ -141,11 +162,12 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         if (!cmd.args.length || ['irons', '铁魔法'].includes(cmd.args[0])) {
           if (cmd.args.length > 1) { fail('invalid_params', '用法：spells irons。'); return }
           const result = await irons.request('list', subject)
-          if (cmd.json) jsonReply(result)
+          if (cmd.json) jsonReply({ ...result, guideCommand: 'help irons', nextCommands: ['status', 'help cast'], snapshotOnly: true })
           else if (!result.ok) reply(`[铁魔法] ${result.summary}`)
           else {
             reply(`[铁魔法] 装备法术 ${result.spells?.length ?? 0} 个 · /mycli menu irons 选取施法；特色秘术查 spells legacy，旧档案查 spells archive。`)
-            replyLines((result.spells ?? []).map(s => `${s.name} Lv.${s.level} · ${s.id} · 法力 ${s.mana} · 冷却 ${s.cooldownMs}ms`))
+            replyLines((result.spells ?? []).map(s => `${s.name} Lv.${s.level} · ${s.id} · 法力 ${s.mana} · 冷却 ${s.cooldownMs}ms · ${s.ready === true ? '可尝试施放' : `暂不可用：${s.reasonKey ?? '状态待核实'}`}`))
+            if (!result.spells?.length) replyLines(IRON_GUIDE.slice(0, 3))
           }
           return
         }

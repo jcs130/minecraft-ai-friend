@@ -15,14 +15,14 @@ import java.util.List;
 /** All compass/book/keybind entry points share the categorized vanilla chest. */
 public final class SkillChestCommands {
     private static final Logger GODFIX = LoggerFactory.getLogger("godfix-skillchest");
-    private enum View { MAIN, WAYPOINTS, ARCHIVE, ITEMS, SKILLBAR, SKILLBAR_CHOICES }
+    private enum View { MAIN, WAYPOINTS, ARCHIVE, ITEMS, SKILLBAR, SKILLBAR_CHOICES, GUIDE }
     private SkillChestCommands() {}
 
     public static LiteralArgumentBuilder<CommandSourceStack> root() {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("skillchest");
         root.then(Commands.literal("self").executes(ctx -> openSelf(ctx.getSource())));
-        for (String name : List.of("wheel", "panel", "open", "waypoints", "archive", "items", "skillbar")) {
-            View view = switch (name) { case "waypoints" -> View.WAYPOINTS; case "archive" -> View.ARCHIVE; case "items" -> View.ITEMS; case "skillbar" -> View.SKILLBAR; default -> View.MAIN; };
+        for (String name : List.of("wheel", "panel", "open", "waypoints", "archive", "items", "skillbar", "guide")) {
+            View view = switch (name) { case "waypoints" -> View.WAYPOINTS; case "archive" -> View.ARCHIVE; case "items" -> View.ITEMS; case "skillbar" -> View.SKILLBAR; case "guide" -> View.GUIDE; default -> View.MAIN; };
             root.then(Commands.literal(name).then(Commands.argument("player", StringArgumentType.word())
                     .executes(ctx -> openNamed(ctx.getSource(), StringArgumentType.getString(ctx, "player"), 0, view))
                     .then(Commands.argument("page", IntegerArgumentType.integer(0))
@@ -61,6 +61,7 @@ public final class SkillChestCommands {
     public static void openArchiveFor(ServerPlayer player, int page) { openPage(player, page, View.ARCHIVE); }
     public static void openCategoryFor(ServerPlayer player, String category) { openPage(player, 0, View.MAIN, 0, SkillChestLayout.validFilter(category)); }
     public static void openSkillbarFor(ServerPlayer player) { openPage(player, 0, View.SKILLBAR); }
+    public static void openGuideFor(ServerPlayer player) { openPage(player, 0, View.GUIDE); }
     public static void openSkillbarChoicesFor(ServerPlayer player, int slot, int page) {
         if (slot >= 1 && slot <= SkillChestLayout.SKILLBAR_SLOTS) openPage(player, page, View.SKILLBAR_CHOICES, slot);
     }
@@ -69,7 +70,7 @@ public final class SkillChestCommands {
         return openPage(player, requested, view, 0);
     }
     private static boolean openPage(ServerPlayer player, int requested, View view, int selectedSlot) {
-        return openPage(player, requested, view, selectedSlot, "all");
+        return openPage(player, requested, view, selectedSlot, "known");
     }
     private static boolean openPage(ServerPlayer player, int requested, View view, int selectedSlot, String category) {
         try {
@@ -84,7 +85,7 @@ public final class SkillChestCommands {
                 case ARCHIVE -> SkillChestLayout.pagesFor(data.archivedSkills);
                 case WAYPOINTS -> SkillChestLayout.waypointPagesFor(data.waypoints);
                 case ITEMS -> SkillChestLayout.itemPagesFor(data.config.giveItems);
-                case SKILLBAR -> 1;
+                case SKILLBAR, GUIDE -> 1;
                 case SKILLBAR_CHOICES -> SkillChestLayout.skillbarChoicePagesFor(choices);
             };
             int page = Math.max(0, Math.min(requested, pages - 1));
@@ -95,9 +96,10 @@ public final class SkillChestCommands {
                 case ITEMS -> SkillChestLayout.buildItemGrid(data.config, data.config.giveItems, page);
                 case SKILLBAR -> SkillChestLayout.buildSkillbar(data.config, choices, data.skillbar, data.skillbarAvailable);
                 case SKILLBAR_CHOICES -> SkillChestLayout.buildSkillbarChoices(data.config, choices, data.skillbar, selectedSlot, page);
+                case GUIDE -> SkillChestLayout.buildGuide(data.config);
             };
             String label = switch (view) { case MAIN -> "技能罗盘 · " + SkillChestLayout.filterName(category); case ARCHIVE -> "旧技能档案 · 只读"; case WAYPOINTS -> "传送阵"; case ITEMS -> "造物 · 选择物品";
-                case SKILLBAR -> "快捷栏 · 8 槽"; case SKILLBAR_CHOICES -> "快捷槽 " + selectedSlot + " · 选择秘术"; };
+                case SKILLBAR -> "快捷栏 · 8 槽"; case SKILLBAR_CHOICES -> "快捷槽 " + selectedSlot + " · 选择技能"; case GUIDE -> "施法入门与排障"; };
             Component title = Component.literal(label + " · " + (page + 1) + "/" + pages);
             var opened = player.openMenu(new net.minecraft.world.MenuProvider() {
                 @Override public net.minecraft.world.inventory.AbstractContainerMenu createMenu(int id, net.minecraft.world.entity.player.Inventory inv,

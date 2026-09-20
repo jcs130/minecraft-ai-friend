@@ -446,6 +446,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     /* 天平引擎：女神动态平衡 */
     listBalance: () => balancePatches.map((p) => ({ ...p })),
     applyBalancePatch: (atomKey, field, value, by, reason) => {
+      if (!Number.isFinite(value)) return { ok: false, error: '数值必须是有限数字；未修改任何平衡配置' }
       if (field in BALANCE_GLOBALS) {
         // 全局字段（regenPerSec）：改回蓝速率，立即生效
         const g = BALANCE_GLOBALS[field]
@@ -465,6 +466,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const key = (atomKey ?? '').trim()
       const a = atoms.find((x) => x.id === key) ?? atoms.find((x) => x.name === key)
       if (!a) return { ok: false, error: `未知法术「${atomKey}」` }
+      if (nativeMapping(a)) return { ok: false, error: `「${a.name}」由 ${nativeMapping(a)} 执行；旧秘术覆盖层不改变原生数值，请提交原生配置的独立验证候选` }
       if (!Number.isInteger(value)) return { ok: false, error: `${spec.label}须为整数` }
       if (value < spec.min || value > spec.max) return { ok: false, error: `「${a.name}」${spec.label}须在 ${spec.min}~${spec.max} 之间` }
       const before = spec.get(a)

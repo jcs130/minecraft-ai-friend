@@ -79,14 +79,14 @@ public class SkillChestMenu extends ChestMenu {
                     .withStyle(style -> style.withColor(color).withItalic(false)));
             if (entry.selected) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
             List<Component> lore = new ArrayList<>();
-            if (!entry.lore.isEmpty()) for (String line : entry.lore.split("\\n"))
-                lore.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
+            if (!entry.lore.isEmpty()) for (String line : SkillChestLayout.loreLines(entry.lore))
+                lore.add(Component.literal(line).withStyle(style -> style.withColor(ChatFormatting.GRAY).withItalic(false)));
             String instruction = switch (entry.kind) {
                 case SKILL -> "give".equals(entry.id) ? "A / 左键：选择物品" : "A / 左键：确认释放";
                 case NATIVE_SPELL -> "A / 左键：按原生规则施法";
                 case WAYPOINT -> "A / 左键：确认传送";
                 case ITEM -> "A / 左键：确认造物";
-                case NATIVE, WARP_HUB, ARCHIVE_HUB, SKILLBAR_HUB, SKILLBAR_SLOT -> "A / 左键：打开";
+                case NATIVE, WARP_HUB, ARCHIVE_HUB, SKILLBAR_HUB, SKILLBAR_SLOT, GUIDE -> "A / 左键：打开";
                 case SKILLBAR_EDIT -> "A / 左键：确认配置（不会施法）";
                 case MORE, BACK -> "A / 左键：翻页";
                 case HOME -> "A / 左键：返回罗盘";
@@ -130,6 +130,7 @@ public class SkillChestMenu extends ChestMenu {
                 case SKILLBAR_HUB -> SkillChestCommands.openSkillbarFor(player);
                 case SKILLBAR_SLOT -> SkillChestCommands.openSkillbarChoicesFor(player, SkillChestLayout.navTarget(entry), 0);
                 case CATEGORY -> SkillChestCommands.openCategoryFor(player, entry.id);
+                case GUIDE -> SkillChestCommands.openGuideFor(player);
                 case HOME -> { if (homeOpener != null) homeOpener.run(); }
                 default -> { }
             }
