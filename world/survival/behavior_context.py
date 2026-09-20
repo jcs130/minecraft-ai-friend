@@ -120,6 +120,7 @@ def prepare(root, life, context, memory, *, learning=False):
             '目标和方法由你决定，当前身体授权只使用本条turn_id。updates替换同名顶层状态，removed删除状态；'
             'events仅为新事件，observations说明当前各感知源的时间和有效性，未变化字段不重复发送。'
             'self与scene是局部实测，intent是意图，未知不是不存在。行动后查真实回执；受理、idle、程序done不证明目标。'
+            '轮内需要最新身体/行动状态时用status(detail="brief")；需要背包槽位或物品详情再用full，已有有效回执不重复查询。'
             '高频执行交给本地技能；模型处理目标、新条件、交流与学习。只传结论、证据和下一步，不复制旧思考。'
             '旧记忆已归档，不能把历史结论当本代事实。结束用remember(finish_turn=true,summary=简短结论)。')
         envelope.update(instruction=rules + PURPOSE[purpose], references=REFERENCES,

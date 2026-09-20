@@ -41,6 +41,17 @@ def valid_tools(value):
         and {row['name'] for row in value} == set(TOOL_NAMES))
     if not basic:
         return False
+    status_schema = next(row for row in value if row['name'] == 'status')['input_schema']
+    status_properties = status_schema.get('properties', {})
+    detail = status_properties.get('detail', {}) if isinstance(status_properties, dict) else {}
+    choices = detail.get('enum') if isinstance(detail, dict) else None
+    required = status_schema.get('required', [])
+    if (not isinstance(detail, dict) or detail.get('type') != 'string'
+            or detail.get('default') != 'full' or not isinstance(choices, list)
+            or len(choices) != 2 or not all(isinstance(choice, str) for choice in choices)
+            or set(choices) != {'full', 'brief'}
+            or not isinstance(required, list) or 'detail' in required):
+        return False
     properties = next(row for row in value if row['name'] == 'remember')['input_schema'].get('properties', {})
     memory_ready = (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
             and properties.get('finish_turn', {}).get('default') is False

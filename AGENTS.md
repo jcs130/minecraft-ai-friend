@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-20 RSI 实施候选：原工程恢复工具现支持可信提交三方升级、旧dirty/history保留、hash绑定unknown搁置、固定具身/团队测试和原生idle→disabled维护；18回归通过。提交失败仅增受控步骤诊断，不重试、不改旧unknown；现役Qwen镜像38/38通过，旧工程完整隔离副本292项通过且真实提交成功，历史故障尚未复现。L1 status增加可选brief（默认full兼容），只省背包槽位、保留最新状态/终态/未知保护，按需提示和原生schema健康同步；40条轨迹离线字节-34.35%，不是token/时延/成功率收益。组合固定镜像371项通过，Node UI另行24项通过；部署状态见docs/RSI-AGENT-DESIGN.md的最新实施记录，不重跑旧归档或自动开启旧工程Cron。
+
 2026-09-20 RSI 研究附带最小源码修复：policy_draft 沿用 TeamStore case 去重，持久保留有界校验回执/原 changes/因果未验证标记；请求标识绑定提交内容，同样重试幂等，新证据追加同案。新增5回归通过；Linux learning 唯一旧账本测试失败已用 b1db1ce 基线复现，TeamStore10通过；未部署到运行服务。此修复仅补证据链，不代表完成 L3。
 
 2026-09-20 最新 RSI 方向：采用 L1 感知/决策/行动/反馈/短反思，L2 有条件的经验/规则/可执行技能，L3 跨任务证据驱动的模块化 harness 演化。ModularRSI 五模块是 L3 的修改面，不新增五套 Agent；复用 QwenPaw 原工单、司灯/女神与 qd-engineer。只读核查时工程师角色/工具启用但 qd-team-engineer Cron 关闭，独立源码 base600ffa3/HEAD36de676 缺当前具身模块，固定计划不覆盖 world/survival；不能称 L3 已自主运行或重跑旧初始化器。Plan4MC 借技能条件/效果与执行后重规划；MineDojo/MCEnv 基于1.11.2，作为另一研究环境，不能替代本服1.21.1独立存档验收；MineCLIP 是视觉表征/相关信号，现语义俯视图不是第一视角视频，相关分数不等于完成。详见 docs/RSI-AGENT-DESIGN.md 与 docs/OPEN-SOURCE-AGENT-CODE-STUDY.md。旧归档无需重做，本次研究不启用工程班次或自动晋升。

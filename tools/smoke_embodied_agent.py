@@ -22,17 +22,18 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     before = hashes()
-    module = importlib.import_module('test_embodied_agent')
     suite = unittest.TestSuite()
     names = []
-    for _, cls in inspect.getmembers(module, inspect.isclass):
-        if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
-            continue
-        for method, function in sorted(cls.__dict__.items()):
-            if method.startswith('test_') and callable(function):
-                test = cls(method)
-                names.append(test.id())
-                suite.addTest(test)
+    for name in ('test_embodied_agent', 'test_survival_status_detail'):
+        module = importlib.import_module(name)
+        for _, cls in inspect.getmembers(module, inspect.isclass):
+            if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
+                continue
+            for method, function in sorted(cls.__dict__.items()):
+                if method.startswith('test_') and callable(function):
+                    test = cls(method)
+                    names.append(test.id())
+                    suite.addTest(test)
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     report = {'schema': 1, 'ok': result.wasSuccessful() and not result.skipped and before == hashes(),
               'testsRun': result.testsRun, 'tests': names, 'sourceHashes': before,

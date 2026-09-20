@@ -297,6 +297,90 @@ class EngineeringTests(unittest.TestCase):
         with patch.object(self.service, 'git', side_effect=AssertionError('must not replay')):
             self.assertFalse(self.service.commit('fix', sha, 'request-0001', 'commit-0001')['ok'])
 
+    def test_real_index_lock_failure_records_step_without_stderr_or_retry(self):
+        self.modify(); sha = self.receipt()
+        lock = self.repo / '.git/index.lock'; lock.write_text('fixture-owned lock')
+        with self.assertRaisesRegex(ValueError, '^engineering_git_failed$'):
+            self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        journal = json.loads((self.area / 'state/commit-commit-0001.json').read_text())
+        self.assertEqual(journal['status'], 'unknown')
+        self.assertEqual(journal['failure'], {'step': 'read-tree', 'errorType': 'EngineeringGitError', 'exitCode': 128})
+        self.assertEqual(self.git('rev-parse', 'HEAD').strip(), self.base)
+        self.assertNotIn(str(self.repo), json.dumps(journal))
+        self.assertEqual(self.service.status()['progress']['recentCommits'][0]['failure'], journal['failure'])
+        lock.unlink()  # Only this fixture's lock; removing it must not enable replay.
+        with patch.object(self.service, 'git', side_effect=AssertionError('must not replay')):
+            repeated = self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        self.assertEqual(repeated, {'ok': False, **journal})
+
+    def test_update_ref_completed_before_timeout_keeps_unknown_and_new_head(self):
+        self.modify(); sha = self.receipt()
+        real_git = self.service.git
+        def timed_out_after_update(*args, **kwargs):
+            result = real_git(*args, **kwargs)
+            if args[0] == 'update-ref':
+                raise subprocess.TimeoutExpired('sensitive command', 25, stderr=b'sensitive stderr')
+            return result
+        with patch.object(self.service, 'git', side_effect=timed_out_after_update):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        head = self.git('rev-parse', 'HEAD').strip()
+        self.assertNotEqual(head, self.base)
+        journal = json.loads((self.area / 'state/commit-commit-0001.json').read_text())
+        self.assertEqual(journal['status'], 'unknown')
+        self.assertEqual(journal['failure'], {'step': 'update-ref', 'errorType': 'TimeoutExpired', 'exitCode': None})
+        self.assertNotIn('sensitive', json.dumps(journal))
+        with patch.object(self.service, 'git', side_effect=AssertionError('must not replay')):
+            self.assertFalse(self.service.commit('fix', sha, 'request-0001', 'commit-0001')['ok'])
+        self.assertEqual(self.git('rev-parse', 'HEAD').strip(), head)
+
+    def test_result_write_failure_after_ref_update_keeps_unknown_and_records_step(self):
+        self.modify(); sha = self.receipt()
+        def failing_result(path, row):
+            if row.get('status') == 'committed': raise OSError('sensitive storage path')
+            return write(path, row)
+        with patch('engineering_workspace.write', side_effect=failing_result):
+            with self.assertRaises(OSError):
+                self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        head = self.git('rev-parse', 'HEAD').strip()
+        self.assertNotEqual(head, self.base)
+        journal = json.loads((self.area / 'state/commit-commit-0001.json').read_text())
+        self.assertEqual(journal['status'], 'unknown')
+        self.assertEqual(journal['failure'], {'step': 'persist-result', 'errorType': 'OSError', 'exitCode': None})
+        self.assertNotIn('sensitive', json.dumps(journal))
+        with patch.object(self.service, 'git', side_effect=AssertionError('must not replay')):
+            self.assertFalse(self.service.commit('fix', sha, 'request-0001', 'commit-0001')['ok'])
+        self.assertEqual(self.git('rev-parse', 'HEAD').strip(), head)
+
+    def test_failed_diagnostic_write_preserves_original_unknown_journal(self):
+        self.modify(); sha = self.receipt()
+        lock = self.repo / '.git/index.lock'; lock.write_text('fixture-owned lock')
+        def failing_diagnostic(path, row):
+            if 'failure' in row: raise OSError('storage unavailable')
+            return write(path, row)
+        with patch('engineering_workspace.write', side_effect=failing_diagnostic):
+            with self.assertRaisesRegex(ValueError, '^engineering_git_failed$'):
+                self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        journal = json.loads((self.area / 'state/commit-commit-0001.json').read_text())
+        self.assertEqual(journal, {'status': 'unknown', 'previousHead': self.base,
+            'intent': {'message': 'fix', 'sourceSha256': sha, 'testJobId': 'request-0001'}})
+        lock.unlink()
+
+    def test_error_after_durable_result_does_not_downgrade_or_recommit(self):
+        self.modify(); sha = self.receipt()
+        def error_after_write(path, row):
+            write(path, row)
+            if row.get('status') == 'committed': raise OSError('cleanup failed after durable write')
+        with patch('engineering_workspace.write', side_effect=error_after_write):
+            with self.assertRaises(OSError):
+                self.service.commit('fix', sha, 'request-0001', 'commit-0001')
+        journal = json.loads((self.area / 'state/commit-commit-0001.json').read_text())
+        self.assertEqual(journal['status'], 'committed')
+        self.assertNotIn('failure', journal)
+        self.assertEqual(self.git('rev-parse', 'HEAD').strip(), journal['commit'])
+        with patch.object(self.service, 'git', side_effect=AssertionError('must not recommit')):
+            self.assertEqual(self.service.commit('fix', sha, 'request-0001', 'commit-0001'), {'ok': True, **journal})
+
     def test_branch_change_and_linked_worktree_refused(self):
         self.git('switch', '-qc', 'unapproved')
         with self.assertRaisesRegex(ValueError, 'branch_changed'): self.service.status()

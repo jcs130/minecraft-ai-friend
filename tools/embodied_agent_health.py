@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/survival/dialogue.py',
            'world/survival/controller.py', 'world/survival/behavior_context.py', 'world/survival/fast_execution.py',
            'world/survival/skill_library.py', 'world/survival/mcp_server.py', 'world/survival/AGENT.md',
-           'world/survival/life_cycle.py', 'world/survival/world_adapter.py')
+           'world/survival/life_cycle.py', 'world/survival/world_adapter.py', 'world/survival/native_tools.py')
 
 
 def check(root=ROOT, clock=time.time):
@@ -38,7 +38,8 @@ def check(root=ROOT, clock=time.time):
         checks['public_brain'] = (brain.get('version') == 1 and brain.get('memoryEpoch') == epoch
                                  and brain.get('dialogueBodyAccess') == 'read_only')
         report = read(root / 'reports/embodied-agent-smoke.json')
-        checks['behavior_test'] = (report.get('ok') is True and report.get('testsRun', 0) >= 12
+        checks['behavior_test'] = (report.get('ok') is True and report.get('testsRun', 0) >= 20
+            and any(name.startswith('test_survival_status_detail.') for name in report.get('tests', []))
             and report.get('modelCalls') == 0 and report.get('productionMutations') == 0
             and all(report.get('sourceHashes', {}).get(name) == hashlib.sha256((root / name).read_bytes()).hexdigest()
                     for name in SOURCES))
