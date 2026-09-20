@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **AI / 机器人（mineflayer 等）** | `<服务器IP>:25565` | 无需正版账号；`auth: 'offline'`；协议钉 `1.21.1` | **能用**（Goddess 与 NekoX 今日实测在线） |
 | **AI / 假玩家（服务端内生）** | 不开网络口 | 服务端 `numen` 插件 + RCON `25577` | **能用**（Kirito 在线） |
-| **基岩版（手机/Switch/Win10 版）** | **UDP `19140`**（经 Geyser 桥） | 宿主机 ViaProxy+Geyser 进程在跑 | **当前不能：桥没启动**（见第三节） |
+| **基岩版（手机/Switch/Win10 版）** | **UDP `19140`**（经 Geyser 桥） | 宿主机 ViaProxy+Geyser 进程在跑 | **能用 ✓**（2026-09-20 拉起，计划任务 `ViaProxy-Bedrock` 登录自起 ✓） |
 | **真人 Java 玩家** | `<服务器IP>:25565` | **装了 NeoForge 的客户端** | 能用（萌萌实测） |
 
 ---
@@ -82,7 +82,7 @@ bot.on('spawn', () => bot.chat('我进来了'))
 | 25701 | TCP | `qiandengji-gate-1:25700` | 握手门神（旁路备用） |
 | 19091 / 19092 | TCP | panel / world:3070 | 管理面板 / 观战与镜头服务 |
 | 24455 | UDP | 容器 `24454` | Simple Voice Chat 语音 |
-| **19140** | UDP | 宿主 ViaProxy+Geyser | **基岩版入口（当前未运行）** |
+| **19140** | UDP | 宿主 ViaProxy+Geyser | **基岩版入口（运行中 ✓）** |
 
 ---
 
@@ -97,7 +97,10 @@ bot.on('spawn', () => bot.chat('我进来了'))
 ### 现状（必须先说清）
 
 - 桥是**宿主机进程**，不在 Docker 里：Docker Desktop 的 UDP 端口映射在本机不转发（实测过）。
-- **现在 ViaProxy 没在跑**，UDP 19140 无监听，其日志停在 09-07 19:49。
+- **现在 ViaProxy 在跑**（2026-09-20 拉起）：UDP 19140 监听 ✓、Geyser 2.11.2-b1232 完成启动 3.98 s ✓、
+  `settlementsgate` 扩展加载 **6/6 vanilla 定义 captured (all OK)** + **37 NPC 名册** ✓、
+  后端 target = `127.0.0.1:25565` ✓、防火墙规则 `Geyser Bedrock UDP 19140` = **Enabled: Yes** ✓。
+  已挂计划任务 **`ViaProxy-Bedrock`（onlogon）** ✓ 重启后自起 ✓（本机作业对象会杀掉随会话启动的进程树 ✓ 所以必须走任务计划 ✓）
 - 但**东西齐全且已修好**：
   - `ViaProxy-3.4.12.jar` + `plugins/Geyser-ViaProxy.jar`（Geyser 2.11.2，199 个 mod 方块映射）
   - 启动脚本里 **target 已是正确的 `127.0.0.1:25565`**（历史上写死成 `25599`——容器内口、宿主不通，曾造成"僵尸进程占端口→基岩连不上"，已修）
@@ -110,12 +113,19 @@ bot.on('spawn', () => bot.chat('我进来了'))
 start "" /min cmd /c "C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-friend\ops\docker\shadow\viaproxy\start-viaproxy.bat"
 ```
 
-或由我做成计划任务常驻 —— 本机 Windows 作业对象会把随会话启动的整棵进程树收走（这是踩过的坑），必须脱离会话。
+**已经挂成计划任务**（`ViaProxy-Bedrock`，onlogon 自起 ✓）—— 因为本机 Windows 作业对象会把随会话启动的整棵进程树收走 ✗（踩过的坑 ✓），必须脱离会话 ✓
+日常运维两条命令 ✓：
+
+```bat
+schtasks /run  /tn "ViaProxy-Bedrock"    :: 拉起/重启基岩桥 ✓
+schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 run）✓
+```
 
 ### 基岩端配置
 
 - 地址 **`192.168.3.133`**，端口 **`19140`（UDP）**
-- **不需要正版/Microsoft 账号**（Floodgate 免验证 + 服务端离线模式）
+- **不需要正版/Microsoft 账号** ✓：实测 Geyser `config.yml` 里 **`auth-type: offline`** ✓ 与服务端离线模式配套 ✓
+  （**注意：本部署没装 Floodgate** ✓ 只靠"双离线"放行 —— 好处是零配置 ✓ 代价是基岩玩家身份可伪造 ✓ 若将来要对外网开放须补 Floodgate 或改正版 ✓）
 - 客户端为基岩版（手机/平板/Switch/Win10 版）
 
 ### 基岩端能看到什么（预期管理）
@@ -145,7 +155,7 @@ start "" /min cmd /c "C:\Users\lzl19\.copaw\workspaces\default\minecraft-ai-frie
 
 ## 五、当前欠账（别当已完成）
 
-1. **基岩桥未运行** —— 东西齐、脚本对，缺"拉起来并常驻"。
+1. **基岩桥映射名册要重启才刷新** —— `plugins/Geyser/settlements-professions.json` 变更后必须重启 ViaProxy 才生效（`schtasks /end /tn ViaProxy-Bedrock` + `/run`）；另日志提示 ViaProxy 3.4.13 / Geyser 5.12.0 有新版可升（可选，不影响当前连通）。
 2. **`packet_entity_metadata` 解析洞未修** —— AI 实体视图不完整，影响避怪/寻路。
 3. **偶发 `ECONNRESET`** —— 长驻 bot 必须自带看门狗重连。
 4. **AI 自主性依赖 `MC_SELF_PROPOSE=1`**（已开）：不设则没任务时原地罚站，看着像死机。
