@@ -10,7 +10,7 @@
 
 | 想接什么 | 走哪个口 | 需要什么 | 现在能用吗 |
 |---|---|---|---|
-| **AI / 机器人（mineflayer 等）** | `<服务器IP>:25565` | 无需正版账号；`auth: 'offline'`；协议钉 `1.21.1` | **能用**（Goddess 与 NekoX 今日实测在线） |
+| **AI / 机器人（mineflayer 等）** | `<服务器IP>:25565` | 无需正版账号；`auth: 'offline'`；协议钉 `1.21.1` | **能用**（Goddess 在线；NekoX 为实验体，已按需停用 ✓） |
 | **AI / 假玩家（服务端内生）** | 不开网络口 | 服务端 `numen` 插件 + RCON `25577` | **能用**（Kirito 在线） |
 | **基岩版（手机/Switch/Win10 版）** | **UDP `19140`**（经 Geyser 桥） | 宿主机 ViaProxy+Geyser 进程在跑 | **能用 ✓**（2026-09-20 拉起，计划任务 `ViaProxy-Bedrock` 登录自起 ✓） |
 | **真人 Java 玩家** | `<服务器IP>:25565` | **装了 NeoForge 的客户端** | 能用（萌萌实测） |
@@ -44,7 +44,7 @@ bot.on('spawn', () => bot.chat('我进来了'))
 | 实例 | 引擎 | 入口 | 备注 |
 |---|---|---|---|
 | **Goddess**（女神化身） | mineflayer | 25565 | 一直在岗 |
-| **NekoX**（wehos/mc-agent-neko fork） | Node + mineflayer | 127.0.0.1:25565 | 今日整天在跑 |
+| **NekoX**（wehos/mc-agent-neko fork） | Node + mineflayer | 127.0.0.1:25565 | 实验体，**当前已停**（要再跑：`schtasks /change /tn NekoX-Local /enable` + `/run` ✓）|
 | **Kirito / 鸣人 / 爱德华** | **numen 假玩家**（服务端内生） | 不走网络 | 由 RCON `numen_act` 驱动 |
 
 ### 路线 B：numen 假玩家（服务端内生"身体"，魂在外面）
