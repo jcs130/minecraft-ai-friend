@@ -60,6 +60,8 @@ flowchart TD
 
 ## 3. L1：先用成熟运行机制建立可靠起点
 
+2026-09-20 补充：[Jev 与可训练快策略源码调研](JEV-FAST-POLICY-RESEARCH.md)区分云端类型化决策、开放小模型训练和像素到键鼠路线，明确 Numen 已有输入驱动与尚缺的通用输入帧/训练数据契约。当前仅完成调研与参考项目离线测试，尚未接入 Jev、训练策略或部署新的快模型。
+
 参考 [Cortico / Neko 源码对照](OPEN-SOURCE-AGENT-CODE-STUDY.md)，复用已有 controller、WorldAdapter、NumenGateway、身体租约和程序库。当前协议允许本地程序与高层工具组合；原生输入的进一步开放须接原任务生命周期，并提供持续时间、停止确认与反馈。
 
 一次行为的数据约定：
