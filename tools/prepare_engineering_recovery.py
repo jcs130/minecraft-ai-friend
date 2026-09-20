@@ -484,8 +484,14 @@ def prepare_upgrade(source_repo, source_ref, unknown_review=None):
         str(source_repo), new_base)
     git(stage, 'merge-base', '--is-ancestor', cfg['baseCommit'], new_base)
     git(stage, 'merge-base', '--is-ancestor', cfg['baseCommit'], before['head'])
+    # The approved baseline governs fixed checks, not branch ancestry. Engineer
+    # commits may already have been merged and corrected in the trusted target;
+    # replaying them from that older baseline would conflict or revive old code.
+    merge_bases = git(stage, 'merge-base', '--all', before['head'], new_base).decode().splitlines()
+    require(len(merge_bases) == 1, 'upgrade_ambiguous_merge_base')
+    common = committed_files(stage, merge_bases[0])
     incoming = committed_files(stage, new_base)
-    committed, conflicts = merge_files(old_base, old_head, incoming, folder)
+    committed, conflicts = merge_files(common, old_head, incoming, folder)
     phase = 'committed'
     combined = {}
     if not conflicts:

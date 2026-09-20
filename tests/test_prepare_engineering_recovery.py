@@ -130,6 +130,46 @@ class EngineeringUpgradeTests(unittest.TestCase):
                 self.assertFalse((Path(result['folder'])/'proposal.json').exists())
                 self.assertEqual(recovery.capture(self.original)[0],before)
 
+    def test_already_integrated_history_keeps_target_corrections_and_original_dirty_work(self):
+        recovery.git(self.source,'-c','protocol.file.allow=always','fetch',str(self.original),self.old_head)
+        recovery.git(self.source,'merge','--no-edit',self.old_head)
+        updated = self.lines.replace('line 00','reviewed upstream correction').replace('line 29','new baseline')
+        self.put(self.source,self.code,updated)
+        recovery.git(self.source,'add','.'); recovery.git(self.source,'commit','-m','correct already merged engineer code')
+        self.target = recovery.git(self.source,'rev-parse','HEAD').decode().strip()
+        self.assertEqual(recovery.git(self.source,'merge-base',self.old_head,self.target).decode().strip(),self.old_head)
+        before = recovery.capture(self.original)[0]
+        folder = self.prepare(); stage = folder/'repo'
+        self.assertEqual(recovery.git(stage,'show','HEAD:'+self.code).decode(),updated)
+        self.assertEqual((stage/self.code).read_text(),updated.replace('line 15','dirty local'))
+        self.assertIn('?? tests/test_world_team_local.py',recovery.git(stage,'status','--porcelain').decode())
+        self.assertFalse((stage/'docs/removed.md').exists())
+        self.assertEqual(recovery.capture(self.original)[0],before)
+        _, report = recovery.load(folder)
+        self.assertEqual(report['originalConfig']['baseCommit'],self.base)
+        self.assertEqual(report['proposedConfig']['baseCommit'],self.target)
+
+    def test_diverged_heads_merge_from_latest_common_commit_not_approved_test_baseline(self):
+        recovery.git(self.source,'-c','protocol.file.allow=always','fetch',str(self.original),self.old_head)
+        recovery.git(self.source,'merge','--no-edit',self.old_head)
+        self.put(self.source,self.code,self.lines.replace('line 00','reviewed upstream correction').replace('line 29','new baseline'))
+        recovery.git(self.source,'add','.'); recovery.git(self.source,'commit','-m','correct shared history')
+        self.target = recovery.git(self.source,'rev-parse','HEAD').decode().strip()
+        # Commit only the already staged engineer edit. Untracked tests and the
+        # working-tree deletion stay uncommitted, as in the real workspace.
+        recovery.git(self.original,'add',self.code)
+        recovery.git(self.original,'commit','-m','next engineer edit after shared history')
+        next_head = recovery.git(self.original,'rev-parse','HEAD').decode().strip()
+        self.assertEqual(recovery.git(self.source,'merge-base',self.old_head,self.target).decode().strip(),self.old_head)
+        before = recovery.capture(self.original)[0]
+        folder = self.prepare(); stage = folder/'repo'
+        committed = recovery.git(stage,'show','HEAD:'+self.code).decode()
+        self.assertIn('reviewed upstream correction',committed)
+        self.assertIn('dirty local',committed)
+        self.assertIn('new baseline',committed)
+        recovery.git(stage,'merge-base','--is-ancestor',next_head,'HEAD')
+        self.assertEqual(recovery.capture(self.original)[0],before)
+
     def test_candidate_cannot_change_fixed_test_or_invent_a_different_old_baseline_hash(self):
         self.put(self.original,'tests/test_world_team.py',BASE.replace(b'assertEqual(self.value, 2)',b'assertTrue(True)'))
         with self.assertRaisesRegex(ValueError,'approved_check_bytes_changed'): self.prepare()
