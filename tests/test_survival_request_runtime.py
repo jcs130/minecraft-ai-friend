@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/ops'))
-from survival_request_runtime import KEY, current_reference, wrap_prepare
+from survival_request_runtime import KEY, current_reference, wrap_prepare, omit_consumed_thinking
 
 SESSION = 'life-' + 'e' * 32
 TURN = 'survival-' + 'a' * 32
@@ -74,6 +74,42 @@ class SurvivalRequestTests(unittest.IsolatedAsyncioTestCase):
         async def original(agent):
             return result
         self.assertIs(await wrap_prepare(original)(self.agent), result)
+
+    def test_omit_only_old_or_acknowledged_thinking_without_mutating_history(self):
+        self.agent._request_context[KEY]['context_protocol'] = 2
+        self.agent.state = NS(reply_id='current')
+        self.agent._context_manager = NS(_seen_thinking_block_ids={'seen'}, _folded_thinking_block_ids={'folded'})
+        captured = []
+        self.agent._set_formatter_thinking_omit_ids = lambda ids: captured.append(ids) or True
+        messages = [NS(id='old', content=[{'type': 'thinking', 'id': 'old-thought', 'thinking': 'private'}]),
+                    NS(id='current', content=[{'type': 'thinking', 'id': 'seen'},
+                                              {'type': 'thinking', 'id': 'unseen'},
+                                              {'type': 'tool_call', 'id': 'tool-call'}])]
+        before = copy.deepcopy(messages)
+        omit_consumed_thinking(self.agent, messages)
+        self.assertEqual(captured, [{'old-thought', 'seen', 'folded'}])
+        self.assertEqual(messages, before)
+
+    async def test_actual_formatter_keeps_provider_required_reasoning(self):
+        from qwenpaw.agents.model_factory import _create_file_block_support_formatter
+        from agentscope.formatter import OpenAIChatFormatter
+        from agentscope.message import AssistantMsg, ThinkingBlock, TextBlock
+        self.agent._request_context[KEY]['context_protocol'] = 2
+        self.agent.state = NS(reply_id='new')
+        message = AssistantMsg(id='old', name='Kirito', content=[ThinkingBlock(thinking='fixture reasoning'), TextBlock(text='done')])
+        for provider, model, expected in [('aliyun-codingplan', 'qwen3.5-plus', True), ('deepseek', 'deepseek-reasoner', False)]:
+            formatter = _create_file_block_support_formatter(OpenAIChatFormatter, provider, model)()
+            self.agent._set_formatter_thinking_omit_ids = formatter.set_thinking_omit_ids
+            omit_consumed_thinking(self.agent, [message])
+            self.assertEqual(bool(formatter._qwenpaw_omit_thinking_ids), expected)
+            wire = await formatter.format([message])
+            sent = any(row.get('reasoning_content') == 'fixture reasoning' for row in wire)
+            self.assertEqual(sent, not expected)
+            self.assertEqual(message.get_content_blocks('thinking')[0].thinking, 'fixture reasoning')
+
+    def test_legacy_requests_do_not_change_formatter_behavior(self):
+        self.agent._set_formatter_thinking_omit_ids = lambda ids: self.fail('legacy request changed')
+        omit_consumed_thinking(self.agent, [])
 
 
 if __name__ == '__main__':

@@ -282,6 +282,8 @@ class QwenBackend:
         payload['request_context'] = {**payload.get('request_context', {}),
             'qiandeng_survival_turn': {'version': 1, 'turn_id': turn_id,
                                       'session_id': session['primarySessionId']}}
+        if session.get('contextProtocol') == 2:
+            payload['request_context']['qiandeng_survival_turn']['context_protocol'] = 2
         payload['timeout'] = timeout
         value = self.api('POST', '/console/chat/task', payload)
         import re
@@ -945,7 +947,7 @@ class Controller:
                      else None) or control.get('mission') or self.settings['mission'],
             'body': self.last_body, 'lastDecision': self.data.get('lastDecision'),
             'lifeSession': {k: self.session.get(k) for k in ('primarySessionId', 'chatId', 'agentId', 'userId', 'channel')},
-            'sessionProtocol': 1, 'actionExecution': self.data.get('actionExecution'),
+            'sessionProtocol': self.settings.get('contextProtocol', 1), 'actionExecution': self.data.get('actionExecution'),
             'lastInferenceFailure': inference_failure,
             'inferenceBackoff': inference_backoff,
             'cancellationStatus': self.data.get('cancellationStatus'),
@@ -988,7 +990,8 @@ class Controller:
             pass
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
-            'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1})
+            'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
+            'contextProtocol': self.settings.get('contextProtocol', 1)})
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -1214,6 +1217,9 @@ class Controller:
                 self.pause('party_answer_receipt_pending')
                 return
         if completed:
+            if active.get('contextDelivery'):
+                from behavior_context import acknowledge
+                acknowledge(self.root, self.session, active['contextDelivery'])
             self.session['hasCompletedTask'] = True
             write_json(self.root / 'life-session.json', self.session)
         self.data['active'] = None
@@ -1522,6 +1528,8 @@ class Controller:
             candidate = evolution_candidate(self.root)
             if candidate:
                 context['instruction'] += candidate
+                if self.settings.get('contextProtocol') == 2:
+                    context['evolutionCandidate'] = candidate
         elif provider.get('cyclesSince'):
             context['instruction'] += (
                 '【进化】本班若有余力，交代一句：产出草稿，或写明"本周期无可固化"。'
@@ -1545,13 +1553,24 @@ class Controller:
         # does not retrieve the same boilerplate across every life turn.
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
                                         control.get('missionChangedAt', 0))
+        model_session, context_delivery = self.session, None
+        context_event_ids = context['perception'].get('pendingEventIds', [])
+        if self.settings.get('contextProtocol') == 2:
+            from behavior_context import prepare
+            model_session, context, context_delivery = prepare(
+                self.root, self.session, context, self.memory(), learning=due)
         prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
-                  'sessionId': self.session['primarySessionId'], 'userId': self.session['userId'],
-                  'channel': self.session['channel'], 'chatId': self.session.get('chatId'),
-                  'mission': context['mission'], 'missionChangedAt': control.get('missionChangedAt'),
+                  'sessionId': model_session['primarySessionId'], 'userId': self.session['userId'],
+                  'channel': self.session['channel'], 'chatId': model_session.get('chatId'),
+                  'mission': control.get('mission') or self.settings['mission'], 'missionChangedAt': control.get('missionChangedAt'),
                   'partyReplyEventIds': [reply['eventId'] for reply in replies],
-                  'eventIds': context['perception'].get('pendingEventIds', []), 'before': body}
+                  'eventIds': context_event_ids, 'before': body}
+        if context_delivery:
+            active['contextDelivery'] = context_delivery
+            active['contextStats'] = {'protocol': 2, 'purpose': context['purpose'],
+                                      'inputBytes': len(prompt.encode('utf-8')),
+                                      'incremental': context.get('baseTurn') is not None}
         if requested_review:
             active['review'] = requested_review
         self.gateway.open_lease(turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, action_limit=6)
@@ -1587,7 +1606,7 @@ class Controller:
                     self.party.validate_session(self.session, self.settings, reservation=reply)
             request_context = self.party.request_context() if message is not None or replies else None
             active['taskId'] = self.backend.submit(turn_id, prompt, self.settings['taskTimeoutSeconds'],
-                session=self.session, request_context=request_context)
+                session=model_session, request_context=request_context)
             active['phase'] = 'submitted'
             from life_cycle import consume
             if consume(self.session):
@@ -1597,10 +1616,11 @@ class Controller:
                 self.party.submitted(active['partyReservation'], active['taskId'])
             if hasattr(self.backend, 'resolve_chat'):
                 try:
-                    chat = self.backend.resolve_chat(self.session)
+                    chat = self.backend.resolve_chat(model_session)
                     if chat:
                         from life_session import bind_chat
-                        bind_chat(self.root, self.session, chat['id'])
+                        if model_session['primarySessionId'] == self.session['primarySessionId']:
+                            bind_chat(self.root, self.session, chat['id'])
                         active['chatId'] = chat['id']
                         self.save()
                 except Exception as exc:

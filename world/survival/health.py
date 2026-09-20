@@ -24,6 +24,11 @@ def check():
             assert json.load(response).get('ok') is True
     heartbeat = json.loads((state / 'survival/heartbeat.json').read_text())
     assert heartbeat['ok'] is True and -5000 < time.time() * 1000 - heartbeat['at'] < 90000
+    settings = json.loads((state / 'survival/settings.json').read_text())
+    protocol = settings.get('contextProtocol', 1)
+    assert protocol in (1, 2), 'unknown_context_protocol'
+    if protocol == 2:
+        assert heartbeat.get('contextProtocol') == 2, 'context_protocol_not_loaded'
     base = os.environ.get('QWENPAW_API_URL', 'http://qwenpaw:8088/api' if external
                           else 'http://127.0.0.1:8088/api').rstrip('/')
     for endpoint in ('healthz', 'auth/status'):
@@ -34,7 +39,8 @@ def check():
         else:
             assert value.get('enabled') is False
     assert require_ready(base), 'native_survivor_tools_unavailable'
-    print(json.dumps({'ok': True, 'project': 'qiandengji-survivor', 'status': heartbeat['status']}))
+    print(json.dumps({'ok': True, 'project': 'qiandengji-survivor', 'status': heartbeat['status'],
+                      'contextProtocol': protocol}))
 
 
 if __name__ == '__main__':

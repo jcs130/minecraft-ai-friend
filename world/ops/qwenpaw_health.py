@@ -310,7 +310,7 @@ def main():
     actual_version = release()
     assert marker['qwenVersion'] == actual_version
     assert marker.get('survivalTurnRuntimeVersion') == 4
-    assert marker.get('survivalRequestRuntimeVersion') == 1
+    assert marker.get('survivalRequestRuntimeVersion') == 2
     from life_memory_evidence_runtime import VERSION as evidence_version
     assert marker.get('lifeMemoryEvidenceVersion') == evidence_version
     sys.path.insert(0, '/survival')
@@ -384,7 +384,7 @@ def main():
                       'worldTeamAgents': sum(bool(world_team.actor_for(aid, 'game')) for aid in expected_roles),
                       'worldTeamDriverPolicyVerified': True,
                       'cronBudgetGuardVerified': guard_verified,
-                      'explicitSurvivalFinishVerified': True, 'survivalRequestRuntimeVersion': 1,
+                      'explicitSurvivalFinishVerified': True, 'survivalRequestRuntimeVersion': 2,
                       'lifeMemoryEvidenceVersion': evidence_version,
                       'lifeContextStrategy': 'scroll', 'lifeHistoryRetentionDays': 0,
                       'lifeHistoryVerified': bool(life_histories) and len(life_histories) == len(bound_party_roles),
