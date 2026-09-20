@@ -4,30 +4,25 @@
 本脚本安装**静态**的 PawApp —— 目前是「天神之眼」：把宿主 127.0.0.1:19092 的
 modern-viewer 世界观察画面嵌进控制台，省得在两个口之间来回切。
 
-控制台按请求实时扫描 plugins 目录，所以装完即生效、不需要重启。
+生成官方插件包后，运行中的 QwenPaw 需用原生插件安装 API 热加载；
+已有前端入口的静态更新可由浏览器重新加载。建目录不代表运行时已加载。
 """
 
 import argparse
 import json
 from pathlib import Path
 
+from pawapp_bridge import (build_frontend, build_manifest, build_static_backend,
+                          install_pawapp)
+
 PLUGINS = Path('/state/work/plugins')
 
-GODS_EYE_UI = '/**\n * 天神之眼 — 前端入口（运行时加载的插件模块）。\n *\n * 由宿主用 Blob URL + 动态 import 载入，自己注册一条 React 路由。\n * React / antd 从 window.QwenPaw.host 取，不需要打包器。\n * 页面本体复用已做好的静态页（同源 iframe），所以这里只做"路由 + 开窗"。\n */\n(function () {\n  var QwenPaw = window.QwenPaw;\n  if (!QwenPaw || !QwenPaw.host || !QwenPaw.registerRoutes) {\n    console.error("[gods-eye] window.QwenPaw 尚未就绪，无法注册路由");\n    return;\n  }\n  var React = QwenPaw.host.React;\n  function Page() {\n    return React.createElement("iframe", {\n      src: "/api/pawapps/gods-eye/static/index.html",\n      title: "天神之眼",\n      style: { width: "100%", height: "calc(100vh - 140px)", border: 0, borderRadius: 12, background: "#0b0d11" }\n    });\n  }\n  QwenPaw.registerRoutes("gods-eye", [\n    { path: "/plugin/gods-eye", component: Page, label: "天神之眼", icon: "👁", priority: 42 }\n  ]);\n})();\n'
-
-
-GODS_EYE_PLUGIN = {
-    'id': 'gods-eye',
-    'name': '天神之眼',
-    'version': '1.0.0',
-    'description': '世界观察渲染：本机 127.0.0.1:19092 的 modern-viewer 画面（Goddess 观察者视角）嵌在这里。',
-    'type': 'app',
-    # 与 evolution-board 同一契约：前端是一个 JS 模块，entry_page 是路由。
-    'entry': {'frontend': 'ui/index.js'},
-    'meta': {'pawapp': {'category': 'monitor', 'icon': '👁',
-                        'entry_page': '/apps/gods-eye', 'launch_scope': 'page'},
-             'settings': []},
-}
+GODS_EYE_UI = build_frontend('gods-eye', '天神之眼', '👁', priority=42)
+GODS_EYE_PLUGIN = build_manifest(
+    'gods-eye', '天神之眼',
+    '世界观察渲染：本机 127.0.0.1:19092 的 modern-viewer 画面（Goddess 观察者视角）嵌在这里。',
+    '👁', backend=True)
+GODS_EYE_BACKEND = build_static_backend('gods-eye', '天神之眼')
 
 GODS_EYE_PAGE = """<!doctype html>
 <html lang="zh">
@@ -57,7 +52,7 @@ GODS_EYE_PAGE = """<!doctype html>
 <div class="bar">
   <span class="dot" id="dot"></span>
   <h1>👁 天神之眼</h1>
-  <span class="meta" id="state">连接 19092…</span>
+  <span class="meta" id="state">正在载入观察页面…</span>
   <a href="http://127.0.0.1:19092/" target="_blank" rel="noopener">新窗口打开 ↗</a>
 </div>
 <iframe id="eye" src="http://127.0.0.1:19092/" referrerpolicy="no-referrer"
@@ -66,10 +61,10 @@ GODS_EYE_PAGE = """<!doctype html>
 本页能嵌它，是因为 19092 的 <code>frame-ancestors</code> 已按配置放行控制台 origin（<code>MC_CONSOLE_ORIGIN</code>，默认 18089）。</div>
 <script>
 const el = document.getElementById('eye'), dot = document.getElementById('dot'), state = document.getElementById('state');
-el.addEventListener('load', () => { dot.className = 'dot up'; state.textContent = '已连接 19092'; });
+el.addEventListener('load', () => { dot.className = 'dot up'; state.textContent = '页面已载入，画面状态以观察器为准'; });
 el.addEventListener('error', () => { dot.className = 'dot down'; state.textContent = '嵌入被拒 —— 用右上角新窗口'; });
 setTimeout(() => { if (!dot.className.includes('up')) { dot.className = 'dot down';
-  state.textContent = '未在 3 秒内出画 —— 试新窗口'; } }, 3000);
+  state.textContent = '观察页面仍在载入，可用新窗口查看'; } }, 3000);
 </script>
 </body>
 </html>
@@ -77,14 +72,8 @@ setTimeout(() => { if (!dot.className.includes('up')) { dot.className = 'dot dow
 
 
 def install(app_id, manifest, page):
-    folder = PLUGINS / app_id
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
-    (folder / 'index.html').write_text(page, encoding='utf-8')
-    (folder / 'ui').mkdir(exist_ok=True)
-    (folder / 'ui' / 'index.js').write_text(GODS_EYE_UI, encoding='utf-8')
-    return {'appId': app_id, 'dir': str(folder),
-            'entry': '/api/pawapps/%s/static/index.html' % app_id}
+    return install_pawapp(PLUGINS / app_id, manifest, page,
+                         backend_source=GODS_EYE_BACKEND, priority=42)
 
 
 def main():

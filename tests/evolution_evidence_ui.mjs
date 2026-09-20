@@ -18,7 +18,9 @@ for (const [survival, expected, absent] of [
       if (!elements.has(id)) elements.set(id, {});
       return elements.get(id);
     } },
-    fetch: async () => ({ json: async () => ({ roles: [], metrics: { survival } }) }),
+    parent: { QwenPaw: { paw: { forApp: () => ({ api: {
+      get: async () => ({ roles: [], metrics: { survival } }),
+    } }) } } },
   });
   vm.runInContext(script, context);
   await vm.runInContext('tick()', context);
@@ -27,3 +29,30 @@ for (const [survival, expected, absent] of [
   assert.ok(!rendered.includes(absent), absent);
 }
 console.log('4 evolution evidence renderer cases passed');
+
+// A real pause, rejected contracts and missing rate stay visible; a failed
+// refresh must retain the last reading and explicitly mark it as stale.
+const nodes = new Map();
+let fail = false;
+const live = {schema:2,roles:[],metrics:{survival:{schema:2,at:100,ageMinutes:10,
+  generation:{status:'current',memoryEpoch:'test-epoch',startedAt:1000},
+  runtime:{status:'paused',enabled:false,pauseReason:'controller_FileNotFoundError'},
+  evidence:{coverage:{currentGeneration:24,readFailures:1,sampleTruncated:true},errors:['bad.json']},
+  closedLoop:{rate:null,sampled:24,succeeded:0,outcomes:{rejected:24,unknown:1}},
+  repeats:{share:null},trends:{buckets:[{from:100,to:200,rate:null,sampled:0,succeeded:0}]},
+  behaviors:[{category:'contracts',sampled:24,succeeded:0,tools:{guild_claim:24},outcomes:{rejected:24}}],
+}},proposals:[{id:'case-test',title:'<img src=x onerror=bad()>',status:'open'}]};
+const context=vm.createContext({document:{getElementById(id){if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);}},
+  parent:{QwenPaw:{paw:{forApp:()=>({api:{get:async()=>{if(fail)throw new Error('offline');return live;}}})}}}});
+vm.runInContext(script,context);await vm.runInContext('tick()',context);
+assert.ok(nodes.get('runtime').textContent.includes('controller_FileNotFoundError'));
+assert.ok(nodes.get('scope').textContent.includes('数据已过期'));
+assert.ok(nodes.get('behaviors').innerHTML.includes('guild_claim'));
+assert.ok(nodes.get('behaviors').innerHTML.includes('24'));
+assert.ok(!nodes.get('trend').innerHTML.includes('NaN'));
+assert.ok(nodes.get('proposals').innerHTML.includes('&lt;img'));
+const previous=nodes.get('metrics').innerHTML;fail=true;await vm.runInContext('tick()',context);
+assert.equal(nodes.get('metrics').innerHTML,previous);
+assert.equal(nodes.get('error').hidden,false);
+assert.ok(nodes.get('error').textContent.includes('上次读取结果'));
+console.log('Live pause, partial evidence, escaping and failed refresh verified');

@@ -191,7 +191,8 @@ def probe_panel_smoke():
     maid_perception = probe_maid_perception()
     survival_practice = probe_survival_practice()
     embodied_agent = probe_embodied_agent()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent)),
+    pawapps = probe_pawapps()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, pawapps)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -202,7 +203,7 @@ def probe_panel_smoke():
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
             'world_team': world_team, 'maid_perception': maid_perception, 'survival_practice': survival_practice,
-            'embodied_agent': embodied_agent}
+            'embodied_agent': embodied_agent, 'pawapps': pawapps}
 
 
 def probe_engineering_cron_runtime():
@@ -1611,6 +1612,16 @@ def probe_embodied_agent():
         return {'ok': False, 'error': 'Embodied agent probe unavailable'}
 
 
+def probe_pawapps():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_pawapps_health', PROJECT / 'tools/pawapps_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(PROJECT)
+    except (OSError, ValueError, AttributeError, ImportError, KeyError, TypeError):
+        return {'ok': False, 'error': 'PawApp probe unavailable'}
+
+
 def probe_survival_practice():
     """Keep current ledger readiness and its separate isolated behavior evidence explicit."""
     try:
@@ -1691,6 +1702,7 @@ def main_locked():
               "maid_perception": probe_maid_perception(),
               "survival_practice": probe_survival_practice(),
               "embodied_agent": probe_embodied_agent(),
+              "pawapps": probe_pawapps(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
               "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
               "world_team": probe_world_team()}

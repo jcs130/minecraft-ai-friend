@@ -112,20 +112,28 @@ def observed_delta(receipt):
     return out
 
 
-def load_receipts(directory, limit=400):
+def load_receipts(directory, limit=400, *, with_coverage=False):
     """Bounded latest-file sample; return exact byte hashes and all read failures."""
     if type(limit) is not int or not 1 <= limit <= 10000:
         raise ValueError('receipt_limit_out_of_range')
     root = Path(directory)
     errors, files, records = [], [], []
+    coverage = {'availableFiles': 0, 'selectedFiles': 0, 'decodedReceipts': 0,
+                'readFailures': 0, 'sampleTruncated': False, 'retainedSampleOnly': True}
+    def result():
+        coverage.update(decodedReceipts=len(records), readFailures=len(errors))
+        return (records, errors, coverage) if with_coverage else (records, errors)
     if not root.is_dir():
-        return [], ['receipt_directory_unavailable']
+        errors.append('receipt_directory_unavailable')
+        return result()
     for path in root.glob('*.json'):
         try:
             files.append((path.stat().st_mtime_ns, path))
         except OSError:
             errors.append(path.name + ':stat_unavailable')
-    for _, path in sorted(files)[-limit:]:
+    selected = sorted(files)[-limit:]
+    coverage.update(availableFiles=len(files), selectedFiles=len(selected), sampleTruncated=len(files) > limit)
+    for _, path in selected:
         try:
             raw = path.read_bytes()
             row = json.loads(raw)
@@ -140,7 +148,7 @@ def load_receipts(directory, limit=400):
     records.sort(key=lambda item: (item['receipt'].get('acceptedAt')
                                  if _number(item['receipt'].get('acceptedAt')) else -1,
                                  item['receipt']['actionId']))
-    return records, errors
+    return result()
 
 
 def repeats(receipts, minimum=3):
@@ -192,3 +200,65 @@ def summarize(receipts):
             'definition': 'confirmed_action_successes / sampled_persisted_receipts',
             'objectiveSuccessRate': None,
             'notice': 'Action completion is not proof of goal achievement or improvement.'}
+
+
+def behavior_category(tool):
+    """Display groups, not judgments about whether a behavior was useful."""
+    groups = {
+        'movement': ('goto',),
+        'production': ('mine', 'craft', 'place_block', 'farm'),
+        'inventory': ('eat', 'equip_item', 'drop_items', 'open_container', 'transfer_items', 'close_container'),
+        'contracts': ('guild_claim', 'guild_release', 'guild_deliver'),
+        'interaction': ('sleep', 'trade', 'interact_at'),
+        'skills': ('game_cast', 'game_learn'),
+    }
+    return next((category for category, tools in groups.items() if tool in tools), 'other')
+
+
+def sampled_summary(receipts, *, incomplete=False):
+    value = summarize(receipts)
+    if incomplete:
+        # Counts describe readable evidence; dropping damaged records must not
+        # improve the displayed rate. They cannot be assigned invented outcomes.
+        value.update(rate=None, rateReason='incomplete_receipt_sample')
+    return value
+
+
+def behavior_summary(receipts, *, incomplete=False):
+    groups = {}
+    for row in receipts:
+        groups.setdefault(behavior_category(row.get('tool')), []).append(row)
+    return [dict(category=category, tools=dict(Counter(str(row.get('tool') or 'unknown') for row in rows)),
+                 **sampled_summary(rows, incomplete=incomplete))
+            for category, rows in sorted(groups.items())]
+
+
+def time_buckets(receipts, *, started_at, now, incomplete=False, bucket_seconds=3600, limit=24):
+    """UTC acceptance-time buckets of retained evidence, never independent trials.
+
+    Empty buckets remain unknown, and every bucket is partial: the gateway
+    prunes old receipts, so absence in this sample is not proof of inactivity.
+    """
+    if (type(bucket_seconds) is not int or bucket_seconds <= 0
+            or type(limit) is not int or not 1 <= limit <= 168):
+        raise ValueError('invalid_evidence_bucket_limit')
+    out = {'bucketSeconds': bucket_seconds, 'timeBasis': 'acceptedAt', 'causallyComparable': False,
+           'retainedSampleOnly': True, 'buckets': [], 'olderSamples': 0}
+    if not (_number(started_at) and _number(now) and 0 <= started_at <= now):
+        return out
+    last = int(now // bucket_seconds) * bucket_seconds
+    first = max(int(started_at // bucket_seconds) * bucket_seconds, last - (limit - 1) * bucket_seconds)
+    groups = {stamp: [] for stamp in range(first, last + 1, bucket_seconds)}
+    for row in receipts:
+        accepted = row.get('acceptedAt')
+        if not _number(accepted):
+            continue
+        stamp = int((accepted / 1000) // bucket_seconds) * bucket_seconds
+        if stamp in groups:
+            groups[stamp].append(row)
+        elif stamp < first:
+            out['olderSamples'] += 1
+    out['buckets'] = [dict(**{'from': stamp, 'to': stamp + bucket_seconds}, partial=True,
+                           **sampled_summary(rows, incomplete=incomplete))
+                      for stamp, rows in groups.items()]
+    return out

@@ -108,9 +108,20 @@ def receipt_evidence(row):
 
 def _read_json(path, limit):
     path = Path(path)
-    if path.is_symlink() or path.stat().st_size > limit:
-        raise GatewayError('invalid_state_file')
-    value = json.loads(path.read_text(encoding='utf-8-sig'))
+    # A Docker Desktop bind mount can briefly report ENOENT while another
+    # worker replaces a durable state file. Retry only this read, never an
+    # action or a callback; a persistently missing receipt must still fail.
+    delays = (0.05, 0.1, 0.2)
+    for attempt in range(len(delays) + 1):
+        try:
+            if path.is_symlink() or path.stat().st_size > limit:
+                raise GatewayError('invalid_state_file')
+            value = json.loads(path.read_text(encoding='utf-8-sig'))
+            break
+        except FileNotFoundError:
+            if attempt == len(delays):
+                raise
+            time.sleep(delays[attempt])
     if not isinstance(value, dict):
         raise GatewayError('invalid_state_file')
     return value
