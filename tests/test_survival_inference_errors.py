@@ -200,7 +200,7 @@ class InferenceBackoffTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.controller.data['lastInferenceFailure']['code'], 'MODEL_QUOTA_EXCEEDED')
 
-    def test_unclassified_and_window_failures_keep_existing_repeated_failure_stop(self):
+    def test_unclassified_and_window_failures_back_off_without_disabling_life(self):
         for detail in (error('Quota exceeded'), error('month allocated quota exceeded')):
             with self.subTest(detail=detail['message']):
                 self.setUp()
@@ -212,8 +212,9 @@ class InferenceBackoffTests(unittest.TestCase):
                 self.backend.reply = {'status': 'running'}
                 self.controller.tick()
                 self.fail(detail)
-                self.assertFalse(read_json(self.state / 'control.json')['enabled'])
-                self.assertEqual(self.controller.data['pauseReason'], 'repeated_model_failure')
+                self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+                self.assertEqual(self.controller.data['status'], 'model_recovery_wait')
+                self.assertGreater(self.controller.data['recoveryAfter'], self.clock())
 
     def test_unknown_task_result_and_unknown_action_are_never_recovered_by_backoff(self):
         self.controller.tick()

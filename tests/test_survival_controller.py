@@ -642,7 +642,7 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.data['failures'], 1)
         self.assertEqual(len(self.backend.submitted), 1)
         self.controller.tick()
-        self.assertEqual(self.controller.data['status'], 'cooldown')
+        self.assertEqual(self.controller.data['status'], 'model_recovery_wait')
 
     def test_public_status_uses_bounded_skill_rows_and_real_evidence(self):
         self.controller.tick()

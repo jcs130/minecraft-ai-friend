@@ -75,7 +75,8 @@ def _engine():
 def _kernel_version():
     # The declared sensor validation is part of the executable proposal contract.
     return hashlib.sha256(Path(__file__).read_bytes() + b'\0'
-                          + Path(__file__).with_name('world_adapter.py').read_bytes()).hexdigest()
+                          + Path(__file__).with_name('world_adapter.py').read_bytes() + b'\0'
+                          + Path(__file__).with_name('system_one.py').read_bytes()).hexdigest()
 
 
 def _wait_seconds(value):
@@ -109,10 +110,10 @@ def _observation(value):
 
 def _validate_result(value):
     if not isinstance(value, dict) or set(value) - {
-            'action', 'memory', 'done', 'replan', 'reason', 'waitSeconds', 'observe'}:
+            'action', 'memory', 'done', 'replan', 'reason', 'waitSeconds', 'observe', 'choose'}:
         raise SkillError('invalid_skill_result')
     if (not isinstance(value.get('memory'), dict)
-            or not any(key in value for key in ('action', 'waitSeconds', 'observe'))):
+            or not any(key in value for key in ('action', 'waitSeconds', 'observe', 'choose'))):
         raise SkillError('invalid_skill_result')
     action = value.get('action')
     if action is not None:
@@ -135,6 +136,12 @@ def _validate_result(value):
         extra['waitSeconds'] = _wait_seconds(value['waitSeconds'])
     if 'observe' in value:
         extra['observe'] = _observation(value['observe'])
+    if 'choose' in value:
+        from system_one import validate_choice
+        try:
+            extra['choose'] = validate_choice(value['choose'])
+        except ValueError as exc:
+            raise SkillError('invalid_skill_choice') from exc
     if extra and (len(extra) > 1 or action is not None or value.get('done') or value.get('replan')):
         raise SkillError('conflicting_skill_requests')
     _json(value['memory'], 16384)
@@ -207,11 +214,11 @@ def _fixtures(fixtures):
     for row in fixtures:
         if not isinstance(row, dict) or set(row) - {
                 'state', 'memory', 'expectedActionTool', 'done', 'replan', 'expectedAction',
-                'expectedMemory', 'expectedWaitSeconds', 'expectedObserve'}:
+                'expectedMemory', 'expectedWaitSeconds', 'expectedObserve', 'expectedChoice'}:
             raise SkillError('invalid_fixture')
         if not isinstance(row.get('state'), dict) or not isinstance(row.get('memory', {}), dict):
             raise SkillError('invalid_fixture_input')
-        if not any(key in row for key in ('expectedActionTool', 'done', 'expectedWaitSeconds', 'expectedObserve')):
+        if not any(key in row for key in ('expectedActionTool', 'done', 'expectedWaitSeconds', 'expectedObserve', 'expectedChoice')):
             raise SkillError('fixture_expectation_required')
         if 'expectedActionTool' in row and row['expectedActionTool'] not in (None, *ACTION_TOOLS):
             raise SkillError('invalid_fixture_expectation')
@@ -224,6 +231,12 @@ def _fixtures(fixtures):
             _wait_seconds(row['expectedWaitSeconds'])
         if row.get('expectedObserve') is not None:
             _observation(row['expectedObserve'])
+        if 'expectedChoice' in row:
+            from system_one import validate_choice
+            try:
+                validate_choice(row['expectedChoice'])
+            except ValueError as exc:
+                raise SkillError('invalid_fixture_choice') from exc
         inputs.add(_json({'state': row['state'], 'memory': row.get('memory', {})}))
     if len(inputs) < 2:
         raise SkillError('distinct_fixture_inputs_required')
@@ -446,6 +459,8 @@ class SkillLibrary:
                                          or result.get('waitSeconds') == fixture['expectedWaitSeconds'])
                     passed = passed and ('expectedObserve' not in fixture
                                          or result.get('observe') == fixture['expectedObserve'])
+                    passed = passed and ('expectedChoice' not in fixture
+                                         or result.get('choose') == fixture['expectedChoice'])
                     cases.append({'index': index, 'passed': passed, 'actual': result})
                 except SkillError as exc:
                     cases.append({'index': index, 'passed': False, 'error': str(exc),

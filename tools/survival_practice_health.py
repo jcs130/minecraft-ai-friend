@@ -19,6 +19,7 @@ LIVE_SOURCES = (
 )
 TEST_SOURCES = ('tests/test_survival_practice.py', 'tests/test_survival_practice_integration.py')
 SOURCES = LIVE_SOURCES + (
+    'world/survival/system_one.py',
     'world/survival/fast_execution.py',
     *TEST_SOURCES,
     'tools/survival_practice_health.py',

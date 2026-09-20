@@ -2,7 +2,8 @@
 
 A healthy Qwen API and a healthy MCP endpoint do not imply an active Driver:
 Qwen 2.2 retains no handler after a failed startup connection. Its whitelist
-API saves the same card and schedules a native reload without changing auth.
+API preserves the card; the scoped 2.2.1 compatibility hook calls the native
+DriverManager reload only if its normal refresh still has no usable handler.
 """
 import json
 import os
@@ -102,7 +103,7 @@ class NativeToolConnection:
             if names is not None and (not isinstance(names, list) or len(names) != len(TOOL_NAMES)
                     or any(not isinstance(name, str) for name in names) or set(names) != set(TOOL_NAMES)):
                 return False
-            request(self.base, TOOLS_ROUTE, {'tools': list(TOOL_NAMES)})
+            request(self.base, TOOLS_ROUTE, {'tools': names})
             # PUT starts an asynchronous native reload. Its response is not proof
             # of readiness: a later GET must see the active capabilities.
             return require_ready(self.base)

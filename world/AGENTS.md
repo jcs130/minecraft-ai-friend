@@ -1,3 +1,5 @@
+2026-09-21 后续持续运行根因修复与系统1已部署：原生task准确404且tracker idle/0才把丢失推理记failed；无结果不重放、不算动作成功。普通IO和已知推理失败退避，人工pause/drain/未知动作保持保护。自有MCP同值白名单PUT触发限定2.2.1 DriverManager reload，完整凭据卡保持；结衣新轮先检查工具。服务管理启动Qwen进程后先拉起survivor，最后严格核验Qwen完整健康，失败照留。用户已有Decider接技能choose候选入口，367ms真实状态影子推理，未做WASD训练。97具身/34实践、6旧晋升版本35用例实测通过；10profiles/16Cron原样恢复，MC/world未重启，control更新后一次重启。维护system-one-native-20260921已恢复勿重放；详见docs/SYSTEM-ONE-NATIVE-CONTINUITY.md。
+
 2026-09-21 持续运行修复已部署：桐人已有模型 task 的临时查询故障按原期限退避、不重复提交；结衣旧丢失任务复用显式对账机制释放，旧 unknown 回执保留。公会四个讨伐统计条件修正为 minecraft.killed:minecraft.<mob>，缺失 objective 已原生创建，不清零玩家分数。原 10 profiles/16 Cron 恢复，仅 NPC/survivor 停启；原禁用班次保持。MCP 熔断需官方 PATCH toggle 重连，完整 Client DTO 写回可能丢自定义凭据别名，不可覆盖原环境引用。84 项生产字节冒烟、73 控制器和 9 女仆对账通过；其他历史健康失败照实保留。维护已结束，不重放恢复脚本，详见 docs/AGENT-CONTINUITY-REPAIR.md。
 
 2026-09-20 23:45 技能部署收尾：NPC重启后的4条原生HTTP连接inactive已通过同值官方API重连（桐人qd_party、两人物maid_native、结衣qd_party），工具3/7/7/3与配置/权限全等；numen_survival原已正常。新维护skill-system-reconnect-20260920已结束，10profiles/16Cron再次精确恢复，无二次服务重启。今后依赖服务恢复后再同步角色技能，并实际读工具清单。

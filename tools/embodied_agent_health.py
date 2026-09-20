@@ -15,13 +15,17 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'tests/test_survival_life_session.py', 'world/survival/standing_task.py',
            'tests/test_survival_standing_task.py', 'tools/smoke_embodied_agent.py',
            'tools/embodied_agent_health.py', 'tests/test_survival_poll_recovery.py',
-           'world/sidecar/mc_guild.py', 'tests/test_guild_hunt_score.py')
+           'world/sidecar/mc_guild.py', 'tests/test_guild_hunt_score.py',
+           'world/survival/system_one.py', 'world/survival/service.py', 'world/survival/game_service.py',
+           'world/ops/native_mcp_recovery.py', 'world/sidecar/qwen_tasks.py',
+           'world/sidecar/party_life.py', 'world/sidecar/native_tool_connection.py',
+           'tests/test_native_continuity.py', 'tests/test_native_mcp_recovery.py', 'tests/test_system_one.py')
 
 
 def check(root=ROOT, clock=time.time):
     root = Path(root)
     checks = dict.fromkeys(('generation_binding', 'supervised_heartbeat', 'archive_outside_retrieval',
-                            'archive_verified', 'current_prompt', 'public_brain', 'behavior_test'), False)
+                            'archive_verified', 'current_prompt', 'public_brain', 'behavior_test', 'native_mcp_recovery'), False)
     try:
         read = lambda p: json.loads(p.read_text(encoding='utf-8-sig'))
         state = root / 'server/survival-agent-state/survival'
@@ -29,6 +33,8 @@ def check(root=ROOT, clock=time.time):
         settings, heartbeat = read(state / 'settings.json'), read(state / 'heartbeat.json')
         marker = read(workspace / 'embodiment.json')
         epoch = settings['memoryEpoch']
+        runtime = read(root / 'server/agents/work/learning-runtime.json')
+        checks['native_mcp_recovery'] = runtime.get('nativeMcpRecoveryVersion') == 1
         checks['generation_binding'] = settings.get('brainProtocol') == 1 and marker.get('memoryEpoch') == epoch
         checks['supervised_heartbeat'] = (heartbeat.get('brainProtocol') == 1 and heartbeat.get('memoryEpoch') == epoch
             and heartbeat.get('ok') is True and -5000 < clock() * 1000 - heartbeat['at'] < 90000)

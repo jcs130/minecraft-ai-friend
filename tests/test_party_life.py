@@ -37,6 +37,10 @@ class PartyLifeTests(unittest.TestCase):
         self.owner_online = True; self.native_busy = False; self.posts = []; self.status = 'running'
         self.drop_post = False; self.drop_get = False
         def transport(method, path, role, payload=None):
+            if path.startswith('/mcp/tools/'):
+                from maid_native_tools import TOOL_NAMES
+                names = TOOL_NAMES if path.endswith('/maid_native') else ['party_send']
+                return [{'name': name, 'enabled': True} for name in names]
             if method == 'POST':
                 self.posts.append((role, payload))
                 if self.drop_post: raise TimeoutError('lost acknowledgement')

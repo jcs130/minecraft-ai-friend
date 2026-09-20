@@ -55,7 +55,10 @@ def systems_status(data, job, now):
             'nextCheckAt': job.get('nextRunAt') if waiting else None,
             'steps': job.get('steps', 0) if active else 0,
             'observations': job.get('observations', 0) if active else 0,
-            'requiresModelPerStep': False},
+            'requiresModelPerStep': bool(active and job.get('lastPolicy')),
+            'localPolicy': {k: v for k, v in (data.get('systemOne') or {}).items()
+                            if k in ('model', 'choice', 'confidence', 'latencyMs', 'code', 'ok', 'observedAt')},
+            'requiresQwenPerStep': False},
             'slow': {'owner': 'qwenpaw', 'active': bool(data.get('active')),
                      'status': data.get('status'), 'readiness': data.get('qwenReadiness')},
             'automaticFoodReflex': False}

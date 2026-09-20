@@ -292,7 +292,28 @@ class QwenBackend:
         return value['task_id']
 
     def poll(self, task_id):
-        return self.api('GET', '/console/chat/task/' + task_id)
+        try:
+            return self.api('GET', '/console/chat/task/' + task_id)
+        except Exception as error:
+            response = getattr(error, 'response', None)
+            if response is None or response.status_code != 404:
+                raise
+            # Native background handles are process-local. An exact missing
+            # handle plus an idle native tracker retires this inference only;
+            # it proves neither successful tools nor a successful answer.
+            if response.json() != {'detail': 'Task not found: ' + task_id}:
+                raise
+            status = self.api('GET', '/agents/' + self.agent_id + '/agent-status')
+            if status.get('status') != 'idle' or type(status.get('running_task_count')) is not int or status['running_task_count'] != 0:
+                raise
+            return {'status': 'failed', 'result': {'status': 'failed', 'error': {
+                'code': 'NATIVE_TASK_LOST', 'message': 'Native task absent and agent idle; result unverified. Observe again; do not replay old actions.'}},
+                'reconciliation': {'resultVerified': False, 'requestReplayed': False, 'nativeRunningTaskCount': 0}}
+
+    def idle(self):
+        state = self.api('GET', '/agents/' + self.agent_id + '/agent-status')
+        return (state.get('status') == 'idle' and type(state.get('running_task_count')) is int
+                and state['running_task_count'] == 0)
 
     def cancel(self, active):
         # A session is reused, so cancelling it after this task ended could stop
@@ -303,14 +324,6 @@ class QwenBackend:
         try:
             terminal = self.poll(task_id)
         except Exception as error:
-            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
-                # The task endpoint answers 404 for a task that is gone. That is proof
-                # the turn is already terminal: nothing left to cancel, nothing to wait
-                # for. Without this, cancel() raised on every attempt, the caller's
-                # except ran pause('cancellation_uncertain') every tick, and Kirito sat
-                # frozen for forty minutes on task-c9bc619f34a2 with cycles stuck at 88.
-                # Any other failure stays unknown and keeps the conservative wait.
-                return {'stopped': True, 'alreadyTerminal': True, 'absent': True}
             raise
         if terminal.get('status') in ('finished', 'completed', 'failed', 'cancelled', 'canceled'):
             return {'stopped': True, 'alreadyTerminal': True}
@@ -1325,6 +1338,7 @@ class Controller:
         self.data['lastDecisionPosition'] = body.get('position')
         if completed:
             self.data['failures'] = 0
+            self.data.pop('recoveryAfter', None)
             self.data.pop('lastInferenceFailure', None)
             self.data.pop('inferenceBackoff', None)
         else:
@@ -1339,12 +1353,12 @@ class Controller:
             else:
                 self.data.pop('inferenceBackoff', None)
                 self.data['failures'] = self.data.get('failures', 0) + 1
-                if self.data['failures'] >= 2:
-                    # Name what actually happened. "repeated_model_failure" reads as a
-                    # broken model; a doom loop means the model kept choosing the same
-                    # action, which is an approach problem with a known remedy.
-                    self.pause('doom_loop' if self.data.get('lastFailureReason') == 'native_doom_loop'
-                               else 'repeated_model_failure')
+                # Qwen's iteration/doom-loop guard ends ONE inference. It does
+                # not withdraw the user's standing authorization to live.
+                # Pace future fresh observations; never repeat this request.
+                delay = min(1800, 60 * 2 ** min(self.data['failures'] - 1, 5))
+                self.data['recoveryAfter'] = self.clock() + delay
+                self.data['status'] = 'model_recovery_wait'
         self.save()
 
     def deliver_party_terminal(self, active, *, allow_dispatch=True):
@@ -1422,6 +1436,20 @@ class Controller:
                 adventure=self.adventure(body), guild=self.cached_guild(),
                 constructionAreas=self.settings.get('constructionAreas', [])[:8])
             plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
+            job.pop('lastPolicy', None)
+            if 'choose' in plan:
+                from system_one import SystemOne
+                selection = SystemOne(clock=self.clock).choose(plan['choose'], body,
+                    self.memory().get('goal', ''), observed['execution'].get('lastExecution'))
+                job['lastPolicy'] = {k: v for k, v in selection.items() if k not in ('state', 'candidates', 'action')}
+                self.data['systemOne'] = job['lastPolicy']
+                self.record('system_one_choice', name=job['name'], version=job['version'],
+                            practiceRunId=job.get('practiceRunId'), selection=selection)
+                if selection['ok']:
+                    plan['action'] = selection['action']
+                else:
+                    plan.update(action=None, replan=True, reason=selection['code'])
+                plan.pop('choose')
             self.data.pop('skillWaitReason', None)
             job.pop('nextRunAt', None)
             passive = 'waitSeconds' in plan or 'observe' in plan
@@ -1444,6 +1472,9 @@ class Controller:
             action = plan.get('action')
             if action:
                 turn_id = 'skill-' + uuid.uuid4().hex
+                if job.get('lastPolicy'):
+                    self.record('system_one_dispatch', turnId=turn_id, name=job['name'], version=job['version'],
+                                practiceRunId=job.get('practiceRunId'), policy=job['lastPolicy'])
                 if job.get('practiceRunId'):
                     self.practice.step(job['practiceRunId'], turn_id, turn_id, action['tool'], action['args'])
                 self.gateway.open_lease(turn_id, (now + 60) * 1000)
@@ -1504,6 +1535,9 @@ class Controller:
         if self.drain_at_boundary(body):
             return
         now = self.clock()
+        if now < self.data.get('recoveryAfter', 0):
+            self.data['status'] = 'model_recovery_wait'
+            return
         backoff = self.data.get('inferenceBackoff')
         if backoff is not None:
             from inference_errors import validate_backoff
@@ -1527,7 +1561,7 @@ class Controller:
             self.party.validate_session(self.session, self.settings)
         message = self.party.pending() if self.party else None
         requested_review = self.reviews.pending()
-        changed = (backoff is not None or message is not None
+        changed = (backoff is not None or self.data.get('recoveryAfter') is not None or message is not None
                    or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
                    or self.meaningful_displacement(body))
         review = self.next_review(control)
@@ -1901,19 +1935,7 @@ class Controller:
     CANCELLATION_SETTLE_SECONDS = 300
 
     def settle_cancellation(self):
-        """把悬着的 cancellationStatus 按证据结案，而不是无限等一个不会来的终态。
-
-        2026-09-19：他 24 小时里 184/475 个动作拿到 unknown —— 近四成，且集中在
-        goto/farm/equip_item 这些核心动作上。根因就在此处：stop_actions 一旦写下
-        waiting_for_native_terminal，就再也没有人去探过 —— 而那个原生任务其实早已 404，
-        终态永远不会来，这一窗里所有动作的回执就永远缺一块。
-
-        回执是学习的原料：拿不到回执就学不到「我做成没做成」，于是只能重复（重复占比 1.00）、
-        只能写字（知识 15 份/天而能力化为 0）、四天做成率 57–60% 一动不动。
-
-        每轮复探一次，三种结局都写清楚：终态即结案；404 / 超窗不可观测按证据结案；
-        仍在跑就继续等 —— 那是正确的等待。
-        """
+        """Settle proven terminal tasks; elapsed time alone proves no outcome."""
         if self.data.get('cancellationStatus') != 'waiting_for_native_terminal':
             return None
         active = self.data.get('active') or {}
@@ -1928,16 +1950,12 @@ class Controller:
             self.save()
 
         if not task_id:
-            settle('native_task_absent', reason='no_task_id')
-            return 'absent'
+            return 'waiting'  # An unknown POST is not evidence of absence.
         now = self.clock()
         try:
             terminal = self.backend.poll(task_id)
             native = str((terminal or {}).get('status') or '').lower()
-        except Exception as error:
-            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
-                settle('native_task_absent', reason='http_404')
-                return 'absent'
+        except Exception:
             native = None
         if native in ('finished', 'completed', 'failed', 'cancelled', 'canceled', 'timeout', 'timed_out'):
             settle('native_terminal_confirmed', reason='native_terminal', nativeStatus=native)
@@ -1952,8 +1970,44 @@ class Controller:
             return 'waiting'
         if now - since < self.CANCELLATION_SETTLE_SECONDS:
             return 'waiting'
-        settle('native_task_unobservable', reason='unobservable_beyond_window', seconds=int(now - since))
-        return 'unobservable'
+        return 'waiting'  # Elapsed time cannot establish native termination.
+
+    def recover_runtime_pause(self, body):
+        """Resume infrastructure pauses only after native and body ownership settle."""
+        recoverable = {'model_timeout', 'model_result_unknown', 'cancellation_uncertain',
+                       'doom_loop', 'repeated_model_failure', 'survivor_child_exited',
+                       'controller_OSError', 'controller_GatewayError', 'controller_FileNotFoundError'}
+        try:
+            control = read_json(self.root / 'control.json')
+            if control.get('pauseReason') not in recoverable or control.get('drain', {}).get('status') == 'requested':
+                return
+            execution = self.data.get('actionExecution', {})
+            if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True
+                    or body.get('task', {}).get('busy') or execution.get('ok') is not True
+                    or execution.get('inFlight') or (self.root / 'unknown.json').exists()):
+                return
+            job_path = self.root / 'skill-job.json'
+            if job_path.exists() and read_json(job_path).get('status') == 'dispatching':
+                return
+            if not hasattr(self.backend, 'idle') or not self.backend.idle():
+                return
+            if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
+                from native_tools import require_ready
+                if not require_ready():
+                    return
+            with action_lock(self.root, blocking=True):
+                latest = read_json(self.root / 'control.json')
+                if latest != control or (self.root / 'unknown.json').exists():
+                    return
+                latest.update(enabled=True, pauseReason=None)
+                write_json(self.root / 'control.json', latest)
+            self.data.pop('pauseReason', None)
+            self.data['status'] = 'waiting'
+            self.record('runtime_pause_recovered', reason=control['pauseReason'], requestReplayed=False)
+            self.save()
+        except Exception as error:
+            self.data['recoveryProbeError'] = type(error).__name__
+            return
 
     def tick(self):
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
@@ -2018,68 +2072,8 @@ class Controller:
                     self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
                 except (ValueError, OSError):
                     self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
-            elif (control.get('pauseReason') or self.data.get('pauseReason')) == 'cancellation_uncertain':
-                # A cancel whose terminal never arrives paused this lane for good: the
-                # body-pause branch above resumes its own reasons, this one had no
-                # branch at all. On 2026-09-18 that left Kirito frozen for forty
-                # minutes waiting on task-c9bc619f34a2, which had already 404'd.
-                # The task ledger is the evidence: a terminal status settles it, and a
-                # 404 proves the task is gone, so the cancellation is concluded. No
-                # result is invented, and a task that still answers as running keeps
-                # the pause - that wait is correct.
-                active = self.data.get('active')
-                task_id = (active or {}).get('taskId')
-                if not active:
-                    # An orphaned cancellation pause. stop_actions() runs earlier in this
-                    # same branch and, with the 404-is-terminal rule, already clears the
-                    # turn - so by the time control flow reaches here there is nothing
-                    # left to cancel or wait for, and only the stale control.json reason
-                    # keeps the lane down. That is exactly what held Kirito at cycles=88.
-                    # The write must mirror pause(): re-read under the same lock and write
-                    # the file, because the in-memory control dict never reaches disk and
-                    # the next tick reads the file again.
-                    with action_lock(self.root, blocking=True):
-                        latest = (read_json(self.root / 'control.json')
-                                  if (self.root / 'control.json').exists() else {'schema': 1})
-                        latest.update(enabled=True, pauseReason=None)
-                        write_json(self.root / 'control.json', latest)
-                    self.data.pop('pauseReason', None)
-                    self.data['status'] = 'waiting'
-                elif task_id:
-                    try:
-                        terminal = self.backend.poll(task_id)
-                        absent = False
-                    except Exception as error:
-                        terminal, absent = None, True
-                        probe = type(error).__name__
-                    status = '' if absent else str((terminal or {}).get('status') or '').lower()
-                    settled = status in ('finished', 'completed', 'failed', 'cancelled', 'canceled')
-                    if settled or absent:
-                        if absent:
-                            active['nativeTerminal'] = {'text': '', 'completed': False,
-                                'failureReason': 'native_task_absent', 'probe': probe}
-                        else:
-                            active['nativeTerminal'] = {'text': '', 'completed': False,
-                                'failureReason': 'native_task_' + status}
-                        self.save()
-                        if self.party and active.get('partyReservation'):
-                            try:
-                                self.deliver_party_terminal(active, allow_dispatch=False)
-                            except Exception:
-                                pass
-                        self.data['active'] = None
-                        self.data['cancellationStatus'] = ('native_terminal_confirmed' if settled
-                                                           else 'native_task_absent')
-                        self.data.pop('pauseReason', None)
-                        self.data['status'] = 'waiting'
-                        # pause() also wrote control.json (enabled=False + the reason) and
-                        # that file is what actually holds the lane down. Mirror that write
-                        # exactly - re-read under the lock, then persist.
-                        with action_lock(self.root, blocking=True):
-                            latest = (read_json(self.root / 'control.json')
-                                      if (self.root / 'control.json').exists() else {'schema': 1})
-                            latest.update(enabled=True, pauseReason=None)
-                            write_json(self.root / 'control.json', latest)
+            else:
+                self.recover_runtime_pause(body)
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:

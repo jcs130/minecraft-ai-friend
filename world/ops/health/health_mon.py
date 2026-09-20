@@ -191,10 +191,11 @@ def probe_panel_smoke():
     maid_perception = probe_maid_perception()
     survival_practice = probe_survival_practice()
     embodied_agent = probe_embodied_agent()
+    system_one = probe_system_one()
     pawapps = probe_pawapps()
     skill_system = probe_skill_system()
     town_protection = probe_town_protection()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, pawapps, town_protection, skill_system)),
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -205,7 +206,7 @@ def probe_panel_smoke():
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
             'world_team': world_team, 'maid_perception': maid_perception, 'survival_practice': survival_practice,
-            'embodied_agent': embodied_agent, 'pawapps': pawapps, 'town_protection': town_protection, 'skill_system': skill_system}
+            'embodied_agent': embodied_agent, 'system_one': system_one, 'pawapps': pawapps, 'town_protection': town_protection, 'skill_system': skill_system}
 
 
 def probe_engineering_cron_runtime():
@@ -1636,6 +1637,16 @@ def probe_embodied_agent():
         return {'ok': False, 'error': 'Embodied agent probe unavailable'}
 
 
+def probe_system_one():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_system_one_health', PROJECT / 'tools/system_one_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check()
+    except (OSError, ValueError, AttributeError, ImportError):
+        return {'ok': False, 'error': 'System one probe unavailable'}
+
+
 def probe_pawapps():
     try:
         spec = importlib.util.spec_from_file_location('qd_pawapps_health', PROJECT / 'tools/pawapps_health.py')
@@ -1726,6 +1737,7 @@ def main_locked():
               "maid_perception": probe_maid_perception(),
               "survival_practice": probe_survival_practice(),
               "embodied_agent": probe_embodied_agent(),
+              "system_one": probe_system_one(),
               "pawapps": probe_pawapps(),
               "town_protection": probe_town_protection(),
               "skill_system": probe_skill_system(),

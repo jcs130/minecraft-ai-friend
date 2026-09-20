@@ -1,3 +1,5 @@
+2026-09-21 原生持续运行与系统1首阶段：已修复已知失败永久停机、原生task句柄丢失占道、MCP失效handler刷新不重连，以及Qwen完整健康→survivor启动的互锁。沿用原生tracker/Cron/DriverManager和Docker守护；2.2.1兼容钩子仅同值白名单PUT、固定自有端点、idle且卡片未变时reload，不写Client DTO/凭据。系统1接用户已有Mapika/decider-2b的/v1/systemone，仅已测试程序choose候选，失败回Qwen；真实身体367ms影子推理已验，未证明逐帧WASD/策略收益。97具身、34实践、94控制器、80相关、37管理回归通过（组间有重叠），6旧晋升版本35用例真重测。原10profile/16Cron精确恢复，MC/world未重启；额外control一次重启修启动互锁，原失败回执保留。维护system-one-native-20260921已恢复，勿重放。见docs/SYSTEM-ONE-NATIVE-CONTINUITY.md。
+
 2026-09-21 桐人/结衣持续运行修复：已有 task 的临时 GET 失败在原期限内退避查询，不重投；结衣 9/18 丢失任务经现有 operator-reconciliations 释放通道，原 unknown 记录/身份/会话保留。10 profiles/16 Cron 精确恢复，原禁用班次不改；桐人显式恢复。仅停启 NPC/survivor，首次启动 readiness_timeout 回执保留，后续官方 MCP toggle 重连并恢复原环境凭据引用后健康。不要用 Client DTO 写回覆盖自定义凭据别名。实测公会讨伐 criteria 冒号误写已修复，4 个缺失计数器原生创建、未改玩家分数。84 项生产字节具身冒烟、73 控制器和 9 女仆对账通过；完整 panel-smoke 仍有其他证据失配，勿假称全绿。维护 agent-continuity-20260921 已恢复，勿重放；见 docs/AGENT-CONTINUITY-REPAIR.md。
 
 2026-09-20 23:45 技能部署收尾：NPC重启后的4条原生HTTP连接inactive已通过同值官方API重连（桐人qd_party、两人物maid_native、结衣qd_party），工具3/7/7/3与配置/权限全等；numen_survival原已正常。新维护skill-system-reconnect-20260920已结束，10profiles/16Cron再次精确恢复，无二次服务重启。今后依赖服务恢复后再同步角色技能，并实际读工具清单。

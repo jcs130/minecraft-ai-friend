@@ -247,7 +247,8 @@ class PartyLife:
                     if active.get('inputIds'):
                         self.bridge.perception_inbox.finish(member, active['inputIds'], active['key'],
                                                            row['taskId'], row['status'])
-                    receipt = {key: row.get(key) for key in ('requestId', 'taskId', 'sessionId', 'status', 'finishedAt')}
+                    receipt = {key: row.get(key) for key in ('requestId', 'taskId', 'sessionId', 'status', 'finishedAt',
+                                                           'failureReason', 'resultVerified', 'retryOriginalRequest')}
                     receipt.update(signalId=active['signalId'], replyIds=active['replyIds'],
                                    inputIds=active.get('inputIds', []),
                                    finalSummaryIsPrivate=True, automaticSpeech=False)
@@ -339,6 +340,15 @@ class PartyLife:
             if native.get('status') != 'idle' or native.get('running_task_count') != 0:
                 state.update(status='native_busy'); self._save(state)
                 return state
+            from native_tool_connection import NativeTools
+            if not hasattr(self, '_connections'):
+                self._connections = NativeTools(self.bridge.tasks.transport)
+            for key, url, names in (
+                ('maid_native', 'http://npc:8091/mcp', ['identity']),
+                ('qd_party', 'http://npc:8091/party/mcp', ['party_send'])):
+                if not self._connections.ready(YUI_AGENT_ID, key, url, names):
+                    state.update(status='waiting_for_tools'); self._save(state)
+                    return state
             row = self.bridge.tasks.submit('maid_dialogue', active['key'], active['prompt'],
                 allowed_tools=active['allowedTools'], expected_binding=member, **kwargs)
             active.update(taskId=row.get('taskId'), requestId=row.get('requestId'))

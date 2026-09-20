@@ -64,6 +64,8 @@ export function dockerRequest(method, route, body, timeout=15000, requestImpl=ht
 export function defineTopology(spec) {
   if(!Array.isArray(spec?.services)||!spec.services.length||!Array.isArray(spec.startOrder))throw new Error('topology_configuration');
   const immutable=new Set(spec.immutable||[]);
+  const deferredHealth=new Set(spec.deferredHealth||[]);
+  if([...deferredHealth].some(id=>!spec.services.includes(id)||(spec.healthGated||[]).includes(id)))throw new Error('topology_configuration');
   const dependencies=spec.dependencies||{};
   const dependents={};
   for(const [service,needs] of Object.entries(dependencies))
@@ -81,6 +83,7 @@ export function defineTopology(spec) {
     dependencies,dependents,
     startOrder:[...spec.startOrder],
     healthGated:new Set(spec.healthGated||[]),
+    deferredHealth,
     lockFile:spec.lockFile||'.control-operation.lock',
     refuseIfPresent:spec.refuseIfPresent||[],
     preStop,
@@ -199,15 +202,22 @@ export function createControlServer({topology,token,stateDir,maintenanceDir,engi
       for(const n of plan.stop.filter(n=>!deferred.has(n))) await step(topology.labels.stop(n),()=>engine('POST','/containers/'+plan.containers[n]+'/stop?t=30',null,40000));
       for(const hook of topology.preStop) if(plan[hook.planFlag]) await step(hook.name,()=>hook.run({engine,containerId:plan.containers[hook.service]}));
       for(const n of plan.stop.filter(n=>deferred.has(n))) await step(topology.labels.stop(n),()=>engine('POST','/containers/'+plan.containers[n]+'/stop?t=30',null,40000));
-      for(const n of plan.start)await step(topology.labels.start(n),async()=>{
-        await engine('POST','/containers/'+plan.containers[n]+'/start');
+      const waitReady=async(n,health=true)=>{
         const end=clock()+180000;
         while(clock()<end){const r=await engine('GET','/containers/'+plan.containers[n]+'/json');
-          if(r.State?.Running && (!r.State.Health||r.State.Health.Status==='healthy'))return;
+          if(r.State?.Running && (!health||!r.State.Health||r.State.Health.Status==='healthy'))return;
           if(r.State?.Status==='exited'||r.State?.Status==='dead')throw new Error('service_exited');
           await sleep(1000);}
         throw new Error('readiness_timeout');
+      };
+      for(const n of plan.start)await step(topology.labels.start(n),async()=>{
+        await engine('POST','/containers/'+plan.containers[n]+'/start');
+        await waitReady(n,!topology.deferredHealth?.has(n));
       });
+      // Cross-service audits may need a later endpoint (Qwen's body MCP).
+      // Delay that audit, never omit it or report a partial start as complete.
+      for(const n of plan.start.filter(n=>topology.deferredHealth?.has(n)))
+        await step('最终健康检查 '+n,()=>waitReady(n));
       record.status='complete';record.ok=true;
     } catch(error){fail(error);record.observed=await inventory(engine,topology);}
     finally {

@@ -12,6 +12,7 @@ import re
 import threading
 import time
 import urllib.request
+import urllib.error
 import uuid
 
 ROLES = {'npc_dialogue': 'qd-villager-dialogue', 'guild_quest': 'qd-guild-planner',
@@ -128,9 +129,10 @@ class QwenTasks:
         request = urllib.request.Request(BASE + path, method=method, headers=headers,
             data=json.dumps(payload, ensure_ascii=False, allow_nan=False).encode('utf8') if payload is not None else None)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        limit = 2 * 1024 * 1024 if method == 'GET' and path.startswith('/console/chat/task/') else MAX_BYTES
         with opener.open(request, timeout=10) as response:
-            raw = response.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
+            raw = response.read(limit + 1)
+        if len(raw) > limit:
             raise ValueError('qwen_response_too_large')
         result = json.loads(raw)
         if not isinstance(result, dict) and not (method == 'GET' and isinstance(result, list)
@@ -359,6 +361,21 @@ class QwenTasks:
                 raise ValueError('qwen_task_status_invalid')
         except Exception as exc:
             row.update(status='poll_unavailable', errorType=type(exc).__name__)
+            # Background handles disappear on native runtime restart. Retire
+            # the lost inference only after Qwen's own role tracker is idle.
+            # The failed receipt retains identity and uncertainty; neither the
+            # original prompt nor any tool effect is replayed or called success.
+            if isinstance(exc, urllib.error.HTTPError) and exc.code == 404:
+                try:
+                    detail = json.loads(exc.read(4096))
+                    status = (self.transport('GET', '/agents/' + row['agentId'] + '/agent-status', row['agentId'])
+                              if detail == {'detail': 'Task not found: ' + row['taskId']} else {})
+                    if (status.get('status') == 'idle' and type(status.get('running_task_count')) is int
+                            and status['running_task_count'] == 0):
+                        row.update(status='failed', finishedAt=self.clock(), failureReason='native_task_lost',
+                                   resultVerified=False, nativeRunningTaskCount=0, retryOriginalRequest=False)
+                except Exception:
+                    pass
         with state_lock(self.root):
             # Another process may have polled while this GET was in flight.
             # A stale running/error reply cannot erase a saved terminal answer.
