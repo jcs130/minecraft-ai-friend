@@ -23,6 +23,10 @@ COOLDOWN = 0
 DAILY_LIMIT = None
 TASK_TIMEOUT = 180
 TERMINAL = frozenset(('completed', 'failed', 'cancelled'))
+# A learning shift is a *race*, not a debt: it must settle inside its own budget
+# (900s timeout + 300s misfire grace, doubled for slop). Past that, a shift row is
+# just another stuck reservation and has to be named like one.
+LEARNING_SHIFT_LIMIT_SECONDS = 3600
 
 
 def bind_state(role, *, native_role=None, native_runtime=None):
@@ -102,10 +106,33 @@ def compact_ledger(rows, terminal_limit=100):
     return unresolved + [row for _, row in terminal[-terminal_limit:]]
 
 
+def learning_shift_row(row):
+    """Is this unfinished row a learning shift, rather than a delegated operation?"""
+    return str(row.get('jobId') or '').startswith('qd-learning-') \
+        or row.get('source') == 'native-qwen-cron'
+
+
 def budget_check(rows, now, parent_run_id=None):
-    if any(r.get('status') not in TERMINAL and (parent_run_id is None or r.get('runId') != parent_run_id) for r in rows):
+    """Is the shared budget free, or does somebody still owe an answer?
+
+    Two different faults used to answer with one code. A shift another role is
+    running right now settles by itself in minutes; a row nobody is going to close
+    is a debt and blocks the ledger until someone names it. Calling the first one
+    `operations_task_unresolved` cost the board its honesty for a day (2026-09-19
+    20:00 → 09-20 00:00: five roles flagged as if they owed something, while the
+    ledger held nothing but each other's in-flight hour). Past LEARNING_SHIFT_LIMIT
+    even a shift becomes a debt, so this never hides the real clog.
+    """
+    racing = False
+    for row in rows:
+        if row.get('status') in TERMINAL: continue
+        if parent_run_id is not None and row.get('runId') == parent_run_id: continue
+        age = now - (row.get('startedAt') or now)
+        if learning_shift_row(row) and 0 <= age <= LEARNING_SHIFT_LIMIT_SECONDS:
+            racing = True
+            continue
         return 'operations_task_unresolved'
-    return None
+    return 'budget_taken_this_hour' if racing else None
 
 
 def engineering_overlap_evidence():

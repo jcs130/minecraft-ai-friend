@@ -24,10 +24,14 @@ def main():
     before = hashes()
     suite = unittest.TestSuite()
     names = []
-    for name in ('test_embodied_agent', 'test_survival_status_detail'):
+    for name in ('test_embodied_agent', 'test_survival_status_detail',
+                 'test_survival_feedback', 'test_survival_guild', 'test_survival_life_session',
+                 'test_survival_standing_task'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
+                continue
+            if name == 'test_survival_life_session' and cls.__name__ != 'ContinuousActionTests':
                 continue
             for method, function in sorted(cls.__dict__.items()):
                 if method.startswith('test_') and callable(function):

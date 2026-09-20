@@ -339,6 +339,7 @@ class LearningTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == 'nt', 'evidence gate uses the Linux shared task ledger')
     def test_game_shift_agent_task_goes_through_the_evidence_gate(self):
+        import operations_native_tasks as native
         executor = SimpleNamespace(_workspace=SimpleNamespace(agent_id=self.role, workspace_dir=self.folder))
         job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text',
                               dispatch=SimpleNamespace(channel='console'),
@@ -351,23 +352,24 @@ class LearningTests(unittest.TestCase):
         # admitted only when the role has new evidence, so an hourly attempt with
         # nothing new costs no model call at all.
         job.task_type = 'agent'
-        result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
+        with patch.object(native, 'STATE', self.root):
+            result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
         self.assertEqual(result['qiandeng']['code'], 'no_new_learning_evidence')
 
     @unittest.skipIf(os.name == 'nt', 'uses actual Linux operations ledger')
     def test_ops_cron_and_delegate_share_existing_ledger_and_uncertain_reservation(self):
         import operations_native_tasks as native
-        with patch.object(native, 'STATE', self.root):
+        with patch.object(native, 'STATE', self.root), patch.object(native.time, 'time', return_value=self.now):
             self.assertEqual(reserve_review(self.tool, 'job', lambda: self.now)['code'], 'no_new_learning_evidence')
             self.draft()
             first = reserve_review(self.tool, 'job', lambda: self.now)
             self.assertTrue(first['ok'])
             self.assertEqual(reserve_review(self.tool, 'job', lambda: self.now)['code'], 'no_new_learning_evidence')
             with native.ledger() as rows:
-                self.assertEqual(native.budget_check(rows, self.now), 'operations_task_unresolved')
+                self.assertEqual(native.budget_check(rows, self.now), 'budget_taken_this_hour')
                 self.assertEqual(rows[0]['source'], 'native-qwen-cron')
             self.tool.feedback('role-review', 'unverified', '有一个新的观察需要在下次任务中进一步核对')
-            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'operations_task_unresolved')
+            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'budget_taken_this_hour')
 
 
 if __name__ == '__main__': unittest.main()

@@ -19,7 +19,9 @@ from test_agent_learning import Service
 
 def native_fixture_lock():
     import hashlib
-    return {'skills': {name: {'sha256': hashlib.sha256(('fixture-' + name).encode()).hexdigest()} for name in native.NATIVE_SKILLS}}
+    result = {'skills': {name: {'sha256': hashlib.sha256(('fixture-' + name).encode()).hexdigest()} for name in native.NATIVE_SKILLS}}
+    result['skills']['make-skill']['scannerContentSha256'] = 'a' * 64
+    return result
 
 
 def learning_fixture(folder, role, runtime='game'):
@@ -105,13 +107,17 @@ class RoleLearningProfiles(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(AssertionError):
                 contract.validate_jobs({'jobs': jobs}, self.role, 'operations')
 
-    def test_learned_skills_require_own_revision_and_actual_enabled_manifest(self):
+    def activated_skill(self):
         tool = LearningTools(self.role, 'operations', self.root, Service(self.folder), api=lambda *a: {'success': True})
         draft = tool.draft('qd-learned-freshness', 'Validate current evidence before claiming a result',
             'Read the current observation and its collection time. If evidence is missing or expired, state that the result remains unknown. Record the exact receipt before considering a workflow successful.',
             ['learning_status'], [{'input': 'New observation with timestamp', 'expected': 'Report only the current observation', 'kind': 'success'},
                 {'input': 'No available observation timestamp', 'expected': 'Keep the result unknown until fresh evidence', 'kind': 'failure'}])
         tool.validate(draft['name'], draft['revision']); tool.activate(draft['name'], draft['revision'])
+        return draft
+
+    def test_learned_skills_require_own_revision_and_actual_enabled_manifest(self):
+        draft = self.activated_skill()
         self.assertEqual(contract.validate_role_skills(self.folder, self.role, 'operations')['learnedEnabled'], 1)
         manifest = read(self.folder / 'skill.json'); manifest['skills'][draft['name']]['enabled'] = False
         write(self.folder / 'skill.json', manifest)
@@ -120,10 +126,53 @@ class RoleLearningProfiles(unittest.TestCase):
         (self.folder / 'skills' / draft['name'] / 'SKILL.md').write_text('tampered')
         with self.assertRaises(AssertionError): contract.validate_role_skills(self.folder, self.role, 'operations')
 
-    def test_unknown_learned_manifest_is_rejected(self):
-        manifest = read(self.folder / 'skill.json'); manifest['skills']['qd-learned-unowned'] = {'enabled': False}
+    def test_disabled_historical_skill_keeps_files_without_entering_current_index(self):
+        draft = self.activated_skill()
+        historical = self.folder / 'skills/qd-learned-old-epoch/SKILL.md'
+        historical.parent.mkdir(parents=True); historical.write_bytes(b'Archived previous epoch experience.\n')
+        manifest = read(self.folder / 'skill.json'); manifest['skills']['qd-learned-old-epoch'] = {'enabled': False}
         write(self.folder / 'skill.json', manifest)
-        with self.assertRaises(AssertionError): contract.validate_role_skills(self.folder, self.role, 'operations')
+        before = {p.relative_to(self.folder): p.read_bytes() for p in self.folder.rglob('*') if p.is_file()}
+        result = contract.validate_role_skills(self.folder, self.role, 'operations')
+        self.assertEqual((result['learned'], result['learnedEnabled']), (1, 1))
+        self.assertEqual(set(read(self.folder / 'learning/index.json')['skills']), {draft['name']})
+        self.assertEqual(before, {p.relative_to(self.folder): p.read_bytes() for p in self.folder.rglob('*') if p.is_file()})
+
+    def test_historical_skill_must_be_explicitly_disabled_boolean(self):
+        manifest = read(self.folder / 'skill.json')
+        for enabled in (True, 0, 1, None, '', 'false'):
+            manifest['skills']['qd-learned-old-epoch'] = {'enabled': enabled}
+            write(self.folder / 'skill.json', manifest)
+            with self.subTest(enabled=enabled), self.assertRaises(AssertionError):
+                contract.validate_role_skills(self.folder, self.role, 'operations')
+
+    def test_current_disabled_skill_still_requires_owned_revision_and_exact_content(self):
+        draft = self.activated_skill(); name = draft['name']
+        manifest = read(self.folder / 'skill.json'); manifest['skills'][name]['enabled'] = False
+        index = read(self.folder / 'learning/index.json'); index['skills'][name]['enabled'] = False
+        write(self.folder / 'skill.json', manifest); write(self.folder / 'learning/index.json', index)
+        self.assertEqual(contract.validate_role_skills(self.folder, self.role, 'operations')['learnedEnabled'], 0)
+        paths = {'manifest': self.folder / 'skill.json', 'index': self.folder / 'learning/index.json',
+                 'draft': self.folder / 'learning/drafts' / name / (draft['revision'] + '.json'),
+                 'markdown': self.folder / 'skills' / name / 'SKILL.md'}
+        original = {key: path.read_bytes() for key, path in paths.items()}
+        for change in ('missing-binding', 'manifest-state', 'index-state', 'index-nonboolean', 'revision', 'draft-hash', 'markdown'):
+            for key, path in paths.items(): path.write_bytes(original[key])
+            if change in ('missing-binding', 'manifest-state'):
+                value = read(paths['manifest'])
+                if change == 'missing-binding': del value['skills'][name]
+                else: value['skills'][name]['enabled'] = True
+                write(paths['manifest'], value)
+            elif change in ('index-state', 'index-nonboolean', 'revision'):
+                value = read(paths['index']); row = value['skills'][name]
+                if change == 'revision': row['revision'] = 'invalid-revision'
+                else: row['enabled'] = True if change == 'index-state' else 0
+                write(paths['index'], value)
+            elif change == 'draft-hash':
+                value = read(paths['draft']); value['steps'] += ' Unreviewed extra behavior.'; write(paths['draft'], value)
+            else: paths['markdown'].write_bytes(b'Unreviewed replacement.')
+            with self.subTest(change=change), self.assertRaises(AssertionError):
+                contract.validate_role_skills(self.folder, self.role, 'operations')
 
     def test_dynamic_maid_only_from_ready_public_registry_not_prefix(self):
         role = '76564cab-6750-48d3-a6a6-1894d89c4b12'; path = self.root / 'roles.json'

@@ -962,6 +962,7 @@ class Controller:
             'lastInferenceFailure': inference_failure,
             'inferenceBackoff': inference_backoff,
             'cancellationStatus': self.data.get('cancellationStatus'),
+            'standingTask': self.data.get('standingTask'),
             'partyDelivery': self.data.get('partyDelivery'),
             'skills': skills, 'episodes': self.data.get('episodes', [])[-8:],
             'budgets': {'decisionsUsed': len(recent), 'decisionLimit': self.daily_planning_limit(),
@@ -1011,6 +1012,47 @@ class Controller:
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
+
+    def watch_standing_task(self, body):
+        """Observe a foreign native task and reclaim it after the existing grace.
+
+        Receipt and skill ownership take precedence. An unreadable ownership
+        source permits observation only, never a stop based on missing evidence.
+        """
+        row = {}
+        try:
+            import standing_task
+            task = (body or {}).get('task') or {}
+            task_id = task.get('task_id')
+            watch = self.data.get('standingTask') or {}
+            if not task_id:
+                standing_task.observe(watch, body, self.clock())
+                if watch:
+                    self.data['standingTask'] = watch
+                return
+            known = {(self.data.get('actionExecution') or {}).get('receipt', {}).get('nativeTaskId'),
+                     (self.data.get('observeAction') or {}).get('nativeTaskId')}
+            ownership_known = True
+            job_path = self.root / 'skill-job.json'
+            if job_path.exists():
+                try:
+                    known.add((read_json(job_path).get('lastExecution') or {}).get('nativeTaskId'))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    ownership_known = False
+            owned = task_id in known
+            row = standing_task.observe(watch, body, self.clock(), owned=owned,
+                stop=(lambda tid: self.gateway._invoke('task_stop', {'task_id': tid}))
+                     if ownership_known and not owned else None,
+                record=self.record)
+            self.data['standingTask'] = watch
+            if ownership_known:
+                self.data.pop('standingTaskError', None)
+            else:
+                self.data['standingTaskError'] = 'skill_ownership_unavailable'
+        except Exception as error:
+            self.data['standingTaskError'] = type(error).__name__
+        if row.get('occupied'):
+            self.data['status'] = 'body_occupied'
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -2050,7 +2092,9 @@ class Controller:
                 self.pause('not_in_survival')
             elif body['task']['busy']:
                 self.data['status'] = 'acting'
+                self.watch_standing_task(body)
             else:
+                self.watch_standing_task(body)
                 self.finish_action_observation(body)
                 # Pattern detection (case-9f5b2099 熟能生巧): check for repeating
                 # action sequences and crystallize them into skill hints.

@@ -1,6 +1,6 @@
 # GitHub 开发与本机资源恢复
 
-主仓库是 https://github.com/jcs130/minecraft-ai-friend，整合开发分支为 `codex/performance-foundation`。本次目录整合继承原 `main` 的 `7e2b4e19f07cacab903f88e5b785487b9deae225` 及之前 409 个提交；原世界服务源码现在位于 `world/`。配套 `dsh-minecraft-agent` 是另一个 Agent 接入仓库，不是本项目的远端。
+主仓库是 https://github.com/jcs130/minecraft-ai-friend。2026-09-20 用户明确要求部署后提交主干，交付分支改为 `main`；`codex/*` 可继续用于隔离开发。原整合开发分支为 `codex/performance-foundation`，本次目录整合继承原 `main` 的 `7e2b4e19f07cacab903f88e5b785487b9deae225` 及之前 409 个提交；原世界服务源码现在位于 `world/`。配套 `dsh-minecraft-agent` 是另一个 Agent 接入仓库，不是本项目的远端。
 
 ## 提交范围
 
@@ -11,12 +11,12 @@
 - `dist/`、生成的 YSM 模型和网页 bundle、GLB、图片、模组提取资源不重复发布。保存生成器、SHA256 来源清单及自研 `vendor/modern-viewer/runtime-budget.js`。
 - 原 MIT 许可保留在根目录和 `world/LICENSE`。第三方游戏资源仍适用其各自许可；恢复历史资源不改变许可归属。
 
-后续开发完成后，在当前分支提交已经验证的改动并推送，核对本地和远端提交号。不要强推或把运行数据加入提交。本次目录迁移会在比较中显示旧根目录删除、新 `world/` 路径增加或重命名，原历史仍可以追溯。
+后续开发完成后，提交已验证的改动，正常合入并推送 `main`，核对本地和远端提交号。保留历史，不强推或把运行数据加入提交。本次主干同步包含旧主干以来的累积开发，不能描述为仅本轮小修。生产目录有现役未提交变更时，逐项核对、备份与部署，不能通过强制切分支或整目录覆盖抹掉它们。本次目录迁移会在比较中显示旧根目录删除、新 `world/` 路径增加或重命名，原历史仍可以追溯。
 
 ## 首次拉取
 
 ```powershell
-git clone --branch codex/performance-foundation https://github.com/jcs130/minecraft-ai-friend.git QiandengJi
+git clone --branch main https://github.com/jcs130/minecraft-ai-friend.git QiandengJi
 cd QiandengJi
 npm ci --prefix world --ignore-scripts
 python tools/restore_viewer_assets.py --check

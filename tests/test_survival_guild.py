@@ -166,6 +166,91 @@ class GuildTests(unittest.TestCase):
         self.assertEqual(self.board['board'][0]['status'], 'open')
         self.assertEqual(self.inventory, {'wheat': 4, 'emerald': 0})
 
+    def test_moved_receptionist_refusal_exposes_live_target_not_historical_binding(self):
+        reception = self.npc.PROFILES[1]
+        reception['entityBinding'] = {'uuid': str(uuid.uuid4()), 'entityType': 'minecraft:villager',
+            'dimension': 'minecraft:overworld', 'preservePosition': True,
+            'lastKnownPosition': [0, 64, 0], 'observedAt': 1000}
+        self.npc.alive_pos.side_effect = lambda p: (40, 68, 12) if p is reception else (1, 64, 0)
+        board = self.service.execute(self.request('query'))
+        self.assertFalse(board['quests'][0]['claimable'])
+        self.assertEqual(board['receptionist']['lastKnownPosition'], [0, 64, 0])
+        self.assertEqual(board['receptionist']['position'], [40, 68, 12])
+        self.assertEqual(board['proximity']['maxDistance'], 8)
+        self.assertFalse(board['proximity']['near'])
+        result = self.service.execute(self.request('claim'))
+        self.assertEqual(result['code'], 'claim_refused')
+        self.assertIn('隔着老远', result['summary'])
+        context = result['claimContext']
+        self.assertEqual(context['receptionist']['position'], [40, 68, 12])
+        self.assertTrue(context['receptionist']['positionFresh'])
+        self.assertEqual(context['proximity'], board['proximity'])
+        self.assertAlmostEqual(context['proximity']['distance'], (40**2 + 4**2 + 12**2)**.5, places=3)
+        self.assertEqual(context['proximity']['actorPosition'], [0, 64, 0])
+        self.assertTrue(context['proximity']['sameDimension'])
+        self.assertGreater(context['observedAt'], 1000)
+        self.assertEqual(self.board['board'][0]['status'], 'open')
+        self.assertEqual(self.inventory, {'wheat': 4, 'emerald': 0})
+        self.npc.ledger_append.assert_not_called()
+
+    def test_missing_live_receptionist_never_falls_back_to_historical_proximity(self):
+        self.npc.PROFILES[1]['entityBinding'] = {'uuid': str(uuid.uuid4()), 'entityType': 'minecraft:villager',
+            'dimension': 'minecraft:overworld', 'preservePosition': True,
+            'lastKnownPosition': [0, 64, 0], 'observedAt': 1000}
+        self.npc.alive_pos.return_value = None
+        result = self.service.execute(self.request('claim'))
+        self.assertEqual(result['code'], 'claim_refused')
+        context = result['claimContext']
+        self.assertIsNone(context['receptionist']['position'])
+        self.assertFalse(context['receptionist']['positionFresh'])
+        self.assertIsNone(context['proximity']['distance'])
+        self.assertFalse(context['proximity']['near'])
+        board = self.service.execute(self.request('query'))
+        self.assertEqual(board['receptionist']['lastKnownPosition'], [0, 64, 0])
+        self.assertIsNone(board['receptionist']['position'])
+        self.assertFalse(board['quests'][0]['claimable'])
+
+    def test_foreign_or_unknown_dimension_keeps_distance_unknown_and_refuses(self):
+        original = self.npc.R.cmd
+        for dimension in ('minecraft:the_nether', None):
+            with self.subTest(dimension=dimension):
+                def cmd(value):
+                    if value.endswith(' Dimension'):
+                        return 'Fixture123 data: "%s"' % dimension if dimension else 'No entity was found'
+                    return original(value)
+                with patch.object(self.npc.R, 'cmd', side_effect=cmd):
+                    result = self.service.execute(self.request('claim'))
+                self.assertEqual(result['code'], 'claim_refused')
+                proximity = result['claimContext']['proximity']
+                self.assertEqual(proximity['actorDimension'], dimension)
+                self.assertIs(proximity['sameDimension'], False if dimension else None)
+                self.assertIsNone(proximity['distance'])
+                self.assertFalse(proximity['near'])
+
+    def test_refusal_stays_definite_when_corrective_observation_is_unavailable(self):
+        self.npc.alive_pos.side_effect = [(40, 64, 0), OSError('temporary observation failure')]
+        result = self.service.execute(self.request('claim'))
+        self.assertEqual(result['code'], 'claim_refused')
+        self.assertFalse(result['ok'])
+        self.assertIn('隔着老远', result['summary'])
+        self.assertIsNone(result['claimContext']['receptionist']['position'])
+        self.assertIsNone(result['claimContext']['proximity']['distance'])
+        self.assertFalse(result['claimContext']['proximity']['near'])
+
+    def test_query_and_claim_keep_configured_distance_boundary_and_hard_cap(self):
+        for configured, boundary in ((8, 8), (100, 12), (.1, 1)):
+            with self.subTest(configured=configured):
+                self.guild.GCFG['claim_proximity'] = configured
+                self.board['board'][0].update(status='open', taker=[])
+                self.npc.alive_pos.return_value = (boundary + .001, 64, 0)
+                self.assertFalse(self.service.execute(self.request('query'))['quests'][0]['claimable'])
+                rejected = self.service.execute(self.request('claim'))
+                self.assertEqual(rejected['code'], 'claim_refused')
+                self.assertEqual(rejected['claimContext']['proximity']['maxDistance'], boundary)
+                self.npc.alive_pos.return_value = (boundary, 64, 0)
+                self.assertTrue(self.service.execute(self.request('query'))['quests'][0]['claimable'])
+                self.assertEqual(self.service.execute(self.request('claim'))['code'], 'claimed')
+
     def test_queue_replay_duplicate_and_crash_never_execute_twice(self):
         queue = requests.GuildQueue(self.root / 'queue', self.service)
         request = self.request('claim')
@@ -288,6 +373,19 @@ class GuildTests(unittest.TestCase):
 
 
 class GuildAdapterTests(unittest.TestCase):
+    def test_definite_refusal_keeps_corrective_context_without_an_extra_query(self):
+        guild = adapter.Guild(SimpleNamespace(state=Path('fixture')))
+        result = {'ok': False, 'code': 'claim_refused', 'summary': '到柜台前办理。',
+                  'questId': '2026-09-20:1', 'claimContext': {'observedAt': 1000,
+                  'receptionist': {'position': [40, 68, 12], 'positionFresh': True},
+                  'proximity': {'distance': 42, 'maxDistance': 8, 'near': False}}}
+        with patch.object(guild, '_request', return_value=result) as request:
+            observed = guild.dispatch('guild_claim', {'quest_id': '2026-09-20:1'})
+        request.assert_called_once_with('claim', '2026-09-20:1')
+        self.assertFalse(observed['success'])
+        self.assertEqual(observed['message'], result['summary'])
+        self.assertEqual(observed['data']['receipt'], result)
+
     def test_mutation_validation_and_unknown_dispatch_are_fail_closed(self):
         for args in ({'quest_id': '2026-09-08:1', 'reward': 99}, {'quest_id': '2026-02-31:1'}, {'quest_id': '1'}):
             with self.assertRaises(ValueError):

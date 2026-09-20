@@ -56,6 +56,33 @@ class NativeTaskTests(unittest.TestCase):
         self.assertIsNone(native.budget_check([{'startedAt':now,'status':'completed'}]*500,now))
         self.assertEqual(native.budget_check([{'startedAt':0,'status':'submission_uncertain'}],now),'operations_task_unresolved')
 
+    def test_recent_learning_shift_is_busy_through_exact_budget_boundary(self):
+        for identity in ({'jobId': 'qd-learning-mc-god'}, {'source': 'native-qwen-cron'}):
+            row = {'runId': 'learning-fixture', 'status': 'cron_reserved', 'startedAt': 100, **identity}
+            original = deepcopy(row)
+            for age in (0, native.LEARNING_SHIFT_LIMIT_SECONDS):
+                self.assertEqual(native.budget_check([row], 100 + age), 'budget_taken_this_hour')
+            self.assertEqual(native.budget_check([row], 101 + native.LEARNING_SHIFT_LIMIT_SECONDS),
+                             'operations_task_unresolved')
+            self.assertEqual(row, original)
+
+    def test_future_and_nonfinite_learning_starts_stay_unresolved(self):
+        for start in (float('nan'), float('inf'), 1001):
+            with self.subTest(start=start):
+                row = {'jobId': 'qd-learning-fixture', 'status': 'cron_reserved', 'startedAt': start}
+                self.assertEqual(native.budget_check([row], 1000), 'operations_task_unresolved')
+
+    def test_unresolved_operation_wins_over_learning_and_parent_exemption_stays_exact(self):
+        young = {'runId': 'learning-fixture', 'jobId': 'qd-learning-fixture',
+                 'status': 'cron_reserved', 'startedAt': 100}
+        unknown = {'runId': 'unresolved-fixture', 'status': 'submission_uncertain', 'startedAt': 100}
+        for rows in ([young, unknown], [unknown, young]):
+            self.assertEqual(native.budget_check(rows, 101), 'operations_task_unresolved')
+        self.assertIsNone(native.budget_check([young], 101, parent_run_id=young['runId']))
+        self.assertEqual(native.budget_check([young, unknown], 101, parent_run_id=young['runId']),
+                         'operations_task_unresolved')
+        self.assertIsNone(native.budget_check([dict(young, status='completed')], 101))
+
     def test_new_terminal_at_pending_head_survives_full_history_compaction(self):
         old = [{'runId': 'old-'+str(i), 'status': 'completed', 'startedAt': i,
                 'finishedAt': i + 1} for i in range(100)]
@@ -161,7 +188,7 @@ class NativeTaskTests(unittest.TestCase):
     def test_non_coordinator_cron_never_grants_parent_exception(self):
         native.reserve_operation('default','qd-learning-default')
         with patch.object(native,'api') as api:
-            self.assertEqual(native.delegate('default','mc-god','任务')['code'],'operations_task_unresolved')
+            self.assertEqual(native.delegate('default','mc-god','任务')['code'],'budget_taken_this_hour')
             api.assert_not_called()
 
     def archive(self, row):
