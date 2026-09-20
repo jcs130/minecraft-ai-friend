@@ -4,6 +4,8 @@
 这是关键链路的源码精读与第一批诊断修正，不是四个仓库逐行审计，也不是游戏能力排名。
 外部源码仅在忽略的 `runtime/reference-repos/` 阅读；未启动它们的机器人、模型或服务。
 
+2026-09-20 后续补充：精读 ModularRSI 论文方法、实验与关键实现，并核查 Plan4MC、MineDojo、MineCLIP。最新三层落地设计及现役工程角色缺口见 [RSI-AGENT-DESIGN.md](RSI-AGENT-DESIGN.md)；本页早期“已有/缺少”判断须结合后续具身部署记录阅读。
+
 ## 判断
 
 千灯纪已经有 QwenPaw 角色、原生身体身份绑定、持久动作回执、技能版本与练习证据、环境反馈和提案通道。
@@ -136,3 +138,51 @@
 
 Cortico 与 Neko 仓库提供 MIT LICENSE。MineEvolve README 标示 MIT，但本次固定树未找到独立 LICENSE 文件。ModularRSI 另有 `LICENSE-MODULARRSI.md`，研究原创部分标为 CC BY-NC 4.0，Harbor 派生部分沿用 Apache-2.0。
 本轮独立实现我们自己的回执诊断，没有复制第三方实现；如以后移植具体代码，逐文件核对声明并保留所需归属，不把所有仓库默认当成同一种许可证。
+
+## 2026-09-20 补充：具身技能、实验环境与视觉表征
+
+本次研究的新增克隆在开发工作区忽略目录 `runtime/embodied-references/`。保留了仓库随附文件，包括 Plan4MC 的策略权重；未安装学习依赖、运行模拟器、加载策略权重或复现论文成绩，也未另行下载 MineCLIP checkpoint。
+
+| 项目 | 固定阅读提交 | 官方论文 |
+| --- | --- | --- |
+| [Plan4MC](https://github.com/PKU-RL/Plan4MC/tree/217e938c928dc5fc3e78b6b1cf7546cbe421029e) | `217e938c928dc5fc3e78b6b1cf7546cbe421029e` | [2303.16563 v2](https://arxiv.org/html/2303.16563v2) |
+| [Plan4MC 的 MCEnv 分支](https://github.com/PKU-RL/MCEnv/tree/0ed52d65811d734e028f6491abd2f5a4c8261dc3) | `0ed52d65811d734e028f6491abd2f5a4c8261dc3` | Plan4MC 指定依赖 |
+| [MineDojo](https://github.com/MineDojo/MineDojo/tree/2731bc27394269643b43828d9db8ab3a364601f0) | `2731bc27394269643b43828d9db8ab3a364601f0` | [2206.08853](https://arxiv.org/html/2206.08853v1) |
+| [MineCLIP](https://github.com/MineDojo/MineCLIP/tree/e6c06a0245fac63dceb38bc9bd4fecd033dae735) | `e6c06a0245fac63dceb38bc9bd4fecd033dae735` | MineDojo 论文中的视觉/语言模型 |
+
+同时核对旧参考仓库远端：ModularRSI `06fdcce7` 和 Neko `23f59712` 与当时远端 HEAD 相同；Cortico 远端 `9a35e4a` 相对已阅读的 `7d20a102` 仅更新两个 README 的横幅，运行代码相同。
+
+### Plan4MC：把“能做什么”组织成可执行计划
+
+[skills.yaml](https://github.com/PKU-RL/Plan4MC/blob/217e938c928dc5fc3e78b6b1cf7546cbe421029e/skills/skills.yaml) 区分 `consume/require/equip/obtain`；材料消耗和可复用条件有不同语义。
+[task_decompose.py](https://github.com/PKU-RL/Plan4MC/blob/217e938c928dc5fc3e78b6b1cf7546cbe421029e/skills/task_decompose.py) 的 `skill_search` 从目标搜索依赖、推演库存；探索/移动之后，某些“附近有工具”的假设失效。其模块级可变 `possess` 不适合直接复制进我们的并发控制器。
+
+[test.py](https://github.com/PKU-RL/Plan4MC/blob/217e938c928dc5fc3e78b6b1cf7546cbe421029e/test.py) 的渐进模式每次执行一个技能，再用真实库存经 `convert_state_to_init_items` 重建条件并规划。LLM 在论文中帮助建立技能关系，在线执行并非每一步调用 LLM，也不是技能图自主持续进化的完整框架。
+
+[load_skills.py](https://github.com/PKU-RL/Plan4MC/blob/217e938c928dc5fc3e78b6b1cf7546cbe421029e/skills/load_skills.py) 将 Finding、Manipulation、Crafting 分开执行，并区分 `skill_done/task_success/task_done`。Finding 用分层导航和模拟器 lidar，Manipulation 调预训练策略，Crafting 使用环境原语。因此它不是从视觉像素学习完整键鼠合成流程；底层接口不同，不能直接替换 Numen。
+
+对我们的取舍：在原 SkillLibrary 与实践台账补条件、效果、适用世界和真实验证记录；计划结束一个片段后检查状态再继续。图来自当前模组配方和已验证技能，不能导入旧物品表或把模型推测的关系当事实。现 README 仍写 24 任务，而当前 `hard_task_conf.yaml` 和 v2 论文为 40；本次没有复现这些任务。
+
+### MineDojo：实验协议可借鉴，世界重置必须核实
+
+[build.gradle](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/sim/Malmo/Minecraft/build.gradle) 固定 Minecraft/Forge `1.11.2-13.20.1.2588`；Plan4MC 的 MCEnv 分支也使用此版本。[官方安装说明](https://docs.minedojo.org/sections/getting_started/install.html) 使用 JDK8，不能直接嵌入当前 NeoForge 1.21.1 / Java21 模组服。
+
+[MinecraftInstance.launch](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/sim/bridge/mc_instance/instance.py) 可选端口、创建临时目录并启动独立游戏进程；[sim.py](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/sim/sim.py) 暴露初始物资/位置/天气、世界来源和 reset/step。独立实例不等同隔离任意不可信 Python 代码的安全沙箱。
+
+[FastResetWrapper](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/sim/wrappers/fast_reset.py) 的快速重置会处理复活、传送、天气等，但不还原改动过的方块、不清零统计，并存在非默认健康/饥饿初始化限制。它不能直接证明两次试验拥有相同初始状态。
+
+[success_criteria.py](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/tasks/meta/utils/success_criteria.py) 从库存、击杀、物品使用等状态变化判定；[MetaTaskBase](https://github.com/MineDojo/MineDojo/blob/2731bc27394269643b43828d9db8ab3a364601f0/minedojo/tasks/meta/base.py) 将 reward、success 和 episode termination 分开。多个 success criteria 在其钩子中以 `any` 组合，多条件目标不能误配成任一条件满足就过关。
+
+对我们的取舍：复用任务规格、初态清单、episode 身份和独立目标判据。正式改进先在同版本 Numen 世界副本验证；MineDojo 可作为第二 backend 检验通用部分，不加载现代生产存档。Agent 与评测器允许观察的信息分别声明，尤其要记录是否使用原生 voxel/lidar 等额外信息。
+
+### MineCLIP：视觉特征与相关信号，需要真实画面和校准
+
+[官方示例](https://github.com/MineDojo/MineCLIP/blob/e6c06a0245fac63dceb38bc9bd4fecd033dae735/main/mineclip/run.py) 输入 RGB 序列 `[B,16,3,160,256]` 和文本，产生视频/文本的 512 维特征与相似度。16 帧是该示例窗口，不代表只能接受这一长度；相似度 logits 不是天然校准的成功概率。
+
+[VideoRewardBase](https://github.com/MineDojo/MineCLIP/blob/e6c06a0245fac63dceb38bc9bd4fecd033dae735/mineclip/mineclip/base.py) 分开图像编码、时序聚合和文本相关评分，也支持复用缓存特征。固定任务文本和重叠窗口帧特征可复用，异步评分的吞吐/显存收益仍需本机测量。
+
+模型可消费现代游戏渲染帧，但这不证明模组材质、新实体、GUI 或不同视角的准确性。当前 `world/survival/scene_view.py` 输出语义俯视地图，不是第一视角 RGB；直接送入预训练 MineCLIP 会改变输入分布。
+
+对我们的取舍：保留 Numen 精确感知，待具备真实视角视频后先离线/影子评分。每段视频记录身体、维度、位姿、帧时间、游戏 tick、模型/checkpoint 和目标文本版本；用当前模组正反例对照原生结果，再决定用于感知检索、经验挑选还是未来 RL 奖励。最终任务验收保持独立，候选不能通过修改相似度阈值给自己判成功。
+
+三者的接入不应阻塞首个 L3 闭环：先让现有角色在自己的游戏任务上取得可归因改进，再验证视觉与跨环境能力。

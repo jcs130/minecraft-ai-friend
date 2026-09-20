@@ -557,31 +557,43 @@ class LearningTools:
         迟早会和它分叉。批准由 COORDINATORS（game:mc-god / operations:default）落，
         角色不能自行结单。
         """
-        import hashlib as _hashlib
-        import json as _json
         from evolution_policy import validate_proposal
         ok, receipt = validate_proposal(self.role, changes, note, metric,
                                         would_change_outcome, evidence)
         actor = '%s:%s' % (self.runtime, self.role)
-        digest = _hashlib.sha256(_json.dumps(changes, sort_keys=True, ensure_ascii=False)
-                                 .encode('utf-8')).hexdigest()
+        # Keep the historical changes-only case key; individual submissions are
+        # identified by their persisted payload so new evidence is not swallowed.
+        digest = hashlib.sha256(json.dumps(changes, sort_keys=True, ensure_ascii=False)
+                                .encode('utf-8')).hexdigest()
         from world_team import TeamStore
         accepted = receipt.get('accepted') or []
-        expected = '；'.join('%s → %s' % (item['knob'], _json.dumps(item['value'], ensure_ascii=False))
+        expected = '；'.join('%s → %s' % (item['knob'], json.dumps(item['value'], ensure_ascii=False))
                              for item in accepted) or '（本次没有通过校验的改动）'
-        observed = (note.strip() + '\n\n校验结果：' + ('通过，待天神裁决' if ok else '被拒'))
-        filed = TeamStore(actor).report(
-            request_id='policy-draft-' + digest[:32],
+        # These are the validator's bounded note/metric/evidence, not a copy of
+        # the full incoming request. Preserve original changes without truncating
+        # the JSON; oversize audits must fail before a partial case is recorded.
+        audit = {key: receipt[key] for key in ('note', 'metric', 'wouldChangeOutcome',
+                 'status', 'noVerdict', 'problems', 'accepted', 'evidence')}
+        audit.update(schema=1, changes=changes, causalityVerified=False,
+                     validation='proposal_shape_and_scope')
+        observed = ('提议证据（形式与范围校验；因果效果未验证）\n'
+                    + json.dumps(audit, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        if len(observed.strip()) > 6000 or len(expected.strip()) > 2000:
+            raise ValueError('policy_proposal_audit_too_large')
+        report = dict(
             dedupe_key='policy-%s-%s' % (self.role, digest[:16]),
             title='改进机制提议：' + (accepted[0]['knob'] if accepted else '（无通过项）'),
             category='improvement', observed=observed, expected=expected,
             evidence=['world-notes/evolution-policy.md', 'world-notes/evolution-board.md',
-                      'problems=' + _json.dumps(receipt.get('problems') or [], ensure_ascii=False)])
+                      *[item for item in receipt['evidence'] if item.strip()]])
+        request_digest = hashlib.sha256(json.dumps(report, ensure_ascii=False, sort_keys=True,
+                                                   allow_nan=False).encode('utf-8')).hexdigest()
+        filed = TeamStore(actor).report(request_id='policy-draft-v2-' + request_digest[:32], **report)
         return {'ok': ok, 'status': receipt['status'], 'metric': receipt.get('metric'),
                 'wouldChangeOutcome': receipt.get('wouldChangeOutcome'),
                 'noVerdict': receipt.get('noVerdict'), 'accepted': accepted,
                 'problems': receipt.get('problems') or [], 'case': filed,
-                'notice': '这是申请，不是生效；结单只能由天神/司灯（COORDINATORS）落地。'}
+                'notice': '这是申请，形式校验未验证因果效果且不会使改动生效；结单只能由女神/司灯（COORDINATORS）落地。'}
 
     def schedule(self, enabled=None, weekday=None, hour=None):
         if enabled is not None and type(enabled) is not bool: raise ValueError('invalid_enabled')
