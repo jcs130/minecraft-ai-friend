@@ -39,6 +39,9 @@ class WorldInteractionHealthTests(unittest.TestCase):
 
     def sample(self, body, request, operation='interaction'):
         self.calls.append((body, request, operation))
+        if operation == 'controls':
+            return {'schema': 1, 'capability': 'numen_generic_interaction_v1', 'tool': 'interact_at',
+                    'forwardAim': True, 'maxHoldTicks': 100, 'receiptCapability': probe.CAPABILITY}
         return {'schema': 1, 'capability': probe.CAPABILITY, 'actorUuid': body, 'requestId': request,
             'epoch': '90123456-1234-1234-1234-123456789abc', 'tool': 'drop_items' if operation == 'dropping' else 'interact_at',
             'status': 'unknown', 'code': 'request_not_found', 'observedAt': self.now*1000}
@@ -46,15 +49,15 @@ class WorldInteractionHealthTests(unittest.TestCase):
     def check(self, sample=None):
         return probe.check(self.root, sample or self.sample, lambda: self.now)
 
-    def test_healthy_is_two_unused_queries_without_writes(self):
+    def test_healthy_is_capability_and_two_unused_queries_without_writes(self):
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         result = self.check()
         self.assertTrue(result['ok'])
-        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(len(self.calls), 3)
         self.assertRegex(self.calls[0][1], '^[0-9a-f]{32}$')
         self.assertEqual(result['interactionSubmissions'], 0)
         self.assertEqual(result['dropSubmissions'], 0)
-        self.assertEqual([row[2] for row in self.calls], ['interaction', 'dropping'])
+        self.assertEqual([row[2] for row in self.calls], ['controls', 'interaction', 'dropping'])
         self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
     def test_build_manifest_installed_and_sources_must_all_match(self):

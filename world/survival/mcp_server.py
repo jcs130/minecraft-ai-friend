@@ -16,7 +16,7 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
-              'speak', 'speech_status', 'stop_speaking')
+              'speak', 'speech_status', 'stop_speaking', 'interact_at')
 
 
 class SkillTools:
@@ -29,8 +29,8 @@ class SkillTools:
         if self._library is None:
             from skill_library import SkillLibrary
             # P2：可选的世界级共享技能库（只读消费，写只走显式 publish）。
-        self._library = SkillLibrary(self.state / 'skills',
-                                     world_root=os.environ.get('WORLD_SKILLS_DIR'))
+            self._library = SkillLibrary(self.state / 'skills',
+                                         world_root=os.environ.get('WORLD_SKILLS_DIR'))
         return self._library
 
     @property
@@ -143,6 +143,9 @@ class SkillTools:
             item = self.library.read(name, version)
             if item.get('promoted') is not True or item.get('version') != version:
                 raise GatewayError('skill_not_promoted')
+            # Reject stale test evidence before closing the caller's lease or
+            # queuing work that the same kernel would refuse on its first step.
+            self.library._tested(name, version)
             path = self.state / 'skill-job.json'
             if path.exists():
                 previous = read_json(path)
@@ -354,6 +357,15 @@ def make_server(gateway=None, skill_tools=None, http=False):
         if y is not None:
             args['y'] = y
         return gateway.action(turn_id, 'goto', args)
+
+    @server.tool()
+    def interact_at(turn_id: str, button: str, x: int | None = None, y: int | None = None,
+                    z: int | None = None, hold_ticks: int = 0, item_id: str | None = None) -> dict:
+        """原生左/右键交互，可供技能组合：button=left/right；坐标全给表示瞄准4.5格内目标，全空沿当前视线使用物品；不导航。hold_ticks=0点按，1–100按住游戏tick；item_id可选，须实际持有。不预设种植/放置等玩法。accepted仅为受理，沿用status查原任务终态，再以库存/方块观测验收目标；不因等待重复点击。"""
+        args = {'button': button, 'x': x, 'y': y, 'z': z, 'hold_ticks': hold_ticks}
+        if item_id is not None:
+            args['item_id'] = item_id
+        return gateway.action(turn_id, 'interact_at', args)
 
     @server.tool()
     def mine(turn_id: str, block_ids: list[str], count: int = 4) -> dict:

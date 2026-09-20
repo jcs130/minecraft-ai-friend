@@ -298,7 +298,7 @@ public final class NumenActCommand {
             return 0;
         }
 
-        String callId = UUID.randomUUID().toString();
+        String callId = com.dwinovo.numen.task.TaskRecord.EXTERNAL_CALL_PREFIX + UUID.randomUUID();
         // 查询型当场回、动作型(setTask)受理即回 task_id，均在本线程回调；异步 runSync
         // 类工具（当前无调用方）才会 null，兜底回受理提示。
         String[] result = new String[1];

@@ -21,4 +21,13 @@ class VisionPolicyTests(unittest.TestCase):
         for rule in ({'tool_name':'foreign','effect':'allow'},{'tool_name':'look','effect':'deny'},self.before['tool_defaults'][0]):
             with self.assertRaises(ValueError):prepare_policy(self.before|{'tool_defaults':self.before['tool_defaults']+[rule]},self.names)
 
+    def test_native_control_extension_preserves_existing_scene_permission(self):
+        names=(*self.names,'interact_at')
+        before=prepare_policy(self.before,self.names)
+        after=prepare_policy(before,names,added_tool='interact_at')
+        self.assertEqual(after['tool_defaults'][:-1],before['tool_defaults'])
+        self.assertEqual(after['tool_defaults'][-1],{'tool_name':'interact_at','effect':'allow'})
+        with self.assertRaises(ValueError):
+            prepare_policy(self.before,names,added_tool='interact_at')
+
 if __name__=='__main__':unittest.main()

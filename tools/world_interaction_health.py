@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JAR = 'server/mc/mods/qiandeng-irons-bridge-0.1.0.jar'
 BUILD_JAR = 'world/irons-bridge-src/build/qiandeng-irons-bridge-0.1.0.jar'
 BUILD_RECORD = 'world/irons-bridge-src/build/build-record.json'
-NUMEN = 'server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar'
+NUMEN = 'server/mc/mods/numen-neoforge-1.21.1-0.1.3.jar'
 MANIFEST = 'manifests/server-extensions.lock.json'
 SETTINGS = 'server/survival-agent-state/survival/settings.json'
 CONFIG = 'server/mc/config/numen-autonomous-bodies.json'
@@ -67,10 +67,10 @@ def parse_reply(raw):
 
 
 def read_status(body, request, operation='interaction'):
-    if operation not in ('interaction', 'dropping') or not canonical(body) or not re.fullmatch('[0-9a-f]{32}', request):
+    if operation not in ('interaction', 'dropping', 'controls') or not canonical(body) or not re.fullmatch('[0-9a-f]{32}', request):
         raise ValueError('invalid_probe_identity')
     result = subprocess.run(['docker', 'exec', 'qiandengji-mc-1', 'rcon-cli',
-        f'qdworld {operation} {body} {request}'], capture_output=True, text=True,
+        'qdworld controls' if operation == 'controls' else f'qdworld {operation} {body} {request}'], capture_output=True, text=True,
         encoding='utf8', errors='replace', timeout=12, check=False)
     if result.returncode:
         raise ValueError('native_query_unavailable')
@@ -79,7 +79,8 @@ def read_status(body, request, operation='interaction'):
 
 def check(root=ROOT, sample=read_status, clock=time.time):
     checks = dict.fromkeys(('artifact_matches_build_and_manifest', 'source_current', 'pinned_numen_dependency',
-                           'exact_body_binding', 'native_receipt_protocol', 'native_drop_receipt_protocol'), False)
+                           'exact_body_binding', 'native_receipt_protocol', 'native_drop_receipt_protocol',
+                           'native_generic_controls'), False)
     evidence = {'queries': 0}
     try:
         record = document(root, BUILD_RECORD)
@@ -104,6 +105,11 @@ def check(root=ROOT, sample=read_status, clock=time.time):
             and expected['bodyName'] == 'Kirito' and config.get('schema') == 1
             and config.get('enabled') is True and config.get('bodies') == [expected])
         if checks['exact_body_binding']:
+            controls = sample(expected['bodyUuid'], uuid.uuid4().hex, 'controls')
+            evidence['queries'] += 1
+            checks['native_generic_controls'] = controls == {'schema': 1,
+                'capability': 'numen_generic_interaction_v1', 'tool': 'interact_at',
+                'forwardAim': True, 'maxHoldTicks': 100, 'receiptCapability': CAPABILITY}
             for operation, tool, key in (('interaction', 'interact_at', 'native_receipt_protocol'),
                                         ('dropping', 'drop_items', 'native_drop_receipt_protocol')):
                 request = uuid.uuid4().hex

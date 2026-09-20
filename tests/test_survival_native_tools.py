@@ -140,6 +140,7 @@ class NativeToolConnectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'survival').mkdir()
+            (root / 'survival/settings.json').write_text('{}')
             (root / 'game-migration.json').write_text('{}')
             (root / 'survival/heartbeat.json').write_text(json.dumps({'ok': True, 'at': time.time() * 1000, 'status': 'paused'}))
             values = [{'ok': True}, {'status': 'ok', 'agents_loaded': ['qd-survivor']}, {'enabled': False}]

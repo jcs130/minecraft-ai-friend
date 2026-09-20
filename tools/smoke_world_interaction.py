@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import subprocess
@@ -26,7 +27,7 @@ PYTHON_CLIENT=r'''
 import hashlib,json,sys,time,uuid
 from pathlib import Path
 from types import SimpleNamespace
-from numen_gateway import RconClient
+from numen_gateway import RconClient, NumenGateway
 from world_actions import WorldActions
 
 body='d4ac9523-4962-43ed-98c5-19b49e104048'
@@ -52,7 +53,7 @@ class Transport:
         return raw
 
 state=Path('/tmp/interaction-state');state.mkdir()
-gateway=SimpleNamespace(rcon=Transport(),state=state,_now=lambda:int(time.time()*1000))
+gateway=NumenGateway(state, rcon=Transport())
 began=time.monotonic()
 result=None;error=None
 try:result=WorldActions(gateway)._interaction({'bodyUuid':body,'actionId':request},args)
@@ -66,7 +67,7 @@ FOOD_CLIENT=r'''
 import json,sys,time,uuid
 from pathlib import Path
 from types import SimpleNamespace
-from numen_gateway import RconClient
+from numen_gateway import RconClient, NumenGateway
 from food_actions import FoodActions
 body='d4ac9523-4962-43ed-98c5-19b49e104048';request=uuid.uuid4().hex
 mode=sys.argv[1];native=RconClient(host='mc',port=25575,secret=Path('/qa/rcon-secret'))
@@ -77,7 +78,7 @@ class Transport:
         commands.append(command);raw=native.cmd(command)
         if len(commands)==1 and mode=='food-lost-ack':raise ConnectionError('injected_lost_ack')
         return raw
-gateway=SimpleNamespace(rcon=Transport());client=FoodActions(gateway)
+gateway=NumenGateway(Path('/tmp/food-state'),rcon=Transport());client=FoodActions(gateway)
 before={'bodyUuid':body};args={'item_id':'minecraft:bread'}
 reply=client.dispatch(request,before,args)
 receipt={'actionId':request,'before':before,'args':args,'result':{'result':reply}}
@@ -110,22 +111,24 @@ def prepared_folder(value):
     return folder
 
 
-def prepare():
+def prepare(resource_root=ROOT):
     ident=uuid.uuid4().hex[:12]
     folder=prepared_folder(ROOT/'runtime'/('interaction-qa-'+ident))
     if folder.exists():raise ValueError('isolated_fixture_already_exists')
     data=folder/'data';(data/'mods').mkdir(parents=True)
     print(json.dumps({'stage':'preparing','folder':str(folder)}),flush=True)
-    mod_sources=sorted((ROOT/'server/mc/mods').glob('*.jar'))
+    mod_sources=sorted((resource_root/'server/mc/mods').glob('*.jar'))
     for mod in mod_sources:shutil.copyfile(mod,data/'mods'/mod.name)
-    numen=data/'mods/numen-neoforge-1.21.1-0.1.1.jar'
+    numens=list((data/'mods').glob('numen-neoforge-*.jar'))
+    if len(numens)!=1:raise ValueError('exact_numen_dependency_required')
+    numen=numens[0]
     with zipfile.ZipFile(numen) as archive:
         names=[n for n in archive.namelist() if n.startswith('META-INF/jarjar/') and n.endswith('.jar') and 'numen_api' in n]
         if len(names)!=1:raise ValueError('exact_numen_api_required')
         embedded=folder/'numen-api.jar';embedded.write_bytes(archive.read(names[0]))
     spec=importlib.util.spec_from_file_location('interaction_qa_classpath',ROOT/'world/botgate-src/build.py')
     helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-    cp=os.pathsep.join([helper.full_cp(ROOT/'server/mc/libraries'),str(embedded),*(str(p) for p in (data/'mods').glob('*.jar'))])
+    cp=os.pathsep.join([helper.full_cp(resource_root/'server/mc/libraries'),str(embedded),*(str(p) for p in (data/'mods').glob('*.jar'))])
     classes=folder/'qa-classes';classes.mkdir()
     javac=Path(os.environ.get('JDK21_BIN',r'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin'))/('javac.exe' if os.name=='nt' else 'javac')
     quote=lambda value:'"'+str(value).replace('\\','/')+'"'
@@ -146,7 +149,7 @@ def prepare():
     image=run(['docker','image','inspect','itzg/minecraft-server:java21','--format','{{.Id}}']).stdout.strip()
     compose={'services':{'mc':{'image':image,'entrypoint':['java','-Xms1G','-Xmx3G','@libraries/net/neoforged/neoforge/21.1.248/unix_args.txt','nogui'],
         'working_dir':'/data','environment':{'QD_QA_FIXTURE':'isolated-world-interaction','RCON_PASSWORD':password},
-        'volumes':[f'{data.as_posix()}:/data',f'{(ROOT/"server/mc/libraries").as_posix()}:/data/libraries:ro'],
+        'volumes':[f'{data.as_posix()}:/data',f'{(resource_root/"server/mc/libraries").as_posix()}:/data/libraries:ro'],
         'networks':['qa'],'stop_grace_period':'60s'}},'networks':{'qa':{'internal':True}}}
     write(folder/'compose.json',compose)
     record={'schema':1,'project':'qiandengji-interaction-qa-'+ident,'fixtureSourceSha256':sha(SOURCE),'fixtureJarSha256':sha(fixture),
@@ -188,8 +191,10 @@ def main():
     action.add_argument('--run-isolated',action='store_true')
     parser.add_argument('--prepared',type=Path)
     parser.add_argument('--jar',type=Path,default=DEFAULT_JAR)
+    parser.add_argument('--resource-root',type=Path,default=ROOT,help='Installed mod/library inputs only; no production saves mounted')
+    parser.add_argument('--actuator-jar',type=Path,help='Optional reviewed actuator candidate for external-call receipt validation')
     args=parser.parse_args()
-    folder=prepared_folder(args.prepared) if args.prepared else prepare()
+    folder=prepared_folder(args.prepared) if args.prepared else prepare(args.resource_root.resolve())
     record=json.loads((folder/'prepared.json').read_text('utf8'))
     data=folder/'data'
     if record['fixtureSourceSha256']!=sha(SOURCE) or record['fixtureJarSha256']!=sha(data/'mods/qiandeng-interaction-qa.jar'):
@@ -206,6 +211,17 @@ def main():
     if len(installed)!=1:raise ValueError('exact_isolated_bridge_required')
     shutil.copyfile(candidate,installed[0])
     if sha(installed[0])!=build['sha256']:raise ValueError('isolated_candidate_copy_mismatch')
+    actuator_record=None
+    if args.actuator_jar:
+        actuator=args.actuator_jar.resolve()
+        actuator_record=json.loads(actuator.with_name('build-record.json').read_text('utf8'))
+        if not actuator_record['ok'] or actuator_record['sha256']!=sha(actuator):raise ValueError('actuator_candidate_hash_mismatch')
+        if actuator_record['numenSha256']!=record['numenSha256']:raise ValueError('actuator_numen_dependency_mismatch')
+        for name,digest in actuator_record['sources'].items():
+            if sha(ROOT/name)!=digest:raise ValueError('actuator_source_changed:'+name)
+        previous=list((data/'mods').glob('numen_act-neoforge-*.jar'))
+        if len(previous)!=1 or sha(previous[0])!=actuator_record['baselineSha256']:raise ValueError('actuator_baseline_mismatch')
+        shutil.copyfile(actuator,previous[0])
     if (data/'qa-world/level.dat').exists():raise ValueError('fresh_isolated_world_required')
     python_record=python_fixture(folder)
     project=record['project'];base=['docker','compose','-p',project,'-f',str(folder/'compose.json')]
@@ -358,6 +374,46 @@ def main():
         checks['food-old-terminal-keeps-original-epoch']=stable(food_old)==stable(food_success)
         details['food-restart']={'accepted':pending_food,'unknown':food_unknown,'duplicate':food_duplicate,'before':before_food_restart,'after':after_food_restart}
         checkpoint('food-restart-verified')
+        controls=response('qdworld controls',PREFIX)
+        checks['generic-controls-contract']=(controls.get('capability')=='numen_generic_interaction_v1'
+            and controls.get('maxHoldTicks')==100 and controls.get('forwardAim') is True)
+        assert response('qdinteractionqa water_setup')['ok']
+        def generic(arguments):
+            request_id=uuid.uuid4().hex
+            payload=base64.urlsafe_b64encode(json.dumps(arguments).encode()).decode().rstrip('=')
+            row=response(f'qdworld interact {BODY} {request_id} {payload}',PREFIX)
+            start=row.copy();deadline=time.monotonic()+35
+            while row['status'] in ('accepted','running') and time.monotonic()<deadline:
+                time.sleep(.2);row=query(request_id)
+            assert row['requestId']==request_id and row['actorUuid']==BODY and row['args']==arguments
+            return start,row,payload
+        bucket_args={'button':'right','x':3,'y':-60,'z':0,'hold_ticks':0,'item_id':'minecraft:bucket'}
+        accepted,bucket,payload=generic(bucket_args);after_bucket=ground()
+        details['generic-bucket']={'accepted':accepted,'terminal':bucket,'after':after_bucket}
+        checks['generic-bucket-real-inventory-result']=(bucket['status']=='terminal' and bucket['result']['success'] is True
+            and after_bucket['waterBuckets']==1 and after_bucket['buckets']==0)
+        duplicate=response(f'qdworld interact {BODY} '+bucket['requestId']+' '+payload,PREFIX)
+        checks['generic-bucket-replay-is-read-only']=stable(duplicate)==stable(bucket) and ground()['waterBuckets']==1
+        assert checks['generic-bucket-real-inventory-result'],details['generic-bucket']
+        assert response('qdinteractionqa hold_setup')['ok']
+        held_args={'button':'right','x':None,'y':None,'z':None,'hold_ticks':40,'item_id':'minecraft:shield'}
+        before_hold=ground();accepted,held,_=generic(held_args);after_hold=ground()
+        details['generic-hold']={'accepted':accepted,'terminal':held,'before':before_hold,'after':after_hold}
+        checks['generic-forward-hold-terminates-and-releases']=(held['status']=='terminal'
+            and held['result']['success'] is True
+            and after_hold['gameTime']-before_hold['gameTime']>=40 and after_hold['usingItem'] is False)
+        assert checks['generic-forward-hold-terminates-and-releases'],details['generic-hold']
+        checkpoint('generic-controls-verified')
+        if actuator_record:
+            # rcon-cli appends an ANSI reset outside the native JSON document.
+            # Production RconClient receives the packet payload without this CLI suffix.
+            raw=command('numen_act invoke Kirito goto {"x":0.5,"y":-60,"z":0.5}')
+            moved=json.loads(re.sub(r'\x1b\[[0-9;]*m', '', raw).strip())
+            checks['external-call-receipt-does-not-promise-client-event']=(moved.get('success') is True
+                and moved.get('data',{}).get('async') is True and 'task_status' in moved.get('message','')
+                and '自动收到' not in moved.get('message',''))
+            details['external-call-receipt']=moved
+            assert checks['external-call-receipt-does-not-promise-client-event'],moved
     except Exception as error:
         checks['execution-completed']=False;details['failure']=str(error)[:5000]
     finally:
@@ -367,6 +423,7 @@ def main():
     report={'ok':all(checks.values()),'checks':checks,'details':details,'candidateSha256':build['sha256'],'candidateSources':build['sources'],
             'project':project,'fixtureSourceSha256':sha(SOURCE),'toolSha256':sha(Path(__file__)),'numenSha256':record['numenSha256'],
             'pythonIntegration':python_record,
+            'actuatorCandidateSha256':actuator_record['sha256'] if actuator_record else None,
             'modCount':len(record['modSources']),'modelCalls':0,'productionMutations':0,'elapsedSeconds':round(time.monotonic()-began,2),
             'scope':'Fresh isolated world, actual Numen task/vanilla placement and persisted bridge receipts; installed mod snapshots, no production save or model.'}
     write(folder/'result.json',report)

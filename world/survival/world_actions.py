@@ -1,8 +1,9 @@
 """Ordinary Numen world interactions behind the survivor's single-action lease.
 
 The gateway calls prepare() before reserving its lease and dispatch() only after
-persisting the uncertainty marker. There is no raw command, free-material build,
-teleport, inventory NBT write, or replacement of existing buildings here.
+persisting the uncertainty marker. Generic clicks obey native reach, item and
+physics rules; workspace/protected-area checks still apply. There is no raw
+command, free-material build, teleport or inventory NBT write here.
 """
 import json
 import math
@@ -13,7 +14,7 @@ import uuid
 
 from numen_gateway import GatewayError, IDENTIFIER, read_json, write_json
 
-WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade')
+WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade', 'interact_at')
 AIR = frozenset(('minecraft:air', 'minecraft:cave_air', 'minecraft:void_air'))
 REPLACEABLE = AIR | {'minecraft:short_grass', 'minecraft:fern', 'minecraft:dead_bush'}
 SOIL = frozenset(('minecraft:dirt', 'minecraft:grass_block'))
@@ -67,9 +68,21 @@ def validate_world_action(tool, args):
               'farm': {'operation', 'item_id', 'x', 'y', 'z'},
               'open_container': {'x', 'y', 'z'}, 'transfer_items': {'x', 'y', 'z', 'moves'},
               'close_container': set(), 'sleep': {'x', 'y', 'z'},
-              'trade': {'entity_id', 'offer_index', 'quote'}}[tool]
+              'trade': {'entity_id', 'offer_index', 'quote'},
+              'interact_at': {'button', 'x', 'y', 'z', 'hold_ticks'}}[tool]
+    if tool == 'interact_at' and 'item_id' in args:
+        fields = fields | {'item_id'}
     if set(args) != fields:
         raise GatewayError('invalid_world_arguments')
+    if tool == 'interact_at':
+        if args['button'] not in ('left', 'right'):
+            raise GatewayError('invalid_interaction_button')
+        _integer(args['hold_ticks'], 0, 100)
+        if any(args[key] is not None for key in ('x', 'y', 'z')):
+            _point(args)
+        if 'item_id' in args:
+            _item(args['item_id'])
+        return
     if tool not in ('close_container', 'trade'):
         _point(args)
     if tool == 'trade':
@@ -450,6 +463,20 @@ class WorldActions:
         plan = {'schema': 1, 'tool': tool, 'args': args, 'dimension': before['dimension'],
                 'bodyUuid': before['bodyUuid'], 'preparedAt': self.gateway._now(),
                 'countsBefore': before.get('counts', {}), 'expected': [], 'observations': []}
+        if tool == 'interact_at':
+            # Generic native interaction does not infer a recipe, placement or
+            # farming goal. The existing work/protected area still applies.
+            self.gateway._area(before['position'], margin=5)
+            if before.get('onGround') is not True:
+                raise GatewayError('world_target_out_of_reach')
+            if args['x'] is not None:
+                point = _point(args)
+                self.gateway._area(point)
+                self._reach(point, before)
+                plan['observations'].append(self._block(point))
+            if args.get('item_id') is not None and before.get('counts', {}).get(args['item_id'], 0) < 1:
+                raise GatewayError('required_item_not_carried')
+            return plan
         if tool == 'trade':
             reply = self.villager_offers(args['entity_id'], args['offer_index'] // 4 * 4)
             if reply.get('ok') is not True:
@@ -653,7 +680,7 @@ class WorldActions:
             raise GatewayError('outcome_unknown')
         return reply
 
-    def _interaction(self, plan, args):
+    def _interaction(self, plan, args, *, query_only=False, allow_pending=False):
         """One native sync-slot request, then exact receipt reads only.
 
         The old numen_act invoke endpoint drops runSync's eventual TaskResult.
@@ -664,7 +691,7 @@ class WorldActions:
         if not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id):
             raise GatewayError('world_interaction_request_id_missing')
         actor = str(uuid.UUID(plan['bodyUuid']))
-        epoch = None
+        epoch = plan.get('epoch')
         diagnostic = {'schema': 1, 'actionId': request_id, 'actorUuid': actor,
                       'tool': 'interact_at', 'args': args, 'stage': 'dispatch', 'attempt': 0}
         path = self.state / 'world-interaction-receipts' / (request_id + '.json')
@@ -680,7 +707,7 @@ class WorldActions:
                 self.sleep(.25)
             diagnostic.update(stage='dispatch' if poll == 0 else 'query', attempt=poll + 1)
             try:
-                raw = (self.gateway._native_interaction(actor, request_id) if poll
+                raw = (self.gateway._native_interaction(actor, request_id) if poll or query_only
                        else self.gateway._native_interact(actor, request_id, args))
             except (OSError, ValueError, TypeError) as exc:
                 note('rcon_response_unavailable', errorType=type(exc).__name__)
@@ -700,6 +727,7 @@ class WorldActions:
                         or receipt.get('capability') != 'numen_interaction_receipt_v1'
                         or receipt.get('actorUuid') != actor or receipt.get('requestId') != request_id
                         or receipt.get('tool') != 'interact_at'
+                        or plan.get('nativeTaskId') is not None and receipt.get('nativeTaskId') != plan['nativeTaskId']
                         or json.dumps(receipt.get('args'), sort_keys=True, separators=(',', ':'))
                            != json.dumps(args, sort_keys=True, separators=(',', ':'))
                         or str(uuid.UUID(receipt.get('epoch', ''))) != receipt['epoch']
@@ -708,7 +736,13 @@ class WorldActions:
                 epoch = receipt['epoch']
                 status = receipt.get('status')
                 if status in ('accepted', 'running'):
+                    if allow_pending and (not isinstance(receipt.get('nativeTaskId'), str) or not receipt['nativeTaskId']):
+                        raise ValueError('native_interaction_identity_mismatch')
                     note('native_interaction_pending', lastValidatedReceipt=receipt)
+                    if allow_pending:
+                        return {'success': True, 'message': 'Native interaction accepted; query the original action status for its terminal result.',
+                                'data': {'async': True, 'task_id': receipt['nativeTaskId'],
+                                         'nativeInteractionReceipt': receipt, 'retryAutomatically': False}}
                     continue
                 result = receipt.get('result')
                 if (status not in ('terminal', 'rejected') or not isinstance(result, dict)
@@ -746,7 +780,7 @@ class WorldActions:
             fresh = self.prepare(tool, args, current)
             if fresh.get('expected') != plan.get('expected'):
                 raise GatewayError('world_target_changed')
-            if tool in ('place_block', 'farm', 'open_container'):
+            if tool in ('place_block', 'farm', 'open_container', 'interact_at'):
                 request_id = plan.get('actionId')
                 if not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id):
                     raise GatewayError('world_interaction_request_id_missing')
@@ -755,6 +789,8 @@ class WorldActions:
             return {'success': False, 'message': str(exc) if isinstance(exc, GatewayError) else 'world_preflight_unavailable',
                     'data': {'dispatched': False, 'retryAutomatically': False}}
         plan = fresh
+        if tool == 'interact_at':
+            return self._interaction(plan, args, allow_pending=True)
         if tool == 'trade':
             reply = self._merchant('trade', args['entity_id'], args['offer_index'], args['quote'])
             if reply.get('code') == 'outcome_unknown':

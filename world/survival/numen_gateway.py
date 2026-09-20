@@ -19,9 +19,9 @@ import uuid
 
 TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
          'place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade',
-         'guild_claim', 'guild_release', 'guild_deliver')
+         'guild_claim', 'guild_release', 'guild_deliver', 'interact_at')
 DIRECT_ACTIONS = ('drop_items',)  # Excluded from the existing executable-skill kernel.
-WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade')
+WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade', 'interact_at')
 GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
 TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
@@ -835,6 +835,7 @@ class NumenGateway:
             return receipt
         outcome = None
         food_outcome = None
+        interaction_outcome = None
         if receipt['tool'] == 'goto':
             candidate = body.get('navigationResult') or {}
             if (receipt.get('nativeTaskId') and before.get('navigationEpoch')
@@ -850,6 +851,16 @@ class NumenGateway:
                 outcome = self._observed_arrival(receipt, body)
                 if outcome is None:
                     return receipt  # nothing to judge against: keep the identity, do not guess
+        elif receipt['tool'] == 'interact_at':
+            from world_actions import WorldActions
+            interaction_outcome = WorldActions(self, max_polls=1)._interaction(
+                {'actionId': receipt['actionId'], 'bodyUuid': before['bodyUuid'],
+                 'nativeTaskId': receipt['nativeTaskId'],
+                 'epoch': receipt['result']['result']['data']['nativeInteractionReceipt']['epoch']},
+                receipt['args'], query_only=True, allow_pending=True)
+            if interaction_outcome.get('data', {}).get('async'):
+                return receipt
+            outcome = interaction_outcome
         elif receipt['tool'] == 'eat' and receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt'):
             from food_actions import FoodActions
             food_outcome = FoodActions(self).terminal(receipt)
@@ -865,6 +876,9 @@ class NumenGateway:
         if food_outcome is not None:
             receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
                            notice='Completion is the exact original native eating task result.')
+        if interaction_outcome is not None:
+            receipt.update(nativeInteractionOutcome=interaction_outcome, navigationOutcome=None,
+                           notice='The original native interaction ended; inspect its effects to judge the skill objective.')
         if receipt['tool'] == 'goto' and outcome is not None and outcome.get('success') is not True:
             from navigation_sense import NavigationSense, verdict
             survey = NavigationSense(self).for_destination(body, receipt['args'])
@@ -1179,6 +1193,8 @@ class NumenGateway:
                         if tool == 'eat' and reply.get('nativeFoodReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
                         if tool == 'drop_items' and reply.get('nativeDropReceipt', {}).get('status') == 'terminal':
+                            result['completionConfirmed'] = True
+                        if tool == 'interact_at' and reply.get('data', {}).get('nativeInteractionReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
                     else:
                         raise GatewayError('outcome_unknown')

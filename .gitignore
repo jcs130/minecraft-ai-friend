@@ -8,6 +8,7 @@ assets/prepared-models/
 vendor/controller-cache/
 world/client-controls-src/build/
 world/irons-bridge-src/build/
+world/numen-actuator-src/build/
 world/chanting-items-src/build/
 vendor/chanting-items-cache/
 .env

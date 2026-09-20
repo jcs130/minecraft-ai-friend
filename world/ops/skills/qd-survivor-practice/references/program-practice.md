@@ -20,6 +20,12 @@
 
 fixtures 为 2–12 个不同输入的对象，含 state、可选 memory，以及至少一个 expectedActionTool、done、expectedWaitSeconds 或 expectedObserve。还可断言 expectedAction、replan、expectedMemory。建议覆盖正常前置条件、条件缺失、成功终态与未确认结果。样例输入只是分支测试，不能记成真实世界经历。
 
+## 通用原生交互
+
+当 `skill_catalog.actionTools` 包含 `interact_at`，程序可提出 `{tool:"interact_at",args:{button:"right",x:整数,y:整数,z:整数,hold_ticks:0,item_id:"实际携带的命名空间物品"}}`。坐标须全给或全为 null；全 null 沿当前视线使用物品。button 为 left/right，hold_ticks 为 0–100（游戏 tick），item_id 可省略；不导航，须已在目标触及范围，原工作区及保护区规则有效。食物仍用 `eat`，原生拒绝原因必须尊重。
+
+用它组合当前目标需要的取水、施肥、工具或模组物品使用等方法，不要求维护者逐项提供专用玩法。accepted 只表示原任务受理，控制器随后查询同一原生任务；不能再次点击来催促完成。终态仅说明这次交互结束，必须依据实际库存、方块及相关效果判断程序目标。失败或未知时保留已执行前缀，先核实再修改策略。`matching_passed_tests_required` 表示当前内核下的测试资格缺失或失效，先对同一版本执行 `skill_test`，不要修改通过标志或不断重试 `skill_start`。
+
 下面示范“只发出一次小批合成，再核对回执和产物”。仅当实时查询确认此配方、背包有相应材料且当前目标确需木棍时才考虑使用；其他目标应改成实际物品、材料与验收。count=1 是一次有界请求，产量以当前配方和真实回执为准。
 
 ```javascript
