@@ -701,5 +701,45 @@
       },
       "remainingFailuresNotBlanketClassifiedAsHistorical": true
     }
+  },
+  "floatingCleanup": {
+    "status": "production_completed_and_saved_world_verified",
+    "date": "2026-09-20",
+    "debrisRemoved": 1245,
+    "changedCoordinates": 1256,
+    "lampMoves": [
+      {
+        "from": [
+          -726,
+          66,
+          898
+        ],
+        "to": [
+          -726,
+          64,
+          898
+        ]
+      },
+      {
+        "from": [
+          -562,
+          68,
+          880
+        ],
+        "to": [
+          -562,
+          68,
+          883
+        ],
+        "derivedFenceConnection": "south=true at Y68 and Y69 against existing slope"
+      }
+    ],
+    "retainedFloatingIslandBlocks": 5051,
+    "remainingLowDetachedGroupsInAuditBounds": 0,
+    "temporaryForceloadsReleased": 53,
+    "report": "assets/town-expansion/floating-cleanup-verification.json",
+    "documentation": "docs/TOWN-FLOATING-CLEANUP.md",
+    "priorGeometryVerificationRemainsHistorical": true,
+    "priorPreserveVolumeFoliageException": "41 detached canopy blocks in west_mod_fixture removed under the later cleanup request; functional objects untouched"
   }
 }
