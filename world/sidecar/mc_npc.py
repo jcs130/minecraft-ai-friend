@@ -1503,7 +1503,9 @@ def summon_villager(v):
     print("[npc] healed(%s):" % ("base" if base else "vanilla"), v["display"], flush=True)
 
 def summon_npc(v):
-    if not SPAWN_MISSING:
+    # Bound identities must never be replaced by a random-UUID legacy summon,
+    # including when their binding is malformed and needs manual reconciliation.
+    if not SPAWN_MISSING or v.get('entityBinding') is not None:
         return
     if mode_of(v) == "stand":
         summon_stand(v)
@@ -1530,7 +1532,12 @@ def unleash_alive():
         if mode_of(v) == "stand":
             continue
         try:
-            R.cmd("data merge entity %s {NoAI:0b}" % sel(v))
+            from npc_identity import binding
+            bound = binding(v)
+            # Migrated bodies retain their exact UUID/type/tag selector and the
+            # same protection as newly created NPCs, without moving or replacing them.
+            flags = '{NoAI:0b,Invulnerable:1b,PersistenceRequired:1b}' if bound else '{NoAI:0b}'
+            R.cmd("data merge entity %s %s" % (sel(v), flags))
             print("[npc] unleashed:", v["display"], flush=True)
         except Exception:
             R.s = None
@@ -1547,6 +1554,10 @@ def heal_npcs():
             R.s = None
         pos = alive_pos(v)
         if pos is None:
+            # A query miss does not prove this exact bound entity was lost.
+            # Legacy summoning would create a clone that sel() can never find.
+            if v.get('entityBinding') is not None:
+                continue
             # R011(2026-09-01) 重招节流：村民 NoAI:0b 自由溜达会走出加载 chunk，
             # data get 瞬态 miss ≠ 丢失——旧逻辑每拍 miss 即重招，旧 chunk 重载后
             # 实体回来 → 分身无限增殖（8h 259 只；再往前 dedup 杀阀时代=1916 死亡泵）。

@@ -1,3 +1,5 @@
+2026-09-20 主村庄已实际恢复：全维度70实体region核对33具名原UUID，保留3存活并恢复30缺失、救回4只原地下铁傀儡，无随机身份补生。30恢复交易/物品/职业已读回、33村民原生AI及保护验证，MC已save-all flush；来源备份实为9/7（5公会角色交易取9/8），不是死亡前最新状态。InControl主村XZ不变，Y扩至-64..320，position/finalize/onjoin三入口已实服重载；清理40精确现存残留，四高度加入测试无目标实体，13类常见敌对复查未检出。绑定NPC双入口禁止旧随机UUID补生，启动沿既有流程补保护；spawn_missing=false保持。NPC仅单次stop/start，原准入/桐人/三角色Cron已恢复；24回归、NPC/路由/相关panel通过，13历史全局red保留。勿重跑恢复/维护或旧backup脚本，详见docs/VILLAGE-RECOVERY.md及runtime/village-recovery-20260920。
+
 # 千灯纪整合项目
 
 2026-09-20 最后接线补充：read-model已接通原NPC轮询/公会身份子健康字段，既有team_context不再只看笼统unhealthy；19跨语言Python/25Node核心通过，浏览器环境限制如实保留。15:56:54女神/命令/语音空闲复核后仅world普通重启一次，15:57:42启动、15:58:51真实公开快照→生产原helper通过，guild_lan在线/hesu未定位/整体false均保留，不改健康绿灯。错误guild-claim-precision已15:55:55精确撤回共享索引，6→5且其余条目不变，旧正文/草稿/反馈保留，未发现其他角色安装。首批59a7b3f已推main，最后接线另提交；勿把接线和维护纠错当自主RSI成功。详见docs/GUILD-FEEDBACK-REPAIR.md及runtime/guild-feedback-20260920/npc-health-projection。

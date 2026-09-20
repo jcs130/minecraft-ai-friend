@@ -1,0 +1,44 @@
+[
+  {
+    "when": "position",
+    "dimension": "minecraft:overworld",
+    "hostile": true,
+    "area": "village",
+    "result": "deny"
+  },
+  {
+    "when": "finalize",
+    "dimension": "minecraft:overworld",
+    "hostile": true,
+    "area": "village",
+    "result": "deny"
+  },
+  {
+    "when": "onjoin",
+    "dimension": "minecraft:overworld",
+    "hostile": true,
+    "area": "village",
+    "result": "deny"
+  },
+  {
+    "when": "position",
+    "dimension": "minecraft:overworld",
+    "mob": ["minecraft:phantom"],
+    "area": "village",
+    "result": "deny"
+  },
+  {
+    "when": "finalize",
+    "dimension": "minecraft:overworld",
+    "mob": ["minecraft:phantom"],
+    "area": "village",
+    "result": "deny"
+  },
+  {
+    "when": "onjoin",
+    "dimension": "minecraft:overworld",
+    "mob": ["minecraft:phantom"],
+    "area": "village",
+    "result": "deny"
+  }
+]

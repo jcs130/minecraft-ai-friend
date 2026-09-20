@@ -106,6 +106,89 @@ class BindingTests(unittest.TestCase):
         namespace['heal_npcs']()
         rcon.cmd.assert_not_called()
 
+    def caretaker_fixture(self, profiles, *, spawn_missing=True):
+        source = ROOT / 'world/sidecar/mc_npc.py'
+        tree = ast.parse(source.read_text(encoding='utf-8-sig'))
+        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                     and n.name in ('heal_npcs', 'summon_npc', 'unleash_alive', 'sel')]
+        namespace = {'CFG': {}, 'PROFILES': profiles, 'SPAWN_MISSING': spawn_missing,
+                     'R': SimpleNamespace(cmd=Mock()), '_MISS': {}, 'dedup_npc': Mock(),
+                     'alive_pos': Mock(return_value=None), 'mode_of': Mock(return_value='villager'),
+                     'etype_of': Mock(return_value='villager'), 'print': Mock(),
+                     'summon_stand': Mock(), 'summon_villager': Mock()}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), 'exec'), namespace)
+        return namespace
+
+    def test_bound_missing_caretaker_never_dispatches_legacy_recovery(self):
+        for bound in (self.bound, {}, {'uuid': 'invalid'}, False):
+            with self.subTest(binding=bound):
+                namespace = self.caretaker_fixture([self.profile | {'entityBinding': bound}])
+                dispatch = Mock()
+                namespace['summon_npc'] = dispatch
+                # Two old five-miss windows must not manufacture replacement identities.
+                for _ in range(10):
+                    namespace['heal_npcs']()
+                dispatch.assert_not_called()
+                namespace['R'].cmd.assert_not_called()
+
+    def test_direct_summon_refuses_bound_or_malformed_identity_before_carrier_dispatch(self):
+        namespace = self.caretaker_fixture([])
+        for bound in (self.bound, {}, {'uuid': 'invalid'}, False):
+            namespace['summon_npc'](self.profile | {'entityBinding': bound})
+        namespace['mode_of'].assert_not_called()
+        namespace['summon_stand'].assert_not_called()
+        namespace['summon_villager'].assert_not_called()
+        namespace['R'].cmd.assert_not_called()
+
+    def test_unbound_legacy_recovery_still_requires_enabled_gate_and_five_misses(self):
+        profile = {k: v for k, v in self.profile.items() if k != 'entityBinding'}
+        for explicit_none in (False, True):
+            unbound = profile | {'entityBinding': None} if explicit_none else profile
+            for enabled in (False, True):
+                with self.subTest(explicit_none=explicit_none, enabled=enabled):
+                    namespace = self.caretaker_fixture([unbound], spawn_missing=enabled)
+                    for _ in range(4):
+                        namespace['heal_npcs']()
+                    namespace['summon_villager'].assert_not_called()
+                    namespace['heal_npcs']()
+                    if enabled:
+                        namespace['summon_villager'].assert_called_once_with(unbound)
+                    else:
+                        namespace['mode_of'].assert_not_called()
+                        namespace['summon_villager'].assert_not_called()
+                    namespace['summon_stand'].assert_not_called()
+                    namespace['R'].cmd.assert_not_called()
+
+    def test_startup_protects_only_exact_bound_villager_and_keeps_ai_enabled(self):
+        namespace = self.caretaker_fixture([self.profile])
+        namespace['unleash_alive']()
+        selector = identity.typed_uuid_selector(self.uuid, 'npc_guild_lan')
+        namespace['R'].cmd.assert_called_once_with(
+            'data merge entity ' + selector + ' {NoAI:0b,Invulnerable:1b,PersistenceRequired:1b}')
+        namespace['etype_of'].assert_not_called()
+        namespace['summon_villager'].assert_not_called()
+        self.assertEqual(self.profile['spawn'], [999, 999, 999])
+
+    def test_startup_unbound_npc_keeps_existing_ai_only_update(self):
+        profile = {k: v for k, v in self.profile.items() if k != 'entityBinding'}
+        namespace = self.caretaker_fixture([profile])
+        namespace['unleash_alive']()
+        namespace['R'].cmd.assert_called_once_with(
+            'data merge entity @e[type=villager,tag=npc_guild_lan,limit=1] {NoAI:0b}')
+        namespace['summon_villager'].assert_not_called()
+
+    def test_startup_invalid_binding_or_tag_never_mutates_an_entity(self):
+        profiles = [self.profile | {'entityBinding': value}
+                    for value in ({}, False, self.bound | {'uuid': 'invalid'},
+                                  self.bound | {'entityType': 'minecraft:iron_golem'},
+                                  self.bound | {'dimension': 'minecraft:the_nether'},
+                                  self.bound | {'preservePosition': False})]
+        profiles.append(self.profile | {'tag': 'npc_bad,sort=nearest'})
+        namespace = self.caretaker_fixture(profiles)
+        namespace['unleash_alive']()
+        namespace['R'].cmd.assert_not_called()
+        namespace['summon_villager'].assert_not_called()
+
     def test_reviewed_merge_changes_only_six_bindings_and_preserves_all_other_fields(self):
         spec = importlib.util.spec_from_file_location('guild_bind_tool_fixture', ROOT / 'tools/bind_guild_npcs.py')
         tool = importlib.util.module_from_spec(spec); spec.loader.exec_module(tool)
