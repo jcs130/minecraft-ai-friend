@@ -13,7 +13,7 @@
     },
     {
       "path": "server/mc/mods/qiandeng-irons-bridge-0.1.0.jar",
-      "sha256": "321c2e5c2d309c4936ffe0fa20808e50c109ea637a9db689f0178f81c8d353de",
+      "sha256": "361636f64e201bbf5cd11cf9963d9051d2a9562c1e3d157c804782f6a897af4a",
       "client_required": false
     },
     {
@@ -37,8 +37,8 @@
       "client_required": true
     },
     {
-      "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar",
-      "sha256": "bda81485d7a6760bb0288b232f251f4a12972936bd6c47104b1094b43397b1c8",
+      "path": "server/mc/mods/numen-neoforge-1.21.1-0.1.3.jar",
+      "sha256": "5e913b2ffb1a39b199333f768526537867be726bf27c451e7a1a507cc8a35da0",
       "client_required": false
     },
     {

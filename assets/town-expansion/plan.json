@@ -1,0 +1,705 @@
+{
+  "schema": 2,
+  "status": "production_deployed_with_recorded_legacy_validation_failures",
+  "namespace": "qiandeng_rebuild",
+  "preserveBoxes": [
+    {
+      "id": "shrine",
+      "minX": -546,
+      "maxX": -538,
+      "minZ": 849,
+      "maxZ": 857,
+      "minY": -64,
+      "maxY": 320
+    },
+    {
+      "id": "tombstone",
+      "minX": -554,
+      "maxX": -547,
+      "minZ": 821,
+      "maxZ": 828,
+      "minY": -64,
+      "maxY": 320
+    },
+    {
+      "id": "west_mod_fixture",
+      "minX": -612,
+      "maxX": -602,
+      "minZ": 861,
+      "maxZ": 872,
+      "minY": -64,
+      "maxY": 320
+    },
+    {
+      "id": "display_pavilion",
+      "minX": -565,
+      "maxX": -556,
+      "minZ": 890,
+      "maxZ": 900,
+      "minY": -64,
+      "maxY": 320
+    },
+    {
+      "id": "item_frame",
+      "minX": -471,
+      "maxX": -461,
+      "minZ": 936,
+      "maxZ": 950,
+      "minY": -64,
+      "maxY": 320
+    }
+  ],
+  "sites": [
+    {
+      "id": "B02",
+      "asset": "barn",
+      "minX": -425,
+      "minZ": 799,
+      "floorY": 72,
+      "rotation": "none",
+      "role": "public_archive_and_inventory_relocation"
+    },
+    {
+      "id": "T01",
+      "asset": "plains_tavern",
+      "minX": -535,
+      "minZ": 823,
+      "floorY": 70,
+      "rotation": "180",
+      "role": "guild_tavern"
+    },
+    {
+      "id": "W01",
+      "asset": "swiss_mason_butcher",
+      "minX": -502,
+      "minZ": 842,
+      "floorY": 71,
+      "rotation": "180",
+      "role": "market_workshop"
+    },
+    {
+      "id": "W02",
+      "asset": "swiss_fletcher",
+      "minX": -492,
+      "minZ": 826,
+      "floorY": 70,
+      "rotation": "180",
+      "role": "fletcher"
+    },
+    {
+      "id": "W03",
+      "asset": "swiss_fisher",
+      "minX": -499,
+      "minZ": 865,
+      "floorY": 63,
+      "rotation": "none",
+      "role": "river_fisher"
+    },
+    {
+      "id": "H01",
+      "asset": "swiss_small_house",
+      "minX": -558,
+      "minZ": 802,
+      "floorY": 70,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H02",
+      "asset": "swiss_lodge",
+      "minX": -577,
+      "minZ": 805,
+      "floorY": 70,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H03",
+      "asset": "swiss_small_house",
+      "minX": -575,
+      "minZ": 829,
+      "floorY": 71,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H04",
+      "asset": "swiss_small_house",
+      "minX": -553,
+      "minZ": 832,
+      "floorY": 71,
+      "rotation": "none",
+      "role": "residents"
+    },
+    {
+      "id": "H05",
+      "asset": "swiss_lodge",
+      "minX": -524,
+      "minZ": 800,
+      "floorY": 70,
+      "rotation": "none",
+      "role": "residents"
+    },
+    {
+      "id": "H07",
+      "asset": "swiss_lodge",
+      "minX": -608,
+      "minZ": 898,
+      "floorY": 68,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H08",
+      "asset": "swiss_small_house",
+      "minX": -592,
+      "minZ": 900,
+      "floorY": 70,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H09",
+      "asset": "swiss_small_house",
+      "minX": -573,
+      "minZ": 907,
+      "floorY": 73,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "H10",
+      "asset": "swiss_small_house",
+      "minX": -552,
+      "minZ": 908,
+      "floorY": 71,
+      "rotation": "none",
+      "role": "residents"
+    },
+    {
+      "id": "H11",
+      "asset": "swiss_lodge",
+      "minX": -532,
+      "minZ": 912,
+      "floorY": 71,
+      "rotation": "none",
+      "role": "residents"
+    },
+    {
+      "id": "H12",
+      "asset": "swiss_small_house",
+      "minX": -534,
+      "minZ": 929,
+      "floorY": 70,
+      "rotation": "none",
+      "role": "residents"
+    },
+    {
+      "id": "H14",
+      "asset": "swiss_small_house",
+      "minX": -606,
+      "minZ": 919,
+      "floorY": 68,
+      "rotation": "180",
+      "role": "residents"
+    },
+    {
+      "id": "B01",
+      "asset": "barn",
+      "minX": -586,
+      "minZ": 929,
+      "floorY": 70,
+      "rotation": "none",
+      "role": "barn"
+    },
+    {
+      "id": "F01",
+      "asset": "wheat_farm",
+      "minX": -677,
+      "minZ": 946,
+      "floorY": 71,
+      "rotation": "none",
+      "role": "farm"
+    },
+    {
+      "id": "F02",
+      "asset": "wheat_farm",
+      "minX": -657,
+      "minZ": 952,
+      "floorY": 72,
+      "rotation": "none",
+      "role": "farm"
+    },
+    {
+      "id": "G01",
+      "asset": "japanese_garden",
+      "minX": -674,
+      "minZ": 888,
+      "floorY": 70,
+      "rotation": "none",
+      "role": "park"
+    },
+    {
+      "id": "P01",
+      "asset": "swiss_medium_house",
+      "minX": -705,
+      "minZ": 795,
+      "floorY": 65,
+      "rotation": "180",
+      "role": "player_home"
+    },
+    {
+      "id": "P02",
+      "asset": "swiss_small_house",
+      "minX": -678,
+      "minZ": 798,
+      "floorY": 64,
+      "rotation": "none",
+      "role": "player_home"
+    },
+    {
+      "id": "P03",
+      "asset": "swiss_small_house",
+      "minX": -701,
+      "minZ": 822,
+      "floorY": 65,
+      "rotation": "180",
+      "role": "player_home"
+    },
+    {
+      "id": "P04",
+      "asset": "swiss_medium_house",
+      "minX": -677,
+      "minZ": 821,
+      "floorY": 68,
+      "rotation": "180",
+      "role": "player_home"
+    }
+  ],
+  "townProtection": {
+    "dimension": "minecraft:overworld",
+    "minX": -715,
+    "maxX": -375,
+    "minZ": 695,
+    "maxZ": 1035,
+    "allY": true,
+    "enforcement": "server bridge deployed; native enabled/all-height bounds/no manual OP bypass and four production health checks passed"
+  },
+  "housing": {
+    "nonPlayerBeds": 38,
+    "playerBeds": 6,
+    "originalVillagers": 33,
+    "qaCompleteBedsObserved": 44,
+    "qaSleepingVillagersObserved": 19,
+    "allocationIsNotNativeBedClaim": true
+  },
+  "preservedOriginalAssets": {
+    "movedBlockEntities": 30,
+    "method": "native clone move with complete same-representation typed NBT verification",
+    "verifiedEnvironment": "isolated_qa_and_production",
+    "sourceAirAndTargetFullNbtVerified": true,
+    "ignoredNbtFields": [
+      "root.x",
+      "root.y",
+      "root.z"
+    ],
+    "productionMigrationVerified": true
+  },
+  "infrastructure": {
+    "pond": {
+      "bounds": [
+        -698,
+        72,
+        890,
+        -687,
+        76,
+        898
+      ],
+      "waterY": 73,
+      "sourceWaterCells": 54
+    },
+    "mainBridge": {
+      "centerX": -555,
+      "zRange": [
+        868,
+        881
+      ],
+      "deckY": 64,
+      "walkingWidth": 3
+    },
+    "mine": {
+      "surfaceFoot": [
+        -761,
+        66,
+        817
+      ],
+      "originalBranchFoot": [
+        -768,
+        28,
+        785
+      ],
+      "trialChamberConnected": false,
+      "outsideTownSafetyRegion": true
+    }
+  },
+  "qaEvidence": {
+    "environment": "isolated_qa",
+    "builtLots": 25,
+    "composedCellsChecked": 50034,
+    "unexplainedGeometryDifferences": 0,
+    "neighborDerivedStateDifferencesRecorded": 113,
+    "protectedVolumesUnchanged": 5,
+    "originalBridgeWaterCellsUnchanged": 151,
+    "roadsBridgePondMineEntranceBuilt": true,
+    "originalActors": {
+      "total": 80,
+      "villagers": 33,
+      "ironGolems": 4,
+      "maids": 3,
+      "otherAnimals": 40,
+      "savedIdentityChecksPassed": 80,
+      "actualChangedFields": [
+        "Pos"
+      ],
+      "respawned": false
+    },
+    "navigation": {
+      "numenSha256": "5e913b2ffb1a39b199333f768526537867be726bf27c451e7a1a507cc8a35da0",
+      "bridgeSha256": "361636f64e201bbf5cd11cf9963d9051d2a9562c1e3d157c804782f6a897af4a",
+      "successfulRouteTypes": [
+        "archive_down",
+        "archive_up",
+        "mine_down",
+        "mine_up",
+        "bridge_foot"
+      ],
+      "trials": 6,
+      "passedTrials": 5,
+      "firstMineDownFailedPhysicalAcceptanceDespiteNativeSuccess": true,
+      "failedTrialRetained": true,
+      "additionalMineDownRunId": "stair-v1-fresh10",
+      "additionalMineDownStartStabilizationTicks": 12,
+      "additionalMineDownElapsedSeconds": 12.532217090003542,
+      "additionalMineDownFinalY": 29,
+      "additionalMineDownDistanceToGoal": 0.16583458209706636,
+      "alter": "none",
+      "alterBudget": 0,
+      "teleportOnlyToStart": true,
+      "cacheTimingIsNotUniquelyProvenCause": true
+    },
+    "retainedFailures": [
+      "early_release_plan_8_of_33_positions_blocked_before_all_buildings",
+      "B01_F01_three_crop_postimage_failures_repaired_by_separate_guarded_operation",
+      "archive_access_same_block_setblock_zero_return_repaired_without_resetting_attempt",
+      "first_mine_descent_native_near_goal_success_did_not_reach_exact_physical_target"
+    ],
+    "proofs": [
+      "runtime/town-rebuild-20260920/verify-phase10/world-verification.json",
+      "runtime/town-rebuild-20260920/release/phase11-identity-verification.json",
+      "runtime/town-rebuild-20260920/qa/nav-recorder/summary.json",
+      "runtime/town-rebuild-20260920/qa/nav-recorder/fresh10-summary.json"
+    ],
+    "limits": [
+      "QA success is not production deployment evidence",
+      "19 observed sleeping villagers does not prove every resident has claimed a designated bed",
+      "Only the existing local mine branch is connected; no full mine clearance or trial chamber connection",
+      "Administrator reconstruction is not autonomous society or demonstrated RSI improvement"
+    ]
+  },
+  "production": {
+    "status": "deployed_and_resumed_with_recorded_validation_failures",
+    "constructionVerified": true,
+    "maintenanceReported": {
+      "nativePauseDrainReady": true,
+      "worldAndNpcStopped": true,
+      "ticksFrozen": true,
+      "initialBackupAtLastReport": "complete_save_on_confirmed"
+    },
+    "initialBackupReceipt": "runtime/town-rebuild-20260920/production/initial-backup.json",
+    "finalBackupReceipt": "runtime/town-rebuild-20260920/production/after-restoration-backup.json",
+    "buildAndMigrationReceipts": {
+      "postAll25": "runtime/town-rebuild-20260920/production/11-all-buildings-post.json.journal.jsonl",
+      "migration": "runtime/town-rebuild-20260920/production/migration-verify/migration-verified-final.json",
+      "movedAssets": 30,
+      "immediateFullNbtEqual": 30,
+      "savedFullNbtEqual": 30,
+      "sourceAir": 30,
+      "failedApplyAndAttemptsRetained": true,
+      "independentCropRepairs": [
+        "runtime/town-rebuild-20260920/production/08-b01-crop-reconcile.json.journal.jsonl",
+        "runtime/town-rebuild-20260920/production/10-f01-crop-reconcile.json.journal.jsonl"
+      ]
+    },
+    "geometryAndIdentityVerification": {
+      "geometryReport": "runtime/town-rebuild-20260920/production/final-verification/world-verification.json",
+      "status": "geometry_passed_original_actors_released",
+      "composedCellsChecked": 50034,
+      "unexplainedDifferences": 0,
+      "derivedStateDifferencesRecorded": 113,
+      "completeBeds": 44,
+      "preservedVolumesUnchanged": 5,
+      "originalWaterCellsUnchanged": 151,
+      "holdingOriginalActors": 80,
+      "villagers": 33,
+      "ironGolems": 6,
+      "maids": 3,
+      "otherAnimals": 38,
+      "holdingRotationSupplement": "runtime/town-rebuild-20260920/production/holding-rotation-review/conclusion.json",
+      "nativeYawWrapDegreesExactFloat32Matches": 42,
+      "unchangedRotations": 38,
+      "rotationBitMismatches": 0,
+      "pitchChanges": 0,
+      "otherNonMovementFieldsEqual": true,
+      "originalStrictFailedReportRetained": true,
+      "migrationPeriodHeldActorsEntireSavedNbtUnchanged": true,
+      "released": true
+    },
+    "deployedArtifactHashes": {
+      "bridge": "361636f64e201bbf5cd11cf9963d9051d2a9562c1e3d157c804782f6a897af4a",
+      "numen": "5e913b2ffb1a39b199333f768526537867be726bf27c451e7a1a507cc8a35da0"
+    },
+    "protectionHealthReceipt": "runtime/town-rebuild-20260920/production/runtime-restoration-verification.json",
+    "resumeReceipt": "runtime/town-rebuild-20260920/resumed.json",
+    "completedAt": "2026-09-20T14:15:43.653358+00:00",
+    "stageBackups": [
+      {
+        "stage": "initial",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T132211.0195850Z-06afceb6",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-holding",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T132630.4897819Z-807ba3a9",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "empty-room",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T133449.9514382Z-9e9eb032",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-migration",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T133958.8050845Z-65430dc4",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-buildings",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T134638.2207740Z-8196b97d",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-cleanup",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T134925.0627613Z-4279b931",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "final-held",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T135209.8061201Z-cb595f8d",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-release",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T135541.6672242Z-21d1f2a6",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "before-restart",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T140359.5435857Z-2bea106a",
+        "status": "complete",
+        "saveOn": "confirmed"
+      },
+      {
+        "stage": "after-restoration",
+        "path": "D:/backups/mc-neoforge-auto/2026-09-20T141133.6146792Z-25448c7f",
+        "status": "complete",
+        "saveOn": "confirmed"
+      }
+    ],
+    "finalHeldBackupReceipt": "runtime/town-rebuild-20260920/production/final-held-backup.json",
+    "releaseStatus": "saved_identity_verified",
+    "protectionDeploymentVerified": true,
+    "operationsResumed": true,
+    "releaseVerification": {
+      "report": "runtime/town-rebuild-20260920/production/release-identity/identity-verification.json",
+      "passed": 80,
+      "unexpectedChanges": 0,
+      "bodyReturnReceipt": "runtime/town-rebuild-20260920/production/15-body-return.json.journal.jsonl",
+      "kiritoFootPosition": [
+        -554.5,
+        64,
+        866.5
+      ],
+      "holdingGlassRemoved": 858
+    },
+    "fileDeployment": {
+      "status": "complete",
+      "written": 29,
+      "backupOnly": 1,
+      "planSha256": "ca66625f832a3c17ce1e3fa5061df10d0c10276d811e5d0512e9d23abc7d023a",
+      "journal": "runtime/town-rebuild-20260920/deployments/reviewed-final-files-v2/journal.jsonl",
+      "completedAt": "2026-09-20T14:06:30.451735+00:00"
+    },
+    "protectionRuntimeVerified": true,
+    "minecraftRestartStatus": "healthy",
+    "bodyBeforeRestart": {
+      "report": "runtime/town-rebuild-20260920/production/body-initial-to-before-restart.json",
+      "identityExact": true,
+      "inventoryAndEnderItemsExact": true,
+      "overallReportStatus": "differences_require_review"
+    },
+    "runtimeRestoration": {
+      "report": "runtime/town-rebuild-20260920/production/runtime-restoration-verification.json",
+      "checksPassed": 7,
+      "all43FilesExact": true,
+      "originalThreeConfigurationsExact": true,
+      "originalFiveContainerIdsImagesRestartPoliciesPreserved": true,
+      "allFiveContainersRunning": true,
+      "primaryAndMirrorWaypointsVerified": true,
+      "mcWorldNpcHealthy": true,
+      "qwenHealth": "healthy_after_natural_cooldown_no_restart_or_config_change",
+      "qwenHealthObservedWindowUtc": [
+        "2026-09-20T14:16:54Z",
+        "2026-09-20T14:17:49Z"
+      ],
+      "qwenFailingStreak": 0,
+      "qwenNativeRolesVerified": 10,
+      "qwenNativeSkillBindingsVerified": 99,
+      "defaultServicesRunning": 13,
+      "allConfiguredDockerHealthchecksHealthy": true,
+      "gateHasHealthcheck": false
+    },
+    "nativeActorsAfterRestart": {
+      "report": "runtime/town-rebuild-20260920/production/16-original-actors.json.journal.jsonl",
+      "count": 80,
+      "allOriginalUuidTypeAndPositiveHealthVerified": true,
+      "kiritoRestoredOnceViaExistingRestore": true,
+      "goddessOriginalUuidViaOriginalProcess": true
+    },
+    "restoredBodyState": {
+      "inventoryXpAbilitiesHealthExact": true,
+      "attributeOrderAndExistingFivePassiveEffectsReview": "complete_exact_typed_comparison_and_actual_world_ON_logs_bound",
+      "proof": "runtime/town-rebuild-20260920/production/body-after-restoration/preservation-proof.json",
+      "proofStatus": "identity_inventory_experience_permanent_abilities_preserved",
+      "review": "runtime/town-rebuild-20260920/production/BODY-AFTER-RESTORATION-REVIEW.md",
+      "temporaryEffectsAreNotNewPermanentAbilities": true,
+      "strictComparisonsRemain": "differences_require_review",
+      "genericComparisonRulesUnchanged": true
+    },
+    "resumedOriginalConfiguration": {
+      "roles": 10,
+      "jobs": 16,
+      "profilesAndCronsExactlyRestored": true,
+      "sessionsPreserved": true,
+      "previouslyDisabledRemainDisabled": true
+    },
+    "tickAndLoads": {
+      "ownedLoadsReleased": 223,
+      "remainingForcedChunks": 0,
+      "ticksRunning": true,
+      "targetTps": 20,
+      "observedAverageMsPerTick": 7.8,
+      "sampleCount": 100,
+      "unfreezeDispatchedOnce": true,
+      "wrongUnfrozenExpectationFailureRetained": true,
+      "independentConfirmation": "runtime/town-rebuild-20260920/production/21-observe-resumed-ticks.json.journal.jsonl"
+    },
+    "fullHealthStatus": "completed_exit1_original_report_retained_targeted_rechecks_passed",
+    "survivorAfterResume": {
+      "heartbeatAt": "2026-09-20T14:18:31Z",
+      "status": "thinking",
+      "ok": true,
+      "originalMemoryEpochPreserved": true,
+      "gameGoalSuccessClaimed": false
+    },
+    "fullHealthOk": false,
+    "fullHealthVerification": {
+      "originalReport": "runtime/town-rebuild-20260920/production/full-health-after.stdout.json",
+      "originalOk": false,
+      "exitCode": 1,
+      "sampleStartedAtUtc": "2026-09-20T14:17:35.425995+00:00",
+      "outputAtUtc": "2026-09-20T14:20:53Z",
+      "originalFailedSections": [
+        "operations_inventory",
+        "services",
+        "architecture",
+        "panel_smoke",
+        "rcon_protocol",
+        "character_speech",
+        "maid_bridge",
+        "maid_perception",
+        "survival_practice",
+        "pawapps",
+        "agent_learning",
+        "world_operations",
+        "numen_autonomy",
+        "world_team"
+      ],
+      "originalReportRetained": true,
+      "closureReport": "runtime/town-rebuild-20260920/production/final-health-closure.json",
+      "currentServicesOk": true,
+      "townProtectionFromFullHealthOk": true,
+      "gameQwenFromPanelSmokeOk": true,
+      "panelOverallPassClaimed": false,
+      "allProjectHealthPassClaimed": false,
+      "serviceSamplePredatesQwenRecovery": true,
+      "scope": "This deployment and operations restoration are complete. Other validation failures remain recorded; targeted rechecks do not rewrite the full report.",
+      "classification": "runtime/town-rebuild-20260920/production/full-health-after-classification.json",
+      "classificationReview": "runtime/town-rebuild-20260920/production/FULL-HEALTH-AFTER-CLASSIFICATION.md",
+      "newBehaviorAcceptanceNotPerformed": [
+        "current_voice",
+        "team_communication",
+        "native_maid"
+      ]
+    },
+    "targetedHealthRechecks": {
+      "pawapps": {
+        "report": "runtime/town-rebuild-20260920/production/pawapps-recheck-after-recovery.json",
+        "at": "2026-09-20T14:23:58.132657+00:00",
+        "originalHelperInvocations": 1,
+        "ok": true,
+        "checksPassed": 8,
+        "behaviorOk": true,
+        "discoverySeconds": 0.047,
+        "sdkSeconds": [
+          0.203,
+          0.078
+        ],
+        "boardSeconds": 6.453,
+        "sourceAndTimeoutUnchanged": true
+      },
+      "nativeSpeechTools": {
+        "report": "runtime/town-rebuild-20260920/production/character-speech-tools-recheck.json",
+        "at": "2026-09-20T14:24:05.861381+00:00",
+        "getInvocations": 1,
+        "httpStatus": 200,
+        "elapsedSeconds": 0.547,
+        "toolCount": 48,
+        "speakEnabled": true,
+        "speechStatusEnabled": true,
+        "stopSpeakingEnabled": true,
+        "actualClientAudioTested": false,
+        "originalFailureExceptionTypeUnknown": true
+      },
+      "modelCalls": 0,
+      "worldActions": 0,
+      "sourceOrTimeoutChanges": false,
+      "worldTeamKnownValidationContract": {
+        "publicationCount": 13,
+        "withdrawn": 1,
+        "blocked": 7,
+        "published": 5,
+        "legacyHealthAllowlistMissingWithdrawn": true,
+        "checkerModified": false
+      },
+      "remainingFailuresNotBlanketClassifiedAsHistorical": true
+    }
+  }
+}

@@ -1,0 +1,20 @@
+--- a/world/numen-src/core/common/src/main/java/com/dwinovo/numen/core/pathing/spec/CellClass.java
++++ b/world/numen-src/core/common/src/main/java/com/dwinovo/numen/core/pathing/spec/CellClass.java
+@@ -51,7 +51,7 @@
+     OPEN,
+     /** 可站的实心面:整块、玻璃、箱子、耕地、土径、灵魂沙、杜鹃、上半与双层台阶、八层雪。 */
+     GROUND,
+-    /** 楼梯:可站;碰撞不满格,原版寻路视为可通行。 */
++    /** 楼梯:可站;含碰撞体,不能把整个楼梯格作为身体脚格。 */
+     STAIRS,
+     /** 下半台阶:可站,不可穿。 */
+     BOTTOM_SLAB,
+@@ -179,7 +179,7 @@
+             return false;
+         }
+         switch (cls) {
+-            case OPEN, DOOR, LADDER, VINE, STAIRS:
++            case OPEN, DOOR, LADDER, VINE:
+                 return true;
+             case CARPET:
+                 return canWalkOn(view, loaded, x, y - 1, z, spec);

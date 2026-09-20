@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "capability": "stair_support_not_body_cell_v1",
+  "baselineJarSha256": "9591136eea7eb68e7914e31c8627474a1925c11eb675f076e209620afcd9508d",
+  "baselineClassHashes": {
+    "com/dwinovo/numen/core/pathing/spec/CellClass.class": "c3eb379b8fe2e1f381e32dd5455f9786c64bdb7019ce755d083eb03dd9b3e573"
+  },
+  "sourceFile": "world/numen-src/core/common/src/main/java/com/dwinovo/numen/core/pathing/spec/CellClass.java",
+  "sourceSha256": "3fb294a2fc4cd45884773ada8b5e6f5675f12074b789b1c55174757dd94caad7",
+  "patchedSourceSha256": "ed74c4a6cbbc79b4ce5feddd5f51cd4d65369cd4f5bf5a5f57504252ecfb93cc",
+  "patchSha256": "23ffa38282242d11b4e36851de8766ef161f8d7ea36c3e872f483f1c125c7ed7",
+  "classFamilies": [
+    "com/dwinovo/numen/core/pathing/spec/CellClass"
+  ],
+  "scope": "Only classify stairs as support, never a collision-free body cell. No permission, execution, task or body-lifecycle changes.",
+  "parentOrigin": "Existing QA 9591136e jar; compile original source and compare javap before overlay. Historical manifest release hashes are not accepted.",
+  "nativePhysicsVerified": false
+}

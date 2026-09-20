@@ -1,0 +1,182 @@
+{
+  "schema": 2,
+  "status": "selected_and_native_QA_placed",
+  "sourcePolicy": "Current verified JAR hash only. DataVersion unchanged. Third-party NBT remains ignored runtime; no source JAR modification or redistribution.",
+  "templates": [
+    {
+      "id": "qiandeng_rebuild:plains_tavern",
+      "sourceId": "village_taverns:village/plains/tavern",
+      "jar": "village_taverns-neoforge-1.3.0+1.21.1.jar",
+      "jarSha256": "d253da1816c49494d916be389c67ae4102ae5a1f00922f3a7fc66c53fae01133",
+      "sourcePath": "data/village_taverns/structure/village/plains/tavern.nbt",
+      "sourceNbtSha256": "d6b1abe3fbd7423fa319202870b300f9ffb13d0d120a8375051a99c88a83b129",
+      "outputNbtSha256": "f5dac6931610443f7ec868899858ca648e59b3724748f0cda83330e17b969679",
+      "DataVersion": 3955,
+      "size": [
+        13,
+        15,
+        13
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_medium_house",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_medium_house_3",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_medium_house_3.nbt",
+      "sourceNbtSha256": "152f124bb9bfc412744e0e5291d7b3443fa81ea2f9f07b77f4ce6a02a6781eb7",
+      "outputNbtSha256": "5c87bdedb3853c9cfb8cebe4a1743568a61855906b4ac5ef5edaa5ac3c0c473a",
+      "DataVersion": 3700,
+      "size": [
+        12,
+        10,
+        12
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_small_house",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_small_house_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_small_house_1.nbt",
+      "sourceNbtSha256": "a21a2bce48d2b89b9daf2400e1651aa65e16fd67ee8c2e2509c367508ee88d2c",
+      "outputNbtSha256": "be817bc4b0e3233dd231aae7e6cc132c85b7faea14a4a8785f50396b2563775d",
+      "DataVersion": 3700,
+      "size": [
+        9,
+        10,
+        9
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_mason_butcher",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_butcher_and_mason_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_butcher_and_mason_1.nbt",
+      "sourceNbtSha256": "0df429576c4bb4ef68b9e29c74386eb770a0e27143a07bcf31eeff3cd7dfb8e1",
+      "outputNbtSha256": "5aa987801caff7b3256734df068ea324ddef00770d2020961fa68d2f13e18d36",
+      "DataVersion": 3700,
+      "size": [
+        11,
+        10,
+        13
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_fletcher",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_fletcher_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_fletcher_1.nbt",
+      "sourceNbtSha256": "f7478fa7e69351c1eef7aa05809741d5b1586d18479fc2ee90f5abae74d8d519",
+      "outputNbtSha256": "8f64d56e531c9d201631eb2793a0778340cb564672e9e15f9530b6ce3e77ca9b",
+      "DataVersion": 3700,
+      "size": [
+        11,
+        11,
+        13
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_fisher",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_fisher_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_fisher_1.nbt",
+      "sourceNbtSha256": "38eef0f3119138f92f5b26eb0645b53c89c3b58219448234437858164a42ed8f",
+      "outputNbtSha256": "8b34b3f56d2835988551c0352c4f4045653f3635e9826bcdc9b75278af09bcdd",
+      "DataVersion": 3700,
+      "size": [
+        11,
+        9,
+        12
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:wheat_farm",
+      "sourceId": "kaisyn:village/sunflower_plains_farm/side/sunflower_plains_farm_wheat_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/sunflower_plains_farm/side/sunflower_plains_farm_wheat_1.nbt",
+      "sourceNbtSha256": "1770f26cff5b0121acc4e2c860426f58fea0f9f182f0717bd64d645c1a2f07f6",
+      "outputNbtSha256": "3d3c20f0781a0a5314146f83fa40ac164c5d1f289f0076ca9cbd0140ebbca447",
+      "DataVersion": 3700,
+      "size": [
+        18,
+        5,
+        16
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:barn",
+      "sourceId": "mvs:houses/barn",
+      "jar": "MoogsVoyagerStructures-1.21-5.0.14.jar",
+      "jarSha256": "28695cbb33b7af504c3b4b44dfec2449ea9c5fa4923c801d8558c965fb16bdc7",
+      "sourcePath": "data/mvs/structure/houses/barn.nbt",
+      "sourceNbtSha256": "ae43b60090521becb306b77d61e97842951cbb613ed711c147b381ee37c450aa",
+      "outputNbtSha256": "66cf05ac00599e7e1f8c8129558dd8188107350e28ad0a2513e78a8679e87e53",
+      "DataVersion": 3953,
+      "size": [
+        15,
+        10,
+        18
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:japanese_garden",
+      "sourceId": "kaisyn:village/flower_forest_japanese/houses/flower_forest_park_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/flower_forest_japanese/houses/flower_forest_park_1.nbt",
+      "sourceNbtSha256": "c9a73dcd399e7efa598b0dfcff0192dad3d1906b1a03a19544829aaa6b68e7e5",
+      "outputNbtSha256": "3495735ca6a89b05c5dcc64473f750d85331db6c5a3f9e9f98633057b0ebd252",
+      "DataVersion": 3700,
+      "size": [
+        10,
+        6,
+        12
+      ],
+      "outputEntityCount": 0
+    },
+    {
+      "id": "qiandeng_rebuild:swiss_lodge",
+      "sourceId": "kaisyn:village/meadow_swiss/houses/meadow_medium_house_1",
+      "jar": "t_and_t-fabric-neoforge-1.13.11.jar",
+      "jarSha256": "270fc0d1c99e54bc15f43d64bdaac60a90cb896efc357af624988e677136440f",
+      "sourcePath": "data/kaisyn/structure/village/meadow_swiss/houses/meadow_medium_house_1.nbt",
+      "sourceNbtSha256": "e1093593c72a2f92dcae3c963c4eb1aaddf18541eb8f48d7ba0228d028f1c0f9",
+      "outputNbtSha256": "7e4af7380fea2bf34474f5e6a57a744f56e72b5a75eed701d4f15a9b4d18f2cf",
+      "DataVersion": 3700,
+      "size": [
+        9,
+        10,
+        13
+      ],
+      "outputEntityCount": 0
+    }
+  ],
+  "sanitization": [
+    "No copied entities, generated loot, jigsaws, command blocks, spawners or vaults.",
+    "Keep original DataVersion; native rotations none or 180 only.",
+    "Derived third-party templates remain private runtime artifacts."
+  ],
+  "excluded": [
+    {
+      "kind": "newer pond/windmill structure",
+      "reason": "DataVersion 4440/4556 incompatible with current 1.21.1 world 3955"
+    },
+    {
+      "kind": "prefab mine digger",
+      "reason": "unreviewed deep excavation does not match actual mineshaft"
+    }
+  ]
+}

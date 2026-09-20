@@ -48,7 +48,7 @@ OPERATIONS_TEAM_FIELDS = {
 OPERATIONS_ROUND_ROLE_FIELDS = {'role': 'role', 'ok': 'bool', 'requestId': 100,
                                'summary': 1600, 'errorType': 60, **OPERATIONS_USAGE_FIELDS}
 MANIFEST = {
-    "mc": {"health_required": True, "purpose": "Imported save, NeoForge and independent chanting-item protocol"},
+    "mc": {"health_required": True, "purpose": "Imported save, NeoForge, native town protection and independent chanting-item protocol"},
     "world": {"health_required": True, "purpose": "Player commands, game adapters, optional goddess dialogue and heartbeat"},
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
     "npc": {"health_required": True, "purpose": "Skill-book, NPC event consumers and persistent maid perception inbox; legacy merchant availability audited separately"},
@@ -192,7 +192,8 @@ def probe_panel_smoke():
     survival_practice = probe_survival_practice()
     embodied_agent = probe_embodied_agent()
     pawapps = probe_pawapps()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, pawapps)),
+    town_protection = probe_town_protection()
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, pawapps, town_protection)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -203,7 +204,7 @@ def probe_panel_smoke():
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
             'world_team': world_team, 'maid_perception': maid_perception, 'survival_practice': survival_practice,
-            'embodied_agent': embodied_agent, 'pawapps': pawapps}
+            'embodied_agent': embodied_agent, 'pawapps': pawapps, 'town_protection': town_protection}
 
 
 def probe_engineering_cron_runtime():
@@ -514,6 +515,18 @@ def probe_world_interaction():
     except (OSError, ValueError, KeyError, TypeError, ImportError):
         return {'ok': False, 'error': 'Native interaction receipt evidence unavailable',
                 'modelRequests': 0, 'worldActions': 0, 'interactionSubmissions': 0}
+
+
+def probe_town_protection():
+    """Observe the installed server guard without attempting to damage the town."""
+    try:
+        spec = importlib.util.spec_from_file_location('qd_town_protection_health', PROJECT/'tools/town_protection_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(root=PROJECT)
+    except (OSError, ValueError, KeyError, TypeError, ImportError):
+        return {'ok': False, 'error': 'Native town protection evidence unavailable',
+                'modelRequests': 0, 'worldActions': 0}
 
 
 def probe_survivor():
@@ -1703,6 +1716,7 @@ def main_locked():
               "survival_practice": probe_survival_practice(),
               "embodied_agent": probe_embodied_agent(),
               "pawapps": probe_pawapps(),
+              "town_protection": probe_town_protection(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
               "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
               "world_team": probe_world_team()}
