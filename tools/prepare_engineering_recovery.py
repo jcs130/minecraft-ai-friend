@@ -459,7 +459,99 @@ def engineering_idle():
     return entries, blobs
 
 
-def prepare_upgrade(source_repo, source_ref, unknown_review=None):
+def resolution_entries(raw, original_head, target):
+    value = json.loads(raw)
+    require(isinstance(value, dict) and set(value) == {'schema', 'entries'}
+            and value['schema'] == 1 and isinstance(value['entries'], list), 'working_resolution_schema')
+    fields = {'path', 'originalHead', 'targetCommit', 'baseSha256', 'localSha256',
+              'incomingSha256', 'resolvedSha256', 'resolvedFile'}
+    paths = []
+    for row in value['entries']:
+        require(isinstance(row, dict) and set(row) == fields, 'working_resolution_schema')
+        for key in ('path', 'resolvedFile'):
+            name = row[key]
+            require(isinstance(name, str) and name and '\\' not in name and ':' not in name
+                    and all(part not in ('', '.', '..', '.git') for part in name.split('/')),
+                    'working_resolution_path')
+        require(row['originalHead'] == original_head and row['targetCommit'] == target,
+                'working_resolution_commit_changed')
+        for key in ('baseSha256', 'localSha256', 'incomingSha256', 'resolvedSha256'):
+            digest = row[key]
+            require((digest is None and key != 'resolvedSha256') or
+                    (isinstance(digest, str) and len(digest) == 64
+                     and all(ch in '0123456789abcdef' for ch in digest)), 'working_resolution_digest')
+        paths.append(row['path'])
+    require(paths and len(paths) == len(set(paths)), 'working_resolution_paths_changed')
+    return value['entries']
+
+
+def resolution_bytes(path, root):
+    path = safe(path, root)
+    require(path.is_file() and path.stat().st_nlink == 1 and path.stat().st_size <= 16*1024*1024,
+            'working_resolution_not_regular')
+    raw = path.read_bytes()
+    require(len(raw) <= 16*1024*1024, 'working_resolution_too_large')
+    return raw
+
+
+def resolve_working_conflicts(review_path, folder, original_head, target, base, local, incoming, conflicts, fixed):
+    review_path = Path(review_path).absolute()
+    raw = resolution_bytes(review_path, review_path.parent)
+    rows = resolution_entries(raw, original_head, target)
+    require(sorted(row['path'] for row in rows) == sorted(conflicts), 'working_resolution_paths_changed')
+    resolved = {}
+    for row in rows:
+        name = row['path']
+        require(name not in fixed, 'working_resolution_fixed_check')
+        for key, files in (('baseSha256', base), ('localSha256', local), ('incomingSha256', incoming)):
+            require(row[key] == (sha(files[name][1]) if name in files else None), 'working_resolution_input_changed')
+        data = resolution_bytes(review_path.parent/row['resolvedFile'], review_path.parent)
+        require(sha(data) == row['resolvedSha256'], 'working_resolution_bytes_changed')
+        mode = (incoming.get(name) or base.get(name) or local[name])[0]
+        resolved[name] = (mode, data)
+    # Persist only after the entire review has passed. The original checkout is untouched.
+    (folder/'working-resolutions.json').write_bytes(raw)
+    for name, (_, data) in resolved.items():
+        dest = safe(folder/'working-resolutions'/name, folder/'working-resolutions')
+        dest.parent.mkdir(parents=True, exist_ok=True); dest.write_bytes(data)
+    return resolved, sha(raw)
+
+
+def verify_working_resolutions(folder, report):
+    digest = report.get('workingResolutionsSha256')
+    if digest is None:
+        require(not report.get('workingResolutionPaths') and not (folder/'working-resolutions.json').exists()
+                and not (folder/'working-resolutions').exists(), 'working_resolution_paths_changed')
+        return {}
+    raw = resolution_bytes(folder/'working-resolutions.json', folder)
+    require(sha(raw) == digest, 'working_resolution_review_changed')
+    rows = resolution_entries(raw, report['originalHead'], report['targetCommit'])
+    require(sorted(row['path'] for row in rows) == report['workingResolutionPaths'], 'working_resolution_paths_changed')
+    base = committed_files(folder/'repo', report['originalHead'])
+    incoming = committed_files(folder/'repo', report['migrationHead'])
+    local = {row['path']: row.get('sha256') for row in report['source']['files']}
+    fixed = {name for cfg in (report['originalConfig'], report['proposedConfig'])
+             for plan in cfg['plans'] for name in plan['checks']}
+    copies = {'working-resolutions.json': raw}
+    for row in rows:
+        name = row['path']
+        require(name not in fixed, 'working_resolution_fixed_check')
+        require(row['baseSha256'] == (sha(base[name][1]) if name in base else None)
+                and row['localSha256'] == local.get(name)
+                and row['incomingSha256'] == (sha(incoming[name][1]) if name in incoming else None),
+                'working_resolution_input_changed')
+        data = resolution_bytes(folder/'working-resolutions'/name, folder/'working-resolutions')
+        require(sha(data) == row['resolvedSha256'], 'working_resolution_bytes_changed')
+        require(all(resolution_bytes(folder/root/name, folder/root) == data
+                    for root in ('repo', 'snapshot/source')), 'working_resolution_candidate_changed')
+        copies['working-resolutions/'+name] = data
+    root = folder/'working-resolutions'
+    require(sorted(path.relative_to(root).as_posix() for path in root.rglob('*') if path.is_file())
+            == report['workingResolutionPaths'], 'working_resolution_paths_changed')
+    return copies
+
+
+def prepare_upgrade(source_repo, source_ref, unknown_review=None, working_resolutions=None):
     source_repo = safe(Path(source_repo), Path(source_repo).resolve())
     require(Path(git(source_repo, 'rev-parse', '--show-toplevel').decode().strip()).resolve() == source_repo,
             'upgrade_source_root_required')
@@ -494,9 +586,20 @@ def prepare_upgrade(source_repo, source_ref, unknown_review=None):
     committed, conflicts = merge_files(common, old_head, incoming, folder)
     phase = 'committed'
     combined = {}
+    resolution_digest = None
+    resolution_paths = []
+    require(not (conflicts and working_resolutions), 'working_resolution_requires_dirty_conflicts')
     if not conflicts:
         dirty = {name:(old_head.get(name, ('100644',))[0],data) for name,data in working.items()}
         combined, conflicts = merge_files(old_head, dirty, committed, folder); phase = 'working_tree'
+        if working_resolutions:
+            require(conflicts, 'working_resolution_requires_dirty_conflicts')
+            proposed = upgrade_config(cfg, stage, new_base)
+            fixed = {name for config in (cfg, proposed) for plan in config['plans'] for name in plan['checks']}
+            resolved, resolution_digest = resolve_working_conflicts(working_resolutions, folder,
+                before['head'], new_base, old_head, dirty, committed, conflicts, fixed)
+            resolution_paths = sorted(resolved)
+            combined.update(resolved); conflicts = []
     if conflicts:
         report = {'schema':1,'mode':'upgrade','prepared':False,'applied':False,'conflicts':conflicts,
                   'conflictPhase':phase,'source':before,'targetCommit':new_base,'productionMutations':0}
@@ -528,7 +631,10 @@ def prepare_upgrade(source_repo, source_ref, unknown_review=None):
         'snapshotManifest':manifest,'snapshotSha256':sha(canonical(manifest)), 'changedPaths':changed,
         'image':IMAGE,'historyRewritten':False,'approvedChecksChanged':True,'productionMutations':0,
         'fixedChecksRebasedFromTrustedCommit':True,'engineeringRecords':entries,'unknownReviewSha256':sha(review_raw)}
+    if resolution_digest:
+        report.update(workingResolutionsSha256=resolution_digest, workingResolutionPaths=resolution_paths)
     verify_snapshot_contract(report)
+    verify_working_resolutions(folder, report)
     save(folder/'proposal.json',report)
     return {'ok':True,'folder':str(folder),'targetCommit':new_base,'changedPaths':changed,
             'reviewedUnknownCommits':len(review['entries']),'productionMutations':0}
@@ -563,6 +669,7 @@ def load(folder):
     require(sha(canonical(report['snapshotManifest'])) == report['snapshotSha256'], 'snapshot_manifest_changed')
     for entry in report['snapshotManifest']:
         require(sha(safe(folder / 'snapshot/source' / entry['path'], folder / 'snapshot/source').read_bytes()) == entry['sha256'], 'snapshot_changed')
+    if upgrade: verify_working_resolutions(folder, report)
     return folder, report
 
 
@@ -701,6 +808,7 @@ def quiesce(folder):
 
 def apply(folder):
     folder, proposal = load(folder)
+    resolution_copies = verify_working_resolutions(folder, proposal) if proposal.get('mode') == 'upgrade' else {}
     receipt = json.loads((folder/'test-result.json').read_text('utf8'))
     acceptance = completed_test_receipt(proposal, receipt, (folder/'test-output.txt').read_bytes())
     upgrade = proposal.get('mode') == 'upgrade'
@@ -731,6 +839,8 @@ def apply(folder):
         for name in ('test-result.json', 'test-output.txt'):
             (backup/name).write_bytes((folder/name).read_bytes())
         (backup/'unknown-review.json').write_bytes(review_raw)
+        for name, raw in resolution_copies.items():
+            dest = safe(backup/name); dest.parent.mkdir(parents=True, exist_ok=True); dest.write_bytes(raw)
         for name, raw in record_bytes.items():
             dest = safe(backup/'records'/name); dest.parent.mkdir(parents=True,exist_ok=True); dest.write_bytes(raw)
         require(capture(original)[0] == proposal['source'], 'candidate_changed_at_apply')
@@ -739,6 +849,7 @@ def apply(folder):
         if upgrade: native_quiescent(folder)
         else: native_idle()
         require(engineering_idle()[0] == records, 'engineering_records_changed')
+        if upgrade: verify_working_resolutions(folder, proposal)
         original.rename(safe(backup/'original-repo'))
         audit['phase']='original_archived'; save(backup/'apply.json',audit)
         safe(folder/'repo').rename(original)
@@ -762,11 +873,14 @@ if __name__ == '__main__':
     parser.add_argument('--upgrade-source',type=Path)
     parser.add_argument('--upgrade-ref')
     parser.add_argument('--unknown-review',type=Path)
+    parser.add_argument('--working-resolutions',type=Path)
     args=parser.parse_args()
     if (args.upgrade_source or args.upgrade_ref) and not (args.prepare and args.upgrade_source and args.upgrade_ref):
         parser.error('--upgrade-source and --upgrade-ref require --prepare together')
     if args.unknown_review and not args.prepare: parser.error('--unknown-review requires --prepare')
-    result=(prepare_upgrade(args.upgrade_source,args.upgrade_ref,args.unknown_review) if args.upgrade_source
+    if args.working_resolutions and not (args.prepare and args.upgrade_source):
+        parser.error('--working-resolutions requires --prepare --upgrade-source --upgrade-ref')
+    result=(prepare_upgrade(args.upgrade_source,args.upgrade_ref,args.unknown_review,args.working_resolutions) if args.upgrade_source
             else prepare(args.unknown_review) if args.prepare else test(args.test) if args.test
             else quiesce(args.quiesce) if args.quiesce else apply(args.apply))
     print(json.dumps(result,ensure_ascii=True))

@@ -179,6 +179,113 @@ class EngineeringUpgradeTests(unittest.TestCase):
         recovery.save(self.root/recovery.CONFIG,altered)
         with self.assertRaisesRegex(ValueError,'approved_check_not_committed_base'): self.prepare()
 
+    def working_review(self):
+        upstream = self.lines.replace('line 15','upstream changed').replace('line 29','new baseline')
+        self.put(self.source,self.code,upstream)
+        recovery.git(self.source,'add','.'); recovery.git(self.source,'commit','-m','upstream dirty conflict')
+        self.target = recovery.git(self.source,'rev-parse','HEAD').decode().strip()
+        base = recovery.git(self.original,'show','HEAD:'+self.code)
+        local = (self.original/self.code).read_bytes()
+        incoming = upstream.replace('line 00','local committed').encode()
+        resolved = incoming.replace(b'upstream changed',b'reviewed local and upstream')
+        review = self.root/'reviewed/review.json'
+        row = {'path':self.code,'originalHead':self.old_head,'targetCommit':self.target,
+            'baseSha256':recovery.sha(base),'localSha256':recovery.sha(local),
+            'incomingSha256':recovery.sha(incoming),'resolvedSha256':recovery.sha(resolved),
+            'resolvedFile':'resolved.py'}
+        recovery.save(review,{'schema':1,'entries':[row]})
+        self.put(review.parent,'resolved.py',resolved)
+        return review,row,resolved,(base,local,incoming)
+
+    def test_working_resolution_stays_dirty_is_test_gated_and_is_backed_up_with_old_bytes(self):
+        review,row,resolved,_ = self.working_review()
+        before = recovery.capture(self.original)[0]; journal = self.journal.read_bytes()
+        result = recovery.prepare_upgrade(self.source,self.target,self.review,review)
+        self.assertTrue(result['ok'],result); folder = Path(result['folder'])
+        self.assertEqual(recovery.capture(self.original)[0],before)
+        self.assertEqual((folder/'repo'/self.code).read_bytes(),resolved)
+        self.assertIn(' M '+self.code,recovery.git(folder/'repo','status','--porcelain').decode())
+        self.assertNotIn(b'reviewed local',recovery.git(folder/'repo','show','HEAD:'+self.code))
+        with patch.object(recovery,'run_test_plan',return_value=(b'failed fixture',1)): recovery.test(folder)
+        with self.assertRaisesRegex(ValueError,'upgrade_fixed_checks_not_passed'): recovery.apply(folder)
+        self.simulated_pass(folder); self.runner()
+        with patch.object(recovery,'native_quiescent',return_value={'status':'quiesced'}):
+            applied = recovery.apply(folder)
+        backup = Path(applied['backup'])
+        self.assertEqual(recovery.capture(backup/'original-repo')[0],before)
+        self.assertEqual((backup/'working-resolutions.json').read_bytes(),review.read_bytes())
+        self.assertEqual((backup/'working-resolutions'/self.code).read_bytes(),resolved)
+        self.assertEqual((backup/'original-repo'/self.code).read_bytes(),
+                         self.lines.replace('line 00','local committed').replace('line 15','dirty local').encode())
+        self.assertEqual(self.journal.read_bytes(),journal)
+        self.assertEqual((self.original/self.code).read_bytes(),resolved)
+
+    def test_working_resolution_requires_exact_conflicts_commits_inputs_paths_and_fixed_checks(self):
+        review,row,resolved,inputs = self.working_review()
+        folder = self.root/'review-stage'; folder.mkdir()
+        maps = [{self.code:('100644',data)} for data in inputs]
+        good = {'schema':1,'entries':[row]}
+        def attempt(value, fixed=()):
+            recovery.save(review,value)
+            return recovery.resolve_working_conflicts(review,folder,self.old_head,self.target,
+                *maps,[self.code],fixed)
+        invalid = [({'schema':1,'entries':[]},'paths_changed'),
+            ({'schema':1,'entries':[row,row]},'paths_changed'),
+            ({'schema':1,'entries':[row,row|{'path':'docs/extra.md'}]},'paths_changed')]
+        for key,code in (('originalHead','commit_changed'),('targetCommit','commit_changed'),
+                         ('baseSha256','input_changed'),('localSha256','input_changed'),
+                         ('incomingSha256','input_changed'),('resolvedSha256','bytes_changed')):
+            invalid.append(({'schema':1,'entries':[row|{key:'0'*(40 if key.endswith(('Head','Commit')) else 64)}]},code))
+        for key in ('path','resolvedFile'):
+            invalid.append(({'schema':1,'entries':[row|{key:'../outside.py'}]},'resolution_path'))
+        for value,reason in invalid:
+            with self.subTest(reason=reason,value=value):
+                with self.assertRaisesRegex(ValueError,reason): attempt(value)
+        with self.assertRaisesRegex(ValueError,'fixed_check'): attempt(good,[self.code])
+        self.put(review.parent,'resolved.py',resolved+b'changed')
+        with self.assertRaisesRegex(ValueError,'bytes_changed'): attempt(good)
+        self.assertFalse((folder/'working-resolutions.json').exists())
+
+    def test_working_resolution_load_rejects_review_copy_extra_and_input_tampering(self):
+        review,row,resolved,_ = self.working_review()
+        result = recovery.prepare_upgrade(self.source,self.target,self.review,review)
+        self.assertTrue(result['ok']); folder = Path(result['folder'])
+        proposal = folder/'proposal.json'; report_raw = proposal.read_bytes()
+        copy = folder/'working-resolutions'/self.code
+        for path in (copy,folder/'working-resolutions.json'):
+            raw = path.read_bytes(); path.write_bytes(raw+b'changed')
+            with self.assertRaises(ValueError): recovery.load(folder)
+            path.write_bytes(raw)
+        self.put(folder,'working-resolutions/extra.py','extra')
+        with self.assertRaisesRegex(ValueError,'paths_changed'): recovery.load(folder)
+        (folder/'working-resolutions/extra.py').unlink()
+        stored = folder/'working-resolutions.json'; review_raw = stored.read_bytes()
+        altered = json.loads(review_raw); altered['entries'][0]['localSha256'] = '0'*64
+        recovery.save(stored,altered)
+        report = json.loads(report_raw); report['workingResolutionsSha256'] = recovery.sha(stored.read_bytes())
+        recovery.save(proposal,report)
+        with self.assertRaisesRegex(ValueError,'input_changed'): recovery.load(folder)
+        stored.write_bytes(review_raw); proposal.write_bytes(report_raw)
+        copy.unlink()
+        with self.assertRaisesRegex(ValueError,'not_regular'): recovery.load(folder)
+        self.put(folder,'working-resolutions/'+self.code,resolved)
+        recovery.load(folder)
+
+    def test_working_resolution_cannot_override_committed_conflicts_or_nonconflicting_work(self):
+        review,row,_,_ = self.working_review()
+        self.put(self.source,self.code,self.lines.replace('line 00','conflicting committed history'))
+        recovery.git(self.source,'add','.'); recovery.git(self.source,'commit','-m','real history conflict')
+        target = recovery.git(self.source,'rev-parse','HEAD').decode().strip()
+        before = recovery.capture(self.original)[0]
+        with self.assertRaisesRegex(ValueError,'requires_dirty_conflicts'):
+            recovery.prepare_upgrade(self.source,target,self.review,review)
+        self.put(self.source,self.code,self.lines.replace('line 29','no dirty conflict'))
+        recovery.git(self.source,'add','.'); recovery.git(self.source,'commit','-m','no dirty conflict')
+        target = recovery.git(self.source,'rev-parse','HEAD').decode().strip()
+        with self.assertRaisesRegex(ValueError,'requires_dirty_conflicts'):
+            recovery.prepare_upgrade(self.source,target,self.review,review)
+        self.assertEqual(recovery.capture(self.original)[0],before)
+
     def test_prepared_code_snapshot_plan_and_review_tampering_are_rejected(self):
         folder = self.prepare()
         for path in (folder/'repo'/self.code,folder/'snapshot/source'/self.code,folder/'unknown-review.json'):
