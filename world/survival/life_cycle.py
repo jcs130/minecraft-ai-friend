@@ -183,11 +183,14 @@ def rotate_session(state_dir, settings, death, now=None):
     path = state_dir / 'life-session.json'
     session = _read(path, {}) or {}
     previous = session.get('primarySessionId')
+    identity = previous if settings.get('brainProtocol') == 1 and previous else 'life-' + uuid.uuid4().hex
     session.update(schema=1, agentId='qd-survivor', bodyUuid=settings.get('bodyUuid'),
                    userId='survival-controller', channel='console',
-                   primarySessionId='life-' + uuid.uuid4().hex, chatId=None,
+                   primarySessionId=identity, chatId=None,
                    previousSessionId=previous, lifeStartedAt=int(now * 1000),
                    freshFromDeath=death.get('id'))
+    if settings.get('brainProtocol') == 1:
+        session['bodyEpisode'] = death['id']
     path.write_text(json.dumps(session, ensure_ascii=False) + '\n', encoding='utf-8')
     return session
 

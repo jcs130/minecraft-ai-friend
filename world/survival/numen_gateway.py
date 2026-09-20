@@ -408,6 +408,10 @@ class NumenGateway:
             raise GatewayError('body_uuid_mismatch')
         return body, actual
 
+    def sense(self, sensor='catalog', arguments=None):
+        from sensors import sense
+        return sense(self, sensor, arguments)
+
     def _invoke(self, tool, args=None):
         if tool in GUILD_ACTIONS:
             from guild import Guild
@@ -546,7 +550,7 @@ class NumenGateway:
     def observe(self, radius=8):
         try:
             self._integer(radius, 4, 12)
-            body, _ = self._check_binding()
+            body, actor_uuid = self._check_binding()
             terrain = self._native_scene(body, radius)
             if terrain.startswith('no companion:'):
                 raise GatewayError('body_offline')
@@ -559,7 +563,7 @@ class NumenGateway:
             conditions.update({k: world[k] for k in ('game_time',) if self._number(world.get(k))})
             conditions.update({k: world[k] for k in ('is_bright_outside', 'is_dark_outside')
                                if type(world.get(k)) is bool})
-            return {'ok': True, 'observedAt': self._now(), 'terrain': terrain[:6000],
+            return {'ok': True, 'observedAt': self._now(), 'bodyUuid': actor_uuid, 'terrain': terrain[:6000],
                     'entities': self._observed_entities(entities.get('entities'), 20),
                     'hostiles': self._observed_entities(hostiles.get('entities'), 8),
                     'entitiesTruncated': entities.get('truncated') is True,

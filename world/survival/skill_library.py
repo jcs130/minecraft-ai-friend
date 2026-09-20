@@ -26,7 +26,7 @@ MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
 from numen_gateway import TOOLS as ACTION_TOOLS
-OBSERVATION_TOOLS = ('inspect_block', 'inspect_container')
+OBSERVATION_TOOLS = ('inspect_block', 'inspect_container', 'sense')
 MIN_WAIT_SECONDS = 15
 MAX_WAIT_SECONDS = 300
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
@@ -73,7 +73,9 @@ def _engine():
 
 
 def _kernel_version():
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    # The declared sensor validation is part of the executable proposal contract.
+    return hashlib.sha256(Path(__file__).read_bytes() + b'\0'
+                          + Path(__file__).with_name('world_adapter.py').read_bytes()).hexdigest()
 
 
 def _wait_seconds(value):
@@ -85,8 +87,18 @@ def _wait_seconds(value):
 def _observation(value):
     """Validate only a proposal. Physical reach and ownership remain gateway work."""
     if (not isinstance(value, dict) or set(value) != {'tool', 'args'}
-            or value['tool'] not in OBSERVATION_TOOLS or not isinstance(value['args'], dict)
-            or set(value['args']) != {'x', 'y', 'z'}):
+            or value['tool'] not in OBSERVATION_TOOLS or not isinstance(value['args'], dict)):
+        raise SkillError('invalid_skill_observation')
+    if value['tool'] == 'sense':
+        from world_adapter import validate_sensor
+        try:
+            if set(value['args']) != {'sensor', 'arguments'}:
+                raise ValueError('invalid_sensor_arguments')
+            validate_sensor(value['args']['sensor'], value['args']['arguments'])
+        except (ValueError, TypeError):
+            raise SkillError('invalid_skill_observation')
+        return value
+    if set(value['args']) != {'x', 'y', 'z'}:
         raise SkillError('invalid_skill_observation')
     for key, low, high in (('x', -29999984, 29999984), ('y', -64, 319), ('z', -29999984, 29999984)):
         coordinate = value['args'][key]

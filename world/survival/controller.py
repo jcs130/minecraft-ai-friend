@@ -356,6 +356,11 @@ class Controller:
             'schema': 1, 'status': 'starting', 'decisions': [], 'active': None,
             'episodes': [], 'nextDecisionAt': 0, 'failures': 0}
         self.settings = read_json(self.root / 'settings.json')
+        if self.settings.get('brainProtocol') is not None:
+            from embodiment import VERSION
+            if (self.settings['brainProtocol'] != VERSION or self.settings.get('contextProtocol') != 2
+                    or not isinstance(self.settings.get('memoryEpoch'), str) or not self.settings['memoryEpoch']):
+                raise ValueError('embodied_brain_configuration_invalid')
         from life_session import load_session
         self.session = load_session(self.root, self.settings)
         from practice import PracticeStore
@@ -422,7 +427,7 @@ class Controller:
     def drain_at_boundary(self, body):
         """Stop scheduling after the current native turn and physical action settle."""
         initial = read_json(self.root / 'control.json')
-        if (self.data.get('active') or initial.get('enabled') is not True
+        if (self.data.get('active') or self.data.get('dialogueActive') or initial.get('enabled') is not True
                 or (initial.get('drain') or {}).get('status') != 'requested'):
             return False
         # A model can finish after starting an asynchronous native action. The
@@ -435,7 +440,7 @@ class Controller:
                 return False
             # Unknown retains its existing stronger stop path. No native stop,
             # action dispatch, or receipt inference belongs to this boundary.
-            if (self.data.get('active') or body.get('ok') is not True or body.get('task', {}).get('busy') is not False
+            if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True or body.get('task', {}).get('busy') is not False
                     or self.data.get('actionExecution', {}).get('inFlight')
                     or (self.root / 'unknown.json').exists() or (self.root / 'inflight-action.json').exists()):
                 return False
@@ -503,7 +508,10 @@ class Controller:
 
     def memory(self):
         path = self.root / 'memory.json'
-        return read_json(path) if path.exists() else {}
+        value = read_json(path) if path.exists() else {}
+        if self.settings.get('brainProtocol') == 1 and value.get('memoryEpoch') != self.settings['memoryEpoch']:
+            return {}
+        return value
 
     def practice_context(self):
         if self.practice is None:
@@ -723,6 +731,9 @@ class Controller:
 
     def life_context(self, body, control, turn_id, message=None, replies=None):
         """Wake information, not a fresh reconstruction of the whole world."""
+        if self.settings.get('brainProtocol') == 1:
+            from embodiment import wake
+            return wake(self, body, control, turn_id, message, replies)
         from perception import prioritize_events
         events = prioritize_events(self.awareness.get('events', []))[:6]
         bounded_events, size = [], 0
@@ -971,6 +982,12 @@ class Controller:
         job_path = self.root / 'skill-job.json'
         job = read_json(job_path) if job_path.exists() else {}
         value['executionSystems'] = systems_status(self.data, job, now)
+        if self.settings.get('brainProtocol') == 1:
+            value['embodiment'] = {'version': 1, 'memoryEpoch': self.settings['memoryEpoch'],
+                'worldModel': 'partial_observation', 'sharedSensorSurface': True,
+                'legacyDraftQuotaEnabled': False, 'requiresModelPerProgramStep': False,
+                'dialogueActive': bool(self.data.get('dialogueActive')),
+                'dialogueStatus': self.data.get('dialogueStatus', 'idle'), 'dialogueBodyAccess': 'read_only'}
         write_json(self.public, value)
         # 动作连贯性指标：节流计算、写共享位置给元层看板读。
         # 与看板刷新同样的纪律 —— 指标绝不能让被度量的东西坏掉：任何异常都吞掉。
@@ -991,7 +1008,9 @@ class Controller:
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
             'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
-            'contextProtocol': self.settings.get('contextProtocol', 1)})
+            'contextProtocol': self.settings.get('contextProtocol', 1),
+            'brainProtocol': self.settings.get('brainProtocol'),
+            'memoryEpoch': self.settings.get('memoryEpoch')})
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
@@ -1415,6 +1434,8 @@ class Controller:
             return False
 
     def submit_model(self, body, control):
+        if self.data.get('dialogueActive'):
+            return
         if self.drain_at_boundary(body):
             return
         now = self.clock()
@@ -1501,8 +1522,11 @@ class Controller:
         # world task comes first and learning can be deferred - which is exactly why
         # fifteen roles have produced zero drafts. This asks every review to close the loop
         # one way or the other, so declining is a decision on the record instead of silence.
-        provider = self._evolution_quota()
-        context['evolutionQuota'] = provider
+        # The embodied brain learns from evidence at review boundaries. A count
+        # of shifts without drafts is not evidence that a new skill is needed.
+        provider = self._evolution_quota() if self.settings.get('brainProtocol') != 1 else {}
+        if provider:
+            context['evolutionQuota'] = provider
         # Fifty-seven cycles of "review, and while you are at it consolidate something"
         # produced zero drafts. The ask was not too quiet, it was in the wrong place: as
         # one more line inside a survival turn, learning always loses to the next real
@@ -1638,6 +1662,9 @@ class Controller:
         """
         from body_reconnect import BODY_PAUSE_REASONS
         try:
+            if self.data.get('active') or self.data.get('dialogueActive'):
+                return
+            control = read_json(self.root / 'control.json')
             from life_cycle import check, take_rotation
             name = self.settings.get('bodyName')
             if not isinstance(name, str) or not hasattr(self.gateway, '_native_roster'):
@@ -1893,6 +1920,9 @@ class Controller:
             except GatewayError as exc:
                 self.data['actionExecution'] = {'ok': False, 'inFlight': True, 'code': str(exc)}
         self.perceive(body)
+        if self.settings.get('brainProtocol') == 1:
+            from dialogue import tick as dialogue_tick
+            dialogue_tick(self, body, control)
         self._check_life_cycle(body)
         if body.get('ok'):
             from body_reconnect import BodyReconnect
@@ -2024,13 +2054,16 @@ class Controller:
                 self.finish_action_observation(body)
                 # Pattern detection (case-9f5b2099 熟能生巧): check for repeating
                 # action sequences and crystallize them into skill hints.
-                self._check_patterns()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_patterns()
                 # Environment penalties (2026-09-17): the world's own verdicts —
                 # a repeated refusal, lost health, a target that never changes —
                 # are triggers in their own right, not just background.
-                self._check_environment_penalties()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_environment_penalties()
                 # P1 停滞重定向：目标本身是否还在推进（与上一条同源、不同问题）
-                self._check_stagnation()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_stagnation()
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):
@@ -2050,7 +2083,7 @@ class Controller:
                             # something is genuinely continuing server-side;
                             # otherwise think rather than dead-idle until
                             # time_drift re-escalates minutes later.
-                            routing = self._adaptive_route(body)
+                            routing = self._adaptive_route(body) if self.settings.get('brainProtocol') != 1 else None
                             continues = (routing or {}).get('suggested_action') in (
                                 'continue_goto', 'continue_farming_skill')
                             if routing and routing.get('level') == 0 and continues:

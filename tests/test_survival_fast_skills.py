@@ -154,7 +154,7 @@ class FastSkillTests(unittest.TestCase):
         self.library.promote('check_furnace', version)
         self.assertEqual(self.library.run('check_furnace', {'ready': False})['waitSeconds'], 60)
         self.assertEqual(self.library.run('check_furnace', {'ready': True})['observe'], OBSERVE)
-        self.assertEqual(self.library.catalog()['observationTools'], ['inspect_block', 'inspect_container'])
+        self.assertEqual(self.library.catalog()['observationTools'], ['inspect_block', 'inspect_container', 'sense'])
 
     def test_wrong_expected_wait_or_point_fails_publication(self):
         for field, wrong in (('expectedWaitSeconds', 30),

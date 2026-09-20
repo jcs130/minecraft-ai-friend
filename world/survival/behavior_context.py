@@ -27,6 +27,7 @@ PURPOSE = {
     'dialogue': '回应已经听见的伙伴来信，直接给最终答复，桥负责投递；不要party_send重复回复。',
 }
 REFERENCES = {
+    'embodiment': 'skills/qd-survivor-practice/references/embodiment.md',
     'planning': 'skills/qd-survivor-practice/references/long-term-planning.md',
     'practice': 'skills/qd-survivor-practice/references/program-practice.md',
     'vision': 'skills/qd-survivor-practice/references/vision.md',
@@ -53,11 +54,16 @@ def _load(root, life):
 def prepare(root, life, context, memory, *, learning=False):
     """Persist a selected session before submission; baseline advances only on ack."""
     purpose = ('dialogue' if context.get('partyMessage') is not None else
-               'review' if context.get('review') else 'learning' if learning else 'action')
+               'review' if context.get('review') or context.get('wakeReason') == 'autonomous_review'
+               else 'learning' if learning else 'action')
+    brain = context.get('brain') or {}
+    embodied = brain.get('version') == 1
     # nextFocus and observations can vary within one behavior. Only the model's
     # goal and the operator mission define a new action task, never coordinates.
     goal = memory.get('goal') or context.get('mission')
     task = digest([context.get('mission'), goal]) if purpose == 'action' else purpose
+    if embodied:
+        task = digest([task, brain.get('memoryEpoch'), life.get('bodyEpisode')])
     with action_lock(root, blocking=True):
         state = _load(root, life)
         lane = state['lanes'].get(purpose, {})
@@ -77,6 +83,8 @@ def prepare(root, life, context, memory, *, learning=False):
     skip = {'turn_id', 'sessionId', 'currentTime', 'wakeReason', 'body', 'instruction',
             'planning', 'visualPerception', 'learningUpdate', 'capabilityUpdate',
             'continuation', 'perception', 'recentActionReceipts', 'executionEvents', 'partyReplies'}
+    if embodied:
+        skip.add('observations')
     current = {k: copy.deepcopy(v) for k, v in context.items() if k not in skip}
     adventure = current.get('adventure')
     if isinstance(adventure, dict):
@@ -99,12 +107,22 @@ def prepare(root, life, context, memory, *, learning=False):
                 events[key].append(row)
                 seen.add(identity)
     envelope = {k: context.get(k) for k in ('turn_id', 'currentTime', 'wakeReason', 'body')}
+    if embodied:
+        envelope.pop('body')
+        envelope['observations'] = copy.deepcopy(context['observations'])
+        envelope['brainProtocol'] = 1
     envelope.update(sessionId=lane['sessionId'], contextProtocol=VERSION, purpose=purpose,
                     goal=goal, baseTurn=lane.get('ackTurn'), updates=updates,
                     removed=sorted(set(baseline) - set(current)),
                     events={k: v for k, v in events.items() if v})
     if fresh:
-        envelope.update(instruction=RULES + PURPOSE[purpose], references=REFERENCES,
+        rules = RULES if not embodied else (
+            '目标和方法由你决定，当前身体授权只使用本条turn_id。updates替换同名顶层状态，removed删除状态；'
+            'events仅为新事件，observations说明当前各感知源的时间和有效性，未变化字段不重复发送。'
+            'self与scene是局部实测，intent是意图，未知不是不存在。行动后查真实回执；受理、idle、程序done不证明目标。'
+            '高频执行交给本地技能；模型处理目标、新条件、交流与学习。只传结论、证据和下一步，不复制旧思考。'
+            '旧记忆已归档，不能把历史结论当本代事实。结束用remember(finish_turn=true,summary=简短结论)。')
+        envelope.update(instruction=rules + PURPOSE[purpose], references=REFERENCES,
                         handoff={k: memory[k][:700] for k in ('goal', 'nextFocus', 'lesson')
                                  if isinstance(memory.get(k), str)})
     # Store only hashes, never another copy of the full prompt or reasoning.

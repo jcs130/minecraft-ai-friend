@@ -11,12 +11,13 @@ import argparse,json,sys
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'world/survival'))
+sys.path.insert(0,str(ROOT/'world/sidecar'))
 from mcp_server import TOOL_NAMES
 
 
 def prepare_policy(policy, names=TOOL_NAMES, added_tool='view_scene'):
     expected=set(names)
-    if added_tool not in ('view_scene', 'interact_at') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
+    if added_tool not in ('view_scene', 'interact_at', 'sense') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
     rules=policy.get('tool_defaults')
     if (policy.get('default_effect')!='deny' or policy.get('client_overrides')!=[]
         or policy.get('tool_overrides')!=[] or policy.get('unmanaged_rules_count')!=0
@@ -34,10 +35,27 @@ def prepare_policy(policy, names=TOOL_NAMES, added_tool='view_scene'):
     return after
 
 
+def apply_tool_scope(api, role, previous_tools, policy, names=TOOL_NAMES):
+    # The console client DTO cannot round-trip an env-backed Driver credential.
+    # Updating that DTO silently drops Authorization on the next cold start.
+    # The native whitelist route edits only card.config.tools and refreshes the
+    # active handler; policy has its own native persistence/refresh route.
+    from mcp_configuration import wait_active
+    key = 'numen_survival'
+    wait_active(api, role, key, previous_tools, exposed_tools=names)
+    route = '/mcp/policy/' + key
+    if api('PUT', route, role, policy) != policy or api('GET', route, role) != policy:
+        raise ValueError('native_mcp_policy_not_applied')
+    api('PUT', '/mcp/tools/' + key, role, {'tools': list(names)})
+    wait_active(api, role, key, names, previous_tools=previous_tools)
+    if api('GET', route, role) != policy:
+        raise ValueError('native_mcp_policy_not_applied')
+
+
 def main():
     from configure_survivor_party import api
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--apply',action='store_true')
-    parser.add_argument('--tool', choices=('view_scene','interact_at'), default='view_scene')
+    parser.add_argument('--tool', choices=('view_scene','interact_at','sense'), default='view_scene')
     parser.add_argument('--project-root', type=Path, default=ROOT)
     args=parser.parse_args();role='qd-survivor';route='/mcp/policy/numen_survival'
     before=api('GET',route,role);after=prepare_policy(before, added_tool=args.tool)
@@ -65,9 +83,7 @@ def main():
     assert api('GET',route,role)==before and api('GET','/mcp/numen_survival',role)==connection
     idle()
     (out/'intent.json').write_text(json.dumps(after,ensure_ascii=False,indent=2),'utf8')
-    from mcp_configuration import configure_client
-    configure_client(api,role,'numen_survival',{'enabled':True,'tools':list(TOOL_NAMES)},after,
-                     exists=True,previous_tools=connection['tools'])
+    apply_tool_scope(api,role,connection['tools'],after)
     actual=api('GET',route,role)
     (out/'after.json').write_text(json.dumps(actual,ensure_ascii=False,indent=2),'utf8')
     current_connection=api('GET','/mcp/numen_survival',role)

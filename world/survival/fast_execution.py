@@ -10,7 +10,8 @@ OBSERVATION_LIMIT = 16384
 def program_observation(gateway: WorldAdapter, request, body, now):
     """Execute one already-validated read with the same checks as the MCP tool."""
     from numen_gateway import GatewayError
-    methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container}
+    methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container,
+               'sense': getattr(gateway, 'sense', None)}
     method = methods.get(request.get('tool'))
     if method is None:
         raise ValueError('unsupported_program_observation')

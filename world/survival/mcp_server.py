@@ -16,7 +16,7 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
-              'speak', 'speech_status', 'stop_speaking', 'interact_at')
+              'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense')
 
 
 class SkillTools:
@@ -199,8 +199,13 @@ class SkillTools:
             if type(review_after_seconds) is not int or not 180 <= review_after_seconds <= 3600:
                 raise GatewayError('invalid_review_interval')
             values.update(goalState=goal_state, reviewAfterSeconds=review_after_seconds)
+            settings = read_json(self.state / 'settings.json') if (self.state / 'settings.json').exists() else {}
+            if settings.get('brainProtocol') == 1:
+                values['memoryEpoch'] = settings['memoryEpoch']
             path = self.state / 'memory.json'
             previous = read_json(path) if path.exists() else {}
+            if settings.get('brainProtocol') == 1 and previous.get('memoryEpoch') != settings['memoryEpoch']:
+                previous = {}
             history = previous.get('history', [])
             if not isinstance(history, list):
                 raise GatewayError('invalid_memory_history')
@@ -332,6 +337,11 @@ def make_server(gateway=None, skill_tools=None, http=False):
     def look(radius: int = 8) -> dict:
         """观察附近地形、村民/玩家/生物、敌怪和时间天气，半径 4–12 格，不移动身体。"""
         return gateway.observe(radius)
+
+    @server.tool()
+    def sense(sensor: str = 'catalog', arguments: dict | None = None) -> dict:
+        """按需只读感知；catalog发现接口，self/scene/block/container/storage/menu查询身体、局部世界或模组机器。原始菜单数值含义依菜单而定，unknown不表示空；程序也能调用，不消耗动作。"""
+        return gateway.sense(sensor, arguments)
 
     @server.tool()
     def view_scene(radius: int = 8) -> CallToolResult:

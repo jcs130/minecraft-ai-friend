@@ -29,6 +29,9 @@ def check():
     assert protocol in (1, 2), 'unknown_context_protocol'
     if protocol == 2:
         assert heartbeat.get('contextProtocol') == 2, 'context_protocol_not_loaded'
+    if settings.get('brainProtocol') == 1:
+        assert protocol == 2 and heartbeat.get('brainProtocol') == 1, 'brain_protocol_not_loaded'
+        assert settings.get('memoryEpoch') and heartbeat.get('memoryEpoch') == settings['memoryEpoch'], 'memory_epoch_mismatch'
     base = os.environ.get('QWENPAW_API_URL', 'http://qwenpaw:8088/api' if external
                           else 'http://127.0.0.1:8088/api').rstrip('/')
     for endpoint in ('healthz', 'auth/status'):
