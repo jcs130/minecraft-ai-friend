@@ -57,6 +57,22 @@
 
 15:49:25–15:49:29，在角色空闲且当前 revision 未变时，复用 `LearningTools.lock`、官方 `SkillService.disable_skill`、原索引保存和官方 reload，将这条规则停用并标记待复核。补入一次真实 `unverified` 反馈，记录源码中的 8 格规则和 44.828 格现场观测；没有伪造两次失败来凑自动停用阈值，也没有回滚到同样错误的旧版本。manifest 与当前索引均为 disabled，failures、previous、全部技能/草稿文件保持。分步证据在 `guild-skill-review/native-maintenance-receipt.jsonl`。这属于维护侧纠正已证伪的学习规则，不冒充 Agent 自主完成了 RSI。
 
+15:55:55，进一步沿用共享索引的正式锁与原子保存协议，核对作者、名字、revision 和作者已停用状态后，只撤回该错误版本的共享索引引用。共享条目 6→5，其余条目不变；8 份共享历史正文、56 份作者技能/草稿/反馈/profile/Cron 文件原字节保留。实际检查其他角色的 `shared_skills`、`_inherited` 和 `learning_read` 均不能再从共享入口取得该版本；没有发现其他角色已安装它。撤回回执在 `guild-skill-review/shared-withdrawal/`，没有删除经验正文或发布同样错误的旧版。
+
+## 补齐已有 NPC 子健康投影
+
+对上述主动等待继续追查，发现已有的 `team_context.npcHealthSubchecks` 消费器没有收到真实数据：`world/admin/read-model.mjs` 丢弃了 `npc-health.json` 中已经存在的轮询时间与公会角色身份状态。原测试手工构造字段，只能验证消费器，不能证明生产接线。
+
+本轮仅补齐 6 行投影，复用原字段和消费器：三个轮询时间、公会检查时间转成 ISO 时间；公会角色仅发布有界的 `key/state`，保留 false/null，不公开 UUID 或历史坐标。新增真实 Node `projectWorld` → Python 消费器的跨语言回归，19/19 Python 与 25/25 Node 核心检查通过。固定 Linux 镜像缺少原浏览器用例所需的 Chromium；3 个可选浏览器用例跳过，扩展浏览器组的环境失败日志保留，没有改断言掩盖。
+
+生产投影由原 world 服务静态加载，单改文件或重启 panel 不会生效。15:56:54 复核女神角色空闲、祈愿/命令/麦克风/语音在途为零、在线只有 Goddess 与 Kirito 后，按已有 SIGTERM 收尾与 45 秒宽限正常重启 world 一次；该次启动时间为 15:57:42。MC、Qwen、NPC、survivor 没有再次重启。这是当前空闲观测，原 world 不提供统一独占的全流程 drain，不能把它描述成绝对排空锁。
+
+15:58:51，实际公开快照（年龄 5.28 秒）经过生产 Qwen 容器内的原 `npc_health_subchecks` 验证通过：三个轮询时间均新鲜、接待员在线、禾叔未定位、`guildNpcsOk=false`。既有告警没有被改绿。部署前后源哈希、原字节备份、跨语言测试与实机验证在 `npc-health-projection/`；首批提交 `59a7b3f` 已快进推送主干，本补充单独提交，保留此前 110 条累积开发历史。
+
+16:02:02，再次执行原完整 panel smoke 后，顶层探针与 15:42 的结果完全一致：Qwen、survivor、路由、具身、实践、PawApp 通过，桐人未暂停，原 13 项失败保留，没有新增失败探针。77/34 报告的全部源哈希与生产一致，报告原字节不变；结果见 `npc-health-projection/postdeploy-panel-summary.json`。
+
+最后跟到 16:00 原生复盘及后续行动轮：review `task-00ff94460343` 只调用 remember；action `task-47e33caa78e0` 于 16:01:55 完成，只调用 brief status、world_perception、remember，没有 team_context、公会查询、导航或领取。三个实际行动轮工具结果均不含新 `npcHealthSubchecks`，因此只能证明新数据已经可读，不能称模型读过并纠正了旧判断。其公开回复仍沿用“NPC unhealthy，因此柜台不可用、等待恢复”的旧阻塞叙述；这没有新的领取回执支持。原会话、运行状态和未知结果屏障保持正常，关键剩余问题是旧阻塞判断缺少主动重新验证，不是身体执行层已确认再次拒绝。观测到此结束，未人为指定领取目标或伪造成功。
+
 已知范围：NPC 健康仍报告禾叔在已加载的原登记区块中不可见，尚无可靠证据区分移入未加载区块与实体丢失，因此没有凭空生成替身来消除告警。学习预算缺失/非法开始时间的额外加固也未部署；本轮保持现役长驻模块字节，不伪称修改磁盘即可更新 QwenPaw 的 import 缓存。全项目旧健康项需按各自证据处理，不能以本轮局部检查通过代替。
 
 PawApp 界面与官方 SDK 接入沿用 [PAWAPPS-OBSERVATION.md](PAWAPPS-OBSERVATION.md) 的部署成果；本轮不修改该页面的 8 个源文件或重写旧视觉证据。动作确认、目标完成和 RSI 改进仍是不同结论，不能仅凭字段齐全、模型回合结束或测试通过宣称智能提升。

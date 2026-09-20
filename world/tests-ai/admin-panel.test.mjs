@@ -466,6 +466,47 @@ test('public projection excludes raw instructions, secrets, private waypoints an
   assert.equal(result.skills.featured[0].name, '归乡');
 });
 
+test('NPC health projection preserves failing identity subchecks without exposing private records', () => {
+  const stamp = 1789890709.3295, iso = new Date(stamp * 1000).toISOString(), sentinel = 'PRIVATE_NPC_SENTINEL';
+  const npc = { updated_at: stamp, rcon_last_ok: stamp, spell_last_poll: stamp,
+    guild_requests_last_poll: stamp, threads: { 'guild-requests': true },
+    guild_npcs: { ok: false, checked_at: stamp, online: 1, secret: sentinel, required: [
+      { key: 'guild_lan', state: 'online', uuid: sentinel, position: [1, 2, 3] },
+      { key: 'hesu', state: 'missing_in_loaded_chunk', lastKnownPosition: [4, 5, 6], config: sentinel },
+    ] } };
+  const original = JSON.stringify(npc), result = projectWorld({ npc }).npc;
+  assert.equal(result.rconLastOkAt, iso); assert.equal(result.spellLastPollAt, iso);
+  assert.equal(result.guildRequestsLastPollAt, iso);
+  assert.deepEqual(result.guildNpcs, { ok: false, checkedAt: iso, online: 1,
+    required: [{ key: 'guild_lan', state: 'online' }, { key: 'hesu', state: 'missing_in_loaded_chunk' }] });
+  assert.deepEqual(result.threads, [{ name: 'guild-requests', ok: true }]);
+  assert.equal(JSON.stringify(result).includes(sentinel), false);
+  assert.equal(JSON.stringify(npc), original);
+});
+
+test('NPC health projection keeps absent and invalid timestamps and flags unknown', () => {
+  for (const invalid of [undefined, null, '1789890709', true, -1, 0, NaN, Infinity, 8640000000001]) {
+    const result = projectWorld({ npc: { rcon_last_ok: invalid, spell_last_poll: invalid,
+      guild_requests_last_poll: invalid, guild_npcs: { checked_at: invalid, ok: 'false', online: '0', required: {} } } }).npc;
+    assert.equal(result.rconLastOkAt, null); assert.equal(result.spellLastPollAt, null);
+    assert.equal(result.guildRequestsLastPollAt, null);
+    assert.deepEqual(result.guildNpcs, { ok: null, checkedAt: null, online: null, required: [] });
+  }
+  assert.deepEqual(projectWorld({}).npc.guildNpcs, { ok: null, checkedAt: null, online: null, required: [] });
+  assert.equal(projectWorld({ npc: { guild_npcs: { online: 0 } } }).npc.guildNpcs.online, 0);
+});
+
+test('NPC health identity states are bounded and do not coerce missing states into success', () => {
+  const rows = [null, { key: 'invalid key', state: 'online' }, { key: 'x'.repeat(65), state: 'online' },
+    { key: 'guild_lan', state: undefined }, { key: 'hesu', state: 'x'.repeat(65) },
+    ...Array.from({ length: 60 }, (_, i) => ({ key: `npc_${i}`, state: 'online' }))];
+  const result = projectWorld({ npc: { guild_npcs: { required: rows } } }).npc.guildNpcs;
+  assert.equal(result.ok, null);
+  assert.deepEqual(result.required.slice(0, 2), [{ key: 'guild_lan', state: null }, { key: 'hesu', state: null }]);
+  assert.equal(result.required.length, 29);
+  assert.equal(result.required.at(-1).key, 'npc_26');
+});
+
 test('missing flags and malformed catalogue are unknown rather than healthy or enabled', () => {
   const result = projectWorld({ npc: {}, board: {}, catalog: null });
   assert.equal(result.npc.llmEnabled, null);

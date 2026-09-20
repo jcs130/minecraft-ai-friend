@@ -13,6 +13,7 @@ export const chinaDate = now => new Intl.DateTimeFormat('en-CA', {
 
 export function projectWorld({ heartbeat, state, waypoints, atoms, catalog, rawCatalog, npc, guildHealth, board, fame, warnings = [] }, now = Date.now()) {
   const h = object(heartbeat), n = object(npc), gh = object(guildHealth), b = object(board);
+  const guildNpcs = object(n.guild_npcs);
   const provider = object(h.agentProvider), capabilities = object(provider.capabilities);
   const definitions = new Map(list(object(atoms).atoms).map(atom => [atom.id, atom]));
   const raw = object(rawCatalog), details = object(raw.featuredDetails), archived = object(raw.archived);
@@ -39,6 +40,11 @@ export function projectWorld({ heartbeat, state, waypoints, atoms, catalog, rawC
       capabilities: { chat: capabilities.chat === true, task: capabilities.task === true } },
     npc: { available: number(n.updated_at) !== null, updatedAt: iso(number(n.updated_at) * 1000),
       llmEnabled: bool(n.llm_enabled), spawnMissing: bool(n.spawn_missing),
+      rconLastOkAt: partyStamp(n.rcon_last_ok, 1000), spellLastPollAt: partyStamp(n.spell_last_poll, 1000),
+      guildRequestsLastPollAt: partyStamp(n.guild_requests_last_poll, 1000),
+      guildNpcs: { ok: bool(guildNpcs.ok), checkedAt: partyStamp(guildNpcs.checked_at, 1000),
+        online: count(guildNpcs.online), required: list(guildNpcs.required).slice(0, 32)
+          .filter(row => partyCode(row?.key)).map(row => ({ key: row.key, state: partyCode(row.state) })) },
       threads: Object.entries(object(n.threads)).map(([name, ok]) => ({ name: text(name, 64), ok: ok === true })) },
     skills,
     players: Object.entries(object(object(state).players)).filter(([name]) => playerName(name)).slice(0, 200).map(([name, value]) => {

@@ -9,6 +9,9 @@ the fake-module patch must stay active while the tool runs; patching only around
 registration would let the real snapshot reader touch /public paths.
 """
 from pathlib import Path
+import json
+import shutil
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace as N
@@ -158,6 +161,29 @@ class NpcHealthSubchecksTests(unittest.TestCase):
         self.assertEqual(view['guildNpcsStates'], {'guild_lan': 'missing_in_loaded_chunk'})
         self.assertIn('npcHealthSubchecks', result['notice'])
         self.assertIn('case-874c6b4133a5affd763b', result['notice'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is required for the real public projection')
+    def test_raw_npc_health_reaches_team_context_through_actual_public_projection(self):
+        raw = {'updated_at': 1789890709.329, 'rcon_last_ok': 1789890709.329,
+               'spell_last_poll': 1789890709.329, 'guild_requests_last_poll': 1789890709.329,
+               'guild_npcs': {'checked_at': 1789890709.329, 'ok': False, 'online': 1,
+                              'required': [{'key': 'guild_lan', 'state': 'online', 'uuid': 'PRIVATE_SENTINEL'},
+                                           {'key': 'hesu', 'state': 'missing_in_loaded_chunk'}]}}
+        projection = Path(__file__).resolve().parents[1] / 'world/admin/read-model.mjs'
+        code = ('import { projectWorld } from ' + json.dumps(projection.as_uri()) + ';'
+                'import fs from "node:fs";'
+                'console.log(JSON.stringify(projectWorld({npc:JSON.parse(fs.readFileSync(0,"utf8"))}).npc));')
+        process = subprocess.run([shutil.which('node'), '--input-type=module', '-e', code],
+                                 input=json.dumps(raw), text=True, encoding='utf-8', capture_output=True,
+                                 timeout=15, check=True)
+        self.assertNotIn('PRIVATE_SENTINEL', process.stdout)
+        result = self.context(json.loads(process.stdout))
+        view = result['world']['npcHealthSubchecks']
+        for field in ('rconLastOkAt', 'spellLastPollAt', 'guildRequestsLastPollAt', 'guildNpcsCheckedAt'):
+            self.assertEqual(view[field], '2026-09-20T07:51:49.329Z')
+        self.assertIs(view['guildNpcsOk'], False)
+        self.assertEqual(view['guildNpcsStates'], {'guild_lan': 'online', 'hesu': 'missing_in_loaded_chunk'})
+        self.assertIn('npcHealthSubchecks', result['notice'])
 
     def test_partial_records_surface_available_fields_only(self):
         result = self.context({'guildNpcs': {'ok': True, 'required': 'not-a-list'}})

@@ -1,5 +1,7 @@
 # 千灯纪整合项目
 
+2026-09-20 最后接线补充：read-model已接通原NPC轮询/公会身份子健康字段，既有team_context不再只看笼统unhealthy；19跨语言Python/25Node核心通过，浏览器环境限制如实保留。15:56:54女神/命令/语音空闲复核后仅world普通重启一次，15:57:42启动、15:58:51真实公开快照→生产原helper通过，guild_lan在线/hesu未定位/整体false均保留，不改健康绿灯。错误guild-claim-precision已15:55:55精确撤回共享索引，6→5且其余条目不变，旧正文/草稿/反馈保留，未发现其他角色安装。首批59a7b3f已推main，最后接线另提交；勿把接线和维护纠错当自主RSI成功。详见docs/GUILD-FEEDBACK-REPAIR.md及runtime/guild-feedback-20260920/npc-health-projection。
+
 2026-09-20 同轮15:49补充：当前L2技能qd-learned-guild-claim-precision把未验证的“先右键柜台”写成领取前置，服务端无此条件，上版也同错；已在角色idle时通过原LearningTools锁/官方SkillService/索引保存/reload精确停用该revision并标reviewPending，未rollback、未伪造失败凑阈值。仅追加1条unverified事实反馈；49份技能/草稿/验证/激活文件、failures0、previous、revision、action-precheck、profile/Cron均保持。生产角色学习校验通过（learned2/enabled1）。这属于维护纠正错误规则，不是已证明自主RSI；“NPC unhealthy导致所有领取失败”的模型推断仍须在真实行动中检验，不能改整体告警凑绿。证据runtime/guild-feedback-20260920/guild-skill-review。
 
 2026-09-20 用户要求直接修复、实际部署并提交main。公会拒绝现附实时接待员位置/同维度距离，精简回执保留quest_id及claimContext；实机只读确认接待员离旧柜台44.828格、原领取门槛8格。保护区预检补准确边界与未派发说明，不放宽权限。原生修复9角色学习Cron旧模板、关闭桐人2旧epoch失效技能绑定（54文件保持）；校验允许明确禁用历史项，当前L2索引校验仍严格。补收现役standing-task守卫/学习预算分类入库，并加固所有权未知不stop与空闲清理。维护guild-feedback-20260920于15:36:08结束：原NPC重启1次、survivor2次，Qwen/MC/宿主未重启，10profiles/16Cron恢复全等、原工程Cron仍关闭。生产77具身/34实践smoke及源hash通过，111网关回归、19预算、22学习、16角色契约通过；Qwen完整健康/路由/PawApp/具身实践探针通过，旧全局red保留。15:40原生复盘与后续行动两真实轮终态；review/action分session正常，行动brief+增量3822bytes，但模型仅观察和记忆，仍误把NPC聚合unhealthy当领取原因，没有新goto/guild_claim，不能宣称已验证纠正导航或RSI收益。勿重跑维护或旧记忆归档。详见docs/GUILD-FEEDBACK-REPAIR.md与本机runtime/guild-feedback-20260920。
