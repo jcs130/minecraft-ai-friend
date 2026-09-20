@@ -76,7 +76,7 @@ QwenPaw 的 Scroll 仍负责历史回收。未重复发送不表示事实永远�
 上线先经原 `control.py drain` 等当前任务正常完成，再合并代码、重载服务、应用配置。生存健康探针检查配置与心跳协议版本一致；QwenPaw 探针检查适配器版本。
 回退可在同样的空闲点把 `contextProtocol` 设回 1，再重启 survivor；原生适配器的省略逻辑只处理 protocol 2，旧历史和缓存文件不用删除。恢复旧 AGENTS 时应核对备份 ETag/内容，不能覆盖后续个人编辑。
 
-本次已通过自然任务边界完成维护，保留本地 `standing_task` 等并发改动；Minecraft 未重启。上线的具体健康和首轮结果见本机 `runtime/context-live-verification.json`。
+本次已通过自然任务边界完成维护，保留本地 `standing_task` 等并发改动；Minecraft 未重启。上线的具体健康和两轮结果见本机 `runtime/context-live-verification.json`。
 
-线上首轮 review 已正常完成，独立 session 的 protocol-2 输入保存在 QwenPaw 原生会话中，增量缓存已确认对应 turn；原生活 session 保留，控制器继续自主调度。生存健康探针返回 `contextProtocol=2`、`ok=true`。
+线上两轮 review 已正常完成，独立 session 的 protocol-2 输入保存在 QwenPaw 原生会话中，增量缓存已确认对应 turn；原生活 session 保留，控制器继续自主调度。首轮 JSON 输入为 11,601 字节、10 项事实更新，第二轮为 6,125 字节、2 项事实更新且不含初始化说明。第二轮包含实际变化和新证据，因此不同于上面的同事实模拟；这些字节量仍不代表供应商 token 或费用。生存健康探针返回 `contextProtocol=2`、`ok=true`。
 QwenPaw 总健康仍有此前已存在的 `role_learning_profiles.validate_jobs:text_drift`，未把此告警算成本轮通过；未清空或改写学习任务来掩盖它。
