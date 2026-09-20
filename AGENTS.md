@@ -1,3 +1,5 @@
+2026-09-20 16:43备份补充：原D:/ops/world-backup.ps1同时指向旧世界、旧25575端口与旧凭据，已用纳管tools/world-backup.ps1替换现役入口；原文件前像保留。新入口复用当前RconClient、唯一目录、明确退出码、确认拥有save-off后finally save-on，无历史删除/静默离线拷贝。7离线分支/只读检查通过，已实际生成2026-09-20T084316.4728094Z-35679c65完整新快照，save-on确认、robocopy=1。计划任务定义读取被Windows拒绝，未改调度且不宣称自动调度已验证。详见docs/VILLAGE-RECOVERY.md。
+
 2026-09-20 主村庄已实际恢复：全维度70实体region核对33具名原UUID，保留3存活并恢复30缺失、救回4只原地下铁傀儡，无随机身份补生。30恢复交易/物品/职业已读回、33村民原生AI及保护验证，MC已save-all flush；来源备份实为9/7（5公会角色交易取9/8），不是死亡前最新状态。InControl主村XZ不变，Y扩至-64..320，position/finalize/onjoin三入口已实服重载；清理40精确现存残留，四高度加入测试无目标实体，13类常见敌对复查未检出。绑定NPC双入口禁止旧随机UUID补生，启动沿既有流程补保护；spawn_missing=false保持。NPC仅单次stop/start，原准入/桐人/三角色Cron已恢复；24回归、NPC/路由/相关panel通过，13历史全局red保留。勿重跑恢复/维护或旧backup脚本，详见docs/VILLAGE-RECOVERY.md及runtime/village-recovery-20260920。
 
 # 千灯纪整合项目

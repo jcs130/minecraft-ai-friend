@@ -40,6 +40,12 @@ InControl原配置正常加载、村庄坐标正确，但仅有默认`position`�
 - 复查区域内13类常见敌对生物均未检出。镇外边界区块没有加载，未为测试强制加载；镇外放行由配置契约测试覆盖，未冒充实服对照试验。
 - NPC健康通过，岚和禾叔实时在线；路由6项、15路由/15站点通过。面板相关Qwen、桐人、具身、实践及PawApp探针通过，无新增失败；13项历史全局异常仍保留。
 
-备份脚本还发现世界、RCON端口与凭据路径均停留在旧目录。修正应使用当前项目的RCON客户端、独立新目录、明确退出码和`finally save-on`，不混写或自动删除历史备份。当前Windows身份无法读取`MCWorldBackup`任务定义，不能宣称已验证其自动调度。
+## 备份路径修复
+
+原`D:/ops/world-backup.ps1`仍复制旧CoPaw世界，并调用旧端口25575及旧凭据路径；旧源与“9月20日备份”的level.dat、主村实体区域字节完全相同，实际数据停在9月7日。
+
+已将原PowerShell入口纳管为`tools/world-backup.ps1`，部署到当前项目和原`D:/ops/world-backup.ps1`。它复用现有RconClient连接127.0.0.1:25577及`server/world-data/rcon-secret.txt`；确认自己取得save-off后先flush，再写入唯一新目录，并在finally尝试save-on。已关闭自动删旧备份和离线静默拷贝，检查RCON文字及robocopy退出码；未知状态不假装成功。`-CheckOnly`只读检查通过，7个离线成功/失败分支通过；Python使用`-I`避免调用者旧环境污染3.14运行时。
+
+16:43已实际执行一次，完整快照位于`D:/backups/mc-neoforge-auto/2026-09-20T084316.4728094Z-35679c65/world`。回执明确save-off、flush、save-on成功，robocopy=1（成功复制），status=complete，所有旧目录保留。原外置脚本前像为`D:/ops/world-backup.pre-village-20260920.ps1`，不能再作为现役入口执行。当前Windows身份读取`MCWorldBackup`任务定义被拒绝；本轮未改其调度，不能宣称已验证自动调度。
 
 配置或源码需要回退时使用本轮保存的逐文件前像，保留已经恢复的原身份和当前游戏进度；不要重跑本轮召唤脚本、启用旧自动补生或回灌整个旧世界。
