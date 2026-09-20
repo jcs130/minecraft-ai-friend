@@ -91,18 +91,18 @@ bot.on('spawn', () => bot.chat('我进来了'))
 基岩与 Java **协议完全不同**，不能直连，必须走协议翻译桥：
 
 ```
-手机基岩客户端 --UDP 19140--> ViaProxy(内挂 Geyser 2.11.2) --TCP 127.0.0.1:25565--> NeoForge 服务端
+手机基岩客户端 --UDP 19140--> ViaProxy(内挂 Geyser 2.11.3（build 1245）) --TCP 127.0.0.1:25565--> NeoForge 服务端
 ```
 
 ### 现状（必须先说清）
 
 - 桥是**宿主机进程**，不在 Docker 里：Docker Desktop 的 UDP 端口映射在本机不转发（实测过）。
-- **现在 ViaProxy 在跑**（2026-09-20 拉起）：UDP 19140 监听 ✓、Geyser 2.11.2-b1232 完成启动 3.98 s ✓、
+- **现在 ViaProxy 在跑**（2026-09-20 拉起）：UDP 19140 监听 ✓、Geyser 2.11.3（build 1245）-b1232 完成启动 3.98 s ✓、
   `settlementsgate` 扩展加载 **6/6 vanilla 定义 captured (all OK)** + **37 NPC 名册** ✓、
   后端 target = `127.0.0.1:25565` ✓、防火墙规则 `Geyser Bedrock UDP 19140` = **Enabled: Yes** ✓。
   已挂计划任务 **`ViaProxy-Bedrock`（onlogon）** ✓ 重启后自起 ✓（本机作业对象会杀掉随会话启动的进程树 ✓ 所以必须走任务计划 ✓）
 - 但**东西齐全且已修好**：
-  - `ViaProxy-3.4.12.jar` + `plugins/Geyser-ViaProxy.jar`（Geyser 2.11.2，199 个 mod 方块映射）
+  - `ViaProxy-3.4.12.jar` + `plugins/Geyser-ViaProxy.jar`（Geyser 2.11.3（build 1245），199 个 mod 方块映射）
   - 启动脚本里 **target 已是正确的 `127.0.0.1:25565`**（历史上写死成 `25599`——容器内口、宿主不通，曾造成"僵尸进程占端口→基岩连不上"，已修）
   - `plugins/Geyser/extensions/settlementsgate-1.3.0.jar`：把万家烟火的自定义实体 `settlements:base_villager`
     映射成基岩的 `minecraft:villager_v2`。**没它，智能村民在基岩端会变成一条鱼**（真事，已修）
