@@ -1,3 +1,5 @@
+2026-09-21 桐人/结衣持续运行修复：已有 task 的临时 GET 失败在原期限内退避查询，不重投；结衣 9/18 丢失任务经现有 operator-reconciliations 释放通道，原 unknown 记录/身份/会话保留。10 profiles/16 Cron 精确恢复，原禁用班次不改；桐人显式恢复。仅停启 NPC/survivor，首次启动 readiness_timeout 回执保留，后续官方 MCP toggle 重连并恢复原环境凭据引用后健康。不要用 Client DTO 写回覆盖自定义凭据别名。实测公会讨伐 criteria 冒号误写已修复，4 个缺失计数器原生创建、未改玩家分数。84 项生产字节具身冒烟、73 控制器和 9 女仆对账通过；完整 panel-smoke 仍有其他证据失配，勿假称全绿。维护 agent-continuity-20260921 已恢复，勿重放；见 docs/AGENT-CONTINUITY-REPAIR.md。
+
 2026-09-20 23:45 技能部署收尾：NPC重启后的4条原生HTTP连接inactive已通过同值官方API重连（桐人qd_party、两人物maid_native、结衣qd_party），工具3/7/7/3与配置/权限全等；numen_survival原已正常。新维护skill-system-reconnect-20260920已结束，10profiles/16Cron再次精确恢复，无二次服务重启。今后依赖服务恢复后再同步角色技能，并实际读工具清单。
 
 2026-09-20 23:36 技能罗盘与CLI修复已部署：默认我的技能、学习图鉴分离、不可用原生法术禁用、铁魔法三步指引与按需help；目录实服8→35（9秘术/26主题别名，对应21原生法术），不授予装备/重写进度。旧平衡层拒绝原生映射无效调参与非有限数值。botgate8f669d9f，Java285/Node97/独立原生7项/实服只读4项通过；未做真人画面手柄或证明平衡性能收益。10角色两套指引通过官方API同步，原profile/16Cron精确恢复，工程Cron原关闭保持，后续case-ad416b71edb9e6d6d43a要求先补固定技能测试覆盖。新skill_system和主城保护探针通过；旧验收来源失配保留，练习34项Linux重新执行后旧报告归档。13服务/12健康恢复，无新增daemon。维护已结束，勿重放；详见docs/SKILL-SYSTEM-REVIEW.md。

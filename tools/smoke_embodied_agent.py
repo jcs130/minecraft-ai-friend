@@ -26,7 +26,7 @@ def main():
     names = []
     for name in ('test_embodied_agent', 'test_survival_status_detail',
                  'test_survival_feedback', 'test_survival_guild', 'test_survival_life_session',
-                 'test_survival_standing_task'):
+                 'test_survival_standing_task', 'test_survival_poll_recovery', 'test_guild_hunt_score'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):

@@ -1173,16 +1173,39 @@ class Controller:
             self.pause('model_timeout')
             self.stop_actions()
             return
+        # A GET timeout is not a lost POST or a missing task. Keep polling the
+        # same durable task, within its original deadline, without disabling
+        # the tools of a model which may still be running.
+        poll_wait = active.get('pollWait') or {}
+        if not active.get('nativeTerminal') and self.clock() < poll_wait.get('nextPollAt', 0):
+            self.data['status'] = 'model_poll_wait'
+            return
         try:
             terminal = active.get('nativeTerminal')
             result = ({'status': 'finished', 'result': {'status': 'completed' if terminal['completed'] else 'failed', 'output': [
                 {'role': 'assistant', 'type': 'message', 'status': 'completed',
                  'content': [{'type': 'text', 'text': terminal['text']}]}]}}
                 if terminal else self.backend.poll(active['taskId']))
-        except Exception:
+        except Exception as error:
+            import httpx
+            status = getattr(getattr(error, 'response', None), 'status_code', None)
+            transient = (status in (408, 429, 500, 502, 503, 504)
+                         or isinstance(error, (httpx.TransportError, TimeoutError, ConnectionError)))
+            if transient:
+                failures = poll_wait.get('failures', 0) + 1
+                active['pollWait'] = {'failures': failures,
+                    'firstFailureAt': poll_wait.get('firstFailureAt', self.clock()),
+                    'nextPollAt': self.clock() + min(30, 5 * 2 ** min(failures - 1, 3)),
+                    'errorType': type(error).__name__, 'httpStatus': status}
+                self.data['status'] = 'model_poll_wait'
+                self.save()
+                return
             self.pause('model_result_unknown')
             self.stop_actions()
             return
+        if active.pop('pollWait', None):
+            self.record('model_poll_recovered', taskId=active['taskId'], turnId=active['turnId'],
+                        failures=poll_wait['failures'], requestReplayed=False)
         if result.get('status') in ('pending', 'running', 'queued'):
             self.data['status'] = 'thinking'
             return

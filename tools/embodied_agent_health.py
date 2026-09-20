@@ -14,7 +14,8 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'tests/test_survival_feedback.py', 'tests/test_survival_guild.py',
            'tests/test_survival_life_session.py', 'world/survival/standing_task.py',
            'tests/test_survival_standing_task.py', 'tools/smoke_embodied_agent.py',
-           'tools/embodied_agent_health.py')
+           'tools/embodied_agent_health.py', 'tests/test_survival_poll_recovery.py',
+           'world/sidecar/mc_guild.py', 'tests/test_guild_hunt_score.py')
 
 
 def check(root=ROOT, clock=time.time):
@@ -47,7 +48,8 @@ def check(root=ROOT, clock=time.time):
         checks['behavior_test'] = (report.get('ok') is True and report.get('testsRun', 0) >= 20
             and all(any(name.startswith(prefix) for name in report.get('tests', [])) for prefix in (
                 'test_survival_status_detail.', 'test_survival_feedback.', 'test_survival_guild.',
-                'test_survival_life_session.ContinuousActionTests.', 'test_survival_standing_task.'))
+                'test_survival_life_session.ContinuousActionTests.', 'test_survival_standing_task.',
+                'test_survival_poll_recovery.PollRecoveryTests.', 'test_guild_hunt_score.HuntScoreTests.'))
             and report.get('modelCalls') == 0 and report.get('productionMutations') == 0
             and all(report.get('sourceHashes', {}).get(name) == hashlib.sha256((root / name).read_bytes()).hexdigest()
                     for name in SOURCES))

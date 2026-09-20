@@ -71,10 +71,10 @@ RANKS = Rules.RANKS
 RANK_TAGS = ["§7", "§8", "§f", "§e", "§b", "§3"]  # 告示牌用不上了，聊天文案用文字即可
 
 HUNT_MOBS = {
-    "skeleton": ("killed_skeleton", "minecraft:killed:minecraft.skeleton", "骷髅"),
-    "zombie":   ("killed_zombie",   "minecraft:killed:minecraft.zombie",   "僵尸"),
-    "spider":   ("killed_spider",   "minecraft:killed:minecraft.spider",   "蜘蛛"),
-    "ravager":  ("killed_ravager",  "minecraft:killed:minecraft.ravager",  "劫掠兽"),
+    "skeleton": ("killed_skeleton", "minecraft.killed:minecraft.skeleton", "骷髅"),
+    "zombie":   ("killed_zombie",   "minecraft.killed:minecraft.zombie",   "僵尸"),
+    "spider":   ("killed_spider",   "minecraft.killed:minecraft.spider",   "蜘蛛"),
+    "ravager":  ("killed_ravager",  "minecraft.killed:minecraft.ravager",  "劫掠兽"),
 }
 
 VISIT_SPOTS = [
