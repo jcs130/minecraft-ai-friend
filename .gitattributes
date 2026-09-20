@@ -3,3 +3,11 @@ world/numen-patches/*.patch text eol=lf whitespace=-blank-at-eol
 
 # Health check compares skill bytes against workspace copies deployed via text-mode API (LF).
 world/ops/skills/** text eol=lf
+
+# Preserve reviewed native function and patch hashes across Windows checkouts.
+assets/town-renewal/** text eol=lf
+assets/town-renewal/**/*.nbt binary
+# Frozen one-time packs retain the exact bytes verified and deployed, including CRLF.
+assets/town-renewal/operator-pack/** -text
+assets/town-renewal/bridge-operator-pack/** -text whitespace=cr-at-eol
+patches/guardvillagers/*.patch text eol=lf whitespace=-blank-at-eol

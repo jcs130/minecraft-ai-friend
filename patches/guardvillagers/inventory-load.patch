@@ -1,0 +1,68 @@
+diff --git a/src/main/java/tallestegg/guardvillagers/common/entities/Guard.java b/src/main/java/tallestegg/guardvillagers/common/entities/Guard.java
+index 1a79811..daa7bb2 100644
+--- a/src/main/java/tallestegg/guardvillagers/common/entities/Guard.java
++++ b/src/main/java/tallestegg/guardvillagers/common/entities/Guard.java
+@@ -244,36 +244,30 @@ public class Guard extends PathfinderMob implements CrossbowAttackMob, RangedAtt
+             ListTag gossipTag = compound.getList("Gossips", 10);
+             this.gossips.update(new Dynamic<>(NbtOps.INSTANCE, gossipTag));
+         }
+-        ListTag inventoryNBT = compound.getList("Inventory", 9);
+-        for (int i = 0; i < inventoryNBT.size(); ++i) {
+-            CompoundTag compoundnbt = inventoryNBT.getCompound(i);
+-            int j = compoundnbt.getByte("Slot") & 255;
+-            ItemStack stack = ItemStack.parseOptional(this.registryAccess(), compoundnbt);
+-            if (!stack.isEmpty()) this.guardInventory.setItem(j, stack);
+-            else inventoryNBT.add(new CompoundTag());
+-        }
+-        if (compound.contains("ArmorItems", 9)) {
++        this.guardInventory.clearContent();
++        // Inventory is authoritative: the vanilla equipment lists may be stale.
++        if (compound.contains("Inventory", 9)) {
++            ListTag inventoryNBT = compound.getList("Inventory", 10);
++            for (int i = 0; i < inventoryNBT.size(); ++i) {
++                CompoundTag compoundnbt = inventoryNBT.getCompound(i);
++                if (!compoundnbt.contains("Slot", 99)) continue;
++                int slot = compoundnbt.getInt("Slot");
++                if (slot < 0 || slot >= this.guardInventory.getContainerSize()) continue;
++                ItemStack stack = ItemStack.parseOptional(this.registryAccess(), compoundnbt);
++                this.guardInventory.setItem(slot, stack);
++            }
++        } else {
++            // Older saves and vanilla summon data may only contain equipment lists.
+             ListTag armorItems = compound.getList("ArmorItems", 10);
+-            for (int i = 0; i < this.armorItems.size(); ++i) {
+-                ItemStack stack = ItemStack.parseOptional(this.registryAccess(), armorItems.getCompound(i));
+-                if (!stack.isEmpty()) {
+-                    int index = Guard.slotToInventoryIndex(this.getEquipmentSlotForItem(ItemStack.parse(this.registryAccess(), armorItems.getCompound(i)).orElse(ItemStack.EMPTY)));
+-                    this.guardInventory.setItem(index, stack);
+-                } else {
+-                    armorItems.add(new CompoundTag());
+-                }
++            for (int i = 0; i < Math.min(armorItems.size(), 4); ++i) {
++                this.guardInventory.setItem(3 - i, ItemStack.parseOptional(this.registryAccess(), armorItems.getCompound(i)));
+             }
+-            if (compound.contains("HandItems", 9)) {
+-                ListTag handItems = compound.getList("HandItems", 10);
+-                for (int i = 0; i < this.handItems.size(); ++i) {
+-                    int handSlot = i == 0 ? 5 : 4;
+-                    if (!ItemStack.parseOptional(this.registryAccess(), handItems.getCompound(i)).isEmpty())
+-                        this.guardInventory.setItem(handSlot, ItemStack.parseOptional(this.registryAccess(), handItems.getCompound(i)));
+-                    else handItems.add(new CompoundTag());
+-                }
+-                if (!level().isClientSide) this.readPersistentAngerSaveData(level(), compound);
++            ListTag handItems = compound.getList("HandItems", 10);
++            for (int i = 0; i < Math.min(handItems.size(), 2); ++i) {
++                this.guardInventory.setItem(5 - i, ItemStack.parseOptional(this.registryAccess(), handItems.getCompound(i)));
+             }
+         }
++        if (!level().isClientSide) this.readPersistentAngerSaveData(level(), compound);
+     }
+ 
+     @Override
+@@ -1789,4 +1783,4 @@ public class Guard extends PathfinderMob implements CrossbowAttackMob, RangedAtt
+             return (guard.isPatrolling() && guard.getTarget() == null && guard.blockPosition().equals(guard.getPatrolPos())) || super.isDone();
+         }
+     }
+-}
+\ No newline at end of file
++}

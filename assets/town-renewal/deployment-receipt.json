@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "status": "deployed_and_verified",
+  "date": "2026-09-20",
+  "timezone": "Asia/Shanghai",
+  "beforeBackup": "2026-09-20T093920.6320295Z-99ab93b6",
+  "afterBackup": "2026-09-20T100129.2070902Z-ca483bde",
+  "backupCompleteAndAutomaticSavingRestored": true,
+  "town": {
+    "applied": 1,
+    "progress": 1034,
+    "manifestSha256": "94efa9b2adcca9e3774df389e271253e68cce8ee38921aa19b653f93c8add51d"
+  },
+  "bridge": {
+    "applied": 1,
+    "progress": 15,
+    "verified": 20,
+    "manifestSha256": "a5d2ac96c39a4b06a8180eff875de4b311179cf6f4d41902528c34dcf6a134d7"
+  },
+  "persistedVerification": {
+    "templateBlocks": 2183,
+    "newBeds": 20,
+    "newDoors": 4,
+    "structureLights": 18,
+    "roadLights": 11,
+    "roadColumns": 196,
+    "bridgeBlocks": 15,
+    "originalFeaturesPreserved": 384,
+    "originalVillagersPreserved": 33,
+    "originalGolemsPreserved": 4,
+    "unexplainedDifferences": 0,
+    "sourceFilesStableDuringFinalInspection": true
+  },
+  "nativeSideEffects": {
+    "coveredFoundationGrassToDirt": 629,
+    "bridgeCoveredGrassToDirt": 2,
+    "bridgeCoveredPathToDirt": 4,
+    "bridgeAdjacentShortGrassRemoved": 1
+  },
+  "nativeWalkTest": "Four isolated test villagers walked from old road connections to assigned beds in C02/C03/C04/C06 and slept; not a claim that all production residents claimed all beds.",
+  "observerRestored": true,
+  "productionForceloadsAdded": 0,
+  "productionModsAdded": 0,
+  "guardPatch": "Source candidate only; official build and 22 isolated checks passed, not deployed to production or clients.",
+  "packageSha256": {
+    "operator-pack/data/qiandeng_town/function/apply.mcfunction": "131836bf858f99c34390ce5ad3469306f1cff8e70b18f78216a0fff7aa92c0ba",
+    "operator-pack/data/qiandeng_town/function/commit.mcfunction": "83edbb72b9917779648a4f2ac09d6b5ad0c05e1ad66c514d3ab961c8b67bd00f",
+    "operator-pack/data/qiandeng_town/function/preflight.mcfunction": "0f1d2eeab5091cb2059da1941f175154c1ce73fa12704283bc249942d2f05ab4",
+    "operator-pack/data/qiandeng_town/function/prepare.mcfunction": "5415be24165973ed448f4530d3cac8347ee803de1534abdc263dd7a995489f8d",
+    "operator-pack/data/qiandeng_town/structure/courtyard-house.nbt": "9ef7d9ba5d1865233dee8d7c074a2dd30f9a95a18116594add0f5579ae428e60",
+    "operator-pack/data/qiandeng_town/structure/market-courtyard.nbt": "cf79a04245ee7764d6c37e8848557d24da514c6818935793a9b9351d9ed50ecb",
+    "operator-pack/pack.mcmeta": "f18f70e13024177699c0f680aa3e548c63ba71680939e68996254a70ea94fa94",
+    "bridge-operator-pack/data/qiandeng_bridge/function/apply.mcfunction": "3a87d08a084bd6f4ed145cf5a640093ff06b5921c5cbd3e2feb27382593d6cf6",
+    "bridge-operator-pack/data/qiandeng_bridge/function/commit.mcfunction": "ef6c06d4f17bbb2ed6749c028d4811c933d2ee4ef5085c6c7a88eece2286ccf7",
+    "bridge-operator-pack/data/qiandeng_bridge/function/preflight.mcfunction": "540ad68ca7dbbe97f078a692697e12dae593703489666a0c2cb156290af0afea",
+    "bridge-operator-pack/data/qiandeng_bridge/function/prepare.mcfunction": "fe49e99a5e19258a42515dc5758c45d2e83eb7ff5ba70240a494047ebb112c37",
+    "bridge-operator-pack/pack.mcmeta": "3116db9dcacdeda4de9e5942e64bb0802112af5ef41e700c9d2f3c25c38952a8"
+  }
+}
