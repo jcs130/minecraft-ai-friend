@@ -9,7 +9,7 @@ QwenPaw 管理认知、交流与工程角色，Numen 服务端假玩家承担身
 - 游戏版本：**Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21**
 - 项目目录：`D:\Projects\QiandengJi`
 - 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，交付主干 `main`，隔离开发使用 `codex/*`；原世界源码已移入 `world/`
-- 默认纳管 **13 个 Docker 服务**；历史阶段验收日志见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
+- 默认纳管 **15 个 Docker 服务**；历史阶段验收日志见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
 
 > 本仓库保存源码、配置模板、构建工具与验证方法。运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些，也不等于已完成环境安装。首次拉取先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)。
 
