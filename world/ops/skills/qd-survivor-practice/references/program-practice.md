@@ -2,11 +2,13 @@
 
 ## 系统 1 候选决策
 
-已测试程序可返回 `choose:{question,candidates:[{id,description,action}]}`，与 action、observe、waitSeconds、done/replan 互斥。提供 2–8 个依据当前观测构造的候选；每个 action 必须包含完整的现有 tool/args，或为 null（交回慢系统）。现役官方 Jev 只选候选，不生成参数，不接收历史思考。官方 confidence 不等于选中概率；confidence 低于 0.75、服务失败或观测超过 5 秒均 replan，不自动改用本地模型。原身体租约、权限、预算、回执和未知动作不重放继续生效。
+已测试程序可返回 `choose:{question,candidates:[{id,description,action}],context:{...}}`，context 可省略，与 action、observe、waitSeconds、done/replan 互斥。提供 2–8 个依据当前观测构造的候选；每个 action 必须包含完整的现有 tool/args，或为 null（交回慢系统）。现役官方 Jev 只选候选，不生成参数。context 是最多 2048 字节的局部事实对象：可放当前目标距离、观察到的障碍、最近动作的实际进展；先检查 observation.fresh/result.ok，缺失事实标未知，不能复制历史思考或整个环境。控制器自动提供身体、当前目标、上次执行摘要和各候选的确切参数。
+
+分类在原控制器的单个异步槽内进行，复用 HTTPS 连接；等待期间不推进程序 memory/steps，也不占身体租约，原生动作回执与只读交流继续处理。目标、程序版本、身体身份、维度、物资或主要生命状态改变时旧选择作废。超出 5 秒或身体条件变化最多重新观察两次，仍不稳定才 replan。官方 confidence 不等于选中概率；confidence 低于 0.75、服务失败或 null 候选直接交回 Qwen，不自动改用本地模型。原身体租约、权限、预算、回执和未知动作不重放继续生效。
 
 例如当前已知路线的小段移动与“返回慢系统重新规划”二选一；先确认候选坐标确实可行，不把模型置信度当寻路或安全证明。fixtures 用 expectedChoice 核验候选生成，用另一个观察/记忆样例核验终止或失败分支。测试不调用模型，运行时才选择；选择记录与实际 action 回执分别核验，不把选择成功当任务完成。
 
-当前仅为结构化状态→候选动作的首个集成，不是逐帧视觉或已训练 WASD 控制。无需为每一步调用 Qwen；Qwen 负责目标、候选程序和必要复盘。
+当前是结构化状态→有界原生动作的快慢控制，不是逐帧视觉或已训练 WASD 控制。Qwen 负责小目标、前置条件、候选程序、终止/失败条件和必要复盘；确定性步骤直接用已测试程序，有需要比较的选项才调用 Jev；原生任务持续执行导航/交互。accepted 后等同一原生任务的回执，不能每 250 ms 重发动作。执行结束、异常、目标变化才唤醒慢系统。交流使用现有只读 session，可与程序/原生动作并行，不能借旧 turn_id 写身体。
 
 候选参数使用程序动作的契约，不省略字段。例如装备为 `{tool:"equip_item",args:{item_id:"minecraft:iron_sword",action:"equip",slot:"mainhand"}}`，不是 MCP `equip` 的简写。`expectedChoice` 只比较候选生成结果，错误参数也可能与错误 fixture 一致；真实网关仍会拒绝，收到具体拒绝后修订而非重复启动旧版。
 

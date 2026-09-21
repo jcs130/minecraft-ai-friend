@@ -1,5 +1,7 @@
 # 官方 Jev 切换（2026-09-21）
 
+同日后续已部署[异步快慢控制与连接复用](JEV-FAST-SLOW-CONTROL.md)，下文保留初次切换的证据和当时延迟，不能用旧冷连接测量代表当前复用连接性能。
+
 按用户要求，项目系统 1 默认从本地 Decider 切换到 TypeSafe 官方 `https://api.typesafe.ai/v1/systemone`，请求模型 `jev-latest`，实际响应模型为 `jev-1.13.0`。这次没有改身体控制器、引入新守护进程或自动降低执行阈值。宿主的共享本地 Decider 保留供其他用途，游戏链路不再默认依赖它，也不在官方故障时偷偷改用它。
 
 协议依据：[官方 API](https://docs.typesafe.ai/api)、[Confidence](https://docs.typesafe.ai/confidence)。沿用 HTTP JSON 适配器；无需再安装 SDK。API Key 从 `/state/secret/jev-api-key` 读取，宿主对应被 Git 忽略的 `server/survival-agent-state/secret/jev-api-key`，文件 ACL 限于当前账户、SYSTEM 和管理员。密钥不写入环境变量、模型请求体、源码或报告。已有 `/state` 挂载承载该文件，无需重建容器。可通过 `SURVIVOR_SYSTEM_ONE_KEY_FILE` 指定其他受保护文件。

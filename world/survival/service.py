@@ -179,9 +179,10 @@ def main():
                     except Exception:
                         pass
                     print(json.dumps({'event': 'paused', 'errorType': type(exc).__name__}), flush=True)
-                interval = (1 if controller.data.get('status') == 'executing_skill'
-                            and controller.data.get('systemOne') else controller.settings['observationSeconds'])
-                delay = max(1, interval - (time.monotonic() - started))
+                # Native tasks keep running in Minecraft. Only sample/handoff here;
+                # a pending classifier must not block receipts or read-only dialogue.
+                interval = control_interval(controller)
+                delay = max(.05, interval - (time.monotonic() - started))
                 until = time.monotonic() + delay
                 while running and proc.poll() is None and time.monotonic() < until:
                     time.sleep(min(1, max(0.01, until - time.monotonic())))
@@ -193,6 +194,7 @@ def main():
                 controller.data['status'] = 'stopped'
                 controller.publish()
             finally:
+                controller.close_policy()
                 if probe is not None and not probe.stop():
                     print(json.dumps({'event': 'qwen_probe_shutdown_timeout'}), flush=True)
                 proc.terminate()
@@ -201,6 +203,15 @@ def main():
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait(timeout=5)
+
+
+def control_interval(controller):
+    if controller.data.get('policyPending'):
+        return .25
+    if (controller.data.get('status') in ('executing_skill', 'acting', 'action_confirmation_wait')
+            or controller.data.get('dialogueActive')):
+        return 1
+    return controller.settings['observationSeconds']
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ an interrupted request is not retried. Game actions always pass the Numen lease.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import copy
 import json
 import hashlib
 import math
@@ -348,7 +349,8 @@ class QwenBackend:
 
 class Controller:
     def __init__(self, state=Path('/state/survival'), public=Path('/public/survivor.json'),
-                 gateway=None, backend=None, clock=time.time, skills=None, perception=None, party=None):
+                 gateway=None, backend=None, clock=time.time, skills=None, perception=None, party=None,
+                 policy_worker=None):
         self.root, self.public, self.clock = Path(state), Path(public), clock
         self.root.mkdir(parents=True, exist_ok=True)
         self.gateway = gateway or NumenGateway(self.root)
@@ -356,6 +358,11 @@ class Controller:
         self.skills = skills
         self.perception = perception
         self.party = party
+        from policy_worker import PolicyWorker
+        from system_one import SystemOne
+        self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
+        self.pending_policy = None  # Inference has no external effect; never recover an old choice.
+        self.policy_slot_wait_at = None
         from review import ReviewQueue
         self.reviews = ReviewQueue(self.root, self.clock)
         self.awareness = {}
@@ -392,6 +399,23 @@ class Controller:
         if job_path.exists() and read_json(job_path).get('status') == 'dispatching':
             self.pause('interrupted_skill_action')
         self.last_body = {}
+        self.data.pop('policyPending', None)
+
+    def discard_policy(self):
+        self.pending_policy = None
+        self.policy_slot_wait_at = None
+        self.data.pop('policyPending', None)
+
+    def close_policy(self):
+        self.discard_policy()
+        self.policy_worker.close()
+
+    def policy_binding(self, job):
+        control = read_json(self.root / 'control.json')
+        value = {'job': job, 'goal': self.memory().get('goal', ''),
+                 'epoch': self.settings.get('memoryEpoch'),
+                 'control': {k: control.get(k) for k in ('enabled', 'mission', 'missionChangedAt', 'drain')}}
+        return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
     def save(self):
         write_json(self.root / 'controller.json', self.data)
@@ -423,6 +447,7 @@ class Controller:
                 abs(current.get('y', 0) - previous['y']) >= 4)
 
     def pause(self, reason):
+        self.discard_policy()
         self.data.update(status='paused', pauseReason=reason)
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json') if (self.root / 'control.json').exists() else {'schema': 1}
@@ -472,6 +497,7 @@ class Controller:
             control.update(enabled=False, pauseReason='operator_drain', drain=evidence)
             write_json(self.root / 'control.json', control)
         self.data.update(status='paused', pauseReason='operator_drain')
+        self.discard_policy()
         self.record('operator_drained', **evidence)
         return True
 
@@ -1068,6 +1094,7 @@ class Controller:
             self.data['status'] = 'body_occupied'
 
     def stop_actions(self):
+        self.discard_policy()
         """Operator cancellation, never a replacement game goal."""
         active = self.data.get('active')
         confirmed = True
@@ -1399,9 +1426,11 @@ class Controller:
     def tick_skill(self, body):
         path = self.root / 'skill-job.json'
         if not self.skills or not path.exists():
+            self.discard_policy()
             return False
         job = read_json(path)
         if job.get('status') not in ('pending', 'running'):
+            self.discard_policy()
             return False
         if job.get('practiceRunId') and not job.get('practiceStarted'):
             try:
@@ -1423,6 +1452,7 @@ class Controller:
         if (job['steps'] >= min(job.get('maxSteps', 32), self.settings['maxSkillSteps']) or
                 now - job['startedAt'] > self.settings['maxSkillSeconds']):
             job.update(status='replan', reason='skill_execution_budget')
+            self.discard_policy()
             write_json(path, job)
             self.record('skill_stopped', name=job['name'], reason=job['reason'])
             return False
@@ -1431,16 +1461,65 @@ class Controller:
             return True
         try:
             from fast_execution import execution_state, program_observation
-            observed = dict(body, execution=execution_state(job, self.data.get('episodes', []), body, now),
-                environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
-                adventure=self.adventure(body), guild=self.cached_guild(),
-                constructionAreas=self.settings.get('constructionAreas', [])[:8])
-            plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
+            pending = self.pending_policy
+            binding = self.policy_binding(job)
+            if pending and pending['binding'] != binding:
+                self.discard_policy()
+                pending = None
+            if pending:
+                plan = dict(pending['plan'])
+            else:
+                observed = dict(body, execution=execution_state(job, self.data.get('episodes', []), body, now),
+                    environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
+                    adventure=self.adventure(body), guild=self.cached_guild(),
+                    constructionAreas=self.settings.get('constructionAreas', [])[:8])
+                plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
             job.pop('lastPolicy', None)
             if 'choose' in plan:
-                from system_one import SystemOne
-                selection = SystemOne(clock=self.clock).choose(plan['choose'], body,
-                    self.memory().get('goal', ''), observed['execution'].get('lastExecution'))
+                if pending is None:
+                    token = self.policy_worker.submit(plan['choose'], body,
+                        self.memory().get('goal', ''), observed['execution'].get('lastExecution'))
+                    if token is not None:
+                        self.policy_slot_wait_at = None
+                        # Persist only the unchanged program job, never a replayable choice.
+                        write_json(path, original_job)
+                        self.pending_policy = {'token': token, 'plan': copy.deepcopy(plan), 'body': copy.deepcopy(body),
+                            'binding': binding, 'submittedAt': self.clock()}
+                        self.data['policyPending'] = {'submittedAt': int(self.clock() * 1000),
+                            'name': job['name'], 'version': job['version']}
+                    else:
+                        if self.policy_slot_wait_at is None:
+                            self.policy_slot_wait_at = self.clock()
+                        if self.clock() - self.policy_slot_wait_at > 5:
+                            job.update(status='replan', reason='policy_worker_busy')
+                            write_json(path, job)
+                            self.discard_policy()
+                            self.record('skill_finished', name=job['name'], version=job['version'],
+                                        status='replan', reason='policy_worker_busy', steps=job['steps'])
+                            return False
+                    self.data.update(status='executing_skill', skillWaitReason='policy_pending')
+                    return True
+                selection = self.policy_worker.poll(pending['token'])
+                elapsed = self.clock() - pending['submittedAt']
+                if selection is None and elapsed <= 5:
+                    self.data.update(status='executing_skill', skillWaitReason='policy_pending')
+                    return True
+                from policy_worker import same_body
+                self.discard_policy()
+                if (selection is None or elapsed > 5 or not same_body(pending['body'], body, self.clock())
+                        or selection.get('code') == 'policy_observation_stale'):
+                    # A classifier may re-observe, but never retry an uncertain action.
+                    job['policyDiscards'] = job.get('policyDiscards', 0) + 1
+                    self.record('system_one_discarded', name=job['name'], reason='policy_premise_changed',
+                                requestAgeMs=round(elapsed * 1000, 2), worldActions=0)
+                    if job['policyDiscards'] <= 2:
+                        write_json(path, job)
+                        self.data.update(status='executing_skill', skillWaitReason='policy_reobserve')
+                        return True
+                    selection = {'ok': False, 'code': 'policy_reobserve_exhausted'}
+                selection['handoffMs'] = round(elapsed * 1000, 2)
+                selection['resultAgeMs'] = round(max(0, elapsed * 1000 - selection.get('workerMs', 0)), 2)
+                job.pop('policyDiscards', None)
                 job['lastPolicy'] = {k: v for k, v in selection.items() if k not in ('state', 'candidates', 'action')}
                 self.data['systemOne'] = job['lastPolicy']
                 self.record('system_one_choice', name=job['name'], version=job['version'],
@@ -1513,6 +1592,7 @@ class Controller:
             self.save()
             return job['status'] == 'running'
         except Exception as exc:
+            self.discard_policy()
             if job.get('status') == 'dispatching':
                 # Preserve the last intent even if the action response journal is intact.
                 # The program must not be restarted at an unknown external-effect boundary.
@@ -2013,10 +2093,14 @@ class Controller:
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
         self.settle_cancellation()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
+        if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
+            self.discard_policy()
         body = self.gateway.snapshot()
         if hasattr(self.gateway, 'enforce_navigation_deadline'):
             body = self.gateway.enforce_navigation_deadline(body)
         self.last_body = body
+        if not body.get('ok') or body.get('task', {}).get('busy') or self.data.get('active'):
+            self.discard_policy()
         if hasattr(self.gateway, 'action_status'):
             execution = self.gateway.action_status(body)
             self.data['actionExecution'] = execution

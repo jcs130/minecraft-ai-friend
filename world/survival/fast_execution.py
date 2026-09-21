@@ -55,9 +55,12 @@ def systems_status(data, job, now):
             'nextCheckAt': job.get('nextRunAt') if waiting else None,
             'steps': job.get('steps', 0) if active else 0,
             'observations': job.get('observations', 0) if active else 0,
+            'policyPending': data.get('policyPending'),
+            'waitReason': data.get('skillWaitReason') if active else None,
             'requiresModelPerStep': bool(active and job.get('lastPolicy')),
             'localPolicy': {k: v for k, v in (data.get('systemOne') or {}).items()
-                            if k in ('model', 'choice', 'confidence', 'latencyMs', 'code', 'ok', 'observedAt')},
+                            if k in ('model', 'choice', 'confidence', 'latencyMs', 'code', 'ok', 'observedAt',
+                                     'provider', 'stateBytes', 'transportTiming', 'handoffMs', 'resultAgeMs')},
             'requiresQwenPerStep': False},
             'slow': {'owner': 'qwenpaw', 'active': bool(data.get('active')),
                      'status': data.get('status'), 'readiness': data.get('qwenReadiness')},

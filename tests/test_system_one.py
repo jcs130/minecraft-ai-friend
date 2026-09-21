@@ -2,6 +2,8 @@ import copy
 from pathlib import Path
 import sys
 import tempfile
+import time
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -154,9 +156,44 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):validate_choice(bad)
         with self.assertRaises(ValueError):SystemOne('http://outside.example/v1/systemone')
 
+    def test_context_and_actual_action_effects_are_bounded_and_reach_the_classifier(self):
+        proposal = copy.deepcopy(PROPOSAL)
+        proposal['context'] = {'route': {'obstruction': False, 'targetDistance': 5}, 'recentProgress': 2}
+        self.assertTrue(self.policy.choose(proposal, self.body)['ok'])
+        state = self.transport.call_args.args[0]['state']
+        self.assertEqual(state['context'], proposal['context'])
+        self.assertEqual(state['actions']['advance'], proposal['candidates'][0]['action'])
+        for context in ([], {'raw': 'x' * 2048}, {'distance': float('nan')}):
+            with self.assertRaises(ValueError):validate_choice(proposal | {'context': context})
+
+    def test_connection_is_reused_and_explicitly_closed(self):
+        import httpx
+        with tempfile.TemporaryDirectory() as folder:
+            key = Path(folder) / 'key';key.write_text('fixture-key-never-a-real-credential')
+            real_client = httpx.Client
+            policy = SystemOne(api_key_file=key, clock=lambda:self.now)
+            with patch('httpx.Client', side_effect=lambda **kw: real_client(**kw,
+                    transport=httpx.MockTransport(lambda req:httpx.Response(200, json=reply())))) as client:
+                self.assertTrue(policy.choose(PROPOSAL,self.body)['ok'])
+                self.assertTrue(policy.choose(PROPOSAL,self.body)['ok'])
+                self.assertEqual(client.call_count,1)
+                connection = policy._client
+                policy.close()
+                self.assertTrue(connection.is_closed)
+
 
 class PolicyControllerTests(unittest.TestCase):
-    setUp=fixture.ControllerTests.setUp
+    def setUp(self):
+        fixture.ControllerTests.setUp(self)
+        self.addCleanup(self.controller.close_policy)
+        self.controller.cached_guild = Mock(return_value={})
+
+    def await_policy(self):
+        token = self.controller.pending_policy['token']
+        deadline = time.monotonic() + 2
+        while self.controller.policy_worker.poll(token) is None and time.monotonic() < deadline:
+            time.sleep(.005)
+        self.assertIsNotNone(self.controller.policy_worker.poll(token))
     create=fixture.ControllerTests.create
     write=fixture.ControllerTests.write
     job=fixture.ControllerTests.job
@@ -165,6 +202,9 @@ class PolicyControllerTests(unittest.TestCase):
         self.job();self.gateway.body['observedAt']=self.clock()*1000
         self.skills.reply={'choose':PROPOSAL,'action':None,'memory':{},'done':False,'replan':False}
         with patch.object(SystemOne,'_post',return_value=reply()):
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.assertEqual(self.gateway.actions, [])
+            self.await_policy()
             self.assertTrue(self.controller.tick_skill(self.gateway.body))
         self.assertEqual(len(self.gateway.actions),1)
         self.assertEqual(self.gateway.actions[0]['tool'],'goto')
@@ -178,7 +218,124 @@ class PolicyControllerTests(unittest.TestCase):
         self.job();self.gateway.body['observedAt']=self.clock()*1000
         self.skills.reply={'choose':PROPOSAL,'action':None,'memory':{},'done':False,'replan':False}
         with patch.object(SystemOne,'_post',side_effect=TimeoutError('fixture')):
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.await_policy()
             self.assertFalse(self.controller.tick_skill(self.gateway.body))
         self.assertEqual(self.gateway.actions,[])
         self.assertEqual(read_json(self.state/'skill-job.json')['status'],'replan')
         self.assertTrue(read_json(self.state/'control.json')['enabled'])
+
+    def prepare_choice(self):
+        self.job();self.gateway.body['observedAt']=self.clock()*1000
+        self.skills.reply={'choose':PROPOSAL,'action':None,'memory':{'advanced':True},'done':False,'replan':False}
+
+    def test_blocked_http_does_not_block_ticks_advance_memory_or_duplicate_requests(self):
+        self.prepare_choice();entered=threading.Event();release=threading.Event()
+        self.addCleanup(release.set)
+        def blocked(payload):
+            entered.set();release.wait(2);return reply()
+        with patch.object(SystemOne,'_post',side_effect=blocked) as post:
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.assertTrue(entered.wait(1))
+            before=read_json(self.state/'skill-job.json')
+            for _ in range(3):self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.assertEqual(before,read_json(self.state/'skill-job.json'))
+            self.assertEqual(self.gateway.actions,[]);self.assertEqual(post.call_count,1)
+            release.set();self.await_policy()
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+        self.assertEqual(len(self.gateway.actions),1)
+        self.assertEqual(read_json(self.state/'skill-job.json')['memory'],{'advanced':True})
+
+    def test_changed_physical_state_and_expired_result_never_dispatch(self):
+        for change in ('hp','position','dimension','deadline'):
+            with self.subTest(change=change):
+                self.prepare_choice()
+                with patch.object(SystemOne,'_post',return_value=reply()):
+                    self.controller.tick_skill(self.gateway.body);self.await_policy()
+                    if change=='deadline':self.clock.now+=6
+                    elif change=='position':self.gateway.body['position']['x']+=2
+                    elif change=='hp':self.gateway.body['hp']-=1
+                    else:self.gateway.body['dimension']='nether'
+                    self.assertTrue(self.controller.tick_skill(self.gateway.body))
+                self.assertEqual(self.gateway.actions,[])
+                self.assertEqual(read_json(self.state/'skill-job.json')['steps'],0)
+
+    def test_goal_change_and_pause_invalidate_a_completed_choice(self):
+        self.prepare_choice()
+        with patch.object(SystemOne,'_post',return_value=reply()):
+            self.controller.tick_skill(self.gateway.body);self.await_policy()
+            old=self.controller.pending_policy['token']
+            control=read_json(self.state/'control.json');control['mission']='new task'
+            self.write('control.json',control)
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.assertNotEqual(self.controller.pending_policy['token'],old)
+            self.await_policy();self.controller.pause('operator')
+            self.assertIsNone(self.controller.pending_policy)
+        self.assertEqual(self.gateway.actions,[])
+
+    def test_repeated_stale_results_escalate_instead_of_spinning_forever(self):
+        self.prepare_choice()
+        for attempt in range(3):
+            self.gateway.body['observedAt']=self.clock()*1000
+            with patch.object(SystemOne,'_post',return_value=reply()):
+                self.controller.tick_skill(self.gateway.body);self.await_policy()
+                self.clock.now+=6
+                active=self.controller.tick_skill(self.gateway.body)
+            self.assertEqual(active,attempt<2)
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'],'policy_reobserve_exhausted')
+        self.assertEqual(self.gateway.actions,[])
+
+    def test_unavailable_worker_slot_has_a_bounded_wait(self):
+        self.prepare_choice()
+        with patch.object(self.controller.policy_worker,'submit',return_value=None):
+            self.assertTrue(self.controller.tick_skill(self.gateway.body))
+            self.clock.now+=6
+            self.assertFalse(self.controller.tick_skill(self.gateway.body))
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'],'policy_worker_busy')
+        self.assertEqual(self.gateway.actions,[])
+
+    def test_read_only_dialogue_runs_during_inference_and_cannot_take_the_body(self):
+        import test_survival_life_session as life
+        self.prepare_choice()
+        self.controller.settings.update(contextProtocol=2,brainProtocol=1,memoryEpoch='new-generation')
+        release=threading.Event();entered=threading.Event()
+        def blocked(payload):entered.set();release.wait(15);return reply()
+        try:
+            with patch.object(SystemOne,'_post',side_effect=blocked):
+                self.controller.tick_skill(self.gateway.body);self.assertTrue(entered.wait(1))
+                self.controller.party=life.FakeParty()
+                self.controller.tick()
+                self.assertIsNotNone(self.controller.data.get('dialogueActive'))
+                allowed=self.backend.submitted[-1]['requestContext']['subagent_allowed_tools']
+                self.assertNotIn('numen_survival__move',allowed)
+                self.assertNotIn('numen_survival__remember',allowed)
+                self.assertEqual(self.gateway.opened,[]);self.assertEqual(self.gateway.actions,[])
+                release.set();self.await_policy();self.controller.tick()
+                self.assertEqual(len(self.gateway.actions),1)
+                self.assertIsNotNone(self.controller.data.get('dialogueActive'))
+        finally:release.set()
+
+
+class WorkerTests(unittest.TestCase):
+    def test_invalidated_busy_slot_cannot_queue_and_then_reuses_one_client(self):
+        from policy_worker import PolicyWorker
+        entered=threading.Event();release=threading.Event()
+        policy=Mock()
+        def choose(*args):entered.set();release.wait(2);return {'ok':False}
+        policy.choose.side_effect=choose
+        factory=Mock(return_value=policy);worker=PolicyWorker(factory)
+        try:
+            first=worker.submit(PROPOSAL,{})
+            self.assertTrue(entered.wait(1))
+            self.assertIsNone(worker.submit(PROPOSAL,{}))
+            release.set()
+            deadline=time.monotonic()+2
+            while worker.poll(first) is None and time.monotonic()<deadline:time.sleep(.005)
+            second=worker.submit(PROPOSAL,{})
+            self.assertNotEqual(first,second);self.assertIsNone(worker.poll(first))
+            deadline=time.monotonic()+2
+            while worker.poll(second) is None and time.monotonic()<deadline:time.sleep(.005)
+            self.assertIsNotNone(worker.poll(second));factory.assert_called_once()
+        finally:
+            release.set();worker.close()
+        policy.close.assert_called_once()

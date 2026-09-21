@@ -12,10 +12,15 @@ OFFICIAL_ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
 
 
 def validate_choice(value):
-    if (not isinstance(value, dict) or set(value) != {'question', 'candidates'}
+    if (not isinstance(value, dict) or not {'question', 'candidates'} <= set(value)
+            or set(value) - {'question', 'candidates', 'context'}
             or not isinstance(value['question'], str) or not 1 <= len(value['question']) <= 500
             or not isinstance(value['candidates'], list) or not 2 <= len(value['candidates']) <= 8):
         raise ValueError('invalid_policy_choice')
+    if 'context' in value:
+        context = value['context']
+        if not isinstance(context, dict) or len(json.dumps(context, allow_nan=False).encode()) > 2048:
+            raise ValueError('invalid_policy_context')
     from numen_gateway import TOOLS
     ids = set()
     for row in value['candidates']:
@@ -70,8 +75,15 @@ def compact_state(body, goal, execution, proposal=None):
         keys = sorted(valid, key=lambda k: (k not in preferred, k))[:32]
         view['counts'] = {k: valid[k] for k in keys}
         view['countsTruncated'] = len(keys) != len(counts)
-    return {'body': view, 'goal': str(goal)[:600],
-            'lastExecution': _fields(execution, ('actionId', 'tool', 'status', 'code', 'completionConfirmed'))}
+    state = {'body': view, 'goal': str(goal)[:600],
+             'lastExecution': _fields(execution, ('actionId', 'tool', 'status', 'code', 'completionConfirmed'))}
+    if proposal:
+        # Exact bounded effects, not just prose labels. Programs select task-local
+        # facts from their observations; chat transcripts/reasoning are never added.
+        state['actions'] = {r['id']: r['action'] for r in proposal['candidates']}
+        if 'context' in proposal:
+            state['context'] = proposal['context']
+    return state
 
 
 class SystemOne:
@@ -89,6 +101,13 @@ class SystemOne:
         self.api_key_file = Path(api_key_file or os.environ.get('SURVIVOR_SYSTEM_ONE_KEY_FILE', '/state/secret/jev-api-key'))
         self.transport = transport or self._post
         self.clock = clock
+        self._client = None
+        self.timing = None
+
+    def close(self):
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
     def _headers(self):
         # Never attach the official credential to local or arbitrary endpoints.
@@ -103,16 +122,39 @@ class SystemOne:
     def _request(self, method, endpoint, payload=None):
         import httpx
         headers = self._headers()
-        with httpx.Client(timeout=2.0, trust_env=False, follow_redirects=False) as client:
-            # Bound the read, not just the already-buffered response. No automatic retries.
-            with client.stream(method, endpoint, json=payload, headers=headers) as reply:
+        started = time.monotonic()
+        events = {}
+        def trace(event, info):
+            # Only event names/times: never trace headers, bodies or credentials.
+            events[event] = (time.monotonic() - started) * 1000
+        if self._client is None:
+            self._client = httpx.Client(timeout=2.0, trust_env=False, follow_redirects=False,
+                limits=httpx.Limits(max_connections=1, max_keepalive_connections=1, keepalive_expiry=60))
+        initialized = (time.monotonic() - started) * 1000
+        try:
+            # One serial worker owns this connection. No automatic retries.
+            with self._client.stream(method, endpoint, json=payload, headers=headers,
+                                     extensions={'trace': trace}) as reply:
                 reply.raise_for_status()
                 raw = bytearray()
                 for chunk in reply.iter_bytes():
+                    if time.monotonic() - started > 5:
+                        raise TimeoutError('system_one_total_deadline')
                     raw.extend(chunk)
                     if len(raw) > 32768:
                         raise ValueError('system_one_reply_too_large')
                 return json.loads(raw)
+        finally:
+            def duration(prefix):
+                a, b = events.get(prefix + '.started'), events.get(prefix + '.complete')
+                return round(b - a, 2) if a is not None and b is not None else None
+            self.timing = {'clientInitMs': round(initialized, 2),
+                'newConnection': 'connection.connect_tcp.started' in events,
+                'connectMs': duration('connection.connect_tcp'),
+                'tlsMs': duration('connection.start_tls'),
+                'responseHeadersMs': next((round(v, 2) for k, v in events.items()
+                    if k.endswith('receive_response_headers.complete')), None),
+                'httpTotalMs': round((time.monotonic() - started) * 1000, 2)}
 
     def _post(self, payload):
         return self._request('POST', self.endpoint, payload)
@@ -176,6 +218,8 @@ class SystemOne:
                         'provider': 'typesafe' if self.official else 'local-decider',
                         'selectedProbability': probabilities[choice],
                         'probabilities': probabilities, 'latencyMs': round((time.monotonic()-started)*1000, 2),
+                        'transportTiming': self.timing,
+                        'stateBytes': len(packed.encode('utf8')),
                         'stateSha256': hashlib.sha256(packed.encode('utf8')).hexdigest(),
                         'observedAt': stamp, 'state': state, 'candidates': proposal['candidates']}
             metadata['modelInfo'] = _fields(reply.get('model_info'),
@@ -197,7 +241,11 @@ if __name__ == '__main__':
     if sys.argv[1:] != ['--health']:
         raise SystemExit('Only --health is supported')
     try:
-        result = SystemOne().health()
+        policy = SystemOne()
+        try:
+            result = policy.health()
+        finally:
+            policy.close()
     except Exception as error:
         result = {'ok': False, 'errorType': type(error).__name__, 'modelCalls': 0, 'worldActions': 0}
     print(json.dumps(result))
