@@ -412,7 +412,7 @@ class GatewayTests(unittest.TestCase):
             for tool in listed:
                 if tool.name not in ('status', 'look', 'view_scene', 'sense', 'world_perception', 'skill_catalog', 'skill_read',
                                      'game_skills', 'game_skill_receipt', 'knowledge_catalog', 'knowledge_read',
-                                     'request_goal', 'request_review', 'inspect_block', 'scan_blocks', 'villager_offers', 'lookup_recipe',
+                                     'request_goal', 'goal_agenda', 'request_review', 'inspect_block', 'scan_blocks', 'villager_offers', 'lookup_recipe',
                                      'guild_board', 'guild_receipt', 'adventure_guide', 'inspect_container', 'speech_status'):
                     self.assertIn('turn_id', tool.inputSchema['required'])
         asyncio.run(check())

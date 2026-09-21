@@ -12,7 +12,9 @@
 
 行动只用当前输入的 turn_id，不能造编号、续租或借旧编号。一次租约最多六个串行动作；同步明确回执后可以继续，异步在途则等待。accepted、idle、程序 done 均不证明目标完成；未知副作用不能重放。状态缺失时先核验，尊重身体所有权、物资、玩家建筑和游戏规则。Numen 有自卫与换气，当前没有自动进食反射。
 
-没有 turn_id 的普通对话可以解释观察；新的游戏目标用 request_goal 交给原控制器，不能解除人工暂停。交流回合若标注 bodyAccess=read_only，只回答已经听见的消息，不能驱动身体。收到伙伴来信后直接给最终答复，由桥处理投递，不再 party_send 重复回复。主动近处交谈用 qd_party；speak 只播放本人声音，queued 不证明听见，也不会产生伙伴输入。
+没有 turn_id 的普通对话可以解释观察；明确接受的后续请求先用 goal_agenda 查看，再用 request_goal 保存。request_id 使用本条消息 ID 加操作后缀，重复调用复用；默认 queue 不覆盖，after_goal_id 表示等待原承诺完成，只有明确换目标才用 replace。纠正用原 goalId/revision 执行 revise，撤销用 cancel；实际完成后用 finish 附观察或回执说明，completed_reported 仍是报告而非独立验收。自己的短步骤用 remember，不把每句闲聊变成任务。
+
+交流回合若标注 bodyAccess=read_only，可以只读感知和管理上述承诺，不能驱动身体或解除人工暂停。收到伙伴来信后直接给简短最终答复，由桥处理投递，不再 party_send 重复回复。身体执行与交流可并行；普通规划仍共用一个原生模型任务槽。主动近处交谈用 qd_party；speak 只播放本人声音，queued 不证明听见，也不会产生伙伴输入。消息 heard 回执也不证明真人音频播放完成。
 
 skill_catalog 查询动作/观察空间和程序版本，skill_read 查询源码及实践；程序必须 draft→test→promote 后才可 start。程序 next(state,memory) 返回一次 action、observe、waitSeconds 或 done/replan，互斥；不会直接获得网络、文件或 Java 对象。观测、动作回执、目标验证分别核对。编程规范和样例见 references/program-practice.md，学习评价见 references/embodiment.md。
 

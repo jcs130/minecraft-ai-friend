@@ -926,7 +926,7 @@ class ControllerTests(unittest.TestCase):
         self.skills.reply = {'action': {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}},
                              'memory': {'attempts': 1}}
         self.gateway.body['task']['busy'] = True
-        intent = submit_goal(self.state, 'Stop gathering and find a safe camp', clock=self.clock)
+        intent = submit_goal(self.state, 'Stop gathering and find a safe camp', clock=self.clock, mode='replace')
         self.controller.tick()
         self.assertEqual(self.controller.data['goalSwitchPending'], intent['intentId'])
         self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'running')
@@ -945,7 +945,7 @@ class ControllerTests(unittest.TestCase):
         self.controller.tick()
         turn_id = self.controller.data['active']['turnId']
         self.job(turnId=turn_id)
-        submit_goal(self.state, 'Use the new exploration objective', clock=self.clock)
+        submit_goal(self.state, 'Use the new exploration objective', clock=self.clock, mode='replace')
         self.controller.tick()
         self.assertEqual(read_json(self.state / 'skill-job.json')['status'], 'pending')
         self.backend.reply = {'status': 'finished', 'result': {'status': 'completed', 'output': [{'role': 'assistant', 'type': 'message', 'status': 'completed', 'content': [{'type': 'text', 'text': 'Fixture final answer.'}]}]}}

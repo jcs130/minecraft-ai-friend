@@ -362,9 +362,12 @@ class Controller:
         from system_one import SystemOne
         self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
+        self.pending_social = None
         self.policy_slot_wait_at = None
         from review import ReviewQueue
         self.reviews = ReviewQueue(self.root, self.clock)
+        from goal_agenda import GoalAgenda
+        self.goals = GoalAgenda(self.root, self.clock)
         self.awareness = {}
         self.environment = {}
         self.environment_at = 0
@@ -605,30 +608,39 @@ class Controller:
 
     def conversation_intent(self, control):
         path = self.root / 'conversation-intent.json'
-        if not path.exists():
-            return control
         try:
-            intent = read_json(path)
-            identity, goal = intent.get('id'), intent.get('goal')
-            if (not isinstance(identity, str) or str(uuid.UUID(identity)) != identity
-                    or not isinstance(goal, str) or not 1 <= len(goal) <= 1200):
-                raise ValueError('invalid_conversation_intent')
-            if identity == self.data.get('conversationIntentId'):
+            if path.exists():
+                self.goals.import_legacy(read_json(path), self.data.get('conversationIntentId'))
+            job_path = self.root / 'skill-job.json'
+            job = read_json(job_path) if job_path.exists() else {}
+            # Queue waits for the whole existing skill/planning turn to end.
+            # Explicit replacement/revision is already active in the agenda
+            # and still uses the original safe action boundary.
+            selected = self.goals.select(activate=not self.data.get('active') and
+                job.get('status') not in ('pending', 'running', 'dispatching'))
+            tag = ({'goalId': selected['goalId'], 'revision': selected['revision']} if selected else None)
+            self.data.pop('goalAgendaError', None)
+            if tag == control.get('goalAgendaSelection'):
+                if tag != control.get('goalAgendaApplied'):
+                    self.data['goalSwitchPending'] = tag['goalId'] if tag else 'agenda_finished'
                 return control
             with action_lock(self.root, blocking=True):
                 # Preserve a simultaneous operator pause and the existing budget.
                 control = read_json(self.root / 'control.json')
-                control.update(mission=goal, missionChangedAt=int(self.clock() * 1000))
+                if tag == control.get('goalAgendaSelection'):
+                    return control
+                control.update(mission=selected['goal'] if selected else '', goalAgendaSelection=tag,
+                               missionChangedAt=max(int(self.clock() * 1000), control.get('missionChangedAt', 0) + 1))
                 write_json(self.root / 'control.json', control)
-            self.data['conversationIntentId'] = identity
+            self.data['conversationIntentId'] = selected['goalId'] if selected else None
             # Intake may arrive while an old model or Numen action is in flight.
             # Preserve it until that action is finished, then retire the old job
             # before it can dispatch another step for the superseded objective.
-            self.data['goalSwitchPending'] = identity
-            self.record('conversation_goal_received', requestId=identity)
+            self.data['goalSwitchPending'] = tag['goalId'] if tag else 'agenda_finished'
+            self.record('conversation_goal_received', selection=tag, executionConfirmed=False)
             return control
-        except (OSError, ValueError, TypeError):
-            self.data['perceptionWarning'] = 'conversation_intent_invalid'
+        except Exception as exc:
+            self.data['goalAgendaError'] = type(exc).__name__
             return control
 
     def switch_goal_at_boundary(self):
@@ -643,6 +655,10 @@ class Controller:
                     job.update(status='cancelled', reason='goal_changed')
                     write_json(path, job)
                     self.record('skill_stopped', name=job.get('name'), reason='goal_changed')
+            control = read_json(self.root / 'control.json')
+            if 'goalAgendaSelection' in control:
+                control['goalAgendaApplied'] = control['goalAgendaSelection']
+                write_json(self.root / 'control.json', control)
             self.data.pop('goalSwitchPending', None)
             self.data['lastDecisionSignature'] = None
             self.data['noActionReviews'] = 0
@@ -1022,6 +1038,15 @@ class Controller:
         job_path = self.root / 'skill-job.json'
         job = read_json(job_path) if job_path.exists() else {}
         value['executionSystems'] = systems_status(self.data, job, now)
+        try:
+            agenda = self.goals.snapshot()
+            value['socialScheduling'] = {'version': 1, 'goalCounts': agenda['counts'],
+                'selection': control.get('goalAgendaSelection'), 'attention': self.data.get('socialAttention'),
+                'attentionMode': self.settings.get('socialAttentionMode', 'shadow'),
+                'lastDialogue': self.data.get('lastDialogueTiming'), 'goalError': self.data.get('goalAgendaError'),
+                'voicePlaybackConfirmed': False}
+        except Exception as exc:
+            value['socialScheduling'] = {'version': 1, 'goalError': type(exc).__name__}
         if self.settings.get('brainProtocol') == 1:
             value['embodiment'] = {'version': 1, 'memoryEpoch': self.settings['memoryEpoch'],
                 'worldModel': 'partial_observation', 'sharedSensorSurface': True,
@@ -1048,6 +1073,7 @@ class Controller:
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
             'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
+            'socialSchedulingVersion': 1, 'goalAgendaReady': not bool(value['socialScheduling'].get('goalError')),
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
@@ -2128,6 +2154,8 @@ class Controller:
                 self.data['actionExecution'] = {'ok': False, 'inFlight': True, 'code': str(exc)}
         self.perceive(body)
         if self.settings.get('brainProtocol') == 1:
+            from social_attention import tick as attention_tick
+            attention_tick(self, body, control)
             from dialogue import tick as dialogue_tick
             dialogue_tick(self, body, control)
         self._check_life_cycle(body)
@@ -2189,6 +2217,8 @@ class Controller:
                 self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
         elif self.data.get('active'):
             self.poll_model(body)
+        elif self.data.get('goalAgendaError'):
+            self.data['status'] = 'goal_confirmation_wait'
         elif self.data.get('actionExecution', {}).get('inFlight'):
             self.data['status'] = 'acting' if self.data['actionExecution'].get('ok') else 'action_confirmation_wait'
         else:

@@ -36,6 +36,15 @@ class SurvivorParty:
     def heard_replies(self):
         return self.queue.heard_replies('qd-survivor') if self.config.configured() else []
 
+    def attention_candidate(self):
+        return self.queue.attention_candidate('qd-survivor') if self.config.configured() else None
+
+    def begin_attention(self, message):
+        return self.queue.begin_attention(message['messageId'], 'qd-survivor')
+
+    def finish_attention(self, message, decision, evidence):
+        return self.queue.finish_attention(message['messageId'], 'qd-survivor', decision, evidence)
+
     def consume_replies(self, event_ids, task_id):
         return self.queue.consume_replies('qd-survivor', event_ids, task_id)
 

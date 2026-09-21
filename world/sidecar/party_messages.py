@@ -33,7 +33,7 @@ from party_world import speech_event, speech_text, validate_receipt, reply_text,
 IDENTITY_FIELDS = ('agentId', 'bodyUuid', 'ownerUuid', 'sessionId', 'userId', 'channel')
 ACTIVE = ('unknown', 'submitted')
 DEFER_REASONS = frozenset(('busy', 'budget_blocked', 'body_unavailable'))
-TERMINAL = ('answered', 'expired', 'failed')
+TERMINAL = ('answered', 'expired', 'failed', 'observed')
 DEFAULT_LIMITS = {'dailyDispatchCap': None, 'cooldownSeconds': 0, 'maxPending': 32,
                   'maxTextChars': 8000, 'maxTtlSeconds': 86400, 'maxMessages': 10000}
 
@@ -136,6 +136,10 @@ class PartyMessages:
                 event_id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(message_id),
                 kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, receipt TEXT)''')
             db.execute('CREATE INDEX IF NOT EXISTS party_pending ON messages(recipient,status,created)')
+            db.execute('''CREATE TABLE IF NOT EXISTS message_attention (
+                message_id TEXT PRIMARY KEY REFERENCES messages(message_id),
+                decision TEXT NOT NULL, started REAL NOT NULL, ready_at REAL NOT NULL,
+                decided REAL, evidence TEXT)''')
             db.execute('''CREATE TABLE IF NOT EXISTS reply_consumptions (
                 event_id TEXT NOT NULL REFERENCES world_speech(event_id), consumer TEXT NOT NULL,
                 task_id TEXT NOT NULL, consumed_at REAL NOT NULL,
@@ -318,10 +322,80 @@ class PartyMessages:
             self._member(binding, recipient_agent_id)
             if busy or not binding['enabled'] or self._active(db, recipient_agent_id):
                 return None
+            now = self._now()
             row = db.execute("SELECT m.* FROM messages m JOIN world_speech w ON w.event_id=m.message_id "
+                             "LEFT JOIN message_attention a ON a.message_id=m.message_id "
                              "WHERE m.recipient=? AND m.status='pending' AND m.next_attempt<=? AND w.state='heard' "
-                             "ORDER BY m.created,m.rowid LIMIT 1", (recipient_agent_id, self._now())).fetchone()
+                             "AND (a.message_id IS NULL OR a.ready_at<=?) "
+                             "ORDER BY CASE WHEN m.created<=? THEN 0 WHEN a.decision='now' THEN 1 ELSE 2 END,"
+                             "m.created,m.rowid LIMIT 1", (recipient_agent_id, now, now, now - 30)).fetchone()
             return self._public(row) if row else None
+
+    def attention_candidate(self, recipient_agent_id):
+        """Only heard, unreserved inputs; does not reserve a Qwen task or body."""
+        with self._transaction() as db:
+            binding = self._binding(db)
+            self._member(binding, recipient_agent_id)
+            if not binding['enabled'] or self._active(db, recipient_agent_id):
+                return None
+            row = db.execute("SELECT m.* FROM messages m JOIN world_speech w ON w.event_id=m.message_id "
+                             "LEFT JOIN message_attention a ON a.message_id=m.message_id "
+                             "WHERE m.recipient=? AND m.status='pending' AND m.next_attempt<=? "
+                             "AND w.state='heard' AND a.message_id IS NULL ORDER BY m.created,m.rowid LIMIT 1",
+                             (recipient_agent_id, self._now())).fetchone()
+            return self._public(row) if row else None
+
+    def begin_attention(self, message_id, recipient_agent_id):
+        """Persist at most one classification attempt per message, including restarts.
+
+        After five seconds an unfinished attempt becomes eligible for ordinary
+        Qwen dialogue. A lost classifier result cannot consume the message.
+        """
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, recipient_agent_id)
+            row = self._row(db, message_id)
+            require_heard = self._heard(db, message_id)
+            if (not binding['enabled'] or row['status'] != 'pending' or not require_heard
+                    or json.loads(row['payload'])['recipient'] != member):
+                return False
+            now = self._now()
+            return db.execute('INSERT OR IGNORE INTO message_attention(message_id,decision,started,ready_at) '
+                              "VALUES(?,'pending',?,?)", (message_id, now, now + 5)).rowcount == 1
+
+    def finish_attention(self, message_id, recipient_agent_id, decision, evidence):
+        """Trusted classifier adapter only; never expose this method as a tool."""
+        _require(decision in ('now', 'later', 'observe', 'fallback'), 'invalid_party_attention')
+        _require(isinstance(evidence, dict) and len(_json(evidence).encode()) <= 2048, 'invalid_attention_evidence')
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, recipient_agent_id)
+            row = self._row(db, message_id)
+            attention = db.execute('SELECT * FROM message_attention WHERE message_id=?', (message_id,)).fetchone()
+            if (not binding['enabled'] or row['status'] != 'pending' or not self._heard(db, message_id)
+                    or json.loads(row['payload'])['recipient'] != member or not attention
+                    or attention['decision'] != 'pending'):
+                return False
+            now = self._now()
+            if now >= attention['ready_at']:
+                decision = 'fallback'
+            # One bounded deferral, not a sliding deadline under continuous chat.
+            ready = min(now + 3, row['created'] + 30) if decision == 'later' else now
+            db.execute('UPDATE message_attention SET decision=?,ready_at=?,decided=?,evidence=? WHERE message_id=?',
+                       (decision, ready, now, _json(evidence), message_id))
+            if decision == 'observe':
+                db.execute("UPDATE messages SET status='observed',detail='no_reply_selected' WHERE message_id=?",
+                           (message_id,))
+            return True
+
+    def attention_status(self, recipient_agent_id):
+        with self._transaction() as db:
+            binding = self._binding(db)
+            self._member(binding, recipient_agent_id)
+            rows = db.execute('SELECT a.decision,COUNT(*) n FROM message_attention a JOIN messages m '
+                              'ON m.message_id=a.message_id WHERE m.recipient=? AND m.binding_revision=? GROUP BY a.decision',
+                              (recipient_agent_id, binding['revision']))
+            return {'version': 1, 'counts': {r['decision']: r['n'] for r in rows}}
 
     def _reply_observation(self, binding, member, row, db):
         """Only actual hearing for this exact current identity becomes input."""

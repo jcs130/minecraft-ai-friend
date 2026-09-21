@@ -112,6 +112,14 @@ def wake(controller, body, control, turn_id, message=None, replies=None):
         context['partyMessage'] = controller.party.context(message)
     if replies:
         context['partyReplies'] = replies
+    agenda = controller.goals.snapshot()
+    if agenda['goals']:
+        context['commitments'] = {'selection': control.get('goalAgendaSelection'), 'counts': agenda['counts'],
+            'goals': [{**{key: goal[key] for key in ('goalId', 'revision', 'state', 'afterGoalId')},
+                       'goal': goal['goal'][:160], 'truncated': len(goal['goal']) > 160}
+                      for goal in agenda['goals'] if goal['state'] in ('active', 'pending')][:6],
+            'instruction': '承诺用goal_agenda按ID/版本管理；后续请求用request_goal稳定request_id排队。'
+                '纠正修改原目标；实际完成后附观察/回执说明finish，reported不等于独立验证。'}
     return context
 
 

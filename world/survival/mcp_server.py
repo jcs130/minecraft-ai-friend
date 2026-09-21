@@ -13,7 +13,7 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'skill_catalog', 'skill_read', 'skill_draft', 'skill_test',
               'skill_promote', 'skill_start', 'remember', 'game_skills',
               'game_cast', 'game_learn', 'game_skill_receipt', 'world_perception',
-              'knowledge_catalog', 'knowledge_read', 'request_goal', 'request_review',
+              'knowledge_catalog', 'knowledge_read', 'request_goal', 'goal_agenda', 'request_review',
               'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
@@ -242,19 +242,15 @@ class SkillTools:
         return self._write(turn_id, save)
 
 
-def submit_goal(state, goal, clock=time.time):
-    """Conversation intake only; the controller adopts it at a safe boundary."""
-    from numen_gateway import write_json
-    if not isinstance(goal, str) or not goal.strip() or len(goal) > 1200 or '\0' in goal:
-        return {'ok': False, 'code': 'invalid_conversation_goal'}
-    intent = {'schema': 1, 'id': str(uuid.uuid4()), 'goal': goal.strip(), 'at': int(clock() * 1000)}
+def submit_goal(state, goal, clock=time.time, *, request_id=None, mode='queue', after_goal_id=None):
+    """Durable commitments; intake never controls the body or resumes autonomy."""
+    from goal_agenda import GoalAgenda
+    import sqlite3
     try:
-        write_json(Path(state) / 'conversation-intent.json', intent)
-    except (OSError, ValueError, TypeError):
-        return {'ok': False, 'code': 'conversation_goal_unavailable'}
-    return {'ok': True, 'code': 'goal_queued', 'intentId': intent['id'],
-            'executionConfirmed': False, 'autonomyEnabledChanged': False,
-            'summary': '目标已交给调度器；当前动作完成后再切换。暂停状态和调用预算保持不变。'}
+        return GoalAgenda(state, clock).request(goal, request_id, mode, after_goal_id)
+    except (OSError, ValueError, TypeError, sqlite3.Error) as exc:
+        return {'ok': False, 'code': str(exc) if isinstance(exc, ValueError) else 'conversation_goal_unavailable',
+                'retryAutomatically': False}
 
 
 def status_view(body, detail='full'):
@@ -542,9 +538,18 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return knowledge.read(name, offset, max_chars)
 
     @server.tool()
-    def request_goal(goal: str) -> dict:
-        """用户在Qwen普通对话交代新的游戏目标时，排队交给生活调度器，最多1200字。自主生活轮选择的临时步骤/等待用remember保存，不用本工具固化成永久指令。此工具不施放、移动、恢复暂停或重置预算。"""
-        return submit_goal(gateway.state, goal, gateway.clock)
+    def request_goal(goal: str, request_id: str | None = None, mode: Literal['queue', 'replace'] = 'queue',
+                     after_goal_id: str | None = None) -> dict:
+        """接受明确的后续游戏请求：先goal_agenda查看，复用稳定request_id防重，默认排队不覆盖。after_goal_id等待该承诺报告完成；只有用户明确换目标才用replace。不是把每句闲聊或自己的临时步骤变成任务；不停止当前动作或恢复暂停。"""
+        return submit_goal(gateway.state, goal, gateway.clock, request_id=request_id, mode=mode, after_goal_id=after_goal_id)
+
+    @server.tool()
+    def goal_agenda(operation: Literal['list', 'revise', 'cancel', 'finish'] = 'list', goal_id: str = '',
+                    revision: int = 0, request_id: str = '', goal: str = '', evidence: str = '') -> dict:
+        """查看承诺，或按goalId/revision修订、取消、报告完成。写操作用稳定request_id；finish必须附真实观察/回执说明，仍只记completed_reported，不冒充世界验证。用户纠正修改原目标，闲聊不取消任务；身体由调度器在原边界处理。"""
+        from goal_agenda import goal_operation
+        return goal_operation(gateway.state, operation, clock=gateway.clock, goal_id=goal_id,
+                              revision=revision, request_id=request_id, goal=goal, evidence=evidence)
 
     @server.tool()
     def request_review(request_id: str, reason: str = 'scheduled') -> dict:

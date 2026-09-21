@@ -125,15 +125,17 @@ class ConversationGoalTests(unittest.TestCase):
     def test_goal_is_persisted_without_resuming_or_changing_lease_and_budget(self):
         with tempfile.TemporaryDirectory() as folder:
             state = Path(folder)
+            write_json(state / 'settings.json', {'bodyUuid': 'fixture-body', 'ownerUuid': 'fixture-owner'})
             values = {'control.json': {'enabled': False}, 'lease.json': {'status': 'closed'},
                       'driver-state.json': {'modelCalls': 51, 'decisions': [1, 2, 3]}}
             for name, value in values.items():
                 write_json(state / name, value)
             result = submit_goal(state, '找到自己的安全营地，然后学习真正的技能。', clock=lambda: 1800000000)
             self.assertEqual(result['code'], 'goal_queued'); self.assertFalse(result['executionConfirmed'])
-            intent = read_json(state / 'conversation-intent.json')
-            self.assertEqual(str(uuid.UUID(intent['id'])), result['intentId'])
-            self.assertEqual(intent['at'], 1800000000000)
+            from goal_agenda import GoalAgenda
+            intent = GoalAgenda(state).snapshot()['goals'][0]
+            self.assertEqual(str(uuid.UUID(intent['goalId'])), result['intentId'])
+            self.assertEqual(intent['createdAt'], 1800000000000)
             self.assertIn('安全营地', intent['goal'])
             for name, value in values.items():
                 self.assertEqual(read_json(state / name), value)
@@ -142,11 +144,13 @@ class ConversationGoalTests(unittest.TestCase):
     def test_empty_or_oversized_goal_cannot_overwrite_an_accepted_goal(self):
         with tempfile.TemporaryDirectory() as folder:
             state = Path(folder)
+            write_json(state / 'settings.json', {'bodyUuid': 'fixture-body', 'ownerUuid': 'fixture-owner'})
+            from goal_agenda import GoalAgenda
             submit_goal(state, '保留目标')
-            old = read_json(state / 'conversation-intent.json')
+            old = GoalAgenda(state).snapshot()
             for value in ('', '   ', 'x' * 1201, '\0', None, {}):
                 self.assertFalse(submit_goal(state, value)['ok'])
-                self.assertEqual(read_json(state / 'conversation-intent.json'), old)
+                self.assertEqual(GoalAgenda(state).snapshot(), old)
 
 
 if __name__ == '__main__':

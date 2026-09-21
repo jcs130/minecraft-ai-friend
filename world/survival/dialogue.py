@@ -11,7 +11,7 @@ from numen_gateway import read_json, action_lock
 from life_session import final_text, framework_failure
 
 READ_TOOLS = ('numen_survival__status', 'numen_survival__look', 'numen_survival__sense',
-              'numen_survival__world_perception')
+              'numen_survival__world_perception', 'numen_survival__request_goal', 'numen_survival__goal_agenda')
 
 
 def tick(controller, body, control):
@@ -41,9 +41,15 @@ def tick(controller, body, control):
                 success = result['status'] in ('completed', 'finished') and native.get('status') == 'completed' and bool(answer)
                 active['nativeTerminal'] = {'completed': success, 'text': answer if success else '',
                     'failureReason': framework_failure(native) or 'native_task_failed'}
+                active['generatedAt'] = c.clock()
                 c.save()
             receipt = c.deliver_party_terminal(active, allow_dispatch=enabled)
             if receipt['settled']:
+                c.data['lastDialogueTiming'] = {'messageId': active.get('messageId'),
+                    'receivedAt': active.get('receivedAt'), 'submittedAt': active['startedAt'],
+                    'generatedAt': active.get('generatedAt'), 'settledAt': c.clock(),
+                    'worldHeard': receipt['heard'], 'audioPlayedAt': None}
+                c.record('social_dialogue_settled', **c.data['lastDialogueTiming'])
                 if active['nativeTerminal']['completed']:
                     from behavior_context import acknowledge
                     acknowledge(c.root, c.session, active['contextDelivery'])
@@ -100,8 +106,11 @@ def tick(controller, body, control):
         # Every input states the authority independently of previous context.
         context['bodyAccess'] = 'read_only'
         context['instruction'] = ('回应这条已经听见的消息，直接给简短最终答复，由原桥投递。'
-            '本轮只有只读感知工具，没有身体租约；不调用remember或party_send，不声称动作已完成。')
+            '身体工具只读，没有身体租约；不调用remember或party_send，不声称动作已完成。'
+            '不把每句话当任务；若决定接受明确后续请求，先用goal_agenda查看，再request_goal持久保存后才承诺。'
+            'request_id用当前messageId加操作后缀，重试复用；纠正或取消用原goalId/revision，默认排队不覆盖。')
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
+                  'messageId': message['messageId'], 'receivedAt': message.get('createdAt'),
                   'sessionId': session['primarySessionId'], 'userId': session['userId'],
                   'channel': session['channel'], 'contextDelivery': delivery}
         with action_lock(c.root, blocking=True):
