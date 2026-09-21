@@ -169,3 +169,9 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 3. **偶发 `ECONNRESET`** —— 长驻 bot 必须自带看门狗重连。
 4. **AI 自主性依赖 `MC_SELF_PROPOSE=1`**（已开）：不设则没任务时原地罚站，看着像死机。
 5. **夜里角色倾向"躲夜罚站"**（自保反射独占身体且空转）：白天演示，或给它一张床。
+6. **⚠️ 三个已连客户端仍绕过门（读到的是未翻译世界）** ✓ 待点头即改：
+   - 基岩桥 **ViaProxy-3.4.12**（PID 持 UDP 19140 ✓ 计划任务 `ViaProxy-Bedrock` → `ops/docker/shadow/viaproxy/start-viaproxy.bat`）`--target-address 127.0.0.1:25565` → 应改 **`127.0.0.1:25701`** ✓ 改后重启该任务 ✓ 手机端建筑乱码/假火才会消失 ✓（**会踢掉基岩在线访客 ✓ 属直播敏感操作 ✓**）
+   - 女神化身 `world` 服务 `MC_HOST=mc / MC_PORT=25599` → 应改 `gate / 25700` ✓（改 compose + 重启 world 容器 ✓）
+   - NekoX（已停）复活时把端口改 25701 ✓
+   注：计划任务里 `Geyser-Bedrock`（State=Ready ✓ 未跑）与 `ViaProxy-Bedrock`（Running）并存 ✓ **现役是 ViaProxy 内嵌 Geyser** ✓ 早前"Geyser-Standalone b1245"那条记录作废 ✗
+7. **外门 `25702` 已可被局域网直连（`ag_probe` 实测进门成功）** ✓ 而 `white-list=false` ✓ → **公网转发前必须先加白名单并 `whitelist on`** ✓ 否则任何知道地址的人拿 `ag_xxx` 就能进 ✓
