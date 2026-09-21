@@ -388,5 +388,7 @@ python tools/export_pack.py
 - 技能与统一入口：[SKILLS-UNIFIED-CLI.md](docs/SKILLS-UNIFIED-CLI.md)、[言灵法杖](docs/STAFF-CHANTING-DESIGN.md)、[语言即接口](docs/LANGUAGE-INTERFACE.md)
 - AI 共生世界设计（后续方案，非已部署）：[SYMBIOSIS-WORLD-DESIGN.md](docs/SYMBIOSIS-WORLD-DESIGN.md)
 - 服务器管理：[SERVER-MANAGEMENT.md](docs/SERVER-MANAGEMENT.md)
+- **Agent 接入与号映射**：[AGENT-ONBOARDING](docs/AGENT-ONBOARDING.md)（接入手册）· [BOTGATE-IDMAP](docs/BOTGATE-IDMAP.md)（号映射**单一事实源**）· [MC-ACCESS-GUIDE](docs/MC-ACCESS-GUIDE.md)（入口速查）· [MC-PUBLIC-ACCESS](docs/MC-PUBLIC-ACCESS.md)（公网转发边界）
+- **部署与宿主服务**：[deploy-release-runbook](docs/deploy-release-runbook.md) §5–§6 · 不在 compose 里的宿主服务正本 [world/host-services/](world/host-services/README.md)
 - 历史阶段验收日志：[INTEGRATION-HISTORY.md](docs/INTEGRATION-HISTORY.md)
 - Agent 协作约定（权威）：[AGENTS.md](AGENTS.md)
