@@ -1,7 +1,7 @@
 # Agent 接入手册（mineflayer / numen 假玩家）
 
-> 2026-09-21 实测基准。服务端：Java **1.21.1 + NeoForge 21.1.248**、**离线模式**。
-> 本文只讲「文字 AI / Agent 怎么接进来」，且**只写实测过的**；当前有已知读数缺陷，务必看 §4。
+> 2026-09-21 实测基准（世界当日曾整体宕机一次 ✓ 恢复后已复验 ✓）。服务端：Java **1.21.1 + NeoForge 21.1.248**、**离线模式**。
+> 本文只讲「文字 AI / Agent 怎么接进来」，且**只写实测过的**；读数状态见 §4（冒烟 7/7 ✓）。
 
 ---
 
@@ -9,12 +9,12 @@
 
 | 你的 Agent 要做什么 | 用哪条 | 现在能不能上 |
 |---|---|---|
-| 长期住世界、看方块/寻路/采集/建造 | **numen 假玩家**（服务端内生）| **能 ✓ 且读数天然正确** |
-| 快速挂个 mineflayer 做点事、主要看**物品/背包/聊天** | mineflayer 经 **gate `25701`** | 能进 ✓ 物品读数已正确 ✓ |
-| mineflayer 且**要看方块世界**（找床、避怪、挖掘）| —— | **别用 ✗ 方块仍读错**（见 §4）→ 先用 numen |
+| 快速挂个 mineflayer 做点事（物品/背包/聊天）| mineflayer 经门（内 `25701` / 外 `25702`）| **能 ✓ 读数正确 ✓** |
+| mineflayer 且**要看方块世界**（找床、避怪、挖掘、建造）| mineflayer 经门 | **能 ✓ 方块读数已复验正确 ✓**（§4）|
+| 长期住世界、要最稳不掉线、要服务端级权限 | **numen 假玩家**（服务端内生）| **能 ✓ 且不经网络编号 ✓ 最稳** |
 | 真人客户端观战/游玩 | Java 25565 + NeoForge，或基岩 UDP 19140 | 能 ✓ |
 
-**当前最优默认：重要 Agent 走 numen。** mineflayer 的方块读数修复还差「chunk 缓冲区翻译」这一步（§4）。
+**默认建议**：外部/临时 Agent 直接 **mineflayer 走门** ✓（读数已复验正确 ✓）；要长期常驻当角色 → **numen** ✓（不掉线 ✓ 零网络开销 ✓）。**任何 mineflayer 都别裸连 `25565`** ✗（不翻号 ✓ 方块物品都会错 ✓）。
 
 ---
 
@@ -49,20 +49,26 @@ const bot = require('mineflayer').createBot({
 
 - NeoForge 带内容模组后，**网络里的 blockstate/item 数字号 ≠ 原版表**，mineflayer/Geyser 按原版表解码必然错位。
 - 2026-09-21 已上线修复链路：botgate 导出权威号表 → `idmap.json`（state 11.6 万 + item 5158）→ gate 出站翻译。
-- **实测生效范围（截至 2026-09-21 世界宕机前）**：
-  - ✅ **物品**：经 gate 背包/槽位名已正确（diamond_sword/stone/bookshelf 实测对；mod 物品兜底为 paper）
-  - ⏳ **方块**：chunk palette 翻译代码 `remapChunkBuf`（prismarine-chunk load→翻 palette→dump）已进 gate ✓ 但**世界宕机未能复验是否真读对** ✗ —— 上一版"方块仍读错"是**该代码合入前的旧账** ✓ 别当定论 ✓
-- **结论**：方块修复**代码已就位·待世界起来复验** ✓ 复验前，找床/避怪/挖矿/建造类 Agent **稳妥仍走 numen**（读数天然正确 ✓）；复验通过后放开此建议。
+- **实测生效范围（2026-09-21 世界恢复后复验 ✓ 冒烟 `verify-gate.cjs` 7/7 通过 ✓）**：
+  - ✅ **物品**：背包/槽位号已正确（diamond_sword/stone/bookshelf/red_bed/blaze_rod 实测对；mod 物品兜底 paper）
+  - ✅ **区块批量（map_chunk）**：chiseled_bookshelf/bookshelf/obsidian/diamond_block/furnace/sticky_piston/magma_block/glowstone/packed_ice **逐格读对** ✓ 历史上"红床→活塞、书架→变体、obsidian→火"这批高位号全部归正 ✓
+  - ✅ **单块实时（block_change）**：`setblock` 后 **1s 内**模型更新 ✓ 号已翻译（diamond_block→4276 ✓）
+  - ✅ **批量变更（multi_block_change）**：`fill` 4 格 1s 内全读对 ✓ —— 这条是本轮**新补的翻译**（record = `方块号<<12 | 局部坐标` ✓ 实测反推定谳 ✓ 此前漏翻会把高位号砸进客户端读成 air ✗）
+- **结论**：**mineflayer Agent 经门已经能正确读写方块世界** ✓ 不再强制走 numen ✓ numen 仍是"长驻角色"最稳选项（不掉线、不经网络编号）✓
+- 回归口复验方式：`cd world/src/neoforge-handshake && node verify-gate.cjs`（改翻译层后先 `docker restart qiandengji-gate-1 qiandengji-gate-public-1` ✓ `/app/src` 是宿主 `world/src` **只读挂载** ✓ 改宿主文件即生效 ✓ 不用重建镜像 ✓）
 
 ## 5. 白名单与安全铁律
 
-- **外部 Agent 的公网入口已经建好 = `gate-public`（`0.0.0.0:25702`）** ✓ 带前缀门（`GATE_AGENT_PREFIX` ✓ 内部名冒名即拒 ✓）。
-  → **别再另开/转发裸 Java `25565` 给 Agent** ✓ 那条没有前缀闸 ✓ 离线模式下可被 `Kirito`/`Goddess` 冒名抢家当 ✗✗
-- 服务端离线、**没装 Floodgate** ✓ → **基岩访客**（UDP 19140）仍受"名字可被冒用"约束 ✓ 对外开放前：
-  1. `whitelist add <访客独占名>` → 全部备齐再 `whitelist on`（RCON 即时生效 ✓ 不用重启 ✓）
-  2. 已预置 14 个自家号（Goddess/Kirito/…/live）；**没填就开 = 把自家 AI 锁门外** ✗
+- **前缀闸已实测有效 ✓**：外门日志原话 `拒之门外：「Goddess」不符外门命名（须 ag_ 开头）` ✓ `ag_probe` 完整进门进 PLAY ✓
+  （注：被拒时客户端表现是**挂断/超时** ✓ 不是一句友好提示 ✓ Agent 侧要自己处理连接失败 ✓）
+- **⚠️ 当前 `white-list=false`（server.properties 实测 ✓）= 只挡名字、不挡准入** ✓ 任何知道地址的人拿 `ag_xxx` 就能进世界 ✓（本轮 `ag_probe` 就是无白名单直接进来的 ✓ 已退出 ✓）
+  → **25702 要对公网开放前，必须先** `whitelist add <ag_名>` 再 `whitelist on` ✓（RCON 即时生效 ✓ 不用重启 ✓）
+- **外部 Agent 的入口 = `gate-public`（`0.0.0.0:25702` ✓ 现仅局域网可达 ✓ 公网仍需路由器转发那一跳 ✓）**
+  → **绝不要把裸 Java `25565` 转发到公网** ✗✗ 它不过前缀闸、也不翻号 ✓ 离线模式下可被 `Kirito`/`Goddess` 冒名抢家当 ✓
+- 服务端离线、**没装 Floodgate** ✓ → **基岩访客**（UDP 19140）同样"名字可被冒用" ✓ 对外开放前同上（14 个自家号已预置 ✓ 没填就开 = 把自家 AI 锁门外 ✗）
 - **绝不转发到公网**：`25577 RCON` / `19091 面板` / `19092 观战` / `445 SMB` / `3389 RDP` ✗✗（本机有 Agent 凭据 ✓ 泄露=世界沦陷 ✓）
-- 自家 Agent 在异地机器跑 → 优先 **Tailscale 私有组网**（已装 ✓ 连内门 25701 语义 ✓）；要真走公网就连外门 25702 + 前缀独占名 ✓
+- 自家 Agent 在异地机器跑 → 优先 **Tailscale 私有组网**（已装 ✓ 连内门 25701 语义 ✓）；要真走公网就连外门 25702 + 独占 `ag_` 名 + 开白名单 ✓
+- 其它实测参数：`online-mode=false` ✓ `view-distance=6`（**Agent 视野只有 6 区块 ✓ 别指望看远 ✓**）`spawn-protection=0`（出生点不保护 ✓）`max-players=20` ✓
 
 ## 6. 与「观战 / 附身」联动
 
