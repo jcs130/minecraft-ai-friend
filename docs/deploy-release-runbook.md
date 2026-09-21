@@ -85,3 +85,80 @@
 
 - 请求→回执可审计：发布请求含 commit sha 与审批者；回执含前后版本、健康快照、operationId；失败为终态不重放。
 - 角色侧永远只有请求与回执，无 docker/git 直连；宿主步骤由造物主执行并留独立回执。
+
+---
+
+## 5. 号映射与「神社之门」的部署与验证（2026-09-21 补）
+
+> 权威说明在 `docs/BOTGATE-IDMAP.md`（号映射单一事实源）；容器内速查卡在
+> `world/src/neoforge-handshake/README.md`（随只读挂载进两个门容器）。本节只管**部署动作与验收**。
+
+### 5.1 生效路径（为什么便宜）
+
+`/app/src` 是宿主 `world/src` 的**只读 bind-mount** ✓ 所以改门代码或换号表**只需**：
+
+```powershell
+cd D:\Projects\QiandengJi
+docker restart qiandengji-gate-1 qiandengji-gate-public-1
+```
+
+不重建镜像、不重启世界、不掉玩家（实测重启后在线名单不变）。
+
+### 5.2 什么时候**必须**重生成号表
+
+- 增删模组、换 NeoForge 版本、改客户端代理链路之后
+- 症状：Agent 或基岩端读到错位世界（红床→活塞、obsidian→火、模组物品空白）
+
+```powershell
+# 1) 服务端只读导出（不改动世界）
+#    RCON:  /botgate dumpids
+# 2) 取 dump/botgate-ids/{blocks.tsv,items.tsv} → world/src/neoforge-handshake/idmap-dump/
+# 3) 备份 + 生成（必须看到 badRules=0）
+cd world\src\neoforge-handshake
+copy idmap.json idmap.json.bak-<日期>
+node build-idmap.cjs
+# 4) 只重启门
+docker restart qiandengji-gate-1 qiandengji-gate-public-1
+# 5) 验收（两件都必须绿）
+node verify-gate.cjs
+node audit-idmap.cjs
+# 6) 号表入仓（防漂移）
+git add world/src/neoforge-handshake && git commit && git push
+```
+
+### 5.3 验收标准
+
+| 项 | 判据 |
+|---|---|
+| 号表载入 | 门日志 `[REMAP] 载入 state=… item=…` + `[REMAP] 反表 state=…` |
+| 功能冒烟 | `node verify-gate.cjs` → **11/11 exit 0**（含 4 项**状态保真**） |
+| 结构体检 | `node audit-idmap.cjs` → 覆盖率对账一致 ✓ 双向往返恒等 ✓ `direct=0` ✓ |
+| 各条通路 | 门日志 `docker logs qiandengji-gate-1 2>&1 | findstr 叩门` 出现该客户端名 ✓ |
+| 基岩上游（免手机） | `node verify-gate.cjs 127.0.0.1 25568`（ViaProxy Java 入口）✓ `… 25566`（皮肤代理入口）✓ |
+| 天眼 | `http://127.0.0.1:19092/healthz` → `ok:true` 且 `blockStates.mode="gate-translated"` |
+
+⚠ **禁止**用"画面看着对"作为过门证据：号错位是「低段侥幸对、高段全错」，裸连也能画出正常村庄。
+
+### 5.4 回滚
+
+- 号表：`copy idmap.json.bak-<日期> idmap.json` → 重启两道门
+- 门代码：`git checkout` 对应提交 → 重启两道门
+- 基岩桥 target：`copy start-viaproxy.bat.bak-target25565 start-viaproxy.bat` → `schtasks /end` → **`taskkill /T /F` 掉残留 java**（`/end` 不杀孤儿子进程）→ `schtasks /run`
+
+---
+
+## 6. 宿主侧服务（不在 compose 里的东西）与它的正本
+
+有些服务**必须或暂时**跑在宿主机上，它们的定义原本散落在被 gitignore 排除的目录里（换机即丢）。
+2026-09-21 起，**正本收进 `world/host-services/`（入 git）** ✓ 运行副本仍在其原位 ✓ 两边改动要人工同步 ✓
+
+| 服务 | 运行副本位置 | 仓内正本 | 状态 |
+|---|---|---|---|
+| 基岩桥 ViaProxy + Geyser | `ops/docker/shadow/viaproxy/`（被 `ops/docker/.gitignore` 的 `shadow/` 排除） | `world/host-services/viaproxy-bedrock/` | 在跑 ✓ 已过门（target 25701）✓ 容器化 A/B 待手机验证 |
+| 皮肤代理 skin-proxy | `C:\Users\lzl19\.dsh\profiles\web\`（harness/dsh 侧） | `world/host-services/skin-proxy/` | 在跑 ✓ 上游已改 25701 ✓ 实测 11/11 |
+| Geyser 容器 A/B 试验 | `server/geyser-ab/`（被 `/server/` 排除） | `world/host-services/geyser-container/` | 试验中（宿主发 UDP 19141） |
+| `mc-gateway` 玩家门户 | `D:\Minecraft\minecraft-ai-friend\mc-gateway\`（旧栈 clone） | — | **已退役 2026-09-21**（8011 释放 ✓ 代码与 DB 未删 ✓ 回滚：`schtasks /change /tn mc-gateway-autostart /enable` + `/run`） |
+
+> 宿主进程重启纪律：`schtasks /end` **只结束任务注册的那棵树**，bat 里 spawn 的 java/node 会变孤儿继续用旧参数运行 ✓
+> 必须 `/end` → 逐个 `taskkill /T /F`（或 `Stop-Process`）→ 确认端口已空 → 再 `/run` → **以进程命令行实查验收**。
+

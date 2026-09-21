@@ -100,3 +100,7 @@ const bot = require('mineflayer').createBot({
 
 ---
 维护：本手册状态由 `verify-gate.cjs` / `audit-idmap.cjs` 实证背书；改过 `idmap-remap.cjs` 或 `build-idmap.cjs` 后**先跑这两件再更新本文**，勿凭记忆写状态词。
+
+---
+
+> **号映射单一事实源**：NeoForge↔原版 blockstate/item 号的来路、覆盖面、兜底规则、重建与验收，统一见 [BOTGATE-IDMAP](BOTGATE-IDMAP.md) ✓ 部署动作与宿主服务正本见 [deploy-release-runbook](deploy-release-runbook.md) §5–§6 与 `world/host-services/` ✓

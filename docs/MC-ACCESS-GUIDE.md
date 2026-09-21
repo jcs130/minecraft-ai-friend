@@ -180,3 +180,7 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
    - NekoX（已停）复活时把端口改 25701 ✓
    注：计划任务里 `Geyser-Bedrock`（State=Ready ✓ 未跑）与 `ViaProxy-Bedrock`（Running）并存 ✓ **现役是 ViaProxy 内嵌 Geyser** ✓ 早前"Geyser-Standalone b1245"那条记录作废 ✗
 7. **外门 `25702` 已可被局域网直连（`ag_probe` 实测进门成功）** ✓ 而 `white-list=false` ✓ → **公网转发前必须先加白名单并 `whitelist on`** ✓ 否则任何知道地址的人拿 `ag_xxx` 就能进 ✓
+
+---
+
+> **号映射单一事实源**：NeoForge↔原版 blockstate/item 号的来路、覆盖面、兜底规则、重建与验收，统一见 [BOTGATE-IDMAP](BOTGATE-IDMAP.md) ✓ 部署动作与宿主服务正本见 [deploy-release-runbook](deploy-release-runbook.md) §5–§6 与 `world/host-services/` ✓
