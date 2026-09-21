@@ -246,6 +246,28 @@ class DialogueTests(EmbodiedControllerTests):
         self.assertEqual(len(self.backend.submitted), 1)
 
 
+class ActionHealthTests(unittest.TestCase):
+    def test_fresh_heartbeat_does_not_hide_uncertain_action_pause(self):
+        from embodied_agent_health import check
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state = root / 'server/survival-agent-state/survival'
+            for name, value in {'settings.json': {}, 'heartbeat.json': {},
+                                'control.json': {'enabled': True},
+                                'lease.json': {'status': 'closed'}}.items():
+                write_json(state / name, value)
+            self.assertTrue(check(root)['checks']['action_outcome_known'])
+            write_json(state / 'unknown.json', {'actionId': 'unresolved'})
+            self.assertFalse(check(root)['checks']['action_outcome_known'])
+            (state / 'unknown.json').unlink()
+            write_json(state / 'control.json', {'pauseReason': 'action_outcome_unknown'})
+            self.assertFalse(check(root)['checks']['action_outcome_known'])
+            write_json(state / 'control.json', {'pauseReason': 'operator_pause'})
+            self.assertTrue(check(root)['checks']['action_outcome_known'])
+            write_json(state / 'lease.json', {'status': 'unknown'})
+            self.assertFalse(check(root)['checks']['action_outcome_known'])
+
+
 class ArchiveTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

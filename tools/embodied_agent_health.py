@@ -25,18 +25,23 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'world/survival/party.py', 'world/sidecar/party_messages.py', 'tests/test_social_scheduling.py',
            'tests/test_dialogue_batch.py', 'tests/test_behavior_context.py', 'tests/test_survival_service.py',
            'world/ops/survival_submission_runtime.py', 'tests/test_survival_submission_runtime.py')
+SOURCES += ('tests/test_survival_gateway.py',)
 
 
 def check(root=ROOT, clock=time.time):
     root = Path(root)
     checks = dict.fromkeys(('generation_binding', 'supervised_heartbeat', 'archive_outside_retrieval',
                             'archive_verified', 'current_prompt', 'public_brain', 'behavior_test', 'native_mcp_recovery',
-                            'social_scheduling'), False)
+                            'social_scheduling', 'action_outcome_known'), False)
     try:
         read = lambda p: json.loads(p.read_text(encoding='utf-8-sig'))
         state = root / 'server/survival-agent-state/survival'
         workspace = root / 'server/agents/work/workspaces/qd-survivor'
         settings, heartbeat = read(state / 'settings.json'), read(state / 'heartbeat.json')
+        control, lease = read(state / 'control.json'), read(state / 'lease.json')
+        checks['action_outcome_known'] = (not (state / 'unknown.json').exists()
+            and lease.get('status') != 'unknown'
+            and control.get('pauseReason') != 'action_outcome_unknown')
         marker = read(workspace / 'embodiment.json')
         epoch = settings['memoryEpoch']
         runtime = read(root / 'server/agents/work/learning-runtime.json')

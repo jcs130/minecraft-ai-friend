@@ -371,6 +371,7 @@ class GatewayTests(unittest.TestCase):
 
     def test_equipment_is_verified_without_resend(self):
         self.lease()
+        self.rcon.inventory = '[{Slot:0b,id:"minecraft:wooden_pickaxe",count:1}]'
         self.rcon.reply = {'accepted': True, 'note': 'no immediate reply (async tool)'}
         self.rcon.equipment = {'mainhand': {'item': 'minecraft:wooden_pickaxe'}}
         with patch.object(gateway.time, 'sleep'):
@@ -382,11 +383,34 @@ class GatewayTests(unittest.TestCase):
 
     def test_unconfirmed_equipment_does_not_claim_success(self):
         self.lease()
+        self.rcon.inventory = '[{Slot:0b,id:"minecraft:wooden_pickaxe",count:1}]'
         self.rcon.reply = {'accepted': True}
         with patch.object(gateway.time, 'sleep'):
             result = self.client.action(TURN, 'equip_item', {'action': 'equip', 'item_id': 'minecraft:wooden_pickaxe', 'slot': 'mainhand'})
         self.assertEqual(result['code'], 'outcome_unknown')
         self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_missing_equipment_rejects_before_dispatch_and_preserves_lease(self):
+        self.lease()
+        lease = gateway.read_json(self.state / 'lease.json')
+        result = self.client.action(TURN, 'equip_item',
+            {'action': 'equip', 'item_id': 'minecraft:iron_sword', 'slot': 'mainhand'})
+        self.assertEqual(result['code'], 'equipment_item_missing')
+        self.assertIs(result['dispatched'], False)
+        self.assertFalse(self.rcon.mutations())
+        self.assertFalse((self.state / 'unknown.json').exists())
+        self.assertEqual(gateway.read_json(self.state / 'lease.json'), lease)
+        # A normal planning mistake must not block another action in this turn.
+        self.assertTrue(self.mine()['ok'])
+
+    def test_missing_equipment_does_not_clear_an_existing_unknown(self):
+        self.lease()
+        self.write('unknown.json', {'actionId': 'old-uncertain-action'})
+        result = self.client.action(TURN, 'equip_item',
+            {'action': 'equip', 'item_id': 'minecraft:iron_sword', 'slot': 'mainhand'})
+        self.assertEqual(result['code'], 'outcome_unknown')
+        self.assertTrue((self.state / 'unknown.json').exists())
+        self.assertFalse(self.rcon.mutations())
 
     def test_malformed_inventory_cannot_hide_preflight_failure(self):
         self.lease()

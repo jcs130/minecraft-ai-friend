@@ -1164,6 +1164,14 @@ class NumenGateway:
                     from game_skills import is_protected_action
                     protected = is_protected_action(tool, args)
                 self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
+                if tool == 'equip_item' and before['counts'].get(args['item_id'], 0) <= 0:
+                    # runSync has no terminal receipt on the RCON bridge. Reject a
+                    # known missing item BEFORE reserving/sending, rather than
+                    # waiting for equipment that cannot appear and pausing life.
+                    return {'ok': False, 'code': 'equipment_item_missing',
+                            'dispatched': False, 'writePerformed': False,
+                            'itemId': args['item_id'], 'availableCount': 0,
+                            'notice': 'Item absent from the current body inventory. Inspect inventory and choose an available item or acquire it first.'}
                 if tool == 'goto':
                     self._area(args, protect=False)
                     distance = math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z'])
