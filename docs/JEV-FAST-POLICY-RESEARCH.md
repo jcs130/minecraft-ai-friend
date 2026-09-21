@@ -1,5 +1,7 @@
 # Jev 与可训练快策略：Minecraft 具身 RSI 调研
 
+2026-09-21更新：游戏系统1已切换[官方Jev](SYSTEM-ONE-OFFICIAL-JEV.md)，本页9月20日本地模型优先路线保留为历史。新增[具身快循环设计](JEV-FAST-LOOP-DESIGN.md)及[7个控制项目源码对照](JEV-CONTROL-REFERENCE-REVIEW.md)，覆盖驾驶、无人机、机器人和Minecraft。下文旧“本轮未调用API”等仅描述本页当时实验。
+
 核查日期：2026-09-20；本项目源码基线 `f519f14a8beac62cb697eb4fdf1e1c94d98f2529`。本轮为文档、源码精读和参考项目离线测试，没有调用 Jev API、下载模型权重、训练模型或修改生产服务。下列频率、接口及训练阶段是建议，不代表现役能力。
 
 ## 1. 判断

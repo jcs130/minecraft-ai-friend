@@ -1,0 +1,250 @@
+{
+  "date": "2026-09-21",
+  "projectBase": "5d51ba6",
+  "scope": "Key source paths and limited offline checks; not full audits or live robot/game reproduction.",
+  "realModelCalls": 0,
+  "productionChanges": false,
+  "gameActions": 0,
+  "repositories": [
+    {
+      "repository": "standardagents/jevpilot",
+      "commit": "e1beeb13b9a928fb76f167f86af584f4ce9cf180",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "src/planning.js",
+          "sha256": "f2821002f1988063f5b7a73d5a3ba8f9d7db13926fede5de20bb6705191401e3",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/src/planning.js"
+        },
+        {
+          "path": "src/jev-request.js",
+          "sha256": "01d88bf100848325efd8fe1c5626250966583cd58fc6f40b4cd9c35299b1b1d3",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/src/jev-request.js"
+        },
+        {
+          "path": "src/main.js",
+          "sha256": "8a257d88949aa4ada3fd3a6b0a20c55caf881df917de7171aec61180b71f6db9",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/src/main.js"
+        },
+        {
+          "path": "src/background-planner.js",
+          "sha256": "5f137bf0fac723b1a51e352d8974ecceb0449ccd1168528fc6a1116899571db0",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/src/background-planner.js"
+        },
+        {
+          "path": "src/simulation.js",
+          "sha256": "a79573c9c5b5486b6eb7c07b534ee23e4983506629770e7bad76d3cd8ad38a47",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/src/simulation.js"
+        },
+        {
+          "path": "server/jev.js",
+          "sha256": "621a8197a5da8ce690be92eb00a90781829c27a299f69ba719e270ad3fc03748",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/server/jev.js"
+        },
+        {
+          "path": "tests/jev.test.js",
+          "sha256": "de2baac6e1bbd5776d51e58116565acc7996a74b89f6546a9ad2f049e54c24b0",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/tests/jev.test.js"
+        },
+        {
+          "path": "tests/traffic-safety.test.js",
+          "sha256": "72c6fd64a2131b917a389102ddfa166d799e4b12f30d3f1b97dd19a4083c8d0f",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/tests/traffic-safety.test.js"
+        },
+        {
+          "path": "tests/road-recovery.test.js",
+          "sha256": "02abd953723511ef34611d5d82733528f922019cb0c3b98b685a50643dd19313",
+          "url": "https://github.com/standardagents/jevpilot/blob/e1beeb13b9a928fb76f167f86af584f4ce9cf180/tests/road-recovery.test.js"
+        }
+      ]
+    },
+    {
+      "repository": "chahero/driving-jev",
+      "commit": "f8bb635b0907a9a6ee0e22e3787361c49851346a",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "src/driving_jev/app.py",
+          "sha256": "a835961e49d84ab0206edda7b1cc38af45549064417f4f292578a02d4a3596f0",
+          "url": "https://github.com/chahero/driving-jev/blob/f8bb635b0907a9a6ee0e22e3787361c49851346a/src/driving_jev/app.py"
+        },
+        {
+          "path": "src/driving_jev/policy.py",
+          "sha256": "528730710454c99fe0ab4e29767bc454123a520c460829367611d7b9a2c76da5",
+          "url": "https://github.com/chahero/driving-jev/blob/f8bb635b0907a9a6ee0e22e3787361c49851346a/src/driving_jev/policy.py"
+        }
+      ]
+    },
+    {
+      "repository": "arielweinberger/jev-autopilot",
+      "commit": "3292bbc6acfa2bcc8a4373c984f6420af5f47fd1",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "server/pilot.ts",
+          "sha256": "cef53c9c90998bb8488e84cdbda711eb45c2b3e6433241b99a9133784a9f419a",
+          "url": "https://github.com/arielweinberger/jev-autopilot/blob/3292bbc6acfa2bcc8a4373c984f6420af5f47fd1/server/pilot.ts"
+        },
+        {
+          "path": "src/autopilot.ts",
+          "sha256": "556cfbdc66be339086038951a79e208e10e316c33fd45d9e1580fc8b567035ee",
+          "url": "https://github.com/arielweinberger/jev-autopilot/blob/3292bbc6acfa2bcc8a4373c984f6420af5f47fd1/src/autopilot.ts"
+        },
+        {
+          "path": "src/types.ts",
+          "sha256": "94d1753413e2fcb5138d7784cc83111cccdf036cdb940b58f88a4d7d1381dad6",
+          "url": "https://github.com/arielweinberger/jev-autopilot/blob/3292bbc6acfa2bcc8a4373c984f6420af5f47fd1/src/types.ts"
+        }
+      ]
+    },
+    {
+      "repository": "FBddcz/embodied-jev",
+      "commit": "59a00c60e0f80fa32d14df1a365166267505980c",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "src/embodied_jev/incremental.py",
+          "sha256": "dbe0a743aa35871b7a801b3dc1f662b842a6a165ec4af15bd8cf1614ab158078",
+          "url": "https://github.com/FBddcz/embodied-jev/blob/59a00c60e0f80fa32d14df1a365166267505980c/src/embodied_jev/incremental.py"
+        },
+        {
+          "path": "src/embodied_jev/runtime.py",
+          "sha256": "4d67af06d96a9cf43f18d52f5a1c4cb4f578a5db1d5b874b62a22a0cec33de0a",
+          "url": "https://github.com/FBddcz/embodied-jev/blob/59a00c60e0f80fa32d14df1a365166267505980c/src/embodied_jev/runtime.py"
+        },
+        {
+          "path": "src/embodied_jev/policies.py",
+          "sha256": "8da31d90ab2184aabc99d0b352da7f6705a1b2e75abe208ac1d30d65b91cbdb7",
+          "url": "https://github.com/FBddcz/embodied-jev/blob/59a00c60e0f80fa32d14df1a365166267505980c/src/embodied_jev/policies.py"
+        },
+        {
+          "path": "src/embodied_jev/perception.py",
+          "sha256": "ed7a801f52e0fc4f78b9f5bfb40488a0365c3827a9934a5e63a9f683ea7a96a5",
+          "url": "https://github.com/FBddcz/embodied-jev/blob/59a00c60e0f80fa32d14df1a365166267505980c/src/embodied_jev/perception.py"
+        }
+      ]
+    },
+    {
+      "repository": "TarunTomar122/jev-askable-arm",
+      "commit": "bef98b31a122a7033dd4bfb52867cd6ccb2d7e67",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "jev_robotics/primitives.py",
+          "sha256": "2eb3b458c63a0bb7667d4c05ab0d9651fd686ab37bb8e1e5b60dcf98196e9196",
+          "url": "https://github.com/TarunTomar122/jev-askable-arm/blob/bef98b31a122a7033dd4bfb52867cd6ccb2d7e67/jev_robotics/primitives.py"
+        },
+        {
+          "path": "jev_robotics/ask_session.py",
+          "sha256": "c27b9af052058f2925cd5379a86f289ad00d0cea367886898d4d186d71018bd9",
+          "url": "https://github.com/TarunTomar122/jev-askable-arm/blob/bef98b31a122a7033dd4bfb52867cd6ccb2d7e67/jev_robotics/ask_session.py"
+        }
+      ]
+    },
+    {
+      "repository": "ellistev/typesafe-minecraft-demo",
+      "commit": "1cce66aaa7533b59a0feab30b1fbf8e9ed8de2c8",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "src/direct-actions.cjs",
+          "sha256": "f87e4e089ade6d84175b54caa425b49df1c51242eef49ae57300e3010b10e4d9",
+          "url": "https://github.com/ellistev/typesafe-minecraft-demo/blob/1cce66aaa7533b59a0feab30b1fbf8e9ed8de2c8/src/direct-actions.cjs"
+        },
+        {
+          "path": "src/direct-control.cjs",
+          "sha256": "5b90ab63e1aa8cb755d1918ccebf2b2e8a09ae49ebba8802a9d7dda9da91b9f9",
+          "url": "https://github.com/ellistev/typesafe-minecraft-demo/blob/1cce66aaa7533b59a0feab30b1fbf8e9ed8de2c8/src/direct-control.cjs"
+        },
+        {
+          "path": "src/fresh-decision.cjs",
+          "sha256": "f8c8f4cbfd22558a848093044c2af5aa05d3e7e20ebb371b8e9b5542e7f7ac2d",
+          "url": "https://github.com/ellistev/typesafe-minecraft-demo/blob/1cce66aaa7533b59a0feab30b1fbf8e9ed8de2c8/src/fresh-decision.cjs"
+        }
+      ]
+    },
+    {
+      "repository": "rmalde/minecraft-agent",
+      "commit": "78b40ed59514e5e2abde33a05ce398ecb2c39e05",
+      "checkout": "shallow sparse; optional assets omitted",
+      "files": [
+        {
+          "path": "agent.mjs",
+          "sha256": "a62e44d9f3e7b81474b1cd1948c407467c38db515795cd402dedaba22188da7d",
+          "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/agent.mjs"
+        },
+        {
+          "path": "models.mjs",
+          "sha256": "53ca1d853b607b89013015e1fec8e5a687d2ec68c3b3d5cb4d23217c1a1655a7",
+          "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/models.mjs"
+        },
+        {
+          "path": "README.md",
+          "sha256": "28f0146a04796a63d1c7fe2aedd654f60fd114b68e3c92668c40981598833c56",
+          "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/README.md"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "nodeVersion": "v22.22.1",
+    "command": "node --test tests/jev.test.js tests/traffic-safety.test.js tests/road-recovery.test.js",
+    "upstream": {
+      "tests": 20,
+      "passed": 13,
+      "failed": 7,
+      "failureNames": [
+        "Jev chooses a complete maneuver from the submitted random batch",
+        "control validation rejects another batch and changed steering or speed",
+        "eligible choices exclude collisions and fall back to braking when blocked",
+        "random batches change while seeded runs remain reproducible",
+        "crossing motorcycle is detected before it enters the old forward strip",
+        "highway approach leaves a useful gap behind a motorcycle that brakes hard",
+        "prediction follows the turn toward a stopped motorcycle"
+      ]
+    },
+    "currentContract": {
+      "realModelCalls": 0,
+      "gameActions": 0,
+      "upstreamTests": {
+        "passed": 13,
+        "failed": 7,
+        "total": 20
+      },
+      "cases": [
+        {
+          "seed": 42,
+          "assertions": 4,
+          "mockedCalls": 1,
+          "fullStateBytes": 19132,
+          "compactStateBytes": 1845,
+          "entireRequestBytes": 2363,
+          "questionIds": [
+            "vector"
+          ],
+          "localResolved": [
+            "motion"
+          ],
+          "candidates": 7
+        },
+        {
+          "seed": 123,
+          "assertions": 4,
+          "mockedCalls": 1,
+          "fullStateBytes": 19154,
+          "compactStateBytes": 1801,
+          "entireRequestBytes": 2319,
+          "questionIds": [
+            "vector"
+          ],
+          "localResolved": [
+            "motion"
+          ],
+          "candidates": 7
+        }
+      ]
+    },
+    "logSha256": "4bf4132365eb68b755af15d9a0afe3c2982a97c83f2b4dc8b7f9fc01aea59f73",
+    "limits": "Mocked API; no rendering, physical robots, real Jev inference or Minecraft server run."
+  }
+}
