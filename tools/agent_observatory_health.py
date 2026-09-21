@@ -20,6 +20,7 @@ def probe():
         canvas = get('/decision-canvas.js')
         motion = get('/observatory-motion.css')
         architecture = get('/embodied-architecture.js')
+        unified = get('/unified-decision.js')
         checks['embodied-architecture'] = (all(x in page for x in ('id="architecture-canvas"', 'data-layer="online"', 'data-layer="l2"', 'data-layer="l3"'))
             and all(x in architecture for x in ('SYSTEM 1', 'SYSTEM 2', 'Dream', 'MCP', 'verifiedImprovement:null')))
         checks['world-first-layout'] = ('class="broadcast-stage"' in page and '观察者镜头' in page
@@ -40,7 +41,10 @@ def probe():
                 for route in ('/observatory.js', '/decision-model.js', '/decision-canvas.js'))
             and all(content_types.get(route) == 'text/css'
                 for route in ('/observatory.css', '/observatory-motion.css')))
-        checks['decision-views'] = all(f'data-view="{view}"' in page for view in ('policy', 'llm', 'rsi'))
+        checks['unified-decision-canvas'] = ('data-view=' not in page and 'buildUnifiedDecisionGraph' in app
+            and all(x in unified for x in ("['policy','llm']", "['l2','l3']", "evidence:'mechanism'")))
+        checks['graph-navigation'] = all(f'id="{control}"' in page for control in ('zoom-in','zoom-out','fit-graph','expand-graph'))
+        checks['unified-module'] = content_types.get('/unified-decision.js') in ('text/javascript','application/javascript')
         checks['playback-controls'] = all(f'id="{control}"' in page
             for control in ('play', 'step', 'speed', 'pause', 'playback-progress', 'playback-note'))
         checks['layer-inspection'] = (all(f'data-inspect="{layer}"' in page for layer in ('l1', 'l2', 'l3'))

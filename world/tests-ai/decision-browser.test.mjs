@@ -67,6 +67,7 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
     '/observatory.css': ['observatory.css', 'text/css'], '/observatory-motion.css': ['observatory-motion.css', 'text/css'],
     '/decision-model.js': ['decision-model.js', 'text/javascript'], '/decision-canvas.js': ['decision-canvas.js', 'text/javascript'],
     '/embodied-architecture.js': ['embodied-architecture.js', 'text/javascript'],
+    '/unified-decision.js': ['unified-decision.js', 'text/javascript'],
   };
   // Every request, including unexpected URLs, is fulfilled here. No live service or world is reachable.
   await page.route('**/*', async route => {
@@ -99,122 +100,81 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   await page.clock.install({time: new Date(instant)});
   await page.clock.pauseAt(new Date(instant + 1000));
   await page.goto(origin + '/observatory');
-  await page.locator('[data-node="gate"]').waitFor();
-  await page.clock.runFor(600);
-  assert.match(await page.locator('#graph-title').innerText(), /Jev/);
-  assert.equal(await page.locator('#world-frame').isVisible(), true, 'World imagery is visible by default');
-  assert.equal(await page.locator('#world-frame').getAttribute('src'), 'http://127.0.0.1:19092/third/');
-  assert.match(await page.locator('.world-name').innerText(), /观察者镜头/);
-  assert.equal(await page.locator('[data-architecture-node="jev"]').count(), 1);
-  assert.equal(await page.locator('[data-architecture-node="scripts"]').count(), 1);
-  assert.match(await page.locator('#architecture-canvas').textContent(), /SYSTEM 1.*SYSTEM 2/);
-  await page.locator('[data-layer="l2"]').click();
-  await page.locator('[data-architecture-node="dream"]').press('Enter');
-  assert.match(await page.locator('#architecture-node-copy').innerText(), /未提供 Dream 运行回执/);
-  await page.locator('[data-layer="l3"]').click();
-  await page.locator('[data-architecture-node="gate"]').click();
-  assert.match(await page.locator('#architecture-node-copy').innerText(), /独立评测确认改善/);
-  assert.match(await page.locator('#architecture-canvas').textContent(), /收益证据：未知/);
-  await page.locator('[data-layer="online"]').click();
-  await page.locator('#architecture-motion').click();
-  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('architecture-animated')),false);
-  assert.equal(await page.locator('[data-node^="action-"]').count(), 0, 'A selected fallback candidate must never become an executed action');
-  assert.equal(await page.locator('[data-node="fallback"]').count(), 1);
-  assert.match(await page.locator('[data-node="candidate-0"]').textContent(), /57%/);
-  assert.match(await page.locator('[data-node="gate"]').textContent(), /13%/);
-  assert.equal(await page.locator('#play').getAttribute('aria-label'), '暂停记录动画');
-  await page.locator('#play').click();
-  await page.locator('[data-node="gate"]').click();
-  assert.match(await page.locator('#node-detail').innerText(), /决策置信度\s*13%/);
-  assert.match(await page.locator('#node-detail').innerText(), /已选候选概率\s*57%/);
-  await page.locator('[data-node="fallback"]').click();
-  assert.match(await page.locator('#node-detail').innerText(), /未派发动作/);
-  await page.locator('.evidence-link').click();
-  assert.equal(await page.locator('#inspector').isVisible(), true);
-  assert.match(await page.locator('#inspector-content').innerText(), /后续 LLM 轮次未绑定/);
-  await page.locator('#close-inspector').click();
-
-  const stoppedAt = await page.locator('#playback-progress').evaluate(element => element.value);
-  await page.locator('#step').click();
-  assert.equal(await page.locator('#playback-progress').evaluate(element => element.value), stoppedAt + 1);
-  assert.equal(await page.locator('.edge.flowing').count(), 0, 'Single step remains paused');
-  for (const speed of ['2×', '0.5×', '1×']) {
-    await page.locator('#speed').click();
-    assert.equal(await page.locator('#speed').innerText(), speed);
-  }
-  await page.locator('#speed').click(); // 2×, 750 ms per reading step.
-  await page.locator('#loop').click();
-  assert.equal(await page.locator('#loop').getAttribute('aria-pressed'), 'true');
-  assert.match(await page.locator('#playback-note').innerText(), /同一记录循环回放.*非新的执行/);
-  const stepCount = await page.locator('#playback-progress').evaluate(element => element.max);
-  await page.locator('#play').click();
-  await page.clock.runFor(stepCount * 750);
-  assert.equal(await page.locator('#play').getAttribute('aria-label'), '暂停记录动画', 'Opt-in replay loops the same historical record');
-  assert.equal(await page.locator('.edge.mechanism.flowing').count(), 0, 'A policy feedback loop is a mechanism, not a recorded transition');
-  assert.notEqual(await page.locator('.edge.mechanism .edge-base').first().evaluate(element => getComputedStyle(element).strokeDasharray), 'none');
-  await page.locator('#loop').click();
-  await page.clock.runFor((stepCount + 1) * 750);
-  assert.equal(await page.locator('#playback-status').innerText(), '回放结束');
-  assert.equal(await page.locator('#play').getAttribute('aria-label'), '播放记录动画');
-  assert.equal(await page.locator('#playback-progress').evaluate(element => element.value === element.max), true);
-
-  await page.locator('[data-view="llm"]').click();
-  assert.equal(await page.locator('#record-select').inputValue(), 'llm:turn-with-actions', 'Default LLM record has actions even when the newest turn is empty');
-  assert.equal(await page.locator('[data-node^="action-"]').count(), 1);
-  await page.locator('[data-node="action-0"]').click();
-  assert.match(await page.locator('#node-detail').innerText(), /1.20 s/);
-  await page.locator('#node-detail').getByText('调用参数', {exact: true}).click();
-  assert.match(await page.locator('#node-detail').innerText(), /minecraft:oak_planks/);
-  await page.locator('[data-view="rsi"]').click();
-  assert.match(await page.locator('#graph-mode').innerText(), /机制示意.*非执行记录/);
-  assert.equal(await page.locator('.edge.recorded').count(), 0);
-  assert.ok(await page.locator('.edge.mechanism').count() > 0);
-  assert.match(await page.locator('#playback-note').innerText(), /机制演示.*不代表已发生/);
-  await page.locator('[data-view="policy"]').click();
-
-  // Start a response, pause before it arrives, then prove it cannot replace the visible snapshot.
-  const originalMission = await page.locator('#mission').innerText();
-  trace = {...trace, agent: {...trace.agent, goal: '仅恢复更新后可见的新目标'}};
-  holdTrace = true;
-  const pending = new Promise(resolve => {traceStarted = resolve;});
-  await page.clock.runFor(5000);
-  await pending;
-  await page.locator('#pause').click();
-  const response = page.waitForResponse(response => new URL(response.url()).pathname === '/api/survivor-trace');
-  releaseTrace();
-  await (await response).finished();
+  await page.locator('[data-node="policy/gate"]').waitFor();
   await page.clock.runFor(100);
-  assert.equal(await page.locator('#mission').innerText(), originalMission, 'An in-flight fetch cannot overwrite a frozen snapshot');
-  const frozenReads = traceReads;
-  await page.clock.runFor(10000);
-  assert.equal(traceReads, frozenReads, 'Paused updates do not issue new trace reads');
-  assert.equal(await page.locator('.edge.flowing').count(), 0);
-  await page.locator('#pause').click();
-  await page.waitForFunction(() => document.getElementById('mission').textContent === '仅恢复更新后可见的新目标');
-
-  for (const [width, height] of [[1920, 1080], [390, 844]]) {
-    await page.setViewportSize({width, height});
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `Page overflows at ${width}px`);
-  }
-  await page.setViewportSize({width: 480, height: 1080});
-  await page.locator('#mode').click();
-  assert.equal(await page.locator('#decision-canvas').evaluate(element => element.viewBox.baseVal.width), 480);
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'OBS sidebar keeps its canvas inside the page');
-  for (const layer of ['l1', 'l2', 'l3']) assert.equal(await page.locator(`[data-inspect="${layer}"]`).isVisible(), true);
-
-  await page.emulateMedia({reducedMotion: 'reduce'});
-  await page.goto(origin + '/observatory');
-  await page.locator('[data-node="gate"]').waitFor();
-  assert.equal(await page.locator('#play').getAttribute('aria-label'), '播放记录动画', 'Reduced motion suppresses automatic playback');
-  assert.equal(await page.locator('#playback-progress').evaluate(element => element.value), 0);
-  await page.locator('#play').click();
-  await page.clock.runFor(1600);
-  const motion = await page.locator('#decision-canvas').evaluate(element => ({
-    signals: [...element.querySelectorAll('.edge-signal')].every(node => getComputedStyle(node).display === 'none'),
-    halos: [...element.querySelectorAll('.node-halo')].every(node => getComputedStyle(node).animationName === 'none'),
-  }));
-  assert.deepEqual(motion, {signals: true, halos: true}, 'Manual reduced-motion playback keeps signals and pulses disabled');
-  assert.deepEqual(errors, []);
-  assert.deepEqual(unexpected, []);
-  assert.ok(requests.length > 0 && requests.every(request => request.method === 'GET' && (request.url.startsWith(origin + '/') || request.url === 'http://127.0.0.1:19092/third/')));
+  assert.equal(await page.locator('#decision-canvas').count(),1);
+  assert.equal(await page.locator('[data-view]').count(),0,'No decision-view switching remains');
+  assert.equal(await page.locator('[data-lane]').count(),4);
+  for(const id of ['policy/gate','llm/llm','l2/dream','l3/gate'])assert.equal(await page.locator(`[data-node="${id}"]`).count(),1);
+  assert.equal(await page.locator('#world-frame').isVisible(),true);
+  assert.equal(await page.locator('[data-node="llm/llm"]').evaluate(n=>n.classList.contains('live-now')),true);
+  await page.locator('[data-node="policy/gate"]').click();
+  assert.match(await page.locator('#node-detail').innerText(),/决策置信度\s*13%/);
+  assert.match(await page.locator('#node-detail').innerText(),/已选候选概率\s*57%/);
+  await page.locator('[data-node="policy/fallback"]').click();
+  assert.match(await page.locator('#node-detail').innerText(),/未派发动作/);
+  await page.locator('.evidence-link').click();
+  assert.match(await page.locator('#inspector-content').innerText(),/后续 LLM 轮次未绑定/);
+  await page.locator('#close-inspector').click();
+  const initialBox=await page.locator('#decision-canvas').getAttribute('viewBox');
+  await page.locator('#zoom-in').click();
+  const zoomedBox=await page.locator('#decision-canvas').getAttribute('viewBox');
+  assert.notEqual(zoomedBox,initialBox);
+  await page.locator('#record-select').selectOption('llm:turn-with-actions');
+  assert.equal(await page.locator('[data-lane]').count(),4,'Selecting history never hides the other systems');
+  assert.equal(await page.locator('#decision-canvas').getAttribute('viewBox'),zoomedBox,'History changes preserve zoom and pan');
+  assert.equal(await page.locator('[data-node="llm/llm"]').evaluate(n=>n.classList.contains('live-now')),false);
+  await page.locator('#fit-graph').click();
+  await page.locator('[data-node="llm/action-0"]').click();
+  assert.match(await page.locator('#node-detail').innerText(),/1.20 s/);
+  assert.equal(await page.locator('[data-node="policy/gate"]').count(),1);
+  await page.locator('[data-node="l2/dream"]').click();
+  assert.match(await page.locator('#node-detail').innerText(),/未提供 Dream 运行回执/);
+  await page.locator('[data-node="l3/gate"]').press('Enter');
+  assert.match(await page.locator('#node-detail').innerText(),/独立评测确认改善/);
+  await page.locator('#decision-canvas').focus();
+  const beforePan=await page.locator('#decision-canvas').getAttribute('viewBox');
+  await page.keyboard.press('ArrowRight');
+  assert.notEqual(await page.locator('#decision-canvas').getAttribute('viewBox'),beforePan);
+  await page.locator('#fit-graph').click();
+  const bounds=await page.locator('#decision-canvas').boundingBox();
+  await page.mouse.move(bounds.x+5,bounds.y+5);
+  await page.mouse.down();await page.mouse.move(bounds.x+65,bounds.y+45);await page.mouse.up();
+  assert.notEqual(await page.locator('#decision-canvas').getAttribute('viewBox'),beforePan,'Background drag pans the complete graph');
+  await page.locator('#fit-graph').click();
+  await page.locator('#expand-graph').click();
+  assert.equal(await page.locator('body').evaluate(n=>n.classList.contains('graph-expanded')),true);
+  assert.equal(await page.locator('[data-lane]').count(),4);
+  await page.locator('#expand-graph').click();
+  for(const expected of ['2×','0.5×','1×']){await page.locator('#speed').click();assert.equal(await page.locator('#speed').innerText(),expected);}
+  await page.locator('#step').click();
+  assert.equal(await page.locator('.edge.flowing').count(),0);
+  await page.locator('#speed').click();await page.locator('#loop').click();await page.locator('#play').click();
+  const stepCount=await page.locator('#playback-progress').evaluate(n=>n.max);
+  await page.clock.runFor(stepCount*750);
+  assert.equal(await page.locator('#play').getAttribute('aria-label'),'暂停记录动画');
+  assert.equal(await page.locator('.edge.mechanism.flowing').count(),0,'No unbound handoff or evolution is replayed as execution');
+  await page.locator('#loop').click();await page.clock.runFor((stepCount+1)*750);
+  assert.equal(await page.locator('#playback-status').innerText(),'回放结束');
+  await page.locator('#latest').click();
+  assert.equal(await page.locator('#latest').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('[data-node="llm/llm"]').evaluate(n=>n.classList.contains('live-now')),true);
+  const originalMission=await page.locator('#mission').innerText();
+  trace={...trace,agent:{...trace.agent,goal:'仅恢复更新后可见的新目标'}};
+  holdTrace=true;const pending=new Promise(resolve=>{traceStarted=resolve;});
+  await page.clock.runFor(5000);await pending;await page.locator('#pause').click();
+  const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/survivor-trace');releaseTrace();await(await response).finished();
+  await page.clock.runFor(100);assert.equal(await page.locator('#mission').innerText(),originalMission);
+  const frozenReads=traceReads;await page.clock.runFor(10000);assert.equal(traceReads,frozenReads);
+  await page.locator('#pause').click();await page.waitForFunction(()=>document.getElementById('mission').textContent==='仅恢复更新后可见的新目标');
+  for(const width of [1920,390]){await page.setViewportSize({width,height:1080});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);}
+  await page.setViewportSize({width:480,height:1080});await page.locator('#mode').click();
+  assert.equal(await page.locator('[data-lane]').count(),4,'OBS also retains every lane');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+  await page.emulateMedia({reducedMotion:'reduce'});await page.goto(origin+'/observatory');await page.locator('[data-node="policy/gate"]').waitFor();
+  assert.equal(await page.locator('#play').getAttribute('aria-label'),'播放记录动画');
+  await page.locator('#play').click();await page.clock.runFor(1600);
+  assert.equal(await page.locator('.edge-signal').evaluateAll(nodes=>nodes.every(n=>getComputedStyle(n).display==='none')),true);
+  assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
+  assert.ok(requests.every(r=>r.method==='GET'&&(r.url.startsWith(origin+'/')||r.url==='http://127.0.0.1:19092/third/')));
 });

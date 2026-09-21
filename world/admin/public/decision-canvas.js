@@ -5,6 +5,7 @@ const glyphs={observation:'◎',llm:'✳',policy:'✦',candidate:'⑂',gate:'◇
 const labels={observation:'PERCEPTION',llm:'LLM / REASONING',policy:'POLICY / SELECTION',candidate:'CANDIDATE',gate:'CONFIDENCE',fallback:'HANDOFF',action:'TOOL CALL',feedback:'WORLD FEEDBACK',reflection:'MEMORY',experience:'EXPERIENCE',skill:'SKILL',test:'VALIDATION',issue:'PROPOSAL',engineering:'ENGINEERING',validation:'EVALUATION',life:'LIFE LOOP'};
 function color(n){if(n.layer==='l1')return 'cyan';if(n.layer==='l2')return 'purple';if(n.layer==='l3')return 'amber';if(['gate','fallback'].includes(n.kind)&&['blocked','fallback'].includes(n.status))return 'amber';if(n.source==='rsi')return 'amber';if(n.kind==='observation'||n.kind==='feedback')return 'blue';if(n.source==='llm')return 'cyan';if(n.source==='decider')return 'slate';return 'purple';}
 export function layoutDecisionGraph(graph,vertical=false){
+ if(graph.kind==='unified')return {map:new Map(graph.nodes.map(n=>[n.id,{...n,...n.position}])),width:graph.width,height:graph.height};
  const map=new Map(),put=(n,x,y,w=185,h=104)=>map.set(n.id,{...n,x,y,w,h});let height=650;
  if(vertical){
   let y=25;
@@ -37,6 +38,7 @@ function pathFor(a,b,loop,vertical,width,height){
  const ax=a.x+a.w/2,ay=a.y+a.h,bx=b.x+b.w/2,by=b.y-7;return `M ${ax} ${ay} C ${ax} ${(ay+by)/2} ${bx} ${(ay+by)/2} ${bx} ${by}`;
 }
 export function routeDecisionEdge(edge,layout,graphKind,vertical=false){
+ if(graphKind==='unified')return edge.route||null;
  const {map,width,height}=layout,a=map.get(edge.from),b=map.get(edge.to);if(!a||!b)return null;
  const returning=graphKind==='rsi'&&edge.to==='life'&&['test','validation'].includes(edge.from);
  const issueBranch=graphKind==='rsi'&&edge.from==='experience'&&edge.to==='issue';
@@ -54,14 +56,16 @@ export function routeDecisionEdge(edge,layout,graphKind,vertical=false){
  return {d:pathFor(a,b,loop,vertical,width,height),loop,label:loop&&!vertical?{x:width/2,y:height-22,text:edge.label||'反馈循环 · 机制示意'}:null};
 }
 export function renderDecisionCanvas(svg,graph,{vertical=false,onSelect=()=>{}}={}){
+ if(graph.kind==='unified')vertical=false;
  svg.replaceChildren();const layout=layoutDecisionGraph(graph,vertical),{map,width,height}=layout;svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.dataset.kind=graph.kind||'empty';
  const defs=s('defs');for(const tone of ['purple','cyan','amber','muted']){const m=s('marker',{id:'arrow-'+tone,viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:5,markerHeight:5,orient:'auto-start-reverse'});m.append(s('path',{d:'M0 1L9 5L0 9Z',class:'arrow-'+tone}));defs.append(m);}svg.append(defs);
- if(!graph.empty&&!vertical){const head=s('g',{class:'lane-labels'});const rows=graph.kind==='rsi'?[[75,35,'L1  ·  行动闭环'],[75,180,'L2  ·  经验沉淀'],[75,325,'L3  ·  机制改进']]:graph.kind==='policy'?[[25,35,'01  感知'],[239,35,'02  策略模型'],[470,35,'03  候选分支'],[750,35,'04  检查'],[980,35,'05  去向']]:[[45,35,'L1  ·  已记录的执行顺序']];for(const [x,y,t] of rows)head.append(s('text',{x,y},t));svg.append(head);}
+ if(!graph.empty&&!vertical&&graph.kind!=='unified'){const head=s('g',{class:'lane-labels'});const rows=graph.kind==='rsi'?[[75,35,'L1  ·  行动闭环'],[75,180,'L2  ·  经验沉淀'],[75,325,'L3  ·  机制改进']]:graph.kind==='policy'?[[25,35,'01  感知'],[239,35,'02  策略模型'],[470,35,'03  候选分支'],[750,35,'04  检查'],[980,35,'05  去向']]:[[45,35,'L1  ·  已记录的执行顺序']];for(const [x,y,t] of rows)head.append(s('text',{x,y},t));svg.append(head);}
+ if(graph.kind==='unified'){for(const lane of graph.lanes){const g=s('g',{class:'unified-lane '+lane.id,'data-lane':lane.id});g.append(s('rect',{x:lane.x,y:lane.y,width:lane.w,height:lane.h,rx:18}),s('text',{x:lane.x+20,y:lane.y+29,class:'unified-lane-title'},lane.title));const at=lane.at?new Date(lane.at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'机制示意 · 非执行记录';g.append(s('text',{x:lane.x+20,y:lane.y+50,class:'unified-lane-time'},at));svg.append(g);}}
  const lines=s('g',{class:'graph-lines'}),edgeMap=new Map();
- graph.edges.forEach(e=>{const a=map.get(e.from),b=map.get(e.to),route=routeDecisionEdge(e,layout,graph.kind,vertical);if(!route)return;const tone=e.evidence==='mechanism'||e.disabled?'muted':e.tone==='warning'?'amber':graph.source==='llm'?'cyan':'purple';const {d,label}=route;const g=s('g',{class:`edge ${tone} ${e.evidence}${e.disabled?' disabled':''}`,'data-edge':e.id});g.append(s('path',{d,class:'edge-base','marker-end':`url(#arrow-${tone})`}));if((e.evidence==='recorded'||graph.kind==='rsi')&&!e.disabled)g.append(s('path',{d,class:'edge-signal'}));
+ graph.edges.forEach(e=>{const a=map.get(e.from),b=map.get(e.to),route=routeDecisionEdge(e,layout,graph.kind,vertical);if(!route)return;const tone=e.evidence==='mechanism'||e.disabled?'muted':e.tone==='warning'?'amber':(e.source||graph.source)==='llm'?'cyan':'purple';const {d,label}=route;const g=s('g',{class:`edge ${tone} ${e.evidence}${e.disabled?' disabled':''}`,'data-edge':e.id,...(route.offset?{transform:`translate(${route.offset.x} ${route.offset.y})`}:{})});g.append(s('path',{d,class:'edge-base','marker-end':`url(#arrow-${tone})`}));if((e.evidence==='recorded'||graph.kind==='rsi')&&!e.disabled)g.append(s('path',{d,class:'edge-signal'}));
   if(label){g.append(s('rect',{x:label.x-133,y:label.y-17,width:266,height:25,rx:12,class:'loop-label-bg'}),s('text',{x:label.x,y:label.y,'text-anchor':'middle',class:'edge-label'},label.text));}
   else if(e.disabled&&!vertical&&graph.kind==='policy'){g.append(s('text',{x:(a.x+a.w+b.x)/2,y:b.y+b.h/2-13,'text-anchor':'middle',class:'edge-label'},'未选'));}lines.append(g);edgeMap.set(e.id,g);});svg.append(lines);
- const nodeMap=new Map();graph.nodes.forEach(n=>{const p=map.get(n.id),tone=color(n),g=s('g',{class:`decision-node ${tone}${n.status==='unselected'?' unselected':''}`,'data-node':n.id,transform:`translate(${p.x} ${p.y})`,role:'button',tabindex:'0','aria-label':`${n.title} · ${n.subtitle}`,'aria-pressed':'false'});
+ const nodeMap=new Map();graph.nodes.forEach(n=>{const p=map.get(n.id),tone=color(n),g=s('g',{class:`decision-node ${tone}${n.status==='unselected'?' unselected':''}${n.live?' live-now':''}`,'data-node':n.id,transform:`translate(${p.x} ${p.y})`,role:'button',tabindex:'0','aria-label':`${n.title} · ${n.subtitle}`,'aria-pressed':'false'});
   g.append(s('rect',{x:-5,y:-5,width:p.w+10,height:p.h+10,rx:17,class:'node-halo'}),s('rect',{width:p.w,height:p.h,rx:12,class:'node-box'}),s('rect',{x:0,y:20,width:3,height:p.h-40,rx:2,class:'node-accent'}));
   g.append(s('text',{x:15,y:24,class:'node-glyph'},glyphs[n.kind]||'◇'),s('text',{x:40,y:23,class:'node-kicker'},labels[n.kind]||String(n.layer||'RSI').toUpperCase()));
   const long=n.kind==='candidate',max=Math.min(long?12:13,Math.floor((p.w-30)/16)),title=abbreviate(n.title,Math.min(long?24:22,max*2)),chunks=title.length>max?[title.slice(0,max),title.slice(max)]:[title];chunks.forEach((t,i)=>g.append(s('text',{x:15,y:vertical?43+i*16:long?48+i*19:53+i*19,class:'node-title'},t)));
