@@ -6,87 +6,215 @@ Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入�
 项目以 Minecraft 为具身智能试验环境，目标是让 Agent 通过真实感知、身体行动、结果反馈和可验证的自我改进持续成长。
 QwenPaw 管理认知、交流与工程角色，Numen 服务端假玩家承担身体控制；当前已部署具身基础，完整 RSI 收益仍待独立场景验证。
 
-女神入口增加了 [Jev 意图分流](docs/JEV-SPELL-ATTENTION.md)：完整技能名和 CLI 零推理直达；自然语言私聊用一次固定选项分类选择施法、答疑或祈愿，公屏识别交流对象。否定、问句不再因包含技能词误施法，低置信度保留原答疑/祈愿路径。主城普通拆建改为保护已建成的方块：空位可放床和建设，玩家新放方块可拆，建筑、道路、公共设施以及火焰/流体安全规则仍受保护。
-
 - 游戏版本：**Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21**
 - 项目目录：`D:\Projects\QiandengJi`
 - 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，交付主干 `main`，隔离开发使用 `codex/*`；原世界源码已移入 `world/`
-- 当前按 **13 个活动 Docker 服务** 管理；历史阶段验收日志见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
+- 默认纳管 **13 个 Docker 服务**；历史阶段验收日志见 [整合历史记录](docs/INTEGRATION-HISTORY.md)
 
 > 本仓库保存源码、配置模板、构建工具与验证方法。运行状态、`reports/`、存档和成品链接指开发机上的本地文件，Git clone 不包含这些，也不等于已完成环境安装。首次拉取先读 [GitHub 开发与本机资源恢复](docs/GITHUB-WORKFLOW.md)。
 
 ---
 
-## 设计与实现进展（2026-09-21）
+## 工作总览（截至 2026-09-21）
 
-桐人、结衣的持续运行已补上原生 task 丢失核验、工具自动重连和失败退避，并修复 Qwen 完整健康与身体服务互相等待的启动问题。尽量复用 QwenPaw 的任务 tracker、Cron、DriverManager 和已有 Docker 守护，人工暂停及未知动作仍受保护。
+当前已把“能调用 Minecraft 工具的聊天 Agent”改造成有持续身体、行为会话、实践记录和工程改进入口的具身系统。**QwenPaw 管目标、交流和学习，已测试程序与 Numen 管持续执行，Jev 在限定候选中做快速选择。** 下一步要用真实任务的完成率、耗时和失败恢复验证成长，而不只统计调用次数或代码提交。
 
-系统 1 当前使用 **TypeSafe 官方 Jev**：已测试程序生成少量完整动作候选，官方模型依据新鲜局部状态选择，原身体网关执行与验证；每步不重传历史思考，故障和低置信度交回 Qwen，不自动改用本地模型。按[官方 API](https://docs.typesafe.ai/api)使用 HTTPS/Bearer 与 `jev-latest`，实测解析为 `jev-1.13.0`；密钥从受保护的本地文件读取，不进入 Git。官方 confidence 是分布的统计量，与选中概率分别校验，回执记录实际模型、两种数值及 token 用量。此前本地 Decider 已完成装备铁剑与进食两条实服动作链（92.15 / 68.76 ms），属于历史基线，不能算成官方模型的执行验证。此前的参数拒绝、终止状态误判和维护者指导修订记录保留；完整 RSI 与策略收益仍待验证。实现与部署证据见 [原生恢复与系统 1](docs/SYSTEM-ONE-NATIVE-CONTINUITY.md)。
-
-系统 1 的局部输入包含装备、候选物品优先的有限库存、空气值和饱和度；只投影当前事实与上一条回执摘要，不携带原始背包 NBT 或历史思考，缺失与截断明确标注。相同 6 个合成案例，本地 Decider 为 4/6，官方 Jev 的选项为 6/6；两个可行动案例的官方 confidence 都低于既有 0.75 阈值，仍回慢系统，不能把选项命中当成执行成功或自主执行率提升。旧本地配置修复保留为显式离线研究参考，见 [Decider 补丁](patches/decider/README.md)。
-
-[快慢控制已落地](docs/JEV-FAST-SLOW-CONTROL.md)：Numen 原生任务持续执行，已测试程序处理确定性步骤，Jev 异步选择有界候选，QwenPaw 负责目标、技能和必要重规划；既有只读交流可并行。推理单槽、复用 HTTPS 连接，绑定目标/程序/身体状态并丢弃过期结果，等待不提前推进记忆。实际容器交替测量中，冷连接中位 816.55 ms，复用连接 278.50 ms（各 6 次有效影子样本，约下降 66%）；这是 API 延迟改进，尚非策略或游戏成功率提升。250 ms 分类等待轮询与 1 秒动作回执衔接沿用原 survivor 服务，无新增 daemon。通用 WASD 片段、任务内抢占和批量语义分类仍属[后续研究](docs/JEV-FAST-LOOP-DESIGN.md)。
-
-实地补充：修复连续聊天挤占行动规划、实践子目标被长期目标覆盖的问题。一次官方 Jev 选择因 confidence 0.13 退回，Qwen 随后真实完成木板和工作台合成，面包因前置不足被拒绝；这是慢系统接手证据，尚未取得本轮官方 Jev 的成功动作闭环。该次 API 613 ms，但请求到主循环接收约 1644 ms，说明网络优化后还存在状态读取/调度耗时，250 ms 仅为目标轮询间隔。
-
-进一步[克隆精读7个Jev控制项目](docs/JEV-CONTROL-REFERENCE-REVIEW.md)，将方案扩展为“带预计效果的局部运动候选 → Jev选择 → Numen连续执行”，同时保留原生高层技能。对照涵盖驾驶仿真、无人机、机械臂和Minecraft，明确区分物理持续/等待时冻结、直接输入/语义原语及特权感知；JevPilot所选20项原测试13通过、7失败，原失败照实保留，未将参考演示当作已验证的生产能力。
-
-截图中“Astra + Jev 8分43秒击败末影龙”的 [rmalde/minecraft-agent 已补齐源码并深入核查](docs/JEV-ASTRA-MINECRAFT-CODE-REVIEW.md)：25项原单测通过，重点借鉴后台只读规划、有效候选过滤、阶段保持和本地逐tick技能；保留我们现有目标绑定与低置信回退。其成绩使用预勘测固定种子及和平难度，公开入口没有运行时自主技能晋升链，不能直接当作通用控制或RSI收益证明。本次为研究，未移植其固定攻略或更换现役执行器。
-
-[边玩边聊的调度](docs/EMBODIED-SOCIAL-SCHEDULING.md)首阶段已实现：复用现有 SQLite 保存可修订、可取消、有依赖的承诺，稳定请求 ID 防重复；默认排队等待当前技能结束，明确替换在原动作边界生效。伙伴来信复用身体的 Jev 异步槽判断立即回应、稍等或无需回应，默认影子模式只记录提案，低置信和过期仍交给 Qwen；不会凭分类驱动身体。收到、提交、生成、世界听见分别计时，不把文字投递当音频播放。当前只接桐人的伙伴入口，普通规划仍占同角色模型槽；多人弹幕合并、真人入口统一与全双工语音尚未完成。
-
-9 月 21 日后续实服已经验证三条伙伴来信合成一个原生任务、一次实际听见的回复，随后两条合一也成功。复盘指导修复后，桐人通过原生文件工具更新了长期计划的当前阶段；仍有旧段落和未经核验的推断，不能视为长期记忆质量已解决。最终源码/生产各 181 项具身回归及生产 34 项实践测试通过，维护后原角色与调度恢复。
-
-实服观测后进一步修复交流与进度衔接：社交 Jev 等待也纳入 250 ms 轮询，原生认知任务按 1 秒查询终态，避免 15 秒观察间隔耗尽分类的 5 秒有效期。同一伙伴已听见、已可处理的排队消息最多三条合成一次答复，原文与编号不丢；只有实际听见完整回复才关联结清，未知结果不重发。复盘中的长期计划更新指引改为具名增量字段，避免被上下文压缩过滤；目标仍由 Agent 根据真实回执维护。详见同篇文档的运行改进记录。
-
-对话提交遇到 HTTP 超时后，可依据 QwenPaw 原生入口持久保存的 turn/session/task 回执接回原任务，不另建任务或重发消息。无回执仍保留未知状态；一次补丁前的未知提交已在停机后人工归档，对账不等于执行成功。实服一个新对话样本约 88 秒到实际听见，Jev 一个样本约 1.12 秒接回且未过期；尚未证明统计性的对话速度或游戏策略收益。
-
-### L1 / L2 / L3：从行动闭环到模块化自进化
-
-| 层 | 职责 | 当前落点 |
+| 方向 | 已完成并部署 | 已有证据与当前边界 |
 | --- | --- | --- |
-| **L1 快循环** | 感知 → 决策 → 行动 → 反馈 → 简短现场修正 | QwenPaw 选择目标和技能，Numen 原生任务与已测试的本地程序持续执行；状态、回执与会话按需传递 |
-| **L2 经验沉淀** | 提炼有适用条件的经验、规则和可复用技能 | 复用个人 notes、学习目录、SkillLibrary 与 PracticeStore，保留来源、失败和失效条件 |
-| **L3 模块化 RSI 慢循环** | 从多任务共性问题中选择一个模块改进，比较候选与基线 | 复用原运营工程团队、工单、隔离源码工作区、固定测试和交付回执；完整世界 A/B 与保留场景收益尚未验收 |
+| 具身身体与感知 | Numen 假玩家；移动、采矿、合成、进食、装备、农耕、交互等原生工具；结构化局部感知与按需语义图 | 已有真实导航、合成、装备、进食、采收/补种回执；语义图不是第一人称画面，也不保证能读取所有模组内部状态。[具身架构](docs/EMBODIED-AGENT.md) |
+| 持续运行与上下文 | 原生 task 查询/丢失核验、退避、MCP 重连、启动依赖修复；action/review/dialogue 分会话，确认后发送增量；旧记忆归档 | 保留身体 UUID、背包和生活历史；未知动作不重放。应用层增量不等于供应商只计算新增 token。[原生连续运行](docs/SYSTEM-ONE-NATIVE-CONTINUITY.md) |
+| 快慢控制 | 官方 Jev、持久 HTTPS、原服务内异步单槽；已测试程序产生候选，失效结果丢弃，必要时交回 Qwen | 连接复用样本中位 816.55→278.50 ms（各 6 次）；这只是 HTTP 延迟。历史本地 Decider 的装备/进食成功不能算官方 Jev 的成绩。[实测](docs/JEV-FAST-SLOW-CONTROL.md) |
+| 伙伴交流与承诺 | 原 SQLite 队列、同伙伴最多三条合批、目标排队/依赖/修订/撤销、原生提交回执恢复 | 已验三条来信→一个任务→一次实际 heard 回复，随后两条合一也成功；社交 Jev 仍为 shadow，真人统一入口和全双工语音未完成。[调度与验收](docs/EMBODIED-SOCIAL-SCHEDULING.md) |
+| L2 学习与 L3 工程改进 | 原生计划/记忆、程序 draft→test→promote→start、实践台账；复用司灯/天神、工单、隔离测试和受审候选 | 计划写入已恢复，但旧段落仍可能矛盾；程序结束、目标达到、技能掌握分开。完整跨任务 RSI 收益尚未验收。[RSI 设计](docs/RSI-AGENT-DESIGN.md) |
+| 语言即接口与技能 | 技能罗盘整理、铁魔法指引、CLI 按需帮助；精确技能名直达，女神私聊/公屏 Jev 分流 | 保留已学、等级、装备、魔力和冷却校验；公屏判断女神是否接话，不替其他角色发言。[技能系统](docs/SKILL-SYSTEM-REVIEW.md)、[意图分流](docs/JEV-SPELL-ATTENTION.md) |
+| 世界与小社会 | 原村民/铁傀儡恢复、村庄安全区、街区住宅/农场/池塘/探索入口、悬空残块清理；主城固定建筑方块保护 | 空位可放床/建设，新放方块可拆；建筑、道路和区域火焰/流体规则保留。智能武装村民仅做隔离试验，未安装生产。[城镇](docs/TOWN-EXPANSION-DESIGN.md)、[保护更新](docs/JEV-SPELL-ATTENTION.md) |
+| 可观测与运维 | PawApps 的 evolution-board / gods-eye、行为趋势、服务健康、control 部署回执和原 Docker 守护 | 本轮源码/生产各 181 项具身回归、生产 34 项实践测试通过；相关运行检查通过，全局其他历史验收失配仍保留。[观测应用](docs/PAWAPPS-OBSERVATION.md) |
 
-三层是本项目的分工；借鉴 ModularRSI 的轨迹对照、跨任务汇总、单模块修改和验证方法。
-模型可以改进感知、工具使用、上下文、循环及完成判断，但一次实验的独立评分依据保持固定。
-经验条目增加、代码提交或测试通过，都需进一步结合世界中的客观结果评价。详见 [RSI 落地设计](docs/RSI-AGENT-DESIGN.md)。
+最近一次部署后观测到桐人、结衣均进入新任务，原 10 角色配置、16 条 Cron 和准入已恢复。该窗口桐人 HP/hunger 为 20/20，骷髅任务仍为 0/2；这是 **2026-09-21 的观测记录，不是实时状态或长期成功率**。本轮一次维护误停结衣任务，失败和恢复记录均保留。
+
+## 当前架构与调用链路
+
+下面画的是现役代码中的职责与调用方向。生成式推理统一由游戏 QwenPaw 原生角色承接；Jev 是单独的有界分类调用。管理台的服务健康、世界回执和学习统计分别展示，不互相替代。
+
+### 1. 系统架构
 
 ```mermaid
-flowchart LR
-    W[游戏世界与身体] --> O[带来源和时间的局部感知]
-    O --> Q[QwenPaw 目标与策略]
-    Q --> P[已测试程序与 Numen 原生任务]
-    P --> W
-    P --> E[实际回执与状态变化]
-    E --> L2[L2 条件经验与技能]
-    L2 --> Q
-    E --> L3[L3 原工程团队与独立对照]
-    L3 --> C[验证后晋升或回退]
-    C --> Q
+flowchart TB
+    PLAYER["真人玩家：游戏文字 / 语音 / 技能罗盘"]
+    ENTRY["游戏适配与执行<br/>world：女神、CLI、世界规则<br/>survivor：桐人控制与 MCP<br/>npc：结衣、村民与伙伴队列"]
+    QWEN["游戏 QwenPaw：18089<br/>10 角色，原生 task / Cron / MCP<br/>会话 / 文件 / 记忆"]
+    LLM["角色当前配置的生成式模型"]
+    JEV["TypeSafe 官方 Jev<br/>有界候选分类，不生成游戏命令"]
+    GAME["Minecraft / NeoForge 共享世界<br/>Numen：桐人假玩家身体<br/>TLM：结衣实体与工作 AI<br/>技能 / 铁魔法桥 / 公会 / 城镇"]
+    DATA["持久状态：动作与消息回执 / goals / 实践 / 工单"]
+    VIEW["只读管理台 / 天神之眼 / PawApps"]
+    CONTROL["control：受管部署 / 健康门 / 回执"]
+
+    PLAYER --> ENTRY
+    ENTRY <-->|提交及查询原生 task / 调用 MCP 工具| QWEN
+    QWEN --> LLM
+    ENTRY -->|survivor 候选 / world 意图| JEV
+    ENTRY <-->|身体网关 / 模组桥 / 原命令 / 实际回执| GAME
+    ENTRY --> DATA
+    QWEN --> DATA
+    DATA -.->|观察与审计| VIEW
+    GAME -.->|世界画面与状态| VIEW
+    CONTROL -.->|管理既有服务| ENTRY
 ```
 
-### 已实现的具身基础与世界功能
+这是职责图，不是端口拓扑：身体工具由 QwenPaw 经 MCP 调用，原生任务在游戏中持续执行；`survivor`、`npc` 不各自另开一个生成式大脑。结衣使用绑定自身身份的独立角色，通用 `qd-maid-dialogue` 是兼容入口，不能当作结衣的全部执行链路。
 
-- **身体与感知**：桐人使用 Numen 服务端假玩家，移动沿原生输入和玩家物理执行。共享 `sense` 提供身体、场景、方块、容器、机器存储及菜单查询；模组信息以其实际暴露的能力为限。`move`、`interact_at` 与程序技能复用身体租约和任务回执，受理、完成、失败与未知分别记录。
-- **上下文与交流**：行动按目标组织持久 session，复盘、学习、交流分开；首帧短约定，后续传已确认基线上的变化和新反馈。`status(detail="brief")` 按需省略背包槽位，旧经验已归档并移出当前默认检索。身体执行期间可以处理只读交流；同角色仍保持一次模型任务，真人语音/弹幕端到端效果尚未完整验收。应用层增量也不等于供应商仅处理新增 token。见 [具身架构与部署证据](docs/EMBODIED-AGENT.md)。
-- **文字即接口与技能罗盘**：罗盘默认“我的技能”，学习图鉴分离，显示装备、魔力与冷却条件；铁魔法提供入门指南。Agent 通过 `skills --json`、`help <ID>` 和既有施法/回执工具按需学习与使用。运营角色已接入平衡与性能复盘指引，自动调参收益尚未验证。见 [技能系统修复](docs/SKILL-SYSTEM-REVIEW.md)。
-- **可观察的运行状态**：QwenPaw 应用中心已接通 `evolution-board` 与 `gods-eye`，展示当前记忆代的行为分类、拒绝/未知、小时趋势与村庄画面。动作确认率和任务成功率分开，数据标明采样时间。见 [PawApp 实测记录](docs/PAWAPPS-OBSERVATION.md)。
-- **持续运行恢复**：桐人查询模型任务遇到临时传输错误时，在原期限内继续查询同一任务；结衣复用已有对账机制解除旧未知任务占用，恢复原生活班次。实测发现的公会讨伐计数器条件错误已修正。真实新任务、失败回执与验收边界见 [持续运行修复](docs/AGENT-CONTINUITY-REPAIR.md)。
-- **共享世界**：主城原址扩建为含街区、住宅、农场、池塘及探索入口的河湾镇；村庄恢复、安全区与主城建筑保护已部署，悬空残块已清理。见 [城镇布局](docs/TOWN-EXPANSION-DESIGN.md)、[主城保护](docs/TOWN-PROTECTION.md)、[清理记录](docs/TOWN-FLOATING-CLEANUP.md)。
+### 2. 桐人：感知、慢规划、快执行与反馈
 
-### 下一阶段：可训练的本地快策略
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as survivor 控制器
+    participant Q as QwenPaw 桐人角色
+    participant M as numen_survival MCP
+    participant S as 已测试程序 / QuickJS
+    participant J as 官方 Jev
+    participant G as 网关 / Numen 身体
+    C->>G: 读取身体、局部感知与原动作回执
+    G-->>C: 当前事实、时间戳、任务状态
+    C->>C: 核对目标队列、未结回执和行为会话增量
+    opt 需要新规划或复盘
+        C->>Q: POST /api/console/chat/task
+        Q-->>C: task ID；原生入口持久保存提交回执
+        Q->>M: 按需感知、直接行动或 skill_start
+        alt 模型直接行动
+            M->>G: 原身体租约内派发一次动作
+            G-->>M: 原生回执或未知状态
+            M-->>Q: 事实反馈供本轮判断
+        else 选择已晋升程序
+            M-->>C: 持久化 skill-job
+        end
+        C->>Q: GET 原 task 状态
+        Q-->>C: 原生终态；未知时不另投任务
+    end
+    loop 已选程序的本地执行周期
+        C->>S: 当前状态、程序记忆和上一条回执
+        S-->>C: action / observe / wait / choose / replan
+        opt 程序返回 choose 候选
+            C->>J: 经 PolicyWorker 异步提交局部状态与有限选项
+            J-->>C: 选项、置信度与延迟
+            C->>C: 核对新鲜度、目标、程序版本和身体绑定
+        end
+        alt 当前提议为有效动作
+            C->>G: 身体租约内派发一次
+            Note over G: 原生任务跨游戏 tick 持续执行
+            G-->>C: 查询原动作回执和后续身体状态
+        else 等待、观察或需要重规划
+            C->>C: 等待 / 更新观察 / 交回慢系统
+        end
+        C->>C: 保存真实执行记录与实践证据
+    end
+```
 
-已精读 [Neko / Cortico](docs/OPEN-SOURCE-AGENT-CODE-STUDY.md) 的运行机制，以及 Jev Minecraft 示例、Laya 和 Brain Doom 的决策/执行或训练实现。
-拟在现有 L1 中评估“结构化感知 → 合法候选动作 → 本地小模型 → 有界原生输入”，让 QwenPaw 继续负责目标、聊天和技能创造。
-Numen 已有移动、跳跃和视角驱动；统一 WASD/视角输入帧、逐 tick 训练记录及策略权重晋升仍需实现。
+确定性步骤不用每次请求 Jev；只有已测试程序返回 `choose` 才走快分类。HTTP 超时、低置信度、绑定变化或过期结果不能直接派发动作。身体 Jev 与伙伴注意力共享 survivor 内一个推理槽；女神入口有自己的有界分类器，不共用这条槽。
 
-Jev 当前作为云端决策对照候选，不提供客户微调；自训优先评估开放编码器加决策头或 Laya，先行为克隆，再在隔离环境比较强化学习。
-像素到键鼠路线可参考 STEVE-1/VPT，但需要另行准备第一人称帧与同步动作数据。
-**上述为早期调研；官方 Jev 现已接入并部署异步控制，尚未训练自己的快策略。** 当前实现与实服证据以本页开头及 [快慢控制](docs/JEV-FAST-SLOW-CONTROL.md) 为准。参考项目的离线测试不能替代本项目游戏实测；来源、源码锁定版本与训练路线见 [Jev 与可训练快策略调研](docs/JEV-FAST-POLICY-RESEARCH.md)。
+**三个时间尺度不同**：Numen 按游戏 tick 执行；控制器在分类等待时目标轮询间隔为 250 ms、认知/动作在途时为 1 秒、普通空闲按观察配置；Qwen 规划和答复另有排队、推理、工具耗时。这些间隔均不是端到端延迟，也不能据此声称实现了 80 ms 身体闭环。提交响应丢失后的精确 task 回执接回目前用于对话；无法证明结果的身体动作继续保留未知保护。
+
+### 3. 桐人与结衣：边行动边交流
+
+```mermaid
+flowchart TD
+    Y["结衣：原生生活班次 / 感知收件箱"] --> YQ["QwenPaw 结衣独立角色"]
+    YQ -->|party_send| QUEUE["PartyMessages：SQLite 先持久记账"]
+    QUEUE --> SAY["既有游戏内说话桥"]
+    SAY --> HEARD["核对 UUID / 维度 / 距离 / heard 回执"]
+    HEARD --> ATT["Jev 注意力提案<br/>当前 shadow，不据此自动忽略"]
+    ATT --> READY["原调度选择已就绪消息"]
+    READY --> BATCH["同伙伴、同身份版本最多三条<br/>原文与 ID 保留，原子预留"]
+    BATCH --> DIALOG["桐人 dialogue 会话<br/>与身体执行并行，身体工具只读"]
+    DIALOG --> REPLY["一次简短答复 → 原游戏说话桥"]
+    REPLY --> ACK["完整回复实际 heard<br/>主消息结清，关联成员 observed"]
+    ACK --> Y
+    DIALOG -->|接受明确的后续请求| GOAL["request_goal / goal_agenda<br/>排队、依赖、修订、撤销"]
+    GOAL --> BOUND["由控制器在既有执行边界调度"]
+```
+
+合批不新增等待时间，也不把后来消息塞进已经提交的任务。同角色仍只有一个在途模型任务，因此“身体继续执行时聊天”已接通，“桐人规划与聊天任意双路模型并行”并未实现。未知提交只查询原生回执，不重发；世界 `heard` 不等于真人客户端音频播放完成。两条合一、三条合一已有实服证据，一条新来信的总响应样本仍约 88 秒，速度还受 Qwen 队列与生成时间影响。
+
+### 4. 女神：文字即接口与 Jev 意图分流
+
+```mermaid
+flowchart TD
+    P["玩家 / Agent：CLI 或女神私聊"] --> EXACT{"显式 CLI 或完整技能名？"}
+    EXACT -->|是，零推理| VALID["原入口校验参数<br/>施法时核对权限与条件"]
+    EXACT -->|自然语言| PRIVATE["Jev：施法 / 答疑 / 祈愿 / 确认 / 不确定"]
+    PRIVATE -->|施法候选达阈值且语义允许| VALID
+    PRIVATE -->|答疑、祈愿或不确定回退| CHAT["既有答疑 / 祈愿流程<br/>生成式内容交 QwenPaw 原角色"]
+    VALID --> EXEC["原命令 / 游戏技能 / 铁魔法执行器"]
+    EXEC --> RESULT["实际游戏结果与回执"]
+    PUB["真人公屏聊天"] --> PUBLIC["Jev：女神是否应该回应"]
+    PUBLIC -->|回应 / 低置信走原规则| CHAT
+    PUBLIC -->|不回应| KEEP["不抢答；不替其他角色创建对话"]
+    CHAT --> OUT["保持原公开或私聊渠道<br/>沿原文字 / 语音输出链路"]
+```
+
+自然语言施法候选限定在当前精选目录和支持的无参数技能/原生映射；带目标、距离等参数的操作使用明确 CLI。Jev 不生成任意命令，不绕过已学、等级、魔力、装备和冷却。公屏分类只决定女神接话，不直接施法。真人麦克风转写沿 `voice-command-inbox → spoken-commands` 处理，保留原举杖授权与录音时间校验；上图不把语音入口等同于自由文本私聊。
+
+### 5. L1 / L2 / L3：从实践到模块化 RSI
+
+```mermaid
+flowchart TB
+    subgraph L1["L1：现役具身行动循环"]
+        SENSE["感知"] --> DECIDE["Qwen 目标与技能 / Jev 有界选择"]
+        DECIDE --> ACT["已测试程序 + Numen 原生执行"]
+        ACT --> FEEDBACK["回执与状态变化"]
+        FEEDBACK --> SENSE
+    end
+    subgraph L2["L2：现役经验与技能沉淀"]
+        EVIDENCE["实践台账 / notes / 原生记忆与复盘"]
+        LEARN["Agent 提炼有条件的经验或程序"]
+        TEST["skill_draft → skill_test → skill_promote"]
+        PRACTICE["skill_start → 真实实践与目标观察"]
+        EVIDENCE --> LEARN --> TEST --> PRACTICE
+        PRACTICE --> EVIDENCE
+    end
+    subgraph L3["L3：复用现役团队的工程入口"]
+        CASE["跨任务问题 → TeamStore improvement 工单"]
+        TEAM["女神 / 司灯分诊，天神诊断候选模块"]
+        SOURCE["隔离源码编辑 → capture_source"]
+        CHECK["固定计划 engineering_test → 原测试回执"]
+        COMMIT["engineering_commit → needs_review<br/>本地候选提交，不自动推送或部署"]
+        CASE --> TEAM --> SOURCE --> CHECK --> COMMIT
+    end
+    RELEASE["审查与发布流程：验证源码、受管部署、保留回退点"]
+    EVAL["待完善验收：固定世界基线 / 保留任务集 / 跨任务收益对照"]
+    FEEDBACK --> EVIDENCE
+    PRACTICE -->|供角色选择复用| DECIDE
+    EVIDENCE -->|汇总共性问题| CASE
+    COMMIT -.->|通过审查后| RELEASE
+    RELEASE -.->|部署模块改进| L1
+    RELEASE -.-> EVAL
+```
+
+L1/L2/L3 是本项目的分工，借鉴 ModularRSI 的轨迹对照、跨任务汇总、单模块修改和固定验证思路。**现役工程角色有候选修改/测试/提交入口，尚不能据此宣称完整自主 RSI 已跑通。** 经验增加、程序 `done`、目标实际达到、技能掌握和跨任务能力提升，是不同层次的证据。工程角色的具体班次是否启用以原生配置为准，部署不会把原来关闭的班次一律开启。
+
+### 从图定位源码
+
+| 调用环节 | 主要源码与说明 |
+| --- | --- |
+| 桐人主循环、提交与终态查询 | [service.py](world/survival/service.py)、[controller.py](world/survival/controller.py)、[behavior_context.py](world/survival/behavior_context.py) |
+| MCP 身体入口、感知与回执 | [mcp_server.py](world/survival/mcp_server.py)、[sensors.py](world/survival/sensors.py)、[numen_gateway.py](world/survival/numen_gateway.py) |
+| 程序执行、Jev 与实践 | [skill_library.py](world/survival/skill_library.py)、[policy_worker.py](world/survival/policy_worker.py)、[system_one.py](world/survival/system_one.py)、[practice.py](world/survival/practice.py) |
+| 伙伴交流、承诺与丢失回执恢复 | [dialogue.py](world/survival/dialogue.py)、[social_attention.py](world/survival/social_attention.py)、[party_messages.py](world/sidecar/party_messages.py)、[goal_agenda.py](world/survival/goal_agenda.py)、[survival_submission_runtime.py](world/ops/survival_submission_runtime.py) |
+| 结衣生活与身份适配 | [party_life.py](world/sidecar/party_life.py)、[maid_agent_api.py](world/sidecar/maid_agent_api.py)、[maid_native_tools.py](world/sidecar/maid_native_tools.py) |
+| 女神语言与技能 | [mc-god.ts](world/src/mc-god.ts)、[jev-intent.ts](world/src/application/jev-intent.ts)、[player-commands.ts](world/src/application/player-commands.ts)、[spoken-commands.ts](world/src/application/spoken-commands.ts) |
+| L3 工单、候选测试与提交 | [world_team.py](world/ops/world_team.py)、[engineering_workspace.py](world/ops/engineering_workspace.py)、[engineering-runner.mjs](world/admin/engineering-runner.mjs) |
+| 运行观测与部署 | [health_mon.py](world/ops/health/health_mon.py)、[embodied_agent_health.py](tools/embodied_agent_health.py)、[部署手册](docs/deploy-release-runbook.md) |
+
+### 研究来源与尚未落地的部分
+
+- 已精读并结合现有实现吸收 [Neko / Cortico](docs/OPEN-SOURCE-AGENT-CODE-STUDY.md) 的持续任务、异步交流与事件调度；[后续社交研究](docs/EMBODIED-SOCIAL-SCHEDULING.md)记录固定源码版本与采用边界。
+- [ModularRSI / Plan4MC / MineDojo / MineCLIP](docs/RSI-AGENT-DESIGN.md)用于分层与评测设计。当前感知仍是 Numen 结构化状态与语义图，MineDojo/MineCLIP 尚未成为现役沙箱和感知后端。
+- 已核查 [7 个 Jev 控制参考项目](docs/JEV-CONTROL-REFERENCE-REVIEW.md)和 [Astra + Jev Minecraft 示例](docs/JEV-ASTRA-MINECRAFT-CODE-REVIEW.md)。固定种子、预先勘测或特定难度的演示不能代替本服自由探索验收。
+- 通用 WASD/鼠标输入帧、逐 tick 训练轨迹、自训/微调快策略、任务内抢占、真人多人话轮与全双工语音仍属后续工作。见[快循环设计](docs/JEV-FAST-LOOP-DESIGN.md)与[可训练策略调研](docs/JEV-FAST-POLICY-RESEARCH.md)。
 
 ---
+
 
 ## 一、四类 Agent
 
@@ -99,8 +227,8 @@ Jev 当前作为云端决策对照候选，不提供客户微调；自训优先�
 - 天神之眼（世界观察渲染）：宿主 **19092**
 
 ### 2. 开发运营 Agent 团队（QwenPaw 单实例 · 10 角色）
-负责游戏的开发、运营、策划与协调，全部统一在**游戏 QwenPaw 实例**（控制台 **18089**），以原生 cron
-班次串行运行（旧独立运营实例已归档）。canonical 角色源：`world/ops/world_team.py`。
+负责游戏的开发、运营、策划与协调，全部统一在**游戏 QwenPaw 实例**（控制台 **18089**），按各角色的原生 Cron
+班次运行，同角色遵守在途任务与并发约束（旧独立运营实例已归档）。canonical 角色源：`world/ops/world_team.py`。
 - **天神 / 工程师**（`qd-engineer`）：读写 `engineering/repo` 源码、跑隔离测试、提交受审修复
 - **司灯 / 协调**（`qd-steward`）：工单台账、风险派发、回执
 - **公会策划**（`qd-guild-planner`）：剧情/任务/活动设计，提交内容包
@@ -119,13 +247,13 @@ Jev 当前作为云端决策对照候选，不提供客户微调；自训优先�
 基于 **车万女仆（Touhou Little Maid）** 模组的辅助妖精伴侣：SAO 导航妖精结衣，承担陪伴/家庭与
 管理救援职责，**不会死亡**（伴侣保护），与桐人组成两人小队（桐人自主游玩成长，结衣不替其游玩）。
 - Java 模组侧：`world/maid-bridge-src`（Touhou Little Maid 1.5.3 扩展，站点 `qiandeng-qwen`）
-- Python 侧：`world/sidecar/maid_agent_api.py`（OpenAI 形状适配器 → QwenPaw 角色 `qd-maid-dialogue`）+ 身份/注册/原生工具/对话收件箱
+- Python 侧：`world/sidecar/maid_agent_api.py` 按已验证身份接入独立 QwenPaw 角色；结衣生活由 `party_life.py` 与持久感知收件箱衔接，`qd-maid-dialogue` 保留通用兼容入口
 - 村民与女仆引擎：`npc` 服务（`world/sidecar/mc_npc.py`，走裸 RCON），启动时拉起 maid-agent（:8091）与 party-agent
 - 设计见 [女仆 Agent 设计](docs/MAID-AGENTS-DESIGN.md)、[结衣自主生活](docs/YUI-AUTONOMOUS-LIFE.md)、[SAO 角色](docs/SAO-CHARACTERS.md)
 
 ---
 
-## 二、服务与基础设施（13 个活动服务）
+## 二、服务与基础设施（13 个默认受管服务）
 
 | 服务 | 镜像 | 职责 | 宿主端口 |
 |---|---|---|---|
