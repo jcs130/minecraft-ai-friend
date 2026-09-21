@@ -8,6 +8,7 @@ assets/prepared-models/
 vendor/controller-cache/
 world/client-controls-src/build/
 world/irons-bridge-src/build/
+world/numen-actuator-src/build/
 world/chanting-items-src/build/
 vendor/chanting-items-cache/
 .env
@@ -48,3 +49,6 @@ world/maid-bridge-src/build/
 /vendor/modern-viewer/*
 !/vendor/modern-viewer/runtime-budget.js
 vendor/numen-upstream/
+
+# 号表回滚备份（本地留，勿入库）
+world/src/neoforge-handshake/idmap.json.bak-*

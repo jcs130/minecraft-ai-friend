@@ -55,6 +55,9 @@ const bot = require('mineflayer').createBot({
   - ✅ **单块实时（block_change）**：`setblock` 后 **1s 内**模型更新 ✓ 号已翻译（diamond_block→4276 ✓）
   - ✅ **批量变更（multi_block_change）**：`fill` 4 格 1s 内全读对 ✓ —— 这条是本轮**新补的翻译**（record = `方块号<<12 | 局部坐标` ✓ 实测反推定谳 ✓ 此前漏翻会把高位号砸进客户端读成 air ✗）
 - **结论**：**mineflayer Agent 经门已经能正确读写方块世界** ✓ 不再强制走 numen ✓ numen 仍是"长驻角色"最稳选项（不掉线、不经网络编号）✓
+- **模组物品不再一律 paper ✓**（2026-09-21 造物主谕「映射到最接近的原版」✓）：`build-idmap.cjs` 三级递进——**级1** 同名 mod 方块 → 那原版的方块物品（`prefab:item_pile_of_bricks→stone_bricks` ✓ 3231 个）；**级2.0** 工具/甲**保材质等级**（`item_swift_blade_diamond→diamond_sword` ✓）；**级2.1** 约 70 条语义家族（`scroll→enchanted_book` ✓ `staff/wand→blaze_rod` ✓ `spawn_egg→chicken_spawn_egg` ✓ `stew→mushroom_stew` ✓）；**级3** 才兜 paper。实测：兜 paper **3825 → 303** ✓ 覆盖 **68 种**代理物 ✓ 真给 12 件 **12/12 读对** ✓
+  ⚠ 代理号只影响**显示与识别**，**不是可操作身份** ✓ 要真正使用模组物品请拿完整 id（RCON give / `/mycli`）✓ 加映射规则必须让 `badRules=0`（写错目标名会把 `undefined` 灌进号表 = 线上物品变未知号 ✗）
+- **体检三项也过 ✓**（`node audit-idmap.cjs`）：号表与注册表**逐数对账一致**（states 116650==blocks.tsv 声明总数 ✓ items 5158==items.tsv 行数 ✓）· **双向往返恒等 8/8**（原版物品 `neo→vanilla→neo` 原样回来 ✓ 保证 Agent 反向操作不会被号表改成别的东西 ✓）· chunk 段模式实测 201 chunk/1440 段：palette 565 + singleValue 875 + **direct 0** ✓（"暂不碰 direct"那条分支实际发生率 0% ✓ 该脚本会持续量化它）
 - 回归口复验方式：`cd world/src/neoforge-handshake && node verify-gate.cjs`（改翻译层后先 `docker restart qiandengji-gate-1 qiandengji-gate-public-1` ✓ `/app/src` 是宿主 `world/src` **只读挂载** ✓ 改宿主文件即生效 ✓ 不用重建镜像 ✓）
 
 ## 5. 白名单与安全铁律
@@ -77,11 +80,23 @@ const bot = require('mineflayer').createBot({
 
 ## 7. 接入 checklist
 
-1. [ ] 选路线：重要/看方块 → numen；轻任务/看物品 → mineflayer@gate
-2. [ ] 起 ASCII 独占名，`whitelist add` 它
-3. [ ] mineflayer：`version 1.21.1` + `auth offline` + 端口 25701 + 自带重连
-4. [ ] 跑一条 `bot.chat` / `bot.blockAt` 冒烟，确认能收发
-5. [ ] 涉及方块世界决策前 → 等 §4 方块修复 或 改 numen
+1. [ ] 选路线：临时/任务型 → **mineflayer 走门**（内 `25701` / 外 `25702` + `ag_` 名）；长期常驻角色 → numen
+2. [ ] 起 ASCII 独占名（**定死别改**，名字=UUID=背包家园成就）；`whitelist add` 它（现 `white-list=false`，前缀闸只挡名字不挡准入）
+3. [ ] mineflayer：`version '1.21.1'` + `auth:'offline'` + **端口走门，不是 25565** + 自带看门狗重连
+4. [ ] 进门冒烟：`bot.chat` 收发 ✓ `bot.blockAt` 读一个已知方块（**注意 name 不带 `minecraft:` 前缀**）
+5. [ ] 用命令面而非猜语义：`/mycli status --json` → `/mycli help` → `/mycli commands`（公屏不走命令，必须斜杠或 `/msg Goddess cli …`）
+6. [ ] 服务端侧回归口（改过翻译层/号表后）：`node verify-gate.cjs`（7 项）+ `node audit-idmap.cjs`（覆盖率/往返/段模式）
+
+## 8. 世界 CLI（`/mycli`）——Agent 的服务端正门
+
+门的翻译层解决"看得见"，`/mycli` 解决"做得准" ✓ 权威定义在 `world/src/gameplay/commands/player-cli.ts`（`CLI_VERBS` 命令树）。
+设计四条（CLI-Anything 哲学）：**一条命令一个动作** ✓ **自描述**（`help` 列全树、`help <动词>` 看单条）✓ **确定性**（同命令+同状态 → 回执结构一致，不靠 LLM 猜语义）✓ **机器可读**（`--json` 出 JSON 直接 parse）。
+
+- 前缀等价：`/mycli`、`/cli`、`cli`、`!cli` 都认 ✓ **公屏不走命令**（2026-08-29 造物主谕）→ 用斜杠形式，或私聊 `/msg Goddess cli status`
+- 进门三板斧：`/mycli status --json` → `/mycli commands` → `/mycli help cast`
+- 动词分组：查询 `status/skills/spells/appraise/growth/help/menu` ✓ 施法 `cast/cancel/skillbar/bookget/learn/staff-cast` ✓ 女神对话 `pray/ask/chat` ✓ 成长 `innate/cultivate` ✓ 传送 `goto/waypoint` ✓ 世界社交 `summon/discoveries` ✓ 守卫专用 `guardian-cast`（守护天使代主人施法）✓ 共 24 个
+- 技能体系三层，`/mycli` 站在交界处：**咏唱**（主动法术，众生自己念，真人/AI 通用）· **puffish 技能树**（修行数值层，AI 不装 mod 走 CLI/RCON 侧灌经验）· **女神加护**（`pray` 祈愿裁决）✓ 铁魔法另需"铭文台把卷轴装入法术书并**装备**"，只放背包不算 ✓ 用 `spells` 查真实可用与拒绝原因，别照旧档案硬试
+- 号翻译 + `/mycli` 合起来才是一个完整 Agent：**看得见真世界 + 做得准动作** ✓
 
 ---
-维护：本手册随 §4 修复进度更新；「方块经 gate 已读对」成立那天，把 §4 的 ❌ 改 ✅ 并放开 §1 的"别用"。
+维护：本手册状态由 `verify-gate.cjs` / `audit-idmap.cjs` 实证背书；改过 `idmap-remap.cjs` 或 `build-idmap.cjs` 后**先跑这两件再更新本文**，勿凭记忆写状态词。
