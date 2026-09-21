@@ -144,7 +144,7 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 | 地形、建筑、昼夜、天气、玩家与生物 | 正常 |
 | 智能村民（经 settlementsgate 映射） | 显示为村民（不再是鱼） |
 | 买卖、红石、容器、探索 | 能玩 |
-| 模组方块/物品贴图 | 基岩没有 Java mod：**经门翻译后**显示为「最像的原版方块/物品」代理物（2026-09-21 起：工具甲保材质、卷轴→附魔书、刷怪蛋→鸡蛋类），不再是黑紫格子 ✓ **但基岩桥 target 现仍指 25565（绕过门）⚠ 待改 25701 才生效** |
+| 模组方块/物品贴图 | **已修 ✓ 2026-09-21**：基岩桥上游已改指门（`ViaProxy --target-address 127.0.0.1:25701`）✓ 于是 Geyser 收到的是**翻译后的原版号** ✓ 模组方块/物品显示为「最像的原版方块/物品」代理物（屋顶→石砖类、卷册→附魔书、刷怪蛋→蛋类），不再是黑紫格子/满地假火 ✓ 但**不可能像素级还原** ✗（基岩无该 Java mod 的物理上限 ✓）|
 | puffish 技能树界面 | 看不到 |
 | 网页观战镜头 / 神谕 UI / 书页点选施法 | 收不到自定义 payload |
 | 语音（Simple Voice Chat） | 基岩端无此 mod |
@@ -169,8 +169,10 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 3. **偶发 `ECONNRESET`** —— 长驻 bot 必须自带看门狗重连。
 4. **AI 自主性依赖 `MC_SELF_PROPOSE=1`**（已开）：不设则没任务时原地罚站，看着像死机。
 5. **夜里角色倾向"躲夜罚站"**（自保反射独占身体且空转）：白天演示，或给它一张床。
-6. **⚠️ 三个已连客户端仍绕过门（读到的是未翻译世界）** ✓ 待点头即改：
-   - 基岩桥 **ViaProxy-3.4.12**（PID 持 UDP 19140 ✓ 计划任务 `ViaProxy-Bedrock` → `ops/docker/shadow/viaproxy/start-viaproxy.bat`）`--target-address 127.0.0.1:25565` → 应改 **`127.0.0.1:25701`** ✓ 改后重启该任务 ✓ 手机端建筑乱码/假火才会消失 ✓（**会踢掉基岩在线访客 ✓ 属直播敏感操作 ✓**）
+6. **已连客户端绕过门的情况（2026-09-21 更新）** ✓ 基岩桥已修 ✓ 余两处待点头：
+   - ✅ **基岩桥已接上门（2026-09-21 14:37 落地）**：`start-viaproxy.bat` 的 `--target-address` 已由 `127.0.0.1:25565` 改成 **`127.0.0.1:25701`** ✓ 新进程实查带新值 ✓ **免手机验证法**：`node verify-gate.cjs 127.0.0.1 25568`（打 ViaProxy 的 Java 入口=基岩同一条上游）→ **7/7 通过 ✓** 门日志亦见该会话 ✓ 说明 Geyser 收到的已是原版号 ✓ 改前实查 `Updated 0 players` ✓ 未踢访客 ✓
+  ⚠ 回滚：`copy start-viaproxy.bat.bak-target25565 start-viaproxy.bat` → `schtasks /end` → **还要 `taskkill /T /F` 掉残留 java**（`/end` 不杀孤儿子进程 ✓ 实测踩过）→ `schtasks /run`
+  ⚠ **持久性隐患**：`ops/docker/.gitignore:8` 的 `shadow/` 把整个桥目录排除 ✓ **此脚本不在版本控制里** ✓ 换机/重建即丢 ✓ 正本该另存
    - 女神化身 `world` 服务 `MC_HOST=mc / MC_PORT=25599` → 应改 `gate / 25700` ✓（改 compose + 重启 world 容器 ✓）
    - NekoX（已停）复活时把端口改 25701 ✓
    注：计划任务里 `Geyser-Bedrock`（State=Ready ✓ 未跑）与 `ViaProxy-Bedrock`（Running）并存 ✓ **现役是 ViaProxy 内嵌 Geyser** ✓ 早前"Geyser-Standalone b1245"那条记录作废 ✗
