@@ -1,3 +1,5 @@
+import { createJevIntent, parseSpokenIntent, publicFallback } from './application/jev-intent.ts'
+import { nonCommandSpeech } from './gameplay/commands/spoken-intent.ts'
 import { createPlayerCommands } from './application/player-commands.ts'
 import { createSpokenCommands } from './application/spoken-commands.ts'
 import { createVoiceCommandInbox } from './voice-command-inbox.ts'
@@ -573,8 +575,6 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const lastTp = new Map<string, number>() // 数字传送冷却（防连点抖动）
   const waypointTravel = createWaypointTravel(command => rcon.send(command))
   // 点名闸记账（2026-08-31）：未点名旁白的累计数与「已教过」名册（会话内一次即止）
-  const passCount = new Map<string, number>()
-  const gateTaught = new Set<string>()
   const senderNameOf = (u: string): string => transmigrators.getByUsername(u)?.name ?? u
   /** 传送执行：tp + 粒子/音效仪式感 + 编年史。返回结果描述。 */
   async function tpWaypoint(username: string, wp: Waypoint) {
@@ -1889,6 +1889,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     extendedCommand: handleExtendedPlayerCommand,
   })
   const { handleCli, castUnified } = playerCommands
+  const jevIntent = createJevIntent()
+  // At most the latest message per speaker can dispatch an asynchronous result.
+  const intentTurns = new Map<string, symbol>()
+  const beginIntentTurn = (actor: string) => {
+    jevIntent.invalidate(actor)
+    const turn = Symbol(); intentTurns.set(actor, turn)
+    if (intentTurns.size > 256) intentTurns.delete(intentTurns.keys().next().value!)
+    return turn
+  }
+
   const GODDESS_MENTION = /(女神|天神|天音|娘娘|goddess)/i
   // 祈愿意图词放行（防她忘喊名）：「给我面包」「帮我」「求救」这类明确求神句式
   // 不点名也接——闸的目标是拦旁白闲聊（嗯/对/可以了），不是拦真求。
@@ -1947,64 +1957,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }, 200)
   }
 
-  // ── 施法统一处理链（2026-08-23 造物主谕：严格→向量→LLM→模糊施法，无需二次确认）──
-  // castSpell 抛 NeedLlmError（中置信向量命中）时：LLM 短推理确认法术归属，
-  // 命中 → castFuzzy（tokens 折算魔力 + 推理耗时=自然前摇）；拒绝 → 原话转达。
+  // Exact phrases and explicit CLI parameters bypass inference. No substring/vector
+  // fallback: questions about a skill must never spend resources or start casting.
   async function resolveChant(username: string, chant: string): Promise<string> {
-    const explicit = explicitChantBody(chant)
-    if (explicit !== null || NATIVE_SPELL_ID.test(chant.trim())) {
-      const body = explicit ?? chant.trim()
-      const cmd = parseCli(`/mycli cast ${body}`)!
-      if (cmd.error) return cmd.error
-      return String((await castUnified(username, cmd.args)).summary)
+    if (nonCommandSpeech(chant)) return '这句是讨论或询问，没有施法。可用“问：…”了解技能。'
+    const exact = parseSpokenIntent(chant, magic.listAtoms())
+    if (exact.kind === 'command' && exact.verb === 'cast') return String((await castUnified(username, exact.args)).summary)
+    const body = explicitChantBody(chant)
+    if (body !== null && /(?:^|\s)[a-z_]+=/i.test(body)) {
+      const command = parseCli(`/mycli cast ${body}`)!
+      return command.error ?? String((await castUnified(username, command.args)).summary)
     }
-    try {
-      const r = await magic.castSpell(username, chant)
-      // 咏唱可视化（2026-08-28 造物主点子）：施法成功，头顶冒咒语词气泡——
-      // AI 咏唱虽走 CLI/文件通道，头上照样「言灵显形」；未来接语音可直接念这个词。
-      const spoken = chant.trim()
-      if (spoken && deps.bubble) {
-        const atom = magic.listAtoms().find((a) => a.words.some((w) => spoken.includes(w) || w.includes(spoken)))
-        if (atom) deps.bubble.show(username, `「${atom.words[0]}！」`)
-      }
-      return r
-    } catch (err) {
-      if (err instanceof Error && err.name === 'NeedLlmError' && typeof (err as any).atomId === 'string') {
-        const atomId = (err as any).atomId as string
-        const atom = magic.getAtomById(atomId)
-        const startedAt = Date.now()
-        const decision = await resolveFuzzyByLlm(username, chant, atomId, atom?.name ?? atomId)
-        const latencyMs = Date.now() - startedAt
-        if (decision.ok) {
-          const reply = await magic.castFuzzy(username, chant, atomId, { tokens: decision.tokens, latencyMs, mode: 'llm' })
-          log(`fuzzy llm cast ${atomId} for ${username}: ${chant.slice(0, 30)} -> ${reply.slice(0, 60)}`)
-          return reply
-        }
-        return `女神聆听了你的低语，但「${chant.slice(0, 30)}」未能与任何已知魔法契合——${decision.reason}。直述所求向女神祈愿便是。`
-      }
-      return `施法未能完成：${err instanceof Error ? err.message : String(err)}`
-    }
-  }
-
-  // QwenPaw 传令官短推理确认模糊咒语归属（Y/N）；失败时不猜测、不跨角色重投。
-  async function resolveFuzzyByLlm(username: string, chant: string, atomId: string, atomName: string): Promise<{ ok: true; tokens: number } | { ok: false; reason: string }> {
-    const prompt = [
-      '你是咏唱裁决者。一位施法者念了一段咒语，向量近邻已指向候选法术。',
-      `咒语：「${chant.slice(0, 80)}」`,
-      `候选法术：${atomName}（${atomId}）`,
-      '判断：施法者意图就是此法术 → 只输出 Y。明显不是 / 意图不明 / 危险歧义 → 输出 N 加一句简短原因。',
-    ].join('\n')
-    try {
-      const ans = await callAgent(`mc:${username}`, username, prompt, 'mc-herald')
-      const answer = ans.text
-      // 真实 tokens 优先（turn_usage），拿不到回落字符估算
-      const tokens = ans.usage?.total_tokens ?? Math.ceil((prompt.length + answer.length) / 1.5)
-      const trimmed = answer.trim()
-      if (/^Y\b/i.test(trimmed)) return { ok: true, tokens }
-      return { ok: false, reason: trimmed.slice(0, 60) || '意图不明' }
-    } catch {
-      return { ok: false, reason: '女神此刻无暇倾听，稍后再试' }
-    }
+    const turn = beginIntentTurn(username), botAtStart = getBot()
+    const decision = await jevIntent.classify({ actor: username, text: chant, channel: 'private' }, magic.listAtoms())
+    if (intentTurns.get(username) !== turn || getBot() !== botAtStart) return '消息已更新，本次没有施法。'
+    if (decision.route === 'cast' && decision.skill) return String((await castUnified(username, [decision.skill])).summary)
+    return '还不能确定你要施放的技能。说完整技能名，或用 /mycli cast <技能>；查询用 /mycli spells。'
   }
 
   async function consumeChantRequests(): Promise<void> {
@@ -2509,26 +2477,20 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     }
   }
 
-  // 点名检测：消息里点了守卫/NPC/其他在线玩家的名 → 女神不接，归被点名者处理。
-  function isCalledOut(username: string, message: string): boolean {
-    const m = message.trim()
-    if (!m) return false
-    for (const g of GUARD_PLAYER_NAMES) if (m.includes(g)) return true
-    for (const n of loadNpcNames()) if (m.includes(n)) return true
-    // 其他在线玩家（登录名与穿越者显示名都算）
-    // 2026-08-29 修复:裸用 bot 在此作用域未定义,chat 事件里抛 ReferenceError 会打断
-    // socket 包处理链 → keepalive 30s 无人应答 → 化身断连 → 9090 可视化冻结(每遇聊天必现)
-    for (const name of Object.keys((getBot()?.players ?? {}) as Record<string, unknown>)) {
-      if (name === username || name === getBot()?.username) continue
-      if (m.includes(name)) return true
-    }
-    for (const x of transmigrators.list()) {
-      if (x.username === username) continue
-      if (m.includes(x.name)) return true
-    }
-    return false
+  function chatRoster(username: string): string[] {
+    return [...new Set([...GUARD_PLAYER_NAMES, ...loadNpcNames(),
+      ...Object.keys(getBot()?.players ?? {}), ...transmigrators.list().map(x => x.name)])]
+      .filter(name => name !== username && name !== getBot()?.username).slice(0, 32)
   }
-
+  async function dispatchPublicChat(username: string, message: string, turn: symbol): Promise<void> {
+    const botAtStart = getBot(), others = chatRoster(username)
+    const decision = await jevIntent.classify({ actor: username, text: message, channel: 'public', others }, magic.listAtoms())
+    if (intentTurns.get(username) !== turn || getBot() !== botAtStart) return
+    const respond = ['reply', 'prayer'].includes(decision.route) ||
+      (decision.route === 'uncertain' && publicFallback(message, others, vipChatGate(message)))
+    log(`chat intent route=${decision.route} respond=${respond}`)
+    if (respond) await goddessChat(username, message)
+  }
 
   const DEATH_OBJ = 'mcdeaths'
   const deathScores = new Map<string, number>()
@@ -2642,6 +2604,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const writeHeartbeat = (watching: string[]) => {
     try {
       writeFileSync(heartbeatPath, JSON.stringify({
+        jevIntent: jevIntent.status(),
         ts: Date.now(),
         pid: process.pid,
         goddess: getBot()?.username ?? null,
@@ -3531,6 +3494,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 整回调裹保护：任何异常都落日志，绝不再无声吞话。
       try {
       // 守卫回应玩家的耳（2026-08-24）：玩家公屏发言落盘，守卫桥读取后让守卫判定是否 say 回应。
+      beginIntentTurn(username)
       recordPlayerChat(username, message)
       // 公屏 CLI 收敛为指路牌（2026-08-29 造物主谕：「公屏 cli 有点奇怪，私聊让他用 /mycli」）：
       // 公屏是社交空间，不走命令执行（不刷回执、不产生 LLM 抢答歧义）。凡显式
@@ -3570,48 +3534,14 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
           }
         }
       }
-      // 点名才接（2026-08-31 造物主谕「需要点名才回复」）：萌萌常对着现实里的
-      // 爸爸说话、旁白被天耳录进来——女神不再对未点名的自然语言回话。
-      // 例外放行：「祈愿：」「问：」前缀本就是对神说的；/help 等指令形保留。
-      // 数字门牌号已在前置快路径处理，不受此闸影响。
-      // VIP 重点看护（2026-08-23 造物主谕「让女神化身重点服务」）＋ 灯语女神公屏聊天
-      // （2026-08-29 造物主谕「真人外加公屏都需灯语女神思考」）：真人（VIP 与否）公屏
-      // 未点名的自然语言 → 灯语女神即时理解意图、真回应（「给我来个面包」真给面包）。
-      // 点名（守卫/NPC/其他在线玩家）→ 女神不接，归被点名者（守卫桥/NPC 引擎/玩家互喊）。
-      // 显式「祈愿：」前缀例外 → 走私聊全链上达天听（女神本尊裁决，神恩有价不变）。
-      // AI 穿越者不走此通道（仍走私聊祈愿/咏唱/守卫桥生态，防 bot 话痨绕过祈愿体系）。
-      if (
-        !isInternalBot(username) &&
-        !username.startsWith('sys_') &&
-        !GUARD_PLAYER_NAMES.has(username) &&
-        !transmigrators.getByUsername(username) &&
-        !(() => {
-          // 点名留痕（2026-08-29）：萌萌「给我来几个攻击性的技能」疑似被 isCalledOut
-          // 静默吞掉——拦截时留一行日志，下次「没人理」立刻能看到是谁的名字嵌进话里。
-          if (isCalledOut(username, message)) {
-            log(`chat dispatch: ${username} 的话点名了别人(isCalledOut)，女神不接：「${message.slice(0, 40)}」`)
-            return true
-          }
-          return false
-        })()
-      ) {
-        if (message.trim().startsWith('祈愿：')) {
-          handleWhisper(username, message).catch((err) => log(`handleWhisper(chat-pray) failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
-        } else if (vipChatGate(message)) {
-          goddessChat(username, message).catch((err) => log(`goddessChat failed for ${username}: ${err instanceof Error ? err.message : String(err)}`))
+      // Public attention chooses whether Goddess speaks; it never executes a cast.
+      if (!isInternalBot(username) && !username.startsWith('sys_') &&
+          !GUARD_PLAYER_NAMES.has(username) && !transmigrators.getByUsername(username)) {
+        if (/^祈愿[\s:：，,、]?/.test(message.trim())) {
+          handleWhisper(username, message).catch(err => log(`chat prayer failed: ${err instanceof Error ? err.name : 'error'}`))
         } else {
-          log(`chat-pass: ${username} 未点名，女神不接话：「${message.trim().slice(0, 36)}」`)
-          // 教一次（2026-08-31）：不点名就永远没人应，孩子只会以为「神不理我」。
-          // 攒够 3 次旁白被拦，私语+语音告诉她规则；每人只教一次，之后真静默。
-          const passed = (passCount.get(username) ?? 0) + 1
-          passCount.set(username, passed)
-          if (passed === 3 && !gateTaught.has(username)) {
-            gateTaught.add(username)
-            const tip = `${senderNameOf(username)}，想让我回你，得喊我一声「女神」——不点名我听不见哦。想传送到哪个点，直接说数字就行。`
-            try { bot.whisper(username, tip) } catch { /* not ready */ }
-            speakViaGodVoice(tip, username)
-            log(`gate-taught: ${username} 已教会点名规则`)
-          }
+          dispatchPublicChat(username, message, intentTurns.get(username)!)
+            .catch(err => log(`chat dispatch failed: ${err instanceof Error ? err.name : 'error'}`))
         }
         return
       }
@@ -3698,6 +3628,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       return /(怎么|如何|怎样|怎么办|为什么|为何|为啥|什么|啥|哪|多少|几时|何时|多久|多远|多深|多高|在吗)/.test(t)
     }
     async function handleWhisper(username: string, message: string): Promise<void> {
+      const whisperTurn = beginIntentTurn(username)
       if (username === getBot()?.username) return
       // ── 守护天使代主人上达（2026-08-23 造物主拍板）─────────────────────
       // `sys_<owner>` 是守护天使（客户端侧 LLM 陪玩）的标准登录名：服务端据此认出
@@ -3818,21 +3749,22 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
         answerQuestion(OWNER, askBody, username)
         return
       }
-      if (!explicitPrayer && (magic.sniffChant(body) || explicitChantBody(body) !== null || NATIVE_SPELL_ID.test(body))) {
-        // 2026-08-23 造物主谕「sys 只能通过 mycli 施法」：守护天使直接念咒不代施——
-        // 一切代施走 CLI guardian-cast（主体仍是主人，三闸：已学/等级/魔力，同快路径）。
-        if (isGuardian) {
-          try {
-            bot.whisper(username, `[信使] 守护天使代主人施法请用：/mycli guardian-cast <法术名>（查表：/mycli spells）。直接念咒由主人自己来。`)
-          } catch { /* not ready */ }
-          return
+      const exactIntent = parseSpokenIntent(body, magic.listAtoms())
+      const exactParameters = !nonCommandSpeech(body) && explicitChantBody(body) !== null && /(?:^|\s)[a-z_]+=/i.test(explicitChantBody(body)!)
+      if (!explicitPrayer && (exactIntent.kind === 'command' || exactParameters)) {
+        if (isGuardian && (exactParameters || (exactIntent.kind === 'command' && exactIntent.verb === 'cast'))) {
+          cliWhisper(username, '[信使] 守护天使代施请用 /mycli guardian-cast <技能>。')
+        } else if (exactParameters) {
+          cliWhisper(username, `[信使] ${await resolveChant(OWNER, body)}`)
+        } else if (exactIntent.kind === 'command') {
+          const quote = (arg: string) => JSON.stringify(arg)
+          await handleCli(OWNER, username, parseCli(`/mycli ${exactIntent.verb} ${exactIntent.args.map(quote).join(' ')}`)!, isGuardian)
         }
-        resolveChant(OWNER, body)
-          .then((reply) => {
-            log(`whisper chant from ${OWNER}${OWNER !== username ? `(via guardian ${username})` : ''}: ${body} -> ${String(reply).slice(0, 120)}`)
-            try { bot.whisper(username, `[信使] ${OWNER}，${reply}`) } catch { /* not ready */ }
-          })
-          .catch((err) => log(`whisper cast failed for ${OWNER}: ${err instanceof Error ? err.message : String(err)}`))
+        return
+      }
+      if (!explicitPrayer && exactIntent.kind === 'chant') {
+        if (isGuardian) cliWhisper(username, '[信使] 守护天使代施请用 /mycli guardian-cast <技能>。')
+        else cliWhisper(username, `[信使] ${await resolveChant(OWNER, body)}`)
         return
       }
       // ── 转生者自报家门（2026-08-21 造物主谕「转生异世界」）────────────
@@ -3858,7 +3790,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       // 置于自报家门之后、收尾冷却之前——已过引路期的玩家普通问题同样被女神答复，
       // 且不会被收尾 60s 静默吞掉（只有纯闲聊仍在静默窗口内）；祈愿/求助/闲聊仍
       // 落下方祈愿流程（神恩有价不受影响）。answerQuestion 自带 15s/人节流以控成本。
-      if (looksLikeQuestion(body)) {
+      if (!explicitPrayer && looksLikeQuestion(body)) {
         answerQuestion(OWNER, body, username)
         return
       }
@@ -3870,6 +3802,20 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       if (coolUntil !== undefined && !isVip) {
         if (Date.now() <= coolUntil) return
         introCoolUntil.delete(username)
+      }
+      if (!explicitPrayer) {
+        const decision = await jevIntent.classify({ actor: username, text: body, channel: 'private' }, magic.listAtoms())
+        if (intentTurns.get(username) !== whisperTurn || getBot() !== bot) return
+        if (decision.route === 'cast' && decision.skill) {
+          if (isGuardian) cliWhisper(username, '[信使] 守护天使代施请用 /mycli guardian-cast <技能>。')
+          else cliWhisper(username, `[信使] ${String((await castUnified(OWNER, [decision.skill])).summary)}`)
+          return
+        }
+        if (decision.route === 'ack') { cliWhisper(username, '[女神] 嗯，我在。'); return }
+        // An unavailable classifier must not turn an ordinary gift/help request
+        // into reply-only advice. The existing prayer LLM still adjudicates it.
+        const prayerFallback = decision.route === 'uncertain' && PRAY_INTENT.test(body) && !nonCommandSpeech(body)
+        if (decision.route !== 'prayer' && !prayerFallback) { await answerQuestion(OWNER, body, username); return }
       }
       const { wish, offeringText } = splitWishOffering(body)
       if (!wish) return

@@ -11,12 +11,15 @@ JAR = 'server/mc/mods/qiandeng-irons-bridge-0.1.0.jar'
 NUMEN = 'server/mc/mods/numen-neoforge-1.21.1-0.1.3.jar'
 BUILD = 'world/irons-bridge-src/build/build-record.json'
 SMOKE = 'reports/town-protection-smoke.json'
-EXPECTED = {'schema': 1, 'enabled': True, 'dimension': 'minecraft:overworld',
+MASK = 'world/irons-bridge-src/resources/qiandeng-town-blocks.json'
+EXPECTED = {'schema': 2, 'enabled': True, 'dimension': 'minecraft:overworld',
             'minX': -715, 'maxX': -375, 'minZ': 695, 'maxZ': 1035,
             'allY': True, 'manualOpBypass': False,
-            'maintenance': 'trusted_console_native_commands_only'}
+            'maintenance': 'trusted_console_native_commands_only',
+            'mode': 'reviewed_blocks', 'maskReady': True, 'fallback': 'none'}
 BEHAVIOR = {'manual-blocked', 'explosion-blocked', 'fire-blocked', 'farming-usable',
-            'doors-and-storage-usable', 'trusted-maintenance-usable', 'outside-usable'}
+            'doors-and-storage-usable', 'trusted-maintenance-usable', 'outside-usable',
+            'bed-place', 'bed-remove', 'player-build', 'player-remove', 'replace-blocked', 'op-blocked'}
 
 
 def read_status():
@@ -32,8 +35,9 @@ def read_status():
 
 def check(root=ROOT, sample=read_status):
     checks = dict.fromkeys(('native_boundary', 'no_manual_op_bypass',
-                           'artifact_and_sources_current', 'native_qa_matches_artifact'), False)
+                           'artifact_and_sources_current', 'native_qa_matches_artifact', 'block_mask_current'), False)
     evidence = {}
+    reply = {}
     try:
         reply = sample()
         if not isinstance(reply, dict):
@@ -54,7 +58,11 @@ def check(root=ROOT, sample=read_status):
         sources = record.get('sources', {})
         required = {'tools/build_irons_bridge.py',
                     'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtection.java',
-                    'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtectionPolicy.java'}
+                    'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtectionPolicy.java',
+                    'world/irons-bridge-src/src/dev/qiandeng/irons/TownBlockMask.java', MASK}
+        mask = helper.document(root, MASK)
+        checks['block_mask_current'] = (reply.get('maskSha256') == helper.digest(root, MASK)
+            and type(reply.get('protectedBlocks')) is int and reply['protectedBlocks'] == mask['blocks'] > 0)
         checks['artifact_and_sources_current'] = (record.get('ok') is True
             and manifest.get('schema_version') == 1
             and len(rows) == 1 and rows[0].get('sha256') == installed == record.get('sha256')

@@ -39,6 +39,7 @@ import net.neoforged.neoforge.event.level.PistonEvent;
 public final class TownProtection {
     private static boolean installed;
     private static long refusals;
+    private static final TownBlockMask MASK = TownBlockMask.load();
     private TownProtection() {}
 
     public static synchronized void install() {
@@ -58,6 +59,11 @@ public final class TownProtection {
         NeoForge.EVENT_BUS.addListener(TownProtection::mobGriefing);
     }
     public static boolean protects(LevelAccessor level, BlockPos pos) {
+        return level instanceof ServerLevel server && MASK.protects(
+            server.dimension().location().toString(), pos.getX(), pos.getY(), pos.getZ());
+    }
+    /** Environmental hazards remain region-wide; ordinary building uses only MASK. */
+    public static boolean townArea(LevelAccessor level, BlockPos pos) {
         return level instanceof ServerLevel server && TownProtectionPolicy.contains(
             server.dimension().location().toString(), pos.getX(), pos.getZ());
     }
@@ -97,7 +103,7 @@ public final class TownProtection {
         if (protects(event.getLevel(), event.getPos())) { event.setCanceled(true); refused(); }
     }
     private static void fluidPlacement(BlockEvent.FluidPlaceBlockEvent event) {
-        if (protects(event.getLevel(), event.getPos())) { event.setNewState(event.getOriginalState()); event.setCanceled(true); refused(); }
+        if (townArea(event.getLevel(), event.getPos())) { event.setNewState(event.getOriginalState()); event.setCanceled(true); refused(); }
     }
     private static void livingDestroy(LivingDestroyBlockEvent event) {
         if (protects(event.getEntity().level(), event.getPos())) { event.setCanceled(true); refused(); }
@@ -105,13 +111,13 @@ public final class TownProtection {
     private static void mobGriefing(EntityMobGriefingEvent event) {
         // Do not disable villager farming or maid harvesting through a global gamerule.
         Entity entity = event.getEntity();
-        if (entity instanceof Enemy && protects(entity.level(), entity.blockPosition())) { event.setCanGrief(false); refused(); }
+        if (entity instanceof Enemy && townArea(entity.level(), entity.blockPosition())) { event.setCanGrief(false); refused(); }
     }
     private static void explosion(ExplosionEvent.Detonate event) {
         int before = event.getAffectedBlocks().size();
         event.getAffectedBlocks().removeIf(p -> protects(event.getLevel(), p));
         event.getAffectedEntities().removeIf(e -> (e instanceof HangingEntity || e instanceof ArmorStand)
-            && protects(e.level(), e.blockPosition()));
+            && townArea(e.level(), e.blockPosition()));
         if (before != event.getAffectedBlocks().size()) refused();
     }
     private static void piston(PistonEvent.Pre event) {
@@ -129,7 +135,7 @@ public final class TownProtection {
         if (deny) { event.setCanceled(true); refused(); }
     }
     private static boolean harmfulUse(Level level, BlockPos pos, net.minecraft.world.item.ItemStack item) {
-        if (!protects(level, pos)) return false;
+        if (!townArea(level, pos)) return false;
         return item.getItem() instanceof BucketItem || item.getItem() instanceof FlintAndSteelItem
             || item.getItem() instanceof FireChargeItem || (item.getItem() instanceof BoneMealItem
             && !TownProtectionPolicy.mayPlant(BuiltInRegistries.BLOCK.getKey(
@@ -150,15 +156,15 @@ public final class TownProtection {
         var end = start.add(player.getViewVector(1.0F).scale(player.blockInteractionRange()));
         for (var fluid : new ClipContext.Fluid[]{ClipContext.Fluid.NONE, ClipContext.Fluid.SOURCE_ONLY}) {
             BlockHitResult hit = event.getLevel().clip(new ClipContext(start, end, ClipContext.Block.OUTLINE, fluid, player));
-            if (hit.getType() == HitResult.Type.BLOCK && (protects(event.getLevel(), hit.getBlockPos())
-                    || protects(event.getLevel(), hit.getBlockPos().relative(hit.getDirection())))) {
+            if (hit.getType() == HitResult.Type.BLOCK && (townArea(event.getLevel(), hit.getBlockPos())
+                    || townArea(event.getLevel(), hit.getBlockPos().relative(hit.getDirection())))) {
                 event.setCanceled(true); refused(); return;
             }
         }
     }
     private static void attackDecoration(AttackEntityEvent event) {
         var target = event.getTarget();
-        if ((target instanceof HangingEntity || target instanceof ArmorStand) && protects(target.level(), target.blockPosition())) {
+        if ((target instanceof HangingEntity || target instanceof ArmorStand) && townArea(target.level(), target.blockPosition())) {
             event.setCanceled(true); refused();
         }
     }
@@ -166,7 +172,10 @@ public final class TownProtection {
         dispatcher.register(Commands.literal("qdworldprotect").requires(s -> s.hasPermission(4) && s.getEntity() == null)
             .then(Commands.literal("status").executes(c -> {
                 JsonObject out = new JsonObject();
-                out.addProperty("schema", 1); out.addProperty("enabled", installed);
+                out.addProperty("schema", 2); out.addProperty("enabled", installed);
+                out.addProperty("mode", "reviewed_blocks"); out.addProperty("maskReady", MASK.ready);
+                out.addProperty("protectedBlocks", MASK.size()); out.addProperty("maskSha256", MASK.sha256);
+                out.addProperty("fallback", MASK.ready ? "none" : "whole_region");
                 out.addProperty("dimension", TownProtectionPolicy.DIMENSION);
                 out.addProperty("minX", TownProtectionPolicy.MIN_X); out.addProperty("maxX", TownProtectionPolicy.MAX_X);
                 out.addProperty("minZ", TownProtectionPolicy.MIN_Z); out.addProperty("maxZ", TownProtectionPolicy.MAX_Z);

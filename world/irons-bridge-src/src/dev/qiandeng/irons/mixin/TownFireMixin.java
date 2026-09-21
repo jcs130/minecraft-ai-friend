@@ -19,7 +19,7 @@ public abstract class TownFireMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true, require = 1)
     private void qiandeng$stopTownFire(BlockState state, ServerLevel level, BlockPos pos,
                                      RandomSource random, CallbackInfo ci) {
-        if (TownProtection.protects(level, pos)) {
+        if (TownProtection.townArea(level, pos)) {
             level.removeBlock(pos, false);
             TownProtection.refused();
             ci.cancel();
@@ -29,6 +29,6 @@ public abstract class TownFireMixin {
     private void qiandeng$protectBurnTarget(Level level, BlockPos pos, int chance, RandomSource random,
                                           int age, Direction face, CallbackInfo ci) {
         // Check the victim, not the flame origin: outside fires cannot burn the boundary.
-        if (TownProtection.protects(level, pos)) { TownProtection.refused(); ci.cancel(); }
+        if (TownProtection.townArea(level, pos)) { TownProtection.refused(); ci.cancel(); }
     }
 }

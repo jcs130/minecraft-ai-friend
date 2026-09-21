@@ -56,6 +56,7 @@ services:
       MC_RCON_PORT: "25575"
       MC_RCON_MAX_COMMAND_BYTES: "65522"
       MC_DATA_DIR: /app/data
+      JEV_API_KEY_FILE: /run/secrets/jev-api-key
       MC_SHARED_DATA_DIR: /mcdata
       PANEL_STATE_DIR: /panel-data
       STATUS_REQ: /mcdata/status-requests.jsonl
@@ -93,6 +94,7 @@ services:
       - ./world/admin:/app/admin:ro
       - ./vendor/modern-viewer:/app/modern-viewer:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/survival-agent-state/secret/jev-api-key:/run/secrets/jev-api-key:ro
       - ./server/panel-state:/panel-data
       - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
       - ./server/world-data:/app/data

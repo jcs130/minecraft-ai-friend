@@ -19,6 +19,6 @@ public abstract class TownBucketMixin {
         at = @At("HEAD"), cancellable = true, require = 1)
     private void qiandeng$guardBucketTarget(Player player, Level level, BlockPos pos, BlockHitResult hit,
                                             ItemStack container, CallbackInfoReturnable<Boolean> cir) {
-        if (TownProtection.protects(level, pos)) { TownProtection.refused(); cir.setReturnValue(false); }
+        if (TownProtection.townArea(level, pos)) { TownProtection.refused(); cir.setReturnValue(false); }
     }
 }

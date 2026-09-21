@@ -15,7 +15,7 @@ public abstract class TownFirePlacementMixin {
     @Inject(method = "onPlace", at = @At("HEAD"), cancellable = true, require = 1)
     private void qiandeng$removeNewTownFire(BlockState state, Level level, BlockPos pos,
                                           BlockState oldState, boolean moving, CallbackInfo ci) {
-        if (TownProtection.protects(level, pos)) {
+        if (TownProtection.townArea(level, pos)) {
             level.removeBlock(pos, false);
             TownProtection.refused();
             ci.cancel();

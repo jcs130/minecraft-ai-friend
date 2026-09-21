@@ -19,6 +19,6 @@ public abstract class TownFluidMixin {
     @Inject(method = "spreadTo", at = @At("HEAD"), cancellable = true, require = 1)
     private void qiandeng$protectFluidTarget(LevelAccessor level, BlockPos pos, BlockState state,
                                            Direction direction, FluidState fluid, CallbackInfo ci) {
-        if (TownProtection.protects(level, pos)) { TownProtection.refused(); ci.cancel(); }
+        if (TownProtection.townArea(level, pos)) { TownProtection.refused(); ci.cancel(); }
     }
 }

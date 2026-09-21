@@ -20,14 +20,17 @@ class TownProtectionHealthTests(unittest.TestCase):
         shutil.copyfile(ROOT/'tools/world_interaction_health.py', self.root/'tools/world_interaction_health.py')
         sources = ('tools/build_irons_bridge.py',
                    'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtection.java',
-                   'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtectionPolicy.java')
+                   'world/irons-bridge-src/src/dev/qiandeng/irons/TownProtectionPolicy.java',
+                   'world/irons-bridge-src/src/dev/qiandeng/irons/TownBlockMask.java', probe.MASK)
         self.sha = hashlib.sha256(b'fixture').hexdigest()
         for name in (*sources, probe.JAR, probe.NUMEN, 'world/irons-bridge-src/build/qiandeng-irons-bridge-0.1.0.jar'):
             path = self.root/name; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'fixture')
+        self.write(probe.MASK, {'blocks': 123})
+        self.mask_sha = hashlib.sha256((self.root/probe.MASK).read_bytes()).hexdigest()
         self.write(probe.BUILD, {'ok': True, 'sha256': self.sha,
                                 'dependencies': {Path(probe.NUMEN).name:self.sha},
-                                'sources': dict.fromkeys(sources, self.sha)})
+                                'sources': dict(dict.fromkeys(sources, self.sha), **{probe.MASK: self.mask_sha})})
         self.write('manifests/server-extensions.lock.json', {'schema_version': 1,
                     'files': [{'path': probe.JAR, 'sha256': self.sha}]})
         self.smoke = {'ok': True, 'environment': 'isolated_native_qa',
@@ -39,7 +42,7 @@ class TownProtectionHealthTests(unittest.TestCase):
         path.write_text(json.dumps(value), encoding='utf8')
 
     def check(self, reply=None):
-        return probe.check(self.root, lambda: dict(probe.EXPECTED) if reply is None else reply)
+        return probe.check(self.root, lambda: dict(probe.EXPECTED, maskSha256=self.mask_sha, protectedBlocks=123) if reply is None else reply)
 
     def test_current_evidence_is_read_only(self):
         before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}

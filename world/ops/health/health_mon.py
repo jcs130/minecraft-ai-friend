@@ -193,9 +193,10 @@ def probe_panel_smoke():
     embodied_agent = probe_embodied_agent()
     system_one = probe_system_one()
     pawapps = probe_pawapps()
+    jev_intent = probe_jev_intent()
     skill_system = probe_skill_system()
     town_protection = probe_town_protection()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system)),
+    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
@@ -206,7 +207,7 @@ def probe_panel_smoke():
             'model_routing': model_routing, 'survivor_party': survivor_party, 'companion_ticking': companion_ticking,
             'navigation_sense': navigation_sense,
             'world_team': world_team, 'maid_perception': maid_perception, 'survival_practice': survival_practice,
-            'embodied_agent': embodied_agent, 'system_one': system_one, 'pawapps': pawapps, 'town_protection': town_protection, 'skill_system': skill_system}
+            'embodied_agent': embodied_agent, 'system_one': system_one, 'pawapps': pawapps, 'town_protection': town_protection, 'skill_system': skill_system, 'jev_intent': jev_intent}
 
 
 def probe_engineering_cron_runtime():
@@ -517,6 +518,16 @@ def probe_world_interaction():
     except (OSError, ValueError, KeyError, TypeError, ImportError):
         return {'ok': False, 'error': 'Native interaction receipt evidence unavailable',
                 'modelRequests': 0, 'worldActions': 0, 'interactionSubmissions': 0}
+
+
+def probe_jev_intent():
+    try:
+        spec = importlib.util.spec_from_file_location('qd_jev_intent_health', PROJECT/'tools/jev_intent_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.check(root=PROJECT)
+    except (OSError, ValueError, KeyError, TypeError, ImportError):
+        return {'ok': False, 'error': 'Intent router evidence unavailable', 'modelRequests': 0, 'worldActions': 0}
 
 
 def probe_skill_system():
@@ -1741,6 +1752,7 @@ def main_locked():
               "pawapps": probe_pawapps(),
               "town_protection": probe_town_protection(),
               "skill_system": probe_skill_system(),
+              "jev_intent": probe_jev_intent(),
               "agent_learning": probe_agent_learning(), "game_knowledge": probe_game_knowledge(),
               "world_operations": probe_world_operations(), "numen_autonomy": probe_numen_autonomy(),
               "world_team": probe_world_team()}

@@ -6,6 +6,8 @@ Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入�
 项目以 Minecraft 为具身智能试验环境，目标是让 Agent 通过真实感知、身体行动、结果反馈和可验证的自我改进持续成长。
 QwenPaw 管理认知、交流与工程角色，Numen 服务端假玩家承担身体控制；当前已部署具身基础，完整 RSI 收益仍待独立场景验证。
 
+女神入口增加了 [Jev 意图分流](docs/JEV-SPELL-ATTENTION.md)：完整技能名和 CLI 零推理直达；自然语言私聊用一次固定选项分类选择施法、答疑或祈愿，公屏识别交流对象。否定、问句不再因包含技能词误施法，低置信度保留原答疑/祈愿路径。主城普通拆建改为保护已建成的方块：空位可放床和建设，玩家新放方块可拆，建筑、道路、公共设施以及火焰/流体安全规则仍受保护。
+
 - 游戏版本：**Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21**
 - 项目目录：`D:\Projects\QiandengJi`
 - 源码仓库：[jcs130/minecraft-ai-friend](https://github.com/jcs130/minecraft-ai-friend)，交付主干 `main`，隔离开发使用 `codex/*`；原世界源码已移入 `world/`
