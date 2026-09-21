@@ -2,12 +2,16 @@
 
 2026-09-21：观察舱采用“3D 世界现场 + 紧凑具身架构”的首屏。下方决策链路已合并为一张大图，System 1、System 2、L2、L3 始终同屏，取消 Jev / LLM / RSI 切换。没有新建 Agent、推理服务或记忆库；仅使用 panel 只读投影。
 
+桌面布局已压紧标题、工具栏与卡片留白；图内默认高度 360px（原 780px），1920×1080 下直播现场与完整图同时可见。窄屏自然滚动，节点细节在侧栏阅读。
+
+本次紧凑布局修订：生产字节隔离浏览器回归通过，新增直播与画布同屏边界断言；观察舱 HTTP 检查 22 项通过。实际页面无控制台错误，1080p 截图保存于本机 reports/compact-observatory-screenshots/。
+
 ## 统一决策大图
 
 - `unified-decision.js` 合并四个区域为一个 SVG，使用命名空间隔离节点与边。跨系统升级、行动反馈进入 L2、反思形成 L3 提案、验证后重入在线回路都明确画为机制虚线；不能用共同画布或动画证明它们属于同一次真实执行。
 - 默认每 5 秒跟随最新策略选择和最新 LLM 轮次。两个区域分别显示自身记录时间；仅匹配当前 activeLlmTurnId、当前路由和新鲜快照的 LLM 节点标识正在运行。最新轮次尚无动作时显示等待回执，不借用旧工具结果。
 - 历史定位只替换所选记录所属的区域，另外三个区域仍然可见；记录过期时在原区域显示缺失，不自动替换。点“跟随最新”恢复自动更新。
-- 可拖动空白平移、使用缩放按钮或 Ctrl / Command + 滚轮缩放；聚焦画布后方向键平移、加减键缩放、0 适应全图。刷新和历史定位保留视口，提供“展开大图”专注模式。OBS 侧栏也保留完整图，不再切成单个系统。
+- 可拖动空白平移、使用缩放按钮或 Ctrl / Command + 滚轮缩放；聚焦画布后方向键平移、加减键缩放、0 适应全图。刷新和历史定位保留视口。决策图嵌在直播区下方，取消覆盖整页的“展开大图”；放大只改变画布内部视口。OBS 侧栏也保留完整图，不再切成单个系统。
 - 历史回放依次阅读两个执行区域的已记录路径，不跨区域动画连成因果链；L2 / L3 不进入真实执行回放。当前运行节点脉冲服从暂停和减少动态效果。
 
 本轮生产代码 65 项测试通过，观察舱 HTTP 探针 21 项通过，`probe_panel_smoke.agent_observatory=true`；其他已有全局健康失败独立保留。仅重启 panel，沿用 running / unless-stopped 守护，无模型或游戏控制调用。
@@ -78,7 +82,7 @@ HTTP 轮询每 5 秒；轨迹后端缓存 5 秒，RSI 缓存 15 秒。已有知�
 
 `node --test world/tests-ai/agent-observatory.test.mjs world/tests-ai/admin-panel.test.mjs world/tests-ai/decision-model.test.mjs world/tests-ai/decision-canvas.test.mjs world/tests-ai/decision-browser.test.mjs` 验证投影、精确关联、未知时长、跨身体比较拒绝、RSI 分类、只读 HTTP、来源限制与原管理台回归。
 
-`python tools/agent_observatory_health.py` 是只读 HTTP 探针，已接入 `probe_panel_smoke`。它检查决策画布、三视图、节点证据、时间线、回放控件、L1/L2/L3 与 OBS 侧栏的页面契约，校验三个 JS 模块和两个 CSS 文件可取且 MIME 正确、动画样式包含 reduced-motion 分支，并保留来源新鲜度、动作来源、回退零派发与 RSI 不虚构提升断言。静态契约通过不等于动画和布局已经通过浏览器验收。
+`python tools/agent_observatory_health.py` 是只读 HTTP 探针，已接入 `probe_panel_smoke`。它检查统一决策画布、嵌入直播布局（无全页图层）、节点证据、时间线、回放控件、L1/L2/L3 与 OBS 侧栏的页面契约，校验前端模块和样式可取且 MIME 正确、动画样式包含 reduced-motion 分支，并保留来源新鲜度、动作来源、回退零派发与 RSI 不虚构提升断言。静态契约通过不等于动画和布局已经通过浏览器验收。
 
 panel 沿用 Docker restart 与 `/healthz` 守护。首次增加挂载需要重新创建 panel；后续模块更改只重启 panel。其它已有 panel-smoke 失败按原结果保留，不补写历史验收哈希。完整健康结果保存在本机报告目录，不进入公开源码。
 

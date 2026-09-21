@@ -142,10 +142,14 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   await page.mouse.down();await page.mouse.move(bounds.x+65,bounds.y+45);await page.mouse.up();
   assert.notEqual(await page.locator('#decision-canvas').getAttribute('viewBox'),beforePan,'Background drag pans the complete graph');
   await page.locator('#fit-graph').click();
-  await page.locator('#expand-graph').click();
-  assert.equal(await page.locator('body').evaluate(n=>n.classList.contains('graph-expanded')),true);
+  assert.equal(await page.locator('#expand-graph').count(),0,'The graph cannot replace the broadcast with an overlay');
+  const scene=await page.locator('#world-frame').boundingBox();
+  const canvas=await page.locator('#decision-canvas').boundingBox();
+  assert.ok(scene.height>=220 && scene.y>=0,'The live scene remains a substantial part of the first screen');
+  assert.ok(canvas.y>=scene.y+scene.height && canvas.y+canvas.height<=1080,'The whole graph and live scene fit together at 1080p');
+  assert.ok(canvas.height<=400,'The graph is compact, with local zoom for detail');
+  assert.equal(await page.locator('.workbench').evaluate(n=>getComputedStyle(n).position==='fixed'),false);
   assert.equal(await page.locator('[data-lane]').count(),4);
-  await page.locator('#expand-graph').click();
   for(const expected of ['2×','0.5×','1×']){await page.locator('#speed').click();assert.equal(await page.locator('#speed').innerText(),expected);}
   await page.locator('#step').click();
   assert.equal(await page.locator('.edge.flowing').count(),0);

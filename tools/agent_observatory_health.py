@@ -43,7 +43,9 @@ def probe():
                 for route in ('/observatory.css', '/observatory-motion.css')))
         checks['unified-decision-canvas'] = ('data-view=' not in page and 'buildUnifiedDecisionGraph' in app
             and all(x in unified for x in ("['policy','llm']", "['l2','l3']", "evidence:'mechanism'")))
-        checks['graph-navigation'] = all(f'id="{control}"' in page for control in ('zoom-in','zoom-out','fit-graph','expand-graph'))
+        checks['graph-navigation'] = all(f'id="{control}"' in page for control in ('zoom-in','zoom-out','fit-graph'))
+        checks['embedded-broadcast'] = ('Compact broadcast:' in style and 'expand-graph' not in page
+            and 'graph-expanded' not in app and 'graph-expanded' not in style)
         checks['unified-module'] = content_types.get('/unified-decision.js') in ('text/javascript','application/javascript')
         checks['playback-controls'] = all(f'id="{control}"' in page
             for control in ('play', 'step', 'speed', 'pause', 'playback-progress', 'playback-note'))

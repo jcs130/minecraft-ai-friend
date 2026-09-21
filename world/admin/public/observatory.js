@@ -12,7 +12,7 @@ let trace=null,rsi=null,records=[],selectedId=null,selectedNode=null,graph=null,
 let playing=false,playIndex=-1,timer=null,speed=1,steps=[],loop=false,historyKey='';
 let selections={},following=true;
 const navigation=attachGraphNavigation($('decision-canvas'),zoom=>{$('zoom-level').textContent=Math.round(zoom*100)+'%';});
-$('zoom-in').addEventListener('click',()=>navigation.zoom(1.25));$('zoom-out').addEventListener('click',()=>navigation.zoom(.8));$('fit-graph').addEventListener('click',()=>navigation.fit());$('expand-graph').addEventListener('click',()=>{const expanded=document.body.classList.toggle('graph-expanded');$('expand-graph').setAttribute('aria-pressed',String(expanded));$('expand-graph').textContent=expanded?'收起大图':'展开大图';});
+$('zoom-in').addEventListener('click',()=>navigation.zoom(1.25));$('zoom-out').addEventListener('click',()=>navigation.zoom(.8));$('fit-graph').addEventListener('click',()=>navigation.fit());
 let architectureLayer=['l2','l3'].includes(params.get('layer'))?params.get('layer'):'online',architectureKey='',architectureNode=null,architectureMotion=!reduced.matches;
 function renderArchitecture(){
  const next=buildArchitectureGraph(architectureLayer,trace,rsi),key=JSON.stringify(next);if(key===architectureKey)return;architectureKey=key;
