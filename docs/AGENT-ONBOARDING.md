@@ -36,8 +36,11 @@ const bot = require('mineflayer').createBot({
   version: '1.21.1',                 // 必钉，不钉协商失败
 })
 ```
-- **端口选择**：`25701`=gate（物品号已翻译 ✓ / 方块号未翻译）；`25565`=直连(未翻译，方块物品都可能错)。**要用就挂 gate**。
-- **gate 只绑 `127.0.0.1:25701`**：局域网另一台机器的 Agent 现在**连不到 gate**，要么本机跑，要么以后把 gate 口开放到内网（别对公网，见 §5）。
+- **端口选择（compose 实测 ✓ 有两道门）**：
+  - `127.0.0.1:25701` = **gate（内门）**：本机/容器内 Agent 用 ✓ 收任意名 ✓
+  - `0.0.0.0:25702` = **gate-public（外门）**：外部/局域网另一台机器的 Agent 用 ✓ **只收 `GATE_AGENT_PREFIX` 前缀名**（如 `agent` 开头 ✓ 内部号 Goddess/Kirito 冒名在门口即拒 ✓）
+  - `25565`=直连(未翻译，方块物品都可能错)——**别直连，一律挂门** ✓
+- 内网门/外门都走同一 `gate.cjs`（同一翻译层 ✓）；外门还多一道前缀闸 ✓ 所以**外部 Agent 不必转发裸 Java 口** ✓ 用 25702 即可（见 §5 更新）。
 - 已固化的坑：`version` 必钉；`keepAlive` 竞态曾踢 bot；偶发 `ECONNRESET` → **长驻必带看门狗自动重连**。
 
 ---
@@ -46,18 +49,20 @@ const bot = require('mineflayer').createBot({
 
 - NeoForge 带内容模组后，**网络里的 blockstate/item 数字号 ≠ 原版表**，mineflayer/Geyser 按原版表解码必然错位。
 - 2026-09-21 已上线修复链路：botgate 导出权威号表 → `idmap.json`（state 11.6 万 + item 5158）→ gate 出站翻译。
-- **实测生效范围**：
+- **实测生效范围（截至 2026-09-21 世界宕机前）**：
   - ✅ **物品**：经 gate 背包/槽位名已正确（diamond_sword/stone/bookshelf 实测对；mod 物品兜底为 paper）
-  - ❌ **方块**：经 gate **仍读错**（红床读成活塞、火把读成火、书架读成刻纹书架）—— 因为 chunk 数据是**原始 buffer**，翻译层还没解它
-- **结论**：需要看方块世界的 Agent（找床/避怪/挖矿/建造）**现在必须用 numen**；mineflayer 的方块修复 = 待补「chunk palette buffer 翻译」（工程项，未做）。
+  - ⏳ **方块**：chunk palette 翻译代码 `remapChunkBuf`（prismarine-chunk load→翻 palette→dump）已进 gate ✓ 但**世界宕机未能复验是否真读对** ✗ —— 上一版"方块仍读错"是**该代码合入前的旧账** ✓ 别当定论 ✓
+- **结论**：方块修复**代码已就位·待世界起来复验** ✓ 复验前，找床/避怪/挖矿/建造类 Agent **稳妥仍走 numen**（读数天然正确 ✓）；复验通过后放开此建议。
 
 ## 5. 白名单与安全铁律
 
-- 服务端离线、**没装 Floodgate** ✓ → **名字可被冒用** ✗ → 公网开放前必须：
-  1. `whitelist add <Agent/访客独占名>` → 全部备齐再 `whitelist on`（RCON 即时生效 ✓ 不用重启 ✓）
+- **外部 Agent 的公网入口已经建好 = `gate-public`（`0.0.0.0:25702`）** ✓ 带前缀门（`GATE_AGENT_PREFIX` ✓ 内部名冒名即拒 ✓）。
+  → **别再另开/转发裸 Java `25565` 给 Agent** ✓ 那条没有前缀闸 ✓ 离线模式下可被 `Kirito`/`Goddess` 冒名抢家当 ✗✗
+- 服务端离线、**没装 Floodgate** ✓ → **基岩访客**（UDP 19140）仍受"名字可被冒用"约束 ✓ 对外开放前：
+  1. `whitelist add <访客独占名>` → 全部备齐再 `whitelist on`（RCON 即时生效 ✓ 不用重启 ✓）
   2. 已预置 14 个自家号（Goddess/Kirito/…/live）；**没填就开 = 把自家 AI 锁门外** ✗
 - **绝不转发到公网**：`25577 RCON` / `19091 面板` / `19092 观战` / `445 SMB` / `3389 RDP` ✗✗（本机有 Agent 凭据 ✓ 泄露=世界沦陷 ✓）
-- 需要跨公网跑自己的 Agent → 用 **Tailscale 私有组网**（已装 ✓），不是转发 Java 口。
+- 自家 Agent 在异地机器跑 → 优先 **Tailscale 私有组网**（已装 ✓ 连内门 25701 语义 ✓）；要真走公网就连外门 25702 + 前缀独占名 ✓
 
 ## 6. 与「观战 / 附身」联动
 
