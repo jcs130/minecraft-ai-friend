@@ -104,3 +104,5 @@ const bot = require('mineflayer').createBot({
 ---
 
 > **号映射单一事实源**：NeoForge↔原版 blockstate/item 号的来路、覆盖面、兜底规则、重建与验收，统一见 [BOTGATE-IDMAP](BOTGATE-IDMAP.md) ✓ 部署动作与宿主服务正本见 [deploy-release-runbook](deploy-release-runbook.md) §5–§6 与 `world/host-services/` ✓
+
+> **形象/皮肤**：走 YSM（模型内置服务端 ✓ Agent 用 `world/tools/ysm_assign.py random <玩家>` 随机分配初始形象 ✓ 真人自己 Alt+Y 选）→ 见 [SKINS-YSM](SKINS-YSM.md)

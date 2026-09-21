@@ -184,3 +184,5 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 ---
 
 > **号映射单一事实源**：NeoForge↔原版 blockstate/item 号的来路、覆盖面、兜底规则、重建与验收，统一见 [BOTGATE-IDMAP](BOTGATE-IDMAP.md) ✓ 部署动作与宿主服务正本见 [deploy-release-runbook](deploy-release-runbook.md) §5–§6 与 `world/host-services/` ✓
+
+> **形象/皮肤**：真人客户端 Alt+Y 自选 YSM 模型 ✓ Agent 随机分配 ✓ 详见 [SKINS-YSM](SKINS-YSM.md)
