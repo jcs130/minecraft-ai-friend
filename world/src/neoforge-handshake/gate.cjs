@@ -392,13 +392,18 @@ function onFrontPacket (sess, name, params) {
 }
 
 // 安全重序列化转发：失败只记日志，不炸会话
+const REMAP = require('./idmap-remap.cjs')
+REMAP.load()   // 无 idmap.json = 纯透传，行为与旧版完全一致 ✓
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
   if (target === sess.front) {
+    if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
     sess.frontCensus[name] = (sess.frontCensus[name] || 0) + 1
+  } else if (REMAP.hasMap()) {
+    params = REMAP.remapIn(name, params) // 前端→后端: 原版号→NeoForge号 ✓
   }
   try { target.write(name, params) } catch (e) {
     sess.frontErrCensus = sess.frontErrCensus || {}
