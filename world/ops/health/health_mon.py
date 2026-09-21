@@ -160,6 +160,10 @@ def probe_services():
 
 
 def probe_panel_smoke():
+    observatory_spec = importlib.util.spec_from_file_location('agent_observatory_health', PROJECT / 'tools/agent_observatory_health.py')
+    observatory_module = importlib.util.module_from_spec(observatory_spec)
+    observatory_spec.loader.exec_module(observatory_module)
+    agent_observatory = observatory_module.probe()
     runtime = probe_panel_http()
     management = probe_management()
     visual = probe_recorded_behavior('admin-panel-smoke.json', (
@@ -196,8 +200,8 @@ def probe_panel_smoke():
     jev_intent = probe_jev_intent()
     skill_system = probe_skill_system()
     town_protection = probe_town_protection()
-    return {'ok': all(value['ok'] for value in (runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
-            'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
+    return {'ok': all(value['ok'] for value in (agent_observatory, runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
+            'agent_observatory': agent_observatory, 'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
