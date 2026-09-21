@@ -18,13 +18,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const clean = []
 
 async function readUntil (bot, pos, want, tries = 10) {
+  // 注意：mineflayer 的 block.name **不带** minecraft: 前缀（实测 diamond_block ✓）
+  const w = String(want).replace(/^minecraft:/, '')
   for (let i = 0; i < tries; i++) {
     const b = bot.blockAt(new V(pos.x, pos.y, pos.z))
-    if (b && b.name === want) return true
+    if (b && String(b.name).replace(/^minecraft:/, '') === w) return true
     await sleep(1000)
   }
-  const b = bot.blockAt(new V(pos.x, pos.y, pos.z))
-  return !!(b && b.name === want)
+  return false
 }
 
 ;(async () => {
