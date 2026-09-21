@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
 from urllib.parse import urlsplit
 
@@ -31,10 +32,43 @@ def validate_choice(value):
     return value
 
 
-def compact_state(body, goal, execution):
-    return {'body': {k: body.get(k) for k in ('bodyUuid', 'dimension', 'observedAt', 'position',
-                'hp', 'hunger', 'inWater', 'inLava', 'onGround', 'task')},
-            'goal': str(goal)[:600], 'lastExecution': execution}
+def _scalar(value, limit=100):
+    if isinstance(value, str):
+        return value[:limit]
+    if value is None or type(value) is bool:
+        return value
+    if type(value) in (int, float) and math.isfinite(value):
+        return value
+    return None
+
+
+def _fields(value, keys):
+    return {k: _scalar(value.get(k)) for k in keys} if isinstance(value, dict) else None
+
+
+def compact_state(body, goal, execution, proposal=None):
+    """Current physical facts only; missing/truncated inventory is never an empty bag."""
+    view = {k: _scalar(body.get(k)) for k in ('bodyUuid', 'dimension', 'observedAt',
+        'hp', 'maxHp', 'hunger', 'saturation', 'air', 'inWater', 'inLava', 'onGround', 'biome')}
+    view['position'] = _fields(body.get('position'), ('x', 'y', 'z'))
+    view['task'] = _fields(body.get('task'), ('task_id', 'task', 'state', 'busy', 'completionConfirmed'))
+    equipment = body.get('equipment')
+    view['equipment'] = ({slot: _fields(equipment.get(slot), ('item', 'count', 'damage', 'maxDamage'))
+        for slot in ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')} if isinstance(equipment, dict) else None)
+    counts = body.get('counts')
+    view['counts'] = None
+    view['countsTruncated'] = None
+    if isinstance(counts, dict):
+        valid = {k: v for k, v in counts.items() if isinstance(k, str) and len(k) <= 100
+            and re.fullmatch(r'[a-z0-9_.-]+:[a-z0-9_./-]+', k) and type(v) is int and 0 <= v <= 1000000}
+        # Keep candidate items first; overflow remains explicit, never implied zero.
+        preferred = [r['action']['args'].get('item_id', r['action']['args'].get('item'))
+            for r in (proposal or {}).get('candidates', []) if isinstance(r.get('action'), dict)]
+        keys = sorted(valid, key=lambda k: (k not in preferred, k))[:32]
+        view['counts'] = {k: valid[k] for k in keys}
+        view['countsTruncated'] = len(keys) != len(counts)
+    return {'body': view, 'goal': str(goal)[:600],
+            'lastExecution': _fields(execution, ('actionId', 'tool', 'status', 'code', 'completionConfirmed'))}
 
 
 class SystemOne:
@@ -64,7 +98,7 @@ class SystemOne:
                     and 0 <= self.clock() * 1000 - stamp <= 5000)
         if not fresh():
             return {'ok': False, 'code': 'policy_observation_stale'}
-        state = compact_state(body, goal, execution)
+        state = compact_state(body, goal, execution, proposal)
         packed = json.dumps(state, ensure_ascii=False, allow_nan=False)
         if len(packed.encode('utf8')) > 8192:
             return {'ok': False, 'code': 'policy_state_too_large'}
@@ -91,6 +125,8 @@ class SystemOne:
                         'probabilities': probabilities, 'latencyMs': round((time.monotonic()-started)*1000, 2),
                         'stateSha256': hashlib.sha256(packed.encode('utf8')).hexdigest(),
                         'observedAt': stamp, 'state': state, 'candidates': proposal['candidates']}
+            metadata['modelInfo'] = _fields(reply.get('model_info'),
+                ('revision', 'configSha256', 'modelName', 'temperature', 'temperatureOverridden'))
             if not fresh():
                 return {'ok': False, 'code': 'policy_observation_stale', **metadata}
             if confidence < .75 or choices[choice]['action'] is None:

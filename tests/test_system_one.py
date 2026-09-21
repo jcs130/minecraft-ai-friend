@@ -39,6 +39,37 @@ class PolicyTests(unittest.TestCase):
         self.transport.side_effect=TimeoutError('fixture')
         self.assertEqual(self.policy.choose(PROPOSAL,self.body)['code'],'policy_unavailable')
 
+    def test_current_vitals_and_equipment_reach_policy_without_raw_inventory_or_reasoning(self):
+        self.body.update(hp=8, maxHp=20, hunger=5, saturation=0, air=17, inWater=True,
+            equipment={'mainhand':{'item':'minecraft:iron_sword','nbt':'private data'}},
+            counts={'minecraft:apple':2}, inventory=[{'nbt':'private data'}])
+        outcome={'status':'succeeded','completionConfirmed':True,'reasoning':'private reasoning',
+                 'result':{'unbounded':'x'*20000}}
+        self.assertTrue(self.policy.choose(PROPOSAL,self.body,execution=outcome)['ok'])
+        state=self.transport.call_args.args[0]['state'];body=state['body']
+        self.assertEqual((body['air'],body['maxHp'],body['saturation']),(17,20,0))
+        self.assertEqual(body['equipment']['mainhand']['item'],'minecraft:iron_sword')
+        self.assertEqual(body['counts'],{'minecraft:apple':2})
+        self.assertIs(body['countsTruncated'],False)
+        self.assertEqual(state['lastExecution']['status'],'succeeded')
+        self.assertNotIn('private',str(state));self.assertNotIn('inventory',body)
+
+    def test_unknown_inventory_and_partial_inventory_are_distinct_from_empty(self):
+        self.policy.choose(PROPOSAL,self.body)
+        self.assertIsNone(self.transport.call_args.args[0]['state']['body']['counts'])
+        self.body['counts']={}
+        self.policy.choose(PROPOSAL,self.body)
+        self.assertIs(self.transport.call_args.args[0]['state']['body']['countsTruncated'],False)
+        self.body['counts']={'minecraft:item_'+str(i):1 for i in range(80)}
+        self.body['counts'].update({'minecraft:zz_apple':2,'invalid item':5,'minecraft:nan':float('nan')})
+        proposal=copy.deepcopy(PROPOSAL)
+        proposal['candidates'][0]['action']={'tool':'eat','args':{'item_id':'minecraft:zz_apple'}}
+        self.assertTrue(self.policy.choose(proposal,self.body)['ok'])
+        body=self.transport.call_args.args[0]['state']['body']
+        self.assertEqual(body['counts']['minecraft:zz_apple'],2)
+        self.assertEqual(len(body['counts']),32);self.assertIs(body['countsTruncated'],True)
+        self.assertNotIn('invalid item',body['counts'])
+
     def test_stale_input_or_reply_is_not_executed(self):
         self.now=106
         self.assertFalse(self.policy.choose(PROPOSAL,self.body)['ok']);self.transport.assert_not_called()

@@ -11,3 +11,4 @@ assets/town-renewal/**/*.nbt binary
 assets/town-renewal/operator-pack/** -text
 assets/town-renewal/bridge-operator-pack/** -text whitespace=cr-at-eol
 patches/guardvillagers/*.patch text eol=lf whitespace=-blank-at-eol
+patches/decider/*.patch text eol=lf whitespace=-blank-at-eol

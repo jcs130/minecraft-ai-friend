@@ -11,7 +11,12 @@ def check():
         if len(raw) > 4096:
             raise ValueError('oversized_health')
         value = json.loads(raw)
-        return {'ok': value.get('ok') is True, 'model': str(value.get('model', ''))[:100],
+        configured = (value.get('configLoaded') is True and value.get('modelName') != 'decider-dev'
+                      and isinstance(value.get('configSha256'), str) and len(value['configSha256']) == 64)
+        return {'ok': value.get('ok') is True and configured, 'model': str(value.get('model', ''))[:200],
+                'configurationVerified': configured,
+                'configuration': {k: value.get(k) for k in ('modelName', 'revision', 'configSha256', 'temperature',
+                    'temperatureOverridden', 'schemaTemperature', 'schemaCache', 'isolatedLevels', 'neutralizeNone')},
                 'modelCalls': 0, 'worldActions': 0,
                 'scope': 'Local Jev-compatible choice service; not policy quality or WASD mastery.',
                 'fallback': 'Existing QwenPaw planner; local failure does not disable autonomy.'}
