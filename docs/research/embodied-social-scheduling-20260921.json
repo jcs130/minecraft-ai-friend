@@ -1,0 +1,51 @@
+{
+  "date": "2026-09-21",
+  "projectBase": "fdb35f3",
+  "method": "Targeted source inspection; no reference runtime, model requests or experiment reproduction in this review.",
+  "references": [
+    {
+      "repository": "https://github.com/Pal-AI-Lab/Cortico",
+      "commit": "7d20a1029d69e5f8b3a968d476419d0ddfe6b786",
+      "files": [
+        {
+          "path": "src/core/bus.ts",
+          "sha256": "62aecb463c1b8cc1d49e563db766aea5468b79591a034cfe40dfca5810442b7b"
+        },
+        {
+          "path": "src/core/loop.ts",
+          "sha256": "63a19412641c76c67848f270f740916d933ca6060c5c97f0334679a64e13daef"
+        },
+        {
+          "path": "bots/corti-soulmate/persona/rhythm.ts",
+          "sha256": "f386c7578ecb420249bd1bb474144717b3d6a045efd809a4001d6545ebee5e3d"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/wehos/mc-agent-neko",
+      "commit": "23f5971203e3f4d15ef416ff8e5cc67965845d82",
+      "files": [
+        {
+          "path": "src/agent/agent.js",
+          "sha256": "a3736b5c826d359f424a18eb549d9ad16de820a58d0d68744d1d7c8fdf1057e1"
+        },
+        {
+          "path": "src/websocket/ws_server.js",
+          "sha256": "09810d205d67596743b1b1b00a07870a93a332c73c3550fc60eec799b97e0e21"
+        },
+        {
+          "path": "src/agent/admin_mission.js",
+          "sha256": "8d85fcdce954328087073ec355118d477457bbce7571c7422f53cb3624d10666"
+        },
+        {
+          "path": "src/agent/framework/tool_lanes.js",
+          "sha256": "cd4c1ba993f0925e6328dd5999077ef5544424776108f4e8a8dceb0b5e211854"
+        },
+        {
+          "path": "docs/ingame-chat-as-admin.md",
+          "sha256": "e5dedf1abce14c88b17887fbcf41ead86e4fce390011712396f8e808b6463996"
+        }
+      ]
+    }
+  ]
+}
