@@ -1,11 +1,14 @@
-"""Local typed choice inside the existing tested-program/body-lease loop."""
+"""Typed policy choice inside the existing tested-program/body-lease loop."""
 import hashlib
 import json
 import math
 import os
 import re
 import time
+from pathlib import Path
 from urllib.parse import urlsplit
+
+OFFICIAL_ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
 
 
 def validate_choice(value):
@@ -72,23 +75,69 @@ def compact_state(body, goal, execution, proposal=None):
 
 
 class SystemOne:
-    def __init__(self, endpoint=None, transport=None, clock=time.time):
-        self.endpoint = endpoint or os.environ.get('SURVIVOR_SYSTEM_ONE_URL', 'http://host.docker.internal:8000/v1/systemone')
+    def __init__(self, endpoint=None, transport=None, clock=time.time, api_key_file=None, model=None):
+        self.endpoint = endpoint or os.environ.get('SURVIVOR_SYSTEM_ONE_URL', OFFICIAL_ENDPOINT)
         parsed = urlsplit(self.endpoint)
-        if (parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1', 'localhost', 'host.docker.internal')
-                or parsed.path != '/v1/systemone' or parsed.username or parsed.password or parsed.query or parsed.fragment):
+        self.official = self.endpoint == OFFICIAL_ENDPOINT
+        local = (parsed.scheme == 'http' and parsed.hostname in ('127.0.0.1', 'localhost', 'host.docker.internal')
+                 and parsed.path == '/v1/systemone' and not any((parsed.username, parsed.password, parsed.query, parsed.fragment)))
+        if not self.official and not local:
             raise ValueError('system_one_endpoint_invalid')
+        self.model = model or os.environ.get('SURVIVOR_SYSTEM_ONE_MODEL', 'jev-latest')
+        if not re.fullmatch(r'jev-[A-Za-z0-9_.-]{1,60}', self.model):
+            raise ValueError('system_one_model_invalid')
+        self.api_key_file = Path(api_key_file or os.environ.get('SURVIVOR_SYSTEM_ONE_KEY_FILE', '/state/secret/jev-api-key'))
         self.transport = transport or self._post
         self.clock = clock
 
-    def _post(self, payload):
+    def _headers(self):
+        # Never attach the official credential to local or arbitrary endpoints.
+        if not self.official:
+            return {}
+        with self.api_key_file.open('r', encoding='ascii') as stream:
+            key = stream.read(1025).strip()
+        if not re.fullmatch(r'[A-Za-z0-9_-]{20,512}', key):
+            raise ValueError('system_one_key_invalid')
+        return {'Authorization': 'Bearer ' + key}
+
+    def _request(self, method, endpoint, payload=None):
         import httpx
+        headers = self._headers()
         with httpx.Client(timeout=2.0, trust_env=False, follow_redirects=False) as client:
-            reply = client.post(self.endpoint, json=payload)
-            reply.raise_for_status()
-            if len(reply.content) > 32768:
-                raise ValueError('system_one_reply_too_large')
-            return reply.json()
+            # Bound the read, not just the already-buffered response. No automatic retries.
+            with client.stream(method, endpoint, json=payload, headers=headers) as reply:
+                reply.raise_for_status()
+                raw = bytearray()
+                for chunk in reply.iter_bytes():
+                    raw.extend(chunk)
+                    if len(raw) > 32768:
+                        raise ValueError('system_one_reply_too_large')
+                return json.loads(raw)
+
+    def _post(self, payload):
+        return self._request('POST', self.endpoint, payload)
+
+    def health(self):
+        """Authentication/model availability only; never a billable evaluation."""
+        result = {'ok': False, 'provider': 'typesafe' if self.official else 'local-decider',
+                  'endpoint': self.endpoint, 'model': self.model if self.official else None,
+                  'modelCalls': 0, 'worldActions': 0,
+                  'scope': 'Provider readiness only; not policy quality or successful game actions.',
+                  'fallback': 'Existing QwenPaw planner; no automatic local provider fallback.'}
+        try:
+            if self.official:
+                value = self._request('GET', 'https://api.typesafe.ai/v1/models')
+                models = value.get('models')
+                names = [r.get('name') for r in models if isinstance(r, dict)] if isinstance(models, list) else []
+                names = [n for n in names if isinstance(n, str) and len(n) <= 100][:32]
+                result.update(ok=self.model in names, authenticationVerified=True, availableModels=names)
+            else:
+                value = self._request('GET', self.endpoint.rsplit('/v1/', 1)[0] + '/health')
+                result.update(ok=value.get('ok') is True and value.get('configLoaded') is True,
+                    configuration=_fields(value, ('modelName', 'revision', 'configSha256', 'temperature')))
+        except Exception as error:
+            result['errorType'] = type(error).__name__
+        return result
 
     def choose(self, proposal, body, goal='', execution=None):
         validate_choice(proposal)
@@ -105,6 +154,8 @@ class SystemOne:
         payload = {'state': state, 'questions': {'action': {'type': 'choice',
             'instructions': proposal['question'],
             'criteria': {r['id']: r['description'] for r in proposal['candidates']}}}}
+        if self.official:
+            payload['model'] = self.model
         started = time.monotonic()
         try:
             reply = self.transport(payload)
@@ -117,16 +168,21 @@ class SystemOne:
                     or not isinstance(probabilities, dict) or set(probabilities) != set(choices)
                     or any(type(p) not in (int, float) or not math.isfinite(p) or not 0 <= p <= 1 for p in probabilities.values())
                     or abs(sum(probabilities.values()) - 1) > .02
-                    or abs(probabilities[choice] - confidence) > .02
-                    or confidence < max(probabilities.values()) - .001
+                    or probabilities[choice] < max(probabilities.values()) - .001
+                    or (not self.official and abs(probabilities[choice] - confidence) > .02)
                     or not isinstance(reply.get('model'), str) or len(reply['model']) > 100):
                 raise ValueError('invalid_policy_reply')
             metadata = {'model': reply['model'], 'choice': choice, 'confidence': confidence,
+                        'provider': 'typesafe' if self.official else 'local-decider',
+                        'selectedProbability': probabilities[choice],
                         'probabilities': probabilities, 'latencyMs': round((time.monotonic()-started)*1000, 2),
                         'stateSha256': hashlib.sha256(packed.encode('utf8')).hexdigest(),
                         'observedAt': stamp, 'state': state, 'candidates': proposal['candidates']}
             metadata['modelInfo'] = _fields(reply.get('model_info'),
                 ('revision', 'configSha256', 'modelName', 'temperature', 'temperatureOverridden'))
+            usage = reply.get('usage')
+            metadata['usage'] = ({k: usage[k] for k in ('input_tokens', 'output_tokens')
+                if type(usage.get(k)) is int and 0 <= usage[k] <= 1000000} if isinstance(usage, dict) else None)
             if not fresh():
                 return {'ok': False, 'code': 'policy_observation_stale', **metadata}
             if confidence < .75 or choices[choice]['action'] is None:
@@ -134,3 +190,15 @@ class SystemOne:
             return {'ok': True, 'action': choices[choice]['action'], **metadata}
         except Exception as error:
             return {'ok': False, 'code': 'policy_unavailable', 'errorType': type(error).__name__}
+
+
+if __name__ == '__main__':
+    import sys
+    if sys.argv[1:] != ['--health']:
+        raise SystemExit('Only --health is supported')
+    try:
+        result = SystemOne().health()
+    except Exception as error:
+        result = {'ok': False, 'errorType': type(error).__name__, 'modelCalls': 0, 'worldActions': 0}
+    print(json.dumps(result))
+    raise SystemExit(0 if result['ok'] else 1)

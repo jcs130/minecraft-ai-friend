@@ -1,11 +1,12 @@
 import copy
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]/'world/survival'), str(Path(__file__).parent)]
-from system_one import SystemOne, validate_choice
+from system_one import SystemOne, validate_choice, OFFICIAL_ENDPOINT
 from skill_library import _validate_result, SkillError
 import test_survival_controller as fixture
 from numen_gateway import read_json
@@ -38,6 +39,74 @@ class PolicyTests(unittest.TestCase):
             self.assertFalse(self.policy.choose(PROPOSAL,self.body)['ok'])
         self.transport.side_effect=TimeoutError('fixture')
         self.assertEqual(self.policy.choose(PROPOSAL,self.body)['code'],'policy_unavailable')
+
+    def test_official_confidence_is_independent_of_selected_probability(self):
+        value=reply(.9);value['answers']['action']['confidence']=.78
+        value['usage']={'input_tokens':320,'output_tokens':34}
+        self.transport.return_value=value
+        result=self.policy.choose(PROPOSAL,self.body)
+        self.assertTrue(result['ok']);self.assertEqual(result['selectedProbability'],.9)
+        self.assertEqual(result['confidence'],.78);self.assertEqual(result['usage'],value['usage'])
+        self.assertEqual(self.transport.call_args.args[0]['model'],'jev-latest')
+        value['answers']['action']['confidence']=.6
+        self.assertEqual(self.policy.choose(PROPOSAL,self.body)['code'],'policy_escalated')
+        value['answers']['action'].update(confidence=.9,probabilities={'advance':.3,'escalate':.7})
+        self.assertEqual(self.policy.choose(PROPOSAL,self.body)['code'],'policy_unavailable')
+
+    def test_auth_is_file_backed_official_only_and_redirects_are_not_followed(self):
+        import httpx
+        with tempfile.TemporaryDirectory() as folder:
+            key=Path(folder)/'key';key.write_text('fixture-key-never-a-real-credential','ascii')
+            requests=[]
+            def handle(request):
+                requests.append(request)
+                return httpx.Response(302,headers={'location':'https://outside.example/collect'})
+            client_class=httpx.Client
+            def client(**kwargs):
+                self.assertIs(kwargs['trust_env'],False);self.assertIs(kwargs['follow_redirects'],False)
+                return client_class(**kwargs,transport=httpx.MockTransport(handle))
+            policy=SystemOne(api_key_file=key,clock=lambda:self.now)
+            with patch('httpx.Client',side_effect=client):
+                result=policy.choose(PROPOSAL,self.body)
+            self.assertEqual(result['code'],'policy_unavailable');self.assertEqual(len(requests),1)
+            self.assertEqual(str(requests[0].url),OFFICIAL_ENDPOINT)
+            self.assertEqual(requests[0].headers['Authorization'],'Bearer '+key.read_text())
+            self.assertNotIn(key.read_text(),str(result))
+            local=SystemOne('http://127.0.0.1:8000/v1/systemone',api_key_file=key)
+            self.assertEqual(local._headers(),{})
+            for endpoint in ('http://api.typesafe.ai/v1/systemone',
+                             'https://api.typesafe.ai.evil.example/v1/systemone',
+                             OFFICIAL_ENDPOINT+'?forward=1'):
+                with self.assertRaises(ValueError):SystemOne(endpoint,api_key_file=key)
+
+    def test_http_auth_failure_rate_limit_oversize_and_missing_key_do_not_retry(self):
+        import httpx
+        with tempfile.TemporaryDirectory() as folder:
+            key=Path(folder)/'key';key.write_text('fixture-key-never-a-real-credential','ascii')
+            client_class=httpx.Client
+            for status,body in ((401,b'private upstream error'),(429,b'rate limited'),(200,b'x'*32769)):
+                requests=[]
+                def handle(request):
+                    requests.append(request);return httpx.Response(status,content=body)
+                with patch('httpx.Client',side_effect=lambda **kw:client_class(**kw,transport=httpx.MockTransport(handle))):
+                    result=SystemOne(api_key_file=key,clock=lambda:self.now).choose(PROPOSAL,self.body)
+                self.assertEqual(result['code'],'policy_unavailable');self.assertEqual(len(requests),1)
+                self.assertNotIn('private',str(result));self.assertNotIn(key.read_text(),str(result))
+            key.unlink()
+            with patch('httpx.Client') as client:
+                result=SystemOne(api_key_file=key,clock=lambda:self.now).choose(PROPOSAL,self.body)
+                self.assertEqual(result['code'],'policy_unavailable');client.assert_not_called()
+
+    def test_official_health_lists_models_without_running_inference(self):
+        policy=SystemOne()
+        with patch.object(policy,'_request',return_value={'models':[{'name':'jev-latest'}]}) as request:
+            health=policy.health()
+        self.assertTrue(health['ok']);self.assertTrue(health['authenticationVerified'])
+        self.assertEqual((health['modelCalls'],health['worldActions']),(0,0))
+        request.assert_called_once_with('GET','https://api.typesafe.ai/v1/models')
+        with patch.object(policy,'_request',side_effect=OSError('secret error must not be logged')):
+            health=policy.health()
+        self.assertFalse(health['ok']);self.assertNotIn('secret',str(health))
 
     def test_current_vitals_and_equipment_reach_policy_without_raw_inventory_or_reasoning(self):
         self.body.update(hp=8, maxHp=20, hunger=5, saturation=0, air=17, inWater=True,

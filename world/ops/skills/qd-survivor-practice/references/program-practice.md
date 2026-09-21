@@ -1,10 +1,10 @@
 # 从一次生活实践改进程序
 
-## 本地系统 1 候选决策
+## 系统 1 候选决策
 
-已测试程序可返回 `choose:{question,candidates:[{id,description,action}]}`，与 action、observe、waitSeconds、done/replan 互斥。提供 2–8 个依据当前观测构造的候选；每个 action 必须包含完整的现有 tool/args，或为 null（交回慢系统）。本地 Jev 兼容 Decider 只选候选，不生成参数，不接收历史思考。置信度低于 0.75、服务失败或观测超过 5 秒均 replan。原身体租约、权限、预算、回执和未知动作不重放继续生效。
+已测试程序可返回 `choose:{question,candidates:[{id,description,action}]}`，与 action、observe、waitSeconds、done/replan 互斥。提供 2–8 个依据当前观测构造的候选；每个 action 必须包含完整的现有 tool/args，或为 null（交回慢系统）。现役官方 Jev 只选候选，不生成参数，不接收历史思考。官方 confidence 不等于选中概率；confidence 低于 0.75、服务失败或观测超过 5 秒均 replan，不自动改用本地模型。原身体租约、权限、预算、回执和未知动作不重放继续生效。
 
-例如当前已知路线的小段移动与“返回慢系统重新规划”二选一；先确认候选坐标确实可行，不把模型置信度当寻路或安全证明。fixtures 用 expectedChoice 核验候选生成，用另一个观察/记忆样例核验终止或失败分支。测试不调用本地模型，运行时才选择；选择记录与实际 action 回执分别核验，不把选择成功当任务完成。
+例如当前已知路线的小段移动与“返回慢系统重新规划”二选一；先确认候选坐标确实可行，不把模型置信度当寻路或安全证明。fixtures 用 expectedChoice 核验候选生成，用另一个观察/记忆样例核验终止或失败分支。测试不调用模型，运行时才选择；选择记录与实际 action 回执分别核验，不把选择成功当任务完成。
 
 当前仅为结构化状态→候选动作的首个集成，不是逐帧视觉或已训练 WASD 控制。无需为每一步调用 Qwen；Qwen 负责目标、候选程序和必要复盘。
 
