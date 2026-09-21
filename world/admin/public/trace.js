@@ -8,6 +8,7 @@
   const ms=v=>!finite(v)?'未记录':v<1000?`${Math.round(v)} ms`:v<60000?`${(v/1000).toFixed(2)} 秒`:`${Math.floor(v/60000)} 分 ${Math.round(v%60000/1000)} 秒`;
   const labels={active:'进行中',completed:'轮次完成',failed:'失败',unknown:'结果未知',accepted:'已受理',in_flight:'执行中',pending:'等待执行',rejected:'已拒绝',observed_ended:'观察到结束'};
   const tones={completed:'good',failed:'bad',rejected:'bad',active:'warn',in_flight:'warn',unknown:'neutral'};
+  const source=v=>({llm:'LLM',jev:'Jev',decider:'Decider（历史）'})[v]||'来源未知';
   const tools={goto:'移动',eat:'进食',equip_item:'装备',interact_at:'方块交互',craft:'合成',attack:'攻击',mine:'采矿',place:'放置',drop_items:'丢出物品'};
   let data=null,selected=null,paused=false,busy=false,error=false,lastRead=null,renderKey=null;
   const badge=(s,label)=>el('span','badge '+(tones[s]||'neutral'),label||labels[s]||s);
@@ -43,13 +44,14 @@
     if(key!==renderKey){renderKey=key;drawDetail(turn);}
     const policy=data.systemOne;
     $('trace-policy').replaceChildren(...(policy?[fact('模型',policy.model),fact('选择',policy.choice),fact('置信度',finite(policy.confidence)?`${(policy.confidence*100).toFixed(1)}%`:'未记录'),fact('服务请求耗时',ms(policy.latencyMs)),fact('控制器接收耗时',ms(policy.handoffMs)),fact('记录时间',time(policy.observedAt)),fact('结果',policy.code)]:[el('p','footnote','尚无快系统选择记录。')]));
+    const branchLink=el('a','','查看 LLM / Jev 候选分支、概率与回退 ↗');branchLink.href='/observatory?inspect=decision';$('trace-policy').append(branchLink);
     $('trace-coverage').textContent='记录范围：最近保留的 20 个桐人轮次、每轮至多 40 条游戏动作。决策摘要来自 Agent 保存的目标与复盘，不是完整内部思维链。未记录完整模型输入、逐 Token 推理、全部模型工具或单次模型计费。动作耗时为受理到结束观察的间隔；资源变化不等于任务成功。'+(data.coverage?.unavailable?.length?' 部分数据源不可用：'+data.coverage.unavailable.join('、'):'');
   }
   function drawDetail(t){
     const root=$('trace-detail');root.replaceChildren();
     if(!t){root.append(el('div','card empty','没有可展示的轨迹。新记录就绪后会显示在这里。'));return;}
     const header=card('一次自主生存轮次','TRACE / '+t.turnId.slice(-12)),head=el('div','trace-heading');
-    head.append(badge(t.status),el('span','',`${time(t.startedAt)} → ${time(t.finishedAt)}`));header.append(head);
+    head.append(badge(t.status),badge('neutral',source(t.decisionSource)),el('span','',`${time(t.startedAt)} → ${time(t.finishedAt)}`));header.append(head);
     const facts=el('div','trace-facts');facts.append(fact('总耗时',ms(t.durationMs)),fact('模型任务',t.taskId),fact('关联游戏调用',String(t.actions.length)));header.append(facts);
     if(t.failureReason)header.append(el('p','error-text',t.failureReason));
     const flow=el('ol','trace-flow');['输入 / 感知','目标 / 摘要','工具 / 执行','输出 / 反馈'].forEach((s,i)=>{const n=el('li','');n.append(el('span','',String(i+1).padStart(2,'0')),el('strong','',s));flow.append(n);});header.append(flow);root.append(header);
@@ -66,7 +68,7 @@
     const max=Math.max(1,...t.actions.map(a=>a.durationMs||0));
     t.actions.forEach((a,i)=>{
       const step=el('details','trace-call');const top=el('summary','trace-call-heading');
-      const name=el('div','trace-call-name');name.append(el('strong','',tools[a.tool]||a.tool||'未知工具'),el('code','',a.tool||'unknown'));
+      const name=el('div','trace-call-name');name.append(el('strong','',`${source(a.decisionSource)} → ${tools[a.tool]||a.tool||'未知工具'}`),el('code','',a.tool||'unknown'));
       const stateLabel=a.status==='completed'?(a.completionConfirmed?'执行结束':'待确认结束'):labels[a.status]||'结果未知';
       top.append(el('span','trace-step-number',String(i+1).padStart(2,'0')),name,badge(a.status,stateLabel),el('strong','trace-duration',ms(a.durationMs)));
       step.append(top);

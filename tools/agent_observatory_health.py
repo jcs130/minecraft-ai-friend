@@ -16,6 +16,12 @@ def probe():
         rsi = json.loads(get('/api/rsi-observatory'))
         checks['trace-contract'] = trace.get('schema') == 1 and isinstance(trace.get('turns'), list)
         checks['trace-live-source'] = trace.get('available') is True and trace.get('stale') is False
+        checks['decision-branches'] = ('id="route-history"' in page and isinstance(trace.get('policyDecisions'), list)
+            and trace.get('routing', {}).get('llmAlternativesRecorded') is False)
+        checks['action-provenance'] = all(a.get('decisionSource') == 'llm'
+            for turn in trace.get('turns', []) for a in turn.get('actions', []))
+        checks['fallback-not-execution'] = all(p.get('dispatchTurnId') is None and not p.get('actions')
+            for p in trace.get('policyDecisions', []) if p.get('outcome') == 'fallback')
         checks['rsi-three-layers'] = rsi.get('schema') == 1 and all(k in rsi for k in ('l1', 'l2', 'l3'))
         checks['rsi-sources'] = all(rsi.get('sources', {}).get(k) is True for k in ('learning', 'shared', 'knowledge', 'engineering', 'receipts', 'cases'))
         checks['no-fabricated-improvement'] = rsi.get('l3', {}).get('verifiedImprovement') is None

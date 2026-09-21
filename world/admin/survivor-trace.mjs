@@ -51,18 +51,46 @@ async function readJson(root, name, problems) {
     return JSON.parse((await fs.readFile(target,'utf8')).replace(/^\uFEFF/,''));
   } catch { problems.add(name.split('/')[0]); return null; }
 }
-async function readEpisodes(root, problems) {
+async function readEpisodes(root, problems, {maxBytes=256*1024,limit=600,kinds=null}={}) {
   let file;
   try {
     const target = path.join(root,'episodes.jsonl'), stat = await fs.lstat(target);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('bounded_file');
     file = await fs.open(target,'r');
-    const size = Math.min(stat.size,256*1024), offset = stat.size-size, buffer=Buffer.alloc(size);
+    const size = Math.min(stat.size,maxBytes), offset = stat.size-size, buffer=Buffer.alloc(size);
     const {bytesRead} = await file.read(buffer,0,size,offset);
     let lines = buffer.subarray(0,bytesRead).toString('utf8').split('\n');
     if(offset) lines.shift();
-    return lines.filter(Boolean).flatMap(line => {try{return [JSON.parse(line)];}catch{problems.add('episodes_partial');return [];}}).slice(-600);
+    return lines.filter(Boolean).flatMap(line => {try{const row=JSON.parse(line);return !kinds||kinds.includes(row.kind)?[row]:[];}catch{problems.add('episodes_partial');return [];}}).slice(-limit);
   } catch {problems.add('episodes.jsonl');return [];} finally {await file?.close();}
+}
+
+export function policySource(value) {
+  if(value?.provider==='typesafe' && /^jev[-.]/i.test(value.model||''))return 'jev';
+  if(value?.provider==='local-decider' || /^decider[-.]/i.test(value?.model||''))return 'decider';
+  return 'policy_unknown';
+}
+export function projectPolicyBranches(events) {
+  const dispatches=list(events).filter(e=>e.kind==='system_one_dispatch');
+  return list(events).filter(e=>e.kind==='system_one_choice').slice(-12).reverse().map(e=>{
+    const s=object(e.selection),source=policySource(s);
+    const candidates=list(s.candidates).slice(0,16).map(c=>({id:text(c.id,80),description:text(c.description,320),
+      probability:num(s.probabilities?.[c.id]),selected:c.id===s.choice,
+      action:c.action?{tool:text(c.action.tool,80),args:args(c.action.args)}:null}));
+    const matching=dispatches.filter(d=>s.ok===true && s.stateSha256 && num(s.observedAt)!==null
+      && d.name===e.name && d.version===e.version && d.practiceRunId===e.practiceRunId
+      && d.policy?.stateSha256===s.stateSha256 && d.policy?.observedAt===s.observedAt
+      && d.policy?.choice===s.choice && d.policy?.model===s.model && d.policy?.ok===true && id(d.turnId));
+    const matched=matching.length===1?matching[0]:null;
+    const fallback=s.ok===false;
+    return {source,model:text(s.model,100),at:stamp(e.at),observedAt:num(s.observedAt),skill:text(e.name,100),version:text(e.version,100),
+      practiceRunId:text(e.practiceRunId,100),choice:text(s.choice,80),confidence:num(s.confidence),selectedProbability:num(s.selectedProbability),
+      latencyMs:num(s.latencyMs),handoffMs:num(s.handoffMs),code:text(s.code,100),candidates,
+      outcome:fallback?'fallback':matched?'dispatch_recorded':'selection_only',
+      reason:s.code==='policy_escalated'?(num(s.confidence)!==null&&s.confidence<.75?'low_confidence':candidates.some(c=>c.selected&&c.action===null)?'selected_handoff':'policy_escalated'):text(s.code,100),
+      dispatchTurnId:matched?id(matched.turnId):null,dispatchAt:matched?stamp(matched.at):null,
+      llmFollowupTurnId:null,actions:[],association:matched?'exact_policy_binding':matching.length>1?'ambiguous':'no_dispatch_link'};
+  });
 }
 
 export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
@@ -70,10 +98,21 @@ export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
   const snapshot = await readJson(stateDir,'survivor.json',problems);
   if(snapshot?.project !== 'qiandengji-survivor' || snapshot?.bodyName !== 'Kirito' || snapshot?.schema !== 1)
     return {schema:1,available:false,stale:true,turns:[],coverage:{partial:true,unavailable:['survivor.json']}};
-  const [controller,memory,episodes] = traceDir ? await Promise.all([
-    readJson(traceDir,'controller.json',problems), readJson(traceDir,'memory.json',problems),readEpisodes(traceDir,problems)]) : [null,null,list(snapshot.episodes)];
+  const [controller,memory,episodes,policyEvents] = traceDir ? await Promise.all([
+    readJson(traceDir,'controller.json',problems), readJson(traceDir,'memory.json',problems),readEpisodes(traceDir,problems),
+    readEpisodes(traceDir,problems,{maxBytes:4*1024*1024,limit:100,kinds:['system_one_choice','system_one_dispatch','system_one_discarded']})]) : [null,null,list(snapshot.episodes),[]];
   if(!traceDir) problems.add('trace_directory');
   const c=object(controller), active=object(c.active), last=object(snapshot.lastDecision);
+  const policyDecisions=projectPolicyBranches(policyEvents);
+  if(traceDir)await Promise.all(policyDecisions.map(async p=>{
+    if(!p.dispatchTurnId)return;
+    const index=await readJson(traceDir,`turn-actions/${p.dispatchTurnId}.json`,new Set());
+    if(index?.turnId!==p.dispatchTurnId)return;
+    p.actions=(await Promise.all(list(index.actionIds).slice(-40).filter(id).map(async actionId=>{
+      const r=await readJson(traceDir,`action-receipts/${actionId}.json`,new Set());
+      return r?.turnId===p.dispatchTurnId && r?.actionId===actionId?{...projectTraceAction(r),decisionSource:p.source}:null;
+    }))).filter(Boolean);
+  }));
   const ids=[...new Set([...list(c.decisions).slice(-20).map(d=>id(d.turnId)),id(last.turnId),id(active.turnId)].filter(Boolean))].slice(-20).reverse();
   const turns=await Promise.all(ids.map(async turnId=>{
     const isActive=active.turnId===turnId, decision=list(c.decisions).find(d=>d.turnId===turnId);
@@ -92,9 +131,10 @@ export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
     }
     if(!receipts.length && last.turnId===turnId) receipts=list(last.actions).filter(r=>r.turnId===turnId);
     if(snapshot.actionExecution?.receipt?.turnId===turnId && !receipts.some(r=>r.actionId===snapshot.actionExecution.receipt.actionId)) receipts.push(snapshot.actionExecution.receipt);
-    const actions=receipts.map(projectTraceAction).sort((a,b)=>(a.startedAt??Infinity)-(b.startedAt??Infinity));
+    const decisionSource=decision||isActive||last.turnId===turnId?'llm':'unknown';
+    const actions=receipts.map(r=>({...projectTraceAction(r),decisionSource})).sort((a,b)=>(a.startedAt??Infinity)-(b.startedAt??Infinity));
     const completed=terminal?.completed ?? (last.turnId===turnId ? last.completed : null);
-    return {turnId,taskId:text(isActive?active.taskId:terminal?.taskId??(last.turnId===turnId?last.taskId:null)),
+    return {turnId,decisionSource,taskId:text(isActive?active.taskId:terminal?.taskId??(last.turnId===turnId?last.taskId:null)),
       status: finish !== null ? completed===true?'completed':completed===false?'failed':'unknown' : isActive?'active':'unknown',
       startedAt:start,finishedAt:finish,durationMs:elapsed(start,finish),
       input: {body:isActive?body(active.before):null, mission:isActive?text(active.mission,1600):null,
@@ -108,7 +148,10 @@ export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
   const policy=object(snapshot.executionSystems?.fast?.localPolicy);
   return {schema:1,available:true,...freshness(snapshot.generatedAt,now,90),generatedAt:text(snapshot.generatedAt,64),
     agent:{name:'桐人',bodyName:'Kirito',status:text(snapshot.status),goal:text(snapshot.goal,1600),
-      hp:num(snapshot.body?.hp),hunger:num(snapshot.body?.hunger),position:position(snapshot.body?.position)},turns,
+      hp:num(snapshot.body?.hp),hunger:num(snapshot.body?.hunger),position:position(snapshot.body?.position)},turns,policyDecisions,
+    routing:{activeSource:active.turnId?'llm':snapshot.executionSystems?.fast?.policyPending?'policy_pending':snapshot.executionSystems?.fast?.active?'program':'idle',
+      activeLlmTurnId:id(active.turnId),llmAlternativesRecorded:false,policyHistoryMaxBytes:4*1024*1024,
+      notice:'Jev dispatch uses exact skill/version/practice/state/time/model binding. Fallback does not identify a subsequent LLM turn.'},
     systemOne:policy.model?{model:text(policy.model,80),choice:text(policy.choice,100),confidence:num(policy.confidence),
       latencyMs:num(policy.latencyMs),handoffMs:num(policy.handoffMs),observedAt:num(policy.observedAt),code:text(policy.code,80)}:null,
     coverage:{partial:true,limit:20,unavailable:[...problems],scope:'recent_retained_turns_and_game_action_receipts'} };

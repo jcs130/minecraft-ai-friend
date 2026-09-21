@@ -41,3 +41,11 @@ HTTP 轮询每 5 秒；轨迹后端缓存 5 秒，RSI 缓存 15 秒。已有知�
 `python tools/agent_observatory_health.py` 是新增只读探针，已接入 `probe_panel_smoke`。panel 沿用 Docker restart 与 `/healthz` 守护。上线只重新创建 panel 以增加挂载；后续模块更改只重启 panel。其它已有 panel-smoke 失败按原结果保留，不补写历史验收哈希。
 
 本机浏览器已验证真实工具记录、L2 技能详情、L3 工程提案详情、游戏视角连接以及 1920×1080/480×1080 无页面溢出。完整健康结果保存在本机 `reports/agent-observatory-panel-smoke.json`，不进入公开源码。
+
+## 决策分支与来源
+
+观察舱的“决策分支”与顶部来源条可打开 `/observatory?inspect=decision`。LLM 轮次及其游戏回执标明 LLM；Jev 使用 provider 与 model 身份，旧 Decider 单独标为历史。当前控制器状态与最近策略历史分开显示。
+
+读取 episodes 尾部至多 4 MiB、最近 100 条策略事件，展示最近 12 次选择及最多 16 个候选。候选概率、选择、置信度、服务延迟、控制器接收耗时和回退原因分别展示。低置信选择不记作执行。派发关联要求技能、版本、实践、状态摘要、观察时间、模型及选择精确且唯一匹配，再按 turnId/actionId 读取动作回执；未唯一匹配保留未知。后续 LLM 轮次没有绑定证据时不按时间猜测关联。
+
+现有日志未保存 LLM 未选方案或内部逐步推理；当前页面展示已记录决策与工具路径。策略完整状态和非白名单工具参数不公开。

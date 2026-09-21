@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { once } from 'node:events';
-import { projectTraceAction, readSurvivorTrace } from '../admin/survivor-trace.mjs';
+import { projectTraceAction, readSurvivorTrace, projectPolicyBranches, policySource } from '../admin/survivor-trace.mjs';
 import { readRsi } from '../admin/rsi-observatory.mjs';
 import { createPanelServer } from '../admin/server.mjs';
 
@@ -36,7 +36,42 @@ test('turn joins are exact and native private messages stay private',async t=>{
   const result=await readSurvivorTrace({stateDir:root,traceDir:root},now);
   assert.equal(result.turns.length,1);assert.equal(result.turns[0].actions.length,1);assert.equal(result.turns[0].durationMs,4000);
   assert.equal(result.turns[0].summary.goal,'get food');assert.equal(result.turns[0].input.body,null);
+  assert.equal(result.turns[0].decisionSource,'llm');assert.equal(result.turns[0].actions[0].decisionSource,'llm');
   assert.ok(!JSON.stringify(result).includes('SECRET'));assert.equal(result.turns[0].coverage.allModelToolsRecorded,false);
+});
+const selection={ok:true,provider:'typesafe',model:'jev-1.13.0',choice:'craft',confidence:.92,selectedProbability:.7,probabilities:{craft:.7,handoff:.3},stateSha256:'state-1',observedAt:1234,
+  candidates:[{id:'craft',description:'craft planks',action:{tool:'craft',args:{item_id:'minecraft:oak_planks',token:'SECRET'}}},{id:'handoff',action:null}],state:{private:'SECRET'}};
+const choice={kind:'system_one_choice',name:'prepare',version:'v1',practiceRunId:'p1',at:'2026-09-21T03:00:00Z',selection};
+const dispatch={kind:'system_one_dispatch',name:'prepare',version:'v1',practiceRunId:'p1',turnId:'skill-1',at:'2026-09-21T03:00:01Z',policy:selection};
+test('policy history distinguishes Jev, historical Decider and unknown provenance',()=>{
+  assert.equal(policySource(selection),'jev');assert.equal(policySource({model:'decider-dev'}),'decider');
+  assert.equal(policySource({model:'jev-1.13.0'}),'policy_unknown');
+  const [p]=projectPolicyBranches([choice,dispatch]);assert.equal(p.source,'jev');assert.equal(p.dispatchTurnId,'skill-1');
+  assert.equal(p.candidates[0].probability,.7);assert.equal(p.confidence,.92);assert.equal(p.llmFollowupTurnId,null);
+  assert.ok(!JSON.stringify(p).includes('SECRET'));
+});
+test('fallback retains selected candidate but never claims dispatch or inferred LLM followup',()=>{
+  const [p]=projectPolicyBranches([{...choice,selection:{...selection,ok:false,code:'policy_escalated',confidence:.13}},dispatch]);
+  assert.equal(p.outcome,'fallback');assert.equal(p.reason,'low_confidence');assert.equal(p.candidates[0].selected,true);
+  assert.equal(p.dispatchTurnId,null);assert.deepEqual(p.actions,[]);assert.equal(p.llmFollowupTurnId,null);
+});
+test('dispatch matching requires unique exact policy binding rather than nearby timestamps',()=>{
+  for(const changed of [{name:'other'},{version:'v2'},{practiceRunId:'p2'},{policy:{...selection,stateSha256:'other'}},{policy:{...selection,observedAt:1235}},{policy:{...selection,choice:'handoff'}},{policy:{...selection,model:'other'}}]){
+    assert.equal(projectPolicyBranches([choice,{...dispatch,...changed}])[0].dispatchTurnId,null);
+  }
+  assert.equal(projectPolicyBranches([choice,dispatch,dispatch])[0].association,'ambiguous');
+});
+test('policy receipts join only exact dispatch turn and action identities',async t=>{
+  const {root,write}=await fixture(t);
+  await write('survivor.json',{schema:1,project:'qiandengji-survivor',bodyName:'Kirito',generatedAt:new Date().toISOString()});
+  await write('controller.json',{});await write('memory.json',{});
+  await fs.writeFile(path.join(root,'episodes.jsonl'),[choice,dispatch].map(e=>JSON.stringify(e)).join('\n'));
+  await write('turn-actions/skill-1.json',{turnId:'skill-1',actionIds:['a1','a2']});
+  await write('action-receipts/a1.json',{turnId:'skill-1',actionId:'a1',tool:'craft',status:'accepted'});
+  await write('action-receipts/a2.json',{turnId:'other',actionId:'a2',tool:'eat'});
+  const result=await readSurvivorTrace({stateDir:root,traceDir:root});
+  assert.equal(result.policyDecisions[0].actions.length,1);assert.equal(result.policyDecisions[0].actions[0].decisionSource,'jev');
+  assert.equal(result.policyDecisions[0].actions[0].durationMs,null);assert.equal(result.routing.activeSource,'idle');
 });
 test('unavailable snapshots and historical timestamps are not live',async t=>{
   const {root,write}=await fixture(t);
