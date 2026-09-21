@@ -213,7 +213,7 @@ export function buildDecisionGraph(trace, recordId) {
 
 export function buildEvolutionGraph(rsi) {
   const graph = {id: 'rsi', kind: 'rsi', source: 'rsi', title: 'RSI 自我进化机制',
-    subtitle: 'L1 具身反馈 → L2 技能沉淀 → L3 工程演化', at: time(rsi?.generatedAt),
+    subtitle: 'L0/L1 在线反馈 → L2 经验进化 → L3 框架进化', at: time(rsi?.generatedAt),
     nodes: [], edges: [], steps: [], empty: false, notice: ''};
   const count = value => number(value) !== null && value >= 0 ? value : null;
   const countLabel = value => count(value) === null ? '未知' : String(value);
@@ -227,8 +227,8 @@ export function buildEvolutionGraph(rsi) {
 
   const generation = object(l1.generation) || {};
   const memoryEpoch = text(generation.memoryEpoch, 100);
-  addNode(graph, 'experience', 'reflection', '经验与复盘', memoryEpoch ? `记忆代际 ${memoryEpoch}` : '记忆代际未知',
-    '代际标识描述当前记忆批次；不代表已积累多少经验，也不证明能力提升。', memoryEpoch ? 'recorded' : 'unknown', {layer: 'l1', record: generation});
+  addNode(graph, 'experience', 'reflection', '反思与复盘', memoryEpoch ? `记忆代际 ${memoryEpoch}` : '记忆代际未知',
+    '代际标识描述当前记忆批次；不代表已积累多少经验，也不证明能力提升。', memoryEpoch ? 'recorded' : 'unknown', {layer: 'l2', record: generation});
 
   const knowledge = array(l2.knowledge).filter(object).slice(0, 12);
   addNode(graph, 'knowledge', 'knowledge', '知识沉淀', sources.knowledge === true ? `${knowledge.length} 份${l2.knowledgePartial === true ? '近期' : ''}文件索引` : '知识索引未知',
@@ -262,7 +262,7 @@ export function buildEvolutionGraph(rsi) {
   const successfulReceipts = receipts.filter(receipt => receipt.ok === true).length;
   const failedReceipts = receipts.filter(receipt => receipt.ok === false).length;
   const unknownReceipts = receipts.length - successfulReceipts - failedReceipts;
-  addNode(graph, 'validation', 'validation', '验证与收益', sources.receipts === true ? `${successfulReceipts} / ${receipts.length} 回执 ok · 收益未知` : '回执与收益验收未知',
+  addNode(graph, 'validation', 'validation', '独立收益验收', sources.receipts === true ? `${successfulReceipts} / ${receipts.length} 回执 ok · 收益未知` : '回执与收益验收未知',
     `${sources.receipts === true ? `${successfulReceipts} 条明确 ok，${failedReceipts} 条明确失败，${unknownReceipts} 条结果未知。` : '工程回执来源不可用。'}测试或工程回执 ok 不等于自主能力提升。当前数据没有完整的跨任务对照、代际收益与回退验收，提升程度保持未知。`, 'unknown',
     {layer: 'l3', record: {receipts, verifiedImprovement: null}});
 

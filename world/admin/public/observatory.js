@@ -1,3 +1,4 @@
+import {buildArchitectureGraph,renderArchitectureGraph} from './embodied-architecture.js';
 import {listDecisionRecords,buildDecisionGraph,buildEvolutionGraph} from './decision-model.js';
 import {renderDecisionCanvas} from './decision-canvas.js';
 const $=id=>document.getElementById(id),el=(tag,cls='',value)=>{const n=document.createElement(tag);n.className=cls;if(value!==undefined)n.textContent=value;return n;};
@@ -9,6 +10,21 @@ const params=new URLSearchParams(location.search),reduced=matchMedia('(prefers-r
 let trace=null,rsi=null,records=[],view=params.get('view')==='llm'?'llm':params.get('view')==='rsi'?'rsi':'policy',selectedId=null,selectedNode=null,graph=null,canvas=null,renderKey='',paused=false,loading=false,failed=false,rsiFailed=false,generation=0,lastRead=null,sidebar=params.get('layout')==='sidebar',firstLoad=true;
 let playing=false,playIndex=-1,timer=null,speed=1,steps=[],loop=false,historyKey='';
 const remember={policy:null,llm:null};
+let architectureLayer=['l2','l3'].includes(params.get('layer'))?params.get('layer'):'online',architectureKey='',architectureNode=null,architectureMotion=!reduced.matches;
+function renderArchitecture(){
+ const next=buildArchitectureGraph(architectureLayer,trace,rsi),key=JSON.stringify(next);if(key===architectureKey)return;architectureKey=key;
+ const focused=document.activeElement?.getAttribute('data-architecture-node');
+ renderArchitectureGraph($('architecture-canvas'),next,n=>{architectureNode=n;$('architecture-node-title').textContent=n.title;$('architecture-node-copy').textContent=n.detail;$('architecture-evidence').hidden=!n.record;});
+ $('architecture-caption').textContent=next.caption;document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===architectureLayer)));
+ if(architectureNode){const current=next.nodes.find(n=>n.id===architectureNode.id);if(current){architectureNode=current;$('architecture-node-copy').textContent=current.detail;[...$('architecture-canvas').querySelectorAll('[data-architecture-node]')].find(n=>n.getAttribute('data-architecture-node')===current.id)?.setAttribute('aria-pressed','true');}}
+ if(focused)[...$('architecture-canvas').querySelectorAll('[data-architecture-node]')].find(n=>n.getAttribute('data-architecture-node')===focused)?.focus();
+}
+function architectureState(){document.body.classList.toggle('architecture-animated',architectureMotion&&!paused&&!document.hidden&&!reduced.matches);$('architecture-motion').setAttribute('aria-pressed',String(architectureMotion));$('architecture-motion').textContent=architectureMotion?'◉ 流动':'○ 静止';}
+document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>{architectureLayer=b.dataset.layer;architectureNode=null;$('architecture-node-title').textContent=architectureLayer==='online'?'单轮 DAG × 跨轮反馈':architectureLayer==='l2'?'经验改变行为':'验证通过，才完成进化';$('architecture-node-copy').textContent='点选任意节点查看职责与证据。虚线与流光均为机制示意。';$('architecture-evidence').hidden=true;renderArchitecture();const url=new URL(location.href);url.searchParams.set('layer',architectureLayer);history.replaceState(null,'',url);}));
+$('architecture-evidence').hidden=true;
+$('architecture-evidence').addEventListener('click',()=>{if(architectureNode)openEvidence(architectureNode);});
+$('architecture-motion').addEventListener('click',()=>{architectureMotion=!architectureMotion;architectureState();});
+
 function details(root,title,value){const d=el('details');d.append(el('summary','',title),el('pre','',typeof value==='string'?value:JSON.stringify(value,null,2)));root.append(d);return d;}
 function fact(root,title,value){const d=el('div','detail-fact');d.append(el('span','',title),el('strong','',value??'未记录'));root.append(d);}
 function status(){const stale=failed||trace?.stale;$('connection').textContent=paused?'更新已暂停':failed?'连接中断':stale?'历史快照':trace?.available?'● 实时连接':'等待记录';$('connection').className='connection'+(!paused&&!stale&&trace?.available?' live':'');$('clock').textContent=when(Date.now());$('freshness').textContent=`快照 ${when(trace?.generatedAt)} · 读取 ${when(lastRead)}${rsiFailed?' · RSI 读取失败':''}`;}
@@ -23,13 +39,13 @@ function renderHistory(){const list=filtered(),root=$('history-list'),signature=
  const pick=$('record-select'),old=pick.value;pick.replaceChildren(...list.map(r=>{const o=el('option','',`${when(r.at)} · ${r.label}`);o.value=r.id;return o;}));pick.value=selectedId||old;pick.disabled=!list.length;pick.closest('label').hidden=view==='rsi';
 }
 function render(){
- status();document.body.classList.toggle('view-rsi',view==='rsi');records=listDecisionRecords(trace);if(!selectedId&&view!=='rsi')selectedId=chooseDefault();
+ status();renderArchitecture();architectureState();document.body.classList.toggle('view-rsi',view==='rsi');records=listDecisionRecords(trace);if(!selectedId&&view!=='rsi')selectedId=chooseDefault();
  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
  $('hp').textContent=trace?.agent?.hp??'—';$('hunger').textContent=trace?.agent?.hunger??'—';$('mission').textContent=trace?.agent?.goal||'尚无当前目标';
  const count=(trace?.turns||[]).reduce((n,t)=>n+t.actions.length,0);$('action-count').textContent=`${count} 条采样回执`;$('skill-count').textContent=rsi?.sources?.learning?`${rsi.l2.localSkills.filter(s=>s.enabled).length} 个启用技能`:'索引未读取';$('case-count').textContent=rsi?.l3?.cases?.available?`${rsi.l3.cases.items.filter(c=>!['resolved','rejected'].includes(c.status)).length} 条未结提案`:'工单未读取';
  renderHistory();const next=view==='rsi'?buildEvolutionGraph(rsi):buildDecisionGraph(trace,selectedId),key=JSON.stringify([next,sidebar]);if(key===renderKey)return;
  if(playing&&graph?.id===next.id)return;stop();graph=next;renderKey=key;
- $('graph-title').textContent=graph.title;$('graph-subtitle').textContent=view==='llm'?'已记录的执行顺序 · 点击动作查看结果':view==='rsi'?'三个时间尺度，一套持续学习的机制':graph.subtitle;
+ $('graph-title').textContent=graph.title;$('graph-subtitle').textContent=view==='llm'?'已记录的执行顺序 · 点击动作查看结果':view==='rsi'?'在线回路、经验进化、框架进化；收益需独立验收':graph.subtitle;
  $('graph-kicker').textContent=({policy:'BRANCHES / DECISION ROUTING',llm:'LOOP / OBSERVE · ACT · REFLECT',rsi:'EVOLUTION / THREE LEVELS'})[view];
  $('graph-mode').textContent=view==='rsi'?'机制示意 · 非执行记录':'历史记录 · '+when(graph.at).slice(0,11);
  $('record-time').textContent=when(graph.at);$('graph-empty').hidden=!graph.empty;$('coverage').textContent=view==='rsi'?'机制示意 · 改进收益待独立验收':'实线为保留记录 · 虚线为机制，未证明循环已发生';
@@ -50,7 +66,7 @@ function showNode(n){selectedNode=n.id;canvas?.select(n.id);$('node-source').tex
  if(n.kind==='action'){fact(root,'状态',r.status||n.status);fact(root,'实际记录耗时',duration(r.durationMs));fact(root,'受理时间',when(r.startedAt));if(r.args)details(root,'调用参数',r.args);if(r.inventoryDelta)details(root,'世界变化',{inventoryDelta:r.inventoryDelta,hpDelta:r.hpDelta,hungerDelta:r.hungerDelta});}
  const b=el('button','evidence-link','展开完整节点证据 ↗');b.addEventListener('click',()=>openEvidence(n));root.append(b);
 }
-function openEvidence(n){const root=$('inspector-content');root.replaceChildren(el('p','',n.detail));$('inspector-title').textContent=n.title;details(root,'已记录证据',n.record||{}).open=true;if(graph?.notice)root.append(el('p','',graph.notice));$('inspector').showModal();}
+function openEvidence(n){const root=$('inspector-content');root.replaceChildren(el('p','',n.detail));$('inspector-title').textContent=n.title;details(root,'已记录证据',n.record||{}).open=true;if(n===architectureNode)root.append(el('p','','架构连线是机制示意，节点证据来自当前公开快照，不能与下方所选历史轮次自动关联。'));else if(graph?.notice)root.append(el('p','',graph.notice));$('inspector').showModal();}
 function inspectLayer(layer){const root=$('inspector-content');root.replaceChildren();$('inspector-title').textContent=({l1:'L1 · 行动与反馈',l2:'L2 · 经验与技能',l3:'L3 · 机制与工程',coverage:'数据范围与动画说明'})[layer];
  if(layer==='l1'){root.append(el('p','','按记录顺序展示采样轮次与游戏动作，不还原未保存的内部推理。'));(trace?.turns||[]).slice(0,8).forEach(t=>details(root,`${when(t.startedAt)} · ${t.actions.length} 次游戏调用`,t));}
  if(layer==='l2'){root.append(el('p','','知识文件、技能启用与行为验证分别记录。数量不代表能力提升。'));details(root,'知识索引',rsi?.l2?.knowledge||[]);(rsi?.l2?.localSkills||[]).forEach(s=>details(root,`${s.enabled?'已启用':'已停用'} · ${s.name}`,s));details(root,'共享技能',rsi?.l2?.sharedSkills||[]);}
@@ -70,10 +86,10 @@ document.querySelectorAll('[data-inspect]').forEach(b=>b.addEventListener('click
 document.querySelectorAll('[data-camera]').forEach(b=>b.addEventListener('click',()=>camera(b.dataset.camera)));
 $('open-camera').addEventListener('click',()=>camera('third'));$('record-select').addEventListener('change',e=>selectRecord(e.target.value));$('latest').addEventListener('click',()=>{const id=filtered()[0]?.id;if(id)selectRecord(id);});
 $('play').addEventListener('click',play);$('loop').addEventListener('click',()=>{loop=!loop;$('loop').setAttribute('aria-pressed',String(loop));$('playback-note').textContent=loop?'同一记录循环回放 · 非新的执行':view==='rsi'?'机制演示，不代表已发生的进化':'动画节奏不代表实际耗时';});$('step').addEventListener('click',()=>{stop();advance();});$('speed').addEventListener('click',()=>{speed=speed===1?2:speed===2?.5:1;$('speed').textContent=speed+'×';if(playing)schedule();});
-$('pause').addEventListener('click',()=>{paused=!paused;generation++;if(paused)stop();$('pause').textContent=paused?'恢复更新':'暂停更新';$('pause').setAttribute('aria-pressed',String(paused));status();if(!paused)refresh();});
+$('pause').addEventListener('click',()=>{paused=!paused;generation++;if(paused)stop();architectureState();$('pause').textContent=paused?'恢复更新':'暂停更新';$('pause').setAttribute('aria-pressed',String(paused));status();if(!paused)refresh();});
 $('mode').addEventListener('click',()=>{stop();sidebar=!sidebar;applyLayout();renderKey='';render();});
 function applyLayout(){document.body.classList.toggle('mode-sidebar',sidebar);$('mode').textContent=sidebar?'完整画布':'OBS 侧栏';const url=new URL(location.href);if(sidebar){url.searchParams.set('layout','sidebar');camera('off');}else url.searchParams.delete('layout');history.replaceState(null,'',url);}
 $('coverage-button').addEventListener('click',()=>inspectLayer('coverage'));$('close-inspector').addEventListener('click',()=>$('inspector').close());
 $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){generation++;stop();}else refresh();});reduced.addEventListener('change',()=>{if(reduced.matches)stop();});
-applyLayout();if(params.get('camera')==='third')camera('third');refresh();setInterval(refresh,5000);setInterval(status,1000);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){generation++;stop();}else refresh();architectureState();});reduced.addEventListener('change',()=>{if(reduced.matches){stop();architectureMotion=false;}architectureState();});
+applyLayout();camera(params.get('camera')==='off'?'off':'third');renderArchitecture();architectureState();refresh();setInterval(refresh,5000);setInterval(status,1000);

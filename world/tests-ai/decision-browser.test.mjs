@@ -66,11 +66,15 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
     '/observatory': ['observatory.html', 'text/html'], '/observatory.js': ['observatory.js', 'text/javascript'],
     '/observatory.css': ['observatory.css', 'text/css'], '/observatory-motion.css': ['observatory-motion.css', 'text/css'],
     '/decision-model.js': ['decision-model.js', 'text/javascript'], '/decision-canvas.js': ['decision-canvas.js', 'text/javascript'],
+    '/embodied-architecture.js': ['embodied-architecture.js', 'text/javascript'],
   };
   // Every request, including unexpected URLs, is fulfilled here. No live service or world is reachable.
   await page.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
     requests.push({method: request.method(), url: request.url()});
+    if (request.url() === 'http://127.0.0.1:19092/third/' && request.method() === 'GET') {
+      return route.fulfill({contentType:'text/html',body:'<p>Isolated world viewer fixture</p>'});
+    }
     if (url.origin !== origin || request.method() !== 'GET') {
       unexpected.push(request.url()); return route.fulfill({status: 403, body: ''});
     }
@@ -98,6 +102,22 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   await page.locator('[data-node="gate"]').waitFor();
   await page.clock.runFor(600);
   assert.match(await page.locator('#graph-title').innerText(), /Jev/);
+  assert.equal(await page.locator('#world-frame').isVisible(), true, 'World imagery is visible by default');
+  assert.equal(await page.locator('#world-frame').getAttribute('src'), 'http://127.0.0.1:19092/third/');
+  assert.match(await page.locator('.world-name').innerText(), /观察者镜头/);
+  assert.equal(await page.locator('[data-architecture-node="jev"]').count(), 1);
+  assert.equal(await page.locator('[data-architecture-node="scripts"]').count(), 1);
+  assert.match(await page.locator('#architecture-canvas').textContent(), /SYSTEM 1.*SYSTEM 2/);
+  await page.locator('[data-layer="l2"]').click();
+  await page.locator('[data-architecture-node="dream"]').press('Enter');
+  assert.match(await page.locator('#architecture-node-copy').innerText(), /未提供 Dream 运行回执/);
+  await page.locator('[data-layer="l3"]').click();
+  await page.locator('[data-architecture-node="gate"]').click();
+  assert.match(await page.locator('#architecture-node-copy').innerText(), /独立评测确认改善/);
+  assert.match(await page.locator('#architecture-canvas').textContent(), /收益证据：未知/);
+  await page.locator('[data-layer="online"]').click();
+  await page.locator('#architecture-motion').click();
+  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('architecture-animated')),false);
   assert.equal(await page.locator('[data-node^="action-"]').count(), 0, 'A selected fallback candidate must never become an executed action');
   assert.equal(await page.locator('[data-node="fallback"]').count(), 1);
   assert.match(await page.locator('[data-node="candidate-0"]').textContent(), /57%/);
@@ -196,5 +216,5 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   assert.deepEqual(motion, {signals: true, halos: true}, 'Manual reduced-motion playback keeps signals and pulses disabled');
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
-  assert.ok(requests.length > 0 && requests.every(request => request.method === 'GET' && request.url.startsWith(origin + '/')));
+  assert.ok(requests.length > 0 && requests.every(request => request.method === 'GET' && (request.url.startsWith(origin + '/') || request.url === 'http://127.0.0.1:19092/third/')));
 });

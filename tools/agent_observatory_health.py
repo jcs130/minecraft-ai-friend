@@ -19,6 +19,13 @@ def probe():
         model = get('/decision-model.js')
         canvas = get('/decision-canvas.js')
         motion = get('/observatory-motion.css')
+        architecture = get('/embodied-architecture.js')
+        checks['embodied-architecture'] = (all(x in page for x in ('id="architecture-canvas"', 'data-layer="online"', 'data-layer="l2"', 'data-layer="l3"'))
+            and all(x in architecture for x in ('SYSTEM 1', 'SYSTEM 2', 'Dream', 'MCP', 'verifiedImprovement:null')))
+        checks['world-first-layout'] = ('class="broadcast-stage"' in page and '观察者镜头' in page
+            and "params.get('camera')==='off'?'off':'third'" in app)
+        checks['mechanism-motion'] = ('architectureState' in app and 'architecture-flow' in style
+            and 'prefers-reduced-motion:reduce' in style and "evidence: 'mechanism'" in architecture)
         checks['broadcast-page'] = all(x in page for x in (
             'id="decision-canvas"', 'id="graph-viewport"', 'id="node-detail"',
             'id="history-list"', 'id="world-frame"'))
