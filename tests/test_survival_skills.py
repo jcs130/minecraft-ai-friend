@@ -159,7 +159,9 @@ class SkillTests(unittest.TestCase):
         bad = Path(self.temp.name) / 'broken'
         bad.mkdir()
         (bad / 'head.json').write_text('malformed', encoding='utf-8')
-        view = self.library.catalog()
+        # External restores/edits require explicit maintenance; reads never scan.
+        self.assertEqual(self.library.catalog()['unavailable'], [])
+        view = self.library.rebuild_index()
         self.assertEqual(view['skills'][0]['draftVersion'], version)
         self.assertEqual(view['unavailable'], [{'name': 'broken', 'code': 'invalid_skill_store'}])
 
@@ -204,7 +206,8 @@ class SkillPathTests(unittest.TestCase):
 
     def test_omitted_and_none_root_keep_legacy_default_without_production_io(self):
         for kwargs in ({}, {'root': None}):
-            with self.subTest(kwargs=kwargs), patch('skill_library.Path') as path:
+            with self.subTest(kwargs=kwargs), patch('skill_library.Path') as path, \
+                    patch.object(SkillLibrary, '_ensure_index'):
                 # Check the chosen default, but redirect all constructor IO to a temporary root.
                 path.return_value.absolute.return_value = self.root
                 library = SkillLibrary(**kwargs)

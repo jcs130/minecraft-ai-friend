@@ -94,11 +94,11 @@ class SkillTools:
             return {'ok': False, 'code': 'skill_operation_failed', 'errorType': type(exc).__name__,
                     'retryAutomatically': False}
 
-    def draft(self, turn_id, name, source, fixtures, description='', refinement=None):
+    def draft(self, turn_id, name, source, fixtures, description='', refinement=None, routing=None):
         def save(_):
             proposal = (self.practice.validate_refinement(name, refinement)
                         if refinement is not None else None)
-            result = self.library.draft(name, source, fixtures, description)
+            result = self.library.draft(name, source, fixtures, description, routing)
             if proposal is not None:
                 try:
                     result['refinement'] = self.practice.save_refinement(name, result['version'], proposal)
@@ -569,9 +569,9 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def skill_draft(turn_id: str, name: str, source: str, fixtures: list[dict], description: str = '',
-                    refinement: dict | None = None) -> dict:
+                    refinement: dict | None = None, routing: dict | None = None) -> dict:
         """保存纯JS next(state,memory)和至少2例fixtures，不执行游戏。修订可附refinement={run_ids:[本技能1–3个实际runId],hypothesis:改进原因,expected_outcome:预期效果}；预期不算已验证。程序和样例契约按需读qd-survivor-practice/references/program-practice.md。"""
-        return skill_tools.draft(turn_id, name, source, fixtures, description, refinement)
+        return skill_tools.draft(turn_id, name, source, fixtures, description, refinement, routing)
 
     @server.tool()
     def skill_test(turn_id: str, name: str, version: str | None = None) -> dict:

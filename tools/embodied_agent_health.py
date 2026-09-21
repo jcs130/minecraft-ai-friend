@@ -26,6 +26,9 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'tests/test_dialogue_batch.py', 'tests/test_behavior_context.py', 'tests/test_survival_service.py',
            'world/ops/survival_submission_runtime.py', 'tests/test_survival_submission_runtime.py')
 SOURCES += ('tests/test_survival_gateway.py',)
+SOURCES += ('world/survival/skill_router.py', 'world/survival/starter_skills.py',
+            'tests/test_skill_catalog_router.py', 'tests/test_survival_fast_execution.py',
+            'tests/test_skill_catalog_index.py', 'tests/test_skill_catalog_latency.py')
 
 
 def check(root=ROOT, clock=time.time):
@@ -67,7 +70,7 @@ def check(root=ROOT, clock=time.time):
         report = read(root / 'reports/embodied-agent-smoke.json')
         checks['behavior_test'] = (report.get('ok') is True and report.get('testsRun', 0) >= 20
             and all(any(name.startswith(prefix) for name in report.get('tests', [])) for prefix in (
-                'test_social_scheduling.', 'test_dialogue_batch.', 'test_behavior_context.', 'test_survival_service.',
+                'test_skill_catalog_router.', 'test_social_scheduling.', 'test_dialogue_batch.', 'test_behavior_context.', 'test_survival_service.',
                 'test_survival_status_detail.', 'test_survival_feedback.', 'test_survival_guild.',
                 'test_survival_life_session.ContinuousActionTests.', 'test_survival_standing_task.',
                 'test_survival_poll_recovery.PollRecoveryTests.', 'test_guild_hunt_score.HuntScoreTests.'))

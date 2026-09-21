@@ -28,7 +28,8 @@ def main():
                  'test_behavior_context', 'test_survival_service', 'test_survival_submission_runtime', 'test_survival_status_detail',
                  'test_survival_feedback', 'test_survival_guild', 'test_survival_life_session',
                  'test_survival_standing_task', 'test_survival_poll_recovery', 'test_guild_hunt_score',
-                 'test_native_continuity', 'test_native_mcp_recovery', 'test_system_one'):
+                 'test_native_continuity', 'test_native_mcp_recovery', 'test_system_one', 'test_skill_catalog_router',
+                 'test_skill_catalog_latency', 'test_skill_catalog_index'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):

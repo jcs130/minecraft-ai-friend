@@ -206,7 +206,8 @@ def main():
 
 
 def control_interval(controller):
-    if controller.data.get('policyPending') or getattr(controller, 'pending_social', None):
+    if (controller.data.get('policyPending') or controller.data.get('skillRoutePending')
+            or getattr(controller, 'pending_social', None)):
         return .25
     if (controller.data.get('status') in ('executing_skill', 'acting', 'action_confirmation_wait')
             or controller.data.get('dialogueActive') or controller.data.get('active')):

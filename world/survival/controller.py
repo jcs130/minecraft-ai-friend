@@ -380,6 +380,7 @@ class Controller:
         self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
         self.pending_social = None
+        self.pending_route = None
         self.policy_slot_wait_at = None
         from review import ReviewQueue
         self.reviews = ReviewQueue(self.root, self.clock)
@@ -420,6 +421,7 @@ class Controller:
             self.pause('interrupted_skill_action')
         self.last_body = {}
         self.data.pop('policyPending', None)
+        self.data.pop('skillRoutePending', None)
 
     def discard_policy(self):
         self.pending_policy = None
@@ -428,6 +430,8 @@ class Controller:
 
     def close_policy(self):
         self.discard_policy()
+        from skill_router import clear
+        clear(self)
         self.policy_worker.close()
 
     def policy_binding(self, job):
@@ -468,6 +472,8 @@ class Controller:
 
     def pause(self, reason):
         self.discard_policy()
+        from skill_router import clear
+        clear(self)
         self.data.update(status='paused', pauseReason=reason)
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json') if (self.root / 'control.json').exists() else {'schema': 1}
@@ -554,12 +560,16 @@ class Controller:
         except (OSError, ValueError, TypeError, AttributeError):
             return {'modelRequests': None, 'promptTokens': None, 'completionTokens': None}
 
-    def catalog(self):
+    def catalog(self, refresh=False):
         """Reading a concurrently edited catalogue must not kill the body loop."""
         if not self.skills:
             return {'skills': []}
+        if (self.settings.get('brainProtocol') == 1 and not refresh
+                and self.clock() - getattr(self, 'skill_catalog_at', float('-inf')) < 30):
+            return self.skill_catalog_cache
         try:
             self.skill_catalog_cache = self.skills.catalog()
+            self.skill_catalog_at = self.clock()
             self.data.pop('catalogWarning', None)
         except Exception as exc:
             self.data['catalogWarning'] = getattr(exc, 'code', type(exc).__name__)
@@ -1092,6 +1102,7 @@ class Controller:
             'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
             'socialSchedulingVersion': 1, 'goalAgendaReady': not bool(value['socialScheduling'].get('goalError')),
             'socialProgressVersion': 1,
+            'skillCatalogRoutingVersion': 1,
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
@@ -1513,7 +1524,8 @@ class Controller:
             if pending:
                 plan = dict(pending['plan'])
             else:
-                observed = dict(body, execution=execution_state(job, self.data.get('episodes', []), body, now),
+                observed = dict(body, goal=job.get('routeGoal') or (job.get('objective') or {}).get('description', ''),
+                    execution=execution_state(job, self.data.get('episodes', []), body, now),
                     environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
                     adventure=self.adventure(body), guild=self.cached_guild(),
                     constructionAreas=self.settings.get('constructionAreas', [])[:8])
@@ -1596,6 +1608,9 @@ class Controller:
             action = plan.get('action')
             if action:
                 turn_id = 'skill-' + uuid.uuid4().hex
+                if job.get('routeSelection') and job['steps'] == 1 and action == job.get('routeAction'):
+                    self.record('system_one_dispatch', turnId=turn_id, name=job['name'], version=job['version'],
+                                practiceRunId=job.get('practiceRunId'), policy=job['routeSelection'], scope='skill_catalog')
                 if job.get('lastPolicy'):
                     self.record('system_one_dispatch', turnId=turn_id, name=job['name'], version=job['version'],
                                 practiceRunId=job.get('practiceRunId'), policy=job['lastPolicy'])
@@ -2156,12 +2171,16 @@ class Controller:
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
             self.discard_policy()
+            from skill_router import clear
+            clear(self)
         body = self.gateway.snapshot()
         if hasattr(self.gateway, 'enforce_navigation_deadline'):
             body = self.gateway.enforce_navigation_deadline(body)
         self.last_body = body
         if not body.get('ok') or body.get('task', {}).get('busy') or self.data.get('active'):
             self.discard_policy()
+            from skill_router import clear
+            clear(self)
         if hasattr(self.gateway, 'action_status'):
             execution = self.gateway.action_status(body)
             self.data['actionExecution'] = execution
@@ -2299,7 +2318,9 @@ class Controller:
                             if routing and routing.get('level') == 0 and continues:
                                 self.data['status'] = 'adaptive_skip'
                             else:
-                                self.submit_model(body, control)
+                                from skill_router import tick as route_skill
+                                if not route_skill(self, body, control):
+                                    self.submit_model(body, control)
         # Model terminal and pending physical actions may settle this tick.
         # Preserve other pause reasons, including every unknown outcome.
         self.drain_at_boundary(body)

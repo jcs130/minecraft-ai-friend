@@ -64,7 +64,7 @@ def tick(c, body, control):
             return
         # Never steal a completed physical result or queue ahead of a ready
         # program. Classify alongside native action or ongoing Qwen cognition.
-        if (not allowed or c.pending_policy is not None or c.data.get('dialogueActive')
+        if (not allowed or c.pending_policy is not None or getattr(c, 'pending_route', None) is not None or c.data.get('dialogueActive')
                 or not (body.get('task', {}).get('busy') or c.data.get('active'))):
             return
         c.party.validate_session(c.session, c.settings)

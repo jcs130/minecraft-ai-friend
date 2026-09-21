@@ -22,6 +22,13 @@ class FakeLibrary:
     def __init__(self):
         self.calls = []
         self.promoted = True
+        self.valid_tests = True
+
+    def _tested(self, *args):
+        self.calls.append(('tested', args))
+        if not self.valid_tests:
+            from skill_library import SkillError
+            raise SkillError('matching_passed_tests_required')
 
     def draft(self, *args):
         self.calls.append(('draft', args))
@@ -170,7 +177,14 @@ class SurvivalSkillToolsTests(unittest.TestCase):
                               'objective': None, 'practiceRunId': run_id('gather', VERSION, TURN)})
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'lease_invalid')
-        self.assertEqual(self.library.calls, [('read', ('gather', VERSION))])
+        self.assertEqual(self.library.calls, [('read', ('gather', VERSION)), ('tested', ('gather', VERSION))])
+
+    def test_stale_kernel_test_refuses_before_closing_lease_or_queuing(self):
+        self.library.valid_tests = False
+        result = self.tools.start(TURN, 'gather', VERSION)
+        self.assertEqual(result['code'], 'matching_passed_tests_required')
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+        self.assertFalse((self.state / 'skill-job.json').exists())
 
     def test_start_summary_requests_native_finish_only_after_exact_job_is_saved(self):
         summary = '  已检查背包，程序已排队，实际执行结果仍待观察。\n'
