@@ -26,7 +26,7 @@ import sys
 
 CAMERA = 'live'                       # 直播机位账号（B 站直播端的真实客户端）
 ALLOWED_TARGETS = {'NekoX', 'Kirito', 'Naruto', 'Edward', 'Steve', 'Alex', 'MengMeng',
-                   'Goddess', 'live'}
+                   'Goddess', 'live', 'corti', 'Neko'}   # corti=2026-09-21 造物主点名附身目标 ✓
 RCON_HOST, RCON_PORT = '127.0.0.1', 25577      # compose 把容器 25575 只映射到宿主回环
 
 
