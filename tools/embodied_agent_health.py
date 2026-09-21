@@ -20,7 +20,7 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'world/ops/native_mcp_recovery.py', 'world/sidecar/qwen_tasks.py',
            'world/sidecar/party_life.py', 'world/sidecar/native_tool_connection.py',
            'tests/test_native_continuity.py', 'tests/test_native_mcp_recovery.py', 'tests/test_system_one.py',
-           'world/survival/policy_worker.py')
+           'world/survival/policy_worker.py', 'tests/test_embodied_agent.py')
 
 
 def check(root=ROOT, clock=time.time):

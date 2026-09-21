@@ -57,7 +57,7 @@ def systems_status(data, job, now):
             'observations': job.get('observations', 0) if active else 0,
             'policyPending': data.get('policyPending'),
             'waitReason': data.get('skillWaitReason') if active else None,
-            'requiresModelPerStep': bool(active and job.get('lastPolicy')),
+            'requiresModelPerStep': bool(active and (job.get('lastPolicy') or data.get('policyPending'))),
             'localPolicy': {k: v for k, v in (data.get('systemOne') or {}).items()
                             if k in ('model', 'choice', 'confidence', 'latencyMs', 'code', 'ok', 'observedAt',
                                      'provider', 'stateBytes', 'transportTiming', 'handoffMs', 'resultAgeMs')},

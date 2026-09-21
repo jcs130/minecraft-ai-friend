@@ -135,6 +135,40 @@ class SensorTests(unittest.TestCase):
 
 
 class DialogueTests(EmbodiedControllerTests):
+    def test_new_goal_gets_body_planner_even_with_a_waiting_party_message(self):
+        self.enable()
+        self.controller.party = life_tests.FakeParty()
+        self.controller.data['goalSwitchPending'] = 'new-goal'
+        self.controller.tick()
+        self.assertIsNone(self.controller.data.get('dialogueActive'))
+        self.assertEqual(self.controller.data['active']['contextStats']['purpose'], 'action')
+        self.assertNotIn('partyReservation', self.controller.data['active'])
+        self.assertIsNotNone(self.controller.party.pending())
+
+    def test_idle_dialogue_yields_to_due_planning_after_one_social_turn(self):
+        from dialogue import tick
+        self.enable()
+        self.controller.party = life_tests.FakeParty()
+        self.controller.data.update(lastDecisionSignature='old-world', dialogueYieldToPlanner=True)
+        body = self.gateway.snapshot()
+        tick(self.controller, body, read_json(self.state / 'control.json'))
+        self.assertIsNone(self.controller.data.get('dialogueActive'))
+        self.controller.submit_model(body, read_json(self.state / 'control.json'))
+        self.assertEqual(self.controller.data['active']['contextStats']['purpose'], 'action')
+        self.assertFalse(self.controller.data['dialogueYieldToPlanner'])
+
+    def test_idle_chat_is_not_blocked_when_no_planning_is_due(self):
+        from dialogue import tick
+        self.enable()
+        self.controller.party = life_tests.FakeParty()
+        body = self.gateway.snapshot();control = read_json(self.state / 'control.json')
+        self.controller.data.update(lastDecisionSignature=self.controller.decision_signature(body, control),
+                                    dialogueYieldToPlanner=True)
+        with patch.object(self.controller, 'next_review', return_value=self.clock() + 300):
+            tick(self.controller, body, control)
+        self.assertIsNotNone(self.controller.data.get('dialogueActive'))
+        self.assertEqual(self.gateway.opened, [])
+
     def start_dialogue(self):
         self.enable()
         self.controller.party = life_tests.FakeParty()

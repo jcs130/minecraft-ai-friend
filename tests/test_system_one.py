@@ -294,6 +294,18 @@ class PolicyControllerTests(unittest.TestCase):
         self.assertEqual(read_json(self.state/'skill-job.json')['reason'],'policy_worker_busy')
         self.assertEqual(self.gateway.actions,[])
 
+    def test_policy_receives_current_practice_objective_instead_of_unrelated_long_term_goal(self):
+        self.prepare_choice()
+        job=read_json(self.state/'skill-job.json')
+        job['objective']={'description':'Prepare four planks for a crafting table.',
+                          'checks':[{'kind':'action_completed','tool':'craft','count':1}]}
+        self.write('skill-job.json',job)
+        self.write('memory.json',{'goal':'Hunt two skeletons.'})
+        with patch.object(SystemOne,'_post',return_value=reply()) as post:
+            self.controller.tick_skill(self.gateway.body);self.await_policy()
+            self.assertEqual(post.call_args.args[0]['state']['goal'],job['objective']['description'])
+        self.assertEqual(self.gateway.actions,[])
+
     def test_read_only_dialogue_runs_during_inference_and_cannot_take_the_body(self):
         import test_survival_life_session as life
         self.prepare_choice()

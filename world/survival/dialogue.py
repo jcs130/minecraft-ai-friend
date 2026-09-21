@@ -59,6 +59,21 @@ def tick(controller, body, control):
             or c.data.get('inferenceBackoff') or (c.root / 'unknown.json').exists()):
         return
     now = c.clock()
+    job_path = c.root / 'skill-job.json'
+    job = read_json(job_path) if job_path.exists() else {}
+    executing = (body.get('task', {}).get('busy') or c.data.get('actionExecution', {}).get('inFlight')
+                 or job.get('status') in ('pending', 'running', 'dispatching'))
+    if not executing:
+        # New instructions get an action-planning turn first. Otherwise alternate
+        # when both cognition and social work are due; a stream of chat cannot
+        # starve planning. Running programs/native actions still allow dialogue.
+        signature = c.data.get('lastDecisionSignature')
+        review_at = c.next_review(control)
+        due = (signature != c.decision_signature(body, control) or c.reviews.pending() is not None
+               or review_at is not None and now >= review_at)
+        if (c.data.get('goalSwitchPending') or signature is None
+                or due and c.data.get('dialogueYieldToPlanner')):
+            return
     recent = [row for row in c.data['decisions'] if now - row['startedAt'] < 86400]
     limit = c.daily_planning_limit()
     if limit is not None and len(recent) >= limit or now < c.data.get('nextDecisionAt', 0):
@@ -98,6 +113,7 @@ def tick(controller, body, control):
                 return
             active['partyReservation'] = reservation
             c.data['dialogueActive'] = active
+            c.data['dialogueYieldToPlanner'] = True
             c.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now, 'purpose': 'dialogue'}]
             c.data['nextDecisionAt'] = now + c.model_cooldown()
             c.save()

@@ -1094,8 +1094,8 @@ class Controller:
             self.data['status'] = 'body_occupied'
 
     def stop_actions(self):
-        self.discard_policy()
         """Operator cancellation, never a replacement game goal."""
+        self.discard_policy()
         active = self.data.get('active')
         confirmed = True
         self.gateway.close_lease(blocking=True)
@@ -1478,7 +1478,8 @@ class Controller:
             if 'choose' in plan:
                 if pending is None:
                     token = self.policy_worker.submit(plan['choose'], body,
-                        self.memory().get('goal', ''), observed['execution'].get('lastExecution'))
+                        (job.get('objective') or {}).get('description') or self.memory().get('goal', ''),
+                        observed['execution'].get('lastExecution'))
                     if token is not None:
                         self.policy_slot_wait_at = None
                         # Persist only the unchanged program job, never a replayable choice.
@@ -1639,7 +1640,9 @@ class Controller:
             return
         if self.party and hasattr(self.party, 'validate_session'):
             self.party.validate_session(self.session, self.settings)
-        message = self.party.pending() if self.party else None
+        # Embodied social work has its own read-only lane. A body-planning turn
+        # must not become another dialogue session just because a message arrived.
+        message = self.party.pending() if self.party and self.settings.get('brainProtocol') != 1 else None
         requested_review = self.reviews.pending()
         changed = (backoff is not None or self.data.get('recoveryAfter') is not None or message is not None
                    or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
@@ -1791,6 +1794,7 @@ class Controller:
                         self.data['status'] = 'party_wait'
                 if message is None or active.get('partyReservation'):
                     self.data['active'] = active
+                    self.data['dialogueYieldToPlanner'] = False
                     self.reserve_review_state(active)
                     self.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now}]
                     self.data['nextDecisionAt'] = now + cooldown
