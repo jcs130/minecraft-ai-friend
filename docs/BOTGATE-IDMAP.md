@@ -113,7 +113,7 @@ node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对
 | 守卫之眼 `guard-render-*.mts`（`render_view`） | `GUARD_RENDER_PORT` 默认 25701 | ✓ 15:41 | 门日志 `RenderBot 叩门→PLAY→603 chunk→err=none` ✓ |
 | **基岩桥 ViaProxy（宿主 java）** | `--target-address 127.0.0.1:25701` | ✓ 14:37 | `verify-gate 127.0.0.1 25568` → 11/11 ✓ 手机确认正常 ✓ |
 | **皮肤代理 skin-proxy（宿主 node）** | `SKIN_UPSTREAM_PORT=25701` | ✓ 20:4x | `verify-gate 127.0.0.1 25566` → **11/11 exit 0** ✓ |
-| Geyser 容器 A/B 实验 | `qd-geyser-ab` → `gate:25700`，宿主发 UDP 19141 | ✓（容器内 TCP 测 `gate:25700` OK） | **待手机连 19141 验外部 UDP 入站** |
+| ~~基岩桥容器化~~ 试验 | 裸 Geyser 与容器化 ViaProxy 各试一轮 | — | **未通过 ✓ 已收掉试验容器** 副产品：**证明容器 UDP 外部入站可用**（手机确实打进容器发布口 ✓ 2026-08-30 旧论作废 ✓）；但容器内 ViaProxy 直连 `gate:25700` 时前端卡 CONFIGURATION、后端进 play 即被 MC 关闭（`back_total=0` + `socketClosed`），而宿主 ViaProxy 经 `127.0.0.1:25701` 正常入服（`entityId=83672`、36508 包）→ 根因需抓包级对比 ✓ **ViaProxy 暂留宿主 = 唯一剩余例外** ✓ 详见 `world/host-services/geyser-container/notes.md` |
 | numen MCP | 容器服务 `numen-mcp`（宿主 `127.0.0.1:18091`） | 不经游戏协议口（走 RCON `mc:25575`） | `numen__get_world_info` 等实测 ✓ |
 | ~~`mc-gateway`（宿主 python ✓ 8011）~~ | **已退役 2026-09-21** | — | `8011 RELEASED` ✓ 代码与 DB 未删 ✓ 回滚 `schtasks /change mc-gateway-autostart /enable` + `/run` |
 

@@ -41,3 +41,34 @@ docker run -d --name qd-viaproxy-ab --network qiandengji_default --restart unles
 - 转正后把该服务写进 `compose.yml`（正本进本目录 ✓ 运行副本 `server/viaproxy-ab/` 在 `/server/` 里被 gitignore ✓ 需以本目录为源）
 - 大 jar（47MB）不入库 ✓ 只记版本与 sha256 ✓ 换机需按本文重下
 - 提醒：白名单仍 `off` ✓ 基岩与外门都属"知道地址就能进" ✓ 收口前别扩公网
+
+
+---
+
+## 追加（2026-09-21 深夜）：容器化 ViaProxy 也失败 · 已精确定位但根因未解
+
+按上面的方案把 **ViaProxy 本体**搬进容器（`--target-address gate:25700` ✓ 配置与宿主逐字节一致 ✓
+启动序列一致 ✓ ViaVersion 支持范围一致 `1.7.2 ~ 26.2/776` ✓ 连那 5 条 `GeyserViaProxyPlugin` NPE **宿主也有** ✓ 不是差异 ✓）
+→ 手机连 `19142` 仍报 `InitialConnection-0 数据流终止` ✓
+
+**门日志给出精确断点**（同一玩家 MicroKQ 两次对比 ✓）：
+```
+宿主版 06:51:46  后端 LOGIN_SUCCESS → play → 开闸（前端收尾确认，放 78 包）
+                 MicroKQ 经门而入 entityId=83672 ✓  census back_total=36508 ✓
+容器版 14:04:47  后端 LOGIN_SUCCESS → play → CONFIG 透传 unregister/register/register/brand
+                 census back_total=0        ← 后端一个包都没收到
+                 会话关闭：后端断开 socketClosed   ✗
+                 14:04:50 开闸（ack 超时强开）      ← 前端始终没发 finish_configuration
+```
+**已排除**：UDP 发布（手机确实打进来了 ✓ `Player connected with username MicroKQ (2193)` ✓）、
+Geyser 配置差异（`config.yml` 零差异 ✓）、viaproxy.yml（一致 ✓）、版本数据（启动序列一致 ✓）、
+那个 NPE（两边都有 ✓）、资源包 HTTP 地址（宿主也是 127.0.0.1 ✓ 且能连 ✓）。
+
+**未解**：为什么 ViaProxy 的出站连接在**容器网络里**直连 `gate:25700` 时，前端卡在 CONFIGURATION、
+后端进 play 后立即被 MC 关闭；而同一 ViaProxy 经宿主 `127.0.0.1:25701`（Docker 发布口）就正常 ✓
+下一步要抓包级对比两条路径的字节流（`tcpdump`/`Wireshark` 在容器网 vs loopback 转发路径的差异），
+不是配置能解决的量级 ✓
+
+**当前决定**：**ViaProxy 暂留宿主机** ✓ 它是"全收进 docker"的**唯一剩余例外** ✓ 且**基岩体验正常** ✓
+（顺带证伪了"容器 UDP 外部入站不行"这条旧论 ✓ 所以这不是能力问题 ✓ 是这个具体组合的协议问题 ✓）
+试验容器已 `docker rm -f` 收掉 ✓ 不留半成品迷惑下一个我 ✓
