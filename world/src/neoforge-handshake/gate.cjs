@@ -50,6 +50,14 @@ const BACKEND = { host: backendHost, port: Number(backendPort) }
 //   设 GATE_VANILLA=0 切回 forge 协商并另修时间包。
 const VANILLA_BACKEND = process.env.GATE_VANILLA !== '0'
 
+// 【自 ack 传送 2026-09-21】门才是 MC 眼中的真正客户端，传送应答属传输层职责。
+// 现象：容器化 ViaProxy 经门时，MC 报 `Failed to decode packet 'serverbound/minecraft:accept_teleportation'`
+//       并在 join 后 ~40ms 踢线；宿主 ViaProxy 同一条门却正常（55s 干净会话）→ 前端 ack 的字节
+//       经门"按字段重序列化"后与 MC 期望不符。
+// 做法：门收到下行 position 后自己回 teleport_confirm（用 mcp 自己的序列化器，必然合法），
+//       并把前端上行的 teleport_confirm 吞掉不再转发。默认关，验证后再开。
+const SELF_TELEPORT_ACK = process.env.GATE_SELF_TELEPORT_ACK === '1'
+
 const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`)
 
 // ── 通道知识（共享）与缓存 ────────────────────────────────────────
@@ -318,6 +326,11 @@ function onBackPacket (sess, name, params) {
     sess.backCensus = sess.backCensus || {}
     sess.backCensus[name] = (sess.backCensus[name] || 0) + 1
     relayTo(sess, sess.front, name, params, '后端->前端')
+    // 【自 ack 传送】下行 position 带 teleportId → 门用自己的序列化器回 ack（必然合法）
+    if (SELF_TELEPORT_ACK && name === 'position' && params && params.teleportId != null) {
+      try { back.write('teleport_confirm', { teleportId: params.teleportId }) }
+      catch (e) { log(`（容忍）自 ack 传送失败：${(e && e.message || e).toString().slice(0, 120)}`) }
+    }
     return
   }
 
@@ -368,6 +381,8 @@ function onFrontPacket (sess, name, params) {
   if (sess.closed) return
   const back = sess.back
   if (!back || back.ended) return
+  // 【自 ack 传送】前端上行的 teleport_confirm 吞掉：改由门自己回，避免重序列化字节与 MC 期望不符
+  if (SELF_TELEPORT_ACK && name === 'teleport_confirm') return
   if (!sess.backReady) { // 后端未就绪：入队，待其进 CONFIG 后按序放出
     sess.frontQueue.push({ name, params })
     return
