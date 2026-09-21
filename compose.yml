@@ -186,6 +186,45 @@ services:
       mc:
         condition: service_healthy
 
+  # numen MCP 容器化（2026-09-21 造物主谕「如非必要不要留在外面」）：
+  # 原先它只在宿主上以 stdio 子进程跑（QwenPaw driver 拉起），现提供容器内 HTTP 传输。
+  # 通道文件写 /mcdata（= 宿主 server/world-data）—— 与 world 服务 MC_DATA_DIR=/app/data 同源，
+  # 否则 chant/pray 会石沉大海（LESSONS AUDIT-02 的教训）。
+  # 已知缺口：容器内无 node/tsx → render_view 会明确拒绝并提示改用 look_around（出图暂留宿主）。
+  numen-mcp:
+    image: qiandengji-qwenpaw-game:2.2.1-memory1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/ops-world/sidecar/guard/mcp_numen.py", "--http"]
+    environment:
+      TZ: Asia/Shanghai
+      NUMEN_REPO_ROOT: /ops-world
+      NUMEN_DATA_DIR: /ops-world/data
+      MC_DATA_DIR: /mcdata
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_SECRET: /run/secrets/rcon
+      NUMEN_MCP_TOKEN_FILE: /run/secrets/numen-mcp
+      NUMEN_MCP_PORT: "8090"
+      NUMEN_COMPANION: Kirito
+      NUMEN_DISPLAY: 桐人
+    ports:
+      - "127.0.0.1:18091:8090"   # 只绑宿主 loopback（供宿主的 mc-god 连），绝不公网
+    volumes:
+      - ./world:/ops-world:ro
+      - ./server/world-data:/mcdata
+      - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
+      - ./server/agents/secret/numen-mcp-token.txt:/run/secrets/numen-mcp:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u;u.urlopen('http://127.0.0.1:8090/livez',timeout=3)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 25s
+
   npc:
     image: qiandengji-sidecar:20260913-qd1
     pull_policy: never

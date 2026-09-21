@@ -20,6 +20,7 @@
 """
 import asyncio
 import base64
+import hmac
 import os
 import json
 import re
@@ -641,6 +642,12 @@ async def render_view(
     is_fp = mode in ("fp", "look")
     RENDER = RENDER_SCRIPT_FP if is_fp else RENDER_SCRIPT
     out = os.path.join(DATA, f"mcp-eye-{NUMEN_COMPANION}.{'jpg' if is_fp else 'png'}")
+    # 容器里没有 node/tsx 时【明确拒绝并给替代】，不要静默失败（宿主 stdio 有 node，行为不变）。
+    # 这是"把 numen MCP 搬进容器"留下的已知缺口，见 docs/AGENT-ONBOARDING.md §10。
+    if not (shutil.which(NODE_EXE) and os.path.exists(TSX_CLI) and os.path.exists(RENDER)):
+        return ("[render_view 不可用] 本进程缺 node/tsx/渲染脚本（容器内常见）"
+                f"(node可解析={bool(shutil.which(NODE_EXE))}, tsx={os.path.exists(TSX_CLI)}, 脚本={os.path.exists(RENDER)})。"
+                "周围感知请改用 look_around（文本俯视）或 scan_blocks/inspect_block；出图能力仍留在宿主 stdio 通道。")
     env = dict(os.environ)
     env["RCON_PW"] = _read_rcon_pw()
     env.setdefault("MC_PORT", "25599")
@@ -964,6 +971,60 @@ async def inspect_block_storage(x: int, y: int, z: int) -> str:
     return invoke("inspect_block_storage", {"x": x, "y": y, "z": z})
 
 
+class BearerMcpApp:
+    """给 streamable-http MCP 套一层 Bearer 鉴权 + 开放 /livez。
+    抄自 world/survival/mcp_server.py 的同名实现（本仓已验证的容器内 MCP 姿势），
+    目的：让 numen MCP 能跑在容器里，宿主不再散养一个 stdio 子进程。"""
+
+    def __init__(self, app, token):
+        if not isinstance(token, str) or len(token) < 32 or any(c.isspace() for c in token):
+            raise ValueError("invalid_numen_mcp_token（需 ≥32 字符且无空白）")
+        self.app, self.expected = app, ("Bearer " + token).encode("ascii")
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            return await self.app(scope, receive, send)
+        if scope["type"] != "http":
+            await send({"type": "websocket.close", "code": 1008})
+            return
+        health = scope.get("path") in ("/livez", "/healthz") and scope.get("method") == "GET"
+        headers = [v for k, v in scope.get("headers", []) if k.lower() == b"authorization"]
+        allowed = len(headers) == 1 and hmac.compare_digest(headers[0], self.expected)
+        if health or allowed:
+            if health:
+                body = b'{"ok":true,"service":"qiandengji-numen-mcp"}'
+                status = 200
+            else:
+                return await self.app(scope, receive, send)
+        else:
+            body, status = b'{"error":"unauthorized"}', 401
+        await send({"type": "http.response.start", "status": status,
+                    "headers": [(b"content-type", b"application/json"), (b"cache-control", b"no-store")]})
+        await send({"type": "http.response.body", "body": body})
+
+
+def _run_http():
+    """容器模式：无状态 streamable-http + Bearer（宿主/其它容器都能连，不再依赖 stdio 子进程）。"""
+    import uvicorn
+    port = int(os.environ.get("NUMEN_MCP_PORT", "8090"))
+    # FastMCP 的 http 姿势对齐 survivor：stateless + json_response（无会话粘滞，跨容器可连）
+    mcp.settings.host = os.environ.get("NUMEN_MCP_HOST", "0.0.0.0")
+    mcp.settings.port = port
+    mcp.settings.stateless_http = True
+    mcp.settings.json_response = True
+    tok_file = os.environ.get("NUMEN_MCP_TOKEN_FILE", "/run/secrets/numen-mcp")
+    token = open(tok_file, encoding="utf-8-sig").read().strip()
+    app = BearerMcpApp(mcp.streamable_http_app(), token)
+    print(f"[numen-mcp] streamable-http on {mcp.settings.host}:{port} (companion={NUMEN_COMPANION})", flush=True)
+    uvicorn.run(app, host=mcp.settings.host, port=port, access_log=False)
+
+
 if __name__ == "__main__":
-    # stdio 传输：QwenPaw agent 的 mcp.clients 用 command=Popen 拉起本进程
-    mcp.run(transport="stdio")
+    if "--http" in sys.argv[1:]:
+        # 容器内 HTTP 传输：python mcp_numen.py --http
+        _run_http()
+    elif sys.argv[1:]:
+        raise SystemExit("usage: mcp_numen.py [--http]")
+    else:
+        # stdio 传输：QwenPaw agent 的 mcp.clients 用 command=Popen 拉起本进程
+        mcp.run(transport="stdio")
