@@ -201,7 +201,56 @@ services:
       mc:
         condition: service_healthy
 
-  # numen MCP 容器化（2026-09-21 造物主谕「如非必要不要留在外面」）：
+  # 皮肤注入代理（2026-09-21 从宿主直跑收编进栈）
+  # 脚本与皮肤库的**正本仍在 .dsh harness 侧**（面板在那里改指派 = 单一事实源），此处只读挂载，
+  # 不在仓里复制第二份，避免"两份皮肤库各说各话"。仓内 world/host-services/skin-proxy/ 只留说明与指纹。
+  # 上游改走容器网内的门（gate:25700），不再绕宿主发布口。
+  # 防僵死：脚本已加握手看门狗（SKIN_HS_TIMEOUT_MS）—— 门容器重建后出现的「半死连接」
+  # 原先会让首个代理会话干等到客户端自己的 30s 超时；现在 12s 主动断开，客户端快速失败重连。
+  # skin-proxy：2026-09-21 尝试收编进容器 → 【未通过，暂回滚宿主直跑】
+  # 实测：新进程第一次会话必成，之后本进程发出的上游连接"TCP 连上但字节到不了门"，
+  #   直连 gate:25700 得 1/5、经 host.docker.internal:25701 得约 2/5；同容器另起的探针进程每次都成
+  #   → 判定为代理进程在 Linux 下的状态/资源问题（Windows 宿主长跑正常），非门非网络非配置。
+  # 保留定义供下次尝试；届时先解决该泄漏，或按已定架构改走 GameProfile textures 进皮（见 notes）
+  #   一旦服务端进皮落地，皮肤代理即可整体退役，不必再搬。
+  # skin-proxy:
+  #   image: qiandengji-world:20260913-qd1
+  #   pull_policy: never
+  #   restart: unless-stopped
+  #   entrypoint: ["node", "/app/skin-proxy-local.mjs"]
+  #   environment:
+  #     TZ: Asia/Shanghai
+  #     SKIN_LISTEN_PORT: "25566"
+  #     # 上游经宿主发布口进内门（与容器化 ViaProxy 同一处方）：
+  #     # 直连容器网内的 gate:25700 会在 CONFIGURATION 阶段卡住（门侧 census front_total=2 后静默），
+  #     # 走 host.docker.internal:25701 则握手完整——同型问题在 ViaProxy 容器化时已实测复现并以此解决。
+  #     SKIN_UPSTREAM_HOST: gate
+  #     SKIN_UPSTREAM_PORT: "25700"
+  #     MC_VERSION: "1.21.1"
+  #     SKINS_FILE: /skin-data/skins.json
+  #     SKIN_PROXY_STAT: /tmp/skin-proxy-status.json
+  #     SKIN_HS_TIMEOUT_MS: "12000"
+  #   volumes:
+  #     # 必须挂在 /app 下：脚本用 ESM import 'minecraft-protocol'，而 ESM 不认 NODE_PATH，
+  #     # 只有与镜像内 /app/node_modules 同层才解析得到（挂 /opt 会 ERR_MODULE_NOT_FOUND）。
+  #     - "C:/Users/lzl19/.dsh/profiles/web/skin-proxy-local.mjs:/app/skin-proxy-local.mjs:ro"
+  #     - "C:/Users/lzl19/.dsh/profiles/web/data:/skin-data"
+  #   ports:
+  #     - "127.0.0.1:25566:25566"   # 宿主 bot 沿用同一地址；绝不公网
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   depends_on:
+  #     mc:
+  #       condition: service_healthy
+  #     gate:
+  #       condition: service_started
+  #   healthcheck:
+  #     test: ["CMD", "node", "-e", "const s=JSON.parse(require('fs').readFileSync('/tmp/skin-proxy-status.json','utf8'));process.exit(Date.now()-s.ts<45000?0:1)"]
+  #     interval: 30s
+  #     timeout: 8s
+  #     retries: 3
+
+  # numen 假玩家身体工具 MCP（2026-09-21 收编：原先只在宿主以 stdio 子进程跑）
   # 原先它只在宿主上以 stdio 子进程跑（QwenPaw driver 拉起），现提供容器内 HTTP 传输。
   # 通道文件写 /mcdata（= 宿主 server/world-data）—— 与 world 服务 MC_DATA_DIR=/app/data 同源，
   # 否则 chant/pray 会石沉大海（LESSONS AUDIT-02 的教训）。
