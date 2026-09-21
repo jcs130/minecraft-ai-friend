@@ -65,6 +65,37 @@ async function readUntil (bot, pos, want, tries = 10) {
     await sleep(2500)
     t('物品号翻译（give blaze_rod 背包可见）', bot.inventory.items().some(i => /blaze_rod/.test(i.name)))
 
+    // 5) **方块状态**保真（只比名字测不出"状态被压平"，2026-09-21 note_block 塌平教训）
+    //    注意：本文件用 t() 记测试结果，循环变量绝不能再叫 t（会遮蔽函数）
+    const STATE_CASES = [
+      ['oak_stairs[facing=north,half=top]', { facing: 'north', half: 'top' }],
+      ['oak_slab[type=bottom]', { type: 'bottom' }],
+      ['chest[facing=east]', { facing: 'east' }],
+      ['furnace[facing=south,lit=true]', { facing: 'south', lit: 'true' }],
+    ]
+    for (let i = 0; i < STATE_CASES.length; i++) {
+      const spec = STATE_CASES[i][0]
+      const want = STATE_CASES[i][1]
+      const baseName = spec.split('[')[0]
+      const pos = at(20 + i)
+      rcon(`setblock ${pos.x} ${pos.y} ${pos.z} minecraft:${spec} replace`)
+      clean.push(pos)
+      const agreed = /Test passed/i.test(rcon(`execute if block ${pos.x} ${pos.y} ${pos.z} minecraft:${spec}`))
+      let b = null
+      for (let round = 0; round < 6; round++) {
+        b = bot.blockAt(new V(pos.x, pos.y, pos.z))
+        if (b && b.name === baseName) break
+        await sleep(1000)
+      }
+      // prismarine-block 把状态属性放在 getProperties()/_properties，没有 .properties 字段（实测）
+      let props = {}
+      try { props = (b && typeof b.getProperties === 'function') ? (b.getProperties() || {}) : ((b && b._properties) || {}) } catch (e) { props = {} }
+      const missing = Object.keys(want).filter(k => String(props[k]) !== want[k])
+      const got = JSON.stringify(Object.keys(want).reduce((o, k) => { o[k] = props[k]; return o }, {}))
+      t('状态保真 ' + baseName + ' ' + JSON.stringify(want), agreed && missing.length === 0,
+        (agreed ? '' : '服务端不认可该状态 ') + (missing.length ? '读到 ' + got : ''))
+    }
+
     console.log('\n清理…')
     for (const c of clean) rcon(`setblock ${c.x} ${c.y} ${c.z} minecraft:air replace`)
     console.log(`\n结果 ${pass} 通过 / ${fail} 失败`)

@@ -60,7 +60,10 @@ for (const line of blocks) {
       for (let k = 0; k < cnt; k++) states[neoBaseN + k] = vBase + k
       report.matched++
     } else {
-      for (let k = 0; k < cnt; k++) states[neoBaseN + k] = vBase
+      // 服务端状态数与原版表不等（模组给原版方块加了属性，如 note_block 多几种乐器）
+      // 旧写法把整段全塌到基态（states=vBase）→ 同一方块的不同状态被压平，细节丢失 ✗
+      // 与下方 modFallback 分支保持一致：逐号推进并夹在原版段内（vBase+min(k,vcnt-1)）✓
+      for (let k = 0; k < cnt; k++) states[neoBaseN + k] = vBase + Math.min(k, Math.max(0, vcnt - 1))
       report.stateMismatch++
     }
   } else {
