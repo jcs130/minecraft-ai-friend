@@ -903,12 +903,21 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
   loadViewerDependencies()
   // 门（gate.cjs + idmap.json）已在出站把 NeoForge 号翻成原版号 → 天眼这套「本地补偿」必须停用 ✓
   // 否则二次翻译（实测 vanilla-state-map 键值域重叠 26684），世界会全错且 normalize 抛错致 viewerUnavailable ✗
+  // 号翻译的唯一正解 = 「神社之门」出站翻译（idmap.json）✓ 天眼不再自带第二套表。
+  // 只有两种合法姿势：① MC_GATE_TRANSLATED=1（过门 ✓ 生产默认）② 显式 MC_VIEWER_LEGACY_MAP=1
+  // （裸连调试用 ✓ 必须主动开，绝不允许悄悄走回来）。两者都没给 → 拒绝启动，别画错世界。
   const gateTranslated = process.env.MC_GATE_TRANSLATED === '1'
+  const legacyOptIn = process.env.MC_VIEWER_LEGACY_MAP === '1'
+  if (!gateTranslated && !providedStateMapping && !legacyOptIn) {
+    throw Error('[render-bridge] 拒绝启动：天眼必须过门（MC_GATE_TRANSLATED=1）。'
+      + '裸连需自带第二套号表，会与门/基岩/Agent 的翻译不一致（历史上就漂移出 1299 个状态差）。'
+      + '确要裸连调试，显式设 MC_VIEWER_LEGACY_MAP=1。')
+  }
   const blockStateMapping = gateTranslated ? identityViewerBlockMapping()
     : (providedStateMapping ?? loadViewerBlockMapping(path.join(ASSET_ROOT, 'mod-assets/vanilla-state-map.json'),
       process.env.MC_MOD_BLOCK_REGISTRY ?? '/app/data/block-registry.json', captureVanillaBlockTables(bot.version)))
   if (gateTranslated) console.log('[render-bridge] 门翻译模式：跳过 mod 注册表注入与本地号归一化（收到的已是原版号）')
-  else injectModBlockRegistry(bot) // 渲染桥 Step②：先补注册表，再开任何会话（归一化器/区块流共用 bot.registry）
+  else { console.warn('[render-bridge] ⚠ 裸连模式（本地号表）：与门/基岩/Agent 不是同一张表，仅限调试'); injectModBlockRegistry(bot) }
   const serveViewerStatic = createViewerStaticResponder()
 
   // ---------- settle 村民实体流（2026-08-29 II：9090 村民=盔甲架修复） ----------
