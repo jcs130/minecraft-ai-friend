@@ -8,6 +8,8 @@
 
 当前仅为结构化状态→候选动作的首个集成，不是逐帧视觉或已训练 WASD 控制。无需为每一步调用 Qwen；Qwen 负责目标、候选程序和必要复盘。
 
+候选参数使用程序动作的契约，不省略字段。例如装备为 `{tool:"equip_item",args:{item_id:"minecraft:iron_sword",action:"equip",slot:"mainhand"}}`，不是 MCP `equip` 的简写。`expectedChoice` 只比较候选生成结果，错误参数也可能与错误 fixture 一致；真实网关仍会拒绝，收到具体拒绝后修订而非重复启动旧版。
+
 在当前目标需要重复、已理解的行为时使用本页。自己根据当前配方、材料、身体状态和历史实践选择一项小试验；示例不是固定任务，也不要求为了练习额外收集材料。现有工具负责执行，程序只提出动作。
 
 ## 先查事实，再写最小改动
@@ -19,6 +21,8 @@
 ## 程序与 fixture 契约
 
 源码定义纯函数 `next(state, memory)`，同步返回 JSON 对象；无文件、网络、进程、游戏对象或模型调用，不使用随机数和时间。state 是控制器本次身体观察，常用 `counts`、`hp`、`hunger`、`task`；`execution.lastExecution` 提供上一步工具、回执状态与完成确认，`execution.lastResult` 是动作返回值，`execution.observation/evidence` 是观察和近期证据。缺失信息保持未知。
+
+区分两层状态：原始动作回执的成功终态是 `status:"completed"`；程序读取的 `state.execution.lastExecution.status` 成功值是 **`"succeeded"`**。程序同时检查该值和 `completionConfirmed===true`，再核对当前装备、库存或身体等预期效果。缺失、失败或未确认不能报告 done；也不能把已确认成功的动作因状态字段混淆而再执行一次。
 
 每步只选一种结果：
 
@@ -85,6 +89,8 @@ function next(state, memory) {
 ```
 
 objective 最多4条检查，count 为正整数；inventory_gain 检查指定物品净增量，action_completed 检查该实际动作的完成回执。根据本次小目标设置，不能拿已存在的物品冒充新增。检查通过只说明本次观察满足目标；拾取、其他世界变化仍可能影响物品数量，不自动证明因果或熟练掌握。
+
+`checks` 是全部满足（AND），没有 OR 语义。只执行一次的候选程序不能同时要求 eat 和 equip_item 各完成一次；应收窄本次可观察目标，或不设置这类不适用的 objective 并如实核对实际回执。`objectiveObserved:true` 和 `programReportedDone:true` 分开报告：世界效果已达到而程序误判 replan 时，修正终止逻辑，保留原实践，不重写其结果。
 
 `skill_start` 返回排队成功不等于执行完成；受理后本轮租约已关闭。提供 summary 时，成功回执会让 QwenPaw 直接用你的总结结束当前原生回合，省去额外模型调用。不再 remember、执行身体动作或轮询等待。未提供 summary 的旧调用仍兼容，此时自行给出最终文字结束。参数被拒绝则按具体字段修正，不能当成排队成功。控制器按原任务边界执行，不需要每步调用模型。
 

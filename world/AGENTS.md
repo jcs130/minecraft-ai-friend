@@ -1,3 +1,5 @@
+2026-09-21 系统1实战补验：桐人原生创建prepare_for_task并依据人工反馈两次refinement，真实装备/进食回执已关联Decider（92.15/68.76ms）；最终苹果-1、hunger5→9、实践ae855857为done且目标观察true。首版参数拒绝、第二版错误终止判断保留；程序执行视图成功为succeeded，原始receipt为completed，勿混淆；equip_item必须含action:"equip"，objective.checks为AND。既有audit补关联验收，不把两次异质实验当A/B或完全自主RSI。证据runtime/system-one-live-20260921，勿重放目标提交脚本。详见docs/SYSTEM-ONE-NATIVE-CONTINUITY.md。
+
 2026-09-21 后续持续运行根因修复与系统1已部署：原生task准确404且tracker idle/0才把丢失推理记failed；无结果不重放、不算动作成功。普通IO和已知推理失败退避，人工pause/drain/未知动作保持保护。自有MCP同值白名单PUT触发限定2.2.1 DriverManager reload，完整凭据卡保持；结衣新轮先检查工具。服务管理启动Qwen进程后先拉起survivor，最后严格核验Qwen完整健康，失败照留。用户已有Decider接技能choose候选入口，367ms真实状态影子推理，未做WASD训练。97具身/34实践、6旧晋升版本35用例实测通过；10profiles/16Cron原样恢复，MC/world未重启，control更新后一次重启。维护system-one-native-20260921已恢复勿重放；详见docs/SYSTEM-ONE-NATIVE-CONTINUITY.md。
 
 2026-09-21 持续运行修复已部署：桐人已有模型 task 的临时查询故障按原期限退避、不重复提交；结衣旧丢失任务复用显式对账机制释放，旧 unknown 回执保留。公会四个讨伐统计条件修正为 minecraft.killed:minecraft.<mob>，缺失 objective 已原生创建，不清零玩家分数。原 10 profiles/16 Cron 恢复，仅 NPC/survivor 停启；原禁用班次保持。MCP 熔断需官方 PATCH toggle 重连，完整 Client DTO 写回可能丢自定义凭据别名，不可覆盖原环境引用。84 项生产字节冒烟、73 控制器和 9 女仆对账通过；其他历史健康失败照实保留。维护已结束，不重放恢复脚本，详见 docs/AGENT-CONTINUITY-REPAIR.md。
