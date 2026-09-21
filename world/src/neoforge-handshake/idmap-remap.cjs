@@ -107,6 +107,22 @@ function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
     } catch (e) {} // 手术失败=透传这包 ✓ 错位好过崩溃
     return params
   }
+  if (name === 'multi_block_change' && Array.isArray(params.records)) {
+    // 1.20.5+ Section Blocks Change：records 是扁平 varint[] ✓ 每条 = (blockStateId << 12) | 局部坐标(低 12 位)
+    // 2026-09-21 实测定谳：rec=[19504904,19537671] → >>12 = 4761/4769（号 ✓）低 12 位 = 0xF08/0xF07（同列相邻 y ✓）
+    // fill/结构生成/模组批量改块走这个包 ✓ 不翻就会把 NeoForge 高位号砸进客户端 → 读成 air ✗
+    const VANILLA_STATE_MAX = 26684
+    for (let i = 0; i < params.records.length; i++) {
+      const r = params.records[i]
+      if (typeof r !== 'number' || !Number.isFinite(r)) continue
+      const hi = Math.floor(r / 4096)              // 用除法而非移位，避开 32 位符号坑 ✓
+      const low = r - hi * 4096
+      const v = MAP.bs.get(hi)
+      const nv = v != null ? v : (hi > VANILLA_STATE_MAX ? MAP.fallbackBlock : hi)
+      params.records[i] = nv * 4096 + low
+    }
+    return params
+  }
   const stOut = id => { const v = MAP.bs.get(id); return v == null ? id : v }
   const itOut = id => { const v = MAP.im.get(id); return v == null ? id : v }
   const deep = (obj, d) => { // 通用深改写:只碰安全字段名 ✓ 不碰 entityId/windowId 这类"id" ✓
