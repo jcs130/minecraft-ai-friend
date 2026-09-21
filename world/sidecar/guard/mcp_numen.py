@@ -602,6 +602,43 @@ async def goddess_help(topic: str = "") -> str:
 
 
 # ============ 渲染图（视觉感知，Agent 自主按需调用） ============
+def _render_native():
+    """纯 Python 原生出图：复用 world/survival/scene_view.py（Pillow + numen look_around）。
+
+    为什么优先走这条：
+    - 容器里没有 node/tsx，node 路径在容器内必然失败（2026-09-21 收编进 docker 的前提）；
+    - node 路径要先起临时 bot 再用 RCON 把它传送到目标坐标，RCON 一旦连不上就
+      静默在 bot 出生点出图（今日实踩：宿主 driver 默认连死口 25575 → 两张"拍错地方"的图被误读）；
+      原生路径直接读【绑定身体自己】的 look_around，无临时 bot、无传送、无 node。
+    - 代价：只以身体为中心出图（语义俯视，非第一人称贴图），要看别处得先 move/goto。
+    返回 ImageContent；不可用时返回 None，让上层回落 node 路径。
+    """
+    try:
+        sv_dir = os.path.join(REPO_ROOT, "survival")
+        if not os.path.isfile(os.path.join(sv_dir, "scene_view.py")):
+            return None
+        if sv_dir not in sys.path:
+            sys.path.insert(0, sv_dir)
+        import scene_view
+        raw = invoke("look_around")
+        if not isinstance(raw, str) or "look_around center=" not in raw:
+            return None
+        body = raw.rstrip("\n")
+        radius = (len(body.split("\n")) - 5) // 2
+        if not 4 <= radius <= 12 or radius * 2 + 1 != len(body.split("\n")) - 5:
+            return None
+        grid = scene_view.parse_native_grid(raw, radius)
+        encoded, width, height = scene_view.render_grid(grid)
+        print(f"[render-native] {NUMEN_COMPANION} facing={grid['facing']} center={grid['center']} "
+              f"r={radius} {width}x{height} unloaded={sum(rw.count('?') for rw in grid['rows'])}",
+              file=sys.stderr, flush=True)
+        return ImageContent(type="image", data=base64.b64encode(encoded).decode("ascii"),
+                            mimeType="image/png")
+    except Exception as exc:
+        print(f"[render-native] 不可用，回落 node 路径：{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return None
+
+
 @mcp.tool()
 async def render_view(
     mode: str = "top3",
@@ -611,8 +648,15 @@ async def render_view(
     pitch: float | None = None,
 ):
     """渲染身体周围环境的【图片】（返回 PNG 图，Agent 用视觉理解地形/周围）。
-    mode: 'look'=斜视全景 / 'top'=正俯视雷达 / 'top3'=斜视+俯视双图(默认) / 'fp'=第一人称。
-    x/z 缺省用身体当前位置；yaw/pitch 缺省用身体当前朝向。注意：渲染需起临时观察者，耗时数秒到数十秒，按需调用。"""
+    默认走【原生语义俯视图】：以身体为中心、1格=1方块、含图例，不需要 node、不起临时观察者。
+    mode 传 'look'/'fp'/'top3' 且宿主侧有 node 时才走 3D 贴图视角（容器内不可用，会自动回落原生）。
+    要看别处的地形：先 move/goto 过去再渲染，不要指望图能穿透到远端坐标。"""
+    native = _render_native()
+    if native is not None:
+        return native
+    if mode in ("fp", "look", "top3") and (x is not None or z is not None):
+        return ("[render_view] 原生渲染只以【当前身体位置】为中心；指定 x/z 需要 node 渲染路径，"
+                "而本进程无 node。要看别处请先 move/goto 到该处再调用。")
     # 位置：x/z/y 缺省从身体状态拿
     y = 64.0
     if x is None or z is None:
