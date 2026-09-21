@@ -1,0 +1,141 @@
+{
+  "date": "2026-09-21",
+  "projectBase": "e83dbd1",
+  "repository": "rmalde/minecraft-agent",
+  "commit": "78b40ed59514e5e2abde33a05ce398ecb2c39e05",
+  "remoteHeadVerified": true,
+  "trackedFiles": 238,
+  "checkout": "Full tracked checkout; no run recordings or game binaries are published by the author.",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "28f0146a04796a63d1c7fe2aedd654f60fd114b68e3c92668c40981598833c56",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/README.md"
+    },
+    {
+      "path": "package.json",
+      "sha256": "88e0f42c7372a29516d6328d6ece6c6aaec048f93993e6c692d2c2ab8d4f67f7",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/package.json"
+    },
+    {
+      "path": "async-planner.mjs",
+      "sha256": "58bbbb308e2842e8b39c83b4cb4655f994fc3edae8490e3c3ea38e02823e282c",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/async-planner.mjs"
+    },
+    {
+      "path": "models.mjs",
+      "sha256": "53ca1d853b607b89013015e1fec8e5a687d2ec68c3b3d5cb4d23217c1a1655a7",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/models.mjs"
+    },
+    {
+      "path": "nether-agent.mjs",
+      "sha256": "27c3f9aad27f1afa721d0cfc48a88dc8207f4f1b8bf8ef218813aa6bb9291f90",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/nether-agent.mjs"
+    },
+    {
+      "path": "nether-route.mjs",
+      "sha256": "918a6ce3332c2c47ad2f630773513b97e91b760e7356950dafbc0518f7466f2e",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/nether-route.mjs"
+    },
+    {
+      "path": "optimization/nether/config.json",
+      "sha256": "fa87b199c616ee31ac872a4f71bcfe068d52ca5479e168ab43ca461618cfce81",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/nether/config.json"
+    },
+    {
+      "path": "optimization/policy.mjs",
+      "sha256": "81b38f27efb800377174819e7fad6e7bd8ea8f0b87472ad29bd1aa73bcb45867",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/policy.mjs"
+    },
+    {
+      "path": "end-combat.mjs",
+      "sha256": "bab380b2c36007f1bbbcd9eb62a22435679880848ea587b646e15a23dfd7a8f9",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/end-combat.mjs"
+    },
+    {
+      "path": "breath-reflex.mjs",
+      "sha256": "2ef7d5a869dbfbd4bca1d6768504eb4be0b5a8ca2b2ea39b01349e2191bf326b",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/breath-reflex.mjs"
+    },
+    {
+      "path": "camera-control.mjs",
+      "sha256": "63a4f04ea44025bf983c0918dff15dda174f7286ec20434b88d4a1626f379e42",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/camera-control.mjs"
+    },
+    {
+      "path": "patch-pathfinder.mjs",
+      "sha256": "f091b502f7b9584a87db09985e96b5bbd0f9e33f71784c79c45fd7f2f4d71519",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/patch-pathfinder.mjs"
+    },
+    {
+      "path": "crafting-access.mjs",
+      "sha256": "74513f870e5228d11c75bf1327096a8afc865698f8c0c93733bf706c71c9eb3d",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/crafting-access.mjs"
+    },
+    {
+      "path": "optimization/NOTES.md",
+      "sha256": "1eea056366276544c8ceb52d60620bffd5ba552276d217ed5a3a7bc0f946b90a",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/NOTES.md"
+    },
+    {
+      "path": "optimization/COMPARISON.md",
+      "sha256": "49b45870845da0476d5dd8578592f2eb3ac4ad7f7525b12b96d0890253a5485b",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/COMPARISON.md"
+    },
+    {
+      "path": "optimization/nether/REVIEW.md",
+      "sha256": "cb973a6fc07fb2f705878bbadcec97a123559427f7513a90739fe8ecd66c6fff",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/nether/REVIEW.md"
+    },
+    {
+      "path": "optimization/nether/freeze-run.mjs",
+      "sha256": "f0a1c046d68806317702dcdc11e9e451a18fb128b738ddd8fc30e0eb23a79a54",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/nether/freeze-run.mjs"
+    },
+    {
+      "path": "optimization/nether/analyze-timing.mjs",
+      "sha256": "6509949ee201adceeb0e8b202f778a6fda52e51a77b4f9886c7f05420287b6fd",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/nether/analyze-timing.mjs"
+    },
+    {
+      "path": "optimization/nether/verify.mjs",
+      "sha256": "d4c88c441b04f895977fde94a80da048deefbb48a37409c86f945c03b760c914",
+      "url": "https://github.com/rmalde/minecraft-agent/blob/78b40ed59514e5e2abde33a05ce398ecb2c39e05/optimization/nether/verify.mjs"
+    }
+  ],
+  "validation": {
+    "originalTestsPassed": 25,
+    "files": [
+      "evidence.test.mjs",
+      "optimization/policy.test.mjs",
+      "optimization/nether/async-planner.test.mjs",
+      "optimization/nether/camera.test.mjs",
+      "optimization/nether/corner.test.mjs"
+    ],
+    "boundaryProbes": {
+      "sameStageGoalChangeAcceptsOldPlan": true,
+      "lowConfidenceStillSelectsAction": true,
+      "mockRequests": 1,
+      "realModelCalls": 0,
+      "worldActions": 0,
+      "scope": "Two reproduced reference limitations; not production changes or a live-game test."
+    },
+    "fullDependencyTests": "Not run: isolated npm installation ended with Docker unexpected EOF.",
+    "realModelCalls": 0,
+    "worldActions": 0,
+    "productionRuntimeChanges": false,
+    "environmentFailure": {
+      "dockerVmIOError": true,
+      "volumeFreeBeforeBytes": 5091328,
+      "volumeFreeAfterBytes": 220184576,
+      "generatedDependencyBytesRemoved": 205890983,
+      "recovered": false,
+      "noGlobalPruneOrProductionRestart": true
+    }
+  },
+  "limits": [
+    "Author full-run timing and cost not independently reproduced; run video/log/world excluded from Git.",
+    "Peaceful preset seed route is not an unseen-world generalization test.",
+    "Runtime skill self-modification/promotion was not found in the reviewed entry points."
+  ]
+}
