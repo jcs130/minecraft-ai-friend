@@ -20,6 +20,21 @@ def tick(controller, body, control):
     if active:
         if not active.get('taskId') or active.get('phase') != 'submitted':
             c.data['dialogueStatus'] = 'submission_unknown'
+            if hasattr(c.backend, 'lookup_submission') and c.clock() >= active.get('lookupAfter', 0):
+                active['lookupAfter'] = c.clock() + 10
+                try:
+                    task = c.backend.lookup_submission(active)
+                    if task:
+                        # Persist the party link before advancing controller
+                        # state. Repeating this exact link after a crash is safe.
+                        c.party.submitted(active['partyReservation'], task)
+                        active.update(taskId=task, phase='submitted', recoveredAt=c.clock())
+                        c.data['dialogueStatus'] = 'submission_recovered'
+                        c.record('social_submission_recovered', turnId=active['turnId'], taskId=task,
+                                 requestReplayed=False)
+                except Exception as error:
+                    c.data['dialogueWarning'] = type(error).__name__
+                c.save()
             return
         enabled = control.get('enabled') is True and body.get('ok') is True
         try:
@@ -46,6 +61,7 @@ def tick(controller, body, control):
             receipt = c.deliver_party_terminal(active, allow_dispatch=enabled)
             if receipt['settled']:
                 c.data['lastDialogueTiming'] = {'messageId': active.get('messageId'),
+                    'batchMessageIds': active.get('batchMessageIds', []),
                     'receivedAt': active.get('receivedAt'), 'submittedAt': active['startedAt'],
                     'generatedAt': active.get('generatedAt'), 'settledAt': c.clock(),
                     'worldHeard': receipt['heard'], 'audioPlayedAt': None}
@@ -105,12 +121,13 @@ def tick(controller, body, control):
         session, context, delivery = prepare(c.root, c.session, context, c.memory())
         # Every input states the authority independently of previous context.
         context['bodyAccess'] = 'read_only'
-        context['instruction'] = ('回应这条已经听见的消息，直接给简短最终答复，由原桥投递。'
+        context['instruction'] = ('回应本组已经听见的消息，按发言时间理解补充与纠正，合成一次简短最终答复，由原桥投递。'
             '身体工具只读，没有身体租约；不调用remember或party_send，不声称动作已完成。'
             '不把每句话当任务；若决定接受明确后续请求，先用goal_agenda查看，再request_goal持久保存后才承诺。'
             'request_id用当前messageId加操作后缀，重试复用；纠正或取消用原goalId/revision，默认排队不覆盖。')
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'messageId': message['messageId'], 'receivedAt': message.get('createdAt'),
+                  'batchMessageIds': [item['messageId'] for item in message.get('batchMessages', [])],
                   'sessionId': session['primarySessionId'], 'userId': session['userId'],
                   'channel': session['channel'], 'contextDelivery': delivery}
         with action_lock(c.root, blocking=True):

@@ -41,6 +41,20 @@ class EmbodiedControllerTests(unittest.TestCase):
         self.assertIn('self', value['updates'])
         self.assertIn('observations', value)
 
+    def test_review_plan_guidance_survives_actual_incremental_submission(self):
+        self.enable()
+        with patch.object(self.controller.reviews, 'pending', return_value={'id': 'review-one', 'reason': 'periodic'}):
+            self.controller.tick()
+        value = json.loads(self.backend.submitted[-1]['prompt'].split('\n', 1)[1])
+        self.assertEqual(value['purpose'], 'review')
+        guidance = value['updates']['reviewGuidance']
+        self.assertEqual(guidance['goalFile'], 'memory/goals.md')
+        self.assertIn('已验证', guidance['instruction'])
+        self.assertIn('回执', guidance['instruction'])
+        self.assertLess(guidance['instruction'].index('read_file'), guidance['instruction'].index('finish_turn'))
+        self.assertIn('只写工作摘要不等于长期计划已同步', guidance['instruction'])
+        self.assertNotIn('planning', value['updates'])
+
     def test_unchanged_body_is_incremental_but_freshness_always_delivered(self):
         self.enable()
         self.controller.data['wakeReason'] = 'test'
@@ -203,6 +217,21 @@ class DialogueTests(EmbodiedControllerTests):
         restarted.tick()
         self.assertEqual(len(self.backend.submitted), 1)
         self.assertEqual(restarted.data['dialogueStatus'], 'submission_unknown')
+
+    def test_lost_post_ack_recovers_only_exact_native_receipt_without_repost(self):
+        self.enable()
+        self.controller.party = life_tests.FakeParty()
+        self.backend.on_submit = lambda *_: (_ for _ in ()).throw(OSError('lost_ack'))
+        self.gateway.body['task']['busy'] = True
+        self.controller.tick()
+        self.backend.lookup_submission = lambda active: 'task-000000000001'
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        active = self.controller.data['dialogueActive']
+        self.assertEqual(active['taskId'], 'task-000000000001')
+        self.assertEqual(active['phase'], 'submitted')
+        self.assertIn(('submitted', 'reservation-one', 'task-000000000001'), self.controller.party.calls)
+        self.assertEqual(self.gateway.actions, [])
 
     def test_drain_waits_for_social_terminal_and_creates_no_new_dialogue(self):
         self.start_dialogue()

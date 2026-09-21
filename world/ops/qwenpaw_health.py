@@ -311,6 +311,7 @@ def main():
     assert marker['qwenVersion'] == actual_version
     assert marker.get('survivalTurnRuntimeVersion') == 4
     assert marker.get('survivalRequestRuntimeVersion') == 2
+    assert marker.get('survivalSubmissionReceiptVersion') == 1
     from life_memory_evidence_runtime import VERSION as evidence_version
     assert marker.get('lifeMemoryEvidenceVersion') == evidence_version
     sys.path.insert(0, '/survival')

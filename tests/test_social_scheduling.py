@@ -273,6 +273,18 @@ class AttentionWorkerTests(unittest.TestCase):
         self.assertEqual(self.decisions[0][1]['proposed'], 'observe')
         self.assertEqual(self.decisions[0][1]['mode'], 'shadow')
 
+    def test_classifier_records_controller_delay_separately_from_http(self):
+        c, body, control = self.prepare()
+        tick(c, body, control)
+        self.clock.now += .5
+        self.worker.result = {'code': 'policy_escalated', 'choice': 'now', 'confidence': .99, 'latencyMs': 80}
+        tick(c, body, control)
+        decision, evidence = self.decisions[0]
+        self.assertEqual(decision, 'now')
+        self.assertEqual(evidence['latencyMs'], 80)
+        self.assertEqual(evidence['controllerElapsedMs'], 500)
+        self.assertFalse(evidence['stale'])
+
 
 if __name__ == '__main__':
     unittest.main()

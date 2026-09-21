@@ -52,7 +52,9 @@ def tick(c, body, control):
             mode = c.settings.get('socialAttentionMode', 'shadow')
             decision = proposed if mode == 'live' else 'fallback'
             evidence.update(code=(result or {}).get('code', 'classification_expired'), stale=stale,
-                            mode=mode, proposed=proposed)
+                            mode=mode, proposed=proposed,
+                            controllerElapsedMs=round(max(0, c.clock() - pending['at']) * 1000, 2),
+                            messageAgeMs=round(max(0, c.clock() - pending['message'].get('createdAt', pending['at'])) * 1000, 2))
             applied = c.party.finish_attention(pending['message'], decision, evidence)
             c.data['socialAttention'] = {'version': 1, 'status': decision if applied else 'discarded',
                 'messageId': pending['message']['messageId'], 'receivedAt': pending['message'].get('createdAt'),

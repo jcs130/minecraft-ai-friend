@@ -311,6 +311,23 @@ class QwenBackend:
                 'code': 'NATIVE_TASK_LOST', 'message': 'Native task absent and agent idle; result unverified. Observe again; do not replay old actions.'}},
                 'reconciliation': {'resultVerified': False, 'requestReplayed': False, 'nativeRunningTaskCount': 0}}
 
+    def lookup_submission(self, active):
+        import re
+        turn = active.get('turnId')
+        if not isinstance(turn, str) or not re.fullmatch(r'survival-[0-9a-f]{32}', turn):
+            raise ValueError('invalid_native_submission_lookup')
+        value = self.api('GET', '/console/survival-submission/' + turn)
+        expected = {'schema': 1, 'turnId': turn, 'agentId': self.agent_id,
+                    **{k: active[k] for k in ('sessionId', 'userId', 'channel')}}
+        if any(value.get(k) != v for k, v in expected.items()):
+            raise ValueError('native_submission_binding_mismatch')
+        if value.get('phase') == 'unknown':
+            return None
+        task = value.get('taskId')
+        if value.get('phase') != 'submitted' or not isinstance(task, str) or not re.fullmatch(r'task-[0-9a-f]{12}', task):
+            raise ValueError('native_submission_receipt_invalid')
+        return task
+
     def idle(self):
         state = self.api('GET', '/agents/' + self.agent_id + '/agent-status')
         return (state.get('status') == 'idle' and type(state.get('running_task_count')) is int
@@ -1074,6 +1091,7 @@ class Controller:
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
             'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
             'socialSchedulingVersion': 1, 'goalAgendaReady': not bool(value['socialScheduling'].get('goalError')),
+            'socialProgressVersion': 1,
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
@@ -1708,6 +1726,19 @@ class Controller:
                 '按需用Qwen原生文件和记忆整理已核验事实、失败原因与一个可改进点。'
                 '长期目标及下一步保存在自己的memory/goals.md，MEMORY.md保留短索引，remember记录当前工作状态；'
                 '区分已验证、待验证和受阻。普通笔记不等于程序已学会，程序仍须真实测试。')
+        if requested_review or self.data['wakeReason'] == 'autonomous_review':
+            # A named delta survives behavior_context's intentional removal of
+            # repeated instructions. Plans remain the agent's native workspace.
+            context['reviewGuidance'] = {
+                'goalFile': 'memory/goals.md',
+                'reference': 'skills/qd-survivor-practice/references/long-term-planning.md',
+                'instruction': '本轮先用read_file读取memory/goals.md；按当前身体、实际回执和已听见的信息核对长期计划，'
+                    '用write_file或edit_file修订已过时的进度与下一步，并核对保存回执。'
+                    '区分已验证、待验证、受阻，保留证据编号和时间。不要从自述或程序done推断目标完成。'
+                    'MEMORY.md只留短索引；最后才用remember保存工作状态并finish_turn=true。'
+                    '只写工作摘要不等于长期计划已同步；如果计划无需修改，说明已经核对的依据。'
+                    '身体安全时先完成这份复盘，不为凑动作次数继续旧路线。'
+                    '保留自己的长期使命；危险优先，复盘不打断休息，不为检查另造任务。'}
         # Crystallization (case-9f5b2099 熟能生巧): inject pattern hints into
         # the review/dream context, not the main action prompt. The agent
         # reflects on repeating patterns during its scheduled review cycle —

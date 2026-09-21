@@ -23,6 +23,8 @@ if __name__ == '__main__':
     finish_version = install_survival_finish('game')
     from survival_request_runtime import install as install_survival_request
     request_version = install_survival_request('game')
+    from survival_submission_runtime import install as install_submission_receipts
+    submission_version = install_submission_receipts()
     from life_memory_evidence_runtime import install as install_memory_evidence
     memory_version = install_memory_evidence('game')
     from native_mcp_recovery import install as install_mcp_recovery
@@ -33,6 +35,7 @@ if __name__ == '__main__':
     assert marker['pid'] == os.getpid()
     write(marker_path, marker | {'survivalTurnRuntimeVersion': finish_version,
                                 'survivalRequestRuntimeVersion': request_version,
+                                'survivalSubmissionReceiptVersion': submission_version,
                                 'lifeMemoryEvidenceVersion': memory_version,
                                 'nativeMcpRecoveryVersion': mcp_recovery_version})
     from qwenpaw.cli.main import cli

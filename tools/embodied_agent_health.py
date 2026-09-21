@@ -22,7 +22,9 @@ SOURCES = ('world/survival/embodiment.py', 'world/survival/sensors.py', 'world/s
            'tests/test_native_continuity.py', 'tests/test_native_mcp_recovery.py', 'tests/test_system_one.py',
            'world/survival/policy_worker.py', 'tests/test_embodied_agent.py',
            'world/survival/goal_agenda.py', 'world/survival/social_attention.py',
-           'world/survival/party.py', 'world/sidecar/party_messages.py', 'tests/test_social_scheduling.py')
+           'world/survival/party.py', 'world/sidecar/party_messages.py', 'tests/test_social_scheduling.py',
+           'tests/test_dialogue_batch.py', 'tests/test_behavior_context.py', 'tests/test_survival_service.py',
+           'world/ops/survival_submission_runtime.py', 'tests/test_survival_submission_runtime.py')
 
 
 def check(root=ROOT, clock=time.time):
@@ -38,12 +40,13 @@ def check(root=ROOT, clock=time.time):
         marker = read(workspace / 'embodiment.json')
         epoch = settings['memoryEpoch']
         runtime = read(root / 'server/agents/work/learning-runtime.json')
-        checks['native_mcp_recovery'] = runtime.get('nativeMcpRecoveryVersion') == 1
+        checks['native_mcp_recovery'] = (runtime.get('nativeMcpRecoveryVersion') == 1
+            and runtime.get('survivalSubmissionReceiptVersion') == 1)
         checks['generation_binding'] = settings.get('brainProtocol') == 1 and marker.get('memoryEpoch') == epoch
         checks['supervised_heartbeat'] = (heartbeat.get('brainProtocol') == 1 and heartbeat.get('memoryEpoch') == epoch
             and heartbeat.get('ok') is True and -5000 < clock() * 1000 - heartbeat['at'] < 90000)
         checks['social_scheduling'] = (heartbeat.get('socialSchedulingVersion') == 1
-            and heartbeat.get('goalAgendaReady') is True)
+            and heartbeat.get('goalAgendaReady') is True and heartbeat.get('socialProgressVersion') == 1)
         cutover = read(root / 'runtime/embodied-agent-cutover.json')
         backup = Path(cutover['archive']).resolve()
         checks['archive_outside_retrieval'] = (cutover.get('phase') == 'completed' and cutover.get('memoryEpoch') == epoch
@@ -59,7 +62,8 @@ def check(root=ROOT, clock=time.time):
         report = read(root / 'reports/embodied-agent-smoke.json')
         checks['behavior_test'] = (report.get('ok') is True and report.get('testsRun', 0) >= 20
             and all(any(name.startswith(prefix) for name in report.get('tests', [])) for prefix in (
-                'test_social_scheduling.', 'test_survival_status_detail.', 'test_survival_feedback.', 'test_survival_guild.',
+                'test_social_scheduling.', 'test_dialogue_batch.', 'test_behavior_context.', 'test_survival_service.',
+                'test_survival_status_detail.', 'test_survival_feedback.', 'test_survival_guild.',
                 'test_survival_life_session.ContinuousActionTests.', 'test_survival_standing_task.',
                 'test_survival_poll_recovery.PollRecoveryTests.', 'test_guild_hunt_score.HuntScoreTests.'))
             and report.get('modelCalls') == 0 and report.get('productionMutations') == 0

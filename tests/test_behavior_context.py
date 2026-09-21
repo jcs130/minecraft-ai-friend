@@ -57,6 +57,20 @@ class BehaviorContextTests(unittest.TestCase):
         self.assertEqual(first, again)
         self.assertIsNone(again['baseTurn'])
 
+    def test_review_guidance_is_acknowledged_delta_not_repeated_action_prompt(self):
+        self.context['review'] = {'id': 'review-one'}
+        self.context['reviewGuidance'] = {'goalFile': 'memory/goals.md', 'instruction': 'Review actual receipts'}
+        _, first, delivery = self.prepare()
+        self.assertIn('reviewGuidance', first['updates'])
+        acknowledge(self.root, self.life, delivery)
+        self.advance()
+        _, second, _ = self.prepare()
+        self.assertNotIn('reviewGuidance', second['updates'])
+        self.context.pop('review')
+        self.context.pop('reviewGuidance')
+        _, action, _ = self.prepare()
+        self.assertNotIn('reviewGuidance', action['updates'])
+
     def test_changed_same_action_receipt_is_delivered(self):
         _, _, delivery = self.prepare()
         acknowledge(self.root, self.life, delivery)
