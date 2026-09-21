@@ -159,6 +159,22 @@ services:
       mc:
         condition: service_healthy
 
+  # 外门（2026-09-21 造物主谕）：只收 ag_ 前缀名的外部 Agent ✓ 局域网/公网经路由器 TCP 25702 进来 ✓
+  gate-public:
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
+    environment:
+      GATE_AGENT_PREFIX: "ag_"
+    volumes:
+      - ./world/src:/app/src:ro
+    ports:
+      - "0.0.0.0:25702:25700"
+    depends_on:
+      mc:
+        condition: service_healthy
+
   npc:
     image: qiandengji-sidecar:20260913-qd1
     pull_policy: never

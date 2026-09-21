@@ -156,6 +156,17 @@ function handleLogin (front) {
   front.once('login_start', (p) => {
     try {
       const username = p.username
+      // 公网 Agent 门（2026-09-21 造物主谕「别人的 Agents 也要能连进来」）：
+      // 设了 GATE_AGENT_PREFIX 的门只收该前缀名 ✓ 内部号(Goddess/Kirito…)冒名在门口即拒 ✓
+      const prefix = (process.env.GATE_AGENT_PREFIX || '').trim()
+      if (prefix) {
+        const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[A-Za-z0-9_]{1,13}$')
+        if (!re.test(username)) {
+          log(`拒之门外：「${username}」不符外门命名（须 ${prefix} 开头）`)
+          try { front.write('disconnect', { reason: '外部 Agent 名须以 ' + prefix + ' 开头' }) } catch (e) {}
+          return front.end()
+        }
+      }
       front.username = username
       front.uuid = OFFLINE_UUID.nameToMcOfflineUUID(username)
       log(`DEBUG：login_start ${username} -> compress+success`)

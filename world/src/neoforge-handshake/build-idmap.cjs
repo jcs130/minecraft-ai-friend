@@ -3,8 +3,11 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
-const md = require('D:/copaw-workspaces/mc-god/scratch/mc-agent-neko/node_modules/minecraft-data')
-const v = md('pc', '1.21.1')
+// 直读 minecraft-data 落盘 json（neoforge-handshake 容器同款路径），不依赖库签名
+const MDD = 'D:/copaw-workspaces/mc-god/scratch/mc-agent-neko/node_modules/minecraft-data/minecraft-data/data/pc/1.21.1/'
+const v = { blocks: JSON.parse(fs.readFileSync(MDD + 'blocks.json', 'utf8')),
+            items: JSON.parse(fs.readFileSync(MDD + 'items.json', 'utf8')) }
+if (!v.blocks || !v.blocks.length) { console.error('minecraft-data 载入失败 ✗'); process.exit(1) }
 
 const DUMP = path.join(__dirname, 'idmap-dump')
 const states = {}

@@ -23,6 +23,7 @@ function load () {
     fallbackBlock: raw.fallbackBlockState ?? 0 // air? 由映射生成器决定
   }
   console.log(`[REMAP] 载入 state=${MAP.bs.size} item=${MAP.im.size}`)
+  finalize()   // 2026-09-21 定谳:此前从未调用 → 反表缺失 → 入站翻译形同虚设 ✗ 补 ✓
   return MAP
 }
 
@@ -42,8 +43,14 @@ function itemToNeo (id) { if (!MAP || !MAP.revI) return id; return MAP.revI.get(
 
 function finalize () {
   if (!MAP) return
-  MAP.rev = new Map([...MAP.bs].map(([n, v]) => [v, n]))
-  MAP.revI = new Map([...MAP.im].map(([n, v]) => [v, n]))
+  // 反表必须"恒等对优先"：mod 物品常被近似到 paper/stone 等通用原版号 ✓
+  // 若 modX→paper 后插入会顶掉真 paper 的反查 ✗ 原版对(号相同)是铁证 ✓ 先非恒等后恒等 ✓
+  MAP.rev = new Map(); MAP.revI = new Map()
+  for (const [n, v] of MAP.bs) MAP.rev.set(v, n)
+  for (const [n, v] of MAP.bs) if (n === v) MAP.rev.set(v, n)
+  for (const [n, v] of MAP.im) MAP.revI.set(v, n)
+  for (const [n, v] of MAP.im) if (n === v) MAP.revI.set(v, n)
+  console.log(`[REMAP] 反表 state=${MAP.rev.size} item=${MAP.revI.size}`)
 }
 
 // ItemStack 结构里 item 数字字段名（mcp 767：Slot = {itemId? present...}）
@@ -55,22 +62,64 @@ function remapStack (st) {
   return st
 }
 
-// map_chunk: mcp 1.21.1 sections 解析结构 → 若带 palette 的 section，逐号翻译
-function remapChunk (p) {
-  if (!MAP) return
-  try {
-    const secs = p.data && (p.data.sections || p.sections)
-    if (!secs) return
-    for (const s of secs) {
-      if (s && Array.isArray(s.palette)) s.palette = s.palette.map(id => stateToVanilla(id))
+// map_chunk 的 chunkData 是原始字节 ✓ 手写 varint 游标两次翻车(2026-09-21 定谳) ✗
+// 唯一懂这格式的=prismarine-chunk(mineflayer 实测能 parse 同一块 buffer) ✓
+// 姿势：load → 原地翻 palette(单值段翻 value) → dump 重打包 ✓ 解不懂的直接透传不碰 ✓
+let ChunkCls = undefined
+function remapChunkBuf (buf) {
+  if (ChunkCls === undefined) { try { ChunkCls = require('prismarine-chunk')('1.21.1') } catch (e) { ChunkCls = null } }
+  if (!ChunkCls) return buf
+  const c = new ChunkCls()
+  c.load(buf)                                                  // 解不动会 throw → 上层透传 ✓
+  let hit = 0
+  for (const s of c.sections) {
+    if (!s || !s.data) continue
+    const d = s.data
+    if (Array.isArray(d.palette)) {                            // 间接调色板 ✓
+      for (let i = 0; i < d.palette.length; i++) {
+        const v = MAP.bs.get(d.palette[i])
+        if (v != null) { d.palette[i] = v; hit++ } else { d.palette[i] = MAP.fallbackBlock; hit++ }
+      }
+    } else if (typeof d.value === 'number') {                  // 单值段(整段同方块) ✓
+      const v = MAP.bs.get(d.value)
+      d.value = v == null ? MAP.fallbackBlock : v
+      hit++
     }
-  } catch (e) { /* 结构对不上就不动，透传比错位强 */ }
+    // direct 全局调色板段:少见 ✓ 暂不碰(透传) ✓ 若 verify 显示仍错位再补
+  }
+  if (!hit) return buf                                          // 一个号都没改到 → 别白重打包 ✓
+  return c.dump()
 }
 
-function remapOut (name, params) { // 后端→前端
+const BLOCK_KEYS = { blockId: 1, newState: 1, blockStateId: 1, block: 1 }
+function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
   if (!MAP) return params
+  if (name === 'block_change' && typeof params.type === 'number') { // 单方块更新:字段名是 type (2026-09-21 pktspy 定谳) ✓
+    const v = MAP.bs.get(params.type)
+    if (v != null) params.type = v
+    else if (params.type > 26684) params.type = MAP.fallbackBlock // 超原版表界=mod方块→兜底 ✓ 界内查不到=恒等对 ✓ 原样过 ✓
+    return params
+  }
+  if (name === 'map_chunk' && Buffer.isBuffer(params.chunkData)) {
+    try {
+      const nb = remapChunkBuf(params.chunkData)
+      if (nb && Math.abs(nb.length - params.chunkData.length) <= 4096) params.chunkData = nb // 尺寸剧变=重打包有诈 ✓ 透传
+    } catch (e) {} // 手术失败=透传这包 ✓ 错位好过崩溃
+    return params
+  }
+  const stOut = id => { const v = MAP.bs.get(id); return v == null ? id : v }
+  const itOut = id => { const v = MAP.im.get(id); return v == null ? id : v }
+  const deep = (obj, d) => { // 通用深改写:只碰安全字段名 ✓ 不碰 entityId/windowId 这类"id" ✓
+    if (obj == null || typeof obj !== 'object' || d > 6) return
+    if (Array.isArray(obj)) { for (const v of obj) deep(v, d + 1); return }
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'number' && BLOCK_KEYS[k]) obj[k] = stOut(v)
+      else if (k === 'itemId' && typeof v === 'number') obj[k] = itOut(v)
+      else deep(v, d + 1)
+    }
+  }
+  deep(params, 0)
   switch (name) {
-    case 'map_chunk': remapChunk(params); return params
     case 'block_update': {
       const k = 'newState' in params ? 'newState' : ('stateId' in params ? 'stateId' : ('data' in params && typeof params.data === 'number' ? 'data' : null))
       if (k) params[k] = stateToVanilla(params[k])
@@ -83,13 +132,21 @@ function remapOut (name, params) { // 后端→前端
     default: return params
   }
 }
-function remapIn (name, params) { // 前端→后端（原版→NeoForge）
+function remapIn (name, params) { // 前端→后端: 原版号→NeoForge号 ✓ 通用深改写(与出站同法)
   if (!MAP) return params
-  switch (name) {
-    case 'set_creative_mode': if (params.slot != null && params.item) remapInStack(params.item); return params
-    case 'use_entity_on': return params
-    default: return params
+  const stIn = id => { const v = MAP.rev.get(id); return v == null ? id : v }
+  const itIn = id => { const v = MAP.revI.get(id); return v == null ? id : v }
+  const deep = (obj, d) => {
+    if (obj == null || typeof obj !== 'object' || d > 6) return
+    if (Array.isArray(obj)) { for (const v of obj) deep(v, d + 1); return }
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'number' && BLOCK_KEYS[k]) obj[k] = stIn(v)
+      else if (k === 'itemId' && typeof v === 'number') obj[k] = itIn(v)
+      else deep(v, d + 1)
+    }
   }
+  deep(params, 0)
+  return params
 }
 function remapInStack (st) {
   if (!st || typeof st !== 'object') return st
