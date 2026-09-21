@@ -959,7 +959,7 @@ def _withdraw_one(queue, npc, guild, request, current, clock):
         return receipt
 
 
-def episode_lines(board, *, state=Path('/team'), quest_no=None):
+def episode_lines(board, *, state=Path('/team'), quest_no=None, npc_key=None):
     """Read-only player text; only confirmed publications matching this board."""
     try:
         root = safe(Path(state) / 'content')
@@ -992,8 +992,22 @@ def episode_lines(board, *, state=Path('/team'), quest_no=None):
                     require(digest(objective(by_no[no])) == stage['objectiveSha256'], 'content_display_contract_changed')
                 else:
                     require(no in expected and objective(by_no[no]) == objective(expected[no]), 'content_display_contract_changed')
+            if npc_key is not None and npc_key != 'guild_lan' and not any(by_no[n].get('from') == npc_key for n in nums):
+                continue
             episodes.append((episode, nums))
         lines = []
+        if npc_key is not None:
+            # Reuse publication proof; proposed endings are not world history.
+            for episode, nums in episodes[-1:]:
+                own = [(stage, no) for stage, no in zip(episode['stages'], nums)
+                       if npc_key == 'guild_lan' or by_no[no].get('from') == npc_key]
+                lines.append('【' + text(episode['title'], 80) + '】' + text(episode['story'], 800)[:140])
+                for stage, no in own[:2]:
+                    lines.append(text(stage['pitch'], 80) + '（No.%d，%s）' % (no,
+                        {'open':'可接', 'claimed':'有人承接', 'done':'该合同已结算',
+                         'withdrawn':'已下架，不再办理'}.get(by_no[no]['status'], '状态待核对')))
+                lines.append('想了解来龙去脉，可以对岚说「活动 %d」；实际进度以公会记录为准。' % nums[0])
+            return lines
         for episode, nums in (episodes[:3] if quest_no is None else episodes):
             lines.append('【故事活动 · ' + text(episode['title'], 80) + '】')
             story = text(episode['story'], 800)

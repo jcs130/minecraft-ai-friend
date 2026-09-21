@@ -8,12 +8,14 @@ probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe)
 class IntentHealthTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup); self.root = Path(tmp.name)
-        self.heart = {'ts': time.time()*1000, 'jevIntent': {'schema': 1, 'provider': 'official-jev', 'configured': True, 'inFlight': 0, 'limit': 2}}
+        self.heart = {'ts': time.time()*1000, 'jevIntent': {'schema': 1, 'publicNpcRoutingVersion': 1, 'provider': 'official-jev', 'configured': True, 'inFlight': 0, 'limit': 2}}
+        self.write('server/mcdata/npc-health.json', {'updated_at': time.time(), 'threads': {'inbox': True}, 'story_dialogue_version': 1,
+            'public_chat_routing': {'version': 1, 'owner': 'world-public-chat', 'lastPoll': time.time()}})
         hashes = {}
         for name in probe.REQUIRED:
             path=self.root/name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'fixture')
             hashes[name] = hashlib.sha256(b'fixture').hexdigest()
-        self.write('reports/jev-intent-smoke.json', {'ok': True, 'worldActions': 0, 'testsPassed': 7, 'sources': hashes})
+        self.write('reports/jev-intent-smoke.json', {'ok': True, 'worldActions': 0, 'testsPassed': 7, 'npcTestsPassed': 6, 'sources': hashes})
     def write(self, name, data):
         path=self.root/name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data), 'utf8')
     def check(self):
@@ -26,6 +28,9 @@ class IntentHealthTests(unittest.TestCase):
         self.heart['jevIntent']['configured'] = True; self.heart['jevIntent']['inFlight'] = 3; self.assertFalse(self.check()['ok'])
     def test_changed_source(self):
         (self.root/'world/src/mc-god.ts').write_bytes(b'changed'); self.assertFalse(self.check()['ok'])
+    def test_missing_or_stale_npc_consumer(self):
+        self.write('server/mcdata/npc-health.json', {'updated_at': time.time(), 'threads': {'inbox': False}})
+        self.assertFalse(self.check()['ok'])
 
 
 if __name__ == '__main__': unittest.main()

@@ -1,4 +1,5 @@
-import { createJevIntent, parseSpokenIntent, publicFallback } from './application/jev-intent.ts'
+import { createJevIntent, parseSpokenIntent } from './application/jev-intent.ts'
+import { publicNpcs, publicTarget, enqueuePublicNpc, type PublicNpc } from './application/public-npc-chat.ts'
 import { nonCommandSpeech } from './gameplay/commands/spoken-intent.ts'
 import { createPlayerCommands } from './application/player-commands.ts'
 import { createSpokenCommands } from './application/spoken-commands.ts'
@@ -2338,6 +2339,7 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   // world 容器现挂 mcdata 只读卷（compose 2026-08-29）；MC_DATA_DIR/village 与 /mcdata/village
   // 双路径兼容，档案缺失时退化为空表（点名判定只降级不报错）。
   let npcNamesCache: string[] = []
+  let npcRosterCache: PublicNpc[] = []
   let npcNamesLoadedAt = 0
   function loadNpcNames(): string[] {
     const now = Date.now()
@@ -2348,9 +2350,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       try {
         if (!existsSync(p)) continue
         const d = JSON.parse(readFileSync(p, 'utf-8'))
-        const list: any[] = Array.isArray(d) ? d : (d.villagers ?? [])
-        const names = list
-          .flatMap((v) => [String(v.display ?? ''), ...(Array.isArray(v.calls) ? v.calls.map(String) : [])])
+        npcRosterCache = publicNpcs(d)
+        const names = npcRosterCache
+          .flatMap((v) => [v.display, ...v.calls])
           .map((s) => s.trim()).filter(Boolean)
         if (names.length) { npcNamesCache = names; break }
       } catch { /* 读不动试下一个 */ }
@@ -2483,13 +2485,16 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       .filter(name => name !== username && name !== getBot()?.username).slice(0, 32)
   }
   async function dispatchPublicChat(username: string, message: string, turn: symbol): Promise<void> {
-    const botAtStart = getBot(), others = chatRoster(username)
-    const decision = await jevIntent.classify({ actor: username, text: message, channel: 'public', others }, magic.listAtoms())
+    const createdAt = Date.now(), botAtStart = getBot(), others = chatRoster(username), npcs = npcRosterCache
+    const decision = await jevIntent.classify({ actor: username, text: message, channel: 'public', others, npcs }, magic.listAtoms())
     if (intentTurns.get(username) !== turn || getBot() !== botAtStart) return
-    const respond = ['reply', 'prayer'].includes(decision.route) ||
-      (decision.route === 'uncertain' && publicFallback(message, others, vipChatGate(message)))
-    log(`chat intent route=${decision.route} respond=${respond}`)
-    if (respond) await goddessChat(username, message)
+    const target = publicTarget(message, decision, npcs, others, vipChatGate(message))
+    log(`chat intent route=${decision.route} target=${target ?? 'none'}`)
+    if (target === 'goddess') await goddessChat(username, message)
+    else if (target) {
+      const npc = npcs.find(n => n.key === target)
+      if (npc) enqueuePublicNpc(NPC_INBOX, npc, username, message, createdAt)
+    }
   }
 
   const DEATH_OBJ = 'mcdeaths'

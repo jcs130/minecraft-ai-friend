@@ -618,6 +618,21 @@ def _episode_lines(doc, no=None):
     return episode_lines(doc, state=state, quest_no=no)
 
 
+def npc_story_lines(v):
+    """Read today's actual board, without generating contracts for small talk."""
+    from pathlib import Path
+    from world_content import episode_lines
+    day = time.strftime('%Y-%m-%d')
+    try:
+        with open(guild_path(day), encoding='utf8') as stream:
+            doc = json.load(stream)
+        if doc.get('date') != day:
+            return []
+        return episode_lines(doc, state=Path(os.environ.get('NPC_WORLD_TEAM_ROOT', '/team')), npc_key=v['key'])
+    except (OSError, ValueError, TypeError, KeyError):
+        return []
+
+
 def activity_lines(no):
     """Published story text alongside the existing numbered contract."""
     doc = board_today()
