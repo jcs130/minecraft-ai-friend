@@ -1,4 +1,4 @@
-"""Read-only HTTP contract probe for the existing panel's broadcast observatory."""
+"""Read-only HTTP contracts for the decision canvas; no browser or agent actions."""
 import json
 import urllib.request
 
@@ -6,17 +6,47 @@ import urllib.request
 def probe():
     checks = {}
     try:
+        content_types = {}
+
         def get(route):
             with urllib.request.urlopen('http://127.0.0.1:19091' + route, timeout=10) as response:
+                content_types[route] = response.headers.get_content_type()
                 return response.read(2 * 1024 * 1024).decode('utf-8')
+
         page = get('/observatory')
-        checks['broadcast-page'] = all(x in page for x in ('id="world-frame"', 'id="tool-stream"', 'id="skill-list"', 'id="case-list"'))
-        checks['broadcast-assets'] = 'data-inspect' in get('/observatory.js') and 'mode-sidebar' in get('/observatory.css')
+        app = get('/observatory.js')
+        style = get('/observatory.css')
+        model = get('/decision-model.js')
+        canvas = get('/decision-canvas.js')
+        motion = get('/observatory-motion.css')
+        checks['broadcast-page'] = all(x in page for x in (
+            'id="decision-canvas"', 'id="graph-viewport"', 'id="node-detail"',
+            'id="history-list"', 'id="world-frame"'))
+        checks['broadcast-assets'] = ('type="module"' in page
+            and all(x in app for x in ('./decision-model.js', './decision-canvas.js'))
+            and '/observatory-motion.css' in style)
+        checks['graph-module-contracts'] = (all(x in model for x in (
+            'export function listDecisionRecords', 'export function buildDecisionGraph',
+            'export function buildEvolutionGraph'))
+            and 'export function renderDecisionCanvas' in canvas
+            and all(content_types.get(route) in ('text/javascript', 'application/javascript')
+                for route in ('/observatory.js', '/decision-model.js', '/decision-canvas.js'))
+            and all(content_types.get(route) == 'text/css'
+                for route in ('/observatory.css', '/observatory-motion.css')))
+        checks['decision-views'] = all(f'data-view="{view}"' in page for view in ('policy', 'llm', 'rsi'))
+        checks['playback-controls'] = all(f'id="{control}"' in page
+            for control in ('play', 'step', 'speed', 'pause', 'playback-progress', 'playback-note'))
+        checks['layer-inspection'] = (all(f'data-inspect="{layer}"' in page for layer in ('l1', 'l2', 'l3'))
+            and all(f'id="{count}"' in page for count in ('action-count', 'skill-count', 'case-count')))
+        checks['sidebar-canvas'] = 'mode-sidebar' in app and '.mode-sidebar .graph-viewport' in style
+        checks['motion-accessibility'] = all(x in motion.replace(' ', '') for x in (
+            'prefers-reduced-motion:no-preference', 'prefers-reduced-motion:reduce',
+            '.edge.flowing', '.edge-signal', 'animation:none'))
         trace = json.loads(get('/api/survivor-trace'))
         rsi = json.loads(get('/api/rsi-observatory'))
         checks['trace-contract'] = trace.get('schema') == 1 and isinstance(trace.get('turns'), list)
         checks['trace-live-source'] = trace.get('available') is True and trace.get('stale') is False
-        checks['decision-branches'] = ('id="route-history"' in page and isinstance(trace.get('policyDecisions'), list)
+        checks['decision-branches'] = ('id="record-select"' in page and isinstance(trace.get('policyDecisions'), list)
             and trace.get('routing', {}).get('llmAlternativesRecorded') is False)
         checks['action-provenance'] = all(a.get('decisionSource') == 'llm'
             for turn in trace.get('turns', []) for a in turn.get('actions', []))

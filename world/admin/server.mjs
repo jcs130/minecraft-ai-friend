@@ -14,6 +14,9 @@ const assets = new Map([['/', ['index.html', 'text/html; charset=utf-8']],
   ['/observatory', ['observatory.html', 'text/html; charset=utf-8']],
   ['/observatory.js', ['observatory.js', 'text/javascript; charset=utf-8']],
   ['/observatory.css', ['observatory.css', 'text/css; charset=utf-8']],
+  ['/observatory-motion.css', ['observatory-motion.css', 'text/css; charset=utf-8']],
+  ['/decision-model.js', ['decision-model.js', 'text/javascript; charset=utf-8']],
+  ['/decision-canvas.js', ['decision-canvas.js', 'text/javascript; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']], ['/management.js', ['management.js','text/javascript; charset=utf-8']], ['/style.css', ['style.css', 'text/css; charset=utf-8']]]);
 const headers = {
