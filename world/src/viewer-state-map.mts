@@ -58,3 +58,19 @@ export function loadViewerBlockMapping(mapPath, registryPath, canonical) {
     return result
   } catch { return { ready: false, health: { ready: false, error: 'viewer_state_map_unavailable_or_mismatched' }, normalize() { throw Error('viewer_state_map_unavailable') } } }
 }
+
+/**
+ * 门（gate.cjs + idmap.json）已在出站把 NeoForge blockstate 号翻译成原版号 ✓
+ * 此时本模块那套「服务端号→原版号」的本地补偿必须整体停用：
+ * 实测 vanilla-state-map.json 的键集与值集重叠 26684（26834 条映射）——
+ * 门输出的原版号会被这张表当作「服务端号」再查一次，等于二次翻译，世界彻底错乱 ✗
+ * 且 normalize() 对不在键域的号直接 throw（表现为 viewerUnavailable）。
+ * 所以走门的客户端用这个恒等映射（health.mode = 'gate-translated' 供面板/健康检查辨识）。
+ */
+export function identityViewerBlockMapping() {
+  const normalize = stateId => {
+    if (!safeId(stateId)) throw Error('viewer_state_id_invalid')
+    return stateId
+  }
+  return { ready: true, normalize, health: { ready: true, mode: 'gate-translated', vanillaStates: 0, modStates: 0, modBlocks: 0 } }
+}

@@ -12,7 +12,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { observerEquipmentSlot, observerItemIdentity } from './observer-inventory.mts'
 import { createViewerChunkStream, createViewerEntityStream } from './viewer-stream.mts'
-import { loadViewerBlockMapping } from './viewer-state-map.mts'
+import { loadViewerBlockMapping, identityViewerBlockMapping } from './viewer-state-map.mts'
 import { createViewerStaticResponder } from '../admin/viewer-static.mjs'
 
 const require = createRequire(import.meta.url)
@@ -901,9 +901,14 @@ export function startModernViewer(getBot, options = {}) {
 
 function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs, providedStateMapping) {
   loadViewerDependencies()
-  const blockStateMapping = providedStateMapping ?? loadViewerBlockMapping(path.join(ASSET_ROOT, 'mod-assets/vanilla-state-map.json'),
-    process.env.MC_MOD_BLOCK_REGISTRY ?? '/app/data/block-registry.json', captureVanillaBlockTables(bot.version))
-  injectModBlockRegistry(bot) // 渲染桥 Step②：先补注册表，再开任何会话（归一化器/区块流共用 bot.registry）
+  // 门（gate.cjs + idmap.json）已在出站把 NeoForge 号翻成原版号 → 天眼这套「本地补偿」必须停用 ✓
+  // 否则二次翻译（实测 vanilla-state-map 键值域重叠 26684），世界会全错且 normalize 抛错致 viewerUnavailable ✗
+  const gateTranslated = process.env.MC_GATE_TRANSLATED === '1'
+  const blockStateMapping = gateTranslated ? identityViewerBlockMapping()
+    : (providedStateMapping ?? loadViewerBlockMapping(path.join(ASSET_ROOT, 'mod-assets/vanilla-state-map.json'),
+      process.env.MC_MOD_BLOCK_REGISTRY ?? '/app/data/block-registry.json', captureVanillaBlockTables(bot.version)))
+  if (gateTranslated) console.log('[render-bridge] 门翻译模式：跳过 mod 注册表注入与本地号归一化（收到的已是原版号）')
+  else injectModBlockRegistry(bot) // 渲染桥 Step②：先补注册表，再开任何会话（归一化器/区块流共用 bot.registry）
   const serveViewerStatic = createViewerStaticResponder()
 
   // ---------- settle 村民实体流（2026-08-29 II：9090 村民=盔甲架修复） ----------

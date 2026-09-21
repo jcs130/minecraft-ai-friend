@@ -50,12 +50,18 @@ services:
     entrypoint: ["/app/node_modules/.bin/tsx", "/app/bootstrap-world.mts"]
     environment:
       TZ: Asia/Shanghai
-      MC_HOST: mc
-      MC_PORT: "25599"
+      # 数据面走「神社之门」：出站把 NeoForge blockstate/item 号翻成原版号，
+      # mineflayer/天眼才能读到正确世界（2026-09-21 造物主谕：所有 mineflayer Agent 一律过门）。
+      # 管理面仍直连 mc 的 RCON —— 门不转发 RCON，也不该转发。
+      MC_HOST: gate
+      MC_PORT: "25700"
+      # 门已翻译号 → 停用天眼本地补偿层（vanilla-state-map / mod 注册表注入），避免二次翻译
+      MC_GATE_TRANSLATED: "1"
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_RCON_MAX_COMMAND_BYTES: "65522"
       MC_DATA_DIR: /app/data
+      JEV_API_KEY_FILE: /run/secrets/jev-api-key
       MC_SHARED_DATA_DIR: /mcdata
       PANEL_STATE_DIR: /panel-data
       STATUS_REQ: /mcdata/status-requests.jsonl
@@ -93,6 +99,7 @@ services:
       - ./world/admin:/app/admin:ro
       - ./vendor/modern-viewer:/app/modern-viewer:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/survival-agent-state/secret/jev-api-key:/run/secrets/jev-api-key:ro
       - ./server/panel-state:/panel-data
       - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
       - ./server/world-data:/app/data
@@ -105,6 +112,10 @@ services:
     depends_on:
       mc:
         condition: service_healthy
+      # 数据面走「神社之门」（MC_HOST=gate/MC_PORT=25700：NeoForge→原版号出站翻译）
+      # 门必须在 world 之前起，否则化身连不上；RCON 仍直连 mc（管理面不绕门）。
+      gate:
+        condition: service_started
       # Model requests are optional at execution time. Player commands must
       # remain available while the separately supervised QwenPaw starts/fails.
     healthcheck:

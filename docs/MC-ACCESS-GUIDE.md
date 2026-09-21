@@ -52,7 +52,8 @@ bot.on('spawn', () => bot.chat('我进来了'))
 
 | 实例 | 引擎 | 入口 | 备注 |
 |---|---|---|---|
-| **Goddess**（女神化身） | mineflayer | **`mc:25599` 裸连·⚠ 未走门** | 一直在岗 ✓ 但**读的是未翻译世界** ✗ 待改指 `gate:25700`（compose `MC_HOST/MC_PORT` ✓ 改后须重启 `world` 服务 ✓ 属生产变更·待造物主点头 ⏳）|
+| **Goddess**（女神化身 + 天神之眼） | mineflayer | **`gate:25700` 已走门 ✓（2026-09-21 15:14 切换）** | compose `MC_HOST=gate/MC_PORT=25700` + `MC_GATE_TRANSLATED=1` ✓ 门日志实证 `穿越者 Goddess 叩门→PLAY` ✓ 天眼 `/healthz` 报 `blockStates.mode="gate-translated"` ✓ RCON 仍直连 `mc`（管理面不绕门 ✓）|
+| **守卫之眼 render_view**（`guard-render-pure/webgl.mts`） | mineflayer（宿主侧 numen MCP 拉起） | **已走门 ✓** `GUARD_RENDER_PORT` 默认 25701 ✓ 门日志实证 `RenderBot 叩门→PLAY→603 chunk→err=none` ✓ |
 | **NekoX**（wehos/mc-agent-neko fork） | Node + mineflayer | **`127.0.0.1:25565` 裸连·⚠ 未走门** | 实验体，**当前已停** ✓ 要再跑应把端口改 25701 ✓ |
 | **Kirito / 鸣人 / 爱德华** | **numen 假玩家**（服务端内生） | 不走网络 | 由 RCON `numen_act` 驱动 ✓ **读数天然正确** ✓ |
 
@@ -173,7 +174,9 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
    - ✅ **基岩桥已接上门（2026-09-21 14:37 落地）**：`start-viaproxy.bat` 的 `--target-address` 已由 `127.0.0.1:25565` 改成 **`127.0.0.1:25701`** ✓ 新进程实查带新值 ✓ **免手机验证法**：`node verify-gate.cjs 127.0.0.1 25568`（打 ViaProxy 的 Java 入口=基岩同一条上游）→ **7/7 通过 ✓** 门日志亦见该会话 ✓ 说明 Geyser 收到的已是原版号 ✓ 改前实查 `Updated 0 players` ✓ 未踢访客 ✓
   ⚠ 回滚：`copy start-viaproxy.bat.bak-target25565 start-viaproxy.bat` → `schtasks /end` → **还要 `taskkill /T /F` 掉残留 java**（`/end` 不杀孤儿子进程 ✓ 实测踩过）→ `schtasks /run`
   ⚠ **持久性隐患**：`ops/docker/.gitignore:8` 的 `shadow/` 把整个桥目录排除 ✓ **此脚本不在版本控制里** ✓ 换机/重建即丢 ✓ 正本该另存
-   - 女神化身 `world` 服务 `MC_HOST=mc / MC_PORT=25599` → 应改 `gate / 25700` ✓（改 compose + 重启 world 容器 ✓）
+   - ✅ **`world` 服务（Goddess 化身 + 天神之眼）已改走门 ✓（2026-09-21 15:14）**：compose `MC_HOST=gate / MC_PORT=25700` + 新增 `MC_GATE_TRANSLATED=1` + `depends_on: gate` ✓ 门日志实证 `穿越者 Goddess 叩门→PLAY` ✓
+   **同时必须停用天眼自带的第二套翻译层**（`injectModBlockRegistry` + `vanilla-state-map` 归一化）✓ 门已翻过一次 ✓ 再翻就是二次映射：实测那张表 26834 条、**键值域与原版号重叠 26684** ✓ 且 `normalize()` 对不认识的号直接 `throw viewer_state_id_unregistered` → 表现为 `viewerUnavailable` ✗ 所以天眼本地补偿**只在不过门的裸连接下才需要** ✓（`MC_GATE_TRANSLATED=1` 即切到恒等映射 ✓ 可回退）
+   守卫之眼（`guard-render-*.mts`）同理已改：它原先复用 `MC_PORT` ✓ 而宿主那个环境变量指向裸口 25565 ✓ 现改用专用 `GUARD_RENDER_PORT`（默认 25701）✓ 门日志实证 `RenderBot` 进门 ✓
    - NekoX（已停）复活时把端口改 25701 ✓
    注：计划任务里 `Geyser-Bedrock`（State=Ready ✓ 未跑）与 `ViaProxy-Bedrock`（Running）并存 ✓ **现役是 ViaProxy 内嵌 Geyser** ✓ 早前"Geyser-Standalone b1245"那条记录作废 ✗
 7. **外门 `25702` 已可被局域网直连（`ag_probe` 实测进门成功）** ✓ 而 `white-list=false` ✓ → **公网转发前必须先加白名单并 `whitelist on`** ✓ 否则任何知道地址的人拿 `ag_xxx` 就能进 ✓

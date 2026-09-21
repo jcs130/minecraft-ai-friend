@@ -27,7 +27,11 @@ const YAW = yawS !== undefined && yawS !== '' ? Number(yawS) : null
 const RADIUS = radiusS !== undefined && radiusS !== '' ? Number(radiusS) : 16
 const PX = pxS !== undefined && pxS !== '' ? Math.max(2, Number(pxS)) : 6
 const RCON_PW = process.env.RCON_PW ?? ''
-const MC_PORT = Number(process.env.MC_PORT ?? 25599)
+// 渲染 bot 是 mineflayer 客户端 → 必须走「神社之门」拿翻译后的号（2026-09-21 造物主谕：
+// 所有 mineflayer Agent 一律过门）。不能复用 MC_PORT —— 那是世界进程在宿主上指向裸口
+// （25565）的遗留值，裸口会把方块/物品号读错（低段侥幸对、高段全错：obsidian→火）。
+const MC_HOST = process.env.GUARD_RENDER_HOST ?? '127.0.0.1'
+const MC_PORT = Number(process.env.GUARD_RENDER_PORT ?? 25701)
 const RCON_PORT = Number(process.env.RCON_PORT ?? 25575)
 const BOT_NAME = process.env.GUARD_RENDER_NAME ?? 'RenderBot'
 const log = (m: string) => console.log(`[render-pure] ${m}`)
@@ -137,7 +141,7 @@ function topBlockAt(world: any, bx: number, bz: number, yTop: number, yBottom: n
 
 async function main(): Promise<void> {
   const bot = mineflayer.createBot({
-    host: 'localhost', port: MC_PORT, username: BOT_NAME, version: '1.21.1',
+    host: MC_HOST, port: MC_PORT, username: BOT_NAME, version: '1.21.1',
   })
   await new Promise<void>((resolve, reject) => {
     const to = setTimeout(() => reject(new Error('spawn timeout')), 30_000)

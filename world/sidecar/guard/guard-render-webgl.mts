@@ -32,7 +32,10 @@ const VIEW_DIST = vdS !== undefined && vdS !== '' ? Number(vdS) : 12
 const YAW_RAD = YAW * Math.PI / 180
 const PITCH_RAD = PITCH * Math.PI / 180
 const RCON_PW = process.env.RCON_PW ?? ''
-const MC_PORT = Number(process.env.MC_PORT ?? 25599)
+// 渲染 bot 必须走「神社之门」（同 guard-render-pure.mts 的理由）：
+// 复用 MC_PORT 会连到宿主裸口 25565 → 方块/物品号错位（低段侥幸对、高段全错）。
+const MC_HOST = process.env.GUARD_RENDER_HOST ?? '127.0.0.1'
+const MC_PORT = Number(process.env.GUARD_RENDER_PORT ?? 25701)
 const RCON_PORT = Number(process.env.RCON_PORT ?? 25575)
 const BOT_NAME = process.env.GUARD_RENDER_NAME ?? 'RenderBot'
 const W = 800, H = 512
@@ -78,7 +81,7 @@ function rconCmd(pw: string, port: number, cmd: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const bot = mineflayer.createBot({ host: 'localhost', port: MC_PORT, username: BOT_NAME, version: '1.21.1' })
+  const bot = mineflayer.createBot({ host: MC_HOST, port: MC_PORT, username: BOT_NAME, version: '1.21.1' })
   await new Promise<void>((resolve, reject) => {
     const to = setTimeout(() => reject(new Error('spawn timeout')), 30_000)
     bot.once('spawn', () => { clearTimeout(to); resolve() })
