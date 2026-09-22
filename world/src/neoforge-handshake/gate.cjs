@@ -171,7 +171,10 @@ function handleLogin (front) {
         const re = new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[A-Za-z0-9_]{1,13}$')
         if (!re.test(username)) {
           log(`拒之门外：「${username}」不符外门命名（须 ${prefix} 开头）`)
-          try { front.write('disconnect', { reason: '外部 Agent 名须以 ' + prefix + ' 开头' }) } catch (e) {}
+          // 拒绝文案可配（GATE_PREFIX_MSG）；默认说清"改什么就能进"
+          const msg = process.env.GATE_PREFIX_MSG ||
+            ('外部 Agent 名须以 ' + prefix + ' 开头（改个 ' + prefix + '开头的名字再连 25702）')
+          try { front.write('disconnect', { reason: msg }) } catch (e) {}
           return front.end()
         }
       }
@@ -239,9 +242,12 @@ function kickFront (sess, reason) {
     if (sess.front.state === states.PLAY) {
       sess.front.write('kick_disconnect', { reason: JSON.stringify({ text: reason }) })
     } else {
-      sess.front.write('disconnect', { reason: JSON.stringify({ text: reason }) })
+      // CONFIGURATION 态的 disconnect，reason 必须给组件对象（1.20.5+ 走 NBT 组件序列化；
+      // 给 JSON 字符串会被 mcp 写成坏组件，客户端只解析出 {type:'end'}——2026-09-22 实测踩坑）
+      sess.front.write('disconnect', { reason: { text: reason } })
     }
-  } catch (e) {}
+    log(`kickFront 已写（state=${sess.front.state}）：${reason.slice(0, 80)}`)
+  } catch (e) { log(`kickFront 写失败（state=${sess.front.state}）：${(e && e.message || e).toString().slice(0, 120)}`) }
   setTimeout(() => closeSession(sess, reason), 100)
 }
 
@@ -289,11 +295,30 @@ function connectBackend (sess) {
     if (sess.phase === 'config') { if (!sess.reconnecting) closeSession(sess, '后端错误：' + e.message) }
     else log(`（容忍）后端包解析错误：${e.message.slice(0, 120)}`)
   })
-  back.on('end', (r) => { if (!sess.reconnecting && !sess.closed) closeSession(sess, '后端断开：' + r) })
+  // 2026-09-22 白名单友好提示：MC 在 LOGIN 态发白名单断连，mcp 这条路只报 socketClosed，
+  // 前端原本只被闭 socket（客户端啥提示都看不到）。进世界前被后端断开 → 给一句人话。
+  // 文案可配 GATE_REJECT_MSG；默认点破"名字对了还不够，得先 whitelist add"。
+  const rejectMsg = () => process.env.GATE_REJECT_MSG ||
+    '连接被服务器拒绝：最常见是不在白名单（white-list=on）——名字对了还不够，' +
+    '需管理员先执行 whitelist add <你的名字> 再重连'
+  const prePlay = () => sess.phase !== 'play' && sess.phase !== 'play_pending'
+  back.on('end', (r) => {
+    if (sess.reconnecting || sess.closed) return
+    if (prePlay()) {
+      // kickFront 自带 100ms 延迟关闭（给 disconnect 包 flush 的时间）——
+      // 这里绝不能再紧接着 closeSession，否则包没发出去 socket 先关（2026-09-22 踩过）
+      try { kickFront(sess, rejectMsg() + '（后端断开：' + r + '）') } catch (e) {}
+      return
+    }
+    closeSession(sess, '后端断开：' + r)
+  })
   back.on('disconnect', (p) => {
     let reason = ''
     try { reason = typeof p.reason === 'string' ? p.reason : JSON.stringify(p.reason) } catch (e) {}
-    if (!sess.reconnecting) kickFront(sess, 'NeoForge 拒收：' + reason.slice(0, 300))
+    if (sess.reconnecting) return
+    const wl = /white-?list/i.test(reason)
+    kickFront(sess, wl ? rejectMsg() + '（服务器原话：' + reason.slice(0, 120) + '）'
+                       : 'NeoForge 拒收：' + reason.slice(0, 300))
   })
   back.on('packet', (params, metadata) => onBackPacket(sess, metadata.name, params))
 }
