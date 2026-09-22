@@ -242,6 +242,8 @@ export function cliOverview(): string[] {
     'Agent：/mycli cast irons_spellbooks:firebolt --json；停咒：/mycli cancel。',
     '查状态：/mycli status；法术：spells；秘术：spells legacy；档案：spells archive。',
     '传送：/mycli goto shared:1；记点：waypoint add 家；配槽：skillbar auto。',
+    '说话：/mycli voice_speak 你好 voice=kirito（近大远小语音+头顶泡泡）。',
+    '修行：cultivate combat（灌顶+5）；growth combat（查进度）。',
     '详细用法：/mycli help cast；全部命令：/mycli commands。',
   ]
 }
