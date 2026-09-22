@@ -1253,10 +1253,19 @@ def nearest_villager(speaker):
             best, bestd = v, d
     return best
 
-def route(speaker, msg, via="public"):
+def route(speaker, msg, via="public", target_key=None):
     hit_v, rest = None, msg
     by_calls = False
-    for v in PROFILES:
+    if target_key is not None:
+        hit_v = next((v for v in PROFILES if v['key'] == target_key), None)
+        if hit_v is None:
+            return None, None
+        by_calls = True
+        for call in hit_v['calls']:
+            if rest.strip().startswith(call):
+                rest = rest.strip()[len(call):].lstrip(' ,，:：、')
+                break
+    for v in (PROFILES if target_key is None else []):
         hits = [c for c in v["calls"] if c in msg]
         if hits:
             hit_v = v
@@ -1289,8 +1298,13 @@ def route(speaker, msg, via="public"):
             return hit_v, glines
     except Exception as e:
         print("[guild] route err:", e, flush=True)
+    try:
+        story_lines = _G.npc_story_lines(hit_v)
+    except Exception as e:
+        print('[npc] story read err:', type(e).__name__, flush=True)
+        story_lines = []
     if any(w in rest for w in GREET) and len(rest) <= 6:
-        return hit_v, [hit_v["greet"]]
+        return hit_v, [hit_v["greet"], *story_lines]
     m = RE_HANDOFF.match(rest)
     if m:
         # @公证交割：Agent↔Agent / 玩家↔玩家。公屏/传声只教学，结算走私语通道。
@@ -1309,7 +1323,9 @@ def route(speaker, msg, via="public"):
             ]
         return hit_v, turn_in(speaker, hit_v, int(m.group(1)), m.group(2))
     if any(w in rest for w in QUEST_KW):
-        return hit_v, pitch_quest(hit_v)
+        return hit_v, story_lines or pitch_quest(hit_v)
+    if story_lines and any(w in rest for w in ('故事', '剧情', '近况', '最近', '发生了什么')):
+        return hit_v, story_lines
     ctx = world_ctx()
     for t in hit_v.get("topics", []):
         if any(w in rest for w in t["kw"]):
@@ -1343,7 +1359,7 @@ def route(speaker, msg, via="public"):
             if lines:
                 _llm_chat_last[_ck] = time.time()
                 return hit_v, lines
-    return hit_v, [hit_v.get("greet") or hit_v["fallback"]]
+    return hit_v, story_lines or [hit_v.get("greet") or hit_v["fallback"]]
 
 # ---------- 村民看护（tag 选择器 + 组件语法） ----------
 def sel(v):
@@ -1503,7 +1519,9 @@ def summon_villager(v):
     print("[npc] healed(%s):" % ("base" if base else "vanilla"), v["display"], flush=True)
 
 def summon_npc(v):
-    if not SPAWN_MISSING:
+    # Bound identities must never be replaced by a random-UUID legacy summon,
+    # including when their binding is malformed and needs manual reconciliation.
+    if not SPAWN_MISSING or v.get('entityBinding') is not None:
         return
     if mode_of(v) == "stand":
         summon_stand(v)
@@ -1530,7 +1548,12 @@ def unleash_alive():
         if mode_of(v) == "stand":
             continue
         try:
-            R.cmd("data merge entity %s {NoAI:0b}" % sel(v))
+            from npc_identity import binding
+            bound = binding(v)
+            # Migrated bodies retain their exact UUID/type/tag selector and the
+            # same protection as newly created NPCs, without moving or replacing them.
+            flags = '{NoAI:0b,Invulnerable:1b,PersistenceRequired:1b}' if bound else '{NoAI:0b}'
+            R.cmd("data merge entity %s %s" % (sel(v), flags))
             print("[npc] unleashed:", v["display"], flush=True)
         except Exception:
             R.s = None
@@ -1547,6 +1570,10 @@ def heal_npcs():
             R.s = None
         pos = alive_pos(v)
         if pos is None:
+            # A query miss does not prove this exact bound entity was lost.
+            # Legacy summoning would create a clone that sel() can never find.
+            if v.get('entityBinding') is not None:
+                continue
             # R011(2026-09-01) 重招节流：村民 NoAI:0b 自由溜达会走出加载 chunk，
             # data get 瞬态 miss ≠ 丢失——旧逻辑每拍 miss 即重招，旧 chunk 重载后
             # 实体回来 → 分身无限增殖（8h 259 只；再往前 dedup 杀阀时代=1916 死亡泵）。
@@ -1614,6 +1641,7 @@ def parse_line(ln):
 
 def tail_forever():
     from log_tail import LogTail
+    from npc_public_chat import central_public_line
     global _LOG_READER
     last_cd = {}
     f = LogTail(LOG, report=lambda text: print(text, flush=True))
@@ -1622,6 +1650,8 @@ def tail_forever():
     while True:
         line = f.readline()
         if line:
+            if central_public_line(line):
+                continue  # world selects one responder; do not race it from server logs.
             who, msg = parse_line(line)
             if who and msg:
                 # VIP 让位（2026-08-23 造物主谕「让女神化身重点服务」）：VIP 真人旅人的
@@ -1681,15 +1711,20 @@ def tail_forever():
 # 链路：bot/真人 /msg Goddess 交易：岳山 给16煤 → 女神 whisper 分流 → 本文件 append
 # → 本线程消费 → route(via="whisper") 正常结算（距离门照旧）→ tellraw 点对点回执。
 INBOX = isolated_path("NPC_INBOX", os.path.join(WORLD_DATA, "npc-inbox.jsonl"))
+from npc_public_chat import PublicNpcChat
+_PUBLIC_CHAT = PublicNpcChat(Path(DATA) / 'village' / 'public-chat.sqlite3')
 
 def inbox_loop():
-    while not os.path.exists(INBOX):
-        time.sleep(1.0)
-    f = open(INBOX, "r", encoding="utf-8", errors="replace")
-    f.seek(0, 2)  # 只消费启动之后的新消息
+    from log_tail import LogTail
+    Path(INBOX).parent.mkdir(parents=True, exist_ok=True)
+    Path(INBOX).touch(exist_ok=True)
+    f = LogTail(INBOX, report=lambda text: print(text, flush=True))
+    f.readline()  # Establish the startup cursor before publishing consumer readiness.
     print("[npc] inbox up, tailing", INBOX, flush=True)
     while True:
         line = f.readline()
+        if f.stream is not None and f.error is None:
+            _PUBLIC_CHAT.last_poll = time.time()
         if line:
             try:
                 rec = json.loads(line)
@@ -1697,6 +1732,10 @@ def inbox_loop():
                 msg = rec.get("text", "")
                 via = rec.get("via", "whisper")
             except Exception:
+                continue
+            if via == 'public-routed':
+                result = _PUBLIC_CHAT.consume(sys.modules[__name__], rec)
+                print('[npc] public routing:', result, flush=True)
                 continue
             if not who or not msg:
                 continue
@@ -1724,14 +1763,7 @@ def inbox_loop():
                         R.s = None
                     time.sleep(0.3)
             continue
-        # EOF：轮转检测（与 tail_forever 同款）
-        try:
-            if os.path.exists(INBOX) and os.path.getsize(INBOX) < f.tell():
-                f.close()
-                f = open(INBOX, "r", encoding="utf-8", errors="replace")
-                f.seek(0, 2)
-        except OSError:
-            pass
+        # Existing LogTail handles rotation, partial UTF-8 and transient reads.
         time.sleep(0.4)
 
 # ---------- 技能书施法（2026-08-23 造物主谕：真人靠技能书一键施法） ----------
@@ -2192,6 +2224,8 @@ def npc_heartbeat_loop():
                      "log_tail_error": _LOG_READER.error if _LOG_READER is not None else None,
                      "spell_last_poll": _SPELL_LAST_POLL, "spell_consumed": _SPELL_CONSUMED,
                      "threads": {name: thread.is_alive() for name, thread in _NPC_THREADS.items()},
+                     "public_chat_routing": _PUBLIC_CHAT.status(),
+                     "story_dialogue_version": 1,
                      "rcon_target": {"host": HOST, "port": PORT}, "spawn_missing": SPAWN_MISSING,
                      "llm_enabled": bool(CFG.get("llm", {}).get("enabled")),
                      "guild_agent_enabled": bool(GUILD_AGENT_ENABLED),

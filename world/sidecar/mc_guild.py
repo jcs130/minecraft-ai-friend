@@ -71,10 +71,10 @@ RANKS = Rules.RANKS
 RANK_TAGS = ["§7", "§8", "§f", "§e", "§b", "§3"]  # 告示牌用不上了，聊天文案用文字即可
 
 HUNT_MOBS = {
-    "skeleton": ("killed_skeleton", "minecraft:killed:minecraft.skeleton", "骷髅"),
-    "zombie":   ("killed_zombie",   "minecraft:killed:minecraft.zombie",   "僵尸"),
-    "spider":   ("killed_spider",   "minecraft:killed:minecraft.spider",   "蜘蛛"),
-    "ravager":  ("killed_ravager",  "minecraft:killed:minecraft.ravager",  "劫掠兽"),
+    "skeleton": ("killed_skeleton", "minecraft.killed:minecraft.skeleton", "骷髅"),
+    "zombie":   ("killed_zombie",   "minecraft.killed:minecraft.zombie",   "僵尸"),
+    "spider":   ("killed_spider",   "minecraft.killed:minecraft.spider",   "蜘蛛"),
+    "ravager":  ("killed_ravager",  "minecraft.killed:minecraft.ravager",  "劫掠兽"),
 }
 
 VISIT_SPOTS = [
@@ -616,6 +616,21 @@ def _episode_lines(doc, no=None):
         return []
     from world_content import episode_lines
     return episode_lines(doc, state=state, quest_no=no)
+
+
+def npc_story_lines(v):
+    """Read today's actual board, without generating contracts for small talk."""
+    from pathlib import Path
+    from world_content import episode_lines
+    day = time.strftime('%Y-%m-%d')
+    try:
+        with open(guild_path(day), encoding='utf8') as stream:
+            doc = json.load(stream)
+        if doc.get('date') != day:
+            return []
+        return episode_lines(doc, state=Path(os.environ.get('NPC_WORLD_TEAM_ROOT', '/team')), npc_key=v['key'])
+    except (OSError, ValueError, TypeError, KeyError):
+        return []
 
 
 def activity_lines(no):

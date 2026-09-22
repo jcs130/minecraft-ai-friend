@@ -130,6 +130,45 @@ function fixture() {
   return { app, deps, calls, called, messages, behaviors, state, atoms, entries, cooldowns, native, travel, dispatch }
 }
 
+test('skill help exposes actual engine requirements without casting or inventing legacy locks', async () => {
+  const f = fixture()
+  const mapped = f.atoms.find(a => a.id === 'heal')
+  mapped.catalog = { status: 'featured', nativeSpell: 'irons_spellbooks:heal' }
+  mapped.requiredLevel = 100; f.state.level = 0; f.state.learned = []
+  f.behaviors['irons.request'] = async (action, actor) => f.native(action, actor, { spells: [] })
+  let [r] = await f.dispatch('help heal')
+  assert.equal(r.skill.availability.reason, 'not_equipped')
+  assert.equal(r.skill.requirements.legacyLevelGate, false)
+  assert.equal(r.skill.requirements.manaPool, 'irons_spellbooks')
+  f.behaviors['irons.request'] = async (action, actor) => f.native(action, actor, { spells: [{ id: 'irons_spellbooks:heal', ready: true }] })
+  ;[r] = await f.dispatch('help heal')
+  assert.equal(r.skill.availability.reason, 'native_preflight_ready')
+  assert.equal(r.skill.availability.effectConfirmed, false)
+  assert.equal(f.called('magic.castExact').length, 0)
+  assert.equal(f.called('irons.cast').length, 0)
+  assert.equal(f.called('rcon.send').length, 0)
+})
+
+test('skills keeps discovery compact and does not present native mappings as old level unlocks', async () => {
+  const f = fixture(); f.atoms.find(a => a.id === 'heal').catalog = { status: 'featured', nativeSpell: 'irons_spellbooks:heal' }
+  const [r] = await f.dispatch('skills')
+  assert.equal(r.nativeMappings[0].nativeSpell, 'irons_spellbooks:heal')
+  assert.equal(r.learned.some(a => a.id === 'heal'), false)
+  assert.equal(r.details.find(a => a.id === 'heal').helpCommand, 'help heal')
+  assert.equal('nextStep' in r.details[0], false)
+  assert.equal(f.called('irons.request').length, 1)
+  const [uuid] = await f.dispatch('skills', { subject: UUID })
+  assert.equal(uuid.code, 'login_required')
+})
+
+test('iron onboarding uses existing read-only help and explains consumable scrolls', async () => {
+  const f = fixture(), [r] = await f.dispatch('help irons')
+  assert.equal(r.ok, true)
+  assert.deepEqual(r.nextCommands, ['spells', 'status'])
+  assert.ok(r.steps.some(s => s.includes('消耗卷轴')))
+  assert.equal(f.calls.length, 0)
+})
+
 test('application bundles without provider, Bot, filesystem, network or package runtime imports', () => {
   for (const output of Object.values(bundled.metafile.outputs)) assert.deepEqual(output.imports, [])
   for (const path of Object.keys(bundled.metafile.inputs)) {

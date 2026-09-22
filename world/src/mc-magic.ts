@@ -36,12 +36,8 @@ export { withSkillRequest } from './spring-effect-receipt.ts'
  * 权限隔离：本插件只存在于世界进程。穿越者进程零 RCON、零魔法 ID——
  * 它们只是"说出咒语"（bot.chat），由这里听见并施法。真人与 AI 同通道。
  */
-// 归乡落点（2026-08-30 造物主定谳：家的地址=初始千灯村）：
-// ——千灯村·千灯堂（村中心 (-540,868)，35 位村民锚点重心 (-531.6,853.9)），
-// 地表 y=62、堂内地板站立点 y=64。归乡固定千灯堂（不再查床——村外/野外
-// 睡床会劫持落点，鸣人案例）。旧灯门新镇/收编村庄 (3094,-1338) 随 2026-08-25
-// 世界重生已废弃。城镇搬迁只需改这一处。
-const TOWN_SPAWN = { x: -540, y: 64, z: 868 } // 千灯堂·千灯村中心（2026-08-30 造物主谕迁址：家的地址=初始千灯村；旧灯门新镇 3094,68,-1338 已随世界重生废弃）
+// 原址重建后的公共桥北落脚点；QA 已验证站立与步行，不落入原河道。
+const TOWN_SPAWN = { x: -554.5, y: 64, z: 866.5 }
 
 export interface Config {
   enabled: boolean
@@ -450,6 +446,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
     /* 天平引擎：女神动态平衡 */
     listBalance: () => balancePatches.map((p) => ({ ...p })),
     applyBalancePatch: (atomKey, field, value, by, reason) => {
+      if (!Number.isFinite(value)) return { ok: false, error: '数值必须是有限数字；未修改任何平衡配置' }
       if (field in BALANCE_GLOBALS) {
         // 全局字段（regenPerSec）：改回蓝速率，立即生效
         const g = BALANCE_GLOBALS[field]
@@ -469,6 +466,7 @@ export function createMagic(config: Config, deps: MagicDeps): MagicHandle {
       const key = (atomKey ?? '').trim()
       const a = atoms.find((x) => x.id === key) ?? atoms.find((x) => x.name === key)
       if (!a) return { ok: false, error: `未知法术「${atomKey}」` }
+      if (nativeMapping(a)) return { ok: false, error: `「${a.name}」由 ${nativeMapping(a)} 执行；旧秘术覆盖层不改变原生数值，请提交原生配置的独立验证候选` }
       if (!Number.isInteger(value)) return { ok: false, error: `${spec.label}须为整数` }
       if (value < spec.min || value > spec.max) return { ok: false, error: `「${a.name}」${spec.label}须在 ${spec.min}~${spec.max} 之间` }
       const before = spec.get(a)

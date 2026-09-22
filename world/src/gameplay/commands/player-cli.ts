@@ -10,6 +10,37 @@
 // 本模块只做「纯函数」：解析、帮助文本、数据塑形。**执行**由 mc-god.ts 的分发器
 // 完成（cast/pray/ask/innate/appraise 都要用世界侧的真实执行点）。
 import type { AtomSummary, MagicPlayerView } from '../magic/contracts.ts'
+import type { NativeReceipt } from '../native/contracts.ts'
+
+export const IRON_GUIDE = [
+  '① 获取铁魔法卷轴和法术书，在铭文台将卷轴装入书。',
+  '② 装备法术书；只放在背包里不算装备。也可手持卷轴施放，但会消耗卷轴。',
+  '③ spells 查看实际装备和可用原因；瞄准目标后 cast <完整法术ID>，status 核查结果。',
+  '铁魔法使用原生法力和冷却；燃血术只补女神秘术魔力。空书和已知旧技能名不会授予法术。',
+  '真人可用罗盘右上角入门、铁魔法页或言灵杖。按键以自己的控制设置为准。',
+]
+
+/** A description, never an execution precheck or a second spell implementation. */
+export function describeSkill(atom: AtomSummary, view: MagicPlayerView, native: NativeReceipt) {
+  const mapped = atom.catalog?.nativeSpell
+  const spell = mapped && native.ok ? native.spells?.find(s => s.id === mapped) : undefined
+  const learned = view.learned.includes(atom.id) || view.innateSkill === atom.id ||
+    (!!atom.passiveId && view.passives.includes(atom.passiveId))
+  const reason = atom.type === 'passive' ? 'passive' : atom.catalog?.status === 'archived' ? 'skill_archived' : mapped ?
+    !native.ok ? 'native_unavailable' : !spell ? 'not_equipped' : spell.ready === true ? 'native_preflight_ready' : String(spell.reasonKey ?? 'native_denied') :
+    view.innateSkill !== atom.id && view.level < atom.requiredLevel ? 'level' : 'execution_check_required'
+  return { id: atom.id, name: atom.name, learned, engine: mapped ? 'irons_spellbooks' : 'goddess',
+    nativeSpell: mapped ?? null, availability: { reason, snapshotOnly: true, effectConfirmed: false },
+    requirements: mapped ? { equippedSpell: mapped, manaPool: 'irons_spellbooks', legacyLevelGate: false } :
+      { level: atom.requiredLevel, innateExempt: view.innateSkill === atom.id, manaPool: 'goddess', cost: atom.cost },
+    params: mapped ? {} : atom.params ?? {},
+    nextStep: mapped ? !spell ? '在铭文台将对应卷轴装入法术书并装备，或手持一次性卷轴；然后重新查询 spells。' :
+      spell.ready === true ? '瞄准合适目标后尝试施放，再查询 status；受理不等于命中。' : '按原生拒绝原因恢复条件后刷新，不要连点重试。' :
+      reason === 'passive' ? '被动无需施放；按技能书规则参悟，保留已有装备和能力。' : reason === 'level' ? '提升原版经验等级，或查看出生天赋；达到条件后可尝试咏唱学习。' :
+      reason === 'skill_archived' ? '仅保留历史记录；查看原生替代提示，不可主动施放。' : '按参数尝试施放，执行时检查实时资源、冷却和目标；成功后按原规则学习。',
+    castCommand: ['passive', 'skill_archived'].includes(reason) ? null : `cast ${atom.id}`,
+    native: spell ?? null }
+}
 
 // ── 命令树定义 ─────────────────────────────────────────────────────────
 export interface CliVerbMeta {
@@ -24,8 +55,8 @@ export interface CliVerbMeta {
 /** 命令树（顺序即 help 展示顺序）。 */
 export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'commands', aliases: ['command', 'cmd', '命令'], summary: '列全部命令', usage: 'commands', json: true },
-  { id: 'help', aliases: ['man', 'h', '?', '帮助'], summary: '上手帮助（可跟命令名）', usage: 'help [verb]', argDesc: 'verb：要查询的命令', json: true },
-  { id: 'menu', aliases: ['wheel', '界面', '轮盘'], summary: '打开技能轮盘或铁魔法法术书', usage: 'menu [irons|waypoints|archive]', json: true },
+  { id: 'help', aliases: ['man', 'h', '?', '帮助'], summary: '上手帮助、铁魔法指引或单技能条件', usage: 'help [命令|技能ID|irons]', argDesc: '例：help irons；help tp。仅查询，不施法。', json: true },
+  { id: 'menu', aliases: ['wheel', '界面', '轮盘'], summary: '打开技能罗盘或入门指引', usage: 'menu [guide|irons|waypoints|archive|skillbar]', json: true },
   { id: 'status', aliases: ['me', 'who', 'whoami', '状态'], summary: '查自身状态', usage: 'status', json: true },
   { id: 'skills', aliases: ['known', 'learned', '技能'], summary: '列已学/可学技能', usage: 'skills', json: true },
   { id: 'spells', aliases: ['法术', '魔咒', 'magic'], summary: '查看原生铁魔法、特色秘术或旧档案', usage: 'spells [irons|legacy|archive] [页码]', json: true },
@@ -263,12 +294,15 @@ export function shapeStatus(view: MagicPlayerView, innateName: string | null): {
 
 /** skills：已学 + 当前等级可学（等级已到但未学/未掌握）。 */
 export function shapeSkills(view: MagicPlayerView, atoms: AtomSummary[]): { panel: string; json: Record<string, unknown> } {
-  const learned = atoms.filter((a) => view.learned.includes(a.id))
+  const mappings = atoms.filter(a => a.catalog?.nativeSpell)
+  atoms = atoms.filter(a => !a.catalog?.nativeSpell)
+  const isLearned = (a: AtomSummary) => view.learned.includes(a.id) || view.innateSkill === a.id
+  const learned = atoms.filter(isLearned)
   const levelGate = atoms
-    .filter((a) => a.requiredLevel <= view.level && !view.learned.includes(a.id))
+    .filter((a) => a.requiredLevel <= view.level && !isLearned(a))
     .sort((a, b) => (a.requiredLevel - b.requiredLevel) || a.id.localeCompare(b.id))
   const locked = atoms
-    .filter((a) => a.requiredLevel > view.level)
+    .filter((a) => a.requiredLevel > view.level && !isLearned(a))
     .sort((a, b) => (a.requiredLevel - b.requiredLevel) || a.id.localeCompare(b.id))
   const fmt = (a: AtomSummary) => `  ${a.name}(Lv${a.requiredLevel} ${a.cost.mana ? `${a.cost.mana}蓝` : '无蓝'})`
   const panel =
@@ -277,12 +311,14 @@ export function shapeSkills(view: MagicPlayerView, atoms: AtomSummary[]): { pane
     `\n本等级可学 ${levelGate.length} 项：\n` +
     (levelGate.map(fmt).join('\n') || '  （已全部掌握）') +
     `\n后续解锁：\n` +
-    (locked.slice(0, 6).map(fmt).join('\n') || '  （已臻化境）')
+    (locked.slice(0, 6).map(fmt).join('\n') || '  （无更高等级秘术）') +
+    `\n铁魔法主题别名 ${mappings.length} 项按原生装备使用；spells 查当前装备，help irons 查上手。`
   const json = {
     learned: learned.map((a) => ({ id: a.id, name: a.name, level: a.requiredLevel, mana: a.cost.mana })),
     levelGate: levelGate.map((a) => ({ id: a.id, name: a.name, level: a.requiredLevel, mana: a.cost.mana })),
     locked: locked.slice(0, 20).map((a) => ({ id: a.id, name: a.name, level: a.requiredLevel, mana: a.cost.mana })),
     playerLevel: view.level,
+    nativeMappings: mappings.map(a => ({ id: a.id, name: a.name, nativeSpell: a.catalog!.nativeSpell, requiresEquipment: true })),
   }
   return { panel, json }
 }
@@ -297,6 +333,7 @@ export function shapeSpells(atoms: AtomSummary[], page = 1, perPage = 12, scope 
   const panel =
     `【${scope === 'archive' ? '旧技能档案 · 不提供主动施放' : '特色秘术'} ${p}/${pages}】\n` +
     slice.map((a) => scope === 'archive' ? `  ${a.id}｜${a.name}：${a.catalog?.reason ?? '历史记录'}${a.catalog?.nativeHints?.length ? `；原生参考 ${a.catalog.nativeHints.join('、')}` : ''}` :
+      a.catalog?.nativeSpell ? `  ${a.id}｜${a.name} → ${a.catalog.nativeSpell}（需装备；只消耗原生法力）` :
       `  ${a.id}｜${a.name}(Lv${a.requiredLevel} ${a.cost.mana ? `${a.cost.mana}秘术魔力` : '无魔力消耗'})`).join('\n') +
     (p < pages ? `\n下一页：/mycli spells ${scope} ${p + 1}` : '')
   const json = {
@@ -304,7 +341,9 @@ export function shapeSpells(atoms: AtomSummary[], page = 1, perPage = 12, scope 
     pages,
     total,
     scope,
-    atoms: slice.map((a) => ({ id: a.id, name: a.name, words: a.words.slice(0, 3), level: a.requiredLevel, cost: a.cost, type: a.type, params: a.params, icon: a.icon, catalog: a.catalog })),
+    atoms: slice.map((a) => ({ id: a.id, name: a.name, words: a.words.slice(0, 3), level: a.catalog?.nativeSpell ? null : a.requiredLevel,
+      cost: a.catalog?.nativeSpell ? null : a.cost, engine: a.catalog?.nativeSpell ? 'irons_spellbooks' : 'goddess',
+      type: a.type, params: a.catalog?.nativeSpell ? {} : a.params, icon: a.icon, catalog: a.catalog, helpCommand: `help ${a.id}` })),
   }
   return { panel, json }
 }

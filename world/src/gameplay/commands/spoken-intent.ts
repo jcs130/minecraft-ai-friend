@@ -38,7 +38,7 @@ const trimEnding = (text: string): string => text.trim().replace(/[\s。.,，!�
 
 /** Keep quoted, negated, hypothetical and explanatory speech out of execution.
  * This is a bounded phrase protocol, not a natural-language intent classifier. */
-function nonCommandSpeech(text: string, ordinalParticle = false): boolean {
+export function nonCommandSpeech(text: string, ordinalParticle = false): boolean {
   return /[?？"'“”‘’「」『』《》`\r\n\0]/u.test(text) ||
     /不要|不用|不能|不想|不许|不必|不准|不得|不放|不施|不释|不使用|不咏|不开|不传送|不发动|禁止|请勿|切勿|勿|并非|不是|没有|没想|别(?:再)?(?:给我|帮我)?(?:放|用|施|释|咏|开|传|发动)/u.test(text) ||
     /怎么|怎样|如何|为何|为什么|什么|能否|是否|可否|能不能|可不可以|会不会|为啥|(?:吗|么|嘛)\s*$/u.test(text) ||

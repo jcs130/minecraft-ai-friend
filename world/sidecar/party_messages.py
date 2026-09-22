@@ -33,7 +33,7 @@ from party_world import speech_event, speech_text, validate_receipt, reply_text,
 IDENTITY_FIELDS = ('agentId', 'bodyUuid', 'ownerUuid', 'sessionId', 'userId', 'channel')
 ACTIVE = ('unknown', 'submitted')
 DEFER_REASONS = frozenset(('busy', 'budget_blocked', 'body_unavailable'))
-TERMINAL = ('answered', 'expired', 'failed')
+TERMINAL = ('answered', 'expired', 'failed', 'observed')
 DEFAULT_LIMITS = {'dailyDispatchCap': None, 'cooldownSeconds': 0, 'maxPending': 32,
                   'maxTextChars': 8000, 'maxTtlSeconds': 86400, 'maxMessages': 10000}
 
@@ -136,6 +136,15 @@ class PartyMessages:
                 event_id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(message_id),
                 kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, receipt TEXT)''')
             db.execute('CREATE INDEX IF NOT EXISTS party_pending ON messages(recipient,status,created)')
+            db.execute('''CREATE TABLE IF NOT EXISTS dialogue_batches (
+                reservation_id TEXT NOT NULL REFERENCES reservations(reservation_id),
+                member_id TEXT NOT NULL REFERENCES messages(message_id),
+                state TEXT NOT NULL, PRIMARY KEY(reservation_id,member_id))''')
+            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS party_batch_held ON dialogue_batches(member_id) WHERE state='held'")
+            db.execute('''CREATE TABLE IF NOT EXISTS message_attention (
+                message_id TEXT PRIMARY KEY REFERENCES messages(message_id),
+                decision TEXT NOT NULL, started REAL NOT NULL, ready_at REAL NOT NULL,
+                decided REAL, evidence TEXT)''')
             db.execute('''CREATE TABLE IF NOT EXISTS reply_consumptions (
                 event_id TEXT NOT NULL REFERENCES world_speech(event_id), consumer TEXT NOT NULL,
                 task_id TEXT NOT NULL, consumed_at REAL NOT NULL,
@@ -183,9 +192,11 @@ class PartyMessages:
         db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('binding',?)", (encoded,))
         # Only unsent work expires. UNKNOWN/SUBMITTED still occupy their lane.
         db.execute("UPDATE messages SET status='expired',detail='binding_changed' "
-                   "WHERE status='pending' AND binding_revision<>?", (binding['revision'],))
+                   "WHERE status='pending' AND binding_revision<>? AND message_id NOT IN "
+                   "(SELECT member_id FROM dialogue_batches WHERE state='held')", (binding['revision'],))
         db.execute("UPDATE messages SET status='expired',detail='ttl_expired' "
-                   "WHERE status='pending' AND expires<=?", (self._now(),))
+                   "WHERE status='pending' AND expires<=? AND message_id NOT IN "
+                   "(SELECT member_id FROM dialogue_batches WHERE state='held')", (self._now(),))
         return binding
 
     @staticmethod
@@ -318,10 +329,126 @@ class PartyMessages:
             self._member(binding, recipient_agent_id)
             if busy or not binding['enabled'] or self._active(db, recipient_agent_id):
                 return None
+            now = self._now()
             row = db.execute("SELECT m.* FROM messages m JOIN world_speech w ON w.event_id=m.message_id "
+                             "LEFT JOIN message_attention a ON a.message_id=m.message_id "
                              "WHERE m.recipient=? AND m.status='pending' AND m.next_attempt<=? AND w.state='heard' "
-                             "ORDER BY m.created,m.rowid LIMIT 1", (recipient_agent_id, self._now())).fetchone()
+                             "AND (a.message_id IS NULL OR a.ready_at<=?) "
+                             "ORDER BY CASE WHEN m.created<=? THEN 0 WHEN a.decision='now' THEN 1 ELSE 2 END,"
+                             "m.created,m.rowid LIMIT 1", (recipient_agent_id, now, now, now - 30)).fetchone()
             return self._public(row) if row else None
+
+    def attention_candidate(self, recipient_agent_id):
+        """Only heard, unreserved inputs; does not reserve a Qwen task or body."""
+        with self._transaction() as db:
+            binding = self._binding(db)
+            self._member(binding, recipient_agent_id)
+            if not binding['enabled'] or self._active(db, recipient_agent_id):
+                return None
+            row = db.execute("SELECT m.* FROM messages m JOIN world_speech w ON w.event_id=m.message_id "
+                             "LEFT JOIN message_attention a ON a.message_id=m.message_id "
+                             "WHERE m.recipient=? AND m.status='pending' AND m.next_attempt<=? "
+                             "AND w.state='heard' AND a.message_id IS NULL ORDER BY m.created,m.rowid LIMIT 1",
+                             (recipient_agent_id, self._now())).fetchone()
+            return self._public(row) if row else None
+
+    def dialogue_batch(self, message_id, recipient_agent_id):
+        """Snapshot up to three ready, heard messages for one response, no waiting.
+
+        The dispatcher must reserve these exact IDs before submission. New or
+        changed messages cannot silently enter the already prepared model input.
+        """
+        with self._transaction() as db:
+            binding = self._binding(db)
+            row = self._row(db, message_id)
+            self._visible(binding, row, recipient_agent_id)
+            _require(row['recipient'] == recipient_agent_id, 'party_wrong_recipient')
+            if not binding['enabled'] or self._active(db, recipient_agent_id):
+                return []
+            rows = self._batch_candidates(db, row)
+            result, size = [], len(json.loads(row['payload'])['text'])
+            for item in rows:
+                size += len(json.loads(item['payload'])['text'])
+                if size > 8000:
+                    break  # Never clip speech or skip a large earlier request.
+                result.append(self._public(item))
+            return result
+
+    def _batch_candidates(self, db, row):
+        now = self._now()
+        return db.execute("SELECT m.* FROM messages m JOIN world_speech w ON w.event_id=m.message_id "
+            "LEFT JOIN message_attention a ON a.message_id=m.message_id "
+            "WHERE m.recipient=? AND m.sender=? AND m.binding_revision=? AND m.message_id<>? "
+            "AND m.status='pending' AND m.next_attempt<=? AND w.state='heard' "
+            "AND (a.message_id IS NULL OR a.ready_at<=?) "
+            "AND NOT EXISTS (SELECT 1 FROM dialogue_batches b WHERE b.member_id=m.message_id AND b.state='held') "
+            "ORDER BY m.created,m.rowid LIMIT 2",
+            (row['recipient'], row['sender'], row['binding_revision'], row['message_id'], now, now)).fetchall()
+
+    @staticmethod
+    def _settle_batch(db, reservation_id, heard=False):
+        # One real reply event covers the group. Never invent a separate reply
+        # or hearing receipt for each original utterance.
+        if heard:
+            leader = db.execute('SELECT message_id FROM reservations WHERE reservation_id=?', (reservation_id,)).fetchone()[0]
+            db.execute("UPDATE messages SET status='observed',detail=? WHERE status='pending' AND message_id IN "
+                       "(SELECT member_id FROM dialogue_batches WHERE reservation_id=? AND state='held')",
+                       ('answered_together:' + leader, reservation_id))
+        db.execute("UPDATE dialogue_batches SET state=? WHERE reservation_id=? AND state='held'",
+                   ('covered' if heard else 'released', reservation_id))
+
+    def begin_attention(self, message_id, recipient_agent_id):
+        """Persist at most one classification attempt per message, including restarts.
+
+        After five seconds an unfinished attempt becomes eligible for ordinary
+        Qwen dialogue. A lost classifier result cannot consume the message.
+        """
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, recipient_agent_id)
+            row = self._row(db, message_id)
+            require_heard = self._heard(db, message_id)
+            if (not binding['enabled'] or row['status'] != 'pending' or not require_heard
+                    or json.loads(row['payload'])['recipient'] != member):
+                return False
+            now = self._now()
+            return db.execute('INSERT OR IGNORE INTO message_attention(message_id,decision,started,ready_at) '
+                              "VALUES(?,'pending',?,?)", (message_id, now, now + 5)).rowcount == 1
+
+    def finish_attention(self, message_id, recipient_agent_id, decision, evidence):
+        """Trusted classifier adapter only; never expose this method as a tool."""
+        _require(decision in ('now', 'later', 'observe', 'fallback'), 'invalid_party_attention')
+        _require(isinstance(evidence, dict) and len(_json(evidence).encode()) <= 2048, 'invalid_attention_evidence')
+        with self._transaction() as db:
+            binding = self._binding(db)
+            member = self._member(binding, recipient_agent_id)
+            row = self._row(db, message_id)
+            attention = db.execute('SELECT * FROM message_attention WHERE message_id=?', (message_id,)).fetchone()
+            if (not binding['enabled'] or row['status'] != 'pending' or not self._heard(db, message_id)
+                    or db.execute("SELECT 1 FROM dialogue_batches WHERE member_id=? AND state='held'", (message_id,)).fetchone()
+                    or json.loads(row['payload'])['recipient'] != member or not attention
+                    or attention['decision'] != 'pending'):
+                return False
+            now = self._now()
+            if now >= attention['ready_at']:
+                decision = 'fallback'
+            # One bounded deferral, not a sliding deadline under continuous chat.
+            ready = min(now + 3, row['created'] + 30) if decision == 'later' else now
+            db.execute('UPDATE message_attention SET decision=?,ready_at=?,decided=?,evidence=? WHERE message_id=?',
+                       (decision, ready, now, _json(evidence), message_id))
+            if decision == 'observe':
+                db.execute("UPDATE messages SET status='observed',detail='no_reply_selected' WHERE message_id=?",
+                           (message_id,))
+            return True
+
+    def attention_status(self, recipient_agent_id):
+        with self._transaction() as db:
+            binding = self._binding(db)
+            self._member(binding, recipient_agent_id)
+            rows = db.execute('SELECT a.decision,COUNT(*) n FROM message_attention a JOIN messages m '
+                              'ON m.message_id=a.message_id WHERE m.recipient=? AND m.binding_revision=? GROUP BY a.decision',
+                              (recipient_agent_id, binding['revision']))
+            return {'version': 1, 'counts': {r['decision']: r['n'] for r in rows}}
 
     def _reply_observation(self, binding, member, row, db):
         """Only actual hearing for this exact current identity becomes input."""
@@ -476,9 +603,12 @@ class PartyMessages:
             self._member(binding, actor)
             return self._budget(db, binding)
 
-    def reserve_dispatch(self, message_id, recipient_agent_id, *, budget_receipt=None, busy=False):
+    def reserve_dispatch(self, message_id, recipient_agent_id, *, budget_receipt=None, busy=False, batch_ids=()):
         """Only claimed=True authorizes POST; existing reservations never do."""
         _require(type(busy) is bool, 'invalid_party_busy')
+        _require(isinstance(batch_ids, (list, tuple)) and len(batch_ids) <= 2
+                 and all(isinstance(item, str) for item in batch_ids)
+                 and len(set(batch_ids)) == len(batch_ids) and message_id not in batch_ids, 'invalid_party_batch')
         with self._transaction() as db:
             binding = self._binding(db)
             self._member(binding, recipient_agent_id)
@@ -494,6 +624,11 @@ class PartyMessages:
             elif self._budget(db, binding)['blocked']: reason = 'budget_blocked'
             if reason:
                 return self._public(row, recipient_agent_id) | {'claimed': False, 'dispatchStatus': reason}
+            candidates = {item['message_id']: item for item in self._batch_candidates(db, row)} if batch_ids else {}
+            if any(item not in candidates for item in batch_ids):
+                return self._public(row, recipient_agent_id) | {'claimed': False, 'dispatchStatus': 'batch_changed'}
+            _require(len(json.loads(row['payload'])['text']) + sum(len(json.loads(candidates[item]['payload'])['text'])
+                     for item in batch_ids) <= 8000 or not batch_ids, 'invalid_party_batch_size')
             reservation_id = str(uuid.uuid4())
             task_key = 'party-' + message_id
             receipt = task_key if budget_receipt is None else _identifier(budget_receipt, 'budget_receipt', 180)
@@ -505,8 +640,11 @@ class PartyMessages:
             payload['budgetReceipt'] = receipt
             db.execute("UPDATE messages SET status='unknown',reservation_id=?,payload=?,detail='submission_not_confirmed' WHERE message_id=?",
                        (reservation_id, _json(payload), message_id))
+            db.executemany("INSERT INTO dialogue_batches(reservation_id,member_id,state) VALUES (?,?,'held')",
+                           [(reservation_id, item) for item in batch_ids])
             return self._public(self._row(db, message_id)) | {'claimed': True, 'dispatchStatus': 'reserved',
-                       'reservationId': reservation_id, 'taskKey': task_key, 'budgetReceipt': receipt}
+                       'reservationId': reservation_id, 'taskKey': task_key, 'budgetReceipt': receipt,
+                       'batchMessageIds': list(batch_ids)}
 
     def _reservation(self, db, reservation_id):
         _uuid(reservation_id)
@@ -536,6 +674,7 @@ class PartyMessages:
             db.execute("UPDATE reservations SET state='deferred',reason=? WHERE reservation_id=?", (reason, reservation_id))
             db.execute("UPDATE messages SET status='pending',detail=?,next_attempt=? WHERE message_id=?",
                        (reason, self._now() + retry_after_seconds, row['message_id']))
+            self._settle_batch(db, reservation_id)
             self._binding(db)  # An expired/changed binding must not regain a pending lane.
             return self._public(self._row(db, row['message_id']))
 
@@ -613,6 +752,8 @@ class PartyMessages:
                        (state, reason, _json(usage) if usage is not None else None, reservation_id))
             db.execute('UPDATE messages SET status=?,reply=?,detail=? WHERE message_id=?',
                        (state, _json(reply) if reply else None, reason, row['message_id']))
+            if state == 'failed':
+                self._settle_batch(db, reservation_id)
             return self._public(self._row(db, row['message_id']))
 
     @staticmethod
@@ -729,6 +870,7 @@ class PartyMessages:
             db.execute('UPDATE messages SET status=?,detail=? WHERE message_id=?', (final, reason, message['message_id']))
             db.execute('UPDATE reservations SET state=?,reason=? WHERE reservation_id=?',
                        (final, reason, message['reservation_id']))
+            self._settle_batch(db, message['reservation_id'], heard=state == 'heard')
         elif event['kind'] == 'request' and state in ('rejected', 'expired') and message['status'] == 'pending':
             db.execute("UPDATE messages SET status=?,detail=? WHERE message_id=?",
                        ('expired' if state == 'expired' else 'failed', 'world_' + state, message['message_id']))

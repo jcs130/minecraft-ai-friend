@@ -55,19 +55,39 @@ def valid_position(value):
     return isinstance(value, (list, tuple)) and len(value) == 3 and all(type(x) in (int, float) and math.isfinite(x) for x in value)
 
 
-def near_npc(npc, actor, profile, limit):
-    """Configured NPC selectors resolve in overworld; require the same realm."""
+def npc_proximity(npc, actor, profile, limit):
+    """Read live positions only; historical bindings never establish proximity."""
+    observed = {'observedAt': int(time.time() * 1000), 'npcPosition': None,
+                'actorPosition': None, 'actorDimension': None, 'sameDimension': None,
+                'distance': None, 'maxDistance': None, 'near': False}
     try:
         if not profile or not ACTOR.fullmatch(actor):
-            return False
+            return observed
+        distance_limit = float(limit)
+        if not math.isfinite(distance_limit):
+            return observed
+        observed['maxDistance'] = min(12, max(1, distance_limit))
         dimension = npc.R.cmd('data get entity %s Dimension' % actor)
-        if not re.search(r':\s*"minecraft:overworld"\s*$', dimension or ''):
-            return False
+        match = re.search(r':\s*"([a-z0-9_.-]+:[a-z0-9_./-]+)"\s*$', dimension or '')
+        if match:
+            observed.update(actorDimension=match[1], sameDimension=match[1] == 'minecraft:overworld')
         player, target = npc.player_pos(actor), npc.alive_pos(profile)
-        return (valid_position(player) and valid_position(target)
-                and math.dist(player, target) <= min(12, max(1, float(limit))))
+        if valid_position(player):
+            observed['actorPosition'] = list(player)
+        if valid_position(target):
+            observed['npcPosition'] = list(target)
+        if observed['sameDimension'] is True and valid_position(player) and valid_position(target):
+            distance = math.dist(player, target)
+            if math.isfinite(distance):
+                observed.update(distance=round(distance, 3), near=distance <= observed['maxDistance'])
     except Exception:
-        return False
+        pass  # Missing observations must never relax the native distance gate.
+    return observed
+
+
+def near_npc(npc, actor, profile, limit):
+    """Configured NPC selectors resolve in overworld; require the same realm."""
+    return npc_proximity(npc, actor, profile, limit)['near']
 
 
 def transaction_path(npc, day, qid):
@@ -202,6 +222,16 @@ class GuildService:
     def __init__(self, npc, guild):
         self.npc, self.guild = npc, guild
 
+    def _claim_context(self, actor):
+        profile = next((p for p in self.npc.PROFILES if p.get('key') == 'guild_lan'), None)
+        observed = npc_proximity(self.npc, actor, profile, self.guild.GCFG.get('claim_proximity', 8))
+        return {'observedAt': observed['observedAt'],
+                'receptionist': {'key': 'guild_lan', 'position': observed['npcPosition'],
+                                 'positionFresh': observed['npcPosition'] is not None,
+                                 'dimension': 'minecraft:overworld'},
+                'proximity': {k: observed[k] for k in ('actorPosition', 'actorDimension', 'sameDimension',
+                                                      'distance', 'maxDistance', 'near')}}
+
     def _identity(self, actor, expected):
         raw = self.npc.R.cmd('data get entity %s UUID' % actor)
         match = re.search(r'\[I;\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\]', raw or '')
@@ -216,8 +246,8 @@ class GuildService:
         quests = []
         fame = self.guild.load_fame().get(actor, {})
         active_count = sum(b.get('status') == 'claimed' and actor in self.guild._takers(b) for b in doc['board'])
-        nearby = near_npc(self.npc, actor, next((p for p in self.npc.PROFILES if p.get('key') == 'guild_lan'), None),
-                          self.guild.GCFG.get('claim_proximity', 8))
+        context = self._claim_context(actor)
+        nearby = context['proximity']['near']
         for b in doc['board'][:24]:
             profile = next((p for p in self.npc.PROFILES if p.get('key') == b.get('from')), None)
             pos = self.npc.alive_pos(profile) if profile else None
@@ -250,13 +280,11 @@ class GuildService:
                 'blockedReason': blocked or (None if supported else '旧造景与组队战利品任务未开放'),
                 'acceptance': '向发单人交付真实材料' if b['type'] == 'gather' else '实际新增击杀自动验收' if b['type'] == 'hunt' else '实际到达地点自动验收'})
         reception = next((p for p in self.npc.PROFILES if p.get('key') == 'guild_lan'), None)
-        pos = self.npc.alive_pos(reception) if reception else None
         return reply('guild_observed', '公会尚无已绑定且职业匹配的接待员或发单人。' if doc.get('availability', {}).get('ok') is False else '现有公会看板与本人功勋。', True,
             boardDate=doc['date'], quests=quests, availability=doc.get('availability'),
-            observedAt=int(time.time() * 1000), fame={k: fame.get(k) for k in ('fame', 'done', 'rank', 'joined')},
-            receptionist={'key': 'guild_lan', 'position': list(pos) if valid_position(pos) else None,
-                          **historical_location(reception), 'positionFresh': valid_position(pos),
-                          'dimension': 'minecraft:overworld'}, truncated=len(doc['board']) > 24)
+            observedAt=context['observedAt'], fame={k: fame.get(k) for k in ('fame', 'done', 'rank', 'joined')},
+            receptionist={**context['receptionist'], **historical_location(reception)},
+            proximity=context['proximity'], truncated=len(doc['board']) > 24)
 
     def execute(self, request):
         actor, action = request['actor'], request['action']
@@ -277,7 +305,11 @@ class GuildService:
             if action == 'claim':
                 lines = self.guild.claim(actor, b['no'])
                 ok = b['status'] == 'claimed' and self.guild._takers(b) == [actor]
-                return reply('claimed' if ok else 'claim_refused', '\n'.join(lines)[:600], ok, questId=request['questId'])
+                # A fresh corrective observation follows refusal; it does not
+                # reinterpret that decision or authorize an automatic retry.
+                context = {'claimContext': self._claim_context(actor)} if not ok else {}
+                return reply('claimed' if ok else 'claim_refused', '\n'.join(lines)[:600], ok,
+                             questId=request['questId'], **context)
             if b['status'] != 'claimed' or self.guild._takers(b) != [actor]:
                 return reply('quest_not_owned', '这笔委托当前不在你名下。')
             if action == 'release':
