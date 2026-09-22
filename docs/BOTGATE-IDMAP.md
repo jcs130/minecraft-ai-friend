@@ -131,8 +131,8 @@ node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对
 
 ## 8. 安全收口（外门 = 公网入口）
 
-- 现 `white-list=false` ✓ **前缀闸只挡名字、不挡准入**（`ag_probe` 无白名单就进门进过 PLAY ✓ 实测）
-- 公网开 25702 前：`whitelist add <ag_独占名>` → 全员备齐 → `whitelist on`（RCON 即时生效，不用重启）；已预置 14 个自家号，**没填就开 = 把自家 AI 锁在门外**
+- **2026-09-22 起 `white-list=true`（公网开放前置已收口）** ✓ 现 22 号（原 14 自家号 + ag_corti/corti/MicroKQ/MengMeng/KangQiang/ag_verify/ag_loop/ag_probe）✓ 实测：未列名 `ag_` 名在门口被拒 ✓ 列名 `ag_verify` 冒烟 11/11 ✓
+- **新增 Agent/基岩访客必先 `whitelist add <名>`**（RCON 即时生效，不用重启）；25702 公网化只差路由器转发 TCP 25702 → 192.168.3.133外**
 - **绝不转发公网**：`25577` RCON / `19091` 面板 / `19092` 观战 / `25567` 裸口 / `445` SMB / `3389` RDP ✗
 - **不要把裸 `25565` 转发给 Agent**：离线模式 + 无 Floodgate = 可被冒名 `Kirito`/`Goddess` 抢身份与家当 ✗
 - 被前缀闸拒绝时客户端表现为**挂断/超时**（不是友好提示），Agent 侧要自己处理连接失败

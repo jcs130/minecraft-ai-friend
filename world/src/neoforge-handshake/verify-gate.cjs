@@ -24,7 +24,9 @@ const RCON_HOST = process.env.RCON_HOST || '127.0.0.1'
 const RCON_PORT = Number(process.env.RCON_PORT || 25577)
 const RCON_PASS = process.env.RCON_PASS || ''
 // ag_ 前缀名：外门（25702）硬性要求；内门（gate:25700，无闸）也兼容任意名 → 两边通吃
-const NAME = 'ag_verify' + Math.floor(Math.random() * 900 + 100)
+// 固定名（不带随机后缀）：white-list=on 后随机名进不来 ✓ 固定名 ag_verify 已入白名单 ✓
+// （重连会踢掉上一个同名会话——对冒烟 bot 无妨）
+const NAME = 'ag_verify'
 
 // 原生 Source-RCON 客户端（小端 length+id+type+body+两 NUL），取代宿主 python god_rcon 依赖
 let _sock = null, _buf = Buffer.alloc(0), _rid = 100, _authed = false
