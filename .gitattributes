@@ -3,3 +3,4 @@ world/numen-patches/*.patch text eol=lf whitespace=-blank-at-eol
 
 # Health check compares skill bytes against workspace copies deployed via text-mode API (LF).
 world/ops/skills/** text eol=lf
+patches/decider/*.patch text eol=lf whitespace=-blank-at-eol

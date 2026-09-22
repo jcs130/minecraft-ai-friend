@@ -1,6 +1,8 @@
 @echo off
 rem Bedrock entry: ViaProxy+Geyser console mode (GUI mode hides and waits for a click that never comes)
-rem Docker Desktop on Windows cannot publish UDP ports to the host, so this runs as a host process.
+rem 2026-09-21 更正：这里原先写的「Docker Desktop 不能把 UDP 发布到宿主」已被实测推翻
+rem （手机从 WiFi 连进容器发布的 UDP 口，Geyser 收到 Player connected），本桥已收编进
+rem compose 服务 bedrock-bridge。此 bat 仅保留为回滚路径，不再自启（任务已 disable）。
 cd /d "%~dp0"
 :loop
 
