@@ -131,7 +131,7 @@ node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对
 
 ## 8. 安全收口（外门 = 公网入口）
 
-- **2026-09-22 起 `white-list=true`（公网开放前置已收口）** ✓ 现 22 号（原 14 自家号 + ag_corti/corti/MicroKQ/MengMeng/KangQiang/ag_verify/ag_loop/ag_probe）✓ 实测：未列名 `ag_` 名在门口被拒 ✓ 列名 `ag_verify` 冒烟 11/11 ✓
+- **白名单：2026-09-22 造物主裁量「人数有限」→ `white-list=false`（不拦准入）** ✓ 22 个号**保留**（原 14 自家号 + ag_corti/corti/MicroKQ/MengMeng/KangQiang/ag_verify/ag_loop/ag_probe）✓ 想再开：`whitelist on` 一条命令 ✓ 曾实测：开闸时未列名 `ag_` 名被拒 ✓ 列名冒烟 11/11 ✓
 - **新增 Agent/基岩访客必先 `whitelist add <名>`**（RCON 即时生效，不用重启）；25702 公网化只差路由器转发 TCP 25702 → 192.168.3.133外**
 - **绝不转发公网**：`25577` RCON / `19091` 面板 / `19092` 观战 / `25567` 裸口 / `445` SMB / `3389` RDP ✗
 - **不要把裸 `25565` 转发给 Agent**：离线模式 + 无 Floodgate = 可被冒名 `Kirito`/`Goddess` 抢身份与家当 ✗
