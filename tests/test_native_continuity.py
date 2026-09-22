@@ -60,6 +60,29 @@ class RecoveryTests(unittest.TestCase):
             self.controller.recover_runtime_pause(self.gateway.body)
             self.assertEqual(read_json(self.state/'control.json')['enabled'],enabled)
 
+    def test_orphaned_operator_drain_recovers_after_timeout_but_fresh_or_pending_drain_wait(self):
+        # 2026-09-22 造物主谕「自动恢复持续运行」：drain 完成后被遗忘 → 超时自动解除；
+        # 新鲜 drain 与未完成 drain 不动；operator_pause 仍绝不自动解（上一条测试管）。
+        self.backend.idle=lambda:True
+        self.controller.data['actionExecution']={'ok':True,'inFlight':False}
+        now_ms=int(self.clock.now*1000)
+        self.write('control.json',{'enabled':False,'pauseReason':'operator_drain',
+            'drain':{'status':'completed','completedAt':now_ms-5*3600*1000}})
+        self.controller.recover_runtime_pause(self.gateway.body)
+        control=read_json(self.state/'control.json')
+        self.assertTrue(control['enabled']);self.assertIsNone(control['pauseReason'])
+        self.write('control.json',{'enabled':False,'pauseReason':'operator_drain',
+            'drain':{'status':'completed','completedAt':now_ms-600*1000}})
+        self.controller.recover_runtime_pause(self.gateway.body)
+        self.assertFalse(read_json(self.state/'control.json')['enabled'])
+        self.write('control.json',{'enabled':False,'pauseReason':'operator_drain',
+            'drain':{'status':'requested','requestedAt':now_ms-9*3600*1000}})
+        self.controller.recover_runtime_pause(self.gateway.body)
+        self.assertFalse(read_json(self.state/'control.json')['enabled'])
+        self.write('control.json',{'enabled':False,'pauseReason':'operator_drain'})
+        self.controller.recover_runtime_pause(self.gateway.body)
+        self.assertFalse(read_json(self.state/'control.json')['enabled'])
+
     def test_poll_transport_error_never_settles_cancellation(self):
         self.controller.tick();self.controller.data['cancellationStatus']='waiting_for_native_terminal'
         self.backend.reply=TimeoutError('fixture')

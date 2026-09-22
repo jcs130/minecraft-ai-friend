@@ -2163,7 +2163,24 @@ class Controller:
                        'controller_OSError', 'controller_GatewayError', 'controller_FileNotFoundError'}
         try:
             control = read_json(self.root / 'control.json')
-            if control.get('pauseReason') not in recoverable or control.get('drain', {}).get('status') == 'requested':
+            reason = control.get('pauseReason')
+            if control.get('drain', {}).get('status') == 'requested':
+                return
+            if reason == 'operator_drain':
+                # 2026-09-22 造物主谕「他需要可以自动恢复持续运行」：运维 drain 是
+                # "干完手头活再停"的收尾暂停，不是长期停车。drain 完成后超过
+                # SURVIVOR_DRAIN_ORPHAN_SECONDS（默认 4 小时）无人收尾即视为孤儿，
+                # 在与人工 resume 完全相同的门禁下自动解除（新 drain 重置计时 ✓
+                # control.py pause 的 operator_pause 仍不自动解 ✗ 保持人工神圣）。
+                # 实证：2026-09-22 凌晨一次 drain 被遗忘 13.4 小时，身体满血干等。
+                drain = control.get('drain') or {}
+                completed_at = drain.get('completedAt')
+                orphan_after = float(os.environ.get('SURVIVOR_DRAIN_ORPHAN_SECONDS') or 4 * 3600)
+                if drain.get('status') != 'completed' or type(completed_at) not in (int, float):
+                    return
+                if (self.clock() * 1000 - completed_at) / 1000 < orphan_after:
+                    return
+            elif reason not in recoverable:
                 return
             execution = self.data.get('actionExecution', {})
             if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True
