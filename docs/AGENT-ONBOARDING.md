@@ -58,7 +58,12 @@ const bot = require('mineflayer').createBot({
 - **模组物品不再一律 paper ✓**（2026-09-21 造物主谕「映射到最接近的原版」✓）：`build-idmap.cjs` 三级递进——**级1** 同名 mod 方块 → 那原版的方块物品（`prefab:item_pile_of_bricks→stone_bricks` ✓ 3231 个）；**级2.0** 工具/甲**保材质等级**（`item_swift_blade_diamond→diamond_sword` ✓）；**级2.1** 约 70 条语义家族（`scroll→enchanted_book` ✓ `staff/wand→blaze_rod` ✓ `spawn_egg→chicken_spawn_egg` ✓ `stew→mushroom_stew` ✓）；**级3** 才兜 paper。实测：兜 paper **3825 → 303** ✓ 覆盖 **68 种**代理物 ✓ 真给 12 件 **12/12 读对** ✓
   ⚠ 代理号只影响**显示与识别**，**不是可操作身份** ✓ 要真正使用模组物品请拿完整 id（RCON give / `/mycli`）✓ 加映射规则必须让 `badRules=0`（写错目标名会把 `undefined` 灌进号表 = 线上物品变未知号 ✗）
 - **体检三项也过 ✓**（`node audit-idmap.cjs`）：号表与注册表**逐数对账一致**（states 116650==blocks.tsv 声明总数 ✓ items 5158==items.tsv 行数 ✓）· **双向往返恒等 8/8**（原版物品 `neo→vanilla→neo` 原样回来 ✓ 保证 Agent 反向操作不会被号表改成别的东西 ✓）· chunk 段模式实测 201 chunk/1440 段：palette 565 + singleValue 875 + **direct 0** ✓（"暂不碰 direct"那条分支实际发生率 0% ✓ 该脚本会持续量化它）
-- 回归口复验方式：`cd world/src/neoforge-handshake && node verify-gate.cjs`（改翻译层后先 `docker restart qiandengji-gate-1 qiandengji-gate-public-1` ✓ `/app/src` 是宿主 `world/src` **只读挂载** ✓ 改宿主文件即生效 ✓ 不用重建镜像 ✓）
+- 回归口复验方式（2026-09-22 起**容器内跑 = 正道**，宿主只作兜底；改翻译层后先 `docker restart qiandengji-gate-1 qiandengji-gate-public-1` ✓ `/app/src` 是宿主 `world/src` **只读挂载** ✓ 改宿主文件即生效 ✓ 不用重建镜像 ✓）：
+  ```
+  PW=$(docker exec qiandengji-mc-1 sh -c "grep '^rcon.password' /data/server.properties | cut -d= -f2")
+  docker exec -e GATE_HOST=gate -e GATE_PORT=25700 -e RCON_HOST=mc -e RCON_PORT=25575 \
+    -e RCON_PASS="$PW" qiandengji-world-1 node /app/src/neoforge-handshake/verify-gate.cjs
+  ```
 
 ## 5. 白名单与安全铁律
 

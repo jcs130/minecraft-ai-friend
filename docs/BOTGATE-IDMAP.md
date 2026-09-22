@@ -79,7 +79,7 @@ NeoForge 装了**带内容的模组**后，网络上跑的 blockstate / item **�
    copy idmap.json idmap.json.bak-<日期>            # 先备份，可秒回滚
 4) node build-idmap.cjs                             # 必须看到 badRules=0
 5) docker restart qiandengji-gate-1 qiandengji-gate-public-1     # 只重启门，不动世界
-6) node verify-gate.cjs && node audit-idmap.cjs     # 必须全绿才收工
+6) 验收两件必须全绿（2026-09-22 起容器内跑，见 §6；宿主跑只作兜底）
 7) git add world/src/neoforge-handshake && git commit && git push # 号表入仓，防漂移
 ```
 
@@ -90,11 +90,19 @@ NeoForge 装了**带内容的模组**后，网络上跑的 blockstate / item **�
 ## 6. 验证与体检（两件常驻工具，别再手写一次性探针）
 
 ```
+# ① 容器内跑（正道 · 2026-09-22 起）：world 容器自带 mineflayer 4.37.1 + vec3，
+#    走 compose 内网 gate:25700 / mc:25575，全程不出宿主（铁律：游戏相关的都在容器里）
+PW=$(docker exec qiandengji-mc-1 sh -c "grep '^rcon.password' /data/server.properties | cut -d= -f2")
+docker exec -e GATE_HOST=gate -e GATE_PORT=25700 -e RCON_HOST=mc -e RCON_PORT=25575 \
+  -e RCON_PASS="$PW" qiandengji-world-1 node /app/src/neoforge-handshake/verify-gate.cjs
+
+# ② 宿主兜底（world 容器不可用时；RCON_PASS 必须先注入环境变量，mineflayer 落到 scratch 钉版）：
 node verify-gate.cjs                        # 内门 25701，11 项冒烟
-node verify-gate.cjs 127.0.0.1 25568        # ViaProxy Java 入口 = 基岩同一条上游（免手机验基岩）
-node verify-gate.cjs 127.0.0.1 25566        # 皮肤代理入口 = 走代理的 bot 的实际链路
+node verify-gate.cjs 127.0.0.1 25568        # 基岩桥 Java 入口 = 基岩同一条上游（免手机验基岩）
+#   （25566 皮肤代理入口一行已删：皮肤代理 2026-09 已退役，YSM 接管形象）
 node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对账 ②双向往返恒等 ③chunk 段模式分布
 ```
+2026-09-22 双路复验：**容器内 11/11 ✓（gate:25700）· 宿主兜底 11/11 ✓（127.0.0.1:25701）**
 2026-09-21 基准：verify **11/11 ✓ exit 0**（含 4 项**状态保真**：楼梯朝向+上下 / 半砖类型 / 箱子朝向 / 熔炉 lit —— 只比方块名**测不出状态被压平**）· audit `states 116650 == blocks.tsv 声明数 ✓`、`items 5158 == items.tsv 行数 ✓`、往返 **8/8 恒等 ✓**、`direct = 0 ✓`
 
 **判"过门没有"只能用链路证据**（门日志 `docker logs qiandengji-gate-1 | grep 叩门` 的名单、或进程实参），**不能用"画面看着对"** —— 低段号本来就对，裸连也画得出正常村庄。

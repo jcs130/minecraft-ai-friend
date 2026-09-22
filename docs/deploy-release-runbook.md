@@ -119,8 +119,10 @@ copy idmap.json idmap.json.bak-<日期>
 node build-idmap.cjs
 # 4) 只重启门
 docker restart qiandengji-gate-1 qiandengji-gate-public-1
-# 5) 验收（两件都必须绿）
-node verify-gate.cjs
+# 5) 验收（两件都必须绿；2026-09-22 起容器内跑 = 正道）
+PW=$(docker exec qiandengji-mc-1 sh -c "grep '^rcon.password' /data/server.properties | cut -d= -f2")
+docker exec -e GATE_HOST=gate -e GATE_PORT=25700 -e RCON_HOST=mc -e RCON_PORT=25575 \
+  -e RCON_PASS="$PW" qiandengji-world-1 node /app/src/neoforge-handshake/verify-gate.cjs
 node audit-idmap.cjs
 # 6) 号表入仓（防漂移）
 git add world/src/neoforge-handshake && git commit && git push
