@@ -787,7 +787,7 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertFalse(self.client.action(TURN, 'craft', {'item_id': 'minecraft:stick', 'count': 1})['ok'])
         self.assertEqual(len(self.rcon.mutations()), 6)
 
-    def test_async_move_requires_same_native_task_and_epoch_before_next_action(self):
+    def test_async_move_busy_barrier_then_idle_uses_body_not_unrelated_terminal(self):
         self.lease()
         # Exercise the navigation barrier with an immediate native action.
         # Timed food now needs its separate qdworld receipt fixture/protocol.
@@ -796,20 +796,41 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertEqual(first['code'], 'accepted')
         self.rcon.busy = True
         self.assertEqual(self.client.action(TURN, *next_action)['code'], 'body_action_in_flight')
+        self.rcon.task_id = 'another-live-task'
+        self.assertEqual(self.client.action_status()['code'], 'inflight_task_mismatch')
+        self.assertEqual(len(self.rcon.mutations()), 1)
+        self.rcon.task_id = 't1'
         self.rcon.busy = False
         self.rcon.navigation_result = {'task_id': 'wrong', 'navigation_epoch': self.rcon.navigation_epoch,
                                        'state': 'success', 'success': True}
-        self.assertEqual(self.client.action_status()['code'], 'navigation_terminal_unconfirmed')
-        self.assertFalse(self.client.action(TURN, *next_action)['ok'])
-        self.rcon.navigation_result['task_id'] = 't1'
-        self.rcon.navigation_result.update(state='failed', success=False)
+        # Current upstream has no readable native navigation terminal. Once idle,
+        # use the bound body's observed arrival, never another task's success.
         result = self.client.action_status()
         self.assertFalse(result['inFlight'])
         self.assertEqual(result['receipt']['status'], 'failed')
         self.assertTrue(result['receipt']['completionConfirmed'])
+        outcome = result['receipt']['navigationOutcome']
+        self.assertEqual(outcome['navigation_mode'], 'observed_from_body')
+        self.assertEqual(outcome['task_id'], 't1')
+        self.assertIs(outcome['success'], False)
+        self.assertEqual(outcome['horizontalDistance'], 10)
         self.rcon.reply = {'success': True}
         self.assertTrue(self.client.action(TURN, *next_action)['ok'])
         self.assertEqual(len(self.rcon.mutations()), 2)
+
+    def test_matching_native_failure_is_not_overwritten_by_observed_arrival(self):
+        self.lease()
+        first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        self.rcon.position['x'] = 110
+        self.rcon.navigation_result = {'task_id': 't1', 'navigation_epoch': self.rcon.navigation_epoch,
+                                       'state': 'failed', 'success': False, 'world_interaction_blocked': False}
+        result = self.client.action_status()
+        self.assertFalse(result['inFlight'])
+        self.assertEqual(result['receipt']['actionId'], first['actionId'])
+        self.assertEqual(result['receipt']['status'], 'failed')
+        self.assertTrue(result['receipt']['completionConfirmed'])
+        self.assertEqual(result['receipt']['navigationOutcome'], self.rcon.navigation_result)
+        self.assertEqual(len(self.rcon.mutations()), 1)
 
     def test_unknown_mutation_blocks_all_following_actions_and_survives_restart(self):
         from numen_gateway import NumenGateway
@@ -831,12 +852,21 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertIsNone(receipt['navigationOutcome'])
         self.assertEqual(len(self.rcon.mutations()), 1)
 
-    def test_new_native_epoch_does_not_clear_a_previous_move_barrier(self):
+    def test_new_native_epoch_keeps_unknown_outcome_and_closes_original_lease(self):
         self.lease()
-        self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
         self.rcon.navigation_epoch = 'different-server-process'
-        self.assertEqual(self.client.action_status()['code'], 'inflight_epoch_changed')
+        result = self.client.action_status()
+        self.assertFalse(result['inFlight'])
+        self.assertEqual(result['receipt']['actionId'], first['actionId'])
+        self.assertEqual(result['receipt']['status'], 'observed_ended')
+        self.assertFalse(result['receipt']['completionConfirmed'])
+        self.assertIsNone(result['receipt']['navigationOutcome'])
+        self.assertFalse((self.state / 'inflight-action.json').exists())
+        self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertFalse(self.client.action(TURN, 'eat', {'item_id': 'minecraft:bread'})['ok'])
+        self.assertEqual(self.client.turn_receipts(TURN)[0], result['receipt'])
+        self.assertEqual(self.client.action_status()['receipt'], result['receipt'])
         self.assertEqual(len(self.rcon.mutations()), 1)
 
     def test_controller_observation_does_not_consume_receipt_before_model_reads_it(self):

@@ -27,7 +27,7 @@ TURN = 'turn_' + 'b' * 24
 POINT = {'x': 10, 'y': 64, 'z': 11}
 BINDING = {'bodyName': 'CheckedBody', 'bodyUuid': BODY, 'ownerUuid': OWNER}
 SURFACE = {'snapshot', 'observe', 'open_lease', 'close_lease', 'action', 'action_status',
-           'turn_receipts', 'inspect_block', 'inspect_container'}
+           'turn_receipts', 'inspect_block', 'inspect_container', 'sense'}
 DOMAINS = {'body_reconnect', 'drop_actions', 'food_actions', 'navigation_sense',
            'recipe_lookup', 'scene_view', 'world_actions'}
 
@@ -37,6 +37,10 @@ def payload(text):
 
 
 class FakeAdapter:
+    def sense(self, sensor='catalog', arguments=None):
+        self.reads.append(('sense', sensor, arguments))
+        return {'ok': True, 'sensor': sensor, 'source': 'other-world'}
+
     def __init__(self):
         self.reads = []
 

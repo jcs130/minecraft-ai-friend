@@ -142,7 +142,6 @@ def main():
                 probe.start()
             last_qwen_warning = object()
             gateway_error_count = 0
-            GATEWAY_ERROR_LIMIT = 5
             while running and proc.poll() is None:
                 started = time.monotonic()
                 try:
@@ -156,16 +155,17 @@ def main():
                     gateway_error_count = 0
                 except Exception as exc:
                     # Transient gateway errors (RCON reconnect, MC restart,
-                    # network blip) self-heal on the next tick; only pause
-                    # after consecutive failures or non-transient exceptions.
-                    if type(exc).__name__ == 'GatewayError':
+                    # network blip) retry with backoff; dispatch markers still
+                    # protect uncertain effects from being repeated.
+                    if type(exc).__name__ == 'GatewayError' or isinstance(exc, OSError):
                         gateway_error_count += 1
-                        if gateway_error_count < GATEWAY_ERROR_LIMIT:
-                            print(json.dumps({'event': 'gateway_retry',
-                                              'attempt': gateway_error_count,
-                                              'error': str(exc)[:100]}), flush=True)
-                            time.sleep(2)
-                            continue
+                        print(json.dumps({'event': 'runtime_retry',
+                                          'attempt': gateway_error_count,
+                                          'errorType': type(exc).__name__}), flush=True)
+                        # Dispatch markers and leases still forbid replay after
+                        # IO ambiguity. A read failure cannot revoke autonomy.
+                        time.sleep(min(30, 2 * gateway_error_count))
+                        continue
                     # Unknown effects require attention; restart must not spend again.
                     # Keep the traceback: a pause whose only record is the exception's
                     # class name cannot be diagnosed without guessing. 2026-09-17: a
@@ -179,12 +179,14 @@ def main():
                     except Exception:
                         pass
                     print(json.dumps({'event': 'paused', 'errorType': type(exc).__name__}), flush=True)
-                delay = max(1, controller.settings['observationSeconds'] - (time.monotonic() - started))
+                # Native tasks keep running in Minecraft. Only sample/handoff here;
+                # a pending classifier must not block receipts or read-only dialogue.
+                interval = control_interval(controller)
+                delay = max(.05, interval - (time.monotonic() - started))
                 until = time.monotonic() + delay
                 while running and proc.poll() is None and time.monotonic() < until:
                     time.sleep(min(1, max(0.01, until - time.monotonic())))
             if proc.poll() is not None and running:
-                controller.pause('survivor_child_exited')
                 raise RuntimeError('survivor_child_exited')
         finally:
             try:
@@ -192,6 +194,7 @@ def main():
                 controller.data['status'] = 'stopped'
                 controller.publish()
             finally:
+                controller.close_policy()
                 if probe is not None and not probe.stop():
                     print(json.dumps({'event': 'qwen_probe_shutdown_timeout'}), flush=True)
                 proc.terminate()
@@ -200,6 +203,17 @@ def main():
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait(timeout=5)
+
+
+def control_interval(controller):
+    if (controller.data.get('policyPending') or controller.data.get('skillRoutePending')
+            or getattr(controller, 'pending_social', None) or getattr(controller, 'pending_motor', None)):
+        return .25
+    if (controller.data.get('status') in ('executing_skill', 'acting', 'action_confirmation_wait')
+            or controller.data.get('dialogueActive') or controller.data.get('active')
+            or controller.settings.get('asyncMotor')):
+        return 1
+    return controller.settings['observationSeconds']
 
 
 if __name__ == '__main__':

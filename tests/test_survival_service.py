@@ -27,6 +27,16 @@ with patch.dict(sys.modules, {'fcntl': SimpleNamespace()}):
 
 
 class SharedSurvivalServiceTests(unittest.TestCase):
+    def test_pending_social_result_is_polled_before_its_five_second_deadline(self):
+        controller = SimpleNamespace(data={'status': 'thinking'}, settings={'observationSeconds': 15},
+                                     pending_social={'token': 1})
+        self.assertEqual(service.control_interval(controller), .25)
+        controller.pending_social = None
+        controller.data['active'] = {'taskId': 'task-123'}
+        self.assertEqual(service.control_interval(controller), 1)
+        controller.data.pop('active')
+        self.assertEqual(service.control_interval(controller), 15)
+
     def test_default_launches_http_mcp_and_never_second_qwen(self):
         self.assertEqual(service.child_command({}), ['python', '-u', '/survival/mcp_server.py', '--http'])
         with self.assertRaisesRegex(ValueError, 'invalid_qwen_mode'):

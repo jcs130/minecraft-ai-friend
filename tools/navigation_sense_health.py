@@ -6,13 +6,12 @@ import subprocess
 import time
 
 from world_interaction_health import (ROOT, JAR, BUILD_JAR, BUILD_RECORD, MANIFEST,
-    SETTINGS, CONFIG, canonical, digest, document)
+    SETTINGS, CONFIG, NUMEN, canonical, digest, document)
 
 PREFIX='QD_NAVIGATION_SENSE_JSON '
 REQUIRED_SOURCES={'tools/build_irons_bridge.py',
     'world/irons-bridge-src/src/dev/qiandeng/irons/QiandengIronsBridge.java',
     'world/irons-bridge-src/src/dev/qiandeng/irons/WorldNavigationSense.java'}
-NUMEN='server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar'
 
 
 def read_status(body):

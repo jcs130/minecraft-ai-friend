@@ -371,6 +371,7 @@ class GatewayTests(unittest.TestCase):
 
     def test_equipment_is_verified_without_resend(self):
         self.lease()
+        self.rcon.inventory = '[{Slot:0b,id:"minecraft:wooden_pickaxe",count:1}]'
         self.rcon.reply = {'accepted': True, 'note': 'no immediate reply (async tool)'}
         self.rcon.equipment = {'mainhand': {'item': 'minecraft:wooden_pickaxe'}}
         with patch.object(gateway.time, 'sleep'):
@@ -382,11 +383,58 @@ class GatewayTests(unittest.TestCase):
 
     def test_unconfirmed_equipment_does_not_claim_success(self):
         self.lease()
+        self.rcon.inventory = '[{Slot:0b,id:"minecraft:wooden_pickaxe",count:1}]'
         self.rcon.reply = {'accepted': True}
         with patch.object(gateway.time, 'sleep'):
             result = self.client.action(TURN, 'equip_item', {'action': 'equip', 'item_id': 'minecraft:wooden_pickaxe', 'slot': 'mainhand'})
         self.assertEqual(result['code'], 'outcome_unknown')
         self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_missing_equipment_rejects_before_dispatch_and_preserves_lease(self):
+        self.lease()
+        lease = gateway.read_json(self.state / 'lease.json')
+        result = self.client.action(TURN, 'equip_item',
+            {'action': 'equip', 'item_id': 'minecraft:iron_sword', 'slot': 'mainhand'})
+        self.assertEqual(result['code'], 'equipment_item_missing')
+        self.assertIs(result['dispatched'], False)
+        self.assertFalse(self.rcon.mutations())
+        self.assertFalse((self.state / 'unknown.json').exists())
+        self.assertEqual(gateway.read_json(self.state / 'lease.json'), lease)
+        # A normal planning mistake must not block another action in this turn.
+        self.assertTrue(self.mine()['ok'])
+
+    def test_planning_tool_queues_while_body_busy_without_native_call(self):
+        from motor_mailbox import open_cognition, view
+        self.write('settings.json', self.settings | {'asyncMotor': True})
+        self.rcon.busy = True
+        open_cognition(self.state, TURN, NOW*1000+120000, lambda: NOW)
+        result = self.mine()
+        self.assertEqual(result['code'], 'motor_queued')
+        self.assertFalse(result['executionConfirmed'])
+        self.assertFalse(self.rcon.mutations())
+        self.assertEqual(len(view(self.state)['requests']), 1)
+        self.assertEqual(self.mine()['requestId'], result['requestId'])
+        # The same request reaches the existing executor exactly once after the
+        # body boundary, while its original planning authority is still open.
+        from types import SimpleNamespace
+        from motor_loop import dispatch
+        controller = SimpleNamespace(root=self.state, clock=lambda: NOW, gateway=self.client,
+            data={'active':{'taskId':'still-thinking'}}, collect_action_receipts=lambda turn: None,
+            record=lambda *a, **kw: None, pause=lambda reason: self.fail(reason))
+        self.rcon.busy = False
+        self.assertTrue(dispatch(controller))
+        self.assertEqual(len(self.rcon.mutations()), 1)
+        self.assertFalse(dispatch(controller))
+        self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_missing_equipment_does_not_clear_an_existing_unknown(self):
+        self.lease()
+        self.write('unknown.json', {'actionId': 'old-uncertain-action'})
+        result = self.client.action(TURN, 'equip_item',
+            {'action': 'equip', 'item_id': 'minecraft:iron_sword', 'slot': 'mainhand'})
+        self.assertEqual(result['code'], 'outcome_unknown')
+        self.assertTrue((self.state / 'unknown.json').exists())
+        self.assertFalse(self.rcon.mutations())
 
     def test_malformed_inventory_cannot_hide_preflight_failure(self):
         self.lease()
@@ -410,9 +458,9 @@ class GatewayTests(unittest.TestCase):
             self.assertEqual(set(scene.inputSchema['properties']), {'radius'})
             self.assertEqual(scene.inputSchema.get('required', []), [])
             for tool in listed:
-                if tool.name not in ('status', 'look', 'view_scene', 'world_perception', 'skill_catalog', 'skill_read',
+                if tool.name not in ('status', 'look', 'view_scene', 'sense', 'world_perception', 'skill_catalog', 'skill_read',
                                      'game_skills', 'game_skill_receipt', 'knowledge_catalog', 'knowledge_read',
-                                     'request_goal', 'request_review', 'inspect_block', 'scan_blocks', 'villager_offers', 'lookup_recipe',
+                                     'request_goal', 'goal_agenda', 'request_review', 'inspect_block', 'scan_blocks', 'villager_offers', 'lookup_recipe',
                                      'guild_board', 'guild_receipt', 'adventure_guide', 'inspect_container', 'speech_status'):
                     self.assertIn('turn_id', tool.inputSchema['required'])
         asyncio.run(check())

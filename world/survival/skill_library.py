@@ -26,7 +26,7 @@ MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
 from numen_gateway import TOOLS as ACTION_TOOLS
-OBSERVATION_TOOLS = ('inspect_block', 'inspect_container')
+OBSERVATION_TOOLS = ('inspect_block', 'inspect_container', 'sense')
 MIN_WAIT_SECONDS = 15
 MAX_WAIT_SECONDS = 300
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
@@ -73,7 +73,10 @@ def _engine():
 
 
 def _kernel_version():
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    # The declared sensor validation is part of the executable proposal contract.
+    return hashlib.sha256(Path(__file__).read_bytes() + b'\0'
+                          + Path(__file__).with_name('world_adapter.py').read_bytes() + b'\0'
+                          + Path(__file__).with_name('system_one.py').read_bytes()).hexdigest()
 
 
 def _wait_seconds(value):
@@ -85,8 +88,18 @@ def _wait_seconds(value):
 def _observation(value):
     """Validate only a proposal. Physical reach and ownership remain gateway work."""
     if (not isinstance(value, dict) or set(value) != {'tool', 'args'}
-            or value['tool'] not in OBSERVATION_TOOLS or not isinstance(value['args'], dict)
-            or set(value['args']) != {'x', 'y', 'z'}):
+            or value['tool'] not in OBSERVATION_TOOLS or not isinstance(value['args'], dict)):
+        raise SkillError('invalid_skill_observation')
+    if value['tool'] == 'sense':
+        from world_adapter import validate_sensor
+        try:
+            if set(value['args']) != {'sensor', 'arguments'}:
+                raise ValueError('invalid_sensor_arguments')
+            validate_sensor(value['args']['sensor'], value['args']['arguments'])
+        except (ValueError, TypeError):
+            raise SkillError('invalid_skill_observation')
+        return value
+    if set(value['args']) != {'x', 'y', 'z'}:
         raise SkillError('invalid_skill_observation')
     for key, low, high in (('x', -29999984, 29999984), ('y', -64, 319), ('z', -29999984, 29999984)):
         coordinate = value['args'][key]
@@ -97,10 +110,10 @@ def _observation(value):
 
 def _validate_result(value):
     if not isinstance(value, dict) or set(value) - {
-            'action', 'memory', 'done', 'replan', 'reason', 'waitSeconds', 'observe'}:
+            'action', 'memory', 'done', 'replan', 'reason', 'waitSeconds', 'observe', 'choose'}:
         raise SkillError('invalid_skill_result')
     if (not isinstance(value.get('memory'), dict)
-            or not any(key in value for key in ('action', 'waitSeconds', 'observe'))):
+            or not any(key in value for key in ('action', 'waitSeconds', 'observe', 'choose'))):
         raise SkillError('invalid_skill_result')
     action = value.get('action')
     if action is not None:
@@ -123,6 +136,12 @@ def _validate_result(value):
         extra['waitSeconds'] = _wait_seconds(value['waitSeconds'])
     if 'observe' in value:
         extra['observe'] = _observation(value['observe'])
+    if 'choose' in value:
+        from system_one import validate_choice
+        try:
+            extra['choose'] = validate_choice(value['choose'])
+        except ValueError as exc:
+            raise SkillError('invalid_skill_choice') from exc
     if extra and (len(extra) > 1 or action is not None or value.get('done') or value.get('replan')):
         raise SkillError('conflicting_skill_requests')
     _json(value['memory'], 16384)
@@ -195,11 +214,11 @@ def _fixtures(fixtures):
     for row in fixtures:
         if not isinstance(row, dict) or set(row) - {
                 'state', 'memory', 'expectedActionTool', 'done', 'replan', 'expectedAction',
-                'expectedMemory', 'expectedWaitSeconds', 'expectedObserve'}:
+                'expectedMemory', 'expectedWaitSeconds', 'expectedObserve', 'expectedChoice'}:
             raise SkillError('invalid_fixture')
         if not isinstance(row.get('state'), dict) or not isinstance(row.get('memory', {}), dict):
             raise SkillError('invalid_fixture_input')
-        if not any(key in row for key in ('expectedActionTool', 'done', 'expectedWaitSeconds', 'expectedObserve')):
+        if not any(key in row for key in ('expectedActionTool', 'done', 'expectedWaitSeconds', 'expectedObserve', 'expectedChoice')):
             raise SkillError('fixture_expectation_required')
         if 'expectedActionTool' in row and row['expectedActionTool'] not in (None, *ACTION_TOOLS):
             raise SkillError('invalid_fixture_expectation')
@@ -212,6 +231,12 @@ def _fixtures(fixtures):
             _wait_seconds(row['expectedWaitSeconds'])
         if row.get('expectedObserve') is not None:
             _observation(row['expectedObserve'])
+        if 'expectedChoice' in row:
+            from system_one import validate_choice
+            try:
+                validate_choice(row['expectedChoice'])
+            except ValueError as exc:
+                raise SkillError('invalid_fixture_choice') from exc
         inputs.add(_json({'state': row['state'], 'memory': row.get('memory', {})}))
     if len(inputs) < 2:
         raise SkillError('distinct_fixture_inputs_required')
@@ -234,11 +259,23 @@ class SkillLibrary:
         # being able to write into another's store: sharing is explicit, and reads
         # always prefer our own copy so a local fix is never shadowed.
         self.world_root = Path(world_root).absolute() if world_root else None
+        if self.world_root == self.root:
+            raise SkillError('shared_skill_store_must_be_distinct')
         if self.world_root is not None:
             for path in (self.world_root, *self.world_root.parents):
                 if path.is_symlink():
                     raise SkillError('linked_skill_store')
             self.world_root.mkdir(parents=True, exist_ok=True)
+        # One-time initialization/migration only. Normal catalog reads never
+        # enumerate directories; all managed mutations maintain this manifest.
+        for base in dict.fromkeys(p for p in (self.root, self.world_root) if p is not None):
+            self._ensure_index(base)
+
+    def _ensure_index(self, base):
+        if not self._at(base, 'catalog.json').exists():
+            with self._lock(base):
+                if not self._at(base, 'catalog.json').exists():
+                    self._rebuild_index(base)
 
     def _at(self, base, *parts):
         path = base
@@ -263,8 +300,8 @@ class SkillLibrary:
         return self.root, False
 
     @contextmanager
-    def _lock(self):
-        with self._path('.lock').open('a+b') as stream:
+    def _lock(self, base=None):
+        with self._at(base or self.root, '.lock').open('a+b') as stream:
             if os.name == 'nt':
                 import msvcrt
                 if stream.tell() == 0:
@@ -330,50 +367,82 @@ class SkillLibrary:
             raise SkillError('skill_version_changed')
         return record
 
-    def catalog(self):
-        # Heads are atomically replaced only after their immutable version exists.
-        # Read-only observation need not acquire the writer lock: a concurrent
-        # skill test must never shut down the embodied Agent's controller.
+    def _index(self, base):
+        index = self._load(self._at(base, 'catalog.json'))
+        if (index.get('schema') != 1 or not isinstance(index.get('skills'), list)
+                or len(index['skills']) > 64 or not isinstance(index.get('unavailable'), list)):
+            raise SkillError('invalid_skill_catalog_index')
+        names = set()
+        for row in index['skills']:
+            if not isinstance(row, dict):
+                raise SkillError('invalid_skill_catalog_index')
+            name = _identifier(row.get('name'), NAME, 'skill_name')
+            if name in names or not isinstance(row.get('description'), str):
+                raise SkillError('invalid_skill_catalog_index')
+            names.add(name)
+            for key in ('activeVersion', 'draftVersion'):
+                if row.get(key) is not None:
+                    _identifier(row[key], VERSION, 'skill_version')
+        for row in index['unavailable']:
+            if not isinstance(row, dict) or not isinstance(row.get('code'), str):
+                raise SkillError('invalid_skill_catalog_index')
+            name = _identifier(row.get('name'), NAME, 'skill_name')
+            if name in names:
+                raise SkillError('invalid_skill_catalog_index')
+            names.add(name)
+        return index
+
+    @staticmethod
+    def _index_row(head, record):
+        return ({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
+                | {'description': record['description']}
+                | ({'routing': record['routing']} if 'routing' in record else {}))
+
+    def _rebuild_index(self, base):
+        """Explicit migration/repair, called under the store lock, never per tick."""
         rows, unavailable = [], []
-        for folder in sorted(self.root.iterdir()):
+        for folder in sorted(base.iterdir()):
             if not NAME.fullmatch(folder.name):
                 continue
             try:
-                head = self._head(folder.name)
+                head = self._head(folder.name, base)
                 version = head.get('activeVersion') or head.get('draftVersion')
                 if version:
-                    record = self._record(folder.name, version)
-                    rows.append({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
-                                | {'description': record['description']})
+                    rows.append(self._index_row(head, self._record(folder.name, version, base)))
             except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
-                unavailable.append({'name': folder.name,
-                                    'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
-        # P2: skills published to the world store are offered here too, marked so the
-        # caller can tell them apart. A local skill of the same name always wins, which
-        # is what lets this agent keep its own fix for a shared skill.
-        local_names = {row['name'] for row in rows}
-        if self.world_root is not None:
-            try:
-                folders = sorted(self.world_root.iterdir())
-            except OSError:
-                folders = []
-            for folder in folders:
-                if not NAME.fullmatch(folder.name) or folder.name in local_names:
-                    continue
-                try:
-                    head = self._head(folder.name, self.world_root)
-                    version = head.get('activeVersion') or head.get('draftVersion')
-                    if version:
-                        record = self._record(folder.name, version, self.world_root)
-                        rows.append({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
-                                    | {'description': record['description'], 'shared': True})
-                except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
-                    unavailable.append({'name': folder.name, 'shared': True,
-                                        'code': exc.code if isinstance(exc, SkillError) else 'invalid_skill_store'})
+                unavailable.append({'name': folder.name, 'code': getattr(exc, 'code', 'invalid_skill_store')})
+        self._write(self._at(base, 'catalog.json'), {'schema': 1, 'skills': rows, 'unavailable': unavailable})
+
+    def rebuild_index(self):
+        """Maintenance repair after restoring a store outside the managed API."""
+        with self._lock():
+            self._rebuild_index(self.root)
+        return self.catalog()
+
+    def _index_head(self, base, head):
+        index = self._index(base)
+        version = head.get('activeVersion') or head.get('draftVersion')
+        row = self._index_row(head, self._record(head['name'], version, base))
+        index['skills'] = sorted([r for r in index['skills'] if r['name'] != head['name']] + [row], key=lambda r: r['name'])
+        index['unavailable'] = [r for r in index['unavailable'] if r.get('name') != head['name']]
+        self._write(self._at(base, 'catalog.json'), index)
+
+    def catalog(self):
+        # Read one small manifest per store. Exact source/report/head checks
+        # remain admission/execution work, never a recursive directory scan.
+        rows, unavailable = [], []
+        local = self._index(self.root)
+        rows.extend(local['skills']); unavailable.extend(local['unavailable'])
+        local_names = {r['name'] for r in rows} | {r.get('name') for r in unavailable}
+        if self.world_root is not None and self.world_root != self.root:
+            shared = self._index(self.world_root)
+            rows.extend(r | {'shared': True} for r in shared['skills'] if r['name'] not in local_names)
+            unavailable.extend(r | {'shared': True} for r in shared['unavailable'] if r.get('name') not in local_names)
         return {'skills': rows, 'unavailable': unavailable,
-                'contract': 'next(state,memory) -> {action?,memory,done?,replan?,reason?,waitSeconds?,observe?}; '
-                            'one action, wait, observation or terminal result per step; '
-                            'action may be omitted only for waitSeconds or observe',
+                'contract': 'next(state,memory) -> {action?,memory,done?,replan?,reason?,waitSeconds?,observe?,choose?}; '
+                            'one action, wait, observation, choice or terminal result per step; '
+                            'routing={intents:[keywords],maintenance:boolean} opts into catalog selection; '
+                            'empty-memory preview must propose an applicable action',
                 'actionTools': list(ACTION_TOOLS), 'observationTools': list(OBSERVATION_TOOLS),
                 'waitSeconds': {'minimum': MIN_WAIT_SECONDS, 'maximum': MAX_WAIT_SECONDS},
                 'engine': ENGINE_PACKAGE + '==' + ENGINE_VERSION}
@@ -390,7 +459,7 @@ class SkillLibrary:
                              'shared': shared,
                              'promoted': any(row['version'] == version for row in head['promotions'])}
 
-    def draft(self, name, source, fixtures, description=''):
+    def draft(self, name, source, fixtures, description='', routing=None):
         _identifier(name, NAME, 'skill_name')
         if not isinstance(source, str) or not source.strip() or len(source.encode('utf-8')) > MAX_SOURCE_BYTES:
             raise SkillError('invalid_skill_source')
@@ -398,11 +467,23 @@ class SkillLibrary:
             raise SkillError('invalid_skill_description')
         record = {'schema': 1, 'name': name, 'source': source, 'fixtures': _fixtures(fixtures),
                   'description': description}
+        if routing is not None:
+            from skill_router import validate_routing
+            record['routing'] = validate_routing(routing)
+            # Automatic admission needs both a usable initial state and a
+            # refusal case. Test() still executes every assertion in the kernel.
+            initial = [f for f in fixtures if not f.get('memory')]
+            if (not any(f.get('expectedActionTool') in ACTION_TOOLS for f in initial)
+                    or not any('expectedActionTool' in f and f['expectedActionTool'] is None
+                               and f.get('replan') is True for f in initial)):
+                raise SkillError('routing_positive_and_refusal_fixtures_required')
         version = _hash(record)
         with self._lock():
-            if not self._path(name).exists() and sum(bool(NAME.fullmatch(p.name)) for p in self.root.iterdir()) >= 64:
+            if not self._path(name).exists() and len(self._index(self.root)['skills']) >= 64:
                 raise SkillError('skill_catalog_full')
-            head = self._head(name)
+            # A local refinement starts its own history; do not inherit shared
+            # promotion pointers whose source/report files are in another store.
+            head = self._head(name, self.root)
             target = self._path(name, 'versions', version + '.json')
             if target.exists():
                 self._record(name, version)
@@ -413,6 +494,7 @@ class SkillLibrary:
                 self._write(target, record)
             head['draftVersion'] = version
             self._write(self._path(name, 'head.json'), head)
+            self._index_head(self.root, head)
             return {'name': name, 'version': version, 'draftVersion': version,
                     'activeVersion': head.get('activeVersion')}
 
@@ -434,6 +516,8 @@ class SkillLibrary:
                                          or result.get('waitSeconds') == fixture['expectedWaitSeconds'])
                     passed = passed and ('expectedObserve' not in fixture
                                          or result.get('observe') == fixture['expectedObserve'])
+                    passed = passed and ('expectedChoice' not in fixture
+                                         or result.get('choose') == fixture['expectedChoice'])
                     cases.append({'index': index, 'passed': passed, 'actual': result})
                 except SkillError as exc:
                     cases.append({'index': index, 'passed': False, 'error': str(exc),
@@ -465,6 +549,7 @@ class SkillLibrary:
             if not any(row['version'] == version for row in head['promotions']):
                 head['promotions'].append({'version': version, 'promotedAt': time.time()})
             self._write(self._path(name, 'head.json'), head)
+            self._index_head(self.root, head)
             return {'name': name, 'version': version, 'activeVersion': version,
                     'previousVersion': previous, 'promoted': True}
 
@@ -477,7 +562,7 @@ class SkillLibrary:
         """
         if self.world_root is None:
             raise SkillError('shared_skill_store_unavailable')
-        with self._lock():
+        with self._lock(), self._lock(self.world_root):
             head = self._head(name)
             version = version or head.get('activeVersion')
             if not version or not any(row['version'] == version for row in head['promotions']):
@@ -489,7 +574,10 @@ class SkillLibrary:
             # _load's `default=None` means "raise when missing", so absence has to
             # be tested here rather than passed in as a default.
             existing = self._load(head_path) if head_path.exists() else None
+            if existing is None and len(self._index(self.world_root)['skills']) >= 64:
+                raise SkillError('skill_catalog_full')
             if existing is not None and existing.get('activeVersion') == version:
+                self._index_head(self.world_root, existing)
                 return {'name': name, 'version': version, 'shared': True, 'published': False,
                         'reason': 'already_published'}
             self._write(self._at(self.world_root, name, 'versions', version + '.json'), record)
@@ -502,6 +590,7 @@ class SkillLibrary:
                 published['promotions'].append({'version': version, 'promotedAt': time.time(),
                                                 'publishedBy': 'local'})
             self._write(self._at(self.world_root, name, 'head.json'), published)
+            self._index_head(self.world_root, published)
             return {'name': name, 'version': version, 'shared': True, 'published': True,
                     'path': str(target)}
 

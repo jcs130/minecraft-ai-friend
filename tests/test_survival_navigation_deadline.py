@@ -142,6 +142,22 @@ class NavigationDeadlineTests(unittest.TestCase):
         self.assertFalse(self.gateway.calls)
         self.assertFalse((self.state / 'navigation-stops').exists())
 
+    def test_fast_interrupt_before_deadline_uses_same_exact_once_stop_protocol(self):
+        self.marker['acceptedAt'] = NOW - 1000
+        self.save_marker()
+        after = self.gateway.enforce_navigation_deadline(self.gateway.snapshot(), preempt_action_id=ACTION)
+        result = self.gateway.action_status(after)
+        self.assertEqual(result['receipt']['navigationStop']['reason'], 'motor_preempt')
+        self.assertEqual(result['receipt']['navigationOutcome']['state'], 'cancelled')
+        self.gateway.enforce_navigation_deadline(after, preempt_action_id=ACTION)
+        self.assertEqual(self.gateway.calls, [('task_stop', {'task_id':'t22'})])
+
+    def test_stale_fast_interrupt_cannot_cancel_replacement_action(self):
+        self.marker['acceptedAt'] = NOW - 1000
+        self.save_marker()
+        self.gateway.enforce_navigation_deadline(self.gateway.snapshot(), preempt_action_id='c'*32)
+        self.assertFalse(self.gateway.calls)
+
 
 if __name__ == '__main__':
     unittest.main()

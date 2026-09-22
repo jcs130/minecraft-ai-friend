@@ -6,6 +6,7 @@ an interrupted request is not retried. Game actions always pass the Numen lease.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import copy
 import json
 import hashlib
 import math
@@ -282,6 +283,8 @@ class QwenBackend:
         payload['request_context'] = {**payload.get('request_context', {}),
             'qiandeng_survival_turn': {'version': 1, 'turn_id': turn_id,
                                       'session_id': session['primarySessionId']}}
+        if session.get('contextProtocol') == 2:
+            payload['request_context']['qiandeng_survival_turn']['context_protocol'] = 2
         payload['timeout'] = timeout
         value = self.api('POST', '/console/chat/task', payload)
         import re
@@ -290,7 +293,45 @@ class QwenBackend:
         return value['task_id']
 
     def poll(self, task_id):
-        return self.api('GET', '/console/chat/task/' + task_id)
+        try:
+            return self.api('GET', '/console/chat/task/' + task_id)
+        except Exception as error:
+            response = getattr(error, 'response', None)
+            if response is None or response.status_code != 404:
+                raise
+            # Native background handles are process-local. An exact missing
+            # handle plus an idle native tracker retires this inference only;
+            # it proves neither successful tools nor a successful answer.
+            if response.json() != {'detail': 'Task not found: ' + task_id}:
+                raise
+            status = self.api('GET', '/agents/' + self.agent_id + '/agent-status')
+            if status.get('status') != 'idle' or type(status.get('running_task_count')) is not int or status['running_task_count'] != 0:
+                raise
+            return {'status': 'failed', 'result': {'status': 'failed', 'error': {
+                'code': 'NATIVE_TASK_LOST', 'message': 'Native task absent and agent idle; result unverified. Observe again; do not replay old actions.'}},
+                'reconciliation': {'resultVerified': False, 'requestReplayed': False, 'nativeRunningTaskCount': 0}}
+
+    def lookup_submission(self, active):
+        import re
+        turn = active.get('turnId')
+        if not isinstance(turn, str) or not re.fullmatch(r'survival-[0-9a-f]{32}', turn):
+            raise ValueError('invalid_native_submission_lookup')
+        value = self.api('GET', '/console/survival-submission/' + turn)
+        expected = {'schema': 1, 'turnId': turn, 'agentId': self.agent_id,
+                    **{k: active[k] for k in ('sessionId', 'userId', 'channel')}}
+        if any(value.get(k) != v for k, v in expected.items()):
+            raise ValueError('native_submission_binding_mismatch')
+        if value.get('phase') == 'unknown':
+            return None
+        task = value.get('taskId')
+        if value.get('phase') != 'submitted' or not isinstance(task, str) or not re.fullmatch(r'task-[0-9a-f]{12}', task):
+            raise ValueError('native_submission_receipt_invalid')
+        return task
+
+    def idle(self):
+        state = self.api('GET', '/agents/' + self.agent_id + '/agent-status')
+        return (state.get('status') == 'idle' and type(state.get('running_task_count')) is int
+                and state['running_task_count'] == 0)
 
     def cancel(self, active):
         # A session is reused, so cancelling it after this task ended could stop
@@ -301,14 +342,6 @@ class QwenBackend:
         try:
             terminal = self.poll(task_id)
         except Exception as error:
-            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
-                # The task endpoint answers 404 for a task that is gone. That is proof
-                # the turn is already terminal: nothing left to cancel, nothing to wait
-                # for. Without this, cancel() raised on every attempt, the caller's
-                # except ran pause('cancellation_uncertain') every tick, and Kirito sat
-                # frozen for forty minutes on task-c9bc619f34a2 with cycles stuck at 88.
-                # Any other failure stays unknown and keeps the conservative wait.
-                return {'stopped': True, 'alreadyTerminal': True, 'absent': True}
             raise
         if terminal.get('status') in ('finished', 'completed', 'failed', 'cancelled', 'canceled'):
             return {'stopped': True, 'alreadyTerminal': True}
@@ -333,7 +366,8 @@ class QwenBackend:
 
 class Controller:
     def __init__(self, state=Path('/state/survival'), public=Path('/public/survivor.json'),
-                 gateway=None, backend=None, clock=time.time, skills=None, perception=None, party=None):
+                 gateway=None, backend=None, clock=time.time, skills=None, perception=None, party=None,
+                 policy_worker=None):
         self.root, self.public, self.clock = Path(state), Path(public), clock
         self.root.mkdir(parents=True, exist_ok=True)
         self.gateway = gateway or NumenGateway(self.root)
@@ -341,8 +375,18 @@ class Controller:
         self.skills = skills
         self.perception = perception
         self.party = party
+        from policy_worker import PolicyWorker
+        from system_one import SystemOne
+        self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
+        self.pending_policy = None  # Inference has no external effect; never recover an old choice.
+        self.pending_social = None
+        self.pending_route = None
+        self.pending_motor = None
+        self.policy_slot_wait_at = None
         from review import ReviewQueue
         self.reviews = ReviewQueue(self.root, self.clock)
+        from goal_agenda import GoalAgenda
+        self.goals = GoalAgenda(self.root, self.clock)
         self.awareness = {}
         self.environment = {}
         self.environment_at = 0
@@ -354,6 +398,11 @@ class Controller:
             'schema': 1, 'status': 'starting', 'decisions': [], 'active': None,
             'episodes': [], 'nextDecisionAt': 0, 'failures': 0}
         self.settings = read_json(self.root / 'settings.json')
+        if self.settings.get('brainProtocol') is not None:
+            from embodiment import VERSION
+            if (self.settings['brainProtocol'] != VERSION or self.settings.get('contextProtocol') != 2
+                    or not isinstance(self.settings.get('memoryEpoch'), str) or not self.settings['memoryEpoch']):
+                raise ValueError('embodied_brain_configuration_invalid')
         from life_session import load_session
         self.session = load_session(self.root, self.settings)
         from practice import PracticeStore
@@ -372,6 +421,27 @@ class Controller:
         if job_path.exists() and read_json(job_path).get('status') == 'dispatching':
             self.pause('interrupted_skill_action')
         self.last_body = {}
+        self.data.pop('policyPending', None)
+        self.data.pop('skillRoutePending', None)
+
+    def discard_policy(self):
+        self.pending_policy = None
+        self.policy_slot_wait_at = None
+        self.data.pop('policyPending', None)
+
+    def close_policy(self):
+        self.discard_policy()
+        self.pending_motor = None
+        from skill_router import clear
+        clear(self)
+        self.policy_worker.close()
+
+    def policy_binding(self, job):
+        control = read_json(self.root / 'control.json')
+        value = {'job': job, 'goal': self.memory().get('goal', ''),
+                 'epoch': self.settings.get('memoryEpoch'),
+                 'control': {k: control.get(k) for k in ('enabled', 'mission', 'missionChangedAt', 'drain')}}
+        return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
     def save(self):
         write_json(self.root / 'controller.json', self.data)
@@ -403,6 +473,9 @@ class Controller:
                 abs(current.get('y', 0) - previous['y']) >= 4)
 
     def pause(self, reason):
+        self.discard_policy()
+        from skill_router import clear
+        clear(self)
         self.data.update(status='paused', pauseReason=reason)
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json') if (self.root / 'control.json').exists() else {'schema': 1}
@@ -420,7 +493,7 @@ class Controller:
     def drain_at_boundary(self, body):
         """Stop scheduling after the current native turn and physical action settle."""
         initial = read_json(self.root / 'control.json')
-        if (self.data.get('active') or initial.get('enabled') is not True
+        if (self.data.get('active') or self.data.get('dialogueActive') or initial.get('enabled') is not True
                 or (initial.get('drain') or {}).get('status') != 'requested'):
             return False
         # A model can finish after starting an asynchronous native action. The
@@ -433,7 +506,7 @@ class Controller:
                 return False
             # Unknown retains its existing stronger stop path. No native stop,
             # action dispatch, or receipt inference belongs to this boundary.
-            if (self.data.get('active') or body.get('ok') is not True or body.get('task', {}).get('busy') is not False
+            if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True or body.get('task', {}).get('busy') is not False
                     or self.data.get('actionExecution', {}).get('inFlight')
                     or (self.root / 'unknown.json').exists() or (self.root / 'inflight-action.json').exists()):
                 return False
@@ -452,6 +525,7 @@ class Controller:
             control.update(enabled=False, pauseReason='operator_drain', drain=evidence)
             write_json(self.root / 'control.json', control)
         self.data.update(status='paused', pauseReason='operator_drain')
+        self.discard_policy()
         self.record('operator_drained', **evidence)
         return True
 
@@ -488,12 +562,16 @@ class Controller:
         except (OSError, ValueError, TypeError, AttributeError):
             return {'modelRequests': None, 'promptTokens': None, 'completionTokens': None}
 
-    def catalog(self):
+    def catalog(self, refresh=False):
         """Reading a concurrently edited catalogue must not kill the body loop."""
         if not self.skills:
             return {'skills': []}
+        if (self.settings.get('brainProtocol') == 1 and not refresh
+                and self.clock() - getattr(self, 'skill_catalog_at', float('-inf')) < 30):
+            return self.skill_catalog_cache
         try:
             self.skill_catalog_cache = self.skills.catalog()
+            self.skill_catalog_at = self.clock()
             self.data.pop('catalogWarning', None)
         except Exception as exc:
             self.data['catalogWarning'] = getattr(exc, 'code', type(exc).__name__)
@@ -501,7 +579,10 @@ class Controller:
 
     def memory(self):
         path = self.root / 'memory.json'
-        return read_json(path) if path.exists() else {}
+        value = read_json(path) if path.exists() else {}
+        if self.settings.get('brainProtocol') == 1 and value.get('memoryEpoch') != self.settings['memoryEpoch']:
+            return {}
+        return value
 
     def practice_context(self):
         if self.practice is None:
@@ -556,30 +637,39 @@ class Controller:
 
     def conversation_intent(self, control):
         path = self.root / 'conversation-intent.json'
-        if not path.exists():
-            return control
         try:
-            intent = read_json(path)
-            identity, goal = intent.get('id'), intent.get('goal')
-            if (not isinstance(identity, str) or str(uuid.UUID(identity)) != identity
-                    or not isinstance(goal, str) or not 1 <= len(goal) <= 1200):
-                raise ValueError('invalid_conversation_intent')
-            if identity == self.data.get('conversationIntentId'):
+            if path.exists():
+                self.goals.import_legacy(read_json(path), self.data.get('conversationIntentId'))
+            job_path = self.root / 'skill-job.json'
+            job = read_json(job_path) if job_path.exists() else {}
+            # Queue waits for the whole existing skill/planning turn to end.
+            # Explicit replacement/revision is already active in the agenda
+            # and still uses the original safe action boundary.
+            selected = self.goals.select(activate=not self.data.get('active') and
+                job.get('status') not in ('pending', 'running', 'dispatching'))
+            tag = ({'goalId': selected['goalId'], 'revision': selected['revision']} if selected else None)
+            self.data.pop('goalAgendaError', None)
+            if tag == control.get('goalAgendaSelection'):
+                if tag != control.get('goalAgendaApplied'):
+                    self.data['goalSwitchPending'] = tag['goalId'] if tag else 'agenda_finished'
                 return control
             with action_lock(self.root, blocking=True):
                 # Preserve a simultaneous operator pause and the existing budget.
                 control = read_json(self.root / 'control.json')
-                control.update(mission=goal, missionChangedAt=int(self.clock() * 1000))
+                if tag == control.get('goalAgendaSelection'):
+                    return control
+                control.update(mission=selected['goal'] if selected else '', goalAgendaSelection=tag,
+                               missionChangedAt=max(int(self.clock() * 1000), control.get('missionChangedAt', 0) + 1))
                 write_json(self.root / 'control.json', control)
-            self.data['conversationIntentId'] = identity
+            self.data['conversationIntentId'] = selected['goalId'] if selected else None
             # Intake may arrive while an old model or Numen action is in flight.
             # Preserve it until that action is finished, then retire the old job
             # before it can dispatch another step for the superseded objective.
-            self.data['goalSwitchPending'] = identity
-            self.record('conversation_goal_received', requestId=identity)
+            self.data['goalSwitchPending'] = tag['goalId'] if tag else 'agenda_finished'
+            self.record('conversation_goal_received', selection=tag, executionConfirmed=False)
             return control
-        except (OSError, ValueError, TypeError):
-            self.data['perceptionWarning'] = 'conversation_intent_invalid'
+        except Exception as exc:
+            self.data['goalAgendaError'] = type(exc).__name__
             return control
 
     def switch_goal_at_boundary(self):
@@ -594,6 +684,10 @@ class Controller:
                     job.update(status='cancelled', reason='goal_changed')
                     write_json(path, job)
                     self.record('skill_stopped', name=job.get('name'), reason='goal_changed')
+            control = read_json(self.root / 'control.json')
+            if 'goalAgendaSelection' in control:
+                control['goalAgendaApplied'] = control['goalAgendaSelection']
+                write_json(self.root / 'control.json', control)
             self.data.pop('goalSwitchPending', None)
             self.data['lastDecisionSignature'] = None
             self.data['noActionReviews'] = 0
@@ -721,6 +815,9 @@ class Controller:
 
     def life_context(self, body, control, turn_id, message=None, replies=None):
         """Wake information, not a fresh reconstruction of the whole world."""
+        if self.settings.get('brainProtocol') == 1:
+            from embodiment import wake
+            return wake(self, body, control, turn_id, message, replies)
         from perception import prioritize_events
         events = prioritize_events(self.awareness.get('events', []))[:6]
         bounded_events, size = [], 0
@@ -945,10 +1042,11 @@ class Controller:
                      else None) or control.get('mission') or self.settings['mission'],
             'body': self.last_body, 'lastDecision': self.data.get('lastDecision'),
             'lifeSession': {k: self.session.get(k) for k in ('primarySessionId', 'chatId', 'agentId', 'userId', 'channel')},
-            'sessionProtocol': 1, 'actionExecution': self.data.get('actionExecution'),
+            'sessionProtocol': self.settings.get('contextProtocol', 1), 'actionExecution': self.data.get('actionExecution'),
             'lastInferenceFailure': inference_failure,
             'inferenceBackoff': inference_backoff,
             'cancellationStatus': self.data.get('cancellationStatus'),
+            'standingTask': self.data.get('standingTask'),
             'partyDelivery': self.data.get('partyDelivery'),
             'skills': skills, 'episodes': self.data.get('episodes', [])[-8:],
             'budgets': {'decisionsUsed': len(recent), 'decisionLimit': self.daily_planning_limit(),
@@ -969,6 +1067,27 @@ class Controller:
         job_path = self.root / 'skill-job.json'
         job = read_json(job_path) if job_path.exists() else {}
         value['executionSystems'] = systems_status(self.data, job, now)
+        if self.settings.get('asyncMotor'):
+            from motor_mailbox import public as motor_public
+            value['motor'] = {'version': 1, 'status': self.data.get('motorStatus'),
+                              'queue': motor_public(self.root), 'slowActive': bool(self.data.get('active')),
+                              'pendingInterrupt': self.data.get('motorStop'),
+                              'timingMs': self.data.get('motorTimingMs')}
+        try:
+            agenda = self.goals.snapshot()
+            value['socialScheduling'] = {'version': 1, 'goalCounts': agenda['counts'],
+                'selection': control.get('goalAgendaSelection'), 'attention': self.data.get('socialAttention'),
+                'attentionMode': self.settings.get('socialAttentionMode', 'shadow'),
+                'lastDialogue': self.data.get('lastDialogueTiming'), 'goalError': self.data.get('goalAgendaError'),
+                'voicePlaybackConfirmed': False}
+        except Exception as exc:
+            value['socialScheduling'] = {'version': 1, 'goalError': type(exc).__name__}
+        if self.settings.get('brainProtocol') == 1:
+            value['embodiment'] = {'version': 1, 'memoryEpoch': self.settings['memoryEpoch'],
+                'worldModel': 'partial_observation', 'sharedSensorSurface': True,
+                'legacyDraftQuotaEnabled': False, 'requiresModelPerProgramStep': False,
+                'dialogueActive': bool(self.data.get('dialogueActive')),
+                'dialogueStatus': self.data.get('dialogueStatus', 'idle'), 'dialogueBodyAccess': 'read_only'}
         write_json(self.public, value)
         # 动作连贯性指标：节流计算、写共享位置给元层看板读。
         # 与看板刷新同样的纪律 —— 指标绝不能让被度量的东西坏掉：任何异常都吞掉。
@@ -988,13 +1107,64 @@ class Controller:
             pass
         write_json(self.root / 'heartbeat.json', {'schema': 1, 'at': int(now * 1000),
             'status': self.data['status'], 'ok': True, 'fastSystemProtocol': 1,
-            'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1})
+            'selfPlanningVersion': 1, 'inferenceFailureVersion': 1, 'visionProtocol': 1,
+            'socialSchedulingVersion': 1, 'goalAgendaReady': not bool(value['socialScheduling'].get('goalError')),
+            'socialProgressVersion': 1,
+            'skillCatalogRoutingVersion': 1,
+            'asyncMotorVersion': 1 if self.settings.get('asyncMotor') else 0,
+            'contextProtocol': self.settings.get('contextProtocol', 1),
+            'brainProtocol': self.settings.get('brainProtocol'),
+            'memoryEpoch': self.settings.get('memoryEpoch')})
+
+    def watch_standing_task(self, body):
+        """Observe a foreign native task and reclaim it after the existing grace.
+
+        Receipt and skill ownership take precedence. An unreadable ownership
+        source permits observation only, never a stop based on missing evidence.
+        """
+        row = {}
+        try:
+            import standing_task
+            task = (body or {}).get('task') or {}
+            task_id = task.get('task_id')
+            watch = self.data.get('standingTask') or {}
+            if not task_id:
+                standing_task.observe(watch, body, self.clock())
+                if watch:
+                    self.data['standingTask'] = watch
+                return
+            known = {(self.data.get('actionExecution') or {}).get('receipt', {}).get('nativeTaskId'),
+                     (self.data.get('observeAction') or {}).get('nativeTaskId')}
+            ownership_known = True
+            job_path = self.root / 'skill-job.json'
+            if job_path.exists():
+                try:
+                    known.add((read_json(job_path).get('lastExecution') or {}).get('nativeTaskId'))
+                except (OSError, ValueError, TypeError, AttributeError):
+                    ownership_known = False
+            owned = task_id in known
+            row = standing_task.observe(watch, body, self.clock(), owned=owned,
+                stop=(lambda tid: self.gateway._invoke('task_stop', {'task_id': tid}))
+                     if ownership_known and not owned else None,
+                record=self.record)
+            self.data['standingTask'] = watch
+            if ownership_known:
+                self.data.pop('standingTaskError', None)
+            else:
+                self.data['standingTaskError'] = 'skill_ownership_unavailable'
+        except Exception as error:
+            self.data['standingTaskError'] = type(error).__name__
+        if row.get('occupied'):
+            self.data['status'] = 'body_occupied'
 
     def stop_actions(self):
         """Operator cancellation, never a replacement game goal."""
+        self.discard_policy()
         active = self.data.get('active')
         confirmed = True
         self.gateway.close_lease(blocking=True)
+        if active and active.get('bodyAccess') == 'queued':
+            self.close_model_authority(active)
         if active:
             try:
                 if active.get('nativeTerminal'):
@@ -1102,6 +1272,13 @@ class Controller:
             self.data['observeAction'] = None
             self.save()
 
+    def close_model_authority(self, active):
+        if (active or {}).get('bodyAccess') == 'queued':
+            from motor_mailbox import close_cognition
+            close_cognition(self.root, active['turnId'])
+        else:
+            self.gateway.close_lease(blocking=True)
+
     def poll_model(self, body):
         active = self.data['active']
         self.collect_action_receipts(active['turnId'])
@@ -1109,16 +1286,39 @@ class Controller:
             self.pause('model_timeout')
             self.stop_actions()
             return
+        # A GET timeout is not a lost POST or a missing task. Keep polling the
+        # same durable task, within its original deadline, without disabling
+        # the tools of a model which may still be running.
+        poll_wait = active.get('pollWait') or {}
+        if not active.get('nativeTerminal') and self.clock() < poll_wait.get('nextPollAt', 0):
+            self.data['status'] = 'model_poll_wait'
+            return
         try:
             terminal = active.get('nativeTerminal')
             result = ({'status': 'finished', 'result': {'status': 'completed' if terminal['completed'] else 'failed', 'output': [
                 {'role': 'assistant', 'type': 'message', 'status': 'completed',
                  'content': [{'type': 'text', 'text': terminal['text']}]}]}}
                 if terminal else self.backend.poll(active['taskId']))
-        except Exception:
+        except Exception as error:
+            import httpx
+            status = getattr(getattr(error, 'response', None), 'status_code', None)
+            transient = (status in (408, 429, 500, 502, 503, 504)
+                         or isinstance(error, (httpx.TransportError, TimeoutError, ConnectionError)))
+            if transient:
+                failures = poll_wait.get('failures', 0) + 1
+                active['pollWait'] = {'failures': failures,
+                    'firstFailureAt': poll_wait.get('firstFailureAt', self.clock()),
+                    'nextPollAt': self.clock() + min(30, 5 * 2 ** min(failures - 1, 3)),
+                    'errorType': type(error).__name__, 'httpStatus': status}
+                self.data['status'] = 'model_poll_wait'
+                self.save()
+                return
             self.pause('model_result_unknown')
             self.stop_actions()
             return
+        if active.pop('pollWait', None):
+            self.record('model_poll_recovered', taskId=active['taskId'], turnId=active['turnId'],
+                        failures=poll_wait['failures'], requestReplayed=False)
         if result.get('status') in ('pending', 'running', 'queued'):
             self.data['status'] = 'thinking'
             return
@@ -1128,7 +1328,7 @@ class Controller:
         native = result.get('result') or {}
         if native.get('session_id') and native['session_id'] != active.get('sessionId', active['turnId']):
             self.pause('model_session_result_mismatch')
-            self.gateway.close_lease(blocking=True)
+            self.close_model_authority(active)
             return
         self.consume_party_replies(active)
         if active.get('review'):
@@ -1173,7 +1373,7 @@ class Controller:
             self.record('decision_finished', turnId=active['turnId'], taskId=active['taskId'],
                         resultStatus=native.get('status'), completed=completed, nativeTaskCompleted=native_completed,
                         failureReason=None if completed else failure_reason, inferenceFailure=inference_failure)
-        self.gateway.close_lease(blocking=True)
+        self.close_model_authority(active)
         actions = self.collect_action_receipts(active['turnId'])
         if actions and not hasattr(self.gateway, 'turn_receipts'):
             self.data['observeAction'] = {'action': actions[-1].get('tool'), 'before': active['before'],
@@ -1214,6 +1414,9 @@ class Controller:
                 self.pause('party_answer_receipt_pending')
                 return
         if completed:
+            if active.get('contextDelivery'):
+                from behavior_context import acknowledge
+                acknowledge(self.root, self.session, active['contextDelivery'])
             self.session['hasCompletedTask'] = True
             write_json(self.root / 'life-session.json', self.session)
         self.data['active'] = None
@@ -1235,6 +1438,7 @@ class Controller:
         self.data['lastDecisionPosition'] = body.get('position')
         if completed:
             self.data['failures'] = 0
+            self.data.pop('recoveryAfter', None)
             self.data.pop('lastInferenceFailure', None)
             self.data.pop('inferenceBackoff', None)
         else:
@@ -1249,12 +1453,12 @@ class Controller:
             else:
                 self.data.pop('inferenceBackoff', None)
                 self.data['failures'] = self.data.get('failures', 0) + 1
-                if self.data['failures'] >= 2:
-                    # Name what actually happened. "repeated_model_failure" reads as a
-                    # broken model; a doom loop means the model kept choosing the same
-                    # action, which is an approach problem with a known remedy.
-                    self.pause('doom_loop' if self.data.get('lastFailureReason') == 'native_doom_loop'
-                               else 'repeated_model_failure')
+                # Qwen's iteration/doom-loop guard ends ONE inference. It does
+                # not withdraw the user's standing authorization to live.
+                # Pace future fresh observations; never repeat this request.
+                delay = min(1800, 60 * 2 ** min(self.data['failures'] - 1, 5))
+                self.data['recoveryAfter'] = self.clock() + delay
+                self.data['status'] = 'model_recovery_wait'
         self.save()
 
     def deliver_party_terminal(self, active, *, allow_dispatch=True):
@@ -1295,9 +1499,11 @@ class Controller:
     def tick_skill(self, body):
         path = self.root / 'skill-job.json'
         if not self.skills or not path.exists():
+            self.discard_policy()
             return False
         job = read_json(path)
         if job.get('status') not in ('pending', 'running'):
+            self.discard_policy()
             return False
         if job.get('practiceRunId') and not job.get('practiceStarted'):
             try:
@@ -1319,6 +1525,7 @@ class Controller:
         if (job['steps'] >= min(job.get('maxSteps', 32), self.settings['maxSkillSteps']) or
                 now - job['startedAt'] > self.settings['maxSkillSeconds']):
             job.update(status='replan', reason='skill_execution_budget')
+            self.discard_policy()
             write_json(path, job)
             self.record('skill_stopped', name=job['name'], reason=job['reason'])
             return False
@@ -1327,11 +1534,76 @@ class Controller:
             return True
         try:
             from fast_execution import execution_state, program_observation
-            observed = dict(body, execution=execution_state(job, self.data.get('episodes', []), body, now),
-                environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
-                adventure=self.adventure(body), guild=self.cached_guild(),
-                constructionAreas=self.settings.get('constructionAreas', [])[:8])
-            plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
+            pending = self.pending_policy
+            binding = self.policy_binding(job)
+            if pending and pending['binding'] != binding:
+                self.discard_policy()
+                pending = None
+            if pending:
+                plan = dict(pending['plan'])
+            else:
+                observed = dict(body, goal=job.get('routeGoal') or (job.get('objective') or {}).get('description', ''),
+                    execution=execution_state(job, self.data.get('episodes', []), body, now),
+                    environment=self.environment, perception=self.awareness, gameSkills=self.cached_game_skills(),
+                    adventure=self.adventure(body), guild=self.cached_guild(),
+                    constructionAreas=self.settings.get('constructionAreas', [])[:8])
+                plan = self.skills.run(job['name'], observed, job.get('memory', {}), job['version'])
+            job.pop('lastPolicy', None)
+            if 'choose' in plan:
+                if pending is None:
+                    token = self.policy_worker.submit(plan['choose'], body,
+                        (job.get('objective') or {}).get('description') or self.memory().get('goal', ''),
+                        observed['execution'].get('lastExecution'))
+                    if token is not None:
+                        self.policy_slot_wait_at = None
+                        # Persist only the unchanged program job, never a replayable choice.
+                        write_json(path, original_job)
+                        self.pending_policy = {'token': token, 'plan': copy.deepcopy(plan), 'body': copy.deepcopy(body),
+                            'binding': binding, 'submittedAt': self.clock()}
+                        self.data['policyPending'] = {'submittedAt': int(self.clock() * 1000),
+                            'name': job['name'], 'version': job['version']}
+                    else:
+                        if self.policy_slot_wait_at is None:
+                            self.policy_slot_wait_at = self.clock()
+                        if self.clock() - self.policy_slot_wait_at > 5:
+                            job.update(status='replan', reason='policy_worker_busy')
+                            write_json(path, job)
+                            self.discard_policy()
+                            self.record('skill_finished', name=job['name'], version=job['version'],
+                                        status='replan', reason='policy_worker_busy', steps=job['steps'])
+                            return False
+                    self.data.update(status='executing_skill', skillWaitReason='policy_pending')
+                    return True
+                selection = self.policy_worker.poll(pending['token'])
+                elapsed = self.clock() - pending['submittedAt']
+                if selection is None and elapsed <= 5:
+                    self.data.update(status='executing_skill', skillWaitReason='policy_pending')
+                    return True
+                from policy_worker import same_body
+                self.discard_policy()
+                if (selection is None or elapsed > 5 or not same_body(pending['body'], body, self.clock())
+                        or selection.get('code') == 'policy_observation_stale'):
+                    # A classifier may re-observe, but never retry an uncertain action.
+                    job['policyDiscards'] = job.get('policyDiscards', 0) + 1
+                    self.record('system_one_discarded', name=job['name'], reason='policy_premise_changed',
+                                requestAgeMs=round(elapsed * 1000, 2), worldActions=0)
+                    if job['policyDiscards'] <= 2:
+                        write_json(path, job)
+                        self.data.update(status='executing_skill', skillWaitReason='policy_reobserve')
+                        return True
+                    selection = {'ok': False, 'code': 'policy_reobserve_exhausted'}
+                selection['handoffMs'] = round(elapsed * 1000, 2)
+                selection['resultAgeMs'] = round(max(0, elapsed * 1000 - selection.get('workerMs', 0)), 2)
+                job.pop('policyDiscards', None)
+                job['lastPolicy'] = {k: v for k, v in selection.items() if k not in ('state', 'candidates', 'action')}
+                self.data['systemOne'] = job['lastPolicy']
+                self.record('system_one_choice', name=job['name'], version=job['version'],
+                            practiceRunId=job.get('practiceRunId'), selection=selection)
+                if selection['ok']:
+                    plan['action'] = selection['action']
+                else:
+                    plan.update(action=None, replan=True, reason=selection['code'])
+                plan.pop('choose')
             self.data.pop('skillWaitReason', None)
             job.pop('nextRunAt', None)
             passive = 'waitSeconds' in plan or 'observe' in plan
@@ -1354,6 +1626,12 @@ class Controller:
             action = plan.get('action')
             if action:
                 turn_id = 'skill-' + uuid.uuid4().hex
+                if job.get('routeSelection') and job['steps'] == 1 and action == job.get('routeAction'):
+                    self.record('system_one_dispatch', turnId=turn_id, name=job['name'], version=job['version'],
+                                practiceRunId=job.get('practiceRunId'), policy=job['routeSelection'], scope='skill_catalog')
+                if job.get('lastPolicy'):
+                    self.record('system_one_dispatch', turnId=turn_id, name=job['name'], version=job['version'],
+                                practiceRunId=job.get('practiceRunId'), policy=job['lastPolicy'])
                 if job.get('practiceRunId'):
                     self.practice.step(job['practiceRunId'], turn_id, turn_id, action['tool'], action['args'])
                 self.gateway.open_lease(turn_id, (now + 60) * 1000)
@@ -1392,6 +1670,7 @@ class Controller:
             self.save()
             return job['status'] == 'running'
         except Exception as exc:
+            self.discard_policy()
             if job.get('status') == 'dispatching':
                 # Preserve the last intent even if the action response journal is intact.
                 # The program must not be restarted at an unknown external-effect boundary.
@@ -1409,9 +1688,14 @@ class Controller:
             return False
 
     def submit_model(self, body, control):
+        if self.data.get('dialogueActive'):
+            return
         if self.drain_at_boundary(body):
             return
         now = self.clock()
+        if now < self.data.get('recoveryAfter', 0):
+            self.data['status'] = 'model_recovery_wait'
+            return
         backoff = self.data.get('inferenceBackoff')
         if backoff is not None:
             from inference_errors import validate_backoff
@@ -1433,9 +1717,11 @@ class Controller:
             return
         if self.party and hasattr(self.party, 'validate_session'):
             self.party.validate_session(self.session, self.settings)
-        message = self.party.pending() if self.party else None
+        # Embodied social work has its own read-only lane. A body-planning turn
+        # must not become another dialogue session just because a message arrived.
+        message = self.party.pending() if self.party and self.settings.get('brainProtocol') != 1 else None
         requested_review = self.reviews.pending()
-        changed = (backoff is not None or message is not None
+        changed = (backoff is not None or self.data.get('recoveryAfter') is not None or message is not None
                    or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
                    or self.meaningful_displacement(body))
         review = self.next_review(control)
@@ -1473,6 +1759,19 @@ class Controller:
                 '按需用Qwen原生文件和记忆整理已核验事实、失败原因与一个可改进点。'
                 '长期目标及下一步保存在自己的memory/goals.md，MEMORY.md保留短索引，remember记录当前工作状态；'
                 '区分已验证、待验证和受阻。普通笔记不等于程序已学会，程序仍须真实测试。')
+        if requested_review or self.data['wakeReason'] == 'autonomous_review':
+            # A named delta survives behavior_context's intentional removal of
+            # repeated instructions. Plans remain the agent's native workspace.
+            context['reviewGuidance'] = {
+                'goalFile': 'memory/goals.md',
+                'reference': 'skills/qd-survivor-practice/references/long-term-planning.md',
+                'instruction': '本轮先用read_file读取memory/goals.md；按当前身体、实际回执和已听见的信息核对长期计划，'
+                    '用write_file或edit_file修订已过时的进度与下一步，并核对保存回执。'
+                    '区分已验证、待验证、受阻，保留证据编号和时间。不要从自述或程序done推断目标完成。'
+                    'MEMORY.md只留短索引；最后才用remember保存工作状态并finish_turn=true。'
+                    '只写工作摘要不等于长期计划已同步；如果计划无需修改，说明已经核对的依据。'
+                    '身体安全时先完成这份复盘，不为凑动作次数继续旧路线。'
+                    '保留自己的长期使命；危险优先，复盘不打断休息，不为检查另造任务。'}
         # Crystallization (case-9f5b2099 熟能生巧): inject pattern hints into
         # the review/dream context, not the main action prompt. The agent
         # reflects on repeating patterns during its scheduled review cycle —
@@ -1495,8 +1794,11 @@ class Controller:
         # world task comes first and learning can be deferred - which is exactly why
         # fifteen roles have produced zero drafts. This asks every review to close the loop
         # one way or the other, so declining is a decision on the record instead of silence.
-        provider = self._evolution_quota()
-        context['evolutionQuota'] = provider
+        # The embodied brain learns from evidence at review boundaries. A count
+        # of shifts without drafts is not evidence that a new skill is needed.
+        provider = self._evolution_quota() if self.settings.get('brainProtocol') != 1 else {}
+        if provider:
+            context['evolutionQuota'] = provider
         # Fifty-seven cycles of "review, and while you are at it consolidate something"
         # produced zero drafts. The ask was not too quiet, it was in the wrong place: as
         # one more line inside a survival turn, learning always loses to the next real
@@ -1522,6 +1824,8 @@ class Controller:
             candidate = evolution_candidate(self.root)
             if candidate:
                 context['instruction'] += candidate
+                if self.settings.get('contextProtocol') == 2:
+                    context['evolutionCandidate'] = candidate
         elif provider.get('cyclesSince'):
             context['instruction'] += (
                 '【进化】本班若有余力，交代一句：产出草稿，或写明"本周期无可固化"。'
@@ -1545,16 +1849,37 @@ class Controller:
         # does not retrieve the same boilerplate across every life turn.
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
                                         control.get('missionChangedAt', 0))
+        model_session, context_delivery = self.session, None
+        context_event_ids = context['perception'].get('pendingEventIds', [])
+        if self.settings.get('asyncMotor'):
+            from motor_mailbox import public as motor_public
+            context['motor'] = {'bodyAccess': 'queued', 'queue': motor_public(self.root),
+                'instruction': '身体由独立快循环执行。动作和skill_start返回motor_queued仅表示排队，最多6请求；'
+                '可继续规划或结束本轮，不忙等、不重复排队。status.motorQueue读完成/失败回执。Jev无需等待你的下一回合。'}
+        if self.settings.get('contextProtocol') == 2:
+            from behavior_context import prepare
+            model_session, context, context_delivery = prepare(
+                self.root, self.session, context, self.memory(), learning=due)
         prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
-                  'sessionId': self.session['primarySessionId'], 'userId': self.session['userId'],
-                  'channel': self.session['channel'], 'chatId': self.session.get('chatId'),
-                  'mission': context['mission'], 'missionChangedAt': control.get('missionChangedAt'),
+                  'sessionId': model_session['primarySessionId'], 'userId': self.session['userId'],
+                  'channel': self.session['channel'], 'chatId': model_session.get('chatId'),
+                  'mission': control.get('mission') or self.settings['mission'], 'missionChangedAt': control.get('missionChangedAt'),
                   'partyReplyEventIds': [reply['eventId'] for reply in replies],
-                  'eventIds': context['perception'].get('pendingEventIds', []), 'before': body}
+                  'eventIds': context_event_ids, 'before': body}
+        if context_delivery:
+            active['contextDelivery'] = context_delivery
+            active['contextStats'] = {'protocol': 2, 'purpose': context['purpose'],
+                                      'inputBytes': len(prompt.encode('utf-8')),
+                                      'incremental': context.get('baseTurn') is not None}
         if requested_review:
             active['review'] = requested_review
-        self.gateway.open_lease(turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, action_limit=6)
+        if self.settings.get('asyncMotor'):
+            from motor_mailbox import open_cognition
+            open_cognition(self.root, turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, self.clock)
+            active['bodyAccess'] = 'queued'
+        else:
+            self.gateway.open_lease(turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, action_limit=6)
         # Serialize the final reservation with local operator control. A drain
         # arriving during context construction must not buy a new model turn.
         reserved = False
@@ -1569,6 +1894,7 @@ class Controller:
                         self.data['status'] = 'party_wait'
                 if message is None or active.get('partyReservation'):
                     self.data['active'] = active
+                    self.data['dialogueYieldToPlanner'] = False
                     self.reserve_review_state(active)
                     self.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now}]
                     self.data['nextDecisionAt'] = now + cooldown
@@ -1576,7 +1902,7 @@ class Controller:
                     self.save()
                     reserved = True
         if not reserved:
-            self.gateway.close_lease(blocking=True)
+            self.close_model_authority(active)
             self.drain_at_boundary(body)
             return
         try:
@@ -1587,7 +1913,7 @@ class Controller:
                     self.party.validate_session(self.session, self.settings, reservation=reply)
             request_context = self.party.request_context() if message is not None or replies else None
             active['taskId'] = self.backend.submit(turn_id, prompt, self.settings['taskTimeoutSeconds'],
-                session=self.session, request_context=request_context)
+                session=model_session, request_context=request_context)
             active['phase'] = 'submitted'
             from life_cycle import consume
             if consume(self.session):
@@ -1597,10 +1923,11 @@ class Controller:
                 self.party.submitted(active['partyReservation'], active['taskId'])
             if hasattr(self.backend, 'resolve_chat'):
                 try:
-                    chat = self.backend.resolve_chat(self.session)
+                    chat = self.backend.resolve_chat(model_session)
                     if chat:
                         from life_session import bind_chat
-                        bind_chat(self.root, self.session, chat['id'])
+                        if model_session['primarySessionId'] == self.session['primarySessionId']:
+                            bind_chat(self.root, self.session, chat['id'])
                         active['chatId'] = chat['id']
                         self.save()
                 except Exception as exc:
@@ -1618,6 +1945,9 @@ class Controller:
         """
         from body_reconnect import BODY_PAUSE_REASONS
         try:
+            if self.data.get('active') or self.data.get('dialogueActive'):
+                return
+            control = read_json(self.root / 'control.json')
             from life_cycle import check, take_rotation
             name = self.settings.get('bodyName')
             if not isinstance(name, str) or not hasattr(self.gateway, '_native_roster'):
@@ -1789,19 +2119,7 @@ class Controller:
     CANCELLATION_SETTLE_SECONDS = 300
 
     def settle_cancellation(self):
-        """把悬着的 cancellationStatus 按证据结案，而不是无限等一个不会来的终态。
-
-        2026-09-19：他 24 小时里 184/475 个动作拿到 unknown —— 近四成，且集中在
-        goto/farm/equip_item 这些核心动作上。根因就在此处：stop_actions 一旦写下
-        waiting_for_native_terminal，就再也没有人去探过 —— 而那个原生任务其实早已 404，
-        终态永远不会来，这一窗里所有动作的回执就永远缺一块。
-
-        回执是学习的原料：拿不到回执就学不到「我做成没做成」，于是只能重复（重复占比 1.00）、
-        只能写字（知识 15 份/天而能力化为 0）、四天做成率 57–60% 一动不动。
-
-        每轮复探一次，三种结局都写清楚：终态即结案；404 / 超窗不可观测按证据结案；
-        仍在跑就继续等 —— 那是正确的等待。
-        """
+        """Settle proven terminal tasks; elapsed time alone proves no outcome."""
         if self.data.get('cancellationStatus') != 'waiting_for_native_terminal':
             return None
         active = self.data.get('active') or {}
@@ -1816,16 +2134,12 @@ class Controller:
             self.save()
 
         if not task_id:
-            settle('native_task_absent', reason='no_task_id')
-            return 'absent'
+            return 'waiting'  # An unknown POST is not evidence of absence.
         now = self.clock()
         try:
             terminal = self.backend.poll(task_id)
             native = str((terminal or {}).get('status') or '').lower()
-        except Exception as error:
-            if getattr(getattr(error, 'response', None), 'status_code', None) == 404:
-                settle('native_task_absent', reason='http_404')
-                return 'absent'
+        except Exception:
             native = None
         if native in ('finished', 'completed', 'failed', 'cancelled', 'canceled', 'timeout', 'timed_out'):
             settle('native_terminal_confirmed', reason='native_terminal', nativeStatus=native)
@@ -1840,17 +2154,64 @@ class Controller:
             return 'waiting'
         if now - since < self.CANCELLATION_SETTLE_SECONDS:
             return 'waiting'
-        settle('native_task_unobservable', reason='unobservable_beyond_window', seconds=int(now - since))
-        return 'unobservable'
+        return 'waiting'  # Elapsed time cannot establish native termination.
+
+    def recover_runtime_pause(self, body):
+        """Resume infrastructure pauses only after native and body ownership settle."""
+        recoverable = {'model_timeout', 'model_result_unknown', 'cancellation_uncertain',
+                       'doom_loop', 'repeated_model_failure', 'survivor_child_exited',
+                       'controller_OSError', 'controller_GatewayError', 'controller_FileNotFoundError'}
+        try:
+            control = read_json(self.root / 'control.json')
+            if control.get('pauseReason') not in recoverable or control.get('drain', {}).get('status') == 'requested':
+                return
+            execution = self.data.get('actionExecution', {})
+            if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True
+                    or body.get('task', {}).get('busy') or execution.get('ok') is not True
+                    or execution.get('inFlight') or (self.root / 'unknown.json').exists()):
+                return
+            job_path = self.root / 'skill-job.json'
+            if job_path.exists() and read_json(job_path).get('status') == 'dispatching':
+                return
+            if not hasattr(self.backend, 'idle') or not self.backend.idle():
+                return
+            if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
+                from native_tools import require_ready
+                if not require_ready():
+                    return
+            with action_lock(self.root, blocking=True):
+                latest = read_json(self.root / 'control.json')
+                if latest != control or (self.root / 'unknown.json').exists():
+                    return
+                latest.update(enabled=True, pauseReason=None)
+                write_json(self.root / 'control.json', latest)
+            self.data.pop('pauseReason', None)
+            self.data['status'] = 'waiting'
+            self.record('runtime_pause_recovered', reason=control['pauseReason'], requestReplayed=False)
+            self.save()
+        except Exception as error:
+            self.data['recoveryProbeError'] = type(error).__name__
+            return
 
     def tick(self):
+        tick_started = time.monotonic()
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
         self.settle_cancellation()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
+        if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
+            self.discard_policy()
+            self.pending_motor = None
+            from skill_router import clear
+            clear(self)
         body = self.gateway.snapshot()
         if hasattr(self.gateway, 'enforce_navigation_deadline'):
             body = self.gateway.enforce_navigation_deadline(body)
         self.last_body = body
+        if (not body.get('ok') or body.get('task', {}).get('busy')
+                or self.data.get('active') and not self.settings.get('asyncMotor')):
+            self.discard_policy()
+            from skill_router import clear
+            clear(self)
         if hasattr(self.gateway, 'action_status'):
             execution = self.gateway.action_status(body)
             self.data['actionExecution'] = execution
@@ -1873,6 +2234,12 @@ class Controller:
             except GatewayError as exc:
                 self.data['actionExecution'] = {'ok': False, 'inFlight': True, 'code': str(exc)}
         self.perceive(body)
+        observed_at = time.monotonic()
+        if self.settings.get('brainProtocol') == 1:
+            from social_attention import tick as attention_tick
+            attention_tick(self, body, control)
+            from dialogue import tick as dialogue_tick
+            dialogue_tick(self, body, control)
         self._check_life_cycle(body)
         if body.get('ok'):
             from body_reconnect import BodyReconnect
@@ -1903,68 +2270,8 @@ class Controller:
                     self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
                 except (ValueError, OSError):
                     self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
-            elif (control.get('pauseReason') or self.data.get('pauseReason')) == 'cancellation_uncertain':
-                # A cancel whose terminal never arrives paused this lane for good: the
-                # body-pause branch above resumes its own reasons, this one had no
-                # branch at all. On 2026-09-18 that left Kirito frozen for forty
-                # minutes waiting on task-c9bc619f34a2, which had already 404'd.
-                # The task ledger is the evidence: a terminal status settles it, and a
-                # 404 proves the task is gone, so the cancellation is concluded. No
-                # result is invented, and a task that still answers as running keeps
-                # the pause - that wait is correct.
-                active = self.data.get('active')
-                task_id = (active or {}).get('taskId')
-                if not active:
-                    # An orphaned cancellation pause. stop_actions() runs earlier in this
-                    # same branch and, with the 404-is-terminal rule, already clears the
-                    # turn - so by the time control flow reaches here there is nothing
-                    # left to cancel or wait for, and only the stale control.json reason
-                    # keeps the lane down. That is exactly what held Kirito at cycles=88.
-                    # The write must mirror pause(): re-read under the same lock and write
-                    # the file, because the in-memory control dict never reaches disk and
-                    # the next tick reads the file again.
-                    with action_lock(self.root, blocking=True):
-                        latest = (read_json(self.root / 'control.json')
-                                  if (self.root / 'control.json').exists() else {'schema': 1})
-                        latest.update(enabled=True, pauseReason=None)
-                        write_json(self.root / 'control.json', latest)
-                    self.data.pop('pauseReason', None)
-                    self.data['status'] = 'waiting'
-                elif task_id:
-                    try:
-                        terminal = self.backend.poll(task_id)
-                        absent = False
-                    except Exception as error:
-                        terminal, absent = None, True
-                        probe = type(error).__name__
-                    status = '' if absent else str((terminal or {}).get('status') or '').lower()
-                    settled = status in ('finished', 'completed', 'failed', 'cancelled', 'canceled')
-                    if settled or absent:
-                        if absent:
-                            active['nativeTerminal'] = {'text': '', 'completed': False,
-                                'failureReason': 'native_task_absent', 'probe': probe}
-                        else:
-                            active['nativeTerminal'] = {'text': '', 'completed': False,
-                                'failureReason': 'native_task_' + status}
-                        self.save()
-                        if self.party and active.get('partyReservation'):
-                            try:
-                                self.deliver_party_terminal(active, allow_dispatch=False)
-                            except Exception:
-                                pass
-                        self.data['active'] = None
-                        self.data['cancellationStatus'] = ('native_terminal_confirmed' if settled
-                                                           else 'native_task_absent')
-                        self.data.pop('pauseReason', None)
-                        self.data['status'] = 'waiting'
-                        # pause() also wrote control.json (enabled=False + the reason) and
-                        # that file is what actually holds the lane down. Mirror that write
-                        # exactly - re-read under the lock, then persist.
-                        with action_lock(self.root, blocking=True):
-                            latest = (read_json(self.root / 'control.json')
-                                      if (self.root / 'control.json').exists() else {'schema': 1})
-                            latest.update(enabled=True, pauseReason=None)
-                            write_json(self.root / 'control.json', latest)
+            else:
+                self.recover_runtime_pause(body)
         elif self.data.get('actionExecution', {}).get('code') == 'outcome_unknown':
             # action_status inspected this marker while holding action.lock.
             # Re-reading exists() here races with a subsequent normal dispatch:
@@ -1990,8 +2297,28 @@ class Controller:
                 self.data['bodyReconnect'] = BodyReconnect(self.gateway, self.clock).tick(self.settings)
             except (ValueError, OSError):
                 self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
+        elif self.settings.get('asyncMotor'):
+            from motor_loop import tick as motor_tick
+            motor_at = time.monotonic()
+            motor_tick(self, body, control)
+            motor_finished = time.monotonic()
+            # Native Qwen tasks already run asynchronously. Their progress must
+            # never exclude the independent body branch or close its lease.
+            if read_json(self.root / 'control.json').get('enabled') is True:
+                if self.data.get('active'):
+                    self.poll_model(body)
+                elif ((control.get('drain') or {}).get('status') != 'requested'
+                      and not (self.pending_route or self.pending_policy or self.pending_motor)):
+                    self.submit_model(body, control)
+            self.data['motorTimingMs'] = {
+                'observeAndReceipts': round((observed_at-tick_started)*1000, 2),
+                'attentionAndLife': round((motor_at-observed_at)*1000, 2),
+                'motor': round((motor_finished-motor_at)*1000, 2),
+                'slowHandoff': round((time.monotonic()-motor_finished)*1000, 2)}
         elif self.data.get('active'):
             self.poll_model(body)
+        elif self.data.get('goalAgendaError'):
+            self.data['status'] = 'goal_confirmation_wait'
         elif self.data.get('actionExecution', {}).get('inFlight'):
             self.data['status'] = 'acting' if self.data['actionExecution'].get('ok') else 'action_confirmation_wait'
         else:
@@ -2000,17 +2327,22 @@ class Controller:
                 self.pause('not_in_survival')
             elif body['task']['busy']:
                 self.data['status'] = 'acting'
+                self.watch_standing_task(body)
             else:
+                self.watch_standing_task(body)
                 self.finish_action_observation(body)
                 # Pattern detection (case-9f5b2099 熟能生巧): check for repeating
                 # action sequences and crystallize them into skill hints.
-                self._check_patterns()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_patterns()
                 # Environment penalties (2026-09-17): the world's own verdicts —
                 # a repeated refusal, lost health, a target that never changes —
                 # are triggers in their own right, not just background.
-                self._check_environment_penalties()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_environment_penalties()
                 # P1 停滞重定向：目标本身是否还在推进（与上一条同源、不同问题）
-                self._check_stagnation()
+                if self.settings.get('brainProtocol') != 1:
+                    self._check_stagnation()
                 if not self.drain_at_boundary(body):
                     self.switch_goal_at_boundary()
                     if not self.tick_skill(body):
@@ -2030,13 +2362,15 @@ class Controller:
                             # something is genuinely continuing server-side;
                             # otherwise think rather than dead-idle until
                             # time_drift re-escalates minutes later.
-                            routing = self._adaptive_route(body)
+                            routing = self._adaptive_route(body) if self.settings.get('brainProtocol') != 1 else None
                             continues = (routing or {}).get('suggested_action') in (
                                 'continue_goto', 'continue_farming_skill')
                             if routing and routing.get('level') == 0 and continues:
                                 self.data['status'] = 'adaptive_skip'
                             else:
-                                self.submit_model(body, control)
+                                from skill_router import tick as route_skill
+                                if not route_skill(self, body, control):
+                                    self.submit_model(body, control)
         # Model terminal and pending physical actions may settle this tick.
         # Preserve other pause reasons, including every unknown outcome.
         self.drain_at_boundary(body)

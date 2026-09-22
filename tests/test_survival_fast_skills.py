@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -41,6 +42,42 @@ class FastSkillTests(unittest.TestCase):
                          {'action': None, 'memory': {}, 'done': True, 'replan': False, 'reason': ''})
         with self.assertRaisesRegex(SkillError, 'invalid_skill_result'):
             result({'memory': {}, 'done': True})
+
+    def test_learned_program_can_propose_generic_item_use_and_then_verify_inventory(self):
+        source = '''function next(state,memory) {
+          if (state.counts["minecraft:water_bucket"] > 0)
+            return {action:null,memory:memory,done:true};
+          if (memory.clicked) return {memory:memory,observe:{tool:"inspect_block",args:{x:3,y:64,z:0}}};
+          return {memory:{clicked:true},action:{tool:"interact_at",args:{button:"right",x:3,y:64,z:0,hold_ticks:0,item_id:"minecraft:bucket"}}};
+        }'''
+        first = evaluate(source, {'counts': {'minecraft:bucket': 1}})
+        self.assertEqual(first['action']['tool'], 'interact_at')
+        self.assertFalse(first['done'])
+        waiting = evaluate(source, {'counts': {}}, first['memory'])
+        self.assertEqual(waiting['observe']['tool'], 'inspect_block')
+        self.assertIsNone(waiting['action'])
+        done = evaluate(source, {'counts': {'minecraft:water_bucket': 1}}, first['memory'])
+        self.assertTrue(done['done'])
+
+    def test_stale_kernel_test_is_rejected_before_lease_close_or_job_creation(self):
+        from mcp_server import SkillTools
+        from numen_gateway import write_json, read_json
+        state = Path(self.temp.name)
+        library = SkillLibrary(state / 'skills')
+        version = library.draft('wait_then_observe', SOURCE, FIXTURES)['version']
+        library.test('wait_then_observe', version)
+        library.promote('wait_then_observe', version)
+        report_path = state / 'skills/wait_then_observe/reports' / (version + '.json')
+        report = read_json(report_path)
+        write_json(report_path, report | {'kernelVersion': 'previous-kernel'})
+        write_json(state / 'control.json', {'schema': 1, 'enabled': True})
+        lease = {'schema': 1, 'turnId': 'turn_stale_kernel_test', 'status': 'open',
+                 'expiresAt': int(time.time()*1000)+60000, 'actionLimit': 6, 'actionsUsed': 0}
+        write_json(state / 'lease.json', lease)
+        result = SkillTools(state).start(lease['turnId'], 'wait_then_observe', version)
+        self.assertEqual(result['code'], 'matching_passed_tests_required')
+        self.assertEqual(read_json(state / 'lease.json'), lease)
+        self.assertFalse((state / 'skill-job.json').exists())
 
     def test_explicit_wait_has_bounds_and_normalizes_without_action(self):
         for seconds in (15, 60, 300):
@@ -117,7 +154,7 @@ class FastSkillTests(unittest.TestCase):
         self.library.promote('check_furnace', version)
         self.assertEqual(self.library.run('check_furnace', {'ready': False})['waitSeconds'], 60)
         self.assertEqual(self.library.run('check_furnace', {'ready': True})['observe'], OBSERVE)
-        self.assertEqual(self.library.catalog()['observationTools'], ['inspect_block', 'inspect_container'])
+        self.assertEqual(self.library.catalog()['observationTools'], ['inspect_block', 'inspect_container', 'sense'])
 
     def test_wrong_expected_wait_or_point_fails_publication(self):
         for field, wrong in (('expectedWaitSeconds', 30),

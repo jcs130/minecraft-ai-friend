@@ -22,7 +22,7 @@ KERNEL = {'pattern_detector', 'adaptive_router', 'review', 'practice', 'skill_li
 # The kernel's declared world contract and existing gateway utilities.
 ADAPTER = {'numen_gateway': {'GatewayError', 'IDENTIFIER', 'TOOLS', 'TURN_ID',
                              'action_lock', 'read_json', 'write_json'},
-           'world_adapter': {'WorldAdapter'}}
+           'world_adapter': {'WorldAdapter', 'validate_sensor'}}
 # Third-party native extensions installed only in the survivor image.
 OPTIONAL = {'quickjs'}
 

@@ -10,7 +10,8 @@ OBSERVATION_LIMIT = 16384
 def program_observation(gateway: WorldAdapter, request, body, now):
     """Execute one already-validated read with the same checks as the MCP tool."""
     from numen_gateway import GatewayError
-    methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container}
+    methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container,
+               'sense': getattr(gateway, 'sense', None)}
     method = methods.get(request.get('tool'))
     if method is None:
         raise ValueError('unsupported_program_observation')
@@ -54,7 +55,15 @@ def systems_status(data, job, now):
             'nextCheckAt': job.get('nextRunAt') if waiting else None,
             'steps': job.get('steps', 0) if active else 0,
             'observations': job.get('observations', 0) if active else 0,
-            'requiresModelPerStep': False},
+            'policyPending': data.get('policyPending'),
+            'skillRoutePending': data.get('skillRoutePending'),
+            'skillRouteLast': data.get('skillRouteLast'),
+            'waitReason': data.get('skillWaitReason') if active else None,
+            'requiresModelPerStep': bool(active and (job.get('lastPolicy') or data.get('policyPending'))),
+            'localPolicy': {k: v for k, v in (data.get('systemOne') or {}).items()
+                            if k in ('model', 'choice', 'confidence', 'latencyMs', 'code', 'ok', 'observedAt',
+                                     'provider', 'stateBytes', 'transportTiming', 'handoffMs', 'resultAgeMs')},
+            'requiresQwenPerStep': False},
             'slow': {'owner': 'qwenpaw', 'active': bool(data.get('active')),
                      'status': data.get('status'), 'readiness': data.get('qwenReadiness')},
             'automaticFoodReflex': False}

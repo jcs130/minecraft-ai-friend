@@ -19,9 +19,9 @@ import uuid
 
 TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
          'place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade',
-         'guild_claim', 'guild_release', 'guild_deliver')
+         'guild_claim', 'guild_release', 'guild_deliver', 'interact_at')
 DIRECT_ACTIONS = ('drop_items',)  # Excluded from the existing executable-skill kernel.
-WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade')
+WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade', 'interact_at')
 GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
 IDENTIFIER = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
 TURN_ID = re.compile(r'[A-Za-z0-9_-]{16,128}\Z')
@@ -65,12 +65,30 @@ def receipt_evidence(row):
     summary = {key: row.get(key) for key in ('actionId', 'tool', 'status',
         'completionConfirmed', 'nativeTaskId', 'navigationOutcome', 'observedAt')}
     args = asdict(row.get('args'))
-    summary['requested'] = fields(args, ('x', 'y', 'z', 'item_id', 'operation', 'skill_id'))
+    summary['requested'] = fields(args, ('x', 'y', 'z', 'item_id', 'operation', 'skill_id', 'quest_id'))
     result = asdict(row.get('result'))
     native = asdict(result.get('result'))
     reason = native.get('message') or result.get('code')
     if isinstance(reason, str):
         summary['outcomeDetail'] = reason[:360]
+    contract = asdict(asdict(native.get('data')).get('receipt'))
+    if (row.get('tool') in GUILD_ACTIONS and isinstance(args.get('quest_id'), str)
+            and contract.get('questId') == args['quest_id']):
+        summary['guild'] = fields(contract, ('code', 'questId', 'ok'))
+        context = asdict(contract.get('claimContext'))
+        if context:
+            reception, proximity = asdict(context.get('receptionist')), asdict(context.get('proximity'))
+            target = fields(reception, ('key', 'dimension', 'positionFresh'))
+            position = reception.get('position')
+            if (isinstance(position, (list, tuple)) and len(position) == 3
+                    and all(type(n) in (int, float) and math.isfinite(n) for n in position)):
+                target['position'] = list(position)
+            else:
+                target['position'] = None
+            observed = fields(context, ('observedAt',))
+            observed['receptionist'] = target
+            observed['proximity'] = fields(proximity, ('actorDimension', 'sameDimension', 'distance', 'maxDistance', 'near'))
+            summary['guild']['claimContext'] = observed
     after = asdict(row.get('after'))
     if point(after.get('position')):
         summary['positionAfter'] = point(after['position'])
@@ -108,9 +126,20 @@ def receipt_evidence(row):
 
 def _read_json(path, limit):
     path = Path(path)
-    if path.is_symlink() or path.stat().st_size > limit:
-        raise GatewayError('invalid_state_file')
-    value = json.loads(path.read_text(encoding='utf-8-sig'))
+    # A Docker Desktop bind mount can briefly report ENOENT while another
+    # worker replaces a durable state file. Retry only this read, never an
+    # action or a callback; a persistently missing receipt must still fail.
+    delays = (0.05, 0.1, 0.2)
+    for attempt in range(len(delays) + 1):
+        try:
+            if path.is_symlink() or path.stat().st_size > limit:
+                raise GatewayError('invalid_state_file')
+            value = json.loads(path.read_text(encoding='utf-8-sig'))
+            break
+        except FileNotFoundError:
+            if attempt == len(delays):
+                raise
+            time.sleep(delays[attempt])
     if not isinstance(value, dict):
         raise GatewayError('invalid_state_file')
     return value
@@ -408,6 +437,10 @@ class NumenGateway:
             raise GatewayError('body_uuid_mismatch')
         return body, actual
 
+    def sense(self, sensor='catalog', arguments=None):
+        from sensors import sense
+        return sense(self, sensor, arguments)
+
     def _invoke(self, tool, args=None):
         if tool in GUILD_ACTIONS:
             from guild import Guild
@@ -546,7 +579,7 @@ class NumenGateway:
     def observe(self, radius=8):
         try:
             self._integer(radius, 4, 12)
-            body, _ = self._check_binding()
+            body, actor_uuid = self._check_binding()
             terrain = self._native_scene(body, radius)
             if terrain.startswith('no companion:'):
                 raise GatewayError('body_offline')
@@ -559,7 +592,7 @@ class NumenGateway:
             conditions.update({k: world[k] for k in ('game_time',) if self._number(world.get(k))})
             conditions.update({k: world[k] for k in ('is_bright_outside', 'is_dark_outside')
                                if type(world.get(k)) is bool})
-            return {'ok': True, 'observedAt': self._now(), 'terrain': terrain[:6000],
+            return {'ok': True, 'observedAt': self._now(), 'bodyUuid': actor_uuid, 'terrain': terrain[:6000],
                     'entities': self._observed_entities(entities.get('entities'), 20),
                     'hostiles': self._observed_entities(hostiles.get('entities'), 8),
                     'entitiesTruncated': entities.get('truncated') is True,
@@ -703,13 +736,29 @@ class NumenGateway:
             raise GatewayError('work_area_missing')
         if not (area['minX'] + margin <= point['x'] <= area['maxX'] - margin
                 and area['minZ'] + margin <= point['z'] <= area['maxZ'] - margin):
-            raise GatewayError('outside_work_area')
+            error = GatewayError('outside_work_area')
+            error.details = {'schema': 1, 'kind': 'area_preflight',
+                'checkedPosition': {k: point[k] for k in ('x', 'y', 'z') if k in point},
+                'workArea': {k: area[k] for k in ('minX', 'maxX', 'minZ', 'maxZ')},
+                'margin': margin, 'dispatched': False, 'writePerformed': False,
+                'retryAutomatically': False,
+                'instruction': '检查点超出本身体授权工作区（含动作余量）。请在该范围内重新规划；移动受理不表示目标获准。'}
+            raise error
         anchor = settings.get('anchor', {})
         protected = settings.get('protectedRadius')
         if not self._number(protected) or protected < 0 or not all(self._number(anchor.get(k)) for k in ('x', 'z')):
             raise GatewayError('anchor_missing')
         if protect and math.hypot(point['x'] - anchor['x'], point['z'] - anchor['z']) <= protected + margin:
-            raise GatewayError('protected_area')
+            error = GatewayError('protected_area')
+            error.details = {'schema': 1, 'kind': 'area_preflight',
+                'checkedPosition': {k: point[k] for k in ('x', 'y', 'z') if k in point},
+                'protectedArea': {'anchor': {k: anchor[k] for k in ('x', 'z')},
+                    'radius': protected, 'margin': margin,
+                    'horizontalDistance': round(math.hypot(point['x'] - anchor['x'], point['z'] - anchor['z']), 3)},
+                'dispatched': False, 'writePerformed': False, 'retryAutomatically': False,
+                'instruction': '动作检查点处于保护区，尚未执行。这是授权边界，不是距离够不着；'
+                    '换站位不会使保护区内目标获准。请选择授权区域内的操作或其他任务。'}
+            raise error
 
     def _record(self, row):
         with (self.state / 'actions.jsonl').open('a', encoding='utf-8') as stream:
@@ -835,6 +884,7 @@ class NumenGateway:
             return receipt
         outcome = None
         food_outcome = None
+        interaction_outcome = None
         if receipt['tool'] == 'goto':
             candidate = body.get('navigationResult') or {}
             if (receipt.get('nativeTaskId') and before.get('navigationEpoch')
@@ -850,6 +900,16 @@ class NumenGateway:
                 outcome = self._observed_arrival(receipt, body)
                 if outcome is None:
                     return receipt  # nothing to judge against: keep the identity, do not guess
+        elif receipt['tool'] == 'interact_at':
+            from world_actions import WorldActions
+            interaction_outcome = WorldActions(self, max_polls=1)._interaction(
+                {'actionId': receipt['actionId'], 'bodyUuid': before['bodyUuid'],
+                 'nativeTaskId': receipt['nativeTaskId'],
+                 'epoch': receipt['result']['result']['data']['nativeInteractionReceipt']['epoch']},
+                receipt['args'], query_only=True, allow_pending=True)
+            if interaction_outcome.get('data', {}).get('async'):
+                return receipt
+            outcome = interaction_outcome
         elif receipt['tool'] == 'eat' and receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt'):
             from food_actions import FoodActions
             food_outcome = FoodActions(self).terminal(receipt)
@@ -865,6 +925,9 @@ class NumenGateway:
         if food_outcome is not None:
             receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
                            notice='Completion is the exact original native eating task result.')
+        if interaction_outcome is not None:
+            receipt.update(nativeInteractionOutcome=interaction_outcome, navigationOutcome=None,
+                           notice='The original native interaction ended; inspect its effects to judge the skill objective.')
         if receipt['tool'] == 'goto' and outcome is not None and outcome.get('success') is not True:
             from navigation_sense import NavigationSense, verdict
             survey = NavigationSense(self).for_destination(body, receipt['args'])
@@ -949,7 +1012,7 @@ class NumenGateway:
                 and body.get('navigationEpoch') == before.get('navigationEpoch')
                 and body.get('task', {}).get('task_id') == receipt.get('nativeTaskId'))
 
-    def enforce_navigation_deadline(self, body):
+    def enforce_navigation_deadline(self, body, *, preempt_action_id=None):
         """Controller-only execution boundary; read-only MCP status never calls this.
 
         Compatibility entry point for the shared goto/eat total waiting boundary.
@@ -964,7 +1027,9 @@ class NumenGateway:
         accepted = receipt.get('acceptedAt')
         kind = self._deadline_kind(receipt)
         if (kind is None or receipt.get('status') != 'in_flight'
-                or type(accepted) is not int or not 0 < accepted <= self._now() - kind[1]):
+                or type(accepted) is not int
+                or (preempt_action_id is not None and receipt.get('actionId') != preempt_action_id)
+                or (preempt_action_id is None and not 0 < accepted <= self._now() - kind[1])):
             return body
         label, max_wait_ms, receipt_key = kind
         with action_lock(self.state, blocking=True):
@@ -997,7 +1062,7 @@ class NumenGateway:
                 raise GatewayError(label + '_stop_identity_mismatch')
             if journal is None:
                 journal = {'schema': 1, **identity, 'phase': 'dispatching', 'requestedAt': self._now(),
-                           'reason': label + '_total_wait_limit', 'maxWaitMs': max_wait_ms,
+                           'reason': 'motor_preempt' if preempt_action_id else label + '_total_wait_limit', 'maxWaitMs': max_wait_ms,
                            'acceptedAt': accepted, 'beforeStop': self._action_snapshot(fresh),
                            'actionReplayed': False, 'retryAutomatically': False}
                 write_json(path, journal)  # Claim before sending; an existing claim is read-only forever.
@@ -1070,6 +1135,12 @@ class NumenGateway:
             self._validate(tool, args)
             with action_lock(self.state):
                 self._enabled()
+                from motor_mailbox import cognition, enqueue_locked
+                try:
+                    if cognition(self.state, turn_id, self.clock) is not None:
+                        return enqueue_locked(self.state, turn_id, 'action', {'tool':tool,'args':args}, self.clock)
+                except ValueError as exc:
+                    raise GatewayError(str(exc)) from exc
                 lease = read_json(self.state / 'lease.json')
                 if (not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id) or lease.get('turnId') != turn_id
                         or lease.get('schema') != 1 or lease.get('status') != 'open'
@@ -1101,6 +1172,14 @@ class NumenGateway:
                     from game_skills import is_protected_action
                     protected = is_protected_action(tool, args)
                 self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
+                if tool == 'equip_item' and before['counts'].get(args['item_id'], 0) <= 0:
+                    # runSync has no terminal receipt on the RCON bridge. Reject a
+                    # known missing item BEFORE reserving/sending, rather than
+                    # waiting for equipment that cannot appear and pausing life.
+                    return {'ok': False, 'code': 'equipment_item_missing',
+                            'dispatched': False, 'writePerformed': False,
+                            'itemId': args['item_id'], 'availableCount': 0,
+                            'notice': 'Item absent from the current body inventory. Inspect inventory and choose an available item or acquire it first.'}
                 if tool == 'goto':
                     self._area(args, protect=False)
                     distance = math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z'])
@@ -1180,6 +1259,8 @@ class NumenGateway:
                             result['completionConfirmed'] = True
                         if tool == 'drop_items' and reply.get('nativeDropReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
+                        if tool == 'interact_at' and reply.get('data', {}).get('nativeInteractionReceipt', {}).get('status') == 'terminal':
+                            result['completionConfirmed'] = True
                     else:
                         raise GatewayError('outcome_unknown')
                     if navigation_sense is not None:
@@ -1256,6 +1337,13 @@ class NumenGateway:
         except GatewayError as exc:
             result = {'ok': False, 'code': str(exc)}
             details = getattr(exc, 'details', None)
+            if (str(exc) in ('protected_area', 'outside_work_area')
+                    and isinstance(details, dict) and details.get('schema') == 1
+                    and details.get('kind') == 'area_preflight'
+                    and details.get('dispatched') is False and details.get('writePerformed') is False):
+                result.update(dispatched=False, writePerformed=False, retryAutomatically=False,
+                    areaPreflight={key: details[key] for key in ('schema', 'kind', 'checkedPosition',
+                        'workArea', 'protectedArea', 'margin', 'instruction') if key in details})
             # Only this pre-dispatch observation contract is model-facing.
             # Raw native responses and arbitrary exception metadata stay private.
             # 2026-09-17: the not-air branch joined this contract. Both rejections

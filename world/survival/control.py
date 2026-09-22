@@ -25,7 +25,7 @@ def update_control(state, action, text=None, clock=time.time):
             if (state / 'unknown.json').exists():
                 raise ValueError('Reconcile the recorded uncertain action before resuming')
             current = read_controller_json(state / 'controller.json')
-            if current.get('active'):
+            if current.get('active') or current.get('dialogueActive'):
                 raise ValueError('Wait for native task cancellation before resuming')
             job = read_json(state / 'skill-job.json') if (state / 'skill-job.json').exists() else {}
             if job.get('status') == 'dispatching':

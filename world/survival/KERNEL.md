@@ -44,6 +44,10 @@
 
 任何新增外部导入都会让 `test_declared_adapter_surface_is_exactly_what_the_kernel_uses` 失败，必须显式声明。
 
+## 具身感知扩展（2026-09-20）
+
+WorldAdapter 增加一个只读 `sense(sensor='catalog', arguments=None)` 方法和纯参数校验 `validate_sensor`。程序执行器只通过该适配面调用，不能 import Minecraft 的 sensors 实现。NumenGateway 负责装配原生查询；其他身体可实现自己的感知并明确返回 unsupported。内核参数校验仍声明当前坐标/半径范围，这不是无适配跨环境运行的承诺。
+
 ## 状态位置
 
 内核的持久状态在源码树外（宿主 `server/survival-agent-state/`，容器 `/state/survival`）。S4 核实这些构造参数已经存在，保留部署默认值，不再引入配置层或迁移已有状态：

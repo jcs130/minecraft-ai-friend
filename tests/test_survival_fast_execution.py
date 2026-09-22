@@ -152,8 +152,7 @@ class FastExecutionTests(unittest.TestCase):
         self.job()
         self.wait(300)
         self.controller.tick()
-        write_json(self.state / 'conversation-intent.json',
-                   {'id': str(uuid.uuid4()), 'goal': 'Check the guild instead', 'at': self.clock() * 1000})
+        self.controller.goals.request('Check the guild instead', mode='replace')
         self.controller.tick()
         self.assertEqual(self.saved_job()['status'], 'cancelled')
         self.assertEqual(self.saved_job()['reason'], 'goal_changed')

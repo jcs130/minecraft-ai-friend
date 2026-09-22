@@ -2,7 +2,8 @@
 
 A healthy Qwen API and a healthy MCP endpoint do not imply an active Driver:
 Qwen 2.2 retains no handler after a failed startup connection. Its whitelist
-API saves the same card and schedules a native reload without changing auth.
+API preserves the card; the scoped 2.2.1 compatibility hook calls the native
+DriverManager reload only if its normal refresh still has no usable handler.
 """
 import json
 import os
@@ -40,6 +41,17 @@ def valid_tools(value):
                 and row.get('enabled') is True and isinstance(row.get('input_schema'), dict) for row in value)
         and {row['name'] for row in value} == set(TOOL_NAMES))
     if not basic:
+        return False
+    status_schema = next(row for row in value if row['name'] == 'status')['input_schema']
+    status_properties = status_schema.get('properties', {})
+    detail = status_properties.get('detail', {}) if isinstance(status_properties, dict) else {}
+    choices = detail.get('enum') if isinstance(detail, dict) else None
+    required = status_schema.get('required', [])
+    if (not isinstance(detail, dict) or detail.get('type') != 'string'
+            or detail.get('default') != 'full' or not isinstance(choices, list)
+            or len(choices) != 2 or not all(isinstance(choice, str) for choice in choices)
+            or set(choices) != {'full', 'brief'}
+            or not isinstance(required, list) or 'detail' in required):
         return False
     properties = next(row for row in value if row['name'] == 'remember')['input_schema'].get('properties', {})
     memory_ready = (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
@@ -91,7 +103,7 @@ class NativeToolConnection:
             if names is not None and (not isinstance(names, list) or len(names) != len(TOOL_NAMES)
                     or any(not isinstance(name, str) for name in names) or set(names) != set(TOOL_NAMES)):
                 return False
-            request(self.base, TOOLS_ROUTE, {'tools': list(TOOL_NAMES)})
+            request(self.base, TOOLS_ROUTE, {'tools': names})
             # PUT starts an asynchronous native reload. Its response is not proof
             # of readiness: a later GET must see the active capabilities.
             return require_ready(self.base)
