@@ -17,7 +17,7 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
-              'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense')
+              'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense', 'voice_speak')
 
 
 class SkillTools:
@@ -357,6 +357,19 @@ def make_server(gateway=None, skill_tools=None, http=False):
     def speak(turn_id: str, text: str, interrupt: bool = False) -> dict:
         """用当前租约从自身位置说一句1–160字的中文台词，每轮最多一句。interrupt明确打断旧声音；queued不等于听众听到，不花额外LLM请求。"""
         return speech_tools.speak(turn_id, text, interrupt)
+
+    @server.tool()
+    def voice_speak(turn_id: str, text: str, voice: str = "", tone: str = "neutral") -> dict:
+        """以指定嗓音和语气说话（语音+头顶文字泡泡）。voice 选嗓音（kirito/naruto/goddess/villager，留空用默认），tone 选语气（neutral/happy/sad/urgent/gentle）。第三方Agent也可通过此工具说话。"""
+        gateway = kwargs.get('gateway')
+        if gateway is None:
+            return {'ok': False, 'code': 'gateway_unavailable'}
+        args = {'text': text}
+        if voice:
+            args['voice'] = voice
+        if tone:
+            args['tone'] = tone
+        return gateway.action(turn_id, 'voice_speak', args)
 
     @server.tool()
     def speech_status(utterance_id: str) -> dict:

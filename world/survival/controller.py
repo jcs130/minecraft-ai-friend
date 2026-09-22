@@ -2251,7 +2251,15 @@ class Controller:
             return
         from routine_candidates import build_candidates
         goal = control.get('mission') or self.memory().get('goal', '')
-        proposal = build_candidates(body, goal, self.settings.get('anchor'))
+        # Fast loop only CONTINUES an active navigation; it never picks where to go.
+        # Extract destination from the body's current native task (if navigating).
+        nav_target = None
+        task = body.get('task') if isinstance(body.get('task'), dict) else {}
+        if task.get('busy') and isinstance(task.get('target'), dict):
+            t = task['target']
+            if isinstance(t.get('x'), (int, float)) and isinstance(t.get('z'), (int, float)):
+                nav_target = {'x': t['x'], 'z': t['z']}
+        proposal = build_candidates(body, goal, navigation_target=nav_target)
         if proposal is None:
             return
         token = self.policy_worker.submit(proposal, body, goal, None)

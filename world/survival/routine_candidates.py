@@ -32,11 +32,15 @@ def _first_present(counts, wanted):
     return None
 
 
-def build_candidates(body, goal='', anchor=None, limit=6):
+def build_candidates(body, goal='', navigation_target=None, limit=6):
     """Return a validate_choice-shaped proposal, or None when nothing applies.
 
     Only locally checkable facts become candidates; "none" is always an
     exit so the classifier can decline without inventing an action.
+    navigation_target replaces the old static anchor: the fast loop only
+    offers to CONTINUE an active navigation chosen by the slow brain,
+    never to pick a new destination on its own (JevPilot/Voyager design:
+    fast loop = continue/interrupt/repair, not where-to-go).
     """
     if not isinstance(body, dict) or body.get('ok') is not True:
         return None
@@ -64,8 +68,11 @@ def build_candidates(body, goal='', anchor=None, limit=6):
             candidates.append({'id': 'equip_tool',
                 'description': f'Mainhand empty and {tool.split(":", 1)[-1]} in bag; hold it.',
                 'action': {'tool': 'equip_item', 'args': {'item_id': tool, 'slot': 'mainhand'}}})
+    # goto_leg: only when the slow brain already set a navigation destination.
+    # The fast loop CONTINUES that path; it never picks where to go.
     position = body.get('position') if isinstance(body.get('position'), dict) else {}
-    target = anchor if isinstance(anchor, dict) and {'x', 'z'} <= set(anchor) else None
+    target = (navigation_target if isinstance(navigation_target, dict)
+              and {'x', 'z'} <= set(navigation_target) else None)
     px, pz = _number(position.get('x')), _number(position.get('z'))
     if target and px is not None and pz is not None:
         dx = _number(target.get('x')) - px if _number(target.get('x')) is not None else None
@@ -75,8 +82,8 @@ def build_candidates(body, goal='', anchor=None, limit=6):
             if dist > GOTO_MIN_DISTANCE:
                 scale = min(1.0, MAX_STEP / dist)
                 candidates.append({'id': 'goto_leg',
-                    'description': (f'Goal anchor {dist:.0f} blocks away; walk one bounded '
-                                    f'{MAX_STEP}-block leg toward it and reassess.'),
+                    'description': (f'Active navigation destination {dist:.0f} blocks away; '
+                                    f'walk one bounded {MAX_STEP}-block leg toward it.'),
                     'action': {'tool': 'goto',
                                'args': {'x': round(px + dx * scale, 1), 'z': round(pz + dz * scale, 1)}}})
     if not candidates:
