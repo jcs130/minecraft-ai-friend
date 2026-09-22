@@ -128,8 +128,12 @@ class SystemOne:
             # Only event names/times: never trace headers, bodies or credentials.
             events[event] = (time.monotonic() - started) * 1000
         if self._client is None:
+            # 2026-09-22 保活 60→1200s：调用间隔是分钟级（复盘节律 ~20 分钟一轮），
+            # 60s 保活每次都冷启动（TLS ~708ms 占单次 1.1s 六成 ✗ 实测）；服务端允许
+            # 复用（9-21 影子实测：冷 816ms → 复用 278ms ✓）。httpx 池会在空闲期
+            # 探测到服务端关闭并弃用坏连接，竞态失败走原有 policy_unavailable 回退。
             self._client = httpx.Client(timeout=2.0, trust_env=False, follow_redirects=False,
-                limits=httpx.Limits(max_connections=1, max_keepalive_connections=1, keepalive_expiry=60))
+                limits=httpx.Limits(max_connections=1, max_keepalive_connections=1, keepalive_expiry=1200))
         initialized = (time.monotonic() - started) * 1000
         try:
             # One serial worker owns this connection. No automatic retries.
