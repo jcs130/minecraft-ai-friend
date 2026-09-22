@@ -9,7 +9,7 @@
 
 | 你的 Agent 要做什么 | 用哪条 | 现在能不能上 |
 |---|---|---|
-| 快速挂个 mineflayer 做点事（物品/背包/聊天）| mineflayer 经门（内 `25701` / 外 `25702`）| **能 ✓ 读数正确 ✓** |
+| 快速挂个 mineflayer 做点事（物品/背包/聊天）| mineflayer 经门（统一外门 `25702` ✓ 本机与局域网同口）| **能 ✓ 读数正确 ✓** |
 | mineflayer 且**要看方块世界**（找床、避怪、挖掘、建造）| mineflayer 经门 | **能 ✓ 方块读数已复验正确 ✓**（§4）|
 | 长期住世界、要最稳不掉线、要服务端级权限 | **numen 假玩家**（服务端内生）| **能 ✓ 且不经网络编号 ✓ 最稳** |
 | 真人客户端观战/游玩 | Java 25565 + NeoForge，或基岩 UDP 19140 | 能 ✓ |
@@ -30,14 +30,14 @@
 ```js
 // npm i mineflayer@4.37.1
 const bot = require('mineflayer').createBot({
-  host: '127.0.0.1', port: 25701,   // ★首选 gate(神社之门)：出站把 NeoForge 号翻回原版号
+  host: '127.0.0.1', port: 25702,   // ★统一外门(神社之门)：出站把 NeoForge 号翻回原版号；名须 ag_ 开头
   username: 'MyAgent',               // 离线：名字即身份(UUID)，定死别改
   auth: 'offline',
   version: '1.21.1',                 // 必钉，不钉协商失败
 })
 ```
 - **端口选择（compose 实测 ✓ 有两道门）**：
-  - `127.0.0.1:25701` = **gate（内门）**：本机/容器内 Agent 用 ✓ 收任意名 ✓
+  - 内门已不发布宿主（2026-09-22 统一）：容器内 Agent 用 `gate:25700` ✓ 宿主一律 `127.0.0.1:25702` + `ag_` 名 ✓
   - `0.0.0.0:25702` = **gate-public（外门）**：外部/局域网另一台机器的 Agent 用 ✓ **只收 `GATE_AGENT_PREFIX` 前缀名**（如 `agent` 开头 ✓ 内部号 Goddess/Kirito 冒名在门口即拒 ✓）
   - `25565`=直连(未翻译，方块物品都可能错)——**别直连，一律挂门** ✓
 - 内网门/外门都走同一 `gate.cjs`（同一翻译层 ✓）；外门还多一道前缀闸 ✓ 所以**外部 Agent 不必转发裸 Java 口** ✓ 用 25702 即可（见 §5 更新）。
@@ -75,7 +75,7 @@ const bot = require('mineflayer').createBot({
   → **绝不要把裸 Java `25565` 转发到公网** ✗✗ 它不过前缀闸、也不翻号 ✓ 离线模式下可被 `Kirito`/`Goddess` 冒名抢家当 ✓
 - 服务端离线、**没装 Floodgate** ✓ → **基岩访客**（UDP 19140）同样"名字可被冒用" ✓ 对外开放前同上（14 个自家号已预置 ✓ 没填就开 = 把自家 AI 锁门外 ✗）
 - **绝不转发到公网**：`25577 RCON` / `19091 面板` / `19092 观战` / `445 SMB` / `3389 RDP` ✗✗（本机有 Agent 凭据 ✓ 泄露=世界沦陷 ✓）
-- 自家 Agent 在异地机器跑 → 优先 **Tailscale 私有组网**（已装 ✓ 连内门 25701 语义 ✓）；要真走公网就连外门 25702 + 独占 `ag_` 名 + 开白名单 ✓
+- 自家 Agent 在异地机器跑 → 优先 **Tailscale 私有组网**（已装 ✓ 连外门 25702 语义 ✓）；要真走公网也是外门 25702 + 独占 `ag_` 名 + 开白名单 ✓
 - 其它实测参数：`online-mode=false` ✓ `view-distance=6`（**Agent 视野只有 6 区块 ✓ 别指望看远 ✓**）`spawn-protection=0`（出生点不保护 ✓）`max-players=20` ✓
 
 ## 6. 与「观战 / 附身」联动
@@ -85,7 +85,7 @@ const bot = require('mineflayer').createBot({
 
 ## 7. 接入 checklist
 
-1. [ ] 选路线：临时/任务型 → **mineflayer 走门**（内 `25701` / 外 `25702` + `ag_` 名）；长期常驻角色 → numen
+1. [ ] 选路线：临时/任务型 → **mineflayer 走门**（统一外门 `25702` + `ag_` 名）；长期常驻角色 → numen
 2. [ ] 起 ASCII 独占名（**定死别改**，名字=UUID=背包家园成就）；`whitelist add` 它（现 `white-list=false`，前缀闸只挡名字不挡准入）
 3. [ ] mineflayer：`version '1.21.1'` + `auth:'offline'` + **端口走门，不是 25565** + 自带看门狗重连
 4. [ ] 进门冒烟：`bot.chat` 收发 ✓ `bot.blockAt` 读一个已知方块（**注意 name 不带 `minecraft:` 前缀**）

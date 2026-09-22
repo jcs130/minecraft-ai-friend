@@ -97,7 +97,7 @@ docker exec -e GATE_HOST=gate -e GATE_PORT=25700 -e RCON_HOST=mc -e RCON_PORT=25
   -e RCON_PASS="$PW" qiandengji-world-1 node /app/src/neoforge-handshake/verify-gate.cjs
 
 # ② 宿主兜底（world 容器不可用时；RCON_PASS 必须先注入环境变量，mineflayer 落到 scratch 钉版）：
-node verify-gate.cjs                        # 内门 25701，11 项冒烟
+node verify-gate.cjs                        # 外门 25702（本机与局域网统一口），11 项冒烟
 node verify-gate.cjs 127.0.0.1 25568        # 基岩桥 Java 入口 = 基岩同一条上游（免手机验基岩）
 #   （25566 皮肤代理入口一行已删：皮肤代理 2026-09 已退役，YSM 接管形象）
 node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对账 ②双向往返恒等 ③chunk 段模式分布
@@ -115,11 +115,11 @@ node audit-idmap.cjs                        # ①号表 vs 注册表覆盖率对
 |---|---|---|---|
 | 真人 Java 客户端 | `0.0.0.0:25565` → mc:25599 | 不需要（装了 NeoForge ✓ 原生对表） | 萌萌实测 |
 | 本机兼容裸口 | `127.0.0.1:25567` → mc:25599 | ✗ **Agent 禁用**（旧 README 曾推荐，已更正） | — |
-| **内门**（容器内/本机 Agent） | `127.0.0.1:25701` → gate:25700 | ✓ | 11/11 |
+| **内门**（2026-09-22 起仅容器网内） | `gate:25700`（宿主已停发 25701） | ✓ | 容器内 11/11 |
 | **外门**（外部 Agent，名字须 `ag_` 前缀） | `0.0.0.0:25702` → gate:25700 | ✓ | `ag_probe` 进门 ✓ 内部名门口拒 ✓ |
 | `world` 服务（Goddess 化身 + **天神之眼**） | `gate:25700`（`MC_GATE_TRANSLATED=1`） | ✓ 14:37/15:14 | 门日志 `Goddess 叩门→PLAY` ✓ healthz `mode=gate-translated` ✓ |
 | 守卫之眼 `guard-render-*.mts`（`render_view`） | `GUARD_RENDER_PORT` 默认 25701 | ✓ 15:41 | 门日志 `RenderBot 叩门→PLAY→603 chunk→err=none` ✓ |
-| **基岩桥 ViaProxy（宿主 java）** | `--target-address 127.0.0.1:25701` | ✓ 14:37 | `verify-gate 127.0.0.1 25568` → 11/11 ✓ 手机确认正常 ✓ |
+| **基岩桥 ViaProxy（容器化 ✓ 2026-09-22 起直连内网门）** | `--target-address gate:25700` | ✓ | `verify-gate 127.0.0.1 25568` → 11/11 ✓ 手机确认正常 ✓ |
 | **皮肤代理 skin-proxy（宿主 node）** | `SKIN_UPSTREAM_PORT=25701` | ✓ 20:4x | `verify-gate 127.0.0.1 25566` → **11/11 exit 0** ✓ |
 | ~~基岩桥容器化~~ 试验 | 裸 Geyser 与容器化 ViaProxy 各试一轮 | — | **未通过 ✓ 已收掉试验容器** 副产品：**证明容器 UDP 外部入站可用**（手机确实打进容器发布口 ✓ 2026-08-30 旧论作废 ✓）；但容器内 ViaProxy 直连 `gate:25700` 时前端卡 CONFIGURATION、后端进 play 即被 MC 关闭（`back_total=0` + `socketClosed`），而宿主 ViaProxy 经 `127.0.0.1:25701` 正常入服（`entityId=83672`、36508 包）→ 根因需抓包级对比 ✓ **ViaProxy 暂留宿主 = 唯一剩余例外** ✓ 详见 `world/host-services/geyser-container/notes.md` |
 | numen MCP | 容器服务 `numen-mcp`（宿主 `127.0.0.1:18091`） | 不经游戏协议口（走 RCON `mc:25575`） | `numen__get_world_info` 等实测 ✓ |

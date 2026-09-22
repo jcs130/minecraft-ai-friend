@@ -177,8 +177,8 @@ services:
       GATE_SELF_TELEPORT_ACK: "1"
     volumes:
       - ./world/src:/app/src:ro
-    ports:
-      - "127.0.0.1:25701:25700"
+    # 2026-09-22 端口统一：不再发布 25701 到宿主。本机/局域网 Agent 一律走外门 25702（ag_ 闸）；
+    # 内门只活在 compose 网内（gate:25700），供 Goddess/天眼/基岩桥/容器内验证脚本使用。
     depends_on:
       mc:
         condition: service_healthy
@@ -263,7 +263,7 @@ services:
     restart: unless-stopped
     working_dir: /viaproxy
     entrypoint: ["java", "-jar", "ViaProxy-3.4.12.jar", "cli",
-                 "--target-address", "host.docker.internal:25701",
+                 "--target-address", "gate:25700",
                  "--target-version", "1.21.1",
                  "--auth-method", "NONE",
                  "--bind-address", "0.0.0.0:25568"]

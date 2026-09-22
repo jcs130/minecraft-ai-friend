@@ -6,8 +6,9 @@
 //     -e RCON_HOST=mc -e RCON_PORT=25575 -e RCON_PASS=<rcon密码> \
 //     qiandengji-world-1 node /app/src/neoforge-handshake/verify-gate.cjs
 //     （world 容器自带 mineflayer 4.37.1 + vec3；RCON 密码从 mc 容器 server.properties 取，勿写进仓库）
-//   宿主兜底：node verify-gate.cjs [host=127.0.0.1] [port=25701]
-//     （宿主需 RCON_PASS 环境变量；mineflayer 走宿主 scratch 绝对路径兜底）
+//   宿主兜底：node verify-gate.cjs [host=127.0.0.1] [port=25702]
+//     （2026-09-22 端口统一后宿主唯一 Agent 口是外门 25702 ✓ 名字自带 ag_ 前缀过闸；
+//      需 RCON_PASS 环境变量；mineflayer 走宿主 scratch 绝对路径兜底）
 let mf, V
 try {
   mf = require('mineflayer'); V = require('vec3') // 容器内：解析到 /app/node_modules
@@ -18,11 +19,12 @@ try {
 }
 const net = require('net')
 const HOST = process.env.GATE_HOST || process.argv[2] || '127.0.0.1'
-const PORT = Number(process.env.GATE_PORT || process.argv[3] || 25701)
+const PORT = Number(process.env.GATE_PORT || process.argv[3] || 25702)
 const RCON_HOST = process.env.RCON_HOST || '127.0.0.1'
 const RCON_PORT = Number(process.env.RCON_PORT || 25577)
 const RCON_PASS = process.env.RCON_PASS || ''
-const NAME = 'QDVerify' + Math.floor(Math.random() * 900 + 100)
+// ag_ 前缀名：外门（25702）硬性要求；内门（gate:25700，无闸）也兼容任意名 → 两边通吃
+const NAME = 'ag_verify' + Math.floor(Math.random() * 900 + 100)
 
 // 原生 Source-RCON 客户端（小端 length+id+type+body+两 NUL），取代宿主 python god_rcon 依赖
 let _sock = null, _buf = Buffer.alloc(0), _rid = 100, _authed = false

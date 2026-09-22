@@ -3,7 +3,7 @@
 > 现场核实：2026-09-20，全部来自实测（docker ps 端口表 / netstat / RCON 在线名单 / 容器 mods 清单）。
 > **2026-09-21 更新 ✓**：NeoForge 网络号与原版表不一致的问题**已在门（gate）里翻译修好并复验** ✓
 > 冒烟 `world/src/neoforge-handshake/verify-gate.cjs` **7/7 通过**（区块批量 / 单块实时 / `fill` 批量 / 物品 ✓）✓
-> 所以 **mineflayer Agent 必须走门（内 `25701` / 外 `25702`）✓ 裸连 `25565` 仍会读错世界** ✗
+> 所以 **mineflayer Agent 必须走门（`25702`——2026-09-22 起本机与局域网统一外门 ✓ 内门只在容器网内）✓ 裸连 `25565` 仍会读错世界** ✗
 > Agent 细节（身份铁律/白名单/前缀闸/`/mycli`）见 `docs/AGENT-ONBOARDING.md` ✓
 > 服务端：Minecraft **Java 1.21.1 + NeoForge 21.1.248**，容器 `qiandengji-mc-1`，
 > **离线模式（online-mode=false，免正版验证）** —— 这一条决定了下面所有接入方式都可行。
@@ -14,7 +14,7 @@
 
 | 想接什么 | 走哪个口 | 需要什么 | 现在能用吗 |
 |---|---|---|---|
-| **AI / 机器人（mineflayer 等）** | **必须走门**：本机/内网 `127.0.0.1:25701` ✓ 外部 `192.168.3.133:25702`（名字须 `ag_` 开头）| 无需正版账号；`auth: 'offline'`；协议钉 `1.21.1` | **能 ✓ 读数已复验正确 ✓**（裸连 25565 会读错 ✗）|
+| **AI / 机器人（mineflayer 等）** | **必须走门**：本机与局域网统一外门 `25702`（`127.0.0.1:25702` / `192.168.3.133:25702` ✓ 名字须 `ag_` 开头）| 无需正版账号；`auth: 'offline'`；协议钉 `1.21.1` | **能 ✓ 读数已复验正确 ✓**（裸连 25565 会读错 ✗）|
 | **AI / 假玩家（服务端内生）** | 不开网络口 | 服务端 `numen` 插件 + RCON `25577` | **能用 ✓ 且读数天然正确 ✓（不经网络编号）** |
 | **基岩版（手机/Switch/Win10 版）** | **UDP `19140`**（经 Geyser 桥） | 宿主机 ViaProxy+Geyser 进程在跑 | **能用 ✓**（2026-09-20 拉起，计划任务 `ViaProxy-Bedrock` 登录自起 ✓） |
 | **真人 Java 玩家** | `<服务器IP>:25565` | **装了 NeoForge 的客户端** | 能用（萌萌实测） |
@@ -23,14 +23,14 @@
 
 ## 一、AI（文字 Agent）怎么接入 —— 两条正路
 
-### 路线 A：网络客户端（mineflayer 系）→ **必须走门 `25701`（内）/ `25702`（外）**
+### 路线 A：网络客户端（mineflayer 系）→ **必须走门 `25702`（本机与局域网统一口 ✓ 名字 `ag_` 开头）**
 
 为什么"能进"：服务端装了 **`botgate.jar`**，处理"不会说 NeoForge 模组通道"的客户端协商（否则原版客户端会被以"必需通道缺失"拒绝 `vanilla.client.not_supported`）。
 
 **但光"进得来"不够** ✓ NeoForge 带内容模组后**网络里的方块/物品号 ≠ 原版表** ✓ 直连 `25565` 会读到一个错乱的世界（红床读成活塞 ✓ 书架读成变体 ✓）。
 所以 Agent 一律连 **「神社之门」`gate.cjs`**（它在出站把号翻回原版 ✓ 2026-09-21 已复验 7/7 ✓）：
 
-- **内门** `127.0.0.1:25701`：本机/容器内 Agent ✓ 收任意名
+- **内门已不发布宿主（2026-09-22 端口统一）**：容器网内 `gate:25700` ✓ 供 Goddess/天眼/基岩桥/容器内脚本用 ✓ 宿主侧 Agent 一律走 25702
 - **外门** `192.168.3.133:25702`：外部/异地 Agent ✓ **名字必须以 `ag_` 开头**（内部号冒名在门口即拒 ✓ 实测有效 ✓）
 
 最小可跑示例：
@@ -40,7 +40,7 @@
 const mineflayer = require('mineflayer')
 const bot = mineflayer.createBot({
   host: '127.0.0.1',        // 本机走内门；外部客户端写 192.168.3.133 并把 port 改 25702
-  port: 25701,              // ★门，不是 25565；25565 只给装了 NeoForge 的真人客户端
+  port: 25702,              // ★门（本机与局域网统一外门）；25565 只给装了 NeoForge 的真人客户端
   username: 'ag_myagent',   // 走外门须 ag_ 前缀；离线模式名字决定 UUID，见「身份铁律」
   auth: 'offline',
   version: '1.21.1',        // 必钉；不钉会协商到新版本被拒
@@ -53,8 +53,8 @@ bot.on('spawn', () => bot.chat('我进来了'))
 | 实例 | 引擎 | 入口 | 备注 |
 |---|---|---|---|
 | **Goddess**（女神化身 + 天神之眼） | mineflayer | **`gate:25700` 已走门 ✓（2026-09-21 15:14 切换）** | compose `MC_HOST=gate/MC_PORT=25700` + `MC_GATE_TRANSLATED=1` ✓ 门日志实证 `穿越者 Goddess 叩门→PLAY` ✓ 天眼 `/healthz` 报 `blockStates.mode="gate-translated"` ✓ RCON 仍直连 `mc`（管理面不绕门 ✓）|
-| **守卫之眼 render_view**（`guard-render-pure/webgl.mts`） | mineflayer（宿主侧 numen MCP 拉起） | **已走门 ✓** `GUARD_RENDER_PORT` 默认 25701 ✓ 门日志实证 `RenderBot 叩门→PLAY→603 chunk→err=none` ✓ |
-| **NekoX**（wehos/mc-agent-neko fork） | Node + mineflayer | **`127.0.0.1:25565` 裸连·⚠ 未走门** | 实验体，**当前已停** ✓ 要再跑应把端口改 25701 ✓ |
+| **守卫之眼 render_view**（`guard-render-pure/webgl.mts`） | mineflayer（宿主侧 numen MCP 拉起） | **已走门 ✓**（⚠ 2026-09-22 统一后宿主已无 25701，若再启用须改 25702 + `ag_` 名）门日志实证 `RenderBot 叩门→PLAY→603 chunk→err=none` ✓ |
+| **NekoX**（wehos/mc-agent-neko fork） | Node + mineflayer | **`127.0.0.1:25565` 裸连·⚠ 未走门** | 实验体，**当前已停** ✓ 要再跑应连外门 `25702` + `ag_` 名 ✓ |
 | **Kirito / 鸣人 / 爱德华** | **numen 假玩家**（服务端内生） | 不走网络 | 由 RCON `numen_act` 驱动 ✓ **读数天然正确** ✓ |
 
 ### 路线 B：numen 假玩家（服务端内生"身体"，魂在外面）
@@ -89,7 +89,7 @@ bot.on('spawn', () => bot.chat('我进来了'))
 | **25565** | TCP | `qiandengji-mc-1:25599` | **唯一对外游戏口**：真人 Java（要 NeoForge）+ AI mineflayer（原版协议） |
 | 25567 | TCP | 同上（仅 127.0.0.1） | 本机内部 |
 | **25577** | TCP | 容器 `25575` | **RCON**（口令在容器 `/data/server.properties`，不入仓库） |
-| 25701 | TCP | `qiandengji-gate-1:25700` | 握手门神（旁路备用） |
+| 25701 | TCP | ~~已停发（2026-09-22 统一端口）~~ 内门只活在容器网 `gate:25700` | 握手门神（内部用） |
 | 19091 / 19092 | TCP | panel / world:3070 | 管理面板 / 观战与镜头服务 |
 | 24455 | UDP | 容器 `24454` | Simple Voice Chat 语音 |
 | **19140** | UDP | 宿主 ViaProxy+Geyser | **基岩版入口（运行中 ✓）** |
@@ -145,7 +145,7 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 | 地形、建筑、昼夜、天气、玩家与生物 | 正常 |
 | 智能村民（经 settlementsgate 映射） | 显示为村民（不再是鱼） |
 | 买卖、红石、容器、探索 | 能玩 |
-| 模组方块/物品贴图 | **已修 ✓ 2026-09-21**：基岩桥上游已改指门（`ViaProxy --target-address 127.0.0.1:25701`）✓ 于是 Geyser 收到的是**翻译后的原版号** ✓ 模组方块/物品显示为「最像的原版方块/物品」代理物（屋顶→石砖类、卷册→附魔书、刷怪蛋→蛋类），不再是黑紫格子/满地假火 ✓ 但**不可能像素级还原** ✗（基岩无该 Java mod 的物理上限 ✓）|
+| 模组方块/物品贴图 | **已修 ✓ 2026-09-21**：基岩桥上游已改指门（2026-09-22 桥已容器化并直连内网门 `gate:25700`，同语义）✓ 于是 Geyser 收到的是**翻译后的原版号** ✓ 模组方块/物品显示为「最像的原版方块/物品」代理物（屋顶→石砖类、卷册→附魔书、刷怪蛋→蛋类），不再是黑紫格子/满地假火 ✓ 但**不可能像素级还原** ✗（基岩无该 Java mod 的物理上限 ✓）|
 | puffish 技能树界面 | 看不到 |
 | 网页观战镜头 / 神谕 UI / 书页点选施法 | 收不到自定义 payload |
 | 语音（Simple Voice Chat） | 基岩端无此 mod |
@@ -159,7 +159,7 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 
 ## 四、三份速查
 
-1. **我要挂个 AI 进世界**：连**门**（本机 `127.0.0.1:25701` ✓ 外部 `192.168.3.133:25702` ✓ 外门名字须 `ag_` 开头）+ `auth: 'offline'` + `version '1.21.1'` + 起个 ASCII 名（名字即身份，之后别改）+ 配自动重连 ✓ 细节看 `docs/AGENT-ONBOARDING.md` ✓
+1. **我要挂个 AI 进世界**：连**门 `25702`**（本机 `127.0.0.1:25702` ✓ 局域网 `192.168.3.133:25702` ✓ 名字须 `ag_` 开头——本机局域网同口同规则）+ `auth: 'offline'` + `version '1.21.1'` + 起个 ASCII 名（名字即身份，之后别改）+ 配自动重连 ✓ 细节看 `docs/AGENT-ONBOARDING.md` ✓
 2. **我要手机进来看**：先把桥拉起来（第三节），再连 `192.168.3.133:19140`（UDP），接受"原版体验 + 无 mod 贴图"。
 3. **我要服务端驱动角色**：走 numen 假玩家 + RCON `25577`，不占网络口、最稳。
 
@@ -171,13 +171,13 @@ schtasks /end  /tn "ViaProxy-Bedrock"    :: 停掉（改完名册后先 end 再 
 4. **AI 自主性依赖 `MC_SELF_PROPOSE=1`**（已开）：不设则没任务时原地罚站，看着像死机。
 5. **夜里角色倾向"躲夜罚站"**（自保反射独占身体且空转）：白天演示，或给它一张床。
 6. **已连客户端绕过门的情况（2026-09-21 更新）** ✓ 基岩桥已修 ✓ 余两处待点头：
-   - ✅ **基岩桥已接上门（2026-09-21 14:37 落地）**：`start-viaproxy.bat` 的 `--target-address` 已由 `127.0.0.1:25565` 改成 **`127.0.0.1:25701`** ✓ 新进程实查带新值 ✓ **免手机验证法**：`node verify-gate.cjs 127.0.0.1 25568`（打 ViaProxy 的 Java 入口=基岩同一条上游）→ **7/7 通过 ✓** 门日志亦见该会话 ✓ 说明 Geyser 收到的已是原版号 ✓ 改前实查 `Updated 0 players` ✓ 未踢访客 ✓
+   - ✅ **基岩桥已接上门（2026-09-21 14:37 落地）**：`start-viaproxy.bat` 的 `--target-address` 已由 `127.0.0.1:25565` 改成门（当日为 `127.0.0.1:25701` ✓ 2026-09-22 起桥容器直连 `gate:25700` 同语义）✓ 新进程实查带新值 ✓ **免手机验证法**：`node verify-gate.cjs 127.0.0.1 25568`（打 ViaProxy 的 Java 入口=基岩同一条上游）→ **7/7 通过 ✓** 门日志亦见该会话 ✓ 说明 Geyser 收到的已是原版号 ✓ 改前实查 `Updated 0 players` ✓ 未踢访客 ✓
   ⚠ 回滚：`copy start-viaproxy.bat.bak-target25565 start-viaproxy.bat` → `schtasks /end` → **还要 `taskkill /T /F` 掉残留 java**（`/end` 不杀孤儿子进程 ✓ 实测踩过）→ `schtasks /run`
   ⚠ **持久性隐患**：`ops/docker/.gitignore:8` 的 `shadow/` 把整个桥目录排除 ✓ **此脚本不在版本控制里** ✓ 换机/重建即丢 ✓ 正本该另存
    - ✅ **`world` 服务（Goddess 化身 + 天神之眼）已改走门 ✓（2026-09-21 15:14）**：compose `MC_HOST=gate / MC_PORT=25700` + 新增 `MC_GATE_TRANSLATED=1` + `depends_on: gate` ✓ 门日志实证 `穿越者 Goddess 叩门→PLAY` ✓
    **同时必须停用天眼自带的第二套翻译层**（`injectModBlockRegistry` + `vanilla-state-map` 归一化）✓ 门已翻过一次 ✓ 再翻就是二次映射：实测那张表 26834 条、**键值域与原版号重叠 26684** ✓ 且 `normalize()` 对不认识的号直接 `throw viewer_state_id_unregistered` → 表现为 `viewerUnavailable` ✗ 所以天眼本地补偿**只在不过门的裸连接下才需要** ✓（`MC_GATE_TRANSLATED=1` 即切到恒等映射 ✓ 可回退）
-   守卫之眼（`guard-render-*.mts`）同理已改：它原先复用 `MC_PORT` ✓ 而宿主那个环境变量指向裸口 25565 ✓ 现改用专用 `GUARD_RENDER_PORT`（默认 25701）✓ 门日志实证 `RenderBot` 进门 ✓
-   - NekoX（已停）复活时把端口改 25701 ✓
+   守卫之眼（`guard-render-*.mts`）同理已改：它原先复用 `MC_PORT` ✓ 而宿主那个环境变量指向裸口 25565 ✓ 现改用专用 `GUARD_RENDER_PORT`（历史默认 25701 ✓ 2026-09-22 统一后应设 25702）✓ 门日志实证 `RenderBot` 进门 ✓
+   - NekoX（已停）复活时连外门 `25702` + `ag_` 名 ✓
    注：计划任务里 `Geyser-Bedrock`（State=Ready ✓ 未跑）与 `ViaProxy-Bedrock`（Running）并存 ✓ **现役是 ViaProxy 内嵌 Geyser** ✓ 早前"Geyser-Standalone b1245"那条记录作废 ✗
 7. **外门 `25702` 已可被局域网直连（`ag_probe` 实测进门成功）** ✓ 而 `white-list=false` ✓ → **公网转发前必须先加白名单并 `whitelist on`** ✓ 否则任何知道地址的人拿 `ag_xxx` 就能进 ✓
 
