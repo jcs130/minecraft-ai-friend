@@ -28,6 +28,13 @@ ROLE = 'mc-god'
 BRANCH = r'codex/ops-[A-Za-z0-9_-]{1,80}'
 
 
+class EngineeringGitError(ValueError):
+    """A failed Git process without its arguments, environment or stderr."""
+    def __init__(self, exit_code):
+        super().__init__('engineering_git_failed')
+        self.exit_code = exit_code
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf8')
 
@@ -236,7 +243,7 @@ class EngineeringWorkspace:
             '-c', 'user.name=Qiandeng Operations', '-c', 'user.email=operations@qiandeng.invalid',
             '-C', str(repo), *arguments]
         done = subprocess.run(command, input=input, capture_output=True, timeout=25, env=env)
-        if done.returncode: raise ValueError('engineering_git_failed')
+        if done.returncode: raise EngineeringGitError(done.returncode)
         if len(done.stdout) > MAX_BYTES: raise ValueError('engineering_git_output_limit')
         return done.stdout
 
@@ -412,7 +419,8 @@ class EngineeringWorkspace:
                 commits.append({'requestId': path.stem.removeprefix('commit-'), 'status': row['status'],
                     'commit': row.get('commit'), 'sourceSha256': intent['sourceSha256'],
                     'testJobId': intent['testJobId'], 'isCurrentHead': row.get('commit') == head,
-                    'pushed': row.get('pushed')})
+                    'pushed': row.get('pushed'),
+                    **({'failure': row['failure']} if 'failure' in row else {})})
             except (ValueError, KeyError, OSError, TypeError):
                 errors.append({'record': path.name, 'code': 'engineering_progress_record_unavailable'})
         return {'recentTests': tests, 'testsTruncated': tests_truncated,
@@ -509,26 +517,51 @@ class EngineeringWorkspace:
                     or receipt.get('sourceSha256') != expected_source_sha256
                     or receipt.get('planSha256') != digest(canonical(plan)) or receipt.get('imageId') != plan['image']):
                 raise ValueError('engineering_passed_fixed_checks_required')
-            write(journal, {'status': 'unknown', 'intent': intent, 'previousHead': snapshot['head']})
+            pending = {'status': 'unknown', 'intent': intent, 'previousHead': snapshot['head']}
+            write(journal, pending)
             # Plumbing consumes captured bytes, never applies a repository filter
             # or a command from candidate files. A later edit is left unstaged.
-            self.git('read-tree', '--empty')
-            with tempfile.TemporaryDirectory(prefix='objects-', dir=self.root / 'state') as directory:
-                paths = []
-                for number, entry in enumerate(snapshot['entries']):
-                    path = Path(directory) / str(number)
-                    path.write_bytes(blobs[entry['path']]); paths.append(path.as_posix())
-                ids = self.git('hash-object', '-w', '--no-filters', '--stdin-paths',
-                    input=('\n'.join(paths) + '\n').encode()).decode().splitlines()
-                if len(ids) != len(paths) or any(not COMMIT.fullmatch(oid) for oid in ids):
-                    raise ValueError('engineering_blob_write_unknown')
-                updates = b''.join((entry['mode'] + ' ' + oid + '\t' + entry['path'] + '\0').encode('utf8')
-                                   for entry, oid in zip(snapshot['entries'], ids))
-                self.git('update-index', '-z', '--index-info', input=updates)
-            tree = self.git('write-tree').decode().strip()
-            commit = self.git('commit-tree', tree, '-p', snapshot['head'], '-m', message).decode().strip()
-            self.git('update-ref', 'refs/heads/' + self.config['branch'], commit, snapshot['head'])
-            result = {'status': 'committed', 'intent': intent, 'previousHead': snapshot['head'],
-                      'commit': commit, 'tree': tree, 'branch': self.config['branch'], 'pushed': False}
-            write(journal, result)
-            return {'ok': True, **result}
+            step = 'read-tree'
+            try:
+                self.git('read-tree', '--empty')
+                step = 'prepare-blobs'
+                with tempfile.TemporaryDirectory(prefix='objects-', dir=self.root / 'state') as directory:
+                    paths = []
+                    for number, entry in enumerate(snapshot['entries']):
+                        path = Path(directory) / str(number)
+                        path.write_bytes(blobs[entry['path']]); paths.append(path.as_posix())
+                    step = 'hash-object'
+                    ids = self.git('hash-object', '-w', '--no-filters', '--stdin-paths',
+                        input=('\n'.join(paths) + '\n').encode()).decode().splitlines()
+                    if len(ids) != len(paths) or any(not COMMIT.fullmatch(oid) for oid in ids):
+                        raise ValueError('engineering_blob_write_unknown')
+                    updates = b''.join((entry['mode'] + ' ' + oid + '\t' + entry['path'] + '\0').encode('utf8')
+                                       for entry, oid in zip(snapshot['entries'], ids))
+                    step = 'update-index'
+                    self.git('update-index', '-z', '--index-info', input=updates)
+                    step = 'cleanup-blobs'
+                step = 'write-tree'
+                tree = self.git('write-tree').decode().strip()
+                step = 'commit-tree'
+                commit = self.git('commit-tree', tree, '-p', snapshot['head'], '-m', message).decode().strip()
+                step = 'update-ref'
+                self.git('update-ref', 'refs/heads/' + self.config['branch'], commit, snapshot['head'])
+                result = {'status': 'committed', 'intent': intent, 'previousHead': snapshot['head'],
+                          'commit': commit, 'tree': tree, 'branch': self.config['branch'], 'pushed': False}
+                step = 'persist-result'
+                write(journal, result)
+                return {'ok': True, **result}
+            except Exception as error:
+                error_type = next((name for kind, name in (
+                    (EngineeringGitError, 'EngineeringGitError'), (subprocess.TimeoutExpired, 'TimeoutExpired'),
+                    (OSError, 'OSError'), (ValueError, 'ValueError')) if isinstance(error, kind)), 'Exception')
+                failure = {'step': step, 'errorType': error_type,
+                           'exitCode': error.exit_code if isinstance(error, EngineeringGitError) else None}
+                # Diagnostics do not resolve uncertainty: update-ref may have
+                # succeeded before an error. Never retry or roll it back here,
+                # and never replace a result that was already durably written.
+                try:
+                    if read(journal) == pending: write(journal, {**pending, 'failure': failure})
+                except (OSError, ValueError):
+                    pass  # The original unknown journal remains authoritative.
+                raise

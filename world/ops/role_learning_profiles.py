@@ -271,7 +271,13 @@ def validate_role_skills(folder, role, runtime, source=HERE):
     assert all(NAME.fullmatch(name) for name in learned)
     for name, row in entries.items():
         if name.startswith('qd-learned-'):
-            assert name in learned and type(row['enabled']) is bool and row['enabled'] == learned[name]['enabled']
+            assert type(row['enabled']) is bool
+            # An epoch archive may retain native skill files and their disabled
+            # bindings. Only current-index skills may remain enabled.
+            if name not in learned:
+                assert row['enabled'] is False
+            else:
+                assert row['enabled'] == learned[name]['enabled']
     for name, row in learned.items():
         assert name in entries and type(row['enabled']) is bool and entries[name]['enabled'] == row['enabled']
         revision = row['revision']

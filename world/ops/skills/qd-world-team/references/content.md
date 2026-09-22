@@ -2,7 +2,7 @@
 
 先读取 `world_content_context()`。只有 `ok=true` 的新鲜上下文可用于新内容：选择实际在线且职业匹配的 `issuers`、当天或次日 `days`、真实合同编号与目标哈希、`items/mobs/destinations`。`receptionReady=false` 说明公会接取入口尚未确认。`proposalFormat` 是当前精确字段合同，以它为准；不要从旧世界坐标或文字设定创造可用场地。
 
-剧情顾问 `operations:mc-priest` 使用 `world_content_submit_story(request_id,title,story,objectives)` 投稿。返回 `story_proposed` 只证明投稿保存；将 contentId 记录在工单，供策划按需用 `world_content_read(content_id)` 读取。投稿不能直接批准成任务。
+剧情顾问职责已经并入 `game:qd-guild-planner`，不要等待已归档的 `operations:mc-priest`。旧 `story_proposed` 投稿可用 `world_content_read(content_id)` 参考，但不是可发布任务；现在由策划同时完成故事与可执行阶段设计。
 
 游戏策划 `game:qd-guild-planner` 使用 `world_content_submit(request_id,content)` 提交可执行候选，当前结构为：
 
@@ -34,3 +34,5 @@
 当前 `boss/chest` 的 `capabilities.ready=false` 是实际执行缺口：需要现场勘察、原生生成或放置前后回执、Boss专属击杀/箱内战利品归属、清理与未知状态恢复。记录具体 missing 项为工程工单，由女神转交世界工程师。旧自动生成代码固定高度、缺专属结算证明，不能重新打开开关来绕过缺口，更不能把普通劫掠兽击杀或任意钻石交付当成当前首领/宝箱活动成功。
 
 旧 `guild_quest` 接口仍接受调用方明确要求的货单 JSON；这与团队班次的内容包是两个现有入口。收到旧严格 JSON 请求就遵守该协议；团队策划班次使用本页工具提交内容，不能只返回旧货单 JSON 假称活动发布。
+
+公屏经 Jev 选择一个 NPC 后，原村民引擎会在问候、近况和委托对话中读取当天已发布故事。该角色只讲关联自己的阶段；岚可介绍整体活动。`story` 是共享缘由，`pitch` 是发单人的对话线索，请写得自然、有角色立场。角色名、目标和回报以真实合同为准；结局文本不会作为已发生的事塞进闲聊。草案、失效日期、发布失败或合同目标已变化的故事不会被 NPC 采用。玩家行为进展继续由原公会回执判断；按后续班次的真实反馈续写，不凭自己的上一段文本宣称故事完成。

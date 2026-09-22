@@ -9,7 +9,8 @@ import inspect
 import json
 import re
 
-VERSION = 1
+VERSION = 2
+REFERENCE_VERSION = 1
 KEY = 'qiandeng_survival_turn'
 
 
@@ -25,12 +26,40 @@ def current_reference(agent):
     session = request.get('session_id')
     value = request.get(KEY)
     if (not isinstance(session, str) or not re.fullmatch(r'life-[0-9a-f]{32}', session)
-            or not isinstance(value, dict) or value.get('version') != VERSION
+            or not isinstance(value, dict) or value.get('version') != REFERENCE_VERSION
             or value.get('session_id') != session
             or not isinstance(value.get('turn_id'), str)
             or not re.fullmatch(r'survival-[0-9a-f]{32}', value['turn_id'])):
         return None
     return {'turn_id': value['turn_id'], 'session_id': session}
+
+
+def omit_consumed_thinking(agent, messages):
+    """Use native formatter capabilities, never edit durable messages/signatures.
+
+    Keep unseen reasoning in the active reply. Completed replies and reasoning
+    acknowledged by Scroll need not be resent on compatible wire protocols.
+    """
+    request = getattr(agent, '_request_context', {})
+    if (request.get(KEY) or {}).get('context_protocol') != 2:
+        return
+    setter = getattr(agent, '_set_formatter_thinking_omit_ids', None)
+    if not callable(setter):
+        return
+    manager = getattr(agent, '_context_manager', None)
+    seen = getattr(manager, '_seen_thinking_block_ids', set())
+    omitted = set(getattr(manager, '_folded_thinking_block_ids', set()))
+    active = getattr(getattr(agent, 'state', None), 'reply_id', None)
+    for message in messages:
+        previous_reply = active is not None and getattr(message, 'id', None) != active
+        for block in getattr(message, 'content', None) or []:
+            kind = block.get('type') if isinstance(block, dict) else getattr(block, 'type', None)
+            identity = block.get('id') if isinstance(block, dict) else getattr(block, 'id', None)
+            if kind == 'thinking' and identity and (previous_reply or identity in seen):
+                omitted.add(str(identity))
+    # DeepSeek, signed Anthropic and Responses are owned by the native
+    # formatter: its setter clears unsupported omissions and returns False.
+    setter(omitted)
 
 
 def wrap_prepare(original):
@@ -40,6 +69,7 @@ def wrap_prepare(original):
         reference = current_reference(self)
         if reference is None:
             return result
+        omit_consumed_thinking(self, result['messages'])
         from agentscope.message import UserMsg
         # Input-only append after native compression, including its overflow
         # recovery path. Native context/summary/tool receipts remain untouched.

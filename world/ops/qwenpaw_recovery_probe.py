@@ -26,8 +26,9 @@ def main():
     from life_memory_evidence_runtime import install as memory_install
     assert finish_install('game') == 4
     from survival_request_runtime import install as request_install
-    assert request_install('game') == 1
-    assert memory_install('game') == 1
+    assert request_install('game') == 2
+    from life_memory_evidence import VERSION as memory_version
+    assert memory_install('game') == memory_version
     from engineering_task_runtime import check_native_contract
     assert check_native_contract() == 1
     from qwenpaw.app.crons.executor import CronExecutor

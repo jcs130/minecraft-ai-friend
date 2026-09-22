@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -130,6 +131,112 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(receipt['status'], 'pending_operator_review')
         self.assertEqual(receipt['schema'], 2)
 
+    def policy_store(self):
+        from world_team import TeamStore
+        return TeamStore('operations:' + self.role, self.root / 'team')
+
+    def file_policy(self, **overrides):
+        from world_team import TeamStore
+        arguments = dict(note='每小时出现重复读取回执，希望根据真实变化调整班次节奏。',
+                         changes=[{'knob': 'shift.cron', 'value': '20 */2 * * *'}],
+                         metric='每次目标完成所需模型请求数', would_change_outcome=True,
+                         evidence=['practice: task-one / receipt-one'])
+        arguments.update(overrides)
+        with patch('world_team.TeamStore', side_effect=lambda actor: TeamStore(actor, self.root / 'team')):
+            return self.tool.policy_draft(**arguments)
+
+    @staticmethod
+    def policy_audit(event):
+        return json.loads(event['observed'].split('\n', 1)[1])
+
+    def test_policy_evidence_survives_reopening_the_real_team_store(self):
+        result = self.file_policy()
+        case = self.policy_store().case(result['case']['caseId'])
+        audit = self.policy_audit(case['events'][0])
+        self.assertEqual(audit['changes'], [{'knob': 'shift.cron', 'value': '20 */2 * * *'}])
+        self.assertEqual(audit['metric'], '每次目标完成所需模型请求数')
+        self.assertIs(audit['wouldChangeOutcome'], True)
+        self.assertEqual(audit['status'], 'pending_operator_review')
+        self.assertEqual(audit['noVerdict'], [])
+        self.assertEqual(audit['evidence'], ['practice: task-one / receipt-one'])
+        self.assertIn(audit['evidence'][0], case['events'][0]['evidence'])
+        self.assertIs(audit['causalityVerified'], False)
+        self.assertEqual(case['case']['owner'], 'game:mc-god')
+        self.assertEqual(case['case']['status'], 'open')
+        self.assertEqual(self.requests, [])
+
+    def test_policy_retries_are_idempotent_but_new_evidence_or_reason_is_an_event(self):
+        first = self.file_policy()
+        self.assertEqual(self.file_policy(), first)
+        case_id = first['case']['caseId']
+        self.assertEqual(len(self.policy_store().case(case_id)['events']), 1)
+        second = self.file_policy(evidence=['practice: task-two / receipt-two'])
+        third = self.file_policy(note='另一个真实目标也出现重复读取，建议先做隔离对照再决定是否调整。')
+        fourth = self.file_policy(would_change_outcome=False)
+        self.assertTrue(all(item['case']['caseId'] == case_id for item in (second, third, fourth)))
+        case = self.policy_store().case(case_id, event_limit=20)
+        self.assertEqual(case['case']['version'], 4)
+        self.assertEqual(len(case['events']), 4)
+        self.assertEqual(self.policy_audit(case['events'][0])['evidence'], ['practice: task-one / receipt-one'])
+        self.assertEqual(self.policy_audit(case['events'][1])['evidence'], ['practice: task-two / receipt-two'])
+        self.assertEqual(self.policy_audit(case['events'][2])['note'],
+                         '另一个真实目标也出现重复读取，建议先做隔离对照再决定是否调整。')
+        self.assertEqual(self.policy_audit(case['events'][3])['status'], 'not_actionable')
+
+    def test_policy_new_audit_keeps_the_legacy_case_and_original_event(self):
+        changes = [{'knob': 'shift.cron', 'value': '20 */2 * * *'}]
+        digest = hashlib.sha256(json.dumps(changes, sort_keys=True, ensure_ascii=False).encode('utf8')).hexdigest()
+        store = self.policy_store()
+        legacy = store.report(request_id='policy-draft-' + digest[:32],
+                              dedupe_key='policy-%s-%s' % (self.role, digest[:16]),
+                              title='旧机制提议', category='improvement', observed='原先只保存了理由和形式校验结果',
+                              expected='原先的建议', evidence=['world-notes/evolution-policy.md'])
+        original = store.case(legacy['caseId'])['events'][0]
+        document = self.root / 'team' / legacy['document']
+        original_document = document.read_bytes()
+        result = self.file_policy(changes=changes)
+        self.assertEqual(result['case']['caseId'], legacy['caseId'])
+        events = self.policy_store().case(legacy['caseId'])['events']
+        self.assertEqual(events[0], original)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(self.policy_audit(events[1])['status'], 'pending_operator_review')
+        self.assertEqual(document.read_bytes(), original_document)
+
+    def test_policy_no_verdict_reasons_remain_distinct_from_rejection(self):
+        result = self.file_policy(metric=None, would_change_outcome=None, evidence=None)
+        self.assertFalse(result['ok'])
+        event = self.policy_store().case(result['case']['caseId'])['events'][0]
+        audit = self.policy_audit(event)
+        self.assertEqual(audit['status'], 'no_verdict')
+        self.assertEqual(audit['problems'], [])
+        self.assertEqual(len(audit['noVerdict']), 3)
+        self.assertTrue(any(item.startswith('no_counterfactual_evidence:') for item in audit['noVerdict']))
+        self.assertNotIn('被拒', event['observed'])
+        self.assertIs(audit['causalityVerified'], False)
+
+    def test_policy_audit_uses_validator_bounds_and_rejects_oversize_changes_atomically(self):
+        arguments = dict(note='n' * 600 + 'first', metric='m' * 160 + 'first',
+                         evidence=['e' * 200 + str(number) for number in range(7)])
+        first = self.file_policy(**arguments)
+        # Distinct discarded suffixes are the same bounded report, not a new event.
+        retry = self.file_policy(**(arguments | {'note': 'n' * 600 + 'second',
+                                               'metric': 'm' * 160 + 'second',
+                                               'evidence': ['e' * 200 + 'changed' for _ in range(8)]}))
+        self.assertEqual(first, retry)
+        events = self.policy_store().case(first['case']['caseId'])['events']
+        self.assertEqual(len(events), 1)
+        audit = self.policy_audit(events[0])
+        self.assertEqual(len(audit['note']), 600)
+        self.assertEqual(len(audit['metric']), 160)
+        self.assertEqual(audit['evidence'], ['e' * 200] * 6)
+        self.assertEqual(len(events[0]['evidence']), 8)
+        self.assertLessEqual(len(events[0]['observed']), 6000)
+        self.assertTrue(all(len(item) <= 1200 for item in events[0]['evidence']))
+        with self.assertRaisesRegex(ValueError, 'policy_proposal_audit_too_large'):
+            self.file_policy(changes=[{'knob': 'shift.cron', 'value': '20 */2 * * *', 'extra': 'x' * 6000}])
+        self.assertEqual(len(self.policy_store().cases(owner='all')['cases']), 1)
+        self.assertEqual(self.policy_store().case(first['case']['caseId'])['events'], events)
+
     def test_shift_prompt_tells_the_role_how_to_finish_what_it_started(self):
         """班次提示必须写明续做路径，否则模型只写草稿就散场。"""
         text = managed_job(self.role, 'game')['text']
@@ -232,6 +339,7 @@ class LearningTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == 'nt', 'evidence gate uses the Linux shared task ledger')
     def test_game_shift_agent_task_goes_through_the_evidence_gate(self):
+        import operations_native_tasks as native
         executor = SimpleNamespace(_workspace=SimpleNamespace(agent_id=self.role, workspace_dir=self.folder))
         job = SimpleNamespace(id='qd-learning-' + self.role, meta={'project': 'qiandengji'}, task_type='text',
                               dispatch=SimpleNamespace(channel='console'),
@@ -244,23 +352,24 @@ class LearningTests(unittest.TestCase):
         # admitted only when the role has new evidence, so an hourly attempt with
         # nothing new costs no model call at all.
         job.task_type = 'agent'
-        result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
+        with patch.object(native, 'STATE', self.root):
+            result = asyncio.run(guarded_execute(executor, job, forbidden, 'game', factory))
         self.assertEqual(result['qiandeng']['code'], 'no_new_learning_evidence')
 
     @unittest.skipIf(os.name == 'nt', 'uses actual Linux operations ledger')
     def test_ops_cron_and_delegate_share_existing_ledger_and_uncertain_reservation(self):
         import operations_native_tasks as native
-        with patch.object(native, 'STATE', self.root):
+        with patch.object(native, 'STATE', self.root), patch.object(native.time, 'time', return_value=self.now):
             self.assertEqual(reserve_review(self.tool, 'job', lambda: self.now)['code'], 'no_new_learning_evidence')
             self.draft()
             first = reserve_review(self.tool, 'job', lambda: self.now)
             self.assertTrue(first['ok'])
             self.assertEqual(reserve_review(self.tool, 'job', lambda: self.now)['code'], 'no_new_learning_evidence')
             with native.ledger() as rows:
-                self.assertEqual(native.budget_check(rows, self.now), 'operations_task_unresolved')
+                self.assertEqual(native.budget_check(rows, self.now), 'budget_taken_this_hour')
                 self.assertEqual(rows[0]['source'], 'native-qwen-cron')
             self.tool.feedback('role-review', 'unverified', '有一个新的观察需要在下次任务中进一步核对')
-            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'operations_task_unresolved')
+            self.assertEqual(reserve_review(self.tool, 'job2', lambda: self.now)['code'], 'budget_taken_this_hour')
 
 
 if __name__ == '__main__': unittest.main()

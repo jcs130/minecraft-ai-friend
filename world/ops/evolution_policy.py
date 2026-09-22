@@ -13,15 +13,22 @@
 import argparse
 import json
 import os
+import math
+import re
+import sqlite3
+from contextlib import contextmanager
 import time
 
 from pathlib import Path
 
 NOTES = Path(os.environ.get('WORLD_NOTES_DIR', '/state/work/world-notes'))
-# QwenPaw 的 PawApp 目录：控制台按请求实时扫描它，所以建目录即生效（无需重启）。
+# Official plugin package directory. Backend activation uses the native plugin API.
 PLUGINS = Path(os.environ.get('QWENPAW_PLUGINS_DIR', '/state/work/plugins'))
 PAGE_ID = 'evolution-board'
 WORKSPACES = Path('/state/work/workspaces')
+SURVIVAL_METRICS = Path('/public/survival-metrics.json')
+TEAM_DB = Path('/team/team.sqlite3')
+WORLD_SKILLS = Path('/state/work/world-skills')
 LEARNING_SELF = Path(__file__).resolve()
 
 
@@ -101,8 +108,8 @@ POLICY_JSON = lambda f: {
         'use_existing_game_decision_controller': '历史理由码；2026-09-18 起，受管的游戏角色班次不再被它拦下',
     },
     'insideTheTurn': {
-        'rule': '生存轮里到期的班次，本班正事即固化：产出草稿，或明确写下"本周期无可固化"',
-        'quotaCycles': f['quotaCycles'],
+        'rule': '具身路径按真实执行证据沉淀经验，没有按周期强制产出草稿的配额；是否改进由反事实与独立验证决定。',
+        'legacyQuotaCycles': f['quotaCycles'],
         'safety': '身体正在受威胁时（血低/被围/险地）生存优先，本班顺延',
         'abandonStallSeconds': f['abandonStallSeconds'],
         'minPatternRepeats': f['minPatternRepeats'],
@@ -326,19 +333,40 @@ def validate_proposal(role, changes, note, metric=None, would_change_outcome=Non
         'status': status,
         'activation': '只能由操作员/天神落地；角色不得自行激活'}
 
+def active_profiles():
+    """Read only the native registry; old workspace directories are not agents."""
+    document = json.loads((WORKSPACES.parent / 'config.json').read_text(encoding='utf-8'))
+    profiles = document['agents']['profiles']
+    if not isinstance(profiles, dict):
+        raise ValueError('native_agent_registry_unavailable')
+    result = {}
+    for role, profile in profiles.items():
+        if (not isinstance(profile, dict) or profile.get('enabled') is not True
+                or role == 'default' or role.startswith('QwenPaw_QA_')
+                or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', role)):
+            continue
+        # This console's project workspaces only; never follow a foreign path.
+        folder = WORKSPACES / role
+        if Path(profile.get('workspace_dir') or '').resolve() != folder.resolve():
+            continue
+        result[role] = profile
+    return result
+
+
 def board_rows():
     rows = []
     now = time.time()
-    for folder in sorted(p for p in WORKSPACES.iterdir() if p.is_dir()):
-        role = folder.name
+    for role, profile in sorted(active_profiles().items()):
+        folder = WORKSPACES / role
         learning = folder / 'learning'
-        if not (folder / 'skills' / 'qd-skill-evolution').exists():
-            continue
-        row = {'role': role}
-        # 班次是按**逻辑身份**跑的（迁移后 qd-engineer 的作业其实是 qd-learning-mc-god），
-        # 所以要去逻辑角色自己的工作区读那份 last-cron；按角色自己的目录读，会把迁移前的
-        # 陈旧副本当成现状 —— 2026-09-19 就是这样把"工程师 6642 分钟没跑"报了出来，
-        # 而它的作业一直在每小时跑。
+        row = {'role': role, 'name': role, 'flags': []}
+        try:
+            agent = json.loads((folder / 'agent.json').read_text(encoding='utf-8'))
+            row['name'] = str(agent.get('name') or role)[:120]
+        except (OSError, ValueError):
+            row['flags'].append('profile_unavailable')
+        # Logical identity determines the job id. LearningTools.root still uses
+        # the native workspace: another role's same-named marker is unrelated.
         runtime = 'game'
         try:
             from role_learning_profiles import learning_identity
@@ -348,17 +376,16 @@ def board_rows():
         if logical_role != role:
             row['shiftJob'] = 'qd-learning-' + logical_role
             row['shiftVia'] = logical_role
-        marker = (WORKSPACES / logical_role / 'learning' / 'last-cron.json')
-        if not marker.exists():
-            marker = learning / 'last-cron.json'
+        marker = learning / 'last-cron.json'
         if marker.exists():
             try:
                 record = json.loads(marker.read_text(encoding='utf-8'))
             except (OSError, ValueError):
                 record = {}
+            stamps = [record.get(k) for k in ('reservedAt', 'checkedAt')]
+            stamps = [t for t in stamps if type(t) in (int, float) and math.isfinite(t) and t > 0]
             row['lastShift'] = {'status': record.get('status'), 'code': record.get('code'),
-                                'ageMinutes': round((now - (record.get('reservedAt')
-                                                           or record.get('checkedAt') or 0)) / 60)}
+                                'ageMinutes': round(max(0, now - max(stamps)) / 60) if stamps else None}
         else:
             row['lastShift'] = None
         drafts = len([x for x in (learning / 'drafts').rglob('*') if x.is_file()]) \
@@ -376,178 +403,39 @@ def board_rows():
                     newest = max(newest, item.stat().st_mtime)
         row['knowledge'] = knowledge
         row['knowledgeFreshMinutes'] = round((now - newest) / 60) if newest else None
-        row['flags'] = []
         if newest and (now - newest) > 12 * 3600:
             row['flags'].append('knowledge_stale')
-        if knowledge == 0:
-            row['flags'].append('no_knowledge')
-        if drafts == 0 and knowledge > 0:
-            row['flags'].append('no_skill_draft_yet')
+        # No draft/knowledge quota: a quiet role is not a failed learner.
         if row['lastShift'] and row['lastShift']['status'] == 'skipped' \
-                and row['lastShift']['code'] not in ('no_new_learning_evidence',):
+                and row['lastShift']['code'] not in ('no_new_learning_evidence',
+                    'budget_taken_this_hour', 'reserved_for_unfinished_draft',
+                    'operations_task_unresolved'):
             row['flags'].append('gate:' + str(row['lastShift']['code']))
         rows.append(row)
     return rows
 
 
-UI_JS = '/**\n * 自我改进看板 — 前端入口（运行时加载的插件模块）。\n *\n * 由宿主用 Blob URL + 动态 import 载入，自己注册一条 React 路由。\n * React / antd 从 window.QwenPaw.host 取，不需要打包器。\n * 页面本体复用已做好的静态页（同源 iframe），所以这里只做"路由 + 开窗"。\n */\n(function () {\n  var QwenPaw = window.QwenPaw;\n  if (!QwenPaw || !QwenPaw.host || !QwenPaw.registerRoutes) {\n    console.error("[evolution-board] window.QwenPaw 尚未就绪，无法注册路由");\n    return;\n  }\n  var React = QwenPaw.host.React;\n  function Page() {\n    return React.createElement("iframe", {\n      src: "/api/pawapps/evolution-board/static/index.html",\n      title: "自我改进看板",\n      style: { width: "100%", height: "calc(100vh - 140px)", border: 0, borderRadius: 12, background: "#0b0d11" }\n    });\n  }\n  QwenPaw.registerRoutes("evolution-board", [\n    { path: "/plugin/evolution-board", component: Page, label: "自我改进看板", icon: "📈", priority: 41 }\n  ]);\n})();\n'
+from pawapp_bridge import build_frontend, build_manifest, install_pawapp, EVOLUTION_BOARD_BACKEND
+
+UI_JS = build_frontend(PAGE_ID, '自我改进看板', '📈', priority=41)
 
 
-PAGE_HTML = """<!doctype html>
-<html lang="zh">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>自我改进 · 元层看板</title>
-<style>
- :root{--bg:#0f1115;--card:#171a21;--line:#252a34;--txt:#e6e8ee;--dim:#8b93a7;
-        --ok:#3fbf7f;--warn:#e2b93b;--bad:#e5605e;--acc:#6aa9ff}
- *{box-sizing:border-box}
- body{margin:0;background:var(--bg);color:var(--txt);
-      font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
- header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;
-        flex-wrap:wrap;gap:16px;align-items:baseline}
- h1{font-size:17px;margin:0;font-weight:600}
- .meta{color:var(--dim);font-size:12px}
- .kpis{display:flex;gap:10px;flex-wrap:wrap;margin:16px 22px 0}
- .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;
-       padding:10px 14px;min-width:120px}
- .kpi b{display:block;font-size:20px;margin-top:2px}
- main{padding:16px 22px 40px}
- table{width:100%;border-collapse:collapse;background:var(--card);
-        border:1px solid var(--line);border-radius:12px;overflow:hidden}
- th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
- th{color:var(--dim);font-weight:500;background:#12151b}
- tr:last-child td{border-bottom:0}
- td.num{text-align:right;font-variant-numeric:tabular-nums}
- .flag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;
-        border:1px solid var(--line);margin-right:4px;color:var(--dim)}
- .flag.bad{color:#ffd9d8;border-color:#5c2a29;background:#2a1716}
- .flag.warn{color:#f6e2b0;border-color:#5a4a1e;background:#26200f}
- .flag.good{color:#cfead9;border-color:#245239;background:#12241a}
- code{color:var(--acc)}
- .foot{margin-top:14px;color:var(--dim);font-size:12px}
- .cards{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 0}
- .card2{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:190px}
- .card2 .t{color:var(--dim);font-size:12px}
- .card2 .v{font-size:19px;margin-top:3px;font-variant-numeric:tabular-nums}
- .card2 .n{color:var(--dim);font-size:11px;margin-top:2px}
- details{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
- summary{cursor:pointer;color:var(--acc);font-size:13px}
- pre{white-space:pre-wrap;color:var(--dim);font-size:12px}
-</style>
-</head>
-<body>
-<header>
-  <h1>自我改进 · 元层看板</h1>
-  <span class="meta" id="stamp">加载中…</span>
-  <span class="meta">每 60 秒自动刷新</span>
-</header>
-<div class="kpis" id="kpis"></div>
-<main>
-  <table>
-    <thead><tr>
-      <th>角色</th><th>上次班次</th><th>多久前</th>
-      <th class="num">技能草稿</th><th class="num">知识产物</th>
-      <th>知识新鲜度</th><th>红旗</th>
-    </tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <section id="metrics" class="cards"></section>
-  <details><summary>规则（这份看板背后的政策）</summary><pre id="policy"></pre></details>
-  <div class="foot">数据来自 <code>world/ops/evolution_policy.py</code> 生成的两份文件，与共享笔记树同源。</div>
-</main>
-<script>
-const FLAG = {'no_knowledge':'bad','knowledge_stale':'warn','no_skill_draft_yet':'warn'};
-function cls(f){
-  if(f.startsWith('gate:')||f==='no_knowledge') return 'bad';
-  if(f==='knowledge_stale'||f==='no_skill_draft_yet') return 'warn';
-  return '';
-}
-function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function tick(){
-  const r = await fetch('board.json?ts=' + Date.now());
-  const d = await r.json();
-  const roles = d.roles || [];
-  const flagged = roles.filter(x=>(x.flags||[]).length);
-  const drafts = roles.reduce((a,x)=>a+(x.drafts||0),0);
-  const know = roles.reduce((a,x)=>a+(x.knowledge||0),0);
-  document.getElementById('stamp').textContent =
-    '生成于 ' + new Date((d.generatedAt||0)*1000).toLocaleString() + ' ｜ 角色 ' + roles.length + ' ｜ 红旗 ' + flagged.length;
-  document.getElementById('kpis').innerHTML =
-    [['角色', roles.length, ''],['红旗', flagged.length, flagged.length?'bad':'good'],
-     ['技能草稿', drafts, drafts?'good':'warn'],['知识产物', know, '']]
-    .map(([k,v,c])=>`<div class="kpi">${k}<b class="${c}">${v}</b></div>`).join('');
-  document.getElementById('rows').innerHTML = roles.map(x=>{
-    const s = x.lastShift || {};
-    const flags = (x.flags||[]).map(f=>`<span class="flag ${cls(f)}">${esc(f)}</span>`).join('') || '<span class="flag good">—</span>';
-    return `<tr><td><b>${esc(x.role)}</b></td><td>${esc(s.code||'—')}</td>`
-      + `<td class="num">${s.ageMinutes!=null?Math.round(s.ageMinutes)+' 分钟':'—'}</td>`
-      + `<td class="num">${x.drafts??0}</td><td class="num">${x.knowledge??0}</td>`
-      + `<td>${x.knowledgeFreshMinutes!=null?Math.round(x.knowledgeFreshMinutes)+' 分钟前':'—'}</td>`
-      + `<td>${flags}</td></tr>`;
-  }).join('');
-  const m = d.metrics || {}, sk = m.skillLevel || {}, cs = m.cases || {}, sv = m.survival || {};
-  const ages = (m.flagAges || []).slice(0, 3);
-  document.getElementById('metrics').innerHTML = [
-    ['技能级产出', (sk.drafts ?? 0) + ' / ' + (sk.activated ?? 0) + ' / ' + (sk.sharedPublished ?? 0),
-      '草稿 / 已启用 / 已发布共享', (sk.drafts ? '' : 'warn')],
-    ['工单', Object.entries(cs.counts || {}).map(([k, v]) => k + ' ' + v).join(' · ') || '—',
-      '已结单中位处理 ' + (cs.resolutionMedianMinutes ?? '—') + ' 分钟', ''],
-    ['动作连贯性', sv.closedLoop ? ('闭环 ' + Math.round((sv.closedLoop.rate ?? 0) * 100) + '%') : '—',
-      sv.repeats ? ('重复占比 ' + Math.round((sv.repeats.share ?? 0) * 100) + '% · 停滞目标 ' + ((sv.stalledGoals || {}).count ?? '—')
-        + ' · 最长决策间隔 ' + Math.round(((sv.decisionGaps || {}).maxSeconds ?? 0) / 60) + '′') : '等生存侧写首个文件',
-      sv.closedLoop && (sv.closedLoop.rate ?? 1) < 0.5 ? 'bad' : ''],
-    ['红旗年龄', ages.length ? ages.map(a => Math.round(a.minutes) + '′').join(' / ') : '—',
-      ages.length ? ages.map(a => a.flag.split('|')[0]).join(' / ') : '暂无历史', ages.length > 60 * 24 ? 'bad' : '']
-  ].map(([t, v, n, c]) => `<div class="card2"><div class="t">${t}</div><div class="v ${c}">${v}</div><div class="n">${n}</div></div>`).join('');
-  try{
-    const p = await (await fetch('policy.json?ts='+Date.now())).json();
-    document.getElementById('policy').textContent = JSON.stringify({
-      cadence:p.cadence, evidence:p.evidence, insideTheTurn:p.insideTheTurn,
-      acceptance:p.acceptance, agentMayNotTouch:p.agentMayNotTouch
-    }, null, 1);
-  }catch(e){}
-}
-tick(); setInterval(tick, 60000);
-</script>
-</body>
-</html>
-"""
+PAGE_HTML = (Path(__file__).parent / 'pawapp_assets/evolution-board.html').read_text(encoding='utf-8')
 
 
 def write_pawapp(policy, rows, numbers=None):
-    """把它做成 QwenPaw 控制台里的一个真页面（PawApp），而不是一份 md 文件。
-
-    控制台按请求实时扫描 plugins 目录，所以建目录即生效、不需要重启；
-    静态资源由控制台自己的 /api/pawapps/<id>/static/... 伺服，页面就与它同源取数。
-    """
+    """Refresh the existing package; native plugin installation activates its backend."""
     folder = PLUGINS / PAGE_ID
-    folder.mkdir(parents=True, exist_ok=True)
-    manifest = {
-        'id': PAGE_ID,
-        'name': '自我改进看板',
-        'version': '1.0.0',
-        'description': '这套自我改进体系的元层看板：一角色一行，看谁在动、谁被拦、谁红了。',
-        'type': 'app',
-        # 前端入口是一个 JS 模块（宿主用 Blob URL 动态 import，自己注册 React 路由），
-        # entry_page 是**路由**而不是文件名 —— 2026-09-19 我给了 index.html，于是控制台报
-        # "PawApp frontend plugin not found"：它找不到 entry.frontend，就认为这个 App 没有前端。
-        'entry': {'frontend': 'ui/index.js'},
-        'meta': {'pawapp': {'category': 'monitor', 'icon': '📈',
-                            'entry_page': '/apps/evolution-board', 'launch_scope': 'page'},
-                 'settings': []},
-    }
-    (folder / 'plugin.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
-    (folder / 'index.html').write_text(PAGE_HTML, encoding='utf-8')
-    (folder / 'ui').mkdir(exist_ok=True)
-    (folder / 'ui' / 'index.js').write_text(UI_JS, encoding='utf-8')
+    manifest = build_manifest(PAGE_ID, '自我改进看板',
+        '当前代行为回执、趋势与现役团队的经验改进证据。', '📈', backend=True)
+    result = install_pawapp(folder, manifest, PAGE_HTML,
+        backend_source=EVOLUTION_BOARD_BACKEND, priority=41)
     (folder / 'board.json').write_text(
         json.dumps({'schema': 1, 'generatedAt': time.time(), 'roles': rows,
                     'metrics': numbers or {}}, ensure_ascii=False), encoding='utf-8')
     (folder / 'policy.json').write_text(json.dumps(policy, ensure_ascii=False), encoding='utf-8')
-    return {'appId': PAGE_ID, 'dir': str(folder),
-            'entry': '/api/pawapps/%s/static/index.html' % PAGE_ID}
+    return result
+
 
 
 def proposals():
@@ -558,22 +446,25 @@ def proposals():
     的未结工单读出来，让"提了没人看"不可能发生。
     """
     try:
-        from world_team import TeamStore
-        result = TeamStore('game:mc-god').cases(owner='all', include_closed=False, limit=30)
+        with _team_readonly() as db:
+            records = db.execute("SELECT id,author,owner,status,version,body FROM cases "
+                "WHERE status NOT IN ('resolved','rejected') ORDER BY updated_at DESC,id LIMIT 30").fetchall()
+            cases = [json.loads(row['body']) | dict(row) for row in records]
     except Exception as error:
         return [{'error': type(error).__name__}]
     return [{'id': row.get('id'), 'role': row.get('author'), 'owner': row.get('owner'),
              'status': row.get('status'), 'version': row.get('version'),
              'title': (row.get('title') or '')[:70]}
-            for row in result.get('cases', []) if row.get('category') == 'improvement']
+            for row in cases if row.get('category') == 'improvement']
 
 
 
-def _learning_totals():
+def _learning_totals(rows=None):
     """技能级产出：drafts 与已启用技能（激活在 learning/index.json 的 skills）。"""
     drafts = 0
     activated = 0
-    for folder in WORKSPACES.iterdir():
+    for role in ([row['role'] for row in rows] if rows is not None else active_profiles()):
+        folder = WORKSPACES / role
         if not folder.is_dir():
             continue
         tree = folder / 'learning' / 'drafts'
@@ -585,39 +476,43 @@ def _learning_totals():
                 activated += len((json.loads(index.read_text(encoding='utf-8')).get('skills') or {}))
             except (OSError, ValueError):
                 pass
-    shared = Path('/state/work/world-skills')
-    published = len([x for x in shared.rglob('*') if x.is_file()]) if shared.is_dir() else 0
+    shared = WORLD_SKILLS
+    try:
+        index = json.loads((shared / 'index.json').read_text(encoding='utf-8'))
+        published = len(index['skills']) if isinstance(index.get('skills'), dict) else None
+    except (OSError, ValueError):
+        published = None
     return drafts, activated, published
 
 
-def _case_totals():
-    """工单侧：未结分布 + 已结单的处理时长（events 里有时刻）。"""
+@contextmanager
+def _team_readonly():
+    """Use the existing ledger without its write/initialization transaction."""
+    if TEAM_DB.is_symlink() or any(p.is_symlink() for p in TEAM_DB.parents):
+        raise ValueError('linked_team_ledger')
+    db = sqlite3.connect(TEAM_DB.resolve().as_uri() + '?mode=ro', uri=True, timeout=3)
     try:
-        from world_team import TeamStore
-        store = TeamStore('game:mc-god')
-        rows = store.cases(owner='all', include_closed=True, limit=30).get('cases', [])
-    except Exception as error:
+        db.row_factory = sqlite3.Row
+        db.execute('PRAGMA query_only=ON')
+        yield db
+    finally:
+        db.close()
+
+
+def _case_totals():
+    """Status distribution only; a tail of events cannot prove time to resolve."""
+    try:
+        with _team_readonly() as db:
+            counts = {row['status']: row['n'] for row in
+                      db.execute('SELECT status,COUNT(*) AS n FROM cases GROUP BY status')}
+    except (OSError, sqlite3.Error, ValueError) as error:
         return {'error': type(error).__name__}
-    counts = {}
-    for row in rows:
-        counts[row.get('status')] = counts.get(row.get('status'), 0) + 1
-    durations = []
-    for row in rows:
-        if row.get('status') != 'resolved':
-            continue
-        try:
-            events = store.case(row['id'], event_limit=20).get('events') or []
-        except Exception:
-            continue
-        stamps = [e.get('at') for e in events if isinstance(e.get('at'), (int, float))]
-        if len(stamps) >= 2:
-            durations.append((max(stamps) - min(stamps)) / 60.0)
-    durations.sort()
-    return {'counts': counts, 'resolvedSampled': len(durations),
-            'resolutionMedianMinutes': round(durations[len(durations) // 2], 1) if durations else None}
+    return {'counts': counts, 'scope': 'all cases in the existing project ledger',
+            'resolvedSampled': 0, 'resolutionMedianMinutes': None,
+            'note': '完整结案时长尚未评估；不使用最后20条事件冒充工单起止。'}
 
 
-def _flag_history(rows):
+def _flag_history(rows, *, persist=True):
     """红旗史：某个红旗**第一次出现**到现在多久 —— "被发现了多久还没处理"的数字。
 
     以前没有这个数，所以"故障处理要多快"只能靠感觉 ✗；看板每次都追加一行，
@@ -629,15 +524,18 @@ def _flag_history(rows):
     for row in rows:
         for flag in row.get('flags') or []:
             current['%s|%s' % (row['role'], flag)] = True
-    with path.open('a', encoding='utf-8') as stream:
-        stream.write(json.dumps({'at': now, 'flags': sorted(current)}, ensure_ascii=False) + '\n')
+    if persist:
+        with path.open('a', encoding='utf-8') as stream:
+            stream.write(json.dumps({'at': now, 'flags': sorted(current)}, ensure_ascii=False) + '\n')
     first = {}
     try:
         for line in path.read_text(encoding='utf-8').splitlines():
             if not line.strip():
                 continue
             record = json.loads(line)
-            for key in record.get('flags') or []:
+            present = set(record.get('flags') or [])
+            first = {key: at for key, at in first.items() if key in present}
+            for key in present:
                 first.setdefault(key, record.get('at'))
     except (OSError, ValueError):
         pass
@@ -649,20 +547,24 @@ def _flag_history(rows):
     return ages
 
 
-def metrics(rows):
+def metrics(rows, *, persist=True):
     """第 4 层：把"改进是否让下一轮更好"变成数。
 
     只统计数据真的支持的东西；支持不了的就写明没有记录 —— 编一个好看的数比没有数更糟，
     因为它会让下一轮的自改变成优化一个幻觉。
     """
-    drafts, activated, published = _learning_totals()
+    drafts, activated, published = _learning_totals(rows)
     cases = _case_totals()
     survival = None
     try:
-        shared = Path('/public/survival-metrics.json')
+        shared = SURVIVAL_METRICS
         if shared.exists():
             value = json.loads(shared.read_text(encoding='utf-8'))
-            survival = {'at': value.get('at'), 'ageMinutes': round((time.time() - (value.get('at') or 0)) / 60, 1),
+            survival = {'schema': value.get('schema'), 'evidence': value.get('evidence'),
+                        'generation': value.get('generation'), 'behaviors': value.get('behaviors'),
+                        'runtime': value.get('runtime'),
+                        'trends': value.get('trends'), 'note': value.get('note'),
+                        'at': value.get('at'), 'ageMinutes': round((time.time() - (value.get('at') or 0)) / 60, 1),
                         'closedLoop': value.get('closedLoop'), 'repeats': value.get('repeats'),
                         'decisionGaps': value.get('decisionGaps'), 'stalledGoals': value.get('stalledGoals'),
                         'noOutputSignals': value.get('noOutputSignals'),
@@ -677,18 +579,28 @@ def metrics(rows):
                        'inheritedNote': '没有记录：learning/index.json 未记技能来源角色，'
                                         '所以"跨角色继承"目前无法计算 —— 要它成为数字，先让索引记来源。'},
         'cases': cases,
-        'flagAges': _flag_history(rows),
+        'flagAges': _flag_history(rows, persist=persist),
         'honestLimits': [
             '技能级产出全为 0 时，任何"改进效果"都只能是相对基线说的，不能凭空说变好',
             '继承率需要索引记录来源角色；回退率需要 feedback 里有失败记录',
         ],
     }
     baseline = NOTES / 'metrics-baseline.json'
-    if not baseline.exists():
+    if persist and not baseline.exists():
         baseline.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
         report['baselineRecorded'] = True
-    (NOTES / 'metrics.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
+    if persist:
+        (NOTES / 'metrics.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
     return report
+
+
+def build_live_board():
+    """Native PawApp GET projection. No model calls, actions or file writes."""
+    rows = board_rows()
+    return {'schema': 2, 'generatedAt': time.time(), 'roles': rows,
+            'metrics': metrics(rows, persist=False), 'proposals': proposals(),
+            'policy': POLICY_JSON(code_facts()),
+            'scope': 'enabled agents in this project; retained evidence in the current memory epoch'}
 
 
 def write_outputs():
