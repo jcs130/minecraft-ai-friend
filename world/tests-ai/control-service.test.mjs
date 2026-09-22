@@ -11,6 +11,32 @@ const EXEC_ID='e'.repeat(64),NO_OVERRIDE=Symbol('no override');
 const idFor=name=>(SERVICES.indexOf(name)+1).toString(16).padStart(64,'0');
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
+test('Qwen full health waits for the later body endpoint, then is actually verified',async t=>{
+  let clock=1000;
+  const f=await fixture(t,{server:{clock:()=>clock,sleep:async()=>{clock+=1000;}},
+    rows:rows=>{for(const name of ['qwenpaw','survivor']){const row=rows.get(name);row.State.Status='exited';row.State.Running=false;row.State.Health.Status='starting';}},
+    engine:({route,rows})=>{
+      if(route===`/containers/${idFor('survivor')}/start`){
+        rows.get('qwenpaw').State.Health.Status='healthy';rows.get('survivor').State.Health.Status='healthy';
+      }
+      return NO_OVERRIDE;
+    }});
+  const record=await f.operate({action:'start',services:['qwenpaw','survivor']});
+  assert.equal(record.ok,true,JSON.stringify(record));
+  assert.equal(record.steps.at(-1).name,'最终健康检查 qwenpaw');
+  assert.deepEqual(f.calls.filter(c=>c.method==='POST'&&c.route.endsWith('/start')).map(c=>c.route),
+    [`/containers/${idFor('qwenpaw')}/start`,`/containers/${idFor('survivor')}/start`]);
+});
+
+test('deferred Qwen health still fails the operation when the full audit never recovers',async t=>{
+  let clock=1000;
+  const f=await fixture(t,{server:{clock:()=>clock,sleep:async()=>{clock+=60000;}},
+    rows:rows=>{rows.get('qwenpaw').State.Health.Status='unhealthy';}});
+  const record=await f.operate({action:'start',services:['qwenpaw','survivor']});
+  assert.equal(record.ok,false);assert.equal(record.error,'readiness_timeout');
+  assert.equal(record.steps.at(-1).name,'最终健康检查 qwenpaw');
+});
+
 async function fixture(t,options={}) {
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'qd-control-test-'));
   const stateDir=path.join(root,'state'),maintenanceDir=path.join(root,'maintenance');

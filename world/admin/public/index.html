@@ -7,6 +7,8 @@
   <meta name="description" content="千灯纪独立管理台：世界运行、众生档案、村务与传送阵。">
   <title>千灯纪 · 管理台</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/trace.css">
+  <script src="/trace.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/management.js" defer></script>
 </head>
@@ -26,6 +28,8 @@
       <button class="nav-item" data-view="operations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M6 21v-3a6 6 0 0 1 12 0v3M3 8v6m18-6v6M1 11h4m14 0h4"/></svg><span>运营组</span><span class="nav-index">05</span></button>
       <button class="nav-item" data-view="agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="4"/><path d="M12 3v3M8 11h.01M16 11h.01M9 16h6M1 11v4m22-4v4"/></svg><span>Agent 设置</span><span class="nav-index">06</span></button>
       <button class="nav-item" data-view="survivor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 7-7M13 11l7-7v5l-6 6M8 12l4 4M4 16l4 4"/></svg><span>桐人 · 自主生存</span><span class="nav-index">07</span></button>
+      <button class="nav-item" data-view="trace"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><path d="M7 5h5v7h5M12 12v7H7"/></svg><span>Agent · 运行轨迹</span><span class="nav-index">08</span></button>
+      <a class="nav-item" href="/observatory"><span aria-hidden="true">◈</span><span>直播 · Agent 观察舱 ↗</span></a>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-note"><span class="status-dot neutral" id="panel-dot"></span><span id="panel-status">正在连接管理台</span></div>
@@ -72,6 +76,17 @@
         <a class="link-card" href="#eye"><div><span class="link-kicker">LIVE WORLD</span><strong>打开天神之眼</strong><p>实时三维观察与周边地形；查看地点档案不会自动传送。</p></div><span aria-hidden="true">↗</span></a>
       </section>
 
+      <section id="view-trace" class="view" hidden aria-labelledby="page-title">
+        <div class="trace-banner"><div><p class="eyebrow">KIRITO / EXECUTION TRACE</p><h2>行动有迹可循</h2><p id="trace-goal">正在读取当前目标…</p></div><span class="badge neutral" id="trace-live">待读取</span></div>
+        <div class="trace-toolbar"><p id="trace-updated" role="status">正在连接运行记录…</p><a class="button button-secondary" href="/observatory">打开直播观察舱 ↗</a><button class="button button-secondary" id="trace-pause" type="button" aria-pressed="false">暂停刷新</button><button class="button button-secondary" id="trace-refresh" type="button">刷新轨迹</button></div>
+        <div id="trace-metrics" class="trace-metrics"></div>
+        <div class="trace-layout">
+          <aside class="trace-rail card" aria-label="选择决策轮次"><div class="card-heading"><h2>最近轮次</h2><span id="trace-count" class="badge neutral">—</span></div><label class="sr-only" for="trace-search">搜索工具、目标或轮次</label><input id="trace-search" type="search" placeholder="搜索工具、目标、轮次…"><label class="sr-only" for="trace-filter">筛选轮次状态</label><select id="trace-filter"><option value="all">全部状态</option><option value="active">进行中</option><option value="completed">轮次完成</option><option value="failed">轮次失败</option><option value="unknown">结果未知</option></select><div id="trace-turns" class="trace-turns"></div></aside>
+          <div id="trace-detail" class="trace-detail"><div class="card empty">正在读取轨迹…</div></div>
+        </div>
+        <article class="card trace-policy"><div class="card-heading"><h2>快系统 · 最近一次选择</h2><span class="badge neutral">独立历史记录</span></div><div id="trace-policy"></div><p class="footnote">这条 Jev 记录未与上方轮次建立关联；选择一个选项不表示身体已执行。</p></article>
+        <p class="footnote trace-coverage" id="trace-coverage">仅展示实际保留的记录。</p>
+      </section>
       <section id="view-survivor" class="view" hidden aria-labelledby="page-title">
         <article class="card"><div class="card-heading"><div><p class="eyebrow">KIRITO · LIVE ADVENTURE</p><h2>桐人的冒险</h2></div><span id="survivor-badge" class="badge neutral">待读取</span></div><p id="survivor-freshness" class="card-caption" role="status">等待自主生存服务的状态。</p><p id="survivor-goal" class="page-description"></p><p id="survivor-autonomy" class="card-caption"></p><div id="survivor-metrics" class="metric-grid"></div><p id="survivor-decision" class="card-caption"></p><div class="chip-list"><a class="button button-secondary" href="#services">管理桐人服务</a><a class="button button-secondary" href="http://127.0.0.1:18089/agents" target="_blank" rel="noopener noreferrer">打开桐人控制台 ↗</a><a class="button button-secondary" href="#eye">在天神之眼观察</a></div><p class="footnote">启停前往服务器管理，选择“桐人 · 自主生存”。任务受理与实际完成分别记录，未知结果需要核对。</p></article>
         <article class="card" id="survivor-party"><div class="card-heading"><h2>冒险小队</h2><span id="survivor-party-badge" class="badge neutral">尚未配置</span></div><p id="survivor-party-freshness" class="card-caption" role="status">等待小队状态。</p><div id="survivor-party-members" class="chip-list"></div><p id="survivor-party-reason" class="card-caption"></p><div id="survivor-party-counts" class="fact-list"></div><div id="survivor-party-messages" class="party-messages"></div><a id="survivor-party-console" class="operations-console disabled-link" aria-disabled="true">在 QwenPaw 查看队员 ↗</a><p class="footnote">消息排队、角色回复与游戏任务完成分别记录。此处只显示小队交流，不公开角色的私人资料。</p></article>

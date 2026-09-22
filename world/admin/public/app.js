@@ -1,6 +1,7 @@
 'use strict';
 
 const views = {
+  trace: ['运行轨迹', 'AGENT OBSERVATORY', '看见每一次行动', '从输入、决策摘要到工具与世界反馈，沿着真实记录回看桐人的自主生存。'],
   survivor: ['桐人 · 自主生存', 'AUTONOMOUS ADVENTURE', '桐人 · 自主生存', '跟随他的目标、行动与学习，了解世界里的真实进展。'],
   eye: ['天神之眼', 'LIVE WORLD', '天神之眼', '从世界中看见世界。选择视角，观察身边正在发生的故事。'],
   services: ['服务器管理', 'SERVER MANAGEMENT', '服务器管理', '当前状态、日志与维护记录集中管理，每次操作都有清楚的范围。'],

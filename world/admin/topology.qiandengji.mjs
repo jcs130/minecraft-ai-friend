@@ -14,6 +14,7 @@ export const QIANDENGJI = defineTopology({
   dependencies:{world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc','qwenpaw']},
   startOrder:['tts','mc','world','gate','npc','qwenpaw','resources','voice','asr','panel','survivor','inventory'],
   healthGated:['mc'],
+  deferredHealth:['qwenpaw'],
   lockFile:'.qiandengji-smoke.lock',
   refuseIfPresent:[{file:'.qiandengji-recorder-qa.json',error:'recorder_busy'}],
   preStop:[{
