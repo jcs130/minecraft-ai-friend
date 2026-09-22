@@ -379,6 +379,7 @@ class Controller:
         from system_one import SystemOne
         self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
+        self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
         self.pending_social = None
         self.pending_route = None
         self.pending_motor = None
@@ -1727,6 +1728,9 @@ class Controller:
         review = self.next_review(control)
         if not changed and requested_review is None and (review is None or now < review):
             self.data['status'] = 'observing' if self.autonomy(control) else 'idle'
+            # 平静期影子评估：本地生成日常行为候选交 Jev 选择，只记录不执行
+            # （校准通过前不接管任何行为；见 docs/JEV-FAST-LOOP-DESIGN.md 第二阶段）
+            self.tick_routine_shadow(body, control, now)
             return
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
             from native_tools import require_ready
@@ -2209,6 +2213,54 @@ class Controller:
         except Exception as error:
             self.data['recoveryProbeError'] = type(error).__name__
             return
+
+    ROUTINE_SHADOW_COOLDOWN = 30.0
+
+    def tick_routine_shadow(self, body, control, now):
+        """Shadow-mode routine candidates: Jev is asked, the answer is recorded, nothing executes.
+
+        校准台账 /state/survival/routine-shadow.jsonl；覆盖率和错误率过审前不执行
+        任何候选（第二阶段放行条件见 docs/JEV-FAST-LOOP-DESIGN.md）。与中断裁决共用
+        单推理槽：槽忙即跳过本轮，绝不挤占生产裁决。
+        """
+        if not self.settings.get('routineShadow'):
+            return
+        if self.pending_shadow is not None:
+            result = self.policy_worker.poll(self.pending_shadow)
+            if result is None:
+                return
+            self.pending_shadow = None
+            summary = {'at': now, 'shadowId': getattr(self, '_shadow_last_id', None),
+                       'hunger': body.get('hunger'), 'hp': body.get('hp'),
+                       'position': body.get('position'),
+                       'candidates': [{'id': row['id'], 'action': row['action']}
+                                      for row in getattr(self, '_shadow_last_proposal', {}).get('candidates', [])],
+                       'model': result.get('model'), 'choice': result.get('choice'),
+                       'confidence': result.get('confidence'), 'code': result.get('code'),
+                       'selectedProbability': result.get('selectedProbability'),
+                       'latencyMs': result.get('latencyMs')}
+            try:
+                with (self.root / 'routine-shadow.jsonl').open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps(summary, ensure_ascii=False) + '\n')
+            except OSError:
+                pass
+            self.record('routine_shadow_choice', **{k: v for k, v in summary.items()
+                                                    if k not in ('candidates', 'position')})
+            return
+        if now < self.data.get('nextRoutineShadowAt', 0):
+            return
+        from routine_candidates import build_candidates
+        goal = control.get('mission') or self.memory().get('goal', '')
+        proposal = build_candidates(body, goal, self.settings.get('anchor'))
+        if proposal is None:
+            return
+        token = self.policy_worker.submit(proposal, body, goal, None)
+        if token is None:
+            return  # 单推理槽正被中断/路由等生产裁决占用，本轮让位
+        self.pending_shadow = token
+        self._shadow_last_id = 'shadow-' + uuid.uuid4().hex[:12]
+        self._shadow_last_proposal = proposal
+        self.data['nextRoutineShadowAt'] = now + self.ROUTINE_SHADOW_COOLDOWN
 
     def tick(self):
         tick_started = time.monotonic()
