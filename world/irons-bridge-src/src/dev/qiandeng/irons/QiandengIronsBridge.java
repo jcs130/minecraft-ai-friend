@@ -43,6 +43,7 @@ public final class QiandengIronsBridge {
     private static final int MAX_LIST = 256;
 
     public QiandengIronsBridge() {
+        TownProtection.install();
         NeoForge.EVENT_BUS.addListener(this::registerCommands);
         if (ModList.get().isLoaded("numen")) WorldInteractionBridge.install();
     }
@@ -70,6 +71,7 @@ public final class QiandengIronsBridge {
         }
         root.then(self);
         event.getDispatcher().register(root);
+        TownProtection.register(event.getDispatcher());
         WaypointTravel.register(event.getDispatcher());
         TradeBridge.register(event.getDispatcher());
         WorldMenuBridge.register(event.getDispatcher());

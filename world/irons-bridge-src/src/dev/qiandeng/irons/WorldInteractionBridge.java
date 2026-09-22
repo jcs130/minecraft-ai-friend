@@ -51,6 +51,17 @@ public final class WorldInteractionBridge {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("qdworld").requires(s -> s.hasPermission(2));
+        root.then(Commands.literal("controls").executes(c -> {
+            var out = new JsonObject();
+            out.addProperty("schema", 1);
+            out.addProperty("capability", "numen_generic_interaction_v1");
+            out.addProperty("tool", "interact_at");
+            out.addProperty("forwardAim", true);
+            out.addProperty("maxHoldTicks", 100);
+            out.addProperty("receiptCapability", CAPABILITY);
+            c.getSource().sendSuccess(() -> Component.literal(PREFIX + out), false);
+            return 1;
+        }));
         for (String action : new String[]{"interact", "interaction", "eat", "eating", "drop", "dropping"}) {
             String tool = action.equals("drop") || action.equals("dropping") ? "drop_items"
                 : action.equals("eat") || action.equals("eating") ? "eat" : "interact_at";
@@ -104,7 +115,7 @@ public final class WorldInteractionBridge {
         return out;
     }
 
-    private static JsonObject arguments(String encoded, String tool) {
+    static JsonObject arguments(String encoded, String tool) {
         if (encoded.length() > 4096 || !encoded.matches("[A-Za-z0-9_=-]+"))
             throw new IllegalArgumentException("invalid_interaction_payload");
         byte[] raw = Base64.getUrlDecoder().decode(encoded);
@@ -132,14 +143,17 @@ public final class WorldInteractionBridge {
         if (!args.keySet().containsAll(required) || !allowed.containsAll(args.keySet())
                 || !Set.of("left", "right").contains(args.get("button").getAsString()))
             throw new IllegalArgumentException("invalid_interaction_arguments");
+        boolean forward = args.get("x").isJsonNull() && args.get("y").isJsonNull() && args.get("z").isJsonNull();
         for (String key : new String[]{"x", "y", "z", "hold_ticks"}) {
+            if (forward && !key.equals("hold_ticks")) continue;
             if (!args.get(key).isJsonPrimitive() || !args.getAsJsonPrimitive(key).isNumber()
                     || !args.get(key).getAsString().matches("-?[0-9]{1,8}"))
                 throw new IllegalArgumentException("integer_interaction_coordinates_required");
         }
-        if (args.get("hold_ticks").getAsInt() != 0 || args.get("y").getAsInt() < -64
+        if (args.get("hold_ticks").getAsInt() < 0 || args.get("hold_ticks").getAsInt() > 100
+                || (!forward && (args.get("y").getAsInt() < -64
                 || args.get("y").getAsInt() > 319 || Math.abs(args.get("x").getAsInt()) > 29999984
-                || Math.abs(args.get("z").getAsInt()) > 29999984)
+                || Math.abs(args.get("z").getAsInt()) > 29999984)))
             throw new IllegalArgumentException("interaction_bounds_invalid");
         if (args.has("item_id") && !args.get("item_id").getAsString().matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,100}"))
             throw new IllegalArgumentException("invalid_interaction_item");
@@ -213,7 +227,7 @@ public final class WorldInteractionBridge {
                         || PENDING.values().stream().anyMatch(p -> actorId.equals(p.row().get("actorUuid").getAsString())))
                     throw new IllegalArgumentException("native_body_busy");
                 if (PENDING.size() >= 64) throw new IllegalArgumentException("interaction_bridge_busy");
-                if (tool.equals("interact_at") && actor.distanceToSqr(args.get("x").getAsInt() + .5,
+                if (tool.equals("interact_at") && !args.get("x").isJsonNull() && actor.distanceToSqr(args.get("x").getAsInt() + .5,
                         args.get("y").getAsInt() + .5, args.get("z").getAsInt() + .5) > 20.25)
                     throw new IllegalArgumentException("interaction_target_out_of_reach");
                 var context = new ToolContext("mcp-" + id, actor.level().getGameTime());
@@ -222,7 +236,9 @@ public final class WorldInteractionBridge {
                     : tool.equals("eat")
                     ? new InventoryOps().eatItem(args.get("item_id").getAsString(), context)
                     : new BlockActionOps().interactAt(args.get("button").getAsString(),
-                    args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt(), 0,
+                    args.get("x").isJsonNull() ? null : args.get("x").getAsInt(),
+                    args.get("y").isJsonNull() ? null : args.get("y").getAsInt(),
+                    args.get("z").isJsonNull() ? null : args.get("z").getAsInt(), args.get("hold_ticks").getAsInt(),
                     args.has("item_id") ? args.get("item_id").getAsString() : null, context);
                 if (record instanceof NativeDropTask.Record drop && NativeDropTask.count(actor, drop.item) < drop.count)
                     throw new IllegalArgumentException("insufficient_main_inventory_items");

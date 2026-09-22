@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.qiandeng.irons.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "server": ["TownFireMixin", "TownFirePlacementMixin", "TownFluidMixin", "TownRemovalMixin", "TownBucketMixin",
+             "TownSetBlockCommandMixin", "TownFillCommandMixin", "TownCloneCommandMixin", "TownPlaceCommandMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -8,6 +8,9 @@ version="0.1.0"
 displayName="Qiandeng Native Spell Bridge"
 description='''Server command and vanilla container adapter for equipped Iron's Spells. Native casting rules remain authoritative.'''
 
+[[mixins]]
+config="qiandeng-town-protection.mixins.json"
+
 [[dependencies.qiandeng_irons_bridge]]
 modId="neoforge"
 type="required"

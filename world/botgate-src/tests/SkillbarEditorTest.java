@@ -44,37 +44,37 @@ public class SkillbarEditorTest {
             check(data.skillbar.get(2).equals("old_fire") && data.skillbar.get(3).equals("（记录异常）"),"archived and malformed raw slots displayed as disabled labels");
             check(data.skills.stream().map(s -> s.id).toList().equals(List.of("spring","home","fireworks")),"choices require learned or innate, featured, active and real definition");
             var main = SkillChestLayout.build(data.config,data.skills,data.waypoints,0);
-            check(main.get(6).kind == Kind.SKILLBAR_HUB && main.get(6).command == null,"compass editor entry never casts");
-            check(main.get(0).command.equals("qdspell self menu") && main.get(8).kind == Kind.WARP_HUB,"native and warp entries preserved");
+            check(main.get(47).kind == Kind.SKILLBAR_HUB && main.get(47).command == null,"compass editor entry never casts");
+            check(main.get(6).id.equals("native") && main.get(8).kind == Kind.WARP_HUB,"native and warp entries preserved");
             var editor = SkillChestLayout.buildSkillbar(data.config,data.skills,data.skillbar,data.skillbarAvailable);
-            check(editor.size() == 27,"editor retains ordinary controller-compatible three-row chest");
+            check(editor.size() == 54,"editor retains ordinary controller-compatible six-row chest");
             for (int slot=0;slot<8;slot++) {
-                var entry=editor.get(9+slot);
+                var entry=editor.get(19+slot);
                 check(entry.kind==Kind.SKILLBAR_SLOT && entry.id.equals(String.valueOf(slot+1)) && entry.command==null,"every position opens its own slot and cannot cast");
             }
-            check(editor.get(11).icon.equals("minecraft:barrier") && editor.get(11).lore.contains("原记录未改写"),"archived slot is visibly unavailable");
-            check(editor.get(12).name.contains("记录异常") && editor.get(12).command==null,"malformed slot content is not a command");
-            check(editor.get(20).command.equals("/mycli skillbar auto"),"recommendation uses existing world service");
-            check(editor.get(22).kind==Kind.HOME && editor.get(24).kind==Kind.REFRESH,"editor has return and fresh snapshot actions");
+            check(editor.get(21).icon.equals("minecraft:barrier") && editor.get(21).lore.contains("原记录未改写"),"archived slot is visibly unavailable");
+            check(editor.get(22).name.contains("记录异常") && editor.get(22).command==null,"malformed slot content is not a command");
+            check(editor.get(46).command.equals("/mycli skillbar auto"),"recommendation uses existing world service");
+            check(editor.get(48).kind==Kind.HOME && editor.get(50).kind==Kind.REFRESH,"editor has return and fresh snapshot actions");
             var choices=SkillChestLayout.buildSkillbarChoices(data.config,data.skills,data.skillbar,8,0);
             check(choices.get(0).command.equals("/mycli skillbar set 8 spring"),"innate assignment uses canonical ID and eighth position");
             check(choices.get(1).command.equals("/mycli skillbar set 8 home") && choices.get(1).lore.contains("从槽 1 移到此槽"),"rebinding explains core move semantics");
             check(choices.get(2).lore.contains("已在该槽"),"already bound skill is identified");
-            check(choices.get(20).command.equals("/mycli skillbar clear 8") && choices.get(20).lore.contains("不会前移"),"clear preserves remaining slot positions");
-            check(choices.get(22).kind==Kind.SKILLBAR_HUB,"back from choice page returns to editor");
+            check(choices.get(46).command.equals("/mycli skillbar clear 8") && choices.get(46).lore.contains("不会前移"),"clear preserves remaining slot positions");
+            check(choices.get(48).kind==Kind.SKILLBAR_HUB,"back from choice page returns to editor");
             check(choices.stream().noneMatch(e -> e.command!=null && e.command.contains("cast")),"configuration has no direct or native cast commands");
             check(choices.stream().noneMatch(e -> e.command!=null && (e.command.contains("old_fire") || e.command.contains("passive_power") || e.command.contains("unlearned"))),"ineligible records cannot generate set commands");
             check(Arrays.equals(original,Files.readAllBytes(dir.resolve("state.json"))),"opening/editor construction does not rewrite earned state or bindings");
             put(dir,"catalog.json","{}"); data=load(dir);
             choices=SkillChestLayout.buildSkillbarChoices(data.config,data.skills,data.skillbar,3,0);
             check(choices.stream().noneMatch(e -> e.command!=null && e.command.contains("skillbar set")),"missing catalogue disables assignments");
-            check(choices.get(20).command.equals("/mycli skillbar clear 3"),"clear remains bounded to one chosen slot even if catalog unavailable");
+            check(choices.get(46).command.equals("/mycli skillbar clear 3"),"clear remains bounded to one chosen slot even if catalog unavailable");
             put(dir,"catalog.json",catalog);
             put(dir,"state.json","{\"players\":{\"TestPlayer\":{\"learned\":[\"home\"],\"skillBar\":[\"fireworks\"]}}}");
             data=load(dir);
             check(!data.skillbarAvailable,"absent lowercase field does not accept invented camel-case storage");
             editor=SkillChestLayout.buildSkillbar(data.config,data.skills,data.skillbar,data.skillbarAvailable);
-            check(editor.get(9).name.contains("尚未同步") && editor.get(4).lore.contains("尚未同步"),"missing snapshot never claims a real empty or recommended bar");
+            check(editor.get(19).name.contains("尚未同步") && editor.get(49).lore.contains("尚未同步"),"missing snapshot never claims a real empty or recommended bar");
             for(int invalid : new int[]{-1,0,9,100}) {
                 boolean refused=false;
                 try { SkillChestLayout.buildSkillbarChoices(data.config,data.skills,data.skillbar,invalid,0); }
@@ -83,11 +83,11 @@ public class SkillbarEditorTest {
             }
             var cfg=new SkillChestLayout.Config();cfg.catalogAvailable=true;
             List<SkillChestLayout.SkillInfo> many=new ArrayList<>();
-            for(int i=0;i<23;i++){String id="spell_"+i;cfg.featured.add(id);many.add(new SkillChestLayout.SkillInfo(id));}
+            for(int i=0;i<41;i++){String id="spell_"+i;cfg.featured.add(id);many.add(new SkillChestLayout.SkillInfo(id));}
             many.add(new SkillChestLayout.SkillInfo("home\n/op TestPlayer"));
             var page=SkillChestLayout.buildSkillbarChoices(cfg,many,List.of(),8,1);
-            check(page.get(0).command.equals("/mycli skillbar set 8 spell_18") && page.get(4).command.endsWith("spell_22"),"selection pages preserve selected slot beyond eighteen skills");
-            check(page.get(18).kind==Kind.BACK && page.get(26).kind==Kind.INFO,"selection navigation has exact page boundaries");
+            check(page.get(0).command.equals("/mycli skillbar set 8 spell_36") && page.get(4).command.endsWith("spell_40"),"selection pages preserve selected slot beyond thirty-six skills");
+            check(page.get(45).kind==Kind.BACK && page.get(53).kind==Kind.INFO,"selection navigation has exact page boundaries");
             check(page.stream().noneMatch(e->e.command!=null && e.command.contains("/op")),"malicious IDs cannot reach dispatch");
             var gate=new SkillChestLayout.ActionGate();
             check(!gate.accept(true,true,false,true),"shift/drag/drop cannot edit or take icons");

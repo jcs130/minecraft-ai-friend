@@ -428,7 +428,7 @@ test('featured home returns to overworld and directional teleport stays in the r
   const f = fixture(t, { catalog: consolidatedCatalog,
     origin: { dimension: 'minecraft:the_nether', x: 200, y: 75, z: -20 }, players: { QA: { mana: 200 } } })
   assert.equal((await f.service.castExact('QA', 'home')).ok, true)
-  assert.ok(f.commands.includes('qdwarp "QA" "minecraft:overworld" -540 64 868'))
+  assert.ok(f.commands.includes('qdwarp "QA" "minecraft:overworld" -554.5 64 866.5'))
   assert.equal((await f.service.castExact('QA', 'tp', { direction: '东', distance: 5 })).ok, true)
   assert.ok(f.commands.includes('qdwarp "QA" "minecraft:the_nether" 205 75 -20'))
   assert.equal(f.commands.some(c => /^tp | run tp /.test(c)), false)

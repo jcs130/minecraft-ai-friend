@@ -1,0 +1,13 @@
+[
+  {
+    "dimension": "minecraft:overworld",
+    "name": "village",
+    "type": "box",
+    "x": -545,
+    "y": 128,
+    "z": 865,
+    "dimx": 170,
+    "dimy": 192,
+    "dimz": 170
+  }
+]

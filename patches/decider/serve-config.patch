@@ -1,0 +1,64 @@
+--- a/decider/serve.py
++++ b/decider/serve.py
+@@ -13,6 +13,7 @@
+ from decider.prompt import build, MAX_OPTIONS
+ from decider.infer import Decider, Example, Q, neutralize_options
+ from decider import systemone as S1
++from decider.model_config import load_model_config
+ 
+ MODEL = os.environ.get("DECIDER_MODEL", "runs/r3_v2/model")
+ MAX_BATCH = int(os.environ.get("DECIDER_MAX_BATCH", "32"))
+@@ -24,6 +25,8 @@
+ FP8 = os.environ.get("DECIDER_FP8", "1") == "1"
+ app = FastAPI(title="decider")
+ MODEL_NAME = "decider"; TEMP = 1.0; TEMP_SCHEMA = 1.0; RELEASE_DATE = "2026-09-17"
++MODEL_INFO = {}
++
+ gpu_lock = threading.Lock()            # one GPU job at a time: batched graph replays and shared-prefix requests must not interleave
+ SHARED_MIN_TOKENS = int(os.environ.get("DECIDER_SHARED_MIN_TOKENS", "768"))   # independent rows over a state this long share one prefix pass
+ eng = None; queue = None; stats = dict(requests=0, batches=0, decisions=0, batch_hist={})
+@@ -119,12 +122,11 @@
+ 
+ @app.on_event("startup")
+ async def _start():
+-    global eng, queue
+-    eng = Engine(MODEL, compile=COMPILE, fp8=FP8, conv_patch=COMPILE); print("[serve] engine", eng.cfg, flush=True)
++    global eng, queue, MODEL_INFO
++    resolved, cfg, MODEL_INFO = load_model_config(MODEL)
++    eng = Engine(resolved, compile=COMPILE, fp8=FP8, conv_patch=COMPILE); print("[serve] engine", eng.cfg, flush=True)
+     import json
+     global MODEL_NAME, TEMP
+-    try: cfg = json.load(open(os.path.join(MODEL, "decider_config.json")))
+-    except Exception: cfg = {}
+     eng.neutralize_none = bool(cfg.get("neutralize_none", True)); MODEL_NAME = "decider-" + str(cfg.get("version", "dev"))
+     TEMP = float(os.environ.get("DECIDER_TEMPERATURE", cfg.get("temperature", 1.0)))
+     global RELEASE_DATE; RELEASE_DATE = str(cfg.get("release_date", RELEASE_DATE))
+@@ -254,7 +256,7 @@
+         row = await loop.run_in_executor(None, lambda: se.tokenize(h, S1.render_state(r.state), MAX_STATE_TOKENS))      # CPU work stays off the GPU lock
+         fut = loop.create_future(); await squeue.put((fut, h, row)); p = await fut
+         stats["requests"] += 1; stats["decisions"] += len(rqs); stats["schema_requests"] = stats.get("schema_requests", 0) + 1
+-        return {"model": MODEL_NAME, "answers": S1.assemble(rqs, index, [pk.tolist() for pk in p]),
++        return {"model": MODEL_NAME, "model_info": MODEL_INFO, "answers": S1.assemble(rqs, index, [pk.tolist() for pk in p]),
+                 "usage": {"input_tokens": len(row[0]) * h.P, "cached_tokens": sum(h.tps), "output_tokens": 0}}
+     try:
+         (rqs, index), items = await loop.run_in_executor(None, _prepare_s1, r.state, r.questions, r.independent)
+@@ -270,7 +272,7 @@
+         res = await asyncio.gather(*futs)
+     probs = [p for ps in res for p in ps]                                   # one prob row per question, request order
+     stats["requests"] += 1; stats["decisions"] += len(rqs)
+-    return {"model": MODEL_NAME, "answers": S1.assemble(rqs, index, [p.tolist() for p in probs]),
++    return {"model": MODEL_NAME, "model_info": MODEL_INFO, "answers": S1.assemble(rqs, index, [p.tolist() for p in probs]),
+             "usage": {"input_tokens": S1.unique_tokens(items), "output_tokens": 0}}
+ 
+ 
+@@ -281,7 +283,9 @@
+ 
+ @app.get("/health")
+ async def health():
+-    return {"ok": eng is not None, "model": MODEL}
++    return {"ok": eng is not None and queue is not None, "model": MODEL, **MODEL_INFO,
++            "schemaCache": SCHEMA_FIRST, "isolatedLevels": ISOLATED,
++            "neutralizeNone": getattr(eng, "neutralize_none", None), "schemaTemperature": TEMP_SCHEMA}
+ 
+ 
+ @app.get("/stats")

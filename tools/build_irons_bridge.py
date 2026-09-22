@@ -43,12 +43,15 @@ def main() -> None:
     mod_jars = sorted(p for p in args.mods.glob("*.jar") if not p.name.startswith("qiandeng-irons-bridge-"))
     if args.numen_jar:
         if not args.numen_jar.is_file(): raise SystemExit("Numen candidate JAR missing")
-        mod_jars = [p for p in mod_jars if p.name != 'numen-neoforge-1.21.1-0.1.1.jar'] + [args.numen_jar.resolve()]
+        mod_jars = [p for p in mod_jars if not p.name.startswith('numen-neoforge-')] + [args.numen_jar.resolve()]
     build = (SOURCE / "build").resolve()
     build.mkdir(parents=True, exist_ok=True)
     # The server-only interaction receipt adapter uses the installed Numen API.
     # Its public types live in the exact main mod's nested jar, not the mod root.
-    numen = args.numen_jar.resolve() if args.numen_jar else args.mods / "numen-neoforge-1.21.1-0.1.1.jar"
+    numens = [p for p in mod_jars if p.name.startswith('numen-neoforge-')]
+    if len(numens) != 1:
+        raise SystemExit('Exactly one Numen main dependency required')
+    numen = numens[0]
     with zipfile.ZipFile(numen) as archive:
         api_entries = [n for n in archive.namelist() if n.startswith("META-INF/jarjar/")
                        and n.endswith(".jar") and "numen_api" in n]
@@ -56,7 +59,13 @@ def main() -> None:
             raise SystemExit("Exact installed Numen API dependency required")
         numen_api = build / "numen-api-dependency.jar"
         numen_api.write_bytes(archive.read(api_entries[0]))
-    classpath = os.pathsep.join([*selected, str(numen_api), *(str(p) for p in mod_jars)])
+    # Compile against the exact MixinExtras already bundled by the installed NeoForge.
+    # Never shade it or fetch another version into the production bridge.
+    neo_universal = args.libraries / "net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar"
+    with zipfile.ZipFile(neo_universal) as archive:
+        mixin_extras = build / "mixinextras-dependency.jar"
+        mixin_extras.write_bytes(archive.read("META-INF/jarjar/mixinextras-neoforge-0.5.3.jar"))
+    classpath = os.pathsep.join([*selected, str(numen_api), str(mixin_extras), *(str(p) for p in mod_jars)])
     classes = build / "classes"
     if not build.is_relative_to(SOURCE.resolve()):
         raise SystemExit("Build output escaped owned source directory")
@@ -71,13 +80,14 @@ def main() -> None:
     subprocess.run([str(javac), "@" + str(argfile)], check=True, timeout=300)
     test_classes = build / "test-classes"
     test_classes.mkdir(exist_ok=True)
-    test_names = ("ActorLookupTest", "TradeRulesTest")
+    test_names = ("ActorLookupTest", "TradeRulesTest", "InteractionArgumentsTest", "TownProtectionPolicyTest", "TownCommandScopeTest", "TownBlockMaskTest")
     test_sources = [SOURCE / "tests" / (name + ".java") for name in test_names]
-    subprocess.run([str(javac), "--release", "21", "-encoding", "UTF-8", "-cp", str(classes), "-d", str(test_classes),
+    test_cp = os.pathsep.join([str(classes), str(test_classes), str(SOURCE / 'resources'), classpath])
+    subprocess.run([str(javac), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", test_cp, "-d", str(test_classes),
         *(str(path) for path in test_sources)], check=True, timeout=60)
     test_results = []
     for name in test_names:
-        test = subprocess.run([str(java), "-cp", os.pathsep.join([str(classes), str(test_classes)]),
+        test = subprocess.run([str(java), "-cp", test_cp,
             "dev.qiandeng.irons." + name], check=True, capture_output=True, text=True, timeout=30)
         test_results.append(json.loads(test.stdout))
     test_result = {"ok": all(result.get("ok") is True for result in test_results),
@@ -95,12 +105,13 @@ def main() -> None:
     with zipfile.ZipFile(target) as archive:
         if archive.testzip() is not None:
             raise SystemExit("JAR CRC validation failed")
-    inputs = [*sources, *(SOURCE / "resources").rglob("*.toml"), *test_sources, Path(__file__)]
+    inputs = [*sources, *(p for p in (SOURCE / "resources").rglob("*") if p.is_file()), *test_sources, Path(__file__)]
     record = {"ok": True, "minecraft": "1.21.1", "neoforge": "21.1.248", "irons_spellbooks": "1.21.1-3.16.3",
         "java_release": 21, "jar": str(target), "sha256": sha(target), "tests": test_result,
         "sources": {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(inputs)},
-        "dependencies": {('numen-neoforge-1.21.1-0.1.1.jar' if p == numen else p.name): sha(p) for p in mod_jars},
-        "dependencySourcePaths": {('numen-neoforge-1.21.1-0.1.1.jar' if p == numen else p.name): str(p) for p in mod_jars},
+        "dependencies": {p.name: sha(p) for p in mod_jars},
+        "dependencySourcePaths": {p.name: str(p) for p in mod_jars},
+        "frameworkDependencies": {"neoforge-21.1.248-universal.jar": sha(neo_universal), "bundled-mixinextras-0.5.3": sha(mixin_extras)},
         "deployment": "not performed", "native_cast_live_test": "pending"}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: record[k] for k in ("ok", "jar", "sha256", "tests", "deployment", "native_cast_live_test")}))

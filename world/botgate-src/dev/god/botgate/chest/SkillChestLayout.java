@@ -17,12 +17,12 @@ public final class SkillChestLayout {
     public static final int NATIVE_SLOT = 6, INFO_SLOT = 49, WARP_SLOT = 8;
     public static final int SKILLBAR_HUB_SLOT = 47, SKILLBAR_SLOTS = 8, SKILLBAR_FIRST_SLOT = 19;
     public static final int PREVIOUS_SLOT = 45, ARCHIVE_SLOT = 46, HOME_SLOT = 48, REFRESH_SLOT = 50, CLOSE_SLOT = 52, NEXT_SLOT = 53;
-    public static final List<String> FILTERS = List.of("all", "combat", "support", "movement", "life", "passive", "native");
-    private static final List<String> FILTER_NAMES = List.of("全部技能", "战斗招式", "恢复防御", "移动探索", "生活造物", "被动天赋", "铁魔法");
+    public static final List<String> FILTERS = List.of("known", "combat", "support", "movement", "life", "passive", "native", "all");
+    private static final List<String> FILTER_NAMES = List.of("我的技能", "战斗招式", "恢复防御", "移动探索", "生活造物", "被动天赋", "铁魔法", "学习图鉴");
     private static final List<String> FILTER_ICONS = List.of("minecraft:compass", "minecraft:iron_sword", "minecraft:golden_apple",
-            "minecraft:ender_pearl", "minecraft:crafting_table", "minecraft:nether_star", "minecraft:enchanted_book");
+            "minecraft:ender_pearl", "minecraft:crafting_table", "minecraft:nether_star", "minecraft:enchanted_book", "minecraft:bookshelf");
     public enum Kind { SKILL, WAYPOINT, MORE, BACK, EMPTY, ITEM, NATIVE, WARP_HUB, ARCHIVE_HUB, ARCHIVED, INFO, REFRESH, CLOSE, HOME,
-        SKILLBAR_HUB, SKILLBAR_SLOT, SKILLBAR_EDIT, CATEGORY, NATIVE_SPELL, PASSIVE, LOCKED }
+        SKILLBAR_HUB, SKILLBAR_SLOT, SKILLBAR_EDIT, CATEGORY, NATIVE_SPELL, PASSIVE, LOCKED, GUIDE }
 
     public static final class Entry {
         public final Kind kind;
@@ -66,6 +66,8 @@ public final class SkillChestLayout {
         public final Set<String> passives = new LinkedHashSet<>();
         public final Set<String> learned = new LinkedHashSet<>();
         public boolean learningSnapshotAvailable;
+        public int playerLevel = -1;
+        public final Map<String, Integer> requiredLevels = new HashMap<>();
         public final Map<String, NativeSpell> nativeSpells = new LinkedHashMap<>();
         public boolean nativeAvailable;
         public String nativeSummary = "原生法术状态暂不可读取";
@@ -91,7 +93,7 @@ public final class SkillChestLayout {
             this.cooldownMs=cooldownMs; this.source=source; this.sourceSlot=sourceSlot; this.ready=ready; this.reason=reason;
         }
         public String lore() { return "原生等级 " + level + " · 法力 " + mana + "\n冷却剩余 " + cooldownMs / 1000.0
-                + " 秒\n装备来源：" + source + " / " + sourceSlot + "\n" + (ready ? "当前预检可用，目标与消耗以施法时为准" : "当前不可用：" + reason); }
+                + " 秒\n装备来源：" + sourceLabel(source) + "\n" + (ready ? "可尝试施法，命中与消耗以实际结果为准" : unavailableReason(reason)); }
     }
     public static final class WaypointInfo {
         public final String name, reference, lore;
@@ -120,7 +122,7 @@ public final class SkillChestLayout {
     public static int waypointPagesFor(List<WaypointInfo> points) { return pages(size(points), WAYPOINTS_PER_PAGE); }
     public static int skillbarChoicePagesFor(List<SkillInfo> skills) { return pages(size(skills), ITEMS_PER_PAGE); }
     public static int skillSlot(int index) { return 10 + (index / 7) * 9 + index % 7; }
-    public static String validFilter(String value) { return FILTERS.contains(value) ? value : "all"; }
+    public static String validFilter(String value) { return FILTERS.contains(value) ? value : "known"; }
     public static String filterName(String value) { return FILTER_NAMES.get(FILTERS.indexOf(validFilter(value))); }
     public static List<SkillInfo> sortSkills(Config cfg, List<SkillInfo> skills) {
         return skills.stream().sorted(Comparator.comparingInt((SkillInfo skill) -> cfg.order.getOrDefault(skill.id,
@@ -136,7 +138,13 @@ public final class SkillChestLayout {
     }
     public static List<SkillInfo> filtered(Config cfg, List<SkillInfo> skills, String filter) {
         String group = validFilter(filter);
-        return skills.stream().filter(skill -> group.equals("all") || group.equals(group(cfg, skill.id))).toList();
+        return skills.stream().filter(skill -> {
+            String id = skill.id;
+            if (group.equals("all")) return !validNativeId(id);
+            if (group.equals("known")) return validNativeId(id) ||
+                    (!cfg.passives.contains(id) && !cfg.nativeMappings.containsKey(id) && cfg.learned.contains(id));
+            return group.equals(group(cfg, id));
+        }).toList();
     }
     private static String group(Config cfg, String id) {
         if (cfg.passives.contains(id)) return "passive";
@@ -154,11 +162,11 @@ public final class SkillChestLayout {
                 "选择已装备的原生法术\n使用铁魔法自身法力与冷却\n打开菜单，不会立即施法", "qdspell self menu");
     }
     private static void header(List<Entry> out, Config cfg, int page, int pages, boolean archive, String filter) {
-        for (int i = 0; i < FILTERS.size(); i++) out.set(i, new Entry(Kind.CATEGORY, FILTERS.get(i), FILTER_NAMES.get(i), FILTER_ICONS.get(i),
+        for (int i = 0; i < 7; i++) out.set(i, new Entry(Kind.CATEGORY, FILTERS.get(i), FILTER_NAMES.get(i), FILTER_ICONS.get(i),
                 (!archive && FILTERS.get(i).equals(filter) ? "当前分类\n" : "切换分类，不会施法\n")
                 + (FILTERS.get(i).equals("native") ? cfg.nativeSummary : "目录顺序固定，刷新不会按法力或学习时间重排"), null,
                 null, "", !archive && FILTERS.get(i).equals(filter)));
-        out.set(7, new Entry(Kind.INFO, "brand", "千灯纪 · 技能罗盘", "minecraft:amethyst_shard", "已学秘术、天赋与原生装备法术", null));
+        out.set(7, new Entry(Kind.GUIDE, "guide", "施法入门与排障", "minecraft:book", "铁魔法怎么装备？\n女神秘术怎么学？\n点击查看三步指引", null));
         out.set(WARP_SLOT, new Entry(Kind.WARP_HUB, "waypoints", "传送阵 · 选择地点", "minecraft:ender_eye",
                 "查看公共与个人传送点\n独立分页，不会直接传送", null));
     }
@@ -167,7 +175,8 @@ public final class SkillChestLayout {
                 : new Entry(Kind.INFO, "", "已在第一页", cfg.defaultIcon, "", null));
         out.set(NEXT_SLOT, page + 1 < pages ? new Entry(Kind.MORE, String.valueOf(page + 1), "下一页", cfg.moreIcon, "第 " + (page + 2) + " / " + pages + " 页", null)
                 : new Entry(Kind.INFO, "", "已在最后一页", cfg.defaultIcon, "", null));
-        out.set(HOME_SLOT, new Entry(Kind.HOME, "home", "返回技能总览", "minecraft:compass", "显示全部已学能力与原生装备法术", null));
+        out.set(HOME_SLOT, new Entry(Kind.HOME, "home", "返回我的技能", "minecraft:compass", "已学女神秘术与已装备法术\n同一原生法术只显示一个入口", null));
+        out.set(51, new Entry(Kind.CATEGORY, "all", "学习图鉴", "minecraft:bookshelf", "查看学习条件、装备要求和旧主题别名", null));
         out.set(CLOSE_SLOT, new Entry(Kind.CLOSE, "close", "关闭罗盘", cfg.closeIcon, "也可按 B / Esc 返回游戏", null));
         out.set(INFO_SLOT, new Entry(Kind.INFO, "status", "第 " + (page + 1) + " / " + pages + " 页", "minecraft:experience_bottle",
                 cfg.stateSummary + "\n" + cfg.nativeSummary + "\n确认时由服务器检查消耗与状态", null));
@@ -198,11 +207,19 @@ public final class SkillChestLayout {
                 lore += "\n" + (info == null ? "不在精选目录，旧记录仍保留" : info.reason);
                 if (info != null && !info.nativeHints.isEmpty()) lore += "\n原生替代：" + String.join("、", info.nativeHints);
                 out.set(skillSlot(slot), new Entry(Kind.ARCHIVED, id, name + " · 待整理", icon, lore + "\n只读档案 · 不可点击施法", null));
-            } else if (!cfg.learningSnapshotAvailable || !cfg.learned.contains(id)) {
+            } else if (cfg.nativeMappings.containsKey(id)) {
+                NativeSpell spell = cfg.nativeSpells.get(cfg.nativeMappings.get(id));
+                boolean ready = spell != null && spell.ready;
+                out.set(skillSlot(slot), new Entry(ready ? Kind.SKILL : Kind.LOCKED, id, name + (ready ? " · 已装备" : " · 待装备/恢复"), icon,
+                        "铁魔法主题别名，不重复扣秘术魔力\n对应法术：" + cfg.nativeMappings.get(id)
+                        + "\n" + (spell == null ? "请在铭文台把对应卷轴装入法术书，再装备法术书\n或手持卷轴（施放会消耗卷轴）" : spell.lore())
+                        + "\n不需要先解锁旧别名；原生装备才是来源", ready ? "/mycli cast " + id : null));
+            } else if ((!cfg.learningSnapshotAvailable || !cfg.learned.contains(id)) &&
+                    (cfg.passives.contains(id) || cfg.playerLevel < cfg.requiredLevels.getOrDefault(id, Integer.MAX_VALUE))) {
                 String label = cfg.learningSnapshotAvailable ? "未解锁" : "学习状态未同步";
                 String mapping = cfg.nativeMappings.get(id);
                 out.set(skillSlot(slot), new Entry(Kind.LOCKED, id, name + " · " + label, icon,
-                        lore + "\n" + label + "：仅浏览，不会施法或发放技能"
+                        lore + "\n" + label + "：提升经验等级或按技能书规则参悟\n被动无需主动释放；右上角可查看入门"
                         + (mapping == null ? "" : "\n原生主题映射：" + mapping + "\n解锁后仍需装备对应法术书/装备或手持卷轴"), null));
             } else if (cfg.passives.contains(id)) {
                 out.set(skillSlot(slot), new Entry(Kind.PASSIVE, id, name + " · 已学被动", icon,
@@ -212,7 +229,8 @@ public final class SkillChestLayout {
                 NativeSpell nativeSpell = cfg.nativeSpells.get(mapped);
                 if (mapped != null) lore += "\n主题映射：" + mapped + "\n使用原生装备、法力、冷却和目标规则\n"
                         + (nativeSpell != null ? nativeSpell.lore() : cfg.nativeAvailable ? "尚未装备对应原生法术；请先装备法术书/法术装备或手持卷轴" : cfg.nativeSummary);
-                Entry entry = new Entry(Kind.SKILL, id, name, icon, lore + ("give".equals(id) ? "\n先选择要造出的物品" : "\n确认后由服务器执行"),
+                Entry entry = new Entry(Kind.SKILL, id, name + (cfg.learned.contains(id) ? "" : " · 可尝试学习"), icon, lore + ("give".equals(id) ? "\n先选择要造出的物品" : "\n确认后尝试施放，成功后按原规则学习")
+                        + "\n真实等级、资源、冷却和目标将在施放时检查",
                         "give".equals(id) ? null : "/mycli cast " + id);
                 if (nativeSpell != null) entry = entry.localized(nativeSpell.nameKey, name + " → ");
                 out.set(skillSlot(slot), entry);
@@ -245,8 +263,43 @@ public final class SkillChestLayout {
     private static Entry nativeSkill(Config cfg, String id) {
         NativeSpell spell = cfg.nativeSpells.get(id);
         if (spell == null) return new Entry(Kind.INFO, id, id, "minecraft:barrier", "原生法术来源不可读取，请刷新", null);
-        return new Entry(Kind.NATIVE_SPELL, id, spell.name, skillIcon(cfg, id), "铁魔法 · " + spell.school + "\n" + spell.lore()
-                + "\n法术：" + id + "\n显示已装备来源，点击时再次原生校验", "qdspell self cast " + id).localized(spell.nameKey, "");
+        return new Entry(spell.ready ? Kind.NATIVE_SPELL : Kind.LOCKED, id, spell.name, skillIcon(cfg, id), "铁魔法\n" + spell.lore()
+                + "\n法术：" + id + "\n恢复后点下方时钟刷新", spell.ready ? "qdspell self cast " + id : null).localized(spell.nameKey, spell.ready ? "" : "暂不可用 · ");
+    }
+    public static String sourceLabel(String source) {
+        return switch (source) { case "scroll" -> "手持卷轴（一次性，施放会消耗）";
+            case "spellbook" -> "已装备法术书（可重复使用）"; default -> "原生法术装备（" + source + "）"; };
+    }
+    public static String unavailableReason(String reason) {
+        if (reason.contains("cooldown")) return "冷却未结束：等待后刷新";
+        if (reason.contains("mana")) return "铁魔法法力不足：等待恢复后刷新";
+        if (reason.contains("learn")) return "原生学习条件未满足：查看该法术的原生说明";
+        if (reason.equals("busy")) return "正在施法：等待结束，或用 /mycli cancel 取消";
+        return "当前不可用：" + reason + "\n查看角色状态后刷新，勿反复点击";
+    }
+    public static List<String> loreLines(String text) {
+        List<String> lines = new ArrayList<>();
+        for (String source : text.split("\n")) {
+            StringBuilder line = new StringBuilder(); int width = 0;
+            for (int ch : source.codePoints().toArray()) {
+                int size = ch < 128 ? 1 : 2;
+                if (width + size > 44) { lines.add(line.toString()); line.setLength(0); width = 0; }
+                line.appendCodePoint(ch); width += size;
+            }
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+    public static List<Entry> buildGuide(Config cfg) {
+        List<Entry> out = blank(cfg); footer(out, cfg, 0, 1, false);
+        out.set(11, new Entry(Kind.INFO,"iron-guide","铁魔法 · 三步上手","minecraft:enchanted_book",
+                "① 获取原生法术卷轴与法术书\n② 在铭文台将卷轴装入书，再装备法术书\n③ 回到铁魔法页刷新，瞄准目标后选择施放\n也可手持卷轴直接施放，但会消耗卷轴\n空书、背包里的卷轴、旧技能名称都不等于已装备",null));
+        out.set(13, new Entry(Kind.INFO,"legacy-guide","女神秘术 · 学习与资源","minecraft:amethyst_shard",
+                "① 打开学习图鉴，查看经验等级与参数\n② 达到条件后尝试施放，成功按原规则学习\n③ 已学技能可放入八槽快捷栏\n女神秘术消耗秘术魔力；铁魔法使用原生法力\n燃血术不会恢复铁魔法法力；被动无需点击",null));
+        out.set(15, new Entry(Kind.INFO,"controls-guide","操作与常见问题","minecraft:spyglass",
+                "我的技能：已学秘术和已装备法术\n学习图鉴：未学条目、旧主题别名与条件\n灰色条目只读：查看原因，满足条件后刷新\n言灵杖长按举起，选槽/咏唱，松手释放\n举杖时可保持瞄准；不要在菜单里连点施法",null));
+        out.set(31, nativeEntry());
+        return out;
     }
     private static Entry skillbarHub(String name, String lore) {
         return new Entry(Kind.SKILLBAR_HUB, "skillbar", name, "minecraft:chest", lore, null);

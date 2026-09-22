@@ -98,6 +98,15 @@ public final class InteractionQa {
                                 throw new IllegalStateException("exact_saved_fixture_required");
                             body=CompanionFactory.spawn(server,BODY,"Kirito",OWNER,level,null);
                         }
+                    }else if(action.equals("water_setup") || action.equals("hold_setup")){
+                        if(body==null || CompanionTickDispatcher.currentTaskFor(BODY)!=null)
+                            throw new IllegalStateException("idle_existing_body_required");
+                        level.setBlockAndUpdate(GRASS,Blocks.AIR.defaultBlockState());
+                        level.setBlockAndUpdate(PLACEMENT,Blocks.AIR.defaultBlockState());
+                        if(action.equals("water_setup")){
+                            level.setBlockAndUpdate(TARGET,Blocks.WATER.defaultBlockState());
+                            body.getInventory().setItem(2,new ItemStack(Items.BUCKET,1));
+                        }else body.getInventory().setItem(3,new ItemStack(Items.SHIELD,1));
                     }else if(action.equals("food_setup") || action.equals("food_hungry")){
                         if(body==null || CompanionTickDispatcher.currentTaskFor(BODY)!=null)
                             throw new IllegalStateException("idle_existing_body_required");
@@ -119,7 +128,7 @@ public final class InteractionQa {
                 body=NumenPlayer.findByUuid(server,BODY);
                 out.addProperty("bodyOnline",body!=null);
                 out.addProperty("ownerOnline",server.getPlayerList().getPlayer(OWNER)!=null);
-                out.addProperty("registryCount",registry.snapshot().size());
+                out.addProperty("registryCount",registry.all().size());
                 out.addProperty("rosterCount",server.getPlayerList().getPlayers().size());
                 out.addProperty("currentTask",CompanionTickDispatcher.currentTaskFor(BODY)!=null);
                 out.addProperty("gameTime",level.getGameTime());
@@ -131,6 +140,9 @@ public final class InteractionQa {
                     out.addProperty("uuid",body.getStringUUID());out.addProperty("ownerUuid",body.getOwnerUuid().toString());
                     out.addProperty("dirt",body.getInventory().countItem(Items.DIRT));
                     out.addProperty("bread",body.getInventory().countItem(Items.BREAD));
+                    out.addProperty("buckets",body.getInventory().countItem(Items.BUCKET));
+                    out.addProperty("waterBuckets",body.getInventory().countItem(Items.WATER_BUCKET));
+                    out.addProperty("usingItem",body.isUsingItem());
                     out.addProperty("hunger",body.getFoodData().getFoodLevel());
                     var registered=registry.find(BODY);
                     out.addProperty("persistedTaskTool",registered==null?"":registered.taskTool());

@@ -68,7 +68,7 @@ def compile_java(files, cp):
     with tempfile.TemporaryDirectory(prefix=".javac-", dir=HERE) as output:
         cmd = [JAVAC, "-proc:none", "--release", "21", "-encoding", "UTF-8",
                "-cp", cp, "-d", output] + [os.path.join(HERE, f) for f in files]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        r = subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=900)
         if r.returncode != 0:
             sys.stdout.write(r.stdout[:4000] + "\n")
             sys.stderr.write(r.stderr[:6000] + "\n")

@@ -119,6 +119,29 @@ class ContentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'administrator'):
             self.queue.publish(DESIGNER,'wrong',identity)
 
+    def test_npc_dialogue_uses_confirmed_own_story_and_live_contract_state(self):
+        identity=self.submit_and_approve()
+        self.assertEqual(content.episode_lines(self.guild.board_today(),state=self.team,npc_key='hesu'),[])
+        self.tick();board=self.guild.board_today()
+        lines=content.episode_lines(board,state=self.team,npc_key='hesu')
+        self.assertIn('收集麦子补给旅人', ''.join(lines));self.assertNotIn('清理两只真实僵尸',''.join(lines))
+        self.assertNotIn('预设结局',''.join(lines))
+        self.assertEqual(content.episode_lines(board,state=self.team,npc_key='unrelated'),[])
+        board['board'][1]['status']='claimed'
+        self.assertIn('有人承接',''.join(content.episode_lines(board,state=self.team,npc_key='hesu')))
+        board['board'][1]['status']='withdrawn'
+        self.assertIn('不再办理',''.join(content.episode_lines(board,state=self.team,npc_key='hesu')))
+        board['board'][1]['count']+=1
+        self.assertEqual(content.episode_lines(board,state=self.team,npc_key='hesu'),[])
+
+    def test_npc_dialogue_rejects_old_day_and_nonpublished_receipt(self):
+        identity=self.submit_and_approve();self.tick();board=self.guild.board_today()
+        old=deepcopy(board);old['date']='2026-09-10'
+        self.assertEqual(content.episode_lines(old,state=self.team,npc_key='guild_lan'),[])
+        receipt=self.team/'content/receipts'/f'{identity}.json'
+        value=content.load(receipt);value['status']='blocked';content.save(receipt,value)
+        self.assertEqual(content.episode_lines(board,state=self.team,npc_key='guild_lan'),[])
+
     def test_author_story_is_readable_but_not_executable(self):
         row=self.queue.story(AUTHOR,'story-one','去旅行','一段剧情',['补给','探索'])
         self.assertEqual(self.queue.read(DESIGNER,row['contentId'])['status'],'story_proposed')

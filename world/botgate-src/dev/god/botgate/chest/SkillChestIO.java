@@ -49,6 +49,7 @@ public final class SkillChestIO {
         }
         JsonObject me = obj(obj(readJson(statePath), "players"), player);
         cfg.learningSnapshotAvailable = me != null;
+        cfg.playerLevel = intOf(me, "level", -1);
         Integer mana = nullableInt(me, "mana"), maxMana = nullableInt(me, "maxMana");
         if (me != null) cfg.stateSummary = "秘术魔力：" + (mana == null ? "—" : mana) + "/" + (maxMana == null ? "—" : maxMana)
                 + "（同步快照）\n等级：" + strOf(me, "level", "—");
@@ -64,6 +65,8 @@ public final class SkillChestIO {
         if (passiveRecords != null) for (JsonElement value : passiveRecords) {
             String id = primitiveString(value, null);
             if (SkillChestLayout.validSkillId(id) && "passive".equals(strOf(atoms.get(id), "type", "active"))) learned.add(id);
+            for (var entry : atoms.entrySet()) if ("passive".equals(strOf(entry.getValue(), "type", "active")) &&
+                    id != null && id.equals(strOf(entry.getValue(), "passiveId", null))) learned.add(entry.getKey());
         }
         cfg.learned.addAll(learned);
         LinkedHashSet<String> visible = new LinkedHashSet<>(cfg.featured); visible.addAll(learned);
@@ -72,6 +75,7 @@ public final class SkillChestIO {
         }
         for (String id : visible) {
             JsonObject atom = atoms.get(id);
+            cfg.requiredLevels.put(id, intOf(atom, "requiredLevel", Integer.MAX_VALUE));
             cfg.skillNames.put(id, clean(strOf(atom, "name", id), 80));
             String icon = strOf(atom, "icon", null);
             if (SkillChestLayout.validItemId(icon)) cfg.skillIcons.putIfAbsent(id, icon);
