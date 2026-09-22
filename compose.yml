@@ -250,6 +250,47 @@ services:
   #     timeout: 8s
   #     retries: 3
 
+  # 基岩桥（2026-09-21 收编进栈）：原先在宿主直跑 ViaProxy，理由是旧结论
+  # 「Docker Desktop 不能把外部 UDP 放进来」——该结论已被实测推翻：造物主手机（WiFi 外部设备）
+  # 成功连进容器发布口（Geyser 日志 Player connected with username MicroKQ）✓
+  # 所以收进栈，跑**同一个 ViaProxy**（它的 ViaVersion 把后端钉在 1.21.1，门只认 767；
+  # 裸 Geyser 没有 java.version 键、会自行挑新协议 → 握手即断，故不能用裸 Geyser）。
+  # 上游仍走宿主发布口进内门（实测可用那条路）；对外仍是 UDP 19140 → 访客与路由器转发一字不改。
+  # 大 jar（47MB）不入库：启动参数与来源见 world/host-services/viaproxy-bedrock/notes.md
+  bedrock-bridge:
+    image: itzg/minecraft-server:java21
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /viaproxy
+    entrypoint: ["java", "-jar", "ViaProxy-3.4.12.jar", "cli",
+                 "--target-address", "host.docker.internal:25701",
+                 "--target-version", "1.21.1",
+                 "--auth-method", "NONE",
+                 "--bind-address", "0.0.0.0:25568"]
+    environment:
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./server/viaproxy:/viaproxy
+    # 健康检查：绝不能用镜像自带的 mc-health（它探 MC Java 服 25565，本服务是 ViaProxy，
+    # 必然失败 → 假 unhealthy，还会让 panel/inventory 误报、甚至触发看门狗乱重启）。
+    # 也不能用 /dev/tcp（容器默认 sh 是 dash 不支持 ✓ 实测报 cannot create）；
+    # Java 监听在双栈上，/proc/net/tcp 也查不到（要 tcp6）。
+    # 故用 CMD 数组直接调 python3 建 TCP ——不经 shell，无引号坑，探它自己监听的 25568。
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;socket.create_connection(('127.0.0.1',25568),3)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 45s
+    ports:
+      - "0.0.0.0:19140:19140/udp"   # 基岩入口，与退役前同口
+      - "127.0.0.1:25568:25568/tcp" # 仅本机：可用 mineflayer 打它验"门+翻译"链路（免手机）
+    depends_on:
+      gate:
+        condition: service_started
+
   # numen 假玩家身体工具 MCP（2026-09-21 收编：原先只在宿主以 stdio 子进程跑）
   # 原先它只在宿主上以 stdio 子进程跑（QwenPaw driver 拉起），现提供容器内 HTTP 传输。
   # 通道文件写 /mcdata（= 宿主 server/world-data）—— 与 world 服务 MC_DATA_DIR=/app/data 同源，
