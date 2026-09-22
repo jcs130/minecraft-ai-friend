@@ -78,6 +78,7 @@ export const CLI_VERBS: CliVerbMeta[] = [
   { id: 'goto', aliases: ['传送去', '去', '传送'], summary: '传送：按序号/名字去传送点（书页点行=同一事）', usage: 'goto <序号|完整名字|shared:id|personal:id>', argDesc: '优先使用固定编号；重名不会自动选择。服务器检查维度和安全落点。', json: true },
   { id: 'waypoint', aliases: ['传送点', '路标', '记点'], summary: '传送点簿：查列表 / 记 <名字> / 删 <序号>', usage: 'waypoint [list | add <名字> | remove <个人序号|personal:id>]', argDesc: 'add/记：保存当前维度和位置；remove/删：删除个人点。固定编号不会随排序漂移。', json: true },
   { id: 'growth', aliases: ['进度', '修为'], summary: '查修行进度（经验/点数）', usage: 'growth [类别]', argDesc: '类别：缺省 combat', json: true },
+  { id: 'voice_speak', aliases: ['speak', 'voice', '说话', '开口', '发言'], summary: '用语音说话（近大远小 + 头顶文字泡泡）', usage: 'voice_speak <要说的话> [voice=嗓音] [tone=语气]', argDesc: '例：voice_speak 你好世界；voice_speak 你好 voice=kirito tone=happy。嗓音：kirito/naruto/goddess/villager；语气：neutral/happy/sad/urgent/gentle。', json: true },
 ]
 
 // ── 解析 ───────────────────────────────────────────────────────────────

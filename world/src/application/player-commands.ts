@@ -525,6 +525,38 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         else replyLines([`【修行进度 · ${cat}】`, `  ${fmt(exp)}`, `  ${fmt(pts)}`, `  灌顶：cli cultivate ${cat}（60 秒一次，经验 +5）`])
         return
       }
+      case 'voice_speak': {
+        // 语音说话（2026-09-23 造物主令）：不走红区 RCON ✗ 走 godvoice 文件队列 ✓
+        // 语音经 SVC 近大远小 ✓ 头顶文字泡泡（text_display）✓ 可选嗓音和语气
+        const all = cmd.args.join(' ').trim()
+        if (!all || all.length < 2) { reply(`[CLI] 用法：cli voice_speak <要说的话> [voice=嗓音] [tone=语气]`); return }
+        // 解析可选参数
+        let text = all, voice = '', tone = 'neutral'
+        const vm = all.match(/\s+voice=(\S+)/); if (vm) { voice = vm[1]; text = text.replace(vm[0], '') }
+        const tm = all.match(/\s+tone=(\S+)/); if (tm) { tone = tm[1]; text = text.replace(tm[0], '') }
+        text = text.trim()
+        if (!text || text.length > 160) { reply(`[CLI] 说话内容 2-160 字。`); return }
+        if (voice && !/^[a-z_]{2,20}$/.test(voice)) { reply(`[CLI] 嗓音只认 kirito/naruto/goddess/villager。`); return }
+        if (!['neutral', 'happy', 'sad', 'urgent', 'gentle'].includes(tone)) { reply(`[CLI] 语气：neutral/happy/sad/urgent/gentle。`); return }
+        // 写入 godvoice 队列（文件操作 ✗ 不走 RCON ✓）
+        try {
+          const speechId = `speech-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+          const job = { schema: 2, id: speechId, entity: resolveLogin(subject),
+            actor: subject, text, voiceId: voice || 'kirito', voiceVersion: 1, generation: 1,
+            dimension: 'minecraft:overworld', createdAt: Date.now(), expiresAt: Date.now() + 60_000,
+            turnId: `cli-${speechId}` }
+          const fs = await import('node:fs')
+          const qdir = process.env.GV_BASE ? `${process.env.GV_BASE}/speech-requests` : '/godvoice/speech-requests'
+          fs.writeFileSync(`${qdir}/${speechId}.json`, JSON.stringify(job))
+          worlddb.chronicleRecord('voice_speak', subject, { text: text.slice(0, 60), voice: voice || 'default' })
+          if (cmd.json) jsonReply({ ok: true, code: 'voice_queued', speechId, voice: voice || 'default', tone })
+          else reply(`[语音] 已提交说话（嗓音：${voice || '默认'}，语气：${tone}）。装了语音模组的玩家在 16 格内可听到。`)
+        } catch (e) {
+          if (cmd.json) jsonReply({ ok: false, code: 'voice_queue_error', summary: String(e).slice(0, 120) })
+          else reply(`[语音] 提交失败：${String(e).slice(0, 80)}`)
+        }
+        return
+      }
       default:
         reply(`[CLI] 未知命令「${cmd.verb}」。/cli commands 看全部。`)
     }
@@ -534,8 +566,8 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
     const cmd = parseCli(/^(?:\/?mycli|\/?cli|!cli)\b/i.test(request.command)
       ? request.command : `/mycli ${request.command}`)
     if (!cmd || cmd.error) return { ok: false, code: 'invalid_command', summary: cmd?.error ?? '命令格式无效。' }
-    if (!['help', 'commands', 'status', 'skills', 'spells', 'cast', 'learn', 'cancel', 'skillbar', 'menu', 'goto', 'waypoint'].includes(cmd.verb)) {
-      return { ok: false, code: 'unsupported_command', summary: '技能 CLI 支持 help/status/skills/spells/cast/learn/skillbar/menu/goto/waypoint；角色对话仍使用原聊天工具。' }
+    if (!['help', 'commands', 'status', 'skills', 'spells', 'cast', 'learn', 'cancel', 'skillbar', 'menu', 'goto', 'waypoint', 'voice_speak'].includes(cmd.verb)) {
+      return { ok: false, code: 'unsupported_command', summary: '技能 CLI 支持 help/status/skills/spells/cast/learn/skillbar/menu/goto/waypoint/voice_speak；角色对话仍使用原聊天工具。' }
     }
     const nativeRoute = ['goto', 'waypoint', 'cancel', 'status', 'spells'].includes(cmd.verb) ||
       (cmd.verb === 'cast' && (NATIVE_SPELL_ID.test(cmd.args[0] ?? '') || request.actor.includes('-'))) ||
