@@ -86,6 +86,26 @@ def build_candidates(body, goal='', navigation_target=None, limit=6):
                                     f'walk one bounded {MAX_STEP}-block leg toward it.'),
                     'action': {'tool': 'goto',
                                'args': {'x': round(px + dx * scale, 1), 'z': round(pz + dz * scale, 1)}}})
+    # 5) Place torch in dark area (creator request: see in the dark)
+    #    Triggered when underground (y < 60) or world time is night
+    py = _number(position.get('y', 64)) if isinstance(position, dict) else None
+    is_underground = py is not None and py < 60
+    # Check if it's night (worldTime 13000-23000 is night in MC)
+    world_time = body.get('worldTime', 0)
+    is_night = isinstance(world_time, (int, float)) and 12542 <= world_time <= 23459
+    if is_underground or is_night:
+        torch_count = counts.get('minecraft:torch', 0)
+        if torch_count > 0:
+            # Place at current position + 1 up (standard torch placement)
+            px_t = _number(position.get('x', 0)) if isinstance(position, dict) else 0
+            pz_t = _number(position.get('z', 0)) if isinstance(position, dict) else 0
+            candidates.append({'id': 'place_torch',
+                'description': f'Dark area detected ({"underground y=" + str(int(py)) if is_underground else "nighttime"}). Place a torch at current position to light the area.',
+                'action': {'tool': 'place_block',
+                           'args': {'block': 'minecraft:torch',
+                                    'x': round(px_t), 'y': round(py + 1) if py else 64,
+                                    'z': round(pz_t)}}})
+
     if not candidates:
         return None
     candidates.append({'id': 'none',
