@@ -2252,7 +2252,10 @@ class Controller:
             # Execute if Jev was confident enough
             if result.get('code') == 'policy_escalated' or result.get('confidence', 0) < 0.75:
                 return  # Not confident — skip this round
-            action = getattr(self, '_patrol_last_action', None)
+            # Map the chosen candidate ID back to a patrol action
+            chosen_id = result.get('choice', '')
+            from patrol_nudge import get_patrol_action
+            action = get_patrol_action(chosen_id)
             if not isinstance(action, dict):
                 return
             act_type = action.get('type', '')
@@ -2327,23 +2330,24 @@ class Controller:
         return usage
 
     def _send_patrol_whisper(self, target, text):
-        """Send a whisper message via the goddess channel (godvoice queue)."""
+        """Send a whisper via the voice text-queue (the watcher's polling directory)."""
         try:
             import time as _time
-            speech_id = f'patrol-{uuid.uuid4().hex[:8]}'
-            job = {'schema': 2, 'id': speech_id,
+            whisper_id = f'patrol-{uuid.uuid4().hex[:8]}'
+            # text-queue format: {"id","entity","text","voice"} — watched by god-voice-watcher
+            job = {'id': whisper_id,
                    'entity': self.settings.get('bodyUuid', ''),
-                   'actor': self.settings.get('bodyName', 'Kirito'),
-                   'text': text[:160], 'voiceId': 'villager', 'voiceVersion': 1,
-                   'generation': 1, 'dimension': self.settings.get('dimension', 'minecraft:overworld'),
-                   'createdAt': int(_time.time() * 1000),
-                   'expiresAt': int((_time.time() + 60) * 1000),
-                   'turnId': f'patrol-{speech_id}'}
-            whisper_dir = Path('/godvoice/speech-requests')
-            if whisper_dir.exists():
-                (whisper_dir / f'{speech_id}.json').write_text(
+                   'text': text[:160],
+                   'voice': 'kirito'}
+            # The voice container mounts /godvoice (from server/mc/data/godvoice)
+            # The controller writes via the shared /godvoice mount
+            queue_dir = Path(os.environ.get('GV_BASE', '/godvoice')) / 'text-queue'
+            if queue_dir.exists():
+                (queue_dir / f'{whisper_id}.json').write_text(
                     json.dumps(job, ensure_ascii=False), encoding='utf-8')
                 self.record('patrol_whisper_sent', target=target, text=text[:60])
+            else:
+                self.record('patrol_whisper_no_queue', path=str(queue_dir))
         except Exception as error:
             self.record('patrol_whisper_failed', errorType=type(error).__name__)
 
