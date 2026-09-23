@@ -546,12 +546,16 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
           const uuidRaw = await rcon.send(`data get entity ${login} UUID`).catch(() => '')
           // Parse "[I; a, b, c, d]" format from Minecraft's UUID output
           const uuidMatch = uuidRaw.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/)
-          let entityUuid = ''
+          const entityUuid = ''
           if (uuidMatch) {
             const parts = uuidMatch.slice(1).map(Number)
-            // Convert 4 ints to standard UUID format
             const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
             entityUuid = `${hex(parts[0])}-${hex(parts[1]).slice(0, 4)}-${hex(parts[1]).slice(4)}-${hex(parts[2]).slice(0, 4)}-${hex(parts[2]).slice(4)}${hex(parts[3])}`
+          }
+          if (!entityUuid) {
+            if (cmd.json) jsonReply({ ok: false, code: 'voice_uuid_unresolved' })
+            else reply(`[语音] 无法解析你的 UUID，请稍后再试。`)
+            return
           }
           const speechId = `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
           const job = { id: speechId, entity: entityUuid || login, text, voice: voice || 'kirito' }

@@ -360,58 +360,16 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def voice_speak(turn_id: str, text: str, voice: str = "", tone: str = "neutral") -> dict:
-        """以指定嗓音和语气说话（语音+头顶文字泡泡）。voice 选嗓音（kirito/naruto/goddess/villager，留空用默认），tone 选语气（neutral/happy/sad/urgent/gentle）。第三方Agent也可通过此工具说话。"""
-        def submit(lease):
-            import time as _time
-            import uuid as _uuid
-            import os as _os
-            from pathlib import Path as _Path
-            gv = _Path(_os.environ.get('GV_BASE', '/godvoice'))
-            text_clean = text.strip()[:160]
-            if not text_clean or len(text_clean) < 2:
-                return {'ok': False, 'code': 'voice_text_invalid'}
-            voice_clean = voice.strip() if voice else 'kirito'
-            if voice_clean not in ('kirito', 'naruto', 'goddess', 'villager'):
-                return {'ok': False, 'code': 'voice_voice_invalid'}
-            whisper_id = f'vs-{_uuid.uuid4().hex[:8]}'
-            body_uuid = gateway._settings().get('bodyUuid', '')
-
-            # 1. Write text-queue job (the watcher picks this up for TTS)
-            queue_dir = gv / 'text-queue'
-            if not queue_dir.exists():
-                return {'ok': False, 'code': 'voice_queue_unavailable'}
-            job = {'id': whisper_id, 'entity': body_uuid,
-                   'text': text_clean, 'voice': voice_clean, 'tone': tone}
-            (queue_dir / f'{whisper_id}.json').write_text(
-                json.dumps(job, ensure_ascii=False), encoding='utf-8')
-
-            # 2. Write speech-request (so SpeechBroker.receipt() can track it)
-            req_dir = gv / 'speech-requests'
-            if req_dir.exists():
-                req = {'schema': 2, 'id': whisper_id, 'entity': body_uuid,
-                       'actor': gateway._settings().get('bodyName', ''),
-                       'text': text_clean,
-                       'voiceId': voice_clean, 'voiceVersion': 1, 'generation': 1,
-                       'dimension': 'minecraft:overworld',
-                       'createdAt': int(_time.time() * 1000),
-                       'expiresAt': int((_time.time() + 60) * 1000),
-                       'turnId': f'voice-{whisper_id}'}
-                (req_dir / f'{whisper_id}.json').write_text(
-                    json.dumps(req, ensure_ascii=False), encoding='utf-8')
-
-            # 3. Write initial receipt (so speech_status shows 'queued')
-            rcpt_dir = gv / 'speech-receipts'
-            if rcpt_dir.exists():
-                rcpt = {'schema': 2, 'id': whisper_id, 'entity': body_uuid,
-                        'generation': 1, 'status': 'queued', 'code': 'voice_queued',
-                        'updatedAt': int(_time.time() * 1000)}
-                (rcpt_dir / f'{whisper_id}.json').write_text(
-                    json.dumps(rcpt, ensure_ascii=False), encoding='utf-8')
-
-            return {'ok': True, 'code': 'voice_queued', 'id': whisper_id,
-                    'voice': voice_clean, 'tone': tone,
-                    'notice': 'Voice queued; check speech_status(id) for playback state.'}
-        return skill_tools._write(turn_id, submit)
+        """以指定嗓音和语气说话（语音+头顶文字泡泡）。voice 选嗓音（kirito/naruto/goddess/villager，留空用默认），tone 选语气。使用与 speak 相同的语音管线。"""
+        # Use the exact same working pipeline as `speak` — SpeechBroker handles
+        # submit → receipt → status lifecycle. Voice comes from speech-profiles.json.
+        # We do NOT write any files ourselves; the broker manages everything.
+        result = speech_tools.speak(turn_id, text)
+        # Enrich with voice/tone info (advisory only — actual voice comes from profile)
+        if isinstance(result, dict) and result.get('ok'):
+            result['requestedVoice'] = voice or 'default'
+            result['tone'] = tone
+        return result
 
     @server.tool()
     def speech_status(utterance_id: str) -> dict:

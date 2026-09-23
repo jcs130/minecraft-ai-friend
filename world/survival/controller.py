@@ -2246,30 +2246,39 @@ class Controller:
         return self._lesson_lib
 
     def tick_lesson_capture(self, body, now):
-        """Capture failure events as lessons. Runs every tick."""
+        """Capture failure events as lessons. Reads terminal action receipts."""
         try:
-            ld = self.data.get('lastDecision') or {}
-            for act in (ld.get('actions') or [])[-3:]:
-                result = act.get('result') or {}
-                ok = result.get('ok')
-                code = str(result.get('code', ''))
-                if ok is False or code in ('failed', 'rejected', 'unknown', 'action_rejected',
-                                           'invalid_move', 'body_busy', 'outcome_unknown'):
-                    event = {'type': f'{act.get("tool", "unknown")}_{code or "failed"}',
-                             'target': str(act.get('args', {}).get('x', '?')),
-                             'dimension': self.settings.get('dimension', 'minecraft:overworld'),
-                             'action': act.get('tool', '?'),
-                             'position': act.get('args', {}) if isinstance(act.get('args'), dict) else {}}
-                    ok2, reason, lid = self.lesson_lib.analyze_and_add(event)
-                    if ok2:
-                        self.record('lesson_captured', lessonId=lid, source=reason)
+            # Read from action-receipts (the authoritative final status)
+            receipts_dir = self.root / 'action-receipts'
+            if receipts_dir.exists():
+                for rfile in sorted(receipts_dir.glob('*.json'),
+                                    key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
+                    try:
+                        receipt = json.loads(rfile.read_text(encoding='utf-8'))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+                    status = receipt.get('status', '')
+                    if status in ('failed', 'rejected'):
+                        tool = receipt.get('tool', 'unknown')
+                        args = receipt.get('args', {})
+                        event = {
+                            'type': f'{tool}_{status}',
+                            'target': str(args.get('x', '?')),
+                            'dimension': self.settings.get('dimension', 'minecraft:overworld'),
+                            'action': tool,
+                            'position': args if isinstance(args, dict) else {},
+                        }
+                        ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                        if ok:
+                            self.record('lesson_captured', lessonId=lid, source=reason)
+            # Environment signals
             env = self.data.get('environmentSignals') or []
             for sig in env[-3:]:
                 if sig.get('kind') in ('no_output', 'repeated_rejection', 'doom_loop'):
                     event = {'type': sig['kind'], 'action': sig.get('tool', '?'),
                              'repeats': sig.get('repeats', 3)}
-                    ok2, reason, lid = self.lesson_lib.analyze_and_add(event)
-                    if ok2:
+                    ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                    if ok:
                         self.record('lesson_captured', lessonId=lid, source=reason)
         except Exception:
             pass
