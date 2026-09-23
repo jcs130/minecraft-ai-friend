@@ -823,15 +823,15 @@ class Controller:
             context = wake(self, body, control, turn_id, message, replies)
             # Inject relevant lessons into the wake context (cross-session memory)
             if isinstance(context, dict):
-                # Build context text from BOTH self fields and body state (P2-5 fix)
-                ctx_parts = [str(context.get('mission', ''))]
-                body = context.get('body', {})
-                if isinstance(body, dict):
-                    ctx_parts.append(f"hp {body.get('hp', '?')} hunger {body.get('hunger', '?')}")
-                    pos = body.get('position', {})
-                    if isinstance(pos, dict):
-                        ctx_parts.append(f"position {pos.get('x', '?')} {pos.get('z', '?')}")
-                ctx_parts.append(str(context.get('goal', '')))
+                # embodiment.wake returns `self` (not `body`) and `intent` fields
+                self_state = context.get('self') or context.get('body') or {}
+                intent = context.get('intent') or {}
+                ctx_parts = [
+                    str(context.get('mission', '')),
+                    str(intent.get('goal', '') if isinstance(intent, dict) else ''),
+                    str(self_state.get('position', '')),
+                    f"hp {self_state.get('hp', '?')} hunger {self_state.get('hunger', '?')}",
+                ]
                 lesson_text = self.lesson_inject(' '.join(ctx_parts))
                 if lesson_text:
                     context['verifiedLessons'] = lesson_text
@@ -2246,31 +2246,33 @@ class Controller:
         return self._lesson_lib
 
     def tick_lesson_capture(self, body, now):
-        """Capture failure events as lessons. Runs every tick (not just calm)."""
+        """Capture failure events as lessons. Runs every tick."""
         try:
-            # Read from lastDecision.actions (the actual action record)
             ld = self.data.get('lastDecision') or {}
             for act in (ld.get('actions') or [])[-3:]:
-                if act.get('receiptStatus') in ('failed', 'rejected', 'unknown'):
-                    event = {'type': f'{act.get("tool", "unknown")}_{act.get("receiptStatus")}',
+                result = act.get('result') or {}
+                ok = result.get('ok')
+                code = str(result.get('code', ''))
+                if ok is False or code in ('failed', 'rejected', 'unknown', 'action_rejected',
+                                           'invalid_move', 'body_busy', 'outcome_unknown'):
+                    event = {'type': f'{act.get("tool", "unknown")}_{code or "failed"}',
                              'target': str(act.get('args', {}).get('x', '?')),
                              'dimension': self.settings.get('dimension', 'minecraft:overworld'),
                              'action': act.get('tool', '?'),
                              'position': act.get('args', {}) if isinstance(act.get('args'), dict) else {}}
-                    ok, reason, lid = self.lesson_lib.analyze_and_add(event)
-                    if ok:
+                    ok2, reason, lid = self.lesson_lib.analyze_and_add(event)
+                    if ok2:
                         self.record('lesson_captured', lessonId=lid, source=reason)
-            # Environment signals
             env = self.data.get('environmentSignals') or []
             for sig in env[-3:]:
                 if sig.get('kind') in ('no_output', 'repeated_rejection', 'doom_loop'):
                     event = {'type': sig['kind'], 'action': sig.get('tool', '?'),
                              'repeats': sig.get('repeats', 3)}
-                    ok, reason, lid = self.lesson_lib.analyze_and_add(event)
-                    if ok:
+                    ok2, reason, lid = self.lesson_lib.analyze_and_add(event)
+                    if ok2:
                         self.record('lesson_captured', lessonId=lid, source=reason)
         except Exception:
-            pass  # Lesson capture must never block the main loop
+            pass
 
     def lesson_inject(self, context_text):
         """Get relevant lessons as prompt-injectable text."""
@@ -2308,8 +2310,11 @@ class Controller:
             except OSError:
                 pass
             self.record('patrol_choice', **{k: v for k, v in summary.items() if k != 'action'})
-            # Patrol is a classifier, not a body action — accept any confidence.
-            # The chosen ID maps to a whisper/escalate action; no body risk.
+            # Patrol sends whispers to players — require reasonable confidence.
+            # Below 0.3 means Jev is essentially guessing; don't send those.
+            confidence = result.get('confidence', 0)
+            if isinstance(confidence, (int, float)) and confidence < 0.3:
+                return
             chosen_id = result.get('choice', '')
             from patrol_nudge import get_patrol_action
             action = get_patrol_action(chosen_id)

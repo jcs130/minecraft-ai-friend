@@ -366,37 +366,51 @@ def make_server(gateway=None, skill_tools=None, http=False):
             import uuid as _uuid
             import os as _os
             from pathlib import Path as _Path
-            whisper_id = f'vs-{_uuid.uuid4().hex[:8]}'
+            gv = _Path(_os.environ.get('GV_BASE', '/godvoice'))
             text_clean = text.strip()[:160]
             if not text_clean or len(text_clean) < 2:
                 return {'ok': False, 'code': 'voice_text_invalid'}
             voice_clean = voice.strip() if voice else 'kirito'
             if voice_clean not in ('kirito', 'naruto', 'goddess', 'villager'):
                 return {'ok': False, 'code': 'voice_voice_invalid'}
-            # Write to text-queue (watcher's polling directory)
-            queue_dir = _Path(_os.environ.get('GV_BASE', '/godvoice')) / 'text-queue'
+            whisper_id = f'vs-{_uuid.uuid4().hex[:8]}'
+            body_uuid = gateway._settings().get('bodyUuid', '')
+
+            # 1. Write text-queue job (the watcher picks this up for TTS)
+            queue_dir = gv / 'text-queue'
             if not queue_dir.exists():
                 return {'ok': False, 'code': 'voice_queue_unavailable'}
-            job = {'id': whisper_id,
-                   'entity': gateway._settings().get('bodyUuid', ''),
-                   'text': text_clean,
-                   'voice': voice_clean,
-                   'tone': tone}  # tone passes through to TTS if supported
+            job = {'id': whisper_id, 'entity': body_uuid,
+                   'text': text_clean, 'voice': voice_clean, 'tone': tone}
             (queue_dir / f'{whisper_id}.json').write_text(
                 json.dumps(job, ensure_ascii=False), encoding='utf-8')
-            # Also write a speech-receipt for status tracking (SpeechBroker pattern)
-            receipt_dir = _Path(_os.environ.get('GV_BASE', '/godvoice')) / 'speech-receipts'
-            if receipt_dir.exists():
-                receipt = {'schema': 2, 'id': whisper_id,
-                           'entity': gateway._settings().get('bodyUuid', ''),
-                           'generation': 1, 'status': 'queued',
-                           'code': 'voice_queued',
-                           'updatedAt': int(_time.time() * 1000)}
-                (receipt_dir / f'{whisper_id}.json').write_text(
-                    json.dumps(receipt, ensure_ascii=False), encoding='utf-8')
+
+            # 2. Write speech-request (so SpeechBroker.receipt() can track it)
+            req_dir = gv / 'speech-requests'
+            if req_dir.exists():
+                req = {'schema': 2, 'id': whisper_id, 'entity': body_uuid,
+                       'actor': gateway._settings().get('bodyName', ''),
+                       'text': text_clean,
+                       'voiceId': voice_clean, 'voiceVersion': 1, 'generation': 1,
+                       'dimension': 'minecraft:overworld',
+                       'createdAt': int(_time.time() * 1000),
+                       'expiresAt': int((_time.time() + 60) * 1000),
+                       'turnId': f'voice-{whisper_id}'}
+                (req_dir / f'{whisper_id}.json').write_text(
+                    json.dumps(req, ensure_ascii=False), encoding='utf-8')
+
+            # 3. Write initial receipt (so speech_status shows 'queued')
+            rcpt_dir = gv / 'speech-receipts'
+            if rcpt_dir.exists():
+                rcpt = {'schema': 2, 'id': whisper_id, 'entity': body_uuid,
+                        'generation': 1, 'status': 'queued', 'code': 'voice_queued',
+                        'updatedAt': int(_time.time() * 1000)}
+                (rcpt_dir / f'{whisper_id}.json').write_text(
+                    json.dumps(rcpt, ensure_ascii=False), encoding='utf-8')
+
             return {'ok': True, 'code': 'voice_queued', 'id': whisper_id,
                     'voice': voice_clean, 'tone': tone,
-                    'notice': 'Voice queued; plays through SVC. Use speech_status(id) to check playback.'}
+                    'notice': 'Voice queued; check speech_status(id) for playback state.'}
         return skill_tools._write(turn_id, submit)
 
     @server.tool()

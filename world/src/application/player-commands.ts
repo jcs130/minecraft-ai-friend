@@ -540,9 +540,21 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         if (!['neutral', 'happy', 'sad', 'urgent', 'gentle'].includes(tone)) { reply(`[CLI] 语气：neutral/happy/sad/urgent/gentle。`); return }
         // 写入 godvoice 队列（文件操作 ✗ 不走 RCON ✓）
         try {
-          // Write to text-queue (the watcher's polling directory, NOT speech-requests)
+          // Write to text-queue (the watcher's polling directory)
+          // entity must be a UUID string (the mod parses it with UUID.fromString)
+          const login = resolveLogin(subject)
+          const uuidRaw = await rcon.send(`data get entity ${login} UUID`).catch(() => '')
+          // Parse "[I; a, b, c, d]" format from Minecraft's UUID output
+          const uuidMatch = uuidRaw.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/)
+          let entityUuid = ''
+          if (uuidMatch) {
+            const parts = uuidMatch.slice(1).map(Number)
+            // Convert 4 ints to standard UUID format
+            const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
+            entityUuid = `${hex(parts[0])}-${hex(parts[1]).slice(0, 4)}-${hex(parts[1]).slice(4)}-${hex(parts[2]).slice(0, 4)}-${hex(parts[2]).slice(4)}${hex(parts[3])}`
+          }
           const speechId = `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-          const job = { id: speechId, entity: resolveLogin(subject), text, voice: voice || 'kirito' }
+          const job = { id: speechId, entity: entityUuid || login, text, voice: voice || 'kirito' }
           const fs = await import('node:fs')
           const qdir = process.env.GV_BASE ? `${process.env.GV_BASE}/text-queue` : '/godvoice/text-queue'
           fs.writeFileSync(`${qdir}/${speechId}.json`, JSON.stringify(job))
