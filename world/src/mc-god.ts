@@ -2650,7 +2650,10 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
       log(`failed to load skill-events, using defaults: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-  const enabledPassives = passiveDefs.filter((p) => p.enabled !== false)
+  // 2026-09-23 造物主令「不要这些buff，帮他们作弊」：
+  // always=true 的装备化被动（夜视/铁躯/疾风/鱼鳃/火衣）无条件续杯 = 变相无敌。
+  // 条件型被动（血怒→濒死给力量、铁壁→濒死给抗性）保留——那些是危机应对，不是常驻作弊。
+  const enabledPassives = passiveDefs.filter((p) => p.enabled !== false && (p.effect as { always?: boolean })?.always !== true)
 
   // ── 世界心跳（2026-08-18）：每守望 tick 落盘一次，外部看门狗 + 面板据此探活 ──
   // 教训：世界进程被杀后面板照常绿（面板是独立进程），女神聋了 17 分钟无人察觉。
