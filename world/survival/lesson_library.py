@@ -1,24 +1,24 @@
-"""Cross-session lesson library v2 — with Cortico-inspired improvements.
+"""Cross-session lesson library v3 — with Neko persistence + vector retrieval.
 
-Changes from v1 (after studying Cortico's memory system):
-- Three-path writes: append (log), edit (fix one line), rewrite (distill)
-- Entry status: observation / hypothesis / verified
-- First-line summary for prompt injection (like viewers/<id>.md)
-- No version control yet (Git integration is future work)
-- One fact, one place: merge strictly by overlap
-- Real-world time anchors (not game ticks)
+New from Neko (after studying mc-agent-neko):
+- Cosine similarity retrieval (local TF-IDF, zero external dependency)
+- Spatial anchoring: lessons tied to coordinates via kind@x,y,z keys
+- Freshness tracking: `seen` timestamp + `age` field (recent lessons rank higher)
+- Death-log style append-only JSONL for raw events (separate from curated lessons)
 
-Adapted from corti/MineEvolve (arXiv 2603.13131) + Cortico cormini memory.
+Combined with Cortico v2 patterns:
+- Three-path writes (append/edit/rewrite)
+- Status levels (observation/hypothesis/verified)
+- Real-world time anchors
 """
 import json
+import math
 import re
 import time
+from collections import Counter
 from pathlib import Path
 
 STATUS_LEVELS = {'observation': 0, 'hypothesis': 1, 'verified': 2}
-WRITE_MODES = ('append', 'edit', 'rewrite')
-
-# ── Failure patterns ─────────────────────────────────────────────────────
 
 FAILURE_PATTERNS = {
     'pathfinding_fail': {
@@ -27,7 +27,7 @@ FAILURE_PATTERNS = {
         'lesson': {
             'trigger': 'navigation to {target} failed in {dimension}',
             'risk': 'agent gets stuck or loops when path is blocked',
-            'fix': 'use task_stop to cancel, then scan_blocks to find alternate route, or goto a nearby waypoint',
+            'fix': 'use task_stop to cancel, then scan_blocks to find alternate route',
         },
     },
     'lava_damage': {
@@ -35,7 +35,7 @@ FAILURE_PATTERNS = {
         'lesson': {
             'trigger': 'contact with lava near {position}',
             'risk': 'rapid HP loss and death',
-            'fix': 'equip water bucket in offhand before mining below Y=10; if burning, goto nearest water',
+            'fix': 'equip water bucket before mining below Y=10; if burning, goto water',
         },
     },
     'buried_alive': {
@@ -43,7 +43,7 @@ FAILURE_PATTERNS = {
         'lesson': {
             'trigger': 'suffocated inside blocks at {position}',
             'risk': 'death from being unable to move',
-            'fix': 'mine the block above before digging down; carry torches to prevent collapse',
+            'fix': 'mine the block above before digging down; carry torches',
         },
     },
     'repeat_loop': {
@@ -51,16 +51,16 @@ FAILURE_PATTERNS = {
                           'repeated_rejection', 'circular'],
         'lesson': {
             'trigger': 'repeated {action} {count}+ times without progress',
-            'risk': 'wastes actions and time; agent appears active but achieves nothing',
+            'risk': 'wastes actions; agent appears active but achieves nothing',
             'fix': 'use remember to save state, then request_goal with different approach',
         },
     },
     'starvation': {
         'trigger_words': ['hunger_low', 'starving', 'hunger_zero', 'food_empty'],
         'lesson': {
-            'trigger': 'hunger dropped to {hunger}/20 with no food in inventory',
+            'trigger': 'hunger dropped to {hunger}/20 with no food',
             'risk': 'cannot regenerate HP; eventually dies',
-            'fix': 'always carry 5+ bread; if hungry with no food, cast give for cooked_porkchop',
+            'fix': 'always carry 5+ bread; if hungry, cast give for cooked_porkchop',
         },
     },
     'mob_death': {
@@ -68,66 +68,122 @@ FAILURE_PATTERNS = {
         'lesson': {
             'trigger': 'killed by {source} at {position}',
             'risk': 'loss of items and progress',
-            'fix': 'check nearby entities before entering dark areas; keep HP above 12; equip sword',
+            'fix': 'check nearby entities before entering dark areas; keep HP above 12',
         },
     },
 }
+
+
+# ── TF-IDF vectorizer (Neko-style cosine similarity, zero dependencies) ──
+
+def _tokenize(text):
+    return re.findall(r'[a-z_\d]+', text.lower())
+
+
+def _build_vocab(texts):
+    return list(set(w for t in texts for w in _tokenize(t)))
+
+
+def _tfidf_vector(text, vocab, idf):
+    tf = Counter(_tokenize(text))
+    return [tf.get(w, 0) * idf.get(w, 1.0) for w in vocab]
+
+
+def _cosine_similarity(a, b):
+    if not a or not b:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    ma = math.sqrt(sum(x * x for x in a))
+    mb = math.sqrt(sum(x * x for x in b))
+    if ma == 0 or mb == 0:
+        return 0.0
+    return dot / (ma * mb)
+
+
+class TfidfIndex:
+    """Local TF-IDF index for cosine similarity retrieval (Neko pattern)."""
+
+    def __init__(self):
+        self.vocab = []
+        self.idf = {}
+        self.vectors = {}  # lesson_id -> sparse vector
+
+    def rebuild(self, lessons):
+        texts = [f"{l['trigger']} {l['risk']} {l['fix']}" for l in lessons]
+        self.vocab = _build_vocab(texts)
+        doc_count = max(len(texts), 1)
+        df = Counter()
+        for t in texts:
+            for w in set(_tokenize(t)):
+                df[w] += 1
+        self.idf = {w: math.log(doc_count / (1 + c)) + 1.0 for w, c in df.items()}
+        self.vectors = {}
+        for l in lessons:
+            text = f"{l['trigger']} {l['risk']} {l['fix']}"
+            self.vectors[l['id']] = _tfidf_vector(text, self.vocab, self.idf)
+
+    def query(self, text, lesson_ids):
+        qv = _tfidf_vector(text, self.vocab, self.idf)
+        scores = {}
+        for lid in lesson_ids:
+            if lid in self.vectors:
+                scores[lid] = _cosine_similarity(qv, self.vectors[lid])
+        return scores
 
 
 # ── Curator: 5 gates ─────────────────────────────────────────────────────
 
 def validate_lesson(lesson, existing_lessons):
     for field in ('trigger', 'risk', 'fix'):
-        if not lesson.get(field) or not isinstance(lesson[field], str) or len(lesson[field].strip()) < 5:
+        if not lesson.get(field) or len(lesson[field].strip()) < 5:
             return False, f'field_incomplete: {field}'
     trigger = lesson['trigger'].lower()
-    if not any(re.search(r'\d', trigger) for _ in [trigger]) and \
-       not any(w in trigger for w in ('y=', 'position', 'near', 'at ', 'in ', 'with', 'during')):
-        return False, 'env_not_matchable: trigger has no concrete context'
+    if not re.search(r'\d', trigger) and \
+       not any(w in trigger for w in ('y=', 'position', 'near', 'at ', 'in ', 'with')):
+        return False, 'env_not_matchable'
     fix = lesson['fix'].lower()
     action_words = ('use ', 'goto ', 'mine ', 'craft ', 'eat ', 'equip ', 'cast ',
-                    'stop ', 'scan ', 'check ', 'build ', 'place ', 'carry ',
-                    'avoid ', 'cancel', 'request', 'remember', 'goto')
+                    'stop ', 'scan ', 'check ', 'carry ', 'avoid ', 'cancel', 'request', 'remember')
     if not any(w in fix for w in action_words):
-        return False, 'fix_not_executable: no concrete action word'
-    for phrase in ('try again', 'be careful', 'pay attention', 'do better',
-                   '再试一次', '小心', '注意'):
+        return False, 'fix_not_executable'
+    for phrase in ('try again', 'be careful', 'pay attention', '再试一次', '小心'):
         if phrase in fix:
-            return False, f'empty_advice: contains "{phrase}"'
+            return False, f'empty_advice: "{phrase}"'
     for existing in existing_lessons:
         if existing.get('confidence', 0) >= 3:
             if _word_overlap(lesson['trigger'], existing['trigger']) > 0.5:
                 if _word_overlap(lesson['fix'], existing['fix']) < 0.3:
-                    return False, f'conflicts_with_high_confidence: overlaps #{existing.get("id","?")}'
+                    return False, f'conflicts: #{existing.get("id")}'
     return True, 'approved'
 
 
 def _word_overlap(a, b):
-    wa = set(re.findall(r'[a-z_\d]+', a.lower()))
-    wb = set(re.findall(r'[a-z_\d]+', b.lower()))
+    wa = set(_tokenize(a))
+    wb = set(_tokenize(b))
     if not wa or not wb:
         return 0.0
     return len(wa & wb) / len(wa | wb)
 
 
-# ── LessonLibrary ────────────────────────────────────────────────────────
+# ── LessonLibrary v3 ─────────────────────────────────────────────────────
 
 class LessonLibrary:
     MAX_ENTRIES = 100
     MERGE_THRESHOLD = 0.5
+    FRESHNESS_HALF_LIFE = 7 * 86400  # 7 days (Neko's freshness decay pattern)
 
     def __init__(self, root):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / 'lessons.json'
+        self.event_log = self.root / 'events.jsonl'  # Neko death_log pattern
+        self._tfidf = TfidfIndex()
         self._load()
 
     def _load(self):
         if self.path.exists():
             try:
                 self.lessons = json.loads(self.path.read_text(encoding='utf-8'))
-                if not isinstance(self.lessons, list):
-                    self.lessons = []
             except (json.JSONDecodeError, OSError):
                 self.lessons = []
         else:
@@ -137,11 +193,39 @@ class LessonLibrary:
         self.lessons.sort(key=lambda x: x.get('confidence', 0) * 10 + x.get('hits', 0), reverse=True)
         self.lessons = self.lessons[:self.MAX_ENTRIES]
         self.path.write_text(json.dumps(self.lessons, ensure_ascii=False, indent=2), encoding='utf-8')
+        self._tfidf.rebuild(self.lessons)
+
+    def _log_event(self, event):
+        """Append raw event to JSONL log (Neko death_log pattern — never edit)."""
+        event['loggedAt'] = time.time()
+        with self.event_log.open('a', encoding='utf-8') as f:
+            f.write(json.dumps(event, ensure_ascii=False) + '\n')
+
+    # ── Spatial anchoring (Neko landmarks pattern: kind@x,y,z) ──
+
+    def _spatial_key(self, kind, x, y, z):
+        return f'{kind}@{int(x)},{int(y)},{int(z)}'
+
+    def find_nearby(self, kind, x, z, radius=10):
+        """Find lessons anchored near a position (Neko landmarks query pattern)."""
+        results = []
+        for l in self.lessons:
+            anchor = l.get('spatialAnchor')
+            if not anchor or anchor.get('kind') != kind:
+                continue
+            ax, az = anchor.get('x', 0), anchor.get('z', 0)
+            dist = math.sqrt((ax - x) ** 2 + (az - z) ** 2)
+            if dist <= radius:
+                age = time.time() - l.get('seen', l.get('createdAt', 0))
+                results.append((dist, age, l))
+        results.sort(key=lambda t: (t[0], t[1]))
+        return [l for _, _, l in results]
 
     # ── Three-path writes (Cortico pattern) ──
 
-    def append(self, trigger, risk, fix, source='manual', status='observation'):
-        """Add a new lesson (log-style: one fact forward, never overwrite)."""
+    def append(self, trigger, risk, fix, source='manual', status='observation',
+               spatial=None):
+        """Add lesson. spatial={'kind':'hole','x':-100,'y':64,'z':900} for location-anchored."""
         candidate = {'trigger': trigger.strip(), 'risk': risk.strip(), 'fix': fix.strip()}
         ok, reason = validate_lesson(candidate, self.lessons)
         if not ok:
@@ -149,122 +233,146 @@ class LessonLibrary:
         for existing in self.lessons:
             if _word_overlap(candidate['trigger'], existing['trigger']) > self.MERGE_THRESHOLD:
                 existing['confidence'] = existing.get('confidence', 1) + 1
-                if status == 'verified' and existing.get('status') != 'verified':
+                existing['seen'] = time.time()  # Neko freshness
+                if status == 'verified':
                     existing['status'] = 'verified'
-                existing['lastMerged'] = time.time()
                 self._save()
-                return True, f'merged_with_{existing["id"]}', existing['id']
-        lesson_id = f'lesson_{len(self.lessons)+1:03d}_{int(time.time())%100000}'
+                return True, f'merged_{existing["id"]}', existing['id']
+        lid = f'lesson_{len(self.lessons)+1:03d}_{int(time.time())%100000}'
         lesson = {
-            'id': lesson_id,
+            'id': lid,
             'trigger': candidate['trigger'],
             'risk': candidate['risk'],
             'fix': candidate['fix'],
-            'confidence': 1,
-            'hits': 0,
-            'status': status,
-            'source': source,
-            'createdAt': time.time(),
-            'realTimeAnchor': time.strftime('%Y-%m-%d %H:%M', time.localtime()),
+            'confidence': 1, 'hits': 0, 'status': status, 'source': source,
+            'createdAt': time.time(), 'seen': time.time(),  # Neko: seen = last access
+            'realTimeAnchor': time.strftime('%Y-%m-%d %H:%M'),
         }
+        if spatial:
+            lesson['spatialAnchor'] = spatial
+            lesson['spatialKey'] = self._spatial_key(
+                spatial.get('kind', 'generic'),
+                spatial.get('x', 0), spatial.get('y', 64), spatial.get('z', 0))
         self.lessons.append(lesson)
         self._save()
-        return True, 'created', lesson_id
+        return True, 'created', lid
 
     def edit(self, lesson_id, field, new_value):
-        """Fix one field of an existing lesson (edit-in-place, like edit_file)."""
-        for lesson in self.lessons:
-            if lesson['id'] == lesson_id:
+        for l in self.lessons:
+            if l['id'] == lesson_id:
                 if field in ('trigger', 'risk', 'fix'):
-                    lesson[field] = new_value
-                    lesson['editedAt'] = time.time()
+                    l[field] = new_value
+                    l['seen'] = time.time()
                     self._save()
                     return True, 'edited'
                 return False, f'invalid_field: {field}'
-        return False, 'lesson_not_found'
+        return False, 'not_found'
 
     def rewrite(self, lesson_id, trigger, risk, fix):
-        """Full rewrite (distill/restructure, like write_file)."""
-        for lesson in self.lessons:
-            if lesson['id'] == lesson_id:
-                lesson['trigger'] = trigger
-                lesson['risk'] = risk
-                lesson['fix'] = fix
-                lesson['rewrittenAt'] = time.time()
+        for l in self.lessons:
+            if l['id'] == lesson_id:
+                l.update(trigger=trigger, risk=risk, fix=fix, seen=time.time())
                 self._save()
                 return True, 'rewritten'
-        return False, 'lesson_not_found'
+        return False, 'not_found'
 
     def verify(self, lesson_id):
-        """Promote a lesson to 'verified' status (like Cortico's fact verification)."""
-        for lesson in self.lessons:
-            if lesson['id'] == lesson_id:
-                lesson['status'] = 'verified'
-                lesson['confidence'] = max(lesson.get('confidence', 1), 3)
+        for l in self.lessons:
+            if l['id'] == lesson_id:
+                l['status'] = 'verified'
+                l['confidence'] = max(l.get('confidence', 1), 3)
+                l['seen'] = time.time()
                 self._save()
                 return True, 'verified'
-        return False, 'lesson_not_found'
+        return False, 'not_found'
 
     def demote(self, lesson_id, reason=''):
-        """Demote to 'hypothesis' (evidence contradicted it)."""
-        for lesson in self.lessons:
-            if lesson['id'] == lesson_id:
-                lesson['status'] = 'hypothesis'
-                lesson['demotedReason'] = reason
-                lesson['confidence'] = max(1, lesson.get('confidence', 1) - 2)
+        for l in self.lessons:
+            if l['id'] == lesson_id:
+                l['status'] = 'hypothesis'
+                l['demotedReason'] = reason
+                l['confidence'] = max(1, l.get('confidence', 1) - 2)
                 self._save()
                 return True, 'demoted'
-        return False, 'lesson_not_found'
+        return False, 'not_found'
 
     # ── Auto-analysis ──
 
     def analyze_and_add(self, event):
+        self._log_event(event)  # Always log raw event (Neko death_log pattern)
         event_type = event.get('type', '') or event.get('kind', '')
         event_text = json.dumps(event, ensure_ascii=False).lower()
         for pattern_name, pattern in FAILURE_PATTERNS.items():
             if any(t in event_type.lower() or t in event_text for t in pattern['trigger_words']):
                 template = pattern['lesson']
+                pos = event.get('position', {})
                 trigger = template['trigger'].format(
                     target=event.get('target', '?'),
                     dimension=event.get('dimension', 'overworld'),
-                    position=f"({event.get('position', {}).get('x', '?')},{event.get('position', {}).get('z', '?')})",
+                    position=f"({pos.get('x', '?')},{pos.get('z', '?')})",
                     action=event.get('action', '?'),
                     count=event.get('repeats', 3),
                     hunger=event.get('hunger', 0),
-                    source=event.get('source', 'unknown'),
-                )
+                    source=event.get('source', 'unknown'))
+                spatial = None
+                if pos.get('x') is not None:
+                    spatial = {'kind': pattern_name, 'x': pos.get('x', 0),
+                              'y': pos.get('y', 64), 'z': pos.get('z', 0)}
                 return self.append(trigger, template['risk'], template['fix'],
-                                   source=f'auto_{pattern_name}')
+                                   source=f'auto_{pattern_name}', spatial=spatial)
         return False, 'no_pattern_match', None
 
-    # ── Retrieval & Injection ──
+    # ── Retrieval (Neko cosine + word overlap + freshness + spatial) ──
 
-    def retrieve(self, context_text, limit=3, status_filter=None):
+    def retrieve(self, context_text, limit=3, status_filter=None,
+                 near=None, radius=10):
+        """Multi-signal retrieval: TF-IDF cosine + word overlap + freshness + spatial."""
         if not self.lessons:
             return []
+        # Rebuild index if needed
+        if not self._tfidf.vectors:
+            self._tfidf.rebuild(self.lessons)
+        # Cosine scores (Neko pattern)
+        all_ids = [l['id'] for l in self.lessons]
+        cosine_scores = self._tfidf.query(context_text, all_ids)
+        now = time.time()
         scored = []
-        for lesson in self.lessons:
-            if status_filter and lesson.get('status') not in status_filter:
+        for l in self.lessons:
+            if status_filter and l.get('status') not in status_filter:
                 continue
-            overlap = _word_overlap(context_text, lesson['trigger'])
-            if overlap > 0.03:
-                status_boost = 1 + STATUS_LEVELS.get(lesson.get('status', 'observation'), 0) * 0.3
-                score = overlap * (1 + lesson.get('confidence', 1) * 0.2) * status_boost
-                scored.append((score, lesson))
+            # Spatial filter (Neko landmarks pattern)
+            if near and l.get('spatialAnchor'):
+                anchor = l['spatialAnchor']
+                dist = math.sqrt((anchor.get('x', 0) - near.get('x', 0)) ** 2 +
+                                (anchor.get('z', 0) - near.get('z', 0)) ** 2)
+                if dist > radius:
+                    continue
+            # Combine scores
+            cos = cosine_scores.get(l['id'], 0)
+            overlap = _word_overlap(context_text, l['trigger'])
+            status_boost = 1 + STATUS_LEVELS.get(l.get('status', 'observation'), 0) * 0.3
+            # Neko freshness decay (exponential, half-life = 7 days)
+            seen = l.get('seen', l.get('createdAt', 0))
+            age = max(0, now - seen)
+            freshness = math.exp(-age / self.FRESHNESS_HALF_LIFE * math.log(2))
+            score = max(cos, overlap) * status_boost * (0.5 + 0.5 * freshness) * \
+                    (1 + l.get('confidence', 1) * 0.15)
+            if score > 0.01:
+                scored.append((score, l))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [l for _, l in scored[:limit]]
 
-    def inject(self, context_text, limit=3):
-        """Generate prompt text with first-line summaries (Cortico viewers pattern)."""
-        lessons = self.retrieve(context_text, limit)
+    def inject(self, context_text, limit=3, near=None):
+        lessons = self.retrieve(context_text, limit, near=near)
         if not lessons:
             return ''
         lines = ['[已验证的教训（避免重犯）]']
-        for lesson in lessons:
-            lesson['hits'] = lesson.get('hits', 0) + 1
-            status_tag = {'verified': '✓已验证', 'hypothesis': '?待验证', 'observation': '·观察'}.get(
-                lesson.get('status', 'observation'), '·')
-            lines.append(f'- {status_tag} 当{lesson["trigger"]}时 → {lesson["fix"]}')
+        for l in lessons:
+            l['hits'] = l.get('hits', 0) + 1
+            l['seen'] = time.time()  # Update freshness
+            tag = {'verified': '✓已验证', 'hypothesis': '?待验证', 'observation': '·观察'}.get(
+                l.get('status', 'observation'), '·')
+            lines.append(f'- {tag} 当{l["trigger"]}时 → {l["fix"]}')
         self._save()
         return '\n'.join(lines)
 
@@ -274,32 +382,45 @@ class LessonLibrary:
             'verified': sum(1 for l in self.lessons if l.get('status') == 'verified'),
             'hypothesis': sum(1 for l in self.lessons if l.get('status') == 'hypothesis'),
             'observation': sum(1 for l in self.lessons if l.get('status') == 'observation'),
-            'high_confidence': sum(1 for l in self.lessons if l.get('confidence', 0) >= 3),
+            'spatial_anchored': sum(1 for l in self.lessons if l.get('spatialAnchor')),
+            'events_logged': self._count_events(),
             'total_hits': sum(l.get('hits', 0) for l in self.lessons),
         }
+
+    def _count_events(self):
+        if not self.event_log.exists():
+            return 0
+        with self.event_log.open('r', encoding='utf-8') as f:
+            return sum(1 for _ in f)
 
 
 if __name__ == '__main__':
     import tempfile
     lib = LessonLibrary(tempfile.mkdtemp())
-
-    # v2 features test
     events = [
-        {'type': 'goto_failed', 'target': '(-544,865)', 'dimension': 'overworld'},
-        {'type': 'killed_by', 'source': 'zombie', 'position': {'x': -100, 'z': 900}},
+        {'type': 'goto_failed', 'target': '(-544,865)', 'dimension': 'overworld',
+         'position': {'x': -544, 'y': 64, 'z': 865}},
+        {'type': 'killed_by', 'source': 'zombie', 'position': {'x': -100, 'y': 64, 'z': 900}},
         {'type': 'doom_loop', 'action': 'goto', 'repeats': 5},
+        {'type': 'lava', 'position': {'x': -200, 'y': 12, 'z': 750}},
     ]
     for ev in events:
         ok, reason, lid = lib.analyze_and_add(ev)
         print(f'  {ev["type"]:20s} {"✓" if ok else "✗"} {reason}')
 
-    # Three-path writes
-    lid = lib.lessons[0]['id']
-    print(f'\n  edit: {lib.edit(lid, "fix", "use task_stop then goto shared:1 as fallback")}')
-    print(f'  verify: {lib.verify(lid)}')
-    print(f'  demote: {lib.demote(lib.lessons[1]["id"], "evidence suggests mob was passive")}')
+    # v3: spatial query (Neko landmarks pattern)
+    near_results = lib.find_nearby('killed_by', -100, 900, radius=15)
+    print(f'\n  spatial query near (-100,900): {len(near_results)} lessons')
+    for l in near_results:
+        print(f'    {l["id"]}: {l["trigger"][:60]}')
 
-    # Status-aware injection
-    inj = lib.inject('planning navigation in overworld')
+    # v3: multi-signal retrieval
+    results = lib.retrieve('navigation failed in overworld', near={'x': -540, 'z': 860}, radius=20)
+    print(f'\n  multi-signal near (-540,860): {len(results)} lessons')
+
+    # v3: injection with spatial awareness
+    inj = lib.inject('planning navigation', near={'x': -544, 'z': 865})
     print(f'\n  inject: {inj[:250]}')
+
     print(f'\n  stats: {json.dumps(lib.stats(), indent=2)}')
+    print(f'\n  events.jsonl: {lib._count_events()} events logged')
