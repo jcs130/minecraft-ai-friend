@@ -1,4 +1,5 @@
 """Offline restoration gate: a successful inner QA cannot retain its recorder."""
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -168,28 +169,14 @@ class VoiceBoundaryHealth(unittest.TestCase):
         self.assertFalse(result['after_voice_deployment'])
 
     def test_panel_requires_final_normal_recorder_restoration(self):
-        with patch.object(health, 'probe_panel_http', return_value={'ok': True}), \
-                patch.object(health, 'probe_management', return_value={'ok': True}), \
-                patch.object(health, 'probe_operations_team', return_value={'ok': True}), \
-                patch.object(health, 'probe_game_qwenpaw', return_value={'ok': True}), \
-                patch.object(health, 'probe_survivor', return_value={'ok': True}), \
-                patch.object(health, 'probe_model_routing', return_value={'ok': True}), \
-                patch.object(health, 'probe_recorded_behavior', return_value={'ok': True}), \
-                patch.object(health, 'probe_source_record', return_value={'ok': True}), \
-                patch.object(health, 'probe_player_commands', return_value={'ok': True}), \
-                patch.object(health, 'probe_voice_commands', return_value={'ok': True}), \
-                patch.object(health, 'probe_chanting_staff', return_value={'ok': True}), \
-                patch.object(health, 'probe_voice_recording', return_value={'ok': True}), \
-                patch.object(health, 'probe_skillbar_editor', return_value={'ok': True}), \
-                patch.object(health, 'probe_chanting_client', return_value={'ok': True}), \
-                patch.object(health, 'probe_agent_observatory', return_value={'ok': True}):
+        # 27 个 patch 超过 CPython 的静态嵌套上限（20），改用 ExitStack 堆叠。
+        patched = ['probe_panel_http', 'probe_management', 'probe_operations_team', 'probe_game_qwenpaw', 'probe_survivor', 'probe_model_routing', 'probe_recorded_behavior', 'probe_source_record', 'probe_player_commands', 'probe_voice_commands', 'probe_chanting_staff', 'probe_voice_recording', 'probe_skillbar_editor', 'probe_chanting_client', 'probe_agent_observatory', 'probe_survivor_party', 'probe_companion_ticking', 'probe_navigation_sense', 'probe_world_team', 'probe_maid_perception', 'probe_survival_practice', 'probe_embodied_agent', 'probe_system_one', 'probe_pawapps', 'probe_jev_intent', 'probe_skill_system', 'probe_town_protection']
+        with contextlib.ExitStack() as stack:
+            for name in patched:
+                stack.enter_context(patch.object(health, name, return_value={'ok': True}))
             self.assertTrue(health.probe_panel_smoke()['ok'])
             self.marker.write_text('temporary QA owner', encoding='utf-8')
             result = health.probe_panel_smoke()
             self.assertFalse(result['ok'])
             self.assertFalse(result['voice_boundary_deployment']['ok'])
             self.assertTrue(result['voice_commands']['ok'])
-
-
-if __name__ == '__main__':
-    unittest.main()
