@@ -1921,6 +1921,23 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
     claimStaff: chantingStaff.claim,
     syncStaffBar: chantingStaff.syncBar,
     extendedCommand: handleExtendedPlayerCommand,
+    // 语音口（2026-09-23）：解析实体 UUID（mineflayer players 表）并写 text-queue。
+    // 与既有 speakViaGodVoice 同一通路；应用层不碰文件系统。
+    voiceSpeak: (actor: string, text: string, voice: string) => {
+      const gv = process.env.GODVOICE_DIR
+      const b = getBot()
+      const login = resolveLogin(actor)
+      const uuid = b?.players?.[login]?.uuid as string | undefined
+      if (!gv || !uuid) return { ok: false, code: 'voice_unavailable', summary: '语音服务暂不可用（无法解析实体）。' }
+      try {
+        const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+        appendFileSync(`${gv}/text-queue/${id}.json`, JSON.stringify({ id, entity: String(uuid), text: text.slice(0, 160), voice }), 'utf-8')
+        log(`voice_speak queued: ${login} voice=${voice} text=${text.slice(0, 20)}`)
+        return { ok: true, code: 'voice_queued', id }
+      } catch (e) {
+        return { ok: false, code: 'voice_queue_error', summary: String(e).slice(0, 80) }
+      }
+    },
   })
   const { handleCli, castUnified } = playerCommands
   const jevIntent = createJevIntent()

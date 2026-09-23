@@ -197,6 +197,7 @@ const ordinaryCases = {
   innate: 'innate', appraise: 'appraise', discoveries: 'discoveries', cultivate: 'cultivate',
   skillbar: 'skillbar', bookget: 'bookget fireworks', learn: 'learn 新术',
   goto: 'goto personal:6', waypoint: 'waypoint list', growth: 'growth',
+  voice_speak: 'voice_speak 测试台词',
 }
 test('every ordinary command executes without the optional intelligent integrations', async () => {
   assert.deepEqual(CLI_VERBS.filter(v => !EXTENDED_PLAYER_COMMANDS.has(v.id)).map(v => v.id).sort(), Object.keys(ordinaryCases).sort())

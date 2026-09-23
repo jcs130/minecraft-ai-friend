@@ -45,6 +45,9 @@ export interface PlayerCommandPorts {
   getCultivationCooldowns(): Map<string, number>
   claimStaff?(actor: string, recordedAt: number, recordingEndedAt: number, slot: number): Promise<PlayerReceipt>
   syncStaffBar?(actor: string, slots: Array<{ slot: number; id: string; name: string; icon: string; chant: string }>): Promise<PlayerReceipt>
+  /** Voice sidecar: resolve the actor UUID and queue a godvoice TTS job.
+   * Missing integration means speech is unavailable — never a fake success. */
+  voiceSpeak?: (actor: string, text: string, voice: string) => PlayerReceipt
   /** Original chat/prayer/offering/guard integrations. Ordinary commands never
    * call this optional port, and missing integration is explicitly unavailable. */
   extendedCommand?: PlayerCommandHandler

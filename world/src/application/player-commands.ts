@@ -526,51 +526,26 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         return
       }
       case 'voice_speak': {
-        // 语音说话（2026-09-23 造物主令）：不走红区 RCON ✗ 走 godvoice 文件队列 ✓
-        // 语音经 SVC 近大远小 ✓ 头顶文字泡泡（text_display）✓ 可选嗓音和语气
+        // 语音说话（2026-09-23）：走注入的 voiceSpeak 口 —— 世界侧解析 UUID 并写
+        // godvoice 的 text-queue。应用层保持零文件/零 Bot 依赖（测试强制）。
         const all = cmd.args.join(' ').trim()
-        if (!all || all.length < 2) { reply(`[CLI] 用法：cli voice_speak <要说的话> [voice=嗓音] [tone=语气]`); return }
-        // 解析可选参数
-        let text = all, voice = '', tone = 'neutral'
+        if (!all || all.length < 2) { fail('invalid_params', '用法：cli voice_speak <要说的话> [voice=嗓音] [tone=语气]'); return }
+        let text = all, voice = 'kirito', tone = 'neutral'
         const vm = all.match(/\s+voice=(\S+)/); if (vm) { voice = vm[1]; text = text.replace(vm[0], '') }
         const tm = all.match(/\s+tone=(\S+)/); if (tm) { tone = tm[1]; text = text.replace(tm[0], '') }
         text = text.trim()
-        if (!text || text.length > 160) { reply(`[CLI] 说话内容 2-160 字。`); return }
-        if (voice && !/^[a-z_]{2,20}$/.test(voice)) { reply(`[CLI] 嗓音只认 kirito/naruto/goddess/villager。`); return }
-        if (!['neutral', 'happy', 'sad', 'urgent', 'gentle'].includes(tone)) { reply(`[CLI] 语气：neutral/happy/sad/urgent/gentle。`); return }
-        // 写入 godvoice 队列（文件操作 ✗ 不走 RCON ✓）
-        try {
-          // Write to text-queue (the watcher's polling directory)
-          // entity must be a UUID string (the mod parses it with UUID.fromString)
-          const login = resolveLogin(subject)
-          const uuidRaw = await rcon.send(`data get entity ${login} UUID`).catch(() => '')
-          // Parse "[I; a, b, c, d]" format from Minecraft's UUID output
-          const uuidMatch = uuidRaw.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/)
-          let entityUuid = ''
-          if (uuidMatch) {
-            const parts = uuidMatch.slice(1).map(Number)
-            const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
-            entityUuid = `${hex(parts[0])}-${hex(parts[1]).slice(0, 4)}-${hex(parts[1]).slice(4)}-${hex(parts[2]).slice(0, 4)}-${hex(parts[2]).slice(4)}${hex(parts[3])}`
-          }
-          if (!entityUuid) {
-            if (cmd.json) jsonReply({ ok: false, code: 'voice_uuid_unresolved' })
-            else reply(`[语音] 无法解析你的 UUID，请稍后再试。`)
-            return
-          }
-          const speechId = `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-          const job = { id: speechId, entity: entityUuid || login, text, voice: voice || 'kirito' }
-          const fs = await import('node:fs')
-          const qdir = process.env.GV_BASE ? `${process.env.GV_BASE}/text-queue` : '/godvoice/text-queue'
-          fs.writeFileSync(`${qdir}/${speechId}.json`, JSON.stringify(job))
-          worlddb.chronicleRecord('voice_speak', subject, { text: text.slice(0, 60), voice: voice || 'default' })
-          if (cmd.json) jsonReply({ ok: true, code: 'voice_queued', speechId, voice: voice || 'default', tone })
-          else reply(`[语音] 已提交说话（嗓音：${voice || '默认'}，语气：${tone}）。装了语音模组的玩家在 16 格内可听到。`)
-        } catch (e) {
-          if (cmd.json) jsonReply({ ok: false, code: 'voice_queue_error', summary: String(e).slice(0, 120) })
-          else reply(`[语音] 提交失败：${String(e).slice(0, 80)}`)
-        }
+        if (!text || text.length > 160) { fail('invalid_params', '说话内容 2-160 字。'); return }
+        if (!['kirito', 'naruto', 'goddess', 'villager'].includes(voice)) { fail('invalid_params', '嗓音：kirito/naruto/goddess/villager。'); return }
+        if (!['neutral', 'happy', 'sad', 'urgent', 'gentle'].includes(tone)) { fail('invalid_params', '语气：neutral/happy/sad/urgent/gentle。'); return }
+        if (!deps.voiceSpeak) { fail('voice_unavailable', '语音服务暂不可用。'); return }
+        const receipt = deps.voiceSpeak(subject, text, voice)
+        if (receipt.ok) worlddb.chronicleRecord('voice_speak', subject, { text: text.slice(0, 60), voice, tone })
+        if (cmd.json) jsonReply({ ...receipt, tone })
+        else if (receipt.ok) reply(`[语音] 已提交（嗓音 ${voice}）。装了语音模组的玩家在 16 格内能听到。`)
+        else reply(`[语音] ${String(receipt.summary ?? receipt.code ?? '提交失败')}`)
         return
       }
+
       default:
         reply(`[CLI] 未知命令「${cmd.verb}」。/cli commands 看全部。`)
     }
