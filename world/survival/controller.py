@@ -2257,11 +2257,14 @@ class Controller:
                                     key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
                     if rfile.name in self._lesson_seen:
                         continue
-                    self._lesson_seen.add(rfile.name)
                     try:
                         receipt = json.loads(rfile.read_text(encoding='utf-8'))
                     except (json.JSONDecodeError, OSError):
                         continue
+                    status = receipt.get('status', '')
+                    if status not in ('failed', 'rejected'):
+                        continue  # Non-terminal — come back on next tick
+                    self._lesson_seen.add(rfile.name)  # Only mark after terminal read
                     status = receipt.get('status', '')
                     if status in ('failed', 'rejected'):
                         tool = receipt.get('tool', 'unknown')
