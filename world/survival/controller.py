@@ -381,6 +381,7 @@ class Controller:
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
         self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
         self.pending_patrol = None  # Patrol candidate: Jev decides, whisper executes.
+        self._lesson_lib = None     # Cross-session lesson library (lazy init).
         self.pending_social = None
         self.pending_route = None
         self.pending_motor = None
@@ -819,7 +820,14 @@ class Controller:
         """Wake information, not a fresh reconstruction of the whole world."""
         if self.settings.get('brainProtocol') == 1:
             from embodiment import wake
-            return wake(self, body, control, turn_id, message, replies)
+            context = wake(self, body, control, turn_id, message, replies)
+            # Inject relevant lessons into the wake context (cross-session memory)
+            if isinstance(context, dict):
+                lesson_text = self.lesson_inject(
+                    f"{context.get('mission', '')} {json.dumps(context.get('body', {}), ensure_ascii=False)[:200]}")
+                if lesson_text:
+                    context['verifiedLessons'] = lesson_text
+            return context
         from perception import prioritize_events
         events = prioritize_events(self.awareness.get('events', []))[:6]
         bounded_events, size = [], 0
@@ -1734,6 +1742,8 @@ class Controller:
             self.tick_routine_shadow(body, control, now)
             # 巡检：用 Jev 快脑裁决巡检候选（填坑/给面包/技能提示/紧急帮助）
             self.tick_patrol(body, control, now)
+            # 教训采集：从失败事件中自动学习（跨会话持久化）
+            self.tick_lesson_capture(body, now)
             return
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
             from native_tools import require_ready
@@ -2219,6 +2229,47 @@ class Controller:
 
     ROUTINE_SHADOW_COOLDOWN = 30.0
     PATROL_COOLDOWN = 600.0  # 10 分钟一轮巡检
+
+    @property
+    def lesson_lib(self):
+        """Lazy-init cross-session lesson library."""
+        if self._lesson_lib is None:
+            from lesson_library import LessonLibrary
+            self._lesson_lib = LessonLibrary(self.root / 'lessons')
+        return self._lesson_lib
+
+    def tick_lesson_capture(self, body, now):
+        """Capture failure events as lessons. Called on failure/danger events."""
+        try:
+            # Capture from last action result if it was a failure
+            last = self.data.get('lastAction') or {}
+            if last.get('receiptStatus') in ('failed', 'rejected', 'unknown'):
+                event = {'type': f'{last.get("tool", "unknown")}_{last.get("receiptStatus")}',
+                         'target': str(last.get('args', {}).get('x', '?')),
+                         'dimension': self.settings.get('dimension', 'overworld'),
+                         'action': last.get('tool', '?')}
+                ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                if ok:
+                    self.record('lesson_captured', lessonId=lid, source=reason)
+
+            # Capture from environment signals (doom_loop, no_output)
+            env = self.data.get('environmentSignals') or []
+            for sig in env[-3:]:
+                if sig.get('kind') in ('no_output', 'repeated_rejection', 'doom_loop'):
+                    event = {'type': sig['kind'], 'action': sig.get('tool', '?'),
+                             'repeats': sig.get('repeats', 3)}
+                    ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                    if ok:
+                        self.record('lesson_captured', lessonId=lid, source=reason)
+        except Exception:
+            pass  # Lesson capture must never block the main loop
+
+    def lesson_inject(self, context_text):
+        """Get relevant lessons as prompt-injectable text."""
+        try:
+            return self.lesson_lib.inject(context_text, limit=3)
+        except Exception:
+            return ''
 
     def tick_patrol(self, body, control, now):
         """Patrol: generate world-level candidates, ask Jev, execute the chosen action.
