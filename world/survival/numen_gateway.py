@@ -19,7 +19,9 @@ import uuid
 
 TOOLS = ('goto', 'mine', 'craft', 'eat', 'equip_item', 'game_cast', 'game_learn',
          'place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade',
-         'guild_claim', 'guild_release', 'guild_deliver', 'interact_at', 'voice_speak')
+         'guild_claim', 'guild_release', 'guild_deliver', 'interact_at')
+# voice_speak removed from TOOLS: it's a speech sidecar action (like `speak`),
+# not a body action — it writes to the godvoice text-queue, not the Numen mod.
 DIRECT_ACTIONS = ('drop_items',)  # Excluded from the existing executable-skill kernel.
 WORLD_ACTIONS = ('place_block', 'farm', 'open_container', 'transfer_items', 'close_container', 'sleep', 'trade', 'interact_at')
 GUILD_ACTIONS = ('guild_claim', 'guild_release', 'guild_deliver')
@@ -698,18 +700,6 @@ class NumenGateway:
         if tool in ('game_cast', 'game_learn'):
             from game_skills import validate_game_action
             validate_game_action(tool, args)
-            return
-        if tool == 'voice_speak':
-            # 2026-09-23 造物主令：voice_speak 原生动作（不走 /mycli ✓ 走语音管线）
-            # 参数：text（必填 1-160 字）、voice（可选 嗓音角色名）、tone（可选 语气）
-            if not isinstance(args.get('text'), str) or not 1 <= len(args['text'].strip()) <= 160:
-                raise GatewayError('voice_speak_text_invalid')
-            if 'voice' in args and (not isinstance(args['voice'], str)
-                                    or not args['voice'].replace('_', '').replace('-', '').isalnum()
-                                    or not 1 <= len(args['voice']) <= 32):
-                raise GatewayError('voice_speak_voice_invalid')
-            if 'tone' in args and args['tone'] not in ('neutral', 'happy', 'sad', 'urgent', 'gentle'):
-                raise GatewayError('voice_speak_tone_invalid')
             return
         if tool == 'goto':
             if (not {'x', 'z'} <= set(args) <= {'x', 'y', 'z'}
