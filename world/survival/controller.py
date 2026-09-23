@@ -380,6 +380,7 @@ class Controller:
         self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
         self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
+        self.pending_patrol = None  # Patrol candidate: Jev decides, whisper executes.
         self.pending_social = None
         self.pending_route = None
         self.pending_motor = None
@@ -1731,6 +1732,8 @@ class Controller:
             # 平静期影子评估：本地生成日常行为候选交 Jev 选择，只记录不执行
             # （校准通过前不接管任何行为；见 docs/JEV-FAST-LOOP-DESIGN.md 第二阶段）
             self.tick_routine_shadow(body, control, now)
+            # 巡检：用 Jev 快脑裁决巡检候选（填坑/给面包/技能提示/紧急帮助）
+            self.tick_patrol(body, control, now)
             return
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
             from native_tools import require_ready
@@ -2215,6 +2218,134 @@ class Controller:
             return
 
     ROUTINE_SHADOW_COOLDOWN = 30.0
+    PATROL_COOLDOWN = 600.0  # 10 分钟一轮巡检
+
+    def tick_patrol(self, body, control, now):
+        """Patrol: generate world-level candidates, ask Jev, execute the chosen action.
+
+        Uses patrol_nudge.build_patrol_candidates() for local candidate generation
+        (zero LLM), then Jev for fast classification (<300ms). Simple actions
+        (whisper nudges) execute directly via the goddess whisper channel;
+        complex cases escalate to mc-herald (LLM).
+
+        The patrol data comes from the controller's own state: deaths directory,
+        body status, and skill usage from the episodes ledger.
+        """
+        if not self.settings.get('patrolEnabled'):
+            return
+        if self.pending_patrol is not None:
+            result = self.policy_worker.poll(self.pending_patrol)
+            if result is None:
+                return
+            self.pending_patrol = None
+            summary = {'at': now, 'patrolId': getattr(self, '_patrol_last_id', None),
+                       'choice': result.get('choice'), 'confidence': result.get('confidence'),
+                       'code': result.get('code'), 'model': result.get('model'),
+                       'latencyMs': result.get('latencyMs'),
+                       'action': getattr(self, '_patrol_last_action', None)}
+            try:
+                with (self.root / 'patrol-log.jsonl').open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps(summary, ensure_ascii=False) + '\n')
+            except OSError:
+                pass
+            self.record('patrol_choice', **{k: v for k, v in summary.items() if k != 'action'})
+            # Execute if Jev was confident enough
+            if result.get('code') == 'policy_escalated' or result.get('confidence', 0) < 0.75:
+                return  # Not confident — skip this round
+            action = getattr(self, '_patrol_last_action', None)
+            if not isinstance(action, dict):
+                return
+            act_type = action.get('type', '')
+            if act_type == 'whisper':
+                target = action.get('target', '')
+                text = action.get('text', '')
+                if target and text:
+                    self._send_patrol_whisper(target, text)
+            return
+        if now < self.data.get('nextPatrolAt', 0):
+            return
+        from patrol_nudge import build_patrol_candidates, get_skill_usage_from_chronicle
+        # Gather patrol data from local state
+        deaths = self._patrol_deaths()
+        if deaths is None:
+            deaths = []
+        skill_usage = self._patrol_skill_usage()
+        # Body as sole player proxy (survivor's own state for now)
+        players = [{'name': self.settings.get('bodyName', 'Kirito'),
+                    'online': body.get('ok') is True,
+                    'hp': body.get('hp'), 'hunger': body.get('hunger'),
+                    'position': body.get('position')}]
+        proposal = build_patrol_candidates(players, deaths, [], skill_usage)
+        if proposal is None:
+            return
+        # Find the action for the chosen candidate (Jev picks the ID)
+        candidates_by_id = {c['id']: c for c in proposal['candidates']}
+        token = self.policy_worker.submit(proposal, body, 'patrol', None)
+        if token is None:
+            return  # Inference slot busy — let it go this round
+        self.pending_patrol = token
+        self._patrol_last_id = 'patrol-' + uuid.uuid4().hex[:12]
+        # Store candidate actions for later execution
+        self._patrol_candidates = candidates_by_id
+        self._patrol_last_action = None  # Will be set after Jev decides
+        self.data['nextPatrolAt'] = now + self.PATROL_COOLDOWN
+
+    def _patrol_deaths(self):
+        """Read recent death records for patrol analysis."""
+        import glob
+        deaths_dir = self.root / 'deaths'
+        if not deaths_dir.exists():
+            return []
+        records = []
+        for f in sorted(deaths_dir.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)[:10]:
+            try:
+                records.append(json.loads(f.read_text(encoding='utf-8')))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return records
+
+    def _patrol_skill_usage(self):
+        """Approximate skill usage from recent episodes."""
+        usage = {}
+        try:
+            episodes = self.data.get('episodes') or []
+            for ep in episodes:
+                tool = ep.get('action') or ep.get('kind', '')
+                ts = ep.get('at', '')
+                if isinstance(ts, str) and tool:
+                    import datetime
+                    try:
+                        dt = datetime.datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        ts_epoch = dt.timestamp()
+                    except (ValueError, TypeError):
+                        continue
+                    body_name = self.settings.get('bodyName', 'Kirito')
+                    usage.setdefault(body_name, {})
+                    usage[body_name][tool] = max(usage[body_name].get(tool, 0), ts_epoch)
+        except Exception:
+            pass
+        return usage
+
+    def _send_patrol_whisper(self, target, text):
+        """Send a whisper message via the goddess channel (godvoice queue)."""
+        try:
+            import time as _time
+            speech_id = f'patrol-{uuid.uuid4().hex[:8]}'
+            job = {'schema': 2, 'id': speech_id,
+                   'entity': self.settings.get('bodyUuid', ''),
+                   'actor': self.settings.get('bodyName', 'Kirito'),
+                   'text': text[:160], 'voiceId': 'villager', 'voiceVersion': 1,
+                   'generation': 1, 'dimension': self.settings.get('dimension', 'minecraft:overworld'),
+                   'createdAt': int(_time.time() * 1000),
+                   'expiresAt': int((_time.time() + 60) * 1000),
+                   'turnId': f'patrol-{speech_id}'}
+            whisper_dir = Path('/godvoice/speech-requests')
+            if whisper_dir.exists():
+                (whisper_dir / f'{speech_id}.json').write_text(
+                    json.dumps(job, ensure_ascii=False), encoding='utf-8')
+                self.record('patrol_whisper_sent', target=target, text=text[:60])
+        except Exception as error:
+            self.record('patrol_whisper_failed', errorType=type(error).__name__)
 
     def tick_routine_shadow(self, body, control, now):
         """Shadow-mode routine candidates: Jev is asked, the answer is recorded, nothing executes.
