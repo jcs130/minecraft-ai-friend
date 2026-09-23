@@ -159,11 +159,24 @@ def probe_services():
     return {"ok": all(check["ok"] for check in checks.values()), "checks": checks}
 
 
+def probe_agent_observatory():
+    """Load the observatory probe from the project tools dir.
+
+    Split out (2026-09-23) so tests can patch it: probe_panel_smoke used to
+    load and execute it inline, which made the panel smoke gate untestable
+    without the real file present in a temporary project root.
+    """
+    spec = importlib.util.spec_from_file_location('agent_observatory_health',
+                                                  PROJECT / 'tools/agent_observatory_health.py')
+    if spec is None or spec.loader is None:
+        return {'ok': False, 'code': 'observatory_probe_missing'}
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.probe()
+
+
 def probe_panel_smoke():
-    observatory_spec = importlib.util.spec_from_file_location('agent_observatory_health', PROJECT / 'tools/agent_observatory_health.py')
-    observatory_module = importlib.util.module_from_spec(observatory_spec)
-    observatory_spec.loader.exec_module(observatory_module)
-    agent_observatory = observatory_module.probe()
+    agent_observatory = probe_agent_observatory()
     runtime = probe_panel_http()
     management = probe_management()
     visual = probe_recorded_behavior('admin-panel-smoke.json', (

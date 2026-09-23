@@ -382,7 +382,7 @@ class Controller:
         self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
         self.pending_patrol = None  # Patrol candidate: Jev decides, whisper executes.
         self._lesson_lib = None     # Cross-session lesson library (lazy init).
-        self._lesson_seen = set()   # Receipt filenames already processed (dedup).
+        self._lesson_seen = None    # Lazy: persisted dedup sets (receipts + signals).
         self.pending_social = None
         self.pending_route = None
         self.pending_motor = None
@@ -2246,16 +2246,51 @@ class Controller:
             self._lesson_lib = LessonLibrary(self.root / 'lessons')
         return self._lesson_lib
 
-    def tick_lesson_capture(self, body, now):
-        """Capture failure events as lessons. Reads terminal action receipts, deduped by filename."""
+    def _lesson_seen_path(self):
+        return self.root / 'lesson-seen.json'
+
+    def _load_lesson_seen(self):
+        """Persisted dedup sets (receipts + env signals) so a restart cannot re-capture."""
+        if self._lesson_seen is not None:
+            return self._lesson_seen
+        self._lesson_seen = {'receipts': [], 'signals': []}
         try:
+            data = json.loads(self._lesson_seen_path().read_text(encoding='utf-8'))
+            if isinstance(data, dict):
+                self._lesson_seen = {
+                    'receipts': [str(x) for x in (data.get('receipts') or [])][-500:],
+                    'signals': [str(x) for x in (data.get('signals') or [])][-500:],
+                }
+        except (OSError, json.JSONDecodeError):
+            pass
+        return self._lesson_seen
+
+    def _save_lesson_seen(self):
+        seen = self._lesson_seen or {'receipts': [], 'signals': []}
+        seen['receipts'] = seen['receipts'][-500:]
+        seen['signals'] = seen['signals'][-500:]
+        try:
+            self._lesson_seen_path().write_text(
+                json.dumps(seen, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass
+
+    def tick_lesson_capture(self, body, now):
+        """Capture failures as lessons.
+
+        Dedup is persisted to lesson-seen.json: a controller restart must not
+        re-capture the same terminal receipt, and the same environment signal
+        must only be captured once (keyed by kind|tool|repeats). Receipts are
+        read newest-first (10 per tick) and only marked once terminal, so an
+        unknown -> failed update is picked up on a later tick.
+        """
+        try:
+            seen = self._load_lesson_seen()
             receipts_dir = self.root / 'action-receipts'
             if receipts_dir.exists():
-                if len(self._lesson_seen) > 500:
-                    self._lesson_seen.clear()
                 for rfile in sorted(receipts_dir.glob('*.json'),
-                                    key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
-                    if rfile.name in self._lesson_seen:
+                                    key=lambda p: p.stat().st_mtime, reverse=True)[:10]:
+                    if rfile.name in seen['receipts']:
                         continue
                     try:
                         receipt = json.loads(rfile.read_text(encoding='utf-8'))
@@ -2263,31 +2298,34 @@ class Controller:
                         continue
                     status = receipt.get('status', '')
                     if status not in ('failed', 'rejected'):
-                        continue  # Non-terminal — come back on next tick
-                    self._lesson_seen.add(rfile.name)  # Only mark after terminal read
-                    status = receipt.get('status', '')
-                    if status in ('failed', 'rejected'):
-                        tool = receipt.get('tool', 'unknown')
-                        args = receipt.get('args', {})
-                        event = {
-                            'type': f'{tool}_{status}',
-                            'target': str(args.get('x', '?')),
-                            'dimension': self.settings.get('dimension', 'minecraft:overworld'),
-                            'action': tool,
-                            'position': args if isinstance(args, dict) else {},
-                        }
-                        ok, reason, lid = self.lesson_lib.analyze_and_add(event)
-                        if ok:
-                            self.record('lesson_captured', lessonId=lid, source=reason)
-            # Environment signals
-            env = self.data.get('environmentSignals') or []
-            for sig in env[-3:]:
-                if sig.get('kind') in ('no_output', 'repeated_rejection', 'doom_loop'):
-                    event = {'type': sig['kind'], 'action': sig.get('tool', '?'),
-                             'repeats': sig.get('repeats', 3)}
+                        continue  # Non-terminal: revisit on a later tick
+                    seen['receipts'].append(rfile.name)
+                    args = receipt.get('args', {})
+                    tool = receipt.get('tool', 'unknown')
+                    event = {
+                        'type': f'{tool}_{status}',
+                        'target': str(args.get('x', '?')),
+                        'dimension': self.settings.get('dimension', 'minecraft:overworld'),
+                        'action': tool,
+                        'position': args if isinstance(args, dict) else {},
+                    }
                     ok, reason, lid = self.lesson_lib.analyze_and_add(event)
                     if ok:
                         self.record('lesson_captured', lessonId=lid, source=reason)
+            env = self.data.get('environmentSignals') or []
+            for sig in env[-5:]:
+                kind = sig.get('kind')
+                if kind not in ('no_output', 'repeated_rejection', 'doom_loop'):
+                    continue
+                key = f"{kind}|{sig.get('tool', '?')}|{sig.get('repeats', 3)}"
+                if key in seen['signals']:
+                    continue
+                seen['signals'].append(key)
+                event = {'type': kind, 'action': sig.get('tool', '?'), 'repeats': sig.get('repeats', 3)}
+                ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                if ok:
+                    self.record('lesson_captured', lessonId=lid, source=reason)
+            self._save_lesson_seen()
         except Exception:
             pass
 

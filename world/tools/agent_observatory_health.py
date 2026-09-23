@@ -22,7 +22,7 @@ def check(name, ok, detail=''):
 
 def probe():
     results = []
-    
+
     # 1. Panel is reachable
     try:
         with urllib.request.urlopen(f'{PANEL_BASE}/healthz', timeout=5) as r:

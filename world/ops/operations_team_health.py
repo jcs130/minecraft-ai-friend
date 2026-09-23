@@ -122,7 +122,9 @@ def main():
     from qwenpaw.drivers.storage import load_card
     from upgrade_qwenpaw_runtime import driver_cards
     from qwenpaw.agents.skill_system.workspace_service import SkillService
-    assert importlib.metadata.version('qwenpaw')=='2.2.0'
+    # 2026-09-23：运行时已升级到 2.2.1；断言改为接受 2.2.x（同一技能系统契约），
+    # 避免每次上游小版本升级都把这条健康检查打红。
+    assert importlib.metadata.version('qwenpaw').startswith('2.2.')
     guard_verified = validate_guard('/state/work', 'operations')
     skill_map=json.loads(Path('/ops/operations-role-skills.json').read_text())['roles']
     def get(route, role=None):

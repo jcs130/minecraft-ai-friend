@@ -181,7 +181,8 @@ class VoiceBoundaryHealth(unittest.TestCase):
                 patch.object(health, 'probe_chanting_staff', return_value={'ok': True}), \
                 patch.object(health, 'probe_voice_recording', return_value={'ok': True}), \
                 patch.object(health, 'probe_skillbar_editor', return_value={'ok': True}), \
-                patch.object(health, 'probe_chanting_client', return_value={'ok': True}):
+                patch.object(health, 'probe_chanting_client', return_value={'ok': True}), \
+                patch.object(health, 'probe_agent_observatory', return_value={'ok': True}):
             self.assertTrue(health.probe_panel_smoke()['ok'])
             self.marker.write_text('temporary QA owner', encoding='utf-8')
             result = health.probe_panel_smoke()
