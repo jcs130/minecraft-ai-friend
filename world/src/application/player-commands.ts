@@ -546,7 +546,7 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
           const uuidRaw = await rcon.send(`data get entity ${login} UUID`).catch(() => '')
           // Parse "[I; a, b, c, d]" format from Minecraft's UUID output
           const uuidMatch = uuidRaw.match(/\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/)
-          const entityUuid = ''
+          let entityUuid = ''
           if (uuidMatch) {
             const parts = uuidMatch.slice(1).map(Number)
             const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
