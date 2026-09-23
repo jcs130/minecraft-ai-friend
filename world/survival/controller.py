@@ -382,6 +382,7 @@ class Controller:
         self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
         self.pending_patrol = None  # Patrol candidate: Jev decides, whisper executes.
         self._lesson_lib = None     # Cross-session lesson library (lazy init).
+        self._lesson_seen = set()   # Receipt filenames already processed (dedup).
         self.pending_social = None
         self.pending_route = None
         self.pending_motor = None
@@ -2246,13 +2247,17 @@ class Controller:
         return self._lesson_lib
 
     def tick_lesson_capture(self, body, now):
-        """Capture failure events as lessons. Reads terminal action receipts."""
+        """Capture failure events as lessons. Reads terminal action receipts, deduped by filename."""
         try:
-            # Read from action-receipts (the authoritative final status)
             receipts_dir = self.root / 'action-receipts'
             if receipts_dir.exists():
+                if len(self._lesson_seen) > 500:
+                    self._lesson_seen.clear()
                 for rfile in sorted(receipts_dir.glob('*.json'),
                                     key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
+                    if rfile.name in self._lesson_seen:
+                        continue
+                    self._lesson_seen.add(rfile.name)
                     try:
                         receipt = json.loads(rfile.read_text(encoding='utf-8'))
                     except (json.JSONDecodeError, OSError):
