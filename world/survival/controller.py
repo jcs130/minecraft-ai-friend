@@ -823,8 +823,16 @@ class Controller:
             context = wake(self, body, control, turn_id, message, replies)
             # Inject relevant lessons into the wake context (cross-session memory)
             if isinstance(context, dict):
-                lesson_text = self.lesson_inject(
-                    f"{context.get('mission', '')} {json.dumps(context.get('body', {}), ensure_ascii=False)[:200]}")
+                # Build context text from BOTH self fields and body state (P2-5 fix)
+                ctx_parts = [str(context.get('mission', ''))]
+                body = context.get('body', {})
+                if isinstance(body, dict):
+                    ctx_parts.append(f"hp {body.get('hp', '?')} hunger {body.get('hunger', '?')}")
+                    pos = body.get('position', {})
+                    if isinstance(pos, dict):
+                        ctx_parts.append(f"position {pos.get('x', '?')} {pos.get('z', '?')}")
+                ctx_parts.append(str(context.get('goal', '')))
+                lesson_text = self.lesson_inject(' '.join(ctx_parts))
                 if lesson_text:
                     context['verifiedLessons'] = lesson_text
             return context
@@ -1735,15 +1743,14 @@ class Controller:
                    or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
                    or self.meaningful_displacement(body))
         review = self.next_review(control)
+        # 教训采集：从失败事件中自动学习（跨会话持久化·每个 tick 都跑）
+        self.tick_lesson_capture(body, now)
         if not changed and requested_review is None and (review is None or now < review):
             self.data['status'] = 'observing' if self.autonomy(control) else 'idle'
             # 平静期影子评估：本地生成日常行为候选交 Jev 选择，只记录不执行
-            # （校准通过前不接管任何行为；见 docs/JEV-FAST-LOOP-DESIGN.md 第二阶段）
             self.tick_routine_shadow(body, control, now)
             # 巡检：用 Jev 快脑裁决巡检候选（填坑/给面包/技能提示/紧急帮助）
             self.tick_patrol(body, control, now)
-            # 教训采集：从失败事件中自动学习（跨会话持久化）
-            self.tick_lesson_capture(body, now)
             return
         if os.environ.get('SURVIVOR_QWEN_MODE') == 'external':
             from native_tools import require_ready
@@ -2239,20 +2246,21 @@ class Controller:
         return self._lesson_lib
 
     def tick_lesson_capture(self, body, now):
-        """Capture failure events as lessons. Called on failure/danger events."""
+        """Capture failure events as lessons. Runs every tick (not just calm)."""
         try:
-            # Capture from last action result if it was a failure
-            last = self.data.get('lastAction') or {}
-            if last.get('receiptStatus') in ('failed', 'rejected', 'unknown'):
-                event = {'type': f'{last.get("tool", "unknown")}_{last.get("receiptStatus")}',
-                         'target': str(last.get('args', {}).get('x', '?')),
-                         'dimension': self.settings.get('dimension', 'overworld'),
-                         'action': last.get('tool', '?')}
-                ok, reason, lid = self.lesson_lib.analyze_and_add(event)
-                if ok:
-                    self.record('lesson_captured', lessonId=lid, source=reason)
-
-            # Capture from environment signals (doom_loop, no_output)
+            # Read from lastDecision.actions (the actual action record)
+            ld = self.data.get('lastDecision') or {}
+            for act in (ld.get('actions') or [])[-3:]:
+                if act.get('receiptStatus') in ('failed', 'rejected', 'unknown'):
+                    event = {'type': f'{act.get("tool", "unknown")}_{act.get("receiptStatus")}',
+                             'target': str(act.get('args', {}).get('x', '?')),
+                             'dimension': self.settings.get('dimension', 'minecraft:overworld'),
+                             'action': act.get('tool', '?'),
+                             'position': act.get('args', {}) if isinstance(act.get('args'), dict) else {}}
+                    ok, reason, lid = self.lesson_lib.analyze_and_add(event)
+                    if ok:
+                        self.record('lesson_captured', lessonId=lid, source=reason)
+            # Environment signals
             env = self.data.get('environmentSignals') or []
             for sig in env[-3:]:
                 if sig.get('kind') in ('no_output', 'repeated_rejection', 'doom_loop'):
@@ -2300,10 +2308,8 @@ class Controller:
             except OSError:
                 pass
             self.record('patrol_choice', **{k: v for k, v in summary.items() if k != 'action'})
-            # Execute if Jev was confident enough
-            if result.get('code') == 'policy_escalated' or result.get('confidence', 0) < 0.75:
-                return  # Not confident — skip this round
-            # Map the chosen candidate ID back to a patrol action
+            # Patrol is a classifier, not a body action — accept any confidence.
+            # The chosen ID maps to a whisper/escalate action; no body risk.
             chosen_id = result.get('choice', '')
             from patrol_nudge import get_patrol_action
             action = get_patrol_action(chosen_id)

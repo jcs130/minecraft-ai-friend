@@ -540,13 +540,11 @@ export function createPlayerCommands(deps: PlayerCommandPorts) {
         if (!['neutral', 'happy', 'sad', 'urgent', 'gentle'].includes(tone)) { reply(`[CLI] 语气：neutral/happy/sad/urgent/gentle。`); return }
         // 写入 godvoice 队列（文件操作 ✗ 不走 RCON ✓）
         try {
-          const speechId = `speech-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-          const job = { schema: 2, id: speechId, entity: resolveLogin(subject),
-            actor: subject, text, voiceId: voice || 'kirito', voiceVersion: 1, generation: 1,
-            dimension: 'minecraft:overworld', createdAt: Date.now(), expiresAt: Date.now() + 60_000,
-            turnId: `cli-${speechId}` }
+          // Write to text-queue (the watcher's polling directory, NOT speech-requests)
+          const speechId = `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+          const job = { id: speechId, entity: resolveLogin(subject), text, voice: voice || 'kirito' }
           const fs = await import('node:fs')
-          const qdir = process.env.GV_BASE ? `${process.env.GV_BASE}/speech-requests` : '/godvoice/speech-requests'
+          const qdir = process.env.GV_BASE ? `${process.env.GV_BASE}/text-queue` : '/godvoice/text-queue'
           fs.writeFileSync(`${qdir}/${speechId}.json`, JSON.stringify(job))
           worlddb.chronicleRecord('voice_speak', subject, { text: text.slice(0, 60), voice: voice || 'default' })
           if (cmd.json) jsonReply({ ok: true, code: 'voice_queued', speechId, voice: voice || 'default', tone })

@@ -361,41 +361,42 @@ def make_server(gateway=None, skill_tools=None, http=False):
     @server.tool()
     def voice_speak(turn_id: str, text: str, voice: str = "", tone: str = "neutral") -> dict:
         """以指定嗓音和语气说话（语音+头顶文字泡泡）。voice 选嗓音（kirito/naruto/goddess/villager，留空用默认），tone 选语气（neutral/happy/sad/urgent/gentle）。第三方Agent也可通过此工具说话。"""
-        # voice_speak is a speech sidecar (like `speak`), NOT a body action.
-        # It writes directly to the godvoice text-queue (the watcher's polling
-        # directory), bypassing the Numen body action pipeline entirely.
         def submit(lease):
             import time as _time
             import uuid as _uuid
             import os as _os
             from pathlib import Path as _Path
             whisper_id = f'vs-{_uuid.uuid4().hex[:8]}'
-            queue_dir = _Path(_os.environ.get('GV_BASE', '/godvoice')) / 'text-queue'
-            if not queue_dir.exists():
-                return {'ok': False, 'code': 'voice_queue_unavailable',
-                        'notice': 'godvoice text-queue not mounted; cannot speak.'}
-            # Validate
             text_clean = text.strip()[:160]
             if not text_clean or len(text_clean) < 2:
-                return {'ok': False, 'code': 'voice_text_invalid',
-                        'notice': 'Text must be 2-160 characters.'}
+                return {'ok': False, 'code': 'voice_text_invalid'}
             voice_clean = voice.strip() if voice else 'kirito'
             if voice_clean not in ('kirito', 'naruto', 'goddess', 'villager'):
-                return {'ok': False, 'code': 'voice_voice_invalid',
-                        'notice': f'voice must be kirito/naruto/goddess/villager, got: {voice_clean}'}
-            if tone not in ('neutral', 'happy', 'sad', 'urgent', 'gentle'):
-                return {'ok': False, 'code': 'voice_tone_invalid',
-                        'notice': f'tone must be neutral/happy/sad/urgent/gentle, got: {tone}'}
-            # Write to text-queue (the god-voice-watcher's polling directory)
+                return {'ok': False, 'code': 'voice_voice_invalid'}
+            # Write to text-queue (watcher's polling directory)
+            queue_dir = _Path(_os.environ.get('GV_BASE', '/godvoice')) / 'text-queue'
+            if not queue_dir.exists():
+                return {'ok': False, 'code': 'voice_queue_unavailable'}
             job = {'id': whisper_id,
                    'entity': gateway._settings().get('bodyUuid', ''),
                    'text': text_clean,
-                   'voice': voice_clean}
+                   'voice': voice_clean,
+                   'tone': tone}  # tone passes through to TTS if supported
             (queue_dir / f'{whisper_id}.json').write_text(
                 json.dumps(job, ensure_ascii=False), encoding='utf-8')
+            # Also write a speech-receipt for status tracking (SpeechBroker pattern)
+            receipt_dir = _Path(_os.environ.get('GV_BASE', '/godvoice')) / 'speech-receipts'
+            if receipt_dir.exists():
+                receipt = {'schema': 2, 'id': whisper_id,
+                           'entity': gateway._settings().get('bodyUuid', ''),
+                           'generation': 1, 'status': 'queued',
+                           'code': 'voice_queued',
+                           'updatedAt': int(_time.time() * 1000)}
+                (receipt_dir / f'{whisper_id}.json').write_text(
+                    json.dumps(receipt, ensure_ascii=False), encoding='utf-8')
             return {'ok': True, 'code': 'voice_queued', 'id': whisper_id,
                     'voice': voice_clean, 'tone': tone,
-                    'notice': 'Voice queued; plays through SVC with proximity. Text bubble optional via /mycli.'}
+                    'notice': 'Voice queued; plays through SVC. Use speech_status(id) to check playback.'}
         return skill_tools._write(turn_id, submit)
 
     @server.tool()

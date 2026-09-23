@@ -77,7 +77,17 @@ FAILURE_PATTERNS = {
 # ── TF-IDF vectorizer (Neko-style cosine similarity, zero dependencies) ──
 
 def _tokenize(text):
-    return re.findall(r'[a-z_\d]+', text.lower())
+    """Tokenize for both Latin and CJK (Chinese) text."""
+    # Latin words + numbers
+    tokens = re.findall(r'[a-z_\d]+', text.lower())
+    # CJK bigrams (Chinese character pairs — standard for short text)
+    cjk = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text)
+    for i in range(len(cjk) - 1):
+        tokens.append(cjk[i] + cjk[i + 1])
+    # Single CJK chars as fallback for very short text
+    if len(tokens) == 0 and cjk:
+        tokens = cjk
+    return tokens
 
 
 def _build_vocab(texts):
@@ -225,15 +235,22 @@ class LessonLibrary:
 
     def append(self, trigger, risk, fix, source='manual', status='observation',
                spatial=None):
-        """Add lesson. spatial={'kind':'hole','x':-100,'y':64,'z':900} for location-anchored."""
+        """Add lesson. Merges only if BOTH trigger AND spatial location overlap."""
         candidate = {'trigger': trigger.strip(), 'risk': risk.strip(), 'fix': fix.strip()}
         ok, reason = validate_lesson(candidate, self.lessons)
         if not ok:
             return False, reason, None
         for existing in self.lessons:
             if _word_overlap(candidate['trigger'], existing['trigger']) > self.MERGE_THRESHOLD:
-                existing['confidence'] = existing.get('confidence', 1) + 1
-                existing['seen'] = time.time()  # Neko freshness
+                # If both have spatial anchors, only merge if they're close (< 50 blocks)
+                if spatial and existing.get('spatialAnchor'):
+                    ea = existing['spatialAnchor']
+                    dist = math.sqrt((spatial.get('x', 0) - ea.get('x', 0)) ** 2 +
+                                    (spatial.get('z', 0) - ea.get('z', 0)) ** 2)
+                    if dist > 50:
+                        continue  # Too far apart — different locations, don't merge
+                existing['confidence'] = min(existing.get('confidence', 1) + 1, 5)  # Cap at 5
+                existing['seen'] = time.time()
                 if status == 'verified':
                     existing['status'] = 'verified'
                 self._save()
