@@ -72,15 +72,20 @@ def desired_documents(agent, card):
             or card.get('credentials') != {'survivor_env': {'kind': 'static', 'ref': 'env:SURVIVOR_MCP_TOKEN'}}):
         raise ValueError('survivor_native_driver_changed')
     old = client.get('tools')
-    accepted = (set(names), set(names) - {'drop_items'}, set(names) - {'say', 'say_status'},
-                set(names) - {'navigate'})
+    accepted = (set(names), set(names) - {'navigate_plan'}, set(names) - {'drop_items'},
+                set(names) - {'say', 'say_status'}, set(names) - {'navigate'},
+                set(names) - {'navigate', 'navigate_plan', 'say', 'say_status'})
+    card_tools = card.get('config', {}).get('tools')
     if (not isinstance(old, list) or not all(isinstance(name, str) for name in old)
             or len(set(old)) != len(old) or set(old) not in accepted
-            or card.get('config', {}).get('tools') != old):
+            or not isinstance(card_tools, list) or len(set(card_tools)) != len(card_tools)
+            or not (card_tools == old or
+                set(old) == set(names) - {'navigate', 'navigate_plan', 'say', 'say_status'}
+                and set(card_tools) == set(names) - {'navigate_plan'})):
         raise ValueError('survivor_tool_scope_not_known')
     policy = card.get('policy', {})
     rules = policy.get('rules')
-    if policy.get('default_effect') != 'deny' or not isinstance(rules, list) or len(rules) != len(old):
+    if policy.get('default_effect') != 'deny' or not isinstance(rules, list) or len(rules) != len(card_tools):
         raise ValueError('survivor_native_policy_changed')
     rule_names = []
     for rule in rules:
@@ -92,7 +97,7 @@ def desired_documents(agent, card):
                                                                 'subject_type': '*', 'subject_value': '*'})):
             raise ValueError('survivor_native_policy_changed')
         rule_names.append(rule['target']['name'])
-    if len(set(rule_names)) != len(old) or set(rule_names) != set(old):
+    if len(set(rule_names)) != len(card_tools) or set(rule_names) != set(card_tools):
         raise ValueError('survivor_native_policy_scope_changed')
     updated_agent, updated_card = deepcopy(agent), deepcopy(card)
     updated_agent['mcp']['clients'][DRIVER]['tools'] = names
@@ -108,7 +113,7 @@ def desired_documents(agent, card):
     compare_card['policy']['rules'] = card['policy']['rules']
     if compare_agent != agent or compare_card != card or updated_card['policy']['rules'][:len(rules)] != rules:
         raise ValueError('survivor_sync_exceeded_scope')
-    return updated_agent, updated_card, [name for name in names if name not in old]
+    return updated_agent, updated_card, [name for name in names if name not in card_tools]
 
 
 def require_stopped(root, run=subprocess.run):

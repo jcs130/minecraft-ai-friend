@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 
-TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'navigate', 'mine', 'craft', 'lookup_recipe', 'eat', 'equip',
+TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'navigate', 'navigate_plan', 'mine', 'craft', 'lookup_recipe', 'eat', 'equip',
               'skill_catalog', 'skill_read', 'skill_draft', 'skill_test',
               'skill_promote', 'skill_start', 'remember', 'game_skills',
               'game_cast', 'game_learn', 'game_skill_receipt', 'world_perception',
@@ -176,6 +176,44 @@ class SkillTools:
         if not proposal.get('ok'):
             return {**proposal, 'queued': False, 'dispatched': False, 'writePerformed': False}
         return self.start(turn_id, 'base_navigate', proposal['version'], proposal['memory'],
+                          max_steps=max_steps, summary=summary)
+
+    def navigate_plan(self, turn_id, waypoints, max_steps=32, summary=''):
+        """Admit one tested multi-waypoint program through the usual skill queue."""
+        from numen_gateway import GatewayError, read_json
+        from skill_library import VERSION
+
+        def prepare(_):
+            finite = lambda value: type(value) in (int, float) and math.isfinite(value)
+            if (not isinstance(waypoints, list) or not 2 <= len(waypoints) <= 6
+                    or any(not isinstance(row, dict) or set(row) not in ({'x', 'z'}, {'x', 'y', 'z'})
+                           or not all(finite(v) for v in row.values()) for row in waypoints)):
+                raise GatewayError('invalid_motion_waypoints')
+            settings = read_json(self.state / 'settings.json')
+            area = settings.get('workArea')
+            if (not isinstance(area, dict)
+                    or not all(finite(area.get(key)) for key in ('minX', 'maxX', 'minZ', 'maxZ'))
+                    or area['maxX'] - area['minX'] < 4 or area['maxZ'] - area['minZ'] < 4):
+                raise GatewayError('navigation_work_area_unavailable')
+            if any(not (area['minX'] <= row['x'] <= area['maxX']
+                        and area['minZ'] <= row['z'] <= area['maxZ']) for row in waypoints):
+                raise GatewayError('outside_work_area')
+            rows = self.library.catalog().get('skills', [])
+            matches = [row for row in rows if isinstance(row, dict) and row.get('name') == 'base_motion_plan']
+            if len(matches) != 1:
+                raise GatewayError('motion_program_unavailable')
+            row = matches[0]
+            version = row.get('activeVersion')
+            if (not isinstance(version, str) or not VERSION.fullmatch(version)
+                    or (row.get('testEligibility') or {}).get('status') != 'current'):
+                raise GatewayError('motion_program_unavailable')
+            return {'ok': True, 'version': version,
+                    'memory': {'policy': True, 'waypoints': waypoints}}
+
+        proposal = self._write(turn_id, prepare)
+        if not proposal.get('ok'):
+            return {**proposal, 'queued': False, 'dispatched': False, 'writePerformed': False}
+        return self.start(turn_id, 'base_motion_plan', proposal['version'], proposal['memory'],
                           max_steps=max_steps, summary=summary)
 
     def start(self, turn_id, name, version, memory=None, max_steps=32, objective=None, summary=''):
@@ -518,6 +556,12 @@ def make_server(gateway=None, skill_tools=None, http=False):
                  max_steps: StrictInt = 32, summary: str = '') -> dict:
         """持续前往整体目的地，复用已晋升且当前测试通过的base_navigate，不用填写版本。target模式给工作区内真实已知的完整X/Z，可远于24格；通常省略Y，程序沿实际地形勘察支撑高度，明确指定Y才按三维目标验收。越界返程用mode=return_to_work_area并省略全部坐标。最多32步，自动逐段勘察、导航和核验，失败/未知/无进展交回，不保证全局寻路。与其他动作共用本轮请求额度。queued仅表示排队，不等于到达；可先say/remember保存意图，再提供summary排队并结束本轮，不逐段move或忙等status。"""
         return skill_tools.navigate(turn_id, x, z, y, mode, max_steps, summary)
+
+    @server.tool()
+    def navigate_plan(turn_id: str, waypoints: list[dict], max_steps: StrictInt = 32,
+                      summary: str = '') -> dict:
+        """一次提交2–6个工作区内已知路标，每个{x,z}或{x,y,z}。快循环按顺序勘察、行走、核验；Jev在每段真实可站立候选中选下一步或要求重规划。任何失败或未知即停止后续路标。queued只表示排队，成功须看终态；用summary结束本轮。"""
+        return skill_tools.navigate_plan(turn_id, waypoints, max_steps, summary)
 
     @server.tool()
     def interact_at(turn_id: str, button: str, x: int | None = None, y: int | None = None,

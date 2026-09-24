@@ -36,6 +36,8 @@ SOURCES += ('world/survival/navigation_sense.py', 'world/survival/chat.py', 'tes
             'tests/test_survival_navigation_sense.py', 'tests/test_motor_projection.py',
             'tests/test_survival_area_recovery.py', 'tests/test_survival_chat.py', 'tests/test_motor_boundary.py')
 SOURCES += ('tools/configure_survivor_vision.py', 'tools/sync_survivor_driver_scope.py',
+            'tools/enable_survivor_shell.py', 'tests/test_enable_survivor_shell.py',
+            'world/ops/native_role_capabilities.py', 'tests/test_native_role_capabilities.py',
             'tests/test_configure_survivor_vision.py', 'tests/test_survivor_driver_scope.py',
             'tests/test_survival_native_tools.py', 'tools/smoke_survivor_chat.py',
             'world/ops/skills/qd-survivor-practice/SKILL.md',
@@ -60,6 +62,7 @@ SOURCES += ('tests/test_skill_catalog_eligibility.py', 'world/survival/motor_pro
             'tests/test_character_speech.py', 'tests/test_survival_speech.py')
 SOURCES += ('tests/test_survival_action_admission.py', 'tests/test_system_one_body_control.py')
 SOURCES += ('world/survival/navigation_program.py', 'tests/test_survival_continuous_navigation.py',
+            'tests/test_survival_motion_plan.py',
             'tests/test_survival_blocked_progress_wake.py',
             'tests/test_survival_navigation_capability.py',
             'tests/test_survival_navigate_tool.py',

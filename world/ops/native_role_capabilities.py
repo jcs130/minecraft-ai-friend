@@ -1,7 +1,7 @@
 """Use Qwen's packaged skills and native ToolGuard, without a second tool runtime.
 
-These rules are pre-execution checks, not an OS sandbox. General shell execution
-is intentionally absent: the shell tool can only manage this role's native cron.
+These rules are pre-execution checks, not an OS sandbox. The survivor's native
+shell and extra builtin tools are explicitly enabled by the operator.
 """
 from copy import deepcopy
 import hashlib
@@ -31,12 +31,23 @@ NATIVE_TOOLS = (*FILE_TOOLS,
     *(('materialize_skill',) if package_version() == '2.2.0' else ()),
     'get_current_time', 'execute_shell_command')
 
+SURVIVOR_EXTRA_TOOLS = frozenset({
+    'activate_f1_exploration_mode', 'ast_search', 'browser', 'chat_with_agent',
+    'delegate_external_agent', 'desktop_screenshot', 'get_token_usage',
+    'glob_search', 'grep_search', 'materialize_skill', 'run_tool_batch',
+    'send_file_to_user', 'set_user_timezone', 'spawn_subagent', 'submit_to_agent',
+    'view_image', 'view_video', 'web_fetch', 'web_search',
+})
+
 
 def enabled_native_tools(role, runtime='game'):
     from team_native_policy import native_tools
     # A validated caller supplies its own role. Dynamic identities are checked
     # again by the runtime against the persisted team registry.
-    return set(NATIVE_TOOLS) | set(native_tools(role, runtime, registered_roles=(role,)))
+    permitted = set(NATIVE_TOOLS) | set(native_tools(role, runtime, registered_roles=(role,)))
+    if role == 'qd-survivor' and runtime == 'game':
+        permitted |= SURVIVOR_EXTRA_TOOLS
+    return permitted
 PREFIX = 'QD_NATIVE_'
 # Shared across every role: the world-level notes tree (docs/WORLD-NOTES.md).
 WORLD_NOTES = '/state/work/world-notes/'
@@ -156,7 +167,9 @@ def rules(role):
         row('MANAGED_WRITE', FILE_TOOLS[1:], ['file_path'],
             [rf'\A(?:{base})?(?:AGENTS\.md|SOUL\.md|PROFILE\.md|agent\.json|skill\.json|jobs\.json|drivers(?:/|\Z)|learning(?:/|\Z)|skills/(?:qd-|make-skill/|file_reader/|cron/))'],
             'Managed identity, budget, drivers and supplied skills are maintained through their native services.'),
-        row('CRON_SCOPE', ['execute_shell_command'], ['command'], [rf'\A(?!{cli}\Z)'], 'Only this role native cron and reviewed MakeSkill scripts are allowed.'),
+        *([] if role == 'qd-survivor' else [
+            row('CRON_SCOPE', ['execute_shell_command'], ['command'], [rf'\A(?!{cli}\Z)'],
+                'Only this role native cron and reviewed MakeSkill scripts are allowed.')]),
         row('SKILL_NAMESPACE', ['materialize_skill'], ['name'], [r'\A(?:qd-|make-skill\Z|file_reader\Z|cron\Z)'],
             'Native learned skills use their own names; qd- names are reserved for validated game integrations.'),
     ]
@@ -196,14 +209,20 @@ def configure_native(agent, role, runtime='game'):
     security = result['security']
     guard = security.setdefault('tool_guard', {})
     guard['enabled'] = True
-    guard['guarded_tools'] = sorted(set(guard.get('guarded_tools') or []) | enabled)
+    guarded = set(guard.get('guarded_tools') or []) | enabled
+    if role == 'qd-survivor' and runtime == 'game':
+        guarded.discard('execute_shell_command')
+    guard['guarded_tools'] = sorted(guarded)
     # Qwen adds ReMe tools after the workspace builtin list. Preserve only the
     # approved life-role memory aliases; do not invent builtin tool entries.
     dynamic_tools = dynamic_memory_tools(result, role, runtime)
     guard['denied_tools'] = sorted((set(guard.get('denied_tools', [])) | set(tools)) - enabled - dynamic_tools)
     guard['custom_rules'] = [row for row in guard.get('custom_rules', []) if not row['id'].startswith(PREFIX)] + rules(role)
     required = {row['id'] for row in rules(role)} | {'SENSITIVE_FILE_BLOCK', 'SAFETY_CHECKS_DESTRUCTIVE_COMMAND'}
-    guard['auto_denied_rules'] = sorted(set(guard.get('auto_denied_rules', [])) | required)
+    retained = set(guard.get('auto_denied_rules', []))
+    if role == 'qd-survivor' and runtime == 'game':
+        retained.discard(PREFIX + 'CRON_SCOPE')
+    guard['auto_denied_rules'] = sorted(retained | required)
     guard['disabled_rules'] = [name for name in guard.get('disabled_rules', []) if name not in required]
     files = security.setdefault('file_guard', {})
     files['enabled'] = True

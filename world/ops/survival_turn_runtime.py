@@ -15,6 +15,7 @@ VERSION = 6
 TOOL = 'numen_survival__remember'
 START_TOOL = 'numen_survival__skill_start'
 NAVIGATE_TOOL = 'numen_survival__navigate'
+NAVIGATE_PLAN_TOOL = 'numen_survival__navigate_plan'
 CONTRACT = 'qiandeng-survival-turn-v1'
 ENDED_CONTRACT = 'qiandeng-survival-authority-ended-v1'
 ENDED_SUMMARY = '本轮操作权限已结束，等待下一轮重新观察。游戏动作结果仍以原回执为准。'
@@ -85,7 +86,7 @@ def completion_summary(agent):
                     and ended.get('gameOutcomeConfirmed') is False):
                 return ENDED_SUMMARY
             return None
-        if call.name not in (TOOL, START_TOOL, NAVIGATE_TOOL):
+        if call.name not in (TOOL, START_TOOL, NAVIGATE_TOOL, NAVIGATE_PLAN_TOOL):
             return None
         if call.name == TOOL and args.get('finish_turn') is not True:
             return None
@@ -113,8 +114,8 @@ def completion_summary(agent):
                     or result.get('turnId') != turn or result.get('executionConfirmed') is not False
                     or not isinstance(version, str) or re.fullmatch(r'[0-9a-f]{64}', version) is None):
                 return None
-            if call.name == NAVIGATE_TOOL:
-                if result.get('name') != 'base_navigate':
+            if call.name in (NAVIGATE_TOOL, NAVIGATE_PLAN_TOOL):
+                if result.get('name') != ('base_navigate' if call.name == NAVIGATE_TOOL else 'base_motion_plan'):
                     return None
             elif (not isinstance(args.get('name'), str) or not args['name'].strip()
                     or result.get('name') != args['name'] or version != args.get('version')):
@@ -125,7 +126,7 @@ def completion_summary(agent):
                         or not isinstance(request_id, str)
                         or re.fullmatch(r'[0-9a-f]{64}', request_id) is None):
                     return None
-            elif call.name != NAVIGATE_TOOL or result.get('code') != 'skill_queued':
+            elif call.name not in (NAVIGATE_TOOL, NAVIGATE_PLAN_TOOL) or result.get('code') != 'skill_queued':
                 return None
     except (ValueError, TypeError):
         return None

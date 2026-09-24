@@ -9,9 +9,9 @@ from motor_mailbox import view
 from numen_gateway import read_json, write_json, action_lock
 from skill_library import _observation, evaluate, SkillLibrary, SkillError
 from starter_skills import bundle
-from navigation_program import SOURCE, record
+from navigation_program import SOURCE, record, motion_record
 import test_survival_fast_execution as fast_fixture
-from motor_mailbox import enqueue_locked
+from motor_mailbox import enqueue_locked, expire_queued_locked
 
 
 class ContinuousNavigationAdmissionTests(unittest.TestCase):
@@ -482,6 +482,36 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(len(self.backend.submitted), 1)
         self.assertEqual(set(self.backend.polled), {self.active['taskId']})
         self.c.policy_worker.submit.assert_not_called()
+
+    def test_motion_plan_waits_for_jev_then_binds_selected_segment_during_slow_task(self):
+        drafted = self.library.draft(**motion_record())
+        motion_version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', motion_version)['passed'])
+        self.library.promote('base_motion_plan', motion_version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': motion_version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        self.c.policy_worker.submit = Mock(return_value=77)
+        self.advance()  # claim the one durable plan
+        self.advance()  # fresh survey, then classifier request
+        pending = self.c.pending_policy
+        self.assertIsNotNone(pending)
+        self.assertEqual(len(self.gateway.actions), 0)
+        choice = pending['plan']['choose']['candidates'][0]['action']
+        self.c.policy_worker.poll = Mock(return_value={
+            'ok': True, 'code': 'policy_selected', 'choice': 'path_0',
+            'action': choice, 'confidence': .9, 'workerMs': 50})
+        self.advance()  # exact offered segment is now dispatched
+        self.assertEqual(len(self.gateway.actions), 1)
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['memory']['segment'], choice['args'])
+        self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
+        self.assertEqual(len(self.backend.submitted), 1)
 
     def test_fresh_survey_dispatches_before_slow_handoff_can_expire_it(self):
         self.advance()  # The explicitly selected program is durably claimed.

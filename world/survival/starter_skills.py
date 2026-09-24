@@ -162,8 +162,9 @@ function next(s,m) {
  if(!ready(s)||!m.target||!["x","y","z"].every(k=>Number.isInteger(m.target[k]))) return stop(m,"known_bed_required");
  return {memory:{sent:true},action:{tool:"sleep",args:m.target}};
 }''', body(), 'sleep', memory={'target': {'x': 0, 'y': 64, 'z': 1}}))
-    from navigation_program import record as navigation_record
+    from navigation_program import record as navigation_record, motion_record
     rows.append(navigation_record())
+    rows.append(motion_record())
     return rows
 
 

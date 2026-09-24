@@ -2,6 +2,23 @@
 import copy
 
 NAME = 'base_navigate'
+MOTION_NAME = 'base_motion_plan'
+
+
+def bind_motion_choice(plan, action):
+    """Bind Jev's exact offered goto to the next receipt expectation."""
+    choice = plan.get('choose') or {}
+    memory = plan.get('memory') or {}
+    offered = [row.get('action') for row in choice.get('candidates', [])
+               if isinstance(row, dict) and row.get('action') is not None]
+    if (memory.get('policy') is not True or memory.get('stage') != 'selecting'
+            or not isinstance(action, dict) or action.get('tool') != 'goto'
+            or action not in offered or not isinstance(action.get('args'), dict)):
+        raise ValueError('motion_policy_choice_unbound')
+    bound = copy.deepcopy(plan)
+    bound['memory'].update(stage='moving', segment=copy.deepcopy(action['args']))
+    bound['action'] = copy.deepcopy(action)
+    return bound
 
 
 def recovery_program(library, job):
@@ -48,12 +65,27 @@ function next(s,m) {
    return stop("navigation_body_continuity_lost");
  m={...m,identity:{bodyUuid:s.bodyUuid,dimension:s.dimension,epoch:epoch,
                   gameTime:control.gameTime,bodyTickCount:control.bodyTickCount,observedAt:control.observedAt}};
+ if(m.policy===true) {
+   if(!Array.isArray(m.waypoints)||m.waypoints.length<2||m.waypoints.length>6||
+      !Number.isSafeInteger(m.index||0)||(m.index||0)<0||(m.index||0)>=m.waypoints.length||
+      !m.waypoints.every(w=>horizontal(w)&&(!Object.prototype.hasOwnProperty.call(w,"y")||Number.isFinite(w.y))&&inside(w)))
+     return stop("invalid_motion_waypoints");
+   m={...m,index:m.index||0,target:m.waypoints[m.index||0]};
+ }
  if(!m.target&&returning) m.target={x:Math.max(area.minX+2,Math.min(area.maxX-2,p.x)),
                                    y:p.y,z:Math.max(area.minZ+2,Math.min(area.maxZ-2,p.z))};
   const t=m.target;
   const hasY=t&&Object.prototype.hasOwnProperty.call(t,"y"), ground=!returning&&!hasY;
   if(!horizontal(t)||(hasY&&!Number.isFinite(t.y))||!inside(t)) return stop("known_in_area_target_required");
   const arrived=(returning&&inside(p))||(!returning&&distance(p,t)<=1.5&&(ground||Math.abs(p.y-t.y)<=1.5));
+  const advance=reason=>{
+   if(m.policy===true&&m.index+1<m.waypoints.length) {
+     m={...m,index:m.index+1,target:m.waypoints[m.index+1],stage:null,probe:null,
+        probeAttempt:0,probeSpan:null};
+     return next(s,m);
+   }
+   return {action:null,memory:m,done:true,reason:reason};
+  };
  if(m.stage==="moving") {
    const expected=(s.execution||{}).expectedAction||{};
    if(e.status!=="succeeded"||e.completionConfirmed!==true||e.tool!=="goto"||
@@ -86,10 +118,10 @@ function next(s,m) {
       distance(n.position,p)>0.01||Math.abs(n.position.y-p.y)>0.01||
       s.inWater===true||s.inLava===true||dest.requestedStanceClear!==true||dest.requestedStanceSupported!==true)
      return stop("navigation_arrival_stance_unconfirmed");
-   return {action:null,memory:m,done:true,reason:"observed_horizontal_supported_target"};
+   return advance("observed_horizontal_supported_target");
   }
   if(arrived)
-   return {action:null,memory:m,done:true,reason:returning?"observed_inside_work_area":"observed_navigation_target"};
+   return advance(returning?"observed_inside_work_area":"observed_navigation_target");
   const d=distance(p,t);
   if(d<=1.5) return stop("navigation_vertical_route_required");
   const surveyAt=(span,attempt)=>{
@@ -119,6 +151,16 @@ function next(s,m) {
    }
    return stop("navigation_no_supported_progress");
   }
+ if(m.policy===true) {
+   const options=usable.slice(0,3).map((c,i)=>({id:"path_"+i,
+      description:"Fresh surveyed supported next segment toward waypoint "+(m.index+1)+
+        ": "+JSON.stringify(c)+"; remaining horizontal distance "+distance(c,t).toFixed(1),
+      action:{tool:"goto",args:c}}));
+   options.push({id:"replan",description:"No candidate is appropriate; stop this plan for slow replanning",action:null});
+   return {memory:{...m,stage:"selecting",before:{...p}},choose:{
+      question:"Choose a freshly surveyed safe segment that advances toward this waypoint. Escalate if the present body or route looks unsafe.",
+      candidates:options,context:{waypoint:m.index+1,total:m.waypoints.length,target:t}}};
+ }
  return {memory:{...m,stage:"moving",before:{...p},segment:usable[0]},
          action:{tool:"goto",args:usable[0]}};
 }
@@ -192,4 +234,33 @@ def record():
              'expectedActionTool': None, 'replan': True},
             {'state': ground, 'memory': ground_memory, 'expectedActionTool': None, 'done': True},
             {'state': unsupported, 'memory': ground_memory, 'expectedActionTool': None, 'replan': True},
+        ]}
+
+
+def motion_record():
+    """A distinct tested program so installed navigation versions stay immutable."""
+    base = record()
+    state = copy.deepcopy(base['fixtures'][0]['state'])
+    state['position'] = {'x': 100, 'y': 64, 'z': 100}
+    waypoints = [{'x': 130, 'z': 100}, {'x': 145, 'z': 105}]
+    memory = {'policy': True, 'waypoints': waypoints}
+    probe = {'x': 116, 'y': 64, 'z': 100}
+    surveyed = copy.deepcopy(state)
+    surveyed['execution'] = {'observedAt': 1000250, 'observation': {
+        'tool': 'navigation_sense', 'args': probe, 'fresh': True, 'ageMs': 250,
+        'result': {'ok': True, 'navigationSense': {'ok': True,
+            'actorUuid': state['bodyUuid'], 'dimension': state['dimension'],
+            'position': state['position'], 'observedAt': 1000000,
+            'destination': {'available': True, 'requested': probe, 'pathVerified': False,
+                'requestedStanceClear': True, 'requestedStanceSupported': True,
+                'candidates': [{'x': 112, 'y': 64, 'z': 102}]}}}}}
+    bad = copy.deepcopy(memory)
+    bad['waypoints'][1]['x'] = 200
+    return {'name': MOTION_NAME, 'source': SOURCE,
+        'description': '一次提交2–6个已知工作区路标；每段在实时勘察与精确回执之后继续，Jev从真实支持的候选下一步中选择或交回慢脑。',
+        'fixtures': [
+            {'state': state, 'memory': memory, 'expectedObserve': {'tool': 'navigation_sense', 'args': probe}},
+            {'state': surveyed, 'memory': memory | {'stage': 'survey', 'probe': probe, 'probeSpan': 16, 'probeAttempt': 0},
+             'expectedActionTool': None, 'replan': False},
+            {'state': state, 'memory': bad, 'expectedActionTool': None, 'replan': True},
         ]}

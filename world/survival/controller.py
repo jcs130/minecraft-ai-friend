@@ -829,7 +829,7 @@ class Controller:
                        and area['minZ'] <= position['z'] <= area['maxZ'])
         arguments = ({'mode': 'return_to_work_area'} if outside else
                      {'x': '<已知整体目标X数值>', 'z': '<已知整体目标Z数值>'})
-        return {'schema': 2, 'source': 'skill_catalog', 'testEligibility': 'current_index_proof',
+        capability = {'schema': 2, 'source': 'skill_catalog', 'testEligibility': 'current_index_proof',
             'sourceProof': {'name': 'base_navigate', 'activeVersion': version},
             'requiresFillingTemplate': True, 'workArea': dict(area),
             'callTemplate': {'tool': 'navigate', 'arguments': {
@@ -841,6 +841,13 @@ class Controller:
                 '区域外用return_to_work_area模式且省略XYZ。目标由你决定；工具重验当前晋升版本与测试，'
                 'summary可自然结束本轮，快程序继续，排队不等于到达。未知/无进展交回，'
                 '最多32步并受原时长预算，不保证全局寻路；不要忙等status。'}
+        motion = next((row for row in catalog.get('skills', [])
+                       if row.get('name') == 'base_motion_plan'), None)
+        if (not outside and motion
+                and (motion.get('testEligibility') or {}).get('status') == 'current'):
+            capability['motionPlan'] = ('若已知连续2–6个工作区内路标，用navigate_plan一次提交waypoints；'
+                'Jev逐段选择新鲜勘察候选，失败交回慢脑。只排队，不宣称已到达。')
+        return capability
 
     def planning_context(self, body, control, turn_id):
         from perception import prioritize_events, event_wakes
@@ -1838,6 +1845,12 @@ class Controller:
         if job.get('status') not in ('pending', 'running'):
             self.discard_policy()
             return False
+        if (job.get('name') == 'base_motion_plan'
+                and ((job.get('memory') or {}).get('policy') is not True
+                     or not isinstance((job.get('memory') or {}).get('waypoints'), list))):
+            job.update(status='replan', reason='motion_policy_required')
+            write_json(path, job)
+            return False
         if job.get('practiceRunId') and not job.get('practiceStarted'):
             try:
                 self.practice.begin(job, body)
@@ -1944,7 +1957,15 @@ class Controller:
                 self.record('system_one_choice', name=job['name'], version=job['version'],
                             practiceRunId=job.get('practiceRunId'), selection=selection)
                 if selection['ok']:
-                    plan['action'] = selection['action']
+                    selected_action = selection.get('action')
+                    if job['name'] == 'base_motion_plan':
+                        from navigation_program import bind_motion_choice
+                        try:
+                            plan = bind_motion_choice(plan, selected_action)
+                        except ValueError:
+                            plan.update(action=None, replan=True, reason='motion_policy_choice_unbound')
+                    else:
+                        plan['action'] = selected_action
                 else:
                     plan.update(action=None, replan=True, reason=selection['code'])
                 plan.pop('choose')

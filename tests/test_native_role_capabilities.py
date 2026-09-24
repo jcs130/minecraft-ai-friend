@@ -47,6 +47,19 @@ class NativeRoleCapabilities(unittest.TestCase):
                         'qwenpaw cron create --agent-id mc-herald', 'qwenpaw cron list --agent-id $(whoami)'):
             self.assertTrue(self.blocked('execute_shell_command', 'command', command), command)
 
+    def test_operator_expanded_survivor_tools_and_general_shell_are_enabled(self):
+        survivor = native.configure_native({'id': 'qd-survivor'}, 'qd-survivor')
+        native.validate_native(survivor, 'qd-survivor')
+        enabled = {name for name, row in survivor['tools']['builtin_tools'].items() if row['enabled']}
+        self.assertTrue(native.SURVIVOR_EXTRA_TOOLS <= enabled)
+        self.assertIn('execute_shell_command', enabled)
+        guard = survivor['security']['tool_guard']
+        self.assertTrue(native.SURVIVOR_EXTRA_TOOLS.isdisjoint(guard['denied_tools']))
+        self.assertNotIn('execute_shell_command', guard['guarded_tools'])
+        self.assertNotIn('QD_NATIVE_CRON_SCOPE', guard['auto_denied_rules'])
+        self.assertNotIn('QD_NATIVE_CRON_SCOPE', [row['id'] for row in guard['custom_rules']])
+        self.assertEqual(native.configure_native(survivor, 'qd-survivor'), survivor)
+
     def test_native_file_precheck_protects_role_and_managed_configuration(self):
         for path in ('notes/任务.md', '/state/work/workspaces/mc-herald/notes/plan.json'):
             self.assertFalse(self.blocked('write_file', 'file_path', path))
