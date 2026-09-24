@@ -44,6 +44,11 @@ function next(s,m) {
   const point=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
   const horizontal=p=>p&&["x","z"].every(k=>Number.isFinite(p[k]));
  const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
+ const distinct=rows=>{
+  const result=[];
+  for(const c of rows) if(result.every(x=>distance(x,c)>1.25||Math.abs(x.y-c.y)>0.25)) result.push(c);
+  return result;
+ };
  const area=s.workArea||{}, p=s.position, e=(s.execution||{}).lastExecution||{};
  const control=s.bodyControl||{}, epoch=(typeof s.navigationEpoch==="string"&&s.navigationEpoch)||null;
  const observedAt=(s.execution||{}).observedAt||s.observedAt;
@@ -155,7 +160,7 @@ function next(s,m) {
      !seen.some(previous=>distance(previous,c)<2));
    usable.sort((a,b)=>distance(a,t)-distance(b,t));
    if(usable.length) {
-    const options=usable.slice(0,3).map((c,i)=>({id:"path_"+i,
+    const options=distinct(usable).slice(0,3).map((c,i)=>({id:"path_"+i,
       description:"Fresh surveyed supported lateral detour toward waypoint "+(m.index+1)+": "+JSON.stringify(c),
       action:{tool:"goto",args:c}}));
     options.push({id:"replan",description:"No lateral step is appropriate; stop for slow replanning",action:null});
@@ -196,7 +201,7 @@ function next(s,m) {
    return stop("navigation_no_supported_progress");
   }
  if(m.policy===true) {
-   const options=usable.slice(0,3).map((c,i)=>({id:"path_"+i,
+   const options=distinct(usable).slice(0,3).map((c,i)=>({id:"path_"+i,
       description:"Fresh surveyed supported next segment toward waypoint "+(m.index+1)+
         ": "+JSON.stringify(c)+"; remaining horizontal distance "+distance(c,t).toFixed(1),
       action:{tool:"goto",args:c}}));
@@ -298,6 +303,9 @@ def motion_record():
             'destination': {'available': True, 'requested': probe, 'pathVerified': False,
                 'requestedStanceClear': True, 'requestedStanceSupported': True,
                 'candidates': [{'x': 112, 'y': 64, 'z': 102}]}}}}}
+    near_duplicates = copy.deepcopy(surveyed)
+    near_duplicates['execution']['observation']['result']['navigationSense']['destination']['candidates'] = [
+        {'x': 115.5, 'y': 64, 'z': 100.5}, {'x': 116.5, 'y': 64, 'z': 100.5}]
     bad = copy.deepcopy(memory)
     bad['waypoints'][1]['x'] = 200
     blocked = copy.deepcopy(surveyed)
@@ -322,4 +330,7 @@ def motion_record():
             {'state': lateral, 'memory': memory | {'stage': 'detour_left', 'probe': left},
              'expectedActionTool': None, 'replan': False},
             {'state': state, 'memory': bad, 'expectedActionTool': None, 'replan': True},
+            {'state': near_duplicates, 'memory': memory | {'stage': 'survey', 'probe': probe, 'probeSpan': 16,
+                                                           'probeAttempt': 0},
+             'expectedActionTool': None, 'replan': False},
         ]}

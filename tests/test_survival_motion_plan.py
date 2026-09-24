@@ -50,6 +50,18 @@ class MotionProgramTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'motion_policy_choice_unbound'):
                     bind_motion_choice(result, false_choice)
 
+    def test_near_identical_supported_stances_do_not_split_jev_vote(self):
+        fixture = self.record['fixtures'][5]
+        result = evaluate(SOURCE, fixture['state'], fixture['memory'])
+        options = result['choose']['candidates']
+        self.assertEqual([row['id'] for row in options], ['path_0', 'replan'])
+        self.assertEqual(options[0]['action']['args'], {'x': 116.5, 'y': 64, 'z': 100.5})
+        higher = copy.deepcopy(fixture['state'])
+        higher['execution']['observation']['result']['navigationSense']['destination']['candidates'].append(
+            {'x': 115.5, 'y': 65, 'z': 100.5})
+        options = evaluate(SOURCE, higher, fixture['memory'])['choose']['candidates']
+        self.assertEqual([row['id'] for row in options], ['path_0', 'path_1', 'replan'])
+
     def test_blocked_forward_probe_offers_bounded_lateral_step(self):
         state = copy.deepcopy(self.record['fixtures'][1]['state'])
         direct = {'x': 104, 'y': 64, 'z': 100}
