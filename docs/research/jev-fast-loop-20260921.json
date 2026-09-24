@@ -1,0 +1,891 @@
+{
+  "synthetic": true,
+  "worldActions": 0,
+  "productionChanged": false,
+  "modelCalls": 16,
+  "questions": {
+    "mode": {
+      "type": "choice",
+      "instructions": "Which execution response best fits the current goal and evidence? Choose only an available response; do not invent an action or treat missing evidence as failure.",
+      "criteria": {
+        "continue": "Let the current native task continue; evidence shows useful ongoing progress.",
+        "local_repair": "Use the available tested repair for this specific, understood obstacle.",
+        "observe": "Obtain the missing information before changing body behavior.",
+        "slow_plan": "The current goal or method needs reasoning beyond available tested repairs.",
+        "urgent": "Interrupt for an immediate physical threat using the existing emergency behavior."
+      }
+    },
+    "repair_fits": {
+      "type": "noul",
+      "instructions": "Does the explicitly available tested repair resolve the currently observed obstacle? Answer no when no repair or no obstacle is described."
+    },
+    "progress": {
+      "type": "score",
+      "instructions": "Rate observed progress of the current goal from the evidence, not eventual success.",
+      "criteria": [
+        "Goal is regressing or physically threatened.",
+        "No demonstrated progress, including insufficient evidence.",
+        "Observable partial progress.",
+        "Goal completion is verified."
+      ]
+    },
+    "social": {
+      "type": "choice",
+      "instructions": "What should the read-only dialogue lane do with the heard message? It cannot control the body.",
+      "criteria": {
+        "none": "No message was heard.",
+        "reply": "A heard social question can be answered while the body continues.",
+        "planner": "A heard instruction asks to change the physical goal; send it to the planner."
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "walking_chat",
+      "expected": "continue",
+      "social": "reply",
+      "state": {
+        "goal": "Reach the farm.",
+        "evidence": "Native navigation is running. Distance fell from 30 to 20 blocks over 3 seconds. Ground ahead is clear.",
+        "testedRepair": null,
+        "heard": "How are you today?"
+      }
+    },
+    {
+      "id": "closed_gate",
+      "expected": "local_repair",
+      "social": "none",
+      "state": {
+        "goal": "Reach the farm.",
+        "evidence": "Navigation stopped at a closed gate. The gate is in interaction reach and interaction is permitted. The path beyond is clear.",
+        "testedRepair": "Open the gate and resume the same navigation target.",
+        "heard": null
+      }
+    },
+    {
+      "id": "missing_sensor",
+      "expected": "observe",
+      "social": "none",
+      "state": {
+        "goal": "Reach the farm.",
+        "evidence": "The current navigation and nearby geometry observations are unavailable. Only a 30-second-old position is known.",
+        "testedRepair": null,
+        "heard": null
+      }
+    },
+    {
+      "id": "flooded_tunnel",
+      "expected": "urgent",
+      "social": "none",
+      "state": {
+        "goal": "Explore the mine.",
+        "evidence": "The body is submerged. Air is nearly exhausted and health is falling. An existing native emergency surface behavior is available.",
+        "testedRepair": null,
+        "heard": null
+      }
+    },
+    {
+      "id": "wrong_quest",
+      "expected": "slow_plan",
+      "social": "none",
+      "state": {
+        "goal": "Deliver wheat for the guild.",
+        "evidence": "The receptionist confirms this quest has already expired. The wheat is still in inventory. No replacement quest has been chosen.",
+        "testedRepair": null,
+        "heard": null
+      }
+    },
+    {
+      "id": "mining_chat",
+      "expected": "continue",
+      "social": "reply",
+      "state": {
+        "goal": "Collect six iron ore.",
+        "evidence": "Native mining is running safely. Verified inventory count increased from one to four. Two reachable ore blocks remain.",
+        "testedRepair": null,
+        "heard": "What are you collecting?"
+      }
+    },
+    {
+      "id": "tool_repair",
+      "expected": "local_repair",
+      "social": "none",
+      "state": {
+        "goal": "Collect iron ore.",
+        "evidence": "Mining stopped because the held pickaxe broke. A suitable spare iron pickaxe is confirmed in inventory and the ore remains reachable.",
+        "testedRepair": "Equip the confirmed spare pickaxe and resume the same mining target.",
+        "heard": null
+      }
+    },
+    {
+      "id": "new_goal",
+      "expected": "continue",
+      "social": "planner",
+      "state": {
+        "goal": "Reach the farm; no new goal has been accepted yet.",
+        "evidence": "Current navigation is progressing on clear ground. No immediate danger.",
+        "testedRepair": null,
+        "heard": "After this, help me build a house instead."
+      }
+    }
+  ],
+  "sourceCommit": "d2068ea",
+  "rows": [
+    {
+      "id": "walking_chat",
+      "arm": "single",
+      "expected": "continue",
+      "payloadSha256": "65f1a5876f939a56b542496886e7e4bd5c043deaf4340af8f1248b15d010d1df",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 1.0,
+            "probabilities": {
+              "urgent": 0.0,
+              "continue": 1.0,
+              "observe": 0.0,
+              "local_repair": 0.0,
+              "slow_plan": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 487,
+          "output_tokens": 55
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 1110.0
+    },
+    {
+      "id": "walking_chat",
+      "arm": "batch",
+      "expected": "continue",
+      "payloadSha256": "2b3ffc3bc2aa0674228b9fe07daf9aad523f89db68a091dc802760961b0c6b1b",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 1.0,
+            "probabilities": {
+              "slow_plan": 0.0,
+              "urgent": 0.0,
+              "observe": 0.0,
+              "local_repair": 0.0,
+              "continue": 1.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.16
+          },
+          "progress": {
+            "type": "score",
+            "score": 2.0,
+            "confidence": 1.0,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.0,
+              "1": 0.0,
+              "2": 1.0,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "reply",
+            "confidence": 0.98,
+            "probabilities": {
+              "none": 0.01,
+              "planner": 0.0,
+              "reply": 0.99
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 695,
+          "output_tokens": 123
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 875.0
+    },
+    {
+      "id": "closed_gate",
+      "arm": "batch",
+      "expected": "local_repair",
+      "payloadSha256": "99470ac9db8e00b9df14c9c6879af875bb00484cfab378beadfa753bc037fb98",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "local_repair",
+            "confidence": 1.0,
+            "probabilities": {
+              "local_repair": 1.0,
+              "observe": 0.0,
+              "urgent": 0.0,
+              "slow_plan": 0.0,
+              "continue": 0.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.95
+          },
+          "progress": {
+            "type": "score",
+            "score": 1.72,
+            "confidence": 0.72,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.0,
+              "1": 0.27,
+              "2": 0.73,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 1.0,
+            "probabilities": {
+              "none": 1.0,
+              "planner": 0.0,
+              "reply": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 698,
+          "output_tokens": 125
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 656.0
+    },
+    {
+      "id": "closed_gate",
+      "arm": "single",
+      "expected": "local_repair",
+      "payloadSha256": "80c44e932932dc12bc9d46c0d19427fa79d24f980a4a35d82f568d80e99fa409",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "local_repair",
+            "confidence": 1.0,
+            "probabilities": {
+              "urgent": 0.0,
+              "local_repair": 1.0,
+              "slow_plan": 0.0,
+              "observe": 0.0,
+              "continue": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 490,
+          "output_tokens": 57
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 875.0
+    },
+    {
+      "id": "missing_sensor",
+      "arm": "single",
+      "expected": "observe",
+      "payloadSha256": "6a87cfc1a780e9d6a320a83ead371d6d40f45c93bd4e1449dd536b6253e6f085",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "observe",
+            "confidence": 0.97,
+            "probabilities": {
+              "urgent": 0.0,
+              "local_repair": 0.0,
+              "slow_plan": 0.01,
+              "continue": 0.01,
+              "observe": 0.98
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 476,
+          "output_tokens": 55
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 672.0
+    },
+    {
+      "id": "missing_sensor",
+      "arm": "batch",
+      "expected": "observe",
+      "payloadSha256": "0fa1c571d52c3d0e6dd6104227b5cf0039cbf4a5baa8001791ac976f5cbf1e7a",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "observe",
+            "confidence": 0.96,
+            "probabilities": {
+              "observe": 0.97,
+              "local_repair": 0.0,
+              "urgent": 0.0,
+              "slow_plan": 0.02,
+              "continue": 0.01
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.09
+          },
+          "progress": {
+            "type": "score",
+            "score": 1.0,
+            "confidence": 1.0,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.0,
+              "1": 1.0,
+              "2": 0.0,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.99,
+            "probabilities": {
+              "none": 0.99,
+              "reply": 0.01,
+              "planner": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 684,
+          "output_tokens": 123
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 907.0
+    },
+    {
+      "id": "flooded_tunnel",
+      "arm": "batch",
+      "expected": "urgent",
+      "payloadSha256": "82bee1533eea73c40dcd205d3e046ef32e4ef5f106b20f5a7eda4825a48d9164",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "urgent",
+            "confidence": 1.0,
+            "probabilities": {
+              "continue": 0.0,
+              "local_repair": 0.0,
+              "observe": 0.0,
+              "urgent": 1.0,
+              "slow_plan": 0.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.14
+          },
+          "progress": {
+            "type": "score",
+            "score": 0.01,
+            "confidence": 0.99,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.99,
+              "1": 0.01,
+              "2": 0.0,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.98,
+            "probabilities": {
+              "reply": 0.01,
+              "none": 0.99,
+              "planner": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 686,
+          "output_tokens": 123
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 985.0
+    },
+    {
+      "id": "flooded_tunnel",
+      "arm": "single",
+      "expected": "urgent",
+      "payloadSha256": "53af3071b0090b8a2f08e0ea841d969751cd7a22a4dc927a8999dc629c63b258",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "urgent",
+            "confidence": 1.0,
+            "probabilities": {
+              "slow_plan": 0.0,
+              "observe": 0.0,
+              "continue": 0.0,
+              "urgent": 1.0,
+              "local_repair": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 478,
+          "output_tokens": 55
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 890.0
+    },
+    {
+      "id": "wrong_quest",
+      "arm": "single",
+      "expected": "slow_plan",
+      "payloadSha256": "22212abbc34a3ed3881bf21e61e780b974ad158e1a8c73bd063976ffb4086412",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "slow_plan",
+            "confidence": 0.74,
+            "probabilities": {
+              "slow_plan": 0.79,
+              "observe": 0.18,
+              "local_repair": 0.02,
+              "urgent": 0.0,
+              "continue": 0.01
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 484,
+          "output_tokens": 56
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": false,
+      "latencyMs": 640.0
+    },
+    {
+      "id": "wrong_quest",
+      "arm": "batch",
+      "expected": "slow_plan",
+      "payloadSha256": "f783c3331bfddc3cc2d703f34f42b66d0e57d2b10af210603a60e099bed15745",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "slow_plan",
+            "confidence": 0.73,
+            "probabilities": {
+              "slow_plan": 0.78,
+              "local_repair": 0.02,
+              "observe": 0.19,
+              "urgent": 0.0,
+              "continue": 0.01
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.13
+          },
+          "progress": {
+            "type": "score",
+            "score": 0.54,
+            "confidence": 0.46,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.53,
+              "1": 0.4,
+              "2": 0.07,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 0.97,
+            "probabilities": {
+              "planner": 0.01,
+              "reply": 0.01,
+              "none": 0.98
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 692,
+          "output_tokens": 124
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": false,
+      "socialCorrect": true,
+      "latencyMs": 766.0
+    },
+    {
+      "id": "mining_chat",
+      "arm": "batch",
+      "expected": "continue",
+      "payloadSha256": "aa449700378f152d48ff8e35c8083296a6d74a35f60f4f8ea4dee91551955bf1",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 0.96,
+            "probabilities": {
+              "continue": 0.97,
+              "observe": 0.02,
+              "urgent": 0.0,
+              "slow_plan": 0.01,
+              "local_repair": 0.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.19
+          },
+          "progress": {
+            "type": "score",
+            "score": 2.0,
+            "confidence": 0.99,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.0,
+              "1": 0.0,
+              "2": 0.99,
+              "3": 0.01
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "reply",
+            "confidence": 0.99,
+            "probabilities": {
+              "planner": 0.0,
+              "reply": 1.0,
+              "none": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 691,
+          "output_tokens": 123
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 703.0
+    },
+    {
+      "id": "mining_chat",
+      "arm": "single",
+      "expected": "continue",
+      "payloadSha256": "6b8391b67f4545bfb7cdbdcedb65859a40128c6670e09534b13d05c029bd9dcc",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 0.96,
+            "probabilities": {
+              "urgent": 0.0,
+              "local_repair": 0.0,
+              "slow_plan": 0.01,
+              "observe": 0.02,
+              "continue": 0.97
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 483,
+          "output_tokens": 55
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 656.0
+    },
+    {
+      "id": "tool_repair",
+      "arm": "single",
+      "expected": "local_repair",
+      "payloadSha256": "16e6fbf91c2c00b2c0169d9e8d432aa90e631e8c800a51cb316a573e59bb0f7f",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "local_repair",
+            "confidence": 0.99,
+            "probabilities": {
+              "urgent": 0.0,
+              "local_repair": 0.99,
+              "slow_plan": 0.0,
+              "observe": 0.0,
+              "continue": 0.01
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 494,
+          "output_tokens": 57
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 625.0
+    },
+    {
+      "id": "tool_repair",
+      "arm": "batch",
+      "expected": "local_repair",
+      "payloadSha256": "e61c58ca2fc2cfc9aab6b0e77b224c138f2e65578f1ed2efa0e6089fe4799981",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "local_repair",
+            "confidence": 0.99,
+            "probabilities": {
+              "continue": 0.01,
+              "urgent": 0.0,
+              "local_repair": 0.99,
+              "observe": 0.0,
+              "slow_plan": 0.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.94
+          },
+          "progress": {
+            "type": "score",
+            "score": 1.23,
+            "confidence": 0.49,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.14,
+              "1": 0.49,
+              "2": 0.37,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 1.0,
+            "probabilities": {
+              "reply": 0.0,
+              "none": 1.0,
+              "planner": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 702,
+          "output_tokens": 125
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 704.0
+    },
+    {
+      "id": "new_goal",
+      "arm": "batch",
+      "expected": "continue",
+      "payloadSha256": "8d30b4fb1c0b72a46fedce563906d940029128f831201d16da0cbf84c549d962",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 1.0,
+            "probabilities": {
+              "local_repair": 0.0,
+              "slow_plan": 0.0,
+              "urgent": 0.0,
+              "continue": 1.0,
+              "observe": 0.0
+            }
+          },
+          "repair_fits": {
+            "type": "noul",
+            "noul": 0.16
+          },
+          "progress": {
+            "type": "score",
+            "score": 1.91,
+            "confidence": 0.91,
+            "legend": {
+              "0": "Goal is regressing or physically threatened.",
+              "1": "No demonstrated progress, including insufficient evidence.",
+              "2": "Observable partial progress.",
+              "3": "Goal completion is verified."
+            },
+            "probabilities": {
+              "0": 0.0,
+              "1": 0.09,
+              "2": 0.91,
+              "3": 0.0
+            }
+          },
+          "social": {
+            "type": "choice",
+            "choice": "planner",
+            "confidence": 0.31,
+            "probabilities": {
+              "reply": 0.44,
+              "planner": 0.54,
+              "none": 0.02
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 694,
+          "output_tokens": 125
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "socialCorrect": true,
+      "latencyMs": 687.0
+    },
+    {
+      "id": "new_goal",
+      "arm": "single",
+      "expected": "continue",
+      "payloadSha256": "d23b11c226010590920103dea0518838c7f5dfe13e740c71aecd1bb54cf973a8",
+      "reply": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "mode": {
+            "type": "choice",
+            "choice": "continue",
+            "confidence": 1.0,
+            "probabilities": {
+              "urgent": 0.0,
+              "continue": 1.0,
+              "observe": 0.0,
+              "local_repair": 0.0,
+              "slow_plan": 0.0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 486,
+          "output_tokens": 55
+        }
+      },
+      "correct": true,
+      "passesOldConfidenceGate": true,
+      "latencyMs": 734.0
+    }
+  ],
+  "summary": {
+    "single": {
+      "attempts": 8,
+      "responses": 8,
+      "correct": 8,
+      "passesOldConfidenceGate": 7,
+      "medianMs": 703.0,
+      "maxMs": 1110.0,
+      "inputTokens": 3878
+    },
+    "batch": {
+      "attempts": 8,
+      "responses": 8,
+      "correct": 8,
+      "passesOldConfidenceGate": 7,
+      "medianMs": 735.0,
+      "maxMs": 985.0,
+      "inputTokens": 5542
+    }
+  }
+}

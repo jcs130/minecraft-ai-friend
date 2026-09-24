@@ -1,0 +1,261 @@
+{
+  "schema": 1,
+  "minecraftVersion": "1.21.1",
+  "dataVersion": 3955,
+  "namespace": "qiandeng_town",
+  "origin": "local [0,0,0] is northwest ground-layer block; +X east, +Z south; standing feet Y1",
+  "airPolicy": "No air entries; unspecified cells are not cleared. Preflight must establish free space.",
+  "placement": {
+    "defaultPolicy": "Preserve existing world content by preflight rejection of occupied/conflicting target cells; this asset has no enforcement mechanism",
+    "numenBlueprint": "Existing BlueprintTool hardcodes REPLACE_EMPTY: permits replacing solids and explicit air clearing, subject to native permissions/materials. This asset has no air, but listed cells can still overwrite. DONT_REPLACE is the conservative enum; BlueprintTool does not expose it",
+    "vanillaPlaceTemplate": "Administrator placement overwrites listed cells; omitted cells remain. No built-in rollback or protection bypass authorization."
+  },
+  "assets": {
+    "market-courtyard": {
+      "title": "暖木石双摊集市庭院",
+      "size": [
+        13,
+        5,
+        13
+      ],
+      "beds": [],
+      "doors": [],
+      "centralPath": {
+        "min": [
+          5,
+          1,
+          0
+        ],
+        "max": [
+          7,
+          3,
+          12
+        ]
+      },
+      "notes": [
+        "两座木质遮阳摊、六盏灯、四格座椅、两组花池。",
+        "X5..7 南北贯通三格通路，Y1..3 全净空；摊位仅静态装饰，不含库存。"
+      ],
+      "placedBlocks": {
+        "minecraft:dandelion": 2,
+        "minecraft:grass_block": 6,
+        "minecraft:lantern": 6,
+        "minecraft:mossy_stone_bricks": 12,
+        "minecraft:oak_slab": 36,
+        "minecraft:poppy": 4,
+        "minecraft:smooth_stone": 26,
+        "minecraft:spruce_fence": 30,
+        "minecraft:spruce_planks": 6,
+        "minecraft:spruce_slab": 40,
+        "minecraft:spruce_stairs": 4,
+        "minecraft:stone_brick_slab": 6,
+        "minecraft:stone_bricks": 125
+      },
+      "equivalentItems": {
+        "minecraft:dandelion": 2,
+        "minecraft:grass_block": 6,
+        "minecraft:lantern": 6,
+        "minecraft:mossy_stone_bricks": 12,
+        "minecraft:oak_slab": 36,
+        "minecraft:poppy": 4,
+        "minecraft:smooth_stone": 26,
+        "minecraft:spruce_fence": 30,
+        "minecraft:spruce_planks": 6,
+        "minecraft:spruce_slab": 40,
+        "minecraft:spruce_stairs": 4,
+        "minecraft:stone_brick_slab": 6,
+        "minecraft:stone_bricks": 125
+      },
+      "equivalentItemsNote": "床头/脚合为1床，门上下合为1门，双半砖折为2半砖；草方块不等于生存模式可直接购买/获得。不是Numen库存承诺。",
+      "blockCount": 303,
+      "paletteCount": 15,
+      "templateId": "qiandeng_town:market-courtyard",
+      "files": {
+        "nativeSnbt": "market-courtyard.snbt",
+        "compressedNbt": "market-courtyard.nbt",
+        "datapackNbt": "datapack/data/qiandeng_town/structure/market-courtyard.nbt"
+      },
+      "sha256": {
+        "snbt": "98ef8ddd25255c892ce2b2c183ad79f32aaf3aa03bac1496bfccbd14f4814bb4",
+        "nbt": "cf79a04245ee7764d6c37e8848557d24da514c6818935793a9b9351d9ed50ecb"
+      }
+    },
+    "courtyard-house": {
+      "title": "五床暖木石庭院住宅",
+      "size": [
+        13,
+        8,
+        13
+      ],
+      "beds": [
+        {
+          "foot": [
+            3,
+            1,
+            4
+          ],
+          "head": [
+            3,
+            1,
+            3
+          ],
+          "facing": "north",
+          "color": "white"
+        },
+        {
+          "foot": [
+            4,
+            1,
+            4
+          ],
+          "head": [
+            4,
+            1,
+            3
+          ],
+          "facing": "north",
+          "color": "white"
+        },
+        {
+          "foot": [
+            8,
+            1,
+            4
+          ],
+          "head": [
+            8,
+            1,
+            3
+          ],
+          "facing": "north",
+          "color": "white"
+        },
+        {
+          "foot": [
+            9,
+            1,
+            4
+          ],
+          "head": [
+            9,
+            1,
+            3
+          ],
+          "facing": "north",
+          "color": "white"
+        },
+        {
+          "foot": [
+            3,
+            1,
+            7
+          ],
+          "head": [
+            3,
+            1,
+            6
+          ],
+          "facing": "north",
+          "color": "white"
+        }
+      ],
+      "doors": [
+        {
+          "lower": [
+            6,
+            1,
+            9
+          ],
+          "upper": [
+            6,
+            2,
+            9
+          ],
+          "facing": "south",
+          "hinge": "left"
+        }
+      ],
+      "entrance": [
+        6,
+        1,
+        12
+      ],
+      "interiorFloor": {
+        "min": [
+          3,
+          0,
+          2
+        ],
+        "max": [
+          9,
+          0,
+          8
+        ]
+      },
+      "centralPath": {
+        "min": [
+          5,
+          1,
+          2
+        ],
+        "max": [
+          7,
+          3,
+          8
+        ]
+      },
+      "notes": [
+        "五张平层床；室内通道 Y1..3 全净空，床上方 Y2..4 净空。",
+        "门向南（+Z）；门内外接地通行，木门可由原版村民打开。",
+        "一层主体、玻璃窗、半砖斜坡尖屋顶，最高占用 Y7。"
+      ],
+      "placedBlocks": {
+        "minecraft:glass": 36,
+        "minecraft:grass_block": 4,
+        "minecraft:lantern": 3,
+        "minecraft:mossy_stone_bricks": 7,
+        "minecraft:oak_planks": 147,
+        "minecraft:oxeye_daisy": 2,
+        "minecraft:poppy": 2,
+        "minecraft:smooth_stone": 8,
+        "minecraft:spruce_door": 2,
+        "minecraft:spruce_fence": 4,
+        "minecraft:spruce_log": 51,
+        "minecraft:spruce_slab": 121,
+        "minecraft:stone_brick_slab": 4,
+        "minecraft:stone_bricks": 69,
+        "minecraft:white_bed": 10
+      },
+      "equivalentItems": {
+        "minecraft:glass": 36,
+        "minecraft:grass_block": 4,
+        "minecraft:lantern": 3,
+        "minecraft:mossy_stone_bricks": 7,
+        "minecraft:oak_planks": 147,
+        "minecraft:oxeye_daisy": 2,
+        "minecraft:poppy": 2,
+        "minecraft:smooth_stone": 8,
+        "minecraft:spruce_door": 1,
+        "minecraft:spruce_fence": 4,
+        "minecraft:spruce_log": 51,
+        "minecraft:spruce_slab": 131,
+        "minecraft:stone_brick_slab": 4,
+        "minecraft:stone_bricks": 69,
+        "minecraft:white_bed": 5
+      },
+      "equivalentItemsNote": "床头/脚合为1床，门上下合为1门，双半砖折为2半砖；草方块不等于生存模式可直接购买/获得。不是Numen库存承诺。",
+      "blockCount": 470,
+      "paletteCount": 22,
+      "templateId": "qiandeng_town:courtyard-house",
+      "files": {
+        "nativeSnbt": "courtyard-house.snbt",
+        "compressedNbt": "courtyard-house.nbt",
+        "datapackNbt": "datapack/data/qiandeng_town/structure/courtyard-house.nbt"
+      },
+      "sha256": {
+        "snbt": "b0d4d1a5f0eab29909702405c556db0a2a975e54e9f9a31d33eba789523103b2",
+        "nbt": "9ef7d9ba5d1865233dee8d7c074a2dd30f9a95a18116594add0f5579ae428e60"
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "千灯河湾小镇",
+  "status": "deployed_2026-09-20",
+  "minecraft": "1.21.1",
+  "design": "保留河湾与旧木石街区，以小庭院、低层住宅、连续步道和暖灯组织公共空间。",
+  "surveyBounds": {"minX": -715, "maxX": -375, "minZ": 695, "maxZ": 1035},
+  "preserve": ["33 resident UUIDs and their entity data", "4 existing iron golems", "all existing buildings", "all existing storage, beds and workstations", "river and underground", "H01, H02 and H03 elevated structures", "guild ledger and six typed UUID bindings"],
+  "sites": [
+    {"id": "C01", "name": "河湾集市庭院", "blueprint": "market-courtyard.nbt", "bounds": {"minX": -502, "maxX": -490, "minZ": 842, "maxZ": 854}, "surveySurfaceY": [69, 71], "purpose": "开放摊位、座椅与照明；不创建虚构商品或库存", "beds": 0},
+    {"id": "C02", "name": "北街客舍", "blueprint": "courtyard-house.nbt", "bounds": {"minX": -524, "maxX": -512, "minZ": 800, "maxZ": 812}, "surveySurfaceY": [67, 70], "purpose": "连接既有北街，为居民提供可达床位", "beds": 5},
+    {"id": "C03", "name": "东街花窗民居", "blueprint": "courtyard-house.nbt", "bounds": {"minX": -492, "maxX": -480, "minZ": 826, "maxZ": 838}, "surveySurfaceY": [68, 70], "purpose": "低层住宅与前庭，保留地下设施", "beds": 5},
+    {"id": "C04", "name": "南岸灯庭民居", "blueprint": "courtyard-house.nbt", "bounds": {"minX": -532, "maxX": -520, "minZ": 912, "maxZ": 924}, "surveySurfaceY": [68, 71], "purpose": "连接南岸旧路与现有住宅群", "beds": 5},
+    {"id": "C06", "name": "西园民居", "blueprint": "courtyard-house.nbt", "bounds": {"minX": -608, "maxX": -596, "minZ": 898, "maxZ": 910}, "surveySurfaceY": [65, 68], "purpose": "小型庭院住宅，保留周围地形与生产空间", "beds": 5}
+  ],
+  "existingDistricts": [
+    {"name": "公会服务区", "anchor": [-524.5, 838.4], "note": "原看板配置锚点，接单仍按真实接待员位置与现有规则"},
+    {"name": "木石工坊巷", "anchor": [-566, 831], "note": "保留既有工作站、贸易与居民身份"},
+    {"name": "河岸旧街", "anchor": [-540, 865], "note": "保留水道和旧屋，按实测修补道路缺口"},
+    {"name": "南岸田园预留", "anchor": [-504, 924], "note": "不自动登记玩家物资为公用，也不宣称实物生产已运行"}
+  ],
+  "construction": {
+    "method": "Deployed with guarded one-time vanilla operator packs after isolated-world verification; existing Numen blueprint tools remain available for future material-backed Agent construction.",
+    "terrain": "No bulk clearing. Verify every footprint and approaches in an isolated saved-world copy. Preserve underground. Recheck live preimages before deployment.",
+    "agentPermissions": "Unchanged; this plan does not authorize autonomous construction inside the town protection area.",
+    "evidence": "Production town applied=1/progress=1034 and bridge applied=1/progress=15/verified=20; both save-all flush confirmed. Runtime receipts and persisted-world inspections remain local. See docs/TOWN-RENEWAL.md and OPERATOR.md."
+  }
+}

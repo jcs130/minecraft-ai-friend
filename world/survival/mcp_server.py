@@ -410,7 +410,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def move(turn_id: str, x: float, z: float, y: float | None = None) -> dict:
-        """不挖不搭走到24格水平距离内的已观察位置。省略y时只选择目标x/z列中与当前高度相近、已观测可站立的格；无此格会拒绝，避免走进同列深井。跨高度移动须先观察脚部高度再传y（-64至319）。受理后用status(wait_seconds=10,detail="brief")查该任务终态；仍在途则结束等待，明确终态后可用剩余动作继续。同xz不证明已到高处柜台。"""
+        """不挖不搭走到24格水平距离内的已观察位置。省略y时只选择目标x/z列中与当前高度相近、已观测可站立的格；无此格会拒绝，避免走进同列深井。跨高度移动须先观察脚部高度再传y（-64至319）。受理后用status(wait_seconds=10,detail="brief")查该任务终态；仍在途则结束等待，明确终态后可用剩余动作继续。同xz不证明已到高处柜台；距离拒绝会附当时原点、目标与实际水平距离。"""
         args = {'x': x, 'z': z}
         if y is not None:
             args['y'] = y
