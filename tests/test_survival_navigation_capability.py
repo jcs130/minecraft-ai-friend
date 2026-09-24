@@ -71,6 +71,21 @@ class NavigationCapabilityTests(unittest.TestCase):
         self.assertTrue(card['requiresFillingTemplate'])
         self.assertEqual(card['workArea'], self.c.settings['workArea'])
 
+    def test_inside_area_advertises_tested_multi_waypoint_call(self):
+        motion = {'name': 'base_motion_plan', 'activeVersion': 'b' * 64,
+                  'testEligibility': {'status': 'current', 'indexProofOnly': True}}
+        self.skills.catalog.side_effect = lambda: {'skills': [copy.deepcopy(self.row), copy.deepcopy(motion)]}
+        self.body['position']['x'] = 100
+        card = self.context()['continuousNavigation']
+        plan = card['motionPlan']
+        self.assertEqual(plan['sourceProof']['activeVersion'], motion['activeVersion'])
+        self.assertEqual(plan['callTemplate']['tool'], 'navigate_plan')
+        self.assertEqual(len(plan['callTemplate']['arguments']['waypoints']), 2)
+        self.assertNotIn('version', plan['callTemplate']['arguments'])
+        self.assertFalse(self.gateway.actions or self.backend.submitted)
+        self.body['position']['x'] = 220
+        self.assertNotIn('motionPlan', self.context('survival-capability-outside')['continuousNavigation'])
+
     def test_legacy_life_and_planning_context_have_same_card(self):
         self.c.settings['brainProtocol'] = 0
         life = self.context()

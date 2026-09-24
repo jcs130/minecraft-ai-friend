@@ -843,10 +843,20 @@ class Controller:
                 '最多32步并受原时长预算，不保证全局寻路；不要忙等status。'}
         motion = next((row for row in catalog.get('skills', [])
                        if row.get('name') == 'base_motion_plan'), None)
-        if (not outside and motion
+        motion_version = motion.get('activeVersion') if motion else None
+        if (not outside and isinstance(motion_version, str) and len(motion_version) == 64
+                and all(char in '0123456789abcdef' for char in motion_version)
                 and (motion.get('testEligibility') or {}).get('status') == 'current'):
-            capability['motionPlan'] = ('若已知连续2–6个工作区内路标，用navigate_plan一次提交waypoints；'
-                'Jev逐段选择新鲜勘察候选，失败交回慢脑。只排队，不宣称已到达。')
+            capability['motionPlan'] = {
+                'sourceProof': {'name': 'base_motion_plan', 'activeVersion': motion_version},
+                'callTemplate': {'tool': 'navigate_plan', 'arguments': {
+                    'turn_id': '<本条输入的turn_id>',
+                    'waypoints': [{'x': '<已知中途X数值>', 'z': '<已知中途Z数值>'},
+                                  {'x': '<已知终点X数值>', 'z': '<已知终点Z数值>'}],
+                    'max_steps': 32, 'summary': '<本轮路线意图简述>'}},
+                'instruction': ('已有两个以上明确路标时，一次提交整个路线，让快程序在慢脑处理期间依次行走；'
+                    'Jev逐段从新鲜勘察的可站立候选中修正下一步或交回慢脑。'
+                    '路标填已知工作区XZ数值；未知地形由每段勘察决定，不宣称排队即到达。')}
         return capability
 
     def planning_context(self, body, control, turn_id):
