@@ -48,6 +48,37 @@ def invalid_lease_response():
                 '关闭、过期或受保护的租约不能复用，本回执不会延长或恢复授权。'}
 
 
+def cognition_rejection(state, turn_id, code, clock=time.time):
+    """End only an exactly identified, irrevocably closed planning round.
+
+    This is a rejected call, never a game completion or a lease renewal. A
+    missing/mismatched lease and uncertain world effects have no such proof.
+    """
+    result = {'ok': False, 'code': code, 'retryAutomatically': False}
+    if code not in ('cognition_closed', 'cognition_expired'):
+        return result
+    result['instruction'] = ('当前回合权限已结束且不会恢复。直接最终答复，等待新生活输入；'
+                             '不要继续动作、查询或remember，不要生成新turn_id。')
+    try:
+        lease = read_json(Path(state) / 'cognition-lease.json')
+        if (not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id)
+                or lease.get('schema') != 1 or lease.get('turnId') != turn_id
+                or lease.get('bodyAccess') != 'queued'):
+            return result
+        closed = code == 'cognition_closed' and lease.get('status') == 'closed'
+        expiry = lease.get('expiresAt')
+        expired = (code == 'cognition_expired' and lease.get('status') == 'open'
+                   and type(expiry) in (int, float) and math.isfinite(expiry)
+                   and expiry <= clock() * 1000)
+        if closed or expired:
+            result.update(turnId=turn_id, dispatched=False, writePerformed=False,
+                          turnEnded={'contract': 'qiandeng-survival-authority-ended-v1',
+                                     'authorityEnded': True, 'gameOutcomeConfirmed': False})
+    except (OSError, ValueError, TypeError):
+        pass
+    return result
+
+
 def receipt_evidence(row):
     """Carry the last attempt's actual target/reason, without its full inventory.
 
@@ -89,6 +120,18 @@ def receipt_evidence(row):
     if isinstance(reason, str):
         summary['outcomeDetail'] = reason[:360]
     contract = asdict(asdict(native.get('data')).get('receipt'))
+    if row.get('tool') in ('game_cast', 'game_learn') and contract:
+        summary['gameSkill'] = fields(contract, ('requestId', 'ok', 'code', 'skillId',
+            'engine', 'nativeSpell', 'accepted', 'executionConfirmed'))
+        spell_id = asdict(contract.get('spell')).get('id')
+        if 'nativeSpell' not in summary['gameSkill'] and isinstance(spell_id, str):
+            summary['gameSkill']['nativeSpell'] = spell_id
+        if (row.get('status') == 'rejected' and contract.get('ok') is False
+                and contract.get('code') == 'not_equipped'):
+            summary['recovery'] = {'requiredNextStep': 'equip_then_observe', 'retryAutomatically': False,
+                'instruction': '原生回执明确未装备此法术。先取得并装备对应法术书、装备或卷轴，'
+                    '再用game_skills(scope="irons")核实当前装备；历史learned不等于可施放，'
+                    '不要改猜另一个治疗别名或原地重试。'}
     if (row.get('tool') in GUILD_ACTIONS and isinstance(args.get('quest_id'), str)
             and contract.get('questId') == args['quest_id']):
         summary['guild'] = fields(contract, ('code', 'questId', 'ok'))
@@ -1227,7 +1270,7 @@ class NumenGateway:
                         'data': {'verifiedEquipment': args['item_id'], 'slot': args['slot']}}
         raise GatewayError('outcome_unknown')
 
-    def action(self, turn_id, tool, args):
+    def action(self, turn_id, tool, args, *, previous_request_id=None):
         try:
             self._validate(tool, args)
             with action_lock(self.state):
@@ -1235,9 +1278,12 @@ class NumenGateway:
                 from motor_mailbox import cognition, enqueue_locked
                 try:
                     if cognition(self.state, turn_id, self.clock) is not None:
-                        return enqueue_locked(self.state, turn_id, 'action', {'tool':tool,'args':args}, self.clock)
+                        return enqueue_locked(self.state, turn_id, 'action', {'tool':tool,'args':args}, self.clock,
+                                              previous_request_id=previous_request_id)
                 except ValueError as exc:
                     raise GatewayError(str(exc)) from exc
+                if previous_request_id is not None:
+                    raise GatewayError('motor_previous_requires_cognition')
                 lease = read_json(self.state / 'lease.json')
                 if (not isinstance(turn_id, str) or not TURN_ID.fullmatch(turn_id) or lease.get('turnId') != turn_id
                         or lease.get('schema') != 1 or lease.get('status') != 'open'
@@ -1477,7 +1523,7 @@ class NumenGateway:
                     self._record({**marker, 'phase': 'response', 'result': result, 'finishedAt': self._now()})
                     return result
         except GatewayError as exc:
-            result = {'ok': False, 'code': str(exc)}
+            result = cognition_rejection(self.state, turn_id, str(exc), self.clock)
             details = getattr(exc, 'details', None)
             if (str(exc) in ('protected_area', 'outside_work_area')
                     and isinstance(details, dict) and details.get('schema') == 1

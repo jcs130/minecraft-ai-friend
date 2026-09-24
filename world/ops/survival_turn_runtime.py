@@ -1,19 +1,22 @@
-"""Honor a model's explicit finish request via the existing native reply exit.
+"""Close finished or revoked planning rounds through the native reply exit.
 
 No timer, repetition counter, game action, model call or fabricated completion.
 Ordinary remember calls remain checkpoints. The current successful remember
 or program queue receipt may carry the model-authored final answer. Queue
 acceptance ends deliberation; it does not assert program execution or success.
+A verified closed/expired authority rejection ends only that current round.
 """
 from functools import wraps
 import inspect
 import json
 import re
 
-VERSION = 4
+VERSION = 5
 TOOL = 'numen_survival__remember'
 START_TOOL = 'numen_survival__skill_start'
 CONTRACT = 'qiandeng-survival-turn-v1'
+ENDED_CONTRACT = 'qiandeng-survival-authority-ended-v1'
+ENDED_SUMMARY = '本轮操作权限已结束，等待下一轮重新观察。游戏动作结果仍以原回执为准。'
 
 
 def completion_summary(agent):
@@ -36,7 +39,7 @@ def completion_summary(agent):
     calls = message.get_content_blocks('tool_call')
     results = message.get_content_blocks('tool_result')
     # Only the final selected tool may close a round; never drop later calls.
-    if not calls or calls[-1].name not in (TOOL, START_TOOL):
+    if not calls or not calls[-1].name.startswith('numen_survival__'):
         return None
     call = calls[-1]
     if getattr(agent, '_qiandeng_survival_finish_emitted', None) == (message.id, call.id):
@@ -48,11 +51,6 @@ def completion_summary(agent):
         except ValueError:
             return None
     if not isinstance(args, dict):
-        return None
-    if call.name == TOOL and args.get('finish_turn') is not True:
-        return None
-    summary = args.get('summary')
-    if not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 600:
         return None
     matching = [row for row in results if row.id == call.id and row.name == call.name]
     if len(matching) != 1 or matching[0].state != 'success':
@@ -74,6 +72,24 @@ def completion_summary(agent):
             if isinstance(result, str) and len(result) <= 16000:
                 result = json.loads(result)
         if not isinstance(result, dict):
+            return None
+        ended = result.get('turnEnded')
+        if isinstance(ended, dict) and ended.get('contract') == ENDED_CONTRACT:
+            turn = args.get('turn_id')
+            if (isinstance(turn, str) and re.fullmatch(r'[A-Za-z0-9_-]{16,128}', turn)
+                    and result.get('turnId') == turn and result.get('ok') is False
+                    and result.get('code') in ('cognition_closed', 'cognition_expired')
+                    and result.get('dispatched') is False and result.get('writePerformed') is False
+                    and ended.get('authorityEnded') is True
+                    and ended.get('gameOutcomeConfirmed') is False):
+                return ENDED_SUMMARY
+            return None
+        if call.name not in (TOOL, START_TOOL):
+            return None
+        if call.name == TOOL and args.get('finish_turn') is not True:
+            return None
+        summary = args.get('summary')
+        if not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 600:
             return None
         intent = result.get('turnCompletion', {})
         if (result.get('ok') is not True or not isinstance(intent, dict)
@@ -100,7 +116,9 @@ def wrap_reasoning_impl(original):
 
     This inner hook retains QwenPaw's outer pending gates, stop handlers and
     AgentScope reasoning middleware. It does not manufacture model-call events
-    or usage. The text already came from the current model's successful tool.
+    or usage. The text is the model's successful finish summary, or a factual
+    authority-ended notice from the exact current rejected call. Neither path
+    fabricates game success or touches another native task/session.
     """
     @wraps(original)
     async def reasoning_impl(self, tool_choice=None):

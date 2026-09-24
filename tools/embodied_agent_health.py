@@ -53,6 +53,7 @@ SOURCES += ('world/survival/food_actions.py', 'tests/test_survival_food_receipts
             'tests/test_survival_native_interaction.py', 'tests/test_motor_cast_acceptance.py',
             'tools/smoke_mine_receipts.py', 'world/irons-bridge-src/qa/MiningQa.java',
             'world/irons-bridge-src/tests/InteractionArgumentsTest.java')
+SOURCES += ('tests/test_motor_occurrence.py', 'tests/test_survival_self_planning.py', 'tests/test_survival_reply_wake.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

@@ -8,7 +8,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/ops'))
-from survival_turn_runtime import completion_summary, wrap_reasoning_impl, TOOL, START_TOOL, CONTRACT
+from survival_turn_runtime import (completion_summary, wrap_reasoning_impl, TOOL, START_TOOL, CONTRACT,
+                                   ENDED_CONTRACT, ENDED_SUMMARY)
 from test_survival_skill_tools import SurvivalSkillToolsTests, TURN
 
 EXTERNAL_SESSION = 'life-0123456789abcdef0123456789abcdef'
@@ -106,6 +107,54 @@ class TurnCompletionTests(unittest.TestCase):
         self.fixture()
         self.agent._qiandeng_survival_finish_emitted = (self.message.id, 'call-current')
         self.assertIsNone(completion_summary(self.agent))
+
+    def test_exact_closed_authority_ends_without_claiming_game_success(self):
+        from numen_gateway import write_json, cognition_rejection
+        self.fixture(finish_turn=False)
+        write_json(self.state / 'cognition-lease.json', {'schema': 1, 'turnId': TURN,
+            'status': 'closed', 'bodyAccess': 'queued', 'expiresAt': 9999999999999})
+        value = cognition_rejection(self.state, TURN, 'cognition_closed')
+        self.message.calls[0] = NS(id='call-current', name='numen_survival__eat', input={'turn_id': TURN})
+        self.message.results[0] = NS(id='call-current', name='numen_survival__eat',
+            state='success', output=json.dumps(value))
+        self.assertEqual(completion_summary(self.agent), ENDED_SUMMARY)
+        self.assertFalse(value['turnEnded']['gameOutcomeConfirmed'])
+        self.assertFalse(value['writePerformed'])
+        for field, changed in (('turnId', 'survival-other00000'), ('ok', True), ('dispatched', True),
+                               ('writePerformed', True), ('code', 'outcome_unknown')):
+            self.message.results[0].output = json.dumps(value | {field: changed})
+            self.assertIsNone(completion_summary(self.agent), field)
+        self.message.results[0].output = json.dumps(value)
+        self.message.calls[0].name = self.message.results[0].name = 'other__eat'
+        self.assertIsNone(completion_summary(self.agent))
+
+    def test_authority_end_requires_own_lease_and_known_terminal_authorization(self):
+        from numen_gateway import write_json, cognition_rejection
+        self.fixture(finish_turn=False)
+        path = self.state / 'cognition-lease.json'
+        valid = {'schema': 1, 'turnId': TURN, 'status': 'closed', 'bodyAccess': 'queued', 'expiresAt': 2000}
+        for change in ({'turnId': 'survival-other00000'}, {'schema': 9}, {'bodyAccess': 'direct'},
+                       {'status': 'unknown'}, {'status': 'open'}):
+            write_json(path, valid | change)
+            self.assertNotIn('turnEnded', cognition_rejection(self.state, TURN, 'cognition_closed', lambda: 3))
+        write_json(path, valid)
+        for code in ('outcome_unknown', 'autonomy_disabled', 'cognition_goal_changed', 'lease_invalid'):
+            self.assertNotIn('turnEnded', cognition_rejection(self.state, TURN, code, lambda: 3))
+        write_json(path, valid | {'status': 'open'})
+        self.assertNotIn('turnEnded', cognition_rejection(self.state, TURN, 'cognition_expired', lambda: 1))
+        self.assertTrue(cognition_rejection(self.state, TURN, 'cognition_expired', lambda: 3)['turnEnded']['authorityEnded'])
+
+    def test_closed_remember_rejection_does_not_write_or_renew(self):
+        from numen_gateway import write_json
+        self.fixture(finish_turn=False)
+        write_json(self.state / 'settings.json', {'asyncMotor': True})
+        write_json(self.state / 'cognition-lease.json', {'schema': 1, 'turnId': TURN,
+            'status': 'closed', 'bodyAccess': 'queued', 'expiresAt': 9999999999999})
+        before = {p.name: p.read_bytes() for p in self.state.glob('*.json')}
+        result = self.tools.remember(TURN, goal='must not save', finish_turn=True, summary='不能保存本轮。')
+        self.assertEqual(result['code'], 'cognition_closed')
+        self.assertTrue(result['turnEnded']['authorityEnded'])
+        self.assertEqual(before, {p.name: p.read_bytes() for p in self.state.glob('*.json')})
 
     def test_native_single_text_result_is_accepted_but_mixed_evidence_is_not(self):
         self.fixture()
@@ -220,7 +269,7 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
     """
     async def scenario(self, order=('remember',), finish=True, role='qd-survivor', gate_continue=False,
                        unlimited=False, high_iteration=None, request_overrides=None,
-                       start_receipt_overrides=None, summary_value=None):
+                       start_receipt_overrides=None, summary_value=None, ended_receipt_overrides=None):
         from unittest.mock import patch
         from agentscope.agent import ReActConfig
         from agentscope.message import ToolCallBlock, TextBlock, UserMsg
@@ -240,6 +289,12 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         async def other():
             executed.append('other')
             return 'observed'
+        async def ended(turn_id: str):
+            executed.append('ended')
+            return json.dumps({'ok': False, 'code': 'cognition_closed', 'turnId': turn_id,
+                'dispatched': False, 'writePerformed': False,
+                'turnEnded': {'contract': ENDED_CONTRACT, 'authorityEnded': True,
+                              'gameOutcomeConfirmed': False}} | (ended_receipt_overrides or {}))
         async def start(turn_id: str, name: str, version: str, summary: str = ''):
             executed.append('start')
             return json.dumps({'ok': True, 'code': 'skill_queued', 'executionConfirmed': False,
@@ -250,6 +305,7 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         await toolkit.add_tool(FunctionTool(remember, name=TOOL, is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(start, name=START_TOOL, is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(other, name='other', is_concurrency_safe=False))
+        await toolkit.add_tool(FunctionTool(ended, name='numen_survival__eat', is_concurrency_safe=False))
         manager = NS(on_save=lambda agent, blocks: saved.extend(blocks))
         async def compress(agent, config): pass
         manager.compress = compress
@@ -285,10 +341,10 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
             if len(calls) == 1:
                 if high_iteration is not None:
                     agent.state.cur_iter = high_iteration
-                names = {'remember': TOOL, 'start': START_TOOL, 'other': 'other'}
+                names = {'remember': TOOL, 'start': START_TOOL, 'other': 'other', 'ended': 'numen_survival__eat'}
                 args = {'remember': {'finish_turn': finish, 'summary': summary},
                         'start': {'turn_id': TURN, 'name': 'gather', 'version': 'a' * 64, 'summary': summary},
-                        'other': {}}
+                        'other': {}, 'ended': {'turn_id': TURN}}
                 return ChatResponse(content=[ToolCallBlock(id=f'call-{i}', name=names[name],
                     input=json.dumps(args[name]))
                     for i, name in enumerate(order)], is_last=True)
@@ -333,6 +389,23 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         result = await self.scenario(order=('remember', 'other'))
         self.assertEqual(result.executed, ['remember', 'other'])
         self.assertEqual(result.calls, 2)
+
+    async def test_native_closed_authority_finishes_without_another_model_call(self):
+        from agentscope.event import TextBlockDeltaEvent, ReplyEndEvent
+        result = await self.scenario(order=('ended',))
+        self.assertEqual(result.calls, 1)
+        self.assertEqual(result.executed, ['ended'])
+        self.assertEqual(''.join(e.delta for e in result.events if isinstance(e, TextBlockDeltaEvent)), ENDED_SUMMARY)
+        self.assertEqual([e.finished_reason for e in result.events if isinstance(e, ReplyEndEvent)], ['completed'])
+        self.assertEqual(result.total_calls, 2)
+        self.assertEqual(result.final_internal_session, result.native_internal_session)
+
+    async def test_native_closed_authority_preserves_other_tools_and_foreign_context(self):
+        for options in ({'order': ('ended', 'other')}, {'order': ('ended',), 'role': 'qd-engineer'},
+                        {'order': ('ended',), 'ended_receipt_overrides': {'code': 'outcome_unknown'}}):
+            with self.subTest(options=options):
+                result = await self.scenario(**options)
+                self.assertEqual(result.calls, 2)
 
     async def test_native_start_queue_stream_persists_summary_without_next_model_call(self):
         from agentscope.event import TextBlockDeltaEvent, ReplyEndEvent, ModelCallStartEvent

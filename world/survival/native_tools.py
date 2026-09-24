@@ -10,7 +10,7 @@ import os
 import time
 import urllib.request
 
-from mcp_server import TOOL_NAMES
+from mcp_server import BODY_ACTION_TOOLS, TOOL_NAMES
 
 ROLE = 'qd-survivor'
 DRIVER = 'numen_survival'
@@ -42,6 +42,19 @@ def valid_tools(value):
         and {row['name'] for row in value} == set(TOOL_NAMES))
     if not basic:
         return False
+    for row in value:
+        if row['name'] not in BODY_ACTION_TOOLS:
+            continue
+        schema = row['input_schema']
+        properties = schema.get('properties', {})
+        previous = properties.get('previous_request_id', {}) if isinstance(properties, dict) else {}
+        variants = previous.get('anyOf', []) if isinstance(previous, dict) else []
+        if (not isinstance(previous, dict) or previous.get('default', 'missing') is not None
+                or not isinstance(variants, list) or len(variants) != 2
+                or not all(isinstance(part, dict) and part.get('type') in ('string', 'null') for part in variants)
+                or {part['type'] for part in variants} != {'string', 'null'}
+                or 'previous_request_id' in schema.get('required', [])):
+            return False
     say = next(row for row in value if row['name'] == 'say')['input_schema']
     speech = say.get('properties', {})
     receipt = next(row for row in value if row['name'] == 'say_status')['input_schema']

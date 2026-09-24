@@ -6,6 +6,7 @@ Latest observations stay in the controller; only commands/receipts are queued.
 import copy
 import hashlib
 import json
+import re
 import time
 from numen_gateway import action_lock, read_json, write_json, TURN_ID, _read_json, receipt_evidence
 
@@ -133,32 +134,81 @@ def compact_public(value):
     return result
 
 
-def enqueue_locked(root, turn_id, kind, payload, clock=time.time):
+def confirmed_completion(row):
+    receipt = row.get('receipt')
+    return (row.get('status') == 'completed' and isinstance(receipt, dict)
+            and receipt.get('status') == 'completed' and receipt.get('completionConfirmed') is True)
+
+
+def request_result(row):
+    """A duplicate is a receipt read, not another admission or a fresh action."""
+    status = row['status']
+    confirmed = confirmed_completion(row)
+    result = {'ok': status in ('queued', 'claimed', 'completed', 'dispatched'),
+              'code': 'motor_' + status, 'requestId': row['requestId'], 'status': status,
+              'executionConfirmed': confirmed, 'retryAutomatically': False}
+    if isinstance(row.get('receipt'), dict):
+        result['receipt'] = brief_receipt(row['receipt'])
+    if row.get('previousRequestId'):
+        result['previousRequestId'] = row['previousRequestId']
+    if confirmed and row.get('kind') == 'action':
+        result['nextRepeat'] = {'previousRequestId': row['requestId']}
+        result['instruction'] = ('这次动作已确认完成；先观察当前需要。若同轮确需再次执行相同动作，'
+                                 '显式传previous_request_id=nextRepeat.previousRequestId；'
+                                 '相同previous_request_id的重试只查询同一次后继，不会再执行。')
+    elif status == 'queued':
+        result['instruction'] = '执行请求已入队，身体由快循环调度；可say后remember(finish_turn=true,summary=...)结束本轮。查询status核对回执，不重复排队。'
+    elif status == 'dispatched':
+        result.update(dispatchConfirmed=row.get('receipt', {}).get('dispatchConfirmed') is True, effectConfirmed=False)
+        result['instruction'] = '原生已受理施法，效果尚未确认；只观察当前原生法术与身体状态，不重发此请求。'
+    else:
+        result['instruction'] = '这是原请求的当前状态；未获确认完成，不可重发。读取status和准确回执后再决定下一步。'
+    return result
+
+
+def enqueue_locked(root, turn_id, kind, payload, clock=time.time, *, previous_request_id=None):
     lease=cognition(root,turn_id,clock)
     if not lease:raise ValueError('cognition_required')
     if kind not in ('action','skill') or not isinstance(payload,dict):raise ValueError('invalid_motor_command')
     encoded=json.dumps(payload,sort_keys=True,separators=(',',':'),allow_nan=False)
     if len(encoded.encode())>20000:raise ValueError('motor_command_too_large')
-    identity=hashlib.sha256((turn_id+'\0'+kind+'\0'+encoded).encode()).hexdigest()
+    base_identity=hashlib.sha256((turn_id+'\0'+kind+'\0'+encoded).encode()).hexdigest()
+    payload_hash=hashlib.sha256(encoded.encode()).hexdigest()
+    identity=base_identity
     data=view(root)
+    if previous_request_id is not None:
+        if kind != 'action' or not isinstance(previous_request_id, str) or not re.fullmatch(r'[0-9a-f]{64}', previous_request_id):
+            raise ValueError('motor_previous_invalid')
+        previous = next((r for r in data['requests'] if r['requestId'] == previous_request_id), None)
+        if previous is None:
+            raise ValueError('motor_previous_not_found')
+        # Legacy base IDs already bind the full payload, even after settlement
+        # removed it. New successors retain the hash; compact command args are
+        # only a display projection and cannot prove an exact payload match.
+        if (previous.get('turnId') != turn_id or previous.get('kind') != kind
+                or not (previous.get('payloadHash') == payload_hash or previous_request_id == base_identity)):
+            raise ValueError('motor_previous_mismatch')
+        if not confirmed_completion(previous):
+            return request_result(previous) | {'repeatAccepted': False, 'repeatCode': 'motor_previous_not_completed'}
+        identity = hashlib.sha256((base_identity + '\0after\0' + previous_request_id).encode()).hexdigest()
     old=next((r for r in data['requests'] if r['requestId']==identity),None)
     if old is None:
         if lease['actionsUsed']>=6:raise ValueError('cognition_command_limit')
         if sum(r['status'] in ('queued','claimed','unknown') for r in data['requests'])>=8:
             raise ValueError('motor_inbox_full')
         row={'requestId':identity,'turnId':turn_id,'kind':kind,'payload':json.loads(encoded),
-             'command':command_summary(payload),
+             'command':command_summary(payload),'payloadHash':payload_hash,
              'goalBinding':lease['goalBinding'],'status':'queued','createdAt':clock(),
              'expiresAt':min(clock()+300,lease['expiresAt']/1000), 'motorTurnId':'motor-'+identity[:32]}
+        if previous_request_id is not None:
+            row['previousRequestId'] = previous_request_id
         # Budget first: a crash cannot buy more commands; no external effect here.
         write_json(root/'cognition-lease.json',lease|{'actionsUsed':lease['actionsUsed']+1})
         retained=[r for r in data['requests'] if r['status'] in ('queued','claimed','unknown')]
         history=[r for r in data['requests'] if r['status'] not in ('queued','claimed','unknown')][-24:]
         data['requests']=history+retained+[row];write_json(root/'motor-inbox.json',data)
         old=row
-    return {'ok':True,'code':'motor_queued','requestId':identity,'status':old['status'],
-            'executionConfirmed':False,'retryAutomatically':False,
-            'instruction':'执行请求已入队，身体由快循环调度；可继续规划或结束本轮。查询status核对回执，不重复排队。'}
+    return request_result(old)
 
 
 def claim_locked(root, clock=time.time):
@@ -224,6 +274,10 @@ def public(root, detail='full'):
         command = row.get('command') or command_summary(row.get('payload'))
         if command:
             result['command'] = command
+        if row.get('previousRequestId'):
+            result['previousRequestId'] = row['previousRequestId']
+        if row.get('kind') == 'action' and confirmed_completion(row):
+            result['nextRepeat'] = {'previousRequestId': row['requestId']}
         recent.append(result)
     result = {'version':1,'pending':sum(r['status']=='queued' for r in rows),
             'active':[{k:r.get(k) for k in ('requestId','kind','status','createdAt','motorTurnId')}

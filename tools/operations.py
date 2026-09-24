@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -295,6 +296,25 @@ def execute_lifecycle(plan,states):
             result=compose(*args,**kwargs);row['outcome']='command_completed';return result
         except Exception as exc:
             row.update(outcome='not_confirmed',errorType=type(exc).__name__);raise
+    def wait_ready(name,health):
+        label='wait-deferred-health' if health else 'wait-process-running'
+        row={'action':label,'services':[name],'readOnly':True,'outcome':'started'};record['steps'].append(row)
+        container='qiandengji-'+name+'-1';expected=states.get(container,{})
+        deadline=time.monotonic()+180
+        try:
+            while time.monotonic()<deadline:
+                current=inspect_containers([container]).get(container,{})
+                if (not current.get('id') or current['id']!=expected.get('id')
+                        or current.get('project')!='qiandengji' or current.get('service')!=name):
+                    raise ValueError('Container identity changed during readiness observation')
+                if current.get('state') in ('exited','dead'):
+                    raise RuntimeError('Container exited before readiness was confirmed')
+                if current.get('state')=='running' and (not health or current.get('health')=='healthy'):
+                    row['outcome']='observation_confirmed';return
+                time.sleep(1)
+            raise TimeoutError('Container readiness was not confirmed before the deadline')
+        except Exception as exc:
+            row.update(outcome='not_confirmed',errorType=type(exc).__name__);raise
     try:
         consumers=[name for name in plan['stop'] if name!='mc']
         if consumers:step('stop-consumers','stop',*consumers)
@@ -303,7 +323,15 @@ def execute_lifecycle(plan,states):
             assert 'Saved the game' in response or 'Saved the world' in response, 'Save acknowledgement not received; MC remains running'
         if 'mc' in plan['stop']:step('stop-minecraft','stop','mc')
         for name in plan['start']:
-            step('start-and-wait','up','-d','--no-deps','--no-recreate','--wait','--wait-timeout','180',name,timeout=210)
+            if name=='qwenpaw':
+                # Its full audit needs survivor's body endpoint. Match the
+                # control service: process first, then the unchanged plan,
+                # then strict health. Never start an unselected dependency.
+                step('start-deferred-health','up','-d','--no-deps','--no-recreate',name,timeout=210)
+                wait_ready(name,False)
+            else:
+                step('start-and-wait','up','-d','--no-deps','--no-recreate','--wait','--wait-timeout','180',name,timeout=210)
+        if 'qwenpaw' in plan['start']:wait_ready('qwenpaw',True)
         record['ok']=True
     except Exception as exc:
         record['errorType']=type(exc).__name__
