@@ -26,9 +26,9 @@ class PlanningSubjectTests(unittest.TestCase):
         return life_planning_subject(self.mission, self.memory if memory is None else memory,
                                      self.decisions if decisions is None else decisions, changed)
 
-    def test_current_original_turn_uses_own_next_focus_without_mutation(self):
+    def test_current_original_turn_uses_goal_not_old_next_focus_without_mutation(self):
         before = copy.deepcopy((self.memory, self.decisions))
-        self.assertEqual(self.subject(), 'Inspect a safe entrance')
+        self.assertEqual(self.subject(), 'Establish a useful camp')
         self.assertEqual((self.memory, self.decisions), before)
         self.memory['nextFocus'] = ''
         self.checkpoint()
@@ -47,7 +47,7 @@ class PlanningSubjectTests(unittest.TestCase):
     def test_completed_milestone_does_not_become_its_own_next_goal(self):
         self.memory['goalState'] = 'completed'
         self.checkpoint()
-        self.assertEqual(self.subject(), 'Inspect a safe entrance')
+        self.assertEqual(self.subject(), self.mission)
         self.memory['nextFocus'] = '   '
         self.checkpoint()
         self.assertEqual(self.subject(), self.mission)
@@ -60,7 +60,7 @@ class PlanningSubjectTests(unittest.TestCase):
         self.assertEqual(self.subject(decisions=[]), self.mission)
         self.assertEqual(self.subject(changed=True), self.mission)
         self.assertEqual(self.subject(decisions=[{'turnId': 'turn-current', 'startedAt': 4}]), self.mission)
-        self.memory['nextFocus'] = '  Inspect\n\tentrance  ' + 'x' * 500
+        self.memory['goal'] = '  Inspect\n\tentrance  ' + 'x' * 500
         self.checkpoint()
         subject = self.subject()
         self.assertTrue(subject.startswith('Inspect entrance '))
@@ -82,7 +82,30 @@ class PlanningSubjectTests(unittest.TestCase):
         memory['history'].append(dict(memory['history'][-1], turnId='foreign-turn'))
         memory['turnId'] = 'turn-current'  # A fabricated top-level ID cannot repair a bad last row.
         self.assertEqual(self.subject(memory=memory), self.mission)
-        self.assertEqual(self.subject(memory=dict(self.memory, turnId='foreign-turn')), 'Inspect a safe entrance')
+        self.assertEqual(self.subject(memory=dict(self.memory, turnId='foreign-turn')), 'Establish a useful camp')
+
+    def test_no_goal_never_promotes_old_running_claim_to_current_subject(self):
+        self.memory.update(goal='', nextFocus='mine t557 running; HP 14 hunger 14; wait')
+        self.checkpoint()
+        self.assertEqual(self.subject(), self.mission)
+
+    def test_fresh_body_precedes_subject_but_stale_and_unknown_are_not_asserted(self):
+        body = {'ok': True, 'observedAt': 4000, 'hp': 6.5, 'hunger': 5,
+                'task': {'busy': False, 'completionConfirmed': False}}
+        args = (self.mission, self.memory, self.decisions, 1000)
+        subject = life_planning_subject(*args, body=body, now_ms=5000)
+        self.assertTrue(subject.startswith('实测 HP6.5 饥饿5 身体空闲'))
+        self.assertIn('Establish a useful camp', subject)
+        self.assertNotIn('Inspect a safe entrance', subject)
+        self.assertNotIn('完成', subject)
+        for change in ({'observedAt': -1}, {'observedAt': 6000}, {'observedAt': 1},
+                       {'ok': False}, {'observedAt': None}):
+            now = 30000 if change == {'observedAt': 1} else 5000
+            self.assertEqual(life_planning_subject(*args, body=body | change, now_ms=now),
+                             'Establish a useful camp')
+        unknown = life_planning_subject(*args, body=body | {'task': {}}, now_ms=5000)
+        self.assertNotIn('身体空闲', unknown)
+        self.assertNotIn('身体忙碌', unknown)
 
 
 class SelfPlanningContextTests(unittest.TestCase):
@@ -136,7 +159,8 @@ class SelfPlanningContextTests(unittest.TestCase):
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 2)
         payload = self.backend.submitted[-1]
-        self.assertTrue(payload['prompt'].startswith('Inspect the camp approach'))
+        self.assertIn('Find a useful route', payload['prompt'].split('\n', 1)[0])
+        self.assertNotIn('Inspect the camp approach', payload['prompt'].split('\n', 1)[0])
         context = json.loads(payload['prompt'].split('\n', 1)[1])
         self.assertEqual(context['mission'], mission)
         self.assertEqual(context['longTermMission'], self.settings['mission'])
@@ -162,7 +186,30 @@ class SelfPlanningContextTests(unittest.TestCase):
         self.controller = self.create()
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 2)
-        self.assertTrue(self.backend.submitted[-1]['prompt'].startswith(mission))
+        self.assertIn(mission, self.backend.submitted[-1]['prompt'].split('\n', 1)[0])
+
+    def test_embodied_wake_labels_old_focus_without_rewriting_memory(self):
+        self.controller.settings.update(contextProtocol=2, brainProtocol=1, memoryEpoch='current')
+        now_ms = int(self.clock() * 1000)
+        memory = {'schema': 1, 'source': 'agent_learning_data', 'memoryEpoch': 'current',
+                  'goal': '', 'goalState': 'ongoing', 'nextFocus': 'mine t557 running; HP14 hunger14',
+                  'updatedAt': now_ms - 2700000, 'history': []}
+        self.write('memory.json', memory)
+        self.gateway.body.update(hp=6.5, hunger=5, observedAt=now_ms,
+                                 task={'busy': False, 'completionConfirmed': False})
+        self.controller.tick()
+        prompt = self.backend.submitted[-1]['prompt']
+        header, raw = prompt.split('\n', 1)
+        context = json.loads(raw)
+        self.assertTrue(header.startswith('实测 HP6.5 饥饿5 身体空闲'))
+        self.assertNotIn('t557', header)
+        intent = context['updates']['intent']
+        self.assertEqual(intent['source'], 'agent_reported')
+        self.assertEqual(intent['recordedAt'], memory['updatedAt'])
+        self.assertEqual(intent['ageSeconds'], 2700)
+        self.assertEqual(intent['nextFocus'], memory['nextFocus'])
+        self.assertIn('当前', intent['notice'])
+        self.assertEqual(read_json(self.state / 'memory.json'), memory)
 
     def test_heartbeat_only_attests_loaded_planning_protocol(self):
         self.controller.publish()

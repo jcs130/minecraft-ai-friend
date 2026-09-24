@@ -21,7 +21,7 @@ import time
 import uuid
 from zipfile import ZipFile
 
-from live_spectate import rcon
+from observer_follow import attach, rcon_client, sample
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,16 +152,19 @@ def offline_uuid(name):
 
 
 def online():
-    return bool(re.search(r'\b' + re.escape(USERNAME) + r'\b', rcon('list')))
+    return bool(re.search(r'\b' + re.escape(USERNAME) + r'\b', rcon_client().cmd('list')))
 
 
 def spectate():
-    mode = rcon('gamemode spectator ' + USERNAME)
-    if 'spectator' not in mode.lower() and 'nothing changed' not in mode.lower():
-        raise RuntimeError('Observer spectator mode was not confirmed: ' + mode[:160])
-    result = rcon('spectate Kirito ' + USERNAME)
-    if 'spectating Kirito' not in result:
-        raise RuntimeError('Observer camera was not locked: ' + result[:160])
+    # Reuse the ID-matching RCON transport and same-target camera repair.
+    # A saved spectator mode can produce an empty/no-change command response.
+    client = rcon_client()
+    result = attach(client)
+    observed = sample(client)
+    if (not observed['observerOnline'] or not observed['targetOnline']
+            or observed['observerSpectator'] is not True
+            or observed['dimensionMatch'] is not True or observed['distance'] > 4):
+        raise RuntimeError('Observer camera position was not confirmed')
     return result
 
 

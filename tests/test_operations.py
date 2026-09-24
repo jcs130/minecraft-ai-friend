@@ -1,4 +1,5 @@
 import io
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -74,6 +75,63 @@ class OperationsTests(unittest.TestCase):
         with patch.object(ops,'compose',return_value='') as run,patch.object(ops,'write_action_record'):
             self.assertTrue(ops.execute_lifecycle(plan,states)['ok'])
         self.assertEqual(run.call_args_list[-1].args,('up','-d','--no-deps','--no-recreate','--wait','--wait-timeout','180','panel'))
+
+    def test_qwen_restart_defers_full_health_until_survivor_is_running(self):
+        states=self.owned_states();live=copy.deepcopy(states);events=[]
+        plan=ops.lifecycle_plan('restart',['qwenpaw'],states)
+        def compose(*args,**kwargs):
+            if args[0]=='stop':
+                for name in args[1:]:live['qiandengji-'+name+'-1'].update(state='exited',health='starting')
+            elif args[0]=='up':
+                name=args[-1];events.append('start:'+name)
+                live['qiandengji-'+name+'-1']['state']='running'
+                if name=='qwenpaw' and '--wait' in args:
+                    raise TimeoutError('Qwen full health needs the stopped survivor endpoint')
+                if name=='survivor':
+                    live['qiandengji-survivor-1']['health']='healthy'
+                    live['qiandengji-qwenpaw-1']['health']='healthy'
+            return ''
+        def inspect(names):
+            events.append('observe:'+live['qiandengji-qwenpaw-1']['health'])
+            return {name:live[name] for name in names}
+        with patch.object(ops,'compose',side_effect=compose) as run,\
+             patch.object(ops,'inspect_containers',side_effect=inspect),patch.object(ops,'write_action_record'):
+            result=ops.execute_lifecycle(plan,states)
+        self.assertTrue(result['ok'])
+        self.assertEqual(events,['start:qwenpaw','observe:starting','start:survivor','observe:healthy'])
+        self.assertEqual(result['steps'][-1]['action'],'wait-deferred-health')
+        self.assertEqual([call.args[-1] for call in run.call_args_list if call.args[0]=='up'],['qwenpaw','survivor'])
+
+    def test_qwen_final_unhealthy_fails_without_replay_or_waking_an_unselected_survivor(self):
+        for selected in (['qwenpaw'],['qwenpaw','survivor']):
+            with self.subTest(selected=selected):
+                states=self.owned_states();states['qiandengji-survivor-1']['state']='exited'
+                live=copy.deepcopy(states);live['qiandengji-qwenpaw-1']['health']='unhealthy';clock=[0]
+                plan=ops.lifecycle_plan('start',selected,states)
+                def compose(*args,**kwargs):
+                    live['qiandengji-'+args[-1]+'-1']['state']='running'
+                    return ''
+                def sleep(_):clock[0]+=60
+                with patch.object(ops,'compose',side_effect=compose) as run,\
+                     patch.object(ops,'inspect_containers',side_effect=lambda names:{name:live[name] for name in names}),\
+                     patch('time.monotonic',side_effect=lambda:clock[0]),patch('time.sleep',side_effect=sleep),\
+                     patch.object(ops,'write_action_record') as journal:
+                    with self.assertRaises(TimeoutError):ops.execute_lifecycle(plan,states)
+                self.assertEqual([call.args[-1] for call in run.call_args_list],selected)
+                self.assertFalse(journal.call_args.args[0]['ok'])
+                self.assertEqual(journal.call_args.args[0]['steps'][-1]['outcome'],'not_confirmed')
+                if 'survivor' not in selected:self.assertEqual(live['qiandengji-survivor-1']['state'],'exited')
+
+    def test_qwen_readiness_does_not_accept_a_replaced_or_foreign_container(self):
+        for change in ({'id':'replacement'},{'project':'foreign'}):
+            with self.subTest(change=change):
+                states=self.owned_states();live=copy.deepcopy(states)
+                live['qiandengji-qwenpaw-1'].update(change)
+                plan=ops.lifecycle_plan('start',['qwenpaw','survivor'],states)
+                with patch.object(ops,'compose',return_value='') as run,\
+                     patch.object(ops,'inspect_containers',return_value=live),patch.object(ops,'write_action_record'):
+                    with self.assertRaises(ValueError):ops.execute_lifecycle(plan,states)
+                self.assertEqual([call.args[-1] for call in run.call_args_list],['qwenpaw'])
 
     def test_failed_save_records_consumers_needing_recovery_without_stopping_mc(self):
         states=self.owned_states();plan=ops.lifecycle_plan('restart',['mc'],states)

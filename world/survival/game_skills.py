@@ -185,6 +185,45 @@ def owned_skill_books(books, cache):
     return result
 
 
+def casting_eligibility(replies):
+    """Describe this query's equipment evidence, never infer it from old progress."""
+    irons = replies.get('spells irons', {})
+    raw = irons.get('spells') if isinstance(irons, dict) else None
+    known = (isinstance(irons, dict) and irons.get('ok') is True and irons.get('truncated') is not True
+             and isinstance(raw, list)
+             and all(isinstance(row, dict) and isinstance(row.get('id'), str)
+                     and row['id'].startswith('irons_spellbooks:')
+                     and ABILITY_ID.fullmatch(row['id']) for row in raw))
+    equipped = None
+    if known:
+        equipped = [{key: row[key] for key in ('id', 'ready', 'cooldownMs', 'mana', 'level')
+                     if key in row and type(row[key]) in (str, int, float, bool, type(None))}
+                    for row in raw[:64]]
+    skills = replies.get('skills', {})
+    skills = skills if isinstance(skills, dict) and skills.get('ok') is True else {}
+    details = {row['id']: row for row in skills.get('details', [])
+               if isinstance(row, dict) and isinstance(row.get('id'), str)} if isinstance(skills.get('details'), list) else {}
+    mappings = skills.get('nativeMappings', [])
+    requirements = []
+    for row in mappings[:64] if isinstance(mappings, list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get('id'), str) or not isinstance(row.get('nativeSpell'), str):
+            continue
+        item = {key: row[key] for key in ('id', 'nativeSpell', 'requiresEquipment') if key in row}
+        item['equipmentPresent'] = any(spell['id'] == row['nativeSpell'] for spell in raw) if known else None
+        reason = details.get(row['id'], {}).get('reason')
+        if isinstance(reason, str):
+            item['reason'] = reason
+        requirements.append(item)
+    return {'equipmentObserved': known, 'equipmentSource': 'replies.spells irons',
+            'equipmentQuery': {'tool': 'game_skills', 'scope': 'irons'},
+            'equippedNativeSpells': equipped, 'mappedRequirements': requirements,
+            'truncated': bool(known and len(raw) > 64) or isinstance(mappings, list) and len(mappings) > 64,
+            'grantsCastPermission': False,
+            'instruction': 'status.learned是历史进度，不证明当前可施放或已装备。equipmentObserved=false是未核实，'
+                '不是无装备；查game_skills(irons)读取当前装备法术。not_equipped表示需先取得并装备对应法术来源，'
+                '再观察确认；不要改猜另一个同类治疗别名。已装备仍须通过原生法力、冷却、身体与区域校验。'}
+
+
 def skill_access(replies):
     """Explain existing gateway checks for observed spells, without authorizing a cast."""
     spells = {}
@@ -424,10 +463,16 @@ class GameSkills:
             return {'ok': False, 'code': 'invalid_game_skill_scope'}
         try:
             replies = {command: self._request(command) for command in routes[scope]}
+            status = replies.get('status')
+            if isinstance(status, dict) and 'learned' in status:
+                replies['status'] = dict(status, learnedSemantics={
+                    'historicalProgress': True, 'provesCurrentCastability': False,
+                    'currentEquipmentSource': 'game_skills(scope="irons")'})
             result = {'ok': all(row.get('ok') is True for row in replies.values()),
                     'scope': scope, 'page': page, 'actor': self.gateway._settings()['bodyName'],
                     'observedAt': self.gateway._now(), 'replies': replies,
                     'agentPreflight': skill_access(replies),
+                    'castingEligibility': casting_eligibility(replies),
                     'learning': {
                         'legacy': 'skills.learned是当前开放主动技能中的已学项，levelGate是等级已足但尚未收录项；这些主动技能无需先找书即可正常施放，首次成功后收录。status.learned保留旧进度，不等于所有旧技能仍开放。',
                         'books': 'skills.bookSkills包含可参悟的主动/被动目录。status快照的ownedSkillBooks对应实际携带的技能书；game_learn按原规则验书收录，当前不消耗书，主动施放仍受等级限制。没有书不要盲试；被动无需主动施放。',

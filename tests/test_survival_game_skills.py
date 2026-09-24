@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
@@ -67,6 +68,53 @@ class GameSkillTests(unittest.TestCase):
         self.assertEqual(len(self.gateway.calls), 4)
         self.assertFalse((self.state / 'unknown.json').exists())
         self.assertIn('真实装备', result['learning']['irons'])
+
+    def test_status_preserves_learned_progress_without_reusing_old_equipment_as_current(self):
+        self.reply.update(spells=[{'id': 'irons_spellbooks:heal', 'ready': True}])
+        self.bridge.query('irons')
+        self.commands.clear()
+        self.reply={'ok': True, 'learned': ['heal','regen','give']}
+        result=self.bridge.query('status')
+        self.assertEqual(self.commands,['status'])
+        self.assertEqual(result['replies']['status']['learned'],['heal','regen','give'])
+        semantics=result['replies']['status']['learnedSemantics']
+        self.assertTrue(semantics['historicalProgress'])
+        self.assertFalse(semantics['provesCurrentCastability'])
+        access=result['castingEligibility']
+        self.assertFalse(access['equipmentObserved'])
+        self.assertIsNone(access['equippedNativeSpells'])
+        self.assertEqual(access['equipmentQuery'],{'tool':'game_skills','scope':'irons'})
+
+    def test_native_equipment_empty_is_known_but_failed_or_missing_list_is_unknown(self):
+        for reply,known in [({'ok':True,'spells':[]},True),
+                            ({'ok':False,'code':'bridge_unavailable','spells':[]},False),
+                            ({'ok':True,'spells':[],'truncated':True},False),
+                            ({'ok':True},False),({'ok':True,'spells':[{'name':'unverified'}]},False)]:
+            with self.subTest(reply=reply),patch.object(self.bridge,'_request',return_value=reply):
+                result=self.bridge.query('irons')['castingEligibility']
+                self.assertIs(result['equipmentObserved'],known)
+                self.assertEqual(result['equippedNativeSpells'],[] if known else None)
+
+    def test_equipped_native_cooldown_and_alias_requirement_remain_distinct_from_cast_permission(self):
+        replies={'status':{'ok':True,'learned':['heal','regen']},
+            'skills':{'ok':True,'nativeMappings':[
+                {'id':'heal','nativeSpell':'irons_spellbooks:heal','requiresEquipment':True},
+                {'id':'regen','nativeSpell':'irons_spellbooks:cloud_of_regeneration','requiresEquipment':True}],
+                'details':[{'id':'heal','reason':'cooldown'},{'id':'regen','reason':'not_equipped'}]},
+            'spells legacy':{'ok':True,'atoms':[]},
+            'spells irons':{'ok':True,'spells':[{'id':'irons_spellbooks:heal','ready':False,'cooldownMs':3500}]}}
+        original=json.dumps(replies)
+        with patch.object(self.bridge,'_request',side_effect=lambda command:replies[command]):
+            result=self.bridge.query('all')['castingEligibility']
+        self.assertTrue(result['equipmentObserved'])
+        self.assertFalse(result['equippedNativeSpells'][0]['ready'])
+        self.assertEqual(result['equippedNativeSpells'][0]['cooldownMs'],3500)
+        requirements={row['id']:row for row in result['mappedRequirements']}
+        self.assertTrue(requirements['heal']['equipmentPresent'])
+        self.assertFalse(requirements['regen']['equipmentPresent'])
+        self.assertEqual(requirements['regen']['reason'],'not_equipped')
+        self.assertFalse(result['grantsCastPermission'])
+        self.assertEqual(json.dumps(replies),original)
 
     def test_bounded_all_view_drops_flavor_and_legacy_atoms_without_mutation(self):
         result = {'ok': True, 'scope': 'all', 'page': 1, 'actor': 'Kirito', 'observedAt': 1000,

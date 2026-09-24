@@ -87,5 +87,50 @@ class ActionFeedbackTests(unittest.TestCase):
         self.assertNotIn('guild', receipt_evidence(row))
 
 
+class GameSkillFeedbackTests(unittest.TestCase):
+    def row(self, code='not_equipped', status='rejected'):
+        return {'actionId':'action-heal','tool':'game_cast','status':status,'completionConfirmed':False,
+            'args':{'skill_id':'heal','params':{}},
+            'result':{'code':'action_rejected','result':{'message':'Requires an equipped spell.',
+                'data':{'receipt':{'requestId':'native-heal','ok':False,'code':code,
+                    'skillId':'heal','engine':'irons_spellbooks','nativeSpell':'irons_spellbooks:heal',
+                    'effectReceipt':{'code':code,'private':'PRIVATE'}}}}}}
+
+    def test_native_equipment_rejection_keeps_exact_code_spell_and_recovery_after_motor_projection(self):
+        from motor_mailbox import compact_public
+        row=self.row();original=copy.deepcopy(row)
+        summary=receipt_evidence(row)
+        result=compact_public({'recent':[{'receipt':summary}]})['recent'][0]['receipt']
+        self.assertEqual(result['gameSkill'],{'requestId':'native-heal','ok':False,'code':'not_equipped',
+            'skillId':'heal','engine':'irons_spellbooks','nativeSpell':'irons_spellbooks:heal'})
+        self.assertEqual(result['recovery']['requiredNextStep'],'equip_then_observe')
+        self.assertFalse(result['recovery']['retryAutomatically'])
+        self.assertIn('game_skills',result['recovery']['instruction'])
+        self.assertNotIn('PRIVATE',json.dumps(result))
+        self.assertEqual(row,original)
+
+    def test_unknown_native_result_never_becomes_an_equipment_rejection_or_replay_instruction(self):
+        for code in ('outcome_unknown','not_equipped'):
+            row=self.row(code,status='unknown')
+            summary=receipt_evidence(row)
+            self.assertEqual(summary['status'],'unknown')
+            self.assertFalse(summary['completionConfirmed'])
+            self.assertEqual(summary['gameSkill']['code'],code)
+            self.assertNotIn('recovery',summary)
+
+    def test_direct_native_receipt_preserves_observed_spell_id_without_inventing_missing_identity(self):
+        row=self.row('cooldown')
+        row['args']['skill_id']='irons_spellbooks:heal'
+        native=row['result']['result']['data']['receipt']
+        native.pop('nativeSpell');native.pop('skillId')
+        native['spell']={'id':'irons_spellbooks:heal','private':'PRIVATE'}
+        summary=receipt_evidence(row)
+        self.assertEqual(summary['gameSkill']['nativeSpell'],'irons_spellbooks:heal')
+        self.assertEqual(summary['gameSkill']['code'],'cooldown')
+        self.assertNotIn('recovery',summary)
+        native.pop('spell')
+        self.assertNotIn('nativeSpell',receipt_evidence(row)['gameSkill'])
+
+
 if __name__ == '__main__':
     unittest.main()

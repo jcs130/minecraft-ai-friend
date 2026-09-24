@@ -18,6 +18,8 @@ def tools():
     rows = []
     for name in native.TOOL_NAMES:
         properties = {}
+        if name in native.BODY_ACTION_TOOLS:
+            properties['previous_request_id'] = {'default': None, 'anyOf': [{'type': 'string'}, {'type': 'null'}]}
         if name == 'status':
             properties = {'detail': {'type': 'string', 'enum': ['full', 'brief'], 'default': 'brief'}}
         elif name == 'say':
@@ -46,6 +48,25 @@ def saved():
 
 
 class NativeToolConnectionTests(unittest.TestCase):
+    def test_cached_action_schema_reloads_and_predecessor_must_be_optional_nullable_string(self):
+        for name in native.BODY_ACTION_TOOLS:
+            before = tools()
+            next(row for row in before if row['name'] == name)['input_schema']['properties'].pop('previous_request_id')
+            self.assertFalse(native.valid_tools(before), name)
+        with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
+            self.assertTrue(native.NativeToolConnection().ensure_ready())
+            self.assertEqual(request.call_args_list[2].args[1:],
+                             (native.TOOLS_ROUTE, {'tools': list(native.TOOL_NAMES)}))
+        for parameter in ({'default': None}, {'type': 'string', 'default': None},
+                          {'default': None, 'anyOf': [{'type': 'string'}, {'type': 'integer'}]}):
+            invalid = tools()
+            next(row for row in invalid if row['name'] == 'eat')['input_schema']['properties']['previous_request_id'] = parameter
+            self.assertFalse(native.valid_tools(invalid))
+        required = tools()
+        next(row for row in required if row['name'] == 'eat')['input_schema']['required'] = ['previous_request_id']
+        self.assertFalse(native.valid_tools(required))
+        self.assertTrue(native.valid_tools(tools()))
+
     def test_say_requires_split_text_audio_contract_with_optional_voice_default(self):
         for name, field in (('say', 'voice'), ('say_status', 'message_id')):
             before = tools()

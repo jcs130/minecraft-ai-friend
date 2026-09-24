@@ -199,7 +199,7 @@ class GatewayTests(unittest.TestCase):
         self.write('lease.json', original)
         self.write('unknown.json', {'actionId': 'unresolved'})
         marker = (self.state / 'unknown.json').read_bytes()
-        self.assertEqual(self.mine(), {'ok': False, 'code': 'outcome_unknown'})
+        self.assertEqual(self.mine(), {'ok': False, 'code': 'outcome_unknown', 'retryAutomatically': False})
         self.assertEqual((self.state / 'unknown.json').read_bytes(), marker)
         self.assertFalse(self.rcon.calls)
 

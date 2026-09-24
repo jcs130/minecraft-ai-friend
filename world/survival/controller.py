@@ -150,12 +150,13 @@ def evolution_candidate(state_dir):
     return '\n'.join(lines)[:MAX_CANDIDATE_CHARS]
 
 
-def life_planning_subject(mission, memory, decisions, mission_changed_at=0):
+def life_planning_subject(mission, memory, decisions, mission_changed_at=0, *, body=None, now_ms=None):
     """A bounded recall hint, never a replacement for the operator's mission.
 
     A late remember from a superseded turn is not current planning, even when
     its write timestamp follows the new mission. Use the original reservation
     to establish that the remembering turn began under the current mission.
+    nextFocus is a historical claim/plan, never the current task's factual title.
     """
     def stamp(value):
         return type(value) in (int, float) and math.isfinite(value) and value >= 0
@@ -176,11 +177,54 @@ def life_planning_subject(mission, memory, decisions, mission_changed_at=0):
         started = decision.get('startedAt') if decision else None
         # A same-millisecond legacy reservation is ambiguous; the mission is
         # the safe recall hint until a later turn writes its own working goal.
-        if stamp(started) and mission_changed_at < started * 1000 <= updated:
-            keys = ('nextFocus',) if memory.get('goalState') == 'completed' else ('nextFocus', 'goal')
-            subject = next((memory[key] for key in keys
-                            if isinstance(memory.get(key), str) and memory[key].strip()), mission)
-    return ' '.join(str(subject).split())[:160]
+        if (stamp(started) and mission_changed_at < started * 1000 <= updated
+                and memory.get('goalState') != 'completed'
+                and isinstance(memory.get('goal'), str) and memory['goal'].strip()):
+            subject = memory['goal']
+    subject = ' '.join(str(subject).split())[:160]
+    body = body if isinstance(body, dict) else {}
+    observed = body.get('observedAt')
+    if (body.get('ok') is True and stamp(now_ms) and stamp(observed)
+            and 0 <= now_ms - observed <= 20000):
+        facts = [f'{label}{body[key]:g}' for key, label in (('hp', 'HP'), ('hunger', '饥饿'))
+                 if stamp(body.get(key))]
+        busy = (body.get('task') or {}).get('busy')
+        if type(busy) is bool:
+            facts.append('身体忙碌' if busy else '身体空闲')
+        if facts:
+            subject = '实测 ' + ' '.join(facts) + '；目标意图：' + subject
+    return subject[:220]
+
+
+def party_reply_context(replies):
+    """Model view of already verified speech; original bindings own consumption.
+
+    Hearing proves the text arrived, never that the speaker performed an action.
+    Preserve event/part identity, timestamps and uncertain states without inference.
+    """
+    def receipt_view(value):
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        result = {key: copy.deepcopy(value[key]) for key in
+                  ('eventId', 'kind', 'ok', 'heard', 'phase', 'status', 'code', 'channel',
+                   'emittedAt', 'observedAt', 'dimension', 'distance') if key in value}
+        if 'parts' in value:
+            result['parts'] = [receipt_view(part) for part in value['parts']]
+        return result
+
+    result = []
+    for row in replies:
+        projected = {key: copy.deepcopy(row[key]) for key in
+                     ('eventId', 'replyTo', 'partyId', 'bindingRevision', 'text',
+                      'requiresReply', 'trusted') if key in row}
+        if 'sender' in row:
+            sender = row['sender']
+            projected['sender'] = ({key: sender[key] for key in ('agentId', 'bodyUuid', 'displayName', 'name')
+                                   if key in sender} if isinstance(sender, dict) else copy.deepcopy(sender))
+        if 'receipt' in row:
+            projected['receipt'] = receipt_view(row['receipt'])
+        result.append(projected)
+    return result
 
 
 def main_inventory_summary(body):
@@ -828,6 +872,16 @@ class Controller:
         if self.settings.get('brainProtocol') == 1:
             from embodiment import wake
             context = wake(self, body, control, turn_id, message, replies)
+            if replies:
+                context['partyReplies'] = party_reply_context(replies)
+            intent = context.get('intent') if isinstance(context, dict) else None
+            if isinstance(intent, dict) and intent.get('nextFocus'):
+                recorded = intent.get('updatedAt')
+                age = (int(self.clock() * 1000) - recorded
+                       if type(recorded) in (int, float) and math.isfinite(recorded) else None)
+                intent.update(source='agent_reported', recordedAt=recorded,
+                    ageSeconds=round(age / 1000, 1) if age is not None and age >= 0 else None,
+                    notice='历史意图与自述；nextFocus中的运行、坐标和身体值须按当前self及动作回执核对。')
             # Inject relevant lessons into the wake context (cross-session memory)
             if isinstance(context, dict):
                 # embodiment.wake returns `self` (not `body`) and `intent` fields
@@ -938,7 +992,7 @@ class Controller:
             context['instruction'] += ('本轮有已听见的伙伴来信，优先回应其内容，必要时感知或行动后直接给最终答复；'
                 '回复由现有游戏投递流程处理，不调用party_send重复发送或派生新任务。')
         if replies:
-            context['partyReplies'] = replies
+            context['partyReplies'] = party_reply_context(replies)
             context['instruction'] += ('partyReplies是你在游戏中已经听见的回复，作为本轮生活事实考虑；'
                 '不要求再回复，不调用party_send接力对话，不把收到回复当作对方已完成游戏动作。')
         return context
@@ -1990,7 +2044,8 @@ class Controller:
         # official agent-chat sender prefix. Put real task subject first so it
         # does not retrieve the same boilerplate across every life turn.
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
-                                        control.get('missionChangedAt', 0))
+                                        control.get('missionChangedAt', 0), body=body,
+                                        now_ms=int(self.clock() * 1000))
         # Keep the task first for native memory retrieval, but do not bury the
         # audience request inside a large JSON observation. This is guidance to
         # the actor, never an automatic caption or a speaking schedule.

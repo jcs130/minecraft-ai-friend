@@ -20,6 +20,11 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'say', 'say_status', 'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense', 'voice_speak')
 
 
+BODY_ACTION_TOOLS = ('move', 'interact_at', 'mine', 'craft', 'eat', 'equip', 'place_block',
+                     'drop_items', 'farm', 'open_container', 'transfer_items', 'close_container',
+                     'sleep', 'trade', 'guild_claim', 'guild_release', 'guild_deliver', 'game_cast', 'game_learn')
+
+
 class SkillTools:
     """Lease-bound learning writes; only the controller executes promoted skills."""
     def __init__(self, state, library=None, clock=time.time):
@@ -89,7 +94,8 @@ class SkillTools:
                     raise
                 return operation(lease)
         except GatewayError as exc:
-            return {'ok': False, 'code': str(exc), 'retryAutomatically': False}
+            from numen_gateway import cognition_rejection
+            return cognition_rejection(self.state, turn_id, str(exc), self.clock)
         except Exception as exc:
             from skill_library import SkillError
             from practice import PracticeError
@@ -362,6 +368,11 @@ def make_server(gateway=None, skill_tools=None, http=False):
         host='0.0.0.0' if http else '127.0.0.1', port=8089,
         stateless_http=http, json_response=http, max_request_body_size=1048576)
 
+    def body_action(turn_id, tool, args, previous_request_id):
+        if previous_request_id is None:
+            return gateway.action(turn_id, tool, args)
+        return gateway.action(turn_id, tool, args, previous_request_id=previous_request_id)
+
     @server.tool()
     def status(wait_seconds: float = 0, detail: Literal['full', 'brief'] = 'brief') -> dict:
         """读取最新身体与上一动作回执。默认brief保留counts、inventorySpace、装备、技能书、安全和终态，省略背包槽位并压缩历史回执；需要槽位/物品元数据与完整回执时显式detail=full。wait_seconds=0..10按需等当前动作，每2秒只读一次，终态提前返回；超时仍在途则结束本次工作而非忙轮询。空闲不是成功，技能书携带不等于已学。"""
@@ -433,31 +444,31 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return WorldPerception(gateway.state).cached()
 
     @server.tool()
-    def move(turn_id: str, x: float, z: float, y: float | None = None) -> dict:
+    def move(turn_id: str, x: float, z: float, y: float | None = None, previous_request_id: str | None = None) -> dict:
         """不挖不搭走到24格水平距离内的已观察位置，普通路段选超过1.5格到达容差的落点。通常省略y，由感知选择目标列附近高度的可站立格；无此格会拒绝。只有已观察目标脚部高度才传y，勿把当前位置y抄给远处坡地。motor_queued只是入队，可say后remember结束本轮，下一轮读回执；accepted才用status(wait_seconds=10,detail="brief")有界查终态。在途和同xz都不证明到达目标高度；距离拒绝会附当时原点、目标与实际水平距离。"""
         args = {'x': x, 'z': z}
         if y is not None:
             args['y'] = y
-        return gateway.action(turn_id, 'goto', args)
+        return body_action(turn_id, 'goto', args, previous_request_id)
 
     @server.tool()
     def interact_at(turn_id: str, button: str, x: int | None = None, y: int | None = None,
-                    z: int | None = None, hold_ticks: int = 0, item_id: str | None = None) -> dict:
+                    z: int | None = None, hold_ticks: int = 0, item_id: str | None = None, previous_request_id: str | None = None) -> dict:
         """原生左/右键交互，可供技能组合：button=left/right；坐标全给表示瞄准4.5格内目标，全空沿当前视线使用物品；不导航。hold_ticks=0点按，1–100按住游戏tick；item_id可选，须实际持有。不预设种植/放置等玩法。accepted仅为受理，沿用status查原任务终态，再以库存/方块观测验收目标；不因等待重复点击。"""
         args = {'button': button, 'x': x, 'y': y, 'z': z, 'hold_ticks': hold_ticks}
         if item_id is not None:
             args['item_id'] = item_id
-        return gateway.action(turn_id, 'interact_at', args)
+        return body_action(turn_id, 'interact_at', args, previous_request_id)
 
     @server.tool()
-    def mine(turn_id: str, block_ids: list[str], count: int = 4) -> dict:
+    def mine(turn_id: str, block_ids: list[str], count: int = 4, previous_request_id: str | None = None) -> dict:
         """采集 1–8 个新增物品；只选身体16格内已加载的实际方块ID，保留原生寻路和拾取。无目标先观察/移动再规划；排队后结束本轮，用status读准确数量和失败原因，不重复派发。"""
-        return gateway.action(turn_id, 'mine', {'block_ids': block_ids, 'count': count})
+        return body_action(turn_id, 'mine', {'block_ids': block_ids, 'count': count}, previous_request_id)
 
     @server.tool()
-    def craft(turn_id: str, item_id: str, count: int = 1) -> dict:
+    def craft(turn_id: str, item_id: str, count: int = 1, previous_request_id: str | None = None) -> dict:
         """使用真实背包材料合成 1–16 个物品；3×3 配方需附近有工作台。"""
-        return gateway.action(turn_id, 'craft', {'item_id': item_id, 'count': count})
+        return body_action(turn_id, 'craft', {'item_id': item_id, 'count': count}, previous_request_id)
 
     @server.tool()
     def lookup_recipe(item_id: str) -> dict:
@@ -466,14 +477,14 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return query(gateway, item_id)
 
     @server.tool()
-    def eat(turn_id: str, item_id: str) -> dict:
+    def eat(turn_id: str, item_id: str, previous_request_id: str | None = None) -> dict:
         """吃背包中的食物，消耗本轮动作；下轮观察饥饿恢复。"""
-        return gateway.action(turn_id, 'eat', {'item_id': item_id})
+        return body_action(turn_id, 'eat', {'item_id': item_id}, previous_request_id)
 
     @server.tool()
-    def equip(turn_id: str, item_id: str, slot: str = 'mainhand') -> dict:
+    def equip(turn_id: str, item_id: str, slot: str = 'mainhand', previous_request_id: str | None = None) -> dict:
         """装备背包物品；槽位 mainhand/offhand/head/chest/legs/feet。回执不明不要重试。"""
-        return gateway.action(turn_id, 'equip_item', {'item_id': item_id, 'action': 'equip', 'slot': slot})
+        return body_action(turn_id, 'equip_item', {'item_id': item_id, 'action': 'equip', 'slot': slot}, previous_request_id)
 
     @server.tool()
     def inspect_block(x: int, y: int, z: int) -> dict:
@@ -486,24 +497,24 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return world_tools.scan(block_ids, radius)
 
     @server.tool()
-    def place_block(turn_id: str, item_id: str, x: int, y: int, z: int) -> dict:
+    def place_block(turn_id: str, item_id: str, x: int, y: int, z: int, previous_request_id: str | None = None) -> dict:
         """用背包内材料在建设区近距放置一块建筑材料/床/工作台等；x/y/z是目的格。须有实体支撑，不能替换已有建筑，床和门验证双格。"""
-        return gateway.action(turn_id, 'place_block', {'item_id': item_id, 'x': x, 'y': y, 'z': z})
+        return body_action(turn_id, 'place_block', {'item_id': item_id, 'x': x, 'y': y, 'z': z}, previous_request_id)
 
     @server.tool()
-    def drop_items(turn_id: str, item_id: str, count: int) -> dict:
+    def drop_items(turn_id: str, item_id: str, count: int, previous_request_id: str | None = None) -> dict:
         """向面朝方向丢出主背包1–64件物品，保留附魔/耐久/名称等组件。用于整理背包或递给附近队友；掉落实体已出现不代表队友已经拾取。未知不要重发。"""
-        return gateway.action(turn_id, 'drop_items', {'item_id': item_id, 'count': count})
+        return body_action(turn_id, 'drop_items', {'item_id': item_id, 'count': count}, previous_request_id)
 
     @server.tool()
-    def farm(turn_id: str, operation: str, x: int, y: int, z: int, item_id: str | None = None) -> dict:
+    def farm(turn_id: str, operation: str, x: int, y: int, z: int, item_id: str | None = None, previous_request_id: str | None = None) -> dict:
         """建设区内正常耕作。till：x/y/z 是要锄的泥土/草方块格，item_id=锄ID；plant：x/y/z 是作物应占的空气格，其下方 (x,y-1,z) 必须是耕地，item_id=种子ID；harvest：x/y/z 是成熟作物格，item_id=null。比如耕地 y=63，种植和采收用 y=64，不是玩家眼睛高度，也不再加一层。先用 inspect_block 核实目标/下方方块与 age；改变站位不会纠正错误的目标高度。检查真实物品，执行后核对回执。"""
-        return gateway.action(turn_id, 'farm', {'operation': operation, 'item_id': item_id, 'x': x, 'y': y, 'z': z})
+        return body_action(turn_id, 'farm', {'operation': operation, 'item_id': item_id, 'x': x, 'y': y, 'z': z}, previous_request_id)
 
     @server.tool()
-    def open_container(turn_id: str, x: int, y: int, z: int) -> dict:
+    def open_container(turn_id: str, x: int, y: int, z: int, previous_request_id: str | None = None) -> dict:
         """近距打开自己已放置或授权的单箱/桶/熔炉；双手须空手或普通剑/木棍等无使用效果物品，先关闭其他菜单。拒绝双箱；回执绑定实际方块位置，槽位可用inspect_container查询。"""
-        return gateway.action(turn_id, 'open_container', {'x': x, 'y': y, 'z': z})
+        return body_action(turn_id, 'open_container', {'x': x, 'y': y, 'z': z}, previous_request_id)
 
     @server.tool()
     def inspect_container(x: int, y: int, z: int) -> dict:
@@ -511,19 +522,19 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return world_tools.container_view(x, y, z)
 
     @server.tool()
-    def transfer_items(turn_id: str, x: int, y: int, z: int, moves: list[dict]) -> dict:
+    def transfer_items(turn_id: str, x: int, y: int, z: int, moves: list[dict], previous_request_id: str | None = None) -> dict:
         """操作当前已打开的同一个储物方块。最多4项{from,to,count,item_id}；item_id是预期源ID，to/count皆null才自动整栈搬运。用库存/槽位变化验收，可为熔炉装料与燃料。"""
-        return gateway.action(turn_id, 'transfer_items', {'x': x, 'y': y, 'z': z, 'moves': moves})
+        return body_action(turn_id, 'transfer_items', {'x': x, 'y': y, 'z': z, 'moves': moves}, previous_request_id)
 
     @server.tool()
-    def close_container(turn_id: str) -> dict:
+    def close_container(turn_id: str, previous_request_id: str | None = None) -> dict:
         """正常关闭当前容器，检查菜单恢复；一次动作。"""
-        return gateway.action(turn_id, 'close_container', {})
+        return body_action(turn_id, 'close_container', {}, previous_request_id)
 
     @server.tool()
-    def sleep(turn_id: str, x: int, y: int, z: int) -> dict:
+    def sleep(turn_id: str, x: int, y: int, z: int, previous_request_id: str | None = None) -> dict:
         """近距使用实际床，检查原生是否真正入睡；日间/敌怪等仍由游戏拒绝。不生成床或跳过条件。"""
-        return gateway.action(turn_id, 'sleep', {'x': x, 'y': y, 'z': z})
+        return body_action(turn_id, 'sleep', {'x': x, 'y': y, 'z': z}, previous_request_id)
 
     @server.tool()
     def villager_offers(entity_id: int, offset: int = 0) -> dict:
@@ -531,9 +542,9 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return world_tools.villager_offers(entity_id, offset)
 
     @server.tool()
-    def trade(turn_id: str, entity_id: int, offer_index: int, quote: str) -> dict:
+    def trade(turn_id: str, entity_id: int, offer_index: int, quote: str, previous_request_id: str | None = None) -> dict:
         """按villager_offers的index/quote成交一次，消耗真实材料；至少3个背包空槽，正常原版价格/库存/经验，回执未知不重发。"""
-        return gateway.action(turn_id, 'trade', {'entity_id': entity_id, 'offer_index': offer_index, 'quote': quote})
+        return body_action(turn_id, 'trade', {'entity_id': entity_id, 'offer_index': offer_index, 'quote': quote}, previous_request_id)
 
     @server.tool()
     def guild_board() -> dict:
@@ -541,19 +552,19 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return guild_tools.query()
 
     @server.tool()
-    def guild_claim(turn_id: str, quest_id: str) -> dict:
+    def guild_claim(turn_id: str, quest_id: str, previous_request_id: str | None = None) -> dict:
         """按guild_board的YYYY-MM-DD:N合同ID正式承接；须符合档位/每日上限/柜台距离，消耗一次动作。"""
-        return gateway.action(turn_id, 'guild_claim', {'quest_id': quest_id})
+        return body_action(turn_id, 'guild_claim', {'quest_id': quest_id}, previous_request_id)
 
     @server.tool()
-    def guild_release(turn_id: str, quest_id: str) -> dict:
+    def guild_release(turn_id: str, quest_id: str, previous_request_id: str | None = None) -> dict:
         """释放本人已接合同，不能取消他人任务；以公会回执为准。"""
-        return gateway.action(turn_id, 'guild_release', {'quest_id': quest_id})
+        return body_action(turn_id, 'guild_release', {'quest_id': quest_id}, previous_request_id)
 
     @server.tool()
-    def guild_deliver(turn_id: str, quest_id: str) -> dict:
+    def guild_deliver(turn_id: str, quest_id: str, previous_request_id: str | None = None) -> dict:
         """到指定NPC附近交付自己已接收购合同的真实物品，公会核对收货/奖励/功勋。未知回执禁止重发；不凭聊天奖励。"""
-        return gateway.action(turn_id, 'guild_deliver', {'quest_id': quest_id})
+        return body_action(turn_id, 'guild_deliver', {'quest_id': quest_id}, previous_request_id)
 
     @server.tool()
     def guild_receipt(request_id: str) -> dict:
@@ -572,14 +583,14 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return bounded_all_skills_view(game_tools.query(scope, page))
 
     @server.tool()
-    def game_cast(turn_id: str, skill_id: str, params: dict | None = None) -> dict:
+    def game_cast(turn_id: str, skill_id: str, params: dict | None = None, previous_request_id: str | None = None) -> dict:
         """以桐人正常施法，占一个身体动作步骤；先game_skills辨别已学/等级可施放和Agent边界。完整法术ID与目录参数；铁魔法需实际装备并遵守原生法力/冷却，受理不等于命中。"""
-        return gateway.action(turn_id, 'game_cast', {'skill_id': skill_id, 'params': params or {}})
+        return body_action(turn_id, 'game_cast', {'skill_id': skill_id, 'params': params or {}}, previous_request_id)
 
     @server.tool()
-    def game_learn(turn_id: str, skill_id: str) -> dict:
+    def game_learn(turn_id: str, skill_id: str, previous_request_id: str | None = None) -> dict:
         """按ownedSkillBooks已识别的skill_id参悟实际携带的特色技能书，占一个身体动作步骤；原规则验书但不扣书。主动技能等级足也可直接game_cast首次收录；不赠书/等级/Iron法术。"""
-        return gateway.action(turn_id, 'game_learn', {'skill_id': skill_id})
+        return body_action(turn_id, 'game_learn', {'skill_id': skill_id}, previous_request_id)
 
     @server.tool()
     def game_skill_receipt(request_id: str) -> dict:
