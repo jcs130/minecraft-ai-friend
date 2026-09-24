@@ -190,7 +190,7 @@ class SkillTools:
             return result
         return self._write(turn_id, queue)
 
-    def remember(self, turn_id, goal='', lesson='', next_focus='',
+    def remember(self, turn_id, goal=None, lesson=None, next_focus=None,
                  goal_state='ongoing', review_after_seconds=1800, finish_turn=False, summary=''):
         from numen_gateway import read_json, write_json, GatewayError
         def save(_):
@@ -212,8 +212,6 @@ class SkillTools:
                         '请用你自己对实际结果的简短总结替换例文。不要修改lesson来解决缺少summary，也不要另造turn_id。'
                         '可在原租约仍有效时使用本轮原turn_id补齐summary；只存中途进度则用finish_turn=false。'}
             values = {'goal': goal, 'lesson': lesson, 'nextFocus': next_focus}
-            if any(not isinstance(text, str) or len(text) > 1000 for text in values.values()):
-                raise GatewayError('invalid_memory_text')
             if goal_state not in ('ongoing', 'completed', 'blocked', 'resting'):
                 raise GatewayError('invalid_goal_state')
             if type(review_after_seconds) is not int or not 180 <= review_after_seconds <= 3600:
@@ -226,6 +224,13 @@ class SkillTools:
             previous = read_json(path) if path.exists() else {}
             if settings.get('brainProtocol') == 1 and previous.get('memoryEpoch') != settings['memoryEpoch']:
                 previous = {}
+            # A partial checkpoint must not erase the ongoing intention. Merge
+            # only after epoch isolation; an explicit empty string still clears.
+            for key in ('goal', 'lesson', 'nextFocus'):
+                if values[key] is None:
+                    values[key] = previous.get(key, '')
+                if not isinstance(values[key], str) or len(values[key]) > 1000:
+                    raise GatewayError('invalid_memory_text')
             history = previous.get('history', [])
             if not isinstance(history, list):
                 raise GatewayError('invalid_memory_history')
@@ -644,10 +649,10 @@ def make_server(gateway=None, skill_tools=None, http=False):
         return skill_tools.start(turn_id, name, version, memory, max_steps, objective, summary)
 
     @server.tool()
-    def remember(turn_id: str, goal: str = '', lesson: str = '', next_focus: str = '',
+    def remember(turn_id: str, goal: str | None = None, lesson: str | None = None, next_focus: str | None = None,
                  goal_state: str = 'ongoing', review_after_seconds: int = 1800,
                  finish_turn: bool = False, summary: str = '') -> dict:
-        """保存目标/经验和复盘间隔（180–3600秒）。等待或结束本轮时传finish_turn=true和最多600字summary：保存成功后Qwen原生回合直接以你的summary结束，不再调用模型空等。还要行动时保持false。同轮相同记忆不重写；goal_state为ongoing/completed/blocked/resting。summary只陈述真实回执证明的成果与待办；结束本轮不等于完成游戏目标，不暂停自主运行，也不改变动作租约。"""
+        """保存目标/经验和复盘间隔（180–3600秒）。goal/lesson/next_focus省略或null保留当前值，显式空字符串清空。等待或结束本轮时传finish_turn=true和最多600字summary：保存成功后Qwen原生回合直接以你的summary结束，不再调用模型空等。还要行动时保持false。同轮相同记忆不重写；goal_state为ongoing/completed/blocked/resting。summary只陈述真实回执证明的成果与待办；结束本轮不等于完成游戏目标，不暂停自主运行，也不改变动作租约。"""
         return skill_tools.remember(turn_id, goal, lesson, next_focus, goal_state, review_after_seconds, finish_turn, summary)
 
     return server

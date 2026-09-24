@@ -34,7 +34,7 @@ def main():
                  'test_survival_navigation_sense', 'test_motor_projection',
                  'test_survival_area_recovery', 'test_survival_chat', 'test_motor_boundary', 'test_survival_inventory_feedback',
                  'test_survival_native_tools', 'test_survivor_driver_scope', 'test_configure_survivor_vision',
-                 'test_survival_game_skills'):
+                 'test_survival_game_skills', 'test_survival_skill_tools'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
