@@ -7,6 +7,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
 
 /** Java owns published playback receipts; terminal results never regress on a duplicate/restart. */
@@ -34,6 +35,13 @@ final class SpeechReceipts {
         Path temporary = Files.createTempFile(directory, job.id() + ".", ".tmp");
         try {
             Files.writeString(temporary, result.toString() + "\n");
+            // Java temp files default to 0600 on POSIX. The broker runs under a
+            // different UID with no DAC override; it must read actual playback
+            // receipts. Set shared-read, owner-write permissions BEFORE publish.
+            // A permission failure propagates and leaves no published result.
+            if (Files.getFileStore(temporary).supportsFileAttributeView("posix")) {
+                Files.setPosixFilePermissions(temporary, PosixFilePermissions.fromString("rw-r--r--"));
+            }
             try { Files.move(temporary, directory.resolve(job.id() + ".json"), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
             catch (AtomicMoveNotSupportedException ignored) { Files.move(temporary, directory.resolve(job.id() + ".json"), StandardCopyOption.REPLACE_EXISTING); }
         } finally { Files.deleteIfExists(temporary); }

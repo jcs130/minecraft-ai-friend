@@ -953,9 +953,9 @@
     },
     {
       "path": "mods/god-voice-0.1.0.jar",
-      "size": 41048,
-      "sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99",
-      "source_sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99",
+      "size": 41213,
+      "sha256": "850626ab9872fa59d69f085c2137b2f45d7b348ab8392e78ab4ed0acf3b19c02",
+      "source_sha256": "850626ab9872fa59d69f085c2137b2f45d7b348ab8392e78ab4ed0acf3b19c02",
       "source": "client_extension",
       "preserved_existing": false
     },
@@ -1701,7 +1701,7 @@
       "ids": [
         "godvoice"
       ],
-      "sha256": "b23d72da9c6d83a1557538af4bb7db6a73c8ada5469d14f1d1861238b2c44e99"
+      "sha256": "850626ab9872fa59d69f085c2137b2f45d7b348ab8392e78ab4ed0acf3b19c02"
     },
     {
       "file": "qiandeng-maid-bridge-0.1.0.jar",
