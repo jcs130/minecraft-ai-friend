@@ -60,8 +60,15 @@ def main():
                     names.append(test.id())
                     suite.addTest(test)
     result = unittest.TextTestRunner(verbosity=1).run(suite)
-    report = {'schema': 1, 'ok': result.wasSuccessful() and not result.skipped and before == hashes(),
+    legacy_skip = ('Legacy materialize_skill checks require disposable QwenPaw 2.2.0; '
+                   '2.2.1 uses test_native_make_skill_policy')
+    skipped = [{'test': test.id(), 'reason': reason} for test, reason in result.skipped]
+    unexpected_skips = [row for row in skipped if not (
+        row['test'].startswith('test_native_role_capabilities.InstalledNativeImplementation.test_')
+        and row['reason'] == legacy_skip)]
+    report = {'schema': 1, 'ok': result.wasSuccessful() and not unexpected_skips and before == hashes(),
               'testsRun': result.testsRun, 'tests': names, 'sourceHashes': before,
+              'skipped': skipped, 'unexpectedSkips': unexpected_skips,
               'failures': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.failures],
               'errors': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.errors],
               'modelCalls': 0, 'productionMutations': 0, 'worldActions': 0}
