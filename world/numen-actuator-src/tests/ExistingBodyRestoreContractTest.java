@@ -51,12 +51,41 @@ public final class ExistingBodyRestoreContractTest {
         check("death_respawn_dimension_requires_review".equals(ExistingBodyRestore.deathEligibilityError(body, owner, "Kirito", 100, 200, false, "minecraft:the_nether")));
         BlockPos anchor = new BlockPos(-540,64,868);
         java.util.Set<BlockPos> examined = new java.util.HashSet<>();
-        check(ExistingBodyRestore.chooseLanding(anchor, p -> { check(examined.add(p)); return false; }) == null);
-        check(examined.size() == 490);
+        java.util.List<BlockPos> order = new java.util.ArrayList<>();
+        check(ExistingBodyRestore.chooseLanding(anchor, 10, (x,z) -> {
+            BlockPos p = new BlockPos(x,65,z); check(examined.add(p)); order.add(p); return p;
+        }, p -> false) == null);
+        check(examined.size() == 49);
         check(examined.stream().allMatch(p -> Math.abs(p.getX()-anchor.getX())<=3 && Math.abs(p.getZ()-anchor.getZ())<=3
-            && p.getY() >= 63 && p.getY()<=72));
-        BlockPos expected = anchor.offset(2,1,0);
-        check(expected.equals(ExistingBodyRestore.chooseLanding(anchor, expected::equals)));
+            && p.getY() == 65));
+        long previous=-1;
+        for (BlockPos p : order) {
+            long dx=p.getX()-(long)anchor.getX(), dz=p.getZ()-(long)anchor.getZ(), distance=dx*dx+dz*dz;
+            check(distance>=previous); previous=distance;
+        }
+        BlockPos expected = anchor.offset(2,1,1);
+        // The live incident's lower wet pocket passes the old standing predicate.
+        // A world-spawn column must instead reject that column and select dry surface Y.
+        check(expected.equals(ExistingBodyRestore.chooseLanding(anchor, 10,
+            (x,z) -> x==expected.getX() && z==expected.getZ() ? expected : null,
+            p -> p.equals(anchor.below()) || p.equals(expected))));
+        check(ExistingBodyRestore.chooseLanding(anchor, 0, (x,z)->null, p->true)==null);
+        check(ExistingBodyRestore.chooseLanding(anchor, 3, (x,z)->expected, p->false)==null);
+        check(ExistingBodyRestore.chooseLanding(anchor, 0, (x,z)->expected, p->true)==null); // no cross-column fallback
+        check(ExistingBodyRestore.worldSpawnRadius(-1)==0);
+        check(ExistingBodyRestore.worldSpawnRadius(0)==0);
+        check(ExistingBodyRestore.worldSpawnRadius(2)==2);
+        check(ExistingBodyRestore.worldSpawnRadius(Integer.MAX_VALUE)==3);
+        BlockPos roof=anchor.above(30);
+        check(ExistingBodyRestore.chooseLanding(anchor, 3, (x,z)->new BlockPos(x,179,z), p->true)==null);
+        check(ExistingBodyRestore.chooseLanding(anchor, 3, (x,z)->new BlockPos(x,63,z), p->true)==null);
+        check(expected.equals(ExistingBodyRestore.chooseLanding(anchor, 3,
+            (x,z)-> x==anchor.getX() && z==anchor.getZ() ? roof : expected, p->true)));
+        check(expected.equals(ExistingBodyRestore.chooseLanding(anchor, 3,
+            (x,z)-> x==anchor.getX() && z==anchor.getZ() ? anchor.above(8) : expected, p->true))); // lower nearby dry ground wins
+        check(anchor.above(8).equals(ExistingBodyRestore.chooseLanding(anchor, 0,
+            (x,z)->anchor.above(8), p->true)));
+        check(ExistingBodyRestore.chooseLanding(anchor, 0, (x,z)->anchor.above(9), p->true)==null);
         check(!data.contains("SpawnX"));
         check(ExistingBodyRestore.savedDataError(data, body, owner, "minecraft:overworld") == null);
         System.out.println("{\"ok\":true,\"assertions\":"+count+",\"scope\":\"compiled saved identity/data gate; no world or body created\"}");

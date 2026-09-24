@@ -106,15 +106,58 @@ public final class ExistingBodyRestore {
         return null;
     }
 
-    /** Same bounded deterministic shape as upstream SafeSpawn; no fallback onto an unsafe anchor. */
-    public static BlockPos chooseLanding(BlockPos origin, java.util.function.Predicate<BlockPos> safe) {
-        for (int dy = -1; dy <= 8; dy++) for (int r = 0; r <= 3; r++)
-            for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
-                if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
-                BlockPos pos = origin.offset(dx, dy, dz);
-                if (safe.test(pos)) return pos;
-            }
+    /** Keep the existing small neighbourhood, bounded by the actual spawn-radius rule. */
+    public static int worldSpawnRadius(int configured) {
+        return Math.max(0, Math.min(3, configured));
+    }
+
+    /** Prefer the configured spawn height, then nearby higher dry ground. */
+    public static BlockPos chooseLanding(BlockPos origin, int configuredRadius,
+            java.util.function.BiFunction<Integer, Integer, BlockPos> column,
+            java.util.function.Predicate<BlockPos> safe) {
+        int radius = worldSpawnRadius(configuredRadius);
+        java.util.List<BlockPos> columns = new java.util.ArrayList<>();
+        for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++)
+            columns.add(origin.offset(dx, 0, dz));
+        columns.sort(java.util.Comparator.comparingLong((BlockPos p) -> {
+            long dx = p.getX() - (long) origin.getX(), dz = p.getZ() - (long) origin.getZ();
+            return dx * dx + dz * dz;
+        }).thenComparingInt(BlockPos::getX).thenComparingInt(BlockPos::getZ));
+        BlockPos best = null;
+        for (BlockPos candidate : columns) {
+            BlockPos pos = column.apply(candidate.getX(), candidate.getZ());
+            if (pos != null && pos.getX() == candidate.getX() && pos.getZ() == candidate.getZ()
+                    && pos.getY() >= origin.getY() && pos.getY() <= (long) origin.getY() + 8
+                    && (best == null || pos.getY() < best.getY()) && safe.test(pos)) best = pos;
+        }
+        return best;
+    }
+
+    /** A loaded, dry standing point within eight blocks above the explicit world spawn Y.
+     * This is intentionally not the full-height vanilla heightmap search: a sky
+     * structure above a configured ground spawn must not become its landing.
+     */
+    public static BlockPos loadedWorldSpawnColumn(ServerLevel level, int x, int z) {
+        if (!level.getWorldBorder().isWithinBounds(new BlockPos(x, level.getMinBuildHeight(), z))) return null;
+        // Block collision shapes may inspect a neighbour. Resolve all full chunks
+        // without getChunk before reading any block state.
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
+            if (level.getChunkSource().getChunkNow((x + dx) >> 4, (z + dz) >> 4) == null) return null;
+        int originY = level.getSharedSpawnPos().getY();
+        int minimum = Math.max(originY, level.getMinBuildHeight() + 1);
+        int maximum = (int) Math.min((long) originY + 8, level.getMaxBuildHeight() - 2L);
+        for (int y = minimum; y <= maximum; y++) {
+            BlockPos pos = new BlockPos(x, y, z);
+            if (level.getBlockState(pos).getFluidState().isEmpty()
+                    && level.getBlockState(pos.above()).getFluidState().isEmpty()
+                    && loadedSafeLanding(level, pos)) return pos;
+        }
         return null;
+    }
+
+    public static BlockPos chooseWorldSpawnLanding(ServerLevel level) {
+        return chooseLanding(level.getSharedSpawnPos(), level.getServer().getSpawnRadius(level),
+            (x, z) -> loadedWorldSpawnColumn(level, x, z), p -> loadedSafeLanding(level, p));
     }
 
     /** Upstream SafeSpawn footing/hazard/collision checks, guarded BEFORE every world read.
@@ -225,7 +268,7 @@ public final class ExistingBodyRestore {
             Map<String, Object> audit = null;
             if (dead) {
                 ServerLevel level = server.overworld();
-                BlockPos landing = chooseLanding(level.getSharedSpawnPos(), p -> loadedSafeLanding(level, p));
+                BlockPos landing = chooseWorldSpawnLanding(level);
                 if (landing == null) throw new IllegalArgumentException("death_safe_spawn_unavailable");
                 deathLanding = Vec3.atBottomCenterOf(landing);
                 journal = deathJournal(server, body, entry.diedAt());
