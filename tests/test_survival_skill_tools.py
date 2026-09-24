@@ -317,6 +317,61 @@ class SurvivalSkillToolsTests(unittest.TestCase):
             self.assertEqual(self.tools.remember(TURN, review_after_seconds=value)['code'], 'invalid_review_interval')
         self.assertEqual(self.tools.remember(TURN, goal_state='ignore_limits')['code'], 'invalid_goal_state')
 
+    def test_partial_memory_preserves_intent_and_same_turn_retry_is_idempotent(self):
+        self.tools.remember(TURN, goal='Recover hunger', lesson='Make room before pickup',
+                            next_focus='Find food', review_after_seconds=300)
+        args = dict(next_focus='Wait for the nearby reply', goal_state='ongoing',
+                    review_after_seconds=300, finish_turn=True, summary='Ate bread; waiting for a reply.')
+        saved = self.tools.remember(TURN, **args)
+        memory = read_json(self.state / 'memory.json')
+        self.assertEqual((memory['goal'], memory['lesson']), ('Recover hunger', 'Make room before pickup'))
+        self.assertEqual(memory['nextFocus'], args['next_focus'])
+        self.assertTrue(saved['turnCompletion']['requested'])
+        before = (self.state / 'memory.json').read_bytes()
+        reconnected = SkillTools(self.state, self.library, clock=lambda: NOW + 10)
+        with patch('numen_gateway.write_json', side_effect=AssertionError('partial retry must not write')):
+            duplicate = reconnected.remember(TURN, **args)
+        self.assertFalse(duplicate['changed'])
+        self.assertEqual(duplicate['updatedAt'], saved['updatedAt'])
+        self.assertEqual((self.state / 'memory.json').read_bytes(), before)
+        self.assertEqual(read_json(self.state / 'lease.json'), self.lease)
+
+    def test_mcp_partial_memory_preserves_all_omitted_text_and_schema_has_null_defaults(self):
+        from mcp_server import make_server
+        async def check():
+            self.tools.remember(TURN, goal='Recover hunger', lesson='Observed bread', next_focus='Find food')
+            server = make_server(SimpleNamespace(state=self.state, clock=lambda: NOW), self.tools)
+            await server.call_tool('remember', {'turn_id': TURN, 'goal_state': 'blocked',
+                                                'review_after_seconds': 300})
+            memory = read_json(self.state / 'memory.json')
+            self.assertEqual([memory[key] for key in ('goal', 'lesson', 'nextFocus')],
+                             ['Recover hunger', 'Observed bread', 'Find food'])
+            schema = next(tool for tool in await server.list_tools() if tool.name == 'remember').inputSchema
+            for name in ('goal', 'lesson', 'next_focus'):
+                self.assertIsNone(schema['properties'][name]['default'])
+                self.assertEqual({part['type'] for part in schema['properties'][name]['anyOf']}, {'string', 'null'})
+                self.assertNotIn(name, schema['required'])
+        asyncio.run(check())
+
+    def test_explicit_empty_memory_text_still_clears_requested_fields(self):
+        self.tools.remember(TURN, goal='Recover hunger', lesson='Observed bread', next_focus='Find food')
+        self.assertTrue(self.tools.remember(TURN, goal='', lesson='', next_focus='')['ok'])
+        memory = read_json(self.state / 'memory.json')
+        self.assertEqual([memory[key] for key in ('goal', 'lesson', 'nextFocus')], ['', '', ''])
+
+    def test_omitted_memory_text_starts_empty_and_cannot_restore_previous_epoch(self):
+        write_json(self.state / 'settings.json', {'brainProtocol': 1, 'memoryEpoch': 'old-life'})
+        self.assertTrue(self.tools.remember(TURN)['ok'])
+        initial = read_json(self.state / 'memory.json')
+        self.assertEqual([initial[key] for key in ('goal', 'lesson', 'nextFocus')], ['', '', ''])
+        self.tools.remember(TURN, goal='Old goal', lesson='Old lesson', next_focus='Old next step')
+        write_json(self.state / 'settings.json', {'brainProtocol': 1, 'memoryEpoch': 'new-life'})
+        self.assertTrue(self.tools.remember(TURN, next_focus='Observe current body')['ok'])
+        memory = read_json(self.state / 'memory.json')
+        self.assertEqual([memory[key] for key in ('goal', 'lesson', 'nextFocus')], ['', '', 'Observe current body'])
+        self.assertEqual(memory['memoryEpoch'], 'new-life')
+        self.assertEqual(len(memory['history']), 1)
+
     def test_same_turn_memory_retry_preserves_bytes_history_and_review_time(self):
         args = dict(goal='Wait for wheat', lesson='Observed age 1', next_focus='Inspect farm',
                     goal_state='resting', review_after_seconds=300)

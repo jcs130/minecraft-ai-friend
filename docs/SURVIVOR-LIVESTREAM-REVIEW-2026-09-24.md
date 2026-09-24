@@ -52,3 +52,13 @@
 观察者客户端日志确认 13:20:41、13:32:16 两条桐人对结衣的附近聊天进入 `ChatComponent`。这证明伙伴聊天已能到达观察客户端，但不等同于新 `say` 的自主使用。观察者跟随状态多次为 online、spectator、同维度、distance=0，客户端 `pauseOnLostFocus=false`。
 
 本轮整体面板 `probe_panel_smoke` 返回 false，原始结果在 `runtime/livestream-panel-smoke-20260924.json`；多个既有子模块或证据记录未绿，不能据此宣称整个项目运营全绿。具身专项须在最终源码测试与部署后另行检查。
+
+### 第三轮暴露的采矿协议缺口（13:41–13:53）
+
+采样文件：`runtime/survivor-livestream-samples-1790228511.jsonl`。角色自行释放背包格、取得面包并两次进食，饥饿值从 4 恢复到 14；随后有两次确认完成的移动。13:50:05 的 `mine` 原生任务 `t557` 在约 124 秒后身体空闲，但外部异步调用的原生终态已被丢弃，网关只能记录 `observed_ended / completionConfirmed:false`，motor 按未知结果暂停。当前位置从工作区内走到 `(42.50,68,901.75)`，没有橡木库存增量。不能根据时间推断超时并补造失败回执；此轮仍未通过持续直播验收。
+
+同时复现 `remember` 未传 `goal/lesson` 时默认空字符串抹掉意图。新合同中省略或 null 保留旧值，显式空字符串才清空；旧时代记忆仍先过滤，不回填丢失目标。54 项相关回归通过。直播解说指引已由原生实际读取，两个真实输入都包含 `pacing.narration`，但三轮均没有 `say`；增加简短的唤醒前置提示，实际采用效果待新观察确认。当前源代码 509 项全量隔离测试通过；另增加恢复入口拒绝 motor 队列未知结果的先红后绿回归，防止仅因不存在 `unknown.json` 就误恢复。
+
+结衣未回复的一个原因是 9 月 22 日遗留 `async-motor-20260922` 维护准入一直暂停。通过既有控制入口恢复后，14:01 已观察到旧消息获得游戏 heard 回复，随后另一旧消息提交原生任务；新消息还在 FIFO 积压之后。伙伴消费循环独立于结衣的生活定时器，不以恢复聊天为由开启旧 timer。
+
+按正常顺序先刷新运营快照、再调用的面板探针仍非全绿（`runtime/livestream-panel-smoke-final-20260924.json`），其中 runtime、operations、survivor、game_qwenpaw、companion_ticking、navigation_sense、embodied_agent 通过。`survivor_party` 的根生活 chatId 空值和 `world_team` 未接受合法 withdrawn 状态造成部分旧探针误判，另有历史构建证据和未启用的生活定时器；不能将这些全部说成当前服务故障或全部忽略。

@@ -41,7 +41,8 @@ SOURCES += ('tools/configure_survivor_vision.py', 'tools/sync_survivor_driver_sc
             'world/ops/skills/qd-survivor-practice/SKILL.md',
             'world/ops/skills/qd-survivor-practice/references/exploration.md',
             'world/ops/skills/qd-survivor-practice/references/long-term-planning.md')
-SOURCES += ('world/survival/game_skills.py', 'tests/test_survival_game_skills.py')
+SOURCES += ('world/survival/game_skills.py', 'tests/test_survival_game_skills.py',
+            'tests/test_survival_skill_tools.py', 'world/survival/control.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

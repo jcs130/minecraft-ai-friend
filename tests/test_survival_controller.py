@@ -312,6 +312,28 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(resumed['lastDrain']['requestId'], request_id)
         self.assertEqual(resumed['lastDrain']['status'], 'completed')
 
+    def test_resume_refuses_unknown_motor_receipt_without_unknown_marker(self):
+        self.write('control.json', {'enabled': False, 'pauseReason': 'motor_outcome_unknown'})
+        self.write('controller.json', {'schema': 1, 'active': None})
+        original = {'schema': 1, 'requests': [{'requestId': 'a' * 64, 'status': 'unknown',
+            'receipt': {'status': 'observed_ended', 'completionConfirmed': False}}]}
+        self.write('motor-inbox.json', original)
+        before = read_json(self.state / 'control.json')
+        self.assertFalse((self.state / 'unknown.json').exists())
+        with self.assertRaisesRegex(ValueError, 'uncertain motor'):
+            update_control(self.state, 'resume', clock=self.clock)
+        self.assertEqual(read_json(self.state / 'control.json'), before)
+        self.assertEqual(read_json(self.state / 'motor-inbox.json'), original)
+
+    def test_resume_allows_archived_unverified_motor_retirement(self):
+        self.write('control.json', {'enabled': False, 'pauseReason': 'operator_pause'})
+        self.write('controller.json', {'schema': 1, 'active': None})
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'a' * 64, 'status': 'cancelled',
+            'receipt': {'code': 'operator_retired_unverified', 'completionConfirmed': False},
+            'resolution': {'actionReplayed': False, 'effectAttributionVerified': False}}]})
+        self.assertTrue(update_control(self.state, 'resume', clock=self.clock)['enabled'])
+
     def test_drain_arriving_during_context_construction_does_not_reserve_next_turn(self):
         original_open = self.gateway.open_lease
         def late_drain(*args, **kwargs):
@@ -963,6 +985,13 @@ class ControllerTests(unittest.TestCase):
     def test_livestream_never_duplicates_an_active_model_turn(self):
         self.livestream()
         self.controller.tick()
+        # Audience guidance must be visible before the large factual JSON,
+        # while the current task subject remains first for native retrieval.
+        header, facts = self.backend.submitted[0]['prompt'].split('\n', 1)
+        self.assertIn('【直播提示】', header)
+        self.assertIn('say', header)
+        import json
+        self.assertTrue(json.loads(facts)['pacing']['narration']['neverSent'])
         self.clock.now += 46
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)

@@ -26,7 +26,8 @@ def tools():
         elif name == 'say_status':
             properties = {'message_id': {'type': 'string'}}
         elif name == 'remember':
-            properties = {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
+            properties = {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'},
+                          'goal': {'default': None, 'anyOf': [{'type': 'string'}, {'type': 'null'}]}}
         elif name in ('skill_start', 'skill_draft'):
             properties['objective' if name == 'skill_start' else 'refinement'] = {
                 'default': None, 'anyOf': [{'type': 'object'}, {'type': 'null'}]}
@@ -85,6 +86,26 @@ class NativeToolConnectionTests(unittest.TestCase):
         with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
             self.assertTrue(native.NativeToolConnection().ensure_ready())
             self.assertEqual(request.call_args_list[2].args[1], native.TOOLS_ROUTE)
+
+    def test_old_empty_goal_default_requires_reload_and_partial_update_schema_stays_optional(self):
+        before = tools()
+        next(row for row in before if row['name'] == 'remember')['input_schema']['properties']['goal'] = {
+            'type': 'string', 'default': ''}
+        self.assertFalse(native.valid_tools(before))
+        with patch.object(native, 'request', side_effect=[before, saved(), [], tools()]) as request:
+            self.assertTrue(native.NativeToolConnection().ensure_ready())
+            self.assertEqual(request.call_args_list[2].args[1:],
+                             (native.TOOLS_ROUTE, {'tools': list(native.TOOL_NAMES)}))
+        for parameter in ({'default': None}, {'type': 'string', 'default': None},
+                          {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+                          {'default': None, 'anyOf': [{'type': 'string'}, {'type': 'integer'}]}):
+            invalid = tools()
+            next(row for row in invalid if row['name'] == 'remember')['input_schema']['properties']['goal'] = parameter
+            self.assertFalse(native.valid_tools(invalid))
+        required = tools()
+        next(row for row in required if row['name'] == 'remember')['input_schema']['required'] = ['goal']
+        self.assertFalse(native.valid_tools(required))
+        self.assertTrue(native.valid_tools(tools()))
 
     def test_old_status_schema_reloads_and_brief_must_remain_optional_default(self):
         before = tools()

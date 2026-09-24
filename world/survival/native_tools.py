@@ -64,7 +64,16 @@ def valid_tools(value):
             or set(choices) != {'full', 'brief'}
             or not isinstance(required, list) or 'detail' in required):
         return False
-    properties = next(row for row in value if row['name'] == 'remember')['input_schema'].get('properties', {})
+    memory_schema = next(row for row in value if row['name'] == 'remember')['input_schema']
+    properties = memory_schema.get('properties', {})
+    goal = properties.get('goal', {}) if isinstance(properties, dict) else {}
+    variants = goal.get('anyOf', []) if isinstance(goal, dict) else []
+    if (not isinstance(goal, dict) or goal.get('default', 'missing') is not None
+            or not isinstance(variants, list) or len(variants) != 2
+            or not all(isinstance(part, dict) and part.get('type') in ('string', 'null') for part in variants)
+            or {part['type'] for part in variants} != {'string', 'null'}
+            or 'goal' in memory_schema.get('required', [])):
+        return False
     memory_ready = (isinstance(properties, dict) and properties.get('finish_turn', {}).get('type') == 'boolean'
             and properties.get('finish_turn', {}).get('default') is False
             and properties.get('summary', {}).get('type') == 'string')

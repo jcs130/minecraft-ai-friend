@@ -24,6 +24,11 @@ def update_control(state, action, text=None, clock=time.time):
         elif action == 'resume':
             if (state / 'unknown.json').exists():
                 raise ValueError('Reconcile the recorded uncertain action before resuming')
+            # Async actions keep uncertainty in the durable motor queue even
+            # after the gateway has observed the native body become idle.
+            from motor_mailbox import view
+            if any(row.get('status') == 'unknown' for row in view(state)['requests']):
+                raise ValueError('Reconcile the recorded uncertain motor action before resuming')
             current = read_controller_json(state / 'controller.json')
             if current.get('active') or current.get('dialogueActive'):
                 raise ValueError('Wait for native task cancellation before resuming')

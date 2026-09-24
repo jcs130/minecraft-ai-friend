@@ -1991,6 +1991,17 @@ class Controller:
         # does not retrieve the same boilerplate across every life turn.
         subject = life_planning_subject(context['mission'], self.memory(), self.data['decisions'],
                                         control.get('missionChangedAt', 0))
+        # Keep the task first for native memory retrieval, but do not bury the
+        # audience request inside a large JSON observation. This is guidance to
+        # the actor, never an automatic caption or a speaking schedule.
+        narration = context.get('pacing', {}).get('narration', {})
+        last_said = narration.get('lastSent') or {}
+        audience_note = ''
+        if (message is None and context.get('pacing', {}).get('enabled') is True
+                and not narration.get('unknownMessageId')
+                and (narration.get('neverSent') is True or last_said.get('secondsAgo', 0) >= 180)):
+            audience_note = ('【直播提示】附近公屏尚无独立解说或已安静一段时间。身体安全时，'
+                '先用say向观众简短说出眼下的新决定、发现或感受，再继续推进；不要重复旧计划。')
         model_session, context_delivery = self.session, None
         context_event_ids = context['perception'].get('pendingEventIds', [])
         if self.settings.get('asyncMotor'):
@@ -2003,7 +2014,7 @@ class Controller:
             from behavior_context import prepare
             model_session, context, context_delivery = prepare(
                 self.root, self.session, context, self.memory(), learning=due)
-        prompt = subject + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
+        prompt = subject + audience_note + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': model_session['primarySessionId'], 'userId': self.session['userId'],
                   'channel': self.session['channel'], 'chatId': model_session.get('chatId'),
