@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Comparator;
 import java.util.UUID;
 
@@ -16,7 +17,38 @@ public class SpeechContractTest {
         try { action.run(); } catch (IllegalArgumentException expected) { n++; return; }
         throw new AssertionError(label);
     }
+    static void readableReceipt(Path path) throws Exception {
+        if (Files.getFileStore(path).supportsFileAttributeView("posix")) {
+            check(Files.getPosixFilePermissions(path).equals(PosixFilePermissions.fromString("rw-r--r--")),
+                    "published receipt is readable across service UIDs without allowing other writers");
+        }
+    }
+    /** Explicit offline fixture for the UID 1000 writer / cap-dropped UID 0 reader test. */
+    static void sharedReceiptFixture(Path base) throws Exception {
+        UUID actor = UUID.fromString("11111111-1111-4111-8111-111111111111");
+        long now = System.currentTimeMillis();
+        var job = new SpeechJob(2, "uid-receipt", actor, base.resolve("unused.mp3"),
+                "fixture", "fixture", "fixture", 4, now, now + 90000,
+                "minecraft:overworld", "nearby", null, 24, "normal", base.resolve("unused.processing"));
+        Files.createDirectories(base.resolve("speech-requests"));
+        Files.createDirectories(base.resolve("speech-state"));
+        Files.writeString(base.resolve("speech-requests/uid-receipt.json"),
+                "{\"schema\":2,\"id\":\"uid-receipt\",\"entity\":\"" + actor
+                + "\",\"generation\":4,\"createdAt\":" + now + ",\"expiresAt\":" + (now + 90000) + "}");
+        Files.writeString(base.resolve("speech-state/" + actor + ".json"),
+                "{\"schema\":1,\"entity\":\"" + actor + "\",\"generation\":4}");
+        var receipts = new SpeechReceipts(base);
+        receipts.write(job, "started", "audio_started", now, now);
+        readableReceipt(base.resolve("speech-receipts/uid-receipt.json"));
+        receipts.write(job, "completed", "audio_completed", now + 1, now);
+        readableReceipt(base.resolve("speech-receipts/uid-receipt.json"));
+        System.out.println("{\"ok\":true,\"fixture\":\"uid-receipt\",\"assertions\":" + n + "}");
+    }
     public static void main(String[] args) throws Exception {
+        if (args.length == 2 && args[0].equals("--write-shared-receipt")) {
+            sharedReceiptFixture(Path.of(args[1]));
+            return;
+        }
         Path base = Files.createTempDirectory("godvoice-speech-test-");
         try {
             Path queue = Files.createDirectories(base.resolve("tts-queue"));
@@ -70,7 +102,9 @@ public class SpeechContractTest {
             var receipts = new SpeechReceipts(base);
             receipts.write(job, "started", "audio_started", now, now);
             check(receipts.status(job.id()).equals("started"), "started is persistent, not completed");
+            readableReceipt(base.resolve("speech-receipts/utterance.json"));
             receipts.write(job, "cancelled", "generation_changed", now + 1, now);
+            readableReceipt(base.resolve("speech-receipts/utterance.json"));
             receipts.write(job, "completed", "late_callback", now + 2, now);
             check(receipts.status(job.id()).equals("cancelled"), "late completion cannot overwrite cancellation");
             String saved = Files.readString(base.resolve("speech-receipts/utterance.json"));

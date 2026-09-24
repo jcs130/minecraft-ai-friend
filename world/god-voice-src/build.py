@@ -25,9 +25,13 @@ def main():
     parser.add_argument('--libraries', type=Path, default=ROOT/'server/mc/libraries')
     parser.add_argument('--voicechat', type=Path, default=ROOT/'server/mc/mods/voicechat-neoforge-1.21.1-2.6.22.jar')
     parser.add_argument('--speech', action='store_true', help='Explicitly permit reviewed playback replacement; preserve recorder/entrypoints')
+    parser.add_argument('--receipt-permissions', action='store_true',
+        help='With --speech, explicitly permit only SpeechReceipts shared-read permission repair')
     parser.add_argument('--jdk-bin', type=Path, default=Path(os.environ.get('JDK21_BIN',
         r'C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin')))
     args = parser.parse_args()
+    if args.receipt_permissions and not args.speech:
+        parser.error('--receipt-permissions requires --speech')
     suffix = '.exe' if os.name == 'nt' else ''
     javac, java = args.jdk_bin/('javac'+suffix), args.jdk_bin/('java'+suffix)
     assert javac.is_file() and java.is_file(), 'Java 21 JDK required'
@@ -42,7 +46,16 @@ def main():
     if args.speech:
         changed.add('dev/god/godvoice/TtsQueueWatcher.java')
     unchanged = [row for row in origin['files'] if row['path'] not in changed]
-    assert all(digest(HERE/row['path']) == row['sha256'] for row in unchanged), 'Original playback/entrypoint/resources must stay unchanged'
+    origin_bytes, normalized_origin = {}, []
+    for row in unchanged:
+        data = (HERE/row['path']).read_bytes()
+        if hashlib.sha256(data).hexdigest() != row['sha256']:
+            # Windows Git checkout may change only line endings. Still require
+            # the exact original hash after this one reversible normalization.
+            data = data.replace(b'\r\n', b'\n')
+            assert hashlib.sha256(data).hexdigest() == row['sha256'], 'Original playback/entrypoint/resources must stay unchanged'
+            normalized_origin.append(row['path'])
+        origin_bytes[row['path']] = data
     build_root = (ROOT/'runtime/god-voice-build').resolve()
     assert build_root.is_relative_to(ROOT.resolve())
     build_root.mkdir(parents=True, exist_ok=True)
@@ -94,14 +107,16 @@ def main():
             for path, name in sorted(entries, key=lambda entry: entry[1]):
                 info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
-                archive.writestr(info, path.read_bytes())
+                data = origin_bytes[name] if name == 'META-INF/neoforge.mods.toml' else path.read_bytes()
+                archive.writestr(info, data)
     with zipfile.ZipFile(output) as archive:
         assert archive.testzip() is None, 'Recorder JAR CRC verification failed'
         assert not any('Test' in name or name.endswith(('.java', '.py', '.json')) for name in archive.namelist())
         baseline = ROOT/'server/mc/mods/god-voice-0.1.0.jar'
         with zipfile.ZipFile(baseline) as existing:
             names = ([name for name in existing.namelist() if name.startswith('dev/god/godvoice/')
-                and name.endswith('.class') and not name.startswith('dev/god/godvoice/TtsQueueWatcher')]
+                and name.endswith('.class') and not name.startswith('dev/god/godvoice/TtsQueueWatcher')
+                and not (args.receipt_permissions and name == 'dev/god/godvoice/SpeechReceipts.class')]
                 if args.speech else ['dev/god/godvoice/'+name+'.class' for name in ('GodVoiceLog', 'GodVoiceMod', 'GodVoicePlugin', 'TtsQueueWatcher')])
             bytecode = {name: existing.read(name) == archive.read(name) for name in names}
             assert all(bytecode.values()), 'Protected recorder/entrypoint bytecode differs; review before deployment'
@@ -112,6 +127,8 @@ def main():
         'jar': str(output.resolve()), 'sha256': digest(output), 'tests': test_results, 'registration_test_chanting_sha256': digest(chanting),
         'source_files': [{'path': path.relative_to(ROOT).as_posix(), 'sha256': digest(path)} for path in sorted(inputs)],
         'unchanged_origin_files': unchanged, 'recording_allowlist_expanded': False,
+        'origin_line_endings_normalized': normalized_origin,
+        'receipt_permissions_replaced_explicitly': args.receipt_permissions,
         'unchanged_server_bytecode': bytecode, 'comparison_server_jar_sha256': digest(baseline),
         'classpath': [{'path': str(path), 'sha256': digest(path)} for path in dependencies],
         'scope': 'Compiled recorder and speech queue, disk contracts and installed SVC with fake encoder/channel; no deployment, microphone capture or audible playback test'}
