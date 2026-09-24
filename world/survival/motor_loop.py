@@ -5,6 +5,7 @@ Native goto/eat cancellation reuses the gateway's exact-task stop journal.
 """
 import hashlib
 import json
+import uuid
 from motor_mailbox import view, claim_locked, finish_locked, public, binding
 from numen_gateway import GatewayError, action_lock, read_json, write_json
 
@@ -12,6 +13,45 @@ from numen_gateway import GatewayError, action_lock, read_json, write_json
 def _job(c):
     p = c.root / 'skill-job.json'
     return read_json(p) if p.exists() else {}
+
+
+def _accepted_cast(c, row, receipt):
+    """Prove original spell admission, without inferring its eventual effects."""
+    try:
+        payload = row['payload']
+        result = receipt['result']
+        native = result['result']
+        data = native['data']
+        cast = data['receipt']
+        admission = cast.get('effectReceipt', cast)  # Legacy aliases retain the original native receipt here.
+        request_id = cast['requestId']
+        if (payload['tool'] != 'game_cast' or receipt['tool'] != 'game_cast'
+                or receipt['status'] != 'effect_unconfirmed' or receipt['completionConfirmed'] is not False
+                or receipt['turnId'] != row['motorTurnId'] or receipt['args'] != payload['args']
+                or uuid.UUID(receipt['actionId']).hex != receipt['actionId']
+                or result.get('actionId') != receipt['actionId']
+                or result.get('ok') is not True or result.get('code') != 'accepted'
+                or result.get('completionConfirmed') is not False or native.get('success') is not True
+                or data.get('async') is not True or data.get('task_id')
+                or cast.get('ok') is not True or cast.get('code') != 'casting_started'
+                or admission.get('ok') is not True or admission.get('code') != 'casting_started'
+                or admission.get('accepted') is not True or admission.get('action') != 'cast'
+                or admission.get('engine') != 'irons_spellbooks'
+                or admission.get('actorUuid') != receipt['before']['bodyUuid']
+                or admission.get('actor') != cast.get('actor')
+                or admission.get('spell', {}).get('id') != cast.get('nativeSpell', payload['args']['skill_id'])
+                or ('effectReceipt' in cast and cast.get('skillId') != payload['args']['skill_id'])
+                or str(uuid.UUID(request_id)) != request_id):
+            return False
+        # The same immutable request links the world receipt to this exact body
+        # and spell command. A different/missing request must remain unknown.
+        owned = read_json(c.root / 'game-skill-requests' / (request_id + '.json'))
+        from game_skills import action_command
+        return (owned.get('requestId') == request_id and owned.get('actor') == cast.get('actor')
+                and owned.get('actorUuid') == receipt['before']['bodyUuid']
+                and owned.get('command') == action_command('game_cast', receipt['args']))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return False
 
 
 def reconcile(c):
@@ -41,8 +81,9 @@ def reconcile(c):
                 receipt = receipts[-1]
                 if receipt.get('status') in ('in_flight', 'dispatching'):
                     return
-                status = {'completed': 'completed', 'failed': 'failed',
-                          'rejected': 'failed', 'cancelled': 'cancelled'}.get(receipt.get('status'), 'unknown')
+                status = ('dispatched' if _accepted_cast(c, row, receipt) else
+                          {'completed': 'completed', 'failed': 'failed',
+                           'rejected': 'failed', 'cancelled': 'cancelled'}.get(receipt.get('status'), 'unknown'))
         # A concurrent status read must not turn a journalled outcome into an
         # uncertain dispatch. This lock only commits the local queue terminal.
         with action_lock(c.root, blocking=True):

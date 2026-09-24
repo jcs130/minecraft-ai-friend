@@ -3,6 +3,7 @@ package dev.qiandeng.irons;
 import com.dwinovo.numen.agent.tool.api.ToolContext;
 import com.dwinovo.numen.core.tools.BlockActionOps;
 import com.dwinovo.numen.core.tools.InventoryOps;
+import com.dwinovo.numen.core.task.mine.MineBlockTaskRecord;
 import com.dwinovo.numen.entity.NumenPlayer;
 import com.dwinovo.numen.task.CompanionTickDispatcher;
 import com.dwinovo.numen.task.TaskDispatch;
@@ -14,6 +15,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.GameType;
@@ -27,7 +29,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Base64;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -62,11 +67,12 @@ public final class WorldInteractionBridge {
             c.getSource().sendSuccess(() -> Component.literal(PREFIX + out), false);
             return 1;
         }));
-        for (String action : new String[]{"interact", "interaction", "eat", "eating", "drop", "dropping"}) {
-            String tool = action.equals("drop") || action.equals("dropping") ? "drop_items"
+        for (String action : new String[]{"interact", "interaction", "eat", "eating", "drop", "dropping", "mine", "mining"}) {
+            String tool = action.equals("mine") || action.equals("mining") ? "mine"
+                : action.equals("drop") || action.equals("dropping") ? "drop_items"
                 : action.equals("eat") || action.equals("eating") ? "eat" : "interact_at";
             var request = Commands.argument("request", StringArgumentType.word());
-            if (action.equals("interact") || action.equals("eat") || action.equals("drop")) request.then(Commands.argument("payload", StringArgumentType.word())
+            if (action.equals("interact") || action.equals("eat") || action.equals("drop") || action.equals("mine")) request.then(Commands.argument("payload", StringArgumentType.word())
                 .executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
                     StringArgumentType.getString(c, "request"), StringArgumentType.getString(c, "payload"), tool)));
             else request.executes(c -> run(c.getSource(), StringArgumentType.getString(c, "actor"),
@@ -121,6 +127,18 @@ public final class WorldInteractionBridge {
         byte[] raw = Base64.getUrlDecoder().decode(encoded);
         if (raw.length > 2048) throw new IllegalArgumentException("invalid_interaction_payload");
         var args = JsonParser.parseString(new String(raw, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (tool.equals("mine")) {
+            if (!args.keySet().equals(Set.of("block_ids", "count")) || !args.get("block_ids").isJsonArray()
+                    || args.getAsJsonArray("block_ids").size() < 1 || args.getAsJsonArray("block_ids").size() > 8
+                    || !args.get("count").isJsonPrimitive() || !args.getAsJsonPrimitive("count").isNumber()
+                    || !args.get("count").getAsString().matches("[1-8]"))
+                throw new IllegalArgumentException("invalid_mine_arguments");
+            for (var block : args.getAsJsonArray("block_ids"))
+                if (!block.isJsonPrimitive() || !block.getAsJsonPrimitive().isString()
+                        || !block.getAsString().matches("[a-z0-9_.-]+:[a-z0-9_./-]{1,100}"))
+                    throw new IllegalArgumentException("invalid_mine_block_id");
+            return args;
+        }
         if (tool.equals("drop_items")) {
             if (!args.keySet().equals(Set.of("item_id", "count"))
                     || !args.get("item_id").isJsonPrimitive() || !args.getAsJsonPrimitive("item_id").isString()
@@ -166,6 +184,44 @@ public final class WorldInteractionBridge {
             if (Files.isSymbolicLink(p)) throw new IllegalArgumentException("linked_interaction_journal");
         Files.createDirectories(root);
         return root.resolve(actor + "-" + id + ".json");
+    }
+
+    private static TaskRecord mining(NumenPlayer actor, JsonObject args, ToolContext context, JsonObject out) {
+        var ids = new ArrayList<String>();
+        args.getAsJsonArray("block_ids").forEach(id -> ids.add(id.getAsString()));
+        var original = (MineBlockTaskRecord) new BlockActionOps().autoMine(actor, ids, null,
+            args.get("count").getAsInt(), null, context);
+        var origin = actor.position();
+        var center = actor.blockPosition();
+        var candidates = new ArrayList<BlockPos>();
+        // Select only loaded, local cells. Named-cell mining retains Numen's normal
+        // tool/permission checks, item pickup and inventory-delta count semantics.
+        for (int x = center.getX() - 16; x <= center.getX() + 16; x++)
+            for (int z = center.getZ() - 16; z <= center.getZ() + 16; z++) {
+                if (!actor.level().hasChunkAt(new BlockPos(x, center.getY(), z))) continue;
+                for (int y = Math.max(actor.level().getMinBuildHeight(), center.getY() - 16);
+                        y <= Math.min(actor.level().getMaxBuildHeight() - 1, center.getY() + 16); y++) {
+                    var pos = new BlockPos(x, y, z);
+                    if (origin.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos)) <= 16 * 16
+                            && original.targets.contains(actor.level().getBlockState(pos).getBlock()))
+                        candidates.add(pos);
+                }
+            }
+        candidates.sort(Comparator.<BlockPos>comparingDouble(pos -> origin.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos)))
+            .thenComparingInt(BlockPos::getX).thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
+        var selection = new JsonObject();
+        selection.addProperty("radius", 16); selection.addProperty("loadedOnly", true);
+        selection.addProperty("candidateLimit", 64); selection.addProperty("candidateCount", Math.min(64, candidates.size()));
+        selection.addProperty("truncated", candidates.size() > 64);
+        selection.addProperty("dimension", actor.level().dimension().location().toString());
+        var point = new JsonObject(); point.addProperty("x", origin.x); point.addProperty("y", origin.y); point.addProperty("z", origin.z);
+        selection.add("origin", point);
+        out.add("miningSelection", selection);
+        if (candidates.isEmpty()) throw new IllegalArgumentException("no_loaded_mining_targets");
+        var cells = new LinkedHashMap<BlockPos, net.minecraft.world.level.block.Block>();
+        candidates.stream().limit(64).forEach(pos -> cells.put(pos, actor.level().getBlockState(pos).getBlock()));
+        return new MineBlockTaskRecord(context.toolCallId(), original.getDeadlineGameTime(), original.targets,
+            cells, original.count, original.label, original.spec);
     }
 
     private static JsonObject read(Path path) throws Exception {
@@ -231,7 +287,8 @@ public final class WorldInteractionBridge {
                         args.get("y").getAsInt() + .5, args.get("z").getAsInt() + .5) > 20.25)
                     throw new IllegalArgumentException("interaction_target_out_of_reach");
                 var context = new ToolContext("mcp-" + id, actor.level().getGameTime());
-                TaskRecord record = tool.equals("drop_items")
+                TaskRecord record = tool.equals("mine") ? mining(actor, args, context, out)
+                    : tool.equals("drop_items")
                     ? new NativeDropTask.Record(id, actor.level().getGameTime(), args.get("item_id").getAsString(), args.get("count").getAsInt())
                     : tool.equals("eat")
                     ? new InventoryOps().eatItem(args.get("item_id").getAsString(), context)
@@ -250,12 +307,12 @@ public final class WorldInteractionBridge {
                 claimed = true;
                 Pending pending = new Pending(path, out.deepCopy(), record);
                 PENDING.put(key, pending);
-                if (tool.equals("eat")) {
+                if (tool.equals("eat") || tool.equals("mine")) {
                     try { TaskDispatch.setTask(actor, record, args, ignored -> {}); }
                     finally {
                         // This exact external request is journalled above. Numen's ordinary
                         // standing-task persistence replays tool arguments after restart;
-                        // a consumable request must instead remain unknown, never eat twice.
+                        // an externally journalled request must remain unknown, never replay.
                         TaskPersistence.forget(actor);
                     }
                 }

@@ -844,9 +844,15 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertEqual(client.turn_receipts(TURN)[0]['status'], 'unknown')
         self.assertEqual(len(self.rcon.mutations()), 1)
 
-    def test_async_mining_idle_records_ended_observation_not_goal_success(self):
+    def test_legacy_async_mining_idle_records_ended_observation_not_goal_success(self):
         self.lease()
         self.client.action(TURN, 'mine', {'block_ids': ['minecraft:oak_log'], 'count': 1})
+        # A legacy request such as t557 had no exact native receipt. Upgrading
+        # the bridge must not fabricate a terminal for that earlier task.
+        path = self.state / 'inflight-action.json'
+        legacy = read_json(path)
+        legacy['result']['result'].pop('nativeMineReceipt')
+        write_json(path, legacy)
         receipt = self.client.action_status()['receipt']
         self.assertEqual(receipt['status'], 'observed_ended')
         self.assertFalse(receipt['completionConfirmed'])

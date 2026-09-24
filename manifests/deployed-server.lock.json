@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-14T19:21:28.191092+08:00",
+  "recorded_at": "2026-09-24T06:21:20.786841+00:00",
   "project": "qiandengji",
   "target": {
     "minecraft": "1.21.1",
@@ -270,8 +270,8 @@
     },
     {
       "path": "server/mc/mods/qiandeng-irons-bridge-0.1.0.jar",
-      "size": 72132,
-      "sha256": "1f14026f8cda64d5fa86587c594e67305939201fa95adf6f09c57b4567144614"
+      "size": 134763,
+      "sha256": "4d59bba0cd4ed89a52b31ccf5da5aaa2a8ec515454fae158862641bab5799ac4"
     },
     {
       "path": "server/mc/mods/qiandeng-maid-bridge-0.1.0.jar",

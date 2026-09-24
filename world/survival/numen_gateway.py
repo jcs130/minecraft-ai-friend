@@ -73,6 +73,19 @@ def receipt_evidence(row):
     result = asdict(row.get('result'))
     native = asdict(result.get('result'))
     reason = native.get('message') or result.get('code')
+    if row.get('tool') == 'mine':
+        summary['requested']['count'] = args.get('count')
+        if isinstance(args.get('block_ids'), list):
+            summary['requested']['block_ids'] = args['block_ids'][:8]
+        mine = asdict(row.get('nativeMineOutcome')) or asdict(native.get('nativeMineReceipt'))
+        if mine:
+            summary['mining'] = fields(mine, ('status', 'nativeState', 'nativeTaskId', 'code'))
+            selection = asdict(mine.get('miningSelection'))
+            summary['mining']['selection'] = fields(selection, ('radius', 'loadedOnly', 'candidateCount', 'candidateLimit', 'truncated'))
+            if mine.get('status') == 'terminal':
+                terminal = asdict(mine.get('result'))
+                summary['mining'].update(fields(terminal.get('data'), ('requested', 'gathered', 'target')))
+                reason = terminal.get('message') or reason
     if isinstance(reason, str):
         summary['outcomeDetail'] = reason[:360]
     contract = asdict(asdict(native.get('data')).get('receipt'))
@@ -371,6 +384,13 @@ class NumenGateway:
 
     def _native_eating(self, actor, action_id):
         return self.rcon.cmd(f'qdworld eating {actor} {action_id}')
+
+    def _native_mine(self, actor, action_id, args):
+        payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
+        return self.rcon.cmd(f'qdworld mine {actor} {action_id} {payload}')
+
+    def _native_mining(self, actor, action_id):
+        return self.rcon.cmd(f'qdworld mining {actor} {action_id}')
 
     def _native_drop(self, actor, action_id, args):
         payload = base64.urlsafe_b64encode(json.dumps(args, separators=(',', ':')).encode()).decode().rstrip('=')
@@ -903,7 +923,32 @@ class NumenGateway:
         if (body.get('ok') is not True or body.get('bodyUuid') != before.get('bodyUuid')
                 or body.get('dimension') != before.get('dimension')):
             raise GatewayError('inflight_body_unavailable')
-        if (before.get('navigationEpoch') and body.get('navigationEpoch') != before['navigationEpoch']):
+        mine_outcome = None
+        food_outcome = None
+        interaction_outcome = None
+        native_reply = receipt.get('result', {}).get('result', {})
+        native_mine = receipt['tool'] == 'mine' and native_reply.get('nativeMineReceipt')
+        native_food = receipt['tool'] == 'eat' and native_reply.get('nativeFoodReceipt')
+        native_interaction = receipt['tool'] == 'interact_at' and native_reply.get('data', {}).get('nativeInteractionReceipt')
+        # Durable exact terminals survive navigation/server changes. Query them
+        # before interpreting a new epoch or another currently running task.
+        # Interrupted accepted requests return unknown and keep the old claim.
+        if native_mine:
+            from mine_actions import MineActions
+            mine_outcome = MineActions(self).terminal(receipt)
+        elif native_food:
+            from food_actions import FoodActions
+            food_outcome = FoodActions(self).terminal(receipt)
+        elif native_interaction:
+            from world_actions import WorldActions
+            interaction_outcome = WorldActions(self, max_polls=1)._interaction(
+                {'actionId': receipt['actionId'], 'bodyUuid': before['bodyUuid'],
+                 'nativeTaskId': receipt['nativeTaskId'], 'epoch': native_interaction['epoch']},
+                receipt['args'], query_only=True, allow_pending=True)
+        durable_receipt = native_mine or native_food or native_interaction
+        terminal_known = (mine_outcome is not None or food_outcome is not None
+            or interaction_outcome is not None and not interaction_outcome.get('data', {}).get('async'))
+        if (not durable_receipt and before.get('navigationEpoch') and body.get('navigationEpoch') != before['navigationEpoch']):
             # The process that owned this task is gone (a restart, or a mod swap):
             # its terminal can never arrive, so the outcome is permanently
             # unknowable. Close it as observed-ended - never as success, and never
@@ -926,13 +971,11 @@ class NumenGateway:
                 pass
             return receipt
         task = body.get('task', {})
-        if task.get('busy'):
+        if task.get('busy') and not terminal_known:
             if task.get('task_id') != receipt.get('nativeTaskId'):
                 raise GatewayError('inflight_task_mismatch')
             return receipt
         outcome = None
-        food_outcome = None
-        interaction_outcome = None
         if receipt['tool'] == 'goto':
             candidate = body.get('navigationResult') or {}
             if (receipt.get('nativeTaskId') and before.get('navigationEpoch')
@@ -949,23 +992,26 @@ class NumenGateway:
                 if outcome is None:
                     return receipt  # nothing to judge against: keep the identity, do not guess
         elif receipt['tool'] == 'interact_at':
-            from world_actions import WorldActions
-            interaction_outcome = WorldActions(self, max_polls=1)._interaction(
-                {'actionId': receipt['actionId'], 'bodyUuid': before['bodyUuid'],
-                 'nativeTaskId': receipt['nativeTaskId'],
-                 'epoch': receipt['result']['result']['data']['nativeInteractionReceipt']['epoch']},
-                receipt['args'], query_only=True, allow_pending=True)
+            if not native_interaction:
+                from world_actions import WorldActions
+                interaction_outcome = WorldActions(self, max_polls=1)._interaction(
+                    {'actionId': receipt['actionId'], 'bodyUuid': before['bodyUuid'],
+                     'nativeTaskId': receipt['nativeTaskId'],
+                     'epoch': receipt['result']['result']['data']['nativeInteractionReceipt']['epoch']},
+                    receipt['args'], query_only=True, allow_pending=True)
             if interaction_outcome.get('data', {}).get('async'):
                 return receipt
             outcome = interaction_outcome
-        elif receipt['tool'] == 'eat' and receipt.get('result', {}).get('result', {}).get('nativeFoodReceipt'):
-            from food_actions import FoodActions
-            food_outcome = FoodActions(self).terminal(receipt)
+        elif native_food:
             if food_outcome is None:
                 # Idle can precede delivery of the exact native record; retain the
                 # in-flight identity rather than discard its eventual terminal.
                 return receipt
             outcome = food_outcome['result']
+        elif native_mine:
+            if mine_outcome is None:
+                return receipt
+            outcome = mine_outcome['result']
         receipt.update(status=('completed' if outcome.get('success') else 'failed') if outcome else 'observed_ended',
                        after=self._action_snapshot(body), observedAt=self._now(),
                        completionConfirmed=outcome is not None, navigationOutcome=outcome,
@@ -973,6 +1019,9 @@ class NumenGateway:
         if food_outcome is not None:
             receipt.update(nativeFoodOutcome=food_outcome, navigationOutcome=None,
                            notice='Completion is the exact original native eating task result.')
+        if mine_outcome is not None:
+            receipt.update(nativeMineOutcome=mine_outcome, navigationOutcome=None,
+                           notice='Completion is the exact original native mining result, including gathered item count and failure reason.')
         if interaction_outcome is not None:
             receipt.update(nativeInteractionOutcome=interaction_outcome, navigationOutcome=None,
                            notice='The original native interaction ended; inspect its effects to judge the skill objective.')
@@ -1330,6 +1379,9 @@ class NumenGateway:
                     if tool == 'eat':
                         from food_actions import FoodActions
                         reply = FoodActions(self).dispatch(action_id, before, args)
+                    elif tool == 'mine':
+                        from mine_actions import MineActions
+                        reply = MineActions(self).dispatch(action_id, before, args)
                     elif tool == 'drop_items':
                         from drop_actions import DropActions
                         reply = DropActions(self).dispatch(action_id, before, args)
@@ -1344,6 +1396,8 @@ class NumenGateway:
                     elif reply.get('success') is False:
                         result = {'ok': False, 'code': 'action_rejected', 'actionId': action_id, 'result': reply}
                         if tool == 'eat' and reply.get('nativeFoodReceipt', {}).get('status') == 'terminal':
+                            result['completionConfirmed'] = True
+                        if tool == 'mine' and reply.get('nativeMineReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
                         if tool == 'drop_items' and reply.get('nativeDropReceipt', {}).get('status') == 'terminal':
                             result['completionConfirmed'] = True
