@@ -37,7 +37,9 @@ def main():
                  'test_survival_game_skills', 'test_survival_skill_tools', 'test_survival_mine_receipts',
                  'test_party_bridge', 'test_party_life', 'test_yui_admin_team',
                  'test_survival_food_receipts', 'test_survival_native_interaction', 'test_motor_cast_acceptance',
-                 'test_motor_occurrence', 'test_survival_self_planning', 'test_survival_reply_wake'):
+                 'test_motor_occurrence', 'test_survival_self_planning', 'test_survival_reply_wake',
+                 'test_skill_catalog_eligibility', 'test_motor_progress_audit',
+                 'test_character_speech', 'test_survival_speech'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):

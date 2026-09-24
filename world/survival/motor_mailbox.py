@@ -126,9 +126,39 @@ def compact_public(value):
     if not isinstance(value, dict):
         return value
     result = copy.deepcopy(value)
-    for row in result.get('recent', []):
-        if isinstance(row, dict) and 'receipt' in row:
-            row['receipt'] = brief_receipt(row['receipt'])
+    recent = result.get('recent', [])
+    for index, row in enumerate(recent):
+        if not isinstance(row, dict) or not isinstance(row.get('receipt'), dict):
+            continue
+        # Unsettled identities/evidence are never historical summaries, even if
+        # an older producer put an unknown receipt under a terminal queue row.
+        if row.get('status') not in ('completed', 'failed') or row['receipt'].get('status') == 'unknown':
+            continue
+        receipt = row['receipt'] = brief_receipt(row['receipt'])
+        if index < len(recent) - 2:
+            # Keep intent, exact outcome/IDs, partial gains and repeat lineage.
+            # Old terrain is not a fresh route. New/unknown outcome fields stay
+            # intact; only these known observation/boilerplate fields are omitted.
+            for key in ('navigationPreflight', 'areaPreflight', 'positionAfter', 'notice'):
+                receipt.pop(key, None)
+            sense = receipt.get('navigationSense')
+            if isinstance(sense, dict):
+                receipt['navigationSense'] = {key: item for key, item in sense.items()
+                                             if key in ('ok', 'code', 'observedAt')}
+                if isinstance(sense.get('destination'), dict):
+                    receipt['navigationSense']['destination'] = {
+                        key: item for key, item in sense['destination'].items() if key in ('available', 'code')}
+            verdict = receipt.get('navigationVerdict')
+            if isinstance(verdict, dict):
+                receipt['navigationVerdict'] = {key: item for key, item in verdict.items()
+                                               if key in ('code', 'targetUsable', 'surveyCode')}
+            outcome = receipt.get('navigationOutcome')
+            if isinstance(outcome, dict):
+                receipt['navigationOutcome'] = {key: item for key, item in outcome.items()
+                    if key not in ('requested', 'final_x', 'final_y', 'final_z',
+                                   'horizontalDistance', 'navigation_mode')
+                    and (key != 'reason' or outcome.get('success') is not True)}
+            row['receiptDetail'] = 'historical outcome; observations omitted, not absent; status(detail="full")'
     # Active/unknown rows remain exact; these identify work that must not replay.
     result['receiptDetail'] = 'brief; status(detail="full") retains full receipt details'
     return result

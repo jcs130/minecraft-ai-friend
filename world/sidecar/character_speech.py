@@ -85,20 +85,118 @@ class SpeechBroker:
             raise ValueError('speech_profile_version_invalid')
         return row
 
-    def generation(self, actor):
+    def _state(self, actor):
         path = self.root / 'speech-state' / (actor_id(actor) + '.json')
         if not path.exists():
-            return 0
+            return {'generation': 0}
         state = read(path)
         value = state.get('generation')
         if (state.get('schema') != 1 or state.get('entity') != actor
                 or type(value) is not int or not 1 <= value < 2**52):
             raise ValueError('speech_generation_invalid')
-        return value
+        return state
 
-    def advance(self, actor, generation):
+    def generation(self, actor):
+        return self._state(actor)['generation']
+
+    def advance(self, actor, generation, index=None):
+        if type(generation) is not int or not 1 <= generation < 2**52:
+            raise ValueError('speech_generation_invalid')
+        state = {'schema': 1, 'entity': actor, 'generation': generation, 'updatedAt': self.now()}
+        if index is not None:
+            state['recentIndex'] = index
         write(self.root / 'speech-state' / (actor + '.json'),
-              {'schema': 1, 'entity': actor, 'generation': generation, 'updatedAt': self.now()})
+              state)
+
+    def _validate_job(self, actor, row):
+        if (not isinstance(row, dict) or row.get('schema') != 2 or row.get('entity') != actor
+                or not isinstance(row.get('id'), str) or not ID.fullmatch(row['id'])
+                or type(row.get('generation')) is not int or not 1 <= row['generation'] < 2**52
+                or type(row.get('createdAt')) is not int or not 0 <= row['createdAt'] < 2**52
+                or type(row.get('expiresAt')) is not int
+                or not row['createdAt'] < row['expiresAt'] <= row['createdAt'] + 90000
+                or not isinstance(row.get('text'), str) or not 1 <= len(row['text']) <= 160
+                or not isinstance(row.get('dimension'), str) or not DIMENSION.fullmatch(row['dimension'])):
+            raise ValueError('speech_index_invalid')
+
+    def _index(self, actor, state):
+        generation = state['generation']
+        if 'recentIndex' in state:
+            index = state['recentIndex']
+            if (not isinstance(index, dict) or index.get('schema') != 1
+                    or type(index.get('generation')) is not int or index['generation'] != generation
+                    or type(index.get('lastAcceptedAt')) is not int
+                    or not -1 <= index['lastAcceptedAt'] < 2**52
+                    or not isinstance(index.get('reservations'), list) or len(index['reservations']) > 5):
+                raise ValueError('speech_index_invalid')
+            seen = set()
+            for row in index['reservations']:
+                self._validate_job(actor, row)
+                if (row['generation'] != generation or row['id'] in seen
+                        or row['createdAt'] > index['lastAcceptedAt']):
+                    raise ValueError('speech_index_invalid')
+                seen.add(row['id'])
+            return index, False
+        # One migration of legacy history, never a per-submit global scan.
+        index = {'schema': 1, 'generation': generation, 'lastAcceptedAt': -1, 'reservations': []}
+        for path in (self.root / 'speech-requests').glob('*.json'):
+            try:
+                row = read(path)
+            except FileNotFoundError:
+                continue
+            if row.get('entity') != actor:
+                continue
+            self._validate_job(actor, row)
+            if path.stem != row['id'] or row['generation'] > generation:
+                raise ValueError('speech_index_invalid')
+            index['lastAcceptedAt'] = max(index['lastAcceptedAt'], row['createdAt'])
+            if (row['generation'] == generation and row['expiresAt'] > self.now()
+                    and self.receipt(actor, row['id']).get('status') not in TERMINAL):
+                index['reservations'].append(row)
+                if len(index['reservations']) > 5:
+                    raise ValueError('speech_index_overflow')
+        return index, True
+
+    def index_preview(self, actor):
+        """Read-only migration diagnostic: no lock file, index write or dispatch."""
+        state = self._state(actor)
+        index, rebuild = self._index(actor, state)
+        return {'ok': True, 'needsRebuild': rebuild, 'generation': state['generation'],
+                'activeCount': sum(row['expiresAt'] > self.now() for row in index['reservations']),
+                'lastAcceptedAt': index['lastAcceptedAt'], 'reservations': len(index['reservations'])}
+
+    def migrate_recent(self, actor, dry_run=True):
+        """Explicit legacy-index migration, preserving generation and all jobs."""
+        if type(dry_run) is not bool:
+            raise ValueError('speech_request_invalid')
+        if dry_run:
+            return self.index_preview(actor)
+        with actor_lock(self.root, actor):
+            state = self._state(actor)
+            index, rebuild = self._index(actor, state)
+            if rebuild and state['generation']:
+                self.advance(actor, state['generation'], index)
+            return {'ok': True, 'migrated': rebuild and state['generation'] > 0,
+                    'generation': state['generation'], 'reservations': len(index['reservations']),
+                    'dispatched': False}
+
+    def _refresh_index(self, actor, index):
+        recent = []
+        for reserved in index['reservations']:
+            path = self.root / 'speech-requests' / (reserved['id'] + '.json')
+            if not path.exists():
+                # Reservation committed but request publication was interrupted.
+                # Preserve exact-ID history before pruning/cancelling its slot;
+                # this record is NEVER added to text-queue or replayed.
+                write(path, {**reserved, 'submissionUnconfirmed': True})
+            job = read(path)
+            if any(job.get(key) != reserved.get(key) for key in
+                   ('schema', 'id', 'entity', 'generation', 'createdAt', 'expiresAt', 'text', 'dimension')):
+                raise ValueError('speech_index_invalid')
+            if (reserved['expiresAt'] > self.now()
+                    and self.receipt(actor, reserved['id']).get('status') not in TERMINAL):
+                recent.append(reserved)
+        return {**index, 'reservations': recent}
 
     def receipt(self, actor, speech_id):
         actor_id(actor)
@@ -106,12 +204,20 @@ class SpeechBroker:
             raise ValueError('speech_id_invalid')
         job_path = self.root / 'speech-requests' / (speech_id + '.json')
         if not job_path.exists():
+            state = self._state(actor)
+            if 'recentIndex' in state:
+                index, _ = self._index(actor, state)
+                for row in index['reservations']:
+                    if row['id'] == speech_id:
+                        return self._unconfirmed_receipt(row)
             return {'ok': False, 'code': 'speech_not_found'}
         job = read(job_path)
         if job.get('entity') != actor:
             raise ValueError('speech_not_owned')
         receipt_path = self.root / 'speech-receipts' / (speech_id + '.json')
-        receipt = read(receipt_path) if receipt_path.exists() else {'status': 'queued'}
+        receipt = read(receipt_path) if receipt_path.exists() else (
+            {'status': 'unknown', 'code': 'speech_submission_unconfirmed'}
+            if job.get('submissionUnconfirmed') else {'status': 'queued'})
         if receipt_path.exists() and (receipt.get('schema') != 2 or receipt.get('id') != speech_id
                 or receipt.get('entity') != actor or receipt.get('generation') != job['generation']
                 or receipt.get('status') not in (TERMINAL | {'synthesized', 'started'})):
@@ -127,6 +233,12 @@ class SpeechBroker:
         return {'ok': True, 'utteranceId': speech_id, 'status': status, 'code': code,
                 'playbackCompleted': status == 'completed', 'retryAutomatically': False,
                 'updatedAt': receipt.get('updatedAt', job['createdAt'])}
+
+    def _unconfirmed_receipt(self, row):
+        return {'ok': True, 'utteranceId': row['id'],
+                'status': 'expired' if self.now() >= row['expiresAt'] else 'unknown',
+                'code': 'speech_submission_unconfirmed', 'playbackCompleted': False,
+                'retryAutomatically': False, 'updatedAt': row['createdAt']}
 
     def submit(self, actor, key, text, dimension, interrupt=False):
         actor_id(actor)
@@ -145,8 +257,56 @@ class SpeechBroker:
                 if previous.get('text') != text.strip() or previous.get('dimension') != dimension:
                     raise ValueError('speech_request_conflict')
                 return self.receipt(actor, speech_id)
-            now, generation = self.now(), self.generation(actor)
-            recent = []
+            state = self._state(actor)
+            index, rebuild = self._index(actor, state)
+            generation = state['generation']
+            if rebuild and generation:
+                self.advance(actor, generation, index)
+            # A previous process may have committed only its reservation. Never
+            # redispatch the same identity even when the request file is absent.
+            for reserved in index['reservations']:
+                if reserved['id'] == speech_id:
+                    if reserved['text'] != text.strip() or reserved['dimension'] != dimension:
+                        raise ValueError('speech_request_conflict')
+                    return self._unconfirmed_receipt(reserved)
+            now = self.now()
+            if index['lastAcceptedAt'] >= 0 and now - index['lastAcceptedAt'] < 10000:
+                raise ValueError('speech_rate_limited')
+            index = self._refresh_index(actor, index)
+            if len(index['reservations']) >= 5 and not interrupt:
+                raise ValueError('speech_queue_full')
+            generation = generation + 1 if interrupt or generation == 0 else generation
+            job = {'schema': 2, 'id': speech_id, 'entity': actor, 'voiceId': profile['voiceId'],
+                   'voiceVersion': profile['version'], 'generation': generation,
+                   'createdAt': now, 'expiresAt': now + 90000, 'dimension': dimension,
+                   'scope': 'nearby', 'radius': 24, 'priority': 'urgent' if interrupt else 'normal',
+                   'text': text.strip()}
+            index = {**index, 'generation': generation, 'lastAcceptedAt': now,
+                     'reservations': ([] if interrupt else index['reservations']) + [job]}
+            # Durable reservation -> identity -> dispatch. Every ambiguous crash
+            # occupies a slot until expiry; none authorizes automatic replay.
+            self.advance(actor, generation, index)
+            write(path, job)
+            write(self.root / 'text-queue' / (speech_id + '.json'), job)
+            return self.receipt(actor, speech_id)
+
+    def maintain(self, actor):
+        """Explicit audio GC. Identity/receipts persist for exact-ID deduplication.
+
+        Metadata retention is intentional and unbounded; operator archival must
+        preserve identity lookups. Admission never scans this retained history.
+        The returned ``removed`` count refers only to deleted audio files.
+        """
+        actor_id(actor)
+        with actor_lock(self.root, actor):
+            state = self._state(actor)
+            index, _ = self._index(actor, state)
+            index = self._refresh_index(actor, index)
+            if state['generation']:
+                self.advance(actor, state['generation'], index)
+            now = self.now()
+            cleanup = {'code': 'speech_cleanup_deferred', 'deferred': 0, 'errors': []}
+            removed = 0
             requests = self.root / 'speech-requests'
             for existing in requests.glob('*.json'):
                 try:
@@ -157,37 +317,33 @@ class SpeechBroker:
                         and row.get('entity') == actor
                         and row.get('schema') == 2 and now - row['createdAt'] > 7 * 86400000
                         and row['expiresAt'] < now):
-                    # Only our expiring speech data; never legacy voice jobs,
-                    # player recordings, references or another directory tree.
-                    for stale in (existing, self.root / 'speech-receipts' / (row['id'] + '.json'),
-                                  self.root / 'tts-queue' / (row['id'] + '.mp3')):
-                        stale.unlink(missing_ok=True)
+                    # Removing identity would let the same exact key replay.
+                    # Retain the original request AND playback evidence forever;
+                    # only this actor's expired audio may be garbage collected.
+                    try:
+                        audio = self.root / 'tts-queue' / (row['id'] + '.mp3')
+                        if audio.exists():
+                            audio.unlink(missing_ok=True)
+                            removed += 1
+                    except OSError as exc:
+                        cleanup['deferred'] += 1
+                        error = {'artifact': 'audio', 'error': type(exc).__name__}
+                        if error not in cleanup['errors'] and len(cleanup['errors']) < 3:
+                            cleanup['errors'].append(error)
                     continue
-                if row.get('entity') == actor:
-                    if now - row['createdAt'] < 10000:
-                        raise ValueError('speech_rate_limited')
-                    if (row['generation'] == generation and row['expiresAt'] > now
-                            and self.receipt(actor, row['id']).get('status') not in TERMINAL):
-                        recent.append(row)
-            if len(recent) >= 5 and not interrupt:
-                raise ValueError('speech_queue_full')
-            generation = generation + 1 if interrupt or generation == 0 else generation
-            self.advance(actor, generation)
-            job = {'schema': 2, 'id': speech_id, 'entity': actor, 'voiceId': profile['voiceId'],
-                   'voiceVersion': profile['version'], 'generation': generation,
-                   'createdAt': now, 'expiresAt': now + 90000, 'dimension': dimension,
-                   'scope': 'nearby', 'radius': 24, 'priority': 'urgent' if interrupt else 'normal',
-                   'text': text.strip()}
-            # Commit identity before dispatch. A crash never generates a new id.
-            write(path, job)
-            write(self.root / 'text-queue' / (speech_id + '.json'), job)
-            return self.receipt(actor, speech_id)
+            result = {'ok': True, 'removed': removed}
+            if cleanup['deferred']:
+                result['cleanup'] = cleanup
+            return result
 
     def cancel(self, actor):
         self.profile(actor)
         with actor_lock(self.root, actor):
-            generation = self.generation(actor) + 1
-            self.advance(actor, generation)
+            state = self._state(actor)
+            index, _ = self._index(actor, state)
+            self._refresh_index(actor, index)
+            generation = state['generation'] + 1
+            self.advance(actor, generation, {**index, 'generation': generation, 'reservations': []})
         return {'ok': True, 'code': 'speech_cancellation_requested', 'generation': generation,
                 'playbackStoppedConfirmed': False, 'retryAutomatically': False}
 

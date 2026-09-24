@@ -22,29 +22,56 @@ def validate_routing(value):
     return copy.deepcopy(value)
 
 
-def candidates(library, body, goal, catalog=None):
+def _reject(diagnostics, item, code, reasons=None):
+    if diagnostics is None:
+        return
+    diagnostics['counts'][code] = diagnostics['counts'].get(code, 0) + 1
+    if len(diagnostics['rejected']) < 8:
+        diagnostics['rejected'].append({'name': item.get('name'),
+            'version': item.get('activeVersion') or item.get('version'), 'code': code,
+            **({'reasons': reasons} if reasons else {})})
+
+
+def candidates(library, body, goal, catalog=None, diagnostics=None):
     """Bounded sandbox previews. A failing/absent prerequisite admits no candidate."""
     rows = []
+    if diagnostics is not None:
+        diagnostics.update(scanned=0, counts={}, rejected=[], eligible=0)
     for item in (catalog if catalog is not None else library.catalog()).get('skills', [])[:64]:
+        if diagnostics is not None:
+            diagnostics['scanned'] += 1
         version = item.get('activeVersion')
         if not version or not item.get('routing'):
             continue
         try:
             routing = validate_routing(item.get('routing'))
             if not routing['maintenance'] and not any(s.casefold() in goal.casefold() for s in routing['intents']):
+                _reject(diagnostics, item, 'intent_mismatch')
+                continue
+            eligibility = item.get('testEligibility') or {}
+            if eligibility.get('status') in ('stale', 'unavailable'):
+                _reject(diagnostics, item, 'matching_passed_tests_required', eligibility.get('reasons'))
                 continue
             record = library.read(item['name'], version)
             if not record.get('active') or record.get('routing') != routing:
+                _reject(diagnostics, item, 'catalog_record_changed')
                 continue
             plan = library.run(item['name'], dict(body, goal=goal), {}, version)
             if not plan.get('action') or plan.get('done') or plan.get('replan'):
+                _reject(diagnostics, item, 'program_not_applicable')
                 continue
             rows.append({'name': item['name'], 'version': version, 'action': plan['action'],
                          'description': record['description'][:240], 'maintenance': routing['maintenance']})
-        except (ValueError, OSError, KeyError, TypeError):
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            # SkillError has a fixed public code, never include arbitrary source,
+            # state or exception text in the compact routing diagnostic.
+            _reject(diagnostics, item, getattr(exc, 'code', 'program_preview_error'))
             continue
     # Hunger/emergency maintenance first, otherwise name ordering is stable.
-    return sorted(rows, key=lambda r: (not r['maintenance'], r['name']))[:7]
+    rows = sorted(rows, key=lambda r: (not r['maintenance'], r['name']))[:7]
+    if diagnostics is not None:
+        diagnostics['eligible'] = len(rows)
+    return rows
 
 
 def clear(c):
@@ -72,10 +99,13 @@ def _catalog_signature(catalog):
     # Version hashes already bind source and routing; include indexed routing as
     # well so its admission metadata must still agree with the exact record.
     active = [{'name': row.get('name'), 'version': row['activeVersion'],
-               'routing': row['routing']} for row in catalog.get('skills', [])[:64]
+               'routing': row['routing'], 'testProof': row.get('testProof'),
+               'testEligibility': row.get('testEligibility')} for row in catalog.get('skills', [])[:64]
               if row.get('activeVersion') and row.get('routing')]
     active.sort(key=lambda row: row['name'])
-    return hashlib.sha256(json.dumps(active, sort_keys=True).encode()).hexdigest()
+    # No testedAt: repeating identical tests cannot buy a new route attempt.
+    return hashlib.sha256(json.dumps({'active': active, 'testContract': catalog.get('testContract')},
+                                     sort_keys=True).encode()).hexdigest()
 
 
 def tick(c, body, control):
@@ -140,6 +170,8 @@ def _tick(c, body, control):
             result = {**(result or {}), 'ok': False, 'code': 'skill_route_timeout'}
         result['handoffMs'] = round(age * 1000, 2)
         c.data['skillRouteLast'] = {k: v for k, v in result.items() if k not in ('state', 'candidates', 'action')}
+        if pending.get('diagnostics') is not None:
+            c.data['skillRouteLast']['diagnostics'] = pending['diagnostics']
         c.record('system_one_skill_choice', selection=result, candidates=pending['rows'])
         if not result.get('ok'):
             return False
@@ -196,12 +228,22 @@ def _tick(c, body, control):
     if catalog_was_cached:
         catalog = c.catalog(refresh=True)
         key = hashlib.sha256((premise_key + _catalog_signature(catalog)).encode()).hexdigest()
-    rows = candidates(c.skills, body, goal, catalog)
+    diagnostics = {}
+    rows = candidates(c.skills, body, goal, catalog, diagnostics)
     if asynchronous:
         goal_key = _context(c, control)[1]
-        rows = [r for r in rows if r['maintenance'] or
-                c.data.get('motorRoutedPrograms', {}).get(r['name']+':'+r['version']) != goal_key]
+        eligible = []
+        for row in rows:
+            if not row['maintenance'] and c.data.get('motorRoutedPrograms', {}).get(row['name']+':'+row['version']) == goal_key:
+                _reject(diagnostics, row, 'goal_version_already_used')
+            else:
+                eligible.append(row)
+        rows = eligible
+        diagnostics['eligible'] = len(rows)
     c.data['skillRouteAttempt'] = key
+    if not rows:
+        c.data['skillRouteLast'] = {'ok': False, 'code': 'skill_route_no_candidates',
+            'diagnostics': diagnostics, 'observedAt': int(c.clock() * 1000)}
     c.save()  # A restart cannot buy an automatic retry for an unchanged goal.
     if not rows:
         return False
@@ -219,7 +261,8 @@ def _tick(c, body, control):
     if token is None:
         return False
     c.pending_route = {'token': token, 'key': key, 'binding': binding, 'body': copy.deepcopy(body),
-                       'rows': rows, 'at': c.clock()}
-    c.data['skillRoutePending'] = {'submittedAt': int(c.clock() * 1000), 'candidates': len(rows)}
+                       'rows': rows, 'at': c.clock(), 'diagnostics': diagnostics}
+    c.data['skillRoutePending'] = {'submittedAt': int(c.clock() * 1000), 'candidates': len(rows),
+                                  'diagnostics': diagnostics}
     c.data['status'] = 'selecting_skill'
     return True
