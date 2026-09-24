@@ -41,7 +41,8 @@ def reconcile(c):
                 receipt = receipts[-1]
                 if receipt.get('status') in ('in_flight', 'dispatching'):
                     return
-                status = {'completed': 'completed', 'failed': 'failed', 'cancelled': 'cancelled'}.get(receipt.get('status'), 'unknown')
+                status = {'completed': 'completed', 'failed': 'failed',
+                          'rejected': 'failed', 'cancelled': 'cancelled'}.get(receipt.get('status'), 'unknown')
         with action_lock(c.root):
             finish_locked(c.root, row['requestId'], status, receipt)
         if status == 'unknown':
@@ -71,10 +72,12 @@ def dispatch(c):
         outcome = c.gateway.action(row['motorTurnId'], **row['payload'])
         c.gateway.close_lease(blocking=True)
         c.collect_action_receipts(row['motorTurnId'])
-        if not outcome.get('ok') and outcome.get('code') != 'outcome_unknown':
+        if not outcome.get('ok') and outcome.get('code') != 'outcome_unknown' and not outcome.get('actionId'):
             with action_lock(c.root):
                 finish_locked(c.root, row['requestId'], 'failed', outcome)
         else:
+            # A dispatched rejection has an exact journal receipt. The raw
+            # gateway return omits its tool/status/reason and must not replace it.
             reconcile(c)
         c.record('motor_dispatch', requestId=row['requestId'], turnId=row['motorTurnId'],
                  slowTaskId=(c.data.get('active') or {}).get('taskId'), outcome=outcome.get('code'))
@@ -127,6 +130,10 @@ def preempt(c, body, control):
 
 def tick(c, body, control):
     if (control.get('drain') or {}).get('status') == 'requested':
+        # Finish a claimed action from its exact journal while admission is
+        # closed. Queued commands are retired at the controller's idle boundary.
+        reconcile(c)
+        c.data['motorQueue'] = public(c.root)
         return
     c.gateway._area(body['position'], protect=False)
     if body.get('gameMode') != 'survival':

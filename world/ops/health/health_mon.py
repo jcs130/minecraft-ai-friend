@@ -575,7 +575,8 @@ def probe_survivor():
     checks = {'snapshot_fresh': False, 'supervised_container': False, 'panel_projection': False,
               'adventure_projection': False, 'no_unexpected_pause': False,
               'execution_systems': False, 'fast_system_protocol': False, 'self_planning_protocol': False,
-              'vision_protocol': False, 'inference_failure_protocol': False, 'inference_projection': False,
+              'vision_protocol': False, 'navigation_height_guard': False,
+              'inference_failure_protocol': False, 'inference_projection': False,
               'inference_limits_unrestricted': False}
     try:
         target = PROJECT/'server/panel-state/survivor.json'
@@ -615,6 +616,8 @@ def probe_survivor():
                 and type(heartbeat.get('selfPlanningVersion')) is int and heartbeat['selfPlanningVersion'] == 1)
             checks['vision_protocol'] = (checks['fast_system_protocol']
                 and type(heartbeat.get('visionProtocol')) is int and heartbeat['visionProtocol'] == 1)
+            checks['navigation_height_guard'] = (checks['fast_system_protocol']
+                and heartbeat.get('navigationHeightGuardVersion') == 1)
             checks['inference_failure_protocol'] = (checks['fast_system_protocol']
                 and type(heartbeat.get('inferenceFailureVersion')) is int and heartbeat['inferenceFailureVersion'] == 1)
         reason = source.get('pauseReason') or ''

@@ -66,6 +66,8 @@ def receipt_evidence(row):
     row = asdict(row)
     summary = {key: row.get(key) for key in ('actionId', 'tool', 'status',
         'completionConfirmed', 'nativeTaskId', 'navigationOutcome', 'observedAt')}
+    if type(row.get('resolvedNavigationY')) in (int, float):
+        summary['resolvedNavigationY'] = row['resolvedNavigationY']
     args = asdict(row.get('args'))
     summary['requested'] = fields(args, ('x', 'y', 'z', 'item_id', 'operation', 'skill_id', 'quest_id'))
     result = asdict(row.get('result'))
@@ -833,14 +835,18 @@ class NumenGateway:
         if not (self._number(args.get('x')) and self._number(args.get('z'))):
             return None
         distance = math.hypot(position['x'] - args['x'], position['z'] - args['z'])
-        if self._number(args.get('y')):
-            arrived = math.floor(position['y']) == math.floor(args['y']) and distance <= 1.5
+        target_y = receipt.get('resolvedNavigationY', args.get('y'))
+        if self._number(target_y):
+            arrived = math.floor(position['y']) == math.floor(target_y) and distance <= 1.5
         else:
             arrived = distance <= 1.5
+        requested = {k: args.get(k) for k in ('x', 'y', 'z') if k in args}
+        if self._number(target_y):
+            requested['y'] = target_y
         return {'task_id': receipt.get('nativeTaskId'), 'state': 'ended', 'success': arrived,
                 'navigation_mode': 'observed_from_body',
                 'final_x': position['x'], 'final_y': position['y'], 'final_z': position['z'],
-                'requested': {k: args.get(k) for k in ('x', 'y', 'z') if k in args},
+                'requested': requested,
                 'horizontalDistance': round(distance, 2),
                 'reason': 'the task ended and the core keeps no readable navigation terminal; '
                           'arrival is judged from the body against the request'}
@@ -1209,9 +1215,29 @@ class NumenGateway:
                     preflight(before, args)
                 plan = None
                 navigation_sense = None
+                resolved_navigation_y = None
+                native_args = args
                 if tool == 'goto':
-                    from navigation_sense import NavigationSense
+                    from navigation_sense import NavigationSense, supported_column_y
                     navigation_sense = NavigationSense(self).for_destination(before, args)
+                    if 'y' not in args:
+                        resolved_navigation_y = supported_column_y(navigation_sense, args)
+                        if resolved_navigation_y is None:
+                            result = {'ok': False, 'code': 'walk_height_unverified',
+                                      'tool': 'goto', 'requested': dict(args),
+                                      'dispatched': False, 'writePerformed': False,
+                                      'navigationSense': navigation_sense,
+                                      'notice': 'The native x/z column goal can end in a deep cave. '
+                                                'Choose an observed supported stance at the intended height '
+                                                'and supply y, or choose a closer x/z cell.'}
+                            try:
+                                self._record({'turnId': turn_id, 'tool': tool, 'args': dict(args),
+                                              'phase': 'preflight_rejected', 'observedAt': self._now(),
+                                              'result': result})
+                            except OSError:
+                                result['auditLogAvailable'] = False
+                            return result
+                        native_args = {**args, 'y': resolved_navigation_y}
                 if tool in WORLD_ACTIONS:
                     from world_actions import WorldActions
                     plan = WorldActions(self).prepare(tool, args, before)
@@ -1233,6 +1259,8 @@ class NumenGateway:
                 marker = {'schema': 1, 'actionId': action_id, 'turnId': turn_id, 'tool': tool,
                           'args': args, 'acceptedAt': self._now(), 'result': 'unknown',
                           'before': self._action_snapshot(before)}
+                if resolved_navigation_y is not None:
+                    marker['resolvedNavigationY'] = resolved_navigation_y
                 write_json(self.state / 'unknown.json', marker)
                 index = self.state / 'turn-actions' / (turn_id + '.json')
                 ids = read_json(index).get('actionIds', []) if index.exists() else []
@@ -1248,7 +1276,7 @@ class NumenGateway:
                         from drop_actions import DropActions
                         reply = DropActions(self).dispatch(action_id, before, args)
                     else:
-                        reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, args)
+                        reply = WorldActions(self).dispatch(plan) if tool in WORLD_ACTIONS else self._invoke(tool, native_args)
                     if tool == 'equip_item' and reply.get('accepted') is True:
                         reply = self._confirm_equipment(args)
                     if reply.get('success') is True:

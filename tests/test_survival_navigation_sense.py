@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'world/survival'))
-from navigation_sense import NavigationSense, PREFIX, CAPABILITY
+from navigation_sense import NavigationSense, PREFIX, CAPABILITY, supported_column_y
 from numen_gateway import NumenGateway, write_json, read_json
 
 BODY='d4ac9523-4962-43ed-98c5-19b49e104048'
@@ -52,6 +52,14 @@ class NavigationSenseTests(unittest.TestCase):
         self.assertFalse(result['destination']['pathVerified'])
         self.assertTrue(all(not c['pathVerified'] for c in result['destination']['candidates']))
         self.assertEqual(self.commands,['qdworld navigation_sense '+BODY+' 10.0 64.0 10.0'])
+
+    def test_column_height_uses_only_the_requested_supported_cell(self):
+        args = {'x': 10., 'z': 10.}
+        self.assertIsNone(supported_column_y(self.row, args))
+        self.row['destination']['candidates'][0].update(x=10.5, y=65., z=10.5)
+        self.assertEqual(supported_column_y(self.row, args), 65)
+        self.row['destination'].update(requestedStanceClear=True, requestedStanceSupported=True)
+        self.assertEqual(supported_column_y(self.row, args), 64)
 
     def test_missing_bridge_and_timeout_are_unavailable_not_idle_or_defense(self):
         for raw in ('Unknown command',PREFIX+'{}'):

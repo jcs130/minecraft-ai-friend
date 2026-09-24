@@ -110,6 +110,20 @@ def claim_locked(root, clock=time.time):
     return selected
 
 
+def expire_queued_locked(root, clock=time.time):
+    """Retire unsent commands when the operator drains the body owner."""
+    data = view(root)
+    changed = 0
+    for row in data['requests']:
+        if row['status'] == 'queued':
+            row.update(status='expired', finishedAt=clock())
+            row.pop('payload', None)
+            changed += 1
+    if changed:
+        write_json(root/'motor-inbox.json', data)
+    return changed
+
+
 def finish_locked(root, identity, status, receipt):
     if status not in ('completed','failed','unknown','cancelled'):raise ValueError('invalid_motor_terminal')
     data=view(root);row=next(r for r in data['requests'] if r['requestId']==identity)
@@ -128,7 +142,7 @@ def public(root):
     rows=view(root)['requests']
     recent = []
     for row in rows[-6:]:
-        result = {k:row.get(k) for k in ('requestId','kind','status')}
+        result = {k:row.get(k) for k in ('requestId','turnId','kind','status')}
         receipt = row.get('receipt')
         result['receipt'] = receipt
         recent.append(result)

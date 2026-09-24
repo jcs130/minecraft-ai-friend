@@ -226,7 +226,12 @@ class GatewayTests(unittest.TestCase):
         # accepted with an empty mode list, it is accepted on any upstream body. One
         # action per turn, because an accepted action consumes the lease's budget.
         self.rcon.navigation_modes = []
-        result = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        survey = {'ok': True, 'destination': {'available': True,
+            'requested': {'x': 110, 'y': 64, 'z': 100},
+            'requestedStanceClear': True, 'requestedStanceSupported': True,
+            'candidates': []}}
+        with patch('navigation_sense.NavigationSense.for_destination', return_value=survey):
+            result = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
         self.assertTrue(result['ok'])
         self.assertNotIn('"walk_only"', self.rcon.mutations()[0])
 
@@ -426,6 +431,78 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(len(self.rcon.mutations()), 1)
         self.assertFalse(dispatch(controller))
         self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_rejected_async_motor_action_keeps_native_failure_for_next_plan(self):
+        from motor_mailbox import open_cognition, public
+        from motor_loop import dispatch
+        from types import SimpleNamespace
+
+        self.write('settings.json', self.settings | {'asyncMotor': True})
+        open_cognition(self.state, TURN, NOW*1000+120000, lambda: NOW)
+        queued = self.mine()
+        original_cmd = self.rcon.cmd
+        def rejected(command):
+            if ' mine ' in command:
+                self.rcon.calls.append(command)
+                return json.dumps({'success': False, 'message': 'invalid target self'})
+            return original_cmd(command)
+        controller = SimpleNamespace(root=self.state, clock=lambda: NOW, gateway=self.client,
+            data={'active': {'taskId': 'still-thinking'}}, collect_action_receipts=lambda turn: None,
+            record=lambda *a, **kw: None, pause=lambda reason: self.fail(reason))
+
+        with patch.object(self.rcon, 'cmd', side_effect=rejected), \
+             patch('numen_gateway.inventory_from_snbt',
+                   return_value=([], {'minecraft:oak_log': 4})):
+            self.assertTrue(dispatch(controller))
+        row = next(r for r in public(self.state)['recent'] if r['requestId'] == queued['requestId'])
+        self.assertEqual(row['status'], 'failed')
+        self.assertEqual(row['receipt']['tool'], 'mine')
+        self.assertEqual(row['receipt']['status'], 'rejected')
+        self.assertEqual(row['receipt']['outcomeDetail'], 'invalid target self')
+        self.assertFalse(row['receipt']['completionConfirmed'])
+        self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_two_coordinate_walk_uses_observed_supported_height(self):
+        self.lease()
+        survey = {'ok': True, 'destination': {'available': True,
+            'requested': {'x': 101, 'y': 64, 'z': 100},
+            'requestedStanceClear': True, 'requestedStanceSupported': True,
+            'candidates': []}}
+        with patch('numen_gateway.inventory_from_snbt',
+                   return_value=([], {'minecraft:oak_log': 4})), \
+             patch('navigation_sense.NavigationSense.for_destination', return_value=survey):
+            result = self.client.action(TURN, 'goto', {'x': 101, 'z': 100})
+        self.assertTrue(result['ok'])
+        native = self.rcon.mutations()
+        self.assertEqual(len(native), 1)
+        self.assertEqual(json.loads(native[0].split(' goto ', 1)[1]),
+                         {'x': 101, 'y': 64, 'z': 100})
+        receipt = gateway.read_json(self.state/'action-receipts'/(result['actionId']+'.json'))
+        self.assertEqual(receipt['resolvedNavigationY'], 64)
+        self.assertEqual(receipt['args'], {'x': 101, 'z': 100})
+
+    def test_two_coordinate_walk_refuses_unverified_height_without_body_effect(self):
+        self.lease()
+        survey = {'ok': True, 'destination': {'available': True,
+            'requested': {'x': 101, 'y': 64, 'z': 100},
+            'requestedStanceClear': False, 'requestedStanceSupported': False,
+            'candidates': [{'x': 102.5, 'y': 64, 'z': 100.5}]}}
+        with patch('numen_gateway.inventory_from_snbt',
+                   return_value=([], {'minecraft:oak_log': 4})), \
+             patch('navigation_sense.NavigationSense.for_destination', return_value=survey):
+            result = self.client.action(TURN, 'goto', {'x': 101, 'z': 100})
+        self.assertEqual(result['code'], 'walk_height_unverified')
+        self.assertFalse(result['dispatched'])
+        self.assertFalse(self.rcon.mutations())
+        self.assertFalse((self.state/'unknown.json').exists())
+
+    def test_resolved_walk_cannot_complete_in_a_cave_below_its_target(self):
+        receipt = {'nativeTaskId': 't1', 'args': {'x': 101, 'z': 100},
+                   'resolvedNavigationY': 64}
+        wrong_level = {'position': {'x': 101.2, 'y': 13, 'z': 100.2}}
+        self.assertFalse(self.client._observed_arrival(receipt, wrong_level)['success'])
+        on_level = {'position': {'x': 101.2, 'y': 64, 'z': 100.2}}
+        self.assertTrue(self.client._observed_arrival(receipt, on_level)['success'])
 
     def test_missing_equipment_does_not_clear_an_existing_unknown(self):
         self.lease()

@@ -20,6 +20,31 @@ def point(value):
     return isinstance(value, dict) and all(number(value.get(k)) for k in ('x', 'y', 'z'))
 
 
+def supported_column_y(survey, args):
+    """Resolve an x/z walk to a supported stance near the body's observed level.
+
+    Upstream's COLUMN goal accepts any Y, including a cave far below the
+    requested location. Only an exact, observed cell in the same x/z column is
+    safe to pass to its BLOCK goal; a nearby candidate is not that cell.
+    """
+    if not isinstance(survey, dict) or survey.get('ok') is not True:
+        return None
+    dest = survey.get('destination') or {}
+    requested = dest.get('requested') or {}
+    if (dest.get('available') is not True or not point(requested)
+            or not number(args.get('x')) or not number(args.get('z'))
+            or requested['x'] != args['x'] or requested['z'] != args['z']):
+        return None
+    if dest.get('requestedStanceClear') is True and dest.get('requestedStanceSupported') is True:
+        return int(math.floor(requested['y']))
+    for candidate in dest.get('candidates') or []:
+        if (point(candidate) and math.floor(candidate['x']) == math.floor(args['x'])
+                and math.floor(candidate['z']) == math.floor(args['z'])
+                and abs(candidate['y'] - requested['y']) <= 5):
+            return int(math.floor(candidate['y']))
+    return None
+
+
 class NavigationSense:
     def __init__(self, gateway):
         self.gateway = gateway
@@ -159,4 +184,3 @@ def verdict(survey, outcome, args=None):
             'instruction': '这个目标格本身站不住（目标方块 %s），而附近这一次没勘察到可站立格。'
                 '先走到最近的干处（离开水面/爬上地面），再重新 goto 目标；'
                 '或先用 inspect_block 看清目标下方是什么方块再来。' % (block or 'unknown')}
-

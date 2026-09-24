@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from numen_gateway import action_lock, read_json, write_json
 from motor_mailbox import open_cognition, cognition, enqueue_locked, claim_locked, finish_locked
@@ -51,6 +52,23 @@ class MailboxTests(unittest.TestCase):
         write_json(self.root/'control.json',control)
         with action_lock(self.root):self.assertIsNone(claim_locked(self.root,lambda:self.now))
         self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'],'expired')
+
+    def test_drain_settles_claimed_receipt_without_dispatching_queued_work(self):
+        from motor_loop import tick
+        self.enqueue()
+        self.enqueue({'tool': 'goto', 'args': {'x': 1, 'z': 2}})
+        with action_lock(self.root):
+            claimed = claim_locked(self.root, lambda: self.now)
+        receipt = {'actionId': 'a' * 32, 'tool': 'eat', 'status': 'completed',
+                   'completionConfirmed': True}
+        controller = SimpleNamespace(root=self.root,
+            gateway=SimpleNamespace(turn_receipts=lambda turn: [receipt]),
+            data={}, pause=lambda reason: self.fail(reason))
+        tick(controller, {}, {'drain': {'status': 'requested'}})
+        rows = read_json(self.root/'motor-inbox.json')['requests']
+        self.assertEqual(rows[0]['status'], 'completed')
+        self.assertEqual(rows[0]['requestId'], claimed['requestId'])
+        self.assertEqual(rows[1]['status'], 'queued')
 
     def test_turn_budget_is_bounded(self):
         for i in range(6):self.enqueue({'tool':'craft','args':{'item_id':'minecraft:stick','count':i+1}})

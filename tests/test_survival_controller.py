@@ -233,6 +233,19 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(self.backend.submitted), 1)
         self.assertEqual(read_json(self.public)['drain']['status'], 'completed')
 
+    def test_drain_retires_unsent_motor_work_before_resume(self):
+        self.controller.settings['asyncMotor'] = True
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'unsent-1', 'turnId': 'survival-plan-1', 'kind': 'action',
+            'status': 'queued', 'payload': {'tool': 'goto', 'args': {'x': 101, 'z': 101}},
+            'expiresAt': self.clock() + 300, 'goalBinding': {}, 'motorTurnId': 'motor-unsent-1'}]})
+        self.drain()
+        self.assertTrue(self.controller.drain_at_boundary(self.gateway.body))
+        row = read_json(self.state / 'motor-inbox.json')['requests'][0]
+        self.assertEqual(row['status'], 'expired')
+        self.assertNotIn('payload', row)
+        self.assertFalse(self.gateway.actions)
+
     def test_drain_on_native_failure_preserves_failure_receipt(self):
         self.controller.tick()
         self.drain()
@@ -1034,6 +1047,59 @@ class ControllerTests(unittest.TestCase):
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 3)
         self.assertEqual(self.controller.data['wakeReason'], 'world_or_goal_changed')
+
+    def test_confirmed_async_motor_action_is_not_counted_as_empty_review(self):
+        self.controller.tick()
+        active = self.controller.data['active']
+        active['bodyAccess'] = 'queued'
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'action-1', 'turnId': active['turnId'], 'kind': 'action',
+            'status': 'completed', 'receipt': {'actionId': 'a' * 32,
+                'tool': 'goto', 'status': 'completed', 'completionConfirmed': True}}]})
+        self.terminal()
+        self.controller.poll_model(self.gateway.body)
+        self.assertEqual(self.controller.data['noActionReviews'], 0)
+
+    def test_pending_async_motor_action_is_not_counted_as_empty_review(self):
+        self.controller.tick()
+        active = self.controller.data['active']
+        active['bodyAccess'] = 'queued'
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'action-1', 'turnId': active['turnId'], 'kind': 'action',
+            'status': 'claimed', 'receipt': None}]})
+        self.terminal()
+        self.controller.poll_model(self.gateway.body)
+        self.assertEqual(self.controller.data['noActionReviews'], 0)
+
+    def test_failed_async_motor_action_gets_one_prompt_corrective_review(self):
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+        self.write('memory.json', {'goal': 'Make an iron sword', 'goalState': 'ongoing',
+                                   'reviewAfterSeconds': 1800})
+        self.controller.tick()
+        active = self.controller.data['active']
+        active['bodyAccess'] = 'queued'
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'action-1', 'turnId': active['turnId'], 'kind': 'action',
+            'status': 'failed', 'receipt': {'actionId': 'a' * 32,
+                'tool': 'game_cast', 'status': 'rejected', 'completionConfirmed': False,
+                'outcomeDetail': 'target is unsupported'}}]})
+        self.terminal()
+        self.controller.poll_model(self.gateway.body)
+        self.assertEqual(self.controller.data['noActionReviews'], 1)
+        self.controller.data['motorQueue'] = {
+            'recent': [{'turnId': active['turnId'], 'kind': 'action', 'status': 'failed'}]}
+        self.assertEqual(self.controller.next_review(read_json(self.state / 'control.json')),
+                         self.controller.data['lastReviewAt'] + self.controller.review_floor())
+        self.controller.data['noActionReviews'] = 6
+        self.assertEqual(self.controller.next_review(read_json(self.state / 'control.json')),
+                         self.controller.data['lastReviewAt'] + self.controller.review_floor())
+        self.controller.data['motorQueue']['recent'].append({
+            'turnId': active['turnId'], 'kind': 'action', 'status': 'expired'})
+        self.assertEqual(self.controller.next_review(read_json(self.state / 'control.json')),
+                         self.controller.data['lastReviewAt'] + self.controller.review_floor())
+        self.controller.data['motorQueue']['recent'][0]['turnId'] = 'older-turn'
+        self.assertEqual(self.controller.next_review(read_json(self.state / 'control.json')),
+                         self.controller.data['lastReviewAt'] + 3600)
 
     def test_transient_skill_read_lock_waits_locally_without_advancing_or_buying_a_decision(self):
         from skill_library import SkillError

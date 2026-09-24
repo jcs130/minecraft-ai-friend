@@ -518,6 +518,12 @@ class Controller:
             lease = read_json(lease_path) if lease_path.exists() else {}
             if lease.get('status') in ('reserved', 'unknown'):
                 return False
+            if self.settings.get('asyncMotor'):
+                from motor_mailbox import view as motor_view, expire_queued_locked
+                if any(row['status'] in ('claimed', 'unknown')
+                       for row in motor_view(self.root)['requests']):
+                    return False
+                expire_queued_locked(self.root, self.clock)
             if lease.get('status') == 'open':
                 write_json(lease_path, lease | {'status': 'closed'})
             last = self.data.get('lastDecision') or {}
@@ -1018,6 +1024,16 @@ class Controller:
             empty = max(0, min(6, self.data.get('noActionReviews', 0)))
             if empty > 1:
                 delay = max(delay, min(3600, floor * 2 ** (empty - 1)))
+            # A rejected body action is actionable feedback. Keep correction
+            # reviews at the normal floor even after the empty-review counter
+            # saturates; the floor still bounds the model request rate.
+            recent = (self.data.get('motorQueue') or {}).get('recent') or []
+            latest = next((row for row in reversed(recent) if row.get('kind') == 'action'
+                           and row.get('status') in ('completed', 'failed')), {})
+            if (memory.get('goalState') in ('ongoing', 'blocked') and empty > 0
+                    and latest.get('kind') == 'action' and latest.get('status') == 'failed'
+                    and latest.get('turnId') == (self.data.get('lastDecision') or {}).get('turnId')):
+                delay = min(delay, floor)
         started = self.data.get('lastReviewAt')
         if started is None:
             # Migration preserves prior decisions/cost; it does not restart the quota.
@@ -1131,6 +1147,7 @@ class Controller:
             'socialProgressVersion': 1,
             'skillCatalogRoutingVersion': 1,
             'asyncMotorVersion': 1 if self.settings.get('asyncMotor') else 0,
+            'navigationHeightGuardVersion': 1,
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
@@ -1409,10 +1426,21 @@ class Controller:
             job = read_json(job_path) if job_path.exists() else {}
             queued_skill = job.get('turnId') == active['turnId'] and job.get('status') in ('pending', 'running')
             acted = any(row.get('result', {}).get('ok') is True for row in actions)
+            pending_motor = False
+            if active.get('bodyAccess') == 'queued':
+                from motor_mailbox import view as motor_view
+                motor_rows = [row for row in motor_view(self.root)['requests']
+                              if row.get('turnId') == active['turnId']]
+                acted = acted or any(row.get('kind') == 'action' and row.get('status') == 'completed'
+                    and (row.get('receipt') or {}).get('status') == 'completed'
+                    and (row.get('receipt') or {}).get('completionConfirmed') is True
+                    for row in motor_rows)
+                pending_motor = any(row.get('status') in ('queued', 'claimed', 'unknown')
+                                    for row in motor_rows)
             if completed:
                 self.data.pop('lastFailureReason', None)
             self.data['noActionReviews'] = (min(6, self.data.get('noActionReviews', 0) + 1)
-                                           if completed and not acted and not queued_skill else 0)
+                                           if completed and not acted and not queued_skill and not pending_motor else 0)
         if active.get('partyReservation') and self.party:
             # Persist terminal before delivering a response. Reconciliation may
             # repeat this idempotent receipt write, never the model submission.
