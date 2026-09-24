@@ -50,6 +50,80 @@ class MotionProgramTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'motion_policy_choice_unbound'):
                     bind_motion_choice(result, false_choice)
 
+    def test_blocked_forward_probe_offers_bounded_lateral_step(self):
+        state = copy.deepcopy(self.record['fixtures'][1]['state'])
+        direct = {'x': 104, 'y': 64, 'z': 100}
+        observation = state['execution']['observation']
+        observation['args'] = direct
+        destination = observation['result']['navigationSense']['destination']
+        destination.update(requested=direct, requestedStanceSupported=False, candidates=[])
+        memory = self.memory | {'index': 0, 'target': self.memory['waypoints'][0],
+                                'stage': 'survey', 'probe': direct,
+                                'probeSpan': 4, 'probeAttempt': 2}
+        left = evaluate(SOURCE, state, memory)
+        self.assertEqual(left['observe']['args'], {'x': 100, 'y': 64, 'z': 106})
+        self.assertEqual(left['memory']['stage'], 'detour_left')
+        lateral_state = copy.deepcopy(state)
+        lateral_state['execution']['observation']['args'] = left['observe']['args']
+        lateral_destination = lateral_state['execution']['observation']['result']['navigationSense']['destination']
+        lateral_destination.update(requested=left['observe']['args'], requestedStanceSupported=True)
+        offered = evaluate(SOURCE, lateral_state, left['memory'])
+        self.assertEqual(offered['choose']['candidates'][0]['action']['args'], left['observe']['args'])
+        selected = bind_motion_choice(offered, offered['choose']['candidates'][0]['action'])
+        moved = copy.deepcopy(self.state)
+        moved['position'] = left['observe']['args']
+        moved['execution'] = {'lastExecution': {'status': 'succeeded', 'completionConfirmed': True,
+            'tool': 'goto', 'actionId': 'detour-action', 'turnId': 'detour-turn'},
+            'expectedAction': {'tool': 'goto', 'args': left['observe']['args'],
+                'actionId': 'detour-action', 'turnId': 'detour-turn'}}
+        continued = evaluate(SOURCE, moved, selected['memory'])
+        self.assertEqual(continued['observe']['tool'], 'navigation_sense')
+        self.assertEqual(continued['memory']['detours'], 1)
+
+    def test_both_lateral_probes_without_support_replan(self):
+        state = copy.deepcopy(self.record['fixtures'][1]['state'])
+        left_probe = {'x': 100, 'y': 64, 'z': 106}
+        observation = state['execution']['observation']
+        observation['args'] = left_probe
+        destination = observation['result']['navigationSense']['destination']
+        destination.update(requested=left_probe, requestedStanceSupported=False, candidates=[])
+        memory = self.memory | {'index': 0, 'target': self.memory['waypoints'][0],
+                                'stage': 'detour_left', 'probe': left_probe}
+        right = evaluate(SOURCE, state, memory)
+        self.assertEqual(right['observe']['args'], {'x': 100, 'y': 64, 'z': 94})
+        observation['args'] = right['observe']['args']
+        destination['requested'] = right['observe']['args']
+        terminal = evaluate(SOURCE, state, right['memory'])
+        self.assertTrue(terminal['replan'])
+        self.assertEqual(terminal['reason'], 'navigation_no_supported_progress')
+
+    def test_detour_budget_and_fresh_survey_boundaries(self):
+        fixture = self.record['fixtures'][2]
+        exhausted = copy.deepcopy(fixture['memory'])
+        exhausted['detours'] = 2
+        result = evaluate(SOURCE, fixture['state'], exhausted)
+        self.assertTrue(result['replan'])
+        self.assertEqual(result['reason'], 'navigation_no_supported_progress')
+        lateral = self.record['fixtures'][3]
+        stale = copy.deepcopy(lateral['state'])
+        stale['execution']['observation']['fresh'] = False
+        result = evaluate(SOURCE, stale, lateral['memory'])
+        self.assertTrue(result['replan'])
+        self.assertNotIn('choose', result)
+
+    def test_lateral_probe_stays_inside_work_area(self):
+        state = copy.deepcopy(self.record['fixtures'][2]['state'])
+        state['position']['z'] = 155
+        state['execution']['observation']['result']['navigationSense']['position']['z'] = 155
+        direct = {'x': 104, 'y': 64, 'z': 155}
+        state['execution']['observation']['args'] = direct
+        state['execution']['observation']['result']['navigationSense']['destination']['requested'] = direct
+        memory = {'policy': True, 'waypoints': [{'x': 130, 'z': 155}, {'x': 145, 'z': 155}],
+                  'stage': 'survey', 'probe': direct, 'probeSpan': 4, 'probeAttempt': 2}
+        result = evaluate(SOURCE, state, memory)
+        self.assertEqual(result['memory']['stage'], 'detour_right')
+        self.assertEqual(result['observe']['args'], {'x': 100, 'y': 64, 'z': 149})
+
     def test_confirmed_first_waypoint_advances_to_second_without_model(self):
         position = {'x': 130, 'y': 64, 'z': 100}
         state = copy.deepcopy(self.state)
