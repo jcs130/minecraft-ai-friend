@@ -31,6 +31,9 @@ SLOTS = ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')
 # Cap the on-disk receipt archive so the directory (and the survivor's
 # per-tick pattern scan over it) does not grow without bound.
 MAX_ACTION_RECEIPTS = 200
+# Only the tool admission caller waits; ordinary motor-loop mutex checks stay
+# nonblocking. This budget never waits for a game action or holds the mutex.
+ACTION_ADMISSION_WAIT_SECONDS = 0.05
 
 
 class GatewayError(ValueError):
@@ -243,8 +246,12 @@ def write_json(path, value):
 
 
 @contextmanager
-def action_lock(state, blocking=False):
-    """One interprocess lock shared by driver and every MCP worker."""
+def action_lock(state, blocking=False, *, wait_seconds=0):
+    """Shared mutex; optional bounded admission wait uses a monotonic clock."""
+    if (type(wait_seconds) not in (int, float) or not math.isfinite(wait_seconds)
+            or wait_seconds < 0 or blocking and wait_seconds):
+        raise ValueError('invalid_action_lock_wait')
+    deadline = time.monotonic() + wait_seconds
     state = Path(state)
     state.mkdir(parents=True, exist_ok=True)
     with (state / 'action.lock').open('a+b') as stream:
@@ -254,16 +261,23 @@ def action_lock(state, blocking=False):
                 stream.write(b'0')
                 stream.flush()
             stream.seek(0)
-            try:
+            def acquire():
                 msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
-            except OSError as exc:
-                raise GatewayError('action_busy') from exc
+            contention = OSError
         else:
             import fcntl
-            try:
+            def acquire():
                 fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
-            except BlockingIOError as exc:
-                raise GatewayError('action_busy') from exc
+            contention = BlockingIOError
+        while True:
+            try:
+                acquire()
+                break
+            except contention as exc:
+                remaining = deadline - time.monotonic()
+                if blocking or remaining <= 0:
+                    raise GatewayError('action_busy') from exc
+                time.sleep(min(0.005, remaining))
         try:
             yield
         finally:
@@ -1271,9 +1285,12 @@ class NumenGateway:
         raise GatewayError('outcome_unknown')
 
     def action(self, turn_id, tool, args, *, previous_request_id=None):
+        entry_attempted = entry_acquired = False
         try:
             self._validate(tool, args)
-            with action_lock(self.state):
+            entry_attempted = True
+            with action_lock(self.state, wait_seconds=ACTION_ADMISSION_WAIT_SECONDS):
+                entry_acquired = True
                 self._enabled()
                 from motor_mailbox import cognition, enqueue_locked
                 try:
@@ -1523,6 +1540,18 @@ class NumenGateway:
                     self._record({**marker, 'phase': 'response', 'result': result, 'finishedAt': self._now()})
                     return result
         except GatewayError as exc:
+            if str(exc) == 'action_busy' and entry_attempted and not entry_acquired:
+                # This call never entered admission. Do not attach this contract
+                # to an exception raised after enqueue/native dispatch began.
+                return {'ok': False, 'code': 'action_busy', 'admissionPhase': 'before_lock',
+                    'dispatched': False, 'writePerformed': False, 'queued': False,
+                    'retryable': True, 'retryAfterSeconds': 0.1,
+                    'retryScope': 'same_request_only', 'retryAutomatically': False,
+                    'instruction': 'This call could not acquire admission and did not enqueue or dispatch. '
+                        'After the short delay, you may retry the exact same turn_id, tool, arguments '
+                        'and previous_request_id once; do not invent a new identity. This says nothing '
+                        'about an earlier call: pending/unknown requests keep their original identity '
+                        'and must not be replayed. Authority and outcome guards are checked again.'}
             result = cognition_rejection(self.state, turn_id, str(exc), self.clock)
             details = getattr(exc, 'details', None)
             if (str(exc) in ('protected_area', 'outside_work_area')
