@@ -18,6 +18,9 @@ import uuid
 from numen_gateway import (NumenGateway, GatewayError, read_json, read_controller_json,
     write_json, action_lock, receipt_evidence)
 
+NATIVE_CHAT_BUSY_DETAIL = ('A task is already running for this chat. Wait for it to '
+                           'finish or use a different session_id.')
+
 
 def utc():
     return datetime.now(timezone.utc).isoformat()
@@ -252,6 +255,10 @@ def life_action_evidence(row):
     return receipt_evidence(row)
 
 
+class NativeChatBusy(Exception):
+    """The pinned native endpoint proved that this turn was not dispatched."""
+
+
 class QwenBackend:
     def __init__(self, env=None):
         env = os.environ if env is None else env
@@ -330,7 +337,20 @@ class QwenBackend:
         if session.get('contextProtocol') == 2:
             payload['request_context']['qiandeng_survival_turn']['context_protocol'] = 2
         payload['timeout'] = timeout
-        value = self.api('POST', '/console/chat/task', payload)
+        try:
+            value = self.api('POST', '/console/chat/task', payload)
+        except Exception as error:
+            import httpx
+            response = getattr(error, 'response', None)
+            if (isinstance(error, httpx.HTTPStatusError) and response.status_code == 409
+                    and response.json() == {'detail': NATIVE_CHAT_BUSY_DETAIL}):
+                active = {'turnId': turn_id, 'sessionId': session['primarySessionId'],
+                          'userId': session['userId'], 'channel': session['channel']}
+                receipt = self._submission_receipt(active)
+                if (receipt.get('phase') == 'rejected' and receipt.get('reason') == 'chat_busy'
+                        and receipt.get('taskId') is None):
+                    raise NativeChatBusy('native_chat_busy') from error
+            raise
         import re
         if not isinstance(value.get('task_id'), str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value['task_id']):
             raise ValueError('native_task_id_missing')
@@ -355,7 +375,7 @@ class QwenBackend:
                 'code': 'NATIVE_TASK_LOST', 'message': 'Native task absent and agent idle; result unverified. Observe again; do not replay old actions.'}},
                 'reconciliation': {'resultVerified': False, 'requestReplayed': False, 'nativeRunningTaskCount': 0}}
 
-    def lookup_submission(self, active):
+    def _submission_receipt(self, active):
         import re
         turn = active.get('turnId')
         if not isinstance(turn, str) or not re.fullmatch(r'survival-[0-9a-f]{32}', turn):
@@ -365,6 +385,11 @@ class QwenBackend:
                     **{k: active[k] for k in ('sessionId', 'userId', 'channel')}}
         if any(value.get(k) != v for k, v in expected.items()):
             raise ValueError('native_submission_binding_mismatch')
+        return value
+
+    def lookup_submission(self, active):
+        import re
+        value = self._submission_receipt(active)
         if value.get('phase') == 'unknown':
             return None
         task = value.get('taskId')
@@ -1525,6 +1550,49 @@ class Controller:
         else:
             self.gateway.close_lease(blocking=True)
 
+    def settle_chat_busy(self, active):
+        """Release only an exactly rejected native reservation, with no replay."""
+        if (self.data.get('active') is not active or active.get('phase') != 'reserved'
+                or active.get('taskId') is not None):
+            raise ValueError('chat_busy_reservation_changed')
+        self.close_model_authority(active)
+        if active.get('partyReservation'):
+            self.party.deferred(active['partyReservation'], 'native_chat_busy')
+        if (active.get('completionReviewId')
+                and self.data.get('completedReviewConsumed') == active['completionReviewId']):
+            self.data.pop('completedReviewConsumed', None)
+        decisions = self.data.get('decisions') or []
+        if decisions and decisions[-1].get('turnId') == active['turnId']:
+            self.data['decisions'] = decisions[:-1]
+        count = min(6, self.data.get('modelBusyCount', 0) + 1)
+        self.data['modelBusyCount'] = count
+        self.data['nextDecisionAt'] = self.clock() + min(60, 5 * 2 ** (count - 1))
+        self.data['active'] = None
+        self.data['status'] = 'model_busy'
+        self.record('model_submission_rejected_busy', turnId=active['turnId'],
+                    nativeTaskCreated=False, requestReplayed=False)
+        self.save()
+
+    def reconcile_rejected_submission(self):
+        """Recover a persisted exact busy rejection after a controller crash."""
+        active = self.data.get('active') or {}
+        if (active.get('phase') != 'reserved' or active.get('taskId') is not None
+                or not hasattr(self.backend, '_submission_receipt')
+                or self.clock() < active.get('rejectionLookupAfter', 0)):
+            return
+        active['rejectionLookupAfter'] = self.clock() + 10
+        try:
+            receipt = self.backend._submission_receipt(active)
+        except Exception:
+            # Missing/unknown receipts are not evidence of rejection.
+            return
+        if (receipt.get('phase') == 'rejected' and receipt.get('reason') == 'chat_busy'
+                and receipt.get('taskId') is None):
+            try:
+                self.settle_chat_busy(active)
+            except Exception:
+                self.pause('model_submission_uncertain')
+
     def _timed_call(self, phase, call, *args, **kwargs):
         """Measure existing IO without repeating it or recording its contents."""
         started = time.monotonic()
@@ -2256,6 +2324,7 @@ class Controller:
             active['taskId'] = self._timed_call('nativeSubmit', self.backend.submit, turn_id, prompt, self.settings['taskTimeoutSeconds'],
                 session=model_session, request_context=request_context)
             active['phase'] = 'submitted'
+            self.data['modelBusyCount'] = 0
             from life_cycle import consume
             if consume(self.session):
                 self.save()  # the new life's death note has been delivered
@@ -2273,6 +2342,11 @@ class Controller:
                         self.save()
                 except Exception as exc:
                     self.data['sessionWarning'] = type(exc).__name__
+        except NativeChatBusy:
+            try:
+                self.settle_chat_busy(active)
+            except Exception:
+                self.pause('model_submission_uncertain')
         except Exception:
             self.pause('model_submission_uncertain')
 
@@ -2843,6 +2917,7 @@ class Controller:
         self.data['loopPhaseTimingMs'] = {}
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
         self.settle_cancellation()
+        self.reconcile_rejected_submission()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
             self.discard_policy()

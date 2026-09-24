@@ -14,6 +14,8 @@ from fastapi import Request
 
 VERSION = 1
 NATIVE_SHA = '10a699cbf6689ffff81f79223e6a62b7b8039b55a368057f9ff566a8996053a5'
+CHAT_BUSY_DETAIL = ('A task is already running for this chat. Wait for it to '
+                    'finish or use a different session_id.')
 
 
 def identity(payload, role):
@@ -48,7 +50,16 @@ async def submit_once(original, payload, request, workspace, *, root=None):
     receipt = {'schema': VERSION, **bound, 'phase': 'unknown', 'createdAt': time.time(),
                'requestSha256': hashlib.sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode()).hexdigest()}
     write(path, receipt)
-    result = await original(payload, request)
+    try:
+        result = await original(payload, request)
+    except HTTPException as error:
+        # This exact pinned native branch rejects before it creates a
+        # background task. Other errors may occur after dispatch and remain
+        # unknown. Keep the original single-submit receipt either way.
+        if error.status_code == 409 and error.detail == CHAT_BUSY_DETAIL:
+            write(path, {**receipt, 'phase': 'rejected', 'reason': 'chat_busy',
+                         'rejectedAt': time.time()})
+        raise
     task_id = result.get('task_id') if isinstance(result, dict) else None
     if not isinstance(task_id, str) or not re.fullmatch(r'task-[0-9a-f]{12}', task_id):
         raise ValueError('native_submission_receipt_invalid')
