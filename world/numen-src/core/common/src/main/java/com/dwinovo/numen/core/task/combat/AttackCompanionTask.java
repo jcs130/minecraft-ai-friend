@@ -170,6 +170,8 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
     /** 原生远程/受保护威胁的撤离模式,不会请求攻击许可或出手。 */
     private boolean retreatOnly;
     private final boolean nativeDefense;
+    /** 原生撤离当前中继距离档:32、16、8;可站不代表有通路。 */
+    private int retreatRangeStep;
     private long retreatRetryAt;
     private long retreatProgressAt;
     private Vec3 retreatProgressPosition;
@@ -202,6 +204,7 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
         clearHaven();
         target = null;
         retreatFailures = 0;
+        retreatRangeStep = 0;
         retreatProgressAt = player.level().getGameTime();
         retreatProgressPosition = player.position();
     }
@@ -905,11 +908,18 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
             return TaskState.RUNNING;
         }
         if (haven == null || player.blockPosition().closerThan(haven, HAVEN_ARRIVED)) {
-            haven = Haven.awayFrom(player, retreatOnly ? around
-                    : Menace.hostilesAround(player, FLEE_SCAN_RADIUS));
-            if (retreatOnly && haven == null) {
-                haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / 2.0);
-                if (haven == null) haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / 4.0);
+            if (retreatOnly) {
+                if (haven != null) {
+                    retreatFailures = 0;
+                    retreatRangeStep = 0;
+                }
+                haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / (1 << retreatRangeStep));
+                while (haven == null && retreatRangeStep < 2) {
+                    retreatRangeStep++;
+                    haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / (1 << retreatRangeStep));
+                }
+            } else {
+                haven = Haven.awayFrom(player, Menace.hostilesAround(player, FLEE_SCAN_RADIUS));
             }
             stopNav();
             Constants.LOG.info("[numen-attack] 逃向 {} —— {} 格内 {} 只",
@@ -935,13 +945,18 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
         if (status == PlayerNav.Status.FAILED) {
             String reason = nav.failReason();
             stopNav();
-            haven = null;   // 这个方向走不通,下一刻换一个
-            if (retreatOnly) return retreatFailed(now, reason);
+            haven = null;
+            if (retreatOnly) {
+                // 落脚点可站却不可达时也缩短中继;仍共用三次失败预算。
+                retreatRangeStep = Math.min(2, retreatRangeStep + 1);
+                return retreatFailed(now, reason);
+            }
             retreatFailures++;
         } else {
             if (status == PlayerNav.Status.ARRIVED) {
                 stopNav();
                 haven = null;
+                retreatRangeStep = 0;
             }
             if (!retreatOnly || status == PlayerNav.Status.ARRIVED) retreatFailures = 0;
         }

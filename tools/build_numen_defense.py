@@ -14,7 +14,10 @@ def load(name,path):
  s=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 walk=load('walk',ROOT/'tools/build_numen_walk_only.py');helper=load('cp',ROOT/'world/botgate-src/build.py')
 baseline=args.baseline_jar.resolve()
-if walk.sha(baseline.read_bytes())!='5e913b2ffb1a39b199333f768526537867be726bf27c451e7a1a507cc8a35da0':raise SystemExit('Exact deployed 5e913b baseline required')
+if walk.sha(baseline.read_bytes()) not in {
+    '5e913b2ffb1a39b199333f768526537867be726bf27c451e7a1a507cc8a35da0',
+    '2075c5ac6a6aca8ba8b8774937db1b9ff85eb148172fba7c4e514716216321ea',
+}:raise SystemExit('Exact verified deployed Numen baseline required')
 jar=HERE/'baseline-numen.jar'
 shutil.copy2(baseline,jar)
 deps=walk.embedded_dependencies(jar,HERE/'dependencies')
