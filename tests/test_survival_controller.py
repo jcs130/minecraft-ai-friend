@@ -907,6 +907,146 @@ class ControllerTests(unittest.TestCase):
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 2)
 
+    def livestream(self):
+        self.controller.settings.update(livestreamMode=True, livestreamReviewSeconds=45,
+            livestreamBlockedMaxSeconds=180, decisionCooldownSeconds=0)
+        self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
+
+    def test_livestream_ongoing_long_review_wakes_after_idle_budget(self):
+        self.livestream()
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        self.finish_no_action_decision()
+        self.clock.now += 44
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.clock.now += 1
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertEqual(self.controller.data['wakeReason'], 'autonomous_review')
+        self.assertEqual(read_json(self.public)['pacing']['reviewSeconds'], 45)
+        self.assertEqual(read_json(self.state/'heartbeat.json')['livestreamPacingVersion'], 1)
+        self.assertEqual(read_json(self.state/'heartbeat.json')['outsideAreaRecoveryVersion'], 1)
+
+    def test_livestream_blocked_empty_reviews_back_off_with_a_bound(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.write('memory.json', {'goalState': 'blocked', 'reviewAfterSeconds': 1800})
+        self.controller.data['lastReviewAt'] = self.clock()
+        for count, seconds in ((0, 45), (1, 45), (2, 90), (3, 180), (6, 180)):
+            self.controller.data['noActionReviews'] = count
+            with self.subTest(count=count):
+                self.assertEqual(self.controller.next_review(control), self.clock() + seconds)
+
+    def test_livestream_preserves_explicit_rest_and_confirmed_sleep(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.controller.data['lastReviewAt'] = self.clock()
+        self.write('memory.json', {'goalState': 'resting', 'reviewAfterSeconds': 1800})
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        self.controller.data['actionExecution'] = {'receipt': {'tool': 'sleep',
+            'status': 'completed', 'completionConfirmed': True}}
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+
+    def test_livestream_does_not_accelerate_pending_or_unknown_body_work(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.controller.data['lastReviewAt'] = self.clock()
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        for execution in ({'inFlight': True}, {'code': 'outcome_unknown'}):
+            self.controller.data['actionExecution'] = execution
+            self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.controller.data['actionExecution'] = {}
+        self.controller.data['motorQueue'] = {'pending': 1}
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+
+    def test_livestream_never_duplicates_an_active_model_turn(self):
+        self.livestream()
+        self.controller.tick()
+        self.clock.now += 46
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertEqual(self.backend.polled, ['native-task-1'])
+
+    def test_livestream_keeps_explicit_cooldown_and_off_mode_compatibility(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.controller.data['lastReviewAt'] = self.clock()
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        self.controller.settings['livestreamMode'] = False
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.controller.settings.update(livestreamMode=True, decisionCooldownSeconds=120)
+        self.controller.data['nextDecisionAt'] = self.clock() + 120
+        self.assertEqual(self.controller.next_review(control), self.clock() + 120)
+
+    def test_livestream_waits_for_running_native_task_and_skill(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.controller.data['lastReviewAt'] = self.clock()
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        self.controller.last_body = {'task': {'busy': True, 'task_id': 'walking'}}
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.controller.last_body = {}
+        self.job(status='running')
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+
+    def test_livestream_ongoing_backoff_cannot_restore_long_silent_gaps(self):
+        self.livestream()
+        control = read_json(self.state/'control.json')
+        self.controller.data.update(lastReviewAt=self.clock(), noActionReviews=6)
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 3600})
+        self.controller.settings['livestreamReviewSeconds'] = 60
+        self.assertEqual(self.controller.next_review(control), self.clock() + 60)
+
+    def finish_livestream_motor_turn(self, moved=10, status='completed'):
+        self.livestream()
+        self.controller.settings.update(asyncMotor=True, decisionsPerDay=10)
+        self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
+        self.controller.tick()
+        active = self.controller.data['active']
+        before = dict(self.gateway.body['position'])
+        self.gateway.body['position']['x'] += moved
+        receipt = {'actionId': 'a' * 32, 'tool': 'goto', 'status': status,
+                   'completionConfirmed': True}
+        self.write('motor-inbox.json', {'schema': 1, 'requests': [{
+            'requestId': 'progress-request', 'turnId': active['turnId'], 'kind': 'action',
+            'status': status, 'receipt': receipt}]})
+        self.controller.data['episodes'].append({'kind': 'action_observed', 'actionId': 'a' * 32,
+            'action': 'goto', 'receiptStatus': status, 'completionConfirmed': True,
+            'positionBefore': before, 'positionAfter': dict(self.gateway.body['position']), 'inventoryDelta': {}})
+        self.terminal()
+        self.controller.tick()
+
+    def test_livestream_confirmed_motor_progress_wakes_once_without_45_second_wait(self):
+        self.finish_livestream_motor_turn()
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertEqual(self.controller.data['wakeReason'], 'motor_progress')
+        self.controller.tick()
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 2)
+
+    def test_livestream_stationary_completion_does_not_fast_wake(self):
+        self.finish_livestream_motor_turn(moved=0)
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_livestream_failed_motor_does_not_fast_wake(self):
+        self.finish_livestream_motor_turn(status='failed')
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_livestream_motor_progress_never_bypasses_pending_or_unknown(self):
+        self.finish_livestream_motor_turn()
+        self.gateway.body['task']['busy'] = True
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.gateway.body['task']['busy'] = False
+        self.write('unknown.json', {'actionId': 'unresolved'})
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+        self.assertFalse(read_json(self.state/'control.json')['enabled'])
+
     def test_model_review_interval_cannot_bypass_cooldown_or_daily_budget(self):
         self.write('control.json', {'schema': 1, 'enabled': True, 'autonomous': True})
         self.finish_no_action_decision()

@@ -17,7 +17,8 @@ from mcp_server import TOOL_NAMES
 
 def prepare_policy(policy, names=TOOL_NAMES, added_tool='view_scene'):
     expected=set(names)
-    if added_tool not in ('view_scene', 'interact_at', 'sense') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
+    if added_tool not in ('view_scene', 'interact_at', 'sense', 'say') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
+    additions = {'say', 'say_status'} if added_tool == 'say' else {added_tool}
     rules=policy.get('tool_defaults')
     if (policy.get('default_effect')!='deny' or policy.get('client_overrides')!=[]
         or policy.get('tool_overrides')!=[] or policy.get('unmanaged_rules_count')!=0
@@ -28,10 +29,11 @@ def prepare_policy(policy, names=TOOL_NAMES, added_tool='view_scene'):
             or rule.get('effect')!='allow' or not isinstance(rule.get('tool_name'),str)):
             raise ValueError('unexpected_policy_rule')
         found.append(rule['tool_name'])
-    if len(found)!=len(set(found)) or set(found) not in (expected,expected-{added_tool}):
+    if len(found)!=len(set(found)) or set(found) not in (expected,expected-additions):
         raise ValueError('unexpected_policy_tools')
     after=deepcopy(policy)
-    if added_tool not in found:after['tool_defaults'].append({'tool_name':added_tool,'effect':'allow'})
+    for name in names:
+        if name in additions and name not in found:after['tool_defaults'].append({'tool_name':name,'effect':'allow'})
     return after
 
 
@@ -55,13 +57,14 @@ def apply_tool_scope(api, role, previous_tools, policy, names=TOOL_NAMES):
 def main():
     from configure_survivor_party import api
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--apply',action='store_true')
-    parser.add_argument('--tool', choices=('view_scene','interact_at','sense'), default='view_scene')
+    parser.add_argument('--tool', choices=('view_scene','interact_at','sense','say'), default='view_scene')
     parser.add_argument('--project-root', type=Path, default=ROOT)
     args=parser.parse_args();role='qd-survivor';route='/mcp/policy/numen_survival'
     before=api('GET',route,role);after=prepare_policy(before, added_tool=args.tool)
     connection=api('GET','/mcp/numen_survival',role)
     assert connection['enabled'] and connection['url']=='http://survivor:8089/mcp'
-    assert set(connection['tools']) in (set(TOOL_NAMES),set(TOOL_NAMES)-{args.tool})
+    additions = {'say', 'say_status'} if args.tool == 'say' else {args.tool}
+    assert set(connection['tools']) in (set(TOOL_NAMES),set(TOOL_NAMES)-additions)
     changed=before!=after or set(connection['tools'])!=set(TOOL_NAMES)
     if not args.apply or not changed:
         print(json.dumps({'changed':changed,'applied':False,'addedTool':args.tool if changed else None}));return

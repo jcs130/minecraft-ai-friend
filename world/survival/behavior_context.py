@@ -86,6 +86,9 @@ def prepare(root, life, context, memory, *, learning=False):
     if embodied:
         skip.add('observations')
     current = {k: copy.deepcopy(v) for k, v in context.items() if k not in skip}
+    if isinstance(current.get('motor'), dict) and 'queue' in current['motor']:
+        from motor_mailbox import compact_public
+        current['motor']['queue'] = compact_public(current['motor']['queue'])
     adventure = current.get('adventure')
     if isinstance(adventure, dict):
         adventure.pop('body', None)  # same observation is already in body

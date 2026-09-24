@@ -792,7 +792,7 @@ class ContinuousActionTests(unittest.TestCase):
         # Exercise the navigation barrier with an immediate native action.
         # Timed food now needs its separate qdworld receipt fixture/protocol.
         next_action = ('craft', {'item_id': 'minecraft:stick', 'count': 1})
-        first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        first = self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
         self.assertEqual(first['code'], 'accepted')
         self.rcon.busy = True
         self.assertEqual(self.client.action(TURN, *next_action)['code'], 'body_action_in_flight')
@@ -820,7 +820,7 @@ class ContinuousActionTests(unittest.TestCase):
 
     def test_matching_native_failure_is_not_overwritten_by_observed_arrival(self):
         self.lease()
-        first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        first = self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
         self.rcon.position['x'] = 110
         self.rcon.navigation_result = {'task_id': 't1', 'navigation_epoch': self.rcon.navigation_epoch,
                                        'state': 'failed', 'success': False, 'world_interaction_blocked': False}
@@ -834,6 +834,7 @@ class ContinuousActionTests(unittest.TestCase):
 
     def test_unknown_mutation_blocks_all_following_actions_and_survives_restart(self):
         from numen_gateway import NumenGateway
+        self.rcon.inventory = 'Kirito has the following entity data: [{Slot:0b,id:"minecraft:bread",count:2}]'
         self.lease()
         self.rcon.reply = TimeoutError()
         first = self.client.action(TURN, 'eat', {'item_id': 'minecraft:bread'})
@@ -854,7 +855,7 @@ class ContinuousActionTests(unittest.TestCase):
 
     def test_new_native_epoch_keeps_unknown_outcome_and_closes_original_lease(self):
         self.lease()
-        first = self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        first = self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
         self.rcon.navigation_epoch = 'different-server-process'
         result = self.client.action_status()
         self.assertFalse(result['inFlight'])
@@ -869,9 +870,41 @@ class ContinuousActionTests(unittest.TestCase):
         self.assertEqual(self.client.action_status()['receipt'], result['receipt'])
         self.assertEqual(len(self.rcon.mutations()), 1)
 
+    def test_new_native_epoch_during_next_action_cannot_reopen_closed_lease(self):
+        self.lease()
+        first = self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
+        self.rcon.navigation_epoch = 'different-server-process'
+        self.rcon.reply = {'success': True}
+
+        # Do not query status first: the action call itself discovers the lost
+        # native epoch and must honor the lease closed by that reconciliation.
+        result = self.client.action(TURN, 'craft', {'item_id': 'minecraft:stick', 'count': 1})
+
+        self.assertFalse(result['ok'])
+        self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
+        receipts = self.client.turn_receipts(TURN)
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(receipts[0]['actionId'], first['actionId'])
+        self.assertEqual(receipts[0]['status'], 'observed_ended')
+        self.assertFalse(receipts[0]['completionConfirmed'])
+        self.assertFalse(self.client.action(TURN, 'craft', {'item_id': 'minecraft:stick', 'count': 1})['ok'])
+        self.assertEqual(len(self.rcon.mutations()), 1)
+
+    def test_confirmed_arrival_during_next_action_keeps_valid_lease(self):
+        self.lease()
+        self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
+        self.rcon.position['x'] = 110
+        self.rcon.reply = {'success': True}
+
+        result = self.client.action(TURN, 'craft', {'item_id': 'minecraft:stick', 'count': 1})
+
+        self.assertTrue(result['ok'])
+        self.assertEqual([r['status'] for r in self.client.turn_receipts(TURN)], ['completed', 'completed'])
+        self.assertEqual(len(self.rcon.mutations()), 2)
+
     def test_controller_observation_does_not_consume_receipt_before_model_reads_it(self):
         self.lease()
-        self.client.action(TURN, 'goto', {'x': 110, 'z': 100})
+        self.client.action(TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
         self.rcon.navigation_result = {'task_id': 't1', 'navigation_epoch': self.rcon.navigation_epoch,
                                       'state': 'success', 'success': True}
         first = self.client.action_status()['receipt']

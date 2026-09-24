@@ -67,6 +67,68 @@ class AsyncMotorTests(unittest.TestCase):
         self.assertEqual(len(self.worker.calls), 2)
         self.assertFalse(self.backend.submitted)
 
+    def draft_routed_sticks(self, name, intent):
+        row = copy.deepcopy(next(r for r in fixtures.bundle() if r['name'] == 'base_craft_stick'))
+        row.update(name=name, routing={'intents': [intent], 'maintenance': False})
+        draft = self.library.draft(**row)
+        self.library.test(name, draft['version'])
+        return draft['version']
+
+    def refresh_catalog_time(self):
+        self.clock.now += 31
+        self.gateway.body['observedAt'] = self.clock() * 1000
+
+    def test_promoted_catalog_revision_reconsiders_unchanged_goal(self):
+        self.control['mission'] = 'learned-route'
+        write_json(self.state/'control.json', self.control)
+        version = self.draft_routed_sticks('learned_route', 'learned-route')
+        self.assertFalse(route(self.c, self.gateway.body, self.control))
+        self.assertFalse(self.worker.calls)
+        first_attempt = self.c.data['skillRouteAttempt']
+
+        self.library.promote('learned_route', version)
+        self.refresh_catalog_time()
+
+        self.assertTrue(route(self.c, self.gateway.body, self.control))
+        self.assertNotEqual(self.c.data['skillRouteAttempt'], first_attempt)
+        self.assertEqual([r['name'] for r in self.c.pending_route['rows']], ['learned_route'])
+        self.assertEqual(len(self.worker.calls), 1)
+        self.assertFalse(self.gateway.actions)
+
+    def test_unchanged_catalog_draft_and_position_do_not_retry_classification(self):
+        fixtures.CatalogExecutionTests.select(self)
+        self.worker.reply = {'ok': False, 'code': 'policy_escalated'}
+        self.assertFalse(route(self.c, self.gateway.body, self.control))
+        first_attempt = self.c.data['skillRouteAttempt']
+        self.draft_routed_sticks('unpromoted_sticks', 'stick')
+        self.refresh_catalog_time()
+        self.gateway.body['position']['x'] += 3
+
+        with patch.object(self.library, 'catalog', wraps=self.library.catalog) as catalog, \
+             patch('skill_router.candidates', side_effect=AssertionError('unchanged admission was retried')):
+            for _ in range(4):
+                self.assertFalse(route(self.c, self.gateway.body, self.control))
+            self.assertLessEqual(catalog.call_count, 1)
+        self.assertEqual(self.c.data['skillRouteAttempt'], first_attempt)
+        self.assertEqual(len(self.worker.calls), 1)
+        self.assertFalse(self.gateway.actions)
+
+    def test_catalog_revision_preserves_used_program_goal_dedup(self):
+        fixtures.CatalogExecutionTests.select(self)
+        self.assertTrue(route(self.c, self.gateway.body, self.control))
+        used = copy.deepcopy(self.c.data['motorRoutedPrograms'])
+        job = read_json(self.state/'skill-job.json')
+        write_json(self.state/'skill-job.json', job | {'status': 'done', 'practiceFinalized': True})
+        version = self.draft_routed_sticks('learned_sticks', self.control['mission'])
+        self.library.promote('learned_sticks', version)
+        self.refresh_catalog_time()
+
+        self.assertTrue(route(self.c, self.gateway.body, self.control))
+        self.assertEqual([r['name'] for r in self.c.pending_route['rows']], ['learned_sticks'])
+        self.assertEqual(self.c.data['motorRoutedPrograms'], used)
+        self.assertEqual(len(self.worker.calls), 2)
+        self.assertFalse(self.gateway.actions)
+
     def test_claim_without_receipt_pauses_and_is_never_redispatched(self):
         with action_lock(self.state):
             enqueue_locked(self.state, 'survival-plan-0001', 'action', {'tool':'eat','args':{}}, self.clock)

@@ -997,6 +997,77 @@ class Controller:
             self.data['completedReviewConsumed'] = identity
             active['completionReviewId'] = identity
 
+    def livestream_pacing(self, memory=None):
+        """Bound idle planning gaps; never choose or interrupt a body action."""
+        value = {'version': 1, 'enabled': self.settings.get('livestreamMode') is True}
+        if not value['enabled']:
+            return value
+        seconds = self.settings.get('livestreamReviewSeconds', 45)
+        maximum = self.settings.get('livestreamBlockedMaxSeconds', 180)
+        if (type(seconds) is not int or not 15 <= seconds <= 120
+                or type(maximum) is not int or not seconds <= maximum <= 600):
+            raise ValueError('invalid_livestream_pacing')
+        value.update(reviewSeconds=seconds, blockedMaxSeconds=maximum, idleCapSeconds=None)
+        memory = self.memory() if memory is None else memory
+        state = memory.get('goalState', 'ongoing')
+        execution = self.data.get('actionExecution') or {}
+        queue = self.data.get('motorQueue') or {}
+        receipt = execution.get('receipt') or {}
+        path = self.root / 'skill-job.json'
+        job = read_json(path) if path.exists() else {}
+        if state == 'resting':
+            value['reason'] = 'agent_resting'
+        elif (execution.get('code') == 'outcome_unknown' or (self.root/'unknown.json').exists()
+                or any(row.get('status') == 'unknown' for row in queue.get('active', []))):
+            value['reason'] = 'outcome_unknown'
+        elif (self.last_body.get('task', {}).get('busy') or execution.get('inFlight')
+                or queue.get('pending') or queue.get('active')
+                or job.get('status') in ('pending', 'running', 'dispatching')
+                or job.get('practiceStarted') and not job.get('practiceFinalized')):
+            value['reason'] = 'body_work_pending'
+        elif (receipt.get('tool') == 'sleep' and receipt.get('status') == 'completed'
+                and receipt.get('completionConfirmed') is True):
+            # Entering sleep does not prove waking. Preserve the ordinary
+            # model interval until new action evidence or an explicit rest plan.
+            value['reason'] = 'sleep_entered'
+        elif state in ('ongoing', 'blocked'):
+            empty = max(0, min(6, self.data.get('noActionReviews', 0)))
+            cap = min(maximum, seconds * 2 ** max(0, empty - 1)) if state == 'blocked' else seconds
+            value.update(reason='goal_' + state, idleCapSeconds=cap)
+        elif (state == 'completed'
+                and self.completed_review_id(memory) != self.data.get('completedReviewConsumed')):
+            value.update(reason='next_goal', idleCapSeconds=seconds)
+        else:
+            value['reason'] = 'agent_interval'
+        return value
+
+    def motor_progress_wake(self, control):
+        """Consume confirmed physical progress at admission, not model completion."""
+        if (not self.settings.get('asyncMotor') or not self.autonomy(control)
+                or self.livestream_pacing().get('reason') != 'goal_ongoing'):
+            return None
+        for row in reversed((self.data.get('motorQueue') or {}).get('recent', [])):
+            receipt = row.get('receipt') or {}
+            if (row.get('kind') != 'action' or row.get('status') != 'completed'
+                    or receipt.get('status') != 'completed' or receipt.get('completionConfirmed') is not True
+                    or not receipt.get('actionId') or not row.get('requestId')):
+                continue
+            cursor = str(row.get('requestId')) + ':' + str(receipt.get('actionId'))
+            if cursor == self.data.get('lastMotorProgressWake'):
+                return None
+            event = next((item for item in reversed(self.data.get('episodes', []))
+                if item.get('kind') == 'action_observed' and item.get('actionId') == receipt.get('actionId')
+                and item.get('receiptStatus') == 'completed' and item.get('completionConfirmed') is True), {})
+            before, after = event.get('positionBefore') or {}, event.get('positionAfter') or {}
+            moved = (all(type(point.get(axis)) in (int, float) and math.isfinite(point[axis])
+                         for point in (before, after) for axis in ('x', 'y', 'z'))
+                     and sum((after[axis] - before[axis]) ** 2 for axis in ('x', 'y', 'z')) > 1.5 ** 2)
+            inventory_changed = any(type(change) in (int, float) and change != 0
+                                    for change in (event.get('inventoryDelta') or {}).values())
+            if event.get('action') != 'sleep' and (moved or inventory_changed):
+                return cursor
+        return None
+
     def next_review(self, control):
         if not self.autonomy(control):
             return None
@@ -1034,6 +1105,9 @@ class Controller:
                     and latest.get('kind') == 'action' and latest.get('status') == 'failed'
                     and latest.get('turnId') == (self.data.get('lastDecision') or {}).get('turnId')):
                 delay = min(delay, floor)
+        pacing = self.livestream_pacing(memory)
+        if pacing.get('idleCapSeconds') is not None:
+            delay = min(delay, pacing['idleCapSeconds'])
         started = self.data.get('lastReviewAt')
         if started is None:
             # Migration preserves prior decisions/cost; it does not restart the quota.
@@ -1092,6 +1166,7 @@ class Controller:
             'nextDecisionAt': self.data.get('nextDecisionAt') if self.model_cooldown() else None,
             'autonomous': self.autonomy(control), 'nextReviewAt': self.next_review(control),
             'wakeReason': self.data.get('wakeReason'), 'goalState': memory.get('goalState', 'ongoing'),
+            'pacing': self.livestream_pacing(memory),
             'perception': self.awareness, 'environment': self.environment,
             'gameSkills': self.cached_game_skills(), 'adventure': self.adventure(self.last_body or {}), 'guild': self.cached_guild(),
             'constructionAreas': self.settings.get('constructionAreas', [])[:8],
@@ -1106,6 +1181,7 @@ class Controller:
             from motor_mailbox import public as motor_public
             value['motor'] = {'version': 1, 'status': self.data.get('motorStatus'),
                               'queue': motor_public(self.root), 'slowActive': bool(self.data.get('active')),
+                              'blocked': self.data.get('motorBlocked'),
                               'pendingInterrupt': self.data.get('motorStop'),
                               'timingMs': self.data.get('motorTimingMs')}
         try:
@@ -1148,6 +1224,8 @@ class Controller:
             'skillCatalogRoutingVersion': 1,
             'asyncMotorVersion': 1 if self.settings.get('asyncMotor') else 0,
             'navigationHeightGuardVersion': 1,
+            'livestreamPacingVersion': 1,
+            'outsideAreaRecoveryVersion': 1,
             'contextProtocol': self.settings.get('contextProtocol', 1),
             'brainProtocol': self.settings.get('brainProtocol'),
             'memoryEpoch': self.settings.get('memoryEpoch')})
@@ -1768,9 +1846,10 @@ class Controller:
         # must not become another dialogue session just because a message arrived.
         message = self.party.pending() if self.party and self.settings.get('brainProtocol') != 1 else None
         requested_review = self.reviews.pending()
+        motor_progress = self.motor_progress_wake(control)
         changed = (backoff is not None or self.data.get('recoveryAfter') is not None or message is not None
                    or self.data.get('lastDecisionSignature') != self.decision_signature(body, control)
-                   or self.meaningful_displacement(body))
+                   or self.meaningful_displacement(body) or motor_progress is not None)
         review = self.next_review(control)
         # 教训采集：从失败事件中自动学习（跨会话持久化·每个 tick 都跑）
         self.tick_lesson_capture(body, now)
@@ -1794,11 +1873,21 @@ class Controller:
         replies = self.party.heard_replies() if self.party and hasattr(self.party, 'heard_replies') else []
         self.data['wakeReason'] = ('party_message' if message is not None else
                                   'inference_recovery' if backoff is not None else
+                                  'motor_progress' if motor_progress is not None else
                                   'world_or_goal_changed' if changed else
                                   'requested_review' if requested_review else 'autonomous_review')
         self.perceive(body)
         turn_id = 'survival-' + uuid.uuid4().hex
         context = self.life_context(body, control, turn_id, message, replies)
+        if self.settings.get('livestreamMode') is True:
+            from chat import narration_context
+            context['pacing'] = self.livestream_pacing() | {
+                'narration': narration_context(self.root, self.clock()),
+                'instruction': '当前是游戏直播。ongoing目标空闲后会很快续接下一轮，blocked会短暂退避后重看证据。'
+                    '等待资源时自主推进其它可行目标；真正休息或睡眠请remember(goal_state="resting")并说明等待条件。'
+                    '普通最终回复只留在控制台，不会进入游戏公屏。参照narration的真实发言记录，'
+                    '新阶段、发现、受阻或脱险时主动用say说一句现场短话，让观众知道你在做什么；勿反复播报同一计划。'
+                    '节奏调度不证明任何行动成功，不要求重复动作或打断在途任务。'}
         from life_cycle import pending_note
         death_note = pending_note(self.session, self.root)
         if death_note:
@@ -1907,6 +1996,7 @@ class Controller:
         if self.settings.get('asyncMotor'):
             from motor_mailbox import public as motor_public
             context['motor'] = {'bodyAccess': 'queued', 'queue': motor_public(self.root),
+                'blocked': self.data.get('motorBlocked'),
                 'instruction': '身体由独立快循环执行。动作和skill_start返回motor_queued仅表示排队，最多6请求；'
                 '可继续规划或结束本轮，不忙等、不重复排队。status.motorQueue读完成/失败回执。Jev无需等待你的下一回合。'}
         if self.settings.get('contextProtocol') == 2:
@@ -1947,6 +2037,8 @@ class Controller:
                         self.data['status'] = 'party_wait'
                 if message is None or active.get('partyReservation'):
                     self.data['active'] = active
+                    if motor_progress is not None:
+                        self.data['lastMotorProgressWake'] = motor_progress
                     self.data['dialogueYieldToPlanner'] = False
                     self.reserve_review_state(active)
                     self.data['decisions'] = recent + [{'turnId': turn_id, 'startedAt': now}]

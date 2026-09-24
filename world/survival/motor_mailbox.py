@@ -3,6 +3,7 @@
 Cognition authorizes proposals, never the body. Claimed work is never replayed.
 Latest observations stay in the controller; only commands/receipts are queued.
 """
+import copy
 import hashlib
 import json
 import time
@@ -68,6 +69,70 @@ def view(root):
     return data
 
 
+def command_summary(payload):
+    """Keep action intent after settlement removes the executable payload."""
+    if not isinstance(payload, dict):
+        return {}
+    if 'tool' not in payload:
+        return {key: copy.deepcopy(payload[key]) for key in ('name', 'version') if key in payload}
+    result = {'tool': payload['tool']}
+    args = payload.get('args', {})
+    if len(json.dumps(args, ensure_ascii=False).encode()) <= 1024:
+        result['args'] = copy.deepcopy(args)
+    else:
+        result['args'] = {key: value for key, value in args.items()
+                          if type(value) in (int, float, bool, type(None))
+                          or isinstance(value, str) and len(value) <= 100}
+        result['argsTruncated'] = True
+    return result
+
+
+def brief_receipt(receipt):
+    """Reduce repeated acquisition detail, keeping exact outcomes and identity.
+
+    This is a read projection only. The full journal and status(detail="full")
+    retain the original receipt; omitted scans are never inferred to be empty.
+    """
+    if not isinstance(receipt, dict):
+        return receipt
+    result = copy.deepcopy(receipt)
+    # Full observations are redundant with the freshly acquired status body.
+    for key in ('before', 'after'):
+        result.pop(key, None)
+    if result.get('status') == 'completed' and result.get('completionConfirmed') is True:
+        result.pop('navigationSense', None)
+        result.pop('outcomeDetail', None)
+    elif isinstance(result.get('navigationSense'), dict):
+        sense = result['navigationSense']
+        result['navigationSense'] = {key: value for key, value in sense.items()
+                                    if key in ('ok', 'code', 'observedAt', 'position', 'destination')}
+        target = sense.get('destination')
+        if isinstance(target, dict):
+            target = {key: value for key, value in target.items() if key not in
+                      ('notice', 'examinedCells', 'unloadedCells', 'targetBlock')}
+            candidates = target.get('candidates')
+            if isinstance(candidates, list) and len(candidates) > 3:
+                target['candidates'] = candidates[:3]
+                target['candidatesTruncated'] = True
+            result['navigationSense']['destination'] = target
+    if isinstance(result.get('lastExecution'), dict):
+        result['lastExecution'] = brief_receipt(result['lastExecution'])
+    return result
+
+
+def compact_public(value):
+    """Project every queue identity, with short recent outcome evidence."""
+    if not isinstance(value, dict):
+        return value
+    result = copy.deepcopy(value)
+    for row in result.get('recent', []):
+        if isinstance(row, dict) and 'receipt' in row:
+            row['receipt'] = brief_receipt(row['receipt'])
+    # Active/unknown rows remain exact; these identify work that must not replay.
+    result['receiptDetail'] = 'brief; status(detail="full") retains full receipt details'
+    return result
+
+
 def enqueue_locked(root, turn_id, kind, payload, clock=time.time):
     lease=cognition(root,turn_id,clock)
     if not lease:raise ValueError('cognition_required')
@@ -82,6 +147,7 @@ def enqueue_locked(root, turn_id, kind, payload, clock=time.time):
         if sum(r['status'] in ('queued','claimed','unknown') for r in data['requests'])>=8:
             raise ValueError('motor_inbox_full')
         row={'requestId':identity,'turnId':turn_id,'kind':kind,'payload':json.loads(encoded),
+             'command':command_summary(payload),
              'goalBinding':lease['goalBinding'],'status':'queued','createdAt':clock(),
              'expiresAt':min(clock()+300,lease['expiresAt']/1000), 'motorTurnId':'motor-'+identity[:32]}
         # Budget first: a crash cannot buy more commands; no external effect here.
@@ -128,6 +194,8 @@ def finish_locked(root, identity, status, receipt):
     if status not in ('completed','failed','unknown','cancelled'):raise ValueError('invalid_motor_terminal')
     data=view(root);row=next(r for r in data['requests'] if r['requestId']==identity)
     if row['status'] not in ('claimed','unknown'):raise ValueError('motor_already_terminal')
+    if 'command' not in row and isinstance(row.get('payload'), dict):
+        row['command'] = command_summary(row['payload'])
     # The original gateway/practice journal owns full observations. Keeping
     # them again here would grow a bounded command queue into a context log.
     if row['kind']=='action' and receipt.get('actionId'):
@@ -138,15 +206,21 @@ def finish_locked(root, identity, status, receipt):
     write_json(root/'motor-inbox.json',data)
 
 
-def public(root):
+def public(root, detail='full'):
+    if detail not in ('full', 'brief'):
+        raise ValueError('invalid_motor_detail')
     rows=view(root)['requests']
     recent = []
     for row in rows[-6:]:
         result = {k:row.get(k) for k in ('requestId','turnId','kind','status')}
         receipt = row.get('receipt')
         result['receipt'] = receipt
+        command = row.get('command') or command_summary(row.get('payload'))
+        if command:
+            result['command'] = command
         recent.append(result)
-    return {'version':1,'pending':sum(r['status']=='queued' for r in rows),
+    result = {'version':1,'pending':sum(r['status']=='queued' for r in rows),
             'active':[{k:r.get(k) for k in ('requestId','kind','status','createdAt','motorTurnId')}
                       for r in rows if r['status'] in ('claimed','unknown')],
             'recent':recent,'capacity':8}
+    return compact_public(result) if detail == 'brief' else result

@@ -17,7 +17,7 @@ TOOL_NAMES = ('status', 'look', 'view_scene', 'move', 'mine', 'craft', 'lookup_r
               'inspect_block', 'scan_blocks', 'place_block', 'farm', 'open_container', 'drop_items',
               'transfer_items', 'close_container', 'sleep', 'villager_offers', 'trade',
               'guild_board', 'guild_claim', 'guild_release', 'guild_deliver', 'guild_receipt', 'adventure_guide', 'inspect_container',
-              'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense', 'voice_speak')
+              'say', 'say_status', 'speak', 'speech_status', 'stop_speaking', 'interact_at', 'sense', 'voice_speak')
 
 
 class SkillTools:
@@ -275,13 +275,19 @@ def submit_goal(state, goal, clock=time.time, *, request_id=None, mode='queue', 
 def status_view(body, detail='full'):
     """Project an already fresh status; never replace acquisition or settlement.
 
-    Only slot-level inventory is optional. Keep counts, item-book metadata,
-    safety fields and every execution/terminal field, including future fields.
+    Keep live body safety fields and compact historical receipt diagnostics.
     Omission is explicit and never means the inventory is empty.
     """
-    if detail == 'brief' and 'inventory' in body:
-        return {**{key: value for key, value in body.items() if key != 'inventory'},
-                'statusDetail': 'brief', 'omittedFields': ['inventory']}
+    if detail == 'brief':
+        from motor_mailbox import compact_public, brief_receipt
+        projected = {key: value for key, value in body.items() if key != 'inventory'}
+        omitted = ['inventory'] if 'inventory' in body else []
+        if isinstance(body.get('motorQueue'), dict):
+            projected['motorQueue'] = compact_public(body['motorQueue'])
+        if isinstance(body.get('actionExecution', {}).get('receipt'), dict):
+            projected['actionExecution'] = dict(body['actionExecution'],
+                receipt=brief_receipt(body['actionExecution']['receipt']))
+        return {**projected, 'statusDetail': 'brief', 'omittedFields': omitted}
     return body
 
 
@@ -329,6 +335,8 @@ def make_server(gateway=None, skill_tools=None, http=False):
     guild_tools = Guild(gateway)
     from speech import SpeechTools
     speech_tools = SpeechTools(gateway, skill_tools)
+    from chat import ChatTools
+    chat_tools = ChatTools(gateway, skill_tools, speech_tools)
     from scene_view import SceneView
     scene_view = SceneView(gateway)
     server = FastMCP('qiandengji-survivor', instructions=(
@@ -343,24 +351,35 @@ def make_server(gateway=None, skill_tools=None, http=False):
         '可用game_learn参悟已有技能书、game_cast正常施法，世界服务校验学习、等级、真实装备、魔力和冷却。'
         '完成一个短目标后自主选择下一目标；remember设置goal_state和下次review_after_seconds。当前无人工模型次数与冷却门，身体串行、租约与未知结果保护仍有效。'
         'Numen 已处理寻路、自卫和换气。工作区域只是预检，不能把它理解成服务端硬隔离。'
-        '需要在世界中开口时用speak：当前turn_id最多一句160字，声源固定自身；speech_status看播放回执。'
+        '给观众解说或回应附近玩家用say：附近公屏文字和可选本人语音分别查回执，每轮最多一句160字。'
+        '向结衣传话、求助和分工用party_send；say/speak不会成为伙伴输入。speak仅播放音频，speech_status看播放回执。'
         '说话不代表动作完成，不要每次观察都说话。stop_speaking取消旧声音，不会取消身体任务。'),
         host='0.0.0.0' if http else '127.0.0.1', port=8089,
         stateless_http=http, json_response=http, max_request_body_size=1048576)
 
     @server.tool()
-    def status(wait_seconds: float = 0, detail: Literal['full', 'brief'] = 'full') -> dict:
-        """读取最新身体与上一动作回执。detail=brief只省略背包槽位inventory，仍含counts、装备、技能书、安全和终态；需要槽位/物品元数据时用full（默认）。wait_seconds=0..10按需等当前动作，每2秒只读一次，终态提前返回；超时仍在途则结束本次工作而非忙轮询。空闲不是成功，技能书携带不等于已学。"""
+    def status(wait_seconds: float = 0, detail: Literal['full', 'brief'] = 'brief') -> dict:
+        """读取最新身体与上一动作回执。默认brief保留counts、inventorySpace、装备、技能书、安全和终态，省略背包槽位并压缩历史回执；需要槽位/物品元数据与完整回执时显式detail=full。wait_seconds=0..10按需等当前动作，每2秒只读一次，终态提前返回；超时仍在途则结束本次工作而非忙轮询。空闲不是成功，技能书携带不等于已学。"""
         return read_status(gateway, wait_seconds, detail=detail)
 
     @server.tool()
+    def say(turn_id: str, text: str, voice: bool = True) -> dict:
+        """向自身同维度24格内玩家公屏说一句1–160字，可解说决定、发现或结果；voice默认true另排本人语音。每轮至多一句，不消耗身体动作，文字服务器发送与音频播放分别确认。无语音听众不撤销文字；unknown只用say_status查原messageId，不重发。给结衣传话/求助请party_send，本工具不唤醒伙伴。"""
+        return chat_tools.say(turn_id, text, voice)
+
+    @server.tool()
+    def say_status(message_id: str) -> dict:
+        """只读本人say的原messageId回执；核对公屏文字服务器发送和可选音频播放，未知仅对账不重发；不证明真人已阅读。"""
+        return chat_tools.status(message_id)
+
+    @server.tool()
     def speak(turn_id: str, text: str, interrupt: bool = False) -> dict:
-        """用当前租约从自身位置说一句1–160字的中文台词，每轮最多一句。interrupt明确打断旧声音；queued不等于听众听到，不花额外LLM请求。"""
+        """仅播放本人音频，1–160字每轮最多一句；无语音听众会失败，不写公屏也不让结衣收到消息。给观众解说用say，给伙伴传话用party_send。interrupt打断旧声音；queued不是已播放。"""
         return speech_tools.speak(turn_id, text, interrupt)
 
     @server.tool()
     def voice_speak(turn_id: str, text: str, voice: str = "", tone: str = "neutral") -> dict:
-        """以指定嗓音和语气说话（语音+头顶文字泡泡）。voice 选嗓音（kirito/naruto/goddess/villager，留空用默认），tone 选语气。使用与 speak 相同的语音管线。"""
+        """兼容旧音频调用，等同speak；voice/tone仅记录请求，实际固定用本人声音档案，不切换角色或语气。不写公屏、不通知伙伴；解说用say，伙伴交流用party_send。"""
         # Use the exact same working pipeline as `speak` — SpeechBroker handles
         # submit → receipt → status lifecycle. Voice comes from speech-profiles.json.
         # We do NOT write any files ourselves; the broker manages everything.
@@ -410,7 +429,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def move(turn_id: str, x: float, z: float, y: float | None = None) -> dict:
-        """不挖不搭走到24格水平距离内的已观察位置。省略y时只选择目标x/z列中与当前高度相近、已观测可站立的格；无此格会拒绝，避免走进同列深井。跨高度移动须先观察脚部高度再传y（-64至319）。受理后用status(wait_seconds=10,detail="brief")查该任务终态；仍在途则结束等待，明确终态后可用剩余动作继续。同xz不证明已到高处柜台；距离拒绝会附当时原点、目标与实际水平距离。"""
+        """不挖不搭走到24格水平距离内的已观察位置，普通路段选超过1.5格到达容差的落点。通常省略y，由感知选择目标列附近高度的可站立格；无此格会拒绝。只有已观察目标脚部高度才传y，勿把当前位置y抄给远处坡地。motor_queued只是入队，可say后remember结束本轮，下一轮读回执；accepted才用status(wait_seconds=10,detail="brief")有界查终态。在途和同xz都不证明到达目标高度；距离拒绝会附当时原点、目标与实际水平距离。"""
         args = {'x': x, 'z': z}
         if y is not None:
             args['y'] = y
@@ -544,7 +563,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def game_skills(scope: str = 'all', page: int = 1) -> dict:
-        """查询/mycli人物法术：all/status/legacy/irons/archive/help。legacy/archive支持page分页；返回已学、等级可施放、技能书目录、原生装备及Agent实际施法边界。all是有界视图：省略status前世flavor与legacy原始atoms（其归档/边界规则已并入agentPreflight，原文按需查legacy/archive），完整能力摘要每轮已随gameSkills提供。targeted scope仍返回原始replies。JS程序查skill_catalog。"""
+        """查询/mycli人物法术：all/status/legacy/irons/archive/help；legacy/archive支持page。初次需要能力事实时查all，当前生活输入不保证包含能力目录；同会话已有新鲜目录后仅按需查status(等级/法力)、irons(已装备法术)、legacy/archive(原始详情)，勿反复全量读。all的skills.entries按id合并全部名称/等级/进度/装备限制，agentPreflight保留执行边界；learned不等于可施放。其余scope保留原始replies；JS程序查skill_catalog。"""
         return bounded_all_skills_view(game_tools.query(scope, page))
 
     @server.tool()

@@ -30,6 +30,17 @@ class VisionPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare_policy(self.before,names,added_tool='interact_at')
 
+    def test_say_and_receipt_permission_are_added_together_without_other_changes(self):
+        before = prepare_policy(self.before, self.names)
+        names = (*self.names, 'say', 'say_status')
+        after = prepare_policy(before, names, added_tool='say')
+        self.assertEqual(after['tool_defaults'][:-2], before['tool_defaults'])
+        self.assertEqual(after['tool_defaults'][-2:], [
+            {'tool_name': 'say', 'effect': 'allow'}, {'tool_name': 'say_status', 'effect': 'allow'}])
+        self.assertEqual(prepare_policy(after, names, added_tool='say'), after)
+        with self.assertRaises(ValueError):
+            prepare_policy(self.before, names, added_tool='say')
+
     def test_tool_extension_keeps_credential_card_out_of_console_roundtrip(self):
         after = prepare_policy(self.before,self.names)
         enabled = set(self.names[:-1]); policy = copy.deepcopy(self.before); writes = []

@@ -214,16 +214,52 @@ def skill_access(replies):
             'learning': 'game_learn不受城镇施法排除，但必须持有可识别的真实技能书；当前参悟不扣除书籍。'}
 
 
-def bounded_all_skills_view(result):
-    """Agent-facing bound for the heavy default ``all`` scope; never mutates input.
+def _merged_skill_catalog(skills):
+    """Keep every catalog identity and fact once, with conflicts left unknown."""
+    if not isinstance(skills, dict):
+        return skills
+    sources = ('learned', 'levelGate', 'locked', 'bookSkills', 'nativeMappings', 'details')
+    present = [key for key in sources if key in skills]
+    if not present or any(not isinstance(skills[key], list) for key in present):
+        return skills
+    # An incomplete/changed source schema is evidence, not an empty catalog.
+    if any(not isinstance(row, dict) or not isinstance(row.get('id'), str)
+           or not row['id'] for key in present for row in skills[key]):
+        return skills
+    rows, observed = {}, {}
+    for source in present:
+        for item in skills[source]:
+            ability = item['id']
+            row = rows.setdefault(ability, {'id': ability})
+            facts = observed.setdefault(ability, {})
+            if source in ('learned', 'levelGate', 'locked'):
+                access = row.setdefault('legacyAccess', [])
+                if source not in access:
+                    access.append(source)
+            for key, value in item.items():
+                if key in ('id', 'helpCommand'):
+                    continue
+                values = facts.setdefault(key, [])
+                if not any(type(old) is type(value) and old == value for old in values):
+                    values.append(value)
+                row[key] = values[0] if len(values) == 1 else None
+                if len(values) > 1:
+                    row.setdefault('conflictingObservations', {})[key] = list(values)
+    result = {key: value for key, value in skills.items() if key not in sources}
+    result.update(entries=list(rows.values()), catalogSources=present,
+                  detailScope='legacy',
+                  notice='entries按id合并所有目录项；legacyAccess保留原learned/levelGate/locked分类。'
+                      'learned只表示既有进度，engine/reason/requiresEquipment与agentPreflight仍约束能否施放。'
+                      'null或conflictingObservations不是许可；原始分表及helpCommand按需查legacy。')
+    return result
 
-    The per-turn life context already carries ``summarize_game_skills`` and
-    ``query`` still caches the full raw replies, so the raw ``all`` dump is
-    mostly redundant for decisions. Drop the ``status.backstory`` flavor text and
-    the ``spells legacy`` atoms — the latter are already distilled into
-    ``agentPreflight`` inside ``query`` and remain available on demand via the
-    ``legacy``/``archive`` scopes. Targeted scopes are the raw drill-down and are
-    returned unchanged.
+
+def bounded_all_skills_view(result):
+    """Merge repeated default-scope catalogs without trimming usable abilities.
+
+    Current embodied inputs do not guarantee a game-skill summary. This remains
+    a complete initial catalog, while targeted scopes and the disk cache retain
+    raw details. No source object, native response, or execution rule is changed.
     """
     if not isinstance(result, dict) or result.get('scope') != 'all' or result.get('ok') is not True:
         return result
@@ -239,9 +275,11 @@ def bounded_all_skills_view(result):
         bounded_replies['spells legacy'] = {'omitted': 'raw_atoms_removed_from_all_view',
             'total': legacy.get('total'), 'pages': legacy.get('pages'),
             'detail': 'agentPreflight已含归档与施法边界规则；原始atoms及nativeHints用game_skills("legacy",page)或game_skills("archive",page)查看。'}
+    if 'skills' in bounded_replies:
+        bounded_replies['skills'] = _merged_skill_catalog(bounded_replies['skills'])
     bounded = dict(result)
     bounded['replies'] = bounded_replies
-    bounded['boundedView'] = 'all_omits_status_backstory_and_legacy_atoms'
+    bounded['boundedView'] = 'all_merged_catalog_v2'
     return bounded
 
 

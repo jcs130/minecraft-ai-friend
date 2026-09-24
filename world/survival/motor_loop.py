@@ -6,7 +6,7 @@ Native goto/eat cancellation reuses the gateway's exact-task stop journal.
 import hashlib
 import json
 from motor_mailbox import view, claim_locked, finish_locked, public, binding
-from numen_gateway import action_lock, read_json, write_json
+from numen_gateway import GatewayError, action_lock, read_json, write_json
 
 
 def _job(c):
@@ -43,13 +43,15 @@ def reconcile(c):
                     return
                 status = {'completed': 'completed', 'failed': 'failed',
                           'rejected': 'failed', 'cancelled': 'cancelled'}.get(receipt.get('status'), 'unknown')
-        with action_lock(c.root):
+        # A concurrent status read must not turn a journalled outcome into an
+        # uncertain dispatch. This lock only commits the local queue terminal.
+        with action_lock(c.root, blocking=True):
             finish_locked(c.root, row['requestId'], status, receipt)
         if status == 'unknown':
             c.pause('motor_outcome_unknown')
 
 
-def dispatch(c):
+def dispatch(c, recovery_only=False):
     with action_lock(c.root):
         control = read_json(c.root / 'control.json')
         if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
@@ -57,6 +59,11 @@ def dispatch(c):
         row = claim_locked(c.root, c.clock)
         if not row:
             return False
+        if recovery_only and (row['kind'] != 'action' or row['payload'].get('tool') != 'goto'):
+            finish_locked(c.root, row['requestId'], 'failed', {'code': 'outside_work_area',
+                'dispatched': False, 'writePerformed': False,
+                'instruction': 'Return using a short inward goto before other body actions.'})
+            return True
         if row['kind'] == 'skill':
             from practice import run_id
             p = row['payload']
@@ -73,7 +80,7 @@ def dispatch(c):
         c.gateway.close_lease(blocking=True)
         c.collect_action_receipts(row['motorTurnId'])
         if not outcome.get('ok') and outcome.get('code') != 'outcome_unknown' and not outcome.get('actionId'):
-            with action_lock(c.root):
+            with action_lock(c.root, blocking=True):
                 finish_locked(c.root, row['requestId'], 'failed', outcome)
         else:
             # A dispatched rejection has an exact journal receipt. The raw
@@ -128,6 +135,62 @@ def preempt(c, body, control):
         c.pending_motor = {'token':token,'key':key,'at':c.clock()}
 
 
+def recovery_boundary(c, body):
+    """Retire stopped programs only at a proved, idle body boundary."""
+    execution = c.data.get('actionExecution') or {}
+    if (body.get('task', {}).get('busy') or execution.get('inFlight')
+            or execution.get('code') == 'outcome_unknown'):
+        return False
+    with action_lock(c.root):
+        control = read_json(c.root/'control.json')
+        lease_path = c.root/'lease.json'
+        lease = read_json(lease_path) if lease_path.exists() else {}
+        if (control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested'
+                or lease.get('status') == 'unknown'
+                or (c.root/'unknown.json').exists() or (c.root/'inflight-action.json').exists()):
+            return False
+        job = _job(c)
+        if job.get('status') == 'dispatching':
+            return False
+        stop = c.data.get('motorStop')
+        terminal = ('completed', 'failed', 'cancelled', 'rejected')
+        def ended(row):
+            return (row.get('status') in terminal and
+                    (row.get('completionConfirmed') is True or row.get('status') == 'rejected'))
+        receipt = execution.get('receipt') or {}
+        if stop and (receipt.get('actionId') != stop['actionId']
+                or not ended(receipt)):
+            return False
+        if job.get('status') in ('pending', 'running'):
+            last = job.get('lastExecution') or {}
+            turn = job.get('lastTurnId')
+            evidence = None
+            if turn:
+                rows = c.gateway.turn_receipts(turn)
+                evidence = rows[-1] if rows else {}
+                if (evidence.get('turnId') != turn or not evidence.get('actionId')
+                        or not ended(evidence)
+                        or last.get('turnId') not in (None, turn)
+                        or last.get('actionId') not in (None, evidence['actionId'])):
+                    return False
+            elif job.get('status') == 'running' or last:
+                # Idle alone cannot prove what a running program last did.
+                return False
+            job.update(status='replan', reason='outside_work_area',
+                recoveryBoundary=({k: evidence[k] for k in ('turnId', 'actionId', 'status')}
+                                  if evidence else {'dispatched': False}))
+            write_json(c.root/'skill-job.json', job)
+        if stop:
+            c.data.pop('motorStop', None)
+            c.save()
+    # Practice.finish is idempotent and must settle before the skill's mailbox
+    # claim releases. Keep its frozen terminal observation on later retries.
+    if job.get('practiceStarted') and not job.get('practiceFinalized'):
+        c.settle_practice()
+    reconcile(c)
+    return True
+
+
 def tick(c, body, control):
     if (control.get('drain') or {}).get('status') == 'requested':
         # Finish a claimed action from its exact journal while admission is
@@ -135,7 +198,32 @@ def tick(c, body, control):
         reconcile(c)
         c.data['motorQueue'] = public(c.root)
         return
-    c.gateway._area(body['position'], protect=False)
+    try:
+        c.gateway._area(body['position'], protect=False)
+    except GatewayError as exc:
+        if str(exc) != 'outside_work_area':
+            raise
+        # Being outside the action boundary must not starve the cognition
+        # terminal, exact action receipts, or heartbeat in Controller.tick.
+        # The gateway still refuses every unauthorized body dispatch.
+        c.discard_policy()
+        c.pending_motor = None
+        from skill_router import clear
+        clear(c)
+        reconcile(c)
+        c.data['motorStatus'] = 'outside_work_area'
+        c.data['motorBlocked'] = {'code': 'outside_work_area',
+            'position': dict(body['position']), **getattr(exc, 'details', {})}
+        if (body.get('gameMode') == 'survival' and not c.data.get('goalAgendaError')
+                and not body.get('task', {}).get('busy')
+                and not c.data.get('actionExecution', {}).get('inFlight')
+                and recovery_boundary(c, body)):
+            # Only a model-selected inward goto reaches the normal fresh gateway
+            # preflight. No route is invented and no skill starts outside the area.
+            dispatch(c, recovery_only=True)
+        c.data['motorQueue'] = public(c.root)
+        return
+    c.data.pop('motorBlocked', None)
     if body.get('gameMode') != 'survival':
         c.pause('not_in_survival')
         return

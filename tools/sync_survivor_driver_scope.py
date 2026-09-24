@@ -56,7 +56,7 @@ def read_document(path, maximum=1048576):
 
 def desired_documents(agent, card):
     names = list(TOOL_NAMES)
-    if len(names) != 45 or len(set(names)) != 45 or 'drop_items' not in names:
+    if len(names) < 45 or len(set(names)) != len(names) or not {'drop_items', 'say', 'say_status'} <= set(names):
         raise ValueError('review_survivor_tool_contract')
     if agent.get('id') != ROLE or agent.get('workspace_dir') != '/state/work/workspaces/' + ROLE:
         raise ValueError('wrong_survivor_role')
@@ -72,7 +72,7 @@ def desired_documents(agent, card):
             or card.get('credentials') != {'survivor_env': {'kind': 'static', 'ref': 'env:SURVIVOR_MCP_TOKEN'}}):
         raise ValueError('survivor_native_driver_changed')
     old = client.get('tools')
-    accepted = (set(names), set(names) - {'drop_items'})
+    accepted = (set(names), set(names) - {'drop_items'}, set(names) - {'say', 'say_status'})
     if (not isinstance(old, list) or not all(isinstance(name, str) for name in old)
             or len(set(old)) != len(old) or set(old) not in accepted
             or card.get('config', {}).get('tools') != old):

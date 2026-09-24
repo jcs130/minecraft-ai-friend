@@ -16,6 +16,7 @@ class StatusProjectionTests(unittest.TestCase):
     def test_brief_only_omits_slots_and_explicitly_marks_the_omission(self):
         body = {'ok': True, 'inventory': [{'slot': 0, 'id': 'minecraft:stick', 'count': 2}],
                 'counts': {'minecraft:stick': 2}, 'equipment': {'mainhand': 'minecraft:stick'},
+                'inventorySpace': {'mainSlots': 36, 'occupiedSlots': 1, 'freeSlots': 35},
                 'ownedSkillBooks': [{'name': 'fixture'}], 'air': 2, 'inWater': True,
                 'inLava': False, 'hp': 5, 'bodyControl': {'kind': 'reflex'},
                 'navigationEpoch': 'epoch', 'navigationResult': {'state': 'failed'},
@@ -98,7 +99,7 @@ class StatusGatewayTests(unittest.TestCase):
 
     def test_brief_navigation_terminal_does_not_consume_or_extend_lease(self):
         self.open_lease()
-        first = self.client.action(fixture.TURN, 'goto', {'x': 110, 'z': 100})
+        first = self.client.action(fixture.TURN, 'goto', {'x': 110, 'y': 64, 'z': 100})
         self.assertEqual(first['code'], 'accepted')
         lease_before = numen_gateway.read_json(self.state / 'lease.json')
         self.rcon.navigation_result = {'task_id': 't1', 'navigation_epoch': self.rcon.navigation_epoch,
@@ -150,7 +151,7 @@ class StatusGatewayTests(unittest.TestCase):
         self.assertEqual(after, mcp_server.status_view(full, 'brief'))
         self.assertEqual(len(self.rcon.mutations()), 1)
 
-    def test_mcp_schema_defaults_to_full_and_brief_is_optional(self):
+    def test_mcp_schema_defaults_to_brief_and_explicit_full_retains_every_field(self):
         async def check():
             server = mcp_server.make_server(self.client)
             listed = await server.list_tools()
@@ -158,10 +159,11 @@ class StatusGatewayTests(unittest.TestCase):
             self.assertTrue(valid_tools([{'name': t.name, 'enabled': True, 'input_schema': t.inputSchema}
                                          for t in listed]))
             tool = next(t for t in listed if t.name == 'status')
-            self.assertEqual(tool.inputSchema['properties']['detail']['default'], 'full')
+            self.assertEqual(tool.inputSchema['properties']['detail']['default'], 'brief')
             self.assertEqual(set(tool.inputSchema['properties']['detail']['enum']), {'full', 'brief'})
             self.assertNotIn('detail', tool.inputSchema.get('required', []))
-            full_result = await server.call_tool('status', {})
+            default_result = await server.call_tool('status', {})
+            full_result = await server.call_tool('status', {'detail': 'full'})
             brief_result = await server.call_tool('status', {'detail': 'brief'})
             # Newer FastMCP also returns structured content beside the blocks.
             def decoded(result):
@@ -169,8 +171,16 @@ class StatusGatewayTests(unittest.TestCase):
                 return json.loads(blocks[0].text)
             full = decoded(full_result)
             brief = decoded(brief_result)
+            default = decoded(default_result)
             self.assertIn('inventory', full)
+            self.assertEqual(default, brief)
+            self.assertNotIn('inventory', default)
+            for key in ('counts', 'inventorySpace', 'equipment', 'hp', 'air', 'inWater', 'inLava',
+                        'bodyControl', 'actionExecution'):
+                self.assertIn(key, default)
+                self.assertEqual(default[key], brief[key])
             self.assertEqual(brief, mcp_server.status_view(full, 'brief'))
+            self.assertEqual(mcp_server.read_status(self.client), full)
         asyncio.run(check())
         self.assertFalse(self.rcon.mutations())
 

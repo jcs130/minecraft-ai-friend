@@ -31,13 +31,54 @@ SOURCES += ('world/survival/motor_mailbox.py', 'world/survival/motor_loop.py',
 SOURCES += ('world/survival/skill_router.py', 'world/survival/starter_skills.py',
             'tests/test_skill_catalog_router.py', 'tests/test_survival_fast_execution.py',
             'tests/test_skill_catalog_index.py', 'tests/test_skill_catalog_latency.py')
+SOURCES += ('world/survival/navigation_sense.py', 'world/survival/chat.py', 'tests/test_survival_inventory_feedback.py',
+            'tests/test_survival_controller.py', 'tests/test_survival_status_detail.py',
+            'tests/test_survival_navigation_sense.py', 'tests/test_motor_projection.py',
+            'tests/test_survival_area_recovery.py', 'tests/test_survival_chat.py', 'tests/test_motor_boundary.py')
+SOURCES += ('tools/configure_survivor_vision.py', 'tools/sync_survivor_driver_scope.py',
+            'tests/test_configure_survivor_vision.py', 'tests/test_survivor_driver_scope.py',
+            'tests/test_survival_native_tools.py', 'tools/smoke_survivor_chat.py',
+            'world/ops/skills/qd-survivor-practice/SKILL.md',
+            'world/ops/skills/qd-survivor-practice/references/exploration.md',
+            'world/ops/skills/qd-survivor-practice/references/long-term-planning.md')
+SOURCES += ('world/survival/game_skills.py', 'tests/test_survival_game_skills.py')
+
+
+def runtime_protocols(settings, heartbeat, public):
+    """Check loaded runtime fields, without treating them as gameplay proof."""
+    pacing = public.get('pacing') if isinstance(public.get('pacing'), dict) else {}
+    enabled = settings.get('livestreamMode') is True
+    live = (heartbeat.get('livestreamPacingVersion') == 1 and pacing.get('version') == 1
+            and pacing.get('enabled') is enabled)
+    if enabled:
+        seconds = settings.get('livestreamReviewSeconds', 45)
+        maximum = settings.get('livestreamBlockedMaxSeconds', 180)
+        cap, reason = pacing.get('idleCapSeconds'), pacing.get('reason')
+        live = (live and type(seconds) is int and 15 <= seconds <= 120
+                and type(maximum) is int and seconds <= maximum <= 600
+                and pacing.get('reviewSeconds') == seconds and pacing.get('blockedMaxSeconds') == maximum
+                and ((reason in ('goal_ongoing', 'next_goal') and cap == seconds)
+                     or (reason == 'goal_blocked' and type(cap) is int and seconds <= cap <= maximum)
+                     or (reason in ('agent_resting', 'body_work_pending', 'outcome_unknown',
+                                    'sleep_entered', 'agent_interval') and cap is None)))
+    motor = public.get('motor') if isinstance(public.get('motor'), dict) else {}
+    recovery = heartbeat.get('outsideAreaRecoveryVersion') == 1
+    if settings.get('asyncMotor') is True:
+        recovery = (recovery and motor.get('version') == 1 and isinstance(motor.get('status'), str)
+                    and 'blocked' in motor)
+        if motor.get('status') in ('outside_work_area', 'recovery_dispatching'):
+            block = motor.get('blocked') if isinstance(motor.get('blocked'), dict) else {}
+            recovery = (recovery and block.get('code') == 'outside_work_area'
+                        and isinstance(block.get('position'), dict) and isinstance(block.get('workArea'), dict))
+    return {'livestream_pacing': bool(live), 'outside_area_recovery': bool(recovery)}
 
 
 def check(root=ROOT, clock=time.time):
     root = Path(root)
     checks = dict.fromkeys(('generation_binding', 'supervised_heartbeat', 'archive_outside_retrieval',
                             'archive_verified', 'current_prompt', 'public_brain', 'behavior_test', 'native_mcp_recovery',
-                            'social_scheduling', 'action_outcome_known'), False)
+                            'social_scheduling', 'action_outcome_known',
+                            'livestream_pacing', 'outside_area_recovery'), False)
     try:
         read = lambda p: json.loads(p.read_text(encoding='utf-8-sig'))
         state = root / 'server/survival-agent-state/survival'
@@ -66,6 +107,7 @@ def check(root=ROOT, clock=time.time):
         checks['current_prompt'] = ((workspace / 'AGENTS.md').read_text(encoding='utf8')
                                     == (root / 'world/survival/AGENT.md').read_text(encoding='utf8'))
         public = read(root / 'server/panel-state/survivor.json')
+        checks.update(runtime_protocols(settings, heartbeat, public))
         brain = public.get('embodiment', {})
         checks['public_brain'] = (brain.get('version') == 1 and brain.get('memoryEpoch') == epoch
                                  and brain.get('dialogueBodyAccess') == 'read_only')
@@ -75,6 +117,8 @@ def check(root=ROOT, clock=time.time):
                 'test_skill_catalog_router.', 'test_social_scheduling.', 'test_dialogue_batch.', 'test_behavior_context.', 'test_survival_service.',
                 'test_survival_status_detail.', 'test_survival_feedback.', 'test_survival_guild.',
                 'test_survival_life_session.ContinuousActionTests.', 'test_survival_standing_task.',
+                'test_survival_controller.ControllerTests.test_livestream_', 'test_motor_projection.',
+                'test_survival_area_recovery.', 'test_survival_chat.', 'test_survival_navigation_sense.', 'test_motor_boundary.',
                 'test_survival_poll_recovery.PollRecoveryTests.', 'test_guild_hunt_score.HuntScoreTests.'))
             and report.get('modelCalls') == 0 and report.get('productionMutations') == 0
             and all(report.get('sourceHashes', {}).get(name) == hashlib.sha256((root / name).read_bytes()).hexdigest()
