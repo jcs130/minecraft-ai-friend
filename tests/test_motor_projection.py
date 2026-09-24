@@ -92,7 +92,8 @@ class MotorProjectionTests(unittest.TestCase):
                 self.assertEqual(row['receipt'][key], full['recent'][i]['receipt'][key])
             self.assertNotIn('candidates', row['receipt'].get('navigationSense', {}).get('destination', {}))
             self.assertNotIn('positionAfter', row['receipt'])
-            self.assertIn('omitted', row['receiptDetail'])
+            self.assertNotIn('receiptDetail', row)
+            self.assertIn('omitted', brief['receiptDetail'])
         self.assertEqual(brief['recent'][1]['receipt']['mining'], failed['mining'])
         self.assertEqual(brief['recent'][1]['receipt']['code'], 'partial_mining_failure')
         self.assertEqual(brief['recent'][1]['receipt']['navigationSense']['destination']['code'],
@@ -166,6 +167,112 @@ class MotorProjectionTests(unittest.TestCase):
             context['turn_id'] = 'survival-two'
             _, second, _ = prepare(root, life, context, {'goal': 'explore'})
             self.assertNotIn('motor', second['updates'])
+
+    def test_known_equipment_rejections_keep_latest_advice_and_every_identity(self):
+        full = self.queue()
+        for i, row in enumerate(full['recent'][:3]):
+            row['receipt'] = {'actionId': 'cast-' + str(i), 'status': 'rejected',
+                'tool': 'game_cast', 'completionConfirmed': False, 'observedAt': i,
+                'outcomeDetail': 'Native spell must be equipped.',
+                'gameSkill': {'code': 'not_equipped', 'ok': False, 'requestId': 'native-' + str(i),
+                    'engine': 'irons_spellbooks', 'nativeSpell': 'irons_spellbooks:heal'},
+                'recovery': {'requiredNextStep': 'equip_then_observe', 'retryAutomatically': False,
+                    'instruction': 'Equip the spell, then observe; do not guess a healing alias.'},
+                'futureSafety': {'noReplay': True}}
+        original = copy.deepcopy(full)
+        brief = mailbox.compact_public(full)
+        self.assertEqual(full, original)
+        for i in (0, 1):
+            r = brief['recent'][i]['receipt']
+            self.assertNotIn('outcomeDetail', r)
+            self.assertNotIn('instruction', r['recovery'])
+            for key in ('actionId', 'gameSkill', 'futureSafety', 'completionConfirmed'):
+                self.assertEqual(r[key], full['recent'][i]['receipt'][key])
+            self.assertEqual(r['recovery']['requiredNextStep'], 'equip_then_observe')
+            self.assertFalse(r['recovery']['retryAutomatically'])
+        self.assertEqual(brief['recent'][2]['receipt'], full['recent'][2]['receipt'])
+        self.assertEqual(brief, mailbox.compact_public(brief))
+
+    def test_other_native_rejection_and_future_recovery_text_are_not_dropped(self):
+        full = self.queue()
+        for i, code in enumerate(('cooldown', 'not_equipped')):
+            full['recent'][i]['receipt'].update(status='rejected',
+                gameSkill={'code': code, 'ok': False},
+                outcomeDetail='Specific diagnostic that is not a known duplicate.',
+                recovery={'requiredNextStep': 'future_policy', 'instruction': 'Keep this safety rule.'})
+        brief = mailbox.compact_public(full)
+        for i in (0, 1):
+            self.assertEqual(brief['recent'][i]['receipt']['outcomeDetail'],
+                             full['recent'][i]['receipt']['outcomeDetail'])
+            self.assertEqual(brief['recent'][i]['receipt']['recovery'], full['recent'][i]['receipt']['recovery'])
+
+    def test_unrecognized_legacy_rows_are_preserved_without_crashing(self):
+        full = {'recent': [None, 'legacy-row', 42, {'receipt': None}]}
+        self.assertEqual(mailbox.compact_public(full)['recent'], full['recent'])
+
+    def test_success_coordinates_only_collapse_when_identical_and_failure_reason_stays(self):
+        r = self.receipt('completed')
+        r['navigationOutcome'].update(success=True,
+            reason='the task ended and the core keeps no readable navigation terminal; '
+                   'arrival is judged from the body against the request',
+            navigation_mode='observed_from_body', final_x=9, final_y=69, final_z=20,
+            requested={'x': 10, 'y': 70, 'z': 20}, horizontalDistance=1,
+            futureSafety={'pathNotVerified': True})
+        brief = mailbox.brief_receipt(r)
+        self.assertNotIn('reason', brief['navigationOutcome'])
+        self.assertNotIn('positionAfter', brief)
+        for key in ('navigation_mode', 'requested', 'horizontalDistance', 'futureSafety', 'final_x', 'final_y', 'final_z'):
+            self.assertEqual(brief['navigationOutcome'][key], r['navigationOutcome'][key])
+        r['positionAfter']['y'] = 70
+        self.assertEqual(mailbox.brief_receipt(r)['positionAfter']['y'], 70)
+        r['navigationOutcome']['reason'] = 'A new native success diagnostic must remain visible.'
+        self.assertEqual(mailbox.brief_receipt(r)['navigationOutcome']['reason'],
+                         'A new native success diagnostic must remain visible.')
+        r['navigationOutcome'].update(success=False, reason='no_path')
+        self.assertEqual(mailbox.brief_receipt(r)['navigationOutcome']['reason'], 'no_path')
+
+    def test_effect_unconfirmed_and_unknown_under_terminal_row_remain_exact(self):
+        for patch in ({'status': 'unknown'}, {'status': 'in_flight'},
+                      {'status': 'completed', 'completionConfirmed': False},
+                      {'status': 'completed', 'effectConfirmed': False},
+                      {'status': 'future_native_state'}):
+            full = self.queue()
+            row = full['recent'][0]
+            row.update(status='completed')
+            row['receipt'].update(patch, before={'inventory': ['uncertain effect']}, noReplay=True)
+            self.assertEqual(mailbox.compact_public(full)['recent'][0], row)
+
+
+class ActionOutcomeProjectionTests(unittest.TestCase):
+    def test_query_success_is_not_native_action_success(self):
+        execution = {'ok': True, 'inFlight': False, 'receipt': {
+            'actionId': 'native-cast', 'tool': 'game_cast', 'status': 'rejected',
+            'completionConfirmed': False, 'observedAt': 42, 'requested': {'skill_id': 'heal'},
+            'gameSkill': {'code': 'not_equipped', 'engine': 'irons_spellbooks',
+                          'nativeSpell': 'irons_spellbooks:heal', 'executionConfirmed': False},
+            'recovery': {'requiredNextStep': 'equip_then_observe', 'retryAutomatically': False,
+                         'instruction': 'The full advice remains in the receipt.'}}}
+        before = copy.deepcopy(execution)
+        result = mailbox.action_outcome(execution)
+        self.assertTrue(result['queryOk'])
+        self.assertEqual(result['status'], 'rejected')
+        self.assertFalse(result['completionConfirmed'])
+        self.assertEqual(result['gameSkill'], execution['receipt']['gameSkill'])
+        self.assertEqual(result['recovery'], {'requiredNextStep': 'equip_then_observe', 'retryAutomatically': False})
+        self.assertEqual(result['requested'], {'skill_id': 'heal'})
+        self.assertNotIn('ok', result)
+        self.assertEqual(execution, before)
+
+    def test_missing_unknown_and_unconfirmed_outcomes_do_not_gain_success(self):
+        self.assertIsNone(mailbox.action_outcome({'ok': False, 'code': 'action_busy', 'inFlight': True}))
+        for receipt in ({'status': 'unknown', 'completionConfirmed': False, 'noReplay': True},
+                        {'status': 'completed'},
+                        {'status': 'dispatched', 'dispatchConfirmed': True, 'effectConfirmed': False}):
+            result = mailbox.action_outcome({'ok': True, 'receipt': receipt})
+            self.assertEqual({k: result[k] for k in receipt}, receipt)
+            self.assertNotIn('success', result)
+            self.assertEqual(result.get('completionConfirmed'), receipt.get('completionConfirmed'))
+        self.assertIsNone(mailbox.action_outcome(None))
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ from mcp_server import TOOL_NAMES
 
 def prepare_policy(policy, names=TOOL_NAMES, added_tool='view_scene'):
     expected=set(names)
-    if added_tool not in ('view_scene', 'interact_at', 'sense', 'say') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
+    if added_tool not in ('view_scene', 'interact_at', 'sense', 'say', 'navigate') or added_tool not in expected or not isinstance(policy,dict):raise ValueError('invalid_policy')
     additions = {'say', 'say_status'} if added_tool == 'say' else {added_tool}
     rules=policy.get('tool_defaults')
     if (policy.get('default_effect')!='deny' or policy.get('client_overrides')!=[]
@@ -57,7 +57,7 @@ def apply_tool_scope(api, role, previous_tools, policy, names=TOOL_NAMES):
 def main():
     from configure_survivor_party import api
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--apply',action='store_true')
-    parser.add_argument('--tool', choices=('view_scene','interact_at','sense','say'), default='view_scene')
+    parser.add_argument('--tool', choices=('view_scene','interact_at','sense','say','navigate'), default='view_scene')
     parser.add_argument('--project-root', type=Path, default=ROOT)
     args=parser.parse_args();role='qd-survivor';route='/mcp/policy/numen_survival'
     before=api('GET',route,role);after=prepare_policy(before, added_tool=args.tool)

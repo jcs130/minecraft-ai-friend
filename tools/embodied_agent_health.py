@@ -59,6 +59,13 @@ SOURCES += ('tests/test_skill_catalog_eligibility.py', 'world/survival/motor_pro
             'world/survival/character_speech.py', 'world/survival/speech.py',
             'tests/test_character_speech.py', 'tests/test_survival_speech.py')
 SOURCES += ('tests/test_survival_action_admission.py', 'tests/test_system_one_body_control.py')
+SOURCES += ('world/survival/navigation_program.py', 'tests/test_survival_continuous_navigation.py',
+            'tests/test_survival_blocked_progress_wake.py',
+            'tests/test_survival_navigation_capability.py',
+            'tests/test_survival_navigate_tool.py',
+            'world/ops/skills/qd-survivor-practice/references/program-practice.md')
+SOURCES += ('world/ops/survival_turn_runtime.py', 'tests/test_survival_turn_completion.py',
+            'world/ops/qwenpaw_recovery_probe.py', 'world/ops/qwenpaw_health.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

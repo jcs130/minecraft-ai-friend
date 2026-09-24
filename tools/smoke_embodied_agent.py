@@ -40,7 +40,10 @@ def main():
                  'test_motor_occurrence', 'test_survival_self_planning', 'test_survival_reply_wake',
                  'test_skill_catalog_eligibility', 'test_motor_progress_audit',
                  'test_character_speech', 'test_survival_speech',
-                 'test_survival_action_admission', 'test_system_one_body_control'):
+                 'test_survival_action_admission', 'test_system_one_body_control',
+                 'test_survival_continuous_navigation', 'test_survival_blocked_progress_wake',
+                 'test_survival_navigation_capability', 'test_survival_navigate_tool',
+                 'test_survival_turn_completion'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):

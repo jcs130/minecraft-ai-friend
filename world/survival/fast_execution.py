@@ -11,12 +11,14 @@ def program_observation(gateway: WorldAdapter, request, body, now):
     """Execute one already-validated read with the same checks as the MCP tool."""
     from numen_gateway import GatewayError
     methods = {'inspect_block': gateway.inspect_block, 'inspect_container': gateway.inspect_container,
-               'sense': getattr(gateway, 'sense', None)}
+               'sense': getattr(gateway, 'sense', None),
+               'navigation_sense': getattr(gateway, 'navigation_observation', None)}
     method = methods.get(request.get('tool'))
     if method is None:
         raise ValueError('unsupported_program_observation')
     try:
-        result = method(**request['args'])
+        result = (method(body, request['args']) if request['tool'] == 'navigation_sense'
+                  else method(**request['args']))
         if not isinstance(result, dict):
             raise ValueError('invalid_observation_result')
         encoded = json.dumps(result, ensure_ascii=True, allow_nan=False)
@@ -34,7 +36,8 @@ def observation_view(observation, body, now):
         return None
     stamp = observation.get('observedAt')
     age = now * 1000 - stamp if type(stamp) in (int, float) and math.isfinite(stamp) else None
-    fresh = (age is not None and 0 <= age <= 60000
+    max_age = 5000 if observation.get('tool') == 'navigation_sense' else 60000
+    fresh = (age is not None and 0 <= age <= max_age
              and observation.get('bodyUuid') == body.get('bodyUuid')
              and observation.get('dimension') == body.get('dimension'))
     # Stale data stays visible as history; it cannot masquerade as a fresh read.
@@ -43,6 +46,9 @@ def observation_view(observation, body, now):
 
 def execution_state(job, episodes, body, now):
     return {'lastResult': job.get('lastResult'), 'lastExecution': job.get('lastExecution'),
+            'expectedAction': {'turnId': job.get('lastTurnId'),
+                               'actionId': (job.get('lastResult') or {}).get('actionId'),
+                               **(job.get('lastAction') or {})},
             'observation': observation_view(job.get('lastObservation'), body, now),
             'observedAt': int(now * 1000), 'evidence': episodes[-3:]}
 

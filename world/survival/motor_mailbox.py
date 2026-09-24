@@ -97,12 +97,28 @@ def brief_receipt(receipt):
     if not isinstance(receipt, dict):
         return receipt
     result = copy.deepcopy(receipt)
+    if (result.get('status') not in (None, 'completed', 'failed', 'rejected')
+            or result.get('effectConfirmed') is False
+            or result.get('status') == 'completed' and result.get('completionConfirmed') is not True):
+        return result
     # Full observations are redundant with the freshly acquired status body.
     for key in ('before', 'after'):
         result.pop(key, None)
     if result.get('status') == 'completed' and result.get('completionConfirmed') is True:
         result.pop('navigationSense', None)
         result.pop('outcomeDetail', None)
+        outcome = result.get('navigationOutcome')
+        if isinstance(outcome, dict) and outcome.get('success') is True:
+            # Keep how arrival was established, its target/final coordinates and
+            # every future field. Only the repeated success prose is redundant.
+            if (outcome.get('navigation_mode') == 'observed_from_body'
+                    and outcome.get('reason') == 'the task ended and the core keeps no readable navigation terminal; '
+                        'arrival is judged from the body against the request'):
+                outcome.pop('reason', None)
+            position = result.get('positionAfter')
+            if (isinstance(position, dict) and all('final_' + k in outcome for k in ('x', 'y', 'z'))
+                    and position == {k: outcome['final_' + k] for k in ('x', 'y', 'z')}):
+                result.pop('positionAfter', None)
     elif isinstance(result.get('navigationSense'), dict):
         sense = result['navigationSense']
         result['navigationSense'] = {key: value for key, value in sense.items()
@@ -121,20 +137,70 @@ def brief_receipt(receipt):
     return result
 
 
+def action_outcome(execution):
+    """Expose the exact last action separately from successful status acquisition.
+
+    This projection never infers completion, grants repeat authority or changes
+    settlement. Query success and action success are distinct observations.
+    """
+    if not isinstance(execution, dict) or not isinstance(execution.get('receipt'), dict):
+        return None
+    receipt = execution['receipt']
+    result = {key: copy.deepcopy(receipt[key]) for key in (
+        'actionId', 'tool', 'requested', 'args', 'status', 'completionConfirmed',
+        'nativeTaskId', 'observedAt', 'code', 'noReplay', 'retryAutomatically',
+        'dispatchConfirmed', 'effectConfirmed', 'executionConfirmed') if key in receipt}
+    if 'ok' in execution:
+        result['queryOk'] = execution['ok']
+    if 'inFlight' in execution:
+        result['inFlight'] = execution['inFlight']
+    if isinstance(receipt.get('gameSkill'), dict):
+        result['gameSkill'] = copy.deepcopy(receipt['gameSkill'])
+    if isinstance(receipt.get('recovery'), dict):
+        result['recovery'] = {key: copy.deepcopy(receipt['recovery'][key])
+            for key in ('requiredNextStep', 'retryAutomatically') if key in receipt['recovery']}
+    return result
+
+
+def _equipment_rejection(row):
+    if not isinstance(row, dict):
+        return False
+    receipt = row.get('receipt', {})
+    return (isinstance(receipt, dict) and row.get('status') == 'failed'
+        and receipt.get('status') == 'rejected' and receipt.get('effectConfirmed') is not False
+        and isinstance(receipt.get('gameSkill'), dict)
+        and receipt['gameSkill'].get('code') == 'not_equipped'
+        and receipt['gameSkill'].get('ok') is False
+        and isinstance(receipt.get('recovery'), dict)
+        and receipt['recovery'].get('requiredNextStep') == 'equip_then_observe'
+        and receipt['recovery'].get('retryAutomatically') is False)
+
+
 def compact_public(value):
     """Project every queue identity, with short recent outcome evidence."""
     if not isinstance(value, dict):
         return value
     result = copy.deepcopy(value)
     recent = result.get('recent', [])
+    equipment_rejections = [i for i, row in enumerate(recent) if _equipment_rejection(row)]
+    latest_rejection = max(equipment_rejections, default=-1)
     for index, row in enumerate(recent):
         if not isinstance(row, dict) or not isinstance(row.get('receipt'), dict):
             continue
         # Unsettled identities/evidence are never historical summaries, even if
         # an older producer put an unknown receipt under a terminal queue row.
-        if row.get('status') not in ('completed', 'failed') or row['receipt'].get('status') == 'unknown':
+        receipt = row['receipt']
+        if (row.get('status') not in ('completed', 'failed')
+                or receipt.get('status') not in (None, 'completed', 'failed', 'rejected')
+                or receipt.get('effectConfirmed') is False
+                or receipt.get('status') == 'completed' and receipt.get('completionConfirmed') is not True):
             continue
         receipt = row['receipt'] = brief_receipt(row['receipt'])
+        if index in equipment_rejections and index != latest_rejection:
+            # The newest exact equipment rejection retains the full remedy.
+            # Older aliases keep their native code/spell and structured remedy.
+            receipt.pop('outcomeDetail', None)
+            receipt['recovery'].pop('instruction', None)
         if index < len(recent) - 2:
             # Keep intent, exact outcome/IDs, partial gains and repeat lineage.
             # Old terrain is not a fresh route. New/unknown outcome fields stay
@@ -158,9 +224,9 @@ def compact_public(value):
                     if key not in ('requested', 'final_x', 'final_y', 'final_z',
                                    'horizontalDistance', 'navigation_mode')
                     and (key != 'reason' or outcome.get('success') is not True)}
-            row['receiptDetail'] = 'historical outcome; observations omitted, not absent; status(detail="full")'
+        row.pop('receiptDetail', None)
     # Active/unknown rows remain exact; these identify work that must not replay.
-    result['receiptDetail'] = 'brief; status(detail="full") retains full receipt details'
+    result['receiptDetail'] = 'brief; historical observations omitted, not absent; status(detail="full") retains full receipt details'
     return result
 
 

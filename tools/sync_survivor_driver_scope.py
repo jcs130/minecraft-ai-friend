@@ -72,7 +72,8 @@ def desired_documents(agent, card):
             or card.get('credentials') != {'survivor_env': {'kind': 'static', 'ref': 'env:SURVIVOR_MCP_TOKEN'}}):
         raise ValueError('survivor_native_driver_changed')
     old = client.get('tools')
-    accepted = (set(names), set(names) - {'drop_items'}, set(names) - {'say', 'say_status'})
+    accepted = (set(names), set(names) - {'drop_items'}, set(names) - {'say', 'say_status'},
+                set(names) - {'navigate'})
     if (not isinstance(old, list) or not all(isinstance(name, str) for name in old)
             or len(set(old)) != len(old) or set(old) not in accepted
             or card.get('config', {}).get('tools') != old):

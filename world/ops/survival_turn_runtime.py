@@ -11,9 +11,10 @@ import inspect
 import json
 import re
 
-VERSION = 5
+VERSION = 6
 TOOL = 'numen_survival__remember'
 START_TOOL = 'numen_survival__skill_start'
+NAVIGATE_TOOL = 'numen_survival__navigate'
 CONTRACT = 'qiandeng-survival-turn-v1'
 ENDED_CONTRACT = 'qiandeng-survival-authority-ended-v1'
 ENDED_SUMMARY = '本轮操作权限已结束，等待下一轮重新观察。游戏动作结果仍以原回执为准。'
@@ -84,7 +85,7 @@ def completion_summary(agent):
                     and ended.get('gameOutcomeConfirmed') is False):
                 return ENDED_SUMMARY
             return None
-        if call.name not in (TOOL, START_TOOL):
+        if call.name not in (TOOL, START_TOOL, NAVIGATE_TOOL):
             return None
         if call.name == TOOL and args.get('finish_turn') is not True:
             return None
@@ -99,13 +100,33 @@ def completion_summary(agent):
         if call.name == TOOL:
             if result.get('code') != 'memory_recorded' or result.get('memorySaved') is not True:
                 return None
-        else:
+        elif call.name == START_TOOL and result.get('code') == 'skill_queued':
             if result.get('code') != 'skill_queued' or result.get('executionConfirmed') is not False:
                 return None
             for arg_key, receipt_key in (('name', 'name'), ('version', 'version'), ('turn_id', 'turnId')):
                 value = args.get(arg_key)
                 if not isinstance(value, str) or not value.strip() or result.get(receipt_key) != value:
                     return None
+        else:
+            turn, version = args.get('turn_id'), result.get('version')
+            if (not isinstance(turn, str) or re.fullmatch(r'[A-Za-z0-9_-]{16,128}', turn) is None
+                    or result.get('turnId') != turn or result.get('executionConfirmed') is not False
+                    or not isinstance(version, str) or re.fullmatch(r'[0-9a-f]{64}', version) is None):
+                return None
+            if call.name == NAVIGATE_TOOL:
+                if result.get('name') != 'base_navigate':
+                    return None
+            elif (not isinstance(args.get('name'), str) or not args['name'].strip()
+                    or result.get('name') != args['name'] or version != args.get('version')):
+                return None
+            if result.get('code') == 'motor_queued':
+                request_id = result.get('requestId')
+                if (result.get('kind') != 'skill' or result.get('status') != 'queued'
+                        or not isinstance(request_id, str)
+                        or re.fullmatch(r'[0-9a-f]{64}', request_id) is None):
+                    return None
+            elif call.name != NAVIGATE_TOOL or result.get('code') != 'skill_queued':
+                return None
     except (ValueError, TypeError):
         return None
     return summary.strip()

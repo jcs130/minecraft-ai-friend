@@ -24,7 +24,7 @@ def main():
     assert tools_install('game') == 1
     from survival_turn_runtime import install as finish_install
     from life_memory_evidence_runtime import install as memory_install
-    assert finish_install('game') == 5
+    assert finish_install('game') == 6
     from survival_request_runtime import install as request_install
     assert request_install('game') == 2
     from life_memory_evidence import VERSION as memory_version

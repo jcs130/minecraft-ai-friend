@@ -8,6 +8,7 @@ import json
 import uuid
 from motor_mailbox import view, claim_locked, finish_locked, public, binding
 from numen_gateway import GatewayError, action_lock, read_json, write_json
+from navigation_program import recovery_program
 
 
 def _job(c):
@@ -100,10 +101,21 @@ def dispatch(c, recovery_only=False):
         row = claim_locked(c.root, c.clock)
         if not row:
             return False
-        if recovery_only and (row['kind'] != 'action' or row['payload'].get('tool') != 'goto'):
+        try:
+            recovery_skill = (recovery_only and row['kind'] == 'skill'
+                              and recovery_program(getattr(c, 'skills', None), row['payload']))
+        except (ValueError, OSError) as exc:
+            # Validation has no world effects and no job was started. A local
+            # library lock/test failure must not become a lost-dispatch claim.
+            finish_locked(c.root, row['requestId'], 'failed', {
+                'code': getattr(exc, 'code', 'recovery_program_validation_failed'),
+                'dispatched': False, 'writePerformed': False, 'retryAutomatically': False})
+            return True
+        if recovery_only and not recovery_skill and (row['kind'] != 'action'
+                or row['payload'].get('tool') not in ('goto', 'eat')):
             finish_locked(c.root, row['requestId'], 'failed', {'code': 'outside_work_area',
                 'dispatched': False, 'writePerformed': False,
-                'instruction': 'Return using a short inward goto before other body actions.'})
+                'instruction': 'Outside the work area, only inward goto, eating carried food, or an explicitly selected tested return program is allowed.'})
             return True
         if row['kind'] == 'skill':
             from practice import run_id
@@ -203,6 +215,7 @@ def recovery_boundary(c, body):
                 or not ended(receipt)):
             return False
         if job.get('status') in ('pending', 'running'):
+            continuation = recovery_program(getattr(c, 'skills', None), job) and not stop
             last = job.get('lastExecution') or {}
             turn = job.get('lastTurnId')
             evidence = None
@@ -214,19 +227,22 @@ def recovery_boundary(c, body):
                         or last.get('turnId') not in (None, turn)
                         or last.get('actionId') not in (None, evidence['actionId'])):
                     return False
-            elif job.get('status') == 'running' or last:
+            elif last or (job.get('status') == 'running' and not
+                          (continuation and job.get('steps', 0) == 0)):
                 # Idle alone cannot prove what a running program last did.
                 return False
-            job.update(status='replan', reason='outside_work_area',
-                recoveryBoundary=({k: evidence[k] for k in ('turnId', 'actionId', 'status')}
-                                  if evidence else {'dispatched': False}))
-            write_json(c.root/'skill-job.json', job)
+            if not continuation:
+                job.update(status='replan', reason='outside_work_area',
+                    recoveryBoundary=({k: evidence[k] for k in ('turnId', 'actionId', 'status')}
+                                      if evidence else {'dispatched': False}))
+                write_json(c.root/'skill-job.json', job)
         if stop:
             c.data.pop('motorStop', None)
             c.save()
     # Practice.finish is idempotent and must settle before the skill's mailbox
     # claim releases. Keep its frozen terminal observation on later retries.
-    if job.get('practiceStarted') and not job.get('practiceFinalized'):
+    if (job.get('status') not in ('pending', 'running', 'dispatching')
+            and job.get('practiceStarted') and not job.get('practiceFinalized')):
         c.settle_practice()
     reconcile(c)
     return True
@@ -255,12 +271,26 @@ def tick(c, body, control):
         c.data['motorStatus'] = 'outside_work_area'
         c.data['motorBlocked'] = {'code': 'outside_work_area',
             'position': dict(body['position']), **getattr(exc, 'details', {})}
+        idle_boundary = (not body.get('task', {}).get('busy')
+                         and not c.data.get('actionExecution', {}).get('inFlight'))
         if (body.get('gameMode') == 'survival' and not c.data.get('goalAgendaError')
-                and not body.get('task', {}).get('busy')
-                and not c.data.get('actionExecution', {}).get('inFlight')
+                and idle_boundary
                 and recovery_boundary(c, body)):
-            # Only a model-selected inward goto reaches the normal fresh gateway
-            # preflight. No route is invented and no skill starts outside the area.
+            if c.data.get('goalSwitchPending'):
+                c.switch_goal_at_boundary()
+            job = _job(c)
+            if (job.get('status') in ('pending', 'running')
+                    and recovery_program(getattr(c, 'skills', None), job)):
+                c.finish_action_observation(body)
+                if c.tick_skill(body, recovery_only=True):
+                    c.data['motorStatus'] = 'executing_recovery_skill'
+                    c.data['motorQueue'] = public(c.root)
+                    return
+                c.settle_practice()
+                reconcile(c)
+            # Every segment still requires fresh inward preflight. Explicit
+            # eating uses the same inventory, body-slot and exact food receipt
+            # checks; no other action or unknown replay gains authorization.
             dispatch(c, recovery_only=True)
         c.data['motorQueue'] = public(c.root)
         return

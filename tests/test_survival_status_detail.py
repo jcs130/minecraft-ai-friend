@@ -13,6 +13,25 @@ import test_survival_gateway as fixture
 
 
 class StatusProjectionTests(unittest.TestCase):
+    def test_brief_surfaces_action_rejection_without_changing_query_success(self):
+        receipt = {'actionId': 'cast-1', 'tool': 'game_cast', 'status': 'rejected',
+                   'completionConfirmed': True, 'args': {'spell': 'heal'},
+                   'gameSkill': {'ok': False, 'code': 'not_equipped'},
+                   'recovery': {'requiredNextStep': 'equip_then_observe',
+                                'retryAutomatically': False, 'instruction': 'Keep full guidance'}}
+        body = {'ok': True, 'actionExecution': {'ok': True, 'inFlight': False, 'receipt': receipt}}
+        original = copy.deepcopy(body)
+        result = mcp_server.status_view(body, 'brief')
+        self.assertEqual(next(iter(result)), 'actionOutcome')
+        self.assertTrue(result['ok'])
+        self.assertTrue(result['actionOutcome']['queryOk'])
+        self.assertEqual(result['actionOutcome']['status'], 'rejected')
+        self.assertEqual(result['actionOutcome']['gameSkill']['code'], 'not_equipped')
+        self.assertFalse(result['actionOutcome']['recovery']['retryAutomatically'])
+        self.assertEqual(result['actionExecution']['receipt'], receipt)
+        self.assertEqual(mcp_server.status_view(body, 'full'), original)
+        self.assertEqual(body, original)
+
     def test_brief_only_omits_slots_and_explicitly_marks_the_omission(self):
         body = {'ok': True, 'inventory': [{'slot': 0, 'id': 'minecraft:stick', 'count': 2}],
                 'counts': {'minecraft:stick': 2}, 'equipment': {'mainhand': 'minecraft:stick'},

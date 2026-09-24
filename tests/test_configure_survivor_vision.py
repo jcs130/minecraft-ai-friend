@@ -63,4 +63,14 @@ class VisionPolicyTests(unittest.TestCase):
         self.assertEqual(writes,['/mcp/policy/numen_survival','/mcp/tools/numen_survival'])
         self.assertEqual(enabled,set(self.names))
 
+    def test_navigation_permission_only_adds_one_named_tool(self):
+        before = prepare_policy(self.before, self.names)
+        names = (*self.names, 'navigate')
+        after = prepare_policy(before, names, added_tool='navigate')
+        self.assertEqual(after['tool_defaults'][:-1], before['tool_defaults'])
+        self.assertEqual(after['tool_defaults'][-1], {'tool_name': 'navigate', 'effect': 'allow'})
+        self.assertEqual(prepare_policy(after, names, added_tool='navigate'), after)
+        with self.assertRaises(ValueError):
+            prepare_policy(self.before, names, added_tool='navigate')
+
 if __name__=='__main__':unittest.main()

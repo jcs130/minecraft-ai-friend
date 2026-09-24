@@ -1,4 +1,4 @@
-"""An escaped body may walk back without extending its work permissions."""
+"""An escaped body may return or eat carried food; world permissions stay bounded."""
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -36,7 +36,10 @@ class AreaRecoveryTests(unittest.TestCase):
         self.lease()
         for target in ({'x': 180, 'z': 160}, {'x': 170, 'z': 175}, {'x': 170, 'z': 170}):
             self.assertEqual(self.client.action(fixture.TURN, 'goto', target)['code'], 'outside_work_area')
-        self.assertEqual(self.client.action(fixture.TURN, 'eat', {'item_id': 'minecraft:bread'})['code'], 'outside_work_area')
+        for tool, args in (('craft', {'item_id': 'minecraft:bread', 'count': 1}),
+                           ('mine', {'block_ids': ['minecraft:oak_log'], 'count': 1}),
+                           ('drop_items', {'item_id': 'minecraft:bread', 'count': 1})):
+            self.assertEqual(self.client.action(fixture.TURN, tool, args)['code'], 'outside_work_area')
         self.assertFalse(self.rcon.mutations())
 
     def test_boundary_error_gives_computed_inward_direction(self):
@@ -59,7 +62,66 @@ class AreaRecoveryTests(unittest.TestCase):
         self.write('unknown.json', {'status': 'unknown'})
         result = self.client.action(fixture.TURN, 'goto', {'x': 180, 'z': 100})
         self.assertEqual(result['code'], 'outcome_unknown')
+        result = self.client.action(fixture.TURN, 'eat', {'item_id': 'minecraft:bread'})
+        self.assertEqual(result['code'], 'outcome_unknown')
         self.assertFalse(self.rcon.mutations())
+
+    def test_outside_eat_uses_exact_native_receipt_even_after_lost_ack(self):
+        from test_survival_food_receipts import FoodRcon
+        self.rcon = self.client.rcon = FoodRcon()
+        self.rcon.position = {'x': 200, 'y': 64, 'z': 100}
+        self.rcon.lose_ack = True
+        self.lease()
+        result = self.client.action(fixture.TURN, 'eat', {'item_id': 'minecraft:bread'})
+        self.assertEqual(result['code'], 'accepted')
+        self.assertFalse(result['completionConfirmed'])
+        action_id = result['actionId']
+        self.assertTrue(any(cmd.endswith(action_id) for cmd in self.rcon.calls if cmd.startswith('qdworld eating ')))
+        self.rcon.finish()
+        receipt = self.client.action_status()['receipt']
+        self.assertEqual(receipt['actionId'], action_id)
+        self.assertEqual(receipt['status'], 'completed')
+        self.assertTrue(receipt['completionConfirmed'])
+        self.assertEqual(receipt['nativeFoodOutcome']['requestId'], action_id)
+        self.assertFalse(self.client.action(fixture.TURN, 'eat', {'item_id': 'minecraft:bread'})['ok'])
+        self.assertEqual(len([cmd for cmd in self.rcon.calls if cmd.startswith('qdworld eat ')]), 1)
+
+    def test_motor_outside_eat_owns_one_body_slot_until_exact_terminal(self):
+        from test_survival_food_receipts import FoodRcon
+        from motor_mailbox import open_cognition, enqueue_locked, view
+        from motor_loop import tick
+        self.rcon = self.client.rcon = FoodRcon()
+        self.rcon.position = {'x': 200, 'y': 64, 'z': 100}
+        self.settings['asyncMotor'] = True
+        self.write('settings.json', self.settings)
+        clock = lambda: fixture.NOW
+        open_cognition(self.state, fixture.TURN, (fixture.NOW + 100) * 1000, clock)
+        with gateway.action_lock(self.state):
+            enqueue_locked(self.state, fixture.TURN, 'action',
+                           {'tool': 'eat', 'args': {'item_id': 'minecraft:bread'}}, clock)
+            enqueue_locked(self.state, fixture.TURN, 'action',
+                           {'tool': 'goto', 'args': {'x': 180, 'y': 64, 'z': 100}}, clock)
+        controller = SimpleNamespace(root=self.state, gateway=self.client, data={}, clock=clock,
+            discard_policy=lambda: None, pause=lambda reason: self.fail(reason),
+            collect_action_receipts=lambda turn: None, record=lambda *args, **kwargs: None)
+        tick(controller, self.client.snapshot(), {'enabled': True})
+        rows = view(self.state)['requests']
+        self.assertEqual([row['status'] for row in rows], ['claimed', 'queued'])
+        controller.data['actionExecution'] = self.client.action_status()
+        tick(controller, self.client.snapshot(), {'enabled': True})
+        self.assertEqual(len(self.rcon.mutations()), 1)
+        self.assertEqual([row['status'] for row in view(self.state)['requests']], ['claimed', 'queued'])
+        self.rcon.finish()
+        controller.data['actionExecution'] = self.client.action_status()
+        tick(controller, self.client.snapshot(), {'enabled': True})
+        rows = view(self.state)['requests']
+        self.assertEqual([row['status'] for row in rows], ['completed', 'claimed'])
+        self.assertTrue(rows[0]['receipt']['completionConfirmed'])
+        full = self.client.turn_receipts(rows[0]['motorTurnId'])[-1]
+        self.assertEqual(full['turnId'], rows[0]['motorTurnId'])
+        self.assertEqual(full['actionId'], rows[0]['receipt']['actionId'])
+        self.assertEqual(len([cmd for cmd in self.rcon.calls if cmd.startswith('qdworld eat ')]), 1)
+        self.assertEqual(len(self.rcon.mutations()), 2)
 
     def test_motor_dispatches_only_explicit_recovery_and_keeps_exact_receipt(self):
         from motor_mailbox import open_cognition, enqueue_locked, view
@@ -71,7 +133,7 @@ class AreaRecoveryTests(unittest.TestCase):
         open_cognition(self.state, fixture.TURN, (fixture.NOW + 100) * 1000, clock)
         with gateway.action_lock(self.state):
             enqueue_locked(self.state, fixture.TURN, 'action',
-                           {'tool': 'eat', 'args': {'item_id': 'minecraft:bread'}}, clock)
+                           {'tool': 'craft', 'args': {'item_id': 'minecraft:bread', 'count': 1}}, clock)
             enqueue_locked(self.state, fixture.TURN, 'action',
                            {'tool': 'goto', 'args': {'x': 180, 'y': 64, 'z': 100}}, clock)
         controller = SimpleNamespace(root=self.state, gateway=self.client, data={}, clock=clock,

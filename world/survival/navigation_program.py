@@ -1,0 +1,195 @@
+"""One explicitly selected, bounded navigation program; no planner or world IO."""
+import copy
+
+NAME = 'base_navigate'
+
+
+def recovery_program(library, job):
+    """Only a promoted, currently tested explicit return intent gets this lane.
+
+    This is admission, not authority to move: every proposed step still passes
+    the executor's goto-only check and the gateway's fresh inward-area preflight.
+    """
+    if (library is None or job.get('name') != NAME
+            or not isinstance(job.get('memory'), dict)
+            or job['memory'].get('mode') != 'return_to_work_area'):
+        return False
+    record = library.read(job['name'], job['version'])
+    if record.get('promoted') is not True or record.get('version') != job['version']:
+        return False
+    library._tested(job['name'], job['version'])
+    return True
+
+
+SOURCE = '''
+function next(s,m) {
+  const stop=why=>({action:null,memory:m,replan:true,reason:why});
+  const point=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+  const horizontal=p=>p&&["x","z"].every(k=>Number.isFinite(p[k]));
+ const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
+ const area=s.workArea||{}, p=s.position, e=(s.execution||{}).lastExecution||{};
+ const control=s.bodyControl||{}, epoch=(typeof s.navigationEpoch==="string"&&s.navigationEpoch)||null;
+ const observedAt=(s.execution||{}).observedAt||s.observedAt;
+ const inside=p=>p.x>=area.minX&&p.x<=area.maxX&&p.z>=area.minZ&&p.z<=area.maxZ;
+ const gap=p=>Math.hypot(Math.max(area.minX-p.x,0,p.x-area.maxX),Math.max(area.minZ-p.z,0,p.z-area.maxZ));
+ const returning=m.mode==="return_to_work_area";
+ if(s.ok!==true||!point(p)||!s.bodyUuid||!s.dimension||
+    !s.task||s.task.busy!==false) return stop("navigation_body_unavailable");
+ if(!["minX","maxX","minZ","maxZ"].every(k=>Number.isFinite(area[k]))||
+    area.maxX-area.minX<4||area.maxZ-area.minZ<4) return stop("navigation_area_unavailable");
+ if(control.available!==true||control.actorUuid!==s.bodyUuid||control.dimension!==s.dimension||
+    !["gameTime","bodyTickCount","observedAt"].every(k=>Number.isSafeInteger(control[k])&&control[k]>=0)||
+    !Number.isFinite(observedAt)||Math.abs(observedAt-control.observedAt)>15000)
+   return stop("navigation_body_continuity_unavailable");
+ if(m.identity&&(m.identity.bodyUuid!==s.bodyUuid||m.identity.dimension!==s.dimension||
+    m.identity.epoch!==epoch)) return stop("navigation_body_changed");
+ if(m.identity&&["gameTime","bodyTickCount","observedAt"].some(k=>
+    !Number.isSafeInteger(m.identity[k])||control[k]<m.identity[k]))
+   return stop("navigation_body_continuity_lost");
+ m={...m,identity:{bodyUuid:s.bodyUuid,dimension:s.dimension,epoch:epoch,
+                  gameTime:control.gameTime,bodyTickCount:control.bodyTickCount,observedAt:control.observedAt}};
+ if(!m.target&&returning) m.target={x:Math.max(area.minX+2,Math.min(area.maxX-2,p.x)),
+                                   y:p.y,z:Math.max(area.minZ+2,Math.min(area.maxZ-2,p.z))};
+  const t=m.target;
+  const hasY=t&&Object.prototype.hasOwnProperty.call(t,"y"), ground=!returning&&!hasY;
+  if(!horizontal(t)||(hasY&&!Number.isFinite(t.y))||!inside(t)) return stop("known_in_area_target_required");
+  const arrived=(returning&&inside(p))||(!returning&&distance(p,t)<=1.5&&(ground||Math.abs(p.y-t.y)<=1.5));
+ if(m.stage==="moving") {
+   const expected=(s.execution||{}).expectedAction||{};
+   if(e.status!=="succeeded"||e.completionConfirmed!==true||e.tool!=="goto"||
+      typeof e.actionId!=="string"||!e.actionId||!e.turnId||e.actionId===m.lastActionId||
+      expected.turnId!==e.turnId||expected.actionId!==e.actionId||expected.tool!=="goto"||
+      !point(expected.args)||!point(m.segment)||!["x","y","z"].every(k=>expected.args[k]===m.segment[k]))
+     return stop("navigation_completion_not_confirmed");
+   if(!arrived&&(!point(m.before)||distance(p,m.before)<=1.5||distance(m.before,t)-distance(p,t)<0.5))
+     return stop("navigation_progress_not_observed");
+   m={...m,stage:null,probe:null,probeAttempt:0,probeSpan:null,lastActionId:e.actionId,segments:(m.segments||0)+1};
+ }
+  const readSurvey=()=>{
+   const obs=(s.execution||{}).observation, r=(obs||{}).result||{}, n=r.navigationSense||{};
+   const dest=n.destination||{};
+   if(!obs||obs.tool!=="navigation_sense"||!obs.fresh||obs.ageMs>5000||r.ok!==true||n.ok!==true||
+      n.actorUuid!==s.bodyUuid||n.dimension!==s.dimension||!point(n.position)||distance(n.position,p)>1.5||
+      Math.abs(n.position.y-p.y)>1.5||!Number.isFinite(n.observedAt)||
+      !Number.isFinite((s.execution||{}).observedAt)||Math.abs(s.execution.observedAt-n.observedAt)>5000||
+      !point(obs.args)||!point(m.probe)||!["x","y","z"].every(k=>obs.args[k]===m.probe[k])||
+      !point(dest.requested)||!["x","y","z"].every(k=>dest.requested[k]===m.probe[k])||
+      dest.available!==true||dest.pathVerified!==false) return null;
+   return n;
+  };
+  if(ground&&m.stage==="arrival_survey"&&!arrived) return stop("navigation_arrival_position_changed");
+  if(arrived&&ground) {
+   if(m.stage!=="arrival_survey")
+    return {memory:{...m,stage:"arrival_survey",probe:{...p}},observe:{tool:"navigation_sense",args:{...p}}};
+   const n=readSurvey(), dest=(n||{}).destination||{};
+   if(!n||distance(m.probe,p)>0.01||Math.abs(m.probe.y-p.y)>0.01||
+      distance(n.position,p)>0.01||Math.abs(n.position.y-p.y)>0.01||
+      s.inWater===true||s.inLava===true||dest.requestedStanceClear!==true||dest.requestedStanceSupported!==true)
+     return stop("navigation_arrival_stance_unconfirmed");
+   return {action:null,memory:m,done:true,reason:"observed_horizontal_supported_target"};
+  }
+  if(arrived)
+   return {action:null,memory:m,done:true,reason:returning?"observed_inside_work_area":"observed_navigation_target"};
+  const d=distance(p,t);
+  if(d<=1.5) return stop("navigation_vertical_route_required");
+  const surveyAt=(span,attempt)=>{
+   const probe={x:p.x+(t.x-p.x)*span/d,y:p.y,z:p.z+(t.z-p.z)*span/d};
+   return {memory:{...m,stage:"survey",probe:probe,probeSpan:span,probeAttempt:attempt},
+           observe:{tool:"navigation_sense",args:probe}};
+  };
+  if(m.stage!=="survey") {
+   return surveyAt(Math.min(16,d),0);
+ }
+  const n=readSurvey();
+  if(!n) return stop("navigation_survey_unusable");
+  const dest=n.destination;
+ const candidates=(dest.candidates||[]).slice(0,5).filter(point).map(c=>({x:c.x,y:c.y,z:c.z}));
+ if(dest.requestedStanceClear===true&&dest.requestedStanceSupported===true) candidates.push({...m.probe});
+ const usable=candidates.filter(c=>distance(p,c)>(d<=3?1.5:2)&&distance(p,c)<=20&&
+   Math.abs(c.y-p.y)<=5&&distance(c,t)<d-0.5&&(inside(p)?inside(c):gap(c)<gap(p)-0.5));
+ usable.sort((a,b)=>distance(a,t)-distance(b,t));
+  if(!usable.length) {
+   const attempt=m.probeAttempt===undefined?0:m.probeAttempt;
+   const span=m.probeSpan===undefined?distance(p,m.probe):m.probeSpan;
+   const shorter=Math.min(d,span/2);
+   if(Number.isSafeInteger(attempt)&&attempt>=0&&attempt<2&&Number.isFinite(span)&&span<=16.01&&
+      shorter>1.5&&shorter<span-0.01) {
+    const next=surveyAt(shorter,attempt+1);
+    if(distance(next.observe.args,m.probe)>0.01||Math.abs(next.observe.args.y-m.probe.y)>0.01) return next;
+   }
+   return stop("navigation_no_supported_progress");
+  }
+ return {memory:{...m,stage:"moving",before:{...p},segment:usable[0]},
+         action:{tool:"goto",args:usable[0]}};
+}
+'''
+
+
+def record():
+    state = {'ok': True, 'bodyUuid': 'navigation-fixture', 'dimension': 'minecraft:overworld',
+             'navigationEpoch': None, 'observedAt': 1000000, 'task': {'busy': False},
+             'bodyControl': {'available': True, 'actorUuid': 'navigation-fixture', 'dimension': 'minecraft:overworld',
+                             'observedAt': 1000000, 'gameTime': 35364424, 'bodyTickCount': 33487},
+             'position': {'x': 200, 'y': 64, 'z': 100},
+             'workArea': {'minX': 64, 'maxX': 160, 'minZ': 64, 'maxZ': 160}}
+    probe = {'x': 184, 'y': 64, 'z': 100}
+    memory = {'mode': 'return_to_work_area', 'stage': 'survey', 'target': {'x': 158, 'y': 64, 'z': 100},
+              'probe': probe, 'identity': {'bodyUuid': state['bodyUuid'], 'dimension': state['dimension'],
+                                          'epoch': None, 'gameTime': 35364424, 'bodyTickCount': 33487,
+                                          'observedAt': 1000000}}
+    observed = copy.deepcopy(state)
+    observed['execution'] = {'observedAt': 1000250, 'observation': {'tool': 'navigation_sense', 'args': probe, 'fresh': True, 'ageMs': 250,
+        'result': {'ok': True, 'navigationSense': {'ok': True, 'actorUuid': state['bodyUuid'],
+            'dimension': state['dimension'], 'position': state['position'], 'observedAt': 1000000,
+            'destination': {'available': True, 'requested': probe, 'pathVerified': False,
+                'requestedStanceClear': True, 'requestedStanceSupported': True, 'candidates': []}}}}}
+    moved = copy.deepcopy(state)
+    moved['position'] = probe
+    moved['execution'] = {'lastExecution': {'status': 'succeeded', 'completionConfirmed': True,
+        'tool': 'goto', 'actionId': 'fixture-action', 'turnId': 'fixture-turn'},
+        'expectedAction': {'tool': 'goto', 'args': probe, 'actionId': 'fixture-action', 'turnId': 'fixture-turn'}}
+    moving = memory | {'stage': 'moving', 'before': state['position'], 'segment': probe}
+    ground = copy.deepcopy(state)
+    ground['position'] = {'x': 100, 'y': 70, 'z': 100}
+    ground_memory = {'target': {'x': 101, 'z': 100}, 'stage': 'arrival_survey', 'probe': ground['position']}
+    ground['execution'] = {'observedAt': 1000250, 'observation': {
+        'tool': 'navigation_sense', 'args': ground['position'], 'fresh': True, 'ageMs': 250,
+        'result': {'ok': True, 'navigationSense': {'ok': True, 'actorUuid': ground['bodyUuid'],
+            'dimension': ground['dimension'], 'position': ground['position'], 'observedAt': 1000000,
+            'destination': {'available': True, 'requested': ground['position'], 'pathVerified': False,
+                'requestedStanceClear': True, 'requestedStanceSupported': True, 'candidates': []}}}}}
+    unsupported = copy.deepcopy(ground)
+    unsupported['execution']['observation']['result']['navigationSense']['destination']['requestedStanceSupported'] = False
+    blocked = copy.deepcopy(observed)
+    blocked['execution']['observation']['result']['navigationSense']['destination']['requestedStanceSupported'] = False
+    exhausted = copy.deepcopy(blocked)
+    probe4 = {'x': 196, 'y': 64, 'z': 100}
+    exhausted['execution']['observation']['args'] = probe4
+    exhausted['execution']['observation']['result']['navigationSense']['destination']['requested'] = probe4
+    return {'name': NAME, 'source': SOURCE,
+        'description': '显式连续导航：memory.target 为区内已知XZ地面目标，已知目标高度可带Y；或 memory.mode=return_to_work_area 返回工作区。'
+                        '每段先勘察可站立点，无安全进展时同方向最多16/8/4格三次勘察；精确动作到达回执和实际进展续段，'
+                        'UUID/维度/原生计数连续性检查；'
+                        'XZ到达还须勘察当前脚下支撑与净空，只证明水平位置站稳，不证明建筑楼层；失败/无进展交回，不负责全局寻路。',
+        'fixtures': [
+            {'state': state, 'memory': {'mode': 'return_to_work_area'},
+             'expectedObserve': {'tool': 'navigation_sense', 'args': {'x': 184, 'y': 64, 'z': 100}}},
+            {'state': state, 'memory': {}, 'expectedActionTool': None, 'replan': True},
+            {'state': moved | {'execution': {}}, 'memory': moving, 'expectedActionTool': None, 'replan': True},
+            {'state': state | {'position': {'x': 159, 'y': 64, 'z': 100}},
+             'memory': {'mode': 'return_to_work_area'}, 'expectedActionTool': None, 'done': True},
+            {'state': moved | {'bodyControl': moved['bodyControl'] | {'bodyTickCount': 1}},
+             'memory': moving, 'expectedActionTool': None, 'replan': True},
+            {'state': blocked, 'memory': memory,
+             'expectedObserve': {'tool': 'navigation_sense', 'args': {'x': 192, 'y': 64, 'z': 100}}},
+            {'state': state, 'memory': {'target': {'x': 80, 'z': 100}},
+             'expectedObserve': {'tool': 'navigation_sense', 'args': probe}},
+            {'state': observed, 'memory': memory | {'mode': 'target', 'target': {'x': 80, 'z': 100}},
+             'expectedAction': {'tool': 'goto', 'args': probe}, 'expectedActionTool': 'goto'},
+            {'state': moved, 'memory': moving | {'mode': 'target', 'target': {'x': 80, 'z': 100}},
+             'expectedObserve': {'tool': 'navigation_sense', 'args': {'x': 168, 'y': 64, 'z': 100}}},
+            {'state': exhausted, 'memory': memory | {'probe': probe4, 'probeSpan': 4, 'probeAttempt': 2},
+             'expectedActionTool': None, 'replan': True},
+            {'state': ground, 'memory': ground_memory, 'expectedActionTool': None, 'done': True},
+            {'state': unsupported, 'memory': ground_memory, 'expectedActionTool': None, 'replan': True},
+        ]}

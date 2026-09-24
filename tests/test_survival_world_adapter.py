@@ -27,7 +27,7 @@ TURN = 'turn_' + 'b' * 24
 POINT = {'x': 10, 'y': 64, 'z': 11}
 BINDING = {'bodyName': 'CheckedBody', 'bodyUuid': BODY, 'ownerUuid': OWNER}
 SURFACE = {'snapshot', 'observe', 'open_lease', 'close_lease', 'action', 'action_status',
-           'turn_receipts', 'inspect_block', 'inspect_container', 'sense'}
+           'turn_receipts', 'inspect_block', 'inspect_container', 'sense', 'navigation_observation'}
 DOMAINS = {'body_reconnect', 'drop_actions', 'food_actions', 'navigation_sense',
            'recipe_lookup', 'scene_view', 'world_actions'}
 
@@ -37,6 +37,10 @@ def payload(text):
 
 
 class FakeAdapter:
+    def navigation_observation(self, body, args):
+        self.reads.append(('navigation', body, args))
+        return {'ok': False, 'code': 'navigation_sense_unavailable'}
+
     def sense(self, sensor='catalog', arguments=None):
         self.reads.append(('sense', sensor, arguments))
         return {'ok': True, 'sensor': sensor, 'source': 'other-world'}
@@ -75,6 +79,14 @@ class FakeAdapter:
 
 
 class WorldAdapterTests(unittest.TestCase):
+    def test_navigation_read_has_explicit_unavailable_on_other_world_without_effects(self):
+        adapter = FakeAdapter()
+        body = adapter.snapshot()
+        request = {'tool': 'navigation_sense', 'args': dict(POINT)}
+        result = program_observation(adapter, request, body, 1000)
+        self.assertEqual(result['result'], {'ok': False, 'code': 'navigation_sense_unavailable'})
+        self.assertEqual(adapter.reads, [('navigation', body, POINT)])
+
     def test_actual_gateway_structurally_conforms_with_exact_signatures(self):
         gateway = NumenGateway(rcon=Mock(), clock=lambda: 1000)
         self.assertNotIn(WorldAdapter, NumenGateway.__mro__)
