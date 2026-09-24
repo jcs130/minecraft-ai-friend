@@ -244,6 +244,55 @@ class MotorProjectionTests(unittest.TestCase):
 
 
 class ActionOutcomeProjectionTests(unittest.TestCase):
+    def test_real_non_food_failures_keep_exact_reason_at_top_level(self):
+        for item, action in (('phantom_membrane', '296da4e6e60b4c84a5c7e184d5b315af'),
+                             ('egg', 'a04c361a51ee442987d685c44264c3e9')):
+            with self.subTest(item=item):
+                execution = {'ok': True, 'inFlight': False, 'receipt': {
+                    'actionId': action, 'tool': 'eat', 'status': 'failed',
+                    'completionConfirmed': True, 'requested': {'item_id': 'minecraft:' + item},
+                    'outcomeDetail': item + " can't be eaten or drunk"}}
+                before = copy.deepcopy(execution)
+                result = mailbox.action_outcome(execution)
+                self.assertEqual(result['outcomeDetail'], execution['receipt']['outcomeDetail'])
+                self.assertEqual(result['actionId'], action)
+                self.assertTrue(result['queryOk'])
+                self.assertEqual(result['status'], 'failed')
+                self.assertNotIn('ok', result)
+                self.assertNotIn('recovery', result)
+                self.assertEqual(execution, before)
+
+    def test_outcome_detail_is_bounded_text_without_inference(self):
+        for detail in ('native reason ' * 80, {'not': 'text'}, None):
+            with self.subTest(detail_type=type(detail).__name__):
+                receipt = {'tool': 'eat', 'status': 'failed', 'completionConfirmed': True,
+                           'outcomeDetail': detail}
+                result = mailbox.action_outcome({'ok': True, 'receipt': receipt})
+                if isinstance(detail, str):
+                    self.assertEqual(result['outcomeDetail'], detail[:360])
+                else:
+                    self.assertNotIn('outcomeDetail', result)
+                self.assertTrue(result['completionConfirmed'])
+                self.assertNotIn('recovery', result)
+
+    def test_only_confirmed_eat_terminal_reason_is_promoted(self):
+        for receipt in (
+                {'tool': 'goto', 'status': 'failed', 'completionConfirmed': True,
+                 'outcomeDetail': 'Accepted; running in background. Poll task_status.'},
+                {'tool': 'eat', 'status': 'unknown', 'completionConfirmed': False,
+                 'outcomeDetail': 'Unconfirmed transport result', 'noReplay': True},
+                {'tool': 'eat', 'status': 'failed', 'completionConfirmed': False,
+                 'outcomeDetail': 'Not a confirmed terminal'},
+                {'tool': 'mine', 'status': 'failed', 'completionConfirmed': True,
+                 'outcomeDetail': 'Outside this deliberately narrow projection'}):
+            with self.subTest(tool=receipt['tool'], status=receipt['status']):
+                result = mailbox.action_outcome({'ok': True, 'receipt': receipt})
+                self.assertNotIn('outcomeDetail', result)
+                self.assertEqual(result['status'], receipt['status'])
+                self.assertEqual(result['completionConfirmed'], receipt['completionConfirmed'])
+                if 'noReplay' in receipt:
+                    self.assertTrue(result['noReplay'])
+
     def test_query_success_is_not_native_action_success(self):
         execution = {'ok': True, 'inFlight': False, 'receipt': {
             'actionId': 'native-cast', 'tool': 'game_cast', 'status': 'rejected',

@@ -363,6 +363,14 @@ class GameSkillTests(unittest.TestCase):
         for skill_id in ('home', 'tp', 'spring', 'irons_spellbooks:firebolt', 'othermod:unknown_spell'):
             self.assertTrue(is_protected_action('game_cast', {'skill_id': skill_id, 'params': {}}))
 
+    def test_give_is_self_cast_but_cannot_redirect_or_add_world_parameters(self):
+        args = {'skill_id': 'give', 'params': {'item': 'minecraft:bread', 'count': 4}}
+        self.assertFalse(is_protected_action('game_cast', args))
+        self.assertEqual(action_command('game_cast', args), 'cast give count=4 item=minecraft:bread')
+        for key, value in (('target', 'AnotherPlayer'), ('actor', 'Goddess'), ('x', 100)):
+            with self.subTest(key=key), self.assertRaisesRegex(GatewayError, 'invalid_game_skill_params'):
+                validate_game_action('game_cast', {'skill_id': 'give', 'params': {key: value}})
+
     def test_model_surface_has_game_abilities_without_arbitrary_player_or_shell_command(self):
         for name in ('game_skills', 'game_cast', 'game_learn', 'game_skill_receipt'):
             self.assertIn(name, TOOL_NAMES)

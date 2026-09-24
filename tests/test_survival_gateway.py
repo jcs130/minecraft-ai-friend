@@ -792,6 +792,39 @@ class GatewayTests(unittest.TestCase):
             dispatch.assert_not_called()
         self.assertFalse((self.state / 'unknown.json').exists())
 
+    def test_town_give_uses_normal_lease_and_keeps_native_resource_rejection(self):
+        self.settings.update(anchor={'x': 100, 'z': 100}, protectedRadius=32)
+        self.write('settings.json', self.settings)
+        self.lease()
+        args = {'skill_id': 'give', 'params': {'item': 'minecraft:bread'}}
+        native = {'success': False, 'message': 'not enough mana',
+                  'data': {'async': False, 'receipt': {'ok': False, 'code': 'mana', 'skillId': 'give'}}}
+        with patch('game_skills.GameSkills.dispatch', return_value=native) as dispatch:
+            result = self.client.action(TURN, 'game_cast', args)
+        dispatch.assert_called_once_with('game_cast', args)
+        self.assertEqual(result['code'], 'action_rejected')
+        self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 1)
+        self.assertFalse((self.state / 'unknown.json').exists())
+        receipt = gateway.read_json(self.state / 'action-receipts' / (result['actionId'] + '.json'))
+        self.assertEqual(receipt['result']['result']['data']['receipt']['code'], 'mana')
+        self.assertFalse(receipt['completionConfirmed'])
+
+    def test_town_give_target_injection_and_terrain_spells_never_dispatch(self):
+        self.settings.update(anchor={'x': 100, 'z': 100}, protectedRadius=32)
+        self.write('settings.json', self.settings)
+        self.lease()
+        with patch('game_skills.GameSkills.dispatch') as dispatch:
+            result = self.client.action(TURN, 'game_cast', {
+                'skill_id': 'give', 'params': {'item': 'minecraft:bread', 'target': 'AnotherPlayer'}})
+            self.assertEqual(result['code'], 'invalid_game_skill_params')
+            for skill in ('spring', 'tp', 'irons_spellbooks:firebolt'):
+                with self.subTest(skill=skill):
+                    result = self.client.action(TURN, 'game_cast', {'skill_id': skill, 'params': {}})
+                    self.assertEqual(result['code'], 'protected_area')
+            dispatch.assert_not_called()
+        self.assertEqual(gateway.read_json(self.state / 'lease.json')['actionsUsed'], 0)
+        self.assertFalse((self.state / 'unknown.json').exists())
+
 
 class FakeSocket:
     def __init__(self, packets, read_chunk=3):
