@@ -896,6 +896,8 @@ class Controller:
                 lesson_text = self.lesson_inject(' '.join(ctx_parts))
                 if lesson_text:
                     context['verifiedLessons'] = lesson_text
+            if self.data.get('motorProgressHint'):
+                context['motorProgressHint'] = self.data['motorProgressHint']
             return context
         from perception import prioritize_events
         events = prioritize_events(self.awareness.get('events', []))[:6]
@@ -995,6 +997,8 @@ class Controller:
             context['partyReplies'] = party_reply_context(replies)
             context['instruction'] += ('partyReplies是你在游戏中已经听见的回复，作为本轮生活事实考虑；'
                 '不要求再回复，不调用party_send接力对话，不把收到回复当作对方已完成游戏动作。')
+        if self.data.get('motorProgressHint'):
+            context['motorProgressHint'] = self.data['motorProgressHint']
         return context
 
     def collect_action_receipts(self, turn_id):
@@ -2814,8 +2818,14 @@ class Controller:
                 self.data['bodyReconnect'] = {'status': 'blocked', 'reason': 'restore_configuration_invalid'}
         elif self.settings.get('asyncMotor'):
             from motor_loop import tick as motor_tick
+            from motor_progress_audit import observe as audit_motor_progress
             motor_at = time.monotonic()
             motor_tick(self, body, control)
+            hint = audit_motor_progress(self, body, control)
+            if hint:
+                self.data['motorProgressHint'] = hint
+            else:
+                self.data.pop('motorProgressHint', None)
             motor_finished = time.monotonic()
             # Native Qwen tasks already run asynchronously. Their progress must
             # never exclude the independent body branch or close its lease.

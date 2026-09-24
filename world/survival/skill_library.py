@@ -392,11 +392,45 @@ class SkillLibrary:
             names.add(name)
         return index
 
-    @staticmethod
-    def _index_row(head, record):
-        return ({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
+    def _index_row(self, base, head, record):
+        row = ({key: head[key] for key in ('name', 'draftVersion', 'activeVersion')}
                 | {'description': record['description']}
                 | ({'routing': record['routing']} if 'routing' in record else {}))
+        if head.get('activeVersion'):
+            # Only mutations/explicit rebuilds read reports. Catalog polling
+            # remains one bounded index per store; this is not execution proof.
+            try:
+                report = self._load(self._at(base, head['name'], 'reports', head['activeVersion'] + '.json'))
+                cases = report.get('cases')
+                row['testProof'] = {key: report.get(key) for key in
+                                    ('version', 'kernelVersion', 'engineVersion')}
+                row['testProof'].update(passed=report.get('passed') is True,
+                    casesPassed=isinstance(cases, list) and len(cases) >= 2
+                        and all(isinstance(case, dict) and case.get('passed') is True for case in cases))
+            except (SkillError, OSError) as exc:
+                row['testProof'] = {'code': getattr(exc, 'code', 'test_report_unavailable')}
+        return row
+
+    @staticmethod
+    def _test_eligibility(row, contract):
+        proof = row.get('testProof')
+        if proof is None:
+            # Legacy index: allow the normal exact preview to check the report.
+            return {'status': 'unknown', 'code': 'test_proof_not_indexed'}
+        if not isinstance(proof, dict) or proof.get('code'):
+            return {'status': 'unavailable', 'code': 'matching_passed_tests_required',
+                    'reasons': ['test_report_unavailable']}
+        reasons = []
+        if proof.get('version') != row.get('activeVersion'):
+            reasons.append('version_changed')
+        if proof.get('kernelVersion') != contract['kernelVersion']:
+            reasons.append('kernel_changed')
+        if proof.get('engineVersion') != contract['engineVersion']:
+            reasons.append('engine_changed')
+        if proof.get('passed') is not True or proof.get('casesPassed') is not True:
+            reasons.append('tests_not_passed')
+        return ({'status': 'stale', 'code': 'matching_passed_tests_required', 'reasons': reasons}
+                if reasons else {'status': 'current', 'indexProofOnly': True})
 
     def _rebuild_index(self, base):
         """Explicit migration/repair, called under the store lock, never per tick."""
@@ -408,7 +442,7 @@ class SkillLibrary:
                 head = self._head(folder.name, base)
                 version = head.get('activeVersion') or head.get('draftVersion')
                 if version:
-                    rows.append(self._index_row(head, self._record(folder.name, version, base)))
+                    rows.append(self._index_row(base, head, self._record(folder.name, version, base)))
             except (SkillError, OSError, ValueError, TypeError, KeyError) as exc:
                 unavailable.append({'name': folder.name, 'code': getattr(exc, 'code', 'invalid_skill_store')})
         self._write(self._at(base, 'catalog.json'), {'schema': 1, 'skills': rows, 'unavailable': unavailable})
@@ -422,7 +456,7 @@ class SkillLibrary:
     def _index_head(self, base, head):
         index = self._index(base)
         version = head.get('activeVersion') or head.get('draftVersion')
-        row = self._index_row(head, self._record(head['name'], version, base))
+        row = self._index_row(base, head, self._record(head['name'], version, base))
         index['skills'] = sorted([r for r in index['skills'] if r['name'] != head['name']] + [row], key=lambda r: r['name'])
         index['unavailable'] = [r for r in index['unavailable'] if r.get('name') != head['name']]
         self._write(self._at(base, 'catalog.json'), index)
@@ -438,7 +472,10 @@ class SkillLibrary:
             shared = self._index(self.world_root)
             rows.extend(r | {'shared': True} for r in shared['skills'] if r['name'] not in local_names)
             unavailable.extend(r | {'shared': True} for r in shared['unavailable'] if r.get('name') not in local_names)
-        return {'skills': rows, 'unavailable': unavailable,
+        contract = {'kernelVersion': _kernel_version(), 'engineVersion': ENGINE_VERSION}
+        rows = [row | {'testEligibility': self._test_eligibility(row, contract)}
+                if row.get('activeVersion') else row for row in rows]
+        return {'skills': rows, 'unavailable': unavailable, 'testContract': contract,
                 'contract': 'next(state,memory) -> {action?,memory,done?,replan?,reason?,waitSeconds?,observe?,choose?}; '
                             'one action, wait, observation, choice or terminal result per step; '
                             'routing={intents:[keywords],maintenance:boolean} opts into catalog selection; '
@@ -526,6 +563,11 @@ class SkillLibrary:
                       'cases': cases, 'kernelVersion': _kernel_version(), 'engineVersion': ENGINE_VERSION,
                       'testedAt': time.time()}
             self._write(self._path(name, 'reports', version + '.json'), report)
+            # Testing never changes source/head/promotion or grants execution.
+            # Refresh the owned index so an unchanged active version can become
+            # eligible after a genuine test under a new kernel/engine.
+            if self._base_for(name)[0] == self.root:
+                self._index_head(self.root, head)
             return report
 
     def _tested(self, name, version, base=None):

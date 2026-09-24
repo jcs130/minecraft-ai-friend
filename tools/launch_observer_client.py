@@ -109,6 +109,31 @@ def set_option(value, key, setting):
     return pattern.sub(line, value) if pattern.search(value) else value.rstrip('\n') + '\n' + line + '\n'
 
 
+def prepare_observer_voice():
+    """Finish first-run listening setup; retain the muted observer microphone.
+
+    SVC's runtime canEnable() rejects unfinished onboarding even if disabled=false.
+    Match its native finishOnboarding settings before the observer client starts.
+    Once initialized, preserve the user's later voice preferences.
+    """
+    path = GAME / 'config' / 'voicechat' / 'voicechat-client.properties'
+    if not path.is_file():
+        return
+    value = path.read_text(encoding='utf-8')
+    if not re.search(r'^onboarding_finished=false\s*$', value, re.MULTILINE):
+        return
+    updated = value
+    for key, setting in (('onboarding_finished', 'true'), ('muted', 'true'), ('disabled', 'false')):
+        pattern = re.compile(r'^' + re.escape(key) + r'=[^\r\n]*$', re.MULTILINE)
+        if not pattern.search(updated):
+            raise RuntimeError('Incomplete voice chat configuration: ' + key)
+        updated = pattern.sub(key + '=' + setting, updated)
+    backup = path.with_name(path.name + '.pre-observer-listening-20260924')
+    if not backup.exists():
+        shutil.copy2(path, backup)
+    path.write_text(updated, encoding='utf-8')
+
+
 def prepare():
     base, mod, jars, native_jars = game_files()
     NATIVES.mkdir(parents=True, exist_ok=True)
@@ -122,6 +147,7 @@ def prepare():
         if not backup.exists():
             shutil.copy2(options, backup)
         options.write_text(updated, encoding='utf-8')
+    prepare_observer_voice()
     for jar in native_jars:
         with ZipFile(jar) as archive:
             for name in archive.namelist():

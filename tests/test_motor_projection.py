@@ -66,6 +66,73 @@ class MotorProjectionTests(unittest.TestCase):
         self.assertTrue(brief['completionConfirmed'])
         self.assertEqual(brief['positionAfter']['y'], 69)
 
+    def test_old_terminal_rows_keep_outcomes_and_repeat_chain_without_observations(self):
+        full = self.queue()
+        for row in full['recent']:
+            row['command'] = {'tool': 'goto', 'args': {'x': 10, 'y': 70, 'z': 20}}
+        old = full['recent'][0]
+        old.update(status='completed', previousRequestId='predecessor',
+                   nextRepeat={'previousRequestId': old['requestId']})
+        old['receipt'] = self.receipt('completed')
+        old['receipt']['navigationOutcome'].update(success=True, reason='arrival checked')
+        failed = full['recent'][1]['receipt']
+        failed.update(code='partial_mining_failure', tool='mine', completionConfirmed=True,
+                      mining={'status': 'terminal', 'requested': 4, 'gathered': 2, 'code': 'no_more_blocks'})
+        failed['navigationVerdict'] = {'code': 'destination_unusable', 'targetUsable': False,
+                                       'instruction': 'choose a fresh candidate'}
+        full['recent'][1]['command'] = {'tool': 'mine', 'args': {'block_ids': ['minecraft:oak_log'], 'count': 4}}
+        original = copy.deepcopy(full)
+        brief = mailbox.compact_public(full)
+        self.assertEqual(full, original)
+        for i in (0, 1):
+            row = brief['recent'][i]
+            for key in ('requestId', 'turnId', 'kind', 'status', 'command', 'nextRepeat', 'previousRequestId'):
+                self.assertEqual(row.get(key), full['recent'][i].get(key))
+            for key in ('actionId', 'nativeTaskId', 'completionConfirmed', 'navigationEpoch', 'observedAt'):
+                self.assertEqual(row['receipt'][key], full['recent'][i]['receipt'][key])
+            self.assertNotIn('candidates', row['receipt'].get('navigationSense', {}).get('destination', {}))
+            self.assertNotIn('positionAfter', row['receipt'])
+            self.assertIn('omitted', row['receiptDetail'])
+        self.assertEqual(brief['recent'][1]['receipt']['mining'], failed['mining'])
+        self.assertEqual(brief['recent'][1]['receipt']['code'], 'partial_mining_failure')
+        self.assertEqual(brief['recent'][1]['receipt']['navigationSense']['destination']['code'],
+                         'requested_stance_blocked')
+        self.assertEqual(brief['recent'][1]['receipt']['navigationVerdict'],
+                         {'code': 'destination_unusable', 'targetUsable': False})
+        self.assertFalse(brief['recent'][1]['receipt']['navigationOutcome']['success'])
+        self.assertEqual(brief['recent'][1]['receipt']['navigationOutcome']['reason'], 'no_path')
+        for i in (-2, -1):
+            self.assertIn('navigationSense', brief['recent'][i]['receipt'])
+
+    def test_unknown_and_unsettled_recent_rows_are_never_reduced(self):
+        for status in ('unknown', 'claimed', 'queued', 'dispatched'):
+            full = self.queue()
+            full['recent'][0]['status'] = status
+            full['recent'][0]['receipt'].update(status=status, before={'unusual': ['evidence']})
+            brief = mailbox.compact_public(full)
+            self.assertEqual(brief['recent'][0], full['recent'][0])
+            self.assertEqual(brief['active'], full['active'])
+        full = self.queue()
+        full['recent'][0]['receipt']['status'] = 'unknown'
+        self.assertEqual(mailbox.compact_public(full)['recent'][0], full['recent'][0])
+
+    def test_historical_projection_is_idempotent_and_keeps_legacy_target(self):
+        full = self.queue()
+        brief = mailbox.compact_public(full)
+        self.assertEqual(brief, mailbox.compact_public(brief))
+        self.assertEqual(brief['recent'][0]['receipt']['requested'], full['recent'][0]['receipt']['requested'])
+
+    def test_full_query_keeps_all_history_bytes_after_brief_query(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            write_json(root/'motor-inbox.json', {'schema': 1, 'requests': self.queue()['recent']})
+            before = (root/'motor-inbox.json').read_bytes()
+            full = mailbox.public(root)
+            brief = mailbox.public(root, detail='brief')
+            self.assertNotIn('candidates', brief['recent'][0]['receipt']['navigationSense']['destination'])
+            self.assertEqual(mailbox.public(root), full)
+            self.assertEqual((root/'motor-inbox.json').read_bytes(), before)
+
     def test_preflight_failure_preserves_exact_rejection_and_command(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
