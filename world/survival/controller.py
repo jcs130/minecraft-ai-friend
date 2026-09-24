@@ -1847,7 +1847,7 @@ class Controller:
         self.save()
         return delivery
 
-    def tick_skill(self, body, recovery_only=False, *, observation_budget=3):
+    def tick_skill(self, body, recovery_only=False, *, observation_budget=None):
         path = self.root / 'skill-job.json'
         if not self.skills or not path.exists():
             self.discard_policy()
@@ -1856,6 +1856,9 @@ class Controller:
         if job.get('status') not in ('pending', 'running'):
             self.discard_policy()
             return False
+        if observation_budget is None:
+            # Three direct probes plus at most one probe per lateral side.
+            observation_budget = 5 if job.get('name') == 'base_motion_plan' else 3
         if (job.get('name') == 'base_motion_plan'
                 and ((job.get('memory') or {}).get('policy') is not True
                      or not isinstance((job.get('memory') or {}).get('waypoints'), list))):
@@ -1990,7 +1993,7 @@ class Controller:
                 self.data['skillWaitReason'] = 'program_wait'
             elif 'observe' in plan:
                 if plan['observe']['tool'] == 'navigation_sense' and observation_budget <= 0:
-                    # Current navigation has at most three probes (16/8/4).
+                    # Per-program survey budget bounds same-tick continuation.
                     # Never issue evidence which this tick cannot consume.
                     job.update(status='replan', reason='navigation_observation_budget')
                     write_json(path, job)

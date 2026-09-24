@@ -513,6 +513,36 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
         self.assertEqual(len(self.backend.submitted), 1)
 
+    def test_motion_plan_consumes_bounded_side_probes_after_three_forward_failures(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        reads = []
+        def blocked_survey(body, args):
+            reads.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            destination = result['navigationSense']['destination']
+            destination['requestedStanceSupported'] = False
+            destination['candidates'] = []
+            return result
+        self.gateway.navigation_observation = blocked_survey
+        self.advance()  # claim
+        self.advance()  # 16/8/4 forward, left and right; then stop
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(len(reads), 5)
+        self.assertEqual(job['observations'], 5)
+        self.assertEqual(job['status'], 'replan')
+        self.assertEqual(job['reason'], 'navigation_no_supported_progress')
+        self.assertFalse(self.gateway.actions)
+
     def test_fresh_survey_dispatches_before_slow_handoff_can_expire_it(self):
         self.advance()  # The explicitly selected program is durably claimed.
         self.c.close_model_authority(self.active)
