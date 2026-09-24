@@ -21,6 +21,8 @@ import time
 import uuid
 from zipfile import ZipFile
 
+import psutil
+
 from observer_follow import attach, rcon_client, sample
 
 
@@ -195,14 +197,20 @@ def spectate():
 
 
 def ensure_follow():
-    import psutil
     state_path = WORK / 'client.json'
     state = json.loads(state_path.read_text(encoding='utf-8'))
-    process = psutil.Process(state['pid'])
-    if process.name().lower() != 'javaw.exe' or state.get('name') != USERNAME:
+    pid = state.get('pid')
+    if type(pid) is not int or pid <= 0 or state.get('name') != USERNAME:
         raise RuntimeError('Observer client process identity was not confirmed')
-    state['startedAt'] = process.create_time()
-    state_path.write_text(json.dumps(state), encoding='utf-8')
+    process = psutil.Process(pid)
+    started = process.create_time()
+    if (not process.is_running() or process.name().lower() != 'javaw.exe'
+            or ('startedAt' in state and (type(state['startedAt']) not in (int, float)
+                or state['startedAt'] != started))):
+        raise RuntimeError('Observer client process identity was not confirmed')
+    if 'startedAt' not in state:
+        state['startedAt'] = started
+        state_path.write_text(json.dumps(state), encoding='utf-8')
     result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
         str(ROOT / 'tools' / 'observer_follow_task.ps1'), '-Python', sys.executable,
         '-Watcher', str(ROOT / 'tools' / 'observer_follow.py')],
@@ -213,9 +221,11 @@ def ensure_follow():
     while time.monotonic() < deadline:
         health = subprocess.run([sys.executable, str(ROOT / 'tools' / 'observer_follow.py'), 'check'],
             capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=15)
-        if health.returncode == 0 and json.loads(health.stdout).get('active') is True:
-            print(health.stdout.strip(), flush=True)
-            return
+        if health.returncode == 0:
+            observed = json.loads(health.stdout)
+            if observed.get('ok') is True and observed.get('active') is True:
+                print(health.stdout.strip(), flush=True)
+                return observed
         time.sleep(2)
     raise RuntimeError('Observer follow task did not become healthy; inspect ' + str(WORK / 'follow.log'))
 
@@ -259,7 +269,8 @@ def main(argv):
         proc = subprocess.Popen(args, cwd=GAME, stdin=subprocess.DEVNULL,
             stdout=output, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-    (WORK / 'client.json').write_text(json.dumps({'pid': proc.pid, 'name': USERNAME}), encoding='utf-8')
+    (WORK / 'client.json').write_text(json.dumps({'pid': proc.pid, 'name': USERNAME,
+        'startedAt': psutil.Process(proc.pid).create_time()}), encoding='utf-8')
     print('Launched observer client PID=' + str(proc.pid), flush=True)
     deadline = time.monotonic() + 150
     while time.monotonic() < deadline:
@@ -267,9 +278,12 @@ def main(argv):
             raise RuntimeError('Minecraft client exited; inspect ' + str(GAME / 'logs' / 'latest.log'))
         try:
             if online():
-                print(spectate(), flush=True)
-                ensure_follow()
-                print('Observer is online and spectating Kirito; pauseOnLostFocus=false', flush=True)
+                observed = ensure_follow()
+                # The managed watcher can wait through a target logout/respawn.
+                # A direct spectate here would abort startup before it is armed.
+                status = ('managed follow is waiting for Kirito' if observed['targetOnline'] is False
+                    else 'spectating Kirito')
+                print('Observer is online; ' + status + '; pauseOnLostFocus=false', flush=True)
                 return 0
         except (OSError, TimeoutError, subprocess.SubprocessError):
             pass
