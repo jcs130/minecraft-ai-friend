@@ -144,6 +144,17 @@ def attach(client):
     return result
 
 
+def follow_status(observed):
+    if not observed['observerOnline']:
+        return 'waiting_observer'
+    if not observed['targetOnline']:
+        return 'waiting_target'
+    if (observed['observerSpectator'] is True and observed['dimensionMatch'] is True
+            and observed['distance'] <= MAX_DISTANCE):
+        return 'following'
+    return 'needs_reattach'
+
+
 def watch():
     process = client_process()
     if process is None:
@@ -194,14 +205,14 @@ def watch():
                 observer_was_offline = True
             save_state({'active': True, 'pid': os.getpid(), 'clientPid': process.pid,
                 'checkedAt': time.time(), 'target': TARGET, 'recoveries': recoveries,
-                'lastAttemptAt': last_attempt, **observed})
+                'status': follow_status(observed), 'lastAttemptAt': last_attempt, **observed})
             errors = 0
         except (OSError, ValueError, RuntimeError) as error:
             errors += 1
             log('poll error=' + type(error).__name__ + ' consecutive=' + str(errors))
             save_state({'active': True, 'pid': os.getpid(), 'clientPid': process.pid,
                 'checkedAt': time.time(), 'target': TARGET, 'recoveries': recoveries,
-                'lastError': type(error).__name__})
+                'status': 'reconnecting', 'lastError': type(error).__name__})
         # A server restart may outlast the scheduler's finite crash retries.
         # Keep watching the client and reconnect when RCON becomes available.
         time.sleep(POLL_SECONDS if errors == 0 else min(30, 2 ** min(errors, 5)))
@@ -226,6 +237,7 @@ def check():
                 and observed['observerSpectator'] is True
                 and observed['distance'] <= MAX_DISTANCE)))
         print(json.dumps({'ok': ok, 'active': state.get('active'),
+            'status': follow_status(observed) if ok else 'watcher_unhealthy',
             'heartbeatAgeSeconds': round(age, 2), 'recoveries': state.get('recoveries'),
             **observed}))
         return 0 if ok else 1

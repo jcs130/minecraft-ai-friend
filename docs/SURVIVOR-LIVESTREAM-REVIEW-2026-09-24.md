@@ -111,6 +111,27 @@
 
 用户补充要求：LLM 慢推理期间游戏仍持续，认真借鉴 Mindcraft、mc-agent-neko、Cortico 及 Jev 游戏实现。保持现有 Qwen 原生人格/会话、Jev 单槽与 Numen 身体执行器，不改成按一步等一次慢模型的串行结构。
 
+```mermaid
+flowchart LR
+    O[新鲜身体观测与精确回执] --> C[Controller 独立推进 motor]
+    C --> J[Jev 异步单槽选择]
+    J --> P[已验证的有界技能程序]
+    P --> Q[持久 motor 队列]
+    C --> L[Qwen 原生慢任务]
+    L --> T[MCP 工具与权限检查]
+    T --> Q
+    Q --> G[网关与真实动作回执]
+    G --> N[Numen 原生任务]
+    K[Minecraft 独立游戏 tick] --> N
+    K --> R[原生避险反射]
+    N --> O
+    R --> O
+    T --> S[say 公屏与角色语音]
+    S --> A[TTS 队列与原生播放回执]
+```
+
+慢任务活动与身体任务活动可以重叠，模型结束也不应取消已受理身体动作。但图中的并行结构本身不会生成下一段路线：需要当前合法程序继续提出动作，或由慢模型提供新计划；原生反射引起的移动也不能记为计划达成。
+
 研究不止 README：分别读取入口、调度、模型/工具、状态更新、取消、回执、聊天与测试，固定提交并标注实现、离线验证和未验证推断。四份详细报告：
 
 - [Mindcraft](research/MINDCRAFT-CODE-REVIEW-2026-09-24.md)：独立 modes 更新、ActionManager、持续采集/寻路、self-prompt、聊天和恢复。
@@ -227,8 +248,33 @@ Mindcraft、Neko、Cortico 的所审 Minecraft 路径不是 Jev 集成；Cortico
 
 **本段冻结时仅确认候选离线通过，现场部署与连续新台词验收待追加。** 下一阶段应另记管理器维护/恢复回执、旧文件权限迁移的内容哈希保留、新原生回执实际 0644，以及恢复后至少两条自然新台词的独立文本与音频结果；不能用本段候选报告替代部署验收。
 
+### 原生回执权限实际部署与恢复（16:28–16:44）
+
+原生慢任务自然结束后，本轮 drain `0dfa1b6b00f8492a8eab04f4026b7b63` 于 16:29:23 完成；16 个角色均 idle/disabled、无运行任务，原 16 份 Cron 保持禁用。沿既有管理器保存世界并停止 MC、gate、world、NPC、voice、survivor；Qwen/TTS 保持运行。没有取消模型任务或重放动作。
+
+16:36:53 专用部署完成，记录 `runtime/speech-receipt-permissions-deployment/20260924T083251880593Z-9cae7e4f/deployment.json` 为 `ok=true/phase=complete`。停服原世界完整备份逐文件哈希相等；只替换服务端、观察客户端、缓存三份 GodVoice JAR 及六份当前清单/构建记录，旧文件逐个留档。JAR 仍仅改变 `SpeechReceipts.class`。原世界、角色保护、历史 snapshot 和 source-origin 文件未改写。
+
+随后在无网络、只挂载回执目录、uid/gid1000、CapDrop ALL 的一次性辅助容器中，按两个 canonical actor、schema2、已知终态、原 owner/mode、文件名与 ID 一致等条件，将 **601 份**旧回执由 0600 改为 0644。预检与实际修改集合完全相同，逐份内容 SHA256、mtime、属主不变；23 份其他 actor 和 109 份其他属主文件跳过，零错误、零派发。完整证据为 `runtime/speech-receipt-permissions-20260924/production-mode-{dryrun,apply}.json`。没有改写回执内容，也没有补播第六轮两条未知音频。
+
+管理器按 MC→gate→world→NPC→voice→survivor 恢复，16:41:10 成功（`runtime/operations-actions/20260924T084110780421Z.json`）。实际运行的语音协议、安装包哈希、23 个构建源和 114 项 Java 断言已重新绑定核验；survivor 的 uid0 无特权进程现能读取原 uid1000 回执并返回原 `completed/audio_completed`。第一次诊断命令漏设 Python 模块路径导致导入失败，补正确 `/survival` 后只读验证通过，未修改生产包。
+
+Qwen 严格健康通过，10 个启用角色、102 个技能绑定全部核对；恢复前 `20260924T084204678159Z/preservation.json` 再确认 16 个角色配置和 Cron 规格与基线相同。16:43:30 准入恢复、survivor 启用；`runtime/speech-receipt-permissions-20260924/resume-evidence.json` 保留实际读回，未将维护计划预览当执行结果。原观察客户端正常关闭后仅启动一份新进程；初次入服时桐人尚未在线，镜头附着报错，保留原错误并在身体回来后启动原跟随任务，实际 spectator、同维度、distance=0。`pauseOnLostFocus=false`，SVC 收听启用且麦克风静音。
+
+本节验证部署、权限与恢复；新自然台词和自主目标进展由恢复后的独立观察窗口验收。
+
+观察者启动边界另补最小修复：客户端已入服但桐人暂时离线时，先启动原受管跟随任务，明确报告 `waiting_target`；目标回来仍沿原监视器自动附着，不再先执行一次必失败的 spectate 并漏建监视任务。新启动立即保存进程创建时间，后续拒绝 PID 被复用后覆盖旧身份。6 项新回归先红后绿，连同原镜头测试，在 Windows 与隔离无网络 Linux 各 **7/7 通过**；不涉及具身门禁的 110 个源文件。证据 `runtime/observer-startup-qa-20260924/verification.json`；生产只读新状态检查为 `following/active=true/distance=0`，存于 `live-follow-status-verified.json`。当前已运行监视器保留原进程，新增启动流程的目标离线场景由隔离测试覆盖，没有为测试再断开真实客户端。
+
+恢复后的全项目面板探针 `runtime/livestream-panel-1790239702.json` 仍为 **false**。runtime、operations、observer_view、game_qwenpaw、survivor、embodied_agent、system_one、voice_recording、voice_boundary_deployment 均通过。未通过项包含：历史源码验收与当前文件不一致（730 项中 667 项不匹配）、管理页模组/方块映射、旧技能栏/吟唱/女仆/练习/城镇保护验收与当前包不匹配，以及伙伴生活定时器/身份、剧情内容消费状态。没有重写旧验收哈希或开启原来禁用的定时器来消除红项；这些项目需要各自重新核验，不能全视为当前服务宕机，也不能忽略。
+
 ## 仍需单独验收的能力
 
 修复循环阻断不等于已经达到“聪明的全天主播”。下一阶段应把稳定目标 identity、具体阶段与等待事项分开；优先推进有反馈的持续寻路/采集程序，再按真实事件组织短解说和观众响应。当前 router 以 nextFocus 优先构造意图和使用限制，文字改写可能误成新尝试；长期 mission 非空也可能遮挡具体目标，这是静态风险，未当作本轮已证实生产原因。
 
 验收需同时看动作占用、目标净进展、最长无进度窗口、模型延迟、游戏聊天/音频送达和观众回复时间。随机走动、守护进程存活、工具调用变多、一次十分钟采样，都不能代替这些指标。单点故障和未测项目在上述原始记录保留。
+
+后续实现优先级与验收边界：
+
+1. **观察与动作的依赖。** 需要扫描结果才能选目标时，先返回观察，再产生动作；验证资源消失、身体被反射移走和仍有近处资源三种情况，分别重新观察、明确拒绝或合法采集。不能把同轮预先生成的 move 当成已经使用扫描结果。
+2. **有界持续探索与稳定目标。** 同一 goalId/revision 下保存找树、接近、采集的阶段和有限访问点/失败边；每段重新观测并核回执，预算耗尽交回慢模型。改写 nextFocus 不应重置尝试额度；成功必须以实际木料入包判断。当前尚未实现这条完整程序。
+3. **按事实组织解说。** 提供少量未解说的真实发现、失败和库存事件，由原角色措辞，并按事件 ID 去重。只看到树不能说已拿到木头；同时单独核对文字、原生音频和观众实际收听。
+4. **独立观众问答验收。** 关联一条受控玩家问题的入站事件、原生任务、一次对应回复及客户端文字，记录真实耗时；重复事件不重复答，纯对话不取消身体动作。伙伴来信和主动 say 的证明不代替此项，本轮未完成真人观众问答测试。
