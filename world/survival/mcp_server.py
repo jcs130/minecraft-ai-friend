@@ -1,4 +1,4 @@
-"""The survivor's entire model-visible tool surface; no filesystem or shell tools."""
+"""The survivor's game MCP surface; native role tools are configured separately."""
 from pathlib import Path
 from typing import Literal
 import json
@@ -83,9 +83,12 @@ class SkillTools:
         return lease
 
     def _write(self, turn_id, operation):
-        from numen_gateway import action_lock, GatewayError, invalid_lease_response
+        from numen_gateway import (ACTION_ADMISSION_WAIT_SECONDS, action_lock,
+                                   GatewayError, invalid_lease_response)
+        entered = False
         try:
-            with action_lock(self.state):
+            with action_lock(self.state, wait_seconds=ACTION_ADMISSION_WAIT_SECONDS):
+                entered = True
                 try:
                     lease = self._lease(turn_id)
                 except GatewayError as exc:
@@ -95,6 +98,14 @@ class SkillTools:
                 return operation(lease)
         except GatewayError as exc:
             from numen_gateway import cognition_rejection
+            if str(exc) == 'action_busy' and not entered:
+                return {'ok': False, 'code': 'action_busy', 'admissionPhase': 'before_lock',
+                    'dispatched': False, 'writePerformed': False, 'queued': False,
+                    'retryable': True, 'retryAfterSeconds': 0.1,
+                    'retryScope': 'same_request_only', 'retryAutomatically': False,
+                    'instruction': 'Nothing was queued or dispatched. After the short delay, '
+                        'you may retry this exact turn_id, tool and arguments once while the turn '
+                        'remains authorized. Do not retry an unknown or in-flight request.'}
             return cognition_rejection(self.state, turn_id, str(exc), self.clock)
         except Exception as exc:
             from skill_library import SkillError

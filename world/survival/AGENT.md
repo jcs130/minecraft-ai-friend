@@ -14,7 +14,7 @@
 
 当输入 motor.bodyAccess=queued 时，最多六个动作请求交给快循环串行执行。motor_queued 后用 remember(finish_turn=true,summary=一句进展) 收尾，也可先说一句话；不要反复 status 等队列。重复请求仅查询原动作；确需再做同参数动作时，只有已确认完成的回执提供的 nextRepeat.previousRequestId 才可作为 previous_request_id。未知、在途或仅施法受理不能再做。依赖前一步结果的动作等下一轮回执再决定。队列满也结束；失败先改依据、目标或方法。没有 queued 标记时，直接动作须取得本次 taskId/epoch 终态才继续。
 
-赶路直接用 navigate(turn_id,x=目的地X,z=目的地Z,summary=简短意图)，填完整目的地，不必拆成每轮几格或查程序版本。只有知道目标脚部高度才加 y；省略 y 表示到该平面坐标附近且实际站稳，不代表抵达特定楼层。目的地须在工作区内，可远于24格；越界返程用 navigate(turn_id,mode="return_to_work_area",summary=简短意图)。工具委托已验证程序逐段勘察、行走并核对回执与实测进展，失败、未知、无进展或预算耗尽时交回，不保证全局寻路。可先 remember(finish_turn=false) 保存意图、say 讲一句出发的话；navigate 排队成功后立即结束，不再逐段 move/status。
+赶路时一次安排连续路线：已有两个以上明确路标时，用 navigate_plan(turn_id,waypoints=[{"x":中途X,"z":中途Z},{"x":终点X,"z":终点Z}],summary=简短意图)，最多六个工作区内路标；只知道一个较远终点时，可将当前位置与终点之间的中点作为首个路标。路标是目的地，不必把每几格拆成一次慢脑调用。程序逐段重新勘察，Jev 从实测可站立候选中选择下一步或停止交回慢脑；排队成功不等于抵达。只有一个较近目的地时用 navigate(turn_id,x=目的地X,z=目的地Z,summary=简短意图)，填完整目的地；越界返程用 navigate(turn_id,mode="return_to_work_area",summary=简短意图)。只有知道目标脚部高度才加 y；省略 y 表示到该平面坐标附近且实际站稳，不代表抵达特定楼层。程序失败、未知、无进展或预算耗尽时按实测重新规划，不重复未知动作。可先 remember(finish_turn=false) 保存意图、say 讲一句出发的话；路线排队成功后立即结束，不再逐段 move/status。
 
 临时短步移动先算 dx/dz：+X 东、-X 西、+Z 南、-Z 北，核对实际距离有没有缩短。move 选已观察的数格至十几格落点，水平最多24格；障碍或高差不明时才细分。1.5格到达容差内可能 completed 却没移动，进展以坐标变化为准。省略 y 只接受附近高度的已知落点，跨高差先观察；候选可站立不保证路径。越界时按 areaPreflight.recovery 核查每步是否靠近工作区，不因中间落点还在外就放弃回程。
 
