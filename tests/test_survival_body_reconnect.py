@@ -1,5 +1,6 @@
 """Known-body restore boundaries; no live RCON, model, or world changes."""
 import copy
+import ast
 import json
 from pathlib import Path
 import sys
@@ -54,6 +55,73 @@ class BodyReconnectTests(unittest.TestCase):
 
     def commands(self):
         return [c for c in self.rcon.calls if c != 'numen_act list']
+
+    def test_reconnector_has_one_runtime_definition_per_method(self):
+        tree = ast.parse((ROOT/'world/survival/body_reconnect.py').read_text(encoding='utf8'))
+        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'BodyReconnect')
+        names = [node.name for node in cls.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        self.assertEqual(len(names), len(set(names)), 'A later method must not shadow the reviewed restore path')
+
+    def test_known_death_preflight_delay_can_retry_without_unknown_replay(self):
+        for code in ('death_respawn_delay', 'death_safe_spawn_unavailable'):
+            self.restore.path.unlink(missing_ok=True)
+            self.rcon.roster = 'count=0'
+            self.rcon.response.update(ok=False, phase='rejected', code=code)
+            before = len(self.commands())
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['status'], 'waiting')
+            self.assertEqual(result['reason'], code)
+            self.assertGreater(result['nextCheckAt'], self.clock())
+            self.restore.tick(BINDING)
+            self.assertEqual(len(self.commands()), before + 1)
+            self.clock.now = result['nextCheckAt'] + 1
+            self.rcon.response.update(ok=True, phase='restored', code='restored_existing', recovery='native_post_death')
+            self.assertEqual(self.restore.tick(BINDING)['status'], 'online')
+            self.assertEqual(len(self.commands()), before + 2)
+            self.clock.now += 61
+
+    def test_repeated_death_preflight_rejections_keep_backoff_without_daily_dispatch_limit(self):
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='death_safe_spawn_unavailable')
+        history = []
+        for delay in (120, 240, 480, 900):
+            history.append(self.clock())
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['reason'], 'death_safe_spawn_unavailable')
+            self.assertEqual(result['nextCheckAt'] - self.clock(), delay)
+            self.assertEqual(result['attempts'], history)
+            self.assertNotIn('verifiedAt', result)
+            rejection = result['preflightRejections'][-1]
+            self.assertEqual(rejection, {'attemptAt':self.clock(), 'rejectedAt':self.clock(),
+                'phase':'rejected', 'code':'death_safe_spawn_unavailable'})
+            self.clock.now = result['nextCheckAt'] + 1
+        self.rcon.response.update(ok=True, phase='restored', code='restored_existing')
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'online')
+        self.assertEqual(result['attempts'], history + [self.clock()])
+        self.assertEqual(len(self.commands()), 5)
+
+    def test_death_preflight_code_does_not_refund_unknown_or_contradictory_receipt(self):
+        for phase, ok in (('unknown', False), ('rejected', True)):
+            self.restore.path.unlink(missing_ok=True)
+            self.rcon.roster = 'count=0'
+            self.rcon.response.update(ok=ok, phase=phase, code='death_respawn_delay')
+            before = len(self.commands())
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['status'], 'unknown')
+            self.assertFalse(result.get('preflightRejections'))
+            self.rcon.roster = 'count=0'  # Keep the body absent; no independent confirmation.
+            self.clock.now = result['nextCheckAt'] + 1
+            self.assertEqual(self.restore.tick(BINDING)['status'], 'unknown')
+            self.assertEqual(len(self.commands()), before + 1)
+
+    def test_death_preflight_identity_mismatch_never_refunds_dispatch_budget(self):
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='death_safe_spawn_unavailable', ownerUuid=fixtures.BODY_UUID)
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'unknown')
+        self.assertFalse(result.get('preflightRejections'))
+        self.assertEqual(len(result['attempts']), 1)
 
     def test_existing_uuid_reserved_before_command_and_confirmed_by_roster(self):
         def observe_reservation():

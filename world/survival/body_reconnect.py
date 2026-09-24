@@ -19,10 +19,11 @@ CAPABILITY = 'existing_body_restore_v1'
 # here; the strict restore command's own dead-branch handles respawn, so the
 # channel must stay open or the pause can never lift without an operator.
 BODY_PAUSE_REASONS = frozenset({'body_lost_during_decision', 'body_dead'})
+DEATH_PREFLIGHT_REJECTIONS = frozenset({'death_respawn_delay', 'death_safe_spawn_unavailable'})
 
 
-def unverified_attempts(state, now):
-    """Budget only the current unsuccessful episode; keep the historical ledger."""
+def episode_attempts(state, now):
+    """Current unsuccessful episode, including safe preflight refusals for backoff."""
     attempts = state.get('attempts', [])
     if (not isinstance(attempts, list) or any(type(at) not in (int, float)
             or not math.isfinite(at) or at < 0 for at in attempts)):
@@ -30,6 +31,22 @@ def unverified_attempts(state, now):
     verified = state.get('verifiedAt')
     verified = verified if type(verified) in (int, float) and math.isfinite(verified) and 0 <= verified <= now else None
     return [at for at in attempts if now - at < 86400 and (verified is None or at > verified)]
+
+
+def unverified_attempts(state, now):
+    """Exclude only exact, validated pre-constructor refusals from dispatch quota."""
+    attempts = episode_attempts(state, now)
+    rejected = set()
+    receipts = state.get('preflightRejections', [])
+    for receipt in receipts if isinstance(receipts, list) else []:
+        if not isinstance(receipt, dict):
+            continue
+        at, ended = receipt.get('attemptAt'), receipt.get('rejectedAt')
+        if (receipt.get('phase') == 'rejected' and receipt.get('code') in DEATH_PREFLIGHT_REJECTIONS
+                and type(at) in (int, float) and type(ended) in (int, float)
+                and math.isfinite(at) and math.isfinite(ended) and 0 <= at <= ended <= now):
+            rejected.add(at)
+    return [at for at in attempts if at not in rejected]
 
 
 def binding(settings):
@@ -185,93 +202,7 @@ class BodyReconnect:
         if state.get('status') == 'blocked':
             return state
         attempts = unverified_attempts(state, now)
-        # Earlier versions counted successful maintenance restores against a daily
-        # lifetime quota. Only that obsolete limit may bypass its old backoff;
-        # uncertainty and all other read/rejection backoffs retain their boundary.
-        verified = state.get('verifiedAt')
-        cleared_old_limit = (state.get('status') == 'waiting' and state.get('reason') == 'restore_attempt_limit'
-            and type(verified) in (int, float) and math.isfinite(verified) and 0 <= verified <= now
-            and len(attempts) < 3 and any(at <= verified for at in state.get('attempts', [])))
-        if now < state.get('nextCheckAt', 0) and not cleared_old_limit:
-            return state
-        state['checkedAt'] = now
-        state['nextCheckAt'] = now + 60
-        try:
-            online = roster_online(self.gateway._native_roster(), expected)
-        except Exception as error:
-            uncertain = state.get('status') in ('reserved', 'unknown', 'restoring')
-            state.update(status='unknown' if uncertain else 'waiting',
-                         reason='restore_outcome_unknown' if uncertain else
-                         (str(error) if isinstance(error, ValueError) else 'restore_roster_unavailable'))
-            state['readFailures'] = min(8, state.get('readFailures', 0) + 1)
-            state['nextCheckAt'] = now + min(900, 30 * 2 ** state['readFailures'])
-            if str(error) == 'restore_live_identity_conflict':
-                state['status'] = 'blocked'
-            write_json(self.path, state)
-            return state
-        state['readFailures'] = 0
-        if online:
-            state.update(status='online', reason='identity_verified', verifiedAt=now)
-            self._auto_resume(control, resume_after_restore, now)
-            write_json(self.path, state)
-            return state
-        if state.get('status') in ('reserved', 'unknown', 'restoring'):
-            # We cannot distinguish a failed native constructor from a lost reply.
-            state.update(status='unknown', reason='restore_outcome_unknown')
-            write_json(self.path, state)
-            return state
-        # Upstream numen respawns its own bodies: Companions.tickRespawns restores a
-        # dead or missing companion from its catalogue entry and .dat without being
-        # asked, and the server does that on its own schedule. The
-        # numen_restore_existing command this module used to dispatch was our own core
-        # patch and upstream has no equivalent, so this module observes rather than
-        # acts. The online branch above is what lifts the pause, via the roster.
-        state.update(status='waiting', reason='awaiting_native_respawn', nextCheckAt=now + 60)
-        write_json(self.path, state)
-        return state
-
-    def _auto_resume(self, control, resume_after_restore, now):
-        """Lift a body-loss pause once the body is verifiably back.
-
-        Mirrors control.py resume's exact write (enabled=True, pauseReason=None)
-        so the supervised loop resumes decisions without an operator. Only the
-        pause reasons that gate on body presence qualify; every other stop
-        (operator, unknown marker, model policy) keeps its explicit resume.
-        """
-        if not resume_after_restore:
-            return
-        control.update(enabled=True, pauseReason=None,
-                       autoResumedAt=now, autoResumeReason='body_restored')
-        write_json(self.root/'control.json', control)
-
-    def _tick(self, settings):
-        now = self.clock()
-        # Recheck authorization under the same lock as every game action.
-        control = read_json(self.root/'control.json')
-        controller = read_controller_json(self.root/'controller.json') if (self.root/'controller.json').exists() else {}
-        lease = read_json(self.root/'lease.json') if (self.root/'lease.json').exists() else {}
-        # Body-loss pauses keep the restore channel open: resolving the missing
-        # body is the only way out of that pause, and the strict restore command
-        # revalidates every guard (identity, task ledger, playerdata) itself.
-        resume_after_restore = (control.get('enabled') is not True
-                                and control.get('pauseReason') in BODY_PAUSE_REASONS)
-        if ((control.get('enabled') is not True and not resume_after_restore)
-                # A decision record left over from the moment the body disappeared must
-                # not block the restore: a body-loss pause means that decision cannot
-                # proceed at all, which is precisely why this channel is kept open for
-                # it. Without this the two guards contradict each other and nothing
-                # restores the body - observed live on 2026-09-18.
-                or (controller.get('active') and not resume_after_restore)
-                or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'
-                or (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
-            return {'status': 'waiting', 'reason': 'restore_not_authorized'}
-        expected = binding(settings)
-        state = read_json(self.path) if self.path.exists() else {'schema': 1, **expected, 'attempts': []}
-        if any(state.get(key) != value for key, value in expected.items()):
-            return {'status': 'blocked', 'reason': 'restore_binding_changed'}
-        if state.get('status') == 'blocked':
-            return state
-        attempts = unverified_attempts(state, now)
+        episode = episode_attempts(state, now)
         # Earlier versions counted successful maintenance restores against a daily
         # lifetime quota. Only that obsolete limit may bypass its old backoff;
         # uncertainty and all other read/rejection backoffs retain their boundary.
@@ -330,11 +261,18 @@ class BodyReconnect:
                     raise ValueError('restore_not_observed')
                 state.update(status='online', reason='restored_identity_verified', verifiedAt=now)
                 self._auto_resume(control, resume_after_restore, now)
-            elif result.get('phase') == 'rejected':
+            elif result['ok'] is False and result.get('phase') == 'rejected':
                 code = result.get('code', 'restore_rejected')
-                state.update(status='waiting' if code in ('restore_cooldown', 'dimension_unavailable', 'playerdata_unavailable')
+                if code in DEATH_PREFLIGHT_REJECTIONS:
+                    # The complete envelope and exact identity passed validation
+                    # above. These two native codes occur before the constructor.
+                    # Keep the original attempt and never invent verifiedAt.
+                    state['preflightRejections'] = state.get('preflightRejections', []) + [
+                        {'attemptAt':now, 'rejectedAt':self.clock(), 'phase':'rejected', 'code':code}]
+                state.update(status='waiting' if code in ('restore_cooldown', 'dimension_unavailable', 'playerdata_unavailable',
+                                                         'death_respawn_delay', 'death_safe_spawn_unavailable')
                              else 'blocked', reason=code)
-                state['nextCheckAt'] = now + min(900, 60 * 2 ** (len(attempts) + 1))
+                state['nextCheckAt'] = now + min(900, 60 * 2 ** min(4, len(episode) + 1))
             else:
                 raise ValueError('restore_outcome_unknown')
         except Exception:

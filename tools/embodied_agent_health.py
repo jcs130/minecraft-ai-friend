@@ -66,6 +66,7 @@ SOURCES += ('world/survival/navigation_program.py', 'tests/test_survival_continu
             'world/ops/skills/qd-survivor-practice/references/program-practice.md')
 SOURCES += ('world/ops/survival_turn_runtime.py', 'tests/test_survival_turn_completion.py',
             'world/ops/qwenpaw_recovery_probe.py', 'world/ops/qwenpaw_health.py')
+SOURCES += ('world/survival/body_reconnect.py', 'tests/test_survival_body_reconnect.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

@@ -204,71 +204,9 @@ public final class NumenActCommand {
         return 1;
     }
 
-    // ==================== restore-existing ====================
-
-    // The command the survivor's reconnect path calls. It used to be added by a patch to
-    // the core; it lives here now, in our own module, so the core can stay upstream's.
-    // The reply envelope is deliberately identical to the old one, because the reconnect
-    // module's tested safety (unknown outcomes are never replayed, a reservation is never
-    // re-dispatched) is written against exactly this shape.
-    private static final String RESTORE_PREFIX = "QD_NUMEN_RESTORE_JSON ";
-
+    // The strict restore implementation distinguishes offline data from a recorded death.
     private static void registerRestore(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("numen_restore_existing")
-                .then(Commands.argument("uuid", StringArgumentType.string())
-                .then(Commands.argument("owner", StringArgumentType.string())
-                .then(Commands.argument("name", StringArgumentType.string())
-                .executes(NumenActCommand::restoreExisting)))));
-    }
-
-    private static int restoreExisting(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack src = ctx.getSource();
-        MinecraftServer server = src.getServer();
-        String uuidStr = StringArgumentType.getString(ctx, "uuid");
-        String ownerStr = StringArgumentType.getString(ctx, "owner");
-        String name = StringArgumentType.getString(ctx, "name");
-        UUID bodyUuid, ownerUuid;
-        try {
-            bodyUuid = UUID.fromString(uuidStr);
-            ownerUuid = UUID.fromString(ownerStr);
-        } catch (IllegalArgumentException ex) {
-            return emitRestore(src, false, "rejected", "identity_invalid", uuidStr, ownerStr, name);
-        }
-        // Already in the world: the only honest phase is the observation itself.
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            if (p instanceof NumenPlayer np && np.getUUID().equals(bodyUuid)) {
-                return emitRestore(src, true, "observed", "", uuidStr, ownerStr, name);
-            }
-        }
-        CompanionRegistry.Entry entry = CompanionRegistry.get(server).find(bodyUuid);
-        if (entry == null) {
-            // No catalogue entry: there is no saved body to bring back, and summoning a
-            // fresh one would invent a companion. Refuse instead.
-            return emitRestore(src, false, "rejected", "playerdata_unavailable", uuidStr, ownerStr, name);
-        }
-        if (!entry.owner().equals(ownerUuid) || !entry.name().equals(name)) {
-            return emitRestore(src, false, "rejected", "identity_mismatch", uuidStr, ownerStr, name);
-        }
-        ServerLevel level = server.overworld();
-        Vec3 pos = Vec3.atCenterOf(entry.pos());
-        NumenPlayer body = Companions.summon(server, ownerUuid, name, level, pos);
-        if (body == null || !body.getUUID().equals(bodyUuid)) {
-            return emitRestore(src, false, "rejected", "restore_rejected", uuidStr, ownerStr, name);
-        }
-        return emitRestore(src, true, "restored", "", uuidStr, ownerStr, name);
-    }
-
-    private static int emitRestore(CommandSourceStack src, boolean ok, String phase, String code,
-                                   String uuidStr, String ownerStr, String name) {
-        String out = RESTORE_PREFIX + "{\"schema\":1,\"capability\":\"existing_body_restore_v1\""
-                + ",\"bodyUuid\":\"" + uuidStr + "\""
-                + ",\"ownerUuid\":\"" + ownerStr + "\""
-                + ",\"bodyName\":\"" + name + "\""
-                + ",\"ok\":" + ok
-                + ",\"phase\":\"" + phase + "\""
-                + ",\"code\":\"" + code + "\"}";
-        src.sendSuccess(() -> Component.literal(out), false);
-        return ok ? 1 : 0;
+        ExistingBodyRestore.register(dispatcher);
     }
 
     // ==================== invoke ====================
