@@ -1959,6 +1959,14 @@ class Controller:
                     self.record('system_one_discarded', name=job['name'], reason='policy_premise_changed',
                                 requestAgeMs=round(elapsed * 1000, 2), worldActions=0)
                     if job['policyDiscards'] <= 2:
+                        if job['name'] == 'base_motion_plan':
+                            # The saved survey has aged while Jev was pending.
+                            # Re-enter the program before its survey stage so
+                            # it obtains fresh evidence instead of consuming
+                            # the old observation and stopping immediately.
+                            job['memory'] = dict(job['memory'], stage=None, probe=None,
+                                                 probeAttempt=0, probeSpan=None, detour=False)
+                            job.pop('lastObservation', None)
                         write_json(path, job)
                         self.data.update(status='executing_skill', skillWaitReason='policy_reobserve')
                         return True
