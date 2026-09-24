@@ -241,15 +241,16 @@ def lifecycle_plan(action,selected,states):
     expanded=set(selected)
     if action in ('stop','restart'):
         if 'mc' in expanded:expanded.update(('world','npc','gate','survivor'))
-        elif 'world' in expanded:expanded.add('npc')
+        if 'gate' in expanded:expanded.add('world')
+        if 'world' in expanded:expanded.add('npc')
         if 'tts' in expanded:expanded.add('voice')
         if 'qwenpaw' in expanded:expanded.add('survivor')
     stop_order=[n for n in ('survivor','npc','world','gate','voice','asr','qwenpaw-ops','qwenpaw','resources','panel','control','inventory','mc','tts') if n in expanded]
     # A restart restores previously running consumers; it does not wake a
     # deliberately stopped dependent just because its prerequisite restarted.
     start=list(selected) if action=='start' else [n for n in stop_order if n in selected or states.get('qiandengji-'+n+'-1',{}).get('state')=='running']
-    start=[n for n in ('tts','mc','world','gate','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','inventory','panel','survivor') if n in start] if action!='stop' else []
-    dependencies={'world':['mc'],'gate':['mc'],'npc':['mc','world'],'voice':['tts'],'survivor':['mc','qwenpaw']}
+    start=[n for n in ('tts','mc','gate','world','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','inventory','panel','survivor') if n in start] if action!='stop' else []
+    dependencies={'world':['mc','gate'],'gate':['mc'],'npc':['mc','world'],'voice':['tts'],'survivor':['mc','qwenpaw']}
     required=sorted({d for n in start for d in dependencies.get(n,[]) if d not in start})
     return {'project':'qiandengji','action':action,'selected':selected,'stop':stop_order if action!='start' else [],
             'saveMinecraft':action!='start' and 'mc' in expanded and states.get('qiandengji-mc-1',{}).get('state')=='running',

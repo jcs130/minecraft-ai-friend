@@ -11,8 +11,8 @@ export const QIANDENGJI = defineTopology({
   services:SERVICES,
   // The panel must never be able to stop the executor running its own request.
   immutable:['control'],
-  dependencies:{world:['mc'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc','qwenpaw']},
-  startOrder:['tts','mc','world','gate','npc','qwenpaw','resources','voice','asr','panel','survivor','inventory'],
+  dependencies:{world:['mc','gate'],gate:['mc'],npc:['mc','world'],voice:['tts'],survivor:['mc','qwenpaw']},
+  startOrder:['tts','mc','gate','world','npc','qwenpaw','resources','voice','asr','panel','survivor','inventory'],
   healthGated:['mc'],
   deferredHealth:['qwenpaw'],
   lockFile:'.qiandengji-smoke.lock',

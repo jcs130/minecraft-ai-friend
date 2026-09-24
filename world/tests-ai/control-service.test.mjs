@@ -134,7 +134,7 @@ test('missing/foreign/malformed container identity and stopped required dependen
 test('explicit dependency plan does not start an already stopped NPC as a side effect',async t=>{
   const f=await fixture(t);f.rows.get('npc').State.Status='exited';f.rows.get('npc').State.Running=false;
   const plan=buildPlan({action:'restart',services:['world']},await inventory(f.engine));
-  assert.deepEqual(plan.stop,['npc','world']);assert.deepEqual(plan.start,['world']);assert.deepEqual(plan.required,['mc']);
+  assert.deepEqual(plan.stop,['npc','world']);assert.deepEqual(plan.start,['world']);assert.deepEqual(plan.required,['mc','gate']);
   const result=await f.operate({action:'restart',services:['world']});assert.equal(result.ok,true);
   assert.equal(f.calls.some(c=>c.method==='POST'&&c.route===`/containers/${idFor('npc')}/start`),false);
 });
@@ -142,9 +142,43 @@ test('explicit dependency plan does not start an already stopped NPC as a side e
 test('MC restart stops consumers, acknowledges save, stops MC then starts dependencies in order',async t=>{
   const f=await fixture(t),result=await f.operate({action:'restart',services:['mc']});
   assert.equal(result.ok,true);assert.equal(result.cleanup.lockReleased,true);
-  assert.deepEqual(result.steps.map(s=>s.name),['停止 survivor','停止 npc','停止 gate','停止 world','保存 Minecraft','停止 mc','启动并检查 mc','启动并检查 world','启动并检查 gate','启动并检查 npc','启动并检查 survivor']);
+  assert.deepEqual(result.steps.map(s=>s.name),['停止 survivor','停止 npc','停止 world','停止 gate','保存 Minecraft','停止 mc','启动并检查 mc','启动并检查 gate','启动并检查 world','启动并检查 npc','启动并检查 survivor']);
   const exec=f.calls.find(c=>c.route===`/containers/${idFor('mc')}/exec`);assert.deepEqual(exec.body.Cmd,['rcon-cli','save-all','flush']);
   assert.equal((await f.request('/execute',{planId:result.id})).value.error,'plan_expired');
+});
+
+test('world-only start rejects a stopped gate without starting any dependency',async t=>{
+  const f=await fixture(t,{rows:rows=>{
+    for(const name of ['world','gate']){rows.get(name).State.Status='exited';rows.get(name).State.Running=false;}
+  }});
+  const plan=await f.request('/plan',{action:'start',services:['world']});
+  assert.equal(plan.status,400);assert.equal(plan.value.error,'dependency_not_ready');
+  assert.equal(f.calls.some(c=>c.method==='POST'),false);
+});
+
+test('cold MC gate world startup reaches world health without waking stopped consumers',async t=>{
+  let clock=1000;
+  const f=await fixture(t,{server:{clock:()=>clock,sleep:async()=>{clock+=60000;}},rows:rows=>{
+    for(const name of ['mc','gate','world','npc','survivor']){rows.get(name).State.Status='exited';rows.get(name).State.Running=false;}
+  },engine:({route,rows})=>{
+    // MC_HOST=gate makes world health depend on the proxy already running.
+    if(route===`/containers/${idFor('world')}/json`)
+      rows.get('world').State.Health.Status=rows.get('gate').State.Running?'healthy':'starting';
+    return NO_OVERRIDE;
+  }});
+  const result=await f.operate({action:'start',services:['mc','world','gate']});
+  assert.equal(result.ok,true,JSON.stringify(result));
+  assert.deepEqual(f.calls.filter(c=>c.method==='POST'&&c.route.endsWith('/start')).map(c=>c.route),
+    ['mc','gate','world'].map(name=>`/containers/${idFor(name)}/start`));
+  assert.equal(f.rows.get('npc').State.Running,false);assert.equal(f.rows.get('survivor').State.Running,false);
+});
+
+test('gate restart stops world first and keeps previously stopped NPC stopped',async t=>{
+  const f=await fixture(t,{rows:rows=>{rows.get('npc').State.Status='exited';rows.get('npc').State.Running=false;}});
+  const plan=buildPlan({action:'restart',services:['gate']},await inventory(f.engine));
+  assert.deepEqual(plan.stop,['npc','world','gate']);assert.deepEqual(plan.start,['gate','world']);
+  const result=await f.operate({action:'restart',services:['gate']});assert.equal(result.ok,true);
+  assert.equal(f.calls.some(c=>c.method==='POST'&&c.route===`/containers/${idFor('npc')}/start`),false);
 });
 
 test('save output or exec failure prevents MC stop and records consumers already stopped without replay',async t=>{
