@@ -425,6 +425,29 @@ class GatewayTests(unittest.TestCase):
         # A normal planning mistake must not block another action in this turn.
         self.assertTrue(self.mine()['ok'])
 
+    def test_outside_eating_still_requires_inventory_identity_mode_and_lease(self):
+        self.rcon.position = {'x': 200, 'y': 64, 'z': 100}
+        self.lease()
+        lease = (self.state / 'lease.json').read_bytes()
+        eat = lambda turn=TURN: self.client.action(turn, 'eat', {'item_id': 'minecraft:bread'})
+        self.assertEqual(eat()['code'], 'food_item_missing')
+        self.assertEqual(eat('another_turn_123456')['code'], 'lease_invalid')
+        self.rcon.busy = True
+        self.assertEqual(eat()['code'], 'body_busy')
+        self.rcon.busy = False
+        self.rcon.game_mode = 'creative'
+        self.assertEqual(eat()['code'], 'survival_body_unavailable')
+        self.rcon.game_mode = 'survival'
+        self.settings['dimension'] = 'minecraft:the_nether'
+        self.write('settings.json', self.settings)
+        self.assertEqual(eat()['code'], 'wrong_dimension')
+        self.settings['dimension'] = 'minecraft:overworld'
+        self.settings['bodyUuid'] = '00000000-0000-0000-0000-000000000001'
+        self.write('settings.json', self.settings)
+        self.assertEqual(eat()['code'], 'survival_body_unavailable')
+        self.assertEqual((self.state / 'lease.json').read_bytes(), lease)
+        self.assertFalse(self.rcon.mutations())
+
     def test_planning_tool_queues_while_body_busy_without_native_call(self):
         from motor_mailbox import open_cognition, view
         self.write('settings.json', self.settings | {'asyncMotor': True})
@@ -496,6 +519,26 @@ class GatewayTests(unittest.TestCase):
         receipt = gateway.read_json(self.state/'action-receipts'/(result['actionId']+'.json'))
         self.assertEqual(receipt['resolvedNavigationY'], 64)
         self.assertEqual(receipt['args'], {'x': 101, 'z': 100})
+
+    def test_turn_request_limit_explains_end_turn_without_queuing_or_closing_authority(self):
+        from motor_mailbox import open_cognition
+        self.write('settings.json', self.settings | {'asyncMotor': True})
+        open_cognition(self.state, TURN, NOW*1000+120000, lambda: NOW)
+        for x in range(101, 107):
+            self.assertEqual(self.client.action(TURN, 'goto', {'x': x, 'y': 64, 'z': 100})['code'], 'motor_queued')
+        queue = (self.state/'motor-inbox.json').read_bytes()
+        authority = (self.state/'cognition-lease.json').read_bytes()
+        result = self.client.action(TURN, 'goto', {'x': 107, 'y': 64, 'z': 100})
+        self.assertEqual(result['code'], 'cognition_command_limit')
+        self.assertFalse(result['queued'])
+        self.assertFalse(result['dispatched'])
+        self.assertFalse(result['writePerformed'])
+        self.assertFalse(result['retryable'])
+        self.assertIn('finish_turn=true', result['instruction'])
+        self.assertNotIn('turnEnded', result)
+        self.assertEqual((self.state/'motor-inbox.json').read_bytes(), queue)
+        self.assertEqual((self.state/'cognition-lease.json').read_bytes(), authority)
+        self.assertFalse(self.rcon.mutations())
 
     def test_two_coordinate_walk_refuses_unverified_height_without_body_effect(self):
         self.lease()

@@ -2,15 +2,17 @@
 
 ## 从整个技能库选择程序
 
-先调用 `skill_catalog` 读取持久化可用目录，不要用 shell、glob 或递归扫描技能文件夹。目录由管理接口在草稿、晋升、共享发布时原子更新；其中 activeVersion 是当前候选，draftVersion 不代表可执行。再按名称用 `skill_read` 获取必要正文、测试与实践，避免每轮读完整代码库。测试是否匹配当前内核仍在执行准入时核对。外部恢复导致目录损坏时报告维护，不自行遍历全盘或编辑通过标志。
+先用 `skill_catalog` 查目录：activeVersion 是候选，draftVersion 不代表可执行。按名称 `skill_read` 查必要代码、测试和实践，执行准入仍验证当前内核测试。目录由管理接口原子维护；损坏时报维护，不用 shell/glob 递归扫描或编辑通过标志。
 
 现有控制器在身体空闲的安全边界，可让 Jev 从已晋升、当前内核测试通过的程序中选一个；asyncMotor 模式不等待慢模型或复盘结束。`skill_draft` 可附 `routing={intents:["木棍","stick"],maintenance:false}`：关键词只用于本地粗筛，实际还会以当前身体和空 memory 运行一次纯函数预览，只有提出可执行首步的程序进入候选。必须提供空 memory 的正例和 `expectedActionTool:null,replan:true` 的前提不足反例。`maintenance:true` 仅用于与目标无关的必要自理，例如饥饿时吃饭。已有程序默认不自动加入，Agent 可根据真实实践修订并晋升。
 
-Jev 只看到最多7个程序的首步参数和一个慢系统选项，选择后重新检查版本、身体、目标和执行边界，排入原 skill-job；不会直接执行模型生成的参数。asyncMotor 模式下它独立于模型回合运行，物资、装备、饥饿或目标改变可触发新选择；同目标同版本的非自理程序只自动启动一次，需要重复时由规划者明确排队，避免无限合成。选择、程序、动作回执以 practiceRunId/name/version/turnId 关联；`done` 不代替实践验收，也不证明已掌握。
+Jev 最多看7个程序首步和一个慢系统选项；选择后核查版本、身体、目标和执行边界，再入 skill-job，不直接执行模型生成的参数。asyncMotor 独立于模型回合，物资、装备、饥饿或目标变化可触发选择；同目标同版本的非自理程序只自动启动一次，重复须由规划者排队。选择、程序、动作回执以 practiceRunId/name/version/turnId 关联；`done` 不代替实践验收或证明掌握。
 
 输入 `motor.bodyAccess=queued` 时，动作工具和 skill_start 共用8槽持久收件箱，每回合最多6请求、最长5分钟有效；排队和身体执行分离。`motor_queued` 后可继续思考、交流或结束本轮，不能把排队当完成或重复提交同请求。`status.motorQueue` 查最近回执；旧目标或过期的待执行请求作废。一个请求被认领后不自动重放，结果未知暂停并保留证据。执行时 Jev 可选择继续/中断；goto/eat 绑定原生 task_id、动作和 epoch 请求精确停止，确认终态后才接续，其他动作等正常边界。
 
-初始 `base_*` 共27个程序：安全食物、9类装备及盾牌、木板和12种配方、短程导航、收获补种、睡觉。其中15个支持自动候选；需工作台的9种配方要求 `memory.table={x,y,z}`，先读取真实方块；导航/农耕/睡觉要求 `memory.target={x,y,z}`，农耕还需 `memory.seed`。先 `skill_read` 查看准确契约和测试；所有坐标来自真实感知，不从名字猜测。持有工作台不等于附近已放置工作台。初始实现可继续按实际失败证据修订，安装器不覆盖已有同名程序。
+`base_*` 覆盖进食、装备、合成、导航、农耕和睡觉，以 `skill_catalog` 为准。先 `skill_read` 查契约：需工作台的配方用 `memory.table={x,y,z}`；农耕/睡觉用 `memory.target={x,y,z}`，农耕另需 `memory.seed`。坐标须实测，携带工作台不等于已放置。安装器不覆盖已有同名程序。
+
+赶路用 `navigate(turn_id,x=目的地X,z=目的地Z,summary="目的地与待核验事项")`，内部选已验证 `base_navigate`，无需查版本。填区内完整目标，可远于24格；已知脚部高度才加 y，省略则只验平面到达且实际站稳，不宣称楼层到达。越界用 `mode="return_to_work_area"` 并省略坐标。逐段真实勘察、goto、精确回执与进展检查；失败、未知、身体连续性变化、无进展或预算耗尽交回，不保证全局寻路。排队成功后结束，不逐段 move/status。换目标经 request_goal(mode="replace") 在动作边界切换；remember 不替换程序。
 
 ## 系统 1 候选决策
 

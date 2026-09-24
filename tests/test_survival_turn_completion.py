@@ -13,6 +13,7 @@ from survival_turn_runtime import (completion_summary, wrap_reasoning_impl, TOOL
 from test_survival_skill_tools import SurvivalSkillToolsTests, TURN
 
 EXTERNAL_SESSION = 'life-0123456789abcdef0123456789abcdef'
+NAVIGATE_TOOL = 'numen_survival__navigate'
 
 
 def request_identity():
@@ -261,6 +262,84 @@ class TurnCompletionTests(unittest.TestCase):
         self.assertIsNone(completion_summary(self.agent))
 
 
+class NavigationAdmissionTests(unittest.TestCase):
+    """Actual library + admission results, without model or world calls."""
+    def setUp(self):
+        from test_survival_navigate_tool import NavigateToolTests
+        NavigateToolTests.setUp(self)
+
+    def receipt(self, queued=True, start=False):
+        from test_survival_navigate_tool import NavigateToolTests, TURN as NAV_TURN
+        if queued:
+            NavigateToolTests.queued(self)
+        args = {'turn_id': NAV_TURN, 'summary': '导航程序已排队，等待实际行走回执。'}
+        if start:
+            args.update(name='base_navigate', version=self.version)
+            result = self.tools.start(**args, memory={'target': {'x': -200, 'z': 250}})
+            tool = START_TOOL
+        else:
+            args.update(x=-200, z=250)
+            result = self.tools.navigate(**args)
+            tool = NAVIGATE_TOOL
+        self.message = Message([NS(id='call-current', name=tool, input=args)],
+            [NS(id='call-current', name=tool, state='success', output=json.dumps(result))])
+        self.agent = NS(_workspace_dir='/state/work/workspaces/qd-survivor',
+            _agent_config=NS(id='qd-survivor'), _request_context=request_identity(),
+            state=NS(reply_id=self.message.id), _get_last_msg=lambda: self.message)
+        return args, result
+
+    def test_real_async_navigate_receipt_finishes_exact_current_round(self):
+        args, result = self.receipt()
+        self.assertEqual(result['code'], 'motor_queued')
+        self.assertEqual(completion_summary(self.agent), args['summary'])
+        self.assertEqual((result['kind'], result['name'], result['version'], result['turnId']),
+                         ('skill', 'base_navigate', self.version, args['turn_id']))
+
+    def test_real_async_start_receipt_finishes_exact_current_round(self):
+        args, result = self.receipt(start=True)
+        self.assertEqual(result['code'], 'motor_queued')
+        self.assertEqual(completion_summary(self.agent), args['summary'])
+
+    def test_real_direct_navigate_receipt_finishes_exact_current_round(self):
+        args, result = self.receipt(queued=False)
+        self.assertEqual(result['code'], 'skill_queued')
+        self.assertEqual(completion_summary(self.agent), args['summary'])
+
+    def test_async_queue_requires_exact_unexecuted_skill_identity(self):
+        args, result = self.receipt()
+        for key, value in (('ok', False), ('kind', 'action'), ('name', 'another_skill'),
+                           ('version', 'not-a-version'), ('version', 'A' * 64),
+                           ('turnId', 'another-turn'), ('requestId', ''), ('requestId', 'g' * 64),
+                           ('code', 'motor_claimed'), ('status', 'claimed'),
+                           ('executionConfirmed', True), ('executionConfirmed', 0)):
+            with self.subTest(key=key, value=value):
+                self.message.results[0].output = json.dumps(result | {key: value})
+                self.assertIsNone(completion_summary(self.agent))
+        for key in ('kind', 'name', 'version', 'turnId', 'requestId', 'status', 'turnCompletion'):
+            changed = {k:v for k,v in result.items() if k != key}
+            self.message.results[0].output = json.dumps(changed)
+            self.assertIsNone(completion_summary(self.agent), key)
+        self.message.results[0].output = json.dumps(result)
+        self.message.calls[0].input = args | {'turn_id': 'foreign-turn'}
+        self.assertIsNone(completion_summary(self.agent))
+        self.message.calls[0].input = args
+        self.message.results.append(copy.deepcopy(self.message.results[0]))
+        self.assertIsNone(completion_summary(self.agent))
+
+    def test_async_start_cannot_borrow_another_program_or_version_receipt(self):
+        _, result = self.receipt(start=True)
+        for key, value in (('name', 'another_skill'), ('version', 'b' * 64)):
+            self.message.results[0].output = json.dumps(result | {key: value})
+            self.assertIsNone(completion_summary(self.agent), key)
+
+    def test_direct_navigate_requires_base_program_exact_turn_and_version_format(self):
+        _, result = self.receipt(queued=False)
+        for key, value in (('name', 'another_skill'), ('version', 'invalid'),
+                           ('turnId', 'another-turn'), ('executionConfirmed', True)):
+            self.message.results[0].output = json.dumps(result | {key: value})
+            self.assertIsNone(completion_summary(self.agent), key)
+
+
 class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
     """Real Qwen/AgentScope reply, tool execution, text events and persistence.
 
@@ -269,7 +348,8 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
     """
     async def scenario(self, order=('remember',), finish=True, role='qd-survivor', gate_continue=False,
                        unlimited=False, high_iteration=None, request_overrides=None,
-                       start_receipt_overrides=None, summary_value=None, ended_receipt_overrides=None):
+                       start_receipt_overrides=None, summary_value=None, ended_receipt_overrides=None,
+                       navigate_receipt=None, navigate_args=None):
         from unittest.mock import patch
         from agentscope.agent import ReActConfig
         from agentscope.message import ToolCallBlock, TextBlock, UserMsg
@@ -301,9 +381,13 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
                 'name': name, 'version': version, 'turnId': turn_id,
                 'turnCompletion': {'requested': bool(summary.strip()), 'summary': summary.strip(),
                     'contract': CONTRACT}} | (start_receipt_overrides or {}))
+        async def navigate(turn_id: str, x: float, z: float, summary: str = ''):
+            executed.append('navigate')
+            return json.dumps(navigate_receipt)
         toolkit = Toolkit()
         await toolkit.add_tool(FunctionTool(remember, name=TOOL, is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(start, name=START_TOOL, is_concurrency_safe=False))
+        await toolkit.add_tool(FunctionTool(navigate, name=NAVIGATE_TOOL, is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(other, name='other', is_concurrency_safe=False))
         await toolkit.add_tool(FunctionTool(ended, name='numen_survival__eat', is_concurrency_safe=False))
         manager = NS(on_save=lambda agent, blocks: saved.extend(blocks))
@@ -341,10 +425,11 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
             if len(calls) == 1:
                 if high_iteration is not None:
                     agent.state.cur_iter = high_iteration
-                names = {'remember': TOOL, 'start': START_TOOL, 'other': 'other', 'ended': 'numen_survival__eat'}
+                names = {'remember': TOOL, 'start': START_TOOL, 'other': 'other', 'ended': 'numen_survival__eat',
+                         'navigate': NAVIGATE_TOOL}
                 args = {'remember': {'finish_turn': finish, 'summary': summary},
                         'start': {'turn_id': TURN, 'name': 'gather', 'version': 'a' * 64, 'summary': summary},
-                        'other': {}, 'ended': {'turn_id': TURN}}
+                        'other': {}, 'ended': {'turn_id': TURN}, 'navigate': navigate_args}
                 return ChatResponse(content=[ToolCallBlock(id=f'call-{i}', name=names[name],
                     input=json.dumps(args[name]))
                     for i, name in enumerate(order)], is_last=True)
@@ -433,6 +518,26 @@ class NativeReplyTests(unittest.IsolatedAsyncioTestCase):
         result = await self.scenario(order=('other', 'start'))
         self.assertEqual(result.executed, ['other', 'start'])
         self.assertEqual(result.calls, 1)
+
+    async def test_native_real_async_navigation_finishes_without_extra_model_and_keeps_other_tools(self):
+        from agentscope.event import TextBlockDeltaEvent, ReplyEndEvent
+        fixture = NavigationAdmissionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        args, receipt = fixture.receipt()
+        for order, expected_calls in ((('navigate',), 1), (('navigate', 'other'), 2)):
+            with self.subTest(order=order):
+                result = await self.scenario(order=order, navigate_receipt=receipt, navigate_args=args,
+                                             summary_value=args['summary'])
+                self.assertEqual(result.calls, expected_calls)
+                self.assertEqual(result.executed, list(order))
+                if expected_calls == 1:
+                    self.assertEqual(''.join(e.delta for e in result.events if isinstance(e, TextBlockDeltaEvent)),
+                                     args['summary'])
+                    self.assertEqual([e.finished_reason for e in result.events if isinstance(e, ReplyEndEvent)],
+                                     ['completed'])
+                    self.assertEqual(result.state['state']['context'][-1]['content'][-1]['text'], args['summary'])
+                    self.assertEqual(result.total_calls, 2)
 
     async def test_native_earlier_queued_tool_executes_before_finish(self):
         result = await self.scenario(order=('other', 'remember'))

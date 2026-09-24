@@ -42,15 +42,19 @@ def main():
         'com.dwinovo.numen.core.task.combat.AttackTaskRecord extends com.dwinovo.numen.task.TaskRecord': 'public AttackTaskRecord(String s,long l,java.util.List<Integer> ids,boolean b){}',
         'com.dwinovo.numen.core.task.combat.LootSweep': 'public LootSweep(com.dwinovo.numen.entity.NumenPlayer p){}',
         'com.dwinovo.numen.core.Constants': 'public static final org.slf4j.Logger LOG=new org.slf4j.Logger(){};',
-        'com.dwinovo.numen.core.pathing.calc.NavGoal': '@interface static NavGoal nearGround(net.minecraft.core.BlockPos p,double r){return new NavGoal(){};} static NavGoal approachAvoiding(NavGoal n,double k,java.util.List<com.dwinovo.numen.core.pathing.goals.GoalAvoidEntities.Threat> ts){return n;}',
+        'com.dwinovo.numen.core.pathing.calc.NavGoal': '@interface net.minecraft.core.BlockPos center(); static NavGoal nearGround(net.minecraft.core.BlockPos p,double r){return ()->p;} static NavGoal approachAvoiding(NavGoal n,double k,java.util.List<com.dwinovo.numen.core.pathing.goals.GoalAvoidEntities.Threat> ts){return n;}',
         'com.dwinovo.numen.core.pathing.execute.PlayerNav': '''public enum Status{RUNNING,ARRIVED,FAILED;} public static int created,stopped,ticked;public static Status status=Status.RUNNING;
-        public static PlayerNav toGoal(com.dwinovo.numen.entity.NumenPlayer p,java.util.function.Supplier<com.dwinovo.numen.core.pathing.calc.NavGoal> g,double s,java.util.function.BooleanSupplier b){g.get();created++;return new PlayerNav();} public Status tick(){ticked++;return status;} public void stop(){stopped++;} public String failReason(){return "fixture no route";}''',
+        public static java.util.List<Double> requestedDistances=new java.util.ArrayList<>(); public static net.minecraft.core.BlockPos lastLanding;
+        public static PlayerNav toGoal(com.dwinovo.numen.entity.NumenPlayer p,java.util.function.Supplier<com.dwinovo.numen.core.pathing.calc.NavGoal> g,double s,java.util.function.BooleanSupplier b){var c=g.get().center();lastLanding=c;requestedDistances.add(Math.hypot(c.x-p.x,c.z-p.z));created++;return new PlayerNav();} public Status tick(){ticked++;return status;} public void stop(){stopped++;} public String failReason(){return "fixture no route";}''',
         'com.dwinovo.numen.core.task.base.AbstractCompanionTask<R extends com.dwinovo.numen.task.TaskRecord> implements com.dwinovo.numen.task.Task': '''protected com.dwinovo.numen.entity.NumenPlayer player; protected R r; protected com.dwinovo.numen.core.pathing.execute.PlayerNav nav; private com.dwinovo.numen.core.FailureType failure=com.dwinovo.numen.core.FailureType.UNKNOWN;
         public AbstractCompanionTask(com.dwinovo.numen.entity.NumenPlayer p,R r){player=p;this.r=r;} protected void stopNav(){if(nav!=null)nav.stop();nav=null;} protected void fail(String s,com.dwinovo.numen.core.FailureType f){failure=f;} protected com.dwinovo.numen.core.FailureType lastFailure(){return failure;}''',
         'net.minecraft.core.NonNullList<E> extends java.util.ArrayList<E>': '',
         'net.minecraft.world.entity.player.Inventory': 'public net.minecraft.core.NonNullList<net.minecraft.world.item.ItemStack> items=new net.minecraft.core.NonNullList<>();',
     })
     del stubs['com.dwinovo.numen.core.task.combat.AttackTaskRecord']
+    stubs['net.minecraft.world.level.Level'] = stubs['net.minecraft.world.level.Level'].replace(
+        'public long time=100;', 'public long time=100; public int supportedRadius=64;').replace(
+        'Math.abs(p.x)<=16 && Math.abs(p.z)<=16', 'Math.abs(p.x)<=supportedRadius && Math.abs(p.z)<=supportedRadius')
     stubs['net.minecraft.world.entity.Entity'] += ' public net.minecraft.world.phys.Vec3 position(){return new net.minecraft.world.phys.Vec3(x,y,z);} public net.minecraft.core.BlockPos blockPosition(){return new net.minecraft.core.BlockPos(getBlockX(),getBlockY(),getBlockZ());}'
     stubs['net.minecraft.world.entity.LivingEntity extends Entity'] += ' public boolean isDeadOrDying(){return !alive;}'
     stubs['com.dwinovo.numen.entity.NumenPlayer extends net.minecraft.server.level.ServerPlayer'] += ' public net.minecraft.world.entity.player.Inventory getInventory(){return new net.minecraft.world.entity.player.Inventory();}'
@@ -86,11 +90,12 @@ def main():
     (output / 'output.txt').write_text(run.stdout + run.stderr, encoding='utf8')
     print(run.stdout, run.stderr)
     count = re.search(r'checks=(\d+)', run.stdout)
+    failures = re.search(r'failures=(\d+)', run.stdout)
     check_names = re.findall(r'^([a-z][a-z0-9_]+)$', run.stdout, re.M)
     report = {'schema': 1, 'ok': run.returncode == 0, 'exitCode': run.returncode,
-              'passed': int(count[1]) if run.returncode == 0 and count else 0,
+              'passed': int(count[1]) - int(failures[1]) if count and failures else 0,
               'assertions': int(count[1]) if count else 0,
-              'failed': 0 if run.returncode == 0 else 1,
+              'failed': int(failures[1]) if failures else (0 if run.returncode == 0 else 1),
               'checks': {name: True for name in check_names}, 'worldActions': 0,
               'jarSha256': hashlib.sha256(args.jar.read_bytes()).hexdigest(),
               'realBytecode': ['AttackCompanionTask', 'Haven', 'Menace'],
@@ -112,8 +117,9 @@ import java.lang.reflect.*;
 import java.util.*;
 public class NavigationFixture {
  static class Shooter extends Mob implements Enemy,RangedAttackMob {}
- static int checks;
- static void check(boolean ok,String name){if(!ok)throw new AssertionError(name);checks++;System.out.println(name);}
+ static int checks,failures;
+ static void check(boolean ok,String name){checks++;if(!ok){failures++;System.out.println("FAIL "+name);}else System.out.println(name);}
+ static boolean distance(int index,double expected){return index<PlayerNav.requestedDistances.size() && Math.abs(PlayerNav.requestedDistances.get(index)-expected)<1.0;}
  static Object call(AttackCompanionTask t,String name)throws Exception{Method m=AttackCompanionTask.class.getDeclaredMethod(name);m.setAccessible(true);return m.invoke(t);}
  static NumenPlayer self(){NumenPlayer p=new NumenPlayer();p.world=new Level();Shooter m=new Shooter();m.world=p.world;m.x=5.5;m.target=p;p.world.mobs.add(m);return p;}
  static AttackCompanionTask task(NumenPlayer p)throws Exception{var t=new AttackCompanionTask(p,new AttackTaskRecord("fixture",10000,List.of(),true),true);call(t,"onStart");return t;}
@@ -124,9 +130,23 @@ public class NavigationFixture {
   p.world.time+=176;check(call(t,"onTick")==TaskState.FAILED && t.retreatBlocked(),"no_progress_has_bounded_failure");check(PlayerNav.stopped==1,"blocked_retreat_releases_navigation");
   p=self();t=task(p);PlayerNav.status=PlayerNav.Status.FAILED;call(t,"onTick");int made=PlayerNav.created;p.world.time+=1;call(t,"onTick");check(PlayerNav.created==made,"failed_route_waits_bounded_retry");
   p.world.time+=20;call(t,"onTick");p.world.time+=20;check(call(t,"onTick")==TaskState.FAILED && t.retreatBlocked(),"three_route_failures_end_retreat");
+  check(distance(1,32) && distance(2,16) && distance(3,8),"unreachable_existing_landings_shorten_32_16_8");
+  p=self();t=task(p);PlayerNav.requestedDistances.clear();PlayerNav.status=PlayerNav.Status.FAILED;call(t,"onTick");
+  p.world.time+=20;PlayerNav.status=PlayerNav.Status.RUNNING;call(t,"onTick");made=PlayerNav.created;int stopped=PlayerNav.stopped;
+  p.world.time+=25;call(t,"onTick");check(PlayerNav.created==made && PlayerNav.stopped==stopped && distance(1,16),"running_shorter_route_keeps_same_navigation");
+  PlayerNav.status=PlayerNav.Status.FAILED;call(t,"onTick");p.world.time+=20;PlayerNav.status=PlayerNav.Status.RUNNING;call(t,"onTick");
+  check(distance(2,8),"running_does_not_erase_previous_route_failure");
+  PlayerNav.status=PlayerNav.Status.ARRIVED;call(t,"onTick");PlayerNav.status=PlayerNav.Status.RUNNING;p.world.time++;call(t,"onTick");
+  check(distance(3,32),"arrived_waypoint_resets_reach_for_next_segment");
+  p=self();p.world.supportedRadius=16;t=task(p);PlayerNav.requestedDistances.clear();PlayerNav.status=PlayerNav.Status.FAILED;call(t,"onTick");
+  p.world.time+=20;PlayerNav.status=PlayerNav.Status.RUNNING;call(t,"onTick");
+  check(distance(0,16) && distance(1,8),"missing_far_landing_then_failed_near_route_shrinks_again");
+  p=self();t=task(p);PlayerNav.requestedDistances.clear();PlayerNav.status=PlayerNav.Status.FAILED;call(t,"onTick");
+  p.world.time+=20;PlayerNav.status=PlayerNav.Status.RUNNING;call(t,"onTick");p.x=PlayerNav.lastLanding.x+.5;p.z=PlayerNav.lastLanding.z+.5;
+  p.world.time++;call(t,"onTick");check(distance(2,32),"physical_waypoint_arrival_resets_reach");
   p=self();t=task(p);PlayerNav.status=PlayerNav.Status.ARRIVED;check(call(t,"onTick")==TaskState.RUNNING,"near_waypoint_is_not_terminal_safe");
   p.world.mobs.clear();check(call(t,"onTick")==TaskState.FAILED && !t.retreatBlocked(),"threat_disappearance_releases_without_no_path_claim");
-  System.out.println("checks="+checks);
+  System.out.println("checks="+checks+" failures="+failures);if(failures>0)System.exit(1);
  }
 }
 '''

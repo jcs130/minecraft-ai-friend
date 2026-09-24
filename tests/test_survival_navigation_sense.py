@@ -1,4 +1,4 @@
-"""No game or model calls. Native identity/geometry evidence must remain advisory."""
+"""No live calls. Geometry proves a stance, never a route or completed movement."""
 import copy
 import json
 from pathlib import Path
@@ -113,6 +113,66 @@ class NavigationSenseTests(unittest.TestCase):
             self.assertEqual(result['args'],args);self.assertEqual(result['navigationSense']['destination']['requested'],args)
             self.assertEqual(result['after']['bodyControl']['name'],'mob_defense')
             self.assertIsNone(client._settle_inflight(body));self.assertEqual(len(self.commands),1)
+
+
+class NavigationPreflightTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.state = Path(temp.name)
+        self.args = {'x': 10., 'y': 64., 'z': 10.}
+        self.row = sample(self.args)
+        self.commands = []
+        def command(text):
+            self.commands.append(text)
+            return PREFIX + json.dumps(self.row)
+        self.client = NumenGateway(self.state, SimpleNamespace(cmd=command), clock=lambda: NOW/1000)
+        self.body = {'ok': True, 'bodyUuid': BODY, 'dimension': DIM, 'observedAt': NOW,
+            'position': {'x': 9., 'y': 64., 'z': 9.}, 'gameMode': 'survival',
+            'task': {'busy': False}, 'counts': {}}
+        self.turn = 'turn_0123456789abcdef'
+        write_json(self.state/'settings.json', {'bodyName': 'Kirito', 'bodyUuid': BODY,
+            'dimension': DIM, 'anchor': {'x': 0, 'z': 0}, 'protectedRadius': 0,
+            'workArea': {'minX': 0, 'maxX': 100, 'minZ': 0, 'maxZ': 100}})
+        write_json(self.state/'control.json', {'schema': 1, 'enabled': True})
+        write_json(self.state/'lease.json', {'schema': 1, 'turnId': self.turn, 'status': 'open',
+            'expiresAt': NOW+120000, 'actionLimit': 1, 'actionsUsed': 0})
+
+    def test_known_colliding_explicit_height_never_spends_lease_or_dispatches(self):
+        for clear, supported in ((False, False), (False, True), (True, False)):
+            with self.subTest(clear=clear, supported=supported):
+                self.row['destination'].update(requestedStanceClear=clear, requestedStanceSupported=supported)
+                lease = read_json(self.state/'lease.json')
+                with patch.object(self.client, 'snapshot', return_value=self.body):
+                    result = self.client.action(self.turn, 'goto', self.args)
+                self.assertEqual(result['code'], 'walk_stance_unusable')
+                self.assertFalse(result['dispatched'])
+                self.assertFalse(result['writePerformed'])
+                self.assertEqual(result['requested'], self.args)
+                self.assertEqual(result['navigationSense']['destination']['candidates'], self.row['destination']['candidates'])
+                self.assertEqual(read_json(self.state/'lease.json'), lease)
+                self.assertFalse((self.state/'unknown.json').exists())
+                self.assertTrue(all(c.startswith('qdworld navigation_sense ') for c in self.commands))
+
+    def test_program_navigation_observation_uses_fresh_identity_and_only_reads(self):
+        with patch.object(self.client, 'snapshot', return_value=self.body) as snapshot:
+            result = self.client.navigation_observation(self.body, self.args)
+        snapshot.assert_called_once_with()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['navigationSense']['actorUuid'], BODY)
+        self.assertEqual(result['navigationSense']['destination']['requested'], self.args)
+        self.assertEqual(self.commands, ['qdworld navigation_sense '+BODY+' 10.0 64.0 10.0'])
+        self.assertFalse((self.state/'unknown.json').exists())
+
+    def test_program_observation_identity_change_or_bad_arguments_never_queries(self):
+        changed = dict(self.body, bodyUuid='e5005711-be9f-44b7-aaad-6993c0ba5df4')
+        with patch.object(self.client, 'snapshot', return_value=changed):
+            self.assertFalse(self.client.navigation_observation(self.body, self.args)['ok'])
+        with patch.object(self.client, 'snapshot', return_value=self.body):
+            for args in ({'x': True, 'z': 10}, {'x': 10, 'z': 10, 'command': 'anything'},
+                         {'x': float('nan'), 'z': 10}, {'x': 10, 'y': 320, 'z': 10}):
+                self.assertFalse(self.client.navigation_observation(self.body, args)['ok'])
+        self.assertEqual(self.commands, [])
 
 
 if __name__=='__main__':unittest.main()

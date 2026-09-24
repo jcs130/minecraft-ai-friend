@@ -112,6 +112,57 @@ def _body(value):
     return result
 
 
+def _observed_navigation(receipt, before, after, navigation):
+    """Validate the gateway's epoch-less, body-observed arrival contract.
+
+    This is evidence of the original goto's observed endpoint, not a native
+    epoch terminal or proof of the encompassing program's objective.
+    """
+    error = 'practice_observed_navigation_mismatch'
+    number = lambda value: type(value) in (int, float) and math.isfinite(value)
+    point = lambda value: isinstance(value, dict) and all(number(value.get(k)) for k in ('x', 'y', 'z'))
+    result = receipt.get('result') if isinstance(receipt.get('result'), dict) else {}
+    native = result.get('result') if isinstance(result.get('result'), dict) else {}
+    admission = native.get('data') or {}
+    _require(isinstance(after, dict) and after.get('ok') is True
+        and isinstance(after.get('task'), dict) and after['task'].get('busy') is False
+        and not after['task'].get('task_id')
+        and before.get('navigationEpoch') is None and after.get('navigationEpoch') is None
+        and navigation.get('navigation_epoch') is None
+        and isinstance(receipt.get('nativeTaskId'), str) and bool(receipt['nativeTaskId'])
+        and navigation.get('task_id') == receipt['nativeTaskId']
+        and navigation.get('state') == 'ended' and type(navigation.get('success')) is bool
+        and receipt.get('status') == ('completed' if navigation['success'] else 'failed')
+        and receipt.get('completionConfirmed') is True
+        and result.get('ok') is True and result.get('code') == 'accepted'
+        and result.get('actionId') == receipt['actionId'] and result.get('tool') == 'goto'
+        and native.get('success') is True and isinstance(admission, dict)
+        and admission.get('async') is True and admission.get('task_id') == receipt['nativeTaskId'], error)
+    _body(after)
+    _require(all(number(value) for value in (before.get('observedAt'), receipt.get('acceptedAt'),
+        after.get('observedAt'), receipt.get('observedAt')))
+        and before['observedAt'] <= receipt['acceptedAt'] <= after['observedAt'] <= receipt['observedAt'], error)
+    position, args = after.get('position'), receipt['args']
+    _require(point(position) and number(args.get('x')) and number(args.get('z'))
+        and ('y' not in args or number(args['y']))
+        and all(number(navigation.get('final_' + k)) and navigation['final_' + k] == position[k]
+                for k in ('x', 'y', 'z')), error)
+    target_y = receipt.get('resolvedNavigationY', args.get('y'))
+    _require(target_y is None or number(target_y), error)
+    requested = {k: args[k] for k in ('x', 'y', 'z') if k in args}
+    if target_y is not None:
+        requested['y'] = target_y
+    distance = math.hypot(position['x'] - args['x'], position['z'] - args['z'])
+    arrived = distance <= 1.5 and (target_y is None or math.floor(position['y']) == math.floor(target_y))
+    _require(isinstance(navigation.get('requested'), dict)
+        and all(number(value) for value in navigation['requested'].values())
+        and navigation['requested'] == requested and math.isfinite(distance)
+        and number(navigation.get('horizontalDistance'))
+        and navigation['horizontalDistance'] == round(distance, 2)
+        and navigation['success'] is arrived, error)
+    return arrived
+
+
 class PracticeStore:
     def __init__(self, state, clock=time.time):
         self.path = Path(state).resolve() / 'practice.sqlite3'
@@ -260,16 +311,20 @@ class PracticeStore:
                 terminal_success = None
                 navigation = receipt.get('navigationOutcome')
                 if navigation is not None:
-                    _require(step['tool'] == 'goto' and isinstance(navigation, dict)
-                             and bool(receipt.get('nativeTaskId')) and bool(before.get('navigationEpoch'))
-                             and navigation.get('task_id') == receipt['nativeTaskId']
-                             and navigation.get('navigation_epoch') == before['navigationEpoch']
-                             and type(navigation.get('success')) is bool, 'practice_native_identity_mismatch')
-                    if 'state' in navigation:
-                        _require(navigation['state'] in ('success', 'failed', 'timeout', 'cancelled')
-                                 and navigation['success'] == (navigation['state'] == 'success'),
-                                 'practice_invalid_native_terminal')
-                    terminal_success = navigation['success']
+                    _require(step['tool'] == 'goto' and isinstance(navigation, dict),
+                             'practice_native_identity_mismatch')
+                    if navigation.get('navigation_mode') == 'observed_from_body':
+                        terminal_success = _observed_navigation(receipt, before, after, navigation)
+                    else:
+                        _require(bool(receipt.get('nativeTaskId')) and bool(before.get('navigationEpoch'))
+                                 and navigation.get('task_id') == receipt['nativeTaskId']
+                                 and navigation.get('navigation_epoch') == before['navigationEpoch']
+                                 and type(navigation.get('success')) is bool, 'practice_native_identity_mismatch')
+                        if 'state' in navigation:
+                            _require(navigation['state'] in ('success', 'failed', 'timeout', 'cancelled')
+                                     and navigation['success'] == (navigation['state'] == 'success'),
+                                     'practice_invalid_native_terminal')
+                        terminal_success = navigation['success']
                 food = receipt.get('nativeFoodOutcome')
                 if food is not None:
                     expected = native.get('nativeFoodReceipt')

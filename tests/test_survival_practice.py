@@ -270,6 +270,111 @@ class PracticeTests(unittest.TestCase):
         receipt['navigationOutcome']['navigation_epoch'] = 'epoch-1'
         self.assertEqual(self.store.capture_turn(STEP_TURN, [receipt])['ownConfirmedActions'], 1)
 
+    def observed_navigation_receipt(self, arrived=True, args=None):
+        args = args or {'x': 4, 'y': 64, 'z': 0}
+        receipt = self.receipt(status='completed' if arrived else 'failed', tool='goto', args=args)
+        receipt.update(nativeTaskId='t286', acceptedAt=1000001, observedAt=1000020)
+        receipt['before']['navigationEpoch'] = None
+        receipt['after'].update(position={'x': 4 if arrived else 1, 'y': 64, 'z': 0},
+                                navigationEpoch=None, observedAt=1000010,
+                                task={'busy': False, 'completionConfirmed': False})
+        receipt['result'].update(ok=True, code='accepted', actionId=ACTION, tool='goto')
+        receipt['result']['result'] = {'success': True, 'data': {'async': True, 'task_id': 't286', 'task': 'goto'}}
+        receipt['navigationOutcome'] = {'task_id': 't286', 'state': 'ended', 'success': arrived,
+            'navigation_mode': 'observed_from_body', 'final_x': receipt['after']['position']['x'],
+            'final_y': 64, 'final_z': 0, 'requested': dict(args), 'horizontalDistance': 0 if arrived else 3}
+        return receipt
+
+    def test_observed_navigation_null_epoch_settles_exact_receipt_not_program_goal(self):
+        self.job['objective'] = None
+        self.begin()
+        receipt = self.observed_navigation_receipt()
+        self.step(tool='goto', args=receipt['args'])
+        result = self.store.capture_turn(STEP_TURN, [receipt])
+        self.assertTrue(result['evidenceComplete'])
+        self.assertEqual(result['ownConfirmedActions'], 1)
+        job = dict(self.job, status='replan')
+        result = self.store.finish(job['practiceRunId'], job, receipt['after'])
+        self.assertFalse(result['programReportedDone'])
+        self.assertIsNone(result['objectiveObserved'])
+        self.assertFalse(self.store.capture_turn(STEP_TURN, [receipt])['changed'])
+
+    def test_observed_navigation_known_nonarrival_is_failure_not_success(self):
+        self.begin()
+        receipt = self.observed_navigation_receipt(arrived=False)
+        self.step(tool='goto', args=receipt['args'])
+        result = self.store.capture_turn(STEP_TURN, [receipt])
+        self.assertTrue(result['evidenceComplete'])
+        self.assertEqual(result['ownConfirmedActions'], 0)
+
+    def test_observed_navigation_requires_exact_admission_idle_body_and_actual_arrival(self):
+        self.begin()
+        valid = self.observed_navigation_receipt()
+        self.step(tool='goto', args=valid['args'])
+        mutations = [
+            lambda r: r.update(status='unknown'),
+            lambda r: r.update(status='effect_unconfirmed'),
+            lambda r: r.update(completionConfirmed=False),
+            lambda r: r['before'].update(navigationEpoch='lost-epoch'),
+            lambda r: r['after'].update(navigationEpoch='new-epoch'),
+            lambda r: r['after']['task'].update(busy=True),
+            lambda r: r['after']['task'].update(task_id='another-task'),
+            lambda r: r['after'].update(observedAt=999999),
+            lambda r: r.update(observedAt=999999),
+            lambda r: r['result'].update(actionId='f' * 32),
+            lambda r: r['result'].update(code='outcome_unknown'),
+            lambda r: r['result']['result']['data'].update(task_id='other-task'),
+            lambda r: r['result']['result']['data'].update(**{'async': False}),
+            lambda r: r['navigationOutcome'].update(task_id='other-task'),
+            lambda r: r['navigationOutcome'].update(navigation_epoch='fake-epoch'),
+            lambda r: r['navigationOutcome'].update(final_x=5),
+            lambda r: r['navigationOutcome'].update(horizontalDistance=1),
+            lambda r: r['navigationOutcome']['requested'].update(x=6),
+            lambda r: r['navigationOutcome'].update(success=False),
+            lambda r: (r['after']['position'].update(x=1), r['navigationOutcome'].update(final_x=1, horizontalDistance=3)),
+            lambda r: (r['after']['position'].update(y=65), r['navigationOutcome'].update(final_y=65)),
+        ]
+        for i, mutate in enumerate(mutations):
+            receipt = copy.deepcopy(valid)
+            mutate(receipt)
+            with self.subTest(mutation=i), self.assertRaises(PracticeError):
+                self.store.capture_turn(STEP_TURN, [receipt])
+        self.assertFalse(self.finish()['evidenceComplete'])
+
+    def test_replan_observed_navigation_auto_finalizes_and_releases_mailbox_claim(self):
+        from types import SimpleNamespace
+        from controller import Controller
+        from motor_loop import reconcile
+        from numen_gateway import read_json, write_json
+        self.job = self.make_job(name='base_navigate', objective=None)
+        self.begin()
+        receipt = self.observed_navigation_receipt()
+        self.step(tool='goto', args=receipt['args'])
+        job = dict(self.job, status='replan', reason='navigation_no_supported_progress',
+                   practiceStarted=True, motorRequestId='request-navigation', lastTurnId=STEP_TURN,
+                   lastExecution={'turnId': STEP_TURN, 'actionId': ACTION,
+                                  'status': 'succeeded', 'completionConfirmed': True})
+        write_json(self.state / 'skill-job.json', job)
+        write_json(self.state / 'motor-inbox.json', {'schema': 1, 'requests': [
+            {'requestId': job['motorRequestId'], 'kind': 'skill', 'status': 'claimed'},
+            {'requestId': 'next-move', 'kind': 'action', 'status': 'queued'}]})
+        events = []
+        context = SimpleNamespace(root=self.state, practice=self.store, data={'practiceWarning': 'PracticeError'},
+            gateway=SimpleNamespace(snapshot=lambda: copy.deepcopy(receipt['after']),
+                turn_receipts=lambda turn: [copy.deepcopy(receipt)] if turn == STEP_TURN else []),
+            record=lambda kind, **values: events.append(kind),
+            pause=lambda reason: self.fail('No unknown or world action expected: ' + reason))
+        Controller.settle_practice(context)
+        Controller.settle_practice(context)
+        self.assertTrue(read_json(self.state / 'skill-job.json')['practiceFinalized'])
+        self.assertNotIn('practiceWarning', context.data)
+        self.assertEqual(events, ['practice_recorded'])
+        reconcile(context)
+        rows = read_json(self.state / 'motor-inbox.json')['requests']
+        self.assertEqual(rows[0]['status'], 'failed')
+        self.assertEqual(rows[0]['receipt']['status'], 'replan')
+        self.assertEqual(rows[1]['status'], 'queued')
+
     def test_false_completed_and_unknown_success_flags_are_not_evidence(self):
         self.begin()
         self.step()

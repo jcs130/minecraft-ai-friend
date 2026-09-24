@@ -309,7 +309,7 @@ def main():
     from qwenpaw_runtime_contract import release
     actual_version = release()
     assert marker['qwenVersion'] == actual_version
-    assert marker.get('survivalTurnRuntimeVersion') == 5
+    assert marker.get('survivalTurnRuntimeVersion') == 6
     assert marker.get('survivalRequestRuntimeVersion') == 2
     assert marker.get('survivalSubmissionReceiptVersion') == 1
     from life_memory_evidence_runtime import VERSION as evidence_version

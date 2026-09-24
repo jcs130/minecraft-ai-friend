@@ -32,7 +32,7 @@ class StarterSkillsTests(unittest.TestCase):
 
     def test_all_initial_programs_execute_fixtures_and_install_preserves_edits(self):
         result = install(self.library)
-        self.assertEqual(len(result), 27)
+        self.assertEqual(len(result), 28)
         self.assertEqual(sum(r['automatic'] for r in result), 15)
         self.assertTrue(all(r['installed'] for r in result))
         self.assertTrue(all(not r['installed'] for r in install(self.library)))

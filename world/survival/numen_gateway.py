@@ -58,6 +58,23 @@ def cognition_rejection(state, turn_id, code, clock=time.time):
     missing/mismatched lease and uncertain world effects have no such proof.
     """
     result = {'ok': False, 'code': code, 'retryAutomatically': False}
+    if code == 'cognition_command_limit':
+        try:
+            lease = read_json(Path(state) / 'cognition-lease.json')
+            if (isinstance(turn_id, str) and TURN_ID.fullmatch(turn_id)
+                    and lease.get('schema') == 1 and lease.get('turnId') == turn_id
+                    and lease.get('bodyAccess') == 'queued' and lease.get('status') == 'open'
+                    and lease.get('actionLimit') == 6 and type(lease.get('actionsUsed')) is int
+                    and lease['actionsUsed'] >= 6):
+                result.update(queued=False, dispatched=False, writePerformed=False,
+                    retryable=False, endTurnRequired=True, requestLimit=6, requestsUsed=lease['actionsUsed'],
+                    instruction='本轮6个执行请求额度已用完；这次未入队、未派发。等待或修改坐标不会恢复额度。'
+                        '已入队请求仍由快系统执行。不要重试动作、skill_start或反复status；'
+                        '用remember(finish_turn=true,summary=简短实测进展)收尾，然后直接最终答复。'
+                        '若remember也拒绝，直接最终答复，等待新的生活输入，不生成新turn_id。')
+        except (OSError, ValueError, TypeError):
+            pass
+        return result
     if code not in ('cognition_closed', 'cognition_expired'):
         return result
     result['instruction'] = ('当前回合权限已结束且不会恢复。直接最终答复，等待新生活输入；'
@@ -521,6 +538,26 @@ class NumenGateway:
     def sense(self, sensor='catalog', arguments=None):
         from sensors import sense
         return sense(self, sensor, arguments)
+
+    def navigation_observation(self, body, args):
+        """Read landing geometry for a program without reserving a body action.
+
+        A supported stance is not a verified path. The eventual goto still
+        checks a fresh body, work area, distance and landing before dispatch.
+        """
+        try:
+            self._validate('goto', args)
+            fresh = self.snapshot()
+            if (not isinstance(body, dict) or fresh.get('ok') is not True
+                    or any(fresh.get(key) != body.get(key) for key in ('bodyUuid', 'dimension'))):
+                return {'ok': False, 'code': 'navigation_body_changed'}
+            from navigation_sense import NavigationSense
+            survey = NavigationSense(self).for_destination(fresh, args)
+            return {'ok': survey.get('ok') is True,
+                    'code': 'navigation_observed' if survey.get('ok') is True else 'navigation_sense_unavailable',
+                    'navigationSense': survey}
+        except (GatewayError, OSError, ValueError, TypeError, KeyError):
+            return {'ok': False, 'code': 'navigation_observation_unavailable'}
 
     def _invoke(self, tool, args=None):
         if tool in GUILD_ACTIONS:
@@ -1339,7 +1376,10 @@ class NumenGateway:
                     from game_skills import is_protected_action
                     protected = is_protected_action(tool, args)
                 recovering = tool == 'goto' and self._inward_move(before['position'], args)
-                if not recovering:
+                # Eating consumes carried inventory at the current body; it
+                # has no world target. Keep all identity, mode, lease, unknown
+                # and body-slot checks above and native food validation below.
+                if not recovering and tool != 'eat':
                     self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
                 if tool == 'eat' and before['counts'].get(args['item_id'], 0) <= 0:
                     return {'ok': False, 'code': 'food_item_missing',
@@ -1390,6 +1430,30 @@ class NumenGateway:
                 if tool == 'goto':
                     from navigation_sense import NavigationSense, supported_column_y
                     navigation_sense = NavigationSense(self).for_destination(before, args)
+                    destination = navigation_sense.get('destination') or {}
+                    if ('y' in args and navigation_sense.get('ok') is True
+                            and destination.get('available') is True
+                            and (destination.get('requestedStanceClear') is False
+                                 or destination.get('requestedStanceSupported') is False)):
+                        # The 2026-09-24 live return repeatedly supplied a floor
+                        # block as feet Y. Native terrain evidence already knew
+                        # it was blocked, yet we spent the lease on that target.
+                        # Reject only observed bad stances; never rewrite the
+                        # caller's point or claim the nearby candidates are paths.
+                        result = {'ok': False, 'code': 'walk_stance_unusable',
+                                  'tool': 'goto', 'requested': dict(args),
+                                  'dispatched': False, 'writePerformed': False,
+                                  'navigationSense': navigation_sense,
+                                  'notice': 'The requested feet position is blocked or unsupported. '
+                                            'Choose an observed supported stance with its x/y/z; '
+                                            'the candidates describe landing cells, not verified paths.'}
+                        try:
+                            self._record({'turnId': turn_id, 'tool': tool, 'args': dict(args),
+                                          'phase': 'preflight_rejected', 'observedAt': self._now(),
+                                          'result': result})
+                        except OSError:
+                            result['auditLogAvailable'] = False
+                        return result
                     if 'y' not in args:
                         resolved_navigation_y = supported_column_y(navigation_sense, args)
                         if resolved_navigation_y is None:

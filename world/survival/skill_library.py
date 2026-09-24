@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import hashlib
 from importlib.metadata import version as package_version
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -26,7 +27,7 @@ MEMORY_BYTES = 16 * 1024 * 1024
 STACK_BYTES = 256 * 1024
 CPU_SECONDS = 0.10
 from numen_gateway import TOOLS as ACTION_TOOLS
-OBSERVATION_TOOLS = ('inspect_block', 'inspect_container', 'sense')
+OBSERVATION_TOOLS = ('inspect_block', 'inspect_container', 'sense', 'navigation_sense')
 MIN_WAIT_SECONDS = 15
 MAX_WAIT_SECONDS = 300
 NAME = re.compile(r'[a-z][a-z0-9_-]{0,47}\Z')
@@ -98,6 +99,14 @@ def _observation(value):
             validate_sensor(value['args']['sensor'], value['args']['arguments'])
         except (ValueError, TypeError):
             raise SkillError('invalid_skill_observation')
+        return value
+    if value['tool'] == 'navigation_sense':
+        if not {'x', 'z'} <= set(value['args']) <= {'x', 'y', 'z'}:
+            raise SkillError('invalid_skill_observation')
+        for key, coordinate in value['args'].items():
+            low, high = (-64, 319) if key == 'y' else (-29999980, 29999980)
+            if type(coordinate) not in (int, float) or not math.isfinite(coordinate) or not low <= coordinate <= high:
+                raise SkillError('invalid_skill_observation')
         return value
     if set(value['args']) != {'x', 'y', 'z'}:
         raise SkillError('invalid_skill_observation')
