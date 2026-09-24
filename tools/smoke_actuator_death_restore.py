@@ -29,6 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-isolated', action='store_true', required=True)
     parser.add_argument('--candidate-build-record', type=Path, required=True)
+    parser.add_argument('--spawn-geometry', type=Path, help='Saved block-only spawn volume copied into the isolated test world')
+    parser.add_argument('--spawn-high-columns', type=Path, help='Saved sparse full-height columns; required with spawn geometry')
     args = parser.parse_args()
     record = json.loads(args.candidate_build_record.read_text('utf8'))
     jar = Path(record['jar'])
@@ -43,6 +45,23 @@ def main():
     if not folder.is_relative_to((ROOT/'runtime').resolve()) or folder.exists():
         raise ValueError('invalid_qa_directory')
     data = folder/'data'; (data/'mods').mkdir(parents=True)
+    geometry_sha = None
+    high_columns_sha = None
+    if args.spawn_geometry:
+        if not args.spawn_high_columns:
+            raise ValueError('real_high_columns_required_with_geometry')
+        raw = args.spawn_geometry.read_bytes()
+        geometry = json.loads(raw)
+        if geometry.get('bounds') != {'min':[-558,61,857], 'max':[-529,71,879]}:
+            raise ValueError('expected_spawn_geometry_bounds_required')
+        geometry_sha = hashlib.sha256(raw).hexdigest()
+        (data/'qa-spawn-geometry.json').write_bytes(raw)
+        high_raw = args.spawn_high_columns.read_bytes()
+        high = json.loads(high_raw)
+        if high.get('source') != 'saved_one_region_not_live' or not high.get('columns'):
+            raise ValueError('saved_high_columns_required')
+        high_columns_sha = hashlib.sha256(high_raw).hexdigest()
+        (data/'qa-spawn-high-columns.json').write_bytes(high_raw)
     print(json.dumps({'stage':'preparing','folder':str(folder),'project':project}), flush=True)
     for mod in (ROOT/'server/mc/mods').glob('*.jar'):
         if mod.name != 'numen_act-neoforge-1.21.1-0.1.3.jar':
@@ -113,6 +132,7 @@ def main():
         before=response('qddeathqa setup');details['setup']=before
         checks['existing-exact-owner-offline']=before['uuid']==BODY and before['ownerUuid']==OWNER and not before['ownerOnline'] and before['registryCount']==1
         checks['unloaded-landing-read-does-not-load']=not before['farChunkLoaded'] and not before['farChunkLoadedAfter'] and before['farSafeRejected']
+        checks['unloaded-worldspawn-column-does-not-load']=before['farWorldSpawnColumnRejected'] and not before['farChunkLoadedAfterColumn']
         offline=response('qddeathqa offline');details['ordinaryOffline']=offline
         checks['ordinary-offline-not-death']=not offline['bodyOnline'] and offline['pendingDeath']==0
         ordinary_raw=command('qddeathqa restore');ordinary_at=time.monotonic()
@@ -132,18 +152,40 @@ def main():
         checks['wrong-owner-refused']=not denied['ok'] and denied['code']=='registry_identity_mismatch'
         response('qddeathqa unsafe_spawn');unsafe=restore();details['unsafe']=unsafe
         checks['unsafe-spawn-refused-before-create']=not unsafe['ok'] and unsafe['code']=='death_safe_spawn_unavailable' and not status()['bodyOnline']
-        response('qddeathqa safe_spawn');response('qddeathqa stale_task')
+        response('qddeathqa safe_spawn')
+        if args.spawn_geometry:
+            geometry_observation=response('qddeathqa spawn_geometry');details['spawnGeometry']=geometry_observation
+            checks['real-water-under-air-anchor-reproduced']=geometry_observation['anchorFeetAir'] and geometry_observation['oldLowerFootWater'] and geometry_observation['oldLowerStandingAccepted']
+            selected=geometry_observation.get('selectedSurface')
+            checks['surface-selector-rejects-lower-water-pocket']=selected is not None and selected[1]>63 and geometry_observation['selectedFeetDry']
+            checks['high-sky-roof-cannot-replace-ground-spawn']=(geometry_observation['realHighColumnsApplied'] > 0 and geometry_observation['realSkyBlocksApplied'] > 0 and geometry_observation['highRoofAt178'] and geometry_observation['selectedWithinSpawnHeightBand'] and geometry_observation['realAndAdversarialSelectionEqual'])
+        response('qddeathqa stale_task')
         first=restore();first_at=time.monotonic();after=status()
         details['keptRestore']={'receipt':first,'after':after}
         checks['same-uuid-native-death-respawn']=first['ok'] and first.get('recovery')=='native_post_death' and after['uuid']==BODY and after['ownerUuid']==OWNER and after['pendingDeath']==0
         checks['kept-inventory-food-xp-preserved']=all(first.get(key) is True for key in ('postDeathInventoryMatched','postDeathFoodMatched','postDeathXpMatched')) and after['cake']==1 and after['cakeOffhand'] and after['sword']==1
         checks['stale-interrupted-task-never-replayed']=after['taskTool']=='' and not after['currentTask']
-        checks['safe-world-spawn-not-death-position']=after['safeLanding'] and abs(after['x'])<=3.5 and abs(after['z'])<=3.5 and abs(after['x']-before['x'])>3
+        anchor=(-540,64,868) if args.spawn_geometry else (0,-60,0)
+        checks['safe-world-spawn-not-death-position']=after['safeLanding'] and abs(after['x']-anchor[0])<=3.5 and abs(after['z']-anchor[2])<=3.5 and abs(after['x']-before['x'])>3
+        if args.spawn_geometry:
+            checks['actual-death-restores-on-dry-surface']=first['ok'] and after['feetDry'] and after['y']>63
         again=restore();details['alreadyOnline']=again
         checks['repeat-live-observation-not-second-body']=again['ok'] and again['phase']=='observed' and status()['rosterCount']==1
         journals=list((data/'qa-world/data/qd-numen-restores').glob('*.json'))
         audit=json.loads(journals[0].read_text()) if len(journals)==1 else {}
         checks['death-audit-completed-with-original-cause']=audit.get('status')=='completed' and audit.get('deathAt')==dead['pendingDeath'] and bool(audit.get('deathCause')) and len(audit.get('sourcePlayerdataSha256',''))==64
+        if args.spawn_geometry:
+            time.sleep(5)  # let pasted bounded-volume gravity/fluid updates settle
+            details['nativeWalkDispatch']=response('qddeathqa walk_exit')
+            pasted_diff=data/'qa-geometry-before-walk.json'
+            details['pastedGeometryChangesBeforeWalk']={'path':str(pasted_diff),'sha256':hashlib.sha256(pasted_diff.read_bytes()).hexdigest(),'count':len(json.loads(pasted_diff.read_text('utf8')))}
+            deadline=time.monotonic()+35
+            walked=status()
+            while time.monotonic()<deadline and (walked['currentTask'] or not walked.get('walkReply')):
+                time.sleep(1);walked=status()
+            details['drySurfaceWalk']=walked
+            checks['real-native-walk-from-surface-to-dry-exit']=not walked['currentTask'] and ((walked['x']+535.5)**2+(walked['z']-873.5)**2)**.5<=1.5 and int(walked['y'])==63 and ((walked['x']-after['x'])**2+(walked['z']-after['z'])**2)**.5>3
+            checks['surface-walk-did-not-edit-solid-geometry']=walked['geometryChangedSolidBlocks']==0
         response('qddeathqa die_drop');dropped=pending();details['postDeathDropped']=dropped
         checks['actual-death-removes-items-before-restore']=dropped['savedInventorySha256']!=dead['savedInventorySha256']
         print(json.dumps({'stage':'first_restore_checked','checks':checks}),flush=True)
@@ -165,6 +207,8 @@ def main():
     report={'ok':all(checks.values()),'checks':checks,'details':details,'jarSha256':record['sha256'],'numenJarSha256':record['numenSha256'],'project':project,
         'network':'isolated_docker_internal_no_published_ports','productionWorldUsed':False,
         'modelCalls':0,'productionMutations':0,'fixtureSha256':hashlib.sha256(source.read_bytes()).hexdigest(),
+        'spawnGeometrySha256':geometry_sha,
+        'spawnHighColumnsSha256':high_columns_sha,
         'toolSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'scope':'fresh isolated world with installed mods, real vanilla death and Numen factory, no production save or LLM'}
     (folder/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n','utf8')
     print(json.dumps({'ok':report['ok'],'checks':checks,'report':str(folder/'result.json')}),flush=True)

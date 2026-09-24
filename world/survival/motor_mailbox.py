@@ -150,6 +150,10 @@ def action_outcome(execution):
         'actionId', 'tool', 'requested', 'args', 'status', 'completionConfirmed',
         'nativeTaskId', 'observedAt', 'code', 'noReplay', 'retryAutomatically',
         'dispatchConfirmed', 'effectConfirmed', 'executionConfirmed') if key in receipt}
+    if (receipt.get('tool') == 'eat' and receipt.get('completionConfirmed') is True
+            and receipt.get('status') in ('completed', 'failed')
+            and isinstance(receipt.get('outcomeDetail'), str)):
+        result['outcomeDetail'] = receipt['outcomeDetail'][:360]
     if 'ok' in execution:
         result['queryOk'] = execution['ok']
     if 'inFlight' in execution:

@@ -347,6 +347,104 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(read_json(self.state / 'lease.json')['status'], 'closed')
         self.assertEqual(self.controller.data['pauseReason'], 'operator_drain')
 
+    def test_async_drain_during_context_closes_admission_without_submission_or_cancel(self):
+        self.controller.settings['asyncMotor'] = True
+        original_context = self.controller.life_context
+        request_ids = []
+        def late_drain(*args, **kwargs):
+            context = original_context(*args, **kwargs)
+            request_ids.append(self.drain()['drain']['requestId'])
+            return context
+        self.controller.life_context = late_drain
+        self.controller.submit_model(self.gateway.body, read_json(self.state / 'control.json'))
+        control = read_json(self.state / 'control.json')
+        self.assertEqual(control['drain']['requestId'], request_ids[0])
+        self.assertEqual(control['drain']['status'], 'completed')
+        self.assertFalse(control['enabled'])
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.invoked)
+        self.assertFalse(self.controller.data['decisions'])
+        self.assertIsNone(self.controller.data['active'])
+        self.assertFalse((self.state / 'cognition-lease.json').exists())
+
+    def test_async_cognition_errors_other_than_closed_admission_still_raise(self):
+        from unittest.mock import patch
+        self.controller.settings['asyncMotor'] = True
+        for code in ('cognition_already_open', 'outcome_unknown', 'invalid_cognition_expiry'):
+            with self.subTest(code=code), patch('motor_mailbox.open_cognition', side_effect=ValueError(code)):
+                with self.assertRaisesRegex(ValueError, '^' + code + '$'):
+                    self.controller.submit_model(self.gateway.body, read_json(self.state / 'control.json'))
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
+
+    def test_requested_idle_drain_completes_same_request_after_controller_pause(self):
+        self.controller.settings['asyncMotor'] = True
+        self.controller.data.update(status='paused', pauseReason='controller_ValueError')
+        self.write('control.json', {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError'})
+        self.job(status='replan', practiceStarted=True, practiceFinalized=True)
+        request = self.drain()['drain']
+        self.controller.tick()
+        control = read_json(self.state / 'control.json')
+        self.assertEqual(control['drain']['requestId'], request['requestId'])
+        self.assertEqual(control['drain']['status'], 'completed')
+        self.assertFalse(control['enabled'])
+        self.assertEqual(control['pauseReason'], 'operator_drain')
+        self.assertFalse(control['drain']['actionReplayed'])
+        self.assertFalse(control['drain']['nativeTaskCancelled'])
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.invoked)
+
+    def test_disabled_drain_waits_for_persisted_skill_and_practice_boundaries(self):
+        self.controller.settings['asyncMotor'] = True
+        self.write('control.json', {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError'})
+        self.drain()
+        baseline = read_json(self.state / 'control.json')
+        jobs = [{'status': status} for status in ('pending', 'running', 'dispatching', 'unknown')]
+        jobs += [{'status': status, 'practiceStarted': True, 'practiceFinalized': False}
+                 for status in ('replan', 'done', 'failed', 'paused')]
+        for job in jobs:
+            with self.subTest(job=job):
+                self.job(**job)
+                self.assertFalse(self.controller.drain_at_boundary(self.gateway.body))
+                self.assertEqual(read_json(self.state / 'control.json'), baseline)
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.invoked)
+
+    def test_disabled_drain_keeps_all_unsettled_boundaries(self):
+        self.controller.settings['asyncMotor'] = True
+        self.write('control.json', {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError'})
+        self.drain()
+        baseline = read_json(self.state / 'control.json')
+        cases = ('unknown', 'inflight', 'lease_reserved', 'lease_unknown', 'motor_claimed',
+                 'motor_unknown', 'native_busy', 'observation_failed', 'active', 'dialogue', 'execution')
+        for case in cases:
+            with self.subTest(case=case):
+                if case in ('unknown', 'inflight'):
+                    self.write('unknown.json' if case == 'unknown' else 'inflight-action.json', {'actionId': 'a' * 32})
+                elif case.startswith('lease_'):
+                    self.write('lease.json', {'status': case.removeprefix('lease_')})
+                elif case.startswith('motor_'):
+                    self.write('motor-inbox.json', {'schema': 1, 'requests': [{'status': case.removeprefix('motor_')}]})
+                elif case == 'native_busy': self.gateway.body['task']['busy'] = True
+                elif case == 'observation_failed': self.gateway.body['ok'] = False
+                elif case == 'active': self.controller.data['active'] = {'taskId': 'existing'}
+                elif case == 'dialogue': self.controller.data['dialogueActive'] = {'taskId': 'existing'}
+                elif case == 'execution': self.controller.data['actionExecution'] = {'inFlight': True}
+                self.assertFalse(self.controller.drain_at_boundary(self.gateway.body))
+                self.assertEqual(read_json(self.state / 'control.json'), baseline)
+                for name in ('unknown.json', 'inflight-action.json', 'lease.json', 'motor-inbox.json'):
+                    (self.state / name).unlink(missing_ok=True)
+                self.gateway.body['ok'] = True
+                self.gateway.body['task']['busy'] = False
+                for name in ('active', 'dialogueActive', 'actionExecution'):
+                    self.controller.data.pop(name, None)
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.invoked)
+
     def test_navigation_stop_unknown_is_not_reissued_by_generic_pause_cleanup(self):
         self.gateway.body['task'] = {'busy': True, 'task_id': 't22'}
         self.gateway.navigation_stop_pending = lambda body: body['task']['task_id'] == 't22'

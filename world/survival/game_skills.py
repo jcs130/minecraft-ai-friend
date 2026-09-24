@@ -21,7 +21,7 @@ PARAM_TEXT = re.compile(r'[A-Za-z0-9_:.\-/\u3400-\u9fff]{1,64}\Z')
 REQUEST_ID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z')
 # All unknown/new spells conservatively retain town protection. These native
 # spells or featured legacy effects do not move the actor or damage terrain.
-SELF_CASTS = frozenset(('blood_mana', 'feather_boots',
+SELF_CASTS = frozenset(('blood_mana', 'feather_boots', 'give',
                        'irons_spellbooks:oakskin', 'irons_spellbooks:shield',
                        'irons_spellbooks:invisibility', 'irons_spellbooks:gluttony'))
 UNRESOLVED_TRAVEL = frozenset(('home', 'sky_walk', *('irons_spellbooks:' + name for name in (
@@ -336,6 +336,10 @@ def validate_game_action(tool, args):
         return
     params = args['params']
     if not isinstance(params, dict) or len(params) > 6 or (':' in ability and params):
+        raise GatewayError('invalid_game_skill_params')
+    # The existing featured give spell affects only the bound actor. Keep its
+    # item whitelist/count/level/mana checks in the authoritative world service.
+    if ability == 'give' and set(params) - {'item', 'count'}:
         raise GatewayError('invalid_game_skill_params')
     for key, value in params.items():
         if not isinstance(key, str) or not PARAM_KEY.fullmatch(key) or key in ('constructor', 'prototype', '__proto__'):

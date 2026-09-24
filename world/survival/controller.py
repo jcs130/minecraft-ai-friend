@@ -541,7 +541,7 @@ class Controller:
     def drain_at_boundary(self, body):
         """Stop scheduling after the current native turn and physical action settle."""
         initial = read_json(self.root / 'control.json')
-        if (self.data.get('active') or self.data.get('dialogueActive') or initial.get('enabled') is not True
+        if (self.data.get('active') or self.data.get('dialogueActive')
                 or (initial.get('drain') or {}).get('status') != 'requested'):
             return False
         # A model can finish after starting an asynchronous native action. The
@@ -550,7 +550,7 @@ class Controller:
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json')
             drain = control.get('drain') or {}
-            if control.get('enabled') is not True or drain.get('status') != 'requested':
+            if drain.get('status') != 'requested':
                 return False
             # Unknown retains its existing stronger stop path. No native stop,
             # action dispatch, or receipt inference belongs to this boundary.
@@ -562,6 +562,15 @@ class Controller:
             lease = read_json(lease_path) if lease_path.exists() else {}
             if lease.get('status') in ('reserved', 'unknown'):
                 return False
+            if control.get('enabled') is not True:
+                # A known admission race can pause before a requested drain
+                # settles. That must not require re-enabling autonomy. Unlike
+                # the enabled path, motor_tick has not visited persisted work.
+                job_path = self.root / 'skill-job.json'
+                job = read_json(job_path) if job_path.exists() else {}
+                if (job and job.get('status') not in ('done', 'replan', 'cancelled', 'paused', 'failed')
+                        or job.get('practiceStarted') and not job.get('practiceFinalized')):
+                    return False
             if self.settings.get('asyncMotor'):
                 from motor_mailbox import view as motor_view, expire_queued_locked
                 if any(row['status'] in ('claimed', 'unknown')
@@ -2165,7 +2174,16 @@ class Controller:
             active['review'] = requested_review
         if self.settings.get('asyncMotor'):
             from motor_mailbox import open_cognition
-            open_cognition(self.root, turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, self.clock)
+            try:
+                open_cognition(self.root, turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, self.clock)
+            except ValueError as error:
+                if str(error) != 'cognition_admission_closed':
+                    raise
+                # Operator pause/drain won the context-construction race.
+                # No cognition lease, active reservation or model submission
+                # exists for this turn; preserve that known non-dispatch.
+                self.drain_at_boundary(body)
+                return
             active['bodyAccess'] = 'queued'
         else:
             self.gateway.open_lease(turn_id, (now + self.settings['taskTimeoutSeconds']) * 1000, action_limit=6)
