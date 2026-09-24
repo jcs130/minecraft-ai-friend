@@ -483,6 +483,254 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(set(self.backend.polled), {self.active['taskId']})
         self.c.policy_worker.submit.assert_not_called()
 
+    def test_fresh_survey_dispatches_before_slow_handoff_can_expire_it(self):
+        self.advance()  # The explicitly selected program is durably claimed.
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data['nextDecisionAt'] = 0
+        handoff = []
+        def slow_submit(*args):
+            job = read_json(self.state/'skill-job.json')
+            handoff.append({'actions': len(self.gateway.actions), 'job': job,
+                            'lease': (read_json(self.state/'lease.json')
+                                      if (self.state/'lease.json').exists() else {})})
+            self.clock.now += 8.81043  # Observed production slowHandoff, no sleeping.
+        self.backend.on_submit = slow_submit
+        self.advance()
+        self.assertEqual(len(handoff), 1)
+        self.assertEqual(handoff[0]['actions'], 1)
+        job = handoff[0]['job']
+        self.assertEqual(job['status'], 'running')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['observations'], 1)
+        self.assertEqual(job['steps'], 1)
+        self.assertTrue(job['practiceStarted'])
+        self.assertEqual(job['lastTurnId'], self.gateway.actions[0]['turnId'])
+        self.assertEqual(handoff[0]['lease']['status'], 'closed')
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(read_json(self.state/'skill-job.json').get('practiceFinalized'))
+        self.assertIn('prepareContext', self.c.data['motorTimingMs'])
+        self.assertIn('nativeSubmit', self.c.data['motorTimingMs'])
+        self.advance()
+        self.assertIn('taskPoll', self.c.data['motorTimingMs'])
+        self.assertNotIn('nativeSubmit', self.c.data['motorTimingMs'])
+        self.assertNotIn('prepareContext', self.c.data['motorTimingMs'])
+
+    def test_survey_continuation_stays_bounded_when_program_requests_another_read(self):
+        self.advance()
+        calls = []
+        def empty_survey(body, args):
+            calls.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            result['navigationSense']['destination']['requestedStanceSupported'] = False
+            return result
+        self.gateway.navigation_observation = empty_survey
+        with patch.object(self.library, 'run', wraps=self.library.run) as run:
+            self.advance()
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([p['x'] for p in calls], [204, 212, 216])
+        self.assertFalse(self.gateway.actions)
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_no_supported_progress')
+
+    def test_shorter_supported_survey_is_consumed_before_slow_handoff(self):
+        self.advance()
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data['nextDecisionAt'] = 0
+        reads, handoff = [], []
+        def shorter_survey(body, args):
+            reads.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            result['navigationSense']['destination']['requestedStanceSupported'] = len(reads) == 2
+            return result
+        def slow_submit(*args):
+            handoff.append(len(self.gateway.actions))
+            self.clock.now += 8.81043
+        self.gateway.navigation_observation = shorter_survey
+        self.backend.on_submit = slow_submit
+        self.advance()
+        self.assertEqual([p['x'] for p in reads], [204, 212])
+        self.assertEqual(handoff, [1])
+        self.assertEqual(self.gateway.actions[0]['args']['x'], 212)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.assertEqual(len(self.backend.submitted), 2)
+
+    def test_same_tick_continuation_does_not_relax_expired_survey(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        def stale_survey(body, args):
+            result = original(body, args)
+            result['navigationSense']['observedAt'] -= 5001
+            return result
+        self.gateway.navigation_observation = stale_survey
+        self.advance()
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_survey_unusable')
+        self.assertFalse(self.gateway.actions)
+        self.assertFalse(self.backend.cancelled)
+
+    def test_same_tick_continuation_does_not_relax_wrong_actor_survey(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        def wrong_actor(body, args):
+            result = original(body, args)
+            result['navigationSense']['actorUuid'] = 'different-body'
+            return result
+        self.gateway.navigation_observation = wrong_actor
+        self.advance()
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_survey_unusable')
+        self.assertFalse(self.gateway.actions)
+
+    def test_operator_drain_during_read_stops_continuation_without_dispatch(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        control = read_json(self.state/'control.json') | {'drain': {
+            'requestId': 'same-operator-drain', 'status': 'requested', 'requestedAt': int(self.clock()*1000)}}
+        def draining_read(body, args):
+            write_json(self.state/'control.json', control)
+            return original(body, args)
+        self.gateway.navigation_observation = draining_read
+        self.advance()
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.gateway.opened or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_operator_pause_during_read_stops_continuation_without_dispatch(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'operator_pause'}
+        def paused_read(body, args):
+            write_json(self.state/'control.json', control)
+            return original(body, args)
+        self.gateway.navigation_observation = paused_read
+        self.advance()
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.gateway.opened or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_disabled_requested_drain_retires_original_known_claim_without_resume(self):
+        self.advance()
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data.update(status='paused', pauseReason='controller_ValueError')
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError',
+                   'drain': {'requestId': 'disabled-original-drain', 'status': 'requested',
+                             'requestedAt': int(self.clock()*1000)}}
+        write_json(self.state/'control.json', control)
+        self.advance()
+        current = read_json(self.state/'control.json')
+        self.assertIs(current['enabled'], False)
+        self.assertEqual(current['drain']['requestId'], 'disabled-original-drain')
+        self.assertEqual(current['drain']['status'], 'completed')
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_disabled_drain_retries_cancelled_practice_at_same_safe_boundary(self):
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.c.practice.begin(job, self.gateway.body)
+        job['practiceStarted'] = True
+        write_json(self.state/'skill-job.json', job)
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data.update(status='paused', pauseReason='controller_ValueError')
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError',
+                   'drain': {'requestId': 'disabled-practice-retry', 'status': 'requested',
+                             'requestedAt': int(self.clock()*1000)}}
+        write_json(self.state/'control.json', control)
+        finish = self.c.practice.finish
+        attempts = []
+        def fail_once(*args):
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise OSError('fixture temporary practice storage failure')
+            return finish(*args)
+        with patch.object(self.c.practice, 'finish', side_effect=fail_once):
+            self.advance()
+            self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+            self.assertTrue(read_json(self.state/'skill-job.json')['practiceFinalized'])
+            self.assertEqual(view(self.state)['requests'][0]['status'], 'claimed')
+            self.assertEqual(read_json(self.state/'control.json')['drain']['status'], 'requested')
+            self.advance()
+        current = read_json(self.state/'control.json')
+        self.assertIs(current['enabled'], False)
+        self.assertEqual(current['drain']['requestId'], 'disabled-practice-retry')
+        self.assertEqual(current['drain']['status'], 'completed')
+        self.assertTrue(read_json(self.state/'skill-job.json')['practiceFinalized'])
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+
+    def test_drain_after_practice_step_before_lease_settles_without_world_receipt(self):
+        from numen_gateway import NumenGateway
+        self.advance()
+        guard = NumenGateway(self.state, rcon=Mock(), clock=self.clock)
+        control = {'schema': 1, 'enabled': True, 'drain': {
+            'requestId': 'lease-admission-drain', 'status': 'requested', 'requestedAt': int(self.clock()*1000)}}
+        def guarded_lease(*args, **kwargs):
+            job = read_json(self.state/'skill-job.json')
+            self.assertEqual(len(self.c.practice.turns(job['practiceRunId'])), 1)
+            write_json(self.state/'control.json', control)
+            return guard.open_lease(*args, **kwargs)
+        self.gateway.open_lease = guarded_lease
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['status'], 'replan')
+        self.assertTrue(job['practiceFinalized'])
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertFalse((self.state/'unknown.json').exists())
+        self.assertFalse((self.state/'inflight-action.json').exists())
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_unbounded_read_program_cannot_leave_an_unconsumed_fourth_survey(self):
+        self.advance()
+        calls = []
+        def observe(body, args):
+            calls.append(args)
+            return survey(body | {'observedAt': self.clock()*1000}, args)
+        self.gateway.navigation_observation = observe
+        plan = {'memory': {'mode': 'return_to_work_area'},
+                'observe': {'tool': 'navigation_sense', 'args': {'x': 204, 'y': 64, 'z': 100}}}
+        with patch.object(self.library, 'run', return_value=plan) as run:
+            self.advance()
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_observation_budget')
+        self.assertFalse(self.gateway.actions)
+
+    def test_actual_arrival_survey_is_consumed_before_slow_poll_ages_wrapper(self):
+        self.advance()
+        # Exact fifth-window arrival/probe and target. The fixture world read
+        # reports the original supported, collision-free stance (not a route).
+        position = {'x': -555.3086858530143, 'y': 64, 'z': 864.7768436963573}
+        self.gateway.body['position'] = position
+        self.c.settings['workArea'] = {'minX': -1100, 'maxX': 0, 'minZ': 300, 'maxZ': 1400}
+        self.gateway._area = Mock()
+        job = read_json(self.state/'skill-job.json')
+        job['memory'] = {'target': {'x': -555, 'z': 865}}
+        write_json(self.state/'skill-job.json', job)
+        original = self.gateway.navigation_observation
+        def actual_read_latency(body, args):
+            self.clock.now += .263  # 3118555 wrapper -> 3118818 native result.
+            return original(body, args)
+        self.gateway.navigation_observation = actual_read_latency
+        observed_at_poll = []
+        def slow_poll(task):
+            observed_at_poll.append(read_json(self.state/'skill-job.json'))
+            self.clock.now += 5.8
+            return {'status': 'running'}
+        self.backend.poll = slow_poll
+        self.advance()
+        self.assertEqual(len(observed_at_poll), 1)
+        self.assertEqual(observed_at_poll[0]['status'], 'done')
+        self.assertEqual(observed_at_poll[0]['reason'], 'observed_horizontal_supported_target')
+        self.assertEqual(observed_at_poll[0]['lastObservation']['args'], position)
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
     def test_unknown_and_restart_never_replay_or_advance(self):
         self.start()
         write_json(self.state/'unknown.json', {'actionId': self.current_receipt['actionId']})
@@ -513,7 +761,10 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.c.skills = self.library
         self.c.policy_worker.submit = Mock(side_effect=AssertionError('unexpected classifier'))
         self.advance()
-        self.assertEqual(len(self.gateway.actions), 1)
+        # A newly acquired survey is now consumed in the same tick. The old
+        # dispatch is still never replayed; only the next verified segment runs.
+        self.assertEqual(len(self.gateway.actions), 2)
+        self.assertEqual(read_json(self.state/'skill-job.json')['observations'], 2)
         self.advance()
         self.assertEqual(len(self.gateway.actions), 2)
         self.assertNotEqual(self.gateway.actions[0]['turnId'], self.gateway.actions[1]['turnId'])

@@ -186,7 +186,9 @@ class StatusGatewayTests(unittest.TestCase):
             brief_result = await server.call_tool('status', {'detail': 'brief'})
             # Newer FastMCP also returns structured content beside the blocks.
             def decoded(result):
-                blocks = result[0] if isinstance(result, tuple) else result
+                from mcp.types import CallToolResult
+                blocks = (result.content if isinstance(result, CallToolResult)
+                          else result[0] if isinstance(result, tuple) else result)
                 return json.loads(blocks[0].text)
             full = decoded(full_result)
             brief = decoded(brief_result)

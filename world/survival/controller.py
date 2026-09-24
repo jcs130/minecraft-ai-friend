@@ -547,6 +547,10 @@ class Controller:
         # A model can finish after starting an asynchronous native action. The
         # snapshot from the beginning of this tick may predate that action.
         body = self.gateway.snapshot()
+        if self.settings.get('asyncMotor'):
+            from motor_loop import drain_skill_boundary, reconcile
+            if drain_skill_boundary(self, body):
+                reconcile(self)
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json')
             drain = control.get('drain') or {}
@@ -1521,6 +1525,14 @@ class Controller:
         else:
             self.gateway.close_lease(blocking=True)
 
+    def _timed_call(self, phase, call, *args, **kwargs):
+        """Measure existing IO without repeating it or recording its contents."""
+        started = time.monotonic()
+        try:
+            return call(*args, **kwargs)
+        finally:
+            self.data.setdefault('loopPhaseTimingMs', {})[phase] = round((time.monotonic() - started) * 1000, 2)
+
     def poll_model(self, body):
         active = self.data['active']
         self.collect_action_receipts(active['turnId'])
@@ -1540,7 +1552,7 @@ class Controller:
             result = ({'status': 'finished', 'result': {'status': 'completed' if terminal['completed'] else 'failed', 'output': [
                 {'role': 'assistant', 'type': 'message', 'status': 'completed',
                  'content': [{'type': 'text', 'text': terminal['text']}]}]}}
-                if terminal else self.backend.poll(active['taskId']))
+                if terminal else self._timed_call('taskPoll', self.backend.poll, active['taskId']))
         except Exception as error:
             import httpx
             status = getattr(getattr(error, 'response', None), 'status_code', None)
@@ -1749,7 +1761,7 @@ class Controller:
         self.save()
         return delivery
 
-    def tick_skill(self, body, recovery_only=False):
+    def tick_skill(self, body, recovery_only=False, *, observation_budget=3):
         path = self.root / 'skill-job.json'
         if not self.skills or not path.exists():
             self.discard_policy()
@@ -1877,11 +1889,20 @@ class Controller:
                 job['nextRunAt'] = now + plan['waitSeconds']
                 self.data['skillWaitReason'] = 'program_wait'
             elif 'observe' in plan:
+                if plan['observe']['tool'] == 'navigation_sense' and observation_budget <= 0:
+                    # Current navigation has at most three probes (16/8/4).
+                    # Never issue evidence which this tick cannot consume.
+                    job.update(status='replan', reason='navigation_observation_budget')
+                    write_json(path, job)
+                    self.record('skill_finished', name=job['name'], version=job['version'],
+                                status='replan', reason=job['reason'], steps=job['steps'])
+                    return False
                 job['lastObservation'] = program_observation(self.gateway, plan['observe'], body, now)
                 job['observations'] = job.get('observations', 0) + 1
-                # A destination survey is evidence for the very next segment,
-                # not a long-running environmental process. No loop or new LLM.
-                delay = .25 if plan['observe']['tool'] == 'navigation_sense' else max(15, self.settings['observationSeconds'])
+                # Persist the read before its bounded continuation. Otherwise
+                # synchronous social/model IO can age this 5s evidence before
+                # the next motor tick. Each read consumes the small tick budget.
+                delay = 0 if plan['observe']['tool'] == 'navigation_sense' else max(15, self.settings['observationSeconds'])
                 job['nextRunAt'] = now + delay
                 self.data['skillWaitReason'] = 'program_observation'
             if plan.get('done') or plan.get('replan'):
@@ -1936,6 +1957,15 @@ class Controller:
                 self.collect_action_receipts(turn_id)
             self.data['status'] = 'executing_skill'
             self.save()
+            if (plan.get('observe') or {}).get('tool') == 'navigation_sense':
+                latest = read_json(self.root / 'control.json')
+                if (latest.get('enabled') is not True
+                        or (latest.get('drain') or {}).get('status') == 'requested'):
+                    from motor_loop import drain_skill_boundary
+                    return not drain_skill_boundary(self, body, allow_pause=True)
+                # The normal step retains budget, body identity, freshness,
+                # practice and gateway dispatch/unknown checks. No model wait.
+                return self.tick_skill(body, recovery_only=recovery_only, observation_budget=observation_budget-1)
             return job['status'] == 'running'
         except Exception as exc:
             self.discard_policy()
@@ -1956,6 +1986,7 @@ class Controller:
             return False
 
     def submit_model(self, body, control):
+        prepare_started = time.monotonic()
         if self.data.get('dialogueActive'):
             return
         if self.drain_at_boundary(body):
@@ -2159,6 +2190,7 @@ class Controller:
             model_session, context, context_delivery = prepare(
                 self.root, self.session, context, self.memory(), learning=due)
         prompt = subject + audience_note + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
+        self.data.setdefault('loopPhaseTimingMs', {})['prepareContext'] = round((time.monotonic() - prepare_started) * 1000, 2)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': model_session['primarySessionId'], 'userId': self.session['userId'],
                   'channel': self.session['channel'], 'chatId': model_session.get('chatId'),
@@ -2221,7 +2253,7 @@ class Controller:
                 for reply in replies:
                     self.party.validate_session(self.session, self.settings, reservation=reply)
             request_context = self.party.request_context() if message is not None or replies else None
-            active['taskId'] = self.backend.submit(turn_id, prompt, self.settings['taskTimeoutSeconds'],
+            active['taskId'] = self._timed_call('nativeSubmit', self.backend.submit, turn_id, prompt, self.settings['taskTimeoutSeconds'],
                 session=model_session, request_context=request_context)
             active['phase'] = 'submitted'
             from life_cycle import consume
@@ -2232,7 +2264,7 @@ class Controller:
                 self.party.submitted(active['partyReservation'], active['taskId'])
             if hasattr(self.backend, 'resolve_chat'):
                 try:
-                    chat = self.backend.resolve_chat(model_session)
+                    chat = self._timed_call('resolveChat', self.backend.resolve_chat, model_session)
                     if chat:
                         from life_session import bind_chat
                         if model_session['primarySessionId'] == self.session['primarySessionId']:
@@ -2808,6 +2840,7 @@ class Controller:
 
     def tick(self):
         tick_started = time.monotonic()
+        self.data['loopPhaseTimingMs'] = {}
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
         self.settle_cancellation()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
@@ -2850,14 +2883,15 @@ class Controller:
         observed_at = time.monotonic()
         if self.settings.get('brainProtocol') == 1:
             from social_attention import tick as attention_tick
-            attention_tick(self, body, control)
+            self._timed_call('attention', attention_tick, self, body, control)
             from dialogue import tick as dialogue_tick
-            dialogue_tick(self, body, control)
-        self._check_life_cycle(body)
+            self._timed_call('dialogue', dialogue_tick, self, body, control)
+        self._timed_call('life', self._check_life_cycle, body)
         if body.get('ok'):
             from body_reconnect import BodyReconnect
             try:
-                confirmed = BodyReconnect(self.gateway, self.clock).confirm_online(self.settings, body)
+                confirmed = self._timed_call('confirmOnline', BodyReconnect(self.gateway, self.clock).confirm_online,
+                                             self.settings, body)
                 if confirmed is not None:
                     self.data['bodyReconnect'] = confirmed
             except (ValueError, OSError):
@@ -2933,7 +2967,8 @@ class Controller:
                 'observeAndReceipts': round((observed_at-tick_started)*1000, 2),
                 'attentionAndLife': round((motor_at-observed_at)*1000, 2),
                 'motor': round((motor_finished-motor_at)*1000, 2),
-                'slowHandoff': round((time.monotonic()-motor_finished)*1000, 2)}
+                'slowHandoff': round((time.monotonic()-motor_finished)*1000, 2),
+                **self.data['loopPhaseTimingMs']}
         elif self.data.get('active'):
             self.poll_model(body)
         elif self.data.get('goalAgendaError'):

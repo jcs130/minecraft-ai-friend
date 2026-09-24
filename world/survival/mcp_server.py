@@ -433,7 +433,11 @@ def make_server(gateway=None, skill_tools=None, http=False):
     @server.tool()
     def status(wait_seconds: float = 0, detail: Literal['full', 'brief'] = 'brief') -> dict:
         """读取最新身体与上一动作回执。默认brief保留counts、inventorySpace、装备、技能书、安全和终态，省略背包槽位并压缩历史回执；需要槽位/物品元数据与完整回执时显式detail=full。wait_seconds=0..10按需等当前动作，每2秒只读一次，终态提前返回；超时仍在途则结束本次工作而非忙轮询。空闲不是成功，技能书携带不等于已学。"""
-        return read_status(gateway, wait_seconds, detail=detail)
+        body = read_status(gateway, wait_seconds, detail=detail)
+        # Keep the existing single-text MCP contract; avoid FastMCP's pretty
+        # JSON expansion without filtering receipts, identities or future data.
+        return CallToolResult(content=[TextContent(type='text',
+            text=json.dumps(body, ensure_ascii=False, separators=(',', ':')))])
 
     @server.tool()
     def say(turn_id: str, text: str, voice: bool = True) -> dict:

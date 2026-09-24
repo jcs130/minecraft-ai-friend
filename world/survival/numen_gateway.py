@@ -760,6 +760,8 @@ class NumenGateway:
         control = read_json(self.state / 'control.json')
         if control.get('schema') != 1 or control.get('enabled') is not True:
             raise GatewayError('autonomy_disabled')
+        if (control.get('drain') or {}).get('status') == 'requested':
+            raise GatewayError('drain_requested')
 
     def open_lease(self, turn_id, expires_at, action_limit=1):
         with action_lock(self.state):
@@ -1617,6 +1619,10 @@ class NumenGateway:
                         'about an earlier call: pending/unknown requests keep their original identity '
                         'and must not be replayed. Authority and outcome guards are checked again.'}
             result = cognition_rejection(self.state, turn_id, str(exc), self.clock)
+            if str(exc) == 'drain_requested':
+                # _enabled runs under admission lock, before lease consumption
+                # and the uncertainty journal. Existing native work is untouched.
+                result.update(dispatched=False, writePerformed=False, queued=False)
             details = getattr(exc, 'details', None)
             if (str(exc) in ('protected_area', 'outside_work_area')
                     and isinstance(details, dict) and details.get('schema') == 1

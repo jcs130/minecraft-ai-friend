@@ -425,6 +425,43 @@ class GatewayTests(unittest.TestCase):
         # A normal planning mistake must not block another action in this turn.
         self.assertTrue(self.mine()['ok'])
 
+    def test_drain_rejects_new_lease_and_unspent_open_lease_action_without_marker(self):
+        lease = self.lease()
+        control = {'schema': 1, 'enabled': True, 'drain': {
+            'requestId': 'operator-exact-drain', 'status': 'requested'}}
+        self.write('control.json', control)
+        with self.assertRaisesRegex(gateway.GatewayError, '^drain_requested$'):
+            self.client.open_lease('new_0123456789abcdef', NOW*1000+120000)
+        result = self.mine()
+        self.assertEqual(result['code'], 'drain_requested')
+        self.assertIs(result['ok'], False)
+        self.assertIs(result['dispatched'], False)
+        self.assertIs(result['writePerformed'], False)
+        self.assertEqual(gateway.read_json(self.state/'lease.json'), lease)
+        self.assertEqual(gateway.read_json(self.state/'control.json'), control)
+        self.assertFalse((self.state/'unknown.json').exists())
+        self.assertFalse((self.state/'inflight-action.json').exists())
+        self.assertFalse((self.state/'turn-actions'/f'{TURN}.json').exists())
+        self.assertFalse(self.rcon.calls)
+
+    def test_drain_during_readonly_action_preflight_cannot_reserve_or_dispatch(self):
+        lease = self.lease()
+        original = self.client.snapshot
+        control = {'schema': 1, 'enabled': True, 'drain': {
+            'requestId': 'operator-preflight-drain', 'status': 'requested'}}
+        def snapshot():
+            value = original()
+            self.write('control.json', control)
+            return value
+        with patch.object(self.client, 'snapshot', side_effect=snapshot):
+            result = self.client.action(TURN, 'equip_item', {'item_id': 'minecraft:oak_log', 'slot': 'mainhand', 'action': 'equip'})
+        self.assertEqual(result['code'], 'drain_requested')
+        self.assertEqual(gateway.read_json(self.state/'lease.json'), lease)
+        self.assertEqual(gateway.read_json(self.state/'control.json'), control)
+        self.assertFalse((self.state/'unknown.json').exists())
+        self.assertFalse((self.state/'turn-actions'/f'{TURN}.json').exists())
+        self.assertFalse(self.rcon.mutations())
+
     def test_outside_eating_still_requires_inventory_identity_mode_and_lease(self):
         self.rcon.position = {'x': 200, 'y': 64, 'z': 100}
         self.lease()

@@ -248,10 +248,67 @@ def recovery_boundary(c, body):
     return True
 
 
+def drain_skill_boundary(c, body, *, allow_pause=False):
+    """Retire a program for operator drain only at a proved idle boundary."""
+    execution = c.data.get('actionExecution') or {}
+    if (body.get('ok') is not True or body.get('task', {}).get('busy') is not False
+            or execution.get('inFlight') or execution.get('code') == 'outcome_unknown'):
+        return False
+    with action_lock(c.root, blocking=True):
+        control = read_json(c.root/'control.json')
+        draining = (control.get('drain') or {}).get('status') == 'requested'
+        if not draining and not (allow_pause and control.get('enabled') is not True):
+            return False
+        lease_path = c.root/'lease.json'
+        lease = read_json(lease_path) if lease_path.exists() else {}
+        if (lease.get('status') in ('reserved', 'unknown')
+                or (c.root/'unknown.json').exists() or (c.root/'inflight-action.json').exists()):
+            return False
+        job = _job(c)
+        operator_cancelled = (job.get('status') == 'cancelled'
+            and job.get('reason') in ('operator_drain', 'operator_pause'))
+        if job.get('status') not in ('pending', 'running') and not operator_cancelled:
+            return False
+        rows = view(c.root)['requests']
+        if (any(row['status'] == 'unknown' for row in rows) or not any(
+                row['kind'] == 'skill' and row['status'] == 'claimed'
+                and row['requestId'] == job.get('motorRequestId')
+                and row['motorTurnId'] == job.get('turnId') for row in rows)):
+            return False
+        turn = job.get('lastTurnId')
+        if turn and not operator_cancelled:
+            rows = c.gateway.turn_receipts(turn)
+            receipt = rows[-1] if rows else {}
+            action = job.get('lastAction') or {}
+            expected_id = (job.get('lastResult') or {}).get('actionId')
+            last = job.get('lastExecution') or {}
+            if (not expected_id or receipt.get('turnId') != turn or receipt.get('actionId') != expected_id
+                    or receipt.get('tool') != action.get('tool') or receipt.get('args') != action.get('args')
+                    or not action.get('tool') or not isinstance(action.get('args'), dict)
+                    or last.get('turnId') not in (None, turn)
+                    or last.get('actionId') not in (None, expected_id)
+                    or not (receipt.get('status') == 'rejected' or
+                        receipt.get('status') in ('completed', 'failed', 'cancelled')
+                        and receipt.get('completionConfirmed') is True)):
+                return False
+        elif not operator_cancelled and (job.get('lastExecution') or job.get('lastResult') or job.get('lastAction')
+                or job.get('steps', 0) != 0):
+            return False
+        if not operator_cancelled:
+            job.update(status='cancelled', reason='operator_drain' if draining else 'operator_pause')
+            write_json(c.root/'skill-job.json', job)
+    # Practice validates the original receipt and retries only local settlement.
+    # An already finalized owned cancellation also needs reconcile when disabled;
+    # unrelated/unknown claims above are never admitted to that path.
+    c.settle_practice()
+    return True
+
+
 def tick(c, body, control):
     if (control.get('drain') or {}).get('status') == 'requested':
         # Finish a claimed action from its exact journal while admission is
         # closed. Queued commands are retired at the controller's idle boundary.
+        drain_skill_boundary(c, body)
         reconcile(c)
         c.data['motorQueue'] = public(c.root)
         return
