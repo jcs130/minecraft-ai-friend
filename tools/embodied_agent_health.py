@@ -43,6 +43,16 @@ SOURCES += ('tools/configure_survivor_vision.py', 'tools/sync_survivor_driver_sc
             'world/ops/skills/qd-survivor-practice/references/long-term-planning.md')
 SOURCES += ('world/survival/game_skills.py', 'tests/test_survival_game_skills.py',
             'tests/test_survival_skill_tools.py', 'world/survival/control.py')
+SOURCES += ('world/survival/mine_actions.py', 'tests/test_survival_mine_receipts.py',
+            'world/irons-bridge-src/src/dev/qiandeng/irons/WorldInteractionBridge.java')
+SOURCES += ('world/sidecar/party_bridge.py', 'tests/test_party_bridge.py',
+            'tests/test_party_life.py', 'tests/test_yui_admin_team.py',
+            'world/ops/skills/qd-yui-rescue/references/rescue.md',
+            'world/ops/skills/qd-yui-rescue/references/world-admin.md')
+SOURCES += ('world/survival/food_actions.py', 'tests/test_survival_food_receipts.py',
+            'tests/test_survival_native_interaction.py', 'tests/test_motor_cast_acceptance.py',
+            'tools/smoke_mine_receipts.py', 'world/irons-bridge-src/qa/MiningQa.java',
+            'world/irons-bridge-src/tests/InteractionArgumentsTest.java')
 
 
 def runtime_protocols(settings, heartbeat, public):

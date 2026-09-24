@@ -191,15 +191,21 @@ def expire_queued_locked(root, clock=time.time):
 
 
 def finish_locked(root, identity, status, receipt):
-    if status not in ('completed','failed','unknown','cancelled'):raise ValueError('invalid_motor_terminal')
+    if status not in ('completed','failed','unknown','cancelled','dispatched'):raise ValueError('invalid_motor_terminal')
     data=view(root);row=next(r for r in data['requests'] if r['requestId']==identity)
     if row['status'] not in ('claimed','unknown'):raise ValueError('motor_already_terminal')
     if 'command' not in row and isinstance(row.get('payload'), dict):
         row['command'] = command_summary(row['payload'])
     # The original gateway/practice journal owns full observations. Keeping
     # them again here would grow a bounded command queue into a context log.
+    cast_request = (receipt.get('result', {}).get('result', {}).get('data', {}).get('receipt', {})
+                    if status == 'dispatched' else {})
     if row['kind']=='action' and receipt.get('actionId'):
         receipt = receipt_evidence(receipt)
+    if status == 'dispatched':
+        receipt.update(dispatchConfirmed=True, effectConfirmed=False, castRequestId=cast_request['requestId'],
+            notice='Native casting was accepted; spell effects are not confirmed. '
+                   'Observe current native spell/body status before deciding further actions; do not replay this request.')
     row.update(status=status,receipt=receipt,finishedAt=time.time())
     if status != 'unknown':
         row.pop('payload', None)

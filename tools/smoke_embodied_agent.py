@@ -34,7 +34,9 @@ def main():
                  'test_survival_navigation_sense', 'test_motor_projection',
                  'test_survival_area_recovery', 'test_survival_chat', 'test_motor_boundary', 'test_survival_inventory_feedback',
                  'test_survival_native_tools', 'test_survivor_driver_scope', 'test_configure_survivor_vision',
-                 'test_survival_game_skills', 'test_survival_skill_tools'):
+                 'test_survival_game_skills', 'test_survival_skill_tools', 'test_survival_mine_receipts',
+                 'test_party_bridge', 'test_party_life', 'test_yui_admin_team',
+                 'test_survival_food_receipts', 'test_survival_native_interaction', 'test_motor_cast_acceptance'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
@@ -49,6 +51,8 @@ def main():
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     report = {'schema': 1, 'ok': result.wasSuccessful() and not result.skipped and before == hashes(),
               'testsRun': result.testsRun, 'tests': names, 'sourceHashes': before,
+              'failures': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.failures],
+              'errors': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.errors],
               'modelCalls': 0, 'productionMutations': 0, 'worldActions': 0}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf8')

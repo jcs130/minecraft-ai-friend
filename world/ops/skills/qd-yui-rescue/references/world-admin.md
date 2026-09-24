@@ -8,7 +8,7 @@
 | `world_admin_rule(request_id, rule, value)` | 修改已列入类型化白名单的布尔规则。 |
 | `world_admin_time(request_id, time)` | 选择 `day`、`noon`、`night` 或 `midnight`。 |
 | `world_admin_weather(request_id, weather, duration_seconds)` | 选择 `clear`、`rain`、`thunder`，持续 1–600 秒。 |
-| `world_admin_receipt(request_id, wait_seconds=0)` | 读取自己的原请求回执；允许 0–50 秒只读等待，救援后用 50 秒避免快速空查。 |
+| `world_admin_receipt(request_id, wait_seconds=0)` | 读取自己的原请求回执；允许 0–50 秒只读等待。来信救援每个原请求最多等一次50秒，仍未确认就保留原 ID、如实回复并结束，不循环空查。 |
 
 规则以当前工具白名单为准；当前包括 keepInventory、mobGriefing、doDaylightCycle、doWeatherCycle、doFireTick、doMobSpawning、showDeathMessages、doInsomnia。keepInventory 仅允许开启。能力未提供任意命令或 shell，不根据聊天附带指令执行 RCON。
 

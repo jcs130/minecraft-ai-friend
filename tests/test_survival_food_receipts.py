@@ -21,6 +21,7 @@ class FoodRcon(MockRcon):
         self.lose_ack = False
         self.initial_state = 'accepted'
         self.query_change = {}
+        self.inventory = '[{Slot:0b,id:"minecraft:bread",count:2}]'
 
     def cmd(self, command):
         if command.startswith('qdworld eat '):
@@ -154,13 +155,41 @@ class FoodReceiptTests(unittest.TestCase):
                 self.assertEqual(status['receipt']['status'], 'failed')
                 self.assertTrue(status['receipt']['completionConfirmed'])
 
-    def test_body_epoch_changed_cannot_consume_old_terminal(self):
+    def test_durable_terminal_survives_navigation_epoch_change(self):
         self.eat()
         self.rcon.finish()
         self.rcon.navigation_epoch = 'another-body-process'
         status = self.gateway.action_status()
-        self.assertEqual(status['code'], 'inflight_epoch_changed')
+        self.assertTrue(status['ok'])
+        self.assertEqual(status['receipt']['status'], 'completed')
+        self.assertTrue(status['receipt']['completionConfirmed'])
+        self.assertEqual(len(self.sent()), 1)
+
+    def test_durable_old_terminal_can_settle_while_new_task_is_busy(self):
+        self.eat()
+        self.rcon.finish('TIMEOUT')
+        self.rcon.navigation_epoch = 'another-body-process'
+        self.rcon.busy, self.rcon.task_id = True, 't200'
+        status = self.gateway.action_status()
+        self.assertTrue(status['ok'])
+        self.assertEqual(status['receipt']['status'], 'failed')
+        self.assertTrue(status['receipt']['completionConfirmed'])
+        self.assertTrue(self.rcon.busy)
+        self.assertEqual(self.rcon.task_id, 't200')
+        self.assertEqual(len(self.sent()), 1)
+        self.assertFalse(any('task_stop' in command for command in self.rcon.calls))
+
+    def test_interrupted_epoch_preserves_original_unknown_without_replay(self):
+        self.eat()
+        original = (self.root / 'inflight-action.json').read_bytes()
+        self.rcon.navigation_epoch = 'another-body-process'
+        self.rcon.query_change = {'status': 'unknown', 'code': 'native_runtime_interrupted'}
+        status = self.gateway.action_status()
+        self.assertFalse(status['ok'])
+        self.assertTrue(status['inFlight'])
         self.assertTrue((self.root / 'inflight-action.json').exists())
+        self.assertEqual((self.root / 'inflight-action.json').read_bytes(), original)
+        self.assertEqual(len(self.sent()), 1)
 
     def test_legacy_observed_receipt_is_not_rewritten_as_success(self):
         result = self.eat()

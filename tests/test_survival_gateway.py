@@ -32,6 +32,7 @@ class MockRcon:
         self.task_id = 't1'
         self.roster = 'count=1\nKirito|uuid=' + BODY_UUID + '|owner=fixture|dim=minecraft:overworld|pos=100,64,100'
         self.reply = {'success': True, 'data': {'task_id': 't1', 'task': 'mine', 'async': True}}
+        self.mine_receipt = None
         self.inventory = ('Kirito has the following entity data: '
                           '[{Slot:0b,id:"minecraft:oak_log",count:4},'
                           '{Slot:1b,id:"biomesoplenty:oak_log",count:2},'
@@ -60,6 +61,22 @@ class MockRcon:
             return '{"entities": []}'
         if isinstance(self.reply, Exception):
             raise self.reply
+        if command.startswith('qdworld mine '):
+            import base64
+            _, _, actor, request, payload = command.split()
+            if self.reply.get('success') is False or self.reply.get('data', {}).get('async') is True:
+                rejected = self.reply.get('success') is False
+                self.mine_receipt = {'schema': 1, 'capability': 'numen_interaction_receipt_v1',
+                    'actorUuid': actor, 'requestId': request, 'epoch': 'e0200f85-b8e7-46df-9c28-8f431d67aaef',
+                    'tool': 'mine', 'args': json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4))),
+                    'observedAt': NOW * 1000, 'dispatched': not rejected, 'nativeTaskId': self.task_id,
+                    'status': 'rejected' if rejected else 'accepted', 'result': self.reply,
+                    'miningSelection': {'radius': 16, 'loadedOnly': True, 'candidateCount': 4,
+                        'candidateLimit': 64, 'truncated': False, 'origin': dict(self.position),
+                        'dimension': 'minecraft:overworld'}}
+                return 'QD_WORLD_INTERACTION_JSON ' + json.dumps(self.mine_receipt)
+        if command.startswith('qdworld mining ') and self.mine_receipt:
+            return 'QD_WORLD_INTERACTION_JSON ' + json.dumps(self.mine_receipt)
         return json.dumps(self.reply)
 
     def mutations(self):
@@ -339,7 +356,7 @@ class GatewayTests(unittest.TestCase):
         self.assertTrue(result['nativeDiagnosticRecorded'])
         diagnostic = gateway.read_json(self.state / 'native-action-diagnostics' / (result['actionId'] + '.json'))
         self.assertEqual(diagnostic['nativeReply'], raw)
-        self.assertEqual(diagnostic['errorCode'], 'numen_reply_invalid')
+        self.assertEqual(diagnostic['errorCode'], 'mine_receipt_unconfirmed')
         self.assertFalse(diagnostic['nativeReplyTruncated'])
         self.assertNotIn(raw, json.dumps(result))
         self.assertTrue((self.state / 'unknown.json').exists())
@@ -443,8 +460,7 @@ class GatewayTests(unittest.TestCase):
         original_cmd = self.rcon.cmd
         def rejected(command):
             if ' mine ' in command:
-                self.rcon.calls.append(command)
-                return json.dumps({'success': False, 'message': 'invalid target self'})
+                self.rcon.reply = {'success': False, 'message': 'invalid target self'}
             return original_cmd(command)
         controller = SimpleNamespace(root=self.state, clock=lambda: NOW, gateway=self.client,
             data={'active': {'taskId': 'still-thinking'}}, collect_action_receipts=lambda turn: None,

@@ -263,6 +263,39 @@ class PartyBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'party_message_not_heard'):
             message_context(row)
 
+    def test_delayed_help_message_keeps_original_facts_and_marks_age_at_actual_dispatch(self):
+        original = 'HP 3.88, stuck at (-222,29,836); please help.'
+        row = self.bridge.call('qd-survivor', 'party_send', {'text': original}, 'delayed-help')
+        created = self.now
+        self.now += 15 * 60 * 60
+        fresh = {'ok': True, 'observedAt': self.now * 1000,
+                 'identity': {'position': [42, 68, 901]}, 'state': {'ownerOnline': True}}
+        self.native.invoke = lambda *args: fresh
+        self.bridge.tick()
+        prompt = self.posts[0][1]['input'][0]['content'][0]['text']
+        instructions, raw = prompt.split('\n', 1)
+        context = json.loads(raw)
+        self.assertEqual(context['messageAgeSeconds'], 54000)
+        self.assertEqual(context['contextAt'], self.now)
+        self.assertEqual(context['createdAt'], created)
+        self.assertEqual((context['messageId'], context['text']), (row['messageId'], original))
+        self.assertEqual(context['currentObservation']['observedAt'], self.now * 1000)
+        self.assertEqual(context['currentObservation']['identity']['position'], [42, 68, 901])
+        self.assertIn('旧消息里的位置、HP和求救原因不能当作当前事实', instructions)
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(len(self.game.emits), 1)
+
+    def test_incoming_reply_guidance_ends_pending_or_moved_rescue_without_promising_followup(self):
+        row = self.bridge.call('qd-survivor', 'party_send', {'text': 'Need help.'}, 'bounded-help')
+        instructions, _ = message_context(row).split('\n', 1)
+        self.assertIn('每个原请求最多一次 world_admin_receipt(request_id, wait_seconds=50)', instructions)
+        self.assertIn('仍 queued/claimed/busy/unknown 就保留原 ID', instructions)
+        self.assertIn('quote_source_moved', instructions)
+        self.assertIn('本来信不再新建检查或救援请求', instructions)
+        self.assertIn('简短回复并结束本轮', instructions)
+        self.assertIn('不承诺自动续查', instructions)
+        self.assertEqual(self.posts, [])
+
     def test_native_tool_markup_is_never_spoken_executed_or_retried(self):
         answers = (
             '<invoke name="qd_party__party_send"><parameter name="text">已到安全地面。</parameter></invoke>',

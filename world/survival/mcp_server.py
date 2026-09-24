@@ -451,7 +451,7 @@ def make_server(gateway=None, skill_tools=None, http=False):
 
     @server.tool()
     def mine(turn_id: str, block_ids: list[str], count: int = 4) -> dict:
-        """采集 1–8 个新增物品；提供实际方块 ID，Numen 自己找块和寻路。"""
+        """采集 1–8 个新增物品；只选身体16格内已加载的实际方块ID，保留原生寻路和拾取。无目标先观察/移动再规划；排队后结束本轮，用status读准确数量和失败原因，不重复派发。"""
         return gateway.action(turn_id, 'mine', {'block_ids': block_ids, 'count': count})
 
     @server.tool()

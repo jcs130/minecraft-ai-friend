@@ -62,3 +62,28 @@
 结衣未回复的一个原因是 9 月 22 日遗留 `async-motor-20260922` 维护准入一直暂停。通过既有控制入口恢复后，14:01 已观察到旧消息获得游戏 heard 回复，随后另一旧消息提交原生任务；新消息还在 FIFO 积压之后。伙伴消费循环独立于结衣的生活定时器，不以恢复聊天为由开启旧 timer。
 
 按正常顺序先刷新运营快照、再调用的面板探针仍非全绿（`runtime/livestream-panel-smoke-final-20260924.json`），其中 runtime、operations、survivor、game_qwenpaw、companion_ticking、navigation_sense、embodied_agent 通过。`survivor_party` 的根生活 chatId 空值和 `world_team` 未接受合法 withdrawn 状态造成部分旧探针误判，另有历史构建证据和未启用的生活定时器；不能将这些全部说成当前服务故障或全部忽略。
+
+### 采矿与伙伴链路修复
+
+- 原生采矿 `block_ids` 默认搜索半径 512 格。新增桥只选择身体 16 格内已加载的真实目标，最多 64 个候选，仍使用原生权限、工具、挖掘、拾取与新入包数量判断；原生寻路可能绕行，此限制不冒称完整路径边界。
+- 持久请求记录绑定原 actionId、nativeTaskId 和 epoch。原任务真实 SUCCESS/FAILED/TIMEOUT/CANCELLED 才确认终态；丢 ACK 只读原请求，重启中断不重放。重启前已持久保存的终态优先于导航 epoch 变化，不再丢弃已知结果。模型摘要提供真实原因和 gathered/requested。
+- `t557` 已按精确原生认知回执、原 motor 请求与两次递增 tick 的空任务槽观测退休到 `operator_retired_unverified`。当时防御反射仍活跃，未写成身体完全静止；原动作回执及日志未改，未计采矿成功，也未重放。证据保存在 `server/survival-agent-state/survival/reconciled-actions/9d78bfca6e7740a7be9f452c88d09ee2/`。
+- 新 JAR 仅改 WorldInteractionBridge 及其内部类，SHA256 `4d59bba0cd4ed89a52b31ccf5da5aaa2a8ec515454fae158862641bab5799ac4`。179 项 Java 断言及 16 项隔离原生检查通过；QA 不挂生产存档、不开放宿主端口。TIMEOUT 用隔离世界推进到原任务期限，由真实 TaskSlot 产生结果。最终通过报告 `runtime/interaction-qa-31c47c523765/result.json`，前一轮失败夹具不当成功证据。
+- 结衣积压来信任务 `task-2c0dd0807aa7` 实际 41 次工具调用（7 次检查、28 次回执查询、6 次救援），6 次救援均因目标已移动拒绝，却不断新建检查，最终原生 600 秒超时。管理消费者每 45 秒处理一项，实际认领延迟约 27–43 秒，未发现死锁或单次模型等待 10 分钟的证据。
+- 伙伴入口补 `messageAgeSeconds/contextAt`，明确旧位置和 HP 不能当当前事实；本来信最多一轮检查和必要救援，原请求一次有界等待，未确认或目标已移动拒绝后简短回复并结束，保留原请求。删除救援指南的无界等待措辞。82 项隔离伙伴回归通过；提示效果需实际来信验证，不能从测试推断模型必定服从。
+
+14:12:45 核对 16 个原生角色全部无活动任务后，经既有管理器保存并停止 MC 及其消费者，安装上述已测桥；原世界未替换。观察客户端在维护断开后按原 PID/创建时间确认并关闭，日志已备份，恢复服务后重新进入同一观察身份。
+
+### 同类回执边界复核
+
+继续沿同一链路检查发现：Iron 法术受理返回 `casting_started`，没有 Numen 任务 ID。网关保留 `effect_unconfirmed` 本来是正确的，但 motor 没有对应状态，又将确定的受理错误映射成派发未知并全局暂停。直接法术、瞬发和旧技能映射均可复现。
+
+| 证据 | 队列结果 | 是否计作游戏目标成功 |
+| --- | --- | --- |
+| 原生动作精确终态成功/失败 | completed / failed | 仍看实际数量与目标条件 |
+| 原身份、原请求、原命令与法术匹配的明确施法受理 | dispatched，保留 effect_unconfirmed | 否，仅 dispatchConfirmed=true |
+| 丢 ACK、身份不符、结果不可追回 | unknown 并暂停 | 否，不重放 |
+
+新增 7 项施法回归先红后绿，相关 motor/fast execution 组合 62 项通过；已受理不冒充物理进展，不触发成功唤醒，正常 ongoing 复核上限仍为 45 秒。
+
+将相同的持久终态优先规则扩展到既有进食和交互：6 项新回归先红后绿，相关 36 项及 2 项旧行为检查通过。跨重启能读到旧确切终态时可结算，即使身体已经在处理新任务，也不停止新任务；真正中断未知仍保留原记录。未改 Java 字节。

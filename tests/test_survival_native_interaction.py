@@ -20,6 +20,8 @@ class NativeInteractionTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.state = Path(temporary.name)
         self.gateway = FakeGateway(self.state)
+        self.gateway.clock = lambda: self.gateway._now() / 1000
+        self.gateway.body['navigationEpoch'] = 'fixture-navigation-epoch'
         self.gateway.on_interaction_receipt = lambda row: row.update(nativeTaskId='native-original')
         write_json(self.state / 'control.json', {'schema': 1, 'enabled': True})
         write_json(self.state / 'lease.json', {'schema': 1, 'status': 'open', 'turnId': TURN,
@@ -111,6 +113,41 @@ class NativeInteractionTests(unittest.TestCase):
         with patch.object(self.gateway, '_native_interact', side_effect=lost), patch('world_actions.time.sleep'):
             result = self.action()
         self.assertTrue(result['completionConfirmed'], result)
+        self.assertEqual(len(self.clicks()), 1)
+
+    def test_durable_terminal_survives_navigation_epoch_change(self):
+        self.gateway.interaction_states = ['accepted']
+        result = self.action()
+        self.assertEqual(result['receipt']['status'], 'in_flight')
+        self.gateway.body['navigationEpoch'] = 'another-body-process'
+        done = self.gateway._settle_inflight(self.gateway.snapshot())
+        self.assertEqual(done['status'], 'completed')
+        self.assertTrue(done['completionConfirmed'])
+        self.assertEqual(len(self.clicks()), 1)
+
+    def test_old_terminal_settles_without_touching_new_busy_task(self):
+        self.gateway.interaction_states = ['accepted']
+        result = self.action()
+        self.assertEqual(result['receipt']['status'], 'in_flight')
+        self.gateway.body['navigationEpoch'] = 'another-body-process'
+        self.gateway.body['task'] = {'busy': True, 'task_id': 'new-task'}
+        done = self.gateway._settle_inflight(self.gateway.snapshot())
+        self.assertEqual(done['status'], 'completed')
+        self.assertTrue(done['completionConfirmed'])
+        self.assertEqual(self.gateway.body['task'], {'busy': True, 'task_id': 'new-task'})
+        self.assertEqual(len(self.clicks()), 1)
+        self.assertFalse(any('task_stop' in str(call) for call in self.gateway.calls))
+
+    def test_interrupted_epoch_keeps_original_unknown_claim(self):
+        self.gateway.interaction_states = ['accepted']
+        self.action()
+        original = (self.state / 'inflight-action.json').read_bytes()
+        self.gateway.body['navigationEpoch'] = 'another-body-process'
+        self.gateway.on_interaction_receipt = lambda row: row.update(nativeTaskId='native-original',
+            status='unknown', code='native_runtime_interrupted')
+        with self.assertRaisesRegex(GatewayError, 'outcome_unknown'):
+            self.gateway._settle_inflight(self.gateway.snapshot())
+        self.assertEqual((self.state / 'inflight-action.json').read_bytes(), original)
         self.assertEqual(len(self.clicks()), 1)
 
 
