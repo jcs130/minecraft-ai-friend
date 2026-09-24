@@ -60,6 +60,19 @@ class NativeRoleCapabilities(unittest.TestCase):
         self.assertNotIn('QD_NATIVE_CRON_SCOPE', [row['id'] for row in guard['custom_rules']])
         self.assertEqual(native.configure_native(survivor, 'qd-survivor'), survivor)
 
+    def test_actual_survivor_guard_allows_an_ordinary_shell_command(self):
+        from qwenpaw.config.config import Config
+        from qwenpaw.security.tool_guard.engine import ToolGuardEngine
+        survivor = native.configure_native({'id': 'qd-survivor'}, 'qd-survivor')
+        with patch('qwenpaw.config.load_config',
+                   return_value=Config(security=survivor['security'])):
+            engine = ToolGuardEngine(enabled=True)
+            self.assertFalse(engine.is_denied('execute_shell_command'))
+            self.assertFalse(engine.is_guarded('execute_shell_command'))
+            result = engine.guard('execute_shell_command', {'command': 'pwd'},
+                                  only_always_run=True)
+            self.assertFalse(engine.should_auto_deny_result(result))
+
     def test_native_file_precheck_protects_role_and_managed_configuration(self):
         for path in ('notes/任务.md', '/state/work/workspaces/mc-herald/notes/plan.json'):
             self.assertFalse(self.blocked('write_file', 'file_path', path))
