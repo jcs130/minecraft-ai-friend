@@ -67,6 +67,17 @@ def _context(c, control):
     return goal, key
 
 
+def _catalog_signature(catalog):
+    # A draft or index ordering change cannot buy another automatic attempt.
+    # Version hashes already bind source and routing; include indexed routing as
+    # well so its admission metadata must still agree with the exact record.
+    active = [{'name': row.get('name'), 'version': row['activeVersion'],
+               'routing': row['routing']} for row in catalog.get('skills', [])[:64]
+              if row.get('activeVersion') and row.get('routing')]
+    active.sort(key=lambda row: row['name'])
+    return hashlib.sha256(json.dumps(active, sort_keys=True).encode()).hexdigest()
+
+
 def tick(c, body, control):
     try:
         result = _tick(c, body, control)
@@ -105,6 +116,13 @@ def _tick(c, body, control):
         # Moving and polling do not buy repeated craft attempts.
         facts = {k: body.get(k) for k in ('counts', 'equipment', 'hunger', 'hp')}
         key = hashlib.sha256((key + json.dumps(facts, sort_keys=True)).encode()).hexdigest()
+    # Read the existing bounded index cache before the no-retry gate, so a newly
+    # promoted program becomes visible within its 30-second refresh interval.
+    # This never scans program directories or invalidates goal/version use caps.
+    premise_key = key
+    catalog_was_cached = c.clock() - getattr(c, 'skill_catalog_at', float('-inf')) < 30
+    catalog = c.catalog()
+    key = hashlib.sha256((premise_key + _catalog_signature(catalog)).encode()).hexdigest()
     pending = c.pending_route
     binding = c.policy_binding(job)
     if pending is not None:
@@ -175,7 +193,10 @@ def _tick(c, body, control):
         return False
     # Loading indexed candidates on a slow bind mount can still take time. Do this
     # once per admission, then refresh physical facts BEFORE starting its clock.
-    rows = candidates(c.skills, body, goal, c.catalog(refresh=True))
+    if catalog_was_cached:
+        catalog = c.catalog(refresh=True)
+        key = hashlib.sha256((premise_key + _catalog_signature(catalog)).encode()).hexdigest()
+    rows = candidates(c.skills, body, goal, catalog)
     if asynchronous:
         goal_key = _context(c, control)[1]
         rows = [r for r in rows if r['maintenance'] or

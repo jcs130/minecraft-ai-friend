@@ -94,9 +94,9 @@ class GameSkillTests(unittest.TestCase):
         self.assertEqual(legacy['omitted'], 'raw_atoms_removed_from_all_view')
         self.assertEqual(legacy['total'], 8)
         # Documented agent paths and the execution boundary are preserved.
-        self.assertEqual(view['replies']['skills']['bookSkills'][0]['id'], 'feather_boots')
+        self.assertEqual(view['replies']['skills']['entries'][-1]['id'], 'feather_boots')
         self.assertEqual(view['agentPreflight'], result['agentPreflight'])
-        self.assertEqual(view['boundedView'], 'all_omits_status_backstory_and_legacy_atoms')
+        self.assertEqual(view['boundedView'], 'all_merged_catalog_v2')
         self.assertLess(len(json.dumps(view, ensure_ascii=False)), len(original))
 
     def test_bounded_view_passes_through_other_scopes_and_failures(self):
@@ -120,7 +120,58 @@ class GameSkillTests(unittest.TestCase):
         view = bounded_all_skills_view(full)
         self.assertNotIn('backstory', view['replies']['status'])
         self.assertNotIn('atoms', view['replies']['spells legacy'])
-        self.assertEqual(view['replies']['skills']['bookSkills'][0]['id'], 'feather_boots')
+        self.assertEqual(view['replies']['skills']['entries'][-1]['id'], 'feather_boots')
+
+    def test_all_merges_every_catalog_id_without_losing_operational_fields(self):
+        books = [{'id': 'skill_' + str(i), 'name': '能力' + str(i),
+                  'requiredLevel': i, 'learned': i % 2 == 0} for i in range(42)]
+        details = [{'id': row['id'], 'engine': 'irons_spellbooks',
+                    'nativeSpell': 'irons_spellbooks:spell_' + str(i),
+                    'learned': row['learned'], 'reason': 'not_equipped',
+                    'helpCommand': 'help ' + row['id']} for i, row in enumerate(books)]
+        mappings = [{'id': row['id'], 'name': row['name'],
+                     'nativeSpell': details[i]['nativeSpell'], 'requiresEquipment': True}
+                    for i, row in enumerate(books)]
+        skills = {'ok': True, 'playerLevel': 39, 'bookSkills': books,
+                  'details': details, 'nativeMappings': mappings,
+                  'levelGate': [{'id': 'skill_1', 'level': 1, 'mana': 20}],
+                  'locked': [{'id': 'skill_41', 'level': 41, 'mana': 40}],
+                  'nativeQuery': {'ok': False, 'code': 'unknown'}}
+        result = {'ok': True, 'scope': 'all', 'replies': {'skills': skills},
+                  'agentPreflight': {'spells': [{'id': 'skill_1', 'rule': 'destination_unavailable'}]}}
+        original = json.dumps(result)
+        view = bounded_all_skills_view(result)
+        merged = {row['id']: row for row in view['replies']['skills']['entries']}
+        self.assertEqual(set(merged), {row['id'] for row in books})
+        for i, book in enumerate(books):
+            row = merged[book['id']]
+            for source in (book, details[i], mappings[i]):
+                for key, value in source.items():
+                    if key != 'helpCommand':
+                        self.assertEqual(row[key], value)
+        self.assertEqual(merged['skill_1']['legacyAccess'], ['levelGate'])
+        self.assertEqual(merged['skill_41']['legacyAccess'], ['locked'])
+        self.assertEqual(merged['skill_41']['level'], 41)
+        self.assertEqual(merged['skill_41']['mana'], 40)
+        self.assertEqual(view['replies']['skills']['nativeQuery'], skills['nativeQuery'])
+        self.assertEqual(view['agentPreflight'], result['agentPreflight'])
+        self.assertEqual(json.dumps(result), original)
+        self.assertLess(len(json.dumps(view)), len(original) * .7)
+
+    def test_all_preserves_unknown_conflicting_and_malformed_catalog_evidence(self):
+        skills = {'bookSkills': [{'id': 'heal', 'learned': True, 'name': 'Heal'}],
+                  'details': [{'id': 'heal', 'learned': None, 'reason': 'unknown', 'nativeSpell': None}]}
+        view = bounded_all_skills_view({'ok': True, 'scope': 'all', 'replies': {'skills': skills}})
+        row = view['replies']['skills']['entries'][0]
+        self.assertIsNone(row['learned'])
+        self.assertEqual(row['conflictingObservations']['learned'], [True, None])
+        self.assertEqual(row['reason'], 'unknown')
+        self.assertIsNone(row['nativeSpell'])
+        self.assertNotIn('legacyAccess', row)
+        for malformed in (None, {'unknown': True}, [{'name': 'id unavailable'}]):
+            raw = {'bookSkills': malformed, 'nativeQuery': {'code': 'pending'}}
+            result = {'ok': True, 'scope': 'all', 'replies': {'skills': raw}}
+            self.assertEqual(bounded_all_skills_view(result)['replies']['skills'], raw)
 
     def test_mutation_requires_existing_gateway_unknown_marker(self):
         with self.assertRaises(OSError):

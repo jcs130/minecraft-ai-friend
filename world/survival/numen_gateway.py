@@ -492,6 +492,12 @@ class NumenGateway:
                 raise GatewayError('body_status_invalid')
             stage = 'inventory'
             inventory, counts = inventory_from_snbt(self.rcon.cmd(f'data get entity {body} Inventory'))
+            occupied = len({item['slot'] for item in inventory
+                            if type(item.get('slot')) is int and 0 <= item['slot'] < 36})
+            inventory_space = {'mainSlots': 36, 'occupiedMainSlots': occupied, 'emptyMainSlots': 36 - occupied,
+                'compatibleStackSpace': 'not_measured',
+                'notice': 'New item types need an empty main slot. Ground drops are not owned inventory; '
+                    'a full backpack can prevent pickup. Existing compatible stacks may still accept items.'}
             from game_skills import cached_game_skills, owned_skill_books
             tagged_books = [item for item in inventory if 'bookName' in item]
             skill_books = tagged_books[:12]
@@ -507,6 +513,7 @@ class NumenGateway:
                     'hp': status.get('hp'), 'maxHp': status.get('max_hp'), 'hunger': status.get('hunger'),
                     'position': pos, 'dimension': status.get('dimension'), 'gameMode': status.get('game_mode'),
                     'equipment': status.get('equipment', {}), 'inventory': inventory, 'counts': counts,
+                    'inventorySpace': inventory_space,
                     'skillBooks': skill_books, 'ownedSkillBooks': owned_books,
                     'skillBooksTruncated': len(tagged_books) > 12,
                     'task': task_info, 'air': status.get('air'), 'inWater': status.get('in_water'),
@@ -733,6 +740,38 @@ class NumenGateway:
                 raise GatewayError('invalid_equip')
             self._item(args['item_id'])
 
+    @staticmethod
+    def _area_recovery(point, area):
+        # Land beyond the native ~1.5 block arrival tolerance, otherwise a
+        # target exactly on the border can "complete" while still outside.
+        target = {}
+        for axis, low, high in (('x', 'minX', 'maxX'), ('z', 'minZ', 'maxZ')):
+            inset = min(2, max(0, (area[high] - area[low]) / 2))
+            target[axis] = min(area[high] - inset, max(area[low] + inset, point[axis]))
+        dx, dz = target['x'] - point['x'], target['z'] - point['z']
+        distance = math.hypot(dx, dz)
+        scale = min(1, 16 / distance) if distance else 0
+        direction = '-'.join(part for part in (
+            'north' if dz < 0 else 'south' if dz > 0 else '',
+            'west' if dx < 0 else 'east' if dx > 0 else '') if part) or 'inside'
+        return {'nearestInside': target, 'arrivalInset': 2, 'delta': {'x': dx, 'z': dz}, 'direction': direction,
+                'suggestedStep': {axis: round(point[axis] + (target[axis] - point[axis]) * scale, 3)
+                                  for axis in ('x', 'z')},
+                'maxHorizontalDistance': 24, 'terrainVerified': False,
+                'instruction': 'Only short goto steps reducing the distance to the work area are allowed outside it. '
+                    'Survey supported terrain before choosing a step; this direction is not a verified path.'}
+
+    def _inward_move(self, origin, target):
+        area = self._settings().get('workArea', {})
+        if not all(self._number(area.get(k)) for k in ('minX', 'maxX', 'minZ', 'maxZ')):
+            return False
+        def violations(point):
+            return [max(area[low] - point[axis], 0, point[axis] - area[high])
+                    for axis, low, high in (('x', 'minX', 'maxX'), ('z', 'minZ', 'maxZ'))]
+        before, after = violations(origin), violations(target)
+        return (any(value > 0 for value in before) and
+                all(b <= a for a, b in zip(before, after)) and sum(after) < sum(before))
+
     def _area(self, point, margin=0, protect=True):
         settings = self._settings()
         area = settings.get('workArea', {})
@@ -745,6 +784,7 @@ class NumenGateway:
                 'checkedPosition': {k: point[k] for k in ('x', 'y', 'z') if k in point},
                 'workArea': {k: area[k] for k in ('minX', 'maxX', 'minZ', 'maxZ')},
                 'margin': margin, 'dispatched': False, 'writePerformed': False,
+                'recovery': self._area_recovery(point, area) if margin == 0 else None,
                 'retryAutomatically': False,
                 'instruction': '检查点超出本身体授权工作区（含动作余量）。请在该范围内重新规划；移动受理不表示目标获准。'}
             raise error
@@ -1164,6 +1204,13 @@ class NumenGateway:
                 pending = self._settle_inflight(before)
                 if pending and pending.get('status') == 'in_flight':
                     raise GatewayError('body_action_in_flight')
+                # Reconciliation can close this lease when its native epoch is
+                # lost. Do not overwrite that durable boundary with the older
+                # in-memory open lease or spend a second action after it.
+                if (self.state / 'unknown.json').exists():
+                    raise GatewayError('outcome_unknown')
+                if read_json(self.state / 'lease.json') != lease:
+                    return invalid_lease_response()
                 if before.get('ok') is not True or before.get('gameMode') != 'survival':
                     raise GatewayError('survival_body_unavailable')
                 if before['task']['busy']:
@@ -1179,7 +1226,17 @@ class NumenGateway:
                 if tool in ('game_cast', 'game_learn'):
                     from game_skills import is_protected_action
                     protected = is_protected_action(tool, args)
-                self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
+                recovering = tool == 'goto' and self._inward_move(before['position'], args)
+                if not recovering:
+                    self._area(before['position'], 16 if tool == 'mine' else 0, protect=protected)
+                if tool == 'eat' and before['counts'].get(args['item_id'], 0) <= 0:
+                    return {'ok': False, 'code': 'food_item_missing',
+                            'dispatched': False, 'writePerformed': False,
+                            'itemId': args['item_id'], 'availableCount': 0,
+                            'inventorySpace': before.get('inventorySpace'),
+                            'notice': 'This food is not in the body inventory. A nearby drop or successful '
+                                'spell does not prove pickup. Check free slots, choose what to store or drop '
+                                'if needed, and confirm an inventory increase before eating.'}
                 if tool == 'equip_item' and before['counts'].get(args['item_id'], 0) <= 0:
                     # runSync has no terminal receipt on the RCON bridge. Reject a
                     # known missing item BEFORE reserving/sending, rather than
@@ -1189,7 +1246,8 @@ class NumenGateway:
                             'itemId': args['item_id'], 'availableCount': 0,
                             'notice': 'Item absent from the current body inventory. Inspect inventory and choose an available item or acquire it first.'}
                 if tool == 'goto':
-                    self._area(args, protect=False)
+                    if not recovering:
+                        self._area(args, protect=False)
                     distance = math.hypot(args['x'] - before['position']['x'], args['z'] - before['position']['z'])
                     if distance > 24:
                         result = {'ok': False, 'code': 'walk_target_too_far', 'dispatched': False,
@@ -1373,7 +1431,7 @@ class NumenGateway:
                     and details.get('dispatched') is False and details.get('writePerformed') is False):
                 result.update(dispatched=False, writePerformed=False, retryAutomatically=False,
                     areaPreflight={key: details[key] for key in ('schema', 'kind', 'checkedPosition',
-                        'workArea', 'protectedArea', 'margin', 'instruction') if key in details})
+                        'workArea', 'protectedArea', 'margin', 'instruction', 'recovery') if key in details})
             # Only this pre-dispatch observation contract is model-facing.
             # Raw native responses and arbitrary exception metadata stay private.
             # 2026-09-17: the not-air branch joined this contract. Both rejections

@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,6 +75,134 @@ class MailboxTests(unittest.TestCase):
         for i in range(6):self.enqueue({'tool':'craft','args':{'item_id':'minecraft:stick','count':i+1}})
         with self.assertRaisesRegex(ValueError,'cognition_command_limit'):
             self.enqueue({'tool':'craft','args':{'item_id':'minecraft:stick','count':7}})
+
+    def dispatch_with_contended_terminal_lock(self, receipt_status):
+        from motor_loop import dispatch, reconcile
+        self.enqueue({'tool': 'game_cast', 'args': {'skill_id': 'feed', 'params': {}}})
+        held, release = threading.Event(), threading.Event()
+        calls, pauses, receipts = [], [], {}
+        def contender():
+            with action_lock(self.root, blocking=True):
+                held.set()
+                release.wait(3)
+        worker = threading.Thread(target=contender)
+        def action(turn_id, tool, args):
+            calls.append((turn_id, tool, args))
+            if receipt_status is None:
+                return {'ok': False, 'code': 'food_item_missing', 'dispatched': False,
+                        'writePerformed': False}
+            receipt = {'actionId': 'a' * 32, 'turnId': turn_id, 'tool': tool,
+                'status': receipt_status, 'completionConfirmed': False,
+                'result': {'ok': False, 'code': 'action_rejected',
+                           'result': {'success': False, 'message': 'skill_archived'}}}
+            receipts[turn_id] = [receipt]
+            return {'ok': False, 'code': 'outcome_unknown' if receipt_status == 'unknown' else 'action_rejected',
+                    'actionId': receipt['actionId']}
+        def collect(turn_id):
+            # A concurrent MCP status read takes the same real interprocess lock
+            # after the effect has returned and its durable receipt is available.
+            worker.start()
+            self.assertTrue(held.wait(3))
+            timer.start()
+        timer = threading.Timer(.2, release.set)
+        controller = SimpleNamespace(root=self.root, clock=lambda: self.now, data={},
+            gateway=SimpleNamespace(open_lease=lambda *args: None, action=action,
+                close_lease=lambda **kwargs: None, turn_receipts=lambda turn: receipts.get(turn, [])),
+            collect_action_receipts=collect, record=lambda *args, **kwargs: None,
+            pause=pauses.append)
+        try:
+            self.assertTrue(dispatch(controller))
+        finally:
+            release.set()
+            if worker.ident is not None:
+                worker.join(3)
+            timer.cancel()
+        row = read_json(self.root/'motor-inbox.json')['requests'][0]
+        if receipt_status != 'unknown':
+            reconcile(controller)
+            self.assertFalse(dispatch(controller))
+        self.assertEqual(len(calls), 1)
+        return row, pauses
+
+    def test_known_native_rejection_survives_terminal_lock_contention(self):
+        row, pauses = self.dispatch_with_contended_terminal_lock('rejected')
+        self.assertEqual(row['status'], 'failed')
+        self.assertEqual(row['receipt']['status'], 'rejected')
+        self.assertEqual(row['receipt']['outcomeDetail'], 'skill_archived')
+        self.assertFalse(pauses)
+
+    def test_known_preflight_failure_survives_terminal_lock_contention(self):
+        row, pauses = self.dispatch_with_contended_terminal_lock(None)
+        self.assertEqual(row['status'], 'failed')
+        self.assertEqual(row['receipt']['code'], 'food_item_missing')
+        self.assertFalse(pauses)
+
+    def test_unknown_receipt_still_pauses_after_terminal_lock_contention(self):
+        row, pauses = self.dispatch_with_contended_terminal_lock('unknown')
+        self.assertEqual(row['status'], 'unknown')
+        self.assertEqual(pauses, ['motor_outcome_unknown'])
+
+    def test_outside_area_still_polls_model_terminal_and_publishes_heartbeat(self):
+        from test_survival_controller import ControllerTests
+        fixture = ControllerTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        controller = fixture.controller
+        controller.settings['asyncMotor'] = True
+        controller.tick()
+        task_id = controller.data['active']['taskId']
+        previous_at = read_json(fixture.state/'heartbeat.json')['at']
+        fixture.terminal()
+        fixture.clock.now += 1
+        fixture.gateway.body['position']['x'] = 200
+        controller.pending_route = {'token': 'stale-route'}
+        controller.pending_policy = {'token': 'stale-policy'}
+        controller.pending_motor = {'token': 'stale-interrupt'}
+
+        controller.tick()
+
+        self.assertEqual(fixture.backend.polled, [task_id])
+        self.assertIsNone(controller.data['active'])
+        self.assertEqual(controller.data['motorStatus'], 'outside_work_area')
+        self.assertIsNone(controller.pending_route)
+        self.assertIsNone(controller.pending_policy)
+        self.assertIsNone(controller.pending_motor)
+        self.assertGreater(read_json(fixture.state/'heartbeat.json')['at'], previous_at)
+        blocked = read_json(fixture.public)['motor']['blocked']
+        self.assertEqual(blocked['code'], 'outside_work_area')
+        self.assertEqual(blocked['position'], fixture.gateway.body['position'])
+        self.assertTrue(read_json(fixture.state/'control.json')['enabled'])
+        self.assertFalse(fixture.gateway.actions)
+
+    def test_outside_area_reconciles_claimed_receipt_without_dispatch(self):
+        from motor_loop import tick
+        from numen_gateway import GatewayError
+        self.enqueue()
+        self.enqueue({'tool': 'goto', 'args': {'x': 1, 'z': 2}})
+        with action_lock(self.root):
+            claim_locked(self.root, lambda: self.now)
+        receipt = {'actionId': 'a' * 32, 'tool': 'eat', 'status': 'completed',
+                   'completionConfirmed': True}
+        def outside(*args, **kwargs):
+            raise GatewayError('outside_work_area')
+        controller = SimpleNamespace(root=self.root,
+            gateway=SimpleNamespace(_area=outside, turn_receipts=lambda turn: [receipt]),
+            data={}, pause=lambda reason: self.fail(reason), discard_policy=lambda: None)
+
+        tick(controller, {'position': {'x': 200, 'y': 64, 'z': 100}}, {})
+
+        rows = read_json(self.root/'motor-inbox.json')['requests']
+        self.assertEqual([row['status'] for row in rows], ['completed', 'queued'])
+        self.assertEqual(controller.data['motorStatus'], 'outside_work_area')
+
+    def test_other_area_errors_are_not_hidden(self):
+        from motor_loop import tick
+        from numen_gateway import GatewayError
+        def broken(*args, **kwargs):
+            raise GatewayError('work_area_missing')
+        controller = SimpleNamespace(gateway=SimpleNamespace(_area=broken), data={})
+        with self.assertRaisesRegex(GatewayError, 'work_area_missing'):
+            tick(controller, {'position': {'x': 200, 'z': 100}}, {})
 
     def test_live_cognition_cannot_be_replaced(self):
         with self.assertRaisesRegex(ValueError, 'cognition_already_open'):

@@ -74,7 +74,7 @@ def wake(controller, body, control, turn_id, message=None, replies=None):
     self_state = {key: copy.deepcopy(body[key]) for key in (
         'ok', 'bodyUuid', 'bodyName', 'dimension', 'position', 'hp', 'maxHp', 'hunger',
         'saturation', 'air', 'inWater', 'inLava', 'onGround', 'gameMode',
-        'equipment', 'counts', 'task', 'bodyControl') if key in body}
+        'equipment', 'counts', 'inventorySpace', 'task', 'bodyControl') if key in body}
     # Native scheduler tick counters and world clocks change even when the
     # observed situation does not. Keep them as acquisition metadata, otherwise
     # every wake resends the entire inventory and scene as a false state change.

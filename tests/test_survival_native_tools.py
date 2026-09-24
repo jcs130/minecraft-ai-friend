@@ -19,7 +19,12 @@ def tools():
     for name in native.TOOL_NAMES:
         properties = {}
         if name == 'status':
-            properties = {'detail': {'type': 'string', 'enum': ['full', 'brief'], 'default': 'full'}}
+            properties = {'detail': {'type': 'string', 'enum': ['full', 'brief'], 'default': 'brief'}}
+        elif name == 'say':
+            properties = {'turn_id': {'type': 'string'}, 'text': {'type': 'string'},
+                          'voice': {'type': 'boolean', 'default': True}}
+        elif name == 'say_status':
+            properties = {'message_id': {'type': 'string'}}
         elif name == 'remember':
             properties = {'finish_turn': {'type': 'boolean', 'default': False}, 'summary': {'type': 'string'}}
         elif name in ('skill_start', 'skill_draft'):
@@ -28,6 +33,8 @@ def tools():
             if name == 'skill_start':
                 properties['summary'] = {'type': 'string', 'default': ''}
         rows.append({'name': name, 'enabled': True, 'input_schema': {'type': 'object', 'properties': properties}})
+        if name in ('say', 'say_status'):
+            rows[-1]['input_schema']['required'] = ['turn_id', 'text'] if name == 'say' else ['message_id']
     return rows
 
 
@@ -38,6 +45,16 @@ def saved():
 
 
 class NativeToolConnectionTests(unittest.TestCase):
+    def test_say_requires_split_text_audio_contract_with_optional_voice_default(self):
+        for name, field in (('say', 'voice'), ('say_status', 'message_id')):
+            before = tools()
+            next(row for row in before if row['name'] == name)['input_schema']['properties'].pop(field)
+            self.assertFalse(native.valid_tools(before))
+        before = tools()
+        next(row for row in before if row['name'] == 'say')['input_schema']['required'].append('voice')
+        self.assertFalse(native.valid_tools(before))
+        self.assertTrue(native.valid_tools(tools()))
+
     def test_request_is_agent_scoped_bounded_and_never_submits_a_model(self):
         with patch.object(native.urllib.request, 'build_opener') as build:
             build.return_value.open.return_value = io.BytesIO(json.dumps(tools()).encode())
@@ -69,7 +86,7 @@ class NativeToolConnectionTests(unittest.TestCase):
             self.assertTrue(native.NativeToolConnection().ensure_ready())
             self.assertEqual(request.call_args_list[2].args[1], native.TOOLS_ROUTE)
 
-    def test_old_status_schema_reloads_and_brief_must_remain_optional_with_full_default(self):
+    def test_old_status_schema_reloads_and_brief_must_remain_optional_default(self):
         before = tools()
         next(row for row in before if row['name'] == 'status')['input_schema']['properties'].pop('detail')
         self.assertFalse(native.valid_tools(before))
@@ -78,7 +95,7 @@ class NativeToolConnectionTests(unittest.TestCase):
             self.assertEqual(request.call_args_list[2].args[1:],
                              (native.TOOLS_ROUTE, {'tools': list(native.TOOL_NAMES)}))
             self.assertNotIn('PRIVATE', str(request.call_args_list))
-        for changes in ({'default': 'brief'}, {'type': 'boolean'}, {'enum': ['full']},
+        for changes in ({'default': 'full'}, {'type': 'boolean'}, {'enum': ['full']},
                         {'enum': ['full', 'brief', 'delta']}, {'enum': ['full', 'full']},
                         {'enum': None}, {'enum': ['full', {}]}):
             invalid = tools()

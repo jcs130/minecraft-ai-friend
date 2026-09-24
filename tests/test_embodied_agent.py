@@ -247,6 +247,35 @@ class DialogueTests(EmbodiedControllerTests):
 
 
 class ActionHealthTests(unittest.TestCase):
+    def test_livestream_health_requires_loaded_projection_and_matching_pacing(self):
+        from embodied_agent_health import runtime_protocols
+        settings = {'livestreamMode': True, 'asyncMotor': True}
+        heartbeat = {'livestreamPacingVersion': 1, 'outsideAreaRecoveryVersion': 1}
+        public = {'pacing': {'version': 1, 'enabled': True, 'reviewSeconds': 45,
+            'blockedMaxSeconds': 180, 'idleCapSeconds': 45, 'reason': 'goal_ongoing'},
+            'motor': {'version': 1, 'status': 'idle', 'blocked': None}}
+        self.assertTrue(all(runtime_protocols(settings, heartbeat, public).values()))
+        public['pacing']['idleCapSeconds'] = 1800
+        self.assertFalse(runtime_protocols(settings, heartbeat, public)['livestream_pacing'])
+        public['pacing'].update(idleCapSeconds=None, reason='agent_resting')
+        self.assertTrue(runtime_protocols(settings, heartbeat, public)['livestream_pacing'])
+        heartbeat.pop('livestreamPacingVersion')
+        self.assertFalse(runtime_protocols(settings, heartbeat, public)['livestream_pacing'])
+        public['pacing'] = 'unavailable'
+        self.assertFalse(runtime_protocols(settings, heartbeat, public)['livestream_pacing'])
+
+    def test_area_recovery_health_requires_blocking_evidence(self):
+        from embodied_agent_health import runtime_protocols
+        settings = {'asyncMotor': True}
+        heartbeat = {'outsideAreaRecoveryVersion': 1}
+        public = {'motor': {'version': 1, 'status': 'outside_work_area', 'blocked': None}}
+        self.assertFalse(runtime_protocols(settings, heartbeat, public)['outside_area_recovery'])
+        public['motor']['blocked'] = {'code': 'outside_work_area', 'position': {'x': 82.5},
+                                      'workArea': {'maxX': 0}}
+        self.assertTrue(runtime_protocols(settings, heartbeat, public)['outside_area_recovery'])
+        heartbeat.pop('outsideAreaRecoveryVersion')
+        self.assertFalse(runtime_protocols(settings, heartbeat, public)['outside_area_recovery'])
+
     def test_fresh_heartbeat_does_not_hide_uncertain_action_pause(self):
         from embodied_agent_health import check
         with tempfile.TemporaryDirectory() as temp:

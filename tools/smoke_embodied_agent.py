@@ -30,7 +30,11 @@ def main():
                  'test_survival_standing_task', 'test_survival_poll_recovery', 'test_guild_hunt_score',
                  'test_native_continuity', 'test_native_mcp_recovery', 'test_system_one', 'test_skill_catalog_router',
                  'test_skill_catalog_latency', 'test_skill_catalog_index', 'test_motor_mailbox',
-                 'test_async_motor', 'test_survival_navigation_deadline'):
+                 'test_async_motor', 'test_survival_navigation_deadline', 'test_survival_controller',
+                 'test_survival_navigation_sense', 'test_motor_projection',
+                 'test_survival_area_recovery', 'test_survival_chat', 'test_motor_boundary', 'test_survival_inventory_feedback',
+                 'test_survival_native_tools', 'test_survivor_driver_scope', 'test_configure_survivor_vision',
+                 'test_survival_game_skills'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):

@@ -64,7 +64,7 @@ class ScopeTests(unittest.TestCase):
         before = {str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
         result = scope.sync(self.root, run=lambda *a, **kw: self.fail('read-only plan must not inspect runtime'))
         self.assertEqual(result['addedTools'], ['drop_items'])
-        self.assertEqual(result['toolCount'], 45)
+        self.assertEqual(result['toolCount'], len(scope.TOOL_NAMES))
         self.assertNotIn('PRIVATE_FIXTURE', json.dumps(result))
         self.assertEqual(before, {str(p): p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
 
