@@ -58,6 +58,7 @@ SOURCES += ('tests/test_skill_catalog_eligibility.py', 'world/survival/motor_pro
             'tests/test_motor_progress_audit.py', 'world/sidecar/character_speech.py',
             'world/survival/character_speech.py', 'world/survival/speech.py',
             'tests/test_character_speech.py', 'tests/test_survival_speech.py')
+SOURCES += ('tests/test_survival_action_admission.py', 'tests/test_system_one_body_control.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

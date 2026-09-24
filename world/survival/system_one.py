@@ -60,6 +60,11 @@ def compact_state(body, goal, execution, proposal=None):
         'hp', 'maxHp', 'hunger', 'saturation', 'air', 'inWater', 'inLava', 'onGround', 'biome')}
     view['position'] = _fields(body.get('position'), ('x', 'y', 'z'))
     view['task'] = _fields(body.get('task'), ('task_id', 'task', 'state', 'busy', 'completionConfirmed'))
+    # A native reflex owns the body independently of the model's task slot.
+    # Preserve its own sample identity/time so idle and active defense differ;
+    # do not infer an attacker or damage cause from a health change.
+    view['bodyControl'] = _fields(body.get('bodyControl'), ('available', 'kind', 'name',
+        'nativeAvoidanceActive', 'actorUuid', 'dimension', 'observedAt', 'gameTime', 'bodyTickCount'))
     equipment = body.get('equipment')
     view['equipment'] = ({slot: _fields(equipment.get(slot), ('item', 'count', 'damage', 'maxDamage'))
         for slot in ('mainhand', 'offhand', 'head', 'chest', 'legs', 'feet')} if isinstance(equipment, dict) else None)
