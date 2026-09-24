@@ -48,6 +48,11 @@ public final class Haven {
      * @return 落点;实在找不到可站的地方时返回 {@code null},调用方自行退化
      */
     public static BlockPos awayFrom(LivingEntity self, List<? extends Entity> threats) {
+        return awayFrom(self, threats, REACH_OUT);
+    }
+
+    /** 有高差时可用较近的中继落点;到达中继不代表已经脱险。 */
+    public static BlockPos awayFrom(LivingEntity self, List<? extends Entity> threats, double reach) {
         if (threats.isEmpty()) {
             return null;
         }
@@ -74,8 +79,8 @@ public final class Haven {
         RandomSource random = self.getRandom();
         for (int i = 0; i < TRIES; i++) {
             double angle = baseAngle + (random.nextDouble() * 2.0 - 1.0) * SPREAD;
-            int x = (int) Math.round(self.getX() + Math.cos(angle) * REACH_OUT);
-            int z = (int) Math.round(self.getZ() + Math.sin(angle) * REACH_OUT);
+            int x = (int) Math.round(self.getX() + Math.cos(angle) * reach);
+            int z = (int) Math.round(self.getZ() + Math.sin(angle) * reach);
             BlockPos landing = standableNear(self.level(), x, self.getBlockY(), z);
             if (landing != null) {
                 return landing;

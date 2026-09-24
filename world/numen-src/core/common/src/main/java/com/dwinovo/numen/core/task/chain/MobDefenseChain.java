@@ -11,22 +11,13 @@ import com.dwinovo.numen.task.TaskState;
 import com.dwinovo.numen.task.reflex.Reflex;
 
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 危险来了就<b>自动开一场战斗</b>——然后把打法完全交给 {@code attack}。
- *
- * <h2>它不再自己打</h2>
- * 这条链曾经是一整套独立的战斗系统:自己选武器、自己追、自己退。于是同一件事有了两份实现,
- * 两层还会为身体互相抢——她在十格外射爬行者,链子把她拽开,拉到一半的弓作废;拉开又交还,
- * 弓刚拉起来链子又拽。
- *
- * <p>现在它只做一件事:<b>判断该不该开打,然后派一场 {@link AttackCompanionTask}</b>。
- * 挥击、弹道、走位、退避、扛不扛得住,全归那一份判据,和模型自己派的 {@code attack} 走的是
- * 同一段代码。<b>走位也是战斗的一部分</b>,不该由另一个系统代管。
+ * 危险来了自动自卫,复用 {@link AttackCompanionTask} 的战斗或撤离执行。
+ * 远程来袭和不许攻击的目标只走撤离,近战的攻击仍由权限层决定。
  *
  * <h2>为什么仍然是一条反射链,而不是直接换掉她手上的活</h2>
  * 反射链是<b>抢占 + 归还</b>:她挖着矿被打断,打完矿照样接着挖({@code stop(PREEMPTED)} 明确
@@ -34,9 +25,8 @@ import java.util.List;
  * 重派等于从头挖一遍。
  *
  * <h2>什么算危险</h2>
- * 看的是<b>它已经逼到多近</b>:还远就有时间(模型看得见它,该由模型决定),近了就没有提前量,
- * 当场接管。这条线按威胁类型取自 {@link Menace}——爬行者 7.5(引信开始倒退的距离)、
- * 末影水晶 12(爆炸威力的两倍)、寻常怪 {@link #MELEE_DANGER}。
+ * 近战看碰撞箱与爆炸半径;远程看当前针对和视线,或五秒内真实受击来源。
+ * 感知有三十二格上限,不会把旁边未交战的中立生物当作攻击目标。
  */
 public final class MobDefenseChain implements Task, Reflex {
 
@@ -44,15 +34,7 @@ public final class MobDefenseChain implements Task, Reflex {
     public static final String ID = "mob_defense";
 
     /** 看多远。超出这个半径的不算"身边"。 */
-    private static final double SCAN_RADIUS = 12.0;
-
-    /**
-     * 寻常近战怪逼到这么近就算危险。
-     *
-     * <p>爬行者与末影水晶那两条线是从原版推出来的(引信倒退距离、爆炸威力两倍),这一条不是
-     * ——它是"它下一步就能打到我"的经验值。要更硬该去读每种怪自己的攻击距离。
-     */
-    private static final double MELEE_DANGER = 4.0;
+    private static final double SCAN_RADIUS = Menace.FLEE_DISTANCE;
 
     /**
      * 危险离开后还盯这么久才算真的没事。
@@ -68,17 +50,15 @@ public final class MobDefenseChain implements Task, Reflex {
     private AttackCompanionTask fight;
     /** 最后一刻还看得见危险的游戏时间。 */
     private long dangerLastSeenTick = NEVER;
+    private long blockedUntilTick;
+    private int blockedHurtTimestamp;
 
     public MobDefenseChain() {
     }
 
     /**
-     * 危险来了就醒。<b>打完不设冷却</b>——没有危险时 {@link #dangersNear} 本来就是空的,
-     * 链子自然不会醒,冷却在这里没有作用,只有副作用:那几秒里新出现的危险她一动不动。
-     * 实测四次重伤都发生在这个窗口里。
-     *
-     * <p>冷却原本管的是"退无可退"(老注释:hands the body back to the LLM),但那件事的正解
-     * 不是等几秒再试一次,而是{@code cornered} 那一维——退不掉就打。
+     * 危险来了就醒。正常结束没有冷却;连续三次撤离无路后给普通任务两秒窗口,
+     * 新受击立即打断这个窗口。高优先反射仍能随时抢占。
      */
     @Override
     public boolean canRun(NumenPlayer companion) {
@@ -91,6 +71,9 @@ public final class MobDefenseChain implements Task, Reflex {
         if (fight != null) {
             return true;   // 打着呢,打完再说
         }
+        // 无路时给普通任务一个有界窗口;新的一击会立即重新唤醒,不被退避吞掉。
+        if (now < blockedUntilTick
+                && companion.getLastHurtByMobTimestamp() == blockedHurtTimestamp) return false;
         if (SurvivalDecisions.mobDefenseTriggered(!dangersNear(companion).isEmpty())) {
             return true;
         }
@@ -110,6 +93,7 @@ public final class MobDefenseChain implements Task, Reflex {
             begin(companion);
             return TaskState.RUNNING;
         }
+        if (requiresRetreat(companion)) fight.retreatFromDanger();
         TaskState state = fight.tick(companion);
         if (state != TaskState.RUNNING) {
             end(companion, state);
@@ -127,10 +111,19 @@ public final class MobDefenseChain implements Task, Reflex {
         long now = companion.level().getGameTime();
         AttackTaskRecord record = new AttackTaskRecord(
                 "reflex-" + now, now + NO_DEADLINE, List.of(), true);
-        fight = new AttackCompanionTask(companion, record);
+        // 远程来袭与不许攻击的生物只撤离;禁止攻击不能同时禁止她离开危险。
+        boolean retreatOnly = requiresRetreat(companion);
+        fight = new AttackCompanionTask(companion, record, retreatOnly);
         fight.start(companion);
         com.dwinovo.numen.Constants.LOG.info("[numen-defense] 自动接管 —— 身边 {} 个危险",
                 dangersNear(companion).size());
+    }
+
+    private boolean requiresRetreat(NumenPlayer companion) {
+        return dangersNear(companion).stream().anyMatch(foe ->
+                Menace.rangedThreat(foe, companion)
+                        || !com.dwinovo.numen.permission.Permission.judge(companion,
+                        com.dwinovo.numen.permission.Action.attack(foe)).allowed());
     }
 
     /** 长到等同于没有截止时间;终点由"没人再追我"说了算。 */
@@ -138,6 +131,10 @@ public final class MobDefenseChain implements Task, Reflex {
 
     private void end(NumenPlayer companion, TaskState state) {
         String line = fight.result(state).message();
+        if (fight.retreatBlocked()) {
+            blockedUntilTick = companion.level().getGameTime() + CALM_GRACE_TICKS;
+            blockedHurtTimestamp = companion.getLastHurtByMobTimestamp();
+        }
         fight = null;
         dangerLastSeenTick = NEVER;
         InputDriver.halt(companion);
@@ -146,7 +143,7 @@ public final class MobDefenseChain implements Task, Reflex {
         // <b>不急</b>:她的后台任务照跑,黄了自有 task_finished 报。这条只是让主人翻聊天流时
         // 看得懂她刚才为什么打了一架、或者挪了二十格。攒着搭下一轮的车就够。
         com.dwinovo.numen.event.NumenEvents.reflex(companion, this,
-                "hit danger and handled it on instinct — " + line);
+                "defense reflex ended — " + line);
     }
 
     @Override
@@ -173,7 +170,7 @@ public final class MobDefenseChain implements Task, Reflex {
 
     @Override
     public String describe() {
-        return "身边有危险就自动开打,打法与她自己派的 attack 完全一致";
+        return "近身危险自动自卫;远程来袭或不许攻击的威胁只撤离,受阻如实报告";
     }
 
     // ---- 什么算危险 ----
@@ -187,24 +184,11 @@ public final class MobDefenseChain implements Task, Reflex {
      * <p>模型自己派的 {@code attack} 已经认领的目标同样不算:那场仗有人管了。但她扛不住时
      * 一律接管——那一档只有本能看得见。
      */
-    private List<Mob> dangersNear(NumenPlayer companion) {
-        LivingEntity attacker = companion.getLastHurtByMob();
-        List<Mob> near = new ArrayList<>();
-        for (Mob m : Menace.hostilesAround(companion, SCAN_RADIUS)) {
-            if (m != attacker && m.getTarget() != companion) {
-                continue;
-            }
-            // 本能开打也要过权限层:一只有名字的僵尸追着她,没有主人点头就不是一场能打的仗
-            // ——开了也是 attack 在局面里把它剔掉、当场收场、下一刻再开,循环打转。
-            if (!com.dwinovo.numen.permission.Permission.judge(companion,
-                    com.dwinovo.numen.permission.Action.attack(m)).allowed()) {
-                continue;
-            }
-
-            // "够危险了没有"与站位、退避问的是<b>同一个函数</b>:它自己的危险半径。
-            // 用一条固定的线时每种怪都判错——爬行者要七格,僵尸两格就够。
-            if (Menace.tooClose(m, companion)) {
-                near.add(m);
+    private List<LivingEntity> dangersNear(NumenPlayer companion) {
+        List<LivingEntity> near = new ArrayList<>();
+        for (LivingEntity foe : Menace.defenseThreats(companion, SCAN_RADIUS)) {
+            if (Menace.defenseDanger(foe, companion)) {
+                near.add(foe);
             }
         }
         return near;
