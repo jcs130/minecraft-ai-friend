@@ -167,21 +167,58 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
     /** 这一段逃跑路线是哪一刻算的。到点就重算,见 {@link #FLEE_REPLAN_TICKS}。 */
     private long havenPlannedAt;
 
+    /** 原生远程/受保护威胁的撤离模式,不会请求攻击许可或出手。 */
+    private boolean retreatOnly;
+    private final boolean nativeDefense;
+    private long retreatRetryAt;
+    private long retreatProgressAt;
+    private Vec3 retreatProgressPosition;
+
     public AttackCompanionTask(NumenPlayer player, AttackTaskRecord record) {
+        this(player, record, false, false);
+    }
+
+    public AttackCompanionTask(NumenPlayer player, AttackTaskRecord record, boolean retreatOnly) {
+        this(player, record, retreatOnly, true);
+    }
+
+    private AttackCompanionTask(NumenPlayer player, AttackTaskRecord record,
+                                boolean retreatOnly, boolean nativeDefense) {
         super(player, record);
+        this.retreatOnly = retreatOnly;
+        this.nativeDefense = nativeDefense;
         this.loot = new LootSweep(player);
+    }
+
+    public boolean retreatBlocked() {
+        return retreatOnly && lastFailure() == FailureType.NO_PATH;
+    }
+
+    /** 反射已经在近战时出现远程或受保护威胁,本场立即改为只撤离。 */
+    public void retreatFromDanger() {
+        if (!nativeDefense || retreatOnly) return;
+        retreatOnly = true;
+        abortShot();
+        clearHaven();
+        target = null;
+        retreatFailures = 0;
+        retreatProgressAt = player.level().getGameTime();
+        retreatProgressPosition = player.position();
     }
 
     @Override
     protected void onStart() {
         snapshotInventory(inventoryBaseline);
+        retreatProgressAt = player.level().getGameTime();
+        retreatProgressPosition = player.position();
         // 这场仗归我管了 —— 本能链别再为同一件事抢身体。空闲时自动解除,不必显式还。
-        player.pauseReflex(MobDefenseChain.ID);
+        if (!nativeDefense) player.pauseReflex(MobDefenseChain.ID);
     }
 
     @Override
     protected TaskState onTick() {
         if (player.isDeadOrDying()) return TaskState.CANCELLED;
+        if (retreatOnly) return tickFlee();
         if (phase == Phase.LOOT) return tickLoot();
 
         Battlefield field = surveyField();
@@ -830,10 +867,17 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
      * <p>三十二格是<b>跑的目标</b>,不是状态的出口:跑到了就没什么可跑的,判据自会改口。
      */
     private TaskState tickFlee() {
-        var around = Menace.hostilesAround(player, Menace.FLEE_DISTANCE);
+        var around = retreatOnly ? Menace.defenseThreats(player, Menace.FLEE_DISTANCE)
+                : Menace.hostilesAround(player, Menace.FLEE_DISTANCE);
         if (around.isEmpty()) {
             clearHaven();
             InputDriver.halt(player);
+            if (retreatOnly) {
+                fail("defensive retreat ended — no current or recent attacker within "
+                        + (int) Menace.FLEE_DISTANCE + " blocks; no enemy defeat claimed",
+                        FailureType.TARGET_LOST);
+                return TaskState.FAILED;
+            }
             Constants.LOG.info("[numen-attack] 脱离成功 —— {} 格内没有敌对生物",
                     (int) Menace.FLEE_DISTANCE);
             fail(Menace.outmatched(player)
@@ -843,18 +887,40 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
                     FailureType.TARGET_LOST);
             return TaskState.FAILED;
         }
+        long now = player.level().getGameTime();
+        if (retreatOnly) {
+            if (retreatProgressPosition == null
+                    || player.position().distanceToSqr(retreatProgressPosition) >= 0.25) {
+                retreatProgressPosition = player.position();
+                retreatProgressAt = now;
+            } else if (now - retreatProgressAt >= 200) {
+                clearHaven();
+                InputDriver.halt(player);
+                fail("defensive retreat blocked — no position progress for 200 ticks",
+                        FailureType.NO_PATH);
+                return TaskState.FAILED;
+            }
+        }
+        if (retreatOnly && nav == null && now < retreatRetryAt) {
+            return TaskState.RUNNING;
+        }
         if (haven == null || player.blockPosition().closerThan(haven, HAVEN_ARRIVED)) {
-            haven = Haven.awayFrom(player, Menace.hostilesAround(player, FLEE_SCAN_RADIUS));
+            haven = Haven.awayFrom(player, retreatOnly ? around
+                    : Menace.hostilesAround(player, FLEE_SCAN_RADIUS));
+            if (retreatOnly && haven == null) {
+                haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / 2.0);
+                if (haven == null) haven = Haven.awayFrom(player, around, Menace.FLEE_DISTANCE / 4.0);
+            }
             stopNav();
             Constants.LOG.info("[numen-attack] 逃向 {} —— {} 格内 {} 只",
                     haven, (int) Menace.FLEE_DISTANCE, around.size());
         }
         if (haven == null) {
             Constants.LOG.info("[numen-attack] 没有可跑的方向");
+            if (retreatOnly) return retreatFailed(now, "no loaded retreat landing at 32, 16 or 8 blocks");
             return TaskState.RUNNING;
         }
-        long now = player.level().getGameTime();
-        if (nav != null && now - havenPlannedAt >= FLEE_REPLAN_TICKS) {
+        if (!retreatOnly && nav != null && now - havenPlannedAt >= FLEE_REPLAN_TICKS) {
             stopNav();   // 到点重算:落点不变,只让这一刻的怪进边成本
         }
         if (nav == null) {
@@ -867,17 +933,30 @@ public final class AttackCompanionTask extends AbstractCompanionTask<AttackTaskR
         }
         PlayerNav.Status status = nav.tick();
         if (status == PlayerNav.Status.FAILED) {
+            String reason = nav.failReason();
             stopNav();
             haven = null;   // 这个方向走不通,下一刻换一个
+            if (retreatOnly) return retreatFailed(now, reason);
             retreatFailures++;
         } else {
             if (status == PlayerNav.Status.ARRIVED) {
                 stopNav();
                 haven = null;
             }
-            retreatFailures = 0;
+            if (!retreatOnly || status == PlayerNav.Status.ARRIVED) retreatFailures = 0;
         }
         return TaskState.RUNNING;
+    }
+
+    /** 三次独立路线失败后让出身体并如实报告;搜索中的 RUNNING 不会抹掉失败计数。 */
+    private TaskState retreatFailed(long now, String reason) {
+        retreatRetryAt = now + FLEE_REPLAN_TICKS;
+        if (++retreatFailures < MAX_RETREAT_FAILURES) return TaskState.RUNNING;
+        clearHaven();
+        InputDriver.halt(player);
+        fail("defensive retreat blocked after " + retreatFailures + " attempts: " + reason,
+                FailureType.NO_PATH);
+        return TaskState.FAILED;
     }
 
     /** 丢掉落点与导航。跑到了、跑不动了、或者判据改口不跑了,都过这里。 */

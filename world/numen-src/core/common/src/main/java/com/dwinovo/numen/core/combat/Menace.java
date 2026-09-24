@@ -11,6 +11,7 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.monster.Creeper;
 
@@ -82,6 +83,9 @@ public final class Menace {
      * 于是起跑两秒后宣布脱离,而她身后两格还跟着三只。
      */
     public static final double FLEE_DISTANCE = 32.0;
+
+    /** 受击来源只作为五秒内的事实;旧仇恨不能永久替代当前目标。 */
+    private static final int RECENT_HURT_TICKS = 100;
 
     private Menace() {}
 
@@ -222,6 +226,46 @@ public final class Menace {
             }
         }
         return found;
+    }
+
+    /** 当前确实针对她的威胁,包括有实际受击来源的模组投射物主人。 */
+    public static List<LivingEntity> defenseThreats(LivingEntity self, double radius) {
+        List<LivingEntity> found = new ArrayList<>();
+        for (Mob mob : self.level().getEntitiesOfClass(Mob.class,
+                self.getBoundingBox().inflate(radius))) {
+            if (mob != self && mob.isAlive() && self.distanceToSqr(mob) <= radius * radius
+                    && (mob.getTarget() == self || recentlyHurtBy(self, mob))) {
+                found.add(mob);
+            }
+        }
+        LivingEntity attacker = self.getLastHurtByMob();
+        if (attacker != null && attacker != self && attacker.isAlive()
+                && attacker.level() == self.level() && recentlyHurtBy(self, attacker)
+                && self.distanceToSqr(attacker) <= radius * radius && !found.contains(attacker)) {
+            found.add(attacker);
+        }
+        return found;
+    }
+
+    public static boolean recentlyHurtBy(LivingEntity self, LivingEntity foe) {
+        int age = self.tickCount - self.getLastHurtByMobTimestamp();
+        return self.getLastHurtByMob() == foe && age >= 0 && age <= RECENT_HURT_TICKS;
+    }
+
+    /** 射手接口覆盖原版骷髅和 Fairy;真实间接受击也覆盖未实现接口的模组。 */
+    public static boolean rangedThreat(LivingEntity foe, LivingEntity self) {
+        if (foe instanceof RangedAttackMob) {
+            return true;
+        }
+        var hit = self.getLastDamageSource();
+        return recentlyHurtBy(self, foe) && hit != null && hit.getEntity() == foe
+                && hit.getDirectEntity() != null && hit.getDirectEntity() != foe;
+    }
+
+    /** 防御的开场条件与近战站位不同:远程来袭必须退出射线,不能只退到碰撞箱外。 */
+    public static boolean defenseDanger(LivingEntity foe, LivingEntity self) {
+        return tooClose(foe, self) || (rangedThreat(foe, self)
+                && (recentlyHurtBy(self, foe) || self.hasLineOfSight(foe)));
     }
 
     /**
