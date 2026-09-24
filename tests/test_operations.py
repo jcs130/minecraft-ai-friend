@@ -32,6 +32,43 @@ class OperationsTests(unittest.TestCase):
         states['qiandengji-mc-1']['state']='exited'
         with self.assertRaises(ValueError):ops.validate_lifecycle(plan,states)
 
+    def test_world_start_requires_running_gate_without_implicitly_starting_it(self):
+        states=self.owned_states()
+        states['qiandengji-world-1']['state']='exited'
+        states['qiandengji-gate-1']['state']='exited'
+        plan=ops.lifecycle_plan('start',['world'],states)
+        self.assertEqual(plan['start'],['world'])
+        with self.assertRaisesRegex(ValueError,'required dependency'):
+            ops.validate_lifecycle(plan,states)
+        self.assertEqual(plan['requiredRunning'],['gate','mc'])
+        states['qiandengji-gate-1']['state']='running'
+        ops.validate_lifecycle(plan,states)
+
+    def test_cold_game_start_makes_gate_ready_before_waiting_for_world_health(self):
+        states=self.owned_states()
+        for name in ('mc','world','gate','npc','survivor'):
+            states['qiandengji-'+name+'-1']['state']='exited'
+        plan=ops.lifecycle_plan('start',['mc','world','gate'],states)
+        ops.validate_lifecycle(plan,states)
+        ready=set()
+        def start_and_wait(*args,**kwargs):
+            self.assertEqual(args[:-1],('up','-d','--no-deps','--no-recreate','--wait','--wait-timeout','180'))
+            name=args[-1]
+            # The real world service logs in via MC_HOST=gate. With --no-deps,
+            # waiting for its health cannot succeed while gate is still off.
+            dependencies={'gate':{'mc'},'world':{'mc','gate'}}
+            if not dependencies.get(name,set())<=ready:
+                raise RuntimeError('health cannot become ready before its dependency')
+            ready.add(name)
+            return ''
+        with patch.object(ops,'compose',side_effect=start_and_wait) as run,\
+             patch.object(ops,'inspect_containers',return_value=states),\
+             patch.object(ops,'write_action_record'):
+            self.assertTrue(ops.execute_lifecycle(plan,states)['ok'])
+        self.assertEqual([call.args[-1] for call in run.call_args_list],['mc','gate','world'])
+        self.assertNotIn('npc',ready)
+        self.assertNotIn('survivor',ready)
+
     def test_start_cannot_implicitly_touch_other_services(self):
         states=self.owned_states();plan=ops.lifecycle_plan('restart',['panel'],states)
         with patch.object(ops,'compose',return_value='') as run,patch.object(ops,'write_action_record'):
@@ -125,7 +162,18 @@ class OperationsTests(unittest.TestCase):
         self.assertTrue(plan['saveMinecraft'])
         self.assertEqual(plan['stop'][-1],'mc')
         self.assertTrue({'world','npc','gate'}<=set(plan['stop']))
-        self.assertEqual(set(plan['start']),{'mc','world','gate'})
+        self.assertEqual(plan['start'],['mc','gate','world'])
+        self.assertLess(plan['stop'].index('world'),plan['stop'].index('gate'))
+
+    def test_gate_restart_stops_world_before_gate_and_restores_only_running_consumers(self):
+        states=self.owned_states()
+        states['qiandengji-npc-1']['state']='exited'
+        states['qiandengji-survivor-1']['state']='exited'
+        plan=ops.lifecycle_plan('restart',['gate'],states)
+        self.assertEqual(plan['stop'],['npc','world','gate'])
+        self.assertEqual(plan['start'],['gate','world'])
+        self.assertEqual(plan['requiredRunning'],['mc'])
+        self.assertFalse(plan['saveMinecraft'])
 
     def test_dialogue_restart_does_not_stop_player_command_service(self):
         states={'qiandengji-qwenpaw-1':{'state':'running'}}
