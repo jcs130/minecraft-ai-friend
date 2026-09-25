@@ -20,6 +20,9 @@ CAPABILITY = 'existing_body_restore_v1'
 # channel must stay open or the pause can never lift without an operator.
 BODY_PAUSE_REASONS = frozenset({'body_lost_during_decision', 'body_dead'})
 DEATH_PREFLIGHT_REJECTIONS = frozenset({'death_respawn_delay', 'death_safe_spawn_unavailable'})
+# 这些 blocked 理由属于“需复核但身体可能已由别的路径回来”——允许按节律做只读
+# roster 观察并自愈；绝不代表可以自行再次派发 restore（硬闸仍尊重）。
+OBSERVATION_RECOVERABLE = frozenset({'saved_task_requires_review'})
 
 
 def episode_attempts(state, now):
@@ -200,6 +203,22 @@ class BodyReconnect:
         if any(state.get(key) != value for key, value in expected.items()):
             return {'status': 'blocked', 'reason': 'restore_binding_changed'}
         if state.get('status') == 'blocked':
+            # 硬闸（身份冲突/绑定变更）保持人工；但“需复核”类理由若身体其实已回来
+            # （人工 summon、自然复活、numen 侧清了遗留任务），按节律只读观察即可自愈，
+            # 不再空转成永久死锁——这正是过去“起不来”要等运维的根。
+            if (state.get('reason') in OBSERVATION_RECOVERABLE
+                    and now >= state.get('nextCheckAt', 0)):
+                state['checkedAt'] = now
+                state['nextCheckAt'] = now + 60
+                try:
+                    online = roster_online(self.gateway._native_roster(), expected)
+                except Exception:
+                    online = False   # 观察不确定：保持 blocked，下一轮再试，绝不自作派发
+                if online:
+                    state.update(status='online', reason='identity_verified',
+                                 verifiedAt=now, readFailures=0)
+                    self._auto_resume(control, resume_after_restore, now)
+                write_json(self.path, state)   # 观察过就落盘（含节律），不每 tick 重探
             return state
         attempts = unverified_attempts(state, now)
         episode = episode_attempts(state, now)

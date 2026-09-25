@@ -149,6 +149,42 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(self.restore.tick(BINDING)['status'], 'online')
         self.assertFalse(self.commands())
 
+    def test_saved_task_block_self_heals_by_roster_probe_without_redispatch(self):
+        # 身体掉线时 numen 挡回 saved_task_requires_review → blocked（这正是过去“起不来”要等运维的死锁）
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        blocked = self.restore.tick(BINDING)
+        self.assertEqual(blocked['status'], 'blocked')
+        self.assertEqual(blocked['reason'], 'saved_task_requires_review')
+        before = len(self.commands())
+        # 别的路径（运维 summon / 自然复活）把身体弄回来：reconnector 只读观察即自愈，绝不再自行派发 restore
+        self.rcon.roster = ONLINE
+        self.clock.now = blocked['nextCheckAt'] + 1
+        healed = self.restore.tick(BINDING)
+        self.assertEqual(healed['status'], 'online')
+        self.assertEqual(healed['reason'], 'identity_verified')
+        self.assertEqual(len(self.commands()), before)
+
+    def test_saved_task_block_does_not_self_heal_while_body_absent(self):
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        blocked = self.restore.tick(BINDING)
+        before = len(self.commands())
+        self.clock.now = blocked['nextCheckAt'] + 1   # 身体仍不在
+        again = self.restore.tick(BINDING)
+        self.assertEqual(again['status'], 'blocked')
+        self.assertGreater(again['nextCheckAt'], self.clock())
+        self.assertEqual(len(self.commands()), before)   # 探针绝不派发 restore
+
+    def test_hard_blocked_identity_conflict_never_self_heals_by_probe(self):
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'blocked',
+                 'reason':'restore_live_identity_conflict', 'attempts':[], 'nextCheckAt':0})
+        self.rcon.roster = ONLINE
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['reason'], 'restore_live_identity_conflict')
+        self.assertFalse(self.commands())
+
     def test_unknown_submission_is_not_retried_after_process_restart(self):
         self.rcon.response = TimeoutError('response lost')
         self.assertEqual(self.restore.tick(BINDING)['status'], 'unknown')
