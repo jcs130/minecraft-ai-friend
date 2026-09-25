@@ -21,6 +21,15 @@ def probe():
         motion = get('/observatory-motion.css')
         architecture = get('/embodied-architecture.js')
         unified = get('/unified-decision.js')
+        stream = get('/decision-dag')
+        stream_app = get('/decision-stream.js')
+        stream_model = get('/decision-stream-model.js')
+        stream_style = get('/decision-stream.css')
+        checks['standalone-decision-dag'] = ('id="stream-dag"' in stream and '<iframe' not in stream
+            and 'api/rsi-observatory' not in stream_app and "l.id==='policy'||l.id==='llm'" in stream_model)
+        checks['standalone-dag-assets'] = (content_types.get('/decision-stream.js') in ('text/javascript','application/javascript')
+            and content_types.get('/decision-stream-model.js') in ('text/javascript','application/javascript')
+            and content_types.get('/decision-stream.css') == 'text/css' and 'html.transparent' in stream_style)
         checks['embodied-architecture'] = (all(x in page for x in ('id="architecture-canvas"', 'data-layer="online"', 'data-layer="l2"', 'data-layer="l3"'))
             and all(x in architecture for x in ('SYSTEM 1', 'SYSTEM 2', 'Dream', 'MCP', 'verifiedImprovement:null')))
         checks['world-first-layout'] = ('class="broadcast-stage"' in page and '观察者镜头' in page

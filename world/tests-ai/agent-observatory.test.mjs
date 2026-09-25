@@ -101,6 +101,6 @@ test('observatory serves only read-only fixed routes with existing host protecti
   assert.equal((await request('/api/survivor-trace','POST')).status,405);
   assert.equal((await request('/api/rsi-observatory','GET','evil.test')).status,403);
   assert.equal((await request('/survivor-trace/controller.json')).status,404);
-  for(const asset of ['/observatory.js','/observatory.css','/trace.js','/trace.css'])assert.equal((await request(asset)).status,200);
+  for(const asset of ['/observatory.js','/observatory.css','/trace.js','/trace.css','/decision-dag','/decision-stream.js','/decision-stream-model.js','/decision-stream.css'])assert.equal((await request(asset)).status,200);
   assert.equal(JSON.parse((await request('/api/rsi-observatory')).body).available,false);
 });

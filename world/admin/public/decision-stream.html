@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev × LLM · 直播决策 DAG</title><link rel="stylesheet" href="/decision-stream.css"><script type="module" src="/decision-stream.js"></script></head>
+<body><main class="decision-stream" aria-label="LLM 与 Jev 独立决策组件">
+<header><div class="stream-title"><span class="stream-mark">⌘</span><strong>决策链路</strong><span class="jev">Jev · System 1</span><span class="llm">LLM · System 2</span></div><span id="stream-status" role="status">正在连接</span></header>
+<div class="stream-canvas"><svg id="stream-dag" role="group" tabindex="0" aria-label="Jev 与 LLM 决策 DAG，拖动平移，Ctrl 加滚轮缩放"></svg><p id="stream-empty">读取决策记录…</p></div>
+<footer><span id="stream-note">实线：已记录路径 · 虚线：机制，非执行关联</span><span id="stream-time">—</span></footer>
+<nav class="stream-controls" aria-label="决策图控制"><button id="stream-minus" aria-label="缩小">−</button><button id="stream-fit">适应全图</button><button id="stream-plus" aria-label="放大">＋</button><button id="stream-replay">回放记录</button><button id="stream-pause" aria-pressed="false">暂停更新</button></nav>
+<aside id="stream-detail" hidden><button id="stream-close" aria-label="关闭节点详情">×</button><h2 id="stream-node-title"></h2><p id="stream-node-summary"></p><pre id="stream-node-evidence"></pre></aside>
+</main></body></html>
