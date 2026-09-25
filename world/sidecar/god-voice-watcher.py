@@ -47,11 +47,22 @@ def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def synth_local(text: str, role: str, mp3: Path) -> None:
+def _tts_params(text, voice, prosody):
+    """Merge IndexTTS /tts query from text+voice+prosody(speed/emo/emo_alpha/emo_text)."""
+    params = {"text": text, "voice": voice, "format": "mp3"}
+    if isinstance(prosody, dict):
+        for key in ("speed", "emo", "emo_alpha", "emo_text"):
+            value = prosody.get(key)
+            if value not in (None, ""):
+                params[key] = value
+    return params
+
+
+def synth_local(text: str, role: str, mp3: Path, prosody=None) -> None:
     """本地 TTS 直出 mp3（神语阁 lameenc 编码，voice 侧零 ffmpeg）。失败抛异常。"""
     if not TTS_LOCAL_URL:
         raise RuntimeError("tts-local disabled")
-    qs = urllib.parse.urlencode({"text": text, "voice": role, "format": "mp3"})
+    qs = urllib.parse.urlencode(_tts_params(text, role, prosody))
     with urllib.request.urlopen(f"{TTS_LOCAL_URL}/tts?{qs}", timeout=90) as r:
         data = r.read()
     if not data:
@@ -61,8 +72,8 @@ def synth_local(text: str, role: str, mp3: Path) -> None:
     temporary.replace(mp3)
 
 
-def speech_audio(text: str, voice_id: str) -> bytes:
-    qs = urllib.parse.urlencode({'text': text, 'voice': voice_id, 'format': 'mp3'})
+def speech_audio(text: str, voice_id: str, prosody=None) -> bytes:
+    qs = urllib.parse.urlencode(_tts_params(text, voice_id, prosody))
     request = urllib.request.Request(f'{TTS_LOCAL_URL}/tts?{qs}', headers={'Accept': 'audio/mpeg'})
     with urllib.request.urlopen(request, timeout=90) as response:
         if response.headers.get_content_type() != 'audio/mpeg':

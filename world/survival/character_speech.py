@@ -12,6 +12,38 @@ TERMINAL = {'completed', 'cancelled', 'expired', 'failed'}
 ID = re.compile(r'[a-zA-Z0-9_-]{1,100}\Z')
 VOICE = re.compile(r'[a-zA-Z0-9_-]{1,64}\Z')
 DIMENSION = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
+EMO = frozenset({'happy', 'angry', 'sad', 'afraid', 'surprised', 'calm', 'neutral'})
+
+
+def normalize_prosody(value):
+    """Coerce caller/profile prosody to IndexTTS query params; drop invalid.
+
+    Accepted keys: speed (0.5-2.0), emo (enum), emo_alpha (0-1.2), emo_text (str).
+    Returns a dict suitable for the /tts query, or {} — never raises on junk so a
+    bad hint can't block speech (the utterance still plays with the profile voice).
+    """
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    try:
+        speed = float(value.get('speed'))
+        if 0.5 <= speed <= 2.0:
+            out['speed'] = ('%.2f' % speed).rstrip('0').rstrip('.')
+    except (TypeError, ValueError):
+        pass
+    emo = value.get('emo')
+    if isinstance(emo, str) and emo in EMO:
+        out['emo'] = emo
+    try:
+        alpha = float(value.get('emo_alpha'))
+        if 0.0 <= alpha <= 1.2:
+            out['emo_alpha'] = ('%.2f' % alpha).rstrip('0').rstrip('.')
+    except (TypeError, ValueError):
+        pass
+    emo_text = value.get('emo_text')
+    if isinstance(emo_text, str) and 1 <= len(emo_text.strip()) <= 32:
+        out['emo_text'] = emo_text.strip()
+    return out
 
 
 def read(path):
@@ -240,7 +272,7 @@ class SpeechBroker:
                 'code': 'speech_submission_unconfirmed', 'playbackCompleted': False,
                 'retryAutomatically': False, 'updatedAt': row['createdAt']}
 
-    def submit(self, actor, key, text, dimension, interrupt=False):
+    def submit(self, actor, key, text, dimension, interrupt=False, prosody=None):
         actor_id(actor)
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 160 or any(ord(c) < 32 for c in text):
             raise ValueError('speech_text_invalid')
@@ -276,11 +308,14 @@ class SpeechBroker:
             if len(index['reservations']) >= 5 and not interrupt:
                 raise ValueError('speech_queue_full')
             generation = generation + 1 if interrupt or generation == 0 else generation
+            resolved = {**normalize_prosody(profile.get('prosody')), **normalize_prosody(prosody)}
             job = {'schema': 2, 'id': speech_id, 'entity': actor, 'voiceId': profile['voiceId'],
                    'voiceVersion': profile['version'], 'generation': generation,
                    'createdAt': now, 'expiresAt': now + 90000, 'dimension': dimension,
                    'scope': 'nearby', 'radius': 24, 'priority': 'urgent' if interrupt else 'normal',
                    'text': text.strip()}
+            if resolved:
+                job['prosody'] = resolved
             index = {**index, 'generation': generation, 'lastAcceptedAt': now,
                      'reservations': ([] if interrupt else index['reservations']) + [job]}
             # Durable reservation -> identity -> dispatch. Every ambiguous crash
@@ -365,6 +400,19 @@ class SpeechWorker:
               {'schema': 2, 'id': job['id'], 'entity': job['entity'], 'generation': job['generation'],
                'status': status, 'code': code or status, 'updatedAt': self.broker.now()})
 
+    def _render(self, job):
+        # Call the injected synthesize with prosody when it supports it; legacy
+        # 2-arg injectors keep working (prosody simply not applied there).
+        import inspect
+        prosody = job.get('prosody') or {}
+        try:
+            arity = len(inspect.signature(self.synthesize).parameters)
+        except (TypeError, ValueError):
+            arity = 2
+        if arity >= 3:
+            return self.synthesize(job['text'], job['voiceId'], prosody)
+        return self.synthesize(job['text'], job['voiceId'])
+
     def process(self, job):
         speech_id, actor = job.get('id'), job.get('entity')
         if not isinstance(speech_id, str) or not ID.fullmatch(speech_id):
@@ -389,7 +437,8 @@ class SpeechWorker:
             self.report(job, 'cancelled', 'voice_profile_changed')
             return
         key = hashlib.sha256(json.dumps([job['voiceId'], job['voiceVersion'], job['text'],
-                                       'mp3', 'indextts-local-v1'], ensure_ascii=False).encode()).hexdigest()
+                                       job.get('prosody') or {}, 'mp3', 'indextts-local-v1'],
+                                       ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         cache = self.root / 'speech-cache'
         cache.mkdir(parents=True, exist_ok=True)
         cached = cache / (key + '.mp3')
@@ -399,7 +448,7 @@ class SpeechWorker:
             if cached.exists() and 0 <= self.broker.clock() - cached.stat().st_mtime < 7 * 86400:
                 data = cached.read_bytes()
             else:
-                data = self.synthesize(job['text'], job['voiceId'])
+                data = self._render(job)
                 if not isinstance(data, bytes) or not 1 <= len(data) <= 4 * 1024 * 1024:
                     raise ValueError('speech_audio_size_invalid')
                 temp = cached.with_suffix('.tmp')

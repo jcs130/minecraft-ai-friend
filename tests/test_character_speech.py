@@ -43,6 +43,36 @@ class SpeechTest(unittest.TestCase):
     def job(self, result):
         return read(self.root / 'speech-requests' / (result['utteranceId'] + '.json'))
 
+    def test_prosody_threads_to_synthesize_and_splits_cache(self):
+        # submit 归一化 prosody 进 job（合法值保留、越界/非法/多余键丢弃）
+        r = self.submit(prosody={'speed': '1.20', 'emo': 'happy', 'emo_text': '开心', 'junk': 1})
+        self.assertEqual(self.job(r)['prosody'],
+                         {'speed': '1.2', 'emo': 'happy', 'emo_text': '开心'})
+        self.now += 11
+        r2 = self.submit(key='t2', prosody={'emo': 'nope', 'speed': 9})
+        self.assertNotIn('prosody', self.job(r2))
+        # 3-arg synthesize 收到 prosody（生产注入 speech_audio(text,voice,prosody)）
+        seen = []
+        def syn3(text, voice, prosody=None):
+            seen.append(prosody); return b'ID3-audio'
+        SpeechWorker(self.broker, syn3).process(self.job(r))
+        self.assertEqual(seen, [{'speed': '1.2', 'emo': 'happy', 'emo_text': '开心'}])
+        # 同文本不同情绪 → 缓存键不同 → 各合成一次（不串嗓性）
+        self.now += 11
+        rA = self.submit(key='cA', text='同一句', prosody={'emo': 'calm'})
+        self.now += 11
+        rB = self.submit(key='cB', text='同一句', prosody={'emo': 'sad'})
+        seen.clear()
+        SpeechWorker(self.broker, syn3).process(self.job(rA))
+        SpeechWorker(self.broker, syn3).process(self.job(rB))
+        self.assertEqual(seen, [{'emo': 'calm'}, {'emo': 'sad'}])
+        # 2-arg 遗留 synthesize 仍可用（不带 prosody，向后兼容）——用一个未处理过的新 job
+        legacy = []
+        self.now += 11
+        rC = self.submit(key='cC', text='遗留句')
+        SpeechWorker(self.broker, lambda t, v: legacy.append((t, v)) or b'ID3-audio').process(self.job(rC))
+        self.assertEqual(legacy, [('遗留句', 'cosy_male')])
+
     def test_idempotence_and_conflict(self):
         one = self.submit()
         self.assertEqual(one['utteranceId'], self.submit()['utteranceId'])
