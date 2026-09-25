@@ -172,6 +172,9 @@ class PracticeStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with closing(sqlite3.connect(self.path, timeout=5)) as db:
+                # WAL：写不再独占读、写-写锁大幅减少（原只 timeout=5 仍频繁 database is locked）
+                db.execute('PRAGMA journal_mode=WAL')
+                db.execute('PRAGMA synchronous=NORMAL')
                 schema = db.execute('PRAGMA user_version').fetchone()[0]
                 _require(schema in (0, SCHEMA), 'practice_schema_mismatch')
                 if schema == SCHEMA:

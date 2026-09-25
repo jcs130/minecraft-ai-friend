@@ -26,6 +26,9 @@ class ReviewQueue:
         db = sqlite3.connect(self.path, timeout=5)
         db.row_factory = sqlite3.Row
         try:
+            # WAL：review 写与并发读互不阻塞（根治 database is locked）
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('PRAGMA synchronous=NORMAL')
             db.execute('BEGIN IMMEDIATE')
             db.execute('CREATE TABLE IF NOT EXISTS requests (seq INTEGER PRIMARY KEY AUTOINCREMENT, '
                        'request_id TEXT UNIQUE NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL, evidence TEXT)')
