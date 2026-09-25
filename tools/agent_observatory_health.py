@@ -68,6 +68,13 @@ def probe():
         rsi = json.loads(get('/api/rsi-observatory'))
         checks['trace-contract'] = trace.get('schema') == 1 and isinstance(trace.get('turns'), list)
         checks['trace-live-source'] = trace.get('available') is True and trace.get('stale') is False
+        checks['stream-model-result-ui'] = all(f'id="{item}"' in stream for item in ('jev-result','llm-result','llm-result-time')) and 'streamRuntimeLabel' in stream_app
+        results = trace.get('modelResults', {})
+        checks['stream-runtime-state'] = isinstance(trace.get('runtime'), dict) and all(k in results for k in ('current','last'))
+        projected = [r for r in results.values() if isinstance(r, dict)]
+        checks['native-result-projection'] = all(r.get('turnId') and r.get('taskId') and r.get('availability') == 'available'
+            and 'output' not in r and 'reasoning' not in r and isinstance(r.get('tools'), list) for r in projected)
+        checks['native-final-text-contract'] = all(r.get('finalText') is None or (r.get('status') == 'completed' and isinstance(r['finalText'], str) and len(r['finalText']) <= 6000) for r in projected)
         checks['decision-branches'] = ('id="record-select"' in page and isinstance(trace.get('policyDecisions'), list)
             and trace.get('routing', {}).get('llmAlternativesRecorded') is False)
         checks['action-provenance'] = all(a.get('decisionSource') == 'llm'

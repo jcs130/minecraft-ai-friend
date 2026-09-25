@@ -39,6 +39,21 @@ test('turn joins are exact and native private messages stay private',async t=>{
   assert.equal(result.turns[0].decisionSource,'llm');assert.equal(result.turns[0].actions[0].decisionSource,'llm');
   assert.ok(!JSON.stringify(result).includes('SECRET'));assert.equal(result.turns[0].coverage.allModelToolsRecorded,false);
 });
+test('live native projections bind current and last controller tasks without borrowing an older snapshot result',async t=>{
+ const {root,write}=await fixture(t),now=Date.now(),calls=[];
+ await write('survivor.json',{schema:1,project:'qiandengji-survivor',bodyName:'Kirito',generatedAt:new Date(now).toISOString(),status:'paused',enabled:false,pauseReason:'controller_error',lastDecision:{turnId:'outdated'}});
+ await write('controller.json',{active:{turnId:'current',taskId:'task-current',sessionId:'session-current'},lastDecision:{turnId:'last',taskId:'task-last',sessionId:'session-last',completed:true,at:new Date(now).toISOString()}});
+ await write('memory.json',{});
+ const nativeResults={baseUrl:'http://127.0.0.1:18089/api',fetchImpl:async url=>{
+  calls.push(url);const current=url.endsWith('task-current');
+  return new Response(JSON.stringify({status:current?'running':'finished',result:{status:current?'running':'completed',session_id:current?'session-current':'session-last',output:current?[]:[{type:'message',role:'assistant',status:'completed',content:[{type:'text',text:'原生最终回复'}]}]}}));
+ }};
+ const r=await readSurvivorTrace({stateDir:root,traceDir:root,nativeResults},now);
+ assert.equal(calls.length,2);assert.equal(r.modelResults.current.finalText,null);assert.equal(r.modelResults.current.status,'running');
+ assert.equal(r.modelResults.last.finalText,'原生最终回复');assert.equal(r.modelResults.last.turnId,'last');
+ assert.equal(r.turns.find(t=>t.turnId==='last').modelResult.taskId,'task-last');assert.equal(r.turns.some(t=>t.turnId==='outdated'),false);
+ assert.equal(r.runtime.enabled,false);assert.equal(r.runtime.pauseReason,'controller_error');
+});
 const selection={ok:true,provider:'typesafe',model:'jev-1.13.0',choice:'craft',confidence:.92,selectedProbability:.7,probabilities:{craft:.7,handoff:.3},stateSha256:'state-1',observedAt:1234,
   candidates:[{id:'craft',description:'craft planks',action:{tool:'craft',args:{item_id:'minecraft:oak_planks',token:'SECRET'}}},{id:'handoff',action:null}],state:{private:'SECRET'}};
 const choice={kind:'system_one_choice',name:'prepare',version:'v1',practiceRunId:'p1',at:'2026-09-21T03:00:00Z',selection};
