@@ -41,6 +41,7 @@ class Rcon:
 class ReconnectGateway(fixtures.FakeGateway):
     _native_roster = NumenGateway._native_roster
     _native_restore_existing = NumenGateway._native_restore_existing
+    _native_summon = NumenGateway._native_summon
 
 
 class BodyReconnectTests(unittest.TestCase):
@@ -184,6 +185,33 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(result['status'], 'blocked')
         self.assertEqual(result['reason'], 'restore_live_identity_conflict')
         self.assertFalse(self.commands())
+
+    def test_blocked_recovery_runs_even_with_active_decision(self):
+        # 回归：过去 blocked 自愈排在授权闸之后，有活跃决策时永远走不到 → 只能等运维。
+        # 现在恢复先于授权闸跑，活跃决策不得饿死它。
+        write_json(self.state/'controller.json', {'active': {'taskId': 'stale'}})
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'blocked',
+                 'reason':'saved_task_requires_review', 'attempts':[], 'nextCheckAt':0})
+        self.rcon.roster = ONLINE
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'online')          # 身体在线 → 翻 online，而非 restore_not_authorized
+        self.assertEqual(result['reason'], 'identity_verified')
+        self.assertFalse(self.commands())                     # 只读观察，不派发任何动作
+
+    def test_saved_task_absent_triggers_bounded_auto_summon(self):
+        # 身体确认缺席：连续缺席 SUMMON_AFTER_ABSENT 次 → 幂等自动 summon 召回，且当天有配额上限。
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        state = self.restore.tick(BINDING)                    # 首轮走正常派发→被拒→blocked
+        self.assertEqual(state['status'], 'blocked')
+        for _ in range(3):                                    # 反复只读观察，身体始终不在
+            self.clock.now = state['nextCheckAt'] + 1
+            self.rcon.roster = 'count=0'
+            state = self.restore.tick(BINDING)
+            self.assertEqual(state['status'], 'blocked')
+        self.assertIn('numen_act summon ' + OWNER + ' Kirito', self.rcon.calls)   # 缺席够多次→自动召唤
+        # 配额：一天内自动召唤次数有上限，不无界重试
+        self.assertLessEqual(len([c for c in self.rcon.calls if c.startswith('numen_act summon')]), 5)
 
     def test_unknown_submission_is_not_retried_after_process_restart(self):
         self.rcon.response = TimeoutError('response lost')
