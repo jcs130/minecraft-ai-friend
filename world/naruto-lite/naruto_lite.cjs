@@ -50,7 +50,8 @@ const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行
 {"action":"sleep"}                              找床睡觉
 {"action":"set_goal","params":{"goal":"一句话阶段目标"}}
 {"action":"rest"}                               原地观望几秒
-不确定就 wander 或 rest。距离坐标不超过 64 格。say 保持口语短句。`;
+不确定就 wander 或 rest。距离坐标不超过 64 格。say 保持口语短句。
+常识：挖不动石头(返回 dug_but_zero_drop)说明缺工具——先 craft "wooden_pickaxe"（3木板+2木棍，木板够的），不是 stone_pickaxe；镐子要工作台，放不下说明在别人的保护区，先 wander 离开 30 格再放。上一轮动作没让背包变多就是无用功，换思路别重复。`;
 
 let bot = null;
 let turnCount = 0;
@@ -133,8 +134,11 @@ async function exec(dec) {
     if (a === 'mine') {
       const b = bot.findBlock({ matching: x => x.name === P.what || x.name === 'minecraft:' + P.what, maxDistance: 24 });
       if (!b) return 'no_target';
+      const t0 = bot.inventory.items().reduce((s, i) => s + i.count, 0);
       await bot.dig(b, 'ignoreDistance');
-      return 'ok';
+      await new Promise(r => setTimeout(r, 900));   // 等掉落物入包再算数
+      const t1 = bot.inventory.items().reduce((s, i) => s + i.count, 0);
+      return t1 > t0 ? 'ok' : 'dug_but_zero_drop_need_pickaxe_first';
     }
     if (a === 'chop') {
       const b = bot.findBlock({ matching: x => x.name.includes('log'), maxDistance: 20 });
@@ -154,9 +158,28 @@ async function exec(dec) {
         if (cand) item = bot.registry.itemsByName[cand];
       }
       if (!item) return 'no_item';
-      const rs = bot.recipesFor(item.id, null, 1, null);   // null 桌子=只用背包 2x2
+      // 3x3 配方（镐/斧等）需要工作台：先找身边 8 格内的，没有就放下背包里的
+      let table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
+      if (!table) {
+        const tItem = bot.inventory.items().find(i => i.name === 'crafting_table');
+        if (tItem) {
+          const p = bot.entity.position;
+          const spots = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [2.5, 0], [0, 2.5]];
+          for (const [dx, dz] of spots) {
+            const ref = bot.blockAt(p.offset(dx, -1, dz));
+            if (!ref || ref.name === 'air' || ref.name === 'crafting_table') continue;
+            try { await bot.placeBlock(ref, vec3up); } catch (e) { continue; }
+            await new Promise(r => setTimeout(r, 500));
+            table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
+            if (table) break;
+          }
+          if (!table) return 'placement_refused_protected_area_walk_30_blocks_and_retry';
+        }
+      }
+      let rs = bot.recipesFor(item.id, null, 1, table);
+      if (!rs.length && !table) rs = bot.recipesFor(item.id, null, 1, null);
       if (!rs.length) return 'no_recipe_or_mat';
-      await bot.craft(rs[0], 1, null); return 'ok';
+      await bot.craft(rs[0], 1, table); return 'ok';
     }
     if (a === 'fight') {
       const e = bot.nearestEntity(x => x.position && ['zombie', 'skeleton', 'creeper', 'spider', 'drowned', 'pillager'].some(k => x.name && x.name.includes(k)));
