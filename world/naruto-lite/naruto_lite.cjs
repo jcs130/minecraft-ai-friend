@@ -147,7 +147,12 @@ async function exec(dec) {
       await bot.equip(it, 'hand'); await bot.consume(); return 'ok';
     }
     if (a === 'craft') {
-      const item = bot.registry.itemsByName[P.what] || bot.registry.itemsByName['minecraft:' + P.what];
+      const want = String(P.what || '').toLowerCase();
+      let item = bot.registry.itemsByName[want] || bot.registry.itemsByName['minecraft:' + want];
+      if (!item) {  // 模糊名兜底：planks→oak_planks、stick→oak_stick
+        const cand = Object.keys(bot.registry.itemsByName).find(n => n === 'oak_' + want || n.endsWith('_' + want));
+        if (cand) item = bot.registry.itemsByName[cand];
+      }
       if (!item) return 'no_item';
       const rs = bot.recipesFor(item.id, null, 1, null);   // null 桌子=只用背包 2x2
       if (!rs.length) return 'no_recipe_or_mat';
