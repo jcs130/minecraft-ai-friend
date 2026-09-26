@@ -22,8 +22,11 @@ def voice_root(name='GV_BASE', suffix=''):
 
 def local_tts_url(raw):
     url = urlsplit(raw)
-    if url.scheme != 'http' or url.hostname not in {'host.docker.internal', 'localhost', '127.0.0.1'} or url.port != 8100 or url.username or url.password or url.path not in {'', '/'} or url.query or url.fragment:
-        raise RuntimeError('TTS_LOCAL_URL must identify the existing local TTS service on port 8100')
+    # 8100 = legacy kokoro tts container; 8191 = IndexTTS-2.5 shim (WSL 3080Ti).
+    # 2026-09-26: the "shim occupies 8100" assumption silently broke the voice
+    # chain (no listener on 8100 => goddess went mute). Accept the real ports.
+    if url.scheme != 'http' or url.hostname not in {'host.docker.internal', 'localhost', '127.0.0.1'} or url.port not in {8100, 8191} or url.username or url.password or url.path not in {'', '/'} or url.query or url.fragment:
+        raise RuntimeError('TTS_LOCAL_URL must identify the local TTS service on port 8100 or 8191')
     return raw.rstrip('/')
 
 

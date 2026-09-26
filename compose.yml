@@ -45,7 +45,7 @@ services:
 
   world:
     stop_grace_period: 45s
-    image: qiandengji-world:20260913-qd1
+    image: qiandengji-world:20260925-vision1
     pull_policy: never
     restart: unless-stopped
     entrypoint: ["/app/node_modules/.bin/tsx", "/app/bootstrap-world.mts"]
@@ -78,6 +78,7 @@ services:
       MC_OBSERVER: "1"
       MC_VIEWER: "0"
       MC_MODERN_VIEWER: "1"
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
       MC_VIEWER_PUBLIC_ORIGIN: http://127.0.0.1:19092
       MC_PANEL_ORIGIN: http://127.0.0.1:19091
       MC_MEMORY_ENABLED: "0"
@@ -92,6 +93,7 @@ services:
       CHILD_COMPANION_FILE: /etc/qiandeng/child-companion.json
     ports:
       - "127.0.0.1:19092:3070"
+      - "127.0.0.1:19093:3071"
     volumes:
       - ./world/src:/app/src:ro
       - ./world/bootstrap-world.mts:/app/bootstrap-world.mts:ro
@@ -100,6 +102,7 @@ services:
       - ./world/admin:/app/admin:ro
       - ./vendor/modern-viewer:/app/modern-viewer:ro
       - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
       - ./server/survival-agent-state/secret/jev-api-key:/run/secrets/jev-api-key:ro
       - ./server/panel-state:/panel-data
       - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
@@ -108,6 +111,7 @@ services:
       - ./server/mc/logs:/mclogs:ro
       - ./server/mc/shadow/data/maid_backups:/maid-backups:ro
       - ./server/mc/data/godvoice:/godvoice
+      - ./server/mc/vision:/mcvision:ro
       - ./server/mc/shadow/advancements:/mcadv:ro
       - ./server/mc/shadow/stats:/mcstats:ro
     depends_on:
@@ -162,6 +166,34 @@ services:
       - ./server/team-state:/rsi/team:ro
     healthcheck:
       test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:9090/healthz',{headers:{Host:'127.0.0.1:19091'}},s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>{process.exitCode=1})"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  live:
+    # 直播中控台（独立页）：思考流+弹幕+主播应答+给桐人指令+语音解说
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/live/server.mjs"]
+    environment:
+      TZ: Asia/Shanghai
+      LIVE_HOST: 0.0.0.0
+      LIVE_PORT: "3110"
+      PANEL_URL: http://panel:9090
+      TTS_URL: http://host.docker.internal:8191   # 2026-09-26 天神：改指 shim 真口 8191；回退=改回 http://tts:8100 并 up -d tts   # 2026-09-25 小智：IndexTTS-2.5 经兼容层(WSL:8100)；voice_paths 硬校验 8100 ⇒ 用此口；回退=改回 http://tts:8100 并 up -d tts   # 2026-09-25 小智：切到 IndexTTS-2.5(WSL 3080Ti)；回退=改回 http://tts:8100
+      QWENPAW_URL: http://qwenpaw:8088
+      SURVIVOR_STATE_DIR: /survivor-state
+      BILI_ROOM: ${BILI_ROOM:-}
+    ports:
+      - "127.0.0.1:19095:3110"
+    volumes:
+      - ./world/live:/app/live:ro
+      - ./server/survival-agent-state/survival:/survivor-state
+    depends_on: [panel, qwenpaw]
+    healthcheck:
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:3110/healthz',s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>process.exitCode=1)"]
       interval: 20s
       timeout: 5s
       start_period: 10s
@@ -464,12 +496,12 @@ services:
       - ./docs:/reference/docs:ro
     networks: [default, operations]
     healthcheck:
-      test: ["CMD", "python", "/ops/qwenpaw_health.py"]
-      # Full native audit covers ten roles and 94 enabled skill bindings.
-      # Measured at ~40s after deduplicating reads within one probe.
-      interval: 120s
-      timeout: 120s
-      retries: 4
+      # Container readiness stays cheap while live agents use the API. The
+      # ten-role native policy audit remains available via qwenpaw_health.py.
+      test: ["CMD", "python", "-c", "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8088/api/healthz',timeout=8); d=json.load(r); assert r.status==200 and d.get('status')=='ok' and 'qd-survivor' in d.get('agents_loaded',[])"]
+      interval: 30s
+      timeout: 12s
+      retries: 3
       start_period: 60s
 
   qwenpaw-ops:
@@ -595,7 +627,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       GV_BASE: /godvoice
-      TTS_LOCAL_URL: http://host.docker.internal:8100
+      TTS_LOCAL_URL: http://host.docker.internal:8191   # 2026-09-26 天神：shim 实际占 8191（8100 无人监听=哑火根因）；8100 假想兼容层从未存在，别再依赖   # 2026-09-25 小智：同上（shim 占 8100）；回退=改回 :8100 原值并 up -d tts
       VOICE_ALLOW_EDGE_FALLBACK: "0"
     volumes:
       - ./world/sidecar:/opt/sidecar:ro
@@ -633,6 +665,7 @@ services:
       retries: 3
 
   tts:
+    profiles: [kokoro-fallback]
     image: qiandengji-tts:kokoro-1.1-qd1
     pull_policy: never
     restart: unless-stopped
@@ -645,7 +678,7 @@ services:
       TTS_VOICE_MAP: /app/kokoro-voices.json
       TTS_VOICES: /voices
       TTS_DEFAULT_VOICE: goddess
-      TTS_DEVICE: cuda:0
+      TTS_DEVICE: cuda:1   # 2026-09-25 小智：挪到 3080Ti，把 3090 整张留给 LLM（改回 cuda:0 即回退）
       TTS_HOST: 0.0.0.0
       TTS_PORT: "8100"
       OMP_NUM_THREADS: "4"
