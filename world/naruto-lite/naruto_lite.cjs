@@ -134,6 +134,9 @@ async function exec(dec) {
     if (a === 'mine') {
       const b = bot.findBlock({ matching: x => x.name === P.what || x.name === 'minecraft:' + P.what, maxDistance: 24 });
       if (!b) return 'no_target';
+      if (b.position.distanceTo(bot.entity.position) > 3) {   // 太远=挖了掉地上捡不到，先走过去
+        try { await bot.pathfinder.goto(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 2)); } catch (e) { return 'walk_to_target_failed_nearby_only'; }
+      }
       const t0 = bot.inventory.items().reduce((s, i) => s + i.count, 0);
       await bot.dig(b, 'ignoreDistance');
       await new Promise(r => setTimeout(r, 900));   // 等掉落物入包再算数
