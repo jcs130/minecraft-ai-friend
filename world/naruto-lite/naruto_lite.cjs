@@ -147,9 +147,11 @@ async function exec(dec) {
       await bot.equip(it, 'hand'); await bot.consume(); return 'ok';
     }
     if (a === 'craft') {
-      const r = bot.findRecipe({ craftingTable: false, match: rc => (rc.result.item.name === P.what || rc.result.item.name === 'minecraft:' + P.what) });
-      if (!r) return 'no_recipe_or_mat';
-      await bot.craft(r, 1, null); return 'ok';
+      const item = bot.registry.itemsByName[P.what] || bot.registry.itemsByName['minecraft:' + P.what];
+      if (!item) return 'no_item';
+      const rs = bot.recipesFor(item.id, null, 1, null);   // null 桌子=只用背包 2x2
+      if (!rs.length) return 'no_recipe_or_mat';
+      await bot.craft(rs[0], 1, null); return 'ok';
     }
     if (a === 'fight') {
       const e = bot.nearestEntity(x => x.position && ['zombie', 'skeleton', 'creeper', 'spider', 'drowned', 'pillager'].some(k => x.name && x.name.includes(k)));
@@ -226,7 +228,7 @@ async function turn() {
   turnCount++;
   const rec = { t: new Date().toISOString(), n: turnCount, think: dec && dec.think, say: dec && dec.say, action: dec && dec.action, result, ms: Date.now() - startedAt, snap };
   append(THINK, rec);
-  fs.writeFileSync(STATUS, JSON.stringify({ name: CFG.name, alive: true, turn: turnCount, errCount, last: rec, at: new Date().toISOString() }, null, 1));
+  fs.writeFileSync(STATUS, JSON.stringify({ name: CFG.name, alive: true, turn: turnCount, errCount, deaths, last: rec, at: new Date().toISOString() }, null, 1));
 }
 
 async function mainLoop() {
@@ -243,10 +245,23 @@ function connect() {
   log('connect', { host: CFG.host, port: CFG.port, name: CFG.name, llm: CFG.llmBase, model: CFG.model });
   bot = mineflayer.createBot({ host: CFG.host, port: CFG.port, username: CFG.name, version: CFG.version, auth: 'offline', checkVersion: false });
   bot.on('spawn', () => log('spawn', { pos: bot.entity.position.jsonable ? bot.entity.position.toString() : String(bot.entity.position) }));
+  bot.on('death', () => {
+    deaths++;
+    log('death', { n: deaths });
+    append(THINK, { t: new Date().toISOString(), kind: 'death', count: deaths });
+    setTimeout(() => { try { bot.respawn(); } catch (e) { log('respawn_fail', { err: String(e).slice(0, 80) }); } }, 4000);
+  });
   bot.on('error', e => { errCount++; log('bot_error', { err: String(e.message).slice(0, 100) }); });
   bot.on('end', reason => { log('bot_end', { reason }); setTimeout(connect, 15000); });
   bot.on('kicked', r => log('kicked', { r: String(r).slice(0, 120) }));
   bot.loadPlugin(pfPlugin);
 }
+let deaths = 0;
+process.on('unhandledRejection', e => log('unhandled_rejection', { err: String(e).slice(0, 120) }));
+process.on('uncaughtException', e => {
+  errCount++;
+  log('uncaught_swallowed', { err: String(e && e.message || e).slice(0, 140) });
+  try { if (bot && bot._client) bot._client.end(); } catch (_) {}   // 触发 end→重连，别带病挂机
+});
 connect();
 mainLoop();
