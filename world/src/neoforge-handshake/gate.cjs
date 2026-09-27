@@ -393,8 +393,14 @@ function onBackPacket (sess, name, params) {
       // 后端 play.js 已自动回 ack；收尾令透传给真客户端，等它的 ack 再开闸
       sess.phase = 'play_pending'
       relayTo(sess, sess.front, name, params, '后端->前端')
-      // 保险：ack 久候不至则强行开闸（真客户端异常时宁可错位也别卡死）
-      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, 3000)
+      // 保险：ack 久候不至则强行开闸（真客户端异常时宁可错位也别卡死）。
+      // 【2026-09-27】基岩访客（Geyser/ViaProxy）**从不发这个 ack**，所以每次进门都要白等满
+      // 这个超时，期间后端把整批初始区块全堆在队列里（实测一次堆到 3202 个包），
+      // 开闸瞬间的洪峰正是她「Timed out」反复掉线的推手之一。
+      // 原版客户端在收到我们透传的 finish_configuration 时就已经切到 PLAY 了，
+      // 所以这个等待可以大幅缩短；保留环境变量以便回退。
+      const ACK_WAIT_MS = Number(process.env.GATE_ACK_TIMEOUT_MS || 400)
+      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, ACK_WAIT_MS)
       return
     default:
       // registry_data / select_known_packs 查询 / feature_flags / 其余原版任务 -> 透传
