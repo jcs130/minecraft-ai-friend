@@ -1548,6 +1548,16 @@ def unleash_alive():
             R.s = None
 
 _MISS = {}  # R011: per-tag 连续 miss 计数（chunk 卸载瞬态不重招）
+# 2026-09-27 接地自愈冷却：同一 NPC 拉回后 N 轮内不再重复拉。
+# 旧行为实测在打拉锯战——村民自己走上柜台/屋顶（y 比 spawn 地面高 2+）就被拖下来，
+# 它再走上去，60s 一轮无限循环：10 分钟 137 次 tp，给基岩访客白灌约 20 包/秒
+# （entity_teleport 18116 次/873 秒），是她反复 Timed out 的直接推手之一。
+_GND_LAST = {}
+# 冷却设 60 轮（≈1 小时）而不是 10 轮：实测这些村民**档案里的 spawn 高度与它实际站的位置本来就不符**
+# （墨白 69↔72、火钳 72↔64、石头 65↔70…），所以看护永远判它"不对"、每轮都拽。
+# 本功能是"救卡住/掉坑的村民"，不是"把村民钉死在锚点"；10 轮冷却仍留 3.5 次/分钟的白 tp，
+# 60 轮把它压成真正的兜底（≈0.6 次/分钟），村民该站哪儿站哪儿。
+GND_COOLDOWN_ROUNDS = 60
 
 def heal_npcs():
     # 2026-08-23 造物主拍板「A+B」：水平拉回阈值用全局 leash_radius(40) 放宽+软化，每 NPC 可配 radius 覆盖。
@@ -1587,8 +1597,13 @@ def heal_npcs():
             sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
             gy = ground_y(sx, sz, sy0)
             if pos[1] - gy > 2 or pos[1] - gy < -2.5:
-                R.cmd("tp %s %d %d %d" % (sel(v), sx, gy, sz))
-                print("[npc] ground:", v["display"], "y %.1f -> %d" % (pos[1], gy), flush=True)
+                left = _GND_LAST.get(v["tag"], 0)
+                if left > 0:
+                    _GND_LAST[v["tag"]] = left - 1   # 冷却中：这一轮不动它
+                else:
+                    R.cmd("tp %s %d %d %d" % (sel(v), sx, gy, sz))
+                    _GND_LAST[v["tag"]] = GND_COOLDOWN_ROUNDS
+                    print("[npc] ground:", v["display"], "y %.1f -> %d" % (pos[1], gy), flush=True)
         except Exception:
             R.s = None
         if mode_of(v) == "stand":
