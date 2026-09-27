@@ -205,9 +205,14 @@ services:
     restart: unless-stopped
     entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
     environment:
-      # 门自己回传送应答（前端那条吞掉）：解容器化 ViaProxy 经门时 MC 报
-      # Failed to decode packet 'serverbound/minecraft:accept_teleportation' 的问题
-      GATE_SELF_TELEPORT_ACK: "1"
+      # 门自己回传送应答（前端那条吞掉）：原本是解容器化 ViaProxy 经门时 MC 报
+      # Failed to decode packet 'serverbound/minecraft:accept_teleportation' 的权宜。
+      # 【2026-09-27 关掉】该解码 bug 已在根上修掉（dc64789/fe1e44d：frontQueue 补发改走相位
+      # 分发器 + relayTo 状态闸，非法包名的写入会被丢弃而不再静默落到 PLAY id 0）。
+      # 留着假 ack 反而有害：服务端在客户端真正应用传送之前就认定传送完成，
+      # 实测基岩访客被跨 3724 格传送后客户端没跟上，每包 `moved too quickly! -3724.0,2.0,2429.5`
+      # —— 表现就是"进了竞技场却打不了怪"（她一直在朝旧位置挥刀）。改回透传真 ack。
+      GATE_SELF_TELEPORT_ACK: "0"
     volumes:
       - ./world/src:/app/src:ro
     # 2026-09-22 端口统一：不再发布 25701 到宿主。本机/局域网 Agent 一律走外门 25702（ag_ 闸）；
@@ -224,8 +229,9 @@ services:
     entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
     environment:
       GATE_AGENT_PREFIX: "ag_"
-      # 与内门保持一致：同一套传送自 ack 行为，别让内外门语义分叉
-      GATE_SELF_TELEPORT_ACK: "1"
+      # 与内门保持一致：同一套传送 ack 行为，别让内外门语义分叉
+      # （2026-09-27 随内门一起关，理由见上）
+      GATE_SELF_TELEPORT_ACK: "0"
     volumes:
       - ./world/src:/app/src:ro
     ports:
@@ -379,7 +385,7 @@ services:
       MC_RCON_HOST: mc
       MC_RCON_PORT: "25575"
       MC_RCON_PASSWORD_FILE: /world-data/rcon-secret.txt
-      NPC_SPAWN_MISSING: "0"
+      NPC_SPAWN_MISSING: "1"
       NPC_VILLAGE_GUARD: "0"
       NPC_GUILD_AUTOGENERATE: "0"
       NPC_GUILD_BASIC_QUESTS: "1"
