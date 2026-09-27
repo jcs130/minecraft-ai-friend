@@ -21,6 +21,9 @@ const CFG = {
   turnSeconds: Number(ENV.NARUTO_TURN_SECONDS || 90),   // 每轮总预算（想+做）
   restSeconds: Number(ENV.NARUTO_REST_SECONDS || 4),
   stateDir: ENV.NARUTO_STATE || path.join(__dirname, 'state'),
+  gvQueue: ENV.NARUTO_GV_QUEUE || 'D:\\Projects\\QiandengJi\\server\\mc\\data\\godvoice\\text-queue',
+  gvVoice: ENV.NARUTO_GV_VOICE || 'yunxi_local',      // IndexTTS 嗓: 云汐·男声(voicelist 实有)
+  gvEntity: ENV.NARUTO_GV_ENTITY || 'b9874570-7320-3424-8934-a904426170aa',  // mod 契约: entity=UUID(usercache 实证)
 };
 fs.mkdirSync(CFG.stateDir, { recursive: true });
 fs.mkdirSync(path.join(CFG.stateDir, 'voice'), { recursive: true });
@@ -304,14 +307,14 @@ const vec3up = { x: 0, y: 1, z: 0 };
 
 async function speak(text) {
   if (!text) return;
+  // 正路：文本任务写进天音桥队列 → god-voice-watcher 调 IndexTTS(8191) →
+  // godvoice Mod 经 Simple Voice Chat 在 ag_naruto 头顶真出声。（旧版自合成存本地=没人听得见）
   try {
-    const u = `${CFG.ttsBase}/tts?text=${encodeURIComponent(text)}&voice=${CFG.voice}&format=mp3`;
-    const res = await fetch(u, { signal: AbortSignal.timeout(15000) });
-    if (res.ok) {
-      const buf = Buffer.from(await res.arrayBuffer());
-      fs.writeFileSync(path.join(CFG.stateDir, 'voice', 'latest.mp3'), buf);
-      append(THINK, { t: new Date().toISOString(), kind: 'voice', bytes: buf.length, text });
-    }
+    const jid = 'naruto-' + Date.now() + '-' + Math.floor(Math.random() * 1e4);
+    fs.mkdirSync(CFG.gvQueue, { recursive: true });
+    fs.writeFileSync(path.join(CFG.gvQueue, jid + '.json'),
+      JSON.stringify({ id: jid, text: String(text).slice(0, 200), entity: CFG.gvEntity, voice: CFG.gvVoice }));
+    append(THINK, { t: new Date().toISOString(), kind: 'voice', jid, text });
   } catch (e) { append(THINK, { t: new Date().toISOString(), kind: 'voice_fail', err: String(e.message).slice(0, 60) }); }
 }
 
