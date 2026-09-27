@@ -52,7 +52,8 @@ const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行
 {"action":"rest"}                               原地观望几秒
 不确定就 wander 或 rest。距离坐标不超过 64 格。say 保持口语短句。
 常识：挖不动石头(返回 dug_but_zero_drop)说明缺工具——先 craft "wooden_pickaxe"（3木板+2木棍，木板够的），不是 stone_pickaxe；镐子要工作台，放不下说明在别人的保护区，先 wander 离开 30 格再放。上一轮动作没让背包变多就是无用功，换思路别重复。
-火把铁律：time=夜 或周围一暗，先看背包有没有 torch，没有就 craft "torch"（1煤或木炭+1木棍，2x2背包能造），然后 place_torch；夜里每走 8-10 格补一支——你在夜里干活必须自己照亮，也是替看直播的人照亮。白天不用插。`;
+火把铁律：time=夜 或周围一暗，先看背包有没有 torch，没有就 craft "torch"（1煤或木炭+1木棍，2x2背包能造），然后 place_torch；夜里每走 8-10 格补一支——你在夜里干活必须自己照亮，也是替看直播的人照亮。白天不用插。
+合成规矩：torch/planks/stick/crafting_table 都能背包2x2直接造，最省事；石镐石斧要3x3，返回 needs_crafting_table… 或 crafting_table_inaccessible… 就说明你在别人保护区里开不了桌子——别硬试，先 wander 60格到没围栏的空旷草地，再 craft crafting_table 摆下，然后才造镐。同一个动作连败两次就换别的活（挖掉落物、砍树、吃东西），绝不在原地死磕。`;
 
 let bot = null;
 let turnCount = 0;
@@ -118,6 +119,7 @@ async function llmDecide(snap) {
 function timeout(ms) { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return { signal: c.signal, done: () => clearTimeout(t) }; }
 
 let noPathStreak = 0;
+let selfCraftTable = null;   // 自己摆下的工作台（唯一可信、可开的）
 
 function unstick() {
   try { bot.pathfinder.stop(); } catch (e) {}
@@ -194,31 +196,36 @@ async function exec(dec) {
         if (cand) item = bot.registry.itemsByName[cand];
       }
       if (!item) return 'no_item';
-      // 先试背包 2x2（火把/木板/棍够用），造不出再找/摆工作台（镐斧类 3x3 配方）
+      const withTimeout = (p, ms, tag) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(tag)), ms))]);
+      // 1) 背包 2x2 优先（木板/木棍/火把/工作台本身都是 2x2，不需要桌子）
       let rs = bot.recipesFor(item.id, null, 1, null);
-      if (!rs.length) {
-        let table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
-        if (!table) {
-          const tItem = bot.inventory.items().find(i => i.name === 'crafting_table');
-          if (tItem) {
-            const p = bot.entity.position;
-            const spots = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [2.5, 0], [0, 2.5]];
-            for (const [dx, dz] of spots) {
-              const ref = bot.blockAt(p.offset(dx, -1, dz));
-              if (!ref || ref.name === 'air' || ref.name === 'crafting_table') continue;
-              try { await bot.placeBlock(ref, vec3up); } catch (e) { continue; }
-              await new Promise(r => setTimeout(r, 500));
-              table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
-              if (table) break;
-            }
-            if (!table) return 'placement_refused_protected_area_walk_30_blocks_and_retry';
-          }
-        }
-        rs = bot.recipesFor(item.id, null, 1, table || null);
+      if (rs.length) {
+        try { await withTimeout(bot.craft(rs[0], 1, null), 12000, 'craft_2x2_hang'); return 'ok'; }
+        catch (e) { try { bot.closeWindow(bot.currentWindow); } catch (_) {} return 'craft_2x2_failed_move_on'; }
       }
-      if (!rs.length) return 'no_recipe_or_mat';
-      const table2 = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
-      await bot.craft(rs[0], 1, table2); return 'ok';
+      // 2) 需要 3x3（镐/斧等）：只用自己的工作台，且硬超时；绝不去开别人/保护区内打不开的桌子
+      let myTable = selfCraftTable;
+      if (!myTable) {
+        const tItem = bot.inventory.items().find(i => i.name === 'crafting_table');
+        const ground = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+        if (tItem && ground && ground.name !== 'air') {
+          try { await bot.placeBlock(ground, vec3up); } catch (e) {}
+          await new Promise(r => setTimeout(r, 500));
+          myTable = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 4 }) || null;
+          if (myTable) selfCraftTable = myTable;
+        }
+      }
+      if (!myTable) return 'needs_crafting_table_place_one_on_open_ground';
+      try {
+        const ok2 = await withTimeout(bot.craft(bot.recipesFor(item.id, null, 1, myTable)[0], 1, myTable), 8000, 'table_unreachable');
+        return 'ok';
+      } catch (e) {
+        try { bot.closeWindow(bot.currentWindow); } catch (_) {}
+        selfCraftTable = null;   // 这张桌子开不了，别再信它
+        return String(e.message).includes('table_unreachable')
+          ? 'crafting_table_inaccessible_move_60_blocks_to_open_ground_and_place_new_table'
+          : 'craft_failed_use_2x2_items_instead';
+      }
     }
     if (a === 'fight') {
       const e = bot.nearestEntity(x => x.position && ['zombie', 'skeleton', 'creeper', 'spider', 'drowned', 'pillager'].some(k => x.name && x.name.includes(k)));
