@@ -638,49 +638,35 @@ def _offer_recipe(item_id, count, emeralds, max_uses=1):
 # 每本技能书条目占 NBT 较大，书商总柜台（3卖+2本+1收）需 < ~1300 字节，故每商限量 2 本。
 SKILLBOOKS = {
     "home": {
-        "title": "归乡之卷", "author": "墨白", "emerald": 2, "chant": "咏唱：归乡/回家/回基地/归途/回巢",
-        "pages": [
-            "归乡之卷（空间系·Lv2）｜咏唱：归乡/回家/回基地/归途/回巢。私语念出即施，成功即掌握；远行前备一卷，迷途不慌。",
-        ],
+        "title": "归乡之卷", "author": "墨白", "emerald": 2, "chant": "归乡/回基地",
+        "pages": ["归乡之卷·空间Lv2｜咏唱「归乡/回家/回基地」或右键本书，即刻返回床或镇中心。"],
     },
     "light": {
-        "title": "照明之卷", "author": "墨白", "emerald": 2, "chant": "咏唱：照明/点火/火把/光亮/照亮/驱暗",
-        "pages": [
-            "照明之卷（光系·Lv1）｜咏唱：照明/点火/火把/光亮/照亮/驱暗。黑暗中私语念出，掌心燃光；矿洞夜路皆可应急。",
-        ],
+        "title": "照明之卷", "author": "墨白", "emerald": 2, "chant": "照明/火把",
+        "pages": ["照明之卷·光Lv1｜咏唱「照明/点火/火把」或右键本书，掌心燃光应急。"],
     },
     "feed": {
-        "title": "饱食之卷", "author": "墨白", "emerald": 3, "chant": "咏唱：饱食/充饥/饱腹/不饿/充能",
-        "pages": [
-            "饱食之卷（生命系·Lv2）｜咏唱：饱食/充饥/饱腹/不饿/充能。腹空时私语念出，饥意自消；神赐一餐，不如自己种一田。",
-        ],
+        "title": "饱食之卷", "author": "墨白", "emerald": 3, "chant": "饱食/充饥",
+        "pages": ["饱食之卷·生命Lv2｜咏唱「饱食/充饥」或右键本书，饥意自消。"],
     },
     "heal": {
-        "title": "圣愈之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈",
-        "pages": [
-            "圣愈之卷（生命系·Lv5）｜咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈。负伤时私语念出，伤口愈合；生死关头的保命卷。",
-        ],
+        "title": "圣愈之卷", "author": "云笈", "emerald": 4, "chant": "圣愈/治疗",
+        "pages": ["圣愈之卷·生命Lv5｜咏唱「圣愈/治愈/疗伤」或右键本书，伤口愈合。"],
     },
     "tp": {
-        "title": "传送之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：传送/瞬移/闪现/空间跳跃/跃迁",
-        "pages": [
-            "传送之卷（空间系·Lv2）｜咏唱：传送/瞬移/闪现/撕裂虚空/空间跳跃/跃迁。报方向距离（如「传送十格东」）念出即至。",
-        ],
+        "title": "传送之卷", "author": "云笈", "emerald": 4, "chant": "传送/瞬移",
+        "pages": ["传送之卷·空间Lv2｜报方向距离（如「传送十格东」）咏唱或右键，念出即至。"],
     },
     "give": {
-        "title": "造物之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：造物/赐予/给予/给我/变出",
-        "pages": [
-            "造物之卷（创造系·Lv2）｜咏唱：造物/赐予/给予/赐下/给我/变出。报所需之物（如「给我个火把」）私语念出，神恩按白名单施予。",
-        ],
+        "title": "造物之卷", "author": "云笈", "emerald": 4, "chant": "造物/给我",
+        "pages": ["造物之卷·创造Lv2｜报所需之物（如「给我个火把」）咏唱或右键，白名单内即给。"],
     },
     # 2026-08-23 造物技能自由化：空白造物卷（书与笔）——玩家自写想要的内容 → 合书 → 右键。
     # 白名单内物资直给（火把/面包/煤/原木/石头/圆石/铁锭/金锭/小麦/苹果/木棍/木板，数量有上限）；
     # 白名单外（钻石剑/附魔书/末影珍珠…）→ 呈神裁量，或拒或索供奉。写在书页里的话就是祈愿文。
     "craft": {
         "title": "空白造物卷", "author": "云笈", "emerald": 2, "writable": True,
-        "pages": [
-            "空白造物卷｜买下这本空白书（书与笔），写下你想要的物资（如「铁锭 2」「火把」），合成本书后右键——白名单内的物资直接到手；白名单外的会上达天神，由女神裁断。",
-        ],
+        "pages": ["写下你想要的物资（如「铁锭2」），合书后右键呈神。白名单内直给，白名单外由女神裁断。"],
     },
 }
 
@@ -711,15 +697,12 @@ def _skillbook_nbt(sb, key):
                 '{"minecraft:custom_data":{"craftreq":true}}}')
     # 2026-08-23 造物主谕「书在手上右键=施法而非打开」：技能书右键被 settlementsfix mod 拦截施法、
     # 2026-08-29 godfix.5 新交互：右键=施放、潜行+右键=翻开细读说明（lore 同步更新）。
-    lore_items = [
-        {"text": sb.get("chant", ""), "color": "gray", "italic": False},
-        {"text": "右键=施放 · 潜行+右键=阅读", "color": "dark_gray", "italic": True},
-    ]
-    lore = ",".join('"%s"' % _snbt_esc(json.dumps(x, ensure_ascii=False)) for x in lore_items)
+    # 2026-09-27 柜台命令瘦身：lore 每本+150B 会撑爆 RCON 大包安全线（墨白柜台
+    # 静默截断=空架的第三层根因），页内已含用法说明，删除 lore 组件。
     return ('{id:"minecraft:written_book",count:1,components:'
             '{"minecraft:written_book_content":{title:"%s",author:"%s",pages:[%s]},'
-            '"minecraft:custom_data":{"skillbook":"%s"},"minecraft:lore":[%s]}'
-            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages, key, lore))
+            '"minecraft:custom_data":{"skillbook":"%s"}}}'
+            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages, key))
 
 def _recipes_nbt(v):
     """村民柜台：当日未完成委托 + 档案 shop 民生柜台。
@@ -1487,7 +1470,10 @@ def summon_stand(v):
 
 def summon_villager(v):
     biome = v.get("biome", "plains")
-    offers = _recipes_nbt(v) or "Offers:{Recipes:[]}"
+    # 2026-09-27 技能书回归战役：召唤一律空柜台（长 Offers 会把 summon 撑到 ~1.5KB，
+    # RCON 大包静默截断 → 书商墨白/云笈“healed 了但实体从未存在”）。
+    # 柜台由 60s 一拍的 sync_offers 用 data merge 回填（单包 ~1KB 实测可过）。
+    offers = "Offers:{Recipes:[]}"
     # 2026-08-22 造物主谕「正常 NPC 不要站桩」：一律 NoAI:0b 自由生活（会溜达/归巢），
     # 交易/职业动作不受影响；拴绳看护（heal_npcs leash_radius）把离家者拉回广场。
     noai = "0b"
