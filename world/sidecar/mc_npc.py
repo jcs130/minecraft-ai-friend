@@ -834,6 +834,52 @@ def _settle_gui_trade(v, q):
         print("[guild] gui settle err:", e, flush=True)
     sync_offers()  # 全量：掌柜聚合柜与各家柜同步下架
 
+# ---------- 城门委托公告栏（字直接写在牌上，不用找 NPC、不用喊「看板」）----------
+# 2026-09-28 造物主令：「公会任务面板可以做一个单独的公告栏，用于显示有什么任务，
+# 这样不用找到 npc」。查下来更糟：GATE_BOARD 坐标上根本没有牌子（08-24 立的那块
+# 早已不在），只剩一个 12 格 proximity 判定 —— 等于既找不到人也没有板。
+# 牌位：城门 (-530,845) 背墙上的 4 块告示牌，2x2，每块两行 = 8 行容量。
+BOARD_SIGNS = [(-531, 69, 844), (-530, 69, 844), (-531, 70, 844), (-530, 70, 844)]
+_BOARD_LAST = {"key": None}
+
+
+def board_lines():
+    doc = quests_today() or {}
+    qs = doc.get("quests") or []
+    lines = ["今日委托 %s" % (doc.get("date") or "")[5:], "——————"]
+    for i, q in enumerate(qs[:3]):
+        who = (q.get("display") or "").split("·")[-1] or q.get("villager", "?")
+        obj = q.get("zh") or q.get("item") or "?"
+        st = "已交付" if q.get("done") else "%s x%s" % (obj, q.get("count", 1))
+        lines.append("%d.%s %s" % (i + 1, who, st))
+        lines.append("赏 %s 绿" % q.get("emerald", 1))
+    while len(lines) < len(BOARD_SIGNS) * 2:
+        lines.append("")
+    return lines[:len(BOARD_SIGNS) * 2]
+
+
+def sync_board():
+    """当日委托变了才写牌（省 RCON、也不闪面）。牌面文字用 data merge block：
+    setblock 带告示牌 NBT 会报 Could not set the block（旧坑）。"""
+    lines = board_lines()
+    key = "|".join(lines)
+    if key == _BOARD_LAST["key"]:
+        return
+    for (x, y, z), i in zip(BOARD_SIGNS, range(len(BOARD_SIGNS))):
+        l1, l2 = lines[i * 2], lines[i * 2 + 1]
+
+        def msg(s):
+            return '{"text":"%s","color":"black"}' % s.replace('"', "").replace("\\", "")
+        payload = ("{front_text:{color:\"black\",messages:['%s','%s','{\"text\":\"\"}','{\"text\":\"\"}']}}"
+                   % (msg(l1), msg(l2)))
+        try:
+            R.cmd("data merge block %d %d %d %s" % (x, y, z, payload))
+        except Exception:
+            R.s = None
+    _BOARD_LAST["key"] = key
+    print("[board] 委托已上板:", " / ".join([l for l in lines if l]), flush=True)
+
+
 def watch_offers():
     """柜台成交侦测（15s 轮询）：扫每个柜台实体的全部 recipe，uses≥1 的核销。"""
     while True:
@@ -842,6 +888,10 @@ def watch_offers():
             if mode_of(v) == "stand" or not v.get("alive"):
                 continue
             _scan_settle(v)
+        try:
+            sync_board()          # 委托变了就重刷公告栏
+        except Exception as e:
+            print("[board] err:", e, flush=True)
 
 # ---------- @公证交割（Agent↔Agent / 玩家↔玩家，村民作公证点） ----------
 RE_HANDOFF = re.compile(r"@([A-Za-z0-9_]{1,16})\s+(?:给\s*)?(\d+)\s*([A-Za-z\u4e00-\u9fff_]+)")
