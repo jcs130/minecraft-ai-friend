@@ -13,10 +13,11 @@
     { "login": "ag_naruto", "display": "鸣人(mindcraft)" }
   ],
   "checks": [
-    { "key": "white_bed",       "label": "床",            "need": 1 },
-    { "key": "crafting_table",  "label": "工作台",        "need": 1 },
-    { "key": "furnace",         "label": "熔炉",          "need": 1 },
-    { "key": "chest",           "label": "箱子",          "need": 1 },
+    { "key": "white_bed",       "label": "床(背包或已放)", "need": 1 },
+    { "key": "crafting_table",  "label": "工作台已放置",   "need": 1, "source": "place" },
+    { "key": "furnace",         "label": "熔炉已放置",     "need": 1, "source": "place" },
+    { "key": "chest",           "label": "箱子已放置",     "need": 1, "source": "place" },
+    { "key": "torch",           "label": "火把已放置",     "need": 1, "source": "place" },
     { "key": "iron_helmet",     "label": "铁头盔",        "need": 1 },
     { "key": "iron_chestplate", "label": "铁胸甲",        "need": 1 },
     { "key": "iron_leggings",   "label": "铁护腿",        "need": 1 },

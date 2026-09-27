@@ -103,7 +103,11 @@ function raceBuild(withHistory) {
     const bs = base && base.stats ? base.stats : null;
     const snapP = lastSnap && lastSnap.players ? lastSnap.players[r.login] : null;
     const hold = (snapP && snapP.hold) || {};
-    const checks = (cfg.checks || []).map(c => ({ label: c.label, need: c.need, have: Math.max(0, hold[c.key] || 0), ok: (hold[c.key] || 0) >= c.need }));
+    const place = (snapP && snapP.place_delta) || {};
+    const checks = (cfg.checks || []).map(c => {
+      const have = Math.max(0, (c.source === 'place' ? place[c.key] : hold[c.key]) || 0);
+      return { label: c.label, need: c.need, have, ok: have >= c.need };
+    });
     return {
       login: r.login, display: r.display || r.login, uuid: uu, stats_available: !!cs,
       move_m: cs && bs ? raceMove(cs) - raceMove(bs) : null,
