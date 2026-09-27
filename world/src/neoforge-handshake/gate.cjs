@@ -57,6 +57,12 @@ const VANILLA_BACKEND = process.env.GATE_VANILLA !== '0'
 // 做法：门收到下行 position 后自己回 teleport_confirm（用 mcp 自己的序列化器，必然合法），
 //       并把前端上行的 teleport_confirm 吞掉不再转发。默认关，验证后再开。
 const SELF_TELEPORT_ACK = process.env.GATE_SELF_TELEPORT_ACK === '1'
+// 【下行分批放行 2026-09-27】开闸时一次性把几百个 PLAY 包同步倾泻给前端 = 客户端解码风暴，
+// 表现为「定住→瞬移」橡皮筋（实测基岩访客 MicroKQ 一次会话积压 949 包，随后连刷 11 条
+// `moved too quickly!`，最终服务端 Timed out 踢线）。改成单写者队列分批放：
+// 稳态（队列空）仍然同步立即发，零额外延迟；只有积压时才摊平。
+const DRAIN_BATCH = Number(process.env.GATE_DRAIN_BATCH || 48)
+const DRAIN_GAP_MS = Number(process.env.GATE_DRAIN_GAP_MS || 15)
 
 const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`)
 
@@ -350,12 +356,9 @@ function onBackPacket (sess, name, params) {
     // 【时间包普查】后端 PLAY 包名计数,会话关时打摘要——update_time 断流类问题的常驻探针
     sess.backCensus = sess.backCensus || {}
     sess.backCensus[name] = (sess.backCensus[name] || 0) + 1
-    relayTo(sess, sess.front, name, params, '后端->前端')
-    // 【自 ack 传送】下行 position 带 teleportId → 门用自己的序列化器回 ack（必然合法）
-    if (SELF_TELEPORT_ACK && name === 'position' && params && params.teleportId != null) {
-      try { back.write('teleport_confirm', { teleportId: params.teleportId }) }
-      catch (e) { log(`（容忍）自 ack 传送失败：${(e && e.message || e).toString().slice(0, 120)}`) }
-    }
+    // 统一入队，由 drainPlay 按序分批放行（自 ack 也跟着挪到投递点，见该函数注释）
+    sess.playQueue.push({ name, params })
+    drainPlay(sess)
     return
   }
 
@@ -395,10 +398,33 @@ function flushPlayQueue (sess, why) {
   clearTimeout(sess.ackTimer)
   sess.front.state = states.PLAY
   sess.phase = 'play'
-  const q = sess.playQueue.splice(0)
-  log(`DEBUG：[${sess.username}] 开闸（${why}），放出 PLAY 排队包 ${q.length} 个`)
-  for (const pkt of q) relayTo(sess, sess.front, pkt.name, pkt.params, '后端->前端')
+  log(`DEBUG：[${sess.username}] 开闸（${why}），排队 PLAY 包 ${sess.playQueue.length} 个 → 分批放行（每批 ${DRAIN_BATCH} 包 / 间隔 ${DRAIN_GAP_MS}ms）`)
+  drainPlay(sess)
   if (sess.joinedEntityId != null) log(`${sess.username} 经门而入（entityId=${sess.joinedEntityId}）`)
+}
+
+// 单写者下行队列：playQueue 既是开闸前的积压，也是开闸后唯一的发出通道，
+// 保证顺序（后到的包只能排在已排队的包之后），且只在真需要时摊平。
+function drainPlay (sess) {
+  if (sess.draining) return
+  sess.draining = true
+  const step = () => {
+    if (sess.closed) { sess.draining = false; return }
+    const n = Math.min(sess.playQueue.length, DRAIN_BATCH)
+    for (let i = 0; i < n; i++) {
+      const pkt = sess.playQueue.shift()
+      relayTo(sess, sess.front, pkt.name, pkt.params, '后端->前端')
+      // 【自 ack 传送】position 真投递给前端之后再回 ack：ack 早于投递＝服务端以为人到位了、
+      // 客户端还在原地，随后前端补发的移动包就被判超速（moved too quickly 风暴）
+      if (SELF_TELEPORT_ACK && pkt.name === 'position' && pkt.params && pkt.params.teleportId != null && sess.back) {
+        try { sess.back.write('teleport_confirm', { teleportId: pkt.params.teleportId }) }
+        catch (e) { log(`（容忍）自 ack 传送失败：${(e && e.message || e).toString().slice(0, 120)}`) }
+      }
+    }
+    if (sess.playQueue.length > 0) setTimeout(step, DRAIN_GAP_MS)
+    else sess.draining = false
+  }
+  step()
 }
 
 // 前端 -> 后端（CONFIG：只透传 vanilla 配置应答；PLAY：全透传）
