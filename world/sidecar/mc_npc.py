@@ -1558,6 +1558,12 @@ _GND_LAST = {}
 # 本功能是"救卡住/掉坑的村民"，不是"把村民钉死在锚点"；10 轮冷却仍留 3.5 次/分钟的白 tp，
 # 60 轮把它压成真正的兜底（≈0.6 次/分钟），村民该站哪儿站哪儿。
 GND_COOLDOWN_ROUNDS = 60
+# 【2026-09-27 造物主令：接地看护关闭】实测它与村民自己的 AI 打拉锯战——档案里的 spawn 高度
+# 与村民实际站位本就不符（墨白 69↔72、火钳 72↔64、石头 65↔70），60s 一轮无限互拽：
+# 10 分钟 137 次 RCON 传送，基岩访客普查里 entity_teleport 高达 21 次/秒，
+# 是她反复 Timed out 的直接推手。要救卡住的村民改由女神/守卫按需手动处理。
+# 需要恢复时设环境变量 NPC_GROUND_HEAL=1。
+NPC_GROUND_HEAL = os.environ.get("NPC_GROUND_HEAL", "0") == "1"
 
 def heal_npcs():
     # 2026-08-23 造物主拍板「A+B」：水平拉回阈值用全局 leash_radius(40) 放宽+软化，每 NPC 可配 radius 覆盖。
@@ -1596,7 +1602,7 @@ def heal_npcs():
         try:
             sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
             gy = ground_y(sx, sz, sy0)
-            if pos[1] - gy > 2 or pos[1] - gy < -2.5:
+            if NPC_GROUND_HEAL and (pos[1] - gy > 2 or pos[1] - gy < -2.5):
                 left = _GND_LAST.get(v["tag"], 0)
                 if left > 0:
                     _GND_LAST[v["tag"]] = left - 1   # 冷却中：这一轮不动它
