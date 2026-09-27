@@ -1,8 +1,11 @@
-"""Keep the local Java observer's camera attached to Kirito while its client runs.
+"""Keep the local Java observer's camera attached to a configurable target.
 
 Minecraft drops a spectator camera when the target dies, respawns, or is
 replaced. This watcher observes both players before issuing a bounded,
-idempotent /spectate command; it never moves or changes Kirito.
+idempotent /spectate command; it never moves or changes the target.
+
+Target resolution (2026-09-27, creator asked to weld camera onto naruto):
+runtime/observer-client/target.txt > env OBSERVER_TARGET > 'Kirito'.
 """
 
 from datetime import datetime, timezone
@@ -27,7 +30,21 @@ CLIENT_STATE = WORK / 'client.json'
 FOLLOW_STATE = WORK / 'follow.json'
 FOLLOW_LOG = WORK / 'follow.log'
 OBSERVER = 'ag_observer'
-TARGET = 'Kirito'
+
+
+def _resolve_target():
+    try:
+        raw = (ROOT / 'runtime' / 'observer-client' / 'target.txt').read_text(encoding='utf-8').strip()
+    except OSError:
+        raw = ''
+    if not raw:
+        raw = (os.environ.get('OBSERVER_TARGET') or '').strip()
+    if not raw:
+        raw = 'Kirito'
+    return raw if re.fullmatch(r'[A-Za-z0-9_]{1,16}', raw) else 'Kirito'
+
+
+TARGET = _resolve_target()
 POLL_SECONDS = 2
 MAX_DISTANCE = 4.0
 ATTACH_RETRY_SECONDS = 5
@@ -135,6 +152,12 @@ def attach(client):
         client.cmd('gamemode spectator ' + OBSERVER)
         if entity_value(client, OBSERVER, 'playerGameType') != '3':
             raise RuntimeError('Observer spectator mode was not confirmed')
+    # 观战夜视：夜里画面全黑（造物主 2026-09-27 令），效果死亡/重登会清，
+    # 跟着每次 attach 顺手续一次（REFRESH 周期 120s，够密）。
+    try:
+        client.cmd('effect give ' + OBSERVER + ' minecraft:night_vision infinite')
+    except Exception:
+        pass
     # /spectate <same target> may report success without resetting a stale
     # camera. Clear the old target first, then bind the new one.
     client.cmd('execute as ' + OBSERVER + ' run spectate stop')

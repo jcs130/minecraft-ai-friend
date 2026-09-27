@@ -35,7 +35,7 @@ const append = (file, obj) => fs.appendFile(file, JSON.stringify(obj) + '\n', ()
 
 const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行动派、先干再说、不矫情。
 你这轮只做一件事：观察、决定一个动作、用一句话说清你为什么这么做。
-输出必须是严格 JSON（不要 markdown 围栏）：
+输出必须是严格 JSON（不要 markdown 围栏）。**第一个字符就必须是 {，禁止写任何分析过程、编号清单或开场白**：
 {"think":"一句内心判断","say":"游戏里喊的话(可空)","action":"动作名","params":{...}}
 可用动作：
 {"action":"goto","params":{"x":数,"z":数}}    走到坐标
@@ -43,7 +43,7 @@ const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行
 {"action":"mine","params":{"what":"stone|coal_ore|iron_ore|oak_log","n":1到8}}  挖最近的某种方块
 {"action":"chop"}                               砍最近的树
 {"action":"eat","params":{"what":"golden_apple|apple|cooked_beef|bread"}}  吃东西
-{"action":"craft","params":{"what":"stone_pickaxe|planks|stick|crafting_table"}}  合成(需材料齐)
+{"action":"craft","params":{"what":"stone_pickaxe|torch|planks|stick|crafting_table"}}  合成(需材料齐)
 {"action":"fight"}                              打最近的敌对生物
 {"action":"flee"}                               向远离最近敌人的方向撤 30 格
 {"action":"place_torch"}                        插一支火把
@@ -51,7 +51,8 @@ const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行
 {"action":"set_goal","params":{"goal":"一句话阶段目标"}}
 {"action":"rest"}                               原地观望几秒
 不确定就 wander 或 rest。距离坐标不超过 64 格。say 保持口语短句。
-常识：挖不动石头(返回 dug_but_zero_drop)说明缺工具——先 craft "wooden_pickaxe"（3木板+2木棍，木板够的），不是 stone_pickaxe；镐子要工作台，放不下说明在别人的保护区，先 wander 离开 30 格再放。上一轮动作没让背包变多就是无用功，换思路别重复。`;
+常识：挖不动石头(返回 dug_but_zero_drop)说明缺工具——先 craft "wooden_pickaxe"（3木板+2木棍，木板够的），不是 stone_pickaxe；镐子要工作台，放不下说明在别人的保护区，先 wander 离开 30 格再放。上一轮动作没让背包变多就是无用功，换思路别重复。
+火把铁律：time=夜 或周围一暗，先看背包有没有 torch，没有就 craft "torch"（1煤或木炭+1木棍，2x2背包能造），然后 place_torch；夜里每走 8-10 格补一支——你在夜里干活必须自己照亮，也是替看直播的人照亮。白天不用插。`;
 
 let bot = null;
 let turnCount = 0;
@@ -94,20 +95,52 @@ async function llmDecide(snap) {
     const res = await fetch(CFG.llmBase + '/chat/completions', {
       method: 'POST', signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + CFG.llmKey },
-      body: JSON.stringify({ model: CFG.model, messages: [{ role: 'system', content: PERSONA }, { role: 'user', content: user }], temperature: 0.8, max_tokens: 600 }),
+      body: JSON.stringify({ model: CFG.model, messages: [{ role: 'system', content: PERSONA }, { role: 'user', content: user }], temperature: 0.7, max_tokens: 1500 }),
     });
     if (!res.ok) throw new Error('llm_http_' + res.status);
     const d = await res.json();
-    const text = (d.choices[0].message.content || '').trim();
+    const msg = d.choices[0].message || {};
+    // 推理型模型常把正文留空、答案塞进 reasoning_content；两处都捞。
+    let text = ((msg.content || '') + '\n' + (msg.reasoning_content || '')).trim();
+    const blocks = text.match(/```[\s\S]*?```/g) || [];
+    for (const b of blocks) { const mm = b.match(/\{[\s\S]*\}/); if (mm) { try { return JSON.parse(mm[0]); } catch (e) { /* 继续找 */ } } }
     const m = text.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error('llm_no_json');
-    return JSON.parse(m[0]);
+    if (!m) throw new Error('llm_no_json:' + text.slice(0, 48).replace(/\s+/g, ' '));
+    try { return JSON.parse(m[0]); }
+    catch (e) {
+      const m2 = text.match(/\{[\s\S]*?"action"[\s\S]*"params"[\s\S]*\}|\{[\s\S]*?"action"[\s\S]*\}/);
+      if (m2) { try { return JSON.parse(m2[0]); } catch (e2) {} }
+      throw new Error('llm_json_unparseable:' + text.slice(0, 48).replace(/\s+/g, ' '));
+    }
   } finally { clearTimeout(timer); }
 }
 
 function timeout(ms) { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return { signal: c.signal, done: () => clearTimeout(t) }; }
 
 let noPathStreak = 0;
+
+function unstick() {
+  try { bot.pathfinder.stop(); } catch (e) {}
+  try { bot.setControlState('jump', false); bot.setControlState('forward', false); bot.setControlState('sprint', false); } catch (e) {}
+}
+
+// 寻路硬超时：mineflayer-pathfinder 撞墙时会原地无限跳着尝试爬墙，goto 永不返回。
+// 每次 goto 都包一层死线，到点强制 stop+清控制键，把身体从卡死的寻路里拔出来。
+function gotoHard(goal, ms) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const t = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      unstick();
+      reject(new Error('goto_timeout_unstuck'));
+    }, ms);
+    bot.pathfinder.goto(goal).then(
+      v => { if (!settled) { settled = true; clearTimeout(t); resolve(v); } },
+      e => { if (!settled) { settled = true; clearTimeout(t); reject(e); } });
+  });
+}
+
 async function lostEscape() {
   // 连续无路 = 被困在台地/墙角。不求解了：朝随机方向直跑两秒，撞树撞墙就停，交给下一轮再想。
   try { bot.look(bot.entity.yaw + (Math.random() - 0.5) * 3, 0, true); } catch (e) {}
@@ -124,18 +157,18 @@ async function exec(dec) {
   const hard = timeout(CFG.turnSeconds * 1000);
   try {
     if (a === 'goto' && Number.isFinite(P.x) && Number.isFinite(P.z)) {
-      await bot.pathfinder.goto(new goals.GoalXZ(P.x, P.z)); return 'ok';
+      await gotoHard(new goals.GoalXZ(P.x, P.z), 40000); return 'ok';
     }
     if (a === 'wander') {
       const c = bot.entity.position;
-      await bot.pathfinder.goto(new goals.GoalXZ(Math.round(c.x + (Math.random() - .5) * 60), Math.round(c.z + (Math.random() - .5) * 60)));
+      await gotoHard(new goals.GoalXZ(Math.round(c.x + (Math.random() - .5) * 60), Math.round(c.z + (Math.random() - .5) * 60)), 40000);
       return 'ok';
     }
     if (a === 'mine') {
       const b = bot.findBlock({ matching: x => x.name === P.what || x.name === 'minecraft:' + P.what, maxDistance: 24 });
       if (!b) return 'no_target';
       if (b.position.distanceTo(bot.entity.position) > 3) {   // 太远=挖了掉地上捡不到，先走过去
-        try { await bot.pathfinder.goto(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 2)); } catch (e) { return 'walk_to_target_failed_nearby_only'; }
+        try { await gotoHard(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 2), 40000); } catch (e) { return 'walk_to_target_failed_nearby_only'; }
       }
       const t0 = bot.inventory.items().reduce((s, i) => s + i.count, 0);
       await bot.dig(b, 'ignoreDistance');
@@ -161,33 +194,36 @@ async function exec(dec) {
         if (cand) item = bot.registry.itemsByName[cand];
       }
       if (!item) return 'no_item';
-      // 3x3 配方（镐/斧等）需要工作台：先找身边 8 格内的，没有就放下背包里的
-      let table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
-      if (!table) {
-        const tItem = bot.inventory.items().find(i => i.name === 'crafting_table');
-        if (tItem) {
-          const p = bot.entity.position;
-          const spots = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [2.5, 0], [0, 2.5]];
-          for (const [dx, dz] of spots) {
-            const ref = bot.blockAt(p.offset(dx, -1, dz));
-            if (!ref || ref.name === 'air' || ref.name === 'crafting_table') continue;
-            try { await bot.placeBlock(ref, vec3up); } catch (e) { continue; }
-            await new Promise(r => setTimeout(r, 500));
-            table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
-            if (table) break;
+      // 先试背包 2x2（火把/木板/棍够用），造不出再找/摆工作台（镐斧类 3x3 配方）
+      let rs = bot.recipesFor(item.id, null, 1, null);
+      if (!rs.length) {
+        let table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
+        if (!table) {
+          const tItem = bot.inventory.items().find(i => i.name === 'crafting_table');
+          if (tItem) {
+            const p = bot.entity.position;
+            const spots = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5], [2.5, 0], [0, 2.5]];
+            for (const [dx, dz] of spots) {
+              const ref = bot.blockAt(p.offset(dx, -1, dz));
+              if (!ref || ref.name === 'air' || ref.name === 'crafting_table') continue;
+              try { await bot.placeBlock(ref, vec3up); } catch (e) { continue; }
+              await new Promise(r => setTimeout(r, 500));
+              table = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
+              if (table) break;
+            }
+            if (!table) return 'placement_refused_protected_area_walk_30_blocks_and_retry';
           }
-          if (!table) return 'placement_refused_protected_area_walk_30_blocks_and_retry';
         }
+        rs = bot.recipesFor(item.id, null, 1, table || null);
       }
-      let rs = bot.recipesFor(item.id, null, 1, table);
-      if (!rs.length && !table) rs = bot.recipesFor(item.id, null, 1, null);
       if (!rs.length) return 'no_recipe_or_mat';
-      await bot.craft(rs[0], 1, table); return 'ok';
+      const table2 = bot.findBlock({ matching: x => x.name === 'crafting_table', maxDistance: 8 }) || null;
+      await bot.craft(rs[0], 1, table2); return 'ok';
     }
     if (a === 'fight') {
       const e = bot.nearestEntity(x => x.position && ['zombie', 'skeleton', 'creeper', 'spider', 'drowned', 'pillager'].some(k => x.name && x.name.includes(k)));
       if (!e) return 'no_enemy';
-      await bot.pathfinder.goto(new goals.GoalFollow(e, 1));
+      await gotoHard(new goals.GoalFollow(e, 1), 40000);
       try { await bot.attack(e); } catch (err) { return 'attack_fail'; }
       return 'ok';
     }
@@ -195,15 +231,20 @@ async function exec(dec) {
       const e = bot.nearestEntity(x => x.position && (x.name || '').match(/zombie|skeleton|creeper|spider|drowned/));
       const dir = e ? e.position.minus(bot.entity.position) : { x: 1, y: 0, z: 0 };
       const g = bot.entity.position.offset(-dir.x * 2, 0, -dir.z * 2).normalize().times(30);
-      await bot.pathfinder.goto(new goals.GoalNear((bot.entity.position.x + g.x) | 0, (bot.entity.position.z + g.z) | 0, 4));
+      await gotoHard(new goals.GoalNear((bot.entity.position.x + g.x) | 0, (bot.entity.position.z + g.z) | 0, 4), 30000);
       return 'ok';
     }
     if (a === 'place_torch') {
       const it = bot.inventory.items().find(i => i.name.includes('torch'));
       if (!it) return 'no_torch';
-      const ref = bot.blockAt(bot.entity.position);
-      if (ref) await bot.placeBlock(ref, vec3up);
-      return 'ok';
+      await bot.equip(it, 'hand');
+      try { await bot.look(0, -Math.PI / 4, true); } catch (e) {}
+      const under = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+      if (under && under.name !== 'air') { await bot.placeBlock(under, vec3up); return 'ok_underfoot'; }
+      const p = bot.entity.position;
+      const ref = bot.blockAt(p.offset(Math.round(Math.cos(bot.entity.yaw)), -1, Math.round(Math.sin(bot.entity.yaw))));
+      if (ref && ref.name !== 'air') { await bot.placeBlock(ref, vec3up); return 'ok'; }
+      return 'no_floor_to_place';
     }
     if (a === 'sleep') {
       const bed = bot.findBlock({ matching: x => x.name.includes('bed'), maxDistance: 30 });
