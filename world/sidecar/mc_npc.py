@@ -1477,10 +1477,13 @@ def summon_villager(v):
     # 2026-08-22 造物主谕「正常 NPC 不要站桩」：一律 NoAI:0b 自由生活（会溜达/归巢），
     # 交易/职业动作不受影响；拴绳看护（heal_npcs leash_radius）把离家者拉回广场。
     noai = "0b"
+    # 2026-09-27 分身+英文名事故定谳：1.21 的 CustomName 必须是 JSON 字符串（复合体
+    # 写法被静默丢弃→无名村民被 villagernames mod 领成英文名）。
+    name_json = '{\\"text\\":\\"%s\\",\\"color\\":\\"%s\\"}' % (v["display"], v["color"])
     nbt = ('{NoAI:%s,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
-           'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,Xp:0,'
+           'CustomName:"%s",CustomNameVisible:1b,Xp:0,'
            'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
-        noai, v["tag"], v["display"], v["color"], v["profession"], biome, offers)
+        noai, v["tag"], name_json, v["profession"], biome, offers)
     x, y, z = v["spawn"]
     y = ground_y(x, z, y)
     base = v.get("carrier") == "base_villager"
