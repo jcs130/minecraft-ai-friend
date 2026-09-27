@@ -36,7 +36,8 @@ const append = (file, obj) => fs.appendFile(file, JSON.stringify(obj) + '\n', ()
 const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行动派、先干再说、不矫情。
 你这轮只做一件事：观察、决定一个动作、用一句话说清你为什么这么做。
 输出必须是严格 JSON（不要 markdown 围栏）。**第一个字符就必须是 {，禁止写任何分析过程、编号清单或开场白**：
-{"think":"一句内心判断","say":"游戏里喊的话(可空)","action":"动作名","params":{...}}
+{"think":"一句内心判断","say":"游戏里喊的话，**大多数轮留空**","action":"动作名","params":{...}}
+话要少：只在发现稀有物、遇险、做出重要决定时开口，大约每 4-5 轮说一句； routine 砍树挖矿闷头干，别播报。
 可用动作：
 {"action":"goto","params":{"x":数,"z":数}}    走到坐标
 {"action":"wander"}                             随机探索一段
@@ -50,10 +51,11 @@ const PERSONA = `你是鸣人，MC 异世界的穿越者。性格：直爽、行
 {"action":"sleep"}                              找床睡觉
 {"action":"set_goal","params":{"goal":"一句话阶段目标"}}
 {"action":"rest"}                               原地观望几秒
-不确定就 wander 或 rest。距离坐标不超过 64 格。say 保持口语短句。
+不确定就 wander 或 rest。距离坐标不超过 120 格。say 保持口语短句。
+找森林规矩：chop 返回 no_tree 或 chop_no_drop（保护区砍不了）连续出现，说明你脚下的地方采不出东西——**定一个固定方向，连着 goto 走远三四段（每段100格）**，中途别回头，直到脚下变草地/森林、看见树为止再干活；东南方向的河岸边就有树。
 常识：挖不动石头(返回 dug_but_zero_drop)说明缺工具——先 craft "wooden_pickaxe"（3木板+2木棍，木板够的），不是 stone_pickaxe；镐子要工作台，放不下说明在别人的保护区，先 wander 离开 30 格再放。上一轮动作没让背包变多就是无用功，换思路别重复。
 火把铁律：time=夜 或周围一暗，先看背包有没有 torch，没有就 craft "torch"（1煤或木炭+1木棍，2x2背包能造），然后 place_torch；夜里每走 8-10 格补一支——你在夜里干活必须自己照亮，也是替看直播的人照亮。白天不用插。
-合成规矩：torch/planks/stick/crafting_table 都能背包2x2直接造，最省事；石镐石斧要3x3，返回 needs_crafting_table… 或 crafting_table_inaccessible… 就说明你在别人保护区里开不了桌子——别硬试，先 wander 60格到没围栏的空旷草地，再 craft crafting_table 摆下，然后才造镐。同一个动作连败两次就换别的活（挖掉落物、砍树、吃东西），绝不在原地死磕。`;
+合成规矩：torch/planks/stick/crafting_table 都能背包2x2直接造，最省事；石镐石斧要3x3，返回 needs_crafting_table… 或 crafting_table_inaccessible… 就说明你在别人保护区里开不了桌子——别硬试，先 wander 60格到没围栏的空旷草地，再 craft crafting_table 摆下，然后才造镐。同一个动作连败两次就换别的活（挖掉落物、砍树、吃东西），绝不在原地死磕。结果带 protected/refused/no_drop 时系统会自动带你跑路(hardleave)，跑出去后专挑有树有石的野地干活，别回公会广场磨。`;
 
 let bot = null;
 let turnCount = 0;
@@ -144,12 +146,31 @@ function gotoHard(goal, ms) {
 }
 
 async function lostEscape() {
-  // 连续无路 = 被困在台地/墙角。不求解了：朝随机方向直跑两秒，撞树撞墙就停，交给下一轮再想。
-  try { bot.look(bot.entity.yaw + (Math.random() - 0.5) * 3, 0, true); } catch (e) {}
+  // 硬脱困：朝随机水平方向「啃着往前走」——挡路的栅栏/泥土/草甸挖开，1.x 格障碍跳。
+  // 不依赖寻路（围栏内寻路必挂），纯控制流：前进+跳+挖面前方块，25 秒起步。
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7]];
+  const [dx, dz] = dirs[Math.floor(Math.random() * dirs.length)];
+  let yaw = Math.atan2(-dx, dz);
+  const start = bot.entity.position.clone();
+  let stuckTicks = 0;
   bot.setControlState('sprint', true);
   bot.setControlState('forward', true);
-  await new Promise(r => setTimeout(r, 2500));
+  for (let i = 0; i < 40; i++) {
+    try { await bot.look(yaw, 0, true); } catch (e) {}
+    try { bot.setControlState('jump', true); } catch (e) {}
+    // 面前腿高处的阻挡方块：能挖就挖（栅栏=可挖），石头挖不动就换向
+    const fx = Math.round(Math.sin(yaw) * -1), fz = Math.round(Math.cos(yaw));
+    const ahead = bot.blockAt(bot.entity.position.offset(fx, 0, fz)) || bot.blockAt(bot.entity.position.offset(fx, -1, fz));
+    if (ahead && ahead.name !== 'air' && ahead.diggable) {
+      try { await Promise.race([bot.dig(ahead, 'ignoreDistance'), new Promise(r => setTimeout(r, 2200))]); } catch (e) {}
+    }
+    await new Promise(r => setTimeout(r, 700));
+    const moved = bot.entity.position.distanceTo(start);
+    if (i > 2 && moved < 1.2) { stuckTicks++; if (stuckTicks > 3) { yaw += 1.3; stuckTicks = 0; } } else stuckTicks = 0;
+    if (moved > 45) break;
+  }
   bot.setControlState('forward', false);
+  bot.setControlState('jump', false);
   bot.setControlState('sprint', false);
 }
 
@@ -181,7 +202,16 @@ async function exec(dec) {
     if (a === 'chop') {
       const b = bot.findBlock({ matching: x => x.name.includes('log'), maxDistance: 20 });
       if (!b) return 'no_tree';
-      await bot.dig(b, 'ignoreDistance'); return 'ok';
+      if (b.position.distanceTo(bot.entity.position) > 3) {   // 走树下再砍，原木才掉脚边
+        try { await gotoHard(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 2), 30000); }
+        catch (e) { return 'walk_to_tree_failed'; }
+      }
+      const before = bot.inventory.items().filter(i => i.name.includes('log')).reduce((s, i) => s + i.count, 0);
+      await bot.dig(b, 'ignoreDistance');
+      await new Promise(r => setTimeout(r, 1200));
+      const after = bot.inventory.items().filter(i => i.name.includes('log')).reduce((s, i) => s + i.count, 0);
+      // 只报诚实结果：挖了木头没进包 = 被服务端回滚（保护区）或够不到，绝不能说 ok
+      return after > before ? 'ok' : 'chop_no_drop_protected_or_unreach_leave_area';
     }
     if (a === 'eat') {
       const it = bot.inventory.items().find(i => i.name === P.what || i.name.includes(P.what || 'apple'));
@@ -294,9 +324,10 @@ async function turn() {
     if (dec.say) bot.chat(String(dec.say).slice(0, 100));
     if (dec.say) speak(dec.say);
     result = await exec(dec);
-    if (/No path|stopped before/i.test(result)) {
+    // 环境拒绝(保护区/挖不动/寻路撞死)连撞两次 → 不等 LLM 开窍，直接物理跑路
+    if (/Server refused|placement_refused|chop_no_drop|dug_but_zero|No path|Path was stopped|goto_timeout|walk_to_target_failed/i.test(result)) {
       noPathStreak++;
-      if (noPathStreak >= 2) { await lostEscape(); noPathStreak = 0; result += '+escape'; }
+      if (noPathStreak >= 2) { await lostEscape(); noPathStreak = 0; result += '+hardleave'; }
     } else noPathStreak = 0;
     recent.push({ action: dec.action || '?', result });
     if (recent.length > 8) recent.shift();
