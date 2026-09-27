@@ -2382,6 +2382,9 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   const GODDESS_CHAT_COOLDOWN = 10_000      // 每人公屏聊天节流
   const GODDESS_GIVE_COOLDOWN = 60_000      // 每人物品馈赠冷却（VIP 减半）
   const lastGoddessChat = new Map<string, number>()
+  // 防傻循环闸（2026-09-27）：鸣人「!」僵直期与化身互刷，单字符噪声每 10s 触发一次
+  // 回复、白白烧双方轮次。纯标点/符号消息不接；同人同文 90s 内复读不接。
+  const lastSameMsg = new Map<string, number>()
   const lastGoddessGive = new Map<string, number>()
   const VIP_SET = new Set(config.vipListen)
 
@@ -2472,6 +2475,13 @@ export function createGod(config: Config, deps: GodDeps): GodHandle {
   async function goddessChat(username: string, message: string, allowGifts = true): Promise<void> {
     const bot = getBot()
     if (!bot) return
+    const msg = (message ?? '').trim()
+    if (/^(rcon|server|console)$/i.test((username ?? '').trim())) return // 服务端广播（say/RCON 公告）不接话
+    if (!/[\p{L}\p{N}]/u.test(msg)) return // 纯标点/空白噪声（如「!」）不接，防哑剧互刷循环
+    const dupKey = username + '|' + msg.toLowerCase()
+    const dupAt = lastSameMsg.get(dupKey) ?? 0
+    if (Date.now() - dupAt < 90_000) return // 同人同文 90s 内复读不再应（第二道闸）
+    lastSameMsg.set(dupKey, Date.now())
     const isVip = VIP_SET.has(username.toLowerCase())
     const now = Date.now()
     const cool = isVip ? Math.floor(GODDESS_CHAT_COOLDOWN / 2) : GODDESS_CHAT_COOLDOWN
