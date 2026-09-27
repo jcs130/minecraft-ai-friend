@@ -8,6 +8,7 @@
     "CheckPacketSendGuardMixin",
     "BetterCombatConfigTaskGateMixin",
     "ConfigTaskGateForNonNeoForgeMixin",
+    "OriginGateForVanillaHandshakeMixin",
     "RecipePacketGateForNonNeoForgeMixin",
     "EquipmentPacketGateForNonNeoForgeMixin",
     "ItemPacketGateForNonNeoForgeMixin",
