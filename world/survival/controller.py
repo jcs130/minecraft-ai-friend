@@ -2669,7 +2669,21 @@ class Controller:
             if not isinstance(memory, dict):
                 return
             detector = StagnationDetector(self.root, self.clock)
-            hints = detector.check(memory, self.data.get('environmentSignals') or [])
+            signals = list(self.data.get('environmentSignals') or [])
+            try:
+                # 2026-09-27 夜窗事故实证：只信环境的 no_output 时，「寻路反复被拒+位置小幅
+                # 挪动」被当成多产，原地打转一小时不触发 pivot。电机连败是世界对"这条意图"
+                # 的直接否定——补一条 repeated_rejection 进佐证链。
+                inbox = _json.loads((self.root / 'motor-inbox.json').read_text(encoding='utf-8'))
+                rows = (inbox.get('requests') or [])[-6:]
+                if rows and sum(1 for r in rows if isinstance(r, dict) and r.get('status') == 'failed') >= 3:
+                    kinds = {s.get('kind') for s in signals if isinstance(s, dict)}
+                    if 'repeated_rejection' not in kinds:
+                        signals.append({'kind': 'repeated_rejection', 'tool': 'motor',
+                                        'code': 'motion_failures_in_window'})
+            except Exception:
+                pass
+            hints = detector.check(memory, signals)
             if hints:
                 self.data['stagnationHint'] = hints[0]
         except Exception:
