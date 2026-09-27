@@ -18,6 +18,7 @@ import net.neoforged.fml.common.Mod;
 @Mod("botgate")
 public class BotGateMod {
     public BotGateMod() {
-        System.out.println("[BOTGATE] botgate loaded: 5 vanilla/bedrock protocol gates armed");
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(SkinInjection::onPlayerLoadFromFile);
+        System.out.println("[BOTGATE] botgate loaded: 5 vanilla/bedrock protocol gates armed + skin injector");
     }
 }
