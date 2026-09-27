@@ -10,7 +10,7 @@ services:
       TYPE: NEOFORGE
       VERSION: "1.21.1"
       NEOFORGE_VERSION: "21.1.248"
-      MEMORY: "4G"
+      MEMORY: "6G"
       SERVER_PORT: "25599"
       LEVEL: shadow
       MOTD: "千灯纪 · 整合测试世界"
