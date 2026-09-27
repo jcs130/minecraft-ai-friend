@@ -212,7 +212,8 @@ services:
       # 留着假 ack 反而有害：服务端在客户端真正应用传送之前就认定传送完成，
       # 实测基岩访客被跨 3724 格传送后客户端没跟上，每包 `moved too quickly! -3724.0,2.0,2429.5`
       # —— 表现就是"进了竞技场却打不了怪"（她一直在朝旧位置挥刀）。改回透传真 ack。
-      GATE_SELF_TELEPORT_ACK: "0"
+      GATE_SELF_TELEPORT_ACK: "1"
+      GATE_ACK_TIMEOUT_MS: "3000"  # 2026-09-28 回滚：400ms 时她拿不到世界数据，33 秒必超时
     volumes:
       - ./world/src:/app/src:ro
     # 2026-09-22 端口统一：不再发布 25701 到宿主。本机/局域网 Agent 一律走外门 25702（ag_ 闸）；
@@ -231,7 +232,8 @@ services:
       GATE_AGENT_PREFIX: "ag_"
       # 与内门保持一致：同一套传送 ack 行为，别让内外门语义分叉
       # （2026-09-27 随内门一起关，理由见上）
-      GATE_SELF_TELEPORT_ACK: "0"
+      GATE_SELF_TELEPORT_ACK: "1"
+      GATE_ACK_TIMEOUT_MS: "3000"  # 2026-09-28 回滚：400ms 时她拿不到世界数据，33 秒必超时
     volumes:
       - ./world/src:/app/src:ro
     ports:
