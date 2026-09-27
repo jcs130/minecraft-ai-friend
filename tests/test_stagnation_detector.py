@@ -22,7 +22,8 @@ class DetectTests(unittest.TestCase):
         self.seen = {'at': self.now - MIN_STAGNATION_SECONDS - 1}
 
     def test_a_recently_set_goal_is_never_stale(self):
-        self.assertIsNone(detect(HELD_GOAL, NO_OUTPUT, {'at': self.now - 60}, self.now))
+        self.assertIsNone(detect(HELD_GOAL, NO_OUTPUT,
+                                 {'at': self.now - (MIN_STAGNATION_SECONDS - 10)}, self.now))
 
     def test_a_stale_goal_with_the_world_agreeing_fires(self):
         finding = detect(HELD_GOAL, NO_OUTPUT, self.seen, self.now)
