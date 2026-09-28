@@ -63,6 +63,11 @@ const SELF_TELEPORT_ACK = process.env.GATE_SELF_TELEPORT_ACK === '1'
 // 稳态（队列空）仍然同步立即发，零额外延迟；只有积压时才摊平。
 const DRAIN_BATCH = Number(process.env.GATE_DRAIN_BATCH || 48)
 const DRAIN_GAP_MS = Number(process.env.GATE_DRAIN_GAP_MS || 15)
+// 【开闸兜底超时 2026-09-28】前端 finish_configuration 迟到多久才强行开闸。
+// 基岩链（Geyser 抬版 1.21.1→26.2）实测 CONFIG 要 29 秒，原硬编码 3000ms 会在前端
+// 还没进 PLAY 时就把整批世界数据倾泻过去 → 客户端"登录了但什么都没有"。默认放大到 60s；
+// Java 客户端走正常 ack 路径（毫秒级），不受此值影响。
+const ACK_FLUSH_TIMEOUT_MS = Number(process.env.GATE_ACK_FLUSH_TIMEOUT_MS || 60000)
 
 const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`)
 
@@ -394,7 +399,14 @@ function onBackPacket (sess, name, params) {
       sess.phase = 'play_pending'
       relayTo(sess, sess.front, name, params, '后端->前端')
       // 保险：ack 久候不至则强行开闸（真客户端异常时宁可错位也别卡死）
-      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, 3000)
+      // 【2026-09-28 定谳：3 秒对基岩链是致命的】前端 ack 不是"永远不来"，是"来得晚"——
+      // Geyser 要把服务端注册表从 1.21.1 抬到 26.2，实测 CONFIG 耗 29 秒
+      // （12:05:11 Player connected → 12:05:40 Configuration finished → 12:05:45 后端断开）。
+      // 3 秒强开＝把 PLAY 包写进仍在 CONFIG 态的前端，整批世界数据作废；等她真进 PLAY
+      // 队列已空 → 客户端表现就是"登录了但什么都没有"。正常开闸路径（前端
+      // finish_configuration，见 play_pending 分支）不受影响：Java 客户端毫秒级就 ack，
+      // 这个超时纯兜底，放大到 60 秒无副作用。
+      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, ACK_FLUSH_TIMEOUT_MS)
       return
     default:
       // registry_data / select_known_packs 查询 / feature_flags / 其余原版任务 -> 透传
