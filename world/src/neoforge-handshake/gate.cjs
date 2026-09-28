@@ -235,6 +235,11 @@ function closeSession (sess, reason) {
     log(`census[${sess.username}] back_total=${b.reduce((s, [, v]) => s + v, 0)} time(${pick(b)}) | front_total=${f.reduce((s, [, v]) => s + v, 0)} time(${pick(f)}) | err=${e.length ? e.map(([k, v]) => k + '=' + v).join(',') : 'none'}`)
     const top = b.slice(0, 8).map(([k, v]) => k + '=' + v).join(' ')
     if (top) log(`census[${sess.username}] back top: ${top}`)
+    // 【2026-09-27】前端来包名单 + 状态闸丢弃清单——诊断 Geyser 收尾 ack 与畸形包错位用
+    const fi = fmt(sess.frontInCensus).slice(0, 10).map(([k, v]) => k + '=' + v).join(' ')
+    if (fi) log(`census[${sess.username}] front-in top: ${fi}`)
+    const dr = fmt(sess.droppedCensus).map(([k, v]) => k + '=' + v).join(',')
+    if (dr) log(`census[${sess.username}] 状态闸丢弃: ${dr}`)
     // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
   } catch (err) {}
@@ -292,7 +297,12 @@ function connectBackend (sess) {
       sess.backReady = true
       const q = sess.frontQueue.splice(0)
       log(`DEBUG：[${sess.username}] 后端就绪，放出排队包 ${q.length} 个`)
-      for (const pkt of q) relayTo(sess, back, pkt.name, pkt.params, '前端->后端（补发）')
+      // 【2026-09-27 修】补发必须走相位分发器，不能再裸 relayTo：
+      // 排队包里若混着前端的 finish_configuration，裸补发会让后端**提前**结束 CONFIG 切进 PLAY，
+      // 于是紧随其后的 CONFIG 包名在 PLAY 表里查无此项 → protodef 落进 default 兜底分支 →
+      // 按 PLAY id 0 写出（Mojang 名 serverbound/minecraft:accept_teleportation）+ 正文对不上 →
+      // 服务端 DecoderException 当场踢线（14:26:13 MicroKQ 首登即被踢，实测复现）。
+      for (const pkt of q) onFrontPacket(sess, pkt.name, pkt.params)
     }
   })
   // NeoForge 的模组命令会让 mcp 解析 declare_commands 抛 PartialReadError——
@@ -430,6 +440,10 @@ function drainPlay (sess) {
 // 前端 -> 后端（CONFIG：只透传 vanilla 配置应答；PLAY：全透传）
 function onFrontPacket (sess, name, params) {
   if (sess.closed) return
+  // 【前端来包普查 2026-09-27】先计数再分流——被吞掉的包也要看得见，
+  // 否则永远不知道 Geyser/ViaProxy 到底用什么名字发收尾 ack（27 秒 CONFIG 停顿之谜的钥匙）
+  sess.frontInCensus = sess.frontInCensus || {}
+  sess.frontInCensus[name] = (sess.frontInCensus[name] || 0) + 1
   const back = sess.back
   if (!back || back.ended) return
   // 【自 ack 传送】前端上行的 teleport_confirm 吞掉：改由门自己回，避免重序列化字节与 MC 期望不符
@@ -471,8 +485,31 @@ function onFrontPacket (sess, name, params) {
 // 安全重序列化转发：失败只记日志，不炸会话
 const REMAP = require('./idmap-remap.cjs')
 REMAP.load()   // 无 idmap.json = 纯透传，行为与旧版完全一致 ✓
+// 【状态闸 2026-09-27】protodef 的 switch 带 default 兜底：包名在目标**当前状态**的表里查无此项时，
+// write() 不抛错，而是落到兜底分支按 id 0 写出（PLAY 的 id 0 = Mojang 名
+// serverbound/minecraft:accept_teleportation），正文却是另一个包的内容 → 对端 DecoderException。
+// 这种「静默错位」就是首登被踢的根因，所以写之前先查表：不在表里就丢弃并计数，绝不放行成畸形包。
+// 设 GATE_STATE_GUARD=0 可关（回退用）。
+const STATE_GUARD = process.env.GATE_STATE_GUARD !== '0'
+function packetInTable (target, name, dir) {
+  try {
+    const st = target.protocol && target.state ? target.protocol[target.state] : null
+    const types = st && st[dir] ? st[dir].types : null
+    if (!types) return true // 拿不到表 → 放行：宁可错位也别把会话卡死
+    return Object.prototype.hasOwnProperty.call(types, 'packet_' + name)
+  } catch (e) { return true }
+}
+
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
+  const tableDir = target === sess.front ? 'toClient' : 'toServer'
+  if (STATE_GUARD && !packetInTable(target, name, tableDir)) {
+    const k = name + '@' + (target.state || '?')
+    sess.droppedCensus = sess.droppedCensus || {}
+    sess.droppedCensus[k] = (sess.droppedCensus[k] || 0) + 1
+    if (sess.droppedCensus[k] <= 3) log(`（状态闸）丢弃 ${dir} ${name}：不在 ${tableDir}.${target.state} 表内`)
+    return
+  }
   if (target === sess.front) {
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
