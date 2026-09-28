@@ -303,7 +303,12 @@ services:
     pull_policy: never
     restart: unless-stopped
     working_dir: /viaproxy
-    entrypoint: ["java", "-jar", "ViaProxy-3.4.12.jar", "cli",
+    entrypoint: ["java",
+                 # 2026-09-28 加：跳过 GeyserViaProxyPlugin 里未护 null 的 getLocalAddress() 查表
+                 # （上游 issue GeyserMC/Geyser#6567 仍 open、master 至今未护；代价=不向 Java 侧透传真实 IP，
+                 #  而我们识别玩家本来就用登录名/ag_ 前缀，服务端看到的向来是容器 IP，故代价可接受）
+                 "-Dgeyser.viaproxy.disableIpPassthrough",
+                 "-jar", "ViaProxy-3.4.12.jar", "cli",
                  "--target-address", "gate:25700",
                  "--target-version", "1.21.1",
                  "--auth-method", "NONE",
