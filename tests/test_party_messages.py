@@ -6,12 +6,13 @@ from pathlib import Path
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world/sidecar'))
-from party_messages import PartyMessages, validate_binding
+from party_messages import PartyMessages, validate_binding, recent_heard_dialogue
 from test_party_world import confirm_heard
 
 
@@ -37,6 +38,38 @@ def reserve_worker(root, binding, message_id, gate, output):
 
 
 class PartyMessageTests(unittest.TestCase):
+    def test_heard_replies_does_not_wait_for_unrelated_writer(self):
+        writer = sqlite3.connect(self.ledger.path)
+        self.addCleanup(writer.close)
+        writer.execute('BEGIN IMMEDIATE')
+        original_connect = sqlite3.connect
+
+        def short_timeout(*args, **kwargs):
+            kwargs['timeout'] = .05
+            return original_connect(*args, **kwargs)
+
+        started = time.monotonic()
+        with patch('party_messages.sqlite3.connect', side_effect=short_timeout):
+            self.assertEqual(self.ledger.heard_replies(self.sender), [])
+            self.assertEqual(self.ledger.overview(self.sender, limit=1)['messages'], [])
+        self.assertLess(time.monotonic() - started, .5)
+        writer.rollback()
+
+    def test_recent_dialogue_uses_only_game_heard_utterances_in_order(self):
+        rows = [
+            {'sender': {'agentId': 'test-maid'}, 'text': 'old', 'createdAt': 1,
+             'worldDelivery': {'state': 'heard'},
+             'reply': {'sender': {'agentId': 'test-survivor'}, 'text': 'answer',
+                       'createdAt': 3, 'worldDelivery': {'state': 'heard'}}},
+            {'sender': {'agentId': 'test-maid'}, 'text': 'unsent', 'createdAt': 2,
+             'worldDelivery': {'state': 'pending'}, 'reply': None},
+            {'sender': {'agentId': 'test-maid'}, 'text': 'new', 'createdAt': 4,
+             'worldDelivery': {'state': 'heard'}, 'reply': None},
+        ]
+        self.assertEqual(recent_heard_dialogue(rows, limit=2), [
+            {'speaker': 'test-survivor', 'text': 'answer', 'at': 3},
+            {'speaker': 'test-maid', 'text': 'new', 'at': 4}])
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name) / 'state'

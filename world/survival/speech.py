@@ -3,11 +3,12 @@ import os
 from pathlib import Path
 import sys
 
-_source_shared = Path(__file__).resolve().parents[1] / 'sidecar'
-if _source_shared.is_dir():
+_source_shared = Path('/party-code') if Path('/party-code').is_dir() else Path(__file__).resolve().parents[1] / 'sidecar'
+if str(_source_shared) not in sys.path:
     sys.path.append(str(_source_shared))
 
 from character_speech import SpeechBroker
+from party_voice_quality import review_spoken_text
 
 
 class SpeechTools:
@@ -24,14 +25,17 @@ class SpeechTools:
             self._broker = SpeechBroker(Path(path), clock=self.gateway.clock)
         return self._broker
 
-    def speak(self, turn_id, text, interrupt=False):
+    def speak(self, turn_id, text, interrupt=False, prosody=None):
         def submit(lease):
             from numen_gateway import GatewayError
             try:
+                problem = review_spoken_text(text)
+                if problem:
+                    raise GatewayError(problem)
                 _, actor = self.gateway._check_binding()
                 status = self.gateway._invoke('get_self_status')
                 return self.broker.submit(actor, 'turn:' + turn_id, text,
-                                          status.get('dimension'), interrupt)
+                                          status.get('dimension'), interrupt, prosody=prosody)
             except ValueError as exc:
                 raise GatewayError(str(exc)) from exc
         # Speech cannot issue movement, close the action lease or spend a model call.

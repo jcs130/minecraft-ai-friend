@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "jar": "D:\\Projects\\QiandengJi\\world\\numen-actuator-src\\build-vision-hud-20260925\\numen_act-neoforge-1.21.1-0.1.3.jar",
+  "sha256": "850093ef9596fbe239f6c40b4dc15da5f369a0b86756ec8bc4ef69a054bf4502",
+  "baseline": "D:\\Projects\\QiandengJi\\server\\mc\\mods\\numen_act-neoforge-1.21.1-0.1.3.jar",
+  "baselineSha256": "5939ca1feb74fa5ddbcbdd0456f847c78f7dc70f8765dd02e47a9453e105c953",
+  "numenJar": "D:\\Projects\\QiandengJi\\server\\mc\\mods\\numen-neoforge-1.21.1-0.1.3.jar",
+  "numenSha256": "496545426a63ff61545f0796491bde1b602f61b5e2e48edcfb1fa812012994bd",
+  "sources": {
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/CompanionPad.java": "971ed20d3bdaff50db87287d8035783c335e32c32be89044ec25600ff5089453",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/ExistingBodyRestore.java": "b1b710e2397e731785c1c2077daa54b36a7dba65736f448ef49ac81469d0710f",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/GodChannel.java": "126f1766653553bb39927a9c14118ff8ebf09ce81afb8db1131dfac5d59d754d",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/GoddessBridgeCommands.java": "5f4952dab5c728549beeb82de6ab9a3b9581e5be22a2eb0e563c4047ad77eee3",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/LootInjector.java": "0e44af40e96a32b69f761254aaa14a60d0bca1282381f04f0fafec1e2406383f",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/NumenActCommand.java": "b973850cd8ef713482367e1af4cdc2f386f4ddd00e241b7667e8f10531fa6a43",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/NumenActuatorMod.java": "424bdb9678cba65a76aeabff78c598808d59d2a3971dc0bba7e435e485d0bfa7",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/NumenVisionSnapshot.java": "e422bbbb6ee8265d682279f8521d9f486b5ce85963013951b57f7216ec82adc1",
+    "world/numen-actuator-src/neoforge/src/main/java/com/dwinovo/numen/actuator/SkillBookHandler.java": "684183a615f69cfcb8bb113a421d5a7bba6d6fea3dbe42655b8bcf0e3c97b30e",
+    "tools/build_numen_actuator.py": "31eb24c8d6dd0bfa018d5ea157a8801a85177475cc4a3214bf96296ccc7011d3"
+  },
+  "tests": {
+    "restoreContract": {
+      "ok": true,
+      "assertions": 153,
+      "scope": "compiled saved identity/data gate; no world or body created",
+      "source": "world/numen-actuator-src/tests/ExistingBodyRestoreContractTest.java",
+      "sourceSha256": "aa4293621821d56f91e25350eeb77ae155ab8154584714fd67b5d04c6e8aacce",
+      "outputSha256": "b4abe1c4c17136511f667366ab116fcf391d9ab2e63f8936ad7b756fccfea177"
+    }
+  },
+  "preservedEntries": [
+    "LICENSE_Numen",
+    "META-INF/MANIFEST.MF",
+    "META-INF/neoforge.mods.toml"
+  ],
+  "deployment": "not performed"
+}

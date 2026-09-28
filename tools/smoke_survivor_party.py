@@ -102,9 +102,20 @@ def verify_game_dialogue(row, game):
 
 
 def same_life_identity(life, session):
-    fields = ('primarySessionId', 'agentId', 'bodyUuid', 'userId', 'channel', 'chatId')
-    return (life.get('ok') is True and all(session.get(k) is not None
-            and life.get('session', {}).get(k) == session[k] for k in fields))
+    fields = ('primarySessionId', 'agentId', 'bodyUuid', 'userId', 'channel')
+    if (life.get('ok') is not True or not all(session.get(k) is not None
+            and life.get('session', {}).get(k) == session[k] for k in fields)):
+        return False
+    chat_id = session.get('chatId')
+    if chat_id is not None:
+        return life.get('session', {}).get('chatId') == chat_id
+    native = next((row.get('evidence', {}) for row in life.get('checks', [])
+                   if row.get('name') == 'persistent-native-session' and row.get('ok') is True), {})
+    chat = native.get('chat') or {}
+    return (life.get('session', {}).get('chatId') is None
+        and chat.get('session_id') == session['primarySessionId']
+        and isinstance(chat.get('id'), str) and bool(chat['id'])
+        and session['primarySessionId'] in native.get('verifiedLaneSessions', []))
 
 
 def live_owned_body(body, maid, survivor):

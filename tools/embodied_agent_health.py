@@ -71,6 +71,8 @@ SOURCES += ('world/ops/survival_turn_runtime.py', 'tests/test_survival_turn_comp
             'world/ops/qwenpaw_recovery_probe.py', 'world/ops/qwenpaw_health.py')
 SOURCES += ('world/survival/body_reconnect.py', 'tests/test_survival_body_reconnect.py')
 SOURCES += ('tests/test_survival_status_encoding.py',)
+SOURCES += ('world/survival/tool_focus.py', 'tests/test_tool_focus.py')
+SOURCES += ('world/survival/auto_patrol.py', 'tests/test_auto_patrol.py')
 
 
 def runtime_protocols(settings, heartbeat, public):

@@ -55,6 +55,8 @@ def _tts_params(text, voice, prosody):
             value = prosody.get(key)
             if value not in (None, ""):
                 params[key] = value
+    if 'emo_text' in params:
+        params.pop('emo', None)  # Also normalize jobs persisted before the broker fix.
     return params
 
 

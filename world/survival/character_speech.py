@@ -12,7 +12,8 @@ TERMINAL = {'completed', 'cancelled', 'expired', 'failed'}
 ID = re.compile(r'[a-zA-Z0-9_-]{1,100}\Z')
 VOICE = re.compile(r'[a-zA-Z0-9_-]{1,64}\Z')
 DIMENSION = re.compile(r'[a-z0-9_.-]+:[a-z0-9_./-]+\Z')
-EMO = frozenset({'happy', 'angry', 'sad', 'afraid', 'surprised', 'calm', 'neutral'})
+EMO = frozenset({'happy', 'angry', 'sad', 'afraid', 'surprised', 'calm', 'neutral',
+                 'disgusted', 'melancholic'})
 
 
 def normalize_prosody(value):
@@ -43,6 +44,7 @@ def normalize_prosody(value):
     emo_text = value.get('emo_text')
     if isinstance(emo_text, str) and 1 <= len(emo_text.strip()) <= 32:
         out['emo_text'] = emo_text.strip()
+        out.pop('emo', None)  # IndexTTS accepts one emotion source at a time.
     return out
 
 
@@ -308,7 +310,12 @@ class SpeechBroker:
             if len(index['reservations']) >= 5 and not interrupt:
                 raise ValueError('speech_queue_full')
             generation = generation + 1 if interrupt or generation == 0 else generation
-            resolved = {**normalize_prosody(profile.get('prosody')), **normalize_prosody(prosody)}
+            caller_prosody = normalize_prosody(prosody)
+            resolved = {**normalize_prosody(profile.get('prosody')), **caller_prosody}
+            if 'emo_text' in caller_prosody:
+                resolved.pop('emo', None)
+            elif 'emo' in caller_prosody:
+                resolved.pop('emo_text', None)
             job = {'schema': 2, 'id': speech_id, 'entity': actor, 'voiceId': profile['voiceId'],
                    'voiceVersion': profile['version'], 'generation': generation,
                    'createdAt': now, 'expiresAt': now + 90000, 'dimension': dimension,

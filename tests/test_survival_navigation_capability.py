@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import test_survival_controller as fixture
 from behavior_context import acknowledge, prepare
+from controller import accept_bounded_motion_choice
 
 
 class NavigationCapabilityTests(unittest.TestCase):
@@ -80,6 +81,11 @@ class NavigationCapabilityTests(unittest.TestCase):
         plan = card['motionPlan']
         self.assertEqual(plan['sourceProof']['activeVersion'], motion['activeVersion'])
         self.assertEqual(plan['callTemplate']['tool'], 'navigate_plan')
+        self.assertEqual(card['primaryMode'], 'motion_plan')
+        self.assertEqual(card['callTemplate']['tool'], 'navigate_plan')
+        self.assertEqual(card['sourceProof']['name'], 'base_motion_plan')
+        self.assertIn('view_scene(mode="first_person")', card['instruction'])
+        self.assertEqual(card['singleGoal']['callTemplate']['tool'], 'navigate')
         self.assertEqual(len(plan['callTemplate']['arguments']['waypoints']), 2)
         self.assertNotIn('version', plan['callTemplate']['arguments'])
         self.assertFalse(self.gateway.actions or self.backend.submitted)
@@ -131,6 +137,29 @@ class NavigationCapabilityTests(unittest.TestCase):
         _, third, _ = prepare(self.state, self.c.session, self.context('survival-capability-3'), {})
         self.assertIn('x', third['updates']['continuousNavigation']['callTemplate']['arguments'])
         self.assertNotIn('mode', third['updates']['continuousNavigation']['callTemplate']['arguments'])
+
+
+class MotionChoiceThresholdTests(unittest.TestCase):
+    def test_only_near_threshold_surveyed_path_is_resumed(self):
+        candidates = [
+            {'id': 'path_0', 'description': 'Fresh supported segment',
+             'action': {'tool': 'goto', 'args': {'x': 12, 'y': 64, 'z': 9}}},
+            {'id': 'replan', 'description': 'Stop for a new route', 'action': None},
+        ]
+        plan = {'choose': {'candidates': candidates}}
+        selected = {'ok': False, 'code': 'policy_escalated', 'choice': 'path_0',
+                    'confidence': .73, 'selectedProbability': .82,
+                    'candidates': copy.deepcopy(candidates)}
+        result = accept_bounded_motion_choice(plan, selected)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['action'], candidates[0]['action'])
+        self.assertEqual(result['classifierCode'], 'policy_escalated')
+        self.assertFalse(selected['ok'])
+        for change in ({'confidence': .69}, {'selectedProbability': .79},
+                       {'choice': 'replan'}, {'code': 'policy_unavailable'},
+                       {'candidates': [candidates[1]]}):
+            rejected = selected | change
+            self.assertIs(accept_bounded_motion_choice(plan, rejected), rejected)
 
 
 if __name__ == '__main__':

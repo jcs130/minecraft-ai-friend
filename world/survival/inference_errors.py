@@ -32,6 +32,14 @@ def classify_inference_error(error):
             matches.append((kind, prefix if kind == 'provider_window_exhausted' else None))
     if re.search(r'(?<![a-z_])_?acquiretimeouterror(?![a-z_])', message):
         matches.append(('local_queue_timeout', None))
+    # The home proxy reports its own per-minute token ceiling with an explicit
+    # limit type and reset time. This is provider throttling, not our local
+    # QwenPaw queue acquire timeout; never retain its api_key identifier.
+    if (not matches and code == 'MODEL_QUOTA_EXCEEDED'
+            and re.search(r'(?<![a-z_])rate limit exceeded(?![a-z_])', message)
+            and re.search(r'\blimit type:\s*tokens\b', message)
+            and 'limit resets at:' in message):
+        matches.append(('provider_throttled', None))
     # The native layer re-codes a local concurrency acquire timeout as
     # MODEL_QUOTA_EXCEEDED with a generic rate-limit message and no allocated
     # quota window. Recognise that exact signature as the transient local queue

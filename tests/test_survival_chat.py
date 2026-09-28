@@ -191,6 +191,22 @@ class PublicChatTests(unittest.TestCase):
         self.assertTrue(self.chat.say(next_turn, 'again', voice=False)['ok'])
         self.assertEqual(len(self.sends()), 2)
 
+    def test_repeated_or_technical_narration_is_refused_before_game_write(self):
+        line = '北边有一条窄路，刚才我亲眼看见它通到树林边。我们先到树旁停一下，再决定往哪走。'
+        first = self.chat.say(TURN, line, voice=False)
+        self.assertTrue(first['ok'])
+        self.gateway.now += 11
+        next_turn = 'survival-chat-test-0002'
+        self.lease(next_turn)
+        repeat = self.chat.say(next_turn, line, voice=False)
+        self.assertEqual(repeat['code'], 'speech_repeats_recent_plan')
+        self.assertEqual(len(self.sends()), 1)
+        report = ('我在(-518.49, 163.72, 874.30)，游戏时间Day 395清晨。'
+                  '我的HP还没补满，继续下山，稍后再等骷髅刷新。')
+        rejected = self.chat.say(next_turn, report, voice=False)
+        self.assertEqual(rejected['code'], 'speech_reads_game_status')
+        self.assertEqual(len(self.sends()), 1)
+
     def test_audio_failure_does_not_undo_successful_public_text(self):
         with patch.object(self.speech.broker, 'submit', side_effect=ConnectionError('tts unavailable')):
             result = self.chat.say(TURN, 'hello')

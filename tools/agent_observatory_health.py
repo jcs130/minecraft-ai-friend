@@ -21,6 +21,15 @@ def probe():
         motion = get('/observatory-motion.css')
         architecture = get('/embodied-architecture.js')
         unified = get('/unified-decision.js')
+        stream = get('/decision-dag')
+        stream_app = get('/decision-stream.js')
+        stream_model = get('/decision-stream-model.js')
+        stream_style = get('/decision-stream.css')
+        checks['standalone-decision-dag'] = ('id="stream-dag"' in stream and '<iframe' not in stream
+            and 'api/rsi-observatory' not in stream_app and "l.id==='policy'||l.id==='llm'" in stream_model)
+        checks['standalone-dag-assets'] = (content_types.get('/decision-stream.js') in ('text/javascript','application/javascript')
+            and content_types.get('/decision-stream-model.js') in ('text/javascript','application/javascript')
+            and content_types.get('/decision-stream.css') == 'text/css' and 'html.transparent' in stream_style)
         checks['embodied-architecture'] = (all(x in page for x in ('id="architecture-canvas"', 'data-layer="online"', 'data-layer="l2"', 'data-layer="l3"'))
             and all(x in architecture for x in ('SYSTEM 1', 'SYSTEM 2', 'Dream', 'MCP', 'verifiedImprovement:null')))
         checks['world-first-layout'] = ('class="broadcast-stage"' in page and '观察者镜头' in page
@@ -59,6 +68,24 @@ def probe():
         rsi = json.loads(get('/api/rsi-observatory'))
         checks['trace-contract'] = trace.get('schema') == 1 and isinstance(trace.get('turns'), list)
         checks['trace-live-source'] = trace.get('available') is True and trace.get('stale') is False
+        checks['stream-model-result-ui'] = all(f'id="{item}"' in stream for item in ('jev-result','llm-result','llm-result-time')) and 'streamRuntimeLabel' in stream_app
+        results = trace.get('modelResults', {})
+        checks['stream-runtime-state'] = isinstance(trace.get('runtime'), dict) and all(k in results for k in ('current','last'))
+        projected = [r for r in results.values() if isinstance(r, dict)]
+        checks['native-result-projection'] = all(
+            r.get('turnId') and r.get('taskId') and 'output' not in r and 'reasoning' not in r
+            and isinstance(r.get('tools'), list) and (
+                r.get('availability') == 'available' or
+                # Native task handles belong to the old Qwen process. After a
+                # restart the last completed task can be unavailable; never
+                # turn that absence into a fabricated final answer or tools.
+                r is results.get('last') and r.get('availability') == 'unavailable'
+                and r.get('status') == 'unknown' and r.get('finalText') is None
+                and not r['tools']) for r in projected)
+        if trace.get('runtime', {}).get('status') == 'thinking' and isinstance(results.get('current'), dict):
+            checks['native-result-projection'] = (checks['native-result-projection']
+                and results['current'].get('availability') == 'available')
+        checks['native-final-text-contract'] = all(r.get('finalText') is None or (r.get('status') == 'completed' and isinstance(r['finalText'], str) and len(r['finalText']) <= 6000) for r in projected)
         checks['decision-branches'] = ('id="record-select"' in page and isinstance(trace.get('policyDecisions'), list)
             and trace.get('routing', {}).get('llmAlternativesRecorded') is False)
         checks['action-provenance'] = all(a.get('decisionSource') == 'llm'

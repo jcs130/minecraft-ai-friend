@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { freshness } from './read-model.mjs';
+import { readNativeDecisionResult } from './native-decision-result.mjs';
 
 const object = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 const list = v => Array.isArray(v) ? v : [];
@@ -93,7 +94,7 @@ export function projectPolicyBranches(events) {
   });
 }
 
-export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
+export async function readSurvivorTrace({stateDir, traceDir, nativeResults}, now=Date.now()) {
   const problems = new Set();
   const snapshot = await readJson(stateDir,'survivor.json',problems);
   if(snapshot?.project !== 'qiandengji-survivor' || snapshot?.bodyName !== 'Kirito' || snapshot?.schema !== 1)
@@ -102,7 +103,10 @@ export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
     readJson(traceDir,'controller.json',problems), readJson(traceDir,'memory.json',problems),readEpisodes(traceDir,problems),
     readEpisodes(traceDir,problems,{maxBytes:4*1024*1024,limit:100,kinds:['system_one_choice','system_one_dispatch','system_one_discarded']})]) : [null,null,list(snapshot.episodes),[]];
   if(!traceDir) problems.add('trace_directory');
-  const c=object(controller), active=object(c.active), last=object(snapshot.lastDecision);
+  const c=object(controller), active=object(c.active), last=object(c.lastDecision?.turnId?c.lastDecision:snapshot.lastDecision);
+  const bindings=[active,last].filter((value,index,all)=>id(value.turnId)&&all.findIndex(v=>v.turnId===value.turnId)===index);
+  const results=await Promise.all(bindings.map(binding=>readNativeDecisionResult(binding,nativeResults)));
+  const modelResults={current:results.find(r=>r.turnId===active.turnId)||null,last:results.find(r=>r.turnId===last.turnId)||null};
   const policyDecisions=projectPolicyBranches(policyEvents);
   if(traceDir)await Promise.all(policyDecisions.map(async p=>{
     if(!p.dispatchTurnId)return;
@@ -142,13 +146,17 @@ export async function readSurvivorTrace({stateDir, traceDir}, now=Date.now()) {
         eventCount:isActive?list(active.eventIds).length:null},
       summary:history?{goal:text(history.goal,1600),lesson:text(history.lesson,2400),nextFocus:text(history.nextFocus,1200),at:num(history.at)}:null,
       failureReason:text(terminal?.failureReason ?? (last.turnId===turnId?last.failureReason:null),400),actions,
+      modelResult:results.find(r=>r.turnId===turnId)||null,
       events:events.slice(-24).map(e=>({kind:text(e.kind,80),at:stamp(e.at),action:text(e.action,80),reason:text(e.reason,300)})),
       coverage:{actionsLimited:true,fullPromptRecorded:false,allModelToolsRecorded:false} };
   }));
   const policy=object(snapshot.executionSystems?.fast?.localPolicy);
   return {schema:1,available:true,...freshness(snapshot.generatedAt,now,90),generatedAt:text(snapshot.generatedAt,64),
     agent:{name:'桐人',bodyName:'Kirito',status:text(snapshot.status),goal:text(snapshot.goal,1600),
-      hp:num(snapshot.body?.hp),hunger:num(snapshot.body?.hunger),position:position(snapshot.body?.position)},turns,policyDecisions,
+      hp:num(snapshot.body?.hp),hunger:num(snapshot.body?.hunger),position:position(snapshot.body?.position)},turns,policyDecisions,modelResults,
+    runtime:{status:text(snapshot.status),enabled:typeof snapshot.enabled==='boolean'?snapshot.enabled:null,
+      pauseReason:text(snapshot.pauseReason,400),policyPending:snapshot.executionSystems?.fast?.policyPending===true,
+      programActive:snapshot.executionSystems?.fast?.active===true},
     routing:{activeSource:active.turnId?'llm':snapshot.executionSystems?.fast?.policyPending?'policy_pending':snapshot.executionSystems?.fast?.active?'program':'idle',
       activeLlmTurnId:id(active.turnId),llmAlternativesRecorded:false,policyHistoryMaxBytes:4*1024*1024,
       notice:'Jev dispatch uses exact skill/version/practice/state/time/model binding. Fallback does not identify a subsequent LLM turn.'},

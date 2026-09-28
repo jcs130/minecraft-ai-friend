@@ -47,7 +47,7 @@ class SpeechTest(unittest.TestCase):
         # submit 归一化 prosody 进 job（合法值保留、越界/非法/多余键丢弃）
         r = self.submit(prosody={'speed': '1.20', 'emo': 'happy', 'emo_text': '开心', 'junk': 1})
         self.assertEqual(self.job(r)['prosody'],
-                         {'speed': '1.2', 'emo': 'happy', 'emo_text': '开心'})
+                         {'speed': '1.2', 'emo_text': '开心'})
         self.now += 11
         r2 = self.submit(key='t2', prosody={'emo': 'nope', 'speed': 9})
         self.assertNotIn('prosody', self.job(r2))
@@ -56,7 +56,7 @@ class SpeechTest(unittest.TestCase):
         def syn3(text, voice, prosody=None):
             seen.append(prosody); return b'ID3-audio'
         SpeechWorker(self.broker, syn3).process(self.job(r))
-        self.assertEqual(seen, [{'speed': '1.2', 'emo': 'happy', 'emo_text': '开心'}])
+        self.assertEqual(seen, [{'speed': '1.2', 'emo_text': '开心'}])
         # 同文本不同情绪 → 缓存键不同 → 各合成一次（不串嗓性）
         self.now += 11
         rA = self.submit(key='cA', text='同一句', prosody={'emo': 'calm'})
@@ -72,6 +72,18 @@ class SpeechTest(unittest.TestCase):
         rC = self.submit(key='cC', text='遗留句')
         SpeechWorker(self.broker, lambda t, v: legacy.append((t, v)) or b'ID3-audio').process(self.job(rC))
         self.assertEqual(legacy, [('遗留句', 'cosy_male')])
+
+    def test_caller_emotion_replaces_profile_emotion_source(self):
+        profiles = read(self.root / 'speech-profiles.json')
+        profiles['actors'][ALICE]['prosody'] = {'speed': '1.0', 'emo': 'calm'}
+        write(self.root / 'speech-profiles.json', profiles)
+        text = self.submit(prosody={'emo_text': '紧张但镇定'})
+        self.assertEqual(self.job(text)['prosody'], {'speed': '1', 'emo_text': '紧张但镇定'})
+        self.now += 11
+        profiles['actors'][ALICE]['prosody'] = {'emo_text': '温柔'}
+        write(self.root / 'speech-profiles.json', profiles)
+        named = self.submit(key='named', prosody={'emo': 'melancholic'})
+        self.assertEqual(self.job(named)['prosody'], {'emo': 'melancholic'})
 
     def test_idempotence_and_conflict(self):
         one = self.submit()

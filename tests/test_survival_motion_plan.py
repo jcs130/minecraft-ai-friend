@@ -30,6 +30,20 @@ class MotionProgramTests(unittest.TestCase):
             report = library.test(self.record['name'], drafted['version'])
             self.assertTrue(report['passed'], report['cases'])
 
+    def test_explicit_route_continues_once_only_with_fresh_safe_scene(self):
+        completed, hostile, used = self.record['fixtures'][-3:]
+        continued = evaluate(SOURCE, completed['state'], completed['memory'])
+        self.assertEqual(continued['observe']['args'], {'x': 130, 'y': 64, 'z': 100})
+        self.assertTrue(continued['memory']['continuationUsed'])
+        self.assertEqual(continued['memory']['waypoints'],
+                         [{'x': 130, 'z': 100}, {'x': 145, 'z': 105}])
+        self.assertTrue(evaluate(SOURCE, hostile['state'], hostile['memory'])['done'])
+        self.assertTrue(evaluate(SOURCE, used['state'], used['memory'])['done'])
+        stale = copy.deepcopy(completed['state'])
+        stale['environment']['observedAt'] -= 6000
+        self.assertEqual(evaluate(SOURCE, stale, completed['memory'])['reason'],
+                         'motion_continuation_not_safe')
+
     def test_survey_candidates_are_bound_and_judge_can_correct_segment(self):
         fixture = self.record['fixtures'][1]
         result = evaluate(SOURCE, fixture['state'], fixture['memory'])
@@ -50,6 +64,47 @@ class MotionProgramTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'motion_policy_choice_unbound'):
                     bind_motion_choice(result, false_choice)
 
+    def test_single_explicit_goal_uses_jev_choice_after_fresh_survey(self):
+        fixture = self.record['fixtures'][1]
+        memory = fixture['memory'] | {'singleGoal': True,
+                                      'waypoints': [self.memory['waypoints'][0]]}
+        result = evaluate(SOURCE, fixture['state'], memory)
+        self.assertEqual(result['memory']['stage'], 'selecting')
+        self.assertEqual([row['id'] for row in result['choose']['candidates']],
+                         ['path_0', 'path_1', 'replan'])
+        self.assertEqual(result['choose']['context']['total'], 1)
+
+    def test_single_explicit_goal_can_survey_lateral_detour(self):
+        fixture = self.record['fixtures'][2]
+        memory = fixture['memory'] | {'singleGoal': True,
+                                      'waypoints': [self.memory['waypoints'][0]]}
+        result = evaluate(SOURCE, fixture['state'], memory)
+        self.assertEqual(result['memory']['stage'], 'detour_left')
+        self.assertEqual(result['observe']['tool'], 'navigation_sense')
+        self.assertEqual(result['observe']['args'], {'x': 100, 'y': 64, 'z': 106})
+
+    def test_failed_goto_without_displacement_surveys_side_before_forward(self):
+        fixture = self.record['fixtures'][8]
+        result = evaluate(SOURCE, fixture['state'], fixture['memory'])
+        self.assertEqual(result['memory']['stage'], 'detour_left')
+        self.assertEqual(result['memory']['failedSegments'], 1)
+        self.assertEqual(result['observe']['args'], {'x': 100, 'y': 64, 'z': 106})
+
+    def test_failed_goto_with_two_blocked_sides_resumes_forward_survey(self):
+        fixture = self.record['fixtures'][2]
+        state = copy.deepcopy(fixture['state'])
+        right = {'x': 100, 'y': 64, 'z': 94}
+        observation = state['execution']['observation']
+        observation['args'] = right
+        destination = observation['result']['navigationSense']['destination']
+        destination.update(requested=right, requestedStanceSupported=False,
+                           candidates=[])
+        memory = fixture['memory'] | {'stage': 'detour_right', 'probe': right,
+                                      'sideProbeFallback': True}
+        result = evaluate(SOURCE, state, memory)
+        self.assertEqual(result['memory']['stage'], 'survey')
+        self.assertEqual(result['observe']['args'], {'x': 116, 'y': 64, 'z': 100})
+
     def test_near_identical_supported_stances_do_not_split_jev_vote(self):
         fixture = self.record['fixtures'][5]
         result = evaluate(SOURCE, fixture['state'], fixture['memory'])
@@ -61,6 +116,14 @@ class MotionProgramTests(unittest.TestCase):
             {'x': 115.5, 'y': 65, 'z': 100.5})
         options = evaluate(SOURCE, higher, fixture['memory'])['choose']['candidates']
         self.assertEqual([row['id'] for row in options], ['path_0', 'path_1', 'replan'])
+
+    def test_neighbouring_same_height_routes_are_one_jev_choice(self):
+        fixture = copy.deepcopy(self.record['fixtures'][1])
+        fixture['state']['execution']['observation']['result']['navigationSense']['destination']['candidates'] = [
+            {'x': 114, 'y': 64, 'z': 100}, {'x': 112, 'y': 64, 'z': 100}]
+        options = evaluate(SOURCE, fixture['state'], fixture['memory'])['choose']['candidates']
+        self.assertEqual([row['id'] for row in options], ['path_0', 'path_1', 'replan'])
+        self.assertEqual([row['action']['args']['x'] for row in options[:2]], [116, 112])
 
     def test_blocked_forward_probe_offers_bounded_lateral_step(self):
         state = copy.deepcopy(self.record['fixtures'][1]['state'])
@@ -157,6 +220,69 @@ class MotionProgramTests(unittest.TestCase):
         self.assertEqual(result['observe']['tool'], 'navigation_sense')
         self.assertEqual(result['observe']['args'], {'x': 145, 'y': 64, 'z': 105})
 
+    def test_near_intermediate_waypoint_surveys_current_stance_then_advances(self):
+        position = {'x': 128, 'y': 64, 'z': 100}
+        state = copy.deepcopy(self.state)
+        state['position'] = position
+        start = evaluate(SOURCE, state, self.memory)
+        self.assertEqual(start['memory']['stage'], 'arrival_survey')
+        self.assertEqual(start['observe']['args'], position)
+        state['execution'] = {'observedAt': 1000250, 'observation': {
+            'tool': 'navigation_sense', 'args': position, 'fresh': True, 'ageMs': 250,
+            'result': {'ok': True, 'navigationSense': {'ok': True,
+                'actorUuid': state['bodyUuid'], 'dimension': state['dimension'],
+                'position': position, 'observedAt': 1000000,
+                'destination': {'available': True, 'requested': position, 'pathVerified': False,
+                    'requestedStanceClear': True, 'requestedStanceSupported': True,
+                    'candidates': []}}}}}
+        advanced = evaluate(SOURCE, state, start['memory'])
+        self.assertEqual(advanced['memory']['index'], 1)
+        self.assertEqual(advanced['observe']['tool'], 'navigation_sense')
+        final_position = {'x': 143, 'y': 64, 'z': 105}
+        state['position'] = final_position
+        final = evaluate(SOURCE, state, self.memory | {'index': 1})
+        self.assertNotEqual(final['memory'].get('stage'), 'arrival_survey')
+
+    def test_confirmed_failed_segment_with_safe_progress_resurveys_but_never_replays(self):
+        state = copy.deepcopy(self.state)
+        state['position'] = {'x': 108, 'y': 64, 'z': 100}
+        state.update(onGround=True, inWater=False, inLava=False)
+        segment = {'x': 116, 'y': 64, 'z': 100}
+        state['execution'] = {'lastExecution': {
+            'status': 'failed', 'completionConfirmed': True, 'tool': 'goto',
+            'actionId': 'failed-action', 'turnId': 'failed-turn',
+            'navigationOutcome': {'success': False, 'final_x': 108,
+                                  'final_y': 64, 'final_z': 100}},
+            'expectedAction': {'tool': 'goto', 'args': segment,
+                               'actionId': 'failed-action', 'turnId': 'failed-turn'}}
+        memory = self.memory | {'index': 0, 'target': self.memory['waypoints'][0],
+                                'stage': 'moving', 'before': {'x': 100, 'y': 64, 'z': 100},
+                                'segment': segment}
+        retry = evaluate(SOURCE, state, memory)
+        self.assertIsNone(retry['action'])
+        self.assertEqual(retry['observe']['args'], {'x': 124, 'y': 64, 'z': 100})
+        self.assertEqual(retry['memory']['failedSegments'], 1)
+        self.assertEqual(retry['memory']['lastFailedSegment'], segment)
+        no_progress = copy.deepcopy(state)
+        no_progress['position']['x'] = 100
+        no_progress['execution']['lastExecution']['navigationOutcome']['final_x'] = 100
+        alternative = evaluate(SOURCE, no_progress, memory)
+        self.assertEqual(alternative['observe']['args'], {'x': 100, 'y': 64, 'z': 106})
+        self.assertEqual(alternative['memory']['lastFailedSegment'], segment)
+        resurvey = copy.deepcopy(no_progress)
+        resurvey['execution'] = copy.deepcopy(self.record['fixtures'][3]['state']['execution'])
+        resurvey['execution']['observation']['result']['navigationSense']['destination']['candidates'] = [
+            {'x': 102, 'y': 64, 'z': 106}]
+        choices = evaluate(SOURCE, resurvey, alternative['memory'])['choose']['candidates']
+        self.assertEqual([row['action']['args'] for row in choices if row['action']],
+                         [{'x': 102, 'y': 64, 'z': 106}])
+        self.assertEqual(evaluate(SOURCE, state, memory | {'failedSegments': 2})['reason'],
+                         'navigation_failed_segment_no_safe_progress')
+        unknown = copy.deepcopy(state)
+        unknown['execution']['lastExecution']['status'] = 'unknown'
+        self.assertEqual(evaluate(SOURCE, unknown, memory)['reason'],
+                         'navigation_completion_not_confirmed')
+
     def test_bad_waypoint_and_unsupported_ground_never_dispatch(self):
         bad = copy.deepcopy(self.memory)
         bad['waypoints'][1]['x'] = 200
@@ -203,6 +329,30 @@ class MotionAdmissionTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['payload']['memory'], {'policy': True, 'waypoints': self.points})
         self.assertEqual(read_json(self.root / 'cognition-lease.json')['actionsUsed'], 1)
+
+    def test_opt_in_continuation_binds_to_current_ongoing_goal(self):
+        denied = self.tools.navigate_plan(self.turn, self.points,
+            continue_while_thinking=True)
+        self.assertFalse(denied['ok'])
+        self.assertEqual(view(self.root)['requests'], [])
+        write_json(self.root / 'memory.json', {'goal': '巡逻观察', 'goalState': 'ongoing'})
+        result = self.tools.navigate_plan(self.turn, self.points,
+            continue_while_thinking=True)
+        self.assertEqual(result['code'], 'motor_queued')
+        memory = view(self.root)['requests'][0]['payload']['memory']
+        self.assertTrue(memory['continueWhileThinking'])
+        self.assertEqual(memory['goalClaim'], '巡逻观察')
+        self.assertEqual(memory['planOriginTurnId'], self.turn)
+
+    def test_opt_in_rejects_stale_memory_epoch(self):
+        write_json(self.root / 'settings.json', {'asyncMotor': True, 'workArea': self.area,
+            'brainProtocol': 1, 'memoryEpoch': 'current'})
+        write_json(self.root / 'memory.json', {'goal': '旧目标', 'goalState': 'ongoing',
+            'memoryEpoch': 'old'})
+        denied = self.tools.navigate_plan(self.turn, self.points,
+            continue_while_thinking=True)
+        self.assertFalse(denied['ok'])
+        self.assertEqual(view(self.root)['requests'], [])
 
     def test_invalid_plan_is_rejected_before_admission(self):
         for points in ([], [self.points[0]], self.points * 4,

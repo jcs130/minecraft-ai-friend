@@ -118,7 +118,7 @@ def adapters(observations):
     def tts_open(url, timeout):
         if url != 'http://127.0.0.1:8100/health':
             raise ValueError('unregistered_inventory_endpoint')
-        return urllib.request.urlopen('http://tts:8100/health', timeout=timeout)
+        return urllib.request.urlopen('http://host.docker.internal:8100/health', timeout=timeout)
 
     operations.inspect_containers = observations.operations_states
     operations.probe_shared_tts = lambda: original_tts(tts_open)

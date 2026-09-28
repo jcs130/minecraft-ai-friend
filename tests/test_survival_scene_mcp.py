@@ -26,11 +26,11 @@ class SceneMcpTests(unittest.IsolatedAsyncioTestCase):
         tools=await self.server.list_tools()
         self.assertEqual({t.name for t in tools},set(TOOL_NAMES))
         tool=next(t for t in tools if t.name=='view_scene')
-        self.assertEqual(set(tool.inputSchema['properties']),{'radius'})
-        frame={'metadata':{'ok':True,'viewType':'native_semantic_map','fov':None},'png':self.png}
-        with patch('scene_view.SceneView.capture',return_value=frame) as capture:
-            result=await self.server.call_tool('view_scene',{'radius':4})
-        capture.assert_called_once_with(4)
+        self.assertEqual(set(tool.inputSchema['properties']),{'radius','mode'})
+        frame={'metadata':{'ok':True,'viewType':'first_person','isScreenshot':True,'fovDegrees':120},'png':self.png}
+        with patch('frame_view.FrameView.capture',return_value=frame) as capture:
+            result=await self.server.call_tool('view_scene',{})
+        capture.assert_called_once_with()
         # FastMCP forwards native CallToolResult unchanged.
         blocks=result.content
         self.assertFalse(result.isError)
@@ -40,10 +40,17 @@ class SceneMcpTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(base64.b64decode(blocks[1].data),self.png)
 
     async def test_failed_observation_never_returns_a_stale_image(self):
-        with patch('scene_view.SceneView.capture',return_value={'metadata':{'ok':False,'code':'scene_unavailable'},'png':None}):
+        with patch('frame_view.FrameView.capture',return_value={'metadata':{'ok':False,'code':'frame_unavailable'},'png':None}):
             result=await self.server.call_tool('view_scene',{})
         self.assertTrue(result.isError)
         self.assertEqual([b.type for b in result.content],['text'])
+
+    async def test_map_mode_preserves_bounded_native_grid(self):
+        frame={'metadata':{'ok':True,'viewType':'semantic_top_down','isScreenshot':False},'png':self.png}
+        with patch('scene_view.SceneView.capture',return_value=frame) as capture:
+            result=await self.server.call_tool('view_scene',{'mode':'map','radius':4})
+        capture.assert_called_once_with(4)
+        self.assertEqual(json.loads(result.content[0].text)['viewType'],'semantic_top_down')
 
     async def test_installed_qwen_promotes_mcp_image_without_losing_tool_identity(self):
         from agentscope.formatter import OpenAIChatFormatter
@@ -52,7 +59,7 @@ class SceneMcpTests(unittest.IsolatedAsyncioTestCase):
         from qwenpaw.drivers.adapters.agentscope_tool import _tool_chunk_from_driver_result
         from qwenpaw.drivers.capabilities import DriverInvocationResult
         from qwenpaw.providers.provider import ModelInfo
-        with patch('scene_view.SceneView.capture',return_value={'metadata':{'ok':True,'frameId':'fixture-scene'},'png':self.png}):
+        with patch('frame_view.FrameView.capture',return_value={'metadata':{'ok':True,'frameId':'fixture-scene'},'png':self.png}):
             result=await self.server.call_tool('view_scene',{})
         chunk=_tool_chunk_from_driver_result(DriverInvocationResult(ok=True,value=result))
         messages=[Msg(name='user',role='user',content=[TextBlock(text='Inspect this local scene')]),

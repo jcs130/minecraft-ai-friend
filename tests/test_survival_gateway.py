@@ -628,7 +628,7 @@ class GatewayTests(unittest.TestCase):
             listed = await server.list_tools()
             self.assertEqual({tool.name for tool in listed}, set(mcp_server.TOOL_NAMES))
             scene = next(tool for tool in listed if tool.name == 'view_scene')
-            self.assertEqual(set(scene.inputSchema['properties']), {'radius'})
+            self.assertEqual(set(scene.inputSchema['properties']), {'radius', 'mode'})
             self.assertEqual(scene.inputSchema.get('required', []), [])
             for tool in listed:
                 if tool.name not in ('status', 'look', 'view_scene', 'sense', 'world_perception', 'skill_catalog', 'skill_read',

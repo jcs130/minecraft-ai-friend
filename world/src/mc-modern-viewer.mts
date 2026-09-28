@@ -6,7 +6,7 @@
 // 启用：bootstrap-world.mts spawn 后调用 startModernViewer(() => bot.getBot())；MC_MODERN_VIEWER=1。
 import { createRequire } from 'node:module'
 import { readFile, stat, readdir } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +14,8 @@ import { observerEquipmentSlot, observerItemIdentity } from './observer-inventor
 import { createViewerChunkStream, createViewerEntityStream } from './viewer-stream.mts'
 import { loadViewerBlockMapping, identityViewerBlockMapping } from './viewer-state-map.mts'
 import { createViewerStaticResponder } from '../admin/viewer-static.mjs'
+import { AgentFrameCapture, AgentFrameError, kiritoPose } from './agent-frame.mts'
+import { timingSafeEqual } from 'node:crypto'
 
 const require = createRequire(import.meta.url)
 let SocketIoServer, minecraftData
@@ -25,7 +27,9 @@ function loadViewerDependencies() {
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ASSET_ROOT = path.resolve(__dirname, '../modern-viewer') // /app/modern-viewer（Dockerfile COPY）
 
-const MAX_VIEWER_SESSIONS = 2
+const MAX_VIEWER_SESSIONS = 3 // Two ordinary viewers plus one on-demand Agent frame.
+const MAX_ORDINARY_VIEWERS = 2
+const KIRITO_UUID = 'd4ac9523-4962-43ed-98c5-19b49e104048'
 const VIEW_DISTANCE_CHUNKS = 3
 const AVATAR_STATE_INTERVAL_MS = 100
 const MAX_VIEWER_INVENTORY_SLOTS = 46
@@ -883,9 +887,9 @@ export function createViewerLifecycle(getBot, open, { enabled = true, intervalMs
 
 export function startModernViewer(getBot, options = {}) {
   const port = Number(process.env.MC_MODERN_VIEWER_PORT ?? options.port ?? 3070)
-  const firstPersonFov = Number(process.env.MC_MODERN_VIEWER_FP_FOV ?? 110)
+  const firstPersonFov = Number(options.firstPersonFov ?? process.env.MC_MODERN_VIEWER_FP_FOV ?? 110)
   const dashboardOrigin = viewerOrigin(process.env.MC_PANEL_ORIGIN ?? 'http://127.0.0.1:19091')
-  const publicOrigin = viewerOrigin(process.env.MC_VIEWER_PUBLIC_ORIGIN ?? 'http://127.0.0.1:19092')
+  const publicOrigin = viewerOrigin(options.publicOrigin ?? process.env.MC_VIEWER_PUBLIC_ORIGIN ?? 'http://127.0.0.1:19092')
   // QwenPaw 控制台（18089）也允许把这块画面嵌进去：控制台里的「天神之眼」PawApp 就是它。
   // 与另外两个 origin 一样由环境变量控制，默认值即当前部署。
   const consoleOrigin = viewerOrigin(process.env.MC_CONSOLE_ORIGIN ?? 'http://127.0.0.1:18089')
@@ -895,11 +899,13 @@ export function startModernViewer(getBot, options = {}) {
   const getSettleNpcs = typeof options.getSettleNpcs === 'function' ? options.getSettleNpcs : null
 
   return createViewerLifecycle(getBot,
-    bot => startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs, options.blockStateMapping),
+    bot => startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin,
+      getSettleNpcs, options.blockStateMapping, options.beforeAgentFrame, options.agentFrames === true),
     { enabled: process.env.MC_MODERN_VIEWER === '1' })
 }
 
-function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs, providedStateMapping) {
+function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, consoleOrigin, getSettleNpcs,
+    providedStateMapping, beforeAgentFrame, agentFrames) {
   loadViewerDependencies()
   // 门（gate.cjs + idmap.json）已在出站把 NeoForge 号翻成原版号 → 天眼这套「本地补偿」必须停用 ✓
   // 否则二次翻译（实测 vanilla-state-map 键值域重叠 26684），世界会全错且 normalize 抛错致 viewerUnavailable ✗
@@ -919,6 +925,20 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
   if (gateTranslated) console.log('[render-bridge] 门翻译模式：跳过 mod 注册表注入与本地号归一化（收到的已是原版号）')
   else { console.warn('[render-bridge] ⚠ 裸连模式（本地号表）：与门/基岩/Agent 不是同一张表，仅限调试'); injectModBlockRegistry(bot) }
   const serveViewerStatic = createViewerStaticResponder()
+  const internalOrigin = `http://127.0.0.1:${port}`
+  const frameTokenFile = process.env.SURVIVOR_MCP_TOKEN_FILE
+  const frameToken = agentFrames && frameTokenFile ? readFileSync(frameTokenFile, 'utf8').trim() : null
+  const frameCapture = new AgentFrameCapture({ port })
+  let capturedFrames = 0
+  const loopback = remote => remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+  const allowed = (headers, socket, remote) => viewerRequestAllowed(headers, publicOrigin, socket)
+    || (loopback(remote) && viewerRequestAllowed(headers, internalOrigin, socket))
+  const frameAuthorized = headers => {
+    const supplied = headers['x-qd-vision-token']
+    if (!frameToken || typeof supplied !== 'string') return false
+    const a = Buffer.from(supplied), b = Buffer.from(frameToken)
+    return a.length === b.length && timingSafeEqual(a, b)
+  }
 
   // ---------- settle 村民实体流（2026-08-29 II：9090 村民=盔甲架修复） ----------
   // mineflayer 把 settlements:base_villager 错认成 unknown/armor stand → 3D 画面村民隐身或成盔甲架。
@@ -973,7 +993,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
 
   const server = createServer(async (req, res) => {
     try {
-      if (!viewerRequestAllowed(req.headers, publicOrigin)) {
+      if (!allowed(req.headers, false, req.socket.remoteAddress)) {
         res.writeHead(403, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }); res.end('Forbidden'); return
       }
       res.setHeader('Cache-Control', 'no-store')
@@ -1005,6 +1025,30 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
       const send = (code, type, body, headers = {}) => {
         res.writeHead(code, { 'Content-Type': type, ...headers })
         res.end(req.method === 'HEAD' ? undefined : body)
+      }
+      if (p === '/agent-frame') {
+        if (!frameAuthorized(req.headers)) { send(403, 'application/json', '{"ok":false,"code":"forbidden"}'); return }
+        try {
+          if (typeof beforeAgentFrame === 'function') await beforeAgentFrame()
+          kiritoPose(bot, KIRITO_UUID)
+          const result = await frameCapture.capture(() => kiritoPose(bot, KIRITO_UUID), beforeAgentFrame)
+          capturedFrames += 1
+          send(200, 'application/json; charset=utf-8', JSON.stringify({
+            ok: true, metadata: { schema: 2, viewType: 'first_person', isScreenshot: true,
+              source: 'numen.loaded-block-snapshot+prismarine-viewer', actorName: 'Kirito', actorUuid: result.pose.actorUuid,
+              dimension: result.pose.dimension, position: { x: result.pose.x, y: result.pose.y, z: result.pose.z },
+              yawRadians: result.pose.yaw, pitchRadians: result.pose.pitch,
+              sampledAt: result.pose.sampledAt, geometrySampledAt: result.pose.geometrySampledAt,
+              observedAt: Date.now(),
+              hud: result.pose.hud,
+              width: result.width, height: result.height, fovDegrees: result.fovDegrees,
+              loadedOnly: true, atomicSnapshot: false }, pngBase64: result.png.toString('base64') }))
+        } catch (error) {
+          const code = error instanceof AgentFrameError ? error.code : 'frame_unavailable'
+          const status = error instanceof AgentFrameError ? error.status : 503
+          send(status, 'application/json; charset=utf-8', JSON.stringify({ ok: false, code }))
+        }
+        return
       }
       // TEMP 渲染桥排障：worker 探针回传（问号方块根修用，修复后拆除）
       if (p === '/worker-probe') {
@@ -1135,7 +1179,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
 
   const socketOptions = {
     allowRequest: (request, callback) => {
-      callback(null, viewerRequestAllowed(request.headers, publicOrigin, true))
+      callback(null, allowed(request.headers, true, request.connection?.remoteAddress))
     },
     httpCompression: false,
     maxHttpBufferSize: 64 * 1024,
@@ -1172,7 +1216,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
 
   function acceptViewer(socket, viewMode) {
     if (!bot.entity || !blockStateMapping.ready) { socket.emit('viewerUnavailable', { code: 'viewer_state_map_unavailable' }); socket.disconnect(true); return }
-    if (sessions.size >= MAX_VIEWER_SESSIONS) {
+    const captureSession = socket.handshake?.headers?.origin === internalOrigin
+    const occupied = [...sessions].filter(session => session.captureSession === captureSession).length
+    if (sessions.size >= MAX_VIEWER_SESSIONS || occupied >= (captureSession ? 1 : MAX_ORDINARY_VIEWERS)) {
       socket.emit('viewerBusy', { maximum: MAX_VIEWER_SESSIONS })
       socket.disconnect(true); return
     }
@@ -1345,7 +1391,7 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
     }, 1500)
     settleTimer.unref()
     const session = {
-      socket, worldView, entityStream, mode, viewMode, avatarTimer, locomotionKeepalive, settleTimer, movementAnimations,
+      socket, worldView, entityStream, mode, viewMode, captureSession, avatarTimer, locomotionKeepalive, settleTimer, movementAnimations,
       botPosition, botTime, botWeather, botAvatarState, botEntitySpawn, botEntityMoved, botEntityRefresh,
       botEntitySwingArm, botEntityHurt, botParticle, botSoundEffect, botHardcodedSoundEffect, botEntityDead,
       botEntityCrouch, botEntityUncrouch,
@@ -1439,6 +1485,9 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
       observerOnline: online, observer: bot.username, worldAvailable: !!bot.world, dimension: currentDimension(),
       sessions: sessions.size, readySessions: [...sessions].filter(s => s.worldView.stats().loadedColumns > 0).length,
       viewDistanceChunks: VIEW_DISTANCE_CHUNKS, maxSessions: MAX_VIEWER_SESSIONS,
+      ordinaryViewerLimit: MAX_ORDINARY_VIEWERS,
+      agentFrame: { enabled: !!frameToken, browserAvailable: existsSync(frameCapture.chromiumPath),
+        busy: frameCapture.busy, capturedFrames },
       blockStates: blockStateMapping.health,
       streams: [...sessions].map(s => ({ mode: s.mode, chunks: s.worldView.stats(), entities: s.entityStream.stats() })),
       generation: worldGeneration, scope: 'Observer and chunk stream readiness; browser rendering is verified separately' }
@@ -1450,7 +1499,8 @@ function startServer(bot, port, firstPersonFov, dashboardOrigin, publicOrigin, c
     bot.off('game', dimensionChanged)
     for (const session of [...sessions]) closeSession(session)
     server.closeAllConnections()
-    closing = Promise.all([firstIo, thirdIo].map(io => new Promise(resolve => io.close(() => resolve())))).then(() => {})
+    closing = Promise.all([firstIo, thirdIo].map(io => new Promise(resolve => io.close(() => resolve()))))
+      .then(() => frameCapture.close())
     return closing
   }
   return new Promise((resolve, reject) => {

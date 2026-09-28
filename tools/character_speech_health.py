@@ -18,7 +18,8 @@ def get_json(url, headers=None):
 
 def check(root=ROOT, clock=time.time, fetch=get_json):
     checks = {key: False for key in ('live_player_protocol', 'voice_worker_fresh',
-                                    'body_voice_binding', 'local_voice_available', 'native_speech_tools')}
+                                    'body_voice_binding', 'yui_voice_binding', 'local_voice_available',
+                                    'native_speech_tools', 'plain_speech_skill_binding')}
     try:
         base = root / 'server/mc/data/godvoice'
         heartbeat = json.loads((base / '.speech-health.json').read_text(encoding='utf-8-sig'))
@@ -33,8 +34,25 @@ def check(root=ROOT, clock=time.time, fetch=get_json):
         profile = profiles.get('actors', {}).get(settings.get('bodyUuid'), {})
         checks['body_voice_binding'] = (profiles.get('schema') == 1 and profile.get('enabled') is True
             and isinstance(profile.get('voiceId'), str) and bool(profile.get('version')))
+        members = json.loads((root / 'server/mcdata/village/party/public/roles.json').read_text(encoding='utf-8-sig'))['members']
+        yui = [row for row in members if row.get('agentId') == '5swvhK' and row.get('kind') == 'maid']
+        yui_profile = profiles.get('actors', {}).get(yui[0]['bodyUuid'], {}) if len(yui) == 1 else {}
+        checks['yui_voice_binding'] = (len(yui) == 1 and yui_profile.get('enabled') is True
+            and isinstance(yui_profile.get('voiceId'), str) and bool(yui_profile['voiceId'])
+            and yui_profile['voiceId'] != profile.get('voiceId') and bool(yui_profile.get('version')))
         voices = fetch('http://127.0.0.1:8100/voices')
-        checks['local_voice_available'] = profile.get('voiceId') in voices.get('voices', [])
+        checks['local_voice_available'] = (profile.get('voiceId') in voices.get('voices', [])
+            and yui_profile.get('voiceId') in voices.get('voices', []))
+        def voice_skill(role):
+            workspace = root / 'server/agents/work/workspaces' / role
+            manifest = json.loads((workspace / 'skill.json').read_text(encoding='utf-8-sig'))
+            entry = manifest.get('skills', {}).get('say-it-plain', {})
+            instructions = (workspace / 'AGENTS.md').read_text(encoding='utf-8-sig')
+            return (entry.get('enabled') is True and entry.get('channels') == ['all']
+                and (workspace / 'skills/say-it-plain/SKILL.md').is_file()
+                and instructions.count('<!-- qiandeng-party-voice-v1 -->') == 1
+                and instructions.count('<!-- /qiandeng-party-voice-v1 -->') == 1)
+        checks['plain_speech_skill_binding'] = all(voice_skill(role) for role in ('qd-survivor', '5swvhK'))
         tools = fetch('http://127.0.0.1:18089/api/mcp/tools/numen_survival', {'X-Agent-Id': 'qd-survivor'})
         checks['native_speech_tools'] = (isinstance(tools, list)
             and {'speak', 'speech_status', 'stop_speaking'} <= {row.get('name') for row in tools if row.get('enabled') is True})

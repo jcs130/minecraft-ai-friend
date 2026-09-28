@@ -12,6 +12,10 @@ const assets = new Map([['/', ['index.html', 'text/html; charset=utf-8']],
   ['/trace.js', ['trace.js', 'text/javascript; charset=utf-8']],
   ['/trace.css', ['trace.css', 'text/css; charset=utf-8']],
   ['/observatory', ['observatory.html', 'text/html; charset=utf-8']],
+  ['/decision-dag', ['decision-stream.html', 'text/html; charset=utf-8']],
+  ['/decision-stream.js', ['decision-stream.js', 'text/javascript; charset=utf-8']],
+  ['/decision-stream-model.js', ['decision-stream-model.js', 'text/javascript; charset=utf-8']],
+  ['/decision-stream.css', ['decision-stream.css', 'text/css; charset=utf-8']],
   ['/unified-decision.js', ['unified-decision.js', 'text/javascript; charset=utf-8']],
   ['/embodied-architecture.js', ['embodied-architecture.js', 'text/javascript; charset=utf-8']],
   ['/observatory.js', ['observatory.js', 'text/javascript; charset=utf-8']],
@@ -42,7 +46,7 @@ function publicLink(value, fallback) {
   } catch { return fallback; }
 }
 
-export function createPanelServer({ stateDir, traceDir, rsi, publicOrigin = 'http://127.0.0.1:9090',
+export function createPanelServer({ stateDir, traceDir, rsi, nativeResults, publicOrigin = 'http://127.0.0.1:9090',
   qwenpawUrl = 'http://127.0.0.1:18089', resourcesUrl = 'http://127.0.0.1:19090/packs/', management = {} } = {}) {
   if (!stateDir) throw new Error('Panel state directory is required');
   const expected = new URL(publicOrigin);
@@ -52,7 +56,7 @@ export function createPanelServer({ stateDir, traceDir, rsi, publicOrigin = 'htt
   const localOrigins=[expected.origin];
   if(expected.hostname==='127.0.0.1')localOrigins.push(`${expected.protocol}//localhost:${expected.port||'80'}`);
   const managementApi=createManagementApi({...management,localOrigins});
-  const readTrace=createTraceReader({stateDir,traceDir});
+  const readTrace=createTraceReader({stateDir,traceDir,nativeResults});
   const readEvolution=createRsiReader(rsi?{...rsi,stateDir}:null);
   const send = (res, status, body, contentType = 'application/json; charset=utf-8') => {
     res.writeHead(status, { ...headers, 'Content-Type': contentType });
@@ -109,6 +113,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const port = Number(process.env.PANEL_PORT || 9090);
   const server = createPanelServer({ stateDir: process.env.PANEL_STATE_DIR || '/panel-data',
     traceDir: process.env.PANEL_TRACE_DIR,
+    nativeResults:{baseUrl:process.env.PANEL_NATIVE_RESULTS_URL || 'http://qwenpaw:8088/api'},
     rsi: process.env.PANEL_RSI_ROOT ? {
       notesDir:path.join(process.env.PANEL_RSI_ROOT,'notes'),learningDir:path.join(process.env.PANEL_RSI_ROOT,'learning'),
       knowledgeDir:path.join(process.env.PANEL_RSI_ROOT,'knowledge'),sharedSkillsDir:path.join(process.env.PANEL_RSI_ROOT,'shared'),

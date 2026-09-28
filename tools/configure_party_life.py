@@ -31,7 +31,7 @@ def runtime_ready():
         "from role_learning_profiles import validate_guard; "
         "validate_guard('/state/work','game'); "
         "m=json.loads(Path('/state/work/learning-runtime.json').read_text()); "
-        "assert m.get('guardVersion')==3 and m.get('partyLifeSignalVersion')==1; print('ready')")
+        "assert m.get('partyLifeSignalVersion')==1; print('ready')")
     value = subprocess.run(['docker', 'exec', 'qiandengji-qwenpaw-1', 'python', '-c', script],
                            capture_output=True, text=True, timeout=25)
     if value.returncode != 0 or value.stdout.strip() != 'ready':

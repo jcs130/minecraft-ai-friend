@@ -340,6 +340,22 @@ def expire_queued_locked(root, clock=time.time):
     return changed
 
 
+def release_prelease_claim_locked(root, identity, clock=time.time):
+    """Retry an unspent claim only after the caller proves no lease was opened."""
+    data = view(root)
+    row = next(r for r in data['requests'] if r['requestId'] == identity)
+    if row['status'] != 'claimed':
+        raise ValueError('motor_claim_not_active')
+    row.pop('claimedAt', None)
+    if row['expiresAt'] <= clock() or row['goalBinding'] != binding(root):
+        row.update(status='expired', finishedAt=clock())
+        row.pop('payload', None)
+    else:
+        row['status'] = 'queued'
+    write_json(root / 'motor-inbox.json', data)
+    return row['status']
+
+
 def finish_locked(root, identity, status, receipt):
     if status not in ('completed','failed','unknown','cancelled','dispatched'):raise ValueError('invalid_motor_terminal')
     data=view(root);row=next(r for r in data['requests'] if r['requestId']==identity)

@@ -5,6 +5,12 @@ from pathlib import Path
 import re
 import unicodedata
 import uuid
+import sys
+
+SHARED = Path('/party-code') if Path('/party-code').is_dir() else Path(__file__).resolve().parents[1] / 'sidecar'
+if str(SHARED) not in sys.path:
+    sys.path.insert(0, str(SHARED))
+from party_voice_quality import review_spoken_text
 
 from numen_gateway import GatewayError, read_json, write_json
 
@@ -163,6 +169,12 @@ class ChatTools:
             existing = [read_json(path) for path in paths]
             if len(existing) >= 4096:
                 raise GatewayError('say_journal_full')
+            recent = [row.get('text') for row in existing
+                      if row.get('textStatus') == 'sent'
+                      and 0 <= now - row.get('createdAt', 0) <= 900000]
+            problem = review_spoken_text(text_value, recent)
+            if problem:
+                raise GatewayError(problem)
             for previous in existing:
                 if now - previous.get('createdAt', 0) < 10000:
                     raise GatewayError('say_rate_limited')

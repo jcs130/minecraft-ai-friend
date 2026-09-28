@@ -144,6 +144,17 @@ class BehaviorContextTests(unittest.TestCase):
         self.assertNotEqual(first['primarySessionId'], other['primarySessionId'])
         self.assertIn('handoff', value)
 
+    def test_action_session_rotates_before_third_completed_turn(self):
+        first, _, _ = self.prepare()
+        for i in range(2):
+            self.context['turn_id'] = 'survival-' + format(i, '032x')
+            _, _, delivery = self.prepare()
+            acknowledge(self.root, self.life, delivery)
+        next_session, value, _ = self.prepare()
+        self.assertNotEqual(next_session['primarySessionId'], first['primarySessionId'])
+        self.assertIsNone(value['baseTurn'])
+        self.assertEqual(value['handoff']['goal'], self.memory['goal'])
+
     def test_body_rebinding_is_rejected(self):
         self.prepare()
         self.life['bodyUuid'] = 'another-body'

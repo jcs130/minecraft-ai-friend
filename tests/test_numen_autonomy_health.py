@@ -168,6 +168,27 @@ class NumenAutonomyHealthTests(unittest.TestCase):
         result = probe.check(self.root, missing, lambda _: None, lambda: self.now)
         self.assertFalse(result['ok']); self.assertEqual(calls, ['numen_autonomy_status'])
 
+    def test_current_native_scheduler_requires_two_advancing_samples(self):
+        checks = {key: True for key in ('artifact_matches_build_and_manifest',
+            'source_current', 'pinned_numen_dependency', 'exact_body_binding',
+            'native_protocol', 'current_scheduler_sample')}
+        first = {'ok': True, 'checks': checks, 'evidence': {
+            'bodyUuid': self.identity['bodyUuid'], 'dimension': 'minecraft:overworld',
+            'observedAt': int(self.now * 1000) - 1000,
+            'bodyTickCount': 300, 'gameTime': 1000}}
+        second = copy.deepcopy(first)
+        second['evidence'].update(observedAt=int(self.now * 1000),
+                                  bodyTickCount=315, gameTime=1015)
+        rows = iter((first, second))
+        result = probe.check_current(self.root, lambda **_: next(rows), lambda _: None)
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['evidence']['bodyTicksAdvanced'], 15)
+        self.assertNotIn(self.identity['bodyUuid'], json.dumps(result))
+        second['evidence']['bodyTickCount'] = 300
+        rows = iter((first, second))
+        self.assertFalse(probe.check_current(self.root, lambda **_: next(rows),
+                                             lambda _: None)['checks']['body_tick_progress'])
+
 
 if __name__ == '__main__':
     unittest.main()

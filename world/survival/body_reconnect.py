@@ -132,13 +132,15 @@ class BodyReconnect:
                 if any(state.get(key) != value for key, value in expected.items()):
                     return {'status': 'blocked', 'reason': 'restore_binding_changed'}
                 restored_death = state.get('status') == 'blocked' and state.get('reason') == 'body_dead'
-                if restored_death and not (isinstance(body, dict) and body.get('ok') is True
+                recoverable_blocked = (state.get('status') == 'blocked'
+                                       and state.get('reason') in OBSERVATION_RECOVERABLE)
+                if (restored_death or recoverable_blocked) and not (isinstance(body, dict) and body.get('ok') is True
                         and body.get('bodyUuid') == expected['bodyUuid']
                         and body.get('bodyName') == expected['bodyName']
                         and body.get('gameMode') == 'survival'
                         and type(body.get('hp')) in (int, float) and math.isfinite(body['hp']) and body['hp'] > 0):
                     return state
-                if state.get('status') not in ('reserved', 'unknown', 'restoring') and not restored_death:
+                if state.get('status') not in ('reserved', 'unknown', 'restoring') and not (restored_death or recoverable_blocked):
                     return state
                 now = self.clock()
                 if now < state.get('nextConfirmationAt', 0):
@@ -150,14 +152,15 @@ class BodyReconnect:
                     online = roster_online(self.gateway._native_roster(), expected)
                     if online:
                         state.update(status='online', reason='identity_verified', verifiedAt=now,
-                                     readFailures=0, confirmationReason='identity_verified')
-                    elif not restored_death:
+                                     readFailures=0, absentStreak=0, confirmationReason='identity_verified')
+                        state.pop('autoSummonPendingAt', None)
+                    elif not (restored_death or recoverable_blocked):
                         state.update(status='unknown', reason='restore_outcome_unknown',
                                      confirmationReason='restore_not_observed')
                 except Exception as error:
                     conflict = str(error) == 'restore_live_identity_conflict'
-                    state.update(status='blocked' if conflict or restored_death else 'unknown',
-                                 reason='restore_live_identity_conflict' if conflict else 'body_dead' if restored_death else 'restore_outcome_unknown',
+                    state.update(status='blocked' if conflict or restored_death or recoverable_blocked else 'unknown',
+                                 reason='restore_live_identity_conflict' if conflict else 'body_dead' if restored_death else 'saved_task_requires_review' if recoverable_blocked else 'restore_outcome_unknown',
                                  confirmationReason=str(error) if isinstance(error, ValueError)
                                  else 'restore_roster_unavailable')
                 write_json(self.path, state)
@@ -216,10 +219,16 @@ class BodyReconnect:
                 try:
                     online = roster_online(self.gateway._native_roster(), expected)
                 except Exception:
-                    online = False   # 观察不确定：保持 blocked，下一轮再试，绝不自作派发
+                    # A failed roster read is not evidence that the body is absent.
+                    # In particular, it must never advance the summon threshold.
+                    state['readFailures'] = min(8, state.get('readFailures', 0) + 1)
+                    state['nextCheckAt'] = now + min(900, 30 * 2 ** state['readFailures'])
+                    write_json(self.path, state)
+                    return state
                 if online:
                     state.update(status='online', reason='identity_verified',
-                                 verifiedAt=now, readFailures=0)
+                                 verifiedAt=now, readFailures=0, absentStreak=0)
+                    state.pop('autoSummonPendingAt', None)
                     self._auto_resume(control, resume_after_restore, now)
                     write_json(self.path, state)
                     return state
@@ -233,16 +242,21 @@ class BodyReconnect:
                 summoned = state.get('autoSummons', [])
                 summoned = [t for t in summoned if isinstance(t, (int, float)) and now - t < 86400]
                 if (absent >= SUMMON_AFTER_ABSENT and len(summoned) < MAX_AUTO_SUMMONS
+                        and not state.get('autoSummonPendingAt')
                         and not (self.root/'unknown.json').exists()
                         and lease.get('status') != 'unknown'
                         and not (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
                     state['autoSummons'] = summoned + [now]
+                    # Reserve before the external command. A crash or lost RCON
+                    # reply cannot authorize another summon in this episode.
+                    state['autoSummonPendingAt'] = now
+                    write_json(self.path, state)
                     try:
                         self.gateway._native_summon(expected['ownerUuid'], expected['bodyName'])
                         state['lastAutoSummonAt'] = now
                         state['nextCheckAt'] = now + 20   # 召唤后尽快复查 roster 是否回来
                     except Exception:
-                        pass   # 召唤不确定：保持 blocked，靠节律与配额兜底，绝不无界重试
+                        state['autoSummonOutcome'] = 'unknown'
                 write_json(self.path, state)
             return state
         # Normal restore dispatch stays behind the full authorization gate (blocked

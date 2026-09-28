@@ -226,11 +226,23 @@ def receipt_rows(state, turn, since, body_uuid):
                        and isinstance(before.get('counts'), dict) and isinstance(after.get('counts'), dict))
         confirmed = row.get('completionConfirmed') is True
         navigation = row.get('navigationOutcome') or {}
-        native_match = (row.get('tool') != 'goto' or
-            (row.get('nativeTaskId') and navigation.get('task_id') == row['nativeTaskId']
-             and before.get('navigationEpoch')
-             and navigation.get('navigation_epoch') == before['navigationEpoch']
-             and after.get('navigationEpoch') == before['navigationEpoch']))
+        native_match = row.get('tool') != 'goto'
+        if (row.get('tool') == 'goto' and row.get('nativeTaskId')
+                and row['nativeTaskId'] == navigation.get('task_id')):
+            if before.get('navigationEpoch'):
+                native_match = (navigation.get('navigation_epoch') == before['navigationEpoch']
+                                and after.get('navigationEpoch') == before['navigationEpoch'])
+            elif navigation.get('navigation_mode') == 'observed_from_body':
+                position = after.get('position') or {}
+                requested = navigation.get('requested') or {}
+                native_match = (confirmed and navigation.get('state') == 'ended'
+                    and navigation.get('success') is True
+                    and all(number(navigation.get('final_' + axis)) and number(position.get(axis))
+                            and abs(navigation['final_' + axis] - position[axis]) <= 0.05
+                            for axis in ('x', 'y', 'z'))
+                    and all(number(requested.get(axis)) for axis in ('x', 'z'))
+                    and number(navigation.get('horizontalDistance'))
+                    and navigation['horizontalDistance'] <= 1.5)
         valid = bool(fresh and same_body and observation and row.get('tool') in NATIVE_ACTIONS
             and row.get('status') in ('completed', 'failed', 'observed_ended')
             and result_value.get('ok') is True and result_value.get('actionId') == action and native_match)
@@ -243,6 +255,33 @@ def receipt_rows(state, turn, since, body_uuid):
             'receiptSha256': digest(file),
             'notice': 'Observed changes/idle are not a blanket goal-success assertion.'})
     return result
+
+
+def motor_skill_receipts(state, since, body_uuid, bound_turns):
+    """Follow the durable model -> motor skill -> native action receipt chain."""
+    path = Path(state) / 'motor-inbox.json'
+    if not path.exists():
+        return []
+    queue = read_json(path)
+    require(isinstance(queue.get('requests'), list), 'motor_inbox_invalid')
+    verified = []
+    for item in queue['requests']:
+        if (item.get('kind') != 'skill' or item.get('status') != 'completed'
+                or item.get('turnId') not in bound_turns):
+            continue
+        receipt = item.get('receipt') or {}
+        last = receipt.get('lastExecution') or {}
+        skill_turn, action = last.get('turnId'), last.get('actionId')
+        if (receipt.get('status') != 'done' or last.get('tool') != 'goto'
+                or last.get('status') != 'succeeded' or last.get('completionConfirmed') is not True
+                or not isinstance(skill_turn, str) or not re.fullmatch(r'skill-[0-9a-f]{32}', skill_turn)
+                or not isinstance(action, str) or not ACTION_ID.fullmatch(action)):
+            continue
+        for row in receipt_rows(state, skill_turn, since, body_uuid):
+            if row['actionId'] == action:
+                verified.append(row | {'source': 'motor_skill', 'modelTurnId': item['turnId'],
+                                       'motorRequestId': item['requestId']})
+    return verified
 
 
 def collect(state, before, get, clock=time.time):
@@ -268,14 +307,31 @@ def collect(state, before, get, clock=time.time):
         and isinstance(session.get('primarySessionId'), str)
         and (before.get('primarySessionId') in (None, session.get('primarySessionId'))))
     native_chat = None
+    native_chats = {}
+    expected_sessions = {session.get('primarySessionId')}
+    behavior_path = state / 'behavior-context.json'
+    if behavior_path.exists():
+        behavior = read_json(behavior_path)
+        lanes = behavior.get('lanes') or {}
+        if (behavior.get('schema') == 2 and behavior.get('bodyUuid') == body_uuid
+                and behavior.get('lifeSessionId') == session.get('primarySessionId')
+                and isinstance(lanes, dict)):
+            expected_sessions.update(lane.get('sessionId') for lane in lanes.values()
+                                     if isinstance(lane, dict) and isinstance(lane.get('sessionId'), str)
+                                     and re.fullmatch(r'life-[0-9a-f]{32}', lane['sessionId']))
     try:
         chats = get('/chats?' + urllib.parse.urlencode({'user_id': 'survival-controller', 'channel': 'console'}))
         require(isinstance(chats, list), 'native_chat_list_invalid')
-        matches = [r for r in chats if isinstance(r, dict)
-            and (r.get('session_id'), r.get('user_id'), r.get('channel')) ==
-                (session.get('primarySessionId'), 'survival-controller', 'console')]
-        if len(matches) == 1 and session.get('chatId') in (None, matches[0].get('id')):
-            native_chat = {k: matches[0].get(k) for k in ('id', 'session_id', 'user_id', 'channel', 'status')}
+        for target in expected_sessions:
+            matches = [r for r in chats if isinstance(r, dict)
+                and (r.get('session_id'), r.get('user_id'), r.get('channel')) ==
+                    (target, 'survival-controller', 'console')]
+            if len(matches) == 1:
+                native_chats[target] = {k: matches[0].get(k) for k in
+                                        ('id', 'session_id', 'user_id', 'channel', 'status')}
+        primary = native_chats.get(session.get('primarySessionId'))
+        if primary and session.get('chatId') in (None, primary.get('id')):
+            native_chat = primary
     except EvidenceError as exc:
         errors.append({'operation': 'native_chats', 'code': str(exc)})
     tasks = []
@@ -294,17 +350,22 @@ def collect(state, before, get, clock=time.time):
                     nativeSessionVerified=bool(binding and native_chat
                         and native.get('status') in ('finished', 'completed')
                         and result.get('status') == 'completed'
-                        and result.get('session_id') == session.get('primarySessionId')))
+                        and result.get('session_id') in native_chats))
             except EvidenceError as exc:
                 row['error'] = str(exc)
         else:
-            row['error'] = 'native_submission_id_unknown'
+            if (controller.get('active') or {}).get('turnId') == turn:
+                row['nativeStatus'] = 'pending'
+            else:
+                row['error'] = 'native_submission_id_unknown'
         tasks.append(row)
     verified = {r['turnId'] for r in tasks if r['nativeSessionVerified'] and r['nativeAnswerVerified']}
     bound_turns = {r['turnId'] for r in tasks if r['nativeSessionVerified']}
     receipts = [r for turn in new for r in receipt_rows(state, turn, before['observedAt'], body_uuid)]
+    receipts.extend(motor_skill_receipts(state, before['observedAt'], body_uuid, bound_turns))
     # Real game actions and cost remain evidence even when the model hit its limit.
-    valid_receipts = [r for r in receipts if r['turnId'] in bound_turns and r.get('validNativeReceipt')]
+    valid_receipts = [r for r in receipts if (r.get('modelTurnId', r['turnId']) in bound_turns
+                                               and r.get('validNativeReceipt'))]
     unknown = ([{'turnId': r['turnId'], 'taskId': r['taskId'], 'code': r.get('error', 'native_task_unknown')}
                 for r in tasks if r['nativeStatus'] == 'unknown']
                + [{'turnId': r['turnId'], 'actionId': r['actionId'], 'code': 'action_outcome_unknown'}
@@ -325,7 +386,8 @@ def collect(state, before, get, clock=time.time):
           {'since': before['observedAt'], 'oldTurnCount': len(prior), 'newTurnCount': len(new),
            'excludedPreBaselineTurns': len(current) - len(new)})
     check('persistent-native-session', binding and native_chat is not None and len(verified) >= 2,
-          {'verifiedDistinctNativeTasks': len(verified), 'required': 2, 'chat': native_chat})
+          {'verifiedDistinctNativeTasks': len(verified), 'required': 2, 'chat': native_chat,
+           'verifiedLaneSessions': sorted(native_chats)})
     check('per-action-native-body-receipt', len(valid_receipts) >= 1,
           {'verifiedReceipts': len(valid_receipts), 'required': 1})
     check('unknown-outcomes-not-assumed', not unknown, {'unknown': unknown})

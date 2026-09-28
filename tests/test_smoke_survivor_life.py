@@ -103,6 +103,55 @@ class SurvivorLifeSmokeTests(unittest.TestCase):
         self.assertFalse(self.check(result, 'same-session-after-live-restart')['required'])
         self.assertNotIn('/console/chat/task/task-old', self.calls)
 
+    def test_protocol_two_motor_skill_links_to_observed_native_navigation(self):
+        self.new_tasks()
+        (self.state / 'turn-actions' / (FIRST + '.json')).unlink()
+        (self.state / 'action-receipts' / ('b' * 32 + '.json')).unlink()
+        action_session = 'life-' + 'c' * 32
+        self.write('behavior-context.json', {'schema': 2, 'bodyUuid': BODY,
+            'lifeSessionId': SESSION, 'lanes': {'action': {'sessionId': action_session}}})
+        self.chats.append({'id': 'chat-action', 'session_id': action_session,
+                           'user_id': 'survival-controller', 'channel': 'console'})
+        self.tasks['task-one']['result']['session_id'] = action_session
+        skill_turn, action = 'skill-' + 'd' * 32, 'e' * 32
+        before = {'ok': True, 'bodyUuid': BODY, 'dimension': 'minecraft:overworld',
+                  'counts': {}, 'position': {'x': 0.0, 'y': 64.0, 'z': 0.0}}
+        after = before | {'position': {'x': 3.0, 'y': 64.0, 'z': 4.0}}
+        navigation = {'task_id': 't1', 'navigation_mode': 'observed_from_body',
+            'state': 'ended', 'success': True, 'final_x': 3.0, 'final_y': 64.0,
+            'final_z': 4.0, 'requested': {'x': 3.0, 'z': 4.0}, 'horizontalDistance': 0.0}
+        self.write('turn-actions/' + skill_turn + '.json',
+                   {'turnId': skill_turn, 'actionIds': [action]})
+        self.write('action-receipts/' + action + '.json', {'schema': 2, 'actionId': action,
+            'turnId': skill_turn, 'tool': 'goto', 'acceptedAt': 1002500,
+            'status': 'completed', 'completionConfirmed': True, 'nativeTaskId': 't1',
+            'before': before, 'after': after, 'navigationOutcome': navigation,
+            'result': {'ok': True, 'actionId': action}})
+        self.write('motor-inbox.json', {'requests': [{'requestId': 'f' * 64,
+            'kind': 'skill', 'turnId': FIRST, 'status': 'completed', 'receipt': {
+                'status': 'done', 'lastExecution': {'turnId': skill_turn, 'actionId': action,
+                    'tool': 'goto', 'status': 'succeeded', 'completionConfirmed': True}}}]})
+        report = self.collect()
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['actionReceipts'][0]['source'], 'motor_skill')
+        self.assertEqual(report['actionReceipts'][0]['modelTurnId'], FIRST)
+        self.assertEqual(report['actionReceipts'][0]['nativeNavigationMatched'], True)
+        navigation['success'] = False
+        receipt = json.loads((self.state / 'action-receipts' / (action + '.json')).read_text())
+        receipt['navigationOutcome'] = navigation
+        self.write('action-receipts/' + action + '.json', receipt)
+        self.assertFalse(self.check(self.collect(), 'per-action-native-body-receipt')['ok'])
+
+    def test_active_unsubmitted_turn_is_pending_not_unknown(self):
+        self.new_tasks()
+        third = 'survival-' + '3' * 32
+        self.controller['decisions'].append({'turnId': third, 'startedAt': 1003})
+        self.controller['active'] = {'turnId': third, 'startedAt': 1003}
+        self.write('controller.json', self.controller)
+        report = self.collect()
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['tasks'][-1]['nativeStatus'], 'pending')
+
     def test_unrestricted_policy_is_null_and_usage_evidence_remains_real(self):
         self.settings.update(dailyPlanningLimit=None, decisionCooldownSeconds=0)
         self.write('settings.json', self.settings)

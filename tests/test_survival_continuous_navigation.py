@@ -165,6 +165,32 @@ class ContinuousNavigationProgramTests(unittest.TestCase):
         self.confirmed(state, step)
         self.assertEqual(evaluate(SOURCE, state, step['memory'])['reason'], 'navigation_progress_not_observed')
 
+    def test_failed_native_segment_without_progress_surveys_an_alternative(self):
+        state, memory = self.ready_step()
+        step = evaluate(SOURCE, state, memory)
+        self.confirmed(state, step)
+        state.update(onGround=True, inWater=False, inLava=False)
+        state['execution']['lastExecution'].update(
+            status='failed', navigationOutcome={
+                'success': False, 'final_x': state['position']['x'],
+                'final_y': state['position']['y'], 'final_z': state['position']['z']})
+        result = evaluate(SOURCE, state, step['memory'])
+        self.assertEqual(result['observe']['tool'], 'navigation_sense')
+        self.assertEqual(result['memory']['failedSegments'], 1)
+        self.assertEqual(result['memory']['lastFailedSegment'], step['action']['args'])
+
+    def test_failed_native_segment_retries_are_bounded(self):
+        state, memory = self.ready_step()
+        step = evaluate(SOURCE, state, memory)
+        self.confirmed(state, step)
+        state.update(onGround=True, inWater=False, inLava=False)
+        state['execution']['lastExecution'].update(status='failed', navigationOutcome={
+            'success': False, 'final_x': state['position']['x'],
+            'final_y': state['position']['y'], 'final_z': state['position']['z']})
+        result = evaluate(SOURCE, state, step['memory'] | {'failedSegments': 2})
+        self.assertTrue(result['replan'])
+        self.assertEqual(result['reason'], 'navigation_failed_segment_no_safe_progress')
+
     def test_missing_unknown_failed_or_reused_receipt_cannot_continue(self):
         state, memory = self.ready_step()
         step = evaluate(SOURCE, state, memory)
@@ -513,6 +539,31 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
         self.assertEqual(len(self.backend.submitted), 1)
 
+    def test_single_target_navigate_binds_jev_choice_during_slow_task(self):
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_navigate', 'version': self.version,
+                 'memory': {'policy': True, 'singleGoal': True,
+                            'waypoints': [{'x': 130, 'z': 100}]},
+                 'maxSteps': 32}, self.clock)
+        self.c.policy_worker.submit = Mock(return_value=77)
+        self.advance()
+        self.advance()
+        pending = self.c.pending_policy
+        self.assertIsNotNone(pending)
+        choice = pending['plan']['choose']['candidates'][0]['action']
+        self.c.policy_worker.poll = Mock(return_value={
+            'ok': True, 'code': 'policy_selected', 'choice': 'path_0',
+            'action': choice, 'confidence': .9, 'workerMs': 50})
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['memory']['segment'], choice['args'])
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
+
     def test_expired_jev_choice_resurveys_motion_plan_before_retrying(self):
         drafted = self.library.draft(**motion_record())
         version = drafted['version']
@@ -543,6 +594,81 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(self.c.policy_worker.submit.call_count, 2)
         self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
         self.assertEqual(len(self.gateway.actions), 0)
+
+    def test_low_confidence_jev_resurveys_then_can_choose_a_fresh_segment(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        surveys = []
+        self.gateway.navigation_observation = lambda body, args: (
+            surveys.append(copy.deepcopy(args)) or
+            survey(body | {'observedAt': self.clock()*1000}, args))
+        self.c.policy_worker.submit = Mock(side_effect=[77, 78])
+        calls = []
+        def choose(token):
+            calls.append(token)
+            candidates = self.c.pending_policy['plan']['choose']['candidates']
+            common = {'choice': 'path_0', 'candidates': candidates, 'workerMs': 50}
+            if len(calls) == 1:
+                return {'ok': False, 'code': 'policy_escalated', 'confidence': .65,
+                        'selectedProbability': .77, **common}
+            return {'ok': True, 'code': 'policy_selected', 'confidence': .9,
+                    'action': candidates[0]['action'], **common}
+        self.c.policy_worker.poll = Mock(side_effect=choose)
+        self.advance()  # claim
+        self.advance()  # initial survey and Jev request
+        self.advance()  # low confidence: no world action, request a new survey
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.assertFalse(self.gateway.actions)
+        self.advance()  # fresh survey and second Jev request
+        self.advance()  # fresh supported choice dispatches one exact segment
+        self.assertEqual(len(surveys), 2)
+        self.assertEqual(calls, [77, 78])
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(read_json(self.state/'skill-job.json')['memory']['stage'], 'moving')
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_low_confidence_jev_retries_are_bounded_without_world_actions(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        surveys = []
+        self.gateway.navigation_observation = lambda body, args: (
+            surveys.append(copy.deepcopy(args)) or
+            survey(body | {'observedAt': self.clock()*1000}, args))
+        self.c.policy_worker.submit = Mock(side_effect=[77, 78, 79])
+        def uncertain(token):
+            return {'ok': False, 'code': 'policy_escalated', 'choice': 'path_0',
+                    'confidence': .65, 'selectedProbability': .77, 'workerMs': 50,
+                    'candidates': self.c.pending_policy['plan']['choose']['candidates']}
+        self.c.policy_worker.poll = Mock(side_effect=uncertain)
+        self.advance()  # claim
+        for _ in range(3):
+            self.advance()  # survey and classify
+            self.advance()  # local retry or final slow replan
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['status'], 'replan')
+        self.assertEqual(job['reason'], 'policy_escalated')
+        self.assertEqual(len(surveys), 3)
+        self.assertEqual(self.c.policy_worker.submit.call_count, 3)
+        self.assertFalse(self.gateway.actions)
+        self.assertEqual(len(self.backend.submitted), 1)
 
     def test_motion_plan_consumes_bounded_side_probes_after_three_forward_failures(self):
         drafted = self.library.draft(**motion_record())
@@ -672,6 +798,22 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.advance()
         self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_survey_unusable')
         self.assertFalse(self.gateway.actions)
+
+    def test_survey_uses_new_body_snapshot_after_native_position_changes(self):
+        self.advance()  # claim the already selected navigation program
+        reads = []
+        def moving_survey(body, args):
+            # The native body can move between the tick snapshot and its read.
+            self.gateway.body['position']['x'] = 217
+            reads.append(copy.deepcopy(args))
+            return survey(self.gateway.body | {'observedAt': self.clock()*1000}, args)
+        self.gateway.navigation_observation = moving_survey
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(len(reads), 1)
+        self.assertEqual(job['status'], 'running')
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(self.gateway.actions[0]['tool'], 'goto')
 
     def test_operator_drain_during_read_stops_continuation_without_dispatch(self):
         self.advance()

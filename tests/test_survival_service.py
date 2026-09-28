@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -27,6 +28,14 @@ with patch.dict(sys.modules, {'fcntl': SimpleNamespace()}):
 
 
 class SharedSurvivalServiceTests(unittest.TestCase):
+    def test_only_sqlite_contention_is_retryable(self):
+        locked = sqlite3.OperationalError('database is locked')
+        locked.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        self.assertTrue(service.retryable_runtime_error(locked))
+        schema_error = sqlite3.OperationalError('no such table: messages')
+        schema_error.sqlite_errorcode = sqlite3.SQLITE_ERROR
+        self.assertFalse(service.retryable_runtime_error(schema_error))
+
     def test_pending_social_result_is_polled_before_its_five_second_deadline(self):
         controller = SimpleNamespace(data={'status': 'thinking'}, settings={'observationSeconds': 15},
                                      pending_social={'token': 1})

@@ -1091,15 +1091,18 @@ class ControllerTests(unittest.TestCase):
             with self.subTest(count=count):
                 self.assertEqual(self.controller.next_review(control), self.clock() + seconds)
 
-    def test_livestream_preserves_explicit_rest_and_confirmed_sleep(self):
+    def test_livestream_revisits_waiting_but_preserves_confirmed_sleep(self):
         self.livestream()
         control = read_json(self.state/'control.json')
         self.controller.data['lastReviewAt'] = self.clock()
         self.write('memory.json', {'goalState': 'resting', 'reviewAfterSeconds': 1800})
-        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.assertEqual(self.controller.next_review(control), self.clock() + 90)
+        self.assertEqual(self.controller.livestream_pacing()['reason'], 'agent_resting')
         self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
         self.controller.data['actionExecution'] = {'receipt': {'tool': 'sleep',
             'status': 'completed', 'completionConfirmed': True}}
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.write('memory.json', {'goalState': 'resting', 'reviewAfterSeconds': 1800})
         self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
 
     def test_livestream_does_not_accelerate_pending_or_unknown_body_work(self):
@@ -1123,7 +1126,9 @@ class ControllerTests(unittest.TestCase):
         self.assertIn('【直播提示】', header)
         self.assertIn('say', header)
         import json
-        self.assertTrue(json.loads(facts)['pacing']['narration']['neverSent'])
+        context = json.loads(facts)
+        self.assertTrue(context['pacing']['narration']['neverSent'])
+        self.assertIn('普通赶路和等待没有新变化就安静', context['pacing']['instruction'])
         self.clock.now += 46
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)

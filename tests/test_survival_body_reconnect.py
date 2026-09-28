@@ -213,6 +213,38 @@ class BodyReconnectTests(unittest.TestCase):
         # 配额：一天内自动召唤次数有上限，不无界重试
         self.assertLessEqual(len([c for c in self.rcon.calls if c.startswith('numen_act summon')]), 5)
 
+    def test_roster_failure_never_counts_as_confirmed_absence(self):
+        write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+                 'reason': 'saved_task_requires_review', 'attempts': [], 'nextCheckAt': 0})
+        self.rcon.roster = TimeoutError('roster unavailable')
+        for _ in range(5):
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['status'], 'blocked')
+            self.assertEqual(result.get('absentStreak', 0), 0)
+            self.assertFalse(self.commands())
+            self.clock.now = result['nextCheckAt'] + 1
+
+    def test_uncertain_auto_summon_is_reserved_and_never_replayed(self):
+        write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+                 'reason': 'saved_task_requires_review', 'attempts': [],
+                 'absentStreak': 2, 'nextCheckAt': 0})
+        self.rcon.roster = 'count=0'
+
+        def lose_reply():
+            reserved = read_json(self.restore.path)
+            self.assertEqual(reserved['autoSummonPendingAt'], self.clock())
+            raise TimeoutError('summon reply lost')
+
+        self.rcon.on_restore = lose_reply
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['autoSummonOutcome'], 'unknown')
+        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
+        self.rcon.on_restore = None
+        for _ in range(5):
+            self.clock.now = result['nextCheckAt'] + 1
+            result = self.restore.tick(BINDING)
+        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
+
     def test_unknown_submission_is_not_retried_after_process_restart(self):
         self.rcon.response = TimeoutError('response lost')
         self.assertEqual(self.restore.tick(BINDING)['status'], 'unknown')
@@ -411,9 +443,23 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(self.rcon.calls, ['numen_act list'])
         self.assertFalse(self.commands())
 
-    def test_death_recovery_does_not_clear_other_blocks_or_unhealthy_body(self):
+    def test_saved_task_block_clears_from_verified_live_body_without_dispatch(self):
         self.rcon.roster = ONLINE
-        for reason in ('registry_identity_mismatch', 'saved_task_requires_review', 'playerdata_missing'):
+        self.gateway.body.update(gameMode='survival', hp=14)
+        record = {'schema': 1, **BINDING, 'status': 'blocked',
+                  'reason': 'saved_task_requires_review', 'attempts': [],
+                  'autoSummonPendingAt': self.clock() - 30, 'absentStreak': 3}
+        write_json(self.restore.path, record)
+        result = self.restore.confirm_online(BINDING, self.gateway.body)
+        self.assertEqual(result['status'], 'online')
+        self.assertEqual(result['reason'], 'identity_verified')
+        self.assertNotIn('autoSummonPendingAt', result)
+        self.assertEqual(result['absentStreak'], 0)
+        self.assertFalse(self.commands())
+
+    def test_death_recovery_does_not_clear_hard_blocks_or_unhealthy_body(self):
+        self.rcon.roster = ONLINE
+        for reason in ('registry_identity_mismatch', 'playerdata_missing'):
             record = {'schema':1, **BINDING, 'status':'blocked', 'reason':reason, 'attempts':[]}
             write_json(self.restore.path, record)
             self.assertEqual(self.restore.confirm_online(BINDING, self.gateway.body), record)

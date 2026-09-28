@@ -63,6 +63,10 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   const {rsi} = fixtures();
   let {trace} = fixtures(), traceReads = 0, holdTrace = false, releaseTrace, traceStarted;
   const assets = {
+    '/decision-dag': ['decision-stream.html','text/html'],
+    '/decision-stream.js': ['decision-stream.js','text/javascript'],
+    '/decision-stream-model.js': ['decision-stream-model.js','text/javascript'],
+    '/decision-stream.css': ['decision-stream.css','text/css'],
     '/observatory': ['observatory.html', 'text/html'], '/observatory.js': ['observatory.js', 'text/javascript'],
     '/observatory.css': ['observatory.css', 'text/css'], '/observatory-motion.css': ['observatory-motion.css', 'text/css'],
     '/decision-model.js': ['decision-model.js', 'text/javascript'], '/decision-canvas.js': ['decision-canvas.js', 'text/javascript'],
@@ -145,7 +149,7 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   assert.equal(await page.locator('#expand-graph').count(),0,'The graph cannot replace the broadcast with an overlay');
   const scene=await page.locator('#world-frame').boundingBox();
   const canvas=await page.locator('#decision-canvas').boundingBox();
-  assert.ok(scene.height>=220 && scene.y>=0,'The live scene remains a substantial part of the first screen');
+  assert.ok(scene.height>=220 && scene.y>=0,'The live scene remains a substantial part of the first screen: '+JSON.stringify({scene,canvas,scroll:await page.evaluate(()=>scrollY)}));
   assert.ok(canvas.y>=scene.y+scene.height && canvas.y+canvas.height<=1080,'The whole graph and live scene fit together at 1080p');
   assert.ok(canvas.height<=400,'The graph is compact, with local zoom for detail');
   assert.equal(await page.locator('.workbench').evaluate(n=>getComputedStyle(n).position==='fixed'),false);
@@ -179,6 +183,45 @@ test('decision canvas preserves evidence, playback controls, frozen snapshots an
   assert.equal(await page.locator('#play').getAttribute('aria-label'),'播放记录动画');
   await page.locator('#play').click();await page.clock.runFor(1600);
   assert.equal(await page.locator('.edge-signal').evaluateAll(nodes=>nodes.every(n=>getComputedStyle(n).display==='none')),true);
+  const streamStart=requests.length;
+  const nativeLast={turnId:'turn-with-actions',taskId:'task-last',availability:'available',status:'completed',finalText:'已完成木板合成，准备工作台。',completedAt:Date.now(),tools:[{name:'numen_survival__craft',status:'completed'}]};
+  trace.runtime={enabled:true,status:'thinking'};
+  trace.modelResults={current:{turnId:'turn-latest-empty',taskId:'task-current',availability:'available',status:'running',finalText:null,tools:[]},last:nativeLast};
+  trace.turns.find(t=>t.turnId==='turn-latest-empty').modelResult=trace.modelResults.current;
+  await page.setViewportSize({width:1280,height:1000});
+  await page.goto(origin+'/decision-dag?background=transparent&controls=1');
+  await page.locator('[data-node="policy/gate"]').waitFor();
+  assert.match(await page.locator('#stream-status').innerText(),/LLM 运行中/);
+  assert.match(await page.locator('#llm-result').innerText(),/已完成木板合成/);
+  assert.match(await page.locator('#jev-result').innerText(),/13%/);
+  assert.match(await page.locator('#jev-result-meta').innerText(),/历史结果/);
+  trace.runtime={enabled:false,status:'paused',pauseReason:'controller_error'};
+  trace.modelResults.current={...trace.modelResults.current,status:'completed',finalText:'已经到达目的地。'};
+  trace.turns.find(t=>t.turnId==='turn-latest-empty').modelResult=trace.modelResults.current;
+  await page.clock.runFor(5100);
+  await page.waitForFunction(()=>document.getElementById('llm-result').textContent==='已经到达目的地。');
+  assert.match(await page.locator('#stream-status').innerText(),/已暂停/);
+  assert.equal(await page.locator('.live-now').count(),0);
+  assert.equal(await page.locator('#llm-result-title').innerText(),'LLM 本轮结果');
+  assert.equal(await page.locator('[data-lane]').count(),2);
+  assert.equal(await page.locator('iframe').count(),0);
+  assert.equal(await page.locator('[data-node^="l2/"],[data-node^="l3/"]').count(),0);
+  assert.equal(await page.locator('html').evaluate(n=>getComputedStyle(n).backgroundColor),'rgba(0, 0, 0, 0)');
+  assert.ok(requests.slice(streamStart).every(r=>!r.url.includes('/api/rsi-observatory')&&!r.url.includes('19092')));
+  const streamBox=await page.locator('#stream-dag').getAttribute('viewBox');
+  await page.locator('#stream-plus').click();assert.notEqual(await page.locator('#stream-dag').getAttribute('viewBox'),streamBox);
+  await page.locator('#stream-fit').click();
+  await page.locator('[data-node="policy/gate"]').click();
+  assert.match(await page.locator('#stream-node-evidence').innerText(),/0.13/);
+  await page.locator('#stream-close').click();
+  await page.locator('#stream-pause').click();
+  const streamReads=traceReads;await page.clock.runFor(10000);assert.equal(traceReads,streamReads);
+  assert.equal(await page.locator('#stream-status').innerText(),'更新已暂停');
+  await page.locator('#stream-pause').click();
+  await page.locator('#stream-replay').click();await page.clock.runFor(1600);
+  assert.match(await page.locator('#stream-note').innerText(),/历史回放/);
+  assert.equal(await page.locator('.edge.mechanism.flowing').count(),0);
+  for(const width of [1280,600,390]){await page.setViewportSize({width,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.documentElement.scrollHeight<=innerHeight+1),true);}
   assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);
   assert.ok(requests.every(r=>r.method==='GET'&&(r.url.startsWith(origin+'/')||r.url==='http://127.0.0.1:19092/third/')));
 });

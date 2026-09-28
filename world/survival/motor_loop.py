@@ -1,12 +1,12 @@
 """Single body executor, independent of the native asynchronous planning task.
 
-Commands are durable; observations are coalesced. No claimed request is replayed.
+Commands are durable; observations are coalesced. No world-dispatched request is replayed.
 Native goto/eat cancellation reuses the gateway's exact-task stop journal.
 """
 import hashlib
 import json
 import uuid
-from motor_mailbox import view, claim_locked, finish_locked, public, binding
+from motor_mailbox import view, claim_locked, finish_locked, release_prelease_claim_locked, public, binding
 from numen_gateway import GatewayError, action_lock, read_json, write_json
 from navigation_program import recovery_program
 
@@ -14,6 +14,17 @@ from navigation_program import recovery_program
 def _job(c):
     p = c.root / 'skill-job.json'
     return read_json(p) if p.exists() else {}
+
+
+def _prelease_unspent(c, row):
+    """The motor gateway cannot write to the world before opening this lease."""
+    lease_path = c.root / 'lease.json'
+    lease = read_json(lease_path) if lease_path.exists() else {}
+    turn = row['motorTurnId']
+    return (lease.get('turnId') != turn
+            and not (c.root / 'turn-actions' / (turn + '.json')).exists()
+            and not (c.root / 'unknown.json').exists()
+            and not (c.root / 'inflight-action.json').exists())
 
 
 def _accepted_cast(c, row, receipt):
@@ -77,6 +88,10 @@ def reconcile(c):
         else:
             receipts = c.gateway.turn_receipts(row['motorTurnId'])
             if not receipts:
+                with action_lock(c.root, blocking=True):
+                    if _prelease_unspent(c, row):
+                        release_prelease_claim_locked(c.root, row['requestId'], c.clock)
+                        continue
                 status, receipt = 'unknown', {'code': 'motor_claim_without_receipt'}
             else:
                 receipt = receipts[-1]
@@ -127,8 +142,10 @@ def dispatch(c, recovery_only=False):
             return True
     # Native gateway owns the effect journal and fresh preflight; no model owns
     # this short lease. A crash between claim and receipt remains unknown.
+    lease_opened = False
     try:
         c.gateway.open_lease(row['motorTurnId'], (c.clock()+60)*1000)
+        lease_opened = True
         outcome = c.gateway.action(row['motorTurnId'], **row['payload'])
         c.gateway.close_lease(blocking=True)
         c.collect_action_receipts(row['motorTurnId'])
@@ -142,6 +159,11 @@ def dispatch(c, recovery_only=False):
         c.record('motor_dispatch', requestId=row['requestId'], turnId=row['motorTurnId'],
                  slowTaskId=(c.data.get('active') or {}).get('taskId'), outcome=outcome.get('code'))
     except Exception:
+        if not lease_opened:
+            with action_lock(c.root, blocking=True):
+                if _prelease_unspent(c, row):
+                    release_prelease_claim_locked(c.root, row['requestId'], c.clock)
+                    return False
         c.pause('motor_dispatch_uncertain')
         raise
     return True
@@ -380,6 +402,12 @@ def tick(c, body, control):
         return
     c.finish_action_observation(body)
     c.switch_goal_at_boundary()
+    job = _job(c)
+    if (job.get('status') in ('pending', 'running')
+            and (job.get('memory') or {}).get('continueWhileThinking') is True):
+        c.perceive(body, refresh=True)
+    from auto_patrol import yield_to_explicit
+    yield_to_explicit(c, body)
     if c.tick_skill(body):
         c.data['motorStatus'] = 'executing_skill'
         return

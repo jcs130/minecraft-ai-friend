@@ -38,9 +38,30 @@ DEFAULT_LIMITS = {'dailyDispatchCap': None, 'cooldownSeconds': 0, 'maxPending': 
                   'maxTextChars': 8000, 'maxTtlSeconds': 86400, 'maxMessages': 10000}
 
 
+class _BindingNeedsSync(Exception):
+    pass
+
+
 def _require(ok, message):
     if not ok:
         raise ValueError(message)
+
+
+def recent_heard_dialogue(messages, *, limit=6):
+    """A short, chronological conversation cue from verified game delivery only."""
+    _require(type(limit) is int and 1 <= limit <= 12, 'invalid_party_dialogue_limit')
+    heard = []
+    for row in messages:
+        for spoken in (row, row.get('reply') or {}):
+            if (spoken.get('worldDelivery') or {}).get('state') != 'heard':
+                continue
+            speaker = (spoken.get('sender') or {}).get('agentId')
+            content = spoken.get('text')
+            at = spoken.get('createdAt')
+            if (isinstance(speaker, str) and isinstance(content, str) and content
+                    and type(at) in (int, float)):
+                heard.append({'speaker': speaker, 'text': content[:160], 'at': at})
+    return sorted(heard, key=lambda item: item['at'])[-limit:]
 
 
 def _json(value):
@@ -178,6 +199,57 @@ class PartyMessages:
         finally:
             db.close()
 
+    @contextmanager
+    def _read_transaction(self):
+        """Keep scene/dialogue reads out of SQLite's single writer lane."""
+        for path in (self.root, self.path, Path(str(self.path) + '-journal'),
+                     Path(str(self.path) + '-wal'), Path(str(self.path) + '-shm')):
+            _safe_path(path)
+        db = sqlite3.connect(self.path, timeout=1, isolation_level=None)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute('PRAGMA query_only=ON')
+            db.execute('BEGIN')
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @contextmanager
+    def _query_transaction(self):
+        with self._read_transaction() as db:
+            try:
+                binding = self._binding_read(db)
+            except _BindingNeedsSync:
+                pass
+            else:
+                yield db, binding
+                return
+        # A new identity generation still performs the original expiry and
+        # metadata update, once. Ordinary scene/dialogue reads never do.
+        with self._transaction() as db:
+            self._binding(db)
+        with self._read_transaction() as db:
+            yield db, self._binding_read(db)
+
+    def _binding_read(self, db):
+        """Validate the current identity without expiry writes or reservations."""
+        binding = validate_binding(self.binding_provider())
+        row = db.execute("SELECT value FROM meta WHERE key='binding'").fetchone()
+        _require(row is not None, 'party_binding_missing')
+        previous = json.loads(row['value'])
+        _require(previous['partyId'] == binding['partyId'], 'party_id_changed')
+        _require(binding['revision'] >= previous['revision'], 'party_binding_rollback')
+        if binding['revision'] > previous['revision']:
+            raise _BindingNeedsSync
+        _require(binding['revision'] != previous['revision']
+                 or _binding_generation(previous) == _binding_generation(binding),
+                 'party_binding_revision_collision')
+        return binding
+
     def _binding(self, db):
         binding = validate_binding(self.binding_provider())
         encoded = _json(binding)
@@ -298,8 +370,7 @@ class PartyMessages:
 
     def overview(self, actor, *, limit=50):
         _require(type(limit) is int and 1 <= limit <= 200, 'invalid_party_limit')
-        with self._transaction() as db:
-            binding = self._binding(db)
+        with self._query_transaction() as (db, binding):
             member = self._member(binding, actor)
             counts = {state: 0 for state in ('pending', *ACTIVE, *TERMINAL)}
             visible = []
@@ -313,6 +384,7 @@ class PartyMessages:
             return {'partyId': binding['partyId'], 'bindingRevision': binding['revision'],
                     'enabled': binding['enabled'], 'members': deepcopy(binding['members']),
                     'counts': counts, 'messages': visible, 'budget': self._budget(db, binding)}
+
 
     def active_for_recipient(self, recipient_agent_id):
         """Trusted dispatcher check; an old binding's unknown task still blocks."""
@@ -531,8 +603,7 @@ class PartyMessages:
     def heard_replies(self, actor, *, limit=8):
         """Read-only input selection, not a request/callback or an acknowledgement."""
         _require(type(limit) is int and 1 <= limit <= 8, 'invalid_party_reply_limit')
-        with self._transaction() as db:
-            binding = self._binding(db)
+        with self._query_transaction() as (db, binding):
             member = self._member(binding, actor)
             if not binding['enabled']:
                 return []
@@ -876,10 +947,10 @@ class PartyMessages:
                        ('expired' if state == 'expired' else 'failed', 'world_' + state, message['message_id']))
 
     def unresolved_world(self, *, kind='request', limit=32):
-        """Trusted recovery: only UNKNOWN may query status; never resend pending intent."""
+        """Trusted recovery: dispatch unclaimed PENDING; query UNKNOWN by original ID."""
         _require(kind in ('request', 'reply') and type(limit) is int and 1 <= limit <= 100,
                  'invalid_party_world_query')
         with self._transaction() as db:
             self._binding(db)
             return [self._world_public(row) for row in db.execute(
-                "SELECT * FROM world_speech WHERE kind=? AND state='unknown' ORDER BY rowid LIMIT ?", (kind, limit))]
+                  "SELECT * FROM world_speech WHERE kind=? AND state IN ('pending','unknown') ORDER BY rowid LIMIT ?", (kind, limit))]

@@ -510,15 +510,16 @@ class ConsolidatedOperationsProbe(unittest.TestCase):
         patcher=patch.object(health,'PROJECT',self.root)
         patcher.start();self.addCleanup(patcher.stop)
 
-    def test_current_services_require_thirteen_and_ignore_absent_archive(self):
+    def test_current_services_require_twelve_and_ignore_archived_tts(self):
         active=health.current_service_manifest()
-        self.assertEqual(len(active),13)
+        self.assertEqual(len(active),12)
         self.assertNotIn('qwenpaw-ops',active)
+        self.assertNotIn('tts',active)
         rows=[{'Service':name,'State':'running','Health':'healthy'} for name in active]
         process=SimpleNamespace(returncode=0,stdout=json.dumps(rows))
         with patch.object(health.subprocess,'run',return_value=process):
             result=health.probe_services()
-            self.assertTrue(result['ok']);self.assertEqual(len(result['checks']),13)
+            self.assertTrue(result['ok']);self.assertEqual(len(result['checks']),12)
             rows[0]['Health']='unhealthy';process.stdout=json.dumps(rows)
             self.assertFalse(health.probe_services()['ok'])
 

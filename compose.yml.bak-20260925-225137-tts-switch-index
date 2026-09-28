@@ -1,0 +1,764 @@
+name: qiandengji
+
+services:
+  mc:
+    image: itzg/minecraft-server:java21@sha256:f71707d922f9d616c654ff504bf41e4d09dbf4fa1cd9776ccca660bb2accbab8
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      EULA: "TRUE"
+      TYPE: NEOFORGE
+      VERSION: "1.21.1"
+      NEOFORGE_VERSION: "21.1.248"
+      MEMORY: "4G"
+      SERVER_PORT: "25599"
+      LEVEL: shadow
+      MOTD: "千灯纪 · 整合测试世界"
+      ONLINE_MODE: "false"
+      ENABLE_RCON: "true"
+      RCON_PORT: "25575"
+      RCON_PASSWORD: "${QIANDENG_RCON_PASSWORD:?Run python tools/project.py setup first}"
+      ENABLE_COMMAND_BLOCK: "true"
+      VIEW_DISTANCE: "6"
+      SIMULATION_DISTANCE: "6"
+      SPAWN_PROTECTION: "0"
+      PVP: "false"
+      GUI: "false"
+      TZ: Asia/Shanghai
+      JVM_OPTS: "-Dsettlementsfix.interactFile=/mcdata/village/interact-events.jsonl -Dsettlementsfix.spellFile=/mcdata/spell-requests.jsonl -Dsettlementsfix.statusFile=/mcdata/status-requests.jsonl -Dsettlementsfix.mcdataDir=/mcdata -Dsettlementsfix.testHooks=true"
+    ports:
+      - "0.0.0.0:25565:25599"
+      # Preserve existing host-side scripts without exposing the old port to LAN.
+      - "127.0.0.1:25567:25599"
+      # RCON 局域网可达（贾维斯从 162 连 133:25577 用）；不转发路由器即不暴露公网
+      - "25577:25575"
+      - "0.0.0.0:24455:24454/udp"
+    volumes:
+      - ./server/mc:/data
+      - ./server/mcdata:/mcdata
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+
+  world:
+    stop_grace_period: 45s
+    image: qiandengji-world:20260925-vision1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["/app/node_modules/.bin/tsx", "/app/bootstrap-world.mts"]
+    environment:
+      TZ: Asia/Shanghai
+      # 数据面走「神社之门」：出站把 NeoForge blockstate/item 号翻成原版号，
+      # mineflayer/天眼才能读到正确世界（2026-09-21 造物主谕：所有 mineflayer Agent 一律过门）。
+      # 管理面仍直连 mc 的 RCON —— 门不转发 RCON，也不该转发。
+      MC_HOST: gate
+      MC_PORT: "25700"
+      # 门已翻译号 → 停用天眼本地补偿层（vanilla-state-map / mod 注册表注入），避免二次翻译
+      MC_GATE_TRANSLATED: "1"
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_MAX_COMMAND_BYTES: "65522"
+      MC_DATA_DIR: /app/data
+      JEV_API_KEY_FILE: /run/secrets/jev-api-key
+      MC_SHARED_DATA_DIR: /mcdata
+      PANEL_STATE_DIR: /panel-data
+      STATUS_REQ: /mcdata/status-requests.jsonl
+      GODVOICE_DIR: /godvoice
+      VOICE_ALLOWED_PLAYERS: ${VOICE_ALLOWED_PLAYERS:-MengMeng}
+      MC_LOG_PATH: /mclogs/latest.log
+      MC_ADVANCEMENTS_DIR: /mcadv
+      MC_STATS_DIR: /mcstats
+      MC_GOD_NAME: Goddess
+      # ★2026-09-20 造物主谕：live 是直播机位账号（不是旅人）→ 登记为内部号，
+      #   女神/气泡/降临仪式/社交四处一律按机器账号跳过，别对它搭话或赐福。
+      INTERNAL_BOT_NAMES: "RenderBot,ProbeBot,QDSmokeProbe,QDSmokeBody,live"
+      MC_OBSERVER: "1"
+      MC_VIEWER: "0"
+      MC_MODERN_VIEWER: "1"
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
+      MC_VIEWER_PUBLIC_ORIGIN: http://127.0.0.1:19092
+      MC_PANEL_ORIGIN: http://127.0.0.1:19091
+      MC_MEMORY_ENABLED: "0"
+      WORLD_GOD_REVIEW_ENABLED: "0"
+      WORLD_GOD_DAILY_REPORT_ENABLED: "0"
+      WORLD_LEGACY_EVOLVE_REVIEW_ENABLED: "0"
+      MC_SAGA: "0"
+      TERRAIN_FILL: "0"
+      QWENPAW_CONSOLE_URL: http://qwenpaw:8088/api/console/chat
+      QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
+      CHILD_COMPANION_FILE: /etc/qiandeng/child-companion.json
+    ports:
+      - "127.0.0.1:19092:3070"
+      - "127.0.0.1:19093:3071"
+    volumes:
+      - ./world/src:/app/src:ro
+      - ./world/bootstrap-world.mts:/app/bootstrap-world.mts:ro
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
+      - ./config/child-companion.json:/etc/qiandeng/child-companion.json:ro
+      - ./world/admin:/app/admin:ro
+      - ./vendor/modern-viewer:/app/modern-viewer:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
+      - ./server/survival-agent-state/secret/jev-api-key:/run/secrets/jev-api-key:ro
+      - ./server/panel-state:/panel-data
+      - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
+      - ./server/world-data:/app/data
+      - ./server/mcdata:/mcdata
+      - ./server/mc/logs:/mclogs:ro
+      - ./server/mc/shadow/data/maid_backups:/maid-backups:ro
+      - ./server/mc/data/godvoice:/godvoice
+      - ./server/mc/vision:/mcvision:ro
+      - ./server/mc/shadow/advancements:/mcadv:ro
+      - ./server/mc/shadow/stats:/mcstats:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+      # 数据面走「神社之门」（MC_HOST=gate/MC_PORT=25700：NeoForge→原版号出站翻译）
+      # 门必须在 world 之前起，否则化身连不上；RCON 仍直连 mc（管理面不绕门）。
+      gate:
+        condition: service_started
+      # Model requests are optional at execution time. Player commands must
+      # remain available while the separately supervised QwenPaw starts/fails.
+    healthcheck:
+      test: ["CMD", "node", "-e", "const f=require('fs');const p='/app/data/world-heartbeat.json';process.exit(f.existsSync(p)&&Date.now()-f.statSync(p).mtimeMs<180000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  panel:
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/admin/server.mjs"]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TZ: Asia/Shanghai
+      PANEL_HOST: 0.0.0.0
+      PANEL_PORT: "9090"
+      PANEL_PUBLIC_ORIGIN: http://127.0.0.1:19091
+      PANEL_MANAGEMENT_AUTH_MODE: local
+      PANEL_TRACE_DIR: /survivor-trace
+      PANEL_RSI_ROOT: /rsi
+      # Exact Docker Desktop peer; recheck when qiandengji_default is recreated.
+      PANEL_LOCAL_TRUSTED_PEERS: 172.18.0.1
+      PANEL_STATE_DIR: /panel-data
+      PANEL_QWENPAW_URL: http://127.0.0.1:18089
+      PANEL_RESOURCES_URL: http://127.0.0.1:19090/packs/
+    ports:
+      - "127.0.0.1:19091:9090"
+    volumes:
+      - ./world/admin:/app/admin:ro
+      - ./server/panel-state:/panel-data:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/survival-agent-state/survival:/survivor-trace:ro
+      - ./server/agents/work/world-notes:/rsi/notes:ro
+      - ./server/agents/work/workspaces/qd-survivor/learning:/rsi/learning:ro
+      - ./server/agents/work/workspaces/qd-survivor/memory:/rsi/knowledge:ro
+      - ./server/agents/work/world-skills:/rsi/shared:ro
+      - ./server/engineering:/rsi/engineering:ro
+      - ./server/team-state:/rsi/team:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:9090/healthz',{headers:{Host:'127.0.0.1:19091'}},s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>{process.exitCode=1})"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  live:
+    # 直播中控台（独立页）：思考流+弹幕+主播应答+给桐人指令+语音解说
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/live/server.mjs"]
+    environment:
+      TZ: Asia/Shanghai
+      LIVE_HOST: 0.0.0.0
+      LIVE_PORT: "3110"
+      PANEL_URL: http://panel:9090
+      TTS_URL: http://tts:8100
+      QWENPAW_URL: http://qwenpaw:8088
+      SURVIVOR_STATE_DIR: /survivor-state
+      BILI_ROOM: ${BILI_ROOM:-}
+    ports:
+      - "127.0.0.1:19095:3110"
+    volumes:
+      - ./world/live:/app/live:ro
+      - ./server/survival-agent-state/survival:/survivor-state
+    depends_on: [panel, tts, qwenpaw]
+    healthcheck:
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:3110/healthz',s=>{s.resume();if(s.statusCode!==200)process.exitCode=1});r.setTimeout(3000,()=>r.destroy());r.on('error',()=>process.exitCode=1)"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  gate:
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
+    environment:
+      # 门自己回传送应答（前端那条吞掉）：解容器化 ViaProxy 经门时 MC 报
+      # Failed to decode packet 'serverbound/minecraft:accept_teleportation' 的问题
+      GATE_SELF_TELEPORT_ACK: "1"
+    volumes:
+      - ./world/src:/app/src:ro
+    # 2026-09-22 端口统一：不再发布 25701 到宿主。本机/局域网 Agent 一律走外门 25702（ag_ 闸）；
+    # 内门只活在 compose 网内（gate:25700），供 Goddess/天眼/基岩桥/容器内验证脚本使用。
+    depends_on:
+      mc:
+        condition: service_healthy
+
+  # 外门（2026-09-21 造物主谕）：只收 ag_ 前缀名的外部 Agent ✓ 局域网/公网经路由器 TCP 25702 进来 ✓
+  gate-public:
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/src/neoforge-handshake/gate.cjs", "25700", "mc", "25599"]
+    environment:
+      GATE_AGENT_PREFIX: "ag_"
+      # 与内门保持一致：同一套传送自 ack 行为，别让内外门语义分叉
+      GATE_SELF_TELEPORT_ACK: "1"
+    volumes:
+      - ./world/src:/app/src:ro
+    ports:
+      - "0.0.0.0:25702:25700"
+    depends_on:
+      mc:
+        condition: service_healthy
+
+  # 皮肤注入代理（2026-09-21 从宿主直跑收编进栈）
+  # 脚本与皮肤库的**正本仍在 .dsh harness 侧**（面板在那里改指派 = 单一事实源），此处只读挂载，
+  # 不在仓里复制第二份，避免"两份皮肤库各说各话"。仓内 world/host-services/skin-proxy/ 只留说明与指纹。
+  # 上游改走容器网内的门（gate:25700），不再绕宿主发布口。
+  # 防僵死：脚本已加握手看门狗（SKIN_HS_TIMEOUT_MS）—— 门容器重建后出现的「半死连接」
+  # 原先会让首个代理会话干等到客户端自己的 30s 超时；现在 12s 主动断开，客户端快速失败重连。
+  # skin-proxy：2026-09-21 尝试收编进容器 → 【未通过，暂回滚宿主直跑】
+  # 实测：新进程第一次会话必成，之后本进程发出的上游连接"TCP 连上但字节到不了门"，
+  #   直连 gate:25700 得 1/5、经 host.docker.internal:25701 得约 2/5；同容器另起的探针进程每次都成
+  #   → 判定为代理进程在 Linux 下的状态/资源问题（Windows 宿主长跑正常），非门非网络非配置。
+  # 保留定义供下次尝试；届时先解决该泄漏，或按已定架构改走 GameProfile textures 进皮（见 notes）
+  #   一旦服务端进皮落地，皮肤代理即可整体退役，不必再搬。
+  # skin-proxy:
+  #   image: qiandengji-world:20260913-qd1
+  #   pull_policy: never
+  #   restart: unless-stopped
+  #   entrypoint: ["node", "/app/skin-proxy-local.mjs"]
+  #   environment:
+  #     TZ: Asia/Shanghai
+  #     SKIN_LISTEN_PORT: "25566"
+  #     # 上游经宿主发布口进内门（与容器化 ViaProxy 同一处方）：
+  #     # 直连容器网内的 gate:25700 会在 CONFIGURATION 阶段卡住（门侧 census front_total=2 后静默），
+  #     # 走 host.docker.internal:25701 则握手完整——同型问题在 ViaProxy 容器化时已实测复现并以此解决。
+  #     SKIN_UPSTREAM_HOST: gate
+  #     SKIN_UPSTREAM_PORT: "25700"
+  #     MC_VERSION: "1.21.1"
+  #     SKINS_FILE: /skin-data/skins.json
+  #     SKIN_PROXY_STAT: /tmp/skin-proxy-status.json
+  #     SKIN_HS_TIMEOUT_MS: "12000"
+  #   volumes:
+  #     # 必须挂在 /app 下：脚本用 ESM import 'minecraft-protocol'，而 ESM 不认 NODE_PATH，
+  #     # 只有与镜像内 /app/node_modules 同层才解析得到（挂 /opt 会 ERR_MODULE_NOT_FOUND）。
+  #     - "C:/Users/lzl19/.dsh/profiles/web/skin-proxy-local.mjs:/app/skin-proxy-local.mjs:ro"
+  #     - "C:/Users/lzl19/.dsh/profiles/web/data:/skin-data"
+  #   ports:
+  #     - "127.0.0.1:25566:25566"   # 宿主 bot 沿用同一地址；绝不公网
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   depends_on:
+  #     mc:
+  #       condition: service_healthy
+  #     gate:
+  #       condition: service_started
+  #   healthcheck:
+  #     test: ["CMD", "node", "-e", "const s=JSON.parse(require('fs').readFileSync('/tmp/skin-proxy-status.json','utf8'));process.exit(Date.now()-s.ts<45000?0:1)"]
+  #     interval: 30s
+  #     timeout: 8s
+  #     retries: 3
+
+  # 基岩桥（2026-09-21 收编进栈）：原先在宿主直跑 ViaProxy，理由是旧结论
+  # 「Docker Desktop 不能把外部 UDP 放进来」——该结论已被实测推翻：造物主手机（WiFi 外部设备）
+  # 成功连进容器发布口（Geyser 日志 Player connected with username MicroKQ）✓
+  # 所以收进栈，跑**同一个 ViaProxy**（它的 ViaVersion 把后端钉在 1.21.1，门只认 767；
+  # 裸 Geyser 没有 java.version 键、会自行挑新协议 → 握手即断，故不能用裸 Geyser）。
+  # 上游仍走宿主发布口进内门（实测可用那条路）；对外仍是 UDP 19140 → 访客与路由器转发一字不改。
+  # 大 jar（47MB）不入库：启动参数与来源见 world/host-services/viaproxy-bedrock/notes.md
+  bedrock-bridge:
+    image: itzg/minecraft-server:java21
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /viaproxy
+    entrypoint: ["java", "-jar", "ViaProxy-3.4.12.jar", "cli",
+                 "--target-address", "gate:25700",
+                 "--target-version", "1.21.1",
+                 "--auth-method", "NONE",
+                 "--bind-address", "0.0.0.0:25568"]
+    environment:
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./server/viaproxy:/viaproxy
+    # 健康检查：绝不能用镜像自带的 mc-health（它探 MC Java 服 25565，本服务是 ViaProxy，
+    # 必然失败 → 假 unhealthy，还会让 panel/inventory 误报、甚至触发看门狗乱重启）。
+    # 也不能用 /dev/tcp（容器默认 sh 是 dash 不支持 ✓ 实测报 cannot create）；
+    # Java 监听在双栈上，/proc/net/tcp 也查不到（要 tcp6）。
+    # 故用 CMD 数组直接调 python3 建 TCP ——不经 shell，无引号坑，探它自己监听的 25568。
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;socket.create_connection(('127.0.0.1',25568),3)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 45s
+    ports:
+      - "0.0.0.0:19140:19140/udp"   # 基岩入口，与退役前同口
+      - "127.0.0.1:25568:25568/tcp" # 仅本机：可用 mineflayer 打它验"门+翻译"链路（免手机）
+    depends_on:
+      gate:
+        condition: service_started
+
+  # numen 假玩家身体工具 MCP（2026-09-21 收编：原先只在宿主以 stdio 子进程跑）
+  # 原先它只在宿主上以 stdio 子进程跑（QwenPaw driver 拉起），现提供容器内 HTTP 传输。
+  # 通道文件写 /mcdata（= 宿主 server/world-data）—— 与 world 服务 MC_DATA_DIR=/app/data 同源，
+  # 否则 chant/pray 会石沉大海（LESSONS AUDIT-02 的教训）。
+  # 已知缺口：容器内无 node/tsx → render_view 会明确拒绝并提示改用 look_around（出图暂留宿主）。
+  numen-mcp:
+    image: qiandengji-qwenpaw-game:2.2.1-memory1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/ops-world/sidecar/guard/mcp_numen.py", "--http"]
+    environment:
+      TZ: Asia/Shanghai
+      NUMEN_REPO_ROOT: /ops-world
+      NUMEN_DATA_DIR: /ops-world/data
+      MC_DATA_DIR: /mcdata
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_SECRET: /run/secrets/rcon
+      NUMEN_MCP_TOKEN_FILE: /run/secrets/numen-mcp
+      NUMEN_MCP_PORT: "8090"
+      NUMEN_COMPANION: Kirito
+      NUMEN_DISPLAY: 桐人
+    ports:
+      - "127.0.0.1:18091:8090"   # 只绑宿主 loopback（供宿主的 mc-god 连），绝不公网
+    volumes:
+      - ./world:/ops-world:ro
+      - ./server/world-data:/mcdata
+      - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
+      - ./server/agents/secret/numen-mcp-token.txt:/run/secrets/numen-mcp:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u;u.urlopen('http://127.0.0.1:8090/livez',timeout=3)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 25s
+
+  npc:
+    image: qiandengji-sidecar:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    entrypoint: ["python3", "-u", "/opt/sidecar/mc_npc.py"]
+    environment:
+      TZ: Asia/Shanghai
+      NPC_DATA_DIR: /mcdata
+      MC_DATA_DIR: /world-data
+      NPC_MAGIC_DIR: /world-data
+      NPC_LOG_PATH: /mclogs/latest.log
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_PASSWORD_FILE: /world-data/rcon-secret.txt
+      NPC_SPAWN_MISSING: "0"
+      NPC_VILLAGE_GUARD: "0"
+      NPC_GUILD_AUTOGENERATE: "0"
+      NPC_GUILD_BASIC_QUESTS: "1"
+      NPC_GUILD_QUEUE: /world-data/guild-cli
+      NPC_LLM_ENABLED: "0"
+      NPC_GUILD_AGENT_ENABLED: "1"
+      NPC_WORLD_OPERATIONS_REQUESTS: /ops-world-requests
+      MAID_ROLES_MANIFEST_FILE: /mcdata/village/maid-agents/public/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /mcdata/village/party/public/roles.json
+      NPC_WORLD_PLANNING_PUBLIC: /party-public/world-planning.json
+      MAID_AGENT_ENABLED: "1"
+      MAID_GUARDIAN_ENABLED: "1"
+      MAID_BACKUP_DIR: /maid-backups
+      MAID_AGENT_TOKEN_FILE: /mcdata/village/maid-agent-token
+      MAID_IDENTITY_KEY_FILE: /run/secrets/maid-identity
+      MAID_REGISTRY_DIR: /mcdata/village/maid-agents
+      PARTY_ENABLED: "1"
+      PARTY_STATE_DIR: /mcdata/village/party
+      PARTY_PUBLIC_FILE: /party-public/party.json
+      GV_BASE: /godvoice
+      QWENPAW_CONSOLE_TOKEN_FILE: /run/secrets/qwenpaw-console-token
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./world/survival:/opt/survival:ro
+      - ./server/survival-agent-state/survival:/survivor-state
+      - ./server/operations-agent-state/work/operations/world-requests:/ops-world-requests:ro
+      - ./tools/npc_health.py:/opt/npc_health.py:ro
+      - ./tools/register_maid_agents.py:/opt/register_maid_agents.py:ro
+      - ./world/ops:/opt/ops:ro
+      - ./server/team-state:/team
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
+      - ./server/agents/secret/console-token.txt:/run/secrets/qwenpaw-console-token:ro
+      - ./server/mc/config/qiandeng_maid_bridge/identity.key:/run/secrets/maid-identity:ro
+      - ./server/world-data:/world-data
+      - ./server/mcdata:/mcdata
+      - ./server/mc/logs:/mclogs:ro
+      - ./server/mc/shadow/data/maid_backups:/maid-backups:ro
+      - ./server/panel-state:/party-public
+      - ./server/mc/data/godvoice:/godvoice
+    depends_on:
+      mc:
+        condition: service_healthy
+      world:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "/opt/npc_health.py", "--state", "/mcdata/npc-health.json"]
+      interval: 20s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+
+  resources:
+    image: qiandengji-sidecar:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python3", "-m", "http.server", "9090", "--directory", "/public"]
+    ports:
+      - "127.0.0.1:19090:9090"
+    volumes:
+      - ./server/public:/public:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/packs/', timeout=3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  qwenpaw:
+    image: qiandengji-qwenpaw-game:2.2.1-memory1
+    pull_policy: never
+    restart: unless-stopped
+    # Native HTTP MCP clients are loaded with each role. Start their NPC
+    # endpoint before QwenPaw so a cold boot does not leave inactive clients.
+    depends_on:
+      npc:
+        condition: service_healthy
+    entrypoint: ["python", "-u", "/survival/game_service.py"]
+    ports:
+      - "127.0.0.1:18089:8088"
+    environment:
+      HOME: /state/home
+      QWENPAW_WORKING_DIR: /state/work
+      COPAW_WORKING_DIR: /state/work
+      QWENPAW_SECRET_DIR: /state/secret
+      COPAW_SECRET_DIR: /state/secret
+      QWENPAW_DISABLE_KEYRING: "1"
+      QWENPAW_KEYRING_ACCOUNT: qiandengji
+      QWENPAW_AUTH_ENABLED: "0"
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
+      MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /party-roles/roles.json
+      QIANDENG_OPERATIONS_STATE_DIR: /operations-state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./server/agents:/state
+      - ./server/team-state:/team
+      - ./server/panel-state:/public:ro
+      - ./world/sidecar:/ops-sidecar:ro
+      - ./world/ops:/ops:ro
+      - ./world/survival:/survival:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
+      - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
+      - ./server/mcdata/village/party/public:/party-roles:ro
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests
+      - ./server/engineering/snapshots:/engineering/snapshots
+      - ./server/engineering/receipts:/engineering/receipts:ro
+      - ./server/engineering/state:/engineering/state
+      - ./server/operations-agent-state/operations-budget:/operations-state/operations-budget
+      - ./server/operations-agent-state/run-reports:/operations-state/run-reports:ro
+      - ./server/operations-agent-state/work/operations:/operations-state/work/operations
+      - ./server/operations-agent-state/secret/console-token.txt:/operations-state/secret/console-token.txt:ro
+      - ./docs:/reference/docs:ro
+    networks: [default, operations]
+    healthcheck:
+      test: ["CMD", "python", "/ops/qwenpaw_health.py"]
+      # Full native audit covers ten roles and 94 enabled skill bindings.
+      # Measured at ~40s after deduplicating reads within one probe.
+      interval: 120s
+      timeout: 120s
+      retries: 4
+      start_period: 60s
+
+  qwenpaw-ops:
+    # Archived after the ten-role team was consolidated into game QwenPaw.
+    # Retain its data and definition for explicit recovery; never start by default.
+    profiles: [legacy-operations]
+    image: qiandengji-qwenpaw-ops:2.2.0
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/ops/learning_service.py", "--runtime", "operations"]
+    ports:
+      - "127.0.0.1:18090:8088"
+    environment:
+      HOME: /state/home
+      QWENPAW_WORKING_DIR: /state/work
+      COPAW_WORKING_DIR: /state/work
+      QWENPAW_SECRET_DIR: /state/secret
+      COPAW_SECRET_DIR: /state/secret
+      QWENPAW_DISABLE_KEYRING: "1"
+      QWENPAW_KEYRING_ACCOUNT: qiandengji-ops
+      QWENPAW_AUTH_ENABLED: "0"
+      MAID_ROLES_MANIFEST_FILE: /maid-roles/roles.json
+      PARTY_ROLES_MANIFEST_FILE: /party-roles/roles.json
+    volumes:
+      - ./server/operations-agent-state:/state
+      - ./server/mcdata/village/maid-agents/public:/maid-roles:ro
+      - ./server/mcdata/village/party/public:/party-roles:ro
+      - ./server/team-state:/team
+      - ./world/sidecar:/ops-sidecar:ro
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests
+      - ./server/engineering/snapshots:/engineering/snapshots
+      - ./server/engineering/receipts:/engineering/receipts:ro
+      - ./server/engineering/state:/engineering/state
+      - ./world/ops:/ops:ro
+      - ./server/panel-state:/public:ro
+      - ./docs:/reference/docs:ro
+    networks: [operations]
+    mem_limit: 2g
+    cpus: 2
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "/ops/operations_team_health.py"]
+      interval: 30s
+      timeout: 30s
+      retries: 4
+      start_period: 90s
+
+  survivor:
+    image: qiandengji-survivor:2.2.0-autonomy23
+    pull_policy: never
+    restart: unless-stopped
+    stop_grace_period: 120s
+    init: true
+    entrypoint: ["python", "-u", "/survival/service.py"]
+    environment:
+      TZ: Asia/Shanghai
+      HOME: /state/home
+      QWENPAW_WORKING_DIR: /state/work
+      COPAW_WORKING_DIR: /state/work
+      QWENPAW_SECRET_DIR: /state/secret
+      COPAW_SECRET_DIR: /state/secret
+      QWENPAW_DISABLE_KEYRING: "1"
+      QWENPAW_KEYRING_ACCOUNT: qiandengji-survivor
+      QWENPAW_AUTH_ENABLED: "0"
+      SURVIVOR_QWEN_MODE: external
+      PARTY_ENABLED: "1"
+      PARTY_STATE_DIR: /party-state
+      # P2：世界级共享技能库，与 npc 侧共享同一目录（server/mcdata/village/party）
+      WORLD_SKILLS_DIR: /party-state/skills-world
+      QWENPAW_API_URL: http://qwenpaw:8088/api
+      MODEL_TASK_ROUTES_FILE: /etc/qiandeng/model-task-routes.json
+      SURVIVOR_MCP_TOKEN_FILE: /run/secrets/survivor-mcp
+      SURVIVOR_SKILL_QUEUE: /survival-skills-queue
+      SURVIVOR_GUILD_QUEUE: /survival-guild-queue
+      GV_BASE: /godvoice
+      MC_RCON_HOST: mc
+      MC_RCON_PORT: "25575"
+      MC_RCON_SECRET: /run/secrets/rcon
+    volumes:
+      - ./world/survival:/survival
+      - ./server/survival-agent-state:/state
+      - ./server/mcdata/village/party:/party-state
+      - ./world/sidecar:/party-code:ro
+      - ./world/ops:/ops:ro
+      - ./config/model-task-routes.json:/etc/qiandeng/model-task-routes.json:ro
+      - ./server/panel-state:/public
+      - ./server/world-data/rcon-secret.txt:/run/secrets/rcon:ro
+      - ./server/survival-agent-state/mcp-token:/run/secrets/survivor-mcp:ro
+      - ./server/world-data/skill-cli:/survival-skills-queue
+      - ./server/world-data/guild-cli:/survival-guild-queue
+      - ./server/mc/data/godvoice:/godvoice
+      - ./world/sidecar/guard/skills:/survival-knowledge:ro
+      - ./server/world-data/player-chat.jsonl:/world-observation/player-chat.jsonl:ro
+      - ./server/world-data/goddess-orders.jsonl:/world-observation/goddess-orders.jsonl:ro
+      - ./server/world-data/chant-reply.jsonl:/world-observation/chant-reply.jsonl:ro
+      - ./server/world-data/guard-inbox.jsonl:/world-observation/guard-inbox.jsonl:ro
+    depends_on:
+      mc:
+        condition: service_healthy
+      qwenpaw:
+        # Qwen's full health probes this service's MCP. Start the body service
+        # first; its existing readiness gate prevents inference before tools load.
+        condition: service_started
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 160
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "/survival/health.py"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 180s
+
+  voice:
+    image: qiandengji-voice:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/opt/sidecar/god-voice-watcher.py"]
+    environment:
+      TZ: Asia/Shanghai
+      GV_BASE: /godvoice
+      TTS_LOCAL_URL: http://host.docker.internal:8100
+      VOICE_ALLOW_EDGE_FALLBACK: "0"
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./tools/voice_health.py:/opt/voice_health.py:ro
+      - ./server/mc/data/godvoice:/godvoice
+    healthcheck:
+      test: ["CMD", "python", "/opt/voice_health.py", "--state", "/godvoice/.voice-health.json"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  asr:
+    image: qiandengji-voice:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["python", "-u", "/opt/sidecar/mic_asr_watcher.py"]
+    environment:
+      TZ: Asia/Shanghai
+      MIC_BASE: /godvoice/mic
+      ASR_MODEL_DIR: /model
+      ASR_THREADS: "2"
+      ASR_MIN_DUR: "0.45"
+      VOICE_ALLOWED_PLAYERS: MengMeng
+    volumes:
+      - ./world/sidecar:/opt/sidecar:ro
+      - ./tools/voice_health.py:/opt/voice_health.py:ro
+      - ./server/mc/data/godvoice:/godvoice
+      - ./server/asr-model:/model:ro
+    healthcheck:
+      test: ["CMD", "python", "/opt/voice_health.py", "--state", "/godvoice/mic/.asr-health.json"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  tts:
+    image: qiandengji-tts:kokoro-1.1-qd1
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["python3", "-u", "/app/tts_api.py"]
+    environment:
+      TZ: Asia/Shanghai
+      TTS_ENGINE: kokoro
+      KOKORO_MODEL_DIR: /kokoro
+      TTS_VOICE_MAP: /app/kokoro-voices.json
+      TTS_VOICES: /voices
+      TTS_DEFAULT_VOICE: goddess
+      TTS_DEVICE: cuda:1   # 2026-09-25 小智：挪到 3080Ti，把 3090 整张留给 LLM（改回 cuda:0 即回退）
+      TTS_HOST: 0.0.0.0
+      TTS_PORT: "8100"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      - ./server/kokoro-state/model:/kokoro:ro
+      - ./config/kokoro-voices.json:/app/kokoro-voices.json:ro
+      - ./server/tts-state/voices:/voices:ro
+      - ./server/kokoro-state/tmp:/tmp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8100/health',timeout=5)).get('ok') is True"]
+      interval: 30s
+      timeout: 8s
+      start_period: 180s
+      retries: 10
+
+  control:
+    image: qiandengji-world:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["node", "/app/admin/control-service.mjs"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      QIANDENG_ENGINEERING_ENABLED: "1"
+    volumes:
+      - ./world/admin:/app/admin:ro
+      - ./server/admin-state/secrets/control-token.txt:/run/secrets/control-token:ro
+      - ./server/admin-state/operations:/control-state
+      - ./server/world-data:/maintenance
+      - ./server/engineering/config.json:/engineering/config.json:ro
+      - ./server/engineering/requests:/engineering/requests:ro
+      - ./server/engineering/snapshots:/engineering/snapshots:ro
+      - ./server/engineering/receipts:/engineering/receipts
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http'),f=require('fs');h.get('http://127.0.0.1:3090/healthz',{headers:{Authorization:'Bearer '+f.readFileSync('/run/secrets/control-token','utf8').trim()}},r=>{r.resume();if(r.statusCode!==200)process.exitCode=1}).on('error',()=>process.exitCode=1)"]
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  inventory:
+    image: qiandengji-sidecar:20260913-qd1
+    pull_policy: never
+    restart: unless-stopped
+    working_dir: /project
+    entrypoint: ["python3", "-u", "/project/tools/inventory_service.py"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./tools:/project/tools:ro
+      - ./config:/project/config:ro
+      - ./world/ops:/project/world/ops:ro
+      - ./server/agents/work:/project/server/agents/work:ro
+      - ./server/team-state:/project/server/team-state:ro
+      - ./server/panel-state:/project/server/panel-state
+      - ./server/inventory-state:/project/server/inventory-state
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python3", "/project/tools/inventory_service.py", "--health"]
+      interval: 30s
+      timeout: 8s
+      start_period: 45s
+      retries: 3
+
+networks:
+  operations: {}

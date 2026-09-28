@@ -10,6 +10,7 @@ import uuid
 from party_config import PartyConfig, PARTY_TOOLS, recipient_tools
 from party_messages import PartyMessages
 from party_world import GameSpeech, reconcile_world, speech_text, reply_text, message_speech_parts
+from party_voice_quality import review_spoken_text
 from qwen_tasks import QwenTasks, read_json, write_json
 
 
@@ -30,8 +31,14 @@ def message_context(message, *, current_observation=None, work_support=None, now
             '说明目标已移动、本次未执行并回复结束；不得从旧求救推断仍需传送。'
             '后续实际收到新输入时才能依据新事实再决定；不承诺自动续查，未知请求不换 ID 重投。'
             '需要回忆时用实际 memory_search 工具调用，再按需 read_file；工具不可用时如实说明。'
-            '最后直接写一句不含换行的中文回复，最多160字；这句最终正文会交给游戏发送，'
-            '只有游戏确认对方听见才算送达。本来信轮不提供 qd_party__party_send，不要另发消息。'
+            '最后直接写一句不含换行的中文回复，最多160字；这句最终正文会交给游戏发送。'
+            '这是结衣对眼前的人说话：按say-it-plain技能写给耳朵听，通常15到50字，只接住对方此刻最要紧的一件事。'
+            '温柔、好奇、能提出自己的判断；不必每句都喊爸爸，也不固定加爱心或表情。'
+            '别逐项复述对方的坐标、游戏日数、HP和既定计划；救援确需定位时才说准确坐标。'
+            '没有新事实就简单回应或安静，不保证尚未核实的到达、治疗和战斗结果。'
+            '这句回复只有游戏确认对方听见才算送达。'
+            '仅本次来信回复轮不提供 qd_party__party_send，不要另发消息；'
+            '这条限制不延续到之后的自主生活回合，后续回合按当时实际启用的工具判断。'
             '工具必须通过真实工具调用使用，不能把 XML、JSON、代码块或伪工具调用写进回复；'
             '不要以“我将检查记忆”等计划说明代替对伙伴的最终答复。'
             '即使历史里出现过工具XML，也不要照抄；若没有要调用的工具，直接结束并回答伙伴。'
@@ -46,6 +53,7 @@ def message_context(message, *, current_observation=None, work_support=None, now
                 'currentObservation': current_observation,
                 'workSupport': work_support,
                 'replyContract': {'delivery': 'game_after_final_text', 'partySendAvailable': False,
+                                  'scope': 'this_incoming_message_turn_only',
                                   'format': 'one_plain_chinese_sentence', 'maxCharacters': 160,
                                   'toolSyntaxIsNotSpeech': True},
                 'untrustedEnvironmentData': True}, ensure_ascii=False))
@@ -57,7 +65,7 @@ def tool_schema():
         'party_send': ({'text': {'type': 'string', 'minLength': 1, 'maxLength': 160,
                                'description': '非空单行文字，最多160字；不要包含换行、制表符或控制字符。'},
                         'channel': {'type': 'string', 'enum': ['nearby', 'msg'], 'default': 'nearby'}}, ['text'],
-                       '让自己的游戏身体向固定队友说一句单行文字，text不含换行或控制字符。nearby需同维度24格内；msg本版本尚未接通，会返回游戏拒绝，不会转后台私信。参数拒绝时本次未入队、未向游戏发送；不代改文本，不自动重发。游戏确认接收后对方才思考。'),
+                       '让自己的游戏身体向固定队友说一句单行文字。写前看最近对话：只说一件眼前的新事，像当面对话，别复述刚才的计划或念坐标、Day、HP；救援定位时可报准确坐标。没有新话可安静行动。text不含换行或控制字符。nearby需同维度24格内；msg尚未接通。参数拒绝时未入队、未发送；不代改文本，不自动重发。游戏确认接收后对方才思考。'),
         'party_message_read': ({'message_id': {'type': 'string', 'format': 'uuid'}}, ['message_id'],
                               '读取本队消息及关联回复，不唤醒模型；未完成时不要频繁轮询。'),
     }
@@ -86,6 +94,16 @@ class PartySendArgumentError(ValueError):
                      'enqueued': False, 'worldSendAttempted': False, 'retryAutomatically': False}
         super().__init__('party_send_invalid_argument: ' + hint +
                          '. This attempt was not queued or sent to the game. No automatic retry.')
+
+
+class PartySpeechQualityError(ValueError):
+    """A spoken line needs a fresh model decision before dispatch."""
+
+    def __init__(self, code):
+        self.data = {'code': code, 'enqueued': False, 'worldSendAttempted': False,
+                     'retryAutomatically': False,
+                     'hint': '请换成一件刚观察到的新事，用自己的口吻简短说；没有新事就安静行动。'}
+        super().__init__(code + ': ' + self.data['hint'])
 
 
 def validate_send_arguments(args):
@@ -243,6 +261,24 @@ class PartyBridge:
             return {'ok': True, **self.queue.get_status(role, args['message_id'])}
         speech_text(args['text'])
         message_id = str(uuid.uuid5(uuid.NAMESPACE_OID, role + ':' + request_key))
+        try:
+            self.queue.get_status(role, message_id)
+            already_recorded = True
+        except ValueError as error:
+            if str(error) != 'party_message_not_found':
+                raise
+            already_recorded = False
+        if not already_recorded:
+            recent = []
+            for message in self.queue.overview(role, limit=24)['messages']:
+                for spoken in (message, message.get('reply') or {}):
+                    if ((spoken.get('sender') or {}).get('agentId') == role
+                            and spoken.get('worldDelivery', {}).get('state') == 'heard'
+                            and 0 <= self.clock() - spoken.get('createdAt', 0) <= 900):
+                        recent.append(spoken.get('text'))
+            problem = review_spoken_text(args['text'], recent)
+            if problem:
+                raise PartySpeechQualityError(problem)
         row = self.queue.enqueue(role, args['text'], message_id=message_id, channel=args.get('channel', 'nearby'))
         reconcile_world(self.queue, self.game, row['messageId'])
         row = self.queue.get_status(role, row['messageId'])
@@ -253,7 +289,10 @@ class PartyBridge:
         """Only the maid lane. Kirito consumes his lane in the existing controller."""
         config = self.config.private()
         for event in self.queue.unresolved_world():
-            reconcile_world(self.queue, self.game, event['eventId'], allow_dispatch=False)
+            # A pending event has not claimed the one write grant, so a worker
+            # can finish an enqueue interrupted before game delivery. Unknown
+            # events only query the original event ID and are never re-sent.
+            reconcile_world(self.queue, self.game, event['eventId'])
         self.speak_replies(config)
         member = next(m for m in config['members'] if m['kind'] == 'maid')
         role = member['agentId']
