@@ -141,6 +141,102 @@ class MotorBoundaryTests(unittest.TestCase):
         self.assertFalse(self.calls)
         self.assertEqual(self.finalizations, 0)
 
+    def request_drain(self):
+        control = {'enabled': True, 'drain': {'status': 'requested', 'requestId': 'operator-drain-exact'}}
+        write_json(self.root/'control.json', control)
+        return control
+
+    def test_drain_between_ticks_retires_known_read_only_program_boundary(self):
+        job = self.claimed_skill()
+        job.pop('lastTurnId'); job.pop('lastExecution')
+        job.update(steps=0, observations=1, lastObservation={'tool': 'navigation_sense'})
+        write_json(self.root/'skill-job.json', job)
+        control = self.request_drain()
+        tick(self.controller, self.body, control)
+        self.assertEqual(read_json(self.root/'skill-job.json')['status'], 'cancelled')
+        self.assertEqual(view(self.root)['requests'][0]['status'], 'cancelled')
+        self.assertEqual(self.finalizations, 1)
+        self.assertEqual(read_json(self.root/'control.json'), control)
+        self.assertFalse(self.calls)
+
+    def test_drain_waits_for_exact_native_terminal_then_finalizes_once_without_cancel(self):
+        job = self.claimed_skill()
+        action = {'tool': 'goto', 'args': {'x': 180, 'y': 64, 'z': 100}}
+        job.update(lastAction=action, lastResult={'actionId': 'a'*32})
+        write_json(self.root/'skill-job.json', job)
+        self.receipts[job['lastTurnId']][0].update(action)
+        control = self.request_drain()
+        self.body['task']['busy'] = True
+        tick(self.controller, self.body, control)
+        self.assertEqual(read_json(self.root/'skill-job.json')['status'], 'running')
+        self.body['task']['busy'] = False
+        tick(self.controller, self.body, control)
+        tick(self.controller, self.body, control)
+        self.assertEqual(read_json(self.root/'skill-job.json')['status'], 'cancelled')
+        self.assertEqual(view(self.root)['requests'][0]['status'], 'cancelled')
+        self.assertEqual(self.finalizations, 1)
+        self.assertEqual(read_json(self.root/'control.json'), control)
+        self.assertFalse(self.calls)
+
+    def test_drain_never_retires_unknown_mismatched_or_dispatching_program(self):
+        job = self.claimed_skill()
+        action = {'tool': 'goto', 'args': {'x': 180, 'y': 64, 'z': 100}}
+        job.update(lastAction=action, lastResult={'actionId': 'a'*32})
+        receipt = self.receipts[job['lastTurnId']][0] | action
+        control = self.request_drain()
+        cases = ('unknown_file', 'inflight_file', 'reserved_lease', 'unknown_lease',
+                 'execution_pending', 'body_unavailable', 'dispatching', 'wrong_turn',
+                 'wrong_action', 'wrong_args', 'unconfirmed', 'effect_unconfirmed', 'unknown_receipt')
+        for case in cases:
+            with self.subTest(case=case):
+                write_json(self.root/'skill-job.json', job)
+                current = dict(receipt)
+                if case == 'unknown_file': write_json(self.root/'unknown.json', {'actionId': 'unknown'})
+                if case == 'inflight_file': write_json(self.root/'inflight-action.json', {'actionId': 'flight'})
+                if case in ('reserved_lease', 'unknown_lease'):
+                    write_json(self.root/'lease.json', {'status': case.split('_')[0]})
+                if case == 'execution_pending': self.controller.data['actionExecution']['inFlight'] = True
+                if case == 'body_unavailable': self.body['ok'] = False
+                if case == 'dispatching': write_json(self.root/'skill-job.json', job | {'status': 'dispatching'})
+                if case == 'wrong_turn': current['turnId'] = 'other'
+                if case == 'wrong_action': current['actionId'] = 'b'*32
+                if case == 'wrong_args': current['args'] = {'x': 181, 'y': 64, 'z': 100}
+                if case == 'unconfirmed': current['completionConfirmed'] = False
+                if case in ('effect_unconfirmed', 'unknown_receipt'): current['status'] = case.replace('_receipt', '')
+                self.receipts[job['lastTurnId']] = [current]
+                tick(self.controller, self.body, control)
+                self.assertEqual(read_json(self.root/'skill-job.json')['status'], 'dispatching' if case == 'dispatching' else 'running')
+                self.assertEqual(view(self.root)['requests'][0]['status'], 'claimed')
+                self.assertEqual(self.finalizations, 0)
+                for name in ('unknown.json', 'inflight-action.json'):
+                    (self.root/name).unlink(missing_ok=True)
+                write_json(self.root/'lease.json', {'status': 'closed'})
+                self.controller.data['actionExecution']['inFlight'] = False
+                self.body['ok'] = True
+        self.assertFalse(self.calls)
+
+    def test_drain_retries_practice_after_known_cancellation_without_redispatch(self):
+        job = self.claimed_skill()
+        job.pop('lastTurnId'); job.pop('lastExecution')
+        job.update(steps=0, observations=1)
+        write_json(self.root/'skill-job.json', job)
+        control = self.request_drain()
+        attempts = []
+        def settle():
+            attempts.append(True)
+            if len(attempts) > 1:
+                self.settle_practice()
+        self.controller.settle_practice = settle
+        tick(self.controller, self.body, control)
+        self.assertEqual(read_json(self.root/'skill-job.json')['status'], 'cancelled')
+        self.assertEqual(view(self.root)['requests'][0]['status'], 'claimed')
+        tick(self.controller, self.body, control)
+        tick(self.controller, self.body, control)
+        self.assertEqual(view(self.root)['requests'][0]['status'], 'cancelled')
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(self.finalizations, 1)
+        self.assertFalse(self.calls)
+
 
 if __name__ == '__main__':
     unittest.main()

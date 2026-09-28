@@ -192,8 +192,13 @@ class MotorOccurrenceTests(unittest.TestCase):
         def action(*args, **kwargs):
             calls.append((args, kwargs))
             raise TimeoutError('lost ACK after native admission')
+        def open_lease(turn_id, expires_at):
+            # The real gateway persists this before any native admission.
+            write_json(self.root / 'lease.json', {'schema': 1, 'turnId': turn_id,
+                'status': 'open', 'expiresAt': int(expires_at),
+                'actionLimit': 1, 'actionsUsed': 0})
         controller = SimpleNamespace(root=self.root, clock=lambda: self.now, data={},
-            gateway=SimpleNamespace(open_lease=lambda *a: None, action=action, turn_receipts=lambda turn: []),
+            gateway=SimpleNamespace(open_lease=open_lease, action=action, turn_receipts=lambda turn: []),
             pause=pauses.append)
         first = self.enqueue()
         with self.assertRaises(TimeoutError):

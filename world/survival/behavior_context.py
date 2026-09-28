@@ -14,7 +14,9 @@ from numen_gateway import action_lock, read_json, write_json
 
 VERSION = 2
 FILE = 'behavior-context.json'
-MAX_TURNS = 24
+# A single native turn can accumulate many tool results. Retain only one
+# completed turn in the next request; factual handoff carries later continuity.
+MAX_TURNS = 2
 RULES = ('你自主选择目标和工具。只使用本条turn_id；最多6个串行动作，异步在途即等待，未知副作用不重放。'
          '受理、idle、程序done不证明目标完成。remember保存目标与下一步；结束用finish_turn=true及简短summary。'
          '输入为增量：updates替换同名顶层字段，removed删除字段，events仅本次新事件；body是当前完整身体摘要。'
@@ -35,9 +37,99 @@ REFERENCES = {
 }
 
 
+def _model_queue(value):
+    """Keep current queue authority and a few useful terminal outcomes."""
+    from motor_mailbox import compact_public
+    queue = compact_public(value)
+    if not isinstance(queue, dict) or not isinstance(queue.get('recent'), list):
+        return queue
+    recent = queue['recent']
+    for row in recent:
+        if not isinstance(row, dict) or row.get('kind') != 'skill' or row.get('status') not in (
+                'completed', 'failed', 'cancelled'):
+            continue
+        receipt = row.get('receipt')
+        if (not isinstance(receipt, dict) or receipt.get('status') not in ('done', 'replan', 'cancelled')
+                or receipt.get('effectConfirmed') is False):
+            continue
+        compact = {key: copy.deepcopy(receipt[key]) for key in
+                   ('status', 'reason', 'code', 'practiceRunId') if key in receipt}
+        execution = receipt.get('lastExecution')
+        if isinstance(execution, dict):
+            compact['lastExecution'] = {key: copy.deepcopy(execution[key]) for key in
+                ('turnId', 'actionId', 'tool', 'status', 'completionConfirmed',
+                 'positionBefore', 'positionAfter') if key in execution}
+            outcome = execution.get('navigationOutcome')
+            if isinstance(outcome, dict):
+                compact['lastExecution']['navigationOutcome'] = {
+                    key: copy.deepcopy(outcome[key]) for key in
+                    ('success', 'requested', 'final_x', 'final_y', 'final_z', 'horizontalDistance', 'reason')
+                    if key in outcome}
+        row['receipt'] = compact
+    terminal = [index for index, row in enumerate(recent) if isinstance(row, dict)
+                and row.get('status') in ('completed', 'failed', 'cancelled', 'expired')
+                and not (isinstance(row.get('receipt'), dict)
+                         and (row['receipt'].get('effectConfirmed') is False
+                              or row['receipt'].get('status') in ('unknown', 'in_flight', 'dispatched')))]
+    keep = set(terminal[-2:])
+    failed = [index for index in terminal if recent[index].get('status') == 'failed']
+    if failed:
+        keep.add(failed[-1])
+    # An unknown or unsettled effect must remain visible with its exact ID.
+    keep.update(index for index, row in enumerate(recent)
+                if index not in terminal)
+    if len(keep) != len(recent):
+        queue['recent'] = [row for index, row in enumerate(recent) if index in keep]
+        queue['olderTerminalOmitted'] = len(recent) - len(keep)
+        queue['receiptDetail'] += '; older terminal rows available with status(detail="full")'
+    return queue
+
+
+def _action_navigation(value):
+    """Keep tested tool entry points without repeating their long manual."""
+    if not isinstance(value, dict):
+        return value
+    if value.get('primaryMode') == 'motion_plan' and isinstance(value.get('motionPlan'), dict):
+        motion = value['motionPlan']
+        single = value.get('singleGoal') or {}
+        return {'primaryMode': 'motion_plan', 'testEligibility': value.get('testEligibility'),
+                'motionPlan': {key: copy.deepcopy(motion[key]) for key in ('sourceProof', 'callTemplate')
+                               if key in motion},
+                'singleGoal': {key: copy.deepcopy(single[key]) for key in ('sourceProof', 'callTemplate')
+                               if key in single},
+                'instruction': '连续赶路选2–6个已知路标用navigate_plan排队；快循环逐段勘察和执行，受阻交回慢脑。'
+                    '近距离单点用navigate。工具会验证版本和区域，回执才证明结果。'}
+    return {key: copy.deepcopy(value[key]) for key in ('sourceProof', 'callTemplate', 'testEligibility')
+            if key in value} | {'instruction': '已测试的单目标导航；工具会验证版本和区域，回执才证明结果。'}
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                    separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+
+
+def _decision_brief(context, memory, current):
+    """Put the agent's own next step beside fresh body and queue evidence."""
+    body = context.get('self') or context.get('body') or {}
+    queue = (current.get('motor') or {}).get('queue') or {}
+    recent = queue.get('recent') or []
+    latest = recent[-1] if recent and isinstance(recent[-1], dict) else {}
+    receipt = latest.get('receipt') or {}
+    focus = context.get('toolFocus') or {}
+    plan = memory.get('nextFocus')
+    return {
+        'agentPlanClaim': plan[:280] if isinstance(plan, str) else None,
+        'planEvidenceClaim': memory['lesson'][:240] if isinstance(memory.get('lesson'), str) else None,
+        'goalStateClaim': memory.get('goalState'),
+        'verifiedBody': {key: copy.deepcopy(body.get(key)) for key in
+                         ('position', 'hp', 'hunger') if key in body},
+        'bodyTaskBusy': (body.get('task') or {}).get('busy'),
+        'sceneFresh': ((context.get('observations') or {}).get('scene') or {}).get('fresh') is True,
+        'motor': {'pending': queue.get('pending'), 'activeCount': len(queue.get('active') or []),
+                  'latest': {key: latest.get(key) for key in ('requestId', 'kind', 'status') if key in latest},
+                  'latestResult': {key: receipt.get(key) for key in ('status', 'code', 'reason') if key in receipt}},
+        'jevPriority': {key: focus.get(key) for key in ('category', 'source') if key in focus},
+    }
 
 
 def _load(root, life):
@@ -87,8 +179,13 @@ def prepare(root, life, context, memory, *, learning=False):
         skip.add('observations')
     current = {k: copy.deepcopy(v) for k, v in context.items() if k not in skip}
     if isinstance(current.get('motor'), dict) and 'queue' in current['motor']:
-        from motor_mailbox import compact_public
-        current['motor']['queue'] = compact_public(current['motor']['queue'])
+        current['motor']['queue'] = _model_queue(current['motor']['queue'])
+    if purpose == 'action':
+        if 'continuousNavigation' in current:
+            current['continuousNavigation'] = _action_navigation(current['continuousNavigation'])
+        if isinstance(current.get('pacing'), dict) and 'instruction' in current['pacing']:
+            current['pacing']['instruction'] = ('直播时先推进安全的身体任务；等待昼夜或资源时选可做的探索、'
+                                                '建设或互动，有真实新变化再简短说话。')
     adventure = current.get('adventure')
     if isinstance(adventure, dict):
         adventure.pop('body', None)  # same observation is already in body
@@ -115,9 +212,10 @@ def prepare(root, life, context, memory, *, learning=False):
         envelope['observations'] = copy.deepcopy(context['observations'])
         envelope['brainProtocol'] = 1
     envelope.update(sessionId=lane['sessionId'], contextProtocol=VERSION, purpose=purpose,
-                    goal=goal, baseTurn=lane.get('ackTurn'), updates=updates,
-                    removed=sorted(set(baseline) - set(current)),
-                    events={k: v for k, v in events.items() if v})
+                      goal=goal, baseTurn=lane.get('ackTurn'), updates=updates,
+                      removed=sorted(set(baseline) - set(current)),
+                      events={k: v for k, v in events.items() if v})
+    envelope['decisionBrief'] = _decision_brief(context, memory, current)
     if fresh:
         rules = RULES if not embodied else (
             '目标和方法由你决定，当前身体授权只使用本条turn_id。updates替换同名顶层状态，removed删除状态；'

@@ -61,7 +61,7 @@ class InventoryServiceTests(unittest.TestCase):
         with patch.object(worker.urllib.request,'urlopen',return_value=io.BytesIO(b'{}')) as http:
             with worker.adapters(reader):
                 worker.operations.probe_shared_tts()
-                self.assertEqual(http.call_args.args,('http://tts:8100/health',))
+                self.assertEqual(http.call_args.args,('http://host.docker.internal:8100/health',))
                 self.assertEqual(worker.qwenpaw_inventory._container('shadow-qwenpaw'),{})
             self.assertIs(worker.operations.inspect_containers,old)
             self.assertIs(worker.qwenpaw_inventory._container,old_qwen)

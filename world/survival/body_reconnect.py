@@ -20,6 +20,13 @@ CAPABILITY = 'existing_body_restore_v1'
 # channel must stay open or the pause can never lift without an operator.
 BODY_PAUSE_REASONS = frozenset({'body_lost_during_decision', 'body_dead'})
 DEATH_PREFLIGHT_REJECTIONS = frozenset({'death_respawn_delay', 'death_safe_spawn_unavailable'})
+# 这些 blocked 理由属于“需复核但身体可能已由别的路径回来”——允许按节律做只读
+# roster 观察并自愈；绝不代表可以自行再次派发 restore（硬闸仍尊重）。
+OBSERVATION_RECOVERABLE = frozenset({'saved_task_requires_review'})
+# 有界自动召唤（幂等 summon 复用原 UUID/存档、不重放动作）：连续缺席这么多次才召、
+# 一天最多这么多次，仍不行回落人工。硬闸理由不走此路。
+SUMMON_AFTER_ABSENT = 3
+MAX_AUTO_SUMMONS = 5
 
 
 def episode_attempts(state, now):
@@ -125,13 +132,15 @@ class BodyReconnect:
                 if any(state.get(key) != value for key, value in expected.items()):
                     return {'status': 'blocked', 'reason': 'restore_binding_changed'}
                 restored_death = state.get('status') == 'blocked' and state.get('reason') == 'body_dead'
-                if restored_death and not (isinstance(body, dict) and body.get('ok') is True
+                recoverable_blocked = (state.get('status') == 'blocked'
+                                       and state.get('reason') in OBSERVATION_RECOVERABLE)
+                if (restored_death or recoverable_blocked) and not (isinstance(body, dict) and body.get('ok') is True
                         and body.get('bodyUuid') == expected['bodyUuid']
                         and body.get('bodyName') == expected['bodyName']
                         and body.get('gameMode') == 'survival'
                         and type(body.get('hp')) in (int, float) and math.isfinite(body['hp']) and body['hp'] > 0):
                     return state
-                if state.get('status') not in ('reserved', 'unknown', 'restoring') and not restored_death:
+                if state.get('status') not in ('reserved', 'unknown', 'restoring') and not (restored_death or recoverable_blocked):
                     return state
                 now = self.clock()
                 if now < state.get('nextConfirmationAt', 0):
@@ -143,14 +152,15 @@ class BodyReconnect:
                     online = roster_online(self.gateway._native_roster(), expected)
                     if online:
                         state.update(status='online', reason='identity_verified', verifiedAt=now,
-                                     readFailures=0, confirmationReason='identity_verified')
-                    elif not restored_death:
+                                     readFailures=0, absentStreak=0, confirmationReason='identity_verified')
+                        state.pop('autoSummonPendingAt', None)
+                    elif not (restored_death or recoverable_blocked):
                         state.update(status='unknown', reason='restore_outcome_unknown',
                                      confirmationReason='restore_not_observed')
                 except Exception as error:
                     conflict = str(error) == 'restore_live_identity_conflict'
-                    state.update(status='blocked' if conflict or restored_death else 'unknown',
-                                 reason='restore_live_identity_conflict' if conflict else 'body_dead' if restored_death else 'restore_outcome_unknown',
+                    state.update(status='blocked' if conflict or restored_death or recoverable_blocked else 'unknown',
+                                 reason='restore_live_identity_conflict' if conflict else 'body_dead' if restored_death else 'saved_task_requires_review' if recoverable_blocked else 'restore_outcome_unknown',
                                  confirmationReason=str(error) if isinstance(error, ValueError)
                                  else 'restore_roster_unavailable')
                 write_json(self.path, state)
@@ -185,6 +195,72 @@ class BodyReconnect:
         # revalidates every guard (identity, task ledger, playerdata) itself.
         resume_after_restore = (control.get('enabled') is not True
                                 and control.get('pauseReason') in BODY_PAUSE_REASONS)
+        # blocked recovery runs BEFORE the active-decision authorization gate: a leftover
+        # or in-flight decision must not starve it (that starvation was the second
+        # “起不来/要等运维” root, observed live 2026-09-26). Identity is computed
+        # best-effort here — a settings bundle that cannot bind is left to the gate and
+        # dispatch below (which raise the same way as before), so this never newly raises.
+        try:
+            expected = binding(settings)
+            state = read_json(self.path) if self.path.exists() else {'schema': 1, **expected, 'attempts': []}
+        except ValueError:
+            expected = None
+        if expected is not None:
+            if any(state.get(key) != value for key, value in expected.items()):
+                return {'status': 'blocked', 'reason': 'restore_binding_changed'}
+        # 硬闸（身份冲突/绑定变更）保持人工；“需复核”类理由按节律只读 roster 观察即可自愈，
+        # 不再空转成永久死锁；身体确实缺席时有界自动 summon 兜底。恢复排在授权闸之前，
+        # 但只读观察本身安全、自动 summon 另有 unknown/lease 护栏，绝不抢未决动作。
+        if expected is not None and state.get('status') == 'blocked':
+            if (state.get('reason') in OBSERVATION_RECOVERABLE
+                    and now >= state.get('nextCheckAt', 0)):
+                state['checkedAt'] = now
+                state['nextCheckAt'] = now + 60
+                try:
+                    online = roster_online(self.gateway._native_roster(), expected)
+                except Exception:
+                    # A failed roster read is not evidence that the body is absent.
+                    # In particular, it must never advance the summon threshold.
+                    state['readFailures'] = min(8, state.get('readFailures', 0) + 1)
+                    state['nextCheckAt'] = now + min(900, 30 * 2 ** state['readFailures'])
+                    write_json(self.path, state)
+                    return state
+                if online:
+                    state.update(status='online', reason='identity_verified',
+                                 verifiedAt=now, readFailures=0, absentStreak=0)
+                    state.pop('autoSummonPendingAt', None)
+                    self._auto_resume(control, resume_after_restore, now)
+                    write_json(self.path, state)
+                    return state
+                # 身体确认不在：saved_task_requires_review 是 numen 侧那道“遗留动作待复核”
+                # 挡住了按原身份 restore，但幂等 summon（按 bodyName 复用原 UUID 与存档、
+                # 不重放任何动作）能自愈——过去只能等运维手动 summon。这里做**有界**自动召唤：
+                # 连续缺席 SUMMON_AFTER_ABSENT 次、每天至多 MAX_AUTO_SUMMONS 次，仍失败则回落到
+                # 人工；身份冲突/绑定变更等硬闸不走此路。
+                absent = int(state.get('absentStreak', 0)) + 1
+                state['absentStreak'] = absent
+                summoned = state.get('autoSummons', [])
+                summoned = [t for t in summoned if isinstance(t, (int, float)) and now - t < 86400]
+                if (absent >= SUMMON_AFTER_ABSENT and len(summoned) < MAX_AUTO_SUMMONS
+                        and not state.get('autoSummonPendingAt')
+                        and not (self.root/'unknown.json').exists()
+                        and lease.get('status') != 'unknown'
+                        and not (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
+                    state['autoSummons'] = summoned + [now]
+                    # Reserve before the external command. A crash or lost RCON
+                    # reply cannot authorize another summon in this episode.
+                    state['autoSummonPendingAt'] = now
+                    write_json(self.path, state)
+                    try:
+                        self.gateway._native_summon(expected['ownerUuid'], expected['bodyName'])
+                        state['lastAutoSummonAt'] = now
+                        state['nextCheckAt'] = now + 20   # 召唤后尽快复查 roster 是否回来
+                    except Exception:
+                        state['autoSummonOutcome'] = 'unknown'
+                write_json(self.path, state)
+            return state
+        # Normal restore dispatch stays behind the full authorization gate (blocked
+        # recovery already ran above, so an active decision can no longer starve it).
         if ((control.get('enabled') is not True and not resume_after_restore)
                 # A decision record left over from the moment the body disappeared must
                 # not block the restore: a body-loss pause means that decision cannot
@@ -195,12 +271,13 @@ class BodyReconnect:
                 or (self.root/'unknown.json').exists() or lease.get('status') == 'unknown'
                 or (lease.get('status') == 'open' and lease.get('expiresAt', 0) > now * 1000)):
             return {'status': 'waiting', 'reason': 'restore_not_authorized'}
-        expected = binding(settings)
-        state = read_json(self.path) if self.path.exists() else {'schema': 1, **expected, 'attempts': []}
-        if any(state.get(key) != value for key, value in expected.items()):
-            return {'status': 'blocked', 'reason': 'restore_binding_changed'}
-        if state.get('status') == 'blocked':
-            return state
+        if expected is None:
+            # binding failed above but the gate passed; raise/re-read as the original
+            # post-gate dispatch did (restore_identity_missing propagates here).
+            expected = binding(settings)
+            state = read_json(self.path) if self.path.exists() else {'schema': 1, **expected, 'attempts': []}
+            if any(state.get(key) != value for key, value in expected.items()):
+                return {'status': 'blocked', 'reason': 'restore_binding_changed'}
         attempts = unverified_attempts(state, now)
         episode = episode_attempts(state, now)
         # Earlier versions counted successful maintenance restores against a daily

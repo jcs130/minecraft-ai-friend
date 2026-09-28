@@ -9,9 +9,9 @@ from motor_mailbox import view
 from numen_gateway import read_json, write_json, action_lock
 from skill_library import _observation, evaluate, SkillLibrary, SkillError
 from starter_skills import bundle
-from navigation_program import SOURCE, record
+from navigation_program import SOURCE, record, motion_record
 import test_survival_fast_execution as fast_fixture
-from motor_mailbox import enqueue_locked
+from motor_mailbox import enqueue_locked, expire_queued_locked
 
 
 class ContinuousNavigationAdmissionTests(unittest.TestCase):
@@ -164,6 +164,32 @@ class ContinuousNavigationProgramTests(unittest.TestCase):
         step = evaluate(SOURCE, state, memory)
         self.confirmed(state, step)
         self.assertEqual(evaluate(SOURCE, state, step['memory'])['reason'], 'navigation_progress_not_observed')
+
+    def test_failed_native_segment_without_progress_surveys_an_alternative(self):
+        state, memory = self.ready_step()
+        step = evaluate(SOURCE, state, memory)
+        self.confirmed(state, step)
+        state.update(onGround=True, inWater=False, inLava=False)
+        state['execution']['lastExecution'].update(
+            status='failed', navigationOutcome={
+                'success': False, 'final_x': state['position']['x'],
+                'final_y': state['position']['y'], 'final_z': state['position']['z']})
+        result = evaluate(SOURCE, state, step['memory'])
+        self.assertEqual(result['observe']['tool'], 'navigation_sense')
+        self.assertEqual(result['memory']['failedSegments'], 1)
+        self.assertEqual(result['memory']['lastFailedSegment'], step['action']['args'])
+
+    def test_failed_native_segment_retries_are_bounded(self):
+        state, memory = self.ready_step()
+        step = evaluate(SOURCE, state, memory)
+        self.confirmed(state, step)
+        state.update(onGround=True, inWater=False, inLava=False)
+        state['execution']['lastExecution'].update(status='failed', navigationOutcome={
+            'success': False, 'final_x': state['position']['x'],
+            'final_y': state['position']['y'], 'final_z': state['position']['z']})
+        result = evaluate(SOURCE, state, step['memory'] | {'failedSegments': 2})
+        self.assertTrue(result['replan'])
+        self.assertEqual(result['reason'], 'navigation_failed_segment_no_safe_progress')
 
     def test_missing_unknown_failed_or_reused_receipt_cannot_continue(self):
         state, memory = self.ready_step()
@@ -483,6 +509,461 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.assertEqual(set(self.backend.polled), {self.active['taskId']})
         self.c.policy_worker.submit.assert_not_called()
 
+    def test_motion_plan_waits_for_jev_then_binds_selected_segment_during_slow_task(self):
+        drafted = self.library.draft(**motion_record())
+        motion_version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', motion_version)['passed'])
+        self.library.promote('base_motion_plan', motion_version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': motion_version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        self.c.policy_worker.submit = Mock(return_value=77)
+        self.advance()  # claim the one durable plan
+        self.advance()  # fresh survey, then classifier request
+        pending = self.c.pending_policy
+        self.assertIsNotNone(pending)
+        self.assertEqual(len(self.gateway.actions), 0)
+        choice = pending['plan']['choose']['candidates'][0]['action']
+        self.c.policy_worker.poll = Mock(return_value={
+            'ok': True, 'code': 'policy_selected', 'choice': 'path_0',
+            'action': choice, 'confidence': .9, 'workerMs': 50})
+        self.advance()  # exact offered segment is now dispatched
+        self.assertEqual(len(self.gateway.actions), 1)
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['memory']['segment'], choice['args'])
+        self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_single_target_navigate_binds_jev_choice_during_slow_task(self):
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_navigate', 'version': self.version,
+                 'memory': {'policy': True, 'singleGoal': True,
+                            'waypoints': [{'x': 130, 'z': 100}]},
+                 'maxSteps': 32}, self.clock)
+        self.c.policy_worker.submit = Mock(return_value=77)
+        self.advance()
+        self.advance()
+        pending = self.c.pending_policy
+        self.assertIsNotNone(pending)
+        choice = pending['plan']['choose']['candidates'][0]['action']
+        self.c.policy_worker.poll = Mock(return_value={
+            'ok': True, 'code': 'policy_selected', 'choice': 'path_0',
+            'action': choice, 'confidence': .9, 'workerMs': 50})
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['memory']['segment'], choice['args'])
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(self.c.data['active']['taskId'], self.active['taskId'])
+
+    def test_expired_jev_choice_resurveys_motion_plan_before_retrying(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        surveys = []
+        self.gateway.navigation_observation = lambda body, args: (
+            surveys.append(copy.deepcopy(args)) or
+            survey(body | {'observedAt': self.clock() * 1000}, args))
+        self.c.policy_worker.submit = Mock(side_effect=[77, 78])
+        self.c.policy_worker.poll = Mock(return_value=None)
+        self.advance()  # claim
+        self.advance()  # first survey and Jev submission
+        self.assertEqual(len(surveys), 1)
+        self.clock.now += 6
+        self.advance()  # expired Jev choice is discarded without a game action
+        self.assertEqual(len(self.gateway.actions), 0)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.advance()  # the old survey must be replaced before another Jev request
+        self.assertEqual(len(surveys), 2)
+        self.assertEqual(self.c.policy_worker.submit.call_count, 2)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.assertEqual(len(self.gateway.actions), 0)
+
+    def test_low_confidence_jev_resurveys_then_can_choose_a_fresh_segment(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        surveys = []
+        self.gateway.navigation_observation = lambda body, args: (
+            surveys.append(copy.deepcopy(args)) or
+            survey(body | {'observedAt': self.clock()*1000}, args))
+        self.c.policy_worker.submit = Mock(side_effect=[77, 78])
+        calls = []
+        def choose(token):
+            calls.append(token)
+            candidates = self.c.pending_policy['plan']['choose']['candidates']
+            common = {'choice': 'path_0', 'candidates': candidates, 'workerMs': 50}
+            if len(calls) == 1:
+                return {'ok': False, 'code': 'policy_escalated', 'confidence': .65,
+                        'selectedProbability': .77, **common}
+            return {'ok': True, 'code': 'policy_selected', 'confidence': .9,
+                    'action': candidates[0]['action'], **common}
+        self.c.policy_worker.poll = Mock(side_effect=choose)
+        self.advance()  # claim
+        self.advance()  # initial survey and Jev request
+        self.advance()  # low confidence: no world action, request a new survey
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.assertFalse(self.gateway.actions)
+        self.advance()  # fresh survey and second Jev request
+        self.advance()  # fresh supported choice dispatches one exact segment
+        self.assertEqual(len(surveys), 2)
+        self.assertEqual(calls, [77, 78])
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(read_json(self.state/'skill-job.json')['memory']['stage'], 'moving')
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_low_confidence_jev_retries_are_bounded_without_world_actions(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        surveys = []
+        self.gateway.navigation_observation = lambda body, args: (
+            surveys.append(copy.deepcopy(args)) or
+            survey(body | {'observedAt': self.clock()*1000}, args))
+        self.c.policy_worker.submit = Mock(side_effect=[77, 78, 79])
+        def uncertain(token):
+            return {'ok': False, 'code': 'policy_escalated', 'choice': 'path_0',
+                    'confidence': .65, 'selectedProbability': .77, 'workerMs': 50,
+                    'candidates': self.c.pending_policy['plan']['choose']['candidates']}
+        self.c.policy_worker.poll = Mock(side_effect=uncertain)
+        self.advance()  # claim
+        for _ in range(3):
+            self.advance()  # survey and classify
+            self.advance()  # local retry or final slow replan
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['status'], 'replan')
+        self.assertEqual(job['reason'], 'policy_escalated')
+        self.assertEqual(len(surveys), 3)
+        self.assertEqual(self.c.policy_worker.submit.call_count, 3)
+        self.assertFalse(self.gateway.actions)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_motion_plan_consumes_bounded_side_probes_after_three_forward_failures(self):
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        self.gateway.body['position'] = {'x': 100, 'y': 64, 'z': 100}
+        with action_lock(self.state):
+            expire_queued_locked(self.state, self.clock)
+            enqueue_locked(self.state, self.active['turnId'], 'skill',
+                {'name': 'base_motion_plan', 'version': version,
+                 'memory': {'policy': True, 'waypoints': [
+                     {'x': 130, 'z': 100}, {'x': 145, 'z': 105}]}, 'maxSteps': 32}, self.clock)
+        reads = []
+        def blocked_survey(body, args):
+            reads.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            destination = result['navigationSense']['destination']
+            destination['requestedStanceSupported'] = False
+            destination['candidates'] = []
+            return result
+        self.gateway.navigation_observation = blocked_survey
+        self.advance()  # claim
+        self.advance()  # 16/8/4 forward, left and right; then stop
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(len(reads), 5)
+        self.assertEqual(job['observations'], 5)
+        self.assertEqual(job['status'], 'replan')
+        self.assertEqual(job['reason'], 'navigation_no_supported_progress')
+        self.assertFalse(self.gateway.actions)
+
+    def test_fresh_survey_dispatches_before_slow_handoff_can_expire_it(self):
+        self.advance()  # The explicitly selected program is durably claimed.
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data['nextDecisionAt'] = 0
+        handoff = []
+        def slow_submit(*args):
+            job = read_json(self.state/'skill-job.json')
+            handoff.append({'actions': len(self.gateway.actions), 'job': job,
+                            'lease': (read_json(self.state/'lease.json')
+                                      if (self.state/'lease.json').exists() else {})})
+            self.clock.now += 8.81043  # Observed production slowHandoff, no sleeping.
+        self.backend.on_submit = slow_submit
+        self.advance()
+        self.assertEqual(len(handoff), 1)
+        self.assertEqual(handoff[0]['actions'], 1)
+        job = handoff[0]['job']
+        self.assertEqual(job['status'], 'running')
+        self.assertEqual(job['memory']['stage'], 'moving')
+        self.assertEqual(job['observations'], 1)
+        self.assertEqual(job['steps'], 1)
+        self.assertTrue(job['practiceStarted'])
+        self.assertEqual(job['lastTurnId'], self.gateway.actions[0]['turnId'])
+        self.assertEqual(handoff[0]['lease']['status'], 'closed')
+        self.assertEqual(len(self.backend.submitted), 2)
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(read_json(self.state/'skill-job.json').get('practiceFinalized'))
+        self.assertIn('prepareContext', self.c.data['motorTimingMs'])
+        self.assertIn('nativeSubmit', self.c.data['motorTimingMs'])
+        self.advance()
+        self.assertIn('taskPoll', self.c.data['motorTimingMs'])
+        self.assertNotIn('nativeSubmit', self.c.data['motorTimingMs'])
+        self.assertNotIn('prepareContext', self.c.data['motorTimingMs'])
+
+    def test_survey_continuation_stays_bounded_when_program_requests_another_read(self):
+        self.advance()
+        calls = []
+        def empty_survey(body, args):
+            calls.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            result['navigationSense']['destination']['requestedStanceSupported'] = False
+            return result
+        self.gateway.navigation_observation = empty_survey
+        with patch.object(self.library, 'run', wraps=self.library.run) as run:
+            self.advance()
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([p['x'] for p in calls], [204, 212, 216])
+        self.assertFalse(self.gateway.actions)
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_no_supported_progress')
+
+    def test_shorter_supported_survey_is_consumed_before_slow_handoff(self):
+        self.advance()
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data['nextDecisionAt'] = 0
+        reads, handoff = [], []
+        def shorter_survey(body, args):
+            reads.append(copy.deepcopy(args))
+            result = survey(body | {'observedAt': self.clock()*1000}, args)
+            result['navigationSense']['destination']['requestedStanceSupported'] = len(reads) == 2
+            return result
+        def slow_submit(*args):
+            handoff.append(len(self.gateway.actions))
+            self.clock.now += 8.81043
+        self.gateway.navigation_observation = shorter_survey
+        self.backend.on_submit = slow_submit
+        self.advance()
+        self.assertEqual([p['x'] for p in reads], [204, 212])
+        self.assertEqual(handoff, [1])
+        self.assertEqual(self.gateway.actions[0]['args']['x'], 212)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'running')
+        self.assertEqual(len(self.backend.submitted), 2)
+
+    def test_same_tick_continuation_does_not_relax_expired_survey(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        def stale_survey(body, args):
+            result = original(body, args)
+            result['navigationSense']['observedAt'] -= 5001
+            return result
+        self.gateway.navigation_observation = stale_survey
+        self.advance()
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_survey_unusable')
+        self.assertFalse(self.gateway.actions)
+        self.assertFalse(self.backend.cancelled)
+
+    def test_same_tick_continuation_does_not_relax_wrong_actor_survey(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        def wrong_actor(body, args):
+            result = original(body, args)
+            result['navigationSense']['actorUuid'] = 'different-body'
+            return result
+        self.gateway.navigation_observation = wrong_actor
+        self.advance()
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_survey_unusable')
+        self.assertFalse(self.gateway.actions)
+
+    def test_survey_uses_new_body_snapshot_after_native_position_changes(self):
+        self.advance()  # claim the already selected navigation program
+        reads = []
+        def moving_survey(body, args):
+            # The native body can move between the tick snapshot and its read.
+            self.gateway.body['position']['x'] = 217
+            reads.append(copy.deepcopy(args))
+            return survey(self.gateway.body | {'observedAt': self.clock()*1000}, args)
+        self.gateway.navigation_observation = moving_survey
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(len(reads), 1)
+        self.assertEqual(job['status'], 'running')
+        self.assertEqual(len(self.gateway.actions), 1)
+        self.assertEqual(self.gateway.actions[0]['tool'], 'goto')
+
+    def test_operator_drain_during_read_stops_continuation_without_dispatch(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        control = read_json(self.state/'control.json') | {'drain': {
+            'requestId': 'same-operator-drain', 'status': 'requested', 'requestedAt': int(self.clock()*1000)}}
+        def draining_read(body, args):
+            write_json(self.state/'control.json', control)
+            return original(body, args)
+        self.gateway.navigation_observation = draining_read
+        self.advance()
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.gateway.opened or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_operator_pause_during_read_stops_continuation_without_dispatch(self):
+        self.advance()
+        original = self.gateway.navigation_observation
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'operator_pause'}
+        def paused_read(body, args):
+            write_json(self.state/'control.json', control)
+            return original(body, args)
+        self.gateway.navigation_observation = paused_read
+        self.advance()
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.gateway.opened or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_disabled_requested_drain_retires_original_known_claim_without_resume(self):
+        self.advance()
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data.update(status='paused', pauseReason='controller_ValueError')
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError',
+                   'drain': {'requestId': 'disabled-original-drain', 'status': 'requested',
+                             'requestedAt': int(self.clock()*1000)}}
+        write_json(self.state/'control.json', control)
+        self.advance()
+        current = read_json(self.state/'control.json')
+        self.assertIs(current['enabled'], False)
+        self.assertEqual(current['drain']['requestId'], 'disabled-original-drain')
+        self.assertEqual(current['drain']['status'], 'completed')
+        self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_disabled_drain_retries_cancelled_practice_at_same_safe_boundary(self):
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.c.practice.begin(job, self.gateway.body)
+        job['practiceStarted'] = True
+        write_json(self.state/'skill-job.json', job)
+        self.c.close_model_authority(self.active)
+        self.c.data['active'] = None
+        self.c.data.update(status='paused', pauseReason='controller_ValueError')
+        control = {'schema': 1, 'enabled': False, 'pauseReason': 'controller_ValueError',
+                   'drain': {'requestId': 'disabled-practice-retry', 'status': 'requested',
+                             'requestedAt': int(self.clock()*1000)}}
+        write_json(self.state/'control.json', control)
+        finish = self.c.practice.finish
+        attempts = []
+        def fail_once(*args):
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise OSError('fixture temporary practice storage failure')
+            return finish(*args)
+        with patch.object(self.c.practice, 'finish', side_effect=fail_once):
+            self.advance()
+            self.assertEqual(read_json(self.state/'skill-job.json')['status'], 'cancelled')
+            self.assertTrue(read_json(self.state/'skill-job.json')['practiceFinalized'])
+            self.assertEqual(view(self.state)['requests'][0]['status'], 'claimed')
+            self.assertEqual(read_json(self.state/'control.json')['drain']['status'], 'requested')
+            self.advance()
+        current = read_json(self.state/'control.json')
+        self.assertIs(current['enabled'], False)
+        self.assertEqual(current['drain']['requestId'], 'disabled-practice-retry')
+        self.assertEqual(current['drain']['status'], 'completed')
+        self.assertTrue(read_json(self.state/'skill-job.json')['practiceFinalized'])
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+
+    def test_drain_after_practice_step_before_lease_settles_without_world_receipt(self):
+        from numen_gateway import NumenGateway
+        self.advance()
+        guard = NumenGateway(self.state, rcon=Mock(), clock=self.clock)
+        control = {'schema': 1, 'enabled': True, 'drain': {
+            'requestId': 'lease-admission-drain', 'status': 'requested', 'requestedAt': int(self.clock()*1000)}}
+        def guarded_lease(*args, **kwargs):
+            job = read_json(self.state/'skill-job.json')
+            self.assertEqual(len(self.c.practice.turns(job['practiceRunId'])), 1)
+            write_json(self.state/'control.json', control)
+            return guard.open_lease(*args, **kwargs)
+        self.gateway.open_lease = guarded_lease
+        self.advance()
+        job = read_json(self.state/'skill-job.json')
+        self.assertEqual(job['status'], 'replan')
+        self.assertTrue(job['practiceFinalized'])
+        self.assertEqual(read_json(self.state/'control.json'), control)
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertFalse((self.state/'unknown.json').exists())
+        self.assertFalse((self.state/'inflight-action.json').exists())
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_unbounded_read_program_cannot_leave_an_unconsumed_fourth_survey(self):
+        self.advance()
+        calls = []
+        def observe(body, args):
+            calls.append(args)
+            return survey(body | {'observedAt': self.clock()*1000}, args)
+        self.gateway.navigation_observation = observe
+        plan = {'memory': {'mode': 'return_to_work_area'},
+                'observe': {'tool': 'navigation_sense', 'args': {'x': 204, 'y': 64, 'z': 100}}}
+        with patch.object(self.library, 'run', return_value=plan) as run:
+            self.advance()
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(read_json(self.state/'skill-job.json')['reason'], 'navigation_observation_budget')
+        self.assertFalse(self.gateway.actions)
+
+    def test_actual_arrival_survey_is_consumed_before_slow_poll_ages_wrapper(self):
+        self.advance()
+        # Exact fifth-window arrival/probe and target. The fixture world read
+        # reports the original supported, collision-free stance (not a route).
+        position = {'x': -555.3086858530143, 'y': 64, 'z': 864.7768436963573}
+        self.gateway.body['position'] = position
+        self.c.settings['workArea'] = {'minX': -1100, 'maxX': 0, 'minZ': 300, 'maxZ': 1400}
+        self.gateway._area = Mock()
+        job = read_json(self.state/'skill-job.json')
+        job['memory'] = {'target': {'x': -555, 'z': 865}}
+        write_json(self.state/'skill-job.json', job)
+        original = self.gateway.navigation_observation
+        def actual_read_latency(body, args):
+            self.clock.now += .263  # 3118555 wrapper -> 3118818 native result.
+            return original(body, args)
+        self.gateway.navigation_observation = actual_read_latency
+        observed_at_poll = []
+        def slow_poll(task):
+            observed_at_poll.append(read_json(self.state/'skill-job.json'))
+            self.clock.now += 5.8
+            return {'status': 'running'}
+        self.backend.poll = slow_poll
+        self.advance()
+        self.assertEqual(len(observed_at_poll), 1)
+        self.assertEqual(observed_at_poll[0]['status'], 'done')
+        self.assertEqual(observed_at_poll[0]['reason'], 'observed_horizontal_supported_target')
+        self.assertEqual(observed_at_poll[0]['lastObservation']['args'], position)
+        self.assertFalse(self.gateway.actions or self.backend.cancelled)
+        self.assertEqual(len(self.backend.submitted), 1)
+
     def test_unknown_and_restart_never_replay_or_advance(self):
         self.start()
         write_json(self.state/'unknown.json', {'actionId': self.current_receipt['actionId']})
@@ -513,7 +994,10 @@ class ContinuousNavigationExecutionTests(unittest.TestCase):
         self.c.skills = self.library
         self.c.policy_worker.submit = Mock(side_effect=AssertionError('unexpected classifier'))
         self.advance()
-        self.assertEqual(len(self.gateway.actions), 1)
+        # A newly acquired survey is now consumed in the same tick. The old
+        # dispatch is still never replayed; only the next verified segment runs.
+        self.assertEqual(len(self.gateway.actions), 2)
+        self.assertEqual(read_json(self.state/'skill-job.json')['observations'], 2)
         self.advance()
         self.assertEqual(len(self.gateway.actions), 2)
         self.assertNotEqual(self.gateway.actions[0]['turnId'], self.gateway.actions[1]['turnId'])

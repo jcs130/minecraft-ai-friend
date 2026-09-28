@@ -6,6 +6,7 @@ The adapter remains the only boundary to a particular body/world implementation.
 """
 import copy
 import math
+import re
 from world_adapter import validate_sensor
 
 VERSION = 1
@@ -87,6 +88,23 @@ def wake(controller, body, control, turn_id, message=None, replies=None):
              ('world', 'hostiles', 'limits') if key in environment} if scene_binding else None
     if scene is not None and isinstance(scene.get('world'), dict) and 'game_time' in scene['world']:
         scene_meta['gameTime'] = scene['world'].pop('game_time')
+    # The controller has already paid for this local scan before asking Qwen.
+    # A short, current map in the first input avoids another full model pass
+    # just to call look(). Never attach a map centered on an old body position.
+    terrain = environment.get('terrain')
+    position = body.get('position') or {}
+    center = (re.match(r'^look_around center=\((-?\d+),(-?\d+),(-?\d+)\) facing=', terrain)
+              if isinstance(terrain, str) else None)
+    scene_stamp = scene_meta.get('observedAt')
+    if (scene is not None and scene_meta['fresh'] and scene_stamp is not None
+            and 0 <= now_ms - scene_stamp <= 5000 and center is not None
+            and len(terrain.encode('utf8')) <= 5000
+            and all(type(position.get(key)) in (int, float) and math.isfinite(position[key])
+                    and abs(position[key] - int(center.group(index))) <= 1.5
+                    for index, key in enumerate(('x', 'y', 'z'), 1))):
+        scene['terrain'] = terrain
+        if type(environment.get('radius')) is int and 4 <= environment['radius'] <= 12:
+            scene['radius'] = environment['radius']
     last = controller.data.get('lastDecision') or {}
     context = {
         'turn_id': turn_id, 'currentTime': now_ms, 'wakeReason': controller.data['wakeReason'],

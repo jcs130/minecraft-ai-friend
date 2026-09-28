@@ -48,6 +48,45 @@ class PolicyContract(unittest.TestCase):
         self.assertIs(obj.react_config, original)
 
 
+class HomeSummaryPolicy(unittest.IsolatedAsyncioTestCase):
+    async def test_home_summary_omits_conflicting_thinking_flag(self):
+        original = AsyncMock(return_value='other provider summary')
+        calls = []
+
+        async def model(**kwargs):
+            calls.append(kwargs)
+            return NS(text='home summary')
+
+        manager = NS(_summary_messages=lambda prompt, language: [prompt, language],
+                     _raise_if_summary_interrupted=lambda response: None,
+                     _response_text=lambda response: response.text)
+        home = NS(_agent_config=NS(active_model=NS(provider_id='home_llm')), model=model)
+        result = await policy.wrap_plain_summary(original)(manager, home, 'prompt', max_tokens=256)
+        self.assertEqual(result, 'home summary')
+        self.assertEqual(calls, [{'messages': ['prompt', 'en'], 'tools': None, 'max_tokens': 256}])
+        original.assert_not_awaited()
+
+        remote = NS(_agent_config=NS(active_model=NS(provider_id='aliyun-codingplan')), model=model)
+        self.assertEqual(await policy.wrap_plain_summary(original)(manager, remote, 'prompt', max_tokens=256),
+                         'other provider summary')
+        original.assert_awaited_once()
+        self.assertEqual(len(calls), 1)
+
+    async def test_home_summary_stream_keeps_final_chunk(self):
+        async def model(**kwargs):
+            async def chunks():
+                yield NS(text='draft', is_last=False)
+                yield NS(text='final', is_last=True)
+            return chunks()
+
+        manager = NS(_summary_messages=lambda prompt, language: [],
+                     _raise_if_summary_interrupted=lambda response: None,
+                     _response_text=lambda response: response.text)
+        home = NS(_agent_config=NS(active_model=NS(provider_id='home_llm')), model=model)
+        self.assertEqual(await policy.wrap_plain_summary(AsyncMock())(
+            manager, home, 'prompt', max_tokens=256), 'final')
+
+
 @unittest.skipUnless(importlib.util.find_spec('qwenpaw'), 'native Qwen image/venv required')
 class NativePolicy(unittest.IsolatedAsyncioTestCase):
     def fixture(self, *, enabled=False, iteration=1000000, awaiting=False, structured=False):
@@ -102,6 +141,7 @@ class NativePolicy(unittest.IsolatedAsyncioTestCase):
     async def test_installed_schema_switch_and_process_hook_are_exact_and_idempotent(self):
         from qwenpaw.config.config import AgentsRunningConfig
         from qwenpaw.agents.react_agent import QwenPawAgent
+        from qwenpaw.agents.context.scroll.manager import ScrollContextManager
         from agentscope.agent import Agent
         running = AgentsRunningConfig(llm_max_concurrent=1)
         policy.disable_limits(running); policy.validate_running(running)
@@ -110,16 +150,26 @@ class NativePolicy(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(AgentsRunningConfig.model_validate_json(encoded).loop.iteration.max_iterations)
         original = QwenPawAgent._next_action
         marker = getattr(QwenPawAgent, '_qiandeng_llm_policy', None)
+        original_summary = ScrollContextManager._generate_plain_summary
+        summary_marker = getattr(ScrollContextManager, '_qiandeng_home_summary', None)
         try:
             self.assertEqual(policy.install('game'), 1)
             wrapped = QwenPawAgent._next_action
             self.assertEqual(policy.install('game'), 1)
             self.assertIs(QwenPawAgent._next_action, wrapped)
             self.assertIs(wrapped.__wrapped__, Agent._next_action)
+            self.assertIs(ScrollContextManager._generate_plain_summary.__wrapped__, original_summary)
         finally:
             QwenPawAgent._next_action = original
-            if marker is None: delattr(QwenPawAgent, '_qiandeng_llm_policy')
+            if marker is None:
+                if hasattr(QwenPawAgent, '_qiandeng_llm_policy'):
+                    delattr(QwenPawAgent, '_qiandeng_llm_policy')
             else: QwenPawAgent._qiandeng_llm_policy = marker
+            ScrollContextManager._generate_plain_summary = original_summary
+            if summary_marker is None:
+                if hasattr(ScrollContextManager, '_qiandeng_home_summary'):
+                    delattr(ScrollContextManager, '_qiandeng_home_summary')
+            else: ScrollContextManager._qiandeng_home_summary = summary_marker
 
 
 if __name__ == '__main__': unittest.main()

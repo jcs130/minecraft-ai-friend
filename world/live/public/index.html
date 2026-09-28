@@ -1,0 +1,74 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>千灯纪 · 直播中控台</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--line:#21262d;--tx:#e6edf3;--dim:#8b949e;--acc:#f778ba;--god:#58a6ff;--ok:#3fb950;--warn:#d29922}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.55 "Segoe UI",system-ui,sans-serif}
+header{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+header h1{font-size:16px;margin:0}.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);display:inline-block}.dot.on{background:var(--ok)}.dot.off{background:var(--warn)}
+.grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px;padding:12px;height:calc(100vh - 52px)}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;min-height:0}
+.card h2{font-size:13px;margin:0 0 8px;color:var(--dim);letter-spacing:.5px}
+.body{overflow-y:auto;flex:1;min-height:0}
+.turn{border-left:3px solid #26303b;padding:7px 10px;margin:7px 0;background:#0b0f14;border-radius:0 8px 8px 0}
+.turn.now{border-left-color:var(--acc);background:#1a1220}
+.nowtag{color:var(--acc);font-size:11px;font-weight:700;letter-spacing:1px}
+.meta{color:var(--dim);font-size:11px;margin-bottom:3px}
+.goal{color:var(--acc);font-weight:600;margin:2px 0}
+.lesson{color:#c9d1d9;margin:2px 0}.lesson:before{content:"💡 "}
+.next{color:var(--ok);font-size:13px;margin:2px 0}.next:before{content:"▶ "}
+.danmu{padding:4px 0;border-bottom:1px solid #0b0f14;font-size:13px}.danmu .u{color:var(--god);margin-right:6px}
+.reply{background:#132133;border:1px solid #1f3a5f;border-radius:8px;padding:8px;margin:6px 0;font-size:13px}.reply .who{color:var(--god);font-weight:600}
+.stat{font-size:12px;color:var(--dim);margin:2px 0}.stat b{color:var(--tx)}
+input,textarea,button,select{font:inherit;border-radius:8px;border:1px solid var(--line);background:#0b0f14;color:var(--tx);padding:8px}
+textarea{width:100%;resize:vertical;min-height:44px}button{cursor:pointer;background:#238636;border-color:#2ea043;color:#fff}
+button.sec{background:#21262d;border-color:#30363d;color:var(--tx)}.row{display:flex;gap:8px;margin-top:8px}.row>*{flex:1}
+.small{font-size:12px;color:var(--dim)}
+</style></head><body>
+<header><span class="dot off" id="dmDot"></span><h1>千灯纪 · 直播中控台</h1>
+<span class="small" id="hp"></span><span style="flex:1"></span>
+<label class="small"><input type="checkbox" id="autoSpeak" checked> 自动语音播报</label></header>
+<div class="grid">
+  <div class="col"><div class="card" style="flex:1"><h2>🧠 桐人 · 思考过程</h2><div class="body" id="think"><div class="small">加载中…</div></div></div></div>
+  <div class="col"><div class="card" style="flex:1"><h2>B站弹幕 <span class="dot off" id="dmDot2" style="margin-left:6px"></span></h2><div class="body" id="danmu"><div class="small">弹幕未接入（待房间号）</div></div></div>
+    <div class="card" style="flex:1"><h2>主播回复（我）</h2><div class="body" id="replies"></div></div></div>
+  <div class="col"><div class="card"><h2>现场状态</h2><div id="status" class="small"></div></div>
+    <div class="card"><h2>给桐人发指令</h2><textarea id="mission" placeholder="例：去河边砍些木头，天黑前回村里"></textarea>
+      <div class="row"><button id="sendMission">发送任务</button><button class="sec" id="pause">暂停</button><button class="sec" id="resume">恢复</button></div>
+      <div class="small" id="cmdMsg" style="margin-top:6px"></div></div>
+    <div class="card" style="flex:1"><h2>手动解说</h2><textarea id="sayText" placeholder="输入要语音播报的主播词…"></textarea>
+      <div class="row"><button id="sayBtn">🔊 播报</button><select id="voice" style="flex:0 0 110px"><option value="goddess">女神嗓</option><option value="kirito">桐人嗓</option><option value="yui">结衣嗓</option></select></div></div>
+  </div>
+</div>
+<audio id="player"></audio>
+<script>
+const $=id=>document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function speak(text,voice){ if(!text) return; const a=$('player'); a.src='/api/say?'+new URLSearchParams({text,voice:voice||'goddess'}); a.play().catch(()=>{}); }
+let lastKey='';
+async function pollThink(){
+  try{ const s=await (await fetch('/api/live/state')).json(); const ag=s.agent||{};
+    $('hp').textContent=`${ag.name||'桐人'} · HP ${ag.hp??'-'} · 饥饿 ${ag.hunger??'-'} · ${ag.status||''}`;
+    const p=ag.position||{}; $('status').innerHTML=`<div class="stat">目标：<b>${esc(ag.goal||'-')}</b></div><div class="stat">坐标：<b>${p.x??'-'}, ${p.y??'-'}, ${p.z??'-'}</b></div><div class="stat">弹幕：<b>${s.danmakuStatus?.connected?'已接入':'未接入'}</b></div>`;
+  }catch{}
+  try{ const t=await (await fetch('/api/live/thoughts')).json(); const rows=[];
+    if(t.now&&(t.now.goal||t.now.lesson)) rows.push(`<div class="turn now"><div class="nowtag">● 现在</div>${t.now.goal?`<div class="goal">🎯 ${esc(t.now.goal)}</div>`:''}${t.now.lesson?`<div class="lesson">${esc(t.now.lesson)}</div>`:''}</div>`);
+    for(const x of (t.thoughts||[])){ if(!x.goal&&!x.lesson&&!x.nextFocus) continue;
+      const ts=x.at?new Date(x.at).toLocaleTimeString('zh-CN',{hour12:false}):'';
+      rows.push(`<div class="turn"><div class="meta">${ts}${x.goalState==='blocked'?' · ⚠️受阻':''}</div>${x.goal?`<div class="goal">🎯 ${esc(x.goal)}</div>`:''}${x.lesson?`<div class="lesson">${esc(x.lesson)}</div>`:''}${x.nextFocus?`<div class="next">${esc(x.nextFocus)}</div>`:''}</div>`);
+    }
+    $('think').innerHTML=rows.join('')||'<div class="small">暂无思考</div>';
+    const key=t.now?((t.now.goal||'')+'|'+(t.now.lesson||'')):'';
+    if(key&&key!==lastKey){ lastKey=key; if($('autoSpeak').checked&&t.now.lesson) speak('桐人：'+String(t.now.lesson).replace(/[（(].*?[)）]/g,'').slice(0,90),'goddess'); }
+  }catch(e){ $('think').innerHTML='<div class="small">思考流不可用</div>'; }
+}
+function connectDanmu(){ const es=new EventSource('/api/live/danmaku'); es.onmessage=e=>{ const d=JSON.parse(e.data);
+  if(d.type==='status'){ const on=d.connected; $('dmDot').className='dot '+(on?'on':'off'); $('dmDot2').className='dot '+(on?'on':'off'); if(on)$('danmu').querySelector('.small')?.remove(); }
+  if(d.type==='danmaku'){ const el=document.createElement('div'); el.className='danmu'; el.innerHTML=`<span class="u">${esc(d.user||'')}</span>${esc(d.text||'')}`; const box=$('danmu'); box.querySelector('.small')?.remove(); box.prepend(el); while(box.children.length>200)box.lastChild.remove(); }
+  if(d.type==='reply'){ const el=document.createElement('div'); el.className='reply'; el.innerHTML=`<span class="who">🎤 主播：</span>${esc(d.reply||'')}`; $('replies').prepend(el); } }; }
+$('sendMission').onclick=async()=>{ const m=$('mission').value.trim(); if(!m)return; const r=await (await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mission:m})})).json(); $('cmdMsg').textContent=r.ok?'✓ '+r.note:('✗ '+(r.error||'')); if(r.ok){$('mission').value='';speak('我让桐人去：'+m,'goddess');} };
+$('pause').onclick=()=>ctrlCmd('pause'); $('resume').onclick=()=>ctrlCmd('resume');
+async function ctrlCmd(a){ const r=await (await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:a})})).json(); $('cmdMsg').textContent=r.ok?'✓ '+a:('✗ 后端未支持action='+a); }
+$('sayBtn').onclick=()=>speak($('sayText').value.trim(),$('voice').value);
+pollThink(); setInterval(pollThink,4000); connectDanmu();
+</script></body></html>

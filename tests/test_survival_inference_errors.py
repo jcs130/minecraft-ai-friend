@@ -15,6 +15,14 @@ def error(message='usage allocated quota exceeded. please try again later.'):
 
 
 class ClassificationTests(unittest.TestCase):
+    def test_home_proxy_token_minute_limit_is_provider_throttling(self):
+        value = error('Rate limit exceeded for api_key: redacted. Limit type: tokens. '
+                      'Current limit: 1000000, Remaining: 12737. '
+                      'Limit resets at: 2026-09-25 05:15:56 UTC')
+        result = classify_inference_error(value)
+        self.assertEqual(result['kind'], 'provider_throttled')
+        self.assertNotIn('redacted', str(result))
+
     def test_exact_vendor_reasons_remain_distinct_from_generic_quota(self):
         cases = [('usage', 'provider_throttled'), ('concurrency', 'provider_concurrency'),
                  ('hour', 'provider_window_exhausted'), ('week', 'provider_window_exhausted'),

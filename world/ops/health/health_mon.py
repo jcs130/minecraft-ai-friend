@@ -49,7 +49,7 @@ OPERATIONS_ROUND_ROLE_FIELDS = {'role': 'role', 'ok': 'bool', 'requestId': 100,
                                'summary': 1600, 'errorType': 60, **OPERATIONS_USAGE_FIELDS}
 MANIFEST = {
     "mc": {"health_required": True, "purpose": "Imported save, NeoForge, native town protection and independent chanting-item protocol"},
-    "world": {"health_required": True, "purpose": "Player commands, game adapters, optional goddess dialogue and heartbeat"},
+    "world": {"health_required": True, "purpose": "Player commands, game adapters, optional goddess dialogue, heartbeat and Kirito visual renderer"},
     "gate": {"health_required": False, "purpose": "Vanilla protocol Agent entry"},
     "npc": {"health_required": True, "purpose": "Skill-book, NPC event consumers and persistent maid perception inbox; legacy merchant availability audited separately"},
     "resources": {"health_required": True, "purpose": "Local maid voice packs"},
@@ -175,6 +175,28 @@ def probe_agent_observatory():
     return module.probe()
 
 
+def probe_agent_frame():
+    """Read-only health of the supervised Kirito frame renderer, without a model call."""
+    try:
+        request = urllib.request.Request('http://127.0.0.1:19093/healthz',
+                                         headers={'Host': '127.0.0.1:3071'})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            raw = response.read(16385)
+        if len(raw) > 16384:
+            raise ValueError('viewer_health_too_large')
+        viewer = json.loads(raw)
+        frame = viewer.get('agentFrame') or {}
+        return {'ok': (viewer.get('ok') is True and viewer.get('observerOnline') is True
+                       and viewer.get('ordinaryViewerLimit') == 2
+                       and viewer.get('maxSessions') == 3
+                       and frame.get('enabled') is True and frame.get('browserAvailable') is True),
+                'browserAvailable': frame.get('browserAvailable') is True,
+                'capturedFrames': frame.get('capturedFrames'),
+                'observerOnline': viewer.get('observerOnline') is True}
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        return {'ok': False, 'errorType': type(error).__name__}
+
+
 def probe_panel_smoke():
     agent_observatory = probe_agent_observatory()
     runtime = probe_panel_http()
@@ -189,6 +211,7 @@ def probe_panel_smoke():
         'bounded-events', 'cached-assets', 'world-progress-preserved'))
     observer_view = probe_recorded_behavior('eye-observer-smoke.json', (
         'first-person-no-hand', 'other-camera-views', 'static-asset-refreshed'), showHand=False)
+    agent_frame = probe_agent_frame()
     sources = probe_source_record('architecture-current.json')
     player_commands = probe_player_commands()
     voice_commands = probe_voice_commands()
@@ -213,10 +236,11 @@ def probe_panel_smoke():
     jev_intent = probe_jev_intent()
     skill_system = probe_skill_system()
     town_protection = probe_town_protection()
-    return {'ok': all(value['ok'] for value in (agent_observatory, runtime, management, visual, operations_view, eye_performance, observer_view, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
+    return {'ok': all(value['ok'] for value in (agent_observatory, runtime, management, visual, operations_view, eye_performance, observer_view, agent_frame, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
             'agent_observatory': agent_observatory,
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
+            'agent_frame': agent_frame,
             'player_commands': player_commands, 'voice_commands': voice_commands,
             'chanting_staff': chanting_staff, 'voice_recording': voice_recording,
             'voice_boundary_deployment': voice_boundary_deployment,

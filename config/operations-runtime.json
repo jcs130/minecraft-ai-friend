@@ -22,7 +22,6 @@
       "qwenpaw"
     ],
     "voice": [
-      "tts",
       "voice",
       "asr",
       "resources"
@@ -95,9 +94,7 @@
       "label": "语音回复队列",
       "group": "voice",
       "purpose": "将回复交给本项目 TTS 合成",
-      "dependencies": [
-        "tts"
-      ],
+      "dependencies": [],
       "healthRequired": true
     },
     {
@@ -126,9 +123,10 @@
     },
     {
       "id": "tts",
-      "label": "本项目语音合成",
+      "label": "旧 Kokoro 合成（备用）",
       "group": "voice",
-      "purpose": "D 盘独立 GPU 语音服务与女仆兼容接口",
+      "purpose": "IndexTTS-2.5 接管 8100 后保留的手动回退服务；默认不启动",
+      "active": false,
       "dependencies": [],
       "healthRequired": true
     },
@@ -161,11 +159,11 @@
   "externalServices": [
     {
       "id": "shared-tts",
-      "label": "语音合成接口",
+      "label": "IndexTTS-2.5 语音合成接口",
       "group": "dependency",
       "container": "qiandengji-tts-1",
-      "purpose": "D 项目 TTS 的兼容接口 8100",
-      "managedBy": "D 项目 Compose",
+      "purpose": "WSL IndexTTS-2.5 兼容入口 8100；旧 Compose tts 容器已归档",
+      "managedBy": "WSL IndexTTS-2.5 兼容层",
       "dependencies": [],
       "required": true,
       "healthUrl": "http://127.0.0.1:8100/health"

@@ -128,6 +128,26 @@ class ScopeTests(unittest.TestCase):
         self.agent['mcp']['clients'][scope.DRIVER]['tools'] = ['status']
         with self.assertRaises(ValueError): scope.desired_documents(self.agent, self.card)
 
+    def test_known_legacy_and_native_card_difference_is_scoped_to_new_plan_tool(self):
+        legacy = [name for name in scope.TOOL_NAMES
+                  if name not in {'navigate', 'navigate_plan', 'say', 'say_status'}]
+        native = [name for name in scope.TOOL_NAMES if name != 'navigate_plan']
+        self.agent['mcp']['clients'][scope.DRIVER]['tools'] = legacy
+        self.card['config']['tools'] = native
+        self.card['policy']['rules'] = [row for row in self.card['policy']['rules']
+                                        if row['target']['name'] in native]
+        existing = {row['target']['name'] for row in self.card['policy']['rules']}
+        for name in native:
+            if name not in existing:
+                rule = deepcopy(self.card['policy']['rules'][0])
+                rule['target']['name'] = name
+                self.card['policy']['rules'].append(rule)
+        updated_agent, updated_card, added = scope.desired_documents(self.agent, self.card)
+        self.assertEqual(added, ['navigate_plan'])
+        self.assertEqual(updated_agent['mcp']['clients'][scope.DRIVER]['tools'], list(scope.TOOL_NAMES))
+        self.assertEqual(updated_card['config']['tools'], list(scope.TOOL_NAMES))
+        self.assertEqual(len(updated_card['policy']['rules']), len(scope.TOOL_NAMES))
+
     def test_partial_config_write_rolls_back_exact_original_bytes(self):
         before = [path.read_bytes() for path in (self.root / r for r in scope.FILES)]
         original = scope.atomic_bytes

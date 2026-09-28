@@ -1,12 +1,12 @@
 """Single body executor, independent of the native asynchronous planning task.
 
-Commands are durable; observations are coalesced. No claimed request is replayed.
+Commands are durable; observations are coalesced. No world-dispatched request is replayed.
 Native goto/eat cancellation reuses the gateway's exact-task stop journal.
 """
 import hashlib
 import json
 import uuid
-from motor_mailbox import view, claim_locked, finish_locked, public, binding
+from motor_mailbox import view, claim_locked, finish_locked, release_prelease_claim_locked, public, binding
 from numen_gateway import GatewayError, action_lock, read_json, write_json
 from navigation_program import recovery_program
 
@@ -14,6 +14,17 @@ from navigation_program import recovery_program
 def _job(c):
     p = c.root / 'skill-job.json'
     return read_json(p) if p.exists() else {}
+
+
+def _prelease_unspent(c, row):
+    """The motor gateway cannot write to the world before opening this lease."""
+    lease_path = c.root / 'lease.json'
+    lease = read_json(lease_path) if lease_path.exists() else {}
+    turn = row['motorTurnId']
+    return (lease.get('turnId') != turn
+            and not (c.root / 'turn-actions' / (turn + '.json')).exists()
+            and not (c.root / 'unknown.json').exists()
+            and not (c.root / 'inflight-action.json').exists())
 
 
 def _accepted_cast(c, row, receipt):
@@ -77,6 +88,10 @@ def reconcile(c):
         else:
             receipts = c.gateway.turn_receipts(row['motorTurnId'])
             if not receipts:
+                with action_lock(c.root, blocking=True):
+                    if _prelease_unspent(c, row):
+                        release_prelease_claim_locked(c.root, row['requestId'], c.clock)
+                        continue
                 status, receipt = 'unknown', {'code': 'motor_claim_without_receipt'}
             else:
                 receipt = receipts[-1]
@@ -127,8 +142,10 @@ def dispatch(c, recovery_only=False):
             return True
     # Native gateway owns the effect journal and fresh preflight; no model owns
     # this short lease. A crash between claim and receipt remains unknown.
+    lease_opened = False
     try:
         c.gateway.open_lease(row['motorTurnId'], (c.clock()+60)*1000)
+        lease_opened = True
         outcome = c.gateway.action(row['motorTurnId'], **row['payload'])
         c.gateway.close_lease(blocking=True)
         c.collect_action_receipts(row['motorTurnId'])
@@ -142,6 +159,11 @@ def dispatch(c, recovery_only=False):
         c.record('motor_dispatch', requestId=row['requestId'], turnId=row['motorTurnId'],
                  slowTaskId=(c.data.get('active') or {}).get('taskId'), outcome=outcome.get('code'))
     except Exception:
+        if not lease_opened:
+            with action_lock(c.root, blocking=True):
+                if _prelease_unspent(c, row):
+                    release_prelease_claim_locked(c.root, row['requestId'], c.clock)
+                    return False
         c.pause('motor_dispatch_uncertain')
         raise
     return True
@@ -248,10 +270,67 @@ def recovery_boundary(c, body):
     return True
 
 
+def drain_skill_boundary(c, body, *, allow_pause=False):
+    """Retire a program for operator drain only at a proved idle boundary."""
+    execution = c.data.get('actionExecution') or {}
+    if (body.get('ok') is not True or body.get('task', {}).get('busy') is not False
+            or execution.get('inFlight') or execution.get('code') == 'outcome_unknown'):
+        return False
+    with action_lock(c.root, blocking=True):
+        control = read_json(c.root/'control.json')
+        draining = (control.get('drain') or {}).get('status') == 'requested'
+        if not draining and not (allow_pause and control.get('enabled') is not True):
+            return False
+        lease_path = c.root/'lease.json'
+        lease = read_json(lease_path) if lease_path.exists() else {}
+        if (lease.get('status') in ('reserved', 'unknown')
+                or (c.root/'unknown.json').exists() or (c.root/'inflight-action.json').exists()):
+            return False
+        job = _job(c)
+        operator_cancelled = (job.get('status') == 'cancelled'
+            and job.get('reason') in ('operator_drain', 'operator_pause'))
+        if job.get('status') not in ('pending', 'running') and not operator_cancelled:
+            return False
+        rows = view(c.root)['requests']
+        if (any(row['status'] == 'unknown' for row in rows) or not any(
+                row['kind'] == 'skill' and row['status'] == 'claimed'
+                and row['requestId'] == job.get('motorRequestId')
+                and row['motorTurnId'] == job.get('turnId') for row in rows)):
+            return False
+        turn = job.get('lastTurnId')
+        if turn and not operator_cancelled:
+            rows = c.gateway.turn_receipts(turn)
+            receipt = rows[-1] if rows else {}
+            action = job.get('lastAction') or {}
+            expected_id = (job.get('lastResult') or {}).get('actionId')
+            last = job.get('lastExecution') or {}
+            if (not expected_id or receipt.get('turnId') != turn or receipt.get('actionId') != expected_id
+                    or receipt.get('tool') != action.get('tool') or receipt.get('args') != action.get('args')
+                    or not action.get('tool') or not isinstance(action.get('args'), dict)
+                    or last.get('turnId') not in (None, turn)
+                    or last.get('actionId') not in (None, expected_id)
+                    or not (receipt.get('status') == 'rejected' or
+                        receipt.get('status') in ('completed', 'failed', 'cancelled')
+                        and receipt.get('completionConfirmed') is True)):
+                return False
+        elif not operator_cancelled and (job.get('lastExecution') or job.get('lastResult') or job.get('lastAction')
+                or job.get('steps', 0) != 0):
+            return False
+        if not operator_cancelled:
+            job.update(status='cancelled', reason='operator_drain' if draining else 'operator_pause')
+            write_json(c.root/'skill-job.json', job)
+    # Practice validates the original receipt and retries only local settlement.
+    # An already finalized owned cancellation also needs reconcile when disabled;
+    # unrelated/unknown claims above are never admitted to that path.
+    c.settle_practice()
+    return True
+
+
 def tick(c, body, control):
     if (control.get('drain') or {}).get('status') == 'requested':
         # Finish a claimed action from its exact journal while admission is
         # closed. Queued commands are retired at the controller's idle boundary.
+        drain_skill_boundary(c, body)
         reconcile(c)
         c.data['motorQueue'] = public(c.root)
         return
@@ -323,6 +402,12 @@ def tick(c, body, control):
         return
     c.finish_action_observation(body)
     c.switch_goal_at_boundary()
+    job = _job(c)
+    if (job.get('status') in ('pending', 'running')
+            and (job.get('memory') or {}).get('continueWhileThinking') is True):
+        c.perceive(body, refresh=True)
+    from auto_patrol import yield_to_explicit
+    yield_to_explicit(c, body)
     if c.tick_skill(body):
         c.data['motorStatus'] = 'executing_skill'
         return

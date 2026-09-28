@@ -1,0 +1,92 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>桐人 · 游戏经历</title>
+<style>
+:root{--bg:#0b1020;--card:#141c30;--line:#243049;--tx:#e8eefc;--dim:#8ea0c4;--hp:#ff6b6b;--gold:#ffd166;--ok:#4ade80;--acc:#7dd3fc}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:radial-gradient(1400px 800px at 15% -10%,#16223f,#0a0f1e);color:var(--tx);font:14px/1.4 "Segoe UI",system-ui,sans-serif;overflow:hidden}
+header{height:40px;display:flex;align-items:center;gap:10px;padding:0 14px;font-weight:700;font-size:16px;border-bottom:1px solid var(--line)}
+header .live{font-size:11px;background:#e11;color:#fff;padding:1px 7px;border-radius:5px;letter-spacing:1px}
+header .sp{flex:1}header .u{font-size:11px;color:#546}
+.board{display:grid;grid-template-columns:1.05fr 1.35fr 1.15fr;gap:8px;padding:8px;height:calc(100% - 40px)}
+.col{display:flex;flex-direction:column;gap:8px;min-height:0}
+.card{background:linear-gradient(180deg,#16203a,#111a30);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;min-height:0}
+.card h2{margin:0 0 6px;font-size:11px;color:var(--dim);letter-spacing:1px;font-weight:600}
+.grow{flex:1;min-height:0;overflow:auto}
+/* 状态 */
+.hp{display:flex;align-items:baseline;gap:8px}.hp b{font-size:30px}.hp small{color:var(--dim)}
+.bar{height:7px;background:#0a1226;border-radius:5px;overflow:hidden;margin:3px 0 8px}.bar>i{display:block;height:100%}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.kv span{color:var(--dim)}.kv b{font-weight:600}
+.pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.pill{font-size:11px;padding:2px 7px;border-radius:20px;background:#1c2a4a;color:var(--acc)}
+.pill.warn{background:#3a1c1c;color:#f99}.pill.gold{background:#3a2f10;color:var(--gold)}
+/* 手持/目标 */
+.held{font-size:22px;font-weight:800;color:var(--gold)}
+.goal{font-size:13px;line-height:1.45}.goal .nf{color:var(--ok);font-size:12px;margin-top:4px}
+/* 背包 */
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;gap:5px;background:#0f1830;border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px}
+.chip .c{color:var(--gold);font-weight:700}
+/* 任务 */
+.q{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #18223c;font-size:13px}
+.q .st{font-size:11px}.q-open .st{color:var(--dim)}.q-claimed .st{color:var(--acc)}.q-done .st{color:var(--ok)}
+.q .me{color:var(--acc)}
+/* 地图 */
+#mapimg{width:100%;flex:1;min-height:0;border-radius:10px;background:#0a1226;image-rendering:pixelated;object-fit:contain}
+/* 事件/路点 */
+.ev{padding:3px 0;border-bottom:1px solid #172039;font-size:12px}.ev .t{color:var(--acc);font-weight:600;margin-right:5px}.ev .tm{color:#456;font-size:10px;float:right}
+.pl{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #172039}.pl .co{color:var(--dim)}
+</style></head><body>
+<header>⚔️ 桐人 · 游戏经历 <span class="live">LIVE</span><span class="sp"></span><span class="u" id="updated"></span></header>
+<div class="board">
+  <div class="col">
+    <div class="card"><h2>状态</h2>
+      <div class="hp"><b id="hp">—</b><small>/ 20</small></div>
+      <div class="bar"><i id="hpbar" style="background:var(--hp);width:0"></i></div>
+      <div class="bar"><i id="foodbar" style="background:var(--gold);width:0"></i></div>
+      <div class="kv"><span>坐标</span><b id="pos">—</b><span>维度</span><b id="dim">—</b><span>状态</span><b id="st">—</b></div>
+      <div class="pills" id="pills"></div>
+    </div>
+    <div class="card"><h2>手里拿着</h2><div class="held" id="held">空手</div></div>
+    <div class="card grow"><h2>当前目标 · 下一步</h2><div class="goal"><div id="goal">—</div><div class="nf" id="nextFocus"></div></div></div>
+  </div>
+  <div class="col">
+    <div class="card"><h2>背包 <span id="invcount" style="color:var(--dim)"></span></h2><div class="chips grow" id="inv">—</div></div>
+    <div class="card grow"><h2>公会任务 · 成就</h2><div id="fame" class="pills" style="margin-bottom:6px"></div><div class="grow" id="quests"></div></div>
+  </div>
+  <div class="col">
+    <div class="card" style="flex:1.4"><h2>周边地图 <span id="mapc" style="color:var(--dim)"></span></h2><img id="mapimg" alt="map"></div>
+    <div class="card grow"><h2>近况 · 事件</h2><div class="grow" id="events"></div></div>
+    <div class="card"><h2>去过的地方</h2><div id="places" style="max-height:96px;overflow:auto"></div></div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const pretty=s=>{if(!s)return s;const t=String(s).split(':').pop().replace(/_/g,' ');return t.charAt(0).toUpperCase()+t.slice(1);};
+async function refresh(){
+ try{
+  const d=await (await fetch('/api/live/stats')).json(); const b=d.body||{};
+  const hp=b.hp!=null?b.hp:null; $('hp').textContent=hp!=null?hp:'—'; $('hpbar').style.width=(hp!=null?Math.min(100,hp/20*100):0)+'%';
+  const hg=b.hunger; $('foodbar').style.width=(hg!=null?Math.min(100,hg/20*100):0)+'%';
+  $('pos').textContent=b.pos&&b.pos.x!=null?`${Math.round(b.pos.x)}, ${Math.round(b.pos.y)}, ${Math.round(b.pos.z)}`:'—';
+  $('dim').textContent=(b.dimension||'').replace('minecraft:','')||'—';
+  $('st').textContent=b.status||'—';
+  const v=b.vitals||{}; const pills=[];
+  if(v.health&&v.health!=='ok')pills.push(`<span class="pill warn">❤ ${({injured:'受伤',critical:'濒危'}[v.health]||v.health)}</span>`);
+  if(v.food&&v.food!=='ok')pills.push(`<span class="pill warn">🍖 ${({urgent:'饥饿'}[v.food]||v.food)}</span>`);
+  if(d.deaths)pills.push(`<span class="pill">☠ 阵亡 ${d.deaths}</span>`);
+  $('pills').innerHTML=pills.join('');
+  $('held').textContent=d.held?pretty(d.held):'空手';
+  $('goal').textContent=d.goal||'（暂无明确目标）'; $('nextFocus').textContent=d.nextFocus?('▶ '+d.nextFocus):'';
+  const inv=d.inventory||[]; $('invcount').textContent=inv.length?`(${inv.length}种)`:'';
+  $('inv').innerHTML=inv.length?inv.map(x=>`<span class="chip">${pretty(x.id)}<span class="c">×${x.count}</span></span>`).join(''):'<span style="color:var(--dim)">（身体在线时显示实时背包）</span>';
+  const f=d.fame||{}; $('fame').innerHTML=`<span class="pill gold">🏅 ${f.rank||'—'}</span><span class="pill">完成 ${f.done??'—'}</span><span class="pill">功勋 ${f.fame??'—'}</span><span class="pill">入会 ${f.joined||'—'}</span>`;
+  const qs=d.quests||[]; $('quests').innerHTML=qs.map(q=>{const cls=q.status==='delivered'?'q-done':q.status==='claimed'?'q-claimed':'q-open';return `<div class="q ${cls}"><span>${q.title||q.questId}${q.mine?' <span class=me>🟦我</span>':''}</span><span class="st">${q.type}·${q.status}</span></div>`;}).join('')||'—';
+  const m=d.map||{}; if(m.cx!=null){$('mapc').textContent=`@${m.cx},${m.cz}`; $('mapimg').src=`/api/live/map.png?cx=${m.cx}&cz=${m.cz}&r=48&t=${Math.floor(Date.now()/15000)}`;}
+  const ev=d.events||[]; $('events').innerHTML=ev.length?ev.map(e=>`<div class="ev"><span class="t">${e.speaker||'·'}</span>${e.text||''}<span class="tm">${e.at?new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false}):''}</span></div>`).join(''):'<span style="color:var(--dim)">（暂无）</span>';
+  const pl=d.places||[]; $('places').innerHTML=pl.map(w=>`<div class="pl"><span>📍 ${w.name}</span><span class="co">${Math.round(w.x)},${Math.round(w.z)}</span></div>`).join('')||'—';
+  $('updated').textContent='刷新 '+new Date().toLocaleTimeString('zh-CN');
+ }catch(e){ $('updated').textContent='取数失败'; }
+}
+refresh(); setInterval(refresh,5000);
+</script></body></html>

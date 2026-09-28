@@ -117,7 +117,7 @@ def inspect_containers(names):
 def probe_shared_tts(opener=urllib.request.urlopen):
     """Probe the actual dependency; a polling voice worker alone proves nothing."""
     try:
-        with opener('http://127.0.0.1:8100/health',timeout=4) as response:
+        with opener('http://127.0.0.1:8100/health',timeout=8) as response:
             body=response.read(16385)
             assert len(body)<=16384
             data=json.loads(body)
@@ -159,7 +159,7 @@ def collect_snapshot(root=ROOT):
         if row.get('desiredRestart')=='no' and state['state']!='absent' and state.get('restart')!='no':
             issues.append({'code':'retirement-policy:'+row['id'],'severity':'warning','title':row['label']+'启动策略有变化',
                            'detail':'退役环境应保持 restart=no；检查是否有其他管理入口更改策略。'})
-    if not dependency['ok']:issues.append({'code':'shared-tts','severity':'error','title':'语音合成不可用','detail':'语音回复依赖本项目 tts 的 8100 端口；语音队列存活不能代替此依赖检查。'})
+    if not dependency['ok']:issues.append({'code':'shared-tts','severity':'error','title':'语音合成不可用','detail':'语音回复依赖 IndexTTS-2.5 兼容入口 8100；语音队列存活不能代替此依赖检查。'})
     try:
         from qwenpaw_inventory import collect_qwenpaw_inventory
         inventory=collect_qwenpaw_inventory(project_root=root)
@@ -251,7 +251,7 @@ def lifecycle_plan(action,selected,states):
     # deliberately stopped dependent just because its prerequisite restarted.
     start=list(selected) if action=='start' else [n for n in stop_order if n in selected or states.get('qiandengji-'+n+'-1',{}).get('state')=='running']
     start=[n for n in ('tts','mc','gate','world','npc','qwenpaw','qwenpaw-ops','resources','voice','asr','control','inventory','panel','survivor') if n in start] if action!='stop' else []
-    dependencies={'world':['mc','gate'],'gate':['mc'],'npc':['mc','world'],'voice':['tts'],'survivor':['mc','qwenpaw']}
+    dependencies={'world':['mc','gate'],'gate':['mc'],'npc':['mc','world'],'survivor':['mc','qwenpaw']}
     required=sorted({d for n in start for d in dependencies.get(n,[]) if d not in start})
     return {'project':'qiandengji','action':action,'selected':selected,'stop':stop_order if action!='start' else [],
             'saveMinecraft':action!='start' and 'mc' in expanded and states.get('qiandengji-mc-1',{}).get('state')=='running',

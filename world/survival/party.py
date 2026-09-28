@@ -8,7 +8,7 @@ SIDECAR = Path('/party-code') if Path('/party-code').is_dir() else Path(__file__
 if str(SIDECAR) not in sys.path:
     sys.path.insert(0, str(SIDECAR))
 from party_config import PartyConfig, recipient_tools
-from party_messages import PartyMessages
+from party_messages import PartyMessages, recent_heard_dialogue
 from party_bridge import message_context
 from party_world import GameSpeech, reconcile_world, delivery_result, reply_text
 
@@ -39,6 +39,11 @@ class SurvivorParty:
 
     def heard_replies(self):
         return self.queue.heard_replies('qd-survivor') if self.config.configured() else []
+
+    def recent_dialogue(self):
+        if not self.config.configured():
+            return []
+        return recent_heard_dialogue(self.queue.overview('qd-survivor', limit=16)['messages'])
 
     def attention_candidate(self):
         return self.queue.attention_candidate('qd-survivor') if self.config.configured() else None

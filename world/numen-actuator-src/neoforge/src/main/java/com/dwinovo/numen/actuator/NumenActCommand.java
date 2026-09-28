@@ -64,6 +64,8 @@ public final class NumenActCommand {
                         .executes(NumenActCommand::pad))
                 .then(Commands.literal("list")
                         .executes(NumenActCommand::list))
+                .then(Commands.literal("snapshot")
+                        .executes(ctx -> NumenVisionSnapshot.capture(ctx.getSource())))
                 .then(Commands.literal("summon")
                         .then(Commands.argument("owner", StringArgumentType.string())
                                 .then(Commands.argument("name", StringArgumentType.string()) // string 非 word：支持中文名（桐人/鸣人）

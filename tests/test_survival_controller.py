@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'world/survival'))
-from controller import Controller, main_inventory_summary
+from controller import Controller, NativeChatBusy, main_inventory_summary
 from control import update_control
 from numen_gateway import read_json, write_json, GatewayError
 
@@ -491,6 +491,40 @@ class ControllerTests(unittest.TestCase):
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)
         self.assertEqual(len(self.backend.cancelled), 1)
+
+    def test_exact_busy_rejection_releases_reservation_without_pausing(self):
+        self.controller.settings['asyncMotor'] = True
+        self.backend.on_submit = lambda *args: (_ for _ in ()).throw(NativeChatBusy('native_chat_busy'))
+        self.controller.tick()
+        self.assertTrue(read_json(self.state / 'control.json')['enabled'])
+        self.assertIsNone(self.controller.data['active'])
+        self.assertEqual(self.controller.data['decisions'], [])
+        self.assertEqual(self.controller.data['modelBusyCount'], 1)
+        self.assertGreater(self.controller.data['nextDecisionAt'], self.clock())
+        self.assertEqual(read_json(self.state / 'cognition-lease.json')['status'], 'closed')
+        self.assertFalse(self.backend.cancelled)
+        self.assertFalse(self.gateway.actions)
+        self.controller.tick()
+        self.assertEqual(len(self.backend.submitted), 1)
+
+    def test_crash_after_durable_busy_rejection_is_reconciled_without_post(self):
+        from motor_mailbox import open_cognition
+        self.controller.settings['asyncMotor'] = True
+        turn = 'survival-' + 'f' * 32
+        open_cognition(self.state, turn, (self.clock() + 60) * 1000, self.clock)
+        active = {'turnId': turn, 'phase': 'reserved', 'taskId': None, 'bodyAccess': 'queued'}
+        self.controller.data['active'] = active
+        self.controller.data['decisions'] = [{'turnId': turn, 'startedAt': self.clock()}]
+        self.controller.save()
+        self.backend._submission_receipt = lambda _: {'phase': 'rejected', 'reason': 'chat_busy'}
+        recovered = self.create()
+        recovered.settings['asyncMotor'] = True
+        recovered.reconcile_rejected_submission()
+        self.assertIsNone(recovered.data['active'])
+        self.assertEqual(recovered.data['decisions'], [])
+        self.assertEqual(read_json(self.state / 'cognition-lease.json')['status'], 'closed')
+        self.assertFalse(self.backend.submitted)
+        self.assertFalse(self.backend.cancelled)
 
     def test_native_404_pauses_cancels_and_never_resubmits(self):
         self.controller.tick()
@@ -1057,15 +1091,18 @@ class ControllerTests(unittest.TestCase):
             with self.subTest(count=count):
                 self.assertEqual(self.controller.next_review(control), self.clock() + seconds)
 
-    def test_livestream_preserves_explicit_rest_and_confirmed_sleep(self):
+    def test_livestream_revisits_waiting_but_preserves_confirmed_sleep(self):
         self.livestream()
         control = read_json(self.state/'control.json')
         self.controller.data['lastReviewAt'] = self.clock()
         self.write('memory.json', {'goalState': 'resting', 'reviewAfterSeconds': 1800})
-        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.assertEqual(self.controller.next_review(control), self.clock() + 90)
+        self.assertEqual(self.controller.livestream_pacing()['reason'], 'agent_resting')
         self.write('memory.json', {'goalState': 'ongoing', 'reviewAfterSeconds': 1800})
         self.controller.data['actionExecution'] = {'receipt': {'tool': 'sleep',
             'status': 'completed', 'completionConfirmed': True}}
+        self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
+        self.write('memory.json', {'goalState': 'resting', 'reviewAfterSeconds': 1800})
         self.assertEqual(self.controller.next_review(control), self.clock() + 1800)
 
     def test_livestream_does_not_accelerate_pending_or_unknown_body_work(self):
@@ -1089,7 +1126,9 @@ class ControllerTests(unittest.TestCase):
         self.assertIn('【直播提示】', header)
         self.assertIn('say', header)
         import json
-        self.assertTrue(json.loads(facts)['pacing']['narration']['neverSent'])
+        context = json.loads(facts)
+        self.assertTrue(context['pacing']['narration']['neverSent'])
+        self.assertIn('普通赶路和等待没有新变化就安静', context['pacing']['instruction'])
         self.clock.now += 46
         self.controller.tick()
         self.assertEqual(len(self.backend.submitted), 1)

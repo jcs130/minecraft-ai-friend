@@ -1,6 +1,7 @@
 """Read-only deployed party/session, native tools and management projection probe."""
 import json
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.request
@@ -92,13 +93,24 @@ def check():
             and sorted([{k: m[k] for k in ('agentId', 'kind')} for m in panel.get('members', [])],
                        key=lambda m: m['agentId']) == [{k: m[k] for k in ('agentId', 'kind')} for m in projected])
         session = read_json(ROOT / 'server/survival-agent-state/survival/life-session.json')
+        behavior = read_json(ROOT / 'server/survival-agent-state/survival/behavior-context.json')
         settings = read_json(ROOT / 'server/survival-agent-state/survival/settings.json')
         survivor = next(m for m in config['members'] if m['kind'] == 'survivor')
+        chat_id = session.get('chatId')
+        behavior_lanes = behavior.get('lanes') or {}
+        native_identity = (isinstance(chat_id, str) and str(uuid.UUID(chat_id)) == chat_id) if chat_id else (
+            chat_id is None and behavior.get('schema') == 2
+            and behavior.get('bodyUuid') == survivor['bodyUuid']
+            and behavior.get('lifeSessionId') == session.get('primarySessionId')
+            and isinstance(behavior_lanes, dict) and bool(behavior_lanes)
+            and all(isinstance(lane, dict) and isinstance(lane.get('sessionId'), str)
+                    and re.fullmatch(r'life-[0-9a-f]{32}', lane['sessionId'])
+                    for lane in behavior_lanes.values()))
         checks['persistent_life_identity'] = (session.get('agentId') == 'qd-survivor'
             and all(session.get(k) == survivor[k] for k in ('bodyUuid', 'userId', 'channel'))
             and session.get('primarySessionId') == survivor['sessionId']
             and settings.get('bodyUuid') == survivor['bodyUuid'] and settings.get('ownerUuid') == survivor['ownerUuid']
-            and isinstance(session.get('chatId'), str) and str(uuid.UUID(session['chatId'])) == session['chatId'])
+            and native_identity)
         report = ROOT / 'reports/survivor-party-smoke.json'
         evidence = json.loads(report.read_text(encoding='utf-8-sig')) if report.exists() else {}
         checks['verified_behavior'] = evidence.get('ok') is True and all(evidence.get('checks', {}).get(k) is True for k in (

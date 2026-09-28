@@ -20,9 +20,19 @@ class SpeechHealthTests(unittest.TestCase):
             'updatedAt': 1000000, 'activeCount': 0, 'queuedCount': 0})
         self.put(self.voice / '.voice-health.json', {'updated_at': 1000})
         self.put(self.voice / 'speech-profiles.json', {'schema': 1, 'actors': {
-            'body': {'enabled': True, 'voiceId': 'cosy_male', 'version': 'v1'}}})
+            'body': {'enabled': True, 'voiceId': 'cosy_male', 'version': 'v1'},
+            'yui-body': {'enabled': True, 'voiceId': 'voice_03', 'version': 'v1'}}})
         self.put(self.root / 'server/survival-agent-state/survival/settings.json', {'bodyUuid': 'body'})
-        self.voices = ['cosy_male']
+        self.put(self.root / 'server/mcdata/village/party/public/roles.json', {'members': [
+            {'agentId': '5swvhK', 'kind': 'maid', 'bodyUuid': 'yui-body'}]})
+        for role in ('qd-survivor', '5swvhK'):
+            folder = self.root / 'server/agents/work/workspaces' / role
+            self.put(folder / 'skill.json', {'skills': {'say-it-plain': {'enabled': True, 'channels': ['all']}}})
+            (folder / 'AGENTS.md').write_text('<!-- qiandeng-party-voice-v1 -->\n口语规则\n<!-- /qiandeng-party-voice-v1 -->', encoding='utf-8')
+            skill = folder / 'skills/say-it-plain/SKILL.md'
+            skill.parent.mkdir(parents=True, exist_ok=True)
+            skill.write_text('---\nname: say-it-plain\n---\n', encoding='utf-8')
+        self.voices = ['cosy_male', 'voice_03']
         self.tools = [{'name': name, 'enabled': True} for name in ('speak', 'speech_status', 'stop_speaking')]
 
     def put(self, path, value):
@@ -53,6 +63,17 @@ class SpeechHealthTests(unittest.TestCase):
         result = self.run_probe()
         self.assertFalse(result['checks']['local_voice_available'])
         self.assertFalse(result['checks']['native_speech_tools'])
+
+    def test_missing_yui_style_binding_fails(self):
+        (self.root / 'server/agents/work/workspaces/5swvhK/skills/say-it-plain/SKILL.md').unlink()
+        result = self.run_probe()
+        self.assertFalse(result['checks']['plain_speech_skill_binding'])
+
+    def test_yui_must_keep_a_distinct_available_voice(self):
+        profiles = json.loads((self.voice / 'speech-profiles.json').read_text(encoding='utf8'))
+        profiles['actors']['yui-body']['voiceId'] = 'cosy_male'
+        self.put(self.voice / 'speech-profiles.json', profiles)
+        self.assertFalse(self.run_probe()['checks']['yui_voice_binding'])
 
     def test_missing_file_fails_without_crash(self):
         (self.voice / '.speech-health.json').unlink()

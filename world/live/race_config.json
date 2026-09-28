@@ -1,0 +1,35 @@
+{
+  "name": "建房武装竞速",
+  "startedAt": "2026-09-27 18:00 (v2 修订 19:38)",
+  "verdictAt": "2026-09-28 12:00 现场验房点装",
+  "statsDir": "D:/Projects/QiandengJi/server/mc/shadow/stats",
+  "usercache": "D:/Projects/QiandengJi/server/mc/usercache.json",
+  "raceDir": "D:/Projects/QiandengJi/runtime/eye/race",
+  "basePattern": "base_{login}.json",
+  "snapPattern": "snap-{ymd}.jsonl",
+  "goalText": "七项：①封闭房屋(墙/顶/门) ②屋内一张床 ③火把点亮 ④工作台+熔炉+箱子 ⑤全套铁甲(头/胸/腿/靴) ⑥铁剑+铁镐 ⑦16铁锭存入家中箱。缺一不计完成；明午现场验房裁决。",
+  "racers": [
+    { "login": "Kirito", "display": "桐人(重栈)" },
+    { "login": "ag_naruto", "display": "鸣人(mindcraft)" }
+  ],
+  "checks": [
+    { "key": "white_bed",       "label": "床(背包或已放)", "need": 1 },
+    { "key": "crafting_table",  "label": "工作台已放置",   "need": 1, "source": "place" },
+    { "key": "furnace",         "label": "熔炉已放置",     "need": 1, "source": "place" },
+    { "key": "chest",           "label": "箱子已放置",     "need": 1, "source": "place" },
+    { "key": "torch",           "label": "火把已放置",     "need": 1, "source": "place" },
+    { "key": "iron_helmet",     "label": "铁头盔",        "need": 1 },
+    { "key": "iron_chestplate", "label": "铁胸甲",        "need": 1 },
+    { "key": "iron_leggings",   "label": "铁护腿",        "need": 1 },
+    { "key": "iron_boots",      "label": "铁靴",          "need": 1 },
+    { "key": "iron_sword",      "label": "铁剑",          "need": 1 },
+    { "key": "iron_pickaxe",    "label": "铁镐",          "need": 1 },
+    { "key": "iron_ingot",      "label": "铁锭存量",      "need": 16 }
+  ],
+  "manualChecks": [
+    "封闭房屋实体(墙/顶/门、人在内)——现场判定",
+    "火把为屋内点亮(背包囤积不算)——现场判定",
+    "床为自家放置并真睡(sleep计数佐证)——现场判定",
+    "铁锭存于家中箱——现场判定,接口按随身量给参考值"
+  ]
+}

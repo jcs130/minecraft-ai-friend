@@ -76,7 +76,9 @@ def wrap_prepare(original):
         note = UserMsg(name='survival-controller', content=(
             '当前调度请求的原始操作引用（对话压缩后仍保留）：' + json.dumps(reference, ensure_ascii=False)
             + '。需要 turn_id 时原样复制；这不是新任务、续租或授权。'
-            '以工具实际回执为准；已过期或拒绝时结束本轮，不猜编号、不自动重试。'))
+            '以工具实际回执为准；已过期、在途、未知或其他拒绝时结束本轮，不猜编号、不自动重试。'
+            '仅当回执明确 admissionPhase=before_lock、dispatched=false、writePerformed=false、'
+            'retryable=true，且本轮仍获授权时，短暂等待后可用原 turn_id 和完全相同参数重试一次。'))
         return {**result, 'messages': [*result['messages'], note]}
     return prepare
 

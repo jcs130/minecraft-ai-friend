@@ -92,6 +92,30 @@ class EmbodiedControllerTests(unittest.TestCase):
         self.assertIsNone(value['scene'])
         self.assertFalse(value['observations']['scene']['fresh'])
 
+    def test_fresh_body_bound_terrain_reaches_the_first_model_input(self):
+        self.enable()
+        self.controller.data['wakeReason'] = 'test'
+        body = copy.deepcopy(self.gateway.body)
+        body['observedAt'] = int(self.clock() * 1000)
+        position = body['position']
+        terrain = ('look_around center=(%d,%d,%d) facing=north | 1 cell = 1 block\n'
+                   '@ . .') % tuple(round(position[k]) for k in ('x', 'y', 'z'))
+        self.controller.environment = {'ok': True, 'observedAt': body['observedAt'],
+            'bodyUuid': body['bodyUuid'], 'world': {'dimension': body['dimension']},
+            'terrain': terrain, 'radius': 12}
+        context = self.controller.life_context(body, {}, 'survival-' + '3' * 32)
+        self.assertEqual(context['scene']['terrain'], terrain)
+        self.assertEqual(context['scene']['radius'], 12)
+        _, first_input, _ = prepare(self.state, self.controller.session, context, {})
+        self.assertEqual(first_input['updates']['scene']['terrain'], terrain)
+        self.controller.environment['observedAt'] -= 6000
+        stale = self.controller.life_context(body, {}, 'survival-' + '4' * 32)
+        self.assertNotIn('terrain', stale['scene'])
+        self.controller.environment['observedAt'] = body['observedAt']
+        body['position']['x'] += 4
+        moved = self.controller.life_context(body, {}, 'survival-' + '5' * 32)
+        self.assertNotIn('terrain', moved['scene'])
+
     def test_body_episode_changes_cognition_but_keeps_party_address(self):
         from life_cycle import rotate_session
         self.enable()

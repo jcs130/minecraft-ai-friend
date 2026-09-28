@@ -102,6 +102,51 @@ class PartyLifeTests(unittest.TestCase):
         self.assertEqual(context['historicalMessages'][0]['createdAtIso'], '1970-01-01T08:10:01+08:00')
         self.assertIn('追加一条带日期的纠正', prompt)
 
+    def test_recent_yui_speech_counts_only_game_heard_utterances(self):
+        self.signal()
+        history = [
+            {'messageId': 'unheard', 'createdAt': 1190, 'status': 'failed',
+             'sender': {'agentId': ROLE}, 'channel': 'nearby',
+             'worldDelivery': {'state': 'rejected'}},
+            {'messageId': 'heard-reply', 'createdAt': 1000, 'status': 'answered',
+             'sender': {'agentId': 'qd-survivor'}, 'worldDelivery': {'state': 'heard'},
+             'reply': {'sender': {'agentId': ROLE}, 'createdAt': 1180, 'channel': 'nearby'},
+             'replyDelivery': {'state': 'heard'}},
+        ]
+        with patch.object(self.bridge.queue, 'overview', return_value={'messages': history}):
+            self.life.tick()
+        context = json.loads(self.posts[0][1]['input'][0]['content'][0]['text'].split('\n', 1)[1])
+        self.assertEqual(context['recentYuiSpeech']['lastHeardAt'], 1180)
+        self.assertEqual(context['recentYuiSpeech']['ageSecondsAtRoundStart'], 21)
+        self.assertIn('qd_party__party_send', context['capabilities']['communication']['enabledTools'])
+        self.assertNotIn('qd_party__party_send确已启用', self.posts[0][1]['input'][0]['content'][0]['text'].split('\n', 1)[0])
+
+    def test_long_silence_does_not_force_party_utterance(self):
+        self.signal()
+        history = [{'messageId': 'last-yui-speech', 'createdAt': 600, 'status': 'answered',
+                    'sender': {'agentId': ROLE}, 'channel': 'nearby',
+                    'worldDelivery': {'state': 'heard'}}]
+        with patch.object(self.bridge.queue, 'overview', return_value={'messages': history}):
+            self.life.tick()
+        prompt = self.posts[0][1]['input'][0]['content'][0]['text']
+        self.assertNotIn('当前位置', prompt.split('privateDialogueInputs', 1)[0])
+        self.assertNotIn('五分钟', prompt)
+        self.assertNotIn('优先说一句', prompt)
+        self.assertIn('不要按沉默时长或定时信号发言', prompt)
+        self.assertIn('按已启用的say-it-plain技能自查', prompt)
+        self.assertIn('没有新事就安静行动', prompt)
+        self.assertEqual(json.loads(prompt.split('\n', 1)[1])['recentYuiSpeech']['ageSecondsAtRoundStart'], 601)
+
+    def test_night_rest_exposes_independent_schedule_choice(self):
+        self.signal()
+        self.life._scope = lambda: ['maid_native__identity', 'maid_native__schedule', 'qd_party__party_send']
+        self.life.world_clock = lambda: {'available': True, 'daytime': 18549}
+        with patch.object(self.bridge, 'observation', return_value={'state': {
+                'schedule': 'DAY', 'activity': 'rest', 'following': True, 'ownerOnline': True}}):
+            self.life.tick()
+        first = self.posts[0][1]['input'][0]['content'][0]['text'].split('\n', 1)[0]
+        self.assertIn('maid_native__schedule切到ALL', first)
+
     def test_world_clock_failure_is_explicit_and_never_invented(self):
         self.signal()
         def unavailable(): raise TimeoutError('native query unavailable')

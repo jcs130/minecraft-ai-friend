@@ -15,10 +15,11 @@ def main():
                 'quickjs-ng': '0.16.2.1', 'transformers': '4.57.1'}
     actual = {name: importlib.metadata.version(name) for name in expected}
     assert actual == expected, actual
-    from llm_runtime_policy import install as llm_install
+    from llm_runtime_policy import install as llm_install, install_home_summary
     from reme_status_compat import install as reme_install
     from native_tool_runtime import install as tools_install
     assert llm_install('game') == 1
+    assert install_home_summary() == 1
     reme_compat = reme_install('game')
     assert reme_compat == (0 if version == '2.2.1' else 1)
     assert tools_install('game') == 1

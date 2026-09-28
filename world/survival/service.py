@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import sqlite3
 import subprocess
 import threading
 import time
@@ -16,6 +17,15 @@ from perception import WorldPerception
 from native_tools import NativeToolConnection
 
 STATE = Path('/state/survival')
+
+
+def retryable_runtime_error(exc):
+    if type(exc).__name__ == 'GatewayError' or isinstance(exc, OSError):
+        return True
+    if isinstance(exc, sqlite3.OperationalError):
+        code = getattr(exc, 'sqlite_errorcode', None)
+        return type(code) is int and code & 0xff in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+    return False
 
 
 def child_command(environ=None):
@@ -157,7 +167,7 @@ def main():
                     # Transient gateway errors (RCON reconnect, MC restart,
                     # network blip) retry with backoff; dispatch markers still
                     # protect uncertain effects from being repeated.
-                    if type(exc).__name__ == 'GatewayError' or isinstance(exc, OSError):
+                    if retryable_runtime_error(exc):
                         gateway_error_count += 1
                         print(json.dumps({'event': 'runtime_retry',
                                           'attempt': gateway_error_count,

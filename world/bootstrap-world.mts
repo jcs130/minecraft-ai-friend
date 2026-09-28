@@ -32,6 +32,7 @@ import { createEvolveReview } from './src/mc-evolve-review.ts'
 import { createTerra } from './src/mc-terra.ts'
 import { createSaga } from './src/mc-saga.ts'
 import { startModernViewer } from './src/mc-modern-viewer.mts'
+import { createNumenSnapshotView } from './src/numen-snapshot-view.mts'
 import type { Bot } from 'mineflayer'
 
 // 运行态根（2026-08-20 D 步迁正仓）：默认 ./data（仓内自足）；迁正仓跑时经 MC_DATA_DIR 指向部署现场 data（运行态正本）
@@ -85,6 +86,14 @@ const rcon = createRcon({
   host: process.env.MC_RCON_HOST ?? process.env.MC_HOST ?? 'localhost',
   port: Number(process.env.MC_RCON_PORT ?? 25575),
   passwordPath: `${D}/rcon-secret.txt`,
+})
+// The perspective source is Kirito's Numen body and loaded server blocks.
+// This virtual read-only bot provides Prismarine's existing rendering protocol;
+// it never connects to Minecraft or teleports another player.
+const visionSource = createNumenSnapshotView({ sendCommand: command => rcon.service.send(command) })
+const visionViewer = startModernViewer(() => visionSource.bot, {
+  port: 3071, publicOrigin: 'http://127.0.0.1:3071', firstPersonFov: 120, agentFrames: true,
+  beforeAgentFrame: visionSource.prepare,
 })
 const eye = startEyeService({
   getBot: () => bot.getBot(),
@@ -326,7 +335,7 @@ const shutdown = (): Promise<void> => {
     console.log('[bootstrap-world] shutting down ...')
     // Parking needs the live RCON/bot adapters. Close observation endpoints
     // before ordinary world consumers and their shared connections.
-    for (const h of [eye, modernViewer, mapTiles, panelPublisher, ...handles]) {
+    for (const h of [eye, modernViewer, visionViewer, mapTiles, panelPublisher, ...handles]) {
       try { await h.dispose() } catch (e) {
         console.error('[bootstrap-world] dispose error:', e instanceof Error ? e.message : String(e))
       }

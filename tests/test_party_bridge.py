@@ -240,6 +240,7 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertEqual(context['workSupport']['equipment']['lines'], ['Backpack items: [Wheat Seeds]x5'])
         self.assertTrue(context['workSupport']['equipment']['available'])
         self.assertFalse(context['replyContract']['partySendAvailable'])
+        self.assertEqual(context['replyContract']['scope'], 'this_incoming_message_turn_only')
         self.assertTrue(context['replyContract']['toolSyntaxIsNotSpeech'])
         self.assertEqual(context['replyContract']['delivery'], 'game_after_final_text')
         self.assertEqual(request['session_id'], 'maid-abc')
@@ -255,6 +256,8 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertIn('实际 memory_search 工具调用', instructions)
         self.assertIn('最后直接写一句不含换行的中文回复', instructions)
         self.assertIn('这句最终正文会交给游戏发送', instructions)
+        self.assertIn('按say-it-plain技能写给耳朵听', instructions)
+        self.assertIn('不必每句都喊爸爸', instructions)
         self.assertIn('不提供 qd_party__party_send', instructions)
         self.assertIn('不能把 XML、JSON、代码块或伪工具调用写进回复', instructions)
         self.assertTrue(json.loads(data)['untrustedEnvironmentData'])
@@ -262,6 +265,23 @@ class PartyBridgeTests(unittest.TestCase):
         row['worldDelivery']['state'] = 'unknown'
         with self.assertRaisesRegex(ValueError, 'party_message_not_heard'):
             message_context(row)
+
+    def test_repeated_long_speech_is_rejected_before_world_send_but_same_id_replays(self):
+        line = '北边有一条窄路，刚才我亲眼看见它通到树林边。我们先到树旁停一下，再决定往哪走。'
+        first = self.bridge.call('qd-survivor', 'party_send', {'text': line}, 'plain-first')
+        before = len(self.game.emits)
+        self.assertEqual(self.bridge.call('qd-survivor', 'party_send', {'text': line}, 'plain-first')['messageId'], first['messageId'])
+        with self.assertRaisesRegex(ValueError, 'speech_repeats_recent_plan'):
+            self.bridge.call('qd-survivor', 'party_send', {'text': line}, 'plain-second')
+        self.assertEqual(len(self.game.emits), before)
+
+    def test_status_readout_is_rejected_before_queue_reservation(self):
+        line = ('爸爸，我在(-518.49, 163.72, 874.30)，游戏时间Day 395清晨。'
+                '你的HP还没补满，我们要继续下山，稍后再等骷髅刷新。')
+        with self.assertRaisesRegex(ValueError, 'speech_reads_game_status'):
+            self.bridge.call('maid-test', 'party_send', {'text': line}, 'status-report')
+        self.assertEqual(self.game.emits, [])
+        self.assertEqual(self.bridge.queue.overview('maid-test')['messages'], [])
 
     def test_delayed_help_message_keeps_original_facts_and_marks_age_at_actual_dispatch(self):
         original = 'HP 3.88, stuck at (-222,29,836); please help.'
@@ -295,6 +315,17 @@ class PartyBridgeTests(unittest.TestCase):
         self.assertIn('简短回复并结束本轮', instructions)
         self.assertIn('不承诺自动续查', instructions)
         self.assertEqual(self.posts, [])
+
+    def test_worker_finishes_unclaimed_world_send_after_interrupted_tool_call(self):
+        message = self.bridge.queue.enqueue('maid-test', '爸爸，我看到一条路。')
+        event_id = message['messageId']
+        self.assertEqual(self.bridge.queue.world_event(event_id)['state'], 'pending')
+        self.assertEqual(self.game.emits, [])
+        self.bridge.tick()
+        self.assertEqual(self.bridge.queue.world_event(event_id)['state'], 'heard')
+        self.assertEqual([event['text'] for event in self.game.emits], ['爸爸，我看到一条路。'])
+        self.bridge.tick()
+        self.assertEqual(len(self.game.emits), 1)
 
     def test_native_tool_markup_is_never_spoken_executed_or_retried(self):
         answers = (
@@ -603,6 +634,27 @@ class PartyBridgeTests(unittest.TestCase):
             failed = request(call, session=session)[2]
         self.assertEqual(failed['error'], {'code': -32602,
             'message': 'Invalid or unavailable party request'})
+
+    def test_http_repeated_speech_returns_actionable_tool_feedback(self):
+        request = self.http_request()
+        _, headers, _ = request({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                                  'params': {'protocolVersion': '2025-11-25'}})
+        session = headers['Mcp-Session-Id']
+        line = '北边有一条窄路，刚才我亲眼看见它通到树林边。我们先到树旁停一下，再决定往哪走。'
+        def send(rid):
+            return request({'jsonrpc': '2.0', 'id': rid, 'method': 'tools/call',
+                            'params': {'name': 'party_send', 'arguments': {'text': line}}},
+                           session=session)[2]
+        self.assertFalse(send(2)['result']['isError'])
+        before = len(self.game.emits)
+        result = send(3)['result']
+        self.assertTrue(result['isError'])
+        feedback = json.loads(result['content'][0]['text'])
+        self.assertEqual(feedback['code'], 'speech_repeats_recent_plan')
+        self.assertFalse(feedback['enqueued'])
+        self.assertFalse(feedback['worldSendAttempted'])
+        self.assertIn('刚观察到的新事', feedback['hint'])
+        self.assertEqual(len(self.game.emits), before)
 
 
 if __name__ == '__main__': unittest.main()

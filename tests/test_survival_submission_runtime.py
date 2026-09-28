@@ -9,8 +9,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'world/ops'), str(ROOT / 'world/survival')]
-from survival_submission_runtime import identity, submit_once
-from controller import QwenBackend
+from survival_submission_runtime import CHAT_BUSY_DETAIL, identity, submit_once
+from controller import NATIVE_CHAT_BUSY_DETAIL, NativeChatBusy, QwenBackend
 
 
 class SubmissionReceiptTests(unittest.TestCase):
@@ -54,6 +54,57 @@ class SubmissionReceiptTests(unittest.TestCase):
         row = json.loads(next((self.root / 'native-submissions').glob('*.json')).read_text())
         self.assertEqual(row['phase'], 'unknown')
         self.assertNotIn('taskId', row)
+
+    def test_exact_native_chat_busy_is_durable_rejection_without_task(self):
+        from fastapi import HTTPException
+        self.assertEqual(CHAT_BUSY_DETAIL, NATIVE_CHAT_BUSY_DETAIL)
+        calls = []
+        async def original(*args):
+            calls.append(args)
+            raise HTTPException(status_code=409, detail=CHAT_BUSY_DETAIL)
+        with self.assertRaises(HTTPException):
+            asyncio.run(submit_once(original, self.payload, None, self.workspace))
+        path = self.root / 'native-submissions' / (self.ref['turn_id'] + '.json')
+        row = json.loads(path.read_text())
+        self.assertEqual((row['phase'], row['reason']), ('rejected', 'chat_busy'))
+        self.assertNotIn('taskId', row)
+        with self.assertRaises(HTTPException):
+            asyncio.run(submit_once(original, self.payload, None, self.workspace))
+        self.assertEqual(len(calls), 1)
+
+    def test_other_409_remains_unknown(self):
+        from fastapi import HTTPException
+        async def original(*args):
+            raise HTTPException(status_code=409, detail='survival_submission_already_recorded')
+        with self.assertRaises(HTTPException):
+            asyncio.run(submit_once(original, self.payload, None, self.workspace))
+        row = json.loads(next((self.root / 'native-submissions').glob('*.json')).read_text())
+        self.assertEqual(row['phase'], 'unknown')
+
+    def test_backend_accepts_busy_only_with_exact_http_and_bound_durable_receipt(self):
+        import httpx
+        session = {'primarySessionId': self.ref['session_id'], 'userId': 'survival-controller',
+                   'channel': 'console'}
+        row = {'schema': 1, 'turnId': self.ref['turn_id'], 'sessionId': self.ref['session_id'],
+               'userId': 'survival-controller', 'agentId': 'qd-survivor', 'channel': 'console',
+               'phase': 'rejected', 'reason': 'chat_busy'}
+        request = httpx.Request('POST', 'http://localhost/api/console/chat/task')
+        response = httpx.Response(409, json={'detail': CHAT_BUSY_DETAIL}, request=request)
+        backend = QwenBackend({})
+        calls = []
+        def api(method, route, payload=None):
+            calls.append((method, route))
+            if method == 'POST':
+                raise httpx.HTTPStatusError('busy', request=request, response=response)
+            return row
+        backend.api = api
+        with self.assertRaises(NativeChatBusy):
+            backend.submit(self.ref['turn_id'], 'one prompt', 60, session=session)
+        self.assertEqual(calls, [('POST', '/console/chat/task'),
+            ('GET', '/console/survival-submission/' + self.ref['turn_id'])])
+        row['phase'] = 'unknown'
+        with self.assertRaises(httpx.HTTPStatusError):
+            backend.submit(self.ref['turn_id'], 'one prompt', 60, session=session)
 
     def test_other_roles_pass_through_and_invalid_owned_binding_fails(self):
         self.assertIsNone(identity(self.payload, 'another-role'))

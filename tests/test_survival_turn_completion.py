@@ -14,6 +14,7 @@ from test_survival_skill_tools import SurvivalSkillToolsTests, TURN
 
 EXTERNAL_SESSION = 'life-0123456789abcdef0123456789abcdef'
 NAVIGATE_TOOL = 'numen_survival__navigate'
+NAVIGATE_PLAN_TOOL = 'numen_survival__navigate_plan'
 
 
 def request_identity():
@@ -304,6 +305,27 @@ class NavigationAdmissionTests(unittest.TestCase):
         args, result = self.receipt(queued=False)
         self.assertEqual(result['code'], 'skill_queued')
         self.assertEqual(completion_summary(self.agent), args['summary'])
+
+    def test_real_async_motion_plan_receipt_finishes_exact_current_round(self):
+        from navigation_program import motion_record
+        from test_survival_navigate_tool import NavigateToolTests, TURN as NAV_TURN
+        drafted = self.library.draft(**motion_record())
+        version = drafted['version']
+        self.assertTrue(self.library.test('base_motion_plan', version)['passed'])
+        self.library.promote('base_motion_plan', version)
+        NavigateToolTests.queued(self)
+        args = {'turn_id': NAV_TURN, 'waypoints': [{'x': -200, 'z': 250}, {'x': -150, 'z': 280}],
+                'summary': '两个路标已排队，等待真实行走回执。'}
+        result = self.tools.navigate_plan(**args)
+        self.assertEqual(result['code'], 'motor_queued')
+        self.message = Message([NS(id='call-current', name=NAVIGATE_PLAN_TOOL, input=args)],
+            [NS(id='call-current', name=NAVIGATE_PLAN_TOOL, state='success', output=json.dumps(result))])
+        self.agent = NS(_workspace_dir='/state/work/workspaces/qd-survivor',
+            _agent_config=NS(id='qd-survivor'), _request_context=request_identity(),
+            state=NS(reply_id=self.message.id), _get_last_msg=lambda: self.message)
+        self.assertEqual(completion_summary(self.agent), args['summary'])
+        self.message.results[0].output = json.dumps(result | {'name': 'base_navigate'})
+        self.assertIsNone(completion_summary(self.agent))
 
     def test_async_queue_requires_exact_unexecuted_skill_identity(self):
         args, result = self.receipt()

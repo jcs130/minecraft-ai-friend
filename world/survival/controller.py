@@ -18,6 +18,35 @@ import uuid
 from numen_gateway import (NumenGateway, GatewayError, read_json, read_controller_json,
     write_json, action_lock, receipt_evidence)
 
+NATIVE_CHAT_BUSY_DETAIL = ('A task is already running for this chat. Wait for it to '
+                           'finish or use a different session_id.')
+
+
+def accept_bounded_motion_choice(plan, selection):
+    """Keep a near-threshold Jev route inside the tested motion program.
+
+    The candidate comes from the current program, and the normal exact-action
+    binding plus Numen's fresh goto preflight still run before movement.
+    """
+    if (not isinstance(selection, dict) or selection.get('ok') is not False
+            or selection.get('code') != 'policy_escalated'
+            or selection.get('candidates') != (plan.get('choose') or {}).get('candidates')):
+        return selection
+    confidence, probability = selection.get('confidence'), selection.get('selectedProbability')
+    if (type(confidence) not in (int, float) or type(probability) not in (int, float)
+            or not math.isfinite(confidence) or not math.isfinite(probability)
+            or not .70 <= confidence < .75 or probability < .80):
+        return selection
+    choice = selection.get('choice')
+    if not isinstance(choice, str) or not choice.startswith('path_'):
+        return selection
+    matches = [row for row in selection['candidates'] if row.get('id') == choice]
+    if (len(matches) != 1 or not isinstance(matches[0].get('action'), dict)
+            or matches[0]['action'].get('tool') != 'goto'):
+        return selection
+    return {**selection, 'ok': True, 'code': 'policy_selected_bounded_motion',
+            'classifierCode': selection['code'], 'action': copy.deepcopy(matches[0]['action'])}
+
 
 def utc():
     return datetime.now(timezone.utc).isoformat()
@@ -252,6 +281,10 @@ def life_action_evidence(row):
     return receipt_evidence(row)
 
 
+class NativeChatBusy(Exception):
+    """The pinned native endpoint proved that this turn was not dispatched."""
+
+
 class QwenBackend:
     def __init__(self, env=None):
         env = os.environ if env is None else env
@@ -330,7 +363,20 @@ class QwenBackend:
         if session.get('contextProtocol') == 2:
             payload['request_context']['qiandeng_survival_turn']['context_protocol'] = 2
         payload['timeout'] = timeout
-        value = self.api('POST', '/console/chat/task', payload)
+        try:
+            value = self.api('POST', '/console/chat/task', payload)
+        except Exception as error:
+            import httpx
+            response = getattr(error, 'response', None)
+            if (isinstance(error, httpx.HTTPStatusError) and response.status_code == 409
+                    and response.json() == {'detail': NATIVE_CHAT_BUSY_DETAIL}):
+                active = {'turnId': turn_id, 'sessionId': session['primarySessionId'],
+                          'userId': session['userId'], 'channel': session['channel']}
+                receipt = self._submission_receipt(active)
+                if (receipt.get('phase') == 'rejected' and receipt.get('reason') == 'chat_busy'
+                        and receipt.get('taskId') is None):
+                    raise NativeChatBusy('native_chat_busy') from error
+            raise
         import re
         if not isinstance(value.get('task_id'), str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value['task_id']):
             raise ValueError('native_task_id_missing')
@@ -355,7 +401,7 @@ class QwenBackend:
                 'code': 'NATIVE_TASK_LOST', 'message': 'Native task absent and agent idle; result unverified. Observe again; do not replay old actions.'}},
                 'reconciliation': {'resultVerified': False, 'requestReplayed': False, 'nativeRunningTaskCount': 0}}
 
-    def lookup_submission(self, active):
+    def _submission_receipt(self, active):
         import re
         turn = active.get('turnId')
         if not isinstance(turn, str) or not re.fullmatch(r'survival-[0-9a-f]{32}', turn):
@@ -365,6 +411,11 @@ class QwenBackend:
                     **{k: active[k] for k in ('sessionId', 'userId', 'channel')}}
         if any(value.get(k) != v for k, v in expected.items()):
             raise ValueError('native_submission_binding_mismatch')
+        return value
+
+    def lookup_submission(self, active):
+        import re
+        value = self._submission_receipt(active)
         if value.get('phase') == 'unknown':
             return None
         task = value.get('taskId')
@@ -411,7 +462,7 @@ class QwenBackend:
 class Controller:
     def __init__(self, state=Path('/state/survival'), public=Path('/public/survivor.json'),
                  gateway=None, backend=None, clock=time.time, skills=None, perception=None, party=None,
-                 policy_worker=None):
+                 policy_worker=None, tool_focus_worker=None):
         self.root, self.public, self.clock = Path(state), Path(public), clock
         self.root.mkdir(parents=True, exist_ok=True)
         self.gateway = gateway or NumenGateway(self.root)
@@ -422,6 +473,8 @@ class Controller:
         from policy_worker import PolicyWorker
         from system_one import SystemOne
         self.policy_worker = policy_worker or PolicyWorker(lambda: SystemOne(clock=self.clock))
+        self.tool_focus_worker = tool_focus_worker
+        self.pending_tool_focus = None
         self.pending_policy = None  # Inference has no external effect; never recover an old choice.
         self.pending_shadow = None  # Shadow fast-loop candidate: recorded, never executed.
         self.pending_patrol = None  # Patrol candidate: Jev decides, whisper executes.
@@ -446,6 +499,10 @@ class Controller:
             'schema': 1, 'status': 'starting', 'decisions': [], 'active': None,
             'episodes': [], 'nextDecisionAt': 0, 'failures': 0}
         self.settings = read_json(self.root / 'settings.json')
+        if self.settings.get('jevToolFocusEnabled') is True and self.tool_focus_worker is None:
+            # Advisory inference gets its own slot: it cannot delay a motion
+            # classifier that is already steering the fast program.
+            self.tool_focus_worker = PolicyWorker(lambda: SystemOne(clock=self.clock))
         if self.settings.get('brainProtocol') is not None:
             from embodiment import VERSION
             if (self.settings['brainProtocol'] != VERSION or self.settings.get('contextProtocol') != 2
@@ -479,10 +536,51 @@ class Controller:
 
     def close_policy(self):
         self.discard_policy()
+        self.pending_tool_focus = None
         self.pending_motor = None
         from skill_router import clear
         clear(self)
         self.policy_worker.close()
+        if self.tool_focus_worker is not None:
+            self.tool_focus_worker.close()
+
+    def select_tool_focus(self, body, context):
+        """Get one bounded Jev tool-family hint before reserving a slow task."""
+        from tool_focus import proposal, summarize
+        if self.tool_focus_worker is None:
+            return summarize(None, context, body)
+        now = self.clock()
+        pending = self.pending_tool_focus
+        if pending is None:
+            token = self.tool_focus_worker.submit(
+                proposal(context, body), body, self.memory().get('goal', ''),
+                (self.data.get('actionExecution') or {}).get('receipt'))
+            if token is None:
+                return summarize(None, context, body)
+            self.pending_tool_focus = {'token': token, 'submittedAt': now,
+                'body': {key: copy.deepcopy(body.get(key)) for key in
+                         ('bodyUuid', 'dimension', 'position', 'hp', 'hunger')},
+                'requestedReview': bool(context.get('review')),
+                'partyMessage': bool(context.get('partyMessage'))}
+            self.data['status'] = 'tool_triage'
+            return None
+        selection = self.tool_focus_worker.poll(pending['token'])
+        if selection is None and now - pending['submittedAt'] < 2:
+            self.data['status'] = 'tool_triage'
+            return None
+        self.pending_tool_focus = None
+        previous = pending['body']
+        position = body.get('position') or {}
+        old = previous.get('position') or {}
+        try:
+            near = sum((position[key] - old[key]) ** 2 for key in ('x', 'y', 'z')) <= 2.25
+        except (KeyError, TypeError):
+            near = False
+        current = (near and pending['requestedReview'] == bool(context.get('review'))
+                   and pending['partyMessage'] == bool(context.get('partyMessage'))
+                   and all(previous.get(key) == body.get(key) for key in
+                           ('bodyUuid', 'dimension', 'hp', 'hunger')))
+        return summarize(selection, context, body, current=current)
 
     def policy_binding(self, job):
         control = read_json(self.root / 'control.json')
@@ -547,6 +645,10 @@ class Controller:
         # A model can finish after starting an asynchronous native action. The
         # snapshot from the beginning of this tick may predate that action.
         body = self.gateway.snapshot()
+        if self.settings.get('asyncMotor'):
+            from motor_loop import drain_skill_boundary, reconcile
+            if drain_skill_boundary(self, body):
+                reconcile(self)
         with action_lock(self.root, blocking=True):
             control = read_json(self.root / 'control.json')
             drain = control.get('drain') or {}
@@ -800,7 +902,7 @@ class Controller:
                        and area['minZ'] <= position['z'] <= area['maxZ'])
         arguments = ({'mode': 'return_to_work_area'} if outside else
                      {'x': '<已知整体目标X数值>', 'z': '<已知整体目标Z数值>'})
-        return {'schema': 2, 'source': 'skill_catalog', 'testEligibility': 'current_index_proof',
+        capability = {'schema': 2, 'source': 'skill_catalog', 'testEligibility': 'current_index_proof',
             'sourceProof': {'name': 'base_navigate', 'activeVersion': version},
             'requiresFillingTemplate': True, 'workArea': dict(area),
             'callTemplate': {'tool': 'navigate', 'arguments': {
@@ -810,8 +912,38 @@ class Controller:
                 '目标可远于24格；无需填写技能版本或memory，也无需逐段move。Y未知可省略，各段从新鲜地形选高度，'
                 '终点核对当前脚下支撑和净空，仅证明目标水平位置站稳；特定楼层目标须提供已知Y。'
                 '区域外用return_to_work_area模式且省略XYZ。目标由你决定；工具重验当前晋升版本与测试，'
-                'summary可自然结束本轮，快程序继续，排队不等于到达。未知/无进展交回，'
+                'summary可自然结束本轮，快程序继续，排队不等于到达。工作区内要连续赶路时优先看motionPlan；未知/无进展交回，'
                 '最多32步并受原时长预算，不保证全局寻路；不要忙等status。'}
+        motion = next((row for row in catalog.get('skills', [])
+                       if row.get('name') == 'base_motion_plan'), None)
+        motion_version = motion.get('activeVersion') if motion else None
+        if (not outside and isinstance(motion_version, str) and len(motion_version) == 64
+                and all(char in '0123456789abcdef' for char in motion_version)
+                and (motion.get('testEligibility') or {}).get('status') == 'current'):
+            capability['motionPlan'] = {
+                'sourceProof': {'name': 'base_motion_plan', 'activeVersion': motion_version},
+                'callTemplate': {'tool': 'navigate_plan', 'arguments': {
+                    'turn_id': '<本条输入的turn_id>',
+                    'waypoints': [{'x': '<已知中途X数值>', 'z': '<已知中途Z数值>'},
+                                  {'x': '<已知终点X数值>', 'z': '<已知终点Z数值>'}],
+                    'max_steps': 32, 'summary': '<本轮路线意图简述>'}},
+                'instruction': ('直播赶路优先一次提交2–6个明确路标，让快程序在慢脑处理期间依次行走，避免一个短目标结束后空等下一轮；'
+                    '若只知道一个较远的终点，可按当前已知坐标算出中点作首个路标，再把终点作第二路标。'
+                    '本轮scene.terrain新鲜且方向明确时，先排队路线；普通坐标换算无需先调用shell，已有身体和地图不必重复status/look。'
+                    'Jev逐段从新鲜勘察的可站立候选中修正下一步或交回慢脑。'
+                    '路标填已知工作区XZ数值；未知地形由每段勘察决定，不宣称排队即到达。'
+                    '同一区域连续受阻时不要重试相近目标；按需先用view_scene(mode="first_person")观察本人眼前，'
+                    '再以look或inspect_block核实支撑、高差和入口，必要时换目标或建设安全通路。'
+                    '只有近距离单点或无法给出两个已知路标时，用singleGoal中的navigate。')}
+            capability['singleGoal'] = {
+                'sourceProof': capability['sourceProof'],
+                'callTemplate': capability['callTemplate'],
+                'instruction': capability['instruction']}
+            capability.update(schema=3, primaryMode='motion_plan',
+                sourceProof=capability['motionPlan']['sourceProof'],
+                callTemplate=capability['motionPlan']['callTemplate'],
+                instruction=capability['motionPlan']['instruction'])
+        return capability
 
     def planning_context(self, body, control, turn_id):
         from perception import prioritize_events, event_wakes
@@ -966,8 +1098,8 @@ class Controller:
                     'dimension', 'gameMode', 'task', 'observedAt', 'bodyControl',
                     'onGround', 'inWater', 'inLava') if k in body} | {'mainInventory': main_inventory_summary(body)},
             'adventure': self.adventure(body),
-            'visualPerception': {'tool': 'view_scene', 'view': 'native_semantic_map',
-                'instruction': '需要营地布局、方位或局部通路判断时，按需调用view_scene看真实PNG并结合inspect_block；不是第一视角截图，不用每轮取图。'},
+            'visualPerception': {'tool': 'view_scene', 'view': 'first_person_render',
+                'instruction': '需要判断眼前地形、建筑或生物时按需调用view_scene看本人第一视角PNG，结合look/inspect_block核实；需要北上东右的路径图时用mode=map。图像服务不可用时用结构化感知继续行动，不用每轮取图。'},
             'planning': {'version': 1, 'goalFile': 'memory/goals.md',
                 'reference': 'skills/qd-survivor-practice/references/long-term-planning.md',
                 'selectionAuthority': 'model',
@@ -1032,8 +1164,14 @@ class Controller:
         party_config = getattr(self.party, 'config', None)
         if party_config is not None and party_config.configured():
             context['partyMembers'] = party_config.roster()
+            if hasattr(self.party, 'recent_dialogue'):
+                context['recentPartyDialogue'] = self.party.recent_dialogue()
             context['instruction'] += ('partyMembers是当前固定队友名单，使用当前显示名；旧称谓仅属于过去经历。'
                 '名单不代表对方此刻在附近或已经听见，具体相处关系按各自人设。'
+                'recentPartyDialogue只含游戏确认双方听见的近几句；避免反复说同一项等待计划，'
+                '结合本轮新观察推进话题或给观众一句现场感受，不能编造行动成果。'
+                '发言前按say-it-plain技能自查：说给耳朵听，一两句只讲一件新事；普通闲聊不念坐标、Y值、HP、Day或工具名。'
+                '你是桐人，冷静、直接，偶尔轻轻自嘲；和结衣说话可以更柔和，但不要每轮复述同一计划。'
                 '与固定AI伙伴交流时用party_status读取已听见的对话与回话；'
                 '主动说话用party_send(channel="nearby")，由游戏验证对方听见。'
                 'speak只播放声音，当前不会成为伙伴的接收输入，不能据此声称已沟通；无需每轮发声。')
@@ -1125,9 +1263,7 @@ class Controller:
         receipt = execution.get('receipt') or {}
         path = self.root / 'skill-job.json'
         job = read_json(path) if path.exists() else {}
-        if state == 'resting':
-            value['reason'] = 'agent_resting'
-        elif (execution.get('code') == 'outcome_unknown' or (self.root/'unknown.json').exists()
+        if (execution.get('code') == 'outcome_unknown' or (self.root/'unknown.json').exists()
                 or any(row.get('status') == 'unknown' for row in queue.get('active', []))):
             value['reason'] = 'outcome_unknown'
         elif (self.last_body.get('task', {}).get('busy') or execution.get('inFlight')
@@ -1140,6 +1276,10 @@ class Controller:
             # Entering sleep does not prove waking. Preserve the ordinary
             # model interval until new action evidence or an explicit rest plan.
             value['reason'] = 'sleep_entered'
+        elif state == 'resting':
+            # Waiting for a time window is not physical sleep. Keep the show
+            # active enough to revisit the scene and choose daytime work.
+            value.update(reason='agent_resting', idleCapSeconds=min(maximum, seconds * 2))
         elif state in ('ongoing', 'blocked'):
             empty = max(0, min(6, self.data.get('noActionReviews', 0)))
             cap = min(maximum, seconds * 2 ** max(0, empty - 1)) if state == 'blocked' else seconds
@@ -1521,6 +1661,57 @@ class Controller:
         else:
             self.gateway.close_lease(blocking=True)
 
+    def settle_chat_busy(self, active):
+        """Release only an exactly rejected native reservation, with no replay."""
+        if (self.data.get('active') is not active or active.get('phase') != 'reserved'
+                or active.get('taskId') is not None):
+            raise ValueError('chat_busy_reservation_changed')
+        self.close_model_authority(active)
+        if active.get('partyReservation'):
+            self.party.deferred(active['partyReservation'], 'native_chat_busy')
+        if (active.get('completionReviewId')
+                and self.data.get('completedReviewConsumed') == active['completionReviewId']):
+            self.data.pop('completedReviewConsumed', None)
+        decisions = self.data.get('decisions') or []
+        if decisions and decisions[-1].get('turnId') == active['turnId']:
+            self.data['decisions'] = decisions[:-1]
+        count = min(6, self.data.get('modelBusyCount', 0) + 1)
+        self.data['modelBusyCount'] = count
+        self.data['nextDecisionAt'] = self.clock() + min(60, 5 * 2 ** (count - 1))
+        self.data['active'] = None
+        self.data['status'] = 'model_busy'
+        self.record('model_submission_rejected_busy', turnId=active['turnId'],
+                    nativeTaskCreated=False, requestReplayed=False)
+        self.save()
+
+    def reconcile_rejected_submission(self):
+        """Recover a persisted exact busy rejection after a controller crash."""
+        active = self.data.get('active') or {}
+        if (active.get('phase') != 'reserved' or active.get('taskId') is not None
+                or not hasattr(self.backend, '_submission_receipt')
+                or self.clock() < active.get('rejectionLookupAfter', 0)):
+            return
+        active['rejectionLookupAfter'] = self.clock() + 10
+        try:
+            receipt = self.backend._submission_receipt(active)
+        except Exception:
+            # Missing/unknown receipts are not evidence of rejection.
+            return
+        if (receipt.get('phase') == 'rejected' and receipt.get('reason') == 'chat_busy'
+                and receipt.get('taskId') is None):
+            try:
+                self.settle_chat_busy(active)
+            except Exception:
+                self.pause('model_submission_uncertain')
+
+    def _timed_call(self, phase, call, *args, **kwargs):
+        """Measure existing IO without repeating it or recording its contents."""
+        started = time.monotonic()
+        try:
+            return call(*args, **kwargs)
+        finally:
+            self.data.setdefault('loopPhaseTimingMs', {})[phase] = round((time.monotonic() - started) * 1000, 2)
+
     def poll_model(self, body):
         active = self.data['active']
         self.collect_action_receipts(active['turnId'])
@@ -1540,7 +1731,7 @@ class Controller:
             result = ({'status': 'finished', 'result': {'status': 'completed' if terminal['completed'] else 'failed', 'output': [
                 {'role': 'assistant', 'type': 'message', 'status': 'completed',
                  'content': [{'type': 'text', 'text': terminal['text']}]}]}}
-                if terminal else self.backend.poll(active['taskId']))
+                if terminal else self._timed_call('taskPoll', self.backend.poll, active['taskId']))
         except Exception as error:
             import httpx
             status = getattr(getattr(error, 'response', None), 'status_code', None)
@@ -1709,7 +1900,12 @@ class Controller:
                 # Qwen's iteration/doom-loop guard ends ONE inference. It does
                 # not withdraw the user's standing authorization to live.
                 # Pace future fresh observations; never repeat this request.
-                delay = min(1800, 60 * 2 ** min(self.data['failures'] - 1, 5))
+                # 2026-09-27 livestream fix: the old 1800s ceiling made three
+                # consecutive model timeouts look exactly like a frozen body
+                # (8 min of visible silence, then doubling to 30 min). A live
+                # viewer cannot tell that from death. Cap at 240s: worst case
+                # the backend gets ONE fresh request every 4 minutes per body.
+                delay = min(240, 60 * 2 ** min(self.data['failures'] - 1, 5))
                 self.data['recoveryAfter'] = self.clock() + delay
                 self.data['status'] = 'model_recovery_wait'
         self.save()
@@ -1749,7 +1945,7 @@ class Controller:
         self.save()
         return delivery
 
-    def tick_skill(self, body, recovery_only=False):
+    def tick_skill(self, body, recovery_only=False, *, observation_budget=None):
         path = self.root / 'skill-job.json'
         if not self.skills or not path.exists():
             self.discard_policy()
@@ -1757,6 +1953,18 @@ class Controller:
         job = read_json(path)
         if job.get('status') not in ('pending', 'running'):
             self.discard_policy()
+            return False
+        motion_policy = (job.get('name') == 'base_motion_plan' or
+                         job.get('name') == 'base_navigate' and
+                         (job.get('memory') or {}).get('policy') is True)
+        if observation_budget is None:
+            # Three direct probes plus at most one probe per lateral side.
+            observation_budget = 5 if motion_policy else 3
+        if (job.get('name') == 'base_motion_plan'
+                and ((job.get('memory') or {}).get('policy') is not True
+                     or not isinstance((job.get('memory') or {}).get('waypoints'), list))):
+            job.update(status='replan', reason='motion_policy_required')
+            write_json(path, job)
             return False
         if job.get('practiceRunId') and not job.get('practiceStarted'):
             try:
@@ -1852,19 +2060,56 @@ class Controller:
                     self.record('system_one_discarded', name=job['name'], reason='policy_premise_changed',
                                 requestAgeMs=round(elapsed * 1000, 2), worldActions=0)
                     if job['policyDiscards'] <= 2:
+                        if motion_policy:
+                            # The saved survey has aged while Jev was pending.
+                            # Re-enter the program before its survey stage so
+                            # it obtains fresh evidence instead of consuming
+                            # the old observation and stopping immediately.
+                            job['memory'] = dict(job['memory'], stage=None, probe=None,
+                                                 probeAttempt=0, probeSpan=None, detour=False)
+                            job.pop('lastObservation', None)
                         write_json(path, job)
                         self.data.update(status='executing_skill', skillWaitReason='policy_reobserve')
                         return True
                     selection = {'ok': False, 'code': 'policy_reobserve_exhausted'}
                 selection['handoffMs'] = round(elapsed * 1000, 2)
                 selection['resultAgeMs'] = round(max(0, elapsed * 1000 - selection.get('workerMs', 0)), 2)
+                if motion_policy:
+                    selection = accept_bounded_motion_choice(plan, selection)
+                    candidates = (plan.get('choose') or {}).get('candidates') or []
+                    chosen = [row for row in candidates if row.get('id') == selection.get('choice')]
+                    if (selection.get('ok') is False and selection.get('code') == 'policy_escalated'
+                            and selection.get('candidates') == candidates and len(chosen) == 1
+                            and isinstance(chosen[0].get('action'), dict)
+                            and chosen[0]['action'].get('tool') == 'goto'
+                            and job.get('policyDiscards', 0) < 2):
+                        # Low confidence never authorizes movement. A changed
+                        # position or view may make a fresh survey decidable;
+                        # spend at most two local reobservations before Qwen.
+                        job['policyDiscards'] = job.get('policyDiscards', 0) + 1
+                        job['memory'] = dict(job['memory'], stage=None, probe=None,
+                                             probeAttempt=0, probeSpan=None, detour=False)
+                        job.pop('lastObservation', None)
+                        write_json(path, job)
+                        self.record('system_one_discarded', name=job['name'],
+                                    reason='policy_low_confidence_reobserve', worldActions=0)
+                        self.data.update(status='executing_skill', skillWaitReason='policy_reobserve')
+                        return True
                 job.pop('policyDiscards', None)
                 job['lastPolicy'] = {k: v for k, v in selection.items() if k not in ('state', 'candidates', 'action')}
                 self.data['systemOne'] = job['lastPolicy']
                 self.record('system_one_choice', name=job['name'], version=job['version'],
                             practiceRunId=job.get('practiceRunId'), selection=selection)
                 if selection['ok']:
-                    plan['action'] = selection['action']
+                    selected_action = selection.get('action')
+                    if motion_policy:
+                        from navigation_program import bind_motion_choice
+                        try:
+                            plan = bind_motion_choice(plan, selected_action)
+                        except ValueError:
+                            plan.update(action=None, replan=True, reason='motion_policy_choice_unbound')
+                    else:
+                        plan['action'] = selected_action
                 else:
                     plan.update(action=None, replan=True, reason=selection['code'])
                 plan.pop('choose')
@@ -1877,11 +2122,20 @@ class Controller:
                 job['nextRunAt'] = now + plan['waitSeconds']
                 self.data['skillWaitReason'] = 'program_wait'
             elif 'observe' in plan:
+                if plan['observe']['tool'] == 'navigation_sense' and observation_budget <= 0:
+                    # Per-program survey budget bounds same-tick continuation.
+                    # Never issue evidence which this tick cannot consume.
+                    job.update(status='replan', reason='navigation_observation_budget')
+                    write_json(path, job)
+                    self.record('skill_finished', name=job['name'], version=job['version'],
+                                status='replan', reason=job['reason'], steps=job['steps'])
+                    return False
                 job['lastObservation'] = program_observation(self.gateway, plan['observe'], body, now)
                 job['observations'] = job.get('observations', 0) + 1
-                # A destination survey is evidence for the very next segment,
-                # not a long-running environmental process. No loop or new LLM.
-                delay = .25 if plan['observe']['tool'] == 'navigation_sense' else max(15, self.settings['observationSeconds'])
+                # Persist the read before its bounded continuation. Otherwise
+                # synchronous social/model IO can age this 5s evidence before
+                # the next motor tick. Each read consumes the small tick budget.
+                delay = 0 if plan['observe']['tool'] == 'navigation_sense' else max(15, self.settings['observationSeconds'])
                 job['nextRunAt'] = now + delay
                 self.data['skillWaitReason'] = 'program_observation'
             if plan.get('done') or plan.get('replan'):
@@ -1936,6 +2190,19 @@ class Controller:
                 self.collect_action_receipts(turn_id)
             self.data['status'] = 'executing_skill'
             self.save()
+            if (plan.get('observe') or {}).get('tool') == 'navigation_sense':
+                latest = read_json(self.root / 'control.json')
+                if (latest.get('enabled') is not True
+                        or (latest.get('drain') or {}).get('status') == 'requested'):
+                    from motor_loop import drain_skill_boundary
+                    return not drain_skill_boundary(self, body, allow_pause=True)
+                # Numen's read can observe movement after the tick's earlier
+                # body snapshot. Rebind the continuation to the current body;
+                # the tested program still checks actor, position and age
+                # before it admits the survey or sends a world action.
+                fresh_body = self.gateway.snapshot()
+                return self.tick_skill(fresh_body, recovery_only=recovery_only,
+                                       observation_budget=observation_budget-1)
             return job['status'] == 'running'
         except Exception as exc:
             self.discard_policy()
@@ -1956,6 +2223,7 @@ class Controller:
             return False
 
     def submit_model(self, body, control):
+        prepare_started = time.monotonic()
         if self.data.get('dialogueActive'):
             return
         if self.drain_at_boundary(body):
@@ -2011,6 +2279,18 @@ class Controller:
                 # reservation or changes an operator's pause decision.
                 self.data['status'] = 'waiting_for_tools'
                 return
+        # Attention and world reads can consume most of Jev's five-second
+        # observation validity before a slow turn is admitted. Refresh here,
+        # once the turn is actually due, so the advisory and Qwen see the same
+        # current body while the independent motor executor keeps running.
+        if self.settings.get('jevToolFocusEnabled') is True:
+            stamp = body.get('observedAt')
+            if type(stamp) not in (int, float) or self.clock() * 1000 - stamp > 2000:
+                body = self.gateway.snapshot()
+                self.last_body = body
+                if body.get('ok') is not True:
+                    self.data['status'] = 'waiting_for_body'
+                    return
         # Heard replies remain durable in the party ledger. They enrich an
         # independently due life task; receiving one never buys another task.
         replies = self.party.heard_replies() if self.party and hasattr(self.party, 'heard_replies') else []
@@ -2019,7 +2299,36 @@ class Controller:
                                   'motor_progress' if motor_progress is not None else
                                   'world_or_goal_changed' if changed else
                                   'requested_review' if requested_review else 'autonomous_review')
-        self.perceive(body)
+        # The map is a cheap local read (~0.1 s) and can replace a whole
+        # model/tool/model round-trip when the agent only needs nearby terrain.
+        self.perceive(body, refresh=True)
+        focus = None
+        if self.settings.get('jevToolFocusEnabled') is True:
+            # Run the tiny classifier before assembling the much larger life
+            # context; otherwise its five-second body evidence has expired.
+            stamp = body.get('observedAt')
+            if type(stamp) not in (int, float) or self.clock() * 1000 - stamp > 1500:
+                body = self.gateway.snapshot()
+                self.last_body = body
+                if body.get('ok') is not True:
+                    self.data['status'] = 'waiting_for_body'
+                    return
+                self.perceive(body, refresh=True)
+            environment = self.environment or {}
+            observed = environment.get('observedAt')
+            fresh_scene = (environment.get('ok') is True
+                and type(observed) in (int, float)
+                and 0 <= self.clock() * 1000 - observed <= 5000)
+            from motor_mailbox import public as motor_public
+            focus_context = {'wakeReason': self.data['wakeReason'],
+                'review': requested_review, 'partyMessage': message,
+                'observations': {'scene': {'fresh': fresh_scene}},
+                'scene': {'hostiles': environment.get('hostiles') or []},
+                'intent': {'goalState': self.memory().get('goalState')},
+                'motor': {'queue': motor_public(self.root)}}
+            focus = self.select_tool_focus(body, focus_context)
+            if focus is None:
+                return
         turn_id = 'survival-' + uuid.uuid4().hex
         context = self.life_context(body, control, turn_id, message, replies)
         if self.settings.get('livestreamMode') is True:
@@ -2028,8 +2337,14 @@ class Controller:
                 'narration': narration_context(self.root, self.clock()),
                 'instruction': '当前是游戏直播。ongoing目标空闲后会很快续接下一轮，blocked会短暂退避后重看证据。'
                     '等待资源时自主推进其它可行目标；真正休息或睡眠请remember(goal_state="resting")并说明等待条件。'
+                    '直播期间等待夜晚仍会短间隔重看现场；白天可选择可见的探索、建设或同伴交流，不必原地等一小时。'
+                    '有安全可执行步骤时优先留下本轮真实身体动作；要赶路时优先一次留下2–6路标的navigate_plan，'
+                    '让快程序在慢脑处理期间持续走。已有新鲜现场时先排队行动，再整理记忆或做复杂计算；'
+                    '读够相关记忆就转向现场，'
+                    '别把整轮都花在重复检索、摘录和改写笔记上。'
                     '普通最终回复只留在控制台，不会进入游戏公屏。参照narration的真实发言记录，'
-                    '新阶段、发现、受阻或脱险时主动用say说一句现场短话，让观众知道你在做什么；勿反复播报同一计划。'
+                    '有真正的新发现、危险、转机或行动结果时才用say说一两句现场短话。'
+                    '普通赶路和等待没有新变化就安静；别重复播报坐标、高度、时间和同一计划。'
                     '节奏调度不证明任何行动成功，不要求重复动作或打断在途任务。'}
         from life_cycle import pending_note
         death_note = pending_note(self.session, self.root)
@@ -2037,6 +2352,12 @@ class Controller:
             # The first turn of a life that began with a death carries the record
             # of how the last one ended. Once, not every turn.
             context['lifeDeath'] = death_note
+        if self.settings.get('asyncMotor'):
+            from motor_mailbox import public as motor_public
+            context['motor'] = {'bodyAccess': 'queued', 'queue': motor_public(self.root),
+                'blocked': self.data.get('motorBlocked'),
+                'instruction': '身体由独立快循环执行。动作和skill_start返回motor_queued仅表示排队，最多6请求；'
+                '可继续规划或结束本轮，不忙等、不重复排队。status.motorQueue读完成/失败回执。Jev无需等待你的下一回合。'}
         if requested_review:
             context['review'] = requested_review
             context['instruction'] += ('本轮合并了待复盘信号，保留用户长期使命，不为定时检查另造目标。'
@@ -2057,6 +2378,22 @@ class Controller:
                     '只写工作摘要不等于长期计划已同步；如果计划无需修改，说明已经核对的依据。'
                     '身体安全时先完成这份复盘，不为凑动作次数继续旧路线。'
                     '保留自己的长期使命；危险优先，复盘不打断休息，不为检查另造任务。'}
+        if self.settings.get('jevToolFocusEnabled') is True:
+            context['toolFocus'] = focus
+            self.data['lastToolFocus'] = {
+                'at': int(self.clock() * 1000), 'source': focus['source'],
+                'category': focus['category'], 'confidence': focus['confidence'],
+                'latencyMs': focus['latencyMs'],
+                'jevChoice': focus['jevChoice'], 'jevConfidence': focus['jevConfidence'],
+                'jevCode': focus['jevCode'], 'premiseCurrent': focus['premiseCurrent'],
+                'recommendedTools': focus['recommendedTools']}
+            if (self.settings.get('livestreamMode') is True and requested_review is None
+                    and self.data['wakeReason'] == 'autonomous_review'
+                    and focus['category'] != 'review'):
+                # An ordinary cadence should not turn a live, actionable scene
+                # into a file-maintenance task. Explicit reviews still win.
+                context.pop('reviewGuidance', None)
+                context['wakeReason'] = 'livestream_activity'
         # Crystallization (case-9f5b2099 熟能生巧): inject pattern hints into
         # the review/dream context, not the main action prompt. The agent
         # reflects on repeating patterns during its scheduled review cycle —
@@ -2144,21 +2481,17 @@ class Controller:
         if (message is None and context.get('pacing', {}).get('enabled') is True
                 and not narration.get('unknownMessageId')
                 and (narration.get('neverSent') is True or last_said.get('secondsAgo', 0) >= 180)):
-            audience_note = ('【直播提示】附近公屏尚无独立解说或已安静一段时间。身体安全时，'
-                '先用say向观众简短说出眼下的新决定、发现或感受，再继续推进；不要重复旧计划。')
+            audience_note = ('【直播提示】附近公屏尚无独立解说或已安静一段时间。身体安全且有明确行动时，'
+                '先把动作或连续路标计划排队，再用say说一句眼下的新决定、发现或感受；'
+                '若还没有可安全执行的动作，也可以先说。不要重复旧计划。')
         model_session, context_delivery = self.session, None
         context_event_ids = context['perception'].get('pendingEventIds', [])
-        if self.settings.get('asyncMotor'):
-            from motor_mailbox import public as motor_public
-            context['motor'] = {'bodyAccess': 'queued', 'queue': motor_public(self.root),
-                'blocked': self.data.get('motorBlocked'),
-                'instruction': '身体由独立快循环执行。动作和skill_start返回motor_queued仅表示排队，最多6请求；'
-                '可继续规划或结束本轮，不忙等、不重复排队。status.motorQueue读完成/失败回执。Jev无需等待你的下一回合。'}
         if self.settings.get('contextProtocol') == 2:
             from behavior_context import prepare
             model_session, context, context_delivery = prepare(
                 self.root, self.session, context, self.memory(), learning=due)
         prompt = subject + audience_note + '（当前生活任务；以下为本轮事实）：\n' + json.dumps(context, ensure_ascii=False)
+        self.data.setdefault('loopPhaseTimingMs', {})['prepareContext'] = round((time.monotonic() - prepare_started) * 1000, 2)
         active = {'turnId': turn_id, 'startedAt': now, 'taskId': None, 'phase': 'reserved',
                   'sessionId': model_session['primarySessionId'], 'userId': self.session['userId'],
                   'channel': self.session['channel'], 'chatId': model_session.get('chatId'),
@@ -2169,7 +2502,11 @@ class Controller:
             active['contextDelivery'] = context_delivery
             active['contextStats'] = {'protocol': 2, 'purpose': context['purpose'],
                                       'inputBytes': len(prompt.encode('utf-8')),
-                                      'incremental': context.get('baseTurn') is not None}
+                                      'incremental': context.get('baseTurn') is not None,
+                                      'largestUpdates': sorted(
+                                          ((key, len(json.dumps(value, ensure_ascii=False).encode('utf-8')))
+                                           for key, value in (context.get('updates') or {}).items()),
+                                          key=lambda row: row[1], reverse=True)[:6]}
         if requested_review:
             active['review'] = requested_review
         if self.settings.get('asyncMotor'):
@@ -2221,9 +2558,10 @@ class Controller:
                 for reply in replies:
                     self.party.validate_session(self.session, self.settings, reservation=reply)
             request_context = self.party.request_context() if message is not None or replies else None
-            active['taskId'] = self.backend.submit(turn_id, prompt, self.settings['taskTimeoutSeconds'],
+            active['taskId'] = self._timed_call('nativeSubmit', self.backend.submit, turn_id, prompt, self.settings['taskTimeoutSeconds'],
                 session=model_session, request_context=request_context)
             active['phase'] = 'submitted'
+            self.data['modelBusyCount'] = 0
             from life_cycle import consume
             if consume(self.session):
                 self.save()  # the new life's death note has been delivered
@@ -2232,7 +2570,7 @@ class Controller:
                 self.party.submitted(active['partyReservation'], active['taskId'])
             if hasattr(self.backend, 'resolve_chat'):
                 try:
-                    chat = self.backend.resolve_chat(model_session)
+                    chat = self._timed_call('resolveChat', self.backend.resolve_chat, model_session)
                     if chat:
                         from life_session import bind_chat
                         if model_session['primarySessionId'] == self.session['primarySessionId']:
@@ -2241,6 +2579,11 @@ class Controller:
                         self.save()
                 except Exception as exc:
                     self.data['sessionWarning'] = type(exc).__name__
+        except NativeChatBusy:
+            try:
+                self.settle_chat_busy(active)
+            except Exception:
+                self.pause('model_submission_uncertain')
         except Exception:
             self.pause('model_submission_uncertain')
 
@@ -2326,7 +2669,21 @@ class Controller:
             if not isinstance(memory, dict):
                 return
             detector = StagnationDetector(self.root, self.clock)
-            hints = detector.check(memory, self.data.get('environmentSignals') or [])
+            signals = list(self.data.get('environmentSignals') or [])
+            try:
+                # 2026-09-27 夜窗事故实证：只信环境的 no_output 时，「寻路反复被拒+位置小幅
+                # 挪动」被当成多产，原地打转一小时不触发 pivot。电机连败是世界对"这条意图"
+                # 的直接否定——补一条 repeated_rejection 进佐证链。
+                inbox = _json.loads((self.root / 'motor-inbox.json').read_text(encoding='utf-8'))
+                rows = (inbox.get('requests') or [])[-6:]
+                if rows and sum(1 for r in rows if isinstance(r, dict) and r.get('status') == 'failed') >= 3:
+                    kinds = {s.get('kind') for s in signals if isinstance(s, dict)}
+                    if 'repeated_rejection' not in kinds:
+                        signals.append({'kind': 'repeated_rejection', 'tool': 'motor',
+                                        'code': 'motion_failures_in_window'})
+            except Exception:
+                pass
+            hints = detector.check(memory, signals)
             if hints:
                 self.data['stagnationHint'] = hints[0]
         except Exception:
@@ -2469,7 +2826,9 @@ class Controller:
         """Resume infrastructure pauses only after native and body ownership settle."""
         recoverable = {'model_timeout', 'model_result_unknown', 'cancellation_uncertain',
                        'doom_loop', 'repeated_model_failure', 'survivor_child_exited',
-                       'controller_OSError', 'controller_GatewayError', 'controller_FileNotFoundError'}
+                       'motor_dispatch_uncertain',
+                       'controller_OSError', 'controller_GatewayError', 'controller_FileNotFoundError',
+                       'controller_OperationalError', 'controller_PracticeError', 'controller_sqlite3'}
         try:
             control = read_json(self.root / 'control.json')
             reason = control.get('pauseReason')
@@ -2491,6 +2850,14 @@ class Controller:
                     return
             elif reason not in recoverable:
                 return
+            if reason == 'motor_dispatch_uncertain':
+                from motor_loop import reconcile
+                from motor_mailbox import view
+                reconcile(self)
+                if (read_json(self.root / 'control.json') != control
+                        or any(row['status'] in ('claimed', 'unknown')
+                               for row in view(self.root)['requests'])):
+                    return
             execution = self.data.get('actionExecution', {})
             if (self.data.get('active') or self.data.get('dialogueActive') or body.get('ok') is not True
                     or body.get('task', {}).get('busy') or execution.get('ok') is not True
@@ -2808,8 +3175,10 @@ class Controller:
 
     def tick(self):
         tick_started = time.monotonic()
+        self.data['loopPhaseTimingMs'] = {}
         # 每轮先处理上轮留下的不确定：回执是学习的原料，不能让它悬着。
         self.settle_cancellation()
+        self.reconcile_rejected_submission()
         control = self.conversation_intent(read_json(self.root / 'control.json'))
         if control.get('enabled') is not True or (control.get('drain') or {}).get('status') == 'requested':
             self.discard_policy()
@@ -2850,14 +3219,15 @@ class Controller:
         observed_at = time.monotonic()
         if self.settings.get('brainProtocol') == 1:
             from social_attention import tick as attention_tick
-            attention_tick(self, body, control)
+            self._timed_call('attention', attention_tick, self, body, control)
             from dialogue import tick as dialogue_tick
-            dialogue_tick(self, body, control)
-        self._check_life_cycle(body)
+            self._timed_call('dialogue', dialogue_tick, self, body, control)
+        self._timed_call('life', self._check_life_cycle, body)
         if body.get('ok'):
             from body_reconnect import BodyReconnect
             try:
-                confirmed = BodyReconnect(self.gateway, self.clock).confirm_online(self.settings, body)
+                confirmed = self._timed_call('confirmOnline', BodyReconnect(self.gateway, self.clock).confirm_online,
+                                             self.settings, body)
                 if confirmed is not None:
                     self.data['bodyReconnect'] = confirmed
             except (ValueError, OSError):
@@ -2933,7 +3303,8 @@ class Controller:
                 'observeAndReceipts': round((observed_at-tick_started)*1000, 2),
                 'attentionAndLife': round((motor_at-observed_at)*1000, 2),
                 'motor': round((motor_finished-motor_at)*1000, 2),
-                'slowHandoff': round((time.monotonic()-motor_finished)*1000, 2)}
+                'slowHandoff': round((time.monotonic()-motor_finished)*1000, 2),
+                **self.data['loopPhaseTimingMs']}
         elif self.data.get('active'):
             self.poll_model(body)
         elif self.data.get('goalAgendaError'):

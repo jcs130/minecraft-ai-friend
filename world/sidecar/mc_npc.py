@@ -638,49 +638,35 @@ def _offer_recipe(item_id, count, emeralds, max_uses=1):
 # 每本技能书条目占 NBT 较大，书商总柜台（3卖+2本+1收）需 < ~1300 字节，故每商限量 2 本。
 SKILLBOOKS = {
     "home": {
-        "title": "归乡之卷", "author": "墨白", "emerald": 2, "chant": "咏唱：归乡/回家/回基地/归途/回巢",
-        "pages": [
-            "归乡之卷（空间系·Lv2）｜咏唱：归乡/回家/回基地/归途/回巢。私语念出即施，成功即掌握；远行前备一卷，迷途不慌。",
-        ],
+        "title": "归乡之卷", "author": "墨白", "emerald": 2, "chant": "归乡/回基地",
+        "pages": ["归乡之卷·空间Lv2｜咏唱「归乡/回家/回基地」或右键本书，即刻返回床或镇中心。"],
     },
     "light": {
-        "title": "照明之卷", "author": "墨白", "emerald": 2, "chant": "咏唱：照明/点火/火把/光亮/照亮/驱暗",
-        "pages": [
-            "照明之卷（光系·Lv1）｜咏唱：照明/点火/火把/光亮/照亮/驱暗。黑暗中私语念出，掌心燃光；矿洞夜路皆可应急。",
-        ],
+        "title": "照明之卷", "author": "墨白", "emerald": 2, "chant": "照明/火把",
+        "pages": ["照明之卷·光Lv1｜咏唱「照明/点火/火把」或右键本书，掌心燃光应急。"],
     },
     "feed": {
-        "title": "饱食之卷", "author": "墨白", "emerald": 3, "chant": "咏唱：饱食/充饥/饱腹/不饿/充能",
-        "pages": [
-            "饱食之卷（生命系·Lv2）｜咏唱：饱食/充饥/饱腹/不饿/充能。腹空时私语念出，饥意自消；神赐一餐，不如自己种一田。",
-        ],
+        "title": "饱食之卷", "author": "墨白", "emerald": 3, "chant": "饱食/充饥",
+        "pages": ["饱食之卷·生命Lv2｜咏唱「饱食/充饥」或右键本书，饥意自消。"],
     },
     "heal": {
-        "title": "圣愈之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈",
-        "pages": [
-            "圣愈之卷（生命系·Lv5）｜咏唱：圣愈/治愈/治疗/疗伤/回血/痊愈。负伤时私语念出，伤口愈合；生死关头的保命卷。",
-        ],
+        "title": "圣愈之卷", "author": "云笈", "emerald": 4, "chant": "圣愈/治疗",
+        "pages": ["圣愈之卷·生命Lv5｜咏唱「圣愈/治愈/疗伤」或右键本书，伤口愈合。"],
     },
     "tp": {
-        "title": "传送之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：传送/瞬移/闪现/空间跳跃/跃迁",
-        "pages": [
-            "传送之卷（空间系·Lv2）｜咏唱：传送/瞬移/闪现/撕裂虚空/空间跳跃/跃迁。报方向距离（如「传送十格东」）念出即至。",
-        ],
+        "title": "传送之卷", "author": "云笈", "emerald": 4, "chant": "传送/瞬移",
+        "pages": ["传送之卷·空间Lv2｜报方向距离（如「传送十格东」）咏唱或右键，念出即至。"],
     },
     "give": {
-        "title": "造物之卷", "author": "云笈", "emerald": 4, "chant": "咏唱：造物/赐予/给予/给我/变出",
-        "pages": [
-            "造物之卷（创造系·Lv2）｜咏唱：造物/赐予/给予/赐下/给我/变出。报所需之物（如「给我个火把」）私语念出，神恩按白名单施予。",
-        ],
+        "title": "造物之卷", "author": "云笈", "emerald": 4, "chant": "造物/给我",
+        "pages": ["造物之卷·创造Lv2｜报所需之物（如「给我个火把」）咏唱或右键，白名单内即给。"],
     },
     # 2026-08-23 造物技能自由化：空白造物卷（书与笔）——玩家自写想要的内容 → 合书 → 右键。
     # 白名单内物资直给（火把/面包/煤/原木/石头/圆石/铁锭/金锭/小麦/苹果/木棍/木板，数量有上限）；
     # 白名单外（钻石剑/附魔书/末影珍珠…）→ 呈神裁量，或拒或索供奉。写在书页里的话就是祈愿文。
     "craft": {
         "title": "空白造物卷", "author": "云笈", "emerald": 2, "writable": True,
-        "pages": [
-            "空白造物卷｜买下这本空白书（书与笔），写下你想要的物资（如「铁锭 2」「火把」），合成本书后右键——白名单内的物资直接到手；白名单外的会上达天神，由女神裁断。",
-        ],
+        "pages": ["写下你想要的物资（如「铁锭2」），合书后右键呈神。白名单内直给，白名单外由女神裁断。"],
     },
 }
 
@@ -711,15 +697,12 @@ def _skillbook_nbt(sb, key):
                 '{"minecraft:custom_data":{"craftreq":true}}}')
     # 2026-08-23 造物主谕「书在手上右键=施法而非打开」：技能书右键被 settlementsfix mod 拦截施法、
     # 2026-08-29 godfix.5 新交互：右键=施放、潜行+右键=翻开细读说明（lore 同步更新）。
-    lore_items = [
-        {"text": sb.get("chant", ""), "color": "gray", "italic": False},
-        {"text": "右键=施放 · 潜行+右键=阅读", "color": "dark_gray", "italic": True},
-    ]
-    lore = ",".join('"%s"' % _snbt_esc(json.dumps(x, ensure_ascii=False)) for x in lore_items)
+    # 2026-09-27 柜台命令瘦身：lore 每本+150B 会撑爆 RCON 大包安全线（墨白柜台
+    # 静默截断=空架的第三层根因），页内已含用法说明，删除 lore 组件。
     return ('{id:"minecraft:written_book",count:1,components:'
             '{"minecraft:written_book_content":{title:"%s",author:"%s",pages:[%s]},'
-            '"minecraft:custom_data":{"skillbook":"%s"},"minecraft:lore":[%s]}'
-            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages, key, lore))
+            '"minecraft:custom_data":{"skillbook":"%s"}}}'
+            % (_snbt_esc(sb["title"]), _snbt_esc(sb["author"]), pages, key))
 
 def _recipes_nbt(v):
     """村民柜台：当日未完成委托 + 档案 shop 民生柜台。
@@ -851,6 +834,52 @@ def _settle_gui_trade(v, q):
         print("[guild] gui settle err:", e, flush=True)
     sync_offers()  # 全量：掌柜聚合柜与各家柜同步下架
 
+# ---------- 城门委托公告栏（字直接写在牌上，不用找 NPC、不用喊「看板」）----------
+# 2026-09-28 造物主令：「公会任务面板可以做一个单独的公告栏，用于显示有什么任务，
+# 这样不用找到 npc」。查下来更糟：GATE_BOARD 坐标上根本没有牌子（08-24 立的那块
+# 早已不在），只剩一个 12 格 proximity 判定 —— 等于既找不到人也没有板。
+# 牌位：城门 (-530,845) 背墙上的 4 块告示牌，2x2，每块两行 = 8 行容量。
+BOARD_SIGNS = [(-531, 69, 844), (-530, 69, 844), (-531, 70, 844), (-530, 70, 844)]
+_BOARD_LAST = {"key": None}
+
+
+def board_lines():
+    doc = quests_today() or {}
+    qs = doc.get("quests") or []
+    lines = ["今日委托 %s" % (doc.get("date") or "")[5:], "——————"]
+    for i, q in enumerate(qs[:3]):
+        who = (q.get("display") or "").split("·")[-1] or q.get("villager", "?")
+        obj = q.get("zh") or q.get("item") or "?"
+        st = "已交付" if q.get("done") else "%s x%s" % (obj, q.get("count", 1))
+        lines.append("%d.%s %s" % (i + 1, who, st))
+        lines.append("赏 %s 绿" % q.get("emerald", 1))
+    while len(lines) < len(BOARD_SIGNS) * 2:
+        lines.append("")
+    return lines[:len(BOARD_SIGNS) * 2]
+
+
+def sync_board():
+    """当日委托变了才写牌（省 RCON、也不闪面）。牌面文字用 data merge block：
+    setblock 带告示牌 NBT 会报 Could not set the block（旧坑）。"""
+    lines = board_lines()
+    key = "|".join(lines)
+    if key == _BOARD_LAST["key"]:
+        return
+    for (x, y, z), i in zip(BOARD_SIGNS, range(len(BOARD_SIGNS))):
+        l1, l2 = lines[i * 2], lines[i * 2 + 1]
+
+        def msg(s):
+            return '{"text":"%s","color":"black"}' % s.replace('"', "").replace("\\", "")
+        payload = ("{front_text:{color:\"black\",messages:['%s','%s','{\"text\":\"\"}','{\"text\":\"\"}']}}"
+                   % (msg(l1), msg(l2)))
+        try:
+            R.cmd("data merge block %d %d %d %s" % (x, y, z, payload))
+        except Exception:
+            R.s = None
+    _BOARD_LAST["key"] = key
+    print("[board] 委托已上板:", " / ".join([l for l in lines if l]), flush=True)
+
+
 def watch_offers():
     """柜台成交侦测（15s 轮询）：扫每个柜台实体的全部 recipe，uses≥1 的核销。"""
     while True:
@@ -859,6 +888,10 @@ def watch_offers():
             if mode_of(v) == "stand" or not v.get("alive"):
                 continue
             _scan_settle(v)
+        try:
+            sync_board()          # 委托变了就重刷公告栏
+        except Exception as e:
+            print("[board] err:", e, flush=True)
 
 # ---------- @公证交割（Agent↔Agent / 玩家↔玩家，村民作公证点） ----------
 RE_HANDOFF = re.compile(r"@([A-Za-z0-9_]{1,16})\s+(?:给\s*)?(\d+)\s*([A-Za-z\u4e00-\u9fff_]+)")
@@ -1487,14 +1520,20 @@ def summon_stand(v):
 
 def summon_villager(v):
     biome = v.get("biome", "plains")
-    offers = _recipes_nbt(v) or "Offers:{Recipes:[]}"
+    # 2026-09-27 技能书回归战役：召唤一律空柜台（长 Offers 会把 summon 撑到 ~1.5KB，
+    # RCON 大包静默截断 → 书商墨白/云笈“healed 了但实体从未存在”）。
+    # 柜台由 60s 一拍的 sync_offers 用 data merge 回填（单包 ~1KB 实测可过）。
+    offers = "Offers:{Recipes:[]}"
     # 2026-08-22 造物主谕「正常 NPC 不要站桩」：一律 NoAI:0b 自由生活（会溜达/归巢），
     # 交易/职业动作不受影响；拴绳看护（heal_npcs leash_radius）把离家者拉回广场。
     noai = "0b"
+    # 2026-09-27 分身+英文名事故定谳：1.21 的 CustomName 必须是 JSON 字符串（复合体
+    # 写法被静默丢弃→无名村民被 villagernames mod 领成英文名）。
+    name_json = '{\\"text\\":\\"%s\\",\\"color\\":\\"%s\\"}' % (v["display"], v["color"])
     nbt = ('{NoAI:%s,Invulnerable:1b,PersistenceRequired:1b,Silent:1b,Tags:["%s"],'
-           'CustomName:{text:"%s",color:"%s"},CustomNameVisible:1b,Xp:0,'
+           'CustomName:"%s",CustomNameVisible:1b,Xp:0,'
            'VillagerData:{profession:"minecraft:%s",level:4,type:"minecraft:%s"},%s}') % (
-        noai, v["tag"], v["display"], v["color"], v["profession"], biome, offers)
+        noai, v["tag"], name_json, v["profession"], biome, offers)
     x, y, z = v["spawn"]
     y = ground_y(x, z, y)
     base = v.get("carrier") == "base_villager"
@@ -1559,6 +1598,22 @@ def unleash_alive():
             R.s = None
 
 _MISS = {}  # R011: per-tag 连续 miss 计数（chunk 卸载瞬态不重招）
+# 2026-09-27 接地自愈冷却：同一 NPC 拉回后 N 轮内不再重复拉。
+# 旧行为实测在打拉锯战——村民自己走上柜台/屋顶（y 比 spawn 地面高 2+）就被拖下来，
+# 它再走上去，60s 一轮无限循环：10 分钟 137 次 tp，给基岩访客白灌约 20 包/秒
+# （entity_teleport 18116 次/873 秒），是她反复 Timed out 的直接推手之一。
+_GND_LAST = {}
+# 冷却设 60 轮（≈1 小时）而不是 10 轮：实测这些村民**档案里的 spawn 高度与它实际站的位置本来就不符**
+# （墨白 69↔72、火钳 72↔64、石头 65↔70…），所以看护永远判它"不对"、每轮都拽。
+# 本功能是"救卡住/掉坑的村民"，不是"把村民钉死在锚点"；10 轮冷却仍留 3.5 次/分钟的白 tp，
+# 60 轮把它压成真正的兜底（≈0.6 次/分钟），村民该站哪儿站哪儿。
+GND_COOLDOWN_ROUNDS = 60
+# 【2026-09-27 造物主令：接地看护关闭】实测它与村民自己的 AI 打拉锯战——档案里的 spawn 高度
+# 与村民实际站位本就不符（墨白 69↔72、火钳 72↔64、石头 65↔70），60s 一轮无限互拽：
+# 10 分钟 137 次 RCON 传送，基岩访客普查里 entity_teleport 高达 21 次/秒，
+# 是她反复 Timed out 的直接推手。要救卡住的村民改由女神/守卫按需手动处理。
+# 需要恢复时设环境变量 NPC_GROUND_HEAL=1。
+NPC_GROUND_HEAL = os.environ.get("NPC_GROUND_HEAL", "0") == "1"
 
 def heal_npcs():
     # 2026-08-23 造物主拍板「A+B」：水平拉回阈值用全局 leash_radius(40) 放宽+软化，每 NPC 可配 radius 覆盖。
@@ -1597,9 +1652,14 @@ def heal_npcs():
         try:
             sx, sy0, sz = int(v["spawn"][0]), int(v["spawn"][1]), int(v["spawn"][2])
             gy = ground_y(sx, sz, sy0)
-            if pos[1] - gy > 2 or pos[1] - gy < -2.5:
-                R.cmd("tp %s %d %d %d" % (sel(v), sx, gy, sz))
-                print("[npc] ground:", v["display"], "y %.1f -> %d" % (pos[1], gy), flush=True)
+            if NPC_GROUND_HEAL and (pos[1] - gy > 2 or pos[1] - gy < -2.5):
+                left = _GND_LAST.get(v["tag"], 0)
+                if left > 0:
+                    _GND_LAST[v["tag"]] = left - 1   # 冷却中：这一轮不动它
+                else:
+                    R.cmd("tp %s %d %d %d" % (sel(v), sx, gy, sz))
+                    _GND_LAST[v["tag"]] = GND_COOLDOWN_ROUNDS
+                    print("[npc] ground:", v["display"], "y %.1f -> %d" % (pos[1], gy), flush=True)
         except Exception:
             R.s = None
         if mode_of(v) == "stand":

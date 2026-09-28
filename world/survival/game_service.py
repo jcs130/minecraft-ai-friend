@@ -16,6 +16,9 @@ def environment(source=None):
 
 if __name__ == '__main__':
     os.environ.update(environment())
+    # Local 27B inference can pause between streamed chunks without failing.
+    os.environ.setdefault('QWENPAW_LLM_STREAM_FIRST_CONTENT_TIMEOUT', '60')
+    os.environ.setdefault('QWENPAW_LLM_STREAM_IDLE_TIMEOUT', '60')
     sys.path.insert(0, '/ops')
     from cron_guard import install
     install('game')

@@ -1,0 +1,2 @@
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+{"ok":true,"assertions":153,"scope":"compiled saved identity/data gate; no world or body created"}

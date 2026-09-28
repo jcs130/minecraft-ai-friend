@@ -23,12 +23,12 @@ from pathlib import Path
 SCHEMA = 1
 HINT_PATH_NAME = 'stagnation-hint.json'
 STATE_PATH_NAME = 'stagnation-state.json'
-# A goal that has not moved for this long, while the world reports no production, is
-# stale rather than merely slow. Ten minutes is one review cadence: waiting two cycles
-# before saying anything let a stall run for twenty minutes before anyone noticed
-# (2026-09-18), and the review is where this hint lands anyway.
-MIN_STAGNATION_SECONDS = 600
-COOLDOWN_SECONDS = 900
+# 2026-09-27 造物主令: 「10 分钟太久了, 1 分钟最多了」——10 分钟阈值让桐人在崖边
+# 罚站四十分钟才报警。降到 60 秒安全, 因为触发仍需环境佐证 (no_output / 电机连败):
+# 正常赶路位置在变、动作在成效, 不会误报; 站桩打转一分钟内即出 pivot 指令。
+# 冷却同步 900→300: 第一次 pivot 没听进去, 五分钟后允许再敲, 不再让人看半小时木头。
+MIN_STAGNATION_SECONDS = 60
+COOLDOWN_SECONDS = 300
 MAX_HINT_BYTES = 8192
 CORROBORATING = ('no_output', 'repeated_rejection')
 
@@ -44,9 +44,11 @@ def _fingerprint(goal):
 PIVOT_STEPS = (
     '① 诚实诊断天花板：先看最近这一段真实轨迹，说清"我一直在做什么、世界给了我什么回音"；'
     '原地重复不等于努力，它是该换方向的信号。'
-    '② 找一个最高 EV 的、还没试过的方向：区分"被证据否掉的"和"被我不愿意否掉的"——后者才是候选。'
-    '③ 承诺，不许浅尝：新方向至少真的做三次再判生死，每次自己标 1/3、2/3、3/3。'
-    '④ 把结论写进 lesson：哪条路被证明走不通、为什么，这样下一世不必重走。'
+    '② 先试物理脱困，再谈换目标：挡住去路的方块就挖开它（木头/泥土/草方块徒手也能挖），'
+    '掉进坑里就脚下垫圆石/泥土叠起来跳出去（place_block+跳跃）；被"保护区拒绝"才承认此路不通。'
+    '③ 找一个最高 EV 的、还没试过的方向：区分"被证据否掉的"和"被我不愿意否掉的"——后者才是候选。'
+    '④ 承诺，不许浅尝：新方向至少真的做三次再判生死，每次自己标 1/3、2/3、3/3。'
+    '⑤ 把结论写进 lesson：哪条路被证明走不通、为什么，这样下一世不必重走。'
 )
 
 

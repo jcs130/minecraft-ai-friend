@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -275,9 +276,37 @@ class SurvivalSkillToolsTests(unittest.TestCase):
 
     def test_shared_lock_prevents_parallel_skill_and_body_updates(self):
         with action_lock(self.state):
-            self.assertEqual(self.tools.remember(TURN, 'blocked')['code'], 'action_busy')
+            rejected = self.tools.remember(TURN, 'blocked')
+            self.assertEqual(rejected['code'], 'action_busy')
+            self.assertEqual(rejected['admissionPhase'], 'before_lock')
+            self.assertTrue(rejected['retryable'])
+            self.assertFalse(rejected['queued'])
             self.assertEqual(self.tools.start(TURN, 'gather', VERSION)['code'], 'action_busy')
         self.assertEqual(self.library.calls, [])
+
+    def test_short_lock_contention_does_not_drop_memory_write(self):
+        locked = threading.Event()
+        release = threading.Event()
+
+        def holder():
+            with action_lock(self.state, blocking=True):
+                locked.set()
+                release.wait(2)
+
+        worker = threading.Thread(target=holder, daemon=True)
+        worker.start()
+        self.assertTrue(locked.wait(2))
+        timer = threading.Timer(0.02, release.set)
+        timer.start()
+        try:
+            result = self.tools.remember(TURN, 'still travelling')
+        finally:
+            release.set()
+            timer.join(2)
+            worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertTrue(result['ok'])
+        self.assertEqual(read_json(self.state / 'memory.json')['goal'], 'still travelling')
 
     def test_queue_write_failure_does_not_reopen_lease_or_replay(self):
         original = write_json

@@ -1,6 +1,14 @@
 # 服务端 Agent 的轻量感知与图像链路
 
-## 2026-09-14 当前实现：原 survivor 已部署按需语义图片
+## 2026-09-25 第一人称实现
+
+`view_scene()` 默认从桐人本人 Numen 身体的固定 UUID 采样：服务端只复制已加载的 33×33×最多29 格方块体积、眼位、朝向和维度，Prismarine 在独立的私有场景中渲染纹理，再由受监督的无头浏览器截取 640×360 PNG。未登录第二个 Minecraft 玩家，也没有借用女神的镜头。局部几何来自请求开始时的快照；网格准备后再取一次本人当前姿态，超出 4 格或切换维度则拒绝。两次采样时间均在元数据中给出，不宣称原子快照。
+
+桐人画面使用垂直 FOV 120°；女神原有公开画面仍保持自己的设置。截图的 HUD 标出准星射线命中的真实方块和距离，并列出最近的特殊方块与实体，明确标注“附近不代表视线可见”。这些标签来自同一 Numen 服务端采样，无法代替遮挡和精确交互查询。`view_scene(mode="map")` 仍保留原语义俯视图。客户端独有的角色皮肤、GUI、粒子和部分模组方块纹理不保证出现在此画面中。
+
+实现入口：服务端 `NumenVisionSnapshot.java`，私有场景 `numen-snapshot-view.mts`，渲染与取帧 `mc-modern-viewer.mts` / `agent-frame.mts`，MCP 校验与 HUD `frame_view.py`。截图失败返回明确状态且不回退旧图；一次最多一个请求，私有浏览器占专用槽，不挤占两位普通查看者。
+
+## 2026-09-14 历史阶段：原 survivor 已部署按需语义图片
 
 已在现有 survivor MCP 增加 `view_scene(radius=8)`，将本人原生 `look_around` 的完整、有界语义网格逐格绘成真实 PNG，并通过 MCP `TextContent + ImageContent` 返回当前 Qwen 生活会话。新增实现见 [scene_view.py](../world/survival/scene_view.py)，MCP 入口见 [mcp_server.py](../world/survival/mcp_server.py)；当前源码工具清单由45项增至46项。无需新增 Java 场景导出、游戏客户端、RenderBot、模型服务或常驻进程。
 

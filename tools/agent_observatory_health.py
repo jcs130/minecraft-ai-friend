@@ -72,8 +72,18 @@ def probe():
         results = trace.get('modelResults', {})
         checks['stream-runtime-state'] = isinstance(trace.get('runtime'), dict) and all(k in results for k in ('current','last'))
         projected = [r for r in results.values() if isinstance(r, dict)]
-        checks['native-result-projection'] = all(r.get('turnId') and r.get('taskId') and r.get('availability') == 'available'
-            and 'output' not in r and 'reasoning' not in r and isinstance(r.get('tools'), list) for r in projected)
+        checks['native-result-projection'] = all(
+            r.get('turnId') and r.get('taskId') and 'output' not in r and 'reasoning' not in r
+            and isinstance(r.get('tools'), list) and (
+                r.get('availability') == 'available' or
+                # Old task handles may be unavailable after a restart or bound
+                # to a different native session. Neither is a final answer.
+                r is results.get('last') and r.get('availability') in ('unavailable', 'session_mismatch')
+                and r.get('status') == 'unknown' and r.get('finalText') is None
+                and not r['tools']) for r in projected)
+        if trace.get('runtime', {}).get('status') == 'thinking' and isinstance(results.get('current'), dict):
+            checks['native-result-projection'] = (checks['native-result-projection']
+                and results['current'].get('availability') == 'available')
         checks['native-final-text-contract'] = all(r.get('finalText') is None or (r.get('status') == 'completed' and isinstance(r['finalText'], str) and len(r['finalText']) <= 6000) for r in projected)
         checks['decision-branches'] = ('id="record-select"' in page and isinstance(trace.get('policyDecisions'), list)
             and trace.get('routing', {}).get('llmAlternativesRecorded') is False)

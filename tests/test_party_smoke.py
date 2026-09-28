@@ -86,6 +86,17 @@ class PartySmokeTests(unittest.TestCase):
                 changed['session'][field] = 'different'
                 self.assertFalse(same_life_identity(changed, session))
 
+    def test_protocol_two_null_chat_requires_verified_primary_lane(self):
+        session = dict(primarySessionId='life-one', agentId='qd-survivor', bodyUuid='fixture-body',
+                       userId='survival-controller', channel='console', chatId=None)
+        report = {'ok': True, 'session': copy.deepcopy(session), 'checks': [
+            {'name': 'persistent-native-session', 'ok': True, 'evidence': {
+                'chat': {'id': 'native-chat', 'session_id': 'life-one'},
+                'verifiedLaneSessions': ['life-one']}}]}
+        self.assertTrue(same_life_identity(report, session))
+        report['checks'][0]['evidence']['verifiedLaneSessions'] = []
+        self.assertFalse(same_life_identity(report, session))
+
     def test_owner_must_be_online_and_maid_actually_loaded(self):
         maid, survivor = {'bodyUuid': 'maid-fixture'}, {'bodyUuid': 'kirito-fixture'}
         body = {'ok': True, 'identity': {'loaded': True, 'maidUuid': maid['bodyUuid'], 'ownerUuid': survivor['bodyUuid']},

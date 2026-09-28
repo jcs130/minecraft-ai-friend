@@ -1,0 +1,12 @@
+{
+  "name": "naruto-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "轻量直驱身体（A/B 对照实验：单循环 mineflayer + 阿福 LLM），与 survivor 重栈对照",
+  "main": "naruto_lite.cjs",
+  "scripts": { "start": "set NARUTO_PORT=25702&& set NARUTO_NAME=ag_naruto&& node naruto_lite.cjs" },
+  "dependencies": {
+    "mineflayer": "^4.37.1",
+    "mineflayer-pathfinder": "^2.4.5"
+  }
+}

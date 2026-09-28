@@ -25,7 +25,7 @@ def main():
     suite = unittest.TestSuite()
     names = []
     for name in ('test_embodied_agent', 'test_survival_gateway', 'test_social_scheduling', 'test_dialogue_batch',
-                 'test_behavior_context', 'test_survival_service', 'test_survival_submission_runtime', 'test_survival_status_detail',
+                 'test_behavior_context', 'test_tool_focus', 'test_auto_patrol', 'test_survival_service', 'test_survival_submission_runtime', 'test_survival_status_detail',
                  'test_survival_feedback', 'test_survival_guild', 'test_survival_life_session',
                  'test_survival_standing_task', 'test_survival_poll_recovery', 'test_guild_hunt_score',
                  'test_native_continuity', 'test_native_mcp_recovery', 'test_system_one', 'test_skill_catalog_router',
@@ -33,7 +33,9 @@ def main():
                  'test_async_motor', 'test_survival_navigation_deadline', 'test_survival_controller',
                  'test_survival_navigation_sense', 'test_motor_projection',
                  'test_survival_area_recovery', 'test_survival_chat', 'test_motor_boundary', 'test_survival_inventory_feedback',
-                 'test_survival_native_tools', 'test_survivor_driver_scope', 'test_configure_survivor_vision',
+                 'test_survival_native_tools', 'test_survivor_driver_scope',
+                 'test_native_role_capabilities', 'test_enable_survivor_shell',
+                 'test_configure_survivor_vision',
                  'test_survival_game_skills', 'test_survival_skill_tools', 'test_survival_mine_receipts',
                  'test_party_bridge', 'test_party_life', 'test_yui_admin_team',
                  'test_survival_food_receipts', 'test_survival_native_interaction', 'test_motor_cast_acceptance',
@@ -41,9 +43,11 @@ def main():
                  'test_skill_catalog_eligibility', 'test_motor_progress_audit',
                  'test_character_speech', 'test_survival_speech',
                  'test_survival_action_admission', 'test_system_one_body_control',
-                 'test_survival_continuous_navigation', 'test_survival_blocked_progress_wake',
+                 'test_survival_continuous_navigation', 'test_survival_motion_plan',
+                 'test_survival_blocked_progress_wake',
                  'test_survival_navigation_capability', 'test_survival_navigate_tool',
-                 'test_survival_turn_completion', 'test_survival_body_reconnect'):
+                 'test_survival_turn_completion', 'test_survival_body_reconnect',
+                 'test_survival_status_encoding'):
         module = importlib.import_module(name)
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not issubclass(cls, unittest.TestCase):
@@ -56,8 +60,15 @@ def main():
                     names.append(test.id())
                     suite.addTest(test)
     result = unittest.TextTestRunner(verbosity=1).run(suite)
-    report = {'schema': 1, 'ok': result.wasSuccessful() and not result.skipped and before == hashes(),
+    legacy_skip = ('Legacy materialize_skill checks require disposable QwenPaw 2.2.0; '
+                   '2.2.1 uses test_native_make_skill_policy')
+    skipped = [{'test': test.id(), 'reason': reason} for test, reason in result.skipped]
+    unexpected_skips = [row for row in skipped if not (
+        row['test'].startswith('test_native_role_capabilities.InstalledNativeImplementation.test_')
+        and row['reason'] == legacy_skip)]
+    report = {'schema': 1, 'ok': result.wasSuccessful() and not unexpected_skips and before == hashes(),
               'testsRun': result.testsRun, 'tests': names, 'sourceHashes': before,
+              'skipped': skipped, 'unexpectedSkips': unexpected_skips,
               'failures': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.failures],
               'errors': [{'test': test.id(), 'detail': detail[-5000:]} for test, detail in result.errors],
               'modelCalls': 0, 'productionMutations': 0, 'worldActions': 0}

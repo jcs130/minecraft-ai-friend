@@ -2,6 +2,12 @@
 
 这个目录将 QwenPaw 的规划、受验证的技能程序、Numen 的身体动作分开。真实 `qd-survivor` 角色在游戏 QwenPaw `http://127.0.0.1:18089/agents` 中显示为桐人；`survivor` 容器仅负责感知、持久调度、受限程序和鉴权 HTTP MCP，不再启动独立 18091 控制台。原游戏天神、司礼以及运营六角色的模型设置和用途保留。
 
+## 现役调用链（2026-09-28）
+
+`service.py` 维持单个 `Controller` 并监督 MCP 子进程；`controller.py` 读持久状态、接收目标与原生 QwenPaw 任务终态，`adaptive_router.py` 将合适的局部选择交给 Jev。`motor_mailbox.py` 保存慢脑提交的有界命令，`motor_loop.py` 在模型仍思考时照常推进已授权的导航或技能；`NumenGateway` 与原生模组执行身体动作并按精确回执结算。`frame_view.py` 提供按需第一人称画面，`tool_focus.py` 缩小建议工具范围；它们不代替身体观察、动作授权或真实结果。生产 `world/survival` 以读写方式挂载到 `/survival`，改这里的源码就是改生产文件，生效仍取决于进程加载/重启及部署核验。
+
+本目录中的 `AGENT.md` 是桐人的角色提示；根目录 `AGENTS.md` 是开发与运维约束。实际对照的另一框架是仓库外运行的 Mindcraft 鸣人，详情见 [两套框架对照](../../docs/AGENT-FRAMEWORK-COMPARISON-2026-09-28.md)。仓库内 `world/naruto-lite` 是已停用的直驱原型，不能把它的代码或旧日志当作当前鸣人运行态。
+
 ## 从首轮原型迁入共享控制台
 
 首轮原型已通过 `prepare_survival_agent.py` 建立隔离配置。已有部署应保留该目录，使用迁移工具将真实角色、会话和用量接入游戏实例；不重新初始化或生成另一个身体。构建当前 `qiandengji-survivor:2.2.0-qd2` 后，先只读检查：
@@ -28,11 +34,13 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 
 ## MCP 工具
 
-`mcp_server.TOOL_NAMES` 是初始化与验证共用的唯一白名单，当前源码注册 **44 项 MCP 工具**，其中 **17 项是受动作租约约束的游戏动作**；QwenPaw DriverCard 默认拒绝，运行实例须同步并验证实际清单。Qwen 已启用原生技能、角色范围内文件工具及受管周任务管理，见 [原生能力](../../docs/ROLE-LEARNING.md)；生存适配器继续只负责观察与游戏执行。当前 QPM=0、模型迭代门关闭、模型并发1，`dailyPlanningLimit: null`、`decisionCooldownSeconds: 0`；供应商限制、超时和真实用量记录仍保留。每轮身体最多6个串行动作，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
+`mcp_server.TOOL_NAMES` 是初始化与验证共用的白名单；2026-09-28 源码含 **54 项 MCP 工具**，其中 `BODY_ACTION_TOOLS` 明列 **19 项直接身体动作**。`navigate`、`navigate_plan` 与 `skill_start` 另会提交受控的程序任务，不能只看直接动作计数。运行实例仍须核对实际 DriverCard 和原生工具策略。Qwen 已启用原生技能、角色范围内文件工具及受管周任务管理，见 [原生能力](../../docs/ROLE-LEARNING.md)。当前 `dailyPlanningLimit: null`、`decisionCooldownSeconds: 0`；模型并发、超时、真实用量和供应商限制以实际配置为准。每轮最多提交六个身体请求，决策次数不等于模型调用次数。新增生活能力的完整契约与验收边界见 [自主生活、任务与成长](../../docs/SURVIVOR-ADVENTURE.md)。
 
 | 工具 | 用途 |
 |---|---|
 | `status()`、`look(radius)` | 无模型、只读身体和周边事实 |
+| `view_scene(mode="first_person")` | 按需取得桐人视角的渲染图；也可用 `map` 查看结构化地图，画面不可用时保持未知 |
+| `navigate(...)`、`navigate_plan(...,waypoints)` | 将目的地或最多六个路标交给快循环逐段执行；排队不等于抵达 |
 | `lookup_recipe(item_id)` | 按完整物品ID查询当前服务器原生支持的配方，每次最多四条；不试合成、不占动作租约，自定义机器覆盖有限 |
 | `world_perception()` | 读取控制器持久感知缓存：聊天、发给自身的消息、周边及世界摘要 |
 | `move(turn_id,x,z,y=None)`、`mine(turn_id,block_ids,count)`、`craft(turn_id,item_id,count)`、`eat(turn_id,item_id)`、`equip(turn_id,item_id,slot)` | 一次受租约限制的直接身体动作；可靠观察实际脚高时可传 y，要求原生严格三维到达能力 |
@@ -54,12 +62,12 @@ Compose 的游戏 Qwen 入口为 `game_service.py`，从只读 secret 文件取 
 | `skill_draft(turn_id,name,source,fixtures,description)` | 保存纯 JS `next(state,memory)` 草稿和测试 |
 | `skill_test(turn_id,name,version)` | 使用无 IO、有限 CPU/内存的 QuickJS 测试 |
 | `skill_promote(turn_id,name,version)` | 晋升通过当前内核验证的准确版本 |
-| `skill_start(turn_id,name,version,memory,max_steps)` | 排队执行已晋升程序，与同轮直接动作互斥 |
+| `skill_start(turn_id,name,version,memory,max_steps)` | 提交已晋升程序；queued 模式与直接动作共用六请求额度，同步租约下二选一 |
 | `remember(turn_id,goal,lesson,next_focus,goal_state,review_after_seconds)` | 保存有界经验、目标状态和下次复盘时间，保留最近 16 条历史 |
 
-身体动作、程序学习和记忆写入共享 `action_lock`：控制器已启用、同一未过期租约、状态为 `open` 或 `used`，且没有不确定动作标记时才允许。草稿、测试、晋升和记忆不消耗身体动作次数；`skill_start` 要求 `open` 且 `actionsUsed=0`，先关闭本轮直接动作，再写 `skill-job.json`。得到 `skill_queued` 后结束模型轮次，MCP 不运行程序或触发 RCON。程序执行由控制器在该模型任务结束后启动。`request_goal` 仅排队一条明确会话目标，控制器保留当时的暂停状态和原预算，不创建第二个驱动。
+身体动作、程序学习和记忆写入共享 `action_lock`，并核查控制开关、当前认知授权及不确定动作标记。草稿、测试、晋升和记忆不消耗身体请求额度。`bodyAccess=queued` 时，直接动作和 `skill_start` 共用每轮最多六请求的持久电机信箱；`motor_queued` 只表示排队，电机可在该模型任务未结束时继续执行。同步租约下，直接动作与一个 `skill_start` 互斥。MCP 不自行运行程序或触发 RCON。`request_goal` 仍交原调度器处理，不创建第二个身体驱动。
 
-技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`，当前17项动作是 `goto`、`mine`、`craft`、`eat`、`equip_item`、`game_cast`、`game_learn`、`place_block`、`farm`、`open_container`、`transfer_items`、`close_container`、`sleep`、`trade`、`guild_claim`、`guild_release`、`guild_deliver`。以 `skill_catalog().actionTools` 的当前清单为准，移动/装备不能写成 MCP 的 `move/equip`，扫描等观察工具也不是程序动作。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。法术学习保留原等级、技能书、法力、冷却和铁魔法装备规则，不能凭名称授予法术。
+技能输入使用真实快照，背包计数为 `state.counts`。程序输出 `{action,memory,done?,replan?,reason?}`；具体动作以 `skill_catalog().actionTools` 的当前清单为准。移动/装备不能写成 MCP 的 `move/equip`，扫描等观察工具也不是程序动作。例子及 fixture 结构见 `AGENT.md`。测试和晋升证明程序通过有限样例，不能代替真实世界验收。法术学习保留原等级、技能书、法力、冷却和铁魔法装备规则，不能凭名称授予法术。
 
 新增 `adventure` 摘要把真实资源、装备、当前能力和公示/附近机会提供给规划器，不排序或自动派目标。`19091/#survivor` 的生活卡区分未知、历史与当前观察，展示配置建设范围和本人合同缺条件；持有物品不是已交付，配置范围不是已建成房屋。原公会缓存的 `fame` 对象与全局声望榜分别处理，实时 NPC 位置和历史导航位置也不混用。最终生产加载与实机结果由 [生活能力验证记录](../../docs/SURVIVOR-ADVENTURE.md#验证状态与尚未证明的部分) 补记，不能从工具数量推断已完成建房、收获或交易。
 

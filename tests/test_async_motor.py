@@ -129,10 +129,23 @@ class AsyncMotorTests(unittest.TestCase):
         self.assertEqual(len(self.worker.calls), 2)
         self.assertFalse(self.gateway.actions)
 
-    def test_claim_without_receipt_pauses_and_is_never_redispatched(self):
+    def test_claim_without_opened_lease_returns_to_queue_without_dispatch(self):
         with action_lock(self.state):
             enqueue_locked(self.state, 'survival-plan-0001', 'action', {'tool':'eat','args':{}}, self.clock)
             claim_locked(self.state, self.clock)
+        self.gateway.turn_receipts = lambda turn: []
+        reconcile(self.c)
+        self.assertEqual(view(self.state)['requests'][0]['status'], 'queued')
+        self.assertTrue(read_json(self.state/'control.json')['enabled'])
+        self.assertFalse(self.gateway.actions)
+
+    def test_claim_with_opened_lease_and_no_receipt_stays_unknown(self):
+        with action_lock(self.state):
+            enqueue_locked(self.state, 'survival-plan-0001', 'action', {'tool':'eat','args':{}}, self.clock)
+            claimed = claim_locked(self.state, self.clock)
+        write_json(self.state/'lease.json', {'schema': 1, 'turnId': claimed['motorTurnId'],
+            'status': 'open', 'expiresAt': int((self.clock() + 60) * 1000),
+            'actionLimit': 1, 'actionsUsed': 0})
         self.gateway.turn_receipts = lambda turn: []
         reconcile(self.c)
         self.assertEqual(view(self.state)['requests'][0]['status'], 'unknown')

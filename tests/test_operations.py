@@ -162,9 +162,10 @@ class OperationsTests(unittest.TestCase):
     def test_archived_team_is_never_selected_or_restarted(self):
         registry=ops.read_registry()
         selected=ops.select_services([], 'all', registry)
-        self.assertEqual(len(selected), 13)
+        self.assertEqual(len(selected), 12)
         self.assertIn('inventory',selected)
         self.assertNotIn('qwenpaw-ops', selected)
+        self.assertNotIn('tts', selected)
         self.assertEqual(ops.select_services([], 'operations', registry), ['qwenpaw'])
         with self.assertRaises(ValueError):ops.select_services(['qwenpaw-ops'],None,registry)
         with self.assertRaises(ValueError):ops.lifecycle_plan('start',['qwenpaw-ops'],self.owned_states())
@@ -181,6 +182,7 @@ class OperationsTests(unittest.TestCase):
         states=self.owned_states()
         for state in states.values():state['restart']='unless-stopped'
         states['qiandengji-qwenpaw-ops-1']={'state':'absent','health':'not-applicable','restart':None}
+        states['qiandengji-tts-1']={'state':'exited','health':'not-applicable','restart':'unless-stopped'}
         for row in registry['externalServices']:
             states.setdefault(row['container'],{'state':'absent','health':'not-applicable','restart':None})
         inventory=SimpleNamespace(collect_qwenpaw_inventory=lambda **_: {'runtimes':[],'agents':[],'issues':[]})
@@ -188,8 +190,9 @@ class OperationsTests(unittest.TestCase):
             result=ops.collect_snapshot()
             self.assertTrue(result['checks']['currentServices'])
             self.assertEqual(result['issues'],[])
-            self.assertEqual(result['archivedServices'][0]['id'],'qwenpaw-ops')
+            self.assertEqual({row['id'] for row in result['archivedServices']}, {'qwenpaw-ops', 'tts'})
             self.assertNotIn('qwenpaw-ops',{row['id'] for row in result['services']})
+            self.assertNotIn('tts',{row['id'] for row in result['services']})
             states['qiandengji-asr-1']['health']='unhealthy'
             self.assertFalse(ops.collect_snapshot()['checks']['currentServices'])
             states['qiandengji-qwenpaw-ops-1']['state']='running'
@@ -249,7 +252,7 @@ class OperationsTests(unittest.TestCase):
         for payload,expected in [(b'{"ok":true}',True),(b'{"ok":1}',False),(b'{"ok":"true"}',False),
                                  (b'{"ok":false}',False),(b'{}',False),(b'[]',False),(b'broken',False)]:
             def open_fixture(url,timeout):
-                self.assertEqual(url,'http://127.0.0.1:8100/health');self.assertLessEqual(timeout,4)
+                self.assertEqual(url,'http://127.0.0.1:8100/health');self.assertLessEqual(timeout,8)
                 return Response(payload)
             with self.subTest(payload=payload):self.assertIs(ops.probe_shared_tts(open_fixture)['ok'],expected)
         self.assertFalse(ops.probe_shared_tts(lambda *a,**kw:Response(b'{"ok":true}',503))['ok'])

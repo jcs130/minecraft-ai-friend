@@ -19,7 +19,7 @@ from maid_registry import MaidRegistry
 from maid_native_tools import MaidNativeTools, TOOL_NAMES, READS
 from maid_perception_inbox import DELIVERY, binding_key
 from party_role_capabilities import YUI_AGENT_ID
-from party_bridge import PartySendArgumentError
+from party_bridge import PartySendArgumentError, PartySpeechQualityError
 
 ROLE = 'qd-maid-dialogue'
 BODY_LIMIT = 65536
@@ -316,6 +316,10 @@ def make_handler(adapter, token):
             except PartySendArgumentError as error:
                 return self.send_json(200, {'jsonrpc': '2.0', 'id': rid,
                     'error': {'code': -32602, 'message': str(error), 'data': error.data}})
+            except PartySpeechQualityError as error:
+                return self.send_json(200, {'jsonrpc': '2.0', 'id': rid,
+                    'result': {'content': [{'type': 'text', 'text': json.dumps(error.data, ensure_ascii=False)}],
+                               'isError': True}})
             except (ValueError, OSError, TypeError, KeyError):
                 return self.send_json(200, {'jsonrpc': '2.0', 'id': rid,
                     'error': {'code': -32602, 'message': 'Invalid or unavailable party request'}})

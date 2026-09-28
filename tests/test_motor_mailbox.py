@@ -47,6 +47,42 @@ class MailboxTests(unittest.TestCase):
             finish_locked(self.root,row['requestId'],'completed',{'actionId':'a'})
         self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'],'completed')
 
+    def test_prelease_contention_requeues_without_pausing_or_touching_world(self):
+        from motor_loop import dispatch, reconcile
+        from numen_gateway import GatewayError
+        row = self.enqueue({'tool': 'goto', 'args': {'x': 2, 'z': 3}})
+        calls = []
+        def busy(*args):
+            raise GatewayError('action_busy')
+        controller = SimpleNamespace(root=self.root, clock=lambda: self.now, data={},
+            gateway=SimpleNamespace(open_lease=busy, action=lambda *args: calls.append(args),
+                                    turn_receipts=lambda turn: []),
+            pause=lambda reason: self.fail(reason), record=lambda *args, **kwargs: None)
+        self.assertFalse(dispatch(controller))
+        self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'], 'queued')
+        self.assertEqual(calls, [])
+        with action_lock(self.root):
+            claim_locked(self.root, lambda: self.now)
+        reconcile(controller)
+        self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'], 'queued')
+        self.now = read_json(self.root/'motor-inbox.json')['requests'][0]['expiresAt'] + 1
+        with action_lock(self.root):
+            claim_locked(self.root, lambda: self.now)
+        self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'], 'expired')
+
+    def test_claim_with_opened_lease_and_missing_receipt_stays_unknown(self):
+        from motor_loop import reconcile
+        self.enqueue({'tool': 'goto', 'args': {'x': 2, 'z': 3}})
+        with action_lock(self.root):
+            claimed = claim_locked(self.root, lambda: self.now)
+        write_json(self.root/'lease.json', {'status': 'open', 'turnId': claimed['motorTurnId']})
+        pauses = []
+        controller = SimpleNamespace(root=self.root, clock=lambda: self.now,
+            gateway=SimpleNamespace(turn_receipts=lambda turn: []), pause=pauses.append)
+        reconcile(controller)
+        self.assertEqual(read_json(self.root/'motor-inbox.json')['requests'][0]['status'], 'unknown')
+        self.assertEqual(pauses, ['motor_outcome_unknown'])
+
     def test_old_queued_work_expires_when_goal_changes(self):
         self.enqueue()
         control=read_json(self.root/'control.json');control['missionChangedAt']=2

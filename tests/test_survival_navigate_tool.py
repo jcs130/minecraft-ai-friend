@@ -60,7 +60,8 @@ class NavigateToolTests(unittest.TestCase):
         self.assertTrue(result['ok'], result)
         self.assertEqual(result['code'], 'skill_queued')
         job = read_json(self.state / 'skill-job.json')
-        self.assertEqual(job['memory'], {'target': {'x': -300.5, 'z': 400}})
+        self.assertEqual(job['memory'], {'policy': True, 'singleGoal': True,
+                                         'waypoints': [{'x': -300.5, 'z': 400}]})
         self.assertEqual((job['name'], job['version'], job['maxSteps']), ('base_navigate', self.version, 32))
         self.assertEqual(result['turnCompletion']['summary'], 'Walk to the observed destination')
         self.assertFalse(result['executionConfirmed'])
@@ -78,7 +79,8 @@ class NavigateToolTests(unittest.TestCase):
         rows = view(self.state)['requests']
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['kind'], 'skill')
-        self.assertEqual(rows[0]['payload']['memory'], {'target': {'x': -200, 'z': 250, 'y': 70}})
+        self.assertEqual(rows[0]['payload']['memory'], {'policy': True, 'singleGoal': True,
+                                                         'waypoints': [{'x': -200, 'z': 250, 'y': 70}]})
         self.assertEqual(rows[0]['payload']['version'], self.version)
         self.assertEqual(read_json(self.state / 'cognition-lease.json')['actionsUsed'], 1)
 

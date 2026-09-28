@@ -41,6 +41,7 @@ class Rcon:
 class ReconnectGateway(fixtures.FakeGateway):
     _native_roster = NumenGateway._native_roster
     _native_restore_existing = NumenGateway._native_restore_existing
+    _native_summon = NumenGateway._native_summon
 
 
 class BodyReconnectTests(unittest.TestCase):
@@ -148,6 +149,101 @@ class BodyReconnectTests(unittest.TestCase):
         self.rcon.roster = ONLINE
         self.assertEqual(self.restore.tick(BINDING)['status'], 'online')
         self.assertFalse(self.commands())
+
+    def test_saved_task_block_self_heals_by_roster_probe_without_redispatch(self):
+        # 身体掉线时 numen 挡回 saved_task_requires_review → blocked（这正是过去“起不来”要等运维的死锁）
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        blocked = self.restore.tick(BINDING)
+        self.assertEqual(blocked['status'], 'blocked')
+        self.assertEqual(blocked['reason'], 'saved_task_requires_review')
+        before = len(self.commands())
+        # 别的路径（运维 summon / 自然复活）把身体弄回来：reconnector 只读观察即自愈，绝不再自行派发 restore
+        self.rcon.roster = ONLINE
+        self.clock.now = blocked['nextCheckAt'] + 1
+        healed = self.restore.tick(BINDING)
+        self.assertEqual(healed['status'], 'online')
+        self.assertEqual(healed['reason'], 'identity_verified')
+        self.assertEqual(len(self.commands()), before)
+
+    def test_saved_task_block_does_not_self_heal_while_body_absent(self):
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        blocked = self.restore.tick(BINDING)
+        before = len(self.commands())
+        self.clock.now = blocked['nextCheckAt'] + 1   # 身体仍不在
+        again = self.restore.tick(BINDING)
+        self.assertEqual(again['status'], 'blocked')
+        self.assertGreater(again['nextCheckAt'], self.clock())
+        self.assertEqual(len(self.commands()), before)   # 探针绝不派发 restore
+
+    def test_hard_blocked_identity_conflict_never_self_heals_by_probe(self):
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'blocked',
+                 'reason':'restore_live_identity_conflict', 'attempts':[], 'nextCheckAt':0})
+        self.rcon.roster = ONLINE
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['reason'], 'restore_live_identity_conflict')
+        self.assertFalse(self.commands())
+
+    def test_blocked_recovery_runs_even_with_active_decision(self):
+        # 回归：过去 blocked 自愈排在授权闸之后，有活跃决策时永远走不到 → 只能等运维。
+        # 现在恢复先于授权闸跑，活跃决策不得饿死它。
+        write_json(self.state/'controller.json', {'active': {'taskId': 'stale'}})
+        write_json(self.restore.path, {'schema':1, **BINDING, 'status':'blocked',
+                 'reason':'saved_task_requires_review', 'attempts':[], 'nextCheckAt':0})
+        self.rcon.roster = ONLINE
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['status'], 'online')          # 身体在线 → 翻 online，而非 restore_not_authorized
+        self.assertEqual(result['reason'], 'identity_verified')
+        self.assertFalse(self.commands())                     # 只读观察，不派发任何动作
+
+    def test_saved_task_absent_triggers_bounded_auto_summon(self):
+        # 身体确认缺席：连续缺席 SUMMON_AFTER_ABSENT 次 → 幂等自动 summon 召回，且当天有配额上限。
+        self.rcon.roster = 'count=0'
+        self.rcon.response.update(ok=False, phase='rejected', code='saved_task_requires_review')
+        state = self.restore.tick(BINDING)                    # 首轮走正常派发→被拒→blocked
+        self.assertEqual(state['status'], 'blocked')
+        for _ in range(3):                                    # 反复只读观察，身体始终不在
+            self.clock.now = state['nextCheckAt'] + 1
+            self.rcon.roster = 'count=0'
+            state = self.restore.tick(BINDING)
+            self.assertEqual(state['status'], 'blocked')
+        self.assertIn('numen_act summon ' + OWNER + ' Kirito', self.rcon.calls)   # 缺席够多次→自动召唤
+        # 配额：一天内自动召唤次数有上限，不无界重试
+        self.assertLessEqual(len([c for c in self.rcon.calls if c.startswith('numen_act summon')]), 5)
+
+    def test_roster_failure_never_counts_as_confirmed_absence(self):
+        write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+                 'reason': 'saved_task_requires_review', 'attempts': [], 'nextCheckAt': 0})
+        self.rcon.roster = TimeoutError('roster unavailable')
+        for _ in range(5):
+            result = self.restore.tick(BINDING)
+            self.assertEqual(result['status'], 'blocked')
+            self.assertEqual(result.get('absentStreak', 0), 0)
+            self.assertFalse(self.commands())
+            self.clock.now = result['nextCheckAt'] + 1
+
+    def test_uncertain_auto_summon_is_reserved_and_never_replayed(self):
+        write_json(self.restore.path, {'schema': 1, **BINDING, 'status': 'blocked',
+                 'reason': 'saved_task_requires_review', 'attempts': [],
+                 'absentStreak': 2, 'nextCheckAt': 0})
+        self.rcon.roster = 'count=0'
+
+        def lose_reply():
+            reserved = read_json(self.restore.path)
+            self.assertEqual(reserved['autoSummonPendingAt'], self.clock())
+            raise TimeoutError('summon reply lost')
+
+        self.rcon.on_restore = lose_reply
+        result = self.restore.tick(BINDING)
+        self.assertEqual(result['autoSummonOutcome'], 'unknown')
+        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
+        self.rcon.on_restore = None
+        for _ in range(5):
+            self.clock.now = result['nextCheckAt'] + 1
+            result = self.restore.tick(BINDING)
+        self.assertEqual(len([c for c in self.commands() if c.startswith('numen_act summon')]), 1)
 
     def test_unknown_submission_is_not_retried_after_process_restart(self):
         self.rcon.response = TimeoutError('response lost')
@@ -347,9 +443,23 @@ class BodyReconnectTests(unittest.TestCase):
         self.assertEqual(self.rcon.calls, ['numen_act list'])
         self.assertFalse(self.commands())
 
-    def test_death_recovery_does_not_clear_other_blocks_or_unhealthy_body(self):
+    def test_saved_task_block_clears_from_verified_live_body_without_dispatch(self):
         self.rcon.roster = ONLINE
-        for reason in ('registry_identity_mismatch', 'saved_task_requires_review', 'playerdata_missing'):
+        self.gateway.body.update(gameMode='survival', hp=14)
+        record = {'schema': 1, **BINDING, 'status': 'blocked',
+                  'reason': 'saved_task_requires_review', 'attempts': [],
+                  'autoSummonPendingAt': self.clock() - 30, 'absentStreak': 3}
+        write_json(self.restore.path, record)
+        result = self.restore.confirm_online(BINDING, self.gateway.body)
+        self.assertEqual(result['status'], 'online')
+        self.assertEqual(result['reason'], 'identity_verified')
+        self.assertNotIn('autoSummonPendingAt', result)
+        self.assertEqual(result['absentStreak'], 0)
+        self.assertFalse(self.commands())
+
+    def test_death_recovery_does_not_clear_hard_blocks_or_unhealthy_body(self):
+        self.rcon.roster = ONLINE
+        for reason in ('registry_identity_mismatch', 'playerdata_missing'):
             record = {'schema':1, **BINDING, 'status':'blocked', 'reason':reason, 'attempts':[]}
             write_json(self.restore.path, record)
             self.assertEqual(self.restore.confirm_online(BINDING, self.gateway.body), record)

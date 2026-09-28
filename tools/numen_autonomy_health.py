@@ -18,6 +18,7 @@ NEIGHBOR_BUILD_RECORD = 'runtime/numen-world-tick-v3-build/latest.json'
 NEIGHBOR_CAPABILITY = 'autonomous_world_tick_v3'
 CONFIG = 'server/mc/config/numen-autonomous-bodies.json'
 JAR = 'server/mc/mods/numen-neoforge-1.21.1-0.1.1.jar'
+CURRENT_JAR = 'server/mc/mods/numen-neoforge-1.21.1-0.1.3.jar'
 CHECKS = ('artifact_matches_build', 'source_current', 'exact_body_binding',
           'native_policy_loaded', 'bounded_native_ticket', 'entity_ticking', 'body_tick_progress')
 
@@ -85,8 +86,54 @@ def fresh(sample, now):
     return type(at) in (int, float) and math.isfinite(at) and -5 <= now - at / 1000 <= 15
 
 
+def check_current(root=ROOT, read=None, pause=time.sleep):
+    """Two current native scheduler samples, bound to the installed 0.1.3 jar.
+
+    navigation_sense_health verifies the current bridge/Numen artifact, source,
+    exact body binding and a fresh native sample on each read. This adds the
+    missing progress proof without claiming that the retired 0.1.1 ticket
+    command or its old policy still exists.
+    """
+    if read is None:
+        from navigation_sense_health import probe as read
+    checks = dict.fromkeys(('current_native_source', 'exact_body_binding',
+                            'native_scheduler_samples', 'body_tick_progress'), False)
+    evidence = {'samples': 0, 'bodyTicksAdvanced': None, 'gameTicksAdvanced': None}
+    try:
+        first = read(root=root)
+        evidence['samples'] += 1
+        pause(0.75)
+        second = read(root=root)
+        evidence['samples'] += 1
+        fs, ss = first['checks'], second['checks']
+        checks['current_native_source'] = all(
+            row.get(key) is True for row in (fs, ss)
+            for key in ('artifact_matches_build_and_manifest', 'source_current',
+                        'pinned_numen_dependency'))
+        checks['exact_body_binding'] = all(
+            row.get('exact_body_binding') is True for row in (fs, ss))
+        a, b = first['evidence'], second['evidence']
+        checks['native_scheduler_samples'] = (first['ok'] is True and second['ok'] is True
+            and a.get('bodyUuid') == b.get('bodyUuid')
+            and a.get('dimension') == b.get('dimension')
+            and type(a.get('observedAt')) is int and type(b.get('observedAt')) is int)
+        if checks['native_scheduler_samples']:
+            body_delta = b['bodyTickCount'] - a['bodyTickCount']
+            game_delta = b['gameTime'] - a['gameTime']
+            evidence.update(bodyTicksAdvanced=body_delta, gameTicksAdvanced=game_delta)
+            checks['body_tick_progress'] = (0 < body_delta <= game_delta <= 400
+                and a['observedAt'] < b['observedAt'])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return {'ok': all(checks.values()), 'checks': checks, 'evidence': evidence,
+            'modelRequests': 0, 'worldActions': 0,
+            'scope': 'Current installed native scheduler and two body tick samples; not navigation success'}
+
+
 def check(root=ROOT, sample=read_status, pause=time.sleep, clock=time.time):
     root = Path(root)
+    if not (root / JAR).exists() and (root / CURRENT_JAR).is_file():
+        return check_current(root, pause=pause)
     checks = dict.fromkeys(CHECKS, False)
     evidence = {'samples': 0, 'entityTicking': False, 'bodyTicksAdvanced': None,
                 'serverTicksAdvanced': None, 'loadedChunkAloneIsEvidence': False}
