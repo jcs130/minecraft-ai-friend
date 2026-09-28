@@ -1,0 +1,20 @@
+{
+  "source": "SkinsRestorer bundled recommendations.json, signed skin properties",
+  "skins": [
+    {"name": "afu_gnome", "sourceId": "gnome"},
+    {"name": "afu_capybara", "sourceId": "capybara"},
+    {"name": "afu_frog", "sourceId": "frog"},
+    {"name": "afu_desert_cat", "sourceId": "desert-cat"},
+    {"name": "afu_flower_girl", "sourceId": "flower-girl"},
+    {"name": "afu_wizard_boy", "sourceId": "boy-wizzard"},
+    {"name": "afu_wizard_girl", "sourceId": "girl-wizzard"},
+    {"name": "afu_turtle", "sourceId": "turtle"},
+    {"name": "afu_polar_bear", "sourceId": "polar-bear"},
+    {"name": "afu_fox", "sourceId": "fox"},
+    {"name": "afu_penguin", "sourceId": "pinguin"},
+    {"name": "afu_knight", "sourceId": "knight"},
+    {"name": "afu_pirate", "sourceId": "pirate"},
+    {"name": "afu_rainbow_slime", "sourceId": "rainbow-slime"},
+    {"name": "afu_panda", "sourceId": "panda"}
+  ]
+}

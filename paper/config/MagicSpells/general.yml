@@ -1,0 +1,153 @@
+debug: false
+debug-null: true
+debug-number-format: true
+debug-level: 3
+tab-complete-internal-names: false
+terminate-effectlib-instances: true
+enable-error-logging: true
+enable-profiling: false
+error-log-limit: -1
+text-color: 3
+broadcast-range: 20
+effectlib-instance-limit: 20000
+ops-have-all-spells: true
+default-all-perms-false: false
+ignore-grant-perms: false
+ignore-grant-perms-fake-value: true
+ignore-cast-perms: false
+enable-tempgrant-perms: true
+separate-player-spells-per-world: false
+allow-cycle-to-no-spell: false
+reverse-bow-cycle-buttons: true
+bow-cycle-spells-sneaking: true
+always-show-message-on-cycle: false
+only-cycle-to-castable-spells: true
+spell-icon-slot: -1
+allow-cast-with-fist: false
+cast-with-left-click: false
+cast-with-right-click: false
+cycle-spells-with-offhand-action: false
+cast-bound-bow-spells-from-offhand: false
+ignore-default-bindings: false
+ignore-cast-item-enchants: true
+ignore-cast-item-names: false
+ignore-cast-item-amount: true
+ignore-cast-item-name-colors: false
+ignore-cast-item-breakability: true
+ignore-cast-item-color: true
+ignore-cast-item-potion-types: true
+ignore-cast-item-title: true
+ignore-cast-item-author: true
+ignore-cast-item-lore: true
+ignore-cast-item-custom-model-data: true
+ignore-cast-item-durability:
+    - "leather_helmet"
+    - "leather_chestplate"
+    - "leather_leggings"
+    - "leather_boots"
+    - "iron_helmet"
+    - "iron_chestplate"
+    - "iron_leggings"
+    - "iron_boots"
+    - "golden_helmet"
+    - "golden_chestplate"
+    - "golden_leggings"
+    - "golden_boots"
+    - "chainmail_helmet"
+    - "chainmail_chestplate"
+    - "chainmail_leggings"
+    - "chainmail_boots"
+    - "diamond_helmet"
+    - "diamond_chestplate"
+    - "diamond_leggings"
+    - "diamond_boots"
+    - "wooden_sword"
+    - "wooden_shovel"
+    - "wooden_pickaxe"
+    - "wooden_axe"
+    - "wooden_hoe"
+    - "golden_sword"
+    - "golden_shovel"
+    - "golden_pickaxe"
+    - "golden_axe"
+    - "golden_hoe"
+    - "stone_sword"
+    - "stone_shovel"
+    - "stone_pickaxe"
+    - "stone_axe"
+    - "stone_hoe"
+    - "iron_sword"
+    - "iron_shovel"
+    - "iron_pickaxe"
+    - "iron_axe"
+    - "iron_hoe"
+    - "diamond_sword"
+    - "diamond_shovel"
+    - "diamond_pickaxe"
+    - "diamond_axe"
+    - "diamond_hoe"
+    - "shears"
+    - "fishing_rod"
+    - "carrot_on_a_stick"
+    - "flint_and_steel"
+    - "bow"
+    - "trident"
+    - "shield"
+    - "elytra"
+check-world-pvp-flag: true
+check-scoreboard-teams: false
+show-str-cost-on-missing-reagents: true
+los-transparent-blocks: []
+los-ray-size: 0.2
+los-ignore-passable-blocks: true
+los-fluid-collision-mode: always
+global-radius: 500
+global-cooldown: 500
+cast-on-animate: false
+use-exp-bar-as-cast-time-bar: true
+cooldowns-persist-through-reload: true
+sound-on-cooldown: ""
+sound-missing-reagents: ""
+str-unknown-spell: You do not know a spell with that name.
+str-spell-change: You are now using the %s spell.
+str-spell-change-empty: You are no longer using a spell.
+str-on-cooldown: That spell is on cooldown (%c seconds remaining).
+str-missing-reagents: You do not have the required reagents for that spell.
+str-cant-cast: You can't cast that spell right now.
+str-cant-bind: You cannot bind that spell to that item.
+str-wrong-world: You cannot cast that spell here.
+str-console-name: Admin
+str-xp-auto-learned: You have learned the %s spell!
+allow-anticheat-integrations: false
+buff-check-interval: 100
+ops-ignore-reagents: true
+ops-ignore-cooldowns: true
+ops-ignore-cast-times: true
+hide-magic-items-tooltips: false
+enable-magic-xp: false
+enable-dance-casting: true
+enable-logging: false
+entity-names:
+    zombie: an ugly zombie
+    skeleton: a scary skeleton
+    spider: a spider
+    cave_spider: a nasty little spider
+    creeper: a creepy creeper
+    slime: a slimy blob
+    wolf: a wolf
+    snowman: a snow golem
+    villager: an innocent villager
+    enderman: Mr. Enderman
+    silverfish: a slimy silverfish
+    ghast: a ghast
+    blaze: a blaze
+    magma_cube: a magma cube
+    giant: the giant
+    ender_dragon: the ender dragon
+    cow: a cow
+    sheep: a sheep
+    pig: a smelly pig
+    chicken: a duck
+    mooshroom: a deformed cow
+    squid: a slimy squid
+    iron_golem: a friendly iron golem

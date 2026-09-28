@@ -1,0 +1,8 @@
+".instant.LeapSpell":
+    rotation: 0
+    upward-velocity: 15
+    forward-velocity: 40
+    client-only: false
+    cancel-damage: true
+    add-velocity-instead: false
+    power-affects-velocity: true

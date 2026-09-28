@@ -1,0 +1,278 @@
+[
+  {
+    "id": "afu_house_01",
+    "template": "minecraft:village/taiga/houses/taiga_weaponsmith_2",
+    "bb": [
+      -532,
+      67,
+      -471,
+      -520,
+      114,
+      -455
+    ]
+  },
+  {
+    "id": "afu_house_02",
+    "template": "minecraft:village/taiga/houses/taiga_cartographer_house_1",
+    "bb": [
+      -560,
+      66,
+      -437,
+      -547,
+      113,
+      -420
+    ]
+  },
+  {
+    "id": "afu_house_03",
+    "template": "minecraft:village/taiga/houses/taiga_cartographer_house_1",
+    "bb": [
+      -533,
+      64,
+      -425,
+      -516,
+      111,
+      -412
+    ]
+  },
+  {
+    "id": "afu_house_04",
+    "template": "minecraft:village/taiga/houses/taiga_butcher_shop_1",
+    "bb": [
+      -552,
+      63,
+      -418,
+      -537,
+      110,
+      -404
+    ]
+  },
+  {
+    "id": "afu_house_05",
+    "template": "minecraft:village/taiga/houses/taiga_shepherds_house_1",
+    "bb": [
+      -533,
+      62,
+      -408,
+      -518,
+      109,
+      -394
+    ]
+  },
+  {
+    "id": "afu_house_06",
+    "template": "minecraft:village/taiga/houses/taiga_fisher_cottage_1",
+    "bb": [
+      -552,
+      62,
+      -403,
+      -537,
+      109,
+      -387
+    ]
+  },
+  {
+    "id": "afu_house_07",
+    "template": "minecraft:village/taiga/houses/taiga_medium_house_4",
+    "bb": [
+      -513,
+      66,
+      -437,
+      -500,
+      113,
+      -423
+    ]
+  },
+  {
+    "id": "afu_house_08",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_3",
+    "bb": [
+      -582,
+      64,
+      -437,
+      -571,
+      111,
+      -422
+    ]
+  },
+  {
+    "id": "afu_house_09",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_5",
+    "bb": [
+      -595,
+      63,
+      -437,
+      -583,
+      110,
+      -427
+    ]
+  },
+  {
+    "id": "afu_house_10",
+    "template": "minecraft:village/taiga/houses/taiga_fletcher_house_1",
+    "bb": [
+      -553,
+      62,
+      -382,
+      -537,
+      109,
+      -368
+    ]
+  },
+  {
+    "id": "afu_house_11",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_3",
+    "bb": [
+      -469,
+      95,
+      -437,
+      -458,
+      142,
+      -422
+    ]
+  },
+  {
+    "id": "afu_house_12",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_1",
+    "bb": [
+      -497,
+      68,
+      -437,
+      -483,
+      115,
+      -423
+    ]
+  },
+  {
+    "id": "afu_house_13",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_3",
+    "bb": [
+      -481,
+      81,
+      -437,
+      -470,
+      128,
+      -422
+    ]
+  },
+  {
+    "id": "afu_house_14",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_3",
+    "bb": [
+      -533,
+      45,
+      -499,
+      -518,
+      92,
+      -488
+    ]
+  },
+  {
+    "id": "afu_house_15",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_1",
+    "bb": [
+      -551,
+      41,
+      -501,
+      -537,
+      88,
+      -487
+    ]
+  },
+  {
+    "id": "afu_house_16",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_3",
+    "bb": [
+      -533,
+      67,
+      -514,
+      -518,
+      114,
+      -503
+    ]
+  },
+  {
+    "id": "afu_house_17",
+    "template": "minecraft:village/taiga/houses/taiga_medium_house_4",
+    "bb": [
+      -578,
+      67,
+      -491,
+      -565,
+      114,
+      -477
+    ]
+  },
+  {
+    "id": "afu_house_18",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_5",
+    "bb": [
+      -615,
+      63,
+      -451,
+      -603,
+      110,
+      -441
+    ]
+  },
+  {
+    "id": "afu_house_19",
+    "template": "minecraft:village/taiga/houses/taiga_medium_house_2",
+    "bb": [
+      -511,
+      67,
+      -478,
+      -495,
+      114,
+      -462
+    ]
+  },
+  {
+    "id": "afu_house_20",
+    "template": "minecraft:village/taiga/houses/taiga_tool_smith_1",
+    "bb": [
+      -516,
+      64,
+      -515,
+      -503,
+      103,
+      -501
+    ]
+  },
+  {
+    "id": "afu_house_21",
+    "template": "minecraft:village/taiga/houses/taiga_small_house_5",
+    "bb": [
+      -596,
+      70,
+      -505,
+      -586,
+      117,
+      -493
+    ]
+  },
+  {
+    "id": "afu_house_22",
+    "template": "minecraft:village/taiga/houses/taiga_medium_house_3",
+    "bb": [
+      -595,
+      65,
+      -382,
+      -581,
+      112,
+      -365
+    ]
+  },
+  {
+    "id": "afu_house_23",
+    "template": "minecraft:village/taiga/houses/taiga_weaponsmith_2",
+    "bb": [
+      -507,
+      62,
+      -377,
+      -491,
+      109,
+      -365
+    ]
+  }
+]

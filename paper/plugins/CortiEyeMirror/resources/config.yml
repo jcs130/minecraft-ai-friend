@@ -1,0 +1,8 @@
+# Only a dedicated spectator camera should receive a player's private UI.
+target: CortiLan
+camera: CortiEye
+auto-attach: true
+camera-night-vision: true
+show-vitals-bossbar: false
+mirror-chat: true
+mirror-advancements: true

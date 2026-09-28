@@ -1,0 +1,22 @@
+# Paper 1.20.6 baseline. Set a fresh rcon.password locally; never commit it.
+server-ip=127.0.0.1
+server-port=25565
+online-mode=false
+white-list=true
+enforce-secure-profile=false
+enable-rcon=true
+rcon.port=25575
+rcon.password=REPLACE_WITH_RANDOM_LOCAL_SECRET
+max-players=8
+gamemode=survival
+difficulty=easy
+pvp=false
+allow-flight=true
+spawn-protection=0
+view-distance=8
+simulation-distance=8
+network-compression-threshold=256
+sync-chunk-writes=true
+level-name=world
+level-seed=6543148108166243241
+motd=千灯纪 · 人与 Agent 一起冒险

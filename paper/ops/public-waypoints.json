@@ -1,0 +1,16 @@
+{
+  "world": "world",
+  "productionWorldUuid": "64726c6d-6e51-4bed-b11c-ec6210292081",
+  "created": "2026-09-28",
+  "places": [
+    {"id":"yellowstone","label":"黄石奇境","x":97.5,"y":71.0,"z":201.5,"biome":"terralith:yellowstone","ground":"calcite"},
+    {"id":"snow","label":"雪原","x":577.5,"y":74.5,"z":-959.5,"biome":"minecraft:snowy_plains","ground":"snow layer over grass"},
+    {"id":"bamboo","label":"竹林","x":-1663.5,"y":114.0,"z":-1527.5,"biome":"minecraft:bamboo_jungle","ground":"grass_block"},
+    {"id":"oasis","label":"沙漠绿洲","x":-1887.5,"y":68.0,"z":-1623.5,"biome":"terralith:desert_oasis","ground":"sand"},
+    {"id":"lavender","label":"薰衣草谷","x":1057.5,"y":95.0,"z":-2263.5,"biome":"terralith:lavender_valley","ground":"grass_block"},
+    {"id":"mushroom","label":"蘑菇岛","x":2285.5,"y":126.0,"z":-3339.5,"biome":"minecraft:mushroom_fields","ground":"mycelium"},
+    {"id":"white_cliffs","label":"白色峭壁","x":-863.5,"y":80.0,"z":2473.5,"biome":"terralith:white_cliffs","ground":"moss_block"},
+    {"id":"moonlight","label":"月光林","x":-2175.5,"y":117.0,"z":4073.5,"biome":"terralith:moonlight_grove","ground":"grass_block"},
+    {"id":"ship","label":"海上大船","x":-1564.5,"y":67.0,"z":-2450.5,"structure":"ships:ship","ground":"jungle_planks"}
+  ]
+}

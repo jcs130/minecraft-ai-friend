@@ -1,0 +1,156 @@
+{
+  "capturedAt": "2026-09-29",
+  "minecraft": "1.20.6",
+  "paperBuild": 151,
+  "java": "Temurin 21.0.12.1+1",
+  "paperJarSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
+  "plugins": [
+    {
+      "file": "AgentFriend-0.3.2.jar",
+      "bytes": 59191,
+      "sha256": "aa6d2bd1cae6ccd353658438f1ce5fe5c691e82aac7631c9447fc9705a7ebeca"
+    },
+    {
+      "file": "AuraSkills-2.4.0.jar",
+      "bytes": 3862638,
+      "sha256": "de54cbd2e33d65e8b1704751ae4121ed2f5b466ba89c63a1aadf3a3e629d6a40"
+    },
+    {
+      "file": "Chunky-Bukkit-1.4.40.jar",
+      "bytes": 296244,
+      "sha256": "2a5477fc80f71012e15ade1ce34dbeb836e17623b28db112492c0f1443c09721"
+    },
+    {
+      "file": "CoreProtect-CE-24.1.jar",
+      "bytes": 1113283,
+      "sha256": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97"
+    },
+    {
+      "file": "CortiEyeMirror-0.1.4.jar",
+      "bytes": 11131,
+      "sha256": "a76fd88da6ff491e9c05f15857ac9cc8d4b87dc43a070b0b936e7d4868d3724f"
+    },
+    {
+      "file": "EssentialsX-2.22.0.jar",
+      "bytes": 4861125,
+      "sha256": "bda4685105977fca2e209820a9f0ad24275bd103390a03236f38e59bfdac58e6"
+    },
+    {
+      "file": "floodgate-spigot.jar",
+      "bytes": 11561096,
+      "sha256": "21570aff9ce17d6983928e8552777760e1ede5050026b04c686b0ae112e6fd7e"
+    },
+    {
+      "file": "Geyser-Spigot.jar",
+      "bytes": 47170026,
+      "sha256": "6fed2d9711e2db3c365508ec10db36d06a0199abd226159d23d57f82662fd7a6"
+    },
+    {
+      "file": "LuckPerms-Bukkit-5.5.71.jar",
+      "bytes": 1501521,
+      "sha256": "49cecb66fa1fd22a133039a490e9c1e5095a238e7cd66eb9d2a16fe6c897550d"
+    },
+    {
+      "file": "MagicSpells-4.0-Beta-15.jar",
+      "bytes": 5348040,
+      "sha256": "4da599c6998f965707a5f0fbfc14f0a9a185bb09015b0dd940a030e3c8bad1a6"
+    },
+    {
+      "file": "Minepacks-2.5.9-Release.jar",
+      "bytes": 2099364,
+      "sha256": "185dd911d7dd6e0f93b56d35924e8b61c6452e29b79c2a73c31e48f83c777a04"
+    },
+    {
+      "file": "NamedVillagers-1.2.1.jar",
+      "bytes": 387682,
+      "sha256": "83ec1b56d4048b42644dca11ebe08bd3b07d33b07f17fd3c3453a726d75fb574"
+    },
+    {
+      "file": "ProtocolLib-5.3.0.jar",
+      "bytes": 5318517,
+      "sha256": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d"
+    },
+    {
+      "file": "SkinsRestorer.jar",
+      "bytes": 8016648,
+      "sha256": "a85b4a370f988741c9a38f4d0498262edacbf3220314790ac1c127461996359c"
+    },
+    {
+      "file": "spark-1.10.187-bukkit.jar",
+      "bytes": 4352165,
+      "sha256": "7e1b1c38f131f04da32c86cee6af519fd8ec40c5af54dcbab77921e82bded852"
+    },
+    {
+      "file": "spectatorplus-paper-1.2.0.jar",
+      "bytes": 258240,
+      "sha256": "015d895c0053d3c4833ac86f44b09a4ec94022f331998ac2f450cdd59d0e6fc0"
+    },
+    {
+      "file": "ViaBackwards.jar",
+      "bytes": 1433040,
+      "sha256": "4316593b4e50bac259ed00c6cacf61dccc1fbfcb08832c77ae5ac7ea8e0b0185"
+    },
+    {
+      "file": "ViaVersion.jar",
+      "bytes": 6504305,
+      "sha256": "08caeeaba6674643b427ca901a47e53e291d1b3b20d06c5a0ed3b895d5d7fa00"
+    },
+    {
+      "file": "worldedit-bukkit-7.3.9.jar",
+      "bytes": 6108176,
+      "sha256": "75df26f120ff424e62cba3a6e41b3b4e496251d5613b3c55c5f35b96bd8fd57c"
+    },
+    {
+      "file": "worldguard-bukkit-7.0.10-dist.jar",
+      "bytes": 1167650,
+      "sha256": "050b440bfd9c3b259b54e01f01a0014bab4f2ea93d658e82f6149ee9b1376942"
+    }
+  ],
+  "datapacks": [
+    {
+      "file": "Attract-Villagers-3.0.0.zip",
+      "bytes": 40513,
+      "sha256": "1916c9cfd7e2e4c23e4ed16943fff225f889ca3af46a2cea9ca379af75d9d1ab"
+    },
+    {
+      "file": "Better Villages 3.3.1.zip",
+      "bytes": 2343729,
+      "sha256": "2b42fd0045d030ace9061cbbccfaf4d4d97657808ff66aac2e8284c51d70fc5a"
+    },
+    {
+      "file": "Dungeons and Taverns v3.2.zip",
+      "bytes": 6696691,
+      "sha256": "84bab5f46680693d576b9f8c9ad1aa20dd1c32920bbe3fc9cb64095a7615a286"
+    },
+    {
+      "file": "Explorify v1.6.5.zip",
+      "bytes": 766527,
+      "sha256": "09dea87923b8dc021a6694f7c6487725b1a666e255e122bce55fdd2dc3377d4f"
+    },
+    {
+      "file": "Ships-3.0.3.zip",
+      "bytes": 308145,
+      "sha256": "6de32d59f50f32f548a463e416e93500322f28d63a9c24e06510fcd0bc06e9f7"
+    },
+    {
+      "file": "Structory_1.20_v1.3.5.zip",
+      "bytes": 1271723,
+      "sha256": "f84a6cece9c2f63ba343cdf1dce8f7d29dc02b9c850111ea42a7de8a29b4046d"
+    },
+    {
+      "file": "Structory_Towers_1.20_v1.0.7.zip",
+      "bytes": 509230,
+      "sha256": "55d41299fe7e7f72750668922a0eae5c97fcaaf2c355af0d5b5fac580ff9c76c"
+    },
+    {
+      "file": "StructurePack v1.0.0.zip",
+      "bytes": 196299,
+      "sha256": "d314c240e37a19dcbb850a945f5d398a9a078ca03f880712d3fd1ad2096a1dd3"
+    },
+    {
+      "file": "Terralith_1.20_v2.5.4.zip",
+      "bytes": 3153604,
+      "sha256": "f6822d4dc50c7e8e4d3dc0a7700c623a6de9a9df723a1b6c23075a5b2df860cc"
+    }
+  ]
+}

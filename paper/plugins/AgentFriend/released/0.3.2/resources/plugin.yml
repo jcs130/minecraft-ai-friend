@@ -1,0 +1,12 @@
+name: AgentFriend
+version: '0.3.2'
+main: org.afuhome.agentfriend.AgentFriendPlugin
+api-version: '1.20.6'
+description: Agent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.
+author: AfuHome
+depend: [MagicSpells, AuraSkills]
+softdepend: [Essentials]
+commands:
+  mycli:
+    description: Cross-platform skills, waypoints, and trial arena.
+    usage: /mycli help

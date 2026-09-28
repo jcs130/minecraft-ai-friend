@@ -1,0 +1,131 @@
+# Vanilla-protocol family spells. Copy to plugins/MagicSpells/spells-agentfriend.yml.
+# Distinct, fixed conjure recipes prevent arbitrary item IDs or quantities from chat input.
+selfheal:
+    spell-class: ".targeted.HealSpell"
+    always-granted: true
+    name: Sacred Heal
+    description: Heal yourself for four hearts.
+    spell-icon: golden_apple
+    cast-item: stick
+    target-self: true
+    can-target: players
+    heal-amount: 8
+    cancel-if-full: true
+    cooldown: 15
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 6 shared mana
+    str-cast-self: Sacred healing restores your health.
+    str-max-health: You are already at full health.
+    effects:
+        hearts:
+            position: target
+            effect: particles
+            particle-name: heart
+            height-offset: 1
+            horiz-spread: 0.5
+            vert-spread: 0.5
+            count: 20
+
+conjure_bread:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Bread
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["bread 4"]
+    str-cast-self: You conjured four loaves of bread.
+
+conjure_torch:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Torches
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["torch 4"]
+    str-cast-self: You conjured four torches.
+
+conjure_oak_log:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Oak Logs
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["oak_log 8"]
+    str-cast-self: You conjured eight oak logs.
+
+conjure_cobblestone:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Cobblestone
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["cobblestone 16"]
+    str-cast-self: You conjured sixteen cobblestone.
+
+conjure_crafting_table:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Crafting Table
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["crafting_table 1"]
+    str-cast-self: You conjured a crafting table.
+
+conjure_chest:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Chest
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["chest 1"]
+    str-cast-self: You conjured a chest.
+
+conjure_cake:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Cake
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["cake 1"]
+    str-cast-self: You conjured a cake.
+
+conjure_glass:
+    spell-class: ".instant.ConjureSpell"
+    always-granted: true
+    name: Conjure Glass
+    cast-item: book
+    cooldown: 20
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    add-to-inventory: true
+    drop-if-inventory-full: false
+    items: ["glass 8"]
+    str-cast-self: You conjured eight glass blocks.

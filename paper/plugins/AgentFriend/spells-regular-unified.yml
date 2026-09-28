@@ -1,0 +1,64 @@
+# Command-cast-only, vanilla-protocol spell set for Java, Bedrock, and Cortico.
+# Keep this file small: no terrain edits, custom items, or client resource packs.
+
+blink:
+    spell-class: ".targeted.BlinkSpell"
+    always-granted: true
+    cooldown: 8
+    cast-item: stick
+    description: Teleport a short distance.
+    range: 25
+    pass-through-ceiling: false
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    str-cast-self: You blink away!
+    str-cast-others: "%a blinks away!"
+    str-cant-blink: You cannot blink there.
+    effects:
+        pos1:
+            position: pos1
+            effect: ender
+        pos2:
+            position: pos2
+            effect: ender
+
+heal:
+    spell-class: ".targeted.HealSpell"
+    always-granted: true
+    spell-icon: poppy
+    description: Heal a nearby player.
+    cast-item: stick
+    heal-amount: 6
+    cancel-if-full: true
+    can-target: players,wolf,cat
+    obey-los: true
+    cooldown: 10
+    range: 12
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 4 shared mana
+    str-cast-self: You have healed %t.
+    str-cast-target: "%a has healed you."
+    str-no-target: No target to heal.
+    str-max-health: "%t is already at max health."
+    effects:
+        eff1:
+            position: target
+            effect: particles
+            height-offset: 1
+            particle-name: villager_happy
+            horiz-spread: 0.5
+            vert-spread: 0.5
+            count: 20
+
+food:
+    spell-class: ".instant.FoodSpell"
+    always-granted: true
+    spell-icon: cooked_beef
+    description: Restore hunger.
+    cast-item: book
+    cooldown: 30
+    food: 4
+    saturation: 2.5
+    cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
+    str-cost: 3 shared mana
+    str-cast-self: You feel less hungry.

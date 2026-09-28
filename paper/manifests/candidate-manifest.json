@@ -1,0 +1,34 @@
+[
+  {
+    "file": "GSit-3.7.0.jar",
+    "version": "3.7.0",
+    "versionId": "gnY5Flgo",
+    "sha512": "7813fe99d2fde47e3a40538c09b87b88b6101c27fb4f3305e0fd9bf806809c37e4e67c726f96596caca79785cdd7aa8d8ae724b211535775db21e602f57993d5",
+    "source": "https://cdn.modrinth.com/data/GOHbQGyX/versions/gnY5Flgo/GSit-3.7.0.jar",
+    "installed": false
+  },
+  {
+    "file": "AuraSkills-2.4.0.jar",
+    "version": "2.4.0",
+    "versionId": "9rSJ3THD",
+    "sha512": "47b9cd79efcb244f93e839abd8f5f27dce6945ca8ee23590d3fca194326defada28fe3b95d210b1f7ae5923d6c9dee53db3f62236a6a463c0d9c5f270bd18e77",
+    "source": "https://cdn.modrinth.com/data/uDdZAVls/versions/9rSJ3THD/AuraSkills-2.4.0.jar",
+    "installed": true
+  },
+  {
+    "file": "MagicSpells-4.0-Beta-15.jar",
+    "version": "4.0-Beta-15",
+    "versionId": "tRBVdfAI",
+    "sha512": "f60b9e7217ef8ae21753001f0ebf324e478e59ea0a1bf84b8e53e4685c296dcdab19444eb159a95b75ef974aaac09613a1bc2f65891823d15bf515be03a7416f",
+    "source": "https://cdn.modrinth.com/data/PhyGVafK/versions/tRBVdfAI/MagicSpells-4.0-Beta-15.jar",
+    "installed": true
+  },
+  {
+    "file": "Chunky-Bukkit-1.4.40.jar",
+    "version": "1.4.40",
+    "versionId": "P3y2MXnd",
+    "sha512": "b017fd180141b5c14c38dfb10128d5f5a1072a68ff93ee486d4465953331f5851f09a09b4a159364837a95d192198d8e9885ce39c46eed32dacbf1fd65c6f30f",
+    "source": "https://cdn.modrinth.com/data/fALzjamp/versions/P3y2MXnd/Chunky-Bukkit-1.4.40.jar",
+    "installed": true
+  }
+]

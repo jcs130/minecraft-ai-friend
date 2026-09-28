@@ -1,0 +1,88 @@
+[
+  {
+    "loaders": [
+      "bukkit",
+      "paper",
+      "spigot"
+    ],
+    "gameVersions": [
+      "1.20.2",
+      "1.20.3",
+      "1.20.4",
+      "1.20.5",
+      "1.20.6",
+      "1.21",
+      "1.21.1",
+      "1.21.2",
+      "1.21.3"
+    ],
+    "version": "7.3.9",
+    "versionId": "Bu1zaaoc",
+    "project": "worldedit",
+    "source": "https://cdn.modrinth.com/data/1u6JkXh5/versions/Bu1zaaoc/worldedit-bukkit-7.3.9.jar",
+    "file": "worldedit-bukkit-7.3.9.jar",
+    "sha512": "ce19097ab93a3ff75a929a1efec58138adc5b700f876ec8ac7a96c97d98d77a06f22661f0418c3407d644ca2d9713fde417d5789c79864d9c2094f203f372c76",
+    "installed": true
+  },
+  {
+    "loaders": [
+      "bukkit",
+      "folia",
+      "paper",
+      "purpur",
+      "spigot"
+    ],
+    "gameVersions": [
+      "1.16.5",
+      "1.17",
+      "1.17.1",
+      "1.18",
+      "1.18.1",
+      "1.18.2",
+      "1.19",
+      "1.19.1",
+      "1.19.2",
+      "1.19.3",
+      "1.19.4",
+      "1.20",
+      "1.20.1",
+      "1.20.2",
+      "1.20.3",
+      "1.20.4",
+      "1.20.5",
+      "1.20.6",
+      "1.21",
+      "1.21.1",
+      "1.21.2",
+      "1.21.3",
+      "1.21.4",
+      "1.21.5",
+      "1.21.6",
+      "1.21.7",
+      "1.21.8",
+      "1.21.9",
+      "1.21.10",
+      "1.21.11",
+      "26.1",
+      "26.1.1",
+      "26.1.2",
+      "26.2"
+    ],
+    "version": "24.1",
+    "versionId": "3sehX6Sg",
+    "project": "coreprotect",
+    "source": "https://cdn.modrinth.com/data/Lu3KuzdV/versions/3sehX6Sg/CoreProtect-CE-24.1.jar",
+    "file": "CoreProtect-CE-24.1.jar",
+    "sha512": "76aad727528ddb990bbee5069f8ef3fcd018ae0bcdea89b965be2485e828633eb068672e841be64e550c8474f901a24d8c15c7bd44c2bd6c96244e1e58de0c95",
+    "installed": true
+  },
+  {
+    "source": "https://ci.lucko.me/job/spark/539/artifact/spark-bukkit/build/libs/spark-1.10.187-bukkit.jar",
+    "project": "spark",
+    "sha1": "9286ba60117a30f645e67f30998775af2e124df8",
+    "version": "1.10.187",
+    "platform": "bukkit",
+    "file": "spark-1.10.187-bukkit.jar",
+    "installed": true
+  }
+]

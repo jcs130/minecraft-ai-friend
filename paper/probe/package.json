@@ -1,0 +1,13 @@
+{
+  "name": "mcprobe",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mineflayer": "4.37.1"
+  },
+  "overrides": {
+    "minecraft-data": "3.112.0",
+    "minecraft-protocol": "1.66.2",
+    "protodef": "1.19.0"
+  }
+}
