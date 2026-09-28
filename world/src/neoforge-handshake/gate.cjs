@@ -207,7 +207,7 @@ const sessions = new Set()
 const sessionCount = () => sessions.size
 
 function startSession (front, username) {
-  const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [], trace: [] }
+  const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
   sessions.add(sess)
 
   // client 级 'packet' 事件：(params, metadata, buffer, fullBuffer)，不随换态被清
@@ -223,18 +223,6 @@ function startSession (front, username) {
   connectBackend(sess)
 }
 
-// 【事件轨迹环】踢线/错位这类问题只有"死前最后几十步"能说明问题，
-// 所以每个会话留最近 60 条关键事件，会话关闭时整条打出来。
-function trace (sess, msg) {
-  if (!sess.trace) sess.trace = []
-  const t = new Date()
-  const hh = String(t.getHours()).padStart(2, '0')
-  const mm = String(t.getMinutes()).padStart(2, '0')
-  const ss = String(t.getSeconds()).padStart(2, '0')
-  sess.trace.push(`${hh}:${mm}:${ss} ${msg}`)
-  if (sess.trace.length > 60) sess.trace.shift()
-}
-
 function closeSession (sess, reason) {
   if (sess.closed) return
   sess.closed = true
@@ -247,16 +235,6 @@ function closeSession (sess, reason) {
     log(`census[${sess.username}] back_total=${b.reduce((s, [, v]) => s + v, 0)} time(${pick(b)}) | front_total=${f.reduce((s, [, v]) => s + v, 0)} time(${pick(f)}) | err=${e.length ? e.map(([k, v]) => k + '=' + v).join(',') : 'none'}`)
     const top = b.slice(0, 8).map(([k, v]) => k + '=' + v).join(' ')
     if (top) log(`census[${sess.username}] back top: ${top}`)
-    // 【2026-09-27】前端来包名单 + 状态闸丢弃清单——诊断 Geyser 收尾 ack 与畸形包错位用
-    const fi = fmt(sess.frontInCensus).slice(0, 10).map(([k, v]) => k + '=' + v).join(' ')
-    if (fi) log(`census[${sess.username}] front-in top: ${fi}`)
-    const dr = fmt(sess.droppedCensus).map(([k, v]) => k + '=' + v).join(',')
-    if (dr) log(`census[${sess.username}] 状态闸丢弃: ${dr}`)
-    // 死前轨迹：只在异常关闭（后端断/错误）时打，正常离开不打扰
-    if (sess.trace && sess.trace.length && !/前端离开/.test(reason)) {
-      log(`trace[${sess.username}] 关闭原因=${reason.slice(0, 60)} 最近 ${sess.trace.length} 步：`)
-      for (const step of sess.trace.slice(-30)) log('   ' + step)
-    }
     // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
   } catch (err) {}
@@ -301,7 +279,6 @@ function connectBackend (sess) {
   // 后端进入 CONFIG（握手+login_ack 已发出）后才可接收前端转来的配置包
   back.on('state', (n) => {
     log(`DEBUG：[${sess.username}] 后端 state -> ${n}`)
-    trace(sess, `后端 state -> ${n}`)
     if (n === states.CONFIGURATION && !sess.backReady) {
       // vanilla 姿姿：立刻自报 brand,NeoForge 判 vanilla 走兼容路径(update_time 才会发)
       if (VANILLA_BACKEND) {
@@ -315,12 +292,7 @@ function connectBackend (sess) {
       sess.backReady = true
       const q = sess.frontQueue.splice(0)
       log(`DEBUG：[${sess.username}] 后端就绪，放出排队包 ${q.length} 个`)
-      // 【2026-09-27 修】补发必须走相位分发器，不能再裸 relayTo：
-      // 排队包里若混着前端的 finish_configuration，裸补发会让后端**提前**结束 CONFIG 切进 PLAY，
-      // 于是紧随其后的 CONFIG 包名在 PLAY 表里查无此项 → protodef 落进 default 兜底分支 →
-      // 按 PLAY id 0 写出（Mojang 名 serverbound/minecraft:accept_teleportation）+ 正文对不上 →
-      // 服务端 DecoderException 当场踢线（14:26:13 MicroKQ 首登即被踢，实测复现）。
-      for (const pkt of q) onFrontPacket(sess, pkt.name, pkt.params)
+      for (const pkt of q) relayTo(sess, back, pkt.name, pkt.params, '前端->后端（补发）')
     }
   })
   // NeoForge 的模组命令会让 mcp 解析 declare_commands 抛 PartialReadError——
@@ -411,14 +383,8 @@ function onBackPacket (sess, name, params) {
       // 后端 play.js 已自动回 ack；收尾令透传给真客户端，等它的 ack 再开闸
       sess.phase = 'play_pending'
       relayTo(sess, sess.front, name, params, '后端->前端')
-      // 保险：ack 久候不至则强行开闸（真客户端异常时宁可错位也别卡死）。
-      // 【2026-09-27】基岩访客（Geyser/ViaProxy）**从不发这个 ack**，所以每次进门都要白等满
-      // 这个超时，期间后端把整批初始区块全堆在队列里（实测一次堆到 3202 个包），
-      // 开闸瞬间的洪峰正是她「Timed out」反复掉线的推手之一。
-      // 原版客户端在收到我们透传的 finish_configuration 时就已经切到 PLAY 了，
-      // 所以这个等待可以大幅缩短；保留环境变量以便回退。
-      const ACK_WAIT_MS = Number(process.env.GATE_ACK_TIMEOUT_MS || 400)
-      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, ACK_WAIT_MS)
+      // 保险：ack 久候不至则强行开闸（真客户端异常时宁可错位也别卡死）
+      sess.ackTimer = setTimeout(() => { if (sess.phase === 'play_pending') flushPlayQueue(sess, 'ack 超时强开') }, 3000)
       return
     default:
       // registry_data / select_known_packs 查询 / feature_flags / 其余原版任务 -> 透传
@@ -450,9 +416,6 @@ function drainPlay (sess) {
       relayTo(sess, sess.front, pkt.name, pkt.params, '后端->前端')
       // 【自 ack 传送】position 真投递给前端之后再回 ack：ack 早于投递＝服务端以为人到位了、
       // 客户端还在原地，随后前端补发的移动包就被判超速（moved too quickly 风暴）
-      // 【值自持的传送回执】记下我们刚转给客户端的 teleportId，
-      // 供前端真回执到达时由门自己重写一条必然合法的 ack（见 onFrontPacket）
-      if (pkt.params && pkt.params.teleportId != null) sess.lastTeleportId = pkt.params.teleportId
       if (SELF_TELEPORT_ACK && pkt.name === 'position' && pkt.params && pkt.params.teleportId != null && sess.back) {
         try { sess.back.write('teleport_confirm', { teleportId: pkt.params.teleportId }) }
         catch (e) { log(`（容忍）自 ack 传送失败：${(e && e.message || e).toString().slice(0, 120)}`) }
@@ -467,34 +430,10 @@ function drainPlay (sess) {
 // 前端 -> 后端（CONFIG：只透传 vanilla 配置应答；PLAY：全透传）
 function onFrontPacket (sess, name, params) {
   if (sess.closed) return
-  // 【前端来包普查 2026-09-27】先计数再分流——被吞掉的包也要看得见，
-  // 否则永远不知道 Geyser/ViaProxy 到底用什么名字发收尾 ack（27 秒 CONFIG 停顿之谜的钥匙）
-  sess.frontInCensus = sess.frontInCensus || {}
-  sess.frontInCensus[name] = (sess.frontInCensus[name] || 0) + 1
-  // 轨迹只记低频包（移动包一秒几十条会把环冲满，看不到关键事件）
-  if (!/^(position|position_look|look|flying|arm_animation|chunk_batch_received)$/.test(name)) {
-    trace(sess, `前端→ ${name} (phase=${sess.phase} back=${sess.back ? sess.back.state : '-'})`)
-  }
   const back = sess.back
   if (!back || back.ended) return
   // 【自 ack 传送】前端上行的 teleport_confirm 吞掉：改由门自己回，避免重序列化字节与 MC 期望不符
   if (SELF_TELEPORT_ACK && name === 'teleport_confirm') return
-  // 【值自持 + 时机由客户端决定】2026-09-27：服务端反复报
-  // Failed to decode packet 'serverbound/minecraft:accept_teleportation' 并在 0 秒踢线。
-  // 该包正文只有一个 varint teleportId，若直接重序列化前端解析出的 params，一旦 params 缺字段/类型不对，
-  // protodef 会写出长度不符的包 → 字节流错位 → 服务端在 id 0（就是 accept_teleportation）上报解码失败。
-  // 所以：回执**时机**仍由客户端真回执驱动（不会提前定稿、不会跨图失步），
-  // 但**内容**一律用门自己记下的 teleportId 重写，绝不信任前端 params。
-  if (name === 'teleport_confirm' && !SELF_TELEPORT_ACK) {
-    const id = sess.lastTeleportId != null ? sess.lastTeleportId
-      : (params && params.teleportId != null ? params.teleportId : null)
-    if (id == null) { trace(sess, 'teleport_confirm 无可用 teleportId，吞掉'); return }
-    try {
-      back.write('teleport_confirm', { teleportId: id })
-      trace(sess, `teleport_confirm 重写 ack id=${id}`)
-    } catch (e) { trace(sess, `teleport_confirm 重写失败 ${(e && e.message || e).toString().slice(0, 60)}`) }
-    return
-  }
   if (!sess.backReady) { // 后端未就绪：入队，待其进 CONFIG 后按序放出
     sess.frontQueue.push({ name, params })
     return
@@ -532,32 +471,8 @@ function onFrontPacket (sess, name, params) {
 // 安全重序列化转发：失败只记日志，不炸会话
 const REMAP = require('./idmap-remap.cjs')
 REMAP.load()   // 无 idmap.json = 纯透传，行为与旧版完全一致 ✓
-// 【状态闸 2026-09-27】protodef 的 switch 带 default 兜底：包名在目标**当前状态**的表里查无此项时，
-// write() 不抛错，而是落到兜底分支按 id 0 写出（PLAY 的 id 0 = Mojang 名
-// serverbound/minecraft:accept_teleportation），正文却是另一个包的内容 → 对端 DecoderException。
-// 这种「静默错位」就是首登被踢的根因，所以写之前先查表：不在表里就丢弃并计数，绝不放行成畸形包。
-// 设 GATE_STATE_GUARD=0 可关（回退用）。
-const STATE_GUARD = process.env.GATE_STATE_GUARD !== '0'
-function packetInTable (target, name, dir) {
-  try {
-    const st = target.protocol && target.state ? target.protocol[target.state] : null
-    const types = st && st[dir] ? st[dir].types : null
-    if (!types) return true // 拿不到表 → 放行：宁可错位也别把会话卡死
-    return Object.prototype.hasOwnProperty.call(types, 'packet_' + name)
-  } catch (e) { return true }
-}
-
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
-  const tableDir = target === sess.front ? 'toClient' : 'toServer'
-  if (STATE_GUARD && !packetInTable(target, name, tableDir)) {
-    const k = name + '@' + (target.state || '?')
-    sess.droppedCensus = sess.droppedCensus || {}
-    sess.droppedCensus[k] = (sess.droppedCensus[k] || 0) + 1
-    if (sess.droppedCensus[k] <= 3) log(`（状态闸）丢弃 ${dir} ${name}：不在 ${tableDir}.${target.state} 表内`)
-    trace(sess, `状态闸丢弃 ${name}@${target.state || '?'} → ${tableDir}`)
-    return
-  }
   if (target === sess.front) {
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
