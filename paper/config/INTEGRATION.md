@@ -11,7 +11,7 @@
 | ViaVersion / ViaBackwards | 当前锁定版本见清单 | Geyser 提供的 Java 协议版本与 Paper 1.20.6 之间的转换 |
 | Paper 包速率 | 全局 `DROP`、每秒上限 500 | 超限丢包，降低基岩手柄偶发操作被踢概率 |
 | Paper Timings | `enabled: false` | 保留 Spark 按需性能分析 |
-| MagicSpells | `mana.yml` 关闭独立魔力池 | AuraSkills 是唯一魔力来源；插件负责效果与冷却 |
+| 法术 | MagicSpells 的 `mana.yml` 关闭独立魔力池；AgentFriend 提供星芒箭、霜环、焰浪 | AuraSkills 是唯一魔力来源；战斗法术仅伤敌对生物，粒子用原版协议，不改地形 |
 | Minepacks | `DropOnDeath=false`、`HonorKeepInventoryOnDeath=true`、`OpenContainerOnRightClick=true`、`MaxSize=6`；快捷物品和窗口名为“大背包” | 死亡保留背包、奖励箱与背包快捷物品交互；局部覆盖见 `Minepacks/backpack-overrides.yml` |
 | Geyser 自定义头颅 | `enable-custom-content=true`、`force-resource-packs=true`，映射见 `Geyser-Spigot/custom_mappings/qiandengji-backpack.json` | 让基岩背包栏把 Minepacks 的专属头颅纹理显示成背包 |
 | EssentialsX | `disabled-commands` 含 `msg` | 原版私聊格式供 Goddess 桥接识别 |
@@ -22,3 +22,5 @@
 世界规则还包括 `keepInventory=true`、`playersSleepingPercentage=1`、`doFireTick=false`，出生点在村庄附近，难度简单。它们存于世界数据，必须用存档备份或服务端命令重建；Git 不包含实时世界。
 
 Minepacks 的快捷物品虽然使用原版 `player_head` 作为载体，但有自己的名称和贴图。不要把所有 `player_head` 翻译成“大背包”。变更 `ItemShortcut.ItemName` 后，旧物品需要在玩家下次进服时由 AgentFriend 迁移，避免产生失效快捷物品和重复头颅。Geyser 的头颅映射在启动时生成基岩资源包；改动后应在基岩客户端重新进服验收纹理与名称。
+
+战斗法术从技能罗盘的“战斗法术”页选择，Agent/Java 玩家也能输入 `/mycli cast starbolt|frostnova|flamewave`。星芒箭需瞄准 18 格内的怪物（4 魔力、3 秒冷却）；霜环打击身边最多 4 只怪物并减速（7 魔力、14 秒）；焰浪打击前方最多 4 只怪物并点燃（8 魔力、10 秒）。没找到目标不耗蓝；法术只用服务端粒子、音效、伤害与状态效果，不发送自定义物品或要求客户端装模组。Geyser 当前安装包内的 `particles.json` 为使用的 `END_ROD`、`ELECTRIC_SPARK`、`CRIT`、`SNOWFLAKE`、`CLOUD`、`FLAME` 都提供了基岩映射。
