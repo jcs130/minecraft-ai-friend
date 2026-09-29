@@ -23,4 +23,4 @@
 
 Minepacks 的快捷物品虽然使用原版 `player_head` 作为载体，但有自己的名称和贴图。不要把所有 `player_head` 翻译成“大背包”。变更 `ItemShortcut.ItemName` 后，旧物品需要在玩家下次进服时由 AgentFriend 迁移，避免产生失效快捷物品和重复头颅。Geyser 的头颅映射在启动时生成基岩资源包；改动后应在基岩客户端重新进服验收纹理与名称。
 
-战斗法术从技能罗盘的“战斗法术”页选择，Agent/Java 玩家也能输入 `/mycli cast starbolt|frostnova|flamewave`。星芒箭需瞄准 18 格内的怪物（4 魔力、3 秒冷却）；霜环打击身边最多 4 只怪物并减速（7 魔力、14 秒）；焰浪打击前方最多 4 只怪物并点燃（8 魔力、10 秒）。没找到目标不耗蓝；法术只用服务端粒子、音效、伤害与状态效果，不发送自定义物品或要求客户端装模组。Geyser 当前安装包内的 `particles.json` 为使用的 `END_ROD`、`ELECTRIC_SPARK`、`CRIT`、`SNOWFLAKE`、`CLOUD`、`FLAME` 都提供了基岩映射。
+战斗法术从技能罗盘的“战斗法术”页选择，Agent/Java 玩家也能输入 `/mycli cast starbolt|frostnova|flamewave`。星芒箭瞬发，优先命中准星 18 格内的怪物；没有瞄准时自动锁定 12 格内最近的可见怪物（4 魔力、3 秒冷却）。霜环打击身边最多 4 只怪物并减速（7 魔力、14 秒）；焰浪打击前方最多 4 只怪物并点燃（8 魔力、10 秒）。没找到目标不耗蓝；法术只用服务端粒子、音效、伤害与状态效果，不发送自定义物品或要求客户端装模组。Geyser 当前安装包内的 `particles.json` 为使用的 `END_ROD`、`ELECTRIC_SPARK`、`CRIT`、`SNOWFLAKE`、`CLOUD`、`FLAME` 都提供了基岩映射。

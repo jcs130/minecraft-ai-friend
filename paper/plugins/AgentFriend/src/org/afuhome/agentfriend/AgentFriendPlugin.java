@@ -397,7 +397,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void spells(Player p) {
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
-        p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
+        p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
         p.sendMessage(ChatColor.AQUA + "可学习：羽落(feather) " + learnedLabel(p, featherKey) + "、夜视(night) " + learnedLabel(p, nightKey));
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
         p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗法术与粒子。");
@@ -1030,7 +1030,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + "\n夜视：" + learnedLabel(p, nightKey)
                         + "\n\n未学时点击图标；原版经验 5 级或炼金等级 2 可学习，试炼通关也能解锁。",
                 "§b探索指引§r\n\n手持技能罗盘会指向最近的队友。点‘找队友’可选定追踪或安全传送到身边。\n\n传送地点有村庄、樱花林、试炼场；也能保存自己的营地。",
-                "§6咏唱指引§r\n\n罗盘中的圣愈术治疗自己；治疗队友要面向对方。战斗法术页有星芒箭、霜环和焰浪，只攻击怪物。\n\n造物术只提供少量生活物资，消耗与采集技能共用的魔力。",
+                "§6咏唱指引§r\n\n罗盘中的圣愈术治疗自己；治疗队友要面向对方。战斗法术页的星芒箭可自动锁定附近怪物，霜环和焰浪也只攻击怪物。\n\n造物术只提供少量生活物资，消耗与采集技能共用的魔力。",
                 "§6给旅人的话§r\n\n村庄里可以安心玩耍；村外有怪，结伴探索更有趣。\n\n"
                         + "需要帮助时，可以请大人告诉服主女神。");
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
@@ -1081,7 +1081,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
             inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
         } else if (page.equals("combat")) {
-            inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭", "瞄准 18 格内的怪物；伤害 5；4 魔力；3 秒冷却"));
+            inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
             inv.setItem(13, item(Material.SNOWBALL, "§b霜环", "身边最多 4 只怪物；伤害 2 并减速；7 魔力；14 秒冷却"));
             inv.setItem(15, item(Material.BLAZE_POWDER, "§6焰浪", "前方最多 4 只怪物；伤害 4 并燃烧；8 魔力；10 秒冷却"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));

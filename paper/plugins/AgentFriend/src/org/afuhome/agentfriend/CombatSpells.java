@@ -74,13 +74,16 @@ final class CombatSpells {
         double range = clearDistance(eye, direction, 18);
         RayTraceResult hit = range <= 0 ? null : world.rayTraceEntities(eye, direction,
                 range, 0.35, this::hostile);
-        if (hit == null || !(hit.getHitEntity() instanceof Enemy enemy)) {
-            caster.sendMessage(ChatColor.YELLOW + "星芒箭需要瞄准 18 格内看得见的怪物；未消耗魔力。");
+        Enemy enemy = hit != null && hit.getHitEntity() instanceof Enemy aimed
+                ? aimed : nearestVisibleHostile(caster, 12);
+        if (enemy == null) {
+            caster.sendMessage(ChatColor.YELLOW + "18 格准星和 12 格自动锁定都没找到怪物；未消耗魔力。");
             return;
         }
         if (!begin(caster, "starbolt", 4, 3)) return;
         Vector start = eye.toVector();
-        Vector end = hit.getHitPosition();
+        Vector end = hit != null && hit.getHitEntity() == enemy
+                ? hit.getHitPosition() : enemy.getEyeLocation().toVector();
         Vector line = end.clone().subtract(start);
         int steps = Math.min(16, Math.max(1, (int) Math.ceil(line.length() / 1.2)));
         for (int i = 0; i <= steps; i++) {
@@ -93,6 +96,24 @@ final class CombatSpells {
         world.playSound(eye, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.3f);
         enemy.damage(5, caster);
         caster.sendMessage(ChatColor.LIGHT_PURPLE + "星芒箭命中 " + enemy.getName() + "（4 魔力）。");
+    }
+
+    private Enemy nearestVisibleHostile(Player caster, double radius) {
+        Location eye = caster.getEyeLocation();
+        Enemy nearest = null;
+        double nearestDistanceSquared = radius * radius;
+        for (Entity entity : caster.getNearbyEntities(radius, radius, radius)) {
+            if (!hostile(entity) || !(entity instanceof Enemy enemy)
+                    || !caster.hasLineOfSight(enemy)) continue;
+            Vector to = enemy.getEyeLocation().toVector().subtract(eye.toVector());
+            double distanceSquared = to.lengthSquared();
+            if (distanceSquared >= nearestDistanceSquared || distanceSquared < 0.01) continue;
+            double distance = Math.sqrt(distanceSquared);
+            if (clearDistance(eye, to.normalize(), distance) < distance - 0.35) continue;
+            nearest = enemy;
+            nearestDistanceSquared = distanceSquared;
+        }
+        return nearest;
     }
 
     private void frostnova(Player caster) {
