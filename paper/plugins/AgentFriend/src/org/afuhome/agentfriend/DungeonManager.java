@@ -44,6 +44,8 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -59,6 +61,8 @@ final class DungeonManager implements Listener {
     private static final long RUN_TIMEOUT_MS = 1_800_000L;
     private static final long FLOOR_TIMEOUT_MS = 480_000L;
     private static final long NEXT_FLOOR_DELAY_MS = 10_000L;
+    private static final long REJOIN_GRACE_MS = 600_000L;
+    private static final String RUN_STATE = "dungeon-active-run";
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
@@ -105,6 +109,7 @@ final class DungeonManager implements Listener {
     private long floorStartedAt;
     private long spawnAt;
     private long advanceAt;
+    private long pausedAt;
     private long lastRun;
 
     DungeonManager(AgentFriendPlugin plugin) {
@@ -118,6 +123,7 @@ final class DungeonManager implements Listener {
         if (built) {
             cleanupMobs();
             updateFloorGuides();
+            restoreRun();
         }
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
         plugin.getLogger().info("Dungeon ready; built=" + built + ", floors=" + THEMES.size());
@@ -127,9 +133,8 @@ final class DungeonManager implements Listener {
 
     void shutdown() {
         if (active) {
-            lastRun = System.currentTimeMillis();
-            plugin.getConfig().set("dungeon-last-run", lastRun);
-            plugin.saveConfig();
+            if (pausedAt == 0) pausedAt = System.currentTimeMillis();
+            persistRun();
         }
         cleanupMobs();
         rewardMenus.clear();
@@ -137,6 +142,83 @@ final class DungeonManager implements Listener {
 
     private World world() { return Bukkit.getWorld("world"); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
+
+    private void persistRun() {
+        if (!active) return;
+        plugin.getConfig().set(RUN_STATE + ".floor", floor);
+        plugin.getConfig().set(RUN_STATE + ".participants",
+                participants.stream().map(UUID::toString).toList());
+        plugin.getConfig().set(RUN_STATE + ".run-started-at", runStartedAt);
+        plugin.getConfig().set(RUN_STATE + ".floor-started-at", floorStartedAt);
+        plugin.getConfig().set(RUN_STATE + ".advance-at", advanceAt);
+        plugin.getConfig().set(RUN_STATE + ".cleared", cleared);
+        plugin.getConfig().set(RUN_STATE + ".paused-at", pausedAt);
+        plugin.getConfig().set(RUN_STATE + ".saved-at", System.currentTimeMillis());
+        plugin.saveConfig();
+    }
+
+    private void restoreRun() {
+        if (!plugin.getConfig().isConfigurationSection(RUN_STATE)) return;
+        long now = System.currentTimeMillis();
+        int savedFloor = plugin.getConfig().getInt(RUN_STATE + ".floor", 0);
+        long savedAt = plugin.getConfig().getLong(RUN_STATE + ".saved-at", 0);
+        long savedPause = plugin.getConfig().getLong(RUN_STATE + ".paused-at", 0);
+        List<String> savedPlayers = plugin.getConfig().getStringList(RUN_STATE + ".participants");
+        Set<UUID> savedIds = new HashSet<>();
+        try {
+            for (String raw : savedPlayers) savedIds.add(UUID.fromString(raw));
+        } catch (IllegalArgumentException invalid) {
+            savedIds.clear();
+        }
+        long interruptedAt = savedPause > 0 ? savedPause : savedAt;
+        if (savedFloor < 1 || savedFloor > Y.length || savedIds.isEmpty()
+                || interruptedAt <= 0 || interruptedAt > now
+                || now - interruptedAt > REJOIN_GRACE_MS) {
+            plugin.getLogger().warning("Discarded expired or invalid dungeon run checkpoint.");
+            plugin.getConfig().set(RUN_STATE, null);
+            lastRun = now;
+            plugin.getConfig().set("dungeon-last-run", lastRun);
+            plugin.saveConfig();
+            return;
+        }
+        participants.clear();
+        participants.addAll(savedIds);
+        floor = savedFloor;
+        runStartedAt = plugin.getConfig().getLong(RUN_STATE + ".run-started-at", now);
+        floorStartedAt = plugin.getConfig().getLong(RUN_STATE + ".floor-started-at", now);
+        advanceAt = plugin.getConfig().getLong(RUN_STATE + ".advance-at", 0);
+        cleared = plugin.getConfig().getBoolean(RUN_STATE + ".cleared", false);
+        spawned = false; // The old wave was removed at shutdown or startup; retry it once.
+        pausedAt = interruptedAt;
+        active = true;
+        plugin.getLogger().info("Dungeon run checkpoint restored: floor=" + floor
+                + ", participants=" + participants.size() + ", waiting for reconnect.");
+    }
+
+    private void pauseRun(long now) {
+        if (pausedAt != 0) return;
+        pausedAt = now;
+        if (!cleared) {
+            cleanupMobs();
+            spawned = false;
+        }
+        persistRun();
+        plugin.getLogger().info("Dungeon paused for reconnect: floor=" + floor
+                + ", participants=" + participants.size() + ", graceSeconds=" + REJOIN_GRACE_MS / 1000);
+    }
+
+    private void resumeRun(long now) {
+        if (pausedAt == 0) return;
+        long pausedFor = Math.max(0, now - pausedAt);
+        runStartedAt += pausedFor;
+        floorStartedAt += pausedFor;
+        if (cleared) advanceAt += pausedFor;
+        else spawnAt = now + 3000L;
+        pausedAt = 0;
+        persistRun();
+        plugin.getLogger().info("Dungeon resumed after reconnect: floor=" + floor
+                + ", participants=" + participants.size());
+    }
     private boolean inLobby(Location at) {
         return sameWorld(at) && Math.abs(at.getBlockX() - X) <= 11 && Math.abs(at.getBlockZ() - Z) <= 11
                 && at.getY() >= LOBBY_Y && at.getY() <= LOBBY_Y + 8;
@@ -179,8 +261,9 @@ final class DungeonManager implements Listener {
         switch (sub) {
             case "status" -> player.sendMessage(ChatColor.GOLD + "六层试炼：" + (active
                     ? "第 " + floor + "/6 层 · " + THEMES.get(floor - 1).name()
-                        + (cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
-                            + " 秒后自动下楼" : "，战斗中")
+                        + (pausedAt > 0 ? "，队伍暂离，等待重连"
+                            : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
+                                + " 秒后自动下楼" : "，战斗中")
                     : "待命") + "。奖励存进个人箱子，不自动进入背包。");
             case "start" -> start(player);
             case "next" -> next(player);
@@ -242,12 +325,16 @@ final class DungeonManager implements Listener {
         }
         active = true;
         runStartedAt = now;
+        persistRun();
         announce(ChatColor.GOLD + "六层试炼开始！入口按钮附近 " + participants.size()
                 + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
     }
 
     private int enterFloor(int number, List<Player> group) {
         Set<UUID> arrived = new HashSet<>();
+        Set<UUID> disconnected = new HashSet<>();
+        if (active) for (UUID id : participants)
+            if (Bukkit.getPlayer(id) == null) disconnected.add(id);
         Location destination = center(number);
         int[][] offsets = {{0,0},{2,0},{-2,0},{0,2},{0,-2},{2,2},{-2,2},{2,-2}};
         int position = 0;
@@ -270,6 +357,7 @@ final class DungeonManager implements Listener {
         }
         participants.clear();
         participants.addAll(arrived);
+        participants.addAll(disconnected);
         floor = number;
         spawned = false;
         cleared = false;
@@ -278,6 +366,7 @@ final class DungeonManager implements Listener {
         advanceAt = 0;
         announce(ChatColor.AQUA + "附近 " + arrived.size() + " 人进入第 " + number + "/6 层："
                 + THEMES.get(number - 1).name() + "；生命已补满。");
+        persistRun();
         return arrived.size();
     }
 
@@ -303,21 +392,35 @@ final class DungeonManager implements Listener {
         if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
             player.sendMessage(ChatColor.RED + "地面入口受阻，返回已取消。"); return;
         }
-        if (player.teleport(landing)) player.sendMessage(ChatColor.GREEN + "已返回地面，未领取的奖励留在个人箱子里。");
+        if (player.teleport(landing)) {
+            if (participants.remove(player.getUniqueId())) persistRun();
+            player.sendMessage(ChatColor.GREEN + "已返回地面，未领取的奖励留在个人箱子里。");
+        }
     }
 
     private void tick() {
         if (!active) return;
         long now = System.currentTimeMillis();
-        if (now - runStartedAt > RUN_TIMEOUT_MS || now - floorStartedAt > FLOOR_TIMEOUT_MS) {
-            finish(false, "试炼超时；已赢得的奖励保存在个人箱子里。"); return;
+        if (pausedAt > 0) {
+            if (now - pausedAt > REJOIN_GRACE_MS)
+                finish(false, "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
+            return;
         }
         boolean anyone = false;
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
-            if (p != null && !p.isDead() && inFloor(p.getLocation(), floor)) { anyone = true; break; }
+            if (p != null && p.isOnline() && !p.isDead() && inFloor(p.getLocation(), floor)) {
+                anyone = true; break;
+            }
         }
-        if (!anyone) { finish(false, "队伍离开或倒下；已赢得的奖励保存在个人箱子里。"); return; }
+        if (!anyone) {
+            if (participants.stream().anyMatch(id -> Bukkit.getPlayer(id) == null)) pauseRun(now);
+            else finish(false, "队伍离开或倒下；已赢得的奖励保存在个人箱子里。");
+            return;
+        }
+        if (now - runStartedAt > RUN_TIMEOUT_MS || now - floorStartedAt > FLOOR_TIMEOUT_MS) {
+            finish(false, "试炼超时；已赢得的奖励保存在个人箱子里。"); return;
+        }
         if (cleared) {
             if (floor < Y.length && now >= advanceAt) {
                 List<Player> group = participants.stream().map(Bukkit::getPlayer)
@@ -343,8 +446,40 @@ final class DungeonManager implements Listener {
         if (floor == Y.length) finish(true, "六层完成！打开奖励箱领取，再按红色木按钮回地面。");
         else {
             advanceAt = now + NEXT_FLOOR_DELAY_MS;
+            persistRun();
             announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层并补满生命；奖励留在个人箱子，不必现在领取。");
         }
+    }
+
+    @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (!active || !participants.contains(player.getUniqueId())) return;
+        if (player.isDead() || !inFloor(player.getLocation(), floor)) {
+            participants.remove(player.getUniqueId());
+            persistRun();
+        }
+    }
+
+    @EventHandler public void onParticipantJoin(PlayerJoinEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        if (!active || !participants.contains(id)) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player player = Bukkit.getPlayer(id);
+            if (!active || !participants.contains(id) || player == null || !player.isOnline()
+                    || player.isDead()) return;
+            if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > REJOIN_GRACE_MS) return;
+            boolean advancedWhileAway = floorAt(player.getLocation()) > 0
+                    && floorAt(player.getLocation()) != floor;
+            if (!inFloor(player.getLocation(), floor) && !player.teleport(center(floor))) {
+                player.sendMessage(ChatColor.RED + "地下城重连传送失败；请联系服主，试炼仍保留到宽限期结束。");
+                return;
+            }
+            if (advancedWhileAway) player.setHealth(player.getMaxHealth());
+            player.setNoDamageTicks(60);
+            if (pausedAt > 0) resumeRun(System.currentTimeMillis());
+            player.sendMessage(ChatColor.GREEN + "已恢复第 " + floor + "/6 层试炼。"
+                    + (cleared ? "自动下楼倒计时继续。" : "当前层怪物会重新出现；已领取的奖励不会重复结算。"));
+        }, 10L);
     }
 
     private void spawn() {
@@ -412,9 +547,11 @@ final class DungeonManager implements Listener {
         announce((won ? ChatColor.GREEN : ChatColor.YELLOW) + message);
         active = false;
         advanceAt = 0;
+        pausedAt = 0;
         participants.clear();
         lastRun = System.currentTimeMillis();
         plugin.getConfig().set("dungeon-last-run", lastRun);
+        plugin.getConfig().set(RUN_STATE, null);
         plugin.saveConfig();
     }
 
@@ -553,6 +690,11 @@ final class DungeonManager implements Listener {
         mobs.clear();
         World w = world();
         if (w == null || !built) return;
+        // The arena's four chunks may have unloaded while every player was disconnected.
+        // Load them before looking for tagged mobs, or old mobs return beside the retried wave.
+        for (int cx = (X - RADIUS) >> 4; cx <= (X + RADIUS) >> 4; cx++)
+            for (int cz = (Z - RADIUS) >> 4; cz <= (Z + RADIUS) >> 4; cz++)
+                w.getChunkAt(cx, cz);
         for (int y : Y) for (Entity e : w.getNearbyEntities(new Location(w, X + 0.5, y + 4, Z + 0.5), 20, 8, 20))
             if (e.getScoreboardTags().contains(MOB_TAG)) e.remove();
     }

@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.23 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.24 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -64,6 +64,16 @@ Agent 文字指令验收：0.3.15 的同一隔离测试先读取 `/mycli help`�
 AgentFriend 在施法实际生效后向施法者发送原版标题、副标题、少量粒子和音效。归乡术只有成功到达村庄后才显示“空间之力，护你归途”；冷却、魔力不足、缺少目标不会播放成功效果。Agent 仍能读取原有聊天结果。CortiEyeMirror 0.1.7 在附身时同步目标收到的标题、声音和世界粒子包，并限制世界特效转发为每秒最多 128 包。隔离服 25566 的 `spell-presentation-stage.mjs` 测得归乡、自疗、星尘均有标题/声音/粒子包，冷却重试不再出标题；`spell-presentation-camera-stage.mjs` 的真实附身关系测得目标和观战者都收到三类包。旧 `utility-spells-stage.mjs` 仍使用过期的 `317,119,17` 高空测试点，在当前隔离世界落至 Y=50，跃空用例因此未通过，需更新地形夹具后才能重跑，不作为本次功能验收证据。
 
 2026-09-29 正式发布：仅 CortiLan、CortiEye、Goddess 服务账号在线时生成 E/F 完整快照 `20260929-220753`，两盘 `.complete` 均存在。正常停服，将旧 AgentFriend 0.3.21 与 CortiEyeMirror 0.1.6 设为 disabled，只启用 0.3.22（SHA256 `BB3BAAED18ED967AEE4AFF3F9C31E4B8BD2884C33C023F6C1C2A4123507A2B8C`）及 0.1.7（最终 SHA256 `7D5912AD12D37070B2D3ECC3E36AAAFC9D334C49E7F52E20F7DE81A3596B4C9E`）。首次启动发现 ProtocolLib 对不存在的 `CUSTOM_SOUND_EFFECT` 包发出注册警告；删除该多余监听后，隔离服以最终 JAR 重新验证附身画面三类数据包，再替换正式服 0.1.7 JAR，未改世界。最终重启后 RCON 版本、Java 入口、LAN 网关白名单探针、Geyser Pong、Goddess 桥和道路/房屋保护快照均正常，启动日志无上述警告；CortiEye 真实直播观感仍需在开播时目视验收。回退这次代码只需无人游玩时正常停服、禁用两个新 JAR、启用对应旧 JAR 后启动；不需恢复整个世界而丢失玩家进度。
+
+## 0.3.24 地下城断线续打
+
+原实现于 2026-09-29 23:14:43 在 CortiLan 与 CortiEye 同时显示 `Disconnected` 后，当秒把第二层判为失败；CortiLan 于 23:14:52 重连，但队伍已清空。日志足以证明不能续打的服务端原因，尚不能证明最初两条连接为何同时断开。第一、二层的已结算奖励仍在各自个人箱中。
+
+新版在所有参赛者离线时暂停当前层、怪物波次和自动下楼计时，最多保留 10 分钟；同 UUID 重连自动返回当前层。队友仍在挑战时，掉线玩家重连进入队伍已到的楼层，错过的楼层不补发奖励。暂停前未通关的当前层重开完整怪物波次；已通关的层不重新结算。正常停服时把 `dungeon-active-run` 检查点与原有奖励一起写在 `plugins/AgentFriend/config.yml`，重启后仍按原宽限期等待；过期则结束并启动常规冷却。插件启动与暂停时明确加载试炼房四个区块再清理带标签旧怪，防止卸载的旧波次与重试波次叠加。主动返回地面和死亡照常退出。**恢复整个世界时必须连同 `config.yml` 一起恢复**；单独回退到 0.3.23 不能识别活动检查点，必须等队伍退出后再回退。
+
+隔离服 25566：`dungeon-reconnect-stage.mjs` 通过倒计时中断线与战斗中断线两条路径；`dungeon-party-reconnect-stage.mjs` 通过队友继续下楼、迟归成员回到当前层且无离线奖励；`dungeon-restart-stage.mjs prepare|verify` 在真实 JVM 停启前后通过检查点、倒计时和不重复发奖。最终 JAR `AgentFriend-0.3.24.jar` 为 183526 字节，SHA256 `DF865EB830B2E6F3CD5A430754765F99EB89F6F659C291435131131D769AE795`。基岩真机的断网重登体验仍需用户入服核对。
+
+2026-09-29 23:39 在无人类玩家在线、无活动试炼时，正常停服备份至 `20260929-233951`，E/F 两盘 `.complete` 均存在。随后把唯一启用的 AgentFriend 0.3.23 JAR 设为 disabled，复制并校验上述 0.3.24 JAR，正常启动。正式服 RCON 确认新版本和六层载入；Paper、Agent LAN 网关、Geyser Pong、Goddess 桥和 CortiEyeMirror 状态正常，Agent LAN 白名单探针通过。回退代码须在无活动试炼时正常停服、禁用 0.3.24、启用 0.3.23 再启动；0.3.23 不认识 `dungeon-active-run`，不能用于续打新版本的活动挑战。
 
 ## 0.3.23 地下城自动推进与远征
 
