@@ -44,15 +44,17 @@ final class ViewerStatePublisher implements Listener {
     private static final Locale LABEL_LOCALE = Locale.SIMPLIFIED_CHINESE;
     private final AgentFriendPlugin plugin;
     private final CombatSpells combatSpells;
+    private final ProspectingSpell prospectingSpell;
     private BukkitTask pollTask;
     private final Map<UUID, LastState> lastStates = new HashMap<>();
     private final Set<UUID> pendingInitial = new HashSet<>();
 
     private record LastState(String json, String channel, long sentAt) {}
 
-    ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells) {
+    ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells, ProspectingSpell prospectingSpell) {
         this.plugin = plugin;
         this.combatSpells = combatSpells;
+        this.prospectingSpell = prospectingSpell;
     }
 
     void start() {
@@ -173,7 +175,8 @@ final class ViewerStatePublisher implements Listener {
         addAbility(result, "mycli:starbolt", "星芒箭", 1, combatSpells.remainingCooldownMs(player, "starbolt"));
         addAbility(result, "mycli:frostnova", "霜环", 1, combatSpells.remainingCooldownMs(player, "frostnova"));
         addAbility(result, "mycli:flamewave", "焰浪", 1, combatSpells.remainingCooldownMs(player, "flamewave"));
-        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave"));
+        addAbility(result, "mycli:prospect", "探矿术", 1, prospectingSpell.remainingCooldownMs(player));
+        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave", "mycli:prospect"));
         addMagicSpells(result, player, seen);
         if (user == null) return result;
 

@@ -1,0 +1,28 @@
+# Merge anticheat.anti-xray into world/paper-world.yml; do not replace other world settings.
+_version: 31
+anticheat:
+  anti-xray:
+    enabled: true
+    engine-mode: 1
+    hidden-blocks:
+    - coal_ore
+    - deepslate_coal_ore
+    - copper_ore
+    - deepslate_copper_ore
+    - iron_ore
+    - deepslate_iron_ore
+    - gold_ore
+    - deepslate_gold_ore
+    - redstone_ore
+    - deepslate_redstone_ore
+    - lapis_ore
+    - deepslate_lapis_ore
+    - diamond_ore
+    - deepslate_diamond_ore
+    - emerald_ore
+    - deepslate_emerald_ore
+    lava-obscures: false
+    max-block-height: 320
+    replacement-blocks: []
+    update-radius: 2
+    use-permission: false

@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 目录的 0.3.11 源码对应生产版本；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.12 是已隔离验证的待发布源码，生产仍为 0.3.11；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -30,6 +30,8 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 星芒箭自动锁敌回归：隔离服让 Agent 背对 7 格外僵尸施法，僵尸从 20 降到 15.08，挡在中间的羊仍为 8；第二次立即施法只得到冷却提示。隔墙施法没有目标也不扣血；移除墙、正面瞄准远处僵尸时，优先命中准星目标而不是身后更近的僵尸。Agent 收到 16 个 `world_particles` 包。此逻辑与罗盘按钮及 `/mycli cast starbolt` 共用。
 
 观战状态通道验收：用 Mineflayer 1.20.6 在隔离服以不同名称登录，分别注册 `mcviewer:state` 和旧的 `corti:viewer_state` 并监听原始 `custom_payload`。每人应只在自己注册的首选频道收到以 `{` 开头、可直接按 UTF-8 JSON 解析的消息；同时注册两个频道时优先新频道。一人施放 AgentFriend 或 MagicSpells 法术后，只有自身消息里的魔力与冷却变化。静止时每人最多 5 秒重发；两类列表各不超过 24 项、单包不超过 16384 字节，聊天栏没有 JSON。这个频道向每个玩家发送自己的状态，不负责把目标画面或目标状态镜像给观战者。
+
+探矿术验收：在隔离服先放密封矿物，再让 Mineflayer 连接并读取原始区块；三个真实矿种应被 Paper mode 1 显示为石头，敲开邻格后真实矿物重新可见。`plugins/AgentFriend/prospecting-stage.mjs` 验证同一账号施放 `prospect diamond` 后收到真实钻石提示、屏幕顶部 BossBar 和粒子，魔力下降 6、冷却进入状态频道；`prospect ancient` 在主世界搜不到时不消耗资源。重启后还要核对生产 `world/paper-world.yml` 与 `world_nether/paper-world.yml` 的反透视配置、Java/基岩入口和 MSPT。BossBar 是原版跨端方向提示，不能声称给隔墙矿石画了精确轮廓；真机基岩视觉效果由玩家复核。
 
 ## 当前自动恢复
 

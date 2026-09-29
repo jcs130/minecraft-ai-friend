@@ -146,6 +146,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long lastRun;
     private DungeonManager dungeon;
     private CombatSpells combatSpells;
+    private ProspectingSpell prospectingSpell;
     private ViewerStatePublisher viewerStatePublisher;
 
     @Override public void onEnable() {
@@ -162,7 +163,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
         combatSpells = new CombatSpells(this);
-        viewerStatePublisher = new ViewerStatePublisher(this, combatSpells);
+        prospectingSpell = new ProspectingSpell(this);
+        viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell);
         viewerStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
@@ -194,6 +196,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         giftNonces.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (combatSpells != null) combatSpells.clear();
+        if (prospectingSpell != null) prospectingSpell.clear();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
@@ -388,7 +391,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void help(Player p) {
         p.sendMessage(ChatColor.GOLD + "阿福技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
-        p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave  咏唱");
+        p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
@@ -402,6 +405,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void spells(Player p) {
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：12 格内寻找最近矿物；可选 iron|coal|copper|gold|gems|diamond|redstone|ancient。消耗 6 魔力，30 秒冷却；屏幕顶部显示方向 12 秒。");
         p.sendMessage(ChatColor.AQUA + "可学习：羽落(feather) " + learnedLabel(p, featherKey) + "、夜视(night) " + learnedLabel(p, nightKey));
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
         p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗法术与粒子。");
@@ -419,6 +423,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void cast(Player p, String raw) {
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
+        if (id.equals("prospect") || id.equals("探矿") || id.equals("探矿术") || id.startsWith("prospect ")) {
+            prospectingSpell.cast(p, id.startsWith("prospect ") ? id.substring("prospect ".length()).trim() : "all");
+            return;
+        }
         if (id.equals("give") || id.equals("造物") || id.equals("造物术")) { openMenu(p, "conjure"); return; }
         if (id.startsWith("give ") || id.startsWith("造物术 ")) {
             conjure(p, id.substring(id.indexOf(' ') + 1).trim()); return;
@@ -1063,6 +1071,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "places" -> "§b✦ 传送罗盘";
             case "players" -> "§b✦ 找队友";
             case "combat" -> "§c✦ 战斗法术";
+            case "prospect" -> "§d✦ 探矿术";
             case "creation" -> "§d✦ 向女神申请";
             default -> "§6✦ 造物术";
         };
@@ -1079,6 +1088,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(20, item(Material.LANTERN, "§b夜视", learned(p, nightKey, "已学会；点击咏唱；消耗 2 魔力", learning)));
             inv.setItem(21, item(Material.GOLDEN_APPLE, "§a圣愈术·治疗自己", "回复 4 颗心；消耗 6 魔力"));
             inv.setItem(18, item(Material.BLAZE_POWDER, "§c战斗法术", "星芒箭、霜环、焰浪；只伤怪物"));
+            inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "12 格内找矿；屏幕顶部显示方向", "6 魔力；30 秒冷却；点击选择矿种"));
             inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共地点与私人 home"));
             inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "前往村外六层试炼" : "前往村外三波战斗场"));
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
@@ -1088,6 +1098,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
             inv.setItem(13, item(Material.SNOWBALL, "§b霜环", "身边最多 4 只怪物；伤害 2 并减速；7 魔力；14 秒冷却"));
             inv.setItem(15, item(Material.BLAZE_POWDER, "§6焰浪", "前方最多 4 只怪物；伤害 4 并燃烧；8 魔力；10 秒冷却"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("prospect")) {
+            inv.setItem(10, item(Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(11, item(Material.COAL, "§8探煤矿", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(12, item(Material.RAW_COPPER, "§6探铜矿", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(13, item(Material.RAW_GOLD, "§e探金矿", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(14, item(Material.DIAMOND, "§b探宝石", "钻石、绿宝石、青金石"));
+            inv.setItem(15, item(Material.REDSTONE, "§c探红石", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(16, item(Material.AMETHYST_SHARD, "§d探附近矿脉", "寻找最近的任意矿物"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
@@ -1185,6 +1204,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 19 -> castOrLearn(p, "feather"); case 20 -> castOrLearn(p, "night");
                     case 21 -> cast(p, "selfheal");
                     case 18 -> openMenu(p, "combat");
+                    case 17 -> openMenu(p, "prospect");
                     case 16 -> openMenu(p, "places");
                     case 22 -> gotoPlace(p, "arena"); case 23 -> openMenu(p, "conjure");
                     case 24 -> openMenu(p, "players");
@@ -1197,6 +1217,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 13 -> cast(p, "frostnova");
                     case 15 -> cast(p, "flamewave");
                     case 22 -> openMenu(p, "skills");
+                    default -> { }
+                }
+            } else if (page.equals("prospect")) {
+                switch (slot) {
+                    case 10 -> cast(p, "prospect iron"); case 11 -> cast(p, "prospect coal");
+                    case 12 -> cast(p, "prospect copper"); case 13 -> cast(p, "prospect gold");
+                    case 14 -> cast(p, "prospect gems"); case 15 -> cast(p, "prospect redstone");
+                    case 16 -> cast(p, "prospect"); case 22 -> openMenu(p, "skills");
                     default -> { }
                 }
             } else if (page.equals("places")) {
@@ -1481,7 +1509,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
             return choices;
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "feather", "night");
+        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "feather", "night");
+        if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("prospect")) return List.of("all", "coal", "iron", "copper", "gold", "gems", "diamond", "redstone", "ancient");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("give")) return List.of("bread", "torch", "oak_log", "cobblestone", "crafting_table", "chest", "cake", "glass");
         if (args.length == 2 && args[0].equalsIgnoreCase("goddess")) return List.of("skills", "learn", "pray");
         if (args.length == 3 && args[0].equalsIgnoreCase("goddess") && args[1].equalsIgnoreCase("learn")) return List.of("feather", "night");

@@ -1,5 +1,13 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.12 探矿术
+
+`/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]` 由服务端在玩家周围 12 格内查找最近的真实矿物。命中后消耗 6 点 AuraSkills 魔力，进入 30 秒冷却，并在施法者屏幕顶部用紫色 BossBar 显示矿种、相对方向、距离和高低差 12 秒；短距离末影烛粒子提示方向。找不到矿物不扣魔力也不触发冷却，空搜索仍有 2 秒扫描间隔，防止频繁命令拖慢服务端。技能罗盘的“探矿术”页为手柄玩家提供铁、煤、铜、金、宝石、红石和任意矿脉按钮；Agent 可用文字命令。旁观者不能施法。`mcviewer:state` 中每名玩家自己的 `mycli:prospect` 报告剩余冷却。
+
+普通 Java、基岩和 Mineflayer 都使用原版 BossBar、粒子、箱子菜单和命令。原版协议无法在隔墙矿石上画出精确发光轮廓；顶部方向条是跨端可用的屏幕提示。Paper 的世界级反透视配置另见 `../../config/anti-xray-overworld.yml` 与 `../../config/anti-xray-nether.yml`：engine mode 1 把密封矿物发成普通石头，不给只读区块的 Agent 制造假矿；洞穴中真正暴露的矿仍可被肉眼发现。主动施放探矿术才由服务端查真实矿物。它只搜索已加载区块，不生成新地形。
+
+隔离服 25566 的 `prospecting-stage.mjs` 用无 OP Mineflayer 1.20.6 验证：密封钻石、铁、金矿的三个原始区块值全部变为石头，敲开旁边方块后真实钻石重新可见；探矿命中钻石、顶部 BossBar、粒子、魔力扣 6、30 秒冷却与 `mcviewer:state` 更新通过；罗盘可进入探矿页；空搜索不耗资源。Geyser 19133 Pong 与通用状态通道回归通过。构建候选 `AgentFriend-0.3.12.jar` 的 SHA256 为 `0dd884011c4ef3680a8464987f5f2e713f3331a4ff5e8810e3b457ae1e8cdcee`。基岩真机显示效果仍需玩家进服验收。
+
 ## 0.3.3 世界名称
 
 命格书作者改为「千灯纪」。除此之外沿用 0.3.2 的罗盘、皮肤、地下城与技能逻辑。正式服名称、Geyser 展示名和女神资料的修改及重启记录见 `E:\MC\ops\WORLD_NAME.md`。
