@@ -15,7 +15,7 @@ regions:
         min: {x: -615, y: 63, z: -451}
         max: {x: -603, y: 110, z: -441}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -24,7 +24,7 @@ regions:
         min: {x: -513, y: 66, z: -437}
         max: {x: -500, y: 113, z: -423}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -33,7 +33,7 @@ regions:
         min: {x: -578, y: 67, z: -491}
         max: {x: -565, y: 114, z: -477}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -42,7 +42,7 @@ regions:
         min: {x: -552, y: 62, z: -403}
         max: {x: -537, y: 109, z: -387}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -51,7 +51,7 @@ regions:
         min: {x: -595, y: 63, z: -437}
         max: {x: -583, y: 110, z: -427}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -60,7 +60,7 @@ regions:
         min: {x: -511, y: 67, z: -478}
         max: {x: -495, y: 114, z: -462}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -69,7 +69,7 @@ regions:
         min: {x: -582, y: 64, z: -437}
         max: {x: -571, y: 111, z: -422}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -78,7 +78,7 @@ regions:
         min: {x: -533, y: 45, z: -499}
         max: {x: -518, y: 92, z: -488}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -87,7 +87,7 @@ regions:
         min: {x: -533, y: 64, z: -425}
         max: {x: -516, y: 111, z: -412}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -133,7 +133,7 @@ regions:
         min: {x: -481, y: 81, z: -437}
         max: {x: -470, y: 128, z: -422}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -142,7 +142,7 @@ regions:
         min: {x: -560, y: 66, z: -437}
         max: {x: -547, y: 113, z: -420}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -151,7 +151,7 @@ regions:
         min: {x: -533, y: 67, z: -514}
         max: {x: -518, y: 114, z: -503}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -160,7 +160,7 @@ regions:
         min: {x: -533, y: 62, z: -408}
         max: {x: -518, y: 109, z: -394}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -169,7 +169,7 @@ regions:
         min: {x: -551, y: 41, z: -501}
         max: {x: -537, y: 88, z: -487}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -178,7 +178,7 @@ regions:
         min: {x: -552, y: 63, z: -418}
         max: {x: -537, y: 110, z: -404}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -187,7 +187,7 @@ regions:
         min: {x: -553, y: 62, z: -382}
         max: {x: -537, y: 109, z: -368}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -196,7 +196,7 @@ regions:
         min: {x: -596, y: 70, z: -505}
         max: {x: -586, y: 117, z: -493}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -205,7 +205,7 @@ regions:
         min: {x: -516, y: 64, z: -515}
         max: {x: -503, y: 103, z: -501}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -214,7 +214,7 @@ regions:
         min: {x: -497, y: 68, z: -437}
         max: {x: -483, y: 115, z: -423}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -223,7 +223,7 @@ regions:
         min: {x: -532, y: 67, z: -471}
         max: {x: -520, y: 114, z: -455}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -232,7 +232,7 @@ regions:
         min: {x: -507, y: 62, z: -377}
         max: {x: -491, y: 109, z: -365}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -241,7 +241,7 @@ regions:
         min: {x: -469, y: 95, z: -437}
         max: {x: -458, y: 142, z: -422}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10
@@ -250,7 +250,7 @@ regions:
         min: {x: -595, y: 65, z: -382}
         max: {x: -581, y: 112, z: -365}
         members: {}
-        flags: {passthrough: deny}
+        flags: {passthrough: allow}
         owners: {}
         type: cuboid
         priority: 10

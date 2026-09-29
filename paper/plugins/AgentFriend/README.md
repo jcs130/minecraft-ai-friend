@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.16 村庄可建造与原建筑保护（已部署）
+
+WorldGuard 的 23 个房屋区域从整框 `passthrough: deny` 改为 `allow`。AgentFriend 首次启动时按房屋区域扫描现有建筑材料，保存 `plugins/AgentFriend/village-structure-mask.tsv`（世界 UUID + 方块坐标与材料）；以后重启只读取这份快照，不会把玩家新放的方块加入保护。仅当原建筑方块仍在原坐标、材料未变时阻止拆除，并阻止火、流体、活塞和爆炸破坏；树叶、草木、普通地面以及玩家自己放置的方块可以正常清理。村庄原有防怪、抗爆、动物交互与村民无敌规则保留。快照属于当前世界的运行数据，随 E/F 世界备份保存，不提交 Git；切换世界或改房屋区域前须核对快照，加载失败会对村庄改块采取保守阻止。隔离服无 OP Mineflayer 实测放方块、拆自己的方块、清除树叶、原墙体仍不可拆、村民无伤且羊可受伤。
+
 ## 0.3.15 Agent 文字指令目录（已部署）
 
 `/mycli help` 显示千灯纪的跨端入口；`/mycli spells` 列出四种探索法术的**英文 ID、魔力、冷却和持续时间**。Agent 直接发送 `/mycli cast leap|flight|golem|sense`；探敌范围没有怪物时不消耗魔力。`/mycli status` 查看当前生命、魔力和试炼状态，技能冷却也会通过该玩家自己的 `mcviewer:state` 插件消息发送。

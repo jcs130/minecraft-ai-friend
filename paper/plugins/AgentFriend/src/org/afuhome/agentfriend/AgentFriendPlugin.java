@@ -183,6 +183,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
+    private VillageStructureProtection villageStructureProtection;
     private ViewerStatePublisher viewerStatePublisher;
 
     @Override public void onEnable() {
@@ -203,6 +204,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
+        villageStructureProtection = new VillageStructureProtection(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
