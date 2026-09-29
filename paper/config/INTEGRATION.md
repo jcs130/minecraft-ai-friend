@@ -16,10 +16,10 @@
 | Geyser 自定义头颅 | `enable-custom-content=true`、`force-resource-packs=true`，映射见 `Geyser-Spigot/custom_mappings/qiandengji-backpack.json` | 让基岩背包栏把 Minepacks 的专属头颅纹理显示成背包 |
 | EssentialsX | `disabled-commands` 含 `msg` | 原版私聊格式供 Goddess 桥接识别 |
 | 造物术缺项申请 | `/mycli cast give <其他物品>` 或罗盘“申请更多物品” | Goddess 审核；OP 账号发放时校验原版物品、数量和背包空间 |
-| WorldGuard | `afu_village` 室外允许 `damage-animals`，房屋子区域拒绝改块 | 村庄建筑安全，同时可采集、养殖和冒险 |
+| WorldGuard + AgentFriend | `afu_village` 允许 `damage-animals`，房屋子区域拒绝改块；AgentFriend 只给草/蕨类除草例外，并保护村民 | 村庄建筑安全，同时可采集、养殖和冒险 |
 | CortiEyeMirror | `target=CortiLan`、`camera=CortiEye`、镜头夜视、私聊/成就同步、额外生命 BossBar 关闭、徒手合成物品栏随操作显示 | 真实 Java 客户端直播画面 |
 | AgentFriend 状态通道 | 向每个在线玩家分别发出自己的 `mcviewer:state` 原始 UTF-8 JSON | Java/Agent/直播客户端获得对应玩家的 AuraSkills 魔力、当前等级经验和法术冷却状态 |
-| Paper 反透视（待发布） | 主世界和下界分别合入 `anti-xray-overworld.yml` / `anti-xray-nether.yml`，mode 1 | 密封矿石向客户端表现为石头；不制造假矿；服务端探矿术按真实方块判定 |
+| Paper 反透视 | 主世界和下界已分别合入 `anti-xray-overworld.yml` / `anti-xray-nether.yml`，mode 1 | 密封矿石向客户端表现为石头；不制造假矿；服务端探矿术按真实方块判定 |
 
 世界规则还包括 `keepInventory=true`、`playersSleepingPercentage=1`、`doFireTick=false`，出生点在村庄附近，难度简单。它们存于世界数据，必须用存档备份或服务端命令重建；Git 不包含实时世界。
 

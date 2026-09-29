@@ -45,16 +45,19 @@ final class ViewerStatePublisher implements Listener {
     private final AgentFriendPlugin plugin;
     private final CombatSpells combatSpells;
     private final ProspectingSpell prospectingSpell;
+    private final UtilitySpells utilitySpells;
     private BukkitTask pollTask;
     private final Map<UUID, LastState> lastStates = new HashMap<>();
     private final Set<UUID> pendingInitial = new HashSet<>();
 
     private record LastState(String json, String channel, long sentAt) {}
 
-    ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells, ProspectingSpell prospectingSpell) {
+    ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells,
+            ProspectingSpell prospectingSpell, UtilitySpells utilitySpells) {
         this.plugin = plugin;
         this.combatSpells = combatSpells;
         this.prospectingSpell = prospectingSpell;
+        this.utilitySpells = utilitySpells;
     }
 
     void start() {
@@ -176,7 +179,12 @@ final class ViewerStatePublisher implements Listener {
         addAbility(result, "mycli:frostnova", "霜环", 1, combatSpells.remainingCooldownMs(player, "frostnova"));
         addAbility(result, "mycli:flamewave", "焰浪", 1, combatSpells.remainingCooldownMs(player, "flamewave"));
         addAbility(result, "mycli:prospect", "探矿术", 1, prospectingSpell.remainingCooldownMs(player));
-        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave", "mycli:prospect"));
+        addAbility(result, "mycli:leap", "跃空术", 1, utilitySpells.remainingCooldownMs(player, "leap"));
+        addAbility(result, "mycli:flight", "飞行术", 1, utilitySpells.remainingCooldownMs(player, "flight"));
+        addAbility(result, "mycli:golem", "守护傀儡", 1, utilitySpells.remainingCooldownMs(player, "golem"));
+        addAbility(result, "mycli:sense", "探敌术", 1, utilitySpells.remainingCooldownMs(player, "sense"));
+        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave",
+                "mycli:prospect", "mycli:leap", "mycli:flight", "mycli:golem", "mycli:sense"));
         addMagicSpells(result, player, seen);
         if (user == null) return result;
 

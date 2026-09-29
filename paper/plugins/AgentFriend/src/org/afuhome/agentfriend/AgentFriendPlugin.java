@@ -41,18 +41,21 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -87,6 +90,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static final long RUN_TIMEOUT_MS = 360_000L;
     private static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
     private static final String ARENA_TAG = "afu_agentfriend_arena";
+    private static final Set<Material> VILLAGE_WEEDS = Set.of(Material.SHORT_GRASS, Material.TALL_GRASS,
+            Material.FERN, Material.LARGE_FERN, Material.DEAD_BUSH);
     private static final Map<String, Double> SPELL_MANA_COSTS = Map.ofEntries(
             Map.entry("blink", 4.0), Map.entry("heal", 4.0), Map.entry("food", 3.0),
             Map.entry("selfheal", 6.0),
@@ -106,6 +111,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
             new FocusSpell("fireworks", 4, Material.FIREWORK_ROCKET, "§6烟花术", "原版烟花粒子；1 魔力"),
             new FocusSpell("starlight", 5, Material.GLOWSTONE_DUST, "§e星尘术", "照亮周围"),
+            new FocusSpell("leap", 6, Material.RABBIT_FOOT, "§b跃空术", "高跳缓降；4 魔力"),
+            new FocusSpell("flight", 7, Material.ELYTRA, "§d飞行术", "飞行 15 秒；10 魔力"),
+            new FocusSpell("golem", 8, Material.IRON_BLOCK, "§6守护傀儡", "召唤铁傀儡 45 秒；12 魔力"),
+            new FocusSpell("sense", 9, Material.RECOVERY_COMPASS, "§b探敌术", "寻找周围 24 格怪物；3 魔力"),
             new FocusSpell("prospect iron", 11, Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力"),
             new FocusSpell("prospect diamond", 12, Material.DIAMOND, "§b探钻石", "12 格；6 魔力"),
             new FocusSpell("prospect gems", 13, Material.EMERALD, "§a探宝石", "钻石、绿宝石、青金石"),
@@ -173,6 +182,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
+    private UtilitySpells utilitySpells;
     private ViewerStatePublisher viewerStatePublisher;
 
     @Override public void onEnable() {
@@ -192,7 +202,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeon = new DungeonManager(this);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
-        viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell);
+        utilitySpells = new UtilitySpells(this);
+        viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
@@ -226,10 +237,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (combatSpells != null) combatSpells.clear();
         if (prospectingSpell != null) prospectingSpell.clear();
+        if (utilitySpells != null) utilitySpells.clear();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
+    private boolean inVillage(Location at) {
+        return sameWorld(at) && at.getBlockX() >= -630 && at.getBlockX() <= -470
+                && at.getBlockZ() >= -530 && at.getBlockZ() <= -380;
+    }
     private boolean inside(Location at) {
         return sameWorld(at) && Math.abs(at.getBlockX() - X) <= 11 && Math.abs(at.getBlockZ() - Z) <= 11
                 && at.getY() >= FLOOR && at.getY() <= FLOOR + 8;
@@ -427,6 +443,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli focus  领取/设置法杖；手持法杖使用即施法，潜行使用换技能");
+        p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
@@ -456,6 +473,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void cast(Player p, String raw) {
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
+        if (id.equals("leap") || id.equals("flight") || id.equals("golem") || id.equals("sense")) {
+            utilitySpells.cast(p, id);
+            return;
+        }
         if (id.equals("prospect") || id.equals("探矿") || id.equals("探矿术") || id.startsWith("prospect ")) {
             prospectingSpell.cast(p, id.startsWith("prospect ") ? id.substring("prospect ".length()).trim() : "all");
             return;
@@ -1159,11 +1180,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "combat" -> "§c✦ 战斗法术";
             case "prospect" -> "§d✦ 探矿术";
             case "focus" -> "§d✦ 灵纹法杖绑定";
+            case "utility" -> "§b✦ 探索法术";
             case "creation" -> "§d✦ 向女神申请";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, 27, title);
         if (page.equals("skills")) {
+            inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
             inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
             inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄"));
             inv.setItem(11, item(Material.ENDER_PEARL, "§d闪现", "朝视线短距离移动；消耗 4 魔力"));
@@ -1186,6 +1209,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
             inv.setItem(13, item(Material.SNOWBALL, "§b霜环", "身边最多 4 只怪物；伤害 2 并减速；7 魔力；14 秒冷却"));
             inv.setItem(15, item(Material.BLAZE_POWDER, "§6焰浪", "前方最多 4 只怪物；伤害 4 并燃烧；8 魔力；10 秒冷却"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("utility")) {
+            inv.setItem(10, item(Material.RABBIT_FOOT, "§b跃空术", "高高跳起并缓降；4 魔力；8 秒冷却"));
+            inv.setItem(12, item(Material.ELYTRA, "§d飞行术", "自由飞行 15 秒；10 魔力；90 秒冷却"));
+            inv.setItem(14, item(Material.IRON_BLOCK, "§6守护傀儡", "铁傀儡协战 45 秒；12 魔力；75 秒冷却"));
+            inv.setItem(16, item(Material.RECOVERY_COMPASS, "§b探敌术", "探测 24 格内怪物；3 魔力；15 秒冷却"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("prospect")) {
             inv.setItem(10, item(Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力；30 秒冷却"));
@@ -1300,6 +1329,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == 26) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 8 -> openMenu(p, "utility");
                     case 9 -> openMenu(p, "focus");
                     case 10 -> cast(p, "home"); case 11 -> cast(p, "blink");
                     case 12 -> cast(p, "heal"); case 13 -> cast(p, "food");
@@ -1321,6 +1351,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 15 -> cast(p, "flamewave");
                     case 22 -> openMenu(p, "skills");
                     default -> { }
+                }
+            } else if (page.equals("utility")) {
+                switch (slot) {
+                    case 10 -> cast(p, "leap"); case 12 -> cast(p, "flight");
+                    case 14 -> cast(p, "golem"); case 16 -> cast(p, "sense");
+                    case 22 -> openMenu(p, "skills"); default -> { }
                 }
             } else if (page.equals("prospect")) {
                 switch (slot) {
@@ -1580,8 +1616,22 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt && event.getEntity() instanceof Monster && inside(event.getLocation())
                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
     }
-    @EventHandler public void onBreak(BlockBreakEvent event) {
+    @EventHandler(priority = EventPriority.LOWEST) public void onWeedStart(BlockDamageEvent event) {
+        Block block = event.getBlock();
+        if (event.getPlayer().getGameMode() != GameMode.SURVIVAL
+                || !inVillage(block.getLocation()) || !VILLAGE_WEEDS.contains(block.getType())) return;
+        event.setCancelled(true);
+        block.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);
+        else if (event.isCancelled() && event.getPlayer().getGameMode() == GameMode.SURVIVAL
+                && inVillage(event.getBlock().getLocation()) && VILLAGE_WEEDS.contains(event.getBlock().getType()))
+            event.setCancelled(false);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onVillagerDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Villager && inVillage(event.getEntity().getLocation()))
+            event.setCancelled(true);
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);
@@ -1623,7 +1673,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
             return choices;
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "feather", "night");
+        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("prospect")) return List.of("all", "coal", "iron", "copper", "gold", "gems", "diamond", "redstone", "ancient");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("give")) return List.of("bread", "torch", "oak_log", "cobblestone", "crafting_table", "chest", "cake", "glass");
         if (args.length == 2 && args[0].equalsIgnoreCase("goddess")) return List.of("skills", "learn", "pray");

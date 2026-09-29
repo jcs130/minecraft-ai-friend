@@ -1,6 +1,12 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
-## 0.3.13 探矿描边与灵纹法杖（隔离服已通过，待正式服发布）
+## 0.3.14 探索法术与村庄安全（已部署；隔离服已验证）
+
+`/mycli cast leap` 跃空术：站在地上高跳、缓降，4 魔力、8 秒冷却。`flight` 飞行术：生存模式可飞 15 秒，到期收回飞行权限并缓降，10 魔力、90 秒冷却。`golem` 守护傀儡：召唤一只只攻击怪物的铁傀儡，跟随施法者，45 秒后自动移除，12 魔力、75 秒冷却；附近无安全落脚点时不消耗魔力。`sense` 探敌术：搜索 24 格内已加载的怪物，顶部显示最近怪物的方向、距离、高低差与总数 8 秒，3 魔力、15 秒冷却；找不到怪物时不消耗魔力。四项均由服务端用原版效果实现，Java、基岩、Agent 可走同一 `/mycli` 命令，手柄可在罗盘“探索法术”页点击施放。四项也进入法杖绑定页，玩家可以手持法杖潜行使用换绑定；Agent 可用 `/mycli focus bind leap|flight|golem|sense`。AuraSkills 魔力和 `mcviewer:state` 冷却同步沿用现有结构。
+
+出生村庄的 WorldGuard 房屋区域继续保护建筑。插件只把 `short_grass`、`tall_grass`、`fern`、`large_fern`、`dead_bush` 的破坏作为窄例外；在开始挖草时由服务端清除植物，避免误报“这里不能破坏”，石头、木板与地基仍不可拆。村庄范围内村民不受任何伤害，羊猪等动物仍沿用 WorldGuard 的 `damage-animals: allow`。`village-safety-stage.mjs` 用无 OP Mineflayer 实测：房屋里的草可清且无矛盾提示、地基不可拆、村民保持 20 血、羊由 8 血降至 7 血。`utility-spells-stage.mjs` 实测法杖单键跃空、飞行能力包与自动收回、探敌方向条、铁傀儡击败尸壳且不伤羊；基岩真机飞行手势和光效需再验收。
+
+## 0.3.13 探矿描边与灵纹法杖（已包含在 0.3.14 正式服）
 
 `/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]` 由服务端在玩家周围 12 格内查找最近的真实矿物。命中后消耗 6 点 AuraSkills 魔力，进入 30 秒冷却，并在施法者屏幕顶部用紫色 BossBar 显示矿种、相对方向、距离和高低差 12 秒。Java 版另收到只对施法者可见、位于真实矿块上的短时 Glowing 方块轮廓；基岩版没有 Java 的 Glowing 效果，改由只发给施法者的末影烛粒子在视线命中的墙面投出光框。矿块被挖掉、玩家离开世界或 12 秒到期时清除轮廓。找不到矿物不扣魔力也不触发冷却；空搜索仍有 2 秒扫描间隔。旁观者不能施法。`mcviewer:state` 中每名玩家自己的 `mycli:prospect` 报告剩余冷却。
 
