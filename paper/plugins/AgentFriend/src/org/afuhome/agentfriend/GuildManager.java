@@ -5,23 +5,35 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 /** Per-player adventurer guild contracts backed by the same save as dungeon rewards. */
-final class GuildManager {
+final class GuildManager implements Listener {
     private static final ZoneId GUILD_ZONE = ZoneId.of("Asia/Shanghai");
     private static final String[] RANKS = {"青铜", "黑铁", "白银", "黄金", "白金", "钻石"};
     private static final int[] THRESHOLDS = {0, 10, 30, 70, 150, 350};
-    private enum Goal { FLOOR, KILLS }
+    private enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE }
     private record Contract(String id, String title, String description, Material icon,
             Goal goal, int target, int floor, int minRank, int fame,
-            int emeralds, Material bonus, int bonusCount) { }
+            int emeralds, Material bonus, int bonusCount, String siteId) {
+        Contract(String id, String title, String description, Material icon, Goal goal, int target,
+                int floor, int minRank, int fame, int emeralds, Material bonus, int bonusCount) {
+            this(id, title, description, icon, goal, target, floor, minRank, fame,
+                    emeralds, bonus, bonusCount, null);
+        }
+    }
     private static final List<Contract> CONTRACTS = List.of(
             new Contract("first_step", "初探苔穴", "通关地下城第 1 层", Material.MOSS_BLOCK,
                     Goal.FLOOR, 1, 1, 0, 5, 2, Material.BREAD, 2),
@@ -30,14 +42,33 @@ final class GuildManager {
             new Contract("deep_explorer", "深层远征", "通关地下城第 3 层", Material.DEEPSLATE_BRICKS,
                     Goal.FLOOR, 1, 3, 1, 10, 5, Material.GOLDEN_APPLE, 1),
             new Contract("treasure_vault", "宝库守护者", "通关地下城第 6 层", Material.DIAMOND,
-                    Goal.FLOOR, 1, 6, 2, 20, 8, Material.DIAMOND, 1));
+                    Goal.FLOOR, 1, 6, 2, 20, 8, Material.DIAMOND, 1),
+            new Contract("desert_scout", "遗迹前哨", "通关地下城第 2 层", Material.SANDSTONE,
+                    Goal.FLOOR, 1, 2, 0, 6, 3, Material.ARROW, 8),
+            new Contract("party_oath", "结伴试炼", "至少两名队友共同通关地下城第 2 层", Material.SHIELD,
+                    Goal.PARTY_FLOOR, 1, 2, 0, 8, 4, Material.GOLDEN_APPLE, 1),
+            new Contract("ember_hunter", "烈焰讨伐", "累计击败 12 只试炼地下城怪物", Material.BLAZE_POWDER,
+                    Goal.KILLS, 12, 0, 1, 12, 5, Material.LAPIS_LAZULI, 4),
+            new Contract("ocean_guard", "海渊守望", "通关地下城第 5 层", Material.PRISMARINE_BRICKS,
+                    Goal.FLOOR, 1, 5, 1, 15, 6, Material.GOLDEN_APPLE, 1),
+            new Contract("treasure_keeper", "宝箱整理师", "从个人试炼箱领取 3 次战利品", Material.CHEST,
+                    Goal.CLAIMS, 3, 0, 0, 4, 2, Material.EXPERIENCE_BOTTLE, 2),
+            new Contract("undead_explorer", "亡灵墓穴调查", "找到自然生成的亡灵墓穴入口", Material.BONE,
+                    Goal.EXPLORE, 1, 0, 0, 7, 3, Material.GOLDEN_APPLE, 1, "undead_crypt"),
+            new Contract("creeping_explorer", "蔓生墓穴调查", "找到自然生成的蔓生墓穴入口", Material.MOSS_BLOCK,
+                    Goal.EXPLORE, 1, 0, 1, 10, 4, Material.LAPIS_LAZULI, 4, "creeping_crypt"),
+            new Contract("desert_explorer", "沙漠遗迹调查", "找到自然生成的沙漠遗迹入口", Material.CHISELED_SANDSTONE,
+                    Goal.EXPLORE, 1, 0, 1, 12, 5, Material.DIAMOND, 1, "desert_ruins"));
 
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
+    private final DungeonExpeditions expeditions;
 
     GuildManager(AgentFriendPlugin plugin, DungeonManager dungeon) {
         this.plugin = plugin;
         this.dungeon = dungeon;
+        expeditions = new DungeonExpeditions(plugin);
+        Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     private String base(UUID id) { return "guild-players." + id; }
@@ -76,7 +107,12 @@ final class GuildManager {
             case "abandon", "放弃" -> abandon(player);
             case "claim", "交付", "领取" -> claim(player);
             case "rewards", "箱子" -> dungeon.command(player, new String[]{"arena", "rewards"});
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards");
+            case "travel", "远征" -> {
+                if (args.length < 3) player.sendMessage(ChatColor.YELLOW
+                        + "用法：/mycli guild travel undead_crypt|creeping_crypt|desert_ruins");
+                else expeditions.travel(player, args[2].toLowerCase(Locale.ROOT));
+            }
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|travel <遗迹ID>");
         }
     }
 
@@ -142,6 +178,9 @@ final class GuildManager {
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + "已接公会委托：" + quest.title() + "。" + quest.description()
                 + "；完成后用 /mycli guild claim 领取声望与箱中物资。");
+        if (quest.siteId() != null) player.sendMessage(ChatColor.AQUA
+                + "用传送罗盘选择「" + DungeonExpeditions.site(quest.siteId()).name()
+                + "」或输入 /mycli guild travel " + quest.siteId() + "；落点在遗迹外约 70 格。");
         plugin.getLogger().info("Guild accepted: player=" + player.getUniqueId() + ", contract=" + quest.id());
     }
 
@@ -151,10 +190,34 @@ final class GuildManager {
         advance(player, quest);
     }
 
-    void onDungeonFloorCleared(Player player, int floor) {
+    void onDungeonFloorCleared(Player player, int floor, int partySize) {
         Contract quest = active(player);
-        if (quest == null || quest.goal() != Goal.FLOOR || quest.floor() != floor) return;
+        if (quest == null || quest.floor() != floor) return;
+        if (quest.goal() != Goal.FLOOR && !(quest.goal() == Goal.PARTY_FLOOR && partySize >= 2)) return;
         advance(player, quest);
+    }
+
+    void onDungeonRewardClaimed(Player player) {
+        Contract quest = active(player);
+        if (quest != null && quest.goal() == Goal.CLAIMS) advance(player, quest);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onExplore(PlayerMoveEvent event) {
+        if (event.getTo() == null || event.getFrom().getBlockX() == event.getTo().getBlockX()
+                && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) return;
+        checkExplore(event.getPlayer(), event.getTo());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onExploreTeleport(PlayerTeleportEvent event) {
+        if (event.getTo() != null) checkExplore(event.getPlayer(), event.getTo());
+    }
+
+    private void checkExplore(Player player, org.bukkit.Location destination) {
+        Contract quest = active(player);
+        if (quest == null || quest.goal() != Goal.EXPLORE || quest.siteId() == null) return;
+        if (DungeonExpeditions.reached(destination, quest.siteId())) advance(player, quest);
     }
 
     private void advance(Player player, Contract quest) {
@@ -221,13 +284,13 @@ final class GuildManager {
                     quest.description(), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(), state));
         }
         Contract quest = active(player);
-        inventory.setItem(20, icon(Material.BARRIER, "§c放弃当前委托", quest == null ? "没有在办的任务"
+        inventory.setItem(27, icon(Material.BARRIER, "§c放弃当前委托", quest == null ? "没有在办的任务"
                 : "放弃「" + quest.title() + "」；进度清零"));
-        inventory.setItem(21, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
+        inventory.setItem(28, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
                 : quest.title() + " " + progress(player) + "/" + quest.target(), "点击领取声望与箱中物资"));
-        inventory.setItem(22, icon(Material.CHEST, "§6个人奖励箱", "任务和地下城奖励都在这里"));
-        inventory.setItem(23, icon(Material.IRON_SWORD, "§c前往地下城", "六层试炼；与队友共同挑战"));
-        inventory.setItem(24, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
+        inventory.setItem(29, icon(Material.CHEST, "§6个人奖励箱", "任务和地下城奖励都在这里"));
+        inventory.setItem(30, icon(Material.IRON_SWORD, "§c前往地下城", "六层试炼；与队友共同挑战"));
+        inventory.setItem(31, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
     }
 
     private ItemStack icon(Material material, String title, String... lines) {
@@ -242,9 +305,9 @@ final class GuildManager {
     void click(Player player, int slot) {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());
-        else if (slot == 20) abandon(player);
-        else if (slot == 21) claim(player);
-        else if (slot == 22) dungeon.command(player, new String[]{"arena", "rewards"});
+        else if (slot == 27) abandon(player);
+        else if (slot == 28) claim(player);
+        else if (slot == 29) dungeon.command(player, new String[]{"arena", "rewards"});
     }
 
     String bookPage(Player player) {

@@ -255,7 +255,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     private World world() { return Bukkit.getWorld("world"); }
     void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
-    void guildFloorCleared(Player player, int floor) { if (guild != null) guild.onDungeonFloorCleared(player, floor); }
+    void guildFloorCleared(Player player, int floor, int partySize) {
+        if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
+    }
+    void guildRewardClaimed(Player player) { if (guild != null) guild.onDungeonRewardClaimed(player); }
     void openGuildMenu(Player player) { openMenu(player, "guild"); }
     void guildHallTeleport(Player player) { guildHall.teleport(player); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
@@ -510,7 +513,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena start|status|next|rewards|leave  六层试炼与个人奖励箱"
+                ? "/mycli arena start|status|rewards|leave  入口按钮组队，清怪后自动下楼"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
@@ -1276,7 +1279,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "guild" -> "§6✦ 冒险者公会";
             default -> "§6✦ 造物术";
         };
-        Inventory inv = Bukkit.createInventory(null, 27, title);
+        Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : 27, title);
         if (page.equals("skills")) {
             inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
@@ -1326,7 +1329,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
             }
-            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "按钮启动六层挑战" : "按钮启动三波战斗"));
+            inv.setItem(10, item(Material.BONE, "§6亡灵墓穴", "传送到自然生成遗迹外围；再步行约 70 格"));
+            inv.setItem(11, item(Material.MOSS_BLOCK, "§a蔓生墓穴", "传送到自然生成遗迹外围；再步行约 70 格"));
+            inv.setItem(12, item(Material.CHISELED_SANDSTONE, "§e沙漠遗迹", "传送到自然生成遗迹外围；再步行约 70 格"));
+            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口按钮组队，清怪后自动下楼" : "按钮启动三波战斗"));
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
@@ -1375,7 +1381,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(20, item(Material.AMETHYST_SHARD, "§d申请更多物品", "由女神判断；手柄可选择常见愿望"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         }
-        inv.setItem(26, item(Material.BARRIER, "§c关闭", "关闭菜单"));
+        inv.setItem(inv.getSize() - 1, item(Material.BARRIER, "§c关闭", "关闭菜单"));
         menus.put(inv, page);
         p.openInventory(inv);
     }
@@ -1417,12 +1423,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= 27 || event.getClick().isShiftClick()) return;
+        if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
         menus.remove(top); // A second click packet cannot cast from this menu.
         p.closeInventory();
         Bukkit.getScheduler().runTask(this, () -> {
             if (!p.isOnline()) return;
-            if (slot == 26) return;
+            if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
                     case 7 -> openMenu(p, "guild");
@@ -1469,6 +1475,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         .ifPresent(spell -> bindFocus(p, spell.id()));
             } else if (page.equals("places")) {
                 switch (slot) {
+                    case 10 -> guild.command(p, new String[]{"guild", "travel", "undead_crypt"});
+                    case 11 -> guild.command(p, new String[]{"guild", "travel", "creeping_crypt"});
+                    case 12 -> guild.command(p, new String[]{"guild", "travel", "desert_ruins"});
                     case 13 -> gotoPlace(p, "arena");
                     case 14 -> { if (!p.performCommand("sethome camp")) p.sendMessage(ChatColor.RED + "保存位置失败。"); }
                     case 15 -> gotoPlace(p, "personal:camp");
@@ -1486,11 +1495,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     else trackPlayer(p, targets.get(slot));
                 }
             } else if (page.equals("guild")) {
-                if (slot == 23) gotoPlace(p, "arena");
-                else if (slot == 24) openMenu(p, "skills");
+                if (slot == 30) gotoPlace(p, "arena");
+                else if (slot == 31) openMenu(p, "skills");
                 else {
                     guild.click(p, slot);
-                    if (slot == 0 || (slot >= 10 && slot <= 13) || slot == 20 || slot == 21) openMenu(p, "guild");
+                    if (slot == 0 || (slot >= 10 && slot <= 21) || slot == 27 || slot == 28)
+                        openMenu(p, "guild");
                 }
             } else if (page.equals("creation")) {
                 if (slot >= 10 && slot < 10 + GIFT_IDEAS.size()) requestCreation(p, GIFT_IDEAS.get(slot - 10).id());

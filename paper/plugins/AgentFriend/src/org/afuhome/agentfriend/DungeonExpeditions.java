@@ -1,0 +1,87 @@
+package org.afuhome.agentfriend;
+
+import java.util.List;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.HeightMap;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
+
+/** Safe approach points for existing vanilla-protocol worldgen dungeons. */
+final class DungeonExpeditions {
+    record Site(String id, String name, int x, int z, int approachX, int approachZ) { }
+    static final List<Site> SITES = List.of(
+            new Site("undead_crypt", "亡灵墓穴", -416, 672, -344, 680),
+            new Site("creeping_crypt", "蔓生墓穴", 1168, 224, 1096, 232),
+            new Site("desert_ruins", "沙漠遗迹", -3296, -2096, -3224, -2088));
+
+    private final AgentFriendPlugin plugin;
+
+    DungeonExpeditions(AgentFriendPlugin plugin) { this.plugin = plugin; }
+
+    static Site site(String id) {
+        return SITES.stream().filter(site -> site.id().equals(id)).findFirst().orElse(null);
+    }
+
+    static boolean reached(Location at, String id) {
+        Site site = site(id);
+        return site != null && at != null && at.getWorld() != null
+                && at.getWorld().getName().equals("world")
+                && Math.abs(at.getX() - site.x()) <= 36
+                && Math.abs(at.getZ() - site.z()) <= 36;
+    }
+
+    void travel(Player player, String id) {
+        Site site = site(id);
+        if (site == null) {
+            player.sendMessage(ChatColor.RED + "没有这个遗迹；可选 undead_crypt、creeping_crypt、desert_ruins。");
+            return;
+        }
+        if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
+            player.sendMessage(ChatColor.RED + "旁观者不参与遗迹远征。"); return;
+        }
+        World world = Bukkit.getWorld("world");
+        if (world == null) { player.sendMessage(ChatColor.RED + "主世界尚未加载。"); return; }
+        player.sendMessage(ChatColor.YELLOW + "正在寻找「" + site.name() + "」附近的安全落脚处……");
+        world.getChunkAtAsync(site.approachX() >> 4, site.approachZ() >> 4)
+                .whenComplete((chunk, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (error != null || chunk == null) {
+                        player.sendMessage(ChatColor.RED + "遗迹附近地形暂时无法加载，请稍后再试。"); return;
+                    }
+                    Location landing = safeLanding(world, site);
+                    if (landing == null || !player.teleport(landing)) {
+                        player.sendMessage(ChatColor.RED + "没有找到安全落脚处，传送已取消。"); return;
+                    }
+                    player.sendMessage(ChatColor.GREEN + "已到「" + site.name() + "」附近；遗迹中心约在 "
+                            + site.x() + ", " + site.z() + "。向那里探索约 70 格，留意怪物和入口。");
+                }));
+    }
+
+    private Location safeLanding(World world, Site site) {
+        int x0 = site.approachX(), z0 = site.approachZ();
+        for (int radius = 0; radius <= 4; radius++) for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++) {
+                int x = x0 + dx, z = z0 + dz;
+                int top = Math.min(world.getMaxHeight() - 3,
+                        world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES) + 2);
+                for (int y = top; y >= top - 8 && y > world.getMinHeight(); y--) {
+                    Block floor = world.getBlockAt(x, y, z);
+                    Block feet = world.getBlockAt(x, y + 1, z);
+                    Block head = world.getBlockAt(x, y + 2, z);
+                    Material material = floor.getType();
+                    if (!material.isSolid() || material == Material.MAGMA_BLOCK
+                            || material == Material.CACTUS || material == Material.CAMPFIRE
+                            || material == Material.SOUL_CAMPFIRE || material == Material.POWDER_SNOW
+                            || !feet.isPassable() || !head.isPassable()
+                            || feet.isLiquid() || head.isLiquid()
+                            || feet.getType() == Material.POWDER_SNOW) continue;
+                    return new Location(world, x + 0.5, y + 1, z + 0.5, 0, 0);
+                }
+            }
+        return null;
+    }
+}

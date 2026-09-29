@@ -54,11 +54,16 @@ import org.bukkit.persistence.PersistentDataType;
 final class DungeonManager implements Listener {
     private static final int X = -590, Z = -305, LOBBY_Y = 90, RADIUS = 12;
     private static final int[] Y = {68, 56, 44, 32, 20, 8};
+    private static final double BUTTON_GROUP_RADIUS_SQUARED = 12.0 * 12.0;
     private static final long COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 1_800_000L;
     private static final long FLOOR_TIMEOUT_MS = 480_000L;
+    private static final long NEXT_FLOOR_DELAY_MS = 10_000L;
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
+    private static final String BONUS_ITEMS = "dungeon-bonus-items.";
+    private static final String RARE_MISSES = "dungeon-rare-misses.";
+    private static final int MAX_BONUS_QUEUE = 128;
     private static final Material[] REWARD_TYPES = {
             Material.EMERALD, Material.IRON_INGOT, Material.BREAD,
             Material.EXPERIENCE_BOTTLE, Material.GOLDEN_APPLE,
@@ -99,6 +104,7 @@ final class DungeonManager implements Listener {
     private long runStartedAt;
     private long floorStartedAt;
     private long spawnAt;
+    private long advanceAt;
     private long lastRun;
 
     DungeonManager(AgentFriendPlugin plugin) {
@@ -109,7 +115,10 @@ final class DungeonManager implements Listener {
         if (plugin.getConfig().getBoolean("dungeon-building", false) && !built)
             plugin.getLogger().severe("Interrupted dungeon construction: inspect or restore the world before retrying.");
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
-        if (built) cleanupMobs();
+        if (built) {
+            cleanupMobs();
+            updateFloorGuides();
+        }
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
         plugin.getLogger().info("Dungeon ready; built=" + built + ", floors=" + THEMES.size());
     }
@@ -147,17 +156,37 @@ final class DungeonManager implements Listener {
                 && Math.abs(at.getBlockX() - X) <= RADIUS && Math.abs(at.getBlockZ() - Z) <= RADIUS;
     }
 
+    private Location lobbyButton() {
+        return new Location(world(), X - 5.5, LOBBY_Y + 2.5, Z - 7.5);
+    }
+
+    private boolean nearLobbyButton(Player player, Location button) {
+        Location at = player.getLocation();
+        return player.isOnline() && !player.isDead() && player.getGameMode() != GameMode.SPECTATOR
+                && sameWorld(at) && Math.abs(at.getY() - button.getY()) <= 4
+                && at.distanceSquared(button) <= BUTTON_GROUP_RADIUS_SQUARED;
+    }
+
+    private List<Player> groupNearLobbyButton(Location button) {
+        List<Player> group = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers())
+            if (nearLobbyButton(player, button)) group.add(player);
+        return group;
+    }
+
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         switch (sub) {
             case "status" -> player.sendMessage(ChatColor.GOLD + "六层试炼：" + (active
-                    ? "第 " + floor + "/6 层 · " + THEMES.get(floor - 1).name() + (cleared ? "，已清空" : "，战斗中")
+                    ? "第 " + floor + "/6 层 · " + THEMES.get(floor - 1).name()
+                        + (cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
+                            + " 秒后自动下楼" : "，战斗中")
                     : "待命") + "。奖励存进个人箱子，不自动进入背包。");
             case "start" -> start(player);
             case "next" -> next(player);
             case "rewards", "reward", "箱子" -> openRewards(player);
             case "leave" -> leave(player);
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|status|next|rewards|leave");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|status|rewards|leave；清怪后 10 秒自动下楼");
         }
     }
 
@@ -195,35 +224,61 @@ final class DungeonManager implements Listener {
     }
 
     private void start(Player starter) {
-        if (!inLobby(starter.getLocation())) { starter.sendMessage(ChatColor.RED + "请先到地面试炼场，站在场内按石按钮。"); return; }
         if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动。"); return; }
+        if (!nearLobbyButton(starter, lobbyButton())) {
+            starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。"); return;
+        }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战六层试炼。"); return; }
         long now = System.currentTimeMillis();
         if (now - lastRun < COOLDOWN_MS) {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
             return;
         }
+        List<Player> group = groupNearLobbyButton(lobbyButton());
+        if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
-        for (Player p : Bukkit.getOnlinePlayers()) if (inLobby(p.getLocation()) && p.getGameMode() != GameMode.SPECTATOR)
-            participants.add(p.getUniqueId());
-        if (participants.isEmpty()) return;
+        if (enterFloor(1, group) == 0) {
+            starter.sendMessage(ChatColor.RED + "地下城入口传送失败，试炼未启动。"); return;
+        }
         active = true;
         runStartedAt = now;
-        enterFloor(1);
-        announce(ChatColor.GOLD + "六层试炼开始！打完每层后打开奖励箱，按绿色石按钮下楼；红色木按钮返回地面。");
+        announce(ChatColor.GOLD + "六层试炼开始！入口按钮附近 " + participants.size()
+                + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
     }
 
-    private void enterFloor(int number) {
+    private int enterFloor(int number, List<Player> group) {
+        Set<UUID> arrived = new HashSet<>();
+        Location destination = center(number);
+        int[][] offsets = {{0,0},{2,0},{-2,0},{0,2},{0,-2},{2,2},{-2,2},{2,-2}};
+        int position = 0;
+        for (Player player : group) {
+            int[] offset = offsets[position++ % offsets.length];
+            if (player.isOnline() && !player.isDead()
+                    && player.teleport(destination.clone().add(offset[0], 0, offset[1]))) {
+                arrived.add(player.getUniqueId());
+                double maxHealth = player.getMaxHealth();
+                if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
+                player.setFireTicks(0);
+            } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍。");
+        }
+        if (arrived.isEmpty()) return 0;
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (!arrived.contains(id) && player != null && player.isOnline() && !player.isDead()
+                    && inFloor(player.getLocation(), floor))
+                player.sendMessage(ChatColor.YELLOW + "队友已下楼；你不在按钮附近 12 格内，本次未传送。可按红色按钮回地面。");
+        }
+        participants.clear();
+        participants.addAll(arrived);
         floor = number;
         spawned = false;
         cleared = false;
         floorStartedAt = System.currentTimeMillis();
         spawnAt = floorStartedAt + 3000L;
-        for (UUID id : participants) {
-            Player p = Bukkit.getPlayer(id);
-            if (p != null && !p.isDead()) p.teleport(center(number));
-        }
-        announce(ChatColor.AQUA + "进入第 " + number + "/6 层：" + THEMES.get(number - 1).name());
+        advanceAt = 0;
+        announce(ChatColor.AQUA + "附近 " + arrived.size() + " 人进入第 " + number + "/6 层："
+                + THEMES.get(number - 1).name() + "；生命已补满。");
+        return arrived.size();
     }
 
     private Location center(int number) {
@@ -231,15 +286,13 @@ final class DungeonManager implements Listener {
     }
 
     private void next(Player player) {
-        int here = floorAt(player.getLocation());
-        if (here == 0) { player.sendMessage(ChatColor.RED + "请站在当前楼层内按下楼按钮。"); return; }
-        if (!active) { leave(player); return; }
-        if (!participants.contains(player.getUniqueId()) || here != floor) {
-            player.sendMessage(ChatColor.RED + "只有当前试炼队伍能进入下一层。"); return;
+        if (!active || floorAt(player.getLocation()) != floor) {
+            player.sendMessage(ChatColor.YELLOW + "当前无需操作下一层按钮。"); return;
         }
-        if (!cleared) { player.sendMessage(ChatColor.YELLOW + "先打败本层全部怪物。"); return; }
-        if (floor >= Y.length) { finish(true, "六层完成！可打开奖励箱，再按红色木按钮回地面。"); return; }
-        enterFloor(floor + 1);
+        if (!cleared) player.sendMessage(ChatColor.YELLOW + "打败本层怪物后会自动下楼，不用按绿色按钮。");
+        else player.sendMessage(ChatColor.AQUA + "约 "
+                + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
+                + " 秒后自动下楼并补满生命；奖励留在个人箱子里。");
     }
 
     private void leave(Player player) {
@@ -265,8 +318,18 @@ final class DungeonManager implements Listener {
             if (p != null && !p.isDead() && inFloor(p.getLocation(), floor)) { anyone = true; break; }
         }
         if (!anyone) { finish(false, "队伍离开或倒下；已赢得的奖励保存在个人箱子里。"); return; }
+        if (cleared) {
+            if (floor < Y.length && now >= advanceAt) {
+                List<Player> group = participants.stream().map(Bukkit::getPlayer)
+                        .filter(p -> p != null && p.isOnline() && !p.isDead()
+                                && inFloor(p.getLocation(), floor)).toList();
+                if (enterFloor(floor + 1, group) == 0)
+                    finish(false, "自动下楼失败；已赢得的奖励保存在个人箱子里。");
+            }
+            return;
+        }
         if (!spawned && now >= spawnAt) spawn();
-        if (!spawned || cleared) return;
+        if (!spawned) return;
         mobs.removeIf(id -> {
             Entity e = Bukkit.getEntity(id);
             if (!(e instanceof LivingEntity living) || living.isDead() || !e.isValid()) return true;
@@ -278,7 +341,10 @@ final class DungeonManager implements Listener {
         int credited = rewardFloor();
         announce(ChatColor.GREEN + "第 " + floor + "/6 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == Y.length) finish(true, "六层完成！打开奖励箱领取，再按红色木按钮回地面。");
-        else announce(ChatColor.YELLOW + "领取后按绿色石按钮进入下一层，也可按红色木按钮离开。");
+        else {
+            advanceAt = now + NEXT_FLOOR_DELAY_MS;
+            announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层并补满生命；奖励留在个人箱子，不必现在领取。");
+        }
     }
 
     private void spawn() {
@@ -300,6 +366,11 @@ final class DungeonManager implements Listener {
 
     private int rewardFloor() {
         int credited = 0;
+        int partySize = 0;
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && !player.isDead() && inFloor(player.getLocation(), floor)) partySize++;
+        }
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
             if (p == null || p.isDead() || !inFloor(p.getLocation(), floor)) continue;
@@ -307,8 +378,24 @@ final class DungeonManager implements Listener {
                 String path = rewardPath(id, loot.material());
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + loot.amount());
             }
+            DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
+                    plugin.getConfig().getInt(RARE_MISSES + id, 0));
+            List<ItemStack> queue = bonusItems(id);
+            if (queue.size() < MAX_BONUS_QUEUE) {
+                queue.add(bonus.item());
+                plugin.getConfig().set(BONUS_ITEMS + id, queue);
+                plugin.getConfig().set(RARE_MISSES + id,
+                        bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
+                p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
+                        + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
+            } else {
+                String path = rewardPath(id, bonus.rare() ? Material.DIAMOND : Material.EMERALD);
+                plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
+                p.sendMessage(ChatColor.YELLOW + "个人宝箱特殊物品已满，额外战利品折成 "
+                        + (bonus.rare() ? "钻石" : "绿宝石") + " ×1 保存。请先领取箱内物品。");
+            }
             if (floor == 3) plugin.teachArenaSkills(p);
-            plugin.guildFloorCleared(p, floor);
+            plugin.guildFloorCleared(p, floor, partySize);
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
             p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的宝箱里；打开后点物品领取。");
             credited++;
@@ -324,6 +411,7 @@ final class DungeonManager implements Listener {
         cleanupMobs();
         announce((won ? ChatColor.GREEN : ChatColor.YELLOW) + message);
         active = false;
+        advanceAt = 0;
         participants.clear();
         lastRun = System.currentTimeMillis();
         plugin.getConfig().set("dungeon-last-run", lastRun);
@@ -336,6 +424,16 @@ final class DungeonManager implements Listener {
 
     private String rewardPath(UUID id, Material material) {
         return REWARDS + id + "." + material.name().toLowerCase(Locale.ROOT);
+    }
+
+    private List<ItemStack> bonusItems(UUID id) {
+        List<ItemStack> result = new ArrayList<>();
+        List<?> saved = plugin.getConfig().getList(BONUS_ITEMS + id);
+        if (saved != null) for (Object entry : saved) {
+            if (entry instanceof ItemStack item) result.add(item.clone());
+            else plugin.getLogger().warning("Ignored invalid personal dungeon item: player=" + id);
+        }
+        return result;
     }
     boolean queueGuildRewards(UUID id, int emeralds, Material bonus, int bonusCount) {
         if (emeralds <= 0 || bonusCount <= 0 || !List.of(REWARD_TYPES).contains(bonus)) return false;
@@ -363,10 +461,15 @@ final class DungeonManager implements Listener {
             int count = pending(id, REWARD_TYPES[slot]);
             inv.setItem(slot, count > 0 ? new ItemStack(REWARD_TYPES[slot], Math.min(64, count)) : null);
         }
+        List<ItemStack> bonus = bonusItems(id);
+        for (int slot = 9; slot < 18; slot++)
+            inv.setItem(slot, slot - 9 < bonus.size() ? bonus.get(slot - 9).clone() : null);
         ItemStack guide = new ItemStack(Material.BOOK);
         ItemMeta meta = guide.getItemMeta();
         meta.setDisplayName(ChatColor.YELLOW + "点击上排物品领取");
-        meta.setLore(List.of(ChatColor.GRAY + "每人有自己的奖励箱", ChatColor.GRAY + "背包满时奖励留在箱中"));
+        meta.setLore(List.of(ChatColor.GRAY + "上排为保底物资；中排为随机战利品",
+                ChatColor.GRAY + "特殊物品待领 " + bonus.size() + " 件，先显示前 9 件",
+                ChatColor.GRAY + "背包满时奖励留在箱中"));
         guide.setItemMeta(meta);
         inv.setItem(22, guide);
     }
@@ -377,6 +480,10 @@ final class DungeonManager implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(owner)) return;
         int slot = event.getRawSlot();
+        if (slot >= 9 && slot < 18) {
+            claimBonus(p, inv, owner, slot - 9);
+            return;
+        }
         if (slot < 0 || slot >= REWARD_TYPES.length) return;
         Material material = REWARD_TYPES[slot];
         int count = Math.min(64, pending(owner, material));
@@ -390,9 +497,35 @@ final class DungeonManager implements Listener {
         plugin.saveConfig();
         p.saveData();
         refreshRewards(inv, owner);
+        plugin.guildRewardClaimed(p);
         p.sendMessage(ChatColor.GREEN + "从奖励箱领取了 " + delivered + " × " + rewardName(material) + "。"
                 + (unclaimed > 0 ? "剩余物品仍在箱中。" : ""));
         plugin.getLogger().info("Dungeon reward claimed: player=" + owner + ", item=" + material + ", count=" + delivered);
+    }
+
+    private void claimBonus(Player player, Inventory inv, UUID owner, int index) {
+        List<ItemStack> queue = bonusItems(owner);
+        if (index >= queue.size()) return;
+        ItemStack item = queue.get(index).clone();
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item.clone());
+        int remaining = leftover.values().stream().mapToInt(ItemStack::getAmount).sum();
+        int delivered = item.getAmount() - remaining;
+        if (delivered <= 0) {
+            player.sendMessage(ChatColor.YELLOW + "背包已满，随机战利品仍在箱子里。"); return;
+        }
+        if (remaining == 0) queue.remove(index);
+        else {
+            item.setAmount(remaining);
+            queue.set(index, item);
+        }
+        plugin.getConfig().set(BONUS_ITEMS + owner, queue);
+        plugin.saveConfig();
+        player.saveData();
+        refreshRewards(inv, owner);
+        plugin.guildRewardClaimed(player);
+        player.sendMessage(ChatColor.GREEN + "从个人箱子领取了随机战利品 " + delivered + " 件。");
+        plugin.getLogger().info("Dungeon bonus claimed: player=" + owner + ", item="
+                + item.getType() + ", count=" + delivered);
     }
     private String rewardName(Material material) {
         return switch (material) {
@@ -519,6 +652,27 @@ final class DungeonManager implements Listener {
             sign.setLine(0, a);
             sign.setLine(1, b);
             sign.setLine(2, c);
+            sign.update(true, false);
+        }
+    }
+
+    private void updateFloorGuides() {
+        World w = world();
+        if (w == null) return;
+        for (int i = 0; i < Y.length; i++) {
+            Block block = w.getBlockAt(X + 9, Y[i] + 1, Z - 10);
+            if (!(block.getState() instanceof Sign sign) || !sign.getLine(1).equals("绿色按钮")) continue;
+            if (i + 1 == Y.length) {
+                sign.setLine(0, "最终宝库");
+                sign.setLine(1, "清怪后完成");
+                sign.setLine(2, "领取奖励");
+                sign.setLine(3, "红钮离开");
+            } else {
+                sign.setLine(0, "自动下楼");
+                sign.setLine(1, "清怪后等待");
+                sign.setLine(2, "10秒");
+                sign.setLine(3, "无需按键");
+            }
             sign.update(true, false);
         }
     }

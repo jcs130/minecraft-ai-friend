@@ -52,6 +52,7 @@ try {
     'both players inside the arena lobby');
   assert.match(await ask(a, '/mycli arena start', 500), /试炼|进入第/);
   await until(() => bots.every((bot) => bot.entity.position.y < 80), 'both players in floor 1');
+  for (const name of names) rcon(`minecraft:effect give ${name} minecraft:resistance 180 4 true`);
   await sleep(3800);
   const firstKill = rcon('minecraft:kill @e[tag=afu_dungeon_mob]');
   assert.match(firstKill, /3|Killed|已杀死|已清除/);
@@ -72,8 +73,7 @@ try {
   assert.match(await ask(a, '/mycli guild status'), /洞窟讨伐 \[0\/5\]/);
   a.closeWindow(a.currentWindow);
 
-  assert.match(await ask(a, '/mycli arena next', 500), /进入第 2\/6 层/);
-  await until(() => bots.every((bot) => bot.entity.position.y < 65), 'both players in floor 2');
+  await until(() => bots.every((bot) => bot.entity.position.y < 65), 'both players automatically enter floor 2', 15000);
   await sleep(3800);
   const secondKill = rcon('minecraft:kill @e[tag=afu_dungeon_mob]');
   assert.match(secondKill, /4|Killed|已杀死|已清除/);
@@ -83,8 +83,7 @@ try {
   assert.match(await ask(b, '/mycli guild claim'), /委托交付成功/);
   assert.match(await ask(b, '/mycli guild accept deep_explorer'), /需要黑铁级/);
 
-  assert.match(await ask(a, '/mycli arena next', 500), /进入第 3\/6 层/);
-  await until(() => bots.every((bot) => bot.entity.position.y < 53), 'both players in floor 3');
+  await until(() => bots.every((bot) => bot.entity.position.y < 53), 'both players automatically enter floor 3', 15000);
   await sleep(3800);
   rcon('minecraft:kill @e[tag=afu_dungeon_mob]');
   await sleep(1500);
@@ -104,7 +103,7 @@ try {
   const boardOpen = new Promise((resolve) => a.once('windowOpen', resolve));
   a.chat('/mycli guild menu');
   await boardOpen;
-  await a.clickWindow(20, 0, 0);
+  await a.clickWindow(27, 0, 0);
   await sleep(400);
   assert.match(await ask(a, '/mycli guild status'), /当前没有在办的委托/);
   assert.deepEqual(errors, []);

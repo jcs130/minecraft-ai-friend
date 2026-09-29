@@ -6,9 +6,9 @@
   "paperJarSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
   "plugins": [
     {
-      "file": "AgentFriend-0.3.22.jar",
-      "bytes": 167431,
-      "sha256": "bb3baaed18ed967aee4aff3f9c31e4b8bd2884c33c023f6c1c2a4123507a2b8c"
+      "file": "AgentFriend-0.3.23.jar",
+      "bytes": 181252,
+      "sha256": "7bb79464481347a964a33c3ae77ede81e26621c12fe1d4b643f9252099dfdb49"
     },
     {
       "file": "AuraSkills-2.4.0.jar",
