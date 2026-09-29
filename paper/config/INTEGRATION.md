@@ -14,6 +14,7 @@
 | MagicSpells | `mana.yml` 关闭独立魔力池 | AuraSkills 是唯一魔力来源；插件负责效果与冷却 |
 | Minepacks | `DropOnDeath=false`、`HonorKeepInventoryOnDeath=true`、`OpenContainerOnRightClick=true`、`MaxSize=6` | 死亡保留背包、奖励箱与背包快捷物品交互 |
 | EssentialsX | `disabled-commands` 含 `msg` | 原版私聊格式供 Goddess 桥接识别 |
+| 造物术缺项申请 | `/mycli cast give <其他物品>` 或罗盘“申请更多物品” | Goddess 审核；OP 账号发放时校验原版物品、数量和背包空间 |
 | WorldGuard | `afu_village` 室外允许 `damage-animals`，房屋子区域拒绝改块 | 村庄建筑安全，同时可采集、养殖和冒险 |
 | CortiEyeMirror | `target=CortiLan`、`camera=CortiEye`、镜头夜视、私聊/成就同步、额外生命 BossBar 关闭 | 真实 Java 客户端直播画面 |
 

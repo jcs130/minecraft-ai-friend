@@ -77,6 +77,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class AgentFriendPlugin extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
     private static final int X = -590, Z = -305, FLOOR = 90, RADIUS = 12;
     private static final UUID GODDESS_UUID = UUID.fromString("b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd");
+    private static final Set<Material> FORBIDDEN_GIFTS = Set.of(
+            Material.BEDROCK, Material.BARRIER, Material.COMMAND_BLOCK,
+            Material.CHAIN_COMMAND_BLOCK, Material.REPEATING_COMMAND_BLOCK,
+            Material.COMMAND_BLOCK_MINECART, Material.STRUCTURE_BLOCK,
+            Material.STRUCTURE_VOID, Material.JIGSAW, Material.DEBUG_STICK,
+            Material.LIGHT, Material.SPAWNER, Material.END_PORTAL_FRAME);
     private static final long RUN_COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 360_000L;
     private static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
@@ -91,6 +97,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     // Every public compass destination has a matching Essentials warp. Keep the
     // whitelist here so player commands cannot turn arbitrary warp names into skills.
     private record PublicPlace(String id, int slot, Material icon, String title, String hint) { }
+    private record GiftIdea(String id, Material icon, String title) { }
+    private static final List<GiftIdea> GIFT_IDEAS = List.of(
+            new GiftIdea("cherry_sapling", Material.CHERRY_SAPLING, "樱花树苗"),
+            new GiftIdea("oak_boat", Material.OAK_BOAT, "橡木船"),
+            new GiftIdea("lantern", Material.LANTERN, "灯笼"),
+            new GiftIdea("lead", Material.LEAD, "拴绳"),
+            new GiftIdea("name_tag", Material.NAME_TAG, "命名牌"),
+            new GiftIdea("saddle", Material.SADDLE, "鞍"),
+            new GiftIdea("map", Material.MAP, "地图"),
+            new GiftIdea("flower_pot", Material.FLOWER_POT, "花盆"));
     private static final List<PublicPlace> PUBLIC_PLACES = List.of(
             new PublicPlace("yellowstone", 0, Material.CALCITE, "§e黄石奇境", "白色岩石与温泉地貌"),
             new PublicPlace("snow", 1, Material.SNOW_BLOCK, "§b雪原", "冰雪与雪地探险"),
@@ -116,6 +132,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<UUID, Long> fireworksCooldown = new HashMap<>();
     private final Map<String, Long> goddessCooldown = new HashMap<>();
+    private final Map<String, Long> giftNonces = new HashMap<>();
     private NamespacedKey compassKey;
     private NamespacedKey statusBookKey;
     private NamespacedKey mobKey;
@@ -169,6 +186,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         automaticCompassTargets.clear();
         compassAutoPaused.clear();
         teamTeleportAt.clear();
+        giftNonces.clear();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
@@ -294,6 +312,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
+            goddessGift(sender, args);
+            return true;
+        }
         if (args.length == 4 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("teach")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台授课。"); return true;
@@ -356,6 +378,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void help(Player p) {
         p.sendMessage(ChatColor.GOLD + "阿福技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|heal|give <物品>  咏唱");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
@@ -422,10 +445,90 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             default -> "";
         };
         if (id.isEmpty()) {
-            p.sendMessage(ChatColor.RED + "造物术只支持：面包、火把、橡木、圆石、工作台、箱子、蛋糕、玻璃。");
+            requestCreation(p, raw);
             return;
         }
         if (!p.performCommand("cast conjure_" + id)) p.sendMessage(ChatColor.RED + "造物术当前未受理，请联系管理员。");
+    }
+    private void requestCreation(Player p, String raw) {
+        String wanted = raw.replaceAll("[\\p{Cntrl}\\u00a7]", " ").replaceAll("\\s+", " ").trim();
+        if (wanted.isEmpty() || wanted.length() > 60) {
+            p.sendMessage(ChatColor.RED + "请用 1–60 字说明想要的物品：/mycli cast give <物品>。");
+            return;
+        }
+        if (Bukkit.getPlayerExact("Goddess") == null) {
+            p.sendMessage(ChatColor.YELLOW + "女神暂未上线，造物申请没有送出；稍后再试。");
+            return;
+        }
+        if (!ready(p, "creation-request", 60)) return;
+        if (!p.performCommand("minecraft:msg Goddess [造物申请] " + wanted)) {
+            p.sendMessage(ChatColor.RED + "造物申请发送失败，请稍后再试。");
+            return;
+        }
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "已把“" + wanted + "”交给女神判断；她会在游戏里答复，不会自动造出物品。");
+        getLogger().info("Creation request delivered from " + p.getUniqueId() + ", chars=" + wanted.length());
+    }
+
+    private void goddessGift(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player goddess) || !goddess.getName().equals("Goddess")
+                || !goddess.getUniqueId().equals(GODDESS_UUID) || !goddess.isOp()) {
+            sender.sendMessage("仅限在线的女神服主发放造物礼物。");
+            return;
+        }
+        if (args.length != 6 || !args[2].matches("[a-f0-9]{16}")) {
+            sender.sendMessage("QDJ-GIFT INVALID FAIL format");
+            return;
+        }
+        String nonce = args[2];
+        if (!args[3].matches("[A-Za-z0-9_.-]{1,32}") || !args[4].matches("minecraft:[a-z0-9_]+")) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL argument");
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[3]);
+        if (target == null || target.getGameMode() == GameMode.SPECTATOR) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL offline");
+            return;
+        }
+        Material material = Material.getMaterial(args[4].substring("minecraft:".length()).toUpperCase(Locale.ROOT));
+        if (material == null || !material.isItem() || FORBIDDEN_GIFTS.contains(material)
+                || material.name().endsWith("_SPAWN_EGG")) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL item");
+            return;
+        }
+        int amount;
+        try { amount = Integer.parseInt(args[5]); }
+        catch (NumberFormatException error) { sender.sendMessage("QDJ-GIFT " + nonce + " FAIL amount"); return; }
+        int stackSize = material.getMaxStackSize();
+        if (amount < 1 || amount > 16 || amount > stackSize) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL amount");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        giftNonces.entrySet().removeIf(entry -> now - entry.getValue() > 86_400_000L);
+        if (giftNonces.putIfAbsent(nonce, now) != null) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL duplicate");
+            return;
+        }
+        int capacity = 0;
+        for (ItemStack existing : target.getInventory().getStorageContents()) {
+            if (existing == null || existing.getType().isAir()) capacity += stackSize;
+            else if (existing.getType() == material && !existing.hasItemMeta())
+                capacity += Math.max(0, stackSize - existing.getAmount());
+        }
+        if (capacity < amount) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL inventory");
+            target.sendMessage(ChatColor.YELLOW + "女神想送你礼物，但背包没有空位；请先腾出空间再申请。");
+            return;
+        }
+        if (!target.getInventory().addItem(new ItemStack(material, amount)).isEmpty()) {
+            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL inventory-changed");
+            getLogger().severe("Goddess gift partially applied to " + target.getUniqueId() + "; do not retry blindly");
+            return;
+        }
+        target.sendMessage(ChatColor.LIGHT_PURPLE + "女神批准了造物申请：" + material.name().toLowerCase(Locale.ROOT)
+                + " ×" + amount + " 已放进你的背包。");
+        sender.sendMessage("QDJ-GIFT " + nonce + " OK");
+        getLogger().info("Goddess gift " + material + " x" + amount + " to " + target.getUniqueId());
     }
     private void fireworks(Player p) {
         long now = System.currentTimeMillis();
@@ -941,6 +1044,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "skills" -> "§5✦ 技能罗盘";
             case "places" -> "§b✦ 传送罗盘";
             case "players" -> "§b✦ 找队友";
+            case "creation" -> "§d✦ 向女神申请";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, 27, title);
@@ -992,6 +1096,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             if (visible.isEmpty()) inv.setItem(13, item(Material.BARRIER, "§7暂时没有其他在线玩家", "女神旁观者不会显示在这里"));
             playerMenuTargets.put(inv, targets);
+        } else if (page.equals("creation")) {
+            for (int i = 0; i < GIFT_IDEAS.size(); i++) {
+                GiftIdea idea = GIFT_IDEAS.get(i);
+                inv.setItem(10 + i, item(idea.icon(), "§d申请 " + idea.title(), "由女神判断能否赠送；不会自动发放"));
+            }
+            inv.setItem(21, item(Material.WRITABLE_BOOK, "§e其他物品", "可输入 /mycli cast give <物品> 向女神申请"));
+            inv.setItem(22, item(Material.ARROW, "§7返回造物术", "查看固定生活物资"));
         } else {
             inv.setItem(10, item(Material.BREAD, "§e面包 ×4", "消耗 4 魔力"));
             inv.setItem(11, item(Material.TORCH, "§e火把 ×4", "消耗 4 魔力"));
@@ -1001,6 +1112,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.CHEST, "§e箱子 ×1", "消耗 4 魔力"));
             inv.setItem(16, item(Material.CAKE, "§e蛋糕 ×1", "消耗 4 魔力"));
             inv.setItem(17, item(Material.GLASS, "§e玻璃 ×8", "消耗 4 魔力"));
+            inv.setItem(20, item(Material.AMETHYST_SHARD, "§d申请更多物品", "由女神判断；手柄可选择常见愿望"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         }
         inv.setItem(26, item(Material.BARRIER, "§c关闭", "关闭菜单"));
@@ -1071,13 +1183,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     if (slot >= 19) teleportToTeammate(p, targets.get(slot));
                     else trackPlayer(p, targets.get(slot));
                 }
+            } else if (page.equals("creation")) {
+                if (slot >= 10 && slot < 10 + GIFT_IDEAS.size()) requestCreation(p, GIFT_IDEAS.get(slot - 10).id());
+                else if (slot == 21) p.sendMessage(ChatColor.LIGHT_PURPLE + "其他物品请用 /mycli cast give <物品>，女神会判断能否赠送。");
+                else if (slot == 22) openMenu(p, "conjure");
             } else {
                 switch (slot) {
                     case 10 -> conjure(p, "bread"); case 11 -> conjure(p, "torch");
                     case 12 -> conjure(p, "oak_log"); case 13 -> conjure(p, "cobblestone");
                     case 14 -> conjure(p, "crafting_table"); case 15 -> conjure(p, "chest");
                     case 16 -> conjure(p, "cake"); case 17 -> conjure(p, "glass");
-                    case 22 -> openMenu(p, "skills"); default -> { }
+                    case 20 -> openMenu(p, "creation"); case 22 -> openMenu(p, "skills"); default -> { }
                 }
             }
         });

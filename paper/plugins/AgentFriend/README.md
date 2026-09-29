@@ -44,6 +44,14 @@
 - `/mycli goto village|cherry|plains|arena`。前三项复用 EssentialsX 公共 warp；arena 到达北侧桥入口。私人地点复用现有 `/sethome`、`/homes`、`/home`，并提供 `/mycli waypoint add|remove <名字>`、`/mycli goto personal:<名字>`。此 Paper 版未迁移旧世界坐标或旧项目的 `shared:id` / `personal:id` 账本。
 - `/mycli arena start|status|leave`。也可在场内按石按钮启动；必须人在场内。
 
+### 0.3.4 造物术缺项申请
+
+固定 8 种生活物资仍由 MagicSpells 消耗共享魔力并即时造出。输入 `/mycli cast give <其他物品>` 时不会直接发物品，而是把 1–60 字的愿望私聊给在线女神；申请每位玩家 60 秒最多一次。技能罗盘的造物子菜单还有“申请更多物品”，手柄可点选樱花树苗、船、灯笼、拴绳、命名牌、鞍、地图或花盆。任意其他名称需要文字输入。
+
+`goddess-bridge.mjs` 把申请交给 QwenPaw `mc_godness` 判断。拒绝会在游戏内解释；批准只接受严格的 JSON 物品 ID 和 1–16 数量，由受保护的 Goddess OP 账号调用 `/mycli admin gift`。插件核对账号、在线玩家、原版物品、背包空间和一次性回执，禁止管理方块与刷怪蛋；成功后物品进玩家背包，失败不掉在地上。模型的文字不能直接变成任意服务器命令。若模型超时或发放回执不确定，不会自动重试，也不声称已经发放。审核礼物不扣魔力，日志记录发放玩家 UUID、物品和数量。
+
+隔离 Paper 25585 已用 Mineflayer 验证：缺项申请到 Goddess 私聊、OP 批准后樱花树苗进入普通玩家背包、同回执重复调用被拒、命令方块被拒。正式服临时 LAN Agent `CreationQA` 申请樱花树苗，QwenPaw 女神返回批准，游戏客户端背包确实收到 2 棵；随后账号退出并从白名单移除。基岩手柄真机的新增菜单仍需点验。
+
 ### 0.2.0 女神技艺
 
 `/mycli spells` 与罗盘原有能力保持原规则，新增无伤害的星尘术（`/mycli cast starlight`）。羽落（`feather`，45 秒缓降/90 秒冷却）和夜视（`night`，120 秒夜视/180 秒冷却）需学习；`/mycli goddess learn feather|night` 或罗盘点击未学的图标，每项消耗 5 级经验，首次通关试炼也会自动授予两项。学会后再次点击图标施放。学习状态写进玩家数据，由服务端对 Java、基岩和 Agent 统一判定。
