@@ -183,6 +183,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private GuildManager guild;
     private GuildHallManager guildHall;
+    private TrialRoadManager trialRoad;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
@@ -206,6 +207,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeon = new DungeonManager(this);
         guild = new GuildManager(this, dungeon);
         guildHall = new GuildHallManager(this);
+        trialRoad = new TrialRoadManager(this);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
@@ -429,8 +431,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             } catch (NumberFormatException error) { sender.sendMessage("x、z 必须是整数。"); }
             return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveyroad") || args[1].equalsIgnoreCase("buildroad"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造道路。"); return true;
+            }
+            if (args[1].equalsIgnoreCase("surveyroad")) trialRoad.survey(sender);
+            else trialRoad.build(sender);
+            return true;
+        }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin buildarena|builddungeon|surveyguild|buildguild。");
+            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin buildarena|builddungeon|surveyguild|buildguild|surveyroad|buildroad。");
             return true;
         }
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) { help(player); return true; }

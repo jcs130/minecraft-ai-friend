@@ -51,6 +51,12 @@ Agent 文字指令验收：0.3.15 的同一隔离测试先读取 `/mycli help`�
 
 建成后又做完整备份 `20260929-202045`，E/F 两份均有 `.complete`、0.3.20 JAR 和大厅保护快照。备份引起的重启成功，日志无公会快照错误，原版任务牌仍在；Java 状态、LAN 网关白名单探针、基岩 Pong、Goddess 桥和 CortiEyeMirror 均通过。基岩手柄右键任务牌的真实画面仍由玩家入服确认。`guild-hall-mask.tsv` 必须和同一世界存档一起恢复，不要单独替换或删除；要回到施工前状态，使用 `20260929-201735` 整套快照并意识到之后的玩家进度也会回退。仅回退 JAR 不会拆除建筑，不应直接降到不认识公会大厅的旧版后继续长期运行。
 
+## 0.3.21 试炼场步行道路
+
+施工蓝图在 `plugins/AgentFriend/resources/trial-road.tsv`。隔离服中 `/mycli admin surveyroad` 对现有 23 栋村庄建筑、头顶空间、原方块材质、桥墩落点和在场玩家做预检；然后一次性执行 `buildroad`。村庄出生点 `-543.5,66,-439.5` 到道路起点 `-570,63,-411`，再到试炼场北入口 `-590,90,-329`，普通 Mineflayer 不挖方块即可全程步行。构建约 312 格三格宽路面，水面为云杉栈道，山坡为石砖阶梯，另有 142 格护栏位置、桥墩和路灯。最终候选 JAR SHA256 为 `EF425E852010213CB6B8E8A6660CFB3A7F4E2665842D6A15FE081303F819BBC7`。隔离服重启后读回 650 个受保护方块；`plugins/AgentFriend/trial-road-stage.mjs` 用新 Mineflayer 账号从出生点走至入口、不挖方块，并试挖栈道及安全区外阶梯，两处都被插件拒绝。Geyser 隔离服 Pong 正常。原版 Java、基岩和 Agent 无须新增客户端资源。
+
+正式施工仅在没有真人在线时进行：先运行 `manage-server.ps1 Backup` 并确认 E/F 两盘 `.complete`，再正常停服替换唯一启用的 AgentFriend JAR；启动后运行 `mycli admin surveyroad`，结果允许施工才运行一次 `mycli admin buildroad`。施工一旦中断，保留现场并恢复施工前完整世界备份，不删除 `trial-road.building` 标记硬重试。施工完成后再做一次 E/F 完整备份和重启检查。`plugins/AgentFriend/trial-road-mask.tsv` 与世界 UUID 绑定，必须与世界文件一起恢复；仅回退 JAR 不会拆除道路，也会失去道路的保护逻辑。
+
 ## 当前自动恢复
 
 `Afu-MC-Watchdog` 开机及每分钟执行：验证 Java/RCON、Agent 网关、女神单实例、观战绑定和基岩 Pong。基岩连续三次失败，且无人类玩家在线时，才尝试一次完整重启；持续故障不会每分钟或每半小时重启。自动启动暂停标志用于计划停服。`Afu-MC-DailyBackup` 每天 04:00 尝试快照；在线名单中出现真人或读取异常时跳过。
