@@ -149,6 +149,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new PublicPlace("white_cliffs", 6, Material.QUARTZ_BLOCK, "§f白色峭壁", "白色山崖；留意脚下"),
             new PublicPlace("moonlight", 7, Material.GLOW_BERRIES, "§5月光林", "高地树林与夜色"),
             new PublicPlace("ship", 8, Material.OAK_BOAT, "§9海上大船", "落在甲板，别跳进海里"),
+            new PublicPlace("guild", 9, Material.LECTERN, "§6冒险者公会", "村庄大厅；右键任务板接单"),
             new PublicPlace("village", 10, Material.BELL, "§a出生村庄", "安全出生点"),
             new PublicPlace("cherry", 11, Material.CHERRY_SAPLING, "§d樱花林", "探索樱花树林"),
             new PublicPlace("plains", 12, Material.MAP, "§e平原村庄", "探索另一座村庄"));
@@ -181,6 +182,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long lastRun;
     private DungeonManager dungeon;
     private GuildManager guild;
+    private GuildHallManager guildHall;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
@@ -203,6 +205,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
         guild = new GuildManager(this, dungeon);
+        guildHall = new GuildHallManager(this);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
@@ -248,6 +251,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
     void guildFloorCleared(Player player, int floor) { if (guild != null) guild.onDungeonFloorCleared(player, floor); }
     void openGuildMenu(Player player) { openMenu(player, "guild"); }
+    void guildHallTeleport(Player player) { guildHall.teleport(player); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
     private boolean inVillage(Location at) {
         return sameWorld(at) && at.getBlockX() >= -630 && at.getBlockX() <= -470
@@ -412,8 +416,21 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.build(sender);
             return true;
         }
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveyguild") || args[1].equalsIgnoreCase("buildguild"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造公会大厅。"); return true;
+            }
+            if (args.length != 4) { sender.sendMessage("用法：/mycli admin surveyguild|buildguild <x> <z>"); return true; }
+            try {
+                int gx = Integer.parseInt(args[2]), gz = Integer.parseInt(args[3]);
+                if (args[1].equalsIgnoreCase("surveyguild")) guildHall.survey(sender, gx, gz);
+                else guildHall.build(sender, gx, gz);
+            } catch (NumberFormatException error) { sender.sendMessage("x、z 必须是整数。"); }
+            return true;
+        }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin buildarena|builddungeon。");
+            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin buildarena|builddungeon|surveyguild|buildguild。");
             return true;
         }
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) { help(player); return true; }
@@ -458,7 +475,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(dungeon.isBuilt()
                 ? "/mycli arena start|status|next|rewards|leave  六层试炼与个人奖励箱"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
-        p.sendMessage("/mycli guild board|menu|join|status|accept <ID>|abandon|claim|rewards  公会任务、声望与冒险者等级");
+        p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
     private void spells(Player p) {
@@ -749,6 +766,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void gotoPlace(Player p, String raw) {
         String id = raw.toLowerCase(Locale.ROOT);
+        if (id.equals("guild") || id.equals("公会") || id.equals("工会")) {
+            guildHall.teleport(p);
+            return;
+        }
         if (id.equals("arena") || id.equals("试炼场")) {
             if (!arenaBuilt) { p.sendMessage(ChatColor.RED + "试炼场尚未建成。"); return; }
             Location landing = new Location(world(), X + 0.5, FLOOR + 1.0, Z - 17 + 0.5, 0, 0);
@@ -1314,6 +1335,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (guildHall != null && guildHall.handleInteract(event)) return;
         if (dungeon != null && dungeon.handleInteract(event)) return;
         if (event.getClickedBlock() != null && button(event.getClickedBlock())) {
             startArena(event.getPlayer()); return;
@@ -1721,7 +1743,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return dungeon != null && dungeon.isBuilt()
                     ? List.of("start", "status", "next", "rewards", "leave") : List.of("start", "status", "leave");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
-            return List.of("board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
+            return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint")) return List.of("add", "remove");

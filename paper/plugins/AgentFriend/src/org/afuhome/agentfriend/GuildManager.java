@@ -64,6 +64,7 @@ final class GuildManager {
     void command(Player player, String[] args) {
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "board";
         switch (action) {
+            case "hall", "大厅" -> plugin.guildHallTeleport(player);
             case "board", "list", "看板" -> board(player);
             case "menu", "菜单" -> plugin.openGuildMenu(player);
             case "join", "register", "注册" -> join(player);
@@ -75,7 +76,7 @@ final class GuildManager {
             case "abandon", "放弃" -> abandon(player);
             case "claim", "交付", "领取" -> claim(player);
             case "rewards", "箱子" -> dungeon.command(player, new String[]{"arena", "rewards"});
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild board|menu|join|status|accept <ID>|abandon|claim|rewards");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards");
         }
     }
 
