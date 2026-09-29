@@ -6,18 +6,22 @@ import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
+import org.bukkit.util.RayTraceResult;
 
-/** Server-authoritative, short-range prospecting; never sends hidden block positions to clients. */
+/** Server-authoritative, short-range prospecting; only the caster sees the temporary outline. */
 final class ProspectingSpell {
     private static final int RANGE = 12;
     private static final int DURATION_TICKS = 240;
@@ -36,7 +40,7 @@ final class ProspectingSpell {
             Map.entry(Material.NETHER_GOLD_ORE, "下界金矿"), Map.entry(Material.NETHER_QUARTZ_ORE, "下界石英"),
             Map.entry(Material.ANCIENT_DEBRIS, "远古残骸"));
 
-    private record Trace(Location ore, String name, long expiresAt, BossBar bar) { }
+    private record Trace(Location ore, String name, long expiresAt, BossBar bar, BlockDisplay outline) { }
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Long> lastCast = new HashMap<>();
     private final Map<UUID, Long> lastAttempt = new HashMap<>();
@@ -105,8 +109,19 @@ final class ProspectingSpell {
         remove(player.getUniqueId());
         BossBar bar = Bukkit.createBossBar("探矿术", BarColor.PURPLE, BarStyle.SOLID);
         bar.addPlayer(player);
-        traces.put(player.getUniqueId(), new Trace(closest, oreName, now + DURATION_TICKS * 50L, bar));
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "。看屏幕顶部的方向提示；持续 12 秒。消耗 6 魔力，冷却 30 秒。");
+        BlockDisplay outline = null;
+        if (!plugin.floodgatePlayer(player.getUniqueId())) {
+            Location blockCorner = closest.getBlock().getLocation();
+            outline = world.spawn(blockCorner, BlockDisplay.class, display -> {
+                display.setBlock(Material.GLASS.createBlockData());
+                display.setGlowing(true);
+                display.setPersistent(false);
+                display.setVisibleByDefault(false);
+            });
+            player.showEntity(plugin, outline);
+        }
+        traces.put(player.getUniqueId(), new Trace(closest, oreName, now + DURATION_TICKS * 50L, bar, outline));
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "。矿块描边/墙面光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
 
@@ -157,17 +172,44 @@ final class ProspectingSpell {
         String height = Math.abs(dy) <= 1 ? "同层" : (dy > 0 ? "上方" : "下方") + Math.abs(dy) + "格";
         trace.bar().setTitle("§d✦ 探矿 " + trace.name() + "  §f" + direction + " · " + Math.round(distance) + "格 · " + height);
         trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) (DURATION_TICKS * 50L))));
+        projectOutline(player, ore);
+    }
+
+    /** A small screen-facing frame on the first wall; Bedrock has no glowing-entity outline. */
+    private void projectOutline(Player player, Location ore) {
         Location eye = player.getEyeLocation();
-        Vector towardOre = ore.toVector().subtract(eye.toVector());
-        if (towardOre.lengthSquared() > 0.001) {
-            Location spark = eye.add(towardOre.normalize().multiply(1.1));
-            player.spawnParticle(Particle.END_ROD, spark, 1, 0.12, 0.12, 0.12, 0.0);
+        Vector ray = ore.toVector().subtract(eye.toVector());
+        double length = ray.length();
+        if (length < 0.01) return;
+        RayTraceResult hit = player.getWorld().rayTraceBlocks(eye, ray.normalize(), length + 1.0,
+                FluidCollisionMode.NEVER, true);
+        if (hit == null || hit.getHitBlockFace() == null) return;
+        BlockFace face = hit.getHitBlockFace();
+        Vector normal = face.getDirection();
+        Vector center = hit.getHitPosition().add(normal.clone().multiply(0.08));
+        Vector right = switch (face) {
+            case UP, DOWN, NORTH, SOUTH -> new Vector(1, 0, 0);
+            default -> new Vector(0, 0, 1);
+        };
+        Vector up = switch (face) {
+            case UP, DOWN -> new Vector(0, 0, 1);
+            default -> new Vector(0, 1, 0);
+        };
+        double[][] points = {{-1,-1},{0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0}};
+        for (double[] point : points) {
+            Vector spot = center.clone().add(right.clone().multiply(point[0] * 0.23))
+                    .add(up.clone().multiply(point[1] * 0.23));
+            player.spawnParticle(Particle.END_ROD, spot.getX(), spot.getY(), spot.getZ(),
+                    1, 0, 0, 0, 0);
         }
     }
 
     private void remove(UUID id) {
         Trace trace = traces.remove(id);
-        if (trace != null) trace.bar().removeAll();
+        if (trace != null) {
+            trace.bar().removeAll();
+            if (trace.outline() != null && trace.outline().isValid()) trace.outline().remove();
+        }
     }
 
     void clear() {

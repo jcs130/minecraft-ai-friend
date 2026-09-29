@@ -98,6 +98,29 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     // whitelist here so player commands cannot turn arbitrary warp names into skills.
     private record PublicPlace(String id, int slot, Material icon, String title, String hint) { }
     private record GiftIdea(String id, Material icon, String title) { }
+    private record FocusSpell(String id, int slot, Material icon, String title, String hint) { }
+    private static final List<FocusSpell> FOCUS_SPELLS = List.of(
+            new FocusSpell("prospect", 10, Material.SPYGLASS, "§d探附近矿脉", "12 格；6 魔力"),
+            new FocusSpell("home", 1, Material.RED_BED, "§a回村庄", "安全传送到出生村庄"),
+            new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a治疗队友", "治疗面前队友；4 魔力"),
+            new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
+            new FocusSpell("fireworks", 4, Material.FIREWORK_ROCKET, "§6烟花术", "原版烟花粒子；1 魔力"),
+            new FocusSpell("starlight", 5, Material.GLOWSTONE_DUST, "§e星尘术", "照亮周围"),
+            new FocusSpell("prospect iron", 11, Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力"),
+            new FocusSpell("prospect diamond", 12, Material.DIAMOND, "§b探钻石", "12 格；6 魔力"),
+            new FocusSpell("prospect gems", 13, Material.EMERALD, "§a探宝石", "钻石、绿宝石、青金石"),
+            new FocusSpell("prospect coal", 14, Material.COAL, "§8探煤矿", "12 格；6 魔力"),
+            new FocusSpell("prospect ancient", 15, Material.NETHERITE_SCRAP, "§6探远古残骸", "下界探矿"),
+            new FocusSpell("prospect copper", 16, Material.RAW_COPPER, "§6探铜矿", "12 格；6 魔力"),
+            new FocusSpell("prospect gold", 17, Material.RAW_GOLD, "§e探金矿", "12 格；6 魔力"),
+            new FocusSpell("prospect redstone", 18, Material.REDSTONE, "§c探红石", "12 格；6 魔力"),
+            new FocusSpell("starbolt", 19, Material.AMETHYST_SHARD, "§d星芒箭", "自动锁敌；4 魔力"),
+            new FocusSpell("frostnova", 20, Material.SNOWBALL, "§b霜环", "近身群攻；7 魔力"),
+            new FocusSpell("flamewave", 21, Material.BLAZE_POWDER, "§6焰浪", "前方群攻；8 魔力"),
+            new FocusSpell("selfheal", 22, Material.GOLDEN_APPLE, "§a治疗自己", "回复 4 颗心；6 魔力"),
+            new FocusSpell("blink", 23, Material.ENDER_PEARL, "§d闪现", "短距离移动；4 魔力"),
+            new FocusSpell("food", 24, Material.BREAD, "§e饱食", "恢复饥饿；3 魔力"),
+            new FocusSpell("night", 25, Material.LANTERN, "§b夜视", "需要先学会；2 魔力"));
     private static final List<GiftIdea> GIFT_IDEAS = List.of(
             new GiftIdea("cherry_sapling", Material.CHERRY_SAPLING, "樱花树苗"),
             new GiftIdea("oak_boat", Material.OAK_BOAT, "橡木船"),
@@ -128,12 +151,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private final Map<UUID, UUID> automaticCompassTargets = new HashMap<>();
     private final Set<UUID> compassAutoPaused = new HashSet<>();
     private final Map<UUID, Long> teamTeleportAt = new HashMap<>();
+    private final Map<UUID, Long> focusUseAt = new HashMap<>();
     private final Set<UUID> participants = new HashSet<>();
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<UUID, Long> fireworksCooldown = new HashMap<>();
     private final Map<String, Long> goddessCooldown = new HashMap<>();
     private final Map<String, Long> giftNonces = new HashMap<>();
     private NamespacedKey compassKey;
+    private NamespacedKey focusKey;
+    private NamespacedKey focusSpellKey;
     private NamespacedKey statusBookKey;
     private NamespacedKey mobKey;
     private NamespacedKey featherKey;
@@ -154,6 +180,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         arenaBuilt = getConfig().getBoolean("arena-built", false);
         lastRun = getConfig().getLong("last-run", 0L);
         compassKey = new NamespacedKey(this, "skill_compass");
+        focusKey = new NamespacedKey(this, "spell_focus");
+        focusSpellKey = new NamespacedKey(this, "focus_spell");
         statusBookKey = new NamespacedKey(this, "status_book");
         mobKey = new NamespacedKey(this, "arena_mob");
         featherKey = new NamespacedKey(this, "learned_feather");
@@ -193,6 +221,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         automaticCompassTargets.clear();
         compassAutoPaused.clear();
         teamTeleportAt.clear();
+        focusUseAt.clear();
         giftNonces.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (combatSpells != null) combatSpells.clear();
@@ -261,7 +290,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
 
-    private boolean floodgatePlayer(UUID uuid) {
+    boolean floodgatePlayer(UUID uuid) {
         Plugin floodgate = Bukkit.getPluginManager().getPlugin("floodgate");
         if (floodgate == null || !floodgate.isEnabled()) return true; // fail closed for reserved OP identity
         try {
@@ -307,6 +336,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (player.getGameMode() == GameMode.SPECTATOR) return;
             if (!hasCompass(player)) giveCompass(player);
             if (!hasStatusBook(player)) giveStatusBook(player);
+            if (!hasFocus(player)) giveFocus(player);
         }, 40L);
     }
 
@@ -317,6 +347,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         compassAutoPaused.remove(id);
         savedCompassTargets.remove(id);
         teamTeleportAt.remove(id);
+        focusUseAt.remove(id);
         removeTrackingBar(id);
     }
 
@@ -367,6 +398,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         switch (action) {
             case "menu", "compassmenu", "罗盘" -> openMenu(player, "skills");
             case "compass", "指南针" -> giveCompass(player);
+            case "focus", "法杖" -> focusCommand(player, args);
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
@@ -394,6 +426,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
+        p.sendMessage("/mycli focus  领取/设置法杖；手持法杖使用即施法，潜行使用换技能");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
@@ -996,6 +1029,59 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
 
+    private boolean isFocus(ItemStack stack) {
+        return stack != null && stack.getType() == Material.BLAZE_ROD && stack.hasItemMeta()
+                && stack.getItemMeta().getPersistentDataContainer().has(focusKey, PersistentDataType.BYTE);
+    }
+    private boolean hasFocus(Player p) {
+        for (ItemStack stack : p.getInventory().getContents()) if (isFocus(stack)) return true;
+        return false;
+    }
+    private FocusSpell focusSpell(ItemStack stack) {
+        if (!isFocus(stack)) return null;
+        String id = stack.getItemMeta().getPersistentDataContainer().get(focusSpellKey, PersistentDataType.STRING);
+        return FOCUS_SPELLS.stream().filter(spell -> spell.id().equals(id)).findFirst().orElse(null);
+    }
+    private ItemStack focusItem(FocusSpell spell) {
+        ItemStack stack = item(Material.BLAZE_ROD, "§d✦ 灵纹法杖 · " + ChatColor.stripColor(spell.title()),
+                "手持使用：立即施放", "潜行并使用：切换技能", "消耗和冷却仍按技能本身计算");
+        ItemMeta meta = stack.getItemMeta();
+        meta.getPersistentDataContainer().set(focusKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(focusSpellKey, PersistentDataType.STRING, spell.id());
+        stack.setItemMeta(meta);
+        return stack;
+    }
+    private void giveFocus(Player p) {
+        if (hasFocus(p)) { p.sendMessage(ChatColor.YELLOW + "灵纹法杖已在背包；手持潜行使用可切换技能。"); return; }
+        Map<Integer, ItemStack> extra = p.getInventory().addItem(focusItem(FOCUS_SPELLS.get(0)));
+        if (extra.isEmpty()) p.sendMessage(ChatColor.LIGHT_PURPLE + "已领取灵纹法杖。拿在手上按使用键立即探矿；潜行使用可换技能。");
+        else p.sendMessage(ChatColor.RED + "背包已满；腾出一格后输入 /mycli focus give 领取法杖。");
+    }
+    private void bindFocus(Player p, String id) {
+        FocusSpell spell = FOCUS_SPELLS.stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
+        if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus menu 查看。"); return; }
+        ItemStack[] storage = p.getInventory().getStorageContents();
+        for (int slot = 0; slot < storage.length; slot++) {
+            if (!isFocus(storage[slot])) continue;
+            p.getInventory().setItem(slot, focusItem(spell));
+            p.sendMessage(ChatColor.LIGHT_PURPLE + "法杖已绑定 " + ChatColor.stripColor(spell.title()) + "；手持按使用键施放。");
+            return;
+        }
+        p.sendMessage(ChatColor.RED + "背包中没有灵纹法杖；先用 /mycli focus give 领取。");
+    }
+    private void focusCommand(Player p, String[] args) {
+        if (args.length == 1) {
+            if (hasFocus(p)) openMenu(p, "focus");
+            else giveFocus(p);
+            return;
+        }
+        switch (args[1].toLowerCase(Locale.ROOT)) {
+            case "give", "领取" -> giveFocus(p);
+            case "menu", "选择" -> { if (hasFocus(p)) openMenu(p, "focus"); else giveFocus(p); }
+            case "bind", "绑定" -> bindFocus(p, tail(args, 2).toLowerCase(Locale.ROOT));
+            default -> p.sendMessage(ChatColor.RED + "用法：/mycli focus give|menu|bind <技能ID>。");
+        }
+    }
     private void giveCompass(Player p) {
         for (ItemStack stack : p.getInventory().getContents()) if (isCompass(stack)) {
             p.sendMessage(ChatColor.YELLOW + "技能罗盘已经在背包里；也可随时用 /mycli menu。"); return;
@@ -1072,11 +1158,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "players" -> "§b✦ 找队友";
             case "combat" -> "§c✦ 战斗法术";
             case "prospect" -> "§d✦ 探矿术";
+            case "focus" -> "§d✦ 灵纹法杖绑定";
             case "creation" -> "§d✦ 向女神申请";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, 27, title);
         if (page.equals("skills")) {
+            inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
             inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄"));
             inv.setItem(11, item(Material.ENDER_PEARL, "§d闪现", "朝视线短距离移动；消耗 4 魔力"));
             inv.setItem(12, item(Material.GLISTERING_MELON_SLICE, "§d治疗队友", "治疗面前的玩家；消耗 4 魔力"));
@@ -1108,6 +1196,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.REDSTONE, "§c探红石", "12 格；6 魔力；30 秒冷却"));
             inv.setItem(16, item(Material.AMETHYST_SHARD, "§d探附近矿脉", "寻找最近的任意矿物"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("focus")) {
+            for (FocusSpell spell : FOCUS_SPELLS)
+                inv.setItem(spell.slot(), item(spell.icon(), spell.title(), spell.hint(), "点击绑定；之后手持法杖一按即施放"));
+            inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
@@ -1171,7 +1263,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (event.getClickedBlock() != null && button(event.getClickedBlock())) {
             startArena(event.getPlayer()); return;
         }
-        if (isCompass(event.getItem())) {
+        if (isFocus(event.getItem())) {
+            event.setCancelled(true);
+            Player player = event.getPlayer();
+            if (player.isSneaking()) { openMenu(player, "focus"); return; }
+            long now = System.currentTimeMillis();
+            if (now - focusUseAt.getOrDefault(player.getUniqueId(), 0L) < 300L) return;
+            focusUseAt.put(player.getUniqueId(), now);
+            FocusSpell spell = focusSpell(event.getItem());
+            if (spell == null) player.sendMessage(ChatColor.RED + "法杖绑定已失效；潜行使用重新选择技能。");
+            else cast(player, spell.id());
+        } else if (isCompass(event.getItem())) {
             event.setCancelled(true);
             openMenu(event.getPlayer(), "skills");
         } else if (isStatusBook(event.getItem())) {
@@ -1198,6 +1300,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == 26) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 9 -> openMenu(p, "focus");
                     case 10 -> cast(p, "home"); case 11 -> cast(p, "blink");
                     case 12 -> cast(p, "heal"); case 13 -> cast(p, "food");
                     case 14 -> cast(p, "fireworks"); case 15 -> cast(p, "starlight");
@@ -1227,6 +1330,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 16 -> cast(p, "prospect"); case 22 -> openMenu(p, "skills");
                     default -> { }
                 }
+            } else if (page.equals("focus")) {
+                if (slot == 0) openMenu(p, "skills");
+                else FOCUS_SPELLS.stream().filter(spell -> spell.slot() == slot).findFirst()
+                        .ifPresent(spell -> bindFocus(p, spell.id()));
             } else if (page.equals("places")) {
                 switch (slot) {
                     case 13 -> gotoPlace(p, "arena");
@@ -1498,7 +1605,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "spells", "status", "cast", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "goddess");
+        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "goddess");
+        if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "menu", "bind");
+        if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind"))
+            return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList();
+        if (args.length == 4 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind")
+                && args[2].equalsIgnoreCase("prospect"))
+            return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> id.startsWith("prospect "))
+                    .map(id -> id.substring("prospect ".length())).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("locate")) {
             List<String> choices = new ArrayList<>(List.of("list", "nearest", "off", "tp"));
             if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));

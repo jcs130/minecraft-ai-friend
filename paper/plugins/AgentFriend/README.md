@@ -1,12 +1,14 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
-## 0.3.12 探矿术
+## 0.3.13 探矿描边与灵纹法杖（隔离服已通过，待正式服发布）
 
-`/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]` 由服务端在玩家周围 12 格内查找最近的真实矿物。命中后消耗 6 点 AuraSkills 魔力，进入 30 秒冷却，并在施法者屏幕顶部用紫色 BossBar 显示矿种、相对方向、距离和高低差 12 秒；短距离末影烛粒子提示方向。找不到矿物不扣魔力也不触发冷却，空搜索仍有 2 秒扫描间隔，防止频繁命令拖慢服务端。技能罗盘的“探矿术”页为手柄玩家提供铁、煤、铜、金、宝石、红石和任意矿脉按钮；Agent 可用文字命令。旁观者不能施法。`mcviewer:state` 中每名玩家自己的 `mycli:prospect` 报告剩余冷却。
+`/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]` 由服务端在玩家周围 12 格内查找最近的真实矿物。命中后消耗 6 点 AuraSkills 魔力，进入 30 秒冷却，并在施法者屏幕顶部用紫色 BossBar 显示矿种、相对方向、距离和高低差 12 秒。Java 版另收到只对施法者可见、位于真实矿块上的短时 Glowing 方块轮廓；基岩版没有 Java 的 Glowing 效果，改由只发给施法者的末影烛粒子在视线命中的墙面投出光框。矿块被挖掉、玩家离开世界或 12 秒到期时清除轮廓。找不到矿物不扣魔力也不触发冷却；空搜索仍有 2 秒扫描间隔。旁观者不能施法。`mcviewer:state` 中每名玩家自己的 `mycli:prospect` 报告剩余冷却。
 
-普通 Java、基岩和 Mineflayer 都使用原版 BossBar、粒子、箱子菜单和命令。原版协议无法在隔墙矿石上画出精确发光轮廓；顶部方向条是跨端可用的屏幕提示。Paper 的世界级反透视配置另见 `../../config/anti-xray-overworld.yml` 与 `../../config/anti-xray-nether.yml`：engine mode 1 把密封矿物发成普通石头，不给只读区块的 Agent 制造假矿；洞穴中真正暴露的矿仍可被肉眼发现。主动施放探矿术才由服务端查真实矿物。它只搜索已加载区块，不生成新地形。
+新玩家背包会获得一根带服务端标记的 **灵纹法杖**。手持法杖按一次使用键，立即施放已绑定技能；手持潜行并按使用键，打开原版箱子菜单换技能。默认绑定探附近矿脉；可选指定矿种、星芒箭、霜环、焰浪、治疗自己与队友、回村庄、闪现、饱食、羽落、夜视、烟花和星尘。技能罗盘主菜单也能进入绑定页。已拥有法杖的玩家可用 `/mycli focus` 打开绑定页；丢失时 `/mycli focus give` 补领；Agent 可用 `/mycli focus bind <技能ID>`。法杖调用原来的技能入口，保留原有魔力、学习条件和冷却，没有额外施法次数。
 
-隔离服 25566 的 `prospecting-stage.mjs` 用无 OP Mineflayer 1.20.6 验证：密封钻石、铁、金矿的三个原始区块值全部变为石头，敲开旁边方块后真实钻石重新可见；探矿命中钻石、顶部 BossBar、粒子、魔力扣 6、30 秒冷却与 `mcviewer:state` 更新通过；罗盘可进入探矿页；空搜索不耗资源。Geyser 19133 Pong 与通用状态通道回归通过。构建候选 `AgentFriend-0.3.12.jar` 的 SHA256 为 `0dd884011c4ef3680a8464987f5f2e713f3331a4ff5e8810e3b457ae1e8cdcee`。基岩真机显示效果仍需玩家进服验收。
+普通 Java、基岩和 Mineflayer 都使用原版物品、BossBar、粒子、箱子菜单和命令。Java Glowing 方块标记是短时服务端展示实体，默认对其他玩家隐藏；基岩只有墙面投影光框和方向条，真实手机画面仍需入服验收。Paper 的世界级反透视配置另见 `../../config/anti-xray-overworld.yml` 与 `../../config/anti-xray-nether.yml`：engine mode 1 把密封矿物发成普通石头，不给只读区块的 Agent 制造假矿；洞穴中真正暴露的矿仍可被肉眼发现。主动施放探矿术才由服务端查真实矿物。它只搜索已加载区块，不生成新地形。
+
+隔离服 25566 的 `prospecting-stage.mjs` 用无 OP Mineflayer 1.20.6 验证：密封钻石、铁、金矿的三个原始区块值全部变为石头，敲开旁边方块后真实钻石重新可见；探矿命中钻石、顶部 BossBar、粒子、魔力扣 6、30 秒冷却与 `mcviewer:state` 更新通过；罗盘可进入探矿页；空搜索不耗资源。`focus-outline-stage.mjs` 用施法者和旁观者两个真实协议连接验证：潜行使用打开绑定页，点击钻石后单次使用成功探矿；发光轮廓实体只发给施法者，元数据含 Glowing 标志，旁观者没有收到；矿块移除后轮廓实体消失。法杖换绑治疗技能后单次使用把 12 血恢复到 20 血。构建候选 `AgentFriend-0.3.13.jar` 的 SHA256 为 `a308736dc70d3cdebcd48579adb26806aefc99808401fabb9ae5dbc58887f61f`。基岩真机显示和手柄操作仍需玩家进服验收。
 
 ## 0.3.3 世界名称
 
