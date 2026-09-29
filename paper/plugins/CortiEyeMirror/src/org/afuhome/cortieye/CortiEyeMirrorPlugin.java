@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
@@ -15,6 +16,7 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import dev.aurelium.auraskills.api.AuraSkillsApi;
 import dev.aurelium.auraskills.api.user.SkillsUser;
+import com.hpfxd.spectatorplus.paper.SpectatorPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -27,7 +29,14 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -36,6 +45,11 @@ import org.bukkit.craftbukkit.potion.CraftPotionEffectType;
 import org.bukkit.craftbukkit.potion.CraftPotionUtil;
 import net.minecraft.network.protocol.game.ClientboundRemoveMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
+import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ResolvableProfile;
 
 /** Mirrors presentation packets into a real spectator client; night vision belongs to the camera only. */
 public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
@@ -61,10 +75,15 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     private boolean autoAttach;
     private boolean cameraNightVision;
     private boolean showVitalsBossBar;
+    private boolean mirrorCraftingInventoryClicks;
     private volatile boolean attached;
+    private boolean inventoryMirrorPending;
+    private Inventory mirroredInventory;
+    private long lastInventoryClickAt;
     private int snapshotTargetEntityId = -1;
     private ProtocolManager protocol;
     private BossBar vitalsBar;
+    private final AtomicBoolean captureHotbarSlot36 = new AtomicBoolean();
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -75,6 +94,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         autoAttach = getConfig().getBoolean("auto-attach", true);
         cameraNightVision = getConfig().getBoolean("camera-night-vision", true);
         showVitalsBossBar = getConfig().getBoolean("show-vitals-bossbar", false);
+        mirrorCraftingInventoryClicks = getConfig().getBoolean("mirror-crafting-inventory-clicks", true);
         if (targetName == null || cameraName == null || targetName.equalsIgnoreCase(cameraName)) {
             getLogger().severe("Invalid target/camera mapping; disabling.");
             Bukkit.getPluginManager().disablePlugin(this);
@@ -87,6 +107,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(this, this);
         getCommand("cortieye").setExecutor(this::onStatusCommand);
         Bukkit.getScheduler().runTaskTimer(this, this::ensureCameraNightVision, 1L, 100L);
+        Bukkit.getScheduler().runTaskTimer(this, this::closeIdleInventoryMirror, 20L, 20L);
         if (showVitalsBossBar) Bukkit.getScheduler().runTaskTimer(this, this::tickVitals, 5L, 5L);
         Bukkit.getScheduler().runTaskLater(this, this::attachCamera, 40L);
         Bukkit.getScheduler().runTaskTimer(this, () -> {
@@ -134,6 +155,34 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                         () -> forward(targetId, type, copy, signature), delay);
             }
         });
+        protocol.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST,
+                PacketType.Play.Server.WINDOW_ITEMS, PacketType.Play.Server.SET_SLOT) {
+            @Override public void onPacketSending(PacketEvent event) {
+                if (!captureHotbarSlot36.get() || !event.getPlayer().getName().equalsIgnoreCase(targetName)) return;
+                Object handle = event.getPacket().getHandle();
+                ItemStack item;
+                String packet;
+                if (handle instanceof ClientboundContainerSetContentPacket contents) {
+                    if (contents.getContainerId() != 0 || contents.getItems().size() <= 36) return;
+                    item = contents.getItems().get(36);
+                    packet = "ClientboundContainerSetContentPacket";
+                } else if (handle instanceof ClientboundContainerSetSlotPacket slot) {
+                    if (slot.getContainerId() != 0 || slot.getSlot() != 36) return;
+                    item = slot.getItem();
+                    packet = "ClientboundContainerSetSlotPacket";
+                } else return;
+                if (!captureHotbarSlot36.compareAndSet(true, false)) return;
+                String report;
+                try {
+                    report = describeSlot36(packet, item);
+                } catch (RuntimeException | LinkageError error) {
+                    report = packet + " container=0 slot=36 inspection-error=" + error.getClass().getSimpleName();
+                }
+                String capturedReport = report;
+                Bukkit.getScheduler().runTask(CortiEyeMirrorPlugin.this,
+                        () -> getLogger().info("CortiLan outbound slot36: " + capturedReport));
+            }
+        });
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             long cutoff = System.currentTimeMillis() - 3_000L;
             cameraChat.values().removeIf(time -> time < cutoff);
@@ -141,7 +190,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         getLogger().info("Native HUD mirror ready: " + targetName + " -> " + cameraName
                 + "; chat=" + mirrorChat + "; advancements=" + mirrorAdvancements
                 + "; camera-night-vision=" + cameraNightVision
-                + "; vitals-bossbar=" + showVitalsBossBar);
+                + "; vitals-bossbar=" + showVitalsBossBar
+                + "; crafting-inventory=" + mirrorCraftingInventoryClicks);
     }
 
     @Override public void onDisable() {
@@ -151,6 +201,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         cameraChat.clear();
         restoreCameraEffects(cameraName == null ? null : Bukkit.getPlayerExact(cameraName));
         snapshotTargetEntityId = -1;
+        resetInventoryMirror();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
@@ -167,6 +218,71 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         if (!event.getPlayer().getName().equalsIgnoreCase(targetName)) return;
         Bukkit.getScheduler().runTaskLater(this, this::attachCamera, 5L);
         Bukkit.getScheduler().runTaskLater(this, this::attachCamera, 40L);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTargetInventoryClick(InventoryClickEvent event) {
+        if (!mirrorCraftingInventoryClicks || !(event.getWhoClicked() instanceof Player target)
+                || !target.getName().equalsIgnoreCase(targetName)
+                || event.getView().getType() != InventoryType.CRAFTING) return;
+        Player camera = Bukkit.getPlayerExact(cameraName);
+        if (!isAttached(target, camera)) return;
+        if (mirroredInventory != null
+                && camera.getOpenInventory().getTopInventory() != mirroredInventory) resetInventoryMirror();
+        lastInventoryClickAt = System.currentTimeMillis();
+        if (inventoryMirrorPending || mirroredInventory != null) return;
+        inventoryMirrorPending = true;
+        Bukkit.getScheduler().runTask(this, () -> {
+            inventoryMirrorPending = false;
+            if (!target.isOnline() || !isAttached(target, camera)
+                    || target.getOpenInventory().getType() != InventoryType.CRAFTING) return;
+            if (!(Bukkit.getPluginManager().getPlugin("SpectatorPlus") instanceof SpectatorPlugin spectatorPlus)) return;
+            var screens = spectatorPlus.getSyncController().getScreenSyncHandler();
+            screens.onPlayerOpenInventory(target);
+            if (screens.isViewingSyncedScreen(camera))
+                mirroredInventory = camera.getOpenInventory().getTopInventory();
+        });
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTargetInventoryOpen(InventoryOpenEvent event) {
+        if (event.getPlayer().getName().equalsIgnoreCase(targetName)
+                && event.getView().getType() != InventoryType.CRAFTING) resetInventoryMirror();
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onTargetInventoryClose(InventoryCloseEvent event) {
+        if (event.getPlayer().getName().equalsIgnoreCase(targetName)
+                && event.getView().getType() == InventoryType.CRAFTING) closeInventoryMirror();
+    }
+
+    @EventHandler public void onCameraQuit(PlayerQuitEvent event) {
+        if (event.getPlayer().getName().equalsIgnoreCase(cameraName)
+                || event.getPlayer().getName().equalsIgnoreCase(targetName)) resetInventoryMirror();
+    }
+
+    private boolean isAttached(Player target, Player camera) {
+        return camera != null && camera.isOnline() && camera.getGameMode() == GameMode.SPECTATOR
+                && camera.getSpectatorTarget() != null
+                && camera.getSpectatorTarget().getUniqueId().equals(target.getUniqueId());
+    }
+
+    private void closeIdleInventoryMirror() {
+        if (mirroredInventory != null && System.currentTimeMillis() - lastInventoryClickAt >= 3000L)
+            closeInventoryMirror();
+    }
+
+    private void closeInventoryMirror() {
+        Player camera = Bukkit.getPlayerExact(cameraName);
+        if (mirroredInventory != null && camera != null && camera.isOnline()
+                && camera.getOpenInventory().getTopInventory() == mirroredInventory) camera.closeInventory();
+        resetInventoryMirror();
+    }
+
+    private void resetInventoryMirror() {
+        inventoryMirrorPending = false;
+        mirroredInventory = null;
+        lastInventoryClickAt = 0L;
     }
 
     private SkillsUser skillsUser(Player target) {
@@ -206,6 +322,12 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         Player camera = Bukkit.getPlayerExact(cameraName);
         if (target == null) { sender.sendMessage("Target " + targetName + " offline; camera="
                 + (camera == null ? "offline" : "online")); return true; }
+        if (args.length == 1 && args[0].equalsIgnoreCase("inspectslot36")) {
+            captureHotbarSlot36.set(true);
+            target.updateInventory();
+            sender.sendMessage("Requested outbound inventory packet for " + targetName + " slot36; see server log.");
+            return true;
+        }
         SkillsUser user = skillsUser(target);
         sender.sendMessage("target=" + targetName + " health=" + number(target.getHealth())
                 + "/" + number(target.getMaxHealth()) + " mana="
@@ -217,6 +339,33 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                     && camera.hasPotionEffect(PotionEffectType.NIGHT_VISION))
                 + " vitalsBossBar=" + showVitalsBossBar);
         return true;
+    }
+
+    private String describeSlot36(String packet, ItemStack item) {
+        if (item == null || item.isEmpty()) return packet + " item=empty";
+        var components = item.getComponentsPatch().entrySet().stream()
+                .map(entry -> componentLabel(entry.getKey())
+                        + (entry.getValue().isPresent() ? "" : "(removed)"))
+                .sorted().toList();
+        var customName = item.get(DataComponents.CUSTOM_NAME);
+        var itemName = item.get(DataComponents.ITEM_NAME);
+        ResolvableProfile profile = item.get(DataComponents.PROFILE);
+        int textureCount = profile == null ? 0 : profile.properties().get("textures").size();
+        int textureLength = profile == null ? 0 : profile.properties().get("textures").stream()
+                .findFirst().map(property -> property.value().length()).orElse(0);
+        return packet + " container=0 slot=36 item=" + item.getItem()
+                + " components=" + components
+                + " custom_name=" + (customName == null ? "<absent>" : customName.getString())
+                + " item_name=" + (itemName == null ? "<absent>" : itemName.getString())
+                + " profile=" + (profile != null)
+                + " textures=" + textureCount + " firstTextureBase64Length=" + textureLength;
+    }
+
+    private String componentLabel(Object type) {
+        if (type == DataComponents.CUSTOM_NAME) return "minecraft:custom_name";
+        if (type == DataComponents.ITEM_NAME) return "minecraft:item_name";
+        if (type == DataComponents.PROFILE) return "minecraft:profile";
+        return type.toString();
     }
 
     private void ensureCameraNightVision() {

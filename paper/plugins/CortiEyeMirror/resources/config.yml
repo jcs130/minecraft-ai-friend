@@ -4,5 +4,6 @@ camera: CortiEye
 auto-attach: true
 camera-night-vision: true
 show-vitals-bossbar: false
+mirror-crafting-inventory-clicks: true
 mirror-chat: true
 mirror-advancements: true

@@ -290,7 +290,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler public void onStarterJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         Bukkit.getScheduler().runTaskLater(this, () -> {
-            if (!player.isOnline() || player.getGameMode() == GameMode.SPECTATOR) return;
+            if (!player.isOnline()) return;
+            int backpackChanges = BackpackShortcutMigration.migrate(player);
+            if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
+                    + player.getUniqueId() + "; slots=" + backpackChanges);
+            if (player.getGameMode() == GameMode.SPECTATOR) return;
             if (!hasCompass(player)) giveCompass(player);
             if (!hasStatusBook(player)) giveStatusBook(player);
         }, 40L);

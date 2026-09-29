@@ -1,11 +1,10 @@
 name: CortiEyeMirror
-version: '0.1.4'
+version: '0.1.6'
 main: org.afuhome.cortieye.CortiEyeMirrorPlugin
 api-version: '1.20.6'
 description: Mirrors Corti's native HUD, chat and advancement packets to an attached CortiEye client.
 author: AfuHome
-depend: [ProtocolLib, AuraSkills]
-softdepend: [SpectatorPlus]
+depend: [ProtocolLib, AuraSkills, SpectatorPlus]
 commands:
   cortieye:
     description: Read Corti's actual health, mana and camera binding.
