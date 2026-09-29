@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.19 冒险者公会与地下城委托（已部署）
+
+已有的六层试炼地下城继续用原版方块、怪物、按钮和个人奖励箱。公会看板提供四张每日委托：`first_step` 通关第 1 层、`pest_control` 击败 5 只试炼怪物、`deep_explorer` 通关第 3 层、`treasure_vault` 通关第 6 层。任务必须先接再完成；同层存活的队友共享试炼怪物击杀计数，每人只推进自己接取的任务。每人同时只能接一单，每张任务每天最多交付一次；打不过可放弃当前委托，进度清零后重新接单。交付后声望与奖励物资一起写入插件配置，物资留在个人奖励箱手动领取；背包满时保留。旧项目的等级门槛沿用为青铜 0、黑铁 10、白银 30、黄金 70、白金 150、钻石 350，深层与宝库委托分别要求黑铁与白银。旧世界公会名册没有自动导入新世界。
+
+Java、基岩、Agent 共用 `/mycli guild board|menu|join|status|accept <ID>|abandon|claim|rewards`。手柄玩家在技能罗盘点“冒险者公会”打开 27 格原版箱子菜单，点任务接单、点绿宝石交付、点箱子领奖；命格书也显示本人等级与任务。状态保存于 `plugins/AgentFriend/config.yml` 的 `guild-players` 和既有 `dungeon-rewards`，随世界备份，不提交 Git。隔离服 `guild-stage.mjs` 用两个 Mineflayer 账号实际启动地下城、击杀并通关三层、点 GUI 接单、交付与查个人箱，验证组队计数、每日重复限制、等级门槛、升级、命令及手柄菜单放弃委托和停服后文件持久化。自然生成的 Dungeons and Taverns v3.2 数据包本身定义了地下城刷怪房和战利品表（例如 `undead_crypt`）；此版未重复改写这些生成结构或旧箱子。
+
 ## 0.3.17 玩家独立状态频道（已部署）
 
 服务端向每位在线玩家按其 UUID 构建 AuraSkills 魔力与技能、MagicSpells 和 `/mycli` 能力的完整 JSON，通过 `mcviewer:state` 发送给该玩家。登录、状态变化和每 5 秒心跳均会发送；技能与能力各最多 24 项，UTF-8 原始负载最多 16384 字节。新版客户端须注册 `mcviewer:state`；仅注册旧频道的客户端仍会收到 `corti:viewer_state` 兼容消息。`viewer-state-stage.mjs` 用三个不同账号验证独立经验、魔力与冷却，以及新旧频道的投递行为。

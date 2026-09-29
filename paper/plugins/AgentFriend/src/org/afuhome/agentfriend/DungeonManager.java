@@ -38,6 +38,7 @@ import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -307,6 +308,7 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + loot.amount());
             }
             if (floor == 3) plugin.teachArenaSkills(p);
+            plugin.guildFloorCleared(p, floor);
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
             p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的宝箱里；打开后点物品领取。");
             credited++;
@@ -334,6 +336,17 @@ final class DungeonManager implements Listener {
 
     private String rewardPath(UUID id, Material material) {
         return REWARDS + id + "." + material.name().toLowerCase(Locale.ROOT);
+    }
+    boolean queueGuildRewards(UUID id, int emeralds, Material bonus, int bonusCount) {
+        if (emeralds <= 0 || bonusCount <= 0 || !List.of(REWARD_TYPES).contains(bonus)) return false;
+        long emeraldTotal = (long) pending(id, Material.EMERALD) + emeralds;
+        long bonusTotal = (long) pending(id, bonus) + bonusCount;
+        if (bonus == Material.EMERALD) emeraldTotal += bonusCount;
+        if (emeraldTotal < 0 || bonusTotal < 0
+                || emeraldTotal > Integer.MAX_VALUE || bonusTotal > Integer.MAX_VALUE) return false;
+        plugin.getConfig().set(rewardPath(id, Material.EMERALD), (int) emeraldTotal);
+        if (bonus != Material.EMERALD) plugin.getConfig().set(rewardPath(id, bonus), (int) bonusTotal);
+        return true;
     }
     private int pending(UUID id, Material material) {
         return plugin.getConfig().getInt(rewardPath(id, material), 0);
@@ -409,6 +422,17 @@ final class DungeonManager implements Listener {
         if (w == null || !built) return;
         for (int y : Y) for (Entity e : w.getNearbyEntities(new Location(w, X + 0.5, y + 4, Z + 0.5), 20, 8, 20))
             if (e.getScoreboardTags().contains(MOB_TAG)) e.remove();
+    }
+
+    @EventHandler public void onDungeonMobDeath(EntityDeathEvent event) {
+        if (!active || !mobs.contains(event.getEntity().getUniqueId())
+                || !event.getEntity().getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE)
+                || floorAt(event.getEntity().getLocation()) != floor) return;
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && !player.isDead() && inFloor(player.getLocation(), floor))
+                plugin.guildMobDefeated(player);
+        }
     }
 
     void build(CommandSender sender) {

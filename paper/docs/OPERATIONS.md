@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.17 已在正式服运行；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.19 已在正式服运行；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -32,6 +32,10 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 观战状态通道验收：用 Mineflayer 1.20.6 在隔离服以不同名称登录，分别注册 `mcviewer:state` 和旧的 `corti:viewer_state` 并监听原始 `custom_payload`。服务端按每位玩家 UUID 构建完整状态，对每个连接调用 `sendPluginMessage` 发送 `mcviewer:state`；仅注册旧频道的客户端还发送一份旧频道兼容消息。Paper 只向已注册该频道的客户端实际投递，因此新版客户端须注册 `mcviewer:state`；同时注册两个频道时只收到新版。`plugins/AgentFriend/viewer-state-stage.mjs` 以三个账号验证登录首包、独立技能经验、魔力与冷却变化以及 5 秒心跳。负载以 `{` 开头、可直接按 UTF-8 JSON 解析，不加长度前缀；两类列表各不超过 24 项、单包不超过 16384 字节，聊天栏没有 JSON。这个频道只传接收者本人的状态，不镜像目标玩家状态。
 
 0.3.17 发布：最终 JAR 在 25566 隔离服完成三账号新/旧/双频道测试，最大实测 2622 字节；技能经验、魔力、冷却只改变本人负载。2026-09-29 在仅有服务账号在线时备份至 E:\MC\backups\scheduled\20260929-192545 并完成 F 盘镜像，再停服替换唯一启用的 AgentFriend JAR 并正常启动。生产日志确认载入 0.3.17，Agent LAN 白名单探针、Java 状态、Geyser Pong 和 Goddess 桥均通过；基岩真机画面未在本次自动测试中打开。
+
+公会与地下城验收：六层地下城已建成；0.3.19 只扩展原有挑战与个人奖励箱，不覆盖世界结构。`plugins/AgentFriend/guild-stage.mjs` 在 25566 隔离服用两名 Mineflayer 玩家接单、进入第 1–3 层，验证真实怪物死亡事件、同层队伍共享讨伐计数、楼层结算、每日重复交付拒绝、命令和菜单放弃委托、黑铁等级门槛、罗盘原版箱子菜单接单、声望升级与个人奖励箱绿宝石数量。最终候选两次测试均通过，最后一次第 1 层击杀 3 只、第 2 层 4 只，A 声望升至 10（黑铁），B 为 5（青铜），A 箱中绿宝石 8；停服后 `config.yml` 的 `guild-players` 与 `dungeon-rewards` 均保留。公会数据与世界一同备份，不把隔离服玩家记录复制到正式服。Dungeons and Taverns v3.2 已含 `undead_crypt` 刷怪房模板和战利品表，本版不重复注入其自然生成结构。
+
+0.3.19 正式发布：0.3.18 先完成原流程验证并短暂上线；复核发现接高层任务后缺少退出方式，补 `/mycli guild abandon` 与看板红色按钮后重新编译、重新跑双人三层完整验收。最终候选 JAR SHA256 为 `3cccb75797ae0fe4667340f20276fa9d5a6943a9b5c2450f8978cf0782a92d09`。仅服务账号在线时再次完整备份至 `E:\MC\backups\scheduled\20260929-195422`，F 盘镜像完成；停服替换唯一启用的 AgentFriend 0.3.19 JAR 后正常启动。正式服日志确认 0.3.19 与已建六层地下城，Java 状态、Agent LAN 白名单探针、Geyser Pong、Goddess 桥通过。基岩真机手柄看板操作仍待玩家实际体验。
 
 探矿与法杖验收：在隔离服先放密封矿物，再让 Mineflayer 连接并读取原始区块；三个真实矿种应被 Paper mode 1 显示为石头，敲开邻格后真实矿物重新可见。`plugins/AgentFriend/prospecting-stage.mjs` 验证探矿 BossBar、粒子、魔力下降 6、冷却进入状态频道和空搜索不耗资源。`plugins/AgentFriend/focus-outline-stage.mjs` 以两个 Java 协议账号验证：施法者潜行使用法杖选钻石、单次使用施法，只有施法者收到发光方块展示实体（元数据 Glowing 位为 64）和墙面光框，旁观者收不到，矿块消失即清除；换绑治疗后单次使用能恢复生命。正式服重启后核对 `world/paper-world.yml` 与 `world_nether/paper-world.yml` 的反透视配置、Java/基岩入口和 MSPT。基岩版没有 Java Glowing 效果，使用墙面粒子和 BossBar；真机视觉及手柄操作由玩家复核。
 

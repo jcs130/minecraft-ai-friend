@@ -180,6 +180,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long nextWaveAt;
     private long lastRun;
     private DungeonManager dungeon;
+    private GuildManager guild;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
@@ -201,6 +202,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
+        guild = new GuildManager(this, dungeon);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
@@ -243,6 +245,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private World world() { return Bukkit.getWorld("world"); }
+    void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
+    void guildFloorCleared(Player player, int floor) { if (guild != null) guild.onDungeonFloorCleared(player, floor); }
+    void openGuildMenu(Player player) { openMenu(player, "guild"); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
     private boolean inVillage(Location at) {
         return sameWorld(at) && at.getBlockX() >= -630 && at.getBlockX() <= -470
@@ -429,6 +434,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 if (dungeon.isBuilt()) dungeon.command(player, args);
                 else arenaCommand(player, args);
             }
+            case "guild", "公会", "工会" -> guild.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。输入 /mycli help。不会猜测并执行其他命令。");
         }
@@ -452,6 +458,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(dungeon.isBuilt()
                 ? "/mycli arena start|status|next|rewards|leave  六层试炼与个人奖励箱"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
+        p.sendMessage("/mycli guild board|menu|join|status|accept <ID>|abandon|claim|rewards  公会任务、声望与冒险者等级");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
     private void spells(Player p) {
@@ -472,6 +479,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 + "/" + Math.round(user.getMaxMana()) + " · 炼金等级 " + user.getSkillLevel(Skills.ALCHEMY));
         if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "status"});
         else p.sendMessage(ChatColor.GRAY + "试炼场 " + (active ? "第 " + wave + "/3 波" : "待命"));
+        guild.command(p, new String[]{"guild", "status"});
         p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
     private void cast(Player p, String raw) {
@@ -1163,6 +1171,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + "\n\n未学时点击图标；原版经验 5 级或炼金等级 2 可学习，试炼通关也能解锁。",
                 "§b探索指引§r\n\n手持技能罗盘会指向最近的队友。点‘找队友’可选定追踪或安全传送到身边。\n\n传送地点有村庄、樱花林、试炼场；也能保存自己的营地。",
                 "§6咏唱指引§r\n\n罗盘中的圣愈术治疗自己；治疗队友要面向对方。战斗法术页的星芒箭可自动锁定附近怪物，霜环和焰浪也只攻击怪物。\n\n造物术只提供少量生活物资，消耗与采集技能共用的魔力。",
+                guild.bookPage(p),
                 "§6给旅人的话§r\n\n村庄里可以安心玩耍；村外有怪，结伴探索更有趣。\n\n"
                         + "需要帮助时，可以请大人告诉服主女神。");
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
@@ -1195,10 +1204,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "focus" -> "§d✦ 灵纹法杖绑定";
             case "utility" -> "§b✦ 探索法术";
             case "creation" -> "§d✦ 向女神申请";
+            case "guild" -> "§6✦ 冒险者公会";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, 27, title);
         if (page.equals("skills")) {
+            inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
             inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
             inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄"));
@@ -1274,6 +1285,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             if (visible.isEmpty()) inv.setItem(13, item(Material.BARRIER, "§7暂时没有其他在线玩家", "女神旁观者不会显示在这里"));
             playerMenuTargets.put(inv, targets);
+        } else if (page.equals("guild")) {
+            guild.fillBoard(p, inv);
         } else if (page.equals("creation")) {
             for (int i = 0; i < GIFT_IDEAS.size(); i++) {
                 GiftIdea idea = GIFT_IDEAS.get(i);
@@ -1342,6 +1355,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == 26) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 7 -> openMenu(p, "guild");
                     case 8 -> openMenu(p, "utility");
                     case 9 -> openMenu(p, "focus");
                     case 10 -> cast(p, "home"); case 11 -> cast(p, "blink");
@@ -1400,6 +1414,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else if (targets != null && targets.containsKey(slot)) {
                     if (slot >= 19) teleportToTeammate(p, targets.get(slot));
                     else trackPlayer(p, targets.get(slot));
+                }
+            } else if (page.equals("guild")) {
+                if (slot == 23) gotoPlace(p, "arena");
+                else if (slot == 24) openMenu(p, "skills");
+                else {
+                    guild.click(p, slot);
+                    if (slot == 0 || (slot >= 10 && slot <= 13) || slot == 20 || slot == 21) openMenu(p, "guild");
                 }
             } else if (page.equals("creation")) {
                 if (slot >= 10 && slot < 10 + GIFT_IDEAS.size()) requestCreation(p, GIFT_IDEAS.get(slot - 10).id());
@@ -1668,7 +1689,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "goddess");
+        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
         if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "list", "menu", "bind");
         if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList();
@@ -1699,6 +1720,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
             return dungeon != null && dungeon.isBuilt()
                     ? List.of("start", "status", "next", "rewards", "leave") : List.of("start", "status", "leave");
+        if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
+            return List.of("board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
+        if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
+            return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint")) return List.of("add", "remove");
         return new ArrayList<>();
     }
