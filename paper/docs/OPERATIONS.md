@@ -65,6 +65,14 @@ AgentFriend 在施法实际生效后向施法者发送原版标题、副标题�
 
 2026-09-29 正式发布：仅 CortiLan、CortiEye、Goddess 服务账号在线时生成 E/F 完整快照 `20260929-220753`，两盘 `.complete` 均存在。正常停服，将旧 AgentFriend 0.3.21 与 CortiEyeMirror 0.1.6 设为 disabled，只启用 0.3.22（SHA256 `BB3BAAED18ED967AEE4AFF3F9C31E4B8BD2884C33C023F6C1C2A4123507A2B8C`）及 0.1.7（最终 SHA256 `7D5912AD12D37070B2D3ECC3E36AAAFC9D334C49E7F52E20F7DE81A3596B4C9E`）。首次启动发现 ProtocolLib 对不存在的 `CUSTOM_SOUND_EFFECT` 包发出注册警告；删除该多余监听后，隔离服以最终 JAR 重新验证附身画面三类数据包，再替换正式服 0.1.7 JAR，未改世界。最终重启后 RCON 版本、Java 入口、LAN 网关白名单探针、Geyser Pong、Goddess 桥和道路/房屋保护快照均正常，启动日志无上述警告；CortiEye 真实直播观感仍需在开播时目视验收。回退这次代码只需无人游玩时正常停服、禁用两个新 JAR、启用对应旧 JAR 后启动；不需恢复整个世界而丢失玩家进度。
 
+## 0.3.25 地下城死亡领奖指引
+
+试炼中死亡的玩家会立刻收到原版聊天指引；复活后再次收到聊天和标题。指引区分已通关奖励与尚未结算的当前层：已有奖励保存在按 UUID 隔离的个人箱，不会在死亡地点掉落；未通关的楼层不产出奖励。玩家可走到地面入口箱 `(-594, 91, -313)`，Agent 可执行 `/mycli arena rewards` 打开同一份奖励。死亡后断线，待发提示写入 `plugins/AgentFriend/config.yml` 的 `dungeon-death-guide`，重登后补发并清除。已有奖励仍存于原 `dungeon-rewards`、`dungeon-bonus-items`，此次不迁移物品或世界结构。
+
+隔离服 25566 的 `dungeon-death-guide-stage.mjs` 用两个 Mineflayer 账号验证首层未结算死亡与通关首层后在第二层死亡两条路径；两种提示、复活后补发、入口箱坐标、命令及已结算铁锭/随机奖励均通过。正式发布前需确认无人类玩家在线、无活动试炼，再按本文件流程完成 E/F 双盘备份、正常停服和唯一启用 JAR 替换；发布后核对 Java、基岩、Agent 网关及 Goddess/观战服务。
+
+2026-09-29 正式发布：CortiLan 六层试炼结束、`dungeon-active-run` 清空后，确认仅服务账号在线；正常停服快照 `20260929-235745` 在 E/F 两盘均有 `.complete`，随后正常停服并只启用 AgentFriend 0.3.25（184365 字节，SHA256 `496F232BF26D43722DF41B0795F5E9ED701E61EDA431B85E52EB1F0565FC4FD9`）。重启后 RCON 读到插件 0.3.25、六层加载成功；Java 状态、Agent LAN 网关拒绝未授权账号、Geyser 基岩 Pong、Goddess 桥与 CortiEyeMirror 插件加载均通过。原生 CortiEye 观战插件会在观察者客户端下次登录时附身；维护脚本的旧 watcher 因原生插件已加载而保持停止。回退须在无活动试炼时正常停服，把 0.3.25 设为 disabled 并启用 0.3.24；奖励和死亡提示配置必须与世界一起保留，不要用旧备份覆盖新进度。
+
 ## 0.3.24 地下城断线续打
 
 原实现于 2026-09-29 23:14:43 在 CortiLan 与 CortiEye 同时显示 `Disconnected` 后，当秒把第二层判为失败；CortiLan 于 23:14:52 重连，但队伍已清空。日志足以证明不能续打的服务端原因，尚不能证明最初两条连接为何同时断开。第一、二层的已结算奖励仍在各自个人箱中。

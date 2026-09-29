@@ -40,12 +40,14 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -67,6 +69,7 @@ final class DungeonManager implements Listener {
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
     private static final String RARE_MISSES = "dungeon-rare-misses.";
+    private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 128;
     private static final Material[] REWARD_TYPES = {
             Material.EMERALD, Material.IRON_INGOT, Material.BREAD,
@@ -460,8 +463,53 @@ final class DungeonManager implements Listener {
         }
     }
 
+    @EventHandler public void onParticipantDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (!active || !participants.contains(player.getUniqueId())
+                || !inFloor(player.getLocation(), floor)) return;
+        UUID id = player.getUniqueId();
+        plugin.getConfig().set(DEATH_GUIDE + id, true);
+        plugin.saveConfig(); // Retain the guidance if the player disconnects before respawning.
+        sendDeathGuide(player);
+    }
+
+    @EventHandler public void onParticipantRespawn(PlayerRespawnEvent event) {
+        scheduleDeathGuide(event.getPlayer().getUniqueId(), 10L);
+    }
+
+    private void scheduleDeathGuide(UUID id, long delayTicks) {
+        if (!plugin.getConfig().getBoolean(DEATH_GUIDE + id, false)) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player player = Bukkit.getPlayer(id);
+            if (player == null || !player.isOnline() || player.isDead()
+                    || !plugin.getConfig().getBoolean(DEATH_GUIDE + id, false)) return;
+            sendDeathGuide(player);
+            player.sendTitle(ChatColor.GOLD + "试炼奖励在入口",
+                    ChatColor.YELLOW + "不用返回死亡地点", 5, 70, 15);
+            plugin.getConfig().set(DEATH_GUIDE + id, null);
+            plugin.saveConfig();
+        }, delayTicks);
+    }
+
+    private void sendDeathGuide(Player player) {
+        UUID id = player.getUniqueId();
+        player.sendMessage(ChatColor.GOLD + "[试炼指引] " + ChatColor.YELLOW
+                + "试炼奖励只在楼层通关后存入个人奖励箱，不会掉在死亡地点。");
+        player.sendMessage(hasPendingRewards(id)
+                ? ChatColor.GREEN + "[试炼指引] 你已有未领取奖励，死亡不会清空。"
+                : ChatColor.YELLOW + "[试炼指引] 当前个人箱没有待领奖励；未通关的楼层不结算奖励。");
+        player.sendMessage(ChatColor.AQUA + "[试炼指引] 去试炼场地面入口奖励箱 (-594, 91, -313) 领取；"
+                + "或输入 /mycli arena rewards 直接打开同一个个人箱。");
+    }
+
+    private boolean hasPendingRewards(UUID id) {
+        for (Material material : REWARD_TYPES) if (pending(id, material) > 0) return true;
+        return !bonusItems(id).isEmpty();
+    }
+
     @EventHandler public void onParticipantJoin(PlayerJoinEvent event) {
         UUID id = event.getPlayer().getUniqueId();
+        scheduleDeathGuide(id, 30L);
         if (!active || !participants.contains(id)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player player = Bukkit.getPlayer(id);
