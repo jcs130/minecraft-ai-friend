@@ -438,11 +438,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return String.join(" ", java.util.Arrays.copyOfRange(args, from, args.length)).trim();
     }
     private void help(Player p) {
-        p.sendMessage(ChatColor.GOLD + "阿福技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
+        p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
-        p.sendMessage("/mycli focus  领取/设置法杖；手持法杖使用即施法，潜行使用换技能");
+        p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
@@ -456,9 +456,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：12 格内寻找最近矿物；可选 iron|coal|copper|gold|gems|diamond|redstone|ancient。消耗 6 魔力，30 秒冷却；屏幕顶部显示方向 12 秒。");
+        p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
+        p.sendMessage(ChatColor.GRAY + "Agent 用 /mycli cast <英文ID> 施法；/mycli focus list 查看可绑定 ID，/mycli focus bind <ID> 将法杖改为单次使用即施放。无目标的探敌不扣魔力。");
         p.sendMessage(ChatColor.AQUA + "可学习：羽落(feather) " + learnedLabel(p, featherKey) + "、夜视(night) " + learnedLabel(p, nightKey));
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
-        p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗法术与粒子。");
+        p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗、探矿与探索法术。");
     }
     private void status(Player p) {
         SkillsUser user = skillsUser(p);
@@ -468,7 +470,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 + "/" + Math.round(user.getMaxMana()) + " · 炼金等级 " + user.getSkillLevel(Skills.ALCHEMY));
         if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "status"});
         else p.sendMessage(ChatColor.GRAY + "试炼场 " + (active ? "第 " + wave + "/3 波" : "待命"));
-        p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗法术由 AgentFriend 管冷却。");
+        p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
     private void cast(Player p, String raw) {
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
@@ -1080,7 +1082,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void bindFocus(Player p, String id) {
         FocusSpell spell = FOCUS_SPELLS.stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
-        if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus menu 查看。"); return; }
+        if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus list 查看 ID。"); return; }
         ItemStack[] storage = p.getInventory().getStorageContents();
         for (int slot = 0; slot < storage.length; slot++) {
             if (!isFocus(storage[slot])) continue;
@@ -1090,6 +1092,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         p.sendMessage(ChatColor.RED + "背包中没有灵纹法杖；先用 /mycli focus give 领取。");
     }
+    private void listFocus(Player p) {
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "可绑定的法杖技能 ID（均可用于 /mycli focus bind <ID>）：");
+        for (int start = 0; start < FOCUS_SPELLS.size(); start += 8) {
+            String ids = FOCUS_SPELLS.subList(start, Math.min(start + 8, FOCUS_SPELLS.size()))
+                    .stream().map(FocusSpell::id).collect(java.util.stream.Collectors.joining(", "));
+            p.sendMessage(ChatColor.GRAY + ids);
+        }
+    }
     private void focusCommand(Player p, String[] args) {
         if (args.length == 1) {
             if (hasFocus(p)) openMenu(p, "focus");
@@ -1098,9 +1108,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         switch (args[1].toLowerCase(Locale.ROOT)) {
             case "give", "领取" -> giveFocus(p);
+            case "list", "列表" -> listFocus(p);
             case "menu", "选择" -> { if (hasFocus(p)) openMenu(p, "focus"); else giveFocus(p); }
             case "bind", "绑定" -> bindFocus(p, tail(args, 2).toLowerCase(Locale.ROOT));
-            default -> p.sendMessage(ChatColor.RED + "用法：/mycli focus give|menu|bind <技能ID>。");
+            default -> p.sendMessage(ChatColor.RED + "用法：/mycli focus give|list|menu|bind <技能ID>。");
         }
     }
     private void giveCompass(Player p) {
@@ -1656,7 +1667,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "goddess");
-        if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "menu", "bind");
+        if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "list", "menu", "bind");
         if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList();
         if (args.length == 4 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind")

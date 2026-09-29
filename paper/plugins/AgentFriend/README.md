@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.15 Agent 文字指令目录（已部署）
+
+`/mycli help` 显示千灯纪的跨端入口；`/mycli spells` 列出四种探索法术的**英文 ID、魔力、冷却和持续时间**。Agent 直接发送 `/mycli cast leap|flight|golem|sense`；探敌范围没有怪物时不消耗魔力。`/mycli status` 查看当前生命、魔力和试炼状态，技能冷却也会通过该玩家自己的 `mcviewer:state` 插件消息发送。
+
+不依赖图形菜单的法杖配置：`/mycli focus give` 领法杖，`/mycli focus list` 逐行列出所有可绑定 ID，`/mycli focus bind <ID>` 绑定背包中的法杖，例如 `bind selfheal`、`bind leap` 或 `bind prospect diamond`。之后手持法杖发送一次使用物品动作即可施放；也可继续直接发 `/mycli cast <ID>`。文字列表来自实际 `FOCUS_SPELLS` 注册表，后续增加技能时自动更新。基岩手柄玩家仍可用潜行使用法杖打开绑定菜单。
+
 ## 0.3.14 探索法术与村庄安全（已部署；隔离服已验证）
 
 `/mycli cast leap` 跃空术：站在地上高跳、缓降，4 魔力、8 秒冷却。`flight` 飞行术：生存模式可飞 15 秒，到期收回飞行权限并缓降，10 魔力、90 秒冷却。`golem` 守护傀儡：召唤一只只攻击怪物的铁傀儡，跟随施法者，45 秒后自动移除，12 魔力、75 秒冷却；附近无安全落脚点时不消耗魔力。`sense` 探敌术：搜索 24 格内已加载的怪物，顶部显示最近怪物的方向、距离、高低差与总数 8 秒，3 魔力、15 秒冷却；找不到怪物时不消耗魔力。四项均由服务端用原版效果实现，Java、基岩、Agent 可走同一 `/mycli` 命令，手柄可在罗盘“探索法术”页点击施放。四项也进入法杖绑定页，玩家可以手持法杖潜行使用换绑定；Agent 可用 `/mycli focus bind leap|flight|golem|sense`。AuraSkills 魔力和 `mcviewer:state` 冷却同步沿用现有结构。

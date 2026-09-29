@@ -37,6 +37,17 @@ try {
   const mover=await login('MoveQA'); sessions.push(mover);
   const {bot,log}=mover;
   assert.ok(bot.inventory.items().some((item)=>item.name==='blaze_rod'), 'Starter focus missing');
+  bot.chat('/mycli help');
+  bot.chat('/mycli spells');
+  bot.chat('/mycli focus list');
+  await sleep(600);
+  assert.ok(log.chats.some((line)=>line.includes('千灯纪技能接口 /mycli')), 'Agent help has old world name');
+  assert.ok(log.chats.some((line)=>line.includes('focus give|list|bind')), 'Agent help omits focus list');
+  assert.ok(log.chats.some((line)=>line.includes('探索咏唱') && line.includes('leap')
+    && line.includes('flight') && line.includes('golem') && line.includes('sense')),
+    'Spell catalog omits utility spell IDs');
+  assert.ok(log.chats.some((line)=>line.includes('prospect') && line.includes('leap')),
+    'Text-only focus catalog omits utility spell IDs');
   bot.chat('/mycli focus bind leap');
   await sleep(300);
   await bot.equip(bot.inventory.items().find((item)=>item.name==='blaze_rod'),'hand');
