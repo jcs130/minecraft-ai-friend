@@ -3,6 +3,9 @@ package org.afuhome.agentfriend;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.nisovin.magicspells.MagicSpells;
+import com.nisovin.magicspells.Spell;
+import com.nisovin.magicspells.Spellbook;
 import dev.aurelium.auraskills.api.AuraSkillsApi;
 import dev.aurelium.auraskills.api.ability.Ability;
 import dev.aurelium.auraskills.api.mana.ManaAbility;
@@ -32,7 +35,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 /** Sends each online player their own bounded viewer state over a plugin channel. */
 final class ViewerStatePublisher implements Listener {
-    static final String CHANNEL = "corti:viewer_state";
+    static final String CHANNEL = "mcviewer:state";
     static final int MAX_BYTES = 16_384;
     private static final int MAX_ENTRIES = 24;
     private static final long HEARTBEAT_MS = 5_000L;
@@ -150,9 +153,10 @@ final class ViewerStatePublisher implements Listener {
         addAbility(result, "mycli:starbolt", "星芒箭", 1, combatSpells.remainingCooldownMs(player, "starbolt"));
         addAbility(result, "mycli:frostnova", "霜环", 1, combatSpells.remainingCooldownMs(player, "frostnova"));
         addAbility(result, "mycli:flamewave", "焰浪", 1, combatSpells.remainingCooldownMs(player, "flamewave"));
+        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave"));
+        addMagicSpells(result, player, seen);
         if (user == null) return result;
 
-        Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave"));
         var registry = AuraSkillsApi.get().getGlobalRegistry();
         List<ManaAbility> manaAbilities = new ArrayList<>(registry.getManaAbilities());
         manaAbilities.sort(Comparator.comparing(ability -> id(ability.getId())));
@@ -183,6 +187,24 @@ final class ViewerStatePublisher implements Listener {
             }
         }
         return result;
+    }
+
+    private void addMagicSpells(JsonArray result, Player player, Set<String> seen) {
+        if (!MagicSpells.isLoaded()) return;
+        Spellbook spellbook = MagicSpells.getSpellbook(player);
+        if (spellbook == null) return;
+        List<Spell> spells = new ArrayList<>(spellbook.getSpells());
+        spells.sort(Comparator.comparing(spell -> spell.getInternalName().toLowerCase(Locale.ROOT)));
+        for (Spell spell : spells) {
+            if (result.size() >= MAX_ENTRIES) break;
+            if (spell.isHelperSpell()) continue;
+            String spellId = "magicspells:" + spell.getInternalName().toLowerCase(Locale.ROOT);
+            if (!VALID_ID.matcher(spellId).matches() || !seen.add(spellId)) continue;
+            float remainingSeconds = spell.getCooldown(player);
+            Long cooldownMs = Float.isFinite(remainingSeconds)
+                    ? Math.max(0L, (long) Math.ceil(remainingSeconds * 1000.0)) : null;
+            addAbility(result, spellId, spell.getName(), 1, cooldownMs);
+        }
     }
 
     private void addAbility(JsonArray result, String abilityId, String label, int level, Long cooldownMs) {
