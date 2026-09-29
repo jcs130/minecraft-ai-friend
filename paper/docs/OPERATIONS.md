@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.20 已在正式服运行；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.21 已在正式服运行；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -53,9 +53,11 @@ Agent 文字指令验收：0.3.15 的同一隔离测试先读取 `/mycli help`�
 
 ## 0.3.21 试炼场步行道路
 
-施工蓝图在 `plugins/AgentFriend/resources/trial-road.tsv`。隔离服中 `/mycli admin surveyroad` 对现有 23 栋村庄建筑、头顶空间、原方块材质、桥墩落点和在场玩家做预检；然后一次性执行 `buildroad`。村庄出生点 `-543.5,66,-439.5` 到道路起点 `-570,63,-411`，再到试炼场北入口 `-590,90,-329`，普通 Mineflayer 不挖方块即可全程步行。构建约 312 格三格宽路面，水面为云杉栈道，山坡为石砖阶梯，另有 142 格护栏位置、桥墩和路灯。最终候选 JAR SHA256 为 `EF425E852010213CB6B8E8A6660CFB3A7F4E2665842D6A15FE081303F819BBC7`。隔离服重启后读回 650 个受保护方块；`plugins/AgentFriend/trial-road-stage.mjs` 用新 Mineflayer 账号从出生点走至入口、不挖方块，并试挖栈道及安全区外阶梯，两处都被插件拒绝。Geyser 隔离服 Pong 正常。原版 Java、基岩和 Agent 无须新增客户端资源。
+施工蓝图在 `plugins/AgentFriend/resources/trial-road.tsv`。隔离服中 `/mycli admin surveyroad` 对现有 23 栋村庄建筑、头顶空间、原方块材质、桥墩落点和在场玩家做预检；然后一次性执行 `buildroad`。村庄出生点 `-543.5,66,-439.5` 到道路起点 `-570,63,-411`，再到试炼场北入口 `-590,90,-329`，普通 Mineflayer 不挖方块即可全程步行。构建约 312 格三格宽路面，水面为云杉栈道，山坡为石砖阶梯，另有 142 格护栏位置、落到河床的云杉桥墩和路灯。最终候选 JAR SHA256 为 `CA2D8C124B0A4F3B684D7A54CE6A5B54B7ADE9FD48FFD849F8B329CC02703BFB`。隔离服重建后记录 671 个受保护方块，其中 21 个是桥墩木；`plugins/AgentFriend/trial-road-stage.mjs` 用新 Mineflayer 账号从出生点走至入口、不挖方块，并试挖栈道及安全区外阶梯，两处都被插件拒绝。Geyser 隔离服 Pong 正常。原版 Java、基岩和 Agent 无须新增客户端资源。
 
 正式施工仅在没有真人在线时进行：先运行 `manage-server.ps1 Backup` 并确认 E/F 两盘 `.complete`，再正常停服替换唯一启用的 AgentFriend JAR；启动后运行 `mycli admin surveyroad`，结果允许施工才运行一次 `mycli admin buildroad`。施工一旦中断，保留现场并恢复施工前完整世界备份，不删除 `trial-road.building` 标记硬重试。施工完成后再做一次 E/F 完整备份和重启检查。`plugins/AgentFriend/trial-road-mask.tsv` 与世界 UUID 绑定，必须与世界文件一起恢复；仅回退 JAR 不会拆除道路，也会失去道路的保护逻辑。
+
+2026-09-29 正式发布：`.MicroKQ` 下线后，先在 E/F 两盘生成施工前完整快照 `20260929-213910`；正常停服，把 0.3.20 JAR 设为 disabled，仅启用 SHA256 `CA2D8C124B0A4F3B684D7A54CE6A5B54B7ADE9FD48FFD849F8B329CC02703BFB` 的 0.3.21。正式世界 `surveyroad` 通过后执行一次 `buildroad`，保护快照记录 671 个方块，其中云杉桥墩木 21 个。建成后的 E/F 完整快照为 `20260929-214136`，重启后日志再次读回 671 个方块。Java 状态、Agent LAN 白名单探针、Geyser Pong、Goddess 桥和 CortiEyeMirror 加载均通过；基岩真机走路观感需玩家入服查看。要回到施工前世界，使用 `20260929-213910` 的整套快照，意识到之后的玩家进度会一起回退。
 
 ## 当前自动恢复
 

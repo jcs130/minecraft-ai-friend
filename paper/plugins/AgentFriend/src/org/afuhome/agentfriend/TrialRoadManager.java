@@ -142,6 +142,8 @@ final class TrialRoadManager implements Listener {
                 || material == Material.SHORT_GRASS || material == Material.TALL_GRASS
                 || material == Material.FERN || material == Material.LARGE_FERN
                 || material == Material.DEAD_BUSH || material == Material.PINK_PETALS
+                || material == Material.SEAGRASS || material == Material.TALL_SEAGRASS
+                || material == Material.KELP || material == Material.KELP_PLANT
                 || material == Material.DANDELION || material == Material.POPPY
                 || material == Material.BLUE_ORCHID || material == Material.ALLIUM
                 || material == Material.AZURE_BLUET || material == Material.CORNFLOWER
@@ -238,8 +240,8 @@ final class TrialRoadManager implements Listener {
             Step step = plan.steps().get(i);
             Pos pos = step.pos(); int y = plan.deck().get(pos);
             Block base = ground(pos);
-            if (base.getY() >= y - 2) continue;
             int bottom = base.getType() == Material.WATER ? seabed(pos, base.getY()) : base.getY();
+            if (bottom >= y - 2) continue;
             for (int by = bottom + 1; by < y; by++) {
                 Block block = world.getBlockAt(pos.x, by, pos.z);
                 if (!natural(block.getType())) {
