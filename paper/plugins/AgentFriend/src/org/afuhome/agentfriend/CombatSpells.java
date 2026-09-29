@@ -28,6 +28,10 @@ final class CombatSpells {
 
     void clear() { cooldowns.clear(); }
 
+    long remainingCooldownMs(Player caster, String spell) {
+        return Math.max(0L, cooldowns.getOrDefault(key(caster, spell), 0L) - System.currentTimeMillis());
+    }
+
     void cast(Player caster, String spell) {
         if (caster.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
             caster.sendMessage(ChatColor.RED + "旁观者不能施法。");
@@ -42,7 +46,7 @@ final class CombatSpells {
     }
 
     private boolean ready(Player caster, String spell) {
-        long remaining = cooldowns.getOrDefault(key(caster, spell), 0L) - System.currentTimeMillis();
+        long remaining = remainingCooldownMs(caster, spell);
         if (remaining <= 0) return true;
         caster.sendMessage(ChatColor.RED + "此法术还需 " + ((remaining + 999) / 1000) + " 秒。");
         return false;

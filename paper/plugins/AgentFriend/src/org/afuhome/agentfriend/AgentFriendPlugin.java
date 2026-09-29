@@ -146,6 +146,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long lastRun;
     private DungeonManager dungeon;
     private CombatSpells combatSpells;
+    private ViewerStatePublisher viewerStatePublisher;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -161,6 +162,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
         combatSpells = new CombatSpells(this);
+        viewerStatePublisher = new ViewerStatePublisher(this, combatSpells);
+        viewerStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 20L, 20L);
@@ -189,6 +192,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         compassAutoPaused.clear();
         teamTeleportAt.clear();
         giftNonces.clear();
+        if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (combatSpells != null) combatSpells.clear();
     }
 

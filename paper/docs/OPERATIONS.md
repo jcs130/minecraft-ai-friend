@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 目录的 0.3.5 源码对应生产版本；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 目录的 0.3.8 源码对应生产版本；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -28,6 +28,8 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 战斗法术验收：隔离服用同一个 Mineflayer 账号打开罗盘“战斗法术”页并分别咏唱 `starbolt`、`frostnova`、`flamewave`。对无 AI 的僵尸和羊读取施法前后的 `Health`：三招均使僵尸受伤，羊维持 8；无目标提示不耗魔力，重复星芒箭触发冷却；Agent 收到原版 `world_particles` 包。正式服发布后核对 AgentFriend 版本、Java/基岩入口、LAN 网关和 CortiEye 附身；基岩真机粒子外观需由玩家进入游戏亲眼确认。
 
 星芒箭自动锁敌回归：隔离服让 Agent 背对 7 格外僵尸施法，僵尸从 20 降到 15.08，挡在中间的羊仍为 8；第二次立即施法只得到冷却提示。隔墙施法没有目标也不扣血；移除墙、正面瞄准远处僵尸时，优先命中准星目标而不是身后更近的僵尸。Agent 收到 16 个 `world_particles` 包。此逻辑与罗盘按钮及 `/mycli cast starbolt` 共用。
+
+观战状态通道验收：用 Mineflayer 1.20.6 在隔离服分别以 `CortiLan` 和 `CortiEye` 登录，监听原始 `custom_payload`。`CortiLan` 入服应收到 `corti:viewer_state`，载荷首字节为 `{`，可直接按 UTF-8 JSON 解析；魔力或冷却数值变化立即有新包，静止时最多 5 秒重发；`CortiEye` 不应收到该通道。检查两类列表各不超过 24 项、消息不超过 16384 字节、聊天栏没有 JSON。此通道给 CortiLan 侧的 Agent/直播客户端使用，不承担 CortiEye 画面渲染。
 
 ## 当前自动恢复
 
