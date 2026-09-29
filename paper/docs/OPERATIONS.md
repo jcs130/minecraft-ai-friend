@@ -13,9 +13,17 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 `Status` 应同时显示 Paper、Agent 网关、Geyser Pong、Goddess 桥、CortiEyeMirror、最近 E 盘快照及 F 盘镜像。Pong 和状态包不是基岩真机、Agent 具体动作或直播画面的端到端验收。
 
+## 0.3.26 村民交易发布（2026-09-30）
+
+发布范围只有 AgentFriend JAR，不替换世界或第三方插件。新代码给已加载的成年无职业/游手好闲村民分配原版职业，保留有职业者的原版商品及等级；原生 MerchantOffer 调整交易价格和次数，避免 Bukkit 重新编码食物组件导致 Mineflayer 1.20.6 无法解析。各职业新解锁的商品也调整。分配职业和已调整的交易数记录在村民实体持久数据中，必须和世界一起备份。`/mycli admin villagers` 只统计当前已加载的成年村民，适合 RCON 运维检查；远处未加载区块会在加载时处理。
+
+隔离服 25566 使用 `plugins/AgentFriend/villager-trades-stage.mjs` 让 Mineflayer 实际点击新分配职业、屠夫和图书管理员，三种商人菜单均能解析；检查最高绿宝石价不超过 16、其他交付物不超过 24、每条交易至少可用 1024 次。重启后测试村民职业与交易数据持久。最终 JAR 为 `AgentFriend-0.3.26.jar`，193482 字节，SHA256 `d16b07405a046977050afa06a6a7e2f107b8b22992f33726455d1ca826ac16d6`。
+
+在只有 CortiLan、CortiEye、Goddess 服务账号在线且无活动试炼时完成发布；最新发布前快照是 `E:\MC\backups\scheduled\20260930-020045`，F 盘同名镜像，两处 `.complete` 均存在。停服后禁用 0.3.25、放入唯一启用的 0.3.26、核验 SHA256，再正常启动。正式服 RCON 读到 24 位已加载成年村民、无职业 0、无交易 0、最高绿宝石价 16；Paper、Agent LAN 网关、Geyser Pong、Goddess 桥和 CortiEyeMirror 状态正常。自动探针不能代替基岩真机交易界面的目视验收。若需回退代码，先在无真人玩家和活动试炼时正常停服，将 0.3.26 JAR 禁用、启用保留的 0.3.25 JAR，再启动；已分配职业及交易写在世界数据中，单独回退 JAR 不会撤销这些实体变更。
+
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.24 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.26 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。

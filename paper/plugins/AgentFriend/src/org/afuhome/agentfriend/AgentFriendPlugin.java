@@ -189,6 +189,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
     private VillageStructureProtection villageStructureProtection;
+    private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
     private final SpellPresentation spellPresentation = new SpellPresentation();
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
@@ -215,6 +216,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
         villageStructureProtection = new VillageStructureProtection(this);
+        villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
@@ -415,6 +417,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("villagers")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台检查村民交易。"); return true;
+            }
+            villageTrades.report(sender);
+            return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
             goddessGift(sender, args);
             return true;
