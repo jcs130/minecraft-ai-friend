@@ -50,7 +50,7 @@ final class ViewerStatePublisher implements Listener {
     private final Map<UUID, LastState> lastStates = new HashMap<>();
     private final Set<UUID> pendingInitial = new HashSet<>();
 
-    private record LastState(String json, String channel, long sentAt) {}
+    private record LastState(String json, String route, long sentAt) {}
 
     ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells,
             ProspectingSpell prospectingSpell, UtilitySpells utilitySpells) {
@@ -111,20 +111,22 @@ final class ViewerStatePublisher implements Listener {
         byte[] payload = encodeBounded(root);
         if (payload == null) return;
         String json = new String(payload, StandardCharsets.UTF_8);
-        String channel = preferredChannel(player);
+        // Attempt the generic channel for every connection. Paper delivers it only
+        // when the client registers it; mirror the old channel for legacy-only clients.
+        boolean mirrorLegacy = usesLegacyChannel(player);
+        String route = mirrorLegacy ? CHANNEL + "+" + LEGACY_CHANNEL : CHANNEL;
         long now = System.currentTimeMillis();
         LastState last = lastStates.get(player.getUniqueId());
-        if (!force && last != null && json.equals(last.json()) && channel.equals(last.channel())
+        if (!force && last != null && json.equals(last.json()) && route.equals(last.route())
                 && now - last.sentAt() < HEARTBEAT_MS) return;
-        player.sendPluginMessage(plugin, channel, payload);
-        lastStates.put(player.getUniqueId(), new LastState(json, channel, now));
+        player.sendPluginMessage(plugin, CHANNEL, payload);
+        if (mirrorLegacy) player.sendPluginMessage(plugin, LEGACY_CHANNEL, payload);
+        lastStates.put(player.getUniqueId(), new LastState(json, route, now));
     }
 
-    private String preferredChannel(Player player) {
+    private boolean usesLegacyChannel(Player player) {
         Set<String> listening = player.getListeningPluginChannels();
-        if (listening.contains(CHANNEL)) return CHANNEL;
-        if (listening.contains(LEGACY_CHANNEL)) return LEGACY_CHANNEL;
-        return CHANNEL;
+        return listening.contains(LEGACY_CHANNEL) && !listening.contains(CHANNEL);
     }
 
     private JsonObject buildState(Player player) {

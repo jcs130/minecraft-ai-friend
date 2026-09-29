@@ -8,7 +8,7 @@
 - Java 后端只监听 `127.0.0.1:25565`；局域网 Agent 网关在转发前拒绝 OP 名称。Geyser + Floodgate 向基岩开放 UDP 19132；ViaVersion / ViaBackwards 转译其 Java 协议。当前配置**不允许把离线模式 Java 后端直接暴露公网**。
 - 女神 `Goddess` 是被服务端强制为旁观者的 OP，`goddess-bridge.mjs` 把游戏内私聊送到宿主 QwenPaw `mc_godness`。`CortiLan` 是 Agent 玩家，`CortiEye` 是直播观察者。SpectatorPlus + 自研 CortiEyeMirror 把原版 HUD、聊天/私聊、成就及技能信息同步到真实 Java 观战客户端。
 - 20 个启用的服务端插件、9 套原版结构/群系数据包；版本与 SHA256 见 [installed-content.lock.json](manifests/installed-content.lock.json)。第三方 JAR/ZIP 由上游取得并校验，本仓库只保存清单。插件和数据包使用原版方块、实体与菜单，Java 普通客户端、基岩和 Mineflayer 无需安装内容模组。观战客户端另需匹配的 Fabric/SpectatorPlus。
-- 自研 **AgentFriend 0.3.16** 当前运行：`/mycli` 文字接口、技能罗盘与命格书、共享 AuraSkills 魔力、公共/私人传送、六层试炼和个人奖励箱。`/mycli spells` 向 Agent 列出探索法术的英文 ID、魔力与冷却，`/mycli focus list` 直接列出可绑定法杖技能，无需打开图形菜单。Paper 反透视隐藏密封矿石，探矿术提供 Java 施法者独享矿块轮廓及基岩墙面光框；灵纹法杖可绑定常用技能一按即放，并新增跃空、限时飞行、守护傀儡、探敌。村庄可正常放置和清理树叶、草木及玩家新建方块，原有房屋方块由一次性结构快照保护，村民不会被误伤。造物术缺项可申请女神审核。历史 0.3.2 源码保存在 `plugins/AgentFriend/released/0.3.2/`。自研 **CortiEyeMirror 0.1.6** 同时运行。
+- 自研 **AgentFriend 0.3.17** 当前运行：`/mycli` 文字接口、技能罗盘与命格书、共享 AuraSkills 魔力、公共/私人传送、六层试炼和个人奖励箱。`/mycli spells` 向 Agent 列出探索法术的英文 ID、魔力与冷却，`/mycli focus list` 直接列出可绑定法杖技能，无需打开图形菜单。Paper 反透视隐藏密封矿石，探矿术提供 Java 施法者独享矿块轮廓及基岩墙面光框；灵纹法杖可绑定常用技能一按即放，并新增跃空、限时飞行、守护傀儡、探敌。村庄可正常放置和清理树叶、草木及玩家新建方块，原有房屋方块由一次性结构快照保护，村民不会被误伤。造物术缺项可申请女神审核。历史 0.3.2 源码保存在 `plugins/AgentFriend/released/0.3.2/`。自研 **CortiEyeMirror 0.1.6** 同时运行。
 - 难度简单、死亡保留背包、一人睡觉跳夜。出生村庄安全，室外可采集与攻击友善动物，房屋主体和试炼设施受保护。世界地形、已建建筑、玩家背包、权限数据库及女神会话都是运行数据，**不在 Git 中**。
 
 ## 目录
