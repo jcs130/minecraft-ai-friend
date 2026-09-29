@@ -64,7 +64,10 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             PacketType.Play.Server.ENTITY_EFFECT,
             PacketType.Play.Server.REMOVE_ENTITY_EFFECT,
             PacketType.Play.Server.SYSTEM_CHAT,
-            PacketType.Play.Server.DISGUISED_CHAT
+            PacketType.Play.Server.DISGUISED_CHAT,
+            PacketType.Play.Server.WORLD_PARTICLES,
+            PacketType.Play.Server.NAMED_SOUND_EFFECT,
+            PacketType.Play.Server.ENTITY_SOUND
     };
     private final Map<String, Long> cameraChat = new HashMap<>(); // main thread only
     private final Set<PotionEffectType> mirroredEffects = new HashSet<>(); // main thread only
@@ -84,6 +87,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     private ProtocolManager protocol;
     private BossBar vitalsBar;
     private final AtomicBoolean captureHotbarSlot36 = new AtomicBoolean();
+    private long effectWindowAt;
+    private int effectPacketsInWindow;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -191,7 +196,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 + "; chat=" + mirrorChat + "; advancements=" + mirrorAdvancements
                 + "; camera-night-vision=" + cameraNightVision
                 + "; vitals-bossbar=" + showVitalsBossBar
-                + "; crafting-inventory=" + mirrorCraftingInventoryClicks);
+                + "; crafting-inventory=" + mirrorCraftingInventoryClicks
+                + "; spell-effects=true");
     }
 
     @Override public void onDisable() {
@@ -480,6 +486,16 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             Long alreadySeen = cameraChat.get(signature);
             if (alreadySeen != null && System.currentTimeMillis() - alreadySeen < 2_000L) return;
         }
+        if (isWorldEffect(type)) {
+            long now = System.currentTimeMillis();
+            if (now - effectWindowAt >= 1000L) {
+                effectWindowAt = now;
+                effectPacketsInWindow = 0;
+            }
+            // Ordinary spells are far below this limit; skip pathological bursts before
+            // they can overwhelm a real spectator client or the livestream encoder.
+            if (++effectPacketsInWindow > 128) return;
+        }
         try {
             // false bypasses this plugin's packet listeners, avoiding re-mirror loops.
             protocol.sendServerPacket(camera, copy, false);
@@ -496,6 +512,12 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     private static boolean isEffect(PacketType type) {
         return type == PacketType.Play.Server.ENTITY_EFFECT
                 || type == PacketType.Play.Server.REMOVE_ENTITY_EFFECT;
+    }
+
+    private static boolean isWorldEffect(PacketType type) {
+        return type == PacketType.Play.Server.WORLD_PARTICLES
+                || type == PacketType.Play.Server.NAMED_SOUND_EFFECT
+                || type == PacketType.Play.Server.ENTITY_SOUND;
     }
 
     private static String signature(PacketContainer packet, PacketType type) {

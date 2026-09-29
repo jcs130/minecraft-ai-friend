@@ -15,7 +15,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.21 已在正式服运行；0.3.2 是回滚用历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.22 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是回滚用历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
@@ -58,6 +58,12 @@ Agent 文字指令验收：0.3.15 的同一隔离测试先读取 `/mycli help`�
 正式施工仅在没有真人在线时进行：先运行 `manage-server.ps1 Backup` 并确认 E/F 两盘 `.complete`，再正常停服替换唯一启用的 AgentFriend JAR；启动后运行 `mycli admin surveyroad`，结果允许施工才运行一次 `mycli admin buildroad`。施工一旦中断，保留现场并恢复施工前完整世界备份，不删除 `trial-road.building` 标记硬重试。施工完成后再做一次 E/F 完整备份和重启检查。`plugins/AgentFriend/trial-road-mask.tsv` 与世界 UUID 绑定，必须与世界文件一起恢复；仅回退 JAR 不会拆除道路，也会失去道路的保护逻辑。
 
 2026-09-29 正式发布：`.MicroKQ` 下线后，先在 E/F 两盘生成施工前完整快照 `20260929-213910`；正常停服，把 0.3.20 JAR 设为 disabled，仅启用 SHA256 `CA2D8C124B0A4F3B684D7A54CE6A5B54B7ADE9FD48FFD849F8B329CC02703BFB` 的 0.3.21。正式世界 `surveyroad` 通过后执行一次 `buildroad`，保护快照记录 671 个方块，其中云杉桥墩木 21 个。建成后的 E/F 完整快照为 `20260929-214136`，重启后日志再次读回 671 个方块。Java 状态、Agent LAN 白名单探针、Geyser Pong、Goddess 桥和 CortiEyeMirror 加载均通过；基岩真机走路观感需玩家入服查看。要回到施工前世界，使用 `20260929-213910` 的整套快照，意识到之后的玩家进度会一起回退。
+
+## 0.3.22 咏唱画面和观战特效
+
+AgentFriend 在施法实际生效后向施法者发送原版标题、副标题、少量粒子和音效。归乡术只有成功到达村庄后才显示“空间之力，护你归途”；冷却、魔力不足、缺少目标不会播放成功效果。Agent 仍能读取原有聊天结果。CortiEyeMirror 0.1.7 在附身时同步目标收到的标题、声音和世界粒子包，并限制世界特效转发为每秒最多 128 包。隔离服 25566 的 `spell-presentation-stage.mjs` 测得归乡、自疗、星尘均有标题/声音/粒子包，冷却重试不再出标题；`spell-presentation-camera-stage.mjs` 的真实附身关系测得目标和观战者都收到三类包。旧 `utility-spells-stage.mjs` 仍使用过期的 `317,119,17` 高空测试点，在当前隔离世界落至 Y=50，跃空用例因此未通过，需更新地形夹具后才能重跑，不作为本次功能验收证据。
+
+2026-09-29 正式发布：仅 CortiLan、CortiEye、Goddess 服务账号在线时生成 E/F 完整快照 `20260929-220753`，两盘 `.complete` 均存在。正常停服，将旧 AgentFriend 0.3.21 与 CortiEyeMirror 0.1.6 设为 disabled，只启用 0.3.22（SHA256 `BB3BAAED18ED967AEE4AFF3F9C31E4B8BD2884C33C023F6C1C2A4123507A2B8C`）及 0.1.7（最终 SHA256 `7D5912AD12D37070B2D3ECC3E36AAAFC9D334C49E7F52E20F7DE81A3596B4C9E`）。首次启动发现 ProtocolLib 对不存在的 `CUSTOM_SOUND_EFFECT` 包发出注册警告；删除该多余监听后，隔离服以最终 JAR 重新验证附身画面三类数据包，再替换正式服 0.1.7 JAR，未改世界。最终重启后 RCON 版本、Java 入口、LAN 网关白名单探针、Geyser Pong、Goddess 桥和道路/房屋保护快照均正常，启动日志无上述警告；CortiEye 真实直播观感仍需在开播时目视验收。回退这次代码只需无人游玩时正常停服、禁用两个新 JAR、启用对应旧 JAR 后启动；不需恢复整个世界而丢失玩家进度。
 
 ## 当前自动恢复
 

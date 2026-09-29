@@ -1,5 +1,5 @@
 name: CortiEyeMirror
-version: '0.1.6'
+version: '0.1.7'
 main: org.afuhome.cortieye.CortiEyeMirrorPlugin
 api-version: '1.20.6'
 description: Mirrors Corti's native HUD, chat and advancement packets to an attached CortiEye client.

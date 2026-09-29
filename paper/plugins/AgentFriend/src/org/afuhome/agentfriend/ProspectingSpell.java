@@ -121,6 +121,7 @@ final class ProspectingSpell {
             player.showEntity(plugin, outline);
         }
         traces.put(player.getUniqueId(), new Trace(closest, oreName, now + DURATION_TICKS * 50L, bar, outline));
+        plugin.presentSpell(player, "prospect");
         player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "。矿块描边/墙面光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }

@@ -64,6 +64,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
@@ -189,6 +190,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private UtilitySpells utilitySpells;
     private VillageStructureProtection villageStructureProtection;
     private ViewerStatePublisher viewerStatePublisher;
+    private final SpellPresentation spellPresentation = new SpellPresentation();
+    private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -243,6 +246,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         teamTeleportAt.clear();
         focusUseAt.clear();
         giftNonces.clear();
+        pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (combatSpells != null) combatSpells.clear();
         if (prospectingSpell != null) prospectingSpell.clear();
@@ -289,6 +293,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return user.consumeMana(amount);
     }
 
+    void presentSpell(Player player, String spell) {
+        spellPresentation.show(player, spell);
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpellPreCast(SpellCastEvent event) {
         if (!(event.getCaster() instanceof Player p)) return;
@@ -317,6 +325,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             getLogger().severe("Successful spell was not charged in AuraSkills: "
                     + event.getSpell().getInternalName() + " caster=" + p.getUniqueId());
         }
+        presentSpell(p, event.getSpell().getInternalName());
     }
 
     boolean floodgatePlayer(UUID uuid) {
@@ -377,7 +386,24 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         savedCompassTargets.remove(id);
         teamTeleportAt.remove(id);
         focusUseAt.remove(id);
+        pendingHomeChants.remove(id);
         removeTrackingBar(id);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHomeTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        Long deadline = pendingHomeChants.get(player.getUniqueId());
+        Location target = event.getTo();
+        if (deadline == null || target == null || System.currentTimeMillis() > deadline
+                || !sameWorld(target)
+                || target.distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) >= 12 * 12) return;
+        pendingHomeChants.remove(player.getUniqueId());
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (player.isOnline() && sameWorld(player.getLocation())
+                    && player.getLocation().distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) < 12 * 12)
+                presentSpell(player, "home");
+        });
     }
 
     @EventHandler public void onGoddessMode(PlayerGameModeChangeEvent event) {
@@ -526,7 +552,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             conjure(p, id.substring(id.indexOf(' ') + 1).trim()); return;
         }
         id = switch (id) {
-            case "归乡", "回家", "home" -> "home";
+            case "归乡", "归乡术", "回乡", "回乡术", "回家", "茴香", "home" -> "home";
             case "闪现", "空间传送", "blink" -> "blink";
             case "治疗队友", "heal" -> "heal";
             case "圣愈术", "自愈", "自疗", "治疗自己", "治愈", "治疗", "selfheal", "heal_self" -> "selfheal";
@@ -541,7 +567,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             default -> "";
         };
         if (id.isEmpty()) { p.sendMessage(ChatColor.RED + "没有这项技能。输入 /mycli spells 查看精确名称。"); return; }
-        if (id.equals("home")) { gotoPlace(p, "village"); return; }
+        if (id.equals("home")) {
+            UUID uuid = p.getUniqueId();
+            long deadline = System.currentTimeMillis() + 10_000L;
+            pendingHomeChants.put(uuid, deadline);
+            Bukkit.getScheduler().runTaskLater(this,
+                    () -> pendingHomeChants.remove(uuid, deadline), 200L);
+            gotoPlace(p, "village");
+            return;
+        }
         if (id.equals("fireworks")) { fireworks(p); return; }
         if (id.equals("starlight")) { starlight(p); return; }
         if (id.equals("feather") || id.equals("night")) { goddessSpell(p, id); return; }
@@ -659,6 +693,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Location at = p.getLocation().add(0, 2, 0);
         p.getWorld().spawnParticle(Particle.END_ROD, at, 45, 0.7, 0.7, 0.7, 0.08);
         p.getWorld().playSound(at, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.7f, 1.4f);
+        presentSpell(p, "fireworks");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "烟花术释放了光芒。");
     }
 
@@ -684,6 +719,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Location at = p.getLocation().add(0, 1.4, 0);
         p.getWorld().spawnParticle(Particle.END_ROD, at, 36, 0.8, 0.7, 0.8, 0.02);
         p.getWorld().playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.4f);
+        presentSpell(p, "starlight");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "星尘术：一束星光环绕着你。");
     }
 
@@ -745,6 +781,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             p.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 120 * 20, 0, true, true, true));
             p.sendMessage(ChatColor.AQUA + "夜视术生效 120 秒，黑暗里也能看清道路。");
         }
+        presentSpell(p, id);
     }
 
     private void goddess(Player p, String[] args) {

@@ -84,6 +84,7 @@ final class UtilitySpells implements Listener {
         if (!plugin.spendMana(player, mana)) return false;
         cooldowns.put(player.getUniqueId() + ":" + spell,
                 System.currentTimeMillis() + cooldownSeconds * 1000L);
+        plugin.presentSpell(player, spell);
         return true;
     }
 

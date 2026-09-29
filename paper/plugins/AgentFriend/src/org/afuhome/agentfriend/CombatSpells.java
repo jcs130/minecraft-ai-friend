@@ -55,6 +55,7 @@ final class CombatSpells {
     private boolean begin(Player caster, String spell, int mana, int cooldownSeconds) {
         if (!plugin.spendMana(caster, mana)) return false;
         cooldowns.put(key(caster, spell), System.currentTimeMillis() + cooldownSeconds * 1000L);
+        plugin.presentSpell(caster, spell);
         return true;
     }
 
