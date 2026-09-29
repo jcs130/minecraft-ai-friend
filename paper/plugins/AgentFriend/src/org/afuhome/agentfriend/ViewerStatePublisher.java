@@ -36,6 +36,7 @@ import org.bukkit.scheduler.BukkitTask;
 /** Sends each online player their own bounded viewer state over a plugin channel. */
 final class ViewerStatePublisher implements Listener {
     static final String CHANNEL = "mcviewer:state";
+    static final String LEGACY_CHANNEL = "corti:viewer_state";
     static final int MAX_BYTES = 16_384;
     private static final int MAX_ENTRIES = 24;
     private static final long HEARTBEAT_MS = 5_000L;
@@ -45,8 +46,9 @@ final class ViewerStatePublisher implements Listener {
     private final CombatSpells combatSpells;
     private BukkitTask pollTask;
     private final Map<UUID, LastState> lastStates = new HashMap<>();
+    private final Set<UUID> pendingInitial = new HashSet<>();
 
-    private record LastState(String json, long sentAt) {}
+    private record LastState(String json, String channel, long sentAt) {}
 
     ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells) {
         this.plugin = plugin;
@@ -55,6 +57,7 @@ final class ViewerStatePublisher implements Listener {
 
     void start() {
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
+        Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, LEGACY_CHANNEL);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         pollTask = Bukkit.getScheduler().runTaskTimer(plugin, this::poll, 1L, 5L);
     }
@@ -62,25 +65,33 @@ final class ViewerStatePublisher implements Listener {
     void stop() {
         if (pollTask != null) pollTask.cancel();
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL);
+        Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, LEGACY_CHANNEL);
         lastStates.clear();
+        pendingInitial.clear();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         lastStates.remove(player.getUniqueId());
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) publish(player, true);
-        }, 1L);
+        scheduleInitial(player);
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         lastStates.remove(event.getPlayer().getUniqueId());
+        pendingInitial.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler public void onRegister(PlayerRegisterChannelEvent event) {
         Player player = event.getPlayer();
-        if (!CHANNEL.equals(event.getChannel())) return;
+        if (!CHANNEL.equals(event.getChannel()) && !LEGACY_CHANNEL.equals(event.getChannel())) return;
+        scheduleInitial(player);
+    }
+
+    private void scheduleInitial(Player player) {
+        UUID id = player.getUniqueId();
+        if (!pendingInitial.add(id)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            pendingInitial.remove(id);
             if (player.isOnline()) publish(player, true);
         }, 1L);
     }
@@ -95,11 +106,20 @@ final class ViewerStatePublisher implements Listener {
         byte[] payload = encodeBounded(root);
         if (payload == null) return;
         String json = new String(payload, StandardCharsets.UTF_8);
+        String channel = preferredChannel(player);
         long now = System.currentTimeMillis();
         LastState last = lastStates.get(player.getUniqueId());
-        if (!force && last != null && json.equals(last.json()) && now - last.sentAt() < HEARTBEAT_MS) return;
-        player.sendPluginMessage(plugin, CHANNEL, payload);
-        lastStates.put(player.getUniqueId(), new LastState(json, now));
+        if (!force && last != null && json.equals(last.json()) && channel.equals(last.channel())
+                && now - last.sentAt() < HEARTBEAT_MS) return;
+        player.sendPluginMessage(plugin, channel, payload);
+        lastStates.put(player.getUniqueId(), new LastState(json, channel, now));
+    }
+
+    private String preferredChannel(Player player) {
+        Set<String> listening = player.getListeningPluginChannels();
+        if (listening.contains(CHANNEL)) return CHANNEL;
+        if (listening.contains(LEGACY_CHANNEL)) return LEGACY_CHANNEL;
+        return CHANNEL;
     }
 
     private JsonObject buildState(Player player) {
