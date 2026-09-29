@@ -12,8 +12,10 @@ import dev.aurelium.auraskills.api.user.SkillsUser;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.UUID;
@@ -28,21 +30,20 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRegisterChannelEvent;
 import org.bukkit.scheduler.BukkitTask;
 
-/** Sends bounded JSON over one outgoing plugin channel to the real CortiLan client only. */
+/** Sends each online player their own bounded viewer state over a plugin channel. */
 final class ViewerStatePublisher implements Listener {
     static final String CHANNEL = "corti:viewer_state";
     static final int MAX_BYTES = 16_384;
     private static final int MAX_ENTRIES = 24;
     private static final long HEARTBEAT_MS = 5_000L;
-    private static final UUID CORTILAN_UUID = UUID.fromString("ccba3629-1f58-33d2-bd0c-f7ba6e699816");
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9_:.-]+");
     private static final Locale LABEL_LOCALE = Locale.SIMPLIFIED_CHINESE;
     private final AgentFriendPlugin plugin;
     private final CombatSpells combatSpells;
     private BukkitTask pollTask;
-    private UUID lastRecipient;
-    private String lastJson;
-    private long lastSentAt;
+    private final Map<UUID, LastState> lastStates = new HashMap<>();
+
+    private record LastState(String json, long sentAt) {}
 
     ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells) {
         this.plugin = plugin;
@@ -58,62 +59,44 @@ final class ViewerStatePublisher implements Listener {
     void stop() {
         if (pollTask != null) pollTask.cancel();
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL);
-        clearLast();
+        lastStates.clear();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        if (!isTarget(player)) return;
-        clearLast();
+        lastStates.remove(player.getUniqueId());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) publish(player, true);
         }, 1L);
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
-        if (isTarget(event.getPlayer())) clearLast();
+        lastStates.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler public void onRegister(PlayerRegisterChannelEvent event) {
         Player player = event.getPlayer();
-        if (!isTarget(player) || !CHANNEL.equals(event.getChannel())) return;
+        if (!CHANNEL.equals(event.getChannel())) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) publish(player, true);
         }, 1L);
     }
 
     private void poll() {
-        Player player = Bukkit.getPlayerExact("CortiLan");
-        if (player == null || !isTarget(player)) {
-            clearLast();
-            return;
-        }
-        publish(player, false);
-    }
-
-    private boolean isTarget(Player player) {
-        return player.getName().equals("CortiLan") && player.getUniqueId().equals(CORTILAN_UUID);
-    }
-
-    private void clearLast() {
-        lastRecipient = null;
-        lastJson = null;
-        lastSentAt = 0L;
+        for (Player player : Bukkit.getOnlinePlayers()) publish(player, false);
     }
 
     private void publish(Player player, boolean force) {
-        if (!isTarget(player)) return;
+        if (!player.isOnline()) return;
         JsonObject root = buildState(player);
         byte[] payload = encodeBounded(root);
         if (payload == null) return;
         String json = new String(payload, StandardCharsets.UTF_8);
         long now = System.currentTimeMillis();
-        if (!force && player.getUniqueId().equals(lastRecipient) && json.equals(lastJson)
-                && now - lastSentAt < HEARTBEAT_MS) return;
+        LastState last = lastStates.get(player.getUniqueId());
+        if (!force && last != null && json.equals(last.json()) && now - last.sentAt() < HEARTBEAT_MS) return;
         player.sendPluginMessage(plugin, CHANNEL, payload);
-        lastRecipient = player.getUniqueId();
-        lastJson = json;
-        lastSentAt = now;
+        lastStates.put(player.getUniqueId(), new LastState(json, now));
     }
 
     private JsonObject buildState(Player player) {

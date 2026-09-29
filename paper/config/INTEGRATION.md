@@ -18,7 +18,7 @@
 | 造物术缺项申请 | `/mycli cast give <其他物品>` 或罗盘“申请更多物品” | Goddess 审核；OP 账号发放时校验原版物品、数量和背包空间 |
 | WorldGuard | `afu_village` 室外允许 `damage-animals`，房屋子区域拒绝改块 | 村庄建筑安全，同时可采集、养殖和冒险 |
 | CortiEyeMirror | `target=CortiLan`、`camera=CortiEye`、镜头夜视、私聊/成就同步、额外生命 BossBar 关闭、徒手合成物品栏随操作显示 | 真实 Java 客户端直播画面 |
-| AgentFriend 状态通道 | 仅向在线 `CortiLan` 发出 `corti:viewer_state` 原始 UTF-8 JSON | Agent/直播客户端获得 AuraSkills 魔力、当前等级经验和能力冷却状态 |
+| AgentFriend 状态通道 | 向每个在线玩家分别发出自己的 `corti:viewer_state` 原始 UTF-8 JSON | Java/Agent/直播客户端获得对应玩家的 AuraSkills 魔力、当前等级经验和能力冷却状态 |
 
 世界规则还包括 `keepInventory=true`、`playersSleepingPercentage=1`、`doFireTick=false`，出生点在村庄附近，难度简单。它们存于世界数据，必须用存档备份或服务端命令重建；Git 不包含实时世界。
 
@@ -26,4 +26,4 @@ Minepacks 的快捷物品虽然使用原版 `player_head` 作为载体，但有�
 
 战斗法术从技能罗盘的“战斗法术”页选择，Agent/Java 玩家也能输入 `/mycli cast starbolt|frostnova|flamewave`。星芒箭瞬发，优先命中准星 18 格内的怪物；没有瞄准时自动锁定 12 格内最近的可见怪物（4 魔力、3 秒冷却）。霜环打击身边最多 4 只怪物并减速（7 魔力、14 秒）；焰浪打击前方最多 4 只怪物并点燃（8 魔力、10 秒）。没找到目标不耗蓝；法术只用服务端粒子、音效、伤害与状态效果，不发送自定义物品或要求客户端装模组。Geyser 当前安装包内的 `particles.json` 为使用的 `END_ROD`、`ELECTRIC_SPARK`、`CRIT`、`SNOWFLAKE`、`CLOUD`、`FLAME` 都提供了基岩映射。
 
-`corti:viewer_state` 仅发送给离线 UUID 匹配的 `CortiLan`，使用 `Player.sendPluginMessage` 原始字节（没有 `writeUTF` 或额外长度前缀）。入服、客户端注册频道、数值变化以及每 5 秒都会发送；Mineflayer 客户端应在 play 阶段用 `minecraft:register` 声明 `corti:viewer_state`。单包最多 16384 字节，`skills` 和 `abilities` 各最多 24 项。`mana` 是 AuraSkills 的当前/最大值；`skills[].xp` 是当前等级内进度，`requiredXp` 是下一等级所需值。已解锁的 AuraSkills 能力会列出；无法可靠取得其冷却时 `cooldownMs:null`。`/mycli` 三种战斗法术使用实际剩余冷却毫秒数。未加载的 AuraSkills 用户发 `mana:null`、`skills:[]`。此 JSON 不进入游戏聊天栏。
+`corti:viewer_state` 对每名在线玩家分别读取并发送其自身数据，使用 `Player.sendPluginMessage` 原始字节（没有 `writeUTF` 或额外长度前缀）。入服、客户端注册频道、数值变化以及每 5 秒都会发送；Mineflayer 客户端应在 play 阶段用 `minecraft:register` 声明 `corti:viewer_state`。单包最多 16384 字节，`skills` 和 `abilities` 各最多 24 项。`mana` 是 AuraSkills 的当前/最大值；`skills[].xp` 是当前等级内进度，`requiredXp` 是下一等级所需值。已解锁的 AuraSkills 能力会列出；无法可靠取得其冷却时 `cooldownMs:null`。`/mycli` 三种战斗法术使用实际剩余冷却毫秒数。未加载的 AuraSkills 用户发 `mana:null`、`skills:[]`。此 JSON 不进入游戏聊天栏。基岩客户端是否消费这个 Java plugin channel 取决于 Geyser/客户端实现；玩法本身不依赖该频道。
