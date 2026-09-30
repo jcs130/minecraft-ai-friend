@@ -59,7 +59,11 @@ try {
   bot.chat('/mycli cast prospect diamond');
   await sleep(1300);
   assert.ok(chats.some((line) => line.includes('探矿术找到钻石矿')), `Expected prospecting feedback: ${JSON.stringify(chats)}`);
+  assert.ok(chats.some((line) => line.includes('dimension=minecraft:overworld X=317 Y=115 Z=17 ore=minecraft:diamond_ore')),
+    `Agent must receive absolute block coordinates and dimension in chat: ${JSON.stringify(chats)}`);
   assert.ok(bars.some((bar) => JSON.stringify(bar).includes('钻石矿')), 'Expected on-screen bossbar with ore name');
+  assert.ok(bars.some((bar) => JSON.stringify(bar).includes('X=317 Y=115 Z=17')),
+    'Bossbar must show the same absolute block coordinates');
   assert.ok(particles.length > 0, 'Expected vanilla particle packets');
   assert.ok(states.some((state) => state.abilities?.some((ability) => ability.id === 'mycli:prospect' && ability.cooldownMs > 0)),
     'Expected per-player HUD cooldown update');

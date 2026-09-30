@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.32 探矿绝对坐标
+
+探矿成功后只向施法者发送一次带维度、方块整数坐标和原版矿物 ID 的聊天结果，例如 `dimension=minecraft:overworld X=317 Y=115 Z=17 ore=minecraft:diamond_ore`；Mineflayer Agent 可直接解析并导航。屏幕顶部的 BossBar 同步显示 `X/Y/Z`，不再要求从朝向、距离和高低差推算目标。Java 私有矿块描边、基岩墙面光框、反透视、魔力与冷却规则不变；未找到矿脉不返回虚构坐标。`prospecting-stage.mjs` 在隔离服用真实 Mineflayer 协议验证了聊天和 BossBar 的一致性，`focus-outline-stage.mjs` 验证描边只发给施法者。
+
 ## 深层试炼塔（0.3.28）
 
 原村外试炼塔的六层继续保留。通关第六层后，同队仍在场的玩家解锁第七层“灯火驿站”，十秒后自动进入。第七层有工作台、熔炉、高炉、铁砧、锻造台、砂轮、附魔台、切石机和一位出售火把、箭、食物、盾牌、铁剑、金苹果的商人；默认休息三分钟，也可按绿色按钮或 `/mycli arena next` 在十秒后出发。解锁者下次可从罗盘“地点 → 深层驿站”或 `/mycli arena rest` 直达。驿站为第七层，不发战斗奖励。

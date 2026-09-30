@@ -42,7 +42,7 @@ final class ProspectingSpell {
             Map.entry(Material.NETHER_GOLD_ORE, "下界金矿"), Map.entry(Material.NETHER_QUARTZ_ORE, "下界石英"),
             Map.entry(Material.ANCIENT_DEBRIS, "远古残骸"));
 
-    private record Trace(Location ore, String name, long expiresAt, BossBar bar, BlockDisplay outline) { }
+    private record Trace(Location ore, long expiresAt, BossBar bar, BlockDisplay outline) { }
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Long> lastCast = new HashMap<>();
     private final Map<UUID, Long> lastAttempt = new HashMap<>();
@@ -94,6 +94,7 @@ final class ProspectingSpell {
         int range = rangeFor(miningLevel, imprintedTool);
         Location closest = null;
         String oreName = null;
+        Material oreMaterial = null;
         int bestDistanceSquared = range * range + 1;
         int sx = source.getBlockX(), sy = source.getBlockY(), sz = source.getBlockZ();
         // Scan expanding cubic shells. Once shell r has a hit closer than r+1,
@@ -112,6 +113,7 @@ final class ProspectingSpell {
                 bestDistanceSquared = distanceSquared;
                 closest = new Location(world, sx + dx + 0.5, y + 0.5, sz + dz + 0.5);
                 oreName = ORES.get(material);
+                oreMaterial = material;
                 }
             }
         }
@@ -122,7 +124,9 @@ final class ProspectingSpell {
         if (!plugin.spendMana(player, MANA_COST)) return;
         lastCast.put(player.getUniqueId(), now);
         remove(player.getUniqueId());
-        BossBar bar = Bukkit.createBossBar("探矿术", BarColor.PURPLE, BarStyle.SOLID);
+        BossBar bar = Bukkit.createBossBar("§d✦ 探矿 " + oreName + "  §fX=" + closest.getBlockX()
+                + " Y=" + closest.getBlockY() + " Z=" + closest.getBlockZ(),
+                BarColor.PURPLE, BarStyle.SOLID);
         bar.addPlayer(player);
         BlockDisplay outline = null;
         if (!plugin.floodgatePlayer(player.getUniqueId())) {
@@ -135,11 +139,15 @@ final class ProspectingSpell {
             });
             player.showEntity(plugin, outline);
         }
-        traces.put(player.getUniqueId(), new Trace(closest, oreName, now + DURATION_TICKS * 50L, bar, outline));
+        traces.put(player.getUniqueId(), new Trace(closest, now + DURATION_TICKS * 50L, bar, outline));
         plugin.presentSpell(player, "prospect");
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "（范围 " + range
-                + " 格，挖矿等级 " + miningLevel + (imprintedTool ? "，刻印工具 +8" : "")
-                + "）。矿块描边/墙面光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName
+                + "：dimension=" + world.getKey() + " X=" + closest.getBlockX()
+                + " Y=" + closest.getBlockY() + " Z=" + closest.getBlockZ()
+                + " ore=" + oreMaterial.getKey() + "（方块坐标）。");
+        player.sendMessage(ChatColor.GRAY + "范围 " + range + " 格，挖矿等级 " + miningLevel
+                + (imprintedTool ? "，刻印工具 +8" : "")
+                + "；描边/光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
 
@@ -175,22 +183,8 @@ final class ProspectingSpell {
     }
 
     private void update(Player player, Trace trace, long now) {
-        Location at = player.getLocation(), ore = trace.ore();
-        double dx = ore.getX() - at.getX(), dz = ore.getZ() - at.getZ();
-        double distance = at.distance(ore);
-        String direction;
-        if (Math.hypot(dx, dz) < 1.25) direction = "脚下附近";
-        else {
-            double targetYaw = Math.toDegrees(Math.atan2(-dx, dz));
-            double delta = ((targetYaw - at.getYaw() + 540) % 360) - 180;
-            String[] sectors = {"前方 ↑", "右前 ↗", "右侧 →", "右后 ↘", "后方 ↓", "左后 ↙", "左侧 ←", "左前 ↖"};
-            direction = sectors[Math.floorMod((int) Math.round(delta / 45), 8)];
-        }
-        int dy = ore.getBlockY() - at.getBlockY();
-        String height = Math.abs(dy) <= 1 ? "同层" : (dy > 0 ? "上方" : "下方") + Math.abs(dy) + "格";
-        trace.bar().setTitle("§d✦ 探矿 " + trace.name() + "  §f" + direction + " · " + Math.round(distance) + "格 · " + height);
         trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) (DURATION_TICKS * 50L))));
-        projectOutline(player, ore);
+        projectOutline(player, trace.ore());
     }
 
     /** A small screen-facing frame on the first wall; Bedrock has no glowing-entity outline. */
