@@ -173,6 +173,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private NamespacedKey focusSpellKey;
     private NamespacedKey imprintSpellKey;
     private NamespacedKey statusBookKey;
+    private NamespacedKey guideSeenKey;
     private NamespacedKey mobKey;
     private NamespacedKey featherKey;
     private NamespacedKey nightKey;
@@ -204,6 +205,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         focusSpellKey = new NamespacedKey(this, "focus_spell");
         imprintSpellKey = new NamespacedKey(this, "imprint_spell");
         statusBookKey = new NamespacedKey(this, "status_book");
+        guideSeenKey = new NamespacedKey(this, "guide_seen");
         mobKey = new NamespacedKey(this, "arena_mob");
         featherKey = new NamespacedKey(this, "learned_feather");
         nightKey = new NamespacedKey(this, "learned_night");
@@ -392,6 +394,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!hasCompass(player)) giveCompass(player);
             if (!hasStatusBook(player)) giveStatusBook(player);
             if (!hasFocus(player)) giveFocus(player);
+            if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
+                player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
+                player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！手持技能罗盘按使用键，选择「旅途指南」开始冒险。");
+                player.sendMessage(ChatColor.AQUA + "手柄无需打字；命格书可翻页阅读。Agent 可输入 /mycli guide 查看操作指令。");
+            }
         }, 40L);
     }
 
@@ -510,6 +517,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
             case "imprint", "刻印" -> imprintCommand(player, args);
+            case "guide", "指引", "指南" -> guide(player, args);
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
@@ -538,6 +546,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
+        p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
         p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
@@ -549,6 +558,42 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
+    }
+    private void guide(Player p, String[] args) {
+        String topic = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "start";
+        switch (topic) {
+            case "menu", "目录" -> openMenu(p, "guide");
+            case "start", "开始" -> {
+                p.sendMessage(ChatColor.GOLD + "【千灯纪 · 从这里开始】1 读命格书；2 用技能罗盘选地点；3 到公会看板接一张任务。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli status 查看本人状态；/mycli waypoint 列地点；/mycli goto <地点ID> 前往；/mycli guide <主题> 看下一步。");
+                p.sendMessage(ChatColor.AQUA + "主题：explore、magic、gear、guild、dungeon、team。手柄：罗盘 → 旅途指南，选图标即可进入对应菜单。");
+            }
+            case "explore", "探索" -> {
+                p.sendMessage(ChatColor.GOLD + "【探索】先去出生村庄、樱花林等公共地点；遗迹落点在外围，需要步行探索。罗盘可保存自己的营地。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli waypoint；/mycli goto cherry；/mycli waypoint add camp；/mycli goto personal:camp。传送前先确认周围安全。");
+            }
+            case "magic", "魔法" -> {
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】在罗盘选法术图标；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli spells；/mycli cast selfheal|starbolt|prospect；/mycli focus list；/mycli focus bind <技能ID>。用 /mycli status 看魔力。");
+            }
+            case "gear", "装备", "刻印" -> {
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "【工具刻印】手持镐、剑等工具，在附魔台旁潜行使用附魔台，选择要刻印的法术；之后潜行对方块使用工具施法。");
+                p.sendMessage(ChatColor.GRAY + "需要 3 原版经验等级和 1 青金石。Agent：靠近附魔台后 /mycli imprint list，再用 /mycli imprint <技能ID>；也可直接 /mycli cast <技能ID>。");
+            }
+            case "guild", "公会", "工会" -> {
+                p.sendMessage(ChatColor.GOLD + "【公会】罗盘 → 冒险者公会 → 看板选任务。完成后回看板交付；声望提升冒险者等级，物资进个人奖励箱。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards。");
+            }
+            case "dungeon", "地下城", "试炼" -> {
+                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；队友站到石按钮附近，一人按下后一起进入。清怪 10 秒后自动下楼并补满生命。");
+                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent：/mycli arena status|start|rewards|leave；第六层通关后可用 rest 进入驿站。");
+            }
+            case "team", "队友" -> {
+                p.sendMessage(ChatColor.AQUA + "【结伴】罗盘 → 找队友，可让指针追踪队友，也可安全传送到她身边。女神是旁观服主，不在队友列表。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli locate list；/mycli locate nearest；/mycli locate tp nearest；/mycli locate off。");
+            }
+            default -> p.sendMessage(ChatColor.RED + "指南主题：start|explore|magic|gear|guild|dungeon|team；/mycli guide menu 打开手柄菜单。");
+        }
     }
     private void spells(Player p) {
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
@@ -1338,22 +1383,25 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.setTitle("命格书");
         meta.setAuthor("千灯纪");
         meta.setDisplayName(ChatColor.GOLD + "❖ 命格书 ❖");
-        meta.setLore(List.of("右键查看自己的状态与旅途指引", "丢失可输入 /mycli book 补领"));
+        meta.setLore(List.of("使用键：查看状态与旅途指引", "手柄可用翻页键；丢失可用 /mycli book 补领"));
         SkillsUser user = skillsUser(p);
         String manaLine = user == null ? "魔力数据加载中" : "魔力 " + Math.round(user.getMana())
-                + "/" + Math.round(user.getMaxMana()) + "\n炼金等级 " + user.getSkillLevel(Skills.ALCHEMY);
+                + "/" + Math.round(user.getMaxMana()) + "\n挖矿等级 " + user.getSkillLevel(Skills.MINING)
+                + " · 探矿 " + ProspectingSpell.rangeFor(user.getSkillLevel(Skills.MINING),
+                        hasImprintedProspectTool(p.getInventory().getItemInMainHand())) + " 格";
         meta.setPages(
-                "§6❖ 命格书 ❖§r\n\n" + p.getName() + "\n\n生命 " + Math.round(p.getHealth())
+                "§6❖ 千灯纪 · 命格书 ❖§r\n" + p.getName() + "\n\n生命 " + Math.round(p.getHealth())
                         + "/" + Math.round(p.getMaxHealth()) + "\n饥饿 " + p.getFoodLevel()
-                        + "/20\n原版经验等级 " + p.getLevel() + "\n" + manaLine + "\n\n这是属于你的旅途。",
-                "§d女神技艺§r\n\n羽落：" + learnedLabel(p, featherKey)
-                        + "\n夜视：" + learnedLabel(p, nightKey)
-                        + "\n\n未学时点击图标；原版经验 5 级或炼金等级 2 可学习，试炼通关也能解锁。",
-                "§b探索指引§r\n\n手持技能罗盘会指向最近的队友。点‘找队友’可选定追踪或安全传送到身边。\n\n传送地点有村庄、樱花林、试炼场；也能保存自己的营地。",
-                "§6咏唱指引§r\n\n罗盘中的圣愈术治疗自己；治疗队友要面向对方。战斗法术页的星芒箭可自动锁定附近怪物，霜环和焰浪也只攻击怪物。\n\n造物术只提供少量生活物资，消耗与采集技能共用的魔力。",
+                        + "/20\n经验等级 " + p.getLevel() + "\n" + manaLine + "\n\n向右翻页，开始冒险 →",
+                "§6第一步：打开罗盘§r\n\n把技能罗盘拿在手上，按使用键。\n\n选「旅途指南」可直接进入地点、魔法、公会与队友菜单。\n\n想先逛逛？选「传送地点」去樱花林。",
+                "§b手柄也能玩§r\n\n罗盘：使用键打开。\n方向键：选择图标。\n确认键：使用或进入。\n返回键：关闭菜单。\n\n命格书用页面左右箭头翻页；不用打字。",
+                "§a探索与队友§r\n\n罗盘「传送地点」选村庄、樱花林与遗迹。去遗迹后还要步行探索。\n\n「找队友」可追踪方向或传送过去。\n\n在地点页保存自己的营地，方便回家。",
+                "§d魔法与技能§r\n\n罗盘选图标施法。圣愈术治自己；星芒箭自动锁敌。\n\n法杖使用键瞬发，潜行使用换招。魔力会恢复。\n\n羽落 " + learnedLabel(p, featherKey)
+                        + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
+                "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
                 guild.bookPage(p),
-                "§6给旅人的话§r\n\n村庄里可以安心玩耍；村外有怪，结伴探索更有趣。\n\n"
-                        + "需要帮助时，可以请大人告诉服主女神。");
+                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。队友站在入口石按钮附近，一人按下就会一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
+                "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
         stack.setItemMeta(meta);
         return stack;
@@ -1377,6 +1425,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void openMenu(Player p, String page) {
         String title = switch (page) {
             case "skills" -> "§5✦ 技能罗盘";
+            case "guide" -> "§6✦ 旅途指南";
             case "places" -> "§b✦ 传送罗盘";
             case "expeditions" -> "§6✦ 遗迹远征";
             case "players" -> "§b✦ 找队友";
@@ -1391,6 +1440,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         };
         Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : page.equals("imprint") ? 54 : 27, title);
         if (page.equals("skills")) {
+            inv.setItem(4, item(Material.WRITTEN_BOOK, "§6❖ 旅途指南", "从这里开始：手柄可选图标，不必打字", "也可以拿起命格书，翻页阅读"));
             inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
             inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
@@ -1411,6 +1461,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
             inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
+        } else if (page.equals("guide")) {
+            inv.setItem(10, item(Material.COMPASS, "§a① 先去探索", "打开地点页；选村庄、樱花林或遗迹", "营地也能保存在地点页"));
+            inv.setItem(11, item(Material.BLAZE_ROD, "§d② 学会魔法", "打开技能罗盘；选图标直接施法", "法杖可绑定喜欢的技能"));
+            inv.setItem(12, item(Material.ENCHANTING_TABLE, "§5③ 给工具刻印", "拿着镐或剑到附魔台旁", "潜行使用附魔台，选要刻印的技能"));
+            inv.setItem(13, item(Material.LECTERN, "§6④ 接公会任务", "打开任务看板；选一张委托", "完成后在看板交付，奖励进个人箱"));
+            inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "从村庄沿路走到入口石按钮", "队友站附近；一人按下，全队进入"));
+            inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
+            inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
         } else if (page.equals("combat")) {
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
             inv.setItem(13, item(Material.SNOWBALL, "§b霜环", "身边最多 4 只怪物；伤害 2 并减速；7 魔力；14 秒冷却"));
@@ -1570,6 +1629,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 4 -> openMenu(p, "guide");
                     case 7 -> openMenu(p, "guild");
                     case 8 -> openMenu(p, "utility");
                     case 9 -> openMenu(p, "focus");
@@ -1584,6 +1644,22 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 22 -> gotoPlace(p, "arena"); case 23 -> openMenu(p, "conjure");
                     case 24 -> openMenu(p, "players");
                     case 25 -> { if (!p.performCommand("skins")) p.sendMessage(ChatColor.RED + "皮肤画廊暂时不可用。"); }
+                    default -> { }
+                }
+            } else if (page.equals("guide")) {
+                switch (slot) {
+                    case 10 -> openMenu(p, "places");
+                    case 11 -> openMenu(p, "skills");
+                    case 12 -> {
+                        if (imprintable(p.getInventory().getItemInMainHand()) && nearEnchantingTable(p))
+                            openImprintMenu(p);
+                        else guide(p, new String[]{"guide", "gear"});
+                    }
+                    case 13 -> openMenu(p, "guild");
+                    case 14 -> { guide(p, new String[]{"guide", "dungeon"}); openMenu(p, "places"); }
+                    case 15 -> openMenu(p, "players");
+                    case 16 -> p.openBook(statusBook(p));
+                    case 22 -> openMenu(p, "skills");
                     default -> { }
                 }
             } else if (page.equals("combat")) {
@@ -1913,7 +1989,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 1) return List.of("help", "guide", "spells", "status", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
+            return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {
             List<String> choices = new ArrayList<>(List.of("list"));
             choices.addAll(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());

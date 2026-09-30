@@ -13,6 +13,16 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 `Status` 应同时显示 Paper、Agent 网关、Geyser Pong、Goddess 桥、CortiEyeMirror、最近 E 盘快照及 F 盘镜像。Pong 和状态包不是基岩真机、Agent 具体动作或直播画面的端到端验收。
 
+## 0.3.30 玩家与 Agent 旅途指引（2026-09-30）
+
+新玩家首次入服得到一次短提示：手持技能罗盘按使用键，从「旅途指南」开始；手柄无须打字，命格书可用页面箭头阅读。提示状态存在玩家 PDC，重连不重复刷屏。旧玩家下一次上线也会收到一次入口提示。原有命格书每次使用都会按当前血量、魔力和挖矿等级重建，书页改为从“开局三步”到手柄、探索、魔法、道具刻印、公会、试炼塔和奖励的短章节。书页不使用聊天点击事件，保持 Java/基岩原版书本可读。
+
+技能罗盘新增「旅途指南」图标，打开 27 格原版容器菜单；选章节直接进入现有地点、公会、队友或技能菜单，命格书章节发真实 `open_book` 包。刻印章节在玩家手持合适工具且靠近附魔台时直接进入刻印菜单，否则发简短操作提示。没有新增必须输入的玩家指令。Agent 用 `/mycli guide` 或 `/mycli guide start|explore|magic|gear|guild|dungeon|team` 获取与菜单对应的精确 `/mycli` 操作，包括公会接单/交付和入口个人奖励箱；`/mycli guide menu` 也能打开相同菜单。
+
+隔离服 `journey-guide-stage.mjs` 以 Mineflayer 1.20.6 验证书本原始物品同步含手柄、试炼和 Agent 章节；罗盘 → 旅途指南 → 地点/公会的真实菜单流、书本打开包、Agent 指令返回及重连不重复欢迎提示。`imprint-prospect-stage.mjs`、`focus-outline-stage.mjs` 复测工具刻印和旧法杖。发布只替换 AgentFriend，不改世界结构、代理或第三方插件；基岩真机的书本排版和手柄按钮仍需游玩时目视验收。
+
+2026-09-30 11:39，仅服务账号在线且无活动试炼时，由 S4U 备份任务正常停服并生成 `E:\MC\backups\scheduled\20260930-113952`，校验候选与原 JAR 哈希后启用唯一 `AgentFriend-0.3.30.jar`（206148 字节；SHA256 `96fac10b4c7f9b4fd519d20292bfb61dee37c7361fa5bd6ea88cc5713a51b7d4`）。同名 F 盘镜像与本地均有 `.complete`。正式服 RCON 确认版本 0.3.30；Java 状态、Agent LAN 网关白名单拒绝探针、Geyser 基岩 Pong、Goddess 桥、CortiEyeMirror 和 Watchdog 未暂停均正常。回退时在无人游玩、无活动试炼时正常停服，禁用 0.3.30，启用保留的 0.3.29；命格书和入门标记在玩家数据中，回退前留完整快照。
+
 ## 0.3.29 探矿成长与附魔台刻印（2026-09-30）
 
 探矿基础半径为 24 格；AuraSkills 挖矿等级每 5 级增加 2 格，等级加成为 16 格封顶。手持刻有探矿术的工具再加 8 格，最高 48 格。扫描只查询已加载区块，并从近到远搜索；无目标不扣魔力或进入技能冷却，失败尝试至少间隔 5 秒。反透视仍由 Paper 保持，真实矿物位置只在探矿成功时通过施法者自己的 BossBar、描边和粒子提示。矿物冷却与 6 魔力消耗不变。
@@ -51,7 +61,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.29 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.30 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。

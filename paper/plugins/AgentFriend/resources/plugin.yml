@@ -1,5 +1,5 @@
 name: AgentFriend
-version: '0.3.29'
+version: '0.3.30'
 main: org.afuhome.agentfriend.AgentFriendPlugin
 api-version: '1.20.6'
 description: Agent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.
