@@ -1,20 +1,24 @@
 # Paper 分支维护与发布
 
-## 0.3.33 Agent 保护预检（隔离服通过，待正式发布）
+## 0.3.33 Agent 保护预检（已正式发布）
 
 `/mycli protect break|place <x> <y> <z>` 按发命令的玩家身份查询 16 格内已加载目标；`MC_PROTECT ` 聊天 JSON 与 `mcagent:protection` 原始 UTF-8 plugin message 同时只发给本人。结果覆盖 WorldGuard、村屋原始方块、公会大厅、公共道路、试炼场和十层地下城。`deny`、`unknown` 与 `allow_likely` 的 Agent 行为见 [接入说明](AGENT_PROTECTION.md)；实际方块事件仍是最终拦截。查询不返回方块材质，防止变成探矿旁路。
 
 隔离服 25566 用真实 Mineflayer 1.20.6 验证：原村屋方块返回 `village_structure/deny`，村庄户外方块返回 `no_known_protection/allow_likely`，试炼塔返回 `dungeon/deny`，公共道路方块与道路净空的放置返回 `trial_road/deny`，远距离返回 `unknown_out_of_range/unknown`；聊天和插件消息一致，另一玩家连接没有收到查询结果。放置事件仍取被替换方块的旧状态；该逻辑用前一构建复测通过，随后只增加 `/mycli guide explore` 的 Agent 提示并重新编译，最终 SHA256 `958239948751A4FA0908A19DA71A1190E57BEE821BFD733F8723A5F107D936DB`。隔离服已停并恢复原 AgentFriend 0.3.31 JAR。
 
-2026-09-30 检查正式服时 `.MicroKQ` 仍在线，因此不重启。将 0.3.33 候选按哈希复制到 `E:\minecraft-ai-friend\paper\plugins\AgentFriend\`，把现有 `agentfriend-deploy.pending.json` 从 0.3.32 候选替换为包含该功能的 0.3.33 候选；旧版本预期哈希仍为当前生产 0.3.30。备份任务只有在没有真人在线时才会部署。正式服目前仍未验证 0.3.33；发布后需核对唯一 JAR、RCON 版本、E/F `.complete`、入口及保护查询实际回执。
+2026-09-30 首次检查正式服时 `.MicroKQ` 仍在线，因此当时没有重启。将 0.3.33 候选按哈希复制到 `E:\minecraft-ai-friend\paper\plugins\AgentFriend\`，把原 0.3.32 待发布计划替换为包含探矿坐标与保护查询的 0.3.33；旧版预期哈希仍是当时的生产 0.3.30。下面记录实际发布与复测。
+
+2026-09-30 18:21，仅 Goddess、CortiLan、CortiEye 服务账号在线且无活动试炼，触发既有 `Afu-MC-DailyBackup` S4U 任务。正常停服快照 `20260930-182118` 在 E/F 两盘均有 `.complete`，任务结果为 0；计划中原 0.3.30 哈希与 0.3.33 候选哈希校验后，只启用 `AgentFriend-0.3.33.jar`，待发布文件已清除。RCON 确认版本 0.3.33；Java 状态、LAN Agent 网关的未授权身份拒绝、Geyser 基岩 Pong、Goddess 桥、CortiEyeMirror 载入与重新附身、Watchdog 未暂停均正常。最近一分钟 MSPT 平均约 5.2 ms。正式服临时白名单 Mineflayer 1.20.6 账号按本人连接查询，村屋返回 `village_structure/deny`，道路净空返回 `trial_road/deny`，户外返回 `allow_likely`；聊天与 `mcagent:protection` 原始 JSON 一致，账号随后退出并移除白名单。基岩真机此轮未入服，Pong 只证明网络入口。Cortico 自动挖掘代码尚未接入预检，不得声称它已经自动避让。
+
+这台主机的普通交互式 PowerShell 会在停止 S4U 启动的 Agent 网关进程时收到“Access is denied”；这次直接运行 `manage-server.ps1 Backup` 在停服前失败并恢复了 Goddess，未创建快照或部署。随后通过 `Start-ScheduledTask -TaskName Afu-MC-DailyBackup` 执行同一维护脚本，成功完成备份、发布、重启和镜像。以后需要立即发布时，先确认无真人玩家、无活动试炼，再触发该任务并检查 `Get-ScheduledTaskInfo` 的结果、`manage-server.log` 和两处 `.complete`；不要强杀网关或绕过备份。若需回退，仅在无人游玩且无活动试炼时，正常停服，禁用 0.3.33、启用备份中的 0.3.30 JAR，再启动并复测；旧版不提供绝对探矿坐标或保护预检，不要直接恢复旧世界覆盖后续玩家进度。
 
 此文档描述源码分支与当前 Windows 家服的关系。仓库是代码及配置基线；正式存档和玩家状态只保存在 `E:\MC\server` 以及已校验备份中。完整本机维护记录仍在 `E:\MC\ops\MAINTENANCE.md`。
 
-## 0.3.32 探矿返回绝对坐标（待正式发布）
+## 0.3.32 探矿返回绝对坐标（已并入正式服 0.3.33）
 
 探矿成功时只向施法者发送 `dimension=minecraft:overworld X=317 Y=115 Z=17 ore=minecraft:diamond_ore` 形式的聊天结果；坐标是矿块整数坐标，负坐标和下界使用同样的字段。BossBar 改为显示同一组绝对 X/Y/Z，原来的相对方向/距离不再需要 Agent 推算。矿块描边、基岩墙面光框、Paper 反透视、6 魔力与 30 秒冷却均不改。`prospecting-stage.mjs` 用 Mineflayer 1.20.6 实测了密封矿石仍隐藏、成功聊天与顶栏坐标一致、空搜索不扣魔力和冷却；`focus-outline-stage.mjs` 验证施法者独享描边及旧法杖治疗功能，两项均通过。最终候选 `AgentFriend-0.3.32.jar` SHA256 为 `89755A8D163DECCE9CD9DD733B82BA504F846B28E73F4EAD8FDF5B4BC18EFF20`。
 
-2026-09-30 检查正式服时，真人 `.MicroKQ` 在线且正在试炼塔第八层，因此**没有重启或替换正式服**。候选 JAR 已按哈希复制到 `E:\minecraft-ai-friend\paper\plugins\AgentFriend\`，`E:\MC\ops\agentfriend-deploy.pending.json` 已排队：现有 `Afu-MC-DailyBackup` 在无人游玩时完成完整 E/F 备份，再校验旧 JAR SHA256 并启用候选。发布后必须确认唯一启用 JAR、RCON 版本、备份 `.complete`、Java/基岩/Agent/CortiEye 入口以及探矿实测消息。当前正式服仍是 0.3.30，不能把隔离测试当作线上发布。
+2026-09-30 检查正式服时，真人 `.MicroKQ` 在线且正在试炼塔第八层，因此当时没有重启或替换正式服。随后 0.3.32 的待发布计划被包含本功能与保护预检的 0.3.33 取代；正式服现已运行 0.3.33，上述旧候选哈希仅供追溯。
 
 ## 日常检查
 

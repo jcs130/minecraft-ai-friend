@@ -56,6 +56,8 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 
 Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查询本人当前维度、附近已加载的目标方块；解析 `MC_PROTECT ` JSON 或 `mcagent:protection` 频道。`deny` 换目标，`unknown` 暂缓，`allow_likely` 才尝试，实际事件拒绝后立即停止。协议、范围和原因见 [Agent 保护查询](AGENT_PROTECTION.md)。
 
+AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入口尚未接入，运营 Agent 不能仅因为服务端有接口就假定 CortiLan 已自动避让。接入客户端时要覆盖手动挖掘、路径清障及放置动作，并用真实服务器回执测试。
+
 ### 公会委托与声望
 
 现有委托目录在 `GuildManager.CONTRACTS`，六级声望门槛也在同类中；进度按 UUID 存在运行配置。新增委托先复用现有 `FLOOR`、`KILLS`、`PARTY_FLOOR`、`CLAIMS`、`EXPLORE` 目标；新目标类型必须同时实现进度事件、重复计数防护、看板/书本提示和领奖。保留旧 ID 与含义，不能为了改标题直接重命名已发布 ID；需要停用时先规定在途任务怎么交付或转移。
