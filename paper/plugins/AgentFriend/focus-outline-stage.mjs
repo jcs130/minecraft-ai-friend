@@ -73,7 +73,9 @@ try {
   assert.ok(newSpawns.some(oreMarker), `Only caster should receive outline entity: ${JSON.stringify(newSpawns)}`);
   assert.ok(!bystanderSpawns.some(oreMarker), `Outline leaked to bystander: ${JSON.stringify(bystanderSpawns)}`);
   assert.ok(packets[0].particles.length >= 8, 'Caster should receive a projected surface frame');
-  assert.equal(packets[1].particles.length, 0, 'Bystander should not receive caster particles');
+  assert.equal(packets[1].particles.filter((packet) => packet.amount === 1
+    && packet.particle?.type === 'end_rod').length, 0,
+  'Bystander should not receive the private wall outline; shared casting particles are expected');
   assert.equal(packets[0].errors.length + packets[1].errors.length, 0,
     `Client errors: ${JSON.stringify(packets.map((entry) => entry.errors))}`);
   const marker = newSpawns.find(oreMarker);

@@ -6,6 +6,8 @@ const listenHost = '192.168.3.163';
 const listenPort = 25565;
 const backendHost = '127.0.0.1';
 const backendPort = 25565;
+const controlHost = '127.0.0.1';
+const controlPort = 25577;
 let rejected = 0;
 let reservedRejected = 0;
 const opsFile = 'E:/MC/server/ops.json';
@@ -131,6 +133,20 @@ gateway.on('error', error => {
 gateway.listen(listenPort, listenHost, () => {
   console.log(`Agent LAN gateway listening on ${listenHost}:${listenPort}; backend ${backendHost}:${backendPort}`);
 });
+// Read-only local identity endpoint lets interactive maintenance verify a
+// Session 0 gateway when Windows hides its executable path and command line.
+const control = net.createServer(socket => {
+  if (socket.remoteAddress !== controlHost && socket.remoteAddress !== '::ffff:127.0.0.1') {
+    socket.destroy();
+    return;
+  }
+  socket.end(`AGENT-GATEWAY-V1 ${process.pid}\n`);
+});
+control.on('error', error => {
+  console.error(`Agent LAN gateway control failed: ${error.message}`);
+  process.exit(1);
+});
+control.listen(controlPort, controlHost);
 setInterval(() => {
   if (rejected || reservedRejected) {
     console.log(`Rejected ${rejected} non-LAN and ${reservedRejected} reserved-name connections in the last minute`);

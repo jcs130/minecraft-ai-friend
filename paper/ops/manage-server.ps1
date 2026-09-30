@@ -14,6 +14,7 @@ $java = 'E:\MC\jdk\jdk-21.0.12.1+1\bin\java.exe'
 $node = 'C:\Users\lzl19\AppData\Local\hermes\node\node.exe'
 $lanHost = '192.168.3.163'
 $gatewayScript = Join-Path $opsDir 'agent-lan-gateway.mjs'
+$gatewayControlScript = Join-Path $opsDir 'agent-lan-gateway-control.mjs'
 $goddessScript = Join-Path $opsDir 'goddess-bridge.mjs'
 $goddessControlScript = Join-Path $opsDir 'goddess-bridge-control.mjs'
 $spectateWatcherScript = Join-Path $opsDir 'spectate-watcher.mjs'
@@ -116,9 +117,22 @@ function Stop-Goddess {
 
 function Assert-GatewayProcess([int]$processId) {
     $process = Get-CimInstance Win32_Process -Filter "ProcessId=$processId" -ErrorAction Stop
-    if (-not $process -or $process.ExecutablePath -ne $node -or
-        $process.CommandLine -notlike "*$gatewayScript*") {
+    if (-not $process -or $process.Name -ne 'node.exe') {
         throw "Port ${lanHost}:25565 belongs to an unexpected process (PID $processId)."
+    }
+    if ($process.ExecutablePath -and $process.CommandLine) {
+        if ($process.ExecutablePath -eq $node -and $process.CommandLine -like "*$gatewayScript*") { return }
+        throw "Port ${lanHost}:25565 belongs to an unexpected process (PID $processId)."
+    }
+    # Windows may redact Session 0 process paths from the interactive token.
+    # The loopback-only control listener must be owned by the very same PID.
+    $control = @(Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort 25577 -State Listen -ErrorAction SilentlyContinue)
+    if ($control.Count -ne 1 -or [int]$control[0].OwningProcess -ne $processId) {
+        throw "Gateway identity control listener does not match PID $processId."
+    }
+    $reply = & $node $gatewayControlScript status 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($reply -join "`n") -ne "AGENT-GATEWAY-V1 $processId") {
+        throw "Gateway identity challenge failed for PID $processId."
     }
 }
 

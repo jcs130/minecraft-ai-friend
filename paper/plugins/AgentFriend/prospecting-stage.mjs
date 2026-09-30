@@ -55,7 +55,7 @@ try {
   await sleep(350);
   assert.ok(chats.some((line) => line.includes('没有发现这种矿脉')), 'Empty search should give a clear result');
   assert.equal(states.at(-1).mana.current, beforeMana, 'Empty search must not spend mana');
-  await sleep(2200);
+  await sleep(5200);
   bot.chat('/mycli cast prospect diamond');
   await sleep(1300);
   assert.ok(chats.some((line) => line.includes('探矿术找到钻石矿')), `Expected prospecting feedback: ${JSON.stringify(chats)}`);

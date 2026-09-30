@@ -106,7 +106,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private record GiftIdea(String id, Material icon, String title) { }
     private record FocusSpell(String id, int slot, Material icon, String title, String hint) { }
     private static final List<FocusSpell> FOCUS_SPELLS = List.of(
-            new FocusSpell("prospect", 10, Material.SPYGLASS, "§d探附近矿脉", "12 格；6 魔力"),
+            new FocusSpell("prospect", 10, Material.SPYGLASS, "§d探附近矿脉", "24–40 格；刻印工具再 +8"),
             new FocusSpell("home", 1, Material.RED_BED, "§a回村庄", "安全传送到出生村庄"),
             new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a治疗队友", "治疗面前队友；4 魔力"),
             new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
@@ -116,14 +116,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new FocusSpell("flight", 7, Material.ELYTRA, "§d飞行术", "飞行 15 秒；10 魔力"),
             new FocusSpell("golem", 8, Material.IRON_BLOCK, "§6守护傀儡", "召唤铁傀儡 45 秒；12 魔力"),
             new FocusSpell("sense", 9, Material.RECOVERY_COMPASS, "§b探敌术", "寻找周围 24 格怪物；3 魔力"),
-            new FocusSpell("prospect iron", 11, Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力"),
-            new FocusSpell("prospect diamond", 12, Material.DIAMOND, "§b探钻石", "12 格；6 魔力"),
+            new FocusSpell("prospect iron", 11, Material.RAW_IRON, "§f探铁矿", "范围随挖矿等级成长；6 魔力"),
+            new FocusSpell("prospect diamond", 12, Material.DIAMOND, "§b探钻石", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("prospect gems", 13, Material.EMERALD, "§a探宝石", "钻石、绿宝石、青金石"),
-            new FocusSpell("prospect coal", 14, Material.COAL, "§8探煤矿", "12 格；6 魔力"),
+            new FocusSpell("prospect coal", 14, Material.COAL, "§8探煤矿", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("prospect ancient", 15, Material.NETHERITE_SCRAP, "§6探远古残骸", "下界探矿"),
-            new FocusSpell("prospect copper", 16, Material.RAW_COPPER, "§6探铜矿", "12 格；6 魔力"),
-            new FocusSpell("prospect gold", 17, Material.RAW_GOLD, "§e探金矿", "12 格；6 魔力"),
-            new FocusSpell("prospect redstone", 18, Material.REDSTONE, "§c探红石", "12 格；6 魔力"),
+            new FocusSpell("prospect copper", 16, Material.RAW_COPPER, "§6探铜矿", "范围随挖矿等级成长；6 魔力"),
+            new FocusSpell("prospect gold", 17, Material.RAW_GOLD, "§e探金矿", "范围随挖矿等级成长；6 魔力"),
+            new FocusSpell("prospect redstone", 18, Material.REDSTONE, "§c探红石", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("starbolt", 19, Material.AMETHYST_SHARD, "§d星芒箭", "自动锁敌；4 魔力"),
             new FocusSpell("frostnova", 20, Material.SNOWBALL, "§b霜环", "近身群攻；7 魔力"),
             new FocusSpell("flamewave", 21, Material.BLAZE_POWDER, "§6焰浪", "前方群攻；8 魔力"),
@@ -171,6 +171,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private NamespacedKey compassKey;
     private NamespacedKey focusKey;
     private NamespacedKey focusSpellKey;
+    private NamespacedKey imprintSpellKey;
     private NamespacedKey statusBookKey;
     private NamespacedKey mobKey;
     private NamespacedKey featherKey;
@@ -201,6 +202,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         compassKey = new NamespacedKey(this, "skill_compass");
         focusKey = new NamespacedKey(this, "spell_focus");
         focusSpellKey = new NamespacedKey(this, "focus_spell");
+        imprintSpellKey = new NamespacedKey(this, "imprint_spell");
         statusBookKey = new NamespacedKey(this, "status_book");
         mobKey = new NamespacedKey(this, "arena_mob");
         featherKey = new NamespacedKey(this, "learned_feather");
@@ -285,6 +287,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private SkillsUser skillsUser(Player p) {
         SkillsUser user = AuraSkillsApi.get().getUser(p.getUniqueId());
         return user != null && user.isLoaded() ? user : null;
+    }
+
+    int miningLevel(Player player) {
+        SkillsUser user = skillsUser(player);
+        return user == null ? 0 : user.getSkillLevel(Skills.MINING);
+    }
+
+    boolean hasImprintedProspectTool(ItemStack item) {
+        String id = imprintedSpell(item);
+        return id != null && (id.equals("prospect") || id.startsWith("prospect "));
     }
 
     boolean spendMana(Player p, double amount) {
@@ -497,6 +509,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "menu", "compassmenu", "罗盘" -> openMenu(player, "skills");
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
+            case "imprint", "刻印" -> imprintCommand(player, args);
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
@@ -526,6 +539,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
+        p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
@@ -539,9 +553,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void spells(Player p) {
         p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
-        p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：12 格内寻找最近矿物；可选 iron|coal|copper|gold|gems|diamond|redstone|ancient。消耗 6 魔力，30 秒冷却；屏幕顶部显示方向 12 秒。");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：基础 24 格，挖矿每 5 级 +2 格、最多 40 格；手持探矿刻印工具再 +8 格。可选 iron|coal|copper|gold|gems|diamond|redstone|ancient；6 魔力，30 秒冷却。");
         p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
         p.sendMessage(ChatColor.GRAY + "Agent 用 /mycli cast <英文ID> 施法；/mycli focus list 查看可绑定 ID，/mycli focus bind <ID> 将法杖改为单次使用即施放。无目标的探敌不扣魔力。");
+        p.sendMessage(ChatColor.GRAY + "附魔台旁手持镐/剑等工具，潜行使用附魔台打开刻印菜单；Agent 可用 /mycli imprint <英文ID>。普通附魔、魔力与技能冷却照常保留。");
         p.sendMessage(ChatColor.AQUA + "可学习：羽落(feather) " + learnedLabel(p, featherKey) + "、夜视(night) " + learnedLabel(p, nightKey));
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
         p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗、探矿与探索法术。");
@@ -551,7 +566,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.AQUA + "生命 " + Math.round(p.getHealth()) + "/" + Math.round(p.getMaxHealth())
                 + " · 饥饿 " + p.getFoodLevel() + "/20 · 原版经验等级 " + p.getLevel());
         if (user != null) p.sendMessage(ChatColor.LIGHT_PURPLE + "魔力 " + Math.round(user.getMana())
-                + "/" + Math.round(user.getMaxMana()) + " · 炼金等级 " + user.getSkillLevel(Skills.ALCHEMY));
+                + "/" + Math.round(user.getMaxMana()) + " · 炼金等级 " + user.getSkillLevel(Skills.ALCHEMY)
+                + " · 挖矿等级 " + user.getSkillLevel(Skills.MINING)
+                + " · 探矿 " + ProspectingSpell.rangeFor(user.getSkillLevel(Skills.MINING),
+                        hasImprintedProspectTool(p.getInventory().getItemInMainHand())) + " 格");
         if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "status"});
         else p.sendMessage(ChatColor.GRAY + "试炼场 " + (active ? "第 " + wave + "/3 波" : "待命"));
         guild.command(p, new String[]{"guild", "status"});
@@ -1156,6 +1174,78 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return stack != null && stack.getType() == Material.BLAZE_ROD && stack.hasItemMeta()
                 && stack.getItemMeta().getPersistentDataContainer().has(focusKey, PersistentDataType.BYTE);
     }
+    private boolean imprintable(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || stack.getAmount() != 1 || isFocus(stack)) return false;
+        String type = stack.getType().name();
+        return type.endsWith("_PICKAXE") || type.endsWith("_AXE") || type.endsWith("_SHOVEL")
+                || type.endsWith("_HOE") || type.endsWith("_SWORD")
+                || Set.of(Material.SPYGLASS, Material.COMPASS, Material.BOW, Material.CROSSBOW,
+                        Material.TRIDENT, Material.SHIELD, Material.FISHING_ROD, Material.BRUSH).contains(stack.getType());
+    }
+    private String imprintedSpell(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta()) return null;
+        String id = stack.getItemMeta().getPersistentDataContainer().get(imprintSpellKey, PersistentDataType.STRING);
+        return id != null && FOCUS_SPELLS.stream().anyMatch(spell -> spell.id().equals(id)) ? id : null;
+    }
+    private boolean nearEnchantingTable(Player player) {
+        Location at = player.getLocation();
+        World world = player.getWorld();
+        for (int dx = -4; dx <= 4; dx++) for (int dy = -4; dy <= 4; dy++) for (int dz = -4; dz <= 4; dz++) {
+            if (dx * dx + dy * dy + dz * dz > 16) continue;
+            if (world.getBlockAt(at.getBlockX() + dx, at.getBlockY() + dy, at.getBlockZ() + dz)
+                    .getType() == Material.ENCHANTING_TABLE) return true;
+        }
+        return false;
+    }
+    private void imprintCommand(Player player, String[] args) {
+        if (args.length >= 2 && args[1].equalsIgnoreCase("list")) {
+            listFocus(player);
+            player.sendMessage(ChatColor.GRAY + "在附魔台 4 格内手持工具，用 /mycli imprint <技能ID> 刻印。每次需 3 经验等级和 1 青金石。");
+            return;
+        }
+        if (args.length >= 2) imprint(player, tail(args, 1).toLowerCase(Locale.ROOT));
+        else openImprintMenu(player);
+    }
+    private void openImprintMenu(Player player) {
+        if (!imprintable(player.getInventory().getItemInMainHand())) {
+            player.sendMessage(ChatColor.RED + "请先手持一把镐、剑或其他可刻印的工具。"); return;
+        }
+        if (!nearEnchantingTable(player)) {
+            player.sendMessage(ChatColor.RED + "要在附魔台 4 格内刻印法术。"); return;
+        }
+        openMenu(player, "imprint");
+    }
+    private void imprint(Player player, String id) {
+        FocusSpell spell = FOCUS_SPELLS.stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
+        if (spell == null) { player.sendMessage(ChatColor.RED + "没有这个可刻印法术；/mycli imprint list 查看 ID。"); return; }
+        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印。"); return; }
+        ItemStack stack = player.getInventory().getItemInMainHand();
+        if (!imprintable(stack)) { player.sendMessage(ChatColor.RED + "这件物品不能刻印；请手持镐、剑、工具或望远镜。"); return; }
+        if (!nearEnchantingTable(player)) { player.sendMessage(ChatColor.RED + "要在附魔台 4 格内刻印法术。"); return; }
+        if (id.equals(imprintedSpell(stack))) { player.sendMessage(ChatColor.YELLOW + "这件物品已经刻印了 " + ChatColor.stripColor(spell.title()) + "。"); return; }
+        boolean creative = player.getGameMode() == GameMode.CREATIVE;
+        if (!creative && (player.getLevel() < 3 || !player.getInventory().contains(Material.LAPIS_LAZULI, 1))) {
+            player.sendMessage(ChatColor.RED + "刻印需要 3 经验等级和 1 青金石；普通附魔不受影响。"); return;
+        }
+        if (!creative) {
+            player.setLevel(player.getLevel() - 3);
+            player.getInventory().removeItem(new ItemStack(Material.LAPIS_LAZULI, 1));
+        }
+        ItemMeta meta = stack.getItemMeta();
+        List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+        lore.removeIf(line -> line.startsWith("§5✦ 法术刻印：") || line.startsWith("§7潜行使用：施放刻印法术"));
+        lore.add("§5✦ 法术刻印：" + ChatColor.stripColor(spell.title()));
+        lore.add("§7潜行使用：施放刻印法术");
+        meta.setLore(lore);
+        meta.getPersistentDataContainer().set(imprintSpellKey, PersistentDataType.STRING, id);
+        meta.setEnchantmentGlintOverride(true);
+        stack.setItemMeta(meta);
+        player.getInventory().setItemInMainHand(stack);
+        player.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f);
+        player.spawnParticle(Particle.ENCHANT, player.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.3);
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 已给手持物品刻印 " + ChatColor.stripColor(spell.title())
+                + "。潜行使用即可施放；仍消耗原法术的魔力并遵守冷却。");
+    }
     private boolean hasFocus(Player p) {
         for (ItemStack stack : p.getInventory().getContents()) if (isFocus(stack)) return true;
         return false;
@@ -1293,12 +1383,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "combat" -> "§c✦ 战斗法术";
             case "prospect" -> "§d✦ 探矿术";
             case "focus" -> "§d✦ 灵纹法杖绑定";
+            case "imprint" -> "§5✦ 附魔台法术刻印";
             case "utility" -> "§b✦ 探索法术";
             case "creation" -> "§d✦ 向女神申请";
             case "guild" -> "§6✦ 冒险者公会";
             default -> "§6✦ 造物术";
         };
-        Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : 27, title);
+        Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : page.equals("imprint") ? 54 : 27, title);
         if (page.equals("skills")) {
             inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
@@ -1314,7 +1405,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(20, item(Material.LANTERN, "§b夜视", learned(p, nightKey, "已学会；点击咏唱；消耗 2 魔力", learning)));
             inv.setItem(21, item(Material.GOLDEN_APPLE, "§a圣愈术·治疗自己", "回复 4 颗心；消耗 6 魔力"));
             inv.setItem(18, item(Material.BLAZE_POWDER, "§c战斗法术", "星芒箭、霜环、焰浪；只伤怪物"));
-            inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "12 格内找矿；屏幕顶部显示方向", "6 魔力；30 秒冷却；点击选择矿种"));
+            inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "基础 24 格；挖矿等级提高范围", "刻印工具再 +8 格；点击选择矿种"));
             inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共地点与私人 home"));
             inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "前往村外六层试炼" : "前往村外三波战斗场"));
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
@@ -1332,18 +1423,26 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(16, item(Material.RECOVERY_COMPASS, "§b探敌术", "探测 24 格内怪物；3 魔力；15 秒冷却"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("prospect")) {
-            inv.setItem(10, item(Material.RAW_IRON, "§f探铁矿", "12 格；6 魔力；30 秒冷却"));
-            inv.setItem(11, item(Material.COAL, "§8探煤矿", "12 格；6 魔力；30 秒冷却"));
-            inv.setItem(12, item(Material.RAW_COPPER, "§6探铜矿", "12 格；6 魔力；30 秒冷却"));
-            inv.setItem(13, item(Material.RAW_GOLD, "§e探金矿", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(10, item(Material.RAW_IRON, "§f探铁矿", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
+            inv.setItem(11, item(Material.COAL, "§8探煤矿", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
+            inv.setItem(12, item(Material.RAW_COPPER, "§6探铜矿", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
+            inv.setItem(13, item(Material.RAW_GOLD, "§e探金矿", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
             inv.setItem(14, item(Material.DIAMOND, "§b探宝石", "钻石、绿宝石、青金石"));
-            inv.setItem(15, item(Material.REDSTONE, "§c探红石", "12 格；6 魔力；30 秒冷却"));
+            inv.setItem(15, item(Material.REDSTONE, "§c探红石", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
             inv.setItem(16, item(Material.AMETHYST_SHARD, "§d探附近矿脉", "寻找最近的任意矿物"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("focus")) {
             for (FocusSpell spell : FOCUS_SPELLS)
                 inv.setItem(spell.slot(), item(spell.icon(), spell.title(), spell.hint(), "点击绑定；之后手持法杖一按即施放"));
             inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("imprint")) {
+            for (int i = 0; i < FOCUS_SPELLS.size(); i++) {
+                FocusSpell spell = FOCUS_SPELLS.get(i);
+                inv.setItem(i, item(spell.icon(), spell.title(), spell.hint(),
+                        "点击刻印手中工具；3 经验等级 + 1 青金石"));
+            }
+            inv.setItem(45, item(Material.ENCHANTING_TABLE, "§5刻印说明",
+                    "手持工具潜行使用附魔台打开此页", "刻印后潜行使用工具施法；普通附魔保留"));
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
@@ -1419,9 +1518,25 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (event.getClickedBlock() != null && button(event.getClickedBlock())) {
             startArena(event.getPlayer()); return;
         }
+        Player player = event.getPlayer();
+        if (player.isSneaking() && event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.getClickedBlock().getType() == Material.ENCHANTING_TABLE
+                && imprintable(event.getItem())) {
+            event.setCancelled(true);
+            openImprintMenu(player);
+            return;
+        }
+        String imprinted = imprintedSpell(event.getItem());
+        if (player.isSneaking() && imprinted != null) {
+            event.setCancelled(true);
+            long now = System.currentTimeMillis();
+            if (now - focusUseAt.getOrDefault(player.getUniqueId(), 0L) < 300L) return;
+            focusUseAt.put(player.getUniqueId(), now);
+            cast(player, imprinted);
+            return;
+        }
         if (isFocus(event.getItem())) {
             event.setCancelled(true);
-            Player player = event.getPlayer();
             if (player.isSneaking()) { openMenu(player, "focus"); return; }
             long now = System.currentTimeMillis();
             if (now - focusUseAt.getOrDefault(player.getUniqueId(), 0L) < 300L) return;
@@ -1434,7 +1549,6 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             openMenu(event.getPlayer(), "skills");
         } else if (isStatusBook(event.getItem())) {
             event.setCancelled(true);
-            Player player = event.getPlayer();
             ItemStack updated = statusBook(player);
             player.getInventory().setItemInMainHand(updated);
             player.openBook(updated);
@@ -1498,6 +1612,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 if (slot == 0) openMenu(p, "skills");
                 else FOCUS_SPELLS.stream().filter(spell -> spell.slot() == slot).findFirst()
                         .ifPresent(spell -> bindFocus(p, spell.id()));
+            } else if (page.equals("imprint")) {
+                if (slot >= 0 && slot < FOCUS_SPELLS.size()) imprint(p, FOCUS_SPELLS.get(slot).id());
             } else if (page.equals("places")) {
                 switch (slot) {
                     case 13 -> gotoPlace(p, "arena");
@@ -1797,7 +1913,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 1) return List.of("help", "spells", "status", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {
+            List<String> choices = new ArrayList<>(List.of("list"));
+            choices.addAll(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());
+            return choices;
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("imprint") && args[1].equalsIgnoreCase("prospect"))
+            return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> id.startsWith("prospect "))
+                    .map(id -> id.substring("prospect ".length())).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "list", "menu", "bind");
         if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList();

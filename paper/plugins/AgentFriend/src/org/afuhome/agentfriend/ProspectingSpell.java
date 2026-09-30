@@ -21,12 +21,14 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.bukkit.util.RayTraceResult;
 
-/** Server-authoritative, short-range prospecting; only the caster sees the temporary outline. */
+/** Server-authoritative prospecting; only the caster sees the temporary outline. */
 final class ProspectingSpell {
-    private static final int RANGE = 12;
+    private static final int BASE_RANGE = 24;
+    private static final int MAX_LEVEL_BONUS = 16;
+    private static final int IMPRINT_BONUS = 8;
     private static final int DURATION_TICKS = 240;
     private static final long COOLDOWN_MS = 30_000L;
-    private static final long ATTEMPT_INTERVAL_MS = 2_000L;
+    private static final long ATTEMPT_INTERVAL_MS = 5_000L;
     private static final double MANA_COST = 6.0;
     private static final Map<Material, String> ORES = Map.ofEntries(
             Map.entry(Material.COAL_ORE, "煤矿"), Map.entry(Material.DEEPSLATE_COAL_ORE, "煤矿"),
@@ -56,6 +58,11 @@ final class ProspectingSpell {
         return Math.max(0L, lastCast.getOrDefault(player.getUniqueId(), 0L) + COOLDOWN_MS - System.currentTimeMillis());
     }
 
+    static int rangeFor(int miningLevel, boolean imprintedTool) {
+        return BASE_RANGE + Math.min(MAX_LEVEL_BONUS, Math.max(0, miningLevel) / 5 * 2)
+                + (imprintedTool ? IMPRINT_BONUS : 0);
+    }
+
     void cast(Player player, String requested) {
         String category = requested.isBlank() ? "all" : requested.toLowerCase(Locale.ROOT);
         if (!category.equals("all") && !category.equals("coal") && !category.equals("iron")
@@ -78,19 +85,26 @@ final class ProspectingSpell {
         }
         long now = System.currentTimeMillis();
         if (now - lastAttempt.getOrDefault(player.getUniqueId(), 0L) < ATTEMPT_INTERVAL_MS) {
-            player.sendMessage(ChatColor.YELLOW + "探矿术请稍等 2 秒再试。");
+            player.sendMessage(ChatColor.YELLOW + "探矿术请稍等 5 秒再试。");
             return;
         }
         lastAttempt.put(player.getUniqueId(), now);
+        int miningLevel = plugin.miningLevel(player);
+        boolean imprintedTool = plugin.hasImprintedProspectTool(player.getInventory().getItemInMainHand());
+        int range = rangeFor(miningLevel, imprintedTool);
         Location closest = null;
         String oreName = null;
-        int bestDistanceSquared = RANGE * RANGE + 1;
+        int bestDistanceSquared = range * range + 1;
         int sx = source.getBlockX(), sy = source.getBlockY(), sz = source.getBlockZ();
-        for (int dx = -RANGE; dx <= RANGE; dx++) for (int dz = -RANGE; dz <= RANGE; dz++) {
-            if (!world.isChunkLoaded((sx + dx) >> 4, (sz + dz) >> 4)) continue;
-            for (int dy = -RANGE; dy <= RANGE; dy++) {
+        // Scan expanding cubic shells. Once shell r has a hit closer than r+1,
+        // all remaining shells are farther away, so ordinary casts stay cheap.
+        for (int shell = 0; shell <= range && shell * shell < bestDistanceSquared; shell++) {
+            for (int dx = -shell; dx <= shell; dx++) for (int dz = -shell; dz <= shell; dz++) {
+                if (!world.isChunkLoaded((sx + dx) >> 4, (sz + dz) >> 4)) continue;
+                for (int dy = -shell; dy <= shell; dy++) {
+                if (Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz)) != shell) continue;
                 int distanceSquared = dx * dx + dy * dy + dz * dz;
-                if (distanceSquared >= bestDistanceSquared) continue;
+                if (distanceSquared >= bestDistanceSquared || distanceSquared > range * range) continue;
                 int y = sy + dy;
                 if (y < world.getMinHeight() || y >= world.getMaxHeight()) continue;
                 Material material = world.getBlockAt(sx + dx, y, sz + dz).getType();
@@ -98,10 +112,11 @@ final class ProspectingSpell {
                 bestDistanceSquared = distanceSquared;
                 closest = new Location(world, sx + dx + 0.5, y + 0.5, sz + dz + 0.5);
                 oreName = ORES.get(material);
+                }
             }
         }
         if (closest == null) {
-            player.sendMessage(ChatColor.YELLOW + "12 格内没有发现这种矿脉；未消耗魔力，也未进入冷却。");
+            player.sendMessage(ChatColor.YELLOW + "周围 " + range + " 格内没有发现这种矿脉；未消耗魔力，也未进入冷却。");
             return;
         }
         if (!plugin.spendMana(player, MANA_COST)) return;
@@ -122,7 +137,9 @@ final class ProspectingSpell {
         }
         traces.put(player.getUniqueId(), new Trace(closest, oreName, now + DURATION_TICKS * 50L, bar, outline));
         plugin.presentSpell(player, "prospect");
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "。矿块描边/墙面光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName + "（范围 " + range
+                + " 格，挖矿等级 " + miningLevel + (imprintedTool ? "，刻印工具 +8" : "")
+                + "）。矿块描边/墙面光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
 
