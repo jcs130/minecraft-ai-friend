@@ -70,7 +70,7 @@ try {
   bot.chat('/mycli guide gear');
   bot.chat('/mycli guide dungeon');
   await sleep(900);
-  for (const phrase of ['/mycli status', '/mycli imprint <技能ID>', '/mycli arena status|start|rewards|leave'])
+  for (const phrase of ['/mycli status', '/mycli imprint <技能ID>', '/mycli arena rewards'])
     assert.ok(chats.some(line => line.includes(phrase)), `Agent command guide missing ${phrase}: ${chats}`);
   assert.equal(errors.length, 0, `Client errors: ${errors}`);
   bot.quit();

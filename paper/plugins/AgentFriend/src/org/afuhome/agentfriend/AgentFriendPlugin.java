@@ -29,6 +29,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.Statistic;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.TileState;
@@ -64,6 +65,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -1471,6 +1473,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return stack != null && stack.getType() == Material.COMPASS && stack.hasItemMeta()
                 && stack.getItemMeta().getPersistentDataContainer().has(compassKey, PersistentDataType.BYTE);
     }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onKeepsakeDrop(PlayerDropItemEvent event) {
+        ItemStack stack = event.getItemDrop().getItemStack();
+        if (!isCompass(stack) && !isStatusBook(stack)) return;
+        event.setCancelled(true);
+        event.getPlayer().sendMessage(ChatColor.YELLOW + (isCompass(stack) ? "技能罗盘" : "命格书")
+                + "会留在身上；可移动到其他快捷栏格子。");
+    }
     private boolean isStatusBook(ItemStack stack) {
         return stack != null && stack.getType() == Material.WRITTEN_BOOK && stack.hasItemMeta()
                 && stack.getItemMeta().getPersistentDataContainer().has(statusBookKey, PersistentDataType.BYTE);
@@ -1485,16 +1495,32 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.setTitle("命格书");
         meta.setAuthor("千灯纪");
         meta.setDisplayName(ChatColor.GOLD + "❖ 命格书 ❖");
-        meta.setLore(List.of("使用键：查看状态与旅途指引", "手柄可用翻页键；丢失可用 /mycli book 补领"));
+        meta.setLore(List.of("使用键：查看状态与旅途指引", "手柄可用翻页键；未找到时可用 /mycli book 补领"));
         SkillsUser user = skillsUser(p);
         String manaLine = user == null ? "魔力数据加载中" : "魔力 " + Math.round(user.getMana())
-                + "/" + Math.round(user.getMaxMana()) + "\n挖矿等级 " + user.getSkillLevel(Skills.MINING)
+                + "/" + Math.round(user.getMaxMana());
+        String auraLine = user == null ? "技能数据加载中" : "战斗 " + user.getSkillLevel(Skills.FIGHTING)
+                + " · 挖矿 " + user.getSkillLevel(Skills.MINING)
+                + "\n炼金 " + user.getSkillLevel(Skills.ALCHEMY)
                 + " · 探矿 " + ProspectingSpell.rangeFor(user.getSkillLevel(Skills.MINING),
                         hasImprintedProspectTool(p.getInventory().getItemInMainHand())) + " 格";
         meta.setPages(
                 "§6❖ 千灯纪 · 命格书 ❖§r\n" + p.getName() + "\n\n生命 " + Math.round(p.getHealth())
                         + "/" + Math.round(p.getMaxHealth()) + "\n饥饿 " + p.getFoodLevel()
-                        + "/20\n经验等级 " + p.getLevel() + "\n" + manaLine + "\n\n向右翻页，开始冒险 →",
+                        + "/20\n原版经验等级 " + p.getLevel() + "\n" + manaLine + "\n\n向右翻页，查看战绩与任务 →",
+                "§c冒险战绩§r\n\n击败怪物 " + p.getStatistic(Statistic.MOB_KILLS)
+                        + "\n击败玩家 " + p.getStatistic(Statistic.PLAYER_KILLS)
+                        + "\n死亡次数 " + p.getStatistic(Statistic.DEATHS)
+                        + "\n\n公会等级、声望、已完成委托和当前任务请看后面的「冒险者公会」页。",
+                guild.bookPage(p),
+                "§d角色成长§r\n\n" + auraLine
+                        + "\n\n当前没有可手动分配的属性点。AuraSkills 技能随活动获取经验并升级；法术靠成功施放提高熟练度。",
+                "§d法术熟练度 · 战斗§r\n\n" + masteryBookLine(p, "starbolt") + "\n"
+                        + masteryBookLine(p, "frostnova") + "\n" + masteryBookLine(p, "flamewave")
+                        + "\n\n成功施放 8 次升 2 级，24 次升 3 级。",
+                "§d法术熟练度 · 探索§r\n\n" + masteryBookLine(p, "leap") + "\n"
+                        + masteryBookLine(p, "flight") + "\n" + masteryBookLine(p, "golem") + "\n"
+                        + masteryBookLine(p, "sense") + "\n" + masteryBookLine(p, "prospect"),
                 "§6第一步：打开罗盘§r\n\n把技能罗盘拿在手上，按使用键。\n\n选「旅途指南」可直接进入地点、魔法、公会与队友菜单。\n\n想先逛逛？选「传送地点」去樱花林。",
                 "§b手柄也能玩§r\n\n罗盘：使用键打开。\n方向键：选择图标。\n确认键：使用或进入。\n返回键：关闭菜单。\n\n命格书用页面左右箭头翻页；不用打字。",
                 "§a探索与队友§r\n\n罗盘「传送地点」选村庄、樱花林与遗迹。去遗迹后还要步行探索。\n\n「找队友」可追踪方向或传送过去。\n\n在地点页保存自己的营地，方便回家。",
@@ -1502,12 +1528,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
                 "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
-                guild.bookPage(p),
                 "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。队友站在入口石按钮附近，一人按下就会一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
                 "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
         stack.setItemMeta(meta);
         return stack;
+    }
+    private String masteryBookLine(Player p, String id) {
+        int level = spellMastery.rank(p, id);
+        int uses = spellMastery.uses(p, id);
+        return SpellMastery.NAMES.get(id) + " " + level + "/3 (" + uses
+                + (level == 3 ? " 次)" : "/" + spellMastery.nextRequired(p, id) + " 次)");
     }
     private void giveStatusBook(Player p) {
         if (hasStatusBook(p)) {
