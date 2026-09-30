@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.38 Agent 低频游玩提醒
+
+新增 `/mycli coach status|on|off`：Java/Mineflayer 默认开启，Floodgate 基岩默认关闭，个人开关跨重登保存；旁观者不提醒。默认在 30 分钟内死亡 3 次、闲置 15 分钟、活跃游玩 45 分钟未用 `/mycli` 时，分别发送一次本人独享的 `MC_COACH` JSON 系统聊天，三类提示共享 30 分钟冷却。提示给出 `list`、`explain`、状态、治疗或路线等建议，绝不自动施法或移动。具体活动判定、字段、配置和验收见 [Agent 游玩提醒](../../docs/AGENT_COACH.md)。
+
 ## 0.3.37 `/mycli` Agent 自发现接口
 
 新增 `/mycli list [分类|命令|all] [页码]`、`/mycli explain <ID>` 和 `/mycli help <ID>`。目录按七项分页，使用稳定的点号 ID（如 `cast.prospect`、`arena.stash.take`）；回执是仅发给本人系统聊天的 `MC_CLI_LIST`、`MC_CLI_ITEM`、`MC_CLI_DETAIL` 或 `MC_CLI_ERROR` 加单行 JSON。解释命令只读，不代替执行；不暴露控制台 `admin` 子命令。现有施法、箱子、任务和手柄菜单语法保持兼容。完整字段、使用步骤与客户端接收注意事项见 [Agent CLI 指南](../../docs/MYCLI_AGENT_CLI.md)。隔离服 `mycli-catalog-stage.mjs` 用 Mineflayer 1.20.6 验证 21 项顶层命令、18 项施法命令的翻页、解释和无副作用。

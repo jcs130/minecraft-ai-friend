@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.38 Agent 低频游玩提醒（2026-10-01 已正式发布）
+
+新增 `/mycli coach status|on|off` 个人开关和只发本人的 `MC_COACH` JSON 系统聊天。Java/Mineflayer 默认开启、Floodgate 基岩默认关闭，旁观者不提醒；默认 30 分钟内死亡 3 次、15 分钟闲置、活跃游玩 45 分钟未用 `/mycli` 触发相应建议，三类提醒共享 30 分钟冷却。不会自动施法、传送或给物品。规则、配置、玩家 PDC 与客户端解析见 [Agent 游玩提醒](AGENT_COACH.md)。
+
+隔离服 25566 将门槛临时缩为数秒、死亡阈值设为 2；`agent-coach-stage.mjs` 用真实 Mineflayer 1.20.6 账号验证个人开关、闲置只发一次、两次死亡后复活提示、持续活动但久未用 `/mycli` 提示、`list/explain coach` 和结构化错误码，结果 PASS。测试结束已恢复隔离服原配置与出生点并正常停机。正式服发布前只有 CortiLan、CortiEye、Goddess 服务账号在线、无活动试炼，自动恢复未暂停；S4U `Afu-MC-DailyBackup` 正常停服，E/F 双盘快照 `20261001-024036` 均有 `.complete`，任务结果 0。只启用 `AgentFriend-0.3.38.jar`，SHA256 `70B4CD8CCC585250836FB3E4BB5F0C367CB1B488DBC7AD733912CA80A608F07B`。正式服临时白名单 Mineflayer 账号核验生产默认门槛、`off` 跨重登保存和 `on` 恢复，随后移出白名单。Java、LAN Agent 网关、基岩 Pong、Goddess 桥、Watchdog 与 CortiEye 观战附身、夜视均正常；基岩真机手动打开提醒时的聊天渲染仍需玩家体验验收，152 上 CortiLan 客户端收集系统聊天的端到端链路也未在此轮直接验证。
+
 ## 0.3.37 Agent CLI 自发现（2026-10-01 已正式发布）
 
 玩家命令新增 `/mycli list [分类|命令|all] [页码]`、`/mycli explain <ID>`，以及 `/mycli help <ID>` 别名。每页最多七项，`MC_CLI_LIST`、`MC_CLI_ITEM`、`MC_CLI_DETAIL`、`MC_CLI_ERROR` 是只发给发令玩家的系统聊天 JSON；`list` 和 `explain` 不施法、不传送、不操作物品。目录不包含控制台 `admin` 命令。Agent 用法与字段见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。现有手柄菜单和 Java、基岩、Mineflayer 原版命令兼容。

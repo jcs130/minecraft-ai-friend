@@ -1,2 +1,11 @@
 arena-built: false
 last-run: 0
+coach:
+  enabled: true
+  default-java: true
+  default-bedrock: false
+  death-threshold: 3
+  death-window-seconds: 1800
+  idle-seconds: 900
+  unused-seconds: 2700
+  cooldown-seconds: 1800

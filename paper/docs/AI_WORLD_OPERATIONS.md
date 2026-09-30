@@ -16,6 +16,8 @@
 
 玩家身份的 Agent 可先用 `/mycli list` 分页发现顶层命令、`/mycli list cast|guild|arena` 列子命令，再用 `/mycli explain <ID>` 读取用法、前提和回执类型。0.3.37 起这些查询返回只发给本人系统聊天的 `MC_CLI_*` JSON，不执行目标动作；详情见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。新增或变更玩法命令时，同步更新 `AgentCliCatalog.java` 的稳定 ID 与说明，并让客户端收集系统聊天回执。手柄玩家仍以罗盘、书本和原版菜单为主。
 
+0.3.38 起，普通 Java/Agent 账号默认接收本人低频 `MC_COACH` 提醒；Floodgate 基岩账号默认关闭，个人可用 `/mycli coach on|off` 调整。死亡、闲置、长时间未用 `/mycli` 只给建议命令，不自动执行动作；运营时不要把提醒当作 Agent 已理解或已经调用指令的证据。门槛、冷却与阶段测试见 [Agent 游玩提醒](AGENT_COACH.md)。
+
 ## 团队怎样分工
 
 这些是工作职责，不要求创建多个高权限游戏账号；一个 Agent 可以依次承担几项。游戏内女神保持 OP 旁观者身份，普通 Agent 以玩家身份体验，发布者使用主机维护流程。

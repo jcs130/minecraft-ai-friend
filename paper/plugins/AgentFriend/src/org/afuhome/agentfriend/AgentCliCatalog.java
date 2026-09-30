@@ -32,6 +32,7 @@ final class AgentCliCatalog {
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
+        add(specs,"coach","info","read","/mycli coach status|on|off","查看或调整本人低频提醒；默认 Java 开、基岩关","在线玩家；旁观者不收到提醒","MC_COACH JSON");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
         add(specs,"spells","magic","read","/mycli spells","列出可用法术、消耗与学习条件","在线玩家","技能文字列表");
@@ -52,6 +53,9 @@ final class AgentCliCatalog {
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
         add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","MC_PROTECT status=deny|unknown|allow_likely");
+        add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛和冷却","在线玩家","MC_COACH type=status");
+        add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
+        add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","MC_PROTECT status=deny|unknown|allow_likely");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗视线中的队友","非旁观者；须瞄准目标，魔力与冷却检查","治疗结果与视觉提示");
