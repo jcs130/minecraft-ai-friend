@@ -193,6 +193,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
+    private ProtectionAdvisor protectionAdvisor;
     private final SpellPresentation spellPresentation = new SpellPresentation();
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
@@ -220,6 +221,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
         villageStructureProtection = new VillageStructureProtection(this);
+        protectionAdvisor = new ProtectionAdvisor(this);
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
@@ -254,12 +256,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         giftNonces.clear();
         pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
+        if (protectionAdvisor != null) protectionAdvisor.stop();
         if (combatSpells != null) combatSpells.clear();
         if (prospectingSpell != null) prospectingSpell.clear();
         if (utilitySpells != null) utilitySpells.clear();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
+    VillageStructureProtection villageProtection() { return villageStructureProtection; }
+    GuildHallManager guildHall() { return guildHall; }
+    TrialRoadManager trialRoad() { return trialRoad; }
+    DungeonManager dungeon() { return dungeon; }
+    boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
     void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
     void guildFloorCleared(Player player, int floor, int partySize) {
         if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
@@ -403,6 +411,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
+        if (protectionAdvisor != null) protectionAdvisor.forget(event.getPlayer());
         UUID id = event.getPlayer().getUniqueId();
         trackedPlayers.remove(id);
         automaticCompassTargets.remove(id);
@@ -522,6 +531,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
             case "status", "状态" -> status(player);
+            case "protect", "保护" -> protectionAdvisor.command(player, args);
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
             case "goto", "传送" -> gotoPlace(player, tail(args, 1));
             case "waypoint", "传送点" -> waypoint(player, args);
@@ -544,6 +554,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void help(Player p) {
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
+        p.sendMessage("/mycli protect break|place <x> <y> <z>  查询附近方块能否操作；Agent 挖掘前先查");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
@@ -571,6 +582,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "explore", "探索" -> {
                 p.sendMessage(ChatColor.GOLD + "【探索】先去出生村庄、樱花林等公共地点；遗迹落点在外围，需要步行探索。罗盘可保存自己的营地。");
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli waypoint；/mycli goto cherry；/mycli waypoint add camp；/mycli goto personal:camp。传送前先确认周围安全。");
+                p.sendMessage(ChatColor.GRAY + "挖掘/放置前：/mycli protect break|place <x> <y> <z>；deny 不动、unknown 暂缓、allow_likely 可尝试。");
             }
             case "magic", "魔法" -> {
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】在罗盘选法术图标；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
@@ -1989,7 +2001,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "guide", "spells", "status", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 1) return List.of("help", "guide", "spells", "status", "protect", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {

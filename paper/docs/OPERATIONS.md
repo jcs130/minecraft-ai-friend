@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.33 Agent 保护预检（隔离服通过，待正式发布）
+
+`/mycli protect break|place <x> <y> <z>` 按发命令的玩家身份查询 16 格内已加载目标；`MC_PROTECT ` 聊天 JSON 与 `mcagent:protection` 原始 UTF-8 plugin message 同时只发给本人。结果覆盖 WorldGuard、村屋原始方块、公会大厅、公共道路、试炼场和十层地下城。`deny`、`unknown` 与 `allow_likely` 的 Agent 行为见 [接入说明](AGENT_PROTECTION.md)；实际方块事件仍是最终拦截。查询不返回方块材质，防止变成探矿旁路。
+
+隔离服 25566 用真实 Mineflayer 1.20.6 验证：原村屋方块返回 `village_structure/deny`，村庄户外方块返回 `no_known_protection/allow_likely`，试炼塔返回 `dungeon/deny`，公共道路方块与道路净空的放置返回 `trial_road/deny`，远距离返回 `unknown_out_of_range/unknown`；聊天和插件消息一致，另一玩家连接没有收到查询结果。放置事件仍取被替换方块的旧状态；该逻辑用前一构建复测通过，随后只增加 `/mycli guide explore` 的 Agent 提示并重新编译，最终 SHA256 `958239948751A4FA0908A19DA71A1190E57BEE821BFD733F8723A5F107D936DB`。隔离服已停并恢复原 AgentFriend 0.3.31 JAR。
+
+2026-09-30 检查正式服时 `.MicroKQ` 仍在线，因此不重启。将 0.3.33 候选按哈希复制到 `E:\minecraft-ai-friend\paper\plugins\AgentFriend\`，把现有 `agentfriend-deploy.pending.json` 从 0.3.32 候选替换为包含该功能的 0.3.33 候选；旧版本预期哈希仍为当前生产 0.3.30。备份任务只有在没有真人在线时才会部署。正式服目前仍未验证 0.3.33；发布后需核对唯一 JAR、RCON 版本、E/F `.complete`、入口及保护查询实际回执。
+
 此文档描述源码分支与当前 Windows 家服的关系。仓库是代码及配置基线；正式存档和玩家状态只保存在 `E:\MC\server` 以及已校验备份中。完整本机维护记录仍在 `E:\MC\ops\MAINTENANCE.md`。
 
 ## 0.3.32 探矿返回绝对坐标（待正式发布）

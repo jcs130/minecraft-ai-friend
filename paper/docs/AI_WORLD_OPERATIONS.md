@@ -54,6 +54,8 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 
 面向手柄玩家，关键技能须可由原版物品使用、罗盘选择或按钮触发；面向 Agent，须有稳定的文字命令和可解析回执。高伤害、飞行、召唤物与传送要在村庄保护、组队、世界边界和性能负载下测试。不能把只有 Java 客户端模组能渲染的特效作为完成条件；基岩玩家至少要看见原版标题、粒子、音效或聊天反馈。
 
+Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查询本人当前维度、附近已加载的目标方块；解析 `MC_PROTECT ` JSON 或 `mcagent:protection` 频道。`deny` 换目标，`unknown` 暂缓，`allow_likely` 才尝试，实际事件拒绝后立即停止。协议、范围和原因见 [Agent 保护查询](AGENT_PROTECTION.md)。
+
 ### 公会委托与声望
 
 现有委托目录在 `GuildManager.CONTRACTS`，六级声望门槛也在同类中；进度按 UUID 存在运行配置。新增委托先复用现有 `FLOOR`、`KILLS`、`PARTY_FLOOR`、`CLAIMS`、`EXPLORE` 目标；新目标类型必须同时实现进度事件、重复计数防护、看板/书本提示和领奖。保留旧 ID 与含义，不能为了改标题直接重命名已发布 ID；需要停用时先规定在途任务怎么交付或转移。

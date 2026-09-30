@@ -357,8 +357,10 @@ final class TrialRoadManager implements Listener {
         Integer floor = plan.deck().get(new Pos(block.getX(), block.getZ()));
         return floor != null && Math.abs(block.getY() - floor) <= 3;
     }
+    boolean deniesBreak(Block block) { return protectedFabric(block) || failClosed(block); }
+    boolean deniesPlace(Block block) { return deniesBreak(block) || pathHeadroom(block); }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (protectedFabric(event.getBlock()) || failClosed(event.getBlock())) {
+        if (deniesBreak(event.getBlock())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("§e这是通往试炼场的公共道路；路旁的草木仍可整理。");
         }

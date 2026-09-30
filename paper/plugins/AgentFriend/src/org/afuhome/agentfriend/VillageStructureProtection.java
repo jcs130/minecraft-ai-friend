@@ -183,8 +183,10 @@ final class VillageStructureProtection implements Listener {
 
     private boolean failClosed(Block block) { return !ready && inVillage(block.getLocation()); }
 
+    boolean deniesEdit(Block block) { return failClosed(block) || protectedOriginal(block); }
+
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (failClosed(event.getBlock()) || protectedOriginal(event.getBlock())) {
+        if (deniesEdit(event.getBlock())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("§e这块属于村庄原有建筑；旁边的树叶、草木和自己放的方块可以正常整理。");
         }

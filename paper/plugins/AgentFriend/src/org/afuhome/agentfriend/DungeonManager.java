@@ -297,6 +297,8 @@ final class DungeonManager implements Listener {
         return false;
     }
 
+    boolean deniesEdit(Location at) { return inBuild(at); }
+
     private Location lobbyButton() {
         return new Location(world(), X - 5.5, LOBBY_Y + 2.5, Z - 7.5);
     }

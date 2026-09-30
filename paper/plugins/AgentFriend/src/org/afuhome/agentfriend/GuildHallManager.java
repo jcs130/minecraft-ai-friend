@@ -356,8 +356,9 @@ final class GuildHallManager implements Listener {
         return inHall(b.getBlock()) && fabric.get(key(b.getX(), b.getY(), b.getZ())) == b.getType();
     }
     private boolean failClosed(Block b) { return built && !ready && inHall(b); }
+    boolean deniesEdit(Block block) { return protectedFabric(block) || failClosed(block); }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (protectedFabric(event.getBlock()) || failClosed(event.getBlock())) {
+        if (deniesEdit(event.getBlock())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("§e这是冒险者公会的建筑。周围的草木可以正常整理。");
         }
