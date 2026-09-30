@@ -79,6 +79,7 @@ final class DungeonManager implements Listener {
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
     private static final String STASH = "dungeon-personal-stash.";
+    private static final int STASH_SIZE = 54;
     private static final String RARE_MISSES = "dungeon-rare-misses.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 128;
@@ -618,7 +619,7 @@ final class DungeonManager implements Listener {
     }
     private boolean hasPersonalChestContents(UUID id) {
         if (hasPendingRewards(id)) return true;
-        for (int slot = 0; slot < 27; slot++)
+        for (int slot = 0; slot < STASH_SIZE; slot++)
             if (plugin.getConfig().getItemStack(stashPath(id, slot)) != null) return true;
         return false;
     }
@@ -868,7 +869,7 @@ final class DungeonManager implements Listener {
     private Inventory liveStash(UUID id) {
         for (Map.Entry<Inventory, UUID> entry : stashMenus.entrySet())
             if (entry.getValue().equals(id)) return entry.getKey();
-        Inventory inv = Bukkit.createInventory(null, 27, ChatColor.GOLD + "个人试炼箱");
+        Inventory inv = Bukkit.createInventory(null, STASH_SIZE, ChatColor.GOLD + "个人试炼箱");
         for (int slot = 0; slot < inv.getSize(); slot++) {
             ItemStack saved = plugin.getConfig().getItemStack(stashPath(id, slot));
             if (saved != null) inv.setItem(slot, saved.clone());
@@ -949,7 +950,7 @@ final class DungeonManager implements Listener {
                 player.sendMessage("MC_STASH slot=" + (slot + 1) + itemFields(item));
                 entries++;
             }
-            player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/27");
+            player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE);
             return;
         }
         if (action.equals("putslot") && args.length == 5) {
@@ -1010,8 +1011,8 @@ final class DungeonManager implements Listener {
             try { slot = Integer.parseInt(args[3]) - 1; }
             catch (NumberFormatException invalid) { slot = -1; }
             wanted = args.length == 5 ? positiveCount(args[4]) : 64;
-            if (slot < 0 || slot >= 27 || wanted < 1) {
-                player.sendMessage("用法：/mycli arena stash take <1–27 槽位> [1–64 数量]"); return;
+            if (slot < 0 || slot >= STASH_SIZE || wanted < 1) {
+                player.sendMessage("用法：/mycli arena stash take <1–54 槽位> [1–64 数量]"); return;
             }
             ItemStack source = inv.getItem(slot);
             if (source == null || source.getType().isAir()) {

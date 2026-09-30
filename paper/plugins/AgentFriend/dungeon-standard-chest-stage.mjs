@@ -46,7 +46,7 @@ const openChest = async (client) => {
   const block = client.bot.blockAt(new Vec3(-594, 91, -313));
   assert.equal(block?.name, 'chest', 'physical entrance block is a chest');
   const chest = await client.bot.openContainer(block);
-  assert.equal(chest.inventoryStart, 27, 'ordinary 27-slot chest window');
+  assert.equal(chest.inventoryStart, 54, 'ordinary 54-slot double chest window');
   return chest;
 };
 const count = (chest, item) => chest.containerItems()

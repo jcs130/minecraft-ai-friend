@@ -93,12 +93,12 @@ final class AgentCliCatalog {
         add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","在线玩家","原版箱子菜单");
         add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","列出箱满后尚未入箱的奖励","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
         add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；先查看 rewards list","领取结果");
-        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人 27 格个人箱；支持原版箱子操作","在线玩家","原版箱子菜单");
+        add(specs,"arena.stash","storage","gui","/mycli arena stash","打开本人 54 格双箱；支持原版箱子操作","在线玩家","原版箱子菜单");
         add(specs,"arena.stash.inventory","storage","read","/mycli arena stash inventory","列出本人背包槽位 0–35","在线玩家","MC_INVENTORY、MC_INVENTORY_SUMMARY");
-        add(specs,"arena.stash.list","storage","read","/mycli arena stash list","列出本人箱子槽位 1–27","在线玩家","MC_STASH、MC_STASH_SUMMARY");
+        add(specs,"arena.stash.list","storage","read","/mycli arena stash list","列出本人箱子槽位 1–54","在线玩家","MC_STASH、MC_STASH_SUMMARY");
         add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位","MC_STASH_PUT moved 数量");
         add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按精确背包槽存入；保留附魔与自定义物品","背包槽有物品；箱有空位","MC_STASH_PUT moved 数量");
-        add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–27> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位","MC_STASH_TAKE moved 数量");
+        add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–54> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位","MC_STASH_TAKE moved 数量");
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用","传送结果");
         add(specs,"guild.board","adventure","read","/mycli guild board","列出今天可接任务和 ID","在线玩家","任务、声望及等级门槛");

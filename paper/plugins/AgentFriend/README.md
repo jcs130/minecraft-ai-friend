@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.39 个人奖励箱扩为双箱
+
+试炼塔入口实体箱、公会奖励入口和 `/mycli arena rewards|stash` 现在打开同一个 54 格原版双箱界面；入口方块位置不变。已有 0–26 槽原样读取，新增 27–53 槽用于奖励和存放物品。`/mycli arena stash list` 报告占用数 `/54`，`stash take` 接受 1–54 号箱格。Mineflayer 继续使用标准 `openContainer`、`deposit`、`withdraw`；Java 和基岩端使用原版箱子菜单。奖励队列仅在开箱时装入可用槽，箱满时仍留在队列，不会丢失。
+
+隔离服 `dungeon-standard-chest-stage.mjs` 验证 54 格实体箱、双人 UUID 隔离、标准存取、公会及试炼奖励、重启持久化；正式服临时 Mineflayer 账号再次验证 54 格存取。正式服 CortiLan 原 27 格物品保留，重新开箱后奖励从待入箱队列装入新增槽，现占用 36/54。
+
 ## 0.3.38 Agent 低频游玩提醒
 
 新增 `/mycli coach status|on|off`：Java/Mineflayer 默认开启，Floodgate 基岩默认关闭，个人开关跨重登保存；旁观者不提醒。默认在 30 分钟内死亡 3 次、闲置 15 分钟、活跃游玩 45 分钟未用 `/mycli` 时，分别发送一次本人独享的 `MC_COACH` JSON 系统聊天，三类提示共享 30 分钟冷却。提示给出 `list`、`explain`、状态、治疗或路线等建议，绝不自动施法或移动。具体活动判定、字段、配置和验收见 [Agent 游玩提醒](../../docs/AGENT_COACH.md)。

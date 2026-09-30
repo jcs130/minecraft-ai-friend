@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.39 个人奖励箱扩为 54 格（2026-10-01 已正式发布）
+
+CortiLan 的原 27 格个人箱与 36 格随身背包都已占满；绿宝石堆为 64，木棍没有可合并的箱格，所以普通存入与待入箱奖励都无法继续。试炼、公会和 `/mycli arena rewards|stash` 共用的虚拟箱改为原版 54 格双箱界面，实体入口方块和各玩家 UUID 不变。旧槽位 0–26 原样保留，新增槽位 27–53；`stash list` 和 `stash take` 的范围同步更新。奖励队列继续保留溢出，不直接改玩家背包。
+
+隔离服 `dungeon-standard-chest-stage.mjs` 通过双人 UUID 隔离、标准 Mineflayer `openContainer`/`deposit`/`withdraw`、试炼及公会奖励、重启持久化；正式服临时 Mineflayer 玩家再次验证 54 格标准存取，随后移出白名单。发布前仅 CortiLan、CortiEye、Goddess 三个服务账号在线，没有活动试炼。S4U 备份任务结果 0，E/F 双盘快照 `20261001-070657` 都有 `.complete`，唯一启用的 `AgentFriend-0.3.39.jar` SHA256 为 `3C626FBAE538A6F922185EC3C1C8C60D101C817D94E0E2C36E31D1DF56104C02`。正式服 CortiLan 旧 27 格仍在；以其玩家身份重新开箱后占用 36/54，原待入箱的铁锭、绿宝石、箭均归零。Java、基岩 Pong、LAN Agent 网关、女神桥和自动恢复正常。CortiEyeMirror 服务端已加载，远端 CortiEye 在首次重查时尚未重连，直播镜头需另查 `cortieye`。
+
 ## 0.3.38 Agent 低频游玩提醒（2026-10-01 已正式发布）
 
 新增 `/mycli coach status|on|off` 个人开关和只发本人的 `MC_COACH` JSON 系统聊天。Java/Mineflayer 默认开启、Floodgate 基岩默认关闭，旁观者不提醒；默认 30 分钟内死亡 3 次、15 分钟闲置、活跃游玩 45 分钟未用 `/mycli` 触发相应建议，三类提醒共享 30 分钟冷却。不会自动施法、传送或给物品。规则、配置、玩家 PDC 与客户端解析见 [Agent 游玩提醒](AGENT_COACH.md)。
