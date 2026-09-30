@@ -66,6 +66,8 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 Agent 查本人奖励使用 `/mycli arena rewards list`，按返回的 `MC_REWARD slot=…` 执行 `/mycli arena rewards take <槽位|all>`；成功后物品进入正常背包。`/mycli arena stash list|put|take` 管理 27 格私人储物箱，箱槽位号从 1 起。存放指定附魔物品时先用 `stash inventory` 查背包 0–35 号槽位，再用 `stash putslot <背包槽位> <数量>`。私人储物和待领奖励是两份数据；新任务不得把私人储物内容当作待领奖励，也不得用公共世界箱子代替按 UUID 保存的物品。
 
+CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 `/mycli` 的系统聊天回复纳入 `mc_do` 回执，Agent 才能读到上述槽位清单并自主决策。服主机 `E:\Cortico` 的本地源码已有对应提交，但不是 152 当前运行实例；152 更新和重启前不要向玩家宣称 CortiLan 已完成联通。
+
 ### 试炼塔、遗迹与新地下城
 
 现有十层试炼塔位置、主题、怪物和奖励写在 `DungeonManager`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
