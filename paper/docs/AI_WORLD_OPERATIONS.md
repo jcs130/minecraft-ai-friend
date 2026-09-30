@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置 | 玩家魔力、等级、已学技能和道具刻印在插件/玩家数据里 | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | `GuildManager.java` 的 `CONTRACTS`、`RANKS`、`THRESHOLDS`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `guild-players` | 可新增委托和目标判定，但现阶段仍需改 Java、构建和重启；**改委托 ID 会影响正在进行的任务** |
-| 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、个人奖励和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
+| 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机 | 可解答、引导、审核缺项申请并执行已有管理能力。现有 MCP 仅暴露有限的可审计工具；QwenPaw Agent 自身的文件/开发能力是另一层，不应把 MCP 工具范围误当作全部开发权限 |
 | 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本 | 正式世界、白名单、密钥、日志和备份都在运行主机 | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
 
@@ -63,6 +63,8 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 现有委托目录在 `GuildManager.CONTRACTS`，六级声望门槛也在同类中；进度按 UUID 存在运行配置。新增委托先复用现有 `FLOOR`、`KILLS`、`PARTY_FLOOR`、`CLAIMS`、`EXPLORE` 目标；新目标类型必须同时实现进度事件、重复计数防护、看板/书本提示和领奖。保留旧 ID 与含义，不能为了改标题直接重命名已发布 ID；需要停用时先规定在途任务怎么交付或转移。
 
 每项委托都要让手柄玩家通过原版公会看板完成接单与领奖，也要给 Agent 一个 `/mycli guild` 路径。奖励进入个人箱，需验证玩家退出、死亡或重启后不会丢失或重复发放。价格、声望和稀有物品要与同等级试炼奖励比较，避免一个低风险任务无限产出高阶装备。
+
+Agent 查本人奖励使用 `/mycli arena rewards list`，按返回的 `MC_REWARD slot=…` 执行 `/mycli arena rewards take <槽位|all>`；成功后物品进入正常背包。`/mycli arena stash list|put|take` 管理 27 格私人储物箱，箱槽位号从 1 起。存放指定附魔物品时先用 `stash inventory` 查背包 0–35 号槽位，再用 `stash putslot <背包槽位> <数量>`。私人储物和待领奖励是两份数据；新任务不得把私人储物内容当作待领奖励，也不得用公共世界箱子代替按 UUID 保存的物品。
 
 ### 试炼塔、遗迹与新地下城
 

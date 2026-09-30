@@ -565,9 +565,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena start|rest|next|shop|status|rewards|leave  清怪自动下楼；第七层休息补给"
+                ? "/mycli arena start|rest|next|shop|status|rewards|stash|leave  清怪自动下楼；个人箱可储物"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
-        p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards  公会大厅、任务与声望");
+        p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
     private void guide(Player p, String[] args) {
@@ -594,11 +594,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "guild", "公会", "工会" -> {
                 p.sendMessage(ChatColor.GOLD + "【公会】罗盘 → 冒险者公会 → 看板选任务。完成后回看板交付；声望提升冒险者等级，物资进个人奖励箱。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards list；/mycli arena stash list。");
             }
             case "dungeon", "地下城", "试炼" -> {
                 p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；队友站到石按钮附近，一人按下后一起进入。清怪 10 秒后自动下楼并补满生命。");
-                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent：/mycli arena status|start|rewards|leave；第六层通关后可用 rest 进入驿站。");
+                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent：/mycli arena rewards list，再用 rewards take <槽位|all>；stash list|put|take 管理私人储物。");
             }
             case "team", "队友" -> {
                 p.sendMessage(ChatColor.AQUA + "【结伴】罗盘 → 找队友，可让指针追踪队友，也可安全传送到她身边。女神是旁观服主，不在队友列表。");

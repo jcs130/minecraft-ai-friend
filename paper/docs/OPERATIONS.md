@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.34 地下城私人储物箱（待正式发布）
+
+待领奖励仍在原 `dungeon-rewards`、`dungeon-bonus-items` 队列；奖励页箱子图标和公会看板新增 27 格私人储物入口，数据按 UUID 存于 `dungeon-personal-stash`。Agent 用 `/mycli arena rewards list|take <槽位|all>` 查询并领取到背包，用 `/mycli arena stash inventory|list|put|putslot|take` 存取。英文 ID 与数量、原版物品元数据均保留；`putslot` 能按背包 0–35 号槽位选择同种不同附魔的物品。旧奖励不迁移、不清空。回退 0.3.33 时私人储物入口暂不可用，保留完整 `config.yml` 后重新发布 0.3.34 可恢复。
+
+隔离服 25566 的 `dungeon-stash-stage.mjs` 用两名 Mineflayer 1.20.6 玩家验证 UUID 隔离、奖励页进入储物箱、命令和原版菜单存取、首层结算与公会交付、指令领奖、附魔弩领取后装备、按槽位存取时名称和附魔保留，以及 JVM 重启后储物数据仍在。最后候选 JAR SHA256 为 `DB8E793E202F12F45B8A4F994C419CFB694F697D30131C4A164EE08B371162D4`，源码编译和 `git diff --check` 通过。正式服检查时 `.MicroKQ` 已上线，发布未开始；服务端仍运行 0.3.33，没有创建待发布计划。等待无人游玩、无活动试炼时用既有 S4U 备份任务完成 E/F 快照、插件替换和重启，再检查 Java、Geyser、LAN Agent、女神、CortiEye、Watchdog 和实服命令。基岩真机手柄菜单仍须人工入服验收。
+
 ## 0.3.33 Agent 保护预检（已正式发布）
 
 `/mycli protect break|place <x> <y> <z>` 按发命令的玩家身份查询 16 格内已加载目标；`MC_PROTECT ` 聊天 JSON 与 `mcagent:protection` 原始 UTF-8 plugin message 同时只发给本人。结果覆盖 WorldGuard、村屋原始方块、公会大厅、公共道路、试炼场和十层地下城。`deny`、`unknown` 与 `allow_likely` 的 Agent 行为见 [接入说明](AGENT_PROTECTION.md)；实际方块事件仍是最终拦截。查询不返回方块材质，防止变成探矿旁路。

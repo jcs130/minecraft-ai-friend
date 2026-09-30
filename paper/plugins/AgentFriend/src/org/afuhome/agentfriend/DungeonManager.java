@@ -34,6 +34,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Ravager;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -78,6 +79,7 @@ final class DungeonManager implements Listener {
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
     private static final String BONUS_ITEMS = "dungeon-bonus-items.";
+    private static final String STASH = "dungeon-personal-stash.";
     private static final String RARE_MISSES = "dungeon-rare-misses.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 128;
@@ -133,6 +135,7 @@ final class DungeonManager implements Listener {
     private final Set<UUID> participants = new HashSet<>();
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<Inventory, UUID> rewardMenus = new IdentityHashMap<>();
+    private final Map<Inventory, UUID> stashMenus = new IdentityHashMap<>();
     private boolean built;
     private boolean expanded;
     private boolean active;
@@ -188,7 +191,9 @@ final class DungeonManager implements Listener {
             persistRun();
         }
         cleanupMobs();
+        for (Map.Entry<Inventory, UUID> entry : stashMenus.entrySet()) saveStash(entry.getKey(), entry.getValue());
         rewardMenus.clear();
+        stashMenus.clear();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
@@ -330,9 +335,10 @@ final class DungeonManager implements Listener {
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
             case "shop", "商人" -> openShop(player);
-            case "rewards", "reward", "箱子" -> openRewards(player);
+            case "rewards", "reward", "箱子" -> rewardCommand(player, args);
+            case "stash", "储物" -> stashCommand(player, args);
             case "leave" -> leave(player);
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|rest|next|shop|status|rewards|leave");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|rest|next|shop|status|rewards|stash|leave");
         }
     }
 
@@ -792,6 +798,203 @@ final class DungeonManager implements Listener {
     private int pending(UUID id, Material material) {
         return plugin.getConfig().getInt(rewardPath(id, material), 0);
     }
+    private void rewardCommand(Player player, String[] args) {
+        if (args.length == 2) { openRewards(player); return; }
+        if (args[2].equalsIgnoreCase("list") && args.length == 3) {
+            UUID id = player.getUniqueId();
+            int entries = 0;
+            for (int slot = 0; slot < REWARD_TYPES.length; slot++) {
+                int count = pending(id, REWARD_TYPES[slot]);
+                if (count <= 0) continue;
+                player.sendMessage("MC_REWARD slot=" + slot + itemFields(new ItemStack(REWARD_TYPES[slot], count)));
+                entries++;
+            }
+            List<ItemStack> bonus = bonusItems(id);
+            for (int index = 0; index < Math.min(9, bonus.size()); index++) {
+                ItemStack item = bonus.get(index);
+                player.sendMessage("MC_REWARD slot=" + (index + 9) + itemFields(item));
+                entries++;
+            }
+            player.sendMessage("MC_REWARD_SUMMARY visible=" + entries + " queuedBonus=" + bonus.size());
+            player.sendMessage("领取：/mycli arena rewards take <槽位|all>；存放：/mycli arena stash。");
+            return;
+        }
+        if (args[2].equalsIgnoreCase("take") && args.length == 4) {
+            UUID id = player.getUniqueId();
+            if (args[3].equalsIgnoreCase("all")) {
+                for (Material material : REWARD_TYPES) {
+                    for (int stack = 0; stack < 128 && pending(id, material) > 0; stack++)
+                        if (!claimStandard(player, id, material)) break;
+                }
+                for (int index = 0; index < MAX_BONUS_QUEUE && !bonusItems(id).isEmpty(); index++)
+                    if (!claimBonus(player, id, 0)) break;
+                refreshOpenRewards(id);
+                return;
+            }
+            try {
+                int slot = Integer.parseInt(args[3]);
+                if (slot >= 0 && slot < REWARD_TYPES.length) claimStandard(player, id, REWARD_TYPES[slot]);
+                else if (slot >= 9 && slot < 18) claimBonus(player, id, slot - 9);
+                else player.sendMessage("奖励槽位为 0–7 或 9–17；先用 /mycli arena rewards list 查看。");
+                refreshOpenRewards(id);
+            } catch (NumberFormatException invalid) {
+                player.sendMessage("用法：/mycli arena rewards take <槽位|all>");
+            }
+            return;
+        }
+        player.sendMessage("用法：/mycli arena rewards [list|take <槽位|all>]；/mycli arena stash 管理私人储物。");
+    }
+    private void refreshOpenRewards(UUID id) {
+        for (Map.Entry<Inventory, UUID> entry : rewardMenus.entrySet())
+            if (entry.getValue().equals(id)) refreshRewards(entry.getKey(), id);
+    }
+
+    private String stashPath(UUID id, int slot) { return STASH + id + "." + slot; }
+    private String itemFields(ItemStack item) {
+        String name = item.hasItemMeta() && item.getItemMeta().hasDisplayName()
+                ? ChatColor.stripColor(item.getItemMeta().getDisplayName()).replace(' ', '_') : "-";
+        String enchants = String.join(",", item.getEnchantments().entrySet().stream()
+                .map(entry -> entry.getKey().getKey().getKey() + ":" + entry.getValue()).sorted().toList());
+        return " id=minecraft:" + item.getType().name().toLowerCase(Locale.ROOT)
+                + " count=" + item.getAmount() + " name=" + name
+                + " enchants=" + (enchants.isEmpty() ? "-" : enchants);
+    }
+    private Inventory liveStash(UUID id) {
+        for (Map.Entry<Inventory, UUID> entry : stashMenus.entrySet())
+            if (entry.getValue().equals(id)) return entry.getKey();
+        Inventory inv = Bukkit.createInventory(null, 27, ChatColor.AQUA + "个人储物箱");
+        for (int slot = 0; slot < inv.getSize(); slot++) {
+            ItemStack saved = plugin.getConfig().getItemStack(stashPath(id, slot));
+            if (saved != null) inv.setItem(slot, saved.clone());
+        }
+        return inv;
+    }
+    private void saveStash(Inventory inv, UUID id) {
+        for (int slot = 0; slot < inv.getSize(); slot++) {
+            ItemStack item = inv.getItem(slot);
+            plugin.getConfig().set(stashPath(id, slot), item == null || item.getType().isAir() ? null : item.clone());
+        }
+        plugin.saveConfig();
+    }
+    void openStash(Player player) {
+        UUID id = player.getUniqueId();
+        Inventory inv = liveStash(id);
+        if (player.getOpenInventory().getTopInventory() == inv && stashMenus.containsKey(inv)) return;
+        stashMenus.put(inv, id);
+        player.openInventory(inv);
+        player.sendMessage(ChatColor.AQUA + "这里可正常存放、取出物品；试炼和公会待领物资仍在奖励页。");
+    }
+    private void stashCommand(Player player, String[] args) {
+        if (args.length == 2) { openStash(player); return; }
+        UUID id = player.getUniqueId();
+        Inventory inv = liveStash(id);
+        String action = args[2].toLowerCase(Locale.ROOT);
+        if (action.equals("inventory") && args.length == 3) {
+            for (int slot = 0; slot < 36; slot++) {
+                ItemStack item = player.getInventory().getItem(slot);
+                if (item != null && !item.getType().isAir())
+                    player.sendMessage("MC_INVENTORY slot=" + slot + itemFields(item));
+            }
+            player.sendMessage("MC_INVENTORY_SUMMARY slots=0-35");
+            return;
+        }
+        if (action.equals("list") && args.length == 3) {
+            int entries = 0;
+            for (int slot = 0; slot < inv.getSize(); slot++) {
+                ItemStack item = inv.getItem(slot);
+                if (item == null || item.getType().isAir()) continue;
+                player.sendMessage("MC_STASH slot=" + (slot + 1) + itemFields(item));
+                entries++;
+            }
+            player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/27");
+            return;
+        }
+        if (action.equals("putslot") && args.length == 5) {
+            int slot, wanted;
+            try { slot = Integer.parseInt(args[3]); }
+            catch (NumberFormatException invalid) { slot = -1; }
+            wanted = positiveCount(args[4]);
+            if (slot < 0 || slot >= 36 || wanted < 1) {
+                player.sendMessage("用法：/mycli arena stash putslot <背包槽位 0–35> <1–64>"); return;
+            }
+            ItemStack source = player.getInventory().getItem(slot);
+            if (source == null || source.getType().isAir()) {
+                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=empty"); return;
+            }
+            Material material = source.getType();
+            ItemStack part = source.clone();
+            part.setAmount(Math.min(source.getAmount(), wanted));
+            int attempted = part.getAmount();
+            int left = inv.addItem(part).values().stream().mapToInt(ItemStack::getAmount).sum();
+            int moved = attempted - left;
+            if (moved > 0) {
+                source.setAmount(source.getAmount() - moved);
+                player.getInventory().setItem(slot, source.getAmount() > 0 ? source : null);
+                saveStash(inv, id);
+                player.saveData();
+            }
+            player.sendMessage("MC_STASH_PUT slot=" + slot + " id=minecraft:"
+                    + material.name().toLowerCase(Locale.ROOT) + " moved=" + moved);
+            return;
+        }
+        if (action.equals("put") && args.length == 5) {
+            Material material = Material.matchMaterial(args[3]);
+            int wanted = positiveCount(args[4]);
+            if (material == null || !material.isItem() || wanted < 1) {
+                player.sendMessage("用法：/mycli arena stash put <英文物品ID> <1–64>"); return;
+            }
+            int moved = 0;
+            for (int slot = 0; slot < 36 && moved < wanted; slot++) {
+                ItemStack source = player.getInventory().getItem(slot);
+                if (source == null || source.getType() != material) continue;
+                ItemStack part = source.clone();
+                part.setAmount(Math.min(source.getAmount(), wanted - moved));
+                int attempted = part.getAmount();
+                int left = inv.addItem(part).values().stream().mapToInt(ItemStack::getAmount).sum();
+                int deposited = attempted - left;
+                if (deposited <= 0) break;
+                source.setAmount(source.getAmount() - deposited);
+                player.getInventory().setItem(slot, source.getAmount() > 0 ? source : null);
+                moved += deposited;
+            }
+            if (moved > 0) { saveStash(inv, id); player.saveData(); }
+            player.sendMessage("MC_STASH_PUT id=minecraft:" + material.name().toLowerCase(Locale.ROOT)
+                    + " moved=" + moved + " requested=" + wanted);
+            return;
+        }
+        if (action.equals("take") && (args.length == 4 || args.length == 5)) {
+            int slot, wanted;
+            try { slot = Integer.parseInt(args[3]) - 1; }
+            catch (NumberFormatException invalid) { slot = -1; }
+            wanted = args.length == 5 ? positiveCount(args[4]) : 64;
+            if (slot < 0 || slot >= 27 || wanted < 1) {
+                player.sendMessage("用法：/mycli arena stash take <1–27 槽位> [1–64 数量]"); return;
+            }
+            ItemStack source = inv.getItem(slot);
+            if (source == null || source.getType().isAir()) {
+                player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty"); return;
+            }
+            ItemStack part = source.clone();
+            part.setAmount(Math.min(wanted, source.getAmount()));
+            int attempted = part.getAmount();
+            int left = player.getInventory().addItem(part).values().stream().mapToInt(ItemStack::getAmount).sum();
+            int moved = attempted - left;
+            if (moved > 0) {
+                source.setAmount(source.getAmount() - moved);
+                inv.setItem(slot, source.getAmount() > 0 ? source : null);
+                saveStash(inv, id);
+                player.saveData();
+            }
+            player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " id=minecraft:"
+                    + part.getType().name().toLowerCase(Locale.ROOT) + " moved=" + moved);
+            return;
+        }
+        player.sendMessage("用法：/mycli arena stash [inventory|list|put <物品ID> <数量>|putslot <背包槽位> <数量>|take <箱槽位> [数量]]");
+    }
+    private int positiveCount(String raw) {
+        try { int count = Integer.parseInt(raw); return count >= 1 && count <= 64 ? count : -1; }
+        catch (NumberFormatException invalid) { return -1; }
+    }
     private void openRewards(Player player) {
         Inventory inv = Bukkit.createInventory(null, 27, ChatColor.GOLD + "个人试炼奖励箱");
         rewardMenus.put(inv, player.getUniqueId());
@@ -814,7 +1017,14 @@ final class DungeonManager implements Listener {
                 ChatColor.GRAY + "特殊物品待领 " + bonus.size() + " 件，先显示前 9 件",
                 ChatColor.GRAY + "背包满时奖励留在箱中"));
         guide.setItemMeta(meta);
-        inv.setItem(22, guide);
+        inv.setItem(21, guide);
+        ItemStack stash = new ItemStack(Material.CHEST);
+        ItemMeta stashMeta = stash.getItemMeta();
+        stashMeta.setDisplayName(ChatColor.AQUA + "私人储物箱 · 点击打开");
+        stashMeta.setLore(List.of(ChatColor.GRAY + "可存放和取出物品；离线、死亡和重启后保留",
+                ChatColor.GRAY + "Agent：/mycli arena stash list|put|take"));
+        stash.setItemMeta(stashMeta);
+        inv.setItem(22, stash);
     }
     @EventHandler public void onRewardClick(InventoryClickEvent event) {
         Inventory inv = event.getView().getTopInventory();
@@ -823,38 +1033,44 @@ final class DungeonManager implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(owner)) return;
         int slot = event.getRawSlot();
+        if (slot == 22) {
+            Bukkit.getScheduler().runTask(plugin, () -> { if (p.isOnline()) openStash(p); });
+            return;
+        }
         if (slot >= 9 && slot < 18) {
-            claimBonus(p, inv, owner, slot - 9);
+            if (claimBonus(p, owner, slot - 9)) refreshRewards(inv, owner);
             return;
         }
         if (slot < 0 || slot >= REWARD_TYPES.length) return;
-        Material material = REWARD_TYPES[slot];
+        if (claimStandard(p, owner, REWARD_TYPES[slot])) refreshRewards(inv, owner);
+    }
+    private boolean claimStandard(Player p, UUID owner, Material material) {
         int count = Math.min(64, pending(owner, material));
-        if (count <= 0) return;
+        if (count <= 0) return false;
         Map<Integer, ItemStack> leftover = p.getInventory().addItem(new ItemStack(material, count));
         int unclaimed = leftover.values().stream().mapToInt(ItemStack::getAmount).sum();
         int delivered = count - unclaimed;
-        if (delivered <= 0) { p.sendMessage(ChatColor.YELLOW + "背包已满，奖励仍在箱子里。"); return; }
+        if (delivered <= 0) { p.sendMessage(ChatColor.YELLOW + "背包已满，奖励仍在箱子里。"); return false; }
         String path = rewardPath(owner, material);
         plugin.getConfig().set(path, pending(owner, material) - delivered);
         plugin.saveConfig();
         p.saveData();
-        refreshRewards(inv, owner);
         plugin.guildRewardClaimed(p);
         p.sendMessage(ChatColor.GREEN + "从奖励箱领取了 " + delivered + " × " + rewardName(material) + "。"
                 + (unclaimed > 0 ? "剩余物品仍在箱中。" : ""));
         plugin.getLogger().info("Dungeon reward claimed: player=" + owner + ", item=" + material + ", count=" + delivered);
+        return true;
     }
 
-    private void claimBonus(Player player, Inventory inv, UUID owner, int index) {
+    private boolean claimBonus(Player player, UUID owner, int index) {
         List<ItemStack> queue = bonusItems(owner);
-        if (index >= queue.size()) return;
+        if (index >= queue.size()) return false;
         ItemStack item = queue.get(index).clone();
         Map<Integer, ItemStack> leftover = player.getInventory().addItem(item.clone());
         int remaining = leftover.values().stream().mapToInt(ItemStack::getAmount).sum();
         int delivered = item.getAmount() - remaining;
         if (delivered <= 0) {
-            player.sendMessage(ChatColor.YELLOW + "背包已满，随机战利品仍在箱子里。"); return;
+            player.sendMessage(ChatColor.YELLOW + "背包已满，随机战利品仍在箱子里。"); return false;
         }
         if (remaining == 0) queue.remove(index);
         else {
@@ -864,11 +1080,11 @@ final class DungeonManager implements Listener {
         plugin.getConfig().set(BONUS_ITEMS + owner, queue);
         plugin.saveConfig();
         player.saveData();
-        refreshRewards(inv, owner);
         plugin.guildRewardClaimed(player);
         player.sendMessage(ChatColor.GREEN + "从个人箱子领取了随机战利品 " + delivered + " 件。");
         plugin.getLogger().info("Dungeon bonus claimed: player=" + owner + ", item="
                 + item.getType() + ", count=" + delivered);
+        return true;
     }
     private String rewardName(Material material) {
         return switch (material) {
@@ -886,7 +1102,27 @@ final class DungeonManager implements Listener {
     @EventHandler public void onRewardDrag(InventoryDragEvent event) {
         if (rewardMenus.containsKey(event.getView().getTopInventory())) event.setCancelled(true);
     }
-    @EventHandler public void onRewardClose(InventoryCloseEvent event) { rewardMenus.remove(event.getInventory()); }
+    @EventHandler(priority = EventPriority.MONITOR) public void onStashClick(InventoryClickEvent event) {
+        Inventory inv = event.getView().getTopInventory();
+        UUID owner = stashMenus.get(inv);
+        if (owner == null) return;
+        if (!event.getWhoClicked().getUniqueId().equals(owner)) { event.setCancelled(true); return; }
+        if (!event.isCancelled()) Bukkit.getScheduler().runTask(plugin, () -> {
+            if (stashMenus.containsKey(inv)) saveStash(inv, owner);
+        });
+    }
+    @EventHandler(priority = EventPriority.MONITOR) public void onStashDrag(InventoryDragEvent event) {
+        Inventory inv = event.getView().getTopInventory();
+        UUID owner = stashMenus.get(inv);
+        if (owner != null && !event.isCancelled()) Bukkit.getScheduler().runTask(plugin, () -> {
+            if (stashMenus.containsKey(inv)) saveStash(inv, owner);
+        });
+    }
+    @EventHandler public void onRewardClose(InventoryCloseEvent event) {
+        rewardMenus.remove(event.getInventory());
+        UUID owner = stashMenus.remove(event.getInventory());
+        if (owner != null) saveStash(event.getInventory(), owner);
+    }
 
     private void cleanupMobs() {
         if (bossBar != null) {

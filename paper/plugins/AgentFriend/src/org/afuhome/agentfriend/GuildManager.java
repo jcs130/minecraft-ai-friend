@@ -114,13 +114,14 @@ final class GuildManager implements Listener {
             case "abandon", "放弃" -> abandon(player);
             case "claim", "交付", "领取" -> claim(player);
             case "rewards", "箱子" -> dungeon.command(player, new String[]{"arena", "rewards"});
+            case "stash", "储物" -> dungeon.openStash(player);
             case "travel", "远征" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW
                         + "用法：/mycli guild travel <遗迹ID>；可选 "
                         + String.join("、", DungeonExpeditions.SITES.stream().map(DungeonExpeditions.Site::id).toList()));
                 else expeditions.travel(player, args[2].toLowerCase(Locale.ROOT));
             }
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|travel <遗迹ID>");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash|travel <遗迹ID>");
         }
     }
 
@@ -299,6 +300,7 @@ final class GuildManager implements Listener {
         inventory.setItem(29, icon(Material.CHEST, "§6个人奖励箱", "任务和地下城奖励都在这里"));
         inventory.setItem(30, icon(Material.IRON_SWORD, "§c前往地下城", "六层试炼；与队友共同挑战"));
         inventory.setItem(31, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
+        inventory.setItem(32, icon(Material.BARREL, "§b私人储物箱", "正常存放和取出物品；与试炼箱共用"));
     }
 
     private ItemStack icon(Material material, String title, String... lines) {
@@ -316,6 +318,7 @@ final class GuildManager implements Listener {
         else if (slot == 27) abandon(player);
         else if (slot == 28) claim(player);
         else if (slot == 29) dungeon.command(player, new String[]{"arena", "rewards"});
+        else if (slot == 32) dungeon.openStash(player);
     }
 
     String bookPage(Player player) {
