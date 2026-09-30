@@ -2,6 +2,12 @@
 
 此文档描述源码分支与当前 Windows 家服的关系。仓库是代码及配置基线；正式存档和玩家状态只保存在 `E:\MC\server` 以及已校验备份中。完整本机维护记录仍在 `E:\MC\ops\MAINTENANCE.md`。
 
+## 0.3.32 探矿返回绝对坐标（待正式发布）
+
+探矿成功时只向施法者发送 `dimension=minecraft:overworld X=317 Y=115 Z=17 ore=minecraft:diamond_ore` 形式的聊天结果；坐标是矿块整数坐标，负坐标和下界使用同样的字段。BossBar 改为显示同一组绝对 X/Y/Z，原来的相对方向/距离不再需要 Agent 推算。矿块描边、基岩墙面光框、Paper 反透视、6 魔力与 30 秒冷却均不改。`prospecting-stage.mjs` 用 Mineflayer 1.20.6 实测了密封矿石仍隐藏、成功聊天与顶栏坐标一致、空搜索不扣魔力和冷却；`focus-outline-stage.mjs` 验证施法者独享描边及旧法杖治疗功能，两项均通过。最终候选 `AgentFriend-0.3.32.jar` SHA256 为 `89755A8D163DECCE9CD9DD733B82BA504F846B28E73F4EAD8FDF5B4BC18EFF20`。
+
+2026-09-30 检查正式服时，真人 `.MicroKQ` 在线且正在试炼塔第八层，因此**没有重启或替换正式服**。候选 JAR 已按哈希复制到 `E:\minecraft-ai-friend\paper\plugins\AgentFriend\`，`E:\MC\ops\agentfriend-deploy.pending.json` 已排队：现有 `Afu-MC-DailyBackup` 在无人游玩时完成完整 E/F 备份，再校验旧 JAR SHA256 并启用候选。发布后必须确认唯一启用 JAR、RCON 版本、备份 `.complete`、Java/基岩/Agent/CortiEye 入口以及探矿实测消息。当前正式服仍是 0.3.30，不能把隔离测试当作线上发布。
+
 ## 日常检查
 
 ```powershell
