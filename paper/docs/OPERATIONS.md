@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.35 导航回执绝对坐标（2026-10-01 已正式发布）
+
+`/mycli waypoint` 现在按本人列出公共 warp、试炼场、私人 home 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...`；`goto` 的 Essentials 地点返回 `MC_DESTINATION` **目标**坐标，真正抵达以客户端位置为准。`locate list|nearest|<玩家>` 返回 `MC_PLAYER`，追踪条继续保留方向/距离并刷新目标绝对坐标；探敌术最多给出五个最近怪物的 `MC_HOSTILE` 坐标；遗迹远征 `MC_SITE` 返回实际安全落点 x/y/z 与仅有水平精度的遗迹中心 X/Z。试炼状态和死亡领箱提示带维度、入口及箱子坐标，公会/试炼场/队友传送成功回实际落点。消息仅发给操作玩家，均走原版聊天或 BossBar；探矿和保护查询原有绝对坐标保持不变。移动目标坐标是快照，Agent 算路前须重查。
+
+隔离服 25566 上 `absolute-location-stage.mjs` 以两名 Mineflayer 1.20.6 玩家验过队友、Essentials 公共和私人地点、探敌、试炼入口、遗迹安全落点与公会抵达，结果 PASS。隔离世界旧出生点会触发传送并把测试玩家移回，脚本临时设置远处安全平台和出生点，结束时恢复；该问题是测试场地，不作为正式服故障。正式服 0.3.35 JAR SHA256 `7A8AEBC489E03943E85E6C47037E97A6D454C31B1EF273D9A0534DC5CB40C5D4`。发布前只有 CortiLan、CortiEye、Goddess 服务账号在线且无活动试炼；S4U 维护任务正常停服、生成 E/F 双盘 `.complete` 快照 `20261001-005202`、发布单一 JAR 并重启，任务结果 0，Watchdog 未暂停。正式服临时白名单 Mineflayer 1.20.6 账号实测 `MC_WAYPOINT`、`MC_PLAYER`、`MC_DUNGEON` 后退出并移出白名单。Java 127.0.0.1、Agent LAN 网关、基岩 Pong、女神桥正常。重启后 CortiLan 和 Goddess 已重连，但截至 00:53 CortiEye 客户端尚未重连，`cortieye` 为 `camera=offline`；需要在 152 端恢复并复验直播镜头。
+
 ## 0.3.34 地下城普通个人箱（已正式发布）
 
 试炼塔实体箱、公会看板和 `/mycli arena rewards|stash` 指向同一个按 UUID 隔离的 27 格普通箱子。Mineflayer 使用实体箱的 `openContainer`、`deposit`、`withdraw`；Java 与基岩玩家使用原版箱子菜单。试炼、公会奖励先记入原 `dungeon-rewards`、`dungeon-bonus-items` 队列，下次开箱时移入 `dungeon-personal-stash`，保留附魔等 ItemStack 元数据；箱满时剩余部分继续留在队列，腾格后重开自动补入。`rewards list|take` 仅用于箱满后的待入箱物品，`stash inventory|list|put|putslot|take` 是远程辅助操作。回退 0.3.33 会暂时失去私人箱入口，但保留完整 `config.yml` 后重发 0.3.34 可恢复箱内与待入箱数据；不可用旧版运行配置覆盖现有数据。

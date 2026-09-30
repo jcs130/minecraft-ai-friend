@@ -193,6 +193,11 @@ final class UtilitySpells implements Listener {
         senses.put(player.getUniqueId(), new Sense(bar, System.currentTimeMillis() + 8_000L));
         player.sendMessage(ChatColor.AQUA + "✦ 探敌术发现附近 " + hostiles.size()
                 + " 只怪物；顶部方向提示持续 8 秒（3 魔力；15 秒冷却）。");
+        for (int i = 0; i < Math.min(5, hostiles.size()); i++) {
+            Enemy enemy = hostiles.get(i);
+            player.sendMessage("MC_HOSTILE type=" + ((Entity) enemy).getType().name().toLowerCase(java.util.Locale.ROOT)
+                    + " " + LocationOutput.fields(((Entity) enemy).getLocation()));
+        }
         updateSense(player, senses.get(player.getUniqueId()), hostiles);
     }
 
@@ -220,7 +225,8 @@ final class UtilitySpells implements Listener {
         int dy = target.getBlockY() - at.getBlockY();
         String height = Math.abs(dy) <= 1 ? "同层" : (dy > 0 ? "上" : "下") + Math.abs(dy) + "格";
         sense.bar().setTitle("§b✦ 探敌 " + hostiles.size() + "只 · 最近" + enemyName(nearest)
-                + " §f" + direction + " · " + Math.round(at.distance(target)) + "格 · " + height);
+                + " §f" + direction + " · " + Math.round(at.distance(target)) + "格 · " + height
+                + " · " + LocationOutput.shortForm(target));
         sense.bar().setProgress(Math.max(0, Math.min(1,
                 (sense.expiresAt() - System.currentTimeMillis()) / 8000.0)));
         Vector toward = target.toVector().subtract(player.getEyeLocation().toVector());

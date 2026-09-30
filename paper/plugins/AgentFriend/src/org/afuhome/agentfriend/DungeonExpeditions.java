@@ -69,6 +69,8 @@ final class DungeonExpeditions {
                     }
                     player.sendMessage(ChatColor.GREEN + "已到「" + site.name() + "」附近；遗迹中心约在 "
                             + site.x() + ", " + site.z() + "。向那里探索约 70 格，留意怪物和入口。");
+                    player.sendMessage("MC_SITE id=" + site.id() + " " + LocationOutput.fields(landing)
+                            + " centerX=" + site.x() + " centerZ=" + site.z());
                 }));
     }
 

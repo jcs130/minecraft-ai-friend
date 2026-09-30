@@ -58,6 +58,8 @@ Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查�
 
 AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入口尚未接入，运营 Agent 不能仅因为服务端有接口就假定 CortiLan 已自动避让。接入客户端时要覆盖手动挖掘、路径清障及放置动作，并用真实服务器回执测试。
 
+导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询 `MC_PROTECT` 已包含目标维度与坐标。上述信息沿用原版聊天和 BossBar，因此 Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
+
 ### 公会委托与声望
 
 现有委托目录在 `GuildManager.CONTRACTS`，六级声望门槛也在同类中；进度按 UUID 存在运行配置。新增委托先复用现有 `FLOOR`、`KILLS`、`PARTY_FLOOR`、`CLAIMS`、`EXPLORE` 目标；新目标类型必须同时实现进度事件、重复计数防护、看板/书本提示和领奖。保留旧 ID 与含义，不能为了改标题直接重命名已发布 ID；需要停用时先规定在途任务怎么交付或转移。

@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.35 Agent 导航绝对坐标
+
+`/mycli waypoint` 列出公共 warp、试炼场及本人私人 home 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...`；`/mycli goto` 对 Essentials 目标回 `MC_DESTINATION`，成功到达插件自管的试炼场、公会或队友旁也给出实际落点。`/mycli locate list|nearest|<玩家>` 回 `MC_PLAYER`，追踪条继续给人看方向、距离，并增加持续更新的目标绝对坐标。探敌术成功时最多列五个最近怪物的 `MC_HOSTILE`，BossBar 同时显示最近目标坐标；遗迹远征成功时 `MC_SITE` 返回实际安全落点 `x/y/z` 与仅能确定 `x/z` 的遗迹中心。试炼 `status` 的 `MC_DUNGEON` 包含入口、个人箱和活动层坐标，死亡领箱指引也带维度。`dimension` 为注册维度键，整数坐标按方块位置取整；玩家和怪物会移动，Agent 算路前须刷新。现有探矿和保护查询本来就返回绝对坐标。消息只发给执行命令的玩家；无客户端模组依赖，Java、基岩及 Mineflayer 均可读。
+
+隔离服契约脚本 `absolute-location-stage.mjs` 验证队友、传送点、探敌、试炼和遗迹的机器回执；EssentialsX 为软依赖，但要列出 warp/home 坐标需安装它。构建脚本的编译 classpath 包含现服 EssentialsX JAR。
+
 ## 0.3.34 地下城个人箱
 
 试炼塔入口、楼层宝箱、公会看板以及 `/mycli arena rewards|stash` 都打开同一个按 UUID 隔离的 27 格普通箱子。玩家可按原版操作存取普通及附魔物品；Mineflayer 可对实体箱调用 `openContainer`、`deposit`、`withdraw`，无需识别插件专用菜单。试炼和公会奖励结算后先记入 `dungeon-rewards`、`dungeon-bonus-items`，下一次打开箱子时保留原物品元数据地移入 `dungeon-personal-stash`。箱满时未入箱部分仍在原奖励队列；腾出空位后重新开箱会继续装入，不会因背包满、死亡或重启丢失。

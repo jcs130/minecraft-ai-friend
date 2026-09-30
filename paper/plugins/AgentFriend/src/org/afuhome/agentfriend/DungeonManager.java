@@ -322,12 +322,20 @@ final class DungeonManager implements Listener {
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         switch (sub) {
-            case "status" -> player.sendMessage(ChatColor.GOLD + "" + maxFloor() + " 层试炼：" + (active
-                    ? "第 " + floor + "/" + maxFloor() + " 层 · " + THEMES.get(floor - 1).name()
-                        + (pausedAt > 0 ? "，队伍暂离，等待重连"
-                            : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
-                                + " 秒后自动下楼" : "，战斗中")
-                    : "待命") + "。奖励存进个人箱子，不自动进入背包。");
+            case "status" -> {
+                player.sendMessage(ChatColor.GOLD + "" + maxFloor() + " 层试炼：" + (active
+                        ? "第 " + floor + "/" + maxFloor() + " 层 · " + THEMES.get(floor - 1).name()
+                            + (pausedAt > 0 ? "，队伍暂离，等待重连"
+                                : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
+                                    + " 秒后自动下楼" : "，战斗中")
+                        : "待命") + "。奖励存进个人箱子，不自动进入背包。");
+                player.sendMessage("MC_DUNGEON entrance " + LocationOutput.fields(lobbyButton())
+                        + " chestX=-594 chestY=91 chestZ=-313");
+                if (active) player.sendMessage("MC_DUNGEON floor=" + floor + " "
+                        + LocationOutput.fields(new Location(world(), floorX(floor), Y[floor - 1] + 1, floorZ(floor)))
+                        + " chestX=" + chestX(floor) + " chestY=" + (Y[floor - 1] + 1)
+                        + " chestZ=" + chestZ(floor));
+            }
             case "start" -> start(player);
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
@@ -375,7 +383,8 @@ final class DungeonManager implements Listener {
     private void start(Player starter) {
         if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动。"); return; }
         if (!nearLobbyButton(starter, lobbyButton())) {
-            starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。"); return;
+            starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。 "
+                    + LocationOutput.fields(lobbyButton())); return;
         }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔。"); return; }
         long now = System.currentTimeMillis();
@@ -598,7 +607,8 @@ final class DungeonManager implements Listener {
         player.sendMessage(hasPersonalChestContents(id)
                 ? ChatColor.GREEN + "[试炼指引] 个人箱里的物品和待入箱奖励不会因死亡清空。"
                 : ChatColor.YELLOW + "[试炼指引] 当前个人箱没有物品或待入箱奖励；未通关的楼层不结算奖励。");
-        player.sendMessage(ChatColor.AQUA + "[试炼指引] 去试炼场地面入口奖励箱 (-594, 91, -313) 领取；"
+        player.sendMessage(ChatColor.AQUA + "[试炼指引] 去试炼场地面入口奖励箱 "
+                + LocationOutput.fields(new Location(world(), -594, 91, -313)) + " 领取；"
                 + "或输入 /mycli arena rewards 直接打开同一个个人箱。");
     }
 

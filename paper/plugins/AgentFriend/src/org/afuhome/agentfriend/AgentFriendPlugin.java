@@ -9,6 +9,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.earth2me.essentials.Essentials;
+import com.earth2me.essentials.User;
+import com.earth2me.essentials.Warps;
 import com.nisovin.magicspells.Spell;
 import com.nisovin.magicspells.events.SpellCastEvent;
 import com.nisovin.magicspells.events.SpellCastedEvent;
@@ -598,7 +601,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "dungeon", "地下城", "试炼" -> {
                 p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；队友站到石按钮附近，一人按下后一起进入。清怪 10 秒后自动下楼并补满生命。");
-                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent：/mycli arena rewards list，再用 rewards take <槽位|all>；stash list|put|take 管理私人储物。");
+                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；/mycli arena rewards 远程开箱。");
             }
             case "team", "队友" -> {
                 p.sendMessage(ChatColor.AQUA + "【结伴】罗盘 → 找队友，可让指针追踪队友，也可安全传送到她身边。女神是旁观服主，不在队友列表。");
@@ -920,18 +923,28 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
                 p.sendMessage(ChatColor.RED + "试炼场入口受阻，传送已取消。"); return;
             }
-            if (p.teleport(landing)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；进场后按石按钮启动。");
+            if (p.teleport(landing)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；进场后按石按钮启动。 "
+                    + LocationOutput.fields(landing));
             else p.sendMessage(ChatColor.RED + "传送被其他保护规则取消。");
             return;
         }
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
             if (!p.performCommand("warp " + id)) p.sendMessage(ChatColor.RED + "公共传送点不可用。");
+            else {
+                Location destination = publicWarp(id);
+                if (destination != null) p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(destination));
+            }
             return;
         }
         if (id.startsWith("personal:")) {
             String name = raw.substring("personal:".length());
             if (!name.matches("[A-Za-z0-9_-]{1,24}")) { p.sendMessage(ChatColor.RED + "私人传送点名只用英文、数字、_、-，最长 24 字符。"); return; }
             if (!p.performCommand("home " + name)) p.sendMessage(ChatColor.RED + "私人传送点不可用。");
+            else {
+                Location destination = personalHome(p, name);
+                if (destination != null) p.sendMessage("MC_DESTINATION id=personal:" + name + " "
+                        + LocationOutput.fields(destination));
+            }
             return;
         }
         p.sendMessage(ChatColor.RED + "未知地点。输入 /mycli help。重名地点不会自动选择。");
@@ -940,15 +953,59 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 1) {
             p.performCommand("homes");
             p.sendMessage("公共地点：" + String.join("、", PUBLIC_PLACES.stream().map(PublicPlace::id).toList()) + "、arena");
+            p.sendMessage("MC_WAYPOINT id=arena " + LocationOutput.fields(
+                    new Location(world(), X + 0.5, FLOOR + 1, Z - 17 + 0.5)));
+            for (PublicPlace place : PUBLIC_PLACES) {
+                Location at = publicWarp(place.id());
+                if (at != null) p.sendMessage("MC_WAYPOINT id=" + place.id() + " " + LocationOutput.fields(at));
+            }
+            if (essentials() != null) {
+                Essentials essentials = essentials();
+                User user = essentials.getUser(p);
+                if (user != null) for (String name : user.getHomes()) {
+                    if (!name.matches("[A-Za-z0-9_-]{1,24}")) continue;
+                    Location at = user.getHome(name);
+                    if (at != null) p.sendMessage("MC_WAYPOINT id=personal:" + name + " " + LocationOutput.fields(at));
+                }
+            }
             return;
         }
         if (args.length != 3 || !args[2].matches("[A-Za-z0-9_-]{1,24}")) {
             p.sendMessage(ChatColor.RED + "用法：/mycli waypoint add|remove <英文名字>"); return;
         }
         String op = args[1].toLowerCase(Locale.ROOT);
-        if (op.equals("add")) p.performCommand("sethome " + args[2]);
+        if (op.equals("add")) {
+            if (p.performCommand("sethome " + args[2])) {
+                Location at = personalHome(p, args[2]);
+                if (at != null) p.sendMessage("MC_WAYPOINT id=personal:" + args[2] + " " + LocationOutput.fields(at));
+            }
+        }
         else if (op.equals("remove")) p.performCommand("delhome " + args[2]);
         else p.sendMessage(ChatColor.RED + "用法：/mycli waypoint add|remove <英文名字>");
+    }
+
+    private Essentials essentials() {
+        Plugin installed = Bukkit.getPluginManager().getPlugin("Essentials");
+        return installed instanceof Essentials essentials ? essentials : null;
+    }
+
+    private Location publicWarp(String id) {
+        Essentials essentials = essentials();
+        if (essentials == null) return null;
+        try {
+            Warps warps = essentials.getWarps();
+            return warps.getWarp(id);
+        } catch (Exception missing) {
+            getLogger().fine("Warp unavailable: " + id);
+            return null;
+        }
+    }
+
+    private Location personalHome(Player player, String name) {
+        Essentials essentials = essentials();
+        if (essentials == null) return null;
+        User user = essentials.getUser(player);
+        return user != null && user.hasHome(name) ? user.getHome(name) : null;
     }
 
     private static String worldLabel(World world) {
@@ -994,6 +1051,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 viewer.sendMessage(ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " · "
                         + worldLabel(target.getWorld()) + " " + at.getBlockX() + ", "
                         + at.getBlockY() + ", " + at.getBlockZ());
+                viewer.sendMessage("MC_PLAYER name=" + target.getName() + " " + LocationOutput.fields(at));
             }
             return;
         }
@@ -1069,7 +1127,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (error != null || !success) {
                 teamTeleportAt.remove(viewer.getUniqueId());
                 viewer.sendMessage(ChatColor.RED + "传送失败；请稍后再试。");
-            } else viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。");
+            } else viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。 "
+                    + LocationOutput.fields(viewer.getLocation()));
         }));
     }
 
@@ -1085,6 +1144,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         ensureTrackingBar(viewer);
         viewer.sendMessage(ChatColor.GREEN + "正在追踪 " + target.getName()
                 + "；手持技能罗盘时指针会指向她。罗盘菜单中可停止追踪。");
+        viewer.sendMessage("MC_PLAYER name=" + target.getName() + " " + LocationOutput.fields(target.getLocation()));
         showTracking(viewer, target);
         syncCompass(viewer, target.getLocation());
     }
@@ -1189,7 +1249,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         BossBar bar = trackingBars.get(viewer.getUniqueId());
         if (bar == null) return;
         if (!here.getWorld().equals(there.getWorld())) {
-            bar.setTitle("§b追踪 " + target.getName() + " §7· " + worldLabel(there.getWorld()) + "（不同维度）");
+            bar.setTitle("§b追踪 " + target.getName() + " §7· " + worldLabel(there.getWorld())
+                    + "（不同维度） · " + LocationOutput.shortForm(there));
             return;
         }
         double dx = there.getX() - here.getX(), dz = there.getZ() - here.getZ();
@@ -1197,7 +1258,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         int height = there.getBlockY() - here.getBlockY();
         String vertical = Math.abs(height) <= 2 ? "同一高度" : (height > 0 ? "高 " + height + " 格" : "低 " + -height + " 格");
         bar.setTitle("§b追踪 " + target.getName() + " §e" + direction(here.getYaw(), dx, dz)
-                + " " + distance + " 格 §7· " + vertical);
+                + " " + distance + " 格 §7· " + vertical + " · " + LocationOutput.shortForm(there));
     }
 
     private static String direction(float yaw, double dx, double dz) {
@@ -1217,7 +1278,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         switch (sub) {
             case "status" -> p.sendMessage(ChatColor.GOLD + "试炼场 " + (active ? "第 " + wave + "/3 波" : "待命")
-                    + "，坐标 " + X + ", " + FLOOR + ", " + Z + "。/mycli goto arena 前往。");
+                    + "，坐标 " + LocationOutput.fields(new Location(world(), X, FLOOR, Z))
+                    + "。/mycli goto arena 前往。");
             case "start" -> startArena(p);
             case "leave" -> {
                 if (!inside(p.getLocation())) { p.sendMessage("你目前不在试炼场内。"); return; }
