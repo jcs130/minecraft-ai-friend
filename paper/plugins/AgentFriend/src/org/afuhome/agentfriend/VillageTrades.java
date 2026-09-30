@@ -40,6 +40,7 @@ final class VillageTrades implements Listener {
     private final NamespacedKey assignedJobKey;
     private final NamespacedKey balancedKey;
     private final NamespacedKey balancedCountKey;
+    private final NamespacedKey dungeonMerchantKey;
     private int nextJob;
 
     VillageTrades(AgentFriendPlugin plugin) {
@@ -48,13 +49,15 @@ final class VillageTrades implements Listener {
         assignedJobKey = new NamespacedKey(plugin, "villager_assigned_profession");
         balancedKey = new NamespacedKey(plugin, "villager_trade_balance");
         balancedCountKey = new NamespacedKey(plugin, "villager_trade_count");
+        dungeonMerchantKey = new NamespacedKey(plugin, "dungeon_merchant");
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskLater(plugin, this::scanLoaded, 40L);
         Bukkit.getScheduler().runTaskTimer(plugin, this::scanLoaded, 6000L, 6000L);
     }
 
     private boolean eligible(Villager villager) {
-        return villager.isValid() && villager.isAdult();
+        return villager.isValid() && villager.isAdult()
+                && !villager.getPersistentDataContainer().has(dungeonMerchantKey, PersistentDataType.BYTE);
     }
 
     private boolean noJob(Villager villager) {

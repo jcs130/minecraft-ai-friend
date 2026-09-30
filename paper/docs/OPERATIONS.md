@@ -13,6 +13,16 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 `Status` 应同时显示 Paper、Agent 网关、Geyser Pong、Goddess 桥、CortiEyeMirror、最近 E 盘快照及 F 盘镜像。Pong 和状态包不是基岩真机、Agent 具体动作或直播画面的端到端验收。
 
+## 0.3.28 深层试炼塔扩建（2026-09-30）
+
+第七层为休息驿站，第八、九层为扩大后的战斗房，第十层为“深渊守卫”首领房。玩家通关第六层后可在地点罗盘或 `/mycli arena rest` 直达驿站；站内工作台、商人和个人奖励箱均为原版界面。商人菜单与 Mineflayer 的 1.20.6 交易包须在隔离服实测；基岩真机及直播显示另做上线体验验收。第八层起奖励增加，第十层保底专属附魔武器。旧塔下方的自然结构不动，新分区位于 `-510,-305`，楼层之间靠原有自动传送连接。
+
+隔离服 `mycli admin surveydeep` 通过后一次建成四层。`plugins/AgentFriend/dungeon-deep-stage.mjs` 用 Mineflayer 1.20.6 跑通前六层、第七层工位和商人包、第八至十层自动推进、首领血条、保底钻石与个人箱前排的专属武器；`dungeon-rest-stage.mjs` 在冷却和重启后验证罗盘直达、持久检查点及面对面原版商人界面六条交易。商人的普通右键测试需要切开玩家初始背包所在的快捷栏第 1 格，以免背包插件接管交互。最终候选 JAR SHA256 为 `E6B6E3B017DD432A94D9F58376BF69894D6E604489EBAB8BB11212EDFA71C2E8`。
+
+2026-09-30 10:56 在仅服务账号在线、无活动试炼时，现有备份任务生成施工前 `E:\MC\backups\scheduled\20260930-105658` 与同名 F 盘镜像，启用唯一 0.3.28 JAR 并重启。正式服 `mycli admin surveydeep` 再次通过后，执行一次 `mycli admin builddeep`，配置显示 `dungeon-expanded: true` 且再次运行勘察会拒绝覆盖。10:59 的施工后完整备份为 `20260930-105935`，E/F 两处 `.complete` 存在，`world/level.dat`、AgentFriend 配置和 JAR 的 SHA256 两盘一致。上线后 `version AgentFriend`、Paper 状态、Agent LAN 白名单探针、基岩 UDP Pong、Goddess 桥和 CortiEyeMirror 均通过；实际基岩手柄交易与直播画面需玩家体验。`auto-start.paused` 仍存在，Watchdog 暂停，见下方维护说明。
+
+施工命令会拒绝容器、结构、活跃挑战及重复施工；若施工中断，停止使用该区域并从施工前完整备份恢复，不重复覆盖。回退 JAR 时先确认新版本没有活跃挑战；已建深层建筑与玩家检查点应与世界一起保留或一起从备份恢复，不能只删除配置中的 `dungeon-expanded`。
+
 ## 0.3.27 遗迹远征发布（2026-09-30）
 
 此版只替换 AgentFriend JAR，不重建世界。新增三处由当前种子定位并在隔离世界实地查看的自然结构，六处遗迹集中在传送罗盘的“遗迹远征”页；15 张公会委托可从原版菜单和 `/mycli` 使用。调查委托只要求抵达中心附近，原生怪物、箱子与探险风险依然属于自然结构。个人奖励箱中排可接收盾牌、铁剑等非固定物品；任务和奖励数据仍保存在 `plugins/AgentFriend/config.yml`，必须随世界一同备份。源码测试为 `plugins/AgentFriend/expedition-expansion-stage.mjs` 和 `dungeon-expeditions-stage.mjs`，隔离服验证了三处新落点与旧三处、任务交付、声望、装备奖励和菜单。回退只需无人游玩时停服，禁用 0.3.27 并重新启用 0.3.26；新增的公会任务记录不应被旧版本破坏，回退前保留完整备份。

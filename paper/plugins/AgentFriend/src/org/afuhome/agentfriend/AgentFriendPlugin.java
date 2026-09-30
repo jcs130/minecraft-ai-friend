@@ -456,6 +456,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.build(sender);
             return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveydeep") || args[1].equalsIgnoreCase("builddeep"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或扩建试炼塔深层分区。"); return true;
+            }
+            if (args[1].equalsIgnoreCase("surveydeep")) dungeon.surveyExpansion(sender);
+            else dungeon.buildExpansion(sender);
+            return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("surveyguild") || args[1].equalsIgnoreCase("buildguild"))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -479,7 +488,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return true;
         }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin buildarena|builddungeon|surveyguild|buildguild|surveyroad|buildroad。");
+            sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin surveydeep|builddeep|builddungeon|surveyguild|buildguild|surveyroad|buildroad。");
             return true;
         }
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) { help(player); return true; }
@@ -522,7 +531,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena start|status|rewards|leave  入口按钮组队，清怪后自动下楼"
+                ? "/mycli arena start|rest|next|shop|status|rewards|leave  清怪自动下楼；第七层休息补给"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
@@ -1343,6 +1352,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "选择目标后落在遗迹外围，仍需步行探索"));
+            if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达", "工作台、商人和深层首领战"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("expeditions")) {
             for (int i = 0; i < DungeonExpeditions.SITES.size(); i++) {
@@ -1494,6 +1504,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 14 -> { if (!p.performCommand("sethome camp")) p.sendMessage(ChatColor.RED + "保存位置失败。"); }
                     case 15 -> gotoPlace(p, "personal:camp");
                     case 16 -> openMenu(p, "expeditions");
+                    case 17 -> { if (dungeon.isExpanded()) dungeon.command(p, new String[]{"arena", "rest"}); }
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -1816,7 +1827,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
             return dungeon != null && dungeon.isBuilt()
-                    ? List.of("start", "status", "next", "rewards", "leave") : List.of("start", "status", "leave");
+                    ? List.of("start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))

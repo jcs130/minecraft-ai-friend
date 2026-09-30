@@ -62,6 +62,11 @@ final class DungeonLoot {
         };
     }
 
+    static ItemStack bossRelic() {
+        return named(Material.DIAMOND_SWORD, "深渊裁决", "sharpness", 4,
+                "unbreaking", 3);
+    }
+
     private static ItemStack named(Material material, String name,
             String first, int firstLevel, String second, int secondLevel) {
         ItemStack item = new ItemStack(material);
