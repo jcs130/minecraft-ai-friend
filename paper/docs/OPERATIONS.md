@@ -1,12 +1,12 @@
 # Paper 分支维护与发布
 
-## 0.3.34 地下城私人储物箱（待正式发布）
+## 0.3.34 地下城普通个人箱（待正式发布）
 
-待领奖励仍在原 `dungeon-rewards`、`dungeon-bonus-items` 队列；奖励页箱子图标和公会看板新增 27 格私人储物入口，数据按 UUID 存于 `dungeon-personal-stash`。Agent 用 `/mycli arena rewards list|take <槽位|all>` 查询并领取到背包，用 `/mycli arena stash inventory|list|put|putslot|take` 存取。英文 ID 与数量、原版物品元数据均保留；`putslot` 能按背包 0–35 号槽位选择同种不同附魔的物品。旧奖励不迁移、不清空。回退 0.3.33 时私人储物入口暂不可用，保留完整 `config.yml` 后重新发布 0.3.34 可恢复。
+试炼塔实体箱、公会看板和 `/mycli arena rewards|stash` 指向同一个按 UUID 隔离的 27 格普通箱子。Mineflayer 使用实体箱的 `openContainer`、`deposit`、`withdraw`；Java 与基岩玩家使用原版箱子菜单。试炼、公会奖励先记入原 `dungeon-rewards`、`dungeon-bonus-items` 队列，下次开箱时移入 `dungeon-personal-stash`，保留附魔等 ItemStack 元数据；箱满时剩余部分继续留在队列，腾格后重开自动补入。`rewards list|take` 仅用于箱满后的待入箱物品，`stash inventory|list|put|putslot|take` 是远程辅助操作。回退 0.3.33 会暂时失去私人箱入口，但保留完整 `config.yml` 后重发 0.3.34 可恢复箱内与待入箱数据；不可用旧版运行配置覆盖现有数据。
 
-隔离服 25566 的 `dungeon-stash-stage.mjs` 用两名 Mineflayer 1.20.6 玩家验证 UUID 隔离、奖励页进入储物箱、命令和原版菜单存取、首层结算与公会交付、指令领奖、附魔弩领取后装备、按槽位存取时名称和附魔保留，以及 JVM 重启后储物数据仍在。最后候选 JAR SHA256 为 `DB8E793E202F12F45B8A4F994C419CFB694F697D30131C4A164EE08B371162D4`，源码编译和 `git diff --check` 通过。正式服检查时 `.MicroKQ` 已上线，发布未开始；服务端仍运行 0.3.33，没有创建待发布计划。等待无人游玩、无活动试炼时用既有 S4U 备份任务完成 E/F 快照、插件替换和重启，再检查 Java、Geyser、LAN Agent、女神、CortiEye、Watchdog 和实服命令。基岩真机手柄菜单仍须人工入服验收。
+隔离服 25566 的 `dungeon-standard-chest-stage.mjs` 用两名 Mineflayer 1.20.6 玩家验证实体箱连续开箱、标准 `deposit`/`withdraw`、UUID 隔离、首层与公会奖励自动入箱；以同一玩家账号跨 JVM 重启再次通过取物验证。测试后隔离服已正常停机。候选 JAR SHA256 为 `B82F4E3AE65ABE4A99F2969638553E5701564127F8F9421580C5F2FA3B0181CB`。正式服仍运行 0.3.33；待无人游玩且无活动试炼时，用既有 S4U 备份任务完成 E/F 快照、插件替换和重启，再检查 Java、Geyser、LAN Agent、女神、CortiEye、Watchdog 和实服命令。基岩真机手柄菜单仍须人工入服验收。
 
-服务端只负责把 `MC_REWARD`、`MC_STASH` 等结果发回该玩家连接。CortiLan 当前经 `192.168.3.152` 连入，服主机的 `E:\Cortico` 源码副本不是其运行实例；这个副本已在本地提交“斜杠命令收集系统聊天回执”的改动，类型检查与 4702 项测试通过，真实 1.20.6 协议也确认回复为 `system` 消息。运行在 152 的 Cortico 尚未更新，不能把服务端命令可用等同于 CortiLan 已能自主读取回执。`paper/probe/stash-live-smoke.mjs` 用临时白名单 Mineflayer 玩家在正式服核对服务器接口；该脚本不能替代 152 侧的端到端验收。
+实体箱通过原版容器协议交互，不依赖 Agent 读取指令回执。作为辅助入口，服务端仍只把 `MC_REWARD`、`MC_STASH` 等回执发给本人连接。CortiLan 当前经 `192.168.3.152` 连入，服主机的 `E:\Cortico` 源码副本不是其运行实例；这个副本已在本地提交“斜杠命令收集系统聊天回执”的改动，类型检查与 4702 项测试通过，真实 1.20.6 协议也确认回复为 `system` 消息。运行在 152 的 Cortico 尚未更新，不能把本机源码测试等同于 CortiLan 端到端验收。`paper/probe/stash-live-smoke.mjs` 用临时白名单 Mineflayer 玩家在正式服核对服务器接口。
 
 ## 0.3.33 Agent 保护预检（已正式发布）
 

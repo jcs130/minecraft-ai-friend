@@ -297,10 +297,9 @@ final class GuildManager implements Listener {
                 : "放弃「" + quest.title() + "」；进度清零"));
         inventory.setItem(28, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
                 : quest.title() + " " + progress(player) + "/" + quest.target(), "点击领取声望与箱中物资"));
-        inventory.setItem(29, icon(Material.CHEST, "§6个人奖励箱", "任务和地下城奖励都在这里"));
+        inventory.setItem(29, icon(Material.CHEST, "§6个人试炼箱", "任务与地下城奖励自动入箱", "可像普通箱子一样取放物品"));
         inventory.setItem(30, icon(Material.IRON_SWORD, "§c前往地下城", "六层试炼；与队友共同挑战"));
         inventory.setItem(31, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
-        inventory.setItem(32, icon(Material.BARREL, "§b私人储物箱", "正常存放和取出物品；与试炼箱共用"));
     }
 
     private ItemStack icon(Material material, String title, String... lines) {
@@ -318,7 +317,6 @@ final class GuildManager implements Listener {
         else if (slot == 27) abandon(player);
         else if (slot == 28) claim(player);
         else if (slot == 29) dungeon.command(player, new String[]{"arena", "rewards"});
-        else if (slot == 32) dungeon.openStash(player);
     }
 
     String bookPage(Player player) {

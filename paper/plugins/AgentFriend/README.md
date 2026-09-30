@@ -2,11 +2,11 @@
 
 ## 0.3.34 地下城个人箱
 
-试炼塔入口、楼层宝箱和公会看板继续指向同一份按 UUID 保存的待领奖励。奖励页的箱子图标可打开 27 格私人储物箱；公会看板也有储物入口。储物箱用原版容器操作，可存入和取出普通及附魔物品，数据存在 `plugins/AgentFriend/config.yml` 的 `dungeon-personal-stash`。未领取的试炼与公会奖励继续存在原有 `dungeon-rewards`、`dungeon-bonus-items`，不自动占用储物格。背包满时未能领取的奖励留在原队列。
+试炼塔入口、楼层宝箱、公会看板以及 `/mycli arena rewards|stash` 都打开同一个按 UUID 隔离的 27 格普通箱子。玩家可按原版操作存取普通及附魔物品；Mineflayer 可对实体箱调用 `openContainer`、`deposit`、`withdraw`，无需识别插件专用菜单。试炼和公会奖励结算后先记入 `dungeon-rewards`、`dungeon-bonus-items`，下一次打开箱子时保留原物品元数据地移入 `dungeon-personal-stash`。箱满时未入箱部分仍在原奖励队列；腾出空位后重新开箱会继续装入，不会因背包满、死亡或重启丢失。
 
-Agent 可用 `/mycli arena rewards list` 查询本人待领奖励，返回 `MC_REWARD slot=… id=minecraft:… count=…`；`/mycli arena rewards take <槽位|all>` 把物品送进真实背包。`/mycli arena stash list` 列出本人 1–27 号储物格，`stash put <英文物品ID> <1–64>` 从背包存入，`stash take <槽位> [1–64]` 取回背包。要精确选择某把附魔武器，先用 `stash inventory` 读取背包 0–35 号槽位，再用 `stash putslot <背包槽位> <数量>`。列表同时显示自定义名称与附魔；物品本身的元数据随 ItemStack 保留，取回后仍使用普通装备、食用或施法操作。所有命令只操作发命令者的 UUID，不接受他人名字。手柄玩家从奖励页或公会看板打开储物箱，无需输入命令。
+Agent 首选像普通箱子一样操作实体箱；大厅入口坐标 `(-594, 91, -313)`。`/mycli arena stash list` 列出本人 1–27 号箱格；`stash put <英文物品ID> <1–64>`、`stash putslot <背包槽位 0–35> <数量>`、`stash take <箱槽位> [数量]` 是无法走到实体箱时的辅助指令。`/mycli arena rewards list` 仅列出箱满后尚未装入的奖励，`rewards take <槽位|all>` 可将这部分直接送入背包。所有命令只操作发命令者的 UUID，不接受他人名字。手柄玩家从实体箱或公会看板打开同一个箱子，无需输入命令。
 
-`dungeon-stash-stage.mjs` 在隔离服以两名 Mineflayer 1.20.6 玩家检查存取、UUID 隔离、奖励页到储物箱的原版菜单、首层结算、公会交付及指令领取；重连与重启后再读储物格。此改动不施工世界；发布前应同时备份世界和 AgentFriend 的运行配置。基岩手柄与 CortiEye 的实际显示仍需在客户端目视验收。
+`dungeon-standard-chest-stage.mjs` 在隔离服以两名 Mineflayer 1.20.6 玩家检查实体箱 `openContainer`、`deposit`、`withdraw`、UUID 隔离、首层与公会奖励入箱和 JVM 重启持久性。此改动不施工世界；发布前应同时备份世界和 AgentFriend 的运行配置。基岩手柄与 CortiEye 的实际显示仍需在客户端目视验收。
 
 ## 0.3.32 探矿绝对坐标
 

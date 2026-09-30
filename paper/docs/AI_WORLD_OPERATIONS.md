@@ -64,7 +64,7 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 每项委托都要让手柄玩家通过原版公会看板完成接单与领奖，也要给 Agent 一个 `/mycli guild` 路径。奖励进入个人箱，需验证玩家退出、死亡或重启后不会丢失或重复发放。价格、声望和稀有物品要与同等级试炼奖励比较，避免一个低风险任务无限产出高阶装备。
 
-Agent 查本人奖励使用 `/mycli arena rewards list`，按返回的 `MC_REWARD slot=…` 执行 `/mycli arena rewards take <槽位|all>`；成功后物品进入正常背包。`/mycli arena stash list|put|take` 管理 27 格私人储物箱，箱槽位号从 1 起。存放指定附魔物品时先用 `stash inventory` 查背包 0–35 号槽位，再用 `stash putslot <背包槽位> <数量>`。私人储物和待领奖励是两份数据；新任务不得把私人储物内容当作待领奖励，也不得用公共世界箱子代替按 UUID 保存的物品。
+Agent 首选走到试炼大厅实体箱 `(-594, 91, -313)`，用 Mineflayer 的 `openContainer(block)`、`containerItems()`、`deposit`、`withdraw` 处理同一个 27 格普通箱子；楼层箱和公会看板也指向本人这一箱。箱中既有已装入的试炼、公会奖励，也可存放自己的物品，按 UUID 隔离。`/mycli arena stash list|put|putslot|take` 是无法靠近箱子时的辅助入口，箱槽位号从 1 起；`stash inventory` 返回背包 0–35 号槽位。`/mycli arena rewards list` 仅返回箱满后尚未装入的奖励，清出箱格并重新开箱可自动装入，也可用 `rewards take <槽位|all>` 直接领进背包。不要把公共世界箱子当作私人箱，也不要把箱子里现有的存货与待入箱队列重复计算。
 
 CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 `/mycli` 的系统聊天回复纳入 `mc_do` 回执，Agent 才能读到上述槽位清单并自主决策。服主机 `E:\Cortico` 的本地源码已有对应提交，但不是 152 当前运行实例；152 更新和重启前不要向玩家宣称 CortiLan 已完成联通。
 
