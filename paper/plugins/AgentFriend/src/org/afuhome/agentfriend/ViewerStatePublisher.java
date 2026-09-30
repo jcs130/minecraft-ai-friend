@@ -177,14 +177,14 @@ final class ViewerStatePublisher implements Listener {
 
     private JsonArray abilities(Player player, SkillsUser user) {
         JsonArray result = new JsonArray();
-        addAbility(result, "mycli:starbolt", "星芒箭", 1, combatSpells.remainingCooldownMs(player, "starbolt"));
-        addAbility(result, "mycli:frostnova", "霜环", 1, combatSpells.remainingCooldownMs(player, "frostnova"));
-        addAbility(result, "mycli:flamewave", "焰浪", 1, combatSpells.remainingCooldownMs(player, "flamewave"));
-        addAbility(result, "mycli:prospect", "探矿术", 1, prospectingSpell.remainingCooldownMs(player));
-        addAbility(result, "mycli:leap", "跃空术", 1, utilitySpells.remainingCooldownMs(player, "leap"));
-        addAbility(result, "mycli:flight", "飞行术", 1, utilitySpells.remainingCooldownMs(player, "flight"));
-        addAbility(result, "mycli:golem", "守护傀儡", 1, utilitySpells.remainingCooldownMs(player, "golem"));
-        addAbility(result, "mycli:sense", "探敌术", 1, utilitySpells.remainingCooldownMs(player, "sense"));
+        addAbility(result, "mycli:starbolt", "星芒箭", plugin.mastery().rank(player, "starbolt"), combatSpells.remainingCooldownMs(player, "starbolt"));
+        addAbility(result, "mycli:frostnova", "霜环", plugin.mastery().rank(player, "frostnova"), combatSpells.remainingCooldownMs(player, "frostnova"));
+        addAbility(result, "mycli:flamewave", "焰浪", plugin.mastery().rank(player, "flamewave"), combatSpells.remainingCooldownMs(player, "flamewave"));
+        addAbility(result, "mycli:prospect", "探矿术", plugin.mastery().rank(player, "prospect"), prospectingSpell.remainingCooldownMs(player));
+        addAbility(result, "mycli:leap", "跃空术", plugin.mastery().rank(player, "leap"), utilitySpells.remainingCooldownMs(player, "leap"));
+        addAbility(result, "mycli:flight", "飞行术", plugin.mastery().rank(player, "flight"), utilitySpells.remainingCooldownMs(player, "flight"));
+        addAbility(result, "mycli:golem", "守护傀儡", plugin.mastery().rank(player, "golem"), utilitySpells.remainingCooldownMs(player, "golem"));
+        addAbility(result, "mycli:sense", "探敌术", plugin.mastery().rank(player, "sense"), utilitySpells.remainingCooldownMs(player, "sense"));
         Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave",
                 "mycli:prospect", "mycli:leap", "mycli:flight", "mycli:golem", "mycli:sense"));
         addMagicSpells(result, player, seen);

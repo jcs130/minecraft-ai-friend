@@ -36,7 +36,7 @@ import org.bukkit.util.Vector;
 /** Bounded vanilla-protocol movement, guardian, and hostile-sensing spells. */
 final class UtilitySpells implements Listener {
     private static final String GOLEM_TAG = "afu_spell_guardian";
-    private static final int SENSE_RANGE = 24;
+    private static final int SENSE_BASE_RANGE = 24;
     private final AgentFriendPlugin plugin;
     private final Map<String, Long> cooldowns = new HashMap<>();
     private final Map<UUID, Flight> flights = new HashMap<>();
@@ -95,13 +95,16 @@ final class UtilitySpells implements Listener {
             return;
         }
         if (!begin(player, "leap", 4, 8)) return;
+        int rank = plugin.mastery().rank(player, "leap");
         Vector velocity = player.getVelocity();
-        velocity.setY(1.12);
+        velocity.setY(1.12 + (rank - 1) * 0.04);
         player.setVelocity(velocity);
         player.setFallDistance(0);
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 180, 0, false, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING,
+                180 + (rank - 1) * 40, 0, false, true));
         player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation(), 22, 0.4, 0.2, 0.4, 0.05);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BREEZE_JUMP, 0.8f, 1.25f);
+        plugin.mastery().successfulCast(player, "leap");
         player.sendMessage(ChatColor.AQUA + "✦ 跃空术：高高跳起，缓缓落地（4 魔力；8 秒冷却）。");
     }
 
@@ -116,15 +119,17 @@ final class UtilitySpells implements Listener {
             return;
         }
         if (!begin(player, "flight", 10, 90)) return;
+        int seconds = 15 + (plugin.mastery().rank(player, "flight") - 1) * 3;
         flights.put(player.getUniqueId(), new Flight(player.getAllowFlight(), player.isFlying(),
-                player.getFlySpeed(), System.currentTimeMillis() + 15_000L));
+                player.getFlySpeed(), System.currentTimeMillis() + seconds * 1000L));
         player.setAllowFlight(true);
         player.setFlySpeed(0.07f);
         player.setFlying(true);
         player.setFallDistance(0);
         player.getWorld().spawnParticle(Particle.END_ROD, player.getLocation().add(0, 1, 0),
                 24, 0.4, 0.7, 0.4, 0.03);
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 飞行术持续 15 秒；若未立即起飞，可双按跳跃键。结束后会缓降（10 魔力；90 秒冷却）。");
+        plugin.mastery().successfulCast(player, "flight");
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 飞行术持续 " + seconds + " 秒；若未立即起飞，可双按跳跃键。结束后会缓降（10 魔力；90 秒冷却）。");
     }
 
     private Location safeGolemSpot(Player player) {
@@ -153,6 +158,7 @@ final class UtilitySpells implements Listener {
             return;
         }
         if (!begin(player, "golem", 12, 75)) return;
+        int seconds = 45 + (plugin.mastery().rank(player, "golem") - 1) * 5;
         IronGolem guardian = player.getWorld().spawn(spot, IronGolem.class, entity -> {
             entity.setPlayerCreated(true);
             entity.setPersistent(false);
@@ -161,18 +167,20 @@ final class UtilitySpells implements Listener {
             entity.setCustomName(ChatColor.GOLD + player.getName() + "的守护傀儡");
             entity.setCustomNameVisible(true);
         });
-        guardians.put(player.getUniqueId(), new Guardian(guardian.getUniqueId(), System.currentTimeMillis() + 45_000L));
+        guardians.put(player.getUniqueId(), new Guardian(guardian.getUniqueId(), System.currentTimeMillis() + seconds * 1000L));
         player.getWorld().spawnParticle(Particle.END_ROD, spot.clone().add(0, 1, 0),
                 35, 0.7, 1, 0.7, 0.05);
-        player.sendMessage(ChatColor.GOLD + "✦ 守护傀儡会帮你攻击附近的怪物，45 秒后离开（12 魔力；75 秒冷却）。");
+        plugin.mastery().successfulCast(player, "golem");
+        player.sendMessage(ChatColor.GOLD + "✦ 守护傀儡会帮你攻击附近的怪物，" + seconds + " 秒后离开（12 魔力；75 秒冷却）。");
     }
 
     private List<Enemy> nearbyHostiles(Player player) {
         List<Enemy> found = new ArrayList<>();
         Location at = player.getLocation();
-        for (Entity entity : player.getNearbyEntities(SENSE_RANGE, SENSE_RANGE, SENSE_RANGE)) {
+        int range = SENSE_BASE_RANGE + (plugin.mastery().rank(player, "sense") - 1) * 4;
+        for (Entity entity : player.getNearbyEntities(range, range, range)) {
             if (entity instanceof Enemy enemy && entity.isValid() && !entity.isDead()
-                    && entity.getLocation().distanceSquared(at) <= SENSE_RANGE * SENSE_RANGE)
+                    && entity.getLocation().distanceSquared(at) <= range * range)
                 found.add(enemy);
         }
         found.sort(Comparator.comparingDouble(enemy -> enemy.getLocation().distanceSquared(at)));
@@ -183,7 +191,8 @@ final class UtilitySpells implements Listener {
         if (!ready(player, "sense")) return;
         List<Enemy> hostiles = nearbyHostiles(player);
         if (hostiles.isEmpty()) {
-            player.sendMessage(ChatColor.GREEN + "24 格内没有发现怪物；未消耗魔力，也未进入冷却。");
+            player.sendMessage(ChatColor.GREEN + "" + (SENSE_BASE_RANGE + (plugin.mastery().rank(player, "sense") - 1) * 4)
+                    + " 格内没有发现怪物；未消耗魔力，也未进入冷却。");
             return;
         }
         if (!begin(player, "sense", 3, 15)) return;
@@ -191,6 +200,7 @@ final class UtilitySpells implements Listener {
         BossBar bar = Bukkit.createBossBar("探敌术", BarColor.BLUE, BarStyle.SOLID);
         bar.addPlayer(player);
         senses.put(player.getUniqueId(), new Sense(bar, System.currentTimeMillis() + 8_000L));
+        plugin.mastery().successfulCast(player, "sense");
         player.sendMessage(ChatColor.AQUA + "✦ 探敌术发现附近 " + hostiles.size()
                 + " 只怪物；顶部方向提示持续 8 秒（3 魔力；15 秒冷却）。");
         for (int i = 0; i < Math.min(5, hostiles.size()); i++) {

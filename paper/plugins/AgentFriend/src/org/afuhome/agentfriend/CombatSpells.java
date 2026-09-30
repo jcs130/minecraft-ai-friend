@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import dev.aurelium.auraskills.api.skill.Skills;
 import org.bukkit.ChatColor;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
@@ -61,6 +62,12 @@ final class CombatSpells {
 
     private String key(Player caster, String spell) { return caster.getUniqueId() + ":" + spell; }
 
+    private int damage(Player caster, String spell, int base) {
+        int mastery = plugin.mastery().rank(caster, spell) - 1;
+        int fighting = Math.min(2, plugin.auraLevel(caster, Skills.FIGHTING) / 20);
+        return base + mastery + fighting;
+    }
+
     private boolean hostile(Entity entity) {
         return entity instanceof Enemy && entity.isValid() && !entity.isDead();
     }
@@ -99,7 +106,9 @@ final class CombatSpells {
         world.spawnParticle(Particle.CRIT, enemy.getLocation().add(0, 1, 0),
                 24, 0.35, 0.45, 0.35, 0.1);
         world.playSound(eye, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0f, 1.3f);
-        enemy.damage(5, caster);
+        int damage = damage(caster, "starbolt", 5);
+        enemy.damage(damage, caster);
+        plugin.mastery().successfulCast(caster, "starbolt");
         caster.sendMessage(ChatColor.LIGHT_PURPLE + "星芒箭命中 " + enemy.getName() + "（4 魔力）。");
     }
 
@@ -139,11 +148,14 @@ final class CombatSpells {
         }
         world.spawnParticle(Particle.CLOUD, center, 32, 2.4, 0.3, 2.4, 0.01);
         world.playSound(center, Sound.BLOCK_GLASS_BREAK, 0.8f, 1.4f);
+        int damage = damage(caster, "frostnova", 2);
+        int slowTicks = 80 + (plugin.mastery().rank(caster, "frostnova") - 1) * 20;
         for (Enemy enemy : enemies) {
-            enemy.damage(2, caster);
+            enemy.damage(damage, caster);
             if (enemy.isValid() && !enemy.isDead())
-                enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 1, false, true));
+                enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, slowTicks, 1, false, true));
         }
+        plugin.mastery().successfulCast(caster, "frostnova");
         caster.sendMessage(ChatColor.AQUA + "霜环命中 " + enemies.size() + " 只怪物并减速（7 魔力）。");
     }
 
@@ -180,13 +192,16 @@ final class CombatSpells {
         }
         world.playSound(eye, Sound.ITEM_FIRECHARGE_USE, 0.9f, 1.1f);
         int hit = 0;
+        int damage = damage(caster, "flamewave", 4);
+        int fireTicks = 60 + (plugin.mastery().rank(caster, "flamewave") - 1) * 20;
         for (Enemy enemy : enemies) {
             if (hit == 4) break;
-            enemy.damage(4, caster);
+            enemy.damage(damage, caster);
             if (enemy.isValid() && !enemy.isDead())
-                enemy.setFireTicks(Math.max(enemy.getFireTicks(), 60));
+                enemy.setFireTicks(Math.max(enemy.getFireTicks(), fireTicks));
             hit++;
         }
+        plugin.mastery().successfulCast(caster, "flamewave");
         caster.sendMessage(ChatColor.GOLD + "焰浪命中 " + hit + " 只怪物（8 魔力）。");
     }
 

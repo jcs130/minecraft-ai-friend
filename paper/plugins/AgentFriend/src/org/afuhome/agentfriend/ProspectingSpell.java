@@ -42,7 +42,7 @@ final class ProspectingSpell {
             Map.entry(Material.NETHER_GOLD_ORE, "下界金矿"), Map.entry(Material.NETHER_QUARTZ_ORE, "下界石英"),
             Map.entry(Material.ANCIENT_DEBRIS, "远古残骸"));
 
-    private record Trace(Location ore, long expiresAt, BossBar bar, BlockDisplay outline) { }
+    private record Trace(Location ore, long expiresAt, long durationMs, BossBar bar, BlockDisplay outline) { }
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Long> lastCast = new HashMap<>();
     private final Map<UUID, Long> lastAttempt = new HashMap<>();
@@ -139,15 +139,18 @@ final class ProspectingSpell {
             });
             player.showEntity(plugin, outline);
         }
-        traces.put(player.getUniqueId(), new Trace(closest, now + DURATION_TICKS * 50L, bar, outline));
+        int durationTicks = DURATION_TICKS + (plugin.mastery().rank(player, "prospect") - 1) * 60;
+        traces.put(player.getUniqueId(), new Trace(closest, now + durationTicks * 50L,
+                durationTicks * 50L, bar, outline));
         plugin.presentSpell(player, "prospect");
+        plugin.mastery().successfulCast(player, "prospect");
         player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName
                 + "：dimension=" + world.getKey() + " X=" + closest.getBlockX()
                 + " Y=" + closest.getBlockY() + " Z=" + closest.getBlockZ()
                 + " ore=" + oreMaterial.getKey() + "（方块坐标）。");
         player.sendMessage(ChatColor.GRAY + "范围 " + range + " 格，挖矿等级 " + miningLevel
                 + (imprintedTool ? "，刻印工具 +8" : "")
-                + "；描边/光框持续 12 秒；消耗 6 魔力，冷却 30 秒。");
+                + "；描边/光框持续 " + (durationTicks / 20) + " 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
 
@@ -183,7 +186,7 @@ final class ProspectingSpell {
     }
 
     private void update(Player player, Trace trace, long now) {
-        trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) (DURATION_TICKS * 50L))));
+        trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) trace.durationMs())));
         projectOutline(player, trace.ore());
     }
 

@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.36 法术分类与熟练度（2026-10-01 已正式发布）
+
+八项 AgentFriend 法术增加按 UUID 保存的个人熟练度：成功施放 8/24 次到 2/3 级；战斗伤害及控制时长、探索持续/感知范围、探矿标记时长有界成长。AuraSkills 战斗等级最多给战斗法术 +2 伤害，既有统一魔力、挖矿半径、公会声望、女神学习和 MagicSpells 生活法术保持独立。罗盘「技能成长」是 27 格原版菜单，命格书有短引导；Agent 用 `/mycli mastery` 取 `MC_MASTERY`，通用 `mcviewer:state` 仍只发本人能力等级。规则和未升级的类别见 [技能体系](SKILL_SYSTEM.md)。玩家进度在 `plugins/AgentFriend/spell-mastery.yml`，旧 JAR 回退时须保留这份文件。
+
+隔离服 25566 用 Mineflayer 测过无目标不计数、第 8 次升级、按 UUID 隔离、菜单、状态包、JVM 重启后等级和实际伤害比例；原 `viewer-state-stage.mjs`、`utility-spells-stage.mjs` 回归通过。只在隔离服临时提高魔力回复做连续施放，随后恢复原 `stats.yml`。正式服发布前只有 Goddess、CortiLan、CortiEye 服务账号在线，无活动地下城；S4U 备份任务结果 0，E/F 快照 `20261001-014541` 均有 `.complete`，单一 JAR SHA256 `4BE39B3DA73E31525437C47BF15B497FFA1F2CAC5AB292226424C9A671C93504`。
+
+首次启动遇到 Minecraft 官方发现服务一次 TLS 握手中断，Geyser 未监听 UDP；Java 仍正常。既有 Watchdog 连续三次探测失败且确认无真人后，于 01:49 自动正常重启一次，01:50 基岩 Pong 恢复，恢复标记清除，Watchdog 结果 0。独立 Java HTTPS 请求得到 200，未改 Geyser 或网络配置。正式服临时白名单 Mineflayer 实测 8 条个人熟练度、罗盘入口和本人 `mcviewer:state`，随后移出白名单；Java、LAN Agent 网关、女神桥、基岩 Pong 正常，最近一分钟 MSPT 平均约 7.1 ms。基岩真人尚未测试新菜单与光效；CortiEyeMirror 插件已加载，但本次重启后远端 CortiEye 客户端截至 01:51 尚未重新登录，镜头仍显示 `camera=offline`，要待客户端重连后复验。
+
 ## 0.3.35 导航回执绝对坐标（2026-10-01 已正式发布）
 
 `/mycli waypoint` 现在按本人列出公共 warp、试炼场、私人 home 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...`；`goto` 的 Essentials 地点返回 `MC_DESTINATION` **目标**坐标，真正抵达以客户端位置为准。`locate list|nearest|<玩家>` 返回 `MC_PLAYER`，追踪条继续保留方向/距离并刷新目标绝对坐标；探敌术最多给出五个最近怪物的 `MC_HOSTILE` 坐标；遗迹远征 `MC_SITE` 返回实际安全落点 x/y/z 与仅有水平精度的遗迹中心 X/Z。试炼状态和死亡领箱提示带维度、入口及箱子坐标，公会/试炼场/队友传送成功回实际落点。消息仅发给操作玩家，均走原版聊天或 BossBar；探矿和保护查询原有绝对坐标保持不变。移动目标坐标是快照，Agent 算路前须重查。

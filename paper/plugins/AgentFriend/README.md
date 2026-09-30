@@ -1,5 +1,13 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.36 法术分类与熟练度
+
+现有法术按战斗、探索、采集、守护恢复、位移、创造观赏整理；八项 AgentFriend 原生法术率先提供个人熟练度。成功施放累计 8/24 次到 2/3 级，失败或无目标不计数。星芒箭、霜环、焰浪提升有上限的伤害/控制，跃空、飞行、守护傀儡、探敌和探矿提升持续或探测效果；AuraSkills 战斗等级最多再给战斗法术 +2 伤害，挖矿等级继续决定探矿半径。生活法术、女神学习技能和公会等级仍沿用各自原规则，未虚报它们已经有熟练度。完整数值和扩展边界见 [技能体系](../../docs/SKILL_SYSTEM.md)。
+
+手柄在技能罗盘点「技能成长」打开原版箱子菜单，也可翻命格书；Agent 用 `/mycli mastery` 读取 `MC_MASTERY id=... level=... uses=... requiredUses=... category=...`，再用原有 `/mycli cast` 或法杖施法。`mcviewer:state` 的八项 `mycli:*` 能力等级按本人 UUID 更新，不改 JSON schema 或频道。进度持久化在运行服 `plugins/AgentFriend/spell-mastery.yml`，随 E/F 快照备份；Git 不提交玩家记录。
+
+隔离服 `spell-mastery-stage.mjs` 用无 OP Mineflayer 检查无目标不计数、8 次升级、玩家隔离、菜单、状态包、JVM 重启持久化和实际伤害比例。它在 `first` 阶段需要足够魔力；本次只在隔离服临时把 AuraSkills 魔力回复提高后测试，并已恢复原值。正式服魔力规则不变。基岩真机菜单与标题/粒子画面仍需玩家目视验收。
+
 ## 0.3.35 Agent 导航绝对坐标
 
 `/mycli waypoint` 列出公共 warp、试炼场及本人私人 home 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...`；`/mycli goto` 对 Essentials 目标回 `MC_DESTINATION`，成功到达插件自管的试炼场、公会或队友旁也给出实际落点。`/mycli locate list|nearest|<玩家>` 回 `MC_PLAYER`，追踪条继续给人看方向、距离，并增加持续更新的目标绝对坐标。探敌术成功时最多列五个最近怪物的 `MC_HOSTILE`，BossBar 同时显示最近目标坐标；遗迹远征成功时 `MC_SITE` 返回实际安全落点 `x/y/z` 与仅能确定 `x/z` 的遗迹中心。试炼 `status` 的 `MC_DUNGEON` 包含入口、个人箱和活动层坐标，死亡领箱指引也带维度。`dimension` 为注册维度键，整数坐标按方块位置取整；玩家和怪物会移动，Agent 算路前须刷新。现有探矿和保护查询本来就返回绝对坐标。消息只发给执行命令的玩家；无客户端模组依赖，Java、基岩及 Mineflayer 均可读。

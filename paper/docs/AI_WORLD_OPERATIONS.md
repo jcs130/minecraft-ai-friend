@@ -6,7 +6,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
-| 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置 | 玩家魔力、等级、已学技能和道具刻印在插件/玩家数据里 | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
+| 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | `GuildManager.java` 的 `CONTRACTS`、`RANKS`、`THRESHOLDS`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `guild-players` | 可新增委托和目标判定，但现阶段仍需改 Java、构建和重启；**改委托 ID 会影响正在进行的任务** |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机 | 可解答、引导、审核缺项申请并执行已有管理能力。现有 MCP 仅暴露有限的可审计工具；QwenPaw Agent 自身的文件/开发能力是另一层，不应把 MCP 工具范围误当作全部开发权限 |
@@ -51,6 +51,8 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 ### 技能与法术
 
 技能应有稳定 ID、展示名、解锁条件、魔力消耗、冷却、适用目标、效果、粒子/音效、失败提示和 Agent 可读说明。修改时同时核对 AgentFriend 的 `/mycli spells`、`/mycli focus list`、技能罗盘/命格书、MagicSpells 配置、AuraSkills 魔力扣费和 `mcviewer:state` 的每人状态同步。现有 `ViewerStatePublisher` 已按玩家连接发送本人状态；新技能需要确认它能正确显示等级、经验和剩余冷却，无法提供的值按既有协议留空。
+
+0.3.36 的八项原生法术熟练度是独立成长线：成功施放累计 8/24 次到 2/3 级，进度文件与世界一起备份；Agent 可用 `/mycli mastery` 读取本人 `MC_MASTERY`，手柄可在罗盘点「技能成长」。不要把这项法术等级说成 AuraSkills 等级或公会等级；MagicSpells 治疗/造物、女神学习技能尚未进入这套熟练度。新增技能应按 [技能体系](SKILL_SYSTEM.md) 明确分类、成功归因、等级效果和上限。
 
 面向手柄玩家，关键技能须可由原版物品使用、罗盘选择或按钮触发；面向 Agent，须有稳定的文字命令和可解析回执。高伤害、飞行、召唤物与传送要在村庄保护、组队、世界边界和性能负载下测试。不能把只有 Java 客户端模组能渲染的特效作为完成条件；基岩玩家至少要看见原版标题、粒子、音效或聊天反馈。
 

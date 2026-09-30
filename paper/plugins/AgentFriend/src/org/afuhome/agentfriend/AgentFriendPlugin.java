@@ -193,6 +193,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
+    private SpellMastery spellMastery;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
@@ -220,6 +221,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         guild = new GuildManager(this, dungeon);
         guildHall = new GuildHallManager(this);
         trialRoad = new TrialRoadManager(this);
+        spellMastery = new SpellMastery(this);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
@@ -259,6 +261,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         giftNonces.clear();
         pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
+        if (spellMastery != null) spellMastery.shutdown();
         if (protectionAdvisor != null) protectionAdvisor.stop();
         if (combatSpells != null) combatSpells.clear();
         if (prospectingSpell != null) prospectingSpell.clear();
@@ -325,6 +328,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     void presentSpell(Player player, String spell) {
         spellPresentation.show(player, spell);
+    }
+
+    SpellMastery mastery() { return spellMastery; }
+
+    int auraLevel(Player player, Skills skill) {
+        SkillsUser user = skillsUser(player);
+        return user == null ? 0 : user.getSkillLevel(skill);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -533,6 +543,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
+            case "mastery", "熟练度" -> spellMastery.report(player);
             case "status", "状态" -> status(player);
             case "protect", "保护" -> protectionAdvisor.command(player, args);
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
@@ -562,6 +573,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
         p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
+        p.sendMessage("/mycli mastery  查看战斗、探索、采集法术的个人熟练度与下一级门槛");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
@@ -611,7 +623,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void spells(Player p) {
-        p.sendMessage(ChatColor.LIGHT_PURPLE + "可用咏唱：归乡(home)、闪现(blink)、圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)、造物术(give)、烟花术(fireworks)、星尘术(starlight)");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)、星尘术(starlight)。");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：基础 24 格，挖矿每 5 级 +2 格、最多 40 格；手持探矿刻印工具再 +8 格。可选 iron|coal|copper|gold|gems|diamond|redstone|ancient；6 魔力，30 秒冷却。");
         p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
@@ -620,6 +632,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.AQUA + "可学习：羽落(feather) " + learnedLabel(p, featherKey) + "、夜视(night) " + learnedLabel(p, nightKey));
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
         p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗、探矿与探索法术。");
+        p.sendMessage(ChatColor.GRAY + "技能分战斗、探索、采集；/mycli mastery 看每项熟练度和下一级所需次数。罗盘也可点技能成长。");
     }
     private void status(Player p) {
         SkillsUser user = skillsUser(p);
@@ -1472,6 +1485,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 "§a探索与队友§r\n\n罗盘「传送地点」选村庄、樱花林与遗迹。去遗迹后还要步行探索。\n\n「找队友」可追踪方向或传送过去。\n\n在地点页保存自己的营地，方便回家。",
                 "§d魔法与技能§r\n\n罗盘选图标施法。圣愈术治自己；星芒箭自动锁敌。\n\n法杖使用键瞬发，潜行使用换招。魔力会恢复。\n\n羽落 " + learnedLabel(p, featherKey)
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
+                "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
                 guild.bookPage(p),
                 "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。队友站在入口石按钮附近，一人按下就会一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
@@ -1499,6 +1513,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void openMenu(Player p, String page) {
         String title = switch (page) {
             case "skills" -> "§5✦ 技能罗盘";
+            case "mastery" -> "§d✦ 技能成长";
             case "guide" -> "§6✦ 旅途指南";
             case "places" -> "§b✦ 传送罗盘";
             case "expeditions" -> "§6✦ 遗迹远征";
@@ -1535,6 +1550,25 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
             inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
+            inv.setItem(5, item(Material.EXPERIENCE_BOTTLE, "§d技能成长", "战斗、探索、采集三类熟练度", "成功施法 8/24 次升级；点击查看"));
+        } else if (page.equals("mastery")) {
+            String[] ids = {"starbolt", "frostnova", "flamewave", "leap", "flight", "golem", "sense", "prospect"};
+            Material[] icons = {Material.AMETHYST_SHARD, Material.SNOWBALL, Material.BLAZE_POWDER,
+                    Material.RABBIT_FOOT, Material.ELYTRA, Material.IRON_BLOCK,
+                    Material.RECOVERY_COMPASS, Material.SPYGLASS};
+            int[] slots = {9, 10, 11, 13, 14, 15, 16, 17};
+            for (int i = 0; i < ids.length; i++) {
+                String id = ids[i];
+                int uses = spellMastery.uses(p, id);
+                inv.setItem(slots[i], item(icons[i], "§d" + SpellMastery.NAMES.get(id)
+                        + " §e" + spellMastery.rank(p, id) + "/3",
+                        "成功施放 " + uses + "/" + spellMastery.nextRequired(p, id) + " 次",
+                        "类别 " + switch (spellMastery.category(id)) {
+                            case "combat" -> "战斗"; case "gathering" -> "采集"; default -> "探索";
+                        } + "；点击查看文字说明"));
+            }
+            inv.setItem(4, item(Material.WRITTEN_BOOK, "§6成长规则", "8 次升 2 级；24 次升 3 级", "AuraSkills 属性和公会声望另算"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("guide")) {
             inv.setItem(10, item(Material.COMPASS, "§a① 先去探索", "打开地点页；选村庄、樱花林或遗迹", "营地也能保存在地点页"));
             inv.setItem(11, item(Material.BLAZE_ROD, "§d② 学会魔法", "打开技能罗盘；选图标直接施法", "法杖可绑定喜欢的技能"));
@@ -1703,6 +1737,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 5 -> openMenu(p, "mastery");
                     case 4 -> openMenu(p, "guide");
                     case 7 -> openMenu(p, "guild");
                     case 8 -> openMenu(p, "utility");
@@ -1720,6 +1755,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 25 -> { if (!p.performCommand("skins")) p.sendMessage(ChatColor.RED + "皮肤画廊暂时不可用。"); }
                     default -> { }
                 }
+            } else if (page.equals("mastery")) {
+                if (slot == 22) openMenu(p, "skills");
+                else spellMastery.report(p);
             } else if (page.equals("guide")) {
                 switch (slot) {
                     case 10 -> openMenu(p, "places");
@@ -2063,7 +2101,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "guide", "spells", "status", "protect", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 1) return List.of("help", "guide", "spells", "mastery", "status", "protect", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
         if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
