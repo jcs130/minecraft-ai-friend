@@ -1,10 +1,10 @@
 # Paper 分支维护与发布
 
-## 0.3.34 地下城普通个人箱（待正式发布）
+## 0.3.34 地下城普通个人箱（已正式发布）
 
 试炼塔实体箱、公会看板和 `/mycli arena rewards|stash` 指向同一个按 UUID 隔离的 27 格普通箱子。Mineflayer 使用实体箱的 `openContainer`、`deposit`、`withdraw`；Java 与基岩玩家使用原版箱子菜单。试炼、公会奖励先记入原 `dungeon-rewards`、`dungeon-bonus-items` 队列，下次开箱时移入 `dungeon-personal-stash`，保留附魔等 ItemStack 元数据；箱满时剩余部分继续留在队列，腾格后重开自动补入。`rewards list|take` 仅用于箱满后的待入箱物品，`stash inventory|list|put|putslot|take` 是远程辅助操作。回退 0.3.33 会暂时失去私人箱入口，但保留完整 `config.yml` 后重发 0.3.34 可恢复箱内与待入箱数据；不可用旧版运行配置覆盖现有数据。
 
-隔离服 25566 的 `dungeon-standard-chest-stage.mjs` 用两名 Mineflayer 1.20.6 玩家验证实体箱连续开箱、标准 `deposit`/`withdraw`、UUID 隔离、首层与公会奖励自动入箱；以同一玩家账号跨 JVM 重启再次通过取物验证。测试后隔离服已正常停机。候选 JAR SHA256 为 `B82F4E3AE65ABE4A99F2969638553E5701564127F8F9421580C5F2FA3B0181CB`。正式服仍运行 0.3.33；待无人游玩且无活动试炼时，用既有 S4U 备份任务完成 E/F 快照、插件替换和重启，再检查 Java、Geyser、LAN Agent、女神、CortiEye、Watchdog 和实服命令。基岩真机手柄菜单仍须人工入服验收。
+隔离服 25566 的 `dungeon-standard-chest-stage.mjs` 用两名 Mineflayer 1.20.6 玩家验证实体箱连续开箱、标准 `deposit`/`withdraw`、UUID 隔离、首层与公会奖励自动入箱；以同一玩家账号跨 JVM 重启再次通过取物验证。测试后隔离服已正常停机。正式 JAR SHA256 为 `B82F4E3AE65ABE4A99F2969638553E5701564127F8F9421580C5F2FA3B0181CB`。2026-09-30 23:53，确认无真人玩家、无活动试炼后触发既有 S4U 备份发布任务，E/F 快照 `20260930-235317` 均有 `.complete`，任务结果 0；正式服只启用 0.3.34 JAR。Java、Geyser 基岩 Pong、LAN Agent 网关、女神桥及 Watchdog 检查通过。临时白名单 Mineflayer 1.20.6 账号在正式服用入口实体箱完成标准 `openContainer`、`deposit`、`withdraw`、重开与取物，随后退出并移出白名单。基岩真机手柄箱菜单仍须人工验收。CortiEyeMirror 已加载，但远端 CortiEye 客户端重启后尚未重新登录，`cortieye` 显示 `camera=offline`；直播镜头要待 152 上客户端恢复后复验，不能把插件加载视作镜头已恢复。
 
 实体箱通过原版容器协议交互，不依赖 Agent 读取指令回执。作为辅助入口，服务端仍只把 `MC_REWARD`、`MC_STASH` 等回执发给本人连接。CortiLan 当前经 `192.168.3.152` 连入，服主机的 `E:\Cortico` 源码副本不是其运行实例；这个副本已在本地提交“斜杠命令收集系统聊天回执”的改动，类型检查与 4702 项测试通过，真实 1.20.6 协议也确认回复为 `system` 消息。运行在 152 的 Cortico 尚未更新，不能把本机源码测试等同于 CortiLan 端到端验收。`paper/probe/stash-live-smoke.mjs` 用临时白名单 Mineflayer 玩家在正式服核对服务器接口。
 
