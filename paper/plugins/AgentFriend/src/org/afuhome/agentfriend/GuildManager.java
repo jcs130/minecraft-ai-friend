@@ -58,7 +58,14 @@ final class GuildManager implements Listener {
             new Contract("creeping_explorer", "蔓生墓穴调查", "找到自然生成的蔓生墓穴入口", Material.MOSS_BLOCK,
                     Goal.EXPLORE, 1, 0, 1, 10, 4, Material.LAPIS_LAZULI, 4, "creeping_crypt"),
             new Contract("desert_explorer", "沙漠遗迹调查", "找到自然生成的沙漠遗迹入口", Material.CHISELED_SANDSTONE,
-                    Goal.EXPLORE, 1, 0, 1, 12, 5, Material.DIAMOND, 1, "desert_ruins"));
+                    Goal.EXPLORE, 1, 0, 1, 12, 5, Material.DIAMOND, 1, "desert_ruins"),
+            new Contract("camp_scout", "营地侦察", "找到掠夺者营地，注意结伴应对袭击", Material.CROSSBOW,
+                    Goal.EXPLORE, 1, 0, 0, 8, 4, Material.SHIELD, 1, "illager_camp"),
+            new Contract("lost_town", "失落古镇", "调查古镇废墟并寻找遗留的宝箱", Material.MAP,
+                    Goal.EXPLORE, 1, 0, 0, 8, 4, Material.EXPERIENCE_BOTTLE, 3, "ruin_town"),
+            new Contract("bunker_explorer", "地下堡垒", "找到堡垒入口，深入地下探索", Material.STONE_BRICKS,
+                    Goal.EXPLORE, 1, 0, 1, 12, 5, Material.IRON_SWORD, 1, "bunker"));
+    static int contractCount() { return CONTRACTS.size(); }
 
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
@@ -109,7 +116,8 @@ final class GuildManager implements Listener {
             case "rewards", "箱子" -> dungeon.command(player, new String[]{"arena", "rewards"});
             case "travel", "远征" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW
-                        + "用法：/mycli guild travel undead_crypt|creeping_crypt|desert_ruins");
+                        + "用法：/mycli guild travel <遗迹ID>；可选 "
+                        + String.join("、", DungeonExpeditions.SITES.stream().map(DungeonExpeditions.Site::id).toList()));
                 else expeditions.travel(player, args[2].toLowerCase(Locale.ROOT));
             }
             default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|travel <遗迹ID>");

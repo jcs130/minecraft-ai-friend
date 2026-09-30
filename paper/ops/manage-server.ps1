@@ -22,6 +22,7 @@ $repairFile = Join-Path $opsDir 'repair-no-rcon.requested'
 $lockFile = Join-Path $opsDir 'manage-server.lock'
 $eventLog = Join-Path $opsDir 'manage-server.log'
 $bedrockHealthFile = Join-Path $opsDir 'bedrock-health.json'
+$pendingAgentFriendDeploy = Join-Path $opsDir 'agentfriend-deploy.pending.json'
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -425,6 +426,50 @@ function Mirror-LatestBackup {
     PruneSnapshots $mirrorRoot
 }
 
+function Deploy-PendingAgentFriend {
+    if (-not (Test-Path -LiteralPath $pendingAgentFriendDeploy)) { return }
+    $plan = Get-Content -LiteralPath $pendingAgentFriendDeploy -Raw | ConvertFrom-Json
+    $source = [IO.Path]::GetFullPath([string]$plan.source)
+    $sourceRoot = 'E:\minecraft-ai-friend\paper\plugins\AgentFriend\'
+    $targetName = [IO.Path]::GetFileName($source)
+    if (-not $source.StartsWith($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $targetName -notmatch '^AgentFriend-\d+\.\d+\.\d+\.jar$' -or
+        $plan.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        $plan.previousSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        -not (Test-Path -LiteralPath $source)) { throw 'Pending AgentFriend deployment is invalid.' }
+    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $plan.sha256) {
+        throw 'Pending AgentFriend source hash changed.'
+    }
+    $enabled = @(Get-ChildItem -LiteralPath (Join-Path $serverDir 'plugins') -Filter 'AgentFriend-*.jar' -File)
+    if ($enabled.Count -ne 1 -or
+        (Get-FileHash -LiteralPath $enabled[0].FullName -Algorithm SHA256).Hash -ne $plan.previousSha256) {
+        throw 'Expected previous AgentFriend JAR is not the only enabled version.'
+    }
+    $old = $enabled[0].FullName
+    $oldDisabled = "$old.disabled"
+    $new = Join-Path $serverDir "plugins\$targetName"
+    $staged = "$new.pending"
+    if ((Test-Path -LiteralPath $oldDisabled) -or (Test-Path -LiteralPath $new) -or
+        (Test-Path -LiteralPath $staged)) { throw 'AgentFriend deployment target already exists.' }
+    try {
+        Copy-Item -LiteralPath $source -Destination $staged
+        if ((Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash -ne $plan.sha256) {
+            throw 'Staged AgentFriend JAR hash mismatch.'
+        }
+        Rename-Item -LiteralPath $old -NewName ([IO.Path]::GetFileName($oldDisabled))
+        Rename-Item -LiteralPath $staged -NewName $targetName
+    } catch {
+        Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $old) -and (Test-Path -LiteralPath $oldDisabled)) {
+            Rename-Item -LiteralPath $oldDisabled -NewName ([IO.Path]::GetFileName($old))
+        }
+        Move-Item -LiteralPath $pendingAgentFriendDeploy -Destination "$pendingAgentFriendDeploy.failed" -Force
+        throw
+    }
+    Remove-Item -LiteralPath $pendingAgentFriendDeploy -Force
+    Log "AgentFriend deployed: $targetName SHA256=$($plan.sha256)"
+}
+
 function Backup-Server {
     $sourceBytes = (Get-ChildItem -LiteralPath $serverDir -Recurse -File | Measure-Object -Property Length -Sum).Sum
     $freeBytes = (Get-PSDrive -Name E).Free
@@ -464,7 +509,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -501,6 +546,7 @@ function Backup-Server {
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dest 'backup.json') -Encoding UTF8
         New-Item -ItemType File -Path (Join-Path $dest '.complete') -Force | Out-Null
         Log "Backup complete: $dest"
+        Deploy-PendingAgentFriend
     }
     finally {
         if ($wasRunning) {

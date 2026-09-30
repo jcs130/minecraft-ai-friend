@@ -1279,6 +1279,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String title = switch (page) {
             case "skills" -> "§5✦ 技能罗盘";
             case "places" -> "§b✦ 传送罗盘";
+            case "expeditions" -> "§6✦ 遗迹远征";
             case "players" -> "§b✦ 找队友";
             case "combat" -> "§c✦ 战斗法术";
             case "prospect" -> "§d✦ 探矿术";
@@ -1338,13 +1339,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
             }
-            inv.setItem(10, item(Material.BONE, "§6亡灵墓穴", "传送到自然生成遗迹外围；再步行约 70 格"));
-            inv.setItem(11, item(Material.MOSS_BLOCK, "§a蔓生墓穴", "传送到自然生成遗迹外围；再步行约 70 格"));
-            inv.setItem(12, item(Material.CHISELED_SANDSTONE, "§e沙漠遗迹", "传送到自然生成遗迹外围；再步行约 70 格"));
             inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口按钮组队，清怪后自动下楼" : "按钮启动三波战斗"));
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
+            inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "选择目标后落在遗迹外围，仍需步行探索"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("expeditions")) {
+            for (int i = 0; i < DungeonExpeditions.SITES.size(); i++) {
+                DungeonExpeditions.Site site = DungeonExpeditions.SITES.get(i);
+                inv.setItem(10 + i, item(site.icon(), "§e" + site.name(), site.hint(),
+                        "传送到外围后步行约 70 格；可先在公会接调查委托"));
+            }
+            inv.setItem(22, item(Material.ARROW, "§7返回地点", "打开传送罗盘"));
         } else if (page.equals("players")) {
             inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
             inv.setItem(4, item(Material.COMPASS, "§a追踪最近队友", "同一世界；罗盘指针跟随她"));
@@ -1484,16 +1490,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         .ifPresent(spell -> bindFocus(p, spell.id()));
             } else if (page.equals("places")) {
                 switch (slot) {
-                    case 10 -> guild.command(p, new String[]{"guild", "travel", "undead_crypt"});
-                    case 11 -> guild.command(p, new String[]{"guild", "travel", "creeping_crypt"});
-                    case 12 -> guild.command(p, new String[]{"guild", "travel", "desert_ruins"});
                     case 13 -> gotoPlace(p, "arena");
                     case 14 -> { if (!p.performCommand("sethome camp")) p.sendMessage(ChatColor.RED + "保存位置失败。"); }
                     case 15 -> gotoPlace(p, "personal:camp");
+                    case 16 -> openMenu(p, "expeditions");
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
                 }
+            } else if (page.equals("expeditions")) {
+                if (slot == 22) openMenu(p, "places");
+                else if (slot >= 10 && slot < 10 + DungeonExpeditions.SITES.size())
+                    guild.command(p, new String[]{"guild", "travel", DungeonExpeditions.SITES.get(slot - 10).id()});
             } else if (page.equals("players")) {
                 if (slot == 0) openMenu(p, "skills");
                 else if (slot == 4) trackNearest(p);
@@ -1508,7 +1516,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else if (slot == 31) openMenu(p, "skills");
                 else {
                     guild.click(p, slot);
-                    if (slot == 0 || (slot >= 10 && slot <= 21) || slot == 27 || slot == 28)
+                    if (slot == 0 || (slot >= 10 && slot < 10 + GuildManager.contractCount()) || slot == 27 || slot == 28)
                         openMenu(p, "guild");
                 }
             } else if (page.equals("creation")) {

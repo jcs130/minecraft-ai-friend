@@ -621,14 +621,23 @@ final class DungeonManager implements Listener {
         return result;
     }
     boolean queueGuildRewards(UUID id, int emeralds, Material bonus, int bonusCount) {
-        if (emeralds <= 0 || bonusCount <= 0 || !List.of(REWARD_TYPES).contains(bonus)) return false;
+        if (emeralds <= 0 || bonus == null || !bonus.isItem() || bonusCount <= 0 || bonusCount > 64) return false;
         long emeraldTotal = (long) pending(id, Material.EMERALD) + emeralds;
-        long bonusTotal = (long) pending(id, bonus) + bonusCount;
+        boolean standardBonus = List.of(REWARD_TYPES).contains(bonus);
+        long bonusTotal = standardBonus ? (long) pending(id, bonus) + bonusCount : 0;
         if (bonus == Material.EMERALD) emeraldTotal += bonusCount;
         if (emeraldTotal < 0 || bonusTotal < 0
                 || emeraldTotal > Integer.MAX_VALUE || bonusTotal > Integer.MAX_VALUE) return false;
+        List<ItemStack> extra = null;
+        if (!standardBonus) {
+            extra = bonusItems(id);
+            if (extra.size() >= MAX_BONUS_QUEUE) return false;
+            extra.add(new ItemStack(bonus, bonusCount));
+        }
         plugin.getConfig().set(rewardPath(id, Material.EMERALD), (int) emeraldTotal);
-        if (bonus != Material.EMERALD) plugin.getConfig().set(rewardPath(id, bonus), (int) bonusTotal);
+        if (standardBonus && bonus != Material.EMERALD)
+            plugin.getConfig().set(rewardPath(id, bonus), (int) bonusTotal);
+        if (extra != null) plugin.getConfig().set(BONUS_ITEMS + id, extra);
         return true;
     }
     private int pending(UUID id, Material material) {

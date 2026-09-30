@@ -12,11 +12,21 @@ import org.bukkit.entity.Player;
 
 /** Safe approach points for existing vanilla-protocol worldgen dungeons. */
 final class DungeonExpeditions {
-    record Site(String id, String name, int x, int z, int approachX, int approachZ) { }
+    record Site(String id, String name, Material icon, String hint,
+            int x, int z, int approachX, int approachZ) { }
     static final List<Site> SITES = List.of(
-            new Site("undead_crypt", "亡灵墓穴", -416, 672, -344, 680),
-            new Site("creeping_crypt", "蔓生墓穴", 1168, 224, 1096, 232),
-            new Site("desert_ruins", "沙漠遗迹", -3296, -2096, -3224, -2088));
+            new Site("undead_crypt", "亡灵墓穴", Material.BONE, "古墓探险",
+                    -416, 672, -344, 680),
+            new Site("creeping_crypt", "蔓生墓穴", Material.MOSS_BLOCK, "植被迷宫",
+                    1168, 224, 1096, 232),
+            new Site("desert_ruins", "沙漠遗迹", Material.CHISELED_SANDSTONE, "沙海寻宝",
+                    -3296, -2096, -3224, -2088),
+            new Site("illager_camp", "掠夺者营地", Material.CROSSBOW, "战斗挑战；推荐结伴",
+                    -1072, -1120, -1000, -1120),
+            new Site("ruin_town", "失落古镇", Material.MAP, "废墟寻宝",
+                    -1248, -1392, -1176, -1404),
+            new Site("bunker", "地下堡垒", Material.STONE_BRICKS, "地下探索；推荐带火把",
+                    -1184, -1552, -1112, -1552));
 
     private final AgentFriendPlugin plugin;
 
@@ -37,7 +47,8 @@ final class DungeonExpeditions {
     void travel(Player player, String id) {
         Site site = site(id);
         if (site == null) {
-            player.sendMessage(ChatColor.RED + "没有这个遗迹；可选 undead_crypt、creeping_crypt、desert_ruins。");
+            player.sendMessage(ChatColor.RED + "没有这个遗迹；可选 "
+                    + String.join("、", SITES.stream().map(Site::id).toList()) + "。");
             return;
         }
         if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {

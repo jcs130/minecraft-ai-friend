@@ -13,6 +13,12 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 `Status` 应同时显示 Paper、Agent 网关、Geyser Pong、Goddess 桥、CortiEyeMirror、最近 E 盘快照及 F 盘镜像。Pong 和状态包不是基岩真机、Agent 具体动作或直播画面的端到端验收。
 
+## 0.3.27 遗迹远征发布（2026-09-30）
+
+此版只替换 AgentFriend JAR，不重建世界。新增三处由当前种子定位并在隔离世界实地查看的自然结构，六处遗迹集中在传送罗盘的“遗迹远征”页；15 张公会委托可从原版菜单和 `/mycli` 使用。调查委托只要求抵达中心附近，原生怪物、箱子与探险风险依然属于自然结构。个人奖励箱中排可接收盾牌、铁剑等非固定物品；任务和奖励数据仍保存在 `plugins/AgentFriend/config.yml`，必须随世界一同备份。源码测试为 `plugins/AgentFriend/expedition-expansion-stage.mjs` 和 `dungeon-expeditions-stage.mjs`，隔离服验证了三处新落点与旧三处、任务交付、声望、装备奖励和菜单。回退只需无人游玩时停服，禁用 0.3.27 并重新启用 0.3.26；新增的公会任务记录不应被旧版本破坏，回退前保留完整备份。
+
+2026-09-30 10:12 在仅服务账号在线且无活动试炼时，现有每日备份任务先正常停服并生成 E/F 双盘 `20260930-101252` 快照，两处 `.complete` 均存在。备份完成、启动前一次性启用 `AgentFriend-0.3.27.jar`（193184 字节；SHA256 `af462398ad3c327730910ab05c7db358c65b68c2e767c1d5a0ac9c1713601770`）。重启后 RCON 确认 0.3.27，Agent LAN 白名单探针、基岩 UDP Pong、Paper 状态和女神桥通过；基岩真机与直播画面仍待玩家体验。此前从交互终端直接运行备份时，Windows 不向该终端暴露 Session 0 网关进程的路径/命令行，维护脚本因此拒绝停止未知进程；现有 `Afu-MC-DailyBackup` 计划任务有可验证的运行身份，备份与发布均由它完成。`manage-server.ps1` 新增一次性 `agentfriend-deploy.pending.json` 协议：备份完成后校验候选和旧 JAR 的 SHA256，只保留一个启用版本；失败则恢复旧版本并将标记改为 `.failed`，普通备份没有标记时行为不变。标记不进入备份。直接执行失败留下 `auto-start.paused`，本次自动清理动作被环境审批拦截；服务正常运行，但 Watchdog 需在核查后恢复自动启动。
+
 ## 0.3.26 村民交易发布（2026-09-30）
 
 发布范围只有 AgentFriend JAR，不替换世界或第三方插件。新代码给已加载的成年无职业/游手好闲村民分配原版职业，保留有职业者的原版商品及等级；原生 MerchantOffer 调整交易价格和次数，避免 Bukkit 重新编码食物组件导致 Mineflayer 1.20.6 无法解析。各职业新解锁的商品也调整。分配职业和已调整的交易数记录在村民实体持久数据中，必须和世界一起备份。`/mycli admin villagers` 只统计当前已加载的成年村民，适合 RCON 运维检查；远处未加载区块会在加载时处理。
@@ -23,7 +29,7 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 
 ## 变更顺序
 
-1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.26 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是历史源码。
+1. 对照 [安装内容锁](../manifests/installed-content.lock.json) 和当前服务端文件，确认要修改的源码、配置或第三方版本。AgentFriend 0.3.27 与 CortiEyeMirror 0.1.7 已在正式服运行；0.3.2 是历史源码。
 2. 在独立服务端目录及端口构建、测试插件和跨端行为。自研 JAR 不提交 Git；第三方 JAR/数据包从原发布处取得并按哈希核验。
 3. 检查没有真人玩家在线，执行 `manage-server.ps1 Backup`。备份会在只有服务账号在线时正常停服约半分钟，写 `.complete` 后重启，再复制到独立 F 盘。若 F 盘镜像失败，可在不重启游戏服的情况下单独执行 `Mirror`。
 4. 停服、替换单一启用版本的插件/配置、正常启动；用 Java、基岩、Agent、CortiEye 四条路径复测。不要用 `/reload` 加载新的插件代码。
