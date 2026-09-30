@@ -532,9 +532,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             sender.sendMessage("玩家子命令需要玩家身份；控制台可用 /mycli admin surveydeep|builddeep|builddungeon|surveyguild|buildguild|surveyroad|buildroad。");
             return true;
         }
-        if (args.length == 0 || args[0].equalsIgnoreCase("help")) { help(player); return true; }
+        if (args.length == 0) { help(player); return true; }
+        if (args[0].equalsIgnoreCase("help")) {
+            if (args.length == 1) help(player);
+            else AgentCliCatalog.explain(player, args, 1);
+            return true;
+        }
         String action = args[0].toLowerCase(Locale.ROOT);
         switch (action) {
+            case "list" -> AgentCliCatalog.list(player, args);
+            case "explain" -> AgentCliCatalog.explain(player, args, 1);
             case "menu", "compassmenu", "罗盘" -> openMenu(player, "skills");
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
@@ -556,7 +563,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "guild", "公会", "工会" -> guild.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
-            default -> player.sendMessage(ChatColor.RED + "未知子命令。输入 /mycli help。不会猜测并执行其他命令。");
+            default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
         }
         return true;
     }
@@ -567,6 +574,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void help(Player p) {
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
+        p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("/mycli spells  查看技能；/mycli cast selfheal|starbolt|frostnova|flamewave|prospect  咏唱");
         p.sendMessage("/mycli protect break|place <x> <y> <z>  查询附近方块能否操作；Agent 挖掘前先查");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
@@ -2101,7 +2109,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return List.of("help", "guide", "spells", "mastery", "status", "protect", "cast", "focus", "imprint", "compass", "book", "kit", "menu", "goto", "waypoint", "locate", "arena", "guild", "goddess");
+        if (args.length == 1) return AgentCliCatalog.roots();
+        if (args.length == 2 && args[0].equalsIgnoreCase("list")) return AgentCliCatalog.filters();
+        if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
+            return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");

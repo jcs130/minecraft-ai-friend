@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.37 `/mycli` Agent 自发现接口
+
+新增 `/mycli list [分类|命令|all] [页码]`、`/mycli explain <ID>` 和 `/mycli help <ID>`。目录按七项分页，使用稳定的点号 ID（如 `cast.prospect`、`arena.stash.take`）；回执是仅发给本人系统聊天的 `MC_CLI_LIST`、`MC_CLI_ITEM`、`MC_CLI_DETAIL` 或 `MC_CLI_ERROR` 加单行 JSON。解释命令只读，不代替执行；不暴露控制台 `admin` 子命令。现有施法、箱子、任务和手柄菜单语法保持兼容。完整字段、使用步骤与客户端接收注意事项见 [Agent CLI 指南](../../docs/MYCLI_AGENT_CLI.md)。隔离服 `mycli-catalog-stage.mjs` 用 Mineflayer 1.20.6 验证 21 项顶层命令、18 项施法命令的翻页、解释和无副作用。
+
 ## 0.3.36 法术分类与熟练度
 
 现有法术按战斗、探索、采集、守护恢复、位移、创造观赏整理；八项 AgentFriend 原生法术率先提供个人熟练度。成功施放累计 8/24 次到 2/3 级，失败或无目标不计数。星芒箭、霜环、焰浪提升有上限的伤害/控制，跃空、飞行、守护傀儡、探敌和探矿提升持续或探测效果；AuraSkills 战斗等级最多再给战斗法术 +2 伤害，挖矿等级继续决定探矿半径。生活法术、女神学习技能和公会等级仍沿用各自原规则，未虚报它们已经有熟练度。完整数值和扩展边界见 [技能体系](../../docs/SKILL_SYSTEM.md)。

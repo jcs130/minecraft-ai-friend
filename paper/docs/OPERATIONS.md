@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.37 Agent CLI 自发现（2026-10-01 已正式发布）
+
+玩家命令新增 `/mycli list [分类|命令|all] [页码]`、`/mycli explain <ID>`，以及 `/mycli help <ID>` 别名。每页最多七项，`MC_CLI_LIST`、`MC_CLI_ITEM`、`MC_CLI_DETAIL`、`MC_CLI_ERROR` 是只发给发令玩家的系统聊天 JSON；`list` 和 `explain` 不施法、不传送、不操作物品。目录不包含控制台 `admin` 命令。Agent 用法与字段见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。现有手柄菜单和 Java、基岩、Mineflayer 原版命令兼容。
+
+隔离服 25566 `mycli-catalog-stage.mjs` 实测 21 项顶层命令、18 项 `cast` 子命令的分页、点号/空格两种解释方式、未知 ID/坏页码错误码，以及查询前后生命、位置、背包一致。正式服发布前只有 CortiLan、CortiEye、Goddess 服务账号在线，没有活动试炼，自动恢复未暂停。S4U `Afu-MC-DailyBackup` 正常停服，E/F 双盘完整快照 `20261001-021354` 均有 `.complete`，任务结果 0，正式服仅启用 `AgentFriend-0.3.37.jar`，SHA256 `BC861D64563C1E036A89DA8600D326BF864F1CEE3594648BFA6E82AC410436DF`。正式服临时白名单 Mineflayer 1.20.6 玩家再次通过同一契约测试，已移出白名单；Java、LAN 网关、Geyser 基岩 Pong、Goddess 桥正常。CortiEyeMirror 已载入，但 02:15 远端 CortiEye 客户端仍未重连，`camera=offline`；附身状态待恢复后补记。基岩真人聊天渲染也待手柄玩家实际验证；Pong 仅证明 UDP 入口。
+
 ## 0.3.36 法术分类与熟练度（2026-10-01 已正式发布）
 
 八项 AgentFriend 法术增加按 UUID 保存的个人熟练度：成功施放 8/24 次到 2/3 级；战斗伤害及控制时长、探索持续/感知范围、探矿标记时长有界成长。AuraSkills 战斗等级最多给战斗法术 +2 伤害，既有统一魔力、挖矿半径、公会声望、女神学习和 MagicSpells 生活法术保持独立。罗盘「技能成长」是 27 格原版菜单，命格书有短引导；Agent 用 `/mycli mastery` 取 `MC_MASTERY`，通用 `mcviewer:state` 仍只发本人能力等级。规则和未升级的类别见 [技能体系](SKILL_SYSTEM.md)。玩家进度在 `plugins/AgentFriend/spell-mastery.yml`，旧 JAR 回退时须保留这份文件。
