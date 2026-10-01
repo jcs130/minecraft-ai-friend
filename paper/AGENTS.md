@@ -1,8 +1,8 @@
 # 千灯纪 Paper 分支开发说明
 
-本目录是 `qiandengji-paper-1.20.6` 分支的现役服务器源码入口。仓库根目录的 1.21.1 / NeoForge 文档是历史设计参考；不要将旧版 `world/` 的 JAR、配置或存档直接部署到 Paper 1.20.6。
+本目录是 `qiandengji-personal-stash` 分支的现役服务器源码入口，继承自 `qiandengji-paper-1.20.6`。仓库根目录的 1.21.1 / NeoForge 文档是历史设计参考；不要将旧版 `world/` 的 JAR、配置或存档直接部署到 Paper 1.20.6。
 
-- 此版本后续提交和推送继续使用 `qiandengji-paper-1.20.6`，除非用户明确改变分支策略；不要自动合入或推送 `main`。
+- 此版本后续提交和推送继续使用 `qiandengji-personal-stash`，除非用户明确改变分支策略；不要自动合入或推送 `main`。
 - 运行目录是 `E:\MC\server`。这里的源码/配置快照不会自动影响运行实例；发布须按 `docs/OPERATIONS.md` 的备份、隔离验证、停服、替换、复测顺序进行。
 - 不提交世界存档、玩家数据/白名单、`server.properties` 实值、RCON/代理/模型凭据、Floodgate 私钥、运行日志、备份或第三方 JAR/ZIP。版本和来源只进入清单。
 - AgentFriend `0.3.48` 已在正式服运行；CortiEyeMirror `0.1.7` 对应当前生产 JAR。此前 AgentFriend `0.3.2` 保存在 `released/0.3.2/`。改动须区分构建、隔离测试和正式服验证，并在每次发布后更新此处版本号。

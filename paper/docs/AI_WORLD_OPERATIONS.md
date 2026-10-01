@@ -1,6 +1,6 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
-本文是 `qiandengji-paper-1.20.6` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
+本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
 
 ## 先认清现状
 
@@ -92,7 +92,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 ## 发布检查与故障处理
 
-1. 在 `qiandengji-paper-1.20.6` 分支修改，记录内容 ID 和回退点；构建 AgentFriend 后用对应 `*-stage.mjs` 脚本验证。技能优先跑施法/界面/状态同步，任务跑 `guild-stage.mjs`，副本跑 `dungeon-flow-stage.mjs`、断线/重启/奖励持久化和新内容的专项脚本。
+1. 在 `qiandengji-personal-stash` 分支修改，记录内容 ID 和回退点；构建 AgentFriend 后用对应 `*-stage.mjs` 脚本验证。技能优先跑施法/界面/状态同步，任务跑 `guild-stage.mjs`，副本跑 `dungeon-flow-stage.mjs`、断线/重启/奖励持久化和新内容的专项脚本。
 2. 在隔离服用 Mineflayer 完成真实登录和至少一次完整操作；Java、基岩手柄、CortiEye 画面涉及的菜单、物品、标题、粒子与音效要做相应实机验收。自动状态包与基岩 Pong 只算入口探针。
 3. 发布前读 `Status`、在线名单和活动挑战，确认无人类玩家在场；完成 `manage-server.ps1 Backup`，核对 E/F 两处 `.complete`。有建筑施工时留施工前和施工后两份完整快照。
 4. 按 [维护与发布](OPERATIONS.md) 只启用一个版本的插件，正常停启；不使用 `/reload`。更新配置和 JAR 时核对版本与 SHA256，复查 Java、Agent 网关、基岩、Goddess、CortiEye、Watchdog 与 `mspt`。
