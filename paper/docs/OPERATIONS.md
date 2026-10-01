@@ -6,7 +6,7 @@ AgentFriend 新增 `mcagent:state`：每名在线玩家从自己的 AuraSkills U
 
 隔离服最终 0.3.52 JAR 已验证两个独立 Mineflayer 账号：一方不注册频道、另一方注册；两人各收自己的初始值，施法只更新本人，自然恢复间隔至少一秒，重生重发；稳定状态不重发，聊天里无状态 JSON。测试脚本 `paper/probe/agent-state-stage.mjs`，结果 PASS。
 
-正式服发布前只有 Goddess、CortiLan、CortiEye 服务账号在线，无活动试炼。`Afu-MC-DailyBackup` 正常停服并生成 E/F 双盘快照 `20261001-222317`，两处 `.complete`，任务结果 0；唯一启用 `AgentFriend-0.3.52.jar`，SHA256 `31AEE5FEF8636A772519F7869E5787212900DED583EEA8F8E959395563B9C504`。重启后 Paper 1.20.6、Java 本机及 LAN 网关、Geyser Pong、Goddess 桥、Watchdog 正常，自动启动未暂停。正式服两个临时 Mineflayer 账号再次验证登录、施法、自然恢复、跨账号隔离和无聊天副本，结果 PASS；重生验证在隔离服完成。22:24 CortiEyeMirror 插件已加载，但远端 CortiEye 尚未回连，真实镜头需其上线后检查；基岩真机界面本轮未复测。运行机维护记录同步在 `E:\MC\ops\MAINTENANCE.md`。
+正式服发布前只有 Goddess、CortiLan、CortiEye 服务账号在线，无活动试炼。`Afu-MC-DailyBackup` 正常停服并生成 E/F 双盘快照 `20261001-222317`，两处 `.complete`，任务结果 0；唯一启用 `AgentFriend-0.3.52.jar`，SHA256 `31AEE5FEF8636A772519F7869E5787212900DED583EEA8F8E959395563B9C504`。重启后 Paper 1.20.6、Java 本机及 LAN 网关、Geyser Pong、Goddess 桥、Watchdog 正常，自动启动未暂停。正式服两个临时 Mineflayer 账号再次验证登录、施法、自然恢复、跨账号隔离和无聊天副本，结果 PASS；重生验证在隔离服完成。22:30 远端 CortiEye 回连，`cortieye` 命令回 `camera=online attached=true cameraNightVision=true`，镜头附身恢复；基岩真机界面本轮未复测。运行机维护记录同步在 `E:\MC\ops\MAINTENANCE.md`。
 
 ## 0.3.51 星芒箭命中目标显示实体类型（2026-10-01）
 
