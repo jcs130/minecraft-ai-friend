@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.54 试炼难度、怪物攻击与重复装备整理
+
+入口支持普通、冒险、末日三档，手柄在技能罗盘「传送地点」选择，Agent 用 `/mycli arena difficulty`；发起者的选择固定整场。僵尸、尸壳、溺尸持近战武器，所有试炼怪物对参赛者的近战/投射物伤害按档位提高；掩体后完全静止的怪物会在可站立位置恢复。高档提高稀有奖励概率、装备附魔和个人绿宝石余额，每人每游戏日每层仍限领一次。控制台可预览/执行 `mycli admin prunetrial <玩家> [apply]` 和 `prunetrialbag`，只回收重复试炼装备，保留快捷栏、穿戴栏、独有物与其他物资。详细规则和测试见 [试炼难度与怪物行为](../../docs/ARENA_DIFFICULTY.md)。
+
 ## 0.3.46 试炼状态区分本人和全服
 
 `/mycli status` 与 `/mycli arena status` 都先显示“本人试炼：参赛中/未参赛”，再显示“全服试炼”的当前楼层或待命。`MC_DUNGEON status` 增加 `participant`、`selfState`、`globalActive`、`globalState`、`globalFloor` 和 `maxFloor`；入口坐标标记 `scope=public`，活动层坐标标记 `scope=global`，每行都带本人 `participant`。Agent 只有在 `participant=true` 时才把全服楼层当成本人挑战进度。仅参赛者获得本轮奖励；未参赛账号仍可查询公共入口及全服进度。

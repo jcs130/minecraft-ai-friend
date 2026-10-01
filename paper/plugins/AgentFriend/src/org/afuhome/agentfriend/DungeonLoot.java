@@ -76,13 +76,31 @@ final class DungeonLoot {
         return new Bonus(item, true, "星辉钻石套装 " + (slot + 1) + "/4 · 阶 " + (tier + 1));
     }
 
-    static Bonus roll(int floor, int floorsWithoutRare) {
+    static Bonus roll(int floor, int floorsWithoutRare, int difficulty) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        boolean rare = floorsWithoutRare >= 4 || random.nextInt(100) < 12 + 2 * floor;
+        boolean rare = floorsWithoutRare >= Math.max(2, 4 - difficulty)
+                || random.nextInt(100) < Math.min(75, 12 + 2 * floor + difficulty * 14);
         if (floor <= 3) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(6));
-        if (rare) return rare(floor, random.nextInt(10));
+        if (rare) return improve(rare(floor, random.nextInt(10)), difficulty);
         if (random.nextInt(100) < 55) return uncommon(random.nextInt(9));
         return common(random.nextInt(6));
+    }
+
+    private static Bonus improve(Bonus bonus, int difficulty) {
+        if (difficulty <= 0) return bonus;
+        ItemStack item = bonus.item().clone();
+        if (item.getType().getMaxDurability() == 0 || !item.hasItemMeta()) return bonus;
+        ItemMeta meta = item.getItemMeta();
+        for (var enchant : meta.getEnchants().entrySet()) {
+            int level = Math.min(enchant.getKey().getMaxLevel(), enchant.getValue() + difficulty);
+            if (level > enchant.getValue()) {
+                meta.addEnchant(enchant.getKey(), level, false);
+                item.setItemMeta(meta);
+                return new Bonus(item, true, bonus.label() + " · "
+                        + (difficulty == 1 ? "冒险" : "末日") + "强化");
+            }
+        }
+        return bonus;
     }
 
     private static Bonus earlyRare(int pick) {

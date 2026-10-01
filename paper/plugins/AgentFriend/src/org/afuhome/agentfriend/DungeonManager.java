@@ -99,6 +99,7 @@ final class DungeonManager implements Listener {
     private static final String BOSS_CLEARS = "dungeon-boss-clears.";
     private static final String FINAL_CLEARS = "dungeon-final-clears.";
     private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
+    private static final String DIFFICULTY_CHOICE = "dungeon-difficulty.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 128;
     private static final Material[] REWARD_TYPES = {
@@ -108,6 +109,24 @@ final class DungeonManager implements Listener {
     private record Loot(Material material, int amount) { }
     private record Theme(String name, Material floor, Material wall, Material pillar,
                          EntityType[] mobs, Loot[] rewards) { }
+    private enum Difficulty {
+        NORMAL("normal", "普通", 1.0, 1.0, 0, 0, 0),
+        ADVENTURE("adventure", "冒险", 1.5, 1.25, 0.025, 2, 2),
+        APOCALYPSE("apocalypse", "末日", 2.2, 1.6, 0.05, 4, 5);
+        final String id, label;
+        final double health, damage, speed, armor;
+        final int walletBonus;
+        Difficulty(String id, String label, double health, double damage,
+                double speed, double armor, int walletBonus) {
+            this.id = id; this.label = label; this.health = health;
+            this.damage = damage; this.speed = speed; this.armor = armor;
+            this.walletBonus = walletBonus;
+        }
+        static Difficulty parse(String raw) {
+            for (Difficulty value : values()) if (value.id.equalsIgnoreCase(raw)) return value;
+            return null;
+        }
+    }
     private static final List<Theme> THEMES = List.of(
             new Theme("苔藓洞穴", Material.MOSS_BLOCK, Material.MOSSY_STONE_BRICKS, Material.OAK_LOG,
                     new EntityType[]{EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.ZOMBIE},
@@ -175,6 +194,9 @@ final class DungeonManager implements Listener {
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<Inventory, UUID> stashMenus = new IdentityHashMap<>();
     private final Map<UUID, String> lastMobDamage = new HashMap<>();
+    private final Map<UUID, Location> lastMobPosition = new HashMap<>();
+    private final Map<UUID, Long> lastMobMovedAt = new HashMap<>();
+    private final Map<UUID, Long> lastMobAttackAt = new HashMap<>();
     private final ArenaEconomy economy;
     private boolean built;
     private boolean expanded;
@@ -183,6 +205,7 @@ final class DungeonManager implements Listener {
     private boolean spawned;
     private boolean cleared;
     private int floor;
+    private Difficulty difficulty = Difficulty.NORMAL;
     private long runStartedAt;
     private long floorStartedAt;
     private long spawnAt;
@@ -247,6 +270,7 @@ final class DungeonManager implements Listener {
     private void persistRun() {
         if (!active) return;
         plugin.getConfig().set(RUN_STATE + ".floor", floor);
+        plugin.getConfig().set(RUN_STATE + ".difficulty", difficulty.id);
         plugin.getConfig().set(RUN_STATE + ".participants",
                 participants.stream().map(UUID::toString).toList());
         plugin.getConfig().set(RUN_STATE + ".run-started-at", runStartedAt);
@@ -285,6 +309,8 @@ final class DungeonManager implements Listener {
         participants.clear();
         participants.addAll(savedIds);
         floor = savedFloor;
+        Difficulty savedDifficulty = Difficulty.parse(plugin.getConfig().getString(RUN_STATE + ".difficulty", "normal"));
+        difficulty = savedDifficulty == null ? Difficulty.NORMAL : savedDifficulty;
         runStartedAt = plugin.getConfig().getLong(RUN_STATE + ".run-started-at", now);
         floorStartedAt = plugin.getConfig().getLong(RUN_STATE + ".floor-started-at", now);
         advanceAt = plugin.getConfig().getLong(RUN_STATE + ".advance-at", 0);
@@ -405,13 +431,15 @@ final class DungeonManager implements Listener {
                             : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
                                 + " 秒后自动下楼" : spawned ? "，战斗中" : "，准备刷怪");
                 player.sendMessage(ChatColor.GOLD + "本人试炼：" + (participant ? "参赛中" : "未参赛")
-                        + "；全服试炼：" + globalDescription + "。"
+                        + "；全服试炼：" + globalDescription + (active ? "〔" + difficulty.label + "〕" : "") + "。"
                         + (participant ? "奖励存进你的个人箱子，不自动进入背包。" : "只有参赛者获得本轮奖励。")
                         + (!active ? "当前没有进行中的试炼，无需继续搜怪。"
                             : participant && spawned && !cleared ? "本层剩余 " + remaining + " 只怪物。" : ""));
                 player.sendMessage("MC_DUNGEON status participant=" + participant
                         + " selfState=" + (participant ? "participating" : "not_participating")
                         + " globalActive=" + active + " globalState=" + globalState
+                        + " globalDifficulty=" + (active ? difficulty.id : "none")
+                        + " selectedDifficulty=" + chosenDifficulty(player).id
                         + " globalFloor=" + (active ? floor : 0) + " maxFloor=" + maxFloor()
                         + " selfFloor=" + selfFloor + " remainingMobs=" + remaining
                         + " trackedMobs=" + (active && spawned && !cleared ? mobs.size() : 0)
@@ -430,6 +458,7 @@ final class DungeonManager implements Listener {
                         + " chestZ=" + chestZ(floor) + " scope=global participant=" + participant);
             }
             case "start" -> start(player);
+            case "difficulty", "难度" -> chooseDifficulty(player, args);
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
             case "shop", "商人" -> {
@@ -444,8 +473,36 @@ final class DungeonManager implements Listener {
             case "rewards", "reward", "箱子" -> rewardCommand(player, args);
             case "stash", "储物" -> stashCommand(player, args);
             case "leave" -> leave(player);
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|rest|next|layout|shop|recycle|wallet|loot|status|rewards|stash|leave");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena difficulty normal|adventure|apocalypse；arena start|rest|status|rewards|stash|leave");
         }
+    }
+
+    private Difficulty chosenDifficulty(Player player) {
+        Difficulty choice = Difficulty.parse(plugin.getConfig().getString(DIFFICULTY_CHOICE + player.getUniqueId(), "normal"));
+        return choice == null ? Difficulty.NORMAL : choice;
+    }
+
+    private void chooseDifficulty(Player player, String[] args) {
+        if (args.length == 2 || args.length == 3 && args[2].equalsIgnoreCase("list")) {
+            player.sendMessage(ChatColor.GOLD + "试炼难度：普通（适合首次挑战）、冒险（生命 ×1.5 / 伤害 ×1.25）、末日（生命 ×2.2 / 伤害 ×1.6）。"
+                    + "更高难度提高稀有装备概率与个人绿宝石余额，仍每游戏日每层只领一次。开场前由按钮发起者决定全队难度。"
+                    + "当前选择：" + chosenDifficulty(player).label);
+            player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + chosenDifficulty(player).id
+                    + " available=normal,adventure,apocalypse active=" + active
+                    + " runDifficulty=" + (active ? difficulty.id : "none")
+                    + " dailyLimitPerFloor=1");
+            return;
+        }
+        Difficulty choice = args.length == 3 ? Difficulty.parse(args[2]) : null;
+        if (choice == null) {
+            player.sendMessage(ChatColor.RED + "用法：/mycli arena difficulty normal|adventure|apocalypse");
+            return;
+        }
+        plugin.getConfig().set(DIFFICULTY_CHOICE + player.getUniqueId(), choice.id);
+        plugin.saveConfig();
+        player.sendMessage(ChatColor.GREEN + "已选择" + choice.label + "难度；你发起下一场试炼时全队采用该难度。");
+        player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + choice.id + " changed=true active=" + active
+                + " runDifficulty=" + (active ? difficulty.id : "none"));
     }
 
     boolean handleInteract(PlayerInteractEvent event) {
@@ -496,13 +553,14 @@ final class DungeonManager implements Listener {
         List<Player> group = groupNearLobbyButton(lobbyButton());
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
+        difficulty = chosenDifficulty(starter);
         if (enterFloor(1, group) == 0) {
             starter.sendMessage(ChatColor.RED + "地下城入口传送失败，试炼未启动。"); return;
         }
         active = true;
         runStartedAt = now;
         persistRun();
-        announce(ChatColor.GOLD + "" + maxFloor() + " 层试炼开始！入口按钮附近 " + participants.size()
+        announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！入口按钮附近 " + participants.size()
                 + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
     }
 
@@ -523,13 +581,14 @@ final class DungeonManager implements Listener {
         List<Player> group = nearLobbyButton(starter, lobbyButton())
                 ? groupNearLobbyButton(lobbyButton()) : List.of(starter);
         participants.clear(); mobs.clear();
+        difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {
             starter.sendMessage(ChatColor.RED + "驿站传送失败，挑战未启动。"); return;
         }
         active = true;
         runStartedAt = now;
         persistRun();
-        announce(ChatColor.GOLD + "已从检查点直达第七层驿站；队伍可补给，再继续深入。");
+        announce(ChatColor.GOLD + "已从检查点直达第七层驿站〔" + difficulty.label + "〕；队伍可补给，再继续深入。");
     }
 
     private int enterFloor(int number, List<Player> group) {
@@ -672,6 +731,9 @@ final class DungeonManager implements Listener {
         mobs.removeIf(id -> {
             Entity e = Bukkit.getEntity(id);
             if (!(e instanceof LivingEntity living) || living.isDead() || !e.isValid()) {
+                lastMobPosition.remove(id);
+                lastMobMovedAt.remove(id);
+                lastMobAttackAt.remove(id);
                 plugin.getLogger().info("Dungeon mob removed from count: floor=" + floor
                         + ", id=" + id + ", state=" + (e == null ? "missing" : e.isDead() ? "dead" : "invalid")
                         + ", lastDamage=" + lastMobDamage.getOrDefault(id, "none"));
@@ -684,9 +746,10 @@ final class DungeonManager implements Listener {
                         + ", type=" + e.getType() + ", at=" + LocationOutput.fields(before)
                         + ", rescued=" + rescued);
             }
-            if (living instanceof Mob mob && !validParticipantTarget(mob.getTarget())) {
+            if (living instanceof Mob mob) {
                 Player nearest = nearestParticipant(mob.getLocation());
-                if (nearest != null) mob.setTarget(nearest);
+                if (nearest != null && !validParticipantTarget(mob.getTarget())) mob.setTarget(nearest);
+                recoverStuckMob(mob, nearest, now);
             }
             return false;
         });
@@ -787,6 +850,9 @@ final class DungeonManager implements Listener {
 
     private void spawn() {
         spawned = true;
+        lastMobPosition.clear();
+        lastMobMovedAt.clear();
+        lastMobAttackAt.clear();
         Theme theme = THEMES.get(floor - 1);
         int[][] spots = floor == BOSS_FLOOR
                 ? new int[][]{{0,10},{-9,-7},{9,-7},{-9,7},{9,7}}
@@ -815,10 +881,15 @@ final class DungeonManager implements Listener {
                         case SKELETON, STRAY -> Material.BOW;
                         case PILLAGER -> Material.CROSSBOW;
                         case VINDICATOR -> Material.IRON_AXE;
+                        case ZOMBIE -> i % 2 == 0 ? Material.STONE_SWORD : Material.STONE_AXE;
+                        case HUSK -> Material.IRON_SHOVEL;
+                        case DROWNED -> Material.STONE_SWORD;
                         default -> Material.AIR;
                     };
-                    if (mob.getEquipment() != null)
+                    if (mob.getEquipment() != null) {
                         mob.getEquipment().setItemInMainHand(weapon == Material.AIR ? null : new ItemStack(weapon));
+                        mob.getEquipment().setItemInMainHandDropChance(0);
+                    }
                     Player nearest = nearestParticipant(mob.getLocation());
                     if (nearest != null) mob.setTarget(nearest);
                     if (floor >= 11 && !(mob instanceof Ravager) && i < 2) {
@@ -852,12 +923,72 @@ final class DungeonManager implements Listener {
                     if (player != null && inFloor(player.getLocation(), floor)) bossBar.addPlayer(player);
                 }
             }
+            if (e instanceof Mob mob) applyDifficulty(mob);
             mobs.add(e.getUniqueId());
+            lastMobPosition.put(e.getUniqueId(), e.getLocation().clone());
+            lastMobMovedAt.put(e.getUniqueId(), System.currentTimeMillis());
             plugin.getLogger().info("Dungeon mob spawned: floor=" + floor + ", id=" + e.getUniqueId()
                     + ", type=" + e.getType() + ", at=" + LocationOutput.fields(e.getLocation()));
         }
-        announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层：" + theme.name()
+        announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层〔" + difficulty.label + "〕：" + theme.name()
                 + "，" + theme.mobs().length + " 只怪物！");
+    }
+
+    private void applyDifficulty(Mob mob) {
+        if (difficulty == Difficulty.NORMAL) return;
+        if (mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
+            double max = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue() * difficulty.health;
+            mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(max);
+            mob.setHealth(max);
+        }
+        if (mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED) != null)
+            mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(
+                    mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).getBaseValue() + difficulty.speed);
+        if (mob.getAttribute(Attribute.GENERIC_ARMOR) != null)
+            mob.getAttribute(Attribute.GENERIC_ARMOR).setBaseValue(
+                    mob.getAttribute(Attribute.GENERIC_ARMOR).getBaseValue() + difficulty.armor);
+    }
+
+    private void recoverStuckMob(Mob mob, Player target, long now) {
+        if (target == null) return;
+        UUID id = mob.getUniqueId();
+        Location current = mob.getLocation();
+        Location prior = lastMobPosition.put(id, current.clone());
+        if (prior == null || prior.getWorld() != current.getWorld() || prior.distanceSquared(current) > 0.25) {
+            lastMobMovedAt.put(id, now);
+            return;
+        }
+        if (current.distanceSquared(target.getLocation()) <= 36
+                || now - lastMobAttackAt.getOrDefault(id, 0L) < 12_000
+                || (mob.hasLineOfSight(target) && switch (mob.getType()) {
+                    case SKELETON, STRAY, PILLAGER, WITCH, BLAZE -> true;
+                    default -> false;
+                })
+                || now - lastMobMovedAt.getOrDefault(id, now) < 12_000) return;
+        // Complex cover can strand a wave behind a wall. Only move a truly stationary mob
+        // to a clear floor tile several blocks from its participant; never spawn inside a player.
+        int[][] offsets = {{5,0},{-5,0},{0,5},{0,-5},{4,4},{-4,4},{4,-4},{-4,-4}};
+        for (int[] offset : offsets) {
+            Location candidate = target.getLocation().getBlock().getLocation()
+                    .add(offset[0] + 0.5, 0, offset[1] + 0.5);
+            if (!inFloor(candidate, floor)) continue;
+            Block feet = candidate.getBlock();
+            Material below = feet.getRelative(0, -1, 0).getType();
+            if (!below.isSolid() || below == Material.MAGMA_BLOCK
+                    || feet.getType() == Material.LAVA || feet.getType() == Material.FIRE
+                    || !feet.isPassable() || !feet.getRelative(0, 1, 0).isPassable()) continue;
+            if (mob.teleport(candidate)) {
+                mob.setTarget(target);
+                lastMobPosition.put(id, candidate.clone());
+                lastMobMovedAt.put(id, now);
+                plugin.getLogger().warning("Dungeon stationary mob repositioned: floor=" + floor
+                        + ", id=" + id + ", type=" + mob.getType()
+                        + ", from=" + LocationOutput.fields(current)
+                        + ", to=" + LocationOutput.fields(candidate));
+            }
+            return;
+        }
+        lastMobMovedAt.put(id, now);
     }
 
     private boolean validParticipantTarget(LivingEntity target) {
@@ -905,6 +1036,13 @@ final class DungeonManager implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTrialOutgoingDamage(EntityDamageByEntityEvent event) {
+        if (difficulty == Difficulty.NORMAL || !trialMob(attacker(event.getDamager()))
+                || !validParticipantTarget(event.getEntity() instanceof LivingEntity living ? living : null)) return;
+        event.setDamage(event.getDamage() * difficulty.damage);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTrialPotion(PotionSplashEvent event) {
         if (!trialMob(attacker(event.getPotion()))) return;
         for (LivingEntity affected : event.getAffectedEntities())
@@ -920,6 +1058,14 @@ final class DungeonManager implements Listener {
             source += actor == null ? ":unknown" : ":" + actor.getType().name();
         }
         lastMobDamage.put(event.getEntity().getUniqueId(), source);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTrialAttackAudit(EntityDamageByEntityEvent event) {
+        Entity source = attacker(event.getDamager());
+        if (trialMob(source) && event.getEntity() instanceof Player player
+                && validParticipantTarget(player))
+            lastMobAttackAt.put(source.getUniqueId(), System.currentTimeMillis());
     }
 
     void audit(CommandSender sender) {
@@ -939,6 +1085,14 @@ final class DungeonManager implements Listener {
             count++;
         }
         sender.sendMessage("MC_DUNGEON_AUDIT_END floor=" + floor + " count=" + count);
+    }
+
+    void pruneChestDuplicates(Player player, boolean apply, CommandSender sender) {
+        economy.pruneChestDuplicates(player, apply, sender);
+    }
+
+    void pruneBagDuplicates(Player player, boolean apply, CommandSender sender) {
+        economy.pruneBagDuplicates(player, apply, sender);
     }
 
     private void updateBossBar() {
@@ -1035,7 +1189,7 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + loot.amount());
             }
             DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
-                    plugin.getConfig().getInt(RARE_MISSES + id, 0));
+                    plugin.getConfig().getInt(RARE_MISSES + id, 0), difficulty.ordinal());
             List<ItemStack> queue = bonusItems(id);
             // The queue limit only converts ordinary supplies. Rare and guaranteed gear
             // must not disappear merely because a player has not emptied a full chest.
@@ -1113,6 +1267,14 @@ final class DungeonManager implements Listener {
                 p.sendMessage("MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
                         + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
             }
+            if (difficulty.walletBonus > 0) {
+                int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
+                int creditedBalance = economy.creditDifficulty(id, bonusBalance);
+                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：绿宝石余额 +" + creditedBalance
+                        + "；可在入口商人购买补给，不占背包。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
+                        + difficulty.id + " amount=" + creditedBalance);
+            }
             plugin.getConfig().set(claimPath, gameDay);
             plugin.guildFloorCleared(p, floor, partySize);
             plugin.saveConfig();
@@ -1121,7 +1283,8 @@ final class DungeonManager implements Listener {
             credited++;
         }
         plugin.saveConfig();
-        plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", credited=" + credited);
+        plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", difficulty=" + difficulty.id
+                + ", credited=" + credited);
         return credited;
     }
 
@@ -1551,6 +1714,9 @@ final class DungeonManager implements Listener {
         }
         mobs.clear();
         lastMobDamage.clear();
+        lastMobPosition.clear();
+        lastMobMovedAt.clear();
+        lastMobAttackAt.clear();
         World w = world();
         if (w == null || !built) return;
         // The arena's four chunks may have unloaded while every player was disconnected.

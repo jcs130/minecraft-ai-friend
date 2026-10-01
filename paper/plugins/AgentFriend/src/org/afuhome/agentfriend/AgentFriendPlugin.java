@@ -539,6 +539,32 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.audit(sender);
             return true;
         }
+        if ((args.length == 3 || args.length == 4) && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("prunetrial")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台整理试炼箱。"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("目标玩家必须在线。"); return true; }
+            if (args.length == 4 && !args[3].equalsIgnoreCase("apply")) {
+                sender.sendMessage("用法：mycli admin prunetrial <玩家> [apply]"); return true;
+            }
+            dungeon.pruneChestDuplicates(target, args.length == 4, sender);
+            return true;
+        }
+        if ((args.length == 3 || args.length == 4) && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("prunetrialbag")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台整理试炼装备。"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("目标玩家必须在线。"); return true; }
+            if (args.length == 4 && !args[3].equalsIgnoreCase("apply")) {
+                sender.sendMessage("用法：mycli admin prunetrialbag <玩家> [apply]"); return true;
+            }
+            dungeon.pruneBagDuplicates(target, args.length == 4, sender);
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("surveydeep") || args[1].equalsIgnoreCase("builddeep"))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -651,7 +677,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave  套装保底、个人箱与补给"
+                ? "/mycli arena difficulty normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
@@ -1720,6 +1746,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "选择目标后落在遗迹外围，仍需步行探索"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达", "工作台、商人和深层首领战"));
+            if (dungeon.isBuilt()) {
+                inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；选择后到入口按按钮"));
+                inv.setItem(19, item(Material.IRON_SWORD, "§6冒险试炼", "怪物更强；稀有战利品概率和余额提高"));
+                inv.setItem(20, item(Material.DIAMOND_SWORD, "§5末日试炼", "高强度挑战；更好的战利品和余额"));
+            }
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("expeditions")) {
             for (int i = 0; i < DungeonExpeditions.SITES.size(); i++) {
@@ -1910,6 +1941,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 15 -> gotoPlace(p, "personal:camp");
                     case 16 -> openMenu(p, "expeditions");
                     case 17 -> { if (dungeon.isExpanded()) dungeon.command(p, new String[]{"arena", "rest"}); }
+                    case 18 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "normal"}); }
+                    case 19 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); }
+                    case 20 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); }
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2247,7 +2281,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
             return dungeon != null && dungeon.isBuilt()
-                    ? List.of("start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
+                    ? List.of("difficulty", "start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
+        if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("difficulty"))
+            return List.of("normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))

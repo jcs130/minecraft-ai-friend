@@ -87,6 +87,7 @@ final class AgentCliCatalog {
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；20 秒冷却；有安全落点","传送结果与绝对坐标");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、全服试炼进度和入口/楼层绝对坐标","在线玩家","MC_DUNGEON status 的 participant/selfState 与全服状态分开");
         add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼","在入口且符合组队/冷却条件","挑战开始或拒绝原因");
+        add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [normal|adventure|apocalypse]","查看或选择下次由本人发起试炼的难度；当前场次不受影响","在线玩家；多人由按钮发起者决定","私有 MC_DUNGEON_DIFFICULTY 回执");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest","从试炼驿站继续深层挑战","满足驿站解锁与挑战条件","传送或拒绝原因");
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");
         add(specs,"arena.shop","adventure","gui","/mycli arena shop","打开入口或第七层余额商店；旧实体绿宝石交易可用 shop merchant","在试炼入口或第七层驿站","原版菜单或拒绝原因");

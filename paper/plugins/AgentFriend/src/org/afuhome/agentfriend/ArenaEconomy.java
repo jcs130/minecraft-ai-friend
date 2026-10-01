@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.bukkit.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -188,6 +189,104 @@ final class ArenaEconomy implements Listener {
 
     void wallet(Player player) {
         reply(player, "wallet", true, "ok", null, 0, balance(player.getUniqueId()), false, null);
+    }
+
+    /** Console-only maintenance: recycle exact duplicate named trial gear in a player's chest. */
+    void pruneChestDuplicates(Player player, boolean apply, CommandSender sender) {
+        UUID owner = player.getUniqueId();
+        Inventory stash = dungeon.liveStash(owner);
+        List<Integer> remove = new ArrayList<>();
+        int total = 0;
+        for (int slot = 0; slot < stash.getSize(); slot++) {
+            ItemStack item = stash.getItem(slot);
+            if (item == null || item.getAmount() != 1 || !eligible(item)
+                    || !item.hasItemMeta() || !item.getItemMeta().hasDisplayName()
+                    || !item.getItemMeta().hasLore()) continue;
+            boolean kept = false;
+            for (ItemStack bag : player.getInventory().getContents())
+                if (bag != null && bag.isSimilar(item)) { kept = true; break; }
+            for (int previous = 0; !kept && previous < slot; previous++) {
+                ItemStack other = stash.getItem(previous);
+                if (other != null && other.isSimilar(item) && !remove.contains(previous)) kept = true;
+            }
+            if (!kept) continue;
+            int price = unitPrice(item);
+            if ((long) balance(owner) + total + price > MAX_BALANCE) {
+                sender.sendMessage("MC_ARENA_PRUNE success=false reason=wallet_cap player=" + player.getName());
+                return;
+            }
+            remove.add(slot);
+            total += price;
+            sender.sendMessage("MC_ARENA_PRUNE_ITEM slot=" + (slot + 1) + " id=minecraft:"
+                    + item.getType().name().toLowerCase(Locale.ROOT) + " name="
+                    + ChatColor.stripColor(item.getItemMeta().getDisplayName()).replace(' ', '_')
+                    + " price=" + price);
+        }
+        sender.sendMessage("MC_ARENA_PRUNE player=" + player.getName() + " apply=" + apply
+                + " count=" + remove.size() + " credited=" + total
+                + " chestUsedBefore=" + (stash.getSize() - countEmpty(stash))
+                + " chestUsedAfter=" + (stash.getSize() - countEmpty(stash) - remove.size())
+                + " balanceBefore=" + balance(owner) + " balanceAfter=" + (balance(owner) + total));
+        if (!apply || remove.isEmpty()) return;
+        for (int slot : remove) stash.setItem(slot, null);
+        plugin.getConfig().set(WALLET + owner, balance(owner) + total);
+        dungeon.saveStash(stash, owner);
+        sender.sendMessage("MC_ARENA_PRUNE success=true player=" + player.getName() + " removed=" + remove.size());
+    }
+
+    /** Console-only cleanup of repeated trial gear in non-hotbar inventory slots. */
+    void pruneBagDuplicates(Player player, boolean apply, CommandSender sender) {
+        UUID owner = player.getUniqueId();
+        Inventory stash = dungeon.liveStash(owner);
+        List<Integer> remove = new ArrayList<>();
+        int total = 0;
+        for (int slot = 9; slot < 36; slot++) {
+            ItemStack item = player.getInventory().getItem(slot);
+            if (item == null || item.getAmount() != 1 || !eligible(item)
+                    || !item.hasItemMeta() || !item.getItemMeta().hasDisplayName()
+                    || !item.getItemMeta().hasLore()) continue;
+            boolean kept = false;
+            for (ItemStack chestItem : stash.getContents())
+                if (chestItem != null && chestItem.isSimilar(item)) { kept = true; break; }
+            for (int previous = 0; !kept && previous < slot; previous++) {
+                ItemStack other = player.getInventory().getItem(previous);
+                if (other != null && other.isSimilar(item) && !remove.contains(previous)) kept = true;
+            }
+            if (!kept) continue;
+            int price = unitPrice(item);
+            if ((long) balance(owner) + total + price > MAX_BALANCE) {
+                sender.sendMessage("MC_ARENA_PRUNE_BAG success=false reason=wallet_cap player=" + player.getName());
+                return;
+            }
+            remove.add(slot);
+            total += price;
+            sender.sendMessage("MC_ARENA_PRUNE_BAG_ITEM slot=" + slot + " id=minecraft:"
+                    + item.getType().name().toLowerCase(Locale.ROOT) + " name="
+                    + ChatColor.stripColor(item.getItemMeta().getDisplayName()).replace(' ', '_')
+                    + " price=" + price);
+        }
+        int used = 0;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = player.getInventory().getItem(slot);
+            if (item != null && !item.getType().isAir()) used++;
+        }
+        sender.sendMessage("MC_ARENA_PRUNE_BAG player=" + player.getName() + " apply=" + apply
+                + " count=" + remove.size() + " credited=" + total
+                + " bagUsedBefore=" + used + " bagUsedAfter=" + (used - remove.size())
+                + " balanceBefore=" + balance(owner) + " balanceAfter=" + (balance(owner) + total));
+        if (!apply || remove.isEmpty()) return;
+        for (int slot : remove) player.getInventory().setItem(slot, null);
+        player.updateInventory();
+        player.saveData();
+        plugin.getConfig().set(WALLET + owner, balance(owner) + total);
+        plugin.saveConfig();
+        sender.sendMessage("MC_ARENA_PRUNE_BAG success=true player=" + player.getName() + " removed=" + remove.size());
+    }
+
+    private static int countEmpty(Inventory inv) {
+        int count = 0;
+        for (ItemStack item : inv.getContents()) if (item == null || item.getType().isAir()) count++;
+        return count;
     }
 
     void recycle(Player player, String[] args) {
@@ -380,6 +479,12 @@ final class ArenaEconomy implements Listener {
     }
 
     private int balance(UUID owner) { return Math.max(0, plugin.getConfig().getInt(WALLET + owner, 0)); }
+
+    int creditDifficulty(UUID owner, int amount) {
+        int credited = Math.min(Math.max(0, amount), MAX_BALANCE - balance(owner));
+        if (credited > 0) plugin.getConfig().set(WALLET + owner, balance(owner) + credited);
+        return credited;
+    }
 
     private ItemStack source(Player player, boolean stash, int slot) {
         return stash ? dungeon.liveStash(player.getUniqueId()).getItem(slot) : player.getInventory().getItem(slot);
