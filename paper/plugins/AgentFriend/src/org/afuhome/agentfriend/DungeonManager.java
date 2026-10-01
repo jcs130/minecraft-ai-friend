@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -126,6 +127,15 @@ final class DungeonManager implements Listener {
             for (Difficulty value : values()) if (value.id.equalsIgnoreCase(raw)) return value;
             return null;
         }
+    }
+    private record RewardScale(int gap, int percent) {
+        static RewardScale forRun(Difficulty recommended, Difficulty played) {
+            int gap = Math.max(0, recommended.ordinal() - played.ordinal());
+            return new RewardScale(gap, gap == 0 ? 100 : gap == 1 ? 60 : 30);
+        }
+        int stack(int amount) { return Math.max(1, (amount * percent + 99) / 100); }
+        int wallet(int amount) { return amount * percent / 100; }
+        boolean bonusRoll() { return gap == 0 || ThreadLocalRandom.current().nextInt(100) < percent; }
     }
     private static final List<Theme> THEMES = List.of(
             new Theme("苔藓洞穴", Material.MOSS_BLOCK, Material.MOSSY_STONE_BRICKS, Material.OAK_LOG,
@@ -440,6 +450,9 @@ final class DungeonManager implements Listener {
                         + " globalActive=" + active + " globalState=" + globalState
                         + " globalDifficulty=" + (active ? difficulty.id : "none")
                         + " selectedDifficulty=" + chosenDifficulty(player).id
+                        + " difficultyMode=" + difficultyMode(player)
+                        + " recommendedDifficulty=" + recommendedDifficulty(player).id
+                        + " adventurerRank=" + plugin.adventurerRank(player)
                         + " globalFloor=" + (active ? floor : 0) + " maxFloor=" + maxFloor()
                         + " selfFloor=" + selfFloor + " remainingMobs=" + remaining
                         + " trackedMobs=" + (active && spawned && !cleared ? mobs.size() : 0)
@@ -477,31 +490,58 @@ final class DungeonManager implements Listener {
         }
     }
 
+    private Difficulty recommendedDifficulty(Player player) {
+        int rank = plugin.adventurerRank(player);
+        return rank >= 4 ? Difficulty.APOCALYPSE : rank >= 2 ? Difficulty.ADVENTURE : Difficulty.NORMAL;
+    }
+    String recommendedDifficultyLabel(Player player) { return recommendedDifficulty(player).label; }
+
+    private String difficultyMode(Player player) {
+        String saved = plugin.getConfig().getString(DIFFICULTY_CHOICE + player.getUniqueId(), "auto");
+        return Difficulty.parse(saved) == null ? "auto" : "manual";
+    }
+
     private Difficulty chosenDifficulty(Player player) {
-        Difficulty choice = Difficulty.parse(plugin.getConfig().getString(DIFFICULTY_CHOICE + player.getUniqueId(), "normal"));
-        return choice == null ? Difficulty.NORMAL : choice;
+        Difficulty choice = Difficulty.parse(plugin.getConfig().getString(DIFFICULTY_CHOICE + player.getUniqueId(), "auto"));
+        return choice == null ? recommendedDifficulty(player) : choice;
     }
 
     private void chooseDifficulty(Player player, String[] args) {
         if (args.length == 2 || args.length == 3 && args[2].equalsIgnoreCase("list")) {
             player.sendMessage(ChatColor.GOLD + "试炼难度：普通（适合首次挑战）、冒险（生命 ×1.5 / 伤害 ×1.25）、末日（生命 ×2.2 / 伤害 ×1.6）。"
-                    + "更高难度提高稀有装备概率与个人绿宝石余额，仍每游戏日每层只领一次。开场前由按钮发起者决定全队难度。"
-                    + "当前选择：" + chosenDifficulty(player).label);
+                    + "默认按冒险者等级自动匹配；高等级打低难度，重复物资和装备会减少。"
+                    + "每游戏日每层仍只领一次。开场前由按钮发起者决定全队难度。"
+                    + "你的等级：" + plugin.adventurerRankName(player) + "；推荐：" + recommendedDifficulty(player).label
+                    + "；当前选择：" + chosenDifficulty(player).label + "（" + difficultyMode(player) + "）。");
             player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + chosenDifficulty(player).id
-                    + " available=normal,adventure,apocalypse active=" + active
+                    + " mode=" + difficultyMode(player)
+                    + " recommended=" + recommendedDifficulty(player).id
+                    + " adventurerRank=" + plugin.adventurerRank(player)
+                    + " available=auto,normal,adventure,apocalypse active=" + active
                     + " runDifficulty=" + (active ? difficulty.id : "none")
                     + " dailyLimitPerFloor=1");
             return;
         }
+        boolean auto = args.length == 3 && args[2].equalsIgnoreCase("auto");
         Difficulty choice = args.length == 3 ? Difficulty.parse(args[2]) : null;
-        if (choice == null) {
-            player.sendMessage(ChatColor.RED + "用法：/mycli arena difficulty normal|adventure|apocalypse");
+        if (!auto && choice == null) {
+            player.sendMessage(ChatColor.RED + "用法：/mycli arena difficulty auto|normal|adventure|apocalypse");
             return;
         }
-        plugin.getConfig().set(DIFFICULTY_CHOICE + player.getUniqueId(), choice.id);
+        plugin.getConfig().set(DIFFICULTY_CHOICE + player.getUniqueId(), auto ? "auto" : choice.id);
         plugin.saveConfig();
-        player.sendMessage(ChatColor.GREEN + "已选择" + choice.label + "难度；你发起下一场试炼时全队采用该难度。");
-        player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + choice.id + " changed=true active=" + active
+        player.sendMessage(ChatColor.GREEN + (auto ? "已启用自动匹配；当前推荐" + recommendedDifficulty(player).label
+                + "。你发起下一场试炼时按当时冒险者等级选择全队难度。"
+                : "已选择" + choice.label + "难度；你发起下一场试炼时全队采用该难度。"));
+        if (!auto && choice.ordinal() < recommendedDifficulty(player).ordinal()) {
+            RewardScale scale = RewardScale.forRun(recommendedDifficulty(player), choice);
+            player.sendMessage(ChatColor.YELLOW + "你的冒险者等级推荐" + recommendedDifficulty(player).label
+                    + "；重复挑战" + choice.label + "时奖励按 " + scale.percent() + "% 结算，"
+                    + "重复保底装备和首领宝藏不再掉落。");
+        }
+        player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + chosenDifficulty(player).id
+                + " mode=" + difficultyMode(player) + " recommended=" + recommendedDifficulty(player).id
+                + " adventurerRank=" + plugin.adventurerRank(player) + " changed=true active=" + active
                 + " runDifficulty=" + (active ? difficulty.id : "none"));
     }
 
@@ -1184,47 +1224,71 @@ final class DungeonManager implements Listener {
                         + gameDay + " nextDay=" + (gameDay + 1) + " credited=false");
                 continue;
             }
+            boolean firstClear = !plugin.getConfig().contains(claimPath);
+            Difficulty recommended = recommendedDifficulty(p);
+            RewardScale scale = RewardScale.forRun(recommended, difficulty);
+            if (scale.gap() > 0) p.sendMessage(ChatColor.YELLOW + "你的冒险者等级是"
+                    + plugin.adventurerRankName(p) + "，推荐" + recommended.label + "试炼；本层"
+                    + difficulty.label + "奖励按 " + scale.percent() + "% 结算。首次通关解锁与剧情奖励保留，"
+                    + "重复装备仅在匹配难度中发放。");
+            p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=level_scaling"
+                    + " adventurerRank=" + plugin.adventurerRank(p)
+                    + " recommendedDifficulty=" + recommended.id
+                    + " runDifficulty=" + difficulty.id + " rewardPercent=" + scale.percent()
+                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0 || firstClear));
             for (Loot loot : THEMES.get(floor - 1).rewards()) {
                 String path = rewardPath(id, loot.material());
-                plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + loot.amount());
+                plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0)
+                        + scale.stack(loot.amount()));
             }
-            DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
-                    plugin.getConfig().getInt(RARE_MISSES + id, 0), difficulty.ordinal());
-            List<ItemStack> queue = bonusItems(id);
-            // The queue limit only converts ordinary supplies. Rare and guaranteed gear
-            // must not disappear merely because a player has not emptied a full chest.
-            if (queue.size() < MAX_BONUS_QUEUE || bonus.rare()) {
-                queue.add(bonus.item());
-                plugin.getConfig().set(BONUS_ITEMS + id, queue);
-                plugin.getConfig().set(RARE_MISSES + id,
-                        bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
-                p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
-                        + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
-                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category="
-                        + (bonus.rare() ? "rare" : "extra") + " item=minecraft:"
-                        + bonus.item().getType().name().toLowerCase(Locale.ROOT));
+            if (scale.bonusRoll()) {
+                DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
+                        plugin.getConfig().getInt(RARE_MISSES + id, 0), difficulty.ordinal());
+                List<ItemStack> queue = bonusItems(id);
+                // The queue limit only converts ordinary supplies. Rare and guaranteed gear
+                // must not disappear merely because a player has not emptied a full chest.
+                if (queue.size() < MAX_BONUS_QUEUE || bonus.rare()) {
+                    queue.add(bonus.item());
+                    plugin.getConfig().set(BONUS_ITEMS + id, queue);
+                    plugin.getConfig().set(RARE_MISSES + id,
+                            bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
+                    p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
+                            + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
+                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category="
+                            + (bonus.rare() ? "rare" : "extra") + " item=minecraft:"
+                            + bonus.item().getType().name().toLowerCase(Locale.ROOT));
+                } else {
+                    String path = rewardPath(id, Material.EMERALD);
+                    plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
+                    p.sendMessage(ChatColor.YELLOW + "个人宝箱普通奖励队列已满，本层普通额外战利品折成绿宝石 ×1 保存。"
+                            + "稀有与保底装备仍会留在待领取队列；请及时清理个人箱。");
+                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor
+                            + " category=converted item=minecraft:emerald");
+                }
             } else {
-                String path = rewardPath(id, Material.EMERALD);
-                plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
-                p.sendMessage(ChatColor.YELLOW + "个人宝箱普通奖励队列已满，本层普通额外战利品折成绿宝石 ×1 保存。"
-                        + "稀有与保底装备仍会留在待领取队列；请及时清理个人箱。");
                 p.sendMessage("MC_DUNGEON_LOOT floor=" + floor
-                        + " category=converted item=minecraft:emerald");
+                        + " category=bonus_skipped reason=below_recommended_difficulty");
             }
-            List<DungeonLoot.Bonus> supplies = DungeonLoot.supplies(floor);
+            List<DungeonLoot.Bonus> supplies = scale.gap() == 0 || firstClear
+                    ? DungeonLoot.supplies(floor) : List.of();
             if (!supplies.isEmpty()) {
                 List<ItemStack> guaranteed = bonusItems(id);
                 for (DungeonLoot.Bonus supply : supplies) {
-                    guaranteed.add(supply.item());
-                    p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label() + "，已存入个人箱子。");
+                    ItemStack item = supply.item().clone();
+                    item.setAmount(scale.stack(item.getAmount()));
+                    guaranteed.add(item);
+                    p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label()
+                            + (item.getAmount() == supply.item().getAmount() ? "" : "（按等级调整为 ×" + item.getAmount() + "）")
+                            + "，已存入个人箱子。");
                     p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
-                            + supply.item().getType().name().toLowerCase(Locale.ROOT)
-                            + " count=" + supply.item().getAmount());
+                            + item.getType().name().toLowerCase(Locale.ROOT)
+                            + " count=" + item.getAmount());
                 }
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
             }
             int setIndex = Math.max(0, plugin.getConfig().getInt(DIAMOND_SET_INDEX + id, 0));
-            DungeonLoot.Bonus milestone = DungeonLoot.milestone(floor, setIndex);
+            DungeonLoot.Bonus milestone = scale.gap() == 0 || firstClear
+                    ? DungeonLoot.milestone(floor, setIndex) : null;
             if (milestone != null) {
                 List<ItemStack> guaranteed = bonusItems(id);
                 guaranteed.add(milestone.item());
@@ -1244,7 +1308,7 @@ final class DungeonManager implements Listener {
                 p.saveData();
                 p.sendMessage(ChatColor.GOLD + "已解锁第七层灯火驿站直达；今后可在罗盘或 /mycli arena rest 进入。");
             }
-            if (floor == BOSS_FLOOR) {
+            if (floor == BOSS_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
                 if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
                 DungeonLoot.Bonus cache = DungeonLoot.bossCache(clears);
@@ -1256,7 +1320,7 @@ final class DungeonManager implements Listener {
                 p.sendMessage("MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
                         + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
             }
-            if (floor == FINAL_FLOOR) {
+            if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
                 DungeonLoot.Bonus cache = DungeonLoot.finalCache(clears);
                 List<ItemStack> relics = bonusItems(id);
@@ -1269,7 +1333,7 @@ final class DungeonManager implements Listener {
             }
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
-                int creditedBalance = economy.creditDifficulty(id, bonusBalance);
+                int creditedBalance = economy.creditDifficulty(id, scale.wallet(bonusBalance));
                 p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：绿宝石余额 +" + creditedBalance
                         + "；可在入口商人购买补给，不占背包。");
                 p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="

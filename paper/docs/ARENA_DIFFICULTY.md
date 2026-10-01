@@ -1,6 +1,8 @@
-# 试炼塔难度与怪物行为（AgentFriend 0.3.54）
+# 试炼塔难度与怪物行为（AgentFriend 0.3.55）
 
-入口石按钮仍负责开始并把附近玩家一起带入。队伍发起者在开场前选择难度，整场固定；断线/重启检查点会保存同一难度。默认是普通，适合第一次游玩；手柄玩家在技能罗盘的「传送地点」页点普通、冒险或末日图标，再到入口按按钮。Agent/Java 玩家使用 `/mycli arena difficulty` 查看，或加 `normal|adventure|apocalypse` 选择；`/mycli arena status` 分开返回 `selectedDifficulty` 与 `globalDifficulty`，避免把个人下次选择误认作正在进行的场次。
+入口石按钮仍负责开始并把附近玩家一起带入。队伍发起者在开场前选择难度，整场固定；断线/重启检查点会保存同一难度。默认是 `auto`：按发起者当前**冒险者公会等级**推荐档位。公会等级由持久声望决定；原版经验等级可花费，AuraSkills 技能也各有用途，两者都不用于本次匹配。青铜/黑铁推荐普通，白银/黄金推荐冒险，白金/钻石推荐末日；未入公会按青铜处理。手柄玩家在技能罗盘的「传送地点」页点自动、普通、冒险或末日图标，再到入口按按钮。Agent/Java 玩家使用 `/mycli arena difficulty [list|auto|normal|adventure|apocalypse]` 查看或选择；`auto` 会在开场时按最新等级计算。`/mycli arena status` 分开返回 `selectedDifficulty`、`recommendedDifficulty`、`difficultyMode`、`adventurerRank` 与 `globalDifficulty`，避免把个人下次选择误认作正在进行的场次。
+
+多人同场由发起者决定战斗档位，**每名参赛者的奖励单独按本人等级计算**。推荐档位高于实际档位 1/2 档时，固定材料与补给数量按 60%/30% 取整（每种至少 1 件），额外随机战利品出现机会分别为 60%/30%；已重复通关的该层不再发固定补给、保底装备或首领宝藏。首次通关仍给予剧情解锁、固定补给、保底装备与首领宝藏，数量可按上述比例调整；公会声望和任务奖励另按公会规则结算，不被试炼材料倍率吞掉。难度加成的绿宝石余额也按比例结算。这样高等级队友可以陪低等级孩子打普通档，孩子按自己等级完整领奖，队友只能获得较少的重复奖励。日限仍先于等级衰减生效，不能通过换难度同日重领。本人私有 `MC_DUNGEON_LOOT category=level_scaling` 回执包含 `adventurerRank`、`recommendedDifficulty`、`runDifficulty`、`rewardPercent`、`firstClear` 和 `repeatedGear`；跳过随机战利品时另有 `category=bonus_skipped`。
 
 | 档位 ID | 中文名 | 生命 | 攻击伤害 | 移速基础值增加 | 护甲点增加 | 每层余额加成 | 稀有奖励概率增量 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |

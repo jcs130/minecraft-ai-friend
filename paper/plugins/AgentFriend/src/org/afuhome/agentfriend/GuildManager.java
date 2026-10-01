@@ -87,6 +87,8 @@ final class GuildManager implements Listener {
         for (int i = 1; i < THRESHOLDS.length; i++) if (fame >= THRESHOLDS[i]) rank = i;
         return rank;
     }
+    int adventurerRank(Player player) { return rankIndex(fame(player)); }
+    String adventurerRankName(Player player) { return RANKS[adventurerRank(player)]; }
     private Contract contract(String id) {
         for (Contract quest : CONTRACTS) if (quest.id().equals(id)) return quest;
         return null;

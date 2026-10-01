@@ -26,12 +26,22 @@ try{
   assert.equal(places.slots[18]?.name,'wooden_sword');
   assert.equal(places.slots[19]?.name,'iron_sword');
   assert.equal(places.slots[20]?.name,'diamond_sword');
-  const icons=[18,19,20].map(slot=>places.slots[slot]?.name);
+  assert.equal(places.slots[21]?.name,'compass');
+  const icons=[18,19,20,21].map(slot=>places.slots[slot]?.name);
   await bot.clickWindow(19,0,0);
-  await wait(()=>lines.some(line=>line.includes('selected=adventure changed=true')),'selected via GUI');
+  await wait(()=>lines.some(line=>line.includes('selected=adventure mode=manual')
+    && line.includes('changed=true')),'manual tier selected via GUI');
+  bot.chat('/mycli menu');
+  const skillsAgain=await wait(()=>bot.currentWindow!==places&&bot.currentWindow,'skill menu again');
+  await bot.clickWindow(16,0,0);
+  const placesAgain=await wait(()=>bot.currentWindow!==skillsAgain&&bot.currentWindow,'places menu again');
+  await bot.clickWindow(21,0,0);
+  await wait(()=>lines.some(line=>line.includes('selected=normal mode=auto')
+    && line.includes('changed=true')),'automatic tier selected via GUI');
   bot.chat('/mycli arena status');
   await wait(()=>lines.some(line=>line.includes('MC_DUNGEON status')
-    && line.includes('selectedDifficulty=adventure')),'status selected tier');
-  console.log(JSON.stringify({verdict:'PASS',gui:true,selection:'adventure',
+    && line.includes('selectedDifficulty=normal') && line.includes('difficultyMode=auto')),
+    'status automatic tier');
+  console.log(JSON.stringify({verdict:'PASS',gui:true,selection:'auto',
     icons}));
 }finally{bot.quit();}

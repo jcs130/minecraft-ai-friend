@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.55 冒险者等级自动匹配与低档奖励衰减（2026-10-02）
+
+默认 `auto` 以公会声望决定的冒险者等级推荐战斗档位：青铜/黑铁→普通，白银/黄金→冒险，白金/钻石→末日。原版经验会被附魔等操作消耗，不作为匹配依据。旧版没有保存过手动档位的玩家自动进入 `auto`；已手动选择的玩家保留该选择，可用 `/mycli arena difficulty auto` 或技能罗盘「传送地点」的罗盘图标恢复自动匹配。发起者仍决定全队怪物强度，断线/重启延续既有场次难度。奖励按每位参赛者自己的等级比较：低于本人推荐档位 1/2 档时，固定物资和首通补给数量按 60%/30%（每类至少一件）结算，额外随机战利品触发机会为 60%/30%；重复通关不再给该层固定补给、保底装备、首领宝藏，避免刷塔装备淤积。首次通关保留技能/驿站解锁、保底装备与首领宝藏；公会任务声望及其奖励按原规则独立结算。每游戏日每人每层一次的上限不变。`MC_DUNGEON status`、`MC_DUNGEON_DIFFICULTY` 和 `MC_DUNGEON_LOOT category=level_scaling` 提供本人推荐档位、选择模式、参赛档位、结算比例与是否首通；普通 Java、基岩和 Mineflayer 均只需原版菜单与命令。详细数值见 [试炼难度与怪物行为](ARENA_DIFFICULTY.md)。
+
+隔离服 25566 使用真实 Mineflayer 1.20.6 双账号验证：青铜玩家默认普通、白金玩家默认末日；白金手动选普通后由青铜发起普通档，两人一起进塔，第一层私人回执分别为 `rewardPercent=100 firstClear=true` 和 `rewardPercent=30 firstClear=false`，青铜得到 2 份补给、白金没有重复补给；奖励配置中的面包数分别为 2 和 1。两人推进第 4 层，青铜获得首通保底装备，白金的重复低档挑战没有保底装备。另用白金账号单人自动发起，`globalDifficulty=apocalypse`，首层僵尸生命 44。原版 27 格罗盘菜单的自动与手动图标可点击、选择模式回执正确。相关脚本 `arena-level-prepare-stage.mjs`、`arena-level-stage.mjs`、`arena-auto-start-stage.mjs` 和更新后的 `arena-difficulty-menu-stage.mjs`；阶段日志未见插件异常。正式服发布记录见下段；基岩真机菜单需上线后复验。
+
+正式服等 CortiLan 在第 15 层通关、`dungeonaudit active=false`，且仅 CortiLan/Goddess 服务账号在线后，通过既有 `Afu-MC-DailyBackup` 正常停服发布。E/F 双盘 `20261002-010010` 均有 `.complete`，任务结果 0；只启用 `AgentFriend-0.3.55.jar`，SHA256 `7ED5C8E443F1A9796740EEA7CFAF2AA6686314D463AA0CCE8F661136CCC31B80`。重启后 `version AgentFriend` 确认 0.3.55，Paper 1.20.6、Java 本机、局域网 Agent 网关、Geyser 基岩 Pong、Goddess 桥正常；CortiLan 与 Goddess 已回连，试炼无活动，自动启动未暂停，Watchdog 最近结果 0，启动后的日志没有插件异常。正式服临时 Mineflayer 账号通过 LAN 网关读到本人 `selected=normal mode=auto recommended=normal adventurerRank=0`，`MC_DUNGEON status participant=false globalActive=false difficultyMode=auto`；没有发起挑战或改动世界。CortiEyeMirror 已加载，但远端 CortiEye 截至 01:01 尚未回连，`camera=offline`；直播附身需客户端上线后核对。基岩真机自动难度图标尚待玩家实际点击，Pong 只证明入口应答。回退时必须先等无活动试炼，连同 E/F 同一快照核对玩家奖励账本；只换旧 JAR 会恢复旧难度选择行为，但新版结算过的奖励和公会声望不会倒退。
+
 ## 0.3.54 试炼难度、攻击与重复装备清理（2026-10-02）
 
 玩家反馈试炼怪物常空手、战斗强度偏低，且 CortiLan 连续刷塔后装备占满储物空间。0.3.53 给僵尸、尸壳、溺尸配备原版近战武器，保留蜘蛛、女巫、烈焰人等空手实体的自身攻击；只在目标远且 12 秒完全不移动时尝试将卡在掩体后的怪物移到同层可站立位置。增加普通、冒险、末日三档，手柄在技能罗盘地点页选择，Agent 用 `/mycli arena difficulty`；发起者决定整队档位，断线/重启检查点保存它。高档提高生命、伤害、速度、护甲、稀有装备概率和个人绿宝石余额，不增加奖励箱随机装备件数；每游戏日每人每层仍只领一次。0.3.54 将近战和投射物伤害统一按档位倍率处理，并增加控制台 `prunetrialbag`，只回收非快捷栏里的完全相同试炼装备。具体数值和边界见 [试炼难度与怪物行为](ARENA_DIFFICULTY.md)。

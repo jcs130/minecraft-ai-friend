@@ -299,6 +299,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
     }
     void guildRewardClaimed(Player player) { if (guild != null) guild.onDungeonRewardClaimed(player); }
+    int adventurerRank(Player player) { return guild == null ? 0 : guild.adventurerRank(player); }
+    String adventurerRankName(Player player) { return guild == null ? "青铜" : guild.adventurerRankName(player); }
     void openGuildMenu(Player player) { openMenu(player, "guild"); }
     void guildHallTeleport(Player player) { guildHall.teleport(player); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
@@ -677,7 +679,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena difficulty normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
+                ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
@@ -1750,6 +1752,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；选择后到入口按按钮"));
                 inv.setItem(19, item(Material.IRON_SWORD, "§6冒险试炼", "怪物更强；稀有战利品概率和余额提高"));
                 inv.setItem(20, item(Material.DIAMOND_SWORD, "§5末日试炼", "高强度挑战；更好的战利品和余额"));
+                inv.setItem(21, item(Material.COMPASS, "§b自动匹配难度",
+                        "你的公会等级：" + adventurerRankName(p) + "；推荐：" + dungeon.recommendedDifficultyLabel(p),
+                        "按发起者等级选全队难度；低档重复奖励会减少"));
             }
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("expeditions")) {
@@ -1944,6 +1949,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 18 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "normal"}); }
                     case 19 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); }
                     case 20 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); }
+                    case 21 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); }
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2283,7 +2289,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return dungeon != null && dungeon.isBuilt()
                     ? List.of("difficulty", "start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
         if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("difficulty"))
-            return List.of("normal", "adventure", "apocalypse");
+            return List.of("auto", "normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
