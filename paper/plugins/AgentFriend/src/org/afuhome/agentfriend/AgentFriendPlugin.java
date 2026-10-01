@@ -199,6 +199,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
+    private AgentStatePublisher agentStatePublisher;
     private ProtectionAdvisor protectionAdvisor;
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
@@ -238,6 +239,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
+        agentStatePublisher = new AgentStatePublisher(this);
+        agentStatePublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 20L, 20L);
@@ -277,6 +280,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         giftNonces.clear();
         pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
+        if (agentStatePublisher != null) agentStatePublisher.stop();
         if (spellMastery != null) spellMastery.shutdown();
         if (protectionAdvisor != null) protectionAdvisor.stop();
         if (combatSpells != null) combatSpells.clear();
@@ -339,7 +343,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     + Math.round(user.getMaxMana()) + "，需要 " + Math.round(amount) + "。");
             return false;
         }
-        return user.consumeMana(amount);
+        boolean consumed = user.consumeMana(amount);
+        if (consumed && agentStatePublisher != null) agentStatePublisher.afterCast(p);
+        return consumed;
     }
 
     void presentSpell(Player player, String spell) {
@@ -381,6 +387,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             getLogger().severe("Successful spell was not charged in AuraSkills: "
                     + event.getSpell().getInternalName() + " caster=" + p.getUniqueId());
         }
+        if (agentStatePublisher != null) agentStatePublisher.afterCast(p);
         presentSpell(p, event.getSpell().getInternalName());
     }
 

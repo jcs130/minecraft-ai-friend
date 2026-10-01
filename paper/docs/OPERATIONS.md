@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.52 Agent 魔力私有状态频道（2026-10-01）
+
+AgentFriend 新增 `mcagent:state`：每名在线玩家从自己的 AuraSkills UUID 读取魔力，使用原始 UTF-8 JSON 单播到本人连接；登录、重生、成功施法后发送，自然恢复及其他变化每秒检查一次，数值未变不重发。未注册频道的现有 Mineflayer 连接通过同一玩家连接直发，不依赖 CortiLan 用户名。此频道不写聊天；原有 `/mycli` 机器回执是执行者的私有系统聊天，地下城楼层公告仅发该楼层玩家。协议和 Agent 接入方式见 [Agent 状态频道](AGENT_STATE.md)。
+
+隔离服最终 0.3.52 JAR 已验证两个独立 Mineflayer 账号：一方不注册频道、另一方注册；两人各收自己的初始值，施法只更新本人，自然恢复间隔至少一秒，重生重发；稳定状态不重发，聊天里无状态 JSON。测试脚本 `paper/probe/agent-state-stage.mjs`，结果 PASS。
+
+正式服发布前只有 Goddess、CortiLan、CortiEye 服务账号在线，无活动试炼。`Afu-MC-DailyBackup` 正常停服并生成 E/F 双盘快照 `20261001-222317`，两处 `.complete`，任务结果 0；唯一启用 `AgentFriend-0.3.52.jar`，SHA256 `31AEE5FEF8636A772519F7869E5787212900DED583EEA8F8E959395563B9C504`。重启后 Paper 1.20.6、Java 本机及 LAN 网关、Geyser Pong、Goddess 桥、Watchdog 正常，自动启动未暂停。正式服两个临时 Mineflayer 账号再次验证登录、施法、自然恢复、跨账号隔离和无聊天副本，结果 PASS；重生验证在隔离服完成。22:24 CortiEyeMirror 插件已加载，但远端 CortiEye 尚未回连，真实镜头需其上线后检查；基岩真机界面本轮未复测。运行机维护记录同步在 `E:\MC\ops\MAINTENANCE.md`。
+
 ## 0.3.51 星芒箭命中目标显示实体类型（2026-10-01）
 
 19:42:49 CortiLan 施放星芒箭时收到“命中 小林”。19:42:51 的 Paper 日志记录同一附近的命名掠夺者 `Pillager['小林']`，UUID `f81825ab-638c-4bbd-9d9d-8df14361faf3`，位于约 `(-538, 63, -375)`，随后被 CortiLan 的剑击杀。旧版施法没有逐次目标 UUID 审计，不能把死亡日志严格当作 19:42:49 那次法术的目标记录。`Named-Villagers` 的 illager 前缀为空，灾厄村民也会得到人名。星芒箭的准星路径和最近目标路径均要求 Bukkit `Enemy`，玩家、村民、宠物与本服召唤的铁傀儡不在候选中；查找合法目标先于扣魔力/设置冷却。
