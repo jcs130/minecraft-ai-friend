@@ -105,6 +105,7 @@ final class UtilitySpells implements Listener {
         player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation(), 22, 0.4, 0.2, 0.4, 0.05);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BREEZE_JUMP, 0.8f, 1.25f);
         plugin.mastery().successfulCast(player, "leap");
+        plugin.publishSkill(player, "leap", "高高跃起", player.getLocation());
         player.sendMessage(ChatColor.AQUA + "✦ 跃空术：高高跳起，缓缓落地（4 魔力；8 秒冷却）。");
     }
 
@@ -129,6 +130,7 @@ final class UtilitySpells implements Listener {
         player.getWorld().spawnParticle(Particle.END_ROD, player.getLocation().add(0, 1, 0),
                 24, 0.4, 0.7, 0.4, 0.03);
         plugin.mastery().successfulCast(player, "flight");
+        plugin.publishSkill(player, "flight", "飞行 " + seconds + " 秒", player.getLocation());
         player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 飞行术持续 " + seconds + " 秒；若未立即起飞，可双按跳跃键。结束后会缓降（10 魔力；90 秒冷却）。");
     }
 
@@ -171,6 +173,7 @@ final class UtilitySpells implements Listener {
         player.getWorld().spawnParticle(Particle.END_ROD, spot.clone().add(0, 1, 0),
                 35, 0.7, 1, 0.7, 0.05);
         plugin.mastery().successfulCast(player, "golem");
+        plugin.publishSkill(player, "golem", "守护傀儡已召唤", spot);
         player.sendMessage(ChatColor.GOLD + "✦ 守护傀儡会帮你攻击附近的怪物，" + seconds + " 秒后离开（12 魔力；75 秒冷却）。");
     }
 
@@ -201,6 +204,8 @@ final class UtilitySpells implements Listener {
         bar.addPlayer(player);
         senses.put(player.getUniqueId(), new Sense(bar, System.currentTimeMillis() + 8_000L));
         plugin.mastery().successfulCast(player, "sense");
+        plugin.publishSkill(player, "sense", "发现 " + hostiles.size() + " 只怪物",
+                ((Entity) hostiles.get(0)).getLocation());
         player.sendMessage(ChatColor.AQUA + "✦ 探敌术发现附近 " + hostiles.size()
                 + " 只怪物；顶部方向提示持续 8 秒（3 魔力；15 秒冷却）。");
         for (int i = 0; i < Math.min(5, hostiles.size()); i++) {

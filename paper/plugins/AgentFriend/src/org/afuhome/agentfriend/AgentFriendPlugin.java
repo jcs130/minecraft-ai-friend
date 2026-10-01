@@ -15,6 +15,7 @@ import com.earth2me.essentials.Warps;
 import com.nisovin.magicspells.Spell;
 import com.nisovin.magicspells.events.SpellCastEvent;
 import com.nisovin.magicspells.events.SpellCastedEvent;
+import com.nisovin.magicspells.util.SpellData;
 import dev.aurelium.auraskills.api.AuraSkillsApi;
 import dev.aurelium.auraskills.api.skill.Skills;
 import dev.aurelium.auraskills.api.user.SkillsUser;
@@ -200,6 +201,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
     private AgentStatePublisher agentStatePublisher;
+    private SkillEventPublisher skillEventPublisher;
     private ProtectionAdvisor protectionAdvisor;
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
@@ -241,6 +243,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         viewerStatePublisher.start();
         agentStatePublisher = new AgentStatePublisher(this);
         agentStatePublisher.start();
+        skillEventPublisher = new SkillEventPublisher(this);
+        skillEventPublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 20L, 20L);
@@ -281,6 +285,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (agentStatePublisher != null) agentStatePublisher.stop();
+        if (skillEventPublisher != null) skillEventPublisher.stop();
         if (spellMastery != null) spellMastery.shutdown();
         if (protectionAdvisor != null) protectionAdvisor.stop();
         if (combatSpells != null) combatSpells.clear();
@@ -354,6 +359,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         spellPresentation.show(player, spell);
     }
 
+    void publishSkill(Player player, String spell, String body, Location position) {
+        if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
+    }
+
     SpellMastery mastery() { return spellMastery; }
 
     int auraLevel(Player player, Skills skill) {
@@ -391,6 +400,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (agentStatePublisher != null) agentStatePublisher.afterCast(p);
         presentSpell(p, event.getSpell().getInternalName());
+        String spellId = event.getSpell().getInternalName();
+        SpellData data = event.getSpellData();
+        Location effectPosition = data == null ? null : data.location();
+        if (data != null && data.target() != null) effectPosition = data.target().getLocation();
+        else if (data != null && data.recipient() != null) effectPosition = data.recipient().getLocation();
+        Location capturedPosition = effectPosition == null ? null : effectPosition.clone();
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (!p.isOnline()) return;
+            Location position = spellId.equals("blink") || capturedPosition == null
+                    ? p.getLocation() : capturedPosition;
+            publishSkill(p, spellId, "生效", position);
+        });
     }
 
     boolean floodgatePlayer(UUID uuid) {
@@ -473,8 +494,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         pendingHomeChants.remove(player.getUniqueId());
         Bukkit.getScheduler().runTask(this, () -> {
             if (player.isOnline() && sameWorld(player.getLocation())
-                    && player.getLocation().distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) < 12 * 12)
+                    && player.getLocation().distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) < 12 * 12) {
                 presentSpell(player, "home");
+                publishSkill(player, "home", "已抵达出生村庄", player.getLocation());
+            }
         });
     }
 
@@ -905,6 +928,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.getWorld().spawnParticle(Particle.END_ROD, at, 45, 0.7, 0.7, 0.7, 0.08);
         p.getWorld().playSound(at, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.7f, 1.4f);
         presentSpell(p, "fireworks");
+        publishSkill(p, "fireworks", "光芒绽放", at);
         p.sendMessage(ChatColor.LIGHT_PURPLE + "烟花术释放了光芒。");
     }
 
@@ -931,6 +955,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.getWorld().spawnParticle(Particle.END_ROD, at, 36, 0.8, 0.7, 0.8, 0.02);
         p.getWorld().playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.4f);
         presentSpell(p, "starlight");
+        publishSkill(p, "starlight", "星光环绕", at);
         p.sendMessage(ChatColor.LIGHT_PURPLE + "星尘术：一束星光环绕着你。");
     }
 
@@ -993,6 +1018,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             p.sendMessage(ChatColor.AQUA + "夜视术生效 120 秒，黑暗里也能看清道路。");
         }
         presentSpell(p, id);
+        publishSkill(p, id, "生效", p.getLocation());
     }
 
     private void goddess(Player p, String[] args) {

@@ -110,6 +110,8 @@ final class CombatSpells {
         int damage = damage(caster, "starbolt", 5);
         enemy.damage(damage, caster);
         plugin.mastery().successfulCast(caster, "starbolt");
+        plugin.publishSkill(caster, "starbolt", "命中 " + enemy.getName(),
+                end.toLocation(world));
         caster.sendMessage(ChatColor.LIGHT_PURPLE + "星芒箭命中 " + enemy.getName()
                 + "〔" + hostileTypeLabel(enemy.getType()) + "〕（4 魔力）。");
     }
@@ -183,6 +185,7 @@ final class CombatSpells {
                 enemy.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, slowTicks, 1, false, true));
         }
         plugin.mastery().successfulCast(caster, "frostnova");
+        plugin.publishSkill(caster, "frostnova", "命中 " + enemies.size() + " 只怪物", center);
         caster.sendMessage(ChatColor.AQUA + "霜环命中 " + enemies.size() + " 只怪物并减速（7 魔力）。");
     }
 
@@ -229,6 +232,8 @@ final class CombatSpells {
             hit++;
         }
         plugin.mastery().successfulCast(caster, "flamewave");
+        plugin.publishSkill(caster, "flamewave", "命中 " + hit + " 只怪物",
+                eye.clone().add(forward.clone().multiply(4.5)));
         caster.sendMessage(ChatColor.GOLD + "焰浪命中 " + hit + " 只怪物（8 魔力）。");
     }
 

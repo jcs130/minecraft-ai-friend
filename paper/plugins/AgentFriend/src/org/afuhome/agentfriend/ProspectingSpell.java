@@ -144,6 +144,7 @@ final class ProspectingSpell {
                 durationTicks * 50L, bar, outline));
         plugin.presentSpell(player, "prospect");
         plugin.mastery().successfulCast(player, "prospect");
+        plugin.publishSkill(player, "prospect", "发现" + oreName, closest);
         player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 探矿术找到" + oreName
                 + "：dimension=" + world.getKey() + " X=" + closest.getBlockX()
                 + " Y=" + closest.getBlockY() + " Z=" + closest.getBlockZ()

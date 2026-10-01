@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.57 技能生效私有坐标事件（2026-10-02）
+
+AgentFriend 注册出站 `mcagent:event`，成功技能通过施法者连接单播原始 UTF-8 JSON，含 `schemaVersion=1`、`kind=skill`、`id/title/body/tone/position{x,y,z}`；不向其他玩家、公屏、聊天、动作栏或标题复制此 JSON。现有原版咏唱标题、音效和粒子继续给 Java/基岩/观战客户端。星芒箭用真实射线命中点或自动锁定目标眼部，霜环与焰浪用范围中心，探矿用矿块中心，归乡用到达后的实际位置；失败、无目标、冷却和魔力不足不发成功事件。频道协议与接入边界见 [技能生效事件](AGENT_SKILL_EVENTS.md)。
+
+隔离服 25566 构建的 JAR SHA256 为 `38D6722310DA4CECAAC864AC19E8EB61C96701F79BF17E7C634F9E8FE9590ED6`。真实 Mineflayer 双账号测试了已注册/未注册频道、仅本人收到、烟花、星芒箭命中点、霜环范围中心、归乡落点、MagicSpells 圣愈术实际回血，以及冷却和无目标不发成功事件；聊天 JSON 副本为 0。脚本 `probe/skill-event-stage.mjs` PASS，隔离服无 AgentFriend 异常，正常停机。Geyser 不保证将 Java 自定义频道传给基岩设备；基岩原版标题、音效和粒子仍由既有机制提供，本轮没有基岩真机画面验收。
+
+正式服仅 Goddess、CortiLan、CortiEye 常驻账号在线、`dungeonaudit active=false` 时，使用 `Afu-MC-DailyBackup` 正常停服发布。E/F 双盘 `20261002-073231` 均有 `.complete`，计划任务结果 0；唯一启用 `AgentFriend-0.3.57.jar`，SHA256 与隔离版一致，待发布和自动恢复暂停标记均已清除。重启后正式临时 Mineflayer 普通账号单次烟花术收到本人 `mcagent:event`，坐标数值有效，聊天副本 0；Java 本机、LAN Agent 网关、基岩 Pong、女神桥、Watchdog 与插件启动日志正常。首次核查 CortiEye 仍未重连，`camera=offline`，待账号回连后复核附身；本次不能把插件加载等同于直播画面已恢复。回退应在无活动试炼和无人游玩时，从同一 E/F 快照恢复旧 JAR 与相应世界账本；单独回退 JAR 会停止新频道，但不影响既有状态频道。
+
 ## 2026-10-02 金苹果单次进食后显示 16→0 的排查
 
 正式服 06:15:47 收到 CortiLan 的 `/mycli cast selfheal`，06:15:50 第 6 层结算，06:17:04 才死亡。Paper 普通日志没有逐次物品消费或 container 0 原始包；CortiEyeMirror 当时也未启用相应槽位抓包，因此无法从历史记录确认 06:15:50 的实际库存数或当时发出的 `SetSlot`/`SetContent`。04:00 备份和约 07:11 的玩家存档都没有金苹果，时间跨度过大，不能拿来证明 06:15 的 16 个去了哪里。CoreProtect 在 06:15:45–56 没有记录 CortiLan 的金苹果掉落、拾取或容器转移；它不记录正常进食和玩家库存同步。AgentFriend 没有 `PlayerItemConsumeEvent` 监听；第 6 层结算只把奖励写入个人箱配置/待领取队列，不修改随身金苹果。
