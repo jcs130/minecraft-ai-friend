@@ -25,6 +25,8 @@
 
 Minepacks 的快捷物品虽然使用原版 `player_head` 作为载体，但有自己的名称和贴图。不要把所有 `player_head` 翻译成“大背包”。变更 `ItemShortcut.ItemName` 后，旧物品需要在玩家下次进服时由 AgentFriend 迁移，避免产生失效快捷物品和重复头颅。Geyser 的头颅映射在启动时生成基岩资源包；改动后应在基岩客户端重新进服验收纹理与名称。
 
+AgentFriend 0.3.49 以“大背包”名称加专属 profile 纹理识别快捷头颅，拦截玩家丢弃，并在入服和每分钟检查缺失。若随身 36 格已满，它先把一组物品保存到该玩家的 54 格个人试炼箱，再补回快捷头颅；个人箱也满时不丢弃任何物品。玩家可用 `/mycli arena stash list` 核对转存内容。鼠标光标上暂持有快捷物品不视为缺失。
+
 战斗法术从技能罗盘的“战斗法术”页选择，Agent/Java 玩家也能输入 `/mycli cast starbolt|frostnova|flamewave`。星芒箭瞬发，优先命中准星 18 格内的怪物；没有瞄准时自动锁定 12 格内最近的可见怪物（4 魔力、3 秒冷却）。霜环打击身边最多 4 只怪物并减速（7 魔力、14 秒）；焰浪打击前方最多 4 只怪物并点燃（8 魔力、10 秒）。没找到目标不耗蓝；法术只用服务端粒子、音效、伤害与状态效果，不发送自定义物品或要求客户端装模组。Geyser 当前安装包内的 `particles.json` 为使用的 `END_ROD`、`ELECTRIC_SPARK`、`CRIT`、`SNOWFLAKE`、`CLOUD`、`FLAME` 都提供了基岩映射。
 
 `mcviewer:state` 对每名在线玩家按 UUID 读取并发送其自身数据，使用 `Player.sendPluginMessage` 原始字节（没有 `writeUTF` 或额外长度前缀）。入服、客户端注册频道、数值变化以及每 5 秒都会发送；Mineflayer 客户端应在 play 阶段用 `minecraft:register` 声明 `mcviewer:state`。仍只声明旧 `corti:viewer_state` 的运行中客户端会在旧频道收到同样数据；同时声明两者时只在新频道收到一份。单包最多 16384 字节，`skills` 和 `abilities` 各最多 24 项。`mana` 是 AuraSkills 的当前/最大值；`skills[].xp` 是当前等级内进度，`requiredXp` 是下一等级所需值。已解锁的 AuraSkills 能力会列出；无法可靠取得其冷却时 `cooldownMs:null`。已掌握的 MagicSpells 法术以 `magicspells:` ID 列在 `abilities` 中，等级为 1，剩余冷却取插件接口返回的秒数换算为毫秒。`/mycli` 三种战斗法术使用实际剩余冷却毫秒数。未加载的 AuraSkills 用户发 `mana:null`、`skills:[]`。此 JSON 不进入游戏聊天栏。基岩客户端是否消费这个 Java plugin channel 取决于 Geyser/客户端实现，玩法本身不依赖该频道。

@@ -241,6 +241,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.getGameMode() != GameMode.SPECTATOR)
+                    BackpackShortcutMigration.restoreMissing(player, dungeon);
+            }
+        }, 1200L, 1200L);
         getLogger().info("Ready; arena-built=" + arenaBuilt + ", Paper 1.20.6 vanilla protocol");
     }
 
@@ -422,6 +428,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
                     + player.getUniqueId() + "; slots=" + backpackChanges);
             if (player.getGameMode() == GameMode.SPECTATOR) return;
+            BackpackShortcutMigration.restoreMissing(player, dungeon);
             if (!hasCompass(player)) giveCompass(player);
             if (!hasStatusBook(player)) giveStatusBook(player);
             if (!hasFocus(player)) giveFocus(player);
@@ -1516,9 +1523,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onKeepsakeDrop(PlayerDropItemEvent event) {
         ItemStack stack = event.getItemDrop().getItemStack();
-        if (!isCompass(stack) && !isStatusBook(stack)) return;
+        if (!isCompass(stack) && !isStatusBook(stack) && !BackpackShortcutMigration.isShortcut(stack)) return;
         event.setCancelled(true);
-        event.getPlayer().sendMessage(ChatColor.YELLOW + (isCompass(stack) ? "技能罗盘" : "命格书")
+        event.getPlayer().sendMessage(ChatColor.YELLOW + (isCompass(stack) ? "技能罗盘"
+                        : isStatusBook(stack) ? "命格书" : "大背包")
                 + "会留在身上；可移动到其他快捷栏格子。");
     }
     private boolean isStatusBook(ItemStack stack) {

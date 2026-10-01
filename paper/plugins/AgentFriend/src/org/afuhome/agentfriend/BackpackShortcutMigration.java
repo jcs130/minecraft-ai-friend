@@ -1,6 +1,9 @@
 package org.afuhome.agentfriend;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
+import com.destroystokyo.paper.profile.ProfileProperty;
+import java.util.UUID;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -47,6 +50,42 @@ final class BackpackShortcutMigration {
             }
         }
         return changed;
+    }
+
+    static boolean hasShortcut(Player player) {
+        for (ItemStack item : player.getInventory().getContents()) if (isShortcut(item)) return true;
+        return isShortcut(player.getItemOnCursor());
+    }
+
+    /** Minepacks only grants its shortcut on login when the inventory already has room. */
+    static boolean restoreMissing(Player player, DungeonManager dungeon) {
+        if (hasShortcut(player)) return false;
+        PlayerInventory inventory = player.getInventory();
+        if (firstMainEmpty(inventory) < 0 && !dungeon.storeItemForBackpackRecovery(player)) return false;
+        int slot = firstMainEmpty(inventory);
+        if (slot < 0) return false;
+        ItemStack shortcut = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) shortcut.getItemMeta();
+        meta.setDisplayName(NAME);
+        PlayerProfile profile = Bukkit.createProfile(UUID.randomUUID());
+        profile.setProperty(new ProfileProperty("textures", TEXTURE));
+        meta.setPlayerProfile(profile);
+        shortcut.setItemMeta(meta);
+        inventory.setItem(slot, shortcut);
+        player.sendMessage("§e大背包快捷物品已补到随身物品栏；储物内容仍在原来的背包中。");
+        return true;
+    }
+
+    private static int firstMainEmpty(PlayerInventory inventory) {
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.getType().isAir()) return slot;
+        }
+        return -1;
+    }
+
+    static boolean isShortcut(ItemStack item) {
+        return isShortcut(item, NAME) || isShortcut(item, OLD_NAME);
     }
 
     private static boolean isShortcut(ItemStack item, String name) {

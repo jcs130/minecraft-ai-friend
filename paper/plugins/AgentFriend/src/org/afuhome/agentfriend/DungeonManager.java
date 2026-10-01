@@ -1194,6 +1194,33 @@ final class DungeonManager implements Listener {
         }
         plugin.saveConfig();
     }
+    /** Make one inventory slot available without discarding a player's belongings. */
+    boolean storeItemForBackpackRecovery(Player player) {
+        Inventory stash = liveStash(player.getUniqueId());
+        int free = stash.firstEmpty();
+        if (free < 0) return false;
+        int chosen = -1;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = player.getInventory().getItem(slot);
+            if (item != null && item.getType() == Material.ROTTEN_FLESH) { chosen = slot; break; }
+        }
+        if (chosen < 0) {
+            for (int slot = 35; slot >= 0; slot--) {
+                ItemStack item = player.getInventory().getItem(slot);
+                if (item != null && !item.getType().isAir() && !BackpackShortcutMigration.isShortcut(item)) {
+                    chosen = slot; break;
+                }
+            }
+        }
+        if (chosen < 0) return false;
+        ItemStack item = player.getInventory().getItem(chosen);
+        stash.setItem(free, item.clone());
+        saveStash(stash, player.getUniqueId());
+        player.getInventory().setItem(chosen, null);
+        player.sendMessage(ChatColor.YELLOW + "随身物品栏已满；一组 " + item.getType().name().toLowerCase(Locale.ROOT)
+                + " 已安全转存到个人试炼箱，以补回大背包快捷物品。");
+        return true;
+    }
     /** Move ledger rewards into the real chest before opening it. Keep overflow in the ledger. */
     private void materializeRewards(Inventory inv, UUID id) {
         boolean moved = false;
