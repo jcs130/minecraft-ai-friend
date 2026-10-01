@@ -464,6 +464,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 3 && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("protectchannel")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台检查频道。"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("玩家不在线。"); return true; }
+            sender.sendMessage("Protection channel " + target.getName() + " registered="
+                    + target.getListeningPluginChannels().contains(ProtectionAdvisor.CHANNEL));
+            return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("villagers")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台检查村民交易。"); return true;

@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.42 保护查询独占插件消息（2026-10-01 已正式发布）
+
+`/mycli protect break|place <x> <y> <z>` 保留原判定与 JSON 字段，`deny`、`unknown`、`allow_likely` 只通过请求玩家连接的 `mcagent:protection` UTF-8 JSON custom payload 返回；不发 `MC_PROTECT` 系统聊天、广播、动作栏或标题。0.3.41 曾只删除聊天副本，但正式 CortiLan 的 `getListeningPluginChannels()` 为 `registered=false`，Paper 的 `sendPluginMessage` 会静默跳过这类连接。0.3.42 对已注册连接继续用 Bukkit API，对未注册连接复用 Paper 1.20.6 原生 `ClientboundCustomPayloadPacket`/`DiscardedPayload` 编码发送同一频道与原始 JSON；这个分支与服务端版本绑定，将来升级 Paper 须重新验证。控制台只读 `/mycli admin protectchannel <在线玩家>` 可查询注册状态，不向玩家发消息。
+
+隔离服 `protection-channel-stage.mjs` 用干净角色数据模拟未注册的 CortiLan、未注册的 CortiEye 和已注册的普通玩家，收到状态 `deny/unknown/allow_likely` 各一次；普通玩家自己的回执不泄给 CortiLan，CortiEye 负载 0，三个聊天流均无 `MC_PROTECT`。旧隔离角色数据单文件备份后已恢复。发布前只有 CortiLan、CortiEye、Goddess 服务账号在线且无活动试炼；S4U 维护任务先正常停服，E/F 双盘 `20261001-084034` 均有 `.complete`，结果 0。正式服只启用 `AgentFriend-0.3.42.jar`（SHA256 `AF9E0D3334143D63300D6249D16A4F0E49BCD67CBF0F07BA9DCD4D268C0F658E`）；`paper/probe/protection-live-smoke.mjs` 让未注册的临时 Mineflayer 玩家在正式服收到建筑拒绝、道路拒绝、未知及户外可能允许四条 payload，聊天副本 0，临时白名单已撤。Java、Geyser Pong、Agent LAN 网关、女神桥和自动恢复正常。真实 CortiLan 仍未注册频道，协议层的未注册路径已验证，但其 192.168.3.152 运行程序是否把 `custom_payload` 交给决策层，服主机无法直接观测；不能声称这一层已端到端验收。CortiEyeMirror 插件加载，远端 CortiEye 在发布后首次复查尚未上线。
+
 ## 0.3.40 命格书与技能罗盘防丢（2026-10-01 已正式发布）
 
 AgentFriend 标记的技能罗盘和命格书会拦截玩家丢弃事件，同类型普通物品照常可丢。命格书打开时按玩家本人实时写入生命、魔力、原版经验等级、击败怪物/玩家数、死亡次数、AuraSkills 部分技能等级及八项法术熟练度；公会页前移到战绩之后，保留本人冒险者等级、声望、完成单数、当前任务进度。当前没有自由属性点，书中只说明实际存在的自动经验成长和成功施法熟练度。改动没有新权限、配置或客户端协议要求。
@@ -48,7 +54,7 @@ CortiLan 的原 27 格个人箱与 36 格随身背包都已占满；绿宝石堆
 
 ## 0.3.33 Agent 保护预检（已正式发布）
 
-`/mycli protect break|place <x> <y> <z>` 按发命令的玩家身份查询 16 格内已加载目标；`MC_PROTECT ` 聊天 JSON 与 `mcagent:protection` 原始 UTF-8 plugin message 同时只发给本人。结果覆盖 WorldGuard、村屋原始方块、公会大厅、公共道路、试炼场和十层地下城。`deny`、`unknown` 与 `allow_likely` 的 Agent 行为见 [接入说明](AGENT_PROTECTION.md)；实际方块事件仍是最终拦截。查询不返回方块材质，防止变成探矿旁路。
+`/mycli protect break|place <x> <y> <z>` 按发命令的玩家身份查询 16 格内已加载目标；自 0.3.41 起，`deny`、`unknown`、`allow_likely` 结果只通过本人的 `mcagent:protection` 原始 UTF-8 JSON plugin message 返回，不再发送 `MC_PROTECT` 聊天副本。0.3.42 进一步为未注册频道的连接直发同种原生包，避免 Paper API 静默跳过真实 CortiLan。结果覆盖 WorldGuard、村屋原始方块、公会大厅、公共道路、试炼场和十层地下城。Agent 行为见 [接入说明](AGENT_PROTECTION.md)；实际方块事件仍是最终拦截。查询不返回方块材质，防止变成探矿旁路。
 
 隔离服 25566 用真实 Mineflayer 1.20.6 验证：原村屋方块返回 `village_structure/deny`，村庄户外方块返回 `no_known_protection/allow_likely`，试炼塔返回 `dungeon/deny`，公共道路方块与道路净空的放置返回 `trial_road/deny`，远距离返回 `unknown_out_of_range/unknown`；聊天和插件消息一致，另一玩家连接没有收到查询结果。放置事件仍取被替换方块的旧状态；该逻辑用前一构建复测通过，随后只增加 `/mycli guide explore` 的 Agent 提示并重新编译，最终 SHA256 `958239948751A4FA0908A19DA71A1190E57BEE821BFD733F8723A5F107D936DB`。隔离服已停并恢复原 AgentFriend 0.3.31 JAR。
 

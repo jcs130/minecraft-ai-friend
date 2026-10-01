@@ -44,7 +44,7 @@ final class AgentCliCatalog {
         add(specs,"book","item","item","/mycli book","补领命格书","背包有空位；已有时不重复发放","领取结果");
         add(specs,"kit","item","item","/mycli kit","补领罗盘和命格书","背包有空位","领取结果");
         add(specs,"menu","item","gui","/mycli menu","打开技能罗盘原版箱子界面","在线玩家","原版菜单");
-        add(specs,"protect","safety","read","/mycli protect break|place <x> <y> <z>","操作方块前查询保护；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","MC_PROTECT JSON；deny 不操作，unknown 暂缓");
+        add(specs,"protect","safety","read","/mycli protect break|place <x> <y> <z>","操作方块前查询保护；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓");
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字>","前往公共或私人传送点","目标已存在且安全；私人名 1–24 位英文数字_-","MC_DESTINATION 绝对坐标或失败原因");
         add(specs,"waypoint","travel","read","/mycli waypoint [add|remove <名字>]","列出公共/私人传送点或保存/删除私人点","在线玩家；add/remove 名称为 1–24 位英文数字_-","MC_WAYPOINT 绝对坐标或操作结果");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
@@ -52,11 +52,11 @@ final class AgentCliCatalog {
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
-        add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","MC_PROTECT status=deny|unknown|allow_likely");
+        add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
         add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛和冷却","在线玩家","MC_COACH type=status");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
-        add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","MC_PROTECT status=deny|unknown|allow_likely");
+        add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗视线中的队友","非旁观者；须瞄准目标，魔力与冷却检查","治疗结果与视觉提示");
         add(specs,"cast.food","magic","cast","/mycli cast food","恢复饥饿","非旁观者；MagicSpells 魔力与冷却检查","施法结果");

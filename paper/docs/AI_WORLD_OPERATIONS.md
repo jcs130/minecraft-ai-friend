@@ -60,11 +60,11 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 
 面向手柄玩家，关键技能须可由原版物品使用、罗盘选择或按钮触发；面向 Agent，须有稳定的文字命令和可解析回执。高伤害、飞行、召唤物与传送要在村庄保护、组队、世界边界和性能负载下测试。不能把只有 Java 客户端模组能渲染的特效作为完成条件；基岩玩家至少要看见原版标题、粒子、音效或聊天反馈。
 
-Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查询本人当前维度、附近已加载的目标方块；解析 `MC_PROTECT ` JSON 或 `mcagent:protection` 频道。`deny` 换目标，`unknown` 暂缓，`allow_likely` 才尝试，实际事件拒绝后立即停止。协议、范围和原因见 [Agent 保护查询](AGENT_PROTECTION.md)。
+Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查询本人当前维度、附近已加载的目标方块；只解析本人连接收到的 `mcagent:protection` UTF-8 JSON plugin message。`deny` 换目标，`unknown` 暂缓，`allow_likely` 才尝试，实际事件拒绝后立即停止。保护查询不再发 `MC_PROTECT` 聊天行。协议、范围和原因见 [Agent 保护查询](AGENT_PROTECTION.md)。
 
 AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入口尚未接入，运营 Agent 不能仅因为服务端有接口就假定 CortiLan 已自动避让。接入客户端时要覆盖手动挖掘、路径清障及放置动作，并用真实服务器回执测试。
 
-导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询 `MC_PROTECT` 已包含目标维度与坐标。上述信息沿用原版聊天和 BossBar，因此 Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
+导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
 
 ### 公会委托与声望
 

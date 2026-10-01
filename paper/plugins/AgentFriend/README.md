@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.42 保护查询只走插件消息
+
+保留 `/mycli protect break|place <绝对x> <绝对y> <绝对z>` 的距离、已加载区块、WorldGuard 与建筑保护判定。每次有效查询的 `deny`、`unknown`、`allow_likely` 结果仍按原 JSON schema 编码为 UTF-8 原始字节，但只通过 `mcagent:protection` clientbound plugin message 发给请求玩家；不再发送 `MC_PROTECT` 系统聊天、广播、动作栏或标题。语法错误的普通用法提示保留。已注册客户端走 Bukkit 出站频道，未注册客户端走 Paper 1.20.6 的同一种原生 custom-payload 包，解决真实 CortiLan 尚未注册频道时 `sendPluginMessage` 静默跳过的问题。Mineflayer 仍需监听 `custom_payload`，不要再等待聊天回执。RCON/控制台可用 `/mycli admin protectchannel <在线玩家>` 只读检查该连接是否注册了频道；不会向玩家发消息。详见 [Agent 保护查询](../../docs/AGENT_PROTECTION.md)。
+
+隔离服 `protection-channel-stage.mjs` 用未注册的 CortiLan、未注册的 CortiEye 和已注册的普通玩家验证 `deny`、`unknown`、`allow_likely` 都只进请求者的 `custom_payload`，三人聊天均无 `MC_PROTECT`。正式服 `paper/probe/protection-live-smoke.mjs` 以未注册的临时 Mineflayer 账号验证同一出站路径四次、聊天副本零条。原生包实现绑定 Paper 1.20.6；将来升级服务端时必须重新隔离验证。CortiLan 远端决策程序是否订阅 `custom_payload`，需要在其运行主机侧验收。
+
 ## 0.3.40 技能罗盘与命格书
 
 带 AgentFriend 标记的技能罗盘和命格书现在无法通过丢弃键扔出；普通指南针和成书不受影响，两件道具仍可移到其他快捷栏格子。入服时若背包中缺少这些道具仍会补发，Agent 也可分别使用 `/mycli compass`、`/mycli book` 领取。

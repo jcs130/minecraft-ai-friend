@@ -6,13 +6,18 @@ import com.sk89q.worldguard.WorldGuard;
 import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
 import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
+import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.custom.DiscardedPayload;
+import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 
 /** A bounded, per-player preflight hint. The actual block event remains authoritative. */
@@ -70,9 +75,16 @@ final class ProtectionAdvisor {
             result.addProperty("reason", reason);
         }
         byte[] bytes = result.toString().getBytes(StandardCharsets.UTF_8);
-        // Chat is the vanilla/Bedrock/Mineflayer fallback; the payload is for structured listeners.
-        player.sendMessage("MC_PROTECT " + result);
-        player.sendPluginMessage(plugin, CHANNEL, bytes);
+        if (player.getListeningPluginChannels().contains(CHANNEL)) {
+            player.sendPluginMessage(plugin, CHANNEL, bytes);
+        } else {
+            // CraftPlayer.sendPluginMessage silently skips clients that did not
+            // register the channel. CortiLan's current Mineflayer connection is
+            // one of them. Send the same vanilla custom payload directly.
+            CraftPlayer craft = (CraftPlayer) player;
+            craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
+                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+        }
     }
 
     private String check(Player player, String action, int x, int y, int z) {
