@@ -201,6 +201,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private ViewerStatePublisher viewerStatePublisher;
     private ProtectionAdvisor protectionAdvisor;
     private AgentCoach agentCoach;
+    private PlayerNameTags playerNameTags;
     private final SpellPresentation spellPresentation = new SpellPresentation();
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
@@ -232,6 +233,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         protectionAdvisor = new ProtectionAdvisor(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
+        playerNameTags = new PlayerNameTags(this);
+        playerNameTags.start();
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
@@ -243,6 +246,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @Override public void onDisable() {
         if (agentCoach != null) agentCoach.stop();
+        if (playerNameTags != null) playerNameTags.stop();
         if (dungeon != null) dungeon.shutdown();
         if (active) {
             lastRun = System.currentTimeMillis();

@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.43 玩家头顶 Agent 标签（2026-10-01 已正式发布）
+
+通过原版 scoreboard team prefix 给 CortiLan、Kirito、Naruto、corti 按 UUID 显示简短的 `[Agent]` 头顶标签；普通玩家、Goddess 与摄像机账号不加。不会替换玩家的 scoreboard 或夺走其他插件已分配的队伍。配置和多端限制见 [玩家头顶标签](PLAYER_NAMETAGS.md)。隔离服 25566 用全新 Agent/普通 Mineflayer 账号收到原版 `teams` 前缀和成员包，普通玩家不在队伍；隔离服已恢复原 JAR 与配置并停机。
+
+正式服发布前只有 CortiLan 与 Goddess 在线，配置没有活动试炼检查点。`Afu-MC-DailyBackup` 正常停服并生成 E/F 双盘 `.complete` 快照 `20261001-090029`，任务结果 0，唯一启用 `AgentFriend-0.3.43.jar` 的 SHA256 为 `D5E470232DB3AACE8994E3254D2C9E85D92E0D7918579809377310ABCDBE4D3B`。重启后 RCON 读回 0.3.43；临时白名单 Mineflayer 普通玩家收到 CortiLan 的前缀和成员包，自己未进入 Agent 队伍，随后退出并移出白名单。Java、Geyser 基岩 Pong、Agent LAN 网关、Goddess 桥、CortiEye 附身/夜视及 Watchdog 正常，自动恢复暂停标记不存在。基岩真机的标签位置、颜色和中文字体仍待玩家画面验收；Pong 不能替代此项。
+
 ## 0.3.42 保护查询独占插件消息（2026-10-01 已正式发布）
 
 `/mycli protect break|place <x> <y> <z>` 保留原判定与 JSON 字段，`deny`、`unknown`、`allow_likely` 只通过请求玩家连接的 `mcagent:protection` UTF-8 JSON custom payload 返回；不发 `MC_PROTECT` 系统聊天、广播、动作栏或标题。0.3.41 曾只删除聊天副本，但正式 CortiLan 的 `getListeningPluginChannels()` 为 `registered=false`，Paper 的 `sendPluginMessage` 会静默跳过这类连接。0.3.42 对已注册连接继续用 Bukkit API，对未注册连接复用 Paper 1.20.6 原生 `ClientboundCustomPayloadPacket`/`DiscardedPayload` 编码发送同一频道与原始 JSON；这个分支与服务端版本绑定，将来升级 Paper 须重新验证。控制台只读 `/mycli admin protectchannel <在线玩家>` 可查询注册状态，不向玩家发消息。
