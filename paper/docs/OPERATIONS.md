@@ -6,6 +6,8 @@ CortiLan 在维护期间把大批重复战利品从个人箱移入了随身背�
 
 清理前在 Paper 正常保存退出后取得 E/F 双盘完整快照 `20261001-135526`（两处 `.complete`）；运行机另留原始配置与玩家数据的单文件副本，精确操作记录及一次性脚本在 `E:\MC\ops\MAINTENANCE.md`。现有 `recycle quote/sell` 仅接受玩家身份，控制台不能代执行；此次在停服状态同步更新个人箱、玩家背包和余额，不能在服务器运行时直接覆盖这些文件。重启后 AgentFriend 0.3.48、CortiLan 重连、保留/清除的背包槽、Java、Geyser UDP Pong、女神桥与 Watchdog 均核验通过。CortiEyeMirror 已加载，但截至 14:05 远端 CortiEye 客户端尚未重连，直播镜头仍需在它登录后复查。
 
+14:17 补验：远端 CortiEye 已自动重连，RCON `cortieye` 回 `camera=online attached=true cameraNightVision=true`，镜头重新附身 CortiLan。
+
 ## 0.3.48 挑战侧翼、商人和游戏日领奖（2026-10-01 已正式发布）
 
 第 11–15 层已在 X=-350、Z=-305 的独立侧翼建成：断桥掩体、浅水与干桥、围住的岩浆、热砖/踏板照明，以及第 15 层星灯主宰。第 10 层保留为中途首领，清怪后 10 秒自动进下一层并补血；第 7 层仍是可提前出发的驿站。新房间仅用原版方块与实体，不增加 Java/基岩客户端模组要求。`/mycli arena layout` 向参赛玩家给当前房间的绝对中心、半径、个人箱位置和危险类型。入口与驿站各有补给商、回收商；原版菜单和既有 `shop/recycle` 机器命令共用个人余额。每名玩家每个游戏日每层最多领一次奖励，重复通关返回私有 `MC_DUNGEON_LOOT category=daily_limit`；`/mycli arena loot` 列出当天已领楼层。第 15 层首通专属武器，后续首领奖励轮换。
