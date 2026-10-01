@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | `GuildManager.java` 的 `CONTRACTS`、`RANKS`、`THRESHOLDS`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `guild-players` | 可新增委托和目标判定，但现阶段仍需改 Java、构建和重启；**改委托 ID 会影响正在进行的任务** |
-| 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
+| 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机 | 可解答、引导、审核缺项申请并执行已有管理能力。现有 MCP 仅暴露有限的可审计工具；QwenPaw Agent 自身的文件/开发能力是另一层，不应把 MCP 工具范围误当作全部开发权限 |
 | 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本 | 正式世界、白名单、密钥、日志和备份都在运行主机 | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
 
@@ -64,6 +64,8 @@ Agent 在挖掘或放置前使用 `/mycli protect break|place <x> <y> <z>` 查�
 
 AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入口尚未接入，运营 Agent 不能仅因为服务端有接口就假定 CortiLan 已自动避让。接入客户端时要覆盖手动挖掘、路径清障及放置动作，并用真实服务器回执测试。
 
+试炼状态要先读 `MC_DUNGEON status participant=<true|false> selfState=<participating|not_participating> globalActive=<true|false> globalState=<idle|waiting_reconnect|cleared|fighting|preparing> globalFloor=<0..15> maxFloor=<6|10|15>`。这是发给命令请求者的本人身份与全服快照：`participant=false` 时，即使 `globalFloor=4`，也不能推断自己位于第 4 层、正在参赛或将获得该轮奖励。后续 `MC_DUNGEON entrance` 的 `scope=public` 是公共入口；`MC_DUNGEON floor=...` 的 `scope=global` 是活动队伍所在层，不是请求者坐标。两种查询 `/mycli status` 和 `/mycli arena status` 使用同一规则；玩家自己的位置仍应读实体位置或独立导航回执。
+
 导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
 
 ### 公会委托与声望
@@ -79,6 +81,10 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 ### 试炼塔、遗迹与新地下城
 
 现有十层试炼塔位置、主题、怪物和奖励写在 `DungeonManager`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
+
+0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。第 13 层入场直接给予三分钟抗火效果，使用原版效果包；奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。每位玩家每个游戏日每层最多领取一次奖励，重复挑战仍可进入；`/mycli arena loot` 显示当天已领奖层号，重复通关返回 `MC_DUNGEON_LOOT category=daily_limit`。
+
+验证 Agent 是否会学习新地形时，应让实际 CortiLan 自主进入并自然战斗，不用 RCON 杀怪或人工传送过层。逐次记录第 11–15 层是否到达掩体、是否避开岩浆与热砖、是否主动补给、失败后的路线是否变化、死亡/断线与最终通关回执；把 `/mycli arena layout` 的使用记录与视觉观察分开。隔离服 Mineflayer 的无挖掘算路测试仅证明存在可通行路线，不证明运行中的 Agent 已自主学会挑战。
 
 在隔离世界用正式快照副本勘察候选坐标，排除已建房屋、村庄、自然遗迹、容器、保护快照和玩家活动区。生成器应以稳定的副本 ID、模板版本和世界坐标为输入，先给出预览与冲突报告，正式施工只执行一次；中断标记存在时必须检查或恢复现场，不能删除标记硬重试。建筑、世界区块、实体、奖励队列、保护掩码与插件配置须作为同一份快照恢复。只换旧 JAR 不会拆除已建结构，也可能丢失新结构的保护逻辑。
 

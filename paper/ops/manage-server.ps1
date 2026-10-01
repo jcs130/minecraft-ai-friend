@@ -186,15 +186,24 @@ function Rcon([string]$command) {
 }
 
 function PlayerRoster {
-    $reply = Rcon 'minecraft:list'
+    # The plain list command uses display names such as "[Agent] CortiLan".
+    # UUID mode reports real login names, which are safe for maintenance gating.
+    $reply = Rcon 'minecraft:list uuids'
     if ($reply -notmatch '(?m)^There are (\d+) of a max of \d+ players online:\s*([^\r\n]*)') {
         throw "Could not parse Minecraft player roster: $reply"
     }
     $count = [int]$Matches[1]
     $names = @()
     $text = $Matches[2].Trim()
-    if ($text) { $names = @($text -split ',\s*' | ForEach-Object { $_.Trim() }) }
-    if ($names.Count -ne $count -or @($names | Where-Object { $_ -notmatch '^[A-Za-z0-9_.-]{1,16}$' }).Count) {
+    if ($text) {
+        foreach ($entry in @($text -split ',\s*')) {
+            if ($entry -notmatch '^([A-Za-z0-9_.-]{1,16}) \([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\)$') {
+                throw "Minecraft player roster is incomplete or malformed: $reply"
+            }
+            $names += $Matches[1]
+        }
+    }
+    if ($names.Count -ne $count) {
         throw "Minecraft player roster is incomplete or malformed: $reply"
     }
     return [pscustomobject]@{ Count = $count; Names = $names }

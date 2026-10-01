@@ -1,5 +1,35 @@
 # Paper 分支维护与发布
 
+## CortiLan 个人奖励清理（2026-10-01）
+
+CortiLan 在维护期间把大批重复战利品从个人箱移入了随身背包，停服后的最终存档为个人箱 6/54、背包 36/36。按完整物品组件核对后，只回收个人箱的重复星弦 1 件和背包中未装备的重复奖励装备 12 件；保留更好的武器、各类备用装备、已装备护甲、技能罗盘、命格书、法杖和大背包。按现有 `ArenaEconomy.unitPrice` 的材质、附魔和耐久规则记入个人绿宝石余额 95；清理后个人箱 5/54、背包 24/36，待领取队列为空。没有修改奖励生成规则或其他玩家数据。
+
+清理前在 Paper 正常保存退出后取得 E/F 双盘完整快照 `20261001-135526`（两处 `.complete`）；运行机另留原始配置与玩家数据的单文件副本，精确操作记录及一次性脚本在 `E:\MC\ops\MAINTENANCE.md`。现有 `recycle quote/sell` 仅接受玩家身份，控制台不能代执行；此次在停服状态同步更新个人箱、玩家背包和余额，不能在服务器运行时直接覆盖这些文件。重启后 AgentFriend 0.3.48、CortiLan 重连、保留/清除的背包槽、Java、Geyser UDP Pong、女神桥与 Watchdog 均核验通过。CortiEyeMirror 已加载，但截至 14:05 远端 CortiEye 客户端尚未重连，直播镜头仍需在它登录后复查。
+
+## 0.3.48 挑战侧翼、商人和游戏日领奖（2026-10-01 已正式发布）
+
+第 11–15 层已在 X=-350、Z=-305 的独立侧翼建成：断桥掩体、浅水与干桥、围住的岩浆、热砖/踏板照明，以及第 15 层星灯主宰。第 10 层保留为中途首领，清怪后 10 秒自动进下一层并补血；第 7 层仍是可提前出发的驿站。新房间仅用原版方块与实体，不增加 Java/基岩客户端模组要求。`/mycli arena layout` 向参赛玩家给当前房间的绝对中心、半径、个人箱位置和危险类型。入口与驿站各有补给商、回收商；原版菜单和既有 `shop/recycle` 机器命令共用个人余额。每名玩家每个游戏日每层最多领一次奖励，重复通关返回私有 `MC_DUNGEON_LOOT category=daily_limit`；`/mycli arena loot` 列出当天已领楼层。第 15 层首通专属武器，后续首领奖励轮换。
+
+隔离服先勘察 X=-430 时发现天然木板而拒绝覆盖，改至 X=-350 后才施工。真实 Mineflayer 跑完十五层，分别从新五层中心算路到个人箱，确认水、岩浆、热砖、踏板和掩体方块；相同游戏日再打第 11 层只收到 `daily_limit`，待领取件数不增加。0.3.47 曾短时发布并建成建筑，整理兼容记录时发现它将成品抗火药水放入第 12 层个人箱，与 0.3.46 已知的 Mineflayer `potion_contents` 解码缺口冲突。立即发布 0.3.48：第 12 层改给岩浆膏，入第 13 层时用原版效果包给予三分钟抗火。隔离服重新实走到第 13 层，Mineflayer 确认真实抗火效果、标准 54 格个人箱可打开且有岩浆膏、无成品药水。此前女巫装备包偶发的客户端解析警告仍存在，但未导致这次测试断线或开箱失败；远端 CortiLan 的自主战斗尚未端到端验收。
+
+0.3.47 发布前 E/F 双盘快照 `20261001-132330`，正式世界勘察和一次性施工后 E/F 双盘快照 `20261001-132509`；0.3.48 修正前再次正常停服备份，E/F 双盘快照 `20261001-133623`。三次 `Afu-MC-DailyBackup` S4U 任务结果均为 0，两盘 `.complete` 存在，维护暂停标记清除。正式服唯一启用 `AgentFriend-0.3.48.jar`，279097 字节，SHA256 `18BD55AB50109FE87E16F23EC2BF3A68494FCC4F1A142A59C8A1C461CCBBD433`。正式 Mineflayer 临时账号验证 `maxFloor=15` 与入口购买菜单后已移出白名单；Java、Geyser UDP Pong、女神桥、Watchdog 正常，最近一分钟 MSPT 平均约 5.9 ms。CortiEye 已重连，RCON 回 `camera=online attached=true cameraNightVision=true`。基岩真机的商人菜单与新房间画面需用户实际体验，Pong 不能代替手柄验收。
+
+回退 JAR 前须检查无活动试炼。仅回退到 0.3.47 会重新引入成品药水奖励；回退到 0.3.46 则不认识第 11–15 层的保护与领奖账本，**不可只换旧 JAR 后继续在新侧翼游玩**。如需世界级回退，应在无人游玩时将世界、插件配置、玩家进度作为一组从 `20261001-132330` 恢复，并明示该时间之后的进度将回退；平常保留 0.3.48，优先做前进式修复。
+
+## 0.3.46 试炼身份回执与前层补给（2026-10-01 已正式发布）
+
+`/mycli status` 和 `/mycli arena status` 现把本人 `participant` 与全服试炼状态分开；机器行 `MC_DUNGEON status` 带 `selfState/globalActive/globalState/globalFloor/maxFloor`，活动楼层坐标附 `scope=global`。隔离服两名 Mineflayer 1.20.6 账号分别在塔内和村庄时，两条命令均给参赛者 `participant=true`、未参赛者 `participant=false`；两者看到同一全服楼层，村庄账号仍显示“本人未参赛”。正式服重启后全新账号在两条命令中收到 `participant=false globalActive=false`，入口坐标标记 `scope=public`。
+
+前三层保底材料、金苹果、酿药材料与弓箭，随机额外奖励也限制为材料和消耗品；铁甲保底移至第四、五、八、九层，钻石套装及首领轮换保持。曾尝试直接给成品药水：隔离服十层结算成功，但 Mineflayer 1.20.6 无法解码个人箱的 `potion_contents`，箱子打不开，故最终版改为可正常读取的金苹果、闪烁的西瓜片和河豚。最终候选再跑十层，Agent 逐层读到补给和六件装备，打开 22 格个人箱，钻石套装进度 2，结果 PASS。原有女巫手持药水 `entity_equipment` 偶发解析警告仍存在，本次没有妨碍领奖。规则见 [试炼塔奖励](ARENA_LOOT.md)。
+
+发布前 CortiLan 的上一轮试炼在第七层休息站；等待其自然打完并确认 `dungeon-active-run` 清空后，仅 Goddess、CortiLan、CortiEye 服务账号在线。S4U `Afu-MC-DailyBackup` 正常停服，E/F 两盘 `20261001-124407` 快照均有 `.complete`、任务结果 0，只启用 `AgentFriend-0.3.46.jar`（273525 字节，SHA256 `5E3F607014D171A38683E2C1BDA3F9F8223DDE947810E6A8B7D8CA59B884AC13`）。RCON 读回 0.3.46；Java 状态、Agent LAN 网关、Geyser 基岩 Pong、Goddess 桥和 Watchdog 正常，待发布/自动恢复暂停标记不存在。CortiEyeMirror 服务端已加载，但远端 CortiEye 到 12:49 仍未重连，RCON 为 `camera=offline attached=false`；直播镜头需远端客户端重新上线后再核验 `attached=true` 和夜视。基岩真机的奖励显示与手柄开箱仍待现场验收。
+
+## 0.3.45 试炼塔装备回收、套装保底与奖励轮换（2026-10-01 已正式发布）
+
+0.3.44 的第七层私有回收、余额商店与怪物友伤防护一并随 0.3.45 发布。新奖励在前四层保底附魔铁甲，第六和第十层按玩家进度轮换钻石甲；随机池覆盖所有护甲部位及武器、工具、稀有补给，重复首领战轮换宝藏。`/mycli arena loot` 返回本人下件钻石甲与排队量。规则和经济接口分别见 [奖励设计](ARENA_LOOT.md)、[第七层回收与补给](ARENA_ECONOMY.md)。隔离服同 UUID 两次十层挑战、满 128 件队列后第八层保底装备、重复铁盔回收与专属武器保护均通过。Mineflayer 偶发解析警告已定位为女巫原版药水的 `entity_equipment` 包，不是奖励 ItemStack；这项客户端兼容缺口另行处理。
+
+维护脚本同步修复了 `minecraft:list` 的 `[Agent]` 显示前缀导致真实账号名单解析失败的问题，改读 `minecraft:list uuids`；真实三服务账号和模拟 `.MicroKQ` 真人准入门均通过。正式服发布前只有 CortiLan、CortiEye、Goddess 服务账号在线，第十层活动试炼已经结束，配置没有 `dungeon-active-run`。现有 S4U `Afu-MC-DailyBackup` 正常停服、生成 E/F 两盘 `20261001-121106` `.complete` 快照，任务结果 0，并把唯一启用 JAR 从 0.3.43 切至 `AgentFriend-0.3.45.jar`，SHA256 `EAA258298A00F379C7E088E47AEC492D2825694DDA9ECB198E68A4CBA36DD0B1`。RCON 读回 0.3.45；Java、Agent LAN 网关、Geyser 基岩 Pong、Goddess 桥与 Watchdog 通过，临时调试白名单仍关闭；待发布标记和自动恢复暂停标记均不存在。CortiEyeMirror 服务端已加载，远端 CortiEye 客户端在 12:13 的首次复查仍未上线，直播镜头需其重连后用 `cortieye` 核验 `attached=true` 和夜视。基岩真机奖励名称与手柄菜单尚需实际游玩确认。
+
 ## 0.3.43 玩家头顶 Agent 标签（2026-10-01 已正式发布）
 
 通过原版 scoreboard team prefix 给 CortiLan、Kirito、Naruto、corti 按 UUID 显示简短的 `[Agent]` 头顶标签；普通玩家、Goddess 与摄像机账号不加。不会替换玩家的 scoreboard 或夺走其他插件已分配的队伍。配置和多端限制见 [玩家头顶标签](PLAYER_NAMETAGS.md)。隔离服 25566 用全新 Agent/普通 Mineflayer 账号收到原版 `teams` 前缀和成员包，普通玩家不在队伍；隔离服已恢复原 JAR 与配置并停机。

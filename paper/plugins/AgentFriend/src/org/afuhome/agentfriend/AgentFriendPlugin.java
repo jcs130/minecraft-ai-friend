@@ -518,6 +518,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.build(sender);
             return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("dungeonaudit")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台检查试炼怪物。"); return true;
+            }
+            dungeon.audit(sender);
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("surveydeep") || args[1].equalsIgnoreCase("builddeep"))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -525,6 +532,24 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             if (args[1].equalsIgnoreCase("surveydeep")) dungeon.surveyExpansion(sender);
             else dungeon.buildExpansion(sender);
+            return true;
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveychallenge") || args[1].equalsIgnoreCase("buildchallenge"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造挑战侧翼。"); return true;
+            }
+            if (args[1].equalsIgnoreCase("surveychallenge")) dungeon.surveyChallenge(sender);
+            else dungeon.buildChallenge(sender);
+            return true;
+        }
+        if (args.length == 4 && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("scanchallenge")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许控制台勘察候选区。"); return true;
+            }
+            try { dungeon.scanChallengeCandidate(sender, Integer.parseInt(args[2]), Integer.parseInt(args[3])); }
+            catch (NumberFormatException bad) { sender.sendMessage("x 和 z 必须是整数。"); }
             return true;
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
@@ -612,7 +637,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena start|rest|next|shop|status|rewards|stash|leave  清怪自动下楼；个人箱可储物"
+                ? "/mycli arena start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave  套装保底、个人箱与补给"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");

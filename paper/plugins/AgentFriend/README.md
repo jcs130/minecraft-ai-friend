@@ -1,5 +1,19 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.46 试炼状态区分本人和全服
+
+`/mycli status` 与 `/mycli arena status` 都先显示“本人试炼：参赛中/未参赛”，再显示“全服试炼”的当前楼层或待命。`MC_DUNGEON status` 增加 `participant`、`selfState`、`globalActive`、`globalState`、`globalFloor` 和 `maxFloor`；入口坐标标记 `scope=public`，活动层坐标标记 `scope=global`，每行都带本人 `participant`。Agent 只有在 `participant=true` 时才把全服楼层当成本人挑战进度。仅参赛者获得本轮奖励；未参赛账号仍可查询公共入口及全服进度。
+
+前三层保底材料、火把、箭矢、金苹果、酿药材料与基础弓，附魔铁甲顺延至第四、五、八、九层；首轮十层仍保底凑齐四件。暂不直接放成品药水，因为当前 Mineflayer 1.20.6 的 `potion_contents` 容器解码会使个人箱无法打开。详见 [试炼塔奖励设计](../../docs/ARENA_LOOT.md)。
+
+## 0.3.45 试炼塔套装与重复挑战奖励
+
+前四层保底集齐附魔铁甲；第六和第十层按玩家 UUID 轮换星辉钻石甲，完整十层挑战两轮保底凑齐四件，之后可继续提升附魔阶数。随机池扩展到全部铁甲、钻石甲部位以及武器、工具和珍稀补给；首领重复通关的宝藏也会轮换。`/mycli arena loot` 给玩家和 Agent 查看下一件套装装备，奖励继续进入个人箱或待领取队列；重复装备可用第七层回收功能处理。完整掉落表、保底规则和隔离服验收见 [试炼塔奖励设计](../../docs/ARENA_LOOT.md)。
+
+## 0.3.44 第七层装备回收与补给
+
+第七层商人增加原版容器菜单，供 Java、基岩手柄玩家点选护甲、武器、补给及装备回收；原实体绿宝石交易仍可从菜单进入。Agent 使用 `/mycli arena recycle list|quote|sell`、`/mycli arena shop list|buy` 和 `/mycli arena wallet`，只收到本人私有的 `MC_ARENA_ECONOMY` JSON。30 秒报价绑定本人 UUID、具体箱格或背包槽及完整物品组件哈希；重复成交、换物和过期均拒绝。回收余额不生成实体绿宝石；购买物进个人奖励队列，箱满时仍排队。各层怪物显式配备应有的弓、弩、斧，并阻止试炼怪物互锁和相互伤害。接口、价格与验收见 [第七层回收与补给](../../docs/ARENA_ECONOMY.md)。
+
 ## 0.3.42 保护查询只走插件消息
 
 保留 `/mycli protect break|place <绝对x> <绝对y> <绝对z>` 的距离、已加载区块、WorldGuard 与建筑保护判定。每次有效查询的 `deny`、`unknown`、`allow_likely` 结果仍按原 JSON schema 编码为 UTF-8 原始字节，但只通过 `mcagent:protection` clientbound plugin message 发给请求玩家；不再发送 `MC_PROTECT` 系统聊天、广播、动作栏或标题。语法错误的普通用法提示保留。已注册客户端走 Bukkit 出站频道，未注册客户端走 Paper 1.20.6 的同一种原生 custom-payload 包，解决真实 CortiLan 尚未注册频道时 `sendPluginMessage` 静默跳过的问题。Mineflayer 仍需监听 `custom_payload`，不要再等待聊天回执。RCON/控制台可用 `/mycli admin protectchannel <在线玩家>` 只读检查该连接是否注册了频道；不会向玩家发消息。详见 [Agent 保护查询](../../docs/AGENT_PROTECTION.md)。

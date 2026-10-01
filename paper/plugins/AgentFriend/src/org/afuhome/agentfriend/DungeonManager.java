@@ -29,6 +29,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.MagmaCube;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Ravager;
@@ -46,12 +47,17 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -59,14 +65,21 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MerchantRecipe;
+import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.entity.Projectile;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
-/** Vanilla-protocol trial tower with an optional deep wing and rest floor. */
+/** Vanilla-protocol trial tower with optional deep and challenge wings. */
 final class DungeonManager implements Listener {
-    private static final int X = -590, Z = -305, WING_X = -510, WING_Z = -305;
-    private static final int LOBBY_Y = 90, RADIUS = 12, BASE_FLOORS = 6, REST_FLOOR = 7, BOSS_FLOOR = 10;
-    private static final int[] Y = {68, 56, 44, 32, 20, 8, -4, -16, -28, -40};
-    private static final int[] RADII = {12, 12, 12, 12, 12, 12, 16, 18, 18, 20};
+    private static final int X = -590, Z = -305, WING_X = -510, WING_Z = -305, CHALLENGE_X = -350;
+    private static final int LOBBY_Y = 90, RADIUS = 12, BASE_FLOORS = 6, REST_FLOOR = 7,
+            BOSS_FLOOR = 10, OLD_MAX_FLOOR = 10, FINAL_FLOOR = 15;
+    private static final int[] Y = {68, 56, 44, 32, 20, 8, -4, -16, -28, -40,
+            -40, -28, -16, -4, 8};
+    private static final int[] RADII = {12, 12, 12, 12, 12, 12, 16, 18, 18, 20,
+            22, 22, 22, 22, 24};
     private static final double BUTTON_GROUP_RADIUS_SQUARED = 12.0 * 12.0;
     private static final long COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 3_600_000L;
@@ -81,6 +94,10 @@ final class DungeonManager implements Listener {
     private static final String STASH = "dungeon-personal-stash.";
     private static final int STASH_SIZE = 54;
     private static final String RARE_MISSES = "dungeon-rare-misses.";
+    private static final String DIAMOND_SET_INDEX = "dungeon-diamond-set-index.";
+    private static final String BOSS_CLEARS = "dungeon-boss-clears.";
+    private static final String FINAL_CLEARS = "dungeon-final-clears.";
+    private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 128;
     private static final Material[] REWARD_TYPES = {
@@ -126,7 +143,28 @@ final class DungeonManager implements Listener {
                     new EntityType[]{EntityType.RAVAGER, EntityType.PILLAGER, EntityType.PILLAGER,
                             EntityType.ZOMBIE, EntityType.ZOMBIE},
                     new Loot[]{new Loot(Material.EMERALD, 10), new Loot(Material.DIAMOND, 3),
-                            new Loot(Material.GOLDEN_APPLE, 2), new Loot(Material.EXPERIENCE_BOTTLE, 10)}));
+                            new Loot(Material.GOLDEN_APPLE, 2), new Loot(Material.EXPERIENCE_BOTTLE, 10)}),
+            new Theme("断桥要塞", Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.POLISHED_ANDESITE,
+                    new EntityType[]{EntityType.PILLAGER, EntityType.PILLAGER, EntityType.VINDICATOR,
+                            EntityType.VINDICATOR, EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.SPIDER},
+                    new Loot[]{new Loot(Material.EMERALD, 5), new Loot(Material.IRON_INGOT, 5), new Loot(Material.ARROW, 24)}),
+            new Theme("沉潮书库", Material.PRISMARINE_BRICKS, Material.DARK_PRISMARINE, Material.SEA_LANTERN,
+                    new EntityType[]{EntityType.DROWNED, EntityType.DROWNED, EntityType.DROWNED,
+                            EntityType.SKELETON, EntityType.SKELETON, EntityType.WITCH, EntityType.SPIDER},
+                    new Loot[]{new Loot(Material.EMERALD, 6), new Loot(Material.DIAMOND, 1), new Loot(Material.GOLDEN_APPLE, 1)}),
+            new Theme("赤铜熔炉", Material.POLISHED_BLACKSTONE, Material.TUFF_BRICKS, Material.COPPER_BLOCK,
+                    new EntityType[]{EntityType.BLAZE, EntityType.BLAZE, EntityType.MAGMA_CUBE,
+                            EntityType.MAGMA_CUBE, EntityType.VINDICATOR, EntityType.ZOMBIE, EntityType.ZOMBIE},
+                    new Loot[]{new Loot(Material.EMERALD, 7), new Loot(Material.DIAMOND, 1), new Loot(Material.GOLDEN_APPLE, 2)}),
+            new Theme("机关回廊", Material.CHISELED_STONE_BRICKS, Material.DEEPSLATE_TILES, Material.IRON_BLOCK,
+                    new EntityType[]{EntityType.PILLAGER, EntityType.PILLAGER, EntityType.STRAY,
+                            EntityType.STRAY, EntityType.VINDICATOR, EntityType.VINDICATOR, EntityType.WITCH},
+                    new Loot[]{new Loot(Material.EMERALD, 8), new Loot(Material.DIAMOND, 2), new Loot(Material.EXPERIENCE_BOTTLE, 8)}),
+            new Theme("星灯主宰之庭", Material.PURPUR_BLOCK, Material.POLISHED_BLACKSTONE_BRICKS, Material.AMETHYST_BLOCK,
+                    new EntityType[]{EntityType.RAVAGER, EntityType.WITCH, EntityType.PILLAGER,
+                            EntityType.PILLAGER, EntityType.VINDICATOR, EntityType.VINDICATOR},
+                    new Loot[]{new Loot(Material.EMERALD, 12), new Loot(Material.DIAMOND, 3),
+                            new Loot(Material.GOLDEN_APPLE, 2), new Loot(Material.EXPERIENCE_BOTTLE, 12)}));
 
     private final AgentFriendPlugin plugin;
     private final NamespacedKey mobKey;
@@ -135,8 +173,11 @@ final class DungeonManager implements Listener {
     private final Set<UUID> participants = new HashSet<>();
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<Inventory, UUID> stashMenus = new IdentityHashMap<>();
+    private final Map<UUID, String> lastMobDamage = new HashMap<>();
+    private final ArenaEconomy economy;
     private boolean built;
     private boolean expanded;
+    private boolean challengeBuilt;
     private boolean active;
     private boolean spawned;
     private boolean cleared;
@@ -155,18 +196,22 @@ final class DungeonManager implements Listener {
         mobKey = new NamespacedKey(plugin, "dungeon_mob");
         checkpointKey = new NamespacedKey(plugin, "dungeon_rest_unlocked");
         merchantKey = new NamespacedKey(plugin, "dungeon_merchant");
+        economy = new ArenaEconomy(plugin, this);
         built = plugin.getConfig().getBoolean("dungeon-built", false);
         expanded = plugin.getConfig().getBoolean("dungeon-expanded", false);
+        challengeBuilt = plugin.getConfig().getBoolean("dungeon-challenge-built", false);
         lastRun = plugin.getConfig().getLong("dungeon-last-run", 0L);
         if (plugin.getConfig().getBoolean("dungeon-building", false) && !built)
             plugin.getLogger().severe("Interrupted dungeon construction: inspect or restore the world before retrying.");
         if (plugin.getConfig().getBoolean("dungeon-expansion-building", false) && !expanded)
             plugin.getLogger().severe("Interrupted deep-wing construction: inspect or restore before retrying.");
+        if (plugin.getConfig().getBoolean("dungeon-challenge-building", false) && !challengeBuilt)
+            plugin.getLogger().severe("Interrupted challenge-wing construction: inspect or restore before retrying.");
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         if (built) {
             cleanupMobs();
             updateFloorGuides();
-            if (expanded) ensureMerchant();
+            if (expanded) ensureMerchants();
             restoreRun();
         }
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
@@ -175,8 +220,8 @@ final class DungeonManager implements Listener {
 
     boolean isBuilt() { return built; }
     boolean isExpanded() { return expanded; }
-    private int maxFloor() { return expanded ? Y.length : BASE_FLOORS; }
-    private int floorX(int number) { return number <= BASE_FLOORS ? X : WING_X; }
+    private int maxFloor() { return challengeBuilt ? FINAL_FLOOR : expanded ? OLD_MAX_FLOOR : BASE_FLOORS; }
+    private int floorX(int number) { return number <= BASE_FLOORS ? X : number <= OLD_MAX_FLOOR ? WING_X : CHALLENGE_X; }
     private int floorZ(int number) { return number <= BASE_FLOORS ? Z : WING_Z; }
     private int radius(int number) { return RADII[number - 1]; }
     private int chestX(int number) { return floorX(number) - radius(number) + 3; }
@@ -297,6 +342,10 @@ final class DungeonManager implements Listener {
             if (at.getY() >= Y[number - 1] && at.getY() <= Y[number - 1] + 7
                     && Math.abs(at.getBlockX() - WING_X) <= radius(number)
                     && Math.abs(at.getBlockZ() - WING_Z) <= radius(number)) return true;
+        if (challengeBuilt) for (int number = OLD_MAX_FLOOR + 1; number <= FINAL_FLOOR; number++)
+            if (at.getY() >= Y[number - 1] && at.getY() <= Y[number - 1] + 7
+                    && Math.abs(at.getBlockX() - CHALLENGE_X) <= radius(number)
+                    && Math.abs(at.getBlockZ() - WING_Z) <= radius(number)) return true;
         return false;
     }
 
@@ -324,27 +373,44 @@ final class DungeonManager implements Listener {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         switch (sub) {
             case "status" -> {
-                player.sendMessage(ChatColor.GOLD + "" + maxFloor() + " 层试炼：" + (active
-                        ? "第 " + floor + "/" + maxFloor() + " 层 · " + THEMES.get(floor - 1).name()
-                            + (pausedAt > 0 ? "，队伍暂离，等待重连"
-                                : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
-                                    + " 秒后自动下楼" : "，战斗中")
-                        : "待命") + "。奖励存进个人箱子，不自动进入背包。");
+                boolean participant = active && participants.contains(player.getUniqueId());
+                String globalState = !active ? "idle" : pausedAt > 0 ? "waiting_reconnect"
+                        : cleared ? "cleared" : spawned ? "fighting" : "preparing";
+                String globalDescription = !active ? "待命" : "第 " + floor + "/" + maxFloor()
+                        + " 层 · " + THEMES.get(floor - 1).name()
+                        + (pausedAt > 0 ? "，队伍暂离，等待重连"
+                            : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
+                                + " 秒后自动下楼" : spawned ? "，战斗中" : "，准备刷怪");
+                player.sendMessage(ChatColor.GOLD + "本人试炼：" + (participant ? "参赛中" : "未参赛")
+                        + "；全服试炼：" + globalDescription + "。"
+                        + (participant ? "奖励存进你的个人箱子，不自动进入背包。" : "只有参赛者获得本轮奖励。"));
+                player.sendMessage("MC_DUNGEON status participant=" + participant
+                        + " selfState=" + (participant ? "participating" : "not_participating")
+                        + " globalActive=" + active + " globalState=" + globalState
+                        + " globalFloor=" + (active ? floor : 0) + " maxFloor=" + maxFloor());
                 player.sendMessage("MC_DUNGEON entrance " + LocationOutput.fields(lobbyButton())
-                        + " chestX=-594 chestY=91 chestZ=-313");
+                        + " chestX=-594 chestY=91 chestZ=-313 scope=public participant=" + participant);
                 if (active) player.sendMessage("MC_DUNGEON floor=" + floor + " "
                         + LocationOutput.fields(new Location(world(), floorX(floor), Y[floor - 1] + 1, floorZ(floor)))
                         + " chestX=" + chestX(floor) + " chestY=" + (Y[floor - 1] + 1)
-                        + " chestZ=" + chestZ(floor));
+                        + " chestZ=" + chestZ(floor) + " scope=global participant=" + participant);
             }
             case "start" -> start(player);
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
-            case "shop", "商人" -> openShop(player);
+            case "shop", "商人" -> {
+                if (args.length == 2) openShop(player);
+                else if (args.length == 3 && args[2].equalsIgnoreCase("merchant")) openLegacyMerchant(player);
+                else economy.shop(player, args);
+            }
+            case "recycle" -> economy.recycle(player, args);
+            case "wallet" -> economy.wallet(player);
+            case "loot" -> lootProgress(player);
+            case "layout" -> layout(player);
             case "rewards", "reward", "箱子" -> rewardCommand(player, args);
             case "stash", "储物" -> stashCommand(player, args);
             case "leave" -> leave(player);
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|rest|next|shop|status|rewards|stash|leave");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli arena start|rest|next|layout|shop|recycle|wallet|loot|status|rewards|stash|leave");
         }
     }
 
@@ -448,6 +514,12 @@ final class DungeonManager implements Listener {
                 double maxHealth = player.getMaxHealth();
                 if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
                 player.setFireTicks(0);
+                if (number == 13) {
+                    player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE,
+                            20 * 180, 0, true, true, true));
+                    player.sendMessage(ChatColor.GOLD + "熔炉加护：获得 3 分钟抗火效果；岩浆带仍有路线挑战。");
+                    player.sendMessage("MC_DUNGEON_BUFF floor=13 effect=minecraft:fire_resistance durationTicks=3600");
+                }
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍。");
         }
         if (arrived.isEmpty()) return 0;
@@ -550,6 +622,10 @@ final class DungeonManager implements Listener {
             Entity e = Bukkit.getEntity(id);
             if (!(e instanceof LivingEntity living) || living.isDead() || !e.isValid()) return true;
             if (!inFloor(e.getLocation(), floor)) e.teleport(center(floor));
+            if (living instanceof Mob mob && !validParticipantTarget(mob.getTarget())) {
+                Player nearest = nearestParticipant(mob.getLocation());
+                if (nearest != null) mob.setTarget(nearest);
+            }
             return false;
         });
         if (!mobs.isEmpty()) return;
@@ -652,6 +728,8 @@ final class DungeonManager implements Listener {
         Theme theme = THEMES.get(floor - 1);
         int[][] spots = floor == BOSS_FLOOR
                 ? new int[][]{{0,10},{-9,-7},{9,-7},{-9,7},{9,7}}
+                : floor == FINAL_FLOOR
+                    ? new int[][]{{0,12},{-13,-11},{13,-11},{-13,11},{13,11},{0,-14}}
                 : floor >= 8
                     ? new int[][]{{-12,-10},{12,-10},{-12,10},{12,10},{0,13},{0,-13},
                             {-14,0},{14,0},{-9,13},{9,13},{-9,-13},{9,-13}}
@@ -660,22 +738,52 @@ final class DungeonManager implements Listener {
         for (int i = 0; i < theme.mobs().length; i++) {
             int[] spot = spots[i];
             Location at = center(floor).add(spot[0], 0, spot[1]);
+            // Raised platforms are deliberate terrain; spawn atop their surface.
+            while (at.getBlock().getType().isSolid() && at.getY() < Y[floor - 1] + 5)
+                at.add(0, 1, 0);
             Entity e = world().spawnEntity(at, theme.mobs()[i]);
             e.addScoreboardTag(MOB_TAG);
             e.getPersistentDataContainer().set(mobKey, PersistentDataType.BYTE, (byte) 1);
             if (e instanceof MagmaCube cube) cube.setSize(1); // No untagged split children after a clear.
-            if (e instanceof LivingEntity living) living.setRemoveWhenFarAway(false);
+            if (e instanceof LivingEntity living) {
+                living.setRemoveWhenFarAway(false);
+                if (living instanceof Mob mob) {
+                    mob.setAI(true);
+                    Material weapon = switch (e.getType()) {
+                        case SKELETON, STRAY -> Material.BOW;
+                        case PILLAGER -> Material.CROSSBOW;
+                        case VINDICATOR -> Material.IRON_AXE;
+                        default -> Material.AIR;
+                    };
+                    if (mob.getEquipment() != null)
+                        mob.getEquipment().setItemInMainHand(weapon == Material.AIR ? null : new ItemStack(weapon));
+                    Player nearest = nearestParticipant(mob.getLocation());
+                    if (nearest != null) mob.setTarget(nearest);
+                    if (floor >= 11 && !(mob instanceof Ravager) && i < 2) {
+                        double baseHealth = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) == null ? 20
+                                : mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue();
+                        if (mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
+                            mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(baseHealth + 12 + floor - 11);
+                            mob.setHealth(baseHealth + 12 + floor - 11);
+                        }
+                        mob.setCustomName(ChatColor.GOLD + "精英 · " + mob.getType().name().toLowerCase(Locale.ROOT));
+                        mob.setCustomNameVisible(true);
+                    }
+                }
+            }
             if (e instanceof Ravager ravager) {
                 bossId = ravager.getUniqueId();
-                ravager.setCustomName(ChatColor.DARK_PURPLE + "深渊守卫");
+                String bossName = floor == FINAL_FLOOR ? "星灯主宰" : "深渊守卫";
+                ravager.setCustomName(ChatColor.DARK_PURPLE + bossName);
                 ravager.setCustomNameVisible(true);
                 if (ravager.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-                    ravager.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(90);
-                    ravager.setHealth(90);
+                    double health = floor == FINAL_FLOOR ? 150 : 90;
+                    ravager.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(health);
+                    ravager.setHealth(health);
                 }
                 if (ravager.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE) != null)
-                    ravager.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(5);
-                bossBar = Bukkit.createBossBar(ChatColor.DARK_PURPLE + "深渊守卫",
+                    ravager.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(floor == FINAL_FLOOR ? 7 : 5);
+                bossBar = Bukkit.createBossBar(ChatColor.DARK_PURPLE + bossName,
                         BarColor.PURPLE, BarStyle.SOLID);
                 for (UUID id : participants) {
                     Player player = Bukkit.getPlayer(id);
@@ -686,6 +794,86 @@ final class DungeonManager implements Listener {
         }
         announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层：" + theme.name()
                 + "，" + theme.mobs().length + " 只怪物！");
+    }
+
+    private boolean validParticipantTarget(LivingEntity target) {
+        return target instanceof Player player && participants.contains(player.getUniqueId())
+                && player.isOnline() && !player.isDead() && inFloor(player.getLocation(), floor);
+    }
+
+    private Player nearestParticipant(Location at) {
+        Player nearest = null;
+        double distance = Double.MAX_VALUE;
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (!validParticipantTarget(player)) continue;
+            double candidate = player.getLocation().distanceSquared(at);
+            if (candidate < distance) { nearest = player; distance = candidate; }
+        }
+        return nearest;
+    }
+
+    private boolean trialMob(Entity entity) {
+        return entity != null && entity.getScoreboardTags().contains(MOB_TAG)
+                && entity.getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE);
+    }
+
+    private Entity attacker(Entity damager) {
+        if (damager instanceof Projectile projectile) {
+            ProjectileSource source = projectile.getShooter();
+            return source instanceof Entity entity ? entity : null;
+        }
+        return damager;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTrialTarget(EntityTargetLivingEntityEvent event) {
+        if (trialMob(event.getEntity()) && event.getTarget() != null
+                && !validParticipantTarget(event.getTarget())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTrialFriendlyDamage(EntityDamageByEntityEvent event) {
+        if (trialMob(event.getEntity()) && trialMob(attacker(event.getDamager()))) {
+            event.setCancelled(true);
+            lastMobDamage.put(event.getEntity().getUniqueId(), "blocked_friendly_" + event.getCause());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTrialPotion(PotionSplashEvent event) {
+        if (!trialMob(attacker(event.getPotion()))) return;
+        for (LivingEntity affected : event.getAffectedEntities())
+            if (trialMob(affected)) event.setIntensity(affected, 0);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTrialDamageAudit(EntityDamageEvent event) {
+        if (!trialMob(event.getEntity())) return;
+        String source = event.getCause().name();
+        if (event instanceof EntityDamageByEntityEvent attack) {
+            Entity actor = attacker(attack.getDamager());
+            source += actor == null ? ":unknown" : ":" + actor.getType().name();
+        }
+        lastMobDamage.put(event.getEntity().getUniqueId(), source);
+    }
+
+    void audit(CommandSender sender) {
+        sender.sendMessage("MC_DUNGEON_AUDIT floor=" + floor + " active=" + active + " spawned=" + spawned);
+        int count = 0;
+        for (UUID id : mobs) {
+            Entity entity = Bukkit.getEntity(id);
+            if (!(entity instanceof Mob mob) || !entity.isValid() || mob.isDead()) continue;
+            ItemStack hand = mob.getEquipment() == null ? null : mob.getEquipment().getItemInMainHand();
+            LivingEntity target = mob.getTarget();
+            sender.sendMessage("MC_DUNGEON_MOB floor=" + floor + " id=" + id + " type=" + mob.getType()
+                    + " hand=" + (hand == null ? Material.AIR : hand.getType()) + " ai=" + mob.hasAI()
+                    + " target=" + (target == null ? "none" : target.getType() + ":" + target.getUniqueId())
+                    + " health=" + String.format(Locale.ROOT, "%.2f", mob.getHealth())
+                    + " lastDamage=" + lastMobDamage.getOrDefault(id, "none"));
+            count++;
+        }
+        sender.sendMessage("MC_DUNGEON_AUDIT_END floor=" + floor + " count=" + count);
     }
 
     private void updateBossBar() {
@@ -702,6 +890,62 @@ final class DungeonManager implements Listener {
         bossBar.setProgress(Math.max(0, Math.min(1, ravager.getHealth() / ravager.getMaxHealth())));
     }
 
+    private static boolean bossRelic(ItemStack item) {
+        return item != null && item.hasItemMeta() && item.getItemMeta().hasDisplayName()
+                && "深渊裁决".equals(ChatColor.stripColor(item.getItemMeta().getDisplayName()));
+    }
+
+    private boolean hasBossRelic(UUID id, Player player) {
+        for (ItemStack item : bonusItems(id)) if (bossRelic(item)) return true;
+        for (ItemStack item : player.getInventory().getContents()) if (bossRelic(item)) return true;
+        for (int slot = 0; slot < STASH_SIZE; slot++)
+            if (bossRelic(plugin.getConfig().getItemStack(stashPath(id, slot)))) return true;
+        return false;
+    }
+
+    private void lootProgress(Player player) {
+        UUID id = player.getUniqueId();
+        int index = Math.max(0, plugin.getConfig().getInt(DIAMOND_SET_INDEX + id, 0));
+        int clears = Math.max(0, plugin.getConfig().getInt(BOSS_CLEARS + id, 0));
+        String[] pieces = {"头盔", "胸甲", "护腿", "靴子"};
+        long gameDay = world().getFullTime() / 24000L;
+        List<String> claimedFloors = new ArrayList<>();
+        for (int n = 1; n <= maxFloor(); n++)
+            if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
+                claimedFloors.add(Integer.toString(n));
+        player.sendMessage(ChatColor.GOLD + "前三层给材料、恢复品、酿药材料和弓；第四、五、八、九层保底集齐铁甲；第六、十层依次给星辉钻石甲。"
+                + "下一件：" + pieces[index % 4] + "，第 " + (Math.min(2, index / 4) + 1) + " 阶。"
+                + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
+                + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
+        player.sendMessage("MC_DUNGEON_SET schemaVersion=1 diamondIndex=" + index
+                + " next=minecraft:" + new Material[]{Material.DIAMOND_HELMET, Material.DIAMOND_CHESTPLATE,
+                    Material.DIAMOND_LEGGINGS, Material.DIAMOND_BOOTS}[index % 4].name().toLowerCase(Locale.ROOT)
+                + " tier=" + (Math.min(2, index / 4) + 1) + " bossClears=" + clears
+                + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
+                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1");
+    }
+
+    private void layout(Player player) {
+        boolean participant = active && participants.contains(player.getUniqueId());
+        int room = participant ? floorAt(player.getLocation()) : 0;
+        if (room == 0 || room != floor) {
+            player.sendMessage("MC_DUNGEON_LAYOUT participant=false reason=not_in_active_room");
+            return;
+        }
+        String hazard = switch (room) {
+            case 12 -> "shallow_water";
+            case 13 -> "contained_lava";
+            case 14 -> "magma_and_pressure_lamps";
+            default -> room >= 11 ? "cover_and_raised_platforms" : "none";
+        };
+        player.sendMessage("MC_DUNGEON_LAYOUT participant=true floor=" + room
+                + " theme=" + THEMES.get(room - 1).name() + " dimension=minecraft:overworld"
+                + " centerX=" + floorX(room) + " floorY=" + Y[room - 1] + " centerZ=" + floorZ(room)
+                + " radius=" + radius(room) + " hazard=" + hazard
+                + " centerLaneX=" + floorX(room) + " chestX=" + chestX(room)
+                + " chestY=" + (Y[room - 1] + 1) + " chestZ=" + chestZ(room));
+    }
+
     private int rewardFloor() {
         int credited = 0;
         int partySize = 0;
@@ -712,6 +956,15 @@ final class DungeonManager implements Listener {
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
             if (p == null || p.isDead() || !inFloor(p.getLocation(), floor)) continue;
+            long gameDay = world().getFullTime() / 24000L;
+            String claimPath = DAILY_CLAIMS + id + "." + floor;
+            if (plugin.getConfig().getLong(claimPath, Long.MIN_VALUE) == gameDay) {
+                p.sendMessage(ChatColor.YELLOW + "第 " + floor + " 层今天已领奖；明天（游戏日 "
+                        + (gameDay + 1) + "）可再次获得奖励。仍可继续挑战和使用商人。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=daily_limit gameDay="
+                        + gameDay + " nextDay=" + (gameDay + 1) + " credited=false");
+                continue;
+            }
             for (Loot loot : THEMES.get(floor - 1).rewards()) {
                 String path = rewardPath(id, loot.material());
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + loot.amount());
@@ -719,18 +972,52 @@ final class DungeonManager implements Listener {
             DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
                     plugin.getConfig().getInt(RARE_MISSES + id, 0));
             List<ItemStack> queue = bonusItems(id);
-            if (queue.size() < MAX_BONUS_QUEUE) {
+            // The queue limit only converts ordinary supplies. Rare and guaranteed gear
+            // must not disappear merely because a player has not emptied a full chest.
+            if (queue.size() < MAX_BONUS_QUEUE || bonus.rare()) {
                 queue.add(bonus.item());
                 plugin.getConfig().set(BONUS_ITEMS + id, queue);
                 plugin.getConfig().set(RARE_MISSES + id,
                         bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
                 p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
                         + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category="
+                        + (bonus.rare() ? "rare" : "extra") + " item=minecraft:"
+                        + bonus.item().getType().name().toLowerCase(Locale.ROOT));
             } else {
-                String path = rewardPath(id, bonus.rare() ? Material.DIAMOND : Material.EMERALD);
+                String path = rewardPath(id, Material.EMERALD);
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
-                p.sendMessage(ChatColor.YELLOW + "个人宝箱特殊物品已满，额外战利品折成 "
-                        + (bonus.rare() ? "钻石" : "绿宝石") + " ×1 保存。请先领取箱内物品。");
+                p.sendMessage(ChatColor.YELLOW + "个人宝箱普通奖励队列已满，本层普通额外战利品折成绿宝石 ×1 保存。"
+                        + "稀有与保底装备仍会留在待领取队列；请及时清理个人箱。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor
+                        + " category=converted item=minecraft:emerald");
+            }
+            List<DungeonLoot.Bonus> supplies = DungeonLoot.supplies(floor);
+            if (!supplies.isEmpty()) {
+                List<ItemStack> guaranteed = bonusItems(id);
+                for (DungeonLoot.Bonus supply : supplies) {
+                    guaranteed.add(supply.item());
+                    p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label() + "，已存入个人箱子。");
+                    p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
+                            + supply.item().getType().name().toLowerCase(Locale.ROOT)
+                            + " count=" + supply.item().getAmount());
+                }
+                plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
+            }
+            int setIndex = Math.max(0, plugin.getConfig().getInt(DIAMOND_SET_INDEX + id, 0));
+            DungeonLoot.Bonus milestone = DungeonLoot.milestone(floor, setIndex);
+            if (milestone != null) {
+                List<ItemStack> guaranteed = bonusItems(id);
+                guaranteed.add(milestone.item());
+                plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
+                if (floor == 6 || floor == BOSS_FLOOR)
+                    plugin.getConfig().set(DIAMOND_SET_INDEX + id, setIndex + 1);
+                p.sendMessage((milestone.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN)
+                        + "本层保底装备：" + milestone.label() + "，已存入个人箱子。"
+                        + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
+                p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
+                        + milestone.item().getType().name().toLowerCase(Locale.ROOT)
+                        + " diamondIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1));
             }
             if (floor == 3) plugin.teachArenaSkills(p);
             if (floor == BASE_FLOORS && expanded) {
@@ -739,15 +1026,31 @@ final class DungeonManager implements Listener {
                 p.sendMessage(ChatColor.GOLD + "已解锁第七层灯火驿站直达；今后可在罗盘或 /mycli arena rest 进入。");
             }
             if (floor == BOSS_FLOOR) {
+                int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
+                if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
+                DungeonLoot.Bonus cache = DungeonLoot.bossCache(clears);
                 List<ItemStack> relics = bonusItems(id);
-                if (relics.size() < MAX_BONUS_QUEUE) {
-                    relics.add(0, DungeonLoot.bossRelic());
-                    plugin.getConfig().set(BONUS_ITEMS + id, relics);
-                    p.sendMessage(ChatColor.LIGHT_PURPLE + "首领战利品「深渊裁决」已存入个人箱子。");
-                } else plugin.getConfig().set(rewardPath(id, Material.DIAMOND),
-                        pending(id, Material.DIAMOND) + 3);
+                relics.add(0, cache.item());
+                plugin.getConfig().set(BONUS_ITEMS + id, relics);
+                plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "首领宝藏：" + cache.label() + "，已存入个人箱子。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
             }
+            if (floor == FINAL_FLOOR) {
+                int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
+                DungeonLoot.Bonus cache = DungeonLoot.finalCache(clears);
+                List<ItemStack> relics = bonusItems(id);
+                relics.add(0, cache.item());
+                plugin.getConfig().set(BONUS_ITEMS + id, relics);
+                plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "星灯首领宝藏：" + cache.label() + "，已存入个人箱子。");
+                p.sendMessage("MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
+                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1));
+            }
+            plugin.getConfig().set(claimPath, gameDay);
             plugin.guildFloorCleared(p, floor, partySize);
+            plugin.saveConfig();
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
             p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的个人箱里；像普通箱子一样取放。");
             credited++;
@@ -812,6 +1115,14 @@ final class DungeonManager implements Listener {
     private int pending(UUID id, Material material) {
         return plugin.getConfig().getInt(rewardPath(id, material), 0);
     }
+    boolean queuePurchased(UUID id, ItemStack item) {
+        List<ItemStack> queue = bonusItems(id);
+        if (queue.size() >= MAX_BONUS_QUEUE) return false;
+        queue.add(item.clone());
+        plugin.getConfig().set(BONUS_ITEMS + id, queue);
+        return true;
+    }
+    int queuedItems(UUID id) { return bonusItems(id).size(); }
     private void rewardCommand(Player player, String[] args) {
         if (args.length == 2) { openStash(player); return; }
         if (args[2].equalsIgnoreCase("list") && args.length == 3) {
@@ -866,7 +1177,7 @@ final class DungeonManager implements Listener {
                 + " count=" + item.getAmount() + " name=" + name
                 + " enchants=" + (enchants.isEmpty() ? "-" : enchants);
     }
-    private Inventory liveStash(UUID id) {
+    Inventory liveStash(UUID id) {
         for (Map.Entry<Inventory, UUID> entry : stashMenus.entrySet())
             if (entry.getValue().equals(id)) return entry.getKey();
         Inventory inv = Bukkit.createInventory(null, STASH_SIZE, ChatColor.GOLD + "个人试炼箱");
@@ -876,7 +1187,7 @@ final class DungeonManager implements Listener {
         }
         return inv;
     }
-    private void saveStash(Inventory inv, UUID id) {
+    void saveStash(Inventory inv, UUID id) {
         for (int slot = 0; slot < inv.getSize(); slot++) {
             ItemStack item = inv.getItem(slot);
             plugin.getConfig().set(stashPath(id, slot), item == null || item.getType().isAir() ? null : item.clone());
@@ -1137,6 +1448,7 @@ final class DungeonManager implements Listener {
             if (e != null) e.remove();
         }
         mobs.clear();
+        lastMobDamage.clear();
         World w = world();
         if (w == null || !built) return;
         // The arena's four chunks may have unloaded while every player was disconnected.
@@ -1268,10 +1580,75 @@ final class DungeonManager implements Listener {
         plugin.getConfig().set("dungeon-expanded", true);
         plugin.getConfig().set("dungeon-expansion-building", false);
         plugin.saveConfig();
-        ensureMerchant();
+        ensureMerchants();
         updateFloorGuides();
         sender.sendMessage("深层四层已建成：第七层驿站、第八九层大房间和第十层首领殿。");
         plugin.getLogger().info("Deep dungeon wing built at " + WING_X + "," + WING_Z + ", y=-40..3");
+    }
+
+    void surveyChallenge(CommandSender sender) { surveyChallengeSite(sender, CHALLENGE_X, WING_Z); }
+
+    void scanChallengeCandidate(CommandSender sender, int x, int z) {
+        if (Math.abs(x - WING_X) < 65 || Math.abs(x - X) < 65) {
+            sender.sendMessage("候选侧翼距现有试炼建筑太近。"); return;
+        }
+        surveyChallengeSite(sender, x, z);
+    }
+
+    private boolean surveyChallengeSite(CommandSender sender, int centerX, int centerZ) {
+        if (!built || !expanded || !plugin.getConfig().getBoolean("dungeon-expanded", false)) {
+            sender.sendMessage("十层试炼尚未建成，不能施工新侧翼。"); return false;
+        }
+        if (challengeBuilt || plugin.getConfig().getBoolean("dungeon-challenge-built", false)) {
+            sender.sendMessage("挑战侧翼已经建成，拒绝重复覆盖。"); return false;
+        }
+        if (active || plugin.getConfig().isConfigurationSection(RUN_STATE)) {
+            sender.sendMessage("有试炼或重连检查点，不能施工。"); return false;
+        }
+        if (plugin.getConfig().getBoolean("dungeon-challenge-building", false)) {
+            sender.sendMessage("施工中断标记仍在；先检查并恢复施工前快照。"); return false;
+        }
+        World w = world();
+        if (w == null || Y[10] < w.getMinHeight() + 4 || Y[14] + 7 >= w.getMaxHeight()) {
+            sender.sendMessage("主世界未加载或高度不足。"); return false;
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getGameMode() == GameMode.SPECTATOR || !sameWorld(player.getLocation())) continue;
+            Location at = player.getLocation();
+            if (Math.abs(at.getBlockX() - centerX) <= 25
+                    && Math.abs(at.getBlockZ() - centerZ) <= 25
+                    && at.getY() >= Y[10] && at.getY() <= Y[14] + 7) {
+                sender.sendMessage("施工区域里有玩家：" + player.getName()); return false;
+            }
+        }
+        for (int number = OLD_MAX_FLOOR + 1; number <= FINAL_FLOOR; number++) {
+            int r = radius(number), y = Y[number - 1];
+            for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++)
+                for (int dy = 0; dy <= 7; dy++) {
+                    Block block = w.getBlockAt(centerX + dx, y + dy, centerZ + dz);
+                    if (block.getState() instanceof TileState || suspicious(block.getType())) {
+                        sender.sendMessage("挑战侧翼发现容器或结构，拒绝施工：" + block.getLocation()
+                                + " " + block.getType()); return false;
+                    }
+                }
+        }
+        sender.sendMessage("挑战侧翼勘察通过：第 11–15 层，中心 X=" + centerX
+                + " Z=" + centerZ + "，Y=-40..15，无容器/人工结构/在场玩家。");
+        return true;
+    }
+
+    void buildChallenge(CommandSender sender) {
+        if (!surveyChallengeSite(sender, CHALLENGE_X, WING_Z)) return;
+        plugin.getConfig().set("dungeon-challenge-building", true);
+        plugin.saveConfig();
+        for (int number = OLD_MAX_FLOOR + 1; number <= FINAL_FLOOR; number++) buildFloor(world(), number);
+        challengeBuilt = true;
+        plugin.getConfig().set("dungeon-challenge-built", true);
+        plugin.getConfig().set("dungeon-challenge-building", false);
+        plugin.saveConfig();
+        ensureMerchants();
+        updateFloorGuides();
+        sender.sendMessage("第 11–15 层已建成；第 10 层现为中途首领，第 15 层为终点。");
     }
 
     private void buildRestWorkstations(World w) {
@@ -1301,23 +1678,34 @@ final class DungeonManager implements Listener {
         return recipes;
     }
 
-    private Villager ensureMerchant() {
+    private void ensureMerchants() {
+        for (byte kind = 1; kind <= 4; kind++) ensureMerchant(kind);
+    }
+
+    private Villager ensureMerchant(byte kind) {
         if (!expanded || world() == null) return null;
-        Location at = new Location(world(), WING_X + 7.5, Y[REST_FLOOR - 1] + 1, WING_Z - 4.5);
+        Location at = switch (kind) {
+            case 1 -> new Location(world(), WING_X + 7.5, Y[REST_FLOOR - 1] + 1, WING_Z - 4.5);
+            case 2 -> new Location(world(), WING_X + 10.5, Y[REST_FLOOR - 1] + 1, WING_Z - 4.5);
+            case 3 -> new Location(world(), X + 2.5, LOBBY_Y + 1, Z - 5.5);
+            default -> new Location(world(), X + 5.5, LOBBY_Y + 1, Z - 5.5);
+        };
         Villager merchant = null;
-        for (Entity entity : world().getNearbyEntities(at, 12, 6, 12)) {
+        for (Entity entity : world().getNearbyEntities(at, 1.5, 2, 1.5)) {
             if (!(entity instanceof Villager villager)
-                    || !villager.getPersistentDataContainer().has(merchantKey, PersistentDataType.BYTE)) continue;
+                    || !Byte.valueOf(kind).equals(villager.getPersistentDataContainer()
+                            .get(merchantKey, PersistentDataType.BYTE))) continue;
             if (merchant == null) merchant = villager;
             else villager.remove();
         }
         if (merchant == null) {
             merchant = world().spawn(at, Villager.class);
-            merchant.getPersistentDataContainer().set(merchantKey, PersistentDataType.BYTE, (byte) 1);
+            merchant.getPersistentDataContainer().set(merchantKey, PersistentDataType.BYTE, kind);
         }
-        merchant.setProfession(Villager.Profession.CLERIC);
+        merchant.setProfession(kind % 2 == 0 ? Villager.Profession.ARMORER : Villager.Profession.WEAPONSMITH);
         merchant.setVillagerLevel(5);
-        merchant.setCustomName(ChatColor.GOLD + "灯火驿站商人");
+        merchant.setCustomName(ChatColor.GOLD + (kind >= 3 ? "入口" : "驿站")
+                + (kind % 2 == 0 ? "装备回收商" : "武备补给商"));
         merchant.setCustomNameVisible(true);
         merchant.setAI(false);
         merchant.setInvulnerable(true);
@@ -1326,14 +1714,38 @@ final class DungeonManager implements Listener {
         return merchant;
     }
 
+    private boolean nearMerchant(Player player) {
+        return expanded && (inLobby(player.getLocation())
+                || active && floor == REST_FLOOR && participants.contains(player.getUniqueId())
+                    && inFloor(player.getLocation(), REST_FLOOR));
+    }
+
     private void openShop(Player player) {
-        if (!expanded || !active || floor != REST_FLOOR || !participants.contains(player.getUniqueId())
-                || !inFloor(player.getLocation(), REST_FLOOR)) {
-            player.sendMessage(ChatColor.YELLOW + "在第七层灯火驿站内才能与商人交易。"); return;
+        if (!nearMerchant(player)) {
+            player.sendMessage(ChatColor.YELLOW + "前往试炼场入口或第七层驿站与商人交易。"); return;
         }
-        Villager merchant = ensureMerchant();
+        economy.openShopMenu(player);
+    }
+
+    void openLegacyMerchant(Player player) {
+        if (!nearMerchant(player)) {
+            player.sendMessage(ChatColor.YELLOW + "前往试炼场入口或第七层驿站与商人交易。"); return;
+        }
+        Villager merchant = ensureMerchant((byte) (inLobby(player.getLocation()) ? 3 : 1));
         if (merchant == null) player.sendMessage(ChatColor.RED + "驿站商人暂时不在，请联系服主。");
         else player.openMerchant(merchant, true);
+    }
+
+    @EventHandler public void onRestMerchant(PlayerInteractEntityEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || !expanded) return;
+        Byte kind = event.getRightClicked().getPersistentDataContainer().get(merchantKey, PersistentDataType.BYTE);
+        if (kind == null || kind < 1 || kind > 4) return;
+        event.setCancelled(true);
+        if (!nearMerchant(event.getPlayer())) {
+            event.getPlayer().sendMessage(ChatColor.YELLOW + "需要在入口或驿站使用商人。"); return;
+        }
+        if (kind % 2 == 0) economy.openRecycleMenu(event.getPlayer());
+        else economy.openShopMenu(event.getPlayer());
     }
 
     private void buildFloor(World w, int number) {
@@ -1365,6 +1777,54 @@ final class DungeonManager implements Listener {
             for (int dx = -5; dx <= 5; dx++) for (int dz = 8; dz <= 12; dz++)
                 w.getBlockAt(fx + dx, y, fz + dz).setType(Material.GILDED_BLACKSTONE, false);
         }
+        if (number > OLD_MAX_FLOOR) buildChallengeTerrain(w, number);
+    }
+
+    private void buildChallengeTerrain(World w, int number) {
+        int fx = floorX(number), fz = floorZ(number), y = Y[number - 1];
+        Material cover = THEMES.get(number - 1).pillar();
+        // Low, spaced cover remains walkable for Mineflayer; central lane stays clear.
+        for (int dx : new int[]{-9, 9}) for (int dz : new int[]{-7, 7}) {
+            for (int x = dx - 1; x <= dx + 1; x++)
+                w.getBlockAt(fx + x, y + 1, fz + dz).setType(cover, false);
+        }
+        for (int dx : new int[]{-6, 6}) for (int dz : new int[]{-12, 12}) {
+            for (int x = dx - 2; x <= dx + 2; x++) for (int z = dz - 2; z <= dz + 2; z++)
+                w.getBlockAt(fx + x, y + 1, fz + z).setType(THEMES.get(number - 1).floor(), false);
+            for (int z = dz - 2; z <= dz + 2; z++)
+                w.getBlockAt(fx + dx, y + 2, fz + z).setType(THEMES.get(number - 1).floor(), false);
+        }
+        if (number == 12) {
+            // Shallow flooded shelves, with dry crossings at z = -4, 0, +4.
+            for (int dx : new int[]{-4, 4}) for (int dz = -15; dz <= 15; dz++) {
+                if (dz == -4 || dz == 0 || dz == 4) continue;
+                w.getBlockAt(fx + dx, y, fz + dz).setType(Material.WATER, false);
+                w.getBlockAt(fx + dx, y - 1, fz + dz).setType(Material.PRISMARINE_BRICKS, false);
+            }
+        }
+        if (number == 13) {
+            // Contained, visible lava strips; three broad stone bridges remain.
+            for (int dx : new int[]{-5, 5}) for (int dz = -14; dz <= 14; dz++) {
+                if (Math.abs(dz) <= 2 || Math.abs(dz) >= 10 && Math.abs(dz) <= 12) continue;
+                w.getBlockAt(fx + dx, y, fz + dz).setType(Material.LAVA, false);
+                w.getBlockAt(fx + dx, y - 1, fz + dz).setType(Material.POLISHED_BLACKSTONE, false);
+            }
+        }
+        if (number == 14) {
+            // Magma/pressure-plate hazard lanes can be read from ordinary block state.
+            for (int dx : new int[]{-5, 5}) for (int dz = -13; dz <= 13; dz++) {
+                if (Math.abs(dz) <= 2 || dz % 7 == 0) continue;
+                boolean pad = dz % 4 == 0;
+                w.getBlockAt(fx + dx, y, fz + dz).setType(
+                        pad ? Material.REDSTONE_LAMP : Material.MAGMA_BLOCK, false);
+                if (pad) w.getBlockAt(fx + dx, y + 1, fz + dz).setType(Material.STONE_PRESSURE_PLATE, false);
+            }
+        }
+        if (number == 15) for (int dx = -3; dx <= 3; dx++) for (int dz = 9; dz <= 15; dz++)
+            w.getBlockAt(fx + dx, y + 1, fz + dz).setType(Material.PURPUR_BLOCK, false);
+        placeSign(w.getBlockAt(chestX(number) + 2, y + 1, chestZ(number) - 1),
+                number == 12 ? "浅水与干桥" : number == 13 ? "熔炉与石桥" : number == 14 ? "踏板与热砖" : "利用掩体",
+                "中央可通行", "留意高低差");
     }
     private void placeButton(Block block, Material material) {
         Switch data = (Switch) Bukkit.createBlockData(material);

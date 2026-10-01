@@ -1,14 +1,14 @@
 {
-  "capturedAt": "2026-09-30",
+  "capturedAt": "2026-10-01",
   "minecraft": "1.20.6",
   "paperBuild": 151,
   "java": "Temurin 21.0.12.1+1",
   "paperJarSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
   "plugins": [
     {
-      "file": "AgentFriend-0.3.30.jar",
-      "bytes": 206148,
-      "sha256": "96fac10b4c7f9b4fd519d20292bfb61dee37c7361fa5bd6ea88cc5713a51b7d4"
+      "file": "AgentFriend-0.3.48.jar",
+      "bytes": 279097,
+      "sha256": "18bd55ab50109fe87e16f23ec2bf3a68494fcc4f1a142a59c8a1c461ccbbd433"
     },
     {
       "file": "AuraSkills-2.4.0.jar",
