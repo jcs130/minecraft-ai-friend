@@ -69,8 +69,6 @@ import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.entity.Projectile;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 /** Vanilla-protocol trial tower with optional deep and challenge wings. */
 final class DungeonManager implements Listener {
@@ -648,10 +646,8 @@ final class DungeonManager implements Listener {
                 if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
                 player.setFireTicks(0);
                 if (number == 13) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE,
-                            20 * 180, 0, true, true, true));
-                    player.sendMessage(ChatColor.GOLD + "熔炉加护：获得 3 分钟抗火效果；岩浆带仍有路线挑战。");
-                    player.sendMessage("MC_DUNGEON_BUFF floor=13 effect=minecraft:fire_resistance durationTicks=3600");
+                    player.sendMessage(ChatColor.GOLD + "第 13 层岩浆会造成伤害；本层不再自动给予抗火，请观察地形并绕行。");
+                    player.sendMessage("MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false");
                 }
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍。");
         }

@@ -13,8 +13,8 @@ const rcon = (command) => execFileSync('node', [
 const connect = (username) => mineflayer.createBot({
   host: '127.0.0.1', port: 25566, username, auth: 'offline', version: '1.20.6',
 });
-const target = connect('ChantTarget');
-const eye = connect('ChantEye');
+const target = connect('CortiLan');
+const eye = connect('CortiEye');
 const packets = { target: [], eye: [] };
 for (const [key, bot] of [['target', target], ['eye', eye]]) {
   bot._client.on('packet', (packet, meta) => {
@@ -43,7 +43,7 @@ try {
     try { return rcon('cortieye').includes('attached=true'); }
     catch { return false; }
   }, 'camera attachment', 12000);
-  rcon('minecraft:tp ChantTarget -589.5 91 -329.5');
+  rcon('minecraft:tp CortiLan -589.5 91 -329.5');
   await until(() => target.entity.position.distanceTo(new Vec3(-589.5, 91, -329.5)) < 2,
     'target arena position');
   packets.target.length = 0;
@@ -53,6 +53,10 @@ try {
   await sleep(400);
   assert.ok(packets.target.some((packet) => packet.name === 'world_particles'));
   assert.ok(packets.target.some((packet) => packet.name.includes('sound')));
+  assert.ok(packets.eye.filter((packet) => packet.name === 'world_particles').length >= 30,
+    'attached spectator receives the full three-beat particle sequence');
+  assert.ok(packets.eye.filter((packet) => packet.name.includes('sound')).length >= 2,
+    'attached spectator receives both sound cues');
   console.log(JSON.stringify({ attached: true,
     target: packets.target.map((packet) => packet.name),
     eye: packets.eye.map((packet) => packet.name),

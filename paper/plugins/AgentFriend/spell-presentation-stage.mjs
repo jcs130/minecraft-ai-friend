@@ -1,4 +1,4 @@
-// Run against the isolated 25566 server with AgentFriend 0.3.22 enabled.
+// Run against the isolated 25566 server with AgentFriend 0.3.56 enabled.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -33,10 +33,12 @@ const cues = async (incantation, action) => {
   const start = packets.length;
   action();
   await until(() => titleCount(incantation) > 0, `${incantation} title`);
-  await sleep(250);
+  await sleep(600);
   const newPackets = packets.slice(start);
-  assert.ok(newPackets.some((packet) => packet.name.includes('sound')), 'vanilla sound packet');
-  assert.ok(newPackets.some((packet) => packet.name.includes('particle')), 'vanilla particle packet');
+  assert.ok(newPackets.filter((packet) => packet.name.includes('sound')).length >= 2,
+    'opening and closing vanilla sound packets');
+  assert.ok(newPackets.filter((packet) => packet.name.includes('particle')).length >= 30,
+    'three distinct vanilla-particle beats');
   return newPackets.map((packet) => packet.name);
 };
 

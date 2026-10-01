@@ -88,7 +88,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 现有十层试炼塔位置、主题、怪物和奖励写在 `DungeonManager`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
 
-0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。第 13 层入场直接给予三分钟抗火效果，使用原版效果包；奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。每位玩家每个游戏日每层最多领取一次奖励，重复挑战仍可进入；`/mycli arena loot` 显示当天已领奖层号，重复通关返回 `MC_DUNGEON_LOOT category=daily_limit`。
+0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。0.3.56 起第 13 层不再自动给予抗火，向本人发送 `MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false`；Agent 须观察岩浆并规划绕行。奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。每位玩家每个游戏日每层最多领取一次奖励，重复挑战仍可进入；`/mycli arena loot` 显示当天已领奖层号，重复通关返回 `MC_DUNGEON_LOOT category=daily_limit`。
 
 验证 Agent 是否会学习新地形时，应让实际 CortiLan 自主进入并自然战斗，不用 RCON 杀怪或人工传送过层。逐次记录第 11–15 层是否到达掩体、是否避开岩浆与热砖、是否主动补给、失败后的路线是否变化、死亡/断线与最终通关回执；把 `/mycli arena layout` 的使用记录与视觉观察分开。隔离服 Mineflayer 的无挖掘算路测试仅证明存在可通行路线，不证明运行中的 Agent 已自主学会挑战。
 

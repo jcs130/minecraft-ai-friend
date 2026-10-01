@@ -203,7 +203,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private ProtectionAdvisor protectionAdvisor;
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
-    private final SpellPresentation spellPresentation = new SpellPresentation();
+    private final SpellPresentation spellPresentation = new SpellPresentation(this);
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
     @Override public void onEnable() {

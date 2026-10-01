@@ -53,6 +53,7 @@ try {
     setTimeout(() => reject(new Error('spawn timeout')), 30000);
   });
   rcon(`gamemode creative ${name}`);
+  rcon(`minecraft:effect clear ${name} minecraft:fire_resistance`);
   await sleep(1500);
   let initial = await ask('/mycli arena status');
   let firstFloor = 1;
@@ -61,7 +62,13 @@ try {
   } else {
     rcon(`tp ${name} -596 92 -313`);
     await sleep(700);
-    assert.match(await ask('/mycli arena start'), /15 层试炼开始/);
+    let started = await ask('/mycli arena start');
+    const cooldown = /休息中，还需 (\d+) 秒/.exec(started);
+    if (cooldown) {
+      await sleep((Number(cooldown[1]) + 2) * 1000);
+      started = await ask('/mycli arena start');
+    }
+    assert.match(started, /15 层(?:普通|冒险|末日)试炼开始/);
   }
 
   for (let floor = firstFloor; floor <= 12; floor++) {
@@ -91,6 +98,10 @@ try {
     lines = [];
     await waitLine(/第 13\/15 层/);
   }
+  await waitLine(/MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false/);
+  const effects = rcon(`minecraft:data get entity ${name} active_effects`);
+  assert.doesNotMatch(effects, /minecraft:fire_resistance/,
+    'floor 13 must not grant automatic fire resistance');
   const active = await waitStatus(/globalState=fighting.*globalFloor=13.*remainingMobs=7/);
   assert.match(active, /participant=true.*globalActive=true.*globalState=fighting.*globalFloor=13.*remainingMobs=7.*anomaly=none.*searchAdvice=search_remaining_mobs/);
   const audit = rcon('mycli admin dungeonaudit');
