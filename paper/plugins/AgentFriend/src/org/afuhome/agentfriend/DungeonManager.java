@@ -87,6 +87,7 @@ final class DungeonManager implements Listener {
     private static final long NEXT_FLOOR_DELAY_MS = 10_000L;
     private static final long REST_DURATION_MS = 180_000L;
     private static final long REJOIN_GRACE_MS = 600_000L;
+    private static final long OUTSIDE_GRACE_MS = 15_000L;
     private static final String RUN_STATE = "dungeon-active-run";
     private static final String MOB_TAG = "afu_dungeon_mob";
     private static final String REWARDS = "dungeon-rewards.";
@@ -187,6 +188,7 @@ final class DungeonManager implements Listener {
     private long spawnAt;
     private long advanceAt;
     private long pausedAt;
+    private long outsideSince;
     private long lastRun;
     private UUID bossId;
     private BossBar bossBar;
@@ -297,6 +299,7 @@ final class DungeonManager implements Listener {
     private void pauseRun(long now) {
         if (pausedAt != 0) return;
         pausedAt = now;
+        outsideSince = 0;
         if (!cleared) {
             cleanupMobs();
             spawned = false;
@@ -314,6 +317,7 @@ final class DungeonManager implements Listener {
         if (cleared) advanceAt += pausedFor;
         else spawnAt = now + 3000L;
         pausedAt = 0;
+        outsideSince = 0;
         persistRun();
         plugin.getLogger().info("Dungeon resumed after reconnect: floor=" + floor
                 + ", participants=" + participants.size());
@@ -327,7 +331,9 @@ final class DungeonManager implements Listener {
         int y = Y[number - 1];
         return Math.abs(at.getBlockX() - floorX(number)) < radius(number)
                 && Math.abs(at.getBlockZ() - floorZ(number)) < radius(number)
-                && at.getY() >= y + 1 && at.getY() <= y + 7;
+                // Floors 12 and 13 have recessed water/lava one block below the walking surface.
+                // A living participant standing in either trench still belongs to this floor.
+                && at.getY() >= y && at.getY() <= y + 7;
     }
     private int floorAt(Location at) {
         for (int n = 1; n <= maxFloor(); n++) if (inFloor(at, n)) return n;
@@ -374,6 +380,23 @@ final class DungeonManager implements Listener {
         switch (sub) {
             case "status" -> {
                 boolean participant = active && participants.contains(player.getUniqueId());
+                int selfFloor = floorAt(player.getLocation());
+                int remaining = 0, missing = 0, outside = 0;
+                if (active && spawned && !cleared) for (UUID id : mobs) {
+                    Entity entity = Bukkit.getEntity(id);
+                    if (!(entity instanceof LivingEntity living) || !entity.isValid() || living.isDead()) missing++;
+                    else {
+                        remaining++;
+                        if (!inFloor(entity.getLocation(), floor)) outside++;
+                    }
+                }
+                String anomaly = !active ? "none" : participant && selfFloor != floor
+                        ? "participant_outside_floor" : outside > 0 ? "mob_outside_floor"
+                        : missing > 0 ? "missing_mob_entity" : "none";
+                String searchAdvice = !active ? "stop_no_active_run" : !participant ? "not_participating"
+                        : selfFloor != floor ? "return_to_floor" : cleared ? "wait_next_floor"
+                        : pausedAt > 0 ? "wait_reconnect" : !spawned ? "wait_spawn"
+                        : remaining == 0 ? "wait_clear" : "search_remaining_mobs";
                 String globalState = !active ? "idle" : pausedAt > 0 ? "waiting_reconnect"
                         : cleared ? "cleared" : spawned ? "fighting" : "preparing";
                 String globalDescription = !active ? "待命" : "第 " + floor + "/" + maxFloor()
@@ -383,11 +406,22 @@ final class DungeonManager implements Listener {
                                 + " 秒后自动下楼" : spawned ? "，战斗中" : "，准备刷怪");
                 player.sendMessage(ChatColor.GOLD + "本人试炼：" + (participant ? "参赛中" : "未参赛")
                         + "；全服试炼：" + globalDescription + "。"
-                        + (participant ? "奖励存进你的个人箱子，不自动进入背包。" : "只有参赛者获得本轮奖励。"));
+                        + (participant ? "奖励存进你的个人箱子，不自动进入背包。" : "只有参赛者获得本轮奖励。")
+                        + (!active ? "当前没有进行中的试炼，无需继续搜怪。"
+                            : participant && spawned && !cleared ? "本层剩余 " + remaining + " 只怪物。" : ""));
                 player.sendMessage("MC_DUNGEON status participant=" + participant
                         + " selfState=" + (participant ? "participating" : "not_participating")
                         + " globalActive=" + active + " globalState=" + globalState
-                        + " globalFloor=" + (active ? floor : 0) + " maxFloor=" + maxFloor());
+                        + " globalFloor=" + (active ? floor : 0) + " maxFloor=" + maxFloor()
+                        + " selfFloor=" + selfFloor + " remainingMobs=" + remaining
+                        + " trackedMobs=" + (active && spawned && !cleared ? mobs.size() : 0)
+                        + " missingMobs=" + missing + " outsideMobs=" + outside
+                        + " anomaly=" + anomaly + " searchAdvice=" + searchAdvice
+                        + " lastOutcome=" + plugin.getConfig().getString("dungeon-last-outcome", "none")
+                        + " lastFloor=" + plugin.getConfig().getInt("dungeon-last-finish-floor", 0)
+                        + " lastReason=" + plugin.getConfig().getString("dungeon-last-finish-reason", "none")
+                        + " lastRunParticipant=" + plugin.getConfig().getStringList("dungeon-last-participants")
+                                .contains(player.getUniqueId().toString()));
                 player.sendMessage("MC_DUNGEON entrance " + LocationOutput.fields(lobbyButton())
                         + " chestX=-594 chestY=91 chestZ=-313 scope=public participant=" + participant);
                 if (active) player.sendMessage("MC_DUNGEON floor=" + floor + " "
@@ -533,6 +567,7 @@ final class DungeonManager implements Listener {
         participants.addAll(arrived);
         participants.addAll(disconnected);
         floor = number;
+        outsideSince = 0;
         spawned = false;
         cleared = number == REST_FLOOR;
         floorStartedAt = System.currentTimeMillis();
@@ -587,7 +622,7 @@ final class DungeonManager implements Listener {
         long now = System.currentTimeMillis();
         if (pausedAt > 0) {
             if (now - pausedAt > REJOIN_GRACE_MS)
-                finish(false, "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
+                finish(false, "reconnect_timeout", "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
             return;
         }
         boolean anyone = false;
@@ -599,11 +634,27 @@ final class DungeonManager implements Listener {
         }
         if (!anyone) {
             if (participants.stream().anyMatch(id -> Bukkit.getPlayer(id) == null)) pauseRun(now);
-            else finish(false, "队伍离开或倒下；已赢得的奖励保存在个人箱子里。");
+            else if (participants.stream().anyMatch(id -> {
+                Player player = Bukkit.getPlayer(id);
+                return player != null && player.isOnline() && !player.isDead();
+            })) {
+                if (outsideSince == 0) {
+                    outsideSince = now;
+                    for (UUID id : participants) {
+                        Player player = Bukkit.getPlayer(id);
+                        if (player != null && player.isOnline()) player.sendMessage(ChatColor.YELLOW
+                                + "已离开本层范围；15 秒内返回，否则试炼结束。可用 /mycli arena status 查看状态。");
+                    }
+                    plugin.getLogger().warning("Dungeon participant outside floor: floor=" + floor
+                            + ", participants=" + participants);
+                } else if (now - outsideSince >= OUTSIDE_GRACE_MS)
+                    finish(false, "party_outside_floor", "队伍离开本层超过 15 秒；已赢得的奖励保存在个人箱子里。");
+            } else finish(false, "party_defeated", "队伍全部倒下；已赢得的奖励保存在个人箱子里。");
             return;
         }
+        outsideSince = 0;
         if (now - runStartedAt > RUN_TIMEOUT_MS || now - floorStartedAt > FLOOR_TIMEOUT_MS) {
-            finish(false, "试炼超时；已赢得的奖励保存在个人箱子里。"); return;
+            finish(false, "timeout", "试炼超时；已赢得的奖励保存在个人箱子里。"); return;
         }
         if (cleared) {
             if (floor < maxFloor() && now >= advanceAt) {
@@ -611,7 +662,7 @@ final class DungeonManager implements Listener {
                         .filter(p -> p != null && p.isOnline() && !p.isDead()
                                 && inFloor(p.getLocation(), floor)).toList();
                 if (enterFloor(floor + 1, group) == 0)
-                    finish(false, "自动下楼失败；已赢得的奖励保存在个人箱子里。");
+                    finish(false, "advance_failed", "自动下楼失败；已赢得的奖励保存在个人箱子里。");
             }
             return;
         }
@@ -620,8 +671,19 @@ final class DungeonManager implements Listener {
         updateBossBar();
         mobs.removeIf(id -> {
             Entity e = Bukkit.getEntity(id);
-            if (!(e instanceof LivingEntity living) || living.isDead() || !e.isValid()) return true;
-            if (!inFloor(e.getLocation(), floor)) e.teleport(center(floor));
+            if (!(e instanceof LivingEntity living) || living.isDead() || !e.isValid()) {
+                plugin.getLogger().info("Dungeon mob removed from count: floor=" + floor
+                        + ", id=" + id + ", state=" + (e == null ? "missing" : e.isDead() ? "dead" : "invalid")
+                        + ", lastDamage=" + lastMobDamage.getOrDefault(id, "none"));
+                return true;
+            }
+            if (!inFloor(e.getLocation(), floor)) {
+                Location before = e.getLocation();
+                boolean rescued = e.teleport(center(floor));
+                plugin.getLogger().warning("Dungeon mob outside floor: floor=" + floor + ", id=" + id
+                        + ", type=" + e.getType() + ", at=" + LocationOutput.fields(before)
+                        + ", rescued=" + rescued);
+            }
             if (living instanceof Mob mob && !validParticipantTarget(mob.getTarget())) {
                 Player nearest = nearestParticipant(mob.getLocation());
                 if (nearest != null) mob.setTarget(nearest);
@@ -632,7 +694,7 @@ final class DungeonManager implements Listener {
         cleared = true;
         int credited = rewardFloor();
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
-        if (floor == maxFloor()) finish(true, maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
+        if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
         else {
             advanceAt = now + NEXT_FLOOR_DELAY_MS;
             persistRun();
@@ -791,6 +853,8 @@ final class DungeonManager implements Listener {
                 }
             }
             mobs.add(e.getUniqueId());
+            plugin.getLogger().info("Dungeon mob spawned: floor=" + floor + ", id=" + e.getUniqueId()
+                    + ", type=" + e.getType() + ", at=" + LocationOutput.fields(e.getLocation()));
         }
         announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层：" + theme.name()
                 + "，" + theme.mobs().length + " 只怪物！");
@@ -867,6 +931,7 @@ final class DungeonManager implements Listener {
             ItemStack hand = mob.getEquipment() == null ? null : mob.getEquipment().getItemInMainHand();
             LivingEntity target = mob.getTarget();
             sender.sendMessage("MC_DUNGEON_MOB floor=" + floor + " id=" + id + " type=" + mob.getType()
+                    + " " + LocationOutput.fields(mob.getLocation()) + " inFloor=" + inFloor(mob.getLocation(), floor)
                     + " hand=" + (hand == null ? Material.AIR : hand.getType()) + " ai=" + mob.hasAI()
                     + " target=" + (target == null ? "none" : target.getType() + ":" + target.getUniqueId())
                     + " health=" + String.format(Locale.ROOT, "%.2f", mob.getHealth())
@@ -1060,14 +1125,24 @@ final class DungeonManager implements Listener {
         return credited;
     }
 
-    private void finish(boolean won, String message) {
+    private void finish(boolean won, String reason, String message) {
         if (!active) return;
-        plugin.getLogger().info("Dungeon finished: won=" + won + ", floor=" + floor + ", message=" + message);
+        plugin.getLogger().info("Dungeon finished: won=" + won + ", floor=" + floor
+                + ", reason=" + reason + ", remaining=" + mobs.size() + ", message=" + message);
+        plugin.getConfig().set("dungeon-last-outcome", won ? "won" : "failed");
+        plugin.getConfig().set("dungeon-last-finish-floor", floor);
+        plugin.getConfig().set("dungeon-last-finish-reason", reason);
+        plugin.getConfig().set("dungeon-last-participants", participants.stream().map(UUID::toString).toList());
+        // Termination must reach participants who are outside the narrow floor volume.
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && player.isOnline()) player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + message);
+        }
         cleanupMobs();
-        announce((won ? ChatColor.GREEN : ChatColor.YELLOW) + message);
         active = false;
         advanceAt = 0;
         pausedAt = 0;
+        outsideSince = 0;
         participants.clear();
         lastRun = System.currentTimeMillis();
         plugin.getConfig().set("dungeon-last-run", lastRun);
@@ -1493,8 +1568,11 @@ final class DungeonManager implements Listener {
 
     @EventHandler public void onDungeonMobDeath(EntityDeathEvent event) {
         if (!active || !mobs.contains(event.getEntity().getUniqueId())
-                || !event.getEntity().getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE)
-                || floorAt(event.getEntity().getLocation()) != floor) return;
+                || !event.getEntity().getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE)) return;
+        plugin.getLogger().info("Dungeon mob died: floor=" + floor + ", id=" + event.getEntity().getUniqueId()
+                + ", type=" + event.getEntity().getType() + ", at=" + LocationOutput.fields(event.getEntity().getLocation())
+                + ", lastDamage=" + lastMobDamage.getOrDefault(event.getEntity().getUniqueId(), "none"));
+        if (floorAt(event.getEntity().getLocation()) != floor) return;
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
             if (player != null && !player.isDead() && inFloor(player.getLocation(), floor))

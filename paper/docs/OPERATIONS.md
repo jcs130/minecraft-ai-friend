@@ -1,5 +1,15 @@
 # Paper 分支维护与发布
 
+## 0.3.50 试炼塔第 13 层清场误判与状态回执（2026-10-01）
+
+17:11 的归档服务端日志显示：第 12 层在 17:11:30 结算，第 13 层在约 17:11:40 开始，17:11:49 被判“队伍离开或倒下”并清掉怪物；因此随后空房间内并没有仍待击杀的 7 只怪。旧版未记录这批怪的 UUID 与坐标，清场后无法事后读回其实际存活状态；不能把隔离服新生成的 UUID 当作当时的怪。代码检查发现第 13 层岩浆槽位于地板 Y=-16，玩家脚部可下到 Y=-16，而旧 `inFloor` 只接受 Y≥-15；第 12 层浅水凹槽同样有这一问题。当前版本允许凹槽高度，真实离开楼层则给 15 秒返回宽限，失败结算会送达在线参赛者并持久化 `lastReason`。
+
+`/mycli arena status` 与 `/mycli status` 的 `MC_DUNGEON status` 增加 `selfFloor/remainingMobs/trackedMobs/missingMobs/outsideMobs/anomaly/searchAdvice/lastOutcome/lastFloor/lastReason/lastRunParticipant`。`stop_no_active_run` 表示已经清场，Agent 不再搜索；`return_to_floor` 表示人在房间外且仍有宽限。服主的 `mycli admin dungeonaudit` 新增怪物绝对坐标和 `inFloor`；以后的每次生成、死亡、失踪、越界拉回都记录 UUID、类型和坐标或受伤来源，便于查同类事故。
+
+隔离服用 Mineflayer 1.20.6 从第 3 层恢复并打到第 13 层，现场核到 7 个活怪及其 UUID、绝对坐标、正常 AI；账号进入岩浆槽后连续 16 秒仍处于第 13 层，`remainingMobs=7`，清怪后正常结算进入第 14 层。再模拟短暂越界后返回、超过 15 秒越界失败，均得到预期回执。最终重编 JAR 后重启隔离服，再用 Mineflayer 验证已结束时 `remainingMobs=0 searchAdvice=stop_no_active_run lastReason=party_outside_floor lastRunParticipant=true`。测试脚本是 `paper/probe/dungeon-floor-boundary-smoke.mjs`，运行机临时隔离环境端口 25566；其女巫装备包触发过已知 Mineflayer `PartialReadError` 日志，但没有中断本次挑战和状态测试。
+
+正式服在当前 CortiLan 试炼结束、`dungeon-active-run` 清空，且只有 Goddess、CortiLan、CortiEye 服务账号在线后，通过 `Afu-MC-DailyBackup` 正常保存退出并生成 E/F 双盘快照 `20261001-185713`（两处 `.complete`、任务结果 0），随后启用唯一 `AgentFriend-0.3.50.jar`，SHA256 `9466D23E366C6CAD63ADDA196166F8EAAB3B157DF1E837D7255CD039144C4F78`。Paper 1.20.6、Java 本机入口、局域网 Agent 网关、Geyser 基岩 Pong、Goddess 桥、Watchdog 均通过；正式服临时 Mineflayer 账号从局域网入口读到 `participant=false globalActive=false remainingMobs=0 searchAdvice=stop_no_active_run` 后退出。由于调试期白名单按用户要求关闭，原本以“未知账号被拒”为成功条件的 `agent-lan-smoke.mjs` 返回 FAIL，此处改用正向 Mineflayer 登录和 `mcstatus` 核验网关。CortiEyeMirror 插件已加载，但本次重启后远端 CortiEye 尚未重连，镜头附身状态需客户端上线后复查。基岩真机玩法仍需现场验证，Pong 仅证明入口应答。完整发布记录见运行机 `E:\MC\ops\MAINTENANCE.md`。
+
 ## 大背包快捷物品恢复（2026-10-01）
 
 CortiLan 的随身 36 格全满，Minepacks 的入服补发和原版 `/give` 都不能把快捷头颅放进物品栏；`/give` 的成功回执可能只代表物品落在脚边。先用玩家身份的 `/mycli arena stash putslot 1 64` 转存一组物品，再补发带 `minecraft:custom_name`（“大背包”）和 `minecraft:profile` 专属纹理的头颅，RCON 读回其位于随身槽 1。AgentFriend 0.3.49 新增丢弃拦截及入服、每分钟缺失自愈；满格时把一组物品持久化到本人个人试炼箱后补回，不覆盖装备或丢弃物品。隔离服 `backpack-recovery-stage.mjs` 用 Mineflayer 验证实际丢弃、满格转存、重登和在线定时恢复；发布记录及 E/F 双盘备份见运行机 `E:\MC\ops\MAINTENANCE.md`。
