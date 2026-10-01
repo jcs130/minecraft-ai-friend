@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 2026-10-02 金苹果单次进食后显示 16→0 的排查
+
+正式服 06:15:47 收到 CortiLan 的 `/mycli cast selfheal`，06:15:50 第 6 层结算，06:17:04 才死亡。Paper 普通日志没有逐次物品消费或 container 0 原始包；CortiEyeMirror 当时也未启用相应槽位抓包，因此无法从历史记录确认 06:15:50 的实际库存数或当时发出的 `SetSlot`/`SetContent`。04:00 备份和约 07:11 的玩家存档都没有金苹果，时间跨度过大，不能拿来证明 06:15 的 16 个去了哪里。CoreProtect 在 06:15:45–56 没有记录 CortiLan 的金苹果掉落、拾取或容器转移；它不记录正常进食和玩家库存同步。AgentFriend 没有 `PlayerItemConsumeEvent` 监听；第 6 层结算只把奖励写入个人箱配置/待领取队列，不修改随身金苹果。
+
+隔离服 Paper 1.20.6 / AgentFriend 0.3.56 用 `probe/golden-apple-consume-stage.mjs` 让真实 Mineflayer 生存账号持有 16 个金苹果、仅吃一次，重复两次均通过：服务器实体 NBT 为 16→15，发给该玩家的 container 0 `window_items` 在槽位 40 给出金苹果 15 个；随后另有 `set_slot` 将副手槽位 45 设为空。客户端若把这个副手空槽误当作快捷栏金苹果，可能显示 0；这是待客户端原始包核对的推断，不能倒推出历史事故必然如此。隔离服测试后正常停机，正式服未重启或修改物品。
+
+若再现，先同时保留该连接的 container 0 `SetSlot`/`SetContent` 原始字段（stateId、slot、itemId、count）和服务端进食前后同槽库存快照，按同一时刻、同一槽位比较；不要用死亡后的玩家存档判断进食当刻的库存。
+
 ## 0.3.56 三拍施法视觉与熔炉层避险（2026-10-02）
 
 `SpellPresentation` 对成功施法发送约 0.3 秒的三拍原版粒子与双段音效，保留咏唱标题和原有 Agent 私有文字回执。空间术使用螺旋、星尘/烟花使用星形、移动术使用随朝向变化的双翼、霜环贴地外扩；战斗法术保留实际弹道和命中。每次额外世界粒子包至多 39 个，延迟阶段遇到退出、死亡或换世界会停止。第 13 层移除入场自动抗火，改发本人 `MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false`；玩家自行取得的抗火不被清除。
