@@ -14,6 +14,7 @@ import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -109,7 +110,33 @@ final class CombatSpells {
         int damage = damage(caster, "starbolt", 5);
         enemy.damage(damage, caster);
         plugin.mastery().successfulCast(caster, "starbolt");
-        caster.sendMessage(ChatColor.LIGHT_PURPLE + "星芒箭命中 " + enemy.getName() + "（4 魔力）。");
+        caster.sendMessage(ChatColor.LIGHT_PURPLE + "星芒箭命中 " + enemy.getName()
+                + "〔" + hostileTypeLabel(enemy.getType()) + "〕（4 魔力）。");
+    }
+
+    private String hostileTypeLabel(EntityType type) {
+        String id = type.getKey().toString();
+        String chinese = switch (type) {
+            case PILLAGER -> "掠夺者";
+            case VINDICATOR -> "卫道士";
+            case EVOKER -> "唤魔者";
+            case RAVAGER -> "劫掠兽";
+            case ZOMBIE -> "僵尸";
+            case ZOMBIE_VILLAGER -> "僵尸村民";
+            case HUSK -> "尸壳";
+            case DROWNED -> "溺尸";
+            case SKELETON -> "骷髅";
+            case STRAY -> "流浪者";
+            case SPIDER -> "蜘蛛";
+            case CAVE_SPIDER -> "洞穴蜘蛛";
+            case CREEPER -> "苦力怕";
+            case WITCH -> "女巫";
+            case BLAZE -> "烈焰人";
+            case MAGMA_CUBE -> "岩浆怪";
+            case ENDERMAN -> "末影人";
+            default -> null;
+        };
+        return chinese == null ? id : chinese + " / " + id;
     }
 
     private Enemy nearestVisibleHostile(Player caster, double radius) {

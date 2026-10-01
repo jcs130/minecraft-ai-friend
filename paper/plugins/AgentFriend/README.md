@@ -46,6 +46,8 @@
 
 现有法术按战斗、探索、采集、守护恢复、位移、创造观赏整理；八项 AgentFriend 原生法术率先提供个人熟练度。成功施放累计 8/24 次到 2/3 级，失败或无目标不计数。星芒箭、霜环、焰浪提升有上限的伤害/控制，跃空、飞行、守护傀儡、探敌和探矿提升持续或探测效果；AuraSkills 战斗等级最多再给战斗法术 +2 伤害，挖矿等级继续决定探矿半径。生活法术、女神学习技能和公会等级仍沿用各自原规则，未虚报它们已经有熟练度。完整数值和扩展边界见 [技能体系](../../docs/SKILL_SYSTEM.md)。
 
+星芒箭的私有命中提示同时给目标显示名、中文实体类型和稳定的 Minecraft 实体 ID，例如 `星芒箭命中 小林〔掠夺者 / minecraft:pillager〕（4 魔力）`。`Named-Villagers` 会为灾厄村民取人名，不能只凭显示名判断阵营；准星与自动锁定仍只接受敌对实体，无合法目标时不消耗魔力或进入冷却。
+
 手柄在技能罗盘点「技能成长」打开原版箱子菜单，也可翻命格书；Agent 用 `/mycli mastery` 读取 `MC_MASTERY id=... level=... uses=... requiredUses=... category=...`，再用原有 `/mycli cast` 或法杖施法。`mcviewer:state` 的八项 `mycli:*` 能力等级按本人 UUID 更新，不改 JSON schema 或频道。进度持久化在运行服 `plugins/AgentFriend/spell-mastery.yml`，随 E/F 快照备份；Git 不提交玩家记录。
 
 隔离服 `spell-mastery-stage.mjs` 用无 OP Mineflayer 检查无目标不计数、8 次升级、玩家隔离、菜单、状态包、JVM 重启持久化和实际伤害比例。它在 `first` 阶段需要足够魔力；本次只在隔离服临时把 AuraSkills 魔力回复提高后测试，并已恢复原值。正式服魔力规则不变。基岩真机菜单与标题/粒子画面仍需玩家目视验收。
