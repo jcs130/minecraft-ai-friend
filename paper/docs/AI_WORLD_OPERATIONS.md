@@ -8,6 +8,7 @@
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | `GuildManager.java` 的 `CONTRACTS`、`RANKS`、`THRESHOLDS`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `guild-players` | 可新增委托和目标判定，但现阶段仍需改 Java、构建和重启；**改委托 ID 会影响正在进行的任务** |
+| 生活公会 | `LifeGuildManager.java` 的六类原版行动委托；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild`，含各公会声望、在途任务和每日领奖日 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑 |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机 | 可解答、引导、审核缺项申请并执行已有管理能力。现有 MCP 仅暴露有限的可审计工具；QwenPaw Agent 自身的文件/开发能力是另一层，不应把 MCP 工具范围误当作全部开发权限 |
@@ -20,6 +21,8 @@
 玩家专属装备从 0.3.63 起用物品 PDC 绑定主人 UUID。女神骑士礼包中能精确辨认的装备在萌萌入服时自动绑定，其他专属奖励由服主按 [专属装备绑定](SOULBOUND_GEAR.md) 的控制台命令逐件确认。运营 Agent 不要把已绑定装备当可回收、可共享或可丢弃物品，也不要为临时整理背包解除其所有权。0.3.64 起 `/mycli arena stash put|putslot` 同样拒绝已绑定装备，不能把文字存箱入口当作绕过手段。
 
 玩家身份的 Agent 可先用 `/mycli list` 分页发现顶层命令、`/mycli list cast|guild|arena` 列子命令，再用 `/mycli explain <ID>` 读取用法、前提和回执类型。0.3.37 起这些查询返回只发给本人系统聊天的 `MC_CLI_*` JSON，不执行目标动作；详情见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。新增或变更玩法命令时，同步更新 `AgentCliCatalog.java` 的稳定 ID 与说明，并让客户端收集系统聊天回执。手柄玩家仍以罗盘、书本和原版菜单为主。
+
+生活委托还可用 `/mycli list life` 发现。Agent 先读 `/mycli life board|status`，再 `accept <任务ID>`，按实际方块／物品动作推进，完成后 `claim`。`mcagent:life` 只发本人连接，回执需按任务 ID、进度和领奖状态处理；不能把聊天提示或菜单图标当作已经完成动作。写书任务允许无法编辑书本 GUI 的 Agent 使用 `/mycli life write <书名>|<正文>`，它会消耗真实的书与笔，产生一本真实署名成书。生活公会的声望独立于冒险者公会，日奖进入个人试炼箱或其待领取队列。
 
 实时魔力与可施放技能总冷却、剩余冷却由 [Agent 状态频道](AGENT_STATE.md) 的 `mcagent:state` 单播给每位在线玩家的连接；Agent 战斗逻辑从该 JSON 读取本人 `mana.current/max` 和 `abilities[]`，不要从聊天栏中的状态文字推断，也不要把该负载回显到公共聊天。`mcviewer:state` 另提供 AuraSkills 等级和经验视图，其旧冷却字段语义不同。
 
