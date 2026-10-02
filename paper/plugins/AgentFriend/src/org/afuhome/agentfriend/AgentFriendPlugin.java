@@ -197,6 +197,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private GuildManager guild;
     private GuildHallManager guildHall;
+    private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
@@ -238,6 +239,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeon = new DungeonManager(this);
         guild = new GuildManager(this, dungeon);
         guildHall = new GuildHallManager(this);
+        pvpArena = new PvpArenaManager(this);
         trialRoad = new TrialRoadManager(this);
         spellMastery = new SpellMastery(this);
         combatSpells = new CombatSpells(this);
@@ -273,6 +275,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (pvpArena != null) pvpArena.shutdown();
         if (dungeonGearAura != null) dungeonGearAura.stop();
         if (agentCoach != null) agentCoach.stop();
         if (playerNameTags != null) playerNameTags.stop();
@@ -314,6 +317,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildHallManager guildHall() { return guildHall; }
     TrialRoadManager trialRoad() { return trialRoad; }
     DungeonManager dungeon() { return dungeon; }
+    boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
+    void openPvpMenu(Player player) { openMenu(player, "pvp"); }
     boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
     void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
     void guildFloorCleared(Player player, int floor, int partySize) {
@@ -675,6 +680,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.build(sender);
             return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveypvp") || args[1].equalsIgnoreCase("buildpvp"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造 PvP 竞技场。"); return true;
+            }
+            if (args[1].equalsIgnoreCase("surveypvp")) pvpArena.survey(sender);
+            else pvpArena.build(sender);
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("dungeonaudit")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台检查试炼怪物。"); return true;
@@ -802,6 +816,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 if (dungeon.isBuilt()) dungeon.command(player, args);
                 else arenaCommand(player, args);
             }
+            case "pvp", "duel", "决斗" -> pvpArena.command(player, args);
             case "guild", "公会", "工会" -> guild.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
@@ -834,6 +849,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
+        p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
     private void guide(Player p, String[] args) {
@@ -1846,6 +1862,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "utility" -> "§b✦ 探索法术";
             case "creation" -> "§d✦ 向女神申请";
             case "guild" -> "§6✦ 冒险者公会";
+            case "pvp" -> "§c✦ PvP竞技场";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : page.equals("imprint") ? 54 : 27, title);
@@ -1872,6 +1889,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
             inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
             inv.setItem(5, item(Material.EXPERIENCE_BOTTLE, "§d技能成长", "战斗、探索、采集三类熟练度", "成功施法 8/24 次升级；点击查看"));
+            inv.setItem(6, item(Material.IRON_SWORD, "§cPvP竞技场", "双方自愿匹配；同款装备 1v1", "自动倒数与记录胜负；点击打开"));
         } else if (page.equals("mastery")) {
             String[] ids = {"starbolt", "frostnova", "flamewave", "leap", "flight", "golem", "sense", "prospect"};
             Material[] icons = {Material.AMETHYST_SHARD, Material.SNOWBALL, Material.BLAZE_POWDER,
@@ -1980,6 +1998,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             if (visible.isEmpty()) inv.setItem(13, item(Material.BARRIER, "§7暂时没有其他在线玩家", "女神旁观者不会显示在这里"));
             playerMenuTargets.put(inv, targets);
+        } else if (page.equals("pvp")) {
+            inv.setItem(10, item(Material.IRON_SWORD, "§a加入匹配", "第二位玩家加入后自动倒数开战"));
+            inv.setItem(11, item(Material.BARRIER, "§c退出匹配/认输", "排队时退出；战斗中认输"));
+            inv.setItem(12, item(Material.COMPASS, "§b前往观众平台", "可看比赛；旁观者不能攻击选手"));
+            inv.setItem(14, item(Material.WRITTEN_BOOK, "§e本人战绩", "胜负、积分与对局状态"));
+            inv.setItem(16, item(Material.GOLD_INGOT, "§6排行榜", "同款装备 1v1 的积分"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘"));
         } else if (page.equals("guild")) {
             guild.fillBoard(p, inv);
         } else if (page.equals("creation")) {
@@ -2072,6 +2097,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (page.equals("skills")) {
                 switch (slot) {
                     case 5 -> openMenu(p, "mastery");
+                    case 6 -> openMenu(p, "pvp");
                     case 4 -> openMenu(p, "guide");
                     case 7 -> openMenu(p, "guild");
                     case 8 -> openMenu(p, "utility");
@@ -2163,6 +2189,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else if (targets != null && targets.containsKey(slot)) {
                     if (slot >= 19) teleportToTeammate(p, targets.get(slot));
                     else trackPlayer(p, targets.get(slot));
+                }
+            } else if (page.equals("pvp")) {
+                switch (slot) {
+                    case 10 -> pvpArena.command(p, new String[]{"pvp", "join"});
+                    case 11 -> pvpArena.command(p, new String[]{"pvp", "leave"});
+                    case 12 -> pvpArena.command(p, new String[]{"pvp", "lobby"});
+                    case 14 -> pvpArena.command(p, new String[]{"pvp", "status"});
+                    case 16 -> pvpArena.command(p, new String[]{"pvp", "board"});
+                    case 22 -> openMenu(p, "skills");
+                    default -> { }
                 }
             } else if (page.equals("guild")) {
                 if (slot == 30) gotoPlace(p, "arena");
@@ -2442,6 +2478,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 1) return AgentCliCatalog.roots();
         if (args.length == 2 && args[0].equalsIgnoreCase("list")) return AgentCliCatalog.filters();
         if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "on", "off");
+        if (args.length == 2 && args[0].equalsIgnoreCase("pvp"))
+            return List.of("status", "join", "leave", "lobby", "board", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
         if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
             return AgentCliCatalog.ids();

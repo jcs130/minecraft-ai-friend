@@ -50,6 +50,7 @@ final class AgentCliCatalog {
         add(specs,"waypoint","travel","read","/mycli waypoint [add|remove <名字>]","列出公共/私人传送点或保存/删除私人点","在线玩家；add/remove 名称为 1–24 位英文数字_-","MC_WAYPOINT 绝对坐标或操作结果");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
         add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔挑战、商店与本人奖励箱","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
+        add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
@@ -89,6 +90,11 @@ final class AgentCliCatalog {
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；20 秒冷却；有安全落点","传送结果与绝对坐标");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、全服试炼进度和入口/楼层绝对坐标","在线玩家","MC_DUNGEON status 的 participant/selfState 与全服状态分开");
+        add(specs,"pvp.status","adventure","read","/mycli pvp status","本人积分、胜负、匹配及对手状态和大厅绝对坐标","在线玩家","本人 MC_PVP JSON");
+        add(specs,"pvp.join","adventure","write","/mycli pvp join","进入一对一匹配；第二人加入后自动倒数","非旁观者、未在试炼中；原物品先安全暂存","本人 MC_PVP action=join");
+        add(specs,"pvp.leave","adventure","write","/mycli pvp leave","退出排队或认输；还原原物品与位置","已排队或正在比赛","本人 MC_PVP 与 MC_PVP_RESULT");
+        add(specs,"pvp.lobby","adventure","teleport","/mycli pvp lobby","前往天空竞技场观众平台","竞技场已建；比赛中不可用","本人 MC_PVP 大厅绝对坐标");
+        add(specs,"pvp.board","adventure","read","/mycli pvp board","查看积分榜","在线玩家","私人 MC_PVP_RANK 列表");
         add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼","在入口且符合组队/冷却条件","挑战开始或拒绝原因");
         add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按冒险者公会等级自动匹配，或手动选择下次本人发起试炼的难度；高等级打低难度奖励减少","在线玩家；多人由按钮发起者决定，奖励按各自等级结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest","从试炼驿站继续深层挑战","满足驿站解锁与挑战条件","传送或拒绝原因");

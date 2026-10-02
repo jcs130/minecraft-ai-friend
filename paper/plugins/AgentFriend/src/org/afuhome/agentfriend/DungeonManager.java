@@ -255,6 +255,7 @@ final class DungeonManager implements Listener {
     }
 
     boolean isBuilt() { return built; }
+    boolean isParticipant(Player player) { return active && participants.contains(player.getUniqueId()); }
     boolean isExpanded() { return expanded; }
     private int maxFloor() { return challengeBuilt ? FINAL_FLOOR : expanded ? OLD_MAX_FLOOR : BASE_FLOORS; }
     private int floorX(int number) { return number <= BASE_FLOORS ? X : number <= OLD_MAX_FLOOR ? WING_X : CHALLENGE_X; }
