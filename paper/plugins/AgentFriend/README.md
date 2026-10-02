@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.59 试炼远程怪脱困与攻击审计
+
+试炼怪目标仍只允许本场参赛者。对站定 12 秒、离玩家超过 6 格且近期没有直接命中的怪物，脱困检查不再把“有视线”或“投出过弹药”误当作有效攻击；它会寻找玩家附近可站立且无危险方块的位置。真正命中的女巫、骷髅等继续原位战斗。`/mycli admin dungeonaudit` 增加 `lastProjectileMs` 与 `lastDirectHitMs`，便于区分有 AI、有目标、投出了药水、实际命中这四件事。原版实体、药水与伤害逻辑不变，Java、基岩和 Mineflayer 都走相同服务端行为。
+
 ## 0.3.58 Agent 私有技能冷却状态
 
 `mcagent:state` 在每名玩家的原始 UTF-8 JSON 状态中加入 `abilities[]`，分别给出技能总冷却 `cooldownMs`、本人剩余冷却 `cooldownRemainingMs` 和可选原版物品 `icon`。成功施法后下一刻更新，冷却及魔力变化每秒检查并在归零时更新；无变化不重发，不进入聊天。此频道单播给玩家本人，未注册频道的 Mineflayer 连接亦可收到。协议见 [Agent 状态频道](../../docs/AGENT_STATE.md)。

@@ -53,6 +53,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.entity.PotionSplashEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -205,6 +206,7 @@ final class DungeonManager implements Listener {
     private final Map<UUID, Location> lastMobPosition = new HashMap<>();
     private final Map<UUID, Long> lastMobMovedAt = new HashMap<>();
     private final Map<UUID, Long> lastMobAttackAt = new HashMap<>();
+    private final Map<UUID, Long> lastMobProjectileAt = new HashMap<>();
     private final ArenaEconomy economy;
     private boolean built;
     private boolean expanded;
@@ -770,6 +772,7 @@ final class DungeonManager implements Listener {
                 lastMobPosition.remove(id);
                 lastMobMovedAt.remove(id);
                 lastMobAttackAt.remove(id);
+                lastMobProjectileAt.remove(id);
                 plugin.getLogger().info("Dungeon mob removed from count: floor=" + floor
                         + ", id=" + id + ", state=" + (e == null ? "missing" : e.isDead() ? "dead" : "invalid")
                         + ", lastDamage=" + lastMobDamage.getOrDefault(id, "none"));
@@ -889,6 +892,7 @@ final class DungeonManager implements Listener {
         lastMobPosition.clear();
         lastMobMovedAt.clear();
         lastMobAttackAt.clear();
+        lastMobProjectileAt.clear();
         Theme theme = THEMES.get(floor - 1);
         int[][] spots = floor == BOSS_FLOOR
                 ? new int[][]{{0,10},{-9,-7},{9,-7},{-9,7},{9,7}}
@@ -996,13 +1000,11 @@ final class DungeonManager implements Listener {
         }
         if (current.distanceSquared(target.getLocation()) <= 36
                 || now - lastMobAttackAt.getOrDefault(id, 0L) < 12_000
-                || (mob.hasLineOfSight(target) && switch (mob.getType()) {
-                    case SKELETON, STRAY, PILLAGER, WITCH, BLAZE -> true;
-                    default -> false;
-                })
                 || now - lastMobMovedAt.getOrDefault(id, now) < 12_000) return;
-        // Complex cover can strand a wave behind a wall. Only move a truly stationary mob
-        // to a clear floor tile several blocks from its participant; never spawn inside a player.
+        // Line of sight and launched projectiles do not prove the mob can hit.
+        // A witch may stand in view and lob potions that always land short.
+        // Keep recent hits in place; rescue a stationary mob that has not hit.
+        // Never teleport onto a player or into a hazard.
         int[][] offsets = {{5,0},{-5,0},{0,5},{0,-5},{4,4},{-4,4},{4,-4},{-4,-4}};
         for (int[] offset : offsets) {
             Location candidate = target.getLocation().getBlock().getLocation()
@@ -1086,6 +1088,12 @@ final class DungeonManager implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTrialProjectileLaunch(ProjectileLaunchEvent event) {
+        Entity source = attacker(event.getEntity());
+        if (trialMob(source)) lastMobProjectileAt.put(source.getUniqueId(), System.currentTimeMillis());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTrialDamageAudit(EntityDamageEvent event) {
         if (!trialMob(event.getEntity())) return;
         String source = event.getCause().name();
@@ -1117,10 +1125,16 @@ final class DungeonManager implements Listener {
                     + " hand=" + (hand == null ? Material.AIR : hand.getType()) + " ai=" + mob.hasAI()
                     + " target=" + (target == null ? "none" : target.getType() + ":" + target.getUniqueId())
                     + " health=" + String.format(Locale.ROOT, "%.2f", mob.getHealth())
-                    + " lastDamage=" + lastMobDamage.getOrDefault(id, "none"));
+                    + " lastDamage=" + lastMobDamage.getOrDefault(id, "none")
+                    + " lastProjectileMs=" + ageMs(lastMobProjectileAt.get(id))
+                    + " lastDirectHitMs=" + ageMs(lastMobAttackAt.get(id)));
             count++;
         }
         sender.sendMessage("MC_DUNGEON_AUDIT_END floor=" + floor + " count=" + count);
+    }
+
+    private String ageMs(Long timestamp) {
+        return timestamp == null ? "never" : Long.toString(Math.max(0L, System.currentTimeMillis() - timestamp));
     }
 
     void pruneChestDuplicates(Player player, boolean apply, CommandSender sender) {
