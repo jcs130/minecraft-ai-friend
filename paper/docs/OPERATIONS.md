@@ -4,7 +4,7 @@
 
 已入会玩家的头顶和原版玩家列表显示 `◆青铜` 至 `◆钻石`，随本人声望升级刷新；已入会 Agent 同时保留 `[Agent]`，未入会普通玩家不加标记，旁观者不加标记。只用 scoreboard team 前缀，不更改登录名/UUID/记分板目标，也不抢别的插件的 gameplay team。Agent 仍以 `/mycli guild status` 获取准确数值；四端显示边界与回退见 [玩家头顶标记](PLAYER_NAMETAGS.md)。
 
-隔离服 25566 的 `guild-rank-nametags-stage.mjs` 以真实 Mineflayer 1.20.6 连接验证：钻石普通会员、白金 Agent 和未入会观众的原版 `teams` 包均符合预期；隔离服正常停机并恢复 0.3.62 JAR 与原配置。正式服发布前仅 Goddess、CortiLan、CortiEye 服务账号在线，试炼 `active=false`；既有计划任务正常停服并完成 E/F `20261002-222016` 双盘快照，结果 0。唯一启用 AgentFriend 0.3.67 JAR SHA256 `163436C182DA68C7A479193D59E2267C8ACF35043777662F7B5722D157D931D3`，待发布/自动暂停标记均清除。正式服临时无公会 Java 观众收到 CortiLan 的 `◆白金 [Agent]` 队伍包；Java Agent LAN 探针和 Geyser 基岩 Pong 正常、启动日志无插件异常。CortiEye 重连状态和基岩真机画面需要另行核对；Pong 不能证明名牌实际画面。回退须无人游玩、无试炼时按此手册完整备份并正常停服，只启用保留的 0.3.66 JAR；公会声望与世界无需转换。
+隔离服 25566 的 `guild-rank-nametags-stage.mjs` 以真实 Mineflayer 1.20.6 连接验证：钻石普通会员、白金 Agent 和未入会观众的原版 `teams` 包均符合预期；隔离服正常停机并恢复 0.3.62 JAR 与原配置。正式服发布前仅 Goddess、CortiLan、CortiEye 服务账号在线，试炼 `active=false`；既有计划任务正常停服并完成 E/F `20261002-222016` 双盘快照，结果 0。唯一启用 AgentFriend 0.3.67 JAR SHA256 `163436C182DA68C7A479193D59E2267C8ACF35043777662F7B5722D157D931D3`，待发布/自动暂停标记均清除。正式服临时无公会 Java 观众收到 CortiLan 的 `◆白金 [Agent]` 队伍包；Java Agent LAN 探针和 Geyser 基岩 Pong 正常、启动日志无插件异常。CortiEye 随后自动回连，`camera=online attached=true cameraNightVision=true`；基岩真机名牌字体/颜色及直播实际画面仍需目视，Pong 不能证明画面。回退须无人游玩、无试炼时按此手册完整备份并正常停服，只启用保留的 0.3.66 JAR；公会声望与世界无需转换。
 
 ## 0.3.66 研习书手柄使用兼容修正（2026-10-02）
 
