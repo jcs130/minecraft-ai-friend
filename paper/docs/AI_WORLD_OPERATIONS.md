@@ -14,6 +14,8 @@
 
 `paper/` 是源码和无密钥配置的事实源；`E:\MC\server` 是正式运行数据的事实源。Git 不保存世界、玩家数据、白名单、凭据、第三方 JAR 或完整备份。自然结构的数据包只在新生成区块生效；新增一个数据包不会把旧区块自动变成新地下城。
 
+玩家专属装备从 0.3.63 起用物品 PDC 绑定主人 UUID。女神骑士礼包中能精确辨认的装备在萌萌入服时自动绑定，其他专属奖励由服主按 [专属装备绑定](SOULBOUND_GEAR.md) 的控制台命令逐件确认。运营 Agent 不要把已绑定装备当可回收、可共享或可丢弃物品，也不要为临时整理背包解除其所有权。
+
 玩家身份的 Agent 可先用 `/mycli list` 分页发现顶层命令、`/mycli list cast|guild|arena` 列子命令，再用 `/mycli explain <ID>` 读取用法、前提和回执类型。0.3.37 起这些查询返回只发给本人系统聊天的 `MC_CLI_*` JSON，不执行目标动作；详情见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。新增或变更玩法命令时，同步更新 `AgentCliCatalog.java` 的稳定 ID 与说明，并让客户端收集系统聊天回执。手柄玩家仍以罗盘、书本和原版菜单为主。
 
 实时魔力与可施放技能总冷却、剩余冷却由 [Agent 状态频道](AGENT_STATE.md) 的 `mcagent:state` 单播给每位在线玩家的连接；Agent 战斗逻辑从该 JSON 读取本人 `mana.current/max` 和 `abilities[]`，不要从聊天栏中的状态文字推断，也不要把该负载回显到公共聊天。`mcviewer:state` 另提供 AuraSkills 等级和经验视图，其旧冷却字段语义不同。

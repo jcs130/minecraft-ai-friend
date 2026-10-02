@@ -209,6 +209,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private ProtectionAdvisor protectionAdvisor;
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
+    private SoulboundGear soulboundGear;
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
@@ -242,6 +243,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
+        soulboundGear = new SoulboundGear(this);
+        getServer().getPluginManager().registerEvents(soulboundGear, this);
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
@@ -485,6 +488,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
                     + player.getUniqueId() + "; slots=" + backpackChanges);
             if (player.getGameMode() == GameMode.SPECTATOR) return;
+            soulboundGear.bindMengmengKit(player);
             BackpackShortcutMigration.restoreMissing(player, dungeon);
             if (!hasCompass(player)) giveCompass(player);
             if (!hasStatusBook(player)) giveStatusBook(player);
@@ -534,6 +538,19 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if ((args.length == 4 || args.length == 5) && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("bindgear")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台绑定专属装备。"); return true;
+            }
+            if (args.length == 5 && !args[4].equalsIgnoreCase("apply")) {
+                sender.sendMessage("用法：/mycli admin bindgear <在线玩家> <背包槽位0–40> [apply]"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("目标玩家必须在线。"); return true; }
+            soulboundGear.adminBind(sender, target, args[3], args.length == 5);
+            return true;
+        }
         if (args.length == 3 && args[0].equalsIgnoreCase("admin")
                 && args[1].equalsIgnoreCase("protectchannel")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
