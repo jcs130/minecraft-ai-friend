@@ -197,6 +197,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private GuildManager guild;
     private LifeGuildManager lifeGuild;
+    private VillageWatchManager villageWatch;
     private GuildHallManager guildHall;
     private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
@@ -240,6 +241,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeon = new DungeonManager(this);
         guild = new GuildManager(this, dungeon);
         lifeGuild = new LifeGuildManager(this, dungeon);
+        villageWatch = new VillageWatchManager(this, dungeon);
         guildHall = new GuildHallManager(this);
         pvpArena = new PvpArenaManager(this);
         trialRoad = new TrialRoadManager(this);
@@ -839,6 +841,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "pvp", "duel", "决斗" -> pvpArena.command(player, args);
             case "guild", "公会", "工会" -> guild.command(player, args);
             case "life", "生活" -> lifeGuild.command(player, args);
+            case "village", "村庄" -> villageWatch.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
         }
@@ -871,6 +874,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
+        p.sendMessage("/mycli village threat|villagers  查村庄外围敌情、附近职业村民及真实收购报价");
         p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
@@ -2601,8 +2605,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 2 && args[0].equalsIgnoreCase("life"))
             return List.of("board", "menu", "status", "accept", "claim", "abandon", "write");
+        if (args.length == 2 && args[0].equalsIgnoreCase("village"))
+            return List.of("threat", "villagers");
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
-            return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light");
+            return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint")) return List.of("add", "remove");

@@ -1,5 +1,11 @@
 # Paper 分支维护与发布
 
+## 0.3.73 村民收购与村庄守望（2026-10-03，已发布）
+
+已加载的 37 位成年村民都有原版职业和交易菜单，包含 13 种职业，无职业或无交易者均为 0。新增商旅生活委托 `trader_supply`：玩家经原版交易向两种不同职业的村民出售物资并收到绿宝石才计数，日奖进入个人箱。`/mycli village villagers` 提供附近已加载村民的职业、绝对坐标和真实收购报价。村庄外围 48 格发现巡逻队或正在进行的袭击时，每名在线玩家分别收到 `mcagent:village` 私有状态；普通玩家收到一次文字，已登记的 Agent 收到一次原版私聊 `MC_VILLAGE_ALERT`，使现有 Cortico `whisper` 通道触发紧急决策。`/mycli village threat` 可复核状态；本人每日首次击败附近掠夺者可获个人箱内绿宝石 2 和面包 2。详见 [村民收购与村庄守望](VILLAGE_SUPPORT.md)。
+
+隔离服 `life-guild-20261003` 使用真实 Mineflayer 1.20.6，`village-support-stage.mjs` 通过两种职业实际出售、重复职业不计数、领奖、报价、警报、击败领奖和清场；`village-agent-alert-stage.mjs` 验证 Agent 的 `whisper` 紧急入口、普通玩家单条文字、私有插件频道隔离。原版私聊有 256 字符限制，最初的完整 JSON 被拒；最终私聊改为短 JSON，完整数据仍留在 `mcagent:village`，最终候选 SHA256 `3188000E90D191A757843CD7CA151A833EA3E2E16213BDE9596F5B347AD3F68E`。上线前仅 CortiLan、CortiEye、Goddess 服务账号在线，试炼 `active=false`；`Afu-MC-DailyBackup` 正常停服，E/F 双盘 `20261003-032338` 快照均有 `.complete`，任务结果 0，唯一启用 0.3.73 JAR 的 SHA 与候选一致，待发布和自动暂停标记已清。正式服只读 Mineflayer 探针验证村庄状态私有负载、村民查询及商旅看板；Java LAN 正向入服、Geyser 基岩 Pong、Goddess 桥和 Watchdog 正常，日志无新异常。CortiEyeMirror 已加载但远端 CortiEye 在本次重启后暂未回连，RCON 显示 `camera=offline`；不得把插件加载视为直播画面恢复。真实基岩手柄交易和 Agent 实际接到警报后的行动仍待现场验证。
+
 ## 0.3.72 生活公会与冒险委托扩展（2026-10-03，已发布）
 
 新增六类生活公会：种田、美食、钓鱼、建筑、写书和红石机关。它们只使用原版方块、物品和动作，以技能罗盘、命格书、公会看板及 `/mycli life` 向手柄玩家和 Agent 提供同一套入口；各公会声望独立，每项日常委托每天限领一次，奖励安全进入个人试炼箱。`mcagent:life` 以原始 UTF-8 JSON 向本人连接单播。同期冒险者公会委托扩展为 37 项并增加认证；修复旧会员高阶等级迁移、看板控件覆盖、捐献进度等问题。功能、命令与兼容性取舍见 [生活公会](LIFE_GUILDS.md)。Create 机械动力的 Forge/NeoForge JAR 没有装进 Paper 1.20.6；本版先用原版红石机关任务。

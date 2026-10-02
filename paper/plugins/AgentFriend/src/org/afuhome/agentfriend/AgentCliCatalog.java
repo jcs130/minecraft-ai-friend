@@ -52,7 +52,8 @@ final class AgentCliCatalog {
         add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔挑战、商店与本人奖励箱","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
         add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
-        add(specs,"life","life","read","/mycli life board|menu|status|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书和红石机关","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
+        add(specs,"life","life","read","/mycli life board|menu|status|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
+        add(specs,"village","safety","read","/mycli village threat|villagers","查村庄外围掠夺者、附近职业村民及真实收购报价","在线玩家；结果只含已加载实体","本人 mcagent:village JSON 与私有文字");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
         add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
@@ -132,13 +133,15 @@ final class AgentCliCatalog {
         add(specs,"guild.shared","storage","read","/mycli guild shared","列出四组公会公共双箱的绝对坐标；所有玩家可用普通箱子方式存取","公会服务区已建成","MC_GUILD_SHARED 坐标及 54 格容量");
         add(specs,"guild.trader","adventure","gui","/mycli guild trader","查看公会接待员坐标；到门口打开购买、回收和任务菜单","公会服务区已建成","MC_GUILD_TRADER 与原版容器菜单");
         add(specs,"guild.travel","adventure","teleport","/mycli guild travel <遗迹ID>","前往已开放地下城遗迹的外围安全点","ID 从公会看板/文档获取；目标可用","传送或拒绝原因");
-        add(specs,"life.board","life","read","/mycli life board","查看六类生活公会的每日委托和精确 ID","在线玩家","私人看板文字");
+        add(specs,"life.board","life","read","/mycli life board","查看七类生活公会的每日委托和精确 ID","在线玩家","私人看板文字");
         add(specs,"life.menu","life","gui","/mycli life menu","打开手柄可用的原版生活公会菜单","在线玩家","原版 27 格菜单");
-        add(specs,"life.status","life","read","/mycli life status","查看本人六类公会声望及当前任务","在线玩家","mcagent:life status");
+        add(specs,"life.status","life","read","/mycli life status","查看本人七类公会声望及当前任务","在线玩家","mcagent:life status");
         add(specs,"life.accept","life","write","/mycli life accept <任务ID>","领取一项生活委托","非旁观者；无其他进行中生活委托","mcagent:life accept");
         add(specs,"life.claim","life","item","/mycli life claim","交付达成的生活委托","任务进度已满；今日未领取","声望和个人箱奖励、mcagent:life claim");
         add(specs,"life.abandon","life","write","/mycli life abandon","放弃当前生活委托","本人有进行中任务","mcagent:life abandon");
         add(specs,"life.write","life","item","/mycli life write <书名>|<正文>","为 Agent 创建真实署名游记并参与故事公会任务","非旁观者；背包有空格；正文至少40字","背包实体成书、mcagent:life progress");
+        add(specs,"village.threat","safety","read","/mycli village threat","查当前村庄外围掠夺者/原版袭击与绝对坐标；有威胁时优先评估支援","在线玩家；未加载区块不保证安全","mcagent:village status；active/source/count/position");
+        add(specs,"village.villagers","life","read","/mycli village villagers","查附近职业村民的绝对坐标、职业与绿宝石收购报价","同维度96格内已加载村民","mcagent:village villagers");
         add(specs,"goddess.skills","goddess","read","/mycli goddess skills","查看女神技能和学习条件","在线玩家","技能文字列表");
         add(specs,"goddess.learn","goddess","write","/mycli goddess learn feather|night","学习羽落或夜视","非旁观者；5 级经验或炼金等级满足免费条件","学习结果");
         add(specs,"goddess.pray","goddess","message","/mycli goddess pray <1–100字>","把祈愿私聊给女神 Agent","女神在线；本人 30 秒冷却","明确送达或未送达");

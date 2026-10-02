@@ -1,6 +1,8 @@
 package org.afuhome.agentfriend;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import io.papermc.paper.event.player.PlayerTradeEvent;
 import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -17,6 +19,7 @@ import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Lightable;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -54,7 +57,9 @@ final class LifeGuildManager implements Listener {
             new Contract("author_story", "author", "故事公会", "旅途的一页", "签署一本至少 40 字的原创游记；书留在自己手中",
                     Material.WRITABLE_BOOK, 1, 4, 2, Material.BOOKSHELF, 1),
             new Contract("tinkerer_light", "tinkerer", "机关工匠公会", "点亮第一盏灯", "亲手放置红石灯，再用附近拉杆点亮它",
-                    Material.REDSTONE_LAMP, 1, 4, 3, Material.REDSTONE, 4));
+                    Material.REDSTONE_LAMP, 1, 4, 3, Material.REDSTONE, 4),
+            new Contract("trader_supply", "trader", "商旅公会", "村庄收购单", "把物资卖给两种不同职业的村民，换取绿宝石",
+                    Material.EMERALD, 2, 4, 2, Material.PAPER, 4));
 
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
@@ -115,6 +120,9 @@ final class LifeGuildManager implements Listener {
         Contract contract = active(player);
         player.sendMessage(ChatColor.AQUA + "生活公会：" + (contract == null ? "当前没有委托"
                 : contract.guild() + "「" + contract.title() + "」 " + progress(player) + "/" + contract.target()));
+        if (contract != null && contract.id().equals("trader_supply"))
+            player.sendMessage(ChatColor.GRAY + "已向这些职业出售：" + seenProfessionText(player)
+                    + "；/mycli village villagers 查附近村民的真实收购报价。");
         JsonObject reputations = new JsonObject();
         for (Contract guild : CONTRACTS) {
             int reputation = plugin.getConfig().getInt(base + ".reputation." + guild.guildId());
@@ -127,6 +135,7 @@ final class LifeGuildManager implements Listener {
         json.addProperty("activeId", contract == null ? "" : contract.id());
         json.addProperty("progress", contract == null ? 0 : progress(player));
         json.addProperty("target", contract == null ? 0 : contract.target());
+        json.add("seenProfessions", seenProfessions(player));
         json.add("reputation", reputations);
         send(player, json);
     }
@@ -224,6 +233,18 @@ final class LifeGuildManager implements Listener {
                 + location.getBlockY() + ":" + location.getBlockZ();
     }
 
+    private JsonArray seenProfessions(Player player) {
+        JsonArray seen = new JsonArray();
+        for (String value : plugin.getConfig().getStringList(base(player) + ".active.seen"))
+            if (value.startsWith("profession:")) seen.add(value.substring("profession:".length()));
+        return seen;
+    }
+
+    private String seenProfessionText(Player player) {
+        JsonArray seen = seenProfessions(player);
+        return seen.size() == 0 ? "暂无" : seen.toString();
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHarvest(BlockBreakEvent event) {
         if (event.getBlock().getType() != Material.WHEAT
@@ -294,6 +315,21 @@ final class LifeGuildManager implements Listener {
     public void onBook(PlayerEditBookEvent event) {
         if (event.isSigning() && validBook(event.getNewBookMeta()))
             advance(event.getPlayer(), "author_story", null);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTrade(PlayerTradeEvent event) {
+        if (!(event.getVillager() instanceof Villager villager) || !villager.isAdult()
+                || villager.getProfession() == Villager.Profession.NONE
+                || villager.getProfession() == Villager.Profession.NITWIT
+                || event.getTrade().getResult().getType() != Material.EMERALD
+                || event.getTrade().getIngredients().stream().noneMatch(item -> item.getType() != Material.EMERALD)) return;
+        Player player = event.getPlayer();
+        String profession = villager.getProfession().name().toLowerCase(Locale.ROOT);
+        if (active(player) != null && active(player).id().equals("trader_supply")) {
+            plugin.getConfig().set(base(player) + ".active.lastProfession", profession);
+            advance(player, "trader_supply", "profession:" + profession);
+        }
     }
 
     private boolean validBook(BookMeta meta) {
@@ -392,6 +428,9 @@ final class LifeGuildManager implements Listener {
         json.addProperty("reason", reason);
         json.addProperty("progress", progress(player));
         json.addProperty("target", contract.target());
+        if (contract.id().equals("trader_supply"))
+            json.addProperty("lastProfession", plugin.getConfig().getString(base(player) + ".active.lastProfession", ""));
+        json.add("seenProfessions", seenProfessions(player));
         if (action.equals("claim") && success) {
             json.addProperty("emeralds", contract.emeralds());
             json.addProperty("gift", contract.gift().getKey().toString());
