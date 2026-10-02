@@ -90,7 +90,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 0.3.53 的三档难度与奖励平衡见 [试炼难度](ARENA_DIFFICULTY.md)：手柄玩家在罗盘地点页选择，Agent 用 `/mycli arena difficulty`，发起者的选择固定整场；`status` 的 `selectedDifficulty` 是本人下次发起时的选择，`globalDifficulty` 才是当前全服场次。别把高难度下的重复通关当作当天第二次领奖。重复装备积压时先在控制台预览 `mycli admin prunetrial <在线玩家>`，核对后做 E/F 快照再执行 `apply`；只回收个人箱中与保留件完全相同的具名试炼奖励。0.3.54 的 `prunetrialbag` 用于重复装备已被搬进随身栏的情况，只回收 9–35 格，保留快捷栏、装备栏和副手。
 
-现有十层试炼塔位置、主题、怪物和奖励写在 `DungeonManager`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
+现有十五层试炼塔位置、主题、怪物和固定奖励写在 `DungeonManager`，随机与保底功能装备在 `DungeonLoot`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。0.3.62 起普通难度也略微提高怪物生命和伤害，深层再递进；奖励以铜铁材料、铁甲和带法术刻印的铁剑为主，具体见 [试炼奖励](ARENA_LOOT.md)。Agent 取到“赤铜柄·闪现匕首”或“寒霜剑”后按真实 `minecraft:iron_sword` 识别，潜行使用会触发已有法术；也可直接 `/mycli cast blink|frostnova`。不要把铜主题名称误当成 1.20.6 存在原版铜剑 ID。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
 
 0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。0.3.56 起第 13 层不再自动给予抗火，向本人发送 `MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false`；Agent 须观察岩浆并规划绕行。奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。每位玩家每个游戏日每层最多领取一次奖励，重复挑战仍可进入；`/mycli arena loot` 显示当天已领奖层号，重复通关返回 `MC_DUNGEON_LOOT category=daily_limit`。
 

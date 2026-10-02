@@ -95,7 +95,8 @@ final class DungeonManager implements Listener {
     private static final String STASH = "dungeon-personal-stash.";
     private static final int STASH_SIZE = 54;
     private static final String RARE_MISSES = "dungeon-rare-misses.";
-    private static final String DIAMOND_SET_INDEX = "dungeon-diamond-set-index.";
+    // Keep the persisted path so players retain their rotation position across this rebalance.
+    private static final String EQUIPMENT_INDEX = "dungeon-diamond-set-index.";
     private static final String BOSS_CLEARS = "dungeon-boss-clears.";
     private static final String FINAL_CLEARS = "dungeon-final-clears.";
     private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
@@ -110,9 +111,9 @@ final class DungeonManager implements Listener {
     private record Theme(String name, Material floor, Material wall, Material pillar,
                          EntityType[] mobs, Loot[] rewards) { }
     private enum Difficulty {
-        NORMAL("normal", "普通", 1.0, 1.0, 0, 0, 0),
-        ADVENTURE("adventure", "冒险", 1.5, 1.25, 0.025, 2, 2),
-        APOCALYPSE("apocalypse", "末日", 2.2, 1.6, 0.05, 4, 5);
+        NORMAL("normal", "普通", 1.15, 1.10, 0, 0, 0),
+        ADVENTURE("adventure", "冒险", 1.7, 1.4, 0.025, 2, 2),
+        APOCALYPSE("apocalypse", "末日", 2.5, 1.85, 0.05, 4, 5);
         final String id, label;
         final double health, damage, speed, armor;
         final int walletBonus;
@@ -139,61 +140,61 @@ final class DungeonManager implements Listener {
     private static final List<Theme> THEMES = List.of(
             new Theme("苔藓洞穴", Material.MOSS_BLOCK, Material.MOSSY_STONE_BRICKS, Material.OAK_LOG,
                     new EntityType[]{EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.ZOMBIE},
-                    new Loot[]{new Loot(Material.IRON_INGOT, 1), new Loot(Material.BREAD, 2), new Loot(Material.EXPERIENCE_BOTTLE, 1)}),
+                    new Loot[]{new Loot(Material.COPPER_INGOT, 2), new Loot(Material.BREAD, 2), new Loot(Material.EXPERIENCE_BOTTLE, 1)}),
             new Theme("沙漠遗迹", Material.SANDSTONE, Material.CHISELED_SANDSTONE, Material.CUT_SANDSTONE,
                     new EntityType[]{EntityType.HUSK, EntityType.HUSK, EntityType.SPIDER, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 1), new Loot(Material.IRON_INGOT, 1), new Loot(Material.BREAD, 2), new Loot(Material.EXPERIENCE_BOTTLE, 1)}),
+                    new Loot[]{new Loot(Material.EMERALD, 1), new Loot(Material.COPPER_INGOT, 2), new Loot(Material.BREAD, 2), new Loot(Material.EXPERIENCE_BOTTLE, 1)}),
             new Theme("冰雪洞窟", Material.PACKED_ICE, Material.SNOW_BLOCK, Material.BLUE_ICE,
                     new EntityType[]{EntityType.STRAY, EntityType.STRAY, EntityType.ZOMBIE, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 2), new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 2)}),
+                    new Loot[]{new Loot(Material.EMERALD, 1), new Loot(Material.IRON_INGOT, 2), new Loot(Material.EXPERIENCE_BOTTLE, 2)}),
             new Theme("赤焰堡垒", Material.NETHER_BRICKS, Material.RED_NETHER_BRICKS, Material.BLACKSTONE,
                     new EntityType[]{EntityType.MAGMA_CUBE, EntityType.MAGMA_CUBE, EntityType.HUSK, EntityType.HUSK, EntityType.BLAZE},
-                    new Loot[]{new Loot(Material.EMERALD, 2), new Loot(Material.LAPIS_LAZULI, 4), new Loot(Material.ARROW, 8), new Loot(Material.EXPERIENCE_BOTTLE, 2)}),
+                    new Loot[]{new Loot(Material.EMERALD, 2), new Loot(Material.LAPIS_LAZULI, 3), new Loot(Material.ARROW, 8), new Loot(Material.EXPERIENCE_BOTTLE, 2)}),
             new Theme("海晶遗迹", Material.PRISMARINE_BRICKS, Material.DARK_PRISMARINE, Material.PRISMARINE,
                     new EntityType[]{EntityType.DROWNED, EntityType.DROWNED, EntityType.DROWNED, EntityType.SKELETON, EntityType.SKELETON, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 3), new Loot(Material.IRON_INGOT, 2), new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 3)}),
+                    new Loot[]{new Loot(Material.EMERALD, 2), new Loot(Material.IRON_INGOT, 2), new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 3)}),
             new Theme("深层宝库", Material.DEEPSLATE_BRICKS, Material.POLISHED_BLACKSTONE_BRICKS, Material.CHISELED_DEEPSLATE,
                     new EntityType[]{EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.HUSK, EntityType.HUSK, EntityType.SKELETON, EntityType.SKELETON, EntityType.WITCH},
-                    new Loot[]{new Loot(Material.DIAMOND, 1), new Loot(Material.EMERALD, 5), new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 4)}),
+                    new Loot[]{new Loot(Material.COPPER_INGOT, 5), new Loot(Material.EMERALD, 3), new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 4)}),
             new Theme("灯火驿站", Material.CHERRY_PLANKS, Material.POLISHED_DEEPSLATE, Material.CHERRY_LOG,
                     new EntityType[]{}, new Loot[]{}),
             new Theme("幽荧矿井", Material.TUFF_BRICKS, Material.DEEPSLATE_TILES, Material.COPPER_BLOCK,
                     new EntityType[]{EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SKELETON,
                             EntityType.CAVE_SPIDER, EntityType.CAVE_SPIDER, EntityType.HUSK, EntityType.HUSK},
-                    new Loot[]{new Loot(Material.EMERALD, 5), new Loot(Material.DIAMOND, 1),
+                    new Loot[]{new Loot(Material.EMERALD, 3), new Loot(Material.IRON_INGOT, 3),
                             new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 5)}),
             new Theme("星辉秘殿", Material.AMETHYST_BLOCK, Material.PURPUR_BLOCK, Material.CALCITE,
                     new EntityType[]{EntityType.PILLAGER, EntityType.PILLAGER, EntityType.VINDICATOR,
                             EntityType.SKELETON, EntityType.SKELETON, EntityType.WITCH,
                             EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 7), new Loot(Material.DIAMOND, 2),
+                    new Loot[]{new Loot(Material.EMERALD, 4), new Loot(Material.COPPER_INGOT, 6),
                             new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 6)}),
             new Theme("深渊守卫之殿", Material.POLISHED_BLACKSTONE_BRICKS, Material.CRYING_OBSIDIAN, Material.GILDED_BLACKSTONE,
                     new EntityType[]{EntityType.RAVAGER, EntityType.PILLAGER, EntityType.PILLAGER,
                             EntityType.ZOMBIE, EntityType.ZOMBIE},
-                    new Loot[]{new Loot(Material.EMERALD, 10), new Loot(Material.DIAMOND, 3),
-                            new Loot(Material.GOLDEN_APPLE, 2), new Loot(Material.EXPERIENCE_BOTTLE, 10)}),
+                    new Loot[]{new Loot(Material.EMERALD, 5), new Loot(Material.IRON_INGOT, 4),
+                            new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 8)}),
             new Theme("断桥要塞", Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.POLISHED_ANDESITE,
                     new EntityType[]{EntityType.PILLAGER, EntityType.PILLAGER, EntityType.VINDICATOR,
                             EntityType.VINDICATOR, EntityType.ZOMBIE, EntityType.ZOMBIE, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 5), new Loot(Material.IRON_INGOT, 5), new Loot(Material.ARROW, 24)}),
+                    new Loot[]{new Loot(Material.EMERALD, 3), new Loot(Material.IRON_INGOT, 4), new Loot(Material.ARROW, 16)}),
             new Theme("沉潮书库", Material.PRISMARINE_BRICKS, Material.DARK_PRISMARINE, Material.SEA_LANTERN,
                     new EntityType[]{EntityType.DROWNED, EntityType.DROWNED, EntityType.DROWNED,
                             EntityType.SKELETON, EntityType.SKELETON, EntityType.WITCH, EntityType.SPIDER},
-                    new Loot[]{new Loot(Material.EMERALD, 6), new Loot(Material.DIAMOND, 1), new Loot(Material.GOLDEN_APPLE, 1)}),
+                    new Loot[]{new Loot(Material.EMERALD, 4), new Loot(Material.COPPER_INGOT, 5), new Loot(Material.GOLDEN_APPLE, 1)}),
             new Theme("赤铜熔炉", Material.POLISHED_BLACKSTONE, Material.TUFF_BRICKS, Material.COPPER_BLOCK,
                     new EntityType[]{EntityType.BLAZE, EntityType.BLAZE, EntityType.MAGMA_CUBE,
                             EntityType.MAGMA_CUBE, EntityType.VINDICATOR, EntityType.ZOMBIE, EntityType.ZOMBIE},
-                    new Loot[]{new Loot(Material.EMERALD, 7), new Loot(Material.DIAMOND, 1), new Loot(Material.GOLDEN_APPLE, 2)}),
+                    new Loot[]{new Loot(Material.EMERALD, 4), new Loot(Material.IRON_INGOT, 4), new Loot(Material.GOLDEN_APPLE, 1)}),
             new Theme("机关回廊", Material.CHISELED_STONE_BRICKS, Material.DEEPSLATE_TILES, Material.IRON_BLOCK,
                     new EntityType[]{EntityType.PILLAGER, EntityType.PILLAGER, EntityType.STRAY,
                             EntityType.STRAY, EntityType.VINDICATOR, EntityType.VINDICATOR, EntityType.WITCH},
-                    new Loot[]{new Loot(Material.EMERALD, 8), new Loot(Material.DIAMOND, 2), new Loot(Material.EXPERIENCE_BOTTLE, 8)}),
+                    new Loot[]{new Loot(Material.EMERALD, 5), new Loot(Material.COPPER_INGOT, 6), new Loot(Material.EXPERIENCE_BOTTLE, 6)}),
             new Theme("星灯主宰之庭", Material.PURPUR_BLOCK, Material.POLISHED_BLACKSTONE_BRICKS, Material.AMETHYST_BLOCK,
                     new EntityType[]{EntityType.RAVAGER, EntityType.WITCH, EntityType.PILLAGER,
                             EntityType.PILLAGER, EntityType.VINDICATOR, EntityType.VINDICATOR},
-                    new Loot[]{new Loot(Material.EMERALD, 12), new Loot(Material.DIAMOND, 3),
-                            new Loot(Material.GOLDEN_APPLE, 2), new Loot(Material.EXPERIENCE_BOTTLE, 12)}));
+                    new Loot[]{new Loot(Material.EMERALD, 6), new Loot(Material.DIAMOND, 1),
+                            new Loot(Material.GOLDEN_APPLE, 1), new Loot(Material.EXPERIENCE_BOTTLE, 8)}));
 
     private final AgentFriendPlugin plugin;
     private final NamespacedKey mobKey;
@@ -975,9 +976,10 @@ final class DungeonManager implements Listener {
     }
 
     private void applyDifficulty(Mob mob) {
-        if (difficulty == Difficulty.NORMAL) return;
         if (mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-            double max = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue() * difficulty.health;
+            double deepFloor = 1.0 + Math.max(0, floor - 7) * 0.04;
+            double max = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue()
+                    * difficulty.health * deepFloor;
             mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(max);
             mob.setHealth(max);
         }
@@ -1075,9 +1077,10 @@ final class DungeonManager implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTrialOutgoingDamage(EntityDamageByEntityEvent event) {
-        if (difficulty == Difficulty.NORMAL || !trialMob(attacker(event.getDamager()))
+        if (!trialMob(attacker(event.getDamager()))
                 || !validParticipantTarget(event.getEntity() instanceof LivingEntity living ? living : null)) return;
-        event.setDamage(event.getDamage() * difficulty.damage);
+        event.setDamage(event.getDamage() * difficulty.damage
+                * (1.0 + Math.max(0, floor - 7) * 0.025));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -1174,22 +1177,23 @@ final class DungeonManager implements Listener {
 
     private void lootProgress(Player player) {
         UUID id = player.getUniqueId();
-        int index = Math.max(0, plugin.getConfig().getInt(DIAMOND_SET_INDEX + id, 0));
+        int index = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
         int clears = Math.max(0, plugin.getConfig().getInt(BOSS_CLEARS + id, 0));
-        String[] pieces = {"头盔", "胸甲", "护腿", "靴子"};
+        String[] pieces = {"闪现匕首", "寒霜剑", "赤铜纹战盾", "踏影铁靴"};
         long gameDay = world().getFullTime() / 24000L;
         List<String> claimedFloors = new ArrayList<>();
         for (int n = 1; n <= maxFloor(); n++)
             if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
                 claimedFloors.add(Integer.toString(n));
-        player.sendMessage(ChatColor.GOLD + "前三层给材料、恢复品、酿药材料和弓；第四、五、八、九层保底集齐铁甲；第六、十层依次给星辉钻石甲。"
-                + "下一件：" + pieces[index % 4] + "，第 " + (Math.min(2, index / 4) + 1) + " 阶。"
+        player.sendMessage(ChatColor.GOLD + "前三层给铜铁材料、恢复品、酿药材料和弓；第四、五、八、九层保底集齐铁甲；第六、十层轮换法术刻印装备。"
+                + "下一件：" + pieces[index % 4] + "。"
                 + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
                 + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
-        player.sendMessage("MC_DUNGEON_SET schemaVersion=1 diamondIndex=" + index
-                + " next=minecraft:" + new Material[]{Material.DIAMOND_HELMET, Material.DIAMOND_CHESTPLATE,
-                    Material.DIAMOND_LEGGINGS, Material.DIAMOND_BOOTS}[index % 4].name().toLowerCase(Locale.ROOT)
-                + " tier=" + (Math.min(2, index / 4) + 1) + " bossClears=" + clears
+        player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
+                + " next=minecraft:" + new Material[]{Material.IRON_SWORD, Material.IRON_SWORD,
+                    Material.SHIELD, Material.IRON_BOOTS}[index % 4].name().toLowerCase(Locale.ROOT)
+                + " nextName=" + new String[]{"blink_dagger", "frost_sword", "copper_shield", "shadow_boots"}[index % 4]
+                + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
                 + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1");
     }
@@ -1296,7 +1300,7 @@ final class DungeonManager implements Listener {
                 }
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
             }
-            int setIndex = Math.max(0, plugin.getConfig().getInt(DIAMOND_SET_INDEX + id, 0));
+            int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
             DungeonLoot.Bonus milestone = scale.gap() == 0 || firstClear
                     ? DungeonLoot.milestone(floor, setIndex) : null;
             if (milestone != null) {
@@ -1304,13 +1308,13 @@ final class DungeonManager implements Listener {
                 guaranteed.add(milestone.item());
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
                 if (floor == 6 || floor == BOSS_FLOOR)
-                    plugin.getConfig().set(DIAMOND_SET_INDEX + id, setIndex + 1);
+                    plugin.getConfig().set(EQUIPMENT_INDEX + id, setIndex + 1);
                 p.sendMessage((milestone.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN)
                         + "本层保底装备：" + milestone.label() + "，已存入个人箱子。"
                         + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
                 p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
                         + milestone.item().getType().name().toLowerCase(Locale.ROOT)
-                        + " diamondIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1));
+                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1));
             }
             if (floor == 3) plugin.teachArenaSkills(p);
             if (floor == BASE_FLOORS && expanded) {

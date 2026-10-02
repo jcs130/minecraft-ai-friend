@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.bukkit.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -29,6 +30,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 /** Per-UUID trial-tower economy. All inventory and balance mutations run on the server thread. */
 final class ArenaEconomy implements Listener {
@@ -41,7 +43,8 @@ final class ArenaEconomy implements Listener {
             "苔原旅盔", "遗迹守护甲", "雪行护腿", "焰路行靴", "潮汐守盾",
             "幽荧猎弓", "秘殿破阵弩", "星辉冠", "星辉甲", "星辉护腿", "星辉靴",
             "冒险者铁盔", "冒险者胸甲", "冒险者护腿", "冒险者矿镐", "冒险者战斧", "远征盾",
-            "潮汐探路冠", "回廊踏影靴");
+            "潮汐探路冠", "回廊踏影靴", "赤铜纹战盾", "踏影铁靴",
+            "铜纹守护甲", "机关弩", "深渊破壁斧", "赤铜柄·闪现匕首", "寒霜剑");
     private record Offer(String id, Material material, int count, int price) { }
     private record Quote(UUID owner, String id, boolean stash, int slot, int quantity, int price,
                          byte[] fingerprint, long expiresAt) { }
@@ -508,7 +511,22 @@ final class ArenaEconomy implements Listener {
                 || Set.of("BOW", "CROSSBOW", "TRIDENT", "SHIELD").contains(type);
         if (!gear || !stack.hasItemMeta()) return gear;
         ItemMeta meta = stack.getItemMeta();
-        if (!meta.getPersistentDataContainer().getKeys().isEmpty() || meta.isUnbreakable()) return false;
+        if (meta.isUnbreakable()) return false;
+        Set<NamespacedKey> keys = meta.getPersistentDataContainer().getKeys();
+        if (!keys.isEmpty()) {
+            NamespacedKey imprint = NamespacedKey.fromString("agentfriend:imprint_spell");
+            if (keys.size() != 1 || !keys.contains(imprint) || !meta.hasDisplayName()) return false;
+            String name = ChatColor.stripColor(meta.getDisplayName());
+            String spell = meta.getPersistentDataContainer().get(imprint, PersistentDataType.STRING);
+            if (!(name.equals("赤铜柄·闪现匕首") && "blink".equals(spell)
+                    || name.equals("寒霜剑") && "frostnova".equals(spell))) return false;
+            if (!meta.hasLore() || meta.getLore().size() != 3) return false;
+            List<String> lore = meta.getLore();
+            return TRIAL_LORE.equals(ChatColor.stripColor(lore.get(0)))
+                    && (lore.get(1).startsWith("§5✦ 法术刻印：")
+                        || lore.get(1).startsWith("§d✦ 法术刻印："))
+                    && lore.get(2).startsWith("§7潜行使用：施放刻印法术");
+        }
         if (meta.hasDisplayName()) {
             String name = ChatColor.stripColor(meta.getDisplayName());
             if (!NAMED_REWARDS.contains(name)) return false;

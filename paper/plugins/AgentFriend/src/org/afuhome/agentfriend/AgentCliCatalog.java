@@ -94,7 +94,7 @@ final class AgentCliCatalog {
         add(specs,"arena.shop.list","storage","read","/mycli arena shop list","列出余额商店的护甲、武器与补给","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.shop.buy","storage","item","/mycli arena shop buy <商品ID> [1–16]","用个人绿宝石余额购买；商品进入个人箱待领取队列","余额足够且队列有容量","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.wallet","storage","read","/mycli arena wallet","查询本人的绿宝石余额","在线玩家","私有 MC_ARENA_ECONOMY JSON");
-        add(specs,"arena.loot","adventure","read","/mycli arena loot","查看试炼装备、下一件星辉钻石甲及本游戏日已领奖层数","在线玩家","私有 MC_DUNGEON_SET 进度回执");
+        add(specs,"arena.loot","adventure","read","/mycli arena loot","查看试炼装备、下一件法术刻印装备及本游戏日已领奖层数","在线玩家","私有 MC_DUNGEON_SET 进度回执");
         add(specs,"arena.layout","adventure","read","/mycli arena layout","读取本人当前战斗房间的绝对中心、范围、奖励箱和地形危险类型","本人正在当前层参赛","私有 MC_DUNGEON_LAYOUT 回执");
         add(specs,"arena.recycle.list","storage","read","/mycli arena recycle list","列出本人箱子与背包中可回收装备","在线玩家","私有 MC_ARENA_ECONOMY JSON");
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取30秒报价","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");

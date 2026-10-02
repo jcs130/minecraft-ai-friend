@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.62 试炼塔难度与功能装备调平（2026-10-02）
+
+普通/冒险/末日的怪物生命与直接伤害分别调整为 1.15/1.7/2.5 倍、1.10/1.4/1.85 倍；第 8–15 层另按楼层增加生命与伤害。固定奖励降低绿宝石、金苹果和钻石数量，随机池移除重复钻石/下界合金套装、图腾和附魔金苹果。第 6、10 层的保底装备按玩家原有进度轮换闪现匕首、寒霜剑、赤铜纹战盾和踏影铁靴。前两把实际是附魔铁剑，保留原版 ItemStack 及 `agentfriend:imprint_spell` 组件，潜行使用分别调用既有闪现/霜环法术及其魔力、冷却；普通近战仍可用。1.20.6 没有原版铜剑/铜甲 ID，铜主题使用铜锭与铜纹名称。第 10 层首通武器降为铁剑，第 15 层首通保留一把钻石纪念剑；旧玩家已获得或已排队的物品不回收。`MC_DUNGEON_SET` 升为 schemaVersion 2 的 `equipmentIndex/next/nextName`，保存路径沿用旧索引。详见 [奖励](ARENA_LOOT.md)与[难度](ARENA_DIFFICULTY.md)。
+
+隔离服 25566 的真实 Mineflayer 1.20.6 账号 `arena-balance-stage.mjs` 完整通过前十层：首层普通僵尸生命 23，个人箱收到两把带名称和 PDC 刻印组件的铁剑，进度回执为 `equipmentIndex=2 nextName=copper_shield`，普通十层无保底顶级装备。`arena-artifact-stage.mjs` 从原版箱取出后潜行使用闪现匕首位移约 11 格，寒霜剑对僵尸造成实际伤害。`arena-artifact-economy-stage.mjs` 验证重复匕首可报价回收 8 余额，首通“深渊裁决”不可回收。测试夹具曾因无目标方块使闪现失败、无加载区块使霜环无目标，补充强加载地台、目标墙和僵尸后通过；隔离服已正常停止。快速清场仍偶见既有 Mineflayer 协议库 `PartialReadError` 提示，但连接、箱子解析和上述断言均通过。未把 RCON 清怪结果当作真人/Agent 生存战斗难度证明，基岩真机使用手柄施法画面仍需玩家体验复核。
+
+正式服发布前只有 CortiLan、CortiEye、Goddess 三个服务账号在线，`dungeonaudit active=false`。`Afu-MC-DailyBackup` 正常停服生成 E/F 双盘 `.complete` 快照 `20261002-175145`，任务结果 0；仅启用 `AgentFriend-0.3.62.jar`，SHA256 `5DD0D50BC2E16145D292C556ED1106A340828093F6E1531DC7F005D75E16FA40`，待部署与自动恢复暂停标记均已清除。重启后 RCON 版本 0.3.62、Java 本机与 LAN 网关、Geyser 基岩 Pong、Goddess 桥均正常，最近 1 分钟平均 MSPT 约 6.4。旧 `agent-lan-smoke.mjs` 假定白名单始终开启，因当前按用户要求 `white-list=false` 而误报“测试身份进入”；探针已改为按实际开关验证并重新通过。CortiEyeMirror 已加载，远端 CortiEye 在本次重启后仍未回连，`camera=offline attached=false`；该账号在发布前也曾离线，直播画面尚未验收。回退可在无人挑战时用上述 E/F 快照恢复旧 JAR、配置和玩家进度。
+
 ## 0.3.61 冒险者公会接待与共享箱（2026-10-02）
 
 门内接待员“阿莉娅”提供今日任务、余额购买、装备回收及原版绿宝石交易；所有选项使用原版村民/箱子界面。大厅东南侧四组 54 格公共双箱让玩家和 Agent 直接存取多余武器、护甲与补给，箱体和平台保护不影响箱内存取。`/mycli guild trader|shared` 给 Agent 返回绝对坐标；交易继续使用原有个人余额和报价确认，不会自动取走公共箱物品。箱子坐标、恢复办法见 [公会接待与共享箱](GUILD_SERVICES.md)。
