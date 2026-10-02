@@ -64,6 +64,7 @@ final class AgentAbilityState {
         addBuiltin(result, player, "home", "归乡", "minecraft:compass");
         addBuiltin(result, player, "fireworks", "烟花术", "minecraft:firework_rocket");
         addBuiltin(result, player, "starlight", "星光术", "minecraft:glowstone_dust");
+        addBuiltin(result, player, "heal", "范围治疗", "minecraft:glistering_melon_slice");
         if (plugin.hasLearnedSkill(player, "feather"))
             addBuiltin(result, player, "feather", "羽落", "minecraft:feather");
         if (plugin.hasLearnedSkill(player, "night"))
@@ -86,6 +87,7 @@ final class AgentAbilityState {
         for (Spell spell : spells) {
             if (result.size() >= MAX_ENTRIES) break;
             if (spell.isHelperSpell()) continue;
+            if (spell.getInternalName().equalsIgnoreCase("heal")) continue; // /mycli owns the area version.
             String id = "magicspells:" + spell.getInternalName().toLowerCase(Locale.ROOT);
             if (!VALID_ID.matcher(id).matches()) continue;
             Long total = millis(spell.getCooldown());

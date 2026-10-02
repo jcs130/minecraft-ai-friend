@@ -116,6 +116,7 @@ final class AgentStatePublisher implements Listener {
             root.add("mana", mana);
         }
         root.add("abilities", abilities.build(player));
+        root.add("equipmentEffects", DungeonGearAura.effects(player));
         byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_BYTES) {
             var entries = root.getAsJsonArray("abilities");

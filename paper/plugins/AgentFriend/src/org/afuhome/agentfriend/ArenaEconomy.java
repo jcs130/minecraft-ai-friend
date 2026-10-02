@@ -515,17 +515,38 @@ final class ArenaEconomy implements Listener {
         Set<NamespacedKey> keys = meta.getPersistentDataContainer().getKeys();
         if (!keys.isEmpty()) {
             NamespacedKey imprint = NamespacedKey.fromString("agentfriend:imprint_spell");
-            if (keys.size() != 1 || !keys.contains(imprint) || !meta.hasDisplayName()) return false;
+            if (keys.size() != 1 || !meta.hasDisplayName()) return false;
             String name = ChatColor.stripColor(meta.getDisplayName());
+            if (keys.contains(DungeonGearAura.KEY)) {
+                String aura = meta.getPersistentDataContainer().get(DungeonGearAura.KEY, PersistentDataType.STRING);
+                if (!(stack.getType() == Material.IRON_CHESTPLATE && "熔心护甲".equals(name)
+                        && DungeonGearAura.EMBER.equals(aura)
+                        || stack.getType() == Material.GOLDEN_CHESTPLATE && "春灯愈甲".equals(name)
+                        && DungeonGearAura.RENEWAL.equals(aura)
+                        || stack.getType() == Material.CHAINMAIL_CHESTPLATE && "血誓锁甲".equals(name)
+                        && DungeonGearAura.LEECH.equals(aura))) return false;
+                if (!meta.hasLore() || meta.getLore().size() != 3) return false;
+                List<String> lore = meta.getLore();
+                return TRIAL_LORE.equals(ChatColor.stripColor(lore.get(0)))
+                        && ChatColor.stripColor(lore.get(1)).startsWith("✦ 被动：")
+                        && (ChatColor.stripColor(lore.get(2)).startsWith("穿戴时每")
+                            || ChatColor.stripColor(lore.get(2)).startsWith("双方脱战")
+                            || ChatColor.stripColor(lore.get(2)).startsWith("攻击敌怪"));
+            }
+            if (!keys.contains(imprint)) return false;
             String spell = meta.getPersistentDataContainer().get(imprint, PersistentDataType.STRING);
             if (!(name.equals("赤铜柄·闪现匕首") && "blink".equals(spell)
-                    || name.equals("寒霜剑") && "frostnova".equals(spell))) return false;
+                    || name.equals("寒霜剑") && "frostnova".equals(spell)
+                    || name.equals("炎纹双刃斧") && "flamewave".equals(spell)
+                    || name.equals("星轨猎弓") && "starbolt".equals(spell)
+                    || name.equals("影步连弩") && "blink".equals(spell)
+                    || name.equals("潮汐战矛") && "frostnova".equals(spell))) return false;
             if (!meta.hasLore() || meta.getLore().size() != 3) return false;
             List<String> lore = meta.getLore();
             return TRIAL_LORE.equals(ChatColor.stripColor(lore.get(0)))
                     && (lore.get(1).startsWith("§5✦ 法术刻印：")
                         || lore.get(1).startsWith("§d✦ 法术刻印："))
-                    && lore.get(2).startsWith("§7潜行使用：施放刻印法术");
+                    && lore.get(2).startsWith("§7潜行使用：");
         }
         if (meta.hasDisplayName()) {
             String name = ChatColor.stripColor(meta.getDisplayName());

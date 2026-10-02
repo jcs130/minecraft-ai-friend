@@ -144,6 +144,7 @@ final class ViewerStatePublisher implements Listener {
             root.add("skills", skills(user));
         }
         root.add("abilities", abilities(player, user != null && user.isLoaded() ? user : null));
+        root.add("equipmentEffects", DungeonGearAura.effects(player));
         return root;
     }
 
@@ -185,6 +186,7 @@ final class ViewerStatePublisher implements Listener {
         addAbility(result, "mycli:flight", "飞行术", plugin.mastery().rank(player, "flight"), utilitySpells.remainingCooldownMs(player, "flight"));
         addAbility(result, "mycli:golem", "守护傀儡", plugin.mastery().rank(player, "golem"), utilitySpells.remainingCooldownMs(player, "golem"));
         addAbility(result, "mycli:sense", "探敌术", plugin.mastery().rank(player, "sense"), utilitySpells.remainingCooldownMs(player, "sense"));
+        addAbility(result, "mycli:heal", "范围治疗", 1, plugin.remainingBuiltinCooldownMs(player, "heal"));
         Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave",
                 "mycli:prospect", "mycli:leap", "mycli:flight", "mycli:golem", "mycli:sense"));
         addMagicSpells(result, player, seen);
@@ -231,6 +233,7 @@ final class ViewerStatePublisher implements Listener {
         for (Spell spell : spells) {
             if (result.size() >= MAX_ENTRIES) break;
             if (spell.isHelperSpell()) continue;
+            if (spell.getInternalName().equalsIgnoreCase("heal")) continue;
             String spellId = "magicspells:" + spell.getInternalName().toLowerCase(Locale.ROOT);
             if (!VALID_ID.matcher(spellId).matches() || !seen.add(spellId)) continue;
             float remainingSeconds = spell.getCooldown(player);

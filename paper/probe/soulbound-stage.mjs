@@ -32,6 +32,12 @@ try {
   plate = bot.inventory.items().find(item => item.name === 'diamond_chestplate');
   assert.ok(plate, 'Binding removed chestplate');
   assert.ok(JSON.stringify(plate).includes('灵魂绑定'), 'Bound lore was not synced to vanilla client');
+  bot.chat(`/mycli arena stash putslot ${bukkitSlot} 1`);
+  await sleep(350);
+  assert.ok(messages.some(message => message.includes(`MC_STASH_PUT slot=${bukkitSlot} moved=0 reason=soulbound`)),
+    'Bound item entered personal stash through putslot');
+  assert.ok(bot.inventory.items().some(item => item.name === 'diamond_chestplate'),
+    'Bound item disappeared after putslot');
   await bot.tossStack(plate);
   await sleep(500);
   assert.ok(bot.inventory.items().some(item => item.name === 'diamond_chestplate'),

@@ -1179,20 +1179,20 @@ final class DungeonManager implements Listener {
         UUID id = player.getUniqueId();
         int index = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
         int clears = Math.max(0, plugin.getConfig().getInt(BOSS_CLEARS + id, 0));
-        String[] pieces = {"闪现匕首", "寒霜剑", "赤铜纹战盾", "踏影铁靴"};
+        DungeonLoot.Bonus next = DungeonLoot.equipmentPiece(index);
+        String nextName = ChatColor.stripColor(next.item().getItemMeta().getDisplayName());
         long gameDay = world().getFullTime() / 24000L;
         List<String> claimedFloors = new ArrayList<>();
         for (int n = 1; n <= maxFloor(); n++)
             if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
                 claimedFloors.add(Integer.toString(n));
-        player.sendMessage(ChatColor.GOLD + "前三层给铜铁材料、恢复品、酿药材料和弓；第四、五、八、九层保底集齐铁甲；第六、十层轮换法术刻印装备。"
-                + "下一件：" + pieces[index % 4] + "。"
+        player.sendMessage(ChatColor.GOLD + "前三层给材料、补给和弓；第四、五、八、九层集齐铁甲；第六、十层轮换功能装备，深层首通还有斧与弓。"
+                + "下一件：" + nextName + "。"
                 + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
                 + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
         player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
-                + " next=minecraft:" + new Material[]{Material.IRON_SWORD, Material.IRON_SWORD,
-                    Material.SHIELD, Material.IRON_BOOTS}[index % 4].name().toLowerCase(Locale.ROOT)
-                + " nextName=" + new String[]{"blink_dagger", "frost_sword", "copper_shield", "shadow_boots"}[index % 4]
+                + " next=minecraft:" + next.item().getType().name().toLowerCase(Locale.ROOT)
+                + " nextName=" + DungeonLoot.equipmentId(index)
                 + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
                 + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1");
@@ -1301,7 +1301,8 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
             }
             int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
-            DungeonLoot.Bonus milestone = scale.gap() == 0 || firstClear
+            boolean oneTimeDeepWeapon = floor == 11 || floor == 13;
+            DungeonLoot.Bonus milestone = (oneTimeDeepWeapon ? firstClear : scale.gap() == 0 || firstClear)
                     ? DungeonLoot.milestone(floor, setIndex) : null;
             if (milestone != null) {
                 List<ItemStack> guaranteed = bonusItems(id);
@@ -1619,6 +1620,9 @@ final class DungeonManager implements Listener {
             if (source == null || source.getType().isAir()) {
                 player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=empty"); return;
             }
+            if (plugin.isSoulbound(source)) {
+                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=soulbound"); return;
+            }
             Material material = source.getType();
             ItemStack part = source.clone();
             part.setAmount(Math.min(source.getAmount(), wanted));
@@ -1644,7 +1648,7 @@ final class DungeonManager implements Listener {
             int moved = 0;
             for (int slot = 0; slot < 36 && moved < wanted; slot++) {
                 ItemStack source = player.getInventory().getItem(slot);
-                if (source == null || source.getType() != material) continue;
+                if (source == null || source.getType() != material || plugin.isSoulbound(source)) continue;
                 ItemStack part = source.clone();
                 part.setAmount(Math.min(source.getAmount(), wanted - moved));
                 int attempted = part.getAmount();

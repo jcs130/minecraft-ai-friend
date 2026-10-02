@@ -98,13 +98,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
     private static final long FIREWORKS_COOLDOWN_MS = 10_000L;
     private static final long STARLIGHT_COOLDOWN_MS = 10_000L;
+    private static final long GROUP_HEAL_COOLDOWN_MS = 12_000L;
     private static final long FEATHER_COOLDOWN_MS = 90_000L;
     private static final long NIGHT_COOLDOWN_MS = 180_000L;
     private static final String ARENA_TAG = "afu_agentfriend_arena";
     private static final Set<Material> VILLAGE_WEEDS = Set.of(Material.SHORT_GRASS, Material.TALL_GRASS,
             Material.FERN, Material.LARGE_FERN, Material.DEAD_BUSH);
     private static final Map<String, Double> SPELL_MANA_COSTS = Map.ofEntries(
-            Map.entry("blink", 4.0), Map.entry("heal", 4.0), Map.entry("food", 3.0),
+            Map.entry("blink", 4.0), Map.entry("food", 3.0),
             Map.entry("selfheal", 6.0),
             Map.entry("conjure_bread", 4.0), Map.entry("conjure_torch", 4.0),
             Map.entry("conjure_oak_log", 4.0), Map.entry("conjure_cobblestone", 4.0),
@@ -118,7 +119,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static final List<FocusSpell> FOCUS_SPELLS = List.of(
             new FocusSpell("prospect", 10, Material.SPYGLASS, "§d探附近矿脉", "24–40 格；刻印工具再 +8"),
             new FocusSpell("home", 1, Material.RED_BED, "§a回村庄", "安全传送到出生村庄"),
-            new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a治疗队友", "治疗面前队友；4 魔力"),
+            new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a范围治疗", "治疗 8 格内受伤玩家；6 魔力"),
             new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
             new FocusSpell("fireworks", 4, Material.FIREWORK_ROCKET, "§6烟花术", "原版烟花粒子；1 魔力"),
             new FocusSpell("starlight", 5, Material.GLOWSTONE_DUST, "§e星尘术", "照亮周围"),
@@ -210,6 +211,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
     private SoulboundGear soulboundGear;
+    private DungeonGearAura dungeonGearAura;
+
+    boolean isSoulbound(ItemStack item) {
+        return soulboundGear != null && soulboundGear.owner(item) != null;
+    }
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
     private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
@@ -245,6 +251,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags.start();
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
+        dungeonGearAura = new DungeonGearAura(this);
+        dungeonGearAura.start();
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
@@ -265,6 +273,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (dungeonGearAura != null) dungeonGearAura.stop();
         if (agentCoach != null) agentCoach.stop();
         if (playerNameTags != null) playerNameTags.stop();
         if (dungeon != null) dungeon.shutdown();
@@ -375,6 +384,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "home" -> 0L;
             case "fireworks" -> FIREWORKS_COOLDOWN_MS;
             case "starlight" -> STARLIGHT_COOLDOWN_MS;
+            case "heal" -> GROUP_HEAL_COOLDOWN_MS;
             case "feather" -> FEATHER_COOLDOWN_MS;
             case "night" -> NIGHT_COOLDOWN_MS;
             default -> throw new IllegalArgumentException("Unknown built-in spell " + spell);
@@ -403,6 +413,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpellPreCast(SpellCastEvent event) {
         if (!(event.getCaster() instanceof Player p)) return;
+        if (event.getSpell().getInternalName().equalsIgnoreCase("heal")
+                && event.getSpellCastState() == Spell.SpellCastState.NORMAL) {
+            event.setCancelled(true);
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (p.isOnline()) groupHeal(p);
+            });
+            return;
+        }
         Double cost = SPELL_MANA_COSTS.get(event.getSpell().getInternalName());
         if (cost == null || event.getSpellCastState() != Spell.SpellCastState.NORMAL) return;
         if (p.getGameMode() == GameMode.SPECTATOR) {
@@ -798,7 +816,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void spells(Player p) {
-        p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、治疗队友(heal)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)、星尘术(starlight)。");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、范围治疗(heal，8 格内所有受伤玩家)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)、星尘术(starlight)。");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：基础 24 格，挖矿每 5 级 +2 格、最多 40 格；手持探矿刻印工具再 +8 格。可选 iron|coal|copper|gold|gems|diamond|redstone|ancient；6 魔力，30 秒冷却。");
         p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
@@ -841,8 +859,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         id = switch (id) {
             case "归乡", "归乡术", "回乡", "回乡术", "回家", "茴香", "home" -> "home";
             case "闪现", "空间传送", "blink" -> "blink";
-            case "治疗队友", "heal" -> "heal";
-            case "圣愈术", "自愈", "自疗", "治疗自己", "治愈", "治疗", "selfheal", "heal_self" -> "selfheal";
+            case "治疗队友", "治疗术", "范围治疗", "群体治疗", "治愈", "治疗", "heal" -> "heal";
+            case "圣愈术", "自愈", "自疗", "治疗自己", "selfheal", "heal_self" -> "selfheal";
             case "饱食", "食物", "food" -> "food";
             case "烟花", "烟花术", "fireworks" -> "fireworks";
             case "星尘", "星尘术", "starlight" -> "starlight";
@@ -863,6 +881,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             gotoPlace(p, "village");
             return;
         }
+        if (id.equals("heal")) { groupHeal(p); return; }
         if (id.equals("fireworks")) { fireworks(p); return; }
         if (id.equals("starlight")) { starlight(p); return; }
         if (id.equals("feather") || id.equals("night")) { goddessSpell(p, id); return; }
@@ -1173,6 +1192,42 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         else if (op.equals("remove")) p.performCommand("delhome " + args[2]);
         else p.sendMessage(ChatColor.RED + "用法：/mycli waypoint add|remove <英文名字>");
+    }
+
+    private void groupHeal(Player caster) {
+        if (caster.getGameMode() == GameMode.SPECTATOR || caster.isDead()) {
+            caster.sendMessage(ChatColor.RED + "旁观者或倒下的玩家不能施法。");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String key = caster.getUniqueId() + ":heal";
+        long until = goddessCooldown.getOrDefault(key, 0L);
+        if (now < until) {
+            caster.sendMessage(ChatColor.RED + "范围治疗还需 " + ((until - now + 999) / 1000) + " 秒。");
+            return;
+        }
+        List<Player> wounded = new ArrayList<>();
+        if (caster.getHealth() < caster.getMaxHealth()) wounded.add(caster);
+        for (Entity entity : caster.getNearbyEntities(8.0, 8.0, 8.0)) {
+            if (entity instanceof Player player && !player.isDead()
+                    && player.getGameMode() != GameMode.SPECTATOR
+                    && caster.getLocation().distanceSquared(player.getLocation()) <= 64.0
+                    && player.getHealth() < player.getMaxHealth()) wounded.add(player);
+        }
+        if (wounded.isEmpty()) {
+            caster.sendMessage(ChatColor.YELLOW + "8 格内没有需要治疗的玩家；未消耗魔力或冷却。");
+            return;
+        }
+        if (!spendMana(caster, 6)) return;
+        goddessCooldown.put(key, now + GROUP_HEAL_COOLDOWN_MS);
+        for (Player player : wounded) {
+            player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + 6.0));
+            player.getWorld().spawnParticle(Particle.HEART, player.getLocation().add(0, 1.4, 0),
+                    8, 0.45, 0.5, 0.45, 0.01);
+        }
+        presentSpell(caster, "heal");
+        publishSkill(caster, "heal", "治疗 " + wounded.size() + " 人", caster.getLocation());
+        caster.sendMessage(ChatColor.GREEN + "范围治疗：8 格内 " + wounded.size() + " 名受伤玩家恢复最多 3 颗心。");
     }
 
     private Essentials essentials() {
@@ -1743,7 +1798,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
             inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄"));
             inv.setItem(11, item(Material.ENDER_PEARL, "§d闪现", "朝视线短距离移动；消耗 4 魔力"));
-            inv.setItem(12, item(Material.GLISTERING_MELON_SLICE, "§d治疗队友", "治疗面前的玩家；消耗 4 魔力"));
+            inv.setItem(12, item(Material.GLISTERING_MELON_SLICE, "§d范围治疗", "8 格内受伤玩家全部恢复 3 颗心；消耗 6 魔力"));
             inv.setItem(13, item(Material.BREAD, "§d饱食", "恢复饥饿；消耗 3 魔力"));
             inv.setItem(14, item(Material.FIREWORK_ROCKET, "§d烟花术", "无伤害光效；消耗 1 魔力；10 秒冷却"));
             inv.setItem(15, item(Material.GLOWSTONE_DUST, "§d星尘术", "无伤害星光；消耗 1 魔力；10 秒冷却"));
