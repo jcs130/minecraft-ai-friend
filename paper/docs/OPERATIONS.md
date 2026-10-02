@@ -8,6 +8,8 @@
 
 正式服发布前只有 CortiLan、CortiEye、Goddess 三个服务账号在线，`dungeonaudit active=false`。`Afu-MC-DailyBackup` 正常停服生成 E/F 双盘 `.complete` 快照 `20261002-175145`，任务结果 0；仅启用 `AgentFriend-0.3.62.jar`，SHA256 `5DD0D50BC2E16145D292C556ED1106A340828093F6E1531DC7F005D75E16FA40`，待部署与自动恢复暂停标记均已清除。重启后 RCON 版本 0.3.62、Java 本机与 LAN 网关、Geyser 基岩 Pong、Goddess 桥均正常，最近 1 分钟平均 MSPT 约 6.4。旧 `agent-lan-smoke.mjs` 假定白名单始终开启，因当前按用户要求 `white-list=false` 而误报“测试身份进入”；探针已改为按实际开关验证并重新通过。CortiEyeMirror 已加载，远端 CortiEye 在本次重启后仍未回连，`camera=offline attached=false`；该账号在发布前也曾离线，直播画面尚未验收。回退可在无人挑战时用上述 E/F 快照恢复旧 JAR、配置和玩家进度。
 
+18:04 后续复查：`cortieye` 已回 `camera=online attached=true cameraNightVision=true`，CortiEye 自动回连并重新附身 CortiLan；这确认服务端附身和夜视状态，直播软件中的实际画面仍需目视核对。
+
 ## 0.3.61 冒险者公会接待与共享箱（2026-10-02）
 
 门内接待员“阿莉娅”提供今日任务、余额购买、装备回收及原版绿宝石交易；所有选项使用原版村民/箱子界面。大厅东南侧四组 54 格公共双箱让玩家和 Agent 直接存取多余武器、护甲与补给，箱体和平台保护不影响箱内存取。`/mycli guild trader|shared` 给 Agent 返回绝对坐标；交易继续使用原有个人余额和报价确认，不会自动取走公共箱物品。箱子坐标、恢复办法见 [公会接待与共享箱](GUILD_SERVICES.md)。
