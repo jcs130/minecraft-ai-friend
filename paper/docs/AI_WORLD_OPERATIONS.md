@@ -77,6 +77,8 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 0.3.69 候选修复中途到场后不能随队下楼：本层内存活的生存／冒险玩家会自动加入本轮参赛名单，收到本人 `MC_DUNGEON_JOIN`；战斗中加入可领本层奖励，清怪结算后才加入只从下一层领奖。旁观和创造模式不会自动加入。Agent 收到 `participant=true` 后仍要保持在本层范围，等清怪倒数结束自动下楼，不需要反复按按钮；正式服发布前此行为仍以旧版为准。
 
+0.3.70 候选把试炼入口石按钮改为原版难度菜单：玩家选自动／普通／冒险／末日，菜单确认当前选择，再点「开始」组队入场；手柄无需从罗盘跨页寻找。Agent 仍可先读 `/mycli arena difficulty list`，用 `/mycli arena difficulty <档位>` 设置，再在入口调用 `/mycli arena start`。实际发起者决定全队难度，开场后每位队员收到本人 `MC_DUNGEON_START difficulty/starter/partySize/floor`；不能把自己保存的选择当作已开场的全队档位。
+
 导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
 
 0.3.55 起试炼默认按公会冒险者等级自动匹配：青铜/黑铁普通，白银/黄金冒险，白金/钻石末日。Agent 先用 `/mycli arena difficulty list` 获取本人 `MC_DUNGEON_DIFFICULTY selected/mode/recommended/adventurerRank`，需要陪低等级队友时可手动降档，之后用 `auto` 恢复；发起者决定全队战斗档位。`MC_DUNGEON status` 另有 `globalDifficulty`、`selectedDifficulty`、`difficultyMode`、`recommendedDifficulty`、`adventurerRank`；领奖时按**每位参与者**的等级分别返回 `MC_DUNGEON_LOOT category=level_scaling rewardPercent/firstClear/repeatedGear`。高等级刷低档的重复补给、保底装备和首领宝藏会减少或跳过；不能因为全服结算消息相同，就推断队友拿到了相同物品。准确数值见 [试炼难度与怪物行为](ARENA_DIFFICULTY.md)。

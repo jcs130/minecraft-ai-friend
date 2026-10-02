@@ -55,6 +55,9 @@ try {
   const button = a.blockAt(new Vec3(-596, 92, -313));
   assert.equal(button?.name, 'stone_button');
   a.activateBlock(button);
+  await until(() => a.currentWindow?.slots[16]?.name === 'lime_concrete',
+    'entrance difficulty menu');
+  await a.clickWindow(16, 0, 0);
   await until(() => a.entity.position.y < 80 && b.entity.position.y < 80,
     'nearby pair enter floor 1');
   assert.ok(far.entity.position.y > 80, 'far player must stay in lobby');

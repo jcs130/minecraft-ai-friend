@@ -319,6 +319,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     DungeonManager dungeon() { return dungeon; }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
+    void openDungeonDifficultyMenu(Player player) {
+        if (dungeon != null && dungeon.isBuilt()) openMenu(player, "arena_difficulty");
+        else player.sendMessage(ChatColor.RED + "试炼塔尚未建成。");
+    }
     boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
     void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
     void guildFloorCleared(Player player, int floor, int partySize) {
@@ -879,7 +883,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards list；/mycli arena stash list。");
             }
             case "dungeon", "地下城", "试炼" -> {
-                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；队友站到石按钮附近，一人按下后一起进入。清怪 10 秒后自动下楼并补满生命。");
+                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；按石按钮打开难度菜单，选普通／冒险／末日或自动，再点「开始」。附近队友会一起进入；清怪 10 秒后自动下楼并补满生命。");
                 p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；/mycli arena rewards 远程开箱。");
             }
             case "team", "队友" -> {
@@ -1207,7 +1211,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
                 p.sendMessage(ChatColor.RED + "试炼场入口受阻，传送已取消。"); return;
             }
-            if (p.teleport(landing)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；进场后按石按钮启动。 "
+            if (p.teleport(landing)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；按石按钮选难度，再点菜单里的「开始」。 "
                     + LocationOutput.fields(landing));
             else p.sendMessage(ChatColor.RED + "传送被其他保护规则取消。");
             return;
@@ -1819,7 +1823,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
                 "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
-                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。队友站在入口石按钮附近，一人按下就会一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
+                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。按入口石按钮选难度，再点「开始」；附近队友一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
                 "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
         stack.setItemMeta(meta);
@@ -1863,6 +1867,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "creation" -> "§d✦ 向女神申请";
             case "guild" -> "§6✦ 冒险者公会";
             case "pvp" -> "§c✦ PvP竞技场";
+            case "arena_difficulty" -> "§6✦ 试炼难度与开场";
             default -> "§6✦ 造物术";
         };
         Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : page.equals("imprint") ? 54 : 27, title);
@@ -1913,7 +1918,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(11, item(Material.BLAZE_ROD, "§d② 学会魔法", "打开技能罗盘；选图标直接施法", "法杖可绑定喜欢的技能"));
             inv.setItem(12, item(Material.ENCHANTING_TABLE, "§5③ 给工具刻印", "拿着镐或剑到附魔台旁", "潜行使用附魔台，选要刻印的技能"));
             inv.setItem(13, item(Material.LECTERN, "§6④ 接公会任务", "打开任务看板；选一张委托", "完成后在看板交付，奖励进个人箱"));
-            inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "从村庄沿路走到入口石按钮", "队友站附近；一人按下，全队进入"));
+            inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "从村庄沿路走到入口石按钮", "选难度后点开始；附近队友一起进入"));
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
@@ -1953,13 +1958,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
             }
-            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口按钮组队，清怪后自动下楼" : "按钮启动三波战斗"));
+            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口按钮选难度并组队，清怪后自动下楼" : "按钮启动三波战斗"));
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "选择目标后落在遗迹外围，仍需步行探索"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
-                inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；选择后到入口按按钮"));
+                inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
                 inv.setItem(19, item(Material.IRON_SWORD, "§6冒险试炼", "怪物更强；稀有战利品概率和余额提高"));
                 inv.setItem(20, item(Material.DIAMOND_SWORD, "§5末日试炼", "高强度挑战；更好的战利品和余额"));
                 inv.setItem(21, item(Material.COMPASS, "§b自动匹配难度",
@@ -2005,6 +2010,27 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(14, item(Material.WRITTEN_BOOK, "§e本人战绩", "胜负、积分与对局状态"));
             inv.setItem(16, item(Material.GOLD_INGOT, "§6排行榜", "同款装备 1v1 的积分"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘"));
+        } else if (page.equals("arena_difficulty")) {
+            String mode = dungeon.selectedDifficultyMode(p);
+            String selected = dungeon.selectedDifficultyLabel(p);
+            String current = "当前选择：" + selected + (mode.equals("auto") ? "（自动）" : "（手动）");
+            inv.setItem(10, item(Material.COMPASS, "§b自动匹配" + (mode.equals("auto") ? " §a✔" : ""),
+                    "你的公会等级：" + adventurerRankName(p),
+                    "推荐：" + dungeon.recommendedDifficultyLabel(p), "开场时按发起者等级决定"));
+            inv.setItem(11, item(Material.WOODEN_SWORD, "§a普通" + (mode.equals("manual") && selected.equals("普通") ? " §a✔" : ""),
+                    "首次挑战适用；生命 ×1.15，伤害 ×1.10"));
+            inv.setItem(12, item(Material.IRON_SWORD, "§6冒险" + (mode.equals("manual") && selected.equals("冒险") ? " §a✔" : ""),
+                    "更强的怪物；生命 ×1.7，伤害 ×1.4", "稀有奖励机会提高"));
+            inv.setItem(13, item(Material.DIAMOND_SWORD, "§5末日" + (mode.equals("manual") && selected.equals("末日") ? " §a✔" : ""),
+                    "高强度挑战；生命 ×2.5，伤害 ×1.85", "稀有奖励和余额提高"));
+            inv.setItem(15, item(Material.WRITTEN_BOOK, "§e" + current,
+                    "推荐：" + dungeon.recommendedDifficultyLabel(p),
+                    "按下开始的人决定全队难度", "高等级刷低档时重复奖励会减少"));
+            inv.setItem(16, dungeon.hasActiveRun()
+                    ? item(Material.BARRIER, "§c已有队伍在挑战", "当前：" + dungeon.activeDifficultyLabel() + "；请等本轮结束")
+                    : item(Material.LIME_CONCRETE, "§a开始" + selected + "试炼",
+                            "附近玩家一起进入；按下即开场", "全队采用你当前选定的难度"));
+            inv.setItem(22, item(Material.ARROW, "§7返回传送罗盘"));
         } else if (page.equals("guild")) {
             guild.fillBoard(p, inv);
         } else if (page.equals("creation")) {
@@ -2198,6 +2224,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 14 -> pvpArena.command(p, new String[]{"pvp", "status"});
                     case 16 -> pvpArena.command(p, new String[]{"pvp", "board"});
                     case 22 -> openMenu(p, "skills");
+                    default -> { }
+                }
+            } else if (page.equals("arena_difficulty")) {
+                switch (slot) {
+                    case 10 -> { dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); openMenu(p, page); }
+                    case 11 -> { dungeon.command(p, new String[]{"arena", "difficulty", "normal"}); openMenu(p, page); }
+                    case 12 -> { dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); openMenu(p, page); }
+                    case 13 -> { dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); openMenu(p, page); }
+                    case 15 -> { dungeon.command(p, new String[]{"arena", "difficulty", "list"}); openMenu(p, page); }
+                    case 16 -> { if (!dungeon.hasActiveRun()) dungeon.command(p, new String[]{"arena", "start"}); }
+                    case 22 -> openMenu(p, "places");
                     default -> { }
                 }
             } else if (page.equals("guild")) {

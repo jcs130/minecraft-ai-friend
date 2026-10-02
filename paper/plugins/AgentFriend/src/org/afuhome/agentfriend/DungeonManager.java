@@ -517,6 +517,10 @@ final class DungeonManager implements Listener {
         return rank >= 4 ? Difficulty.APOCALYPSE : rank >= 2 ? Difficulty.ADVENTURE : Difficulty.NORMAL;
     }
     String recommendedDifficultyLabel(Player player) { return recommendedDifficulty(player).label; }
+    String selectedDifficultyLabel(Player player) { return chosenDifficulty(player).label; }
+    String selectedDifficultyMode(Player player) { return difficultyMode(player); }
+    boolean hasActiveRun() { return active; }
+    String activeDifficultyLabel() { return active ? difficulty.label : "无"; }
 
     private String difficultyMode(Player player) {
         String saved = plugin.getConfig().getString(DIFFICULTY_CHOICE + player.getUniqueId(), "auto");
@@ -530,7 +534,7 @@ final class DungeonManager implements Listener {
 
     private void chooseDifficulty(Player player, String[] args) {
         if (args.length == 2 || args.length == 3 && args[2].equalsIgnoreCase("list")) {
-            player.sendMessage(ChatColor.GOLD + "试炼难度：普通（适合首次挑战）、冒险（生命 ×1.5 / 伤害 ×1.25）、末日（生命 ×2.2 / 伤害 ×1.6）。"
+            player.sendMessage(ChatColor.GOLD + "试炼难度：普通（生命 ×1.15 / 伤害 ×1.10）、冒险（生命 ×1.7 / 伤害 ×1.4）、末日（生命 ×2.5 / 伤害 ×1.85）。"
                     + "默认按冒险者等级自动匹配；高等级打低难度，重复物资和装备会减少。"
                     + "每游戏日每层仍只领一次。开场前由按钮发起者决定全队难度。"
                     + "你的等级：" + plugin.adventurerRankName(player) + "；推荐：" + recommendedDifficulty(player).label
@@ -582,7 +586,10 @@ final class DungeonManager implements Listener {
         if (block.getX() == X - 6 && block.getY() == LOBBY_Y + 2 && block.getZ() == Z - 8
                 && block.getType() == Material.STONE_BUTTON) {
             event.setCancelled(true);
-            start(event.getPlayer());
+            Player player = event.getPlayer();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (player.isOnline()) plugin.openDungeonDifficultyMenu(player);
+            });
             return true;
         }
         if (n > 0 && block.getX() == nextX(n) && block.getY() == Y[n - 1] + 1
@@ -622,6 +629,16 @@ final class DungeonManager implements Listener {
         active = true;
         runStartedAt = now;
         persistRun();
+        for (UUID id : participants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player == null || !player.isOnline()) continue;
+            player.sendTitle(ChatColor.GOLD + difficulty.label + "试炼",
+                    ChatColor.YELLOW + "由 " + starter.getName() + " 发起 · " + participants.size() + " 人同队",
+                    10, 65, 15);
+            player.sendMessage("MC_DUNGEON_START difficulty=" + difficulty.id
+                    + " starter=" + starter.getName() + " partySize=" + participants.size()
+                    + " floor=1");
+        }
         announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！入口按钮附近 " + participants.size()
                 + " 人已组队进入。每层清怪后 10 秒自动下楼并补满生命；奖励留在个人箱子，红色木按钮可返回地面。");
     }
