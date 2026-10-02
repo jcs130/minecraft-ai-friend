@@ -1,11 +1,14 @@
 package org.afuhome.agentfriend;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,17 +18,30 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
-/** Adds a short vanilla nameplate prefix without replacing a viewer's scoreboard. */
+/** Vanilla scoreboard prefixes for Agent identity and adventurer guild rank. */
 final class PlayerNameTags implements Listener {
-    private static final String TEAM_NAME = "qd_agents";
+    private static final String AGENT_TEAM = "qd_agents";
+    private static final String[] RANKS = {"青铜", "黑铁", "白银", "黄金", "白金", "钻石"};
+    private static final NamedTextColor[] COLORS = {NamedTextColor.GOLD, NamedTextColor.GRAY,
+            NamedTextColor.WHITE, NamedTextColor.YELLOW, NamedTextColor.LIGHT_PURPLE,
+            NamedTextColor.AQUA};
+    private static final Set<String> OWN_TEAMS = teamNames();
     private final AgentFriendPlugin plugin;
     private final Set<Scoreboard> touchedBoards = new HashSet<>();
     private final Set<UUID> agentUuids = new HashSet<>();
-    private Component prefix;
+    private Component agentPrefix;
     private BukkitTask task;
 
-    PlayerNameTags(AgentFriendPlugin plugin) {
-        this.plugin = plugin;
+    PlayerNameTags(AgentFriendPlugin plugin) { this.plugin = plugin; }
+
+    private static Set<String> teamNames() {
+        Set<String> names = new HashSet<>();
+        names.add(AGENT_TEAM);
+        for (int rank = 0; rank < RANKS.length; rank++) {
+            names.add("qd_rank_" + rank);
+            names.add("qd_arank_" + rank);
+        }
+        return Set.copyOf(names);
     }
 
     void start() {
@@ -35,26 +51,22 @@ final class PlayerNameTags implements Listener {
             plugin.getLogger().warning("Invalid nametags.agent-prefix; using [Agent]");
             label = "[Agent] ";
         }
-        prefix = Component.text(label, NamedTextColor.AQUA);
+        agentPrefix = Component.text(label, NamedTextColor.AQUA);
         for (String raw : plugin.getConfig().getStringList("nametags.agent-uuids")) {
-            try {
-                agentUuids.add(UUID.fromString(raw));
-            } catch (IllegalArgumentException invalid) {
+            try { agentUuids.add(UUID.fromString(raw)); }
+            catch (IllegalArgumentException invalid) {
                 plugin.getLogger().warning("Ignoring invalid nametags.agent-uuids entry: " + raw);
             }
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        // A viewer can be given a custom scoreboard after joining. Reconcile the
-        // board they actually use, preserving its objectives and sidebar.
+        // A viewer can receive a custom sidebar later. Update their actual board
+        // without replacing objectives or another plugin's gameplay team.
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::reconcile, 2L, 40L);
     }
 
     void stop() {
         if (task != null) task.cancel();
-        for (Scoreboard board : touchedBoards) {
-            Team team = board.getTeam(TEAM_NAME);
-            if (team != null) team.unregister();
-        }
+        for (Scoreboard board : touchedBoards) removeOwnedTeams(board);
         touchedBoards.clear();
         agentUuids.clear();
     }
@@ -67,35 +79,69 @@ final class PlayerNameTags implements Listener {
         Bukkit.getScheduler().runTask(plugin, this::reconcile);
     }
 
+    private void removeOwnedTeams(Scoreboard board) {
+        for (String name : OWN_TEAMS) {
+            Team team = board.getTeam(name);
+            if (team != null) team.unregister();
+        }
+    }
+
+    private String desiredTeam(Player player) {
+        if (player.getGameMode() == GameMode.SPECTATOR) return null;
+        boolean agent = agentUuids.contains(player.getUniqueId());
+        if (plugin.guildMember(player)) {
+            int rank = Math.max(0, Math.min(RANKS.length - 1, plugin.adventurerRank(player)));
+            return (agent ? "qd_arank_" : "qd_rank_") + rank;
+        }
+        return agent ? AGENT_TEAM : null;
+    }
+
+    private Component prefix(String teamName) {
+        if (AGENT_TEAM.equals(teamName)) return agentPrefix;
+        boolean agent = teamName.startsWith("qd_arank_");
+        int rank = teamName.charAt(teamName.length() - 1) - '0';
+        Component badge = Component.text("◆" + RANKS[rank] + " ", COLORS[rank]);
+        return agent ? badge.append(agentPrefix) : badge;
+    }
+
     private void reconcile() {
         Set<Scoreboard> boards = new HashSet<>();
         for (Player viewer : Bukkit.getOnlinePlayers()) boards.add(viewer.getScoreboard());
         for (Scoreboard previous : new HashSet<>(touchedBoards)) {
             if (boards.contains(previous)) continue;
-            Team abandoned = previous.getTeam(TEAM_NAME);
-            if (abandoned != null) abandoned.unregister();
+            removeOwnedTeams(previous);
             touchedBoards.remove(previous);
         }
         for (Scoreboard board : boards) {
-            Team team = board.getTeam(TEAM_NAME);
-            if (team == null) team = board.registerNewTeam(TEAM_NAME);
             touchedBoards.add(board);
-            if (!prefix.equals(team.prefix())) team.prefix(prefix);
-            Set<String> wanted = new HashSet<>();
+            Map<String, Set<String>> wanted = new HashMap<>();
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (!agentUuids.contains(player.getUniqueId())) continue;
-                String name = player.getName();
-                Team current = board.getEntryTeam(name);
-                // Another plugin's team may carry gameplay rules. Do not steal it.
-                if (current == null || current == team) {
-                    wanted.add(name);
-                    if (current == null) team.addEntry(name);
+                String entry = player.getName();
+                Team current = board.getEntryTeam(entry);
+                if (current != null && !OWN_TEAMS.contains(current.getName())) continue;
+                String desired = desiredTeam(player);
+                if (desired == null) {
+                    if (current != null) current.removeEntry(entry);
+                    continue;
+                }
+                Team target = board.getTeam(desired);
+                if (target == null) target = board.registerNewTeam(desired);
+                Component label = prefix(desired);
+                if (!label.equals(target.prefix())) target.prefix(label);
+                wanted.computeIfAbsent(desired, ignored -> new HashSet<>()).add(entry);
+                if (current != target) {
+                    if (current != null) current.removeEntry(entry);
+                    target.addEntry(entry);
                 }
             }
-            for (String entry : new HashSet<>(team.getEntries())) {
-                if (!wanted.contains(entry)) team.removeEntry(entry);
+            for (String name : OWN_TEAMS) {
+                Team team = board.getTeam(name);
+                if (team == null) continue;
+                Set<String> keep = wanted.getOrDefault(name, Set.of());
+                for (String entry : new HashSet<>(team.getEntries())) {
+                    if (!keep.contains(entry)) team.removeEntry(entry);
+                }
             }
         }
     }
-
 }

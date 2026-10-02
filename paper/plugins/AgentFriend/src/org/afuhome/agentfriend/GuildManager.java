@@ -81,6 +81,7 @@ final class GuildManager implements Listener {
     private String base(UUID id) { return "guild-players." + id; }
     private String today() { return LocalDate.now(GUILD_ZONE).toString(); }
     private boolean member(Player p) { return plugin.getConfig().contains(base(p.getUniqueId()) + ".joined"); }
+    boolean hasJoined(Player p) { return member(p); }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     private int rankIndex(int fame) {
         int rank = 0;

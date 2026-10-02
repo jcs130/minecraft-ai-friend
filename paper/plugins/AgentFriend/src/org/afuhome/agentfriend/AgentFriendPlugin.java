@@ -322,6 +322,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void guildRewardClaimed(Player player) { if (guild != null) guild.onDungeonRewardClaimed(player); }
     int adventurerRank(Player player) { return guild == null ? 0 : guild.adventurerRank(player); }
     String adventurerRankName(Player player) { return guild == null ? "青铜" : guild.adventurerRankName(player); }
+    boolean guildMember(Player player) { return guild != null && guild.hasJoined(player); }
     void openGuildMenu(Player player) { openMenu(player, "guild"); }
     void guildHallTeleport(Player player) { guildHall.teleport(player); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
