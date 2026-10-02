@@ -25,18 +25,24 @@ import org.bukkit.event.player.PlayerRegisterChannelEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.scheduler.BukkitTask;
 
-/** Private, change-only AuraSkills mana snapshots for Agent clients. */
+/** Private, change-only mana and castable-ability snapshots for Agent clients. */
 final class AgentStatePublisher implements Listener {
     static final String CHANNEL = "mcagent:state";
+    private static final int MAX_BYTES = 16_384;
     private static final long RECOVERY_INTERVAL_MS = 1_000L;
     private final AgentFriendPlugin plugin;
+    private final AgentAbilityState abilities;
     private final Map<UUID, LastState> lastStates = new HashMap<>();
     private final Set<UUID> pendingInitial = new HashSet<>();
     private BukkitTask pollTask;
 
     private record LastState(String json, long sentAt) {}
 
-    AgentStatePublisher(AgentFriendPlugin plugin) { this.plugin = plugin; }
+    AgentStatePublisher(AgentFriendPlugin plugin, CombatSpells combat,
+            ProspectingSpell prospecting, UtilitySpells utility) {
+        this.plugin = plugin;
+        this.abilities = new AgentAbilityState(plugin, combat, prospecting, utility);
+    }
 
     void start() {
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
@@ -109,6 +115,19 @@ final class AgentStatePublisher implements Listener {
             mana.addProperty("max", finite(user.getMaxMana()));
             root.add("mana", mana);
         }
+        root.add("abilities", abilities.build(player));
+        byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_BYTES) {
+            var entries = root.getAsJsonArray("abilities");
+            while (bytes.length > MAX_BYTES && entries.size() > 0) {
+                entries.remove(entries.size() - 1);
+                bytes = root.toString().getBytes(StandardCharsets.UTF_8);
+            }
+            if (bytes.length > MAX_BYTES) {
+                plugin.getLogger().warning("Agent state exceeds 16384 bytes even without abilities; not sent.");
+                return;
+            }
+        }
         String json = root.toString();
         long now = System.currentTimeMillis();
         LastState last = lastStates.get(player.getUniqueId());
@@ -116,7 +135,6 @@ final class AgentStatePublisher implements Listener {
             if (json.equals(last.json())) return;
             if (recovery && now - last.sentAt() < RECOVERY_INTERVAL_MS) return;
         }
-        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         if (player.getListeningPluginChannels().contains(CHANNEL)) {
             player.sendPluginMessage(plugin, CHANNEL, bytes);
         } else {

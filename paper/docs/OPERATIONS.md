@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.58 Agent 私有技能总冷却与剩余冷却（2026-10-02）
+
+`mcagent:state` 保持每玩家按连接单播的原始 UTF-8 JSON，在原有 `mana` 外加入可施放技能 `abilities[]`：`cooldownMs` 是配置总时长，`cooldownRemainingMs` 是该玩家发送瞬间剩余毫秒，`icon` 为可选的 1.20.6 原版物品 ID。自定义战斗、探矿、移动、女神技能和玩家已学的 MagicSpells 分别从实际计时来源读取；星芒箭、霜环、焰浪总时长分别为 3000、14000、10000 毫秒。登录、重生、成功施法后的下一刻与每秒变化检查会发送完整状态；冷却归零发送，数据不变不重发。整包至多 16 KiB，未注册频道的 Mineflayer 仍走该玩家连接的原始负载，不复制进聊天。`mcviewer:state` 的旧 `cooldownMs` 仍是剩余冷却，客户端须按频道区分字段语义。协议见 [Agent 状态频道](AGENT_STATE.md)。
+
+隔离服 25566 使用 AgentFriend 0.3.58、真实双 Mineflayer 账号验证了注册/未注册接收路径、三种战斗技能总冷却、烟花术及星芒箭施法后的本人剩余冷却、MagicSpells 圣愈术 15 秒总冷却与剩余冷却、冷却归零、魔力恢复、重生、另一账号隔离和无聊天副本；`probe/agent-state-stage.mjs` 与 `probe/skill-event-stage.mjs` PASS。首轮状态脚本的 `/kill` 在出生安全区被保护而未触发死亡；将测试账号移至隔离试炼区域后重跑，重生状态验证通过。隔离服正常停机。JAR SHA256 `CFABEFCDDC88EDF7FAF28F144BD57A499A17EF94328F226D55B5A7FE2D597EA7`。
+
+正式服发布前仅 Goddess、CortiLan、CortiEye 三个常驻账号在线，`dungeonaudit active=false`。`Afu-MC-DailyBackup` 正常停服、备份、替换和启动；E/F 双盘 `20261002-101143` 均有 `.complete`，任务结果 0，唯一启用 `AgentFriend-0.3.58.jar` 且哈希与隔离版一致，待发布标记与自动恢复暂停标记均不存在。正式服临时双 Mineflayer 账号再次 PASS：本人魔力与冷却变化、冷却归零、另一账号无泄漏、聊天副本 0。Paper 1.20.6、Java 本机、LAN Agent 网关、Geyser Pong、女神桥和 Watchdog 正常，插件启动日志无异常。CortiEyeMirror 已加载，但远端 CortiEye 账号在首次发布核查时尚未重连：`camera=offline attached=false`；直播附身需该账号回连后单独复核。本次没有基岩真机 UI 验收；原版施法提示与画面不受状态频道格式变更影响。需要回退时应在无人挑战时用同一 E/F 快照恢复 JAR 与运行数据。
+
 ## 0.3.57 技能生效私有坐标事件（2026-10-02）
 
 AgentFriend 注册出站 `mcagent:event`，成功技能通过施法者连接单播原始 UTF-8 JSON，含 `schemaVersion=1`、`kind=skill`、`id/title/body/tone/position{x,y,z}`；不向其他玩家、公屏、聊天、动作栏或标题复制此 JSON。现有原版咏唱标题、音效和粒子继续给 Java/基岩/观战客户端。星芒箭用真实射线命中点或自动锁定目标眼部，霜环与焰浪用范围中心，探矿用矿块中心，归乡用到达后的实际位置；失败、无目标、冷却和魔力不足不发成功事件。频道协议与接入边界见 [技能生效事件](AGENT_SKILL_EVENTS.md)。

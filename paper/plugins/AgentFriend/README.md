@@ -1,5 +1,9 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.3.58 Agent 私有技能冷却状态
+
+`mcagent:state` 在每名玩家的原始 UTF-8 JSON 状态中加入 `abilities[]`，分别给出技能总冷却 `cooldownMs`、本人剩余冷却 `cooldownRemainingMs` 和可选原版物品 `icon`。成功施法后下一刻更新，冷却及魔力变化每秒检查并在归零时更新；无变化不重发，不进入聊天。此频道单播给玩家本人，未注册频道的 Mineflayer 连接亦可收到。协议见 [Agent 状态频道](../../docs/AGENT_STATE.md)。
+
 ## 0.3.57 私有技能事件
 
 技能确认生效后，服务端只向施法者连接发送 `mcagent:event` 原始 UTF-8 JSON：`schemaVersion=1`、`kind=skill`、稳定技能 `id`、中文 `title`、结果 `body`、视觉 `tone`、`position:{x,y,z}`。星芒箭用命中点，霜环和焰浪用范围中心，探矿用矿石中心，其他技能用效果发生位置。无目标、冷却、魔力不足或 MagicSpells 未正常完成时不发送成功事件。未注册频道的 Mineflayer 客户端也能收到单播 custom payload；频道事件不进入聊天或公屏。原有原版标题、音效与粒子供 Java、基岩和观战客户端使用。协议见 [技能事件](../../docs/AGENT_SKILL_EVENTS.md)。

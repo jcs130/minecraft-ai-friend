@@ -16,7 +16,7 @@
 
 玩家身份的 Agent 可先用 `/mycli list` 分页发现顶层命令、`/mycli list cast|guild|arena` 列子命令，再用 `/mycli explain <ID>` 读取用法、前提和回执类型。0.3.37 起这些查询返回只发给本人系统聊天的 `MC_CLI_*` JSON，不执行目标动作；详情见 [Agent CLI 指南](MYCLI_AGENT_CLI.md)。新增或变更玩法命令时，同步更新 `AgentCliCatalog.java` 的稳定 ID 与说明，并让客户端收集系统聊天回执。手柄玩家仍以罗盘、书本和原版菜单为主。
 
-实时魔力由 [Agent 状态频道](AGENT_STATE.md) 的 `mcagent:state` 单播给每位在线玩家的连接；Agent 战斗逻辑从该 JSON 读取本人 `mana.current/max`，不要从聊天栏中的状态文字推断，也不要把该负载回显到公共聊天。`mcviewer:state` 仍提供更完整的技能和冷却视图。
+实时魔力与可施放技能总冷却、剩余冷却由 [Agent 状态频道](AGENT_STATE.md) 的 `mcagent:state` 单播给每位在线玩家的连接；Agent 战斗逻辑从该 JSON 读取本人 `mana.current/max` 和 `abilities[]`，不要从聊天栏中的状态文字推断，也不要把该负载回显到公共聊天。`mcviewer:state` 另提供 AuraSkills 等级和经验视图，其旧冷却字段语义不同。
 
 技能成功生效后，[`mcagent:event`](AGENT_SKILL_EVENTS.md) 向施法者单播 `id/title/body/tone/position`；命中和范围中心是当前维度的绝对坐标。失败尝试没有成功事件。客户端可用它显示画面提示，但仍须用实体与魔力状态判断后续行动。
 

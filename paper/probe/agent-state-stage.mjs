@@ -46,6 +46,7 @@ const waitFor = async (condition, label, timeout = 10000) => {
 };
 const own = name => packets.get(name);
 const mana = name => own(name).at(-1)?.state.mana;
+const ability = (name, id) => own(name).at(-1)?.state.abilities?.find(item => item.id === id);
 
 try {
   await Promise.all(bots.map(bot => new Promise((resolve, reject) => {
@@ -59,6 +60,15 @@ try {
     channel: 'minecraft:register', data: Buffer.from('mcagent:state'),
   });
   await waitFor(() => mana(names[0])?.max > 0 && mana(names[1])?.max > 0, 'both loaded mana');
+  for (const name of names) {
+    assert.ok(own(name).every(packet => packet.bytes <= 16_384), 'state exceeds 16 KiB');
+    assert.equal(ability(name, 'mycli:starbolt')?.cooldownMs, 3000);
+    assert.equal(ability(name, 'mycli:frostnova')?.cooldownMs, 14000);
+    assert.equal(ability(name, 'mycli:flamewave')?.cooldownMs, 10000);
+    assert.equal(ability(name, 'mycli:starbolt')?.cooldownRemainingMs, 0);
+    assert.equal(ability(name, 'mycli:starbolt')?.icon, 'minecraft:amethyst_shard');
+    assert.equal(ability(name, 'magicspells:selfheal')?.cooldownMs, 15000);
+  }
   await sleep(1200);
   const stableA = own(names[0]).length;
   const stableB = own(names[1]).length;
@@ -70,9 +80,16 @@ try {
   const beforeB = mana(names[1]).current;
   bots[0].chat('/mycli cast fireworks');
   await waitFor(() => own(names[0]).some(p => p.state.mana?.current < beforeA), 'cast state');
+  await waitFor(() => ability(names[0], 'mycli:fireworks')?.cooldownRemainingMs > 0,
+    'fireworks cooldown began');
+  assert.equal(ability(names[0], 'mycli:fireworks')?.cooldownMs, 10000);
+  assert.equal(ability(names[1], 'mycli:fireworks')?.cooldownRemainingMs, 0,
+    'A cooldown leaked into B state');
   const castAt = own(names[0]).find(p => p.state.mana?.current < beforeA).at;
   assert.equal(mana(names[1]).current, beforeB, 'A mana leaked into B state');
   await waitFor(() => mana(names[0])?.current > beforeA - 1, 'natural recovery', 15000);
+  await waitFor(() => ability(names[0], 'mycli:fireworks')?.cooldownRemainingMs === 0,
+    'cooldown expiry state', 15000);
   const recovery = own(names[0]).filter(p => p.at > castAt && p.state.mana?.current > beforeA - 1);
   assert.ok(recovery.length >= 1, 'no recovery state');
   const recoveryPackets = own(names[0]).filter(p => p.at > castAt);
@@ -84,6 +101,10 @@ try {
   if (port === 25566) {
     const countBeforeRespawn = own(names[0]).length;
     bots[0].once('death', () => bots[0].respawn());
+    // The spawn village cancels damage, including /kill. Move the test account
+    // into the isolated trial area before exercising the respawn path.
+    rcon(`minecraft:tp ${names[0]} -589.5 91 -329.5`);
+    await sleep(400);
     rcon(`minecraft:kill ${names[0]}`);
     await waitFor(() => own(names[0]).length > countBeforeRespawn, 'respawn state');
     assert.equal(mana(names[1]).current, beforeB, 'respawn leaked into B state');
@@ -96,7 +117,7 @@ try {
   console.log(JSON.stringify({ verdict: 'PASS',
     recipients: names.map(name => ({ name, packets: own(name).length,
       maxBytes: Math.max(...own(name).map(p => p.bytes)) })),
-    cast: true, recovery: true, respawn: port === 25566, chatCopies: 0 }));
+    cast: true, recovery: true, cooldownExpiry: true, respawn: port === 25566, chatCopies: 0 }));
 } finally {
   for (const bot of bots) bot.quit();
 }

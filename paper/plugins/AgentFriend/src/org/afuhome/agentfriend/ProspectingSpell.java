@@ -58,6 +58,8 @@ final class ProspectingSpell {
         return Math.max(0L, lastCast.getOrDefault(player.getUniqueId(), 0L) + COOLDOWN_MS - System.currentTimeMillis());
     }
 
+    static long totalCooldownMs() { return COOLDOWN_MS; }
+
     static int rangeFor(int miningLevel, boolean imprintedTool) {
         return BASE_RANGE + Math.min(MAX_LEVEL_BONUS, Math.max(0, miningLevel) / 5 * 2)
                 + (imprintedTool ? IMPRINT_BONUS : 0);

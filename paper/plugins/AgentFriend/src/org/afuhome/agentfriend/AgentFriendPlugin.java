@@ -96,6 +96,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static final long RUN_COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 360_000L;
     private static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
+    private static final long FIREWORKS_COOLDOWN_MS = 10_000L;
+    private static final long STARLIGHT_COOLDOWN_MS = 10_000L;
+    private static final long FEATHER_COOLDOWN_MS = 90_000L;
+    private static final long NIGHT_COOLDOWN_MS = 180_000L;
     private static final String ARENA_TAG = "afu_agentfriend_arena";
     private static final Set<Material> VILLAGE_WEEDS = Set.of(Material.SHORT_GRASS, Material.TALL_GRASS,
             Material.FERN, Material.LARGE_FERN, Material.DEAD_BUSH);
@@ -241,7 +245,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         villageTrades = new VillageTrades(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
-        agentStatePublisher = new AgentStatePublisher(this);
+        agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         agentStatePublisher.start();
         skillEventPublisher = new SkillEventPublisher(this);
         skillEventPublisher.start();
@@ -361,6 +365,29 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     void publishSkill(Player player, String spell, String body, Location position) {
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
+    }
+
+    long totalBuiltinCooldownMs(String spell) {
+        return switch (spell) {
+            case "home" -> 0L;
+            case "fireworks" -> FIREWORKS_COOLDOWN_MS;
+            case "starlight" -> STARLIGHT_COOLDOWN_MS;
+            case "feather" -> FEATHER_COOLDOWN_MS;
+            case "night" -> NIGHT_COOLDOWN_MS;
+            default -> throw new IllegalArgumentException("Unknown built-in spell " + spell);
+        };
+    }
+
+    long remainingBuiltinCooldownMs(Player player, String spell) {
+        long until = spell.equals("fireworks")
+                ? fireworksCooldown.getOrDefault(player.getUniqueId(), 0L)
+                : goddessCooldown.getOrDefault(player.getUniqueId() + ":" + spell, 0L);
+        return Math.max(0L, until - System.currentTimeMillis());
+    }
+
+    boolean hasLearnedSkill(Player player, String spell) {
+        NamespacedKey key = skillKey(spell);
+        return key != null && learned(player, key);
     }
 
     SpellMastery mastery() { return spellMastery; }
@@ -923,7 +950,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         long ready = fireworksCooldown.getOrDefault(p.getUniqueId(), 0L);
         if (now < ready) { p.sendMessage(ChatColor.RED + "烟花术还需 " + ((ready - now + 999) / 1000) + " 秒。"); return; }
         if (!spendMana(p, 1)) return;
-        fireworksCooldown.put(p.getUniqueId(), now + 10_000L);
+        fireworksCooldown.put(p.getUniqueId(), now + FIREWORKS_COOLDOWN_MS);
         Location at = p.getLocation().add(0, 2, 0);
         p.getWorld().spawnParticle(Particle.END_ROD, at, 45, 0.7, 0.7, 0.7, 0.08);
         p.getWorld().playSound(at, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.7f, 1.4f);
@@ -950,7 +977,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         long until = goddessCooldown.getOrDefault(key, 0L);
         if (now < until) { p.sendMessage(ChatColor.RED + "此技能还需 " + ((until - now + 999) / 1000) + " 秒。"); return; }
         if (!spendMana(p, 1)) return;
-        goddessCooldown.put(key, now + 10_000L);
+        goddessCooldown.put(key, now + STARLIGHT_COOLDOWN_MS);
         Location at = p.getLocation().add(0, 1.4, 0);
         p.getWorld().spawnParticle(Particle.END_ROD, at, 36, 0.8, 0.7, 0.8, 0.02);
         p.getWorld().playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.4f);
@@ -1009,7 +1036,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         long until = goddessCooldown.getOrDefault(cooldownKey, 0L);
         if (now < until) { p.sendMessage(ChatColor.RED + "此技能还需 " + ((until - now + 999) / 1000) + " 秒。"); return; }
         if (!spendMana(p, 2)) return;
-        goddessCooldown.put(cooldownKey, now + (id.equals("feather") ? 90_000L : 180_000L));
+        goddessCooldown.put(cooldownKey, now + totalBuiltinCooldownMs(id));
         if (id.equals("feather")) {
             p.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 45 * 20, 0, true, true, true));
             p.sendMessage(ChatColor.AQUA + "羽落术生效 45 秒，脚步会变得轻盈。");

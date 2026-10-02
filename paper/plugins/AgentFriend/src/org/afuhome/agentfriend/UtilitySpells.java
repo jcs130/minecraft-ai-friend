@@ -59,6 +59,16 @@ final class UtilitySpells implements Listener {
                 - System.currentTimeMillis());
     }
 
+    static long totalCooldownMs(String spell) {
+        return switch (spell) {
+            case "leap" -> 8_000L;
+            case "flight" -> 90_000L;
+            case "golem" -> 75_000L;
+            case "sense" -> 15_000L;
+            default -> throw new IllegalArgumentException("Unknown utility spell " + spell);
+        };
+    }
+
     void cast(Player player, String spell) {
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不能施法。");
@@ -80,10 +90,10 @@ final class UtilitySpells implements Listener {
         return false;
     }
 
-    private boolean begin(Player player, String spell, int mana, int cooldownSeconds) {
+    private boolean begin(Player player, String spell, int mana) {
         if (!plugin.spendMana(player, mana)) return false;
         cooldowns.put(player.getUniqueId() + ":" + spell,
-                System.currentTimeMillis() + cooldownSeconds * 1000L);
+                System.currentTimeMillis() + totalCooldownMs(spell));
         plugin.presentSpell(player, spell);
         return true;
     }
@@ -94,7 +104,7 @@ final class UtilitySpells implements Listener {
             player.sendMessage(ChatColor.YELLOW + "请站稳在地上，再使用跃空术。");
             return;
         }
-        if (!begin(player, "leap", 4, 8)) return;
+        if (!begin(player, "leap", 4)) return;
         int rank = plugin.mastery().rank(player, "leap");
         Vector velocity = player.getVelocity();
         velocity.setY(1.12 + (rank - 1) * 0.04);
@@ -119,7 +129,7 @@ final class UtilitySpells implements Listener {
             player.sendMessage(ChatColor.YELLOW + "飞行术仍在生效。");
             return;
         }
-        if (!begin(player, "flight", 10, 90)) return;
+        if (!begin(player, "flight", 10)) return;
         int seconds = 15 + (plugin.mastery().rank(player, "flight") - 1) * 3;
         flights.put(player.getUniqueId(), new Flight(player.getAllowFlight(), player.isFlying(),
                 player.getFlySpeed(), System.currentTimeMillis() + seconds * 1000L));
@@ -159,7 +169,7 @@ final class UtilitySpells implements Listener {
             player.sendMessage(ChatColor.YELLOW + "附近没有足够宽敞的落脚处召唤铁傀儡；未消耗魔力。");
             return;
         }
-        if (!begin(player, "golem", 12, 75)) return;
+        if (!begin(player, "golem", 12)) return;
         int seconds = 45 + (plugin.mastery().rank(player, "golem") - 1) * 5;
         IronGolem guardian = player.getWorld().spawn(spot, IronGolem.class, entity -> {
             entity.setPlayerCreated(true);
@@ -198,7 +208,7 @@ final class UtilitySpells implements Listener {
                     + " 格内没有发现怪物；未消耗魔力，也未进入冷却。");
             return;
         }
-        if (!begin(player, "sense", 3, 15)) return;
+        if (!begin(player, "sense", 3)) return;
         removeSense(player.getUniqueId());
         BossBar bar = Bukkit.createBossBar("探敌术", BarColor.BLUE, BarStyle.SOLID);
         bar.addPlayer(player);

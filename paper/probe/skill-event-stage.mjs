@@ -16,11 +16,16 @@ const bots = names.map(username => mineflayer.createBot({
   host: '127.0.0.1', port: 25566, username, auth: 'offline', version: '1.20.6',
 }));
 const events = new Map(names.map(name => [name, []]));
+const states = new Map(names.map(name => [name, []]));
 const chats = new Map(names.map(name => [name, []]));
 
 for (const bot of bots) {
   bot.on('messagestr', line => chats.get(bot.username).push(line));
   bot._client.on('custom_payload', packet => {
+    if (packet.channel === 'mcagent:state') {
+      states.get(bot.username).push(JSON.parse(Buffer.from(packet.data).toString('utf8')));
+      return;
+    }
     if (packet.channel !== 'mcagent:event') return;
     const raw = Buffer.from(packet.data);
     assert.equal(raw[0], 0x7b, 'payload is raw JSON, without writeUTF prefix');
@@ -42,6 +47,7 @@ const until = async (test, label, limit = 12000) => {
   throw new Error(`Timed out: ${label}; chat=${chats.get(names[0]).slice(-8).join(' | ')}`);
 };
 const own = index => events.get(names[index]);
+const ability = (index, id) => states.get(names[index]).at(-1)?.abilities?.find(item => item.id === id);
 const cast = async (index, id) => {
   const before = own(index).length;
   bots[index].chat(`/mycli cast ${id}`);
@@ -61,6 +67,7 @@ try {
     channel: 'minecraft:register', data: Buffer.from('mcagent:event'),
   });
   await sleep(2500);
+  await until(() => ability(0, 'mycli:starbolt') && ability(1, 'mycli:starbolt'), 'initial states');
   assert.equal(own(0).length + own(1).length, 0, 'login did not cast a skill');
 
   const fireA = await cast(0, 'fireworks');
@@ -82,6 +89,11 @@ try {
   'zombie spawned');
   await bots[0].lookAt(new Vec3(-589.5, 92.6, -325.5), true);
   const bolt = await cast(0, 'starbolt');
+  await until(() => ability(0, 'mycli:starbolt')?.cooldownRemainingMs > 0,
+    'starbolt state begins cooldown');
+  assert.equal(ability(0, 'mycli:starbolt')?.cooldownMs, 3000);
+  assert.equal(ability(1, 'mycli:starbolt')?.cooldownRemainingMs, 0,
+    'starbolt cooldown leaked to other player');
   assert.equal(bolt.title, '星芒箭');
   assert.match(bolt.body, /^命中/);
   assert.equal(bolt.tone, 'arcane');
@@ -106,6 +118,9 @@ try {
   await sleep(250);
   const healthBefore = bots[0].health;
   const heal = await cast(0, 'selfheal');
+  await until(() => ability(0, 'magicspells:selfheal')?.cooldownRemainingMs > 0,
+    'selfheal state begins cooldown');
+  assert.equal(ability(0, 'magicspells:selfheal')?.cooldownMs, 15000);
   assert.equal(heal.title, '圣愈术');
   await until(() => bots[0].health > healthBefore, 'MagicSpells healing took effect');
   assert.ok(Math.abs(heal.position.x - bots[0].entity.position.x) < 2,
@@ -115,6 +130,8 @@ try {
   assert.equal(own(0).filter(event => event.id === 'selfheal').length, 1,
     'MagicSpells cooldown emitted a success event');
   await sleep(3200);
+  await until(() => ability(0, 'mycli:starbolt')?.cooldownRemainingMs === 0,
+    'starbolt cooldown expiry');
   const noTargetBefore = own(0).length;
   const chatBefore = chats.get(names[0]).length;
   bots[0].chat('/mycli cast starbolt');
@@ -126,7 +143,8 @@ try {
   'custom payload was copied to chat');
   console.log(JSON.stringify({ verdict: 'PASS', unregistered: names[0], registered: names[1],
     eventIdsA: own(0).map(event => event.id), eventIdsB: own(1).map(event => event.id),
-    starboltPosition: bolt.position, homePosition: home.position }));
+    starboltPosition: bolt.position, homePosition: home.position,
+    starboltCooldown: true, magicSpellsCooldown: true }));
 } finally {
   try { rcon('minecraft:kill @e[type=minecraft:zombie,tag=SkillEventProbe]'); } catch { /* stage only */ }
   for (const bot of bots) bot.quit();

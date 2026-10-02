@@ -34,6 +34,15 @@ final class CombatSpells {
         return Math.max(0L, cooldowns.getOrDefault(key(caster, spell), 0L) - System.currentTimeMillis());
     }
 
+    static long totalCooldownMs(String spell) {
+        return switch (spell) {
+            case "starbolt" -> 3_000L;
+            case "frostnova" -> 14_000L;
+            case "flamewave" -> 10_000L;
+            default -> throw new IllegalArgumentException("Unknown combat spell " + spell);
+        };
+    }
+
     void cast(Player caster, String spell) {
         if (caster.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
             caster.sendMessage(ChatColor.RED + "旁观者不能施法。");
@@ -54,9 +63,9 @@ final class CombatSpells {
         return false;
     }
 
-    private boolean begin(Player caster, String spell, int mana, int cooldownSeconds) {
+    private boolean begin(Player caster, String spell, int mana) {
         if (!plugin.spendMana(caster, mana)) return false;
-        cooldowns.put(key(caster, spell), System.currentTimeMillis() + cooldownSeconds * 1000L);
+        cooldowns.put(key(caster, spell), System.currentTimeMillis() + totalCooldownMs(spell));
         plugin.presentSpell(caster, spell);
         return true;
     }
@@ -93,7 +102,7 @@ final class CombatSpells {
             caster.sendMessage(ChatColor.YELLOW + "18 格准星和 12 格自动锁定都没找到怪物；未消耗魔力。");
             return;
         }
-        if (!begin(caster, "starbolt", 4, 3)) return;
+        if (!begin(caster, "starbolt", 4)) return;
         Vector start = eye.toVector();
         Vector end = hit != null && hit.getHitEntity() == enemy
                 ? hit.getHitPosition() : enemy.getEyeLocation().toVector();
@@ -166,7 +175,7 @@ final class CombatSpells {
             caster.sendMessage(ChatColor.YELLOW + "霜环附近没有看得见的怪物；未消耗魔力。");
             return;
         }
-        if (!begin(caster, "frostnova", 7, 14)) return;
+        if (!begin(caster, "frostnova", 7)) return;
         World world = caster.getWorld();
         Location center = caster.getLocation().add(0, 0.8, 0);
         for (int i = 0; i < 24; i++) {
@@ -206,7 +215,7 @@ final class CombatSpells {
             caster.sendMessage(ChatColor.YELLOW + "焰浪前方没有看得见的怪物；未消耗魔力。");
             return;
         }
-        if (!begin(caster, "flamewave", 8, 10)) return;
+        if (!begin(caster, "flamewave", 8)) return;
         World world = caster.getWorld();
         Vector side = new Vector(-forward.getZ(), 0, forward.getX());
         if (side.lengthSquared() < 0.01) side = new Vector(1, 0, 0);
