@@ -1190,6 +1190,8 @@ final class DungeonManager implements Listener {
                 + "下一件：" + nextName + "。"
                 + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
                 + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
+        player.sendMessage(ChatColor.AQUA + "随机奖池：常见材料/画、少见探索道具/珍珠、稀有附魔书/技能书、传奇强化技能书/光环装备。"
+                + "研习书是真实物品，手持使用；Agent 用 /mycli skillbook list|use。");
         player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
                 + " next=minecraft:" + next.item().getType().name().toLowerCase(Locale.ROOT)
                 + " nextName=" + DungeonLoot.equipmentId(index)
@@ -1269,8 +1271,11 @@ final class DungeonManager implements Listener {
                     p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
                             + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
                     p.sendMessage("MC_DUNGEON_LOOT floor=" + floor + " category="
-                            + (bonus.rare() ? "rare" : "extra") + " item=minecraft:"
-                            + bonus.item().getType().name().toLowerCase(Locale.ROOT));
+                            + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
+                            + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
+                            + " count=" + bonus.item().getAmount()
+                            + (SkillTome.spellId(bonus.item()) == null ? ""
+                                    : " skill=" + SkillTome.spellId(bonus.item())));
                 } else {
                     String path = rewardPath(id, Material.EMERALD);
                     plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);

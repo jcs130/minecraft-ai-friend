@@ -8,11 +8,17 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 /** Vanilla-only personal loot shared by Java, Geyser Bedrock and Mineflayer. */
 final class DungeonLoot {
-    record Bonus(ItemStack item, boolean rare, String label) { }
+    record Bonus(ItemStack item, boolean rare, String label, String tier) {
+        Bonus(ItemStack item, boolean rare, String label) {
+            this(item, rare, label, rare ? "rare" : "common");
+        }
+        Bonus withTier(String value) { return new Bonus(item, rare, label, value); }
+    }
     static final int EQUIPMENT_CYCLE = 8;
 
     /** Guaranteed equipment favors useful iron gear and spell imprints over raw attack power. */
@@ -106,12 +112,19 @@ final class DungeonLoot {
 
     static Bonus roll(int floor, int floorsWithoutRare, int difficulty) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        boolean rare = floorsWithoutRare >= Math.max(3, 6 - difficulty)
+        boolean pity = floorsWithoutRare >= Math.max(3, 6 - difficulty);
+        boolean rare = pity
                 || random.nextInt(100) < Math.min(42, 7 + floor + difficulty * 5);
-        if (floor <= 3) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(6));
-        if (rare) return improve(rare(floor, random.nextInt(15)), difficulty);
-        if (random.nextInt(100) < 55) return uncommon(random.nextInt(9));
-        return common(random.nextInt(6));
+        if (floor <= 3) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(10));
+        if (rare) {
+            // A pity roll guarantees rare loot, never the legendary sub-pool.
+            if (!pity && floor >= 6 && random.nextInt(100) < 10)
+                return legendary(random.nextInt(6)).withTier("legendary");
+            return improve(rare(floor, random.nextInt(18)), difficulty).withTier("rare");
+        }
+        if (random.nextInt(100) < 30)
+            return uncommon(random.nextInt(14)).withTier("uncommon");
+        return common(random.nextInt(10));
     }
 
     private static Bonus improve(Bonus bonus, int difficulty) {
@@ -125,7 +138,7 @@ final class DungeonLoot {
                 meta.addEnchant(enchant.getKey(), level, false);
                 item.setItemMeta(meta);
                 return new Bonus(item, true, bonus.label() + " · "
-                        + (difficulty == 1 ? "冒险" : "末日") + "强化");
+                        + (difficulty == 1 ? "冒险" : "末日") + "强化", bonus.tier());
             }
         }
         return bonus;
@@ -147,8 +160,12 @@ final class DungeonLoot {
             case 1 -> new Bonus(new ItemStack(Material.IRON_INGOT, 4), false, "铁锭 ×4");
             case 2 -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 8), false, "青金石 ×8");
             case 3 -> new Bonus(new ItemStack(Material.EXPERIENCE_BOTTLE, 4), false, "附魔之瓶 ×4");
-            case 4 -> new Bonus(new ItemStack(Material.GOLDEN_APPLE), false, "金苹果");
-            default -> new Bonus(new ItemStack(Material.TORCH, 16), false, "火把 ×16");
+            case 4 -> new Bonus(new ItemStack(Material.TORCH, 16), false, "火把 ×16");
+            case 5 -> new Bonus(new ItemStack(Material.HONEY_BOTTLE, 2), false, "蜂蜜瓶 ×2");
+            case 6 -> new Bonus(new ItemStack(Material.PAINTING, 2), false, "画 ×2");
+            case 7 -> new Bonus(new ItemStack(Material.ITEM_FRAME, 2), false, "物品展示框 ×2");
+            case 8 -> new Bonus(new ItemStack(Material.MAP), false, "空地图");
+            default -> new Bonus(new ItemStack(Material.COOKED_BEEF, 8), false, "熟牛肉 ×8");
         };
     }
 
@@ -170,8 +187,13 @@ final class DungeonLoot {
                     "unbreaking", 1), false, "附魔铁斧");
             case 7 -> new Bonus(named(Material.CROSSBOW, "迅发弩", "quick_charge", 1,
                     "unbreaking", 1), false, "附魔弩");
-            default -> new Bonus(named(Material.SHIELD, "远征盾", "unbreaking", 2,
+            case 8 -> new Bonus(named(Material.SHIELD, "远征盾", "unbreaking", 2,
                     "mending", 1), false, "附魔盾牌");
+            case 9 -> new Bonus(new ItemStack(Material.ENDER_PEARL), false, "末影珍珠");
+            case 10 -> new Bonus(new ItemStack(Material.SPYGLASS), false, "望远镜");
+            case 11 -> new Bonus(new ItemStack(Material.GLOW_ITEM_FRAME, 2), false, "荧光展示框 ×2");
+            case 12 -> new Bonus(new ItemStack(Material.CHERRY_SAPLING, 2), false, "樱花树苗 ×2");
+            default -> new Bonus(new ItemStack(Material.GOLDEN_APPLE), false, "金苹果");
         };
     }
 
@@ -200,8 +222,39 @@ final class DungeonLoot {
             case 11 -> floor >= 7 ? aura(EMBER_ARMOR, DungeonGearAura.EMBER) : earlyRare(0);
             case 12 -> floor >= 7 ? aura(HEALER_ARMOR, DungeonGearAura.RENEWAL) : earlyRare(1);
             case 13 -> floor >= 11 ? aura(LEECH_ARMOR, DungeonGearAura.LEECH) : earlyRare(3);
-            default -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
+            case 14 -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
+            case 15 -> new Bonus(SkillTome.random(4), true, "技艺研习书 · 熟练度 +4");
+            case 16 -> new Bonus(enchantedBook(floor), true, "可在铁砧使用的附魔书");
+            default -> new Bonus(new ItemStack(Material.ENDER_PEARL, 2), true, "末影珍珠 ×2");
         };
+    }
+
+    private static Bonus legendary(int pick) {
+        return switch (pick) {
+            case 0, 1, 2 -> new Bonus(SkillTome.random(8), true, "珍稀技艺研习书 · 熟练度 +8");
+            case 3 -> aura(EMBER_ARMOR, DungeonGearAura.EMBER);
+            case 4 -> aura(HEALER_ARMOR, DungeonGearAura.RENEWAL);
+            default -> aura(LEECH_ARMOR, DungeonGearAura.LEECH);
+        };
+    }
+
+    private static ItemStack enchantedBook(int floor) {
+        String enchantment = switch (ThreadLocalRandom.current().nextInt(5)) {
+            case 0 -> "feather_falling";
+            case 1 -> "efficiency";
+            case 2 -> "unbreaking";
+            case 3 -> "respiration";
+            default -> "mending";
+        };
+        int level = enchantment.equals("mending") ? 1 : floor >= 11 ? 3 : 2;
+        ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+        EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
+        Enchantment enchant = Enchantment.getByKey(NamespacedKey.minecraft(enchantment));
+        if (enchant == null || !meta.addStoredEnchant(enchant, level, false))
+            throw new IllegalStateException("Unsupported dungeon book: " + enchantment);
+        meta.setLore(List.of(ChatColor.GRAY + "真实附魔书 · 可在铁砧使用"));
+        book.setItemMeta(meta);
+        return book;
     }
 
     /** First boss clear has a unique weapon; repeat clears rotate useful boss caches. */

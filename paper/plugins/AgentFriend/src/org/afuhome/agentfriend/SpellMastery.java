@@ -88,6 +88,24 @@ final class SpellMastery {
         dirty = true;
         int after = rank(player, spell);
         if (after == before) return;
+        announceRank(player, spell, after);
+    }
+
+    int grantTraining(Player player, String spell, int practice) {
+        if (!NAMES.containsKey(spell) || practice <= 0) return 0;
+        int before = rank(player, spell);
+        int count = uses(player, spell);
+        int gained = Math.min(practice, RANK_THREE - count);
+        if (gained == 0) return 0;
+        uses.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashMap<>())
+                .put(spell, count + gained);
+        dirty = true;
+        int after = rank(player, spell);
+        if (after > before) announceRank(player, spell, after);
+        return gained;
+    }
+
+    private void announceRank(Player player, String spell, int after) {
         player.sendTitle("§d✦ 技能精进", "§f" + NAMES.get(spell) + " §e" + after + "/3", 10, 50, 15);
         player.sendMessage(ChatColor.LIGHT_PURPLE + "技能精进：" + NAMES.get(spell)
                 + " 已到 " + after + "/3；/mycli mastery 查看成长。");

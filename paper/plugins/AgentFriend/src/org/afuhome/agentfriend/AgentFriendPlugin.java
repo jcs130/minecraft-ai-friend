@@ -556,6 +556,61 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("lootaudit")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台抽样奖池。"); return true;
+            }
+            if (args.length != 5) {
+                sender.sendMessage("用法：/mycli admin lootaudit <楼层1–15> <难度0–2> <抽样次数100–10000>"); return true;
+            }
+            try {
+                int floor = Integer.parseInt(args[2]), difficulty = Integer.parseInt(args[3]);
+                int draws = Integer.parseInt(args[4]);
+                if (floor < 1 || floor > 15 || difficulty < 0 || difficulty > 2
+                        || draws < 100 || draws > 10000) throw new NumberFormatException();
+                Map<String, Integer> tiers = new HashMap<>();
+                int tomes = 0, enchantedBooks = 0, pearls = 0, paintings = 0;
+                for (int i = 0; i < draws; i++) {
+                    DungeonLoot.Bonus bonus = DungeonLoot.roll(floor, 0, difficulty);
+                    tiers.merge(bonus.tier(), 1, Integer::sum);
+                    if (SkillTome.isTome(bonus.item())) tomes++;
+                    if (bonus.item().getType() == Material.ENCHANTED_BOOK) enchantedBooks++;
+                    if (bonus.item().getType() == Material.ENDER_PEARL) pearls++;
+                    if (bonus.item().getType() == Material.PAINTING) paintings++;
+                }
+                sender.sendMessage("MC_LOOT_AUDIT floor=" + floor + " difficulty=" + difficulty
+                        + " draws=" + draws + " common=" + tiers.getOrDefault("common", 0)
+                        + " uncommon=" + tiers.getOrDefault("uncommon", 0)
+                        + " rare=" + tiers.getOrDefault("rare", 0)
+                        + " legendary=" + tiers.getOrDefault("legendary", 0)
+                        + " skillTomes=" + tomes + " enchantedBooks=" + enchantedBooks
+                        + " enderPearls=" + pearls + " paintings=" + paintings);
+            } catch (NumberFormatException bad) { sender.sendMessage("楼层、难度或次数超出允许范围。"); }
+            return true;
+        }
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("givetome")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台发研习书。 "); return true;
+            }
+            if (args.length != 5) {
+                sender.sendMessage("用法：/mycli admin givetome <在线玩家> <技能ID> <4|8>"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("目标玩家必须在线。"); return true; }
+            try {
+                int practice = Integer.parseInt(args[4]);
+                ItemStack tome = SkillTome.create(args[3].toLowerCase(Locale.ROOT), practice);
+                if (!target.getInventory().addItem(tome).isEmpty()) {
+                    sender.sendMessage("目标背包已满，未发放。"); return true;
+                }
+                sender.sendMessage("研习书发放成功：" + target.getUniqueId() + " " + args[3] + " +" + practice);
+                getLogger().info("Console granted skill tome " + args[3] + " +" + practice
+                        + " to " + target.getUniqueId());
+            } catch (IllegalArgumentException bad) { sender.sendMessage("技能 ID 无效或熟练度只允许 4|8。"); }
+            return true;
+        }
         if ((args.length == 4 || args.length == 5) && args[0].equalsIgnoreCase("admin")
                 && args[1].equalsIgnoreCase("bindgear")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -735,6 +790,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> spells(player);
             case "mastery", "熟练度" -> spellMastery.report(player);
+            case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
             case "status", "状态" -> status(player);
             case "protect", "保护" -> protectionAdvisor.command(player, args);
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
@@ -767,6 +823,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
         p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
         p.sendMessage("/mycli mastery  查看战斗、探索、采集法术的个人熟练度与下一级门槛");
+        p.sendMessage("/mycli skillbook list|use [槽位]  查看并研习试炼掉落的实体技能书；手柄可手持使用");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
@@ -1951,6 +2008,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (SkillTome.isTome(event.getItem())) {
+            event.setCancelled(true);
+            SkillTome.use(event.getPlayer(), event.getPlayer().getInventory().getHeldItemSlot(), spellMastery);
+            return;
+        }
         if (guildHall != null && guildHall.handleInteract(event)) return;
         if (dungeon != null && dungeon.handleInteract(event)) return;
         if (event.getClickedBlock() != null && button(event.getClickedBlock())) {
@@ -2379,6 +2441,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 1) return AgentCliCatalog.roots();
         if (args.length == 2 && args[0].equalsIgnoreCase("list")) return AgentCliCatalog.filters();
         if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "on", "off");
+        if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
         if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
             return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place");
