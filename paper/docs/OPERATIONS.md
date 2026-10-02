@@ -1,5 +1,9 @@
 # Paper 分支维护与发布
 
+## 0.3.68 PvP 竞技场候选（2026-10-02 23:35，待正式发布）
+
+源码和 [PvP 竞技场规则](PVP_ARENA.md)已提交至 `qiandengji-personal-stash`。隔离服用最终候选 JAR `A02C19E43746B1E9817BAAB33603B6C6FBE3E1DD95A0FD959B5565177C4A8FE9` 验证：场外玩家互伤 0、场内真实近战命中、认输及掉线重连判负、原背包精确恢复、私有状态与积分均通过。隔离服已停机并恢复原 0.3.62 JAR、`pvp=false` 和原插件配置。正式服目前**仍运行 0.3.67，`pvp=false`，竞技场尚未建造**。准备阶段已通过 WorldGuard 命令在三维度设置 `__global__ pvp: deny`，主世界创建 `qd_pvp` 优先级 20、范围 `(-716,158,-566)..(-684,168,-534)`，仅此区域 `pvp: allow` 且禁拆、禁放、禁刷怪；`regions.yml` 已读回验证，原主世界文件备份在 `E:\MC\ops\regions.world.before-pvp-20261002-2323.yml`。因 AdeleFelice 在线，本轮未触发停服发布。待无人类玩家、无活动试炼时，按下方维护流程备份后发布 0.3.68，控制台勘察与建造，随后把 `server.properties` 的 `pvp` 改为 `true` 并再次正常备份重启。完成前不得把本节候选当作已上线功能。
+
 ## 0.3.67 冒险者公会等级名牌（2026-10-02）
 
 已入会玩家的头顶和原版玩家列表显示 `◆青铜` 至 `◆钻石`，随本人声望升级刷新；已入会 Agent 同时保留 `[Agent]`，未入会普通玩家不加标记，旁观者不加标记。只用 scoreboard team 前缀，不更改登录名/UUID/记分板目标，也不抢别的插件的 gameplay team。Agent 仍以 `/mycli guild status` 获取准确数值；四端显示边界与回退见 [玩家头顶标记](PLAYER_NAMETAGS.md)。
