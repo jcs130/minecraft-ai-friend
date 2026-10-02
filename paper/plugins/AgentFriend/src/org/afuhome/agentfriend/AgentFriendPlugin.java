@@ -726,6 +726,19 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             dungeon.pruneBagDuplicates(target, args.length == 4, sender);
             return true;
         }
+        if ((args.length == 3 || args.length == 4) && args[0].equalsIgnoreCase("admin")
+                && args[1].equalsIgnoreCase("sharetrial")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台预览或转移个人试炼箱普通物资。"); return true;
+            }
+            if (args.length == 4 && !args[3].equalsIgnoreCase("apply")) {
+                sender.sendMessage("用法：mycli admin sharetrial <在线玩家> [apply]"); return true;
+            }
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null) { sender.sendMessage("目标玩家必须在线。"); return true; }
+            dungeon.donatePlainStash(target, guildHall, args.length == 4, sender);
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("surveydeep") || args[1].equalsIgnoreCase("builddeep"))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {

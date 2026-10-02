@@ -18,6 +18,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Chest;
 import org.bukkit.block.Sign;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.Rotatable;
@@ -468,6 +469,18 @@ final class GuildHallManager implements Listener {
                     + " name=" + SHARED_LABELS[i] + " dimension=minecraft:overworld x=" + (x + 16)
                     + " y=" + (y + 1) + " z=" + (z + dz) + " scope=public slots=54");
         }
+    }
+
+    Inventory sharedInventory(int category) {
+        if (category < 0 || category >= SHARED_LABELS.length || !servicesBuilt || !ready || world == null)
+            return null;
+        int chestZ = z + 7 + category * 2;
+        Block left = world.getBlockAt(x + 16, y + 1, chestZ);
+        Block right = world.getBlockAt(x + 17, y + 1, chestZ);
+        if (!servicesBlock(left) || !servicesBlock(right) || !(left.getState() instanceof Chest chest))
+            return null;
+        Inventory inventory = chest.getInventory();
+        return inventory.getSize() == 54 ? inventory : null;
     }
 
     void traderInfo(Player player) {

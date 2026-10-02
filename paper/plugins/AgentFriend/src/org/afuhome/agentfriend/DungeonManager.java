@@ -1555,6 +1555,104 @@ final class DungeonManager implements Listener {
         }
         plugin.saveConfig();
     }
+
+    private static final Set<Material> PLAIN_GUILD_DONATIONS = Set.of(
+            Material.ARROW, Material.BOW, Material.CROSSBOW, Material.SHIELD,
+            Material.IRON_SWORD, Material.IRON_AXE, Material.IRON_HELMET,
+            Material.IRON_CHESTPLATE, Material.IRON_LEGGINGS, Material.IRON_BOOTS,
+            Material.IRON_PICKAXE, Material.TRIDENT,
+            Material.BREAD, Material.COOKED_BEEF, Material.GOLDEN_APPLE,
+            Material.HONEY_BOTTLE, Material.GLISTERING_MELON_SLICE,
+            Material.EXPERIENCE_BOTTLE, Material.ENDER_PEARL, Material.TORCH,
+            Material.IRON_INGOT, Material.COPPER_INGOT, Material.DIAMOND,
+            Material.EMERALD, Material.LAPIS_LAZULI, Material.SPRUCE_PLANKS,
+            Material.ROTTEN_FLESH, Material.STRING, Material.PUFFERFISH,
+            Material.SPIDER_EYE, Material.BONE, Material.MAGMA_CREAM,
+            Material.MAP, Material.ITEM_FRAME, Material.GLOW_ITEM_FRAME);
+
+    private int guildDonationCategory(Material type) {
+        if (type == Material.BOW || type == Material.CROSSBOW || type == Material.SHIELD
+                || type == Material.IRON_SWORD || type == Material.IRON_AXE || type == Material.TRIDENT)
+            return 0;
+        if (type == Material.IRON_HELMET || type == Material.IRON_CHESTPLATE
+                || type == Material.IRON_LEGGINGS || type == Material.IRON_BOOTS) return 1;
+        if (type == Material.ARROW || type == Material.BREAD || type == Material.COOKED_BEEF
+                || type == Material.GOLDEN_APPLE || type == Material.HONEY_BOTTLE
+                || type == Material.GLISTERING_MELON_SLICE || type == Material.EXPERIENCE_BOTTLE
+                || type == Material.ENDER_PEARL || type == Material.TORCH) return 2;
+        return 3;
+    }
+
+    private record GuildDonation(int slot, int category, ItemStack item) { }
+
+    /** Console-only, previewable transfer of ordinary personal-stash surplus to the public guild chests. */
+    void donatePlainStash(Player target, GuildHallManager hall, boolean apply, CommandSender sender) {
+        Inventory source = liveStash(target.getUniqueId());
+        Inventory[] shared = new Inventory[4];
+        Inventory[] simulated = new Inventory[4];
+        for (int category = 0; category < shared.length; category++) {
+            shared[category] = hall.sharedInventory(category);
+            if (shared[category] == null) {
+                sender.sendMessage("MC_STASH_SHARE ok=false reason=shared_chest_unavailable category=" + category);
+                return;
+            }
+            simulated[category] = Bukkit.createInventory(null, 54);
+            ItemStack[] contents = shared[category].getContents();
+            for (int slot = 0; slot < contents.length; slot++)
+                if (contents[slot] != null) contents[slot] = contents[slot].clone();
+            simulated[category].setContents(contents);
+        }
+        List<GuildDonation> plan = new ArrayList<>();
+        int[] groups = new int[4];
+        int skippedFull = 0, kept = 0;
+        for (int slot = 0; slot < source.getSize(); slot++) {
+            ItemStack item = source.getItem(slot);
+            if (item == null || item.getType().isAir()) continue;
+            if (!PLAIN_GUILD_DONATIONS.contains(item.getType()) || item.hasItemMeta()
+                    || plugin.isSoulbound(item) || BackpackShortcutMigration.isShortcut(item)) {
+                kept++;
+                continue;
+            }
+            int category = guildDonationCategory(item.getType());
+            ItemStack[] before = simulated[category].getContents();
+            for (int prior = 0; prior < before.length; prior++)
+                if (before[prior] != null) before[prior] = before[prior].clone();
+            if (!simulated[category].addItem(item.clone()).isEmpty()) {
+                simulated[category].setContents(before);
+                skippedFull++;
+                continue;
+            }
+            plan.add(new GuildDonation(slot, category, item.clone()));
+            groups[category]++;
+        }
+        sender.sendMessage("MC_STASH_SHARE target=" + target.getName() + " mode=" + (apply ? "apply" : "preview")
+                + " planned=" + plan.size() + " kept=" + kept + " skippedFull=" + skippedFull
+                + " weapons=" + groups[0] + " armor=" + groups[1]
+                + " supplies=" + groups[2] + " misc=" + groups[3]);
+        if (!apply || plan.isEmpty()) return;
+        ItemStack[][] originals = new ItemStack[4][];
+        for (int category = 0; category < shared.length; category++) {
+            originals[category] = shared[category].getContents();
+            for (int slot = 0; slot < originals[category].length; slot++)
+                if (originals[category][slot] != null) originals[category][slot] = originals[category][slot].clone();
+        }
+        for (GuildDonation move : plan) {
+            if (!shared[move.category()].addItem(move.item().clone()).isEmpty()) {
+                for (int category = 0; category < shared.length; category++)
+                    shared[category].setContents(originals[category]);
+                sender.sendMessage("MC_STASH_SHARE ok=false reason=destination_changed rollback=true");
+                return;
+            }
+        }
+        for (GuildDonation move : plan) {
+            source.setItem(move.slot(), null);
+            plugin.getLogger().info("Guild donation " + target.getName() + " stashSlot=" + (move.slot() + 1)
+                    + " chest=" + move.category() + " item=" + move.item().getType()
+                    + " count=" + move.item().getAmount());
+        }
+        saveStash(source, target.getUniqueId());
+        sender.sendMessage("MC_STASH_SHARE ok=true moved=" + plan.size() + " target=" + target.getName());
+    }
     /** Make one inventory slot available without discarding a player's belongings. */
     boolean storeItemForBackpackRecovery(Player player) {
         Inventory stash = liveStash(player.getUniqueId());
