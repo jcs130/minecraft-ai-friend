@@ -15,6 +15,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
@@ -27,6 +28,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -42,7 +44,15 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 /** A one-time, guarded vanilla guild hall and physical quest board. */
 final class GuildHallManager implements Listener {
@@ -59,15 +69,21 @@ final class GuildHallManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final World world;
     private final Map<String, Material> fabric = new HashMap<>();
+    private final Map<String, Material> servicesFabric = new HashMap<>();
+    private final Map<Inventory, UUID> receptionMenus = new HashMap<>();
     private final List<Box> houses = new ArrayList<>();
+    private final NamespacedKey receptionistKey;
     private boolean ready;
     private boolean built;
+    private boolean servicesBuilt;
     private int x, y, z;
 
     GuildHallManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
+        receptionistKey = new NamespacedKey(plugin, "guild_receptionist");
         world = Bukkit.getWorld("world");
         built = plugin.getConfig().getBoolean("guild-hall.built", false);
+        servicesBuilt = plugin.getConfig().getBoolean("guild-hall.services-built", false);
         x = plugin.getConfig().getInt("guild-hall.x");
         y = plugin.getConfig().getInt("guild-hall.y");
         z = plugin.getConfig().getInt("guild-hall.z");
@@ -75,6 +91,7 @@ final class GuildHallManager implements Listener {
             try {
                 readHouseBounds();
                 if (built) readMask();
+                if (servicesBuilt) readServicesMask();
                 ready = true;
             } catch (Exception error) {
                 plugin.getLogger().severe("Guild hall protection unavailable; hall edits fail closed: " + error);
@@ -82,7 +99,10 @@ final class GuildHallManager implements Listener {
         }
         if (plugin.getConfig().getBoolean("guild-hall.building", false))
             plugin.getLogger().severe("Interrupted guild hall construction: inspect or restore backup before retrying.");
+        if (plugin.getConfig().getBoolean("guild-hall.services-building", false))
+            plugin.getLogger().severe("Interrupted guild services construction: inspect or restore backup before retrying.");
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        if (servicesBuilt && ready) Bukkit.getScheduler().runTaskLater(plugin, this::ensureReceptionist, 40L);
     }
 
     boolean isBuilt() { return built; }
@@ -90,6 +110,7 @@ final class GuildHallManager implements Listener {
     private static String key(int x, int y, int z) { return x + "," + y + "," + z; }
     private static String key(Block b) { return key(b.getX(), b.getY(), b.getZ()); }
     private Path maskPath() { return plugin.getDataFolder().toPath().resolve("guild-hall-mask.tsv"); }
+    private Path servicesMaskPath() { return plugin.getDataFolder().toPath().resolve("guild-services-mask.tsv"); }
 
     private void readHouseBounds() throws IOException {
         Path path = world.getWorldFolder().toPath().getParent().resolve("plugins/WorldGuard/worlds/world/regions.yml");
@@ -108,15 +129,21 @@ final class GuildHallManager implements Listener {
     }
 
     private void readMask() throws IOException {
-        List<String> lines = Files.readAllLines(maskPath(), StandardCharsets.UTF_8);
-        if (lines.size() < 200 || !lines.get(0).equals("world=" + world.getUID()))
+        readMask(maskPath(), fabric, 200);
+    }
+    private void readServicesMask() throws IOException {
+        readMask(servicesMaskPath(), servicesFabric, 30);
+    }
+    private void readMask(Path path, Map<String, Material> target, int minimum) throws IOException {
+        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        if (lines.size() < minimum || !lines.get(0).equals("world=" + world.getUID()))
             throw new IOException("guild hall mask missing, too small, or wrong world");
         for (int i = 1; i < lines.size(); i++) {
             String[] row = lines.get(i).split("\\t", 2);
             if (row.length != 2) throw new IOException("invalid guild hall mask row " + i);
             Material material = Material.matchMaterial(row[1]);
             if (material == null) throw new IOException("unknown guild hall material " + row[1]);
-            fabric.put(row[0], material);
+            target.put(row[0], material);
         }
     }
 
@@ -310,16 +337,234 @@ final class GuildHallManager implements Listener {
     }
 
     private void writeMask() throws IOException {
-        Path target = maskPath();
+        writeMask(maskPath(), fabric);
+    }
+    private void writeMask(Path target, Map<String, Material> blocks) throws IOException {
         Files.createDirectories(target.getParent());
-        List<String> lines = new ArrayList<>(fabric.size() + 1);
+        List<String> lines = new ArrayList<>(blocks.size() + 1);
         lines.add("world=" + world.getUID());
-        fabric.entrySet().stream().sorted(Map.Entry.comparingByKey())
+        blocks.entrySet().stream().sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> lines.add(entry.getKey() + "\t" + entry.getValue().name()));
         Path pending = target.resolveSibling(target.getFileName() + ".pending");
         Files.write(pending, lines, StandardCharsets.UTF_8);
         try { Files.move(pending, target, StandardCopyOption.ATOMIC_MOVE); }
         catch (IOException unavailable) { Files.move(pending, target, StandardCopyOption.REPLACE_EXISTING); }
+    }
+
+    private static final String[] SHARED_LABELS = {"武器", "护甲", "补给", "公共杂物"};
+    private boolean inServices(Block b) {
+        return built && servicesBuilt && b.getWorld() == world && b.getX() >= x + 13 && b.getX() <= x + 18
+                && b.getY() >= y - 1 && b.getY() <= y + 4 && b.getZ() >= z + 7 && b.getZ() <= z + 13;
+    }
+    private boolean servicesBlock(Block b) {
+        return inServices(b) && servicesFabric.get(key(b)) == b.getType();
+    }
+    private boolean servicesBlock(org.bukkit.block.BlockState b) {
+        return inServices(b.getBlock()) && servicesFabric.get(key(b.getX(), b.getY(), b.getZ())) == b.getType();
+    }
+    private boolean servicesFailClosed(Block b) { return built && servicesBuilt && !ready && inServices(b); }
+
+    private String inspectServices() {
+        if (!built || !ready || world == null) return "公会大厅或保护数据未就绪";
+        if (x != -489 || y != 66 || z != -502) return "这套共享箱地基只适用于当前村庄公会坐标";
+        for (int dx = 13; dx <= 18; dx++) for (int dz = 7; dz <= 13; dz++) {
+            for (Box house : houses) if (house.near(x + dx, z + dz)) return "距离原村屋过近";
+            Block floor = world.getBlockAt(x + dx, y, z + dz);
+            if (floor.getState() instanceof TileState || !(floor.getType().isAir()
+                    || floor.getType() == Material.GRASS_BLOCK || floor.getType() == Material.DIRT
+                    || floor.getType() == Material.COARSE_DIRT || clearable(floor.getType())))
+                return "地基有非自然方块：" + key(floor) + "=" + floor.getType();
+            for (int dy = 1; dy <= 4; dy++) {
+                Block above = world.getBlockAt(x + dx, y + dy, z + dz);
+                if (above.getState() instanceof TileState || !(clearable(above.getType())
+                        || dy <= 2 && (above.getType() == Material.GRASS_BLOCK
+                        || above.getType() == Material.DIRT)))
+                    return "上方有方块：" + key(above) + "=" + above.getType();
+            }
+        }
+        Block feet = world.getBlockAt(x - 4, y + 1, z + 5);
+        Block head = feet.getRelative(0, 1, 0);
+        if (!feet.getType().isAir() || !head.getType().isAir()) return "入口接待位置被占用";
+        return null;
+    }
+
+    void surveyServices(CommandSender sender) {
+        String issue = inspectServices();
+        sender.sendMessage(issue == null ? "公会服务区可建：四组 54 格原版共享双箱，入口接待员；地基 "
+                + (x + 13) + ".." + (x + 18) + "," + y + "," + (z + 7) + ".." + (z + 13)
+                : "公会服务区不可建：" + issue);
+    }
+
+    void buildServices(CommandSender sender) {
+        if (servicesBuilt || plugin.getConfig().getBoolean("guild-hall.services-building", false)
+                || Files.exists(servicesMaskPath())) {
+            sender.sendMessage("公会服务区已建、施工曾中断或保护快照已存在；拒绝覆盖。"); return;
+        }
+        String issue = inspectServices();
+        if (issue != null) { sender.sendMessage("未施工：" + issue); return; }
+        plugin.getConfig().set("guild-hall.services-building", true);
+        plugin.saveConfig();
+        try {
+            constructServices();
+            writeMask(servicesMaskPath(), servicesFabric);
+            servicesBuilt = true;
+            plugin.getConfig().set("guild-hall.services-built", true);
+            plugin.getConfig().set("guild-hall.services-building", false);
+            plugin.saveConfig();
+            ensureReceptionist();
+            sender.sendMessage("公会接待员与四组共享双箱建成；箱内物品由所有玩家共同存取。");
+            plugin.getLogger().info("Guild services built; protected blocks=" + servicesFabric.size());
+        } catch (Exception error) {
+            plugin.getLogger().severe("Guild services build interrupted; restore world backup before retrying: " + error);
+            sender.sendMessage("施工中断；请核对或恢复世界备份：" + error.getMessage());
+        }
+    }
+
+    private void putService(int dx, int dy, int dz, Material type) {
+        Block b = world.getBlockAt(x + dx, y + dy, z + dz);
+        b.setType(type, false);
+        if (!type.isAir()) servicesFabric.put(key(b), type);
+    }
+    private void constructServices() {
+        for (int dx = 13; dx <= 18; dx++) for (int dz = 7; dz <= 13; dz++) {
+            for (int dy = 1; dy <= 4; dy++) putService(dx, dy, dz, Material.AIR);
+            putService(dx, 0, dz, Material.SPRUCE_PLANKS);
+            Block support = world.getBlockAt(x + dx, y - 1, z + dz);
+            if (support.getType().isAir()) putService(dx, -1, dz, Material.COBBLESTONE);
+        }
+        for (int i = 0; i < SHARED_LABELS.length; i++) {
+            int dz = 7 + i * 2;
+            for (int dx = 16; dx <= 17; dx++) {
+                Block b = world.getBlockAt(x + dx, y + 1, z + dz);
+                org.bukkit.block.data.type.Chest data =
+                        (org.bukkit.block.data.type.Chest) Bukkit.createBlockData(Material.CHEST);
+                data.setFacing(org.bukkit.block.BlockFace.NORTH);
+                data.setType(dx == 16 ? org.bukkit.block.data.type.Chest.Type.LEFT
+                        : org.bukkit.block.data.type.Chest.Type.RIGHT);
+                b.setBlockData(data, false);
+                servicesFabric.put(key(b), Material.CHEST);
+            }
+            Block label = world.getBlockAt(x + 18, y + 1, z + dz);
+            Rotatable sign = (Rotatable) Bukkit.createBlockData(Material.OAK_SIGN);
+            sign.setRotation(org.bukkit.block.BlockFace.WEST);
+            label.setBlockData(sign, false);
+            if (label.getState() instanceof Sign state) {
+                state.setLine(0, "§6公会共享箱");
+                state.setLine(1, "§e" + SHARED_LABELS[i]);
+                state.setLine(2, "§a可取 · 可存");
+                state.setLine(3, "§7所有人共用");
+                state.update(true, false);
+            }
+            servicesFabric.put(key(label), Material.OAK_SIGN);
+        }
+    }
+
+    void storageInfo(Player player) {
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放。"); return; }
+        player.sendMessage("§6公会东南侧有四组双箱。所有玩家可像普通箱子一样存放和取用；不是个人奖励箱。");
+        for (int i = 0; i < SHARED_LABELS.length; i++) {
+            int dz = 7 + i * 2;
+            player.sendMessage("MC_GUILD_SHARED id=" + new String[]{"weapons", "armor", "supplies", "misc"}[i]
+                    + " name=" + SHARED_LABELS[i] + " dimension=minecraft:overworld x=" + (x + 16)
+                    + " y=" + (y + 1) + " z=" + (z + dz) + " scope=public slots=54");
+        }
+    }
+
+    void traderInfo(Player player) {
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗。"); return; }
+        player.sendMessage("MC_GUILD_TRADER dimension=minecraft:overworld x=" + (x - 4)
+                + " y=" + (y + 1) + " z=" + (z + 5) + " scope=public");
+        player.sendMessage("§e右键公会接待员查看任务、购买和回收；Agent 可用"
+                + " /mycli arena shop list、/mycli arena recycle list、/mycli arena wallet。");
+    }
+
+    boolean nearTrader(Player player) {
+        return servicesBuilt && ready && player.getWorld() == world
+                && player.getLocation().distanceSquared(new Location(world, x - 3.5, y + 1, z + 4.5)) <= 64;
+    }
+
+    Villager receptionist() {
+        if (!servicesBuilt || !ready) return null;
+        return ensureReceptionist();
+    }
+
+    private Villager ensureReceptionist() {
+        if (!servicesBuilt || !ready || world == null) return null;
+        Location at = new Location(world, x - 3.5, y + 1, z + 4.5, 20, 0);
+        world.getChunkAt(at);
+        Villager found = null;
+        for (Entity entity : world.getNearbyEntities(at, 2, 3, 2)) {
+            if (!(entity instanceof Villager villager)
+                    || !villager.getPersistentDataContainer().has(receptionistKey, PersistentDataType.BYTE)) continue;
+            if (found == null) found = villager;
+            else villager.remove();
+        }
+        if (found == null) {
+            found = world.spawn(at, Villager.class);
+            found.getPersistentDataContainer().set(receptionistKey, PersistentDataType.BYTE, (byte) 1);
+        }
+        found.setProfession(Villager.Profession.WEAPONSMITH);
+        found.setVillagerLevel(5);
+        found.setCustomName("§6公会接待员·阿莉娅");
+        found.setCustomNameVisible(true);
+        found.setAI(false);
+        found.setInvulnerable(true);
+        found.setRemoveWhenFarAway(false);
+        found.setRecipes(plugin.dungeon().merchantRecipes());
+        return found;
+    }
+
+    private static ItemStack menuItem(Material type, String title, String hint) {
+        ItemStack item = new ItemStack(type);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(title);
+        meta.setLore(List.of(hint));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    void openReceptionMenu(Player player) {
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗。"); return; }
+        Inventory menu = Bukkit.createInventory(null, 27, "冒险者公会 · 接待员阿莉娅");
+        menu.setItem(10, menuItem(Material.WRITABLE_BOOK, "§e聊聊公会任务", "§7查看今日委托和冒险者等级"));
+        menu.setItem(12, menuItem(Material.EMERALD, "§a购买装备与补给", "§7用个人绿宝石余额结算"));
+        menu.setItem(14, menuItem(Material.HOPPER, "§6回收多余装备", "§7从背包或个人奖励箱选取并确认"));
+        menu.setItem(16, menuItem(Material.CHEST, "§b公会共享箱", "§7大厅东南侧，四组普通双箱，可存可取"));
+        menu.setItem(22, menuItem(Material.EMERALD_BLOCK, "§a实体绿宝石交易", "§7原版村民交易界面"));
+        receptionMenus.put(menu, player.getUniqueId());
+        player.openInventory(menu);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST) public void onReceptionist(PlayerInteractEntityEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || !servicesBuilt || !ready) return;
+        if (!event.getRightClicked().getPersistentDataContainer().has(receptionistKey, PersistentDataType.BYTE)) return;
+        event.setCancelled(true);
+        openReceptionMenu(event.getPlayer());
+    }
+    @EventHandler public void onReceptionClick(InventoryClickEvent event) {
+        UUID owner = receptionMenus.get(event.getView().getTopInventory());
+        if (owner == null) return;
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || !owner.equals(player.getUniqueId())) return;
+        int slot = event.getRawSlot();
+        if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) return;
+            switch (slot) {
+                case 10 -> plugin.openGuildMenu(player);
+                case 12 -> plugin.dungeon().openGuildShop(player);
+                case 14 -> plugin.dungeon().openGuildRecycle(player);
+                case 16 -> { player.closeInventory(); storageInfo(player); }
+                case 22 -> plugin.dungeon().openLegacyMerchant(player);
+                default -> { }
+            }
+        });
+    }
+    @EventHandler public void onReceptionDrag(InventoryDragEvent event) {
+        if (receptionMenus.containsKey(event.getView().getTopInventory())) event.setCancelled(true);
+    }
+    @EventHandler public void onReceptionClose(InventoryCloseEvent event) {
+        receptionMenus.remove(event.getInventory());
     }
 
     void teleport(Player player) {
@@ -351,12 +596,13 @@ final class GuildHallManager implements Listener {
                 && b.getZ() >= z - 7 && b.getZ() <= z + 7;
     }
     private boolean protectedFabric(Block b) {
-        return inHall(b) && fabric.get(key(b)) == b.getType();
+        return inHall(b) && fabric.get(key(b)) == b.getType() || servicesBlock(b);
     }
     private boolean protectedFabric(org.bukkit.block.BlockState b) {
-        return inHall(b.getBlock()) && fabric.get(key(b.getX(), b.getY(), b.getZ())) == b.getType();
+        return inHall(b.getBlock()) && fabric.get(key(b.getX(), b.getY(), b.getZ())) == b.getType()
+                || servicesBlock(b);
     }
-    private boolean failClosed(Block b) { return built && !ready && inHall(b); }
+    private boolean failClosed(Block b) { return built && !ready && inHall(b) || servicesFailClosed(b); }
     boolean deniesEdit(Block block) { return protectedFabric(block) || failClosed(block); }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (deniesEdit(event.getBlock())) {

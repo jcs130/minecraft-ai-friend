@@ -2010,7 +2010,7 @@ final class DungeonManager implements Listener {
                 "灯火驿站", "商人和工位", "物品请带走");
     }
 
-    private List<MerchantRecipe> merchantRecipes() {
+    List<MerchantRecipe> merchantRecipes() {
         List<MerchantRecipe> recipes = new ArrayList<>();
         for (Object[] offer : new Object[][]{
                 {Material.TORCH, 16, 1}, {Material.ARROW, 16, 2},
@@ -2062,21 +2062,38 @@ final class DungeonManager implements Listener {
     private boolean nearMerchant(Player player) {
         return expanded && (inLobby(player.getLocation())
                 || active && floor == REST_FLOOR && participants.contains(player.getUniqueId())
-                    && inFloor(player.getLocation(), REST_FLOOR));
+                    && inFloor(player.getLocation(), REST_FLOOR)
+                || plugin.guildHall() != null && plugin.guildHall().nearTrader(player));
+    }
+
+    void openGuildShop(Player player) {
+        if (plugin.guildHall() == null || !plugin.guildHall().nearTrader(player)) {
+            player.sendMessage(ChatColor.YELLOW + "请到冒险者公会门口与接待员交易。"); return;
+        }
+        economy.openShopMenu(player);
+    }
+
+    void openGuildRecycle(Player player) {
+        if (plugin.guildHall() == null || !plugin.guildHall().nearTrader(player)) {
+            player.sendMessage(ChatColor.YELLOW + "请到冒险者公会门口与接待员交易。"); return;
+        }
+        economy.openRecycleMenu(player);
     }
 
     private void openShop(Player player) {
         if (!nearMerchant(player)) {
-            player.sendMessage(ChatColor.YELLOW + "前往试炼场入口或第七层驿站与商人交易。"); return;
+            player.sendMessage(ChatColor.YELLOW + "前往冒险者公会、试炼场入口或第七层驿站与商人交易。"); return;
         }
         economy.openShopMenu(player);
     }
 
     void openLegacyMerchant(Player player) {
         if (!nearMerchant(player)) {
-            player.sendMessage(ChatColor.YELLOW + "前往试炼场入口或第七层驿站与商人交易。"); return;
+            player.sendMessage(ChatColor.YELLOW + "前往冒险者公会、试炼场入口或第七层驿站与商人交易。"); return;
         }
-        Villager merchant = ensureMerchant((byte) (inLobby(player.getLocation()) ? 3 : 1));
+        Villager merchant = plugin.guildHall() != null && plugin.guildHall().nearTrader(player)
+                ? plugin.guildHall().receptionist()
+                : ensureMerchant((byte) (inLobby(player.getLocation()) ? 3 : 1));
         if (merchant == null) player.sendMessage(ChatColor.RED + "驿站商人暂时不在，请联系服主。");
         else player.openMerchant(merchant, true);
     }

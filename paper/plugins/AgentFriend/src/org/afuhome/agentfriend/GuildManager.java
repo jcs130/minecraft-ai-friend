@@ -117,13 +117,18 @@ final class GuildManager implements Listener {
             case "claim", "交付", "领取" -> claim(player);
             case "rewards", "箱子" -> dungeon.command(player, new String[]{"arena", "rewards"});
             case "stash", "储物" -> dungeon.openStash(player);
+            case "trader", "商人" -> {
+                plugin.guildHall().traderInfo(player);
+                if (plugin.guildHall().nearTrader(player)) plugin.guildHall().openReceptionMenu(player);
+            }
+            case "shared", "storage", "共享箱" -> plugin.guildHall().storageInfo(player);
             case "travel", "远征" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW
                         + "用法：/mycli guild travel <遗迹ID>；可选 "
                         + String.join("、", DungeonExpeditions.SITES.stream().map(DungeonExpeditions.Site::id).toList()));
                 else expeditions.travel(player, args[2].toLowerCase(Locale.ROOT));
             }
-            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash|travel <遗迹ID>");
+            default -> player.sendMessage(ChatColor.RED + "用法：/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash|trader|shared|travel <遗迹ID>");
         }
     }
 

@@ -658,6 +658,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return true;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveyservices") || args[1].equalsIgnoreCase("buildservices"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造公会服务区。"); return true;
+            }
+            if (args[1].equalsIgnoreCase("surveyservices")) guildHall.surveyServices(sender);
+            else guildHall.buildServices(sender);
+            return true;
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("surveyroad") || args[1].equalsIgnoreCase("buildroad"))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台勘察或建造道路。"); return true;

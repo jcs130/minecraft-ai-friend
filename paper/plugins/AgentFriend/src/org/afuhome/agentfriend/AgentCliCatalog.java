@@ -119,6 +119,8 @@ final class AgentCliCatalog {
         add(specs,"guild.claim","adventure","item","/mycli guild claim","交付已完成任务并结算声望/奖励","活动任务已达成","声望与奖励箱结果");
         add(specs,"guild.rewards","storage","gui","/mycli guild rewards","打开与试炼共用的本人奖励箱","在线玩家","原版箱子菜单");
         add(specs,"guild.stash","storage","gui","/mycli guild stash","打开与试炼共用的本人私人箱","在线玩家","原版箱子菜单");
+        add(specs,"guild.shared","storage","read","/mycli guild shared","列出四组公会公共双箱的绝对坐标；所有玩家可用普通箱子方式存取","公会服务区已建成","MC_GUILD_SHARED 坐标及 54 格容量");
+        add(specs,"guild.trader","adventure","gui","/mycli guild trader","查看公会接待员坐标；到门口打开购买、回收和任务菜单","公会服务区已建成","MC_GUILD_TRADER 与原版容器菜单");
         add(specs,"guild.travel","adventure","teleport","/mycli guild travel <遗迹ID>","前往已开放地下城遗迹的外围安全点","ID 从公会看板/文档获取；目标可用","传送或拒绝原因");
         add(specs,"goddess.skills","goddess","read","/mycli goddess skills","查看女神技能和学习条件","在线玩家","技能文字列表");
         add(specs,"goddess.learn","goddess","write","/mycli goddess learn feather|night","学习羽落或夜视","非旁观者；5 级经验或炼金等级满足免费条件","学习结果");
