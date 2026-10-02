@@ -1966,7 +1966,7 @@ final class DungeonManager implements Listener {
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
             if (player != null && !player.isDead() && inFloor(player.getLocation(), floor))
-                plugin.guildMobDefeated(player);
+                plugin.guildMobDefeated(player, event.getEntity().getType());
         }
     }
 

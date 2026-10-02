@@ -196,6 +196,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long lastRun;
     private DungeonManager dungeon;
     private GuildManager guild;
+    private LifeGuildManager lifeGuild;
     private GuildHallManager guildHall;
     private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
@@ -238,6 +239,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
         guild = new GuildManager(this, dungeon);
+        lifeGuild = new LifeGuildManager(this, dungeon);
         guildHall = new GuildHallManager(this);
         pvpArena = new PvpArenaManager(this);
         trialRoad = new TrialRoadManager(this);
@@ -324,7 +326,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else player.sendMessage(ChatColor.RED + "试炼塔尚未建成。");
     }
     boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
-    void guildMobDefeated(Player player) { if (guild != null) guild.onDungeonMobDefeated(player); }
+    void guildMobDefeated(Player player, org.bukkit.entity.EntityType type) { if (guild != null) guild.onDungeonMobDefeated(player, type); }
     void guildFloorCleared(Player player, int floor, int partySize) {
         if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
     }
@@ -333,6 +335,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     String adventurerRankName(Player player) { return guild == null ? "青铜" : guild.adventurerRankName(player); }
     boolean guildMember(Player player) { return guild != null && guild.hasJoined(player); }
     void openGuildMenu(Player player) { openMenu(player, "guild"); }
+    void openLifeGuildMenu(Player player) { openMenu(player, "life"); }
     void guildHallTeleport(Player player) { guildHall.teleport(player); }
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
     private boolean inVillage(Location at) {
@@ -835,6 +838,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "pvp", "duel", "决斗" -> pvpArena.command(player, args);
             case "guild", "公会", "工会" -> guild.command(player, args);
+            case "life", "生活" -> lifeGuild.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
         }
@@ -866,6 +870,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
+        p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
         p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
@@ -1208,6 +1213,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             p.sendMessage(ChatColor.LIGHT_PURPLE + "祈愿已送达女神；她会在游戏内回应。");
             getLogger().info("Prayer delivered from " + p.getUniqueId() + " to Goddess");
+            if (guild != null) guild.onPrayer(p);
             return;
         }
         p.sendMessage(ChatColor.RED + "用法：/mycli goddess skills|learn feather|night|pray <话>");
@@ -1821,6 +1827,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + "\n死亡次数 " + p.getStatistic(Statistic.DEATHS)
                         + "\n\n公会等级、声望、已完成委托和当前任务请看后面的「冒险者公会」页。",
                 guild.bookPage(p),
+                lifeGuild.bookPage(p),
                 "§d角色成长§r\n\n" + auraLine
                         + "\n\n当前没有可手动分配的属性点。AuraSkills 技能随活动获取经验并升级；法术靠成功施放提高熟练度。",
                 "§d法术熟练度 · 战斗§r\n\n" + masteryBookLine(p, "starbolt") + "\n"
@@ -1879,12 +1886,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "utility" -> "§b✦ 探索法术";
             case "creation" -> "§d✦ 向女神申请";
             case "guild" -> "§6✦ 冒险者公会";
+            case "life" -> "§a✦ 生活公会";
             case "pvp" -> "§c✦ PvP竞技场";
             case "arena_difficulty" -> "§6✦ 试炼难度与开场";
             default -> "§6✦ 造物术";
         };
-        Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 36 : page.equals("imprint") ? 54 : 27, title);
+        Inventory inv = Bukkit.createInventory(null, page.equals("guild") ? 54 : page.equals("imprint") ? 54 : 27, title);
         if (page.equals("skills")) {
+            inv.setItem(3, item(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石工坊", "手柄点击接单；Agent 用 /mycli life board"));
             inv.setItem(4, item(Material.WRITTEN_BOOK, "§6❖ 旅途指南", "从这里开始：手柄可选图标，不必打字", "也可以拿起命格书，翻页阅读"));
             inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
@@ -1934,6 +1943,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "从村庄沿路走到入口石按钮", "选难度后点开始；附近队友一起进入"));
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
+            inv.setItem(17, item(Material.SUNFLOWER, "§a⑦ 生活公会", "钓鱼、种田、烹饪、建筑、写书与红石机关", "每日小委托；不必打怪也能成长"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
         } else if (page.equals("combat")) {
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
@@ -2046,6 +2056,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(22, item(Material.ARROW, "§7返回传送罗盘"));
         } else if (page.equals("guild")) {
             guild.fillBoard(p, inv);
+        } else if (page.equals("life")) {
+            lifeGuild.fillMenu(p, inv);
         } else if (page.equals("creation")) {
             for (int i = 0; i < GIFT_IDEAS.size(); i++) {
                 GiftIdea idea = GIFT_IDEAS.get(i);
@@ -2135,6 +2147,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 3 -> openMenu(p, "life");
                     case 5 -> openMenu(p, "mastery");
                     case 6 -> openMenu(p, "pvp");
                     case 4 -> openMenu(p, "guide");
@@ -2170,6 +2183,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 14 -> { guide(p, new String[]{"guide", "dungeon"}); openMenu(p, "places"); }
                     case 15 -> openMenu(p, "players");
                     case 16 -> p.openBook(statusBook(p));
+                    case 17 -> openMenu(p, "life");
                     case 22 -> openMenu(p, "skills");
                     default -> { }
                 }
@@ -2251,12 +2265,19 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     default -> { }
                 }
             } else if (page.equals("guild")) {
-                if (slot == 30) gotoPlace(p, "arena");
-                else if (slot == 31) openMenu(p, "skills");
+                if (slot == 51) gotoPlace(p, "arena");
+                else if (slot == 52) openMenu(p, "skills");
+                else if (slot == 47) openMenu(p, "life");
                 else {
                     guild.click(p, slot);
-                    if (slot == 0 || (slot >= 10 && slot < 10 + GuildManager.contractCount()) || slot == 27 || slot == 28)
+                    if (slot == 0 || (slot >= 10 && slot < 10 + GuildManager.contractCount()) || slot == 48 || slot == 49)
                         openMenu(p, "guild");
+                }
+            } else if (page.equals("life")) {
+                if (slot == 22) openMenu(p, "skills");
+                else {
+                    lifeGuild.click(p, slot);
+                    if (slot != 21) openMenu(p, "life");
                 }
             } else if (page.equals("creation")) {
                 if (slot >= 10 && slot < 10 + GIFT_IDEAS.size()) requestCreation(p, GIFT_IDEAS.get(slot - 10).id());
@@ -2578,6 +2599,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return List.of("auto", "normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
+        if (args.length == 2 && args[0].equalsIgnoreCase("life"))
+            return List.of("board", "menu", "status", "accept", "claim", "abandon", "write");
+        if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
+            return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint")) return List.of("add", "remove");
