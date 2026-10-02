@@ -25,7 +25,7 @@ async function until(predicate, label, timeout = 10000) {
   }
   throw new Error(`timeout ${label}: ${lines.slice(-10).join(' | ')}`);
 }
-const tome = () => bot.inventory.items().find(item => item.name === 'book'
+const tome = () => bot.inventory.items().find(item => item.name === 'written_book'
   && JSON.stringify(item).includes('skill_tome_spell'));
 
 try {
@@ -45,7 +45,7 @@ try {
     && line.includes('id=starbolt') && line.includes('gained=4')), 'use reply');
   assert.equal(tome(), undefined, 'one real book consumed');
   rcon(`mycli admin givetome ${name} leap 8`);
-  const leap = await until(() => bot.inventory.items().find(item => item.name === 'book'
+  const leap = await until(() => bot.inventory.items().find(item => item.name === 'written_book'
     && JSON.stringify(item).includes('leap')), 'leap book');
   await bot.equip(leap, 'hand');
   bot.activateItem();
@@ -54,7 +54,7 @@ try {
   bot.chat('/mycli mastery');
   await until(() => lines.find(line => line.includes('MC_MASTERY id=leap')
     && line.includes('level=2') && line.includes('uses=8')), 'mastery persisted in memory');
-  console.log('PASS skill tome: vanilla book PDC, private list/use, hand-use, consumption, mastery');
+  console.log('PASS skill tome: usable vanilla written book PDC, private list/use, hand-use, consumption, mastery');
 } finally {
   bot.quit();
 }
