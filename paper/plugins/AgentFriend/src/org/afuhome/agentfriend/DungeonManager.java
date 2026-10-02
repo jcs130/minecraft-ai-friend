@@ -413,6 +413,26 @@ final class DungeonManager implements Listener {
         return group;
     }
 
+    private void enrollPlayersOnCurrentFloor() {
+        if (!active || pausedAt > 0) return;
+        boolean changed = false;
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
+                    && player.getGameMode() != GameMode.ADVENTURE)
+                    || !inFloor(player.getLocation(), floor)
+                    || !participants.add(player.getUniqueId())) continue;
+            changed = true;
+            player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
+                    + (cleared ? "本层奖励已结算，从下一层开始获得奖励。" : "本层通关后可领取个人奖励。"));
+            player.sendMessage("MC_DUNGEON_JOIN floor=" + floor + " participant=true"
+                    + " rewardThisFloor=" + !cleared + " nextFloorTogether=true");
+            plugin.getLogger().info("Dungeon player joined from current floor: floor=" + floor
+                    + ", player=" + player.getName() + ", uuid=" + player.getUniqueId()
+                    + ", rewardThisFloor=" + !cleared);
+        }
+        if (changed) persistRun();
+    }
+
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         switch (sub) {
@@ -660,7 +680,7 @@ final class DungeonManager implements Listener {
             Player player = Bukkit.getPlayer(id);
             if (!arrived.contains(id) && player != null && player.isOnline() && !player.isDead()
                     && inFloor(player.getLocation(), floor))
-                player.sendMessage(ChatColor.YELLOW + "队友已下楼；你不在按钮附近 12 格内，本次未传送。可按红色按钮回地面。");
+                player.sendMessage(ChatColor.YELLOW + "队友已下楼，但你的传送未成功；请用 /mycli arena status 查看当前层并联系服主。");
         }
         participants.clear();
         participants.addAll(arrived);
@@ -724,6 +744,7 @@ final class DungeonManager implements Listener {
                 finish(false, "reconnect_timeout", "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
             return;
         }
+        enrollPlayersOnCurrentFloor();
         boolean anyone = false;
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
