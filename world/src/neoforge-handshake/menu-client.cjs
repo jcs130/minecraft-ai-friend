@@ -23,6 +23,10 @@ function attachMenuClient (bot) {
       events.emit('stateError', body)
     } else if (body.kind === 'action_receipt') {
       if (body.state) state = body.state
+      else if (body.stateUnavailable) {
+        state = null
+        events.emit('stateError', body)
+      }
       events.emit('receipt', body)
       const request = pending.get(body.requestId)
       if (request) {

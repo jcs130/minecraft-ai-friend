@@ -192,6 +192,14 @@ final class PlayerMenuBridge {
         result.addProperty("retryAutomatically", false);
         result.add("state", snapshot(player));
         String text = result.toString();
+        if (text.getBytes(StandardCharsets.UTF_8).length > 60000) {
+            // A click may already have happened. Keep its outcome, but make it
+            // impossible for the client to continue from its stale snapshot.
+            result.remove("state");
+            result.addProperty("stateUnavailable", true);
+            result.addProperty("stateError", "menu_state_too_large");
+            text = result.toString();
+        }
         var playerReceipts = RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new LinkedHashMap<>());
         playerReceipts.put(requestId, text);
         while (playerReceipts.size() > 32) playerReceipts.remove(playerReceipts.keySet().iterator().next());
