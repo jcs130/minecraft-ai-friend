@@ -32,6 +32,7 @@ const mcData = require('minecraft-data')('1.21.1')
 const states = mc.states
 const P = require('./payloads.cjs')
 const probe = require('./probe.cjs')
+const { decodeNeoForgeTime } = require('./time-payload.cjs')
 
 const VERSION = '1.21.1'
 const PROTO_VERSION = mcData.version.version // 767
@@ -47,8 +48,10 @@ const BACKEND = { host: backendHost, port: Number(backendPort) }
 //   (CONFIG 期发 minecraft:brand)走兼容路径,update_time 每秒 1 个正常到账。
 //   后果:经门 bot(小芋/Goddess)bot.time 恒 null→判永夜→原地 rest。
 //   当前 mod 组合对 vanilla 客户端友好(实测不踢);若日后有 mod 声明必需网络通道,
-//   设 GATE_VANILLA=0 切回 forge 协商并另修时间包。
+//   必需通道模组包须设 GATE_VANILLA=0，并可用 GATE_NEOFORGE_TIME_BRIDGE=1
+//   将 neoforge:custom_time_packet 转为原版 update_time。
 const VANILLA_BACKEND = process.env.GATE_VANILLA !== '0'
+const BRIDGE_NEOFORGE_TIME = process.env.GATE_NEOFORGE_TIME_BRIDGE === '1'
 
 // 【自 ack 传送 2026-09-21】门才是 MC 眼中的真正客户端，传送应答属传输层职责。
 // 现象：容器化 ViaProxy 经门时，MC 报 `Failed to decode packet 'serverbound/minecraft:accept_teleportation'`
@@ -67,7 +70,10 @@ const DRAIN_GAP_MS = Number(process.env.GATE_DRAIN_GAP_MS || 15)
 const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}`)
 
 // ── 通道知识（共享）与缓存 ────────────────────────────────────────
-const cacheFile = path.join(__dirname, 'knowledge-cache.json')
+// Each world has its own negotiated channels. Keep experimental worlds from
+// overwriting the production cache; the listener address is separately configurable.
+const cacheFile = process.env.GATE_CACHE_FILE || path.join(__dirname, 'knowledge-cache.json')
+const listenHost = process.env.GATE_LISTEN_HOST || '0.0.0.0'
 
 // Better Combat 2.3.2 通道（2026-08-29 定谳，javap 反编译挖出）：
 //   CONFIGURATION 桶(4)：config_sync/weapon_registry（服务端→客户端，配置任务负载）
@@ -130,8 +136,8 @@ const knowledge = loadKnowledge()
 
 // ── 神社之门（前端：裸 Server，自驱握手/CONFIG）──────────────────
 const server = new mc.Server(VERSION)
-server.listen(Number(listenPort), '0.0.0.0')
-server.on('listening', () => log(`神社之门开启：0.0.0.0:${listenPort} -> ${BACKEND.host}:${BACKEND.port}（${VERSION}，offline）`))
+server.listen(Number(listenPort), listenHost)
+server.on('listening', () => log(`神社之门开启：${listenHost}:${listenPort} -> ${BACKEND.host}:${BACKEND.port}（${VERSION}，offline）`))
 server.on('error', (e) => log(`门扉出错：${e.message}`))
 server.on('connection', (front) => handleConnection(front))
 
@@ -473,6 +479,12 @@ const REMAP = require('./idmap-remap.cjs')
 REMAP.load()   // 无 idmap.json = 纯透传，行为与旧版完全一致 ✓
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
+  let vanillaTime = null
+  if (BRIDGE_NEOFORGE_TIME && target === sess.front && name === 'custom_payload' &&
+      params.channel === 'neoforge:custom_time_packet') {
+    try { vanillaTime = decodeNeoForgeTime(params.data) }
+    catch (e) { log(`时间负载无法转换：${e.message}`) }
+  }
   if (target === sess.front) {
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
@@ -482,7 +494,13 @@ function relayTo (sess, target, name, params, dir) {
   } else if (REMAP.hasMap()) {
     params = REMAP.remapIn(name, params) // 前端→后端: 原版号→NeoForge号 ✓
   }
-  try { target.write(name, params) } catch (e) {
+  try {
+    target.write(name, params)
+    if (vanillaTime) {
+      target.write('update_time', vanillaTime)
+      sess.frontCensus.update_time = (sess.frontCensus.update_time || 0) + 1
+    }
+  } catch (e) {
     sess.frontErrCensus = sess.frontErrCensus || {}
     sess.frontErrCensus[name] = (sess.frontErrCensus[name] || 0) + 1
     log(`（容忍）${dir} ${name} 重序列化失败：${(e && e.message || e).toString().slice(0, 160)}`)

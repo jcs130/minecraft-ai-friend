@@ -29,6 +29,10 @@
 #    idmap.json 里的 generatedAt 与 report 计数
 ```
 
+## 独立实验服的路径隔离
+
+旧服默认端口、缓存和 `idmap.json` 仍保持原样。为另一套 NeoForge 模组包启动网关时，设置 `GATE_VANILLA=0`、`GATE_NEOFORGE_TIME_BRIDGE=1`，并显式设置 `GATE_LISTEN_HOST=127.0.0.1`、`GATE_CACHE_FILE`、`GATE_IDMAP_FILE` 指向实验目录。`GATE_REMAP=0` 只适合排查登录；此时 Mineflayer 的方块/物品编号可能完全错误。改模组后重新导出注册表，运行 `build-idmap.cjs` 时可通过 `MINECRAFT_DATA_DIR`、`IDMAP_DUMP_DIR`、`IDMAP_OUTPUT_FILE` 指向实验输入和输出，不覆盖此目录的旧服号表。实测与未覆盖的模组能力见 [`docs/MY-AGENT-WORLD-LAB.md`](../../../docs/MY-AGENT-WORLD-LAB.md)。
+
 ## 改这里的东西怎么生效（便宜路径）
 
 ```

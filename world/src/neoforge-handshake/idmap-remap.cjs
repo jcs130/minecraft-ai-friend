@@ -7,7 +7,9 @@
 const fs = require('fs')
 const path = require('path')
 
-const mapFile = path.join(__dirname, 'idmap.json')
+// A registry map belongs to one exact modpack build. Never reuse the production
+// map when a lab world has a different registry order.
+const mapFile = process.env.GATE_IDMAP_FILE || path.join(__dirname, 'idmap.json')
 let MAP = null
 
 function load () {

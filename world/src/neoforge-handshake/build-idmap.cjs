@@ -4,12 +4,13 @@
 const fs = require('fs')
 const path = require('path')
 // 直读 minecraft-data 落盘 json（neoforge-handshake 容器同款路径），不依赖库签名
-const MDD = 'D:/copaw-workspaces/mc-god/scratch/mc-agent-neko/node_modules/minecraft-data/minecraft-data/data/pc/1.21.1/'
-const v = { blocks: JSON.parse(fs.readFileSync(MDD + 'blocks.json', 'utf8')),
-            items: JSON.parse(fs.readFileSync(MDD + 'items.json', 'utf8')) }
+const MDD = process.env.MINECRAFT_DATA_DIR || 'D:/copaw-workspaces/mc-god/scratch/mc-agent-neko/node_modules/minecraft-data/minecraft-data/data/pc/1.21.1/'
+const v = { blocks: JSON.parse(fs.readFileSync(path.join(MDD, 'blocks.json'), 'utf8')),
+            items: JSON.parse(fs.readFileSync(path.join(MDD, 'items.json'), 'utf8')) }
 if (!v.blocks || !v.blocks.length) { console.error('minecraft-data 载入失败 ✗'); process.exit(1) }
 
-const DUMP = path.join(__dirname, 'idmap-dump')
+const DUMP = process.env.IDMAP_DUMP_DIR || path.join(__dirname, 'idmap-dump')
+const OUTPUT = process.env.IDMAP_OUTPUT_FILE || path.join(__dirname, 'idmap.json')
 const states = {}
 const items = {}
 const report = { matched: 0, stateMismatch: 0, modFallback: {}, unknownVanilla: [], modItemFallback: 0, vanillaItemNoDump: 0 }
@@ -251,7 +252,7 @@ const out = {
                            distinctTargets: Object.keys(itemSrc.byTarget).length,
                            topTargets, badRules } }
 }
-fs.writeFileSync(path.join(__dirname, 'idmap.json'), JSON.stringify(out))
+fs.writeFileSync(OUTPUT, JSON.stringify(out))
 console.log(`idmap.json 生成 ✓ states=${Object.keys(states).length} items=${Object.keys(items).length} matched=${report.matched} stateMismatch=${report.stateMismatch} modFallback=${Object.keys(report.modFallback).length}`)
 console.log(`物品映射 ✓ 同名方块=${itemSrc.blockItem} 工具甲(带材质)=${itemSrc.tier} 语义家族=${itemSrc.family} 仍兜paper=${itemSrc.paper} 覆盖到 ${Object.keys(itemSrc.byTarget).length} 种原版代理物（失效规则 ${badRules.length} 条）`)
 console.log('  代理物 Top10:', topTargets.slice(0, 10).map(([k, n]) => k + '=' + n).join(' '))

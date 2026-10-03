@@ -44,9 +44,32 @@ Pop-Location
 
 ### Mineflayer 与模组操作的实测结论
 
-2026-10-03 在仅绑定 `127.0.0.1:28976` 的隔离服，用现有 Cortico 安装的 Mineflayer 4.37.1、`version: "1.21.1"`、离线测试名 `MawMineflayerQA` 进行了实际登录。服务端在配置协商阶段踢出，原因是 `neoforge.network.negotiation.failure.vanilla.client.not_supported`，要求安装 NeoForge 21.1.248。测试后实验服正常存档关闭。**因此现在不能把旧 Mineflayer 机器人直接接到 My Agent World；旧 Paper 千灯纪的 Mineflayer 连接仍不受影响。** Mineflayer 的[原版版本支持](https://github.com/PrismarineJS/mineflayer)仅说明 Minecraft 协议版本，不等于能完成 NeoForge 协商；上游也有[同类 NeoForge 拒绝报告](https://github.com/PrismarineJS/mineflayer/issues/4097)。换版本号或装旧 Forge `FML|HS` 适配库，不能视为已经解决此 1.21.1 NeoForge 问题。[NeoForge 自定义负载文档](https://docs.neoforged.net/docs/1.21.1/networking/payload/)说明模组还可使用配置期和游玩期专用消息，接入后仍须按模组实现动作与状态解释。
+2026-10-03 在仅绑定 `127.0.0.1:28976` 的隔离服，用现有 Cortico 安装的 Mineflayer 4.37.1、`version: "1.21.1"`、离线测试名 `MawMineflayerQA` 进行了实际登录。服务端在配置协商阶段踢出，原因是 `neoforge.network.negotiation.failure.vanilla.client.not_supported`，要求安装 NeoForge 21.1.248。**因此旧 Mineflayer 不能直接连新服；旧 Paper 千灯纪的 Mineflayer 连接不受影响。** Mineflayer 的[原版版本支持](https://github.com/PrismarineJS/mineflayer)仅说明 Minecraft 协议版本，不等于能完成 NeoForge 协商；上游也有[同类 NeoForge 拒绝报告](https://github.com/PrismarineJS/mineflayer/issues/4097)。换版本号或装旧 Forge `FML|HS` 适配库，不能视为已经解决此 1.21.1 NeoForge 问题。[NeoForge 自定义负载文档](https://docs.neoforged.net/docs/1.21.1/networking/payload/)说明模组还可使用配置期和游玩期专用消息，接入后仍须按模组实现动作与状态解释。
 
-目前的可行底座是服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen)，不是伪装成 NeoForge 客户端。Agent 的模型/控制器可以继续用现有语言与规划代码，但世界观察和执行需要接到每人独立的 Numen 身体；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
+### 复用旧服的 Mineflayer 网关：已完成隔离联机
+
+旧项目 `world/src/neoforge-handshake/` 原来就有可用的“神社之门”：前端接原版 Mineflayer，后端替它完成 NeoForge CONFIG 通道协商，再把区块方块状态与物品网络 ID 映射为原版可读 ID。旧服另有 `world/survival/` 的 NumenGateway 原生身体路径；观察和具身操作是两条不同路径，不能把旧网关误当成所有模组玩法的完整客户端。
+
+本次在新实验模组组合上实际复测：协商探针 4 轮进入 PLAY，学到 459 条通道；网关缓存后 1 轮可入服。Mineflayer 4.37.1 经 `127.0.0.1:28977` 登录、生成身体、收到 90 个区块列，并读到脚下 `sand` 方块。新模组组合的专属号表从**同一套模组的独立诊断副本**导出（额外的只读 `labregistry` 只注册 `/labids dumpids` 命令，不注册方块/物品）：3,975 种方块、4,810 种物品，生成 107,852 条状态映射和 4,810 条物品映射；1,060 个原版方块的状态数全部匹配。旧服的 `idmap.json` 没有被覆盖。
+
+为隔离运行，网关新增 `GATE_LISTEN_HOST`、`GATE_CACHE_FILE`、`GATE_IDMAP_FILE`；本次仅绑定回环，知识缓存和新号表均写在 `E:\QiandengJiSocietyLab\research`。`tools/build_lab_registry_dump.py` 可从当前 NeoForge 库构建只读诊断 JAR，`build-idmap.cjs` 可通过 `MINECRAFT_DATA_DIR`、`IDMAP_DUMP_DIR`、`IDMAP_OUTPUT_FILE` 重建**实验专用**映射。启动网关须设 `GATE_VANILLA=0`，因为这套模组有必需协商通道；冒烟入口为 `world/src/neoforge-handshake/smoke-mineflayer.cjs`。模组清单或版本一变，必须重新导出/构建号表，并重测区块、背包与交互；网关前门目前是离线用户名模式，**不得直接开放局域网或公网**。
+
+本机复测命令（先启动隔离服，配置仍只在当前 shell 生效）：
+
+```powershell
+$env:NODE_PATH='E:\Cortico\node_modules\.pnpm\mineflayer@4.37.1\node_modules'
+$env:GATE_VANILLA='0'
+$env:GATE_NEOFORGE_TIME_BRIDGE='1'
+$env:GATE_LISTEN_HOST='127.0.0.1'
+$env:GATE_CACHE_FILE='E:\QiandengJiSocietyLab\research\gate-knowledge-28976.json'
+$env:GATE_IDMAP_FILE='E:\QiandengJiSocietyLab\research\lab-idmap.json'
+node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
+# 另一个终端：node world\src\neoforge-handshake\smoke-mineflayer.cjs 127.0.0.1 28977
+```
+
+此验收只证明 Mineflayer 可以通过网关入服并读取原版可表达的地形。模组方块/物品目前会近似成原版代理物，不能保证 Agent 知道其原始注册名、机器状态或配方；Create、MineColonies、Ars、女仆、地下城机关的自定义负载和 GUI 尚未完成。网关的 NeoForge 协商路径没有收到原版 `update_time` 包，但抓到了每秒一次的 `neoforge:custom_time_packet`。新增的可选 `GATE_NEOFORGE_TIME_BRIDGE=1` 将它按 NeoForge 21.1.248 的真实字段转成原版时间包；实测 6 个自定义时间包对应 6 个 Mineflayer `update_time`，另一轮冒烟收到 3 个。协议解析器对部分模组解锁配方包仍有 `PartialReadError`，不得据此宣称模组配方可用。下一步应把 Mineflayer 用作兼容的网络/移动底座，按玩家 UUID 增加**只读原生语义查询 + 受权限约束的模组动作适配器**，每种玩法按真实前后状态核验；现有 Numen 身体能执行部分原生模组动作，但与一个 Mineflayer 账号合并为同一身体仍待实现。
+
+当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
 
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
