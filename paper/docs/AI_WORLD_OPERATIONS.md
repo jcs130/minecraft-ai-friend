@@ -86,6 +86,8 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
 
+0.3.80 的 `sense` 仍使用原有 ID、魔力、冷却和熟练度；新增 8 秒私有怪物轮廓及持续墙面粒子指引。Agent 仍解析 `MC_HOSTILE` 绝对坐标并重查移动目标；已登记且正在附身的 Eye 可见同一轮廓和私有消息。探矿术也每半秒刷新给本人看的粒子指向线，延伸到第一处遮挡墙并留下光框。Geyser 基岩不支持 Java 的发光轮廓，因此靠原版 END_ROD 粒子、BossBar 和坐标找目标；粒子线只标示方向，不计算安全行走路线。
+
 0.3.55 起试炼默认按公会冒险者等级自动匹配：青铜/黑铁普通，白银/黄金冒险，白金/钻石末日。Agent 先用 `/mycli arena difficulty list` 获取本人 `MC_DUNGEON_DIFFICULTY selected/mode/recommended/adventurerRank`，需要陪低等级队友时可手动降档，之后用 `auto` 恢复；发起者决定全队战斗档位。`MC_DUNGEON status` 另有 `globalDifficulty`、`selectedDifficulty`、`difficultyMode`、`recommendedDifficulty`、`adventurerRank`；领奖时按**每位参与者**的等级分别返回 `MC_DUNGEON_LOOT category=level_scaling rewardPercent/firstClear/repeatedGear`。高等级刷低档的重复补给、保底装备和首领宝藏会减少或跳过；不能因为全服结算消息相同，就推断队友拿到了相同物品。准确数值见 [试炼难度与怪物行为](ARENA_DIFFICULTY.md)。
 
 ### 公会委托与声望

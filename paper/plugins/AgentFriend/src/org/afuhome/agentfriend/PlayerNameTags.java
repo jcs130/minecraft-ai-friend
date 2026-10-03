@@ -38,6 +38,7 @@ final class PlayerNameTags implements Listener {
     private final Set<Scoreboard> touchedBoards = new HashSet<>();
     private final Set<UUID> agentUuids = new HashSet<>();
     private Set<String> registeredAgentNames = Set.of();
+    private Map<String, String> registeredEyes = Map.of();
     private Path pairsFile;
     private String pairsError = "";
     private int refreshTicks;
@@ -85,6 +86,7 @@ final class PlayerNameTags implements Listener {
         touchedBoards.clear();
         agentUuids.clear();
         registeredAgentNames = Set.of();
+        registeredEyes = Map.of();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
@@ -118,6 +120,18 @@ final class PlayerNameTags implements Listener {
                 || registeredAgentNames.contains(player.getName().toLowerCase(Locale.ROOT)));
     }
 
+    Player attachedEye(Player agent) {
+        String eyeName = registeredEyes.get(agent.getName().toLowerCase(Locale.ROOT));
+        if (eyeName == null) return null;
+        for (Player eye : Bukkit.getOnlinePlayers()) {
+            if (!eye.getName().equalsIgnoreCase(eyeName) || eye.getGameMode() != GameMode.SPECTATOR
+                    || eye.getWorld() != agent.getWorld()) continue;
+            org.bukkit.entity.Entity target = eye.getSpectatorTarget();
+            if (target != null && target.getUniqueId().equals(agent.getUniqueId())) return eye;
+        }
+        return null;
+    }
+
     private void refreshAgentNames() {
         try {
             JsonObject root = JsonParser.parseString(Files.readString(pairsFile, StandardCharsets.UTF_8))
@@ -127,6 +141,7 @@ final class PlayerNameTags implements Listener {
             if (entries == null || entries.size() > 16) throw new IllegalArgumentException("pairs");
             Set<String> names = new HashSet<>();
             Set<String> eyes = new HashSet<>();
+            Map<String, String> pairs = new HashMap<>();
             for (JsonElement element : entries) {
                 JsonObject pair = element.getAsJsonObject();
                 String agent = pair.get("agent").getAsString();
@@ -137,12 +152,15 @@ final class PlayerNameTags implements Listener {
                         || name.equals(camera) || name.equals("goddess") || camera.equals("goddess")
                         || !names.add(name) || !eyes.add(camera))
                     throw new IllegalArgumentException("invalid pair");
+                pairs.put(name, eye);
             }
             if (names.stream().anyMatch(eyes::contains)) throw new IllegalArgumentException("Agent is an Eye");
             registeredAgentNames = Set.copyOf(names);
+            registeredEyes = Map.copyOf(pairs);
             pairsError = "";
         } catch (Exception error) {
             registeredAgentNames = Set.of();
+            registeredEyes = Map.of();
             String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
             if (!message.equals(pairsError)) plugin.getLogger().warning("Agent pairs rejected: " + message);
             pairsError = message;

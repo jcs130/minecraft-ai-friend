@@ -331,6 +331,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean isRegisteredAgent(Player player) {
         return playerNameTags != null && playerNameTags.isAgent(player);
     }
+    Player attachedEye(Player player) {
+        return playerNameTags == null ? null : playerNameTags.attachedEye(player);
+    }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
     void openDungeonDifficultyMenu(Player player) {

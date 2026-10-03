@@ -76,11 +76,11 @@ final class AgentCliCatalog {
         add(specs,"cast.starbolt","magic","cast","/mycli cast starbolt","自动锁定怪物；基础 5 伤害，4 魔力、3 秒冷却","非旁观者；射程内有目标","私有命中提示含名称、中文实体类型和 minecraft 实体 ID；粒子");
         add(specs,"cast.frostnova","magic","cast","/mycli cast frostnova","范围冰霜减速；基础 2 伤害，7 魔力、14 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
         add(specs,"cast.flamewave","magic","cast","/mycli cast flamewave","范围火焰；基础 4 伤害，8 魔力、10 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
-        add(specs,"cast.prospect","magic","cast","/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]","探查真实矿物；范围随挖矿等级增长","非旁观者；6 魔力、30 秒冷却，附近有矿才扣费","聊天 dimension/X/Y/Z 绝对矿块坐标、轮廓或无矿结果");
+        add(specs,"cast.prospect","magic","cast","/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]","探查真实矿物；范围随挖矿等级增长","非旁观者；6 魔力、30 秒冷却，附近有矿才扣费","聊天 dimension/X/Y/Z 绝对矿块坐标、持续粒子指向线、轮廓或无矿结果");
         add(specs,"cast.leap","magic","cast","/mycli cast leap","跃空并缓降；4 魔力、8 秒冷却","非旁观者；站在地面","位移与视觉提示");
         add(specs,"cast.flight","magic","cast","/mycli cast flight","生存飞行 15 秒；10 魔力、90 秒冷却","非旁观者；技能可用","飞行状态与到期提示");
         add(specs,"cast.golem","magic","cast","/mycli cast golem","召唤守护铁傀儡 45 秒；12 魔力、75 秒冷却","非旁观者；附近有安全落点","召唤结果");
-        add(specs,"cast.sense","magic","cast","/mycli cast sense","探测 24 格已加载怪物；3 魔力、15 秒冷却","非旁观者；无怪时不扣魔力","怪物方向、距离、高低差与数量");
+        add(specs,"cast.sense","magic","cast","/mycli cast sense","探敌术（心眼）；探测 24 格已加载怪物；3 魔力、15 秒冷却","非旁观者；无怪时不扣魔力","怪物方向、坐标、墙面粒子指引；Java 私有轮廓持续 8 秒");
         add(specs,"cast.feather","magic","cast","/mycli cast feather","羽落 45 秒","已学习；非旁观者；冷却检查","效果与提示");
         add(specs,"cast.night","magic","cast","/mycli cast night","夜视 120 秒","已学习；非旁观者；冷却检查","效果与提示");
         add(specs,"focus.give","magic","item","/mycli focus give","领取灵纹法杖","在线玩家；背包有空位","领取结果");

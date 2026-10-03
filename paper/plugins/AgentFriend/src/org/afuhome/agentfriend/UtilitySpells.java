@@ -1,10 +1,18 @@
 package org.afuhome.agentfriend;
 
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.ProtocolManager;
+import com.comphenix.protocol.events.PacketContainer;
+import com.comphenix.protocol.wrappers.WrappedDataValue;
+import com.comphenix.protocol.wrappers.WrappedDataWatcher;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -28,6 +36,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -37,7 +46,10 @@ import org.bukkit.util.Vector;
 final class UtilitySpells implements Listener {
     private static final String GOLEM_TAG = "afu_spell_guardian";
     private static final int SENSE_BASE_RANGE = 24;
+    private static final int MAX_SENSE_OUTLINES = 64;
+    private static final int GLOWING_FLAG = 0x40;
     private final AgentFriendPlugin plugin;
+    private final ProtocolManager protocol;
     private final Map<String, Long> cooldowns = new HashMap<>();
     private final Map<UUID, Flight> flights = new HashMap<>();
     private final Map<UUID, Guardian> guardians = new HashMap<>();
@@ -46,10 +58,11 @@ final class UtilitySpells implements Listener {
 
     private record Flight(boolean allowed, boolean flying, float speed, long expiresAt) { }
     private record Guardian(UUID entityId, long expiresAt) { }
-    private record Sense(BossBar bar, long expiresAt) { }
+    private record Sense(BossBar bar, long expiresAt, Map<UUID, Set<UUID>> outlined) { }
 
     UtilitySpells(AgentFriendPlugin plugin) {
         this.plugin = plugin;
+        this.protocol = ProtocolLibrary.getProtocolManager();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 10L, 10L);
     }
@@ -212,12 +225,16 @@ final class UtilitySpells implements Listener {
         removeSense(player.getUniqueId());
         BossBar bar = Bukkit.createBossBar("探敌术", BarColor.BLUE, BarStyle.SOLID);
         bar.addPlayer(player);
-        senses.put(player.getUniqueId(), new Sense(bar, System.currentTimeMillis() + 8_000L));
+        senses.put(player.getUniqueId(), new Sense(bar, System.currentTimeMillis() + 8_000L,
+                new HashMap<>()));
         plugin.mastery().successfulCast(player, "sense");
         plugin.publishSkill(player, "sense", "发现 " + hostiles.size() + " 只怪物",
                 ((Entity) hostiles.get(0)).getLocation());
+        String visual = plugin.floodgatePlayer(player.getUniqueId())
+                ? "粒子指向线、墙面光框和顶部方向提示"
+                : "心眼轮廓、粒子指向线和顶部方向提示";
         player.sendMessage(ChatColor.AQUA + "✦ 探敌术发现附近 " + hostiles.size()
-                + " 只怪物；顶部方向提示持续 8 秒（3 魔力；15 秒冷却）。");
+                + " 只怪物；" + visual + "持续 8 秒（3 魔力；15 秒冷却）。");
         for (int i = 0; i < Math.min(5, hostiles.size()); i++) {
             Enemy enemy = hostiles.get(i);
             player.sendMessage("MC_HOSTILE type=" + ((Entity) enemy).getType().name().toLowerCase(java.util.Locale.ROOT)
@@ -236,6 +253,7 @@ final class UtilitySpells implements Listener {
     }
 
     private void updateSense(Player player, Sense sense, List<Enemy> hostiles) {
+        syncSenseOutlines(player, sense, hostiles);
         if (hostiles.isEmpty()) {
             sense.bar().setTitle("§b✦ 探敌：周围暂时没有怪物");
             return;
@@ -259,6 +277,49 @@ final class UtilitySpells implements Listener {
             Location hint = player.getEyeLocation().add(toward.normalize().multiply(1.5));
             player.spawnParticle(Particle.END_ROD, hint, 4, 0.12, 0.12, 0.12, 0.01);
         }
+        WallTraceParticles.guide(player, target.clone().add(0, ((LivingEntity) nearest).getHeight() * 0.6, 0), false);
+    }
+
+    /** Metadata is sent only to the caster and their currently attached registered Eye. */
+    private void syncSenseOutlines(Player caster, Sense sense, List<Enemy> hostiles) {
+        Map<UUID, Player> viewers = new HashMap<>();
+        viewers.put(caster.getUniqueId(), caster);
+        Player eye = plugin.attachedEye(caster);
+        if (eye != null) viewers.put(eye.getUniqueId(), eye);
+        Set<UUID> targets = new HashSet<>();
+        for (int i = 0; i < Math.min(MAX_SENSE_OUTLINES, hostiles.size()); i++)
+            targets.add(((Entity) hostiles.get(i)).getUniqueId());
+        for (UUID viewerId : new ArrayList<>(sense.outlined().keySet())) {
+            Set<UUID> previous = sense.outlined().get(viewerId);
+            Player viewer = Bukkit.getPlayer(viewerId);
+            for (UUID entityId : new HashSet<>(previous)) {
+                if (viewers.containsKey(viewerId) && targets.contains(entityId)) continue;
+                if (viewer != null) sendSenseOutline(viewer, Bukkit.getEntity(entityId), false);
+                previous.remove(entityId);
+            }
+            if (!viewers.containsKey(viewerId)) sense.outlined().remove(viewerId);
+        }
+        for (Player viewer : viewers.values()) {
+            Set<UUID> marked = sense.outlined().computeIfAbsent(viewer.getUniqueId(), ignored -> new HashSet<>());
+            for (UUID entityId : targets) {
+                Entity entity = Bukkit.getEntity(entityId);
+                if (sendSenseOutline(viewer, entity, true)) marked.add(entityId);
+            }
+        }
+    }
+
+    private boolean sendSenseOutline(Player viewer, Entity entity, boolean glowing) {
+        if (entity == null || !entity.isValid() || !viewer.isOnline()
+                || viewer.getWorld() != entity.getWorld()) return false;
+        Byte flags = WrappedDataWatcher.getEntityWatcher(entity).getByte(0);
+        if (flags == null) return false;
+        byte visibleFlags = (byte) (glowing ? flags | GLOWING_FLAG : flags);
+        PacketContainer packet = protocol.createPacket(PacketType.Play.Server.ENTITY_METADATA);
+        packet.getIntegers().write(0, entity.getEntityId());
+        packet.getDataValueCollectionModifier().write(0, List.of(new WrappedDataValue(0,
+                WrappedDataWatcher.Registry.get(Byte.class), visibleFlags)));
+        protocol.sendServerPacket(viewer, packet, false);
+        return true;
     }
 
     private void tick() {
@@ -329,7 +390,14 @@ final class UtilitySpells implements Listener {
 
     private void removeSense(UUID id) {
         Sense sense = senses.remove(id);
-        if (sense != null) sense.bar().removeAll();
+        if (sense == null) return;
+        for (Map.Entry<UUID, Set<UUID>> entry : sense.outlined().entrySet()) {
+            Player viewer = Bukkit.getPlayer(entry.getKey());
+            if (viewer == null) continue;
+            for (UUID entityId : entry.getValue())
+                sendSenseOutline(viewer, Bukkit.getEntity(entityId), false);
+        }
+        sense.bar().removeAll();
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
@@ -349,6 +417,11 @@ final class UtilitySpells implements Listener {
     @EventHandler public void onGameModeChange(PlayerGameModeChangeEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         if (flights.containsKey(id)) Bukkit.getScheduler().runTask(plugin, () -> endFlight(id, true));
+        if (event.getNewGameMode() == GameMode.SPECTATOR) removeSense(id);
+    }
+
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
+        removeSense(event.getPlayer().getUniqueId());
     }
 
     @EventHandler public void onGuardianDamage(EntityDamageByEntityEvent event) {

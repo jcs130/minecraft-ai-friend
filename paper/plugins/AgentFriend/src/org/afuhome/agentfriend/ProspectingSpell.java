@@ -6,20 +6,16 @@ import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
-import org.bukkit.block.BlockFace;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.Vector;
-import org.bukkit.util.RayTraceResult;
 
 /** Server-authoritative prospecting; only the caster sees the temporary outline. */
 final class ProspectingSpell {
@@ -153,7 +149,8 @@ final class ProspectingSpell {
                 + " ore=" + oreMaterial.getKey() + "（方块坐标）。");
         player.sendMessage(ChatColor.GRAY + "范围 " + range + " 格，挖矿等级 " + miningLevel
                 + (imprintedTool ? "，刻印工具 +8" : "")
-                + "；描边/光框持续 " + (durationTicks / 20) + " 秒；消耗 6 魔力，冷却 30 秒。");
+                + "；轮廓/墙面光框和粒子指向线持续 " + (durationTicks / 20)
+                + " 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
 
@@ -190,36 +187,7 @@ final class ProspectingSpell {
 
     private void update(Player player, Trace trace, long now) {
         trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) trace.durationMs())));
-        projectOutline(player, trace.ore());
-    }
-
-    /** A small screen-facing frame on the first wall; Bedrock has no glowing-entity outline. */
-    private void projectOutline(Player player, Location ore) {
-        Location eye = player.getEyeLocation();
-        Vector ray = ore.toVector().subtract(eye.toVector());
-        double length = ray.length();
-        if (length < 0.01) return;
-        RayTraceResult hit = player.getWorld().rayTraceBlocks(eye, ray.normalize(), length + 1.0,
-                FluidCollisionMode.NEVER, true);
-        if (hit == null || hit.getHitBlockFace() == null) return;
-        BlockFace face = hit.getHitBlockFace();
-        Vector normal = face.getDirection();
-        Vector center = hit.getHitPosition().add(normal.clone().multiply(0.08));
-        Vector right = switch (face) {
-            case UP, DOWN, NORTH, SOUTH -> new Vector(1, 0, 0);
-            default -> new Vector(0, 0, 1);
-        };
-        Vector up = switch (face) {
-            case UP, DOWN -> new Vector(0, 0, 1);
-            default -> new Vector(0, 1, 0);
-        };
-        double[][] points = {{-1,-1},{0,-1},{1,-1},{1,0},{1,1},{0,1},{-1,1},{-1,0}};
-        for (double[] point : points) {
-            Vector spot = center.clone().add(right.clone().multiply(point[0] * 0.23))
-                    .add(up.clone().multiply(point[1] * 0.23));
-            player.spawnParticle(Particle.END_ROD, spot.getX(), spot.getY(), spot.getZ(),
-                    1, 0, 0, 0, 0);
-        }
+        WallTraceParticles.guide(player, trace.ore(), true);
     }
 
     private void remove(UUID id) {
