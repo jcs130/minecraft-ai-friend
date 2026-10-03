@@ -25,6 +25,7 @@ PONDER_JAR = "ponder-neoforge-1.0.82+mc1.21.1.jar"
 MINECOLONIES_JAR = "minecolonies-1.1.1319-1.21.1.jar"
 STRUCTURIZE_JAR = "structurize-1.0.832-1.21.1.jar"
 DOMUM_JAR = "domum-ornamentum-1.0.231-main.jar"
+BLOCKUI_JAR = "blockui-1.0.209-1.21.1.jar"
 NAME = "maw_agent_bridge-0.1.0.jar"
 
 
@@ -58,6 +59,7 @@ def main() -> None:
     minecolonies = mods / MINECOLONIES_JAR
     structurize = mods / STRUCTURIZE_JAR
     domum = mods / DOMUM_JAR
+    blockui = mods / BLOCKUI_JAR
     if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
         raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
@@ -70,13 +72,15 @@ def main() -> None:
         raise ValueError("Pinned MineColonies JAR is required for native colony state")
     if not structurize.is_file() or not domum.is_file():
         raise ValueError("Pinned MineColonies structure dependencies are required")
+    if not blockui.is_file():
+        raise ValueError("Pinned BlockUI JAR is required for MineColonies configuration")
     spec = importlib.util.spec_from_file_location("botgate_build", REPO / "world" / "botgate-src" / "build.py")
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
     classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
                                  str(NUMEN_JAR), str(ars), str(create), str(ponder),
-                                 str(minecolonies), str(structurize), str(domum)))
+                                 str(minecolonies), str(structurize), str(domum), str(blockui)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
     if not sources or not resource.is_file():
@@ -114,6 +118,7 @@ def main() -> None:
               "minecoloniesSha256": sha256(minecolonies),
               "structurizeSha256": sha256(structurize),
               "domumSha256": sha256(domum),
+              "blockuiSha256": sha256(blockui),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

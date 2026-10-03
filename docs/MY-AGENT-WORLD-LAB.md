@@ -96,17 +96,25 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 
 ### MineColonies 的 Agent 工单与交货：隔离服已跑通
 
-官方流程里，市政厅和建筑工小屋要用 [Build Tool](https://minecolonies.com/wiki/buildings/townhall/) 放置；建筑工会依 [建造单及所需资源](https://minecolonies.com/wiki/buildings/builder/) 工作，物资请求通常由小屋、仓库和快递员处理。Mineflayer 不能直接操作这套 BlockUI。因此新增服务器原生 `maw_agent:colony_query` → `maw_agent:colony_state`，以及带前置条件的 `maw_agent:colony_action`。三者都是可选的 NeoForge PLAY 通道，JSON 为原始 UTF-8，只通过当前玩家连接单播，不进入聊天。`colony-client.cjs` 提供 `attachColonyClient(bot).status()` 与 `.deliver(...)`。网关启动时必须把这三个通道加入 `GATE_EXTRA_PLAY_CHANNELS`。
+随后补上受限的原生建造动作：同一个 `maw_agent:colony_action` 通道可处理 `found`、`place_builder`、`request_build`。`colony-client.cjs` 对应提供 `.found(...)`、`.placeBuilder(...)`、`.requestBuild(...)`。前两项要求玩家本人背包有市政厅或建筑工小屋物品、完整 SNBT 与槽位相符、目标在本人 8 格内且位置可放置；建城遵守 MineColonies 的已有殖民地间距及世界出生点距离配置，建筑工小屋还需原生 `PLACE_HUTS` 权限和可放置判定。申请施工需原生 `MANAGE_HUTS` 权限及同一殖民地的建筑工小屋。所有回执只发给本人；这些动作仅覆盖初期两种建筑，不允许任意方块或蓝图路径注入。
+
+另一个隔离账号 `MawColonyFoundQB` 从本人菜单状态取得两件小屋物品的原生 SNBT，经 Mineflayer 连接在 (600,64,600) 建立 ID 3 的 `Agent Village 600`，在 (603,64,600) 放建筑工小屋，两件物品各扣 1，`request_build` 产生 `type=build` 的原生施工单。原版 Build Tool 的 BlockUI 没有被 Mineflayer 模拟；桥接调用的是对应服务端原生建城、建筑登记和施工 API。停服存档并重启后，本人查询仍返回殖民地、两座建筑和施工单。此时没有居民，施工未完；重启后状态返回 `inactive`，与诊断副本中此前已有居民的殖民地相同，不能据此声称已经实现自动建完。测试服夹具 JAR 未复制到主实验服。
+
+官方流程里，市政厅和建筑工小屋要用 [Build Tool](https://minecolonies.com/wiki/buildings/townhall/) 放置；建筑工会依 [建造单及所需资源](https://minecolonies.com/wiki/buildings/builder/) 工作，物资请求通常由小屋、仓库和快递员处理。Mineflayer 不能直接操作这套 BlockUI。因此新增服务器原生 `maw_agent:colony_query` → `maw_agent:colony_state`，以及带前置条件的 `maw_agent:colony_action`。三者都是可选的 NeoForge PLAY 通道，JSON 为原始 UTF-8，只通过当前玩家连接单播，不进入聊天。`colony-client.cjs` 提供 `attachColonyClient(bot)` 的状态、交货与受限建造动作。网关启动时必须把这三个通道加入 `GATE_EXTRA_PLAY_CHANNELS`。
 
 `status` 不接受任意坐标，只读本人当前所在、128 格内或本人拥有的殖民地，返回殖民地 ID、中心绝对坐标、状态、居民姓名与工作建筑、建筑等级与小屋库存摘要、真实开放请求 token/类型/数量/候选物品、建造单及是否被认领。每次最多 24 行，单包最多 16 KiB；超限明确失败。库存摘要按物品注册 ID 合并，不能代替完整组件检查。请求的 `displayItems[].count` 是展示图标的堆叠数量；实际所需数量看 `requestedCount`。普通访客看不到库存摘要。
 
 `deliver` 要指定 `buildingPosition`、请求 `token`、本人背包槽 0–35、数量及该槽原生 `expectedSnbt`。服务器从连接取得玩家 UUID，只接受 8 格内、本人有成员权限、该建筑仍持有的开放 `IDeliverable` 请求；核对实际背包物品完整组件、数量和请求类型后，沿 MineColonies 原生小屋库存路径存入实际物品，再扣本人背包并尝试原生请求结算。回执带 `accepted`、背包剩余、`requestStillOpen`；物资即使已存入小屋，也可能还需居民领取。客户端看到超时、断线或 `delivery_outcome_unknown_check_inventory` 时，应重查库存和请求，不能盲目重发。在线同一连接最近 32 个 `requestId` 缓存回执以防重复执行；跨断线持久幂等账本仍未做。
 
-实际验收在可丢弃的 `E:\QiandengJiSocietyLab\research\registry-server`（`127.0.0.1:28978`，网关 `28980`）：用**仅存在该诊断副本**的 `maw_colony_lab` 4 级测试夹具建立 ID 1 殖民地（中心 5,64,4）、市政厅与建筑工小屋。这个夹具经 `tools/build_lab_colony_setup.py` 构建，**未安装到主实验服**；它绕过 Build Tool，仅用于构造真实 MineColonies 状态，不能证明 Agent 已会建城。先以模组 API 建立一条诊断用的 16 块橡木板请求：Mineflayer 读到 token 和建筑坐标，故意提交错误 SNBT 得 `inventory_components_changed`、`accepted=0`、背包仍 16；正确交货后 `accepted=16`、背包归零、请求消失。服务端 `data get block 8 64 4` 显示小屋 `inventory` 中有 16 块木板；重启后 `status.buildings[].stock` 仍返回 16。
+完整 `expectedSnbt` 可从同一玩家的 `maw_agent:menu_state` 获取：原版背包菜单槽 36–44 对应快捷栏库存槽 0–8，菜单槽 9–35 对应库存槽 9–35；其他模组菜单应按真实槽位映射核对。客户端支持带原 `requestId` 复查同一连接内的缓存回执；断线后幂等缓存不在，必须先重查世界与库存。
 
-进一步从已修复蓝图路径的小屋发起真正的建造单：建筑工 Jimmy 认领，`workOrders` 报 `type=build, claimed=true`，本人状态从休息转为工作。他先后亲自提出 `Tool` 型“锄头”和“斧头”需求；同一 Mineflayer 账号分别交付木锄、木斧后，两条真实请求都从列表消失，背包各减 1。木斧交货时重复发送**相同** `requestId`，两次收到完全相同的缓存回执，背包没有再次扣物。至此证明“居民/建筑需求 → Agent 查询 → 本人交货 → 请求结算”的首条完整链成立；尚未完成整座建筑、仓库快递员流转，也尚未把建城的 Build Tool 界面适配给 Agent。
+实际验收在可丢弃的 `E:\QiandengJiSocietyLab\research\registry-server`（`127.0.0.1:28978`，网关 `28980`）：用**仅存在该诊断副本**的 `maw_colony_lab` 4 级测试夹具建立 ID 1 殖民地（中心 5,64,4）、市政厅与建筑工小屋。这个夹具经 `tools/build_lab_colony_setup.py` 构建，**未安装到主实验服**；它绕过 Build Tool，仅用于构造真实 MineColonies 状态，这条诊断测试本身不证明 Agent 已会建城。先以模组 API 建立一条诊断用的 16 块橡木板请求：Mineflayer 读到 token 和建筑坐标，故意提交错误 SNBT 得 `inventory_components_changed`、`accepted=0`、背包仍 16；正确交货后 `accepted=16`、背包归零、请求消失。服务端 `data get block 8 64 4` 显示小屋 `inventory` 中有 16 块木板；重启后 `status.buildings[].stock` 仍返回 16。
+
+进一步从已修复蓝图路径的小屋发起真正的建造单：建筑工 Jimmy 认领，`workOrders` 报 `type=build, claimed=true`，本人状态从休息转为工作。他先后亲自提出 `Tool` 型“锄头”和“斧头”需求；同一 Mineflayer 账号分别交付木锄、木斧后，两条真实请求都从列表消失，背包各减 1。木斧交货时重复发送**相同** `requestId`，两次收到完全相同的缓存回执，背包没有再次扣物。至此证明“居民/建筑需求 → Agent 查询 → 本人交货 → 请求结算”的首条完整链成立；尚未完成整座建筑、仓库快递员流转，而原版 Build Tool 界面仍未适配；受限的建城接口见上文。
 
 主实验服 `E:\QiandengJiSocietyLab\server` 已更新桥接 JAR 与版本锁，保持停机、无新增对外端口。更新前 JAR 备份在 `E:\QiandengJiSocietyLab\snapshots\before-colony-bridge-20261003`。正式千灯纪 Paper 服未触动。
+
+受限建城版桥接 JAR 已部署到停机中的 `E:\QiandengJiSocietyLab\server`，SHA-256 为 `40347fff1450e21f6da61ecac74efe7e13e6d21e1d3888e9625a7bd08847a58c`；前版备份在 `E:\QiandengJiSocietyLab\snapshots\before-colony-build-20261003`。版本锁 `verify` 和整服 `smoke` 均通过，日志为 `E:\QiandengJiSocietyLab\smoke-1791032544.log`，服务端正常存档退出。建城操作只在隔离副本实际执行；正式千灯纪和对外端口未改动。
 
 当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
 
@@ -116,7 +124,7 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 | Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
 | Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6 | 更多配方、食材生产与长期补货 |
 | Create | Mineflayer 放置传动轴与曲柄、右键驱动，原生读取两者转速 0→32 | 压力网络、加工机器、物流与产物闭环 |
-| MineColonies | 同一 Mineflayer 玩家读取原生殖民地、居民、建造单与工单；向小屋交付木板、木锄、木斧，真实请求消失，库存重启后保留 | Agent 自行用 Build Tool 建城、施工完成、仓库快递员与多人长期运营 |
+| MineColonies | 同一 Mineflayer 玩家建立市政厅和建筑工小屋、发起施工单、读取原生殖民地和居民工单；交付木板与工具后请求消失，建筑和库存重启后保留 | 完整 Build Tool 建造界面与其他建筑类型、施工完成、仓库快递员与多人长期运营 |
 | Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
 | 地下城 | 三类结构定位得到绝对坐标 | 进入房间、识别机关与 Boss、通关及战利品核验 |
 
@@ -130,6 +138,6 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 
 旧千灯纪的 `/mycli commands|list|explain|cast`、女神技艺、冷却、技能升级和机器 JSON 回执仍在正式服代码与线上服务中，此实验分支没有改动它们；**它们还没有完整移植到 NeoForge 新服**。当前 `maw_agent spell` 是真实 Ars 施法的第一段适配，不是旧 `/mycli` 的全部替代。将来切换服务端前须逐项复现旧技能 ID、查询说明、施法权限/消耗/冷却、Agent 专用结构化回执、手柄及基岩入口，并以实际施法和客户端画面验收。达不到这些门槛就继续保留 Paper 正式服。
 
-MineColonies 的首条真实居民需求闭环已在 Mineflayer 身体上实测，Agent 仍需学会从采集/合成获得交货物品和通过原生 Build Tool 自己建立殖民地。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；Ars 自愈在 Numen 身体上实测，农夫乐事烹饪产出与食用、Create 曲柄带轴旋转在 Mineflayer 身体上实测。女仆工作仍需实操验收。
+MineColonies 的首条真实居民需求闭环已在 Mineflayer 身体上实测，Agent 仍需学会从采集/合成获得交货物品；受限接口已能让本人建立初期两座建筑，尚未覆盖完整 Build Tool。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；Ars 自愈在 Numen 身体上实测，农夫乐事烹饪产出与食用、Create 曲柄带轴旋转在 Mineflayer 身体上实测。女仆工作仍需实操验收。
 
 基岩版在此实验服**尚未接入**。后续可用 ViaProxy/Geyser 与逐项注册表翻译，让基岩玩家体验原版可表达的方块、物品和互动；MineColonies、女仆、Create、Ars 的专用 GUI、机器状态、粒子和容器协议不能仅靠改物品名视为已经兼容。Java 真人客户端也需要对应 NeoForge 模组包，且 Create 还需客户端 Flywheel。两端都要在隔离服实际联机验证，再考虑开放入口。当前千灯纪 Paper 的 Java、基岩和 Mineflayer 入口继续运行，不因为此实验改变。

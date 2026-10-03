@@ -59,3 +59,39 @@ test('a lost connection rejects pending delivery instead of retrying it', async 
   await assert.rejects(pending, /COLONY_CONNECTION_CLOSED/)
   colony.detach()
 })
+
+test('founding and construction use explicit positions and caller-held hut items', async () => {
+  const { bot, writes, colony } = harness()
+  const position = { x: 300, y: 64, z: 300 }
+  const founded = colony.found({ position, name: 'Agent Village', inventorySlot: 4,
+    expectedSnbt: '{count:1,id:"minecolonies:blockhuttownhall"}', requestId: 'found-once' })
+  assert.throws(() => colony.found({ position, name: 'Agent Village', inventorySlot: 4,
+    expectedSnbt: '{count:1,id:"minecolonies:blockhuttownhall"}', requestId: 'found-once' }),
+  /COLONY_REQUEST_ALREADY_PENDING/)
+  const first = JSON.parse(writes[0].packet.data.toString('utf8'))
+  assert.equal(first.kind, 'found')
+  assert.equal(first.requestId, 'found-once')
+  assert.deepEqual(first.position, position)
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
+    data: Buffer.from(JSON.stringify(receipt(first.requestId))) })
+  assert.equal((await founded).ok, true)
+
+  const builder = colony.placeBuilder({ position: { x: 303, y: 64, z: 300 },
+    inventorySlot: 5, expectedSnbt: '{count:1,id:"minecolonies:blockhutbuilder"}' })
+  const second = JSON.parse(writes[1].packet.data.toString('utf8'))
+  assert.equal(second.kind, 'place_builder')
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
+    data: Buffer.from(JSON.stringify(receipt(second.requestId))) })
+  await builder
+
+  const build = colony.requestBuild({ buildingPosition: position,
+    builderPosition: { x: 303, y: 64, z: 300 } })
+  const third = JSON.parse(writes[2].packet.data.toString('utf8'))
+  assert.equal(third.kind, 'request_build')
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
+    data: Buffer.from(JSON.stringify(receipt(third.requestId))) })
+  await build
+  assert.throws(() => colony.found({ position, name: '', inventorySlot: 4, expectedSnbt: 'item' }),
+    /INVALID_COLONY_FOUNDING/)
+  colony.detach()
+})

@@ -13,8 +13,16 @@ import com.minecolonies.api.colony.requestsystem.manager.IRequestManager;
 import com.minecolonies.api.colony.requestsystem.requestable.IDeliverable;
 import com.minecolonies.api.colony.requestsystem.token.IToken;
 import com.minecolonies.api.colony.workorders.IServerWorkOrder;
+import com.minecolonies.api.IMinecoloniesAPI;
+import com.minecolonies.api.eventbus.events.colony.ColonyCreatedModEvent;
+import com.minecolonies.api.blocks.ModBlocks;
 import com.minecolonies.api.util.InventoryUtils;
+import com.minecolonies.core.MineColonies;
+import com.minecolonies.api.configuration.ServerConfiguration;
+import com.minecolonies.core.tileentities.TileEntityColonyBuilding;
+import com.ldtteam.structurize.storage.StructurePacks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -22,11 +30,17 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -42,6 +56,7 @@ import java.util.UUID;
 
 /** Read-only MineColonies facts for the colony this player is visiting or owns. */
 final class PlayerColonyBridge {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlayerColonyBridge.class);
     private static final int MAX_BYTES = 16384;
     private static final int MAX_ROWS = 24;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
@@ -342,7 +357,12 @@ final class PlayerColonyBridge {
                 }
                 return;
             }
-            if (input.get("schemaVersion").getAsInt() != 1 || !input.get("kind").getAsString().equals("deliver")) {
+            String kind = input.get("kind").getAsString();
+            if (kind.equals("found") || kind.equals("place_builder") || kind.equals("request_build")) {
+                handleConstruction(player, input, requestId, kind);
+                return;
+            }
+            if (input.get("schemaVersion").getAsInt() != 1 || !kind.equals("deliver")) {
                 actionReject(player, requestId, "unsupported_action"); return;
             }
             JsonObject target = input.getAsJsonObject("buildingPosition");
@@ -425,6 +445,9 @@ final class PlayerColonyBridge {
             result.addProperty("resolutionError", resolutionError);
             actionReply(player, result);
         } catch (RuntimeException error) {
+            if (transferStarted) {
+                LOGGER.error("Colony delivery outcome unknown for player {} request {}", player.getUUID(), requestId, error);
+            }
             if (!transferStarted) actionReject(player, requestId, "colony_delivery_failed");
             else {
                 JsonObject result = base(requestId);
@@ -434,6 +457,154 @@ final class PlayerColonyBridge {
                 result.add("accepted", null);
                 actionReply(player, result);
             }
+        }
+    }
+
+    private static void constructionReject(ServerPlayer player, String requestId, String kind, String code) {
+        JsonObject result = base(requestId);
+        result.addProperty("action", kind);
+        result.addProperty("ok", false);
+        result.addProperty("code", code);
+        actionReply(player, result);
+    }
+
+    /**
+     * A narrow server-authoritative substitute for the Build Tool's BlockUI flow.
+     * It only handles the initial town hall, the first builder hut, and a build request.
+     */
+    private static void handleConstruction(ServerPlayer player, JsonObject input, String requestId, String kind) {
+        boolean mutationStarted = false;
+        try {
+            if (input.get("schemaVersion").getAsInt() != 1) {
+                constructionReject(player, requestId, kind, "unsupported_action"); return;
+            }
+            ServerLevel level = player.serverLevel();
+            JsonObject point = input.getAsJsonObject(kind.equals("request_build") ? "buildingPosition" : "position");
+            BlockPos pos = new BlockPos(point.get("x").getAsInt(), point.get("y").getAsInt(), point.get("z").getAsInt());
+            if (!level.isLoaded(pos) || player.distanceToSqr(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) > 64) {
+                constructionReject(player, requestId, kind, "position_not_reachable"); return;
+            }
+            IColonyManager manager = IColonyManager.getInstance();
+            if (kind.equals("request_build")) {
+                IBuilding building = manager.getBuilding(level, pos);
+                if (building == null) { constructionReject(player, requestId, kind, "building_missing"); return; }
+                IColony colony = building.getColony();
+                if (!colony.getPermissions().hasPermission(player,
+                        com.minecolonies.api.colony.permissions.Action.MANAGE_HUTS)) {
+                    constructionReject(player, requestId, kind, "manage_huts_denied"); return;
+                }
+                if (building.isPendingConstruction()) {
+                    constructionReject(player, requestId, kind, "construction_already_pending"); return;
+                }
+                JsonObject builderPoint = input.getAsJsonObject("builderPosition");
+                BlockPos builderPos = new BlockPos(builderPoint.get("x").getAsInt(),
+                        builderPoint.get("y").getAsInt(), builderPoint.get("z").getAsInt());
+                IBuilding builder = manager.getBuilding(level, builderPos);
+                if (builder == null || builder.getColony().getID() != colony.getID()
+                        || !builder.getBuildingType().getRegistryName().getPath().equals("builder")) {
+                    constructionReject(player, requestId, kind, "builder_missing_or_wrong_colony"); return;
+                }
+                mutationStarted = true;
+                building.requestUpgrade(player, builderPos);
+                JsonObject result = base(requestId);
+                result.addProperty("action", kind);
+                result.addProperty("ok", true);
+                result.addProperty("code", "build_requested");
+                result.add("buildingPosition", pos(pos));
+                result.add("builderPosition", pos(builderPos));
+                result.addProperty("colonyId", colony.getID());
+                actionReply(player, result);
+                return;
+            }
+
+            if (!level.getWorldBorder().isWithinBounds(pos) || pos.getY() <= level.getMinBuildHeight()
+                    || pos.getY() >= level.getMaxBuildHeight() - 1
+                    || !level.getBlockState(pos).canBeReplaced()
+                    || !level.getEntitiesOfClass(LivingEntity.class, new AABB(pos)).isEmpty()
+                    || !level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)) {
+                constructionReject(player, requestId, kind, "invalid_build_position"); return;
+            }
+            boolean founding = kind.equals("found");
+            Block hut = founding ? ModBlocks.blockHutTownHall : ModBlocks.blockHutBuilder;
+            String blueprint = founding ? "fundamentals/townhall1.blueprint" : "fundamentals/builder1.blueprint";
+            IColony colony;
+            if (founding) {
+                if (manager.getIColonyByOwner(level, player) != null || !manager.isFarEnoughFromColonies(level, pos)) {
+                    constructionReject(player, requestId, kind, "colony_already_owned_or_too_close"); return;
+                }
+                ServerConfiguration config = (ServerConfiguration) MineColonies.getConfig().getServer();
+                BlockPos spawn = level.getSharedSpawnPos();
+                double distance = Math.hypot(pos.getX() - spawn.getX(), pos.getZ() - spawn.getZ());
+                if (distance < config.minDistanceFromWorldSpawn.get()
+                        || distance > config.maxDistanceFromWorldSpawn.get()) {
+                    constructionReject(player, requestId, kind, "colony_spawn_distance_denied"); return;
+                }
+                String name = input.get("name").getAsString().strip();
+                if (!name.matches("[\\p{L}\\p{N} _-]{1,48}")) {
+                    constructionReject(player, requestId, kind, "invalid_colony_name"); return;
+                }
+            } else {
+                colony = manager.getColonyByPosFromWorld(level, pos);
+                if (colony == null || !colony.getPermissions().hasPermission(player,
+                        com.minecolonies.api.colony.permissions.Action.PLACE_HUTS)
+                        || !colony.getServerBuildingManager().canPlaceAt(hut, pos, player)) {
+                    constructionReject(player, requestId, kind, "place_hut_denied"); return;
+                }
+            }
+            int slot = input.get("inventorySlot").getAsInt();
+            if (slot < 0 || slot >= 36) { constructionReject(player, requestId, kind, "invalid_inventory_slot"); return; }
+            ItemStack held = player.getInventory().getItem(slot);
+            if (held.isEmpty() || !held.is(hut.asItem())
+                    || !held.saveOptional(player.registryAccess()).toString().equals(input.get("expectedSnbt").getAsString())) {
+                constructionReject(player, requestId, kind, "hut_item_missing_or_changed"); return;
+            }
+            var pack = StructurePacks.getStructurePack("Minecolonies Original");
+            if (pack == null) { constructionReject(player, requestId, kind, "structure_pack_unavailable"); return; }
+
+            mutationStarted = true;
+            if (!level.setBlockAndUpdate(pos, hut.defaultBlockState())
+                    || !(level.getBlockEntity(pos) instanceof TileEntityColonyBuilding tile)) {
+                throw new IllegalStateException("hut placement did not create tile");
+            }
+            tile.setStructurePack(pack);
+            tile.setBlueprintPath(blueprint);
+            if (founding) {
+                colony = manager.createColony(level, pos, player, input.get("name").getAsString().strip(),
+                        "Minecolonies Original");
+                if (colony == null) throw new IllegalStateException("native colony creation failed");
+            } else {
+                colony = manager.getColonyByPosFromWorld(level, pos);
+            }
+            hut.setPlacedBy(level, pos, level.getBlockState(pos), player, held.copyWithCount(1));
+            IBuilding building = manager.getBuilding(level, pos);
+            if (building == null) throw new IllegalStateException("native hut registration failed");
+            building.setStructurePack("Minecolonies Original");
+            building.setBlueprintPath(blueprint);
+            building.calculateCorners();
+            ItemStack removed = player.getInventory().removeItem(slot, 1);
+            if (removed.getCount() != 1) throw new IllegalStateException("hut item changed on server thread");
+            player.getInventory().setChanged();
+            player.containerMenu.broadcastChanges();
+            if (founding) {
+                IMinecoloniesAPI.getInstance().getEventBus().post(new ColonyCreatedModEvent(colony));
+            }
+
+            JsonObject result = base(requestId);
+            result.addProperty("action", kind);
+            result.addProperty("ok", true);
+            result.addProperty("code", founding ? "colony_founded" : "builder_placed");
+            result.addProperty("colonyId", colony.getID());
+            result.add("position", pos(pos));
+            result.addProperty("itemId", BuiltInRegistries.ITEM.getKey(removed.getItem()).toString());
+            result.addProperty("inventoryRemaining", player.getInventory().getItem(slot).getCount());
+            actionReply(player, result);
+        } catch (RuntimeException error) {
+            if (mutationStarted) {
+                LOGGER.error("Colony construction outcome unknown for player {} request {} action {}",
+                        player.getUUID(), requestId, kind, error);
+            }
+            constructionReject(player, requestId, kind,
+                    mutationStarted ? "construction_outcome_unknown_check_world" : "construction_failed");
         }
     }
 }

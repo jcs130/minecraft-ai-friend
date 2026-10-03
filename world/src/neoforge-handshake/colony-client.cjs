@@ -40,17 +40,21 @@ function attachColonyClient (bot) {
   bot.on('end', onEnd)
 
   function ask (channel, body) {
-    const requestId = randomUUID()
+    const requestId = body.requestId || randomUUID()
+    if (typeof requestId !== 'string' || !/^[A-Za-z0-9:_-]{1,64}$/.test(requestId)) {
+      throw new Error('INVALID_COLONY_REQUEST_ID')
+    }
+    if (pending.has(requestId)) throw new Error('COLONY_REQUEST_ALREADY_PENDING')
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId)
-        reject(new Error(`COLONY_QUERY_TIMEOUT ${requestId}`))
+        reject(new Error(`COLONY_RECEIPT_TIMEOUT ${requestId}: inspect state before retrying`))
       }, 4000)
       pending.set(requestId, { resolve, reject, timer })
       try {
         bot._client.write('custom_payload', {
           channel,
-          data: Buffer.from(JSON.stringify({ schemaVersion: 1, requestId, ...body }), 'utf8')
+          data: Buffer.from(JSON.stringify({ schemaVersion: 1, ...body, requestId }), 'utf8')
         })
       } catch (error) {
         clearTimeout(timer)
@@ -62,7 +66,7 @@ function attachColonyClient (bot) {
 
   function status () { return ask('maw_agent:colony_query', { kind: 'status' }) }
 
-  function deliver ({ buildingPosition, token, inventorySlot, quantity, expectedSnbt }) {
+  function deliver ({ buildingPosition, token, inventorySlot, quantity, expectedSnbt, requestId }) {
     if (!buildingPosition || !['x', 'y', 'z'].every(key => Number.isInteger(buildingPosition[key])) ||
         typeof token !== 'string' || token.length < 1 ||
         !Number.isInteger(inventorySlot) || inventorySlot < 0 || inventorySlot >= 36 ||
@@ -71,7 +75,42 @@ function attachColonyClient (bot) {
       throw new Error('INVALID_COLONY_DELIVERY')
     }
     return ask('maw_agent:colony_action', {
-      kind: 'deliver', buildingPosition, token, inventorySlot, quantity, expectedSnbt
+      kind: 'deliver', buildingPosition, token, inventorySlot, quantity, expectedSnbt, requestId
+    })
+  }
+
+  function validPosition (position) {
+    return position && ['x', 'y', 'z'].every(key => Number.isInteger(position[key]))
+  }
+
+  function validInventoryItem (inventorySlot, expectedSnbt) {
+    return Number.isInteger(inventorySlot) && inventorySlot >= 0 && inventorySlot < 36 &&
+      typeof expectedSnbt === 'string' && expectedSnbt.length > 0
+  }
+
+  function found ({ position, name, inventorySlot, expectedSnbt, requestId }) {
+    if (!validPosition(position) || typeof name !== 'string' || !name.trim() ||
+        !validInventoryItem(inventorySlot, expectedSnbt)) throw new Error('INVALID_COLONY_FOUNDING')
+    return ask('maw_agent:colony_action', {
+      kind: 'found', position, name, inventorySlot, expectedSnbt, requestId
+    })
+  }
+
+  function placeBuilder ({ position, inventorySlot, expectedSnbt, requestId }) {
+    if (!validPosition(position) || !validInventoryItem(inventorySlot, expectedSnbt)) {
+      throw new Error('INVALID_COLONY_BUILDER')
+    }
+    return ask('maw_agent:colony_action', {
+      kind: 'place_builder', position, inventorySlot, expectedSnbt, requestId
+    })
+  }
+
+  function requestBuild ({ buildingPosition, builderPosition, requestId }) {
+    if (!validPosition(buildingPosition) || !validPosition(builderPosition)) {
+      throw new Error('INVALID_COLONY_BUILD_REQUEST')
+    }
+    return ask('maw_agent:colony_action', {
+      kind: 'request_build', buildingPosition, builderPosition, requestId
     })
   }
 
@@ -79,6 +118,9 @@ function attachColonyClient (bot) {
     events,
     status,
     deliver,
+    found,
+    placeBuilder,
+    requestBuild,
     detach: () => {
       bot._client.off('custom_payload', onPayload)
       bot.off('end', onEnd)
