@@ -332,6 +332,14 @@ function EnsureSpectatorBinding {
     Start-AgentEyeWatcher
 }
 
+function DungeonActive {
+    $audit = Rcon 'mycli admin dungeonaudit'
+    if ($audit -notmatch '(?m)^MC_DUNGEON_AUDIT floor=\d+ active=(true|false)\b') {
+        throw 'Could not verify whether a dungeon run is active.'
+    }
+    return ($Matches[1] -eq 'true')
+}
+
 function Start-Server {
     if (Listener) {
         $status = Probe
@@ -601,6 +609,10 @@ function Backup-Server {
             $goddessStopped = $true
             $humans = @(HumanPlayers)
             if ($humans.Count) { Log "Backup skipped: human joined during preflight: $($humans -join ', ')"; return }
+            if ((Test-Path -LiteralPath $pendingAgentFriendDeploy) -and (DungeonActive)) {
+                Log 'Backup and pending AgentFriend deployment skipped: dungeon run active'
+                return
+            }
             $proceed = $true
         } finally {
             if (-not $proceed -and $goddessStopped) { try { Start-Goddess } catch { Log "WARN Goddess bridge restart: $_" } }

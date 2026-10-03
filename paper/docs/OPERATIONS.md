@@ -1,10 +1,12 @@
 # Paper 分支维护与发布
 
-## 0.3.80 心眼轮廓与探矿粒子指引（2026-10-04，待发布）
+## 0.3.80 心眼轮廓与探矿粒子指引（2026-10-04，待安全窗口发布）
 
 旧版 `sense` 的怪物透墙轮廓恢复到现有 `/mycli cast sense`，但只对施法者和当前已登记、正在附身的 Eye 发送原版实体元数据；不改全服怪物状态。基岩玩家获得最近怪物的粒子指向线和遮挡墙光框，原有 BossBar 与 `MC_HOSTILE` 坐标继续可用。探矿术也持续刷新从施法者眼前到第一处墙面的私有粒子指向线，保留 Java 矿块轮廓及基岩墙面光框。粒子线指方向，不计算绕墙路线。版本需要 ProtocolLib 5.3.0，正式服已安装。
 
 隔离服 `life-buildings-20261003` 使用与正式服相同的 CortiEyeMirror 0.1.8、Geyser 和 ProtocolLib，加上独立 Agent/Eye 测试配对；候选 `AgentFriend-0.3.80.jar` 为 468742 字节、SHA256 `E86365B723AE398DD458049FDA0B2DB330E2D797827B170FFAE45F5DB846261A`。`sense-outline-stage.mjs` 的真实 Mineflayer 三账号测试通过：施法者和附身 Eye 收到敌怪轮廓和坐标，旁观玩家及家畜没有；8 秒到期后恢复；探矿施法动画结束后粒子持续刷新，Eye 也收到私有展示包。Geyser 的内置映射将 END_ROD 转为 `minecraft:endrod`；基岩真机画面仍待目视核对。发布前巡检时正式服有真人 AdeleFelice 在线，试炼塔第 8 层 `active=true`，故当时没有停服或发布。发布时须重新确认零真人、试炼 `active=false`，再由计划任务完成 E/F 双盘完整快照与唯一 JAR 替换；不能趁试炼进行时重启。
+
+候选已写入运行机 `E:\MC\ops\agentfriend-deploy.pending.json`，由现有 `Afu-MC-DailyBackup` 于 04:00 尝试处理。维护脚本额外检查：只要有真人在线，或待发布 AgentFriend 时试炼 `active=true`，就跳过本次备份与发布并保留待发布计划；无法读取试炼状态也拒绝停服。安全窗口才正常停服，生成 E/F 双盘 `.complete` 快照、校验旧版和候选哈希、只启用 0.3.80 并重启。当前正式服仍是 0.3.79；发布后须读回插件版本、E/F 快照、Java/基岩入口、Agent 网关和 Eye 附身状态，再更新本记录与版本清单。
 
 ## 0.3.79 生活公会入口通行（2026-10-03，已发布）
 
