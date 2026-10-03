@@ -32,12 +32,15 @@ def add_bytes(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=str(DEFAULT_ROOT))
+    parser.add_argument("--server-dir", help="Explicit server directory inside --root for isolated test copies")
     parser.add_argument("--java", default=str(DEFAULT_JAVA))
     args = parser.parse_args()
     root = safe_root(args.root)
     java = Path(args.java)
     javac = java.with_name("javac.exe" if os.name == "nt" else "javac")
-    server = root / "server"
+    server = Path(args.server_dir).resolve() if args.server_dir else root / "server"
+    if server != root and root not in server.parents:
+        raise ValueError("Server directory must stay inside the isolated root")
     mods = server / "mods"
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 28976))
@@ -57,8 +60,8 @@ def main() -> None:
                                  str(NUMEN_JAR), str(ars)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
-    if len(sources) != 1 or not resource.is_file():
-        raise ValueError("Expected one bridge Java source and one mod manifest")
+    if not sources or not resource.is_file():
+        raise ValueError("Expected bridge Java sources and one mod manifest")
     build = root / "build" / "society-bridge"
     build.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="compile-", dir=build) as temporary:

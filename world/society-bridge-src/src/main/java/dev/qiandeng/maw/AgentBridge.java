@@ -56,6 +56,7 @@ public final class AgentBridge {
 
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
+        PlayerMenuBridge.register(eventBus);
     }
 
     private static void register(RegisterCommandsEvent event) {

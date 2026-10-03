@@ -33,6 +33,7 @@ const states = mc.states
 const P = require('./payloads.cjs')
 const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
+const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 
 const VERSION = '1.21.1'
 const PROTO_VERSION = mcData.version.version // 767
@@ -52,6 +53,9 @@ const BACKEND = { host: backendHost, port: Number(backendPort) }
 //   将 neoforge:custom_time_packet 转为原版 update_time。
 const VANILLA_BACKEND = process.env.GATE_VANILLA !== '0'
 const BRIDGE_NEOFORGE_TIME = process.env.GATE_NEOFORGE_TIME_BRIDGE === '1'
+const SKIP_MOD_RECIPES = process.env.GATE_SKIP_MOD_RECIPES === '1'
+const BRIDGE_COOKING_POT_GUI = process.env.GATE_BRIDGE_COOKING_POT_GUI === '1'
+const DEBUG_MENUS = process.env.GATE_DEBUG_MENUS === '1'
 
 // 【自 ack 传送 2026-09-21】门才是 MC 眼中的真正客户端，传送应答属传输层职责。
 // 现象：容器化 ViaProxy 经门时，MC 报 `Failed to decode packet 'serverbound/minecraft:accept_teleportation'`
@@ -118,6 +122,12 @@ function loadKnowledge () {
       log(`已从缓存载入通道知识（${backendKey}，${Object.keys(entries).length} 条）`)
     }
   } catch (e) { /* 无缓存：纯基线起步 */ }
+  // Optional server payloads are not reported as missing during negotiation.
+  // The lab can explicitly advertise adapters its backend-side client handles.
+  for (const id of (process.env.GATE_EXTRA_PLAY_CHANNELS || '').split(',').filter(Boolean)) {
+    if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(id)) throw new Error(`Invalid extra channel: ${id}`)
+    if (!knowledge.has(id)) knowledge.set(id, { bucket: 1, version: '1', flow: null, moves: 0, optional: true, core: true })
+  }
   return knowledge
 }
 
@@ -241,6 +251,7 @@ function closeSession (sess, reason) {
     log(`census[${sess.username}] back_total=${b.reduce((s, [, v]) => s + v, 0)} time(${pick(b)}) | front_total=${f.reduce((s, [, v]) => s + v, 0)} time(${pick(f)}) | err=${e.length ? e.map(([k, v]) => k + '=' + v).join(',') : 'none'}`)
     const top = b.slice(0, 8).map(([k, v]) => k + '=' + v).join(' ')
     if (top) log(`census[${sess.username}] back top: ${top}`)
+    if (DEBUG_MENUS) log(`census[${sess.username}] menus: ${b.filter(([k]) => /window|slot|container/.test(k)).map(([k, v]) => k + '=' + v).join(' ') || 'none'}`)
     // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
   } catch (err) {}
@@ -285,6 +296,23 @@ function connectBackend (sess) {
   // 后端进入 CONFIG（握手+login_ack 已发出）后才可接收前端转来的配置包
   back.on('state', (n) => {
     log(`DEBUG：[${sess.username}] 后端 state -> ${n}`)
+    if (n === states.PLAY && SKIP_MOD_RECIPES) {
+      // NeoForge sends custom recipe serializers in packet 0x77. The vanilla
+      // parser treats their bytes as an enormous array and destroys its input
+      // stream. Recipes require a separate semantic API until translated.
+      const parser = back.deserializer
+      const original = parser._transform
+      parser._transform = function (chunk, encoding, callback) {
+        if (chunk[0] === 0x77) {
+          log(`DEBUG：[${sess.username}] 跳过模组 declare_recipes（${chunk.length} 字节）`)
+          return callback()
+        }
+        return original.call(this, chunk, encoding, error => {
+          if (error) log(`DEBUG：[${sess.username}] PLAY 包 id=${chunk[0]} 长=${chunk.length} 解析失败：${error.message.slice(0, 120)}`)
+          callback(error)
+        })
+      }
+    }
     if (n === states.CONFIGURATION && !sess.backReady) {
       // vanilla 姿姿：立刻自报 brand,NeoForge 判 vanilla 走兼容路径(update_time 才会发)
       if (VANILLA_BACKEND) {
@@ -479,7 +507,16 @@ const REMAP = require('./idmap-remap.cjs')
 REMAP.load()   // 无 idmap.json = 纯透传，行为与旧版完全一致 ✓
 function relayTo (sess, target, name, params, dir) {
   if (name === 'custom_payload') params = normalizeCustomPayload(params)
+  if (DEBUG_MENUS && /window|slot|container/.test(name)) {
+    log(`menu[${sess.username}] ${dir} ${name} window=${params.windowId ?? '?'} slot=${params.slot ?? '?'} state=${params.stateId ?? '?'} changed=${params.changedSlots?.length ?? '?'}`)
+  }
   let vanillaTime = null
+  let cookingPotMenu = null
+  if (BRIDGE_COOKING_POT_GUI && target === sess.front && name === 'custom_payload' &&
+      params.channel === 'neoforge:advanced_open_screen') {
+    try { cookingPotMenu = cookingPotWindow(params.data) }
+    catch (e) { log(`烹饪锅菜单负载无法转换：${e.message}`) }
+  }
   if (BRIDGE_NEOFORGE_TIME && target === sess.front && name === 'custom_payload' &&
       params.channel === 'neoforge:custom_time_packet') {
     try { vanillaTime = decodeNeoForgeTime(params.data) }
@@ -496,6 +533,10 @@ function relayTo (sess, target, name, params, dir) {
   }
   try {
     target.write(name, params)
+    if (cookingPotMenu) {
+      target.write('open_window', cookingPotMenu)
+      log(`DEBUG：[${sess.username}] 农夫乐事烹饪锅菜单转成原版 9x1（window=${cookingPotMenu.windowId}）`)
+    }
     if (vanillaTime) {
       target.write('update_time', vanillaTime)
       sess.frontCensus.update_time = (sess.frontCensus.update_time || 0) + 1

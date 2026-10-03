@@ -29,6 +29,8 @@ function vanillaBase (name) {
 
 // 家族兜底：mod 块 → 选个像的原版块（short name）
 const FAM = [
+  [/cooking_pot|kettle|cauldron/i, 'cauldron'],
+  [/stove|oven|furnace/i, 'furnace'],
   [/lamp|light|lantern|glow/i, 'glowstone'],
   [/roof|ceiling/i, 'stone_bricks'],
   [/stair/i, 'stone_stairs'],
@@ -45,7 +47,11 @@ const FAM = [
   [/brick|stone|wall|path|floor|road|pave/i, 'stone_bricks'],
 ]
 function famOf (name) {
-  for (const [re, target] of FAM) if (re.test(name)) return target
+  // Match the block path only: the namespace describes the mod, not the block.
+  // For example, "farmersdelight:cooking_pot" used to match /light/ in the
+  // namespace and was incorrectly shown to Mineflayer as glowstone.
+  const blockName = name.slice(name.indexOf(':') + 1)
+  for (const [re, target] of FAM) if (re.test(blockName)) return target
   return 'stone'
 }
 

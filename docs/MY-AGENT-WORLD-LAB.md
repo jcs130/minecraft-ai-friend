@@ -60,6 +60,9 @@ Pop-Location
 $env:NODE_PATH='E:\Cortico\node_modules\.pnpm\mineflayer@4.37.1\node_modules'
 $env:GATE_VANILLA='0'
 $env:GATE_NEOFORGE_TIME_BRIDGE='1'
+$env:GATE_SKIP_MOD_RECIPES='1'
+$env:GATE_BRIDGE_COOKING_POT_GUI='1'
+$env:GATE_EXTRA_PLAY_CHANNELS='maw_agent:menu_state,maw_agent:menu_action'
 $env:GATE_LISTEN_HOST='127.0.0.1'
 $env:GATE_CACHE_FILE='E:\QiandengJiSocietyLab\research\gate-knowledge-28976.json'
 $env:GATE_IDMAP_FILE='E:\QiandengJiSocietyLab\research\lab-idmap.json'
@@ -67,7 +70,21 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 # 另一个终端：node world\src\neoforge-handshake\smoke-mineflayer.cjs 127.0.0.1 28977
 ```
 
-此验收只证明 Mineflayer 可以通过网关入服并读取原版可表达的地形。模组方块/物品目前会近似成原版代理物，不能保证 Agent 知道其原始注册名、机器状态或配方；Create、MineColonies、Ars、女仆、地下城机关的自定义负载和 GUI 尚未完成。网关的 NeoForge 协商路径没有收到原版 `update_time` 包，但抓到了每秒一次的 `neoforge:custom_time_packet`。新增的可选 `GATE_NEOFORGE_TIME_BRIDGE=1` 将它按 NeoForge 21.1.248 的真实字段转成原版时间包；实测 6 个自定义时间包对应 6 个 Mineflayer `update_time`，另一轮冒烟收到 3 个。协议解析器对部分模组解锁配方包仍有 `PartialReadError`，不得据此宣称模组配方可用。下一步应把 Mineflayer 用作兼容的网络/移动底座，按玩家 UUID 增加**只读原生语义查询 + 受权限约束的模组动作适配器**，每种玩法按真实前后状态核验；现有 Numen 身体能执行部分原生模组动作，但与一个 Mineflayer 账号合并为同一身体仍待实现。
+新建存档的入服测试又定位到一个硬缺口：NeoForge 发来的 682,039 字节 `declare_recipes` 包含原版解析器不认识的模组配方序列化器，解析器把它误读为超大数组并停止后续区块解析。实验网关新增可选 `GATE_SKIP_MOD_RECIPES=1`，只在 1.21.1 PLAY 期跳过包号 `0x77`；Mineflayer 随后收到 141 个区块列与 3 个时间包，正常出生。代价是原版配方簿数据缺席；不能用这一开关宣称 Agent 会制作模组物品，配方要另走服务端原生查询。此选项默认关闭，不能套用到其他 MC 协议版本。网关的 NeoForge 协商路径没有原版 `update_time`，`GATE_NEOFORGE_TIME_BRIDGE=1` 将 `neoforge:custom_time_packet` 转成原版时间包。
+
+### 同一 Mineflayer 玩家操作原生菜单：隔离服已验证
+
+2026-10-03 在另一个可随时丢弃的副本 `E:\QiandengJiSocietyLab\research\registry-server`（`127.0.0.1:28978`）测试，网关前门只绑 `127.0.0.1:28980`。原版箱子可以右键打开；农夫乐事烹饪锅实际发 `neoforge:advanced_open_screen`，原版 Mineflayer 不会把它认成窗口。实验网关仅对**已核对的**烹饪锅菜单 ID 25 和标题转换成原版 9×1 容器，保留服务端窗口 ID 与 9 个真实容器槽位。号表生成器也修正了按整个 `farmersdelight` 命名空间匹配 `/light/` 的误判；料理锅现在近似成炼药锅，炉灶近似成熔炉。近似方块只是视觉和基础点击底座，**不是模组注册身份**。
+
+原版协议解析器还会丢弃含模组自定义物品组件的完整容器同步包。实测箱里有 3 颗钻石时，Mineflayer 的普通窗口仍显示空格；网关收到原始 `0x13` 包，但它没有变成可用的 `window_items`。因此新增服务端原生、按连接单播的菜单协议。先在上述隔离副本验收，随后将新版桥接 JAR 构建进**停机中的**主实验服 `E:\QiandengJiSocietyLab\server`；旧 JAR 备份在 `E:\QiandengJiSocietyLab\snapshots\before-native-menu-20261003`。千灯纪 Paper 正式服未改动。主实验服还没有启用网关常驻或开放任何新端口：
+
+- 服务端把当前玩家自己的 `AbstractContainerMenu` 通过 `maw_agent:menu_state` 发为原始 UTF-8 JSON。含 `schemaVersion=1`、`kind=menu_state`、玩家 UUID、`windowId`、真实 `menuType`、`stateId`、按真实槽位排序的 `slots`、手上游标物品。每件物品有完整注册 ID、数量和含组件的 SNBT。登录、开窗及内容变化时发送；变化检查为每 5 游戏 tick 一次。超 64 KiB 会明确发 `menu_state_error`，不会悄悄给过期状态。
+- Agent 把 `requestId`、`windowId`、`slot`、`button` 和上次状态里的 `expectedItemId`、`expectedCount`、`expectedSnbt`、`expectedCarriedSnbt` 作为原始 UTF-8 JSON 发到 `maw_agent:menu_action`。服务端从**这条玩家连接**取身份，只允许操作本人正在打开的有效菜单，先核对窗口、目标槽位及手上游标的完整组件，再调用原生 `ClickType.PICKUP`。成功/失败都经 `maw_agent:menu_state` 的 `kind=action_receipt` 私发，内含新状态与明确原因；不进聊天或公屏。每个在线玩家最近 32 个 `requestId` 只执行一次。断线或超时后先核对世界状态，不能盲目重放；回执暂未持久化。
+- 网关要设 `GATE_EXTRA_PLAY_CHANNELS='maw_agent:menu_state,maw_agent:menu_action'` 才能向 NeoForge 声明这两个**可选**通道。`menu-client.cjs` 的 `attachMenuClient(bot)` 提供 `current()`、`click(slot, button)`、`events`；它自动带完整槽位前置条件与随机 `requestId`，超时不会自行重试。菜单适配是通用玩家功能，没有 CortiLan 姓名特判。
+
+实际验收：一个 Mineflayer 账号从原版箱取 3 颗钻石，放进本人背包，重开箱确认；重复同一个请求没有第二次执行。另一个账号把 `touhou_little_maid:smart_slab_init` 放入箱子再取回，重开后注册 ID、数量与含自定义组件的 SNBT 完全一致。料理锅的原生状态准确报告 `farmersdelight:cooking_pot` 与 9 个容器槽，并读回先前通过原版点击放入的 2 块生牛肉。又让 Agent 从箱子取出 `farmersdelight:rice`，放进另一口由点燃炉灶加热的料理锅；8 秒后第 6 槽出现 `farmersdelight:cooked_rice`。该槽原生 `mayPickup=false`，直接点只得到 `no_change`；Agent 取碗放入第 7 槽，成品转到第 8 槽后才能领取。成品移入背包、重开锅确认已取走；角色饥饿值 0 时用原版使用物品动作吃下，饥饿值升到 6，手里留下碗。即“取原料 → 烹饪 → 盛装 → 取出 → 食用”全部在同一个 Mineflayer 玩家身上通过真实服务端状态验证。新版本状态还给出每槽 `mayPickup` 和料理锅 `slotRoles`（0–5 原料、6 暂存、7 餐具、8 成品、其余玩家背包），避免 Agent 把图标当可取物。Mineflayer 普通窗口仍可能显示空，Agent 应以原生状态为准。隔离副本的 JAR 通过 `tools/build_society_bridge.py --root E:\QiandengJiSocietyLab\research\registry-server --server-dir E:\QiandengJiSocietyLab\research\registry-server` 构建；实际测试的脚本和日志在实验目录 `research` 下。
+
+这完成的是**同一个玩家身体的容器读写与一道料理闭环**，还没有完成所有模组玩法。其他农夫乐事食材生产、Create 动力机器、MineColonies 的 BlockUI/工单、女仆命令、Ars 法术书学习与施法、地下城机关，都要逐项用真实模组状态做“查询 → 操作 → 核验”。部分界面不是 `AbstractContainerMenu`，不能仅靠通用菜单通道覆盖。原来的 Numen 身体与这个 Mineflayer 玩家仍是两个身份；今后可把 Numen 原生工具逐步改为作用于当前已认证的玩家，而不能把 4 级控制台入口直接暴露给 Agent。主实验服更新版本锁后 `verify` 与原有整服 `smoke` 已通过，最终日志为 `E:\QiandengJiSocietyLab\smoke-1791016583.log`；测试进程正常存档退出。最后又在隔离副本验证了完整游标前置条件：故意提交错误 `expectedCarriedSnbt` 得到私有 `cursor_changed`、`changed=false`，目标槽位未变。
 
 当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
 
@@ -75,7 +92,7 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
 | Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
-| Farmer's Delight | 真实料理锅右键打开、`CookingPotMenu` 与槽位/数据可读 | 放食材、加热、产出、取出与食用的完整闭环 |
+| Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6 | 更多配方、食材生产与长期补货 |
 | Create | 传动轴合成配方可读 | 安装机器、动力传递、工作状态与产物读取；逐个专用交互 |
 | MineColonies | 模组启动、配方和研究加载 | 建殖民地、读取真实工单、交货、确认居民任务消失 |
 | Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
