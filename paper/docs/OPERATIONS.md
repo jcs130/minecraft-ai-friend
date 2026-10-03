@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.78 动态委托看板（2026-10-03，已发布）
+
+正式服在只有 CortiLan、CortiEye、Goddess 服务账号在线且试炼 `active=false` 时，由 `Afu-MC-DailyBackup` 计划任务正常停服。18:44 的发布前完整快照为 `E:\MC\backups\scheduled\20261003-184458` 与 `F:\MC-backups\scheduled\20261003-184458`，两盘 `.complete` 均存在，任务结果 0。任务校验旧版 SHA256 后只启用 `AgentFriend-0.3.78.jar`，SHA256 `3A38D70D8331D0BF0CC35E130A466CBB2813A66CD1D3E4BB3A167D051A0C0DA5`。18:45 正常重启后 RCON 确认 0.3.78、19 个模板载入并生成 4 张今日卡片，Java LAN 探针与基岩 UDP Pong 正常；Goddess 桥和 Agent Eye watcher 进程随维护流程启动。CortiEye 在本轮复测时仍未重连，真实附身画面及基岩手柄界面需要客户端在线时确认，UDP Pong 不能代替画面验收。
+
+模板定义在 `plugins/AgentFriend/dynamic-board.yml`，首次启动从 JAR 复制；此后编辑模板并执行 `mycli admin board reload`、`replace` 或 `regenerate` 可在线更新供货和现有动作类型的日常活动，无须为每次内容调整重启。完整字段、命令和未接入的数据源见 [动态看板](DYNAMIC_BOARD.md)。已解析今日卡片及领奖状态在同一 `plugins/AgentFriend/config.yml` 中；供货物品进入世界内公会共享箱。隔离服 `life-buildings-20261003` 用 `dynamic-board-stage.mjs` 验证连续重生不重复、低库存数量、热加载/坏配置回退和人工增删；`dynamic-board-actions-stage.mjs` 用真实 Mineflayer Agent 与非 Agent 验证私有 `MC_BOARD_TODAY`、54 格原版菜单、16 火把实际入箱、声望 +7、个人箱奖励、接单快照不随热改漂移。隔离 Geyser Pong 通过，日志无新增 ERROR。
+
+回退代码时须先确认无人类玩家和活动试炼，再正常停服，禁用 0.3.78、启用保留的 0.3.77；保留新产生的世界和玩家进度，不要只覆盖 `config.yml`。若需要整套回到发布前状态，使用同次 E/F `.complete` 快照，意识到之后的玩家进度会一并回退。旧版不识别 `dynamic-board` 键，但静态 37 张仍可使用。
+
 ## Agent/Eye 热登记与私有转发（2026-10-03，已发布）
 
 `ops/agent-eye-pairs.json` 是已登记 Agent 与 Eye 的对应表。Goddess 独立观战；Eye 守护进程约每 20 秒维持观战附身，CortiEyeMirror 0.1.8 约每 5 秒更新私有消息与 HUD 转发，AgentFriend 0.3.77 约每 6 秒更新 `[Agent]` 标记及村庄紧急私聊身份。运行机私有 `agent-gateway-access.json` 约束登记账号的来源 IP，按登录即时读取。今后正常增删配对无需重启 Paper。未登记普通 Java 用户名仍在离线模式下可被冒用，扩大公开接入前须确定认证方案；详见 [Agent 观战账号](AGENT_EYES.md)。

@@ -123,7 +123,7 @@ final class AgentCliCatalog {
         add(specs,"arena.stash.take","storage","item","/mycli arena stash take <箱槽位1–54> [1–64]","从个人箱取到本人背包","箱槽有物品；背包有空位","MC_STASH_TAKE moved 数量");
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用","传送结果");
-        add(specs,"guild.board","adventure","read","/mycli guild board","列出今天可接任务和 ID","在线玩家","任务、声望及等级门槛");
+        add(specs,"guild.board","adventure","read","/mycli guild board","列出 05:00 更新的今日动态委托与常驻任务 ID","在线玩家","本人任务、声望及 mcagent:board 今日数据");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
         add(specs,"guild.status","adventure","read","/mycli guild status","查看本人公会等级、声望与活动任务","在线玩家","个人状态");

@@ -6,9 +6,9 @@
   "paperJarSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
   "plugins": [
     {
-      "file": "AgentFriend-0.3.76.jar",
-      "bytes": 439229,
-      "sha256": "67946ac41aedf0ef75c04b0362b1163025f02265f44dd58996bdaf90d353c929"
+      "file": "AgentFriend-0.3.78.jar",
+      "bytes": 463626,
+      "sha256": "3a38d70d8331d0bf0cc35e130a466cbb2813a66cd1d3e4bb3a167d051a0c0da5"
     },
     {
       "file": "AuraSkills-2.4.0.jar",
@@ -26,9 +26,9 @@
       "sha256": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97"
     },
     {
-      "file": "CortiEyeMirror-0.1.7.jar",
-      "bytes": 16561,
-      "sha256": "7d5912ad12d37070b2d3ecc3e36aaafc9d334c49e7f52e20f7de81a3596b4c9e"
+      "file": "CortiEyeMirror-0.1.8.jar",
+      "bytes": 30369,
+      "sha256": "6be57c35e049cc32931d94ecc2ebcac310b9eea75987eac807e3452a586f3f95"
     },
     {
       "file": "EssentialsX-2.22.0.jar",

@@ -196,6 +196,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long lastRun;
     private DungeonManager dungeon;
     private GuildManager guild;
+    private DailyBoardManager dailyBoard;
     private LifeGuildManager lifeGuild;
     private LifeGuildBuildings lifeBuildings;
     private VillageWatchManager villageWatch;
@@ -257,6 +258,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
+        dailyBoard = new DailyBoardManager(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -321,6 +323,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private World world() { return Bukkit.getWorld("world"); }
     VillageStructureProtection villageProtection() { return villageStructureProtection; }
     GuildHallManager guildHall() { return guildHall; }
+    DailyBoardManager dailyBoard() { return dailyBoard; }
+    VillageWatchManager villageWatch() { return villageWatch; }
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
     DungeonManager dungeon() { return dungeon; }
@@ -337,6 +341,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void guildMobDefeated(Player player, org.bukkit.entity.EntityType type) { if (guild != null) guild.onDungeonMobDefeated(player, type); }
     void guildFloorCleared(Player player, int floor, int partySize) {
         if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
+        if (dailyBoard != null) dailyBoard.onFloorCleared(player, floor);
     }
     void guildRewardClaimed(Player player) { if (guild != null) guild.onDungeonRewardClaimed(player); }
     int adventurerRank(Player player) { return guild == null ? 0 : guild.adventurerRank(player); }
@@ -577,6 +582,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("board")) {
+            boolean console = sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender;
+            boolean goddess = sender instanceof Player player && player.getUniqueId().equals(GODDESS_UUID)
+                    && player.isOp() && player.getGameMode() == GameMode.SPECTATOR;
+            if (!console && !goddess) { sender.sendMessage("只允许控制台或女神观战账号维护今日看板。"); return true; }
+            dailyBoard.command(sender, args);
+            return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
                 && args[1].equalsIgnoreCase("lootaudit")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -2343,7 +2356,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else if (slot == 47) openMenu(p, "life");
                 else {
                     guild.click(p, slot);
-                    if (slot == 0 || (slot >= 10 && slot < 10 + GuildManager.contractCount()) || slot == 48 || slot == 49)
+                    if (slot == 0 || (slot >= 1 && slot <= 5)
+                            || (slot >= 10 && slot < 10 + GuildManager.contractCount()) || slot == 48 || slot == 49)
                         openMenu(p, "guild");
                 }
             } else if (page.equals("life")) {

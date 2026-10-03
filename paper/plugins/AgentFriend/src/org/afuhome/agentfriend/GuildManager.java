@@ -26,12 +26,12 @@ final class GuildManager implements Listener {
     private static final ZoneId GUILD_ZONE = ZoneId.of("Asia/Shanghai");
     private static final String[] RANKS = {"青铜", "黑铁", "白银", "黄金", "白金", "钻石"};
     private static final int[] THRESHOLDS = {0, 10, 30, 70, 150, 350};
-    private enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DONATE, PEAK, BIOME_BORDER,
+    enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
             LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
     private static final String[] DIMS = {"感知", "战斗", "规划", "协作", "语言", "约束"};
-    private record Contract(String id, String title, String description, Material icon,
+    record Contract(String id, String title, String description, Material icon,
             Goal goal, int target, int floor, int minRank, int fame,
             int emeralds, Material bonus, int bonusCount, String siteId, int dim) {
         Contract(String id, String title, String description, Material icon, Goal goal, int target,
@@ -153,26 +153,49 @@ final class GuildManager implements Listener {
     String adventurerRankName(Player player) { return RANKS[adventurerRank(player)]; }
     private Contract contract(String id) {
         for (Contract quest : CONTRACTS) if (quest.id().equals(id)) return quest;
-        return null;
+        DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(id);
+        return card == null ? null : card.contract();
     }
     private Contract active(Player p) {
-        return contract(plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""));
+        String path = base(p.getUniqueId()) + ".active";
+        String id = plugin.getConfig().getString(path + ".id", "");
+        Contract found = contract(id);
+        if (found == null && id.startsWith("db_")) {
+            String beneficiary = plugin.getConfig().getString(path + ".beneficiary", "公会伙伴");
+            plugin.getConfig().set(path, null);
+            plugin.saveConfig();
+            p.sendMessage(ChatColor.YELLOW + "给" + beneficiary + "的今日委托已过期或撤下，未交付物品不会扣除；任务槽已释放。");
+        }
+        if (found != null && id.startsWith("db_")) {
+            java.util.Map<?, ?> snapshot = snapshot(p);
+            if (snapshot != null) try {
+                DailyBoardManager.Card frozen = plugin.dailyBoard().savedCard(snapshot);
+                if (frozen.id().equals(id)) return frozen.contract();
+            } catch (IllegalArgumentException invalid) {
+                plugin.getLogger().warning("Dynamic contract snapshot invalid for " + p.getUniqueId());
+            }
+        }
+        return found;
+    }
+    private java.util.Map<?, ?> snapshot(Player player) {
+        Object raw = plugin.getConfig().get(base(player.getUniqueId()) + ".active.snapshot");
+        if (raw instanceof org.bukkit.configuration.ConfigurationSection section) return section.getValues(false);
+        if (raw instanceof java.util.Map<?, ?> map) return map;
+        return null;
     }
     private int progress(Player p) {
         Contract quest = active(p);
         if (quest != null && quest.goal() == Goal.DONATE) {
             Material offer = Material.matchMaterial(quest.siteId() == null ? "" : quest.siteId());
             if (offer == null) return 0;
-            ItemStack plain = new ItemStack(offer);
-            int count = 0;
-            for (ItemStack item : p.getInventory().getContents())
-                if (item != null && item.isSimilar(plain)) count += item.getAmount();
-            return Math.min(quest.target(), count);
+            return Math.min(quest.target(), countPlainStorage(p, offer));
         }
         return plugin.getConfig().getInt(base(p.getUniqueId()) + ".active.progress", 0);
     }
     private boolean doneToday(Player p, Contract quest) {
-        return today().equals(plugin.getConfig().getString(base(p.getUniqueId()) + ".daily." + quest.id()));
+        DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(quest.id());
+        String day = card == null ? today() : card.date();
+        return day.equals(plugin.getConfig().getString(base(p.getUniqueId()) + ".daily." + quest.id()));
     }
 
     void command(Player player, String[] args) {
@@ -222,6 +245,15 @@ final class GuildManager implements Listener {
 
     private void board(Player player) {
         status(player);
+        player.sendMessage(ChatColor.GOLD + "【今日 · " + plugin.dailyBoard().boardDate() + " · 动态委托】");
+        for (DailyBoardManager.Card card : plugin.dailyBoard().cards()) {
+            Contract quest = card.contract();
+            player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
+                    + " · " + quest.description() + " · 声望+" + quest.fame()
+                    + " / 绿宝石×" + quest.emeralds()
+                    + " [" + (doneToday(player, quest) ? "今日已完成" : "可接") + "]");
+        }
+        player.sendMessage(ChatColor.GOLD + "【冒险者公会 · 常驻委托】");
         int[] focus = todayFocus();
         player.sendMessage(ChatColor.GOLD + "【今日公会看板 · " + today() + " · 主考维度："
                 + DIMS[focus[0]] + "、"
@@ -289,6 +321,11 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(path + ".id", quest.id());
         plugin.getConfig().set(path + ".progress", 0);
         plugin.getConfig().set(path + ".accepted", today());
+        DailyBoardManager.Card offered = plugin.dailyBoard().card(quest.id());
+        if (offered != null) {
+            plugin.getConfig().set(path + ".snapshot", offered.save());
+            plugin.getConfig().set(path + ".beneficiary", offered.beneficiary());
+        }
         if (quest.goal() == Goal.PILGRIMAGE) {
             org.bukkit.Location loc = player.getLocation();
             plugin.getConfig().set(path + ".origin", loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ());
@@ -443,6 +480,26 @@ final class GuildManager implements Listener {
                 || type == Material.LANTERN || type == Material.SOUL_LANTERN
                 || type == Material.SEA_LANTERN || type == Material.GLOWSTONE
                 || type == Material.SHROOMLIGHT || type == Material.JACK_O_LANTERN) advance(player, quest);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDynamicCraft(org.bukkit.event.inventory.CraftItemEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player) || event.getCurrentItem() == null) return;
+        Contract quest = active(player);
+        if (quest != null && quest.goal() == Goal.CRAFT
+                && event.getCurrentItem().getType().name().equals(quest.siteId())) advance(player, quest);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDynamicFish(org.bukkit.event.player.PlayerFishEvent event) {
+        if (event.getState() != org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
+                || !(event.getCaught() instanceof org.bukkit.entity.Item caught)) return;
+        Material type = caught.getItemStack().getType();
+        if (type != Material.COD && type != Material.SALMON && type != Material.TROPICAL_FISH
+                && type != Material.PUFFERFISH) return;
+        Contract quest = active(event.getPlayer());
+        if (quest != null && quest.goal() == Goal.FISH
+                && (quest.siteId() == null || quest.siteId().equals(type.name()))) advance(event.getPlayer(), quest);
     }
 
     @EventHandler
@@ -650,6 +707,7 @@ final class GuildManager implements Listener {
     }
 
     private boolean availableToday(Player player, Contract quest) {
+        if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) return true;
         if (poolIds().contains(quest.id())) return true;
         // 等级特权：黑铁 +1、白金 +2 的个人追加池（seed=日期+uuid，公平可复现）
         int rank = effectiveRank(player);
@@ -705,20 +763,49 @@ final class GuildManager implements Listener {
         if (doneToday(player, quest)) {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
         }
+        ItemStack[] playerBefore = null, chestBefore = null;
+        Inventory chest = null;
+        DailyBoardManager.Card dynamic = null;
+        if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) {
+            java.util.Map<?, ?> snapshot = snapshot(player);
+            if (snapshot != null) try {
+                dynamic = plugin.dailyBoard().savedCard(snapshot);
+            } catch (IllegalArgumentException invalid) {
+                plugin.getLogger().warning("Dynamic claim snapshot invalid for " + player.getUniqueId());
+            }
+            if (dynamic == null) dynamic = plugin.dailyBoard().card(quest.id());
+        }
         if (quest.goal() == Goal.DONATE) {
             Material offer = Material.matchMaterial(quest.siteId() == null ? "" : quest.siteId());
-            if (offer == null || !player.getInventory().containsAtLeast(new ItemStack(offer), quest.target())) {
+            if (offer == null || countPlainStorage(player, offer) < quest.target()) {
                 player.sendMessage(ChatColor.RED + "背包里没有足够的" + (offer == null ? "指定物品" : offer.name().toLowerCase(Locale.ROOT))
                         + "（需 ×" + quest.target() + "）；备齐再来交付。"); return;
             }
-            player.getInventory().removeItem(new ItemStack(offer, quest.target()));
+            playerBefore = cloneItems(player.getInventory().getStorageContents());
+            if (dynamic != null && dynamic.chest() >= 0) {
+                chest = plugin.guildHall().sharedInventory(dynamic.chest());
+                if (chest == null || freeCapacity(chest, offer) < quest.target()) {
+                    player.sendMessage(ChatColor.YELLOW + "公共补给箱暂时不可用或已满；物品未扣除，请稍后再交付。");
+                    return;
+                }
+                chestBefore = cloneItems(chest.getContents());
+                if (!chest.addItem(new ItemStack(offer, quest.target())).isEmpty()) {
+                    chest.setContents(chestBefore);
+                    player.sendMessage(ChatColor.RED + "补给箱没能收下物品；请联系服主核对。"); return;
+                }
+            }
+            if (!removePlainStorage(player, offer, quest.target())) {
+                player.getInventory().setStorageContents(playerBefore);
+                if (chest != null) chest.setContents(chestBefore);
+                player.sendMessage(ChatColor.RED + "背包物品发生变化；交付未执行，请重试。"); return;
+            }
         }
         String path = base(player.getUniqueId());
         int emeraldGain = quest.emeralds();
         if (effectiveRank(player) >= 3) emeraldGain += Math.max(1, quest.emeralds() / 10); // 黄金特权：结算绿宝石 +10%
         if (!dungeon.queueGuildRewards(player.getUniqueId(), emeraldGain, quest.bonus(), quest.bonusCount())) {
-            if (quest.goal() == Goal.DONATE) player.getInventory().addItem(new ItemStack(
-                    Material.matchMaterial(quest.siteId()), quest.target()));
+            if (playerBefore != null) player.getInventory().setStorageContents(playerBefore);
+            if (chest != null) chest.setContents(chestBefore);
             player.sendMessage(ChatColor.RED + "个人奖励箱数据异常，交付未执行；请联系服主核对。");
             plugin.getLogger().warning("Guild reward refused: player=" + player.getUniqueId()
                     + ", contract=" + quest.id());
@@ -729,22 +816,75 @@ final class GuildManager implements Listener {
         int nextFame = fame(player) + gain;
         plugin.getConfig().set(path + ".fame", nextFame);
         plugin.getConfig().set(path + ".completed", plugin.getConfig().getInt(path + ".completed", 0) + 1);
-        plugin.getConfig().set(path + ".daily." + quest.id(), today());
-        plugin.getConfig().set(path + ".everDone." + quest.id(), today());
+        String completedDate = dynamic == null ? today() : dynamic.date();
+        plugin.getConfig().set(path + ".daily." + quest.id(), completedDate);
+        plugin.getConfig().set(path + ".everDone." + quest.id(), completedDate);
         plugin.getConfig().set(path + ".active", null);
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");
+        if (dynamic != null) player.sendMessage(ChatColor.GREEN + dynamic.beneficiary()
+                + "收到了这份帮助。" + (chest == null ? "" : "物资已进入公会公共箱。"));
         if (rankIndex(nextFame) > certified(player)) checkCertify(player);
         plugin.getLogger().info("Guild claimed: player=" + player.getUniqueId() + ", contract=" + quest.id()
                 + ", fame=" + nextFame);
+    }
+
+    private ItemStack[] cloneItems(ItemStack[] source) {
+        ItemStack[] copy = new ItemStack[source.length];
+        for (int i = 0; i < source.length; i++) copy[i] = source[i] == null ? null : source[i].clone();
+        return copy;
+    }
+
+    private int countPlainStorage(Player player, Material material) {
+        ItemStack plain = new ItemStack(material);
+        int total = 0;
+        for (ItemStack stack : player.getInventory().getStorageContents())
+            if (stack != null && stack.isSimilar(plain)) total += stack.getAmount();
+        return total;
+    }
+
+    private boolean removePlainStorage(Player player, Material material, int amount) {
+        if (countPlainStorage(player, material) < amount) return false;
+        ItemStack[] slots = cloneItems(player.getInventory().getStorageContents());
+        ItemStack plain = new ItemStack(material);
+        int needed = amount;
+        for (int i = 0; i < slots.length && needed > 0; i++) {
+            ItemStack stack = slots[i];
+            if (stack == null || !stack.isSimilar(plain)) continue;
+            int take = Math.min(needed, stack.getAmount());
+            if (take == stack.getAmount()) slots[i] = null;
+            else stack.setAmount(stack.getAmount() - take);
+            needed -= take;
+        }
+        if (needed != 0) return false;
+        player.getInventory().setStorageContents(slots);
+        return true;
+    }
+
+    private int freeCapacity(Inventory inventory, Material material) {
+        ItemStack plain = new ItemStack(material);
+        int free = 0;
+        for (ItemStack item : inventory.getContents()) {
+            if (item == null || item.getType().isAir()) free += material.getMaxStackSize();
+            else if (item.isSimilar(plain)) free += item.getMaxStackSize() - item.getAmount();
+        }
+        return free;
     }
 
     void fillBoard(Player player, Inventory inventory) {
         int rank = effectiveRank(player);
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
+        inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
+        List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
+        for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
+            Contract quest = dynamic.get(i).contract();
+            inventory.setItem(1 + i, icon(quest.icon(), "§6今日 §e" + quest.title() + " §7(" + quest.id() + ")",
+                    quest.description(), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(),
+                    doneToday(player, quest) ? "今天已完成" : "点击接单"));
+        }
         for (int i = 0; i < CONTRACTS.size(); i++) {
             Contract quest = CONTRACTS.get(i);
             String state = !availableToday(player, quest) ? "今日未开放（轮换）"
@@ -776,6 +916,8 @@ final class GuildManager implements Listener {
 
     void click(Player player, int slot) {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
+        else if (slot >= 1 && slot <= plugin.dailyBoard().cards().size())
+            accept(player, plugin.dailyBoard().cards().get(slot - 1).id());
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());
         else if (slot == 48) abandon(player);
         else if (slot == 49) claim(player);

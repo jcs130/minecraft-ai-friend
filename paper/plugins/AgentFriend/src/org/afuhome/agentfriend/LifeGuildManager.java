@@ -143,6 +143,14 @@ final class LifeGuildManager implements Listener {
         json.add("seenProfessions", seenProfessions(player));
         json.add("reputation", reputations);
         send(player, json);
+        String[] dailyThoughts = {
+                "今日无委托也可：去钓一次鱼、看一场日落，都算过好了今天。",
+                "今天可以慢慢来：给田地浇水，或和朋友散散步。",
+                "做完想做的事，也别忘了在灯下歇一会儿。"
+        };
+        int thought = Math.floorMod((java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
+                + player.getUniqueId().toString()).hashCode(), dailyThoughts.length);
+        player.sendMessage(ChatColor.GRAY + dailyThoughts[thought]);
     }
 
     private String rank(int reputation) {

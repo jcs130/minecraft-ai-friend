@@ -43,6 +43,7 @@ final class VillageWatchManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
     private Threat current = new Threat(false, "none", null, 0);
+    boolean activeThreat() { return current.active(); }
 
     VillageWatchManager(AgentFriendPlugin plugin, DungeonManager dungeon) {
         this.plugin = plugin;
