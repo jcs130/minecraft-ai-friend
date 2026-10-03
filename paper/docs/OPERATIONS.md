@@ -1,5 +1,13 @@
 # Paper 分支维护与发布
 
+## 0.3.79 生活公会入口通行（2026-10-03，已发布）
+
+四座生活公会的原招牌和云杉栅栏位于唯一门洞正前方，且被建筑掩码保护；清开后又发现室外地形低于室内地板两至四格。22:30 在只有服务账号在线、试炼 `active=false` 时，先将四份掩码、原招牌文字和台阶原方块清单分别保存至 `E:\MC\ops\repairs\life-entrances-20261003-223025` 与 `F:\MC-backups\repairs\life-entrances-20261003-223025`；既有 E/F 完整快照 `20261003-184458` 可作施工前整体回退。通过 RCON 在线把四组招牌/栅栏移到门右侧，按实际地形补 18 个石砖台阶及支撑方块，并同步改四份保护掩码。普通 Mineflayer 玩家从四馆室外连续走入馆内，四次通过，Paper 此阶段未重启。
+
+源码随后修正新建建筑的入口选址、台阶和招牌位置，并把保护范围扩至前方八格、地基以下四格。隔离服 25567 加载候选 0.3.79 后，真实 Mineflayer 玩家通过食堂阶梯和门洞，最外侧台阶与移位招牌的 `/mycli protect break` 均返回 `life_guild_building/deny`。22:45 再次确认只有 CortiLan、CortiEye、Goddess 服务账号在线且无活动试炼，由 `Afu-MC-DailyBackup` 正常停服并生成 E/F `.complete` 快照 `20261003-224530`，任务结果 0；只启用 `AgentFriend-0.3.79.jar`，SHA256 `8E18573CB2B7078972EA23B3C457DA946FB5427D099645B0C2977849368B8604`。22:46 重启后在正式服对四馆重新进行室外进馆与最外侧台阶/移位招牌保护测试，全部通过。Paper、Agent LAN 网关、Geyser Pong、Goddess 桥及自动恢复状态正常，启动日志无新增 ERROR。CortiEye 在重启后暂未回连；Agent Eye watcher PID 29668 存活，但交互式 `Status` 因跨会话无法读取其命令行而显示 stopped，不能据此认定守护进程已退出。真实基岩客户端的行走观感仍待玩家现场核对。
+
+回退插件代码须在无人游玩时正常停服，切回保留的 0.3.78 JAR；旧版对入口前第七、八格及书屋最低台阶的保护范围不足，故回退期间不要开放建筑编辑。整套回到施工前需使用 18:44 E/F 快照，届时之后的玩家进度也会一并回退。具体入口位置、测试和掩码边界见 [生活公会建筑](LIFE_GUILD_BUILDINGS.md)。
+
 ## 0.3.78 动态委托看板（2026-10-03，已发布）
 
 正式服在只有 CortiLan、CortiEye、Goddess 服务账号在线且试炼 `active=false` 时，由 `Afu-MC-DailyBackup` 计划任务正常停服。18:44 的发布前完整快照为 `E:\MC\backups\scheduled\20261003-184458` 与 `F:\MC-backups\scheduled\20261003-184458`，两盘 `.complete` 均存在，任务结果 0。任务校验旧版 SHA256 后只启用 `AgentFriend-0.3.78.jar`，SHA256 `3A38D70D8331D0BF0CC35E130A466CBB2813A66CD1D3E4BB3A167D051A0C0DA5`。18:45 正常重启后 RCON 确认 0.3.78、19 个模板载入并生成 4 张今日卡片，Java LAN 探针与基岩 UDP Pong 正常；Goddess 桥和 Agent Eye watcher 进程随维护流程启动。CortiEye 随后重连，18:51 与 18:53 的 watcher 日志记录 `attached CortiEye -> CortiLan`，RCON 再次读到三个服务账号在线。真实观战画面与基岩手柄界面仍需客户端目视确认，UDP Pong 不能代替画面验收。

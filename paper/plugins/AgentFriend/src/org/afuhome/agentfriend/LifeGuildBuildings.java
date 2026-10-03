@@ -185,9 +185,20 @@ final class LifeGuildBuildings implements Listener {
                 || m == Material.ANDESITE || m == Material.GRAVEL || m == Material.MOSS_BLOCK;
     }
 
+    private Block surface(int x, int z) {
+        Block top = world.getBlockAt(x, world.getHighestBlockYAt(x, z, HeightMap.WORLD_SURFACE), z);
+        while (top.getY() > 50 && (clearable(top.getType()) || tree(top.getType())))
+            top = top.getRelative(0, -1, 0);
+        return top;
+    }
+
+    private int approachSteps(Plot plot) {
+        return plot.y() - surface(plot.x(), plot.z() + 8).getY();
+    }
+
     private Survey inspect(int cx, int cz, boolean entities) {
         if (!ready || world == null) return new Survey(0, 0, "保护快照未就绪");
-        if (cx - 7 < -630 || cx + 7 > -470 || cz - 7 < -530 || cz + 7 > -380)
+        if (cx - 7 < -630 || cx + 7 > -470 || cz - 7 < -530 || cz + 8 > -380)
             return new Survey(0, 0, "候选地须完整位于村庄安全区内");
         if (Math.abs(cx + 543) <= 14 && Math.abs(cz + 439) <= 14)
             return new Survey(0, 0, "距离出生点过近");
@@ -198,9 +209,7 @@ final class LifeGuildBuildings implements Listener {
             boolean core = Math.abs(x - cx) <= HALF && Math.abs(z - cz) <= HALF;
             boolean overhang = Math.abs(x - cx) <= HALF + 1 && Math.abs(z - cz) <= HALF + 1;
             if (!overhang) continue;
-            Block top = world.getBlockAt(x, world.getHighestBlockYAt(x, z, HeightMap.WORLD_SURFACE), z);
-            while (top.getY() > 50 && (clearable(top.getType()) || tree(top.getType())))
-                top = top.getRelative(0, -1, 0);
+            Block top = surface(x, z);
             if ((!naturalGround(top.getType()) && top.getType() != Material.DIRT_PATH)
                     || top.getState() instanceof TileState)
                 return new Survey(0, logs, "地表不是自然地形：" + key(top) + "=" + top.getType());
@@ -222,6 +231,28 @@ final class LifeGuildBuildings implements Listener {
             }
         }
         if (high - low > 2) return new Survey(0, logs, "地形高差 " + (high - low) + " > 2");
+        int floorY = high + 1;
+        Block approachEnd = surface(cx, cz + 8);
+        if ((!naturalGround(approachEnd.getType()) && approachEnd.getType() != Material.DIRT_PATH)
+                || approachEnd.getState() instanceof TileState)
+            return new Survey(0, logs, "入口前方不是自然地形：" + key(approachEnd));
+        int steps = floorY - approachEnd.getY();
+        if (steps < 0 || steps > 4)
+            return new Survey(0, logs, "入口前方高差 " + steps + " 不可安全铺台阶");
+        for (int dz = 5; dz < 5 + steps; dz++) {
+            int stairY = floorY - (dz - 5);
+            Block ground = surface(cx, cz + dz);
+            if ((!naturalGround(ground.getType()) && ground.getType() != Material.DIRT_PATH)
+                    || ground.getState() instanceof TileState || ground.getY() > stairY)
+                return new Survey(0, logs, "入口台阶位置有地形冲突：" + key(ground));
+            for (int y = ground.getY(); y <= stairY + 2; y++) {
+                Block block = world.getBlockAt(cx, y, cz + dz);
+                if (plugin.villageProtection().deniesEdit(block) || plugin.guildHall().deniesEdit(block)
+                        || plugin.trialRoad().deniesBreak(block) || deniesEdit(block)
+                        || (y > ground.getY() && !(clearable(block.getType()) || tree(block.getType()))))
+                    return new Survey(0, logs, "入口台阶位置不可覆盖：" + key(block));
+            }
+        }
         if (logs > 24) return new Survey(0, logs, "需清理的树干过多：" + logs);
         if (entities) {
             Location center = new Location(world, cx + .5, high + 3, cz + .5);
@@ -299,7 +330,7 @@ final class LifeGuildBuildings implements Listener {
         for (Map.Entry<String, Material> entry : fabric.entrySet()) {
             String[] xyz = entry.getKey().split(",");
             int bx = Integer.parseInt(xyz[0]), bz = Integer.parseInt(xyz[2]);
-            if (Math.abs(bx - plot.x()) <= 6 && Math.abs(bz - plot.z()) <= 6)
+            if (Math.abs(bx - plot.x()) <= 6 && bz >= plot.z() - 6 && bz <= plot.z() + 8)
                 lines.add(entry.getKey() + "\t" + entry.getValue().name());
         }
         lines.subList(1, lines.size()).sort(String::compareTo);
@@ -322,7 +353,7 @@ final class LifeGuildBuildings implements Listener {
         fabric.put(key(block), material);
     }
     private void sign(Plot plot, Hall hall) {
-        Block block = world.getBlockAt(plot.x(), plot.y() + 2, plot.z() + 5);
+        Block block = world.getBlockAt(plot.x() + 3, plot.y() + 2, plot.z() + 5);
         Rotatable data = (Rotatable) Bukkit.createBlockData(Material.OAK_SIGN);
         data.setRotation(org.bukkit.block.BlockFace.SOUTH);
         block.setBlockData(data, false);
@@ -336,6 +367,9 @@ final class LifeGuildBuildings implements Listener {
         fabric.put(key(block), Material.OAK_SIGN);
     }
     private void construct(Hall hall, Plot plot) {
+        int steps = approachSteps(plot);
+        int[] groundY = new int[steps];
+        for (int i = 0; i < steps; i++) groundY[i] = surface(plot.x(), plot.z() + 5 + i).getY();
         for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++)
             for (int dy = 1; dy <= 8; dy++) {
                 Block block = world.getBlockAt(plot.x() + dx, plot.y() + dy, plot.z() + dz);
@@ -368,7 +402,16 @@ final class LifeGuildBuildings implements Listener {
         for (int dz : new int[]{-4, 4}) for (int dx = -3; dx <= 3; dx++)
             for (int dy = 4; dy <= 5; dy++) put(plot, dx, dy, dz, hall.wall());
         put(plot, 0, 4, 0, Material.SEA_LANTERN);
-        put(plot, 0, 1, 5, Material.SPRUCE_FENCE);
+        for (int i = 0; i < steps; i++) {
+            int dz = 5 + i, stairY = plot.y() - i;
+            for (int y = groundY[i] + 1; y < stairY; y++)
+                put(plot, 0, y - plot.y(), dz, Material.COBBLESTONE);
+            for (int y = stairY + 1; y <= stairY + 2; y++)
+                world.getBlockAt(plot.x(), y, plot.z() + dz).setType(Material.AIR, false);
+            stair(plot, 0, -i, dz, Material.STONE_BRICK_STAIRS,
+                    org.bukkit.block.BlockFace.NORTH);
+        }
+        put(plot, 3, 1, 5, Material.SPRUCE_FENCE);
         sign(plot, hall);
         switch (hall.id()) {
             case "harvest" -> {
@@ -588,8 +631,9 @@ final class LifeGuildBuildings implements Listener {
     private boolean inBuiltPlot(Block b) {
         if (b.getWorld() != world) return false;
         for (Plot plot : plots.values())
-            if (Math.abs(b.getX() - plot.x()) <= 6 && Math.abs(b.getZ() - plot.z()) <= 6
-                    && b.getY() >= plot.y() - 2 && b.getY() <= plot.y() + 8) return true;
+            if (Math.abs(b.getX() - plot.x()) <= 6
+                    && b.getZ() >= plot.z() - 6 && b.getZ() <= plot.z() + 8
+                    && b.getY() >= plot.y() - 4 && b.getY() <= plot.y() + 8) return true;
         return false;
     }
     boolean deniesEdit(Block block) {
