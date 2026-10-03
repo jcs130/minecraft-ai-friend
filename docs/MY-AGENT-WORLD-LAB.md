@@ -15,6 +15,7 @@
 - 新的 `maw_agent` 命令仅限控制台/4 级权限，按 **身体 UUID** 执行 Numen 工具，没有桐人、CortiLan 等姓名特判。`list` 返回每个身体的 owner UUID、身体 UUID、维度、绝对坐标、生命与最大生命；`invoke` 返回 callId 和受理结果；`receipt <bodyUuid> <callId>` 只允许对应身体取回任务终态。对未知结果不得盲目重试。地下城定位的最终回执带结构 ID 与绝对 x/y/z；定位结果中的 y 只是结构搜索定位值，进场前仍需观察地表和寻路。
 - 实验性施法 CLI：`maw_agent commands` 返回命令清单及 `legacyMycliParity=false`；`maw_agent spell list <bodyUuid>` 只列该身体**主手真实 Ars 法术书**中已配置且有效的槽位、名称、配方、glyph ID 与原生魔力；`maw_agent spell explain <bodyUuid> ars_nouveau:slot_N` 解释一个已配置法术；`maw_agent spell cast <bodyUuid> ars_nouveau:slot_N` 走 Ars 的服务端施法路径，缺法术书、无效槽位和无魔力能力会拒绝。正魔力花费的法术只有观察到魔力确实扣除才返回 `ok=true`；原生交互返回 `CONSUME` 但没有扣魔力时返回 `ars_cast_not_confirmed`，避免把魔力不足误报为施法成功。回执中 `effectVerified=false` 表示通用 CLI 尚未核查命中、伤害或生成效果，Agent 仍要观察世界事实。不会凭 CLI 凭空授予法术、书或魔力，也不能把 Ars 的复合法术冒称为旧服的单个技能 ID。
 - 自动冒烟会启动全新独立进程，查询 Minecraft 状态包核对版本与显示名，召唤两个不同 owner 的测试身体，分别调用 `task_status`；检查 Ars 魔力与真实法术书目录、拒绝无书施法；让 Agent 查阅农夫乐事料理锅、Create 传动轴、Ars 入门法术书、Macaw 屋顶和桥墩的真实合成配方，并分别定位 Dungeon Crawl、YUNG 与 Fantastic Dungeoneer 地下城，收取完整终态与绝对坐标，检查跨身体回执隔离。验证错误工具被拒后遣散两个身体、存档并正常退出。最近一次通过记录在实验目录 `smoke-*.log`，退出码 0。
+- 新增模组交互验收：在隔离服测试身体旁临时放置农夫乐事料理锅，以身体执行 `interact_at` 原生右键，再用 `inspect_gui` 读回真实 `CookingPotMenu`、9 个容器槽及机器数据。`interact_at` 的差异回执现在会指出 `opened GUI: CookingPotMenu`，避免 Agent 把成功打开界面误读成“什么都没发生”。测试结束关闭界面、移除临时锅并正常存档；最终通过日志为 `E:\QiandengJiSocietyLab\smoke-1791008821.log`。新版 Numen JAR 已更新到隔离服，旧版备份在 `E:\QiandengJiSocietyLab\snapshots\before-menu-receipt-20261003`。此项只证明模组菜单能打开和读取；食材入锅、烹饪产物与真实食用仍未通过。
 - 冒烟对服务端或模组的 `ERROR`/`FATAL` 日志判失败。这个只绑定回环且离线模式的实验服偶有 Mojang 公钥网络抓取失败，脚本单独计为 `offlineKeyFetchWarnings`，不会把它当成模组启动失败；原始日志仍保留。
 - 2026-10-03 整服冒烟通过，日志为 `E:\QiandengJiSocietyLab\smoke-1791007439.log`，正常存档退出。实验身体在测试中临时得到写有 `Self -> Heal` 的 Ars 入门书；`list` 与 `explain` 读出了真实 glyph 和 60 魔力消耗，受伤后调用 `cast`，魔力 61.25→1.25、生命 12→16.5；紧接着再施放，Ars 虽返回 `CONSUME` 但没有扣魔力，CLI 正确回报失败。这是隔离服冒烟的临时道具，不意味着真实玩家或 Agent 已免费学会此术。旧 `/mycli` 专项 13 项测试通过；Numen Fabric/NeoForge 构建及 `:ai:test :agent:test :api:common:test :core:common:test` 通过。Numen 全量 GameTest 仍有 4 项失败：三项与蓝图/安全方块实体数据有关，其中安全数据标签明确缺失；`creative_pillar_out_empty_handed` 未完成攀高。失败记录在 `world/numen-src/core/neoforge/runs/gametestserver/logs/latest.log`。这些失败未被忽略，正式迁移前须定位修复并重跑。实际攻击法术命中、地下城房间/战利品和完整 Boss 通关也尚未验收。
 
@@ -41,6 +42,24 @@ Pop-Location
 
 ## Agent 与多端边界
 
+### Mineflayer 与模组操作的实测结论
+
+2026-10-03 在仅绑定 `127.0.0.1:28976` 的隔离服，用现有 Cortico 安装的 Mineflayer 4.37.1、`version: "1.21.1"`、离线测试名 `MawMineflayerQA` 进行了实际登录。服务端在配置协商阶段踢出，原因是 `neoforge.network.negotiation.failure.vanilla.client.not_supported`，要求安装 NeoForge 21.1.248。测试后实验服正常存档关闭。**因此现在不能把旧 Mineflayer 机器人直接接到 My Agent World；旧 Paper 千灯纪的 Mineflayer 连接仍不受影响。** Mineflayer 的[原版版本支持](https://github.com/PrismarineJS/mineflayer)仅说明 Minecraft 协议版本，不等于能完成 NeoForge 协商；上游也有[同类 NeoForge 拒绝报告](https://github.com/PrismarineJS/mineflayer/issues/4097)。换版本号或装旧 Forge `FML|HS` 适配库，不能视为已经解决此 1.21.1 NeoForge 问题。[NeoForge 自定义负载文档](https://docs.neoforged.net/docs/1.21.1/networking/payload/)说明模组还可使用配置期和游玩期专用消息，接入后仍须按模组实现动作与状态解释。
+
+目前的可行底座是服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen)，不是伪装成 NeoForge 客户端。Agent 的模型/控制器可以继续用现有语言与规划代码，但世界观察和执行需要接到每人独立的 Numen 身体；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
+
+| 内容 | 隔离服已经实测 | 后续验收门槛 |
+| --- | --- | --- |
+| 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
+| Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
+| Farmer's Delight | 真实料理锅右键打开、`CookingPotMenu` 与槽位/数据可读 | 放食材、加热、产出、取出与食用的完整闭环 |
+| Create | 传动轴合成配方可读 | 安装机器、动力传递、工作状态与产物读取；逐个专用交互 |
+| MineColonies | 模组启动、配方和研究加载 | 建殖民地、读取真实工单、交货、确认居民任务消失 |
+| Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
+| 地下城 | 三类结构定位得到绝对坐标 | 进入房间、识别机关与 Boss、通关及战利品核验 |
+
+实施顺序先做料理锅完整闭环，再做殖民地“缺料 → 生产 → 交货”与 Create 设备，然后才扩展女仆和地下城。每项验收都保留机器可读的失败原因及真实世界前后状态；不能把命令已受理或界面已打开当作产物完成。
+
 `maw_agent commands`、`list`、`summon`、`invoke`、`receipt`、`spell list|explain|cast`、`dismiss` 是目前的实验控制面。例如先调用 `maw_agent invoke <bodyUuid> locate_structure {"structure":"dungeoncrawl:dungeon"}`，保存返回的 `callId`，再查 `maw_agent receipt <bodyUuid> <callId>`；只有 `finalKnown=true` 且 `outcome.success=true`、`data.found=true` 才用 `data.x/y/z`。另两类结构可用 `betterdungeons:skeleton_dungeon` 与 `dungeoneer:cobblestone_dungeon`。入口、房间、怪物、战利品与基岩版呈现尚未逐项实测。**外部 Agent 身份认证、长期调度与故障恢复尚未接入**。不把 4 级控制台口令直接交给每个 Agent；下一步以独立 sidecar 将 token 绑定到单一身体 UUID，再提供每人的只读殖民地需求与受租约约束的动作。
 
 `receipt` 目前只保存在进程内、最多 256 条，重启后无法补取；它解决了当前在线 Agent 的同步/异步结果可见性，尚不是持久任务账本。未知终态只能核对世界事实，不能据“受理”自动重放操作。
@@ -49,6 +68,6 @@ Pop-Location
 
 旧千灯纪的 `/mycli commands|list|explain|cast`、女神技艺、冷却、技能升级和机器 JSON 回执仍在正式服代码与线上服务中，此实验分支没有改动它们；**它们还没有完整移植到 NeoForge 新服**。当前 `maw_agent spell` 是真实 Ars 施法的第一段适配，不是旧 `/mycli` 的全部替代。将来切换服务端前须逐项复现旧技能 ID、查询说明、施法权限/消耗/冷却、Agent 专用结构化回执、手柄及基岩入口，并以实际施法和客户端画面验收。达不到这些门槛就继续保留 Paper 正式服。
 
-MineColonies 自带居民职业、建筑与资源请求；这为社会循环提供世界事实，但目前只验过启动、配方和研究加载，尚未建立第一座殖民地或验证建筑工单、居民工作与 Numen 交互。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；旋转动力、料理设备、实际施法及女仆工作还需逐个实操验收。下一条核心闭环是“居民缺材料 → Agent 查询 → 真实交货 → 请求消失”，之后再让 Agent 生产材料、烹饪和施法。
+MineColonies 自带居民职业、建筑与资源请求；这为社会循环提供世界事实，但目前只验过启动、配方和研究加载，尚未建立第一座殖民地或验证建筑工单、居民工作与 Numen 交互。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；Ars 自愈与料理锅打开/读取已实测，旋转动力、料理产出和女仆工作还需逐个实操验收。下一条核心闭环是“居民缺材料 → Agent 查询 → 真实交货 → 请求消失”，之后再让 Agent 生产材料与烹饪。
 
 基岩版在此实验服**尚未接入**。后续可用 ViaProxy/Geyser 与逐项注册表翻译，让基岩玩家体验原版可表达的方块、物品和互动；MineColonies、女仆、Create、Ars 的专用 GUI、机器状态、粒子和容器协议不能仅靠改物品名视为已经兼容。Java 真人客户端也需要对应 NeoForge 模组包，且 Create 还需客户端 Flywheel。两端都要在隔离服实际联机验证，再考虑开放入口。当前千灯纪 Paper 的 Java、基岩和 Mineflayer 入口继续运行，不因为此实验改变。

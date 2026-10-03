@@ -238,7 +238,7 @@ public final class InteractAtCompanionTask extends GoToThenDoTask<InteractAtTask
     private String settle() {
         changes = receipt == null ? List.of() : receipt.diff(player);
         if (changes.isEmpty()) {
-            return " — but nothing visibly changed (hands, aimed block, nearby entities all "
+            return " — but nothing visibly changed (hands, aimed block, nearby entities, GUI all "
                     + "as before). If you expected an effect, reposition or rethink.";
         }
         return " — " + String.join("; ", changes);

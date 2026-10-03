@@ -4,6 +4,7 @@ import com.dwinovo.numen.entity.NumenPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -16,7 +17,8 @@ import java.util.Set;
  * 一次按键前后的世界事实差异。按键被"消费"不等于"发生了什么"——船可以吃掉点击,
  * 却因为生成位置和身体重叠被原版静默拒绝,世界纹丝不动。这里不判成败,只把三样
  * 看得见的变化如实报出:手上的东西、瞄着的那一格、身边新冒出来的实体。判断交给
- * 读回执的人——什么算"成"只有意图知道,而意图在模型那边。
+ * 读回执的人——什么算"成"只有意图知道,而意图在模型那边。界面打开也是
+ * 可观察的状态变化，不能误报成无效果。
  */
 public final class PressReceipt {
 
@@ -28,6 +30,7 @@ public final class PressReceipt {
     private final BlockPos aim;
     private final BlockState aimBefore;
     private final Set<Integer> entityIdsBefore;
+    private final AbstractContainerMenu menuBefore;
 
     private PressReceipt(NumenPlayer player, BlockPos aim) {
         this.mainBefore = player.getMainHandItem().copy();
@@ -35,6 +38,7 @@ public final class PressReceipt {
         this.aim = aim;
         this.aimBefore = aim == null ? null : player.level().getBlockState(aim);
         this.entityIdsBefore = nearbyIds(player);
+        this.menuBefore = player.containerMenu;
     }
 
     /** 按键之前拍快照;{@code aim} 可空(朝空气挥没有目标格)。 */
@@ -43,7 +47,7 @@ public final class PressReceipt {
     }
 
     /**
-     * 按键之后对账:每一条是一件真发生的事,空表 = 三个观察面都没动静。
+     * 按键之后对账:每一条是一件真发生的事,空表 = 手、方块、实体和界面都没动静。
      * 语言面向工具回执(英文),坐标点名,方便模型下一步引用。
      */
     public List<String> diff(NumenPlayer player) {
@@ -67,6 +71,13 @@ public final class PressReceipt {
             if (!entityIdsBefore.contains(e.getId())) {
                 facts.add("appeared: " + BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath()
                         + " (id " + e.getId() + ")");
+            }
+        }
+        if (player.containerMenu != menuBefore) {
+            if (player.containerMenu != player.inventoryMenu) {
+                facts.add("opened GUI: " + player.containerMenu.getClass().getSimpleName());
+            } else if (menuBefore != player.inventoryMenu) {
+                facts.add("closed GUI: " + menuBefore.getClass().getSimpleName());
             }
         }
         return facts;

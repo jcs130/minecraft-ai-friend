@@ -315,6 +315,64 @@ def console_command(process: subprocess.Popen, log_path: Path, command: str) -> 
     raise TimeoutError(f"No bridge response to {command.split()[1]}: {log_path}")
 
 
+def check_modded_menu(process: subprocess.Popen, log_path: Path, body: str, position: dict) -> None:
+    """Prove that a Numen body can open and read a real Farmer's Delight menu."""
+    base_x, base_y, base_z = (int(position[axis] // 1) for axis in ("x", "y", "z"))
+    spot = None
+    for dx, dz in ((2, 0), (-2, 0), (0, 2), (0, -2), (1, 1), (-1, -1)):
+        x, y, z = base_x + dx, base_y, base_z + dz
+        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
+        at = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
+        below_args = json.dumps({"x": x, "y": y - 1, "z": z}, separators=(",", ":"))
+        below = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {below_args}")
+        if (at.get("reply", {}).get("is_air") is True
+                and at["reply"].get("in_reach") is True
+                and below.get("reply", {}).get("is_solid") is True):
+            spot = (x, y, z)
+            break
+    if spot is None:
+        raise ValueError("No clear supported block next to Agent for Farmer's Delight menu test")
+
+    x, y, z = spot
+    assert process.stdin is not None
+    process.stdin.write(f"setblock {x} {y} {z} farmersdelight:cooking_pot keep\n")
+    process.stdin.flush()
+    try:
+        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
+        placed = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
+        if placed.get("reply", {}).get("block") != "farmersdelight:cooking_pot":
+            raise ValueError(f"Farmer's Delight pot did not appear for Agent: {placed}")
+        click = json.dumps({"button": "right", "x": x, "y": y, "z": z}, separators=(",", ":"))
+        issued = console_command(process, log_path, f"maw_agent invoke {body} interact_at {click}")
+        if issued.get("ok") is not True or not issued.get("callId"):
+            raise ValueError(f"Agent could not click the Farmer's Delight pot: {issued}")
+        deadline = time.monotonic() + 20
+        while not issued.get("finalKnown") and time.monotonic() < deadline:
+            time.sleep(0.2)
+            issued = console_command(process, log_path,
+                                     f"maw_agent receipt {body} {issued['callId']}")
+        if not issued.get("finalKnown"):
+            raise TimeoutError(f"Agent pot click did not finish: {issued}")
+        outcome = issued.get("outcome") or issued.get("reply") or {}
+        if (outcome.get("success") is not True
+                or "opened GUI: CookingPotMenu" not in outcome.get("message", "")):
+            raise ValueError(f"Agent click did not acknowledge opening the modded menu: {issued}")
+        gui = console_command(process, log_path, f"maw_agent invoke {body} inspect_gui {{}}")
+        reply = gui.get("reply") or {}
+        if (gui.get("ok") is not True or reply.get("success") is not True
+                or "CookingPotMenu" not in reply.get("message", "")
+                or "container slots:" not in reply.get("message", "")):
+            raise ValueError(f"Agent could not read Farmer's Delight cooking menu: {gui}")
+    finally:
+        console_command(process, log_path, f"maw_agent invoke {body} close_gui {{}}")
+        process.stdin.write(f"setblock {x} {y} {z} minecraft:air replace\n")
+        process.stdin.flush()
+        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
+        cleared = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
+        if cleared.get("reply", {}).get("is_air") is not True:
+            raise ValueError(f"Farmer's Delight test pot was not removed: {cleared}")
+
+
 def smoke(root: Path, java: Path, lock: dict) -> dict:
     check_runtime(root, lock)
     if not java.is_file():
@@ -368,6 +426,7 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                 if (receipt.get("ok") is not True or receipt.get("bodyUuid") != body
                         or receipt.get("resultKnown") is not True):
                     raise ValueError(f"Agent status was routed incorrectly: {receipt}")
+            check_modded_menu(process, log_path, bodies[0], by_id[bodies[0]])
             spell_list = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
             if (spell_list.get("ok") is not True or spell_list.get("bodyUuid") != bodies[0]
                     or spell_list.get("casterEquipped") is not False
@@ -542,6 +601,7 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
     return {"ok": True, "exitCode": process.returncode, "port": PORT,
             "minecraftVersion": status["version"]["name"], "displayName": "My Agent World",
             "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "cli_commands", "per_body_status",
+                                                   "farmers_delight_menu_open_and_inspect",
                                                    "native_ars_spell_catalog", "unearned_cast_rejected",
                                                    "configured_ars_heal_effect", "no_mana_cast_rejected",
                                                    "content_recipe_lookup", "dungeon_absolute_locations",
