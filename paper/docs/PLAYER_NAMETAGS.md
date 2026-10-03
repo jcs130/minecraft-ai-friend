@@ -8,4 +8,6 @@ Java 原版客户端通过原版队伍包显示头顶和玩家列表前缀；Gey
 
 默认 Agent UUID 名单在 `paper/plugins/AgentFriend/resources/config.yml` 的 `nametags.agent-uuids`，包含 CortiLan、Kirito、Naruto 和 corti。运行服可修改 `nametags.agent-prefix`（单行、最多 20 字符）和 UUID 列表，正常重启生效。公会声望是运行数据 `plugins/AgentFriend/config.yml` 中的 `guild-players`；不要把隔离服测试数据复制到正式服。
 
+Eye 观战账号的自动识别及附身规则见 [Agent 观战账号](AGENT_EYES.md)。这套运行巡检不改变 `[Agent]` 的 UUID 名单；目前 `fulumu` 可以正常做本人公会日常委托，头顶是否显示 `[Agent]` 由名单决定。
+
 隔离验证脚本 `paper/plugins/AgentFriend/guild-rank-nametags-stage.mjs` 用三个真实 1.20.6 Mineflayer 连接检查队伍包：普通钻石公会会员、白金 Agent 会员与未入会观众。发布后仍需用基岩真机确认字体与颜色；Geyser Pong 只能证明网络可达，不能替代画面验收。回退为停服后仅启用上一版 AgentFriend JAR；公会数据无需迁移。

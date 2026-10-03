@@ -1,5 +1,9 @@
 # Paper 分支维护与发布
 
+## Eye 观战账号自动附身（2026-10-03，无停服运维更新）
+
+Goddess 保持独立观战；所有在线用户名包含 `eye` 的账号由 `agent-eye-watcher.mjs` 保持原版观战模式，并按名称自动寻找 Agent 附身。`fulumu_eye → fulumu` 已由命名规则自动识别，`CortiEye → CortiLan` 保留在明确映射配置。原有 `Afu-MC-Watchdog` 保证巡检单实例，账号掉线重连后自动恢复；具体规则见 [Agent 观战账号](AGENT_EYES.md)。运行脚本已在正式服热更新并备份原文件，Paper JVM 未重启。Goddess、CortiEye、fulumu_eye 均读回观战模式；两组附身有巡检日志，fulumu_eye 与 fulumu 的位置相同，CortiEyeMirror 报 `attached=true`。`[Agent]` 头顶标记仍取 AgentFriend 启动时载入的 UUID 名单，本次没有改 JAR 或公会任务。
+
 ## 0.3.76 法术说明与 Agent 自发现（2026-10-03，已发布）
 
 18 项现有主动法术新增同源图鉴，涵盖效果、目标、魔力、总冷却、学习/使用前提、失败条件、成长和适用场景。技能罗盘左上角的「法术图鉴」先打开说明页，只有再点「施放 / 学习」才执行，适合基岩手柄。Agent 用 `/mycli spells list [页码]` 和 `/mycli spells explain <ID>` 读取本人私有的 `MC_SPELL_*` JSON；`/mycli explain cast.<ID>` 也嵌入相同法术详情。`mcagent:state` 继续提供本人实时魔力与剩余冷却。低频 Agent 提醒加入法术图鉴命令。操作语义见 [技能体系](SKILL_SYSTEM.md)、[Agent CLI](MYCLI_AGENT_CLI.md)。

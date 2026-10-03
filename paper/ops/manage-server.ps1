@@ -18,6 +18,7 @@ $gatewayControlScript = Join-Path $opsDir 'agent-lan-gateway-control.mjs'
 $goddessScript = Join-Path $opsDir 'goddess-bridge.mjs'
 $goddessControlScript = Join-Path $opsDir 'goddess-bridge-control.mjs'
 $spectateWatcherScript = Join-Path $opsDir 'spectate-watcher.mjs'
+$agentEyeWatcherScript = Join-Path $opsDir 'agent-eye-watcher.mjs'
 $pausedFile = Join-Path $opsDir 'auto-start.paused'
 $repairFile = Join-Path $opsDir 'repair-no-rcon.requested'
 $lockFile = Join-Path $opsDir 'manage-server.lock'
@@ -80,6 +81,35 @@ function Stop-SpectateWatcher {
     Stop-Process -Id $existing[0].ProcessId -ErrorAction Stop
     Start-Sleep -Milliseconds 700
     Log 'Spectate watcher stopped'
+}
+
+function AgentEyeWatcherProcess {
+    @(Get-CimInstance Win32_Process -Filter "name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -eq $node -and $_.CommandLine -like "*$agentEyeWatcherScript*" })
+}
+
+function Start-AgentEyeWatcher {
+    $existing = @(AgentEyeWatcherProcess)
+    if ($existing.Count -gt 1) { throw 'Multiple Agent Eye watcher processes; manual inspection required.' }
+    if ($existing.Count -eq 1) { return }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $stdout = Join-Path $opsDir "agent-eye-watcher-$stamp.stdout.log"
+    $stderr = Join-Path $opsDir "agent-eye-watcher-$stamp.error.log"
+    $proc = Start-Process -FilePath $node -ArgumentList $agentEyeWatcherScript -WorkingDirectory $opsDir `
+        -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    Start-Sleep -Seconds 2
+    $proc.Refresh()
+    if ($proc.HasExited) { throw "Agent Eye watcher exited; inspect $stderr" }
+    Log "Agent Eye watcher running PID=$($proc.Id), log=$stdout"
+}
+
+function Stop-AgentEyeWatcher {
+    $existing = @(AgentEyeWatcherProcess)
+    if ($existing.Count -gt 1) { throw 'Multiple Agent Eye watcher processes; manual inspection required.' }
+    if ($existing.Count -eq 0) { return }
+    Stop-Process -Id $existing[0].ProcessId -ErrorAction Stop
+    Start-Sleep -Milliseconds 700
+    Log 'Agent Eye watcher stopped'
 }
 
 function Start-Goddess {
@@ -210,7 +240,8 @@ function PlayerRoster {
 }
 
 function HumanPlayers {
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess')
+    # Keep the restart safety gate conservative: only verified service accounts.
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }
@@ -287,6 +318,7 @@ function EnsureSpectatorBinding {
     } else {
         Start-SpectateWatcher
     }
+    Start-AgentEyeWatcher
 }
 
 function Start-Server {
@@ -329,6 +361,7 @@ function Start-Server {
 }
 
 function Stop-Server {
+    Stop-AgentEyeWatcher
     Stop-SpectateWatcher
     Stop-Goddess
     Stop-Gateway
@@ -594,6 +627,7 @@ if ($Action -eq 'Status') {
     Write-Host "Goddess bridge: $(if (GoddessProcess) { 'running' } else { 'stopped' })"
     Write-Host "CortiEye native mirror: $(if ((Listener) -and (NativeSpectateMirror)) { 'loaded' } else { 'not loaded' })"
     Write-Host "Spectate watcher: $(if (SpectateWatcherProcess) { 'running' } else { 'stopped' })"
+    Write-Host "Agent Eye watcher: $(if (AgentEyeWatcherProcess) { 'running' } else { 'stopped' })"
     Write-Host "Auto-start paused: $(Test-Path -LiteralPath $pausedFile)"
     $latestBackup = CompleteSnapshots $backupRoot | Select-Object -First 1
     $latestMirror = CompleteSnapshots $mirrorRoot | Select-Object -First 1
