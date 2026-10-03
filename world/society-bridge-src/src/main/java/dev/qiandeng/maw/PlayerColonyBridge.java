@@ -18,6 +18,8 @@ import com.minecolonies.api.eventbus.events.colony.ColonyCreatedModEvent;
 import com.minecolonies.api.blocks.ModBlocks;
 import com.minecolonies.api.util.InventoryUtils;
 import com.minecolonies.core.MineColonies;
+import com.minecolonies.core.colony.buildings.AbstractBuildingStructureBuilder;
+import com.minecolonies.core.colony.buildings.utils.BuildingBuilderResource;
 import com.minecolonies.api.configuration.ServerConfiguration;
 import com.minecolonies.core.tileentities.TileEntityColonyBuilding;
 import com.ldtteam.structurize.storage.StructurePacks;
@@ -59,6 +61,7 @@ final class PlayerColonyBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerColonyBridge.class);
     private static final int MAX_BYTES = 16384;
     private static final int MAX_ROWS = 24;
+    private static final int MAX_RESOURCE_ROWS = 12;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
     private static final Map<UUID, LinkedHashMap<String, String>> ACTION_RECEIPTS = new HashMap<>();
 
@@ -251,6 +254,7 @@ final class PlayerColonyBridge {
             List<IBuilding> buildingList = new ArrayList<>(colony.getServerBuildingManager().getBuildings().values());
             buildingList.sort(Comparator.comparing(IBuilding::getPosition));
             JsonArray buildings = new JsonArray();
+            int listedResources = 0;
             Set<String> seen = new HashSet<>();
             JsonArray requests = new JsonArray();
             for (IBuilding building : buildingList) {
@@ -259,6 +263,7 @@ final class PlayerColonyBridge {
                     row.addProperty("type", building.getBuildingType().getRegistryName().toString());
                     row.addProperty("level", building.getBuildingLevel());
                     row.addProperty("built", building.isBuilt());
+                    row.addProperty("constructionPending", building.isPendingConstruction());
                     row.add("position", pos(building.getPosition()));
                     if (colony.getPermissions().isColonyMember(player) && building.getTileEntity() != null) {
                         Map<String, Integer> stock = new TreeMap<>();
@@ -276,6 +281,36 @@ final class PlayerColonyBridge {
                         }
                         row.add("stock", summary);
                         row.addProperty("stockTruncated", stock.size() > summary.size());
+                        if (building instanceof AbstractBuildingStructureBuilder builder) {
+                            var progress = builder.getProgress();
+                            if (progress != null) {
+                                JsonObject construction = new JsonObject();
+                                if (progress.getB() != null) {
+                                    construction.addProperty("stage", progress.getB().name().toLowerCase());
+                                }
+                                row.add("construction", construction);
+                            }
+                            List<BuildingBuilderResource> needed = new ArrayList<>(builder.getNeededResources().values());
+                            needed.sort(Comparator.comparing(resource ->
+                                    BuiltInRegistries.ITEM.getKey(resource.getItemStack().getItem()).toString()));
+                            JsonArray resources = new JsonArray();
+                            for (BuildingBuilderResource resource : needed) {
+                                if (listedResources >= MAX_RESOURCE_ROWS) break;
+                                ItemStack item = resource.getItemStack();
+                                if (item.isEmpty()) continue;
+                                JsonObject entry = new JsonObject();
+                                entry.addProperty("id", BuiltInRegistries.ITEM.getKey(item.getItem()).toString());
+                                entry.addProperty("name", limit(item.getHoverName().getString(), 80));
+                                entry.addProperty("needed", resource.getAmount());
+                                entry.addProperty("availableReported", resource.getAvailable());
+                                entry.addProperty("inDelivery", resource.getAmountInDelivery());
+                                resources.add(entry);
+                                listedResources++;
+                            }
+                            row.add("resources", resources);
+                            row.addProperty("resourceCount", needed.size());
+                            row.addProperty("resourcesTruncated", needed.size() > resources.size());
+                        }
                     }
                     buildings.add(row);
                 }

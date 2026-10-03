@@ -116,6 +116,16 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 
 受限建城版桥接 JAR 已部署到停机中的 `E:\QiandengJiSocietyLab\server`，SHA-256 为 `40347fff1450e21f6da61ecac74efe7e13e6d21e1d3888e9625a7bd08847a58c`；前版备份在 `E:\QiandengJiSocietyLab\snapshots\before-colony-build-20261003`。版本锁 `verify` 和整服 `smoke` 均通过，日志为 `E:\QiandengJiSocietyLab\smoke-1791032544.log`，服务端正常存档退出。建城操作只在隔离副本实际执行；正式千灯纪和对外端口未改动。
 
+### 殖民地启动与施工可观测性：2026-10-03 续验
+
+此前在重启后立即查询到 `inactive`、零居民，是殖民地尚未加载和无人持续在线时的瞬时状态。隔离服让建城账号保持在线后，约 5 秒转为 `active`，约 30 秒产生第一位居民并自动分配建筑工；约数分钟达到配置的 4 位初始居民。白天建筑工提出真实的木镐请求，Mineflayer 玩家从本人背包交付后请求结清。这证明启动、自动招募及首个工作循环可以运行；`inactive` 应结合持续在线后的复查判断，不能单凭登录瞬间判为存档损坏。
+
+`maw_agent:colony_state` 现在给每座建筑增加 `constructionPending`。拥有成员权限时，建筑工小屋再给 `construction.stage`、最多 12 条全局材料记录 `resources[]`、`resourceCount` 和 `resourcesTruncated`。每条材料含物品注册 `id`、名称、`needed`、原生模块报告的 `availableReported`、`inDelivery`。`needed` 随施工消耗变化；`availableReported` 是 MineColonies 模块的缓存值，不能代替实时背包或小屋库存核对。真实回执在 `clear` 阶段列出泥土 151、橡木栅栏 54、石板 16、木板 13、Rack 2 等 11 类材料，稍后降为 10 类；这让 Agent 能先规划采集与合成，而非只等到工人逐项发请求。
+
+MineColonies 的 `getProgress()` 内部游标是蓝图扫描位置，不是世界绝对坐标；桥接只透出阶段，不透出那个游标。建筑 `position`、工单 `position`、居民 `lastPosition` 仍为世界绝对坐标。隔离验收核对建造单持续存在、居民上岗、材料需求被读取，以及 `construction` 不含伪装成世界位置的字段。建筑工仍处于清场阶段，**尚未验收小屋实际完工**，也未证明 Agent 已能自行采集合成全部材料。测试时研究副本观察到一次 Touhou Little Maid 的蜘蛛寻路缓存反射错误（`ClientLevel` 被专用服务器拒载），服务器继续运行且没有反复刷屏；在长期稳定性验收前需复测这项模组兼容性，不把该错误归因于殖民地施工。
+
+这版桥接 JAR 已更新到停机中的主实验服，SHA-256 为 `326e67aef4c128a41d7f14037710ad1f75a3739a937a23b14066d0a76cf9e4c6`，前版和锁文件保存在 `E:\QiandengJiSocietyLab\snapshots\before-colony-progress-20261003`。版本锁 `verify`、整服 `smoke` 和 4 项客户端协议测试通过；整服日志为 `E:\QiandengJiSocietyLab\smoke-1791037336.log`，实验服正常存档退出。研究副本的 Mineflayer 实测返回 ID 3、4 位居民、`constructionPending=true`、`construction.stage=clear` 和实际材料清单。正式千灯纪及公网入口未改。
+
 当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
 
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
