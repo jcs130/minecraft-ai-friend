@@ -167,6 +167,21 @@ $env:GATE_COMPONENTS_FILE='E:\QiandengJiSocietyLab\gateway\components.tsv'
 
 研究服和网关现已正常退出，主实验服继续保持停机；原 Paper 千灯纪及公网端口未改动。自主采集合成、更多原生物品组件、其他殖民地建筑及女仆工作仍待独立闭环验收。
 
+### mc-visual-console 源码准备：2026-10-04
+
+按用户要求，已将 [jcs130/mc-visual-console](https://github.com/jcs130/mc-visual-console) 完整克隆到 `E:\mc-visual-console`，当前为 `main`，提交 `2b0d5e11a9805fa666139f0b42b096ade880251b`。本服采用它作为后续 Agent 画面的源码来源，不将生成的 Minecraft 贴图、客户端 JAR 或浏览器 bundle 提交到 Git。现代渲染器入口为 `packages/modern-viewer/renderer-src`，其锁定依赖已通过 `npm ci --no-audit --no-fund` 在该子目录安装；现有装备、钓鱼、页面与通用技能预设共 11 项源码测试通过。没有运行完整仓库测试，也没有完成新实验服的实时 WebGL 验收。
+
+接入应复用**执行动作的同一个 Mineflayer bot**，由宿主将该连接已经接收到的区块、实体、装备、菜单、生命、天气等数据按 `renderer-src/SOCKET_PROTOCOL.md` 转为 Socket.IO 事件。浏览器入口包含第一人称、第三人称和地下城视角；不能另登录一个新观察账号，便宣称画面和背包属于正在行动的 Agent。页面与宿主的数据桥接是两层，安装依赖或提供静态页面不等于已出现游戏画面。
+
+版本边界已核对：最新可复建导出器与构建器**明确绑定 1.20.6**；仓库中的旧 `packages/modern-viewer/src`、`viewer-service` 记录过 1.21.1 宿主实验，但所需派生资产没有随源码入库，且没有覆盖最新画面合约。新服为 1.21.1 NeoForge，不能把这两段历史拼成“直接支持全部模组”的结论，也不能简单改版本字符串或将 1.20.6 state ID 套到新服。
+
+后续实时适配按以下数据边界推进：
+
+- 方块：以此模组包实际 `blocks.tsv` 的注册名和属性建立渲染表，从对应 1.21.1 客户端与已锁定模组导出模型、贴图。网关当前将部分 Create/MineColonies 方块近似为 `stone`，浏览器不能从这个有损投影反推出原生 ID；须另接账号已收到区块的原生状态流，处理加载、卸载、方块更新和维度切换。只读准星接口仍用于动作核验，不扩大为隐藏区块扫描。
+- 物品与窗口：以本人的 `maw_agent:menu_state` 补充真实物品 ID、数量及完整 SNBT，再适配为 `avatarState` / `interactionState`；保留槽位、角色与 `mayPickup`，不把模组菜单图标当作可领取物，也不由前端代理物品名称授权操作。
+- 模组状态：Create 转速、殖民地工单与成员权限分别来自本人 `maw_agent:world_state`、`maw_agent:colony_state`。魔力和冷却要接真实服务端状态，缺失时显示未知，不编造恢复；既有通道尚不代表 Ars 技能 HUD 已接通。
+- 验收：在独立回环端口上验证真实 WebGL、同账号移动、床/村民/机器显示、原生物品取放及重连；再补健康探针、可管理的起停与故障恢复。当前未启动可视化常驻服务、未修改千灯纪服务或公网映射。
+
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
