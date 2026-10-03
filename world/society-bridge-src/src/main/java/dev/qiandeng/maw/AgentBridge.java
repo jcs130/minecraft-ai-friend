@@ -58,6 +58,7 @@ public final class AgentBridge {
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
         PlayerMenuBridge.register(eventBus);
         PlayerWorldBridge.register(eventBus);
+        PlayerColonyBridge.register(eventBus);
     }
 
     private static void register(RegisterCommandsEvent event) {

@@ -37,6 +37,13 @@ ordering="AFTER"
 side="SERVER"
 
 [[dependencies.maw_agent_bridge]]
+modId="minecolonies"
+type="required"
+versionRange="[1.1.1319,)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_agent_bridge]]
 modId="neoforge"
 type="required"
 versionRange="[21.1.248,)"
