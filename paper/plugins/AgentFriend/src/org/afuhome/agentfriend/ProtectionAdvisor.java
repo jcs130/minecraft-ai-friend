@@ -102,6 +102,7 @@ final class ProtectionAdvisor {
         Block block = player.getWorld().getBlockAt(x, y, z);
         if (plugin.villageProtection().deniesEdit(block)) return "village_structure";
         if (plugin.guildHall().deniesEdit(block)) return "guild_hall";
+        if (plugin.lifeBuildings().deniesEdit(block)) return "life_guild_building";
         if (action.equals("break") ? plugin.trialRoad().deniesBreak(block)
                 : plugin.trialRoad().deniesPlace(block)) return "trial_road";
         if (plugin.deniesArenaEdit(block)) return "arena";

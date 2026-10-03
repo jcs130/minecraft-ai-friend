@@ -90,6 +90,11 @@ final class LifeGuildManager implements Listener {
         switch (action) {
             case "board", "list", "看板" -> board(player);
             case "menu", "菜单" -> plugin.openLifeGuildMenu(player);
+            case "locations", "地点", "npc" -> plugin.lifeBuildings().locations(player);
+            case "visit", "拜访" -> {
+                if (args.length < 3) player.sendMessage("§e用法：/mycli life visit harvest|harbor|workshop|library");
+                else plugin.lifeBuildings().visit(player, args[2]);
+            }
             case "status", "状态" -> status(player);
             case "accept", "接单" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW + "用法：/mycli life accept <任务ID>");
@@ -99,7 +104,7 @@ final class LifeGuildManager implements Listener {
             case "abandon", "放弃" -> abandon(player);
             case "write", "写书" -> write(player, args);
             default -> player.sendMessage(ChatColor.YELLOW
-                    + "用法：/mycli life board|menu|status|accept <任务ID>|claim|abandon|write <书名>|<正文>");
+                    + "用法：/mycli life board|menu|status|locations|visit <建筑ID>|accept <任务ID>|claim|abandon|write <书名>|<正文>");
         }
     }
 
@@ -383,6 +388,7 @@ final class LifeGuildManager implements Listener {
         inventory.setItem(21, icon(Material.WRITABLE_BOOK, "§d写一本书", "用原版书与笔写满 40 字后签署",
                 "Agent 可用 /mycli life write <书名>|<正文>"));
         inventory.setItem(22, icon(Material.ARROW, "§7返回技能罗盘", "生活任务每天可各完成一次"));
+        inventory.setItem(24, icon(Material.COMPASS, "§6生活公会地点", "§7列出四座建筑及专属导师的绝对坐标"));
     }
 
     void click(Player player, int slot) {
@@ -392,6 +398,7 @@ final class LifeGuildManager implements Listener {
         else if (slot == 19) abandon(player);
         else if (slot == 21) player.sendMessage(ChatColor.YELLOW
                 + "拿一本书与笔，在原版界面写至少 40 字并签署。Agent 可用 /mycli life write <书名>|<正文>。");
+        else if (slot == 24) plugin.lifeBuildings().locations(player);
     }
 
     String bookPage(Player player) {
@@ -440,7 +447,7 @@ final class LifeGuildManager implements Listener {
         send(player, json);
     }
 
-    private void send(Player player, JsonObject json) {
+    void send(Player player, JsonObject json) {
         byte[] data = json.toString().getBytes(StandardCharsets.UTF_8);
         if (data.length > 16_384) return;
         if (player.getListeningPluginChannels().contains(CHANNEL)) {

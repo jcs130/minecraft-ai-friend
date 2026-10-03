@@ -52,7 +52,7 @@ final class AgentCliCatalog {
         add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔挑战、商店与本人奖励箱","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
         add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
-        add(specs,"life","life","read","/mycli life board|menu|status|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
+        add(specs,"life","life","read","/mycli life board|menu|status|locations|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
         add(specs,"village","safety","read","/mycli village threat|villagers","查村庄外围掠夺者、附近职业村民及真实收购报价","在线玩家；结果只含已加载实体","本人 mcagent:village JSON 与私有文字");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
@@ -135,6 +135,8 @@ final class AgentCliCatalog {
         add(specs,"guild.travel","adventure","teleport","/mycli guild travel <遗迹ID>","前往已开放地下城遗迹的外围安全点","ID 从公会看板/文档获取；目标可用","传送或拒绝原因");
         add(specs,"life.board","life","read","/mycli life board","查看七类生活公会的每日委托和精确 ID","在线玩家","私人看板文字");
         add(specs,"life.menu","life","gui","/mycli life menu","打开手柄可用的原版生活公会菜单","在线玩家","原版 27 格菜单");
+        add(specs,"life.locations","life","read","/mycli life locations","列出四座生活公会建筑、七位职业导师和绝对坐标","建筑已由服主建成","mcagent:life locations；buildingId/contractId/npc/profession/x/y/z");
+        add(specs,"life.visit","life","teleport","/mycli life visit <harvest|harbor|workshop|library>","前往生活公会建筑入口，也可以从村庄步行","建筑已开放且入口无阻挡","MC_DESTINATION 绝对坐标或拒绝原因");
         add(specs,"life.status","life","read","/mycli life status","查看本人七类公会声望及当前任务","在线玩家","mcagent:life status");
         add(specs,"life.accept","life","write","/mycli life accept <任务ID>","领取一项生活委托","非旁观者；无其他进行中生活委托","mcagent:life accept");
         add(specs,"life.claim","life","item","/mycli life claim","交付达成的生活委托","任务进度已满；今日未领取","声望和个人箱奖励、mcagent:life claim");

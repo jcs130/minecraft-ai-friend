@@ -197,6 +197,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private GuildManager guild;
     private LifeGuildManager lifeGuild;
+    private LifeGuildBuildings lifeBuildings;
     private VillageWatchManager villageWatch;
     private GuildHallManager guildHall;
     private PvpArenaManager pvpArena;
@@ -250,6 +251,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
         villageStructureProtection = new VillageStructureProtection(this);
+        lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
@@ -319,6 +321,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private World world() { return Bukkit.getWorld("world"); }
     VillageStructureProtection villageProtection() { return villageStructureProtection; }
     GuildHallManager guildHall() { return guildHall; }
+    LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
     DungeonManager dungeon() { return dungeon; }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
@@ -791,6 +794,30 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             if (args[1].equalsIgnoreCase("surveyservices")) guildHall.surveyServices(sender);
             else guildHall.buildServices(sender);
+            return true;
+        }
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("surveylife") || args[1].equalsIgnoreCase("buildlife"))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台勘察或建造生活公会。"); return true;
+            }
+            if (args.length != 5) {
+                sender.sendMessage("用法：/mycli admin surveylife|buildlife <harvest|harbor|workshop|library> <x> <z>");
+                return true;
+            }
+            try {
+                int bx = Integer.parseInt(args[3]), bz = Integer.parseInt(args[4]);
+                if (args[1].equalsIgnoreCase("surveylife")) lifeBuildings.survey(sender, args[2], bx, bz);
+                else lifeBuildings.build(sender, args[2], bx, bz);
+            } catch (NumberFormatException error) { sender.sendMessage("x、z 必须是整数。"); }
+            return true;
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("scanliferow")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台扫描生活公会候选地。"); return true;
+            }
+            try { lifeBuildings.scanRow(sender, Integer.parseInt(args[2])); }
+            catch (NumberFormatException error) { sender.sendMessage("z 必须是整数。"); }
             return true;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin")
@@ -1891,6 +1918,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "creation" -> "§d✦ 向女神申请";
             case "guild" -> "§6✦ 冒险者公会";
             case "life" -> "§a✦ 生活公会";
+            case "life_sites" -> "§a✦ 生活公会地图";
             case "pvp" -> "§c✦ PvP竞技场";
             case "arena_difficulty" -> "§6✦ 试炼难度与开场";
             default -> "§6✦ 造物术";
@@ -2062,6 +2090,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             guild.fillBoard(p, inv);
         } else if (page.equals("life")) {
             lifeGuild.fillMenu(p, inv);
+        } else if (page.equals("life_sites")) {
+            lifeBuildings.fillMap(inv);
         } else if (page.equals("creation")) {
             for (int i = 0; i < GIFT_IDEAS.size(); i++) {
                 GiftIdea idea = GIFT_IDEAS.get(i);
@@ -2279,10 +2309,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 }
             } else if (page.equals("life")) {
                 if (slot == 22) openMenu(p, "skills");
+                else if (slot == 24) openMenu(p, "life_sites");
                 else {
                     lifeGuild.click(p, slot);
                     if (slot != 21) openMenu(p, "life");
                 }
+            } else if (page.equals("life_sites")) {
+                if (slot == 22) openMenu(p, "life");
+                else if (slot == 24) {
+                    lifeBuildings.locations(p);
+                    openMenu(p, "life_sites");
+                } else lifeBuildings.visitSlot(p, slot);
             } else if (page.equals("creation")) {
                 if (slot >= 10 && slot < 10 + GIFT_IDEAS.size()) requestCreation(p, GIFT_IDEAS.get(slot - 10).id());
                 else if (slot == 21) p.sendMessage(ChatColor.LIGHT_PURPLE + "其他物品请用 /mycli cast give <物品>，女神会判断能否赠送。");
@@ -2604,7 +2641,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 2 && args[0].equalsIgnoreCase("life"))
-            return List.of("board", "menu", "status", "accept", "claim", "abandon", "write");
+            return List.of("board", "menu", "status", "locations", "visit", "accept", "claim", "abandon", "write");
+        if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("visit"))
+            return List.of("harvest", "harbor", "workshop", "library");
         if (args.length == 2 && args[0].equalsIgnoreCase("village"))
             return List.of("threat", "villagers");
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
