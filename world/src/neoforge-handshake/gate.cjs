@@ -35,7 +35,7 @@ const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
-const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE)
+const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
 const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
   ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
@@ -323,7 +323,7 @@ function connectBackend (sess) {
             log(`DEBUG：[${sess.username}] 原生 PLAY 包 id=${chunk[0]} 长=${chunk.length} 无法解析：${error.message.slice(0, 160)}`)
             // An unsupported codec is not a recovered inventory. End explicitly
             // instead of leaving a broken decoder idle until a keepalive timeout.
-            kickFront(sess, '模组物品协议尚未适配，无法安全同步背包：' + error.message.slice(0, 120))
+            kickFront(sess, (chunk[0] === 0x29 ? '模组粒子协议尚未适配：' : '模组物品协议尚未适配，无法安全同步背包：') + error.message.slice(0, 120))
           }
           return callback()
         }
@@ -557,6 +557,15 @@ function relayTo (sess, target, name, params, dir) {
         kickFront(sess, '原生画面数据同步失败：' + error.message.slice(0, 120))
         return
       }
+    }
+    if (name === 'world_particles' && params.particle?.type?.includes(':')) {
+      // A native particle has no vanilla wire equivalent. Keep the original
+      // above on this player's native stream; never invent a substitute effect.
+      if (!sess.nativeParticleNotice) {
+        sess.nativeParticleNotice = true
+        log(`DEBUG：[${sess.username}] 模组粒子只交原生画面通道，原版协议连接不接收替代粒子`)
+      }
+      return
     }
     if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓

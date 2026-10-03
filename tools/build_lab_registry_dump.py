@@ -2,8 +2,8 @@
 
 This mod registers only /labids dumpids. It is intentionally not deployed by
 this script; install it in a throwaway copy of the exact modpack, then remove it
-after exporting blocks.tsv, items.tsv, components.tsv, block-states.jsonl
-and entities.tsv. State properties and render shapes are read from the actual
+after exporting blocks.tsv, items.tsv, components.tsv, block-states.jsonl,
+entities.tsv and particles.tsv. State properties and render shapes are read from the actual
 registry; no vanilla property order or proxy state IDs are inferred.
 """
 from __future__ import annotations
@@ -55,7 +55,8 @@ def main() -> None:
             'int ni = dumpItems(dir.resolve("items.tsv"));\n'
             '                    dumpComponents(dir.resolve("components.tsv"));\n'
             '                    dumpStates(dir.resolve("block-states.jsonl"));\n'
-            '                    dumpEntities(dir.resolve("entities.tsv"));')
+            '                    dumpEntities(dir.resolve("entities.tsv"));\n'
+            '                    dumpParticles(dir.resolve("particles.tsv"));')
         code = code.replace('    private static int dumpBlocks(Path file)', '''    private static void dumpComponents(Path file) throws Exception {
         try (BufferedWriter w = Files.newBufferedWriter(file)) {
             for (var component : BuiltInRegistries.DATA_COMPONENT_TYPE) {
@@ -97,6 +98,16 @@ def main() -> None:
             for (var entity : BuiltInRegistries.ENTITY_TYPE) {
                 w.write(BuiltInRegistries.ENTITY_TYPE.getKey(entity).toString() + "\\t" +
                         BuiltInRegistries.ENTITY_TYPE.getId(entity));
+                w.newLine();
+            }
+        }
+    }
+
+    private static void dumpParticles(Path file) throws Exception {
+        try (BufferedWriter w = Files.newBufferedWriter(file)) {
+            for (var particle : BuiltInRegistries.PARTICLE_TYPE) {
+                w.write(BuiltInRegistries.PARTICLE_TYPE.getKey(particle).toString() + "\\t" +
+                        BuiltInRegistries.PARTICLE_TYPE.getId(particle));
                 w.newLine();
             }
         }

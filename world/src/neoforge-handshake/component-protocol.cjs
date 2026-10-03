@@ -15,6 +15,12 @@ const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
   'patchouli:book': 'string'
 }
+// minecraft-data's 1.21.1 wire names for these two particles differ from the
+// actual BuiltInRegistries names. Resolve the verified aliases by name, not ID.
+const PARTICLE_ALIASES = {
+  trial_spawner_detected_player: 'trial_spawner_detection',
+  trial_spawner_detected_player_ominous: 'trial_spawner_detection_ominous'
+}
 const ITEM_PACKET_NAMES = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'])
 const packetMappings = mcData.protocol.play.toClient.types.packet[1][0].type[1].mappings
 const itemPacketIds = new Set(Object.entries(packetMappings).filter(([, name]) => ITEM_PACKET_NAMES.has(name)).map(([id]) => Number(id)))
@@ -39,7 +45,7 @@ function registryFromTsv (text) {
   return result
 }
 
-function createBackendComponentProtocol (registry) {
+function createBackendComponentProtocol (registry, particles = null) {
   const protocol = structuredClone(mcData.protocol)
   const vanillaMappings = protocol.types.SlotComponentType[1].mappings
   const mappings = {}
@@ -56,21 +62,50 @@ function createBackendComponentProtocol (registry) {
   }
   protocol.types.SlotComponentType = ['mapper', { type: 'varint', mappings }]
   protocol.types.SlotComponent[1][1].type[1].default = 'mawUnsupportedComponent'
+  if (particles) {
+    const definition = protocol.types.Particle[1]
+    const nativeParticleMappings = {}
+    const particleFields = definition[1].type[1].fields
+    for (const name of Object.values(definition[0].type[1].mappings)) {
+      const id = particles.get('minecraft:' + (PARTICLE_ALIASES[name] || name))
+      if (!Number.isSafeInteger(id)) throw Error('MISSING_VANILLA_PARTICLE ' + name)
+      nativeParticleMappings[id] = name
+      particleFields[name] ||= 'void'
+    }
+    for (const [name, id] of particles) {
+      if (name.startsWith('minecraft:')) continue
+      nativeParticleMappings[id] = name
+      particleFields[name] = name === 'create:rotation_indicator'
+        ? ['container', [
+            { name: 'color', type: 'i32' }, { name: 'speed', type: 'f32' },
+            { name: 'radius1', type: 'f32' }, { name: 'radius2', type: 'f32' },
+            { name: 'lifeSpan', type: 'i32' },
+            // Create 6.0.10 + Catnip in Ponder 1.0.82: enum ordinal VarInt.
+            { name: 'axis', type: ['mapper', { type: 'varint', mappings: { 0: 'x', 1: 'y', 2: 'z' } }] }
+          ]]
+        : 'mawUnsupportedParticle'
+    }
+    definition[0].type = ['mapper', { type: 'varint', mappings: nativeParticleMappings }]
+    definition[1].type[1].default = 'mawUnsupportedParticle'
+  }
   const unsupported = () => { throw Error('UNSUPPORTED_NATIVE_ITEM_COMPONENT') }
+  const unsupportedParticle = () => { throw Error('UNSUPPORTED_NATIVE_PARTICLE_CODEC') }
   const compiler = new ProtoDefCompiler()
   compiler.addTypes(nativeTypes)
   compiler.addTypes({
-    Read: { mawUnsupportedComponent: ['native', unsupported] },
-    Write: { mawUnsupportedComponent: ['native', unsupported] },
-    SizeOf: { mawUnsupportedComponent: ['native', unsupported] }
+    Read: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] },
+    Write: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] },
+    SizeOf: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] }
   })
   compiler.addProtocol(protocol, ['play', 'toClient'])
   nbt.addTypesToCompiler('big', compiler)
   return compiler.compileProtoDefSync()
 }
 
-function loadBackendComponentProtocol (file) {
-  return file ? createBackendComponentProtocol(registryFromTsv(fs.readFileSync(file, 'utf8'))) : null
+function loadBackendComponentProtocol (file, particleFile = null) {
+  if (particleFile && !file) throw Error('PARTICLE_PROTOCOL_REQUIRES_COMPONENT_REGISTRY')
+  return file ? createBackendComponentProtocol(registryFromTsv(fs.readFileSync(file, 'utf8')),
+    particleFile ? registryFromTsv(fs.readFileSync(particleFile, 'utf8')) : null) : null
 }
 
 // The vanilla connection cannot receive mod component type IDs. Strip only

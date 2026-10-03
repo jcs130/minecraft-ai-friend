@@ -184,7 +184,7 @@ $env:GATE_COMPONENTS_FILE='E:\QiandengJiSocietyLab\gateway\components.tsv'
 
 ### 原生贴图与建模要求：2026-10-04
 
-用户进一步明确：新服的网页画面必须使用与对应模组 Java 客户端一致的贴图和建模，**禁止原版近似渲染**。兼容协议的代理物品/方块不能作为新画面的渲染依据；未接通的原生渲染应明确报不可用，不静默画成石头或原版生物。静态资源一致、世界数据一致和最终渲染一致须分别验收。Create 动态机械、女仆骨骼动画、Domum 组合材质等不能仅凭复制 JSON/PNG 声称一致；若浏览器不能完整实现对应模组渲染，完整视图须使用原生 NeoForge 客户端渲染并传输到浏览器，Mineflayer 继续作为 Agent 的操作连接。
+用户进一步明确：新服的网页画面必须使用与对应模组 Java 客户端一致的贴图和建模，**禁止原版近似渲染**。兼容协议的代理物品/方块不能作为新画面的渲染依据；未接通的原生渲染应明确报不可用，不静默画成石头或原版生物。静态资源一致、世界数据一致和最终渲染一致须分别验收。Create 动态机械、女仆骨骼动画、Domum 组合材质等不能仅凭复制 JSON/PNG 声称一致。用户随后明确网页也能实现动画，**Three.js 作为优先显示路径**；应移植原始动画规则、材质和真实状态，Java 客户端作为对照。不能因为模组使用 Java 渲染器就直接转去视频串流；其他显示后端须基于实际发现的限制判断。Mineflayer 继续作为 Agent 的操作连接。
 
 诊断导出工具新增 `block-states.jsonl` 与 `entities.tsv`，只在研究副本安装和执行。实测导出 3,975 种方块、107,852 个状态；每个状态保存真实 `stateId`、注册名、属性、`renderShape` 与 `hasBlockEntity`，不推测原版属性顺序。状态表 SHA-256 为 `9a4379ec448a72f4616626769b36a3258317e37eeda6c78c5f3e4e7c78448ad7`。主实验服及 Paper 正式服没有安装诊断 JAR。
 
@@ -204,6 +204,33 @@ $env:GATE_NATIVE_STATES_FILE='E:\QiandengJiSocietyLab\research\registry-server\d
 隔离验收使用普通 `MawNativeViewQA` 连接，原生数据流与普通 Mineflayer 同账号并存。实际观察到建筑工核心 `(603,64,600)` 原生 ID 74628、`minecolonies:blockhutbuilder`、`facing=north`；两件储物架为 75101 / 75095，分别保存朝向和 `blockrackair` / `blockrackfull` 属性，而普通兼容流三者均为 `stone` / ID 1。第一轮 47 秒共收到 402 个区块柱、33,474 个连续原生包，无流错误、生命 20；验收脚本因猜错储物架注册名而失败，原结果仍保留，不能将这条断言失败掩盖为已通过。
 
 按真实注册名 `minecolonies:blockminecoloniesrack` 纠正验收，并补区块卸载处理后，第二次独立回连 47 秒通过：201 个区块柱、31,393 个连续原生包、生命 20、无协议/流错误，上述四件模组方块的原生 ID/属性均读回。额外镜像线流量 7,729,096 字节，当前逐包发送，浏览器宿主仍需按帧合并实体变化并测 CPU/帧率，不能称性能优化已经完成。新协议与既有客户端适配共 20 项回归通过。研究服正常存档退出、网关已关闭；本轮未向 Paper 服发出停启、配置或网络修改操作。当前只完成资源和原生数据接缝，完整浏览器网格、模组运行时渲染、GUI 与实时性能还要逐项验证。
+
+### Three.js 原始模型与动力动画：2026-10-04
+
+`E:\mc-visual-console` 实验分支新增 `renderer-src/src/native-viewer/model-loader.js`、`create-kinetics.js` 和只读网页验收入口。逐文件核对原始模型/PNG 哈希，保留父模型、子级纹理覆盖、原始 UV 和元素旋转。当前 Create 适配锁定本服 6.0.10 JAR，核对实际安装字节码与其提交 `ac0c444d9828da3453ae8cc65338e8de063286fb`：轴依据真实 RPM、轴向与绝对位置的相位规则转动；曲柄加载完整握柄模型，并复现每 tick 四分之一速度追踪与 partial tick 插值。没有把原始握柄简化成木板，也没有从兼容代理的石头状态猜出机器。
+
+首次真实采样因误用区块方块实体坐标字段失败；修正为协议提供的 `x/z` 后，普通账号 `MawWebRenderQA` 收到真实轴 `42909` 和朝上曲柄 `43432`，但第一次转动触发 `world_particles`（包号 `0x29`，68 字节）解码长度错误，被网关明确踢出。该失败记录仍在 `research/create-viewer-capture-1791054474570.json`；它只有正转更新，不能当完整成功。
+
+根因是网关沿用原版粒子注册表和 codec。只读诊断增加 `particles.tsv`，仅在研究副本部署新版诊断 JAR 并导出；原生状态表哈希保持不变。粒子表 SHA-256 `0f82f3bb29200e4d6244c86d330fe665c477ff61c90b6835af5b72c67e84a153`，本服 `create:rotation_indicator` 的实际网络 ID 为 112，不能把 112 当跨包常量。依据安装的 Create 与 Ponder/Catnip 字节码实现 `INT color + FLOAT speed/radius1/radius2 + INT lifeSpan + VarInt Axis.ordinal`。新增可选配置：
+
+```powershell
+$env:GATE_PARTICLES_FILE='E:\QiandengJiSocietyLab\research\registry-server\dump\lab-registry-ids\particles.tsv'
+```
+
+必须与同一模组包的 `GATE_COMPONENTS_FILE` 配套使用。两种原版 trial-spawner 粒子在 minecraft-data 中的名字与真实注册名不同，已按实际导出名建立明确别名；其余按注册名查网络 ID，不靠旧编号猜。未适配的模组粒子 codec 明确失败。已适配的 Create 粒子原样进入本账号 `mcviewer:native_packet`；原版前门没有等价表达，所以不投影为替代粒子，也不让原版 serializer 接收未知类型。没有广播或聊天副本。当前网页模型预览还没有画这些粒子。
+
+补齐后，普通账号在 (5.5,64,-3.5) 用正常右键、潜行右键转动 (3,65,-2) 的既有曲柄；执行动作与采集原生状态使用同一玩家连接。首次靠近位置由研究服 QA 传送，不能称自主走到机器。第三次独立连接实测 9.640 秒，生命 20、2 件原生方块、10 条动力更新、2 条原生旋转指示粒子，速度集合为 `[-32,0,32]`，无流错误、无踢出。成功记录为 `research/create-viewer-capture-1791055128811.json`；退出时两件机器均收到停止状态。原协议与新增粒子回归共 22 项通过。
+
+```powershell
+# 在 E:\mc-visual-console\packages\modern-viewer\renderer-src 执行
+node tools/serve-native-create-preview.mjs `
+  E:\QiandengJiSocietyLab\research\native-viewer-assets-20261004-v2 `
+  E:\QiandengJiSocietyLab\research\create-viewer-capture-1791055128811.json 28982
+```
+
+入口仅监听回环，按清单读取资源，并核对 Host/Origin；不接受游戏控制命令或任何管理凭据。真实浏览器显示曲柄与轴共 35 个原始模型面，按钮分别读回 `32/-32/0 RPM`，握柄惯性也使用原始规则。页面明确是“联机记录回放、非完整世界画面”。首版 CSS 造成画布与父容器反复增高，已用绝对定位消除反馈，重新加载后长时间保持视口 400 px、页面 1,134 px；没有把失败页面当成功。6 项模型/动画回归与既有 8 项资源回归通过。
+
+本轮验证了 Three.js 可以承担这组原生机械动画，**还没有验收完整场景光照、所有朝向、实体动画、特殊材质和实时全世界渲染**。不能改写 `renderParityVerified=false`。原生 Minecraft 联机研究服务已正常存档停止，网关已关闭；只读网页模型预览可供本机查看。本轮没有停启、配置或修改原 Paper 千灯纪，也没有更改路由器/防火墙。
 
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
