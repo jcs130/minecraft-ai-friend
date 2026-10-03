@@ -393,6 +393,53 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                                           f"maw_agent spell cast {bodies[0]} unrestricted_magic")
             if wrong_spell.get("ok") is not False or wrong_spell.get("code") != "invalid_spell_id":
                 raise ValueError(f"Unlisted spell was not rejected: {wrong_spell}")
+            configured_book = (
+                'item replace entity MawSmokeA weapon.mainhand with '
+                'ars_nouveau:novice_spell_book[ars_nouveau:spell_caster='
+                '{current_slot:0,max_slots:10,spells:{"0":{name:"Smoke Heal",'
+                'color:{id:"ars_nouveau:constant",r:255,g:25,b:180},sound:{},'
+                'recipe:["ars_nouveau:glyph_self","ars_nouveau:glyph_heal"]}}}]'
+            )
+            process.stdin.write(configured_book + "\n")
+            process.stdin.flush()
+            learned = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
+            if (learned.get("ok") is not True or not any(
+                    spell.get("id") == "ars_nouveau:slot_0"
+                    and spell.get("glyphs") == ["ars_nouveau:glyph_self", "ars_nouveau:glyph_heal"]
+                    for spell in learned.get("spells", []))):
+                raise ValueError(f"Agent could not inspect configured Ars book: {learned}")
+            explained = console_command(process, log_path,
+                                        f"maw_agent spell explain {bodies[0]} ars_nouveau:slot_0")
+            if (explained.get("ok") is not True or explained.get("name") != "Smoke Heal"
+                    or explained.get("manaCost") != 60):
+                raise ValueError(f"Agent could not explain configured Ars spell: {explained}")
+            mana_deadline = time.monotonic() + 90
+            while learned["mana"]["current"] < explained["manaCost"] and time.monotonic() < mana_deadline:
+                time.sleep(2)
+                learned = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
+            if learned["mana"]["current"] < explained["manaCost"]:
+                raise ValueError(f"Ars mana did not recover enough for test cast: {learned}")
+            process.stdin.write("damage MawSmokeA 8\n")
+            process.stdin.flush()
+            injured_roster = console_command(process, log_path, "maw_agent list")
+            injured = next(row for row in injured_roster["bodies"] if row["bodyUuid"] == bodies[0])
+            if not injured["health"] < injured["maxHealth"] - 5:
+                raise ValueError(f"Smoke body could not be injured for healing test: {injured}")
+            actual_cast = console_command(process, log_path,
+                                          f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
+            time.sleep(1)
+            healed_roster = console_command(process, log_path, "maw_agent list")
+            healed = next(row for row in healed_roster["bodies"] if row["bodyUuid"] == bodies[0])
+            if (actual_cast.get("ok") is not True
+                    or actual_cast.get("manaAfter", 1000) >= actual_cast.get("manaBefore", 0)
+                    or healed["health"] <= injured["health"]):
+                raise ValueError(f"Configured Ars heal had no observed effect: {actual_cast}, {injured}, {healed}")
+            no_mana_cast = console_command(process, log_path,
+                                           f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
+            if (no_mana_cast.get("ok") is not False
+                    or no_mana_cast.get("code") != "ars_cast_not_confirmed"
+                    or no_mana_cast.get("manaSpent") != 0):
+                raise ValueError(f"Ars cast without enough mana was misreported: {no_mana_cast}")
             for item in ("farmersdelight:cooking_pot", "create:shaft",
                          "ars_nouveau:novice_spell_book", "mcwroofs:oak_roof",
                          "mcwbridges:oak_bridge_pier"):
@@ -496,6 +543,7 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
             "minecraftVersion": status["version"]["name"], "displayName": "My Agent World",
             "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "cli_commands", "per_body_status",
                                                    "native_ars_spell_catalog", "unearned_cast_rejected",
+                                                   "configured_ars_heal_effect", "no_mana_cast_rejected",
                                                    "content_recipe_lookup", "dungeon_absolute_locations",
                                                    "boss_trial_absolute_location",
                                                    "receipt_body_isolation", "unknown_tool_rejected", "body_cleanup"],

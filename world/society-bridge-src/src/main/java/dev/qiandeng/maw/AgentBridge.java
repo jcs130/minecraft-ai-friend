@@ -129,6 +129,8 @@ public final class AgentBridge {
                 entry.addProperty("x", body.getX());
                 entry.addProperty("y", body.getY());
                 entry.addProperty("z", body.getZ());
+                entry.addProperty("health", body.getHealth());
+                entry.addProperty("maxHealth", body.getMaxHealth());
                 bodies.add(entry);
             }
         }
@@ -412,13 +414,17 @@ public final class AgentBridge {
         } catch (RuntimeException error) {
             return reject(source, "ars_native_cast_failed");
         }
+        double after = mana.getCurrentMana();
+        boolean manaSpent = after < before;
         JsonObject result = new JsonObject();
-        result.addProperty("ok", true);
+        result.addProperty("ok", manaSpent);
+        if (!manaSpent) result.addProperty("code", "ars_cast_not_confirmed");
         result.addProperty("bodyUuid", body.getUUID().toString());
         result.addProperty("spellId", spellId);
         result.addProperty("name", caster.getSpellName(slot));
         result.addProperty("manaBefore", before);
-        result.addProperty("manaAfter", mana.getCurrentMana());
+        result.addProperty("manaAfter", after);
+        result.addProperty("manaSpent", before - after);
         result.addProperty("nativeInteraction", nativeResult);
         result.addProperty("effectVerified", false);
         result.addProperty("retryAutomatically", false);
