@@ -13,22 +13,27 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import ssl
 import struct
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
 
 REPO = Path(__file__).resolve().parents[1]
 LOCK = REPO / "manifests" / "society-lab-1.21.1.lock.json"
+DATAPACK_SOURCE = REPO / "world" / "society-datapacks" / "maw_curios_maid_slots"
+DATAPACK_NAME = DATAPACK_SOURCE.name
 DEFAULT_ROOT = Path(r"E:\QiandengJiSocietyLab")
 DEFAULT_JAVA = Path(r"E:\MC\jdk\jdk-21.0.12.1+1\bin\java.exe")
 PORT = 28976
 PROPERTIES = {
     "server-ip": "127.0.0.1",
     "server-port": str(PORT),
+    "online-mode": "false",
     "enable-rcon": "false",
     "enable-query": "false",
     "level-name": "world-lab",
@@ -36,7 +41,6 @@ PROPERTIES = {
 }
 INITIAL_PROPERTIES = {
     **PROPERTIES,
-    "online-mode": "false",
     "enforce-secure-profile": "false",
     "white-list": "false",
     "view-distance": "6",
@@ -50,6 +54,9 @@ INITIAL_PROPERTIES = {
 REQUIRED_MODS = (
     "minecolonies", "structurize", "multipiston", "blockui",
     "domum_ornamentum", "touhou_little_maid", "farmersdelight",
+    "ponder", "create", "create_dragons_plus", "create_central_kitchen",
+    "ars_nouveau", "ars_creo", "curios", "patchouli", "geckolib",
+    "mcwbridges", "mcwroofs", "mcwfurnitures", "mcwwindows",
     "numen_api", "numen", "maw_agent_bridge",
 )
 
@@ -92,8 +99,17 @@ def fetch(url: str, dest: Path, expected: str) -> None:
         raise ValueError(f"Incomplete download requires inspection: {part}")
     request = urllib.request.Request(url, headers={"User-Agent": "QiandengJiSocietyLab/1"})
     try:
-        with urllib.request.urlopen(request, timeout=45) as source, part.open("xb") as target:
-            shutil.copyfileobj(source, target, length=1024 * 1024)
+        try:
+            with urllib.request.urlopen(request, timeout=45) as source, part.open("xb") as target:
+                shutil.copyfileobj(source, target, length=1024 * 1024)
+        except urllib.error.URLError as error:
+            if os.name != "nt" or not isinstance(error.reason, ssl.SSLCertVerificationError):
+                raise
+            part.unlink(missing_ok=True)
+            # Windows curl uses Schannel and the machine's trusted certificate store.
+            subprocess.run(["curl.exe", "--fail", "--location", "--retry", "2",
+                            "--silent", "--show-error",
+                            "--output", str(part), url], check=True, timeout=180)
         check_artifact(part, expected)
         os.replace(part, dest)
     except Exception:
@@ -137,6 +153,28 @@ def check_runtime(root: Path, lock: dict, with_agent: bool = True) -> None:
             raise ValueError(f"Lab setting {key} must be {expected!r}; found {props.get(key)!r}")
     if not (server / "eula.txt").is_file() or "eula=true" not in (server / "eula.txt").read_text(encoding="ascii"):
         raise ValueError("Lab EULA has not been accepted")
+    expected_files = {path.relative_to(DATAPACK_SOURCE): path for path in DATAPACK_SOURCE.rglob("*") if path.is_file()}
+    installed = server / "world-lab" / "datapacks" / DATAPACK_NAME
+    actual_files = {path.relative_to(installed): path for path in installed.rglob("*") if path.is_file()}
+    if not expected_files or set(actual_files) != set(expected_files):
+        raise ValueError(f"Lab data pack differs: {installed}")
+    for relative, source in expected_files.items():
+        if sha256(source) != sha256(actual_files[relative]):
+            raise ValueError(f"Lab data pack file differs: {installed / relative}")
+
+
+def install_datapack(server: Path) -> None:
+    target = server / "world-lab" / "datapacks" / DATAPACK_NAME
+    for source in DATAPACK_SOURCE.rglob("*"):
+        if not source.is_file():
+            continue
+        dest = target / source.relative_to(DATAPACK_SOURCE)
+        if dest.exists():
+            if sha256(dest) != sha256(source):
+                raise ValueError(f"Existing lab data pack file differs: {dest}")
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
 
 
 def prepare(root: Path, java: Path, lock: dict, accept_eula: bool) -> None:
@@ -174,6 +212,7 @@ def prepare(root: Path, java: Path, lock: dict, accept_eula: bool) -> None:
         if not accept_eula:
             raise ValueError("Accept the Minecraft EULA explicitly with --accept-eula")
         eula.write_text("eula=true\n", encoding="ascii")
+    install_datapack(server)
     check_runtime(root, lock, with_agent=False)
 
 
@@ -324,6 +363,17 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                 if (receipt.get("ok") is not True or receipt.get("bodyUuid") != body
                         or receipt.get("resultKnown") is not True):
                     raise ValueError(f"Agent status was routed incorrectly: {receipt}")
+            for item in ("farmersdelight:cooking_pot", "create:shaft",
+                         "ars_nouveau:novice_spell_book", "mcwroofs:oak_roof",
+                         "mcwbridges:oak_bridge_pier"):
+                args_json = json.dumps({"item_id": item}, separators=(",", ":"))
+                receipt = console_command(process, log_path,
+                                          f"maw_agent invoke {bodies[0]} lookup_recipe {args_json}")
+                reply = receipt.get("reply") or {}
+                if (receipt.get("ok") is not True or receipt.get("resultKnown") is not True
+                        or reply.get("success") is not True
+                        or "recipe(s) for" not in reply.get("message", "")):
+                    raise ValueError(f"Agent could not read the {item} recipe: {receipt}")
             rejected = console_command(process, log_path,
                                        f"maw_agent invoke {bodies[0]} nonexistent_tool {{}}")
             if rejected.get("ok") is not False or rejected.get("code") != "unknown_tool":
@@ -347,12 +397,22 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                     process.wait(timeout=10)
     content = log_path.read_text(encoding="utf-8", errors="replace")
     missing = [mod for mod in REQUIRED_MODS if f"({mod})" not in content]
-    if process.returncode != 0 or missing or "All dimensions are saved" not in content:
-        raise RuntimeError(f"Lab smoke failed (exit={process.returncode}, missing={missing}): {log_path}")
+    # Authlib may fail to refresh Mojang's public key on this loopback-only,
+    # explicitly offline lab. Preserve that fact in the result without hiding
+    # server/mod errors, which still fail the smoke test.
+    key_fetch_errors = [line for line in content.splitlines()
+                        if "[Yggdrasil Key Fetcher/ERROR]" in line
+                        and "Failed to request yggdrasil public key" in line]
+    errors = [line for line in content.splitlines()
+              if ("/ERROR]" in line or "/FATAL]" in line) and line not in key_fetch_errors]
+    if process.returncode != 0 or missing or errors or "All dimensions are saved" not in content:
+        raise RuntimeError(f"Lab smoke failed (exit={process.returncode}, missing={missing}, "
+                           f"errors={errors[:3]}): {log_path}")
     return {"ok": True, "exitCode": process.returncode, "port": PORT,
             "minecraftVersion": status["version"]["name"], "displayName": "My Agent World",
             "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "per_body_status",
-                                                   "unknown_tool_rejected", "body_cleanup"],
+                                                   "content_recipe_lookup", "unknown_tool_rejected", "body_cleanup"],
+            "offlineKeyFetchWarnings": len(key_fetch_errors),
             "log": str(log_path)}
 
 

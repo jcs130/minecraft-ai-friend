@@ -71,6 +71,97 @@
       "project": "https://www.curseforge.com/minecraft/mc-mods/farmers-delight/files/8765184",
       "url": "https://mediafilez.forgecdn.net/files/8765/184/FarmersDelight-1.21.1-1.3.4.jar",
       "sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c"
+    },
+    {
+      "name": "create-1.21.1-6.0.10.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/create/version/UjX6dr61",
+      "url": "https://cdn.modrinth.com/data/LNytGWDc/versions/UjX6dr61/create-1.21.1-6.0.10.jar",
+      "sha256": "ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a"
+    },
+    {
+      "name": "CreateDragonsPlus-1.11.9.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/create-dragons-plus/version/b0u9vk8C",
+      "url": "https://cdn.modrinth.com/data/dzb1a5WV/versions/b0u9vk8C/CreateDragonsPlus-1.11.9.jar",
+      "sha256": "37f05a6775bbe811fe8c2833fa6289a1c704d0b25bdd5f239d343a5c6f62ed8a"
+    },
+    {
+      "name": "create-central-kitchen-2.6.2.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/create-central-kitchen/version/whbguqT1",
+      "url": "https://cdn.modrinth.com/data/btq68HMO/versions/whbguqT1/create-central-kitchen-2.6.2.jar",
+      "sha256": "b0cd470dce5a1cfd455255d0d26951326fd2abdad8fc785e3545d3bbbc53e222"
+    },
+    {
+      "name": "ars_nouveau-1.21.1-5.13.2.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/ars-nouveau/version/1VWyxABY",
+      "url": "https://cdn.modrinth.com/data/TKB6INcv/versions/1VWyxABY/ars_nouveau-1.21.1-5.13.2.jar",
+      "sha256": "787b5e2ed6b0e5004285b27ab6c51f8b43edab6cb44c6eccf09452c4b3870dce"
+    },
+    {
+      "name": "ars_creo-1.21.1-5.4.0.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/ars-creo/version/LqOllHms",
+      "url": "https://cdn.modrinth.com/data/fZ324GMc/versions/LqOllHms/ars_creo-1.21.1-5.4.0.jar",
+      "sha256": "50f0fe5c5f855151c1482c1772ea94c2eaadc2b0c85c963bb9aeb421fc801e4f"
+    },
+    {
+      "name": "mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/macaws-bridges/version/aQ7rY7ng",
+      "url": "https://cdn.modrinth.com/data/GURcjz8O/versions/aQ7rY7ng/mcw-bridges-3.1.2-mc1.21.1neoforge.jar",
+      "sha256": "070b817d3282760d9789b22ce13779613c8b558e02012fd5884d343175d88fd9"
+    },
+    {
+      "name": "mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/macaws-roofs/version/jiXRXiSt",
+      "url": "https://cdn.modrinth.com/data/B8jaH3P1/versions/jiXRXiSt/mcw-roofs-2.3.2-mc1.21.1neoforge.jar",
+      "sha256": "25c79def993a24b05b0f8494ee9417717d469bc000d5ed7c219b47dcc3b3e9c8"
+    },
+    {
+      "name": "curios-neoforge-9.5.1+1.21.1.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/curios/version/yohfFbgD",
+      "url": "https://cdn.modrinth.com/data/vvuO3ImH/versions/yohfFbgD/curios-neoforge-9.5.1%2B1.21.1.jar",
+      "sha256": "a45df2125c26219974aba7507ffc9afe7b83acc941a386af3faacb1cc0056fde"
+    },
+    {
+      "name": "Patchouli-1.21.1-93-NEOFORGE.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/patchouli/version/BIogJv2D",
+      "url": "https://cdn.modrinth.com/data/nU0bVIaL/versions/BIogJv2D/Patchouli-1.21.1-93-NEOFORGE.jar",
+      "sha256": "959af52ed6640c316c3a8469203420be4aeea11ad6603890ba83bf48f5d9f993"
+    },
+    {
+      "name": "geckolib-neoforge-1.21.1-4.9.3.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/geckolib/version/Grwn5rUB",
+      "url": "https://cdn.modrinth.com/data/8BmcQJ2H/versions/Grwn5rUB/geckolib-neoforge-1.21.1-4.9.3.jar",
+      "sha256": "20a1995e4074f387ff549e2c57ea79dd7d41ee83c6afb9dd6a6e840e592d1c47"
+    },
+    {
+      "name": "mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/macaws-furniture/version/Z5V3Ps7S",
+      "url": "https://cdn.modrinth.com/data/dtWC90iB/versions/Z5V3Ps7S/mcw-furniture-3.4.1-mc1.21.1neoforge.jar",
+      "sha256": "819fda8059b210e9de8b9275c8b8e0d931054af5a5ad47771c72d9fd4ab85e88"
+    },
+    {
+      "name": "mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/macaws-windows/version/rQUE4LCz",
+      "url": "https://cdn.modrinth.com/data/C7I0BCni/versions/rQUE4LCz/mcw-mcwwindows-2.4.2-mc1.21.1neoforge.jar",
+      "sha256": "8970c40ec622edd34c9b055226b403af08ab441c77303a6dc625ae18005f8184"
+    },
+    {
+      "name": "ponder-neoforge-1.0.82+mc1.21.1.jar",
+      "kind": "mod",
+      "project": "https://maven.createmod.net/net/createmod/ponder/ponder-neoforge/1.0.82%2Bmc1.21.1/",
+      "url": "https://maven.createmod.net/net/createmod/ponder/ponder-neoforge/1.0.82%2Bmc1.21.1/ponder-neoforge-1.0.82%2Bmc1.21.1.jar",
+      "sha256": "0cf4611ad853042b689ac386184c5bbe02950efcffddb49e5f604e82baddb0dc"
     }
   ]
 }
