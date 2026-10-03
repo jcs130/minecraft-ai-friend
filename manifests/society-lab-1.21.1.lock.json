@@ -8,12 +8,12 @@
     {
       "name": "numen-neoforge-1.21.1-0.1.3.jar",
       "source": "world/numen-src/core/neoforge/build/libs/numen-neoforge-1.21.1-0.1.3.jar",
-      "sha256": "06fac1748ba1d12f5d395ecf2b3f32b43980e3d0919ba8145a34e260ba168973"
+      "sha256": "a4f2d43eb8e4d1e62b68ac04dfbda0248f6fe173b94f3d45cad59251e732c0af"
     },
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "99465f8b2c0ea62a946e6c62c22e483eda846a5f444550a00c59aae87edec187"
+      "sha256": "f4e491317736f62cd1d3ab7b1b9570da9bf3fde0513681620dfee7fcb1389b2c"
     }
   ],
   "artifacts": [
@@ -162,6 +162,34 @@
       "project": "https://maven.createmod.net/net/createmod/ponder/ponder-neoforge/1.0.82%2Bmc1.21.1/",
       "url": "https://maven.createmod.net/net/createmod/ponder/ponder-neoforge/1.0.82%2Bmc1.21.1/ponder-neoforge-1.0.82%2Bmc1.21.1.jar",
       "sha256": "0cf4611ad853042b689ac386184c5bbe02950efcffddb49e5f604e82baddb0dc"
+    },
+    {
+      "name": "DungeonCrawl-NeoForge-1.21-2.3.17.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/dungeoncrawl/version/D7lKpb69",
+      "url": "https://cdn.modrinth.com/data/q0rRg4lH/versions/D7lKpb69/DungeonCrawl-NeoForge-1.21-2.3.17.jar",
+      "sha256": "853cd59208f17c25188a419b48d1a9fed3acebf676bb1ddd026fa4e7fb56dad4"
+    },
+    {
+      "name": "YungsBetterDungeons-1.21.1-NeoForge-5.1.3.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/yungs-better-dungeons/version/RqX5d3pv",
+      "url": "https://cdn.modrinth.com/data/o1C1Dkj5/versions/RqX5d3pv/YungsBetterDungeons-1.21.1-NeoForge-5.1.3.jar",
+      "sha256": "db67e72e40e1f807574f633a4f019083c2e9aee82fb0730dd69b9265631cfcdb"
+    },
+    {
+      "name": "YungsApi-1.21.1-NeoForge-5.1.8.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/yungs-api/version/K3Dp2T0P",
+      "url": "https://cdn.modrinth.com/data/Ua7DFN59/versions/K3Dp2T0P/YungsApi-1.21.1-NeoForge-5.1.8.jar",
+      "sha256": "bacd2385965bcfa4adcc0841656110b8e21ee024407a5ee706d30929f7c240cc"
+    },
+    {
+      "name": "dungeoneer-1.0.3-Release-neoforge-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/fantastic-dungoneer/version/TjDQPKML",
+      "url": "https://cdn.modrinth.com/data/M744KlcR/versions/TjDQPKML/dungeoneer-1.0.3-Release-neoforge-1.21.1.jar",
+      "sha256": "4cc80b00660c37357998bfccd0c131466349cac76c18aec9d07051919b517131"
     }
   ]
 }

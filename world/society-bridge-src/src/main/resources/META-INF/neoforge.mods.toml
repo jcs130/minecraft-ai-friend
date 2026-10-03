@@ -23,6 +23,13 @@ ordering="AFTER"
 side="SERVER"
 
 [[dependencies.maw_agent_bridge]]
+modId="ars_nouveau"
+type="required"
+versionRange="[5.13.2,)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_agent_bridge]]
 modId="neoforge"
 type="required"
 versionRange="[21.1.248,)"

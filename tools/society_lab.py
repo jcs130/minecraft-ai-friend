@@ -57,6 +57,7 @@ REQUIRED_MODS = (
     "ponder", "create", "create_dragons_plus", "create_central_kitchen",
     "ars_nouveau", "ars_creo", "curios", "patchouli", "geckolib",
     "mcwbridges", "mcwroofs", "mcwfurnitures", "mcwwindows",
+    "dungeoncrawl", "betterdungeons", "yungsapi", "dungeoneer",
     "numen_api", "numen", "maw_agent_bridge",
 )
 
@@ -358,11 +359,40 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
             by_id = {body["bodyUuid"]: body for body in roster["bodies"]}
             if any(body not in by_id for body in bodies) or bodies[0] == bodies[1]:
                 raise ValueError(f"Agent bodies are not independent: {roster}")
+            catalog = console_command(process, log_path, "maw_agent commands")
+            if (catalog.get("ok") is not True or catalog.get("legacyMycliParity") is not False
+                    or "maw_agent spell explain <bodyUuid> <spellId>" not in catalog.get("commands", [])):
+                raise ValueError(f"Agent CLI was not self-describing: {catalog}")
             for body in bodies:
                 receipt = console_command(process, log_path, f"maw_agent invoke {body} task_status {{}}")
                 if (receipt.get("ok") is not True or receipt.get("bodyUuid") != body
                         or receipt.get("resultKnown") is not True):
                     raise ValueError(f"Agent status was routed incorrectly: {receipt}")
+            spell_list = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
+            if (spell_list.get("ok") is not True or spell_list.get("bodyUuid") != bodies[0]
+                    or spell_list.get("casterEquipped") is not False
+                    or not isinstance(spell_list.get("spells"), list)
+                    or not isinstance(spell_list.get("mana"), dict)):
+                raise ValueError(f"Agent's native Ars mana/book state was unavailable: {spell_list}")
+            no_book_cast = console_command(process, log_path,
+                                           f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
+            if no_book_cast.get("ok") is not False or no_book_cast.get("code") != "ars_spellbook_not_held":
+                raise ValueError(f"Agent cast without a real book was not rejected: {no_book_cast}")
+            no_book_explain = console_command(process, log_path,
+                                              f"maw_agent spell explain {bodies[0]} ars_nouveau:slot_0")
+            if no_book_explain.get("ok") is not False or no_book_explain.get("code") != "ars_spellbook_not_held":
+                raise ValueError(f"Agent explained a spell it did not own: {no_book_explain}")
+            assert process.stdin is not None
+            process.stdin.write("item replace entity MawSmokeA weapon.mainhand with ars_nouveau:novice_spell_book\n")
+            process.stdin.flush()
+            equipped = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
+            if (equipped.get("ok") is not True or equipped.get("casterEquipped") is not True
+                    or equipped.get("heldItem") != "ars_nouveau:novice_spell_book"):
+                raise ValueError(f"Agent could not inspect the held Ars spellbook: {equipped}")
+            wrong_spell = console_command(process, log_path,
+                                          f"maw_agent spell cast {bodies[0]} unrestricted_magic")
+            if wrong_spell.get("ok") is not False or wrong_spell.get("code") != "invalid_spell_id":
+                raise ValueError(f"Unlisted spell was not rejected: {wrong_spell}")
             for item in ("farmersdelight:cooking_pot", "create:shaft",
                          "ars_nouveau:novice_spell_book", "mcwroofs:oak_roof",
                          "mcwbridges:oak_bridge_pier"):
@@ -374,6 +404,60 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                         or reply.get("success") is not True
                         or "recipe(s) for" not in reply.get("message", "")):
                     raise ValueError(f"Agent could not read the {item} recipe: {receipt}")
+            locations = {}
+            for body, structure in zip(bodies, ("dungeoncrawl:dungeon",
+                                                "betterdungeons:skeleton_dungeon")):
+                args_json = json.dumps({"structure": structure}, separators=(",", ":"))
+                issued = console_command(process, log_path,
+                                         f"maw_agent invoke {body} locate_structure {args_json}")
+                if issued.get("ok") is not True or issued.get("bodyUuid") != body or not issued.get("callId"):
+                    raise ValueError(f"Agent dungeon search was not accepted: {issued}")
+                locations[body] = (structure, issued["callId"])
+            pending = set(locations)
+            deadline = time.monotonic() + 60
+            while pending and time.monotonic() < deadline:
+                for body in list(pending):
+                    structure, call_id = locations[body]
+                    receipt = console_command(process, log_path, f"maw_agent receipt {body} {call_id}")
+                    if receipt.get("ok") is not True or receipt.get("bodyUuid") != body:
+                        raise ValueError(f"Agent dungeon receipt was misrouted: {receipt}")
+                    if not receipt.get("finalKnown"):
+                        continue
+                    outcome = receipt.get("outcome") or {}
+                    data = outcome.get("data") or {}
+                    if (outcome.get("success") is not True or data.get("structure") != structure
+                            or data.get("found") is not True
+                            or not all(isinstance(data.get(axis), int) for axis in ("x", "y", "z"))):
+                        raise ValueError(f"Agent dungeon search returned no absolute location: {receipt}")
+                    pending.remove(body)
+                if pending:
+                    time.sleep(0.5)
+            if pending:
+                raise TimeoutError(f"Agent dungeon searches did not finish for {sorted(pending)}: {log_path}")
+            wrong_body = console_command(process, log_path,
+                                         f"maw_agent receipt {bodies[1]} {locations[bodies[0]][1]}")
+            if wrong_body.get("ok") is not False or wrong_body.get("code") != "unknown_or_expired_receipt":
+                raise ValueError(f"Dungeon receipt leaked to another body: {wrong_body}")
+            trial_args = json.dumps({"structure": "dungeoneer:cobblestone_dungeon"}, separators=(",", ":"))
+            issued = console_command(process, log_path,
+                                     f"maw_agent invoke {bodies[0]} locate_structure {trial_args}")
+            if issued.get("ok") is not True or not issued.get("callId"):
+                raise ValueError(f"Agent trial dungeon search was not accepted: {issued}")
+            trial_location = None
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                trial_location = console_command(process, log_path,
+                                                 f"maw_agent receipt {bodies[0]} {issued['callId']}")
+                if trial_location.get("finalKnown"):
+                    break
+                time.sleep(0.5)
+            trial_outcome = (trial_location or {}).get("outcome") or {}
+            trial_data = trial_outcome.get("data") or {}
+            if (trial_outcome.get("success") is not True
+                    or trial_data.get("structure") != "dungeoneer:cobblestone_dungeon"
+                    or trial_data.get("found") is not True
+                    or not all(isinstance(trial_data.get(axis), int) for axis in ("x", "y", "z"))):
+                raise ValueError(f"Boss dungeon location was unavailable to the Agent: {trial_location}")
             rejected = console_command(process, log_path,
                                        f"maw_agent invoke {bodies[0]} nonexistent_tool {{}}")
             if rejected.get("ok") is not False or rejected.get("code") != "unknown_tool":
@@ -410,8 +494,11 @@ def smoke(root: Path, java: Path, lock: dict) -> dict:
                            f"errors={errors[:3]}): {log_path}")
     return {"ok": True, "exitCode": process.returncode, "port": PORT,
             "minecraftVersion": status["version"]["name"], "displayName": "My Agent World",
-            "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "per_body_status",
-                                                   "content_recipe_lookup", "unknown_tool_rejected", "body_cleanup"],
+            "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "cli_commands", "per_body_status",
+                                                   "native_ars_spell_catalog", "unearned_cast_rejected",
+                                                   "content_recipe_lookup", "dungeon_absolute_locations",
+                                                   "boss_trial_absolute_location",
+                                                   "receipt_body_isolation", "unknown_tool_rejected", "body_cleanup"],
             "offlineKeyFetchWarnings": len(key_fetch_errors),
             "log": str(log_path)}
 
