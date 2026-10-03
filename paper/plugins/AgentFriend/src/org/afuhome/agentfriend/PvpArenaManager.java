@@ -138,8 +138,9 @@ final class PvpArenaManager implements Listener {
     private void lobby(Player p) {
         if (!built() || world == null) { result(p, "lobby", false, "arena_not_built"); return; }
         if (inMatch(p)) { result(p, "lobby", false, "match_active"); return; }
-        p.teleport(lobby());
-        result(p, "lobby", true, "teleported");
+        if (plugin.travelMagic().teleport(p, lobby(), "pvp:lobby", "竞技场传送术",
+                TravelMagic.LOCAL_MANA)) result(p, "lobby", true, "teleported");
+        else result(p, "lobby", false, "teleport_failed");
     }
     private void join(Player p) {
         if (!built() || world == null) { result(p, "join", false, "arena_not_built"); return; }
@@ -155,10 +156,19 @@ final class PvpArenaManager implements Listener {
         if (queue.contains(p.getUniqueId()) || inMatch(p) || escrow().contains("players." + p.getUniqueId())) {
             result(p, "join", false, "already_joined_or_recovery_pending"); return;
         }
+        if (!plugin.hasMana(p, TravelMagic.LOCAL_MANA)) {
+            result(p, "join", false, "insufficient_mana"); return;
+        }
         p.closeInventory();
         queueOrigins.put(p.getUniqueId(), p.getLocation().clone());
         queue.add(p.getUniqueId());
-        p.teleport(lobby());
+        if (!plugin.travelMagic().teleport(p, lobby(), "pvp:join", "竞技场入场术",
+                TravelMagic.LOCAL_MANA)) {
+            queue.remove(p.getUniqueId());
+            queueOrigins.remove(p.getUniqueId());
+            result(p, "join", false, "teleport_failed");
+            return;
+        }
         result(p, "join", true, "queued");
         p.sendMessage(ChatColor.AQUA + "已加入匹配；第二人加入后自动开始倒计时。退出用 /mycli pvp leave。");
         pair();

@@ -680,8 +680,13 @@ final class DungeonManager implements Listener {
         int position = 0;
         for (Player player : group) {
             int[] offset = offsets[position++ % offsets.length];
+            Location landing = destination.clone().add(offset[0], 0, offset[1]);
+            boolean paidCheckpoint = number == REST_FLOOR && !active;
             if (player.isOnline() && !player.isDead()
-                    && player.teleport(destination.clone().add(offset[0], 0, offset[1]))) {
+                    && (paidCheckpoint
+                        ? plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术",
+                                TravelMagic.DISTANT_MANA)
+                        : player.teleport(landing))) {
                 arrived.add(player.getUniqueId());
                 double maxHealth = player.getMaxHealth();
                 if (maxHealth > 0 && player.getHealth() < maxHealth) player.setHealth(maxHealth);
@@ -890,7 +895,7 @@ final class DungeonManager implements Listener {
                 : ChatColor.YELLOW + "[试炼指引] 当前个人箱没有物品或待入箱奖励；未通关的楼层不结算奖励。");
         player.sendMessage(ChatColor.AQUA + "[试炼指引] 去试炼场地面入口奖励箱 "
                 + LocationOutput.fields(new Location(world(), -594, 91, -313)) + " 领取；"
-                + "或输入 /mycli arena rewards 直接打开同一个个人箱。");
+                + "或用 /mycli arena rewards 花 2 魔力远程开启同一个个人箱。");
     }
 
     private boolean hasPendingRewards(UUID id) {
@@ -1507,20 +1512,26 @@ final class DungeonManager implements Listener {
         }
         if (args[2].equalsIgnoreCase("take") && args.length == 4) {
             UUID id = player.getUniqueId();
+            if (!remoteStashReady(player)) return;
+            boolean delivered = false;
             if (args[3].equalsIgnoreCase("all")) {
                 for (Material material : REWARD_TYPES) {
                     for (int stack = 0; stack < 128 && pending(id, material) > 0; stack++)
-                        if (!claimStandard(player, id, material)) break;
+                        if (claimStandard(player, id, material)) delivered = true;
+                        else break;
                 }
                 for (int index = 0; index < MAX_BONUS_QUEUE && !bonusItems(id).isEmpty(); index++)
-                    if (!claimBonus(player, id, 0)) break;
+                    if (claimBonus(player, id, 0)) delivered = true;
+                    else break;
+                if (delivered) chargeRemoteStash(player);
                 return;
             }
             try {
                 int slot = Integer.parseInt(args[3]);
-                if (slot >= 0 && slot < REWARD_TYPES.length) claimStandard(player, id, REWARD_TYPES[slot]);
-                else if (slot >= 9 && slot < 18) claimBonus(player, id, slot - 9);
+                if (slot >= 0 && slot < REWARD_TYPES.length) delivered = claimStandard(player, id, REWARD_TYPES[slot]);
+                else if (slot >= 9 && slot < 18) delivered = claimBonus(player, id, slot - 9);
                 else player.sendMessage("奖励槽位为 0–7 或 9–17；先用 /mycli arena rewards list 查看。");
+                if (delivered) chargeRemoteStash(player);
             } catch (NumberFormatException invalid) {
                 player.sendMessage("用法：/mycli arena rewards take <槽位|all>");
             }
@@ -1718,10 +1729,12 @@ final class DungeonManager implements Listener {
     void openStash(Player player) {
         UUID id = player.getUniqueId();
         Inventory inv = liveStash(id);
-        materializeRewards(inv, id);
         if (player.getOpenInventory().getTopInventory() == inv && stashMenus.containsKey(inv)) return;
+        if (!remoteStashReady(player)) return;
+        materializeRewards(inv, id);
         stashMenus.put(inv, id);
         player.openInventory(inv);
+        if (player.getOpenInventory().getTopInventory() == inv) chargeRemoteStash(player);
         if (hasPendingRewards(id)) player.sendMessage(ChatColor.YELLOW
                 + "个人箱已满，部分奖励仍待入箱；腾出格子后重新打开即可。");
     }
@@ -1765,6 +1778,7 @@ final class DungeonManager implements Listener {
             if (plugin.isSoulbound(source)) {
                 player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=soulbound"); return;
             }
+            if (!remoteStashReady(player)) return;
             Material material = source.getType();
             ItemStack part = source.clone();
             part.setAmount(Math.min(source.getAmount(), wanted));
@@ -1776,6 +1790,7 @@ final class DungeonManager implements Listener {
                 player.getInventory().setItem(slot, source.getAmount() > 0 ? source : null);
                 saveStash(inv, id);
                 player.saveData();
+                chargeRemoteStash(player);
             }
             player.sendMessage("MC_STASH_PUT slot=" + slot + " id=minecraft:"
                     + material.name().toLowerCase(Locale.ROOT) + " moved=" + moved);
@@ -1787,6 +1802,7 @@ final class DungeonManager implements Listener {
             if (material == null || !material.isItem() || wanted < 1) {
                 player.sendMessage("用法：/mycli arena stash put <英文物品ID> <1–64>"); return;
             }
+            if (!remoteStashReady(player)) return;
             int moved = 0;
             for (int slot = 0; slot < 36 && moved < wanted; slot++) {
                 ItemStack source = player.getInventory().getItem(slot);
@@ -1801,7 +1817,7 @@ final class DungeonManager implements Listener {
                 player.getInventory().setItem(slot, source.getAmount() > 0 ? source : null);
                 moved += deposited;
             }
-            if (moved > 0) { saveStash(inv, id); player.saveData(); }
+            if (moved > 0) { saveStash(inv, id); player.saveData(); chargeRemoteStash(player); }
             player.sendMessage("MC_STASH_PUT id=minecraft:" + material.name().toLowerCase(Locale.ROOT)
                     + " moved=" + moved + " requested=" + wanted);
             return;
@@ -1818,6 +1834,7 @@ final class DungeonManager implements Listener {
             if (source == null || source.getType().isAir()) {
                 player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty"); return;
             }
+            if (!remoteStashReady(player)) return;
             ItemStack part = source.clone();
             part.setAmount(Math.min(wanted, source.getAmount()));
             int attempted = part.getAmount();
@@ -1829,12 +1846,36 @@ final class DungeonManager implements Listener {
                 saveStash(inv, id);
                 player.saveData();
                 plugin.guildRewardClaimed(player);
+                chargeRemoteStash(player);
             }
             player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " id=minecraft:"
                     + part.getType().name().toLowerCase(Locale.ROOT) + " moved=" + moved);
             return;
         }
         player.sendMessage("用法：/mycli arena stash [inventory|list|put <物品ID> <数量>|putslot <背包槽位> <数量>|take <箱槽位> [数量]]");
+    }
+    private boolean nearStash(Player player) {
+        Location at = player.getLocation();
+        if (!sameWorld(at)) return false;
+        Location lobby = new Location(world(), X - 3.5, LOBBY_Y + 1.5, Z - 7.5);
+        if (at.distanceSquared(lobby) <= 25
+                && world().getBlockAt(X - 4, LOBBY_Y + 1, Z - 8).getType() == Material.CHEST) return true;
+        int number = floorAt(at);
+        return number > 0 && at.distanceSquared(new Location(world(), chestX(number) + .5,
+                Y[number - 1] + 1.5, chestZ(number) + .5)) <= 25
+                && world().getBlockAt(chestX(number), Y[number - 1] + 1, chestZ(number)).getType() == Material.CHEST;
+    }
+    private boolean remoteStashReady(Player player) {
+        return nearStash(player) || plugin.hasMana(player, 2);
+    }
+    private void chargeRemoteStash(Player player) {
+        if (nearStash(player)) return;
+        if (plugin.spendMana(player, 2)) {
+            player.sendMessage(ChatColor.LIGHT_PURPLE + "远程个人箱操作消耗 2 魔力；到试炼场实体箱旁操作则无需施法。");
+            player.sendMessage("MC_STORAGE_MAGIC id=personal_stash mana=2");
+            plugin.presentSpell(player, "storage");
+            plugin.publishSkill(player, "storage", "远程个人箱已生效，消耗 2 魔力", player.getLocation());
+        }
     }
     private int positiveCount(String raw) {
         try { int count = Integer.parseInt(raw); return count >= 1 && count <= 64 ? count : -1; }

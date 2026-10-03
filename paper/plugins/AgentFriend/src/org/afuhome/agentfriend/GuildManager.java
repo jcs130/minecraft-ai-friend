@@ -899,7 +899,7 @@ final class GuildManager implements Listener {
                 : "放弃「" + quest.title() + "」；进度清零"));
         inventory.setItem(49, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
                 : quest.title() + " " + progress(player) + "/" + quest.target(), "点击领取声望与箱中物资"));
-        inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "任务和地下城奖励都在这里"));
+        inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "远程开启 2 魔力；实体箱旁免费"));
         inventory.setItem(51, icon(Material.IRON_SWORD, "§c前往地下城", "前往试炼塔入口"));
         inventory.setItem(52, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
         inventory.setItem(47, icon(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石机关"));

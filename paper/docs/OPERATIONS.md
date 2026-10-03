@@ -1,12 +1,18 @@
 # Paper 分支维护与发布
 
-## 0.3.80 心眼轮廓与探矿粒子指引（2026-10-04，待安全窗口发布）
+## 0.3.81 传送与远程物品操作施法（2026-10-04，已发布）
+
+玩家主动发起的非原版瞬移统一按魔力结算，成功后给本人标题、粒子、音效、`MC_TRAVEL` 坐标和 Agent 技能事件；失败不扣费。归乡、公共/私人传送点、公会与竞技场入口等近程位移需 6 魔力；队友安全传送、遗迹远征和深层驿站直达需 8 魔力。Essentials `/warp`、`/home`、同意后的 `/tpa` 等玩家指令实际传送时也扣 6 魔力，单独发送请求不扣。远程打开个人箱或成功用文字指令存取一次扣 2 魔力；站在实体箱旁操作免费。副本自动换层、掉线/死亡恢复、竞技场对局流程和管理员救援保持流程传送规则；末影珍珠与传送门保留原版消耗。各入口与边界见 [位移与远程物品操作的施法成本](TRAVEL_MAGIC.md)。
+
+候选 `AgentFriend-0.3.81.jar` 为 475832 字节、SHA256 `44A2150DAA7B531182A7751E866477AAB2625ED2C452BE43F2E1FF74A6085A0A`。隔离服 `life-buildings-20261003` 以真实 Mineflayer 1.20.6 账号运行 `travel-magic-stage.mjs`，验证归乡、公共与私人传送点、Essentials 指令与 TPA、队友、公会、遗迹、竞技场、深层驿站及个人箱的成功扣费、魔力不足拒绝、原版客户端特效包和既有闪现术不重复收费；控制台救援传送与活动流程恢复保持免费。发布前确认仅服务账号在线、试炼 `active=false`，`Afu-MC-DailyBackup` 于 02:17 正常停服，在 E/F 两盘生成 `20261004-021732/.complete`，校验旧版和候选哈希，唯一启用 0.3.81 并重启；任务结果 0。正式服 RCON 读回 0.3.81 和唯一 JAR 哈希，Paper、Agent LAN 网关、Geyser 本机及 LAN Pong、Goddess 桥与 Watchdog 正常。CortiEye 当前账号离线，故无法验收附身画面；Agent Eye watcher 启动记录 PID 28624，交互式 Status 因跨会话权限误报 stopped。基岩真机的标题与粒子观感仍待玩家目视核对。
+
+## 0.3.80 心眼轮廓与探矿粒子指引（2026-10-04，随 0.3.81 发布）
 
 旧版 `sense` 的怪物透墙轮廓恢复到现有 `/mycli cast sense`，但只对施法者和当前已登记、正在附身的 Eye 发送原版实体元数据；不改全服怪物状态。基岩玩家获得最近怪物的粒子指向线和遮挡墙光框，原有 BossBar 与 `MC_HOSTILE` 坐标继续可用。探矿术也持续刷新从施法者眼前到第一处墙面的私有粒子指向线，保留 Java 矿块轮廓及基岩墙面光框。粒子线指方向，不计算绕墙路线。版本需要 ProtocolLib 5.3.0，正式服已安装。
 
-隔离服 `life-buildings-20261003` 使用与正式服相同的 CortiEyeMirror 0.1.8、Geyser 和 ProtocolLib，加上独立 Agent/Eye 测试配对；候选 `AgentFriend-0.3.80.jar` 为 468742 字节、SHA256 `E86365B723AE398DD458049FDA0B2DB330E2D797827B170FFAE45F5DB846261A`。`sense-outline-stage.mjs` 的真实 Mineflayer 三账号测试通过：施法者和附身 Eye 收到敌怪轮廓和坐标，旁观玩家及家畜没有；8 秒到期后恢复；探矿施法动画结束后粒子持续刷新，Eye 也收到私有展示包。Geyser 的内置映射将 END_ROD 转为 `minecraft:endrod`；基岩真机画面仍待目视核对。发布前巡检时正式服有真人 AdeleFelice 在线，试炼塔第 8 层 `active=true`，故当时没有停服或发布。发布时须重新确认零真人、试炼 `active=false`，再由计划任务完成 E/F 双盘完整快照与唯一 JAR 替换；不能趁试炼进行时重启。
+隔离服 `life-buildings-20261003` 使用与正式服相同的 CortiEyeMirror 0.1.8、Geyser 和 ProtocolLib，加上独立 Agent/Eye 测试配对；当时候选 `AgentFriend-0.3.80.jar` 为 468742 字节、SHA256 `E86365B723AE398DD458049FDA0B2DB330E2D797827B170FFAE45F5DB846261A`。`sense-outline-stage.mjs` 的真实 Mineflayer 三账号测试通过：施法者和附身 Eye 收到敌怪轮廓和坐标，旁观玩家及家畜没有；8 秒到期后恢复；探矿施法动画结束后粒子持续刷新，Eye 也收到私有展示包。Geyser 的内置映射将 END_ROD 转为 `minecraft:endrod`；基岩真机画面仍待目视核对。首次发布前巡检时正式服有真人 AdeleFelice 在线，试炼塔第 8 层 `active=true`，所以没有停服发布。
 
-候选已写入运行机 `E:\MC\ops\agentfriend-deploy.pending.json`，由现有 `Afu-MC-DailyBackup` 于 04:00 尝试处理。维护脚本额外检查：只要有真人在线，或待发布 AgentFriend 时试炼 `active=true`，就跳过本次备份与发布并保留待发布计划；无法读取试炼状态也拒绝停服。安全窗口才正常停服，生成 E/F 双盘 `.complete` 快照、校验旧版和候选哈希、只启用 0.3.80 并重启。当前正式服仍是 0.3.79；发布后须读回插件版本、E/F 快照、Java/基岩入口、Agent 网关和 Eye 附身状态，再更新本记录与版本清单。
+0.3.80 的待发布计划随后由包含上述能力的 0.3.81 候选替代，旧计划保存为 `agentfriend-deploy.superseded-0.3.80.json`。维护脚本继续执行真人在线、试炼活动和状态读取守卫；安全窗口内才停服、备份并发布。0.3.80 没有单独上正式服，其功能随上节的 0.3.81 一并生效。
 
 ## 0.3.79 生活公会入口通行（2026-10-03，已发布）
 

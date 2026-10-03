@@ -6,7 +6,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
-| 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
+| 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.79 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
@@ -68,7 +68,7 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 
 ### 技能与法术
 
-技能应有稳定 ID、展示名、解锁条件、魔力消耗、冷却、适用目标、效果、粒子/音效、失败提示和 Agent 可读说明。0.3.76 起自研法术的玩家/Agent 说明集中在 `SpellGuide.java`：Agent 先 `/mycli spells list`，再 `/mycli spells explain <ID>` 读取私有 `MC_SPELL_DETAIL`；旧 `/mycli explain cast.<ID>` 也嵌入同一份 `spell` 对象。图鉴数据是静态成本和规则，当前魔力与剩余冷却继续从本人 `mcagent:state` 读取。修改技能时同时核对图鉴、`/mycli focus list`、技能罗盘/命格书、MagicSpells 配置、AuraSkills 魔力扣费和 `mcviewer:state` 的每人状态同步。现有 `ViewerStatePublisher` 已按玩家连接发送本人状态；新技能需要确认它能正确显示等级、经验和剩余冷却，无法提供的值按既有协议留空。
+技能应有稳定 ID、展示名、解锁条件、魔力消耗、冷却、适用目标、效果、粒子/音效、失败提示和 Agent 可读说明。0.3.76 起自研法术的玩家/Agent 说明集中在 `SpellGuide.java`：Agent 先 `/mycli spells list`，再 `/mycli spells explain <ID>` 读取私有 `MC_SPELL_DETAIL`；旧 `/mycli explain cast.<ID>` 也嵌入同一份 `spell` 对象。图鉴数据是静态成本和规则，当前魔力与剩余冷却继续从本人 `mcagent:state` 读取。修改技能时同时核对图鉴、`/mycli focus list`、技能罗盘/命格书、MagicSpells 配置、AuraSkills 魔力扣费和 `mcviewer:state` 的每人状态同步。现有 `ViewerStatePublisher` 已按玩家连接发送本人状态；新技能需要确认它能正确显示等级、经验和剩余冷却，无法提供的值按既有协议留空。任何新增的主动瞬移、远程取物等非原版捷径都应先按 [位移与远程物品操作](TRAVEL_MAGIC.md) 定义资源成本与成功特效，不得免费开放。
 
 0.3.36 的八项原生法术熟练度是独立成长线：成功施放累计 8/24 次到 2/3 级，进度文件与世界一起备份；Agent 可用 `/mycli mastery` 读取本人 `MC_MASTERY`，手柄可在罗盘点「技能成长」。不要把这项法术等级说成 AuraSkills 等级或公会等级；MagicSpells 治疗/造物、女神学习技能尚未进入这套熟练度。新增技能应按 [技能体系](SKILL_SYSTEM.md) 明确分类、成功归因、等级效果和上限。
 
@@ -84,7 +84,7 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 0.3.70 候选把试炼入口石按钮改为原版难度菜单：玩家选自动／普通／冒险／末日，菜单确认当前选择，再点「开始」组队入场；手柄无需从罗盘跨页寻找。Agent 仍可先读 `/mycli arena difficulty list`，用 `/mycli arena difficulty <档位>` 设置，再在入口调用 `/mycli arena start`。实际发起者决定全队难度，开场后每位队员收到本人 `MC_DUNGEON_START difficulty/starter/partySize/floor`；不能把自己保存的选择当作已开场的全队档位。
 
-导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，是否真正抵达仍以客户端位置和服务端传送结果为准。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
+导航回执统一使用当前世界的绝对方块坐标。`/mycli waypoint` 的 `MC_WAYPOINT id=... dimension=... x=... y=... z=...` 列出公共和本人私人地点；`/mycli goto` 对 Essentials 地点返回 `MC_DESTINATION` 目标坐标，**实际成功**另有 `MC_TRAVEL id=... mana=... dimension=... x=... y=... z=...` 与 `mcagent:event`，不能把仅有 `MC_DESTINATION` 当作已抵达。`/mycli locate list|nearest|<玩家>` 返回 `MC_PLAYER name=...`；追踪条会继续显示方向、距离与持续刷新的目标坐标。`/mycli cast sense` 返回最多五个最近怪物的 `MC_HOSTILE type=...` 坐标；`/mycli guild travel <遗迹ID>` 的 `MC_SITE` 给出已抵达的安全落点 `x/y/z` 和仅有水平勘察精度的 `centerX/centerZ`。`/mycli arena status` 的 `MC_DUNGEON` 给出入口、个人箱及活动层坐标。`dimension` 是 `minecraft:overworld` 等注册维度键，坐标为方块整数；移动玩家和怪物的位置是回执时刻的快照，算路前应重新查询。探矿术已有绝对矿块坐标，保护查询的 `mcagent:protection` JSON 包含目标世界与坐标。除保护查询专用 plugin message 外，上述导航信息沿用原版聊天和 BossBar，Java、基岩和 Mineflayer 均能接收；不要把旧的“前方几格”文案当作机器坐标。
 
 0.3.80 的 `sense` 仍使用原有 ID、魔力、冷却和熟练度；新增 8 秒私有怪物轮廓及持续墙面粒子指引。Agent 仍解析 `MC_HOSTILE` 绝对坐标并重查移动目标；已登记且正在附身的 Eye 可见同一轮廓和私有消息。探矿术也每半秒刷新给本人看的粒子指向线，延伸到第一处遮挡墙并留下光框。Geyser 基岩不支持 Java 的发光轮廓，因此靠原版 END_ROD 粒子、BossBar 和坐标找目标；粒子线只标示方向，不计算安全行走路线。
 

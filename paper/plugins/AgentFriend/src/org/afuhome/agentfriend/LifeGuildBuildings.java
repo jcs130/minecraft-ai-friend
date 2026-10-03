@@ -560,11 +560,11 @@ final class LifeGuildBuildings implements Listener {
                 || !landing.clone().add(0, 1, 0).getBlock().getType().isAir()) {
             player.sendMessage(ChatColor.RED + "公会入口受阻，传送取消。"); return;
         }
-        if (player.teleport(landing)) {
+        if (plugin.travelMagic().teleport(player, landing, "life:" + hall.id(), "生活公会传送术",
+                TravelMagic.LOCAL_MANA)) {
             player.sendMessage(ChatColor.GOLD + "已到" + hall.name() + "；也可以从村庄步行拜访。");
             player.sendMessage("MC_DESTINATION id=life:" + hall.id() + " " + LocationOutput.fields(landing));
         }
-        else player.sendMessage(ChatColor.RED + "传送被保护规则取消。");
     }
 
     private static ItemStack icon(Material type, String name, String detail) {

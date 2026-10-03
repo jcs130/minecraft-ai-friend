@@ -70,7 +70,6 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
@@ -118,7 +117,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private record FocusSpell(String id, int slot, Material icon, String title, String hint) { }
     private static final List<FocusSpell> FOCUS_SPELLS = List.of(
             new FocusSpell("prospect", 10, Material.SPYGLASS, "§d探附近矿脉", "24–40 格；刻印工具再 +8"),
-            new FocusSpell("home", 1, Material.RED_BED, "§a回村庄", "安全传送到出生村庄"),
+            new FocusSpell("home", 1, Material.RED_BED, "§a回村庄", "安全传送到出生村庄；6 魔力"),
             new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a范围治疗", "治疗 8 格内受伤玩家；6 魔力"),
             new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
             new FocusSpell("fireworks", 4, Material.FIREWORK_ROCKET, "§6烟花术", "原版烟花粒子；1 魔力"),
@@ -217,12 +216,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private PlayerNameTags playerNameTags;
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
+    private TravelMagic travelMagic;
 
     boolean isSoulbound(ItemStack item) {
         return soulboundGear != null && soulboundGear.owner(item) != null;
     }
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
-    private final Map<UUID, Long> pendingHomeChants = new HashMap<>();
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -238,6 +237,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         featherKey = new NamespacedKey(this, "learned_feather");
         nightKey = new NamespacedKey(this, "learned_night");
         getServer().getPluginManager().registerEvents(this, this);
+        travelMagic = new TravelMagic(this);
+        getServer().getPluginManager().registerEvents(travelMagic, this);
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
@@ -309,7 +310,6 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         teamTeleportAt.clear();
         focusUseAt.clear();
         giftNonces.clear();
-        pendingHomeChants.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (agentStatePublisher != null) agentStatePublisher.stop();
         if (skillEventPublisher != null) skillEventPublisher.stop();
@@ -387,7 +387,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return id != null && (id.equals("prospect") || id.startsWith("prospect "));
     }
 
-    boolean spendMana(Player p, double amount) {
+    boolean hasMana(Player p, double amount) {
         SkillsUser user = skillsUser(p);
         if (user == null) { p.sendMessage(ChatColor.RED + "魔力数据还没加载，请稍后再试。"); return false; }
         if (user.getMana() + 0.0001 < amount) {
@@ -395,6 +395,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     + Math.round(user.getMaxMana()) + "，需要 " + Math.round(amount) + "。");
             return false;
         }
+        return true;
+    }
+
+    boolean spendMana(Player p, double amount) {
+        if (!hasMana(p, amount)) return false;
+        SkillsUser user = skillsUser(p);
         boolean consumed = user.consumeMana(amount);
         if (consumed && agentStatePublisher != null) agentStatePublisher.afterCast(p);
         return consumed;
@@ -403,6 +409,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void presentSpell(Player player, String spell) {
         spellPresentation.show(player, spell);
     }
+
+    TravelMagic travelMagic() { return travelMagic; }
 
     void publishSkill(Player player, String spell, String body, Location position) {
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
@@ -461,7 +469,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (user == null || user.getMana() + 0.0001 < cost) {
             event.setCancelled(true);
             p.sendMessage(ChatColor.RED + "魔力不足：需要 " + Math.round(cost) + "。用罗盘的命格书查看当前魔力。");
-        }
+        } else if (event.getSpell().getInternalName().equalsIgnoreCase("blink") && travelMagic != null)
+            travelMagic.exemptBlink(p);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -557,26 +566,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         savedCompassTargets.remove(id);
         teamTeleportAt.remove(id);
         focusUseAt.remove(id);
-        pendingHomeChants.remove(id);
         removeTrackingBar(id);
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onHomeTeleport(PlayerTeleportEvent event) {
-        Player player = event.getPlayer();
-        Long deadline = pendingHomeChants.get(player.getUniqueId());
-        Location target = event.getTo();
-        if (deadline == null || target == null || System.currentTimeMillis() > deadline
-                || !sameWorld(target)
-                || target.distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) >= 12 * 12) return;
-        pendingHomeChants.remove(player.getUniqueId());
-        Bukkit.getScheduler().runTask(this, () -> {
-            if (player.isOnline() && sameWorld(player.getLocation())
-                    && player.getLocation().distanceSquared(new Location(world(), -543.5, 66.9375, -439.5)) < 12 * 12) {
-                presentSpell(player, "home");
-                publishSkill(player, "home", "已抵达出生村庄", player.getLocation());
-            }
-        });
     }
 
     @EventHandler public void onGoddessMode(PlayerGameModeChangeEvent event) {
@@ -912,9 +902,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli skillbook list|use [槽位]  查看并研习试炼掉落的实体技能书；手柄可手持使用");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
-        p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；/mycli waypoint 列出地点");
+        p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；传送 6 魔力；/mycli waypoint 列出地点");
         p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
-        p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送");
+        p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送，8 魔力");
         p.sendMessage(dungeon.isBuilt()
                 ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
@@ -952,7 +942,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "dungeon", "地下城", "试炼" -> {
                 p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；按石按钮打开难度菜单，选普通／冒险／末日或自动，再点「开始」。附近队友会一起进入；清怪 10 秒后自动下楼并补满生命。");
-                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；/mycli arena rewards 远程开箱。");
+                p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；远程开箱需 2 魔力。");
             }
             case "team", "队友" -> {
                 p.sendMessage(ChatColor.AQUA + "【结伴】罗盘 → 找队友，可让指针追踪队友，也可安全传送到她身边。女神是旁观服主，不在队友列表。");
@@ -1020,12 +1010,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         };
         if (id.isEmpty()) { p.sendMessage(ChatColor.RED + "没有这项技能。输入 /mycli spells 查看精确名称。"); return; }
         if (id.equals("home")) {
-            UUID uuid = p.getUniqueId();
-            long deadline = System.currentTimeMillis() + 10_000L;
-            pendingHomeChants.put(uuid, deadline);
-            Bukkit.getScheduler().runTaskLater(this,
-                    () -> pendingHomeChants.remove(uuid, deadline), 200L);
-            gotoPlace(p, "village");
+            gotoPlace(p, "village", true);
             return;
         }
         if (id.equals("heal")) { groupHeal(p); return; }
@@ -1269,7 +1254,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         p.sendMessage(ChatColor.RED + "用法：/mycli goddess skills|learn feather|night|pray <话>");
     }
-    private void gotoPlace(Player p, String raw) {
+    private void gotoPlace(Player p, String raw) { gotoPlace(p, raw, false); }
+
+    private void gotoPlace(Player p, String raw, boolean homeSpell) {
         String id = raw.toLowerCase(Locale.ROOT);
         if (id.equals("guild") || id.equals("公会") || id.equals("工会")) {
             guildHall.teleport(p);
@@ -1281,27 +1268,30 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
                 p.sendMessage(ChatColor.RED + "试炼场入口受阻，传送已取消。"); return;
             }
-            if (p.teleport(landing)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；按石按钮选难度，再点菜单里的「开始」。 "
+            if (travelMagic.teleport(p, landing, "arena", "试炼场传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；按石按钮选难度，再点菜单里的「开始」。 "
                     + LocationOutput.fields(landing));
-            else p.sendMessage(ChatColor.RED + "传送被其他保护规则取消。");
             return;
         }
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
-            if (!p.performCommand("warp " + id)) p.sendMessage(ChatColor.RED + "公共传送点不可用。");
+            Location destination = publicWarp(id);
+            if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用。"); return; }
+            if (!travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
+                    homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA))
+                p.sendMessage(ChatColor.RED + "公共传送点未受理。");
             else {
-                Location destination = publicWarp(id);
-                if (destination != null) p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(destination));
+                p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(destination));
             }
             return;
         }
         if (id.startsWith("personal:")) {
             String name = raw.substring("personal:".length());
             if (!name.matches("[A-Za-z0-9_-]{1,24}")) { p.sendMessage(ChatColor.RED + "私人传送点名只用英文、数字、_、-，最长 24 字符。"); return; }
-            if (!p.performCommand("home " + name)) p.sendMessage(ChatColor.RED + "私人传送点不可用。");
+            Location destination = personalHome(p, name);
+            if (destination == null) { p.sendMessage(ChatColor.RED + "私人传送点不可用。"); return; }
+            if (!travelMagic.command(p, "home " + name, destination, "personal:" + name,
+                    "私人传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.RED + "私人传送点未受理。");
             else {
-                Location destination = personalHome(p, name);
-                if (destination != null) p.sendMessage("MC_DESTINATION id=personal:" + name + " "
-                        + LocationOutput.fields(destination));
+                p.sendMessage("MC_DESTINATION id=personal:" + name + " " + LocationOutput.fields(destination));
             }
             return;
         }
@@ -1515,15 +1505,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (landing == null) {
             viewer.sendMessage(ChatColor.YELLOW + "队友附近没有安全落脚点，请等她走到平地再试。"); return;
         }
-        teamTeleportAt.put(viewer.getUniqueId(), now);
-        viewer.teleportAsync(landing).whenComplete((success, error) -> Bukkit.getScheduler().runTask(this, () -> {
-            if (!viewer.isOnline()) return;
-            if (error != null || !success) {
-                teamTeleportAt.remove(viewer.getUniqueId());
-                viewer.sendMessage(ChatColor.RED + "传送失败；请稍后再试。");
-            } else viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。 "
+        if (travelMagic.teleport(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA)) {
+            teamTeleportAt.put(viewer.getUniqueId(), now);
+            viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。 "
                     + LocationOutput.fields(viewer.getLocation()));
-        }));
+        }
     }
 
     private void trackPlayer(Player viewer, UUID targetId) {
@@ -1955,7 +1941,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
             inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
             inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
-            inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄"));
+            inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄；6 魔力"));
             inv.setItem(11, item(Material.ENDER_PEARL, "§d闪现", "朝视线短距离移动；消耗 4 魔力"));
             inv.setItem(12, item(Material.GLISTERING_MELON_SLICE, "§d范围治疗", "8 格内受伤玩家全部恢复 3 颗心；消耗 6 魔力"));
             inv.setItem(13, item(Material.BREAD, "§d饱食", "恢复饥饿；消耗 3 魔力"));
@@ -1967,8 +1953,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(21, item(Material.GOLDEN_APPLE, "§a圣愈术·治疗自己", "回复 4 颗心；消耗 6 魔力"));
             inv.setItem(18, item(Material.BLAZE_POWDER, "§c战斗法术", "星芒箭、霜环、焰浪；只伤怪物"));
             inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "基础 24 格；挖矿等级提高范围", "刻印工具再 +8 格；点击选择矿种"));
-            inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共地点与私人 home"));
-            inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "前往村外六层试炼" : "前往村外三波战斗场"));
+            inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共地点与私人 home；每次 6 魔力"));
+            inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "传送至村外试炼入口；6 魔力" : "传送至村外战斗场；6 魔力"));
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
             inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
@@ -2054,13 +2040,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     "手持工具潜行使用附魔台打开此页", "刻印后潜行使用工具施法；普通附魔保留"));
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
-                inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint()));
+                inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), "传送消耗 6 魔力"));
             }
-            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口按钮选难度并组队，清怪后自动下楼" : "按钮启动三波战斗"));
+            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口传送 6 魔力；按钮组队，清怪自动下楼" : "传送 6 魔力；按钮启动三波战斗"));
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
-            inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点"));
-            inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "选择目标后落在遗迹外围，仍需步行探索"));
-            if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达", "工作台、商人和深层首领战"));
+            inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点；6 魔力"));
+            inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "传送到遗迹外围；8 魔力，仍需步行探索"));
+            if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达；8 魔力", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
                 inv.setItem(19, item(Material.IRON_SWORD, "§6冒险试炼", "怪物更强；稀有战利品概率和余额提高"));
@@ -2074,14 +2060,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             for (int i = 0; i < DungeonExpeditions.SITES.size(); i++) {
                 DungeonExpeditions.Site site = DungeonExpeditions.SITES.get(i);
                 inv.setItem(10 + i, item(site.icon(), "§e" + site.name(), site.hint(),
-                        "传送到外围后步行约 70 格；可先在公会接调查委托"));
+                        "传送消耗 8 魔力；落脚后步行约 70 格"));
             }
             inv.setItem(22, item(Material.ARROW, "§7返回地点", "打开传送罗盘"));
         } else if (page.equals("players")) {
             inv.setItem(0, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
             inv.setItem(4, item(Material.COMPASS, "§a追踪最近队友", "同一世界；罗盘指针跟随她"));
             inv.setItem(6, item(Material.BARRIER, "§c停止追踪", "关闭画面上的队友方向提示"));
-            inv.setItem(8, item(Material.ENDER_PEARL, "§d传送到最近队友", "安全落脚；20 秒冷却"));
+            inv.setItem(8, item(Material.ENDER_PEARL, "§d传送到最近队友", "安全落脚；8 魔力；20 秒冷却"));
             int[] headSlots = {10, 11, 12, 13, 14, 15, 16};
             Map<Integer, UUID> targets = new HashMap<>();
             List<Player> visible = trackablePlayers(p);
@@ -2095,16 +2081,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         worldLabel(target.getWorld()) + "  " + at.getBlockX() + ", " + at.getBlockY() + ", " + at.getBlockZ(),
                         where + "；罗盘指针跟随"));
                 inv.setItem(headSlots[i] + 9, item(Material.ENDER_PEARL, "§d传送至 " + target.getName(),
-                        "在队友附近安全落脚；20 秒冷却"));
+                        "在队友附近安全落脚；8 魔力；20 秒冷却"));
                 targets.put(headSlots[i], target.getUniqueId());
                 targets.put(headSlots[i] + 9, target.getUniqueId());
             }
             if (visible.isEmpty()) inv.setItem(13, item(Material.BARRIER, "§7暂时没有其他在线玩家", "女神旁观者不会显示在这里"));
             playerMenuTargets.put(inv, targets);
         } else if (page.equals("pvp")) {
-            inv.setItem(10, item(Material.IRON_SWORD, "§a加入匹配", "第二位玩家加入后自动倒数开战"));
+            inv.setItem(10, item(Material.IRON_SWORD, "§a加入匹配", "传送入场 6 魔力；第二人加入后自动开战"));
             inv.setItem(11, item(Material.BARRIER, "§c退出匹配/认输", "排队时退出；战斗中认输"));
-            inv.setItem(12, item(Material.COMPASS, "§b前往观众平台", "可看比赛；旁观者不能攻击选手"));
+            inv.setItem(12, item(Material.COMPASS, "§b前往观众平台", "传送 6 魔力；可看比赛"));
             inv.setItem(14, item(Material.WRITTEN_BOOK, "§e本人战绩", "胜负、积分与对局状态"));
             inv.setItem(16, item(Material.GOLD_INGOT, "§6排行榜", "同款装备 1v1 的积分"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘"));

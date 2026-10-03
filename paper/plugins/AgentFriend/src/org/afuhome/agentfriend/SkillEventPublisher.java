@@ -67,6 +67,8 @@ final class SkillEventPublisher {
             case "golem" -> "守护傀儡";
             case "sense" -> "探敌术";
             case "home" -> "归乡术";
+            case "travel" -> "传送术";
+            case "storage" -> "远程储物术";
             case "blink" -> "闪现术";
             case "selfheal" -> "圣愈术";
             case "heal" -> "治疗术";
@@ -85,7 +87,7 @@ final class SkillEventPublisher {
             case "selfheal", "heal", "food", "feather" -> "healing";
             case "frostnova" -> "frost";
             case "flamewave", "fireworks" -> "fire";
-            case "leap", "flight", "home", "blink" -> "movement";
+            case "leap", "flight", "home", "travel", "blink" -> "movement";
             default -> "arcane";
         };
     }

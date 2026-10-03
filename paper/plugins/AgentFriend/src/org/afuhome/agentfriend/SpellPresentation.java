@@ -55,7 +55,7 @@ final class SpellPresentation {
             double wave = spell.equals("frostnova") ? 0 : Math.sin(angle * 2 + step) * 0.18;
             double distance = radius;
             double y = height + wave;
-            if (spell.equals("home") || spell.equals("blink") || spell.equals("conjure")) {
+            if (spell.equals("home") || spell.equals("travel") || spell.equals("blink") || spell.equals("conjure")) {
                 // A rising portal helix, rather than another flat circle.
                 angle += step * 0.45;
                 y += (i / (double) (points - 1) - 0.5) * 1.2;
@@ -107,6 +107,10 @@ final class SpellPresentation {
         return switch (spell) {
             case "home" -> new Cue("空间之力，护你归途", "归乡术", ChatColor.GOLD,
                     Particle.PORTAL, Particle.END_ROD, Sound.ENTITY_ENDERMAN_TELEPORT, 1.1f);
+            case "travel" -> new Cue("星路为门，抵达彼方", "传送术", ChatColor.LIGHT_PURPLE,
+                    Particle.PORTAL, Particle.END_ROD, Sound.ENTITY_ENDERMAN_TELEPORT, 1.05f);
+            case "storage" -> new Cue("隔空取物，星囊启封", "远程储物术", ChatColor.LIGHT_PURPLE,
+                    Particle.END_ROD, Particle.PORTAL, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.1f);
             case "blink" -> new Cue("折叠一步，越过星隙", "闪现术", ChatColor.LIGHT_PURPLE,
                     Particle.PORTAL, Particle.END_ROD, Sound.ENTITY_ENDERMAN_TELEPORT, 1.2f);
             case "selfheal" -> new Cue("柔和的光，抚平伤痛", "圣愈术", ChatColor.GREEN,

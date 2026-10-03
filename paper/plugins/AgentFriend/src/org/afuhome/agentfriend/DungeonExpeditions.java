@@ -64,9 +64,11 @@ final class DungeonExpeditions {
                         player.sendMessage(ChatColor.RED + "遗迹附近地形暂时无法加载，请稍后再试。"); return;
                     }
                     Location landing = safeLanding(world, site);
-                    if (landing == null || !player.teleport(landing)) {
+                    if (landing == null) {
                         player.sendMessage(ChatColor.RED + "没有找到安全落脚处，传送已取消。"); return;
                     }
+                    if (!plugin.travelMagic().teleport(player, landing, "expedition:" + site.id(),
+                            "遗迹远征术", TravelMagic.DISTANT_MANA)) return;
                     player.sendMessage(ChatColor.GREEN + "已到「" + site.name() + "」附近；遗迹中心约在 "
                             + site.x() + ", " + site.z() + "。向那里探索约 70 格，留意怪物和入口。");
                     player.sendMessage("MC_SITE id=" + site.id() + " " + LocationOutput.fields(landing)

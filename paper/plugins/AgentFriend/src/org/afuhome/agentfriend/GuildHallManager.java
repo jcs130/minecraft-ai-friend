@@ -586,7 +586,7 @@ final class GuildHallManager implements Listener {
         if (!landing.getBlock().getType().isAir() || !landing.clone().add(0, 1, 0).getBlock().getType().isAir()) {
             player.sendMessage(ChatColor.RED + "公会大厅入口受阻，传送取消。"); return;
         }
-        if (player.teleport(landing)) player.sendMessage(ChatColor.GOLD
+        if (plugin.travelMagic().teleport(player, landing, "guild", "公会传送术", TravelMagic.LOCAL_MANA)) player.sendMessage(ChatColor.GOLD
                 + "已到冒险者公会；右键任务牌查看今日委托。 " + LocationOutput.fields(landing));
     }
 
