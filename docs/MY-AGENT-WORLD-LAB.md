@@ -182,6 +182,29 @@ $env:GATE_COMPONENTS_FILE='E:\QiandengJiSocietyLab\gateway\components.tsv'
 - 模组状态：Create 转速、殖民地工单与成员权限分别来自本人 `maw_agent:world_state`、`maw_agent:colony_state`。魔力和冷却要接真实服务端状态，缺失时显示未知，不编造恢复；既有通道尚不代表 Ars 技能 HUD 已接通。
 - 验收：在独立回环端口上验证真实 WebGL、同账号移动、床/村民/机器显示、原生物品取放及重连；再补健康探针、可管理的起停与故障恢复。当前未启动可视化常驻服务、未修改千灯纪服务或公网映射。
 
+### 原生贴图与建模要求：2026-10-04
+
+用户进一步明确：新服的网页画面必须使用与对应模组 Java 客户端一致的贴图和建模，**禁止原版近似渲染**。兼容协议的代理物品/方块不能作为新画面的渲染依据；未接通的原生渲染应明确报不可用，不静默画成石头或原版生物。静态资源一致、世界数据一致和最终渲染一致须分别验收。Create 动态机械、女仆骨骼动画、Domum 组合材质等不能仅凭复制 JSON/PNG 声称一致；若浏览器不能完整实现对应模组渲染，完整视图须使用原生 NeoForge 客户端渲染并传输到浏览器，Mineflayer 继续作为 Agent 的操作连接。
+
+诊断导出工具新增 `block-states.jsonl` 与 `entities.tsv`，只在研究副本安装和执行。实测导出 3,975 种方块、107,852 个状态；每个状态保存真实 `stateId`、注册名、属性、`renderShape` 与 `hasBlockEntity`，不推测原版属性顺序。状态表 SHA-256 为 `9a4379ec448a72f4616626769b36a3258317e37eeda6c78c5f3e4e7c78448ad7`。主实验服及 Paper 正式服没有安装诊断 JAR。
+
+`E:\mc-visual-console` 的实验分支 `experiment/native-mod-rendering-1.21.1` 新增 `renderer-src/tools/native_viewer_assets.py`。从官方哈希验证的 1.21.1 客户端、已锁定的 26 件模组/构建 JAR、当前 NeoForge universal JAR 及嵌套库导出 39,058 份资源，原样保存命名空间、模型、UV、贴图、动画元数据和资源覆盖版本。正式候选目录为 `E:\QiandengJiSocietyLab\research\native-viewer-assets-20261004-v2`；初版导出保留供排障，不作为新候选。导出后独立核对原始资源、覆盖版本与注册表共 39,127 个文件哈希通过。
+
+报告中 2,908 种方块的 JSON 模型依赖和面贴图齐全，1,067 种方块保守标记为需要原生/特殊渲染核验；这个分类不是实际渲染通过率。其中 11 处不同来源的同名资源需要核对覆盖或资源栈合并语义，atlas 定义不能只取最后一份。全部原始版本保存在 `asset-variants/`，工具不偷偷选择替代模型。报告的 `renderParityVerified=false`、`complete=false`；`--verify --require-render-parity` 在完整渲染和资源优先级尚未验收时明确拒绝。8 项新导出/校验回归通过，不能据此宣称实时 WebGL 已通过。
+
+为保留兼容投影丢掉的原生身份，网关新增**默认关闭**的按连接镜像：
+
+```powershell
+$env:GATE_NATIVE_VIEWER='1'
+$env:GATE_NATIVE_STATES_FILE='E:\QiandengJiSocietyLab\research\registry-server\dump\lab-registry-ids\block-states.jsonl'
+```
+
+`mcviewer:native_packet` 只向本次玩家连接发送收到的原生核心世界/实体/物品包，并在原版映射和组件投影**之前**序列化。这是 Node 宿主用的独立二进制协议：`MCNP` + `deflateRaw(v8.serialize(envelope))`，单条不超过 1 MiB、解压上限 16 MiB；信封包含版本 1、Minecraft 1.21.1、实际状态表哈希、连续序号、包名及完整参数。`native-viewer-packet.cjs` 的 `attachNativeViewerPackets(bot, expectedHash)` 接在执行动作的同一个 bot 上，提供私有 `packet` 事件；表哈希不符、序号缺失或解码失败时明确标不可用，不继续混入代理数据。它不扫描存档、不加载额外隐藏区块、不另登录观察账号、不广播或写入聊天，也没有开放新网络端口。既有魔力/技能频道的 UTF-8 JSON 格式不变。该镜像保留核心包，不代表 Create 等所有自定义动态负载已经适配。
+
+隔离验收使用普通 `MawNativeViewQA` 连接，原生数据流与普通 Mineflayer 同账号并存。实际观察到建筑工核心 `(603,64,600)` 原生 ID 74628、`minecolonies:blockhutbuilder`、`facing=north`；两件储物架为 75101 / 75095，分别保存朝向和 `blockrackair` / `blockrackfull` 属性，而普通兼容流三者均为 `stone` / ID 1。第一轮 47 秒共收到 402 个区块柱、33,474 个连续原生包，无流错误、生命 20；验收脚本因猜错储物架注册名而失败，原结果仍保留，不能将这条断言失败掩盖为已通过。
+
+按真实注册名 `minecolonies:blockminecoloniesrack` 纠正验收，并补区块卸载处理后，第二次独立回连 47 秒通过：201 个区块柱、31,393 个连续原生包、生命 20、无协议/流错误，上述四件模组方块的原生 ID/属性均读回。额外镜像线流量 7,729,096 字节，当前逐包发送，浏览器宿主仍需按帧合并实体变化并测 CPU/帧率，不能称性能优化已经完成。新协议与既有客户端适配共 20 项回归通过。研究服正常存档退出、网关已关闭；本轮未向 Paper 服发出停启、配置或网络修改操作。当前只完成资源和原生数据接缝，完整浏览器网格、模组运行时渲染、GUI 与实时性能还要逐项验证。
+
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |

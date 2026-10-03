@@ -2,7 +2,9 @@
 
 This mod registers only /labids dumpids. It is intentionally not deployed by
 this script; install it in a throwaway copy of the exact modpack, then remove it
-after exporting blocks.tsv, items.tsv and components.tsv.
+after exporting blocks.tsv, items.tsv, components.tsv, block-states.jsonl
+and entities.tsv. State properties and render shapes are read from the actual
+registry; no vanilla property order or proxy state IDs are inferred.
 """
 from __future__ import annotations
 
@@ -51,12 +53,50 @@ def main() -> None:
         code = code.replace('"dump", "botgate-ids"', '"dump", "lab-registry-ids"')
         code = code.replace('int ni = dumpItems(dir.resolve("items.tsv"));',
             'int ni = dumpItems(dir.resolve("items.tsv"));\n'
-            '                    dumpComponents(dir.resolve("components.tsv"));')
+            '                    dumpComponents(dir.resolve("components.tsv"));\n'
+            '                    dumpStates(dir.resolve("block-states.jsonl"));\n'
+            '                    dumpEntities(dir.resolve("entities.tsv"));')
         code = code.replace('    private static int dumpBlocks(Path file)', '''    private static void dumpComponents(Path file) throws Exception {
         try (BufferedWriter w = Files.newBufferedWriter(file)) {
             for (var component : BuiltInRegistries.DATA_COMPONENT_TYPE) {
                 w.write(BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(component).toString() + "\\t" +
                         BuiltInRegistries.DATA_COMPONENT_TYPE.getId(component));
+                w.newLine();
+            }
+        }
+    }
+
+    private static <T extends Comparable<T>> String propertyValue(BlockState state,
+            net.minecraft.world.level.block.state.properties.Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
+    private static void dumpStates(Path file) throws Exception {
+        try (BufferedWriter w = Files.newBufferedWriter(file)) {
+            for (Block block : BuiltInRegistries.BLOCK) {
+                for (BlockState state : block.getStateDefinition().getPossibleStates()) {
+                    var row = new com.google.gson.JsonObject();
+                    row.addProperty("stateId", Block.BLOCK_STATE_REGISTRY.getId(state));
+                    row.addProperty("name", BuiltInRegistries.BLOCK.getKey(block).toString());
+                    row.addProperty("renderShape", state.getRenderShape().name());
+                    row.addProperty("hasBlockEntity", state.hasBlockEntity());
+                    var properties = new com.google.gson.JsonObject();
+                    for (var property : state.getProperties()) {
+                        properties.addProperty(property.getName(), propertyValue(state, property));
+                    }
+                    row.add("properties", properties);
+                    w.write(row.toString());
+                    w.newLine();
+                }
+            }
+        }
+    }
+
+    private static void dumpEntities(Path file) throws Exception {
+        try (BufferedWriter w = Files.newBufferedWriter(file)) {
+            for (var entity : BuiltInRegistries.ENTITY_TYPE) {
+                w.write(BuiltInRegistries.ENTITY_TYPE.getKey(entity).toString() + "\\t" +
+                        BuiltInRegistries.ENTITY_TYPE.getId(entity));
                 w.newLine();
             }
         }

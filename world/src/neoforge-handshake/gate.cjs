@@ -36,6 +36,9 @@ const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE)
+const NativeViewer = require('./native-viewer-packet.cjs')
+const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
+  ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
 
 const VERSION = '1.21.1'
 const PROTO_VERSION = mcData.version.version // 767
@@ -540,6 +543,21 @@ function relayTo (sess, target, name, params, dir) {
     catch (e) { log(`时间负载无法转换：${e.message}`) }
   }
   if (target === sess.front) {
+    if (nativeViewerHash) {
+      try {
+        // Serialize before any ItemStack/component/state-ID projection. The
+        // mirror belongs only to this frontend connection, never a new bot or
+        // a broadcast. Failure ends the native view instead of substituting it.
+        const data = NativeViewer.encodeNativePacket(name, params, nativeViewerHash, (sess.nativeViewerSequence || 0) + 1)
+        if (data) {
+          target.write('custom_payload', { channel: NativeViewer.CHANNEL, data })
+          sess.nativeViewerSequence = (sess.nativeViewerSequence || 0) + 1
+        }
+      } catch (error) {
+        kickFront(sess, '原生画面数据同步失败：' + error.message.slice(0, 120))
+        return
+      }
+    }
     if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
