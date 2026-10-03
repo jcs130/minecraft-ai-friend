@@ -34,6 +34,8 @@ const P = require('./payloads.cjs')
 const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
+const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
+const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE)
 
 const VERSION = '1.21.1'
 const PROTO_VERSION = mcData.version.version // 767
@@ -263,11 +265,11 @@ function closeSession (sess, reason) {
 function kickFront (sess, reason) {
   try {
     if (sess.front.state === states.PLAY) {
-      sess.front.write('kick_disconnect', { reason: JSON.stringify({ text: reason }) })
+      sess.front.write('kick_disconnect', { reason: disconnectComponent(reason) })
     } else {
-      // CONFIGURATION 态的 disconnect，reason 必须给组件对象（1.20.5+ 走 NBT 组件序列化；
-      // 给 JSON 字符串会被 mcp 写成坏组件，客户端只解析出 {type:'end'}——2026-09-22 实测踩坑）
-      sess.front.write('disconnect', { reason: { text: reason } })
+      // 1.21.1 needs typed anonymous NBT here. A plain {text: ...} object or
+      // JSON string becomes an empty end tag, hiding the actual failure.
+      sess.front.write('disconnect', { reason: disconnectComponent(reason) })
     }
     log(`kickFront 已写（state=${sess.front.state}）：${reason.slice(0, 80)}`)
   } catch (e) { log(`kickFront 写失败（state=${sess.front.state}）：${(e && e.message || e).toString().slice(0, 120)}`) }
@@ -296,15 +298,30 @@ function connectBackend (sess) {
   // 后端进入 CONFIG（握手+login_ack 已发出）后才可接收前端转来的配置包
   back.on('state', (n) => {
     log(`DEBUG：[${sess.username}] 后端 state -> ${n}`)
-    if (n === states.PLAY && SKIP_MOD_RECIPES) {
+    if (n === states.PLAY && (SKIP_MOD_RECIPES || componentProtocol)) {
       // NeoForge sends custom recipe serializers in packet 0x77. The vanilla
       // parser treats their bytes as an enormous array and destroys its input
       // stream. Recipes require a separate semantic API until translated.
       const parser = back.deserializer
       const original = parser._transform
       parser._transform = function (chunk, encoding, callback) {
-        if (chunk[0] === 0x77) {
+        if (sess.closed || sess.decoderFailed) return callback()
+        if (SKIP_MOD_RECIPES && chunk[0] === 0x77) {
           log(`DEBUG：[${sess.username}] 跳过模组 declare_recipes（${chunk.length} 字节）`)
+          return callback()
+        }
+        if (componentProtocol && isItemPacket(chunk)) {
+          try {
+            const parsed = componentProtocol.parsePacketBuffer('packet', chunk)
+            if (parsed.metadata.size !== chunk.length) throw Error('NATIVE_PACKET_LENGTH_MISMATCH')
+            this.push(parsed)
+          } catch (error) {
+            sess.decoderFailed = true
+            log(`DEBUG：[${sess.username}] 原生 PLAY 包 id=${chunk[0]} 长=${chunk.length} 无法解析：${error.message.slice(0, 160)}`)
+            // An unsupported codec is not a recovered inventory. End explicitly
+            // instead of leaving a broken decoder idle until a keepalive timeout.
+            kickFront(sess, '模组物品协议尚未适配，无法安全同步背包：' + error.message.slice(0, 120))
+          }
           return callback()
         }
         return original.call(this, chunk, encoding, error => {
@@ -523,6 +540,7 @@ function relayTo (sess, target, name, params, dir) {
     catch (e) { log(`时间负载无法转换：${e.message}`) }
   }
   if (target === sess.front) {
+    if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)

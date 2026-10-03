@@ -2,7 +2,7 @@
 
 This mod registers only /labids dumpids. It is intentionally not deployed by
 this script; install it in a throwaway copy of the exact modpack, then remove it
-after exporting blocks.tsv and items.tsv.
+after exporting blocks.tsv, items.tsv and components.tsv.
 """
 from __future__ import annotations
 
@@ -49,6 +49,20 @@ def main() -> None:
         code = code.replace('modid = "botgate"', 'modid = "labregistry"')
         code = code.replace('Commands.literal("botgate")', 'Commands.literal("labids")')
         code = code.replace('"dump", "botgate-ids"', '"dump", "lab-registry-ids"')
+        code = code.replace('int ni = dumpItems(dir.resolve("items.tsv"));',
+            'int ni = dumpItems(dir.resolve("items.tsv"));\n'
+            '                    dumpComponents(dir.resolve("components.tsv"));')
+        code = code.replace('    private static int dumpBlocks(Path file)', '''    private static void dumpComponents(Path file) throws Exception {
+        try (BufferedWriter w = Files.newBufferedWriter(file)) {
+            for (var component : BuiltInRegistries.DATA_COMPONENT_TYPE) {
+                w.write(BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(component).toString() + "\\t" +
+                        BuiltInRegistries.DATA_COMPONENT_TYPE.getId(component));
+                w.newLine();
+            }
+        }
+    }
+
+    private static int dumpBlocks(Path file)''')
         (src / "IdDump.java").write_text(code, encoding="utf-8")
         (src / "LabRegistryMod.java").write_text(
             'package dev.god.labregistry;\n'
