@@ -246,6 +246,23 @@ final class PlayerColonyBridge {
                 if (citizen.getStatus() != null) row.addProperty("status", citizen.getStatus().getTranslationKey());
                 row.add("lastPosition", pos(citizen.getLastPosition()));
                 if (citizen.getWorkBuilding() != null) row.add("workBuilding", pos(citizen.getWorkBuilding().getPosition()));
+                if (colony.getPermissions().isColonyMember(player)) {
+                    row.addProperty("paused", citizen.isPaused());
+                    row.addProperty("asleep", citizen.isAsleep());
+                    row.addProperty("saturation", citizen.getSaturation());
+                    row.addProperty("maxSaturation", ICitizenData.MAX_SATURATION);
+                    if (citizen.getJobStatus() != null) row.addProperty("jobStatus", citizen.getJobStatus().name().toLowerCase());
+                    var entity = citizen.getEntity();
+                    row.addProperty("loaded", entity.isPresent());
+                    if (entity.isPresent()) {
+                        row.addProperty("health", entity.get().getHealth());
+                        row.addProperty("maxHealth", entity.get().getMaxHealth());
+                    }
+                    var job = citizen.getJob();
+                    if (job != null && job.getWorkerAI() != null && job.getWorkerAI().getState() instanceof Enum<?> state) {
+                        row.addProperty("aiState", state.name().toLowerCase());
+                    }
+                }
                 citizens.add(row);
             }
             result.add("citizens", citizens);
@@ -368,13 +385,118 @@ final class PlayerColonyBridge {
         }
     }
 
-    private static void actionReject(ServerPlayer player, String requestId, String code) {
+    private static void actionReject(ServerPlayer player, String requestId, String action, String code) {
         JsonObject result = base(requestId);
-        result.addProperty("action", "deliver");
+        result.addProperty("action", action);
         result.addProperty("ok", false);
         result.addProperty("code", code);
         result.addProperty("accepted", 0);
         actionReply(player, result);
+    }
+
+    private static void actionReject(ServerPlayer player, String requestId, String code) {
+        actionReject(player, requestId, "deliver", code);
+    }
+
+    private static int stockCount(IBuilding building, ItemStack item) {
+        int count = 0;
+        for (var entry : building.getTileEntity().getAllContent().entrySet()) {
+            if (ItemStack.isSameItemSameComponents(entry.getKey().getItemStack(), item)) count += entry.getValue();
+        }
+        return count;
+    }
+
+    /** The Builder GUI's resource arrow can stock required materials without a request token. */
+    private static void handleStockResource(ServerPlayer player, JsonObject input, String requestId) {
+        final String action = "stock_resource";
+        boolean transferStarted = false;
+        try {
+            if (input.get("schemaVersion").getAsInt() != 1) {
+                actionReject(player, requestId, action, "unsupported_action"); return;
+            }
+            JsonObject target = input.getAsJsonObject("buildingPosition");
+            BlockPos pos = new BlockPos(target.get("x").getAsInt(), target.get("y").getAsInt(), target.get("z").getAsInt());
+            if (!player.level().isLoaded(pos) || player.distanceToSqr(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) > 64) {
+                actionReject(player, requestId, action, "building_not_reachable"); return;
+            }
+            IBuilding building = IColonyManager.getInstance().getBuilding(player.level(), pos);
+            if (!(building instanceof AbstractBuildingStructureBuilder builder)
+                    || building.getTileEntity() == null || !builder.hasWorkOrder()) {
+                actionReject(player, requestId, action, "builder_without_active_work_order"); return;
+            }
+            if (!building.getColony().getPermissions().isColonyMember(player)) {
+                actionReject(player, requestId, action, "not_colony_member"); return;
+            }
+            int slot = input.get("inventorySlot").getAsInt();
+            int quantity = input.get("quantity").getAsInt();
+            if (slot < 0 || slot >= 36 || quantity < 1 || quantity > 64) {
+                actionReject(player, requestId, action, "invalid_slot_or_quantity"); return;
+            }
+            ItemStack held = player.getInventory().getItem(slot);
+            if (held.isEmpty() || held.getCount() < quantity) {
+                actionReject(player, requestId, action, "inventory_item_missing"); return;
+            }
+            if (!held.saveOptional(player.registryAccess()).toString().equals(input.get("expectedSnbt").getAsString())) {
+                actionReject(player, requestId, action, "inventory_components_changed"); return;
+            }
+            BuildingBuilderResource required = null;
+            for (BuildingBuilderResource candidate : builder.getNeededResources().values()) {
+                if (candidate.getAmount() > 0 && ItemStack.isSameItemSameComponents(candidate.getItemStack(), held)) {
+                    required = candidate;
+                    break;
+                }
+            }
+            if (required == null) {
+                actionReject(player, requestId, action, "item_not_needed_for_construction"); return;
+            }
+            int stockBefore = stockCount(building, held);
+            int remaining = Math.max(0, required.getAmount() - stockBefore);
+            if (quantity > remaining) {
+                actionReject(player, requestId, action, "quantity_exceeds_remaining_need"); return;
+            }
+
+            transferStarted = true;
+            ItemStack leftover = InventoryUtils.addItemStackToProviderWithResult(
+                    building.getTileEntity(), held.copyWithCount(quantity));
+            int accepted = quantity - (leftover.isEmpty() ? 0 : leftover.getCount());
+            if (accepted <= 0) {
+                actionReject(player, requestId, action, "building_storage_full"); return;
+            }
+            ItemStack removed = player.getInventory().removeItem(slot, accepted);
+            if (removed.getCount() != accepted) throw new IllegalStateException("inventory changed on server thread");
+            building.getTileEntity().setChanged();
+            player.getInventory().setChanged();
+            player.containerMenu.broadcastChanges();
+            boolean resolutionError = false;
+            try { building.overruleNextOpenRequestWithStack(removed); }
+            catch (RuntimeException error) { resolutionError = true; }
+
+            JsonObject result = base(requestId);
+            result.addProperty("action", action);
+            result.addProperty("ok", true);
+            result.addProperty("code", "construction_material_stored");
+            result.add("buildingPosition", pos(pos));
+            result.addProperty("itemId", BuiltInRegistries.ITEM.getKey(removed.getItem()).toString());
+            result.addProperty("accepted", accepted);
+            result.addProperty("inventorySlot", slot);
+            result.addProperty("inventoryRemaining", player.getInventory().getItem(slot).getCount());
+            result.addProperty("neededAtValidation", required.getAmount());
+            result.addProperty("stockBefore", stockBefore);
+            result.addProperty("stockAfter", stockCount(building, removed));
+            result.addProperty("resolutionError", resolutionError);
+            actionReply(player, result);
+        } catch (RuntimeException error) {
+            if (transferStarted) LOGGER.error("Colony stock outcome unknown for player {} request {}", player.getUUID(), requestId, error);
+            if (!transferStarted) actionReject(player, requestId, action, "colony_stock_failed");
+            else {
+                JsonObject result = base(requestId);
+                result.addProperty("action", action);
+                result.addProperty("ok", false);
+                result.addProperty("code", "stock_outcome_unknown_check_inventory");
+                result.add("accepted", null);
+                actionReply(player, result);
+            }
+        }
     }
 
     /** Mirrors MineColonies' own TransferItemsRequestMessage storage path with explicit player preconditions. */
@@ -395,6 +517,10 @@ final class PlayerColonyBridge {
             String kind = input.get("kind").getAsString();
             if (kind.equals("found") || kind.equals("place_builder") || kind.equals("request_build")) {
                 handleConstruction(player, input, requestId, kind);
+                return;
+            }
+            if (kind.equals("stock_resource")) {
+                handleStockResource(player, input, requestId);
                 return;
             }
             if (input.get("schemaVersion").getAsInt() != 1 || !kind.equals("deliver")) {

@@ -51,6 +51,29 @@ test('deliver carries explicit slot, component and building preconditions', asyn
   colony.detach()
 })
 
+test('construction stocking carries an exact player item and never retries a lost result', async () => {
+  const { bot, writes, colony } = harness()
+  const pending = colony.stockResource({ buildingPosition: { x: 603, y: 64, z: 600 },
+    inventorySlot: 7, quantity: 12, expectedSnbt: '{count:12,id:"minecraft:oak_planks"}',
+    requestId: 'stock-once' })
+  const body = JSON.parse(writes[0].packet.data.toString('utf8'))
+  assert.equal(writes[0].packet.channel, 'maw_agent:colony_action')
+  assert.equal(body.kind, 'stock_resource')
+  assert.deepEqual(body.buildingPosition, { x: 603, y: 64, z: 600 })
+  assert.equal(body.inventorySlot, 7)
+  assert.equal(body.quantity, 12)
+  assert.equal(body.expectedSnbt, '{count:12,id:"minecraft:oak_planks"}')
+  assert.throws(() => colony.stockResource({ buildingPosition: { x: 603, y: 64, z: 600 },
+    inventorySlot: 7, quantity: 12, expectedSnbt: 'item', requestId: 'stock-once' }),
+  /COLONY_REQUEST_ALREADY_PENDING/)
+  bot.emit('end')
+  await assert.rejects(pending, /COLONY_CONNECTION_CLOSED/)
+  assert.equal(writes.length, 1)
+  assert.throws(() => colony.stockResource({ buildingPosition: { x: 0, y: 64, z: 0 },
+    inventorySlot: 36, quantity: 1, expectedSnbt: 'item' }), /INVALID_COLONY_STOCK/)
+  colony.detach()
+})
+
 test('a lost connection rejects pending delivery instead of retrying it', async () => {
   const { bot, colony } = harness()
   const pending = colony.deliver({ buildingPosition: { x: 8, y: 64, z: 4 }, token: 'token',

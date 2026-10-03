@@ -79,6 +79,16 @@ function attachColonyClient (bot) {
     })
   }
 
+  function stockResource ({ buildingPosition, inventorySlot, quantity, expectedSnbt, requestId }) {
+    if (!validPosition(buildingPosition) || !validInventoryItem(inventorySlot, expectedSnbt) ||
+        !Number.isInteger(quantity) || quantity < 1 || quantity > 64) {
+      throw new Error('INVALID_COLONY_STOCK')
+    }
+    return ask('maw_agent:colony_action', {
+      kind: 'stock_resource', buildingPosition, inventorySlot, quantity, expectedSnbt, requestId
+    })
+  }
+
   function validPosition (position) {
     return position && ['x', 'y', 'z'].every(key => Number.isInteger(position[key]))
   }
@@ -118,6 +128,7 @@ function attachColonyClient (bot) {
     events,
     status,
     deliver,
+    stockResource,
     found,
     placeBuilder,
     requestBuild,

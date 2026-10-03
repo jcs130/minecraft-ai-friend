@@ -1,10 +1,11 @@
 # My Agent World：隔离服首个可运行切片
 
-2026-10-03。此分支 `experiment/agent-society-1.21.1` 用来验证“Agent 在有居民、职业、生产需求和伙伴的世界里长期生活”。**这是独立实验服，当前千灯纪 Paper 正式服不迁移、不停服、不改端口或存档。** 实验运行目录为 `E:\QiandengJiSocietyLab`；所有存档、模组 JAR、日志与缓存留在该目录，不提交 Git。
+2026-10-03—04。此分支 `experiment/agent-society-1.21.1` 用来验证“Agent 在有居民、职业、生产需求和伙伴的世界里长期生活”。**这是独立实验服，当前千灯纪 Paper 正式服不迁移、不停服、不改端口或存档。** 实验运行目录为 `E:\QiandengJiSocietyLab`；所有存档、模组 JAR、日志与缓存留在该目录，不提交 Git。
 
 ## 当前已做到
 
 - Minecraft 1.21.1、NeoForge 21.1.248、Java 21，实验服只监听 `127.0.0.1:28976`，显示名为 **My Agent World**。无公网映射、RCON、基岩入口或自动启动。
+- Mineflayer 玩家路径已实测殖民地“读取建造单 → 从本人背包补仓 → 原生建筑工完成 1 级小屋”，完工状态重启后保留；也能读取居民健康、饱食度、天气停工和工作 AI 状态。材料由隔离 QA 提供，自主采集/合成及更多建筑仍待验收。下文提供通道、客户端接口与验收边界。
 - [MineColonies 1.1.1319](https://www.curseforge.com/minecraft/mc-mods/minecolonies/files/8138370) 及官方要求的 [Structurize](https://www.curseforge.com/minecraft/mc-mods/structurize/files/8610535)、[Multi-Piston](https://www.curseforge.com/minecraft/mc-mods/multi-piston/files/7097877)、[BlockUI](https://www.curseforge.com/minecraft/mc-mods/blockui/files/7541336)、[Domum Ornamentum](https://www.curseforge.com/minecraft/mc-mods/domum-ornamentum/files/7789217)；[Touhou Little Maid 1.5.3](https://www.curseforge.com/minecraft/mc-mods/touhou-little-maid/files/8061852) 和 [Farmer's Delight 1.3.4](https://www.curseforge.com/minecraft/mc-mods/farmers-delight/files/8765184)。版本、下载地址与 SHA-256 在 [`manifests/society-lab-1.21.1.lock.json`](../manifests/society-lab-1.21.1.lock.json)。
 - 生活与生产：加入 [Create 6.0.10](https://www.curseforge.com/minecraft/mc-mods/create/files/7963363)、其服务端必需的 Ponder 1.0.82、Create: Dragons Plus 1.11.9，以及 [Create: Central Kitchen 2.6.2](https://modrinth.com/mod/create-central-kitchen/version/whbguqT1)。Central Kitchen 的 Farmer's Delight 联动条件由现有 1.3.4 满足。Create 的 Flywheel 是客户端依赖，不放进服务端。
 - 魔法与建筑：加入 [Ars Nouveau 5.13.2](https://www.curseforge.com/minecraft/mc-mods/ars-nouveau/files/8993194)、[Ars Creo 5.4.0](https://modrinth.com/mod/ars-creo/version/LqOllHms) 及 Curios、GeckoLib、Patchouli；建筑补充 Macaw's Bridges 3.1.2、Roofs 2.3.2、Furniture 3.4.1、Windows 2.4.2。均为 1.21.1 NeoForge 对应文件；实际 JAR SHA-256 见版本锁。
@@ -128,13 +129,29 @@ MineColonies 的 `getProgress()` 内部游标是蓝图扫描位置，不是世�
 
 当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
 
+### 建造材料补仓与居民状态：2026-10-03—04 续验
+
+建筑工的 [原生资源面板](https://minecolonies.com/wiki/buildings/builder/) 可以把所需材料直接存入小屋；不必等待每一项都有开放请求。现已为同一 Mineflayer 玩家增加 `colony.stockResource({ buildingPosition, inventorySlot, quantity, expectedSnbt, requestId })`，对应 `maw_agent:colony_action` 的 `kind=stock_resource`。它只接受 8 格内、本人有殖民地成员权限、正在施工的建筑工小屋，核对本人实际槽位的完整 SNBT、物品组件和数量；物品必须仍在该工单的材料需求中，数量不能超过当前需求减去小屋内同组件库存。这个上限不包括工人背包；Agent 应结合原生 `availableReported` 规划，避免重复备料。无法接受的部分保留在玩家背包。
+
+执行沿用 MineColonies 原生库存插入与请求结算，实际扣除接受数量。私有回执包含 `accepted`、`inventoryRemaining`、`neededAtValidation`、`stockBefore/stockAfter`、建筑绝对坐标和 `resolutionError`。同一在线连接最近 32 个 `requestId` 可回放相同回执；断线或 `stock_outcome_unknown_check_inventory` 应先核对原生库存、请求和施工状态，不自动重放。`menu.current()` 每 5 tick 更新，交货后必须等新库存快照再使用 SNBT。状态查询间隔至少 10 tick；`rate_limited` 不是工单消失。材料列表在登录加载、天气停工及原生重新计算期间可能暂时为空，要持续在线后复查；也必须核对回执中的 `colony.id` 和 `member`，因为状态查询优先选择当前位置附近的殖民地。
+
+成员查询的 `citizens[]` 增加原生 `paused`、`asleep`、`saturation/maxSaturation`、`jobStatus`、`loaded`；实体已加载时给 `health/maxHealth`，工作 AI 为枚举时给 `aiState`。不强制加载实体或修改 AI。测试实际区分了 `rain / idle / init` 与 `working / building_step`：默认工人会雨天停工，不能把暂时空材料列表判成库存丢失。`jobStatus` 和 `aiState` 都是模组原始字段，不能只凭 `idle` 推断施工停止。
+
+隔离副本验收中，错误 SNBT、非建材（钻石）和过量提交都被拒绝且没有扣物；4 块橡木板正确入库、背包 16→12，相同 `requestId` 未二次扣除，重启后小屋库存仍为 4。随后通过同一玩家连接补入 Rack 2、泥土 151（64+64+23）、橡木栅栏 54、原版石板、木板、工作台、炉子与火把等材料，建筑工进入 `build_solid` 并实际取用、消耗材料。输入材料由 QA `/give` 提供，不证明自主采集/合成。施工区有水坑，静止测试玩家曾溺水、重生到另一殖民地；保留失败记录后，让观察者远离施工区，只在交货时靠近，并仅在 QA 给观察者水下呼吸、固定晴天和白天。没有修改建筑等级或替工人放置蓝图。
+
+2026-10-04 00:09:12（本机时区），原生服务端触发 `Build a Builder Building` 成就；00:09:14 玩家连接读回 ID 3 的建筑工小屋 `level=1`、`built=true`、`constructionPending=false`、`workOrders=[]`，工人最终为 `idle`。途中短暂的 `inventory_full` 由原生工作流程处理，无需替工人清空库存。为隔离怪物干扰，QA 后半段临时设为和平难度；正式服和主实验服的难度未变。随后正常存档停服、冷启动，同一玩家再次读到 1 级已完工小屋与空工单，工人及余料仍保留。这验收的是一座真实原生小屋，不代表市政厅已完工、完整殖民地运营或自主生产已完成。
+
+新桥接 JAR 已部署到停机中的主实验服，SHA-256 为 `0e80e1d5a2acd0027432167bbb5e0972620636e12422e86d0c3a10a4cce8d774`；更新前 JAR/锁保存在 `E:\QiandengJiSocietyLab\snapshots\before-colony-stock-20261003`。5 项客户端协议测试、版本锁 `verify` 与整服 `smoke` 通过，整服日志为 `E:\QiandengJiSocietyLab\smoke-1791042543.log`。隔离复测脚本为 `research\colony-stock-verify.cjs`、`colony-stock-negative.cjs`、`colony-completion-watch.cjs`；追踪回执为 `colony-current-trace.jsonl`、`colony-completion-trace.jsonl`，冷启动核验为 `colony-after-restart-result.json`，完工原生日志为 `colony-construction-complete-20261004.log`。研究副本和网关已正常退出；正式千灯纪及其公网入口未改。
+
+附加地形诊断中，另一个新账号 `MawColonySiteQC` 从世界出生点被 QA 控制台传送约 850 格后超时，未取得有效区块观察；这个失败未修复或计入通过。近处持续在线、物资交货、建造及冷启动回连已通过，但远距离传送与新账号区块加载还须单独复测网关和 Mineflayer 的解析链，不能据小屋完工宣称所有移动场景稳定。
+
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
 | Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
 | Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6 | 更多配方、食材生产与长期补货 |
 | Create | Mineflayer 放置传动轴与曲柄、右键驱动，原生读取两者转速 0→32 | 压力网络、加工机器、物流与产物闭环 |
-| MineColonies | 同一 Mineflayer 玩家建立市政厅和建筑工小屋、发起施工单、读取原生殖民地和居民工单；交付木板与工具后请求消失，建筑和库存重启后保留 | 完整 Build Tool 建造界面与其他建筑类型、施工完成、仓库快递员与多人长期运营 |
+| MineColonies | 同一 Mineflayer 玩家建立市政厅和建筑工小屋、发起施工单、读取居民工单与工作状态、按材料清单补仓；原生工人完成 1 级建筑工小屋，冷启动后完工、居民和库存保留 | 自主采集/合成、完整 Build Tool 与其他建筑类型、仓库快递员、护卫与多人长期运营 |
 | Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
 | 地下城 | 三类结构定位得到绝对坐标 | 进入房间、识别机关与 Boss、通关及战利品核验 |
 
