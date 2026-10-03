@@ -107,6 +107,7 @@ final class PlayerMenuBridge {
         state.addProperty("playerUuid", player.getUUID().toString());
         state.addProperty("windowId", menu.containerId);
         state.addProperty("stateId", menu.getStateId());
+        state.addProperty("selectedHotbarSlot", player.getInventory().selected);
         String menuType;
         try {
             menuType = BuiltInRegistries.MENU.getKey(menu.getType()).toString();

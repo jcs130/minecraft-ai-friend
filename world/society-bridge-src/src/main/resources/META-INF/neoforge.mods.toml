@@ -30,6 +30,13 @@ ordering="AFTER"
 side="SERVER"
 
 [[dependencies.maw_agent_bridge]]
+modId="create"
+type="required"
+versionRange="[6.0.10,)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_agent_bridge]]
 modId="neoforge"
 type="required"
 versionRange="[21.1.248,)"

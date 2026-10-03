@@ -62,7 +62,7 @@ $env:GATE_VANILLA='0'
 $env:GATE_NEOFORGE_TIME_BRIDGE='1'
 $env:GATE_SKIP_MOD_RECIPES='1'
 $env:GATE_BRIDGE_COOKING_POT_GUI='1'
-$env:GATE_EXTRA_PLAY_CHANNELS='maw_agent:menu_state,maw_agent:menu_action'
+$env:GATE_EXTRA_PLAY_CHANNELS='maw_agent:menu_state,maw_agent:menu_action,maw_agent:world_state,maw_agent:world_query'
 $env:GATE_LISTEN_HOST='127.0.0.1'
 $env:GATE_CACHE_FILE='E:\QiandengJiSocietyLab\research\gate-knowledge-28976.json'
 $env:GATE_IDMAP_FILE='E:\QiandengJiSocietyLab\research\lab-idmap.json'
@@ -84,6 +84,14 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 
 实际验收：一个 Mineflayer 账号从原版箱取 3 颗钻石，放进本人背包，重开箱确认；重复同一个请求没有第二次执行。另一个账号把 `touhou_little_maid:smart_slab_init` 放入箱子再取回，重开后注册 ID、数量与含自定义组件的 SNBT 完全一致。料理锅的原生状态准确报告 `farmersdelight:cooking_pot` 与 9 个容器槽，并读回先前通过原版点击放入的 2 块生牛肉。又让 Agent 从箱子取出 `farmersdelight:rice`，放进另一口由点燃炉灶加热的料理锅；8 秒后第 6 槽出现 `farmersdelight:cooked_rice`。该槽原生 `mayPickup=false`，直接点只得到 `no_change`；Agent 取碗放入第 7 槽，成品转到第 8 槽后才能领取。成品移入背包、重开锅确认已取走；角色饥饿值 0 时用原版使用物品动作吃下，饥饿值升到 6，手里留下碗。即“取原料 → 烹饪 → 盛装 → 取出 → 食用”全部在同一个 Mineflayer 玩家身上通过真实服务端状态验证。新版本状态还给出每槽 `mayPickup` 和料理锅 `slotRoles`（0–5 原料、6 暂存、7 餐具、8 成品、其余玩家背包），避免 Agent 把图标当可取物。Mineflayer 普通窗口仍可能显示空，Agent 应以原生状态为准。隔离副本的 JAR 通过 `tools/build_society_bridge.py --root E:\QiandengJiSocietyLab\research\registry-server --server-dir E:\QiandengJiSocietyLab\research\registry-server` 构建；实际测试的脚本和日志在实验目录 `research` 下。
 
+### Create 机器身份与动力：同一 Mineflayer 玩家已实测
+
+隔离副本里，同一 Agent 的快捷栏确实有 `create:shaft`，但 Mineflayer 的原版 `heldItem` 为空，`bot.placeBlock` 拒绝操作。底层原版 `held_item_slot` 加 `block_place` 仍能让服务端使用该玩家手里的真实模组物品：传动轴放入世界、快捷栏数量 1→0。原版区块映射把轴与曲柄都显示成 `stone`，所以新增按连接单播的 `maw_agent:world_query` → `maw_agent:world_state`，由服务端对**本人当前准星**做 8 格原生射线查询，返回维度、绝对方块坐标、注册 ID、方块属性、方块实体类型以及 Create 动力方块的原生 `speed`、`theoreticalSpeed`、`overstressed` 等状态。没有可见目标就返回失败；不接受任意坐标查询，不发送方块实体 NBT 或隐藏库存。`world-client.cjs` 提供 `look()`、`lookAtBlock()`；如果目标被遮挡，后者返回 `different_visible_block` 而不伪报预期方块。服务器对每个玩家最多每 2 tick 应答一次，不广播。
+
+`native-block-client.cjs` 的 `placeNativeHeld` 先核对服务端私有菜单状态里的真实物品 ID、数量与 `selectedHotbarSlot`，再以该玩家连接发送原版放置包，最后重新瞄准目标并查询服务端原生方块 ID；未知结果不自动重放。隔离服以此放置 `create:shaft`，原生回执为 `create:shaft`、`axis=y`、`create:simple_kinetic`，物品 1→0。随后放置 `create:hand_crank` 于轴上并右键转动；曲柄与从侧面可见的轴均返回速度 32、理论速度 32、未过载。直接从上方查询被曲柄挡住的轴时，服务端只返回眼前的 `create:hand_crank`，证明原生查询不会穿过机器展示下层方块。双玩家同时查询得到了两个不同的玩家 UUID 与各自私有回执。测试产物和脚本仅在 `E:\QiandengJiSocietyLab\research\registry-server`；正式千灯纪未修改。
+
+这证明 Mineflayer 能操作一组真实 Create 方块并读取动力，不等于已能设计、建造、运行完整工厂。应继续实测压力网络、加工配方、物品运输与故障恢复。实验网关须在 `GATE_EXTRA_PLAY_CHANNELS` 额外声明 `maw_agent:world_state,maw_agent:world_query`；公开前门仍必须做按 Agent 身份认证，不能把这个离线测试入口直接开放。更新后的桥接 JAR 已部署到**停机中的**主实验服，旧版备份在 `E:\QiandengJiSocietyLab\snapshots\before-create-world-query-20261003`；`verify` 和整服 `smoke` 通过，后者日志为 `E:\QiandengJiSocietyLab\smoke-1791022969.log`，服务端正常存档退出。6 项相关协议单测通过。正式千灯纪继续运行，未改动。
+
 这完成的是**同一个玩家身体的容器读写与一道料理闭环**，还没有完成所有模组玩法。其他农夫乐事食材生产、Create 动力机器、MineColonies 的 BlockUI/工单、女仆命令、Ars 法术书学习与施法、地下城机关，都要逐项用真实模组状态做“查询 → 操作 → 核验”。部分界面不是 `AbstractContainerMenu`，不能仅靠通用菜单通道覆盖。原来的 Numen 身体与这个 Mineflayer 玩家仍是两个身份；今后可把 Numen 原生工具逐步改为作用于当前已认证的玩家，而不能把 4 级控制台入口直接暴露给 Agent。主实验服更新版本锁后 `verify` 与原有整服 `smoke` 已通过，最终日志为 `E:\QiandengJiSocietyLab\smoke-1791017491.log`；测试进程正常存档退出。体检时增加了超大回执的旧状态失效处理，并运行了 3 项协议单测；更新前的 JAR 备份在 `E:\QiandengJiSocietyLab\snapshots\before-menu-size-20261003`。隔离副本还验证了完整游标前置条件：故意提交错误 `expectedCarriedSnbt` 得到私有 `cursor_changed`、`changed=false`，目标槽位未变。
 
 当前有两条已验证的底座：Mineflayer 经旧服网关可作为原版协议的玩家入服、移动和观察；服务端原生 [Numen 身体](https://github.com/Dwinovo/minecraft-numen) 可操作部分真实模组能力。它们现在是**两个不同的身体路径**，并未统一为同一个玩家 UUID。Agent 的模型/控制器可以继续用现有语言与规划代码；现有 `maw_agent` 仅是 4 级控制台实验入口，按 owner/body UUID 隔离结果，**尚无可交给每个 Agent 的认证 sidecar**。要让 Agent 长期生活，需先完成身份绑定、持久任务回执和故障恢复，再为各模组做“查询状态 → 执行动作 → 独立核验效果”的专用工具。对只能通过客户端画面操作的界面，可另行评估[NeoForge 客户端控制桥](https://github.com/Campione01/MineClient-Bridge)；它在此环境尚未安装或验收，不作为现成方案承诺。
@@ -93,12 +101,12 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
 | Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
 | Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6 | 更多配方、食材生产与长期补货 |
-| Create | 传动轴合成配方可读 | 安装机器、动力传递、工作状态与产物读取；逐个专用交互 |
+| Create | Mineflayer 放置传动轴与曲柄、右键驱动，原生读取两者转速 0→32 | 压力网络、加工机器、物流与产物闭环 |
 | MineColonies | 模组启动、配方和研究加载 | 建殖民地、读取真实工单、交货、确认居民任务消失 |
 | Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
 | 地下城 | 三类结构定位得到绝对坐标 | 进入房间、识别机关与 Boss、通关及战利品核验 |
 
-料理锅的 Mineflayer 闭环已完成。接下来做殖民地“缺料 → 生产 → 交货”与 Create 设备，再扩展女仆和地下城。每项验收都保留机器可读的失败原因及真实世界前后状态；不能把命令已受理或界面已打开当作产物完成。
+料理锅的 Mineflayer 闭环与 Create 基础动力链已完成。接下来做殖民地“缺料 → 生产 → 交货”，再扩展 Create 加工物流、女仆和地下城。每项验收都保留机器可读的失败原因及真实世界前后状态；不能把命令已受理或界面已打开当作产物完成。
 
 `maw_agent commands`、`list`、`summon`、`invoke`、`receipt`、`spell list|explain|cast`、`dismiss` 是目前的实验控制面。例如先调用 `maw_agent invoke <bodyUuid> locate_structure {"structure":"dungeoncrawl:dungeon"}`，保存返回的 `callId`，再查 `maw_agent receipt <bodyUuid> <callId>`；只有 `finalKnown=true` 且 `outcome.success=true`、`data.found=true` 才用 `data.x/y/z`。另两类结构可用 `betterdungeons:skeleton_dungeon` 与 `dungeoneer:cobblestone_dungeon`。入口、房间、怪物、战利品与基岩版呈现尚未逐项实测。**外部 Agent 身份认证、长期调度与故障恢复尚未接入**。不把 4 级控制台口令直接交给每个 Agent；下一步以独立 sidecar 将 token 绑定到单一身体 UUID，再提供每人的只读殖民地需求与受租约约束的动作。
 
@@ -108,6 +116,6 @@ node world\src\neoforge-handshake\gate.cjs 28977 127.0.0.1 28976
 
 旧千灯纪的 `/mycli commands|list|explain|cast`、女神技艺、冷却、技能升级和机器 JSON 回执仍在正式服代码与线上服务中，此实验分支没有改动它们；**它们还没有完整移植到 NeoForge 新服**。当前 `maw_agent spell` 是真实 Ars 施法的第一段适配，不是旧 `/mycli` 的全部替代。将来切换服务端前须逐项复现旧技能 ID、查询说明、施法权限/消耗/冷却、Agent 专用结构化回执、手柄及基岩入口，并以实际施法和客户端画面验收。达不到这些门槛就继续保留 Paper 正式服。
 
-MineColonies 自带居民职业、建筑与资源请求；这为社会循环提供世界事实，但目前只验过启动、配方和研究加载，尚未建立第一座殖民地或验证建筑工单、居民工作与 Numen 交互。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；Ars 自愈在 Numen 身体上实测，农夫乐事烹饪产出与食用在 Mineflayer 身体上实测。Create 旋转动力和女仆工作仍需实操验收。下一条核心闭环是“居民缺材料 → Agent 查询 → 真实交货 → 请求消失”，之后再让 Agent 自己生产材料。
+MineColonies 自带居民职业、建筑与资源请求；这为社会循环提供世界事实，但目前只验过启动、配方和研究加载，尚未建立第一座殖民地或验证建筑工单、居民工作与 Numen 交互。Create、农夫乐事和 Ars 的标准合成配方已通过 Numen 查询；Ars 自愈在 Numen 身体上实测，农夫乐事烹饪产出与食用、Create 曲柄带轴旋转在 Mineflayer 身体上实测。女仆工作仍需实操验收。下一条核心闭环是“居民缺材料 → Agent 查询 → 真实交货 → 请求消失”，之后再让 Agent 自己生产材料。
 
 基岩版在此实验服**尚未接入**。后续可用 ViaProxy/Geyser 与逐项注册表翻译，让基岩玩家体验原版可表达的方块、物品和互动；MineColonies、女仆、Create、Ars 的专用 GUI、机器状态、粒子和容器协议不能仅靠改物品名视为已经兼容。Java 真人客户端也需要对应 NeoForge 模组包，且 Create 还需客户端 Flywheel。两端都要在隔离服实际联机验证，再考虑开放入口。当前千灯纪 Paper 的 Java、基岩和 Mineflayer 入口继续运行，不因为此实验改变。

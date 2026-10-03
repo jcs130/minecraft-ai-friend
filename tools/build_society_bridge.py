@@ -20,6 +20,8 @@ NUMEN = REPO / "world" / "numen-src"
 NUMEN_JAR = NUMEN / "core" / "neoforge" / "build" / "libs" / "numen-neoforge-1.21.1-0.1.3.jar"
 API_JAR = NUMEN / "api" / "neoforge" / "build" / "libs" / "numen_api-neoforge-1.21.1-0.1.3.jar"
 ARS_JAR = "ars_nouveau-1.21.1-5.13.2.jar"
+CREATE_JAR = "create-1.21.1-6.0.10.jar"
+PONDER_JAR = "ponder-neoforge-1.0.82+mc1.21.1.jar"
 NAME = "maw_agent_bridge-0.1.0.jar"
 
 
@@ -48,16 +50,22 @@ def main() -> None:
         raise ValueError("Java 21 and built Numen core/API are required")
     installed_numen = mods / NUMEN_JAR.name
     ars = mods / ARS_JAR
+    create = mods / CREATE_JAR
+    ponder = mods / PONDER_JAR
     if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
         raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
         raise ValueError("Pinned Ars Nouveau JAR is required for the spell bridge")
+    if not create.is_file():
+        raise ValueError("Pinned Create JAR is required for native kinetic state")
+    if not ponder.is_file():
+        raise ValueError("Pinned Ponder JAR is required by Create's block entities")
     spec = importlib.util.spec_from_file_location("botgate_build", REPO / "world" / "botgate-src" / "build.py")
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
     classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
-                                 str(NUMEN_JAR), str(ars)))
+                                 str(NUMEN_JAR), str(ars), str(create), str(ponder)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
     if not sources or not resource.is_file():
@@ -90,6 +98,8 @@ def main() -> None:
     record = {"schemaVersion": 1, "jar": str(target), "sha256": sha256(target),
               "numenSha256": sha256(NUMEN_JAR), "apiSha256": sha256(API_JAR),
               "arsSha256": sha256(ars),
+              "createSha256": sha256(create),
+              "ponderSha256": sha256(ponder),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
