@@ -97,8 +97,7 @@ final class VillageWatchManager implements Listener {
 
     private void alertChat(Player player, Threat threat) {
         if (player.getGameMode() == GameMode.SPECTATOR) return;
-        if (plugin.getConfig().getStringList("nametags.agent-uuids")
-                .contains(player.getUniqueId().toString())) {
+        if (plugin.isRegisteredAgent(player)) {
             // Cortico treats vanilla whispers as urgent input; plain system chat is only rendered.
             // Player names are restricted before they enter a console command.
             if (player.getName().matches("[A-Za-z0-9_]{1,16}")) {

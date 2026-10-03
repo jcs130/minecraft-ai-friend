@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "allowUnregisteredGuests": false,
+  "accounts": [
+    { "name": "ExampleAgent", "allowedIps": ["192.0.2.10"] },
+    { "name": "ExampleAgent_eye", "allowedIps": ["192.0.2.10"] }
+  ]
+}

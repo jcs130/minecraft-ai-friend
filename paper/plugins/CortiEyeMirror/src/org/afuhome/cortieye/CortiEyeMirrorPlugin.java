@@ -85,6 +85,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     private long lastInventoryClickAt;
     private int snapshotTargetEntityId = -1;
     private ProtocolManager protocol;
+    private AdditionalEyeMirrors additionalEyeMirrors;
     private BossBar vitalsBar;
     private final AtomicBoolean captureHotbarSlot36 = new AtomicBoolean();
     private long effectWindowAt;
@@ -130,6 +131,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         }, 1L, 1L);
         protocol.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST, PRESENTATION) {
             @Override public void onPacketSending(PacketEvent event) {
+                if (additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
                 String recipient = event.getPlayer().getName();
                 PacketType type = event.getPacketType();
                 if (recipient.equalsIgnoreCase(cameraName)) {
@@ -192,6 +194,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             long cutoff = System.currentTimeMillis() - 3_000L;
             cameraChat.values().removeIf(time -> time < cutoff);
         }, 60L, 60L);
+        additionalEyeMirrors = new AdditionalEyeMirrors(this, protocol, targetName, cameraName);
+        additionalEyeMirrors.start();
         getLogger().info("Native HUD mirror ready: " + targetName + " -> " + cameraName
                 + "; chat=" + mirrorChat + "; advancements=" + mirrorAdvancements
                 + "; camera-night-vision=" + cameraNightVision
@@ -202,6 +206,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
 
     @Override public void onDisable() {
         attached = false;
+        if (additionalEyeMirrors != null) additionalEyeMirrors.stop();
         if (protocol != null) protocol.removePacketListeners(this);
         if (vitalsBar != null) vitalsBar.removeAll();
         cameraChat.clear();
@@ -228,7 +233,9 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTargetInventoryClick(InventoryClickEvent event) {
-        if (!mirrorCraftingInventoryClicks || !(event.getWhoClicked() instanceof Player target)
+        if (!mirrorCraftingInventoryClicks || additionalEyeMirrors == null
+                || !additionalEyeMirrors.cortiAuthorized()
+                || !(event.getWhoClicked() instanceof Player target)
                 || !target.getName().equalsIgnoreCase(targetName)
                 || event.getView().getType() != InventoryType.CRAFTING) return;
         Player camera = Bukkit.getPlayerExact(cameraName);
@@ -401,7 +408,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     }
 
     private void attachCamera() {
-        if (!autoAttach) return;
+        if (!autoAttach || additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
         Player target = Bukkit.getPlayerExact(targetName);
         Player camera = Bukkit.getPlayerExact(cameraName);
         if (target == null || camera == null) return;
@@ -453,6 +460,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     }
 
     private void forward(UUID targetId, PacketType type, PacketContainer copy, String signature) {
+        if (additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
         Player target = Bukkit.getPlayer(targetId);
         Player camera = Bukkit.getPlayerExact(cameraName);
         if (target == null || camera == null || !target.isOnline() || !camera.isOnline()

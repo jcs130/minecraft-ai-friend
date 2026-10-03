@@ -15,6 +15,7 @@ $node = 'C:\Users\lzl19\AppData\Local\hermes\node\node.exe'
 $lanHost = '192.168.3.163'
 $gatewayScript = Join-Path $opsDir 'agent-lan-gateway.mjs'
 $gatewayControlScript = Join-Path $opsDir 'agent-lan-gateway-control.mjs'
+$gatewayReloadFile = Join-Path $opsDir 'agent-lan-gateway.reload.requested'
 $goddessScript = Join-Path $opsDir 'goddess-bridge.mjs'
 $goddessControlScript = Join-Path $opsDir 'goddess-bridge-control.mjs'
 $spectateWatcherScript = Join-Path $opsDir 'spectate-watcher.mjs'
@@ -25,6 +26,7 @@ $lockFile = Join-Path $opsDir 'manage-server.lock'
 $eventLog = Join-Path $opsDir 'manage-server.log'
 $bedrockHealthFile = Join-Path $opsDir 'bedrock-health.json'
 $pendingAgentFriendDeploy = Join-Path $opsDir 'agentfriend-deploy.pending.json'
+$pendingEyeMirrorDeploy = Join-Path $opsDir 'cortieye-deploy.pending.json'
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -207,6 +209,15 @@ function Stop-Gateway {
         Start-Sleep -Milliseconds 200
     }
     Log 'Agent LAN gateway stopped'
+}
+
+function Reload-Gateway {
+    if (-not (Listener)) { throw 'Paper is not listening; refused gateway-only reload.' }
+    $null = Probe
+    Stop-Gateway
+    Start-Gateway
+    Remove-Item -LiteralPath $gatewayReloadFile -Force -ErrorAction Stop
+    Log 'Agent LAN gateway hot reload completed without Paper restart'
 }
 
 function Rcon([string]$command) {
@@ -486,7 +497,7 @@ function Deploy-PendingAgentFriend {
     if (-not (Test-Path -LiteralPath $pendingAgentFriendDeploy)) { return }
     $plan = Get-Content -LiteralPath $pendingAgentFriendDeploy -Raw | ConvertFrom-Json
     $source = [IO.Path]::GetFullPath([string]$plan.source)
-    $sourceRoot = 'E:\minecraft-ai-friend\paper\plugins\AgentFriend\'
+    $sourceRoot = 'E:\minecraft-ai-friend-prospect-coords\paper\plugins\AgentFriend\'
     $targetName = [IO.Path]::GetFileName($source)
     if (-not $source.StartsWith($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
         $targetName -notmatch '^AgentFriend-\d+\.\d+\.\d+\.jar$' -or
@@ -524,6 +535,50 @@ function Deploy-PendingAgentFriend {
     }
     Remove-Item -LiteralPath $pendingAgentFriendDeploy -Force
     Log "AgentFriend deployed: $targetName SHA256=$($plan.sha256)"
+}
+
+function Deploy-PendingEyeMirror {
+    if (-not (Test-Path -LiteralPath $pendingEyeMirrorDeploy)) { return }
+    $plan = Get-Content -LiteralPath $pendingEyeMirrorDeploy -Raw | ConvertFrom-Json
+    $sourceRoot = 'E:\minecraft-ai-friend-prospect-coords\paper\plugins\CortiEyeMirror\'
+    $source = [IO.Path]::GetFullPath([string]$plan.source)
+    $targetName = [string]$plan.targetName
+    if (-not $source.StartsWith($sourceRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $targetName -notmatch '^CortiEyeMirror-\d+\.\d+\.\d+\.jar$' -or
+        $plan.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        $plan.previousSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        -not (Test-Path -LiteralPath $source)) { throw 'Pending Eye mirror deployment is invalid.' }
+    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $plan.sha256) {
+        throw 'Pending Eye mirror source hash changed.'
+    }
+    $enabled = @(Get-ChildItem -LiteralPath (Join-Path $serverDir 'plugins') -Filter 'CortiEyeMirror-*.jar' -File)
+    if ($enabled.Count -ne 1 -or
+        (Get-FileHash -LiteralPath $enabled[0].FullName -Algorithm SHA256).Hash -ne $plan.previousSha256) {
+        throw 'Expected previous Eye mirror JAR is not the only enabled version.'
+    }
+    $old = $enabled[0].FullName
+    $oldDisabled = "$old.disabled"
+    $new = Join-Path $serverDir "plugins\$targetName"
+    $staged = "$new.pending"
+    if ((Test-Path -LiteralPath $oldDisabled) -or (Test-Path -LiteralPath $new) -or
+        (Test-Path -LiteralPath $staged)) { throw 'Eye mirror deployment target already exists.' }
+    try {
+        Copy-Item -LiteralPath $source -Destination $staged
+        if ((Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash -ne $plan.sha256) {
+            throw 'Staged Eye mirror JAR hash mismatch.'
+        }
+        Rename-Item -LiteralPath $old -NewName ([IO.Path]::GetFileName($oldDisabled))
+        Rename-Item -LiteralPath $staged -NewName $targetName
+    } catch {
+        Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $old) -and (Test-Path -LiteralPath $oldDisabled)) {
+            Rename-Item -LiteralPath $oldDisabled -NewName ([IO.Path]::GetFileName($old))
+        }
+        Move-Item -LiteralPath $pendingEyeMirrorDeploy -Destination "$pendingEyeMirrorDeploy.failed" -Force
+        throw
+    }
+    Remove-Item -LiteralPath $pendingEyeMirrorDeploy -Force
+    Log "Eye mirror deployed: $targetName SHA256=$($plan.sha256)"
 }
 
 function Backup-Server {
@@ -565,7 +620,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'agent-lan-gateway.reload.requested' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -603,6 +658,7 @@ function Backup-Server {
         New-Item -ItemType File -Path (Join-Path $dest '.complete') -Force | Out-Null
         Log "Backup complete: $dest"
         Deploy-PendingAgentFriend
+        Deploy-PendingEyeMirror
     }
     finally {
         if ($wasRunning) {
@@ -673,6 +729,7 @@ try {
         'Watchdog' {
             if (Test-Path -LiteralPath $repairFile) { Repair-NoRcon; break }
             if (Test-Path -LiteralPath $pausedFile) { exit 0 }
+            if (Test-Path -LiteralPath $gatewayReloadFile) { Reload-Gateway; break }
             if (Listener) { $null = Probe; $null = Rcon 'minecraft:list'; Start-Gateway; Start-Goddess; EnsureSpectatorBinding; Check-BedrockHealth }
             else { Start-Server }
         }

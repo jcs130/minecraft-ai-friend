@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Path $build -Force | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'javac failed' }
 Copy-Item -LiteralPath (Join-Path $root 'resources\plugin.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\config.yml') -Destination $build -Force
-$out = Join-Path $root 'CortiEyeMirror-0.1.7.jar'
+$out = Join-Path $root 'CortiEyeMirror-0.1.8.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

@@ -1,23 +1,56 @@
-// Local-network entry for offline Mineflayer clients. Paper itself stays on loopback.
+// Offline Mineflayer entry. Paper itself stays on loopback. Registered Agent
+// and Eye login names are bound to ingress IPs before private UI is mirrored.
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
 
-const listenHost = '192.168.3.163';
-const listenPort = 25565;
-const backendHost = '127.0.0.1';
-const backendPort = 25565;
+const listenHost = process.env.AGENT_GATEWAY_LISTEN_HOST || '192.168.3.163';
+const listenPort = Number(process.env.AGENT_GATEWAY_LISTEN_PORT || 25565);
+const backendHost = process.env.AGENT_GATEWAY_BACKEND_HOST || '127.0.0.1';
+const backendPort = Number(process.env.AGENT_GATEWAY_BACKEND_PORT || 25565);
 const controlHost = '127.0.0.1';
-const controlPort = 25577;
+const controlPort = Number(process.env.AGENT_GATEWAY_CONTROL_PORT || 25577);
 let rejected = 0;
 let reservedRejected = 0;
-const opsFile = 'E:/MC/server/ops.json';
+let identityRejected = 0;
+const opsFile = process.env.AGENT_GATEWAY_OPS_FILE || 'E:/MC/server/ops.json';
+const pairsFile = process.env.AGENT_GATEWAY_PAIRS_FILE || 'E:/MC/ops/agent-eye-pairs.json';
+const accessFile = process.env.AGENT_GATEWAY_ACCESS_FILE || 'E:/MC/ops/agent-gateway-access.json';
 
 function reservedName(name) {
-  if (name.toLowerCase() === 'goddess') return true;
+  if (name.toLowerCase() === 'goddess' || name.startsWith('.')) return true;
   // Read on each login so RCON OP changes take effect without gateway reload.
   const ops = JSON.parse(readFileSync(opsFile, 'utf8'));
   if (!Array.isArray(ops)) throw new Error('invalid ops list');
   return ops.some(entry => entry.name?.toLowerCase() === name.toLowerCase());
+}
+
+function normalizedIp(address) {
+  return address?.startsWith('::ffff:') ? address.slice(7) : address;
+}
+
+function loginAllowed(name, address) {
+  const key = name.toLowerCase();
+  const registry = JSON.parse(readFileSync(pairsFile, 'utf8'));
+  if (registry.schemaVersion !== 1 || !Array.isArray(registry.pairs)
+      || registry.pairs.length > 16) throw new Error('invalid Eye registry');
+  const protectedNames = new Set();
+  for (const pair of registry.pairs) {
+    const agent = pair.agent;
+    const eye = pair.eye ?? `${agent}_eye`;
+    if (![agent, eye].every(value => /^[A-Za-z0-9_]{1,16}$/.test(value)))
+      throw new Error('invalid Eye pair name');
+    protectedNames.add(agent.toLowerCase());
+    protectedNames.add(eye.toLowerCase());
+  }
+  if (key.includes('eye') && !protectedNames.has(key)) return false;
+  const access = JSON.parse(readFileSync(accessFile, 'utf8'));
+  if (access.schemaVersion !== 1 || !Array.isArray(access.accounts))
+    throw new Error('invalid Agent access registry');
+  const entry = access.accounts.find(item => item.name?.toLowerCase() === key);
+  if (entry) return Array.isArray(entry.allowedIps)
+    && entry.allowedIps.includes(normalizedIp(address));
+  if (protectedNames.has(key)) return false;
+  return access.allowUnregisteredGuests === true;
 }
 
 // Inspect the cleartext login name before forwarding an offline-mode connection.
@@ -50,7 +83,7 @@ function string(bytes, at, end, max) {
   return { value: bytes.toString('utf8', size.at, size.at + size.value), at: size.at + size.value };
 }
 
-function decision(bytes) {
+function decision(bytes, address) {
   // Old status ping (0xfe) has no modern handshake.
   if (bytes[0] === 0xfe) return 'allow';
   const handshake = packet(bytes, 0);
@@ -72,12 +105,16 @@ function decision(bytes) {
   if (!id || id.value !== 0) throw new Error('expected login start');
   const name = string(bytes, id.at, login.end, 16);
   if (reservedName(name.value)) return 'reject-reserved';
+  if (!loginAllowed(name.value, address)) return 'reject-identity';
   return 'allow';
 }
 
 function allowed(address) {
-  const ip = address?.startsWith('::ffff:') ? address.slice(7) : address;
+  const ip = normalizedIp(address);
   if (net.isIP(ip) !== 4) return false;
+  // The live gateway has allowed WAN Mineflayer clients since 2026-09-30.
+  // Keep that behavior; registered Agent/Eye names have their own IP gate.
+  if (process.env.AGENT_GATEWAY_ALLOW_WAN !== '0') return true;
   const octets = ip.split('.').map(Number);
   return octets[0] === 192 && octets[1] === 168 && octets[2] === 3 && octets[3] > 0 && octets[3] < 255;
 }
@@ -94,7 +131,7 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     pending = Buffer.concat([pending, chunk]);
     if (pending.length > 8192) { client.destroy(); return; }
     let result;
-    try { result = decision(pending); }
+    try { result = decision(pending, client.remoteAddress); }
     catch { client.destroy(); return; }
     if (result === null) return;
     clearTimeout(timer);
@@ -102,6 +139,11 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     client.off('data', inspect);
     if (result === 'reject-reserved') {
       reservedRejected++;
+      client.destroy();
+      return;
+    }
+    if (result === 'reject-identity') {
+      identityRejected++;
       client.destroy();
       return;
     }
@@ -148,9 +190,10 @@ control.on('error', error => {
 });
 control.listen(controlPort, controlHost);
 setInterval(() => {
-  if (rejected || reservedRejected) {
-    console.log(`Rejected ${rejected} non-LAN and ${reservedRejected} reserved-name connections in the last minute`);
+  if (rejected || reservedRejected || identityRejected) {
+    console.log(`Rejected ${rejected} network, ${reservedRejected} reserved-name and ${identityRejected} Agent/Eye identity connections in the last minute`);
     rejected = 0;
     reservedRejected = 0;
+    identityRejected = 0;
   }
 }, 60_000).unref();

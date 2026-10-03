@@ -1,6 +1,9 @@
 # Only a dedicated spectator camera should receive a player's private UI.
 target: CortiLan
 camera: CortiEye
+# Shared with the Eye spectator watcher. Only explicitly registered pairs
+# receive private target chat and HUD packets.
+pairs-file: E:/MC/ops/agent-eye-pairs.json
 auto-attach: true
 camera-night-vision: true
 show-vitals-bossbar: false

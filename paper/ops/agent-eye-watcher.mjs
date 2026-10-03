@@ -1,6 +1,5 @@
-// Keep Eye accounts in spectator mode and attached to their Agent.
-// Explicit pairs cover names such as CortiEye -> CortiLan. Other Eye names
-// match the online Agent name after removing "eye" (for example fu_eye -> fu).
+// Keep registered Eye accounts in spectator mode and attached to their Agent.
+// A missing eye property means <agent>_eye. Explicit names cover CortiEye.
 // This sidecar uses loopback RCON; Paper does not need to restart.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +13,7 @@ const namePattern = /^[A-Za-z0-9_]{1,16}$/;
 const pollMs = 20_000;
 const refreshMs = 120_000;
 const attached = new Map();
+const unregistered = new Set();
 let pairs = [];
 let configError = '';
 let hadError = false;
@@ -30,7 +30,8 @@ function loadPairs() {
     if (value.schemaVersion !== 1 || !Array.isArray(value.pairs) || value.pairs.length > 16)
       throw new Error('expected schemaVersion=1 and at most 16 pairs');
     const seen = new Set();
-    const next = value.pairs.map(({ agent, eye }) => {
+    const next = value.pairs.map(({ agent, eye: configuredEye }) => {
+      const eye = configuredEye ?? `${agent}_eye`;
       if (!namePattern.test(agent) || !namePattern.test(eye) || agent.toLowerCase() === eye.toLowerCase())
         throw new Error('invalid agent or eye name');
       const key = eye.toLowerCase();
@@ -44,6 +45,7 @@ function loadPairs() {
   } catch (error) {
     if (String(error.message) !== configError) log(`pair config rejected: ${error.message}`);
     configError = String(error.message);
+    pairs = [];
     hadError = true;
   }
 }
@@ -77,14 +79,31 @@ async function tick() {
   loadPairs();
   const online = await roster();
   const cameras = new Map(pairs.map(pair => [pair.key, pair]));
+  for (const key of [...attached.keys()]) {
+    if (cameras.has(key)) continue;
+    const oldEye = online.get(key);
+    if (oldEye) {
+      try {
+        if (dry) log(`DRY detach ${oldEye.name}`);
+        else {
+          const reply = await command(`minecraft:execute as ${oldEye.name} run minecraft:spectate`, 10_000);
+          if (!reply.includes('No longer spectating')) throw new Error(reply.trim());
+          log(`detached unregistered ${oldEye.name}`);
+        }
+      } catch (error) {
+        log(`detach ${oldEye.name} failed: ${error.message}`);
+        hadError = true;
+      }
+    }
+    attached.delete(key);
+  }
   for (const eye of online.values()) {
     const key = eye.name.toLowerCase();
     if (key === 'goddess' || !key.includes('eye') || cameras.has(key)) continue;
-    const agentKey = key.replace('eye', '').replace(/^_+|_+$/g, '');
-    const agent = online.get(agentKey);
-    cameras.set(key, { eye: eye.name, key,
-      agent: agent && !agentKey.includes('eye') && agentKey !== 'goddess' ? agent.name : '' });
+    if (!unregistered.has(key)) log(`unregistered Eye ${eye.name}; no camera privileges`);
+    unregistered.add(key);
   }
+  for (const key of [...unregistered]) if (!online.has(key) || cameras.has(key)) unregistered.delete(key);
   for (const pair of cameras.values()) {
     const eye = online.get(pair.key);
     const agent = pair.agent ? online.get(pair.agent.toLowerCase()) : null;

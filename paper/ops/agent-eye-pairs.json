@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "pairs": [
-    { "agent": "CortiLan", "eye": "CortiEye" }
+    { "agent": "CortiLan", "eye": "CortiEye" },
+    { "agent": "fulumu" }
   ]
 }

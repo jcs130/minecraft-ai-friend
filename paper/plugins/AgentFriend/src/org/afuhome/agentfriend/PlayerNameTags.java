@@ -1,7 +1,15 @@
 package org.afuhome.agentfriend;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +37,10 @@ final class PlayerNameTags implements Listener {
     private final AgentFriendPlugin plugin;
     private final Set<Scoreboard> touchedBoards = new HashSet<>();
     private final Set<UUID> agentUuids = new HashSet<>();
+    private Set<String> registeredAgentNames = Set.of();
+    private Path pairsFile;
+    private String pairsError = "";
+    private int refreshTicks;
     private Component agentPrefix;
     private BukkitTask task;
 
@@ -58,6 +70,9 @@ final class PlayerNameTags implements Listener {
                 plugin.getLogger().warning("Ignoring invalid nametags.agent-uuids entry: " + raw);
             }
         }
+        pairsFile = Path.of(plugin.getConfig().getString("nametags.eye-pairs-file",
+                "E:/MC/ops/agent-eye-pairs.json"));
+        refreshAgentNames();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // A viewer can receive a custom sidebar later. Update their actual board
         // without replacing objectives or another plugin's gameplay team.
@@ -69,6 +84,7 @@ final class PlayerNameTags implements Listener {
         for (Scoreboard board : touchedBoards) removeOwnedTeams(board);
         touchedBoards.clear();
         agentUuids.clear();
+        registeredAgentNames = Set.of();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
@@ -88,12 +104,49 @@ final class PlayerNameTags implements Listener {
 
     private String desiredTeam(Player player) {
         if (player.getGameMode() == GameMode.SPECTATOR) return null;
-        boolean agent = agentUuids.contains(player.getUniqueId());
+        boolean agent = isAgent(player);
         if (plugin.guildMember(player)) {
             int rank = Math.max(0, Math.min(RANKS.length - 1, plugin.adventurerRank(player)));
             return (agent ? "qd_arank_" : "qd_rank_") + rank;
         }
         return agent ? AGENT_TEAM : null;
+    }
+
+    boolean isAgent(Player player) {
+        return player.getGameMode() != GameMode.SPECTATOR
+                && (agentUuids.contains(player.getUniqueId())
+                || registeredAgentNames.contains(player.getName().toLowerCase(Locale.ROOT)));
+    }
+
+    private void refreshAgentNames() {
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(pairsFile, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+            if (root.get("schemaVersion").getAsInt() != 1) throw new IllegalArgumentException("schemaVersion");
+            JsonArray entries = root.getAsJsonArray("pairs");
+            if (entries == null || entries.size() > 16) throw new IllegalArgumentException("pairs");
+            Set<String> names = new HashSet<>();
+            Set<String> eyes = new HashSet<>();
+            for (JsonElement element : entries) {
+                JsonObject pair = element.getAsJsonObject();
+                String agent = pair.get("agent").getAsString();
+                String eye = pair.has("eye") ? pair.get("eye").getAsString() : agent + "_eye";
+                String name = agent.toLowerCase(Locale.ROOT);
+                String camera = eye.toLowerCase(Locale.ROOT);
+                if (!agent.matches("[A-Za-z0-9_]{1,16}") || !eye.matches("[A-Za-z0-9_]{1,16}")
+                        || name.equals(camera) || name.equals("goddess") || camera.equals("goddess")
+                        || !names.add(name) || !eyes.add(camera))
+                    throw new IllegalArgumentException("invalid pair");
+            }
+            if (names.stream().anyMatch(eyes::contains)) throw new IllegalArgumentException("Agent is an Eye");
+            registeredAgentNames = Set.copyOf(names);
+            pairsError = "";
+        } catch (Exception error) {
+            registeredAgentNames = Set.of();
+            String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+            if (!message.equals(pairsError)) plugin.getLogger().warning("Agent pairs rejected: " + message);
+            pairsError = message;
+        }
     }
 
     private Component prefix(String teamName) {
@@ -105,6 +158,7 @@ final class PlayerNameTags implements Listener {
     }
 
     private void reconcile() {
+        if (++refreshTicks % 3 == 0) refreshAgentNames();
         Set<Scoreboard> boards = new HashSet<>();
         for (Player viewer : Bukkit.getOnlinePlayers()) boards.add(viewer.getScoreboard());
         for (Scoreboard previous : new HashSet<>(touchedBoards)) {

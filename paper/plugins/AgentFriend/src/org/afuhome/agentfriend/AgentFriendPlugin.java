@@ -324,6 +324,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
     DungeonManager dungeon() { return dungeon; }
+    boolean isRegisteredAgent(Player player) {
+        return playerNameTags != null && playerNameTags.isAgent(player);
+    }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
     void openDungeonDifficultyMenu(Player player) {

@@ -1,8 +1,14 @@
 # Paper 分支维护与发布
 
+## Agent/Eye 热登记与私有转发（2026-10-03，已发布）
+
+`ops/agent-eye-pairs.json` 是已登记 Agent 与 Eye 的对应表。Goddess 独立观战；Eye 守护进程约每 20 秒维持观战附身，CortiEyeMirror 0.1.8 约每 5 秒更新私有消息与 HUD 转发，AgentFriend 0.3.77 约每 6 秒更新 `[Agent]` 标记及村庄紧急私聊身份。运行机私有 `agent-gateway-access.json` 约束登记账号的来源 IP，按登录即时读取。今后正常增删配对无需重启 Paper。未登记普通 Java 用户名仍在离线模式下可被冒用，扩大公开接入前须确定认证方案；详见 [Agent 观战账号](AGENT_EYES.md)。
+
+CortiEyeMirror 隔离服双配对转发、跨账号隔离、广播去重、热撤销通过；正式服 16:21 用计划任务在 E/F 双盘生成 `.complete` 快照 `20261003-162112`，任务结果 0，唯一启用 `CortiEyeMirror-0.1.8.jar`，SHA256 `6BE57C35E049CC32931D94ECC2EBCAC310B9EEA75987EAC807E3452A586F3F95`。其后 AgentFriend 的热登记在隔离服用 Mineflayer 测试登记、撤销、损坏清单及恢复均通过；正式服 16:31 由同一计划任务生成 E/F `.complete` 快照 `20261003-163151`，任务结果 0，唯一启用 `AgentFriend-0.3.77.jar`，SHA256 `7E9AC0DC241EBECFBC1F9B7C642AF22EA63C8BE643A6C500B0A9DCEFDDCECCEC`。正式服读回 `[Agent] fulumu`，两个插件版本正常，Java 本机与网关、基岩 Pong、Goddess 桥、Eye 巡检与 Watchdog 已恢复，试炼未进行。发布后 `CortiEye` 和 `fulumu_eye` 客户端可能短暂离线；CortiEye 的实际直播画面待远端客户端重连后验收。回退时在无真人在线、无试炼时正常停服，只切回保留的上一版 JAR，并保留世界与玩家数据。
+
 ## Eye 观战账号自动附身（2026-10-03，无停服运维更新）
 
-Goddess 保持独立观战；所有在线用户名包含 `eye` 的账号由 `agent-eye-watcher.mjs` 保持原版观战模式，并按名称自动寻找 Agent 附身。`fulumu_eye → fulumu` 已由命名规则自动识别，`CortiEye → CortiLan` 保留在明确映射配置。原有 `Afu-MC-Watchdog` 保证巡检单实例，账号掉线重连后自动恢复；具体规则见 [Agent 观战账号](AGENT_EYES.md)。运行脚本已在正式服热更新并备份原文件，Paper JVM 未重启。Goddess、CortiEye、fulumu_eye 均读回观战模式；两组附身有巡检日志，fulumu_eye 与 fulumu 的位置相同，CortiEyeMirror 报 `attached=true`。`[Agent]` 头顶标记仍取 AgentFriend 启动时载入的 UUID 名单，本次没有改 JAR 或公会任务。
+Goddess 保持独立观战；已登记的 `CortiEye → CortiLan` 和 `fulumu_eye → fulumu` 由 `agent-eye-watcher.mjs` 保持原版观战并附身。新 Agent 在配对清单登记后，默认可用 `<Agent>_eye` 命名镜头。原有 `Afu-MC-Watchdog` 保证巡检单实例，账号掉线重连后自动恢复；具体规则见 [Agent 观战账号](AGENT_EYES.md)。运行脚本已在正式服热更新并备份原文件，Paper JVM 未重启。Goddess、CortiEye、fulumu_eye 均读回观战模式；两组附身有巡检日志，fulumu_eye 与 fulumu 的位置相同，CortiEyeMirror 报 `attached=true`。`[Agent]` 头顶标记仍取 AgentFriend 启动时载入的 UUID 名单，本次没有改 AgentFriend JAR 或公会任务。
 
 ## 0.3.76 法术说明与 Agent 自发现（2026-10-03，已发布）
 

@@ -4,6 +4,8 @@ nametags:
   # Only real Agent player accounts receive the short overhead role prefix.
   # Camera and Goddess spectator accounts are intentionally absent.
   agent-prefix: '[Agent] '
+  # Registered Agent/Eye pairs are re-read while Paper stays online.
+  eye-pairs-file: E:/MC/ops/agent-eye-pairs.json
   agent-uuids:
   - ccba3629-1f58-33d2-bd0c-f7ba6e699816 # CortiLan
   - 08a6a7ce-526a-3e3f-b0d3-7509efce8398 # Kirito
