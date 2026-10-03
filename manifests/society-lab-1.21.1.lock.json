@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "displayName": "My Agent World",
+  "minecraftVersion": "1.21.1",
+  "neoforgeVersion": "21.1.248",
+  "javaMajor": 21,
+  "builtArtifacts": [
+    {
+      "name": "numen-neoforge-1.21.1-0.1.3.jar",
+      "source": "world/numen-src/core/neoforge/build/libs/numen-neoforge-1.21.1-0.1.3.jar",
+      "sha256": "06fac1748ba1d12f5d395ecf2b3f32b43980e3d0919ba8145a34e260ba168973"
+    },
+    {
+      "name": "maw_agent_bridge-0.1.0.jar",
+      "source": "tools/build_society_bridge.py",
+      "sha256": "99465f8b2c0ea62a946e6c62c22e483eda846a5f444550a00c59aae87edec187"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "neoforge-21.1.248-installer.jar",
+      "kind": "installer",
+      "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar",
+      "sha256": "68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c"
+    },
+    {
+      "name": "minecolonies-1.1.1319-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/minecolonies/files/8138370",
+      "url": "https://mediafilez.forgecdn.net/files/8138/370/minecolonies-1.1.1319-1.21.1.jar",
+      "sha256": "ab97c0eec45c3f2539ec31428e3c836bb30ba1c537af0c86f5ab4e38754f6a4d"
+    },
+    {
+      "name": "structurize-1.0.832-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/structurize/files/8610535",
+      "url": "https://mediafilez.forgecdn.net/files/8610/535/structurize-1.0.832-1.21.1.jar",
+      "sha256": "b6ede7635c63a80bd3d034c1ad3e74c648b8478f341f883d7d29c3dcf90b79ce"
+    },
+    {
+      "name": "multipiston-1.2.58-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/multi-piston/files/7097877",
+      "url": "https://mediafilez.forgecdn.net/files/7097/877/multipiston-1.2.58-1.21.1.jar",
+      "sha256": "7ca26db4648589b7f76694c249d5096c0c0afb7615fe6adf9f638c6c825c15e7"
+    },
+    {
+      "name": "blockui-1.0.209-1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/blockui/files/7541336",
+      "url": "https://mediafilez.forgecdn.net/files/7541/336/blockui-1.0.209-1.21.1.jar",
+      "sha256": "eec023231b21a606306cac6c588b5b07f51741f5e5bc831dba709d52332b82ab"
+    },
+    {
+      "name": "domum-ornamentum-1.0.231-main.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/domum-ornamentum/files/7789217",
+      "url": "https://mediafilez.forgecdn.net/files/7789/217/domum-ornamentum-1.0.231-main.jar",
+      "sha256": "04c0c902bdbcbd48e38bee5a323907ae0b7b7db4ff4a3e4da7c45334b65610a1"
+    },
+    {
+      "name": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/touhou-little-maid/files/8061852",
+      "url": "https://mediafilez.forgecdn.net/files/8061/852/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar",
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27"
+    },
+    {
+      "name": "FarmersDelight-1.21.1-1.3.4.jar",
+      "kind": "mod",
+      "project": "https://www.curseforge.com/minecraft/mc-mods/farmers-delight/files/8765184",
+      "url": "https://mediafilez.forgecdn.net/files/8765/184/FarmersDelight-1.21.1-1.3.4.jar",
+      "sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c"
+    }
+  ]
+}
