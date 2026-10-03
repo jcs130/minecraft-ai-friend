@@ -1,13 +1,13 @@
-# Agent 游玩提醒（AgentFriend 0.3.38）
+# Agent 游玩提醒（AgentFriend 0.3.76）
 
 提醒由服务端按玩家 UUID 维护，走原版系统聊天，只发给本人；Java、Mineflayer 可直接读，基岩无需客户端模组。它只建议命令，不会自动传送、治疗、施法或操作背包。`/mycli coach status|on|off` 可查询、启用或关闭；个人开关存在玩家数据里，重登后保留。旁观者没有提醒。Java/Mineflayer 默认开启，Floodgate 基岩账号默认关闭；两者都能用个人命令覆盖。全服可在 AgentFriend 配置 `coach.enabled` 关闭。
 
-默认触发规则：30 分钟内累计死亡 3 次，在复活后或下次登录时提示检查状态、治疗术和安全撤退；15 分钟没有方块位移、交互、背包点击或命令时，提示发现能力和查看路线；活跃游玩 45 分钟未调用 `/mycli` 时，提示 `list` 与 `explain`。死亡、闲置、久未使用共享每人 30 分钟冷却；一次闲置过程只提示一次，恢复活动后才可开启下一次闲置计时。连续死亡与闲置相撞时，死亡提示优先。提示不会根据一个 Agent 的状态发给其他玩家。
+默认触发规则：30 分钟内累计死亡 3 次，在复活后或下次登录时提示检查状态、查询圣愈术说明和安全撤退；15 分钟没有方块位移、交互、背包点击或命令时，提示发现能力和查看路线；活跃游玩 45 分钟未调用 `/mycli` 时，提示命令目录、法术图鉴与逐项说明。死亡、闲置、久未使用共享每人 30 分钟冷却；一次闲置过程只提示一次，恢复活动后才可开启下一次闲置计时。连续死亡与闲置相撞时，死亡提示优先。提示不会根据一个 Agent 的状态发给其他玩家。
 
 回执示例：
 
 ```text
-MC_COACH {"schemaVersion":1,"type":"reminder","reason":"deaths","deaths":3,"message":"连续死亡后先检查状态和可用技能；必要时回出生村整理装备。","commands":["/mycli status","/mycli explain cast.selfheal","/mycli goto village"]}
+MC_COACH {"schemaVersion":1,"type":"reminder","reason":"deaths","deaths":3,"message":"连续死亡后先检查状态和可用技能；必要时回出生村整理装备。","commands":["/mycli status","/mycli spells explain selfheal","/mycli goto village"]}
 MC_COACH {"schemaVersion":1,"type":"status","enabled":true,"deathThreshold":3,"deathWindowSeconds":1800,"idleSeconds":900,"unusedSeconds":2700,"cooldownSeconds":1800}
 ```
 

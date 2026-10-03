@@ -1,0 +1,174 @@
+package org.afuhome.agentfriend;
+
+import com.google.gson.JsonObject;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+
+/** One read-only guide for the custom spells used by Java, Bedrock and Agents. */
+final class SpellGuide {
+    private static final int PAGE_SIZE = 7;
+    record Entry(String id, String name, String category, Material icon, String command,
+                 String effect, String target, int mana, int cooldownSeconds,
+                 String requires, String failure, String scaling, String tip) {
+        String costLine() { return "魔力 " + mana + " · 冷却 " + cooldownSeconds + " 秒"; }
+        JsonObject json() {
+            JsonObject data = new JsonObject();
+            data.addProperty("schemaVersion", 1);
+            data.addProperty("id", id);
+            data.addProperty("name", name);
+            data.addProperty("category", category);
+            data.addProperty("command", command);
+            data.addProperty("effect", effect);
+            data.addProperty("target", target);
+            data.addProperty("mana", mana);
+            data.addProperty("cooldownMs", cooldownSeconds * 1000);
+            data.addProperty("requires", requires);
+            data.addProperty("onFailure", failure);
+            data.addProperty("scaling", scaling);
+            data.addProperty("tip", tip);
+            return data;
+        }
+    }
+
+    private static final List<Entry> SPELLS = List.of(
+            new Entry("selfheal", "圣愈术", "recovery", Material.GOLDEN_APPLE,
+                    "/mycli cast selfheal", "回复自己 8 点生命（4 颗心）。", "自己", 6, 15,
+                    "生命未满；非旁观者。", "已满血时不治疗，也不应重复施放。", "无熟练度升级。", "受伤后给自己补血；队友受伤用 heal。"),
+            new Entry("heal", "范围治疗", "recovery", Material.GLISTERING_MELON_SLICE,
+                    "/mycli cast heal", "治疗 8 格内所有受伤玩家，每人最多回复 6 点生命（3 颗心）。", "自己和附近队友", 6, 12,
+                    "8 格内至少一名玩家受伤；非旁观者。", "无人受伤不扣魔力，不进入冷却。", "无熟练度升级。", "组队战斗中多人掉血时使用；无需瞄准。"),
+            new Entry("food", "饱食术", "recovery", Material.BREAD,
+                    "/mycli cast food", "恢复 4 点饥饿值和 2.5 点饱和度。", "自己", 3, 30,
+                    "饥饿值未满；非旁观者。", "饥饿已满时没有收益。", "无熟练度升级。", "远行缺少食物时补充；不能代替治疗。"),
+            new Entry("home", "归乡术", "travel", Material.RED_BED,
+                    "/mycli cast home", "传送回出生村庄的安全落点。", "自己", 0, 0,
+                    "目标传送点可用且落脚处安全；非旁观者。", "落点被阻挡或传送失败时留在原地。", "无熟练度升级。", "迷路、任务结束或离开危险区域时使用。"),
+            new Entry("blink", "闪现术", "travel", Material.ENDER_PEARL,
+                    "/mycli cast blink", "沿视线短距闪现，最远约 25 格；不能穿越封闭天花板。", "自己朝向", 4, 8,
+                    "面向可到达的安全位置；非旁观者。", "目标不安全时 MagicSpells 拒绝传送。", "无熟练度升级。", "越过小沟或快速躲开近身怪物；先确认落点。"),
+            new Entry("give", "造物术", "creation", Material.CRAFTING_TABLE,
+                    "/mycli cast give <物品>", "固定配方：bread×4、torch×4、oak_log×8、cobblestone×16、crafting_table×1、chest×1、cake×1、glass×8。其他物品转交女神审核，不会立即生成。", "自己的背包；缺项交女神", 4, 20,
+                    "固定配方需背包有空间；缺项申请需女神在线，申请本身不扣魔力。", "背包满则固定配方拒绝；女神不在线则申请未送达。", "固定配方无熟练度升级；缺项申请有独立 60 秒间隔。", "缺建材或食物时选固定配方；不要把申请当作已得到物品。"),
+            new Entry("fireworks", "烟花术", "cosmetic", Material.FIREWORK_ROCKET,
+                    "/mycli cast fireworks", "在身边播放烟花粒子和声音；没有伤害。", "自己周围", 1, 10,
+                    "非旁观者。", "魔力不足或冷却中不播放成功效果。", "无熟练度升级。", "庆祝或直播画面装饰。"),
+            new Entry("starlight", "星尘术", "cosmetic", Material.GLOWSTONE_DUST,
+                    "/mycli cast starlight", "在身边播放星光粒子和声音；没有真实照明或伤害。", "自己周围", 1, 10,
+                    "非旁观者。", "魔力不足或冷却中不播放成功效果。", "无熟练度升级。", "仪式或直播画面装饰；夜间看路请用 night。"),
+            new Entry("starbolt", "星芒箭", "combat", Material.AMETHYST_SHARD,
+                    "/mycli cast starbolt", "优先命中准星 18 格内敌对怪物，否则锁定 12 格内最近可见怪物；基础伤害 5。", "可见敌对怪物", 4, 3,
+                    "目标可见且没有方块遮挡；非旁观者。", "无合法怪物时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级，每级 +1 伤害；战斗每 20 级再 +1，最多 +2。", "远程单体输出；不会锁玩家、村民、宠物或友方。"),
+            new Entry("frostnova", "霜环", "combat", Material.SNOWBALL,
+                    "/mycli cast frostnova", "伤害并减速身边 5.5 格内最多 4 只可见怪物；基础伤害 2、减速 4 秒。", "附近敌对怪物", 7, 14,
+                    "身边有可见怪物；非旁观者。", "没有合法怪物时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级：伤害 2/3/4，减速 4/5/6 秒；战斗等级最多再 +2 伤害。", "被多只怪物包围时先控场；不会冻住队友。"),
+            new Entry("flamewave", "焰浪", "combat", Material.BLAZE_POWDER,
+                    "/mycli cast flamewave", "伤害并点燃前方 9 格内最多 4 只可见怪物；基础伤害 4、燃烧 3 秒。", "前方敌对怪物", 8, 10,
+                    "面向怪物且目标可见；非旁观者。", "前方没有合法怪物时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级：伤害 4/5/6，燃烧 3/4/5 秒；战斗等级最多再 +2 伤害。", "清理前方成群怪物；不会点燃方块或伤队友。"),
+            new Entry("prospect", "探矿术", "gathering", Material.SPYGLASS,
+                    "/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]", "扫描已加载区域，返回最近符合条件矿块的维度与绝对 X/Y/Z，并短时高亮。", "附近矿块", 6, 30,
+                    "只查已加载区块；ancient 适合下界；非旁观者。", "附近无对应矿物时不扣魔力、不进入冷却。", "基础半径 24 格，挖矿每 5 级 +2，最多 40；刻印工具再 +8；熟练度提升标记 12/15/18 秒。", "先指定矿种，再按绝对坐标寻路；高亮不是透视挖掘许可。"),
+            new Entry("leap", "跃空术", "exploration", Material.RABBIT_FOOT,
+                    "/mycli cast leap", "高高跳起并获得缓降，避免落地伤害。", "自己", 4, 8,
+                    "站在地面，未乘坐载具或飞行；非旁观者。", "没有站稳时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级；跳跃略增，缓降 9/11/13 秒。", "越过高差或短程逃离；先确认上方与落点。"),
+            new Entry("flight", "飞行术", "exploration", Material.ELYTRA,
+                    "/mycli cast flight", "生存模式自由飞行，到期回收飞行权限并缓降。", "自己", 10, 90,
+                    "不是创造模式，当前没有飞行术生效；非旁观者。", "飞行中重复使用不会再扣魔力。", "成功 8/24 次升 2/3 级，持续 15/18/21 秒。", "跨越地形或高处侦察；时间结束前寻找安全落点。"),
+            new Entry("golem", "守护傀儡", "exploration", Material.IRON_BLOCK,
+                    "/mycli cast golem", "在身边召唤临时铁傀儡，只协助攻击敌对怪物。", "附近安全落脚处", 12, 75,
+                    "附近有 3 格高的安全落脚处，且自己的旧傀儡已离开。", "无落点或旧傀儡仍在时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级，存在 45/50/55 秒。", "危险区域提前召唤；不会攻击玩家和家畜。"),
+            new Entry("sense", "探敌术", "exploration", Material.RECOVERY_COMPASS,
+                    "/mycli cast sense", "探查附近已加载的敌对怪物，返回最近目标的绝对坐标与数量。", "附近敌对怪物", 3, 15,
+                    "附近区块已加载；非旁观者。", "未发现怪物时不扣魔力、不进入冷却。", "成功 8/24 次升 2/3 级，范围 24/28/32 格。", "进洞或守村前探路；未加载区域不能据此认定安全。"),
+            new Entry("feather", "羽落术", "support", Material.FEATHER,
+                    "/mycli cast feather", "获得 45 秒缓降效果。", "自己", 2, 90,
+                    "先学会：原版经验 5 级、炼金等级 2 免费，或首次通过试炼第三层。", "未学会、魔力不足或冷却中不能施放。", "无熟练度升级。", "高处下落前施放；也可从罗盘图标学习。"),
+            new Entry("night", "夜视术", "support", Material.LANTERN,
+                    "/mycli cast night", "获得 120 秒夜视效果；不会改变世界光照。", "自己", 2, 180,
+                    "先学会：原版经验 5 级、炼金等级 2 免费，或首次通过试炼第三层。", "未学会、魔力不足或冷却中不能施放。", "无熟练度升级。", "矿洞和夜间探索前施放；观战者夜视另行设置。"));
+
+    private SpellGuide() { }
+    static List<Entry> entries() { return SPELLS; }
+    static Entry find(String raw) {
+        String id = raw.toLowerCase(Locale.ROOT).trim();
+        if (id.startsWith("cast.")) id = id.substring(5);
+        if (id.startsWith("prospect ")) id = "prospect";
+        if (id.startsWith("give ")) id = "give";
+        for (Entry entry : SPELLS) if (entry.id().equals(id)) return entry;
+        return null;
+    }
+    static String costLine(String raw) {
+        Entry entry = find(raw);
+        return entry == null ? "" : entry.costLine();
+    }
+    static String[] menuLines(String... values) {
+        List<String> lines = new ArrayList<>();
+        for (String value : values) {
+            for (int start = 0; start < value.length(); start += 32)
+                lines.add(value.substring(start, Math.min(start + 32, value.length())));
+        }
+        return lines.toArray(String[]::new);
+    }
+    static String[] preview(Entry entry) {
+        String effect = entry.effect();
+        return new String[]{effect.length() > 32 ? effect.substring(0, 32) + "…" : effect,
+                entry.costLine(), "点击查看完整说明；不会施法"};
+    }
+    static void command(Player player, String[] args) {
+        if (args.length == 1 || args.length >= 2 && args[1].equalsIgnoreCase("list")) {
+            int page = 1;
+            if (args.length > 3) { error(player, "INVALID_ARGUMENT", "用法：/mycli spells list [页码]"); return; }
+            if (args.length == 3) try { page = Integer.parseInt(args[2]); }
+            catch (NumberFormatException invalid) { error(player, "INVALID_PAGE", "页码必须是整数"); return; }
+            list(player, page);
+            return;
+        }
+        if (args.length < 3 || !(args[1].equalsIgnoreCase("explain")
+                || args[1].equalsIgnoreCase("info") || args[1].equalsIgnoreCase("describe"))) {
+            error(player, "INVALID_ARGUMENT", "用法：/mycli spells list [页码] 或 /mycli spells explain <技能ID>");
+            return;
+        }
+        detail(player, String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+    }
+    static void list(Player player, int page) {
+        int pages = (SPELLS.size() + PAGE_SIZE - 1) / PAGE_SIZE;
+        if (page < 1 || page > pages) { error(player, "INVALID_PAGE", "页码范围 1–" + pages); return; }
+        JsonObject header = new JsonObject();
+        header.addProperty("schemaVersion", 1);
+        header.addProperty("page", page);
+        header.addProperty("pages", pages);
+        header.addProperty("total", SPELLS.size());
+        player.sendMessage("MC_SPELL_LIST " + header);
+        for (int i = (page - 1) * PAGE_SIZE; i < Math.min(page * PAGE_SIZE, SPELLS.size()); i++) {
+            Entry entry = SPELLS.get(i);
+            JsonObject item = new JsonObject();
+            item.addProperty("id", entry.id());
+            item.addProperty("name", entry.name());
+            item.addProperty("category", entry.category());
+            item.addProperty("mana", entry.mana());
+            item.addProperty("cooldownMs", entry.cooldownSeconds() * 1000);
+            item.addProperty("command", entry.command());
+            player.sendMessage("MC_SPELL_ITEM " + item);
+        }
+        if (page < pages) player.sendMessage("MC_SPELL_NEXT /mycli spells list " + (page + 1));
+        player.sendMessage(ChatColor.GRAY + "查完整说明：/mycli spells explain <英文 ID>；查询本身不会施法。");
+    }
+    static void detail(Player player, String id) {
+        Entry entry = find(id);
+        if (entry == null) { error(player, "UNKNOWN_ID", "未知技能；先用 /mycli spells list"); return; }
+        player.sendMessage("MC_SPELL_DETAIL " + entry.json());
+        player.sendMessage(ChatColor.LIGHT_PURPLE + entry.name() + "：" + entry.effect());
+        player.sendMessage(ChatColor.GRAY + "用法 " + entry.command() + "；" + entry.costLine()
+                + "；" + entry.tip());
+    }
+    private static void error(Player player, String code, String hint) {
+        JsonObject data = new JsonObject();
+        data.addProperty("schemaVersion", 1);
+        data.addProperty("code", code);
+        data.addProperty("hint", hint);
+        player.sendMessage("MC_SPELL_ERROR " + data);
+    }
+}

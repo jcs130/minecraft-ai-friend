@@ -35,7 +35,7 @@ final class AgentCliCatalog {
         add(specs,"coach","info","read","/mycli coach status|on|off","查看或调整本人低频提醒；默认 Java 开、基岩关","在线玩家；旁观者不收到提醒","MC_COACH JSON");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
-        add(specs,"spells","magic","read","/mycli spells","列出可用法术、消耗与学习条件","在线玩家","技能文字列表");
+        add(specs,"spells","magic","read","/mycli spells list [页码]|explain <技能ID>","分页发现全部自研法术；逐项读取效果、目标、消耗、冷却和用法","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
         add(specs,"mastery","magic","read","/mycli mastery","查看本人法术熟练度与升级门槛","在线玩家","熟练度报告");
         add(specs,"skillbook","magic","item","/mycli skillbook list|use [槽位]","列出或使用实体技艺研习书；也可手持右键","背包有研习书且对应技能未满级","MC_SKILLBOOK 私有回执");
         add(specs,"cast","magic","cast","/mycli cast <技能ID> [参数]","施放生活、战斗或探索法术","本人非旁观者；魔力/学习/冷却由技能检查","技能结果；部分返回 MC_* 坐标");
@@ -62,6 +62,8 @@ final class AgentCliCatalog {
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
+        add(specs,"spells.list","magic","read","/mycli spells list [页码]","分页列出全部自研法术 ID、类别、魔力、冷却与施法命令","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM JSON，下一页命令");
+        add(specs,"spells.explain","magic","read","/mycli spells explain <技能ID>","读取单项法术效果、目标、前提、失败条件、成长与战术建议","在线玩家；查询不会施法","本人 MC_SPELL_DETAIL JSON");
         add(specs,"skillbook.list","magic","read","/mycli skillbook list","列出背包内真实研习书、槽位、技能与可得熟练度","本人在线","MC_SKILLBOOK action=list|summary");
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗 8 格内所有受伤玩家（含自己）","非旁观者；6 魔力；12 秒冷却；无需瞄准","治疗人数、视觉提示与私有技能事件");
@@ -218,6 +220,10 @@ final class AgentCliCatalog {
         detail.addProperty("summary", spec.summary());
         detail.addProperty("requires", spec.requires());
         detail.addProperty("returns", spec.returns());
+        if (id.startsWith("cast.")) {
+            SpellGuide.Entry spell = SpellGuide.find(id);
+            if (spell != null) detail.add("spell", spell.json());
+        }
         player.sendMessage("MC_CLI_DETAIL " + detail);
     }
 

@@ -206,7 +206,7 @@ final class AgentCoach implements Listener {
                 if (deaths(player, now) == 0) player.getPersistentDataContainer().remove(pendingDeathKey);
                 else if (send(player, now, "deaths", deaths(player, now),
                         "连续死亡后先检查状态和可用技能；必要时回出生村整理装备。",
-                        "/mycli status", "/mycli explain cast.selfheal", "/mycli goto village")) {
+                        "/mycli status", "/mycli spells explain selfheal", "/mycli goto village")) {
                     player.getPersistentDataContainer().remove(pendingDeathKey);
                     state.idleSent = true;
                     state.unusedSent = true;
@@ -224,8 +224,8 @@ final class AgentCoach implements Listener {
                     && now - state.lastMycli >= seconds("unused-seconds", 2700)
                     && now - state.lastActivity < Math.min(seconds("idle-seconds", 900), 120_000L)) {
                 if (send(player, now, "mycli_unused", 0,
-                        "已游玩一段时间；可先列出命令，再查看单项用法。",
-                        "/mycli list", "/mycli explain <ID>"))
+                        "已游玩一段时间；可先列出命令和法术，再查看单项用法。",
+                        "/mycli list", "/mycli spells list", "/mycli spells explain <ID>"))
                     state.unusedSent = true;
             }
         }

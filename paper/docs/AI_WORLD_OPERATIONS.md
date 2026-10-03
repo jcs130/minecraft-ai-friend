@@ -68,7 +68,7 @@ ID / 标题：唯一、稳定；例如 guild:cherry_scout
 
 ### 技能与法术
 
-技能应有稳定 ID、展示名、解锁条件、魔力消耗、冷却、适用目标、效果、粒子/音效、失败提示和 Agent 可读说明。修改时同时核对 AgentFriend 的 `/mycli spells`、`/mycli focus list`、技能罗盘/命格书、MagicSpells 配置、AuraSkills 魔力扣费和 `mcviewer:state` 的每人状态同步。现有 `ViewerStatePublisher` 已按玩家连接发送本人状态；新技能需要确认它能正确显示等级、经验和剩余冷却，无法提供的值按既有协议留空。
+技能应有稳定 ID、展示名、解锁条件、魔力消耗、冷却、适用目标、效果、粒子/音效、失败提示和 Agent 可读说明。0.3.76 起自研法术的玩家/Agent 说明集中在 `SpellGuide.java`：Agent 先 `/mycli spells list`，再 `/mycli spells explain <ID>` 读取私有 `MC_SPELL_DETAIL`；旧 `/mycli explain cast.<ID>` 也嵌入同一份 `spell` 对象。图鉴数据是静态成本和规则，当前魔力与剩余冷却继续从本人 `mcagent:state` 读取。修改技能时同时核对图鉴、`/mycli focus list`、技能罗盘/命格书、MagicSpells 配置、AuraSkills 魔力扣费和 `mcviewer:state` 的每人状态同步。现有 `ViewerStatePublisher` 已按玩家连接发送本人状态；新技能需要确认它能正确显示等级、经验和剩余冷却，无法提供的值按既有协议留空。
 
 0.3.36 的八项原生法术熟练度是独立成长线：成功施放累计 8/24 次到 2/3 级，进度文件与世界一起备份；Agent 可用 `/mycli mastery` 读取本人 `MC_MASTERY`，手柄可在罗盘点「技能成长」。不要把这项法术等级说成 AuraSkills 等级或公会等级；MagicSpells 治疗/造物、女神学习技能尚未进入这套熟练度。新增技能应按 [技能体系](SKILL_SYSTEM.md) 明确分类、成功归因、等级效果和上限。
 
