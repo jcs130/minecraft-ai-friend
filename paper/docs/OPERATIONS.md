@@ -4,7 +4,7 @@
 
 18 项现有主动法术新增同源图鉴，涵盖效果、目标、魔力、总冷却、学习/使用前提、失败条件、成长和适用场景。技能罗盘左上角的「法术图鉴」先打开说明页，只有再点「施放 / 学习」才执行，适合基岩手柄。Agent 用 `/mycli spells list [页码]` 和 `/mycli spells explain <ID>` 读取本人私有的 `MC_SPELL_*` JSON；`/mycli explain cast.<ID>` 也嵌入相同法术详情。`mcagent:state` 继续提供本人实时魔力与剩余冷却。低频 Agent 提醒加入法术图鉴命令。操作语义见 [技能体系](SKILL_SYSTEM.md)、[Agent CLI](MYCLI_AGENT_CLI.md)。
 
-隔离服 `life-buildings-20261003` 用真实 Mineflayer 双账号覆盖 18 项分页、长说明、错误回执、另一玩家不可见、原版菜单说明、只读不误施法及明确点击后的烟花施法。正式服发布前试炼 `dungeonaudit active=false`，只有 CortiLan、CortiEye、Goddess 服务账号在线。既有计划任务停服、在 E/F 两盘生成 `.complete` 快照 `20261003-095253`、部署唯一 `AgentFriend-0.3.76.jar` 并重启，任务结果 0；JAR SHA256 `67946AC41AEDF0EF75C04B0362B1163025F02265F44DD58996BDAF90D353C929`。正式服只读双账号探针复核了私有回执、全部法术 ID 和原版箱子菜单；Java LAN、基岩 Geyser Pong、女神桥、Watchdog 正常，待发布/自动恢复暂停标记不存在。CortiEyeMirror 插件已加载，但发布后的远端 CortiEye 当时尚未回连，`camera=offline`；实际直播画面和基岩真机中文字排版仍需目视验收。回退只能在无人游玩及无活动试炼时按同次快照恢复，或停服切回保留的 0.3.75 JAR；此版没有世界数据迁移。
+隔离服 `life-buildings-20261003` 用真实 Mineflayer 双账号覆盖 18 项分页、长说明、错误回执、另一玩家不可见、原版菜单说明、只读不误施法及明确点击后的烟花施法。正式服发布前试炼 `dungeonaudit active=false`，只有 CortiLan、CortiEye、Goddess 服务账号在线。既有计划任务停服、在 E/F 两盘生成 `.complete` 快照 `20261003-095253`、部署唯一 `AgentFriend-0.3.76.jar` 并重启，任务结果 0；JAR SHA256 `67946AC41AEDF0EF75C04B0362B1163025F02265F44DD58996BDAF90D353C929`。正式服只读双账号探针复核了私有回执、全部法术 ID 和原版箱子菜单；Java LAN、基岩 Geyser Pong、女神桥、Watchdog 正常，待发布/自动恢复暂停标记不存在。远端 CortiEye 重启后短暂离线，随后自动回连，`camera=online attached=true cameraNightVision=true`；实际直播画面和基岩真机中文字排版仍需目视验收。回退只能在无人游玩及无活动试炼时按同次快照恢复，或停服切回保留的 0.3.75 JAR；此版没有世界数据迁移。
 
 ## 0.3.75 生活公会建筑与专属导师（2026-10-03，已发布）
 
