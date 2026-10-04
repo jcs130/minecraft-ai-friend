@@ -275,3 +275,26 @@ node --test world/src/neoforge-handshake/component-protocol.test.cjs world/src/n
 后续浏览器重连保留一条23:08:25的真实 Three.js 错误。已独立复现空数组展开为零参数 `Object3D.add()` 会产生同一错误；场景初始为空、空模型或无可绘制水面时都可能触发。三处改为逐个添加实际 mesh，空集合保持为空，不补代理模型；可视化主干后续提交 `4ad65ee123a82d8d7584c257c81496a1f9d3aa20` 已推送，38项相关宿主/界面回归通过。23:17:55零待定行动/模型后正常停三子服务，23:17:59全部维度保存、三服务退出0，之后恢复守护以重建新bundle；历史浏览器错误不清除，后续验收只按新bundle加载后的时间判断。
 
 23:20:08 HTTP读回三服务就绪、`healthy=true / heartbeatFresh=true / paused=false`，同UUID本人状态匹配；只归档本轮暂停至 `autonomy.pause-retired-viewer-reconnect-20261004-2320.json` 并恢复自主循环。重新加载最终bundle后本人模型、真实快捷栏及Ars100/100可见，23:20:08之后的浏览器warn/error为空；历史错误仍保留。完整页面截图为仓库外 `agents/maw-explorer/full-native-console-final-page-20261004.jpg`。当前画面仍是局部原生场景，远景、完整实体/装备动画与声音等缺口没有因此通过完整一致性验收。
+
+## 连续地形与动作更新维护（2026-10-05）
+
+本轮原生地形默认范围扩为本人快照锚点周围水平24格、向下24格、向上24格（49×49×49）。只读取同一 MawExplorer 连接已经收到的原生区块，保留实际 state、biome 与已有 block entity 数据；不读存档中尚未收到的区块，不增加机器人连接，也不替换模组方块。流体邻点改为实际所需邻域的去重集合。扫描、方块和字节预算分别为262,144格、100,000个非空气方块、1.5MiB快照；超过预算时缩小完整水平范围并报告覆盖边界，未收到区块仍为 unknown。范围以外和垂直切面依然存在，不能把局部快照解释为无限地形。
+
+宿主合并地形变化，完整快照至少间隔500ms，移动以4格阈值更新锚点，并复用当前快照；不再每跨过一个整数坐标就重扫地形。动作状态独立来自本人连接的 physicsTick，最高20Hz更新，慢客户端使用背压而不积压旧帧。掉线、死亡、重生与世界切换清理旧快照、动作和界面，并验证世界 epoch 与本人 UUID。此次同时有限支持经锁定1.21.1客户端确认的蒲公英、虞美人 XZ 模型偏移；未知模组偏移仍明确未支持。
+
+本轮两次发布均通过 owned stop/resume 管理新服，操作回执保留在 `server\ops\maw-service\replies`，不能把 stop 请求已接受当作存档完成。以下时间均为北京时间：
+
+| 维护 | 正常停止与保存证据 | 恢复回执 |
+| --- | --- | --- |
+| `viewer-continuity-stop-20261004` | 10月4日23:58:03，Java日志确认玩家与全部维度保存完毕 | `viewer-continuity-resume-20261004`，10月5日00:01:55 |
+| `viewer-ground-models-stop-20261005` | 10月5日00:13:10，Java日志确认全部维度保存完毕；健康记录确认三子服务均按请求退出0 | `viewer-ground-models-resume-20261005`，10月5日00:14:50 |
+
+本轮首次停服冷备保存到 `E:\QiandengJiSocietyLab\backups\viewer-continuity-20261004-2358`，目录包含 `world-life` 和 `maw-explorer`。此前冷备及历史失败证据继续保留；本轮未修改旧25565两个实例、基岩19132或QwenPaw宿主8088的运行配置，也没有切换其他角色或模型。
+
+10月5日00:24:47再次读取 `127.0.0.1:28985/healthz`：`healthy=true / heartbeatFresh=true / paused=false`，Java28976、gate28977、worker28984均 `ready=true / problem=null`。本次 supervisor PID20732，三子进程PID依次18788、11760、24648，各 `startsInLastHour=1`。worker健康接口确认本人在线、`mode=paused`；地形覆盖来自16个已收到区块列，缺失列为空，包含52,024个非空气方块，当前一次构建耗时20.67ms。这是恢复后的短时在线及性能读数，不是长期稳定性证明；Java累计warning/error仍保留。
+
+**服务在线，但自主模型仍暂停。** 10月4日23:38:47原生任务 `task-1db3f1206bb9` 以 `MODEL_QUOTA_EXCEEDED` 失败，宿主日志确认 Coding Plan `qwen3.7-plus` 上游HTTP429、`throttling`、`usage allocated quota exceeded`；未证实额度窗口或恢复时间。`E:\QiandengJiSocietyLab\agents\maw-explorer\autonomy.paused` 继续保留，原因为 `model_configuration_or_quota`，错误为 `MODEL_TASK_FAILED: MODEL_QUOTA_EXCEEDED`。守护的 `paused=false` 只表示服务维护暂停已解除，不表示 Agent 可以继续发起模型任务；本轮没有清除该标记、重投旧任务或自动换模型。
+
+原生资源优先级与完整画面一致性仍未验收，`completeSceneParityVerified=false`。连续地形与真实动作更新不等于全部实体、装备／持物、模组动态模型、动画、光照和声音都与匹配Java客户端一致；后续须继续保留显式缺口，并分别记录资源来源核验与客户端对照结果。
+
+可视化源代码已提交并同步 `jcs130/mc-visual-console` 的 `main`，提交 `0f5da18f007c2ba7c4e91168161912b08fbff781`，本地与远端树一致、工作区干净。renderer专项253项及仓库根270项回归通过（入口重叠，不可相加），typecheck通过。最终真实浏览器确认草地/土径/花恢复，可渲染51,282/52,024个非空气块，当前reload无warn/error；此统计不代表像素一致率。仓库外完整页面截图：`agents/maw-explorer/native-console-continuity-20261005.png`。本人当前静止，步态实战和新立方物品GUI像素对照仍待后续验收。
