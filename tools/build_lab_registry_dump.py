@@ -81,6 +81,37 @@ def main() -> None:
                     row.addProperty("name", BuiltInRegistries.BLOCK.getKey(block).toString());
                     row.addProperty("renderShape", state.getRenderShape().name());
                     row.addProperty("hasBlockEntity", state.hasBlockEntity());
+                    row.addProperty("solid", state.isSolid());
+                    row.addProperty("blocksMotion", state.blocksMotion());
+                    row.addProperty("canOcclude", state.canOcclude());
+                    row.addProperty("dynamicShape", block.hasDynamicShape());
+                    row.addProperty("hasOffsetFunction", state.hasOffsetFunction());
+                    var fluid = state.getFluidState();
+                    var fluidRow = new com.google.gson.JsonObject();
+                    fluidRow.addProperty("name", BuiltInRegistries.FLUID.getKey(fluid.getType()).toString());
+                    fluidRow.addProperty("empty", fluid.isEmpty());
+                    fluidRow.addProperty("amount", fluid.getAmount());
+                    fluidRow.addProperty("source", fluid.isSource());
+                    fluidRow.addProperty("height", fluid.getOwnHeight());
+                    fluidRow.addProperty("falling", fluid.hasProperty(net.minecraft.world.level.material.FlowingFluid.FALLING)
+                            && fluid.getValue(net.minecraft.world.level.material.FlowingFluid.FALLING));
+                    row.add("fluid", fluidRow);
+                    if (!block.hasDynamicShape()) {
+                        try {
+                            var shape = state.getOcclusionShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,
+                                    net.minecraft.core.BlockPos.ZERO);
+                            var boxes = new com.google.gson.JsonArray();
+                            for (var box : shape.toAabbs()) {
+                                var coordinates = new com.google.gson.JsonArray();
+                                for (double v : new double[]{box.minX,box.minY,box.minZ,box.maxX,box.maxY,box.maxZ})
+                                    coordinates.add(v);
+                                boxes.add(coordinates);
+                            }
+                            row.add("occlusionBoxes", boxes);
+                        } catch (RuntimeException ignored) {
+                            row.addProperty("occlusionUnavailable", true);
+                        }
+                    }
                     var properties = new com.google.gson.JsonObject();
                     for (var property : state.getProperties()) {
                         properties.addProperty(property.getName(), propertyValue(state, property));
