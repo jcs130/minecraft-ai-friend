@@ -1,15 +1,25 @@
 package dev.qiandeng.maw;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.simibubi.create.AllRecipeTypes;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
+import com.simibubi.create.content.kinetics.millstone.MillingRecipe;
+import com.simibubi.create.content.kinetics.millstone.MillstoneBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeInput;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,21 +31,25 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.wrapper.RecipeWrapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Native identity for only the block this player can currently see. */
 final class PlayerWorldBridge {
     private static final int MAX_REQUEST = 4096;
+    private static final int MAX_STATE = 16384;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
 
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "world_query"));
         static final StreamCodec<RegistryFriendlyByteBuf, Query> CODEC = StreamCodec.of(
-                (buf, payload) -> writeJson(buf, payload.json), buf -> new Query(readJson(buf)));
+                (buf, payload) -> writeJson(buf, payload.json, MAX_REQUEST), buf -> new Query(readJson(buf, MAX_REQUEST)));
 
         @Override public Type<Query> type() { return TYPE; }
     }
@@ -43,20 +57,20 @@ final class PlayerWorldBridge {
     private record State(String json) implements CustomPacketPayload {
         static final Type<State> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "world_state"));
         static final StreamCodec<RegistryFriendlyByteBuf, State> CODEC = StreamCodec.of(
-                (buf, payload) -> writeJson(buf, payload.json), buf -> new State(readJson(buf)));
+                (buf, payload) -> writeJson(buf, payload.json, MAX_STATE), buf -> new State(readJson(buf, MAX_STATE)));
 
         @Override public Type<State> type() { return TYPE; }
     }
 
-    private static void writeJson(RegistryFriendlyByteBuf buf, String json) {
+    private static void writeJson(RegistryFriendlyByteBuf buf, String json, int limit) {
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_REQUEST) throw new IllegalArgumentException("world JSON too large");
+        if (bytes.length > limit) throw new IllegalArgumentException("world JSON too large");
         buf.writeBytes(bytes);
     }
 
-    private static String readJson(RegistryFriendlyByteBuf buf) {
+    private static String readJson(RegistryFriendlyByteBuf buf, int limit) {
         int size = buf.readableBytes();
-        if (size > MAX_REQUEST) throw new IllegalArgumentException("world JSON too large");
+        if (size > limit) throw new IllegalArgumentException("world JSON too large");
         byte[] bytes = new byte[size];
         buf.readBytes(bytes);
         return new String(bytes, StandardCharsets.UTF_8);
@@ -84,7 +98,19 @@ final class PlayerWorldBridge {
     private static void send(ServerPlayer player, JsonObject result) {
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
             result.addProperty("playerUuid", player.getUUID().toString());
-            PacketDistributor.sendToPlayer(player, new State(result.toString()));
+            String json = result.toString();
+            // Never truncate a native item component or let encoding a large
+            // component fail the connection. The caller receives an explicit
+            // private failure instead of an apparently complete inventory.
+            if (json.getBytes(StandardCharsets.UTF_8).length > MAX_STATE) {
+                JsonObject oversized = result(result.get("requestId").getAsString());
+                oversized.addProperty("playerUuid", player.getUUID().toString());
+                oversized.addProperty("ok", false);
+                oversized.addProperty("code", "world_state_too_large");
+                oversized.addProperty("maxBytes", MAX_STATE);
+                json = oversized.toString();
+            }
+            PacketDistributor.sendToPlayer(player, new State(json));
         }
     }
 
@@ -101,6 +127,91 @@ final class PlayerWorldBridge {
         result.addProperty("ok", false);
         result.addProperty("code", code);
         send(player, result);
+    }
+
+    private static JsonArray inventory(ServerPlayer player, IItemHandler handler) {
+        JsonArray items = new JsonArray();
+        for (int slot = 0; slot < handler.getSlots(); slot++) {
+            ItemStack stack = handler.getStackInSlot(slot);
+            if (stack.isEmpty()) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("slot", slot);
+            item.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+            item.addProperty("count", stack.getCount());
+            // Includes the complete native components, not the vanilla-facing
+            // proxy item or a guessed ID-to-item mapping.
+            item.addProperty("snbt", stack.saveOptional(player.registryAccess()).toString());
+            items.add(item);
+        }
+        return items;
+    }
+
+    private static JsonObject millstone(ServerPlayer player, MillstoneBlockEntity machine, JsonObject rotation) {
+        // This is in-memory serialization of this single visible BE. It reads
+        // the real cached Network fields without creating/updating a network,
+        // scanning its members, touching a save file, or applying a recipe.
+        CompoundTag snapshot = new CompoundTag();
+        machine.write(snapshot, player.registryAccess(), true);
+        boolean connected = snapshot.contains("Network", Tag.TAG_COMPOUND);
+        CompoundTag network = snapshot.getCompound("Network");
+        rotation.addProperty("rpm", machine.getSpeed());
+        rotation.addProperty("networkConnected", connected);
+        if (connected && network.contains("Stress", Tag.TAG_ANY_NUMERIC)) {
+            rotation.addProperty("networkStress", network.getFloat("Stress"));
+        } else rotation.add("networkStress", JsonNull.INSTANCE);
+        if (connected && network.contains("Capacity", Tag.TAG_ANY_NUMERIC)) {
+            rotation.addProperty("stressCapacity", network.getFloat("Capacity"));
+        } else rotation.add("stressCapacity", JsonNull.INSTANCE);
+        rotation.addProperty("stressUnit", "SU");
+
+        JsonArray input = inventory(player, machine.inputInv);
+        JsonArray output = inventory(player, machine.outputInv);
+        boolean inputPresent = !input.isEmpty();
+        boolean outputAvailable = !output.isEmpty();
+        boolean outputBlocked = false;
+        // Matches Create 6.0.10's actual tick guard: any output slot exactly at
+        // its slot limit pauses processing, even when other slots are empty.
+        for (int slot = 0; slot < machine.outputInv.getSlots(); slot++) {
+            if (machine.outputInv.getStackInSlot(slot).getCount() == machine.outputInv.getSlotLimit(slot)) {
+                outputBlocked = true;
+                break;
+            }
+        }
+        Optional<RecipeHolder<MillingRecipe>> recipe = inputPresent
+                ? AllRecipeTypes.MILLING.<RecipeInput, MillingRecipe>find(new RecipeWrapper(machine.inputInv), player.level())
+                : Optional.empty();
+        boolean waitingForPower = machine.getSpeed() == 0;
+        JsonObject processing = new JsonObject();
+        processing.addProperty("type", "create:milling");
+        processing.addProperty("inputSlotCount", machine.inputInv.getSlots());
+        processing.addProperty("outputSlotCount", machine.outputInv.getSlots());
+        processing.add("input", input);
+        processing.add("output", output);
+        processing.addProperty("timer", machine.timer);
+        // Timer is Create's remaining processing work, not wall-clock ticks.
+        processing.addProperty("timerUnit", "processing_work_ticks");
+        processing.addProperty("processingSpeed", machine.getProcessingSpeed());
+        processing.addProperty("advancing", !waitingForPower && !outputBlocked && machine.timer > 0);
+        processing.addProperty("waitingForPower", waitingForPower);
+        processing.addProperty("outputAvailable", outputAvailable);
+        processing.addProperty("outputBlocked", outputBlocked);
+        processing.addProperty("canCollectOutput", outputAvailable);
+        if (recipe.isPresent()) {
+            processing.addProperty("recipeId", recipe.get().id().toString());
+            processing.addProperty("recipeDuration", recipe.get().value().getProcessingDuration());
+        } else {
+            processing.add("recipeId", JsonNull.INSTANCE);
+            processing.add("recipeDuration", JsonNull.INSTANCE);
+        }
+        String status;
+        if (outputBlocked) status = "output_blocked";
+        else if (!inputPresent) status = outputAvailable ? "output_ready" : "waiting_input";
+        else if (recipe.isEmpty()) status = "invalid_input";
+        else if (machine.isOverStressed()) status = "overstressed";
+        else if (waitingForPower) status = "waiting_power";
+        else status = machine.timer > 0 ? "processing" : "ready_to_process";
+        processing.addProperty("status", status);
+        return processing;
     }
 
     private static void handle(ServerPlayer player, String raw) {
@@ -158,6 +269,9 @@ final class PlayerWorldBridge {
                     rotation.addProperty("theoreticalSpeed", kinetic.getTheoreticalSpeed());
                     rotation.addProperty("overstressed", kinetic.isOverStressed());
                     rotation.addProperty("speedRequirementFulfilled", kinetic.isSpeedRequirementFulfilled());
+                    if (entity instanceof MillstoneBlockEntity machine) {
+                        block.add("processing", millstone(player, machine, rotation));
+                    }
                     block.add("kinetic", rotation);
                 }
             }

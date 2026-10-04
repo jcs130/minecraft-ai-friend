@@ -55,6 +55,7 @@ public final class AgentBridge {
     }
 
     public AgentBridge(IEventBus eventBus, ModContainer container) {
+        TlmMinecoloniesBurningCompat.register(eventBus);
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
         PlayerMenuBridge.register(eventBus);
         PlayerWorldBridge.register(eventBus);

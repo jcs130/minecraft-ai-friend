@@ -9,6 +9,7 @@ const { ProtoDefCompiler } = require('protodef').Compiler
 const nbt = require('prismarine-nbt')
 const nativeTypes = require('minecraft-protocol/src/datatypes/compiler-minecraft')
 const { arsNativeTypes } = require('./native-ars-codec.cjs')
+const { arsEntityNativeTypes } = require('./native-ars-entity-codec.cjs')
 
 // Verified in TLM 1.5.3 InitDataComponent and Patchouli 93: UUIDUtil.STREAM_CODEC
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
@@ -16,6 +17,14 @@ const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
   'patchouli:book': 'string',
   'ars_nouveau:spell_caster': 'MawArsSpellCaster'
+}
+// Exact installed TLM 1.5.3 / Ars 5.13.2 stream codecs. The names are mapped
+// to the exported network IDs of this server, never to assumed registry order.
+const ENTITY_METADATA_CODECS = {
+  'touhou_little_maid:maid_schedule': 'varint',
+  'touhou_little_maid:maid_chat_bubble': 'MawMaidChatBubbles',
+  'ars_nouveau:spell_resolver': 'MawArsSpellResolver',
+  'ars_nouveau:vec3': 'MawArsVec3'
 }
 // minecraft-data's 1.21.1 wire names for these two particles differ from the
 // actual BuiltInRegistries names. Resolve the verified aliases by name, not ID.
@@ -65,9 +74,11 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   protocol.types.SlotComponentType = ['mapper', { type: 'varint', mappings }]
   protocol.types.SlotComponent[1][1].type[1].default = 'mawUnsupportedComponent'
   protocol.types.MawArsSpellCaster = 'mawArsSpellCasterCodec'
+  protocol.types.MawArsSpellResolver = 'mawArsSpellResolverCodec'
+  protocol.types.MawArsVec3 = 'mawArsVec3Codec'
   // NeoForge 21.1.248 CommonHooks keeps vanilla IDs and adds 256 to the
   // custom serializer registry ID. The TSV contains those actual network IDs.
-  // TLM 1.5.3 EntityMaid uses these two custom serializers; every unknown
+  // TLM maids and Ars spell projectiles use custom serializers; every unknown
   // metadata codec must fail before its payload is mistaken for another key.
   const metadata = protocol.types.entityMetadataEntry[1]
   const metadataMappings = { ...metadata[1].type[1].mappings }
@@ -80,9 +91,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
           !Number.isSafeInteger(id) || id < 256 || ids.has(id)) throw Error('INVALID_ENTITY_SERIALIZER_REGISTRY')
       ids.add(id)
       metadataMappings[id] = name
-      metadataFields[name] = name === 'touhou_little_maid:maid_schedule' ? 'varint'
-        : name === 'touhou_little_maid:maid_chat_bubble' ? 'MawMaidChatBubbles'
-          : 'mawUnsupportedEntityMetadata'
+      metadataFields[name] = ENTITY_METADATA_CODECS[name] || 'mawUnsupportedEntityMetadata'
     }
     metadata[1].type = ['mapper', { type: 'varint', mappings: metadataMappings }]
   }
@@ -151,6 +160,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   const compiler = new ProtoDefCompiler()
   compiler.addTypes(nativeTypes)
   compiler.addTypes(arsNativeTypes)
+  compiler.addTypes(arsEntityNativeTypes)
   compiler.addTypes({
     Read: {
       mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],

@@ -160,7 +160,15 @@ Create 当前可用普通放置、`await bot.activateBlock(crankBlock)` 转动�
 
 最小生产候选是手摇磨石：安装 Create 6.0.10 的实际配方 `create:milling/wheat` 消耗小麦1，处理时间150；保证面粉1，另有两次独立25%额外面粉机会，所以面粉实际可为1–3，种子另有25%机会。磨石转轴Y，仅底面接轴；磨石下方 `facing=down` 曲柄可直接驱动。潜行点击磨石底面放曲柄可固定该方向。曲柄32RPM，每次点击维持10tick，磨石每有效tick推进2。
 
-进料是原生掉落物落到磨石顶部或原生漏斗，小麦右键磨石不会灌入；空手右键收取输出，但输出为空时也会取回未加工输入。必须预留产物槽并确认加工状态，不能不断空手点击等待。当前 `world` 查询不提供通用机器库存 API；同账号已收到的原生 BE 可观察 `Timer/InputInventory/OutputInventory`，但不能用管理员存档读取代替 Agent 感知，也不能对未知 BE 猜产物。2026-10-04 研究服已由本人玩家放置这套装置、漏斗投入小麦1、手摇后得到面粉3和种子1，空手取回并确认本人原生库存与机器输出清空；具体证据和 QA 物料边界见运行记录。这个结果不证明所有加工配方或自动化物流已经打通。
+进料是原生掉落物落到磨石顶部或原生漏斗，小麦右键磨石不会灌入；空手右键收取输出，但输出为空时也会取回未加工输入。必须预留产物槽并确认加工状态，不能不断空手点击等待。`world.lookAtBlock()` 现已针对当前可见磨石提供真实 `block.processing`；它不是任意机器的通用库存 API，不能查询墙后或未加载的机器。2026-10-04 研究服已两次完成本人漏斗进料、手摇及空手领取，第二次使用本人女仆实际收割的小麦1，再次实际得到面粉3、种子1。这个结果不证明所有加工配方或自动化物流已经打通。
+
+磨石返回 `processing.status/input/output/timer/processingSpeed/advancing/waitingForPower/outputAvailable/outputBlocked/canCollectOutput/recipeId/recipeDuration`。input 和 output 的每项是原生 `slot/id/count/snbt`，组件不截断；全回执超过16KiB时明确失败 `world_state_too_large`。`kinetic.rpm/networkConnected/networkStress/stressCapacity/stressUnit` 来自这个真实 BE 的现有状态，压力单位 SU。没有网络时压力和容量为 `null`，不会为查询创建网络。`timerUnit='processing_work_ticks'` 是剩余加工工作量，不是实际经过时间：停摇时 timer 保留，`advancing=false`；转速为0时 `processingSpeed=1` 也不代表机器在加工。
+
+实测状态序列为 `waiting_input → waiting_power → processing → waiting_power → output_ready → waiting_input`，有效加工时 −32RPM、128/256SU、timer146；停摇后0RPM、timer132，之后继续驱动才完成。Agent 只在 `outputAvailable=true` 时取产物；空输出且有输入时先补动力或核对配方。还可能返回 `invalid_input/overstressed/output_blocked/ready_to_process`，这些状态已按原生规则实现，但尚未逐个在游戏中制造验收。
+
+`recipeId/recipeDuration` 表示 RecipeManager 对当前输入的匹配，不是对磨石私有 `lastRecipe` 的独立核验。若以后加入同输入的多个配方或热改数据包，原生磨石可能继续使用旧缓存配方，查询匹配与正在使用的缓存可能不同；当前固定小麦配方已实测，其他此类情况需要再适配。
+
+食品闭环实测：原生配方 `create:crafting/appliances/dough` 消耗面粉1、水桶1，产出 `create:dough`×1，**空桶留在合成网格**；从 `craftNativeGrid().remainingInputs` 与当前原生菜单核对后，PICKUP 回本人空槽，再开始下一次合成。普通熔炉使用真实面团与燃料，`create:smelting/bread` 加工200tick得到面包1；正常取出和 `bot.consume()` 后饱食度8→13。实际取水使用本人空桶、真实转向水源及正常右键；墙、建筑或支撑块可能挡住射线，桶不变就是未成功。此次铁锭、炉和煤是明确的 QA 夹具，不能写成自然获得全套生产设备。
 
 ## MineColonies 社会与建设
 
@@ -255,9 +263,17 @@ async function castHeldSpellOnce (bot, mod, hotbarSlot, desiredSpellId) {
 }
 ```
 
-读返回的 `ok/code/outcomeKnown/manaBefore/manaAfter/manaSpent/healthBefore/healthAfter`。`nativeInteraction='CONSUME'` 本身不能证明魔法成功；实际扣魔可确认施法发生，但任意远程命中或治疗效果仍需独立验收，回执保持 `effectVerified=false`。例如自我治疗须在未满血时检查本人血量提升；不能把满血施法或接口受理写成成功治疗。魔力来自本人的原生 Ars capability；缺失为 `null`，不造一个固定魔力条。冷却目前返回原生 `active/fraction`，无法可靠提供的时长为 `null`，不得猜成零冷却。
+读返回的 `ok/code/outcomeKnown/manaBefore/manaAfter/manaSpent/healthBefore/healthAfter`。施法先通过真实 `SpellBook.use` 的服务端分支初始化书等级和已学 glyph 奖励，再重新核对本人主手、选中槽、配方、冷却与魔力；Ars 5.13.2 此服务端分支只初始化并返回 PASS，原生施法仍只执行一次。魔力上限可能随原生初始化变化，不能固定为100。回执增加 `nativeBookUseInteraction`。
 
-法术书的 `ars_nouveau:spell_caster` 是 Ars 5.13.2 的专用二进制组件，不是 NBT。当前 codec保留法术槽、名称、颜色、音效、glyphs和其他已解字段；支持空粒子 timeline。非空 timeline 明确拒绝 `UNSUPPORTED_ARS_PARTICLE_TIMELINE`，未知组件或未适配粒子也明确失败。不能为了继续连接把真实法术组件删除、替换成空法术或默默省略数据。更多粒子 timeline与复杂施法需继续逐项适配，不代表 Ars 所有功能已经打通。
+`nativeInteraction='CONSUME'` 本身不能证明魔法成功；实际扣魔可确认施法发生，但任意远程命中或治疗效果仍需独立验收，回执保持 `effectVerified=false`。例如自我治疗须在未满血时检查本人血量提升；不能把满血施法或接口受理写成成功治疗。魔力来自本人的原生 Ars capability；缺失为 `null`，不造一个固定魔力条。冷却目前返回原生 `active/fraction`，无法可靠提供的时长为 `null`，不得猜成零冷却。
+
+攻击用当前书中的真实 `Projectile + Harm`，先根据本人已收到的可见目标实体真实转向，再等至少2tick并施法。本轮基础费用25、实际扣25；正常AI尸壳生命20→15.08，本人连接收到目标受伤事件，cause/direct source 是施法者。伤害受配置、护甲和事件影响，不能硬编码必扣5，也不能把施法者 `healthAfter` 当目标生命。此接口按原生 Ars 配方执行，不替宿主筛选敌我；自动锁敌应明确排除玩家、村民、宠物和友方。
+
+确认规则还有一项边界：如果原生配置、折扣或模式导致实际耗魔为0，`castConfirmed=false/ars_cast_not_confirmed` 不能证明法术没有发生，必须继续检查目标或世界终态，保持不自动重试。`outcomeKnown` 也不替代 `effectVerified` 的效果验收。
+
+法术书的 `ars_nouveau:spell_caster` 是 Ars 5.13.2 的专用二进制组件，不是 NBT。当前 codec保留法术槽、名称、颜色、音效、glyphs和其他已解字段；支持空粒子 timeline。实体元数据的 `ars_nouveau:spell_resolver` 使用同样完整的 Spell STREAM，`ars_nouveau:vec3` 是三个大端f64；按本服导出的 serializer 注册表名称接入，不猜网络编号。实机原生弹射实体保留了 owner ID、配方、颜色、音效和空 timeline；原版投影只移除其无法表达的自定义字段。原生数据正确抵达不等于网页已渲染实体与特效。
+
+非空 timeline 明确拒绝 `UNSUPPORTED_ARS_PARTICLE_TIMELINE`，未知组件或未适配粒子也明确失败。Ars 属性粒子另有属性注册表与专用 codec，目前未全量适配。不能为了继续连接把真实法术组件删除、替换成空法术或默默省略数据。更多粒子 timeline与复杂施法需继续逐项适配，不代表 Ars 所有功能已经打通。
 
 ## 宿主的验收与恢复规则
 

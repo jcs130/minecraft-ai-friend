@@ -348,3 +348,38 @@ MineColonies 的首条真实居民需求闭环已在 Mineflayer 身体上实测�
 另有已记录的模组兼容异常：TLM 首次检查附近 MineColonies townhall 的燃烧属性时捕获并打印 `RuntimeDistCleaner: ClientLevel for invalid dist DEDICATED_SERVER`。研究服未崩溃，随后女仆拾取与农耕实测通过；这仍是待定位的模组间兼容缺口，不能说整服日志无错误。网关启动自动学习探针使用原版解析器时也会打印模组命令/物品包解析警告；它与实际动作连接的 backend codec 是两条路径，不纳入普通玩家兼容通过证据。
 
 私有证据位于 `E:\QiandengJiSocietyLab\research`：`mod-play-native-20261004.json`、两份修复前失败记录、`mod-play-protocol-failures-20261004.jsonl` 与 `mod-operations-live-preview-20261004.png`。原始包、完整组件、第三方 JAR、世界存档及诊断动作 stdin harness 不进 Git。新服的基岩接入、旧 `/mycli` 全量移植、原生模组碰撞/寻路、复杂加工与长期自主生活继续列为未验收；本轮只部署研究副本，没有修改旧服、路由器、防火墙、其他服务或新开公网入口。
+
+### 食物、加工状态与攻击施法：2026-10-04 16:50 续验
+
+仍只在原研究副本28978、网关28980与同一普通玩家画面28983执行。动作通过本人 Mineflayer 连接及原生菜单，玩家未授 OP、未用 Numen 身体或管理员传送代做。测试完成前保存研究世界；升级时 `list` 确認在线0，`save-all flush` 正常停服，备份原桥、日志及26.4MB研究世界，才构建与重启。旧 Paper 两个25565监听进程与映射保持原样，主实验服锁定清单未更新。
+
+真实食品闭环：上一轮磨出的 `create:wheat_flour`×3中使用1；铁锭3由QA提供，玩家本人工作台合成空桶。首次转向取水后桶未变化，记录为失败；普通步行/跳跃绕过胸箱与施工边缘，从村外侧水源正常右键取得水桶。原生2×2菜单合成面团1，实际剩余面粉2，空桶留在网格并PICKUP回包。QA再提供熔炉1、煤1，本人正常放置熔炉 `(7,64,1)`、真实菜单进料，200tick烤出面包1。取出并吃下后饱食度8→13、面包剩余0。初次放置未验证成功和私有诊断脚本空槽判断报错均保留，未冒充自然采得铁/石/煤。
+
+`PlayerWorldBridge` 新增准星当前可见磨石的 `block.processing`。input/output使用实际库存和完整SNBT；timer取真实剩余加工工作量；recipeId/duration取本服RecipeManager；RPM、压力与容量只读现有BE缓存。沿用8格、第一命中块与已加载规则，不创建动力网络，不读取管理员存档或墙后机器。无网络时容量/压力为null；超过16KiB明确回执 `world_state_too_large`，不截断组件或把编码异常变为踢人。
+
+用本人女仆上轮真实收割的小麦1，经原生女仆菜单取回后投入原漏斗，第二次完整实测状态序列：
+
+| 时点 | 原生返回与实际变化 |
+| --- | --- |
+| 空磨石 | `waiting_input`，input/output为空、timer0、0RPM，无网络容量 |
+| 小麦入料、未摇 | `waiting_power`，小麦1、timer0，真实配方 `create:milling/wheat`、duration150 |
+| 摇动加工 | `processing`，timer146、processingSpeed2、advancing=true，−32RPM、128/256SU |
+| 暂停摇动 | `waiting_power`，timer132保留、advancing=false、0RPM |
+| 再次持续驱动 | `output_ready`，input空，实际面粉3、种子1、timer0 |
+| 空手取回 | 本人原生库存得到面粉3、种子1，机器output清空并回到 `waiting_input` |
+
+`invalid_input/overstressed/output_blocked/ready_to_process` 已实现原生条件，尚未逐个制造游戏夹具验收。测试两次随机产量都为面粉3不改变配方1–3的真实范围。
+
+攻击施法使用QA提供的真实 Ars `Projectile + Harm` 书。原桥先走 `Item.use` 动态分派至服务端 `SpellBook.use`，更新原生书tier/已知glyph奖励；再重读本人主手、组件、槽位、caster、mana和cooldown，只调用一次原生cast。5.13.2服务端use本身返回PASS且不施法；原生validator、费用折扣、Cast/Resolve/Damage取消事件与弹射命中事件仍生效。初次编译因方法解析需要GeoItem失败，改为Item公开方法后Java21构建成功，旧研究JAR未在失败时更换。
+
+普通AI尸壳QA目标 UUID `79ad6914-ed42-45bd-8e5c-7bfc60de28f9`，原生Health20→15.08，客户端目标entity337的damage_event cause/direct均77（施法者entity76的wire+1），魔力100→75、消耗25。私有记录最初把默认5伤害写成15，随后追加明确更正为控制台实际15.08f，原错误不删除。通用回执仍 `effectVerified=false`，实际伤害由独立目标Health及受伤事件验证，不用扣魔替代命中证明。
+
+**该攻击脚本没有自动战斗/撤离循环**：施法后普通尸壳反击并杀死QA玩家，自动重生后又在出生点受击及接触仙人掌死亡一次，记录保留。操作员随后仅清除唯一tag的QA尸壳，没有清除自然怪物、传送或赐予无敌。原连接正常复活，女仆拾取了部分死亡掉落；本人原生女仆菜单取回小麦、桶和攻击书，再普通步行回磨石完成上表。掉落/死亡不是断线，也不证明自主生存通过。出生点危险、模组代理碰撞与宿主战斗反射仍须单独完善。
+
+实体协议新增有界 `ars_nouveau:spell_resolver`、`ars_nouveau:vec3` codec，使用导出名称绑定真实动态网络ID。真实原生弹射entity479元数据保留owner76、`QA Projectile Harm`、完整颜色、原生 `fire_family` 音效、两glyph与timelineCount0；同连接前端保持正常，原生世界序号继续递增。射向空中用于保留弹射实体较长生命周期并捕获元数据，不当作第二次命中。非空timeline与未适配Ars属性粒子仍明确拒绝；网页实体/GUI/特效与完整光照未实现，不能称为1:1画面。
+
+女仆/MineColonies兼容根因已确认：TLM `Class.getDeclaredMethod` 枚举TownHall签名时解析 `ClientLevel/LocalPlayer`，DedicatedServer拒绝客户端类。新增 `TlmMinecoloniesBurningCompat` 在common setup通过TLM原生公开API，对minecolonies namespace的86种方块设置cannotCache，绕过额外反射缓存；不强行设置burning分类、不更改原始危险判断或日志等级。启动实值为86/0 missing API/0 preexisting values；真实女仆继续在城镇旁跟随、农耕及拾取死亡掉落，当前日志未再出现该ClientLevel错误。JVM独立夹具复现旧反射失败，并验证公开opt-out不加载客户端类且burning值仍未知；未额外证明完整避火/所有寻路场景。
+
+本轮Java21研究桥SHA-256为 `8578a55b244f459ef35e27d239eac4167f2ae8bc5c230ed50b4ef1aed109feb5`，状态表仍 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`。87项Node回归、6项构建端口回归、JVM兼容夹具通过。首次Python模块方式执行因tools导入路径失败，改用该测试文件实际入口后6项通过，失败记录保留。
+
+私有新证据：`mod-life-loop-20261004.json`、`server-before-life-loop-20261004.log`、`world-before-life-loop-20261004.zip`、`bridge-before-life-loop-20261004.jar`、`mod-life-loop-preview-20261004.png`；本轮协议失败捕获文件未产生。原食物动作在 `mod-play-native-20261004.json`，后续记录使用独立新文件保留前者。浏览器实机显示2589区域方块、2541绘制方块、17项明确模型/材质缺口、0未收到区块。临时研究连接与预览不构成正式daemon上线；基岩新服接入、旧 `/mycli` 全量迁移、原生碰撞和长期AI生活仍未验收。

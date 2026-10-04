@@ -253,27 +253,56 @@ final class PlayerSpellBridge {
                             IManaCap mana = CapabilityRegistry.getMana(player);
                             if (mana == null) failed(result, "ars_mana_unavailable");
                             else {
-                                double before = mana.getCurrentMana();
-                                float healthBefore = player.getHealth();
-                                result.addProperty("manaBefore", before);
-                                result.addProperty("healthBefore", healthBefore);
                                 nativeStarted = true;
-                                String nativeResult = caster.castSpell(player.level(), player, InteractionHand.MAIN_HAND,
-                                        null, spell).getResult().name();
-                                double after = mana.getCurrentMana();
-                                boolean spent = before - after > 0.000001;
-                                result.addProperty("nativeInteraction", nativeResult);
-                                result.addProperty("manaAfter", after);
-                                result.addProperty("manaSpent", before - after);
-                                result.addProperty("healthAfter", player.getHealth());
-                                result.addProperty("healthChanged", player.getHealth() != healthBefore);
-                                result.addProperty("castConfirmed", spent);
-                                result.addProperty("ok", spent);
-                                result.addProperty("code", spent ? "ars_cast_confirmed" : "ars_cast_not_confirmed");
-                                // Native CONSUME is unconditional, including insufficient mana.
-                                // A resource debit confirms casting, not arbitrary spell effects.
+                                // Ars 5.13.2 SpellBook.use on ServerPlayer updates the book tier
+                                // and known-glyph mana bonus, syncs the capability, and returns
+                                // PASS. Only its client branch sends PacketCastSpell, so this
+                                // server-side call cannot perform a second cast.
+                                String bookUse = held.getItem().use(player.level(), player,
+                                        InteractionHand.MAIN_HAND).getResult().name();
+                                result.addProperty("nativeBookUseInteraction", bookUse);
+                                // Native use can update player state. Re-read the actual book,
+                                // capability and recipe, retaining every mutation precondition.
+                                held = player.getMainHandItem();
+                                caster = held.getItem() instanceof SpellBook ? SpellCasterRegistry.from(held) : null;
+                                mana = CapabilityRegistry.getMana(player);
                                 result.add("state", observation(player));
-                                player.containerMenu.broadcastChanges();
+                                if (!player.isAlive() || player.isSpectator()) failed(result, "player_not_active");
+                                else if (input.get("expectedHotbarSlot").getAsInt() != player.getInventory().selected ||
+                                        !input.get("expectedHeldSnbt").getAsString().equals(snbt(player, held)))
+                                    failed(result, "held_spellbook_changed");
+                                else if (!(held.getItem() instanceof SpellBook)) failed(result, "ars_spellbook_not_held");
+                                else if (caster == null) failed(result, "ars_spellbook_unconfigured");
+                                else if (slot >= caster.getMaxSlots()) failed(result, "spell_slot_out_of_range");
+                                else if (player.getCooldowns().isOnCooldown(held.getItem())) failed(result, "ars_item_on_cooldown");
+                                else if (mana == null) failed(result, "ars_mana_unavailable");
+                                else {
+                                    spell = caster.getSpell(slot);
+                                    if (spell == null || !spell.isValid()) failed(result, "spell_slot_empty_or_invalid");
+                                    else {
+                                        result.add("spell", spellInfo(caster, slot, spell));
+                                        double before = mana.getCurrentMana();
+                                        float healthBefore = player.getHealth();
+                                        result.addProperty("manaBefore", before);
+                                        result.addProperty("healthBefore", healthBefore);
+                                        String nativeResult = caster.castSpell(player.level(), player, InteractionHand.MAIN_HAND,
+                                                null, spell).getResult().name();
+                                        double after = mana.getCurrentMana();
+                                        boolean spent = before - after > 0.000001;
+                                        result.addProperty("nativeInteraction", nativeResult);
+                                        result.addProperty("manaAfter", after);
+                                        result.addProperty("manaSpent", before - after);
+                                        result.addProperty("healthAfter", player.getHealth());
+                                        result.addProperty("healthChanged", player.getHealth() != healthBefore);
+                                        result.addProperty("castConfirmed", spent);
+                                        result.addProperty("ok", spent);
+                                        result.addProperty("code", spent ? "ars_cast_confirmed" : "ars_cast_not_confirmed");
+                                        // Native CONSUME is unconditional, including insufficient mana.
+                                        // A resource debit confirms casting, not arbitrary spell effects.
+                                        result.add("state", observation(player));
+                                        player.containerMenu.broadcastChanges();
+                                    }
+                                }
                             }
                         }
                     }

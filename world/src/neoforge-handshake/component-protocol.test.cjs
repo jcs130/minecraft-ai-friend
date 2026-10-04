@@ -282,3 +282,74 @@ test('native Ars spell caster remains structured component data while vanilla pr
   assert.equal(parsed.data.params.item.components.length, 2)
   assert.equal(Object.hasOwn(mcData.protocol.types.SlotComponentType[1].mappings, '90'), false)
 })
+
+const arsMetadataRegistry = () => new Map([
+  ...metadataRegistry(), ['ars_nouveau:spell_resolver', 409], ['ars_nouveau:vec3', 423]
+])
+const wireI32 = value => { const buffer = Buffer.alloc(4); buffer.writeInt32BE(value); return buffer }
+const wireF32 = value => { const buffer = Buffer.alloc(4); buffer.writeFloatBE(value); return buffer }
+const wireF64 = value => { const buffer = Buffer.alloc(8); buffer.writeDoubleBE(value); return buffer }
+const arsResolverWire = (timelineCount = 0) => Buffer.concat([
+  wireString('星芒箭'), wireString('ars_nouveau:constant'),
+  ...[255, 50, 125].map(wireI32), wireString('ars_nouveau:default'), wireF32(0.5), wireF32(1.25),
+  wireI32(2), wireString('ars_nouveau:glyph_projectile'), wireString('ars_nouveau:glyph_harm'), wireI32(timelineCount)
+])
+
+test('Ars projectile resolver and Vec3 metadata decode independent wire using server-exported IDs', () => {
+  const serializers = arsMetadataRegistry()
+  const native = createBackendComponentProtocol(registry, null, serializers)
+  const buffer = Buffer.concat([
+    Buffer.from([0x58]), wireVarInt(4061), Buffer.from([9]),
+    wireVarInt(serializers.get('ars_nouveau:spell_resolver')), arsResolverWire(),
+    Buffer.from([12]), wireVarInt(serializers.get('ars_nouveau:vec3')),
+    ...[-500.125, 64.75, 301.0625].map(wireF64),
+    Buffer.from([1, 1]), wireVarInt(300), Buffer.from([0xff])
+  ])
+  assert.equal(isItemPacket(buffer), true)
+  const parsed = native.parsePacketBuffer('packet', buffer)
+  assert.equal(parsed.metadata.size, buffer.length)
+  assert.equal(parsed.data.params.entityId, 4061)
+  const [resolver, vector, vanillaEntry] = parsed.data.params.metadata
+  assert.equal(resolver.type, 'ars_nouveau:spell_resolver')
+  assert.deepEqual(resolver.value, { spell: {
+    name: '星芒箭', color: { id: 'ars_nouveau:constant', r: 255, g: 50, b: 125 },
+    sound: { id: 'ars_nouveau:default', volume: 0.5, pitch: 1.25 },
+    glyphs: ['ars_nouveau:glyph_projectile', 'ars_nouveau:glyph_harm'], timelineCount: 0
+  } })
+  assert.deepEqual(vector, { key: 12, type: 'ars_nouveau:vec3', value: { x: -500.125, y: 64.75, z: 301.0625 } })
+  assert.deepEqual(vanillaEntry, { key: 1, type: 'int', value: 300 })
+  assert.deepEqual(native.createPacketBuffer('packet', parsed.data), buffer)
+  assert.equal(Object.hasOwn(mcData.protocol.types.entityMetadataEntry[1][1].type[1].mappings, '409'), false)
+})
+
+test('Ars metadata projection preserves the same projectile identity and native resolver data', async () => {
+  const native = createBackendComponentProtocol(registry, null, arsMetadataRegistry())
+  const packet = { name: 'entity_metadata', params: { entityId: 4061, metadata: [
+    { key: 12, type: 'ars_nouveau:vec3', value: { x: -500.125, y: 64.75, z: 301.0625 } },
+    { key: 1, type: 'int', value: 300 }
+  ] } }
+  const decoded = native.parsePacketBuffer('packet', native.createPacketBuffer('packet', packet)).data
+  const projected = vanillaProjection(decoded)
+  assert.equal(decoded.params.metadata.length, 2)
+  assert.equal(projected.params.entityId, 4061)
+  assert.deepEqual(projected.params.metadata, [{ key: 1, type: 'int', value: 300 }])
+  const serializer = mc.createSerializer({ state: 'play', isServer: true, version: '1.21.1' })
+  const parser = mc.createDeserializer({ state: 'play', isServer: false, version: '1.21.1' })
+  const result = new Promise((resolve, reject) => { parser.once('data', resolve); parser.once('error', reject); serializer.once('error', reject) })
+  serializer.pipe(parser)
+  serializer.end(projected)
+  const front = await result
+  assert.equal(front.data.params.entityId, 4061)
+  assert.deepEqual(front.data.params.metadata, projected.params.metadata)
+})
+
+test('nonempty Ars timelines explicitly fail without treating their bytes as a neighbouring metadata entry', () => {
+  const serializers = arsMetadataRegistry()
+  const native = createBackendComponentProtocol(registry, null, serializers)
+  const buffer = Buffer.concat([
+    Buffer.from([0x58]), wireVarInt(4061), Buffer.from([9]),
+    wireVarInt(serializers.get('ars_nouveau:spell_resolver')), arsResolverWire(1),
+    Buffer.from([1, 1]), wireVarInt(300), Buffer.from([0xff])
+  ])
+  assert.throws(() => native.parsePacketBuffer('packet', buffer), /UNSUPPORTED_ARS_PARTICLE_TIMELINE/)
+})
