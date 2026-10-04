@@ -5,6 +5,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { createHash, randomUUID } = require('node:crypto')
+const { projectNativeModelError, NATIVE_CODES } = require('./model-failure-policy.cjs')
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 const MAX_JOURNAL_BYTES = 16 * 1024 * 1024
@@ -232,7 +233,9 @@ class QwenTaskClient {
           const error = { code: timeout ? 'NATIVE_TASK_TIMEOUT' : cancelled ? 'NATIVE_TASK_CANCELLED' : 'NATIVE_TASK_FAILED', message: timeout ? 'Native task timed out' : cancelled ? 'Native task was cancelled' : 'Native task failed; inspect the private QwenPaw task log' }
           // A bounded code can drive backoff without leaking provider messages,
           // credentials, temporary dump paths, or prompt text to public status.
-          if (/^[A-Za-z0-9_-]{1,64}$/.test(result.error?.code || '')) error.nativeCode = result.error.code
+          if (NATIVE_CODES.has(result.error?.code)) error.nativeCode = result.error.code
+          const errorDetails = projectNativeModelError(result.error)
+          if (errorDetails) error.errorDetails = errorDetails
           this._mark(journal, record, 'failed', error)
           return this._outcome(record, 'failed', resumed, '', error)
         }
@@ -298,8 +301,10 @@ class QwenTaskClient {
         this._mark(journal, record, 'intent', error)
         return this._outcome(record, 'unknown', false, '', error)
       }
-      if ([400, 401, 403, 404, 503].includes(response.status)) {
+      if ([400, 401, 403, 404, 429, 503].includes(response.status)) {
         const error = { code: 'SUBMISSION_REJECTED', message: `Native API rejected submission (HTTP ${response.status})`, httpStatus: response.status }
+        const errorDetails = projectNativeModelError({ errorDetails: { httpStatus: response.status, body: response.data }, message: response.data?.detail })
+        if (errorDetails) error.errorDetails = errorDetails
         this._mark(journal, record, 'failed', error)
         return this._outcome(record, 'failed', false, '', error)
       }

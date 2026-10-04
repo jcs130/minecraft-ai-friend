@@ -298,3 +298,31 @@ node --test world/src/neoforge-handshake/component-protocol.test.cjs world/src/n
 原生资源优先级与完整画面一致性仍未验收，`completeSceneParityVerified=false`。连续地形与真实动作更新不等于全部实体、装备／持物、模组动态模型、动画、光照和声音都与匹配Java客户端一致；后续须继续保留显式缺口，并分别记录资源来源核验与客户端对照结果。
 
 可视化源代码已提交并同步 `jcs130/mc-visual-console` 的 `main`，提交 `0f5da18f007c2ba7c4e91168161912b08fbff781`，本地与远端树一致、工作区干净。renderer专项253项及仓库根270项回归通过（入口重叠，不可相加），typecheck通过。最终真实浏览器确认草地/土径/花恢复，可渲染51,282/52,024个非空气块，当前reload无warn/error；此统计不代表像素一致率。仓库外完整页面截图：`agents/maw-explorer/native-console-continuity-20261005.png`。本人当前静止，步态实战和新立方物品GUI像素对照仍待后续验收。
+
+## Coding Plan 限流分类与恢复（2026-10-05）
+
+纠正上述历史暂停原因的解释：`MODEL_QUOTA_EXCEEDED` 是当前 QwenPaw 对 HTTP429 的泛化标签，不能据此认定套餐总额度耗尽。原生任务 `task-1db3f1206bb9` 已明确终态 `failed`；23:38:47宿主记录的原始上游错误为 HTTP429、`code=throttling`、`message=usage allocated quota exceeded. please try again later.`。[阿里云 Coding Plan 官方 FAQ](https://help.aliyun.com/zh/model-studio/coding-plan-faq) 将此消息解释为短时请求密集或资源消耗峰值限流，建议至少等待一分钟；`hour/week/month allocated quota exceeded` 才分别表示额度窗口，`concurrency allocated quota exceeded` 表示并发限制。本次不能进一步确定是请求频率、输入Token峰值还是共享账号使用造成，也没有证据表明总额度耗尽。
+
+只读路由核对确认 MawExplorer 仍使用 `maw-aliyun-codingplan/qwen3.7-plus`，provider 的 API host 为 `coding.dashscope.aliyuncs.com`、路径 `/v1`、协议 `OpenAIChatModel`；角色自动回退与 LLM routing 均关闭。没有改 QwenPaw 全局配置、provider、密钥或其他角色，也没有直接调用上游 API。
+
+源码局部策略现将已知失败的 usage/concurrency 限流及无细节的历史泛429归入可恢复退避：依次60、120、240、480秒，之后最多每15分钟尝试一次。受控 `modelBackoff` 保存失败次数、计划时间、到期时间、等待长度和原因；重启保留退避，检查点位于获取新观察及提交模型之前。等待期间仍响应服务维护与自主暂停。模型成功后清除连续限流计数；退避到期只允许新观察、新意图、新任务，绝不重发失败任务或执行它的旧计划。
+
+原生任务的 `errorDetails` 优先投影到固定原因枚举和 HTTP状态；原始消息、密钥、URL、临时dump路径不进入公开状态或新增账本。鉴权、模型配置错误继续持久暂停；明确hour/week/month窗口另记 `model_quota_window`，不伪装为短时限流。未知任务、丢失回执及未完成任务的轮询超时继续保留原taskId并暂停，人工核查只读原任务；原生已结束的超时与取消不会被当作游戏计划。未知游戏动作的暂停保护保持。
+
+部署前应确认行动账本无未结算 `action_intent`，原生任务账本无 `intent/submitted`，并只读确认上述原task已失败。**程序不会自动删除现存 `autonomy.paused`。** 操作员仅在核对其精确内容仍为 `reason=model_configuration_or_quota`、`error=MODEL_TASK_FAILED: MODEL_QUOTA_EXCEEDED` 后，将它改名归档为带日期的 `autonomy.pause-retired-codingplan429-*.json`；遇到其他原因或新的未知行动暂停即停止恢复。随后按现有 owned 服务流程启动/恢复一次，保留全部任务和行动账本。不批量删除暂停文件，不清空 session，不自动换模型。
+
+局部 Agent/任务客户端回归共34项通过，覆盖退避下限及上限、跨重启保留、结构化原始原因优先、鉴权/配置、明确但窗口不明的 `insufficient_quota` 保守暂停、未知任务、终态失败后新意图，以及敏感错误不落盘；语法检查通过。这是源码策略验证，实际模型恢复、后续限流和长期稳定性需由部署后的真实任务另行记录。
+
+## 专用物品 GUI 渲染发布（2026-10-05）
+
+网页源仓库 `jcs130/mc-visual-console` 的 `main` 已同步 `905dd33d552ea459c5b0ef8757603db4582deca4`（原生专用物品）及 `854c4a160d0749e8abc3befe14fc7c1cb327aeb7`（限流等待提示）。Ars Nouveau 5.13.2 的破旧笔记本、初学／学徒／大法师法术书按锁定客户端与 GeckoLib4.9.3 的原始闭合书几何、分级骨骼、GUI变换、UV与贴图渲染，并支持16种原始染色；没有用同名静态PNG代替专用模型。女仆空白智能石板与已知 Patchouli 幻想乡书使用各自真实生成模型及贴图，依据本人物品的完整原生SNBT选择。
+
+SNBT 输入限定64KiB、16层、4096节点，保留原生数值类型和组件。缓存以完整原始SNBT为键，限128项；缺失来源、未知书籍／视觉组件、动态纹理及尚未实现的附魔光效明确显示缺口，资源来源SHA核验不等于像素对照。此次仅完成物品栏／快捷栏GUI；持物模型、翻页、装备、其他专用渲染器与Java客户端完整像素对照仍未验收，`completeSceneParityVerified=false` 保持。
+
+可视化根回归305项通过、0失败0跳过，typecheck通过；后续界面退避提示定向8项通过。这两轮入口有重叠，不能相加。原始资源、JAR、输出PNG、编译bundle与运行数据均在仓库外。
+
+正式新服于00:55完成存档后停止，备份在 `backups/special-item-renderers-20261005-0055`，共161文件。恢复前核对330条游戏行动意图均有结果、167条原生任务全部终态（162完成、5失败），并通过宿主只读原任务确认 `task-1db3f1206bb9` 已结束失败。只将精确匹配旧限流误判的 `agents/maw-explorer/autonomy.paused` 改名为 `autonomy.pause-retired-codingplan429-20261005-0113.json`；所有历史记录保留。
+
+使用同一监督器的 `special-items-resume-20261005` 回执恢复一次，01:14三子服务健康、原UUID MawExplorer本人在线。实际生产网页 `http://127.0.0.1:28984/third/` 已检查自己的石板、幻想乡书、破旧笔记本：两处显示均加载成功，原始图标16×16、法术书专用GUI64×64；本次reload无warn/error。完整截图位于仓库外 `research/special-items-live-20261005.png`。恢复后使用原角色、原session及原在线模型提交新的 `task-95afb63dc32a`，不是重投旧失败任务；01:15宿主只读回执确认 `finished/completed`，Agent已继续进入后续轮次并执行动作，`lastError=null`、没有新暂停标记。这证明原模型路由本次恢复成功，不能据此宣称长期自主生活或限流永不再发生。旧两个25565服务、UDP19132及宿主8088的监听PID均保持，路由器与其他角色配置没有改动。临时28986只读预览已按精确命令行归属停止，正式28984继续运行。
+
+01:15追加真实后置证据：恢复后的前三个模型任务均已完成；MawExplorer连续导航到村庄地面区域，并自主采集 `(-441,67,391)` 的 `minecraft:short_grass`，世界读回变为空气、种子库存4→5。此次没有操作员传送、补物或伪造采集结果，仍不代表全部模组功能或长期游玩验收完成。

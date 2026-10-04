@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 const require = createRequire(import.meta.url)
 const { parsePlan, visibleSurfaces, unknownOutcome, gameJSON } = require('./plan.cjs')
 const { QwenTaskClient } = require('./qwen-task-client.cjs')
+const { modelDecisionError, classifyModelFailure, restoreModelBackoff, nextModelBackoff, modelBackoffRemaining } = require('./model-failure-policy.cjs')
 const mineflayer = require('mineflayer'), nbt = require('prismarine-nbt')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const { Vec3 } = require('vec3')
@@ -28,7 +29,7 @@ const root = fs.realpathSync(config.stateDirectory)
 const stateFile = path.join(root, 'state.json'), ledger = path.join(root, 'actions.jsonl'), paused = path.join(root, 'autonomy.paused')
 const old = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null
 if (old && (old.username !== config.username || old.sessionId !== config.sessionId)) throw Error('AGENT_STATE_IDENTITY_MISMATCH')
-const status = { schemaVersion: 1, username: config.username, sessionId: config.sessionId, online: false, mode: 'starting', goal: old?.goal || '在 My Agent World 生存、成长，建立自己的生活与社会关系', reason: '', round: old?.round || 0, deaths: old?.deaths || 0, receipts: [], lastDecision: old?.lastDecision || null, lastError: null }
+const status = { schemaVersion: 1, username: config.username, sessionId: config.sessionId, online: false, mode: 'starting', goal: old?.goal || '在 My Agent World 生存、成长，建立自己的生活与社会关系', reason: '', round: old?.round || 0, deaths: old?.deaths || 0, receipts: [], lastDecision: old?.lastDecision || null, lastError: null, modelBackoff: restoreModelBackoff(old?.modelBackoff) }
 // A lost process cannot turn an already dispatched action into a safe retry.
 // Keep the complete ledger and stop autonomy for operator reconciliation.
 if (fs.existsSync(ledger)) {
@@ -216,6 +217,9 @@ async function loop () {
   while (!closing) {
     if (!status.online || !menu.current() || bot.health <= 0) { status.mode = 'waiting_for_player'; persist(); await wait(1000); continue }
     if (fs.existsSync(paused)) { status.mode = 'paused'; persist(); await wait(1000); continue }
+    // A restart cannot shorten this persisted cooldown. The gate precedes
+    // inspection/submission and stays responsive to maintenance/shutdown.
+    if (modelBackoffRemaining(status.modelBackoff) > 0) { status.mode = 'model_rate_backoff'; persist(); await wait(1000); continue }
     try {
       const observedEpoch = epoch
       const observation = await inspect()
@@ -223,7 +227,8 @@ async function loop () {
       status.mode = 'thinking'; status.round++; status.lastError = null; persist()
       const decision = await qwen.run(guide + '\n当前真实观察：\n' + gameJSON(observation) + '\n持续目标：' + status.goal)
       if (closing) break
-      if (decision.status !== 'completed') throw Error(`${decision.status === 'unknown' ? 'MODEL_TASK_UNKNOWN' : 'MODEL_TASK_' + String(decision.status).toUpperCase()}: ${decision.error?.nativeCode || decision.error?.code || decision.taskId || 'no task handle'}`)
+      if (decision.status !== 'completed') throw modelDecisionError(decision)
+      status.modelBackoff = null; persist()
       if (decision.resumed === true) { record('decision_discarded', { taskId: decision.taskId, reason: 'task_resumed_from_previous_observation' }); await wait(1000); continue }
       if (observedEpoch !== epoch || !status.online || bot.health <= 0) { record('decision_discarded', { taskId: decision.taskId, reason: 'player_epoch_changed' }); await wait(1000); continue }
       const plan = parsePlan(decision.text)
@@ -248,10 +253,14 @@ async function loop () {
       status.mode = fs.existsSync(paused) ? 'paused' : 'observing'; persist(); await wait(config.decisionIntervalMs || 15000)
     } catch (error) {
       status.lastError = error.message; record('decision_error', { error: error.message })
-      if (/UNKNOWN|UNCERTAIN|INTENT_PENDING|TASK_NOT_FOUND/i.test(error.message)) { fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_model_task', error: error.message })); status.mode = 'paused_unknown' }
-      else if (/MODEL_QUOTA_EXCEEDED|AUTHENTICATION|MODEL_NOT_FOUND|SUBMISSION_REJECTED/.test(error.message)) { fs.writeFileSync(paused, JSON.stringify({ reason: 'model_configuration_or_quota', error: error.message })); status.mode = 'paused_model' }
-      else status.mode = 'decision_backoff'
-      persist(); await wait(30000)
+      const policy = classifyModelFailure(error)
+      if (policy.action === 'pause_unknown' || policy.action === 'pause_model') {
+        fs.writeFileSync(paused, JSON.stringify({ reason: policy.pauseReason, reasonCode: policy.reasonCode, error: error.message })); status.mode = policy.action === 'pause_unknown' ? 'paused_unknown' : 'paused_model'
+      } else if (policy.action === 'rate_backoff') {
+        status.modelBackoff = nextModelBackoff(status.modelBackoff, policy)
+        status.mode = 'model_rate_backoff'; record('model_rate_backoff', status.modelBackoff)
+      } else status.mode = 'decision_backoff'
+      persist(); await wait(policy.action === 'rate_backoff' ? 1000 : 30000)
     }
   }
 }

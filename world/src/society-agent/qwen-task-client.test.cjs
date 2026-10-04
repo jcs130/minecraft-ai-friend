@@ -256,3 +256,60 @@ test('oversized or malformed native responses leave an uncertain submission, nev
     assert.equal(posts, 1)
   }
 })
+
+test('failed throttled task records safe evidence, then a fresh observation creates a distinct intent and task', async t => {
+  const { options, journalPath } = fixture(t)
+  const posts = [], gets = []
+  const client = new QwenTaskClient({ ...options, fetchImpl: async (url, request) => {
+    if (request.method === 'POST') {
+      posts.push(JSON.parse(request.body))
+      return json({ task_id: `task-${String(posts.length).padStart(12, '0')}`, timeout: 1 })
+    }
+    gets.push(url)
+    return posts.length === 1
+      ? json({ status: 'finished', result: { status: 'failed', error: { code: 'MODEL_QUOTA_EXCEEDED', message: 'usage allocated quota exceeded. please try again later. secret-key [dump:private-file]', errorDetails: { httpStatus: 429, body: { error: { code: 'throttling', message: 'usage allocated quota exceeded' } }, api_key: 'secret-key' } } } })
+      : json(completed('{"goal":"fresh","actions":[]}'))
+  } })
+  const first = await client.run('first observation')
+  assert.equal(first.status, 'failed')
+  assert.deepEqual(first.error.errorDetails, { httpStatus: 429, providerCode: 'throttling', reasonCode: 'rate_limit_usage' })
+  const next = await client.run('fresh observation after cooldown')
+  assert.equal(next.status, 'completed')
+  assert.equal(posts.length, 2)
+  assert.notEqual(first.intentId, next.intentId)
+  assert.notEqual(first.taskId, next.taskId)
+  assert.equal(posts[1].input[0].content[0].text, 'fresh observation after cooldown')
+  assert.equal(gets.filter(url => url.endsWith('/' + first.taskId)).length, 1)
+  const journal = fs.readFileSync(journalPath, 'utf8')
+  assert.ok(!journal.includes('secret-key'))
+  assert.ok(!journal.includes('private-file'))
+  assert.deepEqual(JSON.parse(journal).runs.map(run => run.phase), ['failed', 'completed'])
+})
+
+test('unknown provider code is not a credential-safe allowlist code', async t => {
+  const { options, journalPath } = fixture(t)
+  const client = new QwenTaskClient({ ...options, fetchImpl: async (url, request) => request.method === 'POST'
+    ? json({ task_id: 'task-999999999999', timeout: 1 })
+    : json({ status: 'finished', result: { status: 'failed', error: { code: 'sk_private_credential', message: 'private', errorDetails: { providerCode: 'sk_private_credential' } } } }) })
+  const result = await client.run('one')
+  assert.equal(result.error.nativeCode, undefined)
+  assert.equal(result.error.errorDetails, undefined)
+  assert.ok(!fs.readFileSync(journalPath, 'utf8').includes('sk_private_credential'))
+})
+
+test('HTTP 429 rejects a submission before receipt; no replay, next intent is distinct', async t => {
+  const { options, journalPath } = fixture(t)
+  let posts = 0
+  const client = new QwenTaskClient({ ...options, fetchImpl: async (url, request) => {
+    assert.equal(request.method, 'POST'); posts++
+    return json({ error: { code: 'throttling', message: 'usage allocated quota exceeded' } }, 429)
+  } })
+  const result = await client.run('one')
+  assert.equal(result.status, 'failed')
+  assert.equal(result.taskId, null)
+  assert.deepEqual(result.error.errorDetails, { httpStatus: 429, providerCode: 'throttling', reasonCode: 'rate_limit_usage' })
+  const next = await client.run('next observation')
+  assert.equal(posts, 2)
+  assert.notEqual(result.intentId, next.intentId)
+  assert.deepEqual(JSON.parse(fs.readFileSync(journalPath)).runs.map(run => run.phase), ['failed', 'failed'])
+})
