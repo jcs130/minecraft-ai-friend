@@ -32,11 +32,12 @@
 | Minecraft 玩家名 | `MawExplorer` |
 | 玩家 UUID | `e371227c-09fa-3722-84f4-f3228a552c3c` |
 | QwenPaw 独立角色 | `maw-explorer` |
-| 当前模型 | 仅新角色改用已有 `zhipu-cn-codingplan / glm-5.3-flash`；default 原模型未改 |
+| 当前模型 | `maw-aliyun-codingplan / qwen3.7-plus`，线上阿里云 Coding Plan；其他角色原模型未改 |
+| 模型接口 | `https://coding.dashscope.aliyuncs.com/v1`，OpenAI 兼容协议 |
 | Agent 运行配置 | `E:\QiandengJiSocietyLab\services\agent.json` |
 | Agent 私有状态目录 | `E:\QiandengJiSocietyLab\agents\maw-explorer` |
 
-MawExplorer 是普通生存玩家，未授 OP。模型通过独立角色和固定 life session 生成 JSON 决策；它不能调用宿主终端、文件或管理员工具。新角色原生工具全部关闭、`max_iters=1`、跨模型回退关闭，每次任务另带 `request_context.subagent_allowed_tools=[]`。原女神、其他宿主角色与 Cron 不随新服改动。
+MawExplorer 是普通生存玩家，未授 OP。模型通过独立角色和固定 life session 生成 JSON 决策；它不能调用宿主终端、文件或管理员工具。新角色原生工具全部关闭、`max_iters=1`、跨模型回退关闭，每次任务另带 `request_context.subagent_allowed_tools=[]`。按用户指定，本项目调试使用上述线上 Coding Plan，不使用本地 Qwen3.8-27B，也不自动切回 GLM 或其他模型。API Key 只由 QwenPaw 私有凭据存储管理，不能写进源码、提示词或文档。原女神、其他宿主角色与 Cron 不随新服改动。
 
 一轮模型最多返回八个动作。宿主解析、校验并按序执行；实际走路、采集、原生合成、模组交互和网页观察共用**同一个 Mineflayer 连接**，没有额外摄像机代替身体。模型使用本人健康、饥饿、库存、可见表面和实际回执作观察；坐标均为绝对坐标。模型说“完成”不是游戏成功证据。
 
@@ -190,3 +191,11 @@ Agent 私有目录主要包含：
 20:15:43 最后一次审查修复发布后，同 UUID 从自然存档位置重新上线，维护标记在核对具体原因后移除。20:16:22 新服专用健康检查全部通过：本人连接、原生流、三个 owned 子进程、守护新鲜度与自主模式 `thinking`。原两个25565实例仍为 PID21076/PID13880，QwenPaw8088仍为 PID19304。正式入口是 `http://127.0.0.1:28984/`，健康口是28985；没有开放LAN或公网端口。网页实时显示本人位置、世界与真实决策/行动，不额外登录观察者账号。
 
 依赖审查另移除了 npm 产生的无用 `my-agent-world-runtime: file:` 自引用及 lock 中的自链接声明。源和运行目录的两份声明保持一致，其余包版本/完整性不变；正在运行的 `node_modules` 没有重装，已有无用 junction 留到下一次停服 `npm ci` 清理，不删除其目标目录。
+
+## 线上调试模型切换（2026-10-04）
+
+按用户指定，MawExplorer 当前改用 `qwen3.7-plus`，接口为 `https://coding.dashscope.aliyuncs.com/v1`。地址与模型符合[阿里云 Coding Plan 配置说明](https://help.aliyun.com/zh/model-studio/qwen-code)。创建独立 QwenPaw custom provider `maw-aliyun-codingplan`，通过原生 provider 配置接口保存私有凭据（不触发模型发现），只更新 `maw-explorer.active_model`。其余角色的模型路由和本角色其他配置完整读回保持一致，fallback 列表为空、enabled=false；本项目调试不使用本地 Qwen3.8-27B，也不自动回退到此前 GLM。
+
+切换前等待原 GLM 原生任务 `task-b4251ab12eac` 结束并暂停自主，保留身体、UUID、life session、库存与账本。20:33:13 宿主日志确认 `Workspace instance replaced: maw-explorer` 和旧实例停止，零停机重载完成；不重启 Minecraft、网关、worker 或宿主其他角色。恢复后原生任务 `task-2b25bb4ec99a` 实际 completed，聊天持久 metadata 的 `qwenpaw_turn_usage.usage` 确认 `provider_id=maw-aliyun-codingplan`、`model_name=qwen3.7-plus`，有真实 prompt/completion token 及缓存记录；同角色/provider/model 的用量账本已有实际调用增量。这比仅读取 active_model 配置更能证明请求路由。
+
+脱敏切换证据在仓库外 `E:\QiandengJiSocietyLab\agents\maw-explorer\online-qwen-switch-evidence.json`。密钥不进入该报告、源码、提示词或文档。Agent 继续采用 QwenPaw 原生任务/持久会话，加项目 JSON 计划校验与 Mineflayer 执行动作；此次更换模型不代表长期自主生存或完整模组功能已验收。
