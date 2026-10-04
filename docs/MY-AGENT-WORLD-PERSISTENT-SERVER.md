@@ -271,3 +271,7 @@ node --test world/src/neoforge-handshake/component-protocol.test.cjs world/src/n
 本次升级前先持久暂停本人 Agent，确认模型任务和行动全部终态。23:00:49 发出 owned shutdown，23:00:53 所有维度保存完毕，守护及三子进程退出；停服冷备保存到 `backups/supervisor-retry-20261004-2301`。维护暂停只按本次原因恢复，不能清除未知动作/模型保护。
 
 守护回归 `python tools/maw_service_test.py` 共25项通过，包括真实分享锁、永久失败、非共享错误不重试、异常审计和健康新鲜性。新守护23:07:53接受resume；23:08:56 HTTP读回 `healthy=true / heartbeatFresh=true / paused=false`，Java/gate/worker全部ready，原账号身份和本人展示UUID一致。随后只归档本次原因的暂停到 `autonomy.pause-retired-supervisor-retry-20261004-2309.json`，恢复Agent；历史异常、原操作回执及两份冷备全部保留。HKCU登录启动仍不能保证守护自身崩溃后自动重启，本次只是明确修复和短时恢复验收。
+
+后续浏览器重连保留一条23:08:25的真实 Three.js 错误。已独立复现空数组展开为零参数 `Object3D.add()` 会产生同一错误；场景初始为空、空模型或无可绘制水面时都可能触发。三处改为逐个添加实际 mesh，空集合保持为空，不补代理模型；可视化主干后续提交 `4ad65ee123a82d8d7584c257c81496a1f9d3aa20` 已推送，38项相关宿主/界面回归通过。23:17:55零待定行动/模型后正常停三子服务，23:17:59全部维度保存、三服务退出0，之后恢复守护以重建新bundle；历史浏览器错误不清除，后续验收只按新bundle加载后的时间判断。
+
+23:20:08 HTTP读回三服务就绪、`healthy=true / heartbeatFresh=true / paused=false`，同UUID本人状态匹配；只归档本轮暂停至 `autonomy.pause-retired-viewer-reconnect-20261004-2320.json` 并恢复自主循环。重新加载最终bundle后本人模型、真实快捷栏及Ars100/100可见，23:20:08之后的浏览器warn/error为空；历史错误仍保留。完整页面截图为仓库外 `agents/maw-explorer/full-native-console-final-page-20261004.jpg`。当前画面仍是局部原生场景，远景、完整实体/装备动画与声音等缺口没有因此通过完整一致性验收。
