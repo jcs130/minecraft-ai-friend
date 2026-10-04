@@ -199,3 +199,13 @@ Agent 私有目录主要包含：
 切换前等待原 GLM 原生任务 `task-b4251ab12eac` 结束并暂停自主，保留身体、UUID、life session、库存与账本。20:33:13 宿主日志确认 `Workspace instance replaced: maw-explorer` 和旧实例停止，零停机重载完成；不重启 Minecraft、网关、worker 或宿主其他角色。恢复后原生任务 `task-2b25bb4ec99a` 实际 completed，聊天持久 metadata 的 `qwenpaw_turn_usage.usage` 确认 `provider_id=maw-aliyun-codingplan`、`model_name=qwen3.7-plus`，有真实 prompt/completion token 及缓存记录；同角色/provider/model 的用量账本已有实际调用增量。这比仅读取 active_model 配置更能证明请求路由。
 
 脱敏切换证据在仓库外 `E:\QiandengJiSocietyLab\agents\maw-explorer\online-qwen-switch-evidence.json`。密钥不进入该报告、源码、提示词或文档。Agent 继续采用 QwenPaw 原生任务/持久会话，加项目 JSON 计划校验与 Mineflayer 执行动作；此次更换模型不代表长期自主生存或完整模组功能已验收。
+
+## 本人可见与观战视角修复（2026-10-04）
+
+此前28984展示原生区块检查页，缺少本人实体模型，区域镜头也未持续跟随。现通过同一个 action bot 的 `selfPlayer` 接入本人经典模型、头顶姓名、真实生命／饱食和绝对坐标；页面默认第三人称跟随，提供第一人称、自由观察、回到 Agent 与 F5 切换。没有另建观察者账号。本人原生 profile 确认无自定义 textures，UUID `e371227c-09fa-3722-84f4-f3228a552c3c` 按匹配1.21.1客户端规则选择原始 slim/makena 皮肤，纹理SHA-256为 `197307bf92fb9d3adb5808593c88e48ab152335cc4276db4127ccb82d010ca68`。未收到最大生命属性时显示未收到，不补固定20。
+
+维护先持久暂停本角色，核对模型任务已达终态、所有行动 intent 均有结果，21:05使用守护 owned stop 正常保存全部维度并退出三个子服务；停服后备份 `world-life`、services配置与角色状态／模型／行动账本至仓库外 `E:\QiandengJiSocietyLab\backups\viewer-own-player-20261004-2105`。21:06恢复守护并确认同UUID登录，再只清除本次明确原因的自主暂停。新java/gate/worker PID为23156/27540/13136；旧两个25565实例PID21076/13880、QwenPaw8088的PID19304保持。模型仍走线上qwen3.7-plus，维护前一条模型timeout失败原样保留，恢复后的真实决策与移动／采草回执再次出现，未重投旧任务。
+
+浏览器实际验证本人模型与姓名可见、三种视角及回到本人切换正常，角色移动时绝对坐标与跟随画面持续更新。实际截图 `E:\QiandengJiSocietyLab\agents\maw-explorer\own-player-third-person-20261004.jpg` 保留在私人目录，不提交到Git。渲染仓库73项相关Node回归通过。
+
+此改动仅覆盖本人静态经典身体和头部俯仰。步行动画、装备／持物、其他实体、部分方块、GUI、粒子与完整光照尚未全部适配，`completeSceneParityVerified` 仍为false；不得将“能看见本人”写成全部模组画面1:1。原生资源优先级等缺口仍在页面诊断中显式呈现。
