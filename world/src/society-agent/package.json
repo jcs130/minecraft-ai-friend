@@ -1,0 +1,24 @@
+{
+  "name": "my-agent-world-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned local Node dependencies for the My Agent World gateway and player/viewer worker",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "dependencies": {
+    "minecraft-data": "3.112.0",
+    "minecraft-protocol": "1.66.2",
+    "mineflayer": "4.37.1",
+    "mineflayer-pathfinder": "2.4.5",
+    "my-agent-world-runtime": "file:",
+    "prismarine-nbt": "2.8.0",
+    "vec3": "0.2.0"
+  },
+  "overrides": {
+    "minecraft-data": "3.112.0",
+    "minecraft-protocol": "1.66.2",
+    "prismarine-chunk": "1.41.0",
+    "vec3": "0.2.0"
+  }
+}

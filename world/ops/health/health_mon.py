@@ -63,6 +63,43 @@ MANIFEST = {
     "survivor": {"health_required": True, "purpose": "Kirito self-directed adventure, on-demand scene images, transient inference recovery and leased Numen actions"},
     "inventory": {"health_required": True, "purpose": "Read-only Docker-managed current project inventory publication"},
 }
+# Separate native Windows deployment: never fold it into the historical Docker
+# inventory or rewrite that inventory's old audit evidence.
+SOCIETY_SERVICE_MANIFEST = {
+    'java': {'port': 28976, 'purpose': 'My Agent World NeoForge 1.21.1 natural life world'},
+    'gate': {'port': 28977, 'purpose': 'Native mod protocol bridge for the same Mineflayer player'},
+    'worker': {'port': 28984, 'purpose': 'QwenPaw decisions, ordinary player actions, same-connection native web view'},
+}
+
+
+def probe_society_service():
+    report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'project': 'my-agent-world',
+              'scope': 'Current isolated native service and connected player readiness; not long-term gameplay success',
+              'ok': False, 'checks': {}}
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:28985/healthz', timeout=5) as response:
+            supervisor = json.load(response)
+        with urllib.request.urlopen('http://127.0.0.1:28984/healthz', timeout=5) as response:
+            viewer = json.load(response)
+        rows = {row['id']: row for row in supervisor.get('services', [])}
+        checks = report['checks']
+        checks['fresh-supervision'] = supervisor.get('healthy') is True and 0 <= time.time() - supervisor.get('heartbeatEpoch', 0) < 20
+        checks['maintenance-respected'] = supervisor.get('paused') is False
+        for name, expected in SOCIETY_SERVICE_MANIFEST.items():
+            row = rows.get(name, {})
+            checks[name] = row.get('port') == expected['port'] and row.get('host') == '127.0.0.1' and row.get('ready') is True and isinstance(row.get('pid'), int)
+        details = viewer.get('agent', {}).get('details', {})
+        player = viewer.get('identity', {}).get('player')
+        checks['same-connected-player'] = viewer.get('ready') is True and details.get('online') is True and details.get('username') == player
+        checks['native-stream'] = details.get('native', {}).get('failed') is False and details.get('native', {}).get('packets', 0) > 0
+        checks['autonomy-active'] = details.get('mode') in ('thinking', 'acting', 'observing', 'decision_backoff')
+        report['state'] = {'player': player, 'mode': details.get('mode'), 'goal': details.get('goal'),
+                           'round': details.get('round'), 'supervisorPid': supervisor.get('supervisorPid'),
+                           'services': [{k: row.get(k) for k in ('id', 'pid', 'port', 'uptimeSeconds', 'problem')} for row in rows.values()]}
+        report['ok'] = all(checks.values())
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        report['error'] = type(error).__name__ + ': ' + str(error)
+    return report
 SURVIVOR_SMOKE_CHECKS = ('bound-kirito-identity', 'single-action-lease', 'no-unknown-replay',
     'survivor-status-panel', 'survivor-supervised-runtime', 'autonomous-task-evidence')
 SURVIVOR_ADVENTURE_CHECKS = ('native-39-tools', 'loaded-block-scan', 'physical-menu-identity',
@@ -1863,6 +1900,13 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society']:
+        report = probe_society_service()
+        target = PROJECT / 'reports' / 'my-agent-world-runtime-health.json'
+        target.parent.mkdir(exist_ok=True)
+        target.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     # Hold through the HTTP read and report publication, not just collection:
     # the panel must still expose this run's exact snapshot receipt.
     try:

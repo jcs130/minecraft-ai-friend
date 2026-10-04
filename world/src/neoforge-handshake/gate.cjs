@@ -723,8 +723,19 @@ async function bootLearn () {
 
 bootLearn().catch((e) => log('自检异常：' + e.message))
 
-process.on('SIGINT', () => {
+let stopping = false
+function shutdown () {
+  if (stopping) return
+  stopping = true
   log('闭门。')
+  for (const sess of [...sessions]) closeSession(sess, 'gateway maintenance')
   try { server.close() } catch (e) {}
-  process.exit(0)
+  setTimeout(() => process.exit(0), 200).unref()
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
+process.on('SIGBREAK', shutdown)
+// Local supervisor pipe only. This is not a network administration endpoint.
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+  if (line.trim() === '{"kind":"shutdown"}') shutdown()
 })
