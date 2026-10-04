@@ -8,12 +8,14 @@ const mcData = require('minecraft-data')('1.21.1')
 const { ProtoDefCompiler } = require('protodef').Compiler
 const nbt = require('prismarine-nbt')
 const nativeTypes = require('minecraft-protocol/src/datatypes/compiler-minecraft')
+const { arsNativeTypes } = require('./native-ars-codec.cjs')
 
 // Verified in TLM 1.5.3 InitDataComponent and Patchouli 93: UUIDUtil.STREAM_CODEC
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
 const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
-  'patchouli:book': 'string'
+  'patchouli:book': 'string',
+  'ars_nouveau:spell_caster': 'MawArsSpellCaster'
 }
 // minecraft-data's 1.21.1 wire names for these two particles differ from the
 // actual BuiltInRegistries names. Resolve the verified aliases by name, not ID.
@@ -45,7 +47,7 @@ function registryFromTsv (text) {
   return result
 }
 
-function createBackendComponentProtocol (registry, particles = null) {
+function createBackendComponentProtocol (registry, particles = null, entitySerializers = null) {
   const protocol = structuredClone(mcData.protocol)
   const vanillaMappings = protocol.types.SlotComponentType[1].mappings
   const mappings = {}
@@ -62,6 +64,60 @@ function createBackendComponentProtocol (registry, particles = null) {
   }
   protocol.types.SlotComponentType = ['mapper', { type: 'varint', mappings }]
   protocol.types.SlotComponent[1][1].type[1].default = 'mawUnsupportedComponent'
+  protocol.types.MawArsSpellCaster = 'mawArsSpellCasterCodec'
+  // NeoForge 21.1.248 CommonHooks keeps vanilla IDs and adds 256 to the
+  // custom serializer registry ID. The TSV contains those actual network IDs.
+  // TLM 1.5.3 EntityMaid uses these two custom serializers; every unknown
+  // metadata codec must fail before its payload is mistaken for another key.
+  const metadata = protocol.types.entityMetadataEntry[1]
+  const metadataMappings = { ...metadata[1].type[1].mappings }
+  const metadataFields = metadata[2].type[1].fields
+  metadata[2].type[1].default = 'mawUnsupportedEntityMetadata'
+  if (entitySerializers) {
+    const ids = new Set(Object.keys(metadataMappings).map(Number))
+    for (const [name, id] of entitySerializers) {
+      if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(name) ||
+          !Number.isSafeInteger(id) || id < 256 || ids.has(id)) throw Error('INVALID_ENTITY_SERIALIZER_REGISTRY')
+      ids.add(id)
+      metadataMappings[id] = name
+      metadataFields[name] = name === 'touhou_little_maid:maid_schedule' ? 'varint'
+        : name === 'touhou_little_maid:maid_chat_bubble' ? 'MawMaidChatBubbles'
+          : 'mawUnsupportedEntityMetadata'
+    }
+    metadata[1].type = ['mapper', { type: 'varint', mappings: metadataMappings }]
+  }
+  // ChatBubbleRegister$1$1 writes up to five entries. Expiry is a fixed
+  // big-endian long, not VarLong. Text is writeJsonWithCodec's UTF-8 JSON
+  // string, not the NBT component used by vanilla metadata.
+  protocol.types.MawMaidChatBubbleCount = ['mawMaidChatBubbleCount', {}]
+  protocol.types.MawMaidChatBubbles = ['array', {
+    countType: 'MawMaidChatBubbleCount',
+    type: ['container', [
+      { name: 'expiresAt', type: 'i64' },
+      { name: 'type', type: 'string' },
+      { name: 'data', type: ['switch', { compareTo: 'type', fields: {
+        'touhou_little_maid:text': ['container', [
+          { name: 'text', type: 'string' }, { name: 'background', type: 'string' }
+        ]],
+        'touhou_little_maid:image': ['container', [
+          { name: 'width', type: 'varint' }, { name: 'height', type: 'varint' },
+          { name: 'uOffset', type: 'varint' }, { name: 'vOffset', type: 'varint' },
+          { name: 'textureWidth', type: 'varint' }, { name: 'textureHeight', type: 'varint' },
+          { name: 'background', type: 'string' }, { name: 'image', type: 'string' }
+        ]],
+        'touhou_little_maid:waiting': ['container', [
+          { name: 'background', type: 'string' }, { name: 'text', type: 'string' },
+          { name: 'secondaryText', type: ['option', 'string'] }, { name: 'icon', type: 'string' }
+        ]],
+        'touhou_little_maid:progress': ['container', [
+          { name: 'background', type: 'string' }, { name: 'text', type: 'string' },
+          { name: 'barBackgroundColor', type: 'i32' }, { name: 'barForegroundColor', type: 'i32' },
+          { name: 'progress', type: 'f64' }, { name: 'alignCenter', type: 'bool' }
+        ]],
+        'touhou_little_maid:emoji': ['container', [{ name: 'background', type: 'string' }]]
+      }, default: 'mawUnsupportedChatBubble' }] }
+    ]]
+  }]
   if (particles) {
     const definition = protocol.types.Particle[1]
     const nativeParticleMappings = {}
@@ -90,22 +146,49 @@ function createBackendComponentProtocol (registry, particles = null) {
   }
   const unsupported = () => { throw Error('UNSUPPORTED_NATIVE_ITEM_COMPONENT') }
   const unsupportedParticle = () => { throw Error('UNSUPPORTED_NATIVE_PARTICLE_CODEC') }
+  const unsupportedMetadata = () => { throw Error('UNSUPPORTED_NATIVE_ENTITY_METADATA_CODEC') }
+  const unsupportedChatBubble = () => { throw Error('UNSUPPORTED_NATIVE_CHAT_BUBBLE_CODEC') }
   const compiler = new ProtoDefCompiler()
   compiler.addTypes(nativeTypes)
+  compiler.addTypes(arsNativeTypes)
   compiler.addTypes({
-    Read: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] },
-    Write: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] },
-    SizeOf: { mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle] }
+    Read: {
+      mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],
+      mawUnsupportedEntityMetadata: ['native', unsupportedMetadata], mawUnsupportedChatBubble: ['native', unsupportedChatBubble],
+      mawMaidChatBubbleCount: ['parametrizable', compiler => compiler.wrapCode(`
+const result = ctx.varint(buffer, offset)
+if (result.value < 0 || result.value > 5) throw Error('INVALID_NATIVE_CHAT_BUBBLE_COUNT')
+return result
+      `.trim())]
+    },
+    Write: {
+      mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],
+      mawUnsupportedEntityMetadata: ['native', unsupportedMetadata], mawUnsupportedChatBubble: ['native', unsupportedChatBubble],
+      mawMaidChatBubbleCount: ['parametrizable', compiler => compiler.wrapCode(`
+if (!Number.isInteger(value) || value < 0 || value > 5) throw Error('INVALID_NATIVE_CHAT_BUBBLE_COUNT')
+return ctx.varint(value, buffer, offset)
+      `.trim())]
+    },
+    SizeOf: {
+      mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],
+      mawUnsupportedEntityMetadata: ['native', unsupportedMetadata], mawUnsupportedChatBubble: ['native', unsupportedChatBubble],
+      mawMaidChatBubbleCount: ['parametrizable', compiler => compiler.wrapCode(`
+if (!Number.isInteger(value) || value < 0 || value > 5) throw Error('INVALID_NATIVE_CHAT_BUBBLE_COUNT')
+return ctx.varint(value)
+      `.trim())]
+    }
   })
   compiler.addProtocol(protocol, ['play', 'toClient'])
   nbt.addTypesToCompiler('big', compiler)
   return compiler.compileProtoDefSync()
 }
 
-function loadBackendComponentProtocol (file, particleFile = null) {
+function loadBackendComponentProtocol (file, particleFile = null, entitySerializerFile = null) {
   if (particleFile && !file) throw Error('PARTICLE_PROTOCOL_REQUIRES_COMPONENT_REGISTRY')
+  if (entitySerializerFile && !file) throw Error('ENTITY_METADATA_PROTOCOL_REQUIRES_COMPONENT_REGISTRY')
   return file ? createBackendComponentProtocol(registryFromTsv(fs.readFileSync(file, 'utf8')),
-    particleFile ? registryFromTsv(fs.readFileSync(particleFile, 'utf8')) : null) : null
+    particleFile ? registryFromTsv(fs.readFileSync(particleFile, 'utf8')) : null,
+    entitySerializerFile ? registryFromTsv(fs.readFileSync(entitySerializerFile, 'utf8')) : null) : null
 }
 
 // The vanilla connection cannot receive mod component type IDs. Strip only
@@ -120,6 +203,11 @@ function vanillaProjection (value) {
     copy.removeComponents = (copy.removeComponents || []).filter(component => !String(component.type).includes(':'))
     copy.addedComponentCount = copy.components.length
     copy.removedComponentCount = copy.removeComponents.length
+  }
+  // Keep the native decoded packet intact. Only its vanilla front-end
+  // projection omits metadata entries whose custom codec has no representation.
+  if (Number.isInteger(copy.entityId) && Array.isArray(copy.metadata)) {
+    copy.metadata = copy.metadata.filter(entry => !String(entry?.type).includes(':'))
   }
   return copy
 }

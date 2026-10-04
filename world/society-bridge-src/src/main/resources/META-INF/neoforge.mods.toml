@@ -51,6 +51,13 @@ ordering="NONE"
 side="SERVER"
 
 [[dependencies.maw_agent_bridge]]
+modId="touhou_little_maid"
+type="required"
+versionRange="[1.5.3,)"
+ordering="AFTER"
+side="SERVER"
+
+[[dependencies.maw_agent_bridge]]
 modId="minecraft"
 type="required"
 versionRange="[1.21.1,1.21.2)"

@@ -35,7 +35,8 @@ const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
-const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE)
+const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
+  process.env.GATE_ENTITY_SERIALIZERS_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
 const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
   ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
@@ -321,9 +322,20 @@ function connectBackend (sess) {
           } catch (error) {
             sess.decoderFailed = true
             log(`DEBUG：[${sess.username}] 原生 PLAY 包 id=${chunk[0]} 长=${chunk.length} 无法解析：${error.message.slice(0, 160)}`)
+            // Explicit local diagnostics only. Keep raw private packets outside
+            // the repository; never print them or enable capture by default.
+            if (process.env.GATE_FAILURE_CAPTURE_FILE) {
+              try {
+                fs.appendFileSync(process.env.GATE_FAILURE_CAPTURE_FILE, JSON.stringify({
+                  at: new Date().toISOString(), username: sess.username, packetId: chunk[0],
+                  length: chunk.length, error: error.message,
+                  rawBase64: chunk.length <= 65536 ? chunk.toString('base64') : null
+                }) + '\n')
+              } catch (captureError) { log(`私有失败包记录未写入：${captureError.message.slice(0, 120)}`) }
+            }
             // An unsupported codec is not a recovered inventory. End explicitly
             // instead of leaving a broken decoder idle until a keepalive timeout.
-            kickFront(sess, (chunk[0] === 0x29 ? '模组粒子协议尚未适配：' : '模组物品协议尚未适配，无法安全同步背包：') + error.message.slice(0, 120))
+            kickFront(sess, '原生游戏协议尚未适配，已停止连接：' + error.message.slice(0, 120))
           }
           return callback()
         }

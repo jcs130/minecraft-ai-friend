@@ -59,6 +59,8 @@ public final class AgentBridge {
         PlayerMenuBridge.register(eventBus);
         PlayerWorldBridge.register(eventBus);
         PlayerColonyBridge.register(eventBus);
+        PlayerSpellBridge.register(eventBus);
+        PlayerMaidBridge.register(eventBus);
     }
 
     private static void register(RegisterCommandsEvent event) {

@@ -7,12 +7,13 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import tempfile
 import zipfile
 
-from society_lab import DEFAULT_JAVA, DEFAULT_ROOT, REPO, safe_root, sha256
+from society_lab import DEFAULT_JAVA, DEFAULT_ROOT, PORT, REPO, safe_root, sha256
 
 
 SOURCE = REPO / "world" / "society-bridge-src"
@@ -26,7 +27,60 @@ MINECOLONIES_JAR = "minecolonies-1.1.1319-1.21.1.jar"
 STRUCTURIZE_JAR = "structurize-1.0.832-1.21.1.jar"
 DOMUM_JAR = "domum-ornamentum-1.0.231-main.jar"
 BLOCKUI_JAR = "blockui-1.0.209-1.21.1.jar"
+MAID_JAR = "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar"
 NAME = "maw_agent_bridge-0.1.0.jar"
+
+
+def server_port(server: Path) -> int:
+    """Read the target's port; old unconfigured lab copies keep the lab default."""
+    properties = server / "server.properties"
+    try:
+        lines = properties.read_text(encoding="utf-8-sig").splitlines()
+    except FileNotFoundError:
+        return PORT
+    value = None
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        # Minecraft writes key=value. Also accept Java Properties' ordinary
+        # colon/whitespace separators, so a valid alternate form cannot silently
+        # cause this installation guard to check a different port.
+        match = re.fullmatch(r"server-port(?:[ \t\f]*[=:][ \t\f]*|[ \t\f]+)(.*)", line)
+        if match:
+            value = match.group(1).strip()
+        elif line == "server-port":
+            value = ""
+    if value is None:
+        return PORT
+    if not re.fullmatch(r"[0-9]+", value) or not 1 <= int(value) <= 65535:
+        raise ValueError(f"Invalid server-port in {properties}: expected decimal integer 1..65535")
+    return int(value)
+
+
+def ensure_server_stopped(server: Path) -> int:
+    """Reserve the actual IPv4 port briefly; never contact or stop the server."""
+    port = server_port(server)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        # Windows otherwise permits some overlapping binds when the existing
+        # listener enabled SO_REUSEADDR. We must refuse any occupied target port.
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        try:
+            probe.bind(("0.0.0.0", port))
+        except OSError as error:
+            raise RuntimeError(
+                f"Refusing bridge installation: target server TCP port {port} is occupied "
+                f"or unavailable ({server}). Stop the target server before installing."
+            ) from error
+    return port
+
+
+def install_candidate(candidate: Path, target: Path, server: Path) -> None:
+    # Compilation can take minutes. Read properties and check again immediately
+    # before replacing the JAR, even if the earlier startup check succeeded.
+    ensure_server_stopped(server)
+    os.replace(candidate, target)
 
 
 def add_bytes(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
@@ -48,8 +102,7 @@ def main() -> None:
     if server != root and root not in server.parents:
         raise ValueError("Server directory must stay inside the isolated root")
     mods = server / "mods"
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 28976))
+    ensure_server_stopped(server)
     if not javac.is_file() or not NUMEN_JAR.is_file() or not API_JAR.is_file():
         raise ValueError("Java 21 and built Numen core/API are required")
     installed_numen = mods / NUMEN_JAR.name
@@ -60,6 +113,7 @@ def main() -> None:
     structurize = mods / STRUCTURIZE_JAR
     domum = mods / DOMUM_JAR
     blockui = mods / BLOCKUI_JAR
+    maid = mods / MAID_JAR
     if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
         raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
@@ -74,13 +128,15 @@ def main() -> None:
         raise ValueError("Pinned MineColonies structure dependencies are required")
     if not blockui.is_file():
         raise ValueError("Pinned BlockUI JAR is required for MineColonies configuration")
+    if not maid.is_file():
+        raise ValueError("Pinned Touhou Little Maid JAR is required for player maid operations")
     spec = importlib.util.spec_from_file_location("botgate_build", REPO / "world" / "botgate-src" / "build.py")
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
     classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
                                  str(NUMEN_JAR), str(ars), str(create), str(ponder),
-                                 str(minecolonies), str(structurize), str(domum), str(blockui)))
+                                 str(minecolonies), str(structurize), str(domum), str(blockui), str(maid)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
     if not sources or not resource.is_file():
@@ -109,7 +165,7 @@ def main() -> None:
         with zipfile.ZipFile(candidate) as archive:
             if archive.testzip():
                 raise ValueError("Bridge JAR failed CRC check")
-        os.replace(candidate, target)
+        install_candidate(candidate, target, server)
     record = {"schemaVersion": 1, "jar": str(target), "sha256": sha256(target),
               "numenSha256": sha256(NUMEN_JAR), "apiSha256": sha256(API_JAR),
               "arsSha256": sha256(ars),
@@ -119,6 +175,7 @@ def main() -> None:
               "structurizeSha256": sha256(structurize),
               "domumSha256": sha256(domum),
               "blockuiSha256": sha256(blockui),
+              "maidSha256": sha256(maid),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
