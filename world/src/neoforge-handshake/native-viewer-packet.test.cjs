@@ -5,6 +5,14 @@ const { EventEmitter } = require('node:events')
 const { CHANNEL, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets } = require('./native-viewer-packet.cjs')
 const hash = 'a'.repeat(64)
 
+test('native animation clock preserves absolute game age and frozen day sign', () => {
+  const time = { age: 315339n, time: -1000n }
+  const body = decodeNativePacket(encodeNativePacket('update_time', time, hash, 1), hash)
+  assert.deepEqual(body.params, time)
+  assert.equal(body.name, 'update_time')
+  assert.equal(encodeNativePacket('chat', { message: 'clock' }, hash, 2), null)
+})
+
 test('native snapshot survives a later vanilla projection without mutating server data', () => {
   const original = { location: { x: 603, y: 64, z: 600 }, type: 74628, raw: Buffer.from([1, 2, 255]), long: 9007199254740999n }
   const wire = encodeNativePacket('block_change', original, hash, 1)

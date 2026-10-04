@@ -548,7 +548,8 @@ function relayTo (sess, target, name, params, dir) {
         // Serialize before any ItemStack/component/state-ID projection. The
         // mirror belongs only to this frontend connection, never a new bot or
         // a broadcast. Failure ends the native view instead of substituting it.
-        const data = NativeViewer.encodeNativePacket(name, params, nativeViewerHash, (sess.nativeViewerSequence || 0) + 1)
+        const data = NativeViewer.encodeNativePacket(vanillaTime ? 'update_time' : name, vanillaTime || params,
+          nativeViewerHash, (sess.nativeViewerSequence || 0) + 1)
         if (data) {
           target.write('custom_payload', { channel: NativeViewer.CHANNEL, data })
           sess.nativeViewerSequence = (sess.nativeViewerSequence || 0) + 1

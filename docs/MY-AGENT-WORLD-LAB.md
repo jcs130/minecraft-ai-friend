@@ -232,6 +232,33 @@ node tools/serve-native-create-preview.mjs `
 
 本轮验证了 Three.js 可以承担这组原生机械动画，**还没有验收完整场景光照、所有朝向、实体动画、特殊材质和实时全世界渲染**。不能改写 `renderParityVerified=false`。原生 Minecraft 联机研究服务已正常存档停止，网关已关闭；只读网页模型预览可供本机查看。本轮没有停启、配置或修改原 Paper 千灯纪，也没有更改路由器/防火墙。
 
+### 实时原生世界与普通动作同步：2026-10-04 续验
+
+在前一轮 Create 记录回放之后，`mc-visual-console` 实验分支增加 `native-world-host.mjs`、`serve-native-world-preview.mjs` 与 `world-preview.html/js`。这次页面读取的是**正在联机的同一个 Mineflayer 动作玩家**，不是回放，也不是另外登录的摄像机。原生 `map_chunk`、卸载、单方块/批量变化、方块实体和位置统一进入按连接隔离的世界状态。哈希绑定真实模组包状态表，使用实际维度高度；不读存档或额外加载区块。默认只展示水平 ±10 格、下 5/上 10 格，并报告缺失区块。换维度/重生递增 epoch、清空旧场景；断流/序号缺口明确不可用。
+
+网关的 `mcviewer:native_packet` 增加 `update_time/game_state_change`，NeoForge 时间桥转换出的真实时间包进入本账号原生流；不发送聊天或虚构周期状态。网页以真实世界 age 驱动轴的相位，时间包间按 20 tick/s 插值，并将曲柄的 tick 追踪与浏览器帧率分开。服务器低 TPS、全方向、光照与特效的视觉对照还须验证，不能据此开启完整画面验收标记。
+
+静态方块通过原始模型面实例化绘制。新增普通 multipart 的实际属性条件；石头/沙子的加权变体经过 1.21.1 官方客户端字节码核对：`BlockBehaviour.getSeed → Mth.getSeed` 使用绝对方块位置，`LegacyRandomSource/WeightedBakedModel` 保留 Java 整数溢出和随机序列。不是世界种子，也不是网页随机选图。已核对默认种子的范围只有石头/沙子，模组种子覆盖、UV lock、加权 multipart、染色及特殊 loader 等仍明确拒绝。独立 Java 21 夹具在七组含负坐标/世界边界的位置验证了序列。
+
+真实验收仍在可丢弃的 `research/registry-server`（`127.0.0.1:28978`，网关 `28980`），动作账号 `MawWebRenderQA` 未获得 OP。原生状态先通过曲柄普通右键/潜行右键的 `32/-32/0 RPM` 与真实时间更新；浏览器也看到正反转。普通圆石放置首次失败，服务端私有消息明确为 `com.minecolonies.coremod.permission.no`，未把客户端超时写成通过。给该账号研究城镇 1 `Maw Lab` 的 officer 成员权限后，普通 `placeBlock/dig` 在 `(3,64,-3)` 的原生状态为 `0→14→0`；实际前进同步更新本人绝对位置。没有停用殖民地保护或修改生产服权限。圆石由 QA 控制台提供，不证明 Agent 自主采集合成。
+
+成功记录为 `E:\QiandengJiSocietyLab\research\live-native-world-1791075856948.json` 与 `live-native-world-1791075952328.json`，后一份 `passed=true`、生命 20、原生包序号 6630，夹具标记 `opGranted=false`、`autonomousAcquisitionVerified=false`。前面的三份失败（缺测试物品、放置超时、原生殖民地权限拒绝）仍保留。201 个区块列实际加载；区域约 2,600 个非空气方块中约 2,200 个以原始模型绘制，24 项状态/模型/材质缺口在网页列出，测试区域没有缺失区块。不能把代理画面、未显示的水体或草木当作完整原生场景。
+
+```powershell
+# E:\mc-visual-console\packages\modern-viewer\renderer-src；复用此版本依赖。
+$env:NODE_PATH='E:\Cortico\node_modules\.pnpm\mineflayer@4.37.1\node_modules'
+node tools/serve-native-world-preview.mjs `
+  E:\QiandengJiSocietyLab\research\native-viewer-assets-20261004-v2 `
+  E:\minecraft-ai-friend-society-lab\world\src\neoforge-handshake\native-viewer-packet.cjs `
+  MawWebRenderQA 28980 28983
+```
+
+只读本机网页 `http://127.0.0.1:28983/` 提供区域视角/本人视角及未适配列表，无游戏动作或管理凭据接口。宿主应把 `attachNativeWorld` 和 `attachNativeViewerPackets` 挂到**已有动作 bot**，在登录前完成挂载，用本人连接实际注册的维度信息；不可用第二个观察者代替执行者视野。默认保留最多 512 个已经收到的区块列，SSE 合并快照并处理背压，不扩展 Agent 可知范围到未加载存档。
+
+回归通过 16 项网页模型/变体/原生世界测试与 12 项网关原生包/组件协议测试。最终浏览器另验收一次断流：场景清空，包序号/方块数归零，位置、动力与时钟等待新状态、视角按钮禁用；本机预览重启后 SSE 自动恢复同账号的新序号与快照。浏览器没有 warn/error。真实截图保存在 `research/live-native-world-positive-20261004.jpg`、`live-native-world-follow-20261004.jpg` 与 `live-native-world-final-20261004.jpg`；这些私人实测记录、Minecraft 资源和存档不进 Git。主实验服依旧没有开放新公网入口，原 Paper 千灯纪没有停启、配置或路由器/防火墙改动。这里只启动研究副本、研究网关与本机只读预览；不安装全局常驻服务。
+
+**边界仍然明确：**目前没有原生实体、全游戏光照、GUI/背包、染色、水体、动画贴图或网页粒子显示，模组自定义方块实体渲染仍需逐项移植。原始纹理/几何在已支持模型中直接使用，但整个场景尚未达到 1:1；`completeSceneParityVerified` 与 `renderParityVerified` 继续为 false。当前检查页不能作为 Agent 完整视觉输入。之前的 Create 静态记录回放入口保持可用。
+
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |

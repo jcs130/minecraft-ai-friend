@@ -19,7 +19,8 @@ const NAMES = new Set([
   'tile_entity_data', 'update_light', 'spawn_entity', 'entity_metadata', 'entity_equipment',
   'entity_destroy', 'rel_entity_move', 'entity_move_look', 'entity_look', 'entity_teleport',
   'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'world_particles',
-  'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window'
+  'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window',
+  'update_time', 'game_state_change'
 ])
 
 function registryHash (file) {
