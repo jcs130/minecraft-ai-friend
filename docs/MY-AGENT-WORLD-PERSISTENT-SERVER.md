@@ -47,6 +47,8 @@ MawExplorer 是普通生存玩家，未授 OP。模型通过独立角色和固�
 
 打开 `http://127.0.0.1:28984/` 查看 MawExplorer。网页的 Agent 状态显示其目标、决策阶段、近期动作摘要、身体状态与原生观察流健康；仅看页面加载成功或包序号增长不能证明生活目标完成。
 
+本轮已把原 `mc-visual-console` 完整页面接到该同账号原生流并在新服发布：默认第一人称，`/third/` 第三人称，`/dungeon/` 地下城 2.5D 跟随，`/diagnostics` 独立诊断。可查看本人真实生存 HUD、原生背包/容器、已收到的 Ars 魔力与法术、游戏消息和 Agent 状态。发布与浏览器验收记于文末；此前 21:06 的独立检查页截图只作为历史记录。网页依旧只读，背包查看和视角切换不会代玩家点击、施法或调用模型。
+
 初始目标从自然村庄的生活条件出发：采木，制作工作台和基础工具，取得食物、建立储物与避难点，再发展模组生产和社会关系。自然村庄可能受到夜间怪物袭击，尚无“安全区”验收；不能把反复死亡视为正常进度。
 
 可用操作入口由 `world/src/society-agent/maw-agent.mjs` 提供；底层接入详见 [Mineflayer 模组操作指引](MINEFLAYER-MOD-OPERATIONS.md)。已有研究实测说明这些操作可通过普通玩家连接完成，但不等同于本角色已经自主完成：
@@ -70,6 +72,8 @@ MawExplorer 是普通生存玩家，未授 OP。模型通过独立角色和固�
 守护源码：`E:\minecraft-ai-friend-society-lab\tools\maw_service.py`。当前配置：`E:\QiandengJiSocietyLab\services\service.json`。
 
 进程按 `java → gate → worker` 的依赖顺序启动、反序停止。守护检查真实 Minecraft 应答、网关监听、网页 `/healthz` 和监听进程归属，不接管找到的其他 Java/Node 进程。故障重启有退避与次数预算；出现 `restart_budget_exhausted` 应先排障，再显式 `resume`，不要无止境强拉。
+
+健康判断以新鲜 `health.json` 和各子进程当前 `pid / ready / problem` 为准。`metrics` 中保留的上次 HTTP 或 worker 成功读数不是当前健康；worker 已退出时，即使旧 `httpReady` 为 true 也不能报正常。需同时核对当前 28984/28985 健康响应、原生流与本人连接。
 
 运行时及轮转日志位于 `E:\QiandengJiSocietyLab\server\ops\maw-service`：`health.json`、`paused.json`、`requests/`、`replies/` 和 `logs/`。日志保留 Java、网关与 worker 的独立输出及操作回执。
 
@@ -202,10 +206,54 @@ Agent 私有目录主要包含：
 
 ## 本人可见与观战视角修复（2026-10-04）
 
-此前28984展示原生区块检查页，缺少本人实体模型，区域镜头也未持续跟随。现通过同一个 action bot 的 `selfPlayer` 接入本人经典模型、头顶姓名、真实生命／饱食和绝对坐标；页面默认第三人称跟随，提供第一人称、自由观察、回到 Agent 与 F5 切换。没有另建观察者账号。本人原生 profile 确认无自定义 textures，UUID `e371227c-09fa-3722-84f4-f3228a552c3c` 按匹配1.21.1客户端规则选择原始 slim/makena 皮肤，纹理SHA-256为 `197307bf92fb9d3adb5808593c88e48ab152335cc4276db4127ccb82d010ca68`。未收到最大生命属性时显示未收到，不补固定20。
+此前28984展示原生区块检查页，缺少本人实体模型，区域镜头也未持续跟随。21:06 首轮通过同一个 action bot 的 `selfPlayer` 接入本人经典模型、头顶姓名、真实生命／饱食和绝对坐标；当时检查页默认第三人称跟随，提供第一人称、自由观察、回到 Agent 与 F5 切换，后续完整页面默认第一人称。没有另建观察者账号。本人原生 profile 确认无自定义 textures，UUID `e371227c-09fa-3722-84f4-f3228a552c3c` 按匹配1.21.1客户端规则选择原始 slim/makena 皮肤，纹理SHA-256为 `197307bf92fb9d3adb5808593c88e48ab152335cc4276db4127ccb82d010ca68`。未收到最大生命属性时显示未收到，不补固定20。
 
 维护先持久暂停本角色，核对模型任务已达终态、所有行动 intent 均有结果，21:05使用守护 owned stop 正常保存全部维度并退出三个子服务；停服后备份 `world-life`、services配置与角色状态／模型／行动账本至仓库外 `E:\QiandengJiSocietyLab\backups\viewer-own-player-20261004-2105`。21:06恢复守护并确认同UUID登录，再只清除本次明确原因的自主暂停。新java/gate/worker PID为23156/27540/13136；旧两个25565实例PID21076/13880、QwenPaw8088的PID19304保持。模型仍走线上qwen3.7-plus，维护前一条模型timeout失败原样保留，恢复后的真实决策与移动／采草回执再次出现，未重投旧任务。
 
 浏览器实际验证本人模型与姓名可见、三种视角及回到本人切换正常，角色移动时绝对坐标与跟随画面持续更新。实际截图 `E:\QiandengJiSocietyLab\agents\maw-explorer\own-player-third-person-20261004.jpg` 保留在私人目录，不提交到Git。渲染仓库73项相关Node回归通过。
 
-此改动仅覆盖本人静态经典身体和头部俯仰。步行动画、装备／持物、其他实体、部分方块、GUI、粒子与完整光照尚未全部适配，`completeSceneParityVerified` 仍为false；不得将“能看见本人”写成全部模组画面1:1。原生资源优先级等缺口仍在页面诊断中显式呈现。
+该首轮验收仅覆盖本人静态经典身体和头部俯仰。后续完整页面已接上本人原生 GUI，但完整动画、装备／持物、其他实体、部分方块、粒子与完整光照尚未全部验收，`completeSceneParityVerified` 仍为false；不得将“能看见本人”写成全部模组画面1:1。原生资源优先级等缺口仍在页面诊断中显式呈现。
+
+## 原完整网页接入与协议维护（2026-10-04，本轮发布）
+
+可视化仓库重新使用原 `page-template.html`、`viewer.css`、背包人物预览和自适应画质组件，由独立 `native-scene.js` 消费该玩家的 1.21.1 原生世界。浏览器只有一个场景 SSE 订阅，`native-console.js` / `native-ui-adapter.js` 共用其状态。第一／第三人称与地下城跟随相机走各自真实相机模式；地下城遮挡、切面与点击操控仍未接入。
+
+worker 用 `createNativePlayerPresentation` 同步读取已有的 `menu.current()`、`spell.current()` 及本人近期法术回执，并通过宿主 `getPresentationState` 回调注入。这不是新模型任务、游戏轮询或摄像机连接，不改变角色/provider 配置。宿主按本人 UUID、注册表与世界 epoch 校验；掉线、重生与身份不符清掉旧世界、界面和消息。
+
+界面物品来自真实原生菜单的 `id / count / snbt`，保留完整模组组件。只有确认 window 0 的 46 格 `minecraft:inventory` 才显示本人背包；打开其他容器时保留实际全部槽位，不猜其中玩家背包的布局。菜单标题未收到时为未知。界面回调有大小上限，过大的 SNBT/集合会明确不可用，不截掉组件再冒充完整物品。
+
+生命、饥饿、经验与已解析属性使用本人真实值，未知保持 null。魔力与法术来自本人 Ars 回执，并显示 `observedAt / stale`；没有冷却数据时不能画成已就绪。原生 HUD 使用同包原始 1.21.1 PNG，有限原版静态物品图标读取原始 JSON+PNG 并核验哈希和资源优先级；未知模组、组件敏感或动态图标保留名称和 SNBT。装备／持物、声音、音乐、小地图、完整实体和整体 Java 画面一致性尚未验收。钓获组件和待机预览 API 已复用，尚不能因此声称真实钓获事件已经在宿主持续显示。
+
+通用前端合约和回归入口位于可视化仓库 `packages/modern-viewer/renderer-src/SOCKET_PROTOCOL.md` 第 8 节；这里使用原生 SSE，不套用旧 Paper 的 Socket.IO HUD 合约。本次可视化源码已合并并推送 `mc-visual-console/main`，提交 `106ca3880a6019d2e37309cc08a208ff7df38691`；本地与远端 tree 逐项核对一致，来源分支历史保留，后续可视化在主干继续迭代。服务端桥和常驻 worker 仍在后端实验分支。源码接通、单测、实际发布、浏览器演示与匹配 Java 客户端画面对照需要分别记录，`completeSceneParityVerified=false` 保持。
+
+### 已定位的药水断线与原始字节保护
+
+21:32 起新 worker 接连因网关解析失败退出，六次恢复耗尽预算，后一次受控复现得到第七条同型记录。失败包为 `entity_equipment`（原生包 ID 91），实体 ID 1269、主手一瓶 `minecraft:potion`、`minecraft:potion_contents` 组件；仅此包不足以确认实体种类或药水效果。七条原始失败保留于仓库外 `gateway\permanent\protocol-failures.jsonl`，没有通过清日志或静默丢包掩盖。
+
+锁定 NeoForge 21.1.248 的实际服务端字节码确认 1.21.1 `PotionContents.STREAM_CODEC` 只有可选 potion holder、可选 INT 颜色、效果列表三项。依赖 minecraft-data 3.112.0 的 1.21.1 schema 多读了后续版本的 `customName`，使真实 14 字节装备包越界。修复仅覆盖 `component-protocol.cjs` 内已克隆的后端 1.21.1 协议；没有全局修改 node_modules，也没有改变前门 schema。
+
+另确认依赖的装备数组解析会原地清除槽位高位终止标志。编译后端解析器现先使用独立 `Buffer.from` 副本解码，并把原始 `buffer / fullBuffer` 留给 raw 监听者，避免兼容解析污染同连接原生视觉数据。网关仍先发送原生语义镜像，再做前门投影；没有把女仆、模组物品或未知组件改成代理画面。
+
+组件、Ars 物品/实体 codec 与原生包信封共 41 项回归通过，含真实失败包精确解码、完整重编码、连续多装备高位标记、相邻组件边界、前门解析不改原始字节和截断拒绝。七条私有捕获逐条重放均消费精确长度、保留输入字节并重编码逐字一致。这些证明本项协议修复，不能代替重新开服后的稳定性窗口。
+
+```powershell
+cd E:\minecraft-ai-friend-society-lab
+$env:NODE_PATH = 'E:\QiandengJiSocietyLab\gateway\permanent\node\node_modules'
+node --test world/src/neoforge-handshake/component-protocol.test.cjs world/src/neoforge-handshake/native-ars-codec.test.cjs world/src/neoforge-handshake/native-ars-entity-codec.test.cjs world/src/neoforge-handshake/native-viewer-packet.test.cjs
+```
+
+维护前发现 21:43:48 的 `wait` 行动 intent `1abe8801-0bf3-4261-a48f-cc49c918a744` 没有配对终态；21:44 的解析断线发生在其执行期间。先保留行动账本与 `interrupted_action_outcome` 自主暂停，未因等待时间已经过去编造完成。模型旧任务仍只按持久 taskId GET 恢复；服务恢复不自动清除该游戏动作保护。
+
+操作员使用 owned stop 并于 22:10 完成停服冷备 `E:\QiandengJiSocietyLab\backups\native-full-console-20261004-2210`，仅本套新服受影响。22:35:10 执行守护 `resume`，worker 于 22:35:37 启动；同账号、存档与线上模型沿用，旧服及宿主其他角色未动。
+
+### 暂停收尾与实服浏览器验收
+
+原未配对行动经严格核对仅为 30 秒 `wait`、没有游戏变更；操作员保留原 intent，追加 `operator_retired_interrupted_wait` 的失败/结果未验证记录，未标成游戏成功、未重放。22:36 将原暂停标记归档为 `autonomy.pause-retired-20261004-2236.json`，原原因、动作 ID 和时间保留；只解除本次已核对的自主暂停。恢复后 QwenPaw 原生任务 `task-1893bafcfc29` 真实完成，继续走独立角色的阿里云 Coding Plan `qwen3.7-plus`，不使用本地模型或改女神配置。
+
+22:44:48 独立读取新鲜 `health.json`：`healthy=true / paused=false`，Java/gate/worker 均 `ready=true / problem=null`、`startsInLastHour=1`，这是本次正常启动，无启动后的自动重启；gate/worker 本轮 warn/error 为0，Agent处于 thinking。Java28976、gate28977、网页28984和守护28985均有当前就绪证据。前文历史 PID、旧截图和累计 Java warning/error 不是本轮异常的判定依据，维护者后续仍需看新日志与最新心跳。
+
+真实浏览器 `/third/` 显示本人原始 Makena 皮肤，按 E 得到真实 46 格背包与本人预览；第一人称和地下城跟随相机也验证。原版小麦种子、腐肉显示严格原始 JSON+PNG 静态图标，其余未适配模组/动态物品显示原生文字与 SNBT，未画近似图标。当前生命20但 maxHealth未知保持未知，Ars本人读数100/100。页面 warn/error为空，截图在私人目录 `E:\QiandengJiSocietyLab\agents\maw-explorer\full-native-console-20261004.jpg`，不提交资源或私人库存。
+
+22:43 本账号真实多次 navigate成功；22:44:29 的 gather实际把 `minecraft:oak_log` 方块变为空气，本人库存新增橡木1，私有行动账本留有终态。只证明本次模型驱动移动与采集，不因一块橡木认定已建立自然木材/食物生产或长期生活闭环。
+
+最终回归：renderer专项213、仓库根230、真实Cortico0.1.4集成6、后端协议41和society22通过，typecheck通过；前端集合有重叠，不相加。可视化根测试默认不依赖可选Cortico，真实SDK另用 `pnpm test:cortico` 验证，缺失不会跳过或mock。实服恢复、零网页错误和短时动作不证明长期稳定、全部实体/装备/动画/光照/声音一致、全模组操作或新服基岩支持。

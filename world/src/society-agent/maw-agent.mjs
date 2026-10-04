@@ -57,12 +57,24 @@ function receiptSummaries () {
     result: Object.fromEntries(['ok', 'code', 'outcome', 'outcomeUnknown', 'outcomeKnown', 'effectVerified', 'castConfirmed', 'manaBefore', 'manaAfter', 'manaSpent', 'position', 'nativeBlock', 'beforeBlock', 'afterBlock', 'inventoryBefore', 'inventoryAfter', 'foodBefore', 'foodAfter', 'receiptIDs', 'remainingInputs', 'outputId', 'outputCount', 'count', 'truncated', 'maids', 'maid', 'tasks', 'spell', 'colonyId', 'colony', 'colonies', 'buildings', 'requests', 'citizens', 'itemId', 'accepted', 'inventoryRemaining', 'observed', 'selected', 'retryAutomatically', 'serverCode', 'phase', 'buildingPosition', 'builderPosition', 'requestStillOpen'].filter(key => event.result?.[key] !== undefined).map(key => [key, event.result[key]])) }))
 }
 const qwen = new QwenTaskClient({ baseURL: config.qwenURL, agentId: config.agentId, sessionId: config.sessionId, journalPath: path.join(root, 'model-task.json') })
-const { prepareNativeWorldPreviewHost } = await import(pathToFileURL(path.resolve(config.viewerHostModule)))
+const { prepareNativeWorldPreviewHost, createNativePlayerPresentation } = await import(pathToFileURL(path.resolve(config.viewerHostModule)))
 const prepared = await prepareNativeWorldPreviewHost({ assetDirectory: config.assetDirectory, port: config.viewerPort })
 const bot = mineflayer.createBot({ host: config.gameHost, port: config.gamePort, username: config.username, version: '1.21.1', auth: 'offline', hideErrors: true })
 const stream = attachNativeViewerPackets(bot, prepared.registrySha256)
 const menu = attachMenuClient(bot), query = attachWorldClient(bot), maid = attachMaidClient(bot), colony = attachColonyClient(bot), spell = attachSpellClient(bot)
-const viewer = prepared.attach({ bot, expectedUsername: config.username, nativeStream: stream, simplifyNBT: nbt.simplify, getAgentStatus: () => JSON.parse(gameJSON({ ...status, receipts: receiptSummaries(), health: bot.health ?? null, food: bot.food ?? null, position: bot.entity?.position || null, native: stream.health(), modelTask: qwen.status?.() || null })) })
+let spellCatalog = null, spellObservedAt = null
+const observeSpellReceipt = body => {
+  if (body.playerUuid !== bot._client.uuid) return
+  if (!spell.current()) { spellCatalog = null; spellObservedAt = null; return }
+  if (body.state?.playerUuid === bot._client.uuid) spellObservedAt = Date.now()
+  if (Array.isArray(body.spells)) spellCatalog = body
+}
+const clearSpellPresentation = () => { spellCatalog = null; spellObservedAt = null }
+spell.events.on('receipt', observeSpellReceipt)
+bot.on('spawn', clearSpellPresentation); bot.on('end', clearSpellPresentation)
+const viewer = prepared.attach({ bot, expectedUsername: config.username, nativeStream: stream, simplifyNBT: nbt.simplify,
+  getPresentationState: () => createNativePlayerPresentation({ playerUuid: bot._client.uuid, menu: menu.current(), spellState: spell.current(), spellCatalog, spellObservedAt }),
+  getAgentStatus: () => JSON.parse(gameJSON({ ...status, receipts: receiptSummaries(), health: bot.health ?? null, food: bot.food ?? null, position: bot.entity?.position || null, native: stream.health(), modelTask: qwen.status?.() || null })) })
 await viewer.listen()
 bot.loadPlugin(pathfinder)
 let closing = false, epoch = 0, navigationTimer = null
@@ -249,6 +261,8 @@ async function shutdown (code = 0) {
   closing = true; stopMovement(); clearInterval(heartbeat)
   status.mode = 'stopping'; persist()
   await viewer.close(); stream.detach(); bot.quit('My Agent World supervisor stopping')
+  spell.events.off('receipt', observeSpellReceipt)
+  bot.off('spawn', clearSpellPresentation); bot.off('end', clearSpellPresentation)
   for (const client of [menu, query, maid, colony, spell]) client.detach()
   setTimeout(() => process.exit(code), 500).unref()
 }

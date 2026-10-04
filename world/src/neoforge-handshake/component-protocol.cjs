@@ -66,6 +66,18 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
     mappings[id] = name
   }
   const fields = protocol.types.SlotComponent[1][1].type[1].fields
+  // The installed MC 1.21.1 PotionContents.STREAM_CODEC is a three-field
+  // composite: optional Potion holder, optional INT color, MobEffect list.
+  // Its Mojang mapping and NeoForge 21.1.248 bytecode contain no customName.
+  // minecraft-data 3.112.0's 1.21.1 definition includes that later field;
+  // reading its extra option byte truncates real entity-equipment packets.
+  // Correct only this detached backend schema. The Mineflayer front-end's
+  // dependency schema and the server's actual components remain untouched.
+  fields.potion_contents = ['container', [
+    { name: 'potionId', type: ['option', 'varint'] },
+    { name: 'customColor', type: ['option', 'i32'] },
+    { name: 'customEffects', type: ['array', { countType: 'varint', type: 'ItemPotionEffect' }] }
+  ]]
   for (const [name, id] of registry) {
     if (name.startsWith('minecraft:')) continue
     mappings[id] = name
@@ -190,7 +202,19 @@ return ctx.varint(value)
   })
   compiler.addProtocol(protocol, ['play', 'toClient'])
   nbt.addTypesToCompiler('big', compiler)
-  return compiler.compileProtoDefSync()
+  const compiled = compiler.compileProtoDefSync()
+  const parsePacketBuffer = compiled.parsePacketBuffer.bind(compiled)
+  compiled.parsePacketBuffer = (type, buffer, offset = 0) => {
+    // minecraft-protocol's equipment array decoder clears continuation bits
+    // in-place. Gate emits parsed.buffer/fullBuffer to raw listeners after
+    // decoding; parse a private copy so diagnostics and native packet sources
+    // retain the exact server wire. Native params still have ordinary slot IDs.
+    const parsed = parsePacketBuffer(type, Buffer.from(buffer), offset)
+    parsed.buffer = buffer.subarray(0, parsed.metadata.size)
+    parsed.fullBuffer = buffer
+    return parsed
+  }
+  return compiled
 }
 
 function loadBackendComponentProtocol (file, particleFile = null, entitySerializerFile = null) {

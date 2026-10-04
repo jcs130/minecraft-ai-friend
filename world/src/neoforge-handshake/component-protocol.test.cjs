@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const mcData = require('minecraft-data')('1.21.1')
 const mc = require('minecraft-protocol')
+const NativeViewer = require('./native-viewer-packet.cjs')
 const { registryFromTsv, createBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
 const vanilla = mcData.protocol.types.SlotComponentType[1].mappings
 const registry = new Map(Object.entries(vanilla).map(([id, name]) => ['minecraft:' + name, Number(id)]))
@@ -65,6 +66,107 @@ test('an unsupported native codec explicitly fails instead of consuming a neighb
 test('does not route mod command trees or regular keepalive packets through the item decoder', () => {
   assert.equal(isItemPacket(Buffer.from([0x11])), false)
   assert.equal(isItemPacket(Buffer.from([0x26])), false)
+})
+
+test('real 1.21.1 equipment potion payload ends after its three native component fields', () => {
+  // All six private 2026-10-04 failures contain these same 14 wire bytes.
+  // No player name, conversation, profile texture or credential is in this
+  // fixture. Keep the complete private failure capture outside the repo.
+  const raw = Buffer.from('5bf5090001e60701001f01060000', 'hex')
+  assert.equal(isItemPacket(raw), true)
+  const parsed = protocol.parsePacketBuffer('packet', raw)
+  assert.equal(parsed.metadata.size, raw.length)
+  assert.equal(parsed.data.name, 'entity_equipment')
+  assert.equal(parsed.data.params.entityId, 1269)
+  assert.equal(parsed.data.params.equipments[0].slot, 0)
+  const item = parsed.data.params.equipments[0].item
+  assert.equal(item.itemCount, 1)
+  assert.equal(item.itemId, 998)
+  assert.deepEqual(item.components, [{ type: 'potion_contents', data: {
+    potionId: 6, customColor: undefined, customEffects: []
+  } }])
+  assert.equal(Object.hasOwn(item.components[0].data, 'customName'), false)
+  assert.deepEqual(protocol.createPacketBuffer('packet', parsed.data), raw)
+})
+
+test('1.21.1 potion decoder preserves color and the next component and equipment slot', () => {
+  const color = Buffer.alloc(4)
+  color.writeInt32BE(0x12345678)
+  // First slot has a potion with optional color and a separate glint
+  // component. Its high slot bit continues to an explicitly empty offhand.
+  const raw = Buffer.concat([
+    Buffer.from([0x5b, 0xf5, 0x09, 0x80, 1, 0xe6, 7, 2, 0, 31, 0, 1]),
+    color, Buffer.from([0, 18, 1, 1, 0])
+  ])
+  const original = Buffer.from(raw)
+  const parsed = protocol.parsePacketBuffer('packet', raw)
+  assert.deepEqual(raw, original)
+  assert.deepEqual(parsed.buffer, original)
+  assert.deepEqual(parsed.fullBuffer, original)
+  assert.equal(parsed.metadata.size, raw.length)
+  const [main, offhand] = parsed.data.params.equipments
+  assert.deepEqual(main.item.components, [
+    { type: 'potion_contents', data: { potionId: undefined, customColor: 0x12345678, customEffects: [] } },
+    { type: 'enchantment_glint_override', data: true }
+  ])
+  assert.deepEqual(offhand, { slot: 1, item: { itemCount: 0 } })
+  assert.deepEqual(protocol.createPacketBuffer('packet', parsed.data), raw)
+})
+
+test('multi-equipment native mirror preserves server wire semantics before and after vanilla parsing', async () => {
+  const raw = Buffer.from('5bf5098001e60701001f010600000100', 'hex')
+  const original = Buffer.from(raw)
+  const decoded = protocol.parsePacketBuffer('packet', raw)
+  assert.deepEqual(raw, original)
+  assert.deepEqual(decoded.buffer, original)
+  const hash = 'a'.repeat(64)
+  // This is gate's actual ordering: encode native params before projection,
+  // then send the vanilla serializer's independent packet to Mineflayer.
+  const envelope = NativeViewer.decodeNativePacket(
+    NativeViewer.encodeNativePacket(decoded.data.name, decoded.data.params, hash, 1), hash)
+  assert.deepEqual(protocol.createPacketBuffer('packet', { name: envelope.name, params: envelope.params }), original)
+  const projected = vanillaProjection(decoded.data)
+  const serializer = mc.createSerializer({ state: 'play', isServer: true, version: '1.21.1' })
+  const parser = mc.createDeserializer({ state: 'play', isServer: false, version: '1.21.1' })
+  const result = new Promise((resolve, reject) => {
+    parser.once('data', resolve); parser.once('error', reject); serializer.once('error', reject)
+  })
+  serializer.pipe(parser)
+  serializer.end(projected)
+  const front = await result
+  assert.deepEqual(front.data.params.equipments.map(value => value.slot), [0, 1])
+  assert.equal(front.data.params.equipments[0].item.components[0].data.potionId, 6)
+  assert.deepEqual(front.data.params.equipments[1].item, { itemCount: 0 })
+  assert.deepEqual(raw, original)
+  assert.deepEqual(decoded.buffer, original)
+  assert.deepEqual(protocol.createPacketBuffer('packet', decoded.data), original)
+  assert.deepEqual(protocol.createPacketBuffer('packet', { name: envelope.name, params: envelope.params }), original)
+})
+
+test('three-field backend potion projection still serializes with the untouched Mineflayer schema', async () => {
+  const original = structuredClone(mcData.protocol.types.SlotComponent[1][1].type[1].fields.potion_contents)
+  const native = createBackendComponentProtocol(registry)
+  assert.deepEqual(mcData.protocol.types.SlotComponent[1][1].type[1].fields.potion_contents, original)
+  const parsed = native.parsePacketBuffer('packet', Buffer.from('5bf5090001e60701001f01060000', 'hex'))
+  const projected = vanillaProjection(parsed.data)
+  const serializer = mc.createSerializer({ state: 'play', isServer: true, version: '1.21.1' })
+  const parser = mc.createDeserializer({ state: 'play', isServer: false, version: '1.21.1' })
+  const result = new Promise((resolve, reject) => {
+    parser.once('data', resolve); parser.once('error', reject); serializer.once('error', reject)
+  })
+  serializer.pipe(parser)
+  serializer.end(projected)
+  const front = await result
+  assert.equal(front.data.params.entityId, 1269)
+  assert.equal(front.data.params.equipments[0].item.itemId, 998)
+  assert.equal(front.data.params.equipments[0].item.components[0].data.potionId, 6)
+  assert.deepEqual(front.data.params.equipments[0].item.components[0].data.customEffects, [])
+  assert.deepEqual(native.createPacketBuffer('packet', parsed.data), parsed.buffer)
+})
+
+test('truncated native potion color still fails rather than inventing absent component data', () => {
+  const raw = Buffer.from('5bf5090001e60701001f000112', 'hex')
+  assert.throws(() => protocol.parsePacketBuffer('packet', raw), /Read error|PartialReadError|bounds|outside/)
 })
 
 test('registry export rejects duplicate IDs, missing vanilla types and malformed rows', () => {
