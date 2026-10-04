@@ -20,6 +20,7 @@ function attachMenuClient (bot) {
       state = body
       events.emit('state', structuredClone(state))
     } else if (body.kind === 'menu_state_error') {
+      state = null
       events.emit('stateError', body)
     } else if (body.kind === 'action_receipt') {
       if (body.state) state = body.state

@@ -11,9 +11,11 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -118,7 +120,14 @@ final class PlayerWorldBridge {
             LAST_QUERY_TICK.put(player.getUUID(), now);
             // The authoritative server raycast exposes only the first visible
             // block under this player's crosshair, not hidden ore or inventories.
-            HitResult hit = player.pick(8.0, 0.0F, false);
+            // ServerPlayer.pick interpolates old/head-render rotation. A look
+            // packet has already updated body yaw/pitch, while yHeadRot may
+            // still belong to the previous AI tick. Raycast the current input
+            // rotation, keeping vanilla outline/fluid/occlusion rules.
+            Vec3 eye = player.getEyePosition();
+            Vec3 direction = Vec3.directionFromRotation(player.getXRot(), player.getYRot());
+            HitResult hit = player.level().clip(new ClipContext(eye, eye.add(direction.scale(8.0)),
+                    ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
             if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
                 reject(player, requestId, "no_visible_block"); return;
             }

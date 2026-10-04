@@ -61,6 +61,9 @@ function attachWorldClient (bot) {
       throw new Error('INVALID_LOOK_OFFSET')
     }
     await bot.lookAt(block.position.offset(...offset), true)
+    // Forced lookAt only updates Mineflayer's local rotation. Its next physics
+    // tick sends that rotation; querying earlier raycasts the previous view.
+    await bot.waitForTicks(1)
     const receipt = await look()
     if (receipt.ok && (receipt.position.x !== block.position.x ||
         receipt.position.y !== block.position.y || receipt.position.z !== block.position.z)) {

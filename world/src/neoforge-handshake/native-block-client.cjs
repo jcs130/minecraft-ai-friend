@@ -18,10 +18,15 @@ const sequenceByBot = new WeakMap()
 // Mineflayer's vanilla heldItem may be undefined for a real NeoForge item.
 // Trust the server's private inventory snapshot, then send vanilla use-on-block
 // under this player's connection. Never retry an unknown placement automatically.
-async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenceBlock, face, expectedBlockId }) {
+async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenceBlock, face, expectedBlockId,
+  verificationOffset = [0.5, 0.5, 0.5] }) {
   if (!Number.isInteger(hotbarSlot) || hotbarSlot < 0 || hotbarSlot > 8) throw new Error('INVALID_HOTBAR_SLOT')
   if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(itemId) ||
       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(expectedBlockId)) throw new Error('INVALID_REGISTRY_ID')
+  if (!Array.isArray(verificationOffset) || verificationOffset.length !== 3 ||
+      verificationOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1)) {
+    throw new Error('INVALID_VERIFICATION_OFFSET')
+  }
   if (!referenceBlock?.position || !bot.entity?.position) throw new Error('BLOCK_OR_POSITION_UNAVAILABLE')
   const faceNumber = direction(face)
   const dest = referenceBlock.position.offset(face.x, face.y, face.z)
@@ -59,9 +64,16 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
   let observed = null
   for (let i = 0; i < 6; i++) {
     await wait(250)
+    const menuState = menu.current()
+    if (menuState?.menuType !== 'minecraft:inventory') {
+      return { ok: false, code: 'placement_opened_menu', menuType: menuState?.menuType || null,
+        position: dest, retryAutomatically: false }
+    }
     const proxy = bot.blockAt(dest)
     if (!proxy) continue
-    observed = await world.lookAtBlock(proxy)
+    // A slab-like mod block may not intersect its voxel centre. Callers can
+    // supply a point on the actual native shape; no shape is guessed here.
+    observed = await world.lookAtBlock(proxy, verificationOffset)
     if (observed.ok && observed.block?.id === expectedBlockId) {
       const after = menu.current()?.slots?.[36 + hotbarSlot]
       return { ok: true, position: observed.position, nativeBlock: observed.block,

@@ -275,11 +275,33 @@ node tools/serve-native-world-preview.mjs `
 
 **仍需继续：**沼泽草地噪声、红树苗等偏移、含水方块及模组液体、方块实体、资源覆盖冲突、完整游戏光照/水中雾、原生 atlas UV shrink/mipmap/透明面排序、实体、GUI 和粒子。动画资源加载时钟尚未与 Java 客户端相位同步。网页 `http://127.0.0.1:28983/` 是临时本机只读检查入口，三个研究进程只监听回环，不是常驻生产部署；当前页面仍不能作为已经一致的 Agent 完整视觉输入。
 
+### 自然材料生存试玩与原生合成：2026-10-04
+
+普通账号 `MawWebRenderQA` 通过研究网关 `127.0.0.1:28980` 连接 NeoForge 研究副本 `28978`，动作与网页原生观察继续共用同一条 Mineflayer 连接。该账号沿用研究城镇的 officer 成员权限，没有 OP；本轮没有 `give`、管理传送或创造模式。开局实际生命 10、饥饿 0，背包只有模组自动发放的四件引导道具。既有 QA 机械、水池和城镇设施不是本轮自然建造成果。
+
+本轮实际走到自然红树，清掉挡路的根和树叶，徒手采集并拾取 5 个红树原木。原生世界逐个核对 `(0,65,-7)`、`(0,66,-7)`、`(0,67,-7)`、`(0,68,-7)` 与 `(-1,67,-7)` 变为空气，5 个原木进入本人库存。4 个原木手工合成 16 个红树木板，留下 1 个原木；再合成工作台、木棍、木斧和农夫乐事切菜板。工作台实际放在 `(3,64,-5)`，用其真实 3×3 菜单合成工具与模组配方。将保留的原木放上切菜板、持木斧加工，原生方块实体库存由原木变空，木斧耐久增加，随后本人走近拾取 `farmersdelight:tree_bark ×1` 和 `minecraft:stripped_mangrove_log ×1`。13:14:06 的 `natural_survival_loop_verified` 保存了结果。这是实际生存动作的受控脚本闭环，**没有运行主模型长期自主决策，也不证明全部模组已能自由游玩**。
+
+新增 `world/src/neoforge-handshake/native-crafting-client.cjs` 的 `craftNativeGrid(menu, {ingredients, outputId, outputCount})` 复用本人原生菜单和 `PICKUP` 回执，不依赖被网关跳过的模组配方书。例如在空的本人 2×2 合成栏中，木棍配方可传 `ingredients=[{slot:1,id:'minecraft:mangrove_planks'},{slot:3,id:'minecraft:mangrove_planks'}]`、`outputId='minecraft:stick'`、`outputCount=4`。背包菜单材料/产物槽为 9–44，工作台为 10–45；合成输入分别为 1–4 和 1–9，结果槽为 0。必须由真实服务端计算产物，不重建或猜测 ItemStack。该 helper 对同一菜单加互斥锁，检查玩家 UUID/窗口、完整 `mayPickup[]`、空鼠标物品/空输入、材料数量及空产物槽；保存原始 SNBT，逐次核对回执、数量和组件。只取一次结果，返回 `remainingInputs`，不会把多次合成藏在一次调用里。拒绝、菜单切换、组件变化和未知终态均停止，保留当前世界/库存供检查，不自动退款或重放。重启后的最新权限检查也在实服合成木棍 4 个通过。
+
+试玩发现并修复三个接缝。原生菜单报 `menu_state_error` 后必须清除旧快照，避免用过期槽位继续点击。Mineflayer 强制 `lookAt` 只更新本地旋转，必须等下一 physics tick 发出后再请求服务端视线；同时 `ServerPlayer.pick` 会使用插值的旧/头部渲染旋转，现改为当前身体 `getXRot/getYRot` 与 `level.clip`，保留真实眼高、8 格距离、首个可见方块和遮挡规则。只是把 partial tick 改成 1 仍不足以修复头部旋转延后问题。放置 helper 新增明确的 `verificationOffset`，薄板可使用 `[0.5,0.05,0.5]`；工作台右键打开菜单则返回 `placement_opened_menu`，不拿另一窗口的槽位继续判断。
+
+初次采木被自然根叶遮挡、工作台右键打开 GUI、薄板放置已成功却中心点验证失败等记录都保留。后者通过原生状态及消耗库存确认实际已放置，再走到可见位置检查，没有盲目重复发放或放置。最终用原来的空板移到 `(5,64,-3)`，helper 返回原生 `farmersdelight:cutting_board`、朝南、数量 1→0。一次诊断脚本选错主手为木斧，被 `native_item_not_selected` 拒绝且没有放置；更正本人槽位后才进行新操作。
+
+仅研究副本正常存档停服一次，部署并重启当前旋转修复。旧桥备份为 `E:\QiandengJiSocietyLab\research\maw-agent-bridge-before-native-play-20261004.jar`，SHA-256 `0e80e1d5a2acd0027432167bbb5e0972620636e12422e86d0c3a10a4cce8d774`；研究候选 JAR 为 `80183dd6e983b54613aba40c5ef8999af6ec5b290b1090f6013f814c62a00f8f`。Java 21 编译通过，构建记录指向研究目录；主要实验服 JAR/锁定清单没有同步替换。冷启动后材料、加工产物、工作台与空板都保留。同连接 8 次反向转头再瞄准可见薄板全部读回正确，耗时 4–80 ms，包含本地等待 tick，**不能当整服延迟基准**；此前瞄准工作台时实际藤蔓遮挡的失败也照留。相关菜单/视线/放置/合成及既有组件/原生包回归 37 项全部通过。
+
+网页实验分支补上锁定 Farmer's Delight 1.3.4 的空切菜板原始模型/PNG。只在本人原生方块实体确认空库存时绘制；顶部物品尚未适配，不能将占用板显示成空板。真实浏览器对同一玩家放入去皮原木后列出 `NATIVE_CUTTING_BOARD_TOP_ITEM_RENDERING_UNSUPPORTED` 和原生 ID/数量；空手取回并走近拾取后恢复空板模型，旧空板缓存没有残留。最终页面区域有 2,608 个非空气方块、2,560 个已绘制方块，13 项明确缺口，0 个未收到区块，浏览器无 warn/error。39 项网页原生渲染回归通过。这里仍没有完整 Java 场景对照，`completeSceneParityVerified` 与 `renderParityVerified` 均为 false。
+
+**实际玩法边界：**Mineflayer 普通兼容世界把切菜板映射为 `stone`，其物理/寻路会误认完整方块碰撞；这轮靠本人原生视线、真实手工动作和少量逐步移动走通，不能据此称通用模组寻路已完成。下一阶段须单独导出实际 collision shape 并适配本人 physics/pathfinder；静态 `occlusionBoxes` 是遮挡，不是可直接替用的碰撞数据。持续食材生产/补给、原生实体和 GUI、殖民地自主采集合成交货、女仆工作、多 Agent 常驻及基岩实验入口仍须实际验证。
+
+另只读核查了历史和本轮 13:18:13 再次出现的 `NodeEvaluatorBurningCacher` 报错：车万女仆 1.5.3 在对 `minecolonies:blockhuttownhall` 反射方法时解析到客户端 `ClientLevel` 签名，专用服拒绝该类；源码 catch 会禁用此次缓存并回退原生燃烧判断。它是已记录的优化兼容缺口，本次没有造成研究服退出，但不能称全模组日志零异常。本轮未关闭此优化或修改模组字节码，Create Dragons Plus 的数据映射警告也仍保留。
+
+私有证据保存在 `E:\QiandengJiSocietyLab\research`：`native-survival-harvest-loop-20261004.json`（首次采集/合成/加工）、`native-survival-restart-raycast-20261004.json`（重启及视线/薄板放置）、`native-survival-play-20261004.json`（最终回连、权限合成和画面空/占用转换），以及 `native-survival-play-preview-20261004.png`。资源、存档、完整原生 ItemStack 与私有诊断 stdin harness 不进 Git，也不开放 HTTP 动作执行接口。研究服、研究网关、本机只读网页 `http://127.0.0.1:28983/` 当前供查看，均只监听回环；是临时诊断进程，未安装常驻服务。原 Paper 千灯纪、路由器/防火墙和其他服务未改动。
+
 | 内容 | 隔离服已经实测 | 后续验收门槛 |
 | --- | --- | --- |
 | 原版身体与世界观察 | 双 owner 身份、身体状态、配方、地下城结构绝对坐标 | 多 Agent 常驻、掉线恢复、每人最小权限入口 |
 | Ars Nouveau | 真实法术书目录、`Self → Heal` 扣魔力并回血 | 攻击法术目标/命中、法术学习与旧 `/mycli` 完整语义 |
-| Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6 | 更多配方、食材生产与长期补货 |
+| Farmer's Delight | 同一 Mineflayer 玩家取米、入锅加热、加碗盛装、取出并食用，饥饿值 0→6；自然采木→本人原生合成切菜板/木斧→切割→拾取树皮/去皮原木 | 更多配方、食材生产与长期补货、原生模组碰撞/寻路 |
 | Create | Mineflayer 放置传动轴与曲柄、右键驱动，原生读取两者转速 0→32 | 压力网络、加工机器、物流与产物闭环 |
 | MineColonies | 同一 Mineflayer 玩家建立市政厅和建筑工小屋、发起施工单、读取居民工单与工作状态、按材料清单补仓；原生工人完成 1 级建筑工小屋，冷启动后完工、居民和库存保留 | 自主采集/合成、完整 Build Tool 与其他建筑类型、仓库快递员、护卫与多人长期运营 |
 | Touhou Little Maid | 联动模块加载、模型工具注册 | 召唤、下达工作、确认女仆搬运/农耕/战斗实际发生 |
