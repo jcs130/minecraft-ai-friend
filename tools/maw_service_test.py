@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import base64
+import ctypes
 import io
 import json
 import os
@@ -10,11 +11,190 @@ from pathlib import Path
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
 
 import maw_service as service
+
+
+def sharing_error(code=32, error_type=PermissionError):
+    # OSError(errno.EACCES) is promoted to PermissionError by Python; keep
+    # the generic OSError fixture distinct when testing the WinError 5 guard.
+    error = error_type(5 if error_type is OSError else 13, "fixture Windows sharing conflict")
+    error.winerror = code
+    return error
+
+
+class AtomicJsonTests(unittest.TestCase):
+    def test_transient_windows_conflict_retries_same_file_and_original_payload(self):
+        for code in (32, 33, 5):
+            with self.subTest(winerror=code), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "health.json"
+                target.write_text('{"old":true}', encoding="utf-8")
+                payload = {"healthy": True, "count": 1}
+                real_replace, observed = os.replace, []
+                def replace(source, destination):
+                    observed.append((source, destination, source.read_bytes()))
+                    if len(observed) == 1:
+                        payload["count"] = 99
+                        raise sharing_error(code)
+                    return real_replace(source, destination)
+                with patch.object(service.os, "replace", side_effect=replace), patch.object(service.time, "sleep") as sleep:
+                    service.atomic_json(target, payload)
+                self.assertEqual(len(observed), 2)
+                self.assertEqual(observed[0], observed[1])
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"healthy": True, "count": 1})
+                sleep.assert_called_once_with(service.ATOMIC_REPLACE_DELAYS[0])
+                self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
+    def test_permanent_sharing_failure_is_bounded_preserves_destination_and_cleans_temp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "health.json"
+            original = b'{"old":true}'
+            target.write_bytes(original)
+            error = sharing_error()
+            with patch.object(service.os, "replace", side_effect=error) as replace, patch.object(service.time, "sleep") as sleep:
+                with self.assertRaises(PermissionError) as failure:
+                    service.atomic_json(target, {"new": True})
+            self.assertIs(failure.exception, error)
+            self.assertEqual(replace.call_count, len(service.ATOMIC_REPLACE_DELAYS) + 1)
+            self.assertEqual([call.args[0] for call in sleep.call_args_list], list(service.ATOMIC_REPLACE_DELAYS))
+            self.assertEqual(len({call.args[0] for call in replace.call_args_list}), 1)
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
+    def test_nonsharing_errors_are_not_retried(self):
+        for error in (OSError(28, "fixture disk full"), PermissionError(13, "fixture permission denied"), sharing_error(5, OSError)):
+            with self.subTest(error=repr(error)), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "health.json"
+                with patch.object(service.os, "replace", side_effect=error) as replace, patch.object(service.time, "sleep") as sleep:
+                    with self.assertRaises(OSError) as failure:
+                        service.atomic_json(target, {"new": True})
+                self.assertIs(failure.exception, error)
+                replace.assert_called_once()
+                sleep.assert_not_called()
+                self.assertFalse(target.exists())
+                self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
+    @unittest.skipUnless(os.name == "nt", "Actual Windows non-delete-sharing file lock")
+    def test_real_windows_reader_lock_releases_then_same_json_replacement_succeeds(self):
+        from ctypes import wintypes as w
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
+        kernel.CreateFileW.restype = w.HANDLE
+        kernel.CloseHandle.argtypes = [w.HANDLE]
+        kernel.CloseHandle.restype = w.BOOL
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "health.json"
+            target.write_text('{"old":true}', encoding="utf-8")
+            # READ + WRITE sharing, deliberately without FILE_SHARE_DELETE.
+            handle = kernel.CreateFileW(str(target), 0x80000000, 3, None, 3, 0x80, None)
+            self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+            state, lock = {"closed": False}, threading.Lock()
+            def close_lock():
+                with lock:
+                    if not state["closed"]:
+                        kernel.CloseHandle(handle)
+                        state["closed"] = True
+            def delayed_release():
+                time.sleep(0.05)
+                close_lock()
+            release = threading.Thread(target=delayed_release)
+            release.start()
+            try:
+                real_replace = os.replace
+                with patch.object(service.os, "replace", wraps=real_replace) as replace:
+                    service.atomic_json(target, {"healthy": True, "count": 2, "text": "真实锁"})
+                self.assertGreater(replace.call_count, 1)
+                self.assertLessEqual(replace.call_count, len(service.ATOMIC_REPLACE_DELAYS) + 1)
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"healthy": True, "count": 2, "text": "真实锁"})
+                self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+            finally:
+                close_lock()
+                release.join(timeout=1)
+
+
+class SupervisorFailureTests(unittest.TestCase):
+    def fixture(self, tmp):
+        supervisor = service.Supervisor.__new__(service.Supervisor)
+        supervisor.directory = Path(tmp)
+        supervisor.config = {"healthPort": 28985, "serverDir": "fixture"}
+        supervisor.run_id, supervisor.fault = "fixture-run", None
+        supervisor.quit = supervisor.stop_requested = False
+        supervisor.snapshot = {"healthy": True, "heartbeatEpoch": time.time(), "services": []}
+        supervisor.children = {role: Mock(process=None) for role in service.ROLES}
+        supervisor.audit, supervisor.job, supervisor.lock = Mock(), Mock(), Mock()
+        return supervisor
+
+    def test_tick_failure_is_audited_persisted_unhealthy_and_rethrown_inside_owned_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            supervisor = self.fixture(tmp)
+            supervisor.tick = Mock(side_effect=RuntimeError("fixture tick failure"))
+            http, handler = Mock(), {}
+            def create_http(address, implementation):
+                self.assertEqual(address, ("127.0.0.1", 28985))
+                handler["implementation"] = implementation
+                return http
+            with patch.object(service, "ThreadingHTTPServer", side_effect=create_http), patch.object(service.threading, "Thread"), patch.object(service.signal, "signal"):
+                with self.assertRaisesRegex(RuntimeError, "fixture tick failure"):
+                    supervisor.run()
+            logged = json.loads(supervisor.audit.error.call_args_list[0].args[0])
+            self.assertEqual(logged["kind"], "supervisor_failed")
+            self.assertEqual(logged["phase"], "supervision_tick")
+            self.assertEqual(logged["errorType"], "RuntimeError")
+            self.assertIn("RuntimeError: fixture tick failure", logged["traceback"])
+            persisted = service.read_json(Path(tmp) / "health.json")
+            self.assertFalse(persisted["healthy"])
+            self.assertEqual(persisted["state"], "failed")
+            self.assertTrue(persisted["shutdownRequested"])
+            self.assertFalse(persisted["paused"])
+            supervisor.job.close.assert_called_once()
+            supervisor.lock.close.assert_called_once()
+            http.shutdown.assert_called_once()
+            http.server_close.assert_called_once()
+            for child in supervisor.children.values():
+                child.handler.close.assert_called_once()
+                child.stop.assert_not_called()
+            # Execute the real GET handler with fixture I/O, no listening socket.
+            for value, expected_status in ((supervisor.snapshot, 503), ({"healthy": True, "heartbeatEpoch": time.time() - 16}, 503),
+                    ({"healthy": True, "heartbeatEpoch": time.time()}, 200)):
+                supervisor.snapshot = value
+                request = handler["implementation"].__new__(handler["implementation"])
+                request.headers, request.path = {"Host": "127.0.0.1:28985"}, "/healthz"
+                request.send_response, request.send_header, request.end_headers = Mock(), Mock(), Mock()
+                request.wfile = io.BytesIO()
+                request.do_GET()
+                request.send_response.assert_called_once_with(expected_status)
+                response = json.loads(request.wfile.getvalue())
+                self.assertEqual(response["healthy"], expected_status == 200)
+
+    def test_original_failure_is_not_masked_when_failure_health_cannot_be_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            supervisor = self.fixture(tmp)
+            error = sharing_error()
+            supervisor.tick = Mock(side_effect=error)
+            with patch.object(service, "ThreadingHTTPServer"), patch.object(service.threading, "Thread"), patch.object(service.signal, "signal"), \
+                    patch.object(service, "atomic_json", side_effect=OSError(28, "fixture unavailable disk")):
+                with self.assertRaises(PermissionError) as failure:
+                    supervisor.run()
+            self.assertIs(failure.exception, error)
+            logged = [json.loads(call.args[0]) for call in supervisor.audit.error.call_args_list]
+            self.assertEqual([entry["kind"] for entry in logged], ["supervisor_failed", "failure_state_write_failed"])
+            self.assertFalse(supervisor.snapshot["healthy"])
+            supervisor.job.close.assert_called_once()
+
+    def test_health_server_start_failure_is_also_audited_without_shutdown_deadlock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            supervisor = self.fixture(tmp)
+            with patch.object(service, "ThreadingHTTPServer", side_effect=OSError("fixture socket unavailable")):
+                with self.assertRaisesRegex(OSError, "fixture socket unavailable"):
+                    supervisor.run()
+            logged = json.loads(supervisor.audit.error.call_args_list[0].args[0])
+            self.assertEqual(logged["phase"], "health_server_start")
+            self.assertFalse(service.read_json(Path(tmp) / "health.json")["healthy"])
+            supervisor.job.close.assert_called_once()
 
 
 class Layout:

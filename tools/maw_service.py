@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 
 REPO = Path(__file__).resolve().parents[1]
@@ -32,6 +33,7 @@ DEFAULT_JAVA = Path(r"E:\MC\jdk\jdk-21.0.12.1+1\bin\java.exe")
 ROLES = ("java", "gate", "worker")
 PORTS = {28976: (28977, 28984, 28985), 28978: (28979, 28986, 28987)}
 REQUEST_ID = re.compile(r"[a-zA-Z0-9._-]{1,64}\Z")
+ATOMIC_REPLACE_DELAYS = (0.01, 0.02, 0.04, 0.08)
 CONSOLE_COMMANDS = frozenset(("list", "save-all", "say", "time", "weather", "difficulty",
     "gamerule", "whitelist", "op", "deop", "tp", "teleport", "give", "effect", "item",
     "execute", "data", "setblock", "fill", "maw_agent", "mycli", "locate", "setworldspawn", "spawnpoint"))
@@ -46,7 +48,19 @@ def atomic_json(path: Path, value: dict) -> None:
     temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
     try:
         temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        os.replace(temporary, path)
+        # Windows readers without FILE_SHARE_DELETE briefly block replacement.
+        # Retry the same fully written file, never regenerate a payload or hide
+        # persistent permission/disk/configuration failures.
+        for attempt in range(len(ATOMIC_REPLACE_DELAYS) + 1):
+            try:
+                os.replace(temporary, path)
+                break
+            except OSError as error:
+                transient = (getattr(error, "winerror", None) in (32, 33)
+                    or isinstance(error, PermissionError) and getattr(error, "winerror", None) == 5)
+                if not transient or attempt == len(ATOMIC_REPLACE_DELAYS):
+                    raise
+                time.sleep(ATOMIC_REPLACE_DELAYS[attempt])
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -634,8 +648,12 @@ class Supervisor:
                 if host not in (f"127.0.0.1:{supervisor.config['healthPort']}", f"localhost:{supervisor.config['healthPort']}") or self.path != "/healthz":
                     self.send_error(404)
                     return
-                content = json.dumps(supervisor.snapshot, ensure_ascii=False).encode()
-                self.send_response(200 if supervisor.snapshot.get("healthy") else 503)
+                value = dict(supervisor.snapshot)
+                value["heartbeatFresh"] = 0 <= time.time() - value.get("heartbeatEpoch", 0) <= 15
+                if not value["heartbeatFresh"]:
+                    value["healthy"] = False
+                content = json.dumps(value, ensure_ascii=False).encode()
+                self.send_response(200 if value.get("healthy") else 503)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(content)))
@@ -643,25 +661,50 @@ class Supervisor:
                 self.wfile.write(content)
             def log_message(self, *args):
                 pass
-        http = ThreadingHTTPServer(("127.0.0.1", self.config["healthPort"]), Handler)
-        http.daemon_threads = True
-        threading.Thread(target=http.serve_forever, daemon=True).start()
         def shutdown(signum, frame):
             self.pause(f"supervisor signal {signum}")
             self.quit = self.stop_requested = True
-        for signum in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(signum, shutdown)
-        if hasattr(signal, "SIGBREAK"):
-            signal.signal(signal.SIGBREAK, shutdown)
+        http = None
+        serving, phase = False, "health_server_start"
         try:
+            http = ThreadingHTTPServer(("127.0.0.1", self.config["healthPort"]), Handler)
+            http.daemon_threads = True
+            threading.Thread(target=http.serve_forever, daemon=True).start()
+            serving, phase = True, "signal_handlers"
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                signal.signal(signum, shutdown)
+            if hasattr(signal, "SIGBREAK"):
+                signal.signal(signal.SIGBREAK, shutdown)
+            phase = "supervision_tick"
             while True:
                 self.tick()
                 if self.quit and not any(child.process for child in self.children.values()):
                     break
                 time.sleep(2)
+        except Exception as error:
+            # pythonw has no usable terminal traceback. Persist the failure
+            # before the existing owned-job crash boundary closes our children.
+            reason = f"supervisor_failed: {type(error).__name__}: {error}"[:500]
+            self.fault = reason
+            self.quit = self.stop_requested = True
+            self.snapshot = {**self.snapshot, "schemaVersion": 1, "at": utc(), "heartbeatEpoch": time.time(),
+                "runId": self.run_id, "supervisorPid": os.getpid(), "serverDir": self.config["serverDir"],
+                "healthy": False, "state": "failed", "problem": reason, "paused": self.paused(),
+                "stopRequested": True, "shutdownRequested": True, "servicesAreLastKnown": True}
+            self.audit.error(json.dumps({"at": utc(), "kind": "supervisor_failed", "runId": self.run_id,
+                "phase": phase, "errorType": type(error).__name__, "reason": reason,
+                "traceback": traceback.format_exc(limit=12)[-8192:]}))
+            try:
+                atomic_json(self.directory / "health.json", self.snapshot)
+            except Exception as state_error:
+                self.audit.error(json.dumps({"at": utc(), "kind": "failure_state_write_failed", "runId": self.run_id,
+                    "errorType": type(state_error).__name__, "reason": str(state_error)[:500]}))
+            raise
         finally:
-            http.shutdown()
-            http.server_close()
+            if http is not None:
+                if serving:
+                    http.shutdown()
+                http.server_close()
             self.job.close()
             self.lock.close()
             for child in self.children.values():

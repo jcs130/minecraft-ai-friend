@@ -257,3 +257,17 @@ node --test world/src/neoforge-handshake/component-protocol.test.cjs world/src/n
 22:43 本账号真实多次 navigate成功；22:44:29 的 gather实际把 `minecraft:oak_log` 方块变为空气，本人库存新增橡木1，私有行动账本留有终态。只证明本次模型驱动移动与采集，不因一块橡木认定已建立自然木材/食物生产或长期生活闭环。
 
 最终回归：renderer专项213、仓库根230、真实Cortico0.1.4集成6、后端协议41和society22通过，typecheck通过；前端集合有重叠，不相加。可视化根测试默认不依赖可选Cortico，真实SDK另用 `pnpm test:cortico` 验证，缺失不会跳过或mock。实服恢复、零网页错误和短时动作不证明长期稳定、全部实体/装备/动画/光照/声音一致、全模组操作或新服基岩支持。
+
+### 收尾发现的守护异常退出
+
+22:54 再次核查发现上述 22:44:48 健康文件已经过期，原 supervisor 与三子进程均不存在，28985 拒绝连接；没有正常停服记录。不能把该历史 `healthy=true` 当成当前状态。异常退出原因尚无完整堆栈，不能断言由协议修复或文件读取引起。
+
+重启前将当时停止的 `world-life`、角色账本与守护日志另存到仓库外 `backups/supervisor-exit-20261004-2256`，保留异常退出后的未验证存档；没有覆盖存档或重放动作。按已登记的 `maw_service_task.ps1 -Mode Start` 隐藏启动，仅新服受影响。22:56:42 原 UUID 再次入服；worker 按旧 taskId 恢复查询并明确丢弃 `task-979a667f10b4` 的过期观察计划，再创建新观察任务。
+
+后续体检优先读取回环 `/healthz` 并核对心跳时间，CLI `status` 已会将过期健康置为 false。检查发现原 `atomic_json` 替换文件遇 Windows 共享冲突没有重试，守护 tick 抛出异常后关闭 owned job 会同时结束三子进程；这是需要修复的真实可靠性缺口，尚不是本次退出原因的确定证据。
+
+现已为同一完整临时文件增加最多五次替换、合计 150ms 短退避，仅重试 WinError32/33 或 PermissionError5。永久权限/磁盘/配置错误仍明确失败；守护记录 `supervisor_failed` 的阶段和堆栈、尽量发布失败状态，再执行既有 owned 退出边界，不吞掉异常。HTTP `/healthz` 也明确核对 15 秒心跳新鲜性。独立临时目录的真实 Windows `CreateFileW` 分享锁在 50ms 后释放，完整 JSON 成功写入且没有临时文件残留；没有锁住正式健康文件来制造故障。
+
+本次升级前先持久暂停本人 Agent，确认模型任务和行动全部终态。23:00:49 发出 owned shutdown，23:00:53 所有维度保存完毕，守护及三子进程退出；停服冷备保存到 `backups/supervisor-retry-20261004-2301`。维护暂停只按本次原因恢复，不能清除未知动作/模型保护。
+
+守护回归 `python tools/maw_service_test.py` 共25项通过，包括真实分享锁、永久失败、非共享错误不重试、异常审计和健康新鲜性。新守护23:07:53接受resume；23:08:56 HTTP读回 `healthy=true / heartbeatFresh=true / paused=false`，Java/gate/worker全部ready，原账号身份和本人展示UUID一致。随后只归档本次原因的暂停到 `autonomy.pause-retired-supervisor-retry-20261004-2309.json`，恢复Agent；历史异常、原操作回执及两份冷备全部保留。HKCU登录启动仍不能保证守护自身崩溃后自动重启，本次只是明确修复和短时恢复验收。
