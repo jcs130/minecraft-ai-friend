@@ -5,13 +5,13 @@ const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const { attachColonyClient } = require('./colony-client.cjs')
 
-function harness () {
+function harness (options) {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
   bot._client.uuid = '11111111-1111-1111-1111-111111111111'
   const writes = []
   bot._client.write = (name, packet) => writes.push({ name, packet })
-  return { bot, writes, colony: attachColonyClient(bot) }
+  return { bot, writes, colony: attachColonyClient(bot, options) }
 }
 
 function receipt (requestId, playerUuid = '11111111-1111-1111-1111-111111111111') {
@@ -35,6 +35,34 @@ test('status uses the player connection and matches only its private receipt', a
   assert.deepEqual(await pending, receipt(body.requestId))
   colony.detach()
 })
+test('ordinary capabilities and status timeouts are known readonly observations; delivery timeout stays unknown and is not retried', async () => {
+  const { writes, colony } = harness({ timeoutMs: 3 })
+  const cap = await colony.capabilities()
+  assert.equal(JSON.parse(writes[0].packet.data.toString()).kind, 'capabilities')
+  assert.equal(writes[0].packet.channel, 'maw_agent:colony_query'); assert.equal(cap.outcomeKnown, true); assert.equal(cap.outcomeUnknown, false)
+  const state = await colony.status(); assert.equal(state.code, 'colony_query_not_observed'); assert.equal(state.readOnly, true)
+  await assert.rejects(colony.deliver({ buildingPosition: { x: 1, y: 64, z: 2 }, token: 'token', inventorySlot: 4, quantity: 1, expectedSnbt: 'item' }), /COLONY_RECEIPT_TIMEOUT/)
+  assert.equal(writes.length, 3); colony.detach()
+})
+test('native supported huts require exact original type, slot and complete item precondition; keep builder compatibility', async () => {
+  const { bot, writes, colony } = harness()
+  const snbt = '{id:"minecolonies:blockhuthome",count:1,components:{"minecraft:custom_name":"house"}}'
+  const pending = colony.placeHut({ position: { x: 4, y: 64, z: 4 }, hutType: 'home', inventorySlot: 5, expectedSnbt: snbt, requestId: 'home-once' })
+  const body = JSON.parse(writes[0].packet.data.toString())
+  assert.equal(body.kind, 'place_hut'); assert.equal(body.hutType, 'home'); assert.equal(body.expectedSnbt, snbt)
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify({ ...receipt(body.requestId), action: body.kind })) })
+  assert.equal((await pending).ok, true)
+  for (const hutType of ['../home', 'minecolonies:home', 'castle']) assert.throws(() => colony.placeHut({ position: { x: 4, y: 64, z: 4 }, hutType, inventorySlot: 5, expectedSnbt: snbt }), /INVALID_COLONY_HUT/)
+  assert.equal(writes.length, 1); assert.equal(typeof colony.placeBuilder, 'function'); colony.detach()
+})
+test('pending receipts are bound to original player identity, not merely a subsequently changed client UUID', async () => {
+  const { bot, writes, colony } = harness({ timeoutMs: 5 })
+  const pending = colony.status(), body = JSON.parse(writes[0].packet.data.toString())
+  bot._client.uuid = '22222222-2222-2222-2222-222222222222'
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(receipt(body.requestId, bot._client.uuid))) })
+  const result = await pending
+  assert.equal(result.ok, false); assert.equal(result.playerUuid, '11111111-1111-1111-1111-111111111111'); colony.detach()
+})
 
 test('deliver carries explicit slot, component and building preconditions', async () => {
   const { bot, writes, colony } = harness()
@@ -48,7 +76,7 @@ test('deliver carries explicit slot, component and building preconditions', asyn
   assert.equal(body.inventorySlot, 5)
   assert.equal(body.expectedSnbt, '{count:16,id:"minecraft:oak_planks"}')
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
-    data: Buffer.from(JSON.stringify(receipt(body.requestId))) })
+    data: Buffer.from(JSON.stringify({ ...receipt(body.requestId), action: body.kind })) })
   assert.equal((await pending).ok, true)
   assert.throws(() => colony.deliver({ inventorySlot: 36 }), /INVALID_COLONY_DELIVERY/)
   colony.detach()
@@ -99,7 +127,7 @@ test('founding and construction use explicit positions and caller-held hut items
   assert.equal(first.requestId, 'found-once')
   assert.deepEqual(first.position, position)
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
-    data: Buffer.from(JSON.stringify(receipt(first.requestId))) })
+    data: Buffer.from(JSON.stringify({ ...receipt(first.requestId), action: first.kind })) })
   assert.equal((await founded).ok, true)
 
   const builder = colony.placeBuilder({ position: { x: 303, y: 64, z: 300 },
@@ -107,7 +135,7 @@ test('founding and construction use explicit positions and caller-held hut items
   const second = JSON.parse(writes[1].packet.data.toString('utf8'))
   assert.equal(second.kind, 'place_builder')
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
-    data: Buffer.from(JSON.stringify(receipt(second.requestId))) })
+    data: Buffer.from(JSON.stringify({ ...receipt(second.requestId), action: second.kind })) })
   await builder
 
   const build = colony.requestBuild({ buildingPosition: position,
@@ -115,9 +143,37 @@ test('founding and construction use explicit positions and caller-held hut items
   const third = JSON.parse(writes[2].packet.data.toString('utf8'))
   assert.equal(third.kind, 'request_build')
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
-    data: Buffer.from(JSON.stringify(receipt(third.requestId))) })
+    data: Buffer.from(JSON.stringify({ ...receipt(third.requestId), action: third.kind })) })
   await build
   assert.throws(() => colony.found({ position, name: '', inventorySlot: 4, expectedSnbt: 'item' }),
     /INVALID_COLONY_FOUNDING/)
   colony.detach()
+})
+
+test('cached success for a different wire action never resolves or emits a construction success; explicit rejection without action is known', async () => {
+  const { bot, writes, colony } = harness({ timeoutMs: 10 }), receipts = [], errors = []
+  colony.events.on('receipt', body => receipts.push(body)); colony.events.on('protocolError', error => errors.push(error.message))
+  const pending = colony.placeHut({ position: { x: 4, y: 64, z: 4 }, hutType: 'home', inventorySlot: 5,
+    expectedSnbt: '{id:"minecolonies:blockhuthome",count:1}', requestId: 'reused' })
+  const emit = body => bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(body)) })
+  emit({ ...receipt('reused'), action: 'found' }); emit(receipt('reused'))
+  assert.deepEqual(errors, ['COLONY_ACTION_RECEIPT_MISMATCH', 'COLONY_ACTION_RECEIPT_MISMATCH']); assert.equal(receipts.length, 0)
+  const rejected = { ...receipt('reused'), ok: false, code: 'request_id_payload_conflict' }
+  emit(rejected); assert.deepEqual(await pending, rejected); assert.equal(receipts.length, 1); assert.equal(writes.length, 1)
+  const timedOut = colony.placeHut({ position: { x: 5, y: 64, z: 4 }, hutType: 'home', inventorySlot: 5,
+    expectedSnbt: '{id:"minecolonies:blockhuthome",count:1}', requestId: 'never-replay' })
+  emit({ ...receipt('never-replay'), action: 'found' })
+  await assert.rejects(timedOut, /COLONY_RECEIPT_TIMEOUT/); assert.equal(writes.length, 2)
+  colony.detach()
+})
+
+test('outgoing colony requests preserve complete SNBT and canonical schema fields and enforce the native byte budget before dispatch', async () => {
+  const { bot, writes, colony } = harness()
+  const snbt = '{id:"minecolonies:blockhuthome",count:1,components:{"minecraft:custom_data":{text:"\\\"☃\\\"",array:[I;1,2,3]}}}'
+  const pending = colony.placeHut({ position: { x: 9, y: 64, z: -3 }, hutType: 'home', inventorySlot: 0, expectedSnbt: snbt, requestId: 'component-cas' })
+  assert.deepEqual(JSON.parse(writes[0].packet.data.toString('utf8')), { schemaVersion: 1, kind: 'place_hut', position: { x: 9, y: 64, z: -3 }, hutType: 'home', inventorySlot: 0, expectedSnbt: snbt, requestId: 'component-cas' })
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify({ ...receipt('component-cas'), action: 'place_hut' })) })
+  await pending
+  assert.throws(() => colony.placeHut({ position: { x: 9, y: 64, z: -3 }, hutType: 'home', inventorySlot: 0, expectedSnbt: '☃'.repeat(6000) }), /BUDGET/)
+  assert.equal(writes.length, 1); colony.detach()
 })

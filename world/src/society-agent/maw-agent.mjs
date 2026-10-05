@@ -10,6 +10,12 @@ const { parsePlan, visibleSurfaces, unknownOutcome, gameJSON } = require('./plan
 const { QwenTaskClient } = require('./qwen-task-client.cjs')
 const { modelDecisionError, classifyModelFailure, restoreModelBackoff, nextModelBackoff, modelBackoffRemaining } = require('./model-failure-policy.cjs')
 const { runActionWithDeadline, installActionPacketFence } = require('./action-deadline.cjs')
+const { actionIsReadOnly, actionErrorIsUnknown } = require('./action-policy.cjs')
+const { resolveAgentObjective } = require('./agent-objective.cjs')
+const { nativeDigPrecondition } = require('./native-dig-precondition.cjs')
+const { reconcileInterruptedActions } = require('./restart-reconciliation.cjs')
+const { nativeLifecycleReceiptFields } = require('./native-lifecycle-receipt.cjs')
+const { nativeNavigationResult } = require('./native-navigation-result.cjs')
 const { nearbyNativeEntities, validateNativeEntityTarget, validateNativeAttackTarget } = require('./native-entity-observation.cjs')
 const { nativeInventorySnapshot, nativeDigResult, summarizeNativeInventoryReceipt } = require('./native-inventory-delta.cjs')
 const { selectNativeHotbar } = require('./native-hotbar-selection.cjs')
@@ -42,16 +48,15 @@ const stateFile = path.join(root, 'state.json'), ledger = path.join(root, 'actio
 const old = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : null
 if (old && (old.username !== config.username || old.sessionId !== config.sessionId)) throw Error('AGENT_STATE_IDENTITY_MISMATCH')
 const status = { schemaVersion: 1, username: config.username, sessionId: config.sessionId, online: false, mode: 'starting', goal: old?.goal || '在 My Agent World 生存、成长，建立自己的生活与社会关系', reason: '', round: old?.round || 0, deaths: old?.deaths || 0, receipts: [], lastDecision: old?.lastDecision || null, lastError: null, modelBackoff: restoreModelBackoff(old?.modelBackoff) }
+const objective = resolveAgentObjective({ configObjective: config.objective, savedObjective: old?.objective })
+status.objective = objective
+status.subgoal = status.goal
 // A lost process cannot turn an already dispatched action into a safe retry.
 // Keep the complete ledger and stop autonomy for operator reconciliation.
 if (fs.existsSync(ledger)) {
-  const pending = new Map()
-  for (const line of fs.readFileSync(ledger, 'utf8').split('\n').filter(Boolean)) {
-    const event = JSON.parse(line)
-    if (event.kind === 'action_intent') pending.set(event.actionId, event)
-    if (event.kind === 'action_result') pending.delete(event.actionId)
-  }
-  if (pending.size && !fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'interrupted_action_outcome', actionIds: [...pending.keys()], at: new Date().toISOString() }))
+  const { retire, pending } = reconcileInterruptedActions(fs.readFileSync(ledger, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)))
+  for (const retirement of retire) record('action_read_retired', retirement)
+  if (pending.length && !fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'interrupted_action_outcome', actionIds: pending.map(intent => intent.actionId), at: new Date().toISOString() }))
 }
 function persist () {
   status.updatedAt = new Date().toISOString()
@@ -88,7 +93,7 @@ function compactReceipt (result) {
 }
 function receiptSummaries () {
   return status.receipts.map(event => ({ at: event.at, actionId: event.actionId, action: event.action,
-    result: compactReceipt(Object.fromEntries(['machine', 'verificationId', 'expectationSource', 'expectedOutputs', 'recipeEvidence', 'productGains', 'goalSatisfied', 'observationAvailable', 'interactionSent', 'operationCompleted', 'nativeBlockStateChanged', 'readOnly', 'reads', 'capturedAt', 'expiresAt', 'binding', 'ok', 'code', 'outcome', 'outcomeUnknown', 'outcomeKnown', 'blockBroken', 'pickupConfirmed', 'inventoryDelta', 'effectVerified', 'castConfirmed', 'manaBefore', 'manaAfter', 'manaSpent', 'position', 'block', 'hit', 'nativeBlock', 'beforeBlock', 'afterBlock', 'inventoryBefore', 'inventoryAfter', 'foodBefore', 'foodAfter', 'consumedCount', 'receiptIDs', 'remainingInputs', 'outputId', 'outputCount', 'count', 'truncated', 'maids', 'maid', 'tasks', 'spell', 'colonyId', 'colony', 'colonies', 'buildings', 'requests', 'citizens', 'itemId', 'accepted', 'inventoryRemaining', 'observed', 'selected', 'requestedHotbarSlot', 'selectedHotbarSlot', 'lastObservedHotbarSlot', 'proofSource', 'retryAutomatically', 'serverCode', 'phase', 'buildingPosition', 'builderPosition', 'requestStillOpen', 'tools', 'tool', 'limits', 'recipes', 'recipeTypes', 'matchedCount', 'offset', 'nextOffset', 'source', 'entity', 'attackPurpose', 'attackSent', 'target', 'healthBefore', 'healthAfter', 'postcondition', 'menuOpened', 'windowId', 'menuType', 'observedChanges'].filter(key => event.result?.[key] !== undefined).map(key => [key, event.result[key]]))) }))
+    result: compactReceipt(Object.fromEntries([...Object.keys(nativeLifecycleReceiptFields(event.result)), 'machine', 'verificationId', 'expectationSource', 'expectedOutputs', 'recipeEvidence', 'productGains', 'goalSatisfied', 'observationAvailable', 'interactionSent', 'operationCompleted', 'nativeBlockStateChanged', 'readOnly', 'reads', 'capturedAt', 'expiresAt', 'binding', 'ok', 'code', 'outcome', 'outcomeUnknown', 'outcomeKnown', 'blockBroken', 'pickupConfirmed', 'inventoryDelta', 'effectVerified', 'castConfirmed', 'manaBefore', 'manaAfter', 'manaSpent', 'position', 'block', 'hit', 'nativeBlock', 'beforeBlock', 'afterBlock', 'inventoryBefore', 'inventoryAfter', 'foodBefore', 'foodAfter', 'consumedCount', 'receiptIDs', 'remainingInputs', 'outputId', 'outputCount', 'count', 'truncated', 'maids', 'maid', 'tasks', 'spell', 'colonyId', 'colony', 'colonies', 'buildings', 'requests', 'citizens', 'itemId', 'accepted', 'inventoryRemaining', 'observed', 'selected', 'requestedHotbarSlot', 'selectedHotbarSlot', 'lastObservedHotbarSlot', 'proofSource', 'retryAutomatically', 'serverCode', 'phase', 'buildingPosition', 'builderPosition', 'requestStillOpen', 'tools', 'tool', 'limits', 'recipes', 'recipeTypes', 'matchedCount', 'offset', 'nextOffset', 'source', 'entity', 'attackPurpose', 'attackSent', 'target', 'healthBefore', 'healthAfter', 'postcondition', 'menuOpened', 'windowId', 'menuType', 'observedChanges'].filter(key => event.result?.[key] !== undefined).map(key => [key, event.result[key]]))) }))
 }
 const qwen = new QwenTaskClient({ baseURL: config.qwenURL, agentId: config.agentId, sessionId: config.sessionId, journalPath: path.join(root, 'model-task.json') })
 const { prepareNativeWorldPreviewHost, createNativePlayerPresentation } = await import(pathToFileURL(path.resolve(config.viewerHostModule)))
@@ -115,7 +120,13 @@ const viewer = prepared.attach({ bot, expectedUsername: config.username, nativeS
 await viewer.listen()
 bot.loadPlugin(pathfinder)
 let closing = false, epoch = 0, activeActionScope = null, nativeBlockUseSequence = 0
-const actionFence = installActionPacketFence(bot._client, info => record('interrupted_action_packet_blocked', info))
+let activeActionId = null
+const actionFence = installActionPacketFence(bot._client, info => record('interrupted_action_packet_blocked', info), info => {
+  if (!activeActionScope) return
+  const first = !activeActionScope.mutationObserved()
+  activeActionScope.mutationDispatched()
+  if (first) record('action_mutation_dispatch', { actionId: activeActionId, packet: info.packet })
+})
 function stopMovement () {
   // stop() waits for a subsequent path node; setGoal(null) immediately emits
   // goal_updated and rejects goto's promise in the locked pathfinder version.
@@ -153,13 +164,14 @@ function safePosition (position, max = 16) {
   if (viewer.world.stateIdAt(position) === null || !bot.blockAt(pos)) throw Error('ACTION_BLOCK_NOT_LOADED')
   return pos
 }
-async function navigate (position, near = 1, actionScope) {
+async function navigate (position, near = 1, actionScope, { exact = false } = {}) {
   actionScope?.check()
   const pos = safePosition(position)
+  const goal = exact ? new goals.GoalBlock(pos.x, pos.y, pos.z) : new goals.GoalNear(pos.x, pos.y, pos.z, near)
   try {
     await runActionWithDeadline(async scope => {
       scope.phase('navigate'); actionScope?.check()
-      await bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, near))
+      await bot.pathfinder.goto(goal)
       scope.check(); actionScope?.check()
     }, { timeoutMs: 25000, checkContext: () => actionScope?.check(), onAbort: ({ reason }) => {
       // Cancel the outer action synchronously, before native goto's late
@@ -169,7 +181,8 @@ async function navigate (position, near = 1, actionScope) {
     } })
   } finally { bot.clearControlStates() }
   actionScope?.check()
-  return { ok: bot.entity.position.distanceTo(pos) < near + 1.5, position: bot.entity.position }
+  return nativeNavigationResult({ requestedPosition: position, position: bot.entity.position, radius: near, exact,
+    goalSatisfied: goal.isEnd({ x: Math.floor(bot.entity.position.x), y: Math.floor(bot.entity.position.y), z: Math.floor(bot.entity.position.z) }) })
 }
 async function inspect () {
   // These are read-only queries under this exact authenticated player UUID.
@@ -226,23 +239,23 @@ async function execute (action, plannedEpoch, scope) {
     case 'recipes': { const result = await nativeQuery.recipes(action.args); check(); return result }
     case 'entity_inspect': { const result = await nativeQuery.entity(action); check(); return result }
     case 'inspect': { const result = await inspect(); check(); return result }
-    case 'navigate': return navigate(action.position, 1, scope)
+    case 'navigate': return navigate(action.position, 1, scope, { exact: true })
     case 'gather': case 'dig': {
       const pos = safePosition(action.position, 12)
       scope.phase('approach')
       if (bot.entity.position.distanceTo(pos) > 4.4) await navigate(action.position, 2, scope)
       check()
-      const block = bot.blockAt(pos), actual = await readNativeBlockBeforeAction(query, block, [0.5, 0.5, 0.5], check)
+      const block = bot.blockAt(pos), aim = action.aimOffset ?? [0.5, 0.5, 0.5], actual = await readNativeBlockBeforeAction(query, block, aim, check)
       check()
-      if (!actual.ok || !boundModReceipt(actual, bot._client.uuid) || actual.position.x !== pos.x || actual.position.y !== pos.y || actual.position.z !== pos.z) return { ok: false, code: 'not_visible_or_reachable', actual }
-      if (action.expectedId && actual.block?.id !== action.expectedId) return { ok: false, code: 'native_identity_changed', actual }
+      const precondition = nativeDigPrecondition(actual, { playerUuid: bot._client.uuid, requestedPosition: action.position, expectedId: action.expectedId, requireDrops: action.type === 'gather' })
+      if (!precondition.ok) return precondition
       if (bot.entity.position.distanceTo(pos.offset(0.5, 0.5, 0.5)) > 5) return { ok: false, code: 'dig_out_of_reach' }
       const before = nativeInventorySnapshot(ownMenu(), bot._client.uuid)
       if (!before.available && action.type === 'gather') return { ok: false, code: 'native_inventory_unavailable_before_dig', blockBroken: false,
         pickupConfirmed: false, reason: before.reason, outcomeKnown: true, retryAutomatically: false }
       // dig(forceLook) itself awaits lookAt before installing stopDigging.
       // Split that await so a cancelled look cannot later start a new dig.
-      scope.phase('aim'); await bot.lookAt(block.position.offset(0.5, 0.5, 0.5), true); check()
+      scope.phase('aim'); await bot.lookAt(block.position.offset(...aim), true); check()
       scope.phase('dig'); await bot.dig(block, 'ignore')
       check()
       scope.phase('verify'); await pause(700)
@@ -325,15 +338,16 @@ async function execute (action, plannedEpoch, scope) {
 }
 
 const guide = `你是 My Agent World 的普通生存玩家 ${config.username}，这是你长期生活的世界，不是服主。制定你自己的生活目标，真实采集、合成、种地、建设、探索、发展殖民地并照顾自己的东方女仆伙伴。现在从一无所有起步，先解决木材、基础工具、食物和避难处，再逐步探索农夫乐事/Create/Ars/MineColonies/TLM。没有物资就真实获取，不能假称完成，不请求give/tp。保持跨轮同一目标与实际进展，失败查原因再改变方案。
-每轮只输出一个 JSON 对象，例如 {"goal":"采集天然木材","reason":"先建立工具与补给","actions":[{"type":"inspect"},{"type":"navigate","position":{"x":10,"y":64,"z":20}}]}，最多8动作。每个动作使用type字段，不要用技能名称代替type。没有markdown，不要执行宿主文件/终端工具。仅此JSON用于你的真实游戏身体。所有坐标为绝对整数；一次导航目标距当前位置<=16格，路径不能自动挖路搭路。surfaces是8格内第一可见表面，不能透视地下矿石。gather/dig需真实直视方块，expectedId可校验原生ID。
+长期固定目标由运营者的config.objective提供，不能被每轮goal覆盖。goal只是当前阶段目标，例如先吃饭、等天亮、做木斧；这些完成或环境改变后继续长期发展。固定目标：${objective}
+每轮只输出一个 JSON 对象，例如 {"goal":"采集天然木材","reason":"先建立工具与补给","actions":[{"type":"inspect"},{"type":"navigate","position":{"x":10,"y":64,"z":20}}]}，最多8动作。每个动作使用type字段，不要用技能名称代替type。没有markdown，不要执行宿主文件/终端工具。仅此JSON用于你的真实游戏身体。所有坐标为绝对整数；一次导航目标距当前位置<=16格，路径不能自动挖路搭路。surfaces是8格内第一可见表面，不能透视地下矿石。gather/dig需真实直视方块，expectedId可校验原生ID。aimOffset可用surfaces建议的偏移，但它只是first native voxel sample，必须实际server ray确认；different_visible_block返回真实blocking绝对位置和hit，只用于你重新制定计划，不自动挖阻挡。navigate要实际站进目标脚下格且高度匹配；回执position/distanceToRequested/verticalDifference是真实终态，附近或下一层不算到达。
 工具可发现：{"type":"tools","operation":"list"}列实际23种能力，{"type":"tools","operation":"explain","id":"recipes"}读精确参数。支持recipes、block_inspect、block_verify、entity_inspect、entity_interact和现有模组桥。不要把以前失败时“只能攻击敌对/不能吃腐肉”等旧推断当永久限制；读取新目录与实际状态再决定。recipes args用真实recipeId/recipeType/outputId和offset/limit；definitionAvailable=false是内容缺口，不要编造配方。
 生存优先于旧探索目标：每轮先根据真实self.health/maxHealth、self.food/saturation、foodOptions和可见危险决定吃饭、避险或休息，再决定是否找动物/远行；极低血量时不要机械重复原目标。休息不会凭空回血：看实际饥饿和回血结果；选可达安全地面，避免反复卡在同一台阶。执行器不会替你救援、给物品、传送或代定食物，计划仍由你根据观察制定。满足基本生存后，用modStates.recipes真实目录查当前库存可做的农夫乐事食物、切菜板或Create配方，再自然取得材料和操作；没有真实回执和产物不能报告已完成。
-动作：inspect；navigate(position)；gather(position,expectedId)挖一次并走近拾取；dig(position,expectedId)；craft(ingredients:[{slot,id,count:1}],outputId,outputCount)真实原生合成；select(hotbarSlot:0..8)；place(position:参照方块坐标,face:{x,y,z}:一个方向为±1,hotbarSlot,itemId,blockId)；block_inspect/use_block(position,aimOffset可选)；use_item；eat(itemId可选真实食品ID,inventorySlot可选9..44)；entity_inspect/entity_interact/attack均需entityId和expectedUuid（entities里的真实UUID），expectedId可选。attack意图combat用于真实敌人含模组；hunt_food用于无主未命名牛猪羊鸡兔和食用鱼，不伤NPC、宠物、队友。没有合法证据就不派发，不能把协议proxy-zombie当敌人。menu_click(slot,button:0拾取整堆/1放一个)；close_menu；wait(seconds<=30)。背包合成格1..4两行两列，结果0；工作台合成格1..9三行，结果0。真实背包菜单物品9..44，快捷栏36..44。craft要求空网格/空cursor，辅助器使用真实组件和回执，不发明配方；木板=1原木放slot1产4对应木板，工作台=4木板放slots1,2,3,4，木棍=slots1,3木板产4。配方材料与物品ID必须是库存中真实原生ID。
+动作：inspect；navigate(position)；gather(position,expectedId,aimOffset可选)挖一次并走近拾取；dig(position,expectedId,aimOffset可选)；craft(ingredients:[{slot,id,count:1}],outputId,outputCount)真实原生合成；select(hotbarSlot:0..8)；place(position:参照方块坐标,face:{x,y,z}:一个方向为±1,hotbarSlot,itemId,blockId)；block_inspect/use_block(position,aimOffset可选)；use_item；eat(itemId可选真实食品ID,inventorySlot可选9..44)；entity_inspect/entity_interact/attack均需entityId和expectedUuid（entities里的真实UUID），expectedId可选。attack意图combat用于真实敌人含模组；hunt_food用于无主未命名牛猪羊鸡兔和食用鱼，不伤NPC、宠物、队友。没有合法证据就不派发，不能把协议proxy-zombie当敌人。menu_click(slot,button:0拾取整堆/1放一个)；close_menu；wait(seconds<=30)。背包合成格1..4两行两列，结果0；工作台合成格1..9三行，结果0。真实背包菜单物品9..44，快捷栏36..44，装备槽5头盔/6胸甲/7护腿/8靴，副手45。新合成工具往往在普通库存：用menu_click左键从实际产物slot取起放入真实空快捷栏，再select；不能用代理物品equip代替。craft要求空网格/空cursor，辅助器使用真实组件和回执，不发明配方；木板=1原木放slot1产4对应木板，工作台=4木板放slots1,2,3,4，木棍=slots1,3木板产4。配方材料与物品ID必须是库存中真实原生ID。
 模组探索：先recipes查询实际配方，再block_inspect看真实机器状态。Create磨石processing会明确waiting_input/waiting_power/processing/output_ready；不把手摇或计时估算当产物。农夫乐事切菜板的真实形状仅1/16高，block_inspect/use_block要显式aimOffset:[0.5,0.03,0.5]，放料、持正确刀/斧再次使用，再检查BE库存与本人inventoryDelta；厨房菜单读取真实dataValues/slotLayout。食品由foodOptions的真实FOOD组件发现，腐肉和mod食品可以吃，副作用自行权衡；吃东西先关闭菜单、留空cursor，有需要会原生搬到空快捷栏，不会擅丢其他物品。发出交互sent_unverified不等于成功或可以盲目重复。
 机器后置核验：block_inspect/use_block可带实际recipeId，捕获verificationId；它绑定本人UUID、当前epoch/维度、绝对位置/方块ID，10分钟内有效，重生/重启后不可用。{"type":"block_verify","verificationId":"从本轮回执读取","goal":"pickup","waitMs":1500}只读原机器和本人规范库存，最多4次、最多显式8秒，不走过去/放料/转手摇柄/收物。goal还可observe/change/output；0只读一次。输出缓冲已经有物品只能证明可取，不代表本轮刚生产；炉灶/切菜板掉到世界的物品还需你自己决定如何靠近拾取。没有实际recipeId或已有磨石输出就不知道期望产物，pickupConfirmed=null。inputPlacedObserved只表示投料；processingChanged只表示真实状态变化；expectedNativeOutputPresent表示原生输出存在；pickupConfirmed需完整组件匹配的真实库存净增加和机器移除证据，worldDropObserved=null表示未绑定掉落实体来源。吃掉原料、工具磨损、仅空板不算产物。切菜板加工可用use_block的intent:"process"并带真实recipeId，服务器heldToolMatches和板上输入必须匹配；先自主select正确工具。load/collect/interact只发送你请求的一次右键，没有自动搬料/装备。权限拒绝、无变化会not_observed，不能称完成或盲重复；读取超时只意味着本次未观察，已发送交互却未知结果则暂停等待核对。
 foodOptions.items每项food.nativeComponent是服务器实际FOOD完整原定义，含默认effects/食用转换等；SNBT保存组件patch，不能因其中没有effects就断言无副作用。腐肉可能引发饥饿，按原生effects概率、当前血量和替代食物权衡。additionalItemHooksDescribed=false表示额外模组Java消费钩子尚未完整描述，不保证已列尽风险。modStates.recipes仅每30秒缓存一小页和真实recipeTypes目录，observedAt/observationEpoch表明新旧；精确recipes动作可读配方下一页。definitionAvailable=false和code保留边界，不可编造材料、加工时长或模组玩法。
-模组动作：maid(operation:list/status/tasks/follow/pickup/task/bag,maidUuid,args)，只操作本人已拥有、8格内伙伴。例如{"type":"maid","operation":"follow","maidUuid":"从modStates.maid.maids读取的真实uuid","args":{"follow":true}}。modStates含本人的实际女仆/殖民地/法术只读状态，已有uuid不要反复登记或发明身份。女仆hunger=0为模组未使用字段，不能当成饿死。colony(operation:status/found/placeBuilder/requestBuild/deliver/stockResource,args，真实库存/建筑材料/位置/expectedSnbt)；其inventorySlot0..8对应背包菜单36..44的快捷栏，其9..35对应普通库存9..35。spell(operation:list/explain/cast,id原生法术)，真实持书魔力/冷却。先获取准确字段，做不了报告能力/资源缺口。界面点击失败未知不能重投；使用交互sent并非效果已验证。施法castConfirmed且manaSpent才是确认，不夸大effectVerified:false。epoch死亡/重生变化时旧动作立即取消。
-每轮优先查看健康、饥饿、menu的cursor/网格和最近回执。cursor有物品要放回真实空格，网格剩料要回收，不再盲craft。采集前按原生物品ID选择正确工具，Soul Spell、法术书或协议代理图标不代表镐；不要硬套固定工具槽。gather只有blockBroken=true且pickupConfirmed=true、inventoryDelta.added显示本人真实库存增加才算采集完成；slot0是合成结果预览，不算已有物品。no_pickup_confirmed只说明本次没确认拿到掉落，不要称已采集，也不要自动重复挖已经变成air的方块；先检查工具、可见掉落和实际背包再制定新计划。dig仅确认方块破坏，不能当成收到物资。不要挖脚下、不往水/岩浆/怪物里导航。低血应先避险/进食。经确证消失或重生要重看状态。开箱/工作台/女仆背包后完成交互请close_menu。`
+模组动作：maid(operation:list/status/tasks/follow/pickup/task/bag,maidUuid,args)，只操作本人已拥有、8格内伙伴。例如{"type":"maid","operation":"follow","maidUuid":"从modStates.maid.maids读取的真实uuid","args":{"follow":true}}。modStates含本人的实际女仆/殖民地/法术只读状态，已有uuid不要反复登记或发明身份。女仆hunger=0为模组未使用字段，不能当成饿死。colony(operation:status/capabilities/found/placeBuilder/placeHut/requestBuild/deliver/stockResource,args，真实库存/建筑材料/位置/expectedSnbt)。先capabilities读原生hut与蓝图/出生距离/权限，placeHut用hutType builder/home/farmer/warehouse/blacksmith/cook/deliveryman与position/inventorySlot/expectedSnbt。requestBuild返回真实新workOrder与targetLevel仅证明工单登记，不能称建筑完工；后续status应见同position建筑built=true、level达到targetLevel、constructionPending=false。居民交料accepted不代表请求完成，应检查真实请求状态；目前未开放hire；其inventorySlot0..8对应背包菜单36..44的快捷栏，其9..35对应普通库存9..35。spell(operation:list/explain/cast,id原生法术)，真实持书魔力/冷却。先获取准确字段，做不了报告能力/资源缺口。界面点击失败未知不能重投；使用交互sent并非效果已验证。施法castConfirmed且manaSpent才是确认，不夸大effectVerified:false。epoch死亡/重生变化时旧动作立即取消。
+每轮优先查看健康、饥饿、menu的cursor/网格和最近回执。cursor有物品要放回真实空格，网格剩料要回收，不再盲craft。采集前按原生物品ID选择正确工具，Soul Spell、法术书或协议代理图标不代表镐；不要硬套固定工具槽。gather只有blockBroken=true且pickupConfirmed=true、inventoryDelta.added显示本人真实库存增加才算采集完成；slot0是合成结果预览，不算已有物品。no_pickup_confirmed只说明本次没确认拿到掉落，不要称已采集，也不要自动重复挖已经变成air的方块；先检查工具、可见掉落和实际背包再制定新计划。掉落可能晚于本次核验，走近后在下一轮inspect核验实际库存增加；保留原no_pickup_confirmed，不重复挖已变air。gather必须canHarvestWithMainHand=true（服务端原canHarvestBlock含模组HarvestCheck）；false返回wrong_tool_for_drops，缺字段返回native_harvest_precondition_unavailable，不发dig；请从实际库存换正确工具；dig清障无需假称收到材料。dig仅确认方块破坏，不能当成收到物资。不要挖脚下、不往水/岩浆/怪物里导航。低血应先避险/进食。经确证消失或重生要重看状态。开箱/工作台/女仆背包后完成交互请close_menu。`
 
 async function loop () {
   while (!closing) {
@@ -350,24 +364,26 @@ async function loop () {
       const observation = await inspect()
       if (closing || fs.existsSync(paused) || observedEpoch !== epoch || !status.online || bot.health <= 0) { record('observation_discarded', { reason: 'player_context_changed' }); await wait(1000); continue }
       status.mode = 'thinking'; status.round++; status.lastError = null; persist()
-      const decision = await qwen.run(guide + '\n当前真实观察：\n' + gameJSON(observation) + '\n持续目标：' + status.goal)
+      const decision = await qwen.run(guide + '\n当前真实观察：\n' + gameJSON(observation) + '\n长期固定目标：' + objective + '\n当前阶段目标：' + status.goal)
       if (closing) break
       if (decision.status !== 'completed') throw modelDecisionError(decision)
       status.modelBackoff = null; persist()
       if (decision.resumed === true) { record('decision_discarded', { taskId: decision.taskId, reason: 'task_resumed_from_previous_observation' }); await wait(1000); continue }
       if (observedEpoch !== epoch || !status.online || bot.health <= 0) { record('decision_discarded', { taskId: decision.taskId, reason: 'player_epoch_changed' }); await wait(1000); continue }
       const plan = parsePlan(decision.text)
-      status.goal = plan.goal; status.reason = plan.reason; status.lastDecision = { at: new Date().toISOString(), taskId: decision.taskId, actions: plan.actions }; record('decision', status.lastDecision)
+      status.goal = plan.goal; status.subgoal = plan.goal; status.reason = plan.reason; status.lastDecision = { at: new Date().toISOString(), taskId: decision.taskId, actions: plan.actions }; record('decision', status.lastDecision)
       status.mode = 'acting'; const plannedEpoch = epoch
       for (const action of plan.actions) {
         if (closing || fs.existsSync(paused) || epoch !== plannedEpoch || bot.health <= 0) break
         const actionId = randomUUID()
-        record('action_intent', { actionId, action })
+        record('action_intent', { actionId, action, readOnly: actionIsReadOnly(action), readOnlyContractVersion: 1 })
+        activeActionId = actionId
         try {
           const result = await runActionWithDeadline(scope => execute(action, plannedEpoch, scope), {
             timeoutMs: 45000, checkContext: () => checkActionContext(plannedEpoch),
+            readOnly: actionIsReadOnly(action),
             onScope: scope => { activeActionScope = scope },
-            onAbort: () => { actionFence.block(); stopMovement() }
+            onAbort: ({ outcomeUnknown }) => { if (outcomeUnknown) actionFence.block(); stopMovement() }
           })
           record('action_result', { actionId, action, result })
           if (unknownOutcome(result)) {
@@ -377,12 +393,12 @@ async function loop () {
           }
           if (result?.ok === false && !['inspect', 'maid', 'colony', 'spell'].includes(action.type)) break
         } catch (error) {
-          const unknown = error.result?.outcomeUnknown === true || error.outcomeUnknown === true || error.outcomeKnown === false || /TIMEOUT|CONNECTION_CLOSED|UNKNOWN|uncertain/i.test(error.message)
+          const unknown = actionErrorIsUnknown(error)
           if (unknown) { actionFence.block(); try { stopMovement() } catch {} }
           record('action_result', { actionId, action, result: error.result || { ok: false, code: error.message, outcome: unknown ? 'unknown' : 'known_rejection', retryAutomatically: false } })
           if (unknown) { if (!fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_action_outcome', actionId, action, at: new Date().toISOString() })); status.mode = 'paused_unknown' }
           break
-        } finally { activeActionScope = null }
+        } finally { activeActionScope = null; activeActionId = null }
       }
       status.mode = fs.existsSync(paused) ? 'paused' : 'observing'; persist(); await wait(config.decisionIntervalMs || 15000)
     } catch (error) {

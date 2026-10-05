@@ -6,14 +6,19 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Read MineColonies facts from the same authenticated player connection.
 // This never uses the operator-only Numen command bridge.
-function attachColonyClient (bot) {
+function attachColonyClient (bot, { timeoutMs = 4000 } = {}) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10000) throw Error('INVALID_COLONY_TIMEOUT')
   const events = new EventEmitter()
   const pending = new Map()
 
   function onPayload (packet) {
     if (packet.channel !== 'maw_agent:colony_state') return
     let body
-    try { body = JSON.parse(Buffer.from(packet.data).toString('utf8')) }
+    try {
+      const bytes = Buffer.from(packet.data)
+      if (bytes.length > 16384) throw Error('COLONY_RECEIPT_BUDGET_EXCEEDED')
+      body = JSON.parse(bytes.toString('utf8'))
+    }
     catch (error) { events.emit('protocolError', error); return }
     if (body.schemaVersion !== 1 || body.kind !== 'colony_receipt') return
     const owner = bot._client.uuid
@@ -21,19 +26,25 @@ function attachColonyClient (bot) {
       events.emit('protocolError', new Error('COLONY_PLAYER_MISMATCH'))
       return
     }
-    events.emit('receipt', body)
     const request = pending.get(body.requestId)
     if (request) {
+      if (request.uuid !== body.playerUuid.toLowerCase()) return
+      if (body.ok === true && request.expectedAction && body.action !== request.expectedAction) {
+        events.emit('protocolError', new Error('COLONY_ACTION_RECEIPT_MISMATCH'))
+        return
+      }
       clearTimeout(request.timer)
       pending.delete(body.requestId)
       request.resolve(body)
     }
+    events.emit('receipt', body)
   }
 
   function onEnd () {
     for (const request of pending.values()) {
       clearTimeout(request.timer)
-      request.reject(new Error('COLONY_CONNECTION_CLOSED'))
+      if (request.readOnly) request.resolve(readUnavailable(request.requestId, request.uuid, 'colony_query_connection_closed'))
+      else request.reject(new Error('COLONY_CONNECTION_CLOSED'))
     }
     pending.clear()
   }
@@ -47,26 +58,37 @@ function attachColonyClient (bot) {
       throw new Error('INVALID_COLONY_REQUEST_ID')
     }
     if (pending.has(requestId)) throw new Error('COLONY_REQUEST_ALREADY_PENDING')
+    const uuid = bot._client.uuid?.toLowerCase(), readOnly = channel === 'maw_agent:colony_query'
+    if (!UUID.test(uuid || '')) throw Error('COLONY_PLAYER_NOT_READY')
+    const data = Buffer.from(JSON.stringify({ schemaVersion: 1, ...body, requestId }), 'utf8')
+    if (data.length > 16384) throw Error('COLONY_REQUEST_BUDGET_EXCEEDED')
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId)
-        reject(new Error(`COLONY_RECEIPT_TIMEOUT ${requestId}: inspect state before retrying`))
-      }, 4000)
-      pending.set(requestId, { resolve, reject, timer })
+        if (readOnly) resolve(readUnavailable(requestId, uuid, 'colony_query_not_observed'))
+        else reject(new Error(`COLONY_RECEIPT_TIMEOUT ${requestId}: inspect state before retrying`))
+      }, timeoutMs)
+      pending.set(requestId, { resolve, reject, timer, uuid, readOnly, requestId, expectedAction: readOnly ? null : body.kind })
       try {
         bot._client.write('custom_payload', {
           channel,
-          data: Buffer.from(JSON.stringify({ schemaVersion: 1, ...body, requestId }), 'utf8')
+          data
         })
       } catch (error) {
         clearTimeout(timer)
         pending.delete(requestId)
-        reject(error)
+        if (readOnly) resolve(readUnavailable(requestId, uuid, 'colony_query_not_sent'))
+        else reject(error)
       }
     })
   }
+  function readUnavailable (requestId, playerUuid, code) {
+    return { schemaVersion: 1, kind: 'colony_receipt', requestId, playerUuid, ok: false, code,
+      readOnly: true, outcomeKnown: true, outcomeUnknown: false, retryAutomatically: false }
+  }
 
   function status () { return ask('maw_agent:colony_query', { kind: 'status' }) }
+  function capabilities () { return ask('maw_agent:colony_query', { kind: 'capabilities' }) }
 
   function deliver ({ buildingPosition, token, inventorySlot, quantity, expectedSnbt, requestId }) {
     if (!buildingPosition || !['x', 'y', 'z'].every(key => Number.isInteger(buildingPosition[key])) ||
@@ -116,6 +138,11 @@ function attachColonyClient (bot) {
       kind: 'place_builder', position, inventorySlot, expectedSnbt, requestId
     })
   }
+  function placeHut ({ position, hutType, inventorySlot, expectedSnbt, requestId }) {
+    if (!validPosition(position) || !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'].includes(hutType) ||
+        !validInventoryItem(inventorySlot, expectedSnbt)) throw Error('INVALID_COLONY_HUT')
+    return ask('maw_agent:colony_action', { kind: 'place_hut', position, hutType, inventorySlot, expectedSnbt, requestId })
+  }
 
   function requestBuild ({ buildingPosition, builderPosition, requestId }) {
     if (!validPosition(buildingPosition) || !validPosition(builderPosition)) {
@@ -129,10 +156,12 @@ function attachColonyClient (bot) {
   return {
     events,
     status,
+    capabilities,
     deliver,
     stockResource,
     found,
     placeBuilder,
+    placeHut,
     requestBuild,
     detach: () => {
       bot._client.off('custom_payload', onPayload)

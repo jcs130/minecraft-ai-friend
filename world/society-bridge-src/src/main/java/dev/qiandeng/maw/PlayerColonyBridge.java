@@ -1,12 +1,14 @@
 package dev.qiandeng.maw;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.ICitizenData;
 import com.minecolonies.api.colony.buildings.IBuilding;
+import com.minecolonies.api.colony.buildings.modules.IAssignsJob;
 import com.minecolonies.api.colony.requestsystem.request.IRequest;
 import com.minecolonies.api.colony.requestsystem.request.RequestState;
 import com.minecolonies.api.colony.requestsystem.manager.IRequestManager;
@@ -20,6 +22,7 @@ import com.minecolonies.api.util.InventoryUtils;
 import com.minecolonies.core.MineColonies;
 import com.minecolonies.core.colony.buildings.AbstractBuildingStructureBuilder;
 import com.minecolonies.core.colony.buildings.utils.BuildingBuilderResource;
+import com.minecolonies.core.colony.workorders.WorkOrderBuilding;
 import com.minecolonies.api.configuration.ServerConfiguration;
 import com.minecolonies.core.tileentities.TileEntityColonyBuilding;
 import com.ldtteam.structurize.storage.StructurePacks;
@@ -45,25 +48,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
-/** Read-only MineColonies facts for the colony this player is visiting or owns. */
+/** Same-player MineColonies facts and bounded native construction/inventory actions. */
 final class PlayerColonyBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerColonyBridge.class);
     private static final int MAX_BYTES = 16384;
     private static final int MAX_ROWS = 24;
     private static final int MAX_RESOURCE_ROWS = 12;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
-    private static final Map<UUID, LinkedHashMap<String, String>> ACTION_RECEIPTS = new HashMap<>();
+    private static final Map<UUID, ColonyActionReplay> ACTION_RECEIPTS = new HashMap<>();
 
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "colony_query"));
@@ -164,7 +167,7 @@ final class PlayerColonyBridge {
     }
 
     private static String limit(String value, int max) {
-        return value.length() <= max ? value : value.substring(0, max);
+        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
     private static boolean open(RequestState state) {
@@ -207,13 +210,123 @@ final class PlayerColonyBridge {
         return manager.getIColonyByOwner(player.level(), player);
     }
 
+    private static boolean blueprintAvailable(String path) {
+        // The native findBlueprint searches the whole pack and waits for loading.
+        // These are fixed relative paths: use getBlueprint's own pack path resolution.
+        var pack = StructurePacks.getStructurePack(ColonyConstructionRules.PACK);
+        return pack != null && Files.isRegularFile(pack.getPath().resolve(pack.getNormalizedSubPath(path)));
+    }
+
+    private static JsonObject constructionOptions(ServerPlayer player, IColony colony) {
+        JsonObject options = new JsonObject();
+        options.addProperty("scope", "fixed_original_level_one_huts");
+        options.addProperty("structurePack", ColonyConstructionRules.PACK);
+        options.addProperty("requestBuildSemantics", "native_next_level_subject_to_research_and_builder_rules");
+        options.addProperty("hireAvailable", false);
+        options.addProperty("workerConfigurationAvailable", false);
+        options.addProperty("foodDelivery", "open_native_deliverable_requests_only");
+        ServerConfiguration config = (ServerConfiguration) MineColonies.getConfig().getServer();
+        JsonObject founding = new JsonObject();
+        founding.addProperty("itemId", ColonyConstructionRules.TOWN_HALL.itemId());
+        founding.addProperty("blueprintPath", ColonyConstructionRules.TOWN_HALL.blueprintPath());
+        founding.addProperty("blueprintAvailable", blueprintAvailable(ColonyConstructionRules.TOWN_HALL.blueprintPath()));
+        founding.addProperty("minDistanceFromWorldSpawn", config.minDistanceFromWorldSpawn.get());
+        founding.addProperty("maxDistanceFromWorldSpawn", config.maxDistanceFromWorldSpawn.get());
+        BlockPos spawn = player.serverLevel().getSharedSpawnPos();
+        founding.add("worldSpawn", pos(spawn));
+        founding.addProperty("playerDistanceFromWorldSpawn", Math.hypot(player.getX() - spawn.getX(), player.getZ() - spawn.getZ()));
+        founding.addProperty("ownsColonyInDimension", IColonyManager.getInstance().getIColonyByOwner(player.level(), player) != null);
+        founding.addProperty("siteChecksRequired", true);
+        options.add("founding", founding);
+        JsonArray huts = new JsonArray();
+        for (var hut : ColonyConstructionRules.HUTS) {
+            JsonObject row = new JsonObject();
+            row.addProperty("hutType", hut.type());
+            row.addProperty("itemId", hut.itemId());
+            row.addProperty("blueprintPath", hut.blueprintPath());
+            row.addProperty("initialTargetLevel", 1);
+            row.addProperty("blueprintAvailable", blueprintAvailable(hut.blueprintPath()));
+            huts.add(row);
+        }
+        options.add("allowedHuts", huts);
+        if (colony != null) {
+            options.addProperty("placeHutsPermission", colony.getPermissions().hasPermission(player,
+                    com.minecolonies.api.colony.permissions.Action.PLACE_HUTS));
+            options.addProperty("manageHutsPermission", colony.getPermissions().hasPermission(player,
+                    com.minecolonies.api.colony.permissions.Action.MANAGE_HUTS));
+        }
+        return options;
+    }
+
+    private static JsonObject workOrder(IServerWorkOrder order) {
+        JsonObject row = new JsonObject();
+        row.addProperty("id", order.getID());
+        row.addProperty("type", order.getWorkOrderType().name().toLowerCase(java.util.Locale.ROOT));
+        row.addProperty("name", limit(order.getDisplayName().getString(), 120));
+        row.addProperty("claimed", order.isClaimed());
+        row.add("position", pos(order.getLocation()));
+        if (order.isClaimed() && order.getClaimedBy() != null) row.add("claimedBy", pos(order.getClaimedBy()));
+        row.addProperty("currentLevel", order.getCurrentLevel());
+        row.addProperty("targetLevel", order.getTargetLevel());
+        row.addProperty("structurePack", limit(order.getStructurePack(), 100));
+        row.addProperty("blueprintPath", limit(order.getStructurePath(), 240));
+        if (order.getStage() != null) row.addProperty("stage", order.getStage().name().toLowerCase(java.util.Locale.ROOT));
+        return row;
+    }
+
+    private static ColonyConstructionRules.Point point(BlockPos position) {
+        return position == null ? null : new ColonyConstructionRules.Point(position.getX(), position.getY(), position.getZ());
+    }
+
+    private static ColonyConstructionRules.Order orderEvidence(IServerWorkOrder order) {
+        return new ColonyConstructionRules.Order(order.getID(), order.getWorkOrderType().name().toLowerCase(java.util.Locale.ROOT),
+                point(order.getLocation()), order.getTargetLevel(), order.isClaimed(), point(order.getClaimedBy()));
+    }
+
+    private static Block hutBlock(String type) {
+        return switch (type) {
+            case "townhall" -> ModBlocks.blockHutTownHall;
+            case "builder" -> ModBlocks.blockHutBuilder;
+            case "home" -> ModBlocks.blockHutHome;
+            case "farmer" -> ModBlocks.blockHutFarmer;
+            case "warehouse" -> ModBlocks.blockHutWareHouse;
+            case "blacksmith" -> ModBlocks.blockHutBlacksmith;
+            case "cook" -> ModBlocks.blockHutCook;
+            case "deliveryman" -> ModBlocks.blockHutDeliveryman;
+            default -> null;
+        };
+    }
+
+    private static JsonObject colonyMetadata(ServerPlayer player, IColony colony) {
+        JsonObject meta = new JsonObject();
+        meta.addProperty("id", colony.getID());
+        meta.addProperty("name", colony.getName());
+        meta.addProperty("dimension", colony.getDimension().location().toString());
+        meta.add("center", pos(colony.getCenter()));
+        meta.addProperty("state", colony.getState().name().toLowerCase(java.util.Locale.ROOT));
+        meta.addProperty("ownerUuid", colony.getPermissions().getOwner().toString());
+        meta.addProperty("member", colony.getPermissions().isColonyMember(player));
+        return meta;
+    }
+
+    static JsonObject capabilitiesResult(String requestId, JsonObject options, JsonObject colony) {
+        JsonObject result = base(requestId);
+        result.addProperty("ok", true);
+        result.addProperty("query", "capabilities");
+        result.addProperty("readOnly", true);
+        result.add("constructionOptions", options);
+        result.add("colony", colony == null ? JsonNull.INSTANCE : colony);
+        return result;
+    }
+
     private static void handle(ServerPlayer player, String raw) {
         String requestId = "invalid";
         try {
             JsonObject query = JsonParser.parseString(raw).getAsJsonObject();
             requestId = query.get("requestId").getAsString();
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
-            if (query.get("schemaVersion").getAsInt() != 1 || !query.get("kind").getAsString().equals("status")) {
+            String kind = query.get("kind").getAsString();
+            if (query.get("schemaVersion").getAsInt() != 1 || !(kind.equals("status") || kind.equals("capabilities"))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -221,19 +334,20 @@ final class PlayerColonyBridge {
             if (last != null && now - last < 10) { reject(player, requestId, "rate_limited"); return; }
             LAST_QUERY_TICK.put(player.getUUID(), now);
             IColony colony = playerColony(player);
-            if (colony == null) { reject(player, requestId, "no_nearby_or_owned_colony"); return; }
-
+            JsonObject options = constructionOptions(player, colony);
+            if (kind.equals("capabilities")) {
+                send(player, capabilitiesResult(requestId, options, colony == null ? null : colonyMetadata(player, colony)));
+                return;
+            }
             JsonObject result = base(requestId);
+            result.add("constructionOptions", options);
+            if (colony == null) {
+                result.addProperty("ok", false);
+                result.addProperty("code", "no_nearby_or_owned_colony");
+                send(player, result); return;
+            }
             result.addProperty("ok", true);
-            JsonObject meta = new JsonObject();
-            meta.addProperty("id", colony.getID());
-            meta.addProperty("name", colony.getName());
-            meta.addProperty("dimension", colony.getDimension().location().toString());
-            meta.add("center", pos(colony.getCenter()));
-            meta.addProperty("state", colony.getState().name().toLowerCase());
-            meta.addProperty("ownerUuid", colony.getPermissions().getOwner().toString());
-            meta.addProperty("member", colony.getPermissions().isColonyMember(player));
-            result.add("colony", meta);
+            result.add("colony", colonyMetadata(player, colony));
 
             JsonArray citizens = new JsonArray();
             List<ICitizenData> citizenList = new ArrayList<>(colony.getCitizenManager().getCitizens());
@@ -282,6 +396,36 @@ final class PlayerColonyBridge {
                     row.addProperty("built", building.isBuilt());
                     row.addProperty("constructionPending", building.isPendingConstruction());
                     row.add("position", pos(building.getPosition()));
+                    row.addProperty("maxLevel", building.getMaxBuildingLevel());
+                    row.addProperty("structurePack", limit(building.getStructurePack(), 100));
+                    row.addProperty("blueprintPath", limit(building.getBlueprintPath(), 240));
+                    if (colony.getPermissions().isColonyMember(player)) {
+                        JsonArray workers = new JsonArray();
+                        var modules = building.getModules();
+                        int workerModuleCount = 0;
+                        for (int moduleId = 0; moduleId < modules.size(); moduleId++) {
+                            if (!(modules.get(moduleId) instanceof IAssignsJob worker)) continue;
+                            workerModuleCount++;
+                            if (workers.size() >= 4) continue;
+                            JsonObject module = new JsonObject();
+                            module.addProperty("moduleId", moduleId);
+                            module.addProperty("capacity", worker.getModuleMax());
+                            module.addProperty("full", worker.isFull());
+                            module.addProperty("hiringMode", worker.getHiringMode().name().toLowerCase(java.util.Locale.ROOT));
+                            var assigned = worker.getAssignedCitizen();
+                            JsonArray ids = new JsonArray();
+                            for (ICitizenData citizen : assigned) {
+                                if (ids.size() >= 4) break;
+                                ids.add(citizen.getId());
+                            }
+                            module.add("assignedCitizenIds", ids);
+                            module.addProperty("assignedCitizenCount", assigned.size());
+                            module.addProperty("assignedCitizensTruncated", assigned.size() > ids.size());
+                            workers.add(module);
+                        }
+                        row.add("workerModules", workers);
+                        row.addProperty("workerModulesTruncated", workerModuleCount > workers.size());
+                    }
                     if (colony.getPermissions().isColonyMember(player) && building.getTileEntity() != null) {
                         Map<String, Integer> stock = new TreeMap<>();
                         building.getTileEntity().getAllContent().forEach((item, count) -> {
@@ -357,13 +501,7 @@ final class PlayerColonyBridge {
             orderList.sort(Comparator.comparingInt(IServerWorkOrder::getID));
             for (IServerWorkOrder order : orderList) {
                 if (workOrders.size() >= MAX_ROWS) break;
-                JsonObject row = new JsonObject();
-                row.addProperty("id", order.getID());
-                row.addProperty("type", order.getWorkOrderType().name().toLowerCase());
-                row.addProperty("name", limit(order.getDisplayName().getString(), 120));
-                row.addProperty("claimed", order.isClaimed());
-                row.add("position", pos(order.getLocation()));
-                workOrders.add(row);
+                workOrders.add(workOrder(order));
             }
             result.add("workOrders", workOrders);
             result.addProperty("workOrderCount", orderList.size());
@@ -377,9 +515,8 @@ final class PlayerColonyBridge {
         body.addProperty("playerUuid", player.getUUID().toString());
         body.addProperty("retryAutomatically", false);
         String text = body.toString();
-        var receipts = ACTION_RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new LinkedHashMap<>());
-        receipts.put(body.get("requestId").getAsString(), text);
-        while (receipts.size() > 32) receipts.remove(receipts.keySet().iterator().next());
+        var receipts = ACTION_RECEIPTS.get(player.getUUID());
+        if (receipts != null) receipts.complete(body.get("requestId").getAsString(), text);
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
             PacketDistributor.sendToPlayer(player, new State(text));
         }
@@ -502,20 +639,37 @@ final class PlayerColonyBridge {
     /** Mirrors MineColonies' own TransferItemsRequestMessage storage path with explicit player preconditions. */
     private static void handleAction(ServerPlayer player, String raw) {
         String requestId = "invalid";
+        String actionKind = "unknown";
+        boolean receiptReserved = false;
         boolean transferStarted = false;
         try {
             JsonObject input = JsonParser.parseString(raw).getAsJsonObject();
             requestId = input.get("requestId").getAsString();
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
-            String cached = ACTION_RECEIPTS.getOrDefault(player.getUUID(), new LinkedHashMap<>()).get(requestId);
-            if (cached != null) {
+            String kind = input.get("kind").getAsString();
+            actionKind = kind;
+            var replay = ACTION_RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new ColonyActionReplay()).begin(requestId, input);
+            if (replay.outcome() == ColonyActionReplay.Outcome.REPLAY) {
                 if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
-                    PacketDistributor.sendToPlayer(player, new State(cached));
+                    PacketDistributor.sendToPlayer(player, new State(replay.response()));
                 }
                 return;
             }
-            String kind = input.get("kind").getAsString();
-            if (kind.equals("found") || kind.equals("place_builder") || kind.equals("request_build")) {
+            if (replay.outcome() != ColonyActionReplay.Outcome.NEW) {
+                JsonObject result = base(requestId);
+                result.addProperty("action", kind);
+                result.addProperty("ok", false);
+                boolean conflict = replay.outcome() == ColonyActionReplay.Outcome.CONFLICT;
+                result.addProperty("code", conflict ? "request_id_conflict" : "request_outcome_unknown_check_world");
+                result.addProperty("accepted", 0);
+                result.addProperty("knownNotApplied", true);
+                result.addProperty("retryAutomatically", false);
+                // This is about the new attempt; never overwrite the original receipt/fingerprint.
+                send(player, result);
+                return;
+            }
+            receiptReserved = true;
+            if (kind.equals("found") || kind.equals("place_builder") || kind.equals("place_hut") || kind.equals("request_build")) {
                 handleConstruction(player, input, requestId, kind);
                 return;
             }
@@ -606,6 +760,17 @@ final class PlayerColonyBridge {
             result.addProperty("resolutionError", resolutionError);
             actionReply(player, result);
         } catch (RuntimeException error) {
+            if (!receiptReserved) {
+                JsonObject result = base(requestId);
+                result.addProperty("action", actionKind);
+                result.addProperty("ok", false);
+                result.addProperty("code", "invalid_action_payload");
+                result.addProperty("accepted", 0);
+                result.addProperty("knownNotApplied", true);
+                result.addProperty("retryAutomatically", false);
+                send(player, result);
+                return;
+            }
             if (transferStarted) {
                 LOGGER.error("Colony delivery outcome unknown for player {} request {}", player.getUUID(), requestId, error);
             }
@@ -631,7 +796,7 @@ final class PlayerColonyBridge {
 
     /**
      * A narrow server-authoritative substitute for the Build Tool's BlockUI flow.
-     * It only handles the initial town hall, the first builder hut, and a build request.
+     * It handles the initial town hall, a fixed original hut list, and native next-level build requests.
      */
     private static void handleConstruction(ServerPlayer player, JsonObject input, String requestId, String kind) {
         boolean mutationStarted = false;
@@ -665,8 +830,27 @@ final class PlayerColonyBridge {
                         || !builder.getBuildingType().getRegistryName().getPath().equals("builder")) {
                     constructionReject(player, requestId, kind, "builder_missing_or_wrong_colony"); return;
                 }
+                // BlockPos.ZERO means automatic builder selection in the original API.
+                if (builderPos.equals(BlockPos.ZERO)) {
+                    constructionReject(player, requestId, kind, "builder_origin_not_selectable"); return;
+                }
+                Set<Integer> before = new HashSet<>(colony.getWorkManager().getWorkOrders().keySet());
+                for (IServerWorkOrder existing : colony.getWorkManager().getWorkOrders().values()) {
+                    if (existing instanceof WorkOrderBuilding && existing.getLocation().equals(pos)) {
+                        constructionReject(player, requestId, kind, "construction_already_pending"); return;
+                    }
+                }
                 mutationStarted = true;
                 building.requestUpgrade(player, builderPos);
+                List<ColonyConstructionRules.Order> evidence = new ArrayList<>();
+                for (IServerWorkOrder order : colony.getWorkManager().getWorkOrders().values()) {
+                    if (order instanceof WorkOrderBuilding) evidence.add(orderEvidence(order));
+                }
+                var confirmed = ColonyConstructionRules.confirm(before, evidence, point(pos), point(builderPos));
+                if (confirmed.order() == null) {
+                    constructionReject(player, requestId, kind, confirmed.code()); return;
+                }
+                IServerWorkOrder order = colony.getWorkManager().getWorkOrders().get(confirmed.order().id());
                 JsonObject result = base(requestId);
                 result.addProperty("action", kind);
                 result.addProperty("ok", true);
@@ -674,6 +858,7 @@ final class PlayerColonyBridge {
                 result.add("buildingPosition", pos(pos));
                 result.add("builderPosition", pos(builderPos));
                 result.addProperty("colonyId", colony.getID());
+                result.add("workOrder", workOrder(order));
                 actionReply(player, result);
                 return;
             }
@@ -686,8 +871,21 @@ final class PlayerColonyBridge {
                 constructionReject(player, requestId, kind, "invalid_build_position"); return;
             }
             boolean founding = kind.equals("found");
-            Block hut = founding ? ModBlocks.blockHutTownHall : ModBlocks.blockHutBuilder;
-            String blueprint = founding ? "fundamentals/townhall1.blueprint" : "fundamentals/builder1.blueprint";
+            if (input.has("structurePack") || input.has("blueprintPath") || input.has("style")
+                    || input.has("rotation") || input.has("mirror")) {
+                constructionReject(player, requestId, kind, "custom_blueprint_or_transform_unsupported"); return;
+            }
+            var spec = founding ? ColonyConstructionRules.TOWN_HALL
+                    : ColonyConstructionRules.hut(kind.equals("place_builder") ? "builder" : input.get("hutType").getAsString());
+            if (spec == null) {
+                constructionReject(player, requestId, kind, "unsupported_hut_type"); return;
+            }
+            Block hut = hutBlock(spec.type());
+            String blueprint = spec.blueprintPath();
+            if (hut == null || !BuiltInRegistries.BLOCK.getKey(hut).toString().equals(spec.itemId())
+                    || !BuiltInRegistries.ITEM.getKey(hut.asItem()).toString().equals(spec.itemId())) {
+                constructionReject(player, requestId, kind, "hut_registry_mismatch"); return;
+            }
             IColony colony;
             if (founding) {
                 if (manager.getIColonyByOwner(level, player) != null || !manager.isFarEnoughFromColonies(level, pos)) {
@@ -719,8 +917,16 @@ final class PlayerColonyBridge {
                     || !held.saveOptional(player.registryAccess()).toString().equals(input.get("expectedSnbt").getAsString())) {
                 constructionReject(player, requestId, kind, "hut_item_missing_or_changed"); return;
             }
-            var pack = StructurePacks.getStructurePack("Minecolonies Original");
+            var pack = StructurePacks.getStructurePack(ColonyConstructionRules.PACK);
             if (pack == null) { constructionReject(player, requestId, kind, "structure_pack_unavailable"); return; }
+            if (!blueprintAvailable(blueprint)) {
+                constructionReject(player, requestId, kind, "blueprint_unavailable"); return;
+            }
+            var loadedBlueprint = StructurePacks.getBlueprint(ColonyConstructionRules.PACK, blueprint, player.registryAccess());
+            if (loadedBlueprint == null || loadedBlueprint.getPrimaryBlockOffset() == null
+                    || loadedBlueprint.getBlockState(loadedBlueprint.getPrimaryBlockOffset()).getBlock() != hut) {
+                constructionReject(player, requestId, kind, "blueprint_hut_mismatch"); return;
+            }
 
             mutationStarted = true;
             if (!level.setBlockAndUpdate(pos, hut.defaultBlockState())
@@ -731,7 +937,7 @@ final class PlayerColonyBridge {
             tile.setBlueprintPath(blueprint);
             if (founding) {
                 colony = manager.createColony(level, pos, player, input.get("name").getAsString().strip(),
-                        "Minecolonies Original");
+                        ColonyConstructionRules.PACK);
                 if (colony == null) throw new IllegalStateException("native colony creation failed");
             } else {
                 colony = manager.getColonyByPosFromWorld(level, pos);
@@ -739,7 +945,7 @@ final class PlayerColonyBridge {
             hut.setPlacedBy(level, pos, level.getBlockState(pos), player, held.copyWithCount(1));
             IBuilding building = manager.getBuilding(level, pos);
             if (building == null) throw new IllegalStateException("native hut registration failed");
-            building.setStructurePack("Minecolonies Original");
+            building.setStructurePack(ColonyConstructionRules.PACK);
             building.setBlueprintPath(blueprint);
             building.calculateCorners();
             ItemStack removed = player.getInventory().removeItem(slot, 1);
@@ -753,10 +959,15 @@ final class PlayerColonyBridge {
             JsonObject result = base(requestId);
             result.addProperty("action", kind);
             result.addProperty("ok", true);
-            result.addProperty("code", founding ? "colony_founded" : "builder_placed");
+            result.addProperty("code", founding ? "colony_founded" : kind.equals("place_builder") ? "builder_placed" : "hut_placed");
             result.addProperty("colonyId", colony.getID());
             result.add("position", pos(pos));
             result.addProperty("itemId", BuiltInRegistries.ITEM.getKey(removed.getItem()).toString());
+            result.addProperty("hutType", spec.type());
+            result.addProperty("structurePack", ColonyConstructionRules.PACK);
+            result.addProperty("blueprintPath", blueprint);
+            result.addProperty("level", building.getBuildingLevel());
+            result.addProperty("built", building.isBuilt());
             result.addProperty("inventoryRemaining", player.getInventory().getItem(slot).getCount());
             actionReply(player, result);
         } catch (RuntimeException error) {

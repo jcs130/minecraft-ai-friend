@@ -39,3 +39,18 @@ test('maid booleans and actual task IDs cannot be confused with untyped free-for
   assert.throws(() => parse({ type: 'maid', operation: 'follow', maidUuid: uuid, args: { follow: 'true' } }), /ARGUMENT/)
   assert.throws(() => parse({ type: 'maid', operation: 'task', maidUuid: uuid, args: { taskId: 'farm' } }), /ARGUMENT/)
 })
+test('native hut capabilities and component-CAS construction are discoverable without treating work orders as completion', () => {
+  assert.equal(parse({ type: 'colony', operation: 'capabilities' }).actions.length, 1)
+  const args = { position: { x: 100, y: 64, z: 100 }, hutType: 'home', inventorySlot: 5, expectedSnbt: '{id:"minecolonies:blockhuthome",count:1}' }
+  assert.equal(parse({ type: 'colony', operation: 'placeHut', args }).actions.length, 1)
+  for (const patch of [{ hutType: 'castle' }, { inventorySlot: 36 }, { expectedSnbt: null }, { position: { x: .5, y: 64, z: 100 } }]) assert.throws(() => parse({ type: 'colony', operation: 'placeHut', args: { ...args, ...patch } }), /COLONY_HUT/)
+  assert.match(agentToolCatalog('colony').tool.description, /workOrder不等于建筑完成/)
+  assert.match(agentToolCatalog('colony').tool.parameters.operation, /capabilities.*placeHut/)
+})
+test('dig/gather aim offsets remain explicitly bounded and never become an automatic obstruction action', () => {
+  for (const type of ['dig', 'gather']) {
+    assert.equal(parse({ type, position: { x: 1, y: 64, z: 2 }, aimOffset: [.1, .8, .1] }).actions.length, 1)
+    assert.throws(() => parse({ type, position: { x: 1, y: 64, z: 2 }, aimOffset: [-.1, .8, .1] }), /OFFSET/)
+    assert.ok(agentToolCatalog(type).tool.parameters.aimOffset)
+  }
+})

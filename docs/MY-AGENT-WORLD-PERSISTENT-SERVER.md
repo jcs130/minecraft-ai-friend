@@ -1,6 +1,6 @@
 # My Agent World：常驻服运维与 Agent 操作指引
 
-更新：2026-10-04。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。
+更新：2026-10-05。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
 
 ## 运行目录与入口
 
@@ -11,7 +11,7 @@
 | 旧实验世界 | `server\world-lab` | 保留，与新生活世界分开 |
 | 注册表研究副本 | `E:\QiandengJiSocietyLab\research\registry-server` | 保留其研究世界、号表和原始证据，不当作当前生活服 |
 | 常驻号表与网关缓存 | `gateway\permanent\registry`、`gateway\permanent\idmap.json`、`gateway\permanent\knowledge.json` | 从通过验证的研究产物复制，配置引用常驻目录，不依赖清理研究副本 |
-| 原生网页资产 | `assets\native-20261004-v3` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712` |
+| 原生网页资产 | `assets\native-20261005-v9` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712` |
 | Java 服务端 | `127.0.0.1:28976` | 模组服务端后端；真人 Java 客户端须匹配模组包并单独验证 |
 | Agent 协议网关 | `127.0.0.1:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
 | Agent 同连接网页 | `http://127.0.0.1:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |

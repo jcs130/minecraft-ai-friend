@@ -8,10 +8,12 @@ const MUTATIONS = new Set(['block_dig', 'block_place', 'use_item', 'use_item_on'
 const contextReason = error => Object.hasOwn(REASONS, error?.actionInterruptionReason) ? error.actionInterruptionReason : 'context'
 
 class ActionInterruptionError extends Error {
-  constructor (reason, phase, cleanupOk) {
+  constructor (reason, phase, cleanupOk, readOnly = false) {
     super(REASONS[reason]); this.name = 'ActionInterruptionError'; this.code = REASONS[reason]
     this.result = { ok: false, code: this.code, outcome: 'unknown', outcomeUnknown: true, outcomeKnown: false,
       effectVerified: false, retryAutomatically: false, interruptionReason: reason, phase, cleanupOk }
+    if (readOnly) Object.assign(this.result, { outcome: 'known_aborted', outcomeUnknown: false, outcomeKnown: true,
+      readOnly: true, discarded: true, mutationsDispatched: false })
   }
 }
 
@@ -19,17 +21,19 @@ class ActionInterruptionError extends Error {
 // second mutation. The original promise remains observed; its continuation
 // must use scope.check()/wait() and the persistent packet fence below.
 async function runActionWithDeadline (operation, { timeoutMs = 45000, pollIntervalMs = 100, signal,
-  checkContext = () => {}, onAbort = () => {}, onScope = () => {} } = {}) {
+  checkContext = () => {}, onAbort = () => {}, onScope = () => {}, readOnly = false } = {}) {
   if (typeof operation !== 'function' || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000 ||
-      !Number.isInteger(pollIntervalMs) || pollIntervalMs < 1 || pollIntervalMs > 1000) throw Error('ACTION_DEADLINE_CONFIG_INVALID')
+      !Number.isInteger(pollIntervalMs) || pollIntervalMs < 1 || pollIntervalMs > 1000 || typeof readOnly !== 'boolean') throw Error('ACTION_DEADLINE_CONFIG_INVALID')
   // No operation was dispatched yet: this is a real precondition rejection.
   checkContext()
   if (signal?.aborted) throw Error('ACTION_NOT_DISPATCHED_ABORTED')
-  let interrupted = null, finished = false, phase = 'starting', timer, poll, rejectInterrupted
+  let interrupted = null, finished = false, mutationDispatched = false, phase = 'starting', timer, poll, rejectInterrupted
   const controller = new AbortController()
   const interruption = new Promise((_resolve, reject) => { rejectInterrupted = reject })
   const scope = {
     signal: controller.signal,
+    mutationDispatched () { scope.check(); mutationDispatched = true },
+    mutationObserved () { return mutationDispatched },
     phase (name) { scope.check(); if (!/^[a-z0-9_]{1,64}$/.test(name)) throw Error('ACTION_PHASE_INVALID'); phase = name },
     abort (reason = 'context') {
       if (finished || interrupted) return
@@ -37,9 +41,9 @@ async function runActionWithDeadline (operation, { timeoutMs = 45000, pollInterv
       let cleanupOk = true
       // Mark cancelled before stopping the body: synchronous cancellation
       // events and their promise continuations can no longer dispatch work.
-      interrupted = new ActionInterruptionError(reason, phase, true)
+      interrupted = new ActionInterruptionError(reason, phase, true, readOnly && !mutationDispatched)
       controller.abort()
-      try { onAbort({ reason, phase, code: interrupted.code }) } catch { cleanupOk = false }
+      try { onAbort({ reason, phase, code: interrupted.code, outcomeUnknown: interrupted.result.outcomeUnknown }) } catch { cleanupOk = false }
       interrupted.result.cleanupOk = cleanupOk
       rejectInterrupted(interrupted)
     },
@@ -78,6 +82,11 @@ async function runActionWithDeadline (operation, { timeoutMs = 45000, pollInterv
   } catch (error) {
     // A native cancellation can synchronously reject its own promise before
     // Promise.race consumes our interruption. It still has an unknown effect.
+    if (!interrupted && mutationDispatched && !error.result) error.result = { ok: false, code: 'action_dispatch_outcome_unknown',
+      outcome: 'unknown', outcomeKnown: false, outcomeUnknown: true, effectVerified: false, mutationDispatched: true,
+      phase, retryAutomatically: false }
+    if (!interrupted && readOnly && !mutationDispatched && !error.result) error.result = { ok: false, code: error.code || error.message,
+      outcome: 'known_read_unavailable', outcomeKnown: true, outcomeUnknown: false, readOnly: true, retryAutomatically: false }
     throw interrupted || error
   } finally {
     clearTimeout(timer); clearInterval(poll)
@@ -98,8 +107,8 @@ function outboundGameMutation (name, data) {
 // intercept their late native writes. Fence the real client once. After an
 // unknown interrupted action the fence stays closed for this worker lifetime;
 // keepalive/position/read-only queries and dig cancellation remain possible.
-function installActionPacketFence (client, onBlocked = () => {}) {
-  if (!client || typeof client.write !== 'function' || typeof onBlocked !== 'function') throw Error('ACTION_FENCE_CONFIG_INVALID')
+function installActionPacketFence (client, onBlocked = () => {}, onMutation = () => {}) {
+  if (!client || typeof client.write !== 'function' || typeof onBlocked !== 'function' || typeof onMutation !== 'function') throw Error('ACTION_FENCE_CONFIG_INVALID')
   const original = client.write
   let blocked = false, count = 0
   client.write = function (name, data) {
@@ -108,6 +117,9 @@ function installActionPacketFence (client, onBlocked = () => {}) {
       if (count <= 8) { try { onBlocked({ packet: name, count }) } catch {} } // no payload/credentials
       return false
     }
+    // Track the attempted dispatch before native write: a transport throw may
+    // leave its delivery uncertain. Read-only declarations cannot mask it.
+    if (outboundGameMutation(name, data)) onMutation({ packet: name })
     return original.call(this, name, data)
   }
   return { block () { blocked = true }, status () { return { blocked, blockedWrites: count } } }

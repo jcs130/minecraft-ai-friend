@@ -101,3 +101,33 @@ test('maintenance marker context is labeled without exposing uncontrolled error 
   setTimeout(() => { maintained = true }, 2)
   await assert.rejects(result, error => error.result.code === 'ACTION_MAINTENANCE_ABORTED' && !JSON.stringify(error.result).includes('SECRET'))
 })
+test('death abort of a readonly wait discards the old plan without permanently fencing the next spawn', async () => {
+  let alive = true, nextActions = 0, scope, fenceBlocks = 0
+  const result = runActionWithDeadline(async value => { scope = value; await value.wait(1000); nextActions++ }, { readOnly: true, timeoutMs: 2000, pollIntervalMs: 2,
+    checkContext: () => { if (!alive) throw Error('PLAYER_DEAD') }, onAbort: ({ outcomeUnknown }) => { if (outcomeUnknown) fenceBlocks++ } })
+  setTimeout(() => { alive = false }, 3)
+  await assert.rejects(result, error => error.result.outcomeKnown === true && error.result.outcomeUnknown === false && error.result.discarded === true)
+  assert.equal(nextActions, 0); assert.equal(fenceBlocks, 0); assert.throws(() => scope.check(), /ACTION_CONTEXT_ABORTED/)
+  alive = true
+  assert.deepEqual(await runActionWithDeadline(() => ({ ok: true, newSpawn: true }), { readOnly: true, checkContext: () => assert.ok(alive) }), { ok: true, newSpawn: true })
+})
+test('read-only deadline and native query timeout remain known; late successful reads never revive the discarded plan', async () => {
+  let resolve, scope
+  await assert.rejects(runActionWithDeadline(value => { scope = value; return new Promise(done => { resolve = done }) }, { readOnly: true, timeoutMs: 3 }),
+    error => error.result.outcomeKnown && !error.result.outcomeUnknown && error.result.code === 'ACTION_DEADLINE_TIMEOUT')
+  resolve({ ok: true }); await delay(1); assert.throws(() => scope.check(), /DEADLINE_TIMEOUT/)
+  await assert.rejects(runActionWithDeadline(() => { throw Error('COLONY_RECEIPT_TIMEOUT q') }, { readOnly: true }),
+    error => error.result.outcomeKnown && !error.result.outcomeUnknown && error.result.readOnly)
+})
+test('actual packet dispatch upgrades a declared readonly action to unknown, including a native transport throw', async () => {
+  for (const transportThrows of [false, true]) {
+    let scope, dispatched = 0, fenced = false
+    const client = { write () { dispatched++; if (transportThrows) throw Error('TRANSPORT_FAILURE') } }
+    const fence = installActionPacketFence(client, () => {}, () => scope?.mutationDispatched())
+    await assert.rejects(runActionWithDeadline(async value => { scope = value; client.write('custom_payload', { channel: 'maw_agent:colony_action' }); await value.wait(1000) },
+      { readOnly: true, timeoutMs: 3, onAbort: ({ outcomeUnknown }) => { if (outcomeUnknown) { fenced = true; fence.block() } } }),
+    error => error.result.outcomeKnown === false && error.result.outcomeUnknown === true)
+    assert.equal(dispatched, 1)
+    if (!transportThrows) { assert.equal(fenced, true); assert.equal(client.write('window_click', {}), false) }
+  }
+})

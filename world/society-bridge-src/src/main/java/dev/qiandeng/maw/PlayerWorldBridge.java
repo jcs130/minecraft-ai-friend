@@ -377,6 +377,10 @@ final class PlayerWorldBridge {
             JsonObject properties = new JsonObject();
             state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), value.toString()));
             block.add("properties", properties);
+            block.addProperty("requiresCorrectToolForDrops", state.requiresCorrectToolForDrops());
+            block.addProperty("canHarvestWithMainHand", state.canHarvestBlock(player.level(), pos, player));
+            block.addProperty("destroySpeed", state.getDestroySpeed(player.level(), pos));
+            block.addProperty("mainHandItemId", BuiltInRegistries.ITEM.getKey(player.getMainHandItem().getItem()).toString());
             BlockEntity entity = player.level().getBlockEntity(pos);
             if (entity != null) {
                 block.addProperty("blockEntityType", BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(entity.getType()).toString());

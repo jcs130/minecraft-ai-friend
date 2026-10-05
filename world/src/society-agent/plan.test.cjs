@@ -61,4 +61,8 @@ test('does not disclose buried ores behind a solid surface', () => {
   const surfaces = visibleSurfaces(world, { x: 0.5, y: 64, z: 0.5 })
   assert(surfaces.some(s => s.id === 'minecraft:stone'))
   assert(!surfaces.some(s => s.id === 'minecraft:diamond_ore'))
+  for (const surface of surfaces) {
+    assert.equal(surface.aimSource, 'first_native_voxel_sample_not_server_ray_hit')
+    assert.equal(surface.aimOffset.length, 3); assert.ok(surface.aimOffset.every(value => value >= 0 && value <= 1))
+  }
 })

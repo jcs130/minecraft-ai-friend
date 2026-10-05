@@ -1,6 +1,10 @@
 # Mineflayer 模组操作接入
 
-适用：隔离的 My Agent World，Minecraft 1.21.1 / NeoForge 21.1.248。接口按本仓库 2026-10-04 的 `world/src/neoforge-handshake/` 源码编写。版本、模组或注册表变更后必须重新导出号表并验证；详细运行证据见 [MY-AGENT-WORLD-LAB.md](MY-AGENT-WORLD-LAB.md)。本文不更改原 Paper 千灯纪的连接方式。
+适用：隔离的 My Agent World，Minecraft 1.21.1 / NeoForge 21.1.248。接口按本仓库 2026-10-05 的 `world/src/neoforge-handshake/` 源码编写。版本、模组或注册表变更后必须重新导出号表并验证；详细运行证据见 [MY-AGENT-WORLD-LAB.md](MY-AGENT-WORLD-LAB.md) 与 [普通 Agent 发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。本文不更改原 Paper 千灯纪的连接方式。
+
+2026-10-05 新增 `colony.capabilities()` 和 `placeHut()`。前者即使没有城镇也返回本人真实 `constructionOptions`，后者允许 `builder/home/farmer/warehouse/blacksmith/cook/deliveryman`，参数为 `position/hutType/inventorySlot/expectedSnbt/requestId`。真实住宅物品 ID 为 `minecolonies:blockhutcitizen`。查询共用每 10 tick 节流，连续手工测试至少间隔约 600 ms；不能把节流失败当作缺功能。完整蓝图、原生权限、工单与去重限制见发展链文档。
+
+采集先读取本人原生准星命中的 `block.canHarvestWithMainHand`，它经过模组真实 HarvestCheck；字段不为 true 时 `gather` 不派发挖掘。`requiresCorrectToolForDrops/destroySpeed/mainHandItemId` 是额外原生解释信息，不能取代这个判定。`dig` 可清障而不保证收获。导航使用目标脚下格的绝对 XYZ，回执明确实际位置、高差和是否精确抵达；pathfinder Promise 完成不能单独算到达。
 
 宿主 Agent 复用自己已经登录的普通 Mineflayer `bot`，在同一连接上挂接五个客户端。身体动作、个人物品、魔力、城镇交货和本人女仆操作属于这个账号，不需要 OP，也不需要另建摄像机账号。原有 Numen 管理员 `control` 接口属于另一条管理员控制链；不能用它给测试角色发物品、代替普通玩家操作，再声称普通 Agent 已完成游玩。
 

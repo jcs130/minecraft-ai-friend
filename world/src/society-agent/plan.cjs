@@ -32,7 +32,7 @@ function parsePlan (text) {
   for (const action of plan.actions) {
     if (!action || !ACTIONS.has(action.type)) throw Error('PLAN_ACTION_INVALID')
     if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
-    if (action.aimOffset !== undefined && (!['use_block', 'block_inspect'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
+    if (action.aimOffset !== undefined && (!['gather', 'dig', 'use_block', 'block_inspect'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
     if (['use_block', 'block_inspect'].includes(action.type) && action.recipeId !== undefined && !ID.test(action.recipeId)) throw Error('PLAN_BLOCK_RECIPE_INVALID')
     if (action.type === 'use_block' && action.intent !== undefined && !['interact', 'load', 'process', 'collect'].includes(action.intent)) throw Error('PLAN_BLOCK_INTENT_INVALID')
     if (action.type === 'block_verify' && (!UUID.test(action.verificationId || '') || !['observe', 'change', 'output', 'pickup'].includes(action.goal ?? 'observe') ||
@@ -54,7 +54,11 @@ function parsePlan (text) {
     if (action.type === 'place' && (!ID.test(action.itemId) || !ID.test(action.blockId) || !position(action.face) || ['x', 'y', 'z'].reduce((s, k) => s + Math.abs(action.face[k]), 0) !== 1 || !Number.isInteger(action.hotbarSlot) || action.hotbarSlot < 0 || action.hotbarSlot > 8)) throw Error('PLAN_PLACE_INVALID')
     if (action.type === 'maid' && !['list', 'status', 'tasks', 'follow', 'pickup', 'task', 'bag'].includes(action.operation)) throw Error('PLAN_MAID_INVALID')
     if (action.type === 'maid' && action.operation !== 'list' && (!UUID.test(action.maidUuid || '') || (action.operation === 'follow' && typeof action.args?.follow !== 'boolean') || (action.operation === 'pickup' && typeof action.args?.pickup !== 'boolean') || (action.operation === 'task' && !ID.test(action.args?.taskId || '')))) throw Error('PLAN_MAID_ARGUMENT_INVALID')
-    if (action.type === 'colony' && !['status', 'found', 'placeBuilder', 'requestBuild', 'deliver', 'stockResource'].includes(action.operation)) throw Error('PLAN_COLONY_INVALID')
+    if (action.type === 'colony' && !['status', 'capabilities', 'found', 'placeBuilder', 'placeHut', 'requestBuild', 'deliver', 'stockResource'].includes(action.operation)) throw Error('PLAN_COLONY_INVALID')
+    if (action.type === 'colony' && action.operation === 'placeHut' && (!position(action.args?.position) ||
+        !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'].includes(action.args?.hutType) ||
+        !Number.isInteger(action.args?.inventorySlot) || action.args.inventorySlot < 0 || action.args.inventorySlot > 35 ||
+        typeof action.args?.expectedSnbt !== 'string' || !action.args.expectedSnbt)) throw Error('PLAN_COLONY_HUT_INVALID')
     if (action.type === 'spell' && !['list', 'explain', 'cast'].includes(action.operation)) throw Error('PLAN_SPELL_INVALID')
   }
   return plan
@@ -69,12 +73,14 @@ function visibleSurfaces (world, pose, maxDistance = 8) {
   for (let yaw = 0; yaw < Math.PI * 2; yaw += Math.PI / 12) {
     for (const pitch of [-0.45, 0, 0.35, 0.7]) {
       for (let d = 0.5; d <= maxDistance; d += 0.25) {
-        const p = { x: Math.floor(pose.x - Math.sin(yaw) * Math.cos(pitch) * d), y: Math.floor(pose.y + 1.62 - Math.sin(pitch) * d), z: Math.floor(pose.z - Math.cos(yaw) * Math.cos(pitch) * d) }
+        const sample = { x: pose.x - Math.sin(yaw) * Math.cos(pitch) * d, y: pose.y + 1.62 - Math.sin(pitch) * d, z: pose.z - Math.cos(yaw) * Math.cos(pitch) * d }
+        const p = { x: Math.floor(sample.x), y: Math.floor(sample.y), z: Math.floor(sample.z) }
         const stateId = world.stateIdAt(p)
         const state = world.states.get(stateId)
         if (!state) break
         if (air.has(state.name)) continue
-        found.set(`${p.x},${p.y},${p.z}`, { position: p, id: state.name, properties: state.properties, distance: Number(d.toFixed(2)) })
+        found.set(`${p.x},${p.y},${p.z}`, { position: p, id: state.name, properties: state.properties, distance: Number(d.toFixed(2)),
+          aimOffset: ['x', 'y', 'z'].map(key => Number((sample[key] - p[key]).toFixed(6))), aimSource: 'first_native_voxel_sample_not_server_ray_hit' })
         break
       }
     }
