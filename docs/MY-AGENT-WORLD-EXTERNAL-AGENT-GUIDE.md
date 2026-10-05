@@ -39,7 +39,7 @@ bot.once('end', () => sdk.detach())
 
 | 客户端入口 | 作用与边界 |
 | --- | --- |
-| `sdk.menu.current()` | 本人当前原生菜单；含 `playerUuid/windowId/stateId`、真实 ID、数量、名称、完整 SNBT、游标和实际本人状态。尚未收到或状态失效时为 `null`。 |
+| `sdk.menu.current()` | 本人当前原生菜单；含 `playerUuid/windowId/stateId`、真实 ID、数量、名称、完整 SNBT、游标、`menuType/menuTypeId` 和实际本人状态。尚未收到或状态失效时为 `null`。 |
 | `sdk.menu.click(slot, 0或1)` | 当前菜单原生 PICKUP；左键整堆、右键逐个。新 SDK 携带本人 UUID、预期 stateId、目标完整 SNBT 和游标完整 SNBT。 |
 | `sdk.world.look()` / `lookAtBlock(block, offset)` | 服务端从本人当前视线读取首个可见方块、绝对位置和有限真实机器状态；不会扫描墙后库存或矿物。 |
 | `sdk.native.recipes(args)` | 本服 RecipeManager，支持 `recipeId/recipeType/outputId/offset/limit`；只有真实定义和明确语义可以作为执行依据。 |
@@ -47,15 +47,17 @@ bot.once('end', () => sdk.detach())
 | `sdk.maid.list/status/tasks` | 本人已有、已加载且在范围内的女仆及任务事实；列表为空不代表已完成女仆招募或劳动验收。 |
 | `sdk.maid.setFollow/setPickup/setTask/openBag` | 本人女仆的受限原生操作；仍须检查实际状态/窗口变化。其背包用普通原生 menu.click 操作。 |
 | `sdk.colony.capabilities/status/resources` | 本人可用原蓝图、权限、真实建筑/工单/居民请求及建筑工完整资源分页。 |
+| `sdk.domum.state/choices/select` | 本人真实建筑切割台的材料组、变体和原生按钮。输入和取出仍使用 `sdk.menu.click`；详见 [切割台协议](MY-AGENT-WORLD-DOMUM-CUTTER.md)。 |
+| `sdk.collision.query/lookAtBlock` | 本人准星第一可见方块的真实服务器碰撞形状；绑定完整原生属性及维度。未知类明确不可用，目前未接入 Mineflayer 物理或寻路。 |
 | `sdk.colony.found/placeBuilder/placeHut/requestBuild` | 消耗玩家自己的原生物品、检查原权限、距离、原蓝图和位置，登记真实殖民地建筑/工单。放置 hut 和登记工单均不等于完工。 |
 | `sdk.colony.deliver/stockResource` | 按实际槽位、数量及本人库存完整 `expectedSnbt` 交料；随后核验实际请求、库存和工单。 |
 | `sdk.spell.list/explain/cast` | Ars 本人实际持书、配置槽位、glyph、魔力与施放确认。无持书或未配置是明确拒绝，不算魔法完整可玩。 |
 
 普通物品操作还可使用 `native-crafting-client.cjs` 的 `craftNativeGrid` 和 `native-block-client.cjs` 的 `placeNativeHeld`；需传入本人真实菜单/方块查询接口。菜单暂支持 PICKUP 左右键，其他 GUI 按钮、滑条、文本输入和模组专属网络操作不能靠点击槽位自动覆盖。
 
-网关为每条玩家连接同步 `maw_agent:menu_state/world_state/colony_state/maid_state/spell_state` 的 UTF-8 JSON；客户端动作分别走该账号的 `*_action` 或 `*_query`。每份私有回执须匹配自己的登录 UUID、requestId 和动作/查询类型，不能按玩家显示名或仅 requestId 接受。不得发到公屏、广播或旁观者账号。
+网关为每条玩家连接同步 `maw_agent:menu_state/world_state/colony_state/maid_state/spell_state/domum_state` 的 UTF-8 JSON；客户端动作分别走该账号的 `*_action` 或 `*_query`。每份私有回执须匹配自己的登录 UUID、requestId 和动作/查询类型，不能按玩家显示名或仅 requestId 接受。不得发到公屏、广播或旁观者账号。
 
-菜单上限 64 KiB，世界/殖民地/女仆/法术的服务端 JSON 采用各自有界预算。超预算会明确报告缺口；不截断 SNBT 后当作完整物品。查看场景的 `mcviewer:native_packet` 是本连接原始包的独立二进制镜像，采用 MCNP + deflateRaw + Node v8 序列化，须用对应解码器和准确注册表 SHA。它不属于上述 JSON 协议，也不是通用 Python/HTTP API。
+当前聚合客户端注册 16 个实际频道。菜单上限 64 KiB；Domum 状态/回执上限 16 KiB；世界/殖民地/女仆/法术的服务端 JSON 采用各自有界预算。超预算会明确报告缺口；不截断 SNBT 后当作完整物品。查看场景的 `mcviewer:native_packet` 是本连接原始包的独立二进制镜像，采用 MCNP + deflateRaw + Node v8 序列化，须用对应解码器和准确注册表 SHA。它不属于上述 JSON 协议，也不是通用 Python/HTTP API。
 
 ## 必须遵守的身份、槽位和坐标
 
@@ -66,6 +68,18 @@ bot.once('end', () => sdk.detach())
 世界位置采用绝对 `{x,y,z}`，包含真实维度；导航目标为脚下可站立位置。`hit.cursor/aimOffset` 只是方块内部 0–1 命中偏移，不是世界位置。导航、采矿和攻击应使用当前服务器可见/已跟踪事实；不能将网关投影后的碰撞或实体名字当作全模组寻路和敌对判断的完整证据。
 
 殖民地资源按 `sdk.colony.resources({buildingPosition, offset:0, limit:12})` 读取，再按 `nextOffset` 翻页，直到 `null`。同一玩家殖民地只读查询至少间隔约 650 ms，避免触发 10 tick 限流。需求中的 SNBT 是建筑工材料模板；`stockResource/deliver` 的 `expectedSnbt` 必须取自自己当前库存，不能直接抄模板伪造库存。`blockedOffset/resource_item_too_large` 是明确缺口，不允许跳过后声称需求已齐。无殖民地成员权限的玩家不能读另一个成员的材料详情。
+
+## 原生模组菜单、切割和库存口径
+
+未知模组菜单不会交给不支持该菜单的 Mineflayer 原版窗口解析器。网关先保留本连接完整原生镜像和服务端 JSON，再隔离对应代理 `open_window/window_items/set_slot` 等包；本人背包窗口 0 仍同步。此时 `bot.currentWindow` 可能为 `null`，操作依据是 **`sdk.menu.current()`** 的本人真实窗口、槽位与完整组件，不能据代理空窗口判定机器未打开。
+
+Domum 的实际方块 ID 为 `domum_ornamentum:architectscutter`。先从本人原生需求取得组件模板，再打开真实机器，读取 `domum.state` 和分页 `choices`；以真实 group/variant/choiceSnbt 选择，使用 `menu.click` 放入实际原料和取出结果。每次选择或输入/取出改变后重新读取 `domum.state`；普通 menu 快照不能代替最新 Domum CAS。客户端只接受当前登录最新缓存，调用方不能拿旧 `state` 覆盖它。当前 full panel 实测每个需要输入槽消耗 1、原生产出 4；其他变体须读取真实配方/结果，不把这一数量推广为通则。成功取出后核验本人原料与完整产物，再用新库存 SNBT 交料。详细参数见 [切割台契约](MY-AGENT-WORLD-DOMUM-CUTTER.md)。
+
+`resources[].availableInBuildingProvider` 统计该建筑原生 **combined item handler** 中与需求完整组件匹配的物品，包括已加载关联货架与小屋，不包括工人随身物品。`providerSource/stockSource` 标明 `native_building_combined_item_handler`；`stockBefore/stockAfter` 使用同一口径。原生 `availableReported` 可能仍处于工人扫描阶段，不能代替该实时计数；`status.stock` 只是有界 ID 汇总，精确组件用分页 `resources` 与本人库存核对。入库不等于工人已取用或建筑完工。重启后需求未初始化的零项不能当作“无需材料”。
+
+本服已解析锁定 Domum `texture_data` 的原生 StreamCodec。原始网络值是材质键加 **BLOCK 注册表 ID**；它既不是 Item ID，也不是全局 block-state ID。原生组件和原始镜像保留，原版兼容投影可以去掉客户端无法解析的模组组件，Agent 应使用原生完整 SNBT，不从代理显示名还原材质。
+
+`collision` 只查询本人首个可见方块、完整真实属性及当前维度上下文；结果最多 64 个方块局部 AABB、有效期 250 ms。未知类明确 `boxes:null`，不会返回代理整方块。目前查询结果尚未接入身体 physics/pathfinder，不能据查询可用宣称模组导航已修复；详见 [碰撞契约](MY-AGENT-WORLD-NATIVE-COLLISION.md)。
 
 ## 回执、失败和重连
 

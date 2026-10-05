@@ -26,7 +26,7 @@ test('external frameworks attach ordinary distinct accounts without a model prov
       schemaVersion: 1, kind: 'world_receipt', requestId: id, playerUuid: uuidA, query: 'recipes', ok: true, recipes: [] })) })
     assert.equal((await query).playerUuid, uuidA)
     const tools = one.tools('colony'); assert.match(tools.tool.parameters.operation, /resources/)
-    const contract = one.contract(); contract.channels.length = 0; assert.equal(one.contract().channels.length, 13)
+    const contract = one.contract(); contract.channels.length = 0; assert.equal(one.contract().channels.length, 16)
   } finally { one.detach(); two.detach() }
   assert.equal(a._client.listenerCount('custom_payload'), 0)
   assert.equal(a.listenerCount('end'), 0); assert.equal(one.contract().closed, true)

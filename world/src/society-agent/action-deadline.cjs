@@ -2,7 +2,7 @@
 
 const REASONS = Object.freeze({ deadline: 'ACTION_DEADLINE_TIMEOUT', maintenance: 'ACTION_MAINTENANCE_ABORTED',
   shutdown: 'ACTION_SHUTDOWN_ABORTED', context: 'ACTION_CONTEXT_ABORTED' })
-const MUTATIONS = new Set(['block_dig', 'block_place', 'use_item', 'use_item_on', 'use_entity', 'window_click',
+const MUTATIONS = new Set(['block_dig', 'block_place', 'use_item', 'use_item_on', 'use_entity', 'window_click', 'close_window',
   'click_container_button', 'enchant_item', 'creative_inventory_action', 'set_creative_slot', 'held_item_slot', 'arm_animation',
   'chat', 'chat_command', 'chat_command_signed'])
 const contextReason = error => Object.hasOwn(REASONS, error?.actionInterruptionReason) ? error.actionInterruptionReason : 'context'

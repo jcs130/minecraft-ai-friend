@@ -34,6 +34,8 @@ const P = require('./payloads.cjs')
 const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
+const { createNativeMenuProxyGuard } = require('./native-menu-proxy-guard.cjs')
+const vanillaMenuParserWindows = require('prismarine-windows')('1.21.1').windows
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
   process.env.GATE_ENTITY_SERIALIZERS_FILE)
@@ -570,6 +572,22 @@ function relayTo (sess, target, name, params, dir) {
         kickFront(sess, '原生画面数据同步失败：' + error.message.slice(0, 120))
         return
       }
+    }
+    // Raw native menu events have already been captured above. Unknown mod
+    // menus belong to PlayerMenuBridge/native rendering; feeding them into
+    // Mineflayer's vanilla Window factory would return null and crash its
+    // inventory plugin. This is parser isolation, never a fabricated UI.
+    if (!sess.menuProxyGuard || sess.menuProxyGuardBackend !== sess.back) {
+      sess.menuProxyGuard = createNativeMenuProxyGuard({ windows: vanillaMenuParserWindows,
+        getPlayerUuid: () => sess.back?.uuid })
+      sess.menuProxyGuardBackend = sess.back
+    }
+    const menuProxy = sess.menuProxyGuard.filter(name, params, { cookingPotMenu })
+    if (!menuProxy.forward) {
+      sess.menuProxySuppressed = sess.menuProxySuppressed || {}
+      sess.menuProxySuppressed[name] = (sess.menuProxySuppressed[name] || 0) + 1
+      if (name === 'open_window') log(`menu[${sess.username}] native-only window=${params.windowId} type=${params.inventoryType}（${menuProxy.reason}）`)
+      return
     }
     if (name === 'world_particles' && params.particle?.type?.includes(':')) {
       // A native particle has no vanilla wire equivalent. Keep the original

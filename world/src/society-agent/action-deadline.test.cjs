@@ -73,7 +73,8 @@ test('blocked write diagnostics are bounded and all mutating bridge channels are
   const fence = installActionPacketFence(client, () => calls++); fence.block()
   for (let n = 0; n < 30; n++) client.write('use_entity', { secret: 'not printed' })
   assert.equal(calls, 8); assert.equal(fence.status().blockedWrites, 30)
-  for (const name of ['menu', 'colony', 'maid', 'spell']) assert.equal(outboundGameMutation('custom_payload', { channel: `maw_agent:${name}_action` }), true)
+  for (const name of ['menu', 'colony', 'maid', 'spell', 'domum']) assert.equal(outboundGameMutation('custom_payload', { channel: `maw_agent:${name}_action` }), true)
+  assert.equal(outboundGameMutation('close_window', { windowId: 4 }), true)
 })
 test('real release-use and dig cancellation pass, drops and swaps remain fenced', () => {
   for (const status of [1, 5]) assert.equal(outboundGameMutation('block_dig', { status }), false)

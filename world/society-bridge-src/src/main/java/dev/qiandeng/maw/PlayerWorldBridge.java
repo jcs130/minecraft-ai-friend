@@ -328,7 +328,7 @@ final class PlayerWorldBridge {
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
             String kind = input.get("kind").getAsString();
             if (input.get("schemaVersion").getAsInt() != 1 ||
-                    !(kind.equals("look") || kind.equals("entity") || kind.equals("recipes"))) {
+                    !(kind.equals("look") || kind.equals("entity") || kind.equals("recipes") || kind.equals("collision"))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -337,6 +337,7 @@ final class PlayerWorldBridge {
                 reject(player, requestId, "rate_limited"); return;
             }
             LAST_QUERY_TICK.put(player.getUUID(), now);
+            if (kind.equals("collision")) { send(player, PlayerCollisionBridge.query(player, input, requestId)); return; }
             if (kind.equals("entity")) { entity(player, input, requestId); return; }
             if (kind.equals("recipes")) { send(player, PlayerRecipeCatalog.query(player, input, result(requestId))); return; }
             // The authoritative server raycast exposes only the first visible
@@ -375,7 +376,7 @@ final class PlayerWorldBridge {
             JsonObject block = new JsonObject();
             block.addProperty("id", BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
             JsonObject properties = new JsonObject();
-            state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), value.toString()));
+            state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), NativeCollisionFacts.propertyValue(property, value)));
             block.add("properties", properties);
             block.addProperty("requiresCorrectToolForDrops", state.requiresCorrectToolForDrops());
             block.addProperty("canHarvestWithMainHand", state.canHarvestBlock(player.level(), pos, player));

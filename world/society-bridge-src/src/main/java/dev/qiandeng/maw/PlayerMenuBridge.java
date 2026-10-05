@@ -232,12 +232,16 @@ final class PlayerMenuBridge {
         state.add("self", self);
         state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
         String menuType;
+        int menuTypeId;
         try {
             menuType = BuiltInRegistries.MENU.getKey(menu.getType()).toString();
+            menuTypeId = BuiltInRegistries.MENU.getId(menu.getType());
         } catch (RuntimeException error) {
             menuType = "minecraft:inventory";
+            menuTypeId = -1;
         }
         state.addProperty("menuType", menuType);
+        state.addProperty("menuTypeId", menuTypeId);
         JsonArray slots = new JsonArray();
         JsonArray mayPickup = new JsonArray();
         JsonArray layout = new JsonArray();

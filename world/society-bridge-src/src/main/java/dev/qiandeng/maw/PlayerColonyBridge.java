@@ -65,6 +65,7 @@ final class PlayerColonyBridge {
     private static final int MAX_BYTES = 16384;
     private static final int MAX_ROWS = 24;
     private static final int MAX_RESOURCE_ROWS = 12;
+    private static final String PROVIDER_SOURCE = "native_building_combined_item_handler";
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
     private static final Map<UUID, ColonyActionReplay> ACTION_RECEIPTS = new HashMap<>();
 
@@ -373,13 +374,19 @@ final class PlayerColonyBridge {
         }
         List<JsonObject> rows = new ArrayList<>();
         for (BuildingBuilderResource resource : builder.getNeededResources().values()) {
-            if (!resource.getItemStack().isEmpty()) rows.add(resourceFact(player, resource));
+            if (!resource.getItemStack().isEmpty()) {
+                JsonObject fact = resourceFact(player, resource);
+                fact.addProperty("availableInBuildingProvider", stockCount(building, resource.getItemStack()));
+                fact.addProperty("providerSource", PROVIDER_SOURCE);
+                rows.add(fact);
+            }
         }
         JsonObject result = base(requestId);
         result.addProperty("playerUuid", player.getUUID().toString()); // Include this in the exact byte budget.
         result.addProperty("query", "resources");
         result.addProperty("readOnly", true);
         result.addProperty("source", "native_builder_needed_resources");
+        result.addProperty("providerSource", PROVIDER_SOURCE);
         result.addProperty("colonyId", colony.getID());
         result.add("buildingPosition", pos(position));
         result.addProperty("hasWorkOrder", builder.hasWorkOrder());
@@ -500,10 +507,16 @@ final class PlayerColonyBridge {
                     }
                     if (colony.getPermissions().isColonyMember(player) && building.getTileEntity() != null) {
                         Map<String, Integer> stock = new TreeMap<>();
-                        building.getTileEntity().getAllContent().forEach((item, count) -> {
-                            String id = BuiltInRegistries.ITEM.getKey(item.getItem()).toString();
-                            stock.merge(id, count, Integer::sum);
-                        });
+                        // The native insertion provider includes associated racks before
+                        // the hut itself; getAllContent() only counts this single rack.
+                        var provider = buildingProvider(building);
+                        for (int slot = 0; slot < provider.getSlots(); slot++) {
+                            ItemStack item = provider.getStackInSlot(slot);
+                            if (!item.isEmpty()) {
+                                String id = BuiltInRegistries.ITEM.getKey(item.getItem()).toString();
+                                stock.merge(id, item.getCount(), Integer::sum);
+                            }
+                        }
                         JsonArray summary = new JsonArray();
                         for (var item : stock.entrySet()) {
                             if (summary.size() >= 12) break;
@@ -513,6 +526,7 @@ final class PlayerColonyBridge {
                             summary.add(amount);
                         }
                         row.add("stock", summary);
+                        row.addProperty("stockSource", PROVIDER_SOURCE);
                         row.addProperty("stockTruncated", stock.size() > summary.size());
                         if (building instanceof AbstractBuildingStructureBuilder builder) {
                             var progress = builder.getProgress();
@@ -609,10 +623,20 @@ final class PlayerColonyBridge {
         actionReject(player, requestId, "deliver", code);
     }
 
+    private static net.neoforged.neoforge.items.IItemHandler buildingProvider(IBuilding building) {
+        // Read the same unsided native CombinedItemHandler used by insertion.
+        // Reading every side would count shared underlying inventories repeatedly.
+        var provider = building.getTileEntity().getItemHandlerCap((Direction) null);
+        if (provider == null) throw new IllegalStateException("building provider unavailable");
+        return provider;
+    }
+
     private static int stockCount(IBuilding building, ItemStack item) {
         int count = 0;
-        for (var entry : building.getTileEntity().getAllContent().entrySet()) {
-            if (ItemStack.isSameItemSameComponents(entry.getKey().getItemStack(), item)) count += entry.getValue();
+        var provider = buildingProvider(building);
+        for (int slot = 0; slot < provider.getSlots(); slot++) {
+            ItemStack stored = provider.getStackInSlot(slot);
+            if (!stored.isEmpty() && ItemStack.isSameItemSameComponents(stored, item)) count += stored.getCount();
         }
         return count;
     }
@@ -694,6 +718,7 @@ final class PlayerColonyBridge {
             result.addProperty("neededAtValidation", required.getAmount());
             result.addProperty("stockBefore", stockBefore);
             result.addProperty("stockAfter", stockCount(building, removed));
+            result.addProperty("stockSource", PROVIDER_SOURCE);
             result.addProperty("resolutionError", resolutionError);
             actionReply(player, result);
         } catch (RuntimeException error) {

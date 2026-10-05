@@ -59,6 +59,7 @@ public final class AgentBridge {
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
         PlayerMenuBridge.register(eventBus);
         PlayerWorldBridge.register(eventBus);
+        DomumCutterBridge.register(eventBus);
         PlayerColonyBridge.register(eventBus);
         PlayerSpellBridge.register(eventBus);
         PlayerMaidBridge.register(eventBus);

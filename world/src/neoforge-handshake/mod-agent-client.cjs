@@ -4,6 +4,8 @@ const { attachWorldClient } = require('./world-client.cjs')
 const { attachMaidClient } = require('./maid-client.cjs')
 const { attachColonyClient } = require('./colony-client.cjs')
 const { attachSpellClient } = require('./spell-client.cjs')
+const { attachDomumClient } = require('./domum-client.cjs')
+const { attachCollisionClient } = require('./collision-client.cjs')
 const { attachNativeWorldQuery } = require('../society-agent/native-world-query.cjs')
 const { agentToolCatalog } = require('../society-agent/tool-catalog.cjs')
 
@@ -14,7 +16,8 @@ function attachModAgentClient (bot) {
       typeof bot.on !== 'function' || typeof bot.off !== 'function') throw Error('MOD_AGENT_CONNECTION_INVALID')
   const clients = { menu: attachMenuClient(bot), world: attachWorldClient(bot),
     native: attachNativeWorldQuery(bot), maid: attachMaidClient(bot),
-    colony: attachColonyClient(bot), spell: attachSpellClient(bot) }
+    colony: attachColonyClient(bot), spell: attachSpellClient(bot),
+    domum: attachDomumClient(bot), collision: attachCollisionClient(bot) }
   let closed = false
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   function detach () {
@@ -36,7 +39,8 @@ function attachModAgentClient (bot) {
           'maw_agent:world_query', 'maw_agent:world_state',
           'maw_agent:maid_query', 'maw_agent:maid_action', 'maw_agent:maid_state',
           'maw_agent:colony_query', 'maw_agent:colony_action', 'maw_agent:colony_state',
-          'maw_agent:spell_query', 'maw_agent:spell_action', 'maw_agent:spell_state'],
+          'maw_agent:spell_query', 'maw_agent:spell_action', 'maw_agent:spell_state',
+          'maw_agent:domum_query', 'maw_agent:domum_action', 'maw_agent:domum_state'],
         allModsVerified: false, publicAccessReady: false,
         limits: ['requires_server_bridge_and_gateway', 'native_identity_and_complete_components',
           'server_permissions_still_apply', 'unknown_mutations_must_not_be_retried',

@@ -10,13 +10,15 @@ const nbt = require('prismarine-nbt')
 const nativeTypes = require('minecraft-protocol/src/datatypes/compiler-minecraft')
 const { arsNativeTypes } = require('./native-ars-codec.cjs')
 const { arsEntityNativeTypes } = require('./native-ars-entity-codec.cjs')
+const { domumNativeTypes } = require('./native-domum-codec.cjs')
 
 // Verified in TLM 1.5.3 InitDataComponent and Patchouli 93: UUIDUtil.STREAM_CODEC
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
 const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
   'patchouli:book': 'string',
-  'ars_nouveau:spell_caster': 'MawArsSpellCaster'
+  'ars_nouveau:spell_caster': 'MawArsSpellCaster',
+  'domum_ornamentum:texture_data': 'MawDomumTextureData'
 }
 // Exact installed TLM 1.5.3 / Ars 5.13.2 stream codecs. The names are mapped
 // to the exported network IDs of this server, never to assumed registry order.
@@ -88,6 +90,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   protocol.types.MawArsSpellCaster = 'mawArsSpellCasterCodec'
   protocol.types.MawArsSpellResolver = 'mawArsSpellResolverCodec'
   protocol.types.MawArsVec3 = 'mawArsVec3Codec'
+  protocol.types.MawDomumTextureData = 'mawDomumTextureDataCodec'
   // NeoForge 21.1.248 CommonHooks keeps vanilla IDs and adds 256 to the
   // custom serializer registry ID. The TSV contains those actual network IDs.
   // TLM maids and Ars spell projectiles use custom serializers; every unknown
@@ -173,6 +176,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   compiler.addTypes(nativeTypes)
   compiler.addTypes(arsNativeTypes)
   compiler.addTypes(arsEntityNativeTypes)
+  compiler.addTypes(domumNativeTypes)
   compiler.addTypes({
     Read: {
       mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],

@@ -384,6 +384,56 @@ public final class ColonyResourcePageTest {
             handler = text.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
             self.assertIn("Method handleResources:", handler)
 
+    def test_stock_count_resources_and_status_read_actual_same_native_provider_slots(self):
+        with tempfile.TemporaryDirectory(prefix="colony-provider-stock-audit-") as temporary:
+            self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
+                           "-d", temporary, *(str(SOURCE / name) for name in (
+                               "PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
+            text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
+            self.assertNotIn("getAllContent:", text, "a single rack's cached map excludes associated provider racks")
+            provider = text.split("private static net.neoforged.neoforge.items.IItemHandler buildingProvider(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertRegex(provider, r"aconst_null\s+(?:\d+: checkcast[^\n]+Direction\s+)?\d+: invokevirtual[^\n]+getItemHandlerCap:\(Lnet/minecraft/core/Direction;", "one unsided native handler, not ambiguous Void overload or every side")
+            self.assertIn("// String building provider unavailable", provider, "unavailable provider is not a zero count")
+            count = text.split("private static int stockCount(", 1)[1].split("\n  private static ", 1)[0]
+            for required in ("Method buildingProvider:", "IItemHandler.getSlots:", "IItemHandler.getStackInSlot:",
+                             "ItemStack.isEmpty:", "ItemStack.isSameItemSameComponents:", "ItemStack.getCount:"):
+                self.assertIn(required, count)
+            self.assertNotIn("getItemHandlersFromProvider:", count, "shared sides must not duplicate storage")
+            self.assertNotRegex(count, r"(?:insertItem:|extractItem:|setItem:|setCount:|copyWithCount:)")
+            query = text.split("private static void handleResources(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertIn("// String availableInBuildingProvider", query)
+            self.assertIn("// String providerSource", query)
+            self.assertIn("Method stockCount:", query)
+            self.assertLess(query.index("availableInBuildingProvider"), query.index("ColonyResourcePage.apply:"), "new fields participate in exact full packet budget")
+            status = text.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertIn("Method buildingProvider:", status)
+            self.assertIn("IItemHandler.getStackInSlot:", status)
+            self.assertIn("// String stockSource", status)
+            transfer = text.split("private static void handleStockResource(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertEqual(transfer.count("Method stockCount:"), 2, "precondition and postcondition use exactly the same provider")
+            self.assertIn("// String stockSource", transfer)
+            self.assertIn("InventoryUtils.addItemStackToProviderWithResult:", transfer, "insertion must remain native")
+
+    def test_locked_native_provider_combines_loaded_associated_racks_before_own_hut(self):
+        def code(name):
+            return self.run_java([str(self.java.with_name("javap.exe")), "-classpath", self.cp, "-p", "-c", name])
+        native = code("com.minecolonies.core.tileentities.TileEntityColonyBuilding")
+        provider = native.split("public net.neoforged.neoforge.items.IItemHandler getItemHandlerCap(", 1)[1].split("\n  public ", 1)[0]
+        for required in ("IBuilding.getContainers:", "WorldUtil.isBlockLoaded:", "Level.getBlockEntity:",
+                         "AbstractTileEntityRack.getInventory:", "Method getInventory:", "CombinedItemHandler.\"<init>\":"):
+            self.assertIn(required, provider)
+        self.assertLess(provider.index("WorldUtil.isBlockLoaded:"), provider.index("Level.getBlockEntity:"), "read path must not load a remote chunk")
+        self.assertLess(provider.index("AbstractTileEntityRack.getInventory:"), provider.index("Method getInventory:"), "associated rack insertions precede hut own slots")
+        self.assertNotIn("InventoryCitizen:", provider, "provider is building/racks, not citizen inventory")
+        inventory = code("com.minecolonies.api.util.InventoryUtils")
+        insertion = inventory.split("public static net.minecraft.world.item.ItemStack addItemStackToProviderWithResult(", 1)[1].split("\n  public ", 1)[0]
+        self.assertIn("getItemHandlersFromProvider:", insertion)
+        self.assertIn("addItemStackToItemHandlerWithResult:", insertion)
+        storage = code("com.minecolonies.api.crafting.ItemStorage")
+        stack = storage.split("public net.minecraft.world.item.ItemStack getItemStack();", 1)[1].split("\n  public ", 1)[0]
+        self.assertIn("Field stack:", stack)
+        self.assertNotRegex(stack, r"(?:remove:|set:|copyWithCount:|applyComponents:)", "key getter preserves complete original components")
+
 
 if __name__ == "__main__":
     unittest.main()

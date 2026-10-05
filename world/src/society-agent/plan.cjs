@@ -1,6 +1,6 @@
 'use strict'
 
-const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'block_verify', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'wait'])
+const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'block_verify', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'domum', 'collision', 'wait'])
 const ID = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const position = p => p && ['x', 'y', 'z'].every(k => Number.isInteger(p[k]) && Math.abs(p[k]) <= 29999984)
@@ -31,8 +31,24 @@ function parsePlan (text) {
   })
   for (const action of plan.actions) {
     if (!action || !ACTIONS.has(action.type)) throw Error('PLAN_ACTION_INVALID')
-    if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
-    if (action.aimOffset !== undefined && (!['gather', 'dig', 'use_block', 'block_inspect'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
+    if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect', 'collision'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
+    if (action.aimOffset !== undefined && (!['gather', 'dig', 'use_block', 'block_inspect', 'collision'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
+    if (action.type === 'collision' && (!ID.test(action.expectedBlockId || '') ||
+        !action.expectedProperties || typeof action.expectedProperties !== 'object' || Array.isArray(action.expectedProperties) ||
+        Object.keys(action.expectedProperties).length > 32 || Object.entries(action.expectedProperties).some(([k, v]) => !/^[a-z0-9_]{1,64}$/.test(k) || typeof v !== 'string' || !/^[a-z0-9_.:-]{1,96}$/.test(v)) ||
+        (action.dimension !== undefined && !ID.test(action.dimension)))) throw Error('PLAN_COLLISION_INVALID')
+    if (action.type === 'domum') {
+      const args = action.args ?? {}
+      if (!['state', 'choices', 'select'].includes(action.operation) || !args || typeof args !== 'object' || Array.isArray(args) ||
+          (args.requestId !== undefined && (typeof args.requestId !== 'string' || !/^[A-Za-z0-9:_-]{1,64}$/.test(args.requestId)))) throw Error('PLAN_DOMUM_INVALID')
+      const keys = action.operation === 'state' ? ['requestId'] : action.operation === 'choices' ? ['groupId', 'offset', 'limit', 'requestId'] : ['selection', 'groupId', 'variantIndex', 'choiceSnbt', 'requestId']
+      if (Object.keys(args).some(key => !keys.includes(key))) throw Error('PLAN_DOMUM_INVALID')
+      if (action.operation !== 'state' && (typeof args.groupId !== 'string' || args.groupId.length > 256 || !ID.test(args.groupId))) throw Error('PLAN_DOMUM_INVALID')
+      if (action.operation === 'choices' && (!Number.isInteger(args.offset ?? 0) || (args.offset ?? 0) < 0 || (args.offset ?? 0) > 10000 || !Number.isInteger(args.limit ?? 12) || (args.limit ?? 12) < 1 || (args.limit ?? 12) > 24)) throw Error('PLAN_DOMUM_INVALID')
+      if (action.operation === 'select' && (!['group', 'variant'].includes(args.selection) ||
+          (args.selection === 'group' && (args.variantIndex !== undefined || args.choiceSnbt !== undefined)) ||
+          (args.selection === 'variant' && (!Number.isInteger(args.variantIndex) || args.variantIndex < 0 || args.variantIndex > 4095 || typeof args.choiceSnbt !== 'string' || !args.choiceSnbt.trim() || Buffer.byteLength(args.choiceSnbt, 'utf8') > 8192)))) throw Error('PLAN_DOMUM_INVALID')
+    }
     if (['use_block', 'block_inspect'].includes(action.type) && action.recipeId !== undefined && !ID.test(action.recipeId)) throw Error('PLAN_BLOCK_RECIPE_INVALID')
     if (action.type === 'use_block' && action.intent !== undefined && !['interact', 'load', 'process', 'collect'].includes(action.intent)) throw Error('PLAN_BLOCK_INTENT_INVALID')
     if (action.type === 'block_verify' && (!UUID.test(action.verificationId || '') || !['observe', 'change', 'output', 'pickup'].includes(action.goal ?? 'observe') ||
