@@ -39,3 +39,12 @@ test('disconnect settles pending read-only requests and detaches without sending
   f.client.detach(); assert.equal(f.bot._client.listenerCount('custom_payload'), 0)
   assert.equal((await f.client.recipes()).ok, false); assert.equal(f.sent.length, 1)
 })
+
+test('respawn retires old native queries and allows fresh same-account reads', async () => {
+  const f = fixture(); const old = f.client.recipes()
+  f.bot.emit('respawn')
+  assert.equal((await old).code, 'native_query_context_changed')
+  const fresh = f.client.recipes(); f.reply({ recipes: [] })
+  assert.equal((await fresh).ok, true)
+  f.client.detach(); assert.equal(f.bot.listenerCount('respawn'), 0)
+})

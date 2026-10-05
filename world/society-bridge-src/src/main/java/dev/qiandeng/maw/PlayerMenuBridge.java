@@ -29,7 +29,6 @@ import net.minecraft.resources.RegistryOps;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.lang.reflect.Field;
@@ -38,7 +37,7 @@ import java.util.UUID;
 /** Per-connection, server-authoritative menu snapshots and native clicks for Agent players. */
 final class PlayerMenuBridge {
     private static final Map<UUID, String> LAST_STATE = new HashMap<>();
-    private static final Map<UUID, LinkedHashMap<String, String>> RECEIPTS = new HashMap<>();
+    private static final Map<UUID, MenuActionReplay> RECEIPTS = new HashMap<>();
     private static final int MAX_PAYLOAD = 65536;
     private static JsonObject renderRegistryData;
     // Locked 1.21.1's private list contains the same DataSlots that the menu
@@ -296,6 +295,7 @@ final class PlayerMenuBridge {
             JsonObject error = new JsonObject();
             error.addProperty("schemaVersion", 1);
             error.addProperty("kind", "menu_state_error");
+            error.addProperty("playerUuid", player.getUUID().toString());
             error.addProperty("windowId", player.containerMenu.containerId);
             error.addProperty("code", "menu_state_too_large");
             if (!error.toString().equals(LAST_STATE.get(player.getUUID()))) {
@@ -330,16 +330,25 @@ final class PlayerMenuBridge {
         }
     }
 
-    private static void reply(ServerPlayer player, String requestId, boolean ok, String code, boolean changed) {
+    private static void reply(ServerPlayer player, String requestId, boolean ok, String code, boolean changed,
+                              MenuActionReplay reservation, boolean outcomeKnown) {
         JsonObject result = new JsonObject();
         result.addProperty("schemaVersion", 1);
         result.addProperty("kind", "action_receipt");
+        result.addProperty("playerUuid", player.getUUID().toString());
+        result.addProperty("action", "click");
         result.addProperty("requestId", requestId);
         result.addProperty("ok", ok);
         result.addProperty("code", code);
         result.addProperty("changed", changed);
+        result.addProperty("outcomeKnown", outcomeKnown);
         result.addProperty("retryAutomatically", false);
-        result.add("state", snapshot(player));
+        result.addProperty("receiptScope", "server_process_current_login_recent_32_per_player");
+        try { result.add("state", snapshot(player)); }
+        catch (RuntimeException error) {
+            result.addProperty("stateUnavailable", true);
+            result.addProperty("stateError", "native_menu_state_unavailable");
+        }
         String text = result.toString();
         if (text.getBytes(StandardCharsets.UTF_8).length > 60000) {
             // A click may already have happened. Keep its outcome, but make it
@@ -349,62 +358,86 @@ final class PlayerMenuBridge {
             result.addProperty("stateError", "menu_state_too_large");
             text = result.toString();
         }
-        var playerReceipts = RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new LinkedHashMap<>());
-        playerReceipts.put(requestId, text);
-        while (playerReceipts.size() > 32) playerReceipts.remove(playerReceipts.keySet().iterator().next());
+        // Cache before sending: a failed connection write must not reopen the
+        // already attempted mutation. Conflicts and in-progress observations
+        // are never allowed to overwrite the original reservation.
+        if (reservation != null) reservation.complete(requestId, text);
         send(player, result);
     }
 
     private static void handleAction(ServerPlayer player, String text) {
         String requestId = "invalid";
+        MenuActionReplay reservation = null;
+        boolean mutationStarted = false;
         try {
             JsonObject input = JsonParser.parseString(text).getAsJsonObject();
             requestId = input.get("requestId").getAsString();
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
-            String cached = RECEIPTS.getOrDefault(player.getUUID(), new LinkedHashMap<>()).get(requestId);
-            if (cached != null) {
-                if (canSend(player)) PacketDistributor.sendToPlayer(player, new State(cached));
+            MenuActionReplay ledger = RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new MenuActionReplay());
+            var replay = ledger.begin(requestId, input);
+            if (replay.outcome() == MenuActionReplay.Outcome.REPLAY) {
+                if (canSend(player)) PacketDistributor.sendToPlayer(player, new State(replay.response()));
                 return;
+            }
+            if (replay.outcome() == MenuActionReplay.Outcome.CONFLICT) {
+                reply(player, requestId, false, "request_id_conflict", false, null, true); return;
+            }
+            if (replay.outcome() == MenuActionReplay.Outcome.IN_PROGRESS) {
+                reply(player, requestId, false, "action_outcome_unknown", false, null, false); return;
+            }
+            reservation = ledger;
+            // Older schema-1 clients bind through context.player() and the
+            // complete item/cursor CAS. New clients also send identity/state
+            // preconditions; neither field can select a different player.
+            if (input.has("playerUuid") && !player.getUUID().toString().equals(input.get("playerUuid").getAsString())) {
+                reply(player, requestId, false, "player_identity_mismatch", false, reservation, true); return;
             }
             int windowId = input.get("windowId").getAsInt();
             int slot = input.get("slot").getAsInt();
             int button = input.get("button").getAsInt();
             AbstractContainerMenu menu = player.containerMenu;
-            if (menu.containerId != windowId) { reply(player, requestId, false, "stale_window", false); return; }
-            if (slot < 0 || slot >= menu.slots.size() || (button != 0 && button != 1)) {
-                reply(player, requestId, false, "invalid_slot_or_button", false); return;
+            if (menu.containerId != windowId) { reply(player, requestId, false, "stale_window", false, reservation, true); return; }
+            if (input.has("expectedStateId") && input.get("expectedStateId").getAsInt() != menu.getStateId()) {
+                reply(player, requestId, false, "stale_menu_state", false, reservation, true); return;
             }
-            if (!menu.stillValid(player)) { reply(player, requestId, false, "menu_not_valid", false); return; }
+            if (slot < 0 || slot >= menu.slots.size() || (button != 0 && button != 1)) {
+                reply(player, requestId, false, "invalid_slot_or_button", false, reservation, true); return;
+            }
+            if (!menu.stillValid(player)) { reply(player, requestId, false, "menu_not_valid", false, reservation, true); return; }
             ItemStack before = menu.getSlot(slot).getItem().copy();
             if (!input.has("expectedItemId") || !input.has("expectedCount") || !input.has("expectedSnbt") ||
                     !input.has("expectedCarriedSnbt")) {
-                reply(player, requestId, false, "missing_slot_precondition", false); return;
+                reply(player, requestId, false, "missing_slot_precondition", false, reservation, true); return;
             }
             if (input.has("expectedItemId") &&
                     !input.get("expectedItemId").getAsString().equals(
                             before.isEmpty() ? "minecraft:air" : BuiltInRegistries.ITEM.getKey(before.getItem()).toString())) {
-                reply(player, requestId, false, "slot_changed", false); return;
+                reply(player, requestId, false, "slot_changed", false, reservation, true); return;
             }
             if (input.has("expectedCount") && input.get("expectedCount").getAsInt() != before.getCount()) {
-                reply(player, requestId, false, "slot_changed", false); return;
+                reply(player, requestId, false, "slot_changed", false, reservation, true); return;
             }
             String actualSnbt = before.isEmpty() ? "" : before.saveOptional(player.registryAccess()).toString();
             if (!input.get("expectedSnbt").getAsString().equals(actualSnbt)) {
-                reply(player, requestId, false, "slot_components_changed", false); return;
+                reply(player, requestId, false, "slot_components_changed", false, reservation, true); return;
             }
             ItemStack carried = menu.getCarried().copy();
             String carriedSnbt = carried.isEmpty() ? "" : carried.saveOptional(player.registryAccess()).toString();
             if (!input.get("expectedCarriedSnbt").getAsString().equals(carriedSnbt)) {
-                reply(player, requestId, false, "cursor_changed", false); return;
+                reply(player, requestId, false, "cursor_changed", false, reservation, true); return;
             }
+            mutationStarted = true;
             menu.clicked(slot, button, ClickType.PICKUP, player);
             menu.broadcastChanges();
             boolean changed = !ItemStack.matches(before, menu.getSlot(slot).getItem()) ||
                     !ItemStack.matches(carried, menu.getCarried());
             publishIfChanged(player);
-            reply(player, requestId, true, changed ? "clicked" : "no_change", changed);
+            reply(player, requestId, true, changed ? "clicked" : "no_change", changed, reservation, true);
         } catch (RuntimeException error) {
-            reply(player, requestId, false, "invalid_or_failed_action", false);
+            // clicked() or a native hook may have changed inventory before it
+            // threw. Such a write is unknown, never a safe retryable rejection.
+            reply(player, requestId, false, mutationStarted ? "action_outcome_unknown" : "invalid_or_failed_action",
+                    false, reservation, !mutationStarted);
         }
     }
 }

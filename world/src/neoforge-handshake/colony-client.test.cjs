@@ -177,3 +177,150 @@ test('outgoing colony requests preserve complete SNBT and canonical schema field
   assert.throws(() => colony.placeHut({ position: { x: 9, y: 64, z: -3 }, hutType: 'home', inventorySlot: 0, expectedSnbt: '☃'.repeat(6000) }), /BUDGET/)
   assert.equal(writes.length, 1); colony.detach()
 })
+
+test('construction resource pages retain full same-id components and native counts on the own readonly connection', async () => {
+  const { bot, writes, colony } = harness()
+  const pending = colony.resources({ buildingPosition: { x: 603, y: 64, z: 600 }, offset: 12, limit: 24, requestId: 'resource-page-2' })
+  const request = JSON.parse(writes[0].packet.data.toString('utf8'))
+  assert.equal(writes[0].packet.channel, 'maw_agent:colony_query')
+  assert.deepEqual(request, { schemaVersion: 1, kind: 'resources', buildingPosition: { x: 603, y: 64, z: 600 }, offset: 12, limit: 24, requestId: 'resource-page-2' })
+  const oak = '{count:1,id:"domum_ornamentum:panel",components:{"domum_ornamentum:material":{main:"minecraft:oak_planks"}}}'
+  const spruce = oak.replace('oak_planks', 'spruce_planks')
+  const response = { ...receipt(request.requestId), query: 'resources', readOnly: true,
+    source: 'native_builder_needed_resources', offset: 12, limit: 24, total: 38, returned: 2, truncated: true, nextOffset: 14,
+    resources: [{ id: 'domum_ornamentum:panel', name: 'Oak panel', count: 1, snbt: oak, needed: 50, availableReported: 2, inDelivery: 3 },
+      { id: 'domum_ornamentum:panel', name: 'Spruce panel', count: 1, snbt: spruce, needed: 5, availableReported: 0, inDelivery: 0 }] }
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(response)) })
+  assert.deepEqual(await pending, response)
+  assert.equal(response.resources[0].snbt, oak); assert.equal(response.resources[1].snbt, spruce)
+  colony.detach()
+})
+
+test('resource page bounds reject before dispatch; native oversized rows and timeouts remain explicit readonly failures', async () => {
+  const { bot, writes, colony } = harness({ timeoutMs: 3 })
+  const buildingPosition = { x: 1, y: 64, z: 2 }
+  for (const invalid of [undefined, {}, { buildingPosition, offset: -1 }, { buildingPosition, offset: 1.5 },
+    { buildingPosition, offset: 2147483648 }, { buildingPosition, limit: 0 }, { buildingPosition, limit: 25 },
+    { buildingPosition, limit: '12' }, { buildingPosition: { x: 0.5, y: 64, z: 2 } },
+    { buildingPosition: { x: 2147483648, y: 64, z: 2 } }]) {
+    assert.throws(() => colony.resources(invalid), /INVALID_COLONY_RESOURCES/)
+  }
+  assert.equal(writes.length, 0)
+  const pending = colony.resources({ buildingPosition, requestId: 'blocked-page' })
+  assert.deepEqual(JSON.parse(writes[0].packet.data.toString('utf8')), {
+    schemaVersion: 1, kind: 'resources', buildingPosition, offset: 0, limit: 12, requestId: 'blocked-page'
+  })
+  const blocked = { ...receipt('blocked-page'), ok: false, query: 'resources', readOnly: true,
+    code: 'resource_item_too_large', resources: [], offset: 0, limit: 12, total: 3, returned: 0,
+    truncated: true, nextOffset: 0, blockedOffset: 0 }
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(blocked)) })
+  assert.deepEqual(await pending, blocked)
+  const unavailable = await colony.resources({ buildingPosition, offset: 2 })
+  assert.equal(unavailable.code, 'colony_query_not_observed'); assert.equal(unavailable.outcomeKnown, true)
+  assert.equal(unavailable.readOnly, true); assert.equal(writes.length, 2); colony.detach()
+})
+
+test('a successful status receipt cannot resolve or emit a pending resources page', async () => {
+  const { bot, colony } = harness({ timeoutMs: 10 }), errors = [], received = []
+  colony.events.on('protocolError', error => errors.push(error.message))
+  colony.events.on('receipt', body => received.push(body))
+  const pending = colony.resources({ buildingPosition: { x: 1, y: 64, z: 2 }, requestId: 'only-resources' })
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify({ ...receipt('only-resources'), query: 'status' })) })
+  assert.deepEqual(errors, ['COLONY_QUERY_RECEIPT_MISMATCH']); assert.equal(received.length, 0)
+  bot.emit('end'); const unavailable = await pending
+  assert.equal(unavailable.code, 'colony_query_connection_closed'); assert.equal(unavailable.readOnly, true)
+  colony.detach()
+})
+
+test('end and detach permanently close fresh reads and mutations without writing to the old connection', async () => {
+  for (const close of ['end', 'detach']) {
+    const { bot, writes, colony } = harness()
+    if (close === 'end') bot.emit('end'); else colony.detach()
+    for (const read of [() => colony.status(), () => colony.capabilities(),
+      () => colony.resources({ buildingPosition: { x: 1, y: 64, z: 2 } })]) {
+      const result = await read()
+      assert.equal(result.code, 'colony_query_connection_closed'); assert.equal(result.readOnly, true)
+      assert.equal(result.changed, false); assert.equal(result.dispatched, false)
+      assert.equal(result.outcomeKnown, true); assert.equal(result.outcomeUnknown, false)
+    }
+    const position = { x: 1, y: 64, z: 2 }, item = { inventorySlot: 3, expectedSnbt: 'complete-item' }
+    for (const mutation of [
+      () => colony.deliver({ buildingPosition: position, token: 'request-token', quantity: 1, ...item }),
+      () => colony.stockResource({ buildingPosition: position, quantity: 1, ...item }),
+      () => colony.found({ position, name: 'Own colony', ...item }),
+      () => colony.placeBuilder({ position, ...item }),
+      () => colony.placeHut({ position, hutType: 'home', ...item }),
+      () => colony.requestBuild({ buildingPosition: position, builderPosition: position })]) {
+      await assert.rejects(mutation(), error => error.code === 'COLONY_CONNECTION_CLOSED_NOT_SENT' &&
+        error.outcomeKnown === true && error.outcomeUnknown === false && error.changed === false &&
+        error.dispatched === false && error.knownNotApplied === true && error.retryAutomatically === false)
+    }
+    bot.emit('spawn'); bot.emit('respawn')
+    assert.equal((await colony.status()).dispatched, false)
+    assert.equal(writes.length, 0); colony.detach(); colony.detach()
+    assert.equal(bot._client.listenerCount('custom_payload'), 0)
+    for (const event of ['end', 'spawn', 'respawn']) assert.equal(bot.listenerCount(event), 0)
+  }
+})
+
+test('spawn and respawn retire own-account pending requests and late receipts; fresh observations need new request IDs', async () => {
+  for (const lifecycle of ['spawn', 'respawn']) {
+    const { bot, writes, colony } = harness(), receipts = [], unmatched = [], invalidated = []
+    colony.events.on('receipt', body => receipts.push(body)); colony.events.on('unmatchedReceipt', body => unmatched.push(body))
+    colony.events.on('invalidate', body => invalidated.push(body))
+    const position = { x: 1, y: 64, z: 2 }
+    const read = colony.resources({ buildingPosition: position, requestId: 'old-resources' })
+    const mutation = colony.stockResource({ buildingPosition: position, inventorySlot: 3,
+      quantity: 1, expectedSnbt: 'complete-item', requestId: 'old-stock' })
+    const unknown = assert.rejects(mutation, error => error.code === 'COLONY_PLAYER_LIFECYCLE_CHANGED' &&
+      error.requestId === 'old-stock' && error.outcomeKnown === false && error.outcomeUnknown === true &&
+      error.changed === null && error.dispatched === true && error.retryAutomatically === false)
+    bot.emit(lifecycle)
+    const unavailable = await read; await unknown
+    assert.equal(unavailable.code, 'colony_query_player_lifecycle_changed')
+    assert.equal(unavailable.readOnly, true); assert.equal(unavailable.outcomeKnown, true)
+    assert.equal(invalidated.length, 1); assert.equal(invalidated[0].closed, false)
+    for (const old of [{ ...receipt('old-resources'), query: 'resources', resources: ['old page'] },
+      { ...receipt('old-stock'), action: 'stock_resource' }]) {
+      bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(old)) })
+    }
+    assert.equal(receipts.length, 0); assert.equal(unmatched.length, 2)
+    const oldPage = await colony.resources({ buildingPosition: position, requestId: 'old-resources' })
+    assert.equal(oldPage.code, 'colony_query_request_retired'); assert.equal(oldPage.dispatched, false)
+    await assert.rejects(colony.stockResource({ buildingPosition: position, inventorySlot: 3,
+      quantity: 1, expectedSnbt: 'complete-item', requestId: 'old-stock' }), error =>
+      error.code === 'COLONY_REQUEST_RETIRED_NOT_SENT' && error.outcomeKnown === true && error.changed === false)
+    assert.equal(writes.length, 2)
+    const fresh = colony.resources({ buildingPosition: position, requestId: 'new-page' })
+    const response = { ...receipt('new-page'), query: 'resources', resources: [], total: 0, nextOffset: null }
+    bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state', data: Buffer.from(JSON.stringify(response)) })
+    assert.deepEqual(await fresh, response); assert.equal(receipts.length, 1); assert.equal(writes.length, 3)
+    colony.detach()
+  }
+})
+
+test('already dispatched mutations remain unknown on end, timeout, and synchronous wire error; none is automatically retried', async () => {
+  for (const failure of ['end', 'timeout', 'write']) {
+    const { bot, writes, colony } = harness({ timeoutMs: 3 })
+    if (failure === 'write') bot._client.write = () => { writes.push('attempted'); throw Error('transport failed') }
+    const mutation = colony.stockResource({ buildingPosition: { x: 1, y: 64, z: 2 }, inventorySlot: 3,
+      quantity: 1, expectedSnbt: 'complete-item', requestId: `unknown-${failure}` })
+    const unknown = assert.rejects(mutation, error => error.outcomeKnown === false && error.outcomeUnknown === true &&
+      error.changed === null && error.dispatched === true && error.retryAutomatically === false)
+    if (failure === 'end') bot.emit('end')
+    await unknown
+    assert.equal(writes.length, 1)
+    if (failure !== 'end') await assert.rejects(colony.stockResource({ buildingPosition: { x: 1, y: 64, z: 2 },
+      inventorySlot: 3, quantity: 1, expectedSnbt: 'complete-item', requestId: `unknown-${failure}` }), error =>
+      error.code === 'COLONY_REQUEST_RETIRED_NOT_SENT' && error.dispatched === false && error.changed === false)
+    assert.equal(writes.length, 1); colony.detach()
+  }
+})
+
+test('mutation validation before dispatch exposes a known unchanged result', () => {
+  const { writes, colony } = harness()
+  assert.throws(() => colony.stockResource({ buildingPosition: { x: 1, y: 64, z: 2 }, inventorySlot: 36,
+    quantity: 1, expectedSnbt: 'complete-item' }), error => error.code === 'INVALID_COLONY_STOCK' &&
+    error.outcomeKnown === true && error.changed === false && error.dispatched === false)
+  assert.equal(writes.length, 0); colony.detach()
+})

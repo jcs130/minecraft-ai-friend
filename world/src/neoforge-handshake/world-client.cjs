@@ -8,41 +8,57 @@ const { EventEmitter } = require('node:events')
 function attachWorldClient (bot) {
   const events = new EventEmitter()
   const pending = new Map()
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  let closed = false
+  const ownUuid = () => typeof bot._client.uuid === 'string' && uuidPattern.test(bot._client.uuid) ? bot._client.uuid.toLowerCase() : null
 
   function onPayload (packet) {
     if (packet.channel !== 'maw_agent:world_state') return
     let body
-    try { body = JSON.parse(Buffer.from(packet.data).toString('utf8')) }
+    try {
+      const bytes = Buffer.from(packet.data)
+      if (bytes.length > 65536) throw new Error('WORLD_REPLY_TOO_LARGE')
+      body = JSON.parse(bytes.toString('utf8'))
+    }
     catch (error) { events.emit('protocolError', error); return }
-    if (body.schemaVersion !== 1 || body.kind !== 'world_receipt') return
+    if (!body || body.schemaVersion !== 1 || body.kind !== 'world_receipt' || typeof body.ok !== 'boolean') return
+    if (closed || !ownUuid() || typeof body.playerUuid !== 'string' || body.playerUuid.toLowerCase() !== ownUuid()) {
+      events.emit('protocolError', new Error('WORLD_REPLY_PLAYER_MISMATCH'))
+      return
+    }
     events.emit('receipt', body)
     const request = pending.get(body.requestId)
-    if (request) {
+    if (request && request.playerUuid === ownUuid()) {
       clearTimeout(request.timer)
       pending.delete(body.requestId)
       request.resolve(body)
     }
   }
 
-  function onEnd () {
+  function clearPending (reason) {
     for (const request of pending.values()) {
       clearTimeout(request.timer)
-      request.reject(new Error('WORLD_CONNECTION_CLOSED'))
+      request.reject(new Error(reason))
     }
     pending.clear()
   }
+  function onContextChange () { clearPending('WORLD_CONTEXT_CHANGED') }
+  function onEnd () { closed = true; clearPending('WORLD_CONNECTION_CLOSED') }
 
   bot._client.on('custom_payload', onPayload)
   bot.on('end', onEnd)
+  bot.on('spawn', onContextChange)
+  bot.on('respawn', onContextChange)
 
   function look () {
+    if (closed || !ownUuid()) return Promise.reject(new Error('WORLD_CONNECTION_UNAVAILABLE'))
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId)
         reject(new Error(`WORLD_QUERY_TIMEOUT ${requestId}`))
       }, 4000)
-      pending.set(requestId, { resolve, reject, timer })
+      pending.set(requestId, { resolve, reject, timer, playerUuid: ownUuid() })
       try {
         bot._client.write('custom_payload', {
           channel: 'maw_agent:world_query',
@@ -79,6 +95,8 @@ function attachWorldClient (bot) {
     detach: () => {
       bot._client.off('custom_payload', onPayload)
       bot.off('end', onEnd)
+      bot.off('spawn', onContextChange)
+      bot.off('respawn', onContextChange)
       onEnd()
     }
   }

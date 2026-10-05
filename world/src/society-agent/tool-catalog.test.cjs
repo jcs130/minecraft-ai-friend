@@ -47,6 +47,14 @@ test('native hut capabilities and component-CAS construction are discoverable wi
   assert.match(agentToolCatalog('colony').tool.description, /workOrder不等于建筑完成/)
   assert.match(agentToolCatalog('colony').tool.parameters.operation, /capabilities.*placeHut/)
 })
+test('colony resources expose bounded complete-component pages without treating a requirement template as inventory', () => {
+  const args = { buildingPosition: { x: 620, y: 63, z: 610 }, offset: 12, limit: 24 }
+  assert.equal(parse({ type: 'colony', operation: 'resources', args }).actions[0].args.offset, 12)
+  for (const patch of [{ buildingPosition: null }, { offset: -1 }, { offset: 10001 }, { limit: 0 }, { limit: 25 }, { playerUuid: uuid }, { requestId: {} }]) {
+    assert.throws(() => parse({ type: 'colony', operation: 'resources', args: { ...args, ...patch } }), /COLONY_RESOURCES/)
+  }
+  assert.match(agentToolCatalog('colony').tool.parameters.args, /完整原生需求SNBT/)
+})
 test('dig/gather aim offsets remain explicitly bounded and never become an automatic obstruction action', () => {
   for (const type of ['dig', 'gather']) {
     assert.equal(parse({ type, position: { x: 1, y: 64, z: 2 }, aimOffset: [.1, .8, .1] }).actions.length, 1)

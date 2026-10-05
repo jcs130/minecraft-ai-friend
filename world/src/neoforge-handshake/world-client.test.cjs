@@ -5,10 +5,13 @@ const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const { attachWorldClient } = require('./world-client.cjs')
 const { Vec3 } = require('vec3')
+const UUID_A = '11111111-1111-4111-8111-111111111111'
+const UUID_B = '22222222-2222-4222-8222-222222222222'
 
 test('look query correlates only its own private native reply', async () => {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
+  bot._client.uuid = UUID_A
   let sent
   bot._client.write = (name, body) => { sent = { name, body } }
   const world = attachWorldClient(bot)
@@ -18,9 +21,9 @@ test('look query correlates only its own private native reply', async () => {
   const query = JSON.parse(sent.body.data.toString('utf8'))
   assert.equal(query.kind, 'look')
   bot._client.emit('custom_payload', { channel: 'maw_agent:world_state',
-    data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', requestId: 'someone_else', ok: true })) })
+    data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', playerUuid: UUID_A, requestId: 'someone_else', ok: true })) })
   bot._client.emit('custom_payload', { channel: 'maw_agent:world_state',
-    data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', requestId: query.requestId,
+    data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', playerUuid: UUID_A, requestId: query.requestId,
       ok: true, position: { x: 3, y: 64, z: -2 }, block: { id: 'create:shaft' } })) })
   assert.equal((await waiting).block.id, 'create:shaft')
   world.detach()
@@ -29,6 +32,7 @@ test('look query correlates only its own private native reply', async () => {
 test('native raycast waits until forced rotation has reached the physics tick', async () => {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
+  bot._client.uuid = UUID_A
   let finishTick, sent = null
   const operations = []
   bot.lookAt = async (point, force) => operations.push({ kind: 'look', point, force })
@@ -50,7 +54,7 @@ test('native raycast waits until forced rotation has reached the physics tick', 
   await new Promise(resolve => setImmediate(resolve))
   const request = JSON.parse(sent.body.data.toString('utf8'))
   bot._client.emit('custom_payload', { channel: 'maw_agent:world_state', data: Buffer.from(JSON.stringify({
-    schemaVersion: 1, kind: 'world_receipt', requestId: request.requestId, ok: true,
+    schemaVersion: 1, kind: 'world_receipt', playerUuid: UUID_A, requestId: request.requestId, ok: true,
     position: { x: 0, y: 65, z: -7 }, block: { id: 'minecraft:mangrove_log' }
   })) })
   assert.equal((await waiting).ok, true)
@@ -60,6 +64,7 @@ test('native raycast waits until forced rotation has reached the physics tick', 
 test('failed physics synchronization never sends a stale raycast query', async () => {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
+  bot._client.uuid = UUID_A
   bot.lookAt = async () => {}
   bot.waitForTicks = async () => { throw Error('connection ended while turning') }
   let writes = 0
@@ -73,6 +78,7 @@ test('failed physics synchronization never sends a stale raycast query', async (
 function nativeReplyBot () {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
+  bot._client.uuid = UUID_A
   bot.lookAt = async () => {}
   bot.waitForTicks = async () => {}
   let sent
@@ -82,7 +88,7 @@ function nativeReplyBot () {
     sent: () => sent,
     reply: body => bot._client.emit('custom_payload', {
       channel: 'maw_agent:world_state',
-      data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt',
+      data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', playerUuid: UUID_A,
         requestId: JSON.parse(sent.packet.data.toString('utf8')).requestId, ...body }), 'utf8')
     })
   }
@@ -110,7 +116,7 @@ test('visible millstone reply retains native input, complete components and real
       waitingForPower: false, outputAvailable: true, outputBlocked: false,
       canCollectOutput: true, recipeId: 'create:milling/wheat', recipeDuration: 150 }
   }
-  fixture.reply({ ok: true, playerUuid: 'mine', dimension: 'minecraft:overworld',
+  fixture.reply({ ok: true, playerUuid: UUID_A, dimension: 'minecraft:overworld',
     position: { x: -4, y: 65, z: 9 }, block })
   const receipt = await waiting
   assert.equal(receipt.ok, true)
@@ -154,4 +160,31 @@ test('occluding block cannot pass as the requested machine even if its reply has
   assert.equal(receipt.code, 'different_visible_block')
   assert.deepEqual(receipt.position, { x: -4, y: 65, z: 8 })
   world.detach()
+})
+
+
+test('foreign account and oversized replies cannot resolve own read; lifecycle retires old read', async () => {
+  const fixture = nativeReplyBot()
+  const world = attachWorldClient(fixture.bot)
+  const errors = []
+  world.events.on('protocolError', error => errors.push(error.message))
+  const waiting = world.look()
+  let resolved = false
+  waiting.then(() => { resolved = true })
+  fixture.reply({ playerUuid: UUID_B, ok: true })
+  fixture.bot._client.emit('custom_payload', { channel: 'maw_agent:world_state', data: Buffer.alloc(65537, 32) })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(resolved, false)
+  assert.deepEqual(errors, ['WORLD_REPLY_PLAYER_MISMATCH', 'WORLD_REPLY_TOO_LARGE'])
+  fixture.reply({ ok: false, code: 'no_visible_block' })
+  assert.equal((await waiting).code, 'no_visible_block')
+  const retired = world.look()
+  const rejected = assert.rejects(retired, /WORLD_CONTEXT_CHANGED/)
+  fixture.bot.emit('respawn')
+  await rejected
+  fixture.reply({ ok: true })
+  world.detach()
+  assert.equal(fixture.bot.listenerCount('respawn'), 0)
+  assert.equal(fixture.bot._client.listenerCount('custom_payload'), 0)
+  await assert.rejects(world.look(), /WORLD_CONNECTION_UNAVAILABLE/)
 })

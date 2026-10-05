@@ -54,7 +54,14 @@ function parsePlan (text) {
     if (action.type === 'place' && (!ID.test(action.itemId) || !ID.test(action.blockId) || !position(action.face) || ['x', 'y', 'z'].reduce((s, k) => s + Math.abs(action.face[k]), 0) !== 1 || !Number.isInteger(action.hotbarSlot) || action.hotbarSlot < 0 || action.hotbarSlot > 8)) throw Error('PLAN_PLACE_INVALID')
     if (action.type === 'maid' && !['list', 'status', 'tasks', 'follow', 'pickup', 'task', 'bag'].includes(action.operation)) throw Error('PLAN_MAID_INVALID')
     if (action.type === 'maid' && action.operation !== 'list' && (!UUID.test(action.maidUuid || '') || (action.operation === 'follow' && typeof action.args?.follow !== 'boolean') || (action.operation === 'pickup' && typeof action.args?.pickup !== 'boolean') || (action.operation === 'task' && !ID.test(action.args?.taskId || '')))) throw Error('PLAN_MAID_ARGUMENT_INVALID')
-    if (action.type === 'colony' && !['status', 'capabilities', 'found', 'placeBuilder', 'placeHut', 'requestBuild', 'deliver', 'stockResource'].includes(action.operation)) throw Error('PLAN_COLONY_INVALID')
+    if (action.type === 'colony' && !['status', 'capabilities', 'resources', 'found', 'placeBuilder', 'placeHut', 'requestBuild', 'deliver', 'stockResource'].includes(action.operation)) throw Error('PLAN_COLONY_INVALID')
+    if (action.type === 'colony' && action.operation === 'resources') {
+      const args = action.args
+      if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => !['buildingPosition', 'offset', 'limit', 'requestId'].includes(key)) ||
+          !position(args.buildingPosition) || !Number.isInteger(args.offset ?? 0) || (args.offset ?? 0) < 0 || (args.offset ?? 0) > 10000 ||
+          !Number.isInteger(args.limit ?? 12) || (args.limit ?? 12) < 1 || (args.limit ?? 12) > 24 ||
+          (args.requestId !== undefined && (typeof args.requestId !== 'string' || !/^[A-Za-z0-9:_-]{1,64}$/.test(args.requestId)))) throw Error('PLAN_COLONY_RESOURCES_INVALID')
+    }
     if (action.type === 'colony' && action.operation === 'placeHut' && (!position(action.args?.position) ||
         !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'].includes(action.args?.hutType) ||
         !Number.isInteger(action.args?.inventorySlot) || action.args.inventorySlot < 0 || action.args.inventorySlot > 35 ||

@@ -29,7 +29,12 @@ function attachNativeWorldQuery (bot, { timeoutMs = 4000 } = {}) {
     for (const [requestId, request] of pending) { clearTimeout(request.timer); request.resolve(unavailable(requestId, 'native_query_connection_closed')) }
     pending.clear()
   }
+  const contextChanged = () => {
+    for (const [requestId, request] of pending) { clearTimeout(request.timer); request.resolve(unavailable(requestId, 'native_query_context_changed')) }
+    pending.clear()
+  }
   bot._client.on('custom_payload', payload); bot.on('end', end)
+  bot.on('spawn', contextChanged); bot.on('respawn', contextChanged)
   function ask (kind, fields) {
     if (closed || !UUID.test(bot._client.uuid || '')) return Promise.resolve(unavailable(null, 'native_query_connection_unavailable'))
     const uuid = bot._client.uuid.toLowerCase(), requestId = randomUUID()
@@ -52,7 +57,7 @@ function attachNativeWorldQuery (bot, { timeoutMs = 4000 } = {}) {
           !Number.isInteger(args.limit ?? 6) || (args.limit ?? 6) < 1 || (args.limit ?? 6) > 12) throw Error('NATIVE_RECIPE_QUERY_INVALID')
       return ask('recipes', { ...args, offset: args.offset ?? 0, limit: args.limit ?? 6 })
     },
-    detach () { bot._client.off('custom_payload', payload); bot.off('end', end); end() }
+    detach () { bot._client.off('custom_payload', payload); bot.off('end', end); bot.off('spawn', contextChanged); bot.off('respawn', contextChanged); end() }
   }
 }
 module.exports = { attachNativeWorldQuery }

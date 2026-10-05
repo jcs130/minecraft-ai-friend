@@ -319,6 +319,73 @@ final class PlayerColonyBridge {
         return result;
     }
 
+    private static JsonObject resourceFact(ServerPlayer player, BuildingBuilderResource resource) {
+        ItemStack item = resource.getItemStack();
+        JsonObject entry = new JsonObject();
+        entry.addProperty("id", BuiltInRegistries.ITEM.getKey(item.getItem()).toString());
+        entry.addProperty("name", limit(item.getHoverName().getString(), 100));
+        entry.addProperty("count", item.getCount());
+        // The actual native template includes Domum material components and any custom name.
+        // It is NOT the player's stockResource inventory compare-and-swap precondition.
+        entry.addProperty("snbt", item.saveOptional(player.registryAccess()).toString());
+        entry.addProperty("needed", resource.getAmount());
+        entry.addProperty("availableReported", resource.getAvailable());
+        entry.addProperty("inDelivery", resource.getAmountInDelivery());
+        return entry;
+    }
+
+    private static void rejectResources(ServerPlayer player, String requestId, String code) {
+        JsonObject result = base(requestId);
+        result.addProperty("query", "resources");
+        result.addProperty("readOnly", true);
+        result.addProperty("ok", false);
+        result.addProperty("code", code);
+        send(player, result);
+    }
+
+    private static void handleResources(ServerPlayer player, JsonObject query, String requestId, IColony colony) {
+        int offset;
+        int limit;
+        BlockPos position;
+        try {
+            offset = ColonyResourcePage.integer(query, "offset", 0);
+            limit = ColonyResourcePage.integer(query, "limit", ColonyResourcePage.DEFAULT_LIMIT);
+            JsonObject target = query.getAsJsonObject("buildingPosition");
+            position = new BlockPos(ColonyResourcePage.integer(target, "x", null),
+                    ColonyResourcePage.integer(target, "y", null), ColonyResourcePage.integer(target, "z", null));
+            if (offset < 0 || limit < 1 || limit > ColonyResourcePage.MAX_LIMIT) {
+                rejectResources(player, requestId, "invalid_resource_page"); return;
+            }
+        } catch (RuntimeException invalid) {
+            rejectResources(player, requestId, "invalid_resource_query"); return;
+        }
+        if (colony == null || !colony.getPermissions().isColonyMember(player)) {
+            rejectResources(player, requestId, "not_colony_member"); return;
+        }
+        // Do not load chunks for remote inspection or look up another dimension/colony.
+        if (!player.level().isLoaded(position)) {
+            rejectResources(player, requestId, "building_not_loaded"); return;
+        }
+        IBuilding building = IColonyManager.getInstance().getBuilding(player.level(), position);
+        if (!(building instanceof AbstractBuildingStructureBuilder builder)
+                || building.getTileEntity() == null || building.getColony().getID() != colony.getID()) {
+            rejectResources(player, requestId, "resource_builder_missing_or_wrong_colony"); return;
+        }
+        List<JsonObject> rows = new ArrayList<>();
+        for (BuildingBuilderResource resource : builder.getNeededResources().values()) {
+            if (!resource.getItemStack().isEmpty()) rows.add(resourceFact(player, resource));
+        }
+        JsonObject result = base(requestId);
+        result.addProperty("playerUuid", player.getUUID().toString()); // Include this in the exact byte budget.
+        result.addProperty("query", "resources");
+        result.addProperty("readOnly", true);
+        result.addProperty("source", "native_builder_needed_resources");
+        result.addProperty("colonyId", colony.getID());
+        result.add("buildingPosition", pos(position));
+        result.addProperty("hasWorkOrder", builder.hasWorkOrder());
+        send(player, ColonyResourcePage.apply(result, rows, offset, limit));
+    }
+
     private static void handle(ServerPlayer player, String raw) {
         String requestId = "invalid";
         try {
@@ -326,7 +393,8 @@ final class PlayerColonyBridge {
             requestId = query.get("requestId").getAsString();
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
             String kind = query.get("kind").getAsString();
-            if (query.get("schemaVersion").getAsInt() != 1 || !(kind.equals("status") || kind.equals("capabilities"))) {
+            if (query.get("schemaVersion").getAsInt() != 1
+                    || !(kind.equals("status") || kind.equals("capabilities") || kind.equals("resources"))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -334,6 +402,10 @@ final class PlayerColonyBridge {
             if (last != null && now - last < 10) { reject(player, requestId, "rate_limited"); return; }
             LAST_QUERY_TICK.put(player.getUUID(), now);
             IColony colony = playerColony(player);
+            if (kind.equals("resources")) {
+                handleResources(player, query, requestId, colony);
+                return;
+            }
             JsonObject options = constructionOptions(player, colony);
             if (kind.equals("capabilities")) {
                 send(player, capabilitiesResult(requestId, options, colony == null ? null : colonyMetadata(player, colony)));
@@ -471,6 +543,8 @@ final class PlayerColonyBridge {
                             row.add("resources", resources);
                             row.addProperty("resourceCount", needed.size());
                             row.addProperty("resourcesTruncated", needed.size() > resources.size());
+                            row.addProperty("resourcesQuery", "resources");
+                            row.addProperty("resourcesPageLimit", ColonyResourcePage.MAX_LIMIT);
                         }
                     }
                     buildings.add(row);

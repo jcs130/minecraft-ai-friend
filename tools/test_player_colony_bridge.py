@@ -172,7 +172,7 @@ public final class ColonyConstructionRulesTest {
         with tempfile.TemporaryDirectory(prefix="colony-native-api-audit-") as temporary:
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
                            "-d", temporary, str(SOURCE / "PlayerColonyBridge.java"), str(SOURCE / "ColonyConstructionRules.java"),
-                           str(SOURCE / "ColonyActionReplay.java")])
+                           str(SOURCE / "ColonyActionReplay.java"), str(SOURCE / "ColonyResourcePage.java")])
             text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
             calls = re.findall(r"// (?:InterfaceMethod|Method) ([^\r\n]+)", text)
             for required in ("IPermissions.hasPermission:", "IRegisteredStructureManager.canPlaceAt:", "StructurePacks.getBlueprint:",
@@ -279,7 +279,7 @@ public final class ColonyCapabilitiesTest {
             file = Path(temporary) / "ColonyCapabilitiesTest.java"
             file.write_text(harness, encoding="utf-8")
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
-                           "-d", temporary, *(str(SOURCE / name) for name in ("PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java")), str(file)])
+                           "-d", temporary, *(str(SOURCE / name) for name in ("PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java")), str(file)])
             result = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp, "dev.qiandeng.maw.ColonyCapabilitiesTest"])
             self.assertIn("native response branch passed", result)
             bytecode = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
@@ -290,6 +290,99 @@ public final class ColonyCapabilitiesTest {
             self.assertIn("Method send:", early, "capabilities must use the private, byte-budgeted native send path")
             self.assertRegex(early, r"\n\s*\d+: return\b", "capabilities must return before status enumeration")
             self.assertIn("// String unsupported_query", handler, "unknown query kinds remain rejected")
+
+    def test_resource_pages_preserve_complete_components_stable_order_and_utf8_budget_without_skipping(self):
+        harness = r'''
+package dev.qiandeng.maw;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.nio.charset.StandardCharsets;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+public final class ColonyResourcePageTest {
+    static void check(boolean value,String message) { if(!value) throw new AssertionError(message); }
+    static JsonObject row(int index,String material) {
+        var row=new JsonObject();row.addProperty("id","domum_ornamentum:panel");
+        row.addProperty("name","native panel "+index);row.addProperty("count",1);
+        row.addProperty("snbt","{count:1,id:\"domum_ornamentum:panel\",components:{\"test:material\":\""+material+"\"}}");
+        row.addProperty("needed",index+1);row.addProperty("availableReported",index);row.addProperty("inDelivery",0);
+        return row;
+    }
+    static JsonObject envelope() {
+        var result=new JsonObject();result.addProperty("schemaVersion",1);result.addProperty("kind","colony_receipt");
+        result.addProperty("requestId","resource-page");result.addProperty("playerUuid","11111111-1111-1111-1111-111111111111");
+        result.addProperty("query","resources");result.addProperty("readOnly",true);return result;
+    }
+    public static void main(String[] args) {
+        var rows=new ArrayList<JsonObject>();for(int i=0;i<37;i++) rows.add(row(i,String.format("material%02d",i)));
+        var before=rows.toString();Collections.reverse(rows);
+        var page=ColonyResourcePage.apply(envelope(),rows,0,12);
+        check(page.get("total").getAsInt()==37 && page.get("returned").getAsInt()==12,"old 12-row global loss must not recur");
+        check(page.get("truncated").getAsBoolean() && page.get("nextOffset").getAsInt()==12,"page one cursor");
+        var collected=new ArrayList<String>();int offset=0;
+        do {
+            page=ColonyResourcePage.apply(envelope(),rows,offset,12);
+            check(page.toString().getBytes(StandardCharsets.UTF_8).length<=16384,"full UTF8 packet budget");
+            for(var resource:page.getAsJsonArray("resources")) collected.add(resource.getAsJsonObject().get("snbt").getAsString());
+            if(page.get("nextOffset").isJsonNull()) break;
+            int next=page.get("nextOffset").getAsInt();check(next>offset,"normal page must advance");offset=next;
+        } while(true);
+        check(collected.size()==37 && new java.util.HashSet<>(collected).size()==37,"same-id components merged or skipped");
+        for(int i=0;i<37;i++) check(collected.get(i).contains(String.format("material%02d",i)),"component tie-break order");
+        Collections.reverse(rows);check(rows.toString().equals(before),"must not rewrite source/native item facts");
+        check(!envelope().has("resources"),"must not mutate envelope");
+        var finalPage=ColonyResourcePage.apply(envelope(),rows,37,24);
+        check(finalPage.get("ok").getAsBoolean() && finalPage.get("returned").getAsInt()==0 && finalPage.get("nextOffset").isJsonNull(),"terminal page");
+        var invalid=ColonyResourcePage.apply(envelope(),rows,38,12);
+        check(!invalid.get("ok").getAsBoolean() && invalid.get("code").getAsString().equals("invalid_resource_offset"),"out of range must be explicit");
+        var wide=new ArrayList<JsonObject>();for(int i=0;i<8;i++)wide.add(row(i,"material"+i+"界".repeat(1400)));
+        page=ColonyResourcePage.apply(envelope(),wide,0,24);
+        check(page.get("returned").getAsInt()>0 && page.get("returned").getAsInt()<8,"byte budget must reduce row count");
+        int next=page.get("nextOffset").getAsInt();
+        check(ColonyResourcePage.apply(envelope(),wide,next,24).getAsJsonArray("resources").get(0).getAsJsonObject().get("snbt").equals(wide.get(next).get("snbt")),"overflow row must be next, not skipped");
+        var huge=row(0,"a"+"界".repeat(6000));var blocked=ColonyResourcePage.apply(envelope(),java.util.List.of(huge,row(1,"z")),0,24);
+        check(!blocked.get("ok").getAsBoolean() && blocked.get("code").getAsString().equals("resource_item_too_large"),"oversized complete stack unavailable");
+        check(blocked.get("blockedOffset").getAsInt()==0 && blocked.get("nextOffset").getAsInt()==0 && blocked.get("returned").getAsInt()==0,"oversized item cannot be clipped or swallowed");
+        check(!blocked.toString().contains("界"),"no partial component dump");
+        for(String json:java.util.List.of("{\"offset\":-0.1}","{\"offset\":\"1\"}","{\"offset\":2147483648}","{\"offset\":null}","{}")) {
+            try {ColonyResourcePage.integer(JsonParser.parseString(json).getAsJsonObject(),"offset",null);throw new AssertionError("coerced integer accepted");}
+            catch(IllegalArgumentException expected){}
+        }
+        check(ColonyResourcePage.integer(new JsonObject(),"limit",12)==12,"default limit");
+        for(int limit:new int[]{0,25,-1}) {
+            try {ColonyResourcePage.apply(envelope(),rows,0,limit);throw new AssertionError("limit accepted");}
+            catch(IllegalArgumentException expected){}
+        }
+        System.out.println("complete resource paging and byte budget passed");
+    }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="colony-resources-audit-") as temporary:
+            file = Path(temporary) / "ColonyResourcePageTest.java"
+            file.write_text(harness, encoding="utf-8")
+            self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
+                           "-d", temporary, str(SOURCE / "ColonyResourcePage.java"), str(file)])
+            result = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp, "dev.qiandeng.maw.ColonyResourcePageTest"])
+            self.assertIn("complete resource paging and byte budget passed", result)
+
+    def test_resources_query_compiles_native_full_stack_read_and_never_gains_colony_permissions(self):
+        with tempfile.TemporaryDirectory(prefix="colony-resource-native-audit-") as temporary:
+            self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
+                           "-d", temporary, *(str(SOURCE / name) for name in (
+                               "PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
+            text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
+            resource_fact = text.split("private static com.google.gson.JsonObject resourceFact(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertIn("BuildingBuilderResource.getItemStack:", resource_fact)
+            self.assertIn("ItemStack.saveOptional:", resource_fact, "must encode the actual registry-aware component-bearing template")
+            self.assertNotIn("ItemStack.copyWithCount:", resource_fact)
+            resources = text.split("private static void handleResources(", 1)[1].split("\n  private static ", 1)[0]
+            for native_read in ("IPermissions.isColonyMember:", "Level.isLoaded:", "IColonyManager.getBuilding:",
+                                "AbstractBuildingStructureBuilder.getNeededResources:", "Method resourceFact:", "ColonyResourcePage.apply:", "Method send:"):
+                self.assertIn(native_read, resources)
+            self.assertNotRegex(resources, r"(?:setItem|setCount|setBlock|dispatchCommand|performPrefixedCommand|addItemStack|setOwner|addPlayer)")
+            self.assertIn("// String resource_builder_missing_or_wrong_colony", resources)
+            handler = text.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
+            self.assertIn("Method handleResources:", handler)
 
 
 if __name__ == "__main__":

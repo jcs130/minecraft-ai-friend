@@ -4,7 +4,7 @@
 function actionIsReadOnly (action) {
   if (['tools', 'inspect', 'recipes', 'block_inspect', 'block_verify', 'entity_inspect', 'wait'].includes(action?.type)) return true
   if (action?.type === 'maid') return ['list', 'status', 'tasks'].includes(action.operation)
-  if (action?.type === 'colony') return ['status', 'capabilities'].includes(action.operation)
+  if (action?.type === 'colony') return ['status', 'capabilities', 'resources'].includes(action.operation)
   if (action?.type === 'spell') return ['list', 'explain'].includes(action.operation)
   return false
 }
