@@ -2,6 +2,8 @@
 
 本指南对应 `experiment/agent-society-1.21.1` 的 NeoForge 1.21.1 实验世界。普通 Agent 用自己的 Mineflayer 连接及客户端适配器读取原生身份和操作模组，不需要 OP、Numen 管理端或宿主 QwenPaw 账号。服务端所有玩家接口均从 `context.player()` 取得实际请求者，再向该玩家单播；不会按 CortiLan 或 MawExplorer 用户名选人。
 
+当前交付按用户最新要求验收“功能可发现、状态可读、操作可调用”；不要求接入框架或模型先自主经营。新增统一入口 `sdk.operations()/sdk.operations(id)/sdk.call(id,args)`，绑定 30 项已有原生操作；[完整调用说明](MY-AGENT-WORLD-NATIVE-CALL-API.md)记录参数发现、实际结果和失败恢复。尚缺的专用模组接口继续在能力清单标明。
+
 目前入口是本机 `127.0.0.1:28977`，后端 `127.0.0.1:28976`。均未作为新服的公网入口。前门和后端使用离线登录；公网准入、账号归属认证、连接并发/速率限制及新服基岩兼容尚需另行完成。现有旧服公网地址不能当成本实验服地址，也不能直接将这个离线前门映射到公网。使用独立、未被占用的玩家名；每个 Agent 只控制自己的玩家连接。
 
 ## 连接与客户端适配器
@@ -23,15 +25,15 @@ const sdk = attachModAgentClient(bot)
 
 bot.once('spawn', async () => {
   console.log(sdk.contract())
-  console.log(sdk.tools())             // 本地工具说明目录
-  console.log(sdk.tools('colony'))     // 某项说明与参数
-  console.log(await sdk.native.recipes({ recipeType: 'create:milling', limit: 2 }))
-  console.log(await sdk.colony.capabilities())
+  console.log(sdk.operations())                  // 已绑定原生操作的 list
+  console.log(sdk.operations('native.recipes'))   // explain：说明和 JSON Schema
+  console.log(await sdk.call('native.recipes', { recipeType: 'create:milling', limit: 2 }))
+  console.log(await sdk.call('colony.capabilities'))
 })
 bot.once('end', () => sdk.detach())
 ```
 
-`sdk.tools()` 返回现有 Maw Agent 执行器的工具说明，属于 `maw_agent_executor_descriptors`。它不是远程服务器能力承诺，也没有 `execute(plan)` 方法。外部框架须自行实现动作调度、超时、死亡/重生取消、意图/回执持久化和世界后置条件验证。仅连接 Mineflayer、不接这些适配器，不能据代理图标正确操作完整模组包。
+`sdk.operations()` 是 30 项原生适配器调用的目录，包含读写属性与 JSON Schema；`sdk.call` 返回实际原生结果或缓存副本，失效缓存为 `null`。它不会声明所有远端功能通过。`sdk.tools()` 另外返回现有 Maw Agent 执行器的 25 项工具说明，属于 `maw_agent_executor_descriptors`，没有 `execute(plan)` 方法。外部框架自行调度身体动作、死亡/重生取消、意图/回执持久化和世界后置条件验证。仅连接 Mineflayer、不接这些适配器，不能据代理图标正确操作完整模组包。
 
 `sdk.contract().allModsVerified` 和 `publicAccessReady` 当前均为 `false`。不要将“客户端安装了适配器”写成“服务端全部玩法可用”。运行服务部署记录与实际验证见 [原生兼容维护](MY-AGENT-WORLD-NATIVE-COMPATIBILITY.md)、[自主发展验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)及[持久服务](MY-AGENT-WORLD-PERSISTENT-SERVER.md)。
 
@@ -83,6 +85,10 @@ Domum 的实际方块 ID 为 `domum_ornamentum:architectscutter`。先从本人�
 
 ## 回执、失败和重连
 
+通过 `sdk.call` 调用时，变更串行派发；待定变更期间另一变更在发送前拒绝，只读仍可调用。`sdk.callStatus()` 显示在途操作与未知阻断。变更结果未知后阻断下一次变更，并跨重生保持；直接调用底层客户端或身体执行器的变更须由接入方统一调度，不能绕过未知结果继续操作。SDK 内存锁不提供跨重启 exactly-once，重连不能作为清除未知动作的办法。
+
+法术客户端仅接受当前上下文中与本人 UUID、待定 requestId、action 匹配的回执；登录/重生清除旧书缓存，迟到或未请求结果不会补回缓存。`current()` 和统一 `call` 返回副本，接入方修改它们不会改变适配器状态。
+
 每次变更先持久化自己的动作意图及 requestId，收到正式私有回执后再记结果。菜单缓存限定“当前服务端进程、当前登录、每玩家最近 32 条”；同 ID、同完整请求返回原回执，同 ID 不同参数返回 `request_id_conflict`，未结算或原生钩子异常可能返回 `action_outcome_unknown/outcomeKnown:false`。退出、服务端重启及淘汰后的边界均不提供跨重启 exactly-once。
 
 变更超时、断线、死亡/重生、未知回执或异常扣物后，应停止该动作并重新观察；不能换一个 requestId 盲重放。SDK 会清除过期菜单及待定点击，拒绝用迟到回执恢复旧窗口。一般只读查询可以在明确的新观察周期重读，不能把查询重试当作交互重试。Agent 自己的持久账本须保留原未知结果，不能靠重连、删除暂停文件或清空记忆让旧动作再执行。
@@ -93,4 +99,4 @@ Domum 的实际方块 ID 为 `domum_ornamentum:architectscutter`。先从本人�
 
 已打通的有限入口包括普通生存操作、原生菜单、部分农夫乐事料理/切割、Create 磨石及受限加工定义、配置好的 Ars 法术、本人女仆工作设置、MineColonies 部分建造/交料。Create 流体/运动结构/完整生产线、Ars 制书学 glyph 与全效果、女仆全部任务生命周期、殖民地全部岗位/生产物流与持续自然发展、复杂地下城攻略、全模组碰撞导航、完整客户端渲染和基岩新服入口仍需分别验证。
 
-开放门槛按“可发现 → 可读完整原生事实 → 普通账号可操作 → 世界后置条件可验证 → 死亡/断线后不重放”的链路逐项评估。新普通账号的接入与并行隔离测试必须包含至少两名不同 UUID 玩家，不能只沿用现有 MawExplorer 身份或依赖其已有管理员夹具。使用给料的隔离契约验收要明确记录操作员供料，不算 Agent 自主采集或长期运营成功。
+接口验收按“可发现 → 可读完整原生事实 → 普通账号可调用 → 实际效果或明确拒绝可验证 → 死亡/断线后不重放”的链路逐项评估。接口场景可以使用标明的给料夹具，无需先证明自主采集或长期运营。独立账号与私有隔离、对外认证/容量、渲染和基岩沿各自范围验收，不用常驻 MawExplorer 一个身份替代全部结果。

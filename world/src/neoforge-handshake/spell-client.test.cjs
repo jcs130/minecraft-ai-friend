@@ -46,9 +46,11 @@ test('native list and explain preserve actual recipe and book components, withou
 
 test('cast sends exact native book and hotbar preconditions, and keeps failure as failure', async t => {
   const { spell, writes, emit } = fixture(t)
-  emit({ requestId: 'observation', action: 'list', ok: true, state: STATE })
+  const observation = spell.list()
+  emit({ requestId: writes[0].body.requestId, action: 'list', ok: true, state: STATE })
+  await observation
   const cast = spell.cast('ars_nouveau:slot_0', { requestId: 'heal-once' })
-  assert.deepEqual(writes[0], { name: 'custom_payload', channel: 'maw_agent:spell_action', body: {
+  assert.deepEqual(writes[1], { name: 'custom_payload', channel: 'maw_agent:spell_action', body: {
     schemaVersion: 1, kind: 'cast', requestId: 'heal-once', spellId: 'ars_nouveau:slot_0',
     expectedHeldSnbt: BOOK, expectedHotbarSlot: 2
   } })
@@ -59,7 +61,7 @@ test('cast sends exact native book and hotbar preconditions, and keeps failure a
   assert.equal(result.nativeInteraction, 'CONSUME')
   assert.equal(result.effectVerified, false)
   await assert.rejects(spell.cast('ars_nouveau:slot_0', { requestId: 'heal-once' }), /SPELL_CAST_ALREADY_ISSUED/)
-  assert.equal(writes.length, 1)
+  assert.equal(writes.length, 2)
 })
 
 test('foreign UUID or wrong action cannot resolve a request or contaminate the held book', async t => {
@@ -77,7 +79,9 @@ test('foreign UUID or wrong action cannot resolve a request or contaminate the h
 
 test('cast timeout is unknown, sends once, invalidates state and refuses same ID replay', async t => {
   const { spell, writes, emit } = fixture(t, { timeoutMs: 15 })
-  emit({ requestId: 'observation', action: 'list', state: STATE })
+  const observation = spell.list()
+  emit({ requestId: writes[0].body.requestId, action: 'list', ok: true, state: STATE })
+  await observation
   await assert.rejects(spell.cast('ars_nouveau:slot_0', { requestId: 'lost-receipt' }), error => {
     assert.match(error.message, /SPELL_CAST_OUTCOME_UNKNOWN/)
     assert.equal(error.requestId, 'lost-receipt')
@@ -85,12 +89,12 @@ test('cast timeout is unknown, sends once, invalidates state and refuses same ID
     assert.equal(error.retryAutomatically, false)
     return true
   })
-  assert.equal(writes.length, 1)
+  assert.equal(writes.length, 2)
   assert.equal(spell.current(), null)
   assert.throws(() => spell.cast('ars_nouveau:slot_0'), /SPELL_STATE_UNAVAILABLE/)
   await assert.rejects(spell.cast('ars_nouveau:slot_0', { requestId: 'lost-receipt',
     expectedHeldSnbt: BOOK, expectedHotbarSlot: 2 }), /SPELL_CAST_ALREADY_ISSUED/)
-  assert.equal(writes.length, 1)
+  assert.equal(writes.length, 2)
 })
 
 test('disconnect leaves cast unknown and never auto-resends on the same object', async t => {
@@ -104,14 +108,63 @@ test('disconnect leaves cast unknown and never auto-resends on the same object',
 })
 
 test('oversized and native unknown receipts discard potentially stale state', async t => {
-  const { spell, emit } = fixture(t)
-  emit({ requestId: 'a', action: 'list', state: STATE })
+  const { spell, emit, writes } = fixture(t)
+  const observation = spell.list()
+  emit({ requestId: writes[0].body.requestId, action: 'list', ok: true, state: STATE })
+  await observation
+  const first = spell.cast('ars_nouveau:slot_0', { requestId: 'b' })
   emit({ requestId: 'b', action: 'cast', ok: true, stateUnavailable: true })
+  await first
   assert.equal(spell.current(), null)
-  emit({ requestId: 'c', action: 'list', state: STATE })
-  emit({ requestId: 'd', action: 'cast', outcomeKnown: false, state: STATE })
+  const next = spell.list()
+  emit({ requestId: writes.at(-1).body.requestId, action: 'list', ok: true, state: STATE })
+  await next
+  const second = spell.cast('ars_nouveau:slot_0', { requestId: 'd' })
+  emit({ requestId: 'd', action: 'cast', ok: false, outcomeKnown: false, state: STATE })
+  await second
   assert.equal(spell.current(), null)
   assert.throws(() => spell.cast('ars_nouveau:slot_0'), /SPELL_STATE_UNAVAILABLE/)
+})
+
+test('respawn retires pending reads/casts and late old replies cannot refill the cache', async t => {
+  const { spell, bot, writes, emit } = fixture(t)
+  const list = spell.list(), readId = writes.at(-1).body.requestId
+  const cast = spell.cast('ars_nouveau:slot_0', { requestId: 'cast-before-respawn', expectedHeldSnbt: BOOK, expectedHotbarSlot: 2 })
+  bot.emit('respawn')
+  await assert.rejects(list, error => error.outcomeKnown === true && error.outcomeUnknown === false)
+  await assert.rejects(cast, error => error.outcomeUnknown === true)
+  emit({ requestId: readId, action: 'list', ok: true, state: STATE })
+  emit({ requestId: 'cast-before-respawn', action: 'cast', ok: true, state: STATE })
+  assert.equal(spell.current(), null)
+  await assert.rejects(spell.cast('ars_nouveau:slot_0', { requestId: 'cast-before-respawn', expectedHeldSnbt: BOOK, expectedHotbarSlot: 2 }), /ALREADY_ISSUED/)
+  assert.equal(writes.length, 2)
+  const fresh = spell.list(); emit({ requestId: writes.at(-1).body.requestId, action: 'list', ok: true, state: STATE })
+  await fresh; assert.equal(spell.current().heldSnbt, BOOK)
+})
+
+test('unmatched, malformed UTF-8 and oversized receipts cannot seed a book or resolve a query', async t => {
+  const { spell, bot, writes, emit, errors } = fixture(t)
+  emit({ requestId: 'unsolicited', action: 'list', ok: true, state: STATE }); assert.equal(spell.current(), null)
+  const read = spell.list(); const requestId = writes.at(-1).body.requestId
+  for (const value of [null, [], 'text', 7]) bot._client.emit('custom_payload', { channel: 'maw_agent:spell_state', data: Buffer.from(JSON.stringify(value)) })
+  bot._client.emit('custom_payload', { channel: 'maw_agent:spell_state', data: Buffer.from([0xc3, 0x28]) })
+  bot._client.emit('custom_payload', { channel: 'maw_agent:spell_state', data: Buffer.alloc(65537) })
+  emit({ requestId, action: 'list', ok: true, state: { ...STATE, playerUuid: OTHER } })
+  assert.equal(errors.length, 3); assert.equal(spell.current(), null)
+  emit({ requestId, action: 'list', ok: true, state: STATE }); await read
+})
+
+test('cache cloning and disconnect prevent external mutation and stale receipt resurrection', async t => {
+  const { spell, bot, writes, emit } = fixture(t)
+  const read = spell.list(); const requestId = writes.at(-1).body.requestId
+  spell.events.on('receipt', body => { body.state.heldSnbt = 'listener-change' })
+  emit({ requestId, action: 'list', ok: true, state: STATE }); const receipt = await read
+  assert.equal(receipt.state.heldSnbt, BOOK)
+  receipt.state.heldSnbt = 'changed'; const cache = spell.current(); cache.heldSnbt = 'also-changed'
+  assert.equal(spell.current().heldSnbt, BOOK)
+  bot.emit('end'); emit({ requestId, action: 'list', ok: true, state: STATE })
+  assert.equal(spell.current(), null)
+  spell.detach(); assert.equal(bot.listenerCount('spawn'), 0); assert.equal(bot.listenerCount('respawn'), 0)
 })
 
 test('invalid IDs, actor options and out of range preconditions never reach the wire', t => {

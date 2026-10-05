@@ -15,8 +15,9 @@ test('external frameworks attach ordinary distinct accounts without a model prov
   try {
     assert.equal(one.contract().playerUuid, uuidA); assert.equal(two.contract().playerUuid, uuidB)
     assert.equal(one.contract().allModsVerified, false); assert.equal(one.contract().publicAccessReady, false)
+    assert.equal(one.contract().directCallAvailable, true); assert.equal(one.contract().directOperationCount, 30)
     assert.equal(a.writes.length, 0); assert.equal(b.writes.length, 0)
-    const query = one.native.recipes({ recipeType: 'create:milling', limit: 1 })
+    const query = one.call('native.recipes', { recipeType: 'create:milling', limit: 1 })
     const id = JSON.parse(a.writes[0].body.data).requestId
     a._client.emit('custom_payload', { channel: 'maw_agent:world_state', data: Buffer.from(JSON.stringify({
       schemaVersion: 1, kind: 'world_receipt', requestId: id, playerUuid: uuidB, query: 'recipes', ok: true, recipes: ['foreign'] })) })

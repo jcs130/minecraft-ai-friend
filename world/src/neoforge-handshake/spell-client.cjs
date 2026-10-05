@@ -2,6 +2,10 @@
 
 const { randomUUID } = require('node:crypto')
 const { EventEmitter } = require('node:events')
+const { TextDecoder } = require('node:util')
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const utf8 = new TextDecoder('utf-8', { fatal: true })
+const validUuid = value => typeof value === 'string' && UUID.test(value)
 
 // Uses this bot's connection; target body/player UUIDs are never sent.
 function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
@@ -11,48 +15,63 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
   const issuedCasts = new Set()
   let state = null
   let closed = false
+  let epoch = 0
 
-  function identity () { return bot._client.uuid || bot.entity?.uuid || null }
+  function identity () { const uuid = bot._client.uuid || bot.entity?.uuid; return validUuid(uuid) ? uuid.toLowerCase() : null }
   function onPayload (packet) {
-    if (packet.channel !== 'maw_agent:spell_state') return
+    if (closed || packet.channel !== 'maw_agent:spell_state') return
     let body
-    try { body = JSON.parse(Buffer.from(packet.data).toString('utf8')) }
+    try {
+      const data = Buffer.from(packet.data)
+      if (data.length > 65536) throw new Error('SPELL_RECEIPT_BUDGET_EXCEEDED')
+      body = JSON.parse(utf8.decode(data))
+    }
     catch (error) { events.emit('protocolError', error); return }
-    if (body.schemaVersion !== 1 || body.kind !== 'spell_receipt' || body.engine !== 'ars_nouveau') return
+    if (!body || typeof body !== 'object' || Array.isArray(body) || body.schemaVersion !== 1 || body.kind !== 'spell_receipt' || body.engine !== 'ars_nouveau') return
     const request = pending.get(body.requestId)
     // A foreign actor receipt must not complete a pending request or update state.
-    if (!identity() || body.playerUuid !== identity()) {
+    if (!identity() || !validUuid(body.playerUuid) || body.playerUuid.toLowerCase() !== identity()) {
       events.emit('protocolError', new Error('SPELL_ACTOR_MISMATCH'))
       return
     }
-    if (request && body.action !== request.kind) {
+    if (!request) { events.emit('unmatchedReceipt', body); return }
+    if (request.uuid !== identity() || request.epoch !== epoch) return
+    if (body.action !== request.kind) {
       events.emit('protocolError', new Error('SPELL_ACTION_MISMATCH'))
       return
     }
+    if (typeof body.ok !== 'boolean' || (body.state && (!validUuid(body.state.playerUuid) || body.state.playerUuid.toLowerCase() !== identity()))) {
+      events.emit('protocolError', new Error('SPELL_RECEIPT_INVALID')); return
+    }
     if (body.stateUnavailable || body.outcomeKnown === false) state = null
-    else if (body.state?.playerUuid === identity()) state = body.state
-    events.emit('receipt', body)
+    else if (body.state) state = structuredClone(body.state)
+    events.emit('receipt', structuredClone(body))
     if (request) {
       clearTimeout(request.timer)
       pending.delete(body.requestId)
       request.resolve(body)
     }
   }
-  function onEnd () {
-    closed = true
+  function reset (reason) {
+    epoch++
     state = null
     for (const [requestId, request] of pending) {
       clearTimeout(request.timer)
-      const error = new Error(`${request.kind === 'cast' ? 'SPELL_CAST_OUTCOME_UNKNOWN' : 'SPELL_CONNECTION_CLOSED'} ${requestId}`)
+      const error = new Error(`${request.kind === 'cast' ? 'SPELL_CAST_OUTCOME_UNKNOWN' : reason} ${requestId}`)
       error.requestId = requestId
       error.outcomeUnknown = request.kind === 'cast'
+      error.outcomeKnown = request.kind !== 'cast'
       error.retryAutomatically = false
       request.reject(error)
     }
     pending.clear()
   }
+  function onEnd () { closed = true; reset('SPELL_CONNECTION_CLOSED') }
+  function onLifecycle () { if (!closed) reset('SPELL_PLAYER_LIFECYCLE_CHANGED') }
   bot._client.on('custom_payload', onPayload)
   bot.on('end', onEnd)
+  bot.on('spawn', onLifecycle)
+  bot.on('respawn', onLifecycle)
 
   function ask (channel, kind, fields = {}, requestId = randomUUID()) {
     if (closed) return Promise.reject(new Error('SPELL_CONNECTION_CLOSED'))
@@ -71,7 +90,7 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
         error.retryAutomatically = false
         reject(error)
       }, timeoutMs)
-      pending.set(requestId, { resolve, reject, timer, kind })
+      pending.set(requestId, { resolve, reject, timer, kind, uuid: identity(), epoch })
       try {
         bot._client.write('custom_payload', {
           channel,
@@ -109,13 +128,15 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
   }
   return {
     events,
-    current: () => state,
+    current: () => !closed && state?.playerUuid?.toLowerCase() === identity() ? structuredClone(state) : null,
     list: () => ask('maw_agent:spell_query', 'list'),
     explain,
     cast,
     detach: () => {
       bot._client.off('custom_payload', onPayload)
       bot.off('end', onEnd)
+      bot.off('spawn', onLifecycle)
+      bot.off('respawn', onLifecycle)
       onEnd()
     }
   }

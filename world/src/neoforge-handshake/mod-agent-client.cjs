@@ -8,6 +8,7 @@ const { attachDomumClient } = require('./domum-client.cjs')
 const { attachCollisionClient } = require('./collision-client.cjs')
 const { attachNativeWorldQuery } = require('../society-agent/native-world-query.cjs')
 const { agentToolCatalog } = require('../society-agent/tool-catalog.cjs')
+const { attachModCallClient } = require('./mod-call-client.cjs')
 
 // Framework-neutral adapters on ONE ordinary player's existing connection.
 // A local API catalog is not proof that a remote bridge or every mod is ready.
@@ -19,22 +20,29 @@ function attachModAgentClient (bot) {
     colony: attachColonyClient(bot), spell: attachSpellClient(bot),
     domum: attachDomumClient(bot), collision: attachCollisionClient(bot) }
   let closed = false
+  const calls = attachModCallClient(bot, clients, () => closed)
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   function detach () {
     if (closed) return
     closed = true
     bot.off('end', detach)
+    calls.detach()
     for (const client of Object.values(clients)) client.detach()
   }
   bot.on('end', detach)
   return {
     ...clients,
+    call: calls.call,
+    operations: calls.operations,
+    callStatus: calls.callStatus,
     tools: id => agentToolCatalog(id),
     contract () {
       return { schemaVersion: 1, source: 'installed_client_adapters',
         playerUuid: !closed && uuidPattern.test(bot._client.uuid || '') ? bot._client.uuid.toLowerCase() : null,
         closed, connectionSource: 'existing_player_connection',
         catalogScope: 'maw_agent_executor_descriptors', planExecutionAvailable: false,
+        directCallAvailable: true, directCallScope: 'native_client_operations',
+        directOperationCount: calls.operations().operationCount,
         channels: ['maw_agent:menu_action', 'maw_agent:menu_state',
           'maw_agent:world_query', 'maw_agent:world_state',
           'maw_agent:maid_query', 'maw_agent:maid_action', 'maw_agent:maid_state',
