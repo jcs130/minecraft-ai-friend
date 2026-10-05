@@ -59,6 +59,7 @@ REQUIRED_MODS = (
     "mcwbridges", "mcwroofs", "mcwfurnitures", "mcwwindows",
     "dungeoncrawl", "betterdungeons", "yungsapi", "dungeoneer",
     "numen_api", "numen", "maw_agent_bridge",
+    "yes_steve_model",
 )
 
 

@@ -13,7 +13,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "a0da152597b4528feb0cebd0c6fc228ae35583f83a9aea25dd5889abd80dc2e4"
+      "sha256": "91b7281c4ed5f092f6eaa74960de834c32fa73025971b7b5b5636cde16223538"
     }
   ],
   "artifacts": [
@@ -190,6 +190,13 @@
       "project": "https://modrinth.com/mod/fantastic-dungoneer/version/TjDQPKML",
       "url": "https://cdn.modrinth.com/data/M744KlcR/versions/TjDQPKML/dungeoneer-1.0.3-Release-neoforge-1.21.1.jar",
       "sha256": "4cc80b00660c37357998bfccd0c131466349cac76c18aec9d07051919b517131"
+    },
+    {
+      "name": "ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/yes-steve-model/version/HZWaR0LY",
+      "url": "https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar",
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
     }
   ]
 }

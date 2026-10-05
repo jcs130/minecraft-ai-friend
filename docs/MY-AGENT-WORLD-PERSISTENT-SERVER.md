@@ -11,7 +11,7 @@
 | 旧实验世界 | `server\world-lab` | 保留，与新生活世界分开 |
 | 注册表研究副本 | `E:\QiandengJiSocietyLab\research\registry-server` | 保留其研究世界、号表和原始证据，不当作当前生活服 |
 | 常驻号表与网关缓存 | `gateway\permanent\registry`、`gateway\permanent\idmap.json`、`gateway\permanent\knowledge.json` | 从通过验证的研究产物复制，配置引用常驻目录，不依赖清理研究副本 |
-| 原生网页资产 | `assets\native-20261005-v9` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712` |
+| 原生网页资产 | `assets\native-20261005-v10-ysm` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
 | Java 服务端 | `127.0.0.1:28976` | 模组服务端后端；真人 Java 客户端须匹配模组包并单独验证 |
 | Agent 协议网关 | `127.0.0.1:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
 | Agent 同连接网页 | `http://127.0.0.1:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |

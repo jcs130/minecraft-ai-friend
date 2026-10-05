@@ -228,6 +228,7 @@ final class PlayerMenuBridge {
             equipment.add(slot.getName(), item(player, player.getItemBySlot(slot)));
         }
         self.add("equipment", equipment);
+        self.add("ysm", PlayerYsmState.snapshot(player));
         state.add("self", self);
         state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
         String menuType;
