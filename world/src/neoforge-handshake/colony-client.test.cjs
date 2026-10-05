@@ -7,8 +7,8 @@ const { attachColonyClient } = require('./colony-client.cjs')
 
 function harness () {
   const bot = new EventEmitter()
-  bot.uuid = '11111111-1111-1111-1111-111111111111'
   bot._client = new EventEmitter()
+  bot._client.uuid = '11111111-1111-1111-1111-111111111111'
   const writes = []
   bot._client.write = (name, packet) => writes.push({ name, packet })
   return { bot, writes, colony: attachColonyClient(bot) }
@@ -27,6 +27,9 @@ test('status uses the player connection and matches only its private receipt', a
   assert.equal(body.kind, 'status')
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
     data: Buffer.from(JSON.stringify(receipt(body.requestId, '22222222-2222-2222-2222-222222222222'))) })
+  assert.equal(bot.uuid, undefined)
+  bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
+    data: Buffer.from(JSON.stringify({ ...receipt(body.requestId), playerUuid: null })) })
   bot._client.emit('custom_payload', { channel: 'maw_agent:colony_state',
     data: Buffer.from(JSON.stringify(receipt(body.requestId))) })
   assert.deepEqual(await pending, receipt(body.requestId))

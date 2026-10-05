@@ -2,6 +2,7 @@
 
 const { randomUUID } = require('node:crypto')
 const { EventEmitter } = require('node:events')
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Read MineColonies facts from the same authenticated player connection.
 // This never uses the operator-only Numen command bridge.
@@ -15,7 +16,8 @@ function attachColonyClient (bot) {
     try { body = JSON.parse(Buffer.from(packet.data).toString('utf8')) }
     catch (error) { events.emit('protocolError', error); return }
     if (body.schemaVersion !== 1 || body.kind !== 'colony_receipt') return
-    if (body.playerUuid && bot.uuid && body.playerUuid !== bot.uuid) {
+    const owner = bot._client.uuid
+    if (!UUID.test(owner || '') || !UUID.test(body.playerUuid || '') || body.playerUuid.toLowerCase() !== owner.toLowerCase()) {
       events.emit('protocolError', new Error('COLONY_PLAYER_MISMATCH'))
       return
     }

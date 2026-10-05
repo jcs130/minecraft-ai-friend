@@ -5,6 +5,24 @@ const { EventEmitter } = require('node:events')
 const { CHANNEL, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets } = require('./native-viewer-packet.cjs')
 const hash = 'a'.repeat(64)
 
+test('1.21.1 hurt animation remains a received cue on the same connection', () => {
+  const params = { entityId: 91, yaw: 123.25 }
+  const body = decodeNativePacket(encodeNativePacket('hurt_animation', params, hash, 1), hash)
+  assert.equal(body.name, 'hurt_animation')
+  assert.deepEqual(body.params, params)
+})
+
+test('only the exact original TLM two-varint animation payload is mirrored', () => {
+  const original = { channel: 'touhou_little_maid:maid_animation', data: Buffer.from([0xdb, 1, 1]) }
+  const body = decodeNativePacket(encodeNativePacket('custom_payload', original, hash, 1), hash)
+  assert.equal(body.name, 'maid_animation')
+  assert.deepEqual(body.params, { entityId: 219, animationId: 1, sourceChannel: original.channel })
+  assert.equal(encodeNativePacket('custom_payload', { channel: 'maw_agent:menu_state', data: Buffer.from('{}') }, hash, 2), null)
+  for (const data of [Buffer.from([1]), Buffer.from([1, 0, 0]), Buffer.from([128, 128])]) {
+    assert.throws(() => encodeNativePacket('custom_payload', { ...original, data }, hash, 2), /MAID_ANIMATION_PAYLOAD_INVALID/)
+  }
+})
+
 test('native animation clock preserves absolute game age and frozen day sign', () => {
   const time = { age: 315339n, time: -1000n }
   const body = decodeNativePacket(encodeNativePacket('update_time', time, hash, 1), hash)

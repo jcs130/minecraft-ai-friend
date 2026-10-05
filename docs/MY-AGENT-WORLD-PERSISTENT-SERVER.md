@@ -354,3 +354,29 @@ SNBT 输入限定64KiB、16层、4096节点，保留原生数值类型和组件�
 工作台另用日志第1572行原始回执做浏览器只读重放：`2026-10-05T00:27:50.219Z`、actionId `0360dc19-1c3a-4ae9-9e1f-17f7620dd9e0`、window3/state25；同一真实记录的46槽、self与playerInventory，不重建物品或配方。已看到原3×3布局、木板／木棍输入与木锄结果、原书／工具图标，加载0、4个资源优先级拒绝如实显示。页面醒目标明“历史菜单重放；不是当前游戏窗口”，截图 `research/native-crafting-replay-final-20261005.png`，浏览器无warn/error。该证明只覆盖历史菜单布局，不算本次新合成或Java全像素对照。临时28986只读helper PID26244已按精确命令行核对后停止，临时页已关闭。
 
 旧服TCP25565两实例、UDP19132和QwenPaw8088仍监听；本轮没有改它们的配置、路由器映射、provider、密钥、其他角色或模型。当前Agent仍为线上Coding Plan `qwen3.7-plus`。本轮原始资源／JAR、世界、私人记录及生成bundle均未提交Git。女仆／殖民地／Create／Ars复杂实体与动画、完整光照／声音、新服基岩入口及全模组长期生活闭环仍需继续实现和验收，`completeSceneParityVerified=false` 保持。
+
+## 原生内容读取、操作与女仆画面发布（2026-10-05）
+
+本轮普通玩家身体仍为 MawExplorer、UUID `e371227c-09fa-3722-84f4-f3228a552c3c`，采用原 QwenPaw life session、线上 Coding Plan `qwen3.7-plus` 和同一 Mineflayer 连接。新增真实 RecipeManager 查询、完整 FOOD 默认组件、本人已跟踪实体身份与归属查询、工具 list/explain、原生方块命中点交互、食品原生库存操作及实际后置条件核验。农夫乐事菜单提供实际槽位/两项料理锅进度/热源/容器，炉灶和切菜板保持原无 GUI 交互。细节与已知边界见 `MY-AGENT-WORLD-NATIVE-COMPATIBILITY.md`，不声明完整模组生活闭环。
+
+桥 JAR 与仓库锁文件 SHA-256 一致：`c32f68bd51e17c21bb02247595fe420ea789fb61be65d6efc137a2da8e36b04f`。新增桥使用锁定 Farmer's Delight 1.3.4 实际 API，24 类编译通过，构建守卫6项通过。私有 v5 资产 `E:\QiandengJiSocietyLab\assets\native-20261005-v5` 完整验证39127文件，资源/注册表与v4逐字相同，仅桥来源SHA变化；11处覆盖冲突继续 unresolved，所有完整/优先级/像素接受标记仍为false。
+
+| owned维护回执 | 实际停止与存档完成（北京时间） | 恢复 |
+| --- | --- | --- |
+| `native-mod-content-stop-20261005` | 09:26:53所有维度保存；09:26:51–55三子服务退出0 | `native-mod-content-resume-20261005`，09:38:35 |
+| `native-mod-content-host-stop-20261005` | 09:41:44所有维度保存；09:41:42–46三子服务退出0 | `native-mod-content-host-resume-20261005`，09:42:26 |
+| `native-mod-content-plan-stop-20261005` | 09:46:52所有维度保存；09:46:50–54三子服务退出0 | `native-mod-content-plan-resume-20261005`，09:48:44 |
+
+第一轮停服时有一个模型任务尚未结束。已保存原任务账本，精确读取原 `task-40ceeb4e22b2` 的终态，确认同 session 后归档结果；仅 GET、零重投、零旧计划游戏动作。行动账本759个意图全部有结果。冷备 `backups/native-mod-content-20261005` 保存198个世界/Agent/旧桥文件及SHA清单。后两轮停服前均确认动作及模型完全结算，不清空账本或会话。
+
+现场发现女仆状态已从服务端发送、但宿主最终 presentation 漏传；已补齐，并增加宿主端回归。实际浏览器看到原 typeB vengeful 变体的73骨骼模型与红蓝原贴图，同UUID/实体ID10/epoch1，仅本连接原始跟踪实体，不新增旁观游戏连接。只读相机转动没有修改游戏角色。截图私存 `research/native-maid-live-20261005.png`，当前重载无浏览器warn/error。空装备/背包、无乘骑/游泳的有限动画范围已进入实际画面；未完成Java像素对照、复杂装备或特殊动画。
+
+另发现真实原生模型任务在合法 fenced JSON 后追加单行角色摘要，计划解析器因此拒绝整轮。修复仅允许完整唯一 fenced计划及受限单行 `⟧ … ⟧` 尾注（≤256字符，禁换行、JSON定界符、反引号和嵌套尾标记）；多份JSON、多围栏或任意尾文继续拒绝，全部计划schema/action校验保持。历史已结束计划仅本地解析验证，恢复只用新观察、新任务，不执行历史计划。未修改 QwenPaw 全局角色、宿主、provider或模型。
+
+最终可视化根419项、后端Agent/协议115项测试全部通过，无跳过；typecheck、diff检查通过。可视化 `main` 已同步提交 `ff3aa1dca9398642e2c401c0b3dba06d7a7b4c95`，本地与远端树一致。源码/资产检查、同账号状态、浏览器可见结果及自主操作验收分开记录，不能用测试数量宣称全部模组可玩或长期稳定。
+
+09:49:32确认 owned 三服务新鲜就绪后，仅归档本次精确维护标记，恢复自主循环。第347轮全新任务由模型选 close_menu/eat(slot44)/inspect；真实行动 `6bd76a7e-43a0-4788-aacf-0194649eb9ad` 返回 `native_food_consumed`、`effectVerified=true`，本人腐肉4→3、饥饿15→19、消耗数量1，未给物、传送或管理员代定计划。后续饥饿效果与自然回血仍按原版规则运行，09:50:59生命2.166668/20，不能从一次进食推断长期生存已解决。
+
+该轮 inspect 实际收到同UUID、epoch1 的 `server_recipe_manager` 目录：共6286配方、44种类型，包含 FD cooking28/cutting105、Create milling55/mixing46/pressing8、TLM altar43 等；初小页返回原 `ars_creo:starbuncle_wheel` 配方，definitionAvailable=true。目录有 nextOffset、时间和epoch；未知语义的配方明确 definitionAvailable=false，不臆造流体、概率加工或社会玩法。实际Food默认组件读到腐肉 hunger600tick、概率0.8，SNBT patch缺省不再被当作无副作用。
+
+09:50:59实服健康 `healthy/heartbeatFresh=true / paused=false`，Java37296、gate36012、worker36004均ready且problem=null，本人原UUID不变、当前entityId81。实体流available、46槽本人规范库存、实际Ars100/100均收到。第348轮继续新模型任务，无autonomy暂停；账本762意图/762结果、零未结算动作。正在运行的任务尚未返回时session不作成功匹配声明。gate/worker本轮warning/error均0，Java累积warning342/error11如实保留，短时就绪不代表长期稳定性。

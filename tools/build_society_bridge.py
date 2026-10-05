@@ -28,6 +28,7 @@ STRUCTURIZE_JAR = "structurize-1.0.832-1.21.1.jar"
 DOMUM_JAR = "domum-ornamentum-1.0.231-main.jar"
 BLOCKUI_JAR = "blockui-1.0.209-1.21.1.jar"
 MAID_JAR = "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar"
+FOOD_JAR = "FarmersDelight-1.21.1-1.3.4.jar"
 NAME = "maw_agent_bridge-0.1.0.jar"
 
 
@@ -114,6 +115,7 @@ def main() -> None:
     domum = mods / DOMUM_JAR
     blockui = mods / BLOCKUI_JAR
     maid = mods / MAID_JAR
+    food = mods / FOOD_JAR
     if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
         raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
@@ -130,13 +132,15 @@ def main() -> None:
         raise ValueError("Pinned BlockUI JAR is required for MineColonies configuration")
     if not maid.is_file():
         raise ValueError("Pinned Touhou Little Maid JAR is required for player maid operations")
+    if not food.is_file():
+        raise ValueError("Pinned Farmer's Delight JAR is required for native food/menu/recipe state")
     spec = importlib.util.spec_from_file_location("botgate_build", REPO / "world" / "botgate-src" / "build.py")
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
     classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
                                  str(NUMEN_JAR), str(ars), str(create), str(ponder),
-                                 str(minecolonies), str(structurize), str(domum), str(blockui), str(maid)))
+                                 str(minecolonies), str(structurize), str(domum), str(blockui), str(maid), str(food)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
     if not sources or not resource.is_file():
@@ -176,6 +180,7 @@ def main() -> None:
               "domumSha256": sha256(domum),
               "blockuiSha256": sha256(blockui),
               "maidSha256": sha256(maid),
+              "foodSha256": sha256(food),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

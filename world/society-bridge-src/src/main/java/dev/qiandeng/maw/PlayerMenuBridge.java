@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -12,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
@@ -20,11 +22,17 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import vectorwing.farmersdelight.common.block.entity.container.CookingPotMenu;
+import net.minecraft.world.food.FoodProperties;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.resources.RegistryOps;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.lang.reflect.Field;
 import java.util.UUID;
 
 /** Per-connection, server-authoritative menu snapshots and native clicks for Agent players. */
@@ -33,6 +41,37 @@ final class PlayerMenuBridge {
     private static final Map<UUID, LinkedHashMap<String, String>> RECEIPTS = new HashMap<>();
     private static final int MAX_PAYLOAD = 65536;
     private static JsonObject renderRegistryData;
+    // Locked 1.21.1's private list contains the same DataSlots that the menu
+    // sends to its vanilla listener. Read values only; never broadcast or set
+    // them to manufacture a progress bar. An unavailable member stays unknown.
+    private static final Field MENU_DATA_SLOTS = menuDataSlotsField();
+
+    private static Field menuDataSlotsField() {
+        try {
+            Field field = AbstractContainerMenu.class.getDeclaredField("dataSlots");
+            if (!List.class.isAssignableFrom(field.getType())) return null;
+            field.setAccessible(true);
+            return field;
+        } catch (ReflectiveOperationException | RuntimeException error) { return null; }
+    }
+
+    private static void menuData(AbstractContainerMenu menu, JsonObject state) {
+        try {
+            if (MENU_DATA_SLOTS == null) throw new IllegalStateException("unavailable");
+            Object values = MENU_DATA_SLOTS.get(menu);
+            if (!(values instanceof List<?> list) || list.size() > 64) throw new IllegalStateException("invalid");
+            JsonArray data = new JsonArray();
+            for (Object value : list) {
+                if (!(value instanceof DataSlot slot)) throw new IllegalStateException("invalid");
+                data.add(slot.get());
+            }
+            state.add("dataValues", data);
+            state.addProperty("dataValuesSource", "server_menu_data_slots");
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            state.add("dataValues", null);
+            state.addProperty("dataValuesError", "native_menu_data_unavailable");
+        }
+    }
 
     private record State(String json) implements CustomPacketPayload {
         static final Type<State> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "menu_state"));
@@ -100,8 +139,27 @@ final class PlayerMenuBridge {
         // Full native components are retained as SNBT. The proxy item shown by
         // Mineflayer is only a visual approximation and must never be treated as identity.
         value.addProperty("snbt", stack.saveOptional(player.registryAccess()).toString());
+        var food = stack.get(DataComponents.FOOD);
+        if (food == null) value.add("food", null);
+        else {
+            JsonObject properties = new JsonObject();
+            properties.addProperty("nutrition", food.nutrition());
+            properties.addProperty("saturation", food.saturation());
+            properties.addProperty("canAlwaysEat", food.canAlwaysEat());
+            properties.addProperty("eatSeconds", food.eatSeconds());
+            properties.addProperty("source", "server_food_component");
+            // saveOptional() contains the component patch, not necessarily the
+            // item's default FOOD. Include the resolved component so defaults
+            // such as rotten flesh's hunger chance remain observable.
+            properties.add("nativeComponent", FoodProperties.DIRECT_CODEC.encodeStart(
+                    RegistryOps.create(JsonOps.INSTANCE, player.registryAccess()), food).getOrThrow());
+            properties.addProperty("additionalItemHooksDescribed", false);
+            value.add("food", properties);
+        }
         return value;
     }
+
+    static JsonObject nativeItem(ServerPlayer player, ItemStack stack) { return item(player, stack); }
 
     private static JsonObject snapshot(ServerPlayer player) {
         AbstractContainerMenu menu = player.containerMenu;
@@ -171,6 +229,7 @@ final class PlayerMenuBridge {
         }
         self.add("equipment", equipment);
         state.add("self", self);
+        state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
         String menuType;
         try {
             menuType = BuiltInRegistries.MENU.getKey(menu.getType()).toString();
@@ -180,14 +239,22 @@ final class PlayerMenuBridge {
         state.addProperty("menuType", menuType);
         JsonArray slots = new JsonArray();
         JsonArray mayPickup = new JsonArray();
+        JsonArray layout = new JsonArray();
         for (int i = 0; i < menu.slots.size(); i++) {
             JsonObject entry = item(player, menu.getSlot(i).getItem());
             if (entry == null) slots.add((String) null);
             else slots.add(entry);
             mayPickup.add(menu.getSlot(i).mayPickup(player));
+            JsonObject point = new JsonObject();
+            point.addProperty("slot", i);
+            point.addProperty("x", menu.getSlot(i).x);
+            point.addProperty("y", menu.getSlot(i).y);
+            layout.add(point);
         }
         state.add("slots", slots);
         state.add("mayPickup", mayPickup);
+        state.add("slotLayout", layout);
+        menuData(menu, state);
         // The canonical player menu preserves slot indices 0..45 even when a
         // chest/mod menu uses a different arrangement. This is explicit server
         // data, rather than inferring an inventory suffix from container size.
@@ -203,6 +270,14 @@ final class PlayerMenuBridge {
                         i == 7 ? "serving_container" : i == 8 ? "served_output" : "player_inventory");
             }
             state.add("slotRoles", roles);
+        }
+        if (menu instanceof CookingPotMenu pot) {
+            JsonObject cooking = new JsonObject();
+            cooking.addProperty("playerUuid", player.getUUID().toString());
+            cooking.addProperty("source", "native_cooking_pot_menu");
+            cooking.addProperty("isHeated", pot.isHeated());
+            cooking.add("container", item(player, pot.blockEntity.getContainer()));
+            state.add("cookingPot", cooking);
         }
         JsonObject carried = item(player, menu.getCarried());
         if (carried == null) state.add("carried", null);

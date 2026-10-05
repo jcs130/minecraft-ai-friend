@@ -63,3 +63,10 @@ type="required"
 versionRange="[1.21.1,1.21.2)"
 ordering="NONE"
 side="SERVER"
+
+[[dependencies.maw_agent_bridge]]
+modId="farmersdelight"
+type="required"
+versionRange="[1.3.4,)"
+ordering="AFTER"
+side="SERVER"

@@ -20,6 +20,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeInput;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -33,18 +40,25 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.wrapper.RecipeWrapper;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import vectorwing.farmersdelight.common.block.entity.AbstractStoveBlockEntity;
+import vectorwing.farmersdelight.common.block.entity.CuttingBoardBlockEntity;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 
 /** Native identity for only the block this player can currently see. */
 final class PlayerWorldBridge {
     private static final int MAX_REQUEST = 4096;
     private static final int MAX_STATE = 16384;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
+    private static final Map<UUID, Set<UUID>> TRACKED = new HashMap<>();
 
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "world_query"));
@@ -79,6 +93,8 @@ final class PlayerWorldBridge {
     static void register(IEventBus modBus) {
         modBus.addListener(PlayerWorldBridge::registerPayloads);
         NeoForge.EVENT_BUS.addListener(PlayerWorldBridge::onLogout);
+        NeoForge.EVENT_BUS.addListener(PlayerWorldBridge::onStartTracking);
+        NeoForge.EVENT_BUS.addListener(PlayerWorldBridge::onStopTracking);
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
@@ -92,7 +108,97 @@ final class PlayerWorldBridge {
     }
 
     private static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) LAST_QUERY_TICK.remove(player.getUUID());
+        if (event.getEntity() instanceof ServerPlayer player) {
+            LAST_QUERY_TICK.remove(player.getUUID());
+            TRACKED.remove(player.getUUID());
+        }
+    }
+
+    private static void onStartTracking(PlayerEvent.StartTracking event) {
+        if (event.getEntity() instanceof ServerPlayer player)
+            TRACKED.computeIfAbsent(player.getUUID(), ignored -> new HashSet<>()).add(event.getTarget().getUUID());
+    }
+
+    private static void onStopTracking(PlayerEvent.StopTracking event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            Set<UUID> values = TRACKED.get(player.getUUID());
+            if (values != null) values.remove(event.getTarget().getUUID());
+        }
+    }
+
+    static boolean isTracked(ServerPlayer player, Entity entity) {
+        return TRACKED.getOrDefault(player.getUUID(), Set.of()).contains(entity.getUUID()) &&
+                entity.level() == player.level();
+    }
+
+    static JsonArray maidRenderStates(ServerPlayer player) {
+        JsonArray rows = new JsonArray();
+        // Only this connection's tracked identities, never a world entity scan.
+        for (UUID uuid : TRACKED.getOrDefault(player.getUUID(), Set.of()).stream().sorted().toList()) {
+            Entity entity = player.serverLevel().getEntity(uuid);
+            if (!(entity instanceof EntityMaid maid) || !isTracked(player, maid) || !maid.isAlive() ||
+                    player.distanceTo(maid) > 16 || !player.hasLineOfSight(maid)) continue;
+            if (rows.size() >= 16) break;
+            JsonObject row = new JsonObject();
+            row.addProperty("source", "same_player_tracked_entity");
+            row.addProperty("playerUuid", player.getUUID().toString());
+            row.addProperty("entityId", maid.getId()); row.addProperty("uuid", maid.getUUID().toString());
+            row.addProperty("dimension", player.level().dimension().location().toString());
+            row.addProperty("passenger", maid.isPassenger());
+            row.addProperty("swimAmount", maid.getSwimAmount(1));
+            row.addProperty("inSwimFluid", maid.isInWater() || maid.isInFluidType((type, height) -> maid.canSwimInFluidType(type)));
+            row.addProperty("backpackType", maid.getMaidBackpackType().getId().toString());
+            // Both original BackItem and Banner layers read this same getter.
+            row.add("backItem", PlayerMenuBridge.nativeItem(player, maid.getBackpackShowItem()));
+            row.add("bannerItem", PlayerMenuBridge.nativeItem(player, maid.getBackpackShowItem()));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static void entity(ServerPlayer player, JsonObject input, String requestId) {
+        int entityId = input.get("entityId").getAsInt();
+        UUID expected = UUID.fromString(input.get("expectedUuid").getAsString());
+        Entity entity = player.serverLevel().getEntity(entityId);
+        if (entity == null || !expected.equals(entity.getUUID())) { reject(player, requestId, "entity_identity_changed"); return; }
+        if (!isTracked(player, entity)) { reject(player, requestId, "entity_not_tracked"); return; }
+        if (!entity.isAlive() || entity.isRemoved()) { reject(player, requestId, "entity_not_alive"); return; }
+        double distance = player.position().distanceTo(entity.position());
+        if (distance > 12) { reject(player, requestId, "entity_outside_local_range"); return; }
+        if (!player.hasLineOfSight(entity)) { reject(player, requestId, "entity_not_visible"); return; }
+        String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
+        JsonObject value = new JsonObject();
+        value.addProperty("entityId", entity.getId());
+        value.addProperty("uuid", entity.getUUID().toString());
+        value.addProperty("id", id);
+        value.addProperty("dimension", player.level().dimension().location().toString());
+        JsonObject position = new JsonObject();
+        position.addProperty("x", entity.getX()); position.addProperty("y", entity.getY()); position.addProperty("z", entity.getZ());
+        value.add("position", position);
+        value.addProperty("distance", distance);
+        if (entity instanceof LivingEntity living) {
+            value.addProperty("health", living.getHealth()); value.addProperty("maxHealth", living.getMaxHealth());
+        } else { value.add("health", JsonNull.INSTANCE); value.add("maxHealth", JsonNull.INSTANCE); }
+        UUID owner = entity instanceof OwnableEntity owned ? owned.getOwnerUUID() : null;
+        boolean tamed = entity instanceof TamableAnimal animal && animal.isTame();
+        boolean npc = entity instanceof Player || entity instanceof AbstractVillager ||
+                id.equals("touhou_little_maid:maid") || id.startsWith("minecolonies:citizen");
+        value.addProperty("hostile", entity instanceof Enemy);
+        value.addProperty("tameable", entity instanceof TamableAnimal);
+        value.addProperty("tamed", tamed);
+        value.addProperty("ownerKnown", true);
+        if (owner == null) value.add("ownerUuid", JsonNull.INSTANCE); else value.addProperty("ownerUuid", owner.toString());
+        value.addProperty("npc", npc);
+        if (entity.getCustomName() == null) value.add("customName", JsonNull.INSTANCE);
+        else value.addProperty("customName", entity.getCustomName().getString());
+        value.addProperty("friendlyToPlayer", entity.isAlliedTo(player) || owner != null || tamed || npc);
+        value.addProperty("hasLineOfSight", true);
+        value.addProperty("inReach", distance <= 3);
+        value.addProperty("interactionReach", distance <= 4.5);
+        JsonObject result = result(requestId);
+        result.addProperty("ok", true); result.addProperty("query", "entity");
+        result.addProperty("source", "same_player_tracked_entity"); result.add("entity", value);
+        send(player, result);
     }
 
     private static void send(ServerPlayer player, JsonObject result) {
@@ -220,7 +326,9 @@ final class PlayerWorldBridge {
             JsonObject input = JsonParser.parseString(raw).getAsJsonObject();
             requestId = input.get("requestId").getAsString();
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
-            if (input.get("schemaVersion").getAsInt() != 1 || !input.get("kind").getAsString().equals("look")) {
+            String kind = input.get("kind").getAsString();
+            if (input.get("schemaVersion").getAsInt() != 1 ||
+                    !(kind.equals("look") || kind.equals("entity") || kind.equals("recipes"))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -229,6 +337,8 @@ final class PlayerWorldBridge {
                 reject(player, requestId, "rate_limited"); return;
             }
             LAST_QUERY_TICK.put(player.getUUID(), now);
+            if (kind.equals("entity")) { entity(player, input, requestId); return; }
+            if (kind.equals("recipes")) { send(player, PlayerRecipeCatalog.query(player, input, result(requestId))); return; }
             // The authoritative server raycast exposes only the first visible
             // block under this player's crosshair, not hidden ore or inventories.
             // ServerPlayer.pick interpolates old/head-render rotation. A look
@@ -255,6 +365,13 @@ final class PlayerWorldBridge {
             position.addProperty("y", pos.getY());
             position.addProperty("z", pos.getZ());
             result.add("position", position);
+            JsonObject hitDetails = new JsonObject();
+            hitDetails.addProperty("face", blockHit.getDirection().get3DDataValue());
+            JsonObject cursor = new JsonObject();
+            cursor.addProperty("x", blockHit.getLocation().x - pos.getX());
+            cursor.addProperty("y", blockHit.getLocation().y - pos.getY());
+            cursor.addProperty("z", blockHit.getLocation().z - pos.getZ());
+            hitDetails.add("cursor", cursor); result.add("hit", hitDetails);
             JsonObject block = new JsonObject();
             block.addProperty("id", BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
             JsonObject properties = new JsonObject();
@@ -273,6 +390,28 @@ final class PlayerWorldBridge {
                         block.add("processing", millstone(player, machine, rotation));
                     }
                     block.add("kinetic", rotation);
+                }
+                if (entity instanceof AbstractStoveBlockEntity stove) {
+                    JsonObject fd = new JsonObject();
+                    fd.addProperty("source", "native_visible_block_entity"); fd.addProperty("kind", "stove");
+                    fd.add("inventory", inventory(player, stove.getItems()));
+                    fd.addProperty("nextEmptySlot", stove.getNextEmptySlot()); fd.addProperty("full", stove.isFull());
+                    fd.addProperty("slotLimit", 1); fd.addProperty("slotCount", stove.getItems().getSlots());
+                    if (state.hasProperty(BlockStateProperties.LIT)) fd.addProperty("lit", state.getValue(BlockStateProperties.LIT));
+                    CompoundTag data = new CompoundTag(); stove.saveAdditional(data, player.registryAccess());
+                    JsonArray progress = new JsonArray(), duration = new JsonArray();
+                    for (int value : data.getIntArray("CookingTimes")) progress.add(value);
+                    for (int value : data.getIntArray("CookingTotalTimes")) duration.add(value);
+                    fd.add("cookingTimes", progress); fd.add("cookingTotalTimes", duration);
+                    block.add("farmersDelight", fd);
+                } else if (entity instanceof CuttingBoardBlockEntity board) {
+                    JsonObject fd = new JsonObject();
+                    fd.addProperty("source", "native_visible_block_entity"); fd.addProperty("kind", "cutting_board");
+                    fd.add("inventory", inventory(player, board.getInventory()));
+                    fd.add("storedItem", PlayerMenuBridge.nativeItem(player, board.getStoredItem()));
+                    fd.addProperty("maxStackSize", board.getMaxStackSize()); fd.addProperty("empty", board.isEmpty());
+                    fd.addProperty("isItemCarvingBoard", board.isItemCarvingBoard());
+                    block.add("farmersDelight", fd);
                 }
             }
             result.add("block", block);

@@ -1,13 +1,24 @@
 'use strict'
 
-const ACTIONS = new Set(['inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'wait'])
+const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'wait'])
 const ID = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const position = p => p && ['x', 'y', 'z'].every(k => Number.isInteger(p[k]) && Math.abs(p[k]) <= 29999984)
 const unknownOutcome = result => result?.outcomeUnknown === true || result?.outcomeKnown === false || result?.outcome === 'unknown' || /outcome_unknown|receipt_timeout|uncertain/i.test(result?.code || '')
 const gameJSON = (value, space) => JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item, space)
 function parsePlan (text) {
   if (typeof text !== 'string' || text.length > 20000) throw Error('PLAN_TEXT_INVALID')
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
+  let cleaned = text.trim()
+  if (cleaned.startsWith('```')) {
+    // One complete plan wrapper only. The native role may append its bounded
+    // single-line anchor after the closing fence; it never supplies actions.
+    // Do not choose a first/last JSON from ambiguous output or ignore prose.
+    const fenced = /^```(?:json)?\s*([\s\S]*?)```([\s\S]*)$/.exec(cleaned)
+    if (!fenced) throw Error('PLAN_TEXT_WRAPPER_INVALID')
+    const anchor = fenced[2].trim()
+    if (anchor && (anchor.length > 256 || !/^⟧ [^\r\n\v\f\u0085\u2028\u2029{}\[\]`⟧]+ ⟧$/.test(anchor) || !anchor.slice(2, -2).trim())) throw Error('PLAN_TEXT_WRAPPER_INVALID')
+    cleaned = fenced[1].trim()
+  }
   const plan = JSON.parse(cleaned)
   if (!plan || typeof plan.goal !== 'string' || !plan.goal.trim() || plan.goal.length > 500 ||
       typeof plan.reason !== 'string' || plan.reason.length > 1500 || !Array.isArray(plan.actions) || plan.actions.length > 8) throw Error('PLAN_SCHEMA_INVALID')
@@ -20,7 +31,17 @@ function parsePlan (text) {
   })
   for (const action of plan.actions) {
     if (!action || !ACTIONS.has(action.type)) throw Error('PLAN_ACTION_INVALID')
-    if (['navigate', 'gather', 'dig', 'place', 'use_block'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
+    if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
+    if (action.aimOffset !== undefined && (!['use_block', 'block_inspect'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
+    if (action.type === 'tools' && (!['list', 'explain'].includes(action.operation) || (action.operation === 'explain' && (typeof action.id !== 'string' || !/^[a-z_]{1,64}$/.test(action.id))))) throw Error('PLAN_TOOL_QUERY_INVALID')
+    if (['entity_inspect', 'entity_interact', 'attack'].includes(action.type) && (!Number.isSafeInteger(action.entityId) || action.entityId < 0 || !UUID.test(action.expectedUuid || '') || (action.expectedId !== undefined && !ID.test(action.expectedId)))) throw Error('PLAN_ENTITY_IDENTITY_INVALID')
+    if (action.type === 'attack' && action.intent !== undefined && !['combat', 'hunt_food'].includes(action.intent)) throw Error('PLAN_ATTACK_INTENT_INVALID')
+    if (action.type === 'entity_interact' && action.hand !== undefined && !['main', 'off'].includes(action.hand)) throw Error('PLAN_ENTITY_HAND_INVALID')
+    if (action.type === 'eat' && ((action.itemId !== undefined && !ID.test(action.itemId)) || (action.inventorySlot !== undefined && (!Number.isInteger(action.inventorySlot) || action.inventorySlot < 9 || action.inventorySlot > 44)) || (action.item !== undefined && (typeof action.item !== 'string' || !/^(?:minecraft:)?[a-z0-9_]+$/.test(action.item))))) throw Error('PLAN_FOOD_INVALID')
+    if (action.type === 'recipes') {
+      const args = action.args ?? {}
+      if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => !['recipeId', 'recipeType', 'outputId', 'offset', 'limit'].includes(key)) || ['recipeId', 'recipeType', 'outputId'].some(key => args[key] !== undefined && !ID.test(args[key])) || !Number.isInteger(args.offset ?? 0) || (args.offset ?? 0) < 0 || (args.offset ?? 0) > 10000 || !Number.isInteger(args.limit ?? 6) || (args.limit ?? 6) < 1 || (args.limit ?? 6) > 12) throw Error('PLAN_RECIPE_QUERY_INVALID')
+    }
     if (action.type === 'craft' && (!ID.test(action.outputId) || !Array.isArray(action.ingredients) || action.ingredients.length < 1 || action.ingredients.length > 9 ||
         action.ingredients.some(i => !ID.test(i.id) || !Number.isInteger(i.slot) || i.slot < 1 || i.slot > 9 || (i.count !== undefined && (!Number.isInteger(i.count) || i.count < 1 || i.count > 64))))) throw Error('PLAN_CRAFT_INVALID')
     if (action.type === 'select' && (!Number.isInteger(action.hotbarSlot) || action.hotbarSlot < 0 || action.hotbarSlot > 8)) throw Error('PLAN_HOTBAR_INVALID')
@@ -28,6 +49,7 @@ function parsePlan (text) {
     if (action.type === 'wait' && (!Number.isFinite(action.seconds) || action.seconds < 0 || action.seconds > 30)) throw Error('PLAN_WAIT_INVALID')
     if (action.type === 'place' && (!ID.test(action.itemId) || !ID.test(action.blockId) || !position(action.face) || ['x', 'y', 'z'].reduce((s, k) => s + Math.abs(action.face[k]), 0) !== 1 || !Number.isInteger(action.hotbarSlot) || action.hotbarSlot < 0 || action.hotbarSlot > 8)) throw Error('PLAN_PLACE_INVALID')
     if (action.type === 'maid' && !['list', 'status', 'tasks', 'follow', 'pickup', 'task', 'bag'].includes(action.operation)) throw Error('PLAN_MAID_INVALID')
+    if (action.type === 'maid' && action.operation !== 'list' && (!UUID.test(action.maidUuid || '') || (action.operation === 'follow' && typeof action.args?.follow !== 'boolean') || (action.operation === 'pickup' && typeof action.args?.pickup !== 'boolean') || (action.operation === 'task' && !ID.test(action.args?.taskId || '')))) throw Error('PLAN_MAID_ARGUMENT_INVALID')
     if (action.type === 'colony' && !['status', 'found', 'placeBuilder', 'requestBuild', 'deliver', 'stockResource'].includes(action.operation)) throw Error('PLAN_COLONY_INVALID')
     if (action.type === 'spell' && !['list', 'explain', 'cast'].includes(action.operation)) throw Error('PLAN_SPELL_INVALID')
   }

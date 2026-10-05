@@ -18,7 +18,7 @@ const NAMES = new Set([
   'login', 'respawn', 'map_chunk', 'unload_chunk', 'block_change', 'multi_block_change',
   'tile_entity_data', 'update_light', 'spawn_entity', 'entity_metadata', 'entity_equipment',
   'entity_destroy', 'rel_entity_move', 'entity_move_look', 'entity_look', 'entity_teleport',
-  'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'world_particles',
+  'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'hurt_animation', 'maid_animation', 'world_particles',
   'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window',
   'update_time', 'game_state_change'
 ])
@@ -29,6 +29,26 @@ function registryHash (file) {
 }
 
 function encodeNativePacket (name, params, hash, sequence) {
+  if (name === 'custom_payload' && params?.channel === 'touhou_little_maid:maid_animation') {
+    const bytes = Buffer.from(params.data)
+    if (bytes.length < 2 || bytes.length > 10) throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
+    let offset = 0
+    const read = () => {
+      let value = 0
+      for (let shift = 0; shift < 35; shift += 7) {
+        if (offset >= bytes.length) throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
+        const byte = bytes[offset++]
+        if (shift === 28 && (byte & 0xf0)) throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
+        value |= (byte & 127) << shift
+        if (!(byte & 128)) return value
+      }
+      throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
+    }
+    const entityId = read(), animationId = read()
+    if (entityId < 0 || animationId < 0 || offset !== bytes.length) throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
+    // One specific original mod payload; arbitrary plugin traffic is excluded.
+    name = 'maid_animation'; params = { entityId, animationId, sourceChannel: 'touhou_little_maid:maid_animation' }
+  }
   if (!NAMES.has(name)) return null
   if (!/^[a-f0-9]{64}$/.test(hash) || !Number.isSafeInteger(sequence) || sequence < 1) throw Error('NATIVE_VIEWER_ENVELOPE_INVALID')
   const data = v8.serialize({ schemaVersion: 1, minecraftVersion: '1.21.1', registrySha256: hash, sequence, name, params })
