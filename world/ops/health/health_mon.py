@@ -136,6 +136,22 @@ def probe_society_service():
             and isinstance(slots, list) and len(slots) == 46
             and all(canonical_slot(row, index) for index, row in enumerate(slots))
             and finite_number(hp) and finite_number(max_hp) and 1 <= max_hp <= 1024 and 0 <= hp <= max_hp)
+        ysm = self_state.get('ysm') if isinstance(self_state, dict) else None
+        if ysm is not None:
+            checks['same-player-ysm-state'] = (isinstance(ysm, dict) and own_uuid(ysm.get('playerUuid'))
+                and ysm.get('source') == 'same_player_native_attachment' and ysm.get('available') is True
+                and type(ysm.get('installed')) is bool and type(ysm.get('enabled')) is bool)
+            if isinstance(ysm, dict) and ysm.get('enabled') is True:
+                motion = self_state.get('motion')
+                observed = motion.get('sampledAt') if isinstance(motion, dict) else None
+                checks['same-player-ysm-animation-inputs'] = (isinstance(motion, dict)
+                    and own_uuid(motion.get('playerUuid')) and motion.get('available') is True
+                    and motion.get('source') == 'same_player_server_tick' and motion.get('schemaVersion') == 1
+                    and motion.get('sampleIntervalMs') == 250 and type(motion.get('tickCount')) is int
+                    and motion['tickCount'] >= 0 and type(observed) in (int, float)
+                    and 0 <= time.time() * 1000 - observed < 2000
+                    and all(type(motion.get(key)) is bool for key in ('onGround', 'sprinting', 'flying',
+                        'deadOrDying', 'swimming', 'sleeping', 'passenger', 'spinAttack')))
         checks['autonomy-active'] = details.get('mode') in ('thinking', 'acting', 'observing', 'decision_backoff')
         report['state'] = {'player': player, 'mode': details.get('mode'), 'goal': details.get('goal'),
                            'round': details.get('round'), 'supervisorPid': supervisor.get('supervisorPid'),

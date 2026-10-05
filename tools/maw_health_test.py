@@ -58,6 +58,36 @@ class SocietyHealthTests(unittest.TestCase):
         self.assertFalse(report['ok'])
         self.assertIn('offline', report['error'])
 
+    def test_ysm_animation_inputs_require_fresh_own_native_observations(self):
+        values = self.values()
+        uuid = values[1]['identity']['playerUuid']
+        state = values[1]['presentation']['self']
+        state['ysm'] = {'playerUuid': uuid, 'source': 'same_player_native_attachment',
+                        'available': True, 'installed': True, 'enabled': True}
+        state['motion'] = {'playerUuid': uuid, 'schemaVersion': 1, 'available': True,
+                           'source': 'same_player_server_tick', 'sampleIntervalMs': 250,
+                           'tickCount': 100, 'sampledAt': time.time() * 1000,
+                           **{key: False for key in ('onGround', 'sprinting', 'flying', 'deadOrDying',
+                                'swimming', 'sleeping', 'passenger', 'spinAttack')}}
+        self.assertTrue(self.probe(values)['checks']['same-player-ysm-animation-inputs'])
+        for key, invalid in (('playerUuid', 'aaaaaaaa-bbbb-3ccc-8ddd-eeeeeeeeeeee'),
+                             ('sampledAt', (time.time() - 10) * 1000), ('available', False),
+                             ('onGround', None), ('sprinting', 1), ('source', 'client_guessed')):
+            previous = state['motion'][key]
+            state['motion'][key] = invalid
+            self.assertFalse(self.probe(values)['checks']['same-player-ysm-animation-inputs'], key)
+            state['motion'][key] = previous
+
+    def test_missing_ysm_inputs_and_foreign_appearance_cannot_be_green(self):
+        values = self.values()
+        state = values[1]['presentation']['self']
+        state['ysm'] = {'playerUuid': 'aaaaaaaa-bbbb-3ccc-8ddd-eeeeeeeeeeee',
+                        'source': 'same_player_native_attachment', 'available': True,
+                        'installed': True, 'enabled': True}
+        report = self.probe(values)
+        self.assertFalse(report['checks']['same-player-ysm-state'])
+        self.assertFalse(report['checks']['same-player-ysm-animation-inputs'])
+
     def test_native_entity_stream_unknown_reason_or_unavailable_cannot_be_green(self):
         for available, reason, present in ((False, None, True), (True, 'NATIVE_ENTITY_REGISTRY_UNAVAILABLE', True),
                                           (True, None, False), (None, None, True), (1, None, True)):

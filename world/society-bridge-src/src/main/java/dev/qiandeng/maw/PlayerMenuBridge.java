@@ -229,6 +229,7 @@ final class PlayerMenuBridge {
         }
         self.add("equipment", equipment);
         self.add("ysm", PlayerYsmState.snapshot(player));
+        self.add("motion", PlayerRenderMotion.snapshot(player));
         state.add("self", self);
         state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
         String menuType;

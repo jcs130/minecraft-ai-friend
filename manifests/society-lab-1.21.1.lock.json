@@ -13,7 +13,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "91b7281c4ed5f092f6eaa74960de834c32fa73025971b7b5b5636cde16223538"
+      "sha256": "12f68471235ace812aab4608212f69c97ece3580d48252be9f6ae02738624ebb"
     }
   ],
   "artifacts": [
