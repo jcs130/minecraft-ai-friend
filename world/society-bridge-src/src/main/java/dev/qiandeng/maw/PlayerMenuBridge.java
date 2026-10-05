@@ -9,6 +9,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
@@ -31,6 +32,7 @@ final class PlayerMenuBridge {
     private static final Map<UUID, String> LAST_STATE = new HashMap<>();
     private static final Map<UUID, LinkedHashMap<String, String>> RECEIPTS = new HashMap<>();
     private static final int MAX_PAYLOAD = 65536;
+    private static JsonObject renderRegistryData;
 
     private record State(String json) implements CustomPacketPayload {
         static final Type<State> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "menu_state"));
@@ -93,6 +95,8 @@ final class PlayerMenuBridge {
         JsonObject value = new JsonObject();
         value.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         value.addProperty("count", stack.getCount());
+        value.addProperty("displayName", stack.getHoverName().getString());
+        value.addProperty("descriptionId", stack.getDescriptionId());
         // Full native components are retained as SNBT. The proxy item shown by
         // Mineflayer is only a visual approximation and must never be treated as identity.
         value.addProperty("snbt", stack.saveOptional(player.registryAccess()).toString());
@@ -108,6 +112,65 @@ final class PlayerMenuBridge {
         state.addProperty("windowId", menu.containerId);
         state.addProperty("stateId", menu.getStateId());
         state.addProperty("selectedHotbarSlot", player.getInventory().selected);
+        if (renderRegistryData == null) {
+            renderRegistryData = new JsonObject();
+            renderRegistryData.addProperty("source", "server_builtin_registries");
+            JsonArray types = new JsonArray();
+            for (var value : BuiltInRegistries.VILLAGER_TYPE) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", BuiltInRegistries.VILLAGER_TYPE.getId(value));
+                row.addProperty("name", BuiltInRegistries.VILLAGER_TYPE.getKey(value).toString());
+                types.add(row);
+            }
+            renderRegistryData.add("villagerTypes", types);
+            JsonArray professions = new JsonArray();
+            for (var value : BuiltInRegistries.VILLAGER_PROFESSION) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", BuiltInRegistries.VILLAGER_PROFESSION.getId(value));
+                row.addProperty("name", BuiltInRegistries.VILLAGER_PROFESSION.getKey(value).toString());
+                professions.add(row);
+            }
+            renderRegistryData.add("villagerProfessions", professions);
+        }
+        JsonObject registries = renderRegistryData.deepCopy();
+        registries.addProperty("playerUuid", player.getUUID().toString());
+        state.add("renderRegistries", registries);
+        // Snapshot the requesting body's actual values. These remain bound to
+        // its connection, including while a mod container is open. Never use
+        // a proxy item/attribute registry or default HUD health/armor values.
+        JsonObject self = new JsonObject();
+        self.addProperty("playerUuid", player.getUUID().toString());
+        self.addProperty("health", player.getHealth());
+        self.addProperty("maxHealth", player.getMaxHealth());
+        self.addProperty("absorption", player.getAbsorptionAmount());
+        self.addProperty("armor", player.getArmorValue());
+        self.addProperty("food", player.getFoodData().getFoodLevel());
+        self.addProperty("saturation", player.getFoodData().getSaturationLevel());
+        self.addProperty("airSupply", player.getAirSupply());
+        self.addProperty("maxAirSupply", player.getMaxAirSupply());
+        self.addProperty("inWater", player.isUnderWater());
+        self.addProperty("experienceLevel", player.experienceLevel);
+        self.addProperty("experienceProgress", player.experienceProgress);
+        self.addProperty("experiencePoints", player.totalExperience);
+        self.addProperty("mainArm", player.getMainArm().name().toLowerCase(java.util.Locale.ROOT));
+        self.addProperty("usingItem", player.isUsingItem());
+        self.addProperty("useItemRemainingTicks", player.getUseItemRemainingTicks());
+        self.addProperty("crouching", player.isCrouching());
+        self.addProperty("isPassenger", player.isPassenger());
+        self.addProperty("swimAmount", player.getSwimAmount(0));
+        self.addProperty("fallFlying", player.isFallFlying());
+        self.addProperty("spinAttack", player.isAutoSpinAttack());
+        self.addProperty("swinging", player.swinging);
+        self.addProperty("attackAnim", player.getAttackAnim(1));
+        self.addProperty("attackStrengthScale", player.getAttackStrengthScale(1));
+        self.addProperty("pose", player.getPose().name().toLowerCase(java.util.Locale.ROOT));
+        JsonObject equipment = new JsonObject();
+        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND,
+                EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD}) {
+            equipment.add(slot.getName(), item(player, player.getItemBySlot(slot)));
+        }
+        self.add("equipment", equipment);
+        state.add("self", self);
         String menuType;
         try {
             menuType = BuiltInRegistries.MENU.getKey(menu.getType()).toString();
@@ -125,6 +188,14 @@ final class PlayerMenuBridge {
         }
         state.add("slots", slots);
         state.add("mayPickup", mayPickup);
+        // The canonical player menu preserves slot indices 0..45 even when a
+        // chest/mod menu uses a different arrangement. This is explicit server
+        // data, rather than inferring an inventory suffix from container size.
+        if (menu != player.inventoryMenu) {
+            JsonArray inventory = new JsonArray();
+            for (var slot : player.inventoryMenu.slots) inventory.add(item(player, slot.getItem()));
+            state.add("playerInventory", inventory);
+        }
         if (menuType.equals("farmersdelight:cooking_pot")) {
             JsonArray roles = new JsonArray();
             for (int i = 0; i < menu.slots.size(); i++) {

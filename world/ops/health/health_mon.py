@@ -73,8 +73,9 @@ SOCIETY_SERVICE_MANIFEST = {
 
 
 def probe_society_service():
+    from uuid import UUID
     report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'project': 'my-agent-world',
-              'scope': 'Current isolated native service and connected player readiness; not long-term gameplay success',
+              'scope': 'Current isolated native service and same-player data readiness; not pixel parity or long-term gameplay success',
               'ok': False, 'checks': {}}
     try:
         with urllib.request.urlopen('http://127.0.0.1:28985/healthz', timeout=5) as response:
@@ -92,6 +93,49 @@ def probe_society_service():
         player = viewer.get('identity', {}).get('player')
         checks['same-connected-player'] = viewer.get('ready') is True and details.get('online') is True and details.get('username') == player
         checks['native-stream'] = details.get('native', {}).get('failed') is False and details.get('native', {}).get('packets', 0) > 0
+        native_viewer = viewer.get('viewer')
+        checks['native-entity-stream'] = (isinstance(native_viewer, dict)
+            and native_viewer.get('entityDataAvailable') is True
+            and 'entityDataReason' in native_viewer and native_viewer['entityDataReason'] is None)
+        identity = viewer.get('identity') or {}
+        presentation = viewer.get('presentation') or {}
+        self_state = (presentation.get('self') or {}) if isinstance(presentation, dict) else {}
+        inventory = (presentation.get('inventory') or {}) if isinstance(presentation, dict) else {}
+        player_uuid = identity.get('playerUuid') if isinstance(identity, dict) else None
+        try:
+            uuid_valid = isinstance(player_uuid, str) and str(UUID(player_uuid)) == player_uuid.lower()
+        except (ValueError, AttributeError):
+            uuid_valid = False
+        def own_uuid(value):
+            return uuid_valid and isinstance(value, str) and value.lower() == player_uuid.lower()
+        def finite_number(value):
+            # Range first also prevents conversion overflow for huge JSON ints.
+            return type(value) in (int, float) and -1024 <= value <= 1024 and math.isfinite(value)
+        def canonical_slot(row, index):
+            if (not isinstance(row, dict) or type(row.get('slot')) is not int
+                    or row['slot'] != index or 'item' not in row):
+                return False
+            item = row['item']
+            return item is None or (isinstance(item, dict)
+                and isinstance(item.get('name'), str) and item['name'].count(':') == 1
+                and type(item.get('count')) is int and 0 < item['count'] <= 2147483647
+                and isinstance(item.get('snbt'), str) and 0 < len(item['snbt'].encode('utf8')) <= 65536)
+        slots = inventory.get('slots') if isinstance(inventory, dict) else None
+        hp = self_state.get('health') if isinstance(self_state, dict) else None
+        max_hp = self_state.get('maxHealth') if isinstance(self_state, dict) else None
+        checks['same-player-native-presentation'] = (isinstance(presentation, dict)
+            and type(presentation.get('schemaVersion')) is int and presentation['schemaVersion'] == 1
+            and presentation.get('available') is True
+            and presentation.get('source') == 'same_player_connection'
+            and isinstance(presentation.get('nativeState'), dict) and presentation['nativeState'].get('available') is True
+            and own_uuid(presentation.get('playerUuid'))
+            and isinstance(self_state, dict) and own_uuid(self_state.get('uuid'))
+            and isinstance(inventory, dict) and own_uuid(inventory.get('playerUuid'))
+            and type(inventory.get('windowId')) is int and inventory['windowId'] == 0
+            and inventory.get('hotbarStart') == 36 and inventory.get('inventoryStart') == 9 and inventory.get('offhandSlot') == 45
+            and isinstance(slots, list) and len(slots) == 46
+            and all(canonical_slot(row, index) for index, row in enumerate(slots))
+            and finite_number(hp) and finite_number(max_hp) and 1 <= max_hp <= 1024 and 0 <= hp <= max_hp)
         checks['autonomy-active'] = details.get('mode') in ('thinking', 'acting', 'observing', 'decision_backoff')
         report['state'] = {'player': player, 'mode': details.get('mode'), 'goal': details.get('goal'),
                            'round': details.get('round'), 'supervisorPid': supervisor.get('supervisorPid'),

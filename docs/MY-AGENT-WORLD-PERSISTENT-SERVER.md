@@ -326,3 +326,31 @@ SNBT 输入限定64KiB、16层、4096节点，保留原生数值类型和组件�
 使用同一监督器的 `special-items-resume-20261005` 回执恢复一次，01:14三子服务健康、原UUID MawExplorer本人在线。实际生产网页 `http://127.0.0.1:28984/third/` 已检查自己的石板、幻想乡书、破旧笔记本：两处显示均加载成功，原始图标16×16、法术书专用GUI64×64；本次reload无warn/error。完整截图位于仓库外 `research/special-items-live-20261005.png`。恢复后使用原角色、原session及原在线模型提交新的 `task-95afb63dc32a`，不是重投旧失败任务；01:15宿主只读回执确认 `finished/completed`，Agent已继续进入后续轮次并执行动作，`lastError=null`、没有新暂停标记。这证明原模型路由本次恢复成功，不能据此宣称长期自主生活或限流永不再发生。旧两个25565服务、UDP19132及宿主8088的监听PID均保持，路由器与其他角色配置没有改动。临时28986只读预览已按精确命令行归属停止，正式28984继续运行。
 
 01:15追加真实后置证据：恢复后的前三个模型任务均已完成；MawExplorer连续导航到村庄地面区域，并自主采集 `(-441,67,391)` 的 `minecraft:short_grass`，世界读回变为空气、种子库存4→5。此次没有操作员传送、补物或伪造采集结果，仍不代表全部模组功能或长期游玩验收完成。
+
+## 原生模型、菜单与动作回执增量（2026-10-05）
+
+本轮支持范围、原始来源与各模组缺口见 [MY-AGENT-WORLD-NATIVE-COMPATIBILITY.md](MY-AGENT-WORLD-NATIVE-COMPATIBILITY.md)。可视化主干已推送 `0b1d8ab02469e753d6eb35e19891d4b1017e242c`，本地与远端tree一致、工作区干净。服务端与Agent源码继续留在 `experiment/agent-society-1.21.1`，未把新服当作旧Paper服迁移。
+
+新增原始床、猪／牛／鸡／羊／史莱姆／村民模型及有限原生动作、按原始变换的第一／第三人称持物、更多源代码核实的静态物品图标、工作台／标准箱子／炉子布局，以及本人真实健康和规范46槽物品栏。905个物品处于离线guard范围，不能解释为4810件物品或257类实体都已完成。橡木板与橡木按钮仍因同一路径贴图来源优先级未确认而明确拒绝，未知模组实体／专用屏幕不画替身。炉进度原生dataValues未透出，保持unknown；网页菜单只读。
+
+动作总期限45秒、嵌套导航25秒；未知中断关闭原连接mutation fence到owned worker重启。原长时间未结束的采集意图 `9b15ab3e-130f-4e90-8beb-2ac1a8725e2e` 在正常停服、冷备后追加一次明确 `operator_interrupted/outcome=unknown/retryAutomatically=false` 结果，原意图和所有历史保留，不算采集成功。新的gather分别核验方块破坏和真实库存增量，排除合成预览槽0；没有确认拾取则 `no_pickup_confirmed`，不重挖原位置。select最多等待5秒同UUID服务端确认，修复150ms读旧菜单导致的误报失败。
+
+| owned维护回执 | 实际停止与存档完成（北京时间） | 恢复 |
+| --- | --- | --- |
+| `native-renderers-stop-20261005` | 07:38:04所有维度保存；三子服务07:38:01–05依次退出0 | `native-renderers-resume-20261005`，07:44:26 |
+| `native-renderers-final-stop-20261005` | 08:06:30所有维度保存；三子服务08:06:27–31退出0 | `native-renderers-final-resume-20261005`，08:07:01 |
+| `native-gui-layouts-stop-20261005` | 08:35:31所有维度保存；三子服务08:35:29–33退出0 | `native-gui-layouts-resume-20261005`，08:40:05 |
+
+冷备 `backups/native-renderers-20261005-0736` 共177文件，`backups/native-gui-layouts-20261005-0835` 共186文件，均保留世界、Agent账本和当时桥JAR及SHA清单。原生资产v4共39058件资源，39127个资产／变体／注册文件通过完整性检查；本轮桥JAR实际SHA与锁文件一致：`ba66d91d194ad1b05b11a3565e7ff38d2f44d1d94891becdbbe342e0256352dd`。资源优先级／完整场景接受标记仍为false。
+
+08:32实体流曾明确 `NATIVE_ENTITY_METADATA_INVALID`，没有原始失败entry。锁定协议实际codec证明四种bool前缀optional的own undefined合法；现只对这四类转换为JSON null并保留absence标记，其他缺值继续拒绝，诊断有界且不含元数据内容。08:40:54实服SSE已恢复 `entityState.available=true/reason=null`，当前范围有1个真实实体；这不能证明旧错误的唯一原因，也不能把附近女仆的unsupported模型当成渲染通过。
+
+08:40:44新鲜健康确认三服务ready，本账号原UUID不变（本次entityId101）。核对627条意图全部有结果、原模型任务终态后，仅归档精确GUI维护标记为 `autonomy.pause-retired-native-gui-layouts-20261005-084053.json`。未清除其他暂停、未知行动或旧任务保护。08:42:17宿主GET确认新任务 `task-6ad9b9a90118` 已 `finished/completed` 且原session匹配；本轮第290轮，636条意图／636条结果、无待定动作、没有新暂停。真实select回执 `hotbar_selection_confirmed/selectedHotbarSlot=7/effectVerified=true`，随后继续工具／方块交互与观察，没有管理员补物或传送。
+
+08:42:17 `health_mon.py --society` 当前10项均通过，新增原生实体流与同UUID规范库存／有效生命形状冒烟。监督PID20732；Java28976 PID13352，gate28977 PID34068，worker28984 PID21956，均problem=null。本人生命12.666664/20、饥饿7、实际Ars100/100。gate／worker本轮warning/error为0；Java累积warning248/error8和原日志继续保留，不能把累积计数或短时就绪当成长期稳定性结论。
+
+最终回归：可视化仓库根391项、Agent71项、society健康8项均通过，0失败0跳过，typecheck与diff检查通过；前文分轮专项入口有重叠，不相加。真实生产网页重载后背包、原始书／工具图标、生命／魔力与第三人称本人可见，该reload无浏览器warn/error。截图留在仓库外 `research/native-compat-live-final-20261005.png` 和 `research/native-compat-third-final-20261005.png`。后者同时显示真实gather未确认拾取的失败回执，未冒充采集完成。
+
+工作台另用日志第1572行原始回执做浏览器只读重放：`2026-10-05T00:27:50.219Z`、actionId `0360dc19-1c3a-4ae9-9e1f-17f7620dd9e0`、window3/state25；同一真实记录的46槽、self与playerInventory，不重建物品或配方。已看到原3×3布局、木板／木棍输入与木锄结果、原书／工具图标，加载0、4个资源优先级拒绝如实显示。页面醒目标明“历史菜单重放；不是当前游戏窗口”，截图 `research/native-crafting-replay-final-20261005.png`，浏览器无warn/error。该证明只覆盖历史菜单布局，不算本次新合成或Java全像素对照。临时28986只读helper PID26244已按精确命令行核对后停止，临时页已关闭。
+
+旧服TCP25565两实例、UDP19132和QwenPaw8088仍监听；本轮没有改它们的配置、路由器映射、provider、密钥、其他角色或模型。当前Agent仍为线上Coding Plan `qwen3.7-plus`。本轮原始资源／JAR、世界、私人记录及生成bundle均未提交Git。女仆／殖民地／Create／Ars复杂实体与动画、完整光照／声音、新服基岩入口及全模组长期生活闭环仍需继续实现和验收，`completeSceneParityVerified=false` 保持。
