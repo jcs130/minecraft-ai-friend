@@ -282,3 +282,22 @@ async function castHeldSpellOnce (bot, mod, hotbarSlot, desiredSpellId) {
 断线后沿宿主既有账号恢复流程重连，再给新 bot 挂接客户端、重新读取本人身份与状态。旧客户端对象和窗口不可复用；未知动作仍保持未知，不能因重新登录而自动重发。记录失败点、原请求ID、物品组件、位置和服务器回执；先确认物品/魔力/工单/女仆终态，再决定一个不同且必要的新动作。
 
 接入完成的最低证据是：同一普通账号发出的动作、同账号收到的原生回执，以及独立可观察的真实终态。QA 提供了法术书、机器或材料须明确记为夹具；接口与短闭环验证不能写成自然获得全部模组物资、长期自主生活或完整网页渲染已经验收。
+# 加工操作的后置验证（2026-10-05）
+
+常驻实验 Agent 的工具目录新增 `block_verify`。先用 `tools list/explain` 发现参数，`recipes` 查询本服真实定义，再由玩家自己选择工具、投入原料、驱动机器和拾取。没有自动搬料、摇柄、导航或失败重放。
+
+`block_inspect` 或 `use_block` 的 `recipeId` 可绑定真实配方和期望产物，返回 `verificationId`。绑定本人 UUID、生命周期、维度、绝对坐标、原生方块 ID，最多保存 32 项、10 分钟失效；重启、重生后须重建。查询示例：
+
+```json
+{"type":"recipes","args":{"recipeId":"create:milling/wheat","limit":1}}
+{"type":"block_inspect","position":{"x":520,"y":82,"z":-3},"expectedId":"create:millstone","recipeId":"create:milling/wheat"}
+{"type":"block_verify","verificationId":"从本次回执读取","goal":"pickup","waitMs":1500}
+```
+
+示例坐标是独立供料 QA 的磨石，不是常驻世界的设施位置。`observe/change/output/pickup` 分别读状态、看进展、确认缓冲区产物、核验本人库存净增加。默认 1.5 秒最多 4 次读取，显式 0 仅一次，最多可请求 8 秒。首读前 150ms、后续间隔 250ms；限流或纯查询超时明确未观察到。
+
+`inputPlacedObserved` 只证明投入，`processingChanged` 只证明工况变化；`expectedNativeOutputPresent` 只证明真实缓冲区内有对应产物。`pickupConfirmed` 要求对应原生 ID 与完整 SNBT 组件的库存净增加，以及机器输入或输出移除证据。仅砧板变空、吃掉原料、磨损工具、转移槽位和自然炉灶计时均不能代替得到成品。未绑定掉落实体来源，`worldDropObserved=null`。写入后失去回读或未知结果仍暂停待核对，不重新投递。
+
+切菜板加工可用 `use_block` 的 `intent:"process"`，带真实 `recipeId`；原生 `heldToolMatches` 和板内输入必须匹配。投料用 `intent:"load"`，取物用 `intent:"collect"`。不会自动选中刀具；薄板建议 `aimOffset:[0.5,0.03,0.5]`，交互实际 face/cursor 仍取服务端准星射线。权限拒绝且状态无变化返回失败。
+
+Create 6.0.10 的 milling/crushing/cutting/pressing/filling/emptying 有限定义已适配：导出全部 `processing.rollableResults`、单个物品原始概率、完整原生物品组件、流体数量及 codec、真实加工工作量。小麦磨粉：必得面粉1，额外两份面粉分别25%概率、种子25%概率，不能将显示用第一产物当全部结果。查询不滚随机结果。多输入、盆地、序列、动态处理器、复杂流体组件谓词仍明确拒绝；可读定义与可操作全流程分开，`executionAvailable/machineExecutionVerified/fluidHandlingAvailable` 保持 false。

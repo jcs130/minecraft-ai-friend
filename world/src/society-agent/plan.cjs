@@ -1,6 +1,6 @@
 'use strict'
 
-const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'wait'])
+const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'block_verify', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'wait'])
 const ID = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const position = p => p && ['x', 'y', 'z'].every(k => Number.isInteger(p[k]) && Math.abs(p[k]) <= 29999984)
@@ -33,6 +33,10 @@ function parsePlan (text) {
     if (!action || !ACTIONS.has(action.type)) throw Error('PLAN_ACTION_INVALID')
     if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
     if (action.aimOffset !== undefined && (!['use_block', 'block_inspect'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
+    if (['use_block', 'block_inspect'].includes(action.type) && action.recipeId !== undefined && !ID.test(action.recipeId)) throw Error('PLAN_BLOCK_RECIPE_INVALID')
+    if (action.type === 'use_block' && action.intent !== undefined && !['interact', 'load', 'process', 'collect'].includes(action.intent)) throw Error('PLAN_BLOCK_INTENT_INVALID')
+    if (action.type === 'block_verify' && (!UUID.test(action.verificationId || '') || !['observe', 'change', 'output', 'pickup'].includes(action.goal ?? 'observe') ||
+        !Number.isInteger(action.waitMs ?? 1500) || (action.waitMs ?? 1500) < 0 || (action.waitMs ?? 1500) > 8000)) throw Error('PLAN_BLOCK_VERIFY_INVALID')
     if (action.type === 'tools' && (!['list', 'explain'].includes(action.operation) || (action.operation === 'explain' && (typeof action.id !== 'string' || !/^[a-z_]{1,64}$/.test(action.id))))) throw Error('PLAN_TOOL_QUERY_INVALID')
     if (['entity_inspect', 'entity_interact', 'attack'].includes(action.type) && (!Number.isSafeInteger(action.entityId) || action.entityId < 0 || !UUID.test(action.expectedUuid || '') || (action.expectedId !== undefined && !ID.test(action.expectedId)))) throw Error('PLAN_ENTITY_IDENTITY_INVALID')
     if (action.type === 'attack' && action.intent !== undefined && !['combat', 'hunt_food'].includes(action.intent)) throw Error('PLAN_ATTACK_INTENT_INVALID')
