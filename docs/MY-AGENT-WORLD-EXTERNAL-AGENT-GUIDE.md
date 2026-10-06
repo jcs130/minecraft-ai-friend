@@ -1,12 +1,12 @@
 # My Agent World：外部 Agent 接入契约
 
-2026-10-06 局域网更新：用户已授权家庭 LAN 接入，预备的 Agent 入口为 `192.168.3.163:28977`。本次 Windows 管理员确认被取消，发布仍待实际防火墙与登录验收；下文回环入口是当前实际运行状态。待 [LAN 发布记录](MY-AGENT-WORLD-LAN.md)确认后，连接示例只需修改 host。此授权不等于公网认证、整包玩法或新服基岩已完成。
+2026-10-06 局域网已发布：Agent 入口为 `192.168.3.163:28977`，家庭 IPv4 `192.168.3.0/24` 准入；防火墙、冷备、启动及普通非 OP 的同宿主内网 IP 登录/本人原生回执已验收。另一台实体设备的 Wi-Fi 体验尚未实测，详见 [LAN 发布记录](MY-AGENT-WORLD-LAN.md)。公网认证、整包玩法和新服基岩仍未完成。
 
 本指南对应 `experiment/agent-society-1.21.1` 的 NeoForge 1.21.1 实验世界。普通 Agent 用自己的 Mineflayer 连接及客户端适配器读取原生身份和操作模组，不需要 OP、Numen 管理端或宿主 QwenPaw 账号。服务端所有玩家接口均从 `context.player()` 取得实际请求者，再向该玩家单播；不会按 CortiLan 或 MawExplorer 用户名选人。
 
 当前交付按用户最新要求验收“功能可发现、状态可读、操作可调用”；不要求接入框架或模型先自主经营。新增统一入口 `sdk.operations()/sdk.operations(id)/sdk.call(id,args)`，绑定 30 项已有原生操作；[完整调用说明](MY-AGENT-WORLD-NATIVE-CALL-API.md)记录参数发现、实际结果和失败恢复。尚缺的专用模组接口继续在能力清单标明。
 
-目前入口是本机 `127.0.0.1:28977`，后端 `127.0.0.1:28976`。均未作为新服的公网入口。前门和后端使用离线登录；公网准入、账号归属认证、连接并发/速率限制及新服基岩兼容尚需另行完成。现有旧服公网地址不能当成本实验服地址，也不能直接将这个离线前门映射到公网。使用独立、未被占用的玩家名；每个 Agent 只控制自己的玩家连接。
+目前 LAN 入口是 `192.168.3.163:28977`，匹配 Java 模组客户端后端为 `192.168.3.163:28976`；服务器本机仍可使用 `127.0.0.1`。均未作为新服的公网入口。前门和后端使用离线登录；公网准入、账号归属认证、连接并发/速率限制及新服基岩兼容尚需另行完成。现有旧服公网地址不能当成本实验服地址，也不能直接将这个离线前门映射到公网。使用独立、未被占用的玩家名；每个 Agent 只控制自己的玩家连接。
 
 ## 连接与客户端适配器
 
@@ -19,7 +19,7 @@ const mineflayer = require('mineflayer')
 const { attachModAgentClient } = require('./world/src/neoforge-handshake/mod-agent-client.cjs')
 
 const bot = mineflayer.createBot({
-  host: '127.0.0.1', port: 28977,
+  host: '192.168.3.163', port: 28977,
   username: 'YourAgentName', version: '1.21.1', auth: 'offline'
 })
 // 在 spawn 前绑定，避免漏掉自己的第一份原生状态。

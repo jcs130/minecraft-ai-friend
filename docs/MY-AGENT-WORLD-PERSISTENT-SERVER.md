@@ -1,8 +1,8 @@
 # My Agent World：常驻服运维与 Agent 操作指引
 
-2026-10-06：用户已授权先开放局域网，配置与网络策略已准备并通过回归，但 Windows UAC 返回取消，所属防火墙规则尚未创建；当前实际入口仍为下表回环地址。发布步骤、待办和预期 LAN 入口见 [局域网部署](MY-AGENT-WORLD-LAN.md)。原服务尚未停启，主 Agent 的历史未知动作仍暂停；不能把此授权或预备配置当成 LAN 已开放。
+2026-10-06：已按用户要求开放家庭 LAN，防火墙、冷备、持久配置与健康启动完成；同宿主 LAN IP 普通 Agent 登录/三项本人原生调用、网页与 SSE 已通过，另一台实体设备尚未实测。当前入口见下表和 [局域网部署](MY-AGENT-WORLD-LAN.md)。原 world-life 和 27 JAR 保留，主 Agent 的历史未知动作仍暂停。网络可达不代表全部模组、Java 完整画面或新服基岩已完成。
 
-更新：2026-10-05。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
+更新：2026-10-06。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
 
 ## 运行目录与入口
 
@@ -13,17 +13,17 @@
 | 旧实验世界 | `server\world-lab` | 保留，与新生活世界分开 |
 | 注册表研究副本 | `E:\QiandengJiSocietyLab\research\registry-server` | 保留其研究世界、号表和原始证据，不当作当前生活服 |
 | 常驻号表与网关缓存 | `gateway\permanent\registry`、`gateway\permanent\idmap.json`、`gateway\permanent\knowledge.json` | 从通过验证的研究产物复制，配置引用常驻目录，不依赖清理研究副本 |
-| 原生网页资产 | `assets\native-20261005-v10-ysm` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
-| Java 服务端 | `127.0.0.1:28976` | 模组服务端后端；真人 Java 客户端须匹配模组包并单独验证 |
-| Agent 协议网关 | `127.0.0.1:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
-| Agent 同连接网页 | `http://127.0.0.1:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |
-| Agent 网页健康 | `http://127.0.0.1:28984/healthz` | 网页/动作宿主的就绪检查 |
+| 原生网页资产 | `assets\native-20261005-v13-colony-production` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
+| Java 服务端 | `192.168.3.163:28976` | 家庭 LAN 模组后端；真人 Java 客户端须匹配模组包并单独验证 |
+| Agent 协议网关 | `192.168.3.163:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
+| Agent 同连接网页 | `http://192.168.3.163:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |
+| Agent 网页健康 | `http://192.168.3.163:28984/healthz` | 网页/动作宿主的就绪检查 |
 | Supervisor 健康 | `http://127.0.0.1:28985/healthz` | 新服进程依赖、就绪与守护状态；暂停或故障时可以返回 503 |
 | 宿主 QwenPaw | `http://127.0.0.1:8088/api` | 已有宿主运行时，新角色使用它的原生持久会话 |
 
-以上入口均保持回环监听，只能从这台机器直接访问。当前没有新增 LAN、公网或基岩入口；基岩接入新模组服仍待验收。原 Paper 千灯纪的进程、存档、端口及路由映射属于原服务，不能用新服配置覆盖。
+Java/Agent/网页显式监听 IPv4 `0.0.0.0`，防火墙准入仅为家里 `192.168.3.0/24`；网关和网页另核对实际来源。服务器本机仍可用 `127.0.0.1`，Supervisor 与宿主 QwenPaw 保持回环。没有新增公网或基岩入口；基岩接入新模组服仍待验收。原 Paper 千灯纪的进程、存档、端口及路由映射属于原服务，不能用新服配置覆盖。
 
-当前 `server.properties` 使用 `level-name=world-life`、`difficulty=easy`、`gamemode=survival`、`server-ip=127.0.0.1`。生活世界设置死亡保留物品和一人睡觉跳过夜晚，分别对应 `keepInventory=true`、`playersSleepingPercentage=1`；维护后需要在**当前世界**读回确认。
+当前 `server.properties` 使用 `level-name=world-life`、`difficulty=easy`、`gamemode=survival`、`server-ip=0.0.0.0`。生活世界设置死亡保留物品和一人睡觉跳过夜晚，分别对应 `keepInventory=true`、`playersSleepingPercentage=1`；维护后需要在**当前世界**读回确认。
 
 自然平原村庄定位为 X=-432、Z=400，已由操作员设置世界出生点 `(-432, 66, 400)`；MawExplorer 重新登录后的位置为 `(-431.5, 65.9375, 400.5)`，健康和饥饿均为20。此次只设置自然村庄落点，尚未建成带道路、照明和保护规则的安全出生村。初始化第一次高空传送发生过一次摔落死亡，记录保留，不能计入自主生存验收。
 

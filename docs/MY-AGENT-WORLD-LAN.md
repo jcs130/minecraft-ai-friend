@@ -1,6 +1,6 @@
 # My Agent World：局域网部署与接入
 
-用户 2026-10-06 授权将现有 My Agent World 先开放局域网。使用原 `world-life`、原锁定模组和现有守护器，不重生成世界。旧 Paper 千灯纪、其公网映射、宿主 QwenPaw 和其他角色保持。这里是局域网配置说明；地址只有在文末发布验收完成后生效，不能用计划替代实际开放。
+用户 2026-10-06 授权将现有 My Agent World 先开放局域网。现已完成防火墙、冷备、配置切换与健康启动，下表为当前 LAN 入口。使用原 `world-life`、原锁定模组和现有守护器，不重生成世界。旧 Paper 千灯纪、其公网映射、宿主 QwenPaw 和其他角色保持。验收范围见文末，不把本机内网 IP 测试写成另一台实体设备实测。
 
 ## 局域网地址
 
@@ -41,14 +41,18 @@ Java 的 `server-ip=0.0.0.0` 与 `-Djava.net.preferIPv4Stack=true` 对应此模�
 
 ## 本轮发布记录
 
-当前阶段：策略代码与测试通过，但本次 Windows UAC 启动返回“操作已被用户取消”。读回两个所属防火墙规则均不存在；原服务继续回环运行，LAN 尚未开放。没有开始停服、更改正式配置或解除 Agent 自主暂停。
+当前阶段：LAN 配置已发布，Java/网关/worker 全部健康，分别为 TCP 28976/28977/28984，IPv4 `0.0.0.0` 监听；管理 TCP 28985 仍为 `127.0.0.1`。新 runId `7e217d1165a3496480d8fd5be764ea76`，Supervisor PID 21656，Java 17072、Gate 14460、worker 27608；PID 是此刻核验值，今后不得据此接管进程。
 
-管家机上以管理员身份打开 PowerShell，执行以下已准备好的防火墙步骤即可解除这一发布阻碍；它只设置本页列出的三个端口，不修改路由器或旧服：
+第一轮 UAC 返回取消的原始失败保留。用户追问权限后重新使用正规 RunAs 提权成功，管理员 helper 的 Apply 回执为 `ok=true`，两条规则的地址、端口、Profile/Action 以及三个已启用防火墙配置均已读回。原 supervisor 正常 shutdown，三个子进程退出 0，服务端记录三维世界全部存档。冷备为 `E:\QiandengJiSocietyLab\backups\lan-release-20261006-1221`，1031 文件、391608625 字节；世界冷备逐文件校验，27 个 JAR 未改变。完成网络配置 plan 后启动新 supervisor，并通过本次独立 requestId 恢复服务器维护暂停。组合启动命令首次被自动审批拒绝，改为分别核验并执行正常启动和专用维护恢复成功；未触碰主 Agent 自主暂停。
+
+防火墙维护示例（此次已完成，不是要求重新执行发布）：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'E:\minecraft-ai-friend-society-lab\tools\maw_lan_firewall.ps1' -Mode Apply -ReceiptPath 'E:\QiandengJiSocietyLab\research\lan-release-20261006\firewall-applied.json'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'E:\minecraft-ai-friend-society-lab\tools\maw_lan_firewall.ps1' -Mode Status
 ```
 
-完成后维护者必须核对回执和实际规则，继续上述冷备、配置切换及新进程验收；执行防火墙脚本本身不等于 LAN 已开放。预备配置 `research/lan-release-20261006/service-lan.json` 和 `server-lan.properties` 不用于当前运行进程，不能在守护器仍运行时直接覆盖正式配置。
+同宿主通过 `192.168.3.163` 实测 Java/网关 MC 协议 767 应答，普通非 OP `MawLanQA1006` 独立登录网关，`menu.current/native.recipes/colony.capabilities` 三项真实调用通过，回执均为本人 UUID，零串号，正常退出。没有 give/TP/OP 或模型调用。探针集成产生一条已有有限 spawn listener 阈值警告，原始输出保留；不将它写成服务端错误或隐去为零日志异常。
 
-回归：29 项守护器、344 项 Agent/网关、34 项网页网络/宿主测试通过，零失败、零跳过。私有计划、原配置、暂停/model-task/账本基线及原始结果保存于 `research/lan-release-20261006/`；不提交密钥、存档、完整私有库存或旧未知回执到 Git。
+同宿主 LAN IP 的网页首页、第三人称、地下城视角、诊断、健康、样式和脚本均 HTTP 200，SSE 身份为原 MawExplorer UUID；错误 Host/Origin 实际返回 403。主 Agent 配置、autonomy.paused/model-task 原字节与账本原前缀保持，旧 25565 两实例及宿主 8088 监听归属不变。尚未用另一台实体电脑/手机实测 Wi-Fi 登录，也未用匹配 Java 模组客户端重新验收完整画面或游戏内容；公网、基岩入口与完整模组玩法就绪不因本次网络发布而变为已完成。
+
+回归：29 项守护器、344 项 Agent/网关、34 项网页网络/宿主测试通过，零失败、零跳过。私有初次计划、原配置和失败保存在 `research/lan-release-20261006/`；成功提权、停启、冷备、LAN Agent/网页原始结果与 `acceptance.json` 在其 `admin-retry-1221/`。此轮 shutdown/resume 维护已结束，旧 requestId 不得重放。不提交密钥、存档、完整私有库存或旧未知回执到 Git。

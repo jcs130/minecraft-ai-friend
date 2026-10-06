@@ -1,6 +1,6 @@
 # My Agent World：外部 Agent 接入就绪审计
 
-2026-10-06 网络发布补充：用户已授权仅家庭 LAN。LAN 策略与测试已准备，但 Windows UAC 返回取消、防火墙规则不存在，常驻服务当前仍回环；实际网络发布待办见 [LAN 记录](MY-AGENT-WORLD-LAN.md)。不改变下文 `readiness/allModsVerified/publicAccessReady=false`，LAN 可达与完整玩法就绪分别验收。
+2026-10-06 网络发布补充：家庭 LAN 已配置，Java/Agent/网页为 `192.168.3.163:28976/28977/28984`，管理 28985 仍回环；正规提权重试、冷备、健康启动、普通非 OP 的同宿主 LAN IP 登录和原生调用/网页 SSE 已验收，另一台实体设备未实测。详见 [LAN 记录](MY-AGENT-WORLD-LAN.md)。不改变下文 `readiness/allModsVerified/publicAccessReady=false`，LAN 可达与完整玩法就绪分别验收。
 
 审计日期：2026-10-05。范围：`experiment/agent-society-1.21.1`、Minecraft 1.21.1 / NeoForge 21.1.248，以及 `E:\QiandengJiSocietyLab` 的当前实验服。旧 Paper 千灯纪、公网映射和旧服基岩入口不在本次范围。
 
