@@ -10,6 +10,7 @@ import argparse
 import ctypes
 from datetime import datetime, timezone
 import hashlib
+import ipaddress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
@@ -91,10 +92,10 @@ def properties(path: Path) -> dict[str, str]:
     return result
 
 
-def check_server(server: Path, expected_port: int | None = None) -> int:
+def check_server(server: Path, expected_port: int | None = None, *, bind_host: str = "127.0.0.1") -> int:
     value = properties(server / "server.properties")
-    if value.get("server-ip") != "127.0.0.1":
-        raise ValueError("New server must explicitly bind server-ip=127.0.0.1")
+    if bind_host not in ("127.0.0.1", "0.0.0.0") or value.get("server-ip") != bind_host:
+        raise ValueError(f"New server must explicitly bind server-ip={bind_host}")
     port = value.get("server-port", "")
     if not re.fullmatch(r"[0-9]+", port) or int(port) not in PORTS:
         raise ValueError("Only isolated game ports 28976 or 28978 are managed")
@@ -113,7 +114,21 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
     server = Path(raw.get("serverDir", "")).resolve()
     if server not in (root / "server", root / "research" / "registry-server"):
         raise ValueError("serverDir must be the new server or its explicit registry-server copy")
-    game_port = check_server(server)
+    exposure = {"mode": "loopback", "listenHost": "127.0.0.1", "address": None, "subnet": None}
+    if "networkExposure" in raw:
+        requested = raw["networkExposure"]
+        if (not isinstance(requested, dict) or set(requested) != {"mode", "address"}
+                or requested["mode"] != "lan" or not isinstance(requested["address"], str) or server != root / "server"):
+            raise ValueError("Only the main server supports an explicit LAN mode/address")
+        address = ipaddress.IPv4Address(requested["address"])
+        private = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+        if not any(address in ipaddress.IPv4Network(network) for network in private) or int(address) % 256 in (0, 255):
+            raise ValueError("LAN address must be a private IPv4 host in its /24 subnet")
+        exposure = {"mode": "lan", "listenHost": "0.0.0.0", "address": str(address),
+                    "subnet": str(ipaddress.IPv4Network(f"{address}/24", strict=False))}
+    game_port = check_server(server, bind_host=exposure["listenHost"])
+    if exposure["mode"] == "lan" and game_port != 28976:
+        raise ValueError("Research ports remain loopback-only")
     gate_port, worker_port, health_port = PORTS[game_port]
     if raw.get("schemaVersion") != 1 or raw.get("healthPort") != health_port:
         raise ValueError(f"Expected schemaVersion 1 and isolated healthPort {health_port}")
@@ -138,6 +153,13 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         if (not isinstance(env, dict) or any(not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", key)
                 or not isinstance(value, str) or "\0" in value for key, value in env.items())):
             raise ValueError("env must contain valid string environment entries")
+        if exposure["mode"] == "lan":
+            if row["id"] == "java" and command[1] != "-Djava.net.preferIPv4Stack=true":
+                raise ValueError("LAN Java must keep IPv6 closed with its first JVM argument")
+            if row["id"] == "gate" and (env.get("GATE_LISTEN_HOST") != "0.0.0.0" or env.get("GATE_LAN_SUBNET") != exposure["subnet"]):
+                raise ValueError("LAN gate must bind explicitly and enforce the matching LAN subnet")
+            if row["id"] == "worker" and env.get("MAW_VIEWER_LAN_ADDRESS") != exposure["address"]:
+                raise ValueError("LAN viewer must use the explicit matching LAN address")
         if row.get("host", "127.0.0.1") != "127.0.0.1" or row.get("port") != port:
             raise ValueError(f"{row['id']} must use isolated loopback port {port}")
         if row.get("dependsOn", dependencies) != dependencies:
@@ -158,11 +180,11 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         if not isinstance(startup, (int, float)) or not 10 <= startup <= 600:
             raise ValueError("startupTimeoutSeconds must be 10..600")
         services.append({**row, "command": command, "cwd": str(cwd), "env": env,
-            "port": port, "dependsOn": dependencies, "readiness": readiness,
+            "port": port, "listenHost": exposure["listenHost"], "dependsOn": dependencies, "readiness": readiness,
             "healthUrl": health_url, "stopMode": stop_mode, "stopText": stop_text,
             "startupTimeoutSeconds": startup})
     return {"schemaVersion": 1, "serverDir": str(server), "gamePort": game_port,
-        "healthPort": health_port, "services": services,
+        "healthPort": health_port, "services": services, "networkExposure": exposure,
         "runtimeDir": str(server / "ops" / "maw-service")}
 
 
@@ -281,12 +303,14 @@ def probe_service(spec: dict) -> dict:
         connection.close()
 
 
-def check_owned_listener(port: int, pid: int) -> None:
+def check_owned_listener(port: int, pid: int, *, expected_host: str = "127.0.0.1") -> None:
     """Windows kernel IPv4 table: prove the listening socket belongs to our child.
 
     Configuration alone does not prove a Node program actually bound loopback.
     Only inspect this explicit child/port; never derive an ownership PID here.
     """
+    if expected_host not in ("127.0.0.1", "0.0.0.0"):
+        raise ValueError("Unsupported expected listener address")
     if os.name != "nt":
         return
     from ctypes import wintypes as w
@@ -310,8 +334,8 @@ def check_owned_listener(port: int, pid: int) -> None:
         actual_port = socket.ntohs(row.localPort & 0xffff)
         if actual_port == port and row.pid == pid:
             address = socket.inet_ntoa(struct.pack("=I", row.localAddress))
-            if address != "127.0.0.1":
-                raise RuntimeError(f"Owned listener exposed on {address}; expected loopback")
+            if address != expected_host:
+                raise RuntimeError(f"Owned listener exposed on {address}; expected {expected_host}")
             matched = True
     if not matched:
         raise RuntimeError("Expected listener is not owned by the launched child")
@@ -485,7 +509,7 @@ class Child:
             return
         try:
             self.metrics = probe_service(self.spec)
-            check_owned_listener(self.spec["port"], self.process.pid)
+            check_owned_listener(self.spec["port"], self.process.pid, expected_host=self.spec.get("listenHost", "127.0.0.1"))
             self.ready, self.problem = True, None
             if now - self.started > 600:
                 self.failures = 0
@@ -518,7 +542,7 @@ class Child:
 
     def state(self):
         return {"id": self.spec["id"], "pid": self.process.pid if self.process else None,
-            "port": self.spec["port"], "host": "127.0.0.1", "ready": self.ready,
+            "port": self.spec["port"], "host": "127.0.0.1", "listenHost": self.spec.get("listenHost", "127.0.0.1"), "ready": self.ready,
             "stopping": self.stopping, "uptimeSeconds": round(time.monotonic() - self.started, 1) if self.process else None,
             "startsInLastHour": len(self.starts), "lastExit": self.last_exit,
             "problem": self.problem, "metrics": self.metrics,
@@ -558,7 +582,7 @@ class Supervisor:
                 self.quit = True
             return {"ok": True, "state": "requested", "action": action, "resultKnown": action == "pause"}
         if action == "resume":
-            check_server(Path(self.config["serverDir"]), self.config["gamePort"])
+            check_server(Path(self.config["serverDir"]), self.config["gamePort"], bind_host=self.config.get("networkExposure", {}).get("listenHost", "127.0.0.1"))
             if any(child.stopping for child in self.children.values()):
                 raise RuntimeError("Wait for pending graceful stop before resuming")
             (self.directory / "paused.json").unlink(missing_ok=True)
@@ -606,7 +630,7 @@ class Supervisor:
     def tick(self):
         self.requests()
         try:
-            check_server(Path(self.config["serverDir"]), self.config["gamePort"])
+            check_server(Path(self.config["serverDir"]), self.config["gamePort"], bind_host=self.config.get("networkExposure", {}).get("listenHost", "127.0.0.1"))
         except Exception as error:
             self.fault = str(error)
             self.pause("runtime configuration changed: " + self.fault)
@@ -637,6 +661,7 @@ class Supervisor:
             "runId": self.run_id, "supervisorPid": os.getpid(), "serverDir": self.config["serverDir"],
             "healthy": healthy, "paused": self.paused(), "stopRequested": self.stop_requested,
             "shutdownRequested": self.quit, "problem": self.fault, "services": rows,
+            "networkExposure": self.config.get("networkExposure", {"mode": "loopback"}),
             "abnormalOwnerExitPolicy": "Windows job closes only owned children; abrupt owner failure may require unclean save recovery"}
         atomic_json(self.directory / "health.json", self.snapshot)
 
@@ -753,7 +778,7 @@ def main():
     if args.action == "plan":
         # Do not print env values or arbitrary command arguments/secrets.
         print(json.dumps({"ok": True, "serverDir": config["serverDir"], "healthPort": config["healthPort"],
-            "runtimeDir": config["runtimeDir"], "services": [{"id": row["id"], "cwd": row["cwd"],
+            "runtimeDir": config["runtimeDir"], "networkExposure": config["networkExposure"], "services": [{"id": row["id"], "cwd": row["cwd"],
             "port": row["port"], "dependsOn": row["dependsOn"], "readiness": row["readiness"]} for row in config["services"]]}))
     elif args.action == "run":
         Supervisor(config).run()

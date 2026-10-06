@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入就绪审计
 
+2026-10-06 网络发布补充：用户已授权仅家庭 LAN。LAN 策略与测试已准备，但 Windows UAC 返回取消、防火墙规则不存在，常驻服务当前仍回环；实际网络发布待办见 [LAN 记录](MY-AGENT-WORLD-LAN.md)。不改变下文 `readiness/allModsVerified/publicAccessReady=false`，LAN 可达与完整玩法就绪分别验收。
+
 审计日期：2026-10-05。范围：`experiment/agent-society-1.21.1`、Minecraft 1.21.1 / NeoForge 21.1.248，以及 `E:\QiandengJiSocietyLab` 的当前实验服。旧 Paper 千灯纪、公网映射和旧服基岩入口不在本次范围。
 
 **当前判定：`readiness=false`。** 部分专用功能调用和真正外部身份/并发仍缺适配或验收。用户 2026-10-05 已明确以“各项功能能够被 Agent 调用”为当前目标；自主采集、长期经营和独立建城不再作为接口交付前置。已有同一 Mineflayer 玩家连接上的原生观察、若干真实操作及 [30 项统一调用绑定](MY-AGENT-WORLD-NATIVE-CALL-API.md)；绑定数量不等于整包全部玩法已实现。此文件分别记录接口、场景、渲染和公开接入边界。

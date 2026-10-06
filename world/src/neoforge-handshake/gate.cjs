@@ -35,6 +35,8 @@ const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 const { createNativeMenuProxyGuard } = require('./native-menu-proxy-guard.cjs')
+const { lanPeerPolicy } = require('./lan-peer-policy.cjs')
+const acceptsPeer = lanPeerPolicy(process.env.GATE_LAN_SUBNET ?? null)
 const vanillaMenuParserWindows = require('prismarine-windows')('1.21.1').windows
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
@@ -157,7 +159,10 @@ const server = new mc.Server(VERSION)
 server.listen(Number(listenPort), listenHost)
 server.on('listening', () => log(`神社之门开启：${listenHost}:${listenPort} -> ${BACKEND.host}:${BACKEND.port}（${VERSION}，offline）`))
 server.on('error', (e) => log(`门扉出错：${e.message}`))
-server.on('connection', (front) => handleConnection(front))
+server.on('connection', (front) => {
+  if (!acceptsPeer(front.socket?.remoteAddress)) { front.socket?.destroy(); return }
+  handleConnection(front)
+})
 
 function handleConnection (front) {
   log('DEBUG：前端 TCP 接入')

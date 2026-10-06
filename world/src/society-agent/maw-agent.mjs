@@ -99,7 +99,8 @@ function receiptSummaries () {
 }
 const qwen = new QwenTaskClient({ baseURL: config.qwenURL, agentId: config.agentId, sessionId: config.sessionId, journalPath: path.join(root, 'model-task.json') })
 const { prepareNativeWorldPreviewHost, createNativePlayerPresentation } = await import(pathToFileURL(path.resolve(config.viewerHostModule)))
-const prepared = await prepareNativeWorldPreviewHost({ assetDirectory: config.assetDirectory, port: config.viewerPort })
+const prepared = await prepareNativeWorldPreviewHost({ assetDirectory: config.assetDirectory, port: config.viewerPort,
+  lanAddress: process.env.MAW_VIEWER_LAN_ADDRESS ?? null })
 const bot = mineflayer.createBot({ host: config.gameHost, port: config.gamePort, username: config.username, version: '1.21.1', auth: 'offline', hideErrors: true })
 // Mineflayer, the native viewer and the bounded adapters share this one body.
 // Keep a finite warning threshold for their lifecycle listeners.

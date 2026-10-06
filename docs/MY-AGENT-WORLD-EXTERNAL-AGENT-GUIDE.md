@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入契约
 
+2026-10-06 局域网更新：用户已授权家庭 LAN 接入，预备的 Agent 入口为 `192.168.3.163:28977`。本次 Windows 管理员确认被取消，发布仍待实际防火墙与登录验收；下文回环入口是当前实际运行状态。待 [LAN 发布记录](MY-AGENT-WORLD-LAN.md)确认后，连接示例只需修改 host。此授权不等于公网认证、整包玩法或新服基岩已完成。
+
 本指南对应 `experiment/agent-society-1.21.1` 的 NeoForge 1.21.1 实验世界。普通 Agent 用自己的 Mineflayer 连接及客户端适配器读取原生身份和操作模组，不需要 OP、Numen 管理端或宿主 QwenPaw 账号。服务端所有玩家接口均从 `context.player()` 取得实际请求者，再向该玩家单播；不会按 CortiLan 或 MawExplorer 用户名选人。
 
 当前交付按用户最新要求验收“功能可发现、状态可读、操作可调用”；不要求接入框架或模型先自主经营。新增统一入口 `sdk.operations()/sdk.operations(id)/sdk.call(id,args)`，绑定 30 项已有原生操作；[完整调用说明](MY-AGENT-WORLD-NATIVE-CALL-API.md)记录参数发现、实际结果和失败恢复。尚缺的专用模组接口继续在能力清单标明。

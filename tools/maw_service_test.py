@@ -222,6 +222,57 @@ class Layout:
 
 
 class ConfigTests(unittest.TestCase):
+    def lan(self, layout):
+        (layout.server / "server.properties").write_text("server-ip=0.0.0.0\nserver-port=28976\nenable-rcon=false\n", encoding="utf-8")
+        raw = copy.deepcopy(layout.raw)
+        raw["networkExposure"] = {"mode": "lan", "address": "192.168.3.163"}
+        raw["services"][0]["command"].insert(1, "-Djava.net.preferIPv4Stack=true")
+        raw["services"][1]["env"] = {"GATE_LISTEN_HOST": "0.0.0.0", "GATE_LAN_SUBNET": "192.168.3.0/24"}
+        raw["services"][2]["env"] = {"MAW_VIEWER_LAN_ADDRESS": "192.168.3.163"}
+        return raw
+
+    def test_explicit_lan_retains_health_loopback_and_exact_main_ports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            config = layout.load(self.lan(layout))
+            self.assertEqual(config["networkExposure"]["subnet"], "192.168.3.0/24")
+            self.assertEqual(config["services"][2]["healthUrl"], "http://127.0.0.1:28984/healthz")
+            self.assertEqual(config["healthPort"], 28985)
+            with self.assertRaises(ValueError):
+                service.check_server(layout.server, 28976)
+            self.assertEqual(service.check_server(layout.server, 28976, bind_host="0.0.0.0"), 28976)
+
+    def test_lan_refuses_public_broad_unknown_and_mismatched_interface_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = self.lan(layout)
+            for address in ("0.0.0.0", "8.8.8.8", "127.0.0.1", "192.168.3.0", "192.168.3.255", "192.168.3.1/24", 3232236451):
+                with self.subTest(address=address), self.assertRaises(ValueError):
+                    layout.load({**raw, "networkExposure": {"mode": "lan", "address": address}})
+            for profile in ({"mode": "public", "address": "192.168.3.163"}, {"mode": "lan", "address": "192.168.3.163", "healthHost": "0.0.0.0"}, None):
+                with self.subTest(profile=profile), self.assertRaises(ValueError):
+                    layout.load({**raw, "networkExposure": profile})
+            for role, field, value in ((1, "GATE_LAN_SUBNET", "192.168.4.0/24"), (1, "GATE_LISTEN_HOST", "127.0.0.1"), (2, "MAW_VIEWER_LAN_ADDRESS", "192.168.3.164")):
+                changed = copy.deepcopy(raw)
+                changed["services"][role]["env"][field] = value
+                with self.assertRaises(ValueError):
+                    layout.load(changed)
+            changed = copy.deepcopy(raw)
+            changed["services"][0]["command"].append(changed["services"][0]["command"].pop(1))
+            with self.assertRaisesRegex(ValueError, "first JVM argument"):
+                layout.load(changed)
+
+    def test_research_server_cannot_opt_into_lan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = self.lan(layout)
+            research = layout.root / "research/registry-server"
+            research.mkdir(parents=True)
+            (research / "server.properties").write_text("server-ip=0.0.0.0\nserver-port=28978\n", encoding="utf-8")
+            raw["serverDir"] = str(research)
+            with self.assertRaises(ValueError):
+                layout.load(raw)
+
     def test_real_port_and_dependencies_and_no_env_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             layout = Layout(tmp)
@@ -410,6 +461,18 @@ class ChildTests(unittest.TestCase):
 
 
 class KernelOwnershipTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows kernel ownership check")
+    def test_explicit_lan_accepts_only_owned_ipv4_wildcard_and_default_still_refuses(self):
+        with socket.socket() as fixture:
+            fixture.bind(("0.0.0.0", 0))
+            fixture.listen()
+            port = fixture.getsockname()[1]
+            service.check_owned_listener(port, os.getpid(), expected_host="0.0.0.0")
+            with self.assertRaisesRegex(RuntimeError, "exposed"):
+                service.check_owned_listener(port, os.getpid())
+            with self.assertRaisesRegex(RuntimeError, "not owned"):
+                service.check_owned_listener(port, os.getpid() + 99999, expected_host="0.0.0.0")
+
     @unittest.skipUnless(os.name == "nt", "Windows kernel ownership check")
     def test_only_own_loopback_listener_is_accepted(self):
         with socket.socket() as fixture:
