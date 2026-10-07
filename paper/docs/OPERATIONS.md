@@ -1,5 +1,10 @@
 # Paper 分支维护与发布
 
+## 原版难度在线更新（2026-10-05）
+
+22:53:43–22:54:26 通过 `minecraft:difficulty normal` 及下界、末地的 `execute in … run minecraft:difficulty normal` 在线将三个维度设为普通，逐维查询均返回 `Normal`，未重启、未 reload。
+运行 `server.properties` 已仅将 `difficulty=easy` 原子替换为 `difficulty=normal` 并读回，其余文本按反替换检查逐字一致；原配置备份于 `E:\MC\ops\repairs\difficulty-20261005-225343` 和 `F:\MC-backups\repairs\difficulty-20261005-225343`，两份 before 哈希相同。
+
 ## 多 Agent 优化正式发布（2026-10-05）
 
 正式服现为 AgentFriend **0.3.83**（480037 字节，SHA256 `F37340C8663C39BEE519B4CF22515723814D0BF77584DE113253B517B64F38C5`）、CortiEyeMirror **0.1.9**（32326 字节，SHA256 `C278F809D7885A469199256311CD70E54E044C73C7870C89039D678782EA2A3C`）。HUD、状态编码、探矿、村庄敌情和铭牌减少重复工作；waypoint 列表不再执行单 home 时会自动传送的 Essentials `homes`；Eye 跨世界跟随目标并在启动时预热 14 种展示包克隆。回归、真实协议与 16 Agent + 16 Eye 负载见 [性能验收](MULTI_AGENT_PERFORMANCE.md)。
