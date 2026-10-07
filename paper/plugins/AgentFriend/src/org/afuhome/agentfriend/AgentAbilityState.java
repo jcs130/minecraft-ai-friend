@@ -62,6 +62,7 @@ final class AgentAbilityState {
                     UtilitySpells.totalCooldownMs(id), utility.remainingCooldownMs(player, id), icon);
         }
         addBuiltin(result, player, "home", "归乡", "minecraft:compass");
+        add(result, "mycli:travel", "传送点术", 1, 0L, 0L, "minecraft:lodestone");
         add(result, "mycli:support", "支援传送术", 1, VillageWatchManager.SUPPORT_COOLDOWN_MS,
                 plugin.villageWatch().remainingSupportCooldownMs(player), "minecraft:bell");
         addBuiltin(result, player, "fireworks", "烟花术", "minecraft:firework_rocket");

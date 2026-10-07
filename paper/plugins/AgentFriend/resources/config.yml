@@ -1,5 +1,7 @@
 arena-built: false
 last-run: 0
+waypoints:
+  max-per-player: 32
 guild-storage:
   # Exact Floodgate UUID of Mengmeng (.MicroKQ). OP does not bypass property ownership.
   owner-uuid: '00000000-0000-0000-0009-00000d9f9c7b'

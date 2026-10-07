@@ -2,8 +2,10 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
+import {fix1206PotionProtocol} from 'file:///E:/MC/ops/minecraft-1206-potion.mjs';
 
-const require = createRequire('E:/Cortico/package.json');
+const require = createRequire('E:/MC/probe/package.json');
+fix1206PotionProtocol(require);
 const mineflayer = require('mineflayer');
 const rcon = command => execFileSync('node',
   ['E:/MC/staging/life-buildings-20261003/rcon-stage.mjs', command], { encoding: 'utf8' });
@@ -102,7 +104,8 @@ try {
 
   const beforeBadTarget = mana(b);
   b.bot.chat('/mycli goto personal:absent');
-  await until(() => b.messages.some(line => line.includes('私人传送点不可用')), 'missing home');
+  await until(() => b.messages.some(line => line.startsWith('MC_WAYPOINT_RESULT ')
+    && JSON.parse(line.slice(19)).reason === 'not_found'), 'missing home');
   assert.ok(mana(b) >= beforeBadTarget - .01, 'missing target spent mana');
 
   results.push(await cost(b, '/mycli goto guild', null, 'guild', 6, 'guild hall'));
@@ -138,9 +141,12 @@ try {
   await until(() => moved(blink, -543.5, -439.5), 'private home departure');
   results.push(await cost(blink, '/mycli goto personal:travelqa',
     { x: privateAt.x, z: privateAt.z, radius: 5 }, 'personal:travelqa', 6, 'private home'));
+  // Named points are independent of Essentials. Explicitly create a legacy home for /home coverage.
+  blink.bot.chat('/sethome travellegacy');
+  await sleep(350);
   rcon(`minecraft:tp ${blink.name} -543.5 67 -439.5`);
   await until(() => moved(blink, -543.5, -439.5), 'direct home departure');
-  results.push(await cost(blink, '/home travelqa',
+  results.push(await cost(blink, '/home travellegacy',
     { x: privateAt.x, z: privateAt.z, radius: 5 }, 'command', 6, 'direct home'));
 
   const distant = await join('TravelD');

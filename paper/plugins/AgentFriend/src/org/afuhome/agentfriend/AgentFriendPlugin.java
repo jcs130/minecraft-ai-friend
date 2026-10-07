@@ -219,6 +219,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
+    private WaypointManager waypoints;
 
     boolean isSoulbound(ItemStack item) {
         return soulboundGear != null && soulboundGear.owner(item) != null;
@@ -259,6 +260,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
         guildStorage = new GuildStorageOwnership(this);
+        waypoints = new WaypointManager(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -289,6 +291,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (waypoints != null) waypoints.shutdown();
         if (taskMarket != null) taskMarket.shutdown();
         if (pvpArena != null) pvpArena.shutdown();
         if (dungeonGearAura != null) dungeonGearAura.stop();
@@ -345,8 +348,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
     boolean pvpParticipant(Player player) { return pvpArena != null && pvpArena.inMatch(player); }
+    boolean namedTravelBlocked(Player player) {
+        return dungeonParticipant(player) || pvpArena != null && pvpArena.blocksNamedTravel(player);
+    }
+    boolean namedTravelActivityArea(Location at) {
+        return arenaBuilt && inBuild(at) || pvpArena != null && pvpArena.namedTravelArea(at);
+    }
     void refreshAgentState(Player player) { if (agentStatePublisher != null) agentStatePublisher.afterCast(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
+    void openPlacesMenu(Player player) { openMenu(player, "places"); }
     void openDungeonDifficultyMenu(Player player) {
         if (dungeon != null && dungeon.isBuilt()) openMenu(player, "arena_difficulty");
         else player.sendMessage(ChatColor.RED + "试炼塔尚未建成。");
@@ -939,8 +949,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli skillbook list|use [槽位]  查看并研习试炼掉落的实体技能书；手柄可手持使用");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
-        p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>；传送 6 魔力；/mycli waypoint 列出地点");
-        p.sendMessage("/mycli waypoint [add|remove <名字>]  管理私人地点");
+        p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>|shared:<分享码>；传送 6 魔力");
+        p.sendMessage("/mycli waypoint add|update|remove|share|unshare <名字>；rename <旧名> <新名>；list|shared [页码]；menu");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送，8 魔力");
         p.sendMessage(dungeon.isBuilt()
                 ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
@@ -962,7 +972,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "explore", "探索" -> {
                 p.sendMessage(ChatColor.GOLD + "【探索】先去出生村庄、樱花林等公共地点；遗迹落点在外围，需要步行探索。罗盘可保存自己的营地。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli waypoint；/mycli goto cherry；/mycli waypoint add camp；/mycli goto personal:camp。传送前先确认周围安全。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli waypoint add 下界营地；/mycli goto personal:下界营地；/mycli waypoint share 下界营地。记录当前位置免费，传送 6 魔力；分享后可撤回。");
                 p.sendMessage(ChatColor.GRAY + "挖掘/放置前：/mycli protect break|place <x> <y> <z>；deny 不动、unknown 暂缓、allow_likely 可尝试。");
             }
             case "magic", "魔法" -> {
@@ -1240,6 +1250,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     private void gotoPlace(Player p, String raw, boolean homeSpell) {
         String id = raw.toLowerCase(Locale.ROOT);
+        if ((id.startsWith("personal:") || id.startsWith("shared:")) && waypoints.gotoPoint(p, raw)) return;
         if (id.equals("guild") || id.equals("公会") || id.equals("工会")) {
             guildHall.teleport(p);
             return;
@@ -1295,24 +1306,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 User user = essentials.getUser(p);
                 if (user != null) for (String name : user.getHomes()) {
                     if (!name.matches("[A-Za-z0-9_-]{1,24}")) continue;
+                    if (waypoints.contains(p, name)) continue;
                     Location at = user.getHome(name);
                     if (at != null) p.sendMessage("MC_WAYPOINT id=personal:" + name + " " + LocationOutput.fields(at));
                 }
             }
+            waypoints.listOwn(p);
+            waypoints.command(p, new String[]{"waypoint", "list"});
             return;
         }
-        if (args.length != 3 || !args[2].matches("[A-Za-z0-9_-]{1,24}")) {
-            p.sendMessage(ChatColor.RED + "用法：/mycli waypoint add|remove <英文名字>"); return;
-        }
-        String op = args[1].toLowerCase(Locale.ROOT);
-        if (op.equals("add")) {
-            if (p.performCommand("sethome " + args[2])) {
-                Location at = personalHome(p, args[2]);
-                if (at != null) p.sendMessage("MC_WAYPOINT id=personal:" + args[2] + " " + LocationOutput.fields(at));
-            }
-        }
-        else if (op.equals("remove")) p.performCommand("delhome " + args[2]);
-        else p.sendMessage(ChatColor.RED + "用法：/mycli waypoint add|remove <英文名字>");
+        waypoints.command(p, args);
     }
 
     private void groupHeal(Player caster) {
@@ -1368,7 +1371,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
 
-    private Location personalHome(Player player, String name) {
+    Location personalHome(Player player, String name) {
         Essentials essentials = essentials();
         if (essentials == null) return null;
         User user = essentials.getUser(player);
@@ -1936,7 +1939,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(21, item(Material.GOLDEN_APPLE, "§a圣愈术·治疗自己", "回复 4 颗心；消耗 6 魔力"));
             inv.setItem(18, item(Material.BLAZE_POWDER, "§c战斗法术", "星芒箭、霜环、焰浪；只伤怪物"));
             inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "基础 24 格；挖矿等级提高范围", "刻印工具再 +8 格；点击选择矿种"));
-            inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共地点与私人 home；每次 6 魔力"));
+            inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共、自己命名和分享地点；每次 6 魔力"));
             inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "传送至村外试炼入口；6 魔力" : "传送至村外战斗场；6 魔力"));
             inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
             inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
@@ -2027,10 +2030,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), "传送消耗 6 魔力"));
             }
             inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口传送 6 魔力；按钮组队，清怪自动下楼" : "传送 6 魔力；按钮启动三波战斗"));
-            inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
-            inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点；6 魔力"));
+            inv.setItem(14, item(Material.NAME_TAG, "§b新建传送点", "记录当前位置，在聊天框起名字", "支持中文；默认私有；记录免费"));
+            inv.setItem(15, item(Material.ENDER_EYE, "§b我的传送点", "查看、传送、改名和分享；传送 6 魔力"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "传送到遗迹外围；8 魔力，仍需步行探索"));
             inv.setItem(23, item(Material.BELL, "§b支援传送术", "重查村庄敌情，直达活敌人附近", "8 魔力；20 秒冷却"));
+            inv.setItem(24, item(Material.MAP, "§b大家分享的传送点", "探索者主动分享的地点；传送 6 魔力"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达；8 魔力", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
@@ -2226,6 +2230,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 if (slot == 22) openMenu(p, "spell_guide");
                 else if (slot == 24) {
                     if (id.equals("feather") || id.equals("night")) castOrLearn(p, id);
+                    else if (id.equals("travel")) waypoints.open(p, "own", 1);
                     else cast(p, id);
                 }
             } else if (page.equals("mastery")) {
@@ -2280,8 +2285,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             } else if (page.equals("places")) {
                 switch (slot) {
                     case 13 -> gotoPlace(p, "arena");
-                    case 14 -> { if (!p.performCommand("sethome camp")) p.sendMessage(ChatColor.RED + "保存位置失败。"); }
-                    case 15 -> gotoPlace(p, "personal:camp");
+                    case 14 -> waypoints.beginCreate(p);
+                    case 15 -> waypoints.open(p, "own", 1);
                     case 16 -> openMenu(p, "expeditions");
                     case 17 -> { if (dungeon.isExpanded()) dungeon.command(p, new String[]{"arena", "rest"}); }
                     case 18 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "normal"}); }
@@ -2289,6 +2294,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 20 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); }
                     case 21 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); }
                     case 23 -> villageWatch.support(p, null);
+                    case 24 -> waypoints.open(p, "shared", 1);
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2663,7 +2669,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 3 && args[0].equalsIgnoreCase("goddess") && args[1].equalsIgnoreCase("learn")) return List.of("feather", "night");
         if (args.length == 2 && args[0].equalsIgnoreCase("goto")) {
             List<String> places = new ArrayList<>(PUBLIC_PLACES.stream().map(PublicPlace::id).toList());
-            places.add("arena"); places.add("personal:");
+            places.add("arena"); places.add("guild"); places.add("personal:"); places.add("shared:");
+            if (sender instanceof Player player) places.addAll(waypoints.names(player).stream().map(name -> "personal:" + name).toList());
             return places;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
@@ -2683,7 +2690,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
-        if (args.length == 2 && args[0].equalsIgnoreCase("waypoint")) return List.of("add", "remove");
+        if (args.length == 2 && args[0].equalsIgnoreCase("waypoint"))
+            return List.of("add", "update", "remove", "rename", "share", "unshare", "list", "shared", "menu", "cancel");
+        if (args.length == 3 && args[0].equalsIgnoreCase("waypoint")
+                && List.of("update", "remove", "rename", "share", "unshare").contains(args[1].toLowerCase(Locale.ROOT))
+                && sender instanceof Player player) return waypoints.names(player);
         return new ArrayList<>();
     }
 }

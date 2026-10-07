@@ -4,7 +4,9 @@
 
 0.3.76 起，技能罗盘左上角有「法术图鉴」：18 项自研主动法术先显示效果和成本，点击进入完整说明页，可读目标、适用时机、学习条件、失败结果和成长；只有再点「施放 / 学习」才会执行。手柄玩家不必打字。Agent 用 `/mycli spells list [页码]` 发现稳定 ID，再用 `/mycli spells explain <ID>` 读取私有 `MC_SPELL_DETAIL` JSON；原有 `/mycli explain cast.<ID>` 同时嵌入相同说明。`mana` 与 `cooldownMs` 是静态成本和总冷却，当前值仍看 `mcagent:state`。这份图鉴覆盖 AgentFriend 与本服 MagicSpells 的主动法术；AuraSkills 长期技能等级属于角色成长，不是额外的 `/mycli cast` 命令。
 
-0.3.85 增加 `support`「支援传送术」，当前图鉴共 19 项：`/mycli village support [事件ID]` 或 `/mycli cast support`，消耗 8 魔力、冷却 20 秒。罗盘「传送地点 / 探索法术」也有入口。只传到当前已确认、仍存活敌人附近的安全可见落点，扑空/过期不扣费；Agent 应读取警报 `cmd`，抵达后以回执 `enemy.uuid` 识别目标，再自己战斗。具体条件、魔力与协议见 [村庄守望](VILLAGE_SUPPORT.md)。
+0.3.89 增加 `travel`「传送点术」，图鉴共 20 项：亲自到达安全位置后用罗盘或 `/mycli waypoint add 下界营地` 中文命名，默认私有、可主动分享并撤回；主世界、下界和末地之间每次成功传送 6 魔力。记录与管理免费，失败不扣费。文字入口 `/mycli waypoint menu` 和 `goto personal:名字/shared:分享码`，规则与数据回退见 [命名传送点](NAMED_WAYPOINTS.md)。
+
+0.3.85 增加 `support`「支援传送术」：`/mycli village support [事件ID]` 或 `/mycli cast support`，消耗 8 魔力、冷却 20 秒。罗盘「传送地点 / 探索法术」也有入口。只传到当前已确认、仍存活敌人附近的安全可见落点，扑空/过期不扣费；Agent 应读取警报 `cmd`，抵达后以回执 `enemy.uuid` 识别目标，再自己战斗。具体条件、魔力与协议见 [村庄守望](VILLAGE_SUPPORT.md)。
 
 0.3.56 起，成功施法的画面是约 0.3 秒三拍式法阵、元素粒子与两段原版音效：冰霜贴地扩散，感知贴地扫描，归乡/闪现形成螺旋门，星尘向上绽成星形，跃空/飞行/羽落展开随朝向变化的双翼。伤害技能原有攻击轨迹与命中计算不变；新视觉不造成伤害或改动方块。失败施法不播放成功动画。每次额外粒子包有界，仍通过原版协议进入 Java、基岩和 CortiEye；Agent 继续用施法回执、状态及实际环境判断结果。
 

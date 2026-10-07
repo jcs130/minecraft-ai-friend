@@ -79,6 +79,10 @@ final class PvpArenaManager implements Listener {
 
     boolean built() { return plugin.getConfig().getBoolean("pvp-arena.built", false); }
     boolean inMatch(Player p) { return match != null && match.has(p.getUniqueId()); }
+    boolean blocksNamedTravel(Player p) {
+        return inMatch(p) || queue.contains(p.getUniqueId()) || recovering.contains(p.getUniqueId());
+    }
+    boolean namedTravelArea(Location at) { return built() && inRing(at); }
     private Location lobby() { return new Location(world, X + .5, Y + 1, Z + 14.5, 180, 0); }
     private Location spawn(boolean first) {
         return new Location(world, X + (first ? -8 : 8) + .5, Y + 1, Z + .5,
