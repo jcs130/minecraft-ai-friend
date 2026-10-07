@@ -53,7 +53,7 @@ final class AgentCliCatalog {
         add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
         add(specs,"life","life","read","/mycli life board|menu|status|locations|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");
-        add(specs,"village","safety","read","/mycli village threat|villagers","查村庄外围掠夺者、附近职业村民及真实收购报价","在线玩家；结果只含已加载实体","本人 mcagent:village JSON 与私有文字");
+        add(specs,"village","safety","query_or_cast","/mycli village threat|support [事件ID]|villagers","查实时敌情、施放支援传送术、查村民收购报价","查询免费；支援8魔力、20秒冷却，须有已确认的活敌人","本人 mcagent:village JSON；支援返回 MC_VILLAGE_SUPPORT");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
         add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
@@ -81,6 +81,7 @@ final class AgentCliCatalog {
         add(specs,"cast.flight","magic","cast","/mycli cast flight","生存飞行 15 秒；10 魔力、90 秒冷却","非旁观者；技能可用","飞行状态与到期提示");
         add(specs,"cast.golem","magic","cast","/mycli cast golem","召唤守护铁傀儡 45 秒；12 魔力、75 秒冷却","非旁观者；附近有安全落点","召唤结果");
         add(specs,"cast.sense","magic","cast","/mycli cast sense","探敌术（心眼）；探测 24 格已加载怪物；3 魔力、15 秒冷却","非旁观者；无怪时不扣魔力","怪物方向、坐标、墙面粒子指引；Java 私有轮廓持续 8 秒");
+        add(specs,"cast.support","magic","cast","/mycli cast support","支援传送术；与 village support、罗盘共享入口","8魔力、20秒冷却；已确认敌情和安全落点","MC_VILLAGE_SUPPORT 与 MC_TRAVEL id=support；敌人 UUID/坐标");
         add(specs,"cast.feather","magic","cast","/mycli cast feather","羽落 45 秒","已学习；非旁观者；冷却检查","效果与提示");
         add(specs,"cast.night","magic","cast","/mycli cast night","夜视 120 秒","已学习；非旁观者；冷却检查","效果与提示");
         add(specs,"focus.give","magic","item","/mycli focus give","领取灵纹法杖","在线玩家；背包有空位","领取结果");
@@ -145,6 +146,7 @@ final class AgentCliCatalog {
         add(specs,"life.abandon","life","write","/mycli life abandon","放弃当前生活委托","本人有进行中任务","mcagent:life abandon");
         add(specs,"life.write","life","item","/mycli life write <书名>|<正文>","为 Agent 创建真实署名游记并参与故事公会任务","非旁观者；背包有空格；正文至少40字","背包实体成书、mcagent:life progress");
         add(specs,"village.threat","safety","read","/mycli village threat","查当前村庄外围掠夺者/原版袭击与绝对坐标；有威胁时优先评估支援","在线玩家；未加载区块不保证安全","mcagent:village status；active/source/count/position");
+        add(specs,"village.support","travel","cast","/mycli village support [事件ID]","支援传送术：重查警报，直达活敌人附近安全落点","8魔力、20秒冷却；至少3颗心，不在试炼/PvP；旧警报/无敌人/无落点不扣费","MC_VILLAGE_SUPPORT 与 mcagent:village support；success/reason/eventId/position/enemy/spentMana");
         add(specs,"village.villagers","life","read","/mycli village villagers","查附近职业村民的绝对坐标、职业与绿宝石收购报价","同维度96格内已加载村民","mcagent:village villagers");
         add(specs,"goddess.skills","goddess","read","/mycli goddess skills","查看女神技能和学习条件","在线玩家","技能文字列表");
         add(specs,"goddess.learn","goddess","write","/mycli goddess learn feather|night","学习羽落或夜视","非旁观者；5 级经验或炼金等级满足免费条件","学习结果");

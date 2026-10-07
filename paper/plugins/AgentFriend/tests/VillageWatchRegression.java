@@ -35,11 +35,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import sun.misc.Unsafe;
 
-/** Actual manager regression against the old all-world selection, without Minecraft or disk writes. */
+/** Bounded chunk scan with surface eligibility and real raid lifecycle, without disk writes. */
 public final class VillageWatchRegression {
     public static void main(String[] args) throws Exception {
         Env env = new Env(); env.install();
-        env.add(-678, -64, -500); env.add(-421.001, 320, -500); // Both inclusive block-column edges.
+        env.add(-678, 64, -500); env.add(-421.001, 64, -500); // Both inclusive block-column edges.
         env.add(-678.001, 64, -500); env.add(-421, 64, -500); // Outside the old block-coordinate boundary.
         env.add(-500, -1e12, -578); env.add(-500, 1e12, -331.001); // No Y restriction in the old rule.
         env.add(-664, 64, -564); // Outside rounded corner: 34^2 + 34^2 > 48^2.
@@ -69,18 +69,19 @@ public final class VillageWatchRegression {
         for (Mob mob : env.mobs) {
             if (!env.loaded.contains(key(mob.location))) continue;
             oldVisited++;
-            if (mob.valid && !mob.dead && (boolean) near.invoke(manager, mob.location)) before.add(mob.id);
+            if (mob.valid && !mob.dead && (boolean) near.invoke(manager, mob.location)
+                    && Math.abs(mob.location.getY() - 64) <= 10) before.add(mob.id);
         }
         env.resetCounters();
         @SuppressWarnings("unchecked") List<Raider> selected = (List<Raider>) method("nearbyRaiders", World.class).invoke(manager, env.world);
         Set<UUID> after = new HashSet<>();
         for (Raider raider : selected) after.add(raider.getUniqueId());
-        check(before.equals(after), "local query changed the legal Raider set");
+        check(before.equals(after), "bounded query disagrees with surface-eligible Raider set");
         check(env.chunkChecks == 289 && env.chunkGets <= 289, "village footprint is no longer fixed at 289 checks");
         check(env.entityVisits < 1000 && env.globalQueries == 0, "local query touched remote world entities");
         check(env.emptyChunkGets > 0 && !after.contains(unloaded.id), "loaded empty/unloaded occupied chunk guards failed");
         check(after.contains(env.mobs.get(0).id) && after.contains(env.mobs.get(1).id), "fractional edge omitted");
-        check(after.contains(env.mobs.get(4).id) && after.contains(env.mobs.get(5).id), "Y range was narrowed");
+        check(!after.contains(env.mobs.get(4).id) && !after.contains(env.mobs.get(5).id), "underground/airborne false alarms remain");
         check(!after.contains(env.mobs.get(6).id) && after.contains(env.mobs.get(7).id), "rounded corner changed");
         System.out.printf("all-world visits=%d -> fixed chunk checks=%d; local entity visits=%d; matched Raiders=%d%n",
                 oldVisited, env.chunkChecks, env.entityVisits, after.size());
@@ -97,7 +98,7 @@ public final class VillageWatchRegression {
         RaidState raid = new RaidState(env.world, -600, 1000, -500);
         env.raids.addAll(List.of(inactive.proxy, foreign.proxy, outside.proxy, raid.proxy));
         Object raidThreat = snapshot(manager);
-        check(value(raidThreat, "source").equals("raid") && value(raidThreat, "at").equals(raid.at)
+        check(value(raidThreat, "source").equals("raid") && selected.stream().anyMatch(mob -> mob.getLocation().equals(valueUnchecked(raidThreat, "at")))
                 && value(raidThreat, "count").equals(after.size()), "Raid priority/status/world boundary changed");
         env.raids.clear();
         for (Mob mob : env.mobs) mob.dead = true;
@@ -111,8 +112,44 @@ public final class VillageWatchRegression {
         check(value(snapshot(manager), "active").equals(false), "missing overworld did not remain safe");
 
         verifyDeathsAndLiveStatus();
-        System.out.println("PASS: identical legal Raider set, loaded/empty chunks, fractional rounded boundaries,"
-                + " all Y, dimension/Raid guards; same-tick deaths coalesced and public status stays fresh.");
+        verifyAlarmLifecycle();
+        System.out.println("PASS: surface eligibility, loaded-only bounded chunks, real Raid cave exception,"
+                + " confirmation/regroup lifecycle; same-tick deaths and public status stay fresh.");
+    }
+
+    private static Object valueUnchecked(Object record, String name) {
+        try { return value(record, name); } catch (Exception error) { throw new AssertionError(error); }
+    }
+
+    private static void verifyAlarmLifecycle() throws Exception {
+        Env env = new Env(); env.install();
+        Mob mob = env.add(-650, 64, -500); env.index();
+        VillageWatchManager manager = manager(env);
+        Method refresh = method("refresh", snapshot(manager).getClass(), long.class);
+        refresh.invoke(manager, snapshot(manager), 1000L);
+        check(!manager.activeThreat(), "transient patrol raised immediate alarm");
+        refresh.invoke(manager, snapshot(manager), 4999L);
+        check(!manager.activeThreat(), "patrol confirmed too early");
+        refresh.invoke(manager, snapshot(manager), 5000L);
+        check(manager.activeThreat(), "persistent patrol was not confirmed");
+        String id = (String) field(VillageWatchManager.class, "incidentId").get(manager);
+        mob.dead = true; refresh.invoke(manager, snapshot(manager), 6000L);
+        check(!manager.activeThreat(), "vanished target stayed actionable");
+        mob.dead = false; refresh.invoke(manager, snapshot(manager), 6500L);
+        check(id.equals(field(VillageWatchManager.class, "incidentId").get(manager)), "brief reload became a new alarm");
+        mob.dead = true; refresh.invoke(manager, snapshot(manager), 7000L);
+        refresh.invoke(manager, snapshot(manager), 28000L);
+        check(field(VillageWatchManager.class, "incidentId").get(manager).equals(""), "closed incident retained old ID");
+        RaidState raid = new RaidState(env.world, -600, 64, -500); env.raids.add(raid.proxy);
+        refresh.invoke(manager, snapshot(manager), 30000L);
+        refresh.invoke(manager, snapshot(manager), 35000L);
+        check(!((boolean) field(VillageWatchManager.class, "announced").get(manager)), "empty Raid wave woke Agents");
+        mob.dead = false; mob.location.setY(-30); mob.raid = raid.proxy;
+        check(value(snapshot(manager), "count").equals(1), "genuine Raid cave member was ignored");
+        mob.raid = null;
+        check(value(snapshot(manager), "count").equals(0), "unrelated underground mob became a patrol");
+        mob.location.setY(64); mob.type = EntityType.WITCH;
+        check(value(snapshot(manager), "count").equals(0), "wild witch became a patrol");
     }
 
     private static void verifyDeathsAndLiveStatus() throws Exception {
@@ -156,7 +193,10 @@ public final class VillageWatchRegression {
         field(JavaPlugin.class, "logger").set(plugin, Logger.getLogger("VillageWatchRegression"));
         VillageWatchManager manager = allocate(VillageWatchManager.class);
         field(VillageWatchManager.class, "plugin").set(manager, plugin);
-        field(VillageWatchManager.class, "current").set(manager, snapshot(manager));
+        field(VillageWatchManager.class, "current").set(manager, method("emptyThreat").invoke(null));
+        field(VillageWatchManager.class, "incidentId").set(manager, "");
+        field(VillageWatchManager.class, "supportAt").set(manager, new HashMap<UUID,Long>());
+        field(VillageWatchManager.class, "lastAlert").set(manager, new HashMap<UUID,String>());
         return manager;
     }
 
@@ -185,6 +225,7 @@ public final class VillageWatchRegression {
                     (proxy, method, values) -> switch (method.getName()) {
                         case "hashCode", "equals" -> identity(proxy, method.getName(), values);
                         case "getRaids" -> raids;
+                        case "getHighestBlockYAt" -> 63;
                         case "isChunkLoaded" -> { chunkChecks++; yield loaded.contains(new Key((int) values[0], (int) values[1])); }
                         case "getChunkAt" -> {
                             Key key = new Key((int) values[0], (int) values[1]);
@@ -231,6 +272,8 @@ public final class VillageWatchRegression {
         Location location;
         boolean valid = true, dead;
         Player killer;
+        Raid raid;
+        EntityType type = EntityType.PILLAGER;
         Mob(Location location) {
             this.location = location;
             proxy = (Raider) Proxy.newProxyInstance(Raider.class.getClassLoader(), new Class<?>[] {Raider.class},
@@ -240,7 +283,8 @@ public final class VillageWatchRegression {
                         case "getLocation" -> this.location.clone();
                         case "getUniqueId" -> id;
                         case "getKiller" -> killer;
-                        case "getType" -> EntityType.PILLAGER;
+                        case "getType" -> type;
+                        case "getRaid" -> raid;
                         default -> throw new AssertionError("Unexpected Raider action: " + method.getName());
                     });
         }

@@ -7,12 +7,12 @@
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
-| 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.84 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
+| 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.85 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 已正式发布，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.84/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.85 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.85/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 
@@ -26,7 +26,7 @@
 
 生活委托还可用 `/mycli list life` 发现。Agent 先读 `/mycli life board|status`，再 `accept <任务ID>`，按实际方块／物品动作推进，完成后 `claim`。`mcagent:life` 只发本人连接，回执需按任务 ID、进度和领奖状态处理；不能把聊天提示或菜单图标当作已经完成动作。写书任务允许无法编辑书本 GUI 的 Agent 使用 `/mycli life write <书名>|<正文>`，它会消耗真实的书与笔，产生一本真实署名成书。生活公会的声望独立于冒险者公会，日奖进入个人试炼箱或其待领取队列。
 
-村庄外围有掠夺者或原版袭击时，服务端向已登记的 Agent 账号发一条紧急私聊 `MC_VILLAGE_ALERT`，并将完整敌情单播到 `mcagent:village`。运营 Agent 应暂停普通采集或刷塔计划，先用 `/mycli village threat` 确认绝对坐标、本人生命和装备，再从安全路线支援；正在副本战斗或生命危险时先自救并通报，不盲目冲锋。到场只攻击敌对灾厄村民，清场后复查 `active=false`。已有活动不会每两秒重复提醒。村民收购任务 `trader_supply` 要亲自向两种不同职业的村民出售物资；用 `/mycli village villagers` 查本人附近真实报价，不以看过菜单代替成交。详见 [村民收购与村庄守望](VILLAGE_SUPPORT.md)。
+村庄地表巡逻队或真实袭击的活敌人连续确认 4 秒后，向已登记 Agent 发一条 `MC_VILLAGE_ALERT` 私聊，完整敌情单播到 `mcagent:village`。先用 `/mycli village threat` 核查事件、本人生命、装备和魔力，再执行警报 `cmd` 或状态 `supportCommand`：支援传送术 8 魔力、20 秒冷却，过期警报/无敌人/无安全落点不传送、不扣费。到场按回执 `enemy.uuid` 确认并攻击敌对实体；清场重查。真实 Raid 波次等待可 `active=true,count=0,phase=waiting_wave`，这时不支援；未加载不等于安全。副本战斗或低血量先自救。村民收购任务 `trader_supply` 仍需亲自向两种职业出售真实物资。详见 [村庄守望与支援传送](VILLAGE_SUPPORT.md)。
 
 实时魔力与可施放技能总冷却、剩余冷却由 [Agent 状态频道](AGENT_STATE.md) 的 `mcagent:state` 单播给每位在线玩家的连接；Agent 战斗逻辑从该 JSON 读取本人 `mana.current/max` 和 `abilities[]`，不要从聊天栏中的状态文字推断，也不要把该负载回显到公共聊天。`mcviewer:state` 另提供 AuraSkills 等级和经验视图，其旧冷却字段语义不同。
 

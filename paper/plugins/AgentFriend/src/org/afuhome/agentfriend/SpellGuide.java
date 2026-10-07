@@ -35,6 +35,9 @@ final class SpellGuide {
     }
 
     private static final List<Entry> SPELLS = List.of(
+            new Entry("support", "支援传送术", "travel", Material.BELL,
+                    "/mycli village support [事件ID]", "重查村庄实时敌情，传到仍存活敌人附近6至12格的安全可见落点，并返回敌人坐标。", "已确认警报里的活敌人", 8, 20,
+                    "生存/冒险模式；至少3颗心；不在试炼/PvP、载具或滑翔中；敌情已确认。", "警报过期、敌人消失、魔力不足或没有安全落点时不传送、不扣费。", "无熟练度升级；/mycli cast support 和罗盘也可用。", "Agent 用警报 cmd 的事件ID；不要沿用旧坐标，抵达后核对 enemy UUID 再攻击。"),
             new Entry("selfheal", "圣愈术", "recovery", Material.GOLDEN_APPLE,
                     "/mycli cast selfheal", "回复自己 8 点生命（4 颗心）。", "自己", 6, 15,
                     "生命未满；非旁观者。", "已满血时不治疗，也不应重复施放。", "无熟练度升级。", "受伤后给自己补血；队友受伤用 heal。"),
@@ -95,6 +98,7 @@ final class SpellGuide {
     static Entry find(String raw) {
         String id = raw.toLowerCase(Locale.ROOT).trim();
         if (id.startsWith("cast.")) id = id.substring(5);
+        if (id.equals("village.support")) id = "support";
         if (id.startsWith("prospect ")) id = "prospect";
         if (id.startsWith("give ")) id = "give";
         for (Entry entry : SPELLS) if (entry.id().equals(id)) return entry;

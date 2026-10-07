@@ -7,6 +7,7 @@
 | 归乡术、公共/私人传送点、试炼场入口、公会大厅、生活公会、PvP 大厅或加入匹配 | 6 | 罗盘、`/mycli`、已授权的 Essentials `/warp`、`/home` 等玩家指令 |
 | Essentials 其他玩家指令传送（含经同意的 `/tpa`） | 6 | 指令真正把玩家移动时结算；发请求本身不扣费 |
 | 队友安全传送、自然遗迹远征、解锁后的深层驿站直达 | 8 | 罗盘、`/mycli locate tp`、`guild travel`、`arena rest` |
+| 支援传送术（20 秒冷却） | 8 | 罗盘、警报按钮、`/mycli village support [事件ID]`、`/mycli cast support`；重查活敌人及安全落点，失败不扣费 |
 | 闪现术 | 4 | MagicSpells 既有技能，仍只按原有成功施法路径扣一次 |
 | 远程打开个人箱，或用文字指令成功远程存取/领取一次 | 2 | `/mycli arena stash|rewards`、公会个人箱；成功后 `MC_STORAGE_MAGIC` |
 

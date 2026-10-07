@@ -335,6 +335,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return playerNameTags == null ? null : playerNameTags.attachedEye(player);
     }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
+    boolean pvpParticipant(Player player) { return pvpArena != null && pvpArena.inMatch(player); }
+    void refreshAgentState(Player player) { if (agentStatePublisher != null) agentStatePublisher.afterCast(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
     void openDungeonDifficultyMenu(Player player) {
         if (dungeon != null && dungeon.isBuilt()) openMenu(player, "arena_difficulty");
@@ -669,6 +671,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             villageTrades.report(sender);
             return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("villageaudit")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台检查村庄警报。"); return true;
+            }
+            villageWatch.audit(sender); return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
             goddessGift(sender, args);
             return true;
@@ -916,7 +924,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
-        p.sendMessage("/mycli village threat|villagers  查村庄外围敌情、附近职业村民及真实收购报价");
+        p.sendMessage("/mycli village threat|support [事件ID]|villagers  查实时敌情、支援传送术（8魔力）、村民收购报价");
         p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
@@ -987,6 +995,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void cast(Player p, String raw) {
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
+        if (id.equals("support") || id.equals("支援") || id.equals("支援传送术")) {
+            villageWatch.support(p, null); return;
+        }
         if (id.equals("leap") || id.equals("flight") || id.equals("golem") || id.equals("sense")) {
             utilitySpells.cast(p, id);
             return;
@@ -1409,7 +1420,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可传送的在线队友。"));
     }
 
-    private static boolean safeLanding(Block feet) {
+    static boolean safeLanding(Block feet) {
         Block head = feet.getRelative(0, 1, 0), floor = feet.getRelative(0, -1, 0);
         if (!feet.isPassable() || !head.isPassable() || feet.isLiquid() || head.isLiquid()
                 || !floor.getType().isSolid()) return false;
@@ -1964,6 +1975,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(12, item(Material.ELYTRA, "§d飞行术", "自由飞行 15 秒；10 魔力；90 秒冷却"));
             inv.setItem(14, item(Material.IRON_BLOCK, "§6守护傀儡", "铁傀儡协战 45 秒；12 魔力；75 秒冷却"));
             inv.setItem(16, item(Material.RECOVERY_COMPASS, "§b探敌术", "探测 24 格内怪物；3 魔力；15 秒冷却"));
+            inv.setItem(20, item(Material.BELL, "§b支援传送术", "直达仍有效敌情附近的安全落点", "8 魔力；20 秒冷却；到场再确认敌人"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("prospect")) {
             inv.setItem(10, item(Material.RAW_IRON, "§f探铁矿", "范围随挖矿等级成长；6 魔力；30 秒冷却"));
@@ -1995,6 +2007,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(14, item(Material.RED_BED, "§b保存当前位置", "保存或覆盖自己的 camp 地点"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b回到保存位置", "返回自己的 camp 地点；6 魔力"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "传送到遗迹外围；8 魔力，仍需步行探索"));
+            inv.setItem(23, item(Material.BELL, "§b支援传送术", "重查村庄敌情，直达活敌人附近", "8 魔力；20 秒冷却"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达；8 魔力", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
@@ -2223,6 +2236,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 switch (slot) {
                     case 10 -> cast(p, "leap"); case 12 -> cast(p, "flight");
                     case 14 -> cast(p, "golem"); case 16 -> cast(p, "sense");
+                    case 20 -> villageWatch.support(p, null);
                     case 22 -> openMenu(p, "skills"); default -> { }
                 }
             } else if (page.equals("prospect")) {
@@ -2250,6 +2264,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 19 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); }
                     case 20 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); }
                     case 21 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); }
+                    case 23 -> villageWatch.support(p, null);
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2617,7 +2632,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
             return choices;
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night");
+        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "support", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("prospect")) return List.of("all", "coal", "iron", "copper", "gold", "gems", "diamond", "redstone", "ancient");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("give")) return List.of("bread", "torch", "oak_log", "cobblestone", "crafting_table", "chest", "cake", "glass");
         if (args.length == 2 && args[0].equalsIgnoreCase("goddess")) return List.of("skills", "learn", "pray");
@@ -2639,7 +2654,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("visit"))
             return List.of("harvest", "harbor", "workshop", "library");
         if (args.length == 2 && args[0].equalsIgnoreCase("village"))
-            return List.of("threat", "villagers");
+            return List.of("threat", "support", "villagers");
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
             return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))
