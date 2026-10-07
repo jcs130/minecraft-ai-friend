@@ -38,6 +38,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -107,6 +108,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             return;
         }
         protocol = ProtocolLibrary.getProtocolManager();
+        warmPresentationCloning();
         if (showVitalsBossBar) {
             vitalsBar = Bukkit.createBossBar("Corti 状态读取中", BarColor.RED, BarStyle.SEGMENTED_10);
         }
@@ -119,10 +121,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             Player target = Bukkit.getPlayerExact(targetName);
             Player camera = Bukkit.getPlayerExact(cameraName);
-            Entity observed = camera == null || camera.getGameMode() != GameMode.SPECTATOR
-                    ? null : camera.getSpectatorTarget();
-            boolean current = target != null && camera != null && camera.getGameMode() == GameMode.SPECTATOR
-                    && observed != null && observed.getUniqueId().equals(target.getUniqueId());
+            boolean current = isAttached(target, camera);
             if (attached && !current) {
                 restoreCameraEffects(camera);
                 snapshotTargetEntityId = -1;
@@ -231,6 +230,71 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTaskLater(this, this::attachCamera, 40L);
     }
 
+    private void warmPresentationCloning() {
+        warmPresentationCloning("initial");
+        warmPresentationCloning("repeat");
+    }
+
+    private void warmPresentationCloning(String pass) {
+        // ProtocolLib lazily builds packet constructors (including ByteBuddy's
+        // fallback serializer) on the first shallowClone. Do that once during
+        // main-thread startup, before listeners can clone a live player's packet.
+        // These temporary packets are never populated, retained or sent.
+        long started = System.nanoTime();
+        int warmed = 0;
+        long slowestNanos = 0;
+        String slowestType = "none";
+        for (PacketType type : PRESENTATION) {
+            long typeStarted = System.nanoTime();
+            try {
+                if (!type.isSupported()) continue;
+                protocol.createPacket(type, false).shallowClone();
+                warmed++;
+            } catch (RuntimeException | LinkageError error) {
+                getLogger().warning("Presentation clone warmup failed for " + type.name() + ": " + error);
+            }
+            long elapsed = System.nanoTime() - typeStarted;
+            if (elapsed > slowestNanos) {
+                slowestNanos = elapsed;
+                slowestType = type.name();
+            }
+        }
+        getLogger().info(String.format(Locale.ROOT,
+                "Presentation clone warmup (%s): %d/%d packet types in %.1f ms; slowest %s %.1f ms; no packets sent",
+                pass, warmed, PRESENTATION.length, (System.nanoTime() - started) / 1_000_000.0,
+                slowestType, slowestNanos / 1_000_000.0));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTargetWorldTeleport(PlayerTeleportEvent event) {
+        Player target = event.getPlayer();
+        if (!target.getName().equalsIgnoreCase(targetName) || event.getTo() == null
+                || event.getTo().getWorld() == null
+                || event.getFrom().getWorld().equals(event.getTo().getWorld())
+                || additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
+        Player camera = Bukkit.getPlayerExact(cameraName);
+        // Capture before the world changes, but recheck the camera next tick so
+        // a manually detached Eye is never forced back into spectating.
+        if (!isFollowing(target, camera)) return;
+        UUID targetId = target.getUniqueId(), cameraId = camera.getUniqueId();
+        UUID destinationWorld = event.getTo().getWorld().getUID();
+        attached = false;
+        Bukkit.getScheduler().runTask(this, () -> {
+            Player currentTarget = Bukkit.getPlayer(targetId), currentCamera = Bukkit.getPlayer(cameraId);
+            if (additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()
+                    || currentTarget == null || !currentTarget.getWorld().getUID().equals(destinationWorld)
+                    || !isFollowing(currentTarget, currentCamera)) return;
+            closeInventoryMirror();
+            restoreCameraEffects(currentCamera);
+            snapshotTargetEntityId = -1;
+            cameraChat.clear();
+            if (!followWorld(currentTarget, currentCamera)) return;
+            refreshCameraSnapshot(currentTarget, currentCamera);
+            currentTarget.updateInventory();
+            attached = isAttached(currentTarget, currentCamera);
+        });
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTargetInventoryClick(InventoryClickEvent event) {
         if (!mirrorCraftingInventoryClicks || additionalEyeMirrors == null
@@ -274,10 +338,26 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 || event.getPlayer().getName().equalsIgnoreCase(targetName)) resetInventoryMirror();
     }
 
-    private boolean isAttached(Player target, Player camera) {
-        return camera != null && camera.isOnline() && camera.getGameMode() == GameMode.SPECTATOR
+    static boolean isFollowing(Player target, Player camera) {
+        return target != null && target.isOnline() && camera != null && camera.isOnline()
+                && camera.getGameMode() == GameMode.SPECTATOR
                 && camera.getSpectatorTarget() != null
                 && camera.getSpectatorTarget().getUniqueId().equals(target.getUniqueId());
+    }
+
+    static boolean isAttached(Player target, Player camera) {
+        return isFollowing(target, camera) && camera.getWorld().equals(target.getWorld());
+    }
+
+    static boolean followWorld(Player target, Player camera) {
+        if (!isFollowing(target, camera)) return false;
+        if (!camera.getWorld().equals(target.getWorld())
+                && !camera.teleport(target.getLocation(), PlayerTeleportEvent.TeleportCause.SPECTATE)) return false;
+        // Bukkit setSpectatorTarget is a no-op for the same entity, even when its
+        // world changed. Real teleport plus a camera reset also refreshes screens.
+        camera.setSpectatorTarget(null);
+        camera.setSpectatorTarget(target);
+        return isAttached(target, camera);
     }
 
     private void closeIdleInventoryMirror() {
@@ -311,9 +391,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         if (vitalsBar == null) return;
         Player target = Bukkit.getPlayerExact(targetName);
         Player camera = Bukkit.getPlayerExact(cameraName);
-        if (target == null || camera == null || camera.getGameMode() != GameMode.SPECTATOR
-                || camera.getSpectatorTarget() == null
-                || camera.getSpectatorTarget().getEntityId() != target.getEntityId()) {
+        if (!isAttached(target, camera)) {
             vitalsBar.removeAll();
             return;
         }
@@ -346,8 +424,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 + "/" + number(target.getMaxHealth()) + " mana="
                 + (user == null ? "unavailable" : number(user.getMana()) + "/" + number(user.getMaxMana()))
                 + " camera=" + (camera == null ? "offline" : "online")
-                + " attached=" + (camera != null && camera.getSpectatorTarget() != null
-                    && camera.getSpectatorTarget().getEntityId() == target.getEntityId())
+                + " attached=" + isAttached(target, camera)
                 + " cameraNightVision=" + (camera != null
                     && camera.hasPotionEffect(PotionEffectType.NIGHT_VISION))
                 + " vitalsBossBar=" + showVitalsBossBar);
@@ -416,11 +493,17 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         if (camera.getGameMode() != GameMode.SPECTATOR) camera.setGameMode(GameMode.SPECTATOR);
         Entity observed = camera.getSpectatorTarget();
         boolean sameEntity = observed != null && observed.getEntityId() == target.getEntityId();
-        if (sameEntity && target.getEntityId() == snapshotTargetEntityId) return;
+        if (sameEntity && isAttached(target, camera) && target.getEntityId() == snapshotTargetEntityId) return;
+        if (sameEntity && !isAttached(target, camera) && !followWorld(target, camera)) return;
         if (!sameEntity) {
             camera.setSpectatorTarget(target);
             getLogger().info("Attached " + cameraName + " to " + targetName);
         }
+        if (isAttached(target, camera)) refreshCameraSnapshot(target, camera);
+    }
+
+    private void refreshCameraSnapshot(Player target, Player camera) {
+        ensureCameraNightVision();
         // Effects already active before the camera joined never generate a new target packet.
         // Send client-only snapshots; do not change either account's server-side effects.
         for (PotionEffect effect : camera.getActivePotionEffects()) {
@@ -465,7 +548,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         Player camera = Bukkit.getPlayerExact(cameraName);
         if (target == null || camera == null || !target.isOnline() || !camera.isOnline()
                 || !target.getName().equalsIgnoreCase(targetName)
-                || camera.getGameMode() != GameMode.SPECTATOR) return;
+                || !isAttached(target, camera)) return;
         Entity observed = camera.getSpectatorTarget();
         if (observed == null || !observed.getUniqueId().equals(targetId)) return;
         if (type == PacketType.Play.Server.ENTITY_EFFECT

@@ -39,6 +39,7 @@ final class ProspectingSpell {
             Map.entry(Material.ANCIENT_DEBRIS, "远古残骸"));
 
     private record Trace(Location ore, long expiresAt, long durationMs, BossBar bar, BlockDisplay outline) { }
+    record OreTarget(Location location, Material material) { }
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Long> lastCast = new HashMap<>();
     private final Map<UUID, Long> lastAttempt = new HashMap<>();
@@ -90,35 +91,14 @@ final class ProspectingSpell {
         int miningLevel = plugin.miningLevel(player);
         boolean imprintedTool = plugin.hasImprintedProspectTool(player.getInventory().getItemInMainHand());
         int range = rangeFor(miningLevel, imprintedTool);
-        Location closest = null;
-        String oreName = null;
-        Material oreMaterial = null;
-        int bestDistanceSquared = range * range + 1;
-        int sx = source.getBlockX(), sy = source.getBlockY(), sz = source.getBlockZ();
-        // Scan expanding cubic shells. Once shell r has a hit closer than r+1,
-        // all remaining shells are farther away, so ordinary casts stay cheap.
-        for (int shell = 0; shell <= range && shell * shell < bestDistanceSquared; shell++) {
-            for (int dx = -shell; dx <= shell; dx++) for (int dz = -shell; dz <= shell; dz++) {
-                if (!world.isChunkLoaded((sx + dx) >> 4, (sz + dz) >> 4)) continue;
-                for (int dy = -shell; dy <= shell; dy++) {
-                if (Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz)) != shell) continue;
-                int distanceSquared = dx * dx + dy * dy + dz * dz;
-                if (distanceSquared >= bestDistanceSquared || distanceSquared > range * range) continue;
-                int y = sy + dy;
-                if (y < world.getMinHeight() || y >= world.getMaxHeight()) continue;
-                Material material = world.getBlockAt(sx + dx, y, sz + dz).getType();
-                if (!ORES.containsKey(material) || !matches(material, category)) continue;
-                bestDistanceSquared = distanceSquared;
-                closest = new Location(world, sx + dx + 0.5, y + 0.5, sz + dz + 0.5);
-                oreName = ORES.get(material);
-                oreMaterial = material;
-                }
-            }
-        }
-        if (closest == null) {
+        OreTarget target = findClosestOre(source, range, category);
+        if (target == null) {
             player.sendMessage(ChatColor.YELLOW + "周围 " + range + " 格内没有发现这种矿脉；未消耗魔力，也未进入冷却。");
             return;
         }
+        Location closest = target.location();
+        Material oreMaterial = target.material();
+        String oreName = ORES.get(oreMaterial);
         if (!plugin.spendMana(player, MANA_COST)) return;
         lastCast.put(player.getUniqueId(), now);
         remove(player.getUniqueId());
@@ -188,6 +168,33 @@ final class ProspectingSpell {
     private void update(Player player, Trace trace, long now) {
         trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) trace.durationMs())));
         WallTraceParticles.guide(player, trace.ore(), true);
+    }
+
+    /** Enumerate each shell's surface in the original dx/dz/dy order, never loading chunks. */
+    static OreTarget findClosestOre(Location source, int range, String category) {
+        World world = source.getWorld();
+        OreTarget closest = null;
+        int bestDistanceSquared = range * range + 1;
+        int sx = source.getBlockX(), sy = source.getBlockY(), sz = source.getBlockZ();
+        // Interior columns contribute only their top and bottom points. Walking
+        // their entire height and discarding interior points made no-hit scans O(r^4).
+        for (int shell = 0; shell <= range && shell * shell < bestDistanceSquared; shell++) {
+            for (int dx = -shell; dx <= shell; dx++) for (int dz = -shell; dz <= shell; dz++) {
+                if (!world.isChunkLoaded((sx + dx) >> 4, (sz + dz) >> 4)) continue;
+                int step = shell == 0 || Math.abs(dx) == shell || Math.abs(dz) == shell ? 1 : shell * 2;
+                for (int dy = -shell; dy <= shell; dy += step) {
+                    int distanceSquared = dx * dx + dy * dy + dz * dz;
+                    if (distanceSquared >= bestDistanceSquared || distanceSquared > range * range) continue;
+                    int y = sy + dy;
+                    if (y < world.getMinHeight() || y >= world.getMaxHeight()) continue;
+                    Material material = world.getBlockAt(sx + dx, y, sz + dz).getType();
+                    if (!ORES.containsKey(material) || !matches(material, category)) continue;
+                    bestDistanceSquared = distanceSquared;
+                    closest = new OreTarget(new Location(world, sx + dx + 0.5, y + 0.5, sz + dz + 0.5), material);
+                }
+            }
+        }
+        return closest;
     }
 
     private void remove(UUID id) {

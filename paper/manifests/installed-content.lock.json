@@ -1,14 +1,14 @@
 {
-  "capturedAt": "2026-10-04",
+  "capturedAt": "2026-10-05",
   "minecraft": "1.20.6",
   "paperBuild": 151,
   "java": "Temurin 21.0.12.1+1",
   "paperJarSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
   "plugins": [
     {
-      "file": "AgentFriend-0.3.79.jar",
-      "bytes": 464372,
-      "sha256": "8e18573cb2b7078972ea23b3c457da946fb5427d099645b0c2977849368b8604"
+      "file": "AgentFriend-0.3.83.jar",
+      "bytes": 480037,
+      "sha256": "f37340c8663c39bee519b4cf22515723814d0bf77584de113253b517b64f38c5"
     },
     {
       "file": "AuraSkills-2.4.0.jar",
@@ -26,9 +26,9 @@
       "sha256": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97"
     },
     {
-      "file": "CortiEyeMirror-0.1.8.jar",
-      "bytes": 30369,
-      "sha256": "6be57c35e049cc32931d94ecc2ebcac310b9eea75987eac807e3452a586f3f95"
+      "file": "CortiEyeMirror-0.1.9.jar",
+      "bytes": 32326,
+      "sha256": "c278f809d7885a469199256311cd70e54e044c73c7870c89039d678782ea2a3c"
     },
     {
       "file": "EssentialsX-2.22.0.jar",

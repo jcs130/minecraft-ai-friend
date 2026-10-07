@@ -38,6 +38,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -65,6 +66,7 @@ final class AdditionalEyeMirrors implements Listener {
         final UUID cameraId;
         final UUID targetId;
         final int targetEntityId;
+        final UUID worldId;
         final Set<PotionEffectType> effects = new HashSet<>();
         long effectWindowAt;
         int effectPackets;
@@ -73,6 +75,7 @@ final class AdditionalEyeMirrors implements Listener {
             cameraId = camera.getUniqueId();
             targetId = target.getUniqueId();
             targetEntityId = target.getEntityId();
+            worldId = target.getWorld().getUID();
         }
     }
 
@@ -214,13 +217,12 @@ final class AdditionalEyeMirrors implements Listener {
             String key = pair.eye().toLowerCase(Locale.ROOT);
             Player camera = Bukkit.getPlayerExact(pair.eye());
             Player target = Bukkit.getPlayerExact(pair.agent());
-            Entity observed = camera == null ? null : camera.getSpectatorTarget();
-            boolean attached = camera != null && target != null && camera.getGameMode() == GameMode.SPECTATOR
-                    && observed != null && observed.getUniqueId().equals(target.getUniqueId());
+            boolean attached = CortiEyeMirrorPlugin.isAttached(target, camera);
             Session previous = sessions.get(key);
             if (!attached) {
                 if (previous != null) restoreEffects(camera, previous);
                 sessions.remove(key);
+                if (camera != null) closeCrafting(camera.getUniqueId());
                 continue;
             }
             ensureNightVision(camera);
@@ -228,7 +230,8 @@ final class AdditionalEyeMirrors implements Listener {
             targets.add(target.getUniqueId());
             if (previous == null || !previous.cameraId.equals(camera.getUniqueId())
                     || !previous.targetId.equals(target.getUniqueId())
-                    || previous.targetEntityId != target.getEntityId()) {
+                    || previous.targetEntityId != target.getEntityId()
+                    || !previous.worldId.equals(target.getWorld().getUID())) {
                 if (previous != null) restoreEffects(camera, previous);
                 Session current = new Session(camera, target);
                 sessions.put(key, current);
@@ -253,6 +256,37 @@ final class AdditionalEyeMirrors implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTargetWorldTeleport(PlayerTeleportEvent event) {
+        Player target = event.getPlayer();
+        if (event.getTo() == null || event.getTo().getWorld() == null
+                || event.getFrom().getWorld().equals(event.getTo().getWorld())) return;
+        UUID targetId = target.getUniqueId(), destinationWorld = event.getTo().getWorld().getUID();
+        for (Pair pair : pairs) {
+            if (!pair.agent().equalsIgnoreCase(target.getName())) continue;
+            Player camera = Bukkit.getPlayerExact(pair.eye());
+            if (!CortiEyeMirrorPlugin.isFollowing(target, camera)) continue;
+            UUID cameraId = camera.getUniqueId();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                Player currentTarget = Bukkit.getPlayer(targetId), currentCamera = Bukkit.getPlayer(cameraId);
+                if (!pairs.contains(pair) || currentTarget == null
+                        || !currentTarget.getWorld().getUID().equals(destinationWorld)
+                        || !CortiEyeMirrorPlugin.isFollowing(currentTarget, currentCamera)) return;
+                String key = pair.eye().toLowerCase(Locale.ROOT);
+                Session previous = sessions.remove(key);
+                if (previous != null) restoreEffects(currentCamera, previous);
+                closeCrafting(cameraId);
+                cameraChat.remove(cameraId);
+                if (!CortiEyeMirrorPlugin.followWorld(currentTarget, currentCamera)) return;
+                ensureNightVision(currentCamera);
+                Session current = new Session(currentCamera, currentTarget);
+                sessions.put(key, current);
+                snapshotEffects(currentCamera, currentTarget, current);
+                currentTarget.updateInventory();
+            });
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTargetCraftingClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player target)
                 || event.getView().getType() != InventoryType.CRAFTING
@@ -273,7 +307,7 @@ final class AdditionalEyeMirrors implements Listener {
             for (Session session : sessions.values()) {
                 if (!session.targetId.equals(targetId)) continue;
                 Player camera = Bukkit.getPlayer(session.cameraId);
-                if (camera != null && screens.isViewingSyncedScreen(camera))
+                if (CortiEyeMirrorPlugin.isAttached(target, camera) && screens.isViewingSyncedScreen(camera))
                     mirroredCrafting.put(session.cameraId, camera.getOpenInventory().getTopInventory());
             }
         });
@@ -355,9 +389,9 @@ final class AdditionalEyeMirrors implements Listener {
         for (Session session : sessions.values()) {
             if (!session.targetId.equals(targetId)) continue;
             Player camera = Bukkit.getPlayer(session.cameraId);
-            if (camera == null || !camera.isOnline() || camera.getGameMode() != GameMode.SPECTATOR
-                    || camera.getSpectatorTarget() == null
-                    || !camera.getSpectatorTarget().getUniqueId().equals(targetId)) continue;
+            if (!registeredEyes.contains(camera == null ? "" : camera.getName().toLowerCase(Locale.ROOT))
+                    || !CortiEyeMirrorPlugin.isAttached(target, camera)
+                    || !session.worldId.equals(target.getWorld().getUID())) continue;
             if (signature != null) {
                 Long seen = cameraChat.getOrDefault(camera.getUniqueId(), Map.of()).get(signature);
                 if (seen != null && System.currentTimeMillis() - seen < 2_000L) continue;

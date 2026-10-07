@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -43,6 +44,7 @@ final class PlayerNameTags implements Listener {
     private String pairsError = "";
     private int refreshTicks;
     private Component agentPrefix;
+    private final Map<String, Component> prefixes = new HashMap<>();
     private BukkitTask task;
 
     PlayerNameTags(AgentFriendPlugin plugin) { this.plugin = plugin; }
@@ -87,6 +89,7 @@ final class PlayerNameTags implements Listener {
         agentUuids.clear();
         registeredAgentNames = Set.of();
         registeredEyes = Map.of();
+        prefixes.clear();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
@@ -123,12 +126,13 @@ final class PlayerNameTags implements Listener {
     Player attachedEye(Player agent) {
         String eyeName = registeredEyes.get(agent.getName().toLowerCase(Locale.ROOT));
         if (eyeName == null) return null;
-        for (Player eye : Bukkit.getOnlinePlayers()) {
-            if (!eye.getName().equalsIgnoreCase(eyeName) || eye.getGameMode() != GameMode.SPECTATOR
-                    || eye.getWorld() != agent.getWorld()) continue;
-            org.bukkit.entity.Entity target = eye.getSpectatorTarget();
-            if (target != null && target.getUniqueId().equals(agent.getUniqueId())) return eye;
-        }
+        // Paper 1.20.6's exact-name index is case insensitive; never use the
+        // partial-name getPlayer(String) lookup for private Eye forwarding.
+        Player eye = Bukkit.getPlayerExact(eyeName);
+        if (eye == null || !eye.getName().equalsIgnoreCase(eyeName)
+                || eye.getGameMode() != GameMode.SPECTATOR || eye.getWorld() != agent.getWorld()) return null;
+        org.bukkit.entity.Entity target = eye.getSpectatorTarget();
+        if (target != null && target.getUniqueId().equals(agent.getUniqueId())) return eye;
         return null;
     }
 
@@ -168,6 +172,10 @@ final class PlayerNameTags implements Listener {
     }
 
     private Component prefix(String teamName) {
+        return prefixes.computeIfAbsent(teamName, this::buildPrefix);
+    }
+
+    private Component buildPrefix(String teamName) {
         if (AGENT_TEAM.equals(teamName)) return agentPrefix;
         boolean agent = teamName.startsWith("qd_arank_");
         int rank = teamName.charAt(teamName.length() - 1) - '0';
@@ -177,8 +185,10 @@ final class PlayerNameTags implements Listener {
 
     private void reconcile() {
         if (++refreshTicks % 3 == 0) refreshAgentNames();
+        var online = new ArrayList<>(Bukkit.getOnlinePlayers());
+        Map<UUID, String> desiredTeams = new HashMap<>();
         Set<Scoreboard> boards = new HashSet<>();
-        for (Player viewer : Bukkit.getOnlinePlayers()) boards.add(viewer.getScoreboard());
+        for (Player viewer : online) boards.add(viewer.getScoreboard());
         for (Scoreboard previous : new HashSet<>(touchedBoards)) {
             if (boards.contains(previous)) continue;
             removeOwnedTeams(previous);
@@ -187,11 +197,15 @@ final class PlayerNameTags implements Listener {
         for (Scoreboard board : boards) {
             touchedBoards.add(board);
             Map<String, Set<String>> wanted = new HashMap<>();
-            for (Player player : Bukkit.getOnlinePlayers()) {
+            for (Player player : online) {
                 String entry = player.getName();
                 Team current = board.getEntryTeam(entry);
                 if (current != null && !OWN_TEAMS.contains(current.getName())) continue;
-                String desired = desiredTeam(player);
+                UUID id = player.getUniqueId();
+                // Resolve identity/rank once for this reconcile, only when at
+                // least one board allows our team. Null spectator results are cached too.
+                if (!desiredTeams.containsKey(id)) desiredTeams.put(id, desiredTeam(player));
+                String desired = desiredTeams.get(id);
                 if (desired == null) {
                     if (current != null) current.removeEntry(entry);
                     continue;

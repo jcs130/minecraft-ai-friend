@@ -27,6 +27,7 @@ $eventLog = Join-Path $opsDir 'manage-server.log'
 $bedrockHealthFile = Join-Path $opsDir 'bedrock-health.json'
 $pendingAgentFriendDeploy = Join-Path $opsDir 'agentfriend-deploy.pending.json'
 $pendingEyeMirrorDeploy = Join-Path $opsDir 'cortieye-deploy.pending.json'
+$pendingServerSettings = Join-Path $opsDir 'server-settings.pending.json'
 $jvmDiagnosticRequest = Join-Path $opsDir 'jvm-diagnostics.requested'
 $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
@@ -616,6 +617,51 @@ function Deploy-PendingAgentFriend {
     Log "AgentFriend deployed: $targetName SHA256=$($plan.sha256)"
 }
 
+function Deploy-PendingServerSettings {
+    if (-not (Test-Path -LiteralPath $pendingServerSettings)) { return }
+    if (Listener) { throw 'Server settings may only be applied after Paper has stopped for a complete backup.' }
+    $plan = Get-Content -LiteralPath $pendingServerSettings -Raw | ConvertFrom-Json
+    if ($plan.schemaVersion -ne 1 -or ($plan.maxPlayers -isnot [int] -and $plan.maxPlayers -isnot [long]) -or
+        $plan.maxPlayers -lt 8 -or $plan.maxPlayers -gt 80 -or $plan.ignoreSpectators -isnot [bool] -or
+        $plan.previousPropertiesSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        $plan.previousSpigotSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Invalid pending server settings.' }
+    $propertiesPath = Join-Path $serverDir 'server.properties'
+    $spigotPath = Join-Path $serverDir 'spigot.yml'
+    if ((Get-FileHash -LiteralPath $propertiesPath).Hash -ne $plan.previousPropertiesSha256 -or
+        (Get-FileHash -LiteralPath $spigotPath).Hash -ne $plan.previousSpigotSha256) {
+        throw 'Server settings changed after staging; preserve current configuration and review the pending plan.'
+    }
+    $properties = [IO.File]::ReadAllText($propertiesPath)
+    $spigot = [IO.File]::ReadAllText($spigotPath)
+    if ([regex]::Matches($properties, '(?m)^max-players=\d+\r?$').Count -ne 1 -or
+        [regex]::Matches($spigot, '(?m)^      ignore-spectators: (true|false)\r?$').Count -ne 1) {
+        throw 'Unexpected configuration shape; no settings changed.'
+    }
+    $properties = [regex]::Replace($properties, '(?m)^max-players=\d+(?=\r?$)', "max-players=$($plan.maxPlayers)")
+    $ignoreValue = ([string]$plan.ignoreSpectators).ToLowerInvariant()
+    $spigot = [regex]::Replace($spigot, '(?m)^      ignore-spectators: (true|false)(?=\r?$)', "      ignore-spectators: $ignoreValue")
+    $destination = Join-Path (Join-Path $opsDir 'settings-deployments') (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+    New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    $propertiesBefore = Join-Path $destination 'server.properties.before'
+    $spigotBefore = Join-Path $destination 'spigot.yml.before'
+    Copy-Item -LiteralPath $propertiesPath -Destination $propertiesBefore
+    Copy-Item -LiteralPath $spigotPath -Destination $spigotBefore
+    $propertiesTemp = "$propertiesPath.settings.pending"
+    $spigotTemp = "$spigotPath.settings.pending"
+    [IO.File]::WriteAllText($propertiesTemp, $properties, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($spigotTemp, $spigot, [Text.UTF8Encoding]::new($false))
+    try {
+        [IO.File]::Replace($propertiesTemp, $propertiesPath, (Join-Path $destination 'server.properties.atomic-before'))
+        [IO.File]::Replace($spigotTemp, $spigotPath, (Join-Path $destination 'spigot.yml.atomic-before'))
+    } catch {
+        Copy-Item -LiteralPath $propertiesBefore -Destination $propertiesPath -Force
+        Copy-Item -LiteralPath $spigotBefore -Destination $spigotPath -Force
+        throw
+    }
+    Move-Item -LiteralPath $pendingServerSettings -Destination (Join-Path $destination 'plan.applied.json')
+    Log "Server settings applied after backup: max-players=$($plan.maxPlayers), ignore-spectators=$ignoreValue"
+}
+
 function Deploy-PendingEyeMirror {
     if (-not (Test-Path -LiteralPath $pendingEyeMirrorDeploy)) { return }
     $plan = Get-Content -LiteralPath $pendingEyeMirrorDeploy -Raw | ConvertFrom-Json
@@ -680,8 +726,10 @@ function Backup-Server {
             $goddessStopped = $true
             $humans = @(HumanPlayers)
             if ($humans.Count) { Log "Backup skipped: human joined during preflight: $($humans -join ', ')"; return }
-            if ((Test-Path -LiteralPath $pendingAgentFriendDeploy) -and (DungeonActive)) {
-                Log 'Backup and pending AgentFriend deployment skipped: dungeon run active'
+            if (((Test-Path -LiteralPath $pendingAgentFriendDeploy) -or
+                 (Test-Path -LiteralPath $pendingEyeMirrorDeploy) -or
+                 (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
+                Log 'Backup and pending deployment skipped: dungeon run active'
                 return
             }
             $proceed = $true
@@ -703,7 +751,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'server-settings.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -740,6 +788,7 @@ function Backup-Server {
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dest 'backup.json') -Encoding UTF8
         New-Item -ItemType File -Path (Join-Path $dest '.complete') -Force | Out-Null
         Log "Backup complete: $dest"
+        Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
     }

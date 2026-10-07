@@ -1299,7 +1299,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void waypoint(Player p, String[] args) {
         if (args.length == 1) {
-            p.performCommand("homes");
+            // Essentials /homes teleports immediately when only one home exists.
+            // Listing waypoints must stay read-only; enumerate personal homes below.
             p.sendMessage("公共地点：" + String.join("、", PUBLIC_PLACES.stream().map(PublicPlace::id).toList()) + "、arena");
             p.sendMessage("MC_WAYPOINT id=arena " + LocationOutput.fields(
                     new Location(world(), X + 0.5, FLOOR + 1, Z - 17 + 0.5)));

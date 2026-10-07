@@ -1,5 +1,17 @@
 # Paper 服务器性能诊断与内存修复
 
+## 2026-10-05 正式重启后的结果
+
+以下保留 10 月 4 日在线诊断的时间窗。之后已在正常 E/F 备份 `20261005-021734` 后发布 AgentFriend 0.3.83 与 CortiEyeMirror 0.1.9、连接上限 40 和观战者实体激活设置；新 JVM 为 **32992**。原排队 0.3.82 仅在第一次维护中短暂加载，完整过程及高负载边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) 与 [发布记录](OPERATIONS.md)。
+
+正式 `logs/auraskills-cache-patch.json` 于 02:18:04.312 得到 `phase=startup-verified`，`success=true`、`transformApplied=true`、`behaviorVerified=true`；GC 日志确认堆上限 4 GiB。第三方 AuraSkills JAR 没有被替换，固定 JVM 补丁正式重启后自动生效已验收。
+
+02:18:59–02:19:03 同身份 Watchdog 的 `GC.heap_info` 与 `GC.class_histogram -all` 保存在 `E:\MC\ops\diagnostics\20261005-021859-849`：已用堆 1043215 KiB（约 **0.995 GiB**）、已提交 1112064 KiB，`LocalizedKey` **824 个 / 19776 字节**。直方图可含尚待回收对象，此计数不是精确缓存条目数；未请求 Full GC。
+
+02:22:53 的完整最近一分钟平均/最小/最大 MSPT 为 **5.6 / 3.2 / 26.5 ms**，1/5/15 分钟 TPS 均 20。隔离服已停止，此时 CortiLan/Goddess 在线，CortiEye 原机客户端尚未回连，绑定 watcher 与登记正常。主机 02:19:57–02:21:29 的 92 秒测量有 16 记录、15 个 CPU 差值，正式 Java CPU 平均 **1.04%**、最大 1.744%（24 逻辑处理器归一化），可用内存最低 **16.487 GiB**。少量在线窗口不替代 16 Agent + 16 Eye 负载或跨天内存增长观察。
+
+## 2026-10-04 在线修复记录
+
 2026-10-04 的在线诊断确认：卡顿主要伴随 Java 堆接近 4 GiB 上限和较长的垃圾回收停顿。按类直方图与 AuraSkills 2.4.0 代码核查进一步定位到消息缓存键的身份比较错误，重复的同一翻译文本被长期留在缓存。单纯增加内存不能消除这一增长。
 
 当前环境为 Paper 1.20.6、JDK 21.0.12.1、AuraSkills 2.4.0、spark 1.10.187，正式服目录 `E:\MC\server`。AuraSkills 最小补丁于 2026-10-04 23:52 在线生效，正式 JVM PID 保持 13880；持续内存/延迟效果另行记录。
@@ -87,7 +99,7 @@
 
 启动应用的最终证据为 `E:\MC\server\logs\auraskills-cache-patch.json` 的 `phase=startup-verified`、`success=true`、`transformApplied=true`；只有注册/pending 日志不能视为生效。版本或 SHA 不匹配时记录拒绝并保留原目标类。
 
-## 正式服验收状态
+## 在线修复当时的正式服验收状态（2026-10-04）
 
 23:52:22.733 正式服通过同身份 Watchdog 在线应用，回执保存于 `E:\MC\ops\diagnostics\20261004-235221\cache-patch.result.json`：`success=true`、`mode=fix`、`cacheEntriesBefore=10133384`、`cacheEntriesAfter=0`、`classRedefined=true`、`behaviorVerified=true`。JVM 仍为原 PID 13880，未通过重启清掉内存。
 

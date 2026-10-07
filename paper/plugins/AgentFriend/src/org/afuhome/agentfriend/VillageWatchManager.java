@@ -21,6 +21,7 @@ import org.bukkit.Material;
 import org.bukkit.Raid;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Raider;
 import org.bukkit.entity.Villager;
@@ -37,12 +38,17 @@ final class VillageWatchManager implements Listener {
     static final String CHANNEL = "mcagent:village";
     private static final int MIN_X = -630, MAX_X = -470, MIN_Z = -530, MAX_Z = -380;
     private static final int WATCH_MARGIN = 48;
+    private static final int MIN_CHUNK_X = (MIN_X - WATCH_MARGIN) >> 4;
+    private static final int MAX_CHUNK_X = (MAX_X + WATCH_MARGIN) >> 4;
+    private static final int MIN_CHUNK_Z = (MIN_Z - WATCH_MARGIN) >> 4;
+    private static final int MAX_CHUNK_Z = (MAX_Z + WATCH_MARGIN) >> 4;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     private record Threat(boolean active, String source, Location at, int count) { }
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
     private Threat current = new Threat(false, "none", null, 0);
+    private boolean scanPending;
     boolean activeThreat() { return current.active(); }
 
     VillageWatchManager(AgentFriendPlugin plugin, DungeonManager dungeon) {
@@ -65,15 +71,38 @@ final class VillageWatchManager implements Listener {
     private Threat snapshot() {
         World world = villageWorld();
         if (world == null) return new Threat(false, "none", null, 0);
-        List<Raider> nearby = world.getEntitiesByClass(Raider.class).stream()
-                .filter(raider -> raider.isValid() && !raider.isDead() && nearVillage(raider.getLocation()))
-                .toList();
+        List<Raider> nearby = nearbyRaiders(world);
         Raid raid = world.getRaids().stream().filter(candidate ->
                 candidate.getStatus() == Raid.RaidStatus.ONGOING && nearVillage(candidate.getLocation()))
                 .findFirst().orElse(null);
         if (raid != null) return new Threat(true, "raid", raid.getLocation(), nearby.size());
         if (!nearby.isEmpty()) return new Threat(true, "patrol", nearby.get(0).getLocation(), nearby.size());
         return new Threat(false, "none", null, 0);
+    }
+
+    private List<Raider> nearbyRaiders(World world) {
+        List<Raider> nearby = new ArrayList<>();
+        // A fixed 17 x 17 footprint covers the existing rounded boundary. Query
+        // loaded chunks only, retaining every Y including high air and the void.
+        for (int x = MIN_CHUNK_X; x <= MAX_CHUNK_X; x++) {
+            for (int z = MIN_CHUNK_Z; z <= MAX_CHUNK_Z; z++) {
+                if (!world.isChunkLoaded(x, z)) continue;
+                for (Entity entity : world.getChunkAt(x, z).getEntities()) {
+                    if (entity instanceof Raider raider && raider.isValid() && !raider.isDead()
+                            && nearVillage(raider.getLocation())) nearby.add(raider);
+                }
+            }
+        }
+        return nearby;
+    }
+
+    private void scheduleScan() {
+        if (scanPending) return;
+        scanPending = true;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            scanPending = false;
+            scan();
+        }, 1L);
     }
 
     private void scan() {
@@ -221,7 +250,7 @@ final class VillageWatchManager implements Listener {
         data.addProperty("dayKills", kills);
         data.addProperty("rewardedToday", rewarded);
         send(killer, data);
-        Bukkit.getScheduler().runTaskLater(plugin, this::scan, 1L);
+        scheduleScan();
     }
 
     private JsonObject publish(Player player, String kind, Threat threat) {

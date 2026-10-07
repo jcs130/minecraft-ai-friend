@@ -1,5 +1,19 @@
 # Paper 分支维护与发布
 
+## 多 Agent 优化正式发布（2026-10-05）
+
+正式服现为 AgentFriend **0.3.83**（480037 字节，SHA256 `F37340C8663C39BEE519B4CF22515723814D0BF77584DE113253B517B64F38C5`）、CortiEyeMirror **0.1.9**（32326 字节，SHA256 `C278F809D7885A469199256311CD70E54E044C73C7870C89039D678782EA2A3C`）。HUD、状态编码、探矿、村庄敌情和铭牌减少重复工作；waypoint 列表不再执行单 home 时会自动传送的 Essentials `homes`；Eye 跨世界跟随目标并在启动时预热 14 种展示包克隆。回归、真实协议与 16 Agent + 16 Eye 负载见 [性能验收](MULTI_AGENT_PERFORMANCE.md)。
+
+首次发布助手因 PowerShell 对 `.NET File.Replace` 空备份路径的绑定失败，没有完整发布计划；外层仍触发任务，旧 0.3.82 计划及最终 Eye 0.1.9 被执行。E/F `20261005-021426` 与 JVM 30204 的过渡记录保留。修复助手并完整校验最终计划后，第二次于 **02:17:34** 正常停服，E/F **`20261005-021734/.complete`** 完成且任务结果 0；备份后应用设置并启用唯一 0.3.83 JAR，两次均正常保存并恢复。
+
+正式配置为 `max-players=40`、`world-settings.default.entity-activation-range.ignore-spectators=true`；view/sim 8/8、4 GiB 堆及原区块线程保持。新 JVM **32992** 于 02:17:37 启动、02:18:14 完成，AuraSkills `startup-verified` 回执的 success/transform/behavior 全部通过。展示包预热 14/14，initial 748.8 ms / repeat 0.9 ms，无测试包发送或预热失败。
+
+Java、LAN Mineflayer 实际入服后退出、Geyser 本机及 LAN Pong 均通过；当前白名单关闭。Goddess、CortiLan 已恢复，Watchdog 正常，维护暂停及待发布文件清除。**CortiEye 原机客户端仍未回连**，登记与 watcher 正常；本机无远端原生客户端重连入口，需原机连接后核验 `camera=online attached=true`。Pong 与隔离协议不代替基岩/直播画面验收。
+
+02:22:53 的完整最近一分钟平均/最小/最大 MSPT 为 **5.6 / 3.2 / 26.5 ms**，1/5/15 分钟 TPS 均 20；此时只有 CortiLan/Goddess 两个账号、隔离服已停止。02:18:59 的非 Full GC 诊断记录约 0.995 GiB 已用堆、824 个 `LocalizedKey` 对象。92 秒主机窗口正式 Java CPU 均值 1.04%（24 逻辑处理器归一化）、可用内存最低 16.487 GiB。这些少量在线窗口不代替 16 个 LLM 的长期战斗/生产验收。
+
+设置部署计划为 `ops/server-settings.pending.json`：schemaVersion 1、maxPlayers、ignoreSpectators 及原 `server.properties`/`spigot.yml` 的 SHA256。只在现有完整停服备份后应用；在线、原 SHA 变化或文件形状异常时拒绝。原件与应用计划保存在 `ops/settings-deployments/时间戳`。回退须正常停服并选定 JAR/原设置，保留当前世界和技能/公会数据，勿重放消耗的旧计划。
+
 ## 在线内存修复与 Viewer 优化（2026-10-04）
 
 23:52 通过现有 Watchdog 的同身份 Attach 入口，在原正式 JVM PID 13880 应用锁定 AuraSkills 2.4.0 版本的消息缓存补丁，清掉 10133384 条重复文本缓存，类重定义与值相等行为验证成功。未重启正式服、未重载技能或主动执行 GC。23:54 的自然回收后堆使用从 4132705 KiB 降至 964383 KiB，完整一分钟平均/最大 MSPT 为 7.3/26.9 ms，TPS 一分钟为 20；原 Goddess、CortiLan、CortiEye 连接与基岩 Pong 保持。诊断、运行回执、工具 SHA、备份与回退详见 [性能记录](PERFORMANCE.md)。

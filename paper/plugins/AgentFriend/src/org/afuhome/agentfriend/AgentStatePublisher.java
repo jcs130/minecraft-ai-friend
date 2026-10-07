@@ -37,6 +37,7 @@ final class AgentStatePublisher implements Listener {
     private BukkitTask pollTask;
 
     private record LastState(String json, long sentAt) {}
+    record StatePayload(String json, byte[] bytes) {}
 
     AgentStatePublisher(AgentFriendPlugin plugin, CombatSpells combat,
             ProspectingSpell prospecting, UtilitySpells utility) {
@@ -117,19 +118,13 @@ final class AgentStatePublisher implements Listener {
         }
         root.add("abilities", abilities.build(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
-        byte[] bytes = root.toString().getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_BYTES) {
-            var entries = root.getAsJsonArray("abilities");
-            while (bytes.length > MAX_BYTES && entries.size() > 0) {
-                entries.remove(entries.size() - 1);
-                bytes = root.toString().getBytes(StandardCharsets.UTF_8);
-            }
-            if (bytes.length > MAX_BYTES) {
-                plugin.getLogger().warning("Agent state exceeds 16384 bytes even without abilities; not sent.");
-                return;
-            }
+        StatePayload payload = encodeBounded(root);
+        if (payload == null) {
+            plugin.getLogger().warning("Agent state exceeds 16384 bytes even without abilities; not sent.");
+            return;
         }
-        String json = root.toString();
+        byte[] bytes = payload.bytes();
+        String json = payload.json();
         long now = System.currentTimeMillis();
         LastState last = lastStates.get(player.getUniqueId());
         if (!force && last != null) {
@@ -147,6 +142,18 @@ final class AgentStatePublisher implements Listener {
                     new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
         lastStates.put(player.getUniqueId(), new LastState(json, now));
+    }
+
+    static StatePayload encodeBounded(JsonObject root) {
+        String json = root.toString();
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        var entries = root.getAsJsonArray("abilities");
+        while (bytes.length > MAX_BYTES && entries.size() > 0) {
+            entries.remove(entries.size() - 1);
+            json = root.toString();
+            bytes = json.getBytes(StandardCharsets.UTF_8);
+        }
+        return bytes.length > MAX_BYTES ? null : new StatePayload(json, bytes);
     }
 
     private double finite(double value) { return Double.isFinite(value) ? value : 0.0; }
