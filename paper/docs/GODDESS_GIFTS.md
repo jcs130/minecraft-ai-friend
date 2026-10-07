@@ -2,7 +2,17 @@
 
 ## 状态
 
-2026-10-06 候选 AgentFriend **0.3.84** 已构建并通过真实隔离服测试，SHA256 为 `984AE0773B3EB9345DB024FFB2F66769B686B9929EE27B06D864EB936668D69F`。正式服仍为 0.3.83，新插件及配套脚本**尚未发布**；当前在线 `feiyu_bot` 不在已核实服务账号表中，等待身份确认或无人类玩家的安全窗口。不要提前替换正式女神桥：新桥需要 0.3.84 的目录和回执命令。
+2026-10-06 **正式发布 AgentFriend 0.3.84**，SHA256 为 `984AE0773B3EB9345DB024FFB2F66769B686B9929EE27B06D864EB936668D69F`。服主明确确认 `feiyu_bot` 是 bot 并授权重启后，将此精确账号加入运维已核实服务账号例外；其他未登记名字的保护仍保留，不按名字含 bot 泛化授权。
+
+2026-10-06 接入复核：仅确认机器人身份不等于确认其来源 IP。新增 feiyu_bot 配对时发现私有访问清单缺少该账号的可信来源，已撤销本轮新增配对并恢复发布前清单，避免网关把其原有重连拦截；已核实的维护服务账号例外保留。后续建立 Agent/Eye 配对须同时登记各自可信来源。
+
+无活动副本、只有已核实服务账号时，既有 `Afu-MC-DailyBackup` 于 09:09 正常停服备份，在 E/F 两盘生成 `20261006-090906/.complete`，校验哈希并启用唯一 0.3.84，任务结果 0。新 Java PID 34740；配套七文件原子替换并校验哈希，女神桥通过控制接口/Watchdog 重连为唯一 PID 29836，原版模式 3。版本、12 项目录 `ready:true`、修补/力量真实属性、只读预览及原请求查询均已正式读回。
+
+MCP 工具白名单更新后，旧 stdio 连接仍只返回五工具；仅对 `afu-goddess-server` 原生停用/启用完成重连，随后实际发现八工具。初始化第一次查询短暂 502，后续读回全部启用。访问策略逐字段保持原值：默认 deny，游戏桥身份只允许 `server_status`，发物品工具没有向游戏请求开放。
+
+正式临时非 OP 客户端通过 `/mycli goddess pray` 请求“只解释校验，不发物品”，实收女神最终私聊答复，账本未变，随后退出。初始探针把加入/外发文本误当最终回复，已否定其结论；最后的 `prayer-smoke-GoddessGiftAudit.json` 严格匹配女神入站私聊并排除等待提示，才记录通过。真实授予物品/铁砧/饮用仍取下述隔离测试，不给正式玩家随意加物品。
+
+Java、Agent LAN 网关、本机及 LAN Geyser Pong 均通过；AuraSkills `startup-verified` 的 transform/behavior 成功，MSPT 最近一分钟平均/最大 7.1/33.5 ms（两个常驻账号窗口，不能代替 16 个 LLM 长期负载）。CortiLan/Goddess/CortiEye 已恢复，`cortieye` 读回 camera=online、attached=true；feiyu_bot 原客户端也已回连，重启前四个账号均恢复。运行证据及原件在 E/F `repairs/goddess-gift-safety-20261006`。
 
 此前错误附魔书的排查和已实施修复见 [女神附魔书](GODDESS_BOOKS.md)。本次新增的是日后发放的校验机制。
 
@@ -68,7 +78,7 @@ node E:\MC\ops\goddess-delivery.mjs --player <玩家> --gift mending_book --amou
 node E:\MC\ops\goddess-act.mjs mendingbook <玩家>
 ```
 
-女神 MCP 增加 `gift_catalogue/deliver_gift/gift_receipt`；连接重新加载后才可发现这些工具，不能把文件替换当作工具已加载的证据。游戏私聊与造物申请都由桥调用同一验证入口。现有固定运维礼包等其他 `goddess-act` 动作仍是原有固定字面量通道，不属于本次统一回执迁移。
+女神 MCP 的 `gift_catalogue/deliver_gift/gift_receipt` 已重新发现并启用，仅原有维护身份可写；游戏身份仍没有发物品 MCP 权限。游戏私聊与造物申请由桥调用同一验证入口。现有固定运维礼包等其他 `goddess-act` 动作仍是原有固定字面量通道，不属于本次统一回执迁移。
 
 ## 验证与边界
 
