@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync,writeFileSync} from 'node:fs';
@@ -6,10 +7,10 @@ import {fix1206PotionProtocol} from 'file:///E:/MC/ops/minecraft-1206-potion.mjs
 const require=createRequire('E:/MC/probe/package.json');fix1206PotionProtocol(require);
 const mineflayer=require('mineflayer');
 const stage='E:/MC/staging/life-buildings-20261003';
-const roots=['E:/MC/ops/repairs/task-market-20261007','F:/MC-backups/repairs/task-market-20261007'];
+const roots=['E:/MC/ops/repairs/exploration-contracts-20261007','F:/MC-backups/repairs/exploration-contracts-20261007'];
 const rcon=q=>command(q,15000,{port:25587,properties:stage+'/server.properties'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const report={passed:false,checks:[],time:new Date().toISOString(),messages:{},packets:{}};
+const report={candidateSha256:createHash('sha256').update(readFileSync(stage+'/plugins/AgentFriend-0.3.88.jar')).digest('hex').toUpperCase(),passed:false,checks:[],time:new Date().toISOString(),messages:{},packets:{}};
 const bots=[];
 const check=(name,ok,details)=>{assert.ok(ok,name+': '+(details??''));report.checks.push(name);};
 const make=async name=>{
@@ -22,7 +23,7 @@ const make=async name=>{
 const ask=async(bot,q,delay=1250)=>{report.messages[bot.username].length=0;bot.chat(q);await sleep(delay);return report.messages[bot.username].join('\n');};
 const until=async(f,label)=>{for(let i=0;i<80;i++){if(await f())return;await sleep(120);}throw new Error('timeout '+label);};
 try{
- const a=await make('MarketA87'),b=await make('MarketB87');
+ const a=await make('MarketA88'),b=await make('MarketB88');
  check('restart preserved active step',/重启在途工程.*\[2\/2\]/.test(await ask(a,'/mycli guild status')));
  const cfgPath=stage+'/plugins/AgentFriend/task-market.yml',cfg=JSON.parse(readFileSync(cfgPath,'utf8'));
  cfg.tasks.qa_resume.steps[0].target=40;cfg.tasks.qa_resume.reward.fame=99;

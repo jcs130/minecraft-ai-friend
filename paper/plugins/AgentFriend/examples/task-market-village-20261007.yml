@@ -122,3 +122,156 @@ tasks:
     steps:
       - {title: 遗迹踏查, description: 到达亡者古墓；可 guild travel undead_crypt 使用耗魔远征术。, goal: explore, site: undead_crypt, target: 1}
       - {title: 留下补给, description: 交付 8 个普通火把，进入门口公共补给箱。, goal: donate, item: TORCH, chest: supplies, target: 8}
+  nether_field_journal:
+    scope: personal
+    repeat: once
+    title: 灯火越过红门
+    description: 穿过下界之门，走查熔岩彼岸的地貌与至少两种生物群系，再带着见闻回到主世界。
+    beneficiary: 千灯纪远行档案馆
+    icon: OBSIDIAN
+    reward: {fame: 24, emeralds: 8, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 下界地貌调查, description: 自备黑曜石与点火工具，标记返程门；走出门前区域，调查两种群系的不同地带。, goal: dimension, dimension: nether, target: 16, zone-size: 16, min-distance: 384, min-seconds: 120, min-biomes: 2}
+      - {title: 带回红门见闻, description: 探索完成后返回主世界；可使用原版传送门或已经学会且支付代价的返程技能。, goal: return, dimension: overworld, target: 1}
+  nether_fortress_survey:
+    scope: personal
+    repeat: once
+    title: 黑砖回廊的回声
+    description: 调查下界要塞的桥廊与内部通路，辨清多处区段后返程；带好防火与补给。
+    icon: NETHER_BRICKS
+    reward: {fame: 28, emeralds: 10, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 要塞通路勘察, description: 自行寻找自然下界要塞，深入桥廊和内厅的不同区段；门口站定不能完成。, goal: structure, dimension: nether, structure: 'minecraft:fortress', target: 12, min-distance: 128, min-seconds: 60, min-sections: 4}
+      - {title: 返回灯下, description: 保留调查记录，返回主世界。, goal: return, dimension: overworld, target: 1}
+  bastion_old_covenant:
+    scope: personal
+    repeat: once
+    title: 金色废垒的旧约
+    description: 探索堡垒遗迹的残墙和内层通道；猪灵蛮兵不会因金甲而友善，避险后带回路线。
+    icon: POLISHED_BLACKSTONE_BRICKS
+    reward: {fame: 30, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 堡垒内部调查, description: 走查同一座自然堡垒的多处内部区段，观察路线并保留退路，不要求抢夺宝箱。, goal: structure, dimension: nether, structure: 'minecraft:bastion_remnant', target: 12, min-distance: 80, min-seconds: 50, min-sections: 4}
+      - {title: 废垒归来, description: 完成调查后返回主世界。, goal: return, dimension: overworld, target: 1}
+  crimson_forest_trail:
+    scope: personal
+    repeat: once
+    title: 绯红林海的路标
+    description: 调查绯红森林的连续地带，辨认菌树与危险生灵，亲自走出一条调查路线后返程。
+    icon: CRIMSON_FUNGUS
+    reward: {fame: 16, emeralds: 6, bonus: BREAD, bonus-count: 6}
+    steps:
+      - {title: 林海走查, description: 在真实绯红森林中走过不同区域；重复绕同一棵菌树不会增加路线证据。, goal: biome, dimension: nether, biome: 'minecraft:crimson_forest', target: 6, zone-size: 16, min-distance: 128, min-seconds: 30}
+      - {title: 带回林海路线, description: 返回主世界保存这次远行履历。, goal: return, dimension: overworld, target: 1}
+  warped_forest_trail:
+    scope: personal
+    repeat: once
+    title: 诡异森林的蓝光
+    description: 沿蓝绿色菌林勘察不同地带，留意末影人的目光和脚下地形，完成后返回主世界。
+    icon: WARPED_FUNGUS
+    reward: {fame: 16, emeralds: 6, bonus: BREAD, bonus-count: 6}
+    steps:
+      - {title: 蓝光林地走查, description: 亲自在诡异森林走出一段有新覆盖的路线，辨清沿途地形。, goal: biome, dimension: nether, biome: 'minecraft:warped_forest', target: 6, zone-size: 16, min-distance: 128, min-seconds: 30}
+      - {title: 归来的蓝光见闻, description: 调查完成后返回主世界。, goal: return, dimension: overworld, target: 1}
+  end_island_journal:
+    scope: personal
+    repeat: once
+    title: 走向没有黎明的天空
+    description: 用末影之眼寻找要塞与末地入口，在末地实际勘察岛屿的不同区域，之后完成返程。
+    icon: ENDER_EYE
+    reward: {fame: 30, emeralds: 10, bonus: ENDER_PEARL, bonus-count: 4}
+    steps:
+      - {title: 虚空岛屿踏查, description: 走查末地岛屿的不同地带，提前规划龙、虚空与返程风险；仅落在出生平台不算探索。, goal: dimension, dimension: end, target: 10, zone-size: 16, min-distance: 256, min-seconds: 90, min-biomes: 1}
+      - {title: 从无昼之地归来, description: 完成探索后返回主世界；不要求独自击败末影龙。, goal: return, dimension: overworld, target: 1}
+  end_city_letter:
+    scope: personal
+    repeat: once
+    title: 紫影高塔的来信
+    description: 前往末地外岛，探索末地城的塔楼与连廊，带回实际路线；不把远望高塔当作完成。
+    icon: PURPUR_BLOCK
+    reward: {fame: 36, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 3}
+    steps:
+      - {title: 紫影高塔内部勘察, description: 进入同一座自然末地城，在不同建筑区段间探索，注意潜影贝的漂浮效果。, goal: structure, dimension: end, structure: 'minecraft:end_city', target: 8, min-distance: 64, min-seconds: 40, min-sections: 3, min-height-span: 8}
+      - {title: 带回外岛来信, description: 保留勘察履历，返回主世界。, goal: return, dimension: overworld, target: 1}
+  woodland_mansion_survey:
+    scope: personal
+    repeat: once
+    title: 深林宅邸调查书
+    description: 借助制图师的林地探险家地图寻找府邸，深入房间与走廊调查多处内部区段，留下探索履历。
+    beneficiary: 冒险者公会远行档案
+    icon: DARK_OAK_DOOR
+    reward: {fame: 32, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 宅邸深处的路线, description: 深入同一座自然林地府邸的多个房间与走廊区段，走出新路线；注意卫道士和唤魔者。, goal: structure, dimension: overworld, structure: 'minecraft:mansion', target: 16, min-distance: 128, min-seconds: 90, min-sections: 6, min-height-span: 5}
+  stronghold_star_gate:
+    scope: personal
+    repeat: once
+    title: 地下群书与星门
+    description: 跟随末影之眼找到要塞，探索交错回廊与房间，辨清地下通路；本委托不要求开启末地门。
+    icon: CHISELED_STONE_BRICKS
+    reward: {fame: 24, emeralds: 8, bonus: ENDER_PEARL, bonus-count: 2}
+    steps:
+      - {title: 要塞回廊测绘, description: 进入同一座自然要塞，在不同内部区段走查，寻找房间与分叉，不能只站在地面坐标上。, goal: structure, dimension: overworld, structure: 'minecraft:stronghold', target: 10, min-distance: 96, min-seconds: 60, min-sections: 4}
+  ocean_monument_lights:
+    scope: personal
+    repeat: once
+    title: 海底长明灯
+    description: 借海洋探险家地图寻找海底神殿，准备水下呼吸手段，调查神殿内部路线与多个区段。
+    icon: SEA_LANTERN
+    reward: {fame: 32, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 沉入长明灯的回廊, description: 实际游入自然海底神殿并走查内部多处区段；水面上方经过不计，注意守卫者。, goal: structure, dimension: overworld, structure: 'minecraft:monument', target: 10, min-distance: 80, min-seconds: 60, min-sections: 1}
+  ancient_city_silence:
+    scope: personal
+    repeat: once
+    title: 古城沉默的回声
+    description: 深入幽匿之下的远古城市，勘察遗迹不同区段与撤离路线；谨慎潜行，不要求召出或击杀监守者。
+    icon: SCULK_SENSOR
+    reward: {fame: 32, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 2}
+    steps:
+      - {title: 无声古城调查, description: 在同一座自然远古城市的内部区段踏查不同地带；记住退路，避免无谓触发尖啸。, goal: structure, dimension: overworld, structure: 'minecraft:ancient_city', target: 12, min-distance: 128, min-seconds: 75, min-sections: 4}
+  desert_pyramid_archive:
+    scope: personal
+    repeat: once
+    title: 黄沙下的旧纹章
+    description: 调查沙漠神殿地上与地下的不同位置，辨认古老布局和陷阱；仅看到屋顶不能交差。
+    icon: CHISELED_SANDSTONE
+    reward: {fame: 14, emeralds: 5, bonus: BREAD, bonus-count: 4}
+    steps:
+      - {title: 黄沙神殿走查, description: 进入自然沙漠神殿，探索不同位置与高度；小心地下压力板，不要求引爆或搜刮。, goal: structure, dimension: overworld, structure: 'minecraft:desert_pyramid', target: 4, min-distance: 24, min-seconds: 15, min-sections: 1, min-height-span: 6}
+  jungle_temple_puzzle:
+    scope: personal
+    repeat: once
+    title: 藤蔓后的机关旧址
+    description: 在丛林寻找神庙，深入上下通道调查机关遗迹，辨清安全路线；不要求拆毁古迹。
+    icon: MOSSY_COBBLESTONE
+    reward: {fame: 16, emeralds: 6, bonus: BREAD, bonus-count: 5}
+    steps:
+      - {title: 藤蔓神庙内部调查, description: 探索同一座自然丛林神庙的不同位置与高度，留意绊线与箭矢机关。, goal: structure, dimension: overworld, structure: 'minecraft:jungle_pyramid', target: 6, min-distance: 32, min-seconds: 20, min-sections: 1, min-height-span: 5}
+  shipwreck_lost_log:
+    scope: personal
+    repeat: once
+    title: 失落航线的船舱
+    description: 调查海中或搁浅沉船，实际探查船舱的不同位置，为公会留下这段旧航线的履历。
+    icon: OAK_BOAT
+    reward: {fame: 14, emeralds: 5, bonus: COOKED_COD, bonus-count: 4}
+    steps:
+      - {title: 沉船船舱走查, description: 深入同一艘自然沉船的不同位置；残骸很小时可另找完整沉船，不要求拿走船中物品。, goal: structure, dimension: overworld, structures: ['minecraft:shipwreck', 'minecraft:shipwreck_beached'], target: 4, min-distance: 16, min-seconds: 12, min-sections: 1}
+  mineshaft_echoes:
+    scope: personal
+    repeat: once
+    title: 旧矿道的火把余温
+    description: 调查普通或恶地废弃矿井，探索木支架后的岔路与多个矿道区段，注意洞穴蜘蛛。
+    icon: RAIL
+    reward: {fame: 20, emeralds: 7, bonus: TORCH, bonus-count: 12}
+    steps:
+      - {title: 废弃矿道踏查, description: 在同一座自然废弃矿井的多个区段间走查新路线；自行挖出的普通洞穴不算矿井。, goal: structure, dimension: overworld, structures: ['minecraft:mineshaft', 'minecraft:mineshaft_mesa'], target: 10, min-distance: 96, min-seconds: 60, min-sections: 4}
+  ruined_portal_runes:
+    scope: personal
+    repeat: once
+    title: 残门上的旧符文
+    description: 寻找主世界自然生成的废弃传送门，近距离调查残门和基座不同位置；不要求花材料修复。
+    icon: CRYING_OBSIDIAN
+    reward: {fame: 10, emeralds: 4, bonus: BREAD, bonus-count: 3}
+    steps:
+      - {title: 残门遗址勘察, description: 在同一处自然废弃传送门遗址内调查多个不同位置；自己搭一座门不能冒充旧遗址。, goal: structure, dimension: overworld, structures: ['minecraft:ruined_portal', 'minecraft:ruined_portal_desert', 'minecraft:ruined_portal_jungle', 'minecraft:ruined_portal_mountain', 'minecraft:ruined_portal_ocean', 'minecraft:ruined_portal_swamp'], target: 3, min-distance: 16, min-seconds: 8, min-sections: 1}

@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
@@ -6,7 +7,7 @@ import {fix1206PotionProtocol} from 'file:///E:/MC/ops/minecraft-1206-potion.mjs
 
 // Deliberately fixed isolated ports: this fixture must never run on the live world.
 const stage = 'E:/MC/staging/life-buildings-20261003';
-const roots = ['E:/MC/ops/repairs/task-market-20261007', 'F:/MC-backups/repairs/task-market-20261007'];
+const roots = ['E:/MC/ops/repairs/exploration-contracts-20261007', 'F:/MC-backups/repairs/exploration-contracts-20261007'];
 const require = createRequire('E:/MC/probe/package.json'); fix1206PotionProtocol(require);
 const mineflayer = require('mineflayer'), {Vec3} = require('vec3');
 const rcon = q => command(q, 15000, {port: 25587, properties: stage + '/server.properties'});
@@ -15,7 +16,7 @@ const until = async (f, label, timeout = 12000) => {
   const start = Date.now(); while (Date.now() - start < timeout) { if (await f()) return; await sleep(120); }
   throw new Error('Timeout: ' + label);
 };
-const report = {started: new Date().toISOString(), passed: false, checks: [], messages: {}, packets: {}};
+const report = {candidateSha256:createHash('sha256').update(readFileSync(stage+'/plugins/AgentFriend-0.3.88.jar')).digest('hex').toUpperCase(),started: new Date().toISOString(), passed: false, checks: [], messages: {}, packets: {}};
 const bots = [];
 const make = async name => {
   const bot = mineflayer.createBot({host: '127.0.0.1', port: 25567, username: name, version: '1.20.6', auth: 'offline'});
@@ -91,10 +92,11 @@ const toggle = async (bot, x) => {
 };
 try {
   for (const root of roots) mkdirSync(root,{recursive:true});
-  check('isolated runtime', /0\.3\.87/.test(await rcon('version AgentFriend')));
-  const a=await make('MarketA87'), b=await make('MarketB87');
+  check('isolated runtime', /0\.3\.88/.test(await rcon('version AgentFriend')));
+  const a=await make('MarketA88'), b=await make('MarketB88');
   check('admin guarded', /只允许控制台/.test(await ask(a,'/mycli admin market reload')));
-  check('default 12 scenarios loaded', (await rcon('mycli admin market list')).includes('tm_fishing_picnic'));
+  const defaults=await rcon('mycli admin market list');
+  check('default 28 scenarios loaded', (defaults.match(/^tm_/gm)||[]).length===28&&defaults.includes('tm_woodland_mansion_survey'));
   await rcon('minecraft:forceload add 992 992 1063 1007');
   await rcon('minecraft:fill 997 99 998 1065 99 1006 minecraft:stone');
   await rcon('minecraft:fill 997 100 998 1065 105 1006 minecraft:air');

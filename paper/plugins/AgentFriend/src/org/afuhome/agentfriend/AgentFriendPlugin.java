@@ -289,6 +289,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (taskMarket != null) taskMarket.shutdown();
         if (pvpArena != null) pvpArena.shutdown();
         if (dungeonGearAura != null) dungeonGearAura.stop();
         if (agentCoach != null) agentCoach.stop();

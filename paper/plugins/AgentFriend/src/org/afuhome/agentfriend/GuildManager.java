@@ -26,7 +26,7 @@ final class GuildManager implements Listener {
     private static final ZoneId GUILD_ZONE = ZoneId.of("Asia/Shanghai");
     private static final String[] RANKS = {"青铜", "黑铁", "白银", "黄金", "白金", "钻石"};
     private static final int[] THRESHOLDS = {0, 10, 30, 70, 150, 350};
-    enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
+    enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DIMENSION, STRUCTURE, BIOME, RETURN, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
             LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
@@ -198,7 +198,7 @@ final class GuildManager implements Listener {
     }
     int marketProgress(Player player) { return progress(player); }
     private boolean doneToday(Player p, Contract quest) {
-        if (plugin.taskMarket() != null && plugin.taskMarket().onceCompleted(quest.id())) return true;
+        if (plugin.taskMarket() != null && plugin.taskMarket().onceCompleted(p, quest.id())) return true;
         DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(quest.id());
         String day = card == null ? today() : card.date();
         return day.equals(plugin.getConfig().getString(base(p.getUniqueId()) + ".daily." + quest.id()));
@@ -307,6 +307,7 @@ final class GuildManager implements Listener {
                 + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
         if (quest != null && plugin.taskMarket().engineering(quest))
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
+        if (quest != null && ExplorationObjectives.GOALS.contains(quest.goal())) plugin.taskMarket().surveyStatus(player);
     }
 
     private void accept(Player player, String id) {
@@ -918,7 +919,7 @@ final class GuildManager implements Listener {
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
         inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
-        inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 工程与生活", "架桥、修路、建造、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
+        inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 千灯纪委托", "远征探索、工程、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
